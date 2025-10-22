@@ -11,11 +11,14 @@
 
     "build:extractor": "pnpm --filter @esl-pipeline/md-extractor build",
     "build:validator": "pnpm --filter @esl-pipeline/md-validator build",
+    "build:importer": "pnpm --filter @esl-pipeline/notion-importer build",
 
     "dev:extractor": "pnpm --filter @esl-pipeline/md-extractor dev",
+    "dev:importer": "pnpm --filter @esl-pipeline/notion-importer dev",
 
     "md-extractor": "node packages/md-extractor/dist/bin/cli.js",
-    "md-validator": "node packages/md-validator/dist/index.js"
+    "md-validator": "node packages/md-validator/dist/index.js",
+    "notion-importer": "node packages/notion-importer/dist/bin/cli.js"
   },
   "keywords": [],
   "author": "",
@@ -27,7 +30,7 @@
     "@types/node": "^24.9.1",
     "tsx": "^4.20.6",
     "typescript": "^5.9.3",
-    "vitest": "^3.2.4"
+    "vitest": "^4.0.1"
   },
   "dependencies": {
     "@types/mdast": "^4.0.4",

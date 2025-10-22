@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 import fs from 'node:fs'
 import path from 'node:path'
-import { Command } from 'commander'
+import { Command } from 'commander';
 import chalk from 'chalk'
 import { validateMarkdownFile } from './validator.js' // <-- add .js
 

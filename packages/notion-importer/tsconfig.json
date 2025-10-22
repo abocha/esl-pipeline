@@ -3,12 +3,13 @@
   "compilerOptions": {
     "composite": true,
     "declaration": true,
-    "outDir": "./dist",
-    "rootDir": "./src",
-    "lib": ["ES2022"],
+    "outDir": "dist",
+    "rootDir": ".",
     "module": "NodeNext",
     "moduleResolution": "NodeNext",
-    "resolveJsonModule": true
+    "target": "ES2022",
+    "strict": true
   },
-  "include": ["src"]
+  "references": [{ "path": "../md-extractor" }],
+  "include": ["src", "bin", "tests"]
 }
