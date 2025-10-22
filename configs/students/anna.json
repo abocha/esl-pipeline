@@ -1,0 +1,7 @@
+{
+  "student": "Anna",
+  "dbId": "REPLACE_WITH_NOTION_DB_ID",
+  "pageParentId": null,
+  "colorPreset": "b1-default",
+  "voices": { "Alex": "voice_id_1", "Mara": "voice_id_2", "default": "voice_id_default" }
+}

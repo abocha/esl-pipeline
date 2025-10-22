@@ -1,0 +1,7 @@
+{
+  "b1-default": {
+    "levels": ["h2","h3"],
+    "map": { "h2": "yellow_background", "h3": "purple_background" },
+    "toggleMap": { "h2": "yellow_background" }
+  }
+}
