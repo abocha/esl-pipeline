@@ -52,6 +52,12 @@ importers:
         specifier: ^3.23.8
         version: 3.25.76
 
+  packages/notion-color-headings:
+    dependencies:
+      '@notionhq/client':
+        specifier: ^5.3.0
+        version: 5.3.0
+
 packages:
 
   '@esbuild/aix-ppc64@0.25.11':
@@ -212,6 +218,10 @@ packages:
 
   '@jridgewell/sourcemap-codec@1.5.5':
     resolution: {integrity: sha512-cYQ9310grqxueWbl+WuIUIaiUaDcj7WOq5fVhEljNVgRfOUhY9fy2zTvfoqWsnebh8Sl70VScFbICvJnLKB0Og==}
+
+  '@notionhq/client@5.3.0':
+    resolution: {integrity: sha512-pISuJLrP6XwxnmMZ79jT2XkMHFtbQvslfs6Rqdd29ge0KAmJOuhtWZxE1WXO7h03cj/gVAL2PiAjpFuIWrWJ3w==}
+    engines: {node: '>=18'}
 
   '@rollup/rollup-android-arm-eabi@4.52.5':
     resolution: {integrity: sha512-8c1vW4ocv3UOMp9K+gToY5zL2XiiVw3k7f1ksf4yO1FlDFQ1C2u72iACFnSOceJFsWskc2WZNqeRhFRPzv+wtQ==}
@@ -850,6 +860,8 @@ snapshots:
     optional: true
 
   '@jridgewell/sourcemap-codec@1.5.5': {}
+
+  '@notionhq/client@5.3.0': {}
 
   '@rollup/rollup-android-arm-eabi@4.52.5':
     optional: true
