@@ -4,10 +4,18 @@
   "description": "",
   "main": "index.js",
   "scripts": {
-    "build": "pnpm -r --filter ./packages/** run build",
-    "dev": "echo \"Use package-level dev scripts\"",
-    "test": "vitest",
-    "lint": "echo \"(optional) add eslint later\""
+    "build": "pnpm -r --filter './packages/*' run build",
+    "test": "pnpm -r --filter './packages/*' run test",
+    "test:watch": "pnpm -r --filter './packages/*' run test:watch",
+    "clean": "pnpm -r --filter './packages/*' run clean",
+
+    "build:extractor": "pnpm --filter @esl-pipeline/md-extractor build",
+    "build:validator": "pnpm --filter @esl-pipeline/md-validator build",
+
+    "dev:extractor": "pnpm --filter @esl-pipeline/md-extractor dev",
+
+    "md-extractor": "node packages/md-extractor/dist/bin/cli.js",
+    "md-validator": "node packages/md-validator/dist/index.js"
   },
   "keywords": [],
   "author": "",
