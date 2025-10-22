@@ -1,7 +1,6 @@
 import { readFile } from 'node:fs/promises';
 import { basename } from 'node:path';
-import { Client } from '@notionhq/client';
-import { createNotionClient, findStudentPageId, resolveDatabaseId } from './notion.js';
+import { createNotionClient, findStudentPageId, resolveDataSourceId } from './notion.js';
 import { mdToBlocks } from './mdToBlocks.js';
 import { extractFrontmatter } from '@esl-pipeline/md-extractor';
 import type { ImportOptions, FrontmatterShape } from './types.js';
@@ -21,12 +20,17 @@ export async function runImport(opts: ImportOptions) {
 
   // --- Step 3: Notion client / targets ---
   const client = createNotionClient();
-  const dbId = await resolveDatabaseId(client, opts.dbId, opts.dbName);
+  const { dataSourceId, databaseId } = await resolveDataSourceId(client, {
+    dataSourceId: opts.dataSourceId,
+    dataSourceName: opts.dataSourceName,
+    dbId: opts.dbId,
+    dbName: opts.dbName
+  });
   const studentsDbId = process.env.STUDENTS_DB_ID;
   const studentPageId = studentName ? await findStudentPageId(client, studentName, studentsDbId) : undefined;
 
   // --- Step 4: properties payload ---
-  const properties: any = {
+  const properties: Record<string, any> = {
     'Name': { title: [{ type: 'text', text: { content: title } }] }
   };
   if (studentPageId) {
@@ -35,7 +39,6 @@ export async function runImport(opts: ImportOptions) {
   if (topics.length) {
     properties['Topic'] = { multi_select: topics.map(t => ({ name: t })) };
   }
-
   // --- Step 5: blocks mapping ---
   const children = mdToBlocks(md);
 
@@ -43,16 +46,19 @@ export async function runImport(opts: ImportOptions) {
   if (opts.dryRun) {
     return {
       dryRun: true,
-      dbId,
+      databaseId,
+      dataSourceId,
       properties,
       blocksPreview: children.slice(0, 5).map(b => b.type),
       totalBlocks: children.length
     };
   }
 
+  const parent = { data_source: { id: dataSourceId } } as any;
+
   const page = await client.pages.create({
-    parent: { data_source_id: dbId },
-    properties,
+    parent,
+    properties: properties as any,
     children
   });
 

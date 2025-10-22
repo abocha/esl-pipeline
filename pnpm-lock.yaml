@@ -96,11 +96,47 @@ importers:
         specifier: ^4.0.1
         version: 4.0.1(@types/debug@4.1.12)(@types/node@24.9.1)(tsx@4.20.6)
 
+  packages/notion-add-audio:
+    devDependencies:
+      '@types/node':
+        specifier: ^24.9.1
+        version: 24.9.1
+      rimraf:
+        specifier: ^6.0.1
+        version: 6.0.1
+      tsx:
+        specifier: ^4.20.6
+        version: 4.20.6
+      typescript:
+        specifier: ^5.9.3
+        version: 5.9.3
+      vitest:
+        specifier: ^4.0.1
+        version: 4.0.1(@types/debug@4.1.12)(@types/node@24.9.1)(tsx@4.20.6)
+
   packages/notion-color-headings:
     dependencies:
       '@notionhq/client':
         specifier: ^5.3.0
         version: 5.3.0
+
+  packages/notion-colorizer:
+    devDependencies:
+      '@types/node':
+        specifier: ^24.9.1
+        version: 24.9.1
+      rimraf:
+        specifier: ^6.0.1
+        version: 6.0.1
+      tsx:
+        specifier: ^4.20.6
+        version: 4.20.6
+      typescript:
+        specifier: ^5.9.3
+        version: 5.9.3
+      vitest:
+        specifier: ^4.0.1
+        version: 4.0.1(@types/debug@4.1.12)(@types/node@24.9.1)(tsx@4.20.6)
 
   packages/notion-importer:
     dependencies:
@@ -110,6 +146,82 @@ importers:
       '@notionhq/client':
         specifier: ^5.3.0
         version: 5.3.0
+    devDependencies:
+      '@types/node':
+        specifier: ^24.9.1
+        version: 24.9.1
+      rimraf:
+        specifier: ^6.0.1
+        version: 6.0.1
+      tsx:
+        specifier: ^4.20.6
+        version: 4.20.6
+      typescript:
+        specifier: ^5.9.3
+        version: 5.9.3
+      vitest:
+        specifier: ^4.0.1
+        version: 4.0.1(@types/debug@4.1.12)(@types/node@24.9.1)(tsx@4.20.6)
+
+  packages/orchestrator:
+    dependencies:
+      '@esl-pipeline/md-extractor':
+        specifier: workspace:*
+        version: link:../md-extractor
+      '@esl-pipeline/md-validator':
+        specifier: workspace:*
+        version: link:../md-validator
+      '@esl-pipeline/notion-add-audio':
+        specifier: workspace:*
+        version: link:../notion-add-audio
+      '@esl-pipeline/notion-colorizer':
+        specifier: workspace:*
+        version: link:../notion-colorizer
+      '@esl-pipeline/notion-importer':
+        specifier: workspace:*
+        version: link:../notion-importer
+      '@esl-pipeline/storage-uploader':
+        specifier: workspace:*
+        version: link:../storage-uploader
+      '@esl-pipeline/tts-elevenlabs':
+        specifier: workspace:*
+        version: link:../tts-elevenlabs
+    devDependencies:
+      '@types/node':
+        specifier: ^24.9.1
+        version: 24.9.1
+      rimraf:
+        specifier: ^6.0.1
+        version: 6.0.1
+      tsx:
+        specifier: ^4.20.6
+        version: 4.20.6
+      typescript:
+        specifier: ^5.9.3
+        version: 5.9.3
+      vitest:
+        specifier: ^4.0.1
+        version: 4.0.1(@types/debug@4.1.12)(@types/node@24.9.1)(tsx@4.20.6)
+
+  packages/storage-uploader:
+    devDependencies:
+      '@types/node':
+        specifier: ^24.9.1
+        version: 24.9.1
+      rimraf:
+        specifier: ^6.0.1
+        version: 6.0.1
+      tsx:
+        specifier: ^4.20.6
+        version: 4.20.6
+      typescript:
+        specifier: ^5.9.3
+        version: 5.9.3
+      vitest:
+        specifier: ^4.0.1
+        version: 4.0.1(@types/debug@4.1.12)(@types/node@24.9.1)(tsx@4.20.6)
+
+  packages/tts-elevenlabs:
     devDependencies:
       '@types/node':
         specifier: ^24.9.1
