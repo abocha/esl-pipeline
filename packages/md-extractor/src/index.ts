@@ -1,6 +1,4 @@
 import matter from 'gray-matter';
-import { unified } from 'unified';
-import remarkParse from 'remark-parse';
 import type { Frontmatter, StudyText, Section } from './types.js';
 
 const NBSP = /\u00A0/g;
