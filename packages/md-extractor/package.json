@@ -1,0 +1,34 @@
+{
+  "name": "@esl-pipeline/md-extractor",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "import": "./dist/index.js",
+      "types": "./dist/index.d.ts"
+    }
+  },
+  "files": ["dist"],
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "dev": "tsx watch bin/cli.ts"
+  },
+  "dependencies": {
+    "gray-matter": "^4.0.3",
+    "remark-parse": "^11.0.0",
+    "unified": "^11.0.4"
+  },
+  "devDependencies": {
+    "@types/node": "^20.12.12",
+    "tsx": "^4.16.5",
+    "vitest": "^2.1.3"
+  },
+  "bin": {
+    "md-extractor": "dist/bin/cli.js"
+  }
+}
