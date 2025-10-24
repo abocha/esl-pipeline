@@ -64,6 +64,9 @@ Test plan
       pages: { create: pagesCreate }
     });
 
+    // Mock resolveStudentId to return student page ID
+    vi.spyOn(notionMod, 'resolveStudentId' as any).mockResolvedValue('student-page-id');
+
     const res = await runImport({
       mdPath: 'tmp.md',
       dbId: 'db-456',

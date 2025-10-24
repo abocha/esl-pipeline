@@ -60,7 +60,10 @@ Test plan
     // Mock createNotionClient and pages.create
     const create = vi.fn().mockResolvedValue({ id: 'p1' });
     vi.spyOn(notion, 'createNotionClient' as any).mockReturnValue({ pages: { create } });
-    
+
+    // Mock resolveStudentId to return student page ID
+    vi.spyOn(notion, 'resolveStudentId' as any).mockResolvedValue('student-page-id');
+
     // Mock withRetry to avoid actual network calls during test
     const withRetry = vi.fn(async (fn) => fn());
     vi.doMock('../src/retry.js', () => ({ withRetry }));
