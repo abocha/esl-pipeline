@@ -1,8 +1,9 @@
-import { dirname } from 'node:path';
+import { dirname, basename } from 'node:path';
 import { applyHeadingPreset } from '@esl-pipeline/notion-colorizer';
 import { buildStudyTextMp3, hashStudyText } from '@esl-pipeline/tts-elevenlabs';
 import { uploadFile } from '@esl-pipeline/storage-uploader';
-import { addAudioUnderStudyText } from '@esl-pipeline/notion-add-audio';
+import { addOrReplaceAudioUnderStudyText } from '@esl-pipeline/notion-add-audio';
+import { runImport } from '@esl-pipeline/notion-importer';
 import { writeManifest, type AssignmentManifest } from './manifest.js';
 
 export type NewAssignmentFlags = {
@@ -12,6 +13,9 @@ export type NewAssignmentFlags = {
   presetsPath?: string;
   withTts?: boolean;
   upload?: 's3';
+  presign?: number;
+  publicRead?: boolean;
+  prefix?: string;
   dryRun?: boolean;
   force?: boolean;
   voices?: string;
@@ -31,19 +35,24 @@ export async function newAssignment(flags: NewAssignmentFlags): Promise<{
   steps: string[];
 }> {
   const steps: string[] = [];
-  const pageHash = hashStudyText(flags.md).slice(0, 12);
-  const pageId = `page_${pageHash}`;
-  // Use a dummy UUID for dry-run mode
-  const realPageId = flags.dryRun ? 'ce06f3e4-e332-4b83-8b34-6b8c6e6e6e6e' : pageId;
-  const pageUrl = `https://www.notion.so/${pageId}`;
-
   steps.push('validate');
   steps.push('import');
+  const importResult = await runImport({
+    mdPath: flags.md,
+    dbId: flags.dbId,
+    dbName: flags.db,
+    dataSourceId: flags.dataSourceId,
+    dataSourceName: flags.dataSource,
+    student: flags.student,
+    dryRun: flags.dryRun
+  });
+  const pageId = importResult.page_id;
+  const pageUrl = importResult.url;
 
   let colorized = false;
   if (flags.preset && !flags.dryRun) {
     steps.push('colorize');
-    const color = await applyHeadingPreset(realPageId, flags.preset, flags.presetsPath ?? "configs/presets.json");
+    const color = await applyHeadingPreset(pageId, flags.preset, flags.presetsPath ?? "configs/presets.json");
     steps.push(`colorize:${flags.preset}:${color.counts.h2}/${color.counts.h3}/${color.counts.toggles}`);
     colorized = true;
   } else if (flags.preset && flags.dryRun) {
@@ -65,13 +74,29 @@ export async function newAssignment(flags: NewAssignmentFlags): Promise<{
 
   if (flags.upload === 's3' && audio?.path) {
     steps.push('upload');
-    const upload = await uploadFile(audio.path, { backend: 's3', public: !flags.dryRun });
-    audio.url = upload.url;
+    if (flags.dryRun) {
+      // In dry-run mode, generate a realistic preview URL without uploading
+      const bucket = process.env.S3_BUCKET ?? 'stub-bucket';
+      const prefix = flags.prefix ?? process.env.S3_PREFIX ?? 'audio/assignments';
+      const key = `${prefix.replace(/\/$/, '')}/${basename(audio.path)}`;
+      audio.url = `https://${bucket}.s3.amazonaws.com/${key}`;
+    } else {
+      const upload = await uploadFile(audio.path, {
+        backend: 's3',
+        public: flags.publicRead,
+        presignExpiresIn: flags.presign,
+        prefix: flags.prefix
+      });
+      audio.url = upload.url;
+    }
   }
 
-  if (audio?.url) {
+  if (audio?.url && pageId && !flags.dryRun) {
     steps.push('add-audio');
-    await addAudioUnderStudyText(pageId, audio.url, { replace: flags.force });
+    await addOrReplaceAudioUnderStudyText(pageId, audio.url, { replace: flags.force });
+  } else if (audio?.url && pageId && flags.dryRun) {
+    // In dry-run mode, skip the Notion API call
+    steps.push('add-audio');
   }
 
   const manifest: AssignmentManifest = {

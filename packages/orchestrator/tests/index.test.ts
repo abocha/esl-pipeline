@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { newAssignment } from '../src/index.js';
 import { mkdtemp } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
@@ -27,6 +27,9 @@ This is a test lesson.
     await import('node:fs/promises').then(fs => fs.writeFile(voiceMapPath, `
 default: voice_id_default
     `.trim()));
+    // Set required env vars for dry-run upload preview
+    process.env.S3_BUCKET = 'test-bucket';
+    process.env.AWS_REGION = 'us-east-1';
     const result = await newAssignment({
       md: mdPath,
       preset: 'default',
@@ -39,5 +42,6 @@ default: voice_id_default
     expect(result.steps).toContain('import');
     expect(result.manifestPath).toBeDefined();
     expect(result.pageId).toBeDefined();
-  });
+    expect(result.audio?.url).toMatch(/^https:\/\/test-bucket\.s3\.amazonaws\.com\/audio\/assignments\/.*\.mp3$/);
+  }, 30000);
 });

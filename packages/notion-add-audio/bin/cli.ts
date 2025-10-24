@@ -1,24 +1,23 @@
 #!/usr/bin/env node
-import { addAudioUnderStudyText } from '../src/index.js';
+import { Command } from 'commander';
+import { addOrReplaceAudioUnderStudyText } from '../src/index.js';
 
-const args = process.argv.slice(2);
-const flag = (name: string) => {
-  const idx = args.indexOf(name);
-  return idx >= 0 ? args[idx + 1] : undefined;
-};
+const program = new Command();
 
-const pageId = flag('--page-id');
-const url = flag('--url');
-const replace = args.includes('--replace');
-
-if (!pageId || !url) {
-  console.error('Usage: notion-add-audio --page-id <id> --url <audioUrl> [--replace]');
-  process.exit(1);
-}
-
-addAudioUnderStudyText(pageId, url, { replace })
-  .then(result => console.log(JSON.stringify(result, null, 2)))
-  .catch(err => {
-    console.error(err instanceof Error ? err.message : String(err));
-    process.exit(1);
+program
+  .name('notion-add-audio')
+  .description('Add or replace audio under the study-text toggle on a Notion page')
+  .requiredOption('--page-id <pageId>', 'Notion page ID')
+  .requiredOption('--url <url>', 'Audio URL to add')
+  .option('--replace', 'Replace existing audio instead of appending')
+  .action(async (options) => {
+    try {
+      const result = await addOrReplaceAudioUnderStudyText(options.pageId, options.url, { replace: options.replace });
+      console.log(JSON.stringify(result, null, 2));
+    } catch (error) {
+      console.error(error instanceof Error ? error.message : String(error));
+      process.exit(1);
+    }
   });
+
+program.parse();

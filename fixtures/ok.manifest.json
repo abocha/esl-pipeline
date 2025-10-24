@@ -1,10 +1,8 @@
 {
   "mdHash": "32760c358dbc428b23f76177c8890d4496abfbdeeca9180db4fda9d4da8e4faf",
-  "pageId": "page_32760c358dbc",
-  "pageUrl": "https://www.notion.so/page_32760c358dbc",
   "audio": {
-    "path": "/home/abocha/code/esl-pipeline/out/589b9f6decdd9ba38d9cd0f6402507704d11337f8f853d42373afa57641be577.mp3",
-    "hash": "589b9f6decdd9ba38d9cd0f6402507704d11337f8f853d42373afa57641be577"
+    "path": "/home/abocha/code/esl-pipeline/fixtures/175f6b1ffc99ad07ed55bc29f1418f276c52f4f9fbb4f6fc3d5b9ec37adab8cf.mp3",
+    "hash": "175f6b1ffc99ad07ed55bc29f1418f276c52f4f9fbb4f6fc3d5b9ec37adab8cf"
   },
-  "timestamp": "2025-10-24T15:36:24.215Z"
+  "timestamp": "2025-10-24T17:20:10.663Z"
 }
