@@ -30,7 +30,13 @@
     "test": "vitest run",
     "test:watch": "vitest"
   },
+  "dependencies": {
+    "@esl-pipeline/md-extractor": "workspace:*",
+    "@elevenlabs/elevenlabs-js": "^2.20.1",
+    "js-yaml": "^4.1.0"
+  },
   "devDependencies": {
+    "@types/js-yaml": "^4.0.9",
     "@types/node": "^24.9.1",
     "rimraf": "^6.0.1",
     "tsx": "^4.20.6",

@@ -9,7 +9,7 @@ const flag = (name: string) => {
 
 const md = flag('--md');
 if (!md) {
-  console.error('Usage: esl-orchestrator --md <file.md> [--student "Name"] [--preset default] [--with-tts] [--upload s3] [--dry-run]');
+  console.error('Usage: esl-orchestrator --md <file.md> [--student "Name"] [--preset default] [--with-tts] [--voices <file>] [--out <dir>] [--force] [--upload s3] [--dry-run]');
   process.exit(1);
 }
 
