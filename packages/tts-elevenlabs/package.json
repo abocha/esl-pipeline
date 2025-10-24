@@ -31,8 +31,9 @@
     "test:watch": "vitest"
   },
   "dependencies": {
-    "@esl-pipeline/md-extractor": "workspace:*",
     "@elevenlabs/elevenlabs-js": "^2.20.1",
+    "@esl-pipeline/md-extractor": "workspace:*",
+    "ffmpeg-static": "^5.2.0",
     "js-yaml": "^4.1.0"
   },
   "devDependencies": {

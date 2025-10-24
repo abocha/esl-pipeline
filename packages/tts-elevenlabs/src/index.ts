@@ -1,9 +1,10 @@
 import { createHash } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
-import { mkdir, writeFile } from 'node:fs/promises';
+import { mkdir, writeFile, copyFile } from 'node:fs/promises';
 import yaml from 'js-yaml';
 import { extractStudyText } from '@esl-pipeline/md-extractor';
+import { concatMp3Segments } from './ffmpeg.js';
 
 export function hashStudyText(text: string): string {
   return createHash('sha256').update(text).digest('hex');
@@ -58,25 +59,35 @@ export async function buildStudyTextMp3(
   }
 
   // Generate TTS for each line or chunk
-  const audioChunks: Buffer[] = [];
+  const audioFiles: string[] = [];
   let totalDuration = 0;
 
   for (const line of studyText.lines) {
     const voiceId = getVoiceIdForLine(line, voiceMap, studyText.type);
     if (!voiceId) continue;
 
+    // Create a temporary file for this line's audio
+    const lineHash = createHash('sha256').update(`${line}-${voiceId}`).digest('hex');
+    const lineFileName = `${lineHash}.mp3`;
+    const lineFilePath = resolve(outputDir, lineFileName);
+
     // Placeholder - actual ElevenLabs API call would go here
     // For MVP, we'll create dummy audio data
     const dummyAudio = Buffer.from(`dummy audio for: ${line}`); // In real implementation, this would be API response
-    audioChunks.push(dummyAudio);
+    await writeFile(lineFilePath, dummyAudio);
+
+    audioFiles.push(lineFilePath);
     totalDuration += line.length * 0.1; // Rough estimate: 0.1 seconds per character
   }
 
-  // Combine all audio chunks (in real implementation, would need proper audio concatenation)
-  const combinedAudio = Buffer.concat(audioChunks);
-
-  // Write the combined audio to file
-  await writeFile(targetPath, combinedAudio);
+  // Concatenate audio files using ffmpeg
+  if (audioFiles.length === 1) {
+    // Single file, just copy it
+    await copyFile(audioFiles[0]!, targetPath);
+  } else if (audioFiles.length > 1) {
+    // Multiple files, concatenate with ffmpeg
+    await concatMp3Segments(audioFiles.filter(Boolean), targetPath, true);
+  }
 
   return {
     path: targetPath,
