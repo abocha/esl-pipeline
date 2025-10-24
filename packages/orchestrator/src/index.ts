@@ -9,6 +9,7 @@ export type NewAssignmentFlags = {
   md: string;
   student?: string;
   preset?: string;
+  presetsPath?: string;
   withTts?: boolean;
   upload?: 's3';
   dryRun?: boolean;
@@ -32,15 +33,22 @@ export async function newAssignment(flags: NewAssignmentFlags): Promise<{
   const steps: string[] = [];
   const pageHash = hashStudyText(flags.md).slice(0, 12);
   const pageId = `page_${pageHash}`;
+  // Use a dummy UUID for dry-run mode
+  const realPageId = flags.dryRun ? 'ce06f3e4-e332-4b83-8b34-6b8c6e6e6e6e' : pageId;
   const pageUrl = `https://www.notion.so/${pageId}`;
 
   steps.push('validate');
   steps.push('import');
 
   let colorized = false;
-  if (flags.preset) {
+  if (flags.preset && !flags.dryRun) {
     steps.push('colorize');
-    await applyHeadingPreset(pageId, flags.preset);
+    const color = await applyHeadingPreset(realPageId, flags.preset, flags.presetsPath ?? "configs/presets.json");
+    steps.push(`colorize:${flags.preset}:${color.counts.h2}/${color.counts.h3}/${color.counts.toggles}`);
+    colorized = true;
+  } else if (flags.preset && flags.dryRun) {
+    // In dry-run mode, pretend we colorized
+    steps.push(`colorize:${flags.preset}:0/0/0`);
     colorized = true;
   }
 

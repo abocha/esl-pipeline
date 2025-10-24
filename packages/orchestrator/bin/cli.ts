@@ -17,6 +17,7 @@ const result = await newAssignment({
   md,
   student: flag('--student'),
   preset: flag('--preset'),
+  presetsPath: flag('--presets-path'),
   withTts: args.includes('--with-tts'),
   upload: flag('--upload') as 's3' | undefined,
   dryRun: args.includes('--dry-run'),
