@@ -1,26 +1,19 @@
-#!/usr/bin/env node
-import { applyHeadingPreset } from '../src/index.js';
+import { Command } from "commander";
+import { applyHeadingPreset } from "../src/index.js";
 
-const args = process.argv.slice(2);
-const flag = (name: string) => {
-  const idx = args.indexOf(name);
-  return idx >= 0 ? args[idx + 1] : undefined;
-};
-
-const pageId = flag('--page-id');
-const preset = flag('--preset');
-const presetsPath = flag('--presets-path');
-
-if (!pageId || !preset) {
-  console.error('Usage: notion-colorizer --page-id <id> --preset <name> [--presets-path presets.json]');
-  process.exit(1);
-}
-
-applyHeadingPreset(pageId, preset, presetsPath)
-  .then(result => {
-    console.log(JSON.stringify(result, null, 2));
-  })
-  .catch(err => {
-    console.error(err instanceof Error ? err.message : String(err));
-    process.exit(1);
+const program = new Command()
+  .name("notion-colorizer")
+  .requiredOption("--page-id <id>", "Notion page id")
+  .requiredOption("--preset <name>", "Preset name")
+  .option("--presets-path <file>", "Path to presets JSON", "configs/presets.json")
+  .action(async (opts) => {
+    try {
+      const res = await applyHeadingPreset(opts.pageId, opts.preset, opts.presetsPath);
+      console.log(JSON.stringify(res, null, 2));
+    } catch (e: any) {
+      console.error(e?.message || String(e));
+      process.exit(1);
+    }
   });
+
+program.parse();
