@@ -1,24 +1,73 @@
 import { readFile } from 'node:fs/promises';
 import { basename } from 'node:path';
-import { createNotionClient, findStudentPageId, resolveDataSourceId } from './notion.js';
+import { createNotionClient, resolveStudentId, resolveDataSourceId } from './notion.js';
 import { mdToBlocks } from './mdToBlocks.js';
 import { extractFrontmatter } from '@esl-pipeline/md-extractor';
+import { validateMarkdownFile } from '@esl-pipeline/md-validator';
 import type { ImportOptions, FrontmatterShape } from './types.js';
+import { chunk } from './chunk.js';
+import { withRetry } from './retry.js';
+
+const MAX_BLOCKS_PER_REQUEST = 50;
 
 export async function runImport(opts: ImportOptions) {
-  const md = await readFile(opts.mdPath, 'utf8');
+  const rawMd = await readFile(opts.mdPath, 'utf8');
 
-  // --- Step 1: validate via CLI (fail fast) ---
-  // Prefer programmatic later; for now call the CLI if available.
-  await validateWithCli(opts.mdPath);
+  // --- Step 1: validate programmatically (fail fast) ---
+  const v = await validateMarkdownFile(opts.mdPath, { strict: true });
+  if (!v.ok) {
+    const msg = [
+      'Validation failed:',
+      ...v.errors.map(e => `- ${e}`)
+    ].join('\n');
+    throw new Error(msg);
+  }
 
-  // --- Step 2: get front matter ---
-  const fm = (extractFrontmatter(md) ?? {}) as FrontmatterShape;
+  // --- Step 2: extract code block content (like validator does) ---
+  const blockMatch = rawMd.match(/```([a-zA-Z0-9_-]*)\s*\n([\s\S]*?)```/m);
+  if (!blockMatch) {
+    throw new Error('No fenced code block found. Output must be inside a single triple-backtick block.');
+  }
+  const blockContent = blockMatch[2]?.trim() ?? '';
+
+  // --- Step 3: get front matter from block content ---
+  const fm = (extractFrontmatter(blockContent) ?? {}) as FrontmatterShape;
   const title = fm.title ?? basename(opts.mdPath);
   const topics = Array.isArray(fm.topic) ? fm.topic : (fm.topic ? [fm.topic] : []);
   const studentName = (opts.student ?? fm.student ?? '').trim();
 
-  // --- Step 3: Notion client / targets ---
+  // --- Step 4: properties payload ---
+  const properties: Record<string, any> = {
+    'Name': { title: [{ type: 'text', text: { content: title } }] }
+  };
+  if (topics.length) {
+    properties['Topic'] = { multi_select: topics.map((t: string) => ({ name: t })) };
+  }
+
+  // --- Step 5: blocks mapping ---
+  const children = mdToBlocks(blockContent);
+
+  // --- Step 5: dry run ---
+  if (opts.dryRun) {
+    // Add student relation for dry-run if student name exists
+    if (studentName) {
+      properties['Student'] = { relation: [{ id: 'dry-run-student-placeholder' }] };
+    }
+
+    const dryRunOutput = {
+      dataSourceId: opts.dataSourceId ?? opts.dbId ?? 'dry-run-placeholder',
+      propertiesPreview: properties,
+      blocksPreview: children.map(b => b.type),
+      totalBlocks: children.length
+    };
+    return {
+      page_id: undefined,
+      url: undefined,
+      ...dryRunOutput
+    };
+  }
+
+  // --- Step 6: Notion client / targets (only for real runs) ---
   const client = createNotionClient();
   const { dataSourceId, databaseId } = await resolveDataSourceId(client, {
     dataSourceId: opts.dataSourceId,
@@ -26,60 +75,39 @@ export async function runImport(opts: ImportOptions) {
     dbId: opts.dbId,
     dbName: opts.dbName
   });
-  const studentsDbId = process.env.STUDENTS_DB_ID;
-  const studentPageId = studentName ? await findStudentPageId(client, studentName, studentsDbId) : undefined;
+  const studentPageId = studentName ? await resolveStudentId(client, studentName) : undefined;
 
-  // --- Step 4: properties payload ---
-  const properties: Record<string, any> = {
-    'Name': { title: [{ type: 'text', text: { content: title } }] }
-  };
+  // Add student relation if resolved
   if (studentPageId) {
     properties['Student'] = { relation: [{ id: studentPageId }] };
   }
-  if (topics.length) {
-    properties['Topic'] = { multi_select: topics.map(t => ({ name: t })) };
+
+  // --- Step 7: create ---
+  const parent = { data_source_id: dataSourceId };
+
+  let page: any;
+  if (children.length <= MAX_BLOCKS_PER_REQUEST) {
+    page = await withRetry(() => client.pages.create({
+      parent,
+      properties: properties as any,
+      children
+    }), 'pages.create');
+  } else {
+    page = await withRetry(() => client.pages.create({
+      parent,
+      properties: properties as any
+    }), 'pages.create');
+    const chunks = chunk(children, MAX_BLOCKS_PER_REQUEST);
+    for (const batch of chunks) {
+      await withRetry(() => client.blocks.children.append({
+        block_id: page.id,
+        children: batch
+      }), 'blocks.children.append');
+    }
   }
-  // --- Step 5: blocks mapping ---
-  const children = mdToBlocks(md);
-
-  // --- Step 6: create ---
-  if (opts.dryRun) {
-    return {
-      dryRun: true,
-      databaseId,
-      dataSourceId,
-      properties,
-      blocksPreview: children.slice(0, 5).map(b => b.type),
-      totalBlocks: children.length
-    };
-  }
-
-  const parent = { data_source: { id: dataSourceId } } as any;
-
-  const page = await client.pages.create({
-    parent,
-    properties: properties as any,
-    children
-  });
 
   return {
     page_id: page.id,
     url: (page as any).url as string | undefined
   };
-}
-
-/** Temp shim: run validator CLI; later replace with programmatic import */
-async function validateWithCli(mdPath: string) {
-  try {
-    const { execa } = await import('node:child_process' as any); // typesafe import not needed for runtime
-  } catch {
-    // Node 20+ doesn't have execa; we'll use spawnSync from child_process
-  }
-  const cp = await import('node:child_process');
-  const { spawn } = cp as any;
-  // Run the validator CLI: packages/md-validator/dist/index.js <file> --strict
-  await new Promise<void>((resolve, reject) => {
-    const p = spawn('node', ['packages/md-validator/dist/index.js', mdPath, '--strict'], { stdio: 'inherit' });
-    p.on('exit', (code: number) => (code === 0 ? resolve() : reject(new Error(`md-validator failed: ${code}`))));
-  });
 }

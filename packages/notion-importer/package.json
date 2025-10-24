@@ -32,6 +32,7 @@
   },
   "dependencies": {
     "@esl-pipeline/md-extractor": "workspace:*",
+    "@esl-pipeline/md-validator": "workspace:*",
     "@notionhq/client": "^5.3.0"
   },
   "devDependencies": {

@@ -3,6 +3,7 @@ import { unified } from 'unified'
 import remarkParse from 'remark-parse'
 import type { Root, RootContent, Heading } from 'mdast'
 import { z } from 'zod'
+import { readFile } from 'node:fs/promises'
 
 export type ValidateOptions = {
   strict?: boolean
@@ -110,14 +111,16 @@ function sectionSlice(root: Root, startHeading: Heading): RootContent[] {
   return ch.slice(idx + 1, endIdx)
 }
 
-export function validateMarkdownFile(rawFile: string, opts: ValidateOptions = {}): ValidateResult {
+export async function validateMarkdownFile(rawFile: string, opts: ValidateOptions = {}): Promise<ValidateResult> {
   const errors: string[] = []
   const warnings: string[] = []
+
+  const content = await readFile(rawFile, 'utf8')
 
   // 1) get the single code block
   let block: { lang: string; content: string }
   try {
-    block = extractFirstCodeBlock(rawFile)
+    block = extractFirstCodeBlock(content)
   } catch (e: any) {
     return { ok: false, errors: [e.message], warnings }
   }

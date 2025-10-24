@@ -1,87 +1,78 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import type { Client } from '@notionhq/client';
 import { resolveDataSourceId } from '../src/notion.js';
+import type { ResolveDataSourceInput } from '../src/types.js';
 
 describe('resolveDataSourceId', () => {
-  it('returns parent database when data source id provided', async () => {
+  it('Test Case 1: dataSourceId provided', async () => {
+    const mockRetrieve = vi.fn().mockResolvedValue({
+      id: 'ds-123',
+      parent: { type: 'database_id', database_id: 'db-456' }
+    });
     const client = {
-      dataSources: {
-        retrieve: async () => ({
-          id: 'ds-parent',
-          parent: { type: 'database_id', database_id: 'db-parent' }
-        })
-      }
+      dataSources: { retrieve: mockRetrieve }
     } as unknown as Client;
 
-    const result = await resolveDataSourceId(client, { dataSourceId: 'ds-parent' });
-    expect(result).toEqual({ dataSourceId: 'ds-parent', databaseId: 'db-parent' });
+    const result = await resolveDataSourceId(client, { dataSourceId: 'ds-123' });
+    expect(result).toEqual({ dataSourceId: 'ds-123', databaseId: 'db-456' });
+    expect(mockRetrieve).toHaveBeenCalledWith({ data_source_id: 'ds-123' });
   });
 
-  it('selects single data source when only one exists', async () => {
+  it('Test Case 2: dbId provided, single data source found', async () => {
+    const mockRetrieve = vi.fn().mockResolvedValue({
+      id: 'db-456',
+      data_sources: [{ id: 'ds-789', name: 'Primary' }]
+    });
     const client = {
-      dataSources: {
-        retrieve: async () => {
-          throw new Error('should not be called');
-        }
-      },
-      databases: {
-        retrieve: async () => ({
-          id: 'db-single',
-          data_sources: [{ id: 'ds-single', name: 'Primary' }]
-        })
-      }
+      databases: { retrieve: mockRetrieve }
     } as unknown as Client;
 
-    const result = await resolveDataSourceId(client, { dbId: 'db-single' });
-    expect(result).toEqual({ dataSourceId: 'ds-single', databaseId: 'db-single' });
+    const result = await resolveDataSourceId(client, { dbId: 'db-456' });
+    expect(result).toEqual({ dataSourceId: 'ds-789', databaseId: 'db-456' });
+    expect(mockRetrieve).toHaveBeenCalledWith({ database_id: 'db-456' });
   });
 
-  it('selects data source by name when multiple available', async () => {
+  it('Test Case 3: dbId provided, multiple data sources found, no dataSourceName', async () => {
+    const mockRetrieve = vi.fn().mockResolvedValue({
+      id: 'db-456',
+      data_sources: [
+        { id: 'ds-1', name: 'Alpha' },
+        { id: 'ds-2', name: 'Beta' }
+      ]
+    });
     const client = {
-      dataSources: {
-        retrieve: async () => {
-          throw new Error('should not be called');
-        }
-      },
-      databases: {
-        retrieve: async () => ({
-          id: 'db-multi',
-          data_sources: [
-            { id: 'ds-1', name: 'Alpha' },
-            { id: 'ds-2', name: 'Beta' }
-          ]
-        })
-      },
-      search: async () => ({ results: [] })
+      databases: { retrieve: mockRetrieve }
+    } as unknown as Client;
+
+    await expect(
+      resolveDataSourceId(client, { dbId: 'db-456' })
+    ).rejects.toThrow('Multiple data sources found. Pass --data-source <name> or --data-source-id.');
+  });
+
+  it('Test Case 4: dbId provided, multiple data sources found, dataSourceName provided', async () => {
+    const mockRetrieve = vi.fn().mockResolvedValue({
+      id: 'db-456',
+      data_sources: [
+        { id: 'ds-1', name: 'Alpha' },
+        { id: 'ds-2', name: 'Beta' }
+      ]
+    });
+    const client = {
+      databases: { retrieve: mockRetrieve }
     } as unknown as Client;
 
     const result = await resolveDataSourceId(client, {
-      dbId: 'db-multi',
+      dbId: 'db-456',
       dataSourceName: 'beta'
     });
-    expect(result).toEqual({ dataSourceId: 'ds-2', databaseId: 'db-multi' });
+    expect(result).toEqual({ dataSourceId: 'ds-2', databaseId: 'db-456' });
   });
 
-  it('throws when multiple data sources without disambiguation', async () => {
-    const client = {
-      dataSources: {
-        retrieve: async () => {
-          throw new Error('should not be called');
-        }
-      },
-      databases: {
-        retrieve: async () => ({
-          id: 'db-multi',
-          data_sources: [
-            { id: 'ds-1', name: 'Alpha' },
-            { id: 'ds-2', name: 'Beta' }
-          ]
-        })
-      }
-    } as unknown as Client;
+  it('Test Case 5: No IDs/Names provided', async () => {
+    const client = {} as unknown as Client;
 
-    await expect(resolveDataSourceId(client, { dbId: 'db-multi' })).rejects.toThrow(
-      /Multiple data sources/
-    );
+    await expect(
+      resolveDataSourceId(client, {} as ResolveDataSourceInput)
+    ).rejects.toThrow('Provide --data-source-id or --db-id/--db.');
   });
 });

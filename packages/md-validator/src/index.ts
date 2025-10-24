@@ -5,19 +5,20 @@ import { Command } from 'commander';
 import chalk from 'chalk'
 import { validateMarkdownFile } from './validator.js' // <-- add .js
 
+export * from './validator.js'
+
 const program = new Command()
   .name('md-validate')
   .description('Validate ESL assignment Markdown produced by the system prompt')
   .argument('<file>', 'Path to the .md file (the one with the fenced code block)')
   .option('--strict', 'Treat warnings as errors', false)
-  .action((file: string, opts: { strict?: boolean }) => {
+  .action(async (file: string, opts: { strict?: boolean }) => {
     const p = path.resolve(process.cwd(), file)
     if (!fs.existsSync(p)) {
       console.error(chalk.red(`File not found: ${p}`))
       process.exit(1)
     }
-    const raw = fs.readFileSync(p, 'utf8')
-    const result = validateMarkdownFile(raw, { strict: !!opts.strict })
+    const result = await validateMarkdownFile(p, { strict: !!opts.strict })
 
     if (result.ok && (!opts.strict || result.warnings.length === 0)) {
       console.log(chalk.green('✔ Validation passed'))
@@ -45,4 +46,10 @@ const program = new Command()
     process.exit(1)
   })
 
-program.parse()
+import { fileURLToPath } from 'node:url';
+
+const __filename = fileURLToPath(import.meta.url);
+
+if (process.argv[1] === __filename || process.argv[1] === __filename.replace('.ts', '.js')) {
+  program.parse()
+}

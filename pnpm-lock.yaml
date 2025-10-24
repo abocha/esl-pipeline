@@ -143,6 +143,9 @@ importers:
       '@esl-pipeline/md-extractor':
         specifier: workspace:*
         version: link:../md-extractor
+      '@esl-pipeline/md-validator':
+        specifier: workspace:*
+        version: link:../md-validator
       '@notionhq/client':
         specifier: ^5.3.0
         version: 5.3.0
