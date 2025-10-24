@@ -9,7 +9,7 @@ const flag = (name: string) => {
 
 const md = flag('--md');
 if (!md) {
-  console.error('Usage: esl-orchestrator --md <file.md> [--student "Name"] [--preset default] [--with-tts] [--voices <file>] [--out <dir>] [--force] [--upload s3] [--dry-run]');
+  console.error('Usage: esl-orchestrator --md <file.md> [--student "Name"] [--preset default] [--with-tts] [--voices <file>] [--out <dir>] [--force] [--upload s3] [--presign <sec>] [--public-read] [--prefix <keyprefix>] [--dry-run]');
   process.exit(1);
 }
 
@@ -20,6 +20,9 @@ const result = await newAssignment({
   presetsPath: flag('--presets-path'),
   withTts: args.includes('--with-tts'),
   upload: flag('--upload') as 's3' | undefined,
+  presign: flag('--presign') ? parseInt(flag('--presign')!) : undefined,
+  publicRead: args.includes('--public-read'),
+  prefix: flag('--prefix'),
   dryRun: args.includes('--dry-run'),
   force: args.includes('--force'),
   voices: flag('--voices'),

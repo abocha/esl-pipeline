@@ -10,5 +10,5 @@
     "target": "ES2022",
     "strict": true
   },
-  "include": ["src", "bin", "tests"]
+  "include": ["src", "bin"]
 }

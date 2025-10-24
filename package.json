@@ -47,6 +47,7 @@
   },
   "dependencies": {
     "@types/mdast": "^4.0.4",
+    "ffmpeg-static": "5.2.0",
     "remark-parse": "^11.0.0"
   }
 }

@@ -1,6 +1,6 @@
 ```md
 ---
-title: "Homework Assignment: Test"
+title: "Test"
 student: "Anna"
 level: A2
 topic: weather
