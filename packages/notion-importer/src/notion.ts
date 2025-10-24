@@ -165,12 +165,12 @@ export async function findStudentPageId(
   }
 
   const resp = await withRetry(
-    () => client.search({
+    () => (client.search as any)({
       query: trimmedName,
       filter: { value: 'page', property: 'object' }
     }),
     'search'
-  );
+  ) as SearchResponse;
   const page = resp.results.find(isPage);
   if (page) return page.id;
 
