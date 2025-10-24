@@ -8,7 +8,6 @@
     "test": "pnpm -r --filter './packages/*' run test",
     "test:watch": "pnpm -r --filter './packages/*' run test:watch",
     "clean": "pnpm -r --filter './packages/*' run clean",
-
     "build:extractor": "pnpm --filter @esl-pipeline/md-extractor build",
     "build:validator": "pnpm --filter @esl-pipeline/md-validator build",
     "build:importer": "pnpm --filter @esl-pipeline/notion-importer build",
@@ -17,7 +16,6 @@
     "build:uploader": "pnpm --filter @esl-pipeline/storage-uploader build",
     "build:add-audio": "pnpm --filter @esl-pipeline/notion-add-audio build",
     "build:orchestrator": "pnpm --filter @esl-pipeline/orchestrator build",
-
     "dev:extractor": "pnpm --filter @esl-pipeline/md-extractor dev",
     "dev:importer": "pnpm --filter @esl-pipeline/notion-importer dev",
     "dev:colorizer": "pnpm --filter @esl-pipeline/notion-colorizer dev",
@@ -25,7 +23,6 @@
     "dev:uploader": "pnpm --filter @esl-pipeline/storage-uploader dev",
     "dev:add-audio": "pnpm --filter @esl-pipeline/notion-add-audio dev",
     "dev:orchestrator": "pnpm --filter @esl-pipeline/orchestrator dev",
-
     "md-extractor": "node packages/md-extractor/dist/bin/cli.js",
     "md-validator": "node packages/md-validator/dist/index.js",
     "notion-importer": "node packages/notion-importer/dist/bin/cli.js",
@@ -46,7 +43,7 @@
     "@types/node": "^24.9.1",
     "tsx": "^4.20.6",
     "typescript": "^5.9.3",
-    "vitest": "^4.0.1"
+    "vitest": "^4.0.2"
   },
   "dependencies": {
     "@types/mdast": "^4.0.4",
