@@ -58,7 +58,7 @@ export async function newAssignment(flags: NewAssignmentFlags): Promise<{
     const ttsResult = await buildStudyTextMp3(flags.md, {
       voiceMapPath: flags.voices ?? 'voices.json',
       outPath: flags.out ?? dirname(flags.md),
-      preview: true
+      preview: flags.dryRun
     });
     audio = { path: ttsResult.path, hash: ttsResult.hash };
   }
