@@ -1,0 +1,392 @@
+{
+  "voices": [
+    {
+      "name": "Clyde",
+      "category": "premade",
+      "labels": {
+        "accent": "american",
+        "descriptive": "intense",
+        "age": "middle_aged",
+        "gender": "male",
+        "language": "en",
+        "use_case": "characters_animation"
+      },
+      "preview_url": null
+    },
+    {
+      "name": "Roger",
+      "category": "premade",
+      "labels": {
+        "accent": "american",
+        "descriptive": "classy",
+        "age": "middle_aged",
+        "gender": "male",
+        "language": "en",
+        "use_case": "conversational"
+      },
+      "preview_url": null
+    },
+    {
+      "name": "Sarah",
+      "category": "premade",
+      "labels": {
+        "accent": "american",
+        "descriptive": "professional",
+        "age": "young",
+        "gender": "female",
+        "language": "en",
+        "use_case": "entertainment_tv"
+      },
+      "preview_url": null
+    },
+    {
+      "name": "Laura",
+      "category": "premade",
+      "labels": {
+        "accent": "american",
+        "descriptive": "sassy",
+        "age": "young",
+        "gender": "female",
+        "language": "en",
+        "use_case": "social_media"
+      },
+      "preview_url": null
+    },
+    {
+      "name": "Charlie",
+      "category": "premade",
+      "labels": {
+        "accent": "australian",
+        "descriptive": "hyped",
+        "age": "young",
+        "gender": "male",
+        "language": "en",
+        "use_case": "conversational"
+      },
+      "preview_url": null
+    },
+    {
+      "name": "George",
+      "category": "premade",
+      "labels": {
+        "accent": "british",
+        "descriptive": "mature",
+        "age": "middle_aged",
+        "gender": "male",
+        "language": "en",
+        "use_case": "narrative_story"
+      },
+      "preview_url": null
+    },
+    {
+      "name": "Callum",
+      "category": "premade",
+      "labels": {
+        "accent": "",
+        "age": "middle_aged",
+        "language": "en",
+        "gender": "male",
+        "use_case": "characters"
+      },
+      "preview_url": null
+    },
+    {
+      "name": "River",
+      "category": "premade",
+      "labels": {
+        "accent": "american",
+        "descriptive": "calm",
+        "age": "middle_aged",
+        "gender": "neutral",
+        "language": "en",
+        "use_case": "conversational"
+      },
+      "preview_url": null
+    },
+    {
+      "name": "Harry",
+      "category": "premade",
+      "labels": {
+        "accent": "american",
+        "descriptive": "rough",
+        "age": "young",
+        "gender": "male",
+        "language": "en",
+        "use_case": "characters_animation"
+      },
+      "preview_url": null
+    },
+    {
+      "name": "Liam",
+      "category": "premade",
+      "labels": {
+        "accent": "american",
+        "descriptive": "confident",
+        "age": "young",
+        "gender": "male",
+        "language": "en",
+        "use_case": "social_media"
+      },
+      "preview_url": null
+    },
+    {
+      "name": "Alice",
+      "category": "premade",
+      "labels": {
+        "accent": "british",
+        "descriptive": "professional",
+        "age": "middle_aged",
+        "gender": "female",
+        "language": "en",
+        "use_case": "advertisement"
+      },
+      "preview_url": null
+    },
+    {
+      "name": "Matilda",
+      "category": "premade",
+      "labels": {
+        "accent": "american",
+        "descriptive": "upbeat",
+        "age": "middle_aged",
+        "gender": "female",
+        "language": "en",
+        "use_case": "informative_educational"
+      },
+      "preview_url": null
+    },
+    {
+      "name": "Will",
+      "category": "premade",
+      "labels": {
+        "accent": "american",
+        "descriptive": "chill",
+        "age": "young",
+        "gender": "male",
+        "language": "en",
+        "use_case": "conversational"
+      },
+      "preview_url": null
+    },
+    {
+      "name": "Jessica",
+      "category": "premade",
+      "labels": {
+        "accent": "american",
+        "descriptive": "cute",
+        "age": "young",
+        "gender": "female",
+        "language": "en",
+        "use_case": "conversational"
+      },
+      "preview_url": null
+    },
+    {
+      "name": "Eric",
+      "category": "premade",
+      "labels": {
+        "accent": "american",
+        "descriptive": "classy",
+        "age": "middle_aged",
+        "gender": "male",
+        "language": "en",
+        "use_case": "conversational"
+      },
+      "preview_url": null
+    },
+    {
+      "name": "Chris",
+      "category": "premade",
+      "labels": {
+        "accent": "american",
+        "descriptive": "casual",
+        "age": "middle_aged",
+        "gender": "male",
+        "language": "en",
+        "use_case": "conversational"
+      },
+      "preview_url": null
+    },
+    {
+      "name": "Brian",
+      "category": "premade",
+      "labels": {
+        "accent": "american",
+        "descriptive": "classy",
+        "age": "middle_aged",
+        "gender": "male",
+        "language": "en",
+        "use_case": "social_media"
+      },
+      "preview_url": null
+    },
+    {
+      "name": "Daniel",
+      "category": "premade",
+      "labels": {
+        "accent": "british",
+        "descriptive": "formal",
+        "age": "middle_aged",
+        "gender": "male",
+        "language": "en",
+        "use_case": "informative_educational"
+      },
+      "preview_url": null
+    },
+    {
+      "name": "Lily",
+      "category": "premade",
+      "labels": {
+        "accent": "",
+        "descriptive": "confident",
+        "age": "middle_aged",
+        "gender": "female",
+        "language": "en",
+        "use_case": "narration"
+      },
+      "preview_url": null
+    },
+    {
+      "name": "Bill",
+      "category": "premade",
+      "labels": {
+        "accent": "american",
+        "descriptive": "crisp",
+        "age": "old",
+        "gender": "male",
+        "language": "en",
+        "use_case": "advertisement"
+      },
+      "preview_url": null
+    },
+    {
+      "name": "Mark - ConvoAI",
+      "category": "professional",
+      "labels": {
+        "accent": "american",
+        "descriptive": "casual",
+        "age": "middle_aged",
+        "gender": "male",
+        "language": "en",
+        "use_case": "conversational"
+      },
+      "preview_url": null
+    },
+    {
+      "name": "Adeline",
+      "category": "professional",
+      "labels": {
+        "accent": "american",
+        "age": "middle_aged",
+        "language": "en",
+        "gender": "female",
+        "use_case": "narrative_story"
+      },
+      "preview_url": null
+    },
+    {
+      "name": "Eve",
+      "category": "professional",
+      "labels": {
+        "accent": "american",
+        "descriptive": "upbeat",
+        "age": "young",
+        "gender": "female",
+        "language": "en",
+        "use_case": "conversational"
+      },
+      "preview_url": null
+    },
+    {
+      "name": "Arabella",
+      "category": "professional",
+      "labels": {
+        "accent": "american",
+        "descriptive": "gentle",
+        "age": "young",
+        "gender": "female",
+        "language": "en",
+        "use_case": "narrative_story"
+      },
+      "preview_url": null
+    },
+    {
+      "name": "Amelia",
+      "category": "professional",
+      "labels": {
+        "accent": "british",
+        "descriptive": "upbeat",
+        "age": "young",
+        "gender": "female",
+        "language": "en",
+        "use_case": "narrative_story"
+      },
+      "preview_url": null
+    },
+    {
+      "name": "Salma - Conversational Expressive Voice",
+      "category": "professional",
+      "labels": {
+        "accent": "arabic",
+        "descriptive": "pleasant",
+        "age": "young",
+        "gender": "female",
+        "language": "en",
+        "use_case": "conversational"
+      },
+      "preview_url": null
+    },
+    {
+      "name": "Antonio - English with Subtle Italian Accent",
+      "category": "professional",
+      "labels": {
+        "accent": "italian",
+        "descriptive": "calm",
+        "age": "young",
+        "gender": "male",
+        "language": "en",
+        "use_case": "conversational"
+      },
+      "preview_url": null
+    },
+    {
+      "name": "Bjorn The Viking",
+      "category": "professional",
+      "labels": {
+        "accent": "swedish",
+        "descriptive": "deep",
+        "age": "middle_aged",
+        "gender": "male",
+        "language": "en",
+        "use_case": "characters_animation"
+      },
+      "preview_url": null
+    },
+    {
+      "name": "Flint - Commanding Presence",
+      "category": "professional",
+      "labels": {
+        "accent": "american",
+        "descriptive": "husky",
+        "age": "old",
+        "gender": "male",
+        "language": "en",
+        "use_case": "narrative_story"
+      },
+      "preview_url": null
+    },
+    {
+      "name": "Hope - upbeat and clear",
+      "category": "professional",
+      "labels": {
+        "accent": "american",
+        "descriptive": "upbeat",
+        "age": "young",
+        "gender": "female",
+        "language": "en",
+        "use_case": "social_media"
+      },
+      "preview_url": null
+    }
+  ]
+}

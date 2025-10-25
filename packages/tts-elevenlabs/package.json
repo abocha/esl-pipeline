@@ -21,14 +21,16 @@
     "dist"
   ],
   "bin": {
-    "tts-elevenlabs": "dist/bin/cli.js"
+    "tts-elevenlabs": "dist/bin/cli.js",
+    "tts-voices": "dist/bin/voices.js"
   },
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "clean": "rimraf dist",
     "dev": "tsx watch bin/cli.ts",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "voices:sync": "node dist/bin/voices.js"
   },
   "dependencies": {
     "@elevenlabs/elevenlabs-js": "^2.20.1",
