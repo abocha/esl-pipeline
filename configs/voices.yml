@@ -1,4 +1,4 @@
 auto: true
 default: Liam
-Teacher:  VOICE_ID_IF_YOU_WANT_TO_FORCE
+Teacher: VOICE_ID_IF_YOU_WANT_TO_FORCE
 Narrator: Liam

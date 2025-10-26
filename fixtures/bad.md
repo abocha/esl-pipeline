@@ -1,12 +1,13 @@
 ```markdown
 ---
-title: ""
-student: ""
+title: ''
+student: ''
 level: A1
-topic: 
+topic:
 input_type: generate
 ---
 
 ## 1. OOPS
+
 (no rest)
 ```

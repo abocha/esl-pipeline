@@ -37,7 +37,7 @@ function arg(flag: string): string | undefined {
       dataSourceId,
       dataSourceName,
       student,
-      dryRun
+      dryRun,
     });
     console.log(JSON.stringify(res, null, 2));
   } catch (e) {

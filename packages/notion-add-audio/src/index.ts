@@ -16,11 +16,7 @@ export function createNotionClient() {
   return new Client({ auth: token, notionVersion: '2025-09-03' });
 }
 
-async function withRetry<T>(
-  fn: () => Promise<T>,
-  label: string,
-  tries = 5
-): Promise<T> {
+async function withRetry<T>(fn: () => Promise<T>, label: string, tries = 5): Promise<T> {
   let delay = 350; // ms
   for (let i = 0; i < tries; i++) {
     try {
@@ -59,7 +55,12 @@ export async function addOrReplaceAudioUnderStudyText(
     );
 
     for (const block of resp.results) {
-      if ('type' in block && block.type === 'toggle' && 'toggle' in block && block.toggle?.rich_text?.[0]?.plain_text === 'study-text') {
+      if (
+        'type' in block &&
+        block.type === 'toggle' &&
+        'toggle' in block &&
+        block.toggle?.rich_text?.[0]?.plain_text === 'study-text'
+      ) {
         studyTextBlockId = block.id;
         break;
       }
@@ -84,10 +85,7 @@ export async function addOrReplaceAudioUnderStudyText(
   for (const block of childrenResp.results) {
     if ('type' in block && block.type === 'audio') {
       if (opts.replace) {
-        await withRetry(
-          () => client.blocks.delete({ block_id: block.id }),
-          'blocks.delete'
-        );
+        await withRetry(() => client.blocks.delete({ block_id: block.id }), 'blocks.delete');
         replaced = true;
       } else {
         // If not replacing and found existing audio, do nothing
@@ -98,16 +96,19 @@ export async function addOrReplaceAudioUnderStudyText(
 
   // Append new audio block
   await withRetry(
-    () => client.blocks.children.append({
-      block_id: studyTextBlockId,
-      children: [{
-        type: 'audio',
-        audio: {
-          type: 'external',
-          external: { url }
-        }
-      }]
-    }),
+    () =>
+      client.blocks.children.append({
+        block_id: studyTextBlockId,
+        children: [
+          {
+            type: 'audio',
+            audio: {
+              type: 'external',
+              external: { url },
+            },
+          },
+        ],
+      }),
     'blocks.children.append'
   );
 

@@ -31,13 +31,13 @@ export function mdToBlocks(md: string): BlockObjectRequest[] {
 
   const makeRichText = (content: string): RichTextItem => ({
     type: 'text',
-    text: { content }
+    text: { content },
   });
 
   const paragraphBlock = (content: string): ParagraphBlock => {
     const block = {
       type: 'paragraph',
-      paragraph: { rich_text: [makeRichText(content)] }
+      paragraph: { rich_text: [makeRichText(content)] },
     } satisfies ParagraphBlock;
     return block;
   };
@@ -45,7 +45,7 @@ export function mdToBlocks(md: string): BlockObjectRequest[] {
   const bulletBlock = (content: string): BulletBlock => {
     const block = {
       type: 'bulleted_list_item',
-      bulleted_list_item: { rich_text: [makeRichText(content)] }
+      bulleted_list_item: { rich_text: [makeRichText(content)] },
     } satisfies BulletBlock;
     return block;
   };
@@ -54,13 +54,13 @@ export function mdToBlocks(md: string): BlockObjectRequest[] {
     if (depth === 2) {
       const block = {
         type: 'heading_2',
-        heading_2: { rich_text: [makeRichText(content)] }
+        heading_2: { rich_text: [makeRichText(content)] },
       } satisfies Heading2Block;
       return block;
     }
     const block = {
       type: 'heading_3',
-      heading_3: { rich_text: [makeRichText(content)] }
+      heading_3: { rich_text: [makeRichText(content)] },
     } satisfies Heading3Block;
     return block;
   };
@@ -84,8 +84,8 @@ export function mdToBlocks(md: string): BlockObjectRequest[] {
       type: 'toggle',
       toggle: {
         rich_text: [makeRichText(title)],
-        children
-      }
+        children,
+      },
     } satisfies ToggleBlock;
     return block;
   };

@@ -1,5 +1,11 @@
 import { describe, it, expect } from 'vitest';
-import { extractFrontmatter, extractStudyText, extractAnswerKey, extractTeacherNotes, extractSections } from '../src/index.js';
+import {
+  extractFrontmatter,
+  extractStudyText,
+  extractAnswerKey,
+  extractTeacherNotes,
+  extractSections,
+} from '../src/index.js';
 
 const sample = `---
 title: "Homework Assignment: Weather"

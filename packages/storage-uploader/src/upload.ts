@@ -3,18 +3,24 @@ import { uploadToS3 } from './s3.js';
 
 export type UploadOpts = {
   backend: 's3';
-  bucket?: string;     // optional; defaults to env S3_BUCKET
-  prefix?: string;     // e.g. "audio/assignments"
-  public?: boolean;    // request public-read (will auto-fallback if ACLs disabled)
-  presign?: number;    // seconds (only if your s3 helper supports presign)
-  region?: string;     // optional; defaults to env AWS_REGION
+  bucket?: string; // optional; defaults to env S3_BUCKET
+  prefix?: string; // e.g. "audio/assignments"
+  public?: boolean; // request public-read (will auto-fallback if ACLs disabled)
+  presign?: number; // seconds (only if your s3 helper supports presign)
+  region?: string; // optional; defaults to env AWS_REGION
   presignExpiresIn?: number;
 };
 
 export async function uploadFile(
   localPath: string,
   opts: UploadOpts
-): Promise<{ url: string; key: string; etag?: string; isPresigned?: boolean ; presignExpiresIn?: number;}> {
+): Promise<{
+  url: string;
+  key: string;
+  etag?: string;
+  isPresigned?: boolean;
+  presignExpiresIn?: number;
+}> {
   if (opts.backend !== 's3') {
     throw new Error(`Unsupported backend: ${opts.backend}`);
   }

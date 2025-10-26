@@ -4,6 +4,14 @@
   "private": true,
   "type": "module",
   "license": "UNLICENSED",
+  "description": "One-command ESL assignment pipeline (validation, Notion import, TTS, upload).",
+  "keywords": [
+    "esl",
+    "pipeline",
+    "notion",
+    "tts",
+    "cli"
+  ],
   "engines": {
     "node": ">=18.18"
   },

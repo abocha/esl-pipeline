@@ -34,7 +34,7 @@ export async function ensureExtracted(): Promise<void> {
   const archivePath = getVendoredArchivePath();
 
   // Check if already extracted and valid
-  if (existsSync(cachePath) && await isExecutable(cachePath)) {
+  if (existsSync(cachePath) && (await isExecutable(cachePath))) {
     return;
   }
 
@@ -99,19 +99,29 @@ async function extractArchive(archivePath: string, outputPath: string): Promise<
 
 async function extractTarXz(input: string, outDir: string): Promise<void> {
   await new Promise<void>((resolve, reject) => {
-    const proc = spawn('tar', ['-xJf', input, '--strip-components=1', '-C', outDir], { stdio: 'inherit' });
+    const proc = spawn('tar', ['-xJf', input, '--strip-components=1', '-C', outDir], {
+      stdio: 'inherit',
+    });
     proc.on('error', reject);
-    proc.on('exit', code => code === 0 ? resolve() : reject(new Error(`tar exited with ${code}`)));
+    proc.on('exit', code =>
+      code === 0 ? resolve() : reject(new Error(`tar exited with ${code}`))
+    );
   });
 }
 
 async function extractZip(input: string, outDir: string): Promise<void> {
   await new Promise<void>((resolve, reject) => {
     const cmd = 'powershell';
-    const args = ['-NoProfile', '-Command', `Expand-Archive -Path "${input}" -DestinationPath "${outDir}" -Force`];
+    const args = [
+      '-NoProfile',
+      '-Command',
+      `Expand-Archive -Path "${input}" -DestinationPath "${outDir}" -Force`,
+    ];
     const proc = spawn(cmd, args, { stdio: 'inherit' });
     proc.on('error', reject);
-    proc.on('exit', code => code === 0 ? resolve() : reject(new Error(`Expand-Archive exited with ${code}`)));
+    proc.on('exit', code =>
+      code === 0 ? resolve() : reject(new Error(`Expand-Archive exited with ${code}`))
+    );
   });
 }
 
@@ -135,7 +145,7 @@ async function isExecutable(path: string): Promise<boolean> {
 }
 
 async function isExecutableCmd(cmd: string): Promise<boolean> {
-  return new Promise((resolve) => {
+  return new Promise(resolve => {
     const proc = spawn(cmd, ['-version'], { stdio: 'ignore' });
     proc.on('error', () => resolve(false));
     proc.on('exit', code => resolve(code === 0));
@@ -152,7 +162,7 @@ export async function getFfmpegPath(): Promise<string> {
 
   // 2. Extracted cache
   const cachePath = getExtractedCachePath();
-  if (existsSync(cachePath) && await isExecutable(cachePath)) {
+  if (existsSync(cachePath) && (await isExecutable(cachePath))) {
     return cachePath;
   }
 
@@ -160,7 +170,7 @@ export async function getFfmpegPath(): Promise<string> {
   const archivePath = getVendoredArchivePath();
   if (existsSync(archivePath)) {
     await ensureExtracted();
-    if (existsSync(cachePath) && await isExecutable(cachePath)) {
+    if (existsSync(cachePath) && (await isExecutable(cachePath))) {
       return cachePath;
     }
   }
@@ -171,5 +181,7 @@ export async function getFfmpegPath(): Promise<string> {
     return systemPath;
   }
 
-  throw new Error('FFmpeg not found. Please install FFmpeg or set FFMPEG_PATH environment variable.');
+  throw new Error(
+    'FFmpeg not found. Please install FFmpeg or set FFMPEG_PATH environment variable.'
+  );
 }

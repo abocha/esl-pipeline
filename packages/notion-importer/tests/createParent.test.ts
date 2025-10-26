@@ -14,6 +14,7 @@ student: "Anna"
 level: A2
 topic: weather
 input_type: "authentic"
+speaker_labels: ["Anna"]
 ---
 ## 1. This Week's Mission Briefing
 Test briefing
@@ -32,7 +33,18 @@ Test roadmap
 Test toolkit
 
 ## 5. Practice & Pronunciation
-Test practice
+### A. Controlled Practice
+1) item one
+2) item two
+3) item three
+4) item four
+5) item five
+6) item six
+7) item seven
+8) item eight
+### B. Comprehension Check
+1) question one
+2) question two
 
 ## 6. Your Turn: Complete the Mission!
 Test mission
@@ -55,13 +67,13 @@ Test plan
     // Mock resolveDataSourceId to return specific IDs
     vi.spyOn(notionMod, 'resolveDataSourceId' as any).mockResolvedValue({
       dataSourceId: 'ds-123',
-      databaseId: 'db-456'
+      databaseId: 'db-456',
     });
 
     // Mock notion client and pages.create
     const pagesCreate = vi.fn().mockResolvedValue({ id: 'p1', url: 'https://notion.so/x' });
     vi.spyOn(notionMod, 'createNotionClient' as any).mockReturnValue({
-      pages: { create: pagesCreate }
+      pages: { create: pagesCreate },
     });
 
     // Mock resolveStudentId to return student page ID
@@ -70,7 +82,7 @@ Test plan
     const res = await runImport({
       mdPath: 'tmp.md',
       dbId: 'db-456',
-      dryRun: false
+      dryRun: false,
     });
 
     expect(pagesCreate).toHaveBeenCalled();

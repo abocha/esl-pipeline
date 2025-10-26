@@ -8,8 +8,12 @@ const program = new Command()
   .requiredOption('--file <path>', 'Local file to upload')
   .option('--prefix <prefix>', 'Key prefix for uploaded file')
   .option('--public-read', 'Make the uploaded file publicly readable')
-  .option('--presign <seconds>', 'Generate presigned URL with specified expiration in seconds', parseInt)
-  .action(async (opts) => {
+  .option(
+    '--presign <seconds>',
+    'Generate presigned URL with specified expiration in seconds',
+    parseInt
+  )
+  .action(async opts => {
     try {
       const result = await uploadFile(opts.file, {
         backend: 's3',

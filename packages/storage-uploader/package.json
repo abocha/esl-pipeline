@@ -4,6 +4,13 @@
   "private": true,
   "type": "module",
   "license": "UNLICENSED",
+  "description": "Upload ESL assignment assets (audio) to S3-compatible storage.",
+  "keywords": [
+    "esl",
+    "s3",
+    "upload",
+    "cli"
+  ],
   "engines": {
     "node": ">=18.18"
   },
@@ -31,8 +38,8 @@
     "test:watch": "vitest"
   },
   "dependencies": {
-    "@aws-sdk/client-s3": "^3.665.0",
-    "@aws-sdk/s3-request-presigner": "^3.665.0"
+    "@aws-sdk/client-s3": "^3.917.0",
+    "@aws-sdk/s3-request-presigner": "^3.917.0"
   },
   "devDependencies": {
     "@types/node": "^24.9.1",
