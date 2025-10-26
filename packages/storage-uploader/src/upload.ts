@@ -1,31 +1,38 @@
+// packages/storage-uploader/src/upload.ts
 import { uploadToS3 } from './s3.js';
-import { basename } from 'node:path';
 
-type UploadBackend = 's3';
-
-export type UploadOptions = {
-  backend: UploadBackend;
-  public?: boolean;
-  key?: string;
+export type UploadOpts = {
+  backend: 's3';
+  bucket?: string;     // optional; defaults to env S3_BUCKET
+  prefix?: string;     // e.g. "audio/assignments"
+  public?: boolean;    // request public-read (will auto-fallback if ACLs disabled)
+  presign?: number;    // seconds (only if your s3 helper supports presign)
+  region?: string;     // optional; defaults to env AWS_REGION
   presignExpiresIn?: number;
-  prefix?: string;
 };
 
 export async function uploadFile(
   localPath: string,
-  opts: UploadOptions
-): Promise<{ url: string; key: string; etag?: string; isPresigned?: boolean; expiresAt?: string }> {
+  opts: UploadOpts
+): Promise<{ url: string; key: string; etag?: string; isPresigned?: boolean ; presignExpiresIn?: number;}> {
   if (opts.backend !== 's3') {
     throw new Error(`Unsupported backend: ${opts.backend}`);
   }
 
-  const bucket = process.env.S3_BUCKET ?? 'stub-bucket';
-  const prefix = opts.prefix ?? process.env.S3_PREFIX ?? 'audio/assignments';
-  const key = opts.key ?? `${prefix.replace(/\/$/, '')}/${basename(localPath)}`;
+  const bucket = opts.bucket ?? process.env.S3_BUCKET;
+  if (!bucket) throw new Error('S3 bucket not configured (set S3_BUCKET or pass opts.bucket)');
 
-  return uploadToS3(localPath, bucket, key, {
-    public: opts.public,
-    presignExpiresIn: opts.presignExpiresIn,
-    region: process.env.AWS_REGION,
+  // Pass only a key prefix; s3.ts builds "<prefix>/<filename>" itself
+  const keyPrefix = (opts.prefix ?? process.env.S3_PREFIX ?? '')
+    .replace(/^\//, '')
+    .replace(/\/+$/, '');
+
+  return uploadToS3(localPath, {
+    bucket,
+    region: opts.region ?? process.env.AWS_REGION ?? 'ap-southeast-1',
+    keyPrefix,
+    publicRead: !!opts.public,
+    // If your s3.ts supports presign, uncomment/forward it:
+    // presignSeconds: opts.presign ?? 0,
   });
 }

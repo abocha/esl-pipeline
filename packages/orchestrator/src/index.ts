@@ -5,6 +5,8 @@ import { uploadFile } from '@esl-pipeline/storage-uploader';
 import { addOrReplaceAudioUnderStudyText } from '@esl-pipeline/notion-add-audio';
 import { runImport } from '@esl-pipeline/notion-importer';
 import { writeManifest, type AssignmentManifest } from './manifest.js';
+import { access } from 'node:fs/promises';
+import { constants as FS } from 'node:fs';
 
 export type NewAssignmentFlags = {
   md: string;
@@ -65,14 +67,21 @@ export async function newAssignment(flags: NewAssignmentFlags): Promise<{
   if (flags.withTts) {
     steps.push('tts');
     const ttsResult = await buildStudyTextMp3(flags.md, {
-      voiceMapPath: flags.voices ?? 'voices.json',
+      voiceMapPath: flags.voices ?? 'configs/voices.yml',
       outPath: flags.out ?? dirname(flags.md),
-      preview: flags.dryRun
+      preview: flags.dryRun,
     });
     audio = { path: ttsResult.path, hash: ttsResult.hash };
   }
+    // Guard: fail early if TTS produced no file
+    await access(audio!.path!, FS.F_OK).catch(() => {
+      throw new Error(
+        `No audio file produced at ${audio!.path!}. ` +
+        `Check that :::study-text has lines and voices.yml has 'default' or 'auto: true'.`
+      );
+    });
 
-  if (flags.upload === 's3' && audio?.path) {
+  if (!flags.dryRun && flags.upload === 's3' && audio && audio.path) {
     steps.push('upload');
     if (flags.dryRun) {
       // In dry-run mode, generate a realistic preview URL without uploading

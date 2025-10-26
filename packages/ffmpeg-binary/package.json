@@ -1,0 +1,20 @@
+{
+  "name": "@esl-pipeline/ffmpeg-binary",
+  "version": "0.1.0",
+  "private": true,
+  "description": "On-demand FFmpeg binary extraction from vendored archive.",
+  "type": "module",
+  "exports": {
+    ".": "./dist/index.js",
+    "./getFfmpegPath": "./dist/index.js"
+  },
+  "files": [
+    "bin/",
+    "dist/"
+  ],
+  "bin": {
+    "ffmpeg-where": "bin/ffmpeg-where.ts"
+  },
+  "dependencies": {},
+  "license": "SEE LICENSE IN LICENSE-FFMPEG.txt"
+}

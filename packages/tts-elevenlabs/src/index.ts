@@ -1,10 +1,13 @@
 import { createHash } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
-import { mkdir, writeFile, copyFile } from 'node:fs/promises';
+import { mkdir, writeFile, copyFile, unlink } from 'node:fs/promises';
 import yaml from 'js-yaml';
 import { extractStudyText } from '@esl-pipeline/md-extractor';
-import { concatMp3Segments } from './ffmpeg.js';
+import { pickVoiceForSpeaker, loadVoicesCatalog } from "./assign.js";
+import { access } from 'node:fs/promises';
+import { constants as FS } from 'node:fs';
+import { concatMp3Segments, synthSilenceMp3 } from './ffmpeg.js';
 
 export function hashStudyText(text: string): string {
   return createHash('sha256').update(text).digest('hex');
@@ -63,7 +66,7 @@ export async function buildStudyTextMp3(
   let totalDuration = 0;
 
   for (const line of studyText.lines) {
-    const voiceId = getVoiceIdForLine(line, voiceMap, studyText.type);
+    const voiceId = await getVoiceIdForLine(line, voiceMap as any, studyText.type);
     if (!voiceId) continue;
 
     // Create a temporary file for this line's audio
@@ -71,15 +74,19 @@ export async function buildStudyTextMp3(
     const lineFileName = `${lineHash}.mp3`;
     const lineFilePath = resolve(outputDir, lineFileName);
 
-    // Placeholder - actual ElevenLabs API call would go here
-    // For MVP, we'll create dummy audio data
-    const dummyAudio = Buffer.from(`dummy audio for: ${line}`); // In real implementation, this would be API response
-    await writeFile(lineFilePath, dummyAudio);
+    // Placeholder path: synthesize a valid MP3 segment so ffmpeg can concatenate it
+    // Duration heuristic: short base + ~45ms per character (bounded 0.5s..4s)
+    const dur = Math.max(0.5, Math.min(4, 0.25 + line.length * 0.045));
+    await synthSilenceMp3(lineFilePath, dur);
 
     audioFiles.push(lineFilePath);
     totalDuration += line.length * 0.1; // Rough estimate: 0.1 seconds per character
-  }
 
+  }
+    if (audioFiles.length === 0) {
+    throw new Error('TTS produced 0 segments. Check voices.yml (default/auto) and study-text content.');
+  }
+  
   // Concatenate audio files using ffmpeg
   if (audioFiles.length === 1) {
     // Single file, just copy it
@@ -89,6 +96,17 @@ export async function buildStudyTextMp3(
     await concatMp3Segments(audioFiles.filter(Boolean), targetPath, true);
   }
 
+  try {
+    if (audioFiles.length === 1) {
+      await copyFile(audioFiles[0]!, targetPath);
+    } else if (audioFiles.length > 1) {
+      await concatMp3Segments(audioFiles, targetPath, true);
+    }
+  } finally {
+    // best-effort cleanup; ignore errors
+    await Promise.allSettled(audioFiles.map(p => unlink(p)));
+  }
+
   return {
     path: targetPath,
     duration: Math.round(totalDuration * 100) / 100, // Round to 2 decimal places
@@ -96,17 +114,47 @@ export async function buildStudyTextMp3(
   };
 }
 
-function getVoiceIdForLine(line: string, voiceMap: Record<string, string>, type: 'dialogue' | 'monologue'): string | undefined {
-  if (type === 'monologue') {
-    return voiceMap['default'] || Object.values(voiceMap)[0];
+type VoiceMap = {
+  // manual overrides:
+  [speaker: string]: string;
+} & {
+  default?: string;
+  auto?: boolean;
+};
+
+function parseSpeaker(line: string): { speaker?: string; text: string } {
+  const idx = line.indexOf(":");
+  if (idx > 0 && idx < 40) {
+    return { speaker: line.slice(0, idx).trim(), text: line.slice(idx + 1).trim() };
+  }
+  return { text: line.trim() };
+}
+
+async function getVoiceIdForLine(
+  line: string,
+  voiceMap: VoiceMap,
+  mode: "monologue" | "dialogue"
+): Promise<string | undefined> {
+  // 1) manual override by exact speaker
+  const { speaker } = parseSpeaker(line);
+  if (speaker && voiceMap[speaker]) return voiceMap[speaker];
+
+  // 2) manual default
+  if (voiceMap.default) return voiceMap.default;
+
+  // 3) auto mode (if enabled) — pick by gender/role
+  if (voiceMap.auto) {
+    const role =
+      mode === "monologue"
+        ? "narrator"
+        : speaker?.toLowerCase() === "narrator"
+        ? "narrator"
+        : "student";
+    const picked = await pickVoiceForSpeaker(speaker || "Narrator", { role: role as any });
+    return picked || undefined;
   }
 
-  // For dialogue, parse speaker from line
-  const match = line.match(/^[\s]*[\[\(]?([A-Za-zА-Яа-яЁё0-9 _.-]{1,32})[\]\)]?:\s+/);
-  if (match && match[1]) {
-    const speaker = match[1].trim();
-    return voiceMap[speaker] || voiceMap['default'];
-  }
-
-  return voiceMap['default'];
+  // 4) final fallback: try catalog’s first voice, or undefined
+  const catalog = await loadVoicesCatalog().catch(() => ({ voices: [] }));
+  return catalog.voices[0]?.id;
 }

@@ -1,59 +1,60 @@
 import { readFile } from 'node:fs/promises';
-import { PutObjectCommand, S3Client } from '@aws-sdk/client-s3';
-import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
-import { basename } from 'node:path';
+import { S3Client, PutObjectCommand } from '@aws-sdk/client-s3';
+
+function isAclNotSupported(e: any): boolean {
+  // SDK v3 S3 error shape is a ServiceException with a Code field in the body.
+  return (
+    e?.Code === 'AccessControlListNotSupported' ||
+    /AccessControlListNotSupported/i.test(String(e?.message ?? ''))
+  );
+}
 
 export async function uploadToS3(
   localPath: string,
-  bucket: string,
-  key: string,
-  options: {
-    public?: boolean;
-    presignExpiresIn?: number;
+  {
+    bucket = process.env.S3_BUCKET!,
+    region = process.env.AWS_REGION ?? 'ap-southeast-1',
+    keyPrefix = process.env.S3_PREFIX ?? '',
+    publicRead = false, // whether to attempt ACL
+  }: {
+    bucket?: string;
     region?: string;
+    keyPrefix?: string;
+    publicRead?: boolean;
   } = {}
-): Promise<{ url: string; key: string; etag?: string; isPresigned?: boolean; expiresAt?: string }> {
-  const s3Client = new S3Client({
-    region: options.region ?? process.env.AWS_REGION ?? 'us-east-1',
-  });
+): Promise<{ url: string; key: string; etag?: string }> {
+  if (!bucket) throw new Error('S3 bucket not configured');
 
+  const s3 = new S3Client({ region });
   const fileContent = await readFile(localPath);
+  const key = `${keyPrefix ? `${keyPrefix.replace(/\/+$/, '')}/` : ''}${localPath.split('/').pop()}`;
   const contentType = localPath.endsWith('.mp3') ? 'audio/mpeg' : 'application/octet-stream';
 
-  const putCommand = new PutObjectCommand({
+  const base = {
     Bucket: bucket,
     Key: key,
     Body: fileContent,
     ContentType: contentType,
-    ...(options.public ? { ACL: 'public-read' } : {}),
-  });
+    // no ACL by default
+  };
 
-  const result = await s3Client.send(putCommand);
-
-  let url: string;
-  let isPresigned: boolean | undefined;
-  let expiresAt: string | undefined;
-
-  if (options.presignExpiresIn) {
-    const presignCommand = new PutObjectCommand({
-      Bucket: bucket,
-      Key: key,
-    });
-    url = await getSignedUrl(s3Client, presignCommand, {
-      expiresIn: options.presignExpiresIn,
-    });
-    isPresigned = true;
-    expiresAt = new Date(Date.now() + (options.presignExpiresIn * 1000)).toISOString();
-  } else {
-    url = `https://${bucket}.s3.amazonaws.com/${key}`;
-    isPresigned = false;
+  // Try with ACL if requested
+  if (publicRead) {
+    try {
+      const put = new PutObjectCommand({ ...base, ACL: 'public-read' });
+      const res = await s3.send(put);
+      const url = `https://${bucket}.s3.${region}.amazonaws.com/${key}`;
+      return { url, key, etag: res.ETag };
+    } catch (e: any) {
+      if (!isAclNotSupported(e)) throw e;
+      // Fall back to no-ACL
+      console.warn('[S3] ACL not supported on this bucket (Object Ownership: Bucket owner enforced). Retrying without ACL…');
+    }
   }
 
-  return {
-    url,
-    key,
-    etag: result.ETag,
-    isPresigned,
-    expiresAt,
-  };
+  // No ACL path (recommended with ACLs disabled)
+  const putNoAcl = new PutObjectCommand(base);
+  const res = await s3.send(putNoAcl);
+  const url = `https://${bucket}.s3.${region}.amazonaws.com/${key}`;
+  return { url, key, etag: res.ETag };
 }
