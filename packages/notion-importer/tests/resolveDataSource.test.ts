@@ -7,10 +7,10 @@ describe('resolveDataSourceId', () => {
   it('Test Case 1: dataSourceId provided', async () => {
     const mockRetrieve = vi.fn().mockResolvedValue({
       id: 'ds-123',
-      parent: { type: 'database_id', database_id: 'db-456' }
+      parent: { type: 'database_id', database_id: 'db-456' },
     });
     const client = {
-      dataSources: { retrieve: mockRetrieve }
+      dataSources: { retrieve: mockRetrieve },
     } as unknown as Client;
 
     const result = await resolveDataSourceId(client, { dataSourceId: 'ds-123' });
@@ -21,10 +21,10 @@ describe('resolveDataSourceId', () => {
   it('Test Case 2: dbId provided, single data source found', async () => {
     const mockRetrieve = vi.fn().mockResolvedValue({
       id: 'db-456',
-      data_sources: [{ id: 'ds-789', name: 'Primary' }]
+      data_sources: [{ id: 'ds-789', name: 'Primary' }],
     });
     const client = {
-      databases: { retrieve: mockRetrieve }
+      databases: { retrieve: mockRetrieve },
     } as unknown as Client;
 
     const result = await resolveDataSourceId(client, { dbId: 'db-456' });
@@ -37,16 +37,16 @@ describe('resolveDataSourceId', () => {
       id: 'db-456',
       data_sources: [
         { id: 'ds-1', name: 'Alpha' },
-        { id: 'ds-2', name: 'Beta' }
-      ]
+        { id: 'ds-2', name: 'Beta' },
+      ],
     });
     const client = {
-      databases: { retrieve: mockRetrieve }
+      databases: { retrieve: mockRetrieve },
     } as unknown as Client;
 
-    await expect(
-      resolveDataSourceId(client, { dbId: 'db-456' })
-    ).rejects.toThrow('Multiple data sources found. Pass --data-source <name> or --data-source-id.');
+    await expect(resolveDataSourceId(client, { dbId: 'db-456' })).rejects.toThrow(
+      /Multiple data sources found under db-456/
+    );
   });
 
   it('Test Case 4: dbId provided, multiple data sources found, dataSourceName provided', async () => {
@@ -54,16 +54,16 @@ describe('resolveDataSourceId', () => {
       id: 'db-456',
       data_sources: [
         { id: 'ds-1', name: 'Alpha' },
-        { id: 'ds-2', name: 'Beta' }
-      ]
+        { id: 'ds-2', name: 'Beta' },
+      ],
     });
     const client = {
-      databases: { retrieve: mockRetrieve }
+      databases: { retrieve: mockRetrieve },
     } as unknown as Client;
 
     const result = await resolveDataSourceId(client, {
       dbId: 'db-456',
-      dataSourceName: 'beta'
+      dataSourceName: 'beta',
     });
     expect(result).toEqual({ dataSourceId: 'ds-2', databaseId: 'db-456' });
   });
@@ -71,8 +71,8 @@ describe('resolveDataSourceId', () => {
   it('Test Case 5: No IDs/Names provided', async () => {
     const client = {} as unknown as Client;
 
-    await expect(
-      resolveDataSourceId(client, {} as ResolveDataSourceInput)
-    ).rejects.toThrow('Provide --data-source-id or --db-id/--db.');
+    await expect(resolveDataSourceId(client, {} as ResolveDataSourceInput)).rejects.toThrow(
+      'Provide --data-source-id or --db-id/--db.'
+    );
   });
 });

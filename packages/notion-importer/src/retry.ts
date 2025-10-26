@@ -1,8 +1,4 @@
-export async function withRetry<T>(
-  fn: () => Promise<T>,
-  label: string,
-  tries = 5
-): Promise<T> {
+export async function withRetry<T>(fn: () => Promise<T>, label: string, tries = 5): Promise<T> {
   let delay = 350; // ms
   for (let i = 0; i < tries; i++) {
     try {

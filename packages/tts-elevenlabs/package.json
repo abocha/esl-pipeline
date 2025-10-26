@@ -4,6 +4,13 @@
   "private": true,
   "type": "module",
   "license": "UNLICENSED",
+  "description": "Generate study-text audio via ElevenLabs with caching and voice selection.",
+  "keywords": [
+    "esl",
+    "tts",
+    "elevenlabs",
+    "audio"
+  ],
   "engines": {
     "node": ">=18.18"
   },

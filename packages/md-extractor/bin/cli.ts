@@ -11,7 +11,9 @@ import {
 function requireArg(args: string[], flag: string): string {
   const i = args.indexOf(flag);
   if (i === -1 || !args[i + 1]) {
-    console.error('Usage: md-extractor --md <file.md> --what <frontmatter|study|answer|notes|sections>');
+    console.error(
+      'Usage: md-extractor --md <file.md> --what <frontmatter|study|answer|notes|sections>'
+    );
     process.exit(1);
   }
   return args[i + 1]!;
@@ -20,7 +22,12 @@ function requireArg(args: string[], flag: string): string {
 async function main() {
   const args = process.argv.slice(2);
   const file = requireArg(args, '--md');
-  const what = requireArg(args, '--what') as 'frontmatter'|'study'|'answer'|'notes'|'sections';
+  const what = requireArg(args, '--what') as
+    | 'frontmatter'
+    | 'study'
+    | 'answer'
+    | 'notes'
+    | 'sections';
 
   const md = await readFile(file, 'utf8');
 

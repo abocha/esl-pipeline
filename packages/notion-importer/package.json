@@ -4,6 +4,13 @@
   "private": true,
   "type": "module",
   "license": "UNLICENSED",
+  "description": "Import validated ESL assignments into Notion databases.",
+  "keywords": [
+    "esl",
+    "notion",
+    "import",
+    "cli"
+  ],
   "engines": {
     "node": ">=18.18"
   },

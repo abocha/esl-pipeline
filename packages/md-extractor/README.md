@@ -2,7 +2,7 @@
 
 Tiny helpers to pull structured pieces from a validated ESL homework markdown.
 
-```ts
+````ts
 import {
   extractFrontmatter,
   extractStudyText,
@@ -21,3 +21,4 @@ const study = extractStudyText(md); // { type: 'dialogue'|'monologue', lines: st
 pnpm install
 pnpm --filter @esl-pipeline/md-extractor build
 pnpm --filter @esl-pipeline/md-extractor test
+````

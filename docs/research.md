@@ -1,4 +1,4 @@
-# ChatGPT 
+# ChatGPT
 
 ## Monorepo Package Structure and Naming
 
@@ -19,7 +19,7 @@ This structured layout makes each concern modular. The packages share a common v
 
 Rather than a single "shared" package, common types and utilities are defined in context and imported across packages as needed. For example, the frontmatter schema for homework metadata is defined in md-validator using Zod (fields like title, student, level, etc.). Other packages use a compatible shape - e.g. notion-importer defines a FrontmatterShape type matching those fields and leverages the md-extractor to parse frontmatter accordingly. The orchestrator defines an AssignmentManifest type to record the outcome of a pipeline run (MD hash, Notion page ID/URL, audio file info, preset used, timestamp). This manifest is written to a JSON file alongside the markdown for reference. These types (frontmatter, manifest, etc.) are exported by their packages so that other tools can reuse them. The decision to colocate schemas/types with their primary logic keeps each package self-contained, while still allowing import by others (e.g. orchestrator imports the other packages and could utilize their types via TypeScript).
 
-# CLI Design and Tooling 
+# CLI Design and Tooling
 
 Commander.js is used to build the CLI interface for tools that need robust flag parsing. For example, md-validator sets up a Commander program named md-validate with a file argument and a -strict flag. This provides a consistent user experience (usage info, help, etc.). The orchestrator likely uses Commander as well for its higher-level command (e.g. a new command with numerous options for file path, student, preset, etc.), leveraging Commander's option parsing to map to an internal flags object .
 
@@ -37,7 +37,7 @@ Additionally, the pipeline supports linking the new page to a student. The envir
 
 In summary, Codex chose to use Notion's newest API capabilities to future-proof the tool. The Notion SDK v5.3.0 with data source support is central, and all Notion operations (page creation, queries) are done through this client. API credentials (the integration token) and target IDs are pulled from environment and flags rather than hardcoded, making the tool adaptable to different workspaces.
 
-# Validation Schema and JSON Schema Strategy 
+# Validation Schema and JSON Schema Strategy
 
 The pipeline relies on Zod for schema validation of Markdown frontmatter and structure. In the mdvalidator', a Zod schema defines the expected frontmatter fields and types: title, student, level, topic (all required strings), an input_type which must be either "generate" or "authentic", and optionally speaker_labels (an array of speaker name strings) for dialogues. This schema is used to parse the YAML frontmatter via gray-matter and validate it. Any missing or invalid fields produce clear error messages - e.g. "Front matter: title - Required" if the title is blank. By using Zod's. safeParse, the validator collects all schema violations at once and reports them as errors.
 
@@ -47,7 +47,7 @@ Although not yet outputting a formal JSON Schema file, the use of Zod means the 
 
 In summary, Codex's scaffolding emphasizes strict validation of content before it goes into Notion. The combination of Zod schemas for metadata and markdown parsing for content provides both hard guarantees (required fields/sections) and guidance (length or count recommendations via warnings). As development continues, this validated schema can serve as a contract for content format, and could be leveraged for JSON Schema export or documentation.
 
-# Testing Approach with Vitest and Fixtures 
+# Testing Approach with Vitest and Fixtures
 
 The project is set up with Vitest as the test runner for all packages (each package.json includes vitest in devDependencies and has test scripts). The codebase includes a mix of unit tests and fixture-based tests to ensure each tool works as expected. For example, the md-extractor package has tests that feed in a sample markdown string and assert that each extractor function returns the right output. In these tests, a multiline template string represents a fake homework markdown (with frontmatter and sections), and calls to extractFrontmatter, extractStudyText, etc., are verified (e.g. confirming the title and student from frontmatter, or that study text type is "dialogue" when two speakers are present).
 
@@ -69,7 +69,7 @@ Codex structured the pipeline so that markdown parsing and validation are decoup
 
 This composition shows a clear separation of concerns: the Markdown validator ensures content integrity, the extractor provides structured views of the markdown content, and higher-level tools consume those. Each piece can be developed and tested in isolation (as we saw with their tests), and issues are caught early (invalid MD never reaches Notion). Codex's design makes the pipeline robust and paves the way for future enhancements (for instance, replacing the CLI subprocess call with direct function calls once everything is in TypeScript, or extending the extractor/validator for new markdown patterns).
 
-# Configuration: Color Presets, Student Configs, Voice Maps 
+# Configuration: Color Presets, Student Configs, Voice Maps
 
 The pipeline introduces configurable aspects to tailor the output for different scenarios:
 
@@ -82,7 +82,7 @@ notion-colorizer CLI accepts a --preset <name> and an optional --presets-path to
 
 All these configs - presets JSON, voice map JSON, and the student database ID - live outside the core code, which is an intentional design for flexibility. The CLI surfaces them as flags or env vars rather than hardcoding. This allows users or future developers to extend the system (add new presets, support new voices or students) by configuration rather than changing logic. It's also aligned with best practices: keep secrets (like API keys, S3 buckets) in env vars, and user preferences (like colors or voice choices) in data files.
 
-# CLI Flags and Environment Variables 
+# CLI Flags and Environment Variables
 
 Codex's scaffolding exposes many options via CLI flags, making the pipeline highly configurable from the command line. The orchestrator CLI (esl-orchestrator) in particular has a rich set of flags, corresponding to the NewAssignmentFlags interface :
 

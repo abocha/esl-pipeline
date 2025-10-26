@@ -15,7 +15,7 @@ function findBlock(md: string, openerRegex: RegExp): string | null {
   const startIdx = m.index + m[0].length;
   // find the next line that equals ':::' at column start
   const rest = md.slice(startIdx);
-  const close = rest.search(/\n:::\s*$/m);
+  const close = rest.search(/\n[ \t]*:::\s*$/m);
   if (close === -1) return null;
   const inner = rest.slice(0, close);
   return inner.trim();
@@ -35,7 +35,7 @@ export function extractFrontmatter(md: string): Frontmatter {
 
 export function extractStudyText(md: string): StudyText {
   const n = normalize(md);
-  const inner = findBlock(n, /(^|\n):::study-text[^\n]*\n/i);
+  const inner = findBlock(n, /(^|\n)[ \t]*:::study-text[^\n]*\n/i);
   if (!inner) throw new Error('study-text block not found');
   const rawLines = inner.split('\n').map(s => s.trim());
   const lines = rawLines.filter(Boolean);
@@ -46,7 +46,7 @@ export function extractStudyText(md: string): StudyText {
 
 export function extractAnswerKey(md: string): string {
   const n = normalize(md);
-  const block = findBlock(n, /(^|\n):::toggle-heading\s+Answer Key[^\n]*\n/i);
+  const block = findBlock(n, /(^|\n)[ \t]*:::toggle-heading\s+Answer Key[^\n]*\n/i);
   if (!block) throw new Error('Answer Key toggle not found');
   return block;
 }
@@ -54,7 +54,7 @@ export function extractAnswerKey(md: string): string {
 export function extractTeacherNotes(md: string): string {
   const n = normalize(md);
   // match Teacher’s / Teacher's (curly or straight apostrophe)
-  const block = findBlock(n, /(^|\n):::toggle-heading\s+Teacher[’']s\s+Follow-up\s+Plan[^\n]*\n/i);
+  const block = findBlock(n, /(^|\n)[ \t]*:::toggle-heading\s+Teacher[’']s\s+Follow-up\s+Plan[^\n]*\n/i);
   if (!block) throw new Error("Teacher's Follow-up Plan toggle not found");
   return block;
 }
@@ -69,18 +69,18 @@ export function extractSections(md: string): Section[] {
 
   let match: RegExpExecArray | null;
   while ((match = headingRe.exec(n)) !== null) {
-    const hashes = match[1] ?? '';      // TS-safe default
+    const hashes = match[1] ?? ''; // TS-safe default
     const rawTitle = match[2] ?? '';
     if (!hashes || !rawTitle) continue; // skip malformed headings just in case
 
-    const depth: 2 | 3 = (hashes.length === 2 ? 2 : 3);
+    const depth: 2 | 3 = hashes.length === 2 ? 2 : 3;
     const title = rawTitle.trim();
-    const start = headingRe.lastIndex;  // right after the heading line
+    const start = headingRe.lastIndex; // right after the heading line
     positions.push({ depth, title, start });
   }
 
   for (let i = 0; i < positions.length; i++) {
-    const cur = positions[i]!;                  // we just populated these
+    const cur = positions[i]!; // we just populated these
     const next = positions[i + 1];
     const end = next ? next.start : n.length;
     const content = n.slice(cur.start, end).trim();

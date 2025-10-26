@@ -4,6 +4,12 @@
   "private": true,
   "type": "module",
   "license": "UNLICENSED",
+  "description": "Extract study text, answer keys, and sections from ESL markdown.",
+  "keywords": [
+    "esl",
+    "markdown",
+    "extract"
+  ],
   "engines": {
     "node": ">=18.18"
   },

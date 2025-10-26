@@ -16,29 +16,28 @@ export async function runImport(opts: ImportOptions) {
   // --- Step 1: validate programmatically (fail fast) ---
   const v = await validateMarkdownFile(opts.mdPath, { strict: true });
   if (!v.ok) {
-    const msg = [
-      'Validation failed:',
-      ...v.errors.map(e => `- ${e}`)
-    ].join('\n');
+    const msg = ['Validation failed:', ...v.errors.map(e => `- ${e}`)].join('\n');
     throw new Error(msg);
   }
 
   // --- Step 2: extract code block content (like validator does) ---
   const blockMatch = rawMd.match(/```([a-zA-Z0-9_-]*)\s*\n([\s\S]*?)```/m);
   if (!blockMatch) {
-    throw new Error('No fenced code block found. Output must be inside a single triple-backtick block.');
+    throw new Error(
+      'No fenced code block found. Output must be inside a single triple-backtick block.'
+    );
   }
   const blockContent = blockMatch[2]?.trim() ?? '';
 
   // --- Step 3: get front matter from block content ---
   const fm = (extractFrontmatter(blockContent) ?? {}) as FrontmatterShape;
   const title = fm.title ?? basename(opts.mdPath);
-  const topics = Array.isArray(fm.topic) ? fm.topic : (fm.topic ? [fm.topic] : []);
+  const topics = Array.isArray(fm.topic) ? fm.topic : fm.topic ? [fm.topic] : [];
   const studentName = (opts.student ?? fm.student ?? '').trim();
 
   // --- Step 4: properties payload ---
   const properties: Record<string, any> = {
-    'Name': { title: [{ type: 'text', text: { content: title } }] }
+    Name: { title: [{ type: 'text', text: { content: title } }] },
   };
   if (topics.length) {
     properties['Topic'] = { multi_select: topics.map((t: string) => ({ name: t })) };
@@ -58,22 +57,22 @@ export async function runImport(opts: ImportOptions) {
       dataSourceId: opts.dataSourceId ?? opts.dbId ?? 'dry-run-placeholder',
       propertiesPreview: properties,
       blocksPreview: children.map(b => b.type),
-      totalBlocks: children.length
+      totalBlocks: children.length,
     };
     return {
       page_id: undefined,
       url: undefined,
-      ...dryRunOutput
+      ...dryRunOutput,
     };
   }
 
   // --- Step 6: Notion client / targets (only for real runs) ---
   const client = createNotionClient();
-  const { dataSourceId, databaseId } = await resolveDataSourceId(client, {
+  const { dataSourceId } = await resolveDataSourceId(client, {
     dataSourceId: opts.dataSourceId,
     dataSourceName: opts.dataSourceName,
     dbId: opts.dbId,
-    dbName: opts.dbName
+    dbName: opts.dbName,
   });
   const studentPageId = studentName ? await resolveStudentId(client, studentName) : undefined;
 
@@ -87,27 +86,39 @@ export async function runImport(opts: ImportOptions) {
 
   let page: any;
   if (children.length <= MAX_BLOCKS_PER_REQUEST) {
-    page = await withRetry(() => client.pages.create({
-      parent,
-      properties: properties as any,
-      children
-    }), 'pages.create');
+    page = await withRetry(
+      () =>
+        client.pages.create({
+          parent,
+          properties: properties as any,
+          children,
+        }),
+      'pages.create'
+    );
   } else {
-    page = await withRetry(() => client.pages.create({
-      parent,
-      properties: properties as any
-    }), 'pages.create');
+    page = await withRetry(
+      () =>
+        client.pages.create({
+          parent,
+          properties: properties as any,
+        }),
+      'pages.create'
+    );
     const chunks = chunk(children, MAX_BLOCKS_PER_REQUEST);
     for (const batch of chunks) {
-      await withRetry(() => client.blocks.children.append({
-        block_id: page.id,
-        children: batch
-      }), 'blocks.children.append');
+      await withRetry(
+        () =>
+          client.blocks.children.append({
+            block_id: page.id,
+            children: batch,
+          }),
+        'blocks.children.append'
+      );
     }
   }
 
   return {
     page_id: page.id,
-    url: (page as any).url as string | undefined
+    url: (page as any).url as string | undefined,
   };
 }

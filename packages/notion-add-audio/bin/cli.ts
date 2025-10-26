@@ -10,9 +10,11 @@ program
   .requiredOption('--page-id <pageId>', 'Notion page ID')
   .requiredOption('--url <url>', 'Audio URL to add')
   .option('--replace', 'Replace existing audio instead of appending')
-  .action(async (options) => {
+  .action(async options => {
     try {
-      const result = await addOrReplaceAudioUnderStudyText(options.pageId, options.url, { replace: options.replace });
+      const result = await addOrReplaceAudioUnderStudyText(options.pageId, options.url, {
+        replace: options.replace,
+      });
       console.log(JSON.stringify(result, null, 2));
     } catch (error) {
       console.error(error instanceof Error ? error.message : String(error));

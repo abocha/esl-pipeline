@@ -3,19 +3,16 @@ import type {
   DataSourceObjectResponse,
   DatabaseObjectResponse,
   PageObjectResponse,
-  PartialDataSourceObjectResponse,
   PartialPageObjectResponse,
-  SearchResponse
+  SearchResponse,
 } from '@notionhq/client/build/src/api-endpoints.js';
 import type { ResolveDataSourceInput, ResolveDataSourceResult } from './types.js';
 import { withRetry } from './retry.js';
 
 type SearchResult = SearchResponse['results'][number];
-type DataSourceLike = DataSourceObjectResponse | PartialDataSourceObjectResponse;
 type PageLike = PageObjectResponse | PartialPageObjectResponse;
 
-const isPage = (result: SearchResult | PageLike): result is PageLike =>
-  result.object === 'page';
+const isPage = (result: SearchResult | PageLike): result is PageLike => result.object === 'page';
 
 const extractDatabaseTitle = (database: SearchResult): string | undefined => {
   const objectType = (database as { object?: string }).object;
@@ -54,26 +51,28 @@ async function fetchDatabaseWithSources(
   databaseId: string
 ): Promise<{ databaseId: string; dataSources: DataSourceSummary[] }> {
   const response = (await withRetry(
-    () => client.databases.retrieve({
-      database_id: databaseId
-    }),
+    () =>
+      client.databases.retrieve({
+        database_id: databaseId,
+      }),
     'databases.retrieve'
   )) as DatabaseObjectResponse & { data_sources?: DataSourceSummary[] };
   const dataSources = Array.isArray(response.data_sources) ? response.data_sources : [];
   return {
     databaseId: response.id,
-    dataSources: dataSources.map(ds => ({ id: ds.id, name: ds.name }))
+    dataSources: dataSources.map(ds => ({ id: ds.id, name: ds.name })),
   };
 }
 
 async function findDatabaseByName(client: Client, dbName: string): Promise<string> {
-  const resp = await withRetry(
-    () => (client.search as any)({
-      query: dbName,
-      filter: { value: 'database', property: 'object' }
-    }),
+  const resp = (await withRetry(
+    () =>
+      (client.search as any)({
+        query: dbName,
+        filter: { value: 'database', property: 'object' },
+      }),
     'search'
-  ) as SearchResponse;
+  )) as SearchResponse;
   const target = normalize(dbName);
   for (const result of resp.results) {
     const title = extractDatabaseTitle(result);
@@ -91,9 +90,10 @@ export async function resolveDataSourceId(
   if (opts.dataSourceId) {
     try {
       const ds = (await withRetry(
-        () => client.dataSources.retrieve({
-          data_source_id: opts.dataSourceId!
-        }),
+        () =>
+          client.dataSources.retrieve({
+            data_source_id: opts.dataSourceId!,
+          }),
         'dataSources.retrieve'
       )) as DataSourceObjectResponse;
       const parent = ds.parent;
@@ -103,10 +103,13 @@ export async function resolveDataSourceId(
           : parent?.type === 'data_source_id'
             ? parent.database_id
             : opts.dbId;
-      if (!databaseId) throw new Error('Unable to determine parent database for provided data source ID');
+      if (!databaseId)
+        throw new Error('Unable to determine parent database for provided data source ID');
       return { dataSourceId: opts.dataSourceId, databaseId };
     } catch (error) {
-      throw new Error(`Unable to retrieve data source ${opts.dataSourceId}: ${(error as Error).message}`);
+      throw new Error(
+        `Unable to retrieve data source ${opts.dataSourceId}: ${(error as Error).message}`
+      );
     }
   }
 
@@ -133,11 +136,11 @@ export async function resolveDataSourceId(
     throw new Error(`No data sources found for database ${databaseId}.`);
   }
 
-  const names = dataSources
-    .map(ds => (ds.name ? `"${ds.name}"` : ds.id))
-    .join(', ');
+  const names = dataSources.map(ds => (ds.name ? `"${ds.name}"` : ds.id)).join(', ');
 
-  throw new Error('Multiple data sources found. Pass --data-source <name> or --data-source-id.');
+  throw new Error(
+    `Multiple data sources found under ${databaseId}. Pass --data-source <name> or --data-source-id. Available: ${names}`
+  );
 }
 
 export async function findStudentPageId(
@@ -150,39 +153,38 @@ export async function findStudentPageId(
 
   if (studentsDataSourceId) {
     const query = await withRetry(
-      () => client.dataSources.query({
-        data_source_id: studentsDataSourceId,
-        filter: {
-          property: 'Name',
-          title: { equals: trimmedName }
-        },
-        result_type: 'page'
-      }),
+      () =>
+        client.dataSources.query({
+          data_source_id: studentsDataSourceId,
+          filter: {
+            property: 'Name',
+            title: { equals: trimmedName },
+          },
+          result_type: 'page',
+        }),
       'dataSources.query'
     );
     const pageInDb = query.results.find(isPage);
     if (pageInDb) return pageInDb.id;
   }
 
-  const resp = await withRetry(
-    () => (client.search as any)({
-      query: trimmedName,
-      filter: { value: 'page', property: 'object' }
-    }),
+  const resp = (await withRetry(
+    () =>
+      (client.search as any)({
+        query: trimmedName,
+        filter: { value: 'page', property: 'object' },
+      }),
     'search'
-  ) as SearchResponse;
+  )) as SearchResponse;
   const page = resp.results.find(isPage);
   if (page) return page.id;
 
   throw new Error(
     `Student page not found: "${trimmedName}". ` +
-    `Tip: share the Students data source with the integration or pass --student to override.`
+      `Tip: share the Students data source with the integration or pass --student to override.`
   );
 }
 
-export async function resolveStudentId(
-  client: Client,
-  studentName: string
-): Promise<string> {
+export async function resolveStudentId(client: Client, studentName: string): Promise<string> {
   return findStudentPageId(client, studentName, process.env.STUDENTS_DB_ID);
 }

@@ -1,13 +1,17 @@
 import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest';
 import { writeFile, unlink } from 'node:fs/promises';
-import * as path from 'node:path';
-import * as os from 'node:os';
+import { tmpdir } from 'node:os';
+import { join, basename } from 'node:path';
 import { uploadToS3 } from '../src/s3.js';
 
-// Mock AWS SDK v3
+const sendMock = vi.fn();
+
 vi.mock('@aws-sdk/client-s3', () => ({
   S3Client: class {
-    send = vi.fn().mockResolvedValue({ ETag: '"mock-etag"' });
+    constructor() {}
+    send(command: any) {
+      return sendMock(command);
+    }
   },
   PutObjectCommand: class {
     constructor(params: any) {
@@ -16,43 +20,75 @@ vi.mock('@aws-sdk/client-s3', () => ({
   },
 }));
 
-vi.mock('@aws-sdk/s3-request-presigner', () => ({
-  getSignedUrl: vi.fn().mockResolvedValue('https://presigned-url.com'),
-}));
-
 describe('uploadToS3', () => {
   let tempFile: string;
 
   beforeEach(async () => {
-    // Create a temporary file for each test
-    const tempDir = os.tmpdir();
-    tempFile = path.join(tempDir, `test-file-${Date.now()}.mp3`);
+    sendMock.mockReset();
+    sendMock.mockResolvedValue({ ETag: '"mock-etag"' });
+
+    const dir = tmpdir();
+    tempFile = join(dir, `test-file-${Date.now()}.mp3`);
     await writeFile(tempFile, 'mock audio content');
   });
 
   afterEach(async () => {
-    // Clean up the temporary file
-    try {
-      await unlink(tempFile);
-    } catch (err) {
-      // Ignore if file doesn't exist
-    }
+    await unlink(tempFile).catch(() => {});
   });
 
-  it('uploads file to S3 and returns public URL', async () => {
-    const result = await uploadToS3(tempFile, 'test-bucket', 'test-key', { public: true });
-    expect(result.url).toContain('test-bucket.s3.amazonaws.com/test-key');
-    expect(result.key).toBe('test-key');
-    expect(result.etag).toBe('"mock-etag"');
-    expect(result.isPresigned).toBe(false);
+  it('uploads file to S3 with optional ACL when publicRead is true', async () => {
+    const res = await uploadToS3(tempFile, {
+      bucket: 'test-bucket',
+      region: 'us-east-1',
+      keyPrefix: 'audio/tests',
+      publicRead: true,
+    });
+
+    expect(res.url).toBe(
+      `https://test-bucket.s3.us-east-1.amazonaws.com/audio/tests/${basename(tempFile)}`
+    );
+    expect(res.key).toBe(`audio/tests/${basename(tempFile)}`);
+    expect(res.etag).toBe('"mock-etag"');
+
+    expect(sendMock).toHaveBeenCalledTimes(1);
+    const command = sendMock.mock.calls[0]?.[0];
+    expect(command.ACL).toBe('public-read');
+    expect(command.Key).toBe(`audio/tests/${basename(tempFile)}`);
   });
 
-  it('uploads file to S3 and returns presigned URL', async () => {
-    const result = await uploadToS3(tempFile, 'test-bucket', 'test-key', { presignExpiresIn: 3600 });
-    expect(result.url).toBe('https://presigned-url.com');
-    expect(result.key).toBe('test-key');
-    expect(result.etag).toBe('"mock-etag"');
-    expect(result.isPresigned).toBe(true);
-    expect(result.expiresAt).toBeDefined();
+  it('retries without ACL when bucket rejects ACL settings', async () => {
+    sendMock
+      .mockRejectedValueOnce({ Code: 'AccessControlListNotSupported' })
+      .mockResolvedValueOnce({ ETag: '"mock-etag"' });
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+
+    const res = await uploadToS3(tempFile, {
+      bucket: 'test-bucket',
+      region: 'us-east-1',
+      keyPrefix: 'audio/tests',
+      publicRead: true,
+    });
+
+    expect(res.url).toBe(
+      `https://test-bucket.s3.us-east-1.amazonaws.com/audio/tests/${basename(tempFile)}`
+    );
+    expect(sendMock).toHaveBeenCalledTimes(2);
+
+    const firstCall = sendMock.mock.calls[0]?.[0];
+    const secondCall = sendMock.mock.calls[1]?.[0];
+    expect(firstCall.ACL).toBe('public-read');
+    expect(secondCall.ACL).toBeUndefined();
+    expect(warnSpy).toHaveBeenCalledWith(expect.stringMatching(/ACL not supported/));
+
+    warnSpy.mockRestore();
+  });
+
+  it('builds object key without prefix when omitted', async () => {
+    const res = await uploadToS3(tempFile, {
+      bucket: 'test-bucket',
+      region: 'us-east-1',
+    });
+    expect(res.key).toBe(basename(tempFile));
+    expect(sendMock).toHaveBeenCalledWith(expect.objectContaining({ Key: basename(tempFile) }));
   });
 });

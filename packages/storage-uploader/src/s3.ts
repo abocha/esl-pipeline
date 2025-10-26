@@ -1,4 +1,5 @@
 import { readFile } from 'node:fs/promises';
+import { basename } from 'node:path';
 import { S3Client, PutObjectCommand } from '@aws-sdk/client-s3';
 
 function isAclNotSupported(e: any): boolean {
@@ -27,7 +28,10 @@ export async function uploadToS3(
 
   const s3 = new S3Client({ region });
   const fileContent = await readFile(localPath);
-  const key = `${keyPrefix ? `${keyPrefix.replace(/\/+$/, '')}/` : ''}${localPath.split('/').pop()}`;
+  const normalizedPrefix = keyPrefix
+    ? keyPrefix.replace(/^[\/\\]+/, '').replace(/[\/\\]+$/, '')
+    : '';
+  const key = normalizedPrefix ? `${normalizedPrefix}/${basename(localPath)}` : basename(localPath);
   const contentType = localPath.endsWith('.mp3') ? 'audio/mpeg' : 'application/octet-stream';
 
   const base = {
@@ -48,7 +52,9 @@ export async function uploadToS3(
     } catch (e: any) {
       if (!isAclNotSupported(e)) throw e;
       // Fall back to no-ACL
-      console.warn('[S3] ACL not supported on this bucket (Object Ownership: Bucket owner enforced). Retrying without ACL…');
+      console.warn(
+        '[S3] ACL not supported on this bucket (Object Ownership: Bucket owner enforced). Retrying without ACL…'
+      );
     }
   }
 

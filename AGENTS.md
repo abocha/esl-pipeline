@@ -1,23 +1,75 @@
-# Repository Guidelines
+# Agent Handbook
 
-## Project Structure & Module Organization
-The workspace is managed with pnpm, and every functional unit sits in `packages/<module>`. Core pipelines include `md-extractor`, `md-validator`, `notion-importer`, `notion-styler`, `storage-uploader`, and `tts-elevenlabs`; cross-cutting helpers live in `packages/shared`. Source TypeScript lives in each package’s `src/` directory, compiled output in `dist/`, and runnable CLIs under `bin/`. Tests and fixtures stay alongside the package in `tests/`. Configuration assets (voice presets, student lists) are under `configs/`, while AWS credentials and bucket metadata must remain in a local `.env` file.
+This repo houses the ESL homework pipeline. Below is everything the next agent should know before continuing work.
 
-## Build, Test, and Development Commands
-- `pnpm install` – install workspace dependencies; run once after cloning.
-- `pnpm build` – run `tsc` across every package and refresh `dist/`.
-- `pnpm test` / `pnpm test:watch` – execute all Vitest suites once or in watch mode.
-- `pnpm --filter @esl-pipeline/md-extractor dev` – start a package-specific watch/CLI loop via `tsx`.
-- `pnpm md-extractor` / `pnpm notion-importer` – invoke the built CLIs from the repo root.
+## 1. Architecture Snapshot
 
-## Coding Style & Naming Conventions
-Code is modern TypeScript using ES modules. Prefer 2-space indentation, trailing commas, and descriptive, camelCase identifiers; exported types use PascalCase. Keep modules small, default to named exports, and co-locate helper types in `types.ts`. Run `pnpm build` after edits to ensure `tsc` emits clean `.d.ts` files.
+- **Core Flow**: Markdown (`md-validator` → `md-extractor`) → Notion import (`notion-importer` + `notion-colorizer`) → TTS (`tts-elevenlabs`) → S3 upload (`storage-uploader`) → attach audio (`notion-add-audio`).
+- **Orchestrator** (`packages/orchestrator`) glues the above into one command. It now exposes:
+  - `esl-orchestrator --md <file>`: full run.
+  - `esl-orchestrator status --md <file>`: read manifest + hash/audio health.
+  - `esl-orchestrator rerun --md <file> --steps tts,upload`: rerun subset using cached manifest.
+- **Configs** live in `configs/` (notably `voices.yml`, `elevenlabs.voices.json`, `presets.json`). Student-specific overrides can reside in `configs/students/` (stubbed for now).
 
-## Testing Guidelines
-Use Vitest for unit and integration coverage. Place new specs in `packages/<module>/tests` with filenames like `feature-name.test.ts`. Mirror the CLI contract in tests by exercising both happy paths and error handling. Run the relevant `pnpm --filter <module> test` while iterating, then `pnpm test` before pushing.
+## 2. Environment & Secrets
 
-## Commit & Pull Request Guidelines
-History favors short, imperative commits (e.g., `add md-extractor`, `init pipeline`). Keep messages under ~72 characters and group related changes together. Pull requests should describe the workflow impact, link to any Notion task or GitHub issue, and include CLI/test output when behavior changes. Request review once the branch builds cleanly and Vitest passes.
+- Copy `.env.example` to `.env` and fill: `NOTION_TOKEN`, `ELEVENLABS_API_KEY`, `AWS_*`.
+- Keep ffmpeg installed (`ffmpeg` must be on PATH).
+- **Voice Catalog**: refresh with `pnpm exec tsx --eval "import { syncVoices } from './packages/tts-elevenlabs/src/syncVoices.ts'; (async () => { await syncVoices('configs/elevenlabs.voices.json'); })();"` before generating real audio.
+- Never commit `.env` or generated media. `.gitignore` already excludes `*.tsbuildinfo` and `configs/voices.json`.
 
-## Configuration & Security Tips
-Never commit `.env`; load it per session with `set -a && source .env`. Validate S3 settings against `configs/presets.json` before uploading audio, and reference `configs/voices.yml` when adding narrators. Treat generated media and exports as disposable artifacts—keep only source Markdown and configuration under version control.
+## 3. Tooling Commands
+
+- `pnpm install` (workspace install)
+- `pnpm lint` (ESLint v9 flat config + Prettier checks)
+- `pnpm build` (tsc on all packages)
+- `pnpm test` (Vitest suites, including orchestrator smoke)
+- `pnpm smoke` (alias for orchestrator tests)
+- Package-specific scripts: `pnpm --filter <pkg> test`, `pnpm --filter <pkg> dev`, etc.
+
+## 4. Testing Expectations
+
+- Unit tests reside in `packages/<pkg>/tests`.
+- Orchestrator smoke test mocks Notion/S3/ElevenLabs and verifies manifest + rerun flows.
+- Before merging, run lint/build/test locally; CI (see `.github/workflows/ci.yml`) enforces the same.
+
+## 5. Recent Changes (context for follow-up)
+
+- Added status/rerun APIs and CLI commands in orchestrator; manifests now power incremental runs.
+- ElevenLabs integration now resolves friendly voice names using `configs/elevenlabs.voices.json`.
+- Markdown validator accepts topic arrays and enforces `--strict` warnings-as-errors.
+- Storage uploader keys are path-safe and tests match the options-object API.
+- Docs overhauled (`README.md`, `docs/publishing.md`, `docs/orchestrator-ux.md`); Prettier/ESLint added.
+
+## 6. Pending / Next Work
+
+1. **Orchestrator UX roadmap** (`docs/orchestrator-ux.md`): implement interactive wizard, config profiles, structured logging (`--json`), step toggles, etc.
+2. **Release automation**: add CHANGELOG, choose versioning, decide which packages should be public (currently `private: true`).
+3. **Smoke coverage**: consider richer integration tests that mock Notion/S3/ElevenLabs with fixtures.
+4. **Security**: document IAM scopes, key rotation, and voice catalog update cadence in `docs/publishing.md` or new security doc.
+5. **Package docs**: per-package READMEs summarising CLI flags still missing (only root README updated).
+
+## 7. Conventions & Tips
+
+- TypeScript 5.9+, ES modules, 2-space indentation, trailing commas. Types in PascalCase.
+- Co-locate helper types in `types.ts` or adjacent modules.
+- Use `promises` API (`node:fs/promises`), avoid callback-style.
+- For mocks, prefer `vi.importActual` to partially mock modules (see orchestrator smoke test).
+- Keep manifest schema backwards compatible; orchestrator relies on `mdHash`, `audio`, `timestamp`, etc.
+
+## 8. Troubleshooting Checklist
+
+- **Validation fails**: run `pnpm md-validate <file> --strict` to inspect exact errors.
+- **Notion import**: ensure `NOTION_TOKEN` integration has access to target data sources; `resolveDataSourceId` now lists available names on failure.
+- **TTS missing voices**: refresh `configs/elevenlabs.voices.json`; check `voices.yml` for friendly -> voice ID mapping.
+- **S3 upload issues**: confirm `AWS_REGION/S3_BUCKET/S3_PREFIX` in `.env`; ACL fallback logs a warning when bucket blocks ACLs.
+- **ffmpeg errors**: ensure ffmpeg binary is installed or set `FFMPEG_PATH` env var.
+
+## 9. File Guide
+
+- `configs/elevenlabs.voices.json` – generated voice catalog (committed now for reference).
+- `docs/publishing.md` – deployment checklist.
+- `docs/orchestrator-ux.md` – UX design for future work.
+- `packages/orchestrator/src/index.ts` – now exports `newAssignment`, `getAssignmentStatus`, `rerunAssignment`.
+
+Stay consistent with lint rules (`pnpm lint`). When touching the orchestrator, update smoke test as needed. Good luck!

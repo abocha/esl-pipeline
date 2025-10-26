@@ -1,13 +1,32 @@
 {
   "name": "esl-pipeline",
   "version": "1.0.0",
-  "description": "",
+  "description": "ESL assignment pipeline tooling (validation, Notion import, TTS, S3 upload).",
+  "keywords": [
+    "esl",
+    "notion",
+    "tts",
+    "cli",
+    "pipeline"
+  ],
+  "homepage": "https://github.com/abocha/esl-pipeline",
+  "bugs": {
+    "url": "https://github.com/abocha/esl-pipeline/issues"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/abocha/esl-pipeline.git"
+  },
   "main": "index.js",
   "scripts": {
     "build": "pnpm -r --filter './packages/*' run build",
     "test": "pnpm -r --filter './packages/*' run test",
     "test:watch": "pnpm -r --filter './packages/*' run test:watch",
     "clean": "pnpm -r --filter './packages/*' run clean",
+    "lint": "pnpm exec eslint --ext .ts,.tsx packages",
+    "format": "pnpm exec prettier --check \"**/*.{ts,tsx,js,json,md,yml,yaml}\"",
+    "format:write": "pnpm exec prettier --write \"**/*.{ts,tsx,js,json,md,yml,yaml}\"",
+    "smoke": "pnpm --filter @esl-pipeline/orchestrator test",
     "build:extractor": "pnpm --filter @esl-pipeline/md-extractor build",
     "build:validator": "pnpm --filter @esl-pipeline/md-validator build",
     "build:importer": "pnpm --filter @esl-pipeline/notion-importer build",
@@ -33,14 +52,24 @@
     "cli:add-audio": "node packages/notion-add-audio/dist/bin/cli.js",
     "cli:orchestrator": "node packages/orchestrator/dist/bin/cli.js"
   },
-  "keywords": [],
   "author": "",
   "license": "ISC",
   "packageManager": "pnpm@10.19.0+sha512.c9fc7236e92adf5c8af42fd5bf1612df99c2ceb62f27047032f4720b33f8eacdde311865e91c411f2774f618d82f320808ecb51718bfa82c060c4ba7c76a32b8",
   "private": true,
   "type": "module",
   "devDependencies": {
+    "@eslint/js": "^9.38.0",
     "@types/node": "^24.9.1",
+    "@typescript-eslint/eslint-plugin": "^8.46.2",
+    "@typescript-eslint/parser": "^8.46.2",
+    "eslint": "^9.38.0",
+    "eslint-config-prettier": "^9.1.2",
+    "eslint-import-resolver-typescript": "^3.10.1",
+    "eslint-plugin-import": "^2.32.0",
+    "eslint-plugin-node": "^11.1.0",
+    "eslint-plugin-promise": "^7.2.1",
+    "globals": "^15.15.0",
+    "prettier": "^3.6.2",
     "tsx": "^4.20.6",
     "typescript": "^5.9.3",
     "vitest": "^4.0.3"

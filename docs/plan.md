@@ -2,17 +2,17 @@ Here’s a **concrete, build-ready plan** for your pipeline — from small CLIs 
 
 # Tech stack (unified, low-friction)
 
-* **Runtime:** Node.js 22 (via nvm), **pnpm** workspaces, **TypeScript**.
-* **Core libs:**
+- **Runtime:** Node.js 22 (via nvm), **pnpm** workspaces, **TypeScript**.
+- **Core libs:**
+  - Markdown/front-matter: `remark` + `remark-frontmatter` + `gray-matter`
+  - Validation: `zod` (runtime), JSON Schema export (for editor linting)
+  - Notion: `@notionhq/client`
+  - CLI: `commander`, `ora`, `chalk`
+  - HTTP: `axios`
+  - Env/secrets: `dotenv`
 
-  * Markdown/front-matter: `remark` + `remark-frontmatter` + `gray-matter`
-  * Validation: `zod` (runtime), JSON Schema export (for editor linting)
-  * Notion: `@notionhq/client`
-  * CLI: `commander`, `ora`, `chalk`
-  * HTTP: `axios`
-  * Env/secrets: `dotenv`
-* **Tests:** `vitest` + fixtures.
-* **Optional TUI later:** `ink` (React for CLI) — keep pure CLI first.
+- **Tests:** `vitest` + fixtures.
+- **Optional TUI later:** `ink` (React for CLI) — keep pure CLI first.
 
 > Rationale: You already used Node + pnpm for the colorizer; keeping a single TS stack minimizes setup and RAM load in WSL.
 
@@ -50,29 +50,30 @@ esl-pipeline/
 
 **Validates:**
 
-* **One** code block containing the document (no nested code fences).
-* **YAML front matter** with required keys:
+- **One** code block containing the document (no nested code fences).
+- **YAML front matter** with required keys:
 
   ```yaml
-  title: string (non-empty)        # "Homework Assignment: <topic>"
+  title: string (non-empty) # "Homework Assignment: <topic>"
   student: string
   level: string
   topic: string
   input_type: enum("generate","authentic")
-  speaker_labels?: string[]        # optional, if dialogue
+  speaker_labels?: string[] # optional, if dialogue
   ```
-* **H2 section order:** 1..9 exactly as in your template.
-* **Markers present & unique:**
 
-  * `:::study-text` … `:::`
-  * `:::toggle-heading Answer Key` … `:::`
-  * `:::toggle-heading Teacher’s Follow-up Plan` … `:::`
-* **Study text format:**
+- **H2 section order:** 1..9 exactly as in your template.
+- **Markers present & unique:**
+  - `:::study-text` … `:::`
+  - `:::toggle-heading Answer Key` … `:::`
+  - `:::toggle-heading Teacher’s Follow-up Plan` … `:::`
 
-  * If `speaker_labels` present → every dialogue line must be `[Name]: text`, and each `Name` ∈ `speaker_labels`.
-  * Else → 3–5 paragraphs or 10–15 short lines (soft check).
-* **No extra code blocks** inside the main doc.
-* Optional sanity checks: 8–10 items under **Controlled Practice**, ≥2 items under **Comprehension Check**.
+- **Study text format:**
+  - If `speaker_labels` present → every dialogue line must be `[Name]: text`, and each `Name` ∈ `speaker_labels`.
+  - Else → 3–5 paragraphs or 10–15 short lines (soft check).
+
+- **No extra code blocks** inside the main doc.
+- Optional sanity checks: 8–10 items under **Controlled Practice**, ≥2 items under **Comprehension Check**.
 
 **CLI:**
 
@@ -91,11 +92,11 @@ md-validate ./out/anna-2025-10-21.md --strict
 
 **Implementation sketch:**
 
-* Parse with `gray-matter` → front-matter + body.
-* Find the **single** code block (regex or fenced markdown node).
-* Walk H2/H3 using `remark` AST.
-* Markers: scan the raw code block (string), record ranges.
-* Validate with `zod`; expose a function that returns `{ ok, errors[] }`.
+- Parse with `gray-matter` → front-matter + body.
+- Find the **single** code block (regex or fenced markdown node).
+- Walk H2/H3 using `remark` AST.
+- Markers: scan the raw code block (string), record ranges.
+- Validate with `zod`; expose a function that returns `{ ok, errors[] }`.
 
 **Deliverables:** TS library + bin `md-validate`.
 
@@ -107,11 +108,11 @@ md-validate ./out/anna-2025-10-21.md --strict
 
 **Exports:**
 
-* `extractFrontmatter(md) → {title, student, level, topic, input_type, speaker_labels?}`
-* `extractStudyText(md) → { type: "dialogue" | "monologue", lines: string[] }`
-* `extractAnswerKey(md) → { blocks: string }`
-* `extractTeacherNotes(md) → { blocks: string }`
-* `extractSections(md) → structured AST, for importer`
+- `extractFrontmatter(md) → {title, student, level, topic, input_type, speaker_labels?}`
+- `extractStudyText(md) → { type: "dialogue" | "monologue", lines: string[] }`
+- `extractAnswerKey(md) → { blocks: string }`
+- `extractTeacherNotes(md) → { blocks: string }`
+- `extractSections(md) → structured AST, for importer`
 
 **Note:** Works on the **same single code block** string.
 
@@ -123,24 +124,24 @@ md-validate ./out/anna-2025-10-21.md --strict
 
 **Inputs:**
 
-* `--md path`
-* `--db "Homework Assignments"` or `--db-id <id>`
-* `--student "Anna"` or map via `configs/students/*.json`
-* `--parent-id` (optional) if not using a DB
-* `--dry-run`
+- `--md path`
+- `--db "Homework Assignments"` or `--db-id <id>`
+- `--student "Anna"` or map via `configs/students/*.json`
+- `--parent-id` (optional) if not using a DB
+- `--dry-run`
 
 **Behavior:**
 
 1. Use `md-validator` programmatically. Abort on fail.
 2. Create a new DB row with:
+   - **Title** = `frontmatter.title`
+   - **Relations/props**: `Student`, `Topic`, `Date` (today), etc.
 
-   * **Title** = `frontmatter.title`
-   * **Relations/props**: `Student`, `Topic`, `Date` (today), etc.
 3. Convert MD → Notion blocks:
+   - H2/H3 → `heading_2/3` (`is_toggleable` only for `:::toggle-heading …` regions).
+   - `:::study-text` → **toggle** (non-heading) with nested paragraphs (or dialogue lines).
+   - Lists, paragraphs handled via basic mapping (remark AST → Notion blocks).
 
-   * H2/H3 → `heading_2/3` (`is_toggleable` only for `:::toggle-heading …` regions).
-   * `:::study-text` → **toggle** (non-heading) with nested paragraphs (or dialogue lines).
-   * Lists, paragraphs handled via basic mapping (remark AST → Notion blocks).
 4. Save resulting **page_id** for downstream.
 
 **CLI:**
@@ -191,19 +192,19 @@ notion-color-headings "<page-id-or-url>" \
 
 **Inputs:**
 
-* `--md path` (or `--text path`)
-* `--voice-map configs/voices.yml` (speaker → voice_id)
-* `--speed`, `--stability` (optional)
-* `--out ./out/anna/2025-10-21_study-text.mp3`
-* `--preview` (generate but don’t upload/insert)
-* **Secrets**: `ELEVENLABS_API_KEY` in `.env`
+- `--md path` (or `--text path`)
+- `--voice-map configs/voices.yml` (speaker → voice_id)
+- `--speed`, `--stability` (optional)
+- `--out ./out/anna/2025-10-21_study-text.mp3`
+- `--preview` (generate but don’t upload/insert)
+- **Secrets**: `ELEVENLABS_API_KEY` in `.env`
 
 **Behavior:**
 
-* Use `md-extractor.extractStudyText`.
-* Dialogue: group by speaker → generate chunks or one joined stream depending on API cost.
-* Monologue: single voice.
-* Write MP3; emit duration and file size.
+- Use `md-extractor.extractStudyText`.
+- Dialogue: group by speaker → generate chunks or one joined stream depending on API cost.
+- Monologue: single voice.
+- Write MP3; emit duration and file size.
 
 **CLI:**
 
@@ -223,8 +224,8 @@ make-tts-eleven \
 
 **Backends (choose one, pluggable):**
 
-* **MinIO / S3**: put object + **presigned, long-lived** or public bucket.
-* **Google Drive**: upload and set sharing “Anyone with link; Viewer” (works well in practice).
+- **MinIO / S3**: put object + **presigned, long-lived** or public bucket.
+- **Google Drive**: upload and set sharing “Anyone with link; Viewer” (works well in practice).
 
 **CLI:**
 
@@ -255,8 +256,8 @@ notion-add-audio \
 
 **Behavior:**
 
-* Find the toggle created from `:::study-text`, append an `audio` block with `external.url`.
-* If an existing audio block is found, update/replace.
+- Find the toggle created from `:::study-text`, append an `audio` block with `external.url`.
+- If an existing audio block is found, update/replace.
 
 ---
 
@@ -293,7 +294,7 @@ new-assignment \
 
 **Idempotency rules:**
 
-* If `manifest.json` exists and `md` hash unchanged → skip re-import, allow only color restyle or audio replace with `--force`.
+- If `manifest.json` exists and `md` hash unchanged → skip re-import, allow only color restyle or audio replace with `--force`.
 
 ---
 
@@ -327,29 +328,28 @@ S3_BUCKET=notion-tts
 
 # Acceptance tests (executable fixtures)
 
-* **md-validator**
+- **md-validator**
+  - `fixtures/ok.md` → exit 0.
+  - `fixtures/missing-frontmatter.md` → exit 1 with “Missing key: title”.
+  - `fixtures/wrong-order.md` → exit 1.
+  - `fixtures/dialogue-bad-speaker.md` → exit 1.
 
-  * `fixtures/ok.md` → exit 0.
-  * `fixtures/missing-frontmatter.md` → exit 1 with “Missing key: title”.
-  * `fixtures/wrong-order.md` → exit 1.
-  * `fixtures/dialogue-bad-speaker.md` → exit 1.
-* **notion-importer** (use a stub client in tests)
+- **notion-importer** (use a stub client in tests)
+  - Creates the right nested structure for `:::toggle-heading` and `:::study-text`.
+  - Returns `page_id`.
 
-  * Creates the right nested structure for `:::toggle-heading` and `:::study-text`.
-  * Returns `page_id`.
-* **notion-styler**
+- **notion-styler**
+  - Given a synthetic page (mocked), applies `toggleMap` as **annotations only** and no child bleed.
 
-  * Given a synthetic page (mocked), applies `toggleMap` as **annotations only** and no child bleed.
-* **tts-elevenlabs** (mock network)
+- **tts-elevenlabs** (mock network)
+  - Dialogue splits by `[Name]:`.
+  - Writes an mp3 (fake bytes) to disk.
 
-  * Dialogue splits by `[Name]:`.
-  * Writes an mp3 (fake bytes) to disk.
-* **storage-uploader** (use LocalStack or dry-run)
+- **storage-uploader** (use LocalStack or dry-run)
+  - Produces a URL.
 
-  * Produces a URL.
-* **orchestrator**
-
-  * With all mocks, runs end-to-end and writes `manifest.json`.
+- **orchestrator**
+  - With all mocks, runs end-to-end and writes `manifest.json`.
 
 ---
 
@@ -383,9 +383,9 @@ new-assignment \
 
 # Windows/WSL notes
 
-* Put binaries (`new-assignment`, etc.) into `~/bin` and add to PATH in WSL.
-* Audio preview: open the resulting URL in Windows browser via `wslview <url>`.
-* Large audio directories: ensure they sit on the Linux filesystem (`~/`) for speed, not on the Windows mount (`/mnt/c/...`).
+- Put binaries (`new-assignment`, etc.) into `~/bin` and add to PATH in WSL.
+- Audio preview: open the resulting URL in Windows browser via `wslview <url>`.
+- Large audio directories: ensure they sit on the Linux filesystem (`~/`) for speed, not on the Windows mount (`/mnt/c/...`).
 
 ---
 
