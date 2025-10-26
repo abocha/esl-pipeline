@@ -1,4 +1,4 @@
-# configs/voices.yml
-Alex: voice_id_1
-Mara: voice_id_2
-default: voice_id_default
+auto: true
+default: Liam
+Teacher:  VOICE_ID_IF_YOU_WANT_TO_FORCE
+Narrator: Liam
