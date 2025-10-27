@@ -13,6 +13,27 @@ import {
 import { access, readFile } from 'node:fs/promises';
 import { constants as FS } from 'node:fs';
 
+export type AssignmentStage =
+  | 'validate'
+  | 'import'
+  | 'colorize'
+  | 'tts'
+  | 'upload'
+  | 'add-audio'
+  | 'manifest';
+
+export type AssignmentStageStatus = 'start' | 'success' | 'skipped';
+
+export type AssignmentProgressEvent = {
+  stage: AssignmentStage;
+  status: AssignmentStageStatus;
+  detail?: Record<string, unknown>;
+};
+
+export type AssignmentProgressCallbacks = {
+  onStage?: (event: AssignmentProgressEvent) => void;
+};
+
 export type NewAssignmentFlags = {
   md: string;
   student?: string;
@@ -37,7 +58,10 @@ export type NewAssignmentFlags = {
   dataSource?: string;
 };
 
-export async function newAssignment(flags: NewAssignmentFlags): Promise<{
+export async function newAssignment(
+  flags: NewAssignmentFlags,
+  callbacks: AssignmentProgressCallbacks = {}
+): Promise<{
   pageId?: string;
   pageUrl?: string;
   audio?: { path?: string; url?: string; hash?: string };
@@ -45,6 +69,17 @@ export async function newAssignment(flags: NewAssignmentFlags): Promise<{
   manifestPath?: string;
   steps: string[];
 }> {
+  const emitStage = (
+    stage: AssignmentStage,
+    status: AssignmentStageStatus,
+    detail?: Record<string, unknown>
+  ) => {
+    callbacks.onStage?.({ stage, status, detail });
+  };
+
+  const recordSkip = (stage: AssignmentStage, reason: string) =>
+    emitStage(stage, 'skipped', { reason });
+
   const steps: string[] = [];
   const mdContents = await readFile(flags.md, 'utf8');
   const previousManifest = await readManifest(flags.md);
@@ -55,6 +90,8 @@ export async function newAssignment(flags: NewAssignmentFlags): Promise<{
   let colorized = false;
 
   if (flags.skipImport) {
+    recordSkip('validate', 'skip-import flag set');
+    recordSkip('import', 'skip-import flag set');
     steps.push('skip:validate');
     steps.push('skip:import');
     if (!pageId && !flags.dryRun) {
@@ -63,6 +100,8 @@ export async function newAssignment(flags: NewAssignmentFlags): Promise<{
       );
     }
   } else {
+    emitStage('validate', 'start');
+    emitStage('import', 'start');
     steps.push('validate');
     steps.push('import');
     const importResult = await runImport({
@@ -76,13 +115,22 @@ export async function newAssignment(flags: NewAssignmentFlags): Promise<{
     });
     pageId = importResult.page_id;
     pageUrl = importResult.url;
+    emitStage('validate', 'success');
+    emitStage('import', 'success', {
+      pageUrl,
+      studentLinked: importResult.studentLinked ?? undefined,
+    });
   }
 
   if (flags.preset) {
     if (flags.dryRun) {
-      steps.push(
-        `colorize:${flags.preset}:0/0/0`
-      );
+      emitStage('colorize', 'start');
+      steps.push(`colorize:${flags.preset}:0/0/0`);
+      emitStage('colorize', 'success', {
+        preset: flags.preset,
+        dryRun: true,
+        counts: { h2: 0, h3: 0, toggles: 0 },
+      });
       colorized = true;
     } else {
       if (!pageId) {
@@ -90,6 +138,7 @@ export async function newAssignment(flags: NewAssignmentFlags): Promise<{
           'Cannot apply color preset because no Notion pageId is available. Run import first.'
         );
       }
+      emitStage('colorize', 'start');
       steps.push('colorize');
       const color = await applyHeadingPreset(
         pageId,
@@ -99,13 +148,20 @@ export async function newAssignment(flags: NewAssignmentFlags): Promise<{
       steps.push(
         `colorize:${flags.preset}:${color.counts.h2}/${color.counts.h3}/${color.counts.toggles}`
       );
+      emitStage('colorize', 'success', {
+        preset: flags.preset,
+        counts: color.counts,
+      });
       colorized = true;
     }
+  } else {
+    recordSkip('colorize', 'no preset selected');
   }
 
   let audio = previousManifest?.audio ? { ...previousManifest.audio } : undefined;
   if (flags.withTts) {
     if (flags.skipTts) {
+      recordSkip('tts', 'skip-tts flag set');
       steps.push('skip:tts');
       if (!audio?.path && !flags.dryRun) {
         throw new Error(
@@ -113,6 +169,7 @@ export async function newAssignment(flags: NewAssignmentFlags): Promise<{
         );
       }
     } else {
+      emitStage('tts', 'start');
       steps.push('tts');
       const ttsResult = await buildStudyTextMp3(flags.md, {
         voiceMapPath: flags.voices ?? 'configs/voices.yml',
@@ -121,6 +178,10 @@ export async function newAssignment(flags: NewAssignmentFlags): Promise<{
         force: flags.force || flags.redoTts,
       });
       audio = { path: ttsResult.path, hash: ttsResult.hash };
+      emitStage('tts', 'success', {
+        path: ttsResult.path,
+        preview: flags.dryRun,
+      });
 
       if (!flags.dryRun && audio?.path) {
         const audioPath = audio.path;
@@ -133,11 +194,13 @@ export async function newAssignment(flags: NewAssignmentFlags): Promise<{
       }
     }
   } else {
+    recordSkip('tts', 'tts disabled');
     audio = undefined;
   }
 
   if (flags.upload === 's3' && audio?.path) {
     if (flags.skipUpload) {
+      recordSkip('upload', 'skip-upload flag set');
       steps.push('skip:upload');
       if (!audio.url && !flags.dryRun) {
         throw new Error(
@@ -145,6 +208,7 @@ export async function newAssignment(flags: NewAssignmentFlags): Promise<{
         );
       }
     } else {
+      emitStage('upload', 'start');
       steps.push('upload');
       if (flags.dryRun) {
         const bucket = process.env.S3_BUCKET ?? 'stub-bucket';
@@ -163,18 +227,31 @@ export async function newAssignment(flags: NewAssignmentFlags): Promise<{
         });
         audio.url = upload.url;
       }
+      emitStage('upload', 'success', {
+        url: audio.url,
+        dryRun: flags.dryRun,
+      });
     }
+  } else {
+    recordSkip('upload', flags.upload === 's3' ? 'no audio path available' : 'upload disabled');
   }
 
   if (audio?.url && pageId) {
     if (flags.skipUpload) {
+      recordSkip('add-audio', 'skip-upload flag set');
       steps.push('skip:add-audio');
     } else if (flags.dryRun) {
+      emitStage('add-audio', 'start');
       steps.push('add-audio');
+      emitStage('add-audio', 'success', { dryRun: true });
     } else {
+      emitStage('add-audio', 'start');
       steps.push('add-audio');
       await addOrReplaceAudioUnderStudyText(pageId, audio.url, { replace: flags.force });
+      emitStage('add-audio', 'success', { pageId, url: audio.url });
     }
+  } else {
+    recordSkip('add-audio', audio?.url ? 'missing pageId' : 'no audio url available');
   }
 
   const manifest: AssignmentManifest = {
@@ -186,8 +263,10 @@ export async function newAssignment(flags: NewAssignmentFlags): Promise<{
     timestamp: new Date().toISOString(),
   };
 
+  emitStage('manifest', 'start');
   const manifestPath = await writeManifest(flags.md, manifest);
   steps.push('manifest');
+  emitStage('manifest', 'success', { manifestPath });
 
   return {
     pageId,

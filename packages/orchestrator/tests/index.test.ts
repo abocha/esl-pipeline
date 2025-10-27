@@ -99,7 +99,13 @@ default: voice_id_default
       skipUpload: true,
     });
 
-    expect(second.steps).toEqual(['skip:validate', 'skip:import', 'skip:tts', 'skip:upload', 'manifest']);
+    expect(second.steps).toEqual([
+      'skip:validate',
+      'skip:import',
+      'skip:tts',
+      'skip:upload',
+      'manifest',
+    ]);
     expect(buildStudyTextMp3).not.toHaveBeenCalled();
     expect(second.audio?.url).toBe(first.audio?.url);
   });

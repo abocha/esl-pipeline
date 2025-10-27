@@ -134,10 +134,7 @@ export async function addOrReplaceAudioUnderStudyText(
     appendPayload.after = precedingBlockId;
   }
 
-  await withRetry(
-    () => client.blocks.children.append(appendPayload),
-    'blocks.children.append'
-  );
+  await withRetry(() => client.blocks.children.append(appendPayload), 'blocks.children.append');
 
   return { replaced, appended: true };
 }

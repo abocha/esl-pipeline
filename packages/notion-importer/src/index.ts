@@ -16,7 +16,7 @@ export async function runImport(opts: ImportOptions) {
   // --- Step 1: validate programmatically (fail fast) ---
   const v = await validateMarkdownFile(opts.mdPath, { strict: true });
   if (!v.ok) {
-    const msg = ['Validation failed:', ...v.errors.map(e => `- ${e}`)].join('\n');
+    const msg = ['Validation failed:', ...v.errors.map((e: string) => `- ${e}`)].join('\n');
     throw new Error(msg);
   }
 
@@ -58,6 +58,7 @@ export async function runImport(opts: ImportOptions) {
       propertiesPreview: properties,
       blocksPreview: children.map(b => b.type),
       totalBlocks: children.length,
+      studentLinked: Boolean(studentName),
     };
     return {
       page_id: undefined,
@@ -74,7 +75,17 @@ export async function runImport(opts: ImportOptions) {
     dbId: opts.dbId,
     dbName: opts.dbName,
   });
-  const studentPageId = studentName ? await resolveStudentId(client, studentName) : undefined;
+  let studentPageId: string | undefined;
+  if (studentName) {
+    try {
+      studentPageId = await resolveStudentId(client, studentName);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      console.warn(
+        `[notion-importer] Continuing without linking student "${studentName}": ${message}`
+      );
+    }
+  }
 
   // Add student relation if resolved
   if (studentPageId) {
@@ -120,5 +131,6 @@ export async function runImport(opts: ImportOptions) {
   return {
     page_id: page.id,
     url: (page as any).url as string | undefined,
+    studentLinked: Boolean(studentPageId),
   };
 }

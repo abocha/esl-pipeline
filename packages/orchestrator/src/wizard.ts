@@ -23,6 +23,26 @@ type WizardState = Partial<NewAssignmentFlags> & {
   studentProfile?: StudentProfile | null;
 };
 
+export type WizardSelections = {
+  md: string;
+  student?: string;
+  studentProfile?: StudentProfile | null;
+  dbId?: string;
+  preset?: string;
+  withTts: boolean;
+  voices?: string;
+  force?: boolean;
+  upload?: 's3';
+  prefix?: string;
+  publicRead?: boolean;
+  dryRun: boolean;
+};
+
+export type WizardRunResult = {
+  flags: NewAssignmentFlags;
+  selections: WizardSelections;
+};
+
 export class WizardAbortedError extends Error {
   constructor(message = 'Interactive wizard aborted') {
     super(message);
@@ -37,7 +57,7 @@ function onCancel(): never {
 export async function runInteractiveWizard(
   initial: Partial<NewAssignmentFlags> = {},
   ctx: WizardContext = {}
-): Promise<NewAssignmentFlags> {
+): Promise<WizardRunResult> {
   const cwd = resolve(ctx.cwd ?? process.cwd());
   const [presets, profiles, mdSuggestions] = await Promise.all([
     loadPresets(ctx.presetsPath),
@@ -71,7 +91,8 @@ export async function runInteractiveWizard(
           name: 'mdManual',
           message: 'Enter path to the markdown file',
           initial: mdSuggestions[0] ? resolve(cwd, mdSuggestions[0]) : '',
-          validate: (input: string) => (!!input && input.trim().length > 0) || 'Please enter a path',
+          validate: (input: string) =>
+            (!!input && input.trim().length > 0) || 'Please enter a path',
         } satisfies PromptObject<'mdManual'>,
         { onCancel }
       );
@@ -100,8 +121,7 @@ export async function runInteractiveWizard(
       { title: 'Custom…', value: '__custom__' },
       { title: 'Skip', value: '__skip__' },
     ].filter(
-      (choice, index, arr) =>
-        arr.findIndex(other => other.value === choice.value) === index // dedupe
+      (choice, index, arr) => arr.findIndex(other => other.value === choice.value) === index // dedupe
     );
 
     const picked = await prompts(
@@ -136,11 +156,10 @@ export async function runInteractiveWizard(
     }
 
     state.studentProfile = state.student
-      ? profiles.find(profile => profile.student === state.student) ?? null
+      ? (profiles.find(profile => profile.student === state.student) ?? null)
       : null;
   } else if (state.student) {
-    state.studentProfile =
-      profiles.find(profile => profile.student === state.student) ?? null;
+    state.studentProfile = profiles.find(profile => profile.student === state.student) ?? null;
   }
 
   // Auto fill DB info from profile if available
@@ -339,7 +358,7 @@ export async function runInteractiveWizard(
   );
   state.dryRun = Boolean(dryRunAnswer.dryRun);
 
-  const result: NewAssignmentFlags = {
+  const flags: NewAssignmentFlags = {
     md: state.md!,
     student: state.student ?? undefined,
     preset: state.preset ?? undefined,
@@ -359,5 +378,20 @@ export async function runInteractiveWizard(
     dataSource: initial.dataSource,
   };
 
-  return result;
+  const selections: WizardSelections = {
+    md: flags.md,
+    student: flags.student,
+    studentProfile: state.studentProfile ?? null,
+    dbId: flags.dbId,
+    preset: flags.preset,
+    withTts: Boolean(state.withTts),
+    voices: state.voices,
+    force: state.force,
+    upload: state.upload,
+    prefix: state.prefix,
+    publicRead: state.publicRead,
+    dryRun: Boolean(state.dryRun),
+  };
+
+  return { flags, selections };
 }

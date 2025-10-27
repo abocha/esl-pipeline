@@ -7,6 +7,7 @@ coverage/
 .DS_Store
 .roo/mcp.json
 /.roo/mcp.json
+.pnpm-store/v10
 packages/tts-elevenlabs/vendor/ffmpeg/linux-x64.tar.xz
 packages/tts-elevenlabs/vendor/ffmpeg/linux-x64/ffmpeg
 packages/tts-elevenlabs/vendor/ffmpeg/linux-x64/ffplay

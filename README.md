@@ -13,16 +13,16 @@ All functionality lives in pnpm workspaces under `packages/`.
 
 ## At a Glance
 
-| Package                          | Responsibility                                                     | CLI                            |
-| -------------------------------- | ------------------------------------------------------------------ | ------------------------------ |
-| `@esl-pipeline/md-validator`     | Validates Markdown frontmatter, section order, study-text rules    | `md-validate`                  |
-| `@esl-pipeline/md-extractor`     | Pulls structured data (study text, answer key, etc.) from Markdown | —                              |
+| Package                          | Responsibility                                                                    | CLI                            |
+| -------------------------------- | --------------------------------------------------------------------------------- | ------------------------------ |
+| `@esl-pipeline/md-validator`     | Validates Markdown frontmatter, section order, study-text rules                   | `md-validate`                  |
+| `@esl-pipeline/md-extractor`     | Pulls structured data (study text, answer key, etc.) from Markdown                | —                              |
 | `@esl-pipeline/notion-importer`  | Creates/updates Notion pages from validated Markdown with full rich-text fidelity | `notion-importer`              |
-| `@esl-pipeline/notion-colorizer` | Applies heading color presets in Notion                            | `notion-colorizer`             |
-| `@esl-pipeline/tts-elevenlabs`   | Generates MP3 from study text via ElevenLabs                       | `tts-elevenlabs`, `tts-voices` |
-| `@esl-pipeline/storage-uploader` | Uploads generated audio to S3                                      | `storage-uploader`             |
-| `@esl-pipeline/notion-add-audio` | Places the study-text audio block above the toggle (add/replace)   | —                              |
-| `@esl-pipeline/orchestrator`     | “One command” pipeline composition                                 | `esl-orchestrator`             |
+| `@esl-pipeline/notion-colorizer` | Applies heading color presets in Notion                                           | `notion-colorizer`             |
+| `@esl-pipeline/tts-elevenlabs`   | Generates MP3 from study text via ElevenLabs                                      | `tts-elevenlabs`, `tts-voices` |
+| `@esl-pipeline/storage-uploader` | Uploads generated audio to S3                                                     | `storage-uploader`             |
+| `@esl-pipeline/notion-add-audio` | Places the study-text audio block above the toggle (add/replace)                  | —                              |
+| `@esl-pipeline/orchestrator`     | “One command” pipeline composition                                                | `esl-orchestrator`             |
 
 ---
 
@@ -188,5 +188,6 @@ Current focus is on polishing the 1.0 workflow (Markdown fidelity, audio placeme
 - Broader smoke coverage that exercises mocked Notion/S3/ElevenLabs fixtures.
 - Security documentation for IAM scopes, key rotation, and voice catalog refresh cadence.
 - Per-package READMEs that enumerate CLI flags and examples.
+- Smarter voice selection: richer speaker metadata, better catalog scoring, and persisted overrides to reduce manual tweaking of ElevenLabs voices.
 
 Contributions and feedback are welcome—file an issue or PR with context and reproduction steps.

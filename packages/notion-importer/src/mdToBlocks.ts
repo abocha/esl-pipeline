@@ -69,7 +69,7 @@ export function mdToBlocks(md: string): BlockObjectRequest[] {
 
   const createRichTextItem = (
     content: string,
-    annotationsOverride?: Partial<NonNullable<RichTextItem['annotations']>>,
+    annotationsOverride?: Partial<NonNullable<RichTextItem['annotations']>>
   ): RichTextItem => ({
     type: 'text',
     text: { content },
@@ -88,7 +88,7 @@ export function mdToBlocks(md: string): BlockObjectRequest[] {
           bold: active.bold,
           italic: active.italic,
           strikethrough: active.strikethrough,
-        }),
+        })
       );
       buffer = '';
     };
@@ -181,7 +181,7 @@ export function mdToBlocks(md: string): BlockObjectRequest[] {
             italic: false,
             code: true,
             color: 'red',
-          }),
+          })
         );
         idx = close + 1;
         continue;
@@ -234,8 +234,7 @@ export function mdToBlocks(md: string): BlockObjectRequest[] {
   };
 
   const toggleBlock = (title: string, childrenLines: string[]): ToggleBlock => {
-    const nested =
-      childrenLines.length > 0 ? mdToBlocks(childrenLines.join('\n')) : [];
+    const nested = childrenLines.length > 0 ? mdToBlocks(childrenLines.join('\n')) : [];
     const children = nested.map(block => block as ToggleChild);
     const block = {
       type: 'toggle',
@@ -266,8 +265,8 @@ export function mdToBlocks(md: string): BlockObjectRequest[] {
       for (let idx = listStack.length - 1; idx >= 0; idx--) {
         const entry = listStack[idx];
         if (entry && indent > entry.indent) {
-          const children =
-            (entry.block.bulleted_list_item.children ??= [] as unknown as BulletChildren);
+          const children = (entry.block.bulleted_list_item.children ??=
+            [] as unknown as BulletChildren);
           children.push(paragraph as unknown as BulletChildren[number]);
           return;
         }
@@ -289,9 +288,8 @@ export function mdToBlocks(md: string): BlockObjectRequest[] {
     }
     const parentEntry = listStack[listStack.length - 1];
     if (parentEntry && indent > parentEntry.indent) {
-      const children =
-        (parentEntry.block.bulleted_list_item.children ??=
-          [] as unknown as BulletChildren);
+      const children = (parentEntry.block.bulleted_list_item.children ??=
+        [] as unknown as BulletChildren);
       children.push(block as unknown as BulletChildren[number]);
     } else {
       blocks.push(block);

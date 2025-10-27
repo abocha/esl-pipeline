@@ -1,6 +1,6 @@
 {
   "name": "esl-pipeline",
-  "version": "1.1.0",
+  "version": "1.2.0",
   "description": "ESL assignment pipeline tooling (validation, Notion import, TTS, S3 upload).",
   "keywords": [
     "esl",
@@ -73,7 +73,7 @@
     "prettier": "^3.6.2",
     "tsx": "^4.20.6",
     "typescript": "^5.9.3",
-    "vitest": "^4.0.3"
+    "vitest": "^4.0.4"
   },
   "dependencies": {
     "@types/mdast": "^4.0.4",

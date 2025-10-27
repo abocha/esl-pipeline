@@ -1,15 +1,67 @@
 #!/usr/bin/env node
-import 'dotenv/config';
-import { resolve } from 'node:path';
+import { config as loadEnv } from 'dotenv';
+import { existsSync } from 'node:fs';
+import { dirname, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import process from 'node:process';
-import { getAssignmentStatus, newAssignment, rerunAssignment } from '../src/index.js';
+import ora from 'ora';
+import {
+  getAssignmentStatus,
+  newAssignment,
+  rerunAssignment,
+  type AssignmentProgressEvent,
+  type AssignmentStage,
+} from '../src/index.js';
 import type { NewAssignmentFlags, RerunFlags } from '../src/index.js';
 import { createLogger } from '../src/logger.js';
-import { runInteractiveWizard, WizardAbortedError } from '../src/wizard.js';
+import {
+  runInteractiveWizard,
+  WizardAbortedError,
+  type WizardRunResult,
+  type WizardSelections,
+} from '../src/wizard.js';
+
+const moduleDir = dirname(fileURLToPath(import.meta.url));
+loadEnv();
+const repoEnvPath = resolve(moduleDir, '../../../.env');
+if (existsSync(repoEnvPath)) {
+  loadEnv({ path: repoEnvPath, override: false });
+}
 
 type RerunStep = NonNullable<RerunFlags['steps']>[number];
 
 const rawArgs = process.argv.slice(2);
+
+const shouldLogPlainSecrets =
+  (process.env.ORCHESTRATOR_DEBUG_SECRETS ?? '').toLowerCase() === 'true' ||
+  process.env.ORCHESTRATOR_DEBUG_SECRETS === '1';
+
+const maskSecret = (value: string): string => {
+  if (value.length <= 4) return '*'.repeat(value.length);
+  if (value.length <= 8) return `${value.slice(0, 2)}…${value.slice(-2)}`;
+  return `${value.slice(0, 4)}…${value.slice(-4)}`;
+};
+
+const logNotionToken = (): void => {
+  const token = process.env.NOTION_TOKEN;
+  if (!token) {
+    logger.warn('NOTION_TOKEN missing from environment');
+    return;
+  }
+  const details: Record<string, unknown> = {
+    length: token.length,
+    preview: maskSecret(token),
+  };
+  if (shouldLogPlainSecrets) {
+    details.token = token;
+  }
+  logger.info('Loaded NOTION_TOKEN from environment', details);
+  if (token.length < 40) {
+    logger.warn(
+      'NOTION_TOKEN looks unusually short – double-check your .env or shell exports. Notion tokens normally start with "secret_" and are ~50 chars.'
+    );
+  }
+};
 
 const getFlag = (args: string[], name: string): string | undefined => {
   const idx = args.indexOf(name);
@@ -181,16 +233,58 @@ async function handleRerun(args: string[]): Promise<void> {
   logger.flush({ command: 'rerun', result });
 }
 
+const stageLabels: Record<AssignmentStage, string> = {
+  validate: 'Validating markdown',
+  import: 'Importing into Notion',
+  colorize: 'Applying heading preset',
+  tts: 'Generating ElevenLabs audio',
+  upload: 'Uploading audio',
+  'add-audio': 'Attaching audio in Notion',
+  manifest: 'Writing manifest',
+};
+
+const formatSuccessText = (event: AssignmentProgressEvent): string => {
+  const base = stageLabels[event.stage] ?? event.stage;
+  if (event.stage === 'colorize' && event.detail) {
+    const preset = event.detail.preset as string | undefined;
+    const counts = event.detail.counts as
+      | { h2?: number; h3?: number; toggles?: number }
+      | undefined;
+    if (preset && counts) {
+      return `${base} (preset: ${preset}, H2/H3/Toggles: ${counts.h2}/${counts.h3}/${counts.toggles})`;
+    }
+    if (preset) return `${base} (preset: ${preset})`;
+  }
+  if (event.stage === 'upload' && event.detail) {
+    if (event.detail.dryRun) return `${base} (dry run URL prepared)`;
+    if (event.detail.url) return `${base} (${event.detail.url})`;
+  }
+  if (event.stage === 'add-audio' && event.detail?.dryRun) {
+    return `${base} (dry run)`;
+  }
+  if (event.stage === 'manifest' && event.detail?.manifestPath) {
+    return `${base} (${resolve(String(event.detail.manifestPath))})`;
+  }
+  return base;
+};
+
+const formatSkipText = (event: AssignmentProgressEvent): string => {
+  const base = stageLabels[event.stage] ?? event.stage;
+  const reason = event.detail?.reason as string | undefined;
+  return reason ? `${base} (skipped – ${reason})` : `${base} (skipped)`;
+};
+
 async function handleRun(args: string[]): Promise<void> {
   const parsed = parseRunFlags(args);
   if (!parsed.md && !parsed.interactive) usage();
-  const md = parsed.md;
 
-  let flagsForRun = { ...parsed };
+  const useFancy = parsed.interactive && !jsonOutput;
+  let wizardSelections: WizardSelections | undefined;
+  let assignmentFlags: NewAssignmentFlags;
 
   if (parsed.interactive) {
     try {
-      const wizardFlags = await runInteractiveWizard(
+      const wizardResult: WizardRunResult = await runInteractiveWizard(
         {
           md: parsed.md,
           student: parsed.student,
@@ -215,10 +309,8 @@ async function handleRun(args: string[]): Promise<void> {
           voicesPath: parsed.voices,
         }
       );
-      flagsForRun = {
-        ...flagsForRun,
-        ...wizardFlags,
-      };
+      assignmentFlags = wizardResult.flags;
+      wizardSelections = wizardResult.selections;
     } catch (error) {
       if (error instanceof WizardAbortedError) {
         logger.warn('Interactive wizard cancelled by user');
@@ -227,36 +319,176 @@ async function handleRun(args: string[]): Promise<void> {
       }
       throw error;
     }
+  } else {
+    const md = parsed.md ?? usage();
+    assignmentFlags = {
+      md,
+      student: parsed.student ?? undefined,
+      preset: parsed.preset ?? undefined,
+      presetsPath: parsed.presetsPath ?? undefined,
+      withTts: parsed.withTts ? true : undefined,
+      upload: parsed.upload,
+      presign: parsed.presign ?? undefined,
+      publicRead: parsed.publicRead ? true : undefined,
+      prefix: parsed.prefix ?? undefined,
+      dryRun: parsed.dryRun ? true : undefined,
+      force: parsed.force ? true : undefined,
+      voices: parsed.voices ?? undefined,
+      out: parsed.out ?? undefined,
+      dbId: parsed.dbId ?? undefined,
+      db: parsed.db ?? undefined,
+      dataSourceId: parsed.dataSourceId ?? undefined,
+      dataSource: parsed.dataSource ?? undefined,
+      skipImport: parsed.skipImport ? true : undefined,
+      skipTts: parsed.skipTts ? true : undefined,
+      skipUpload: parsed.skipUpload ? true : undefined,
+      redoTts: parsed.redoTts ? true : undefined,
+    };
   }
 
-  if (!flagsForRun.md) usage();
-
-  const runFlags = {
-    ...flagsForRun,
-    md: flagsForRun.md,
-    redoTts: flagsForRun.redoTts,
-    skipImport: flagsForRun.skipImport,
-    skipTts: flagsForRun.skipTts,
-    skipUpload: flagsForRun.skipUpload,
-  } as RunFlags & { md: string };
-
   logger.info('Starting assignment pipeline', {
-    md: runFlags.md,
-    withTts: runFlags.withTts,
-    upload: runFlags.upload ?? 'none',
+    md: assignmentFlags.md,
+    withTts: Boolean(assignmentFlags.withTts),
+    upload: assignmentFlags.upload ?? 'none',
   });
 
-  const { interactive: _interactive, ...assignmentFlags } = runFlags;
+  const stageOutcomes: AssignmentProgressEvent[] = [];
+  const spinner = useFancy ? ora({ spinner: 'dots', color: 'cyan' }) : null;
 
-  const result = await newAssignment(assignmentFlags as unknown as NewAssignmentFlags);
+  const progressCallbacks = {
+    onStage: (event: AssignmentProgressEvent) => {
+      if (event.status !== 'start') stageOutcomes.push(event);
+      if (!useFancy) return;
+      const label = stageLabels[event.stage] ?? event.stage;
+      if (event.status === 'start') {
+        spinner?.start(label);
+        return;
+      }
+      if (event.status === 'success') {
+        const text = formatSuccessText(event);
+        if (spinner?.isSpinning) spinner.succeed(text);
+        else spinner?.succeed?.(text);
+        return;
+      }
+      if (event.status === 'skipped') {
+        const text = formatSkipText(event);
+        if (spinner?.isSpinning) spinner.stop();
+        spinner?.info(text);
+      }
+    },
+  };
+
+  logNotionToken();
+  const result = await newAssignment(assignmentFlags, progressCallbacks);
+
+  if (spinner?.isSpinning) spinner.stop();
 
   logger.success('Assignment pipeline completed', {
     steps: result.steps,
     manifest: result.manifestPath ? resolve(result.manifestPath) : undefined,
   });
-  outputRunSummary(result, runFlags);
+
+  if (parsed.interactive && !jsonOutput && wizardSelections) {
+    printWizardSummary(result, wizardSelections, stageOutcomes);
+  } else {
+    const summaryFlags: RunFlags = {
+      ...parsed,
+      md: assignmentFlags.md,
+      student: assignmentFlags.student,
+      preset: assignmentFlags.preset,
+      presetsPath: assignmentFlags.presetsPath,
+      withTts: Boolean(assignmentFlags.withTts),
+      upload: assignmentFlags.upload,
+      presign: assignmentFlags.presign,
+      publicRead: Boolean(assignmentFlags.publicRead),
+      prefix: assignmentFlags.prefix,
+      dryRun: Boolean(assignmentFlags.dryRun),
+      force: Boolean(assignmentFlags.force),
+      voices: assignmentFlags.voices,
+      out: assignmentFlags.out,
+      dbId: assignmentFlags.dbId,
+      db: assignmentFlags.db,
+      dataSourceId: assignmentFlags.dataSourceId,
+      dataSource: assignmentFlags.dataSource,
+      skipImport: Boolean(assignmentFlags.skipImport),
+      skipTts: Boolean(assignmentFlags.skipTts),
+      skipUpload: Boolean(assignmentFlags.skipUpload),
+      redoTts: Boolean(assignmentFlags.redoTts),
+      interactive: parsed.interactive,
+    };
+    outputRunSummary(result, summaryFlags);
+  }
+
   logger.flush({ command: 'run', result });
 }
+
+const printWizardSummary = (
+  result: Awaited<ReturnType<typeof newAssignment>>,
+  selections: WizardSelections,
+  stages: AssignmentProgressEvent[]
+): void => {
+  console.log('\n✨ Wizard Complete');
+
+  console.log('\nAssignment');
+  console.log(`  Markdown : ${selections.md}`);
+  if (selections.student) console.log(`  Student  : ${selections.student}`);
+  if (selections.dbId) console.log(`  Database : ${selections.dbId}`);
+  if (selections.preset) console.log(`  Preset   : ${selections.preset}`);
+  console.log(`  Audio    : ${selections.withTts ? 'Enabled' : 'Disabled'}`);
+  if (selections.withTts && selections.voices) {
+    console.log(`  Voices   : ${selections.voices}`);
+  }
+  if (selections.upload === 's3') {
+    const prefix = selections.prefix ?? process.env.S3_PREFIX ?? 'audio/assignments';
+    console.log(`  Upload   : S3 (${prefix})${selections.publicRead ? ' [public]' : ''}`);
+  } else {
+    console.log('  Upload   : None');
+  }
+  console.log(`  Dry run  : ${selections.dryRun ? 'Yes' : 'No'}`);
+
+  const outcomeByStage = new Map<AssignmentStage, AssignmentProgressEvent>();
+  for (const event of stages) {
+    outcomeByStage.set(event.stage, event);
+  }
+
+  const orderedStages: AssignmentStage[] = [
+    'validate',
+    'import',
+    'colorize',
+    'tts',
+    'upload',
+    'add-audio',
+    'manifest',
+  ];
+
+  console.log('\nProgress');
+  for (const stage of orderedStages) {
+    const event = outcomeByStage.get(stage);
+    if (!event) continue;
+    const label = event.status === 'success' ? formatSuccessText(event) : formatSkipText(event);
+    const symbol = event.status === 'success' ? '✔' : '↷';
+    console.log(`  ${symbol} ${label}`);
+  }
+
+  console.log('\nDeliverables');
+  if (result.pageUrl) console.log(`  • Notion page: ${result.pageUrl}`);
+  if (result.audio?.url) console.log(`  • Audio URL  : ${result.audio.url}`);
+  else if (result.audio?.path) console.log(`  • Audio file : ${result.audio.path}`);
+  if (result.manifestPath) console.log(`  • Manifest   : ${resolve(result.manifestPath)}`);
+
+  console.log('\nNext Steps');
+  console.log('  1. Review the Notion page and confirm formatting.');
+  if (result.audio?.url) {
+    console.log('  2. Share the audio link with the student.');
+  } else if (result.audio?.path) {
+    console.log('  2. Send the generated audio file to the student.');
+  } else {
+    console.log('  2. Run the pipeline with TTS enabled when you are ready to record audio.');
+  }
+  console.log(
+    `  3. Rerun specific stages with: pnpm esl-orchestrator rerun --md "${selections.md}"`
+  );
+};
 
 async function main(): Promise<void> {
   try {

@@ -238,7 +238,10 @@ default: voice_id_default
       voiceMapPath: tempVoiceMapPath,
       outPath: dir,
     });
-    expect(convertMock).toHaveBeenCalledWith(expect.any(String), expect.objectContaining({ text: 'I really love code!' }));
+    expect(convertMock).toHaveBeenCalledWith(
+      expect.any(String),
+      expect.objectContaining({ text: 'I really love code!' })
+    );
   });
 
   it('reuses generated audio when file already exists', async () => {
