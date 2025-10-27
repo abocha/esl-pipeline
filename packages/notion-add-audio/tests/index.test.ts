@@ -30,6 +30,11 @@ describe('addOrReplaceAudioUnderStudyText', () => {
       .mockResolvedValueOnce({
         results: [
           {
+            type: 'heading_2',
+            id: 'heading456',
+            heading_2: { rich_text: [{ plain_text: 'Section Heading' }] },
+          },
+          {
             type: 'toggle',
             id: 'toggle123',
             toggle: { rich_text: [{ plain_text: 'study-text' }] },
@@ -50,6 +55,16 @@ describe('addOrReplaceAudioUnderStudyText', () => {
     );
     expect(result.replaced).toBe(false);
     expect(result.appended).toBe(true);
+    expect(mockClient.blocks.children.append).toHaveBeenCalledWith({
+      block_id: 'page123',
+      after: 'heading456',
+      children: [
+        {
+          type: 'audio',
+          audio: { type: 'external', external: { url: 'https://example.com/audio.mp3' } },
+        },
+      ],
+    });
   });
 
   it('replaces audio when existing audio and replace=true', async () => {
@@ -57,6 +72,15 @@ describe('addOrReplaceAudioUnderStudyText', () => {
     mockClient.blocks.children.list
       .mockResolvedValueOnce({
         results: [
+          {
+            type: 'heading_2',
+            id: 'heading456',
+            heading_2: { rich_text: [{ plain_text: 'Section Heading' }] },
+          },
+          {
+            type: 'audio',
+            id: 'audio-top',
+          },
           {
             type: 'toggle',
             id: 'toggle123',
@@ -79,6 +103,17 @@ describe('addOrReplaceAudioUnderStudyText', () => {
     );
     expect(result.replaced).toBe(true);
     expect(result.appended).toBe(true);
+    expect(mockClient.blocks.delete).toHaveBeenCalledWith({ block_id: 'audio-top' });
+    expect(mockClient.blocks.children.append).toHaveBeenCalledWith({
+      block_id: 'page123',
+      after: 'heading456',
+      children: [
+        {
+          type: 'audio',
+          audio: { type: 'external', external: { url: 'https://example.com/audio.mp3' } },
+        },
+      ],
+    });
   });
 
   it('does not append or replace when existing audio and replace=false', async () => {
@@ -86,6 +121,11 @@ describe('addOrReplaceAudioUnderStudyText', () => {
     mockClient.blocks.children.list
       .mockResolvedValueOnce({
         results: [
+          {
+            type: 'heading_2',
+            id: 'heading456',
+            heading_2: { rich_text: [{ plain_text: 'Section Heading' }] },
+          },
           {
             type: 'toggle',
             id: 'toggle123',
@@ -106,5 +146,6 @@ describe('addOrReplaceAudioUnderStudyText', () => {
     );
     expect(result.replaced).toBe(false);
     expect(result.appended).toBe(false);
+    expect(mockClient.blocks.children.append).not.toHaveBeenCalled();
   });
 });

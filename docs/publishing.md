@@ -18,11 +18,12 @@ pnpm test
 
 All commands must pass on a clean worktree. CI should already enforce this on `main` via `.github/workflows/ci.yml`.
 
-## 3. Versioning
+## 3. Versioning & Notes
 
 - Decide release scope (single package or full pipeline).
-- Update the selected `packages/*/package.json` version (semantic versioning).
-- Add entries to `CHANGELOG.md` (create if missing) summarising user-facing changes.
+- Update the selected `packages/*/package.json` version(s) following semver.
+- Update the root `CHANGELOG.md` with a dated entry that captures headline changes.
+- Ensure `README.md` and docs reflect any new behaviour (Markdown fidelity, audio placement, flags, etc.).
 
 ## 4. Tag and Publish
 
