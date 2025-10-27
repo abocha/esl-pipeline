@@ -1,6 +1,6 @@
 {
   "name": "@esl-pipeline/orchestrator",
-  "version": "1.1.0",
+  "version": "1.2.0",
   "private": true,
   "type": "module",
   "license": "UNLICENSED",
@@ -48,14 +48,15 @@
     "@esl-pipeline/notion-importer": "workspace:*",
     "@esl-pipeline/storage-uploader": "workspace:*",
     "@esl-pipeline/tts-elevenlabs": "workspace:*",
+    "ora": "9.0.0",
     "prompts": "^2.4.2"
   },
   "devDependencies": {
     "@types/node": "^24.9.1",
-    "@types/prompts": "^2.4.4",
+    "@types/prompts": "^2.4.9",
     "rimraf": "^6.0.1",
     "tsx": "^4.20.6",
     "typescript": "^5.9.3",
-    "vitest": "^4.0.3"
+    "vitest": "^4.0.4"
   }
 }

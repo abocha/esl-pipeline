@@ -1,20 +1,41 @@
 {
   "name": "@esl-pipeline/ffmpeg-binary",
-  "version": "1.1.0",
+  "version": "1.2.0",
   "private": true,
   "description": "On-demand FFmpeg binary extraction from vendored archive.",
   "type": "module",
+  "main": "./dist/src/index.js",
+  "types": "./dist/src/index.d.ts",
   "exports": {
-    ".": "./dist/index.js",
-    "./getFfmpegPath": "./dist/index.js"
+    ".": {
+      "types": "./dist/src/index.d.ts",
+      "import": "./dist/src/index.js",
+      "default": "./dist/src/index.js"
+    },
+    "./getFfmpegPath": {
+      "types": "./dist/src/index.d.ts",
+      "import": "./dist/src/index.js",
+      "default": "./dist/src/index.js"
+    },
+    "./package.json": "./package.json"
   },
   "files": [
-    "bin/",
-    "dist/"
+    "dist"
   ],
   "bin": {
-    "ffmpeg-where": "bin/ffmpeg-where.ts"
+    "ffmpeg-where": "dist/bin/ffmpeg-where.js"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "clean": "rimraf dist",
+    "dev": "tsx watch src/index.ts"
   },
   "dependencies": {},
+  "devDependencies": {
+    "@types/node": "^24.9.1",
+    "rimraf": "^6.0.1",
+    "tsx": "^4.20.6",
+    "typescript": "^5.9.3"
+  },
   "license": "SEE LICENSE IN LICENSE-FFMPEG.txt"
 }

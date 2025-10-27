@@ -25,6 +25,7 @@ const baseRules = {
   ...promisePlugin.configs.recommended.rules,
   ...tsRules,
   'no-console': 'off',
+  'no-unused-vars': 'off',
   'promise/param-names': 'off',
   'import/order': 'off',
   'no-useless-escape': 'off',

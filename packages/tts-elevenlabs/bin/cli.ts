@@ -1,6 +1,16 @@
 #!/usr/bin/env node
-import 'dotenv/config';
+import { config as loadEnv } from 'dotenv';
+import { existsSync } from 'node:fs';
+import { dirname, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { buildStudyTextMp3 } from '../src/index.js';
+
+const moduleDir = dirname(fileURLToPath(import.meta.url));
+loadEnv();
+const repoEnvPath = resolve(moduleDir, '../../../.env');
+if (existsSync(repoEnvPath)) {
+  loadEnv({ path: repoEnvPath, override: false });
+}
 
 const args = process.argv.slice(2);
 const flag = (name: string) => {

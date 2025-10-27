@@ -54,7 +54,10 @@ export function extractAnswerKey(md: string): string {
 export function extractTeacherNotes(md: string): string {
   const n = normalize(md);
   // match Teacher’s / Teacher's (curly or straight apostrophe)
-  const block = findBlock(n, /(^|\n)[ \t]*:::toggle-heading\s+Teacher[’']s\s+Follow-up\s+Plan[^\n]*\n/i);
+  const block = findBlock(
+    n,
+    /(^|\n)[ \t]*:::toggle-heading\s+Teacher[’']s\s+Follow-up\s+Plan[^\n]*\n/i
+  );
   if (!block) throw new Error("Teacher's Follow-up Plan toggle not found");
   return block;
 }

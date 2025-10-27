@@ -99,7 +99,9 @@ describe('applyHeadingPreset', () => {
       block_id: 'toggle-block',
       toggle: {
         rich_text: [
-          expect.objectContaining({ annotations: expect.objectContaining({ color: 'yellow_background' }) }),
+          expect.objectContaining({
+            annotations: expect.objectContaining({ color: 'yellow_background' }),
+          }),
         ],
       },
     });
