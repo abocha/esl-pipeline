@@ -12,3 +12,4 @@ packages/tts-elevenlabs/vendor/ffmpeg/linux-x64/ffmpeg
 packages/tts-elevenlabs/vendor/ffmpeg/linux-x64/ffplay
 packages/tts-elevenlabs/vendor/ffmpeg/linux-x64/ffprobe
 fixtures/d2b73ea0716e6ebc68761db09e4fa9c68d62bc8899d05929e784c7df5c22350f.mp3
+*.mp3

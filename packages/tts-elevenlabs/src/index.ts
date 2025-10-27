@@ -26,7 +26,10 @@ export async function buildStudyTextMp3(
   // Read and extract study text
   const mdContent = readFileSync(mdPath, 'utf-8');
   const studyText = extractStudyText(mdContent);
-  const normalizedText = studyText.lines.join('\n');
+  const sanitizedSegments = studyText.lines
+    .map(line => cleanSpeechText(parseSpeaker(line).text))
+    .filter(segment => segment.length > 0);
+  const normalizedText = sanitizedSegments.join('\n');
 
   // Load voice map
   const voiceMapContent = readFileSync(opts.voiceMapPath, 'utf-8');
@@ -80,20 +83,21 @@ export async function buildStudyTextMp3(
       );
     }
 
+    const { text } = parseSpeaker(line);
+    const speechText = cleanSpeechText(text);
+    if (!speechText) continue;
+
     // Create a temporary file for this line's audio
-    const lineHash = createHash('sha256').update(`${line}-${voiceId}`).digest('hex');
+    const lineHash = createHash('sha256').update(`${speechText}-${voiceId}`).digest('hex');
     const lineFileName = `${lineHash}.mp3`;
     const lineFilePath = resolve(outputDir, lineFileName);
-
-    const { text } = parseSpeaker(line);
-    if (!text) continue;
 
     if (!opts.force && (await fileExistsNonEmpty(lineFilePath))) {
       audioFiles.push(lineFilePath);
       continue;
     }
 
-    await synthesizeLineWithRetry(eleven, voiceId, text, lineFilePath);
+    await synthesizeLineWithRetry(eleven, voiceId, speechText, lineFilePath);
     audioFiles.push(lineFilePath);
   }
   if (audioFiles.length === 0) {
@@ -134,6 +138,31 @@ function parseSpeaker(line: string): { speaker?: string; text: string } {
     return { speaker: line.slice(0, idx).trim(), text: line.slice(idx + 1).trim() };
   }
   return { text: line.trim() };
+}
+
+const MARKDOWN_STRIPPERS: Array<[RegExp, string]> = [
+  [/\r?\n/g, ' '], // single line
+  [/^\s*[-*+]\s+/, ''], // bullet prefixes
+  [/^\s*\d+[\.)]\s+/, ''], // numbered lists
+  [/\*\*(.+?)\*\*/g, '$1'],
+  [/__(.+?)__/g, '$1'],
+  [/\*(.+?)\*/g, '$1'],
+  [/_([^_]+)_/g, '$1'],
+  [/~~(.+?)~~/g, '$1'],
+  [/`{1,3}([^`]+)`{1,3}/g, '$1'],
+  [/!\[(.*?)\]\([^)]*\)/g, '$1'], // image alt text
+  [/\[(.+?)\]\((.+?)\)/g, '$1'], // links
+  [/<[^>]+>/g, ''], // html tags
+] as const;
+
+function cleanSpeechText(text: string): string {
+  let sanitized = text;
+  for (const [pattern, replacement] of MARKDOWN_STRIPPERS) {
+    sanitized = sanitized.replace(pattern, replacement);
+  }
+  sanitized = sanitized.replace(/[*_`~>#]/g, ''); // stray md chars
+  sanitized = sanitized.replace(/\s+/g, ' ').trim();
+  return sanitized;
 }
 
 async function getVoiceIdForLine(

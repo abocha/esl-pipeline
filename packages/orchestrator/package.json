@@ -34,6 +34,7 @@
   },
   "scripts": {
     "build": "tsc -p tsconfig.json",
+    "postbuild": "tsx ./scripts/postbuild.ts",
     "clean": "rimraf dist",
     "dev": "tsx watch bin/cli.ts",
     "test": "vitest run",
@@ -46,10 +47,12 @@
     "@esl-pipeline/notion-colorizer": "workspace:*",
     "@esl-pipeline/notion-importer": "workspace:*",
     "@esl-pipeline/storage-uploader": "workspace:*",
-    "@esl-pipeline/tts-elevenlabs": "workspace:*"
+    "@esl-pipeline/tts-elevenlabs": "workspace:*",
+    "prompts": "^2.4.2"
   },
   "devDependencies": {
     "@types/node": "^24.9.1",
+    "@types/prompts": "^2.4.4",
     "rimraf": "^6.0.1",
     "tsx": "^4.20.6",
     "typescript": "^5.9.3",
