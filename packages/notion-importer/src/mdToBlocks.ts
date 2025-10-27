@@ -8,6 +8,15 @@ type HeadingBlock = Heading2Block | Heading3Block;
 type ToggleBlock = Extract<BlockObjectRequest, { type?: 'toggle' }>;
 type RichTextItem = ParagraphBlock['paragraph']['rich_text'][number];
 type ToggleChild = NonNullable<ToggleBlock['toggle']['children']>[number];
+type BulletChildren = NonNullable<BulletBlock['bulleted_list_item']['children']>;
+type BulletListEntry = {
+  indent: number;
+  block: BulletBlock & {
+    bulleted_list_item: BulletBlock['bulleted_list_item'] & {
+      children?: BulletChildren;
+    };
+  };
+};
 
 /**
  * Extremely pragmatic MD→Notion mapper that:
@@ -28,16 +37,156 @@ export function mdToBlocks(md: string): BlockObjectRequest[] {
   const blocks: BlockObjectRequest[] = [];
 
   let i = 0;
+  const listStack: BulletListEntry[] = [];
 
-  const makeRichText = (content: string): RichTextItem => ({
+  const defaultAnnotations = (): NonNullable<RichTextItem['annotations']> => ({
+    bold: false,
+    italic: false,
+    strikethrough: false,
+    underline: false,
+    code: false,
+    color: 'default' as const,
+  });
+
+  const createRichTextItem = (
+    content: string,
+    annotationsOverride?: Partial<NonNullable<RichTextItem['annotations']>>,
+  ): RichTextItem => ({
     type: 'text',
     text: { content },
+    annotations: { ...defaultAnnotations(), ...annotationsOverride },
   });
+
+  const parseInlineMarkdown = (input: string): RichTextItem[] => {
+    const items: RichTextItem[] = [];
+    const active = { bold: false, italic: false, strikethrough: false };
+    let buffer = '';
+
+    const flush = () => {
+      if (!buffer) return;
+      items.push(
+        createRichTextItem(buffer, {
+          bold: active.bold,
+          italic: active.italic,
+          strikethrough: active.strikethrough,
+        }),
+      );
+      buffer = '';
+    };
+
+    const hasClosing = (delimiter: string, start: number) => input.indexOf(delimiter, start) !== -1;
+    const isWhitespace = (value: string | undefined) => value === undefined || /\s/.test(value);
+
+    for (let idx = 0; idx < input.length; ) {
+      const ch = input[idx];
+      const next = input[idx + 1];
+
+      if (ch === '\\' && next) {
+        if ('*_`~'.includes(next)) {
+          buffer += next;
+          idx += 2;
+          continue;
+        }
+      }
+
+      if (input.startsWith('**', idx)) {
+        if (!active.bold) {
+          const after = input[idx + 2];
+          if (isWhitespace(after) || !hasClosing('**', idx + 2)) {
+            buffer += '**';
+            idx += 2;
+            continue;
+          }
+          flush();
+          active.bold = true;
+        } else {
+          flush();
+          active.bold = false;
+        }
+        idx += 2;
+        continue;
+      }
+
+      if (ch === '*' && next !== '*') {
+        if (!active.italic) {
+          const before = input[idx - 1];
+          if (
+            isWhitespace(next) ||
+            !hasClosing('*', idx + 1) ||
+            (!isWhitespace(before) && before !== undefined && before !== '(')
+          ) {
+            buffer += '*';
+            idx += 1;
+            continue;
+          }
+          flush();
+          active.italic = true;
+        } else {
+          flush();
+          active.italic = false;
+        }
+        idx += 1;
+        continue;
+      }
+
+      if (input.startsWith('~~', idx)) {
+        if (!active.strikethrough) {
+          const after = input[idx + 2];
+          if (isWhitespace(after) || !hasClosing('~~', idx + 2)) {
+            buffer += '~~';
+            idx += 2;
+            continue;
+          }
+          flush();
+          active.strikethrough = true;
+        } else {
+          flush();
+          active.strikethrough = false;
+        }
+        idx += 2;
+        continue;
+      }
+
+      if (ch === '`') {
+        const close = input.indexOf('`', idx + 1);
+        if (close === -1) {
+          buffer += '`';
+          idx += 1;
+          continue;
+        }
+        const codeContent = input.slice(idx + 1, close);
+        flush();
+        items.push(
+          createRichTextItem(codeContent, {
+            bold: false,
+            italic: false,
+            code: true,
+            color: 'red',
+          }),
+        );
+        idx = close + 1;
+        continue;
+      }
+
+      buffer += ch;
+      idx += 1;
+    }
+
+    flush();
+
+    if (items.length === 0) {
+      return [createRichTextItem('')];
+    }
+
+    return items;
+  };
+
+  const makeRichText = (content: string): RichTextItem[] => parseInlineMarkdown(content);
 
   const paragraphBlock = (content: string): ParagraphBlock => {
     const block = {
       type: 'paragraph',
-      paragraph: { rich_text: [makeRichText(content)] },
+      paragraph: { rich_text: makeRichText(content) },
     } satisfies ParagraphBlock;
     return block;
   };
@@ -45,7 +194,7 @@ export function mdToBlocks(md: string): BlockObjectRequest[] {
   const bulletBlock = (content: string): BulletBlock => {
     const block = {
       type: 'bulleted_list_item',
-      bulleted_list_item: { rich_text: [makeRichText(content)] },
+      bulleted_list_item: { rich_text: makeRichText(content) },
     } satisfies BulletBlock;
     return block;
   };
@@ -54,36 +203,25 @@ export function mdToBlocks(md: string): BlockObjectRequest[] {
     if (depth === 2) {
       const block = {
         type: 'heading_2',
-        heading_2: { rich_text: [makeRichText(content)] },
+        heading_2: { rich_text: makeRichText(content) },
       } satisfies Heading2Block;
       return block;
     }
     const block = {
       type: 'heading_3',
-      heading_3: { rich_text: [makeRichText(content)] },
+      heading_3: { rich_text: makeRichText(content) },
     } satisfies Heading3Block;
     return block;
   };
 
   const toggleBlock = (title: string, childrenLines: string[]): ToggleBlock => {
-    const children: ToggleChild[] = [];
-    for (const raw of childrenLines) {
-      const child = raw?.trim();
-      if (!child) continue;
-      if (/^[-*]\s+/.test(child)) {
-        const match = /^[-*]\s+(.+)$/.exec(child);
-        if (!match?.[1]) continue;
-        const [, body] = match;
-        if (!body) continue;
-        children.push(bulletBlock(body.trim()) as ToggleChild);
-      } else {
-        children.push(paragraphBlock(child) as ToggleChild);
-      }
-    }
+    const nested =
+      childrenLines.length > 0 ? mdToBlocks(childrenLines.join('\n')) : [];
+    const children = nested.map(block => block as ToggleChild);
     const block = {
       type: 'toggle',
       toggle: {
-        rich_text: [makeRichText(title)],
+        rich_text: makeRichText(title),
         children,
       },
     } satisfies ToggleBlock;
@@ -91,9 +229,55 @@ export function mdToBlocks(md: string): BlockObjectRequest[] {
   };
 
   const flushParagraph = (raw: string) => {
-    const trimmed = raw.trim();
-    if (!trimmed) return;
-    blocks.push(paragraphBlock(trimmed));
+    if (!raw) {
+      listStack.length = 0;
+      return;
+    }
+    const match = /^(\s*)(.*\S.*)$/.exec(raw);
+    if (!match) {
+      listStack.length = 0;
+      return;
+    }
+    const [, indentStrRaw, bodyRaw] = match;
+    const indentStr = indentStrRaw ?? '';
+    const body = bodyRaw ?? '';
+    const indent = indentStr.replace(/\t/g, '    ').length;
+    const paragraph = paragraphBlock(body.trim());
+    if (indent > 0) {
+      for (let idx = listStack.length - 1; idx >= 0; idx--) {
+        const entry = listStack[idx];
+        if (entry && indent > entry.indent) {
+          const children =
+            (entry.block.bulleted_list_item.children ??= [] as unknown as BulletChildren);
+          children.push(paragraph as unknown as BulletChildren[number]);
+          return;
+        }
+      }
+    }
+    listStack.length = 0;
+    blocks.push(paragraph);
+  };
+
+  const handleBullet = (indent: number, content: string) => {
+    const block = bulletBlock(content.trim()) as BulletListEntry['block'];
+    while (listStack.length > 0) {
+      const top = listStack[listStack.length - 1];
+      if (top && indent <= top.indent) {
+        listStack.pop();
+      } else {
+        break;
+      }
+    }
+    const parentEntry = listStack[listStack.length - 1];
+    if (parentEntry && indent > parentEntry.indent) {
+      const children =
+        (parentEntry.block.bulleted_list_item.children ??=
+          [] as unknown as BulletChildren);
+      children.push(block as unknown as BulletChildren[number]);
+    } else {
+      blocks.push(block);
+    }
+    listStack.push({ indent, block });
   };
 
   while (i < lines.length) {
@@ -111,6 +295,7 @@ export function mdToBlocks(md: string): BlockObjectRequest[] {
         i++;
       }
       if (i < lines.length && /^:::\s*$/.test(lines[i] ?? '')) i++;
+      listStack.length = 0;
       blocks.push(toggleBlock('study-text', inner));
       continue;
     }
@@ -128,28 +313,34 @@ export function mdToBlocks(md: string): BlockObjectRequest[] {
         i++;
       }
       if (i < lines.length && /^:::\s*$/.test(lines[i] ?? '')) i++;
-      if (label) blocks.push(toggleBlock(label, inner));
+      if (label) {
+        listStack.length = 0;
+        blocks.push(toggleBlock(label, inner));
+      }
       continue;
     }
 
     // headings
     const h2 = /^##\s+(.+)\s*$/.exec(current);
     if (h2?.[1]) {
+      listStack.length = 0;
       blocks.push(headingBlock(2, h2[1].trim()));
       i++;
       continue;
     }
     const h3 = /^###\s+(.+)\s*$/.exec(current);
     if (h3?.[1]) {
+      listStack.length = 0;
       blocks.push(headingBlock(3, h3[1].trim()));
       i++;
       continue;
     }
 
-    // bullets
-    const bullet = /^[-*]\s+(.+)$/.exec(current);
-    if (bullet?.[1]) {
-      blocks.push(bulletBlock(bullet[1].trim()));
+    // bullets (with optional indentation)
+    const bullet = /^(\s*)([-*])\s+(.+)$/.exec(current);
+    if (bullet?.[3]) {
+      const indentWidth = bullet[1]?.replace(/\t/g, '    ').length ?? 0;
+      handleBullet(indentWidth, bullet[3]);
       i++;
       continue;
     }
@@ -157,6 +348,8 @@ export function mdToBlocks(md: string): BlockObjectRequest[] {
     // blank line → skip, non-empty → paragraph
     if (current.trim().length > 0) {
       flushParagraph(current);
+    } else {
+      listStack.length = 0;
     }
     i++;
   }

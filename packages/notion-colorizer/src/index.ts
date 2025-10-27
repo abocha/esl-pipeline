@@ -31,6 +31,42 @@ export async function applyHeadingPreset(
 
   const counts: Counts = { h2: 0, h3: 0, toggles: 0 };
 
+  const colorHeading3Descendants = async (parentId: string) => {
+    if (!preset.h3) return;
+    let childCursor: string | undefined = undefined;
+    do {
+      const childResp = await withRetry(
+        () =>
+          client.blocks.children.list({
+            block_id: parentId,
+            start_cursor: childCursor,
+            page_size: 100,
+          }),
+        'blocks.children.list'
+      );
+      for (const child of childResp.results) {
+        if ('type' in child && child.type === 'heading_3') {
+          await withRetry(
+            () =>
+              client.blocks.update({
+                block_id: child.id,
+                heading_3: {
+                  rich_text: (child as any).heading_3.rich_text,
+                  color: preset.h3,
+                },
+              }),
+            'blocks.update.heading_3'
+          );
+          counts.h3++;
+        }
+        if ('type' in child && child.type === 'toggle') {
+          await colorHeading3Descendants(child.id);
+        }
+      }
+      childCursor = childResp.has_more ? (childResp.next_cursor ?? undefined) : undefined;
+    } while (childCursor);
+  };
+
   // 1) list top-level children (paginate)
   let cursor: string | undefined = undefined;
   let prevWasH2 = false;
@@ -77,20 +113,31 @@ export async function applyHeadingPreset(
       }
 
       // TOGGLES right after an H2 (optional)
-      if ('type' in block && block.type === 'toggle' && prevWasH2 && preset.toggleMap?.h2) {
-        await withRetry(
-          () =>
-            client.blocks.update({
-              block_id: block.id,
-              toggle: {
-                rich_text: (block as any).toggle.rich_text,
-                color: preset.toggleMap!.h2,
-              },
-            }),
-          'blocks.update.toggle'
-        );
-        counts.toggles++;
-        prevWasH2 = false; // only the first toggle after H2 gets colored by this rule
+      if ('type' in block && block.type === 'toggle') {
+        if (prevWasH2 && preset.toggleMap?.h2) {
+          const toggle = (block as any).toggle;
+          const richText = Array.isArray(toggle?.rich_text) ? toggle.rich_text : [];
+          const annotated = richText.map((item: any) => ({
+            ...item,
+            annotations: {
+              ...(item.annotations ?? {}),
+              color: preset.toggleMap!.h2,
+            },
+          }));
+          await withRetry(
+            () =>
+              client.blocks.update({
+                block_id: block.id,
+                toggle: {
+                  rich_text: annotated,
+                },
+              }),
+            'blocks.update.toggle'
+          );
+          counts.toggles++;
+        }
+        await colorHeading3Descendants(block.id);
+        prevWasH2 = false;
         continue;
       }
 
