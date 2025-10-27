@@ -96,6 +96,23 @@ not a list
     expect(codeSegment?.annotations?.color).toBe('red');
   });
 
+  it('drops top-level frontmatter instead of emitting it as text', () => {
+    const md = `---
+title: Lesson
+level: B1
+---
+
+## Overview
+Content line.
+`;
+    const blocks = mdToBlocks(md);
+    const joined = JSON.stringify(blocks);
+    expect(joined).not.toContain('title: Lesson');
+    expect(joined).not.toContain('level: B1');
+    expect(blocks[0]?.type).toBe('heading_2');
+    expect((blocks[0] as any).heading_2.rich_text[0].text.content).toBe('Overview');
+  });
+
   it('maps ~~text~~ to strikethrough annotations', () => {
     const md = 'Mark ~~this section~~ as optional.';
     const [first] = mdToBlocks(md);

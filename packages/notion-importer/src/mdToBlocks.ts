@@ -33,7 +33,26 @@ type BulletListEntry = {
  * - Maps everything else (non-empty) to paragraph
  */
 export function mdToBlocks(md: string): BlockObjectRequest[] {
-  const lines = md.replace(/\r\n/g, '\n').split('\n');
+  const normalized = md.replace(/\r\n/g, '\n');
+  const rawLines = normalized.split('\n');
+
+  let lines = rawLines;
+  const firstContentIndex = rawLines.findIndex(line => line.trim().length > 0);
+  if (firstContentIndex !== -1 && rawLines[firstContentIndex]?.trim() === '---') {
+    let end = firstContentIndex + 1;
+    let foundTerminator = false;
+    while (end < rawLines.length) {
+      if (rawLines[end]?.trim() === '---') {
+        foundTerminator = true;
+        end += 1;
+        break;
+      }
+      end += 1;
+    }
+    if (foundTerminator) {
+      lines = rawLines.slice(0, firstContentIndex).concat(rawLines.slice(end));
+    }
+  }
   const blocks: BlockObjectRequest[] = [];
 
   let i = 0;

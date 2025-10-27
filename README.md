@@ -17,12 +17,23 @@ All functionality lives in pnpm workspaces under `packages/`.
 | -------------------------------- | ------------------------------------------------------------------ | ------------------------------ |
 | `@esl-pipeline/md-validator`     | Validates Markdown frontmatter, section order, study-text rules    | `md-validate`                  |
 | `@esl-pipeline/md-extractor`     | Pulls structured data (study text, answer key, etc.) from Markdown | —                              |
-| `@esl-pipeline/notion-importer`  | Creates/updates Notion pages from validated Markdown               | `notion-importer`              |
+| `@esl-pipeline/notion-importer`  | Creates/updates Notion pages from validated Markdown with full rich-text fidelity | `notion-importer`              |
 | `@esl-pipeline/notion-colorizer` | Applies heading color presets in Notion                            | `notion-colorizer`             |
 | `@esl-pipeline/tts-elevenlabs`   | Generates MP3 from study text via ElevenLabs                       | `tts-elevenlabs`, `tts-voices` |
 | `@esl-pipeline/storage-uploader` | Uploads generated audio to S3                                      | `storage-uploader`             |
-| `@esl-pipeline/notion-add-audio` | Adds or replaces the study-text audio block in Notion              | —                              |
+| `@esl-pipeline/notion-add-audio` | Places the study-text audio block above the toggle (add/replace)   | —                              |
 | `@esl-pipeline/orchestrator`     | “One command” pipeline composition                                 | `esl-orchestrator`             |
+
+---
+
+## What's New in v1.0.0
+
+- **Markdown → Notion fidelity.** Bold, italic, inline code (rendered in red), and strike-through now map directly to Notion annotations. Nested bullet hierarchies, indented paragraphs, and headings inside toggles survive the import, while YAML frontmatter is automatically stripped.
+- **Smarter toggles.** Toggle bodies reuse the full Markdown parser, so inner `###` headings get colored by the Notion preset and inner lists stay nested. Toggle titles themselves are tinted without recoloring the content.
+- **Audio placement.** ElevenLabs audio blocks are inserted as siblings immediately above the `study-text` toggle. Existing audio is replaced safely when `--redo-tts` / `--replace` is requested; otherwise it is left untouched.
+- **Release discipline.** The repo ships with a canonical publishing checklist and changelog so future tags can be cut repeatably (`docs/publishing.md`, `CHANGELOG.md`).
+
+These upgrades land together with the interactive `esl-orchestrator --interactive` wizard, manifest-driven reruns, and JSON logging added over the last development cycle.
 
 ---
 
@@ -53,17 +64,10 @@ pnpm lint            # optional: verify style rules
 To process an assignment end-to-end (dry-run):
 
 ```bash
-pnpm --filter @esl-pipeline/orchestrator dev        # watch mode, optional
-pnpm esl-orchestrator \
-  --md ./fixtures/sample-assignment.md \
-  --db-id <NOTION_DATABASE_ID> \
-  --preset default \
-  --with-tts \
-  --upload s3 \
-  --dry-run
+pnpm esl-orchestrator --interactive
 ```
 
-When ready, drop `--dry-run` and provide S3/Notion details to publish the page and audio.
+The wizard suggests markdown files, student profiles, presets, Notion database (defaulting to `NOTION_DB_ID`), ElevenLabs settings, and upload options. Accept the defaults or override fields inline, then re-run without `--dry-run` when you’re ready to publish. If you prefer a non-interactive run, pass the equivalent flags manually (see below).
 
 ---
 
@@ -73,6 +77,7 @@ Copy `.env.example` to `.env` and fill the values:
 
 ```dotenv
 NOTION_TOKEN=secret_xxx
+NOTION_DB_ID=<default notion database id>
 STUDENTS_DB_ID=<optional students data source id>
 
 ELEVENLABS_API_KEY=<your api key>
@@ -102,6 +107,7 @@ pnpm exec tsx --eval "import { syncVoices } from './packages/tts-elevenlabs/src/
 
 - Database/Data Source IDs live in the environment or in per-student config files under `configs/students/`.
 - The importer resolves the data source automatically when passed `--db-id/--data-source` or `--data-source-id`.
+- The `--interactive` wizard defaults to `NOTION_DB_ID` when no student profile is chosen, and you can override it inline.
 
 ---
 
@@ -175,10 +181,12 @@ packages/
 
 ## Roadmap & UX
 
-Current focus is on reliability, validation, and publishing workflows. Upcoming efforts include:
+Current focus is on polishing the 1.0 workflow (Markdown fidelity, audio placement, manifest-powered reruns). Next up:
 
-- Guided CLI “wizard” for the orchestrator (redo TTS, re-upload audio, pick presets).
-- Packaging for npm publication (semver, CHANGELOG, release automation).
-- Richer diagnostics/logging and CLI UX improvements.
+- Student profile presets (`configs/students/*`) and richer interactive previews.
+- Release automation (version bump tooling, GitHub Release templates, npm packaging decisions).
+- Broader smoke coverage that exercises mocked Notion/S3/ElevenLabs fixtures.
+- Security documentation for IAM scopes, key rotation, and voice catalog refresh cadence.
+- Per-package READMEs that enumerate CLI flags and examples.
 
 Contributions and feedback are welcome—file an issue or PR with context and reproduction steps.

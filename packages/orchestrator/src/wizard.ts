@@ -143,7 +143,38 @@ export async function runInteractiveWizard(
       profiles.find(profile => profile.student === state.student) ?? null;
   }
 
-  // --- Step 3: Preset selection ---
+  // Auto fill DB info from profile if available
+  if (!state.dbId && state.studentProfile?.dbId) {
+    state.dbId = state.studentProfile.dbId ?? undefined;
+  }
+
+  // --- Step 3: Notion database ---
+  if (!state.dbId) {
+    const envDbId =
+      initial.dbId ??
+      state.studentProfile?.dbId ??
+      process.env.NOTION_DB_ID ??
+      process.env.STUDENTS_DB_ID;
+
+    const dbAnswer = await prompts(
+      {
+        type: 'text',
+        name: 'dbId',
+        message: 'Target Notion database ID',
+        initial: envDbId ?? '',
+        validate: (input: string) =>
+          (!!input && input.trim().length > 0) ||
+          (!!envDbId && envDbId.trim().length > 0) ||
+          'Please enter a database ID or press ctrl+c to abort',
+      } satisfies PromptObject<'dbId'>,
+      { onCancel }
+    );
+
+    const rawDbId = dbAnswer.dbId?.toString().trim();
+    state.dbId = rawDbId && rawDbId.length > 0 ? rawDbId : envDbId?.trim();
+  }
+
+  // --- Step 4: Preset selection ---
   let presetDefault =
     initial.preset ??
     state.studentProfile?.colorPreset ??
@@ -185,7 +216,7 @@ export async function runInteractiveWizard(
     state.preset = presetDefault;
   }
 
-  // --- Step 4: TTS generation ---
+  // --- Step 5: TTS generation ---
   const ttsAnswer = await prompts(
     {
       type: 'toggle',
@@ -248,7 +279,7 @@ export async function runInteractiveWizard(
     state.force = undefined;
   }
 
-  // --- Step 5: Upload ---
+  // --- Step 6: Upload ---
   const uploadAnswer = await prompts(
     {
       type: 'select',
@@ -294,7 +325,7 @@ export async function runInteractiveWizard(
     state.publicRead = undefined;
   }
 
-  // --- Step 6: Dry run ---
+  // --- Step 7: Dry run ---
   const dryRunAnswer = await prompts(
     {
       type: 'toggle',
@@ -307,11 +338,6 @@ export async function runInteractiveWizard(
     { onCancel }
   );
   state.dryRun = Boolean(dryRunAnswer.dryRun);
-
-  // autop fill DB info from profile if available
-  if (!state.dbId && state.studentProfile?.dbId) {
-    state.dbId = state.studentProfile.dbId ?? undefined;
-  }
 
   const result: NewAssignmentFlags = {
     md: state.md!,
