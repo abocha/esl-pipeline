@@ -1,8 +1,9 @@
 {
-  "mdHash": "32760c358dbc428b23f76177c8890d4496abfbdeeca9180db4fda9d4da8e4faf",
+  "mdHash": "9330e7de2c86c2ecd928deac55a3b622a91e31498d1139f87104b58cc74d30f8",
   "audio": {
-    "path": "/home/abocha/code/esl-pipeline/fixtures/175f6b1ffc99ad07ed55bc29f1418f276c52f4f9fbb4f6fc3d5b9ec37adab8cf.mp3",
-    "hash": "175f6b1ffc99ad07ed55bc29f1418f276c52f4f9fbb4f6fc3d5b9ec37adab8cf"
+    "path": "/home/abocha/code/esl-pipeline/fixtures/43d5a9a6d4ad0fbf341c52d31e774eabaeff55fb61e1f595f57022efcdb55a76.mp3",
+    "hash": "43d5a9a6d4ad0fbf341c52d31e774eabaeff55fb61e1f595f57022efcdb55a76",
+    "url": "https://stub-bucket.s3.amazonaws.com/audio/assignments/43d5a9a6d4ad0fbf341c52d31e774eabaeff55fb61e1f595f57022efcdb55a76.mp3"
   },
-  "timestamp": "2025-10-24T17:20:10.663Z"
+  "timestamp": "2025-10-27T08:11:35.339Z"
 }

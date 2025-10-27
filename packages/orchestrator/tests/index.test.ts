@@ -55,4 +55,52 @@ default: voice_id_default
       /^https:\/\/test-bucket\.s3\.amazonaws\.com\/audio\/assignments\/.*\.mp3$/
     );
   }, 30000);
+
+  it('reuses manifest assets when skip flags are provided', async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'orchestrator-skip-'));
+    const mdPath = join(dir, 'lesson.md');
+    const voiceMapPath = join(dir, 'voices.yml');
+    const okDoc = await readFile(okFixturePath, 'utf8');
+    await writeFile(mdPath, okDoc);
+    await writeFile(
+      voiceMapPath,
+      `
+default: voice_id_default
+    `.trim()
+    );
+    process.env.S3_BUCKET = 'test-bucket';
+    process.env.AWS_REGION = 'us-east-1';
+
+    const { buildStudyTextMp3 } = await import('@esl-pipeline/tts-elevenlabs');
+    const audioPath = join(dir, 'lesson.mp3');
+    await writeFile(audioPath, 'dummy');
+    vi.mocked(buildStudyTextMp3).mockResolvedValue({ path: audioPath, hash: 'abc123' });
+
+    const baseFlags = {
+      md: mdPath,
+      withTts: true,
+      upload: 's3' as const,
+      dryRun: true,
+      voices: voiceMapPath,
+    };
+
+    const first = await newAssignment(baseFlags);
+    expect(first.manifestPath).toBeDefined();
+    expect(first.steps).toContain('manifest');
+    const manifestJson = JSON.parse(await readFile(first.manifestPath!, 'utf8'));
+    expect(manifestJson.audio.url).toBeDefined();
+
+    vi.mocked(buildStudyTextMp3).mockClear();
+
+    const second = await newAssignment({
+      ...baseFlags,
+      skipImport: true,
+      skipTts: true,
+      skipUpload: true,
+    });
+
+    expect(second.steps).toEqual(['skip:validate', 'skip:import', 'skip:tts', 'skip:upload', 'manifest']);
+    expect(buildStudyTextMp3).not.toHaveBeenCalled();
+    expect(second.audio?.url).toBe(first.audio?.url);
+  });
 });

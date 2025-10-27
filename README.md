@@ -123,7 +123,14 @@ pnpm storage-uploader --file ./out/audio/file.mp3 --prefix audio/assignments --p
 # Inspect or rerun orchestrator steps
 pnpm esl-orchestrator status --md ./fixtures/sample-assignment.md
 pnpm esl-orchestrator rerun --md ./fixtures/sample-assignment.md --steps upload,add-audio --upload s3
+
+# Guided run with interactive wizard & JSON logs
+pnpm esl-orchestrator --interactive --with-tts --upload s3 --json
 ```
+
+Use `--skip-import`, `--skip-tts`, `--skip-upload`, and `--redo-tts` to reuse assets from the existing manifest when iterating.
+
+If your S3 bucket is private, the plain `https://bucket.s3.amazonaws.com/...` URL will 403. Either pass `--public-read` (and ensure the bucket allows ACLs / public access) or configure a CloudFront/static-hosting policy that grants read access to uploaded objects.
 
 Check each package README for additional flags (e.g., Notion color presets).
 

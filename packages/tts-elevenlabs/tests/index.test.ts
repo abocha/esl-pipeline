@@ -209,6 +209,38 @@ default: voice_id_default
     expect(convertMock).toHaveBeenCalledTimes(2);
   });
 
+  it('strips markdown formatting before synthesis', async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'tts-'));
+    const tempMdPath = join(dir, 'lesson.md');
+    const tempVoiceMapPath = join(dir, 'voices.yml');
+    await writeFixture(
+      tempMdPath,
+      `
+---
+title: Formatting Lesson
+student: Anna
+
+:::study-text
+Alex: I **really** _love_ \`code\`!
+:::
+    `
+    );
+    await writeFixture(
+      tempVoiceMapPath,
+      `
+default: voice_id_default
+    `
+    );
+
+    const convertMock = setupClientMock();
+    vi.spyOn(ffm, 'concatMp3Segments').mockResolvedValue();
+    await buildStudyTextMp3(tempMdPath, {
+      voiceMapPath: tempVoiceMapPath,
+      outPath: dir,
+    });
+    expect(convertMock).toHaveBeenCalledWith(expect.any(String), expect.objectContaining({ text: 'I really love code!' }));
+  });
+
   it('reuses generated audio when file already exists', async () => {
     const dir = await mkdtemp(join(tmpdir(), 'tts-'));
     const tempMdPath = join(dir, 'lesson.md');

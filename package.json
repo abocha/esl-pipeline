@@ -50,7 +50,8 @@
     "cli:tts": "node packages/tts-elevenlabs/dist/bin/cli.js",
     "cli:uploader": "node packages/storage-uploader/dist/bin/cli.js",
     "cli:add-audio": "node packages/notion-add-audio/dist/bin/cli.js",
-    "cli:orchestrator": "node packages/orchestrator/dist/bin/cli.js"
+    "cli:orchestrator": "node packages/orchestrator/dist/bin/cli.js",
+    "esl-orchestrator": "node packages/orchestrator/dist/bin/cli.js"
   },
   "author": "",
   "license": "ISC",

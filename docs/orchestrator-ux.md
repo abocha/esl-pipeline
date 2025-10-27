@@ -9,23 +9,29 @@ Goal: make `esl-orchestrator` the single entry point teachers use to generate an
 - **Safe defaults**: auto-populate S3 prefixes, presets, and voice maps from student profiles.
 - **Interactive first**: provide prompts when flags are omitted; keep full flag-based scripting for automation.
 
-## Proposed Enhancements
+## Recently Shipped
+
+- `--interactive` wizard now walks through md selection, student/preset defaults, TTS/upload toggles.
+- Step-control flags `--skip-import`, `--skip-tts`, `--skip-upload`, and `--redo-tts` support incremental reruns.
+- `--json` flag produces structured logs with event history; default console output shows summaries.
+
+## Proposed Enhancements (remaining)
 
 1. **Interactive Wizard (`--interactive`)**
-   - Detect missing flags (student, preset, upload target) and prompt with suggestions.
-   - Display frontmatter summary and allow quick edits before import.
+   - ✅ Detects missing flags, surfaces student profiles, presets, voice paths, and supports forced re-generation.
+   - ⏭️ Enhancements: allow inline editing of frontmatter and review summary before execute.
 
 2. **Step Control Flags**
-   - `--skip-import`, `--skip-tts`, `--skip-upload` for incremental runs.
-   - `--redo-tts` to force regeneration even if audio hash matches.
+   - ✅ `--skip-import`, `--skip-tts`, `--skip-upload`, `--redo-tts` implemented; reuses manifest state safely.
+   - ⏭️ Future ideas: expose `--skip-add-audio` or partial colorize toggles.
 
 3. **Manifest Management**
    - `esl-orchestrator status --md lesson.md` to read the manifest and report current page/audio state.
    - `esl-orchestrator rerun --md lesson.md --step upload` to execute a subset using cached assets.
 
 4. **Structured Logging**
-   - Add `--json` output option for scripting.
-   - Default console output with grouped sections and success/failure icons.
+   - ✅ `--json` flag now emits `{ events, result }`; console output gains emoji markers and summary block.
+   - ⏭️ Follow-up: emit per-step timings and persist logs alongside manifests.
 
 5. **Config Profiles**
    - Load per-student configs from `configs/students/*.json` (contains Notion IDs, voice overrides, presets).

@@ -7,6 +7,9 @@ This repo houses the ESL homework pipeline. Below is everything the next agent s
 - **Core Flow**: Markdown (`md-validator` → `md-extractor`) → Notion import (`notion-importer` + `notion-colorizer`) → TTS (`tts-elevenlabs`) → S3 upload (`storage-uploader`) → attach audio (`notion-add-audio`).
 - **Orchestrator** (`packages/orchestrator`) glues the above into one command. It now exposes:
   - `esl-orchestrator --md <file>`: full run.
+    - Add `--interactive` to launch a guided wizard that suggests markdown files, student profiles, presets, TTS/upload settings, and S3 defaults.
+    - Incremental flags: `--skip-import`, `--skip-tts`, `--skip-upload`, and `--redo-tts` reuse manifest assets safely.
+    - Pass `--json` for structured event logs (pairs nicely with scripting).
   - `esl-orchestrator status --md <file>`: read manifest + hash/audio health.
   - `esl-orchestrator rerun --md <file> --steps tts,upload`: rerun subset using cached manifest.
 - **Configs** live in `configs/` (notably `voices.yml`, `elevenlabs.voices.json`, `presets.json`). Student-specific overrides can reside in `configs/students/` (stubbed for now).
@@ -35,7 +38,10 @@ This repo houses the ESL homework pipeline. Below is everything the next agent s
 
 ## 5. Recent Changes (context for follow-up)
 
+- Interactive CLI wizard shipped (`--interactive`) with reusable manifest defaults and guardrails around skip flags.
+- Structured logging/summary output landed; `--json` emits machine-friendly transcripts.
 - Added status/rerun APIs and CLI commands in orchestrator; manifests now power incremental runs.
+- TTS sanitizes Markdown emphasis before hitting ElevenLabs (no more pauses on `**bold**`).
 - ElevenLabs integration now resolves friendly voice names using `configs/elevenlabs.voices.json`.
 - Markdown validator accepts topic arrays and enforces `--strict` warnings-as-errors.
 - Storage uploader keys are path-safe and tests match the options-object API.
@@ -43,7 +49,7 @@ This repo houses the ESL homework pipeline. Below is everything the next agent s
 
 ## 6. Pending / Next Work
 
-1. **Orchestrator UX roadmap** (`docs/orchestrator-ux.md`): implement interactive wizard, config profiles, structured logging (`--json`), step toggles, etc.
+1. **Orchestrator UX roadmap** (`docs/orchestrator-ux.md`): next tranche is config profiles (`configs/students/*`), richer wizard preview/editing, and log timing metrics.
 2. **Release automation**: add CHANGELOG, choose versioning, decide which packages should be public (currently `private: true`).
 3. **Smoke coverage**: consider richer integration tests that mock Notion/S3/ElevenLabs with fixtures.
 4. **Security**: document IAM scopes, key rotation, and voice catalog update cadence in `docs/publishing.md` or new security doc.

@@ -1,0 +1,153 @@
+import { access, readdir, readFile, stat } from 'node:fs/promises';
+import { relative, resolve, join, dirname } from 'node:path';
+import { extractFrontmatter } from '@esl-pipeline/md-extractor';
+
+export type StudentProfile = {
+  student: string;
+  dbId?: string | null;
+  pageParentId?: string | null;
+  colorPreset?: string | null;
+  voices?: Record<string, string>;
+  manifestPreset?: string | null;
+};
+
+export type PresetMap = Record<
+  string,
+  {
+    h2?: string;
+    h3?: string;
+    toggleMap?: Record<string, string>;
+  }
+>;
+
+const DEFAULT_PRESETS_PATH = 'configs/presets.json';
+const DEFAULT_VOICES_PATH = 'configs/voices.yml';
+const DEFAULT_STUDENTS_DIR = 'configs/students';
+
+const IGNORED_DIRS = new Set(['.git', 'node_modules', 'dist', 'build', '.rush', '.turbo']);
+
+export async function loadPresets(presetsPath = DEFAULT_PRESETS_PATH): Promise<PresetMap> {
+  try {
+    const content = await readFile(presetsPath, 'utf8');
+    const parsed = JSON.parse(content) as PresetMap;
+    return parsed ?? {};
+  } catch {
+    return {};
+  }
+}
+
+export async function loadStudentProfiles(
+  studentsDir = DEFAULT_STUDENTS_DIR
+): Promise<StudentProfile[]> {
+  try {
+    const entries = await readdir(studentsDir, { withFileTypes: true });
+    const profiles: StudentProfile[] = [];
+    for (const entry of entries) {
+      if (entry.isFile() && entry.name.toLowerCase().endsWith('.json')) {
+        const filePath = join(studentsDir, entry.name);
+        try {
+          const data = JSON.parse(await readFile(filePath, 'utf8')) as StudentProfile;
+          if (data && typeof data.student === 'string' && data.student.trim().length > 0) {
+            profiles.push({ ...data, student: data.student.trim() });
+          }
+        } catch {
+          // ignore invalid JSON files; surfaced in wizard prompt later
+        }
+      }
+    }
+    return profiles.sort((a, b) => a.student.localeCompare(b.student));
+  } catch {
+    return [];
+  }
+}
+
+export async function resolveVoicesPath(
+  voicesPath?: string,
+  fallback = DEFAULT_VOICES_PATH
+): Promise<string | undefined> {
+  const candidates = [voicesPath, fallback].filter(Boolean) as string[];
+  for (const candidate of candidates) {
+    try {
+      await access(candidate);
+      return candidate;
+    } catch {
+      continue;
+    }
+  }
+  return undefined;
+}
+
+export async function fileExists(path: string): Promise<boolean> {
+  try {
+    await access(path);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+export type MarkdownSummary = {
+  path: string;
+  title?: string;
+  student?: string;
+};
+
+export async function summarizeMarkdown(mdPath: string): Promise<MarkdownSummary> {
+  const summary: MarkdownSummary = { path: mdPath };
+  try {
+    const content = await readFile(mdPath, 'utf8');
+    const frontmatter = extractFrontmatter(content);
+    if (frontmatter && typeof frontmatter === 'object') {
+      const maybeTitle = (frontmatter as any).title;
+      const maybeStudent = (frontmatter as any).student;
+      if (typeof maybeTitle === 'string') summary.title = maybeTitle;
+      if (typeof maybeStudent === 'string') summary.student = maybeStudent;
+    }
+  } catch {
+    // ignore
+  }
+  return summary;
+}
+
+export async function findMarkdownCandidates(
+  cwd: string,
+  limit = 10,
+  maxDepth = 3
+): Promise<string[]> {
+  const results: string[] = [];
+  const queue: Array<{ dir: string; depth: number }> = [{ dir: resolve(cwd), depth: 0 }];
+
+  while (queue.length && results.length < limit) {
+    const { dir, depth } = queue.shift()!;
+    let entries: Array<{ name: string; isFile: boolean; isDir: boolean }> = [];
+    try {
+      const raw = await readdir(dir, { withFileTypes: true });
+      entries = raw.map(d => ({ name: d.name, isFile: d.isFile(), isDir: d.isDirectory() }));
+    } catch {
+      continue;
+    }
+
+    for (const entry of entries) {
+      const fullPath = join(dir, entry.name);
+      if (entry.isFile && entry.name.toLowerCase().endsWith('.md')) {
+        results.push(relative(cwd, fullPath));
+        if (results.length >= limit) break;
+      } else if (entry.isDir && depth < maxDepth && !IGNORED_DIRS.has(entry.name)) {
+        queue.push({ dir: fullPath, depth: depth + 1 });
+      }
+    }
+  }
+
+  return results;
+}
+
+export async function getDefaultOutputDir(mdPath: string): Promise<string> {
+  const abs = resolve(mdPath);
+  try {
+    const stats = await stat(abs);
+    if (stats.isDirectory()) return abs;
+  } catch {
+    // ignore
+  }
+  return dirname(abs);
+}
