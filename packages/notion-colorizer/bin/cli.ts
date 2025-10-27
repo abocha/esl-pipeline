@@ -1,3 +1,5 @@
+#!/usr/bin/env node
+import 'dotenv/config';
 import { Command } from 'commander';
 import { applyHeadingPreset } from '../src/index.js';
 
