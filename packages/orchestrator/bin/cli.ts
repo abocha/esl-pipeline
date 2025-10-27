@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import 'dotenv/config';
 import { resolve } from 'node:path';
 import process from 'node:process';
 import { getAssignmentStatus, newAssignment, rerunAssignment } from '../src/index.js';

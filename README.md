@@ -91,7 +91,7 @@ AWS_ACCESS_KEY_ID=AKIA...
 AWS_SECRET_ACCESS_KEY=...
 ```
 
-Environment variables are consumed through `dotenv` (`set -a && source .env` before running CLIs).
+Environment variables are consumed automatically via `dotenv`—every CLI loads `.env` on startup. (You can still `set -a && source .env` if you prefer shell-level exports.)
 
 ### Voice Catalog
 

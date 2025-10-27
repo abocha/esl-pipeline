@@ -2,6 +2,15 @@
 
 All notable changes to this project will be documented here. Dates use `YYYY-MM-DD`.
 
+## [1.1.0] - 2025-10-27
+
+### Added
+- All CLI entry points now auto-load `.env` via `dotenv/config`, so orchestrator, importer, and helper tools pick up credentials without manual `source` steps.
+- Quick start docs highlight the interactive wizard as the fastest way to run the pipeline.
+
+### Changed
+- The interactive wizard prompts for the Notion database immediately after student selection, using `NOTION_DB_ID` as the default.
+
 ## [1.0.0] - 2025-10-27
 
 ### Highlights

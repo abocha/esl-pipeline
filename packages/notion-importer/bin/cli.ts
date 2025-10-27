@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import 'dotenv/config';
 import { runImport } from '../src/index.js';
 
 function arg(flag: string): string | undefined {
