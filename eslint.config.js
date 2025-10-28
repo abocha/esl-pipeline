@@ -28,6 +28,7 @@ const baseRules = {
   'no-unused-vars': 'off',
   'promise/param-names': 'off',
   'import/order': 'off',
+  'import/no-unresolved': 'error',
   'no-useless-escape': 'off',
   'no-misleading-character-class': 'off',
   'no-empty': 'off',

@@ -6,6 +6,12 @@ import { fileURLToPath } from 'node:url';
 import { Command } from 'commander';
 import { applyHeadingPreset } from '../src/index.js';
 
+type ColorizerCliOptions = {
+  pageId: string;
+  preset: string;
+  presetsPath: string;
+};
+
 const moduleDir = dirname(fileURLToPath(import.meta.url));
 loadEnv();
 const repoEnvPath = resolve(moduleDir, '../../../.env');
@@ -18,12 +24,14 @@ const program = new Command()
   .requiredOption('--page-id <id>', 'Notion page id')
   .requiredOption('--preset <name>', 'Preset name')
   .option('--presets-path <file>', 'Path to presets JSON', 'configs/presets.json')
-  .action(async opts => {
+  .action(async (opts: ColorizerCliOptions) => {
     try {
       const res = await applyHeadingPreset(opts.pageId, opts.preset, opts.presetsPath);
       console.log(JSON.stringify(res, null, 2));
-    } catch (e: any) {
-      console.error(e?.message || String(e));
+    } catch (error: unknown) {
+      const message =
+        error instanceof Error ? error.message : typeof error === 'string' ? error : String(error);
+      console.error(message);
       process.exit(1);
     }
   });

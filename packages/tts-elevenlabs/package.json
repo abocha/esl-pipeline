@@ -43,7 +43,8 @@
     "@elevenlabs/elevenlabs-js": "^2.20.1",
     "@esl-pipeline/ffmpeg-binary": "workspace:*",
     "@esl-pipeline/md-extractor": "workspace:*",
-    "js-yaml": "^4.1.0"
+    "js-yaml": "^4.1.0",
+    "commander": "^14.0.2"
   },
   "devDependencies": {
     "@types/js-yaml": "^4.0.9",
