@@ -14,13 +14,13 @@
   "engines": {
     "node": ">=18.18"
   },
-  "main": "./dist/index.js",
-  "types": "./dist/index.d.ts",
+  "main": "./dist/src/index.js",
+  "types": "./dist/src/index.d.ts",
   "exports": {
     ".": {
-      "types": "./dist/index.d.ts",
-      "import": "./dist/index.js",
-      "default": "./dist/index.js"
+      "types": "./dist/src/index.d.ts",
+      "import": "./dist/src/index.js",
+      "default": "./dist/srcindex.js"
     },
     "./package.json": "./package.json"
   },
@@ -28,15 +28,15 @@
     "dist"
   ],
   "bin": {
-    "md-validate": "dist/cli.js",
-    "md-validator": "dist/cli.js"
+    "md-validator": "dist/bin/cli.js"
   },
   "scripts": {
-    "build": "tsc -p tsconfig.json",
     "clean": "rimraf dist",
+    "build": "tsc -p tsconfig.json",
     "dev": "tsx watch src/index.ts",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "prepare": "pnpm run build"
   },
   "dependencies": {
     "chalk": "^5.6.2",
