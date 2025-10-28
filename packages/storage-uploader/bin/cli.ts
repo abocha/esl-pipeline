@@ -3,12 +3,13 @@ import { config as loadEnv } from 'dotenv';
 import { existsSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { Command } from 'commander';
+import { Command, type OptionValues } from 'commander';
 import { uploadFile } from '../src/index.js';
 
 const moduleDir = dirname(fileURLToPath(import.meta.url));
 loadEnv();
-const repoEnvPath = resolve(moduleDir, '../../../.env');
+
+const repoEnvPath = resolve(moduleDir, '../../../../.env');
 if (existsSync(repoEnvPath)) {
   loadEnv({ path: repoEnvPath, override: false });
 }
@@ -24,19 +25,20 @@ const program = new Command()
     'Generate presigned URL with specified expiration in seconds',
     parseInt
   )
-  .action(async opts => {
+  .action(async (opts: OptionValues) => {
     try {
-      const result = await uploadFile(opts.file, {
+      const result = await uploadFile(opts.file as string, {
         backend: 's3',
-        public: opts.publicRead,
-        presignExpiresIn: opts.presign,
-        prefix: opts.prefix,
+        public: !!opts.publicRead,
+        presignExpiresIn: opts.presign as number | undefined,
+        prefix: opts.prefix as string | undefined,
       });
       console.log(JSON.stringify(result, null, 2));
-    } catch (e: any) {
-      console.error(e?.message || String(e));
+    } catch (e) {
+      console.error((e as Error)?.message ?? String(e));
       process.exit(1);
     }
   });
 
-program.parse();
+// In ESM you can top-level await:
+await program.parseAsync();
