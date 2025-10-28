@@ -38,7 +38,11 @@ default: voice_id_default
     const { buildStudyTextMp3 } = await import('@esl-pipeline/tts-elevenlabs');
     const audioPath = join(dir, 'lesson.mp3');
     await writeFile(audioPath, 'dummy');
-    vi.mocked(buildStudyTextMp3).mockResolvedValue({ path: audioPath, hash: 'abc123' });
+    vi.mocked(buildStudyTextMp3).mockResolvedValue({
+      path: audioPath,
+      hash: 'abc123',
+      voices: [{ speaker: 'Narrator', voiceId: 'voice_id_default', source: 'default' }],
+    });
     const result = await newAssignment({
       md: mdPath,
       preset: 'default',
@@ -74,7 +78,11 @@ default: voice_id_default
     const { buildStudyTextMp3 } = await import('@esl-pipeline/tts-elevenlabs');
     const audioPath = join(dir, 'lesson.mp3');
     await writeFile(audioPath, 'dummy');
-    vi.mocked(buildStudyTextMp3).mockResolvedValue({ path: audioPath, hash: 'abc123' });
+    vi.mocked(buildStudyTextMp3).mockResolvedValue({
+      path: audioPath,
+      hash: 'abc123',
+      voices: [{ speaker: 'Narrator', voiceId: 'voice_id_default', source: 'default' }],
+    });
 
     const baseFlags = {
       md: mdPath,

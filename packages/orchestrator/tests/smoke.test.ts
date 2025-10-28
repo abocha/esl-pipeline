@@ -49,7 +49,11 @@ describe('orchestrator smoke', () => {
     await writeFile(audioPath, 'dummy audio');
 
     const { buildStudyTextMp3 } = await import('@esl-pipeline/tts-elevenlabs');
-    vi.mocked(buildStudyTextMp3).mockResolvedValue({ path: audioPath, hash: 'abc123' });
+    vi.mocked(buildStudyTextMp3).mockResolvedValue({
+      path: audioPath,
+      hash: 'abc123',
+      voices: [{ speaker: 'Anna', voiceId: 'voice_id_default', source: 'default' }],
+    });
 
     const { newAssignment, getAssignmentStatus, rerunAssignment } = await import('../src/index.js');
     const result = await newAssignment({

@@ -9,6 +9,7 @@ import {
   getAssignmentStatus,
   newAssignment,
   rerunAssignment,
+  summarizeVoiceSelections,
   type AssignmentProgressEvent,
   type AssignmentStage,
 } from '../src/index.js';
@@ -162,6 +163,8 @@ const outputRunSummary = (
   if (result.pageUrl) console.log(`  Page URL : ${result.pageUrl}`);
   if (result.audio?.url) console.log(`  Audio URL: ${result.audio.url}`);
   else if (result.audio?.path) console.log(`  Audio    : ${result.audio.path}`);
+  const voiceSummary = summarizeVoiceSelections(result.audio?.voices);
+  if (voiceSummary) console.log(`  Voices   : ${voiceSummary}`);
 };
 
 const outputStatusSummary = (
@@ -436,8 +439,10 @@ const printWizardSummary = (
   if (selections.preset) console.log(`  Preset   : ${selections.preset}`);
   console.log(`  Audio    : ${selections.withTts ? 'Enabled' : 'Disabled'}`);
   if (selections.withTts && selections.voices) {
-    console.log(`  Voices   : ${selections.voices}`);
+    console.log(`  Voice map: ${selections.voices}`);
   }
+  const actualVoices = summarizeVoiceSelections(result.audio?.voices);
+  if (actualVoices) console.log(`  Voices   : ${actualVoices}`);
   if (selections.upload === 's3') {
     const prefix = selections.prefix ?? process.env.S3_PREFIX ?? 'audio/assignments';
     console.log(`  Upload   : S3 (${prefix})${selections.publicRead ? ' [public]' : ''}`);

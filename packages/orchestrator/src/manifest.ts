@@ -1,5 +1,6 @@
 import { basename, dirname, join } from 'node:path';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
+import type { BuildStudyTextResult } from '@esl-pipeline/tts-elevenlabs';
 
 export type AssignmentManifest = {
   mdHash: string;
@@ -9,6 +10,7 @@ export type AssignmentManifest = {
     path?: string;
     url?: string;
     hash?: string;
+    voices?: BuildStudyTextResult['voices'];
   };
   preset?: string;
   timestamp: string;

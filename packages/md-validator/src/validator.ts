@@ -81,13 +81,28 @@ function textFromHeading(h: Heading): string {
   return normalizeHeadingText(txt);
 }
 
-function findStudyTextRegion(source: string): { body: string; start: number; end: number } | null {
+function findStudyTextRegion(
+  source: string
+): {
+  body: string;
+  start: number;
+  end: number;
+  inlineAfterMarker: string;
+  markerLine: number;
+} | null {
   const startIdx = source.indexOf(':::study-text');
   if (startIdx === -1) return null;
   const endIdx = source.indexOf(':::', startIdx + ':::study-text'.length);
   if (endIdx === -1) return null;
-  const body = source.slice(startIdx + ':::study-text'.length, endIdx).trim();
-  return { body, start: startIdx, end: endIdx + 3 };
+  const markerEnd = startIdx + ':::study-text'.length;
+  const lineEndIdxRaw = source.indexOf('\n', markerEnd);
+  const lineEndIdx = lineEndIdxRaw === -1 ? endIdx : Math.min(lineEndIdxRaw, endIdx);
+  const inlineAfterMarker = source.slice(markerEnd, lineEndIdx);
+  const body = source.slice(markerEnd, endIdx).trim();
+  const markerLine = source
+    .slice(0, startIdx)
+    .split(/\r?\n/).length; /* 1-based line number for error messaging */
+  return { body, start: startIdx, end: endIdx + 3, inlineAfterMarker, markerLine };
 }
 
 function parseMarkdownAst(md: string): Root {
@@ -173,10 +188,16 @@ export async function validateMarkdownFile(
   if (!study) {
     errors.push('Missing ":::study-text ... :::" block.');
   } else {
+    let studyBody = study.body;
+    if (study.inlineAfterMarker.trim().length > 0) {
+      const newline = studyBody.indexOf('\n');
+      studyBody = newline === -1 ? '' : studyBody.slice(newline + 1).trim();
+    }
+
     // dialogue/monologue rules
     if (meta?.speaker_labels && meta.speaker_labels.length > 0) {
       const labelSet = new Set(meta.speaker_labels.map(s => s.trim().toLowerCase()));
-      const lines = study.body
+      const lines = studyBody
         .split(/\r?\n/)
         .map(s => s.trim())
         .filter(Boolean);
@@ -199,8 +220,8 @@ export async function validateMarkdownFile(
       }
     } else {
       // monologue: soft check — at least 3 paragraphs or 10 short lines
-      const paras = study.body.split(/\n\s*\n/).filter(p => p.trim().length > 0);
-      const lines = study.body
+      const paras = studyBody.split(/\n\s*\n/).filter(p => p.trim().length > 0);
+      const lines = studyBody
         .split(/\r?\n/)
         .map(s => s.trim())
         .filter(Boolean);

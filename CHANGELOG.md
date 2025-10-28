@@ -4,6 +4,20 @@ All notable changes to this project will be documented here. Dates use `YYYY-MM-
 
 ## [1.2.0] - 2025-10-28
 
+## [1.3.0] - 2025-10-29
+
+### Added
+
+- Orchestrator now surfaces voice assignments in both JSON events and CLI summaries, making it clear which ElevenLabs voices were chosen for each speaker.
+- Manifests persist the selected voice metadata so reruns and downstream tooling can reuse or audit previous choices.
+
+### Changed
+
+- Voice selection honours speaker `gender` metadata as a hard requirement and falls back only when no catalog match exists, eliminating accidental neutral voices.
+- The TTS package locates front matter even when Markdown is wrapped in a fenced code block, ensuring speaker profiles are consistently detected.
+- ffmpeg output is suppressed during successful runs; logs now surface only on failures to keep orchestrator output concise.
+- Markdown validator accepts inline labels after `:::study-text`, matching how other toggle markers behave.
+
 ### Added
 
 - Orchestrator logs the loaded `NOTION_TOKEN` (masked by default, plain text behind `ORCHESTRATOR_DEBUG_SECRETS`) so misconfigured environments are easy to spot.

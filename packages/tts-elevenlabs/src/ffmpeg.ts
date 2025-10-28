@@ -8,11 +8,27 @@ import { getFfmpegPath } from '@esl-pipeline/ffmpeg-binary';
 export async function runFfmpeg(args: string[], label = 'ffmpeg'): Promise<void> {
   const bin = await getFfmpegPath();
   await new Promise<void>((resolvePromise, reject) => {
-    const proc = spawn(bin, args, { stdio: 'inherit' });
+    const proc = spawn(bin, args, { stdio: ['ignore', 'pipe', 'pipe'] });
+    let stdout = '';
+    let stderr = '';
+    proc.stdout?.on('data', chunk => {
+      stdout += chunk.toString();
+    });
+    proc.stderr?.on('data', chunk => {
+      stderr += chunk.toString();
+    });
     proc.on('error', reject);
     proc.on('exit', code => {
-      if (code === 0) resolvePromise();
-      else reject(new Error(`${label} exited with code ${code}`));
+      if (code === 0) {
+        resolvePromise();
+      } else {
+        const parts = [`${label} exited with code ${code}`];
+        const trimmedStdout = stdout.trim();
+        const trimmedStderr = stderr.trim();
+        if (trimmedStdout) parts.push(`stdout:\n${trimmedStdout}`);
+        if (trimmedStderr) parts.push(`stderr:\n${trimmedStderr}`);
+        reject(new Error(parts.join('\n\n')));
+      }
     });
   });
 }
