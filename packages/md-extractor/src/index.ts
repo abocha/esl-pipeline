@@ -9,7 +9,10 @@ function normalize(md: string): string {
   return md.replace(BOM, '').replace(NBSP, ' ').replace(ZWSP, '').replace(/\r\n/g, '\n');
 }
 
-function findBlock(md: string, openerRegex: RegExp): string | null {
+function findBlock(
+  md: string,
+  openerRegex: RegExp
+): { body: string; inlineLabel: string; markerLine: number } | null {
   const m = openerRegex.exec(md);
   if (!m) return null;
   const startIdx = m.index + m[0].length;
@@ -18,7 +21,17 @@ function findBlock(md: string, openerRegex: RegExp): string | null {
   const close = rest.search(/\n[ \t]*:::\s*$/m);
   if (close === -1) return null;
   const inner = rest.slice(0, close);
-  return inner.trim();
+  const body = inner.trim();
+  const markerStart = m.index;
+  const lineStart = md.lastIndexOf('\n', markerStart);
+  const lineEnd = md.indexOf('\n', markerStart);
+  const markerLine = md.slice(
+    lineStart === -1 ? 0 : lineStart + 1,
+    lineEnd === -1 ? md.length : lineEnd
+  );
+  const inlineLabel = markerLine.replace(/^[ \t]*:::[^\s]+/i, '').trim();
+  const markerLineNumber = md.slice(0, markerStart).split(/\r?\n/).length;
+  return { body, inlineLabel, markerLine: markerLineNumber };
 }
 
 function isDialogueLine(line: string): boolean {
@@ -37,7 +50,13 @@ export function extractStudyText(md: string): StudyText {
   const n = normalize(md);
   const inner = findBlock(n, /(^|\n)[ \t]*:::study-text[^\n]*\n/i);
   if (!inner) throw new Error('study-text block not found');
-  const rawLines = inner.split('\n').map(s => s.trim());
+  const rawLines = inner.body.split('\n').map(s => s.trim());
+  if (inner.inlineLabel) {
+    const first = rawLines[0];
+    if (first && first.toLowerCase() === inner.inlineLabel.toLowerCase()) {
+      rawLines.shift();
+    }
+  }
   const lines = rawLines.filter(Boolean);
   const dialogueCount = lines.filter(isDialogueLine).length;
   const type: StudyText['type'] = dialogueCount >= 2 ? 'dialogue' : 'monologue';
@@ -48,7 +67,7 @@ export function extractAnswerKey(md: string): string {
   const n = normalize(md);
   const block = findBlock(n, /(^|\n)[ \t]*:::toggle-heading\s+Answer Key[^\n]*\n/i);
   if (!block) throw new Error('Answer Key toggle not found');
-  return block;
+  return block.body;
 }
 
 export function extractTeacherNotes(md: string): string {
@@ -59,7 +78,7 @@ export function extractTeacherNotes(md: string): string {
     /(^|\n)[ \t]*:::toggle-heading\s+Teacher[’']s\s+Follow-up\s+Plan[^\n]*\n/i
   );
   if (!block) throw new Error("Teacher's Follow-up Plan toggle not found");
-  return block;
+  return block.body;
 }
 
 export function extractSections(md: string): Section[] {
@@ -92,4 +111,4 @@ export function extractSections(md: string): Section[] {
   return out;
 }
 
-export type { Frontmatter, StudyText, Section } from './types.js';
+export type { Frontmatter, StudyText, Section, SpeakerProfile } from './types.js';

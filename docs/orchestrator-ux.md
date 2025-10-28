@@ -14,6 +14,7 @@ Goal: make `esl-orchestrator` the single entry point teachers use to generate an
 - `--interactive` wizard now walks through md selection, student/preset defaults, TTS/upload toggles.
 - Step-control flags `--skip-import`, `--skip-tts`, `--skip-upload`, and `--redo-tts` support incremental reruns.
 - `--json` flag produces structured logs with event history; default console output shows summaries.
+- TTS stage summaries list the speaker → voice mapping (with gender/source tags) so audio issues are easy to spot, and ffmpeg output stays quiet unless synthesis fails.
 
 ## Proposed Enhancements (remaining)
 

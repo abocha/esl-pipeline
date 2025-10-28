@@ -1,6 +1,10 @@
 import { dirname, basename } from 'node:path';
 import { applyHeadingPreset } from '@esl-pipeline/notion-colorizer';
-import { buildStudyTextMp3, hashStudyText } from '@esl-pipeline/tts-elevenlabs';
+import {
+  buildStudyTextMp3,
+  hashStudyText,
+  type BuildStudyTextResult,
+} from '@esl-pipeline/tts-elevenlabs';
 import { uploadFile } from '@esl-pipeline/storage-uploader';
 import { addOrReplaceAudioUnderStudyText } from '@esl-pipeline/notion-add-audio';
 import { runImport } from '@esl-pipeline/notion-importer';
@@ -34,6 +38,42 @@ export type AssignmentProgressCallbacks = {
   onStage?: (event: AssignmentProgressEvent) => void;
 };
 
+export function summarizeVoiceSelections(
+  voices?: BuildStudyTextResult['voices']
+): string | undefined {
+  if (!voices || voices.length === 0) return undefined;
+  return voices
+    .map(voice => {
+      const name = voice.voiceName ?? voice.voiceId;
+      const tags: string[] = [];
+      if (voice.gender) tags.push(voice.gender);
+      switch (voice.source) {
+        case 'profile':
+          tags.push('profile');
+          break;
+        case 'voiceMap':
+          tags.push('map');
+          break;
+        case 'auto':
+          tags.push(typeof voice.score === 'number' ? `auto ${Math.round(voice.score)}` : 'auto');
+          break;
+        case 'default':
+          tags.push('default');
+          break;
+        case 'fallback':
+          tags.push('fallback');
+          break;
+        case 'reuse':
+          tags.push('reuse');
+          break;
+      }
+      if (voice.accent && tags.length < 3) tags.push(voice.accent);
+      const tagString = tags.length ? ` (${tags.join(', ')})` : '';
+      return `${voice.speaker}→${name}${tagString}`;
+    })
+    .join(', ');
+}
+
 export type NewAssignmentFlags = {
   md: string;
   student?: string;
@@ -64,7 +104,7 @@ export async function newAssignment(
 ): Promise<{
   pageId?: string;
   pageUrl?: string;
-  audio?: { path?: string; url?: string; hash?: string };
+  audio?: { path?: string; url?: string; hash?: string; voices?: BuildStudyTextResult['voices'] };
   colorized?: boolean;
   manifestPath?: string;
   steps: string[];
@@ -177,10 +217,13 @@ export async function newAssignment(
         preview: flags.dryRun,
         force: flags.force || flags.redoTts,
       });
-      audio = { path: ttsResult.path, hash: ttsResult.hash };
+      audio = { path: ttsResult.path, hash: ttsResult.hash, voices: ttsResult.voices };
+      const voiceSummary = summarizeVoiceSelections(ttsResult.voices);
       emitStage('tts', 'success', {
         path: ttsResult.path,
         preview: flags.dryRun,
+        voices: ttsResult.voices,
+        voiceSummary,
       });
 
       if (!flags.dryRun && audio?.path) {
@@ -331,7 +374,7 @@ export type RerunFlags = {
 
 export async function rerunAssignment(flags: RerunFlags): Promise<{
   steps: string[];
-  audio?: { path?: string; url?: string; hash?: string };
+  audio?: { path?: string; url?: string; hash?: string; voices?: BuildStudyTextResult['voices'] };
   pageId?: string;
   pageUrl?: string;
   manifestPath: string;
@@ -350,6 +393,7 @@ export async function rerunAssignment(flags: RerunFlags): Promise<{
   let audioPath = manifest.audio?.path;
   let audioUrl = manifest.audio?.url;
   let audioHash = manifest.audio?.hash;
+  let audioVoices = manifest.audio?.voices;
 
   if (stepsToRun.has('tts')) {
     const ttsResult = await buildStudyTextMp3(flags.md, {
@@ -360,6 +404,7 @@ export async function rerunAssignment(flags: RerunFlags): Promise<{
     });
     audioPath = ttsResult.path;
     audioHash = ttsResult.hash;
+    audioVoices = ttsResult.voices;
     executed.push('tts');
   }
 
@@ -420,6 +465,7 @@ export async function rerunAssignment(flags: RerunFlags): Promise<{
       path: audioPath,
       url: audioUrl,
       hash: audioHash,
+      voices: audioVoices,
     },
     timestamp: new Date().toISOString(),
   };
