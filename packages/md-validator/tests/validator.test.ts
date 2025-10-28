@@ -2,7 +2,7 @@ import path from 'node:path';
 import { describe, it, expect } from 'vitest';
 import { mkdtemp, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
-import { validateMarkdownFile } from '../src/validator';
+import { validateMarkdownFile } from '../src/validator.js';
 
 const fixturesPath = path.join(__dirname, '..', 'fixtures');
 
