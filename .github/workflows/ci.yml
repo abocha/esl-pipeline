@@ -10,29 +10,26 @@ jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout repo
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
-      - name: Use Node.js 22
-        uses: actions/setup-node@v4
+      - uses: actions/setup-node@v6
         with:
           node-version: 22
-          cache: 'pnpm'
+          # No explicit cache needed: v6 auto-caches when packageManager is present
 
-      - name: Install pnpm
-        uses: pnpm/action-setup@v3
-        with:
-          version: 8
-          run_install: false
+      - name: Enable Corepack & pin pnpm from package.json
+        run: |
+          corepack enable
+          pnpm -v
 
-      - name: Install dependencies
+      - name: Install deps
         run: pnpm install --frozen-lockfile
 
       - name: Lint
         run: pnpm lint
 
       - name: Build
-        run: pnpm build
+        run: pnpm -r build   # use -r if you intend workspace-wide builds
 
       - name: Unit & integration tests
         run: pnpm test
