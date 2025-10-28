@@ -14,7 +14,6 @@ All notable changes to this project will be documented here. Dates use `YYYY-MM-
 - Student linking is now best-effort: if the Notion importer cannot resolve a student page, the pipeline continues without failing but surfaces a warning and reports the linkage outcome in stage events.
 - Workspace TypeScript configs were tightened to rely on the hoisted linker, consolidated path resolution, and the ffmpeg helper package aligned with the shared build strategy.
 
-
 ## [1.1.0] - 2025-10-27
 
 ### Added
