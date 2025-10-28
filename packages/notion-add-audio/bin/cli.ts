@@ -6,6 +6,12 @@ import { fileURLToPath } from 'node:url';
 import { Command } from 'commander';
 import { addOrReplaceAudioUnderStudyText } from '../src/index.js';
 
+type NotionAddAudioOptions = {
+  pageId: string;
+  url: string;
+  replace?: boolean;
+};
+
 const moduleDir = dirname(fileURLToPath(import.meta.url));
 loadEnv();
 const repoEnvPath = resolve(moduleDir, '../../../.env');
@@ -21,7 +27,7 @@ program
   .requiredOption('--page-id <pageId>', 'Notion page ID')
   .requiredOption('--url <url>', 'Audio URL to add')
   .option('--replace', 'Replace existing audio instead of appending')
-  .action(async options => {
+  .action(async (options: NotionAddAudioOptions) => {
     try {
       const result = await addOrReplaceAudioUnderStudyText(options.pageId, options.url, {
         replace: options.replace,

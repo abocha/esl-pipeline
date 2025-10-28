@@ -3,8 +3,15 @@ import { config as loadEnv } from 'dotenv';
 import { existsSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { Command, type OptionValues } from 'commander';
+import { Command } from 'commander';
 import { uploadFile } from '../src/index.js';
+
+type StorageUploaderCliOptions = {
+  file: string;
+  prefix?: string;
+  publicRead?: boolean;
+  presign?: number;
+};
 
 const moduleDir = dirname(fileURLToPath(import.meta.url));
 loadEnv();
@@ -25,17 +32,19 @@ const program = new Command()
     'Generate presigned URL with specified expiration in seconds',
     parseInt
   )
-  .action(async (opts: OptionValues) => {
+  .action(async (opts: StorageUploaderCliOptions) => {
     try {
-      const result = await uploadFile(opts.file as string, {
+      const result = await uploadFile(opts.file, {
         backend: 's3',
-        public: !!opts.publicRead,
-        presignExpiresIn: opts.presign as number | undefined,
-        prefix: opts.prefix as string | undefined,
+        public: Boolean(opts.publicRead),
+        presignExpiresIn: opts.presign,
+        prefix: opts.prefix,
       });
       console.log(JSON.stringify(result, null, 2));
-    } catch (e) {
-      console.error((e as Error)?.message ?? String(e));
+    } catch (error: unknown) {
+      const message =
+        error instanceof Error ? error.message : typeof error === 'string' ? error : String(error);
+      console.error(message);
       process.exit(1);
     }
   });
