@@ -101,16 +101,15 @@ const mockConcat = () =>
     await writeFile(outFile, 'mock-audio');
   });
 
-vi.spyOn(ffm, 'synthSilenceMp3').mockImplementation(async (outFile: string) => {
-  await writeFile(outFile, 'silence');
-});
-
 afterEach(() => {
   vi.restoreAllMocks();
 });
 
 beforeEach(() => {
   vi.spyOn(assign, 'loadVoicesCatalog').mockResolvedValue(catalogMock as any);
+  vi.spyOn(ffm, 'synthSilenceMp3').mockImplementation(async (outFile: string) => {
+    await writeFile(outFile, 'silence');
+  });
 });
 
 describe('tts elevenlabs integration', () => {
