@@ -24,11 +24,11 @@ jobs:
       - name: Install deps
         run: pnpm install --frozen-lockfile
 
-      - name: Lint
-        run: pnpm lint
-
       - name: Build
         run: pnpm -r build
+      
+      - name: Lint
+        run: pnpm lint
 
       - name: Unit & integration tests
         run: pnpm test
