@@ -79,6 +79,7 @@ export type NewAssignmentFlags = {
   student?: string;
   preset?: string;
   presetsPath?: string;
+  accentPreference?: string;
   withTts?: boolean;
   upload?: 's3';
   presign?: number;
@@ -216,6 +217,7 @@ export async function newAssignment(
         outPath: flags.out ?? dirname(flags.md),
         preview: flags.dryRun,
         force: flags.force || flags.redoTts,
+        defaultAccent: flags.accentPreference,
       });
       audio = { path: ttsResult.path, hash: ttsResult.hash, voices: ttsResult.voices };
       const voiceSummary = summarizeVoiceSelections(ttsResult.voices);
@@ -370,6 +372,7 @@ export type RerunFlags = {
   prefix?: string;
   publicRead?: boolean;
   presign?: number;
+  accentPreference?: string;
 };
 
 export async function rerunAssignment(flags: RerunFlags): Promise<{
@@ -401,6 +404,7 @@ export async function rerunAssignment(flags: RerunFlags): Promise<{
       outPath: flags.out ?? dirname(flags.md),
       preview: flags.dryRun,
       force: flags.force,
+      defaultAccent: flags.accentPreference,
     });
     audioPath = ttsResult.path;
     audioHash = ttsResult.hash;

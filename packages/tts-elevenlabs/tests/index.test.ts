@@ -3,6 +3,7 @@ import { hashStudyText, buildStudyTextMp3 } from '../src/index.js';
 import * as ffm from '../src/ffmpeg.js';
 import * as eleven from '../src/eleven.js';
 import * as assign from '../src/assign.js';
+import * as speakers from '../src/speakerAssignment.js';
 import { mkdtemp, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -170,6 +171,60 @@ default: voice_id_default
         source: 'default',
       }),
     ]);
+  });
+
+  it('passes default accent preference to voice resolver', async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'tts-'));
+    const tempMdPath = join(dir, 'lesson-accent.md');
+    const tempVoiceMapPath = join(dir, 'voices.yml');
+    await writeFixture(
+      tempMdPath,
+      `
+---
+title: Accent Test
+student: Default
+level: A1
+topic: greetings
+input_type: dialogue
+speaker_labels: [Alex]
+speaker_profiles:
+  - id: Alex
+    role: student
+    gender: male
+
+---
+
+:::study-text
+[Alex]: Hello there!
+:::
+    `
+    );
+    await writeFixture(
+      tempVoiceMapPath,
+      `
+auto: true
+    `
+    );
+
+    vi.spyOn(eleven, 'getElevenClient').mockReturnValue({
+      textToSpeech: { convert: vi.fn(() => makeMockStream('audio')) },
+    } as any);
+    vi.spyOn(ffm, 'concatMp3Segments').mockImplementation(async (_segments, outFile) => {
+      await writeFile(outFile, 'mock');
+    });
+
+    const accentSpy = vi.spyOn(speakers, 'resolveSpeakerVoices');
+    await buildStudyTextMp3(tempMdPath, {
+      voiceMapPath: tempVoiceMapPath,
+      outPath: dir,
+      preview: true,
+      defaultAccent: 'british',
+    });
+
+    expect(accentSpy).toHaveBeenCalled();
+    const call = accentSpy.mock.calls[0]?.[0];
+    expect(call).toBeTruthy();
+    expect(call).toMatchObject({ defaultAccent: 'british' });
   });
 
   it('buildStudyTextMp3 creates concatenated file for dialogue', async () => {

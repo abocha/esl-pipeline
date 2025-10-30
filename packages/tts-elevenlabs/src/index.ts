@@ -25,6 +25,7 @@ type BuildStudyTextOptions = {
   outPath: string;
   preview?: boolean;
   force?: boolean;
+  defaultAccent?: string;
 };
 
 export type BuildStudyTextResult = {
@@ -73,6 +74,7 @@ export async function buildStudyTextMp3(
     voiceMap,
     catalog,
     mode: studyText.type,
+    defaultAccent: opts.defaultAccent,
   });
   const speakerVoiceMap = new Map(assignments.map(a => [a.speaker, a.voiceId]));
   const sortedAssignments = [...assignments].sort((a, b) =>

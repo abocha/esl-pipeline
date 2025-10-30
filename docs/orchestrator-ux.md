@@ -37,6 +37,8 @@ Goal: make `esl-orchestrator` the single entry point teachers use to generate an
 5. **Config Profiles**
    - Load per-student configs from `configs/students/*.json` (contains Notion IDs, voice overrides, presets).
    - CLI flag `--student anna` auto-fills `--voices`, `--preset`, `--db-id`.
+   - Built-in `Default` profile keeps sensible color defaults even when you skip picking a student; `accentPreference` (when provided) steers the voice picker toward British/American variants.
+   - `pageParentId` is still optional—only set it if you deliberately parent pages under a normal Notion page; most flows stick with the database ID alone.
 
 ## Implementation Order
 

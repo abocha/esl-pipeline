@@ -109,6 +109,17 @@ pnpm exec tsx --eval "import { syncVoices } from './packages/tts-elevenlabs/src/
 - The importer resolves the data source automatically when passed `--db-id/--data-source` or `--data-source-id`.
 - The `--interactive` wizard defaults to `NOTION_DB_ID` when no student profile is chosen, and you can override it inline.
 
+### Student Profiles & Accent Defaults
+
+- `configs/students/default.json` ships with the repo and is loaded automatically even if you skip the student prompt. It keeps homework pointed at your primary database and applies the `b1-default` color preset without forcing a voice accent.
+- Create additional files in `configs/students/` when a learner needs different defaults (e.g., a British narrator). Fields you can set:
+  - `dbId`: preferred Notion database for that student.
+  - `colorPreset`: heading/toggle preset to apply after import.
+  - `accentPreference`: optional baseline accent sent to the ElevenLabs selector when the Markdown doesn’t specify one.
+  - `voices`: optional explicit ElevenLabs voice IDs per speaker if you don’t want the auto picker.
+  - `pageParentId`: reserved for advanced setups where you want to nest the assignment under a specific Notion page instead of the database root. Most tutors can leave this `null`; the pipeline still relies on the database to manage properties.
+- Profiles are optional. If you run `esl-orchestrator` without `--student`, the default profile still fills in preset/accent defaults so you can stay hands-off. Custom profiles only come into play when you need a tailored voice or color scheme.
+
 ---
 
 ## Important Commands

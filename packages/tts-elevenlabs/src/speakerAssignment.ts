@@ -93,6 +93,7 @@ export async function resolveSpeakerVoices(opts: {
   voiceMap: VoiceMapConfig;
   catalog: VoiceCatalog;
   mode: 'monologue' | 'dialogue';
+  defaultAccent?: string;
 }): Promise<SpeakerVoiceAssignment[]> {
   const assignments: SpeakerVoiceAssignment[] = [];
   const usedVoices = new Set<string>();
@@ -100,6 +101,10 @@ export async function resolveSpeakerVoices(opts: {
   const autoToken = (voiceMap.auto as unknown) ?? true;
   const autoEnabled = !(autoToken === false || autoToken === 'false');
   const defaultToken = coerceVoiceToken(voiceMap.default);
+  const fallbackAccent =
+    typeof opts.defaultAccent === 'string'
+      ? opts.defaultAccent.trim().toLowerCase() || undefined
+      : undefined;
 
   for (const speaker of opts.speakers) {
     const profile = findProfile(opts.profiles, speaker);
@@ -141,6 +146,11 @@ export async function resolveSpeakerVoices(opts: {
           : normalizedSpeaker.includes('teacher')
             ? 'teacher'
             : ROLE_FALLBACK_BY_MODE[opts.mode]);
+      const profileAccent =
+        typeof profile?.accent === 'string' && profile.accent.trim().length > 0
+          ? profile.accent.trim().toLowerCase()
+          : undefined;
+      const accentPreference = profileAccent ?? fallbackAccent;
       const meta: SpeakerMeta = {
         gender: profile?.gender,
         role: inferredRole,
@@ -148,7 +158,7 @@ export async function resolveSpeakerVoices(opts: {
           profile?.age && profile.age !== 'universal'
             ? (profile.age as SpeakerMeta['age'])
             : undefined,
-        accent: profile?.accent,
+        accent: accentPreference,
         style: profile?.style,
       };
       const profileGender = profile?.gender;
