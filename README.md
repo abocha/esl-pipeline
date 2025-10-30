@@ -1,106 +1,66 @@
-# ESL Pipeline Monorepo
+# ESL Pipeline · Orchestrator & Pipeline API
 
-Automates the ESL homework flow end-to-end:
+This repository powers the ESL homework pipeline end-to-end. It can be used either as:
 
-1. **Validate** Markdown exported from the lesson authoring prompt.
-2. **Import** the assignment into Notion (with heading styling).
-3. **Generate** study-text audio with ElevenLabs and upload to S3.
-4. **Attach** the audio file back to the Notion page.
+1. A **CLI** (`esl`) that validates Markdown, imports pages into Notion, generates ElevenLabs audio, uploads to S3, and attaches the audio to the page.
+2. A **programmatic pipeline** (`createPipeline`) you can embed in your own service or job runner.
 
-All functionality lives in pnpm workspaces under `packages/`.
-
----
-
-## At a Glance
-
-| Package                          | Responsibility                                                                    | CLI                            |
-| -------------------------------- | --------------------------------------------------------------------------------- | ------------------------------ |
-| `@esl-pipeline/md-validator`     | Validates Markdown frontmatter, section order, study-text rules                   | `md-validate`                  |
-| `@esl-pipeline/md-extractor`     | Pulls structured data (study text, answer key, etc.) from Markdown                | —                              |
-| `@esl-pipeline/notion-importer`  | Creates/updates Notion pages from validated Markdown with full rich-text fidelity | `notion-importer`              |
-| `@esl-pipeline/notion-colorizer` | Applies heading color presets in Notion                                           | `notion-colorizer`             |
-| `@esl-pipeline/tts-elevenlabs`   | Generates MP3 from study text via ElevenLabs                                      | `tts-elevenlabs`, `tts-voices` |
-| `@esl-pipeline/storage-uploader` | Uploads generated audio to S3                                                     | `storage-uploader`             |
-| `@esl-pipeline/notion-add-audio` | Places the study-text audio block above the toggle (add/replace)                  | —                              |
-| `@esl-pipeline/orchestrator`     | “One command” pipeline composition                                                | `esl`                         |
+> **Runtime requirements**
+> - Node **24.10.0** or newer (enforced by `engines` and CI).
+> - `pnpm` 8+ (use `corepack enable`).
+> - ffmpeg available on PATH or supplied via `FFMPEG_PATH`.
 
 ---
 
-## What's New in v1.0.0
+## Quick Start (CLI)
 
-- **Markdown → Notion fidelity.** Bold, italic, inline code (rendered in red), and strike-through now map directly to Notion annotations. Nested bullet hierarchies, indented paragraphs, and headings inside toggles survive the import, while YAML frontmatter is automatically stripped.
-- **Smarter toggles.** Toggle bodies reuse the full Markdown parser, so inner `###` headings get colored by the Notion preset and inner lists stay nested. Toggle titles themselves are tinted without recoloring the content.
-- **Audio placement.** ElevenLabs audio blocks are inserted as siblings immediately above the `study-text` toggle. Existing audio is replaced safely when `--redo-tts` / `--replace` is requested; otherwise it is left untouched.
-- **Release discipline.** The repo ships with a canonical publishing checklist and changelog so future tags can be cut repeatably (`docs/publishing.md`, `CHANGELOG.md`).
-
-These upgrades land together with the interactive `esl --interactive` wizard, manifest-driven reruns, and JSON logging added over the last development cycle.
-
----
-
-## Requirements
-
-- Node.js 24.10.0 or newer (use `nvm use` if available)
-- pnpm 8+
-- ffmpeg available on `PATH` (required for MP3 stitching; we no longer vendor binaries)
-- Access to:
-  - Notion Integration token
-  - ElevenLabs API key
-  - AWS IAM credentials for the target S3 bucket
-
----
-
-## Quick Start
+Install dependencies and copy the env template:
 
 ```bash
 pnpm install
 cp .env.example .env
-# populate .env with Notion, ElevenLabs, and AWS credentials
-
-pnpm build           # type-check and compile all packages
-pnpm test            # run all vitest suites
-pnpm lint            # optional: verify style rules
+# fill in NOTION_TOKEN, ELEVENLABS_API_KEY, AWS_* credentials
 ```
 
-To process an assignment end-to-end (dry-run):
+Run the interactive workflow:
 
 ```bash
 pnpm esl --interactive
 ```
 
-The wizard now opens with a quick menu: pick `Start` to launch with sane defaults (only choose the Markdown file), or jump into `Settings`/`Select preset` to tweak individual flags. Use `Saved defaults…` to store your manual setup in `configs/wizard.defaults.json`; anything coming from `.env` is labelled in the summary so you know what still needs customising. When you browse manually, the file picker supports tab-style completion for directories and only suggests `.md` files, so pointing at lessons is fast. It still suggests markdown files, student profiles, presets, Notion database (defaulting to `NOTION_DB_ID`), ElevenLabs settings, and upload options. Once you’re happy, re-run without `--dry-run` when you’re ready to publish. Prefer a non-interactive run? pass the equivalent flags manually (see below).
-
-### Run the published CLI with `npx`
+Or run non-interactively:
 
 ```bash
-npx @esl-pipeline/orchestrator new-assignment \
-  --md ./lessons/mission.md \
+pnpm esl --md ./lessons/mission.md \
   --preset b1-default \
   --with-tts \
   --upload s3
 ```
 
-The package exposes the `esl` binary, so follow-up commands look the same:
+Other commands:
 
 ```bash
-esl status --md ./lessons/mission.md --json
-esl rerun --md ./lessons/mission.md --steps tts,upload --upload s3
-esl select --file --ext .md
-esl --version
+pnpm esl status --md ./lessons/mission.md
+pnpm esl rerun --md ./lessons/mission.md --steps upload,add-audio --upload s3
+pnpm esl select --file --ext .md
+pnpm esl --version
 ```
 
-Copy `.env.example` into your working directory (or export the equivalent variables) so Notion, ElevenLabs, and AWS credentials are available at runtime. ffmpeg must be installed separately; run `brew install ffmpeg`, `sudo apt-get install ffmpeg`, or `choco install ffmpeg` depending on your platform, or point `FFMPEG_PATH` at a custom install.
+Zero-install usage (downloads the package on demand):
 
-## Programmatic API
+```bash
+npx @esl-pipeline/orchestrator esl --interactive
+```
 
-Prefer to orchestrate lessons from your own service? The package now exposes a small API that mirrors the CLI defaults while remaining easy to integrate.
+---
+
+## Programmatic Usage
 
 ```ts
 import { createPipeline, loadEnvFiles } from '@esl-pipeline/orchestrator';
 
-// Optional convenience helper – loads .env (and additional files) into process.env.
-loadEnvFiles({ files: ['.env'] });
+loadEnvFiles(); // loads .env and merges into process.env
 
-// Resolve config paths (presets, voices, students, wizard defaults) and share them across requests.
 const pipeline = createPipeline({ cwd: process.cwd() });
 
 const result = await pipeline.newAssignment({
@@ -113,147 +73,114 @@ const result = await pipeline.newAssignment({
 console.log(result.steps, result.manifestPath);
 ```
 
-- `pipeline.defaults` exposes the resolved paths for presets, voices, and output directories so you can reuse them when constructing flags for subsequent runs.
-- `pipeline.configPaths` exposes the underlying directories (`presetsPath`, `voicesPath`, `studentsDir`, and `wizardDefaultsPath`) for wiring custom UI or editing student presets.
-- `pipeline.rerunAssignment(...)` and `pipeline.getAssignmentStatus(...)` wrap the existing CLI commands with the same behaviour, automatically injecting default paths when you leave them undefined.
-- `resolveConfigPaths(...)`, `resolveManifestPath(...)`, and `loadEnvFiles(...)` are exported individually for bespoke setups (e.g., feeding the manifest path into a build system or loading environment variables into an isolated object instead of `process.env`).
+Useful exports:
 
-The exported types (`CreatePipelineOptions`, `PipelineNewAssignmentOptions`, `PipelineRerunOptions`, `AssignmentManifest`, etc.) are all surfaced from the main entrypoint so TypeScript callers inherit accurate signatures without poking at build artefacts.
+- `createPipeline(options)` — builds a pipeline with configurable config/manifest providers.
+- `resolveConfigPaths(options)` — returns the resolved presets/voices/students directories.
+- `loadEnvFiles(options)` — convenience helper for loading `.env` files without mutating `process.env` (set `assignToProcess: false` to opt out).
+- `resolveManifestPath(mdPath)` — deterministic manifest location for a given Markdown file.
 
----
-
-## Environment Configuration
-
-Copy `.env.example` to `.env` and fill the values:
-
-```dotenv
-NOTION_TOKEN=secret_xxx
-NOTION_DB_ID=<default notion database id>
-STUDENTS_DB_ID=<optional students data source id>
-
-ELEVENLABS_API_KEY=<your api key>
-ELEVENLABS_MODEL_ID=eleven_multilingual_v2   # override if desired
-ELEVENLABS_OUTPUT_FORMAT=mp3_22050_32
-
-AWS_REGION=ap-southeast-1
-S3_BUCKET=esl-notion-tts
-S3_PREFIX=audio/assignments
-AWS_ACCESS_KEY_ID=AKIA...
-AWS_SECRET_ACCESS_KEY=...
-```
-
-Environment variables are consumed automatically via `dotenv`—every CLI loads `.env` on startup. (You can still `set -a && source .env` if you prefer shell-level exports.)
-
-### Voice Catalog
-
-Fetch the latest ElevenLabs voice metadata so friendly names (e.g., “Liam”) resolve automatically:
-
-```bash
-pnpm exec tsx --eval "import { syncVoices } from './packages/tts-elevenlabs/src/syncVoices.ts'; (async () => {
-  await syncVoices('configs/elevenlabs.voices.json');
-})();"
-```
-
-### Notion Targets
-
-- Database/Data Source IDs live in the environment or in per-student config files under `configs/students/`.
-- The importer resolves the data source automatically when passed `--db-id/--data-source` or `--data-source-id`.
-- The `--interactive` wizard defaults to `NOTION_DB_ID` when no student profile is chosen, and you can override it inline.
-
-### Student Profiles & Accent Defaults
-
-- `configs/students/default.json` ships with the repo and is loaded automatically even if you skip the student prompt. It keeps homework pointed at your primary database and applies the `b1-default` color preset without forcing a voice accent.
-- Create additional files in `configs/students/` when a learner needs different defaults (e.g., a British narrator). Fields you can set:
-  - `dbId`: preferred Notion database for that student.
-  - `colorPreset`: heading/toggle preset to apply after import.
-  - `accentPreference`: optional baseline accent sent to the ElevenLabs selector when the Markdown doesn’t specify one.
-  - `voices`: optional explicit ElevenLabs voice IDs per speaker if you don’t want the auto picker.
-  - `pageParentId`: reserved for advanced setups where you want to nest the assignment under a specific Notion page instead of the database root. Most tutors can leave this `null`; the pipeline still relies on the database to manage properties.
-- Profiles are optional. If you run `esl` without `--student`, the default profile still fills in preset/accent defaults so you can stay hands-off. Custom profiles only come into play when you need a tailored voice or color scheme.
+Types such as `PipelineNewAssignmentOptions`, `PipelineRerunOptions`, and `AssignmentManifest` are exported for TypeScript consumers.
 
 ---
 
-## Important Commands
+## Configuration & Secrets
 
-```bash
-# Validate Markdown before doing anything else
-pnpm md-validate ./out/anna-2025-10-21.md --strict
+| Setting              | Source / Default                        | Notes                                         |
+|----------------------|------------------------------------------|----------------------------------------------|
+| Notion token         | `NOTION_TOKEN` env variable              | Required                                      |
+| Notion DB / data source | `NOTION_DB_ID`, overrides via CLI flags | Student profiles can pin defaults            |
+| ElevenLabs API key   | `ELEVENLABS_API_KEY` env variable        | Required if `--with-tts`                     |
+| AWS credentials      | `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `AWS_REGION` | Needed for `--upload s3`                     |
+| Voices mapping       | `configs/voices.yml` (override with `--voices`) | `createPipeline` exposes resolved path       |
+| Presets              | `configs/presets.json` (override with `--presets-path`) | Pipeline resolves absolute path              |
+| Student profiles     | `configs/students/*.json`                | Optional per-student defaults                 |
+| ffmpeg               | system install or `FFMPEG_PATH`         | We do not vendor binaries                     |
 
-# Import into Notion (dry-run adds previews of properties/blocks)
-pnpm notion-importer --md ./out/anna-2025-10-21.md --db-id <ID> --dry-run
+`loadEnvFiles()` mirrors the CLI’s behaviour: it checks `.env` in the working directory and the repo root. Pass `files: [...]` to load custom locations.
 
-# Generate study-text audio only
-pnpm tts-elevenlabs --md ./out/anna-2025-10-21.md --voice-map configs/voices.yml --out ./out/audio
+---
 
-> Tip: speaker profiles in your Markdown can live either at the top of the file or inside the fenced code block generated by the LLM—`tts-elevenlabs` now reads both.
+## Project Layout
 
-# Upload an MP3 to S3
-pnpm storage-uploader --file ./out/audio/file.mp3 --prefix audio/assignments --public-read
-
-# Inspect or rerun orchestrator steps
-pnpm esl status --md ./fixtures/sample-assignment.md
-pnpm esl rerun --md ./fixtures/sample-assignment.md --steps upload,add-audio --upload s3
-
-# Guided run with interactive wizard & JSON logs
-pnpm esl --interactive --with-tts --upload s3 --json
+```
+packages/
+  orchestrator/          # CLI + pipeline (publishable)
+  md-validator/          # Markdown linting
+  md-extractor/          # Study text extraction
+  notion-importer/       # Notion page creation
+  notion-colorizer/      # Heading presets
+  tts-elevenlabs/        # ElevenLabs integration (system ffmpeg)
+  storage-uploader/      # S3 uploads
+  notion-add-audio/      # Attach audio blocks
+configs/                 # Sample presets, voices, students
+docs/groundwork-for-backend.md # Backend scaffolding roadmap
+AGENTS.md                # Maintainer guide (v2)
 ```
 
-Use `--skip-import`, `--skip-tts`, `--skip-upload`, and `--redo-tts` to reuse assets from the existing manifest when iterating.
-
-Every successful TTS stage now prints a `Voices` line that maps each speaker to the resolved ElevenLabs voice (including gender, source, and accent), making unexpected picks simple to audit.
-
-If your S3 bucket is private, the plain `https://bucket.s3.amazonaws.com/...` URL will 403. Either pass `--public-read` (and ensure the bucket allows ACLs / public access) or configure a CloudFront/static-hosting policy that grants read access to uploaded objects.
-
-Check each package README for additional flags (e.g., Notion color presets).
-
-### Release Checklist
-
-Before publishing a new version, follow the steps in [`docs/publishing.md`](docs/publishing.md) to ensure lint/build/test pass, voice catalogs are in sync, and package metadata is bumped correctly.
+All packages target ESM (`"type": "module"`), and CLI builds run through `tsup` + `tsc` for declarations.
 
 ---
 
 ## Development Workflow
 
-| Task                   | Command             |
-| ---------------------- | ------------------- |
-| Type check & build     | `pnpm build`        |
-| Unit/Integration tests | `pnpm test`         |
-| Watch tests            | `pnpm test:watch`   |
-| Lint                   | `pnpm lint`         |
-| Prettier check         | `pnpm format`       |
-| Auto-format            | `pnpm format:write` |
+```bash
+# Type-check & build everything
+pnpm build
 
-### Testing Philosophy
+# Lint (ESLint + Prettier checks)
+pnpm lint
 
-- Each package owns its own Vitest suite (`packages/<name>/tests`).
-- Unit tests mock external APIs (Notion, S3, ElevenLabs).
-- The orchestrator suite exercises the end-to-end composition via stubs.
+# Test all packages (Vitest)
+pnpm test
+
+# Orchestrator-only smoke tests
+pnpm smoke
+
+# Publish orchestrator (from packages/orchestrator)
+npm publish --access public
+```
+
+CI (`.github/workflows/ci.yml`) runs on Node 24.10.0 and executes build, lint, tests, and the smoke suite.
 
 ---
 
-## Project Structure
+## Backend Groundwork
 
-```
-configs/                Shared presets (voices, color schemes, students)
-packages/
-  <pkg>/src/            TypeScript sources
-  <pkg>/tests/          Vitest suites
-  <pkg>/bin/            CLI entrypoints compiled to dist/bin
-```
+The orchestrator is now consumable from other Node projects, but we’re actively adding scaffolding to make it backend-ready: pluggable storage adapters, observability hooks, Docker image, etc. See [`docs/groundwork-for-backend.md`](docs/groundwork-for-backend.md) for the detailed plan and progress.
 
-`tsconfig.base.json` defines the shared TypeScript settings. Each package references it via `extends`.
+Key takeaways:
+- `createPipeline` will become the primary integration point for API/queue services.
+- Logger/metrics/tracing interfaces will keep business logic agnostic of the host environment.
+- Manifest/config storage is being abstracted so you can swap JSON files for S3 or a database without touching the pipeline core.
 
 ---
 
-## Roadmap & UX
+## Troubleshooting
 
-Current focus is on polishing the 1.0 workflow (Markdown fidelity, audio placement, manifest-powered reruns). Next up:
+- **`ffmpeg` not found** — install via `brew install ffmpeg`, `sudo apt install ffmpeg`, or `choco install ffmpeg`, then ensure it’s on PATH or set `FFMPEG_PATH`.
+- **Validation fails** — run `pnpm md-validate <file> --strict` to inspect exact Markdown errors. The validator enforces flush-left `:::study-text` blocks and the canonical ESL section order.
+- **Environment missing** — CLI warns when tokens/keys are not set. Use `loadEnvFiles({ assignToProcess: false })` if you want to load env files without polluting `process.env`.
+- **npx command fails** — make sure you invoke the `esl` binary: `npx @esl-pipeline/orchestrator esl --help`.
+- **Node version mismatch** — ensure your environment is running Node ≥ 24.10.0 (`node --version`).
 
-- Student profile presets (`configs/students/*`) and richer interactive previews.
-- Release automation (version bump tooling, GitHub Release templates, npm packaging decisions).
-- Broader smoke coverage that exercises mocked Notion/S3/ElevenLabs fixtures.
-- Security documentation for IAM scopes, key rotation, and voice catalog refresh cadence.
-- Per-package READMEs that enumerate CLI flags and examples.
-- Voice “diff” tooling that highlights when manifests change selected speakers or voice metadata between runs.
+---
 
-Contributions and feedback are welcome—file an issue or PR with context and reproduction steps.
+## Contributing / Release Checklist
+
+1. Work against Node 24.10.0 (`nvm use 24.10.0` or `.tool-versions`).
+2. Run `pnpm lint`, `pnpm test`, `pnpm --filter @esl-pipeline/orchestrator build`.
+3. Update `AGENTS.md` and `docs/groundwork-for-backend.md` if behaviour changes.
+4. Bump `packages/orchestrator/package.json` version, update `CHANGELOG.md`.
+5. Publish: `npm publish --access public` (from `packages/orchestrator`).
+6. Tag release: `git tag vX.Y.Z && git push origin vX.Y.Z`.
+
+---
+
+## Community & Support
+
+At the moment this is a two-person project. Questions / ideas / issues:
+- Open GitHub issues or pull requests.
+- Keep discussions grounded in the Node 24 + ffmpeg + npm publish workflow described above.
+
+Happy shipping! 🎧📝🎯
