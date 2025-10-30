@@ -38,7 +38,9 @@ This repo houses the ESL homework pipeline. Below is everything the next agent s
 
 ## 5. Recent Changes (context for follow-up)
 
-- Interactive CLI wizard shipped (`--interactive`) with reusable manifest defaults and guardrails around skip flags.
+- Interactive CLI wizard now launches with a Start/Settings/Saved-defaults menu, reusable manifest defaults, and guardrails around skip flags.
+- Manual Markdown selection now uses an Enquirer-based path picker (dirs/files) shared with `esl-orchestrator select`, powered by `globby/find-up` and respecting the repo ignore list.
+- Validator now enforces that `:::study-text` and its closing `:::` are flush-left (no indentation) so Notion importer will reliably generate the study-text toggle.
 - Structured logging/summary output landed; `--json` emits machine-friendly transcripts.
 - Added status/rerun APIs and CLI commands in orchestrator; manifests now power incremental runs.
 - TTS sanitizes Markdown emphasis before hitting ElevenLabs (no more pauses on `**bold**`).

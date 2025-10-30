@@ -40,18 +40,18 @@
     "voices:sync": "node dist/bin/voices.js"
   },
   "dependencies": {
-    "@elevenlabs/elevenlabs-js": "^2.20.1",
+    "@elevenlabs/elevenlabs-js": "^2.21.0",
     "@esl-pipeline/ffmpeg-binary": "workspace:*",
     "@esl-pipeline/md-extractor": "workspace:*",
-    "js-yaml": "^4.1.0",
-    "commander": "^14.0.2"
+    "commander": "^14.0.2",
+    "js-yaml": "^4.1.0"
   },
   "devDependencies": {
     "@types/js-yaml": "^4.0.9",
-    "@types/node": "^24.9.1",
+    "@types/node": "^24.9.2",
     "rimraf": "^6.0.1",
     "tsx": "^4.20.6",
     "typescript": "^5.9.3",
-    "vitest": "^4.0.4"
+    "vitest": "^4.0.5"
   }
 }

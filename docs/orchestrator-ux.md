@@ -11,7 +11,7 @@ Goal: make `esl-orchestrator` the single entry point teachers use to generate an
 
 ## Recently Shipped
 
-- `--interactive` wizard now walks through md selection, student/preset defaults, TTS/upload toggles.
+- `--interactive` wizard now opens with a menu (Start/Settings/Preset) and supports `Saved defaults…` to load/store manual presets under `configs/wizard.defaults.json`, plus an Enquirer-backed fuzzy picker for Markdown selection (shares filters with `esl-orchestrator select`).
 - Step-control flags `--skip-import`, `--skip-tts`, `--skip-upload`, and `--redo-tts` support incremental reruns.
 - `--json` flag produces structured logs with event history; default console output shows summaries.
 - TTS stage summaries list the speaker → voice mapping (with gender/source tags) so audio issues are easy to spot, and ffmpeg output stays quiet unless synthesis fails.

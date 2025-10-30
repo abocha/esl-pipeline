@@ -81,28 +81,58 @@ function textFromHeading(h: Heading): string {
   return normalizeHeadingText(txt);
 }
 
-function findStudyTextRegion(
-  source: string
-): {
-  body: string;
-  start: number;
-  end: number;
-  inlineAfterMarker: string;
-  markerLine: number;
-} | null {
-  const startIdx = source.indexOf(':::study-text');
-  if (startIdx === -1) return null;
-  const endIdx = source.indexOf(':::', startIdx + ':::study-text'.length);
-  if (endIdx === -1) return null;
-  const markerEnd = startIdx + ':::study-text'.length;
-  const lineEndIdxRaw = source.indexOf('\n', markerEnd);
-  const lineEndIdx = lineEndIdxRaw === -1 ? endIdx : Math.min(lineEndIdxRaw, endIdx);
-  const inlineAfterMarker = source.slice(markerEnd, lineEndIdx);
-  const body = source.slice(markerEnd, endIdx).trim();
-  const markerLine = source
-    .slice(0, startIdx)
-    .split(/\r?\n/).length; /* 1-based line number for error messaging */
-  return { body, start: startIdx, end: endIdx + 3, inlineAfterMarker, markerLine };
+type StudyTextSearch =
+  | { status: 'missing' }
+  | { status: 'error'; message: string }
+  | { status: 'ok'; body: string; markerLine: number; inlineAfterMarker: string };
+
+function findStudyTextRegion(source: string): StudyTextSearch {
+  const lines = source.split(/\r?\n/);
+  for (let i = 0; i < lines.length; i++) {
+    const raw = lines[i] ?? '';
+    const exactMatch = /^:::study-text\b(.*)$/i.exec(raw);
+    if (exactMatch) {
+      const inlineAfterMarker = exactMatch[1] ?? '';
+      const inner: string[] = [];
+      let j = i + 1;
+      while (j < lines.length) {
+        const candidate = lines[j];
+        if (candidate === undefined) break;
+        if (/^\s+:::\s*$/.test(candidate)) {
+          return {
+            status: 'error',
+            message: `Line ${j + 1}: study-text closing marker must be ":::" with no leading spaces.`,
+          };
+        }
+        if (/^:::\s*$/.test(candidate)) break;
+        inner.push(candidate);
+        j++;
+      }
+      if (j >= lines.length || !/^:::\s*$/.test(lines[j] ?? '')) {
+        return {
+          status: 'error',
+          message: `study-text block starting at line ${i + 1} is missing a closing ":::" on its own line.`,
+        };
+      }
+      const body = inner.join('\n').trim();
+      return { status: 'ok', body, markerLine: i + 1, inlineAfterMarker };
+    }
+
+    const containsMarker = raw.toLowerCase().includes(':::study-text');
+    if (containsMarker) {
+      if (/^\s+:::study-text\b/i.test(raw)) {
+        return {
+          status: 'error',
+          message: `Line ${i + 1}: study-text marker must start at column 1 with ":::study-text".`,
+        };
+      }
+      return {
+        status: 'error',
+        message: `Line ${i + 1}: malformed study-text marker. Use ":::study-text" (case-insensitive) on its own line.`,
+      };
+    }
+  }
+  return { status: 'missing' };
 }
 
 function parseMarkdownAst(md: string): Root {
@@ -185,14 +215,12 @@ export async function validateMarkdownFile(
     errors.push('Missing marker: ":::toggle-heading Teacher’s Follow-up Plan"');
 
   const study = findStudyTextRegion(fm.content);
-  if (!study) {
+  if (study.status === 'missing') {
     errors.push('Missing ":::study-text ... :::" block.');
+  } else if (study.status === 'error') {
+    errors.push(study.message);
   } else {
-    let studyBody = study.body;
-    if (study.inlineAfterMarker.trim().length > 0) {
-      const newline = studyBody.indexOf('\n');
-      studyBody = newline === -1 ? '' : studyBody.slice(newline + 1).trim();
-    }
+    const studyBody = study.body;
 
     // dialogue/monologue rules
     if (meta?.speaker_labels && meta.speaker_labels.length > 0) {

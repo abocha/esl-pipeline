@@ -327,6 +327,7 @@ S3_BUCKET=notion-tts
 
 - `accentPreference` nudges the ElevenLabs picker toward the requested accent whenever the Markdown doesn’t spell it out.
 - `pageParentId` is optional and only matters if you intend to file assignments under a regular Notion page instead of the database root. Most tutors can leave it `null`; the importer continues to target the database specified by `dbId`.
+- `configs/wizard.defaults.json` (created via the wizard’s “Saved defaults…” option) captures only manual settings. Environment-derived values remain annotated as `(from .env)` so you know which fields still rely on external configuration.
 
 ---
 

@@ -1,0 +1,54 @@
+{
+  "mdHash": "839670040cc87a606bbe50872ed1408168d2e4421dc93cd00e0abb5f86cb6045",
+  "pageId": "29c85d3e-01dc-8145-a4cd-f3014a27a00b",
+  "pageUrl": "https://www.notion.so/Homework-Assignment-Hacking-Your-Brain-29c85d3e01dc8145a4cdf3014a27a00b",
+  "audio": {
+    "path": "/home/abocha/code/esl-pipeline/c1981af1eb864b276c94c4a0de7557b7494da66400db4228a3933ddf22a2606c.mp3",
+    "hash": "c1981af1eb864b276c94c4a0de7557b7494da66400db4228a3933ddf22a2606c",
+    "voices": [
+      {
+        "speaker": "Leila",
+        "voiceId": "cgSgspJ2msm6clMCkdW9",
+        "source": "auto",
+        "score": 111,
+        "voiceName": "Jessica",
+        "gender": "female",
+        "accent": "american",
+        "useCase": "conversational"
+      },
+      {
+        "speaker": "Martin",
+        "voiceId": "bIHbv24MWmeRgasZH58o",
+        "source": "auto",
+        "score": 103,
+        "voiceName": "Will",
+        "gender": "male",
+        "accent": "american",
+        "useCase": "conversational"
+      },
+      {
+        "speaker": "Chloe",
+        "voiceId": "ZF6FPAbjXT4488VcRRnw",
+        "source": "auto",
+        "score": 83,
+        "voiceName": "Amelia",
+        "gender": "female",
+        "accent": "british",
+        "useCase": "narrative_story"
+      },
+      {
+        "speaker": "Pablo",
+        "voiceId": "TX3LPaxmHKxFdv7VOQHJ",
+        "source": "auto",
+        "score": 106,
+        "voiceName": "Liam",
+        "gender": "male",
+        "accent": "american",
+        "useCase": "social_media"
+      }
+    ],
+    "url": "https://esl-notion-tts.s3.ap-southeast-1.amazonaws.com/audio/assignments/c1981af1eb864b276c94c4a0de7557b7494da66400db4228a3933ddf22a2606c.mp3"
+  },
+  "preset": "b1-default",
+  "timestamp": "2025-10-30T13:09:32.394Z"
+}

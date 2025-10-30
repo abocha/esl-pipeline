@@ -1,10 +1,13 @@
 #!/usr/bin/env node
 import { config as loadEnv } from 'dotenv';
 import { existsSync } from 'node:fs';
-import { dirname, resolve } from 'node:path';
+import { stat } from 'node:fs/promises';
+import { dirname, resolve, relative } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import process from 'node:process';
 import ora from 'ora';
+import { Command, CommanderError, InvalidOptionArgumentError } from 'commander';
+import pc from 'picocolors';
 import {
   getAssignmentStatus,
   newAssignment,
@@ -26,6 +29,16 @@ import {
   DEFAULT_STUDENT_NAME,
   type StudentProfile,
 } from '../src/config.js';
+import {
+  pickDirectory,
+  pickFile,
+  resolveDirectoryCandidates,
+  resolveFileCandidates,
+  resolveSearchRoot,
+  PathPickerCancelledError,
+  type DirOptions,
+  type FileOptions,
+} from '../src/pathPicker.js';
 
 const moduleDir = dirname(fileURLToPath(import.meta.url));
 loadEnv();
@@ -91,7 +104,18 @@ const usage = (): never => {
       --json                    Emit structured JSON log output
 
   esl-orchestrator status --md <file.md> [--json]                  
-  esl-orchestrator rerun --md <file.md> [--steps tts,upload,add-audio] [options]`);
+  esl-orchestrator rerun --md <file.md> [--steps tts,upload,add-audio] [options]
+
+  esl-orchestrator select [path] [--dir|--file] [picker options]
+      --suffix <.d>             (dir) Require directory name to end with suffix
+      --contains <f1,f2>        (dir) Require files to exist inside the folder
+      --ext <.md,.mp3>          (file) Allowlisted extensions
+      --glob <pattern>          (file) Glob pattern(s) to match
+      --root <git|cwd|pkg>      Root detection strategy (default git)
+      --absolute                Show absolute paths in the prompt/output
+      --include-dot             Include dot-prefixed entries
+      --limit <n>               Limit visible suggestions
+      --verbose                 Print root + relative metadata with result`);
   process.exit(1);
 };
 
@@ -152,6 +176,254 @@ const parseRunFlags = (args: string[]): RunFlags => ({
   redoTts: hasFlag(args, '--redo-tts'),
   interactive: hasFlag(args, '--interactive'),
 });
+
+const ROOT_CHOICES = ['git', 'cwd', 'pkg'] as const;
+type RootChoice = (typeof ROOT_CHOICES)[number];
+
+const collectCsv = (value: string, previous: string[] = []): string[] => {
+  const parsed = value
+    .split(',')
+    .map(part => part.trim())
+    .filter(Boolean);
+  return Array.from(new Set([...previous, ...parsed]));
+};
+
+const parseLimitOption = (value: string): number => {
+  const parsed = Number.parseInt(value, 10);
+  if (!Number.isFinite(parsed) || parsed <= 0) {
+    throw new InvalidOptionArgumentError('Limit must be a positive integer.');
+  }
+  return parsed;
+};
+
+const exitWithError = (message: string): never => {
+  console.error(pc.red(message));
+  process.exit(1);
+};
+
+async function handleSelect(args: string[]): Promise<void> {
+  const program = new Command('select')
+    .description('Interactively pick a file or directory path with fuzzy filtering.')
+    .argument('[path]', 'Validate an existing path instead of launching the picker')
+    .option('--dir', 'Restrict selection to directories')
+    .option('--file', 'Restrict selection to files (default)')
+    .option('--suffix <suffix>', 'When selecting directories, require the name to end with suffix')
+    .option(
+      '--contains <files...>',
+      'When selecting directories, require specific file(s) to exist inside',
+      collectCsv,
+      []
+    )
+    .option(
+      '--ext <extensions...>',
+      'Comma-separated list of allowed file extensions (e.g. .md,.mp3)',
+      collectCsv,
+      []
+    )
+    .option(
+      '--glob <patterns...>',
+      'One or more glob patterns to match files (overrides --ext)',
+      collectCsv,
+      []
+    )
+    .option(
+      '--root <strategy>',
+      'Root detection strategy (git|cwd|pkg)',
+      value => {
+        if (!ROOT_CHOICES.includes(value as RootChoice)) {
+          throw new InvalidOptionArgumentError(
+            `Unknown root strategy "${value}". Use one of: ${ROOT_CHOICES.join(', ')}`
+          );
+        }
+        return value as RootChoice;
+      },
+      'git' satisfies RootChoice
+    )
+    .option('--absolute', 'Display absolute paths in the picker', false)
+    .option('--limit <n>', 'Visible suggestions limit', parseLimitOption)
+    .option('--include-dot', 'Include dot-prefixed files or directories', false)
+    .option('--verbose', 'Print additional metadata alongside the selected path', false);
+
+  program.exitOverride();
+
+  let parsed: Command;
+  try {
+    parsed = await program.parseAsync(['node', 'cli.js', ...args], { from: 'node' });
+  } catch (error) {
+    if (error instanceof CommanderError) {
+      const message = error.message.trim();
+      if (message) console.error(pc.red(message));
+      process.exit(error.exitCode);
+    }
+    throw error;
+  }
+
+  const opts = parsed.opts<{
+    dir?: boolean;
+    file?: boolean;
+    suffix?: string;
+    contains: string[];
+    ext: string[];
+    glob: string[];
+    root: RootChoice;
+    absolute?: boolean;
+    limit?: number;
+    includeDot?: boolean;
+    verbose?: boolean;
+  }>();
+  const [pathArg] = parsed.args as string[];
+
+  const wantsDir = Boolean(opts.dir);
+  const wantsFile = Boolean(opts.file);
+  if (wantsDir && wantsFile) {
+    exitWithError('Please use either --dir or --file, not both.');
+  }
+
+  const mode: 'dir' | 'file' = wantsDir ? 'dir' : 'file';
+  const containsList = Array.from(new Set(opts.contains ?? []));
+  const extList = Array.from(new Set(opts.ext ?? []));
+  const globList = Array.from(new Set(opts.glob ?? []));
+
+  if (mode === 'dir') {
+    if (extList.length) exitWithError('--ext can only be used with --file');
+    if (globList.length) exitWithError('--glob can only be used with --file');
+  } else {
+    if (opts.suffix) exitWithError('--suffix can only be used with --dir');
+    if (containsList.length) exitWithError('--contains can only be used with --dir');
+  }
+
+  const sharedOptions = {
+    cwd: process.cwd(),
+    showAbsolute: Boolean(opts.absolute),
+    limit: opts.limit,
+    rootStrategy: opts.root,
+  } as const;
+
+  if (mode === 'dir') {
+    const dirOptions: DirOptions = {
+      ...sharedOptions,
+      mode: containsList.length ? 'contains' : opts.suffix ? 'suffix' : 'any',
+      suffix: opts.suffix,
+      contains: containsList,
+      includeDotDirs: Boolean(opts.includeDot),
+      message: 'Select a directory',
+    };
+    await runDirectorySelection(dirOptions, pathArg, Boolean(opts.verbose));
+    return;
+  }
+
+  const fileOptions: FileOptions = {
+    ...sharedOptions,
+    glob: globList.length ? globList : undefined,
+    extensions: globList.length ? undefined : extList,
+    includeDotFiles: Boolean(opts.includeDot),
+    message: 'Select a file',
+  };
+  await runFileSelection(fileOptions, pathArg, Boolean(opts.verbose));
+}
+
+async function runDirectorySelection(
+  options: DirOptions,
+  providedPath: string | undefined,
+  verbose: boolean
+): Promise<void> {
+  const lookupOptions = { ...(options as DirOptions) };
+  delete (lookupOptions as Partial<DirOptions>).message;
+
+  if (providedPath) {
+    const absolute = resolve(process.cwd(), providedPath);
+    try {
+      const stats = await stat(absolute);
+      if (!stats.isDirectory()) {
+        exitWithError(`Not a directory: ${absolute}`);
+      }
+    } catch {
+      exitWithError(`Directory not found: ${absolute}`);
+    }
+
+    const candidates = await resolveDirectoryCandidates(lookupOptions);
+    const match = candidates.find(candidate => candidate.absolute === absolute);
+    if (!match) {
+      exitWithError('Provided directory does not satisfy the current filters.');
+      return;
+    }
+    await outputSelection(match.absolute, verbose, lookupOptions);
+    return;
+  }
+
+  try {
+    const selected = await pickDirectory(options);
+    await outputSelection(selected, verbose, lookupOptions);
+  } catch (error) {
+    if (error instanceof PathPickerCancelledError) {
+      process.exit(1);
+    }
+    throw error;
+  }
+}
+
+async function runFileSelection(
+  options: FileOptions,
+  providedPath: string | undefined,
+  verbose: boolean
+): Promise<void> {
+  const lookupOptions = { ...(options as FileOptions) };
+  delete (lookupOptions as Partial<FileOptions>).message;
+
+  if (providedPath) {
+    const absolute = resolve(process.cwd(), providedPath);
+    try {
+      const stats = await stat(absolute);
+      if (!stats.isFile()) {
+        exitWithError(`Not a file: ${absolute}`);
+      }
+    } catch {
+      exitWithError(`File not found: ${absolute}`);
+    }
+
+    const candidates = await resolveFileCandidates(lookupOptions);
+    const match = candidates.find(candidate => candidate.absolute === absolute);
+    if (!match) {
+      exitWithError('Provided file does not satisfy the current filters.');
+      return;
+    }
+    await outputSelection(match.absolute, verbose, lookupOptions);
+    return;
+  }
+
+  try {
+    const selected = await pickFile(options);
+    await outputSelection(selected, verbose, lookupOptions);
+  } catch (error) {
+    if (error instanceof PathPickerCancelledError) {
+      process.exit(1);
+    }
+    throw error;
+  }
+}
+
+async function outputSelection(
+  absolutePath: string,
+  verbose: boolean,
+  options: { rootStrategy?: RootChoice; cwd?: string }
+): Promise<void> {
+  if (verbose) {
+    const root = await resolveSearchRoot({
+      rootStrategy: options.rootStrategy,
+      cwd: options.cwd,
+    });
+    const rel = relative(root, absolutePath);
+    console.log(pc.dim(`Root: ${root}`));
+    if (rel && !rel.startsWith('..')) {
+      console.log(pc.dim(`Relative: ${rel}`));
+    } else if (!rel || rel === '.') {
+      console.log(pc.dim('Relative: .'));
+    } else {
+      console.log(pc.dim(`Relative: (outside root) ${rel}`));
+    }
+  }
+  console.log(absolutePath);
+}
 
 const command = rawArgs[0] && !rawArgs[0].startsWith('--') ? rawArgs[0] : null;
 const jsonOutput = hasFlag(rawArgs, '--json');
@@ -548,6 +820,11 @@ const printWizardSummary = (
 
 async function main(): Promise<void> {
   try {
+    if (command === 'select') {
+      await handleSelect(rawArgs.slice(1));
+      return;
+    }
+
     if (command === 'status') {
       await handleStatus(rawArgs.slice(1));
       return;

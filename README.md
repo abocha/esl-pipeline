@@ -67,7 +67,7 @@ To process an assignment end-to-end (dry-run):
 pnpm esl-orchestrator --interactive
 ```
 
-The wizard suggests markdown files, student profiles, presets, Notion database (defaulting to `NOTION_DB_ID`), ElevenLabs settings, and upload options. Accept the defaults or override fields inline, then re-run without `--dry-run` when you’re ready to publish. If you prefer a non-interactive run, pass the equivalent flags manually (see below).
+The wizard now opens with a quick menu: pick `Start` to launch with sane defaults (only choose the Markdown file), or jump into `Settings`/`Select preset` to tweak individual flags. Use `Saved defaults…` to store your manual setup in `configs/wizard.defaults.json`; anything coming from `.env` is labelled in the summary so you know what still needs customising. When you browse manually, the file picker supports tab-style completion for directories and only suggests `.md` files, so pointing at lessons is fast. It still suggests markdown files, student profiles, presets, Notion database (defaulting to `NOTION_DB_ID`), ElevenLabs settings, and upload options. Once you’re happy, re-run without `--dry-run` when you’re ready to publish. Prefer a non-interactive run? pass the equivalent flags manually (see below).
 
 ---
 
