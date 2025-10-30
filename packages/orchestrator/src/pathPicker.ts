@@ -1,7 +1,7 @@
 import { globby } from 'globby';
 import { findUp } from 'find-up';
 import { access, stat } from 'node:fs/promises';
-import { basename, dirname, isAbsolute, relative, resolve } from 'node:path';
+import { basename, dirname, isAbsolute, resolve } from 'node:path';
 import process from 'node:process';
 import Enquirer from 'enquirer';
 import pc from 'picocolors';
@@ -133,7 +133,9 @@ export async function pickFile(options: FileOptions = {}): Promise<string> {
   }
 }
 
-export async function resolveDirectoryCandidates(options: DirOptions = {}): Promise<PathCandidate[]> {
+export async function resolveDirectoryCandidates(
+  options: DirOptions = {}
+): Promise<PathCandidate[]> {
   const { candidates } = await createDirectoryCandidateList(options, { applyLimit: false });
   return candidates;
 }
@@ -169,14 +171,20 @@ async function createDirectoryCandidateList(
     const suffix = options.suffix;
     directories = directories.filter(entry => basename(entry).endsWith(suffix));
   } else if (mode === 'contains') {
-    const requirements = toArray(options.contains).map(value => value.trim()).filter(Boolean);
+    const requirements = toArray(options.contains)
+      .map(value => value.trim())
+      .filter(Boolean);
     if (!requirements.length) {
       throw new Error('contains mode requires at least one filename.');
     }
     directories = await filterDirectoriesByContents(directories, requirements, root);
   }
 
-  const candidates = finalizeCandidates(directories, root, behaviour.applyLimit ? limit : undefined);
+  const candidates = finalizeCandidates(
+    directories,
+    root,
+    behaviour.applyLimit ? limit : undefined
+  );
   return { candidates, root };
 }
 
@@ -199,7 +207,11 @@ async function createFileCandidateList(
     onlyFiles: true,
   });
 
-  const candidates = finalizeCandidates(uniqueSorted(files), root, behaviour.applyLimit ? limit : undefined);
+  const candidates = finalizeCandidates(
+    uniqueSorted(files),
+    root,
+    behaviour.applyLimit ? limit : undefined
+  );
   return { candidates, root };
 }
 
@@ -220,7 +232,9 @@ async function resolveRoot(strategy: RootStrategy | undefined, cwd?: string): Pr
   }
 
   if (mode === 'pkg') {
-    const pkgJson = await findUp('package.json', { cwd: start, type: 'file' }).catch(() => undefined);
+    const pkgJson = await findUp('package.json', { cwd: start, type: 'file' }).catch(
+      () => undefined
+    );
     return pkgJson ? dirname(pkgJson) : start;
   }
 
@@ -235,7 +249,9 @@ function resolveLimit(limit?: number): number {
 }
 
 function uniqueSorted(values: string[]): string[] {
-  return [...new Set(values)].sort((a, b) => a.localeCompare(b, undefined, { sensitivity: 'base' }));
+  return [...new Set(values)].sort((a, b) =>
+    a.localeCompare(b, undefined, { sensitivity: 'base' })
+  );
 }
 
 async function filterDirectoriesByContents(
@@ -341,7 +357,11 @@ function createAutoCompletePrompt(args: {
         return true;
       } catch (error) {
         const message =
-          error instanceof Error ? error.message : typeof error === 'string' ? error : String(error);
+          error instanceof Error
+            ? error.message
+            : typeof error === 'string'
+              ? error
+              : String(error);
         return message || 'Invalid selection';
       }
     },
@@ -350,7 +370,11 @@ function createAutoCompletePrompt(args: {
   return prompt;
 }
 
-function resolveInitialIndex(initial: string | undefined, candidates: PathCandidate[], root: string): number {
+function resolveInitialIndex(
+  initial: string | undefined,
+  candidates: PathCandidate[],
+  root: string
+): number {
   if (!initial) return -1;
   const absolute = isAbsolute(initial) ? resolve(initial) : resolve(root, initial);
   return candidates.findIndex(candidate => candidate.absolute === absolute);
