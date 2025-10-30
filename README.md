@@ -22,7 +22,7 @@ All functionality lives in pnpm workspaces under `packages/`.
 | `@esl-pipeline/tts-elevenlabs`   | Generates MP3 from study text via ElevenLabs                                      | `tts-elevenlabs`, `tts-voices` |
 | `@esl-pipeline/storage-uploader` | Uploads generated audio to S3                                                     | `storage-uploader`             |
 | `@esl-pipeline/notion-add-audio` | Places the study-text audio block above the toggle (add/replace)                  | —                              |
-| `@esl-pipeline/orchestrator`     | “One command” pipeline composition                                                | `esl` (`esl-orchestrator`)     |
+| `@esl-pipeline/orchestrator`     | “One command” pipeline composition                                                | `esl`                         |
 
 ---
 
@@ -85,6 +85,7 @@ The package exposes the `esl` binary, so follow-up commands look the same:
 esl status --md ./lessons/mission.md --json
 esl rerun --md ./lessons/mission.md --steps tts,upload --upload s3
 esl select --file --ext .md
+esl --version
 ```
 
 Copy `.env.example` into your working directory (or export the equivalent variables) so Notion, ElevenLabs, and AWS credentials are available at runtime. ffmpeg must be installed separately; run `brew install ffmpeg`, `sudo apt-get install ffmpeg`, or `choco install ffmpeg` depending on your platform, or point `FFMPEG_PATH` at a custom install.

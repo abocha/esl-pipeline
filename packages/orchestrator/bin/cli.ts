@@ -4,6 +4,7 @@ import { stat } from 'node:fs/promises';
 import { dirname, resolve, relative } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import process from 'node:process';
+import { createRequire } from 'node:module';
 import ora from 'ora';
 import { Command, CommanderError, InvalidOptionArgumentError } from 'commander';
 import pc from 'picocolors';
@@ -46,6 +47,13 @@ loadEnvFiles({ files: envFiles, cwd: process.cwd(), assignToProcess: true, overr
 type RerunStep = NonNullable<RerunFlags['steps']>[number];
 
 const rawArgs = process.argv.slice(2);
+const require = createRequire(import.meta.url);
+const { version: pkgVersion } = require('../package.json') as { version: string };
+
+if (rawArgs.includes('--version') || rawArgs.includes('-v')) {
+  console.log(pkgVersion);
+  process.exit(0);
+}
 
 const shouldLogPlainSecrets =
   (process.env.ORCHESTRATOR_DEBUG_SECRETS ?? '').toLowerCase() === 'true' ||

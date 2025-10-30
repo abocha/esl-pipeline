@@ -1,6 +1,6 @@
 {
   "name": "@esl-pipeline/orchestrator",
-  "version": "1.6.0",
+  "version": "1.6.1",
   "private": false,
   "type": "module",
   "license": "UNLICENSED",
@@ -32,8 +32,7 @@
     "docs"
   ],
   "bin": {
-    "esl": "dist/cli.js",
-    "esl-orchestrator": "dist/cli.js"
+    "esl": "dist/cli.js"
   },
   "scripts": {
     "build": "tsup --config tsup.config.ts && tsc -p tsconfig.types.json",

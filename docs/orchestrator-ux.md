@@ -1,6 +1,6 @@
 # Orchestrator UX Plan
 
-Goal: make `esl` (alias `esl-orchestrator`) the single entry point teachers use to generate and maintain assignments.
+Goal: make `esl` the single entry point teachers use to generate and maintain assignments.
 
 ## Guiding Principles
 

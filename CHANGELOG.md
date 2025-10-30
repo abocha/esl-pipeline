@@ -4,11 +4,17 @@ All notable changes to this project will be documented here. Dates use `YYYY-MM-
 
 ## [1.4.0] - 2025-10-30
 
+## [Unreleased]
+
+### Changed
+
+- Retired the legacy `esl-orchestrator` binary; use the primary `esl` command (via `npx --yes --package @esl-pipeline/orchestrator -- esl …`).
+
 ## [1.6.0] - 2025-10-31
 
 ### Added
 
-- Orchestrator now builds as a single publishable CLI (`esl`) with an `npx @esl-pipeline/orchestrator` entry point, while still exposing the legacy `esl-orchestrator` alias for existing scripts.
+- Orchestrator now builds as a single publishable CLI (`esl`) with an `npx @esl-pipeline/orchestrator` entry point.
 - Bundled `dist/configs/` and `.env.example` inside the npm tarball so fresh installs have presets, student templates, and voice hints ready to go.
 - Tests document the new ffmpeg resolver behaviour and enforce the flush-left `:::study-text` validation rule across fixtures.
 

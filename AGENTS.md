@@ -6,7 +6,7 @@ This repo houses the ESL homework pipeline. Below is everything the next agent s
 
 - **Core Flow**: Markdown (`md-validator` → `md-extractor`) → Notion import (`notion-importer` + `notion-colorizer`) → TTS (`tts-elevenlabs`) → S3 upload (`storage-uploader`) → attach audio (`notion-add-audio`).
 - **Orchestrator** (`packages/orchestrator`) glues the above into one command. It now exposes:
-  - `esl --md <file>` (alias: `esl-orchestrator`): full run.
+  - `esl --md <file>`: full run.
     - Add `--interactive` to launch a guided wizard that suggests markdown files, student profiles, presets, TTS/upload settings, and S3 defaults.
     - Incremental flags: `--skip-import`, `--skip-tts`, `--skip-upload`, and `--redo-tts` reuse manifest assets safely.
     - Pass `--json` for structured event logs (pairs nicely with scripting).
