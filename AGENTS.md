@@ -6,12 +6,12 @@ This repo houses the ESL homework pipeline. Below is everything the next agent s
 
 - **Core Flow**: Markdown (`md-validator` → `md-extractor`) → Notion import (`notion-importer` + `notion-colorizer`) → TTS (`tts-elevenlabs`) → S3 upload (`storage-uploader`) → attach audio (`notion-add-audio`).
 - **Orchestrator** (`packages/orchestrator`) glues the above into one command. It now exposes:
-  - `esl-orchestrator --md <file>`: full run.
+  - `esl --md <file>` (alias: `esl-orchestrator`): full run.
     - Add `--interactive` to launch a guided wizard that suggests markdown files, student profiles, presets, TTS/upload settings, and S3 defaults.
     - Incremental flags: `--skip-import`, `--skip-tts`, `--skip-upload`, and `--redo-tts` reuse manifest assets safely.
     - Pass `--json` for structured event logs (pairs nicely with scripting).
-  - `esl-orchestrator status --md <file>`: read manifest + hash/audio health.
-  - `esl-orchestrator rerun --md <file> --steps tts,upload`: rerun subset using cached manifest.
+  - `esl status --md <file>`: read manifest + hash/audio health.
+  - `esl rerun --md <file> --steps tts,upload`: rerun subset using cached manifest.
 - **Configs** live in `configs/` (notably `voices.yml`, `elevenlabs.voices.json`, `presets.json`). Student-specific overrides can reside in `configs/students/` (stubbed for now).
 
 ## 2. Environment & Secrets
@@ -39,7 +39,7 @@ This repo houses the ESL homework pipeline. Below is everything the next agent s
 ## 5. Recent Changes (context for follow-up)
 
 - Interactive CLI wizard now launches with a Start/Settings/Saved-defaults menu, reusable manifest defaults, and guardrails around skip flags.
-- Manual Markdown selection now uses an Enquirer-based path picker (dirs/files) shared with `esl-orchestrator select`, powered by `globby/find-up` and respecting the repo ignore list.
+- Manual Markdown selection now uses an Enquirer-based path picker (dirs/files) shared with `esl select`, powered by `globby/find-up` and respecting the repo ignore list.
 - Validator now enforces that `:::study-text` and its closing `:::` are flush-left (no indentation) so Notion importer will reliably generate the study-text toggle.
 - Structured logging/summary output landed; `--json` emits machine-friendly transcripts.
 - Added status/rerun APIs and CLI commands in orchestrator; manifests now power incremental runs.

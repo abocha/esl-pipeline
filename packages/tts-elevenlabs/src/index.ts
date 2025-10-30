@@ -5,7 +5,7 @@ import { mkdir, copyFile, unlink, stat } from 'node:fs/promises';
 import yaml from 'js-yaml';
 import { extractStudyText, extractFrontmatter, type Frontmatter } from '@esl-pipeline/md-extractor';
 import { loadVoicesCatalog, type VoiceCatalog } from './assign.js';
-import { concatMp3Segments, synthSilenceMp3 } from './ffmpeg.js';
+import { concatMp3Segments, synthSilenceMp3, resolveFfmpegPath } from './ffmpeg.js';
 import { Readable } from 'node:stream';
 import { pipeline } from 'node:stream/promises';
 import { getElevenClient } from './eleven.js';
@@ -26,6 +26,7 @@ type BuildStudyTextOptions = {
   preview?: boolean;
   force?: boolean;
   defaultAccent?: string;
+  ffmpegPath?: string;
 };
 
 export type BuildStudyTextResult = {
@@ -205,10 +206,18 @@ export async function buildStudyTextMp3(
 
   const concatFiles = [...segmentFiles];
   let silencePath: string | undefined;
-  if (tailSeconds > 0.01) {
+  const needsSilence = tailSeconds > 0.01;
+  const needsConcat = segmentFiles.length > 1 || needsSilence;
+  let resolvedFfmpeg: string | undefined;
+
+  if (needsConcat) {
+    resolvedFfmpeg = await resolveFfmpegPath(opts.ffmpegPath);
+  }
+
+  if (needsSilence) {
     const silenceFileName = `${hash}-silence.mp3`;
     silencePath = resolve(outputDir, silenceFileName);
-    await synthSilenceMp3(silencePath, tailSeconds);
+    await synthSilenceMp3(silencePath, tailSeconds, resolvedFfmpeg);
     concatFiles.push(silencePath);
     cleanupTargets.push(silencePath);
   }
@@ -217,7 +226,7 @@ export async function buildStudyTextMp3(
     if (concatFiles.length === 1) {
       await copyFile(concatFiles[0]!, targetPath);
     } else if (concatFiles.length > 1) {
-      await concatMp3Segments(concatFiles, targetPath, true);
+      await concatMp3Segments(concatFiles, targetPath, true, resolvedFfmpeg);
     }
   } finally {
     // best-effort cleanup; ignore errors
@@ -395,3 +404,5 @@ function wrapSynthesisError(error: unknown, voiceId: string, text: string): Erro
 function wait(ms: number): Promise<void> {
   return new Promise(resolve => setTimeout(resolve, ms));
 }
+
+export { resolveFfmpegPath, FfmpegNotFoundError } from './ffmpeg.js';

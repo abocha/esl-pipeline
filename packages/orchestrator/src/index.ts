@@ -3,6 +3,7 @@ import { applyHeadingPreset } from '@esl-pipeline/notion-colorizer';
 import {
   buildStudyTextMp3,
   hashStudyText,
+  FfmpegNotFoundError,
   type BuildStudyTextResult,
 } from '@esl-pipeline/tts-elevenlabs';
 import { uploadFile } from '@esl-pipeline/storage-uploader';
@@ -37,6 +38,9 @@ export type AssignmentProgressEvent = {
 export type AssignmentProgressCallbacks = {
   onStage?: (event: AssignmentProgressEvent) => void;
 };
+
+export { manifestPathFor, readManifest, writeManifest } from './manifest.js';
+export type { AssignmentManifest } from './manifest.js';
 
 export function summarizeVoiceSelections(
   voices?: BuildStudyTextResult['voices']
@@ -212,13 +216,21 @@ export async function newAssignment(
     } else {
       emitStage('tts', 'start');
       steps.push('tts');
-      const ttsResult = await buildStudyTextMp3(flags.md, {
-        voiceMapPath: flags.voices ?? 'configs/voices.yml',
-        outPath: flags.out ?? dirname(flags.md),
-        preview: flags.dryRun,
-        force: flags.force || flags.redoTts,
-        defaultAccent: flags.accentPreference,
-      });
+      let ttsResult: Awaited<ReturnType<typeof buildStudyTextMp3>>;
+      try {
+        ttsResult = await buildStudyTextMp3(flags.md, {
+          voiceMapPath: flags.voices ?? 'configs/voices.yml',
+          outPath: flags.out ?? dirname(flags.md),
+          preview: flags.dryRun,
+          force: flags.force || flags.redoTts,
+          defaultAccent: flags.accentPreference,
+        });
+      } catch (error: unknown) {
+        if (error instanceof FfmpegNotFoundError) {
+          throw new Error(`TTS requires FFmpeg.\n\n${error.message}`, { cause: error });
+        }
+        throw error;
+      }
       audio = { path: ttsResult.path, hash: ttsResult.hash, voices: ttsResult.voices };
       const voiceSummary = summarizeVoiceSelections(ttsResult.voices);
       emitStage('tts', 'success', {
@@ -399,13 +411,21 @@ export async function rerunAssignment(flags: RerunFlags): Promise<{
   let audioVoices = manifest.audio?.voices;
 
   if (stepsToRun.has('tts')) {
-    const ttsResult = await buildStudyTextMp3(flags.md, {
-      voiceMapPath: flags.voices ?? 'configs/voices.yml',
-      outPath: flags.out ?? dirname(flags.md),
-      preview: flags.dryRun,
-      force: flags.force,
-      defaultAccent: flags.accentPreference,
-    });
+    let ttsResult: Awaited<ReturnType<typeof buildStudyTextMp3>>;
+    try {
+      ttsResult = await buildStudyTextMp3(flags.md, {
+        voiceMapPath: flags.voices ?? 'configs/voices.yml',
+        outPath: flags.out ?? dirname(flags.md),
+        preview: flags.dryRun,
+        force: flags.force,
+        defaultAccent: flags.accentPreference,
+      });
+    } catch (error: unknown) {
+      if (error instanceof FfmpegNotFoundError) {
+        throw new Error(`TTS requires FFmpeg.\n\n${error.message}`, { cause: error });
+      }
+      throw error;
+    }
     audioPath = ttsResult.path;
     audioHash = ttsResult.hash;
     audioVoices = ttsResult.voices;

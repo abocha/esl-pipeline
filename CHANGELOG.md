@@ -4,6 +4,20 @@ All notable changes to this project will be documented here. Dates use `YYYY-MM-
 
 ## [1.4.0] - 2025-10-30
 
+## [1.6.0] - 2025-10-31
+
+### Added
+
+- Orchestrator now builds as a single publishable CLI (`esl`) with an `npx @esl-pipeline/orchestrator` entry point, while still exposing the legacy `esl-orchestrator` alias for existing scripts.
+- Bundled `dist/configs/` and `.env.example` inside the npm tarball so fresh installs have presets, student templates, and voice hints ready to go.
+- Tests document the new ffmpeg resolver behaviour and enforce the flush-left `:::study-text` validation rule across fixtures.
+
+### Changed
+
+- Switched the orchestrator build to `tsup` (Node 24 target) plus a declaration-only TypeScript pass, shrinking the npm payload and inlining all workspace packages.
+- Raised the required runtime to Node.js 24.10.0 and removed the vendored ffmpeg archive in favour of resolving a system installation (`ffmpeg` on PATH or `FFMPEG_PATH`).
+- Documentation now highlights the `esl` command, the `npx` workflow, and the requirement to install ffmpeg manually.
+
 ### Added
 
 - Bundled `Default` student profile keeps shared color defaults, and a new `--accent` flag lets ad-hoc runs request British/American voices without editing YAML (accent hints remain optional).

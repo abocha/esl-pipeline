@@ -4,7 +4,7 @@ Use this guide when cutting a release or publishing individual packages.
 
 ## 1. Verify Environment
 
-- Node.js 22 and pnpm 8 installed.
+- Node.js 24.10.0+ and pnpm 8 installed.
 - `.env` up to date with valid Notion, ElevenLabs, and AWS credentials.
 - Update voice catalog if needed: `pnpm exec tsx --eval "import { syncVoices } from './packages/tts-elevenlabs/src/syncVoices.ts'; (async () => { await syncVoices('configs/elevenlabs.voices.json'); })();"`
 

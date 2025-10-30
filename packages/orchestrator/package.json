@@ -1,7 +1,7 @@
 {
   "name": "@esl-pipeline/orchestrator",
-  "version": "1.5.0",
-  "private": true,
+  "version": "1.6.0",
+  "private": false,
   "type": "module",
   "license": "UNLICENSED",
   "description": "One-command ESL assignment pipeline (validation, Notion import, TTS, upload).",
@@ -13,34 +13,57 @@
     "cli"
   ],
   "engines": {
-    "node": ">=18.18"
+    "node": ">=24.10.0"
   },
-  "main": "./dist/src/index.js",
-  "types": "./dist/src/index.d.ts",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
   "exports": {
     ".": {
-      "types": "./dist/src/index.d.ts",
-      "import": "./dist/src/index.js",
-      "default": "./dist/src/index.js"
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "default": "./dist/index.js"
     },
-    "./manifest": "./dist/src/manifest.js",
     "./package.json": "./package.json"
   },
   "files": [
-    "dist"
+    "dist",
+    "README.md",
+    "CHANGELOG.md",
+    "docs"
   ],
   "bin": {
-    "esl-orchestrator": "dist/bin/cli.js"
+    "esl": "dist/cli.js",
+    "esl-orchestrator": "dist/cli.js"
   },
   "scripts": {
-    "build": "tsc -p tsconfig.json",
-    "postbuild": "tsx ./scripts/postbuild.ts",
+    "build": "tsup --config tsup.config.ts && tsc -p tsconfig.types.json",
+    "postbuild": "node ./scripts/postbuild.js",
     "clean": "rimraf dist",
     "dev": "tsx watch bin/cli.ts",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "prepack": "pnpm run build"
   },
   "dependencies": {
+    "@aws-sdk/client-s3": "^3.920.0",
+    "@aws-sdk/s3-request-presigner": "^3.920.0",
+    "@elevenlabs/elevenlabs-js": "^2.21.0",
+    "@notionhq/client": "^5.3.0",
+    "commander": "^14.0.2",
+    "dotenv": "^17.2.3",
+    "enquirer": "^2.4.1",
+    "find-up": "^8.0.0",
+    "globby": "^15.0.0",
+    "gray-matter": "^4.0.3",
+    "js-yaml": "^4.1.0",
+    "ora": "9.0.0",
+    "picocolors": "^1.1.1",
+    "prompts": "^2.4.2",
+    "remark-parse": "^11.0.0",
+    "unified": "^11.0.5",
+    "zod": "^4.1.12"
+  },
+  "devDependencies": {
     "@esl-pipeline/md-extractor": "workspace:*",
     "@esl-pipeline/md-validator": "workspace:*",
     "@esl-pipeline/notion-add-audio": "workspace:*",
@@ -48,18 +71,10 @@
     "@esl-pipeline/notion-importer": "workspace:*",
     "@esl-pipeline/storage-uploader": "workspace:*",
     "@esl-pipeline/tts-elevenlabs": "workspace:*",
-    "commander": "^14.0.2",
-    "enquirer": "^2.4.1",
-    "find-up": "^8.0.0",
-    "globby": "^15.0.0",
-    "ora": "9.0.0",
-    "picocolors": "^1.1.1",
-    "prompts": "^2.4.2"
-  },
-  "devDependencies": {
     "@types/node": "^24.9.2",
     "@types/prompts": "^2.4.9",
     "rimraf": "^6.0.1",
+    "tsup": "8.5.0",
     "tsx": "^4.20.6",
     "typescript": "^5.9.3",
     "vitest": "^4.0.5"

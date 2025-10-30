@@ -85,7 +85,7 @@ All these configs - presets JSON, voice map JSON, and the student database ID - 
 
 # CLI Flags and Environment Variables
 
-Codex's scaffolding exposes many options via CLI flags, making the pipeline highly configurable from the command line. The orchestrator CLI (esl-orchestrator) in particular has a rich set of flags, corresponding to the NewAssignmentFlags interface :
+Codex's scaffolding exposes many options via CLI flags, making the pipeline highly configurable from the command line. The orchestrator CLI (`esl`, alias `esl-orchestrator`) in particular has a rich set of flags, corresponding to the `NewAssignmentFlags` interface :
 
 - --md <path> : (Required) Path to the markdown file containing the assignment.
 - --student <name> : Student name to link the assignment to (if omitted, can be derived from frontmatter if present).
