@@ -24,11 +24,7 @@ import {
   type WizardRunResult,
   type WizardSelections,
 } from '../src/wizard.js';
-import {
-  loadStudentProfiles,
-  DEFAULT_STUDENT_NAME,
-  type StudentProfile,
-} from '../src/config.js';
+import { loadStudentProfiles, DEFAULT_STUDENT_NAME, type StudentProfile } from '../src/config.js';
 import {
   pickDirectory,
   pickFile,
@@ -715,14 +711,14 @@ async function handleRun(args: string[]): Promise<void> {
   if (parsed.interactive && !jsonOutput && wizardSelections) {
     printWizardSummary(result, wizardSelections, stageOutcomes);
   } else {
-  const summaryFlags: RunFlags = {
-    ...parsed,
-    md: assignmentFlags.md,
-    student: assignmentFlags.student,
-    preset: assignmentFlags.preset,
-    presetsPath: assignmentFlags.presetsPath,
-    accentPreference: assignmentFlags.accentPreference,
-    withTts: Boolean(assignmentFlags.withTts),
+    const summaryFlags: RunFlags = {
+      ...parsed,
+      md: assignmentFlags.md,
+      student: assignmentFlags.student,
+      preset: assignmentFlags.preset,
+      presetsPath: assignmentFlags.presetsPath,
+      accentPreference: assignmentFlags.accentPreference,
+      withTts: Boolean(assignmentFlags.withTts),
       upload: assignmentFlags.upload,
       presign: assignmentFlags.presign,
       publicRead: Boolean(assignmentFlags.publicRead),

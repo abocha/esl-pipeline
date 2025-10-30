@@ -168,10 +168,13 @@ function removeValuesByOrigin(state: WizardState, origin: ValueOrigin): void {
 async function manageSavedDefaults(
   state: WizardState,
   options: { defaultsPath: string; savedExists: boolean }
-): Promise<{ changed: boolean; savedDefaults?: Partial<NewAssignmentFlags>; resetState?: boolean } | null> {
+): Promise<{
+  changed: boolean;
+  savedDefaults?: Partial<NewAssignmentFlags>;
+  resetState?: boolean;
+} | null> {
   const { defaultsPath } = options;
 
-  // eslint-disable-next-line no-constant-condition
   while (true) {
     const existsNow = await exists(defaultsPath);
     const choice = await prompts(
@@ -245,18 +248,14 @@ export async function runInteractiveWizard(
   ctx: WizardContext = {}
 ): Promise<WizardRunResult> {
   const cwd = resolve(ctx.cwd ?? process.cwd());
-  const defaultsPath = resolve(
-    cwd,
-    ctx.defaultsPath ?? DEFAULT_WIZARD_DEFAULTS_PATH
-  );
+  const defaultsPath = resolve(cwd, ctx.defaultsPath ?? DEFAULT_WIZARD_DEFAULTS_PATH);
   const [presets, profiles, mdSuggestions, savedDefaults] = await Promise.all([
     loadPresets(ctx.presetsPath),
     loadStudentProfiles(ctx.studentsDir),
     findMarkdownCandidates(cwd, 10),
     loadWizardDefaults(defaultsPath),
   ]);
-  const defaultProfile =
-    profiles.find(profile => profile.student === DEFAULT_STUDENT_NAME) ?? null;
+  const defaultProfile = profiles.find(profile => profile.student === DEFAULT_STUDENT_NAME) ?? null;
   const presetNames = Object.keys(presets);
 
   let currentSavedDefaults = savedDefaults;
@@ -290,14 +289,10 @@ export async function runInteractiveWizard(
           { title: 'Start (run with current settings)', value: 'start' },
           { title: 'Configure settings…', value: 'settings' },
           {
-            title: hasSavedDefaults
-              ? 'Saved defaults…'
-              : 'Saved defaults… (none yet)',
+            title: hasSavedDefaults ? 'Saved defaults…' : 'Saved defaults… (none yet)',
             value: 'defaults',
           },
-          ...(presetNames.length
-            ? [{ title: 'Quick select preset…', value: 'preset' }]
-            : []),
+          ...(presetNames.length ? [{ title: 'Quick select preset…', value: 'preset' }] : []),
           { title: 'Review current summary', value: 'summary' },
           { title: 'Reset to defaults', value: 'reset' },
           { title: 'Cancel', value: 'cancel' },
@@ -422,8 +417,7 @@ async function resetState(options: {
   apply(initialFlags, 'cli', { overwrite: true, preserveManual: false });
 
   if (state.student) {
-    state.studentProfile =
-      profiles.find(profile => profile.student === state.student) ?? null;
+    state.studentProfile = profiles.find(profile => profile.student === state.student) ?? null;
   }
   if (!state.studentProfile && defaultProfile) {
     state.studentProfile = defaultProfile;
@@ -462,10 +456,8 @@ async function openSettingsMenu(
     ctx: WizardContext;
   }
 ): Promise<void> {
-  const { cwd, profiles, defaultProfile, presetNames, mdSuggestions, initialFlags, ctx } =
-    options;
+  const { cwd, profiles, defaultProfile, presetNames, mdSuggestions, initialFlags, ctx } = options;
 
-  // eslint-disable-next-line no-constant-condition
   while (true) {
     const choice = await prompts(
       {
@@ -579,9 +571,7 @@ async function selectStudent(
     { title: 'Enter custom student…', value: '__custom__' },
     { title: 'Clear student', value: '__clear__' },
     { title: 'Back', value: '__back__' },
-  ].filter(
-    (choice, index, arr) => arr.findIndex(other => other.value === choice.value) === index
-  );
+  ].filter((choice, index, arr) => arr.findIndex(other => other.value === choice.value) === index);
 
   const picked = await prompts(
     {
@@ -600,7 +590,12 @@ async function selectStudent(
     setStateValue(state, 'student', undefined, 'manual');
     state.studentProfile = defaultProfile;
     if (defaultProfile?.accentPreference !== undefined) {
-      setStateValue(state, 'accentPreference', defaultProfile.accentPreference ?? undefined, 'profile');
+      setStateValue(
+        state,
+        'accentPreference',
+        defaultProfile.accentPreference ?? undefined,
+        'profile'
+      );
     } else {
       setStateValue(state, 'accentPreference', undefined, 'manual');
     }
@@ -674,10 +669,7 @@ async function configureDatabase(
   }
 }
 
-async function selectPreset(
-  state: WizardState,
-  options: { presetNames: string[] }
-): Promise<void> {
+async function selectPreset(state: WizardState, options: { presetNames: string[] }): Promise<void> {
   const { presetNames } = options;
   if (!presetNames.length) {
     console.log('No presets available. Add entries to configs/presets.json to enable this option.');
@@ -752,7 +744,8 @@ async function configureTts(
       name: 'voices',
       message: 'Path to voices.yml',
       initial: voicesGuess,
-      validate: (input: string) => (!!input && input.trim().length > 0) || 'Provide a path to voices.yml',
+      validate: (input: string) =>
+        (!!input && input.trim().length > 0) || 'Provide a path to voices.yml',
     } satisfies PromptObject<'voices'>,
     { onCancel }
   );
@@ -842,10 +835,7 @@ async function configureUpload(
       name: 'prefix',
       message: 'S3 key prefix (optional)',
       initial:
-        state.prefix ??
-        options.initialFlags.prefix ??
-        process.env.S3_PREFIX ??
-        'audio/assignments',
+        state.prefix ?? options.initialFlags.prefix ?? process.env.S3_PREFIX ?? 'audio/assignments',
     } satisfies PromptObject<'prefix'>,
     { onCancel }
   );
@@ -1027,7 +1017,9 @@ function printSummary(state: WizardState): void {
   }
   console.log(`  Database : ${formatValue(state.dbId, state.origins.dbId)}`);
   console.log(`  Preset   : ${formatValue(state.preset, state.origins.preset)}`);
-  console.log(`  Accent   : ${formatValue(state.accentPreference, state.origins.accentPreference)}`);
+  console.log(
+    `  Accent   : ${formatValue(state.accentPreference, state.origins.accentPreference)}`
+  );
 
   console.log(`  TTS      : ${formatBoolean(state.withTts, state.origins.withTts)}`);
   if (state.withTts) {

@@ -21,10 +21,10 @@ Text
 ### B. 🤖 Generated Material
 
 - **Text:**
-:::study-text
-[Alex]: Hi!
-[Mara]: Hello!
-:::
+  :::study-text
+  [Alex]: Hi!
+  [Mara]: Hello!
+  :::
 
 ## 4. 🛠️ Language Toolkit: Useful Language
 
