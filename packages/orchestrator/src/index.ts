@@ -41,6 +41,19 @@ export type AssignmentProgressCallbacks = {
 
 export { manifestPathFor, readManifest, writeManifest } from './manifest.js';
 export type { AssignmentManifest } from './manifest.js';
+export {
+  createPipeline,
+  resolveConfigPaths,
+  loadEnvFiles,
+  resolveManifestPath,
+} from './pipeline.js';
+export type {
+  CreatePipelineOptions,
+  OrchestratorPipeline,
+  ResolvedConfigPaths,
+  PipelineNewAssignmentOptions,
+  PipelineRerunOptions,
+} from './pipeline.js';
 
 export function summarizeVoiceSelections(
   voices?: BuildStudyTextResult['voices']

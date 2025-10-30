@@ -2,11 +2,15 @@
 import { describe, it, expect, vi } from 'vitest';
 import { runImport } from '../src/index.js';
 import * as notion from '../src/notion.js';
-import { writeFileSync } from 'node:fs';
+import { writeFileSync, mkdtempSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 
 describe('parent object shape', () => {
   it('uses the chosen data source parent shape', async () => {
-    const md = `\`\`\`md
+    const tempDir = mkdtempSync(join(tmpdir(), 'parent-shape-'));
+    try {
+      const md = `\`\`\`md
 ---
 title: "Test"
 student: "Anna"
@@ -61,34 +65,37 @@ Test answers
 Test plan
 :::
 \`\`\``;
-    const normalized = md
-      .split('\n')
-      .map(line => line.replace(/^\s+/, ''))
-      .join('\n');
-    const mdPath = 'tmp-parent-shape.md';
-    writeFileSync(mdPath, normalized);
+      const normalized = md
+        .split('\n')
+        .map(line => line.replace(/^\s+/, ''))
+        .join('\n');
+      const mdPath = join(tempDir, 'lesson.md');
+      writeFileSync(mdPath, normalized);
 
-    // Mock resolveDataSourceId to return specific IDs
-    vi.spyOn(notion, 'resolveDataSourceId' as any).mockResolvedValue({
-      dataSourceId: 'ds-123',
-      databaseId: 'db-456',
-    });
+      // Mock resolveDataSourceId to return specific IDs
+      vi.spyOn(notion, 'resolveDataSourceId' as any).mockResolvedValue({
+        dataSourceId: 'ds-123',
+        databaseId: 'db-456',
+      });
 
-    // Mock createNotionClient and pages.create
-    const create = vi.fn().mockResolvedValue({ id: 'p1' });
-    vi.spyOn(notion, 'createNotionClient' as any).mockReturnValue({ pages: { create } });
+      // Mock createNotionClient and pages.create
+      const create = vi.fn().mockResolvedValue({ id: 'p1' });
+      vi.spyOn(notion, 'createNotionClient' as any).mockReturnValue({ pages: { create } });
 
-    // Mock resolveStudentId to return student page ID
-    vi.spyOn(notion, 'resolveStudentId' as any).mockResolvedValue('student-page-id');
+      // Mock resolveStudentId to return student page ID
+      vi.spyOn(notion, 'resolveStudentId' as any).mockResolvedValue('student-page-id');
 
-    // Mock withRetry to avoid actual network calls during test
-    const withRetry = vi.fn(async fn => fn());
-    vi.doMock('../src/retry.js', () => ({ withRetry }));
+      // Mock withRetry to avoid actual network calls during test
+      const withRetry = vi.fn(async fn => fn());
+      vi.doMock('../src/retry.js', () => ({ withRetry }));
 
-    await runImport({ mdPath: mdPath, dbId: 'db-456' });
+      await runImport({ mdPath: mdPath, dbId: 'db-456' });
 
-    const arg = create.mock.calls[0]?.[0];
-    // Assert the implemented shape: { data_source_id: '...' }
-    expect(arg?.parent).toEqual({ data_source_id: 'ds-123' });
+      const arg = create.mock.calls[0]?.[0];
+      // Assert the implemented shape: { data_source_id: '...' }
+      expect(arg?.parent).toEqual({ data_source_id: 'ds-123' });
+    } finally {
+      rmSync(tempDir, { recursive: true, force: true });
+    }
   });
 });
