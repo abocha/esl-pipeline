@@ -2,7 +2,7 @@ Here’s a **concrete, build-ready plan** for your pipeline — from small CLIs 
 
 # Tech stack (unified, low-friction)
 
-- **Runtime:** Node.js 22 (via nvm), **pnpm** workspaces, **TypeScript**.
+- **Runtime:** Node.js 24.10.0 (via nvm), **pnpm** workspaces, **TypeScript**.
 - **Core libs:**
   - Markdown/front-matter: `remark` + `remark-frontmatter` + `gray-matter`
   - Validation: `zod` (runtime), JSON Schema export (for editor linting)

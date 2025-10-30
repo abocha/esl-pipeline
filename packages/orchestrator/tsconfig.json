@@ -5,10 +5,10 @@
     "declaration": true,
     "outDir": "dist",
     "rootDir": ".",
-    "module": "NodeNext",
-    "moduleResolution": "NodeNext",
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
     "target": "ES2022",
     "strict": true
   },
-  "include": ["src", "bin", "tests"]
+  "include": ["src/**/*.ts", "bin/**/*.ts", "tests/**/*.ts"]
 }

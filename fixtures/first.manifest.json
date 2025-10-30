@@ -1,7 +1,7 @@
 {
-  "mdHash": "839670040cc87a606bbe50872ed1408168d2e4421dc93cd00e0abb5f86cb6045",
-  "pageId": "29c85d3e-01dc-8145-a4cd-f3014a27a00b",
-  "pageUrl": "https://www.notion.so/Homework-Assignment-Hacking-Your-Brain-29c85d3e01dc8145a4cdf3014a27a00b",
+  "mdHash": "e4751b05ea7025650c27bc3f17dcaf865d1155429b747fec8c012868eee90d87",
+  "pageId": "29c85d3e-01dc-8151-a9d3-e56083694271",
+  "pageUrl": "https://www.notion.so/Homework-Assignment-Hacking-Your-Brain-29c85d3e01dc8151a9d3e56083694271",
   "audio": {
     "path": "/home/abocha/code/esl-pipeline/c1981af1eb864b276c94c4a0de7557b7494da66400db4228a3933ddf22a2606c.mp3",
     "hash": "c1981af1eb864b276c94c4a0de7557b7494da66400db4228a3933ddf22a2606c",
@@ -46,9 +46,8 @@
         "accent": "american",
         "useCase": "social_media"
       }
-    ],
-    "url": "https://esl-notion-tts.s3.ap-southeast-1.amazonaws.com/audio/assignments/c1981af1eb864b276c94c4a0de7557b7494da66400db4228a3933ddf22a2606c.mp3"
+    ]
   },
   "preset": "b1-default",
-  "timestamp": "2025-10-30T13:09:32.394Z"
+  "timestamp": "2025-10-30T15:39:31.212Z"
 }

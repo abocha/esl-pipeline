@@ -1,6 +1,6 @@
 # Orchestrator UX Plan
 
-Goal: make `esl-orchestrator` the single entry point teachers use to generate and maintain assignments.
+Goal: make `esl` (alias `esl-orchestrator`) the single entry point teachers use to generate and maintain assignments.
 
 ## Guiding Principles
 
@@ -11,7 +11,7 @@ Goal: make `esl-orchestrator` the single entry point teachers use to generate an
 
 ## Recently Shipped
 
-- `--interactive` wizard now opens with a menu (Start/Settings/Preset) and supports `Saved defaults…` to load/store manual presets under `configs/wizard.defaults.json`, plus an Enquirer-backed fuzzy picker for Markdown selection (shares filters with `esl-orchestrator select`).
+- `--interactive` wizard now opens with a menu (Start/Settings/Preset) and supports `Saved defaults…` to load/store manual presets under `configs/wizard.defaults.json`, plus an Enquirer-backed fuzzy picker for Markdown selection (shared with `esl select`).
 - Step-control flags `--skip-import`, `--skip-tts`, `--skip-upload`, and `--redo-tts` support incremental reruns.
 - `--json` flag produces structured logs with event history; default console output shows summaries.
 - TTS stage summaries list the speaker → voice mapping (with gender/source tags) so audio issues are easy to spot, and ffmpeg output stays quiet unless synthesis fails.
@@ -27,8 +27,8 @@ Goal: make `esl-orchestrator` the single entry point teachers use to generate an
    - ⏭️ Future ideas: expose `--skip-add-audio` or partial colorize toggles.
 
 3. **Manifest Management**
-   - `esl-orchestrator status --md lesson.md` to read the manifest and report current page/audio state.
-   - `esl-orchestrator rerun --md lesson.md --step upload` to execute a subset using cached assets.
+   - `esl status --md lesson.md` to read the manifest and report current page/audio state.
+   - `esl rerun --md lesson.md --step upload` to execute a subset using cached assets.
 
 4. **Structured Logging**
    - ✅ `--json` flag now emits `{ events, result }`; console output gains emoji markers and summary block.

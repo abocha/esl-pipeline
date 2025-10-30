@@ -1,12 +1,105 @@
 import { spawn } from 'node:child_process';
 import { writeFile, unlink } from 'node:fs/promises';
-import { tmpdir } from 'node:os';
+import { homedir, platform, tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
-import { getFfmpegPath } from '@esl-pipeline/ffmpeg-binary';
+
+const isWindows = platform() === 'win32';
+const PATH_SEPARATOR = isWindows ? ';' : ':';
+const BINARY_CANDIDATES = isWindows ? ['ffmpeg.exe', 'ffmpeg'] : ['ffmpeg'];
+
+let cachedBinary: string | null = null;
+
+export class FfmpegNotFoundError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'FfmpegNotFoundError';
+  }
+}
+
+async function canSpawn(command: string): Promise<boolean> {
+  return new Promise(resolve => {
+    const proc = spawn(command, ['-version'], { stdio: 'ignore' });
+    proc.on('error', () => resolve(false));
+    proc.on('exit', code => resolve(code === 0));
+  });
+}
+
+function cachePathCandidates(): string[] {
+  const base =
+    process.env.ESL_PIPELINE_FFMPEG_CACHE && process.env.ESL_PIPELINE_FFMPEG_CACHE.length > 0
+      ? process.env.ESL_PIPELINE_FFMPEG_CACHE
+      : join(homedir(), '.cache', 'esl-pipeline', 'ffmpeg');
+  return BINARY_CANDIDATES.map(name => join(base, `${platform()}-${process.arch}`, name));
+}
+
+function systemPathCandidates(): string[] {
+  const pathValue = process.env.PATH ?? '';
+  const dirs = pathValue.split(PATH_SEPARATOR).filter(Boolean);
+  const candidates: string[] = [];
+  for (const dir of dirs) {
+    for (const name of BINARY_CANDIDATES) {
+      candidates.push(join(dir, name));
+    }
+  }
+  // Also allow bare command for spawn when PATH is configured
+  return candidates.concat(BINARY_CANDIDATES);
+}
+
+async function resolveCandidateList(candidates: string[]): Promise<string | null> {
+  for (const candidate of candidates) {
+    if (!candidate) continue;
+    if (await canSpawn(candidate)) {
+      return candidate;
+    }
+  }
+  return null;
+}
+
+export async function resolveFfmpegPath(explicit?: string): Promise<string> {
+  const tryExplicit = explicit ?? process.env.FFMPEG_PATH;
+  if (tryExplicit && (await canSpawn(tryExplicit))) {
+    cachedBinary = tryExplicit;
+    return tryExplicit;
+  }
+
+  if (cachedBinary && (await canSpawn(cachedBinary))) {
+    return cachedBinary;
+  }
+
+  const cacheCandidate = await resolveCandidateList(cachePathCandidates());
+  if (cacheCandidate) {
+    cachedBinary = cacheCandidate;
+    return cacheCandidate;
+  }
+
+  const pathCandidate = await resolveCandidateList(systemPathCandidates());
+  if (pathCandidate) {
+    cachedBinary = pathCandidate;
+    return pathCandidate;
+  }
+
+  const instructions = [
+    'FFmpeg is required to stitch ElevenLabs audio but no executable was found.',
+    'Install FFmpeg and ensure it is available on your PATH, or set the FFMPEG_PATH environment variable.',
+    '',
+    'Quick install guides:',
+    '  • macOS:   brew install ffmpeg',
+    '  • Ubuntu:  sudo apt-get install ffmpeg',
+    '  • Windows: choco install ffmpeg',
+    '',
+    'We will ship an optional auto-download in a future release; for now please install FFmpeg manually.',
+  ].join('\n');
+
+  throw new FfmpegNotFoundError(instructions);
+}
 
 /** Run ffmpeg with args; rejects on non-zero exit. */
-export async function runFfmpeg(args: string[], label = 'ffmpeg'): Promise<void> {
-  const bin = await getFfmpegPath();
+export async function runFfmpeg(
+  args: string[],
+  label = 'ffmpeg',
+  explicitPath?: string
+): Promise<void> {
+  const bin = await resolveFfmpegPath(explicitPath);
   await new Promise<void>((resolvePromise, reject) => {
     const proc = spawn(bin, args, { stdio: ['ignore', 'pipe', 'pipe'] });
     let stdout = '';
@@ -40,7 +133,8 @@ export async function runFfmpeg(args: string[], label = 'ffmpeg'): Promise<void>
 export async function concatMp3Segments(
   segmentPaths: string[],
   outFile: string,
-  reencode = false
+  reencode = false,
+  ffmpegPath?: string
 ): Promise<void> {
   if (segmentPaths.length === 0) throw new Error('No segments to concatenate');
   const abs = segmentPaths.map(p => resolve(p));
@@ -67,12 +161,12 @@ export async function concatMp3Segments(
 
   try {
     if (reencode) {
-      await runFfmpeg(argsReenc, 'ffmpeg-concat-reencode');
+      await runFfmpeg(argsReenc, 'ffmpeg-concat-reencode', ffmpegPath);
     } else {
       try {
-        await runFfmpeg(argsFast, 'ffmpeg-concat-fast');
+        await runFfmpeg(argsFast, 'ffmpeg-concat-fast', ffmpegPath);
       } catch {
-        await runFfmpeg(argsReenc, 'ffmpeg-concat-reencode');
+        await runFfmpeg(argsReenc, 'ffmpeg-concat-reencode', ffmpegPath);
       }
     }
   } finally {
@@ -82,10 +176,12 @@ export async function concatMp3Segments(
   }
 }
 
-// ADD at top of file (if not already present)
-export async function synthSilenceMp3(outFile: string, seconds: number): Promise<void> {
+export async function synthSilenceMp3(
+  outFile: string,
+  seconds: number,
+  ffmpegPath?: string
+): Promise<void> {
   const dur = Math.max(0.3, Math.min(seconds, 10)); // keep sane bounds
-  // mono 22050Hz is fine; libmp3lame is included in BtbN builds
   const args = [
     '-y',
     '-f',
@@ -97,8 +193,8 @@ export async function synthSilenceMp3(outFile: string, seconds: number): Promise
     '-c:a',
     'libmp3lame',
     '-q:a',
-    '7', // variable bitrate, smaller file
+    '7',
     outFile,
   ];
-  await runFfmpeg(args, 'ffmpeg-synth-silence');
+  await runFfmpeg(args, 'ffmpeg-synth-silence', ffmpegPath);
 }

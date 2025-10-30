@@ -61,7 +61,12 @@ Test answers
 Test plan
 :::
 \`\`\``;
-    writeFileSync('tmp.md', md);
+    const normalized = md
+      .split('\n')
+      .map(line => line.replace(/^\s+/, ''))
+      .join('\n');
+    const mdPath = 'tmp-parent-shape.md';
+    writeFileSync(mdPath, normalized);
 
     // Mock resolveDataSourceId to return specific IDs
     vi.spyOn(notion, 'resolveDataSourceId' as any).mockResolvedValue({
@@ -80,7 +85,7 @@ Test plan
     const withRetry = vi.fn(async fn => fn());
     vi.doMock('../src/retry.js', () => ({ withRetry }));
 
-    await runImport({ mdPath: 'tmp.md', dbId: 'db-456' });
+    await runImport({ mdPath: mdPath, dbId: 'db-456' });
 
     const arg = create.mock.calls[0]?.[0];
     // Assert the implemented shape: { data_source_id: '...' }

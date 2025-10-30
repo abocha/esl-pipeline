@@ -88,7 +88,7 @@ const hasFlag = (args: string[], name: string): boolean => args.includes(name);
 
 const usage = (): never => {
   console.error(`Usage:
-  esl-orchestrator --md <file.md> [options]                        
+  esl --md <file.md> [options]                        
       --interactive             Launch guided wizard for missing flags
       --with-tts                Generate ElevenLabs audio
       --accent <name>           Preferred voice accent (american, british, etc.)
@@ -99,10 +99,10 @@ const usage = (): never => {
       --redo-tts                Force regenerate audio even if cached
       --json                    Emit structured JSON log output
 
-  esl-orchestrator status --md <file.md> [--json]                  
-  esl-orchestrator rerun --md <file.md> [--steps tts,upload,add-audio] [options]
+  esl status --md <file.md> [--json]                  
+  esl rerun --md <file.md> [--steps tts,upload,add-audio] [options]
 
-  esl-orchestrator select [path] [--dir|--file] [picker options]
+  esl select [path] [--dir|--file] [picker options]
       --suffix <.d>             (dir) Require directory name to end with suffix
       --contains <f1,f2>        (dir) Require files to exist inside the folder
       --ext <.md,.mp3>          (file) Allowlisted extensions
@@ -809,9 +809,7 @@ const printWizardSummary = (
   } else {
     console.log('  2. Run the pipeline with TTS enabled when you are ready to record audio.');
   }
-  console.log(
-    `  3. Rerun specific stages with: pnpm esl-orchestrator rerun --md "${selections.md}"`
-  );
+  console.log(`  3. Rerun specific stages with: pnpm esl rerun --md "${selections.md}"`);
 };
 
 async function main(): Promise<void> {

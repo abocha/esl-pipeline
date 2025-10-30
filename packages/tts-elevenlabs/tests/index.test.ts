@@ -108,6 +108,7 @@ afterEach(() => {
 
 beforeEach(() => {
   vi.spyOn(assign, 'loadVoicesCatalog').mockResolvedValue(catalogMock as any);
+  vi.spyOn(ffm, 'resolveFfmpegPath').mockResolvedValue('ffmpeg');
   vi.spyOn(ffm, 'synthSilenceMp3').mockImplementation(async (outFile: string) => {
     await writeFile(outFile, 'silence');
   });
@@ -279,7 +280,12 @@ default: voice_id_default
     });
     expect(result.path.endsWith('.mp3')).toBe(true);
     expect(result.hash).toHaveLength(64);
-    expect(spy).toHaveBeenCalledWith(expect.any(Array), expect.stringContaining('.mp3'), true);
+    expect(spy).toHaveBeenCalledWith(
+      expect.any(Array),
+      expect.stringContaining('.mp3'),
+      true,
+      'ffmpeg'
+    );
     expect(convertMock).toHaveBeenCalledTimes(3);
     expect(result.voices).toEqual(
       expect.arrayContaining([
@@ -333,7 +339,12 @@ default: voice_id_default
     });
     expect(result.path.endsWith('.mp3')).toBe(true);
     expect(result.hash).toHaveLength(64);
-    expect(spy).toHaveBeenCalledWith(expect.any(Array), expect.stringContaining('.mp3'), true);
+    expect(spy).toHaveBeenCalledWith(
+      expect.any(Array),
+      expect.stringContaining('.mp3'),
+      true,
+      'ffmpeg'
+    );
     expect(convertMock).toHaveBeenCalledTimes(2);
     const voiceIds = convertMock.mock.calls.map(call => call[0]);
     expect(new Set(voiceIds).size).toBe(1);
@@ -390,7 +401,12 @@ default: voice_id_default
     });
     expect(result.path.endsWith('.mp3')).toBe(true);
     expect(result.hash).toHaveLength(64);
-    expect(spy).toHaveBeenCalledWith(expect.any(Array), expect.stringContaining('.mp3'), true);
+    expect(spy).toHaveBeenCalledWith(
+      expect.any(Array),
+      expect.stringContaining('.mp3'),
+      true,
+      'ffmpeg'
+    );
     expect(convertMock).toHaveBeenCalledTimes(2);
     const voiceIds = convertMock.mock.calls.map(call => call[0]);
     expect(new Set(voiceIds).size).toBe(2);

@@ -7,7 +7,7 @@ import { writeFileSync } from 'node:fs';
 describe('pages.create parent uses data_source', () => {
   it('calls pages.create with parent.data_source.id', async () => {
     // MD fixture with proper structure that passes validation
-    const md = `\`\`\`md
+    const mdRaw = `\`\`\`md
 ---
 title: "Homework Assignment: Test"
 student: "Anna"
@@ -62,7 +62,12 @@ Test answers
 Test plan
 :::
 \`\`\``;
-    writeFileSync('tmp.md', md);
+    const md = mdRaw
+      .split('\n')
+      .map(line => line.replace(/^\s+/, ''))
+      .join('\n');
+    const mdPath = 'tmp-create-parent.md';
+    writeFileSync(mdPath, md);
 
     // Mock resolveDataSourceId to return specific IDs
     vi.spyOn(notionMod, 'resolveDataSourceId' as any).mockResolvedValue({
@@ -80,7 +85,7 @@ Test plan
     vi.spyOn(notionMod, 'resolveStudentId' as any).mockResolvedValue('student-page-id');
 
     const res = await runImport({
-      mdPath: 'tmp.md',
+      mdPath: mdPath,
       dbId: 'db-456',
       dryRun: false,
     });

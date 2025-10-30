@@ -22,7 +22,7 @@ All functionality lives in pnpm workspaces under `packages/`.
 | `@esl-pipeline/tts-elevenlabs`   | Generates MP3 from study text via ElevenLabs                                      | `tts-elevenlabs`, `tts-voices` |
 | `@esl-pipeline/storage-uploader` | Uploads generated audio to S3                                                     | `storage-uploader`             |
 | `@esl-pipeline/notion-add-audio` | Places the study-text audio block above the toggle (add/replace)                  | —                              |
-| `@esl-pipeline/orchestrator`     | “One command” pipeline composition                                                | `esl-orchestrator`             |
+| `@esl-pipeline/orchestrator`     | “One command” pipeline composition                                                | `esl` (`esl-orchestrator`)     |
 
 ---
 
@@ -33,15 +33,15 @@ All functionality lives in pnpm workspaces under `packages/`.
 - **Audio placement.** ElevenLabs audio blocks are inserted as siblings immediately above the `study-text` toggle. Existing audio is replaced safely when `--redo-tts` / `--replace` is requested; otherwise it is left untouched.
 - **Release discipline.** The repo ships with a canonical publishing checklist and changelog so future tags can be cut repeatably (`docs/publishing.md`, `CHANGELOG.md`).
 
-These upgrades land together with the interactive `esl-orchestrator --interactive` wizard, manifest-driven reruns, and JSON logging added over the last development cycle.
+These upgrades land together with the interactive `esl --interactive` wizard, manifest-driven reruns, and JSON logging added over the last development cycle.
 
 ---
 
 ## Requirements
 
-- Node.js 22.x (use `nvm use` if available)
+- Node.js 24.10.0 or newer (use `nvm use` if available)
 - pnpm 8+
-- ffmpeg (available on `PATH`; used for MP3 concatenation)
+- ffmpeg available on `PATH` (required for MP3 stitching; we no longer vendor binaries)
 - Access to:
   - Notion Integration token
   - ElevenLabs API key
@@ -64,10 +64,30 @@ pnpm lint            # optional: verify style rules
 To process an assignment end-to-end (dry-run):
 
 ```bash
-pnpm esl-orchestrator --interactive
+pnpm esl --interactive
 ```
 
 The wizard now opens with a quick menu: pick `Start` to launch with sane defaults (only choose the Markdown file), or jump into `Settings`/`Select preset` to tweak individual flags. Use `Saved defaults…` to store your manual setup in `configs/wizard.defaults.json`; anything coming from `.env` is labelled in the summary so you know what still needs customising. When you browse manually, the file picker supports tab-style completion for directories and only suggests `.md` files, so pointing at lessons is fast. It still suggests markdown files, student profiles, presets, Notion database (defaulting to `NOTION_DB_ID`), ElevenLabs settings, and upload options. Once you’re happy, re-run without `--dry-run` when you’re ready to publish. Prefer a non-interactive run? pass the equivalent flags manually (see below).
+
+### Run the published CLI with `npx`
+
+```bash
+npx @esl-pipeline/orchestrator new-assignment \
+  --md ./lessons/mission.md \
+  --preset b1-default \
+  --with-tts \
+  --upload s3
+```
+
+The package exposes the `esl` binary, so follow-up commands look the same:
+
+```bash
+esl status --md ./lessons/mission.md --json
+esl rerun --md ./lessons/mission.md --steps tts,upload --upload s3
+esl select --file --ext .md
+```
+
+Copy `.env.example` into your working directory (or export the equivalent variables) so Notion, ElevenLabs, and AWS credentials are available at runtime. ffmpeg must be installed separately; run `brew install ffmpeg`, `sudo apt-get install ffmpeg`, or `choco install ffmpeg` depending on your platform, or point `FFMPEG_PATH` at a custom install.
 
 ---
 
@@ -118,7 +138,7 @@ pnpm exec tsx --eval "import { syncVoices } from './packages/tts-elevenlabs/src/
   - `accentPreference`: optional baseline accent sent to the ElevenLabs selector when the Markdown doesn’t specify one.
   - `voices`: optional explicit ElevenLabs voice IDs per speaker if you don’t want the auto picker.
   - `pageParentId`: reserved for advanced setups where you want to nest the assignment under a specific Notion page instead of the database root. Most tutors can leave this `null`; the pipeline still relies on the database to manage properties.
-- Profiles are optional. If you run `esl-orchestrator` without `--student`, the default profile still fills in preset/accent defaults so you can stay hands-off. Custom profiles only come into play when you need a tailored voice or color scheme.
+- Profiles are optional. If you run `esl` without `--student`, the default profile still fills in preset/accent defaults so you can stay hands-off. Custom profiles only come into play when you need a tailored voice or color scheme.
 
 ---
 
@@ -140,11 +160,11 @@ pnpm tts-elevenlabs --md ./out/anna-2025-10-21.md --voice-map configs/voices.yml
 pnpm storage-uploader --file ./out/audio/file.mp3 --prefix audio/assignments --public-read
 
 # Inspect or rerun orchestrator steps
-pnpm esl-orchestrator status --md ./fixtures/sample-assignment.md
-pnpm esl-orchestrator rerun --md ./fixtures/sample-assignment.md --steps upload,add-audio --upload s3
+pnpm esl status --md ./fixtures/sample-assignment.md
+pnpm esl rerun --md ./fixtures/sample-assignment.md --steps upload,add-audio --upload s3
 
 # Guided run with interactive wizard & JSON logs
-pnpm esl-orchestrator --interactive --with-tts --upload s3 --json
+pnpm esl --interactive --with-tts --upload s3 --json
 ```
 
 Use `--skip-import`, `--skip-tts`, `--skip-upload`, and `--redo-tts` to reuse assets from the existing manifest when iterating.
