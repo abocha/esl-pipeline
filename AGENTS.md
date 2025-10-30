@@ -1,84 +1,121 @@
-# Agent Handbook
+# Agent Handbook (v2)
 
-This repo houses the ESL homework pipeline. Below is everything the next agent should know before continuing work.
+Welcome! This repo now ships a publishable CLI _and_ a reusable pipeline module, so we work as much in npm/package-land as in CLI land. Everything below assumes **Node.js 24.10.0+**, pnpm, and system ffmpeg.
+
+---
 
 ## 1. Architecture Snapshot
 
-- **Core Flow**: Markdown (`md-validator` → `md-extractor`) → Notion import (`notion-importer` + `notion-colorizer`) → TTS (`tts-elevenlabs`) → S3 upload (`storage-uploader`) → attach audio (`notion-add-audio`).
-- **Orchestrator** (`packages/orchestrator`) glues the above into one command. It now exposes:
-  - `esl --md <file>`: full run.
-    - Add `--interactive` to launch a guided wizard that suggests markdown files, student profiles, presets, TTS/upload settings, and S3 defaults.
-    - Incremental flags: `--skip-import`, `--skip-tts`, `--skip-upload`, and `--redo-tts` reuse manifest assets safely.
-    - Pass `--json` for structured event logs (pairs nicely with scripting).
-  - `esl status --md <file>`: read manifest + hash/audio health.
-  - `esl rerun --md <file> --steps tts,upload`: rerun subset using cached manifest.
-- **Configs** live in `configs/` (notably `voices.yml`, `elevenlabs.voices.json`, `presets.json`). Student-specific overrides can reside in `configs/students/` (stubbed for now).
+- **CLI (`packages/orchestrator`)** — the user-facing tool. Entry point commands:
+  - `esl --md <file>` (full run, same flags as before).
+  - `esl status …`, `esl rerun …`, `esl select …`.
+  - `esl --version` now prints the package version.
+- **Programmatic API** — `createPipeline`, `resolveConfigPaths`, `loadEnvFiles`, `resolveManifestPath` exported from `@esl-pipeline/orchestrator`. The CLI is a thin adapter around these functions.
+- **Adapters (WIP)** — pipeline consumers can supply their own `ConfigProvider`, `ManifestStore`, and `SecretProvider`. Default implementations still use filesystem configs/manifests and `process.env`.
+- **Pipeline flow** (unchanged logic):
+  1. Validate Markdown (`md-validator`, `md-extractor`)
+  2. Import into Notion (`notion-importer`, `notion-colorizer`)
+  3. Generate TTS (`tts-elevenlabs`)
+  4. Upload to S3 (`storage-uploader`)
+  5. Attach audio (`notion-add-audio`)
+  6. Persist manifest
 
-## 2. Environment & Secrets
+---
 
-- Copy `.env.example` to `.env` and fill: `NOTION_TOKEN`, `ELEVENLABS_API_KEY`, `AWS_*`.
-- Keep ffmpeg installed (`ffmpeg` must be on PATH).
-- **Voice Catalog**: refresh with `pnpm exec tsx --eval "import { syncVoices } from './packages/tts-elevenlabs/src/syncVoices.ts'; (async () => { await syncVoices('configs/elevenlabs.voices.json'); })();"` before generating real audio.
-- Never commit `.env` or generated media. `.gitignore` already excludes `*.tsbuildinfo` and `configs/voices.json`.
+## 2. Runtime & Dependencies
 
-## 3. Tooling Commands
+- **Node**: 24.10.0 or newer. CI targets Node 24 explicitly.
+- **pnpm**: 8+ (`corepack enable`).
+- **ffmpeg**: must be present on PATH or provided via `FFMPEG_PATH`. We no longer vendor binaries.
+- **Env variables**: CLI auto-loads `.env` from CWD + repo root. Programmatic use should call `loadEnvFiles` and/or supply secrets directly.
 
-- `pnpm install` (workspace install)
-- `pnpm lint` (ESLint v9 flat config + Prettier checks)
-- `pnpm build` (tsc on all packages)
-- `pnpm test` (Vitest suites, including orchestrator smoke)
-- `pnpm smoke` (alias for orchestrator tests)
-- Package-specific scripts: `pnpm --filter <pkg> test`, `pnpm --filter <pkg> dev`, etc.
+---
 
-## 4. Testing Expectations
+## 3. Key Packages
 
-- Unit tests reside in `packages/<pkg>/tests`.
-- Orchestrator smoke test mocks Notion/S3/ElevenLabs and verifies manifest + rerun flows.
-- Before merging, run lint/build/test locally; CI (see `.github/workflows/ci.yml`) enforces the same.
+| Package                     | Purpose                                        |
+|-----------------------------|------------------------------------------------|
+| `@esl-pipeline/orchestrator`| CLI & pipeline factory (publishable)           |
+| `@esl-pipeline/md-validator`| Markdown validation                            |
+| `@esl-pipeline/md-extractor`| Study text extraction                          |
+| `@esl-pipeline/notion-importer`| Notion page creation + data source resolution |
+| `@esl-pipeline/notion-colorizer`| Heading presets in Notion                    |
+| `@esl-pipeline/tts-elevenlabs`| ElevenLabs integration (system ffmpeg)        |
+| `@esl-pipeline/storage-uploader`| S3 uploads                                   |
+| `@esl-pipeline/notion-add-audio`| Audio attachment inside Notion               |
 
-## 5. Recent Changes (context for follow-up)
+The orchestrator package now exports type definitions (e.g. `PipelineNewAssignmentOptions`, `AssignmentManifest`) alongside the runtime API.
 
-- Interactive CLI wizard now launches with a Start/Settings/Saved-defaults menu, reusable manifest defaults, and guardrails around skip flags.
-- Manual Markdown selection now uses an Enquirer-based path picker (dirs/files) shared with `esl select`, powered by `globby/find-up` and respecting the repo ignore list.
-- Validator now enforces that `:::study-text` and its closing `:::` are flush-left (no indentation) so Notion importer will reliably generate the study-text toggle.
-- Structured logging/summary output landed; `--json` emits machine-friendly transcripts.
-- Added status/rerun APIs and CLI commands in orchestrator; manifests now power incremental runs.
-- TTS sanitizes Markdown emphasis before hitting ElevenLabs (no more pauses on `**bold**`).
-- ElevenLabs integration now resolves friendly voice names using `configs/elevenlabs.voices.json`.
-- Markdown validator accepts topic arrays and enforces `--strict` warnings-as-errors.
-- Storage uploader keys are path-safe and tests match the options-object API.
-- Student profiles now include a built-in `Default` entry for shared presets (accent hint optional) so orchestrator stays consistent even when you skip selecting a learner.
-- Docs overhauled (`README.md`, `docs/publishing.md`, `docs/orchestrator-ux.md`); Prettier/ESLint added.
+---
 
-## 6. Pending / Next Work
+## 4. Pipeline API Basics
 
-1. **Orchestrator UX roadmap** (`docs/orchestrator-ux.md`): next tranche is config profiles (`configs/students/*`), richer wizard preview/editing, and log timing metrics.
-2. **Release automation**: add CHANGELOG, choose versioning, decide which packages should be public (currently `private: true`).
-3. **Smoke coverage**: consider richer integration tests that mock Notion/S3/ElevenLabs with fixtures.
-4. **Security**: document IAM scopes, key rotation, and voice catalog update cadence in `docs/publishing.md` or new security doc.
-5. **Package docs**: per-package READMEs summarising CLI flags still missing (only root README updated).
+```ts
+import { createPipeline, loadEnvFiles } from '@esl-pipeline/orchestrator';
 
-## 7. Conventions & Tips
+loadEnvFiles(); // optional convenience helper
 
-- TypeScript 5.9+, ES modules, 2-space indentation, trailing commas. Types in PascalCase.
-- Co-locate helper types in `types.ts` or adjacent modules.
-- Use `promises` API (`node:fs/promises`), avoid callback-style.
-- For mocks, prefer `vi.importActual` to partially mock modules (see orchestrator smoke test).
-- Keep manifest schema backwards compatible; orchestrator relies on `mdHash`, `audio`, `timestamp`, etc.
+const pipeline = createPipeline({ cwd: process.cwd() });
 
-## 8. Troubleshooting Checklist
+const result = await pipeline.newAssignment({
+  md: './lessons/mission.md',
+  preset: 'b1-default',
+  withTts: true,
+  upload: 's3',
+});
+```
 
-- **Validation fails**: run `pnpm md-validate <file> --strict` to inspect exact errors.
-- **Notion import**: ensure `NOTION_TOKEN` integration has access to target data sources; `resolveDataSourceId` now lists available names on failure.
-- **TTS missing voices**: refresh `configs/elevenlabs.voices.json`; check `voices.yml` for friendly -> voice ID mapping.
-- **S3 upload issues**: confirm `AWS_REGION/S3_BUCKET/S3_PREFIX` in `.env`; ACL fallback logs a warning when bucket blocks ACLs.
-- **ffmpeg errors**: ensure ffmpeg binary is installed or set `FFMPEG_PATH` env var.
+- `pipeline.defaults` exposes the resolved presets/voices/outDir paths.
+- `pipeline.configPaths` gives you the underlying directories for configs and wizard defaults.
+- `pipeline.rerunAssignment` and `pipeline.getAssignmentStatus` mirror the CLI commands.
+- The CLI uses the same pipeline under the hood; all new features should land in the pipeline and then be surfaced via CLI flags.
 
-## 9. File Guide
+---
 
-- `configs/elevenlabs.voices.json` – generated voice catalog (committed now for reference).
-- `docs/publishing.md` – deployment checklist.
-- `docs/orchestrator-ux.md` – UX design for future work.
-- `packages/orchestrator/src/index.ts` – now exports `newAssignment`, `getAssignmentStatus`, `rerunAssignment`.
+## 5. Soon-to-Land Scaffolding (Backend Prep)
 
-Stay consistent with lint rules (`pnpm lint`). When touching the orchestrator, update smoke test as needed. Good luck!
+A standalone doc `docs/groundwork-for-backend.md` tracks the roadmap. Highlights:
+
+1. **Adapters & abstractions** — pluggable config/manifest/secret providers with filesystem defaults.
+2. **Observability** — logger/metric/tracing interfaces so logs can stream to DataDog, etc., without touching business logic.
+3. **State storage options** — S3/database manifest stores, configurable via `createPipeline`.
+4. **Service skeleton** — Dockerfile, sample HTTP worker, queue hooks.
+5. **CI upgrades** — container builds, integration tests with adapters on mock services.
+
+We’ll implement these in phases to avoid rewriting later when the orchestrator becomes part of a bigger ESL platform.
+
+---
+
+## 6. Working with the Repo
+
+- **Install**: `pnpm install`
+- **Build**: `pnpm -r build`
+- **Lint**: `pnpm lint`
+- **Tests**: `pnpm test` or per package (`pnpm --filter @esl-pipeline/orchestrator test`)
+- **Smoke**: `pnpm smoke` (orchestrator suite)
+- **Publish**: from `packages/orchestrator`, run `npm publish --access public`
+- **Zero-install usage**: `npx @esl-pipeline/orchestrator esl --help`
+
+---
+
+## 7. Gotchas & Notes
+
+- Manifests are written alongside the Markdown by default. Using non-filesystem stores will be handled via adapters (see roadmap).
+- ElevenLabs, Notion, and S3 dependencies are real—tests use mocks. Provide valid credentials for end-to-end runs.
+- The pipeline sets stricter markdown validation (flush-left `:::study-text`). Fixtures and upstream content must comply.
+- Only the `esl` binary is exported; the legacy `esl-orchestrator` alias is gone.
+- CLI/README instructs users to install ffmpeg themselves; we do not bundle or automatically download it.
+
+---
+
+## 8. FAQ
+
+- **How do I use creation programmatically?** Use `createPipeline` as shown, supply env and config overrides, run `newAssignment`.
+- **How do I customize configs?** Override `presetsPath`, `voicesPath`, or `studentsDir` in `createPipeline({ ... })`. More advanced adapters will land soon.
+- **How do I add a new CLI flag?** Extend the pipeline API first, then plumb the flag through `bin/cli.ts`.
+- **Which Node version is required?** Node **24.10.0** minimum. CI and engines enforce this.
+- **How do I handle manifests remotely?** Implement `ManifestStore` per the roadmap (S3/DB). Until then, copy manifests off disk or sync them externally.
+
+---
+
+This handbook should keep future “agents” aligned with the current architecture and the path toward a backend-friendly orchestrator. Keep `docs/groundwork-for-backend.md` in sync as the scaffolding lands. Happy shipping! 🎯
