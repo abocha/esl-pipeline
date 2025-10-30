@@ -2,19 +2,21 @@
 
 All notable changes to this project will be documented here. Dates use `YYYY-MM-DD`.
 
-## [1.2.0] - 2025-10-28
-
 ## [1.4.0] - 2025-10-30
 
 ### Added
 
 - Bundled `Default` student profile keeps shared color defaults, and a new `--accent` flag lets ad-hoc runs request British/American voices without editing YAML (accent hints remain optional).
 - Wizard/CLI fall back to profile presets even when you skip selecting a learner, keeping database and styling details consistent out of the box.
+- Saved defaults live in `configs/wizard.defaults.json`; the wizard now labels `.env`-sourced values and only persists manually configured settings when you choose "Saved defaults…".
+- Interactive wizard now starts with a menu (Start, Settings, quick preset) so tutors can run with defaults or tweak flags individually without replaying the full prompt sequence.
+- Manual markdown picker supports tab-style autocompletion and includes an explicit Cancel option so you can back out without aborting the wizard.
 
 ### Changed
 
 - Student profiles no longer force an accent hint; `accentPreference` now defaults to `null` so tutors opt in only when needed.
 - Documentation clarifies when to set `pageParentId` versus using the database ID, and how accent preferences cascade through the pipeline.
+- Markdown validator now enforces that the `:::study-text` marker and its closing `:::` start at column 1, preventing Notion imports from skipping the study-text toggle due to indentation.
 
 ## [1.3.0] - 2025-10-29
 
@@ -40,6 +42,8 @@ All notable changes to this project will be documented here. Dates use `YYYY-MM-
 
 - Student linking is now best-effort: if the Notion importer cannot resolve a student page, the pipeline continues without failing but surfaces a warning and reports the linkage outcome in stage events.
 - Workspace TypeScript configs were tightened to rely on the hoisted linker, consolidated path resolution, and the ffmpeg helper package aligned with the shared build strategy.
+
+## [1.2.0] - 2025-10-28
 
 ## [1.1.0] - 2025-10-27
 
