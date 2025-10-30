@@ -320,9 +320,13 @@ S3_BUCKET=notion-tts
   "dbId": "xxxxxxxx",
   "pageParentId": null,
   "colorPreset": "b1-default",
+  "accentPreference": "british",
   "voices": { "Alex": "voice_id_1", "Mara": "voice_id_2", "default": "voice_id_default" }
 }
 ```
+
+- `accentPreference` nudges the ElevenLabs picker toward the requested accent whenever the Markdown doesn’t spell it out.
+- `pageParentId` is optional and only matters if you intend to file assignments under a regular Notion page instead of the database root. Most tutors can leave it `null`; the importer continues to target the database specified by `dbId`.
 
 ---
 

@@ -9,6 +9,7 @@ export type StudentProfile = {
   colorPreset?: string | null;
   voices?: Record<string, string>;
   manifestPreset?: string | null;
+  accentPreference?: string | null;
 };
 
 export type PresetMap = Record<
@@ -23,6 +24,7 @@ export type PresetMap = Record<
 const DEFAULT_PRESETS_PATH = 'configs/presets.json';
 const DEFAULT_VOICES_PATH = 'configs/voices.yml';
 const DEFAULT_STUDENTS_DIR = 'configs/students';
+export const DEFAULT_STUDENT_NAME = 'Default';
 
 const IGNORED_DIRS = new Set(['.git', 'node_modules', 'dist', 'build', '.rush', '.turbo']);
 
@@ -55,9 +57,24 @@ export async function loadStudentProfiles(
         }
       }
     }
+    if (!profiles.some(profile => profile.student === DEFAULT_STUDENT_NAME)) {
+      profiles.push({
+        student: DEFAULT_STUDENT_NAME,
+        dbId: null,
+        pageParentId: null,
+        colorPreset: 'b1-default',
+      });
+    }
     return profiles.sort((a, b) => a.student.localeCompare(b.student));
   } catch {
-    return [];
+    return [
+      {
+        student: DEFAULT_STUDENT_NAME,
+        dbId: null,
+        pageParentId: null,
+        colorPreset: 'b1-default',
+      },
+    ];
   }
 }
 

@@ -21,6 +21,11 @@ import {
   type WizardRunResult,
   type WizardSelections,
 } from '../src/wizard.js';
+import {
+  loadStudentProfiles,
+  DEFAULT_STUDENT_NAME,
+  type StudentProfile,
+} from '../src/config.js';
 
 const moduleDir = dirname(fileURLToPath(import.meta.url));
 loadEnv();
@@ -77,6 +82,7 @@ const usage = (): never => {
   esl-orchestrator --md <file.md> [options]                        
       --interactive             Launch guided wizard for missing flags
       --with-tts                Generate ElevenLabs audio
+      --accent <name>           Preferred voice accent (american, british, etc.)
       --upload s3               Upload audio to S3 (requires --with-tts)
       --skip-import             Reuse existing Notion page from manifest
       --skip-tts                Reuse existing audio from manifest
@@ -94,6 +100,7 @@ type RunFlags = {
   student?: string;
   preset?: string;
   presetsPath?: string;
+  accentPreference?: string;
   withTts: boolean;
   upload?: 's3';
   presign?: number;
@@ -125,6 +132,7 @@ const parseRunFlags = (args: string[]): RunFlags => ({
   student: getFlag(args, '--student'),
   preset: getFlag(args, '--preset'),
   presetsPath: getFlag(args, '--presets-path'),
+  accentPreference: getFlag(args, '--accent'),
   withTts: hasFlag(args, '--with-tts'),
   upload: (getFlag(args, '--upload') as 's3' | undefined) ?? undefined,
   presign: parseNumber(getFlag(args, '--presign')),
@@ -149,6 +157,41 @@ const command = rawArgs[0] && !rawArgs[0].startsWith('--') ? rawArgs[0] : null;
 const jsonOutput = hasFlag(rawArgs, '--json');
 const logger = createLogger({ json: jsonOutput });
 
+let cachedProfiles: StudentProfile[] | null = null;
+
+const normalizeProfileName = (value?: string): string | undefined =>
+  value && value.trim().length ? value.trim().toLowerCase() : undefined;
+
+const getStudentProfiles = async (): Promise<StudentProfile[]> => {
+  if (cachedProfiles) return cachedProfiles;
+  cachedProfiles = await loadStudentProfiles().catch(() => []);
+  return cachedProfiles;
+};
+
+const applyProfileDefaults = async (
+  flags: NewAssignmentFlags
+): Promise<StudentProfile | undefined> => {
+  const profiles = await getStudentProfiles();
+  if (!profiles.length) return undefined;
+
+  const requested = normalizeProfileName(flags.student);
+  let profile = requested
+    ? profiles.find(p => normalizeProfileName(p.student) === requested)
+    : undefined;
+
+  if (!profile) {
+    profile = profiles.find(p => p.student === DEFAULT_STUDENT_NAME) ?? undefined;
+  }
+
+  if (!profile) return undefined;
+
+  if (!flags.dbId && profile.dbId) flags.dbId = profile.dbId ?? undefined;
+  if (!flags.preset && profile.colorPreset) flags.preset = profile.colorPreset ?? undefined;
+  if (!flags.accentPreference && profile.accentPreference)
+    flags.accentPreference = profile.accentPreference ?? undefined;
+  return profile;
+};
+
 const outputRunSummary = (
   result: Awaited<ReturnType<typeof newAssignment>>,
   flags: RunFlags
@@ -158,6 +201,7 @@ const outputRunSummary = (
   console.log(`  Markdown : ${flags.md}`);
   if (flags.student) console.log(`  Student  : ${flags.student}`);
   if (flags.preset) console.log(`  Preset   : ${flags.preset}`);
+  if (flags.accentPreference) console.log(`  Accent   : ${flags.accentPreference}`);
   console.log(`  Steps    : ${result.steps.join(', ')}`);
   if (result.manifestPath) console.log(`  Manifest : ${resolve(result.manifestPath)}`);
   if (result.pageUrl) console.log(`  Page URL : ${result.pageUrl}`);
@@ -215,6 +259,7 @@ async function handleRerun(args: string[]): Promise<void> {
     prefix: getFlag(args, '--prefix'),
     publicRead: hasFlag(args, '--public-read'),
     presign: parseNumber(getFlag(args, '--presign')),
+    accentPreference: getFlag(args, '--accent'),
   };
 
   logger.info('Rerunning pipeline steps', {
@@ -293,6 +338,7 @@ async function handleRun(args: string[]): Promise<void> {
           student: parsed.student,
           preset: parsed.preset,
           presetsPath: parsed.presetsPath,
+          accentPreference: parsed.accentPreference,
           withTts: parsed.withTts,
           upload: parsed.upload,
           publicRead: parsed.publicRead,
@@ -329,6 +375,7 @@ async function handleRun(args: string[]): Promise<void> {
       student: parsed.student ?? undefined,
       preset: parsed.preset ?? undefined,
       presetsPath: parsed.presetsPath ?? undefined,
+      accentPreference: parsed.accentPreference ?? undefined,
       withTts: parsed.withTts ? true : undefined,
       upload: parsed.upload,
       presign: parsed.presign ?? undefined,
@@ -348,6 +395,8 @@ async function handleRun(args: string[]): Promise<void> {
       redoTts: parsed.redoTts ? true : undefined,
     };
   }
+
+  await applyProfileDefaults(assignmentFlags);
 
   logger.info('Starting assignment pipeline', {
     md: assignmentFlags.md,
@@ -394,13 +443,14 @@ async function handleRun(args: string[]): Promise<void> {
   if (parsed.interactive && !jsonOutput && wizardSelections) {
     printWizardSummary(result, wizardSelections, stageOutcomes);
   } else {
-    const summaryFlags: RunFlags = {
-      ...parsed,
-      md: assignmentFlags.md,
-      student: assignmentFlags.student,
-      preset: assignmentFlags.preset,
-      presetsPath: assignmentFlags.presetsPath,
-      withTts: Boolean(assignmentFlags.withTts),
+  const summaryFlags: RunFlags = {
+    ...parsed,
+    md: assignmentFlags.md,
+    student: assignmentFlags.student,
+    preset: assignmentFlags.preset,
+    presetsPath: assignmentFlags.presetsPath,
+    accentPreference: assignmentFlags.accentPreference,
+    withTts: Boolean(assignmentFlags.withTts),
       upload: assignmentFlags.upload,
       presign: assignmentFlags.presign,
       publicRead: Boolean(assignmentFlags.publicRead),
@@ -437,6 +487,7 @@ const printWizardSummary = (
   if (selections.student) console.log(`  Student  : ${selections.student}`);
   if (selections.dbId) console.log(`  Database : ${selections.dbId}`);
   if (selections.preset) console.log(`  Preset   : ${selections.preset}`);
+  if (selections.accentPreference) console.log(`  Accent   : ${selections.accentPreference}`);
   console.log(`  Audio    : ${selections.withTts ? 'Enabled' : 'Disabled'}`);
   if (selections.withTts && selections.voices) {
     console.log(`  Voice map: ${selections.voices}`);

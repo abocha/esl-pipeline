@@ -4,12 +4,25 @@ All notable changes to this project will be documented here. Dates use `YYYY-MM-
 
 ## [1.2.0] - 2025-10-28
 
+## [1.4.0] - 2025-10-30
+
+### Added
+
+- Bundled `Default` student profile keeps shared color defaults, and a new `--accent` flag lets ad-hoc runs request British/American voices without editing YAML (accent hints remain optional).
+- Wizard/CLI fall back to profile presets even when you skip selecting a learner, keeping database and styling details consistent out of the box.
+
+### Changed
+
+- Student profiles no longer force an accent hint; `accentPreference` now defaults to `null` so tutors opt in only when needed.
+- Documentation clarifies when to set `pageParentId` versus using the database ID, and how accent preferences cascade through the pipeline.
+
 ## [1.3.0] - 2025-10-29
 
 ### Added
 
 - Orchestrator now surfaces voice assignments in both JSON events and CLI summaries, making it clear which ElevenLabs voices were chosen for each speaker.
 - Manifests persist the selected voice metadata so reruns and downstream tooling can reuse or audit previous choices.
+- Bundled `Default` student profile keeps shared color defaults, and a new `--accent` flag lets ad‑hoc runs request British/American voices without editing YAML (accent hints remain optional).
 
 ### Changed
 

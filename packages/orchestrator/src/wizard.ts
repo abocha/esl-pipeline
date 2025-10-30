@@ -9,6 +9,7 @@ import {
   summarizeMarkdown,
   resolveVoicesPath,
   getDefaultOutputDir,
+  DEFAULT_STUDENT_NAME,
 } from './config.js';
 
 type WizardContext = {
@@ -29,6 +30,7 @@ export type WizardSelections = {
   studentProfile?: StudentProfile | null;
   dbId?: string;
   preset?: string;
+  accentPreference?: string;
   withTts: boolean;
   voices?: string;
   force?: boolean;
@@ -64,6 +66,8 @@ export async function runInteractiveWizard(
     loadStudentProfiles(ctx.studentsDir),
     findMarkdownCandidates(cwd, 10),
   ]);
+  const defaultProfile =
+    profiles.find(profile => profile.student === DEFAULT_STUDENT_NAME) ?? null;
 
   const presetNames = Object.keys(presets);
   const state: WizardState = { ...initial };
@@ -115,7 +119,10 @@ export async function runInteractiveWizard(
         ? [{ title: `Use frontmatter student (${summary.student})`, value: summary.student }]
         : []),
       ...profiles.map(profile => ({
-        title: profile.student,
+        title:
+          profile.student === DEFAULT_STUDENT_NAME
+            ? 'Default profile (auto)'
+            : profile.student,
         value: profile.student,
       })),
       { title: 'Custom…', value: '__custom__' },
@@ -160,6 +167,14 @@ export async function runInteractiveWizard(
       : null;
   } else if (state.student) {
     state.studentProfile = profiles.find(profile => profile.student === state.student) ?? null;
+  }
+
+  if (!state.studentProfile && defaultProfile) {
+    state.studentProfile = defaultProfile;
+  }
+
+  if (!state.accentPreference && state.studentProfile?.accentPreference) {
+    state.accentPreference = state.studentProfile.accentPreference ?? undefined;
   }
 
   // Auto fill DB info from profile if available
@@ -363,6 +378,7 @@ export async function runInteractiveWizard(
     student: state.student ?? undefined,
     preset: state.preset ?? undefined,
     presetsPath: initial.presetsPath,
+    accentPreference: state.accentPreference ?? initial.accentPreference,
     withTts: Boolean(state.withTts),
     upload: state.upload,
     presign: initial.presign,
@@ -384,6 +400,7 @@ export async function runInteractiveWizard(
     studentProfile: state.studentProfile ?? null,
     dbId: flags.dbId,
     preset: flags.preset,
+    accentPreference: state.accentPreference ?? undefined,
     withTts: Boolean(state.withTts),
     voices: state.voices,
     force: state.force,

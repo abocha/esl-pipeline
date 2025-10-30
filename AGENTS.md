@@ -45,6 +45,7 @@ This repo houses the ESL homework pipeline. Below is everything the next agent s
 - ElevenLabs integration now resolves friendly voice names using `configs/elevenlabs.voices.json`.
 - Markdown validator accepts topic arrays and enforces `--strict` warnings-as-errors.
 - Storage uploader keys are path-safe and tests match the options-object API.
+- Student profiles now include a built-in `Default` entry for shared presets (accent hint optional) so orchestrator stays consistent even when you skip selecting a learner.
 - Docs overhauled (`README.md`, `docs/publishing.md`, `docs/orchestrator-ux.md`); Prettier/ESLint added.
 
 ## 6. Pending / Next Work
