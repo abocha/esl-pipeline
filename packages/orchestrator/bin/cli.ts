@@ -1,5 +1,4 @@
 #!/usr/bin/env node
-import { config as loadEnv } from 'dotenv';
 import { existsSync } from 'node:fs';
 import { stat } from 'node:fs/promises';
 import { dirname, resolve, relative } from 'node:path';
@@ -9,10 +8,10 @@ import ora from 'ora';
 import { Command, CommanderError, InvalidOptionArgumentError } from 'commander';
 import pc from 'picocolors';
 import {
-  getAssignmentStatus,
-  newAssignment,
-  rerunAssignment,
   summarizeVoiceSelections,
+  createPipeline,
+  loadEnvFiles,
+  type OrchestratorPipeline,
   type AssignmentProgressEvent,
   type AssignmentStage,
 } from '../src/index.js';
@@ -37,11 +36,12 @@ import {
 } from '../src/pathPicker.js';
 
 const moduleDir = dirname(fileURLToPath(import.meta.url));
-loadEnv();
 const repoEnvPath = resolve(moduleDir, '../../../.env');
+const envFiles = ['.env'];
 if (existsSync(repoEnvPath)) {
-  loadEnv({ path: repoEnvPath, override: false });
+  envFiles.push(repoEnvPath);
 }
+loadEnvFiles({ files: envFiles, cwd: process.cwd(), assignToProcess: true, override: false });
 
 type RerunStep = NonNullable<RerunFlags['steps']>[number];
 
@@ -425,21 +425,32 @@ const command = rawArgs[0] && !rawArgs[0].startsWith('--') ? rawArgs[0] : null;
 const jsonOutput = hasFlag(rawArgs, '--json');
 const logger = createLogger({ json: jsonOutput });
 
-let cachedProfiles: StudentProfile[] | null = null;
+let pipelineInstance: OrchestratorPipeline | null = null;
+const ensurePipeline = (): OrchestratorPipeline => {
+  if (!pipelineInstance) {
+    pipelineInstance = createPipeline();
+  }
+  return pipelineInstance;
+};
+
+let cachedProfiles: { key: string; profiles: StudentProfile[] } | null = null;
 
 const normalizeProfileName = (value?: string): string | undefined =>
   value && value.trim().length ? value.trim().toLowerCase() : undefined;
 
-const getStudentProfiles = async (): Promise<StudentProfile[]> => {
-  if (cachedProfiles) return cachedProfiles;
-  cachedProfiles = await loadStudentProfiles().catch(() => []);
-  return cachedProfiles;
+const getStudentProfiles = async (pipeline: OrchestratorPipeline): Promise<StudentProfile[]> => {
+  const cacheKey = pipeline.configPaths.studentsDir;
+  if (cachedProfiles && cachedProfiles.key === cacheKey) return cachedProfiles.profiles;
+  const profiles = await loadStudentProfiles(cacheKey).catch(() => []);
+  cachedProfiles = { key: cacheKey, profiles };
+  return profiles;
 };
 
 const applyProfileDefaults = async (
+  pipeline: OrchestratorPipeline,
   flags: NewAssignmentFlags
 ): Promise<StudentProfile | undefined> => {
-  const profiles = await getStudentProfiles();
+  const profiles = await getStudentProfiles(pipeline);
   if (!profiles.length) return undefined;
 
   const requested = normalizeProfileName(flags.student);
@@ -461,7 +472,7 @@ const applyProfileDefaults = async (
 };
 
 const outputRunSummary = (
-  result: Awaited<ReturnType<typeof newAssignment>>,
+  result: Awaited<ReturnType<OrchestratorPipeline['newAssignment']>>,
   flags: RunFlags
 ): void => {
   if (jsonOutput) return;
@@ -480,7 +491,7 @@ const outputRunSummary = (
 };
 
 const outputStatusSummary = (
-  status: Awaited<ReturnType<typeof getAssignmentStatus>>,
+  status: Awaited<ReturnType<OrchestratorPipeline['getAssignmentStatus']>>,
   md: string
 ): void => {
   if (jsonOutput) return;
@@ -497,8 +508,9 @@ async function handleStatus(args: string[]): Promise<void> {
   const mdArg = getFlag(args, '--md');
   if (!mdArg) usage();
   const md = mdArg!;
+  const pipeline = ensurePipeline();
   logger.info('Loading assignment status', { md });
-  const status = await getAssignmentStatus(md);
+  const status = await pipeline.getAssignmentStatus(md);
   logger.success('Status loaded', { manifestPath: status.manifestPath });
   outputStatusSummary(status, md);
   logger.flush({ command: 'status', status });
@@ -516,6 +528,8 @@ async function handleRerun(args: string[]): Promise<void> {
         .filter(Boolean) as RerunStep[])
     : undefined;
 
+  const pipeline = ensurePipeline();
+
   const rerunFlags: RerunFlags = {
     md,
     steps,
@@ -530,12 +544,18 @@ async function handleRerun(args: string[]): Promise<void> {
     accentPreference: getFlag(args, '--accent'),
   };
 
+  const appliedFlags: RerunFlags = {
+    ...rerunFlags,
+    voices: rerunFlags.voices ?? pipeline.defaults.voicesPath,
+    out: rerunFlags.out ?? pipeline.defaults.outDir,
+  };
+
   logger.info('Rerunning pipeline steps', {
     md,
     steps: steps ?? ['upload', 'add-audio'],
   });
 
-  const result = await rerunAssignment(rerunFlags);
+  const result = await pipeline.rerunAssignment(rerunFlags);
   logger.success('Rerun completed', { steps: result.steps });
 
   if (!jsonOutput) {
@@ -546,7 +566,11 @@ async function handleRerun(args: string[]): Promise<void> {
     if (result.audio?.url) console.log(`  Audio URL: ${result.audio.url}`);
   }
 
-  logger.flush({ command: 'rerun', result });
+  const status = await pipeline.getAssignmentStatus(md);
+  logger.flush({ command: 'rerun', result, flags: appliedFlags, status });
+  if (!jsonOutput) {
+    outputStatusSummary(status, md);
+  }
 }
 
 const stageLabels: Record<AssignmentStage, string> = {
@@ -591,6 +615,7 @@ const formatSkipText = (event: AssignmentProgressEvent): string => {
 };
 
 async function handleRun(args: string[]): Promise<void> {
+  const pipeline = ensurePipeline();
   const parsed = parseRunFlags(args);
   if (!parsed.md && !parsed.interactive) usage();
 
@@ -605,7 +630,7 @@ async function handleRun(args: string[]): Promise<void> {
           md: parsed.md,
           student: parsed.student,
           preset: parsed.preset,
-          presetsPath: parsed.presetsPath,
+          presetsPath: parsed.presetsPath ?? pipeline.defaults.presetsPath,
           accentPreference: parsed.accentPreference,
           withTts: parsed.withTts,
           upload: parsed.upload,
@@ -613,8 +638,8 @@ async function handleRun(args: string[]): Promise<void> {
           prefix: parsed.prefix,
           dryRun: parsed.dryRun,
           force: parsed.force,
-          voices: parsed.voices,
-          out: parsed.out,
+          voices: parsed.voices ?? pipeline.defaults.voicesPath,
+          out: parsed.out ?? pipeline.defaults.outDir,
           dbId: parsed.dbId,
           db: parsed.db,
           dataSourceId: parsed.dataSourceId,
@@ -622,8 +647,10 @@ async function handleRun(args: string[]): Promise<void> {
         },
         {
           cwd: process.cwd(),
-          presetsPath: parsed.presetsPath,
-          voicesPath: parsed.voices,
+          presetsPath: pipeline.defaults.presetsPath,
+          studentsDir: pipeline.configPaths.studentsDir,
+          voicesPath: pipeline.defaults.voicesPath,
+          defaultsPath: pipeline.configPaths.wizardDefaultsPath,
         }
       );
       assignmentFlags = wizardResult.flags;
@@ -664,12 +691,23 @@ async function handleRun(args: string[]): Promise<void> {
     };
   }
 
-  await applyProfileDefaults(assignmentFlags);
+  if (!assignmentFlags.md) usage();
+
+  const profile = await applyProfileDefaults(pipeline, assignmentFlags);
+
+  const appliedFlags: NewAssignmentFlags = {
+    ...assignmentFlags,
+    presetsPath: assignmentFlags.presetsPath ?? pipeline.defaults.presetsPath,
+    voices: assignmentFlags.voices ?? pipeline.defaults.voicesPath,
+  };
+  if (!appliedFlags.out && pipeline.defaults.outDir) {
+    appliedFlags.out = pipeline.defaults.outDir;
+  }
 
   logger.info('Starting assignment pipeline', {
-    md: assignmentFlags.md,
-    withTts: Boolean(assignmentFlags.withTts),
-    upload: assignmentFlags.upload ?? 'none',
+    md: appliedFlags.md,
+    withTts: Boolean(appliedFlags.withTts),
+    upload: appliedFlags.upload ?? 'none',
   });
 
   const stageOutcomes: AssignmentProgressEvent[] = [];
@@ -699,7 +737,7 @@ async function handleRun(args: string[]): Promise<void> {
   };
 
   logNotionToken();
-  const result = await newAssignment(assignmentFlags, progressCallbacks);
+  const result = await pipeline.newAssignment(appliedFlags, progressCallbacks);
 
   if (spinner?.isSpinning) spinner.stop();
 
@@ -713,38 +751,43 @@ async function handleRun(args: string[]): Promise<void> {
   } else {
     const summaryFlags: RunFlags = {
       ...parsed,
-      md: assignmentFlags.md,
-      student: assignmentFlags.student,
-      preset: assignmentFlags.preset,
-      presetsPath: assignmentFlags.presetsPath,
-      accentPreference: assignmentFlags.accentPreference,
-      withTts: Boolean(assignmentFlags.withTts),
-      upload: assignmentFlags.upload,
-      presign: assignmentFlags.presign,
-      publicRead: Boolean(assignmentFlags.publicRead),
-      prefix: assignmentFlags.prefix,
-      dryRun: Boolean(assignmentFlags.dryRun),
-      force: Boolean(assignmentFlags.force),
-      voices: assignmentFlags.voices,
-      out: assignmentFlags.out,
-      dbId: assignmentFlags.dbId,
-      db: assignmentFlags.db,
-      dataSourceId: assignmentFlags.dataSourceId,
-      dataSource: assignmentFlags.dataSource,
-      skipImport: Boolean(assignmentFlags.skipImport),
-      skipTts: Boolean(assignmentFlags.skipTts),
-      skipUpload: Boolean(assignmentFlags.skipUpload),
-      redoTts: Boolean(assignmentFlags.redoTts),
+      md: appliedFlags.md,
+      student: appliedFlags.student,
+      preset: appliedFlags.preset,
+      presetsPath: appliedFlags.presetsPath,
+      accentPreference: appliedFlags.accentPreference,
+      withTts: Boolean(appliedFlags.withTts),
+      upload: appliedFlags.upload,
+      presign: appliedFlags.presign,
+      publicRead: Boolean(appliedFlags.publicRead),
+      prefix: appliedFlags.prefix,
+      dryRun: Boolean(appliedFlags.dryRun),
+      force: Boolean(appliedFlags.force),
+      voices: appliedFlags.voices,
+      out: appliedFlags.out,
+      dbId: appliedFlags.dbId,
+      db: appliedFlags.db,
+      dataSourceId: appliedFlags.dataSourceId,
+      dataSource: appliedFlags.dataSource,
+      skipImport: Boolean(appliedFlags.skipImport),
+      skipTts: Boolean(appliedFlags.skipTts),
+      skipUpload: Boolean(appliedFlags.skipUpload),
+      redoTts: Boolean(appliedFlags.redoTts),
       interactive: parsed.interactive,
     };
     outputRunSummary(result, summaryFlags);
   }
 
-  logger.flush({ command: 'run', result });
+  logger.flush({
+    command: 'run',
+    result,
+    flags: appliedFlags,
+    profile: profile ? profile.student : undefined,
+  });
 }
 
 const printWizardSummary = (
-  result: Awaited<ReturnType<typeof newAssignment>>,
+  result: Awaited<ReturnType<OrchestratorPipeline['newAssignment']>>,
   selections: WizardSelections,
   stages: AssignmentProgressEvent[]
 ): void => {

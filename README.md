@@ -89,6 +89,36 @@ esl select --file --ext .md
 
 Copy `.env.example` into your working directory (or export the equivalent variables) so Notion, ElevenLabs, and AWS credentials are available at runtime. ffmpeg must be installed separately; run `brew install ffmpeg`, `sudo apt-get install ffmpeg`, or `choco install ffmpeg` depending on your platform, or point `FFMPEG_PATH` at a custom install.
 
+## Programmatic API
+
+Prefer to orchestrate lessons from your own service? The package now exposes a small API that mirrors the CLI defaults while remaining easy to integrate.
+
+```ts
+import { createPipeline, loadEnvFiles } from '@esl-pipeline/orchestrator';
+
+// Optional convenience helper – loads .env (and additional files) into process.env.
+loadEnvFiles({ files: ['.env'] });
+
+// Resolve config paths (presets, voices, students, wizard defaults) and share them across requests.
+const pipeline = createPipeline({ cwd: process.cwd() });
+
+const result = await pipeline.newAssignment({
+  md: './lessons/mission.md',
+  preset: 'b1-default',
+  withTts: true,
+  upload: 's3',
+});
+
+console.log(result.steps, result.manifestPath);
+```
+
+- `pipeline.defaults` exposes the resolved paths for presets, voices, and output directories so you can reuse them when constructing flags for subsequent runs.
+- `pipeline.configPaths` exposes the underlying directories (`presetsPath`, `voicesPath`, `studentsDir`, and `wizardDefaultsPath`) for wiring custom UI or editing student presets.
+- `pipeline.rerunAssignment(...)` and `pipeline.getAssignmentStatus(...)` wrap the existing CLI commands with the same behaviour, automatically injecting default paths when you leave them undefined.
+- `resolveConfigPaths(...)`, `resolveManifestPath(...)`, and `loadEnvFiles(...)` are exported individually for bespoke setups (e.g., feeding the manifest path into a build system or loading environment variables into an isolated object instead of `process.env`).
+
+The exported types (`CreatePipelineOptions`, `PipelineNewAssignmentOptions`, `PipelineRerunOptions`, `AssignmentManifest`, etc.) are all surfaced from the main entrypoint so TypeScript callers inherit accurate signatures without poking at build artefacts.
+
 ---
 
 ## Environment Configuration
