@@ -2,6 +2,9 @@
   "name": "@esl-pipeline/orchestrator-service-example",
   "private": true,
   "type": "module",
+  "scripts": {
+    "vitest": "vitest"
+  },
   "devDependencies": {
     "fastify": "^5.1.0"
   }

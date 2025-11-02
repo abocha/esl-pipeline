@@ -26,6 +26,8 @@
     "lint": "pnpm exec eslint --ext .ts,.tsx packages",
     "format": "pnpm exec prettier --check \"**/*.{ts,tsx,js,json,md,yml,yaml}\"",
     "format:write": "pnpm exec prettier --write \"**/*.{ts,tsx,js,json,md,yml,yaml}\"",
+    "changeset": "changeset",
+    "release:prepare": "pnpm changeset version && pnpm install",
     "smoke": "pnpm --filter @esl-pipeline/orchestrator test",
     "build:extractor": "pnpm --filter @esl-pipeline/md-extractor build",
     "build:validator": "pnpm --filter @esl-pipeline/md-validator build",
@@ -59,6 +61,7 @@
   "private": true,
   "type": "module",
   "devDependencies": {
+    "@changesets/cli": "^2.29.7",
     "@eslint/js": "^9.38.0",
     "@types/node": "^24.9.2",
     "@typescript-eslint/eslint-plugin": "^8.46.2",
