@@ -1,199 +1,239 @@
-• From a “turn this into the backend engine for an ESL tutor dashboard” perspective, the codebase is close—but a modern production service needs more than a CLI and a set of manifests. Biggest gaps fall into three
-  buckets:
+# Backend Integration Guide (2025-11-02)
 
-  ———
+The orchestrator package is now designed to embed directly into backend services. This guide captures the current state and lays out a step-by-step integration plan so you can wire the pipeline into workers, queues, and deployment pipelines without guesswork.
 
-  ### 1. Service scaffolding & API surface
+---
 
-  - CLI-centric design. createPipeline now exists, but there’s still no HTTP/GraphQL/queue entry point. A real app needs a stateless service (REST endpoint, background worker, etc.) that reads jobs from a queue or
-    receives POSTs, persists state, and reports progress back to the UI.
-  - File-based state. Manifests and configs live under configs/ and alongside Markdown files. In a multi-user or serverless setup, you’d want state in a database or object store so jobs can run on any worker.
-  - No job orchestration. There’s no job queue, scheduler, retry policy, or concurrency control. A dashboard will need an async job system (BullMQ, Temporal, etc.), idempotent runs, and mechanisms to resume/retry
-  - Rate limiting & backoff. The pipeline handles a few retry cases, but a web service should enforce API rate limits, concurrency caps, and centralised retry policies so Notion/ElevenLabs aren’t overwhelmed.
-  - Isolation of TTS assets. Temporary audio segments and caches are written to local disk. In a container/cluster, these should go to ephemeral storage or straight to object storage with predictable cleanup.
+## 1. Current Capabilities
 
-  ### 3. Productisation & lifecycle
+| Area | Status | Notes |
+|------|--------|-------|
+| Adapters | ✅ | Filesystem + S3 `ManifestStore`, filesystem + HTTP `ConfigProvider`, selectable via env or constructor. |
+| Observability | ✅ | Injected `logger` / `metrics` hooks, structured stage events, run IDs. |
+| Containerization | ✅ | `packages/orchestrator/Dockerfile` builds an image ready to run the CLI or service. |
+| Service Skeleton | ✅ | `examples/service/` Fastify worker, dry-run POST `/jobs`, Vitest smoke test. |
+| CI | ✅ | GitHub workflow runs on Node 24 + LTS, builds docker image, executes example service test. |
+| Release | ✅ | Changesets-based flow, documented publish steps. |
 
-  - Deployment story. No Dockerfile or deployment manifests; CI runs only tests/lint. You’d need images, infrastructure as code, environment promotion, and integration tests against mock vendors.
-  - Multi-tenant & auth concerns. The current CLI assumes one set of credentials. A tutor platform has multiple teachers—so per-tenant secrets, permissions, and audit logging are required.
-  - Upgrade paths & versioning. With only a changelog and manual npm publish, there’s no automatic migration, no feature flagging, and no schema versioning for manifests. A backend service should add migrations/
-    versioned manifests or compatibility layers.
-  - Docs & UX. README focuses on CLI usage; a backend app needs API docs, job payload contracts, error codes, and operational runbooks.
+Open items (future work): database-backed manifest store, queue helper utilities, advanced tenant/secret providers.
 
-  ———
+---
 
-  Summary
-  The orchestrator is now publishable (createPipeline, clean npx story, Node 24 target), but to slot it into a production tutor dashboard you’d still need:
-  2. Observability, resilience, and operational tooling (logging, metrics, retries, rate limits).
-  3. Deployment scaffolding, multi-tenant secret management, and documentation/SLAs.
+## 2. Integration Checklist
 
-  Addressing those areas turns the current npm CLI into a backend-grade component ready for a larger ESL platform.
+### Step 0 – Prerequisites
+1. Node.js 24.10.0+, pnpm (8 or 10), Docker, ffmpeg on your machine/runner.
+2. Credentials: Notion, ElevenLabs, AWS (if using S3).
+3. Access to your target repository/monorepo where the backend worker will live.
 
-› would it be worth it to lay some groundwork now so that the future transition wouldn't hurt as much?
+### Step 1 – Install the Package
+```bash
+pnpm add @esl-pipeline/orchestrator
+```
 
+For local defaults, copy prebuilt configs:
+```bash
+mkdir -p configs
+cp -R node_modules/@esl-pipeline/orchestrator/dist/configs ./configs
+```
 
-• Yes—it’s far easier (and cheaper) to add the scaffolding while the codebase is still manageable. A few targeted investments now give you a straight path from “CLI tool” to “production service” without a painful
-  rewrite later:
+Load environment variables (via `.env`, secret manager, etc.). Required minimum:
+- `NOTION_TOKEN`
+- `ELEVENLABS_API_KEY`
+- `AWS_REGION`, `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY` (if uploading to S3)
 
-  ———
+Optional (remote adapters):
+- `ESL_PIPELINE_MANIFEST_STORE=s3`
+- `ESL_PIPELINE_MANIFEST_BUCKET`
+- `ESL_PIPELINE_CONFIG_PROVIDER=http`
+- `ESL_PIPELINE_CONFIG_ENDPOINT`
 
-  ### 1. Treat the CLI as a thin adapter
+### Step 2 – Choose Storage/Config Mode
 
-  - Keep the orchestrator logic in src/ and continue expanding the createPipeline API. The CLI should do nothing more than parse flags and call those functions.
-  - Make newAssignment/rerunAssignment fully idempotent for the same manifest: accept explicit IDs, return the same structure every time, and avoid hidden state.
+**Filesystem only:** do nothing; manifests live next to Markdown, configs read from `configs/`.
 
-  ### 2. Separate state & config from the filesystem
+**S3 manifests + remote config:**
+```ts
+import {
+  createPipeline,
+  S3ManifestStore,
+  RemoteConfigProvider,
+} from '@esl-pipeline/orchestrator';
 
-  - Define an interface for manifest storage and student/config lookups (e.g. StorageAdapter, ConfigProvider) and keep the existing JSON/YAML implementation as “local mode.”
-  - Later, you can introduce database/S3 implementations without touching the orchestration code—and local development still works with the JSON version we have today.
+const pipeline = createPipeline({
+  cwd: process.env.PIPELINE_CWD ?? process.cwd(),
+  manifestStore: new S3ManifestStore({
+    bucket: process.env.ESL_PIPELINE_MANIFEST_BUCKET!,
+    prefix: process.env.ESL_PIPELINE_MANIFEST_PREFIX,
+    region: process.env.AWS_REGION,
+    rootDir: process.cwd(),
+  }),
+  configProvider: new RemoteConfigProvider({
+    baseUrl: process.env.ESL_PIPELINE_CONFIG_ENDPOINT!,
+    token: process.env.ESL_PIPELINE_CONFIG_TOKEN,
+  }),
+});
+```
 
-  ### 3. Lay observability hooks
+### Step 3 – Embed in a Service
 
-  - Emit structured events into a logger abstraction (winston/pino). Include correlation IDs and stage timings. Even if you still print to stdout, having a logger interface lets a future service pipe those logs to
-    Firebase, DataDog, etc.
-  - Count successes/failures per stage; just exposing a recordMetric callback now means you can plug it into Prometheus/New Relic later.
+Start with the example worker (`packages/orchestrator/examples/service`):
+```ts
+import Fastify from 'fastify';
+import { createPipeline, noopLogger, noopMetrics } from '@esl-pipeline/orchestrator';
 
-  ### 4. Design for job orchestration
+const pipeline = createPipeline({
+  cwd: process.env.PIPELINE_CWD ?? process.cwd(),
+  logger: noopLogger,      // replace with pino/winston
+  metrics: noopMetrics,    // replace with statsd/Prometheus
+});
 
-  - Add metadata to newAssignment results (jobId, manifest version, start/finish timestamps) that a queue can track.
-  - Consider splitting stages behind a small internal API (e.g., runValidate, runImport, …). Workers can then call subsets when you move to a queue-based architecture.
+const app = Fastify({ logger: true });
 
-  - Normalize configuration through the pipeline factory (already started). Add support for hierarchical overrides: default -> environment -> tenant -> job.
-  - Wrap secrets access behind a simple provider (SecretManager) so you can swap .env for AWS/GCP/Azure secret stores later.
+app.post('/jobs', async (req, reply) => {
+  const body = req.body as { md?: string; jobId?: string };
+  if (!body?.md) return reply.code(400).send({ error: 'md is required' });
 
-  ### 6. Deployment & CI groundwork
+  const result = await pipeline.newAssignment(
+    {
+      md: body.md,
+      dryRun: true,
+      skipImport: true,
+      skipTts: true,
+      skipUpload: true,
+    },
+    undefined,
+    { runId: body.jobId }
+  );
 
-  - Add a Dockerfile now, even if it’s just for local smoke tests. It forces you to codify env setup and ensures the project runs cleanly in a container.
-  - Expand CI to run that Docker build plus a “publish dry-run” so you know the image stays healthy.
+  return { jobId: body.jobId ?? body.md, result };
+});
 
-  ### 7. Document the programmatic API
+await app.listen({ port: Number(process.env.PORT ?? 8080), host: '0.0.0.0' });
+```
 
-  - The new README section is a start; expand it with end-to-end examples of createPipeline inside an Express/Fastify handler and a “dry-run job” for background workers.
-  - Publish typed interfaces (already exported). Provide guidance for hosting (list required env vars, config files, and ffmpeg expectations).
+From here you can remove `dryRun`/`skip*` flags once you’re ready to hit live services.
 
-  ### 8. Prepare for multi-tenant usage
+### Step 4 – Queue Integration
 
-  - Accept tenant-specific overrides (Notion token, AWS credentials) as explicit inputs rather than relying on process env. You can still default to process.env, but the function signatures should allow injection, so
-    future services can pass per-tenant keys.
+1. Pick a queue (BullMQ, SQS, Cloud Tasks, etc.).
+2. Inside the queue consumer, call `pipeline.newAssignment(job.payload, undefined, { runId: job.id })`.
+3. Persist job status using the returned `steps`, timestamps, and `manifestPath`.
+4. On failure, catch errors and mark the queue job accordingly (retries/backoff handled by the queue).
 
-  ———
+Example payload contract:
+```json
+{
+  "jobId": "5f9...",
+  "md": "lessons/unit1.md",
+  "withTts": true,
+  "upload": "s3",
+  "preset": "b1-default",
+  "student": "Alice"
+}
+```
 
-  Net benefit: By abstracting storage/config, formalizing the API, and adding logging/metrics hooks now, the orchestrator becomes much easier to embed in a real backend service. You preserve today’s CLI workflow, but
-  you ensure that when it’s time to build an automated tutor dashboard, the core logic is already service-ready—you’ll just wrap it in HTTP/queue adapters rather than refactoring everything under pressure.
+### Step 5 – Observability
 
+1. Replace `noopLogger` with a real logger:
+   ```ts
+   import pino from 'pino';
+   const log = pino();
+   const logger = {
+     log: event => log.info({ ...event }, event.message),
+   };
+   ```
+2. Replace `noopMetrics` with your metrics sink (statsd, Prometheus client). The pipeline emits `timing` and `increment` calls for each stage.
+3. Propagate `runId` (usually the queue job ID) to tie logs and metrics together.
 
-› create a detailed plan on how to add this scaffolding now to save growing pains later. you are going to be responsible for implementing said plan. but for now only plan, no code.
+### Step 6 – Storage Details
 
+- **Manifests**: S3 store is recommended for multi-worker setups. Filesystem store works for local dev or single-instance deployments. S3 manifest keys mirror Markdown structure unless you provide a `rootDir`/`prefix`.
+- **Audio files**: the pipeline writes MP3s to the output directory. For serverless or containerized workers, set `defaultOutDir` to an ephemeral volume and rely on the S3 upload step to persist audio.
 
-• Backend-Ready Scaffolding Plan
+### Step 7 – Error Handling & Retries
 
-  Goal: Keep the CLI running exactly as it does today, but shape the code so we can drop it straight into a service (API/queue) later—without redoing the core pipeline. No code now; this is the blueprint for upcoming
-  work.
+- `pipeline.newAssignment` throws `Error` with descriptive messages (missing ffmpeg, Notion token, validation failure, etc.). Catch these inside your worker and decide whether to retry or fail the job.
+- Use `pipeline.getAssignmentStatus(mdPath)` for status endpoints.
+- For partial reruns (e.g., upload only), call `pipeline.rerunAssignment({ md, steps: ['upload'], upload: 's3' })`.
 
-  ———
+### Step 8 – Containerization
 
-  ### Phase 1 · Abstraction & Structure (Weeks 1–2)
+- Build the orchestrator image locally:
+  ```bash
+  pnpm --filter @esl-pipeline/orchestrator docker:build
+  pnpm --filter @esl-pipeline/orchestrator docker:run -- --version
+  ```
+- In your backend repo, create your own Dockerfile that either extends `esl-pipeline/orchestrator:local` or replicates its pattern (install, workspace build, orchestrator build).
+- Always run dry-run smoke tests within the container before promoting to higher environments.
 
-  1. Introduce adapters for config/state
-      - Define interfaces (ConfigProvider, ManifestStore, SecretProvider) in packages/orchestrator/src/.
-      - Implement “filesystem” versions that wrap current JSON/YAML manifests and .env access.
-      - Extend createPipeline so it accepts these providers, defaulting to the filesystem implementations.
-  2. Refine the pipeline API
-      - Ensure createPipeline() returns methods that take explicit jobId/tenantId metadata.
-      - Add a createContext() helper to produce per-job contexts (env, tenant overrides, logger).
-  3. Add logger abstraction
-      - Create Logger interface (info/warn/error/debug + child/context variants).
-      - Provide a default ConsoleLogger for CLI use.
-      - Thread logger through newAssignment and submodules so every stage logs via the interface.
-  4. Inject clocks/random IDs
-      - Accept a Clock (now) and IdGenerator in the pipeline; default to Date.now, crypto.randomUUID. Makes testing and future tracing easier.
+### Step 9 – CI / CD
 
-  Deliverable: packages/orchestrator/src/adapters/* with filesystem defaults + updated createPipeline returning structured stages; tests covering the new abstractions.
+Ensure your CI executes:
+```bash
+pnpm --filter @esl-pipeline/orchestrator test -- --runInBand
+pnpm --filter @esl-pipeline/orchestrator/examples/service vitest run
+pnpm --filter @esl-pipeline/orchestrator docker:build
+```
 
-  ———
+Release flow (using Changesets):
+1. `pnpm changeset`
+2. Merge; CI runs tests + docker build.
+3. `pnpm changeset version` + `pnpm install`
+4. `pnpm publish --filter @esl-pipeline/orchestrator --access public`
+5. Tag (`git tag vX.Y.Z && git push --tags`).
 
-  ### Phase 2 · Observability Hooks (Weeks 3–4)
+---
 
-  5. Expose structured events
-      - Expand AssignmentProgressEvent with elapsed time, job ID, tenant ID.
-      - Add a metrics hook (recordMetric(metricName, value, tags)).
-  6. System-level logging
-      - Ensure top-level newAssignment emits start/finish events, errors, and stage timings via the logger.
-  7. Standardized IDs & correlation
-      - Generate/accept a runId per job; include it in every log/metric/callback.
-  8. Optional tracing scaffolding
-      - Add no-op Tracer interface and propagate span objects through stages; default to noop so CLI isn’t affected.
+## 3. Environment Quick Reference
 
-  Deliverable: pipeline pipeline supports plug-in logger/metrics/tracer without changing business logic.
+| Variable | Purpose |
+|----------|---------|
+| `NOTION_TOKEN` | Notion API access. |
+| `NOTION_DB_ID`, `NOTION_DATA_SOURCE_ID` | Optional overrides for import step. |
+| `ELEVENLABS_API_KEY` | Required for TTS. |
+| `AWS_REGION`, `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY` | Required when uploading to S3. |
+| `S3_BUCKET`, `S3_PREFIX` | CLI compatibility; use pipeline options for precise control. |
+| `ESL_PIPELINE_MANIFEST_STORE` | Set to `s3` to activate the S3 manifest store. |
+| `ESL_PIPELINE_MANIFEST_BUCKET` | Target bucket for manifests. |
+| `ESL_PIPELINE_MANIFEST_PREFIX` | Optional key prefix (`manifests/prod`). |
+| `ESL_PIPELINE_MANIFEST_ROOT` | Base directory used to compute manifest keys. |
+| `ESL_PIPELINE_CONFIG_PROVIDER` | Set to `http` to use `RemoteConfigProvider`. |
+| `ESL_PIPELINE_CONFIG_ENDPOINT` | Base URL for presets/students/voices endpoints. |
+| `ESL_PIPELINE_CONFIG_TOKEN` | Bearer token for the remote config service. |
 
-  ———
+Load these before you construct the pipeline.
 
-  ### Phase 3 · State & Storage Options (Weeks 5–7)
+---
 
-  9. Design manifest schema
-      - Document manifest structure in docs/pipeline-manifest.md with versioning rules.
-      - Add schemaVersion to manifests.
-  10. Create pluggable stores
-      - Implement S3ManifestStore (uses AWS SDK) and optional DatabaseManifestStore stub.
-      - Add configuration to createPipeline to select store based on env/flags.
-  11. Centralize config lookups
-      - Move configs/presets.json, voices.yml, and student configs under the new ConfigProvider.
-      - Provide an in-memory CORS version for tests; start documenting how to swap in database config later.
-  12. Introduce job metadata schema
-      - Define PipelineJob type with fields the dashboard will need (status, timestamps, references to manifests/audio/Notion page).
-      - Return the job metadata from newAssignment.
+## 4. Test Commands
 
-  Deliverable: pipeline can operate with either filesystem or remote manifest/config stores; documentation explains how to add new providers.
+| Command | Description |
+|---------|-------------|
+| `pnpm --filter @esl-pipeline/orchestrator test -- --runInBand` | Run orchestrator unit/integration tests. |
+| `pnpm --filter @esl-pipeline/orchestrator/examples/service vitest run` | Test the Fastify worker. |
+| `pnpm --filter @esl-pipeline/orchestrator docker:build` | Build Docker image locally. |
+| `pnpm --filter @esl-pipeline/orchestrator docker:run -- --version` | Smoke test the image. |
 
-  ———
+---
 
-  ### Phase 4 · Service Skeleton (Weeks 8–9)
+## 5. Future Enhancements (Optional)
 
-  13. Docker & runtime packaging
-      - Add a Dockerfile running pnpm install --prod + pnpm --filter @esl-pipeline/orchestrator build.
-      - Include ffmpeg check (or mention in docs) and healthcheck script.
-  14. Minimal HTTP worker (optional)
-      - Provide an example Express/Fastify server that exposes /jobs endpoints using createPipeline.
-      - Add to examples/ with step-by-step documentation; not production-critical but a reference.
-  15. Queue hooks
-      - Document (or stub) a QueueJobRunner that calls pipeline.newAssignment with explicit context.
-      - Provide TypeScript types for queue payloads.
+1. **Database Manifest Store** – implement `ManifestStore` backed by Postgres/Dynamo; reuse existing interface.
+2. **Queue Helper Package** – provide wrappers for BullMQ/SQS/Cloud Tasks with sane defaults.
+3. **SecretProvider Interface** – abstract away `.env` in favor of cloud secret managers.
+4. **Tenant-aware ConfigProvider** – fetch presets/students per tenant from your DB.
+5. **Extended Observability** – export OpenTelemetry traces for stage timing.
 
-  Deliverable: ready-to-run Docker image & example service showing how to embed the pipeline.
+These can be layered on without modifying the core pipeline.
 
-  ———
+---
 
-  ### Phase 5 · Testing & Docs (Weeks 10–11)
+## 6. Summary
 
-  16. Integration tests for adapters
-      - Create tests that run newAssignment using the new storage/config providers (mock AWS SDK, etc.).
-      - Add smoke tests for Docker image (build + run CLI once).
-  17. Documentation overhaul
-      - Update README + docs/ with:
-          - How to use createPipeline.
-          - How to configure adapters (filesystem vs S3/DB).
-          - Deployment notes (Docker, required env vars, ffmpeg install).
-          - Observability guidance (sample log output, metrics schema).
-  18. Changelog & migration notes
-      - Document breaking/non-breaking changes (e.g., esl-orchestrator removal, new manifest schema).
+- The orchestrator is backend-ready: adapters, observability, Docker image, service skeleton, CI, and release tooling are all in place.
+- Follow the checklist above to embed it in your queue/worker environment.
+- Keep dry-run mode on while wiring credentials, then gradually enable import/TTS/upload.
+- Use the provided tests, Docker build, and documentation as guardrails to avoid regressions.
 
-  ———
-
-  ### Phase 6 · Final Polish (Weeks 12+)
-
-  19. CI enhancements
-      - Add Docker build to CI.
-      - Run one job against pipeline.newAssignment using filesystem adapter and another using mock remote store.
-      - Possibly gate PRs on pnpm publish --dry-run.
-  20. Release orchestration
-      - Set up npm release script (Changesets or tagged workflow) to avoid manual version bumps.
-
-  ———
-
-  Immediate Next Steps (for upcoming sprints)
-
-  - Implement Phase 1 (adapters + logger).
-  - Begin Phase 2 instrumentation.
-  - Start drafting documentation for new APIs as they land.
-
-  Each phase is incremental—CLI stays unaffected, but by the end the core orchestrator is ready to slot into a larger backend with minimal rework.
+With these instructions you should be able to drop the ESL pipeline into a running backend without surprises.
