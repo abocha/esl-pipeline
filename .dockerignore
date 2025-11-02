@@ -1,0 +1,5 @@
+node_modules
+packages/*/node_modules
+packages/*/dist
+packages/orchestrator/examples/service/node_modules
+.git

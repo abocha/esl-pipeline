@@ -37,7 +37,23 @@ esl select --file --ext .md
 pnpm install
 pnpm build
 pnpm esl --interactive --with-tts --upload s3
+pnpm --filter @esl-pipeline/orchestrator docker:build
+pnpm --filter @esl-pipeline/orchestrator docker:run
+# Manual invocation for quick checks:
+docker run --rm esl-pipeline/orchestrator:local --version
 ```
+
+## Service skeleton
+
+See `examples/service/` for a Fastify-based HTTP worker that wraps `createPipeline`. It demonstrates:
+
+- Injecting custom `ConfigProvider`/`ManifestStore` via environment
+- Forwarding jobs with queue-provided IDs
+- Streaming pipeline telemetry into your logger/metrics sinks
+- Running the pipeline in dry-run mode for smoke tests
+
+Run `pnpm --filter @esl-pipeline/orchestrator examples/service vitest run` to execute the example
+smoke test.
 
 The pnpm script `esl` points to the same compiled CLI (`packages/orchestrator/dist/cli.js`). Use `pnpm esl --help` to view the full option list.
 

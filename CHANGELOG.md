@@ -6,6 +6,13 @@ All notable changes to this project will be documented here. Dates use `YYYY-MM-
 
 ## [Unreleased]
 
+### Added
+
+- Pipeline integration tests covering filesystem vs. HTTP config providers and the S3 manifest store (mocked end-to-end).
+- Documented Docker build/run workflow (`pnpm --filter @esl-pipeline/orchestrator docker:build` / `docker run --rm esl-pipeline/orchestrator:local --version`).
+- Fastify example service README/test updates that spell out the dry-run job flow and workspace `PIPELINE_CWD` usage.
+- Remote adapter environment variable reference for HTTP configs and S3 manifests in the main README.
+
 ### Changed
 
 - Retired the legacy `esl-orchestrator` binary; use the primary `esl` command (via `npx --yes --package @esl-pipeline/orchestrator -- esl …`).
