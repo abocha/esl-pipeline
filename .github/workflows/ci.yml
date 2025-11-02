@@ -8,7 +8,13 @@ on:
 
 jobs:
   build:
+    name: build (node ${{ matrix.node-version }})
     runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        node-version:
+          - 24.10.0
+          - lts/*
     env:
       NODE_OPTIONS: --max_old_space_size=4096
     steps:
@@ -16,7 +22,7 @@ jobs:
 
       - uses: actions/setup-node@v6
         with:
-          node-version: 24.10.0
+          node-version: ${{ matrix.node-version }}
 
       - name: Enable Corepack & pin pnpm from package.json
         run: |
