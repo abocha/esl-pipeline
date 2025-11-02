@@ -155,6 +155,16 @@ const pipeline = createPipeline({ configProvider: myConfigProvider });
 Environment-variable shortcuts will land alongside the concrete remote providers; until then inject
 your provider explicitly when needed.
 
+To experiment with the built-in HTTP provider, set the following environment variables:
+
+- `ESL_PIPELINE_CONFIG_PROVIDER=http`
+- `ESL_PIPELINE_CONFIG_ENDPOINT=https://config.example.com/`
+- Optional: `ESL_PIPELINE_CONFIG_TOKEN`, `ESL_PIPELINE_CONFIG_PRESETS_PATH`, `ESL_PIPELINE_CONFIG_STUDENTS_PATH`, `ESL_PIPELINE_CONFIG_VOICES_PATH`
+
+**Migration tip:** run the pipeline once with filesystem configs to seed S3/manifests, then enable the
+remote provider in staging before promoting to production. The pipeline treats both providers as
+source-of-truth, so you can fall back to local files simply by unsetting the env variables.
+
 ---
 
 ## Project Layout
