@@ -61,3 +61,13 @@ This document captures the canonical schema so remote stores and services can va
 - Introducing new optional fields does **not** require a schema bump.
 - Removing/renaming fields or altering semantics **does** require a bump and migration steps.
 - When bumping the schema, capture upgrade instructions here and consider providing a migration script.
+
+## Migrating from Filesystem to S3
+
+1. Ensure manifests on disk are up to date (rerun the pipeline or copy existing `.manifest.json` files).
+2. Configure the worker/process with:
+   - `ESL_PIPELINE_MANIFEST_STORE=s3`
+   - `ESL_PIPELINE_MANIFEST_BUCKET=<bucket-name>`
+   - Optional: `ESL_PIPELINE_MANIFEST_PREFIX` and `ESL_PIPELINE_MANIFEST_ROOT` for custom layout.
+3. Copy historical manifests to the matching S3 prefix (`.manifest.json` files can be uploaded as-is).
+4. Restart the pipeline worker; new runs will write and read manifests from S3. Filesystem manifests remain untouched for fallback.

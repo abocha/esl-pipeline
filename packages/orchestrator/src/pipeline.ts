@@ -9,6 +9,7 @@ import { createFilesystemConfigProvider } from './config.js';
 import type { ConfigProvider } from './config.js';
 import { noopLogger, noopMetrics, type PipelineLogger, type PipelineMetrics } from './observability.js';
 import { S3ManifestStore, type S3ManifestStoreOptions } from './adapters/manifest/s3.js';
+import { RemoteConfigProvider, type RemoteConfigProviderOptions } from './adapters/config/remote.js';
 
 type OrchestratorModule = typeof import('./index.js');
 
@@ -108,6 +109,7 @@ export type CreatePipelineOptions = ResolveConfigPathsOptions & {
   defaultOutDir?: string;
   manifestStore?: ManifestStore;
   configProvider?: ConfigProvider;
+  configProviderConfig?: { type: 'remote'; options: RemoteConfigProviderOptions };
   manifestStoreConfig?: { type: 's3'; options: S3ManifestStoreOptions };
   logger?: PipelineLogger;
   metrics?: PipelineMetrics;
@@ -154,13 +156,7 @@ export function createPipeline(options: CreatePipelineOptions = {}): Orchestrato
   };
 
   const manifestStore = resolveManifestStore(options);
-  const configProvider =
-    options.configProvider ??
-    createFilesystemConfigProvider({
-      presetsPath: configPaths.presetsPath,
-      voicesPath: configPaths.voicesPath,
-      studentsDir: configPaths.studentsDir,
-    });
+  const configProvider = resolveConfigProvider(options, configPaths);
   const logger = options.logger ?? noopLogger;
   const metrics = options.metrics ?? noopMetrics;
 
@@ -227,6 +223,40 @@ function resolveManifestStore(options: CreatePipelineOptions): ManifestStore {
   }
 
   return createFilesystemManifestStore();
+}
+
+function resolveConfigProvider(
+  options: CreatePipelineOptions,
+  configPaths: ResolvedConfigPaths
+): ConfigProvider {
+  if (options.configProvider) return options.configProvider;
+
+  if (options.configProviderConfig?.type === 'remote') {
+    return new RemoteConfigProvider(options.configProviderConfig.options);
+  }
+
+  const envProvider = process.env.ESL_PIPELINE_CONFIG_PROVIDER?.toLowerCase();
+  if (envProvider === 'remote' || envProvider === 'http') {
+    const baseUrl = process.env.ESL_PIPELINE_CONFIG_ENDPOINT;
+    if (!baseUrl) {
+      throw new Error(
+        'ESL_PIPELINE_CONFIG_ENDPOINT must be set when ESL_PIPELINE_CONFIG_PROVIDER is remote/http.'
+      );
+    }
+    return new RemoteConfigProvider({
+      baseUrl,
+      token: process.env.ESL_PIPELINE_CONFIG_TOKEN,
+      presetsPath: process.env.ESL_PIPELINE_CONFIG_PRESETS_PATH,
+      studentsPath: process.env.ESL_PIPELINE_CONFIG_STUDENTS_PATH,
+      voicesPath: process.env.ESL_PIPELINE_CONFIG_VOICES_PATH,
+    });
+  }
+
+  return createFilesystemConfigProvider({
+    presetsPath: configPaths.presetsPath,
+    voicesPath: configPaths.voicesPath,
+    studentsDir: configPaths.studentsDir,
+  });
 }
 
 export type LoadEnvOptions = {
