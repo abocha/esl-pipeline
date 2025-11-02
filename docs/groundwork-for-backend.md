@@ -172,7 +172,7 @@ Example payload contract:
 Ensure your CI executes:
 ```bash
 pnpm --filter @esl-pipeline/orchestrator test -- --runInBand
-pnpm --filter @esl-pipeline/orchestrator/examples/service vitest run
+pnpm --filter @esl-pipeline/orchestrator examples/service vitest run
 pnpm --filter @esl-pipeline/orchestrator docker:build
 ```
 
@@ -211,7 +211,7 @@ Load these before you construct the pipeline.
 | Command | Description |
 |---------|-------------|
 | `pnpm --filter @esl-pipeline/orchestrator test -- --runInBand` | Run orchestrator unit/integration tests. |
-| `pnpm --filter @esl-pipeline/orchestrator/examples/service vitest run` | Test the Fastify worker. |
+| `pnpm --filter @esl-pipeline/orchestrator examples/service vitest run` | Test the Fastify worker. |
 | `pnpm --filter @esl-pipeline/orchestrator docker:build` | Build Docker image locally. |
 | `pnpm --filter @esl-pipeline/orchestrator docker:run -- --version` | Smoke test the image. |
 
