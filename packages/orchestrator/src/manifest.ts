@@ -2,7 +2,10 @@ import { basename, dirname, join } from 'node:path';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import type { BuildStudyTextResult } from '@esl-pipeline/tts-elevenlabs';
 
+export const CURRENT_MANIFEST_SCHEMA_VERSION = 1;
+
 export type AssignmentManifest = {
+  schemaVersion?: number;
   mdHash: string;
   pageId?: string;
   pageUrl?: string;
@@ -40,7 +43,11 @@ export function createFilesystemManifestStore(): ManifestStore {
     async readManifest(mdPath) {
       try {
         const contents = await readFile(manifestPathFor(mdPath), 'utf8');
-        return JSON.parse(contents) as AssignmentManifest;
+        const parsed = JSON.parse(contents) as AssignmentManifest;
+        if (parsed.schemaVersion === undefined) {
+          parsed.schemaVersion = CURRENT_MANIFEST_SCHEMA_VERSION;
+        }
+        return parsed;
       } catch {
         return null;
       }
