@@ -8,6 +8,7 @@ import type { ManifestStore } from './manifest.js';
 import { createFilesystemConfigProvider } from './config.js';
 import type { ConfigProvider } from './config.js';
 import { noopLogger, noopMetrics, type PipelineLogger, type PipelineMetrics } from './observability.js';
+import { S3ManifestStore, type S3ManifestStoreOptions } from './adapters/manifest/s3.js';
 
 type OrchestratorModule = typeof import('./index.js');
 
@@ -107,6 +108,7 @@ export type CreatePipelineOptions = ResolveConfigPathsOptions & {
   defaultOutDir?: string;
   manifestStore?: ManifestStore;
   configProvider?: ConfigProvider;
+  manifestStoreConfig?: { type: 's3'; options: S3ManifestStoreOptions };
   logger?: PipelineLogger;
   metrics?: PipelineMetrics;
 };
@@ -151,7 +153,7 @@ export function createPipeline(options: CreatePipelineOptions = {}): Orchestrato
       : undefined,
   };
 
-  const manifestStore = options.manifestStore ?? createFilesystemManifestStore();
+  const manifestStore = resolveManifestStore(options);
   const configProvider =
     options.configProvider ??
     createFilesystemConfigProvider({
@@ -197,6 +199,34 @@ export function createPipeline(options: CreatePipelineOptions = {}): Orchestrato
       return getAssignmentStatus(mdPath, { manifestStore, configProvider, logger, metrics });
     },
   };
+}
+
+function resolveManifestStore(options: CreatePipelineOptions): ManifestStore {
+  if (options.manifestStore) return options.manifestStore;
+
+  if (options.manifestStoreConfig?.type === 's3') {
+    return new S3ManifestStore(options.manifestStoreConfig.options);
+  }
+
+  const envBackend = process.env.ESL_PIPELINE_MANIFEST_STORE?.toLowerCase();
+  if (envBackend === 's3') {
+    const bucket = process.env.ESL_PIPELINE_MANIFEST_BUCKET;
+    if (!bucket) {
+      throw new Error(
+        'ESL_PIPELINE_MANIFEST_BUCKET must be set when ESL_PIPELINE_MANIFEST_STORE is "s3".'
+      );
+    }
+    const prefix = process.env.ESL_PIPELINE_MANIFEST_PREFIX;
+    const rootDir = process.env.ESL_PIPELINE_MANIFEST_ROOT ?? options.cwd ?? process.cwd();
+    return new S3ManifestStore({
+      bucket,
+      prefix,
+      region: process.env.AWS_REGION,
+      rootDir,
+    });
+  }
+
+  return createFilesystemManifestStore();
 }
 
 export type LoadEnvOptions = {

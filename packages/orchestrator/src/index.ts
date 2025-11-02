@@ -14,6 +14,7 @@ import {
   type AssignmentManifest,
   type ManifestStore,
   createFilesystemManifestStore,
+  CURRENT_MANIFEST_SCHEMA_VERSION,
 } from './manifest.js';
 import type { ConfigProvider } from './config.js';
 import {
@@ -418,12 +419,13 @@ export async function newAssignment(
     recordSkip('add-audio', audio?.url ? 'missing pageId' : 'no audio url available');
   }
 
-  const manifest: AssignmentManifest = {
-    mdHash: hashStudyText(mdContents),
-    pageId,
-    pageUrl,
-    audio,
-    preset: flags.preset,
+    const manifest: AssignmentManifest = {
+      schemaVersion: CURRENT_MANIFEST_SCHEMA_VERSION,
+      mdHash: hashStudyText(mdContents),
+      pageId,
+      pageUrl,
+      audio,
+      preset: flags.preset,
     timestamp: new Date().toISOString(),
   };
 
@@ -756,6 +758,7 @@ export async function rerunAssignment(
 
     const updatedManifest: AssignmentManifest = {
       ...manifest,
+      schemaVersion: CURRENT_MANIFEST_SCHEMA_VERSION,
       mdHash: hashStudyText(mdContents),
       audio: {
         path: audioPath,

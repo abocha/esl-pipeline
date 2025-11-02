@@ -76,6 +76,7 @@ console.log(result.steps, result.manifestPath);
 Useful exports:
 
 - `createPipeline(options)` — builds a pipeline with configurable config/manifest providers.
+- `createPipeline` also accepts optional `logger` and `metrics` hooks so services can stream stage telemetry to their own observability stack. Both default to no-ops when omitted.
 - `resolveConfigPaths(options)` — returns the resolved presets/voices/students directories.
 - `loadEnvFiles(options)` — convenience helper for loading `.env` files without mutating `process.env` (set `assignToProcess: false` to opt out).
 - `resolveManifestPath(mdPath)` — deterministic manifest location for a given Markdown file.
@@ -98,6 +99,61 @@ Types such as `PipelineNewAssignmentOptions`, `PipelineRerunOptions`, and `Assig
 | ffmpeg               | system install or `FFMPEG_PATH`         | We do not vendor binaries                     |
 
 `loadEnvFiles()` mirrors the CLI’s behaviour: it checks `.env` in the working directory and the repo root. Pass `files: [...]` to load custom locations.
+
+### Remote Manifest Storage
+
+Manifests live on disk by default. To use Amazon S3 instead:
+
+- Set `ESL_PIPELINE_MANIFEST_STORE=s3` and `ESL_PIPELINE_MANIFEST_BUCKET=<bucket-name>`.
+- Optional environment variables:
+  - `ESL_PIPELINE_MANIFEST_PREFIX` – path prefix inside the bucket (`manifests/production`).
+  - `ESL_PIPELINE_MANIFEST_ROOT` – absolute directory considered the root when deriving manifest keys.
+- Or provide a manifest store explicitly:
+
+```ts
+import { createPipeline, S3ManifestStore } from '@esl-pipeline/orchestrator';
+
+const pipeline = createPipeline({
+  manifestStore: new S3ManifestStore({
+    bucket: 'my-manifest-bucket',
+    prefix: 'manifests/prod',
+    region: 'us-east-1',
+    rootDir: process.cwd(),
+  }),
+});
+```
+
+See `docs/pipeline-manifest.md` for the schema details.
+
+### Config Providers
+
+`createPipeline` exposes a `configProvider` that the CLI, wizard, and pipeline stages rely on for
+presets, student profiles, and voices metadata. The default implementation reads from the local
+filesystem. To plug in your own loader (e.g., HTTP API, database) provide any object that implements
+the `ConfigProvider` interface returned by `@esl-pipeline/orchestrator`.
+
+```ts
+import { createPipeline, type ConfigProvider } from '@esl-pipeline/orchestrator';
+
+const myConfigProvider: ConfigProvider = {
+  async loadPresets() {
+    const response = await fetch('https://config.internal/presets');
+    return response.json();
+  },
+  async loadStudentProfiles() {
+    const response = await fetch('https://config.internal/students');
+    return response.json();
+  },
+  async resolveVoicesPath() {
+    return 'https://config.internal/voices.yml';
+  },
+};
+
+const pipeline = createPipeline({ configProvider: myConfigProvider });
+```
+
+Environment-variable shortcuts will land alongside the concrete remote providers; until then inject
+your provider explicitly when needed.
 
 ---
 

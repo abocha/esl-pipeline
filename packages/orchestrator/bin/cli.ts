@@ -15,6 +15,7 @@ import {
   type OrchestratorPipeline,
   type AssignmentProgressEvent,
   type AssignmentStage,
+  type PipelineLogger,
 } from '../src/index.js';
 import type { NewAssignmentFlags, RerunFlags } from '../src/index.js';
 import { createLogger } from '../src/logger.js';
@@ -433,10 +434,41 @@ const command = rawArgs[0] && !rawArgs[0].startsWith('--') ? rawArgs[0] : null;
 const jsonOutput = hasFlag(rawArgs, '--json');
 const logger = createLogger({ json: jsonOutput });
 
+const pipelineLogger: PipelineLogger = {
+  log(event) {
+    const { level, message, detail, runId, stage } = event;
+    const payload: Record<string, unknown> = {};
+    if (runId) payload.runId = runId;
+    if (stage) payload.stage = stage;
+    if (detail && Object.keys(detail).length > 0) payload.detail = detail;
+
+    const isStageEvent = message.startsWith('stage.');
+    if (!jsonOutput && isStageEvent) {
+      // Spinner/UI already surfaces per-stage status; avoid duplicate console noise.
+      return;
+    }
+
+    switch (level) {
+      case 'error':
+        logger.error(message, payload);
+        break;
+      case 'warn':
+        logger.warn(message, payload);
+        break;
+      case 'debug':
+        logger.info(message, payload);
+        break;
+      default:
+        logger.info(message, payload);
+        break;
+    }
+  },
+};
+
 let pipelineInstance: OrchestratorPipeline | null = null;
 const ensurePipeline = (): OrchestratorPipeline => {
   if (!pipelineInstance) {
-    pipelineInstance = createPipeline();
+    pipelineInstance = createPipeline({ logger: pipelineLogger });
   }
   return pipelineInstance;
 };
