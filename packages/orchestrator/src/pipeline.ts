@@ -3,7 +3,10 @@ import { resolve, join, isAbsolute, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { config as loadDotEnv } from 'dotenv';
 import type { AssignmentProgressCallbacks, NewAssignmentFlags, RerunFlags } from './index.js';
-import { manifestPathFor } from './manifest.js';
+import { manifestPathFor, createFilesystemManifestStore } from './manifest.js';
+import type { ManifestStore } from './manifest.js';
+import { createFilesystemConfigProvider } from './config.js';
+import type { ConfigProvider } from './config.js';
 
 type OrchestratorModule = typeof import('./index.js');
 
@@ -101,6 +104,8 @@ export function resolveConfigPaths(options: ResolveConfigPathsOptions = {}): Res
 
 export type CreatePipelineOptions = ResolveConfigPathsOptions & {
   defaultOutDir?: string;
+  manifestStore?: ManifestStore;
+  configProvider?: ConfigProvider;
 };
 
 export type PipelineNewAssignmentOptions = NewAssignmentFlags;
@@ -113,6 +118,8 @@ export type OrchestratorPipeline = {
     voicesPath: string;
     outDir?: string;
   };
+  manifestStore: ManifestStore;
+  configProvider: ConfigProvider;
   newAssignment(
     flags: PipelineNewAssignmentOptions,
     callbacks?: AssignmentProgressCallbacks
@@ -139,9 +146,20 @@ export function createPipeline(options: CreatePipelineOptions = {}): Orchestrato
       : undefined,
   };
 
+  const manifestStore = options.manifestStore ?? createFilesystemManifestStore();
+  const configProvider =
+    options.configProvider ??
+    createFilesystemConfigProvider({
+      presetsPath: configPaths.presetsPath,
+      voicesPath: configPaths.voicesPath,
+      studentsDir: configPaths.studentsDir,
+    });
+
   return {
     configPaths,
     defaults,
+    manifestStore,
+    configProvider,
     async newAssignment(flags, callbacks) {
       const { newAssignment } = await orchestratorModuleLoader();
       const merged: NewAssignmentFlags = {
@@ -152,7 +170,7 @@ export function createPipeline(options: CreatePipelineOptions = {}): Orchestrato
       if (!merged.out && defaults.outDir) {
         merged.out = defaults.outDir;
       }
-      return newAssignment(merged, callbacks);
+      return newAssignment(merged, callbacks, { manifestStore, configProvider });
     },
     async rerunAssignment(flags) {
       const { rerunAssignment } = await orchestratorModuleLoader();
@@ -163,11 +181,11 @@ export function createPipeline(options: CreatePipelineOptions = {}): Orchestrato
       if (!merged.out && defaults.outDir) {
         merged.out = defaults.outDir;
       }
-      return rerunAssignment(merged);
+      return rerunAssignment(merged, { manifestStore, configProvider });
     },
     async getAssignmentStatus(mdPath: string) {
       const { getAssignmentStatus } = await orchestratorModuleLoader();
-      return getAssignmentStatus(mdPath);
+      return getAssignmentStatus(mdPath, { manifestStore, configProvider });
     },
   };
 }
