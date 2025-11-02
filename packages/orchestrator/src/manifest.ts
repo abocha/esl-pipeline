@@ -16,24 +16,48 @@ export type AssignmentManifest = {
   timestamp: string;
 };
 
+export type ManifestStore = {
+  manifestPathFor(mdPath: string): string;
+  writeManifest(mdPath: string, manifest: AssignmentManifest): Promise<string>;
+  readManifest(mdPath: string): Promise<AssignmentManifest | null>;
+};
+
+export function createFilesystemManifestStore(): ManifestStore {
+  const manifestPathFor = (mdPath: string): string => {
+    const dir = dirname(mdPath);
+    const base = basename(mdPath).replace(/\.[^.]+$/, '');
+    return join(dir, `${base}.manifest.json`);
+  };
+
+  return {
+    manifestPathFor,
+    async writeManifest(mdPath, manifest) {
+      const target = manifestPathFor(mdPath);
+      await mkdir(dirname(target), { recursive: true });
+      await writeFile(target, JSON.stringify(manifest, null, 2));
+      return target;
+    },
+    async readManifest(mdPath) {
+      try {
+        const contents = await readFile(manifestPathFor(mdPath), 'utf8');
+        return JSON.parse(contents) as AssignmentManifest;
+      } catch {
+        return null;
+      }
+    },
+  };
+}
+
+const defaultManifestStore = createFilesystemManifestStore();
+
 export function manifestPathFor(mdPath: string): string {
-  const dir = dirname(mdPath);
-  const base = basename(mdPath).replace(/\.[^.]+$/, '');
-  return join(dir, `${base}.manifest.json`);
+  return defaultManifestStore.manifestPathFor(mdPath);
 }
 
 export async function writeManifest(mdPath: string, manifest: AssignmentManifest): Promise<string> {
-  const target = manifestPathFor(mdPath);
-  await mkdir(dirname(target), { recursive: true });
-  await writeFile(target, JSON.stringify(manifest, null, 2));
-  return target;
+  return defaultManifestStore.writeManifest(mdPath, manifest);
 }
 
 export async function readManifest(mdPath: string): Promise<AssignmentManifest | null> {
-  try {
-    const contents = await readFile(manifestPathFor(mdPath), 'utf8');
-    return JSON.parse(contents) as AssignmentManifest;
-  } catch {
-    return null;
-  }
+  return defaultManifestStore.readManifest(mdPath);
 }

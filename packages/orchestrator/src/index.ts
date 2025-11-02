@@ -10,11 +10,11 @@ import { uploadFile } from '@esl-pipeline/storage-uploader';
 import { addOrReplaceAudioUnderStudyText } from '@esl-pipeline/notion-add-audio';
 import { runImport } from '@esl-pipeline/notion-importer';
 import {
-  writeManifest,
-  readManifest,
-  manifestPathFor,
   type AssignmentManifest,
+  type ManifestStore,
+  createFilesystemManifestStore,
 } from './manifest.js';
+import type { ConfigProvider } from './config.js';
 import { access, readFile } from 'node:fs/promises';
 import { constants as FS } from 'node:fs';
 
@@ -39,8 +39,22 @@ export type AssignmentProgressCallbacks = {
   onStage?: (event: AssignmentProgressEvent) => void;
 };
 
-export { manifestPathFor, readManifest, writeManifest } from './manifest.js';
-export type { AssignmentManifest } from './manifest.js';
+const fallbackManifestStore = createFilesystemManifestStore();
+
+export type OrchestratorDependencies = {
+  manifestStore?: ManifestStore;
+  configProvider?: ConfigProvider;
+};
+
+export {
+  manifestPathFor,
+  readManifest,
+  writeManifest,
+  createFilesystemManifestStore,
+} from './manifest.js';
+export { createFilesystemConfigProvider } from './config.js';
+export type { AssignmentManifest, ManifestStore } from './manifest.js';
+export type { ConfigProvider } from './config.js';
 export {
   createPipeline,
   resolveConfigPaths,
@@ -118,7 +132,8 @@ export type NewAssignmentFlags = {
 
 export async function newAssignment(
   flags: NewAssignmentFlags,
-  callbacks: AssignmentProgressCallbacks = {}
+  callbacks: AssignmentProgressCallbacks = {},
+  dependencies: OrchestratorDependencies = {}
 ): Promise<{
   pageId?: string;
   pageUrl?: string;
@@ -138,9 +153,11 @@ export async function newAssignment(
   const recordSkip = (stage: AssignmentStage, reason: string) =>
     emitStage(stage, 'skipped', { reason });
 
+  const manifestStore = dependencies.manifestStore ?? fallbackManifestStore;
+
   const steps: string[] = [];
   const mdContents = await readFile(flags.md, 'utf8');
-  const previousManifest = await readManifest(flags.md);
+  const previousManifest = await manifestStore.readManifest(flags.md);
 
   let pageId = previousManifest?.pageId;
   let pageUrl = previousManifest?.pageUrl;
@@ -334,7 +351,7 @@ export async function newAssignment(
   };
 
   emitStage('manifest', 'start');
-  const manifestPath = await writeManifest(flags.md, manifest);
+  const manifestPath = await manifestStore.writeManifest(flags.md, manifest);
   steps.push('manifest');
   emitStage('manifest', 'success', { manifestPath });
 
@@ -355,9 +372,13 @@ export type AssignmentStatus = {
   audioFileExists: boolean;
 };
 
-export async function getAssignmentStatus(mdPath: string): Promise<AssignmentStatus> {
-  const manifestPath = manifestPathFor(mdPath);
-  const manifest = await readManifest(mdPath);
+export async function getAssignmentStatus(
+  mdPath: string,
+  dependencies: OrchestratorDependencies = {}
+): Promise<AssignmentStatus> {
+  const manifestStore = dependencies.manifestStore ?? fallbackManifestStore;
+  const manifestPath = manifestStore.manifestPathFor(mdPath);
+  const manifest = await manifestStore.readManifest(mdPath);
 
   let currentHash: string | null = null;
   try {
@@ -400,14 +421,18 @@ export type RerunFlags = {
   accentPreference?: string;
 };
 
-export async function rerunAssignment(flags: RerunFlags): Promise<{
+export async function rerunAssignment(
+  flags: RerunFlags,
+  dependencies: OrchestratorDependencies = {}
+): Promise<{
   steps: string[];
   audio?: { path?: string; url?: string; hash?: string; voices?: BuildStudyTextResult['voices'] };
   pageId?: string;
   pageUrl?: string;
   manifestPath: string;
 }> {
-  const manifest = await readManifest(flags.md);
+  const manifestStore = dependencies.manifestStore ?? fallbackManifestStore;
+  const manifest = await manifestStore.readManifest(flags.md);
   if (!manifest) {
     throw new Error(`No manifest found for ${flags.md}. Run the pipeline first.`);
   }
@@ -507,7 +532,7 @@ export async function rerunAssignment(flags: RerunFlags): Promise<{
     timestamp: new Date().toISOString(),
   };
 
-  const manifestPath = await writeManifest(flags.md, updatedManifest);
+  const manifestPath = await manifestStore.writeManifest(flags.md, updatedManifest);
 
   return {
     steps: executed,

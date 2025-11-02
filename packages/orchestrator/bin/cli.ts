@@ -24,7 +24,7 @@ import {
   type WizardRunResult,
   type WizardSelections,
 } from '../src/wizard.js';
-import { loadStudentProfiles, DEFAULT_STUDENT_NAME, type StudentProfile } from '../src/config.js';
+import { DEFAULT_STUDENT_NAME, type StudentProfile } from '../src/config.js';
 import {
   pickDirectory,
   pickFile,
@@ -449,7 +449,9 @@ const normalizeProfileName = (value?: string): string | undefined =>
 const getStudentProfiles = async (pipeline: OrchestratorPipeline): Promise<StudentProfile[]> => {
   const cacheKey = pipeline.configPaths.studentsDir;
   if (cachedProfiles && cachedProfiles.key === cacheKey) return cachedProfiles.profiles;
-  const profiles = await loadStudentProfiles(cacheKey).catch(() => []);
+  const profiles = await pipeline.configProvider
+    .loadStudentProfiles(cacheKey)
+    .catch(() => []);
   cachedProfiles = { key: cacheKey, profiles };
   return profiles;
 };
