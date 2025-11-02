@@ -4,13 +4,12 @@ import prompts, { PromptObject } from 'prompts';
 import { NewAssignmentFlags } from './index.js';
 import {
   StudentProfile,
-  loadPresets,
-  loadStudentProfiles,
   findMarkdownCandidates,
   summarizeMarkdown,
-  resolveVoicesPath,
   getDefaultOutputDir,
   DEFAULT_STUDENT_NAME,
+  createFilesystemConfigProvider,
+  type ConfigProvider,
   type MarkdownSummary,
 } from './config.js';
 import { pickFile, PathPickerCancelledError } from './pathPicker.js';
@@ -21,6 +20,7 @@ type WizardContext = {
   studentsDir?: string;
   voicesPath?: string;
   defaultsPath?: string;
+  configProvider?: ConfigProvider;
 };
 
 type ValueOrigin = 'manual' | 'saved' | 'env' | 'profile' | 'cli' | 'default';
@@ -249,9 +249,16 @@ export async function runInteractiveWizard(
 ): Promise<WizardRunResult> {
   const cwd = resolve(ctx.cwd ?? process.cwd());
   const defaultsPath = resolve(cwd, ctx.defaultsPath ?? DEFAULT_WIZARD_DEFAULTS_PATH);
+  const configProvider =
+    ctx.configProvider ??
+    createFilesystemConfigProvider({
+      presetsPath: ctx.presetsPath,
+      voicesPath: ctx.voicesPath,
+      studentsDir: ctx.studentsDir,
+    });
   const [presets, profiles, mdSuggestions, savedDefaults] = await Promise.all([
-    loadPresets(ctx.presetsPath),
-    loadStudentProfiles(ctx.studentsDir),
+    configProvider.loadPresets(ctx.presetsPath),
+    configProvider.loadStudentProfiles(ctx.studentsDir),
     findMarkdownCandidates(cwd, 10),
     loadWizardDefaults(defaultsPath),
   ]);
@@ -328,6 +335,7 @@ export async function runInteractiveWizard(
           mdSuggestions,
           initialFlags,
           ctx,
+          configProvider,
         });
         break;
       }
@@ -454,9 +462,19 @@ async function openSettingsMenu(
     mdSuggestions: string[];
     initialFlags: Partial<NewAssignmentFlags>;
     ctx: WizardContext;
+    configProvider: ConfigProvider;
   }
 ): Promise<void> {
-  const { cwd, profiles, defaultProfile, presetNames, mdSuggestions, initialFlags, ctx } = options;
+  const {
+    cwd,
+    profiles,
+    defaultProfile,
+    presetNames,
+    mdSuggestions,
+    initialFlags,
+    ctx,
+    configProvider,
+  } = options;
 
   while (true) {
     const choice = await prompts(
@@ -493,7 +511,7 @@ async function openSettingsMenu(
         await selectPreset(state, { presetNames });
         break;
       case 'tts':
-        await configureTts(state, { cwd, ctx, initialFlags });
+        await configureTts(state, { cwd, ctx, initialFlags, configProvider });
         break;
       case 'upload':
         await configureUpload(state, { initialFlags });
@@ -710,9 +728,10 @@ async function configureTts(
     cwd: string;
     ctx: WizardContext;
     initialFlags: Partial<NewAssignmentFlags>;
+    configProvider: ConfigProvider;
   }
 ): Promise<void> {
-  const { cwd, ctx, initialFlags } = options;
+  const { cwd, ctx, initialFlags, configProvider } = options;
 
   const ttsAnswer = await prompts(
     {
@@ -735,7 +754,10 @@ async function configureTts(
     return;
   }
 
-  const resolvedVoices = await resolveVoicesPath(state.voices ?? ctx.voicesPath);
+  const resolvedVoices = await configProvider.resolveVoicesPath(
+    state.voices ?? ctx.voicesPath,
+    ctx.voicesPath
+  );
   const voicesGuess =
     state.voices ?? ctx.voicesPath ?? resolvedVoices ?? initialFlags.voices ?? 'configs/voices.yml';
   const voicesAnswer = await prompts(

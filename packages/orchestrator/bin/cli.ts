@@ -661,6 +661,7 @@ async function handleRun(args: string[]): Promise<void> {
           studentsDir: pipeline.configPaths.studentsDir,
           voicesPath: pipeline.defaults.voicesPath,
           defaultsPath: pipeline.configPaths.wizardDefaultsPath,
+          configProvider: pipeline.configProvider,
         }
       );
       assignmentFlags = wizardResult.flags;
