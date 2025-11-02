@@ -41,7 +41,10 @@
     "dev": "tsx watch bin/cli.ts",
     "test": "vitest run",
     "test:watch": "vitest",
-    "prepack": "pnpm run build"
+    "prepack": "pnpm run build",
+    "docker:build": "cd ../.. && docker build -f packages/orchestrator/Dockerfile -t esl-pipeline/orchestrator:local .",
+    "docker:run": "docker run --rm esl-pipeline/orchestrator:local --version",
+    "examples/service": "pnpm --dir examples/service exec"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.920.0",

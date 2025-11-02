@@ -1,0 +1,8 @@
+{
+  "name": "@esl-pipeline/orchestrator-service-example",
+  "private": true,
+  "type": "module",
+  "devDependencies": {
+    "fastify": "^5.1.0"
+  }
+}

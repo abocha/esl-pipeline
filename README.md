@@ -211,6 +211,22 @@ CI (`.github/workflows/ci.yml`) runs on Node 24.10.0 and executes build, lint, t
 
 ---
 
+## Testing & Verification
+
+- `pnpm --filter @esl-pipeline/orchestrator test -- --runInBand` covers the unit suite plus new pipeline integrations (filesystem vs. remote config providers and the S3 manifest path assertions in `packages/orchestrator/tests/pipeline.integration.test.ts`).
+- `pnpm --filter @esl-pipeline/orchestrator examples/service vitest run` keeps the Fastify example’s `dryRun: true` submission path green; see `packages/orchestrator/examples/service/README.md` for a walkthrough.
+- Remote adapters rely on env toggles: set `ESL_PIPELINE_CONFIG_PROVIDER=http` with `ESL_PIPELINE_CONFIG_ENDPOINT=...` for the HTTP config provider, and `ESL_PIPELINE_MANIFEST_STORE=s3` with `ESL_PIPELINE_MANIFEST_BUCKET=...` (plus optional `ESL_PIPELINE_MANIFEST_PREFIX` / `ESL_PIPELINE_MANIFEST_ROOT`) to route manifests to S3. Tests mock external services so these variables never trigger real network calls.
+
+---
+
+## Docker & CI
+
+- Build the local image with `pnpm --filter @esl-pipeline/orchestrator docker:build`.
+- Inspect the artifact via `docker run --rm esl-pipeline/orchestrator:local --version` (also available through the `docker:run` script).
+- TODO: extend CI to invoke the Docker build and optionally execute the dry-run service smoke test inside the container before publish.
+
+---
+
 ## Backend Groundwork
 
 The orchestrator is now consumable from other Node projects, but we’re actively adding scaffolding to make it backend-ready: pluggable storage adapters, observability hooks, Docker image, etc. See [`docs/groundwork-for-backend.md`](docs/groundwork-for-backend.md) for the detailed plan and progress.
