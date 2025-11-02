@@ -9,6 +9,8 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
+    env:
+      NODE_OPTIONS: --max_old_space_size=4096
     steps:
       - uses: actions/checkout@v5
 
@@ -27,11 +29,23 @@ jobs:
       - name: Build
         run: pnpm -r build
 
+      - name: Prepare Docker disk space
+        run: docker system prune --all --force || true
+
       - name: Lint
         run: pnpm lint
 
       - name: Unit & integration tests
         run: pnpm test
+
+      - name: Orchestrator targeted tests
+        run: pnpm --filter @esl-pipeline/orchestrator test -- --runInBand
+
+      - name: Example service tests
+        run: pnpm --filter @esl-pipeline/orchestrator/examples/service vitest run
+
+      - name: Docker build smoke
+        run: pnpm --filter @esl-pipeline/orchestrator docker:build
 
       - name: Orchestrator smoke test
         run: pnpm smoke

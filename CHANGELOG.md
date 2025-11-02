@@ -6,6 +6,12 @@ All notable changes to this project will be documented here. Dates use `YYYY-MM-
 
 ## [Unreleased]
 
+### Phase 5 · Testing & Docs
+
+- Hardened remote adapter documentation across the README and `docs/groundwork-for-backend.md`, capturing filesystem vs. HTTP configs and the S3 manifest store mock coverage.
+- CI now mirrors the full release path: it builds the orchestrator Docker image (`pnpm --filter @esl-pipeline/orchestrator docker:build`) and runs the Fastify example service tests (`pnpm --filter @esl-pipeline/orchestrator/examples/service vitest run`).
+- Introduced release automation scaffolding (Changesets, publish workflow, CONTRIBUTING checklist) so version bumps and npm publishes follow a predictable script.
+
 ### Added
 
 - Pipeline integration tests covering filesystem vs. HTTP config providers and the S3 manifest store (mocked end-to-end).
@@ -16,6 +22,29 @@ All notable changes to this project will be documented here. Dates use `YYYY-MM-
 ### Changed
 
 - Retired the legacy `esl-orchestrator` binary; use the primary `esl` command (via `npx --yes --package @esl-pipeline/orchestrator -- esl …`).
+
+### Release Notes Template
+
+Use this scaffold when cutting a new version (see `CONTRIBUTING.md` for the full release process):
+
+```
+## [X.Y.Z] - YYYY-MM-DD
+
+### Highlights
+- …
+
+### Added
+- …
+
+### Changed
+- …
+
+### Fixed
+- …
+
+### Docs
+- …
+```
 
 ## [1.6.0] - 2025-10-31
 

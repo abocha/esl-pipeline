@@ -221,9 +221,10 @@ CI (`.github/workflows/ci.yml`) runs on Node 24.10.0 and executes build, lint, t
 
 ## Docker & CI
 
-- Build the local image with `pnpm --filter @esl-pipeline/orchestrator docker:build`.
-- Inspect the artifact via `docker run --rm esl-pipeline/orchestrator:local --version` (also available through the `docker:run` script).
-- TODO: extend CI to invoke the Docker build and optionally execute the dry-run service smoke test inside the container before publish.
+- CI (`.github/workflows/ci.yml`) now runs lint/tests, builds the Docker image, and executes the Fastify example service tests.
+- Trigger the orchestrator image locally with `pnpm --filter @esl-pipeline/orchestrator docker:build`, then sanity-check via `docker run --rm esl-pipeline/orchestrator:local --version`.
+- Re-run the service tests with `pnpm --filter @esl-pipeline/orchestrator/examples/service vitest run` to match the CI step.
+- The release workflow (`.github/workflows/release.yml`) prepares/publishes the orchestrator package once a Changeset is ready.
 
 ---
 
@@ -251,11 +252,14 @@ Key takeaways:
 ## Contributing / Release Checklist
 
 1. Work against Node 24.10.0 (`nvm use 24.10.0` or `.tool-versions`).
-2. Run `pnpm lint`, `pnpm test`, `pnpm --filter @esl-pipeline/orchestrator build`.
-3. Update `AGENTS.md` and `docs/groundwork-for-backend.md` if behaviour changes.
-4. Bump `packages/orchestrator/package.json` version, update `CHANGELOG.md`.
-5. Publish: `npm publish --access public` (from `packages/orchestrator`).
-6. Tag release: `git tag vX.Y.Z && git push origin vX.Y.Z`.
+2. Run `pnpm lint`, `pnpm test`, and `pnpm --filter @esl-pipeline/orchestrator build`.
+3. Update `AGENTS.md`, `CHANGELOG.md`, and `docs/groundwork-for-backend.md` when behaviour changes.
+4. Record pending work with `pnpm changeset` (one Changeset per logical change).
+5. When ready to ship:
+   - Apply versions via `pnpm changeset version` and re-run `pnpm install`.
+   - Publish with `pnpm --filter @esl-pipeline/orchestrator publish --access public`.
+   - Tag: `git tag vX.Y.Z && git push origin vX.Y.Z`.
+   - Optionally trigger the GitHub “Release” workflow for an automated publish.
 
 ---
 
