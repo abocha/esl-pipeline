@@ -409,21 +409,80 @@ default: voice_id_default
     );
     expect(convertMock).toHaveBeenCalledTimes(2);
     const voiceIds = convertMock.mock.calls.map(call => call[0]);
-    expect(new Set(voiceIds).size).toBe(2);
-    expect(result.voices).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({ speaker: 'Alex', voiceId: 'voice_id_1', source: 'voiceMap' }),
-        expect.objectContaining({
-          speaker: 'Mara',
+   expect(new Set(voiceIds).size).toBe(2);
+   expect(result.voices).toEqual(
+     expect.arrayContaining([
+       expect.objectContaining({ speaker: 'Alex', voiceId: 'voice_id_1', source: 'voiceMap' }),
+       expect.objectContaining({
+          speaker: 'Observer',
           voiceId: 'voice_id_default',
           source: 'default',
         }),
         expect.objectContaining({
-          speaker: 'Observer',
+          speaker: 'Mara',
           source: expect.stringMatching(/auto|fallback/),
         }),
       ])
     );
+  });
+
+  it('assigns continuation lines in a letter to the initial speaker', async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'tts-'));
+    const tempMdPath = join(dir, 'letter.md');
+    const tempVoiceMapPath = join(dir, 'voices.yml');
+    await writeFixture(
+      tempMdPath,
+      `
+---
+title: Letter Lesson
+student: Max
+level: B1
+topic: decisions
+input_type: generate
+speaker_labels: [Narrator, Alex]
+speaker_profiles:
+  - id: Alex
+    role: student
+    gender: male
+
+---
+
+# Warm-up
+
+:::study-text Transcript
+Alex: Hey there,
+
+I wanted to get your advice on a big decision. There's an art studio in Lisbon offering me a role.
+
+The pay would be tight at first, but it feels like the right move for my creativity.
+
+What would you do if you were in my shoes?
+
+Talk soon,
+Alex
+:::
+    `
+    );
+    await writeFixture(
+      tempVoiceMapPath,
+      `
+Alex: voice_id_alex
+default: voice_id_default
+    `
+    );
+
+    const result = await buildStudyTextMp3(tempMdPath, {
+      voiceMapPath: tempVoiceMapPath,
+      outPath: dir,
+      preview: true,
+    });
+
+    expect(result.voices).toHaveLength(1);
+    expect(result.voices[0]).toMatchObject({
+      speaker: 'Alex',
+      voiceId: 'voice_id_alex',
+      source: 'voiceMap',
+    });
   });
 
   it('auto-selects distinct voices for multiple speakers when possible', async () => {

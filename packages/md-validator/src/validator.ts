@@ -223,30 +223,46 @@ export async function validateMarkdownFile(
     const studyBody = study.body;
 
     // dialogue/monologue rules
-    if (meta?.speaker_labels && meta.speaker_labels.length > 0) {
-      const labelSet = new Set(meta.speaker_labels.map(s => s.trim().toLowerCase()));
-      const lines = studyBody
-        .split(/\r?\n/)
-        .map(s => s.trim())
-        .filter(Boolean);
-      for (const [i, line] of lines.entries()) {
-        const m = line.match(/^\s*(?:\[([^\]]+)\]|([A-Za-zА-Яа-яЁё0-9 _.\-]{1,32}))\s*:\s+.+$/);
-        if (!m) {
-          errors.push(`study-text line ${i + 1}: expected "Speaker: text", got "${line}".`);
-          continue;
-        }
-        const who = (m[1] ?? m[2] ?? '').trim();
-        if (!who) {
-          errors.push(`study-text line ${i + 1}: could not extract speaker from line: "${line}".`);
-          continue;
-        }
-        if (!labelSet.has(who.toLowerCase())) {
-          errors.push(
-            `study-text line ${i + 1}: unknown speaker "${who}". Allowed: [${meta.speaker_labels.join(', ')}].`
-          );
+    const hasSpeakerLabels = Boolean(meta?.speaker_labels && meta.speaker_labels.length > 0);
+    let enforceExplicitSpeakers = false;
+    if (hasSpeakerLabels) {
+      const labelSet = new Set(meta!.speaker_labels!.map(s => s.trim().toLowerCase()));
+      const onlyNarrator = labelSet.size === 1 && labelSet.has('narrator');
+      if (!onlyNarrator) {
+        enforceExplicitSpeakers = true;
+        const rawLines = studyBody.split(/\r?\n/);
+        let currentSpeaker: string | null = null;
+        for (const [i, raw] of rawLines.entries()) {
+          const line = raw.trim();
+          if (!line) continue;
+          const m = line.match(/^\s*(?:\[([^\]]+)\]|([A-Za-zА-Яа-яЁё0-9 _.\-]{1,32}))\s*:\s+.+$/);
+          if (m) {
+            const who = (m[1] ?? m[2] ?? '').trim();
+            if (!who) {
+              errors.push(
+                `study-text line ${i + 1}: could not extract speaker from line: "${line}".`
+              );
+              currentSpeaker = null;
+              continue;
+            }
+            if (!labelSet.has(who.toLowerCase())) {
+              errors.push(
+                `study-text line ${i + 1}: unknown speaker "${who}". Allowed: [${meta!.speaker_labels!.join(', ')}].`
+              );
+            }
+            currentSpeaker = who;
+            continue;
+          }
+          if (!currentSpeaker) {
+            errors.push(
+              `study-text line ${i + 1}: expected "Speaker: text" or continuation, got "${line}".`
+            );
+          }
         }
       }
-    } else {
+    }
+
+    if (!enforceExplicitSpeakers) {
       // monologue: soft check — at least 3 paragraphs or 10 short lines
       const paras = studyBody.split(/\n\s*\n/).filter(p => p.trim().length > 0);
       const lines = studyBody
