@@ -165,6 +165,60 @@ function removeValuesByOrigin(state: WizardState, origin: ValueOrigin): void {
   }
 }
 
+function applySavedOrigins(
+  state: WizardState,
+  payload: Partial<NewAssignmentFlags>
+): void {
+  for (const key of Object.keys(payload) as Array<keyof NewAssignmentFlags>) {
+    state.origins[key] = 'saved';
+  }
+  for (const key of Object.keys(state.origins) as Array<keyof NewAssignmentFlags>) {
+    if (state.origins[key] === 'saved' && !(key in payload)) {
+      delete state[key];
+      delete state.origins[key];
+    }
+  }
+}
+
+function defaultsEqual(
+  a: Partial<NewAssignmentFlags>,
+  b: Partial<NewAssignmentFlags>
+): boolean {
+  const aKeys = Object.keys(a);
+  const bKeys = Object.keys(b);
+  if (aKeys.length !== bKeys.length) return false;
+  for (const key of aKeys) {
+    if ((a as any)[key] !== (b as any)[key]) {
+      return false;
+    }
+  }
+  return true;
+}
+
+async function autoPersistDefaults(
+  state: WizardState,
+  defaultsPath: string,
+  previous: Partial<NewAssignmentFlags>
+): Promise<Partial<NewAssignmentFlags>> {
+  const payload = collectPersistableSettings(state);
+  const hasValues = Object.keys(payload).length > 0;
+  const hadPrevious = Object.keys(previous).length > 0;
+
+  if (!hasValues) {
+    if (hadPrevious) {
+      await clearWizardDefaults(defaultsPath);
+    }
+    removeValuesByOrigin(state, 'saved');
+    return {};
+  }
+
+  if (!hadPrevious || !defaultsEqual(previous, payload)) {
+    await saveWizardDefaults(defaultsPath, payload);
+  }
+  applySavedOrigins(state, payload);
+  return payload;
+}
+
 async function manageSavedDefaults(
   state: WizardState,
   options: { defaultsPath: string; savedExists: boolean }
@@ -208,15 +262,7 @@ async function manageSavedDefaults(
         }
         await saveWizardDefaults(defaultsPath, payload);
         console.log(`Saved wizard defaults to ${defaultsPath}`);
-        for (const key of Object.keys(payload) as Array<keyof NewAssignmentFlags>) {
-          state.origins[key] = 'saved';
-        }
-        for (const key of Object.keys(state.origins) as Array<keyof NewAssignmentFlags>) {
-          if (state.origins[key] === 'saved' && !(key in payload)) {
-            delete state[key];
-            delete state.origins[key];
-          }
-        }
+        applySavedOrigins(state, payload);
         return { changed: true, savedDefaults: payload, resetState: false };
       }
 
@@ -323,6 +369,12 @@ export async function runInteractiveWizard(
         warnMissingSettings(state);
         const flags = buildFlags(state, initial, ctx);
         const selections = buildSelections(state, flags);
+        currentSavedDefaults = await autoPersistDefaults(
+          state,
+          defaultsPath,
+          currentSavedDefaults
+        );
+        hasSavedDefaults = Object.keys(currentSavedDefaults).length > 0;
         return { flags, selections };
       }
 

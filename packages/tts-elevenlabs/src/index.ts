@@ -53,8 +53,9 @@ export async function buildStudyTextMp3(
   const mdContent = readFileSync(mdPath, 'utf-8');
   const frontmatter = loadFrontmatter(mdContent);
   const studyText = extractStudyText(mdContent);
-  const sanitizedSegments = studyText.lines
-    .map(line => cleanSpeechText(parseSpeaker(line).text))
+  const segments = resolveStudyTextSegments(studyText.lines, frontmatter);
+  const sanitizedSegments = segments
+    .map(segment => cleanSpeechText(segment.text))
     .filter(segment => segment.length > 0);
   const normalizedText = sanitizedSegments.join('\n');
 
@@ -66,7 +67,7 @@ export async function buildStudyTextMp3(
       ? (rawVoiceMap as VoiceMapConfig)
       : ({} as VoiceMapConfig);
   const catalog = await loadVoicesCatalog().catch<VoiceCatalog>(() => ({ voices: [] }));
-  const speakers = collectSpeakers(studyText, frontmatter);
+  const speakers = collectSpeakers(segments, frontmatter);
   const assignments = await resolveSpeakerVoices({
     speakers,
     profiles: Array.isArray(frontmatter.speaker_profiles)
@@ -146,9 +147,8 @@ export async function buildStudyTextMp3(
   const eleven = getElevenClient();
   const fallbackVoiceId = assignments[0]?.voiceId;
 
-  for (const line of studyText.lines) {
-    const { speaker, text } = parseSpeaker(line);
-    const normalizedSpeaker = speaker?.trim() ?? '';
+  for (const segment of segments) {
+    const normalizedSpeaker = segment.speaker?.trim() ?? '';
     let voiceId =
       normalizedSpeaker && speakerVoiceMap.get(normalizedSpeaker)
         ? speakerVoiceMap.get(normalizedSpeaker)
@@ -165,15 +165,15 @@ export async function buildStudyTextMp3(
       voiceId = fallbackVoiceId ?? catalog.voices[0]?.id;
     }
 
+    const speechText = cleanSpeechText(segment.text);
+    if (!speechText) continue;
+
     if (!voiceId) {
       throw new Error(
-        `No ElevenLabs voice could be resolved for line "${line}". ` +
+        `No ElevenLabs voice could be resolved for line "${segment.raw}". ` +
           `Ensure frontmatter speaker profiles or voices.yml provide enough information.`
       );
     }
-
-    const speechText = cleanSpeechText(text);
-    if (!speechText) continue;
 
     // Create a temporary file for this line's audio
     const lineHash = createHash('sha256').update(`${speechText}-${voiceId}`).digest('hex');
@@ -274,8 +274,10 @@ function cleanSpeechText(text: string): string {
   return sanitized;
 }
 
+type StudyTextSegment = { speaker?: string; text: string; raw: string };
+
 function collectSpeakers(
-  studyText: { type: 'monologue' | 'dialogue'; lines: string[] },
+  segments: StudyTextSegment[],
   frontmatter: Frontmatter
 ): string[] {
   const ordered: string[] = [];
@@ -288,15 +290,28 @@ function collectSpeakers(
     ordered.push(trimmed);
   };
 
-  if (Array.isArray(frontmatter.speaker_labels)) {
-    for (const label of frontmatter.speaker_labels) {
-      if (typeof label === 'string') add(label);
-    }
+  for (const segment of segments) {
+    add(segment.speaker);
   }
 
-  for (const line of studyText.lines) {
-    const { speaker } = parseSpeaker(line);
-    add(speaker);
+  if (Array.isArray(frontmatter.speaker_labels)) {
+    const hasNarratorInSegments = segments.some(
+      segment => segment.speaker?.trim().toLowerCase() === 'narrator'
+    );
+    const hasAnySegmentSpeakers = ordered.length > 0;
+    for (const label of frontmatter.speaker_labels) {
+      if (typeof label !== 'string') continue;
+      const trimmed = label.trim();
+      if (!trimmed) continue;
+      if (
+        trimmed.toLowerCase() === 'narrator' &&
+        hasAnySegmentSpeakers &&
+        !hasNarratorInSegments
+      ) {
+        continue;
+      }
+      add(trimmed);
+    }
   }
 
   if (ordered.length === 0 && Array.isArray(frontmatter.speaker_profiles)) {
@@ -311,6 +326,39 @@ function collectSpeakers(
   }
 
   return ordered;
+}
+
+function resolveStudyTextSegments(
+  lines: string[],
+  frontmatter: Frontmatter
+): StudyTextSegment[] {
+  const segments: StudyTextSegment[] = [];
+  const labelOrder = Array.isArray(frontmatter.speaker_labels)
+    ? frontmatter.speaker_labels
+        .map(label => (typeof label === 'string' ? label.trim() : ''))
+        .filter(Boolean)
+    : [];
+  const nonNarratorFallback = labelOrder.find(
+    label => label.toLowerCase() !== 'narrator'
+  );
+  const singleFallback = labelOrder.length === 1 ? labelOrder[0] : undefined;
+  let lastSpeaker: string | undefined;
+
+  for (const raw of lines) {
+    const { speaker, text } = parseSpeaker(raw);
+    let resolvedSpeaker = speaker?.trim();
+    if (!resolvedSpeaker && lastSpeaker) {
+      resolvedSpeaker = lastSpeaker;
+    } else if (!resolvedSpeaker && !lastSpeaker) {
+      resolvedSpeaker = nonNarratorFallback ?? singleFallback;
+    }
+    if (resolvedSpeaker) {
+      lastSpeaker = resolvedSpeaker;
+    }
+    segments.push({ speaker: resolvedSpeaker, text, raw });
+  }
+
+  return segments;
 }
 
 function loadFrontmatter(source: string): Frontmatter {
