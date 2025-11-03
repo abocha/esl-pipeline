@@ -2,9 +2,7 @@
 
 All notable changes to this project will be documented here. Dates use `YYYY-MM-DD`.
 
-## [1.4.0] - 2025-10-30
-
-## [Unreleased]
+## [1.7.0] - 2025-11-01
 
 ### Phase 5 · Testing & Docs
 
