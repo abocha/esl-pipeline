@@ -60,7 +60,7 @@ npx @esl-pipeline/orchestrator esl --interactive
 ```ts
 import { createPipeline, loadEnvFiles } from '@esl-pipeline/orchestrator';
 
-loadEnvFiles(); // loads .env and merges into process.env
+loadEnvFiles(); // loads .env and merges into process.env (see docs/agents-ssot.md for exact behavior)
 
 const pipeline = createPipeline({ cwd: process.cwd() });
 
@@ -78,9 +78,11 @@ Useful exports:
 
 - `createPipeline(options)` — builds a pipeline with configurable config/manifest providers.
 - `createPipeline` also accepts optional `logger` and `metrics` hooks so services can stream stage telemetry to their own observability stack. Both default to no-ops when omitted.
-- `resolveConfigPaths(options)` — returns the resolved presets/voices/students directories.
+- `resolveConfigPaths(options)` — returns the resolved presets/voices/students/wizard-defaults paths.
 - `loadEnvFiles(options)` — convenience helper for loading `.env` files without mutating `process.env` (set `assignToProcess: false` to opt out).
 - `resolveManifestPath(mdPath)` — deterministic manifest location for a given Markdown file.
+
+For full type signatures and behavioral contracts, see [`docs/agents-ssot.md`](docs/agents-ssot.md).
 
 Types such as `PipelineNewAssignmentOptions`, `PipelineRerunOptions`, and `AssignmentManifest` are exported for TypeScript consumers.
 
@@ -88,18 +90,19 @@ Types such as `PipelineNewAssignmentOptions`, `PipelineRerunOptions`, and `Assig
 
 ## Configuration & Secrets
 
-| Setting                 | Source / Default                                           | Notes                                  |
-| ----------------------- | ---------------------------------------------------------- | -------------------------------------- |
-| Notion token            | `NOTION_TOKEN` env variable                                | Required                               |
-| Notion DB / data source | `NOTION_DB_ID`, overrides via CLI flags                    | Student profiles can pin defaults      |
-| ElevenLabs API key      | `ELEVENLABS_API_KEY` env variable                          | Required if `--with-tts`               |
-| AWS credentials         | `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `AWS_REGION` | Needed for `--upload s3`               |
-| Voices mapping          | `configs/voices.yml` (override with `--voices`)            | `createPipeline` exposes resolved path |
-| Presets                 | `configs/presets.json` (override with `--presets-path`)    | Pipeline resolves absolute path        |
-| Student profiles        | `configs/students/*.json`                                  | Optional per-student defaults          |
-| ffmpeg                  | system install or `FFMPEG_PATH`                            | We do not vendor binaries              |
+| Setting                 | Source / Default                                           | Notes                                                                 |
+| ----------------------- | ---------------------------------------------------------- | --------------------------------------------------------------------- |
+| Notion token            | `NOTION_TOKEN` env variable                                | Required                                                              |
+| Notion DB / data source | `NOTION_DB_ID`, overrides via CLI flags                    | Student profiles can pin defaults                                     |
+| ElevenLabs API key      | `ELEVENLABS_API_KEY` env variable                          | Required if `--with-tts`                                              |
+| AWS credentials         | `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `AWS_REGION` | Needed for `--upload s3`                                              |
+| Voices mapping          | `configs/voices.yml` (override with `--voices`)            | Resolved via `resolveConfigPaths`; can be overridden via CLI/options  |
+| Presets                 | `configs/presets.json` (override with `--presets-path`)    | Resolved via `resolveConfigPaths`                                     |
+| Student profiles        | `configs/students/*.json`                                  | Optional per-student defaults                                         |
+| Wizard defaults         | `configs/wizard.defaults.json`                             | Interactive wizard preferences; resolved next to presets (`configRoot`) |
+| ffmpeg                  | system install or `FFMPEG_PATH`                            | Not vendored; must be installed                                       |
 
-`loadEnvFiles()` mirrors the CLI’s behaviour: it checks `.env` in the working directory and the repo root. Pass `files: [...]` to load custom locations.
+`loadEnvFiles()` mirrors the CLI’s behavior: it checks `.env` in the working directory and the repo root. Pass `files: [...]` to load custom locations. See [`docs/agents-ssot.md`](docs/agents-ssot.md) §3.2 for authoritative details.
 
 ### Remote Manifest Storage
 
@@ -153,8 +156,9 @@ const myConfigProvider: ConfigProvider = {
 const pipeline = createPipeline({ configProvider: myConfigProvider });
 ```
 
-Environment-variable shortcuts will land alongside the concrete remote providers; until then inject
-your provider explicitly when needed.
+Environment-variable shortcuts for selecting remote providers are documented in:
+- [`docs/agents-ssot.md`](docs/agents-ssot.md) §5.2
+- [`docs/groundwork-for-backend.md`](docs/groundwork-for-backend.md)
 
 To experiment with the built-in HTTP provider, set the following environment variables:
 
@@ -172,17 +176,19 @@ source-of-truth, so you can fall back to local files simply by unsetting the env
 
 ```
 packages/
-  orchestrator/          # CLI + pipeline (publishable)
+  orchestrator/          # CLI + pipeline
   md-validator/          # Markdown linting
   md-extractor/          # Study text extraction
   notion-importer/       # Notion page creation
   notion-colorizer/      # Heading presets
-  tts-elevenlabs/        # ElevenLabs integration (system ffmpeg)
+  tts-elevenlabs/        # ElevenLabs integration (ffmpeg)
   storage-uploader/      # S3 uploads
   notion-add-audio/      # Attach audio blocks
-configs/                 # Sample presets, voices, students
-docs/groundwork-for-backend.md # Backend scaffolding roadmap
-AGENTS.md                # Maintainer guide (v2)
+configs/                 # Default presets, voices, students, wizard.defaults
+docs/
+  agents-ssot.md         # Agent SSOT (authoritative contracts)
+  groundwork-for-backend.md # Backend scaffolding roadmap
+AGENTS.md                # Concise maintainer guide pointing to agents-ssot.md
 ```
 
 All packages target ESM (`"type": "module"`), and CLI builds run through `tsup` + `tsc` for declarations.
@@ -255,21 +261,13 @@ Key takeaways:
 
 1. Work against Node 24.10.0 (`nvm use 24.10.0` or `.tool-versions`).
 2. Run `pnpm lint`, `pnpm test`, and `pnpm --filter @esl-pipeline/orchestrator build`.
-3. Update `AGENTS.md`, `CHANGELOG.md`, and `docs/groundwork-for-backend.md` when behaviour changes.
+3. When behavior changes:
+   - Update `CHANGELOG.md`.
+   - Update [`docs/agents-ssot.md`](docs/agents-ssot.md) as the canonical contract.
+   - Update `AGENTS.md` and [`docs/groundwork-for-backend.md`](docs/groundwork-for-backend.md) where relevant.
 4. Record pending work with `pnpm changeset` (one Changeset per logical change).
 5. When ready to ship:
    - Apply versions via `pnpm changeset version` and re-run `pnpm install`.
    - Publish with `pnpm --filter @esl-pipeline/orchestrator publish --access public`.
    - Tag: `git tag vX.Y.Z && git push origin vX.Y.Z`.
    - Optionally trigger the GitHub “Release” workflow for an automated publish.
-
----
-
-## Community & Support
-
-At the moment this is a two-person project. Questions / ideas / issues:
-
-- Open GitHub issues or pull requests.
-- Keep discussions grounded in the Node 24 + ffmpeg + npm publish workflow described above.
-
-Happy shipping! 🎧📝🎯

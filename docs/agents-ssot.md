@@ -429,6 +429,9 @@ Local defaults live under [`configs`](configs):
   - Maps voices to ElevenLabs or other TTS configuration.
 - [`configs/students/*.json`](configs/students)
   - Per-student or profile configs.
+- [`configs/wizard.defaults.json`](configs/wizard.defaults.json)
+  - Stores interactive wizard preferences (e.g., `withTts`, upload target).
+  - Resolved via `wizardDefaultsPath` from [`resolveConfigPaths.declaration()`](packages/orchestrator/src/pipeline.ts:34), which binds it to the same `configRoot` as presets.
 
 `createPipeline` and `ConfigProvider` determine how these are loaded. Agents:
 
@@ -597,6 +600,7 @@ Rules:
 
 - CLI is a thin adapter over orchestrator API.
 - Any CLI feature MUST delegate to orchestrator exports, NOT duplicate logic.
+- `--with-tts` is an explicit opt-in. When omitted, the orchestrator treats `withTts` as “no override” so that saved defaults from [`wizard.defaults.json`](configs/wizard.defaults.json) or other configuration can apply.
 
 ### 7.2. Programmatic API as Source of Truth
 

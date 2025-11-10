@@ -13,3 +13,4 @@ packages/notion-importer/tmp.md
 /fixtures_private/*
 configs/wizard.defaults.json
 .kilocode/*
+packages/orchestrator/examples/service/fixtures/lesson.manifest.json

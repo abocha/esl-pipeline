@@ -288,7 +288,10 @@ export async function runInteractiveWizard(
   ctx: WizardContext = {}
 ): Promise<WizardRunResult> {
   const cwd = resolve(ctx.cwd ?? process.cwd());
-  const defaultsPath = resolve(cwd, ctx.defaultsPath ?? DEFAULT_WIZARD_DEFAULTS_PATH);
+  const defaultsPath =
+    ctx.defaultsPath && ctx.defaultsPath.startsWith('/')
+      ? ctx.defaultsPath
+      : resolve(cwd, ctx.defaultsPath ?? DEFAULT_WIZARD_DEFAULTS_PATH);
   const configProvider =
     ctx.configProvider ??
     createFilesystemConfigProvider({
