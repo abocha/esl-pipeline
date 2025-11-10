@@ -57,10 +57,7 @@ export class RemoteConfigProvider implements ConfigProvider {
     return Array.isArray(data) ? data : [];
   }
 
-  async resolveVoicesPath(
-    voicesPath?: string,
-    fallback?: string
-  ): Promise<string | undefined> {
+  async resolveVoicesPath(voicesPath?: string, fallback?: string): Promise<string | undefined> {
     if (voicesPath) return voicesPath;
     if (fallback) return fallback;
     if (this.voicesTmpPath) return this.voicesTmpPath;
@@ -77,7 +74,9 @@ export class RemoteConfigProvider implements ConfigProvider {
         signal: controller.signal,
       });
       if (!response.ok) {
-        throw new Error(`Failed to fetch remote voices.yml (${response.status} ${response.statusText})`);
+        throw new Error(
+          `Failed to fetch remote voices.yml (${response.status} ${response.statusText})`
+        );
       }
       const body = await response.text();
       const tmpPath = join(tmpdir(), `voices-${randomUUID()}.yml`);
@@ -106,7 +105,9 @@ export class RemoteConfigProvider implements ConfigProvider {
         signal: controller.signal,
       });
       if (!response.ok) {
-        throw new Error(`Failed to fetch remote config (${response.status} ${response.statusText})`);
+        throw new Error(
+          `Failed to fetch remote config (${response.status} ${response.statusText})`
+        );
       }
       return (await response.json()) as T;
     } finally {

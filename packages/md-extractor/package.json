@@ -1,6 +1,6 @@
 {
   "name": "@esl-pipeline/md-extractor",
-  "version": "1.4.0",
+  "version": "1.4.1",
   "private": true,
   "type": "module",
   "license": "UNLICENSED",
@@ -39,11 +39,11 @@
     "unified": "^11.0.5"
   },
   "devDependencies": {
-    "@types/node": "^24.9.2",
-    "rimraf": "^6.0.1",
+    "@types/node": "^24.10.0",
+    "rimraf": "^6.1.0",
     "tsx": "^4.20.6",
     "typescript": "^5.9.3",
-    "vitest": "^4.0.5"
+    "vitest": "^4.0.8"
   },
   "bin": {
     "md-extractor": "dist/bin/cli.js"

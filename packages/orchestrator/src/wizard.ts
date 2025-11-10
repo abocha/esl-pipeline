@@ -165,10 +165,7 @@ function removeValuesByOrigin(state: WizardState, origin: ValueOrigin): void {
   }
 }
 
-function applySavedOrigins(
-  state: WizardState,
-  payload: Partial<NewAssignmentFlags>
-): void {
+function applySavedOrigins(state: WizardState, payload: Partial<NewAssignmentFlags>): void {
   for (const key of Object.keys(payload) as Array<keyof NewAssignmentFlags>) {
     state.origins[key] = 'saved';
   }
@@ -180,10 +177,7 @@ function applySavedOrigins(
   }
 }
 
-function defaultsEqual(
-  a: Partial<NewAssignmentFlags>,
-  b: Partial<NewAssignmentFlags>
-): boolean {
+function defaultsEqual(a: Partial<NewAssignmentFlags>, b: Partial<NewAssignmentFlags>): boolean {
   const aKeys = Object.keys(a);
   const bKeys = Object.keys(b);
   if (aKeys.length !== bKeys.length) return false;
@@ -369,11 +363,7 @@ export async function runInteractiveWizard(
         warnMissingSettings(state);
         const flags = buildFlags(state, initial, ctx);
         const selections = buildSelections(state, flags);
-        currentSavedDefaults = await autoPersistDefaults(
-          state,
-          defaultsPath,
-          currentSavedDefaults
-        );
+        currentSavedDefaults = await autoPersistDefaults(state, defaultsPath, currentSavedDefaults);
         hasSavedDefaults = Object.keys(currentSavedDefaults).length > 0;
         return { flags, selections };
       }

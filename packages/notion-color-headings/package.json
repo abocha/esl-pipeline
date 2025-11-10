@@ -1,6 +1,6 @@
 {
   "name": "@esl-pipeline/notion-color-headings",
-  "version": "1.2.0",
+  "version": "1.2.1",
   "private": true,
   "type": "module",
   "license": "UNLICENSED",
@@ -11,6 +11,6 @@
     "color": "node color-headings.mjs"
   },
   "dependencies": {
-    "@notionhq/client": "^5.3.0"
+    "@notionhq/client": "^5.4.0"
   }
 }

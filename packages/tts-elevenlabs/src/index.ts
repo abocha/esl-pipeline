@@ -5,7 +5,12 @@ import { mkdir, copyFile, unlink, stat } from 'node:fs/promises';
 import yaml from 'js-yaml';
 import { extractStudyText, extractFrontmatter, type Frontmatter } from '@esl-pipeline/md-extractor';
 import { loadVoicesCatalog, type VoiceCatalog } from './assign.js';
-import { concatMp3Segments, synthSilenceMp3, resolveFfmpegPath } from './ffmpeg.js';
+import {
+  concatMp3Segments,
+  synthSilenceMp3,
+  resolveFfmpegPath,
+  setMp3TitleMetadata,
+} from './ffmpeg.js';
 import { Readable } from 'node:stream';
 import { pipeline } from 'node:stream/promises';
 import { getElevenClient } from './eleven.js';
@@ -18,6 +23,23 @@ const RETRYABLE_STATUS = new Set([408, 409, 425, 429, 500, 502, 503, 504]);
 
 export function hashStudyText(text: string): string {
   return createHash('sha256').update(text).digest('hex');
+}
+
+function sanitizeStudentName(student?: unknown): string {
+  if (typeof student !== 'string') return '';
+  const trimmed = student.trim();
+  if (!trimmed) return '';
+  const normalized = trimmed
+    .normalize('NFKD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase();
+  const slug = normalized.replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
+  return slug;
+}
+
+function buildOutputFileName(hash: string, frontmatter: Frontmatter): string {
+  const prefix = sanitizeStudentName(frontmatter.student);
+  return prefix ? `${prefix}-${hash}.mp3` : `${hash}.mp3`;
 }
 
 type BuildStudyTextOptions = {
@@ -108,7 +130,7 @@ export async function buildStudyTextMp3(
   // Generate hash based on study text and voice map
   const hashInput = JSON.stringify({ text: normalizedText, voices: resolvedVoiceDescriptor });
   const hash = hashStudyText(hashInput);
-  const fileName = `${hash}.mp3`;
+  const fileName = buildOutputFileName(hash, frontmatter);
   const outputDir = resolve(opts.outPath || dirname(mdPath));
   const targetPath = resolve(outputDir, fileName);
 
@@ -233,6 +255,14 @@ export async function buildStudyTextMp3(
     await Promise.allSettled(cleanupTargets.map(p => unlink(p)));
   }
 
+  const titleMeta =
+    typeof frontmatter.title === 'string' && frontmatter.title.trim().length > 0
+      ? frontmatter.title.trim()
+      : '';
+  if (titleMeta) {
+    await setMp3TitleMetadata(targetPath, titleMeta, resolvedFfmpeg ?? opts.ffmpegPath);
+  }
+
   return {
     path: targetPath,
     duration: await approximateDurationFromFile(targetPath),
@@ -276,10 +306,7 @@ function cleanSpeechText(text: string): string {
 
 type StudyTextSegment = { speaker?: string; text: string; raw: string };
 
-function collectSpeakers(
-  segments: StudyTextSegment[],
-  frontmatter: Frontmatter
-): string[] {
+function collectSpeakers(segments: StudyTextSegment[], frontmatter: Frontmatter): string[] {
   const ordered: string[] = [];
   const seen = new Set<string>();
   const add = (name: string | undefined | null) => {
@@ -303,11 +330,7 @@ function collectSpeakers(
       if (typeof label !== 'string') continue;
       const trimmed = label.trim();
       if (!trimmed) continue;
-      if (
-        trimmed.toLowerCase() === 'narrator' &&
-        hasAnySegmentSpeakers &&
-        !hasNarratorInSegments
-      ) {
+      if (trimmed.toLowerCase() === 'narrator' && hasAnySegmentSpeakers && !hasNarratorInSegments) {
         continue;
       }
       add(trimmed);
@@ -328,19 +351,14 @@ function collectSpeakers(
   return ordered;
 }
 
-function resolveStudyTextSegments(
-  lines: string[],
-  frontmatter: Frontmatter
-): StudyTextSegment[] {
+function resolveStudyTextSegments(lines: string[], frontmatter: Frontmatter): StudyTextSegment[] {
   const segments: StudyTextSegment[] = [];
   const labelOrder = Array.isArray(frontmatter.speaker_labels)
     ? frontmatter.speaker_labels
         .map(label => (typeof label === 'string' ? label.trim() : ''))
         .filter(Boolean)
     : [];
-  const nonNarratorFallback = labelOrder.find(
-    label => label.toLowerCase() !== 'narrator'
-  );
+  const nonNarratorFallback = labelOrder.find(label => label.toLowerCase() !== 'narrator');
   const singleFallback = labelOrder.length === 1 ? labelOrder[0] : undefined;
   let lastSpeaker: string | undefined;
 

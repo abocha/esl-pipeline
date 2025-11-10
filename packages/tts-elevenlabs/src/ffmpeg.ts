@@ -1,5 +1,5 @@
 import { spawn } from 'node:child_process';
-import { writeFile, unlink } from 'node:fs/promises';
+import { writeFile, unlink, copyFile } from 'node:fs/promises';
 import { homedir, platform, tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 
@@ -173,6 +173,42 @@ export async function concatMp3Segments(
     try {
       await unlink(listFile);
     } catch {}
+  }
+}
+
+/**
+ * Update the ID3 title frame for an MP3 by replaying the file through FFmpeg.
+ * We copy the metadata-tagged temp file back on top of the original so we
+ * never leave the file in a partially-updated state in case of failure.
+ */
+export async function setMp3TitleMetadata(
+  filePath: string,
+  title: string,
+  ffmpegPath?: string
+): Promise<void> {
+  const trimmedTitle = title.trim();
+  if (!trimmedTitle) return;
+
+  const tempPath = join(
+    tmpdir(),
+    `ffmeta-title-${Date.now()}-${Math.random().toString(36).slice(2)}.mp3`
+  );
+  const args = [
+    '-y',
+    '-i',
+    filePath,
+    '-metadata',
+    `title=${trimmedTitle}`,
+    '-codec',
+    'copy',
+    tempPath,
+  ];
+
+  try {
+    await runFfmpeg(args, 'ffmpeg-set-metadata-title', ffmpegPath);
+    await copyFile(tempPath, filePath);
+  } finally {
+    await unlink(tempPath).catch(() => {});
   }
 }
 

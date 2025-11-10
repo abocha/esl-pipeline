@@ -4,3 +4,9 @@ out
 coverage
 packages/**/dist
 .pnpm-store
+fixtures
+fixtures/**
+fixtures_private
+fixtures_private/**
+packages/**/fixtures
+packages/**/fixtures/**

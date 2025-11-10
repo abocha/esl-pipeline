@@ -481,9 +481,7 @@ const normalizeProfileName = (value?: string): string | undefined =>
 const getStudentProfiles = async (pipeline: OrchestratorPipeline): Promise<StudentProfile[]> => {
   const cacheKey = pipeline.configPaths.studentsDir;
   if (cachedProfiles && cachedProfiles.key === cacheKey) return cachedProfiles.profiles;
-  const profiles = await pipeline.configProvider
-    .loadStudentProfiles(cacheKey)
-    .catch(() => []);
+  const profiles = await pipeline.configProvider.loadStudentProfiles(cacheKey).catch(() => []);
   cachedProfiles = { key: cacheKey, profiles };
   return profiles;
 };

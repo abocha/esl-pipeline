@@ -19,14 +19,16 @@ This document captures the canonical schema so remote stores and services can va
   "schemaVersion": 1,
   "mdHash": "<sha256 hash of the Markdown study text>",
   "timestamp": "2024-07-19T12:34:56.789Z",
-  "preset": "b1-default",             // optional, last applied heading preset
-  "pageId": "<notion-page-id>",       // optional, populated after Notion import
+  "preset": "b1-default", // optional, last applied heading preset
+  "pageId": "<notion-page-id>", // optional, populated after Notion import
   "pageUrl": "https://www.notion.so/...", // optional, populated after Notion import
-  "audio": {                          // optional, populated after TTS/upload steps
-    "path": "./lessons/audio.mp3",   // local file path to generated audio
-    "url": "https://...",            // remote URL after upload
+  "audio": {
+    // optional, populated after TTS/upload steps
+    "path": "./lessons/audio.mp3", // local file path to generated audio
+    "url": "https://...", // remote URL after upload
     "hash": "<sha256 audio hash>",
-    "voices": [                       // details returned by tts-elevenlabs
+    "voices": [
+      // details returned by tts-elevenlabs
       {
         "speaker": "Narrator",
         "voiceId": "voice-id",
@@ -34,10 +36,10 @@ This document captures the canonical schema so remote stores and services can va
         "source": "voiceMap",
         "gender": "male",
         "accent": "american",
-        "score": 0.92
-      }
-    ]
-  }
+        "score": 0.92,
+      },
+    ],
+  },
 }
 ```
 

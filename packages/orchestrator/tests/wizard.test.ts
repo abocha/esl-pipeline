@@ -13,9 +13,7 @@ vi.mock('prompts', () => {
   return {
     default: (question: { name?: string }) => {
       if (!promptQueue.length) {
-        throw new Error(
-          `No prompt response queued for question "${question?.name ?? 'unknown'}".`
-        );
+        throw new Error(`No prompt response queued for question "${question?.name ?? 'unknown'}".`);
       }
       return Promise.resolve(promptQueue.shift());
     },
@@ -108,6 +106,44 @@ Content
     expect(secondRun.flags.upload).toBe('s3');
     expect(secondRun.flags.prefix).toBe('audio/custom');
     expect(secondRun.flags.publicRead).toBe(true);
+  });
+
+  it('persists and reloads TTS preference', async () => {
+    promptQueue.push(
+      { main: 'settings' },
+      { setting: 'tts' },
+      { withTts: false },
+      { setting: 'back' },
+      { main: 'start' },
+      { md: mdPath }
+    );
+
+    await runInteractiveWizard(
+      {},
+      {
+        cwd,
+        defaultsPath,
+        configProvider,
+      }
+    );
+
+    const saved = JSON.parse(await readFile(defaultsPath, 'utf8'));
+    expect(saved).toMatchObject({
+      withTts: false,
+    });
+
+    promptQueue.push({ main: 'start' }, { md: mdPath });
+
+    const secondRun = await runInteractiveWizard(
+      {},
+      {
+        cwd,
+        defaultsPath,
+        configProvider,
+      }
+    );
+
+    expect(secondRun.flags.withTts).toBe(false);
   });
 
   afterEach(async () => {

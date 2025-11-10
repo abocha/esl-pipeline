@@ -6,6 +6,7 @@ This repository powers the ESL homework pipeline end-to-end. It can be used eith
 2. A **programmatic pipeline** (`createPipeline`) you can embed in your own service or job runner.
 
 > **Runtime requirements**
+>
 > - Node **24.10.0** or newer (enforced by `engines` and CI).
 > - `pnpm` 8+ (use `corepack enable`).
 > - ffmpeg available on PATH or supplied via `FFMPEG_PATH`.
@@ -87,16 +88,16 @@ Types such as `PipelineNewAssignmentOptions`, `PipelineRerunOptions`, and `Assig
 
 ## Configuration & Secrets
 
-| Setting              | Source / Default                        | Notes                                         |
-|----------------------|------------------------------------------|----------------------------------------------|
-| Notion token         | `NOTION_TOKEN` env variable              | Required                                      |
-| Notion DB / data source | `NOTION_DB_ID`, overrides via CLI flags | Student profiles can pin defaults            |
-| ElevenLabs API key   | `ELEVENLABS_API_KEY` env variable        | Required if `--with-tts`                     |
-| AWS credentials      | `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `AWS_REGION` | Needed for `--upload s3`                     |
-| Voices mapping       | `configs/voices.yml` (override with `--voices`) | `createPipeline` exposes resolved path       |
-| Presets              | `configs/presets.json` (override with `--presets-path`) | Pipeline resolves absolute path              |
-| Student profiles     | `configs/students/*.json`                | Optional per-student defaults                 |
-| ffmpeg               | system install or `FFMPEG_PATH`         | We do not vendor binaries                     |
+| Setting                 | Source / Default                                           | Notes                                  |
+| ----------------------- | ---------------------------------------------------------- | -------------------------------------- |
+| Notion token            | `NOTION_TOKEN` env variable                                | Required                               |
+| Notion DB / data source | `NOTION_DB_ID`, overrides via CLI flags                    | Student profiles can pin defaults      |
+| ElevenLabs API key      | `ELEVENLABS_API_KEY` env variable                          | Required if `--with-tts`               |
+| AWS credentials         | `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `AWS_REGION` | Needed for `--upload s3`               |
+| Voices mapping          | `configs/voices.yml` (override with `--voices`)            | `createPipeline` exposes resolved path |
+| Presets                 | `configs/presets.json` (override with `--presets-path`)    | Pipeline resolves absolute path        |
+| Student profiles        | `configs/students/*.json`                                  | Optional per-student defaults          |
+| ffmpeg                  | system install or `FFMPEG_PATH`                            | We do not vendor binaries              |
 
 `loadEnvFiles()` mirrors the CLI’s behaviour: it checks `.env` in the working directory and the repo root. Pass `files: [...]` to load custom locations.
 
@@ -233,6 +234,7 @@ CI (`.github/workflows/ci.yml`) runs on Node 24.10.0 and executes build, lint, t
 The orchestrator is now consumable from other Node projects, but we’re actively adding scaffolding to make it backend-ready: pluggable storage adapters, observability hooks, Docker image, etc. See [`docs/groundwork-for-backend.md`](docs/groundwork-for-backend.md) for the detailed plan and progress.
 
 Key takeaways:
+
 - `createPipeline` will become the primary integration point for API/queue services.
 - Logger/metrics/tracing interfaces will keep business logic agnostic of the host environment.
 - Manifest/config storage is being abstracted so you can swap JSON files for S3 or a database without touching the pipeline core.
@@ -266,6 +268,7 @@ Key takeaways:
 ## Community & Support
 
 At the moment this is a two-person project. Questions / ideas / issues:
+
 - Open GitHub issues or pull requests.
 - Keep discussions grounded in the Node 24 + ffmpeg + npm publish workflow described above.
 
