@@ -49,10 +49,9 @@ vi.mock('@aws-sdk/client-s3', () => {
 });
 
 vi.mock('@esl-pipeline/tts-elevenlabs', async () => {
-  const actual =
-    await vi.importActual<typeof import('@esl-pipeline/tts-elevenlabs')>(
-      '@esl-pipeline/tts-elevenlabs'
-    );
+  const actual = await vi.importActual<typeof import('@esl-pipeline/tts-elevenlabs')>(
+    '@esl-pipeline/tts-elevenlabs'
+  );
   return {
     ...actual,
     buildStudyTextMp3: vi.fn(),
@@ -197,12 +196,12 @@ describe('pipeline integration', () => {
       'upload',
       'manifest',
     ]);
-    expect(events.filter(event => event.stage === 'validate' && event.status === 'skipped')).toHaveLength(
-      1
-    );
-    expect(events.filter(event => event.stage === 'import' && event.status === 'skipped')).toHaveLength(
-      1
-    );
+    expect(
+      events.filter(event => event.stage === 'validate' && event.status === 'skipped')
+    ).toHaveLength(1);
+    expect(
+      events.filter(event => event.stage === 'import' && event.status === 'skipped')
+    ).toHaveLength(1);
   });
 
   it('writes manifests to S3 when configured via environment variables', async () => {
@@ -231,9 +230,7 @@ describe('pipeline integration', () => {
     const pipeline = createPipeline({ cwd: dir });
 
     const manifestUri = pipeline.manifestStore.manifestPathFor(mdPath);
-    expect(manifestUri).toBe(
-      's3://pipeline-test/manifests/int-tests/lesson.manifest.json'
-    );
+    expect(manifestUri).toBe('s3://pipeline-test/manifests/int-tests/lesson.manifest.json');
 
     const { buildStudyTextMp3 } = await import('@esl-pipeline/tts-elevenlabs');
     vi.mocked(buildStudyTextMp3).mockResolvedValueOnce({
@@ -251,9 +248,7 @@ describe('pipeline integration', () => {
       skipImport: true,
     });
 
-    expect(result.manifestPath).toBe(
-      's3://pipeline-test/manifests/int-tests/lesson.manifest.json'
-    );
+    expect(result.manifestPath).toBe('s3://pipeline-test/manifests/int-tests/lesson.manifest.json');
     expect(mockSend).toHaveBeenCalledTimes(2);
     expect(mockSend.mock.calls[0][0]).toBeInstanceOf(GetCommand);
     expect(mockSend.mock.calls[1][0]).toBeInstanceOf(PutCommand);

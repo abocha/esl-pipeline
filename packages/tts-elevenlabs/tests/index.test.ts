@@ -112,6 +112,7 @@ beforeEach(() => {
   vi.spyOn(ffm, 'synthSilenceMp3').mockImplementation(async (outFile: string) => {
     await writeFile(outFile, 'silence');
   });
+  vi.spyOn(ffm, 'setMp3TitleMetadata').mockResolvedValue();
 });
 
 describe('tts elevenlabs integration', () => {
@@ -163,6 +164,7 @@ default: voice_id_default
     });
     expect(result.path.endsWith('.mp3')).toBe(true);
     expect(result.hash).toHaveLength(64);
+    expect(result.path).toContain('anna-');
     expect(spy).not.toHaveBeenCalled();
     expect(convertMock).not.toHaveBeenCalled();
     expect(result.voices).toEqual([
@@ -409,11 +411,11 @@ default: voice_id_default
     );
     expect(convertMock).toHaveBeenCalledTimes(2);
     const voiceIds = convertMock.mock.calls.map(call => call[0]);
-   expect(new Set(voiceIds).size).toBe(2);
-   expect(result.voices).toEqual(
-     expect.arrayContaining([
-       expect.objectContaining({ speaker: 'Alex', voiceId: 'voice_id_1', source: 'voiceMap' }),
-       expect.objectContaining({
+    expect(new Set(voiceIds).size).toBe(2);
+    expect(result.voices).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ speaker: 'Alex', voiceId: 'voice_id_1', source: 'voiceMap' }),
+        expect.objectContaining({
           speaker: 'Observer',
           voiceId: 'voice_id_default',
           source: 'default',

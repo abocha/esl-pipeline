@@ -33,16 +33,16 @@ Welcome! This repo now ships a publishable CLI _and_ a reusable pipeline module,
 
 ## 3. Key Packages
 
-| Package                     | Purpose                                        |
-|-----------------------------|------------------------------------------------|
-| `@esl-pipeline/orchestrator`| CLI & pipeline factory (publishable)           |
-| `@esl-pipeline/md-validator`| Markdown validation                            |
-| `@esl-pipeline/md-extractor`| Study text extraction                          |
-| `@esl-pipeline/notion-importer`| Notion page creation + data source resolution |
-| `@esl-pipeline/notion-colorizer`| Heading presets in Notion                    |
-| `@esl-pipeline/tts-elevenlabs`| ElevenLabs integration (system ffmpeg)        |
-| `@esl-pipeline/storage-uploader`| S3 uploads                                   |
-| `@esl-pipeline/notion-add-audio`| Audio attachment inside Notion               |
+| Package                          | Purpose                                       |
+| -------------------------------- | --------------------------------------------- |
+| `@esl-pipeline/orchestrator`     | CLI & pipeline factory (publishable)          |
+| `@esl-pipeline/md-validator`     | Markdown validation                           |
+| `@esl-pipeline/md-extractor`     | Study text extraction                         |
+| `@esl-pipeline/notion-importer`  | Notion page creation + data source resolution |
+| `@esl-pipeline/notion-colorizer` | Heading presets in Notion                     |
+| `@esl-pipeline/tts-elevenlabs`   | ElevenLabs integration (system ffmpeg)        |
+| `@esl-pipeline/storage-uploader` | S3 uploads                                    |
+| `@esl-pipeline/notion-add-audio` | Audio attachment inside Notion                |
 
 The orchestrator package now exports type definitions (e.g. `PipelineNewAssignmentOptions`, `AssignmentManifest`) alongside the runtime API.
 

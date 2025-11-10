@@ -2,11 +2,7 @@ import { beforeAll, afterAll, describe, it, expect } from 'vitest';
 import Fastify from 'fastify';
 import { resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import {
-  createPipeline,
-  noopLogger,
-  noopMetrics,
-} from '../../src/index.js';
+import { createPipeline, noopLogger, noopMetrics } from '../../src/index.js';
 
 const fastify = Fastify({ logger: false });
 

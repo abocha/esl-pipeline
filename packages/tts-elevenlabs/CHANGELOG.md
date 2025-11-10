@@ -1,5 +1,16 @@
 # @esl-pipeline/tts-elevenlabs
 
+## 1.6.0
+
+### Minor Changes
+
+- feat: add .mp3 title; add .mp3 student name in filename; known bug: wizard not loading TTS defaults; chore: deps up
+
+### Patch Changes
+
+- Updated dependencies
+  - @esl-pipeline/md-extractor@1.4.1
+
 ## 1.5.0
 
 ### Minor Changes

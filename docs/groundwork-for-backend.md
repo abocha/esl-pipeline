@@ -6,14 +6,14 @@ The orchestrator package is now designed to embed directly into backend services
 
 ## 1. Current Capabilities
 
-| Area | Status | Notes |
-|------|--------|-------|
-| Adapters | ✅ | Filesystem + S3 `ManifestStore`, filesystem + HTTP `ConfigProvider`, selectable via env or constructor. |
-| Observability | ✅ | Injected `logger` / `metrics` hooks, structured stage events, run IDs. |
-| Containerization | ✅ | `packages/orchestrator/Dockerfile` builds an image ready to run the CLI or service. |
-| Service Skeleton | ✅ | `examples/service/` Fastify worker, dry-run POST `/jobs`, Vitest smoke test. |
-| CI | ✅ | GitHub workflow runs on Node 24 + LTS, builds docker image, executes example service test. |
-| Release | ✅ | Changesets-based flow, documented publish steps. |
+| Area             | Status | Notes                                                                                                   |
+| ---------------- | ------ | ------------------------------------------------------------------------------------------------------- |
+| Adapters         | ✅     | Filesystem + S3 `ManifestStore`, filesystem + HTTP `ConfigProvider`, selectable via env or constructor. |
+| Observability    | ✅     | Injected `logger` / `metrics` hooks, structured stage events, run IDs.                                  |
+| Containerization | ✅     | `packages/orchestrator/Dockerfile` builds an image ready to run the CLI or service.                     |
+| Service Skeleton | ✅     | `examples/service/` Fastify worker, dry-run POST `/jobs`, Vitest smoke test.                            |
+| CI               | ✅     | GitHub workflow runs on Node 24 + LTS, builds docker image, executes example service test.              |
+| Release          | ✅     | Changesets-based flow, documented publish steps.                                                        |
 
 Open items (future work): database-backed manifest store, queue helper utilities, advanced tenant/secret providers.
 
@@ -22,27 +22,32 @@ Open items (future work): database-backed manifest store, queue helper utilities
 ## 2. Integration Checklist
 
 ### Step 0 – Prerequisites
+
 1. Node.js 24.10.0+, pnpm (8 or 10), Docker, ffmpeg on your machine/runner.
 2. Credentials: Notion, ElevenLabs, AWS (if using S3).
 3. Access to your target repository/monorepo where the backend worker will live.
 
 ### Step 1 – Install the Package
+
 ```bash
 pnpm add @esl-pipeline/orchestrator
 ```
 
 For local defaults, copy prebuilt configs:
+
 ```bash
 mkdir -p configs
 cp -R node_modules/@esl-pipeline/orchestrator/dist/configs ./configs
 ```
 
 Load environment variables (via `.env`, secret manager, etc.). Required minimum:
+
 - `NOTION_TOKEN`
 - `ELEVENLABS_API_KEY`
 - `AWS_REGION`, `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY` (if uploading to S3)
 
 Optional (remote adapters):
+
 - `ESL_PIPELINE_MANIFEST_STORE=s3`
 - `ESL_PIPELINE_MANIFEST_BUCKET`
 - `ESL_PIPELINE_CONFIG_PROVIDER=http`
@@ -53,12 +58,9 @@ Optional (remote adapters):
 **Filesystem only:** do nothing; manifests live next to Markdown, configs read from `configs/`.
 
 **S3 manifests + remote config:**
+
 ```ts
-import {
-  createPipeline,
-  S3ManifestStore,
-  RemoteConfigProvider,
-} from '@esl-pipeline/orchestrator';
+import { createPipeline, S3ManifestStore, RemoteConfigProvider } from '@esl-pipeline/orchestrator';
 
 const pipeline = createPipeline({
   cwd: process.env.PIPELINE_CWD ?? process.cwd(),
@@ -78,14 +80,15 @@ const pipeline = createPipeline({
 ### Step 3 – Embed in a Service
 
 Start with the example worker (`packages/orchestrator/examples/service`):
+
 ```ts
 import Fastify from 'fastify';
 import { createPipeline, noopLogger, noopMetrics } from '@esl-pipeline/orchestrator';
 
 const pipeline = createPipeline({
   cwd: process.env.PIPELINE_CWD ?? process.cwd(),
-  logger: noopLogger,      // replace with pino/winston
-  metrics: noopMetrics,    // replace with statsd/Prometheus
+  logger: noopLogger, // replace with pino/winston
+  metrics: noopMetrics, // replace with statsd/Prometheus
 });
 
 const app = Fastify({ logger: true });
@@ -122,6 +125,7 @@ From here you can remove `dryRun`/`skip*` flags once you’re ready to hit live 
 4. On failure, catch errors and mark the queue job accordingly (retries/backoff handled by the queue).
 
 Example payload contract:
+
 ```json
 {
   "jobId": "5f9...",
@@ -170,6 +174,7 @@ Example payload contract:
 ### Step 9 – CI / CD
 
 Ensure your CI executes:
+
 ```bash
 pnpm --filter @esl-pipeline/orchestrator test -- --runInBand
 pnpm --filter @esl-pipeline/orchestrator examples/service vitest run
@@ -177,6 +182,7 @@ pnpm --filter @esl-pipeline/orchestrator docker:build
 ```
 
 Release flow (using Changesets):
+
 1. `pnpm changeset`
 2. Merge; CI runs tests + docker build.
 3. `pnpm changeset version` + `pnpm install`
@@ -187,20 +193,20 @@ Release flow (using Changesets):
 
 ## 3. Environment Quick Reference
 
-| Variable | Purpose |
-|----------|---------|
-| `NOTION_TOKEN` | Notion API access. |
-| `NOTION_DB_ID`, `NOTION_DATA_SOURCE_ID` | Optional overrides for import step. |
-| `ELEVENLABS_API_KEY` | Required for TTS. |
-| `AWS_REGION`, `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY` | Required when uploading to S3. |
-| `S3_BUCKET`, `S3_PREFIX` | CLI compatibility; use pipeline options for precise control. |
-| `ESL_PIPELINE_MANIFEST_STORE` | Set to `s3` to activate the S3 manifest store. |
-| `ESL_PIPELINE_MANIFEST_BUCKET` | Target bucket for manifests. |
-| `ESL_PIPELINE_MANIFEST_PREFIX` | Optional key prefix (`manifests/prod`). |
-| `ESL_PIPELINE_MANIFEST_ROOT` | Base directory used to compute manifest keys. |
-| `ESL_PIPELINE_CONFIG_PROVIDER` | Set to `http` to use `RemoteConfigProvider`. |
-| `ESL_PIPELINE_CONFIG_ENDPOINT` | Base URL for presets/students/voices endpoints. |
-| `ESL_PIPELINE_CONFIG_TOKEN` | Bearer token for the remote config service. |
+| Variable                                                   | Purpose                                                      |
+| ---------------------------------------------------------- | ------------------------------------------------------------ |
+| `NOTION_TOKEN`                                             | Notion API access.                                           |
+| `NOTION_DB_ID`, `NOTION_DATA_SOURCE_ID`                    | Optional overrides for import step.                          |
+| `ELEVENLABS_API_KEY`                                       | Required for TTS.                                            |
+| `AWS_REGION`, `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY` | Required when uploading to S3.                               |
+| `S3_BUCKET`, `S3_PREFIX`                                   | CLI compatibility; use pipeline options for precise control. |
+| `ESL_PIPELINE_MANIFEST_STORE`                              | Set to `s3` to activate the S3 manifest store.               |
+| `ESL_PIPELINE_MANIFEST_BUCKET`                             | Target bucket for manifests.                                 |
+| `ESL_PIPELINE_MANIFEST_PREFIX`                             | Optional key prefix (`manifests/prod`).                      |
+| `ESL_PIPELINE_MANIFEST_ROOT`                               | Base directory used to compute manifest keys.                |
+| `ESL_PIPELINE_CONFIG_PROVIDER`                             | Set to `http` to use `RemoteConfigProvider`.                 |
+| `ESL_PIPELINE_CONFIG_ENDPOINT`                             | Base URL for presets/students/voices endpoints.              |
+| `ESL_PIPELINE_CONFIG_TOKEN`                                | Bearer token for the remote config service.                  |
 
 Load these before you construct the pipeline.
 
@@ -208,12 +214,12 @@ Load these before you construct the pipeline.
 
 ## 4. Test Commands
 
-| Command | Description |
-|---------|-------------|
-| `pnpm --filter @esl-pipeline/orchestrator test -- --runInBand` | Run orchestrator unit/integration tests. |
-| `pnpm --filter @esl-pipeline/orchestrator examples/service vitest run` | Test the Fastify worker. |
-| `pnpm --filter @esl-pipeline/orchestrator docker:build` | Build Docker image locally. |
-| `pnpm --filter @esl-pipeline/orchestrator docker:run -- --version` | Smoke test the image. |
+| Command                                                                | Description                              |
+| ---------------------------------------------------------------------- | ---------------------------------------- |
+| `pnpm --filter @esl-pipeline/orchestrator test -- --runInBand`         | Run orchestrator unit/integration tests. |
+| `pnpm --filter @esl-pipeline/orchestrator examples/service vitest run` | Test the Fastify worker.                 |
+| `pnpm --filter @esl-pipeline/orchestrator docker:build`                | Build Docker image locally.              |
+| `pnpm --filter @esl-pipeline/orchestrator docker:run -- --version`     | Smoke test the image.                    |
 
 ---
 

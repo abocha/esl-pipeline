@@ -7,9 +7,17 @@ import { manifestPathFor, createFilesystemManifestStore } from './manifest.js';
 import type { ManifestStore } from './manifest.js';
 import { createFilesystemConfigProvider } from './config.js';
 import type { ConfigProvider } from './config.js';
-import { noopLogger, noopMetrics, type PipelineLogger, type PipelineMetrics } from './observability.js';
+import {
+  noopLogger,
+  noopMetrics,
+  type PipelineLogger,
+  type PipelineMetrics,
+} from './observability.js';
 import { S3ManifestStore, type S3ManifestStoreOptions } from './adapters/manifest/s3.js';
-import { RemoteConfigProvider, type RemoteConfigProviderOptions } from './adapters/config/remote.js';
+import {
+  RemoteConfigProvider,
+  type RemoteConfigProviderOptions,
+} from './adapters/config/remote.js';
 
 type OrchestratorModule = typeof import('./index.js');
 
@@ -94,7 +102,12 @@ export function resolveConfigPaths(options: ResolveConfigPathsOptions = {}): Res
   }
 
   const configRoot = dirname(presetsPath);
-  const wizardDefaultsPath = resolve(cwd, 'configs', 'wizard.defaults.json');
+  const wizardDefaultsCandidates = candidateConfigDirs.map(dir =>
+    join(dir, 'wizard.defaults.json')
+  );
+  const wizardDefaultsPath =
+    findFirstExistingPath(wizardDefaultsCandidates) ??
+    resolve(cwd, 'configs', 'wizard.defaults.json');
 
   return {
     configRoot,
