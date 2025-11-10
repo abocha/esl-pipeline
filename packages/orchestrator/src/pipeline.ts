@@ -102,12 +102,7 @@ export function resolveConfigPaths(options: ResolveConfigPathsOptions = {}): Res
   }
 
   const configRoot = dirname(presetsPath);
-  const wizardDefaultsCandidates = candidateConfigDirs.map(dir =>
-    join(dir, 'wizard.defaults.json')
-  );
-  const wizardDefaultsPath =
-    findFirstExistingPath(wizardDefaultsCandidates) ??
-    resolve(cwd, 'configs', 'wizard.defaults.json');
+  const wizardDefaultsPath = join(configRoot, 'wizard.defaults.json');
 
   return {
     configRoot,

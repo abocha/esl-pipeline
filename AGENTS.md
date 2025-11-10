@@ -1,59 +1,88 @@
 # Agent Handbook (v2)
 
-Welcome! This repo now ships a publishable CLI _and_ a reusable pipeline module, so we work as much in npm/package-land as in CLI land. Everything below assumes **Node.js 24.10.0+**, pnpm, and system ffmpeg.
+This document is a concise, human-readable overview for maintainers and “agents” working in this repo.
+For authoritative, machine-consumable guidance (contracts, invariants, and workflows), always defer to
+[`docs/agents-ssot.md`](docs/agents-ssot.md). If anything here conflicts with that SSOT, the SSOT wins.
+
+Everything below assumes **Node.js 24.10.0+**, pnpm, and system ffmpeg.
 
 ---
 
-## 1. Architecture Snapshot
+## 1. Architecture Snapshot (High-Level)
 
-- **CLI (`packages/orchestrator`)** — the user-facing tool. Entry point commands:
-  - `esl --md <file>` (full run, same flags as before).
-  - `esl status …`, `esl rerun …`, `esl select …`.
-  - `esl --version` now prints the package version.
-- **Programmatic API** — `createPipeline`, `resolveConfigPaths`, `loadEnvFiles`, `resolveManifestPath` exported from `@esl-pipeline/orchestrator`. The CLI is a thin adapter around these functions.
-- **Adapters (WIP)** — pipeline consumers can supply their own `ConfigProvider`, `ManifestStore`, and `SecretProvider`. Default implementations still use filesystem configs/manifests and `process.env`.
-- **Pipeline flow** (unchanged logic):
-  1. Validate Markdown (`md-validator`, `md-extractor`)
-  2. Import into Notion (`notion-importer`, `notion-colorizer`)
-  3. Generate TTS (`tts-elevenlabs`)
-  4. Upload to S3 (`storage-uploader`)
-  5. Attach audio (`notion-add-audio`)
-  6. Persist manifest
+- **CLI (`packages/orchestrator`)**
+  - Primary user-facing entry point (`esl` binary).
+  - Commands include:
+    - `esl --md <file>` — run the full pipeline.
+    - `esl status`, `esl rerun`, `esl select`, `esl --version`.
+  - Implemented in [`packages/orchestrator/bin/cli.ts`](packages/orchestrator/bin/cli.ts) as a thin adapter over orchestrator APIs.
+- **Programmatic API**
+  - Exposed from `@esl-pipeline/orchestrator`:
+    - [`createPipeline.declaration()`](packages/orchestrator/src/pipeline.ts:129)
+    - [`resolveConfigPaths.declaration()`](packages/orchestrator/src/pipeline.ts:34)
+    - [`loadEnvFiles.declaration()`](packages/orchestrator/src/index.ts)
+    - [`resolveManifestPath.declaration()`](packages/orchestrator/src/pipeline.ts)
+  - CLI behavior MUST mirror these core APIs (see SSOT for exact contracts).
+- **Core packages**
+  - `@esl-pipeline/md-validator` — Markdown validation.
+  - `@esl-pipeline/md-extractor` — study-text extraction.
+  - `@esl-pipeline/notion-importer` — Notion creation and data source resolution.
+  - `@esl-pipeline/notion-colorizer` — Notion heading presets.
+  - `@esl-pipeline/tts-elevenlabs` — ElevenLabs integration (requires system `ffmpeg`).
+  - `@esl-pipeline/storage-uploader` — S3 uploads.
+  - `@esl-pipeline/notion-add-audio` — attach audio inside Notion.
+- **Pipeline flow (summary)**
+  1. Validate Markdown.
+  2. Extract study text.
+  3. Create/update Notion page.
+  4. Apply heading presets.
+  5. Generate TTS (optional, controlled via flags/config).
+  6. Upload audio.
+  7. Attach audio in Notion.
+  8. Persist manifest for reruns.
 
 ---
 
-## 2. Runtime & Dependencies
+## 2. Runtime & Dependencies (Summary)
 
-- **Node**: 24.10.0 or newer. CI targets Node 24 explicitly.
+- **Node**: 24.10.0 or newer (see repo `.nvmrc` / `package.json`).
 - **pnpm**: 8+ (`corepack enable`).
-- **ffmpeg**: must be present on PATH or provided via `FFMPEG_PATH`. We no longer vendor binaries.
-- **Env variables**: CLI auto-loads `.env` from CWD + repo root. Programmatic use should call `loadEnvFiles` and/or supply secrets directly.
+- **ffmpeg**: must be present on PATH or provided via `FFMPEG_PATH`.
+- **Env variables**:
+  - CLI auto-loads `.env` from repo root + CWD.
+  - Programmatic use should call [`loadEnvFiles.declaration()`](packages/orchestrator/src/index.ts) or inject env directly.
+- For exhaustive requirements and env contracts, see [`docs/agents-ssot.md`](docs/agents-ssot.md) §§3 and 5.
 
 ---
 
-## 3. Key Packages
+## 3. Key Packages (Pointer Only)
 
-| Package                          | Purpose                                       |
-| -------------------------------- | --------------------------------------------- |
-| `@esl-pipeline/orchestrator`     | CLI & pipeline factory (publishable)          |
+Use this as a quick map; detailed contracts live in the SSOT.
+
+| Package                          | Purpose (high level)                          |
+| -------------------------------- | ----------------------------------------------|
+| `@esl-pipeline/orchestrator`     | CLI and pipeline factory                      |
 | `@esl-pipeline/md-validator`     | Markdown validation                           |
 | `@esl-pipeline/md-extractor`     | Study text extraction                         |
-| `@esl-pipeline/notion-importer`  | Notion page creation + data source resolution |
-| `@esl-pipeline/notion-colorizer` | Heading presets in Notion                     |
-| `@esl-pipeline/tts-elevenlabs`   | ElevenLabs integration (system ffmpeg)        |
+| `@esl-pipeline/notion-importer`  | Notion page creation                          |
+| `@esl-pipeline/notion-colorizer` | Notion heading presets                        |
+| `@esl-pipeline/tts-elevenlabs`   | ElevenLabs integration                        |
 | `@esl-pipeline/storage-uploader` | S3 uploads                                    |
-| `@esl-pipeline/notion-add-audio` | Audio attachment inside Notion                |
+| `@esl-pipeline/notion-add-audio` | Attach audio blocks in Notion                 |
+
+For per-package responsibilities, extension points, and invariants:
+see [`docs/agents-ssot.md`](docs/agents-ssot.md) §4.
 
 The orchestrator package now exports type definitions (e.g. `PipelineNewAssignmentOptions`, `AssignmentManifest`) alongside the runtime API.
 
 ---
 
-## 4. Pipeline API Basics
+## 4. Pipeline API Basics (Quick Reference)
 
 ```ts
 import { createPipeline, loadEnvFiles } from '@esl-pipeline/orchestrator';
 
-loadEnvFiles(); // optional convenience helper
+loadEnvFiles(); // convenience helper; see SSOT for exact behavior
 
 const pipeline = createPipeline({ cwd: process.cwd() });
 
@@ -65,57 +94,68 @@ const result = await pipeline.newAssignment({
 });
 ```
 
-- `pipeline.defaults` exposes the resolved presets/voices/outDir paths.
-- `pipeline.configPaths` gives you the underlying directories for configs and wizard defaults.
-- `pipeline.rerunAssignment` and `pipeline.getAssignmentStatus` mirror the CLI commands.
-- The CLI uses the same pipeline under the hood; all new features should land in the pipeline and then be surfaced via CLI flags.
+Key points:
+
+- `createPipeline` builds the orchestrator pipeline; CLI uses the same core.
+- `pipeline.defaults` / `pipeline.configPaths` expose resolved config locations.
+- `pipeline.rerunAssignment` and `pipeline.getAssignmentStatus` mirror CLI subcommands.
+
+For full type signatures, merging rules, and flag semantics (e.g., `withTts` precedence, `wizardDefaultsPath`):
+see [`docs/agents-ssot.md`](docs/agents-ssot.md) §§4, 5, and 7.
 
 ---
 
-## 5. Soon-to-Land Scaffolding (Backend Prep)
+## 5. Backend & Adapters (Pointer)
 
-A standalone doc `docs/groundwork-for-backend.md` tracks the roadmap. Highlights:
+- Roadmap and backend scaffolding are documented in:
+  - [`docs/groundwork-for-backend.md`](docs/groundwork-for-backend.md)
+  - [`docs/agents-ssot.md`](docs/agents-ssot.md) (adapters, manifest store, config provider rules)
 
-1. **Adapters & abstractions** — pluggable config/manifest/secret providers with filesystem defaults.
-2. **Observability** — logger/metric/tracing interfaces so logs can stream to DataDog, etc., without touching business logic.
-3. **State storage options** — S3/database manifest stores, configurable via `createPipeline`.
-4. **Service skeleton** — Dockerfile, sample HTTP worker, queue hooks.
-5. **CI upgrades** — container builds, integration tests with adapters on mock services.
-
-We’ll implement these in phases to avoid rewriting later when the orchestrator becomes part of a bigger ESL platform.
+Treat this section as directional only; the SSOT and code are the source of truth.
 
 ---
 
-## 6. Working with the Repo
+## 6. Working with the Repo (Essentials)
 
-- **Install**: `pnpm install`
-- **Build**: `pnpm -r build`
-- **Lint**: `pnpm lint`
-- **Tests**: `pnpm test` or per package (`pnpm --filter @esl-pipeline/orchestrator test`)
-- **Smoke**: `pnpm smoke` (orchestrator suite)
-- **Publish**: from `packages/orchestrator`, run `npm publish --access public`
-- **Zero-install usage**: `npx @esl-pipeline/orchestrator esl --help`
+- Install: `pnpm install`
+- Build: `pnpm -r build`
+- Lint: `pnpm lint`
+- Test: `pnpm test` or `pnpm --filter @esl-pipeline/orchestrator test`
+- Smoke: `pnpm smoke` (orchestrator-focused)
+- Zero-install: `npx @esl-pipeline/orchestrator esl --help`
 
----
-
-## 7. Gotchas & Notes
-
-- Manifests are written alongside the Markdown by default. Using non-filesystem stores will be handled via adapters (see roadmap).
-- ElevenLabs, Notion, and S3 dependencies are real—tests use mocks. Provide valid credentials for end-to-end runs.
-- The pipeline sets stricter markdown validation (flush-left `:::study-text`). Fixtures and upstream content must comply.
-- Only the `esl` binary is exported; the legacy `esl-orchestrator` alias is gone.
-- CLI/README instructs users to install ffmpeg themselves; we do not bundle or automatically download it.
+For CI, release, and workflow invariants, follow [`docs/agents-ssot.md`](docs/agents-ssot.md) §§10–12.
 
 ---
 
-## 8. FAQ
+## 7. Gotchas & Notes (Brief)
 
-- **How do I use creation programmatically?** Use `createPipeline` as shown, supply env and config overrides, run `newAssignment`.
-- **How do I customize configs?** Override `presetsPath`, `voicesPath`, or `studentsDir` in `createPipeline({ ... })`. More advanced adapters will land soon.
-- **How do I add a new CLI flag?** Extend the pipeline API first, then plumb the flag through `bin/cli.ts`.
-- **Which Node version is required?** Node **24.10.0** minimum. CI and engines enforce this.
-- **How do I handle manifests remotely?** Implement `ManifestStore` per the roadmap (S3/DB). Until then, copy manifests off disk or sync them externally.
+- Manifests: by default live next to the Markdown; adapters (e.g. S3) are configured via orchestrator (`createPipeline`) and env vars.
+- External deps (Notion, ElevenLabs, AWS/S3) are real; tests use mocks.
+- Markdown: validator enforces stricter rules (e.g. flush-left `:::study-text`).
+- Binary: `esl` is the canonical CLI; legacy aliases are removed.
+- We do not bundle ffmpeg; users must install it.
+
+For exact rules (manifest schema, adapter selection, validation invariants), see [`docs/agents-ssot.md`](docs/agents-ssot.md).
 
 ---
 
-This handbook should keep future “agents” aligned with the current architecture and the path toward a backend-friendly orchestrator. Keep `docs/groundwork-for-backend.md` in sync as the scaffolding lands. Happy shipping! 🎯
+## 8. FAQ (Forward-Looking, Defer to SSOT)
+
+- Programmatic usage? See `createPipeline` example above, and details in [`docs/agents-ssot.md`](docs/agents-ssot.md) §7.2.
+- Custom configs/adapters? Follow extension rules in [`docs/agents-ssot.md`](docs/agents-ssot.md) §§4–5.
+- New CLI flags? Add behavior in orchestrator first, then wire CLI; see [`docs/agents-ssot.md`](docs/agents-ssot.md) §9.6.
+- Node version? Node **24.10.0+** (enforced).
+- Remote manifests/config? Use documented adapters/env vars; SSOT + `docs/groundwork-for-backend.md` describe the contract.
+
+---
+
+This handbook is intentionally high-level. For any non-trivial change or automation:
+
+- Start here for orientation.
+- Then consult [`docs/agents-ssot.md`](docs/agents-ssot.md) as the single source of truth for:
+  - Contracts and invariants.
+  - Allowed operations and extension points.
+  - Cross-file consistency requirements.
+
+Treat deviations from the SSOT as bugs to be fixed. Happy shipping! 🎯

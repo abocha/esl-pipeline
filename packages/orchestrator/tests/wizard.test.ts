@@ -1,5 +1,5 @@
 import { describe, expect, it, beforeEach, afterEach, vi } from 'vitest';
-import { mkdtemp, writeFile, readFile, rm } from 'node:fs/promises';
+import { mkdtemp, writeFile, readFile, rm, mkdir } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import type { ConfigProvider, StudentProfile } from '../src/config.js';
@@ -15,7 +15,11 @@ vi.mock('prompts', () => {
       if (!promptQueue.length) {
         throw new Error(`No prompt response queued for question "${question?.name ?? 'unknown'}".`);
       }
-      return Promise.resolve(promptQueue.shift());
+      const next: any = promptQueue.shift();
+      if (typeof next === 'function') {
+        return Promise.resolve(next(question));
+      }
+      return Promise.resolve(next);
     },
   };
 });
@@ -132,6 +136,7 @@ Content
       withTts: false,
     });
 
+    // When no initial.withTts override is provided, the saved false is respected.
     promptQueue.push({ main: 'start' }, { md: mdPath });
 
     const secondRun = await runInteractiveWizard(
@@ -144,6 +149,70 @@ Content
     );
 
     expect(secondRun.flags.withTts).toBe(false);
+  });
+
+  it('restores saved withTts: true when no CLI override is provided', async () => {
+    // Seed saved defaults directly to avoid exercising the interactive settings menu here.
+    await mkdir(join(cwd, 'configs'), { recursive: true });
+    await writeFile(
+      defaultsPath,
+      JSON.stringify(
+        {
+          withTts: true,
+        },
+        null,
+        2
+      ),
+      'utf8'
+    );
+
+    // Second run without initial.withTts: saved true should be applied.
+    // Simulate the minimal "start run" flow: start -> md.
+    promptQueue.push({ main: 'start' }, { md: mdPath });
+
+    const secondRun = await runInteractiveWizard(
+      {},
+      {
+        cwd,
+        defaultsPath,
+        configProvider,
+      }
+    );
+
+    expect(secondRun.flags.withTts).toBe(true);
+  });
+
+  it('allows explicit CLI withTts override to win over saved default', async () => {
+    // Ensure the defaults directory exists before writing (mirrors saveWizardDefaults behavior).
+    await mkdir(join(cwd, 'configs'), { recursive: true });
+
+    // Seed defaults with withTts: false
+    await writeFile(
+      defaultsPath,
+      JSON.stringify(
+        {
+          withTts: false,
+        },
+        null,
+        2
+      ),
+      'utf8'
+    );
+
+    // Provide an explicit initial override (simulating --with-tts).
+    promptQueue.push({ main: 'start' }, { md: mdPath });
+
+    const run = await runInteractiveWizard(
+      { withTts: true },
+      {
+        cwd,
+        defaultsPath,
+        configProvider,
+      }
+    );
+
+    // Explicit CLI choice takes precedence over saved default.
+    expect(run.flags.withTts).toBe(true);
   });
 
   afterEach(async () => {

@@ -1,5 +1,11 @@
 # @esl-pipeline/orchestrator
 
+## 1.7.3
+
+### Patch Changes
+
+- fix: wizard now correctly loads TTS defaults
+
 ## 1.7.2
 
 ### Patch Changes

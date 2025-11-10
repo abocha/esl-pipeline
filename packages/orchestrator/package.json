@@ -1,6 +1,6 @@
 {
   "name": "@esl-pipeline/orchestrator",
-  "version": "1.7.2",
+  "version": "1.7.3",
   "private": false,
   "type": "module",
   "license": "UNLICENSED",

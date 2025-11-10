@@ -672,7 +672,11 @@ async function handleRun(args: string[]): Promise<void> {
           preset: parsed.preset,
           presetsPath: parsed.presetsPath ?? pipeline.defaults.presetsPath,
           accentPreference: parsed.accentPreference,
-          withTts: parsed.withTts,
+          // IMPORTANT:
+          // - For interactive runs, treat absence of --with-tts as "no override".
+          // - Only an explicit --with-tts should force true here.
+          // - This allows saved wizard.defaults.json withTts to be respected.
+          withTts: parsed.withTts ? true : undefined,
           upload: parsed.upload,
           publicRead: parsed.publicRead,
           prefix: parsed.prefix,
