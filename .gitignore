@@ -8,11 +8,8 @@ coverage/
 .roo/mcp.json
 /.roo/mcp.json
 .pnpm-store/v10
-packages/tts-elevenlabs/vendor/ffmpeg/linux-x64.tar.xz
-packages/tts-elevenlabs/vendor/ffmpeg/linux-x64/ffmpeg
-packages/tts-elevenlabs/vendor/ffmpeg/linux-x64/ffplay
-packages/tts-elevenlabs/vendor/ffmpeg/linux-x64/ffprobe
 *.mp3
 packages/notion-importer/tmp.md
 /fixtures_private/*
 configs/wizard.defaults.json
+.kilocode/*
