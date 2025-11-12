@@ -16,6 +16,8 @@ import { pipeline } from 'node:stream/promises';
 import { getElevenClient } from './eleven.js';
 import type { ReadableStream as NodeReadableStream } from 'node:stream/web';
 import { resolveSpeakerVoices, type VoiceMapConfig } from './speakerAssignment.js';
+import type { TtsMode, DialogueInput } from './types.js';
+import { synthesizeDialogue } from './dialogue.js';
 
 const DEFAULT_MODEL_ID = process.env.ELEVENLABS_MODEL_ID ?? 'eleven_multilingual_v2';
 const DEFAULT_OUTPUT_FORMAT = process.env.ELEVENLABS_OUTPUT_FORMAT ?? 'mp3_22050_32';
@@ -49,6 +51,13 @@ type BuildStudyTextOptions = {
   force?: boolean;
   defaultAccent?: string;
   ffmpegPath?: string;
+  outputFormat?: string;
+  
+  // New fields for dual TTS mode
+  ttsMode?: 'auto' | 'dialogue' | 'monologue';
+  dialogueLanguage?: string;
+  dialogueStability?: number;
+  dialogueSeed?: number;
 };
 
 export type BuildStudyTextResult = {
@@ -65,7 +74,83 @@ export type BuildStudyTextResult = {
     accent?: string;
     useCase?: string;
   }[];
+  voiceAssignments?: Record<string, string>;
 };
+
+/**
+ * Determines which TTS mode to use based on options and content type
+ */
+function selectTtsMode(
+  options: BuildStudyTextOptions,
+  studyTextType: 'monologue' | 'dialogue' | 'mixed'
+): 'dialogue' | 'monologue' {
+  // Check environment variable first
+  const envMode = process.env.ELEVENLABS_TTS_MODE as TtsMode | undefined;
+  const mode = options.ttsMode ?? envMode ?? 'auto';
+
+  if (mode === 'dialogue') {
+    return 'dialogue';
+  }
+  if (mode === 'monologue') {
+    return 'monologue';
+  }
+  
+  // Auto mode: use dialogue for dialogue/mixed content, monologue otherwise
+  return studyTextType === 'monologue' ? 'monologue' : 'dialogue';
+}
+
+/**
+ * Builds MP3 using dialogue mode (Text-to-Dialogue API)
+ */
+async function buildDialogueMp3(
+  segments: StudyTextSegment[],
+  voiceAssignments: Map<string, string>,
+  voiceSummaries: BuildStudyTextResult['voices'],
+  options: BuildStudyTextOptions,
+  apiKey: string,
+  outputDir: string
+): Promise<BuildStudyTextResult> {
+  const { dialogueLanguage, dialogueStability, dialogueSeed } = options;
+  
+  // Convert segments to dialogue inputs
+  const inputs: DialogueInput[] = segments.map(seg => {
+    const speaker = seg.speaker ?? 'default';
+    const voiceId = voiceAssignments.get(speaker);
+    if (!voiceId) {
+      throw new Error(
+        `No voice mapping found for speaker "${speaker}". ` +
+        `Available speakers: ${Array.from(voiceAssignments.keys()).join(', ')}`
+      );
+    }
+    return {
+      text: seg.text,
+      voice_id: voiceId
+    };
+  });
+
+  // Synthesize dialogue
+  const result = await synthesizeDialogue(
+    {
+      inputs,
+      modelId: 'eleven_v3',
+      languageCode: dialogueLanguage,
+      stability: dialogueStability,
+      seed: dialogueSeed,
+      outputFormat: options.outputFormat ?? DEFAULT_OUTPUT_FORMAT,
+      applyTextNormalization: 'auto'
+    },
+    apiKey,
+    outputDir
+  );
+
+  return {
+    path: result.audioPath,
+    duration: result.duration,
+    hash: result.hash,
+    voices: voiceSummaries,
+    voiceAssignments: Object.fromEntries(voiceAssignments)
+  };
+}
 
 export async function buildStudyTextMp3(
   mdPath: string,
@@ -127,6 +212,21 @@ export async function buildStudyTextMp3(
         : undefined,
   }));
 
+  // Determine TTS mode
+  const selectedMode = selectTtsMode(opts, studyText.type);
+  console.log(`Using TTS mode: ${selectedMode} (content type: ${studyText.type})`);
+
+  // Route to appropriate synthesis path
+  if (selectedMode === 'dialogue') {
+    const apiKey = process.env.ELEVENLABS_API_KEY || process.env.ELEVENLABS_API_TOKEN || '';
+    const outputDir = resolve(opts.outPath || dirname(mdPath));
+    await mkdir(outputDir, { recursive: true });
+    
+    return buildDialogueMp3(segments, speakerVoiceMap, voiceSummaries, opts, apiKey, outputDir);
+  }
+
+  // Continue with existing monologue path...
+  
   // Generate hash based on study text and voice map
   const hashInput = JSON.stringify({ text: normalizedText, voices: resolvedVoiceDescriptor });
   const hash = hashStudyText(hashInput);
@@ -163,7 +263,7 @@ export async function buildStudyTextMp3(
     }
   }
 
-  // Generate TTS for each line or chunk
+  // Generate TTS for each line or chunk (monologue mode)
   const segmentFiles: string[] = [];
   const cleanupTargets: string[] = [];
   const eleven = getElevenClient();
@@ -472,3 +572,9 @@ function wait(ms: number): Promise<void> {
 }
 
 export { resolveFfmpegPath, FfmpegNotFoundError } from './ffmpeg.js';
+
+// Export types for orchestrator integration
+export type { TtsMode, DialogueInput, DialogueSynthesisOptions, DialogueSynthesisResult, DialogueChunk } from './types.js';
+
+// Export dialogue functions for orchestrator integration
+export { chunkDialogueInputs, buildDialogueHash, synthesizeDialogue } from './dialogue.js';

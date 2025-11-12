@@ -16,6 +16,13 @@ export type AssignmentManifest = {
     voices?: BuildStudyTextResult['voices'];
   };
   preset?: string;
+  
+  // TTS mode information for reproducibility
+  ttsMode?: 'auto' | 'dialogue' | 'monologue';
+  dialogueLanguage?: string;
+  dialogueStability?: number;
+  dialogueSeed?: number;
+  
   timestamp: string;
 };
 
@@ -37,7 +44,17 @@ export function createFilesystemManifestStore(): ManifestStore {
     async writeManifest(mdPath, manifest) {
       const target = manifestPathFor(mdPath);
       await mkdir(dirname(target), { recursive: true });
-      await writeFile(target, JSON.stringify(manifest, null, 2));
+      
+      // Ensure backward compatibility: only include TTS mode fields if they exist
+      const compatibleManifest = {
+        ...manifest,
+        ...(manifest.ttsMode && { ttsMode: manifest.ttsMode }),
+        ...(manifest.dialogueLanguage && { dialogueLanguage: manifest.dialogueLanguage }),
+        ...(manifest.dialogueStability !== undefined && { dialogueStability: manifest.dialogueStability }),
+        ...(manifest.dialogueSeed !== undefined && { dialogueSeed: manifest.dialogueSeed }),
+      };
+      
+      await writeFile(target, JSON.stringify(compatibleManifest, null, 2));
       return target;
     },
     async readManifest(mdPath) {

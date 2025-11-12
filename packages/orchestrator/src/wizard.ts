@@ -40,6 +40,13 @@ export type WizardSelections = {
   preset?: string;
   accentPreference?: string;
   withTts: boolean;
+  
+  // New TTS mode fields
+  ttsMode?: 'auto' | 'dialogue' | 'monologue';
+  dialogueLanguage?: string;
+  dialogueStability?: number;
+  dialogueSeed?: number;
+  
   voices?: string;
   force?: boolean;
   upload?: 's3';
@@ -83,6 +90,12 @@ const PERSISTABLE_KEYS: Array<keyof NewAssignmentFlags> = [
   'dataSourceId',
   'presign',
   'out',
+  
+  // New TTS mode fields
+  'ttsMode',
+  'dialogueLanguage',
+  'dialogueStability',
+  'dialogueSeed',
 ];
 
 async function loadWizardDefaults(path: string): Promise<Partial<NewAssignmentFlags>> {
@@ -108,6 +121,14 @@ async function clearWizardDefaults(path: string): Promise<void> {
   } catch {
     /* ignore */
   }
+}
+
+function migrateTtsDefaults(defaults: Partial<NewAssignmentFlags>): Partial<NewAssignmentFlags> {
+  // If user has TTS enabled but no TTS mode set, default to 'auto'
+  if (defaults.withTts !== false && !defaults.ttsMode) {
+    return { ...defaults, ttsMode: 'auto' };
+  }
+  return defaults;
 }
 
 async function exists(path: string): Promise<boolean> {
@@ -305,10 +326,13 @@ export async function runInteractiveWizard(
     findMarkdownCandidates(cwd, 10),
     loadWizardDefaults(defaultsPath),
   ]);
+
+  // Migrate existing defaults to include TTS mode
+  const migratedDefaults = migrateTtsDefaults(savedDefaults);
   const defaultProfile = profiles.find(profile => profile.student === DEFAULT_STUDENT_NAME) ?? null;
   const presetNames = Object.keys(presets);
 
-  let currentSavedDefaults = savedDefaults;
+  let currentSavedDefaults = migratedDefaults;
   let hasSavedDefaults = Object.keys(currentSavedDefaults).length > 0;
 
   const state: WizardState = { origins: {} };
@@ -778,6 +802,7 @@ async function configureTts(
 ): Promise<void> {
   const { cwd, ctx, initialFlags, configProvider } = options;
 
+  // Step 1: TTS Enable/Disable
   const ttsAnswer = await prompts(
     {
       type: 'toggle',
@@ -786,7 +811,7 @@ async function configureTts(
       initial: state.withTts ?? initialFlags.withTts ?? true,
       active: 'yes',
       inactive: 'no',
-    } satisfies PromptObject<'withTts'>,
+    },
     { onCancel }
   );
   const withTts = Boolean(ttsAnswer.withTts);
@@ -796,15 +821,102 @@ async function configureTts(
     setStateValue(state, 'voices', undefined, 'manual');
     setStateValue(state, 'force', undefined, 'manual');
     setStateValue(state, 'out', undefined, 'manual');
+    setStateValue(state, 'ttsMode', undefined, 'manual');
+    setStateValue(state, 'dialogueLanguage', undefined, 'manual');
+    setStateValue(state, 'dialogueStability', undefined, 'manual');
+    setStateValue(state, 'dialogueSeed', undefined, 'manual');
     return;
   }
 
-  const resolvedVoices = await configProvider.resolveVoicesPath(
-    state.voices ?? ctx.voicesPath,
-    ctx.voicesPath
+  // Step 2: TTS Mode Selection
+  const modeAnswer = await prompts(
+    {
+      type: 'select',
+      name: 'ttsMode',
+      message: 'Select TTS mode',
+      choices: [
+        { title: 'Auto-detect (recommended)', value: 'auto', description: 'Automatically detects dialogue vs monologue' },
+        { title: 'Dialogue mode (Text-to-Dialogue API)', value: 'dialogue', description: 'For multi-speaker conversations' },
+        { title: 'Monologue mode (Text-to-Speech API)', value: 'monologue', description: 'For single-speaker narration' },
+      ],
+      initial:
+        state.ttsMode === 'dialogue' ? 1 :
+        state.ttsMode === 'monologue' ? 2 :
+        0,
+    },
+    { onCancel }
   );
+  const ttsMode = modeAnswer.ttsMode as 'auto' | 'dialogue' | 'monologue';
+  setStateValue(state, 'ttsMode', ttsMode, 'manual', { overwrite: true, preserveManual: false });
+
+  // Step 3: Dialogue-Specific Options (conditional)
+  if (ttsMode === 'dialogue') {
+    // Language Code
+    const languageAnswer = await prompts(
+      {
+        type: 'text',
+        name: 'dialogueLanguage',
+        message: 'Dialogue language code (ISO 639-1, optional, e.g., en, es, fr)',
+        initial: state.dialogueLanguage ?? initialFlags.dialogueLanguage ?? '',
+        validate: (input: string) => {
+          if (!input.trim()) return true; // Optional
+          const langRegex = /^[a-z]{2}$/i;
+          return langRegex.test(input) || 'Please enter a valid 2-letter language code (e.g., en, es, fr)';
+        },
+      },
+      { onCancel }
+    );
+    const languageValue = languageAnswer.dialogueLanguage?.toString().trim() || undefined;
+    setStateValue(state, 'dialogueLanguage', languageValue, 'manual', { overwrite: true, preserveManual: false });
+
+    // Stability
+    const stabilityAnswer = await prompts(
+      {
+        type: 'number',
+        name: 'dialogueStability',
+        message: 'Dialogue voice stability (0.0-1.0, optional, default 0.5)',
+        initial: state.dialogueStability ?? initialFlags.dialogueStability ?? 0.5,
+        min: 0,
+        max: 1,
+        float: true,
+        round: 2,
+        increment: 0.1,
+      },
+      { onCancel }
+    );
+    const stabilityValue = stabilityAnswer.dialogueStability;
+    setStateValue(state, 'dialogueStability', stabilityValue, 'manual', { overwrite: true, preserveManual: false });
+
+    // Seed
+    const seedAnswer = await prompts(
+      {
+        type: 'number',
+        name: 'dialogueSeed',
+        message: 'Dialogue generation seed (for reproducible results, optional)',
+        initial: state.dialogueSeed ?? initialFlags.dialogueSeed ?? 0,
+        min: 0,
+        validate: (input: number) => {
+          const num = Number(input);
+          return (Number.isInteger(num) && num >= 0) || 'Please enter a non-negative integer';
+        },
+      },
+      { onCancel }
+    );
+    const seedValue = seedAnswer.dialogueSeed;
+    setStateValue(state, 'dialogueSeed', seedValue, 'manual', { overwrite: true, preserveManual: false });
+  } else {
+    // Clear dialogue-specific values if not in dialogue mode
+    setStateValue(state, 'dialogueLanguage', undefined, 'manual');
+    setStateValue(state, 'dialogueStability', undefined, 'manual');
+    setStateValue(state, 'dialogueSeed', undefined, 'manual');
+  }
+
+  // Step 4: Existing Options (simplified path resolution)
   const voicesGuess =
-    state.voices ?? ctx.voicesPath ?? resolvedVoices ?? initialFlags.voices ?? 'configs/voices.yml';
+    state.voices ??
+    ctx.voicesPath ??
+    initialFlags.voices ??
+    'configs/voices.yml';
   const voicesAnswer = await prompts(
     {
       type: 'text',
@@ -813,7 +925,7 @@ async function configureTts(
       initial: voicesGuess,
       validate: (input: string) =>
         (!!input && input.trim().length > 0) || 'Provide a path to voices.yml',
-    } satisfies PromptObject<'voices'>,
+    },
     { onCancel }
   );
   const rawVoices = voicesAnswer.voices?.toString().trim();
@@ -834,7 +946,7 @@ async function configureTts(
       initial: Boolean(state.force ?? initialFlags.force),
       active: 'yes',
       inactive: 'no',
-    } satisfies PromptObject<'force'>,
+    },
     { onCancel }
   );
   setStateValue(state, 'force', Boolean(forceAnswer.force), 'manual', {
@@ -842,17 +954,25 @@ async function configureTts(
     preserveManual: false,
   });
 
-  const outDefault =
-    state.out ??
-    initialFlags.out ??
-    (state.md ? await getDefaultOutputDir(state.md) : await getDefaultOutputDir(cwd));
+  // Safe async default calculation with error handling
+  let outDefault: string;
+  try {
+    outDefault =
+      state.out ??
+      initialFlags.out ??
+      (state.md ? await getDefaultOutputDir(state.md) : await getDefaultOutputDir(cwd));
+  } catch (error) {
+    // If we can't determine a default, use current directory
+    outDefault = cwd;
+  }
+  
   const outAnswer = await prompts(
     {
       type: 'text',
       name: 'out',
       message: 'Audio output directory',
       initial: outDefault,
-    } satisfies PromptObject<'out'>,
+    },
     { onCancel }
   );
   const rawOut = outAnswer.out?.toString().trim();
@@ -997,6 +1117,39 @@ function applyEnvDefaults(state: WizardState): void {
   if (envPrefix) {
     setStateValue(state, 'prefix', envPrefix, 'env', { overwrite: false });
   }
+
+  // New TTS mode environment variables with 'auto' fallback
+  const envTtsMode = process.env.ELEVENLABS_TTS_MODE as 'auto' | 'dialogue' | 'monologue' | undefined;
+  if (envTtsMode && ['auto', 'dialogue', 'monologue'].includes(envTtsMode)) {
+    setStateValue(state, 'ttsMode', envTtsMode, 'env', { overwrite: false });
+  } else if (state.withTts !== false && !envTtsMode) {
+    // Default to 'auto' mode for backward compatibility when TTS is enabled and no env var is set
+    setStateValue(state, 'ttsMode', 'auto', 'default');
+  }
+
+  const envDialogueLanguage = process.env.ELEVENLABS_DIALOGUE_LANGUAGE;
+  if (envDialogueLanguage && envDialogueLanguage.trim()) {
+    const langRegex = /^[a-z]{2}$/i;
+    if (langRegex.test(envDialogueLanguage)) {
+      setStateValue(state, 'dialogueLanguage', envDialogueLanguage.toLowerCase(), 'env', { overwrite: false });
+    }
+  }
+
+  const envDialogueStability = process.env.ELEVENLABS_DIALOGUE_STABILITY;
+  if (envDialogueStability) {
+    const stability = parseFloat(envDialogueStability);
+    if (!isNaN(stability) && stability >= 0 && stability <= 1) {
+      setStateValue(state, 'dialogueStability', stability, 'env', { overwrite: false });
+    }
+  }
+
+  const envDialogueSeed = process.env.ELEVENLABS_DIALOGUE_SEED;
+  if (envDialogueSeed) {
+    const seed = parseInt(envDialogueSeed, 10);
+    if (!isNaN(seed) && seed >= 0) {
+      setStateValue(state, 'dialogueSeed', seed, 'env', { overwrite: false });
+    }
+  }
 }
 
 function buildFlags(state: WizardState, initial: Partial<NewAssignmentFlags>, ctx: WizardContext) {
@@ -1007,6 +1160,13 @@ function buildFlags(state: WizardState, initial: Partial<NewAssignmentFlags>, ct
     presetsPath: initial.presetsPath,
     accentPreference: state.accentPreference ?? initial.accentPreference,
     withTts: Boolean(state.withTts),
+    
+    // New TTS mode fields
+    ttsMode: state.ttsMode ?? initial.ttsMode,
+    dialogueLanguage: state.dialogueLanguage ?? initial.dialogueLanguage,
+    dialogueStability: state.dialogueStability ?? initial.dialogueStability,
+    dialogueSeed: state.dialogueSeed ?? initial.dialogueSeed,
+    
     upload: state.upload,
     presign: initial.presign,
     publicRead: state.publicRead,
@@ -1036,6 +1196,13 @@ function buildSelections(state: WizardState, flags: NewAssignmentFlags): WizardS
     preset: flags.preset,
     accentPreference: state.accentPreference ?? undefined,
     withTts: Boolean(flags.withTts),
+    
+    // New TTS mode fields
+    ttsMode: flags.ttsMode,
+    dialogueLanguage: flags.dialogueLanguage,
+    dialogueStability: flags.dialogueStability,
+    dialogueSeed: flags.dialogueSeed,
+    
     voices: flags.voices,
     force: state.force,
     upload: flags.upload,
@@ -1090,6 +1257,18 @@ function printSummary(state: WizardState): void {
 
   console.log(`  TTS      : ${formatBoolean(state.withTts, state.origins.withTts)}`);
   if (state.withTts) {
+    console.log(`  Mode     : ${formatValue(state.ttsMode, state.origins.ttsMode)} (${state.ttsMode === 'auto' ? 'auto-detect' : state.ttsMode === 'dialogue' ? 'Text-to-Dialogue' : 'Text-to-Speech'})`);
+    if (state.ttsMode === 'dialogue') {
+      if (state.dialogueLanguage) {
+        console.log(`  Language : ${formatValue(state.dialogueLanguage, state.origins.dialogueLanguage)}`);
+      }
+      if (state.dialogueStability !== undefined) {
+        console.log(`  Stability: ${formatValue(state.dialogueStability, state.origins.dialogueStability)}`);
+      }
+      if (state.dialogueSeed !== undefined && state.dialogueSeed > 0) {
+        console.log(`  Seed     : ${formatValue(state.dialogueSeed, state.origins.dialogueSeed)}`);
+      }
+    }
     console.log(`  Voice map: ${formatValue(state.voices, state.origins.voices)}`);
   }
 
