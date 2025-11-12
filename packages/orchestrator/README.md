@@ -13,6 +13,75 @@ One-command CLI that validates lesson markdown, imports it into Notion, applies 
 
 During packaging the CLI ships with default presets, voices, and student templates under `dist/configs/` so a fresh install has sane defaults. You can override them by placing your own `configs/` directory in the working folder.
 
+## Environment Variables
+
+### TTS Configuration
+
+Set these environment variables to configure TTS behavior without wizard prompts:
+
+- `ELEVENLABS_TTS_MODE`: TTS mode selection
+  - `auto`: Auto-detect dialogue vs monologue (default)
+  - `dialogue`: Force Text-to-Dialogue API
+  - `monologue`: Force Text-to-Speech API
+
+- `ELEVENLABS_DIALOGUE_LANGUAGE`: ISO 639-1 language code for dialogue mode
+  - Examples: `en`, `es`, `fr`, `de`
+
+- `ELEVENLABS_DIALOGUE_STABILITY`: Voice stability for dialogue mode (0.0-1.0)
+  - Example: `0.75`
+
+- `ELEVENLABS_DIALOGUE_SEED`: Integer seed for reproducible dialogue generation
+  - Example: `42`
+
+### Database
+
+- `NOTION_DB_ID`: Notion database ID
+- `STUDENTS_DB_ID`: Alternative Notion database ID
+
+### Upload
+
+- `S3_PREFIX`: S3 key prefix for audio uploads
+
+### Core Credentials
+
+- `NOTION_TOKEN`: Notion API token
+- `ELEVENLABS_API_KEY`: ElevenLabs API key
+- `AWS_REGION`: AWS region
+- `S3_BUCKET`: S3 bucket name
+- `AWS_ACCESS_KEY_ID`: AWS access key
+- `AWS_SECRET_ACCESS_KEY`: AWS secret key
+
+## Migration from v1.x to v2.x
+
+The v2.0 update adds TTS mode selection while maintaining full backward compatibility.
+
+### What Changed
+
+- Added new TTS mode options: `auto`, `dialogue`, `monologue`
+- New environment variables: `ELEVENLABS_TTS_MODE`, `ELEVENLABS_DIALOGUE_LANGUAGE`, `ELEVENLABS_DIALOGUE_STABILITY`, `ELEVENLABS_DIALOGUE_SEED`
+- Enhanced wizard TTS configuration
+
+### What's Unchanged
+
+- Existing CLI usage continues to work
+- Existing configurations are automatically migrated
+- Default behavior is 'auto' mode (best for most users)
+
+### For Existing Users
+
+1. **CLI Scripts**: No changes needed. Scripts work as before.
+2. **Wizard Defaults**: Automatically migrated to include `ttsMode: 'auto'`
+3. **Environment Variables**: Optional - can be set for fine-grained control
+4. **Voice Mappings**: No changes needed
+
+### Migration Recommendations
+
+To take advantage of the new features:
+- Use the interactive wizard to configure TTS modes
+- Set `ELEVENLABS_TTS_MODE=auto` in your environment for consistent behavior
+- Use dialogue mode for conversation lessons with multiple speakers
+
+
 ## Quickstart (published package)
 
 ```bash
