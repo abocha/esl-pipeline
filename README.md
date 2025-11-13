@@ -90,17 +90,17 @@ Types such as `PipelineNewAssignmentOptions`, `PipelineRerunOptions`, and `Assig
 
 ## Configuration & Secrets
 
-| Setting                 | Source / Default                                           | Notes                                                                 |
-| ----------------------- | ---------------------------------------------------------- | --------------------------------------------------------------------- |
-| Notion token            | `NOTION_TOKEN` env variable                                | Required                                                              |
-| Notion DB / data source | `NOTION_DB_ID`, overrides via CLI flags                    | Student profiles can pin defaults                                     |
-| ElevenLabs API key      | `ELEVENLABS_API_KEY` env variable                          | Required if `--with-tts`                                              |
-| AWS credentials         | `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `AWS_REGION` | Needed for `--upload s3`                                              |
-| Voices mapping          | `configs/voices.yml` (override with `--voices`)            | Resolved via `resolveConfigPaths`; can be overridden via CLI/options  |
-| Presets                 | `configs/presets.json` (override with `--presets-path`)    | Resolved via `resolveConfigPaths`                                     |
-| Student profiles        | `configs/students/*.json`                                  | Optional per-student defaults                                         |
+| Setting                 | Source / Default                                           | Notes                                                                   |
+| ----------------------- | ---------------------------------------------------------- | ----------------------------------------------------------------------- |
+| Notion token            | `NOTION_TOKEN` env variable                                | Required                                                                |
+| Notion DB / data source | `NOTION_DB_ID`, overrides via CLI flags                    | Student profiles can pin defaults                                       |
+| ElevenLabs API key      | `ELEVENLABS_API_KEY` env variable                          | Required if `--with-tts`                                                |
+| AWS credentials         | `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `AWS_REGION` | Needed for `--upload s3`                                                |
+| Voices mapping          | `configs/voices.yml` (override with `--voices`)            | Resolved via `resolveConfigPaths`; can be overridden via CLI/options    |
+| Presets                 | `configs/presets.json` (override with `--presets-path`)    | Resolved via `resolveConfigPaths`                                       |
+| Student profiles        | `configs/students/*.json`                                  | Optional per-student defaults                                           |
 | Wizard defaults         | `configs/wizard.defaults.json`                             | Interactive wizard preferences; resolved next to presets (`configRoot`) |
-| ffmpeg                  | system install or `FFMPEG_PATH`                            | Not vendored; must be installed                                       |
+| ffmpeg                  | system install or `FFMPEG_PATH`                            | Not vendored; must be installed                                         |
 
 `loadEnvFiles()` mirrors the CLI’s behavior: it checks `.env` in the working directory and the repo root. Pass `files: [...]` to load custom locations. See [`docs/agents-ssot.md`](docs/agents-ssot.md) §3.2 for authoritative details.
 
@@ -157,6 +157,7 @@ const pipeline = createPipeline({ configProvider: myConfigProvider });
 ```
 
 Environment-variable shortcuts for selecting remote providers are documented in:
+
 - [`docs/agents-ssot.md`](docs/agents-ssot.md) §5.2
 - [`docs/groundwork-for-backend.md`](docs/groundwork-for-backend.md)
 

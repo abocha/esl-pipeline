@@ -3,5 +3,8 @@ packages:
   - packages/orchestrator/examples/*
 
 onlyBuiltDependencies:
+  - '@swc/core'
+  - bcrypt
   - esbuild
+  - msgpackr-extract
   - unrs-resolver

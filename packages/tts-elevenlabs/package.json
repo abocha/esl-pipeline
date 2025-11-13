@@ -40,14 +40,14 @@
     "voices:sync": "node dist/bin/voices.js"
   },
   "dependencies": {
-    "@elevenlabs/elevenlabs-js": "^2.22.0",
+    "@elevenlabs/elevenlabs-js": "^2.23.0",
     "@esl-pipeline/md-extractor": "workspace:*",
     "commander": "^14.0.2",
-    "js-yaml": "^4.1.0"
+    "js-yaml": "^4.1.1"
   },
   "devDependencies": {
     "@types/js-yaml": "^4.0.9",
-    "@types/node": "^24.10.0",
+    "@types/node": "^24.10.1",
     "rimraf": "^6.1.0",
     "tsx": "^4.20.6",
     "typescript": "^5.9.3",

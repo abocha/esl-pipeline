@@ -1,0 +1,49 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>ESL Pipeline Batch Jobs</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+
+    <!-- Security Headers -->
+    <meta http-equiv="X-Content-Type-Options" content="nosniff" />
+    <meta http-equiv="X-Frame-Options" content="DENY" />
+    <meta http-equiv="X-XSS-Protection" content="1; mode=block" />
+    <meta name="referrer" content="strict-origin-when-cross-origin" />
+
+    <!-- Content Security Policy -->
+    <meta http-equiv="Content-Security-Policy" content="
+      default-src 'self';
+      script-src 'self' 'unsafe-inline';
+      style-src 'self' 'unsafe-inline';
+      img-src 'self' data: https:;
+      font-src 'self';
+      connect-src 'self' http://localhost:8080;
+      frame-ancestors 'none';
+      base-uri 'self';
+      form-action 'self';
+    " />
+
+    <!--
+      Minimal host page for the batch-frontend with security enhancements.
+
+      Security Features:
+      - Content Security Policy (CSP) to prevent XSS attacks
+      - X-Frame-Options to prevent clickjacking
+      - X-Content-Type-Options to prevent MIME sniffing
+      - X-XSS-Protection for additional XSS protection
+
+      In dev:
+      - Served by Vite (`pnpm --filter @esl-pipeline/batch-frontend dev`).
+      - API calls to /api/* are proxied to the local batch-backend (see vite.config.ts).
+
+      In other environments:
+      - You can serve this bundle behind the same origin as batch-backend
+        or set window.__BATCH_BACKEND_URL__ / VITE_BATCH_BACKEND_URL.
+    -->
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>
