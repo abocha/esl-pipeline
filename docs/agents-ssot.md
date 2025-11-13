@@ -338,6 +338,7 @@ Roadmap-only constructs (e.g., `SecretProvider`, advanced tenant-aware providers
 For each supporting package listed below, agents MUST treat the orchestrator as its primary consumer. Changes in these packages MUST be coordinated with orchestrator code and tests.
 
 For all subsections:
+
 - DO:
   - Add new capabilities in backward-compatible ways.
   - Keep exported signatures used by orchestrator stable.
@@ -880,7 +881,7 @@ Semver:
   - CLI behavior,
   - Manifest schema,
   - Adapter selection semantics,
-  REQUIRE:
+    REQUIRE:
   - Appropriate version bump.
   - Documentation of changes here and in relevant docs.
 

@@ -26,8 +26,11 @@ RUN pnpm -r --filter "./packages/*" build \
 
 FROM base AS runtime
 
-WORKDIR /app/packages/orchestrator
+# Keep the full monorepo workspace so batch-backend and others can run.
+WORKDIR /app
 
 COPY --from=base /app /app
 
-ENTRYPOINT ["node", "dist/cli.js"]
+# Default command is the orchestrator CLI, but allow docker-compose/docker run
+# to override it (e.g. to run batch-backend HTTP server or worker).
+CMD ["node", "packages/orchestrator/dist/cli.js"]

@@ -59,16 +59,16 @@ Everything below assumes **Node.js 24.10.0+**, pnpm, and system ffmpeg.
 
 Use this as a quick map; detailed contracts live in the SSOT.
 
-| Package                          | Purpose (high level)                          |
-| -------------------------------- | ----------------------------------------------|
-| `@esl-pipeline/orchestrator`     | CLI and pipeline factory                      |
-| `@esl-pipeline/md-validator`     | Markdown validation                           |
-| `@esl-pipeline/md-extractor`     | Study text extraction                         |
-| `@esl-pipeline/notion-importer`  | Notion page creation                          |
-| `@esl-pipeline/notion-colorizer` | Notion heading presets                        |
-| `@esl-pipeline/tts-elevenlabs`   | ElevenLabs integration                        |
-| `@esl-pipeline/storage-uploader` | S3 uploads                                    |
-| `@esl-pipeline/notion-add-audio` | Attach audio blocks in Notion                 |
+| Package                          | Purpose (high level)          |
+| -------------------------------- | ----------------------------- |
+| `@esl-pipeline/orchestrator`     | CLI and pipeline factory      |
+| `@esl-pipeline/md-validator`     | Markdown validation           |
+| `@esl-pipeline/md-extractor`     | Study text extraction         |
+| `@esl-pipeline/notion-importer`  | Notion page creation          |
+| `@esl-pipeline/notion-colorizer` | Notion heading presets        |
+| `@esl-pipeline/tts-elevenlabs`   | ElevenLabs integration        |
+| `@esl-pipeline/storage-uploader` | S3 uploads                    |
+| `@esl-pipeline/notion-add-audio` | Attach audio blocks in Notion |
 
 For per-package responsibilities, extension points, and invariants:
 see [`docs/agents-ssot.md`](docs/agents-ssot.md) §4.
