@@ -12,7 +12,7 @@ import {
   ValidationWarning
 } from '../src/infrastructure/file-validation-service';
 
-describe.skip('FileValidationService', () => {
+describe('FileValidationService', () => {
   let validationService: FileValidationService;
   let testConfig: ValidationConfig;
 
