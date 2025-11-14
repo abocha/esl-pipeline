@@ -196,11 +196,7 @@ export function RegisterForm({ onSuccess, onSwitchToLogin }: RegisterFormProps) 
           </div>
         )}
 
-        <button
-          type="submit"
-          disabled={isLoading}
-          className="btn btn-primary"
-        >
+        <button type="submit" disabled={isLoading} className="btn btn-primary">
           {isLoading ? 'Creating Account...' : 'Register'}
         </button>
 

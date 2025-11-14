@@ -202,7 +202,8 @@ export function loadConfig(): BatchBackendConfig {
 
   // Security configuration
   const maxFileSize = readInt('MAX_FILE_SIZE', 10 * 1024 * 1024); // 10MB default
-  const allowedMimeTypesEnv = readString('ALLOWED_MIME_TYPES', 'text/markdown,text/plain') || 'text/markdown,text/plain';
+  const allowedMimeTypesEnv =
+    readString('ALLOWED_MIME_TYPES', 'text/markdown,text/plain') || 'text/markdown,text/plain';
   const allowedMimeTypes = allowedMimeTypesEnv.split(',').map(type => type.trim());
   const uploadRateLimit = readInt('UPLOAD_RATE_LIMIT', 10); // 10 uploads per minute
   const uploadBurstLimit = readInt('UPLOAD_BURST_LIMIT', 20); // 20 uploads burst
@@ -219,7 +220,8 @@ export function loadConfig(): BatchBackendConfig {
   const jobSubmissionRateLimit = readInt('JOB_SUBMISSION_RATE_LIMIT', 5); // 5 jobs per minute
 
   // Storage configuration
-  const storageProvider = (readString('STORAGE_PROVIDER') as 's3' | 'minio' | 'filesystem') || 'filesystem';
+  const storageProvider =
+    (readString('STORAGE_PROVIDER') as 's3' | 'minio' | 'filesystem') || 'filesystem';
   const storageBucketName = readString('S3_BUCKET_NAME') || readString('STORAGE_BUCKET_NAME');
   const storagePathPrefix = readString('S3_PATH_PREFIX') || readString('STORAGE_PATH_PREFIX');
   const presignedUrlExpiresIn = readInt('PRESIGNED_URL_EXPIRES_IN', 3600);

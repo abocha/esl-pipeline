@@ -44,6 +44,7 @@ apiClient.interceptors.response.use(
         // For now, just reject and let the component handle it
         return Promise.reject(error);
       } catch (refreshError) {
+        console.warn('Token refresh attempt failed inside API client', refreshError);
         // Token refresh failed, reject with original error
         return Promise.reject(error);
       }
@@ -67,7 +68,9 @@ export function handleApiError(error: AxiosError): string {
   if (error.response) {
     // Server responded with error status
     const data = error.response.data as any;
-    return data?.message || data?.error || `HTTP ${error.response.status}: ${error.response.statusText}`;
+    return (
+      data?.message || data?.error || `HTTP ${error.response.status}: ${error.response.statusText}`
+    );
   } else if (error.request) {
     // Request was made but no response received
     return 'Network error - please check your connection';

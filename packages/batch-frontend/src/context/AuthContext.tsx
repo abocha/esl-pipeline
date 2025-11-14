@@ -76,7 +76,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
         password,
       });
 
-      const { user: userData, accessToken, refreshToken } = response.data;
+      const { user: userData } = response.data;
 
       // Store tokens in httpOnly cookies (set by server)
       // Note: Frontend receives tokens but doesn't store them directly
@@ -93,11 +93,14 @@ export function AuthProvider({ children }: AuthProviderProps) {
     }
   };
 
-  const register = async (email: string, password: string, role: UserRole = 'user'): Promise<void> => {
+  const register = async (
+    email: string,
+    password: string,
+    role: UserRole = 'user'
+  ): Promise<void> => {
     try {
       setIsLoading(true);
-
-      const response = await axios.post('/api/auth/register', {
+      await axios.post('/api/auth/register', {
         email: email.toLowerCase(),
         password,
         role,
@@ -139,6 +142,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
       }
     } catch (error: any) {
       // Token refresh failed - logout user
+      console.warn('Token refresh failed', error);
       logout();
       throw new Error('Session expired. Please login again.');
     }
@@ -160,11 +164,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
     updateUser,
   };
 
-  return (
-    <AuthContext.Provider value={value}>
-      {children}
-    </AuthContext.Provider>
-  );
+  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }
 
 export function useAuth(): AuthContextType {

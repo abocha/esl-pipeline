@@ -20,7 +20,9 @@ import * as loggerModule from '../src/infrastructure/logger';
 
 // Mock auth middleware to bypass authentication for integration tests
 vi.mock('../src/transport/auth-middleware', async () => {
-  const actual = await vi.importActual<typeof import('../src/transport/auth-middleware')>('../src/transport/auth-middleware');
+  const actual = await vi.importActual<typeof import('../src/transport/auth-middleware')>(
+    '../src/transport/auth-middleware'
+  );
   return {
     ...actual,
     authenticate: vi.fn((request, reply, done) => {
@@ -28,25 +30,31 @@ vi.mock('../src/transport/auth-middleware', async () => {
       (request as any).user = {
         id: 'test-user-id',
         email: 'test@example.com',
-        role: 'user'
+        role: 'user',
       };
       done?.();
     }),
-    requireRole: vi.fn(() => vi.fn((request, reply, done) => {
-      done?.();
-    })),
-    getAuthenticatedUser: vi.fn((request) => (request as any).user),
+    requireRole: vi.fn(() =>
+      vi.fn((request, reply, done) => {
+        done?.();
+      })
+    ),
+    getAuthenticatedUser: vi.fn(request => (request as any).user),
   };
 });
 
 // Mock rate limiting middleware to avoid Redis dependencies
 vi.mock('../src/transport/rate-limit-middleware', async () => {
-  const actual = await vi.importActual<typeof import('../src/transport/rate-limit-middleware')>('../src/transport/rate-limit-middleware');
+  const actual = await vi.importActual<typeof import('../src/transport/rate-limit-middleware')>(
+    '../src/transport/rate-limit-middleware'
+  );
   return {
     ...actual,
-    createUploadRateLimitMiddleware: vi.fn(() => vi.fn((request, reply, done) => {
-      done?.();
-    })),
+    createUploadRateLimitMiddleware: vi.fn(() =>
+      vi.fn((request, reply, done) => {
+        done?.();
+      })
+    ),
   };
 });
 
@@ -89,7 +97,7 @@ describe('transport/http-server - integration (in-process)', () => {
       url: '/jobs',
       payload: {
         md: 'fixtures/ok.md',
-      }
+      },
     });
 
     expect(response.statusCode).toBe(202);
@@ -134,7 +142,7 @@ describe('transport/http-server - integration (in-process)', () => {
       url: '/jobs',
       payload: {
         md: 'fixtures/ok.md',
-      }
+      },
     });
 
     expect(response.statusCode).toBe(500);
@@ -162,7 +170,7 @@ describe('transport/http-server - integration (in-process)', () => {
 
     const response = await app.inject({
       method: 'GET',
-      url: '/jobs/job-1'
+      url: '/jobs/job-1',
     });
 
     expect(response.statusCode).toBe(200);
@@ -195,7 +203,7 @@ describe('transport/http-server - integration (in-process)', () => {
 
     const response = await app.inject({
       method: 'GET',
-      url: '/jobs/job-2/status'
+      url: '/jobs/job-2/status',
     });
 
     expect(response.statusCode).toBe(200);
@@ -208,7 +216,7 @@ describe('transport/http-server - integration (in-process)', () => {
 
     const response = await app.inject({
       method: 'GET',
-      url: '/jobs/missing'
+      url: '/jobs/missing',
     });
 
     expect(response.statusCode).toBe(404);
@@ -226,7 +234,7 @@ describe('transport/http-server - integration (in-process)', () => {
 
     const response = await app.inject({
       method: 'GET',
-      url: '/jobs/job-err'
+      url: '/jobs/job-err',
     });
 
     expect(response.statusCode).toBe(500);

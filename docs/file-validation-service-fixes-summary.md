@@ -3,6 +3,7 @@
 ## Issues Identified and Fixed
 
 ### Root Cause Analysis
+
 The file validation service was incorrectly marking valid markdown files as `isValid: false` due to several issues:
 
 1. **MIME Type Detection Issues**
@@ -23,6 +24,7 @@ The file validation service was incorrectly marking valid markdown files as `isV
 ## Key Fixes Applied
 
 ### 1. MIME Type Detection Improvements
+
 ```typescript
 // Before: file-type library first, restrictive fallback
 const fileType = await fileTypeFromBuffer(fileBuffer);
@@ -42,6 +44,7 @@ if (extension && this.config.allowedExtensions.includes(extension.toLowerCase())
 ```
 
 ### 2. Binary Content Detection Refinement
+
 ```typescript
 // Before: 1% threshold, aggressive null byte detection
 if (binaryContent > 0.01) {
@@ -63,6 +66,7 @@ if (binaryContent > 0.15) { // 15% threshold for larger files
 ```
 
 ### 3. Content Validation Improvements
+
 ```typescript
 // Before: All validation applied regardless of file size
 // After: Size-based validation strategy

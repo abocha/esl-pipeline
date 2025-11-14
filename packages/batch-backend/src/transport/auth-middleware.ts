@@ -1,7 +1,6 @@
 // packages/batch-backend/src/transport/auth-middleware.ts
 
 import { FastifyRequest, FastifyReply } from 'fastify';
-import { JwtPayload } from '../infrastructure/auth-service';
 import { UserRole } from '../domain/user-model';
 import { logger } from '../infrastructure/logger';
 
@@ -56,9 +55,9 @@ async function verifyToken(token: string): Promise<AuthenticatedUser> {
     // Import here to avoid circular dependency
     const { createAuthService } = await import('../infrastructure/auth-service.js');
     const authService = createAuthService();
-    
+
     const payload = authService.verifyToken(token);
-    
+
     return {
       id: payload.sub,
       email: payload.email,
@@ -81,29 +80,26 @@ async function verifyToken(token: string): Promise<AuthenticatedUser> {
 
 /**
  * Authentication middleware
- * 
+ *
  * Usage:
  * - app.get('/protected', { preHandler: authenticate }, handler)
- * 
+ *
  * This middleware:
  * - Extracts JWT from Authorization header
  * - Verifies token validity
  * - Adds authenticated user to request object
  * - Throws 401 if authentication fails
  */
-export async function authenticate(
-  request: FastifyRequest,
-  reply: FastifyReply
-): Promise<void> {
+export async function authenticate(request: FastifyRequest, reply: FastifyReply): Promise<void> {
   try {
     const authHeader = request.headers.authorization;
     const token = extractTokenFromHeader(authHeader);
-    
+
     const user = await verifyToken(token);
-    
+
     // Add user to request object
     (request as AuthenticatedRequest).user = user;
-    
+
     logger.debug('User authenticated', {
       userId: user.id,
       email: user.email,
@@ -119,13 +115,13 @@ export async function authenticate(
         userAgent: request.headers['user-agent'],
         path: request.url,
       });
-      
+
       return reply.code(401).send({
         error: 'unauthorized',
         message: error.message,
       });
     }
-    
+
     // Unexpected error
     logger.error('Authentication middleware error', {
       error: String(error),
@@ -134,7 +130,7 @@ export async function authenticate(
       userAgent: request.headers['user-agent'],
       path: request.url,
     });
-    
+
     return reply.code(500).send({
       error: 'internal_error',
       message: 'Authentication service error',
@@ -144,9 +140,9 @@ export async function authenticate(
 
 /**
  * Role-based authorization middleware factory
- * 
+ *
  * @param allowedRoles - Array of roles that are allowed to access the endpoint
- * 
+ *
  * Usage:
  * - app.get('/admin', { preHandler: requireRole(['admin']) }, handler)
  * - app.post('/api', { preHandler: requireRole(['admin', 'user']) }, handler)
@@ -161,9 +157,9 @@ export function requireRole(allowedRoles: UserRole[]) {
           message: 'Authentication required',
         });
       }
-      
+
       const authenticatedUser = (request as AuthenticatedRequest).user;
-      
+
       // Check if user has required role
       if (!allowedRoles.includes(authenticatedUser.role)) {
         logger.warn('Authorization failed - insufficient permissions', {
@@ -175,14 +171,14 @@ export function requireRole(allowedRoles: UserRole[]) {
           userAgent: request.headers['user-agent'],
           path: request.url,
         });
-        
+
         return reply.code(403).send({
           error: 'forbidden',
           message: 'Insufficient permissions',
           requiredRoles: allowedRoles,
         });
       }
-      
+
       logger.debug('Authorization successful', {
         userId: authenticatedUser.id,
         email: authenticatedUser.email,
@@ -190,7 +186,6 @@ export function requireRole(allowedRoles: UserRole[]) {
         requiredRoles: allowedRoles,
         path: request.url,
       });
-      
     } catch (error) {
       logger.error('Authorization middleware error', {
         error: String(error),
@@ -200,7 +195,7 @@ export function requireRole(allowedRoles: UserRole[]) {
         userAgent: request.headers['user-agent'],
         path: request.url,
       });
-      
+
       return reply.code(500).send({
         error: 'internal_error',
         message: 'Authorization service error',
@@ -211,33 +206,30 @@ export function requireRole(allowedRoles: UserRole[]) {
 
 /**
  * Optional authentication middleware
- * 
+ *
  * Like authenticate() but doesn't require authentication.
  * If token is provided and valid, user is added to request.
  * If no token or invalid token, request proceeds without user.
- * 
+ *
  * Usage:
  * - app.get('/optional', { preHandler: optionalAuth }, handler)
  */
-export async function optionalAuth(
-  request: FastifyRequest,
-  reply: FastifyReply
-): Promise<void> {
+export async function optionalAuth(request: FastifyRequest): Promise<void> {
   try {
     const authHeader = request.headers.authorization;
-    
+
     if (!authHeader) {
       // No authorization header, proceed without authentication
       return;
     }
-    
+
     try {
       const token = extractTokenFromHeader(authHeader);
       const user = await verifyToken(token);
-      
+
       // Add user to request object
       (request as AuthenticatedRequest).user = user;
-      
+
       logger.debug('Optional authentication successful', {
         userId: user.id,
         email: user.email,
@@ -264,7 +256,7 @@ export async function optionalAuth(
       userAgent: request.headers['user-agent'],
       path: request.url,
     });
-    
+
     // For optional auth, we don't want to fail the request
     // Just log the error and continue
   }
@@ -284,6 +276,6 @@ export function userHasRole(user: AuthenticatedUser | null, requiredRoles: UserR
   if (!user) {
     return false;
   }
-  
+
   return requiredRoles.includes(user.role);
 }

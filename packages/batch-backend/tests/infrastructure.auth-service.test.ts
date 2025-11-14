@@ -118,27 +118,37 @@ describe('infrastructure/auth-service', () => {
       const result = authService.generateTokens('user-123', 'test@example.com', 'user');
 
       expect(jwt.sign).toHaveBeenCalledTimes(2);
-      
+
       // First call should be access token
-      expect(jwt.sign).toHaveBeenNthCalledWith(1, {
-        sub: 'user-123',
-        email: 'test@example.com',
-        role: 'user',
-      }, 'test-secret', {
-        expiresIn: '15m',
-        issuer: '@esl-pipeline/batch-backend',
-      });
+      expect(jwt.sign).toHaveBeenNthCalledWith(
+        1,
+        {
+          sub: 'user-123',
+          email: 'test@example.com',
+          role: 'user',
+        },
+        'test-secret',
+        {
+          expiresIn: '15m',
+          issuer: '@esl-pipeline/batch-backend',
+        }
+      );
 
       // Second call should be refresh token
-      expect(jwt.sign).toHaveBeenNthCalledWith(2, {
-        sub: 'user-123',
-        email: 'test@example.com',
-        role: 'user',
-        type: 'refresh',
-      }, 'test-secret', {
-        expiresIn: '7d',
-        issuer: '@esl-pipeline/batch-backend',
-      });
+      expect(jwt.sign).toHaveBeenNthCalledWith(
+        2,
+        {
+          sub: 'user-123',
+          email: 'test@example.com',
+          role: 'user',
+          type: 'refresh',
+        },
+        'test-secret',
+        {
+          expiresIn: '7d',
+          issuer: '@esl-pipeline/batch-backend',
+        }
+      );
 
       expect(result).toEqual({
         accessToken: 'mock-access-token',
@@ -237,15 +247,14 @@ describe('infrastructure/auth-service', () => {
 
     it('refreshTokens generates new tokens from valid refresh token', () => {
       // Mock jwt.verify for refresh token validation
-      vi.mocked(jwt.verify)
-        .mockReturnValueOnce({
-          sub: 'user-123',
-          email: 'test@example.com',
-          role: 'user',
-          type: 'refresh',
-          iat: 1234567890,
-          exp: 1234567890 + 604800,
-        } as any);
+      vi.mocked(jwt.verify).mockReturnValueOnce({
+        sub: 'user-123',
+        email: 'test@example.com',
+        role: 'user',
+        type: 'refresh',
+        iat: 1234567890,
+        exp: 1234567890 + 604800,
+      } as any);
 
       // Mock jwt.sign for token generation
       vi.mocked(jwt.sign)
@@ -349,16 +358,19 @@ describe('infrastructure/auth-service', () => {
 
       // Mock the constructor to track calls
       const AuthServiceConstructorSpy = vi.spyOn(AuthService as any, 'constructor');
-      vi.mocked(AuthServiceConstructorSpy).mockImplementation(() => ({
-        hashPassword: vi.fn(),
-        verifyPassword: vi.fn(),
-        generateTokens: vi.fn(),
-        verifyToken: vi.fn(),
-        verifyRefreshToken: vi.fn(),
-        refreshTokens: vi.fn(),
-        validatePassword: vi.fn(),
-        validateEmail: vi.fn(),
-      }) as any);
+      vi.mocked(AuthServiceConstructorSpy).mockImplementation(
+        () =>
+          ({
+            hashPassword: vi.fn(),
+            verifyPassword: vi.fn(),
+            generateTokens: vi.fn(),
+            verifyToken: vi.fn(),
+            verifyRefreshToken: vi.fn(),
+            refreshTokens: vi.fn(),
+            validatePassword: vi.fn(),
+            validateEmail: vi.fn(),
+          }) as any
+      );
 
       const authService = createAuthService(mockConfig);
 

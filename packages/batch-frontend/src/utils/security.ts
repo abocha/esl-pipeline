@@ -28,7 +28,8 @@ export function sanitizeInput(input: string): string {
 
 // Email validation (additional security layer)
 export function validateEmailSecure(email: string): boolean {
-  const emailRegex = /^[a-zA-Z0-9.!#$%&'*+/=?^_`{|}~-]+@[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(?:\.[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)*$/;
+  const emailRegex =
+    /^[a-zA-Z0-9.!#$%&'*+/=?^_`{|}~-]+@[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(?:\.[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)*$/;
   return emailRegex.test(email) && email.length <= 254;
 }
 
@@ -94,7 +95,9 @@ export interface SecurityEvent {
   url: string;
 }
 
-export function logSecurityEvent(event: Omit<SecurityEvent, 'timestamp' | 'userAgent' | 'url'>): void {
+export function logSecurityEvent(
+  event: Omit<SecurityEvent, 'timestamp' | 'userAgent' | 'url'>
+): void {
   const securityEvent: SecurityEvent = {
     ...event,
     timestamp: new Date().toISOString(),
@@ -119,8 +122,8 @@ export function logSecurityEvent(event: Omit<SecurityEvent, 'timestamp' | 'userA
     }
 
     localStorage.setItem('security_events', JSON.stringify(existingEvents));
-  } catch (error) {
-    // Ignore localStorage errors
+  } catch (storageError) {
+    console.warn('Failed to persist security events locally', storageError);
   }
 
   // TODO: Send to backend security endpoint
@@ -136,7 +139,7 @@ export function generateCsrfToken(): string {
 
 // Content Security Policy violation reporting
 export function setupCSPViolationReporting(): void {
-  document.addEventListener('securitypolicyviolation', (event) => {
+  document.addEventListener('securitypolicyviolation', event => {
     logSecurityEvent({
       type: 'suspicious_input',
       details: {
@@ -155,9 +158,9 @@ export function initializeSecurity(): void {
   setupCSPViolationReporting();
 
   // Monitor for suspicious DOM manipulation attempts
-  const observer = new MutationObserver((mutations) => {
-    mutations.forEach((mutation) => {
-      mutation.addedNodes.forEach((node) => {
+  const observer = new MutationObserver(mutations => {
+    mutations.forEach(mutation => {
+      mutation.addedNodes.forEach(node => {
         if (node.nodeType === Node.ELEMENT_NODE) {
           const element = node as Element;
           // Check for suspicious script injections

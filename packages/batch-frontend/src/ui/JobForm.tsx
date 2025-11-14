@@ -45,8 +45,8 @@ export const JobForm: React.FC<JobFormProps> = ({ onJobCreated }) => {
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [lastJobId, setLastJobId] = useState<string | null>(null);
-  const [userFiles, setUserFiles] = useState<any[]>([]);
-  const [quotaInfo, setQuotaInfo] = useState<{ used: number; limit: number } | null>(null);
+  const [, setUserFiles] = useState<any[]>([]);
+  const [quotaInfo] = useState<{ used: number; limit: number } | null>(null);
 
   // Load user files and quota info when authenticated
   useEffect(() => {
@@ -159,7 +159,9 @@ export const JobForm: React.FC<JobFormProps> = ({ onJobCreated }) => {
             marginBottom: '8px',
           }}
         >
-          <div>Logged in as: <strong>{user.email}</strong> ({user.role})</div>
+          <div>
+            Logged in as: <strong>{user.email}</strong> ({user.role})
+          </div>
           {quotaInfo && (
             <div style={{ marginTop: '4px' }}>
               Upload quota: {quotaInfo.used} / {quotaInfo.limit} files used

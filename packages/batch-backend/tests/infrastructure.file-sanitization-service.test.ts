@@ -6,9 +6,7 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import {
   FileSanitizationService,
-  FileSanitizationError,
   SanitizationConfig,
-  SanitizationWarning
 } from '../src/infrastructure/file-sanitization-service';
 
 describe('FileSanitizationService', () => {
@@ -60,10 +58,7 @@ describe('FileSanitizationService', () => {
     });
 
     it('should handle reserved Windows filenames', async () => {
-      const result = await sanitizationService.sanitizeFile(
-        Buffer.from('test content'),
-        'con.md'
-      );
+      const result = await sanitizationService.sanitizeFile(Buffer.from('test content'), 'con.md');
 
       expect(result.sanitizedFilename).toBe('con_safe.md');
       expect(result.warnings.some(w => w.code === 'RESERVED_FILENAME_DETECTED')).toBe(true);
@@ -71,10 +66,7 @@ describe('FileSanitizationService', () => {
 
     it('should truncate long filenames', async () => {
       const longName = 'a'.repeat(300) + '.md';
-      const result = await sanitizationService.sanitizeFile(
-        Buffer.from('test content'),
-        longName
-      );
+      const result = await sanitizationService.sanitizeFile(Buffer.from('test content'), longName);
 
       expect(result.sanitizedFilename.length).toBeLessThanOrEqual(255);
       expect(result.sanitizedFilename.endsWith('.md')).toBe(true);
@@ -82,10 +74,7 @@ describe('FileSanitizationService', () => {
     });
 
     it('should replace empty filenames', async () => {
-      const result = await sanitizationService.sanitizeFile(
-        Buffer.from('test content'),
-        ''
-      );
+      const result = await sanitizationService.sanitizeFile(Buffer.from('test content'), '');
 
       expect(result.sanitizedFilename).toMatch(/^file_\d+\.md$/);
       expect(result.warnings.some(w => w.code === 'EMPTY_FILENAME_REPLACED')).toBe(true);
@@ -156,7 +145,7 @@ Normal content`);
     });
 
     it('should handle invalid UTF-8 characters', async () => {
-      const contentWithInvalidUTF8 = Buffer.from([0xFF, 0xFE, 0x41, 0x42, 0x43]); // Invalid UTF-8
+      const contentWithInvalidUTF8 = Buffer.from([0xff, 0xfe, 0x41, 0x42, 0x43]); // Invalid UTF-8
       const result = await sanitizationService.sanitizeFile(contentWithInvalidUTF8, 'test.md');
 
       expect(result.warnings.some(w => w.code === 'INVALID_UTF8_REMOVED')).toBe(true);
@@ -257,17 +246,23 @@ rm -rf /; echo "pwned"
 
   describe('Configuration Validation', () => {
     it('should throw error for invalid maxFilenameLength', () => {
-      expect(() => new FileSanitizationService({
-        ...testConfig,
-        maxFilenameLength: 0,
-      })).toThrow('maxFilenameLength must be greater than 0');
+      expect(
+        () =>
+          new FileSanitizationService({
+            ...testConfig,
+            maxFilenameLength: 0,
+          })
+      ).toThrow('maxFilenameLength must be greater than 0');
     });
 
     it('should throw error for invalid allowedSpecialChars', () => {
-      expect(() => new FileSanitizationService({
-        ...testConfig,
-        allowedSpecialChars: null as any,
-      })).toThrow('allowedSpecialChars must be an array');
+      expect(
+        () =>
+          new FileSanitizationService({
+            ...testConfig,
+            allowedSpecialChars: null as any,
+          })
+      ).toThrow('allowedSpecialChars must be an array');
     });
   });
 
@@ -303,10 +298,7 @@ rm -rf /; echo "pwned"
 
   describe('Final Safety Checks', () => {
     it('should validate final filename safety', async () => {
-      const result = await sanitizationService.sanitizeFile(
-        Buffer.from('test'),
-        'safe-file.md'
-      );
+      const result = await sanitizationService.sanitizeFile(Buffer.from('test'), 'safe-file.md');
 
       // Should pass final safety check
       expect(result.warnings.some(w => w.code === 'FILENAME_SAFETY_CHECK_FAILED')).toBe(false);
@@ -314,7 +306,10 @@ rm -rf /; echo "pwned"
 
     it('should detect content truncation', async () => {
       const veryLargeContent = 'A'.repeat(20 * 1024 * 1024); // 20MB
-      const result = await sanitizationService.sanitizeFile(Buffer.from(veryLargeContent), 'large.md');
+      const result = await sanitizationService.sanitizeFile(
+        Buffer.from(veryLargeContent),
+        'large.md'
+      );
 
       expect(result.warnings.some(w => w.code === 'CONTENT_SIZE_EXCEEDED')).toBe(true);
       expect(result.sanitizedContent.length).toBe(10 * 1024 * 1024); // Should be truncated to 10MB

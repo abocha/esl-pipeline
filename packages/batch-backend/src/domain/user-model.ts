@@ -44,7 +44,7 @@ export function isValidRole(role: string): role is UserRole {
 
 // sanitizeUser.declaration()
 export function sanitizeUser(user: UserRecord): Omit<UserRecord, 'passwordHash'> {
-  const { passwordHash, ...sanitized } = user;
+  const { passwordHash: _passwordHash, ...sanitized } = user;
   return sanitized;
 }
 

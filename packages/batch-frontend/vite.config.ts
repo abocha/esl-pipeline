@@ -21,9 +21,9 @@ export default defineConfig({
       '/api': {
         target: batchBackendUrl,
         changeOrigin: true,
-        configure: (proxy, options) => {
+        configure: (proxy, _options) => {
           // Ensure cookies are forwarded for authentication
-          proxy.on('proxyReq', (proxyReq, req, res) => {
+          proxy.on('proxyReq', (proxyReq, req, _res) => {
             // Forward cookies for session management
             if (req.headers.cookie) {
               proxyReq.setHeader('cookie', req.headers.cookie);

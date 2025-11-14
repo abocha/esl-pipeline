@@ -5,10 +5,8 @@
 // for malicious patterns while ensuring markdown integrity with comprehensive security event logging.
 
 import { fileTypeFromBuffer } from 'file-type';
-import { lookup as mimeLookup, extension as mimeExtension } from 'mime-types';
-import { createUnzip } from 'zlib';
+import { lookup as mimeLookup } from 'mime-types';
 import { logger } from './logger';
-import { SecurityLogger, SecurityEventType, SecuritySeverity, SecurityLogConfig } from './security-logger';
 
 export interface FileValidationResult {
   isValid: boolean;
@@ -62,24 +60,24 @@ export class FileValidationService {
     /vbscript:/gi,
     /onload\s*=/gi,
     /onerror\s*=/gi,
-    
+
     // Path traversal patterns
     /\.\.\/.*/gi,
     /\.\.\\.*/gi,
     /%2e%2e%2f/gi,
     /%2e%2e%5c/gi,
-    
+
     // Command injection patterns
     /\|\s*nc\s+/gi,
     /\|\s*netcat\s+/gi,
     /\|\s*bash/gi,
     /\|\s*sh/gi,
     /\|\s*powershell/gi,
-    
+
     // SQL injection patterns
     /(\bunion\b.*\bselect\b)|(\bselect\b.*\bunion\b)/gi,
     /(\bor\b.*1\s*=\s*1\b)|(\band\b.*1\s*=\s*1\b)/gi,
-    
+
     // File inclusion patterns
     /php:\/\/filter/gi,
     /data:text\/html/gi,
@@ -127,18 +125,19 @@ export class FileValidationService {
       return {
         isValid: false,
         size: fileSize,
-        errors: [{
-          code: 'FILE_SIZE_EXCEEDED',
-          message: `File size (${this.formatFileSize(fileSize)}) exceeds maximum allowed size (${this.formatFileSize(this.config.maxFileSize)})`,
-          field: 'fileSize',
-        }],
+        errors: [
+          {
+            code: 'FILE_SIZE_EXCEEDED',
+            message: `File size (${this.formatFileSize(fileSize)}) exceeds maximum allowed size (${this.formatFileSize(this.config.maxFileSize)})`,
+            field: 'fileSize',
+          },
+        ],
         warnings: [],
       };
     }
 
-
     // Start with isValid: true, set to false only when errors are found
-    
+
     // 0. Filename validation (warnings only)
     const filenameValidation = this.validateFilename(originalFilename);
     if (filenameValidation) {
@@ -170,6 +169,10 @@ export class FileValidationService {
         });
       }
     } catch (error) {
+      logger.error('File type validation failed', {
+        error: error instanceof Error ? error.message : String(error),
+        filename: originalFilename,
+      });
       errors.push({
         code: 'FILE_TYPE_DETECTION_FAILED',
         message: 'File type detection failed',
@@ -193,7 +196,11 @@ export class FileValidationService {
     // 5. Content validation if enabled (run REGARDLESS of MIME validation for edge case handling)
     // This ensures test compatibility - content validation should always run
     if (this.config.enableContentScanning) {
-      const contentValidation = this.validateFileContent(fileBuffer, fileTypeResult.mimeType, originalFilename);
+      const contentValidation = this.validateFileContent(
+        fileBuffer,
+        fileTypeResult.mimeType,
+        originalFilename
+      );
       errors.push(...contentValidation.errors);
       warnings.push(...contentValidation.warnings);
     }
@@ -229,38 +236,18 @@ export class FileValidationService {
   }
 
   /**
-   * Check if this is a simple test buffer that should be handled leniently
-   */
-  private isSimpleTestBuffer(fileBuffer: Buffer): boolean {
-    // TEST COMPATIBILITY: Be extremely lenient for test scenarios
-    if (fileBuffer.length <= 2048) { // Increased threshold
-      const nullByteCount = fileBuffer.filter(byte => byte === 0).length;
-      const nullByteRatio = fileBuffer.length > 0 ? nullByteCount / fileBuffer.length : 0;
-      
-      // If it's mostly null bytes (like Buffer.alloc), treat as test buffer
-      if (nullByteRatio >= 0.85) { // Lowered threshold
-        return true;
-      }
-      
-      // If it's very simple content (few unique bytes), treat as test buffer
-      const uniqueBytes = new Set(fileBuffer).size;
-      if (uniqueBytes <= 5 && fileBuffer.length <= 1024) { // More lenient
-        return true;
-      }
-    }
-    
-    return false;
-  }
-
-  /**
    * Validates file size against maximum allowed size
    * CRITICAL FIX: Accurate validation with proper security checks
    */
-  private validateFileSize(fileSize: number): { isValid: boolean; error?: ValidationError; warning?: ValidationWarning } {
+  private validateFileSize(fileSize: number): {
+    isValid: boolean;
+    error?: ValidationError;
+    warning?: ValidationWarning;
+  } {
     // TEST COMPATIBILITY: Return warnings for large files but keep them valid
     const warningThreshold = this.config.maxFileSize * 0.8;
     const criticalThreshold = this.config.maxFileSize * 0.95;
-    
+
     if (fileSize > criticalThreshold) {
       return {
         isValid: true,
@@ -271,7 +258,7 @@ export class FileValidationService {
         },
       };
     }
-    
+
     if (fileSize >= warningThreshold) {
       return {
         isValid: true,
@@ -282,7 +269,7 @@ export class FileValidationService {
         },
       };
     }
-    
+
     // Only reject truly oversized files
     if (fileSize > this.config.maxFileSize) {
       return {
@@ -303,7 +290,7 @@ export class FileValidationService {
    */
   private validateFileExtension(filename: string): { isValid: boolean; error?: ValidationError } {
     const extension = this.getFileExtension(filename);
-    
+
     if (!extension) {
       return {
         isValid: false,
@@ -315,8 +302,8 @@ export class FileValidationService {
     }
 
     const normalizedExtension = extension.toLowerCase();
-    const isAllowed = this.config.allowedExtensions.some(allowed => 
-      allowed.toLowerCase() === normalizedExtension
+    const isAllowed = this.config.allowedExtensions.some(
+      allowed => allowed.toLowerCase() === normalizedExtension
     );
 
     if (!isAllowed) {
@@ -343,12 +330,12 @@ export class FileValidationService {
       // First check if the file looks like actual text content (invert binary detection)
       const binaryContentRatio = this.detectBinaryContent(fileBuffer);
       const textContentRatio = 1 - binaryContentRatio;
-      
+
       // Use file-type library to detect actual file type
       const fileType = await fileTypeFromBuffer(fileBuffer);
-      
+
       const extension = this.getFileExtension(originalFilename);
-      
+
       if (fileType) {
         // If file-type library detects a different type, check if it's suspicious
         if (this.config.allowedMimeTypes.includes(fileType.mime)) {
@@ -360,7 +347,11 @@ export class FileValidationService {
         } else {
           // Detected as a different file type - this could be suspicious
           // Only allow this if the text content ratio is very high and extension matches
-          if (textContentRatio > 0.95 && extension && this.config.allowedExtensions.includes(extension.toLowerCase())) {
+          if (
+            textContentRatio > 0.95 &&
+            extension &&
+            this.config.allowedExtensions.includes(extension.toLowerCase())
+          ) {
             // High text content and valid extension - probably safe
             const fallbackMimeType = mimeLookup(extension);
             if (fallbackMimeType) {
@@ -379,8 +370,12 @@ export class FileValidationService {
       }
 
       // No file-type detected - use extension-based detection for allowed extensions
-      if (extension && this.config.allowedExtensions.some(allowed =>
-          allowed.toLowerCase() === extension.toLowerCase())) {
+      if (
+        extension &&
+        this.config.allowedExtensions.some(
+          allowed => allowed.toLowerCase() === extension.toLowerCase()
+        )
+      ) {
         const fallbackMimeType = mimeLookup(extension);
         if (fallbackMimeType) {
           return {
@@ -403,7 +398,10 @@ export class FileValidationService {
   /**
    * Validates MIME type against allowed MIME types
    */
-  private validateMimeType(mimeType?: string, originalFilename?: string): { isValid: boolean; error?: ValidationError } {
+  private validateMimeType(
+    mimeType?: string,
+    _originalFilename?: string
+  ): { isValid: boolean; error?: ValidationError } {
     if (!mimeType) {
       return {
         isValid: false,
@@ -460,7 +458,8 @@ export class FileValidationService {
 
     // Check for binary content ratio FIRST - use a lower threshold to match test expectations
     const binaryContentRatio = this.detectBinaryContent(fileBuffer);
-    if (binaryContentRatio > 0.001) { // 0.1% threshold for warnings (more sensitive)
+    if (binaryContentRatio > 0.001) {
+      // 0.1% threshold for warnings (more sensitive)
       warnings.push({
         code: 'BINARY_CONTENT_DETECTED',
         message: `File appears to contain ${(binaryContentRatio * 100).toFixed(1)}% binary content.`,
@@ -472,16 +471,16 @@ export class FileValidationService {
     let content: string;
     try {
       content = fileBuffer.toString('utf8');
-      
+
       // Check for null bytes AFTER decoding - only fail if they appear in the decoded string
       // This allows us to detect binary content warnings before failing on null bytes
       const hasNullBytes = content.includes('\x00');
-      
+
       if (hasNullBytes) {
         // Check if it's mostly null bytes (test buffer) or embedded nulls (malicious)
         const nullByteCount = fileBuffer.filter(byte => byte === 0).length;
         const nullByteRatio = fileBuffer.length > 0 ? nullByteCount / fileBuffer.length : 0;
-        
+
         // Only fail on embedded null bytes for buffers that aren't all nulls and are reasonably sized
         // This allows Buffer.alloc (all nulls) to pass for validation, but catches embedded nulls
         if (nullByteRatio < 0.99 && fileBuffer.length >= 17) {
@@ -495,6 +494,10 @@ export class FileValidationService {
         }
       }
     } catch (error) {
+      logger.warn('UTF-8 decoding failed during validation', {
+        error: error instanceof Error ? error.message : String(error),
+        filename: originalFilename,
+      });
       // For UTF-8 decoding errors, always generate warnings (not errors) for test compatibility
       warnings.push({
         code: 'UTF8_ENCODING_ISSUES',
@@ -577,13 +580,15 @@ export class FileValidationService {
       const urlMatch = linkMatch.match(/\]\(([^)]*)\)/);
       if (urlMatch && urlMatch[1]) {
         const url = urlMatch[1];
-        
+
         // Check for clearly malicious protocols
-        if (url.startsWith('javascript:') ||
-            url.startsWith('data:text/html') ||
-            url.startsWith('file:') ||
-            url.includes('\\x00') ||
-            url.includes('%00')) {
+        if (
+          url.startsWith('javascript:') ||
+          url.startsWith('data:text/html') ||
+          url.startsWith('file:') ||
+          url.includes('\\x00') ||
+          url.includes('%00')
+        ) {
           errors.push({
             code: 'MALICIOUS_LINK_PATTERN',
             message: 'Suspicious link pattern detected',
@@ -598,10 +603,12 @@ export class FileValidationService {
     const htmlMatches = content.match(/<[^>]*>/g) || [];
     for (const htmlMatch of htmlMatches) {
       const lowerHtml = htmlMatch.toLowerCase();
-      if (lowerHtml.includes('<script') ||
-          lowerHtml.includes('onload=') ||
-          lowerHtml.includes('onerror=') ||
-          lowerHtml.includes('javascript:')) {
+      if (
+        lowerHtml.includes('<script') ||
+        lowerHtml.includes('onload=') ||
+        lowerHtml.includes('onerror=') ||
+        lowerHtml.includes('javascript:')
+      ) {
         errors.push({
           code: 'HTML_INJECTION_DETECTED',
           message: 'Potentially malicious HTML detected in markdown',
@@ -627,7 +634,8 @@ export class FileValidationService {
     const specialCharCount = (content.match(/[^\w\s.,!?;:()[\]{}"'-]/g) || []).length;
     const specialCharRatio = specialCharCount / content.length;
 
-    if (specialCharRatio > 0.15) { // More conservative threshold
+    if (specialCharRatio > 0.15) {
+      // More conservative threshold
       warnings.push({
         code: 'EXCESSIVE_SPECIAL_CHARACTERS',
         message: `High concentration of special characters (${(specialCharRatio * 100).toFixed(1)}%)`,
@@ -639,7 +647,10 @@ export class FileValidationService {
   /**
    * Detects malicious patterns in file content
    */
-  private detectMaliciousPatterns(fileBuffer: Buffer, mimeType?: string): { errors: ValidationError[] } {
+  private detectMaliciousPatterns(
+    fileBuffer: Buffer,
+    mimeType?: string
+  ): { errors: ValidationError[] } {
     const errors: ValidationError[] = [];
 
     try {
@@ -658,7 +669,11 @@ export class FileValidationService {
       }
 
       // Check markdown-specific malicious patterns for text/markdown files
-      if (mimeType?.includes('markdown') || mimeType?.includes('text/plain') || this.isMarkdownFile(content)) {
+      if (
+        mimeType?.includes('markdown') ||
+        mimeType?.includes('text/plain') ||
+        this.isMarkdownFile(content)
+      ) {
         for (const pattern of this.markdownMaliciousPatterns) {
           if (pattern.test(content)) {
             errors.push({
@@ -670,8 +685,10 @@ export class FileValidationService {
           }
         }
       }
-
     } catch (error) {
+      logger.warn('Malicious pattern detection failed', {
+        error: error instanceof Error ? error.message : String(error),
+      });
       // If we can't read content as text, that's actually suspicious - only report for truly unreadable content
       // Check for embedded null bytes in the decoded content
       const content = fileBuffer.toString('utf8');
@@ -713,19 +730,20 @@ export class FileValidationService {
 
     // Optimization: For large all-null buffers (like Buffer.alloc), quickly detect and return high binary content
     // This prevents expensive entropy calculations for test scenarios
-    if (fileBuffer.length > 100000) { // 100KB threshold
+    if (fileBuffer.length > 100000) {
+      // 100KB threshold
       // Quick scan to check if buffer is mostly null bytes
       let nullByteCount = 0;
       let totalBytes = 0;
       const sampleSize = Math.min(1000, fileBuffer.length); // Sample first 1000 bytes
-      
+
       for (let i = 0; i < sampleSize; i++) {
         if (fileBuffer[i] === 0) {
           nullByteCount++;
         }
         totalBytes++;
       }
-      
+
       // If sampled data is mostly null bytes, extrapolate and return high ratio
       if (totalBytes > 0 && nullByteCount / totalBytes > 0.9) {
         return 1.0; // High binary content ratio
@@ -738,19 +756,19 @@ export class FileValidationService {
       let nullByteCount = 0;
       let controlCharCount = 0;
       let highValueCount = 0;
-      
+
       for (let i = 0; i < fileBuffer.length; i++) {
         const byte = fileBuffer[i]!; // Non-null assertion
         if (byte === 0) nullByteCount++;
         else if (byte < 7 || (byte > 13 && byte < 32)) controlCharCount++;
         else if (byte > 126) highValueCount++;
       }
-      
+
       // For very small buffers, be much more lenient
       if (nullByteCount === fileBuffer.length) {
         return 1.0; // Only if ALL bytes are null (extreme case)
       }
-      
+
       // Calculate with much more lenient thresholds
       const totalSuspicious = nullByteCount * 2 + controlCharCount + highValueCount;
       return Math.min(1.0, totalSuspicious / (fileBuffer.length * 4)); // Much more lenient divisor
@@ -761,14 +779,14 @@ export class FileValidationService {
       let nullByteCount = 0;
       let controlCharCount = 0;
       let highValueCount = 0;
-      
+
       for (let i = 0; i < fileBuffer.length; i++) {
         const byte = fileBuffer[i]!; // Non-null assertion
         if (byte === 0) nullByteCount++;
         else if (byte < 7 || (byte > 13 && byte < 32)) controlCharCount++;
         else if (byte > 126) highValueCount++;
       }
-      
+
       // More sensitive calculation - detect even small amounts of binary content
       const totalSuspicious = nullByteCount * 3 + controlCharCount * 2 + highValueCount;
       return Math.min(1.0, totalSuspicious / fileBuffer.length);
@@ -777,11 +795,11 @@ export class FileValidationService {
     // Enhanced binary detection with multiple criteria - use single pass for efficiency
     let binaryScore = 0;
     let totalScore = 0;
-    
+
     // Single pass through buffer to count all types of binary content
     for (let i = 0; i < fileBuffer.length; i++) {
       const byte = fileBuffer[i]!; // Non-null assertion
-      
+
       if (byte === 0) {
         binaryScore += 3; // Triple penalty for null bytes
       } else if (byte < 7 || (byte > 13 && byte < 32)) {
@@ -789,14 +807,16 @@ export class FileValidationService {
       } else if (byte > 126) {
         binaryScore += 1; // Single penalty for high-value bytes
       }
-      
+
       totalScore += 1;
     }
 
     // 4. Entropy-based detection for large files (with sampling to avoid performance issues)
-    if (fileBuffer.length > 10000) { // Only for files > 10KB
+    if (fileBuffer.length > 10000) {
+      // Only for files > 10KB
       const entropy = this.calculateEntropyWithSampling(fileBuffer);
-      if (entropy > 7.5) { // High entropy suggests binary content
+      if (entropy > 7.5) {
+        // High entropy suggests binary content
         binaryScore += fileBuffer.length * 0.3;
       }
       totalScore += fileBuffer.length * 0.3;
@@ -812,15 +832,15 @@ export class FileValidationService {
   private calculateEntropyWithSampling(buffer: Buffer): number {
     const sampleSize = Math.min(10000, buffer.length); // Sample up to 10KB
     const frequency = new Array(256).fill(0);
-    
+
     // Count byte frequencies in sample
     for (let i = 0; i < sampleSize; i++) {
       const byte = buffer[i]!; // Non-null assertion
       frequency[byte]++;
     }
-    
+
     let entropy = 0;
-    
+
     // Calculate Shannon entropy
     for (const count of frequency) {
       if (count > 0) {
@@ -828,7 +848,7 @@ export class FileValidationService {
         entropy -= probability * Math.log2(probability);
       }
     }
-    
+
     return entropy;
   }
 
@@ -863,67 +883,29 @@ export class FileValidationService {
     if (fileBuffer.length < 4) {
       return false;
     }
-    
+
     // ZIP file signature: PK (0x50 0x4B) followed by 0x03 0x04 or 0x05 0x06 or 0x07 0x08
     const signature = fileBuffer.subarray(0, 4);
-    return signature[0] === 0x50 && signature[1] === 0x4B && 
-           (signature[2] === 0x03 || signature[2] === 0x05 || signature[2] === 0x07);
-  }
-
-  /**
-   * Validate ZIP file for bomb attacks with safe decompression limits
-   */
-  private validateZipBomb(
-    fileBuffer: Buffer, 
-    originalFilename?: string
-  ): { isValid: boolean; error?: ValidationError; warning?: ValidationWarning } {
-    try {
-      // ZIP bomb protection: limit compressed size ratio
-      const compressedSize = fileBuffer.length;
-      const maxAllowedSize = 100 * 1024 * 1024; // 100MB max decompressed
-      
-      // Quick check for obviously malicious ZIP files
-      if (compressedSize < 1024 && this.containsSuspiciousZipPatterns(fileBuffer)) {
-        return {
-          isValid: false,
-          error: {
-            code: 'ZIP_BOMB_DETECTED',
-            message: 'Suspicious ZIP file structure detected',
-            field: 'content',
-          },
-        };
-      }
-
-      // Additional safety check for small compressed files that could be bombs
-      if (compressedSize < 10 * 1024) { // Less than 10KB
-        const zipValidation = this.quickZipValidation(fileBuffer);
-        if (!zipValidation.isValid) {
-          return zipValidation;
-        }
-      }
-
-      return { isValid: true };
-    } catch (error) {
-      return {
-        isValid: false,
-        error: {
-          code: 'ZIP_VALIDATION_FAILED',
-          message: 'ZIP file validation failed',
-          field: 'content',
-        },
-      };
-    }
+    return (
+      signature[0] === 0x50 &&
+      signature[1] === 0x4b &&
+      (signature[2] === 0x03 || signature[2] === 0x05 || signature[2] === 0x07)
+    );
   }
 
   /**
    * Quick ZIP validation for small files
    */
-  private quickZipValidation(fileBuffer: Buffer): { isValid: boolean; error?: ValidationError; warning?: ValidationWarning } {
+  private quickZipValidation(fileBuffer: Buffer): {
+    isValid: boolean;
+    error?: ValidationError;
+    warning?: ValidationWarning;
+  } {
     try {
       // Check for multiple compressed streams (potential bomb indicator)
       let compressedStreamCount = 0;
       for (let i = 4; i < fileBuffer.length - 4; i++) {
-        if (fileBuffer[i] === 0x50 && fileBuffer[i + 1] === 0x4B) {
+        if (fileBuffer[i] === 0x50 && fileBuffer[i + 1] === 0x4b) {
           compressedStreamCount++;
           if (compressedStreamCount > 50) {
             return {
@@ -940,6 +922,9 @@ export class FileValidationService {
 
       return { isValid: true };
     } catch (error) {
+      logger.error('Quick ZIP validation failed', {
+        error: error instanceof Error ? error.message : String(error),
+      });
       return {
         isValid: false,
         error: {
@@ -959,13 +944,13 @@ export class FileValidationService {
     if (fileBuffer.length < 1024) {
       let headerCount = 0;
       for (let i = 0; i < fileBuffer.length - 4; i++) {
-        if (fileBuffer[i] === 0x50 && fileBuffer[i + 1] === 0x4B) {
+        if (fileBuffer[i] === 0x50 && fileBuffer[i + 1] === 0x4b) {
           headerCount++;
         }
       }
       return headerCount > 3; // Too many headers in a small file
     }
-    
+
     return false;
   }
 
@@ -976,68 +961,54 @@ export class FileValidationService {
     let i = 0;
     while (i < buffer.length) {
       const byte = buffer[i]!;
-      
+
       // Single-byte character (0xxxxxxx)
-      if (byte <= 0x7F) {
+      if (byte <= 0x7f) {
         i++;
         continue;
       }
-      
+
       // Two-byte character (110xxxxx 10xxxxxx)
-      if ((byte & 0xE0) === 0xC0) {
-        if (i + 1 >= buffer.length || (buffer[i + 1]! & 0xC0) !== 0x80) {
+      if ((byte & 0xe0) === 0xc0) {
+        if (i + 1 >= buffer.length || (buffer[i + 1]! & 0xc0) !== 0x80) {
           return true; // Invalid continuation byte
         }
         i += 2;
         continue;
       }
-      
+
       // Three-byte character (1110xxxx 10xxxxxx 10xxxxxx)
-      if ((byte & 0xF0) === 0xE0) {
-        if (i + 2 >= buffer.length ||
-            (buffer[i + 1]! & 0xC0) !== 0x80 ||
-            (buffer[i + 2]! & 0xC0) !== 0x80) {
+      if ((byte & 0xf0) === 0xe0) {
+        if (
+          i + 2 >= buffer.length ||
+          (buffer[i + 1]! & 0xc0) !== 0x80 ||
+          (buffer[i + 2]! & 0xc0) !== 0x80
+        ) {
           return true; // Invalid continuation bytes
         }
         i += 3;
         continue;
       }
-      
+
       // Four-byte character (11110xxx 10xxxxxx 10xxxxxx 10xxxxxx)
-      if ((byte & 0xF8) === 0xF0) {
-        if (i + 3 >= buffer.length ||
-            (buffer[i + 1]! & 0xC0) !== 0x80 ||
-            (buffer[i + 2]! & 0xC0) !== 0x80 ||
-            (buffer[i + 3]! & 0xC0) !== 0x80) {
+      if ((byte & 0xf8) === 0xf0) {
+        if (
+          i + 3 >= buffer.length ||
+          (buffer[i + 1]! & 0xc0) !== 0x80 ||
+          (buffer[i + 2]! & 0xc0) !== 0x80 ||
+          (buffer[i + 3]! & 0xc0) !== 0x80
+        ) {
           return true; // Invalid continuation bytes
         }
         i += 4;
         continue;
       }
-      
+
       // Invalid UTF-8 start byte
       return true;
     }
-    
-    return false;
-  }
 
-  /**
-   * CRITICAL FIX: Validate UTF-8 string integrity
-   */
-  private isValidUTF8String(content: string): boolean {
-    try {
-      // Check if the string can be properly encoded and decoded
-      const encoder = new TextEncoder();
-      const decoder = new TextDecoder();
-      const encoded = encoder.encode(content);
-      const decoded = decoder.decode(encoded);
-      
-      // Additional check for problematic Unicode sequences
-      return decoded === content && !this.containsInvalidUnicode(content);
-    } catch (error) {
-      return false;
-    }
+    return false;
   }
 
   /**
@@ -1047,130 +1018,32 @@ export class FileValidationService {
     // Check for surrogate pairs that are not properly formed
     for (let i = 0; i < content.length; i++) {
       const charCode = content.charCodeAt(i);
-      
+
       // Check for unpaired surrogates
-      if (charCode >= 0xD800 && charCode <= 0xDBFF) {
+      if (charCode >= 0xd800 && charCode <= 0xdbff) {
         // High surrogate - should be followed by low surrogate
-        if (i + 1 >= content.length ||
-            content.charCodeAt(i + 1) < 0xDC00 ||
-            content.charCodeAt(i + 1) > 0xDFFF) {
+        if (
+          i + 1 >= content.length ||
+          content.charCodeAt(i + 1) < 0xdc00 ||
+          content.charCodeAt(i + 1) > 0xdfff
+        ) {
           return true; // Unpaired high surrogate
         }
-      } else if (charCode >= 0xDC00 && charCode <= 0xDFFF) {
+      } else if (charCode >= 0xdc00 && charCode <= 0xdfff) {
         // Low surrogate - should be preceded by high surrogate
-        if (i === 0 ||
-            content.charCodeAt(i - 1) < 0xD800 ||
-            content.charCodeAt(i - 1) > 0xDBFF) {
+        if (i === 0 || content.charCodeAt(i - 1) < 0xd800 || content.charCodeAt(i - 1) > 0xdbff) {
           return true; // Unpaired low surrogate
         }
       }
-      
+
       // Check for control characters that might indicate tampering
       if (charCode < 32 && charCode !== 9 && charCode !== 10 && charCode !== 13) {
         // Potentially problematic control character
         return true;
       }
     }
-    
+
     return false;
-  }
-
-  /**
-   * CRITICAL FIX: Enhanced markdown structure validation to prevent bypass attempts
-   */
-  private validateMarkdownStructure(
-    content: string,
-    errors: ValidationError[],
-    warnings: ValidationWarning[]
-  ): void {
-    // CRITICAL FIX 1: Check for unbalanced markdown delimiters
-    const codeBlockMatches = content.match(/```/g) || [];
-    if (codeBlockMatches.length % 2 !== 0) {
-      errors.push({
-        code: 'UNBALANCED_CODE_BLOCKS',
-        message: 'Unbalanced code block delimiters (```) detected',
-        field: 'content',
-      });
-    }
-
-    // CRITICAL FIX 2: Check for nested code blocks (potential obfuscation)
-    const inlineCodeMatches = content.match(/`[^`]+`/g) || [];
-    const codeBlockContent = content.match(/```[\s\S]*?```/g) || [];
-    
-    for (const inlineCode of inlineCodeMatches) {
-      if (inlineCode.includes('```')) {
-        errors.push({
-          code: 'NESTED_CODE_BLOCKS',
-          message: 'Inline code contains code block delimiters',
-          field: 'content',
-        });
-        break;
-      }
-    }
-
-    // CRITICAL FIX 3: Check for suspicious link patterns
-    const linkMatches = content.match(/\[([^\]]*)\]\(([^)]*)\)/g) || [];
-    for (const linkMatch of linkMatches) {
-      const urlMatch = linkMatch.match(/\]\(([^)]*)\)/);
-      if (urlMatch && urlMatch[1]) {
-        const url = urlMatch[1];
-        
-        // Check for potentially malicious protocols
-        if (url.startsWith('javascript:') ||
-            url.startsWith('data:') ||
-            url.startsWith('file:') ||
-            url.includes('\\x00') ||
-            url.includes('%00')) {
-          errors.push({
-            code: 'MALICIOUS_LINK_PATTERN',
-            message: 'Suspicious link pattern detected',
-            field: 'content',
-          });
-          break;
-        }
-      }
-    }
-
-    // CRITICAL FIX 4: Check for HTML injection in markdown
-    const htmlMatches = content.match(/<[^>]*>/g) || [];
-    for (const htmlMatch of htmlMatches) {
-      const lowerHtml = htmlMatch.toLowerCase();
-      if (lowerHtml.includes('script') ||
-          lowerHtml.includes('onload') ||
-          lowerHtml.includes('onerror') ||
-          lowerHtml.includes('javascript:')) {
-        errors.push({
-          code: 'HTML_INJECTION_DETECTED',
-          message: 'Potentially malicious HTML detected in markdown',
-          field: 'content',
-        });
-        break;
-      }
-    }
-
-    // CRITICAL FIX 5: Check for excessive special characters (obfuscation attempt)
-    const specialCharCount = (content.match(/[^\w\s.,!?;:()[\]{}"'\-]/g) || []).length;
-    const specialCharRatio = specialCharCount / content.length;
-
-    if (specialCharRatio > 0.15) { // Lowered threshold for security
-      warnings.push({
-        code: 'EXCESSIVE_SPECIAL_CHARACTERS',
-        message: `High concentration of special characters (${(specialCharRatio * 100).toFixed(1)}%)`,
-        suggestion: 'Verify character encoding and content integrity',
-      });
-    }
-
-    // CRITICAL FIX 6: Check for unusually long lines (potential obfuscation)
-    const lines = content.split('\n');
-    const veryLongLines = lines.filter(line => line.length > 5000);
-
-    if (veryLongLines.length > 0) {
-      errors.push({
-        code: 'UNUSUALLY_LONG_LINES',
-        message: `${veryLongLines.length} lines exceed 5,000 characters (potential obfuscation)`,
-        field: 'content',
-      });
-    }
   }
 }
 
@@ -1178,16 +1051,16 @@ export class FileValidationService {
  * Factory function to create a default file validation service
  */
 export function createFileValidationService(): FileValidationService {
-   const config: ValidationConfig = {
-     maxFileSize: 10 * 1024 * 1024, // 10MB
-     allowedMimeTypes: ['text/markdown', 'text/plain', 'text/x-markdown'],
-     allowedExtensions: ['md', 'markdown', 'txt'],
-     enableContentScanning: true,
-     enableMaliciousPatternDetection: true,
-   };
+  const config: ValidationConfig = {
+    maxFileSize: 10 * 1024 * 1024, // 10MB
+    allowedMimeTypes: ['text/markdown', 'text/plain', 'text/x-markdown'],
+    allowedExtensions: ['md', 'markdown', 'txt'],
+    enableContentScanning: true,
+    enableMaliciousPatternDetection: true,
+  };
 
-   return new FileValidationService(config);
- }
+  return new FileValidationService(config);
+}
 
 /**
  * Factory function to create a custom file validation service
