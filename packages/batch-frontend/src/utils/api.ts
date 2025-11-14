@@ -157,9 +157,39 @@ export async function login(credentials: LoginRequest): Promise<AuthResponse> {
 }
 
 export async function register(userData: RegisterRequest): Promise<void> {
+  const attempt = async (path: string) => {
+    const response = await apiClient.post(path, userData);
+    return response.data;
+  };
+
   try {
-    await apiClient.post('/auth/register', userData);
+    await attempt('/auth/register');
   } catch (error: any) {
+    const status = error.response?.status;
+    const message = (error.response?.data as any)?.message;
+    const isRouteMissing =
+      status === 404 && typeof message === 'string' && message.toLowerCase().includes('route post:/auth/register not found');
+
+    if (status === 404 && error.config?.url !== '/api/auth/register') {
+      try {
+        await attempt('/api/auth/register');
+        return;
+      } catch (fallbackError: any) {
+        if (fallbackError.response?.status === 404 || isRouteMissing) {
+          throw new Error(
+            'Registration endpoint is unavailable. Enable extended API support on the backend or contact an administrator.'
+          );
+        }
+        throw new Error(handleApiError(fallbackError));
+      }
+    }
+
+    if (status === 404 || isRouteMissing) {
+      throw new Error(
+        'Registration endpoint is unavailable. Enable extended API support on the backend or contact an administrator.'
+      );
+    }
+
     throw new Error(handleApiError(error));
   }
 }

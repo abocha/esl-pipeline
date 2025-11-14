@@ -5,7 +5,7 @@
 // - GET /jobs/:id   -> fetch job status
 // Designed to be run as a containerized service.
 
-import Fastify from 'fastify';
+import Fastify, { type FastifyRequest, type FastifyReply } from 'fastify';
 import multipart from '@fastify/multipart';
 import { randomUUID } from 'node:crypto';
 import { Readable } from 'node:stream';
@@ -51,7 +51,7 @@ import { createFileStorageService } from '../infrastructure/file-storage-service
 import { createRedisClient } from '../infrastructure/redis';
 
 function errorResponse(
-  reply: import('fastify').FastifyReply,
+  reply: FastifyReply,
   type: 'validation_failed' | 'not_found' | 'internal_error',
   extras?: Record<string, any>
 ) {
@@ -71,6 +71,16 @@ function errorResponse(
   // internal_error is always 500 with a stable shape
   return reply.code(500).send({ error: 'internal_error' });
 }
+
+const resolveRoutePath = (request: FastifyRequest, fallback: string): string => {
+  return (
+    ((request as any).routerPath as string | undefined) ??
+    request.routeOptions?.url ??
+    request.raw?.url ??
+    request.url ??
+    fallback
+  );
+};
 
 /**
  * Helper function to read file stream into buffer
@@ -166,18 +176,16 @@ export function createHttpServer(): import('fastify').FastifyInstance {
     app.post('/jobs', handleSubmitJob);
   }
 
-  async function handleJobStatusRequest(
-    request: import('fastify').FastifyRequest,
-    reply: import('fastify').FastifyReply
-  ) {
+  async function handleJobStatusRequest(request: FastifyRequest, reply: FastifyReply) {
     const { jobId } = request.params as { jobId: string };
+    const routePath = resolveRoutePath(request, 'GET /jobs/:jobId');
 
     try {
       const status = await getJobStatus(jobId);
       if (!status) {
         logger.info('HTTP request handled', {
           event: 'http_request',
-          route: request.routerPath ?? 'GET /jobs/:jobId',
+          route: routePath,
           statusCode: 404,
           jobId,
         });
@@ -187,7 +195,7 @@ export function createHttpServer(): import('fastify').FastifyInstance {
 
       logger.info('HTTP request handled', {
         event: 'http_request',
-        route: request.routerPath ?? 'GET /jobs/:jobId',
+        route: routePath,
         statusCode: 200,
         jobId,
         jobState: status.state,
@@ -197,7 +205,7 @@ export function createHttpServer(): import('fastify').FastifyInstance {
     } catch (err: any) {
       logger.error(err instanceof Error ? err : String(err), {
         event: 'http_request',
-        route: request.routerPath ?? 'GET /jobs/:jobId',
+        route: routePath,
         statusCode: 500,
         error: 'internal_error',
         jobId,
@@ -206,6 +214,13 @@ export function createHttpServer(): import('fastify').FastifyInstance {
       return errorResponse(reply, 'internal_error');
     }
   }
+
+  app.get('/jobs/events', (_request, reply) => {
+    return reply.code(501).send({
+      error: 'not_implemented',
+      message: 'Job events SSE stream is not available yet.',
+    });
+  });
 
   app.get('/jobs/:jobId', handleJobStatusRequest);
   app.get('/jobs/:jobId/status', handleJobStatusRequest);
@@ -225,6 +240,7 @@ export function createHttpServer(): import('fastify').FastifyInstance {
   const rateLimiterService = createRateLimiterService();
   const uploadRateLimitMiddleware = createUploadRateLimitMiddleware(rateLimiterService);
 
+  const baseStorageConfig = createStorageConfigService().getFullConfig();
   const s3Overrides: Partial<StorageConfig['s3']> = {};
   if (config.storage.provider === 'minio') {
     Object.assign(s3Overrides, {
@@ -247,14 +263,16 @@ export function createHttpServer(): import('fastify').FastifyInstance {
 
   const storageConfig = createStorageConfigService({
     provider: config.storage.provider,
-    s3: s3Overrides,
+    s3: {
+      ...baseStorageConfig.s3,
+      ...s3Overrides,
+    },
     filesystem: {
-      uploadDir: process.env.FILESYSTEM_UPLOAD_DIR || './uploads',
+      uploadDir: process.env.FILESYSTEM_UPLOAD_DIR || baseStorageConfig.filesystem.uploadDir,
     },
     lifecycle: {
+      ...baseStorageConfig.lifecycle,
       presignedUrlExpiresIn: config.storage.presignedUrlExpiresIn,
-      enableMultipartUploads: true,
-      maxMultipartSize: 100 * 1024 * 1024, // 100MB
     },
   });
   const fileStorageService = createFileStorageService(storageConfig);
