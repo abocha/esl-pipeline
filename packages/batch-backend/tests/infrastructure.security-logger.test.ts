@@ -9,7 +9,6 @@ import {
   SecurityEventType,
   SecuritySeverity,
   SecurityLogConfig,
-  SecurityEvent
 } from '../src/infrastructure/security-logger';
 
 // Mock logger
@@ -20,8 +19,7 @@ vi.mock('../src/infrastructure/logger', () => ({
     error: vi.fn(),
     debug: vi.fn(),
   },
-}))
-
+}));
 
 describe('SecurityLogger', () => {
   let securityLogger: SecurityLogger;
@@ -419,17 +417,16 @@ describe('SecurityLogger', () => {
       });
 
       // This should not throw
-      await expect(securityLogger.logEvent({
-        eventType: SecurityEventType.LOGIN_SUCCESS,
-        severity: SecuritySeverity.LOW,
-        outcome: 'success',
-      })).resolves.toBeUndefined();
+      await expect(
+        securityLogger.logEvent({
+          eventType: SecurityEventType.LOGIN_SUCCESS,
+          severity: SecuritySeverity.LOW,
+          outcome: 'success',
+        })
+      ).resolves.toBeUndefined();
 
       // Error should be logged
-      expect(logger.error).toHaveBeenCalledWith(
-        'Security logging failed',
-        expect.any(Object)
-      );
+      expect(logger.error).toHaveBeenCalledWith('Security logging failed', expect.any(Object));
     });
   });
 

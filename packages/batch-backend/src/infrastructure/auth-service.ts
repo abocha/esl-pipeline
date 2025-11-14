@@ -2,7 +2,6 @@
 
 import jwt from 'jsonwebtoken';
 import bcrypt from 'bcrypt';
-import { randomUUID } from 'crypto';
 import { logger } from './logger';
 
 export interface JwtPayload {
@@ -179,7 +178,7 @@ export class AuthService {
    */
   refreshTokens(refreshToken: string): TokenPair {
     const payload = this.verifyRefreshToken(refreshToken);
-    
+
     return this.generateTokens(payload.sub, payload.email, payload.role);
   }
 
@@ -236,11 +235,16 @@ export class AuthService {
     const unit = match[2];
 
     switch (unit) {
-      case 's': return value;
-      case 'm': return value * 60;
-      case 'h': return value * 60 * 60;
-      case 'd': return value * 60 * 60 * 24;
-      default: throw new Error(`Unknown time unit: ${unit}`);
+      case 's':
+        return value;
+      case 'm':
+        return value * 60;
+      case 'h':
+        return value * 60 * 60;
+      case 'd':
+        return value * 60 * 60 * 24;
+      default:
+        throw new Error(`Unknown time unit: ${unit}`);
     }
   }
 }

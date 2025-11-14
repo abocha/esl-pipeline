@@ -9,7 +9,12 @@ import { FastifyReply, FastifyRequest } from 'fastify';
 import { createRedisClient } from '../infrastructure/redis';
 import { loadConfig } from '../config/env';
 import { logger } from '../infrastructure/logger';
-import { SecurityLogger, SecurityEventType, SecuritySeverity, SecurityLogConfig } from '../infrastructure/security-logger';
+import {
+  SecurityLogger,
+  SecurityEventType,
+  SecuritySeverity,
+  SecurityLogConfig,
+} from '../infrastructure/security-logger';
 
 export interface RateLimitResult {
   allowed: boolean;
@@ -113,14 +118,13 @@ export class RateLimiterService {
       await this.redis.zremrangebyscore(burstKey, 0, burstCutoff);
 
       // Phase 2: Get the current counts AFTER cleanup
-      const [mainCount, burstCount] = await Promise.all([
+      const [mainCount] = await Promise.all([
         this.redis.zcard(mainKey),
         this.redis.zcard(burstKey),
       ]);
 
       // Phase 3: Make a clear decision
       const mainLimitExceeded = mainCount >= this.config.maxRequests;
-      const burstLimitExceeded = burstCount >= this.config.burstLimit;
 
       // If the main limit is hit, we are rate-limited regardless of burst window
       if (mainLimitExceeded) {
@@ -147,7 +151,7 @@ export class RateLimiterService {
       // Set expirations to clean up keys for inactive users
       await this.redis.expire(mainKey, Math.ceil(this.config.windowSize / 1000));
       await this.redis.expire(burstKey, Math.ceil(this.config.burstWindow / 1000));
-      
+
       // The new count is the previous count plus the one we just added.
       const newMainCount = mainCount + 1;
       const remaining = Math.max(0, this.config.maxRequests - newMainCount);
@@ -159,7 +163,6 @@ export class RateLimiterService {
         limit: this.config.maxRequests,
         count: newMainCount, // <-- Corrected to reflect state after request
       };
-
     } catch (error) {
       // SECURITY FIX: Implement "Fail-Closed" behavior
       const errorMessage = error instanceof Error ? error.message : String(error);
@@ -202,10 +205,9 @@ export class RateLimiterService {
         const oldestTimestamp = parseInt(oldestRequest[1]);
         const elapsedTime = now - oldestTimestamp;
         const remainingTime = this.config.windowSize - elapsedTime;
-        
+
         return Math.max(30, Math.min(remainingTime, this.config.windowSize));
       }
-
     } catch (error) {
       logger.error('Failed to calculate retry time', {
         error: error instanceof Error ? error.message : String(error),
@@ -233,19 +235,19 @@ export class RateLimiterService {
     burstWindow: { count: number; windowStart: number; windowEnd: number };
   }> {
     const now = Date.now();
-    
+
     try {
       const mainKey = this.buildKey(identifier, 'main');
       const burstKey = this.buildKey(identifier, 'burst');
-      
+
       const [mainCount, burstCount] = await Promise.all([
         this.redis.zcard(mainKey),
         this.redis.zcard(burstKey),
       ]);
-      
+
       const mainWindowStart = Math.floor(now / this.config.windowSize) * this.config.windowSize;
       const burstWindowStart = Math.floor(now / this.config.burstWindow) * this.config.burstWindow;
-      
+
       return {
         mainWindow: {
           count: mainCount,
@@ -263,7 +265,7 @@ export class RateLimiterService {
         error: error instanceof Error ? error.message : String(error),
         identifier,
       });
-      
+
       return {
         mainWindow: { count: 0, windowStart: 0, windowEnd: 0 },
         burstWindow: { count: 0, windowStart: 0, windowEnd: 0 },
@@ -278,7 +280,7 @@ export class RateLimiterService {
     try {
       const pattern = `${this.config.keyPrefix}:*`;
       const keys = await this.redis.keys(pattern);
-      
+
       if (keys.length > 0) {
         // Remove keys that have expired naturally (let Redis handle TTL)
         logger.debug('Rate limit cleanup completed', {
@@ -299,7 +301,7 @@ export class RateLimiterService {
  */
 export function createRateLimiterService(): RateLimiterService {
   const config = loadConfig();
-  
+
   // CRITICAL FIX: If rate limiting is explicitly disabled, return no-op limiter
   if (!config.security.enableRateLimiting) {
     logger.info('Rate limiting disabled, using no-op rate limiter');
@@ -314,7 +316,7 @@ export function createRateLimiterService(): RateLimiterService {
   try {
     // Test Redis connection before creating service
     const redis = createRedisClient();
-    
+
     // Validate rate limiting configuration
     const rateLimitConfig: RateLimitConfig = {
       windowSize: 60 * 1000, // 1 minute
@@ -326,30 +328,33 @@ export function createRateLimiterService(): RateLimiterService {
 
     // Create service
     const service = new RateLimiterService(redis, rateLimitConfig);
-    
+
     // Test connection with a simple operation
-    redis.ping().then(() => {
-      logger.info('Redis connection established successfully for rate limiting');
-      return true;
-    }).catch((error) => {
-      logger.error('Redis connection test failed, falling back to no-op rate limiter', {
-        error: error instanceof Error ? error.message : String(error),
+    redis
+      .ping()
+      .then(() => {
+        logger.info('Redis connection established successfully for rate limiting');
+        return true;
+      })
+      .catch(error => {
+        logger.error('Redis connection test failed, falling back to no-op rate limiter', {
+          error: error instanceof Error ? error.message : String(error),
+        });
+        throw new Error('Redis connection test failed');
       });
-      throw new Error('Redis connection test failed');
-    });
 
     return service;
   } catch (error) {
     // Enhanced error handling for Redis failures
     const errorMessage = error instanceof Error ? error.message : String(error);
-    
+
     logger.error('Redis connection failed, using no-op rate limiter', {
       error: errorMessage,
       redisEnabled: config.redis.enabled,
       rateLimitingEnabled: config.security.enableRateLimiting,
       fallback: 'NoOpRateLimiter',
     });
-    
+
     // In production, return no-op limiter for availability
     // In tests that expect errors, the config.redis.enabled check above will handle it
     return new NoOpRateLimiter();
@@ -408,7 +413,7 @@ class NoOpRateLimiter extends RateLimiterService {
     // CRITICAL FIX: Return consistent stats even in NoOp mode
     const now = Date.now();
     const windowStart = Math.floor(now / NoOpRateLimiter.WINDOW_SIZE) * NoOpRateLimiter.WINDOW_SIZE;
-    
+
     logger.debug('NoOp rate limiter usage stats', {
       event: 'noop_rate_limit_stats',
       identifier,
@@ -419,12 +424,12 @@ class NoOpRateLimiter extends RateLimiterService {
       mainWindow: {
         count: 0,
         windowStart,
-        windowEnd: windowStart + NoOpRateLimiter.WINDOW_SIZE
+        windowEnd: windowStart + NoOpRateLimiter.WINDOW_SIZE,
       },
       burstWindow: {
         count: 0,
         windowStart: Math.floor(now / 10000) * 10000,
-        windowEnd: Math.floor(now / 10000) * 10000 + 10000
+        windowEnd: Math.floor(now / 10000) * 10000 + 10000,
       },
     };
   }
@@ -435,7 +440,7 @@ class NoOpRateLimiter extends RateLimiterService {
       event: 'noop_rate_limit_cleanup',
       message: 'NoOp rate limiter cleanup skipped',
     });
-    
+
     // Intentionally do nothing - Redis operations are not available
     return Promise.resolve();
   }
@@ -451,7 +456,7 @@ class NoOpRateLimiter extends RateLimiterService {
       fallbackMode: this.fallbackActive,
       suggestion: 'This is expected when Redis is unavailable',
     });
-    
+
     // Don't re-throw errors in NoOp mode to maintain availability
   }
 }
@@ -460,29 +465,27 @@ class NoOpRateLimiter extends RateLimiterService {
  * Fastify middleware for rate limiting upload endpoints
  * CRITICAL FIX: Proper HTTP response handling for rate limits
  */
-export function createUploadRateLimitMiddleware(
-  rateLimiter: RateLimiterService
-) {
+export function createUploadRateLimitMiddleware(rateLimiter: RateLimiterService) {
   return async function rateLimitMiddleware(
     request: FastifyRequest,
     reply: FastifyReply
   ): Promise<void> {
     // Get user identifier (user ID if authenticated, IP if not)
     const identifier = getRequestIdentifier(request);
-    
+
     const result = await rateLimiter.checkRateLimit(identifier);
-    
+
     // CRITICAL FIX 1: Always add rate limit headers regardless of outcome
     reply.header('X-RateLimit-Limit', result.limit.toString());
     reply.header('X-RateLimit-Remaining', result.remainingRequests.toString());
     reply.header('X-RateLimit-Reset', Math.ceil(result.resetTime / 1000).toString());
-    
+
     if (!result.allowed) {
       // CRITICAL FIX 2: Proper HTTP response handling for rate limits
       // Calculate accurate retry time
       const retryAfter = result.retryAfter || Math.ceil((result.resetTime - Date.now()) / 1000);
       reply.header('Retry-After', retryAfter.toString());
-      
+
       // CRITICAL FIX 3: Set appropriate HTTP status code and response
       // Check if reply has status method (new Fastify) or code method (old Fastify)
       if (typeof reply.status === 'function') {
@@ -490,9 +493,9 @@ export function createUploadRateLimitMiddleware(
       } else if (typeof reply.code === 'function') {
         reply.code(429); // Too Many Requests (legacy)
       }
-      
+
       reply.header('Content-Type', 'application/json');
-      
+
       // Log the rate limit violation for security monitoring
       logger.warn('Rate limit violation', {
         event: 'rate_limit_violation',
@@ -505,12 +508,7 @@ export function createUploadRateLimitMiddleware(
       });
 
       // CRITICAL FIX 4: Throw RateLimitError for compatibility with existing tests
-      throw new RateLimitError(
-        'Rate limit exceeded',
-        retryAfter,
-        result.limit,
-        result.count
-      );
+      throw new RateLimitError('Rate limit exceeded', retryAfter, result.limit, result.count);
     }
   };
 }
@@ -524,11 +522,11 @@ function getRequestIdentifier(request: FastifyRequest): string {
   if (user?.id) {
     return `user:${user.id}`;
   }
-  
+
   // Fall back to IP address
   const forwarded = request.headers['x-forwarded-for'] as string;
   const realIp = request.headers['x-real-ip'] as string;
   const clientIp = forwarded?.split(',')[0]?.trim() || realIp || request.ip;
-  
+
   return `ip:${clientIp}`;
 }

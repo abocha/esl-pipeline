@@ -7,7 +7,7 @@
 
 import { randomUUID } from 'crypto';
 import { withPgClient } from '../infrastructure/db';
-import { UserRecord, UserRole, sanitizeUser } from './user-model';
+import { UserRecord, UserRole } from './user-model';
 import { logger } from '../infrastructure/logger';
 
 // createUser.declaration()
@@ -82,7 +82,7 @@ export async function updateUser(params: {
   isActive?: boolean;
 }): Promise<UserRecord | null> {
   const { id, ...updateFields } = params;
-  
+
   // Build dynamic SET clause
   const setClauses: string[] = [];
   const values: any[] = [];
@@ -110,7 +110,8 @@ export async function updateUser(params: {
 
   setClauses.push(`updated_at = NOW()`);
 
-  if (setClauses.length === 1) { // Only updated_at
+  if (setClauses.length === 1) {
+    // Only updated_at
     throw new Error('No fields to update');
   }
 
@@ -169,7 +170,7 @@ export async function deleteUser(userId: string): Promise<boolean> {
   });
 
   const deleted = result.rows.length > 0;
-  
+
   if (deleted) {
     logger.info('User deleted', { userId });
   } else {

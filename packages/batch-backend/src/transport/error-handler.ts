@@ -46,10 +46,12 @@ function classifyError(error: any): ErrorType {
   if (error instanceof RateLimitError) {
     return ErrorType.RATE_LIMIT_ERROR;
   }
-  if (error instanceof ValidationError ||
-      error instanceof FileValidationError ||
-      error instanceof FileSanitizationError ||
-      error instanceof ZodError) {
+  if (
+    error instanceof ValidationError ||
+    error instanceof FileValidationError ||
+    error instanceof FileSanitizationError ||
+    error instanceof ZodError
+  ) {
     return ErrorType.VALIDATION_ERROR;
   }
   if (error.statusCode && error.statusCode >= 400 && error.statusCode < 500) {
@@ -206,11 +208,14 @@ function logError(error: any, request: FastifyRequest, errorType: ErrorType): vo
     requestId: (request as any).id,
     userId: (request as any).user?.id,
     ...redactSensitiveData({
-      error: error instanceof Error ? {
-        name: error.name,
-        message: error.message,
-        stack: error.stack,
-      } : String(error),
+      error:
+        error instanceof Error
+          ? {
+              name: error.name,
+              message: error.message,
+              stack: error.stack,
+            }
+          : String(error),
     }),
   };
 
@@ -238,7 +243,6 @@ export function errorHandler(error: any, request: FastifyRequest, reply: Fastify
 
     // Send response
     reply.code(statusCode).send(errorResponse);
-
   } catch (handlerError) {
     // If error handling itself fails, log and send generic response
     logger.error('Error handler failed', {
@@ -266,7 +270,8 @@ export function registerErrorHandler(app: import('fastify').FastifyInstance): vo
 
   // Add request ID generation
   app.addHook('onRequest', (request, reply, done) => {
-    (request as any).id = request.id || `req_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+    (request as any).id =
+      request.id || `req_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
     done();
   });
 }

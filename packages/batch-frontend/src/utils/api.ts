@@ -90,7 +90,13 @@ export interface UserFile {
 }
 
 export interface ErrorEnvelope {
-  error: 'validation_failed' | 'not_found' | 'internal_error' | 'unauthorized' | 'forbidden' | string;
+  error:
+    | 'validation_failed'
+    | 'not_found'
+    | 'internal_error'
+    | 'unauthorized'
+    | 'forbidden'
+    | string;
   message?: string;
   code?: string;
 }
@@ -100,10 +106,8 @@ export interface ErrorEnvelope {
  */
 export function getBatchBackendBaseUrl(): string {
   // Guard against non-browser environments (SSR, tests).
-  // We check typeof before touching window; eslint rule is disabled to avoid false positives.
-  const globalAny: any =
-    // eslint-disable-next-line no-undef
-    typeof window !== 'undefined' ? (window as any) : undefined;
+  // We check typeof before touching window first.
+  const globalAny: any = typeof window !== 'undefined' ? (window as any) : undefined;
   const globalOverride = globalAny?.__BATCH_BACKEND_URL__ as string | undefined;
 
   if (globalOverride) {
@@ -220,31 +224,4 @@ export async function getJobStatus(jobId: string): Promise<JobStatus> {
     }
     throw new Error(handleApiError(error));
   }
-}
-
-/**
- * Helper: map backend error envelope (if present) into a concise Error message.
- */
-async function throwEnhancedError(res: Response, prefix: string): Promise<never> {
-  let detail = '';
-  try {
-    const json = (await res.json()) as Partial<ErrorEnvelope>;
-    if (json.error || json.message || json.code) {
-      detail = [
-        json.error && `error=${json.error}`,
-        json.code && `code=${json.code}`,
-        json.message && `message=${json.message}`,
-      ]
-        .filter(Boolean)
-        .join(' ');
-    }
-  } catch {
-    // ignore JSON parse errors; fall back to status text
-  }
-
-  const statusPart = `${res.status} ${res.statusText || ''}`.trim();
-  const message =
-    [prefix, statusPart, detail].filter(Boolean).join(' - ') || `${prefix} (status ${res.status})`;
-
-  throw new Error(message);
 }

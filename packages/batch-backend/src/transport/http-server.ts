@@ -8,68 +8,47 @@
 import Fastify from 'fastify';
 import multipart from '@fastify/multipart';
 import { randomUUID } from 'node:crypto';
-import { promises as fs } from 'node:fs';
-import { join, resolve } from 'node:path';
 import { Readable } from 'node:stream';
 import { z } from 'zod';
 import { loadConfig } from '../config/env';
 import { logger } from '../infrastructure/logger';
 import { registerErrorHandler } from './error-handler';
 import { registerSecurityHeaders } from './security-headers';
-import { submitJob, ValidationError, type SubmitJobRequest } from '../application/submit-job';
+import { submitJob, type SubmitJobRequest } from '../application/submit-job';
 import { getJobStatus } from '../application/get-job-status';
-import {
-  authenticate,
-  requireRole,
-  optionalAuth,
-  getAuthenticatedUser,
-  AuthenticationError,
-  AuthorizationError,
-  type AuthenticatedRequest
-} from './auth-middleware';
-import {
-  createAuthService
-} from '../infrastructure/auth-service';
+import { authenticate, requireRole, getAuthenticatedUser } from './auth-middleware';
+import { createAuthService } from '../infrastructure/auth-service';
 import {
   createUser,
   getUserByEmail,
-  updateUser,
   updateUserLastLogin,
   getUserById,
   getAllUsers,
-  countUsers
+  countUsers,
 } from '../domain/user-repository';
 import {
   UserRegistration,
   UserLogin,
   UserRole,
   isValidRole,
-  sanitizeUser
+  sanitizeUser,
 } from '../domain/user-model';
 import {
   createFileValidationService,
-  FileValidationError
+  FileValidationError,
 } from '../infrastructure/file-validation-service';
 import {
   createFileSanitizationService,
-  FileSanitizationError
+  FileSanitizationError,
 } from '../infrastructure/file-sanitization-service';
 import {
   createRateLimiterService,
   createUploadRateLimitMiddleware,
-  RateLimitError,
-  RateLimiterService
+  RateLimiterService,
 } from './rate-limit-middleware';
-import {
-  createStorageConfigService,
-  type StorageConfig
-} from '../infrastructure/storage-config';
-import {
-  createFileStorageService
-} from '../infrastructure/file-storage-service';
-import {
-  createRedisClient
-} from '../infrastructure/redis';
+import { createStorageConfigService, type StorageConfig } from '../infrastructure/storage-config';
+import { createFileStorageService } from '../infrastructure/file-storage-service';
+import { createRedisClient } from '../infrastructure/redis';
 
 function errorResponse(
   reply: import('fastify').FastifyReply,
@@ -98,9 +77,9 @@ function errorResponse(
  */
 async function readFileBuffer(fileStream: Readable): Promise<Buffer> {
   const chunks: Buffer[] = [];
-  
+
   return new Promise((resolve, reject) => {
-    fileStream.on('data', (chunk) => chunks.push(Buffer.from(chunk)));
+    fileStream.on('data', chunk => chunks.push(Buffer.from(chunk)));
     fileStream.on('end', () => resolve(Buffer.concat(chunks)));
     fileStream.on('error', reject);
   });
@@ -287,159 +266,163 @@ export function createHttpServer(): import('fastify').FastifyInstance {
     },
   });
 
-  app.post('/uploads', {
-    preHandler: [authenticate, uploadRateLimitMiddleware]
-  }, async (request, reply) => {
-    let authenticatedUser;
-    try {
-      // Check if user is authenticated
-      authenticatedUser = getAuthenticatedUser(request);
-      if (!authenticatedUser) {
-        return reply.code(401).send({
-          error: 'unauthorized',
-          message: 'Authentication required',
-          code: 'not_authenticated',
-        });
-      }
-
-      const file = await (request as any).file();
-      if (!file) {
-        return reply.code(400).send({
-          error: 'validation_failed',
-          message: 'No file uploaded',
-          code: 'no_file',
-        });
-      }
-
-      const filename: string = file.filename || '';
-      
-      // Read file buffer for validation and sanitization
-      const fileBuffer = await readFileBuffer(file.file);
-      
+  app.post(
+    '/uploads',
+    {
+      preHandler: [authenticate, uploadRateLimitMiddleware],
+    },
+    async (request, reply) => {
+      let authenticatedUser;
       try {
-        // 1. File Validation
-        let validationResult;
-        if (fileValidationService) {
-          validationResult = await fileValidationService.validateFile(fileBuffer, filename);
-          if (!validationResult.isValid) {
-            logger.warn('File validation failed', {
-              event: 'file_validation_failed',
+        // Check if user is authenticated
+        authenticatedUser = getAuthenticatedUser(request);
+        if (!authenticatedUser) {
+          return reply.code(401).send({
+            error: 'unauthorized',
+            message: 'Authentication required',
+            code: 'not_authenticated',
+          });
+        }
+
+        const file = await (request as any).file();
+        if (!file) {
+          return reply.code(400).send({
+            error: 'validation_failed',
+            message: 'No file uploaded',
+            code: 'no_file',
+          });
+        }
+
+        const filename: string = file.filename || '';
+
+        // Read file buffer for validation and sanitization
+        const fileBuffer = await readFileBuffer(file.file);
+
+        try {
+          // 1. File Validation
+          let validationResult;
+          if (fileValidationService) {
+            validationResult = await fileValidationService.validateFile(fileBuffer, filename);
+            if (!validationResult.isValid) {
+              logger.warn('File validation failed', {
+                event: 'file_validation_failed',
+                userId: authenticatedUser.id,
+                filename,
+                errors: validationResult.errors.map(e => e.code),
+                warnings: validationResult.warnings.map(w => w.code),
+              });
+
+              return reply.code(400).send({
+                error: 'validation_failed',
+                message: 'File validation failed',
+                code: 'file_validation_failed',
+                details: {
+                  errors: validationResult.errors,
+                  warnings: validationResult.warnings,
+                },
+              });
+            }
+          }
+
+          // 2. File Sanitization
+          let sanitizationResult;
+          let sanitizedBuffer = fileBuffer;
+          let sanitizedFilename = filename;
+
+          if (fileSanitizationService) {
+            sanitizationResult = await fileSanitizationService.sanitizeFile(fileBuffer, filename);
+            sanitizedBuffer = sanitizationResult.sanitizedContent;
+            sanitizedFilename = sanitizationResult.sanitizedFilename;
+
+            if (sanitizationResult.warnings.length > 0) {
+              logger.warn('File sanitization completed with warnings', {
+                event: 'file_sanitized_with_warnings',
+                userId: authenticatedUser.id,
+                originalFilename: filename,
+                sanitizedFilename: sanitizedFilename,
+                warnings: sanitizationResult.warnings.map(w => ({
+                  code: w.code,
+                  severity: w.severity,
+                })),
+              });
+            }
+          }
+
+          // 3. Store the sanitized file using the storage service
+          const id = randomUUID();
+          const storageKey = `uploads/${authenticatedUser.id}/${id}_${sanitizedFilename.replace(/[^\w.-]/g, '_')}`;
+
+          const uploadResult = await fileStorageService.uploadFile(
+            storageKey,
+            sanitizedBuffer,
+            validationResult?.mimeType || 'application/octet-stream',
+            sanitizedBuffer.length
+          );
+
+          // Store file metadata in database (if available)
+          // TODO: Implement database storage for file metadata
+
+          logger.info('Secure upload completed', {
+            event: 'secure_upload_completed',
+            userId: authenticatedUser.id,
+            fileId: id,
+            originalFilename: filename,
+            sanitizedFilename: sanitizedFilename,
+            fileSize: sanitizedBuffer.length,
+            mimeType: validationResult?.mimeType,
+            storageKey,
+            storageProvider: fileStorageService.getProvider(),
+            hasUrl: !!uploadResult.url,
+          });
+
+          return reply.code(201).send({
+            id,
+            md: storageKey, // Use storage key as the file reference
+            url: uploadResult.url, // Include presigned URL if available
+            originalFilename: filename,
+            sanitizedFilename: sanitizedFilename,
+            fileSize: sanitizedBuffer.length,
+            mimeType: validationResult?.mimeType,
+            storageProvider: fileStorageService.getProvider(),
+            warnings: [
+              ...(validationResult?.warnings || []),
+              ...(sanitizationResult?.warnings || []),
+            ],
+          });
+        } catch (securityError) {
+          if (
+            securityError instanceof FileValidationError ||
+            securityError instanceof FileSanitizationError
+          ) {
+            logger.warn('File security processing failed', {
+              event: 'file_security_processing_failed',
               userId: authenticatedUser.id,
               filename,
-              errors: validationResult.errors.map(e => e.code),
-              warnings: validationResult.warnings.map(w => w.code),
+              error: securityError.code,
+              message: securityError.message,
             });
 
             return reply.code(400).send({
-              error: 'validation_failed',
-              message: 'File validation failed',
-              code: 'file_validation_failed',
-              details: {
-                errors: validationResult.errors,
-                warnings: validationResult.warnings,
-              },
+              error: 'security_validation_failed',
+              message: securityError.message,
+              code: securityError.code,
             });
           }
+          throw securityError;
         }
-
-        // 2. File Sanitization
-        let sanitizationResult;
-        let sanitizedBuffer = fileBuffer;
-        let sanitizedFilename = filename;
-
-        if (fileSanitizationService) {
-          sanitizationResult = await fileSanitizationService.sanitizeFile(fileBuffer, filename);
-          sanitizedBuffer = sanitizationResult.sanitizedContent;
-          sanitizedFilename = sanitizationResult.sanitizedFilename;
-
-          if (sanitizationResult.warnings.length > 0) {
-            logger.warn('File sanitization completed with warnings', {
-              event: 'file_sanitized_with_warnings',
-              userId: authenticatedUser.id,
-              originalFilename: filename,
-              sanitizedFilename: sanitizedFilename,
-              warnings: sanitizationResult.warnings.map(w => ({
-                code: w.code,
-                severity: w.severity,
-              })),
-            });
-          }
-        }
-
-        // 3. Store the sanitized file using the storage service
-        const id = randomUUID();
-        const storageKey = `uploads/${authenticatedUser.id}/${id}_${sanitizedFilename.replace(/[^\w.-]/g, '_')}`;
-
-        const uploadResult = await fileStorageService.uploadFile(
-          storageKey,
-          sanitizedBuffer,
-          validationResult?.mimeType || 'application/octet-stream',
-          sanitizedBuffer.length
-        );
-
-        // Store file metadata in database (if available)
-        // TODO: Implement database storage for file metadata
-
-        logger.info('Secure upload completed', {
-          event: 'secure_upload_completed',
-          userId: authenticatedUser.id,
-          fileId: id,
-          originalFilename: filename,
-          sanitizedFilename: sanitizedFilename,
-          fileSize: sanitizedBuffer.length,
-          mimeType: validationResult?.mimeType,
-          storageKey,
-          storageProvider: fileStorageService.getProvider(),
-          hasUrl: !!uploadResult.url,
+      } catch (err: any) {
+        logger.error(err instanceof Error ? err : String(err), {
+          event: 'upload_failed',
+          userId: authenticatedUser?.id,
+          error: 'internal_error',
         });
 
-        return reply.code(201).send({
-          id,
-          md: storageKey, // Use storage key as the file reference
-          url: uploadResult.url, // Include presigned URL if available
-          originalFilename: filename,
-          sanitizedFilename: sanitizedFilename,
-          fileSize: sanitizedBuffer.length,
-          mimeType: validationResult?.mimeType,
-          storageProvider: fileStorageService.getProvider(),
-          warnings: [
-            ...(validationResult?.warnings || []),
-            ...(sanitizationResult?.warnings || []),
-          ],
+        return reply.code(500).send({
+          error: 'internal_error',
         });
-
-      } catch (securityError) {
-        if (securityError instanceof FileValidationError ||
-            securityError instanceof FileSanitizationError) {
-          logger.warn('File security processing failed', {
-            event: 'file_security_processing_failed',
-            userId: authenticatedUser.id,
-            filename,
-            error: securityError.code,
-            message: securityError.message,
-          });
-
-          return reply.code(400).send({
-            error: 'security_validation_failed',
-            message: securityError.message,
-            code: securityError.code,
-          });
-        }
-        throw securityError;
       }
-
-    } catch (err: any) {
-      logger.error(err instanceof Error ? err : String(err), {
-        event: 'upload_failed',
-        userId: authenticatedUser?.id,
-        error: 'internal_error',
-      });
-
-      return reply.code(500).send({
-        error: 'internal_error',
-      });
     }
-  });
+  );
 
   // Authentication Endpoints
 
@@ -522,7 +505,6 @@ export function createHttpServer(): import('fastify').FastifyInstance {
         message: 'User registered successfully',
         user: sanitizedUser,
       });
-
     } catch (err: any) {
       logger.error(err instanceof Error ? err : String(err), {
         event: 'http_request',
@@ -594,7 +576,6 @@ export function createHttpServer(): import('fastify').FastifyInstance {
         },
         ...tokens,
       });
-
     } catch (err: any) {
       logger.error(err instanceof Error ? err : String(err), {
         event: 'http_request',
@@ -624,19 +605,22 @@ export function createHttpServer(): import('fastify').FastifyInstance {
 
       // Verify refresh token and get new tokens
       const authService = createAuthService();
-      
+
       // First, verify the refresh token to get user info for logging
       let refreshPayload;
       try {
         refreshPayload = authService.verifyRefreshToken(body.refreshToken);
       } catch (error) {
+        logger.warn('Invalid refresh token presented', {
+          error: error instanceof Error ? error.message : String(error),
+        });
         return reply.code(401).send({
           error: 'unauthorized',
           message: 'Invalid refresh token',
           code: 'invalid_refresh_token',
         });
       }
-      
+
       const tokens = authService.refreshTokens(body.refreshToken);
 
       // Verify user still exists and is active
@@ -658,7 +642,6 @@ export function createHttpServer(): import('fastify').FastifyInstance {
         message: 'Token refresh successful',
         ...tokens,
       });
-
     } catch (err: any) {
       logger.error(err instanceof Error ? err : String(err), {
         event: 'http_request',
@@ -678,125 +661,141 @@ export function createHttpServer(): import('fastify').FastifyInstance {
   // Admin Endpoints
 
   // GET /admin/users - List all users (admin only)
-  app.get('/admin/users', { preHandler: [authenticate, requireRole(['admin'])] }, async (request, reply) => {
-    try {
-      const users = await getAllUsers();
-      const sanitizedUsers = users.map(user => sanitizeUser(user));
+  app.get(
+    '/admin/users',
+    { preHandler: [authenticate, requireRole(['admin'])] },
+    async (request, reply) => {
+      try {
+        const users = await getAllUsers();
+        const sanitizedUsers = users.map(user => sanitizeUser(user));
 
-      logger.info('Admin listed all users', {
-        userId: getAuthenticatedUser(request)?.id,
-        userCount: users.length,
-      });
+        logger.info('Admin listed all users', {
+          userId: getAuthenticatedUser(request)?.id,
+          userCount: users.length,
+        });
 
-      return reply.code(200).send({
-        users: sanitizedUsers,
-        total: users.length,
-      });
-    } catch (err: any) {
-      logger.error(err instanceof Error ? err : String(err), {
-        event: 'admin_list_users_failed',
-        userId: getAuthenticatedUser(request)?.id,
-      });
+        return reply.code(200).send({
+          users: sanitizedUsers,
+          total: users.length,
+        });
+      } catch (err: any) {
+        logger.error(err instanceof Error ? err : String(err), {
+          event: 'admin_list_users_failed',
+          userId: getAuthenticatedUser(request)?.id,
+        });
 
-      return reply.code(500).send({
-        error: 'internal_error',
-      });
-    }
-  });
-
-  // GET /admin/jobs - List all jobs (admin only)
-  app.get('/admin/jobs', { preHandler: [authenticate, requireRole(['admin'])] }, async (request, reply) => {
-    try {
-      // TODO: Implement getAllJobs function in job-repository.ts
-      // const jobs = await getAllJobs();
-      const jobs: any[] = []; // Placeholder
-
-      logger.info('Admin listed all jobs', {
-        userId: getAuthenticatedUser(request)?.id,
-        jobCount: jobs.length,
-      });
-
-      return reply.code(200).send({
-        jobs,
-        total: jobs.length,
-      });
-    } catch (err: any) {
-      logger.error(err instanceof Error ? err : String(err), {
-        event: 'admin_list_jobs_failed',
-        userId: getAuthenticatedUser(request)?.id,
-      });
-
-      return reply.code(500).send({
-        error: 'internal_error',
-      });
-    }
-  });
-
-  // DELETE /admin/jobs/:id - Delete any job (admin only)
-  app.delete('/admin/jobs/:jobId', { preHandler: [authenticate, requireRole(['admin'])] }, async (request, reply) => {
-    const { jobId } = request.params as { jobId: string };
-
-    try {
-      // TODO: Implement deleteJob function in job-repository.ts
-      // const deleted = await deleteJob(jobId);
-      const deleted = false; // Placeholder
-
-      if (!deleted) {
-        return reply.code(404).send({
-          error: 'not_found',
-          message: 'Job not found',
+        return reply.code(500).send({
+          error: 'internal_error',
         });
       }
-
-      logger.info('Admin deleted job', {
-        userId: getAuthenticatedUser(request)?.id,
-        jobId,
-      });
-
-      return reply.code(200).send({
-        message: 'Job deleted successfully',
-      });
-    } catch (err: any) {
-      logger.error(err instanceof Error ? err : String(err), {
-        event: 'admin_delete_job_failed',
-        userId: getAuthenticatedUser(request)?.id,
-        jobId,
-      });
-
-      return reply.code(500).send({
-        error: 'internal_error',
-      });
     }
-  });
+  );
+
+  // GET /admin/jobs - List all jobs (admin only)
+  app.get(
+    '/admin/jobs',
+    { preHandler: [authenticate, requireRole(['admin'])] },
+    async (request, reply) => {
+      try {
+        // TODO: Implement getAllJobs function in job-repository.ts
+        // const jobs = await getAllJobs();
+        const jobs: any[] = []; // Placeholder
+
+        logger.info('Admin listed all jobs', {
+          userId: getAuthenticatedUser(request)?.id,
+          jobCount: jobs.length,
+        });
+
+        return reply.code(200).send({
+          jobs,
+          total: jobs.length,
+        });
+      } catch (err: any) {
+        logger.error(err instanceof Error ? err : String(err), {
+          event: 'admin_list_jobs_failed',
+          userId: getAuthenticatedUser(request)?.id,
+        });
+
+        return reply.code(500).send({
+          error: 'internal_error',
+        });
+      }
+    }
+  );
+
+  // DELETE /admin/jobs/:id - Delete any job (admin only)
+  app.delete(
+    '/admin/jobs/:jobId',
+    { preHandler: [authenticate, requireRole(['admin'])] },
+    async (request, reply) => {
+      const { jobId } = request.params as { jobId: string };
+
+      try {
+        // TODO: Implement deleteJob function in job-repository.ts
+        // const deleted = await deleteJob(jobId);
+        const deleted = false; // Placeholder
+
+        if (!deleted) {
+          return reply.code(404).send({
+            error: 'not_found',
+            message: 'Job not found',
+          });
+        }
+
+        logger.info('Admin deleted job', {
+          userId: getAuthenticatedUser(request)?.id,
+          jobId,
+        });
+
+        return reply.code(200).send({
+          message: 'Job deleted successfully',
+        });
+      } catch (err: any) {
+        logger.error(err instanceof Error ? err : String(err), {
+          event: 'admin_delete_job_failed',
+          userId: getAuthenticatedUser(request)?.id,
+          jobId,
+        });
+
+        return reply.code(500).send({
+          error: 'internal_error',
+        });
+      }
+    }
+  );
 
   // GET /admin/stats - System statistics (admin only)
-  app.get('/admin/stats', { preHandler: [authenticate, requireRole(['admin'])] }, async (request, reply) => {
-    try {
-      // TODO: Implement system statistics collection
-      const stats = {
-        totalUsers: await countUsers(),
-        // totalJobs: await countJobs(),
-        // activeJobs: await countActiveJobs(),
-        systemStatus: 'operational',
-        timestamp: new Date().toISOString(),
-      };
+  app.get(
+    '/admin/stats',
+    { preHandler: [authenticate, requireRole(['admin'])] },
+    async (request, reply) => {
+      try {
+        // TODO: Implement system statistics collection
+        const stats = {
+          totalUsers: await countUsers(),
+          // totalJobs: await countJobs(),
+          // activeJobs: await countActiveJobs(),
+          systemStatus: 'operational',
+          timestamp: new Date().toISOString(),
+        };
 
-      logger.info('Admin requested system stats', {
-        userId: getAuthenticatedUser(request)?.id,
-      });
+        logger.info('Admin requested system stats', {
+          userId: getAuthenticatedUser(request)?.id,
+        });
 
-      return reply.code(200).send(stats);
-    } catch (err: any) {
-      logger.error(err instanceof Error ? err : String(err), {
-        event: 'admin_stats_failed',
-        userId: getAuthenticatedUser(request)?.id,
-      });
+        return reply.code(200).send(stats);
+      } catch (err: any) {
+        logger.error(err instanceof Error ? err : String(err), {
+          event: 'admin_stats_failed',
+          userId: getAuthenticatedUser(request)?.id,
+        });
 
-      return reply.code(500).send({
-        error: 'internal_error',
-      });
+        return reply.code(500).send({
+          error: 'internal_error',
+        });
+      }
     }
-  });
+  );
 
   // User Management Endpoints
 
@@ -972,7 +971,6 @@ export function createHttpServer(): import('fastify').FastifyInstance {
       return reply.code(200).send({
         user: sanitizeUser(user),
       });
-
     } catch (err: any) {
       logger.error(err instanceof Error ? err : String(err), {
         event: 'http_request',

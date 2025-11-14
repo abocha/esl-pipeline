@@ -8,6 +8,7 @@ import eslintConfigPrettier from 'eslint-config-prettier';
 import globals from 'globals';
 
 const ignores = ['**/dist/**', 'node_modules/**', 'out/**', 'coverage/**', '.pnpm-store/**'];
+const tsconfigRootDir = new URL('.', import.meta.url).pathname;
 
 const tsRules = {
   '@typescript-eslint/no-unused-vars': [
@@ -36,24 +37,26 @@ const baseRules = {
   'node/no-missing-import': 'off',
 };
 
+const tsLanguageOptions = {
+  parser: tsparser,
+  parserOptions: {
+    project: './tsconfig.base.json',
+    tsconfigRootDir,
+  },
+  globals: {
+    ...globals.node,
+    TextEncoder: 'readonly',
+    ReadableStream: 'readonly',
+  },
+};
+
 export default [
   {
     ignores,
   },
   {
     files: ['packages/**/*.{ts,tsx}'],
-    languageOptions: {
-      parser: tsparser,
-      parserOptions: {
-        project: './tsconfig.base.json',
-        tsconfigRootDir: new URL('.', import.meta.url).pathname,
-      },
-      globals: {
-        ...globals.node,
-        TextEncoder: 'readonly',
-        ReadableStream: 'readonly',
-      },
-    },
+    languageOptions: tsLanguageOptions,
     plugins: {
       '@typescript-eslint': tseslint,
       import: importPlugin,
@@ -66,6 +69,16 @@ export default [
         typescript: {
           project: './tsconfig.base.json',
         },
+      },
+    },
+  },
+  {
+    files: ['packages/batch-frontend/**/*.{ts,tsx}'],
+    languageOptions: {
+      ...tsLanguageOptions,
+      globals: {
+        ...tsLanguageOptions.globals,
+        ...globals.browser,
       },
     },
   },

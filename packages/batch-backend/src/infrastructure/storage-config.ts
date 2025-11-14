@@ -52,8 +52,14 @@ export class StorageConfigurationService {
 
   private validateConfig(): void {
     if (this.config.provider === 's3' || this.config.provider === 'minio') {
-      if (!this.config.s3.accessKeyId || !this.config.s3.secretAccessKey || !this.config.s3.bucket) {
-        throw new Error('S3/MinIO configuration incomplete: missing access key, secret key, or bucket name');
+      if (
+        !this.config.s3.accessKeyId ||
+        !this.config.s3.secretAccessKey ||
+        !this.config.s3.bucket
+      ) {
+        throw new Error(
+          'S3/MinIO configuration incomplete: missing access key, secret key, or bucket name'
+        );
       }
     }
   }
@@ -90,7 +96,9 @@ export class StorageConfigurationService {
 /**
  * Create storage configuration service from environment variables
  */
-export function createStorageConfigService(config?: Partial<StorageConfig>): StorageConfigurationService {
+export function createStorageConfigService(
+  config?: Partial<StorageConfig>
+): StorageConfigurationService {
   const defaultConfig: StorageConfig = {
     provider: (process.env.STORAGE_PROVIDER as StorageProvider) || 'filesystem',
     s3: {

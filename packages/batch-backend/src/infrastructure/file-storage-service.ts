@@ -4,7 +4,7 @@ import * as fs from 'fs/promises';
 import * as path from 'path';
 import { Readable } from 'stream';
 import { logger } from './logger';
-import { S3StorageAdapter, FileUploadResult, FileMetadata, PresignedUrlOptions } from './s3-storage-adapter';
+import { S3StorageAdapter, PresignedUrlOptions } from './s3-storage-adapter';
 import { StorageConfigurationService, StorageProvider } from './storage-config';
 
 export interface FileStorageResult {
@@ -206,7 +206,12 @@ export class FileStorageService {
       const fileContent = await fs.readFile(filePath);
 
       // Upload to S3
-      const result = await this.s3Adapter.uploadFile(key, fileContent, fsMetadata.mimeType, fsMetadata.size);
+      const result = await this.s3Adapter.uploadFile(
+        key,
+        fileContent,
+        fsMetadata.mimeType,
+        fsMetadata.size
+      );
       const url = await this.s3Adapter.generatePresignedUrl(key);
 
       logger.info('File migrated from filesystem to S3', { key });
@@ -314,6 +319,8 @@ export class FileStorageService {
 /**
  * Create file storage service from configuration
  */
-export function createFileStorageService(storageConfig: StorageConfigurationService): FileStorageService {
+export function createFileStorageService(
+  storageConfig: StorageConfigurationService
+): FileStorageService {
   return new FileStorageService(storageConfig);
 }

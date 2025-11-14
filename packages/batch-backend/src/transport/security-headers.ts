@@ -52,7 +52,10 @@ function getDefaultSecurityConfig(): SecurityHeadersConfig {
       expectCt: false,
       frameguard: 'DENY',
       hidePoweredBy: true,
-      hsts: config.security.hstsMaxAge > 0 ? `max-age=${config.security.hstsMaxAge}; includeSubDomains` : false,
+      hsts:
+        config.security.hstsMaxAge > 0
+          ? `max-age=${config.security.hstsMaxAge}; includeSubDomains`
+          : false,
       ieNoOpen: true,
       noSniff: true,
       originAgentCluster: false,

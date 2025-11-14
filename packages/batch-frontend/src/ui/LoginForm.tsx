@@ -84,11 +84,7 @@ export function LoginForm({ onSuccess, onSwitchToRegister }: LoginFormProps) {
           </div>
         )}
 
-        <button
-          type="submit"
-          disabled={isLoading}
-          className="btn btn-primary"
-        >
+        <button type="submit" disabled={isLoading} className="btn btn-primary">
           {isLoading ? 'Logging in...' : 'Login'}
         </button>
 

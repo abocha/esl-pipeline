@@ -31,12 +31,12 @@ export enum SecurityEventType {
   TOKEN_VALIDATION_FAILURE = 'token_validation_failure',
   PASSWORD_CHANGE = 'password_change',
   PASSWORD_RESET_REQUEST = 'password_reset_request',
-  
+
   // Authorization events
   UNAUTHORIZED_ACCESS_ATTEMPT = 'unauthorized_access_attempt',
   PRIVILEGE_ESCALATION_ATTEMPT = 'privilege_escalation_attempt',
   ROLE_CHANGE = 'role_change',
-  
+
   // File upload events
   FILE_UPLOAD_ATTEMPT = 'file_upload_attempt',
   FILE_UPLOAD_SUCCESS = 'file_upload_success',
@@ -45,27 +45,27 @@ export enum SecurityEventType {
   FILE_SANITIZATION_REQUIRED = 'file_sanitization_required',
   MALICIOUS_FILE_DETECTED = 'malicious_file_detected',
   SUSPICIOUS_FILE_NAME = 'suspicious_file_name',
-  
+
   // Rate limiting events
   RATE_LIMIT_EXCEEDED = 'rate_limit_exceeded',
   RATE_LIMIT_BLOCKED = 'rate_limit_blocked',
   BRUTE_FORCE_ATTEMPT = 'brute_force_attempt',
-  
+
   // System events
   SYSTEM_ERROR = 'system_error',
   SECURITY_CONFIGURATION_ERROR = 'security_configuration_error',
   DEPENDENCY_FAILURE = 'dependency_failure',
-  
+
   // Data integrity events
   DATA_CORRUPTION_DETECTED = 'data_corruption_detected',
   INVALID_DATA_FORMAT = 'invalid_data_format',
   ENCODING_ERROR = 'encoding_error',
-  
+
   // Network security events
   SUSPICIOUS_IP_DETECTED = 'suspicious_ip_detected',
   GEOLOCATION_ANOMALY = 'geolocation_anomaly',
   REQUEST_ANOMALY = 'request_anomaly',
-  
+
   // Rate limiting operational events
   RATE_LIMIT_CHECK_SUCCESS = 'rate_limit_check_success',
   RATE_LIMIT_BURST_USED = 'rate_limit_burst_used',
@@ -97,7 +97,10 @@ export interface SecurityLogConfig {
 export class SecurityLogger {
   private config: SecurityLogConfig;
   private eventCounter: Map<SecurityEventType, number> = new Map();
-  private userSessionTracking: Map<string, { userId: string; sessionId: string; lastActivity: Date }> = new Map();
+  private userSessionTracking: Map<
+    string,
+    { userId: string; sessionId: string; lastActivity: Date }
+  > = new Map();
 
   constructor(config: SecurityLogConfig) {
     this.config = config;
@@ -140,7 +143,6 @@ export class SecurityLogger {
 
       // Store for audit trail (if persistence layer is available)
       await this.storeForAudit(securityEvent);
-
     } catch (error) {
       // Never let security logging failures affect the main application
       logger.error('Security logging failed', {
@@ -154,7 +156,12 @@ export class SecurityLogger {
    * Log authentication-related security events
    */
   async logAuthEvent(
-    type: SecurityEventType.LOGIN_SUCCESS | SecurityEventType.LOGIN_FAILURE | SecurityEventType.LOGOUT | SecurityEventType.TOKEN_REFRESH | SecurityEventType.TOKEN_VALIDATION_FAILURE,
+    type:
+      | SecurityEventType.LOGIN_SUCCESS
+      | SecurityEventType.LOGIN_FAILURE
+      | SecurityEventType.LOGOUT
+      | SecurityEventType.TOKEN_REFRESH
+      | SecurityEventType.TOKEN_VALIDATION_FAILURE,
     userId: string,
     sessionId: string,
     outcome: 'success' | 'failure' | 'blocked',
@@ -175,7 +182,14 @@ export class SecurityLogger {
    * Log file upload security events
    */
   async logFileUploadEvent(
-    type: SecurityEventType.FILE_UPLOAD_ATTEMPT | SecurityEventType.FILE_UPLOAD_SUCCESS | SecurityEventType.FILE_UPLOAD_FAILURE | SecurityEventType.FILE_VALIDATION_FAILURE | SecurityEventType.FILE_SANITIZATION_REQUIRED | SecurityEventType.MALICIOUS_FILE_DETECTED | SecurityEventType.SUSPICIOUS_FILE_NAME,
+    type:
+      | SecurityEventType.FILE_UPLOAD_ATTEMPT
+      | SecurityEventType.FILE_UPLOAD_SUCCESS
+      | SecurityEventType.FILE_UPLOAD_FAILURE
+      | SecurityEventType.FILE_VALIDATION_FAILURE
+      | SecurityEventType.FILE_SANITIZATION_REQUIRED
+      | SecurityEventType.MALICIOUS_FILE_DETECTED
+      | SecurityEventType.SUSPICIOUS_FILE_NAME,
     userId: string,
     filename: string,
     fileSize: number,
@@ -203,7 +217,10 @@ export class SecurityLogger {
    * Log rate limiting events
    */
   async logRateLimitEvent(
-    type: SecurityEventType.RATE_LIMIT_EXCEEDED | SecurityEventType.RATE_LIMIT_BLOCKED | SecurityEventType.BRUTE_FORCE_ATTEMPT,
+    type:
+      | SecurityEventType.RATE_LIMIT_EXCEEDED
+      | SecurityEventType.RATE_LIMIT_BLOCKED
+      | SecurityEventType.BRUTE_FORCE_ATTEMPT,
     userId: string,
     identifier: string,
     limit: number,
@@ -229,7 +246,9 @@ export class SecurityLogger {
    * Log authorization events
    */
   async logAuthorizationEvent(
-    type: SecurityEventType.UNAUTHORIZED_ACCESS_ATTEMPT | SecurityEventType.PRIVILEGE_ESCALATION_ATTEMPT,
+    type:
+      | SecurityEventType.UNAUTHORIZED_ACCESS_ATTEMPT
+      | SecurityEventType.PRIVILEGE_ESCALATION_ATTEMPT,
     userId: string,
     resource: string,
     action: string,
@@ -237,7 +256,10 @@ export class SecurityLogger {
   ): Promise<void> {
     await this.logEvent({
       eventType: type,
-      severity: type === SecurityEventType.PRIVILEGE_ESCALATION_ATTEMPT ? SecuritySeverity.CRITICAL : SecuritySeverity.HIGH,
+      severity:
+        type === SecurityEventType.PRIVILEGE_ESCALATION_ATTEMPT
+          ? SecuritySeverity.CRITICAL
+          : SecuritySeverity.HIGH,
       userId,
       outcome: 'blocked',
       resource,
@@ -250,7 +272,10 @@ export class SecurityLogger {
    * Log system security events
    */
   async logSystemEvent(
-    type: SecurityEventType.SYSTEM_ERROR | SecurityEventType.SECURITY_CONFIGURATION_ERROR | SecurityEventType.DEPENDENCY_FAILURE,
+    type:
+      | SecurityEventType.SYSTEM_ERROR
+      | SecurityEventType.SECURITY_CONFIGURATION_ERROR
+      | SecurityEventType.DEPENDENCY_FAILURE,
     severity: SecuritySeverity,
     details: Record<string, any>
   ): Promise<void> {
@@ -267,7 +292,10 @@ export class SecurityLogger {
    * Log data integrity events
    */
   async logDataIntegrityEvent(
-    type: SecurityEventType.DATA_CORRUPTION_DETECTED | SecurityEventType.INVALID_DATA_FORMAT | SecurityEventType.ENCODING_ERROR,
+    type:
+      | SecurityEventType.DATA_CORRUPTION_DETECTED
+      | SecurityEventType.INVALID_DATA_FORMAT
+      | SecurityEventType.ENCODING_ERROR,
     resource: string,
     details: Record<string, any>
   ): Promise<void> {
@@ -328,8 +356,8 @@ export class SecurityLogger {
    * Clean up old sessions and events
    */
   async cleanup(): Promise<void> {
-    const cutoffTime = new Date(Date.now() - (this.config.retentionDays * 24 * 60 * 60 * 1000));
-    
+    const cutoffTime = new Date(Date.now() - this.config.retentionDays * 24 * 60 * 60 * 1000);
+
     // Clean up old user sessions
     for (const [key, session] of this.userSessionTracking.entries()) {
       if (session.lastActivity < cutoffTime) {
@@ -381,7 +409,7 @@ export class SecurityLogger {
   }
 
   private getAuthEventSeverity(
-    type: SecurityEventType, 
+    type: SecurityEventType,
     outcome: 'success' | 'failure' | 'blocked'
   ): SecuritySeverity {
     if (outcome === 'success' && type === SecurityEventType.LOGIN_SUCCESS) {
@@ -399,10 +427,12 @@ export class SecurityLogger {
   private getFileUploadEventSeverity(
     type: SecurityEventType,
     outcome: 'success' | 'failure' | 'blocked',
-    filename: string
+    _filename: string
   ): SecuritySeverity {
-    if (type === SecurityEventType.MALICIOUS_FILE_DETECTED || 
-        type === SecurityEventType.SUSPICIOUS_FILE_NAME) {
+    if (
+      type === SecurityEventType.MALICIOUS_FILE_DETECTED ||
+      type === SecurityEventType.SUSPICIOUS_FILE_NAME
+    ) {
       return SecuritySeverity.HIGH;
     }
     if (type === SecurityEventType.FILE_VALIDATION_FAILURE && outcome === 'blocked') {
@@ -418,15 +448,15 @@ export class SecurityLogger {
 
     // Check if any thresholds are exceeded
     const exceededThresholds = [];
-    
+
     if (failedLogins > this.config.alertThresholds.failedLogins) {
       exceededThresholds.push(`failed_logins: ${failedLogins}`);
     }
-    
+
     if (rateLimitViolations > this.config.alertThresholds.rateLimitViolations) {
       exceededThresholds.push(`rate_limit_violations: ${rateLimitViolations}`);
     }
-    
+
     if (suspiciousUploads > this.config.alertThresholds.suspiciousUploads) {
       exceededThresholds.push(`suspicious_uploads: ${suspiciousUploads}`);
     }
@@ -504,11 +534,12 @@ export function getSecurityContext(request: any): {
 } {
   const user = request.user;
   const headers = request.headers;
-  
+
   return {
     userId: user?.id,
     sessionId: user?.sessionId,
-    ipAddress: headers['x-forwarded-for']?.split(',')[0]?.trim() || headers['x-real-ip'] || request.ip,
+    ipAddress:
+      headers['x-forwarded-for']?.split(',')[0]?.trim() || headers['x-real-ip'] || request.ip,
     userAgent: headers['user-agent'],
     correlationId: headers['x-correlation-id'] || headers['x-request-id'],
   };

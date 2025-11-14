@@ -4,7 +4,7 @@
 // burst handling, and middleware integration.
 
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { createRateLimiterService, RateLimiterService, RateLimitError } from '../src/transport/rate-limit-middleware';
+import { RateLimiterService } from '../src/transport/rate-limit-middleware';
 import { createRedisClient } from '../src/infrastructure/redis';
 
 // Mock Redis client
@@ -70,12 +70,12 @@ describe('RateLimiterService', () => {
       expect(mockRedis.zadd).toHaveBeenCalledWith(
         expect.stringContaining('user:123:main'),
         expect.any(Number),
-        expect.any(String),
+        expect.any(String)
       );
       expect(mockRedis.zadd).toHaveBeenCalledWith(
         expect.stringContaining('user:123:burst'),
         expect.any(Number),
-        expect.any(String),
+        expect.any(String)
       );
     });
 
@@ -93,7 +93,7 @@ describe('RateLimiterService', () => {
       expect(result.retryAfter).toBeDefined();
     });
 
-it('should block when both windows exceed limits', async () => {
+    it('should block when both windows exceed limits', async () => {
       mockRedis.zremrangebyscore.mockResolvedValue(0);
       // This mock now responds based on the key, not call order.
       mockRedis.zcard.mockImplementation(async (key: string) => {
@@ -121,7 +121,11 @@ it('should block when both windows exceed limits', async () => {
 
       await rateLimiter.checkRateLimit('user:123');
 
-      expect(mockRedis.zremrangebyscore).toHaveBeenCalledWith(expect.any(String), 0, expect.any(Number));
+      expect(mockRedis.zremrangebyscore).toHaveBeenCalledWith(
+        expect.any(String),
+        0,
+        expect.any(Number)
+      );
     });
 
     it('should set TTL on keys', async () => {
@@ -135,7 +139,7 @@ it('should block when both windows exceed limits', async () => {
       expect(mockRedis.expire).toHaveBeenCalledWith(expect.stringContaining(':burst'), 10);
     });
 
-it('should BLOCK requests on Redis errors to protect the service (fail-closed)', async () => {
+    it('should BLOCK requests on Redis errors to protect the service (fail-closed)', async () => {
       mockRedis.zcard.mockRejectedValue(new Error('Connection failed'));
 
       const result = await rateLimiter.checkRateLimit('user:123');
@@ -146,7 +150,6 @@ it('should BLOCK requests on Redis errors to protect the service (fail-closed)',
       expect(result.retryAfter).toBeDefined();
     });
   });
-
 
   describe('Retry Time Calculation', () => {
     it('should calculate retry time based on oldest request', async () => {
@@ -228,7 +231,7 @@ describe('Rate Limit Middleware', () => {
     expect(mockRedis.zadd).toHaveBeenCalledWith(
       expect.stringContaining('192.168.1.1'),
       expect.any(Number),
-      expect.any(String),
+      expect.any(String)
     );
   });
 
@@ -258,12 +261,12 @@ describe('Rate Limit Middleware', () => {
     const middleware = async (request: any, reply: any, next: any) => {
       const identifier = request.headers['x-forwarded-for'] || 'unknown';
       const result = await rateLimiter.checkRateLimit(identifier);
-      
+
       if (!result.allowed) {
         reply.code(429).send({ error: 'Rate limit exceeded' });
         return;
       }
-      
+
       next();
     };
 

@@ -43,21 +43,34 @@ export class FileSanitizationError extends Error {
 
 export class FileSanitizationService {
   private config: SanitizationConfig;
-  
+
   // Dangerous characters that should be removed or replaced
   private dangerousFilenameChars = /[<>:"/\\|?*]/g;
-  
-  // Control characters range
-  private controlCharacterRanges = [
-    { from: 0, to: 31 },   // \x00-\x1f
-    { from: 127, to: 159 } // \x7f-\x9f
-  ];
-  
+
   // Invalid filename patterns (reserved names on Windows)
   private reservedFilenames = [
-    'con', 'prn', 'aux', 'nul',
-    'com1', 'com2', 'com3', 'com4', 'com5', 'com6', 'com7', 'com8', 'com9',
-    'lpt1', 'lpt2', 'lpt3', 'lpt4', 'lpt5', 'lpt6', 'lpt7', 'lpt8', 'lpt9'
+    'con',
+    'prn',
+    'aux',
+    'nul',
+    'com1',
+    'com2',
+    'com3',
+    'com4',
+    'com5',
+    'com6',
+    'com7',
+    'com8',
+    'com9',
+    'lpt1',
+    'lpt2',
+    'lpt3',
+    'lpt4',
+    'lpt5',
+    'lpt6',
+    'lpt7',
+    'lpt8',
+    'lpt9',
   ];
 
   // Content sanitization patterns
@@ -93,16 +106,13 @@ export class FileSanitizationService {
   /**
    * Main sanitization method - processes file buffer and filename
    */
-  async sanitizeFile(
-    fileBuffer: Buffer, 
-    originalFilename: string
-  ): Promise<SanitizationResult> {
+  async sanitizeFile(fileBuffer: Buffer, originalFilename: string): Promise<SanitizationResult> {
     const warnings: SanitizationWarning[] = [];
-    
+
     // 1. Sanitize filename
     const filenameSanitization = this.sanitizeFilename(originalFilename);
     const sanitizedFilename = filenameSanitization.sanitizedFilename;
-    
+
     if (filenameSanitization.warnings.length > 0) {
       warnings.push(...filenameSanitization.warnings);
     }
@@ -110,14 +120,14 @@ export class FileSanitizationService {
     // 2. Sanitize content
     const contentSanitization = this.sanitizeContent(fileBuffer);
     const sanitizedContent = contentSanitization.sanitizedContent;
-    
+
     if (contentSanitization.warnings.length > 0) {
       warnings.push(...contentSanitization.warnings);
     }
 
     // 3. Apply additional sanitization steps
     const finalSanitization = this.applyFinalSanitization(sanitizedContent, sanitizedFilename);
-    
+
     if (finalSanitization.warnings.length > 0) {
       warnings.push(...finalSanitization.warnings);
     }
@@ -148,7 +158,7 @@ export class FileSanitizationService {
     warnings: SanitizationWarning[];
   } {
     const warnings: SanitizationWarning[] = [];
-    
+
     if (!filename || filename.trim() === '') {
       const generatedName = `file_${Date.now()}.md`;
       warnings.push({
@@ -170,7 +180,7 @@ export class FileSanitizationService {
         severity: 'high',
         field: 'filename',
       });
-      
+
       // Remove path components and keep only the basename
       sanitized = sanitized.split(/[\/\\]/).pop() || 'unnamed';
     }
@@ -184,7 +194,7 @@ export class FileSanitizationService {
         severity: 'medium',
         field: 'filename',
       });
-      
+
       // Remove entire HTML tags, not just angle brackets
       sanitized = sanitized.replace(/<[^>]*>/g, '');
     }
@@ -198,7 +208,7 @@ export class FileSanitizationService {
         severity: 'medium',
         field: 'filename',
       });
-      
+
       // Remove ALL dangerous characters completely (including < and >)
       sanitized = sanitized.replace(/[<>:"/\\|?*]/g, '');
     }
@@ -225,10 +235,10 @@ export class FileSanitizationService {
       const extension = sanitized.match(/\.[^/.]+$/);
       const extensionPart = extension ? extension[0] : '';
       const nameWithoutExt = sanitized.replace(/\.[^/.]+$/, '');
-      
+
       const maxNameLength = this.config.maxFilenameLength - extensionPart.length;
       sanitized = nameWithoutExt.substring(0, Math.max(0, maxNameLength)) + extensionPart;
-      
+
       warnings.push({
         code: 'FILENAME_TRUNCATED',
         message: `Filename truncated from ${originalLength} to ${sanitized.length} characters`,
@@ -261,7 +271,7 @@ export class FileSanitizationService {
           severity: 'low',
           field: 'filename',
         });
-        
+
         sanitized = sanitized.replace(/[^\w\s.-]/g, '_');
       }
     }
@@ -280,7 +290,7 @@ export class FileSanitizationService {
     let content = fileBuffer.toString('utf8');
 
     // Remove BOM if configured
-    if (this.config.removeBOM && content.charCodeAt(0) === 0xFEFF) {
+    if (this.config.removeBOM && content.charCodeAt(0) === 0xfeff) {
       content = content.slice(1);
       warnings.push({
         code: 'BOM_REMOVED',
@@ -292,14 +302,12 @@ export class FileSanitizationService {
 
     // Remove invalid UTF-8 characters
     if (this.config.removeInvalidUTF8) {
-      const originalLength = content.length;
-      
       // Check the original fileBuffer for invalid UTF-8, not the string
       const hasInvalidUTF8 = this.containsInvalidUTF8Buffer(fileBuffer);
-      
+
       if (hasInvalidUTF8) {
         content = this.removeInvalidUTF8(content);
-        
+
         warnings.push({
           code: 'INVALID_UTF8_REMOVED',
           message: `Removed invalid UTF-8 characters from content`,
@@ -376,25 +384,12 @@ export class FileSanitizationService {
   }
 
   /**
-   * Checks if content contains invalid UTF-8 characters
-   */
-  private containsInvalidUTF8(content: string): boolean {
-    try {
-      // Try to decode with fatal mode
-      new TextDecoder('utf-8', { fatal: true }).decode(Buffer.from(content, 'utf8'));
-      return false; // Valid UTF-8
-    } catch {
-      return true; // Invalid UTF-8 detected
-    }
-  }
-
-  /**
    * Normalizes line endings to Unix format (LF)
    */
   private normalizeLineEndings(content: string): string {
     return content
       .replace(/\r\n/g, '\n') // Windows CRLF to LF
-      .replace(/\r/g, '\n');   // Mac CR to LF
+      .replace(/\r/g, '\n'); // Mac CR to LF
   }
 
   /**
@@ -412,11 +407,11 @@ export class FileSanitizationService {
       const matches = sanitized.match(pattern);
       if (matches) {
         modifications += matches.length;
-        
+
         // Replace with safe alternatives
         if (pattern.toString().includes('javascript:') || pattern.toString().includes('data:')) {
           // Replace dangerous links with their text content
-          sanitized = sanitized.replace(pattern, (match, url) => {
+          sanitized = sanitized.replace(pattern, match => {
             const linkText = match.match(/\[(.*?)\]/)?.[1] || 'Link';
             return `[${linkText}]`;
           });
@@ -483,7 +478,6 @@ export class FileSanitizationService {
     warnings: SanitizationWarning[];
   } {
     const warnings: SanitizationWarning[] = [];
-    let content = sanitizedContent.toString('utf8');
     let buffer = sanitizedContent;
 
     // Check for null bytes in content
@@ -495,7 +489,7 @@ export class FileSanitizationService {
         severity: 'high',
         field: 'content',
       });
-      
+
       // Create new buffer without null bytes
       const cleanBytes: number[] = [];
       for (let i = 0; i < buffer.length; i++) {
@@ -505,7 +499,6 @@ export class FileSanitizationService {
         }
       }
       buffer = Buffer.from(cleanBytes);
-      content = buffer.toString('utf8');
     }
 
     // Ensure content doesn't exceed reasonable limits
@@ -517,7 +510,7 @@ export class FileSanitizationService {
         severity: 'medium',
         field: 'content',
       });
-      
+
       // Truncate content to prevent DoS
       buffer = buffer.subarray(0, maxContentSize);
     }
@@ -619,6 +612,8 @@ export function createFileSanitizationService(): FileSanitizationService {
 /**
  * Factory function to create a custom file sanitization service
  */
-export function createCustomFileSanitizationService(config: SanitizationConfig): FileSanitizationService {
+export function createCustomFileSanitizationService(
+  config: SanitizationConfig
+): FileSanitizationService {
   return new FileSanitizationService(config);
 }
