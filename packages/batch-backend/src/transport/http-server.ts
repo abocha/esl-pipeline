@@ -16,6 +16,7 @@ import { registerErrorHandler } from './error-handler';
 import { registerSecurityHeaders } from './security-headers';
 import { submitJob, type SubmitJobRequest } from '../application/submit-job';
 import { getJobStatus } from '../application/get-job-status';
+import { jobRecordToDto } from '../application/job-dto';
 import { authenticate, requireRole, getAuthenticatedUser } from './auth-middleware';
 import { createAuthService } from '../infrastructure/auth-service';
 import {
@@ -50,6 +51,7 @@ import { createStorageConfigService, type StorageConfig } from '../infrastructur
 import { createFileStorageService } from '../infrastructure/file-storage-service';
 import { createRedisClient } from '../infrastructure/redis';
 import { enableRedisJobEventBridge } from '../infrastructure/job-event-redis-bridge';
+import { subscribeJobEvents } from '../domain/job-events';
 
 function errorResponse(
   reply: FastifyReply,
@@ -216,11 +218,74 @@ export function createHttpServer(): import('fastify').FastifyInstance {
     }
   }
 
-  app.get('/jobs/events', (_request, reply) => {
-    return reply.code(501).send({
-      error: 'not_implemented',
-      message: 'Job events SSE stream is not available yet.',
+  const jobEventsRouteOptions: import('fastify').RouteShorthandOptions =
+    extendedApiEnabled && authenticate
+      ? {
+          preHandler: [authenticate],
+        }
+      : {};
+
+  app.get('/jobs/events', jobEventsRouteOptions, (request, reply) => {
+    const routePath = resolveRoutePath(request, 'GET /jobs/events');
+    reply.raw.setHeader('Content-Type', 'text/event-stream');
+    reply.raw.setHeader('Cache-Control', 'no-cache');
+    reply.raw.setHeader('Connection', 'keep-alive');
+    reply.raw.setHeader('X-Accel-Buffering', 'no');
+
+    reply.raw.flushHeaders?.();
+    reply.hijack();
+
+    reply.raw.write(': connected\n\n');
+
+    logger.info('SSE client connected', {
+      event: 'job_events_sse_connected',
+      route: routePath,
+      client: request.ip,
     });
+
+    let closed = false;
+    const heartbeat = setInterval(() => {
+      if (closed) return;
+      try {
+        reply.raw.write(':\n\n');
+      } catch (err) {
+        logger.warn('Failed to write SSE heartbeat', {
+          event: 'job_events_sse_heartbeat_failed',
+          route: routePath,
+          error: err instanceof Error ? err.message : String(err),
+        });
+        cleanup();
+      }
+    }, 25000);
+
+    const unsubscribe = subscribeJobEvents(event => {
+      try {
+        const data = JSON.stringify(jobRecordToDto(event.job));
+        reply.raw.write(`event: ${event.type}\n`);
+        reply.raw.write(`data: ${data}\n\n`);
+      } catch (err: any) {
+        logger.warn('Failed to publish SSE job event', {
+          event: 'job_events_sse_publish_failed',
+          route: routePath,
+          error: err instanceof Error ? err.message : String(err),
+        });
+      }
+    });
+
+    const cleanup = () => {
+      if (closed) return;
+      closed = true;
+      clearInterval(heartbeat);
+      unsubscribe();
+      logger.info('SSE client disconnected', {
+        event: 'job_events_sse_disconnected',
+        route: routePath,
+        client: request.ip,
+      });
+    };
+
+    request.raw.on('close', cleanup);
+    request.raw.on('error', cleanup);
   });
 
   app.get('/jobs/:jobId', handleJobStatusRequest);

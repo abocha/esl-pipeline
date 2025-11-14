@@ -1,4 +1,7 @@
 import { describe, it, expect, vi, beforeAll, afterAll } from 'vitest';
+import { request as httpRequest } from 'node:http';
+import type { JobRecord } from '../src/domain/job-model';
+import { publishJobEvent } from '../src/domain/job-events';
 
 import { createHttpServer } from '../src/transport/http-server';
 import * as submitJobModule from '../src/application/submit-job';
@@ -159,6 +162,10 @@ describe('transport/http-server - integration (in-process)', () => {
     const getJobStatus = vi.spyOn(getJobStatusModule, 'getJobStatus');
     getJobStatus.mockResolvedValue({
       jobId: 'job-1',
+      md: 'fixtures/ok.md',
+      preset: 'b1-default',
+      withTts: true,
+      upload: 's3',
       state: 'queued',
       createdAt: '2024-01-01T00:00:00.000Z',
       updatedAt: '2024-01-01T00:00:00.000Z',
@@ -176,6 +183,10 @@ describe('transport/http-server - integration (in-process)', () => {
     expect(response.statusCode).toBe(200);
     expect(response.json()).toEqual({
       jobId: 'job-1',
+      md: 'fixtures/ok.md',
+      preset: 'b1-default',
+      withTts: true,
+      upload: 's3',
       state: 'queued',
       createdAt: '2024-01-01T00:00:00.000Z',
       updatedAt: '2024-01-01T00:00:00.000Z',
@@ -192,6 +203,10 @@ describe('transport/http-server - integration (in-process)', () => {
     const getJobStatus = vi.spyOn(getJobStatusModule, 'getJobStatus');
     getJobStatus.mockResolvedValue({
       jobId: 'job-2',
+      md: 'fixtures/ok.md',
+      preset: null,
+      withTts: null,
+      upload: null,
       state: 'queued',
       createdAt: '2024-01-01T00:00:00.000Z',
       updatedAt: '2024-01-01T00:00:00.000Z',
@@ -239,5 +254,90 @@ describe('transport/http-server - integration (in-process)', () => {
 
     expect(response.statusCode).toBe(500);
     expect(response.json()).toEqual({ error: 'internal_error' });
+  });
+
+  it('GET /jobs/events streams job events as SSE', async () => {
+    const streamingApp = createHttpServer();
+    const address = (await streamingApp.listen({ port: 0, host: '127.0.0.1' })) as string;
+    const url = new URL('/jobs/events', address);
+
+    const job: JobRecord = {
+      id: 'job-stream',
+      state: 'running',
+      md: 'fixtures/ok.md',
+      preset: 'b1-default',
+      withTts: true,
+      upload: 's3',
+      createdAt: new Date('2024-01-01T10:00:00Z'),
+      updatedAt: new Date('2024-01-01T10:01:00Z'),
+      startedAt: new Date('2024-01-01T10:01:00Z'),
+      finishedAt: null,
+      error: null,
+      manifestPath: null,
+    };
+
+    await new Promise<void>((resolve, reject) => {
+      let resRef: import('node:http').IncomingMessage | null = null;
+      let settled = false;
+      let buffer = '';
+      let published = false;
+      let requestRef: import('node:http').ClientRequest | null = null;
+      let timeout: ReturnType<typeof setTimeout> | null = null;
+
+      const cleanup = (err?: Error) => {
+        if (settled) return;
+        settled = true;
+        requestRef?.destroy();
+        resRef?.destroy();
+        if (timeout) {
+          clearTimeout(timeout);
+        }
+        void streamingApp.close();
+        if (err) {
+          reject(err);
+        } else {
+          resolve();
+        }
+      };
+
+      const req = httpRequest(url, res => {
+        resRef = res;
+        res.setEncoding('utf8');
+
+        res.on('data', chunk => {
+          buffer += chunk;
+
+          if (!published && buffer.includes(': connected')) {
+            published = true;
+            publishJobEvent({ type: 'job_state_changed', job });
+          }
+
+          const dataMatch = buffer.match(/data: (.+)\n\n/);
+          if (dataMatch) {
+            const payload = JSON.parse(dataMatch[1]!);
+            expect(payload.jobId).toBe(job.id);
+            expect(payload.state).toBe('running');
+            expect(payload.preset).toBe('b1-default');
+            cleanup();
+          }
+        });
+
+        res.on('error', err => {
+          cleanup(err as Error);
+        });
+      });
+
+      requestRef = req;
+
+      req.on('error', err => {
+        cleanup(err as Error);
+      });
+
+      req.end();
+
+      timeout = setTimeout(() => {
+        cleanup(new Error('Timed out waiting for SSE payload'));
+      }, 5000);
+    });
   });
 });
