@@ -1,9 +1,46 @@
 import axios, { AxiosInstance, InternalAxiosRequestConfig, AxiosResponse, AxiosError } from 'axios';
 
+type MaybeString = string | undefined | null;
+
+function normalizeBaseUrl(url: MaybeString): string {
+  if (!url) return '';
+  const trimmed = url.trim();
+  if (!trimmed) return '';
+  return trimmed.replace(/\/+$/, '');
+}
+
+function resolveBackendBaseUrl(): string {
+  const globalAny: any = typeof window !== 'undefined' ? window : undefined;
+  const globalOverride = normalizeBaseUrl(globalAny?.__BATCH_BACKEND_URL__);
+  if (globalOverride) return globalOverride;
+
+  const viteEnv = normalizeBaseUrl((import.meta as any)?.env?.VITE_BATCH_BACKEND_URL);
+  if (viteEnv) return viteEnv;
+
+  const nodeEnvSource =
+    typeof globalThis !== 'undefined' ? (globalThis as any)?.process?.env : undefined;
+  const nodeEnv = normalizeBaseUrl(nodeEnvSource?.BATCH_BACKEND_URL as MaybeString);
+  if (nodeEnv) return nodeEnv;
+
+  return '';
+}
+
+export const backendBaseUrl = resolveBackendBaseUrl();
+
+export function buildBackendUrl(path: string): string {
+  const normalizedPath = path.startsWith('/') ? path : `/${path}`;
+  if (!backendBaseUrl) {
+    return normalizedPath;
+  }
+
+  return `${backendBaseUrl}${normalizedPath}`;
+}
+
 // Create axios instance with default config
 const apiClient: AxiosInstance = axios.create({
-  baseURL: '/api', // Proxy to backend
+  baseURL: backendBaseUrl || undefined,
   timeout: 30000, // 30 seconds
+  withCredentials: true,
   headers: {
     'Content-Type': 'application/json',
   },
