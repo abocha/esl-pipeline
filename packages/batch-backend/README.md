@@ -214,6 +214,12 @@ Orchestrator / pipeline integration:
 
 Any enabled subsystem with missing or inconsistent configuration will cause deterministic startup errors.
 
+Experimental extended API:
+
+- `BATCH_BACKEND_ENABLE_EXTENDED_API`
+  - Default: `false`.
+  - When `true`, enables optional endpoints for authenticated uploads and admin/user management. These routes are considered experimental and are not part of the stable surface described in the SSOT.
+
 ---
 
 ## Public HTTP API
@@ -222,9 +228,8 @@ HTTP behavior is implemented in [`createHttpServer.declaration()`](packages/batc
 
 Security/auth:
 
-- No authentication or authorization is implemented in this package.
-- It is intended to run behind trusted ingress (API gateway, service mesh, etc.).
-- Apply authentication and authorization at the edge.
+- Core job endpoints do not implement authentication or authorization. Deploy behind trusted ingress (API gateway, service mesh, etc.) and enforce auth there.
+- Experimental uploads/admin/user endpoints (when `BATCH_BACKEND_ENABLE_EXTENDED_API=true`) reuse the shared auth middleware documented in `docs/batch-backend-ssot.md`, but those routes are off by default.
 
 Error envelope (via [`errorResponse.declaration()`](packages/batch-backend/src/transport/http-server.ts:14)):
 
@@ -311,6 +316,10 @@ Error responses:
   - When the job does not exist.
 - `500 Internal Server Error`
   - On unexpected failures.
+
+Compatibility:
+
+- `/jobs/:jobId/status` remains available as an alias for `/jobs/:jobId` for legacy clients, but all documentation and integrations should migrate to `/jobs/:jobId`.
 
 Side effects:
 

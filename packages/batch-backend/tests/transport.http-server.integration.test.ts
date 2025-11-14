@@ -147,7 +147,7 @@ describe('transport/http-server - integration (in-process)', () => {
     });
   });
 
-  it('GET /jobs/:jobId/status returns 200 with status when job exists', async () => {
+  it('GET /jobs/:jobId returns 200 with status when job exists', async () => {
     const getJobStatus = vi.spyOn(getJobStatusModule, 'getJobStatus');
     getJobStatus.mockResolvedValue({
       jobId: 'job-1',
@@ -162,7 +162,7 @@ describe('transport/http-server - integration (in-process)', () => {
 
     const response = await app.inject({
       method: 'GET',
-      url: '/jobs/job-1/status'
+      url: '/jobs/job-1'
     });
 
     expect(response.statusCode).toBe(200);
@@ -180,13 +180,35 @@ describe('transport/http-server - integration (in-process)', () => {
     expect(getJobStatus).toHaveBeenCalledWith('job-1');
   });
 
-  it('GET /jobs/:jobId/status returns 404 with canonical schema when job not found', async () => {
+  it('GET /jobs/:jobId/status remains available as an alias', async () => {
+    const getJobStatus = vi.spyOn(getJobStatusModule, 'getJobStatus');
+    getJobStatus.mockResolvedValue({
+      jobId: 'job-2',
+      state: 'queued',
+      createdAt: '2024-01-01T00:00:00.000Z',
+      updatedAt: '2024-01-01T00:00:00.000Z',
+      startedAt: null,
+      finishedAt: null,
+      error: null,
+      manifestPath: null,
+    });
+
+    const response = await app.inject({
+      method: 'GET',
+      url: '/jobs/job-2/status'
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(getJobStatus).toHaveBeenCalledWith('job-2');
+  });
+
+  it('GET /jobs/:jobId returns 404 with canonical schema when job not found', async () => {
     const getJobStatus = vi.spyOn(getJobStatusModule, 'getJobStatus');
     getJobStatus.mockResolvedValue(null);
 
     const response = await app.inject({
       method: 'GET',
-      url: '/jobs/missing/status'
+      url: '/jobs/missing'
     });
 
     expect(response.statusCode).toBe(404);
@@ -198,13 +220,13 @@ describe('transport/http-server - integration (in-process)', () => {
     expect(responseData.error).toBe('not_found');
   });
 
-  it('GET /jobs/:jobId/status returns 500 with canonical schema when getJobStatus throws', async () => {
+  it('GET /jobs/:jobId returns 500 with canonical schema when getJobStatus throws', async () => {
     const getJobStatus = vi.spyOn(getJobStatusModule, 'getJobStatus');
     getJobStatus.mockRejectedValue(new Error('boom'));
 
     const response = await app.inject({
       method: 'GET',
-      url: '/jobs/job-err/status'
+      url: '/jobs/job-err'
     });
 
     expect(response.statusCode).toBe(500);

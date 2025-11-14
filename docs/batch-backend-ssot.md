@@ -168,6 +168,7 @@ Public (service boundary):
 - HTTP endpoints:
   - POST /jobs
   - GET /jobs/:jobId
+  - GET /jobs/:jobId/status (alias retained for legacy clients; new integrations MUST use `/jobs/:jobId`)
 - Queue contract:
   - BullMQ jobs with payload `{ jobId: string }`.
 
@@ -175,6 +176,8 @@ Internal:
 
 - All TS modules under `src/*`.
 - External systems SHOULD NOT import internal functions directly; interact via HTTP/queue.
+
+Experimental/extended HTTP routes (uploads/auth/admin/user management) exist in the codebase but are guarded by `BATCH_BACKEND_ENABLE_EXTENDED_API`. They are considered non-canonical until explicitly documented here.
 
 ---
 
@@ -291,6 +294,11 @@ Flow:
 1. HTTP route in [`http-server.ts`](packages/batch-backend/src/transport/http-server.ts:42).
 2. Calls [`getJobStatus`](packages/batch-backend/src/application/get-job-status.ts:18).
 3. Returns serialized job as above or 404.
+
+Notes:
+
+- `/jobs/:jobId/status` is maintained as a backwards-compatible alias that hits the identical handler.
+- No authentication is enforced by default; deploy behind trusted ingress as stated in §8. Additional endpoints that require authentication stay disabled unless `BATCH_BACKEND_ENABLE_EXTENDED_API=true`.
 
 ### 5.4 Worker Processing
 
@@ -417,8 +425,11 @@ Keys (summarized):
     - If `http`, requires `ESL_PIPELINE_CONFIG_ENDPOINT`.
   - `ESL_PIPELINE_CONFIG_ENDPOINT`
   - `ESL_PIPELINE_CONFIG_TOKEN` (optional)
-  - `PIPELINE_CWD` (optional):
-    - When set, overrides `process.cwd()` for orchestrator `cwd` as used by [`getPipeline.declaration()`](packages/batch-backend/src/infrastructure/orchestrator-service.ts:23).
+- `PIPELINE_CWD` (optional):
+  - When set, overrides `process.cwd()` for orchestrator `cwd` as used by [`getPipeline.declaration()`](packages/batch-backend/src/infrastructure/orchestrator-service.ts:23).
+- Extended/experimental HTTP API:
+  - `BATCH_BACKEND_ENABLE_EXTENDED_API` (default: `false`)
+    - When `true`, registers optional upload/auth/admin/user routes that are still under development. The stable service contract remains POST/GET jobs regardless of this flag.
 
 Mapping to orchestrator:
 

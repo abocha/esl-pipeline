@@ -86,6 +86,9 @@ export interface BatchBackendConfig {
     pathPrefix?: string;
     presignedUrlExpiresIn: number;
   };
+  experimental: {
+    extendedApiEnabled: boolean;
+  };
 }
 
 function readBool(name: string, def: boolean): boolean {
@@ -221,6 +224,8 @@ export function loadConfig(): BatchBackendConfig {
   const storagePathPrefix = readString('S3_PATH_PREFIX') || readString('STORAGE_PATH_PREFIX');
   const presignedUrlExpiresIn = readInt('PRESIGNED_URL_EXPIRES_IN', 3600);
 
+  const extendedApiEnabled = readBool('BATCH_BACKEND_ENABLE_EXTENDED_API', false);
+
   return {
     nodeEnv,
     httpPort,
@@ -299,6 +304,9 @@ export function loadConfig(): BatchBackendConfig {
       bucketName: storageBucketName,
       pathPrefix: storagePathPrefix,
       presignedUrlExpiresIn,
+    },
+    experimental: {
+      extendedApiEnabled,
     },
   };
 }
