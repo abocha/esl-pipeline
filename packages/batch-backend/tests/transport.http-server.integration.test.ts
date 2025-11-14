@@ -7,6 +7,7 @@ import { createHttpServer } from '../src/transport/http-server';
 import * as submitJobModule from '../src/application/submit-job';
 import * as getJobStatusModule from '../src/application/get-job-status';
 import * as loggerModule from '../src/infrastructure/logger';
+import { getJobOptions } from '../src/application/get-job-options';
 
 /**
  * Intent:
@@ -254,6 +255,40 @@ describe('transport/http-server - integration (in-process)', () => {
 
     expect(response.statusCode).toBe(500);
     expect(response.json()).toEqual({ error: 'internal_error' });
+  });
+
+  it('GET /config/job-options returns metadata payload when extended API enabled', async () => {
+    const response = await app.inject({
+      method: 'GET',
+      url: '/config/job-options',
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.headers['cache-control']).toBe('private, max-age=60');
+    const expected = await getJobOptions();
+    expect(response.json()).toEqual(expected);
+  });
+
+  it('GET /config/job-options returns 404 when extended API disabled', async () => {
+    const originalFlag = process.env.BATCH_BACKEND_ENABLE_EXTENDED_API;
+    process.env.BATCH_BACKEND_ENABLE_EXTENDED_API = 'false';
+    const disabledApp = createHttpServer();
+
+    try {
+      const response = await disabledApp.inject({
+        method: 'GET',
+        url: '/config/job-options',
+      });
+
+      expect(response.statusCode).toBe(404);
+    } finally {
+      await disabledApp.close();
+      if (originalFlag === undefined) {
+        delete process.env.BATCH_BACKEND_ENABLE_EXTENDED_API;
+      } else {
+        process.env.BATCH_BACKEND_ENABLE_EXTENDED_API = originalFlag;
+      }
+    }
   });
 
   it('GET /jobs/events streams job events as SSE', async () => {
