@@ -2,9 +2,11 @@ import React, { useCallback, useMemo, useState } from 'react';
 import toast from 'react-hot-toast';
 import { useAuth } from '../context/AuthContext';
 import { JobSettingsProvider } from '../context/JobSettingsContext';
+import { JobMonitorProvider } from '../context/JobMonitorContext';
 import { AuthDialog, AuthMode } from './auth/AuthDialog';
 import { JobSettingsForm } from './settings/JobSettingsForm';
 import { JobUploader } from './uploader/JobUploader';
+import { JobConnectionBanner } from './jobs/JobConnectionBanner';
 
 type PlaceholderProps = {
   title: string;
@@ -198,7 +200,9 @@ export const App: React.FC = () => {
 
     return (
       <JobSettingsProvider>
-        <AuthenticatedPanels />
+        <JobMonitorProvider>
+          <AuthenticatedPanels />
+        </JobMonitorProvider>
       </JobSettingsProvider>
     );
   };
@@ -285,6 +289,8 @@ const AuthenticatedPanels: React.FC = () => (
       <JobSettingsForm />
 
       <JobUploader />
+
+      <JobConnectionBanner />
 
       <PlaceholderCard
         title="Active Jobs Table"
