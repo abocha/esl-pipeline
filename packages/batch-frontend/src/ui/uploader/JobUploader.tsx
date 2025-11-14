@@ -4,6 +4,7 @@ import toast from 'react-hot-toast';
 import { uploadMarkdown, createJob } from '../../utils/api';
 import { useJobSettings } from '../../context/JobSettingsContext';
 import type { AppliedJobSettings, JobSettings } from '../../context/JobSettingsContext';
+import { useJobMonitor } from '../../context/JobMonitorContext';
 
 type FileStatus = 'idle' | 'uploading' | 'submitting' | 'success' | 'error';
 
@@ -20,6 +21,7 @@ type QueuedFile = {
 
 export const JobUploader: React.FC = () => {
   const { settings } = useJobSettings();
+  const { registerJob } = useJobMonitor();
   const [queue, setQueue] = useState<QueuedFile[]>([]);
   const [isProcessing, setIsProcessing] = useState(false);
   const sequentialLock = useRef(false);
@@ -127,6 +129,17 @@ export const JobUploader: React.FC = () => {
               : file
           )
         );
+        registerJob({
+          jobId: jobResponse.jobId,
+          fileName: jobFile.name,
+          submittedMd: uploadResponse.md,
+          preset: jobSettings.preset,
+          voiceAccent: jobSettings.voiceAccent,
+          notionDatabase: jobSettings.notionDatabase,
+          upload: jobSettings.upload,
+          withTts: jobSettings.withTts,
+          mode: jobSettings.mode,
+        });
         toast.success(`Job ${jobResponse.jobId} created`);
       } catch (error: any) {
         const message = error?.message ?? 'Failed to process file';
