@@ -22,6 +22,8 @@ export type JobSettings = {
   applyToPending: boolean;
 };
 
+export type AppliedJobSettings = Omit<JobSettings, 'applyToPending'>;
+
 type JobSettingsContextValue = {
   settings: JobSettings;
   updateSettings: (updates: Partial<JobSettings>) => void;
