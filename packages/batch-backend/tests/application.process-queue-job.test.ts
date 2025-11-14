@@ -4,6 +4,7 @@ import { processQueueJob } from '../src/application/process-queue-job';
 import * as jobRepository from '../src/domain/job-repository';
 import * as orchestratorService from '../src/infrastructure/orchestrator-service';
 import * as loggerModule from '../src/infrastructure/logger';
+import * as jobEvents from '../src/domain/job-events';
 
 vi.mock('../src/infrastructure/logger', async () => {
   const actual = await vi.importActual<typeof loggerModule>('../src/infrastructure/logger');
@@ -31,6 +32,7 @@ describe('application/process-queue-job', () => {
   const getJobByIdSpy = vi.spyOn(jobRepository, 'getJobById');
   const updateJobStateAndResultSpy = vi.spyOn(jobRepository, 'updateJobStateAndResult');
   const runAssignmentJobSpy = vi.spyOn(orchestratorService, 'runAssignmentJob');
+  const publishJobEventSpy = vi.spyOn(jobEvents, 'publishJobEvent');
 
   beforeEach(() => {
     vi.clearAllMocks();
@@ -69,6 +71,7 @@ describe('application/process-queue-job', () => {
     expect(getJobByIdSpy).toHaveBeenCalledWith('missing');
     expect(updateJobStateAndResultSpy).not.toHaveBeenCalled();
     expect(runAssignmentJobSpy).not.toHaveBeenCalled();
+    expect(publishJobEventSpy).not.toHaveBeenCalled();
   });
 
   it('skips processing if job is already terminal', async () => {
@@ -78,6 +81,7 @@ describe('application/process-queue-job', () => {
 
     expect(updateJobStateAndResultSpy).not.toHaveBeenCalled();
     expect(runAssignmentJobSpy).not.toHaveBeenCalled();
+    expect(publishJobEventSpy).not.toHaveBeenCalled();
   });
 
   it('processes queued job: queued -> running -> succeeded on orchestrator success', async () => {
@@ -86,14 +90,15 @@ describe('application/process-queue-job', () => {
 
     // First optimistic update: queued -> running
     const running = makeJob({ state: 'running', startedAt: new Date('2024-01-01T10:01:00Z') });
+    const succeeded = {
+      ...running,
+      state: 'succeeded',
+      manifestPath: '/manifests/job-1.json',
+      finishedAt: new Date('2024-01-01T10:02:00Z'),
+    };
     updateJobStateAndResultSpy
       .mockResolvedValueOnce(running as any) // queued -> running
-      .mockResolvedValueOnce({
-        ...running,
-        state: 'succeeded',
-        manifestPath: '/manifests/job-1.json',
-        finishedAt: new Date('2024-01-01T10:02:00Z'),
-      } as any); // running -> succeeded
+      .mockResolvedValueOnce(succeeded as any); // running -> succeeded
 
     runAssignmentJobSpy.mockResolvedValue({ manifestPath: '/manifests/job-1.json' });
 
@@ -127,6 +132,16 @@ describe('application/process-queue-job', () => {
       manifestPath: '/manifests/job-1.json',
       finishedAt: expect.any(Date),
     });
+
+    expect(publishJobEventSpy).toHaveBeenCalledTimes(2);
+    expect(publishJobEventSpy).toHaveBeenNthCalledWith(1, {
+      type: 'job_state_changed',
+      job: running,
+    });
+    expect(publishJobEventSpy).toHaveBeenNthCalledWith(2, {
+      type: 'job_state_changed',
+      job: succeeded,
+    });
   });
 
   it('does not process when queued -> running optimistic update fails (state race)', async () => {
@@ -146,6 +161,7 @@ describe('application/process-queue-job', () => {
     });
 
     expect(runAssignmentJobSpy).not.toHaveBeenCalled();
+    expect(publishJobEventSpy).not.toHaveBeenCalled();
   });
 
   it('marks job failed and rethrows when orchestrator fails', async () => {
@@ -153,13 +169,10 @@ describe('application/process-queue-job', () => {
     getJobByIdSpy.mockResolvedValue(initial);
 
     const running = makeJob({ state: 'running' });
+    const failed = { ...running, state: 'failed', error: 'orchestrator boom' };
     updateJobStateAndResultSpy
       .mockResolvedValueOnce(running as any) // queued -> running
-      .mockResolvedValueOnce({
-        ...running,
-        state: 'failed',
-        error: 'orchestrator boom',
-      } as any); // running -> failed
+      .mockResolvedValueOnce(failed as any); // running -> failed
 
     const err = new Error('orchestrator boom');
     runAssignmentJobSpy.mockRejectedValue(err);
@@ -174,6 +187,16 @@ describe('application/process-queue-job', () => {
       nextState: 'failed',
       error: 'orchestrator boom',
       finishedAt: expect.any(Date),
+    });
+
+    expect(publishJobEventSpy).toHaveBeenCalledTimes(2);
+    expect(publishJobEventSpy).toHaveBeenNthCalledWith(1, {
+      type: 'job_state_changed',
+      job: running,
+    });
+    expect(publishJobEventSpy).toHaveBeenNthCalledWith(2, {
+      type: 'job_state_changed',
+      job: failed,
     });
   });
 });

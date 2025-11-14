@@ -49,6 +49,7 @@ import {
 import { createStorageConfigService, type StorageConfig } from '../infrastructure/storage-config';
 import { createFileStorageService } from '../infrastructure/file-storage-service';
 import { createRedisClient } from '../infrastructure/redis';
+import { enableRedisJobEventBridge } from '../infrastructure/job-event-redis-bridge';
 
 function errorResponse(
   reply: FastifyReply,
@@ -1010,6 +1011,7 @@ export function createHttpServer(): import('fastify').FastifyInstance {
 // Public entrypoint used in production; behavior MUST remain unchanged.
 export async function startHttpServer(): Promise<void> {
   const config = loadConfig();
+  await enableRedisJobEventBridge();
   const app = createHttpServer();
 
   try {

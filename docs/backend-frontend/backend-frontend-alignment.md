@@ -101,4 +101,144 @@ These schema updates can follow after SSE is working; just keep the plan documen
 4. **Schema/field expansion** — necessary for advanced settings and Notion link copying.
 5. **Audio rerun endpoint** — once the orchestrator supports it.
 
+---
+
+## Backend Implementation Plan (Phase-Based)
+
+Each phase is sized so a junior developer can complete it in a focused session. Work through them sequentially.
+
+### Phase 1 – Job Event Bus Scaffolding
+1. Create `src/domain/job-events.ts` with a shared `EventEmitter` as described above.
+2. Export helpers: `publishJobEvent`, `subscribeJobEvents`.
+   - Import `JobRecord` from [`domain/job-model`](../../packages/batch-backend/src/domain/job-model.ts) so the event payload is typed.
+   - Instantiate the emitter once (`const jobEventEmitter = new EventEmitter(); jobEventEmitter.setMaxListeners(0);`) and keep it module-local so every caller shares the same bus.
+   - `subscribeJobEvents` should attach the listener via `on`, return a disposer that calls `off`, and never swallow listener errors (let Fastify’s request scope handle them).
+3. Add unit tests (or simple assertions) to ensure listeners receive events and unsubscribe correctly.
+   - Place them alongside the other Vitest suites in `packages/batch-backend/tests/domain.job-events.test.ts`.
+   - Cover at least: (a) a listener receives both `job_created` and `job_state_changed`, (b) calling the disposer stops further events, and (c) publishing with no listeners is a no-op (no thrown errors).
+
+_Deliverable_: Backend can publish/subscribe to in-memory job events (even though no emitters exist yet), and Vitest exercises both listener delivery and cleanup semantics.
+
+---
+
+### Phase 2 – Emit Events from Application Services
+1. Wire `submitJob` (`packages/batch-backend/src/application/submit-job.ts`) into the event bus.
+   - Import `publishJobEvent` from the new domain module.
+   - Immediately after `insertJob` resolves, call `publishJobEvent({ type: 'job_created', job })`.
+   - Keep the payload exactly what `insertJob` returned so timestamps (`createdAt`, `updatedAt`) flow through without additional queries.
+2. Extend `processQueueJob` (`packages/batch-backend/src/application/process-queue-job.ts`) to publish lifecycle updates.
+   - After `updateJobStateAndResult` marks the job `running`, emit `{ type: 'job_state_changed', job: running }`.
+   - Capture the `JobRecord` returned by the success/failure updates and emit the same event structure (this ensures SSE clients see manifest path + finished timestamps).
+   - When `updateJobStateAndResult` returns `null` (race conditions), skip publishing so we don’t leak stale data.
+3. Tests:
+   - Add or extend Vitest suites (`packages/batch-backend/tests/application.submit-job.test.ts` and `...process-queue-job.test.ts`) to stub the job event module (e.g., using `vi.spyOn`).
+   - Assert that `submitJob` emits one `job_created`, and `processQueueJob` emits transitions in the right order (`running` then terminal state).
+
+_Deliverable_: Event bus fires whenever a job is created or its state changes, with coverage in the existing application-level tests.
+
+---
+
+### Phase 3 – Shared Job DTO Helper
+1. Create `packages/batch-backend/src/application/job-dto.ts` with:
+   - `export interface JobStatusDto` (superset of the current HTTP response, e.g., include `md`, `preset`, `withTts`, `upload` to prep for frontend metadata).
+   - `export function jobRecordToDto(job: JobRecord): JobStatusDto` that handles ISO date serialization and `null` normalization.
+2. Refactor `getJobStatus` to import `jobRecordToDto`.
+   - Function now becomes: fetch record → `return job ? jobRecordToDto(job) : null`.
+   - Re-export `JobStatusDto`/`jobRecordToDto` from `application/index.ts` (or directly import where needed) so later phases (SSE) reuse it without duplicating shape.
+3. Update tests:
+   - Move serialization assertions into a new `packages/batch-backend/tests/application.job-dto.test.ts`.
+   - Keep `application.get-job-status.test.ts` focused on repository interactions by mocking `jobRecordToDto` or snapshotting the helper output.
+
+_Deliverable_: Single source of truth for job serialization, with targeted tests that lock the DTO shape for both HTTP and SSE consumers.
+
+---
+
+### Phase 4 – `/jobs/events` SSE Endpoint
+1. Replace the 501 stub in `packages/batch-backend/src/transport/http-server.ts` with a real SSE implementation.
+   - Register `app.get('/jobs/events', { preHandler: authenticate? [] : undefined }, handler)` so the auth requirement matches other extended routes (frontend currently forwards cookies; follow SSOT guidance).
+   - Inside the handler:
+     - Set headers (`Content-Type: text/event-stream`, `Cache-Control: no-cache`, `Connection: keep-alive`, `X-Accel-Buffering: no`).
+     - Write an initial comment (`": connected\\n\\n"`) to flush the stream.
+     - Subscribe to the job event bus; on each event call `reply.raw.write(\`event: ${event.type}\\n\`)` and `reply.raw.write(\`data: ${JSON.stringify(jobRecordToDto(event.job))}\\n\\n\`)`.
+     - Use `setInterval` to send heartbeat comments every ~25s so load balancers keep the socket alive.
+     - On `'close'`/`'error'` events, remove the listener and clear the heartbeat timer.
+2. Logging + metrics:
+   - Emit a `logger.info` entry when a client connects/disconnects (helps ops see SSE usage).
+   - Consider incrementing an in-memory counter or reusing existing metrics helpers for connection counts (optional but recommended).
+3. Tests:
+   - Extend `packages/batch-backend/tests/transport.http-server.integration.test.ts` with a case that spins up the Fastify server, hits `/jobs/events`, publishes a fake event, and asserts the stream contains `event:` + `data:` lines.
+   - Cover cleanup by closing the response and verifying the event listener disposed (can be asserted via spies on `subscribeJobEvents` return disposer).
+4. Documentation:
+   - Update `docs/backend-frontend/batch-backend-ssot.md` to describe the SSE contract (event names, payload shape, heartbeat interval) so frontend engineers know what to expect.
+
+_Deliverable_: Functional SSE stream that emits `job_created`/`job_state_changed` payloads in real time and survives idle proxies via heartbeats.
+
+---
+
+### Phase 5 – `/config/job-options` Endpoint
+1. Add a new handler in `http-server.ts` behind the extended API flag:
+   - `if (extendedApiEnabled) app.get('/config/job-options', { preHandler: [authenticate] }, handler);`
+   - Response shape:
+     ```ts
+     interface JobOptionResponse {
+       presets: string[];
+       voiceAccents: string[];
+       notionDatabases: Array<{ id: string; name: string }>;
+       uploadOptions: Array<'auto' | 's3' | 'none'>;
+       modes: Array<'auto' | 'dialogue' | 'monologue'>;
+     }
+     ```
+2. Source data:
+   - Presets/voice accents/modes should come from configuration (reuse `loadConfig()` or orchestrator defaults where possible). Until wiring is ready, fall back to constants but wrap them in TODO comments referencing the upstream config provider.
+   - Notion DB metadata should piggyback on existing config (if not available, stub a deterministic list so the UI can render; again mark with TODO).
+3. Logging + caching:
+   - Log the route invocation similarly to `/jobs`.
+   - Since the payload is static, set `Cache-Control: private, max-age=60` so the frontend can cache for a minute.
+4. Tests + docs:
+   - Add integration tests asserting the endpoint is 404/disabled when the flag is off, and returns the expected JSON when enabled.
+   - Document the contract in the SSOT plus a short mention in `README.md` (CLI users know the backend now owns option discovery).
+
+_Deliverable_: Frontend can fetch dropdown values dynamically, keeping option lists in sync with backend/orchestrator defaults.
+
+---
+
+### Phase 6 – Schema Extensions & Additional Fields
+1. Update persistence layer:
+   - Modify `packages/batch-backend/schema.sql` to add columns `voice_accent TEXT`, `force_tts BOOLEAN`, `notion_database TEXT`, `mode TEXT`, `notion_url TEXT`.
+   - Regenerate `JobRecord` (`domain/job-model.ts`) to include the new fields (all nullable for backward compatibility).
+   - Teach `insertJob`/`updateJobStateAndResult` to read/write the columns and pass them through `mapRowToJob`.
+2. Surface fields through the application layer:
+   - Extend `SubmitJobRequest` + validator so `/jobs` can accept `voiceAccent`, `forceTts`, `notionDatabase`, `mode`.
+   - Store these values via `insertJob`, and forward them to the orchestrator (when supported) inside `processQueueJob`.
+   - Update `jobRecordToDto` so SSE/HTTP clients see the extra metadata (even if null today).
+3. Handle Notion URL persistence:
+   - Once `runAssignmentJob` resolves with a Notion link, capture it in the success branch and persist in `updateJobStateAndResult`.
+   - Include `notionUrl` in DTOs so the frontend can surface a “Open in Notion” button.
+4. Migration strategy:
+   - Provide a SQL migration snippet (in `docs/backend-frontend/batch-backend-ssot.md` or `/configs/db/migrations`) so existing deployments can add the columns without dropping data.
+5. Tests:
+   - Extend domain/application tests to cover the new fields (insertion defaults, DTO serialization, orchestrator payload handoff).
+
+_Deliverable_: Backend stores and exposes the advanced job metadata required for the Phase 8 UI controls.
+
+---
+
+### Phase 7 – Audio Rerun Endpoint (pending orchestrator support)
+1. Vendor dependency:
+   - After `@esl-pipeline/orchestrator` exposes a rerun API, add an application service (`packages/batch-backend/src/application/rerun-audio.ts`) that validates the request and calls the orchestrator helper.
+2. HTTP contract:
+   - Add `POST /jobs/:jobId/rerun/audio` under the extended API (auth required).
+   - Body may include overrides like `{ voiceAccent, forceTts }`; validate via Zod similar to `/jobs`.
+   - Decide whether reruns create a brand-new job row or mutate the existing one:
+     - Preferred: insert a new job referencing `parentJobId` so history remains immutable. Persist that relation via a new column or a join table.
+3. Eventing + SSE:
+   - Publish `job_created` for the rerun row and let the normal worker pipeline handle status changes, ensuring frontend receives updates automatically.
+4. Tests + docs:
+   - Integration tests should cover 202 responses, validation errors, and rerun behavior (e.g., ensures a second queue job exists).
+   - Document the rerun endpoint in the SSOT and update frontend alignment doc so designers know when to expose the “Regenerate audio” button.
+
+_Deliverable_: Frontend “Regenerate audio” action triggers a real backend workflow that replays audio generation while preserving historical jobs.
+
+---
+
 Edit this document as work progresses so backend and frontend stay aligned. 

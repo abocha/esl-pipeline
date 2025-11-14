@@ -13,6 +13,7 @@ import { getJobById, updateJobStateAndResult } from '../domain/job-repository';
 import { runAssignmentJob } from '../infrastructure/orchestrator-service';
 import { createJobLogger } from '../infrastructure/logger';
 import type { QueueJobPayload } from '../infrastructure/queue-bullmq';
+import { publishJobEvent } from '../domain/job-events';
 
 // processQueueJob.declaration()
 export async function processQueueJob(payload: QueueJobPayload): Promise<void> {
@@ -44,6 +45,8 @@ export async function processQueueJob(payload: QueueJobPayload): Promise<void> {
     return;
   }
 
+  publishJobEvent({ type: 'job_state_changed', job: running });
+
   const runId = jobId;
 
   try {
@@ -60,13 +63,17 @@ export async function processQueueJob(payload: QueueJobPayload): Promise<void> {
       runId
     );
 
-    await updateJobStateAndResult({
+    const succeeded = await updateJobStateAndResult({
       id: jobId,
       expectedState: 'running',
       nextState: 'succeeded',
       manifestPath: result.manifestPath ?? null,
       finishedAt: new Date(),
     });
+
+    if (succeeded) {
+      publishJobEvent({ type: 'job_state_changed', job: succeeded });
+    }
 
     log.info('Job processed successfully', {
       manifestPath: result.manifestPath,
@@ -76,13 +83,17 @@ export async function processQueueJob(payload: QueueJobPayload): Promise<void> {
       event: 'job_failed',
     });
 
-    await updateJobStateAndResult({
+    const failed = await updateJobStateAndResult({
       id: jobId,
       expectedState: 'running',
       nextState: 'failed',
       error: err instanceof Error ? err.message : String(err),
       finishedAt: new Date(),
     });
+
+    if (failed) {
+      publishJobEvent({ type: 'job_state_changed', job: failed });
+    }
 
     // Propagate so BullMQ can apply retry/backoff policy.
     throw err;

@@ -7,6 +7,7 @@ import { submitJob } from '../src/application/submit-job';
 import * as jobRepository from '../src/domain/job-repository';
 import * as queueBullmq from '../src/infrastructure/queue-bullmq';
 import * as loggerModule from '../src/infrastructure/logger';
+import * as jobEvents from '../src/domain/job-events';
 
 vi.mock('../src/infrastructure/logger', async () => {
   const actual = await vi.importActual<typeof loggerModule>('../src/infrastructure/logger');
@@ -33,6 +34,7 @@ describe('application/submit-job', () => {
 
   const insertJobSpy = vi.spyOn(jobRepository, 'insertJob');
   const createJobQueueSpy = vi.spyOn(queueBullmq, 'createJobQueue');
+  const publishJobEventSpy = vi.spyOn(jobEvents, 'publishJobEvent');
 
   beforeEach(() => {
     vi.clearAllMocks();
@@ -80,6 +82,12 @@ describe('application/submit-job', () => {
     expect(createJobQueueSpy).toHaveBeenCalledTimes(1);
     expect(enqueue).toHaveBeenCalledTimes(1);
     expect(enqueue).toHaveBeenCalledWith({ jobId: fakeJob.id });
+
+    expect(publishJobEventSpy).toHaveBeenCalledTimes(1);
+    expect(publishJobEventSpy).toHaveBeenCalledWith({
+      type: 'job_created',
+      job: fakeJob,
+    });
 
     expect(result).toEqual({ jobId: fakeJob.id });
   });
@@ -137,5 +145,6 @@ describe('application/submit-job', () => {
 
     expect(insertJobSpy).not.toHaveBeenCalled();
     expect(enqueue).not.toHaveBeenCalled();
+    expect(publishJobEventSpy).not.toHaveBeenCalled();
   });
 });
