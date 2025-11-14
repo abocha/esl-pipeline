@@ -170,50 +170,29 @@ _Deliverable_: ✅ `/jobs/events` streams live DTOs (matching `/jobs/:id`) for b
 ---
 
 ### Phase 5 – `/config/job-options` Endpoint
-1. Add a new handler in `http-server.ts` behind the extended API flag:
-   - `if (extendedApiEnabled) app.get('/config/job-options', { preHandler: [authenticate] }, handler);`
-   - Response shape:
-     ```ts
-     interface JobOptionResponse {
-       presets: string[];
-       voiceAccents: string[];
-       notionDatabases: Array<{ id: string; name: string }>;
-       uploadOptions: Array<'auto' | 's3' | 'none'>;
-       modes: Array<'auto' | 'dialogue' | 'monologue'>;
-     }
-     ```
-2. Source data:
-   - Presets/voice accents/modes should come from configuration (reuse `loadConfig()` or orchestrator defaults where possible). Until wiring is ready, fall back to constants but wrap them in TODO comments referencing the upstream config provider.
-   - Notion DB metadata should piggyback on existing config (if not available, stub a deterministic list so the UI can render; again mark with TODO).
-3. Logging + caching:
-   - Log the route invocation similarly to `/jobs`.
-   - Since the payload is static, set `Cache-Control: private, max-age=60` so the frontend can cache for a minute.
-4. Tests + docs:
-   - Add integration tests asserting the endpoint is 404/disabled when the flag is off, and returns the expected JSON when enabled.
-   - Document the contract in the SSOT plus a short mention in `README.md` (CLI users know the backend now owns option discovery).
+**Status: complete.**
 
-_Deliverable_: Frontend can fetch dropdown values dynamically, keeping option lists in sync with backend/orchestrator defaults.
+- `GET /config/job-options` now lives in `http-server.ts`, inherits the extended API/auth gate, and sets `Cache-Control: private, max-age=60` so the React Query call can memoize the response.
+- The handler calls `getJobOptions()` (`packages/batch-backend/src/application/get-job-options.ts`), which currently returns deterministic presets/voices/databases/modes with TODO notes pointing at the upcoming orchestrator-backed config feed.
+- Integration coverage in `tests/transport.http-server.integration.test.ts` asserts both the success payload and the disabled (`404`) behavior when `BATCH_BACKEND_ENABLE_EXTENDED_API=false`.
+
+_Deliverable_: Frontend fetches dropdown metadata dynamically and stays aligned with backend defaults without hardcoding.
 
 ---
 
 ### Phase 6 – Schema Extensions & Additional Fields
-1. Update persistence layer:
-   - Modify `packages/batch-backend/schema.sql` to add columns `voice_accent TEXT`, `force_tts BOOLEAN`, `notion_database TEXT`, `mode TEXT`, `notion_url TEXT`.
-   - Regenerate `JobRecord` (`domain/job-model.ts`) to include the new fields (all nullable for backward compatibility).
-   - Teach `insertJob`/`updateJobStateAndResult` to read/write the columns and pass them through `mapRowToJob`.
-2. Surface fields through the application layer:
-   - Extend `SubmitJobRequest` + validator so `/jobs` can accept `voiceAccent`, `forceTts`, `notionDatabase`, `mode`.
-   - Store these values via `insertJob`, and forward them to the orchestrator (when supported) inside `processQueueJob`.
-   - Update `jobRecordToDto` so SSE/HTTP clients see the extra metadata (even if null today).
-3. Handle Notion URL persistence:
-   - Once `runAssignmentJob` resolves with a Notion link, capture it in the success branch and persist in `updateJobStateAndResult`.
-   - Include `notionUrl` in DTOs so the frontend can surface a “Open in Notion” button.
-4. Migration strategy:
-   - Provide a SQL migration snippet (in `docs/backend-frontend/batch-backend-ssot.md` or `/configs/db/migrations`) so existing deployments can add the columns without dropping data.
-5. Tests:
-   - Extend domain/application tests to cover the new fields (insertion defaults, DTO serialization, orchestrator payload handoff).
+**Status: complete.**
 
-_Deliverable_: Backend stores and exposes the advanced job metadata required for the Phase 8 UI controls.
+1. Persistence:
+   - `schema.sql` gained `voice_accent`, `force_tts`, `notion_database`, `mode`, and `notion_url` columns so Postgres can store the upcoming UI controls plus the Notion link surfaced by the orchestrator.
+   - `JobRecord`/`insertJob`/`updateJobStateAndResult` now round-trip the new columns, and `job-dto.ts` exposes them to both HTTP and SSE consumers. See `packages/batch-backend/src/domain/job-repository.ts` for the canonical mapping.
+2. Submission + workers:
+   - `/jobs` validation accepts `voiceAccent`, `forceTts`, `notionDatabase`, `mode`, and the new `'auto'` upload option, passing those fields through `submitJob`.
+   - `process-queue-job.ts` forwards `voiceAccent` → `accentPreference` and `notionDatabase` → `dbId` when calling the orchestrator, and captures `pageUrl` as `notionUrl` on success (persisted + emitted to clients). `forceTts`/`mode` are persisted for future releases.
+3. Tests + docs:
+   - DTO, repository, submit-job, process-queue, and HTTP integration suites assert the new metadata path end-to-end, and `docs/backend-frontend/batch-backend-ssot.md` now includes the SQL migration snippet operators can run against existing databases.
+
+_Deliverable_: Job rows carry the advanced metadata required by the Phase 8 UI, and clients immediately receive the Notion URL once the orchestrator run succeeds.
 
 ---
 

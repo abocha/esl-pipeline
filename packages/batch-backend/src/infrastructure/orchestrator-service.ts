@@ -89,13 +89,17 @@ export interface RunAssignmentPayload {
   // Upload backend flag is constrained by orchestrator API:
   // currently only 's3' is supported as an explicit option.
   upload?: 's3';
+  voiceAccent?: string | null;
+  forceTts?: boolean | null;
+  notionDatabase?: string | null;
+  mode?: 'auto' | 'dialogue' | 'monologue' | null;
 }
 
 // runAssignmentJob.declaration()
 export async function runAssignmentJob(
   payload: RunAssignmentPayload,
   runId: string
-): Promise<{ manifestPath?: string }> {
+): Promise<{ manifestPath?: string; notionUrl?: string }> {
   const pipeline = getPipeline();
   const log = rootLogger.child({ jobId: payload.jobId, runId });
 
@@ -105,6 +109,16 @@ export async function runAssignmentJob(
     withTts: payload.withTts,
     upload: payload.upload,
   };
+
+  if (payload.voiceAccent) {
+    flags.accentPreference = payload.voiceAccent;
+  }
+
+  if (payload.notionDatabase) {
+    flags.dbId = payload.notionDatabase;
+  }
+
+  // TODO: Forward forceTts/mode once orchestrator exposes the corresponding flags.
 
   const dependencies: OrchestratorDependencies = {
     runId,
@@ -123,7 +137,7 @@ export async function runAssignmentJob(
       durationMs: duration,
     });
 
-    return { manifestPath: result.manifestPath };
+    return { manifestPath: result.manifestPath, notionUrl: result.pageUrl };
   } catch (err) {
     log.error(err instanceof Error ? err : String(err), {
       message: 'Assignment pipeline failed',

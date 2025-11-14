@@ -59,6 +59,8 @@ export async function processQueueJob(payload: QueueJobPayload): Promise<void> {
         // Only forward upload flag values supported by orchestrator.
         // Any other persisted value (e.g. 'none' or null) is treated as "no override".
         upload: running.upload === 's3' ? 's3' : undefined,
+        voiceAccent: running.voiceAccent ?? undefined,
+        notionDatabase: running.notionDatabase ?? undefined,
       },
       runId
     );
@@ -68,6 +70,7 @@ export async function processQueueJob(payload: QueueJobPayload): Promise<void> {
       expectedState: 'running',
       nextState: 'succeeded',
       manifestPath: result.manifestPath ?? null,
+      notionUrl: result.notionUrl ?? null,
       finishedAt: new Date(),
     });
 

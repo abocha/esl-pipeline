@@ -197,7 +197,12 @@ Job:
 - `preset?: string | null`.
 - `withTts?: boolean | null`:
   - When omitted at submission, treated as `false` (no TTS) by current pipeline semantics.
-- `upload?: string | null`.
+- `upload?: string | null` (`'auto' | 's3' | 'none'` semantics mirror the frontend selector; only `'s3'` is forwarded to the orchestrator today).
+- `voiceAccent?: string | null` — forwarded to the orchestrator as `accentPreference`.
+- `forceTts?: boolean | null` — persisted for observability; orchestration wiring is pending.
+- `notionDatabase?: string | null` — forwarded to the orchestrator as `dbId`.
+- `mode?: string | null` — stored for the UI (future orchestrator support).
+- `notionUrl?: string | null` — populated when the orchestrator returns a Notion `pageUrl`.
 - Timestamps: `createdAt`, `updatedAt`, `startedAt`, `finishedAt`.
 - `error?: string | null`.
 - `manifestPath?: string | null`.
@@ -220,6 +225,20 @@ See comments in [`db.ts`](packages/batch-backend/src/infrastructure/db.ts:64). T
 - No transitions are allowed out of terminal states (`succeeded`, `failed`).
 - Repository updates enforce `expectedState` to avoid races.
 - `md` is required at submission.
+
+### 4.5 Schema Migration – Phase 6 Columns
+
+Existing deployments can add the new metadata columns without recreating the `jobs` table:
+
+```sql
+ALTER TABLE jobs ADD COLUMN IF NOT EXISTS voice_accent TEXT NULL;
+ALTER TABLE jobs ADD COLUMN IF NOT EXISTS force_tts BOOLEAN NULL;
+ALTER TABLE jobs ADD COLUMN IF NOT EXISTS notion_database TEXT NULL;
+ALTER TABLE jobs ADD COLUMN IF NOT EXISTS mode TEXT NULL;
+ALTER TABLE jobs ADD COLUMN IF NOT EXISTS notion_url TEXT NULL;
+```
+
+All columns default to `NULL`, so historical rows remain valid.
 
 ### 4.4 Configuration Access
 
@@ -246,9 +265,13 @@ HTTP:
   - `preset?: string`
   - `withTts?: boolean`
     - When omitted, treated as `false` (no TTS) in current canonical behavior.
-  - `upload?: 's3' | 'none'`
+  - `upload?: 'auto' | 's3' | 'none'`
     - `'s3'`: request orchestrator to upload via S3-compatible backend.
-    - `'none'` or omitted: do not set an explicit `upload` flag; orchestrator uses its defaults.
+    - `'auto' | 'none'` (or omitted): do not override orchestrator defaults.
+  - `voiceAccent?: string` — passed through as `accentPreference`.
+  - `forceTts?: boolean` — persisted for Phase 8 UI controls (orchestrator wiring TBD).
+  - `notionDatabase?: string` — forwarded as `dbId`.
+  - `mode?: 'auto' | 'dialogue' | 'monologue'` — stored for UI state and SSE payloads.
 - Responses:
   - `202 Accepted`:
     - Body: `{ "jobId": "<uuid>" }`

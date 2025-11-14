@@ -16,6 +16,10 @@ export async function insertJob(params: {
   preset?: string;
   withTts?: boolean;
   upload?: string;
+  voiceAccent?: string;
+  forceTts?: boolean;
+  notionDatabase?: string;
+  mode?: string;
 }): Promise<JobRecord> {
   const id = randomUUID();
   const now = new Date();
@@ -23,10 +27,39 @@ export async function insertJob(params: {
   const row = await withPgClient(async client => {
     const result = await client.query(
       `
-      INSERT INTO jobs (id, state, md, preset, with_tts, upload, created_at, updated_at)
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $7)
-      RETURNING id, state, md, preset, with_tts, upload,
-                created_at, updated_at, started_at, finished_at, error, manifest_path
+      INSERT INTO jobs (
+        id,
+        state,
+        md,
+        preset,
+        with_tts,
+        upload,
+        voice_accent,
+        force_tts,
+        notion_database,
+        mode,
+        created_at,
+        updated_at
+      )
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $11)
+      RETURNING
+        id,
+        state,
+        md,
+        preset,
+        with_tts,
+        upload,
+        voice_accent,
+        force_tts,
+        notion_database,
+        mode,
+        notion_url,
+        created_at,
+        updated_at,
+        started_at,
+        finished_at,
+        error,
+        manifest_path
       `,
       [
         id,
@@ -35,6 +68,10 @@ export async function insertJob(params: {
         params.preset ?? null,
         params.withTts ?? false,
         params.upload ?? null,
+        params.voiceAccent ?? null,
+        params.forceTts ?? null,
+        params.notionDatabase ?? null,
+        params.mode ?? null,
         now,
       ]
     );
@@ -52,6 +89,7 @@ export async function getJobById(id: string): Promise<JobRecord | null> {
     const result = await client.query(
       `
       SELECT id, state, md, preset, with_tts, upload,
+             voice_accent, force_tts, notion_database, mode, notion_url,
              created_at, updated_at, started_at, finished_at, error, manifest_path
       FROM jobs
       WHERE id = $1
@@ -71,6 +109,7 @@ export async function updateJobStateAndResult(args: {
   nextState: JobState;
   error?: string | null;
   manifestPath?: string | null;
+  notionUrl?: string | null;
   startedAt?: Date | null;
   finishedAt?: Date | null;
 }): Promise<JobRecord | null> {
@@ -82,6 +121,7 @@ export async function updateJobStateAndResult(args: {
     manifestPath = null,
     startedAt = null,
     finishedAt = null,
+    notionUrl = null,
   } = args;
 
   assertTransition(expectedState, nextState);
@@ -94,15 +134,32 @@ export async function updateJobStateAndResult(args: {
         state = $1,
         error = COALESCE($2, error),
         manifest_path = COALESCE($3, manifest_path),
-        started_at = COALESCE($4, started_at),
-        finished_at = COALESCE($5, finished_at),
+        notion_url = COALESCE($4, notion_url),
+        started_at = COALESCE($5, started_at),
+        finished_at = COALESCE($6, finished_at),
         updated_at = now()
-      WHERE id = $6
-        AND state = $7
-      RETURNING id, state, md, preset, with_tts, upload,
-                created_at, updated_at, started_at, finished_at, error, manifest_path
+      WHERE id = $7
+        AND state = $8
+      RETURNING
+        id,
+        state,
+        md,
+        preset,
+        with_tts,
+        upload,
+        voice_accent,
+        force_tts,
+        notion_database,
+        mode,
+        notion_url,
+        created_at,
+        updated_at,
+        started_at,
+        finished_at,
+        error,
+        manifest_path
       `,
-      [nextState, error, manifestPath, startedAt, finishedAt, id, expectedState]
+      [nextState, error, manifestPath, notionUrl, startedAt, finishedAt, id, expectedState]
     );
     return result.rows[0];
   });
@@ -124,6 +181,11 @@ function mapRowToJob(row: any): JobRecord {
     preset: row.preset ?? null,
     withTts: row.with_tts ?? null,
     upload: row.upload ?? null,
+    voiceAccent: row.voice_accent ?? null,
+    forceTts: row.force_tts ?? null,
+    notionDatabase: row.notion_database ?? null,
+    mode: row.mode ?? null,
+    notionUrl: row.notion_url ?? null,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
     startedAt: row.started_at,
