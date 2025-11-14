@@ -137,6 +137,13 @@ export type NewAssignmentFlags = {
   presetsPath?: string;
   accentPreference?: string;
   withTts?: boolean;
+  
+  // New TTS mode fields
+  ttsMode?: 'auto' | 'dialogue' | 'monologue';
+  dialogueLanguage?: string;
+  dialogueStability?: number;
+  dialogueSeed?: number;
+  
   upload?: 's3';
   presign?: number;
   publicRead?: boolean;
@@ -330,6 +337,21 @@ export async function newAssignment(
       } else {
         emitStage('tts', 'start');
         steps.push('tts');
+
+        // TTS mode debug logging
+        if (flags.ttsMode) {
+          logger.log({
+            level: 'info',
+            message: `Using TTS mode: ${flags.ttsMode}`,
+            detail: {
+              ttsMode: flags.ttsMode,
+              dialogueLanguage: flags.dialogueLanguage,
+              dialogueStability: flags.dialogueStability,
+              dialogueSeed: flags.dialogueSeed,
+            },
+          });
+        }
+
         let ttsResult: Awaited<ReturnType<typeof buildStudyTextMp3>>;
         try {
           ttsResult = await buildStudyTextMp3(flags.md, {
@@ -338,10 +360,32 @@ export async function newAssignment(
             preview: flags.dryRun,
             force: flags.force || flags.redoTts,
             defaultAccent: flags.accentPreference,
+            
+            // NEW: Pass TTS mode options to TTS package
+            ttsMode: flags.ttsMode,
+            dialogueLanguage: flags.dialogueLanguage,
+            dialogueStability: flags.dialogueStability,
+            dialogueSeed: flags.dialogueSeed,
           });
         } catch (error: unknown) {
           if (error instanceof FfmpegNotFoundError) {
             throw new Error(`TTS requires FFmpeg.\n\n${error.message}`, { cause: error });
+          }
+          
+          // Enhanced TTS mode error handling
+          if (error instanceof Error) {
+            if (error.message.includes('voice mapping') && flags.ttsMode === 'dialogue') {
+              throw new Error(
+                `Dialogue mode requires voice mappings for all speakers. ` +
+                `Check your voices.yml file. ${error.message}`
+              );
+            }
+            if (error.message.includes('text-to-dialogue') && flags.ttsMode === 'dialogue') {
+              throw new Error(
+                `Dialogue mode failed: ${error.message}\n` +
+                'Try switching to monologue mode with --tts-mode monologue'
+              );
+            }
           }
           throw error;
         }
@@ -432,6 +476,13 @@ export async function newAssignment(
       pageUrl,
       audio,
       preset: flags.preset,
+      
+      // NEW: Include TTS mode information for reproducibility
+      ttsMode: flags.ttsMode,
+      dialogueLanguage: flags.dialogueLanguage,
+      dialogueStability: flags.dialogueStability,
+      dialogueSeed: flags.dialogueSeed,
+      
       timestamp: new Date().toISOString(),
     };
 
@@ -578,6 +629,12 @@ export type RerunFlags = {
   publicRead?: boolean;
   presign?: number;
   accentPreference?: string;
+  
+  // TTS mode options for rerun
+  ttsMode?: 'auto' | 'dialogue' | 'monologue';
+  dialogueLanguage?: string;
+  dialogueStability?: number;
+  dialogueSeed?: number;
 };
 
 export async function rerunAssignment(
@@ -676,6 +733,21 @@ export async function rerunAssignment(
 
     if (stepsToRun.has('tts')) {
       emitStage('tts', 'start');
+
+      // TTS mode debug logging for rerun
+      if (flags.ttsMode) {
+        logger.log({
+          level: 'info',
+          message: `Using TTS mode: ${flags.ttsMode}`,
+          detail: {
+            ttsMode: flags.ttsMode,
+            dialogueLanguage: flags.dialogueLanguage,
+            dialogueStability: flags.dialogueStability,
+            dialogueSeed: flags.dialogueSeed,
+          },
+        });
+      }
+
       let ttsResult: Awaited<ReturnType<typeof buildStudyTextMp3>>;
       try {
         ttsResult = await buildStudyTextMp3(flags.md, {
@@ -684,10 +756,32 @@ export async function rerunAssignment(
           preview: flags.dryRun,
           force: flags.force,
           defaultAccent: flags.accentPreference,
+          
+          // NEW: Pass TTS mode options to TTS package
+          ttsMode: flags.ttsMode,
+          dialogueLanguage: flags.dialogueLanguage,
+          dialogueStability: flags.dialogueStability,
+          dialogueSeed: flags.dialogueSeed,
         });
       } catch (error: unknown) {
         if (error instanceof FfmpegNotFoundError) {
           throw new Error(`TTS requires FFmpeg.\n\n${error.message}`, { cause: error });
+        }
+        
+        // Enhanced TTS mode error handling
+        if (error instanceof Error) {
+          if (error.message.includes('voice mapping') && flags.ttsMode === 'dialogue') {
+            throw new Error(
+              `Dialogue mode requires voice mappings for all speakers. ` +
+              `Check your voices.yml file. ${error.message}`
+            );
+          }
+          if (error.message.includes('text-to-dialogue') && flags.ttsMode === 'dialogue') {
+            throw new Error(
+              `Dialogue mode failed: ${error.message}\n` +
+              'Try switching to monologue mode with --tts-mode monologue'
+            );
+          }
         }
         throw error;
       }
@@ -774,6 +868,13 @@ export async function rerunAssignment(
         hash: audioHash,
         voices: audioVoices,
       },
+      
+      // NEW: Include TTS mode information for reproducibility
+      ttsMode: flags.ttsMode,
+      dialogueLanguage: flags.dialogueLanguage,
+      dialogueStability: flags.dialogueStability,
+      dialogueSeed: flags.dialogueSeed,
+      
       timestamp: new Date().toISOString(),
     };
 
