@@ -134,7 +134,108 @@ export function createHttpServer(): import('fastify').FastifyInstance {
   // Register security headers
   registerSecurityHeaders(app);
 
-  // Initialize security services
+  const extendedApiEnabled = config.experimental.extendedApiEnabled;
+
+  const jobRateLimiter =
+    config.security.enableRateLimiting && config.security.jobSubmissionRateLimit > 0
+      ? new RateLimiterService(createRedisClient(), {
+          windowSize: 60 * 1000, // 1 minute
+          maxRequests: config.security.jobSubmissionRateLimit,
+          burstLimit: config.security.jobSubmissionRateLimit * 2,
+          burstWindow: 10 * 1000, // 10 seconds
+          keyPrefix: 'rate_limit:job_submit',
+        })
+      : null;
+  const jobRateLimitMiddleware = jobRateLimiter
+    ? createUploadRateLimitMiddleware(jobRateLimiter)
+    : null;
+
+  const handleSubmitJob: import('fastify').RouteHandlerMethod = async (request, reply) => {
+    const body = request.body as SubmitJobRequest | undefined;
+
+    // Validate request with Zod schema
+    const jobSchema = z.object({
+      md: z.string().min(1, 'md is required'),
+      preset: z.string().optional(),
+      withTts: z.boolean().optional(),
+      upload: z.enum(['s3', 'none']).optional(),
+    });
+
+    const validatedData = jobSchema.parse(body);
+
+    const result = await submitJob({
+      md: validatedData.md,
+      preset: validatedData.preset,
+      withTts: validatedData.withTts,
+      upload: validatedData.upload,
+    });
+
+    logger.info('HTTP request handled', {
+      event: 'http_request',
+      route: 'POST /jobs',
+      statusCode: 202,
+      jobId: result.jobId,
+    });
+
+    return reply.code(202).send(result);
+  };
+
+  if (jobRateLimitMiddleware) {
+    app.post('/jobs', { preHandler: [jobRateLimitMiddleware] }, handleSubmitJob);
+  } else {
+    app.post('/jobs', handleSubmitJob);
+  }
+
+  async function handleJobStatusRequest(
+    request: import('fastify').FastifyRequest,
+    reply: import('fastify').FastifyReply
+  ) {
+    const { jobId } = request.params as { jobId: string };
+
+    try {
+      const status = await getJobStatus(jobId);
+      if (!status) {
+        logger.info('HTTP request handled', {
+          event: 'http_request',
+          route: request.routerPath ?? 'GET /jobs/:jobId',
+          statusCode: 404,
+          jobId,
+        });
+
+        return errorResponse(reply, 'not_found');
+      }
+
+      logger.info('HTTP request handled', {
+        event: 'http_request',
+        route: request.routerPath ?? 'GET /jobs/:jobId',
+        statusCode: 200,
+        jobId,
+        jobState: status.state,
+      });
+
+      return reply.send(status);
+    } catch (err: any) {
+      logger.error(err instanceof Error ? err : String(err), {
+        event: 'http_request',
+        route: request.routerPath ?? 'GET /jobs/:jobId',
+        statusCode: 500,
+        error: 'internal_error',
+        jobId,
+      });
+
+      return errorResponse(reply, 'internal_error');
+    }
+  }
+
+  app.get('/jobs/:jobId', handleJobStatusRequest);
+  app.get('/jobs/:jobId/status', handleJobStatusRequest);
+
+  if (!extendedApiEnabled) {
+    logger.info('Extended API disabled; skipping uploads/auth/admin routes');
+    return app;
+  }
+
+  // Extended API services (uploads/auth/admin) are optional and guarded by env.
   const fileValidationService = config.security.enableFileValidation
     ? createFileValidationService()
     : null;
@@ -144,17 +245,6 @@ export function createHttpServer(): import('fastify').FastifyInstance {
   const rateLimiterService = createRateLimiterService();
   const uploadRateLimitMiddleware = createUploadRateLimitMiddleware(rateLimiterService);
 
-  // Initialize job rate limiter
-  const jobRateLimiter = new RateLimiterService(createRedisClient(), {
-    windowSize: 60 * 1000, // 1 minute
-    maxRequests: config.security.jobSubmissionRateLimit,
-    burstLimit: config.security.jobSubmissionRateLimit * 2,
-    burstWindow: 10 * 1000, // 10 seconds
-    keyPrefix: 'rate_limit:job_submit',
-  });
-  const createJobRateLimitMiddleware = () => createUploadRateLimitMiddleware(jobRateLimiter);
-
-  // Initialize storage services
   const storageConfig = createStorageConfigService({
     provider: config.storage.provider,
     s3: {
@@ -182,130 +272,6 @@ export function createHttpServer(): import('fastify').FastifyInstance {
       fileSize: config.security.maxFileSize,
       files: 1,
     },
-  });
-
-  app.post('/jobs', {
-    preHandler: [authenticate, createJobRateLimitMiddleware()]
-  }, async (request, reply) => {
-    const authenticatedUser = getAuthenticatedUser(request);
-    if (!authenticatedUser) {
-      return reply.code(401).send({
-        error: 'unauthorized',
-        message: 'Authentication required',
-        code: 'not_authenticated',
-      });
-    }
-
-    const body = request.body as SubmitJobRequest | undefined;
-
-    // Validate request with Zod schema
-    const jobSchema = z.object({
-      md: z.string().min(1, 'md is required'),
-      preset: z.string().optional(),
-      withTts: z.boolean().optional(),
-      upload: z.enum(['s3', 'none']).optional(),
-    });
-
-    const validatedData = jobSchema.parse(body);
-
-    // Check if user has access to referenced files (if any)
-    if (validatedData.md.startsWith('uploads/')) {
-      // Extract user ID from path and verify ownership
-      const pathParts = validatedData.md.split('/');
-      if (pathParts.length >= 3) {
-        const fileUserId = pathParts[1];
-        if (fileUserId !== authenticatedUser.id && authenticatedUser.role !== 'admin') {
-          return reply.code(403).send({
-            error: 'forbidden',
-            message: 'Access denied to referenced file',
-            code: 'file_access_denied',
-          });
-        }
-      }
-    }
-
-    const result = await submitJob({
-      md: validatedData.md,
-      preset: validatedData.preset,
-      withTts: validatedData.withTts,
-      upload: validatedData.upload,
-    });
-
-    logger.info('HTTP request handled', {
-      event: 'http_request',
-      route: 'POST /jobs',
-      statusCode: 202,
-      jobId: result.jobId,
-      userId: authenticatedUser.id,
-    });
-
-    return reply.code(202).send(result);
-  });
-
-  app.get('/jobs/:jobId/status', {
-    preHandler: authenticate
-  }, async (request, reply) => {
-    const authenticatedUser = getAuthenticatedUser(request);
-    if (!authenticatedUser) {
-      return reply.code(401).send({
-        error: 'unauthorized',
-        message: 'Authentication required',
-        code: 'not_authenticated',
-      });
-    }
-
-    const { jobId } = request.params as { jobId: string };
-
-    try {
-      const status = await getJobStatus(jobId);
-      if (!status) {
-        logger.info('HTTP request handled', {
-          event: 'http_request',
-          route: 'GET /jobs/:jobId/status',
-          statusCode: 404,
-          jobId,
-          userId: authenticatedUser.id,
-        });
-
-        return errorResponse(reply, 'not_found');
-      }
-
-      // Check if user owns the job or has admin role
-      // TODO: Add job ownership check once job-user association is implemented
-      if (authenticatedUser.role !== 'admin') {
-        // For now, allow all authenticated users to see jobs
-        // This should be restricted based on ownership in the future
-      }
-
-      // Sanitize response to prevent data leakage
-      const sanitizedStatus = {
-        ...status,
-        // Remove sensitive information if any
-        // Add user-specific filtering here if needed
-      };
-
-      logger.info('HTTP request handled', {
-        event: 'http_request',
-        route: 'GET /jobs/:jobId/status',
-        statusCode: 200,
-        jobId,
-        userId: authenticatedUser.id,
-        jobState: status.state,
-      });
-
-      return reply.send(sanitizedStatus);
-    } catch (err: any) {
-      logger.error(err instanceof Error ? err : String(err), {
-        event: 'http_request',
-        route: 'GET /jobs/:jobId/status',
-        statusCode: 500,
-        error: 'internal_error',
-        jobId,
-        userId: authenticatedUser.id,
-      });
-
-      return errorResponse(reply, 'internal_error');
-    }
   });
 
   app.post('/uploads', {
