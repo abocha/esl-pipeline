@@ -154,24 +154,18 @@ _Deliverable_: Single source of truth for job serialization, with targeted tests
 ---
 
 ### Phase 4 – `/jobs/events` SSE Endpoint
-1. Replace the 501 stub in `packages/batch-backend/src/transport/http-server.ts` with a real SSE implementation.
-   - Register `app.get('/jobs/events', { preHandler: authenticate? [] : undefined }, handler)` so the auth requirement matches other extended routes (frontend currently forwards cookies; follow SSOT guidance).
-   - Inside the handler:
-     - Set headers (`Content-Type: text/event-stream`, `Cache-Control: no-cache`, `Connection: keep-alive`, `X-Accel-Buffering: no`).
-     - Write an initial comment (`": connected\\n\\n"`) to flush the stream.
-     - Subscribe to the job event bus; on each event call `reply.raw.write(\`event: ${event.type}\\n\`)` and `reply.raw.write(\`data: ${JSON.stringify(jobRecordToDto(event.job))}\\n\\n\`)`.
-     - Use `setInterval` to send heartbeat comments every ~25s so load balancers keep the socket alive.
-     - On `'close'`/`'error'` events, remove the listener and clear the heartbeat timer.
-2. Logging + metrics:
-   - Emit a `logger.info` entry when a client connects/disconnects (helps ops see SSE usage).
-   - Consider incrementing an in-memory counter or reusing existing metrics helpers for connection counts (optional but recommended).
-3. Tests:
-   - Extend `packages/batch-backend/tests/transport.http-server.integration.test.ts` with a case that spins up the Fastify server, hits `/jobs/events`, publishes a fake event, and asserts the stream contains `event:` + `data:` lines.
-   - Cover cleanup by closing the response and verifying the event listener disposed (can be asserted via spies on `subscribeJobEvents` return disposer).
-4. Documentation:
-   - Update `docs/backend-frontend/batch-backend-ssot.md` to describe the SSE contract (event names, payload shape, heartbeat interval) so frontend engineers know what to expect.
+**Status: complete.**
 
-_Deliverable_: Functional SSE stream that emits `job_created`/`job_state_changed` payloads in real time and survives idle proxies via heartbeats.
+1. `/jobs/events` now streams real job updates from Fastify (auth-gated whenever the extended API flag is on):
+   - Sets SSE headers (`Content-Type: text/event-stream`, `Cache-Control: no-cache`, `Connection: keep-alive`, `X-Accel-Buffering: no`), flushes `: connected`, and hijacks the socket.
+   - Subscribes to the shared job-event bus, serializes via `jobRecordToDto`, and writes `event:`/`data:` blocks for `job_created` + `job_state_changed`.
+   - Sends heartbeat comments every ~25 s and tears down timers/listeners on close/error.
+2. Cross-process delivery is backed by the Redis bridge (`packages/batch-backend/src/infrastructure/job-event-redis-bridge.ts`), so worker-generated events reach the API process.
+3. Logging captures connect/disconnect plus heartbeat/publish failures for observability.
+4. Tests in `tests/transport.http-server.integration.test.ts` spin up the server, open a real HTTP connection, publish a fake event, and assert the streamed DTO.
+5. Follow-up: document the final SSE contract (event names, sample payload, heartbeat interval) in `docs/backend-frontend/batch-backend-ssot.md`.
+
+_Deliverable_: ✅ `/jobs/events` streams live DTOs (matching `/jobs/:id`) for both job creation and state changes, backed by Redis-published events and heartbeat keepalives.
 
 ---
 

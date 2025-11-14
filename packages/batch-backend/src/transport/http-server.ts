@@ -17,6 +17,7 @@ import { registerSecurityHeaders } from './security-headers';
 import { submitJob, type SubmitJobRequest } from '../application/submit-job';
 import { getJobStatus } from '../application/get-job-status';
 import { jobRecordToDto } from '../application/job-dto';
+import { getJobOptions } from '../application/get-job-options';
 import { authenticate, requireRole, getAuthenticatedUser } from './auth-middleware';
 import { createAuthService } from '../infrastructure/auth-service';
 import {
@@ -295,6 +296,37 @@ export function createHttpServer(): import('fastify').FastifyInstance {
     logger.info('Extended API disabled; skipping uploads/auth/admin routes');
     return app;
   }
+
+  app.get(
+    '/config/job-options',
+    {
+      preHandler: [authenticate],
+    },
+    async (request, reply) => {
+      const routePath = resolveRoutePath(request, 'GET /config/job-options');
+      try {
+        const options = await getJobOptions();
+        reply.header('Cache-Control', 'private, max-age=60');
+
+        logger.info('HTTP request handled', {
+          event: 'http_request',
+          route: routePath,
+          statusCode: 200,
+        });
+
+        return reply.send(options);
+      } catch (err: any) {
+        logger.error(err instanceof Error ? err : String(err), {
+          event: 'http_request',
+          route: routePath,
+          statusCode: 500,
+          error: 'internal_error',
+        });
+
+        return errorResponse(reply, 'internal_error');
+      }
+    }
+  );
 
   // Extended API services (uploads/auth/admin) are optional and guarded by env.
   const fileValidationService = config.security.enableFileValidation
