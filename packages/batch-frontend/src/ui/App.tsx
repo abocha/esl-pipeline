@@ -4,6 +4,7 @@ import { useAuth } from '../context/AuthContext';
 import { JobSettingsProvider } from '../context/JobSettingsContext';
 import { AuthDialog, AuthMode } from './auth/AuthDialog';
 import { JobSettingsForm } from './settings/JobSettingsForm';
+import { JobUploader } from './uploader/JobUploader';
 
 type PlaceholderProps = {
   title: string;
@@ -283,11 +284,7 @@ const AuthenticatedPanels: React.FC = () => (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '18px' }}>
       <JobSettingsForm />
 
-      <PlaceholderCard
-        title="Multi-file Uploader & Submission Queue"
-        description="Drag/drop markdown files, stream uploads to /uploads, then POST /jobs with the selected options. Each file will show its status, retries, and resulting jobId."
-        hint="dropzone, sequential uploads, retry controls"
-      />
+      <JobUploader />
 
       <PlaceholderCard
         title="Active Jobs Table"
