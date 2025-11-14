@@ -78,8 +78,8 @@ function createErrorResponse(
 
   // For ZodError, extract first error details for backward compatibility
   if (errorType === ErrorType.VALIDATION_ERROR && error instanceof ZodError) {
-    if (error.errors.length > 0) {
-      const firstError = error.errors[0];
+    if (error.issues.length > 0) {
+      const firstError = error.issues[0];
       if (firstError) {
         baseResponse.message = firstError.message;
         baseResponse.code = firstError.code || 'validation_failed';

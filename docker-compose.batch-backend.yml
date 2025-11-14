@@ -6,10 +6,12 @@ services:
       POSTGRES_USER: esl
       POSTGRES_PASSWORD: esl
       POSTGRES_DB: esl_batch
+    command: ["postgres", "-c", "fsync=off", "-c", "listen_addresses=*"]
     ports:
       - '5432:5432'
     volumes:
-      - ./packages/batch-backend/schema.sql:/schema/batch-backend/schema.sql:ro
+      - postgres_data:/var/lib/postgresql/data
+      - ./packages/batch-backend/schema.sql:/docker-entrypoint-initdb.d/001-schema.sql:ro
     healthcheck:
       # Check against the configured DB (esl_batch), not the default "esl"
       test: ['CMD-SHELL', 'pg_isready -U esl -d esl_batch']
@@ -63,7 +65,7 @@ services:
       sh -c "
         pnpm install &&
         pnpm -r build &&
-        node packages/batch-backend/dist/transport/http-server.js
+        pnpm --filter @esl-pipeline/batch-backend start:api
       "
     ports:
       - '8080:8080'
@@ -86,5 +88,8 @@ services:
       sh -c "
         pnpm install &&
         pnpm -r build &&
-        node packages/batch-backend/dist/transport/worker-runner.js
+        pnpm --filter @esl-pipeline/batch-backend start:worker
       "
+
+volumes:
+  postgres_data:

@@ -3,10 +3,13 @@ import toast from 'react-hot-toast';
 import { useAuth } from '../context/AuthContext';
 import { JobSettingsProvider } from '../context/JobSettingsContext';
 import { JobMonitorProvider } from '../context/JobMonitorContext';
+import { NotificationProvider } from '../context/NotificationContext';
 import { AuthDialog, AuthMode } from './auth/AuthDialog';
 import { JobSettingsForm } from './settings/JobSettingsForm';
 import { JobUploader } from './uploader/JobUploader';
 import { JobConnectionBanner } from './jobs/JobConnectionBanner';
+import { JobTable } from './jobs/JobTable';
+import { ActivityFeed } from './jobs/ActivityFeed';
 
 type PlaceholderProps = {
   title: string;
@@ -201,7 +204,9 @@ export const App: React.FC = () => {
     return (
       <JobSettingsProvider>
         <JobMonitorProvider>
-          <AuthenticatedPanels />
+          <NotificationProvider>
+            <AuthenticatedPanels />
+          </NotificationProvider>
         </JobMonitorProvider>
       </JobSettingsProvider>
     );
@@ -292,18 +297,11 @@ const AuthenticatedPanels: React.FC = () => (
 
       <JobConnectionBanner />
 
-      <PlaceholderCard
-        title="Active Jobs Table"
-        description="Live-updating table sourced from local session data + SSE job events. Row-level actions (copy Notion link, regenerate audio) land after SSE wiring."
-        hint="search/filter, state pills, row actions"
-      />
+      <JobTable />
     </div>
 
     <aside style={{ display: 'flex', flexDirection: 'column', gap: '18px' }}>
-      <PlaceholderCard
-        title="Activity Feed"
-        description="Chronological list of job state changes, errors, and completion toasts. SSE events will hydrate this feed with real-time updates."
-      />
+      <ActivityFeed />
       <PlaceholderCard
         title="Notifications Panel"
         description="Browser notification opt-in, SSE connection health, and manual refresh controls will appear here so tutors know when live updates pause."

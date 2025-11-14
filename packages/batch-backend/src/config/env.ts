@@ -226,7 +226,7 @@ export function loadConfig(): BatchBackendConfig {
   const storagePathPrefix = readString('S3_PATH_PREFIX') || readString('STORAGE_PATH_PREFIX');
   const presignedUrlExpiresIn = readInt('PRESIGNED_URL_EXPIRES_IN', 3600);
 
-  const extendedApiEnabled = readBool('BATCH_BACKEND_ENABLE_EXTENDED_API', false);
+  const extendedApiEnabled = readBool('BATCH_BACKEND_ENABLE_EXTENDED_API', true);
 
   return {
     nodeEnv,

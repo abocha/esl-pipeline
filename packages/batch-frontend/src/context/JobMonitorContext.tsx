@@ -37,9 +37,13 @@ interface JobMonitorContextValue {
   jobs: JobEntry[];
   jobMap: JobMap;
   registerJob: (options: RegisterJobOptions) => void;
+  trackJob: (jobId: string) => Promise<void>;
   connectionState: ConnectionState;
   isPolling: boolean;
   lastError: string | null;
+  liveUpdatesPaused: boolean;
+  pauseLiveUpdates: () => void;
+  resumeLiveUpdates: () => void;
 }
 
 const JobMonitorContext = createContext<JobMonitorContextValue | undefined>(undefined);
@@ -79,6 +83,7 @@ export function JobMonitorProvider({ children }: { children: ReactNode }) {
   const reconnectTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const reconnectAttemptRef = useRef(0);
   const eventSourceAbortRef = useRef<AbortController | null>(null);
+  const [liveUpdatesPaused, setLiveUpdatesPaused] = useState(false);
 
   useEffect(() => {
     jobsRef.current = jobs;
@@ -196,6 +201,9 @@ export function JobMonitorProvider({ children }: { children: ReactNode }) {
   );
 
   const connectEventSource = useCallback(() => {
+    if (liveUpdatesPaused) {
+      return;
+    }
     if (reconnectTimeoutRef.current) {
       clearTimeout(reconnectTimeoutRef.current);
       reconnectTimeoutRef.current = null;
@@ -233,9 +241,14 @@ export function JobMonitorProvider({ children }: { children: ReactNode }) {
         }, delay);
       },
     });
-  }, [handleJobEvent, startPolling, stopPolling]);
+  }, [handleJobEvent, startPolling, stopPolling, liveUpdatesPaused]);
 
   useEffect(() => {
+    if (liveUpdatesPaused) {
+      eventSourceAbortRef.current?.abort();
+      startPolling();
+      return;
+    }
     connectEventSource();
     return () => {
       eventSourceAbortRef.current?.abort();
@@ -244,7 +257,49 @@ export function JobMonitorProvider({ children }: { children: ReactNode }) {
       }
       stopPolling();
     };
-  }, [connectEventSource, stopPolling]);
+  }, [connectEventSource, stopPolling, liveUpdatesPaused, startPolling]);
+
+  const pauseLiveUpdates = useCallback(() => {
+    if (liveUpdatesPaused) return;
+    setLiveUpdatesPaused(true);
+    eventSourceAbortRef.current?.abort();
+    startPolling();
+  }, [liveUpdatesPaused, startPolling]);
+
+  const resumeLiveUpdates = useCallback(() => {
+    if (!liveUpdatesPaused) return;
+    setLiveUpdatesPaused(false);
+    reconnectAttemptRef.current = 0;
+    connectEventSource();
+  }, [liveUpdatesPaused, connectEventSource]);
+
+  const trackJob = useCallback(
+    async (jobId: string) => {
+      const trimmed = jobId.trim();
+      if (!trimmed) return;
+      updateJob(trimmed, prev => ({ ...prev, jobId: trimmed }));
+
+      try {
+        const status = await getJobStatus(trimmed);
+        updateJob(trimmed, prev => ({
+          ...prev,
+          ...status,
+          fileName: prev.fileName,
+          submittedMd: status.submittedMd ?? prev.submittedMd,
+        }));
+      } catch (error: any) {
+        updateJob(trimmed, prev => ({
+          ...prev,
+          jobId: trimmed,
+          state: 'failed',
+          error: error?.message ?? 'Unable to fetch job status.',
+          updatedAt: new Date().toISOString(),
+        }));
+        throw error;
+      }
+    },
+    [updateJob]
+  );
 
   const jobsArray = useMemo(() => {
     return Object.values(jobs).sort((a, b) => {
@@ -259,11 +314,26 @@ export function JobMonitorProvider({ children }: { children: ReactNode }) {
       jobs: jobsArray,
       jobMap: jobs,
       registerJob,
+      trackJob,
       connectionState,
       isPolling,
       lastError,
+      liveUpdatesPaused,
+      pauseLiveUpdates,
+      resumeLiveUpdates,
     }),
-    [jobs, jobsArray, registerJob, connectionState, isPolling, lastError]
+    [
+      jobs,
+      jobsArray,
+      registerJob,
+      trackJob,
+      connectionState,
+      isPolling,
+      lastError,
+      liveUpdatesPaused,
+      pauseLiveUpdates,
+      resumeLiveUpdates,
+    ]
   );
 
   return <JobMonitorContext.Provider value={value}>{children}</JobMonitorContext.Provider>;
