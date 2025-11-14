@@ -61,7 +61,8 @@ import {
   RateLimiterService
 } from './rate-limit-middleware';
 import {
-  createStorageConfigService
+  createStorageConfigService,
+  type StorageConfig
 } from '../infrastructure/storage-config';
 import {
   createFileStorageService
@@ -245,17 +246,29 @@ export function createHttpServer(): import('fastify').FastifyInstance {
   const rateLimiterService = createRateLimiterService();
   const uploadRateLimitMiddleware = createUploadRateLimitMiddleware(rateLimiterService);
 
-  const storageConfig = createStorageConfigService({
-    provider: config.storage.provider,
-    s3: {
-      endpoint: config.storage.provider === 'minio' ? config.minio.endpoint : undefined,
-      region: config.storage.provider === 'minio' ? 'us-east-1' : 'us-east-1',
-      accessKeyId: config.storage.provider === 'minio' ? config.minio.accessKey : '',
-      secretAccessKey: config.storage.provider === 'minio' ? config.minio.secretKey : '',
+  const s3Overrides: Partial<StorageConfig['s3']> = {};
+  if (config.storage.provider === 'minio') {
+    Object.assign(s3Overrides, {
+      endpoint: config.minio.endpoint,
+      region: 'us-east-1',
+      accessKeyId: config.minio.accessKey,
+      secretAccessKey: config.minio.secretKey,
       bucket: config.storage.bucketName || config.minio.bucket,
       pathPrefix: config.storage.pathPrefix,
-      forcePathStyle: config.storage.provider === 'minio',
-    },
+      forcePathStyle: true,
+    });
+  } else {
+    if (config.storage.bucketName) {
+      Object.assign(s3Overrides, { bucket: config.storage.bucketName });
+    }
+    if (config.storage.pathPrefix) {
+      Object.assign(s3Overrides, { pathPrefix: config.storage.pathPrefix });
+    }
+  }
+
+  const storageConfig = createStorageConfigService({
+    provider: config.storage.provider,
+    s3: s3Overrides,
     filesystem: {
       uploadDir: process.env.FILESYSTEM_UPLOAD_DIR || './uploads',
     },
@@ -665,7 +678,7 @@ export function createHttpServer(): import('fastify').FastifyInstance {
   // Admin Endpoints
 
   // GET /admin/users - List all users (admin only)
-  app.get('/admin/users', { preHandler: requireRole(['admin']) }, async (request, reply) => {
+  app.get('/admin/users', { preHandler: [authenticate, requireRole(['admin'])] }, async (request, reply) => {
     try {
       const users = await getAllUsers();
       const sanitizedUsers = users.map(user => sanitizeUser(user));
@@ -692,7 +705,7 @@ export function createHttpServer(): import('fastify').FastifyInstance {
   });
 
   // GET /admin/jobs - List all jobs (admin only)
-  app.get('/admin/jobs', { preHandler: requireRole(['admin']) }, async (request, reply) => {
+  app.get('/admin/jobs', { preHandler: [authenticate, requireRole(['admin'])] }, async (request, reply) => {
     try {
       // TODO: Implement getAllJobs function in job-repository.ts
       // const jobs = await getAllJobs();
@@ -720,7 +733,7 @@ export function createHttpServer(): import('fastify').FastifyInstance {
   });
 
   // DELETE /admin/jobs/:id - Delete any job (admin only)
-  app.delete('/admin/jobs/:jobId', { preHandler: requireRole(['admin']) }, async (request, reply) => {
+  app.delete('/admin/jobs/:jobId', { preHandler: [authenticate, requireRole(['admin'])] }, async (request, reply) => {
     const { jobId } = request.params as { jobId: string };
 
     try {
@@ -757,7 +770,7 @@ export function createHttpServer(): import('fastify').FastifyInstance {
   });
 
   // GET /admin/stats - System statistics (admin only)
-  app.get('/admin/stats', { preHandler: requireRole(['admin']) }, async (request, reply) => {
+  app.get('/admin/stats', { preHandler: [authenticate, requireRole(['admin'])] }, async (request, reply) => {
     try {
       // TODO: Implement system statistics collection
       const stats = {
