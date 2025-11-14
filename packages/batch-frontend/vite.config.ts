@@ -10,28 +10,35 @@ import react from '@vitejs/plugin-react-swc';
 // - BATCH_BACKEND_URL (e.g. http://localhost:8080)
 // - Or rely on the default below.
 const batchBackendUrl = process.env.BATCH_BACKEND_URL || 'http://localhost:8080';
+const proxyRoutes = ['/auth', '/jobs', '/uploads', '/config', '/user', '/api'];
+
+function withCookieForwarding() {
+  return {
+    target: batchBackendUrl,
+    changeOrigin: true,
+    secure: false,
+    configure: (proxy: any) => {
+      proxy.on('proxyReq', (proxyReq: any, req: any) => {
+        if (req.headers.cookie) {
+          proxyReq.setHeader('cookie', req.headers.cookie);
+        }
+      });
+    },
+  };
+}
 
 export default defineConfig({
   plugins: [react()],
   server: {
     port: 5173,
     strictPort: true,
-    proxy: {
-      // Proxy all API routes to batch-backend for authentication
-      '/api': {
-        target: batchBackendUrl,
-        changeOrigin: true,
-        configure: (proxy, _options) => {
-          // Ensure cookies are forwarded for authentication
-          proxy.on('proxyReq', (proxyReq, req, _res) => {
-            // Forward cookies for session management
-            if (req.headers.cookie) {
-              proxyReq.setHeader('cookie', req.headers.cookie);
-            }
-          });
-        },
+    proxy: proxyRoutes.reduce(
+      (acc, route) => {
+        acc[route] = withCookieForwarding();
+        return acc;
       },
-    },
+      {} as Record<string, any>
+    ),
     // Security headers for development
     headers: {
       'X-Content-Type-Options': 'nosniff',

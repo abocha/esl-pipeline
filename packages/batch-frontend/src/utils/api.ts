@@ -6,24 +6,25 @@
  * - POST /jobs (authenticated)
  * - GET /jobs/:jobId (authenticated)
  * - POST /uploads (authenticated)
+ * - GET /config/job-options for metadata
+ * - GET /jobs/events (SSE) for live updates
  * - GET /user/profile, /user/files (authenticated)
- *
- * Base URL resolution (in priority order):
- * - window.__BATCH_BACKEND_URL__ (for ad-hoc overrides when bundling)
- * - import.meta.env.VITE_BATCH_BACKEND_URL (Vite dev/prod configuration)
- * - Relative "" (when running behind the same origin / reverse proxy)
- *
- * In dev, vite.config.ts also proxies /api to the backend by default.
  */
-import apiClient, { handleApiError, isAuthError } from './api-client';
+import apiClient, { handleApiError, isAuthError, buildBackendUrl } from './api-client';
 
 export type JobState = 'queued' | 'running' | 'succeeded' | 'failed';
+export type UserRole = 'admin' | 'user' | 'viewer';
+export type RegisterRole = Exclude<UserRole, 'admin'>;
 
 export interface SubmitJobRequest {
   md: string;
   preset?: string;
   withTts?: boolean;
-  upload?: string;
+  forceTts?: boolean;
+  voiceAccent?: string;
+  notionDatabase?: string;
+  upload?: 'auto' | 's3' | 'none';
+  mode?: 'auto' | 'dialogue' | 'monologue';
 }
 
 export interface UploadMarkdownResponse {
@@ -44,6 +45,14 @@ export interface JobStatus {
   finishedAt: string | null;
   error: string | null;
   manifestPath: string | null;
+  preset?: string | null;
+  voiceAccent?: string | null;
+  notionDatabase?: string | null;
+  notionUrl?: string | null;
+  submittedMd?: string | null;
+  runMode?: SubmitJobRequest['mode'];
+  upload?: SubmitJobRequest['upload'];
+  withTts?: boolean;
 }
 
 // Authentication interfaces
@@ -55,14 +64,14 @@ export interface LoginRequest {
 export interface RegisterRequest {
   email: string;
   password: string;
-  role?: 'user' | 'viewer';
+  role?: RegisterRole;
 }
 
 export interface AuthResponse {
   user: {
     id: string;
     email: string;
-    role: 'admin' | 'user' | 'viewer';
+    role: UserRole;
     isActive: boolean;
   };
   accessToken: string;
@@ -72,7 +81,7 @@ export interface AuthResponse {
 export interface UserProfile {
   id: string;
   email: string;
-  role: 'admin' | 'user' | 'viewer';
+  role: UserRole;
   isActive: boolean;
   createdAt: string;
   updatedAt: string;
@@ -101,25 +110,38 @@ export interface ErrorEnvelope {
   code?: string;
 }
 
-/**
- * Resolve the base URL to talk to batch-backend.
- */
-export function getBatchBackendBaseUrl(): string {
-  // Guard against non-browser environments (SSR, tests).
-  // We check typeof before touching window first.
-  const globalAny: any = typeof window !== 'undefined' ? (window as any) : undefined;
-  const globalOverride = globalAny?.__BATCH_BACKEND_URL__ as string | undefined;
+export interface JobOptionsResponse {
+  presets: string[];
+  voiceAccents: string[];
+  notionDatabases: Array<{ id: string; name: string }>;
+  uploadOptions: Array<'auto' | 's3' | 'none'>;
+  modes: Array<'auto' | 'dialogue' | 'monologue'>;
+}
 
-  if (globalOverride) {
-    return globalOverride;
-  }
+export type JobEventType = 'job_state_changed' | string;
 
-  // Vite-style env for dev/prod builds.
-  const viteEnv = (import.meta as any).env?.VITE_BATCH_BACKEND_URL as string | undefined;
-  if (viteEnv) return viteEnv;
+export interface JobEventPayload {
+  manifestPath?: string | null;
+  error?: string | null;
+  finishedAt?: string | null;
+  runMode?: SubmitJobRequest['mode'];
+  submittedMd?: string | null;
+  notionUrl?: string | null;
+}
 
-  // Default: same-origin (useful when frontend is served via reverse proxy).
-  return '';
+export interface JobStateChangedEvent {
+  type: 'job_state_changed';
+  jobId: string;
+  state: JobState;
+  payload?: JobEventPayload;
+}
+
+export type JobEvent = JobStateChangedEvent;
+
+export interface JobEventsOptions {
+  signal?: AbortSignal;
+  onError?: (event: Event) => void;
+  onOpen?: (event: Event) => void;
 }
 
 /**
@@ -134,20 +156,30 @@ export async function login(credentials: LoginRequest): Promise<AuthResponse> {
   }
 }
 
-export async function register(userData: RegisterRequest): Promise<{ user: UserProfile }> {
+export async function register(userData: RegisterRequest): Promise<void> {
   try {
-    const response = await apiClient.post('/auth/register', userData);
+    await apiClient.post('/auth/register', userData);
+  } catch (error: any) {
+    throw new Error(handleApiError(error));
+  }
+}
+
+export async function refreshToken(refreshTokenValue: string): Promise<AuthResponse> {
+  try {
+    const response = await apiClient.post('/auth/refresh', { refreshToken: refreshTokenValue });
     return response.data;
   } catch (error: any) {
     throw new Error(handleApiError(error));
   }
 }
 
-export async function refreshToken(refreshToken: string): Promise<AuthResponse> {
+export async function logoutSession(): Promise<void> {
   try {
-    const response = await apiClient.post('/auth/refresh', { refreshToken });
-    return response.data;
+    await apiClient.post('/auth/logout');
   } catch (error: any) {
+    if (error.response?.status === 404) {
+      return;
+    }
     throw new Error(handleApiError(error));
   }
 }
@@ -216,7 +248,7 @@ export async function uploadMarkdown(file: File): Promise<UploadMarkdownResponse
  */
 export async function getJobStatus(jobId: string): Promise<JobStatus> {
   try {
-    const response = await apiClient.get(`/jobs/${encodeURIComponent(jobId)}/status`);
+    const response = await apiClient.get(`/jobs/${encodeURIComponent(jobId)}`);
     return response.data;
   } catch (error: any) {
     if (isAuthError(error)) {
@@ -224,4 +256,50 @@ export async function getJobStatus(jobId: string): Promise<JobStatus> {
     }
     throw new Error(handleApiError(error));
   }
+}
+
+export async function fetchJobOptions(): Promise<JobOptionsResponse> {
+  try {
+    const response = await apiClient.get('/config/job-options');
+    return response.data;
+  } catch (error: any) {
+    throw new Error(handleApiError(error));
+  }
+}
+
+export function subscribeToJobEvents(
+  onEvent: (event: JobEvent) => void,
+  options: JobEventsOptions = {}
+): EventSource {
+  const url = buildBackendUrl('/jobs/events');
+  const eventSource = new EventSource(url, { withCredentials: true });
+
+  if (options.onOpen) {
+    eventSource.onopen = options.onOpen;
+  }
+
+  eventSource.onmessage = event => {
+    try {
+      const parsed = JSON.parse(event.data) as JobEvent;
+      onEvent(parsed);
+    } catch (parseError) {
+      console.warn('Failed to parse SSE payload', parseError);
+    }
+  };
+
+  if (options.onError) {
+    eventSource.onerror = options.onError;
+  }
+
+  if (options.signal) {
+    options.signal.addEventListener(
+      'abort',
+      () => {
+        eventSource.close();
+      },
+      { once: true }
+    );
+  }
+
+  return eventSource;
 }
