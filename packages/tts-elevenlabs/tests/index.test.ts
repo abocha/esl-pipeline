@@ -113,6 +113,8 @@ beforeEach(() => {
     await writeFile(outFile, 'silence');
   });
   vi.spyOn(ffm, 'setMp3TitleMetadata').mockResolvedValue();
+  // Mock console.log to suppress TTS mode selection messages
+  vi.spyOn(console, 'log').mockImplementation(() => {});
 });
 
 describe('tts elevenlabs integration', () => {
@@ -279,6 +281,7 @@ default: voice_id_default
     const result = await buildStudyTextMp3(tempMdPath, {
       voiceMapPath: tempVoiceMapPath,
       outPath: dir,
+      ttsMode: 'monologue', // Force monologue mode for this test
     });
     expect(result.path.endsWith('.mp3')).toBe(true);
     expect(result.hash).toHaveLength(64);
@@ -400,6 +403,7 @@ default: voice_id_default
     const result = await buildStudyTextMp3(tempMdPath, {
       voiceMapPath: tempVoiceMapPath,
       outPath: dir,
+      ttsMode: 'monologue', // Force monologue mode for this test
     });
     expect(result.path.endsWith('.mp3')).toBe(true);
     expect(result.hash).toHaveLength(64);
@@ -541,6 +545,7 @@ auto: true
     const result = await buildStudyTextMp3(tempMdPath, {
       voiceMapPath: tempVoiceMapPath,
       outPath: dir,
+      ttsMode: 'monologue', // Force monologue mode for this test
     });
     expect(convertMock).toHaveBeenCalledTimes(4);
     const voiceIds = convertMock.mock.calls.map(call => call[0]);

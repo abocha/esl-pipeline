@@ -844,9 +844,27 @@ const printWizardSummary = (
   if (selections.dbId) console.log(`  Database : ${selections.dbId}`);
   if (selections.preset) console.log(`  Preset   : ${selections.preset}`);
   if (selections.accentPreference) console.log(`  Accent   : ${selections.accentPreference}`);
-  console.log(`  Audio    : ${selections.withTts ? 'Enabled' : 'Disabled'}`);
-  if (selections.withTts && selections.voices) {
-    console.log(`  Voice map: ${selections.voices}`);
+  if (selections.withTts) {
+    console.log(`  Audio    : Enabled`);
+    if (selections.ttsMode) {
+      console.log(`  Mode     : ${selections.ttsMode} (${selections.ttsMode === 'auto' ? 'auto-detect' : selections.ttsMode === 'dialogue' ? 'Text-to-Dialogue' : 'Text-to-Speech'})`);
+      if (selections.ttsMode === 'dialogue') {
+        if (selections.dialogueLanguage) {
+          console.log(`  Language : ${selections.dialogueLanguage}`);
+        }
+        if (selections.dialogueStability !== undefined) {
+          console.log(`  Stability: ${selections.dialogueStability}`);
+        }
+        if (selections.dialogueSeed !== undefined && selections.dialogueSeed > 0) {
+          console.log(`  Seed     : ${selections.dialogueSeed}`);
+        }
+      }
+    }
+    if (selections.voices) {
+      console.log(`  Voice map: ${selections.voices}`);
+    }
+  } else {
+    console.log(`  Audio    : Disabled`);
   }
   const actualVoices = summarizeVoiceSelections(result.audio?.voices);
   if (actualVoices) console.log(`  Voices   : ${actualVoices}`);
