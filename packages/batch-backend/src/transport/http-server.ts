@@ -152,7 +152,11 @@ export function createHttpServer(): import('fastify').FastifyInstance {
       md: z.string().min(1, 'md is required'),
       preset: z.string().optional(),
       withTts: z.boolean().optional(),
-      upload: z.enum(['s3', 'none']).optional(),
+      upload: z.enum(['auto', 's3', 'none']).optional(),
+      voiceAccent: z.string().min(1).optional(),
+      forceTts: z.boolean().optional(),
+      notionDatabase: z.string().min(1).optional(),
+      mode: z.enum(['auto', 'dialogue', 'monologue']).optional(),
     });
 
     const validatedData = jobSchema.parse(body);
@@ -162,6 +166,10 @@ export function createHttpServer(): import('fastify').FastifyInstance {
       preset: validatedData.preset,
       withTts: validatedData.withTts,
       upload: validatedData.upload,
+      voiceAccent: validatedData.voiceAccent,
+      forceTts: validatedData.forceTts,
+      notionDatabase: validatedData.notionDatabase,
+      mode: validatedData.mode,
     });
 
     logger.info('HTTP request handled', {

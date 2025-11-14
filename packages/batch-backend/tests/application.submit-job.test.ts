@@ -52,6 +52,11 @@ describe('application/submit-job', () => {
       preset: null,
       withTts: false,
       upload: null,
+      voiceAccent: null,
+      forceTts: null,
+      notionDatabase: null,
+      mode: null,
+      notionUrl: null,
       createdAt: new Date(),
       updatedAt: new Date(),
       startedAt: null,
@@ -77,6 +82,10 @@ describe('application/submit-job', () => {
       preset: undefined,
       withTts: undefined,
       upload: undefined,
+      voiceAccent: undefined,
+      forceTts: undefined,
+      notionDatabase: undefined,
+      mode: undefined,
     });
 
     expect(createJobQueueSpy).toHaveBeenCalledTimes(1);
@@ -100,6 +109,11 @@ describe('application/submit-job', () => {
       preset: 'b1-default',
       withTts: true,
       upload: 's3',
+      voiceAccent: 'american_female',
+      forceTts: true,
+      notionDatabase: 'db-123',
+      mode: 'dialogue',
+      notionUrl: null,
       createdAt: new Date(),
       updatedAt: new Date(),
     };
@@ -118,6 +132,10 @@ describe('application/submit-job', () => {
       preset: fakeJob.preset!,
       withTts: fakeJob.withTts!,
       upload: fakeJob.upload as 's3',
+      voiceAccent: fakeJob.voiceAccent,
+      forceTts: fakeJob.forceTts,
+      notionDatabase: fakeJob.notionDatabase,
+      mode: fakeJob.mode as 'dialogue',
     });
 
     expect(insertJobSpy).toHaveBeenCalledWith({
@@ -125,6 +143,10 @@ describe('application/submit-job', () => {
       preset: fakeJob.preset,
       withTts: fakeJob.withTts,
       upload: fakeJob.upload,
+      voiceAccent: fakeJob.voiceAccent,
+      forceTts: fakeJob.forceTts,
+      notionDatabase: fakeJob.notionDatabase,
+      mode: fakeJob.mode,
     });
     expect(enqueue).toHaveBeenCalledWith({ jobId: fakeJob.id });
   });

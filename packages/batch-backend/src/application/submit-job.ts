@@ -10,13 +10,18 @@ import { createJobQueue } from '../infrastructure/queue-bullmq';
 import { logger } from '../infrastructure/logger';
 import { publishJobEvent } from '../domain/job-events';
 
-export type UploadTarget = 's3' | 'none';
+export type UploadTarget = 'auto' | 's3' | 'none';
+export type JobMode = 'auto' | 'dialogue' | 'monologue';
 
 export interface SubmitJobRequest {
   md: string;
   preset?: string;
   withTts?: boolean;
   upload?: UploadTarget;
+  voiceAccent?: string;
+  forceTts?: boolean;
+  notionDatabase?: string;
+  mode?: JobMode;
 }
 
 export interface SubmitJobResponse {
@@ -54,7 +59,34 @@ function validateSubmitJobRequest(req: SubmitJobRequest): void {
   }
 
   if (req.upload !== undefined && req.upload !== 's3' && req.upload !== 'none') {
-    throw new ValidationError('upload must be "s3" or "none" when provided', 'invalid_upload');
+    if (req.upload !== 'auto') {
+      throw new ValidationError('upload must be "auto", "s3" or "none" when provided', 'invalid_upload');
+    }
+  }
+
+  if (
+    req.voiceAccent !== undefined &&
+    (typeof req.voiceAccent !== 'string' || req.voiceAccent.trim().length === 0)
+  ) {
+    throw new ValidationError('voiceAccent must be a non-empty string when provided', 'invalid_voice_accent');
+  }
+
+  if (req.forceTts !== undefined && typeof req.forceTts !== 'boolean') {
+    throw new ValidationError('forceTts must be a boolean when provided', 'invalid_force_tts');
+  }
+
+  if (
+    req.notionDatabase !== undefined &&
+    (typeof req.notionDatabase !== 'string' || req.notionDatabase.trim().length === 0)
+  ) {
+    throw new ValidationError(
+      'notionDatabase must be a non-empty string when provided',
+      'invalid_notion_database'
+    );
+  }
+
+  if (req.mode && !['auto', 'dialogue', 'monologue'].includes(req.mode)) {
+    throw new ValidationError('mode must be auto, dialogue, or monologue when provided', 'invalid_mode');
   }
 }
 
@@ -69,6 +101,10 @@ export async function submitJob(req: SubmitJobRequest): Promise<SubmitJobRespons
     withTts: req.withTts,
     // Persist explicit upload choice for observability; downstream decides how to interpret.
     upload: req.upload,
+    voiceAccent: req.voiceAccent,
+    forceTts: req.forceTts,
+    notionDatabase: req.notionDatabase,
+    mode: req.mode,
   });
 
   publishJobEvent({ type: 'job_created', job });

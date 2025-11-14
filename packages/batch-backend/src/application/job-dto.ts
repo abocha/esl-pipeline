@@ -10,6 +10,11 @@ export interface JobStatusDto {
   preset: string | null;
   withTts: boolean | null;
   upload: string | null;
+  voiceAccent: string | null;
+  forceTts: boolean | null;
+  notionDatabase: string | null;
+  mode: string | null;
+  notionUrl: string | null;
   state: JobRecord['state'];
   createdAt: string;
   updatedAt: string;
@@ -26,6 +31,11 @@ export function jobRecordToDto(job: JobRecord): JobStatusDto {
     preset: job.preset ?? null,
     withTts: job.withTts ?? null,
     upload: job.upload ?? null,
+    voiceAccent: job.voiceAccent ?? null,
+    forceTts: job.forceTts ?? null,
+    notionDatabase: job.notionDatabase ?? null,
+    mode: job.mode ?? null,
+    notionUrl: job.notionUrl ?? null,
     state: job.state,
     createdAt: job.createdAt.toISOString(),
     updatedAt: job.updatedAt.toISOString(),

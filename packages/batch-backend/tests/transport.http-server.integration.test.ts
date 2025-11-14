@@ -112,6 +112,42 @@ describe('transport/http-server - integration (in-process)', () => {
       preset: undefined,
       withTts: undefined,
       upload: undefined,
+      voiceAccent: undefined,
+      forceTts: undefined,
+      notionDatabase: undefined,
+      mode: undefined,
+    });
+  });
+
+  it('POST /jobs accepts advanced metadata fields', async () => {
+    const submitJob = vi.spyOn(submitJobModule, 'submitJob');
+    submitJob.mockResolvedValue({ jobId: 'job-234' });
+
+    const response = await app.inject({
+      method: 'POST',
+      url: '/jobs',
+      payload: {
+        md: 'fixtures/ok.md',
+        preset: 'b1-default',
+        withTts: true,
+        upload: 'auto',
+        voiceAccent: 'american_female',
+        forceTts: true,
+        notionDatabase: 'db-123',
+        mode: 'dialogue',
+      },
+    });
+
+    expect(response.statusCode).toBe(202);
+    expect(submitJob).toHaveBeenCalledWith({
+      md: 'fixtures/ok.md',
+      preset: 'b1-default',
+      withTts: true,
+      upload: 'auto',
+      voiceAccent: 'american_female',
+      forceTts: true,
+      notionDatabase: 'db-123',
+      mode: 'dialogue',
     });
   });
 
@@ -167,6 +203,11 @@ describe('transport/http-server - integration (in-process)', () => {
       preset: 'b1-default',
       withTts: true,
       upload: 's3',
+      voiceAccent: 'american_female',
+      forceTts: true,
+      notionDatabase: 'db-123',
+      mode: 'dialogue',
+      notionUrl: 'https://notion.so/job-1',
       state: 'queued',
       createdAt: '2024-01-01T00:00:00.000Z',
       updatedAt: '2024-01-01T00:00:00.000Z',
@@ -188,6 +229,11 @@ describe('transport/http-server - integration (in-process)', () => {
       preset: 'b1-default',
       withTts: true,
       upload: 's3',
+      voiceAccent: 'american_female',
+      forceTts: true,
+      notionDatabase: 'db-123',
+      mode: 'dialogue',
+      notionUrl: 'https://notion.so/job-1',
       state: 'queued',
       createdAt: '2024-01-01T00:00:00.000Z',
       updatedAt: '2024-01-01T00:00:00.000Z',
@@ -208,6 +254,11 @@ describe('transport/http-server - integration (in-process)', () => {
       preset: null,
       withTts: null,
       upload: null,
+      voiceAccent: null,
+      forceTts: null,
+      notionDatabase: null,
+      mode: null,
+      notionUrl: null,
       state: 'queued',
       createdAt: '2024-01-01T00:00:00.000Z',
       updatedAt: '2024-01-01T00:00:00.000Z',

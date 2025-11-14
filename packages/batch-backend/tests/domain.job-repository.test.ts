@@ -47,6 +47,11 @@ describeIfDb('domain/job-repository', () => {
       expect(job.preset).toBeNull();
       expect(job.withTts).toBe(false);
       expect(job.upload).toBeNull();
+      expect(job.voiceAccent).toBeNull();
+      expect(job.forceTts).toBeNull();
+      expect(job.notionDatabase).toBeNull();
+      expect(job.mode).toBeNull();
+      expect(job.notionUrl).toBeNull();
       expect(job.createdAt instanceof Date).toBe(true);
       expect(job.updatedAt instanceof Date).toBe(true);
 
@@ -55,6 +60,27 @@ describeIfDb('domain/job-repository', () => {
       expect(loaded!.id).toBe(job.id);
       expect(loaded!.state).toBe('queued');
       expect(loaded!.md).toBe('fixtures/ok.md');
+      expect(loaded!.voiceAccent).toBeNull();
+      expect(loaded!.notionDatabase).toBeNull();
+    });
+
+    it('persists optional metadata fields when provided', async () => {
+      const job = await insertJob({
+        md: 'fixtures/ok.md',
+        preset: 'b1-default',
+        withTts: true,
+        upload: 's3',
+        voiceAccent: 'american_female',
+        forceTts: true,
+        notionDatabase: 'db-123',
+        mode: 'dialogue',
+      });
+
+      expect(job.voiceAccent).toBe('american_female');
+      expect(job.forceTts).toBe(true);
+      expect(job.notionDatabase).toBe('db-123');
+      expect(job.mode).toBe('dialogue');
+      expect(job.notionUrl).toBeNull();
     });
 
     it('returns null for unknown id', async () => {
@@ -64,7 +90,7 @@ describeIfDb('domain/job-repository', () => {
   });
 
   describe('updateJobStateAndResult', () => {
-    it('performs queued -> running -> succeeded transitions with timestamps and manifestPath', async () => {
+    it('performs queued -> running -> succeeded transitions with timestamps, Notion URL, and manifestPath', async () => {
       const job = await insertJob({
         md: 'fixtures/ok.md',
         preset: 'b1-default',
@@ -89,6 +115,7 @@ describeIfDb('domain/job-repository', () => {
         expectedState: 'running',
         nextState: 'succeeded',
         manifestPath: '/manifests/test.json',
+        notionUrl: 'https://notion.so/job',
         finishedAt: new Date(),
       });
 
@@ -96,6 +123,7 @@ describeIfDb('domain/job-repository', () => {
       expect(succeeded!.state).toBe('succeeded');
       expect(succeeded!.manifestPath).toBe('/manifests/test.json');
       expect(succeeded!.finishedAt).toBeInstanceOf(Date);
+      expect(succeeded!.notionUrl).toBe('https://notion.so/job');
     });
 
     it('returns null when expectedState does not match (optimistic concurrency / race)', async () => {

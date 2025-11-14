@@ -53,6 +53,10 @@ describe('application/process-queue-job', () => {
       preset: 'b1-default',
       withTts: true,
       upload: 's3',
+      voiceAccent: 'american_female',
+      forceTts: false,
+      notionDatabase: 'db-123',
+      mode: 'auto',
       createdAt: now,
       updatedAt: now,
       startedAt: null,
@@ -95,12 +99,16 @@ describe('application/process-queue-job', () => {
       state: 'succeeded',
       manifestPath: '/manifests/job-1.json',
       finishedAt: new Date('2024-01-01T10:02:00Z'),
+      notionUrl: 'https://notion.so/job-1',
     };
     updateJobStateAndResultSpy
       .mockResolvedValueOnce(running as any) // queued -> running
       .mockResolvedValueOnce(succeeded as any); // running -> succeeded
 
-    runAssignmentJobSpy.mockResolvedValue({ manifestPath: '/manifests/job-1.json' });
+    runAssignmentJobSpy.mockResolvedValue({
+      manifestPath: '/manifests/job-1.json',
+      notionUrl: 'https://notion.so/job-1',
+    });
 
     await processQueueJob({ jobId: 'job-1' });
 
@@ -121,6 +129,8 @@ describe('application/process-queue-job', () => {
       preset: initial.preset!,
       withTts: initial.withTts!,
       upload: 's3',
+      voiceAccent: initial.voiceAccent,
+      notionDatabase: initial.notionDatabase,
     });
     expect(typeof runId).toBe('string');
     expect(runId.length).toBeGreaterThan(0);
@@ -130,6 +140,7 @@ describe('application/process-queue-job', () => {
       expectedState: 'running',
       nextState: 'succeeded',
       manifestPath: '/manifests/job-1.json',
+      notionUrl: 'https://notion.so/job-1',
       finishedAt: expect.any(Date),
     });
 

@@ -13,6 +13,11 @@ export interface JobRecord {
   preset?: string | null;
   withTts?: boolean | null;
   upload?: string | null;
+  voiceAccent?: string | null;
+  forceTts?: boolean | null;
+  notionDatabase?: string | null;
+  mode?: string | null;
+  notionUrl?: string | null;
   createdAt: Date;
   updatedAt: Date;
   startedAt?: Date | null;
