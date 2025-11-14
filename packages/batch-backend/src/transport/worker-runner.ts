@@ -12,9 +12,11 @@
 import { createJobWorker } from '../infrastructure/queue-bullmq';
 import { processQueueJob } from '../application/process-queue-job';
 import { logger } from '../infrastructure/logger';
+import { enableRedisJobEventBridge } from '../infrastructure/job-event-redis-bridge';
 
 // startWorker.declaration()
 export async function startWorker(): Promise<void> {
+  await enableRedisJobEventBridge();
   const worker = createJobWorker(async bullJob => {
     const { jobId } = bullJob.data;
     await processQueueJob({ jobId });

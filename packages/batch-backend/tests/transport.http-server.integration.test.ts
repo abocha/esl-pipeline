@@ -126,7 +126,7 @@ describe('transport/http-server - integration (in-process)', () => {
     expect(response.statusCode).toBe(400);
     expect(response.json()).toEqual({
       error: 'validation_failed',
-      message: 'Required',
+      message: 'Invalid input: expected string, received undefined',
       code: 'invalid_type',
       requestId: expect.any(String),
       timestamp: expect.any(String),

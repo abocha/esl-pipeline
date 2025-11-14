@@ -8,6 +8,7 @@
 import { insertJob } from '../domain/job-repository';
 import { createJobQueue } from '../infrastructure/queue-bullmq';
 import { logger } from '../infrastructure/logger';
+import { publishJobEvent } from '../domain/job-events';
 
 export type UploadTarget = 's3' | 'none';
 
@@ -69,6 +70,8 @@ export async function submitJob(req: SubmitJobRequest): Promise<SubmitJobRespons
     // Persist explicit upload choice for observability; downstream decides how to interpret.
     upload: req.upload,
   });
+
+  publishJobEvent({ type: 'job_created', job });
 
   const { enqueue } = createJobQueue();
   await enqueue({ jobId: job.id });

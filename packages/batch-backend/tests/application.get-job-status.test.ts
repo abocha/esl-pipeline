@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { getJobStatus } from '../src/application/get-job-status';
 import * as jobRepository from '../src/domain/job-repository';
+import * as jobDto from '../src/application/job-dto';
 
 describe('application/get-job-status', () => {
   /**
@@ -11,6 +12,7 @@ describe('application/get-job-status', () => {
    */
 
   const getJobByIdSpy = vi.spyOn(jobRepository, 'getJobById');
+  const jobRecordToDtoSpy = vi.spyOn(jobDto, 'jobRecordToDto');
 
   beforeEach(() => {
     vi.clearAllMocks();
@@ -29,72 +31,24 @@ describe('application/get-job-status', () => {
 
     expect(getJobByIdSpy).toHaveBeenCalledWith('missing-id');
     expect(res).toBeNull();
+    expect(jobRecordToDtoSpy).not.toHaveBeenCalled();
   });
 
-  it('maps JobRecord fields to DTO correctly', async () => {
-    const createdAt = new Date('2024-01-01T10:00:00Z');
-    const updatedAt = new Date('2024-01-01T10:05:00Z');
-    const startedAt = new Date('2024-01-01T10:01:00Z');
-    const finishedAt = new Date('2024-01-01T10:04:00Z');
-
-    getJobByIdSpy.mockResolvedValue({
+  it('delegates serialization to jobRecordToDto', async () => {
+    const jobRecord = {
       id: 'job-1',
-      state: 'succeeded',
+      state: 'queued',
       md: 'fixtures/ok.md',
-      preset: 'b1-default',
-      withTts: true,
-      upload: 's3',
-      createdAt,
-      updatedAt,
-      startedAt,
-      finishedAt,
-      error: null,
-      manifestPath: '/manifests/job-1.json',
-    } as any);
+    } as any;
+    const dto = { jobId: 'job-1', state: 'queued' } as any;
+
+    getJobByIdSpy.mockResolvedValue(jobRecord);
+    jobRecordToDtoSpy.mockReturnValue(dto);
 
     const res = await getJobStatus('job-1');
 
-    expect(res).toEqual({
-      jobId: 'job-1',
-      state: 'succeeded',
-      createdAt: createdAt.toISOString(),
-      updatedAt: updatedAt.toISOString(),
-      startedAt: startedAt.toISOString(),
-      finishedAt: finishedAt.toISOString(),
-      error: null,
-      manifestPath: '/manifests/job-1.json',
-    });
-  });
-
-  it('normalizes nullable fields to null in DTO', async () => {
-    const now = new Date('2024-01-01T10:00:00Z');
-
-    getJobByIdSpy.mockResolvedValue({
-      id: 'job-2',
-      state: 'queued',
-      md: 'fixtures/ok.md',
-      preset: null,
-      withTts: null,
-      upload: null,
-      createdAt: now,
-      updatedAt: now,
-      startedAt: null,
-      finishedAt: null,
-      error: undefined,
-      manifestPath: undefined,
-    } as any);
-
-    const res = await getJobStatus('job-2');
-
-    expect(res).toEqual({
-      jobId: 'job-2',
-      state: 'queued',
-      createdAt: now.toISOString(),
-      updatedAt: now.toISOString(),
-      startedAt: null,
-      finishedAt: null,
-      error: null,
-      manifestPath: null,
-    });
+    expect(getJobByIdSpy).toHaveBeenCalledWith('job-1');
+    expect(jobRecordToDtoSpy).toHaveBeenCalledWith(jobRecord);
+    expect(res).toBe(dto);
   });
 });
