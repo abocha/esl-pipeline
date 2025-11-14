@@ -1,7 +1,9 @@
 import React, { useCallback, useMemo, useState } from 'react';
 import toast from 'react-hot-toast';
 import { useAuth } from '../context/AuthContext';
+import { JobSettingsProvider } from '../context/JobSettingsContext';
 import { AuthDialog, AuthMode } from './auth/AuthDialog';
+import { JobSettingsForm } from './settings/JobSettingsForm';
 
 type PlaceholderProps = {
   title: string;
@@ -193,7 +195,11 @@ export const App: React.FC = () => {
       return <UnauthenticatedNotice onLogin={openLogin} onRegister={openRegister} />;
     }
 
-    return <PlaceholderLayout />;
+    return (
+      <JobSettingsProvider>
+        <AuthenticatedPanels />
+      </JobSettingsProvider>
+    );
   };
 
   return (
@@ -266,7 +272,7 @@ const eyebrowStyle: React.CSSProperties = {
   color: '#818cf8',
 };
 
-const PlaceholderLayout: React.FC = () => (
+const AuthenticatedPanels: React.FC = () => (
   <div
     style={{
       display: 'grid',
@@ -275,11 +281,7 @@ const PlaceholderLayout: React.FC = () => (
     }}
   >
     <div style={{ display: 'flex', flexDirection: 'column', gap: '18px' }}>
-      <PlaceholderCard
-        title="Job Settings Panel"
-        description="Configurable presets, voices, Notion DB, and upload modes. React Query will source live options from /config/job-options."
-        hint="metadata fetch + Apply-to-queue logic"
-      />
+      <JobSettingsForm />
 
       <PlaceholderCard
         title="Multi-file Uploader & Submission Queue"
