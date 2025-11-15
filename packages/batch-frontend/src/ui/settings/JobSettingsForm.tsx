@@ -51,21 +51,6 @@ export const JobSettingsForm: React.FC = () => {
         </label>
 
         <label style={fieldStyle}>
-          Voice accent
-          <select
-            value={settings.voiceAccent}
-            onChange={event => updateSettings({ voiceAccent: event.target.value })}
-            style={selectStyle}
-          >
-            {options.voiceAccents.map(accent => (
-              <option key={accent} value={accent}>
-                {humanizeAccent(accent)}
-              </option>
-            ))}
-          </select>
-        </label>
-
-        <label style={fieldStyle}>
           Notion database
           <select
             value={settings.notionDatabase}
@@ -103,16 +88,17 @@ export const JobSettingsForm: React.FC = () => {
           <select
             value={settings.mode}
             onChange={event => updateSettings({ mode: event.target.value as JobSettingsValue['mode'] })}
-            style={{ ...selectStyle, backgroundColor: '#EEF2FF', cursor: 'not-allowed' }}
-            disabled
+            style={selectStyle}
           >
             {options.modes.map(mode => (
               <option key={mode} value={mode}>
-                {mode} (coming soon)
+                {mode}
               </option>
             ))}
           </select>
-          <span style={helperTextStyle}>Dialogue/monologue presets unlock after orchestrator rollout.</span>
+          <span style={helperTextStyle}>
+            Auto lets the backend decide; use dialogue for multi-speaker lessons or monologue for single voices.
+          </span>
         </label>
 
         <ToggleField
@@ -124,7 +110,7 @@ export const JobSettingsForm: React.FC = () => {
 
         <ToggleField
           label="Force regenerate TTS"
-          description="Even if audio exists, re-run TTS with the selected voice."
+          description="Even if audio exists, re-run TTS with freshly generated audio."
           checked={settings.forceTts}
           onChange={value => updateSettings({ forceTts: value })}
           disabled={!settings.withTts}
@@ -295,10 +281,6 @@ const errorBannerStyle: React.CSSProperties = {
   fontSize: '13px',
   color: '#b91c1c',
 };
-
-function humanizeAccent(accent: string): string {
-  return accent.replace(/_/g, ' ').replace(/\b\w/g, letter => letter.toUpperCase());
-}
 
 function uploadLabel(option: JobSettingsValue['upload']): string {
   switch (option) {

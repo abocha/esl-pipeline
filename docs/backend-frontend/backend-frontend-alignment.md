@@ -184,12 +184,20 @@ _Deliverable_: Frontend fetches dropdown metadata dynamically and stays aligned 
 **Status: complete.**
 
 1. Persistence:
-   - `schema.sql` gained `voice_accent`, `force_tts`, `notion_database`, `mode`, and `notion_url` columns so Postgres can store the upcoming UI controls plus the Notion link surfaced by the orchestrator.
-   - `JobRecord`/`insertJob`/`updateJobStateAndResult` now round-trip the new columns, and `job-dto.ts` exposes them to both HTTP and SSE consumers. See `packages/batch-backend/src/domain/job-repository.ts` for the canonical mapping.
+   - `schema.sql` gained `voice_accent`, `force_tts`, `notion_database`, `mode`, and `notion_url` columns so Postgres can store the upcoming UI controls plus the Notion link surfaced by the orchestrator. `withPgClient` now guards against older databases by issuing `ALTER TABLE ... ADD COLUMN IF NOT EXISTS` for those fields at startup.
+   - `JobRecord`/`insertJob`/`updateJobStateAndResult` round-trip the new columns, and `job-dto.ts` exposes them to both HTTP and SSE consumers. See `packages/batch-backend/src/domain/job-repository.ts` for the canonical mapping.
 2. Submission + workers:
    - `/jobs` validation accepts `voiceAccent`, `forceTts`, `notionDatabase`, `mode`, and the new `'auto'` upload option, passing those fields through `submitJob`.
-   - `process-queue-job.ts` forwards `voiceAccent` → `accentPreference` and `notionDatabase` → `dbId` when calling the orchestrator, and captures `pageUrl` as `notionUrl` on success (persisted + emitted to clients). `forceTts`/`mode` are persisted for future releases.
-3. Tests + docs:
+   - `process-queue-job.ts` forwards `voiceAccent` → `accentPreference`, `mode` → `ttsMode`, `forceTts` → `redoTts`, and `notionDatabase` → `dbId` when calling the orchestrator, and captures `pageUrl` as `notionUrl` on success (persisted + emitted to clients).
+3. Storage path hygiene:
+   - `FILESYSTEM_UPLOAD_DIR` now defaults to an absolute path, and Docker Compose mounts a shared `uploads_data` volume at `/app/uploads` for both API + worker so local filesystem jobs are readable across processes. The DTO/logger surface both the sanitized storage key and the resolved absolute path for observability.
+4. Manifest credentials:
+   - When `manifestStore` is `s3`, the backend now instantiates the orchestrator’s `S3ManifestStore` with a preconfigured `S3Client` that uses either real AWS credentials (`AWS_ACCESS_KEY_ID`/`AWS_SECRET_ACCESS_KEY`) or the MinIO credentials from `.env`. This fixes the “Region/credentials missing” crashes encountered in earlier spins.
+5. Configurable job options:
+   - `GET /config/job-options` now surfaces real Notion database IDs when `NOTION_DB_ID`/`NOTION_DB_NAME` or `NOTION_DB_OPTIONS` are set, so the frontend can stop sending placeholder values that fail validation.
+6. Notion throttling safeguards:
+   - The colorizer now honors `NOTION_COLORIZER_MAX_RETRIES`, `NOTION_COLORIZER_RETRY_DELAY_MS`, `NOTION_CLIENT_TIMEOUT`, and `NOTION_COLORIZER_THROTTLE_MS` env vars to avoid “fetch failed” errors when Notion rate-limits the batch worker. These defaults match the CLI wizard pacing.
+7. Tests + docs:
    - DTO, repository, submit-job, process-queue, and HTTP integration suites assert the new metadata path end-to-end, and `docs/backend-frontend/batch-backend-ssot.md` now includes the SQL migration snippet operators can run against existing databases.
 
 _Deliverable_: Job rows carry the advanced metadata required by the Phase 8 UI, and clients immediately receive the Notion URL once the orchestrator run succeeds.

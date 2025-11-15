@@ -20,6 +20,7 @@ CREATE TABLE IF NOT EXISTS jobs (
   preset TEXT NULL,
   with_tts BOOLEAN NULL,
   upload TEXT NULL,
+  voice_id TEXT NULL,
   voice_accent TEXT NULL,
   force_tts BOOLEAN NULL,
   notion_database TEXT NULL,

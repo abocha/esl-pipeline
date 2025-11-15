@@ -10,6 +10,73 @@ import { loadConfig } from '../config/env';
 import { logger } from './logger';
 
 let pool: Pool | null = null;
+let schemaReadyPromise: Promise<void> | null = null;
+
+const JOBS_TABLE_SQL = `
+CREATE TABLE IF NOT EXISTS jobs (
+  id UUID PRIMARY KEY,
+  state TEXT NOT NULL,
+  md TEXT NOT NULL,
+  preset TEXT NULL,
+  with_tts BOOLEAN NULL,
+  upload TEXT NULL,
+  voice_accent TEXT NULL,
+  force_tts BOOLEAN NULL,
+  notion_database TEXT NULL,
+  mode TEXT NULL,
+  notion_url TEXT NULL,
+  manifest_path TEXT NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  started_at TIMESTAMPTZ NULL,
+  finished_at TIMESTAMPTZ NULL,
+  error TEXT NULL
+);
+`;
+
+const JOBS_SCHEMA_PATCHES: string[] = [
+  'ALTER TABLE jobs ADD COLUMN IF NOT EXISTS preset TEXT NULL',
+  'ALTER TABLE jobs ADD COLUMN IF NOT EXISTS with_tts BOOLEAN NULL',
+  'ALTER TABLE jobs ADD COLUMN IF NOT EXISTS upload TEXT NULL',
+  'ALTER TABLE jobs ADD COLUMN IF NOT EXISTS voice_id TEXT NULL',
+  'ALTER TABLE jobs ADD COLUMN IF NOT EXISTS voice_accent TEXT NULL',
+  'ALTER TABLE jobs ADD COLUMN IF NOT EXISTS force_tts BOOLEAN NULL',
+  'ALTER TABLE jobs ADD COLUMN IF NOT EXISTS notion_database TEXT NULL',
+  'ALTER TABLE jobs ADD COLUMN IF NOT EXISTS mode TEXT NULL',
+  'ALTER TABLE jobs ADD COLUMN IF NOT EXISTS notion_url TEXT NULL',
+  'ALTER TABLE jobs ADD COLUMN IF NOT EXISTS manifest_path TEXT NULL',
+];
+
+const JOBS_INDEX_PATCHES: string[] = [
+  'CREATE INDEX IF NOT EXISTS idx_jobs_state_created_at ON jobs (state, created_at)',
+];
+
+async function ensureJobsSchema(client: PoolClient): Promise<void> {
+  if (schemaReadyPromise) {
+    await schemaReadyPromise;
+    return;
+  }
+
+  schemaReadyPromise = (async () => {
+    await client.query(JOBS_TABLE_SQL);
+    for (const statement of JOBS_SCHEMA_PATCHES) {
+      await client.query(statement);
+    }
+    for (const indexSql of JOBS_INDEX_PATCHES) {
+      await client.query(indexSql);
+    }
+
+    logger.info('Ensured jobs table schema', {
+      component: 'pg',
+      event: 'jobs_schema_ready',
+    });
+  })().catch(err => {
+    schemaReadyPromise = null;
+    throw err;
+  });
+
+  await schemaReadyPromise;
+}
 
 // createPgPool.declaration()
 export function createPgPool(): Pool {
@@ -54,6 +121,7 @@ export async function withPgClient<T>(
   try {
     const client = await p.connect();
     try {
+      await ensureJobsSchema(client);
       return await fn(client);
     } finally {
       client.release();

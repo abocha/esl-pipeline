@@ -11,7 +11,7 @@ services:
       - '5432:5432'
     volumes:
       - postgres_data:/var/lib/postgresql/data
-      - ./packages/batch-backend/schema.sql:/docker-entrypoint-initdb.d/001-schema.sql:ro
+      - ./packages/batch-backend/schema.sql:/schema/batch-backend/schema.sql:ro
     healthcheck:
       # Check against the configured DB (esl_batch), not the default "esl"
       test: ['CMD-SHELL', 'pg_isready -U esl -d esl_batch']
@@ -37,7 +37,7 @@ services:
     environment:
       MINIO_ROOT_USER: minioadmin
       MINIO_ROOT_PASSWORD: minioadmin
-      command: server /data --console-address ":9002"
+    command: server /data --console-address ":9002"
     ports:
       - '9000:9000'
       - '9002:9002'
@@ -60,7 +60,9 @@ services:
       minio:
         condition: service_started
     env_file:
-      - .env.batch-backend.example
+      - .env.batch-backend
+    volumes:
+      - uploads_data:/app/uploads
     command: >
       sh -c "
         pnpm install &&
@@ -83,7 +85,9 @@ services:
       minio:
         condition: service_started
     env_file:
-      - .env.batch-backend.example
+      - .env.batch-backend
+    volumes:
+      - uploads_data:/app/uploads
     command: >
       sh -c "
         pnpm install &&
@@ -93,3 +97,4 @@ services:
 
 volumes:
   postgres_data:
+  uploads_data:

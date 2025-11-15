@@ -8,7 +8,7 @@ import { syncVoices } from '../src/syncVoices.js';
 
 const moduleDir = dirname(fileURLToPath(import.meta.url));
 loadEnv();
-const repoEnvPath = resolve(moduleDir, '../../../.env');
+const repoEnvPath = resolve(moduleDir, '../../../../.env');
 if (existsSync(repoEnvPath)) {
   loadEnv({ path: repoEnvPath, override: false });
 }

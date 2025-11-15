@@ -7,7 +7,7 @@
 
 import { randomUUID } from 'crypto';
 import { withPgClient } from '../infrastructure/db';
-import { JobRecord, JobState, assertTransition } from './job-model';
+import { JobRecord, JobState, JobMode, assertTransition } from './job-model';
 import { logger } from '../infrastructure/logger';
 
 // insertJob.declaration()
@@ -16,10 +16,11 @@ export async function insertJob(params: {
   preset?: string;
   withTts?: boolean;
   upload?: string;
+  voiceId?: string;
   voiceAccent?: string;
   forceTts?: boolean;
   notionDatabase?: string;
-  mode?: string;
+  mode?: JobMode;
 }): Promise<JobRecord> {
   const id = randomUUID();
   const now = new Date();
@@ -34,6 +35,7 @@ export async function insertJob(params: {
         preset,
         with_tts,
         upload,
+        voice_id,
         voice_accent,
         force_tts,
         notion_database,
@@ -41,7 +43,7 @@ export async function insertJob(params: {
         created_at,
         updated_at
       )
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $11)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
       RETURNING
         id,
         state,
@@ -49,6 +51,7 @@ export async function insertJob(params: {
         preset,
         with_tts,
         upload,
+        voice_id,
         voice_accent,
         force_tts,
         notion_database,
@@ -68,10 +71,12 @@ export async function insertJob(params: {
         params.preset ?? null,
         params.withTts ?? false,
         params.upload ?? null,
+        params.voiceId ?? null,
         params.voiceAccent ?? null,
         params.forceTts ?? null,
         params.notionDatabase ?? null,
         params.mode ?? null,
+        now,
         now,
       ]
     );
@@ -89,7 +94,7 @@ export async function getJobById(id: string): Promise<JobRecord | null> {
     const result = await client.query(
       `
       SELECT id, state, md, preset, with_tts, upload,
-             voice_accent, force_tts, notion_database, mode, notion_url,
+             voice_id, voice_accent, force_tts, notion_database, mode, notion_url,
              created_at, updated_at, started_at, finished_at, error, manifest_path
       FROM jobs
       WHERE id = $1
@@ -147,6 +152,7 @@ export async function updateJobStateAndResult(args: {
         preset,
         with_tts,
         upload,
+        voice_id,
         voice_accent,
         force_tts,
         notion_database,
@@ -181,10 +187,11 @@ function mapRowToJob(row: any): JobRecord {
     preset: row.preset ?? null,
     withTts: row.with_tts ?? null,
     upload: row.upload ?? null,
+    voiceId: row.voice_id ?? null,
     voiceAccent: row.voice_accent ?? null,
     forceTts: row.force_tts ?? null,
     notionDatabase: row.notion_database ?? null,
-    mode: row.mode ?? null,
+    mode: normalizeJobMode(row.mode),
     notionUrl: row.notion_url ?? null,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
@@ -193,4 +200,11 @@ function mapRowToJob(row: any): JobRecord {
     error: row.error,
     manifestPath: row.manifest_path,
   };
+}
+
+function normalizeJobMode(value: unknown): JobMode | null {
+  if (value === 'auto' || value === 'dialogue' || value === 'monologue') {
+    return value;
+  }
+  return null;
 }

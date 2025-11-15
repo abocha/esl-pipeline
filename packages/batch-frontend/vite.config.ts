@@ -34,7 +34,10 @@ export default defineConfig({
     strictPort: true,
     proxy: proxyRoutes.reduce(
       (acc, route) => {
-        acc[route] = withCookieForwarding();
+        acc[route] = {
+          ...withCookieForwarding(),
+          rewrite: (path: string) => path.replace(/^\/api/, ''),
+        };
         return acc;
       },
       {} as Record<string, any>

@@ -112,6 +112,7 @@ describe('transport/http-server - integration (in-process)', () => {
       preset: undefined,
       withTts: undefined,
       upload: undefined,
+      voiceId: undefined,
       voiceAccent: undefined,
       forceTts: undefined,
       notionDatabase: undefined,
@@ -131,6 +132,7 @@ describe('transport/http-server - integration (in-process)', () => {
         preset: 'b1-default',
         withTts: true,
         upload: 'auto',
+        voiceId: 'voice_amanda',
         voiceAccent: 'american_female',
         forceTts: true,
         notionDatabase: 'db-123',
@@ -144,6 +146,7 @@ describe('transport/http-server - integration (in-process)', () => {
       preset: 'b1-default',
       withTts: true,
       upload: 'auto',
+      voiceId: 'voice_amanda',
       voiceAccent: 'american_female',
       forceTts: true,
       notionDatabase: 'db-123',
@@ -203,6 +206,7 @@ describe('transport/http-server - integration (in-process)', () => {
       preset: 'b1-default',
       withTts: true,
       upload: 's3',
+      voiceId: 'voice_amanda',
       voiceAccent: 'american_female',
       forceTts: true,
       notionDatabase: 'db-123',
@@ -229,6 +233,7 @@ describe('transport/http-server - integration (in-process)', () => {
       preset: 'b1-default',
       withTts: true,
       upload: 's3',
+      voiceId: 'voice_amanda',
       voiceAccent: 'american_female',
       forceTts: true,
       notionDatabase: 'db-123',
@@ -254,6 +259,7 @@ describe('transport/http-server - integration (in-process)', () => {
       preset: null,
       withTts: null,
       upload: null,
+      voiceId: null,
       voiceAccent: null,
       forceTts: null,
       notionDatabase: null,
@@ -354,6 +360,8 @@ describe('transport/http-server - integration (in-process)', () => {
       preset: 'b1-default',
       withTts: true,
       upload: 's3',
+      voiceAccent: 'american_female',
+      voiceId: 'voice_amanda',
       createdAt: new Date('2024-01-01T10:00:00Z'),
       updatedAt: new Date('2024-01-01T10:01:00Z'),
       startedAt: new Date('2024-01-01T10:01:00Z'),
@@ -401,9 +409,10 @@ describe('transport/http-server - integration (in-process)', () => {
           const dataMatch = buffer.match(/data: (.+)\n\n/);
           if (dataMatch) {
             const payload = JSON.parse(dataMatch[1]!);
+            expect(payload.type).toBe('job_state_changed');
             expect(payload.jobId).toBe(job.id);
             expect(payload.state).toBe('running');
-            expect(payload.preset).toBe('b1-default');
+            expect(payload.payload?.runMode).toBeUndefined();
             cleanup();
           }
         });

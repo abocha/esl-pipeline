@@ -8,6 +8,7 @@
 import Fastify, { type FastifyRequest, type FastifyReply } from 'fastify';
 import multipart from '@fastify/multipart';
 import { randomUUID } from 'node:crypto';
+import path from 'node:path';
 import { Readable } from 'node:stream';
 import { z } from 'zod';
 import { loadConfig } from '../config/env';
@@ -74,6 +75,12 @@ function errorResponse(
 
   // internal_error is always 500 with a stable shape
   return reply.code(500).send({ error: 'internal_error' });
+}
+
+function buildFilesystemMdReference(uploadDir: string, storageKey: string): string {
+  const absoluteRoot = path.resolve(uploadDir || '.');
+  const absoluteFilePath = path.join(absoluteRoot, storageKey);
+  return absoluteFilePath.split(path.sep).join('/');
 }
 
 const resolveRoutePath = (request: FastifyRequest, fallback: string): string => {
@@ -154,6 +161,7 @@ export function createHttpServer(): import('fastify').FastifyInstance {
       withTts: z.boolean().optional(),
       upload: z.enum(['auto', 's3', 'none']).optional(),
       voiceAccent: z.string().min(1).optional(),
+      voiceId: z.string().min(1).optional(),
       forceTts: z.boolean().optional(),
       notionDatabase: z.string().min(1).optional(),
       mode: z.enum(['auto', 'dialogue', 'monologue']).optional(),
@@ -166,6 +174,7 @@ export function createHttpServer(): import('fastify').FastifyInstance {
       preset: validatedData.preset,
       withTts: validatedData.withTts,
       upload: validatedData.upload,
+      voiceId: validatedData.voiceId,
       voiceAccent: validatedData.voiceAccent,
       forceTts: validatedData.forceTts,
       notionDatabase: validatedData.notionDatabase,
@@ -269,9 +278,22 @@ export function createHttpServer(): import('fastify').FastifyInstance {
 
     const unsubscribe = subscribeJobEvents(event => {
       try {
-        const data = JSON.stringify(jobRecordToDto(event.job));
+        const dto = jobRecordToDto(event.job);
+        const payload = {
+          type: event.type,
+          jobId: dto.jobId,
+          state: dto.state,
+          payload: {
+            manifestPath: dto.manifestPath,
+            error: dto.error,
+            finishedAt: dto.finishedAt,
+            runMode: dto.mode ?? undefined,
+            submittedMd: dto.md,
+            notionUrl: dto.notionUrl,
+          },
+        };
         reply.raw.write(`event: ${event.type}\n`);
-        reply.raw.write(`data: ${data}\n\n`);
+        reply.raw.write(`data: ${JSON.stringify(payload)}\n\n`);
       } catch (err: any) {
         logger.warn('Failed to publish SSE job event', {
           event: 'job_events_sse_publish_failed',
@@ -474,7 +496,7 @@ export function createHttpServer(): import('fastify').FastifyInstance {
 
           // 3. Store the sanitized file using the storage service
           const id = randomUUID();
-          const storageKey = `uploads/${authenticatedUser.id}/${id}_${sanitizedFilename.replace(/[^\w.-]/g, '_')}`;
+          const storageKey = `${authenticatedUser.id}/${id}_${sanitizedFilename.replace(/[^\w.-]/g, '_')}`;
 
           const uploadResult = await fileStorageService.uploadFile(
             storageKey,
@@ -482,6 +504,11 @@ export function createHttpServer(): import('fastify').FastifyInstance {
             validationResult?.mimeType || 'application/octet-stream',
             sanitizedBuffer.length
           );
+
+          const mdReference =
+            fileStorageService.getProvider() === 'filesystem'
+              ? buildFilesystemMdReference(storageConfig.getFilesystemConfig().uploadDir, storageKey)
+              : storageKey;
 
           // Store file metadata in database (if available)
           // TODO: Implement database storage for file metadata
@@ -495,13 +522,14 @@ export function createHttpServer(): import('fastify').FastifyInstance {
             fileSize: sanitizedBuffer.length,
             mimeType: validationResult?.mimeType,
             storageKey,
+            mdReference,
             storageProvider: fileStorageService.getProvider(),
             hasUrl: !!uploadResult.url,
           });
 
           return reply.code(201).send({
             id,
-            md: storageKey, // Use storage key as the file reference
+            md: mdReference, // Use normalized path as the file reference
             url: uploadResult.url, // Include presigned URL if available
             originalFilename: filename,
             sanitizedFilename: sanitizedFilename,

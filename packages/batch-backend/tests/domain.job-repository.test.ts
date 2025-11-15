@@ -47,6 +47,7 @@ describeIfDb('domain/job-repository', () => {
       expect(job.preset).toBeNull();
       expect(job.withTts).toBe(false);
       expect(job.upload).toBeNull();
+      expect(job.voiceId).toBeNull();
       expect(job.voiceAccent).toBeNull();
       expect(job.forceTts).toBeNull();
       expect(job.notionDatabase).toBeNull();
@@ -61,6 +62,7 @@ describeIfDb('domain/job-repository', () => {
       expect(loaded!.state).toBe('queued');
       expect(loaded!.md).toBe('fixtures/ok.md');
       expect(loaded!.voiceAccent).toBeNull();
+      expect(loaded!.voiceId).toBeNull();
       expect(loaded!.notionDatabase).toBeNull();
     });
 
@@ -70,12 +72,14 @@ describeIfDb('domain/job-repository', () => {
         preset: 'b1-default',
         withTts: true,
         upload: 's3',
+        voiceId: 'voice_amanda',
         voiceAccent: 'american_female',
         forceTts: true,
         notionDatabase: 'db-123',
         mode: 'dialogue',
       });
 
+      expect(job.voiceId).toBe('voice_amanda');
       expect(job.voiceAccent).toBe('american_female');
       expect(job.forceTts).toBe(true);
       expect(job.notionDatabase).toBe('db-123');

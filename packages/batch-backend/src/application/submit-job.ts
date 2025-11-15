@@ -9,15 +9,17 @@ import { insertJob } from '../domain/job-repository';
 import { createJobQueue } from '../infrastructure/queue-bullmq';
 import { logger } from '../infrastructure/logger';
 import { publishJobEvent } from '../domain/job-events';
+import type { JobMode as DomainJobMode } from '../domain/job-model';
 
 export type UploadTarget = 'auto' | 's3' | 'none';
-export type JobMode = 'auto' | 'dialogue' | 'monologue';
+export type JobMode = DomainJobMode;
 
 export interface SubmitJobRequest {
   md: string;
   preset?: string;
   withTts?: boolean;
   upload?: UploadTarget;
+  voiceId?: string;
   voiceAccent?: string;
   forceTts?: boolean;
   notionDatabase?: string;
@@ -71,6 +73,10 @@ function validateSubmitJobRequest(req: SubmitJobRequest): void {
     throw new ValidationError('voiceAccent must be a non-empty string when provided', 'invalid_voice_accent');
   }
 
+  if (req.voiceId !== undefined && (typeof req.voiceId !== 'string' || req.voiceId.trim().length === 0)) {
+    throw new ValidationError('voiceId must be a non-empty string when provided', 'invalid_voice_id');
+  }
+
   if (req.forceTts !== undefined && typeof req.forceTts !== 'boolean') {
     throw new ValidationError('forceTts must be a boolean when provided', 'invalid_force_tts');
   }
@@ -101,6 +107,7 @@ export async function submitJob(req: SubmitJobRequest): Promise<SubmitJobRespons
     withTts: req.withTts,
     // Persist explicit upload choice for observability; downstream decides how to interpret.
     upload: req.upload,
+    voiceId: req.voiceId,
     voiceAccent: req.voiceAccent,
     forceTts: req.forceTts,
     notionDatabase: req.notionDatabase,

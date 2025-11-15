@@ -1,5 +1,7 @@
 // packages/batch-backend/src/infrastructure/storage-config.ts
 
+import path from 'node:path';
+
 export type StorageProvider = 's3' | 'minio' | 'filesystem';
 
 export interface StorageConfig {
@@ -46,6 +48,11 @@ export class StorageConfigurationService {
       },
       ...config,
     };
+
+    const fsUploadDir = this.config.filesystem?.uploadDir || './uploads';
+    this.config.filesystem.uploadDir = path.isAbsolute(fsUploadDir)
+      ? fsUploadDir
+      : path.resolve(process.cwd(), fsUploadDir);
 
     this.validateConfig();
   }
@@ -99,19 +106,66 @@ export class StorageConfigurationService {
 export function createStorageConfigService(
   config?: Partial<StorageConfig>
 ): StorageConfigurationService {
+  const uploadDirEnv = process.env.FILESYSTEM_UPLOAD_DIR || './uploads';
+  const resolvedUploadDir = path.isAbsolute(uploadDirEnv)
+    ? uploadDirEnv
+    : path.resolve(process.cwd(), uploadDirEnv);
+
+  const requestedProvider = process.env.STORAGE_PROVIDER as StorageProvider | undefined;
+  const minioEnabled = (process.env.MINIO_ENABLED ?? '').toLowerCase() === 'true';
+  const hasAwsBucket =
+    Boolean(process.env.S3_BUCKET) ||
+    Boolean(process.env.S3_BUCKET_NAME) ||
+    Boolean(process.env.STORAGE_BUCKET_NAME);
+
+  let derivedProvider: StorageProvider = 'filesystem';
+  if (requestedProvider === 's3' || requestedProvider === 'minio' || requestedProvider === 'filesystem') {
+    derivedProvider = requestedProvider;
+  } else if (hasAwsBucket) {
+    derivedProvider = 's3';
+  } else if (minioEnabled) {
+    derivedProvider = 'minio';
+  }
+
+  const awsRegion = process.env.S3_REGION || process.env.AWS_REGION || 'us-east-1';
+  const awsBucket = process.env.S3_BUCKET_NAME || process.env.S3_BUCKET || process.env.STORAGE_BUCKET_NAME || '';
+
+  const minioPort = process.env.MINIO_PORT ? Number(process.env.MINIO_PORT) : undefined;
+  const minioEndpointHost = process.env.MINIO_ENDPOINT || 'minio';
+  const minioUseSSL = (process.env.MINIO_USE_SSL ?? '').toLowerCase() === 'true';
+  const minioBucket = process.env.MINIO_BUCKET || awsBucket;
+  const minioEndpoint =
+    process.env.MINIO_ENDPOINT && process.env.MINIO_ENDPOINT.startsWith('http')
+      ? process.env.MINIO_ENDPOINT
+      : `http${minioUseSSL ? 's' : ''}://${minioEndpointHost}${
+          minioPort ? `:${minioPort}` : ''
+        }`;
+
+  const s3AccessKey = process.env.S3_ACCESS_KEY_ID || process.env.AWS_ACCESS_KEY_ID || '';
+  const s3SecretKey = process.env.S3_SECRET_ACCESS_KEY || process.env.AWS_SECRET_ACCESS_KEY || '';
+
   const defaultConfig: StorageConfig = {
-    provider: (process.env.STORAGE_PROVIDER as StorageProvider) || 'filesystem',
+    provider: derivedProvider,
     s3: {
-      endpoint: process.env.S3_ENDPOINT,
-      region: process.env.S3_REGION || 'us-east-1',
-      accessKeyId: process.env.S3_ACCESS_KEY_ID || '',
-      secretAccessKey: process.env.S3_SECRET_ACCESS_KEY || '',
-      bucket: process.env.S3_BUCKET_NAME || '',
+      endpoint: derivedProvider === 'minio' ? minioEndpoint : process.env.S3_ENDPOINT,
+      region: derivedProvider === 'minio' ? process.env.MINIO_REGION || 'us-east-1' : awsRegion,
+      accessKeyId:
+        derivedProvider === 'minio'
+          ? process.env.MINIO_ACCESS_KEY || process.env.MINIO_ROOT_USER || s3AccessKey
+          : s3AccessKey,
+      secretAccessKey:
+        derivedProvider === 'minio'
+          ? process.env.MINIO_SECRET_KEY || process.env.MINIO_ROOT_PASSWORD || s3SecretKey
+          : s3SecretKey,
+      bucket: derivedProvider === 'minio' ? minioBucket || awsBucket : awsBucket,
       pathPrefix: process.env.S3_PATH_PREFIX,
-      forcePathStyle: process.env.S3_FORCE_PATH_STYLE === 'true',
+      forcePathStyle:
+        derivedProvider === 'minio'
+          ? true
+          : process.env.S3_FORCE_PATH_STYLE?.toLowerCase() === 'true',
     },
     filesystem: {
-      uploadDir: process.env.FILESYSTEM_UPLOAD_DIR || './uploads',
+      uploadDir: resolvedUploadDir,
     },
     lifecycle: {
       presignedUrlExpiresIn: parseInt(process.env.PRESIGNED_URL_EXPIRES_IN || '3600'),

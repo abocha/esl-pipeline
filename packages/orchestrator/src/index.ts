@@ -6,6 +6,8 @@ import {
   hashStudyText,
   FfmpegNotFoundError,
   type BuildStudyTextResult,
+  loadVoicesCatalog,
+  type VoiceCatalog,
 } from '@esl-pipeline/tts-elevenlabs';
 import { uploadFile } from '@esl-pipeline/storage-uploader';
 import { addOrReplaceAudioUnderStudyText } from '@esl-pipeline/notion-add-audio';
@@ -136,6 +138,7 @@ export type NewAssignmentFlags = {
   preset?: string;
   presetsPath?: string;
   accentPreference?: string;
+  voiceId?: string;
   withTts?: boolean;
   
   // New TTS mode fields
@@ -180,6 +183,7 @@ export async function newAssignment(
   const runId = dependencies.runId ?? randomUUID();
   const stageStartTimes = new Map<AssignmentStage, number>();
   const pipelineStartedAt = Date.now();
+  await applyVoicePreferences(flags);
 
   const emitStage = (
     stage: AssignmentStage,
@@ -360,6 +364,7 @@ export async function newAssignment(
             preview: flags.dryRun,
             force: flags.force || flags.redoTts,
             defaultAccent: flags.accentPreference,
+            defaultVoiceId: flags.voiceId,
             
             // NEW: Pass TTS mode options to TTS package
             ttsMode: flags.ttsMode,
@@ -629,6 +634,7 @@ export type RerunFlags = {
   publicRead?: boolean;
   presign?: number;
   accentPreference?: string;
+  voiceId?: string;
   
   // TTS mode options for rerun
   ttsMode?: 'auto' | 'dialogue' | 'monologue';
@@ -653,6 +659,7 @@ export async function rerunAssignment(
   const runId = dependencies.runId ?? randomUUID();
   const pipelineStartedAt = Date.now();
   const stageStartTimes = new Map<AssignmentStage, number>();
+  await applyVoicePreferences(flags);
 
   const emitStage = (
     stage: AssignmentStage,
@@ -756,6 +763,7 @@ export async function rerunAssignment(
           preview: flags.dryRun,
           force: flags.force,
           defaultAccent: flags.accentPreference,
+          defaultVoiceId: flags.voiceId,
           
           // NEW: Pass TTS mode options to TTS package
           ttsMode: flags.ttsMode,
@@ -915,5 +923,49 @@ export async function rerunAssignment(
     metrics.timing('esl.pipeline.rerun_assignment.duration_ms', durationMs, { result: 'failure' });
     metrics.increment('esl.pipeline.rerun_assignment.failure', 1, {});
     throw error;
+  }
+}
+
+let cachedVoiceCatalog: VoiceCatalog | null = null;
+
+async function getVoiceCatalog(): Promise<VoiceCatalog> {
+  if (cachedVoiceCatalog) return cachedVoiceCatalog;
+  cachedVoiceCatalog = await loadVoicesCatalog().catch<VoiceCatalog>(() => ({ voices: [] }));
+  return cachedVoiceCatalog;
+}
+
+function findVoiceByToken(token: string, catalog: VoiceCatalog) {
+  const normalized = token.trim().toLowerCase();
+  return catalog.voices.find(
+    voice =>
+      voice.id === token ||
+      (typeof voice.name === 'string' && voice.name.toLowerCase() === normalized)
+  );
+}
+
+async function applyVoicePreferences(flags: NewAssignmentFlags): Promise<void> {
+  const needsResolution = Boolean(flags.voiceId || flags.accentPreference);
+  if (!needsResolution) return;
+
+  const catalog = await getVoiceCatalog();
+  if (flags.voiceId) {
+    const match = findVoiceByToken(flags.voiceId, catalog);
+    if (match) {
+      flags.voiceId = match.id;
+      if (!flags.accentPreference && typeof match.labels?.accent === 'string') {
+        flags.accentPreference = match.labels.accent;
+      }
+      return;
+    }
+  }
+
+  if (flags.accentPreference) {
+    const match = findVoiceByToken(flags.accentPreference, catalog);
+    if (match) {
+      flags.voiceId = match.id;
+      if (typeof match.labels?.accent === 'string') {
+        flags.accentPreference = match.labels.accent;
+      }
+    }
   }
 }

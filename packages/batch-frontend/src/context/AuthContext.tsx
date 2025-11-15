@@ -7,6 +7,7 @@ import {
   logoutSession,
 } from '../utils/api';
 import type { RegisterRole, UserProfile, UserRole as ApiUserRole } from '../utils/api';
+import { setApiAuthToken } from '../utils/api-client';
 
 export type UserRole = ApiUserRole;
 export type User = Pick<UserProfile, 'id' | 'email' | 'role' | 'isActive'> &
@@ -15,6 +16,7 @@ export type User = Pick<UserProfile, 'id' | 'email' | 'role' | 'isActive'> &
 interface StoredSession {
   user: User | null;
   refreshToken: string | null;
+  accessToken: string | null;
 }
 
 export interface AuthContextType {
@@ -38,24 +40,25 @@ const SESSION_STORAGE_KEY = 'esl-batch-session';
 
 function readStoredSession(): StoredSession {
   if (typeof window === 'undefined') {
-    return { user: null, refreshToken: null };
+    return { user: null, refreshToken: null, accessToken: null };
   }
 
   try {
     const serialized = window.localStorage.getItem(SESSION_STORAGE_KEY);
     if (!serialized) {
-      return { user: null, refreshToken: null };
+      return { user: null, refreshToken: null, accessToken: null };
     }
 
     const parsed = JSON.parse(serialized) as Partial<StoredSession>;
     return {
       user: parsed.user ?? null,
       refreshToken: parsed.refreshToken ?? null,
+      accessToken: parsed.accessToken ?? null,
     };
   } catch (error) {
     console.warn('Failed to parse stored auth session', error);
     window.localStorage.removeItem(SESSION_STORAGE_KEY);
-    return { user: null, refreshToken: null };
+    return { user: null, refreshToken: null, accessToken: null };
   }
 }
 
@@ -63,22 +66,35 @@ export function AuthProvider({ children }: AuthProviderProps) {
   const initialSession = readStoredSession();
   const [user, setUser] = useState<User | null>(initialSession.user);
   const [refreshTokenValue, setRefreshTokenValue] = useState<string | null>(initialSession.refreshToken);
+  const [accessTokenValue, setAccessTokenValue] = useState<string | null>(initialSession.accessToken);
   const [isLoading, setIsLoading] = useState(true);
 
   const persistSession = useCallback(
-    (nextUser: User | null, nextRefreshToken?: string | null) => {
-      const tokenToPersist =
-        typeof nextRefreshToken === 'undefined' ? refreshTokenValue : nextRefreshToken ?? null;
+    (
+      nextUser: User | null,
+      options?: {
+        refreshToken?: string | null;
+        accessToken?: string | null;
+      }
+    ) => {
+      const hasRefreshOverride = typeof options?.refreshToken !== 'undefined';
+      const hasAccessOverride = typeof options?.accessToken !== 'undefined';
+
+      const nextRefresh = hasRefreshOverride ? options!.refreshToken ?? null : refreshTokenValue;
+      const nextAccess = hasAccessOverride ? options!.accessToken ?? null : accessTokenValue;
 
       setUser(nextUser);
-      setRefreshTokenValue(tokenToPersist);
+      setRefreshTokenValue(nextRefresh);
+      setAccessTokenValue(nextAccess);
+      setApiAuthToken(nextAccess);
 
       if (typeof window === 'undefined') return;
       try {
-        if (nextUser || tokenToPersist) {
+        if (nextUser || nextRefresh || nextAccess) {
           const payload: StoredSession = {
             user: nextUser,
-            refreshToken: tokenToPersist,
+            refreshToken: nextRefresh,
+            accessToken: nextAccess,
           };
           window.localStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify(payload));
         } else {
@@ -88,8 +104,12 @@ export function AuthProvider({ children }: AuthProviderProps) {
         console.warn('Failed to persist auth session', error);
       }
     },
-    [refreshTokenValue]
+    [refreshTokenValue, accessTokenValue]
   );
+
+  useEffect(() => {
+    setApiAuthToken(accessTokenValue);
+  }, [accessTokenValue]);
 
   useEffect(() => {
     let isMounted = true;
@@ -101,7 +121,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
         }
       } catch {
         if (isMounted) {
-          persistSession(null, null);
+          persistSession(null, { refreshToken: null, accessToken: null });
         }
       } finally {
         if (isMounted) {
@@ -120,7 +140,10 @@ export function AuthProvider({ children }: AuthProviderProps) {
     async (email: string, password: string) => {
       const normalizedEmail = email.trim().toLowerCase();
       const response = await loginRequest({ email: normalizedEmail, password });
-      persistSession(response.user, response.refreshToken ?? null);
+      persistSession(response.user, {
+        refreshToken: response.refreshToken ?? null,
+        accessToken: response.accessToken ?? null,
+      });
     },
     [persistSession]
   );
@@ -136,7 +159,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
     } catch (error) {
       console.warn('Logout endpoint not available yet', error);
     } finally {
-      persistSession(null, null);
+      persistSession(null, { refreshToken: null, accessToken: null });
     }
   }, [persistSession]);
 
@@ -145,8 +168,11 @@ export function AuthProvider({ children }: AuthProviderProps) {
       throw new Error('No refresh token available');
     }
     const response = await refreshTokenRequest(refreshTokenValue);
-    persistSession(response.user, response.refreshToken ?? refreshTokenValue);
-  }, [persistSession, refreshTokenValue]);
+    persistSession(response.user ?? user, {
+      refreshToken: response.refreshToken ?? refreshTokenValue,
+      accessToken: response.accessToken ?? accessTokenValue,
+    });
+  }, [persistSession, refreshTokenValue, user, accessTokenValue]);
 
   const setUserFromProfile = useCallback(
     (nextUser: User | null) => {

@@ -27,6 +27,16 @@ function resolveBackendBaseUrl(): string {
 
 export const backendBaseUrl = resolveBackendBaseUrl();
 
+let currentAccessToken: string | null = null;
+
+export function setApiAuthToken(token: MaybeString): void {
+  currentAccessToken = token ? token : null;
+}
+
+export function getApiAuthToken(): string | null {
+  return currentAccessToken;
+}
+
 export function buildBackendUrl(path: string): string {
   const normalizedPath = path.startsWith('/') ? path : `/${path}`;
   if (!backendBaseUrl) {
@@ -34,6 +44,15 @@ export function buildBackendUrl(path: string): string {
   }
 
   return `${backendBaseUrl}${normalizedPath}`;
+}
+
+export function buildApiProxyPath(path: string): string {
+  const normalizedPath = path.startsWith('/') ? path : `/${path}`;
+  if (!backendBaseUrl) {
+    return `/api${normalizedPath}`;
+  }
+
+  return buildBackendUrl(path);
 }
 
 // Create axios instance with default config
@@ -49,9 +68,10 @@ const apiClient: AxiosInstance = axios.create({
 // Request interceptor to add authentication
 apiClient.interceptors.request.use(
   (config: InternalAxiosRequestConfig): InternalAxiosRequestConfig => {
-    // Note: Authentication tokens are handled via httpOnly cookies
-    // The backend will extract them from cookies automatically
-    // No need to manually add Authorization headers
+    if (currentAccessToken) {
+      config.headers = config.headers ?? {};
+      config.headers.Authorization = `Bearer ${currentAccessToken}`;
+    }
 
     return config;
   },

@@ -9,11 +9,14 @@
 // 5. On success, transition running -> succeeded with manifestPath.
 // 6. On failure, transition running -> failed with error and rethrow so BullMQ can retry.
 
+import path from 'node:path';
+import fs from 'node:fs/promises';
 import { getJobById, updateJobStateAndResult } from '../domain/job-repository';
 import { runAssignmentJob } from '../infrastructure/orchestrator-service';
 import { createJobLogger } from '../infrastructure/logger';
 import type { QueueJobPayload } from '../infrastructure/queue-bullmq';
 import { publishJobEvent } from '../domain/job-events';
+import { loadConfig, type BatchBackendConfig } from '../config/env';
 
 // processQueueJob.declaration()
 export async function processQueueJob(payload: QueueJobPayload): Promise<void> {
@@ -50,17 +53,29 @@ export async function processQueueJob(payload: QueueJobPayload): Promise<void> {
   const runId = jobId;
 
   try {
+    const resolvedMdPath = await resolveMarkdownPath(running.md);
+    if (resolvedMdPath !== running.md) {
+      log.info('Resolved markdown path for job', {
+        original: running.md,
+        resolved: resolvedMdPath,
+      });
+    }
+
+    const config = loadConfig();
+    const uploadFlag = resolveUploadTarget(running.upload, config.storage.provider);
+
     const result = await runAssignmentJob(
       {
         jobId,
-        md: running.md,
+        md: resolvedMdPath,
         preset: running.preset ?? undefined,
         withTts: running.withTts ?? undefined,
         // Only forward upload flag values supported by orchestrator.
         // Any other persisted value (e.g. 'none' or null) is treated as "no override".
-        upload: running.upload === 's3' ? 's3' : undefined,
-        voiceAccent: running.voiceAccent ?? undefined,
+        upload: uploadFlag,
+        forceTts: running.forceTts ?? undefined,
         notionDatabase: running.notionDatabase ?? undefined,
+        mode: running.mode ?? undefined,
       },
       runId
     );
@@ -101,4 +116,65 @@ export async function processQueueJob(payload: QueueJobPayload): Promise<void> {
     // Propagate so BullMQ can apply retry/backoff policy.
     throw err;
   }
+}
+
+async function resolveMarkdownPath(mdPath: string): Promise<string> {
+  const sanitized = mdPath?.trim();
+  if (!sanitized) {
+    throw new Error('Markdown path is empty');
+  }
+
+  const candidates = new Set<string>();
+
+  if (path.isAbsolute(sanitized)) {
+    candidates.add(sanitized);
+  } else {
+    candidates.add(path.resolve(process.cwd(), sanitized));
+  }
+
+  const uploadDir = process.env.FILESYSTEM_UPLOAD_DIR || './uploads';
+  const uploadRoot = path.resolve(uploadDir);
+  const repoRoot = path.resolve(__dirname, '../../..');
+  const normalizedMd = sanitized.replace(/^\.?[\\/]/, '');
+  const normalizedWithoutUploadsPrefix = normalizedMd.replace(/^uploads[\\/]/, '');
+
+  for (const base of [uploadRoot, repoRoot]) {
+    candidates.add(path.join(base, normalizedMd));
+    if (normalizedWithoutUploadsPrefix !== normalizedMd) {
+      candidates.add(path.join(base, normalizedWithoutUploadsPrefix));
+    }
+  }
+
+  for (const candidate of candidates) {
+    if (await fileExists(candidate)) {
+      return candidate;
+    }
+  }
+
+  throw new Error(`Markdown file not found: ${sanitized}`);
+}
+
+async function fileExists(filePath: string): Promise<boolean> {
+  try {
+    await fs.access(filePath);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function resolveUploadTarget(
+  upload: string | null | undefined,
+  provider: BatchBackendConfig['storage']['provider']
+): 's3' | undefined {
+  if (upload === 'none') {
+    return undefined;
+  }
+  if (upload === 's3') {
+    return 's3';
+  }
+  if (upload === 'auto' || upload == null) {
+    return provider === 'filesystem' ? undefined : 's3';
+  }
+  return undefined;
 }

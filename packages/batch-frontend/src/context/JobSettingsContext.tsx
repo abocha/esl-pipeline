@@ -13,7 +13,6 @@ import { fetchJobOptions } from '../utils/api';
 
 export type JobSettings = {
   preset: string;
-  voiceAccent: string;
   notionDatabase: string;
   withTts: boolean;
   forceTts: boolean;
@@ -37,6 +36,7 @@ type JobSettingsContextValue = {
 const DEFAULT_JOB_OPTIONS: JobOptionsResponse = {
   presets: ['b1-default', 'b2-general', 'c1-science'],
   voiceAccents: ['american_female', 'british_male', 'australian_female'],
+  voices: [],
   notionDatabases: [
     { id: 'default-b1', name: 'B1 Lessons' },
     { id: 'default-b2', name: 'B2 Lessons' },
@@ -47,7 +47,6 @@ const DEFAULT_JOB_OPTIONS: JobOptionsResponse = {
 
 const DEFAULT_SETTINGS: JobSettings = {
   preset: DEFAULT_JOB_OPTIONS.presets[0] ?? 'b1-default',
-  voiceAccent: DEFAULT_JOB_OPTIONS.voiceAccents[0] ?? 'american_female',
   notionDatabase: DEFAULT_JOB_OPTIONS.notionDatabases[0]?.id ?? 'default-b1',
   withTts: true,
   forceTts: false,
@@ -71,33 +70,35 @@ export function JobSettingsProvider({ children }: { children: ReactNode }) {
   const [settings, setSettings] = useState<JobSettings>(() => ({
     ...DEFAULT_SETTINGS,
     preset: options.presets[0] ?? DEFAULT_SETTINGS.preset,
-    voiceAccent: options.voiceAccents[0] ?? DEFAULT_SETTINGS.voiceAccent,
     notionDatabase: options.notionDatabases[0]?.id ?? DEFAULT_SETTINGS.notionDatabase,
     upload: options.uploadOptions[0] ?? DEFAULT_SETTINGS.upload,
     mode: options.modes[0] ?? DEFAULT_SETTINGS.mode,
   }));
 
   useEffect(() => {
-    setSettings(prev => ({
-      ...prev,
-      preset: ensureOption(prev.preset, options.presets) ?? options.presets[0] ?? DEFAULT_SETTINGS.preset,
-      voiceAccent:
-        ensureOption(prev.voiceAccent, options.voiceAccents) ??
-        options.voiceAccents[0] ??
-        DEFAULT_SETTINGS.voiceAccent,
-      notionDatabase:
+    setSettings(prev => {
+      const preset = ensureOption(prev.preset, options.presets) ?? options.presets[0] ?? DEFAULT_SETTINGS.preset;
+      const notionDatabase =
         ensureOption(prev.notionDatabase, options.notionDatabases.map(db => db.id)) ??
         options.notionDatabases[0]?.id ??
-        DEFAULT_SETTINGS.notionDatabase,
-      upload:
+        DEFAULT_SETTINGS.notionDatabase;
+      const upload =
         (ensureOption(prev.upload, options.uploadOptions) as JobSettings['upload']) ??
         options.uploadOptions[0] ??
-        DEFAULT_SETTINGS.upload,
-      mode:
+        DEFAULT_SETTINGS.upload;
+      const mode =
         (ensureOption(prev.mode, options.modes) as JobSettings['mode']) ??
         options.modes[0] ??
-        DEFAULT_SETTINGS.mode,
-    }));
+        DEFAULT_SETTINGS.mode;
+
+      return {
+        ...prev,
+        preset,
+        notionDatabase,
+        upload,
+        mode,
+      };
+    });
   }, [options]);
 
   const updateSettings = useCallback((updates: Partial<JobSettings>) => {
@@ -108,7 +109,6 @@ export function JobSettingsProvider({ children }: { children: ReactNode }) {
     setSettings({
       ...DEFAULT_SETTINGS,
       preset: options.presets[0] ?? DEFAULT_SETTINGS.preset,
-      voiceAccent: options.voiceAccents[0] ?? DEFAULT_SETTINGS.voiceAccent,
       notionDatabase: options.notionDatabases[0]?.id ?? DEFAULT_SETTINGS.notionDatabase,
       upload: options.uploadOptions[0] ?? DEFAULT_SETTINGS.upload,
       mode: options.modes[0] ?? DEFAULT_SETTINGS.mode,
