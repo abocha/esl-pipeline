@@ -220,8 +220,21 @@ export function loadConfig(): BatchBackendConfig {
   const jobSubmissionRateLimit = readInt('JOB_SUBMISSION_RATE_LIMIT', 5); // 5 jobs per minute
 
   // Storage configuration
-  const storageProvider =
-    (readString('STORAGE_PROVIDER') as 's3' | 'minio' | 'filesystem') || 'filesystem';
+  let storageProvider = readString('STORAGE_PROVIDER') as 's3' | 'minio' | 'filesystem' | undefined;
+  if (!storageProvider) {
+    if (minioEnabled) {
+      storageProvider = 'minio';
+    } else if (
+      readString('S3_BUCKET') ||
+      readString('S3_BUCKET_NAME') ||
+      readString('STORAGE_BUCKET_NAME')
+    ) {
+      storageProvider = 's3';
+    } else {
+      storageProvider = 'filesystem';
+    }
+  }
+  const resolvedStorageProvider = storageProvider as 's3' | 'minio' | 'filesystem';
   const storageBucketName = readString('S3_BUCKET_NAME') || readString('STORAGE_BUCKET_NAME');
   const storagePathPrefix = readString('S3_PATH_PREFIX') || readString('STORAGE_PATH_PREFIX');
   const presignedUrlExpiresIn = readInt('PRESIGNED_URL_EXPIRES_IN', 3600);
@@ -302,7 +315,7 @@ export function loadConfig(): BatchBackendConfig {
       jobSubmissionRateLimit,
     },
     storage: {
-      provider: storageProvider,
+      provider: resolvedStorageProvider,
       bucketName: storageBucketName,
       pathPrefix: storagePathPrefix,
       presignedUrlExpiresIn,

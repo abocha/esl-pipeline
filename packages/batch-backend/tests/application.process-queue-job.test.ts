@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+import path from 'node:path';
 
 import { processQueueJob } from '../src/application/process-queue-job';
 import * as jobRepository from '../src/domain/job-repository';
@@ -49,10 +50,11 @@ describe('application/process-queue-job', () => {
     return {
       id: 'job-1',
       state: 'queued',
-      md: 'fixtures/ok.md',
+      md: path.resolve(__dirname, '../../../fixtures/ok.md'),
       preset: 'b1-default',
       withTts: true,
       upload: 's3',
+      voiceId: 'voice_amanda',
       voiceAccent: 'american_female',
       forceTts: false,
       notionDatabase: 'db-123',
@@ -123,15 +125,17 @@ describe('application/process-queue-job', () => {
 
     expect(runAssignmentJobSpy).toHaveBeenCalledTimes(1);
     const [payload, runId] = runAssignmentJobSpy.mock.calls[0];
-    expect(payload).toEqual({
+    expect(payload).toMatchObject({
       jobId: 'job-1',
-      md: initial.md,
       preset: initial.preset!,
       withTts: initial.withTts!,
       upload: 's3',
-      voiceAccent: initial.voiceAccent,
+      forceTts: initial.forceTts,
       notionDatabase: initial.notionDatabase,
+      mode: initial.mode,
     });
+    expect(path.isAbsolute(payload.md)).toBe(true);
+    expect(payload.md.replace(/\\/g, '/').endsWith(initial.md)).toBe(true);
     expect(typeof runId).toBe('string');
     expect(runId.length).toBeGreaterThan(0);
 

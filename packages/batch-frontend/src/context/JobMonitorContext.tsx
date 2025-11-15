@@ -26,7 +26,6 @@ interface RegisterJobOptions {
   fileName?: string;
   submittedMd?: string | null;
   preset?: string;
-  voiceAccent?: string;
   notionDatabase?: string;
   upload?: SubmitJobRequest['upload'];
   withTts?: boolean;
@@ -62,6 +61,7 @@ const createDefaultJob = (jobId: string): JobEntry => {
     manifestPath: null,
     error: null,
     preset: null,
+    voiceId: null,
     voiceAccent: null,
     notionDatabase: null,
     notionUrl: null,
@@ -101,17 +101,7 @@ export function JobMonitorProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const registerJob = useCallback(
-    ({
-      jobId,
-      fileName,
-      submittedMd,
-      preset,
-      voiceAccent,
-      notionDatabase,
-      upload,
-      withTts,
-      mode,
-    }: RegisterJobOptions) => {
+    ({ jobId, fileName, submittedMd, preset, notionDatabase, upload, withTts, mode }: RegisterJobOptions) => {
       const now = new Date().toISOString();
       updateJob(jobId, prev => ({
         ...prev,
@@ -119,7 +109,6 @@ export function JobMonitorProvider({ children }: { children: ReactNode }) {
         fileName: fileName ?? prev.fileName,
         submittedMd: submittedMd ?? prev.submittedMd,
         preset: preset ?? prev.preset,
-        voiceAccent: voiceAccent ?? prev.voiceAccent,
         notionDatabase: notionDatabase ?? prev.notionDatabase,
         upload: upload ?? prev.upload,
         withTts: withTts ?? prev.withTts,

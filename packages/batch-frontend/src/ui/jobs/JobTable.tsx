@@ -1,7 +1,7 @@
 import React, { useMemo, useState } from 'react';
 import copy from 'copy-to-clipboard';
 import toast from 'react-hot-toast';
-import { useJobMonitor } from '../../context/JobMonitorContext';
+import { useJobMonitor, type JobEntry } from '../../context/JobMonitorContext';
 
 const stateColors: Record<string, string> = {
   queued: '#94a3b8',
@@ -107,7 +107,7 @@ export const JobTable: React.FC = () => {
               <th>Job ID</th>
               <th>File</th>
               <th>Status</th>
-              <th>Preset / Voice</th>
+              <th>Preset / Mode</th>
               <th>Updated</th>
               <th>Actions</th>
             </tr>
@@ -137,7 +137,7 @@ export const JobTable: React.FC = () => {
                   <td>
                     <div style={{ fontSize: '12px', color: '#475569' }}>
                       <div>{job.preset ?? 'preset?'}</div>
-                      <div>{job.voiceAccent ?? 'voice?'}</div>
+                      <div>{formatMode(job.runMode)}</div>
                     </div>
                   </td>
                   <td style={{ fontSize: '12px' }}>
@@ -218,6 +218,11 @@ const controlsWrapStyle: React.CSSProperties = {
   flexWrap: 'wrap',
   justifyContent: 'flex-end',
 };
+
+function formatMode(mode: JobEntry['runMode']): string {
+  const value = mode ?? 'auto';
+  return value.charAt(0).toUpperCase() + value.slice(1);
+}
 
 const addJobWrapStyle: React.CSSProperties = {
   display: 'flex',

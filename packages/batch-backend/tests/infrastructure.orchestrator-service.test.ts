@@ -28,6 +28,7 @@ vi.mock('../src/infrastructure/logger', () => ({
     child: vi.fn().mockReturnValue({
       info: vi.fn(),
       error: vi.fn(),
+      warn: vi.fn(),
     }),
   },
 }));
@@ -138,5 +139,35 @@ describe('infrastructure/orchestrator-service', () => {
     ).rejects.toBe(error);
 
     expect(newAssignmentMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('runAssignmentJob falls back to filesystem manifest store when S3 bucket is missing', async () => {
+    const { loadConfig } = await import('../src/config/env');
+    const { runAssignmentJob } = await import('../src/infrastructure/orchestrator-service');
+
+    (loadConfig as any).mockReturnValue({
+      orchestrator: {
+        manifestStore: 's3',
+        manifestBucket: 'missing-bucket',
+        configProvider: 'local',
+      },
+    });
+
+    const bucketError = new Error('bucket missing');
+    bucketError.name = 'NoSuchBucket';
+
+    newAssignmentMock.mockRejectedValueOnce(bucketError);
+    newAssignmentMock.mockResolvedValueOnce({ manifestPath: '/manifests/job-2.json' });
+
+    const result = await runAssignmentJob(
+      {
+        jobId: 'job-2',
+        md: 'fixtures/ok.md',
+      },
+      'run-3'
+    );
+
+    expect(newAssignmentMock).toHaveBeenCalledTimes(2);
+    expect(result).toEqual({ manifestPath: '/manifests/job-2.json' });
   });
 });

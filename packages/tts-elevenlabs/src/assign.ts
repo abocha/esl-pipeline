@@ -1,5 +1,6 @@
 import { readFile } from 'node:fs/promises';
-import { resolve } from 'node:path';
+import { dirname, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
 
 export type VoiceCatalog = {
   voices: {
@@ -30,14 +31,49 @@ export async function loadVoicesCatalog(
   file = 'configs/elevenlabs.voices.json'
 ): Promise<VoiceCatalog> {
   if (cachedCatalog) return cachedCatalog;
-  try {
-    const raw = await readFile(resolve(file), 'utf8');
-    cachedCatalog = JSON.parse(raw) as VoiceCatalog;
-    return cachedCatalog!;
-  } catch {
-    // If missing, caller should either run voices:sync or provide overrides.
-    return { voices: [] };
+
+  const candidates = getVoiceCatalogCandidates(file);
+  for (const candidate of candidates) {
+    if (!candidate) continue;
+    try {
+      const raw = await readFile(candidate, 'utf8');
+      cachedCatalog = JSON.parse(raw) as VoiceCatalog;
+      return cachedCatalog;
+    } catch (error: any) {
+      if (error?.code === 'ENOENT' || error?.code === 'EISDIR') {
+        continue;
+      }
+      continue;
+    }
   }
+
+  return { voices: [] };
+}
+
+function getVoiceCatalogCandidates(file: string): Array<string | null> {
+  const override = process.env.ELEVENLABS_VOICES_PATH;
+  const cwd = process.cwd();
+  const moduleDir = dirname(fileURLToPath(import.meta.url));
+  const pipelineCwd = process.env.PIPELINE_CWD;
+
+  const roots = [
+    cwd,
+    resolve(cwd, '..'),
+    resolve(cwd, '..', '..'),
+    moduleDir,
+    resolve(moduleDir, '..'),
+    resolve(moduleDir, '..', '..'),
+  ];
+
+  if (pipelineCwd) {
+    roots.unshift(pipelineCwd);
+  }
+
+  const resolvedRoots = roots.map(root => resolve(root, file));
+
+  return Array.from(
+    new Set<string | null>([override ? resolve(override) : null, resolve(file), ...resolvedRoots])
+  );
 }
 
 // crude heuristic for gender from speaker name if user didn't provide metadata

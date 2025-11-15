@@ -50,6 +50,7 @@ type BuildStudyTextOptions = {
   preview?: boolean;
   force?: boolean;
   defaultAccent?: string;
+  defaultVoiceId?: string;
   ffmpegPath?: string;
   outputFormat?: string;
   
@@ -173,6 +174,9 @@ export async function buildStudyTextMp3(
     typeof rawVoiceMap === 'object' && rawVoiceMap
       ? (rawVoiceMap as VoiceMapConfig)
       : ({} as VoiceMapConfig);
+  if (opts.defaultVoiceId) {
+    voiceMap.default = opts.defaultVoiceId;
+  }
   const catalog = await loadVoicesCatalog().catch<VoiceCatalog>(() => ({ voices: [] }));
   const speakers = collectSpeakers(segments, frontmatter);
   const assignments = await resolveSpeakerVoices({
@@ -572,6 +576,8 @@ function wait(ms: number): Promise<void> {
 }
 
 export { resolveFfmpegPath, FfmpegNotFoundError } from './ffmpeg.js';
+export { loadVoicesCatalog } from './assign.js';
+export type { VoiceCatalog } from './assign.js';
 
 // Export types for orchestrator integration
 export type { TtsMode, DialogueInput, DialogueSynthesisOptions, DialogueSynthesisResult, DialogueChunk } from './types.js';

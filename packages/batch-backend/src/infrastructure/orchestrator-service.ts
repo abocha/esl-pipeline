@@ -12,9 +12,11 @@ import {
   type NewAssignmentFlags,
   type OrchestratorDependencies,
 } from '@esl-pipeline/orchestrator';
-import { loadConfig } from '../config/env';
+import { S3Client } from '@aws-sdk/client-s3';
+import { loadConfig, type BatchBackendConfig } from '../config/env';
 import { logger as rootLogger, Logger } from './logger';
 import { metrics } from './metrics';
+import type { JobMode } from '../domain/job-model';
 
 // Lazily initialized, module-local cache.
 // Populated only inside getPipeline(), never at import time.
@@ -54,11 +56,41 @@ export function getPipeline(configOverride?: ReturnType<typeof loadConfig>) {
 
   let manifestStore: any | undefined;
   if (config.orchestrator.manifestStore === 's3') {
+    const manifestRegion =
+      process.env.AWS_REGION || process.env.S3_REGION || process.env.MINIO_REGION || 'us-east-1';
+
+    const manifestEndpoint =
+      process.env.S3_ENDPOINT ||
+      (config.minio.enabled
+        ? `${config.minio.useSSL ? 'https' : 'http'}://${config.minio.endpoint}:${config.minio.port}`
+        : undefined);
+
+    const preferMinioCreds = Boolean(manifestEndpoint) || config.minio.enabled;
+    let manifestCredentials: { accessKeyId: string; secretAccessKey: string } | undefined;
+    if (preferMinioCreds) {
+      manifestCredentials = {
+        accessKeyId: config.minio.accessKey,
+        secretAccessKey: config.minio.secretKey,
+      };
+    } else if (process.env.AWS_ACCESS_KEY_ID && process.env.AWS_SECRET_ACCESS_KEY) {
+      manifestCredentials = {
+        accessKeyId: process.env.AWS_ACCESS_KEY_ID,
+        secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY,
+      };
+    }
+
+    const s3Client = new S3Client({
+      region: manifestRegion,
+      endpoint: manifestEndpoint,
+      forcePathStyle: manifestEndpoint ? true : undefined,
+      credentials: manifestCredentials,
+    });
+
     manifestStore = new S3ManifestStore({
       bucket: config.orchestrator.manifestBucket!,
       prefix: config.orchestrator.manifestPrefix,
-      region: process.env.AWS_REGION,
       rootDir: config.orchestrator.manifestRoot,
+      client: s3Client,
     });
   }
 
@@ -89,10 +121,9 @@ export interface RunAssignmentPayload {
   // Upload backend flag is constrained by orchestrator API:
   // currently only 's3' is supported as an explicit option.
   upload?: 's3';
-  voiceAccent?: string | null;
   forceTts?: boolean | null;
   notionDatabase?: string | null;
-  mode?: 'auto' | 'dialogue' | 'monologue' | null;
+  mode?: JobMode | null;
 }
 
 // runAssignmentJob.declaration()
@@ -100,35 +131,35 @@ export async function runAssignmentJob(
   payload: RunAssignmentPayload,
   runId: string
 ): Promise<{ manifestPath?: string; notionUrl?: string }> {
-  const pipeline = getPipeline();
+  const config = loadConfig();
   const log = rootLogger.child({ jobId: payload.jobId, runId });
 
-  const flags: NewAssignmentFlags = {
-    md: payload.md,
-    preset: payload.preset,
-    withTts: payload.withTts,
-    upload: payload.upload,
-  };
+  const execute = async (activeConfig: BatchBackendConfig) => {
+    const pipeline = getPipeline(activeConfig);
+    const flags: NewAssignmentFlags = {
+      md: payload.md,
+      preset: payload.preset,
+      withTts: payload.withTts,
+      upload: payload.upload,
+    };
 
-  if (payload.voiceAccent) {
-    flags.accentPreference = payload.voiceAccent;
-  }
+    if (payload.notionDatabase) {
+      flags.dbId = payload.notionDatabase;
+    }
 
-  if (payload.notionDatabase) {
-    flags.dbId = payload.notionDatabase;
-  }
+    if (payload.forceTts) {
+      flags.redoTts = payload.forceTts;
+    }
 
-  // TODO: Forward forceTts/mode once orchestrator exposes the corresponding flags.
+    if (payload.mode) {
+      flags.ttsMode = payload.mode;
+    }
 
-  const dependencies: OrchestratorDependencies = {
-    runId,
-  };
+    const dependencies: OrchestratorDependencies = {
+      runId,
+    };
 
-  try {
     const started = Date.now();
-    // Call orchestrator's newAssignment via pipeline wrapper.
-    // The orchestrator's public signature accepts at most (flags, callbacksOrDeps),
-    // so we pass dependencies (including runId) as the second argument.
     const result = await (pipeline as any).newAssignment(flags as any, dependencies as any);
     const duration = Date.now() - started;
 
@@ -138,10 +169,48 @@ export async function runAssignmentJob(
     });
 
     return { manifestPath: result.manifestPath, notionUrl: result.pageUrl };
+  };
+
+  try {
+    return await execute(config);
   } catch (err) {
+    if (isManifestBucketMissingError(err) && config.orchestrator.manifestStore === 's3') {
+      log.warn(
+        'Manifest bucket missing; falling back to filesystem manifest store for this worker session',
+        {
+          bucket: config.orchestrator.manifestBucket,
+        }
+      );
+      cachedPipeline = null;
+      const fallbackConfig: BatchBackendConfig = {
+        ...config,
+        orchestrator: {
+          ...config.orchestrator,
+          manifestStore: 'filesystem',
+          manifestBucket: undefined,
+        },
+      };
+      return execute(fallbackConfig);
+    }
+
     log.error(err instanceof Error ? err : String(err), {
       message: 'Assignment pipeline failed',
     });
     throw err;
   }
+}
+
+function isManifestBucketMissingError(error: unknown): boolean {
+  if (!error) return false;
+  if (
+    error instanceof Error &&
+    (error.name === 'NoSuchBucket' || error.name === 'PermanentRedirect')
+  ) {
+    return true;
+  }
+  const message = typeof error === 'object' && 'message' in error ? (error as any).message : undefined;
+  if (typeof message === 'string' && message.toLowerCase().includes('no such bucket')) {
+    return true;
+  }
+  return false;
 }

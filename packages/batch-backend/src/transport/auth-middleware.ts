@@ -34,17 +34,42 @@ export class AuthorizationError extends Error {
 /**
  * Extract JWT token from Authorization header
  */
-function extractTokenFromHeader(authHeader: string | undefined): string {
-  if (!authHeader) {
-    throw new AuthenticationError('Authorization header is missing');
-  }
-
+function extractTokenFromHeader(authHeader: string): string {
   const parts = authHeader.split(' ');
   if (parts.length !== 2 || parts[0] !== 'Bearer') {
     throw new AuthenticationError('Invalid authorization header format. Expected: Bearer <token>');
   }
 
   return parts[1]!;
+}
+
+function extractTokenFromQuery(query: unknown): string | null {
+  if (!query || typeof query !== 'object') {
+    return null;
+  }
+
+  const record = query as Record<string, unknown>;
+  const candidate = record.access_token ?? record.accessToken ?? record.token;
+
+  if (typeof candidate === 'string' && candidate.trim()) {
+    return candidate.trim();
+  }
+
+  return null;
+}
+
+function resolveTokenFromRequest(request: FastifyRequest): string {
+  const authHeader = request.headers.authorization;
+  if (authHeader) {
+    return extractTokenFromHeader(authHeader);
+  }
+
+  const queryToken = extractTokenFromQuery(request.query);
+  if (queryToken) {
+    return queryToken;
+  }
+
+  throw new AuthenticationError('Authentication token is missing');
 }
 
 /**
@@ -92,8 +117,7 @@ async function verifyToken(token: string): Promise<AuthenticatedUser> {
  */
 export async function authenticate(request: FastifyRequest, reply: FastifyReply): Promise<void> {
   try {
-    const authHeader = request.headers.authorization;
-    const token = extractTokenFromHeader(authHeader);
+    const token = resolveTokenFromRequest(request);
 
     const user = await verifyToken(token);
 
@@ -216,15 +240,15 @@ export function requireRole(allowedRoles: UserRole[]) {
  */
 export async function optionalAuth(request: FastifyRequest): Promise<void> {
   try {
-    const authHeader = request.headers.authorization;
+    const hasHeader = Boolean(request.headers.authorization);
+    const hasQueryToken = Boolean(extractTokenFromQuery(request.query));
 
-    if (!authHeader) {
-      // No authorization header, proceed without authentication
+    if (!hasHeader && !hasQueryToken) {
       return;
     }
 
     try {
-      const token = extractTokenFromHeader(authHeader);
+      const token = resolveTokenFromRequest(request);
       const user = await verifyToken(token);
 
       // Add user to request object

@@ -10,7 +10,12 @@
  * - GET /jobs/events (SSE) for live updates
  * - GET /user/profile, /user/files (authenticated)
  */
-import apiClient, { handleApiError, isAuthError, buildBackendUrl } from './api-client';
+import apiClient, {
+  handleApiError,
+  isAuthError,
+  buildApiProxyPath,
+  getApiAuthToken,
+} from './api-client';
 
 export type JobState = 'queued' | 'running' | 'succeeded' | 'failed';
 export type UserRole = 'admin' | 'user' | 'viewer';
@@ -21,7 +26,6 @@ export interface SubmitJobRequest {
   preset?: string;
   withTts?: boolean;
   forceTts?: boolean;
-  voiceAccent?: string;
   notionDatabase?: string;
   upload?: 'auto' | 's3' | 'none';
   mode?: 'auto' | 'dialogue' | 'monologue';
@@ -46,6 +50,7 @@ export interface JobStatus {
   error: string | null;
   manifestPath: string | null;
   preset?: string | null;
+  voiceId?: string | null;
   voiceAccent?: string | null;
   notionDatabase?: string | null;
   notionUrl?: string | null;
@@ -113,9 +118,18 @@ export interface ErrorEnvelope {
 export interface JobOptionsResponse {
   presets: string[];
   voiceAccents: string[];
+  voices: VoiceOption[];
   notionDatabases: Array<{ id: string; name: string }>;
   uploadOptions: Array<'auto' | 's3' | 'none'>;
   modes: Array<'auto' | 'dialogue' | 'monologue'>;
+}
+
+export interface VoiceOption {
+  id: string;
+  name: string;
+  accent?: string | null;
+  gender?: string | null;
+  category?: string | null;
 }
 
 export type JobEventType = 'job_state_changed' | string;
@@ -149,7 +163,7 @@ export interface JobEventsOptions {
  */
 export async function login(credentials: LoginRequest): Promise<AuthResponse> {
   try {
-    const response = await apiClient.post('/auth/login', credentials);
+    const response = await apiClient.post(buildApiProxyPath('/auth/login'), credentials);
     return response.data;
   } catch (error: any) {
     throw new Error(handleApiError(error));
@@ -163,16 +177,16 @@ export async function register(userData: RegisterRequest): Promise<void> {
   };
 
   try {
-    await attempt('/auth/register');
+    await attempt(buildApiProxyPath('/auth/register'));
   } catch (error: any) {
     const status = error.response?.status;
     const message = (error.response?.data as any)?.message;
     const isRouteMissing =
       status === 404 && typeof message === 'string' && message.toLowerCase().includes('route post:/auth/register not found');
 
-    if (status === 404 && error.config?.url !== '/api/auth/register') {
+    if (status === 404 && !error.config?.url?.includes('/auth/register')) {
       try {
-        await attempt('/api/auth/register');
+        await attempt(buildApiProxyPath('/auth/register'));
         return;
       } catch (fallbackError: any) {
         if (fallbackError.response?.status === 404 || isRouteMissing) {
@@ -196,7 +210,7 @@ export async function register(userData: RegisterRequest): Promise<void> {
 
 export async function refreshToken(refreshTokenValue: string): Promise<AuthResponse> {
   try {
-    const response = await apiClient.post('/auth/refresh', { refreshToken: refreshTokenValue });
+    const response = await apiClient.post(buildApiProxyPath('/auth/refresh'), { refreshToken: refreshTokenValue });
     return response.data;
   } catch (error: any) {
     throw new Error(handleApiError(error));
@@ -205,7 +219,7 @@ export async function refreshToken(refreshTokenValue: string): Promise<AuthRespo
 
 export async function logoutSession(): Promise<void> {
   try {
-    await apiClient.post('/auth/logout');
+    await apiClient.post(buildApiProxyPath('/auth/logout'));
   } catch (error: any) {
     if (error.response?.status === 404) {
       return;
@@ -216,7 +230,7 @@ export async function logoutSession(): Promise<void> {
 
 export async function getUserProfile(): Promise<UserProfile> {
   try {
-    const response = await apiClient.get('/auth/me');
+    const response = await apiClient.get(buildApiProxyPath('/auth/me'));
     return response.data.user;
   } catch (error: any) {
     throw new Error(handleApiError(error));
@@ -225,7 +239,7 @@ export async function getUserProfile(): Promise<UserProfile> {
 
 export async function getUserFiles(): Promise<UserFile[]> {
   try {
-    const response = await apiClient.get('/user/files');
+    const response = await apiClient.get(buildApiProxyPath('/user/files'));
     return response.data.files || [];
   } catch (error: any) {
     throw new Error(handleApiError(error));
@@ -238,7 +252,7 @@ export async function getUserFiles(): Promise<UserFile[]> {
  */
 export async function createJob(body: SubmitJobRequest): Promise<SubmitJobResponse> {
   try {
-    const response = await apiClient.post('/jobs', body);
+    const response = await apiClient.post(buildApiProxyPath('/jobs'), body);
     return response.data;
   } catch (error: any) {
     if (isAuthError(error)) {
@@ -257,7 +271,7 @@ export async function uploadMarkdown(file: File): Promise<UploadMarkdownResponse
     const formData = new FormData();
     formData.append('file', file);
 
-    const response = await apiClient.post('/uploads', formData, {
+    const response = await apiClient.post(buildApiProxyPath('/uploads'), formData, {
       headers: {
         'Content-Type': 'multipart/form-data',
       },
@@ -278,7 +292,9 @@ export async function uploadMarkdown(file: File): Promise<UploadMarkdownResponse
  */
 export async function getJobStatus(jobId: string): Promise<JobStatus> {
   try {
-    const response = await apiClient.get(`/jobs/${encodeURIComponent(jobId)}`);
+    const response = await apiClient.get(
+      buildApiProxyPath(`/jobs/${encodeURIComponent(jobId)}`)
+    );
     return response.data;
   } catch (error: any) {
     if (isAuthError(error)) {
@@ -290,7 +306,7 @@ export async function getJobStatus(jobId: string): Promise<JobStatus> {
 
 export async function fetchJobOptions(): Promise<JobOptionsResponse> {
   try {
-    const response = await apiClient.get('/config/job-options');
+    const response = await apiClient.get(buildApiProxyPath('/config/job-options'));
     return response.data;
   } catch (error: any) {
     throw new Error(handleApiError(error));
@@ -301,8 +317,14 @@ export function subscribeToJobEvents(
   onEvent: (event: JobEvent) => void,
   options: JobEventsOptions = {}
 ): EventSource {
-  const url = buildBackendUrl('/jobs/events');
-  const eventSource = new EventSource(url, { withCredentials: true });
+  const url = buildApiProxyPath('/jobs/events');
+  const accessToken = getApiAuthToken();
+  const tokenizedUrl =
+    accessToken && accessToken.length > 0
+      ? appendTokenQueryParam(url, accessToken)
+      : url;
+
+  const eventSource = new EventSource(tokenizedUrl, { withCredentials: true });
 
   if (options.onOpen) {
     eventSource.onopen = options.onOpen;
@@ -332,4 +354,17 @@ export function subscribeToJobEvents(
   }
 
   return eventSource;
+}
+
+function appendTokenQueryParam(url: string, token: string): string {
+  if (!token) {
+    return url;
+  }
+
+  const [basePart, hashPart] = url.split('#', 2);
+  const base = basePart ?? '';
+  const hash = hashPart ?? '';
+  const separator = base.includes('?') ? '&' : '?';
+  const queryAppended = `${base}${separator}access_token=${encodeURIComponent(token)}`;
+  return hash ? `${queryAppended}#${hash}` : queryAppended;
 }

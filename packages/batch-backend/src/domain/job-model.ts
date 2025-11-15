@@ -6,6 +6,8 @@
 export type JobState = 'queued' | 'running' | 'succeeded' | 'failed';
 // JobState.declaration()
 
+export type JobMode = 'auto' | 'dialogue' | 'monologue';
+
 export interface JobRecord {
   id: string;
   state: JobState;
@@ -13,10 +15,11 @@ export interface JobRecord {
   preset?: string | null;
   withTts?: boolean | null;
   upload?: string | null;
+  voiceId?: string | null;
   voiceAccent?: string | null;
   forceTts?: boolean | null;
   notionDatabase?: string | null;
-  mode?: string | null;
+  mode?: JobMode | null;
   notionUrl?: string | null;
   createdAt: Date;
   updatedAt: Date;

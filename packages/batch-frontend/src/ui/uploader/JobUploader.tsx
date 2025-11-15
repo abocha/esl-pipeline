@@ -66,7 +66,6 @@ export const JobUploader: React.FC = () => {
   }, [
     settings.applyToPending,
     settings.preset,
-    settings.voiceAccent,
     settings.notionDatabase,
     settings.withTts,
     settings.forceTts,
@@ -111,7 +110,6 @@ export const JobUploader: React.FC = () => {
           preset: jobSettings.preset,
           withTts: jobSettings.withTts,
           forceTts: jobSettings.forceTts,
-          voiceAccent: jobSettings.voiceAccent,
           notionDatabase: jobSettings.notionDatabase,
           upload: jobSettings.upload,
           mode: jobSettings.mode,
@@ -134,7 +132,6 @@ export const JobUploader: React.FC = () => {
           fileName: jobFile.name,
           submittedMd: uploadResponse.md,
           preset: jobSettings.preset,
-          voiceAccent: jobSettings.voiceAccent,
           notionDatabase: jobSettings.notionDatabase,
           upload: jobSettings.upload,
           withTts: jobSettings.withTts,
@@ -403,7 +400,6 @@ const buildAppliedSettings = (settings: JobSettings): AppliedJobSettings => {
 
 const APPLIED_KEYS: (keyof AppliedJobSettings)[] = [
   'preset',
-  'voiceAccent',
   'notionDatabase',
   'withTts',
   'forceTts',

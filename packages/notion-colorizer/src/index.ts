@@ -44,6 +44,7 @@ export async function applyHeadingPreset(
           }),
         'blocks.children.list'
       );
+      await maybeThrottle();
       for (const child of childResp.results) {
         if ('type' in child && child.type === 'heading_3') {
           await withRetry(
@@ -57,6 +58,7 @@ export async function applyHeadingPreset(
               }),
             'blocks.update.heading_3'
           );
+          await maybeThrottle();
           counts.h3++;
         }
         if ('type' in child && child.type === 'toggle') {
@@ -76,6 +78,7 @@ export async function applyHeadingPreset(
       () => client.blocks.children.list({ block_id: pageId, start_cursor: cursor, page_size: 100 }),
       'blocks.children.list'
     );
+    await maybeThrottle();
 
     for (const block of resp.results) {
       if ('type' in block && block.type === 'heading_2' && preset.h2) {
@@ -90,6 +93,7 @@ export async function applyHeadingPreset(
             }),
           'blocks.update.heading_2'
         );
+        await maybeThrottle();
         counts.h2++;
         prevWasH2 = true;
         continue;
@@ -107,6 +111,7 @@ export async function applyHeadingPreset(
             }),
           'blocks.update.heading_3'
         );
+        await maybeThrottle();
         counts.h3++;
         prevWasH2 = false;
         continue;
@@ -131,9 +136,10 @@ export async function applyHeadingPreset(
                 toggle: {
                   rich_text: annotated,
                 },
-              }),
-            'blocks.update.toggle'
-          );
+            }),
+          'blocks.update.toggle'
+        );
+          await maybeThrottle();
           counts.toggles++;
         }
         await colorHeading3Descendants(block.id);
@@ -149,4 +155,13 @@ export async function applyHeadingPreset(
   } while (cursor);
 
   return { applied: true, counts };
+}
+
+const THROTTLE_MS = Number(process.env.NOTION_COLORIZER_THROTTLE_MS ?? 0);
+
+async function maybeThrottle(): Promise<void> {
+  if (THROTTLE_MS <= 0) {
+    return;
+  }
+  await new Promise(resolve => setTimeout(resolve, THROTTLE_MS));
 }
