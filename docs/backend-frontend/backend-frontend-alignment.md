@@ -31,6 +31,8 @@ This document captures the gaps between the new batch frontend (Phase 7/8 UI) an
 
 ## Required Backend Work
 
+> **Routing split**: `packages/batch-backend/src/transport/core-routes.ts` now owns the mandatory job endpoints, while `transport/extended-routes.ts` contains `/config/job-options`, uploads, auth, and admin routes. `createHttpServer` registers the extended plugin only when `config.experimental.extendedApiEnabled` / `BATCH_BACKEND_ENABLE_EXTENDED_API` is true, so any new optional surface should land inside that plugin.
+
 ### 1. Implement Job Event Bus + SSE
 
 1. **Event bus module**
