@@ -68,6 +68,8 @@ _Outcome_: `packages/orchestrator/src/metadata/job-options.ts` now exposes `reso
   - Flag changes no longer require editing the main server file.
   - Tests cover each plugin independently.
 
+_Status_: Completed — `transport/core-routes.ts` and `transport/extended-routes.ts` now register their respective surfaces, and `http-server.ts` simply wires the plugins behind `config.experimental.extendedApiEnabled`.
+
 ---
 
 ## 5. Shared Infra Utilities
