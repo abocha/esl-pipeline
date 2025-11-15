@@ -95,6 +95,12 @@ export type {
   PipelineNewAssignmentOptions,
   PipelineRerunOptions,
 } from './pipeline.js';
+export {
+  resolveJobOptions,
+  type JobOptionsPayload,
+  type VoiceOption as JobVoiceOption,
+  type NotionDatabaseOption as JobNotionDatabaseOption,
+} from './metadata/job-options.js';
 
 export function summarizeVoiceSelections(
   voices?: BuildStudyTextResult['voices']

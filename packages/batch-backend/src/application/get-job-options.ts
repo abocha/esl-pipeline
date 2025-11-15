@@ -1,11 +1,12 @@
 // packages/batch-backend/src/application/get-job-options.ts
 //
-// Temporary job-options provider for the batch frontend. The intent is to swap
-// this out for a config-backed implementation once the orchestrator exposes its
-// preset/voice metadata over HTTP.
+// Batch frontend metadata endpoint. Primarily proxies orchestrator config,
+// with the static section below serving as a fallback when orchestration fails.
 
 import { readFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
+import { logger } from '../infrastructure/logger';
+import { getJobOptionsFromOrchestrator } from '../infrastructure/orchestrator-service';
 
 export type UploadOption = 'auto' | 's3' | 'none';
 export type JobModeOption = 'auto' | 'dialogue' | 'monologue';
@@ -47,6 +48,18 @@ const STATIC_OPTIONS: JobOptionsResponse = {
 };
 
 export async function getJobOptions(): Promise<JobOptionsResponse> {
+  try {
+    const result = await getJobOptionsFromOrchestrator();
+    return result;
+  } catch (error) {
+    logger.warn('Failed to load job options from orchestrator. Falling back to static config.', {
+      error: error instanceof Error ? error.message : String(error),
+    });
+    return loadStaticJobOptions();
+  }
+}
+
+async function loadStaticJobOptions(): Promise<JobOptionsResponse> {
   const notionDatabases = resolveNotionDatabases();
   const voices = await loadVoiceOptions();
   const voiceAccents =

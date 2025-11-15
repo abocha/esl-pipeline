@@ -108,10 +108,11 @@ see [`docs/agents-ssot.md`](docs/agents-ssot.md) §§4, 5, and 7.
 ## 5. Backend & Adapters (Pointer)
 
 - Roadmap and backend scaffolding are documented in:
-  - [`docs/groundwork-for-backend.md`](docs/groundwork-for-backend.md)
+  - [`docs/backend-frontend/backend-frontend-alignment.md`](docs/backend-frontend/backend-frontend-alignment.md) — canonical status for backend ↔ frontend APIs and milestone tracking.
+  - [`docs/groundwork-for-backend.md`](docs/backend-frontend/groundwork-for-backend.md)
   - [`docs/agents-ssot.md`](docs/agents-ssot.md) (adapters, manifest store, config provider rules)
 
-Treat this section as directional only; the SSOT and code are the source of truth.
+Treat the alignment doc as the only human-readable status tracker; the SSOT and code remain the ultimate source of truth.
 
 ---
 

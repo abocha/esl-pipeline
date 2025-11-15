@@ -13,10 +13,25 @@ vi.mock('../src/config/env', () => ({
 }));
 
 const newAssignmentMock = vi.fn();
+const resolveJobOptionsMock = vi.fn();
+const pipelineMock = {
+  newAssignment: newAssignmentMock,
+  configProvider: {
+    loadPresets: vi.fn(),
+    loadStudentProfiles: vi.fn(),
+    resolveVoicesPath: vi.fn(),
+  },
+  configPaths: {
+    configRoot: '/repo/configs',
+    presetsPath: '/repo/configs/presets.json',
+    voicesPath: '/repo/configs/voices.yml',
+    studentsDir: '/repo/configs/students',
+    wizardDefaultsPath: '/repo/configs/wizard.defaults.json',
+  },
+};
 vi.mock('@esl-pipeline/orchestrator', () => ({
-  createPipeline: vi.fn().mockImplementation((_options: any) => ({
-    newAssignment: newAssignmentMock,
-  })),
+  createPipeline: vi.fn().mockImplementation((_options: any) => pipelineMock),
+  resolveJobOptions: resolveJobOptionsMock,
 }));
 
 // Logger and metrics: keep simple and isolated from TDZ.
@@ -169,5 +184,34 @@ describe('infrastructure/orchestrator-service', () => {
 
     expect(newAssignmentMock).toHaveBeenCalledTimes(2);
     expect(result).toEqual({ manifestPath: '/manifests/job-2.json' });
+  });
+
+  it('getJobOptionsFromOrchestrator delegates to orchestrator metadata helper', async () => {
+    const { loadConfig } = await import('../src/config/env');
+    const { getPipeline, getJobOptionsFromOrchestrator } = await import(
+      '../src/infrastructure/orchestrator-service'
+    );
+
+    (loadConfig as any).mockReturnValue({
+      orchestrator: {
+        manifestStore: 'filesystem',
+        configProvider: 'local',
+      },
+    });
+
+    resolveJobOptionsMock.mockResolvedValue({
+      presets: ['alpha'],
+      voiceAccents: [],
+      voices: [],
+      notionDatabases: [],
+      uploadOptions: ['auto', 's3', 'none'],
+      modes: ['auto'],
+    });
+
+    getPipeline();
+    const result = await getJobOptionsFromOrchestrator();
+
+    expect(resolveJobOptionsMock).toHaveBeenCalledWith(pipelineMock);
+    expect(result.presets).toEqual(['alpha']);
   });
 });

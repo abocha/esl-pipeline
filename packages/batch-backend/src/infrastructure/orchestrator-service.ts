@@ -11,6 +11,8 @@ import {
   RemoteConfigProvider,
   type NewAssignmentFlags,
   type OrchestratorDependencies,
+  resolveJobOptions,
+  type JobOptionsPayload,
 } from '@esl-pipeline/orchestrator';
 import { S3Client } from '@aws-sdk/client-s3';
 import { loadConfig, type BatchBackendConfig } from '../config/env';
@@ -198,6 +200,11 @@ export async function runAssignmentJob(
     });
     throw err;
   }
+}
+
+export async function getJobOptionsFromOrchestrator(): Promise<JobOptionsPayload> {
+  const pipeline = getPipeline();
+  return resolveJobOptions(pipeline);
 }
 
 function isManifestBucketMissingError(error: unknown): boolean {
