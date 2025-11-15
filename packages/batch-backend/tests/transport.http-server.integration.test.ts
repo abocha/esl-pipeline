@@ -79,6 +79,20 @@ vi.mock('../src/infrastructure/logger', async () => {
   };
 });
 
+vi.mock('../src/infrastructure/orchestrator-service', () => {
+  const orchestratorJobOptionsMock = {
+    presets: ['b1-default'],
+    voiceAccents: ['american_female'],
+    voices: [{ id: 'voice-1', name: 'Voice One', accent: 'american_female', gender: 'female' }],
+    notionDatabases: [{ id: 'db-1', name: 'DB One' }],
+    uploadOptions: ['auto', 's3', 'none'] as const,
+    modes: ['auto', 'dialogue', 'monologue'] as const,
+  };
+  return {
+    getJobOptionsFromOrchestrator: vi.fn().mockResolvedValue(orchestratorJobOptionsMock),
+  };
+});
+
 describe('transport/http-server - integration (in-process)', () => {
   let app: ReturnType<typeof createHttpServer>;
 

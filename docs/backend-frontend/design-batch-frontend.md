@@ -1,6 +1,6 @@
 # Batch Frontend – Detailed Design
 
-This document captures the end-to-end design for the revamped batch frontend that tutors use to upload Markdown lessons, submit jobs to `@esl-pipeline/batch-backend`, and monitor progress in real time. It covers UI structure, backend integrations, state handling, and extensibility points so that we have a single reference for implementation.
+This document captures the end-to-end design for the revamped batch frontend that tutors use to upload Markdown lessons, submit jobs to `@esl-pipeline/batch-backend`, and monitor progress in real time. It focuses on UI/UX behavior; when you need precise API contracts or milestone status, jump to [`backend-frontend-alignment.md`](backend-frontend-alignment.md).
 
 ---
 
@@ -30,70 +30,14 @@ This document captures the end-to-end design for the revamped batch frontend tha
 
 ---
 
-## 3. API Surface & Backend Expectations
+## 3. Backend Integration Touchpoints
 
-### 3.1 Job Submission
+For every backend interaction, defer to [`backend-frontend-alignment.md`](backend-frontend-alignment.md) for up-to-date payloads, auth requirements, and rollout status. The frontend only needs to honour the interaction points below:
 
-- `POST /uploads`
-  - Accepts multipart form (`file` field).
-  - Returns `{ id, md, url?, ... }`.
-  - Requires authentication (extended API flag must be enabled).
-- `POST /jobs`
-  - Body:
-    ```jsonc
-    {
-      "md": "uploads/<user>/<uuid>_lesson.md",
-      "preset": "b1-default",
-      "withTts": true,
-      "forceTts": false,
-      "voiceAccent": "american_female",
-      "notionDatabase": "db-id-or-alias",
-      "mode": "auto",        // future option (auto/dialogue/monologue)
-      "upload": "auto"       // auto | s3 | none
-    }
-    ```
-  - Returns `{ jobId }`.
-  - Requires authentication.
-
-### 3.2 Job Monitoring
-
-- `GET /jobs/:jobId` – used for initial fetch / manual refresh.
-- `GET /jobs/events` (new) – SSE stream that emits:
-  ```json
-  {
-    "type": "job_state_changed",
-    "jobId": "uuid",
-    "state": "running",
-    "payload": {
-      "manifestPath": "...",
-      "error": null,
-      "finishedAt": null,
-      "runMode": "auto",
-      "submittedMd": "uploads/...md"
-    }
-  }
-  ```
-  - We may include additional event types later (e.g., `job_created`, `job_failed`).
-  - Frontend subscribes once after auth and updates in-memory job data live.
-- `/jobs/:jobId/rerun/audio` (future) – endpoint to regenerate audio only. For now the “Regenerate audio” button will call a stub (warn user that the feature is under construction).
-
-### 3.3 Metadata Endpoints (recommended)
-
-Add a lightweight config endpoint so the UI stays in sync with backend settings:
-- `GET /config/job-options`
-  ```json
-  {
-    "presets": ["b1-default", "c1-science"],
-    "voiceAccents": ["american_female", "british_male", "australian_female"],
-    "notionDatabases": [
-      { "id": "uuid-123", "name": "B1 Lessons" },
-      { "id": "uuid-456", "name": "B2 Lessons" }
-    ],
-    "uploadOptions": ["auto", "s3", "none"],
-    "modes": ["auto", "dialogue", "monologue"]
-  }
-  ```
-  - Modes can stay hidden/disabled until the orchestrator branch lands.
+- **Uploads & job submission**: drag/drop uploads ultimately POST `/uploads` then `/jobs` with the settings selected in the UI. Field validation, accepted enums, and feature flags live in the alignment plan + SSOT.
+- **Status monitoring**: fetch `/jobs/:jobId` for initial hydration, then stream live changes from `/jobs/events` (SSE). The frontend treats SSE as best-effort—if it disconnects, we fall back to polling.
+- **Config metadata**: load presets/voices/Notion DBs via `/config/job-options` on app start so dropdowns match backend defaults.
+- **Future actions**: the “Regenerate audio” and similar controls hook into the job action endpoints tracked in the alignment plan (currently stubbed until rerun support ships).
 
 ---
 
@@ -159,6 +103,8 @@ Add a lightweight config endpoint so the UI stays in sync with backend settings:
 
 ## 5. Real-Time Updates (SSE)
 
+See [`backend-frontend-alignment.md`](backend-frontend-alignment.md#phase-4--jobs-events-sse-endpoint) for the definitive SSE payload and rollout notes.
+
 - **Connection**: Once the tutor logs in, the frontend opens `new EventSource(<backend>/jobs/events, { withCredentials: true })`.
 - **Authentication**: SSE endpoint should honor the same cookies/session as the HTTP API.
 - **Reconnection**: Implement exponential backoff reconnect (e.g., after 1s, 2s, 5s, max 30s). While disconnected, show a warning banner (“Live updates unavailable; falling back to manual refresh”).
@@ -183,6 +129,8 @@ Add a lightweight config endpoint so the UI stays in sync with backend settings:
 ---
 
 ## 7. Job Actions
+
+Backend dependencies for these actions (especially audio reruns) are tracked in [`backend-frontend-alignment.md`](backend-frontend-alignment.md#phase-7--audio-rerun-endpoint-pending-orchestrator-support).
 
 - **Copy Notion Link**:
   - Each job row includes an icon button.

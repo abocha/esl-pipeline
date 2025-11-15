@@ -1,5 +1,15 @@
 # Backend–Frontend Alignment Plan (Batch System)
 
+> **Canonical status tracker** — This file is now the single human-readable source for backend ↔ frontend API status, milestones, and dependencies. All other docs (UI design, implementation notes) should link here instead of duplicating requirements. For runtime contracts always defer to `docs/agents-ssot.md`.
+
+## Document Map
+
+- [`design-batch-frontend.md`](design-batch-frontend.md) — UI/UX narrative (user journey, layout, component responsibilities). Backend requirements referenced there link back to this plan.
+- [`implementation-plan-batch-frontend.md`](implementation-plan-batch-frontend.md) — lightweight execution tips and checklists; any blocking backend work must be reflected here first.
+- Additional backend scaffolding lives in [`groundwork-for-backend.md`](groundwork-for-backend.md) and the SSOTs referenced from `AGENTS.md`.
+
+---
+
 This document captures the gaps between the new batch frontend (Phase 7/8 UI) and the existing batch-backend implementation, along with the concrete steps needed to bring the backend up to speed.
 
 ---
@@ -173,10 +183,11 @@ _Deliverable_: ✅ `/jobs/events` streams live DTOs (matching `/jobs/:id`) for b
 **Status: complete.**
 
 - `GET /config/job-options` now lives in `http-server.ts`, inherits the extended API/auth gate, and sets `Cache-Control: private, max-age=60` so the React Query call can memoize the response.
-- The handler calls `getJobOptions()` (`packages/batch-backend/src/application/get-job-options.ts`), which currently returns deterministic presets/voices/databases/modes with TODO notes pointing at the upcoming orchestrator-backed config feed.
-- Integration coverage in `tests/transport.http-server.integration.test.ts` asserts both the success payload and the disabled (`404`) behavior when `BATCH_BACKEND_ENABLE_EXTENDED_API=false`.
+- The handler calls `getJobOptions()` (`packages/batch-backend/src/application/get-job-options.ts`), which proxies to the orchestrator’s `resolveJobOptions` helper via `getJobOptionsFromOrchestrator`. The helper reads presets + Notion DB metadata from the active config provider (`configs/*.json` or remote) and voice catalog data from `configs/elevenlabs.voices.json`, so frontend dropdowns always reflect whatever the worker will run.
+- If the orchestrator metadata fetch fails, the backend logs a warning and falls back to the legacy static/env-driven options (`NOTION_DB_OPTIONS`, `NOTION_DB_ID`, `NOTION_DB_NAME`, etc.). These env overrides remain supported only as a safety net; they should be treated as temporary until the orchestrator config is reachable again.
+- Integration coverage in `tests/transport.http-server.integration.test.ts` asserts both the success payload (mocked via the orchestrator helper) and the disabled (`404`) behavior when `BATCH_BACKEND_ENABLE_EXTENDED_API=false`.
 
-_Deliverable_: Frontend fetches dropdown metadata dynamically and stays aligned with backend defaults without hardcoding.
+_Deliverable_: Frontend fetches dropdown metadata from the orchestrator-configured presets/voices/databases and stays aligned with backend defaults without hardcoding; legacy env overrides are now a fallback path only.
 
 ---
 
