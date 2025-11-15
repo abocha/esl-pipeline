@@ -19,7 +19,7 @@ This document captures the gaps between the new batch frontend (Phase 7/8 UI) an
 - Frontend now expects:
   - A real SSE endpoint (`GET /jobs/events`) that streams `job_state_changed` events.
   - A `/config/job-options` endpoint to populate presets, voice accents, Notion DBs, upload options, and (soon) dialogue/monologue modes.
-  - Job status payloads that include extra metadata (`preset`, `voiceAccent`, `notionDatabase`, `notionUrl`, `runMode`, etc.).
+  - Job status payloads that include extra metadata (`preset`, `voiceAccent`, `notionDatabase`, `notionUrl`, `mode`, etc.).
   - Fully functional `/auth/*`, `/uploads`, `/jobs` routes with the extended API enabled.
 - Backend currently:
   - Returns `501` for `/jobs/events`.
@@ -159,7 +159,7 @@ _Deliverable_: Event bus fires whenever a job is created or its state changes, w
    - Move serialization assertions into a new `packages/batch-backend/tests/application.job-dto.test.ts`.
    - Keep `application.get-job-status.test.ts` focused on repository interactions by mocking `jobRecordToDto` or snapshotting the helper output.
 
-_Deliverable_: Single source of truth for job serialization, with targeted tests that lock the DTO shape for both HTTP and SSE consumers.
+_Deliverable_: Single source of truth for job serialization, with targeted tests that lock the DTO shape for both HTTP and SSE consumers. The canonical DTO + SSE event types now live in `@esl-pipeline/contracts`, and both backend + frontend import from that package instead of redefining their own interfaces.
 
 ---
 

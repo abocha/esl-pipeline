@@ -7,7 +7,7 @@
 
 import { randomUUID } from 'crypto';
 import { withPgClient } from '../infrastructure/db';
-import { JobRecord, JobState, JobMode, assertTransition } from './job-model';
+import { JobRecord, JobState, JobMode, JobUploadOption, assertTransition } from './job-model';
 import { logger } from '../infrastructure/logger';
 
 // insertJob.declaration()
@@ -15,7 +15,7 @@ export async function insertJob(params: {
   md: string;
   preset?: string;
   withTts?: boolean;
-  upload?: string;
+  upload?: JobUploadOption | null;
   voiceId?: string;
   voiceAccent?: string;
   forceTts?: boolean;
@@ -186,7 +186,7 @@ function mapRowToJob(row: any): JobRecord {
     md: row.md,
     preset: row.preset ?? null,
     withTts: row.with_tts ?? null,
-    upload: row.upload ?? null,
+    upload: normalizeUploadOption(row.upload),
     voiceId: row.voice_id ?? null,
     voiceAccent: row.voice_accent ?? null,
     forceTts: row.force_tts ?? null,
@@ -207,4 +207,11 @@ function normalizeJobMode(value: unknown): JobMode | null {
     return value;
   }
   return null;
+}
+
+const JOB_UPLOAD_OPTIONS: ReadonlySet<JobUploadOption> = new Set(['auto', 's3', 'none']);
+
+function normalizeUploadOption(value: unknown): JobUploadOption | null {
+  if (typeof value !== 'string') return null;
+  return JOB_UPLOAD_OPTIONS.has(value as JobUploadOption) ? (value as JobUploadOption) : null;
 }

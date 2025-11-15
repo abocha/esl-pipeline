@@ -11,7 +11,7 @@ import {
   type JobEvent,
   type JobEventType,
 } from '../domain/job-events';
-import type { JobRecord } from '../domain/job-model';
+import type { JobRecord, JobUploadOption } from '../domain/job-model';
 import { createRedisClient } from './redis';
 import { logger } from './logger';
 
@@ -24,7 +24,7 @@ type SerializedJobRecord = {
   md: string;
   preset: string | null;
   withTts: boolean | null;
-  upload: string | null;
+  upload: JobUploadOption | null;
   createdAt: string;
   updatedAt: string;
   startedAt: string | null;

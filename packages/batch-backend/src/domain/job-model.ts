@@ -3,10 +3,9 @@
 // Minimal job domain model for the batch-backend.
 // Keeps semantics simple and mirrors the `jobs` table schema used in db.ts.
 
-export type JobState = 'queued' | 'running' | 'succeeded' | 'failed';
-// JobState.declaration()
+import type { JobMode, JobState, JobUploadOption } from '@esl-pipeline/contracts';
 
-export type JobMode = 'auto' | 'dialogue' | 'monologue';
+export type { JobMode, JobState, JobUploadOption };
 
 export interface JobRecord {
   id: string;
@@ -14,7 +13,7 @@ export interface JobRecord {
   md: string;
   preset?: string | null;
   withTts?: boolean | null;
-  upload?: string | null;
+  upload?: JobUploadOption | null;
   voiceId?: string | null;
   voiceAccent?: string | null;
   forceTts?: boolean | null;

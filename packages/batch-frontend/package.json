@@ -10,6 +10,7 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "@esl-pipeline/contracts": "workspace:*",
     "@tanstack/react-query": "^5.90.9",
     "axios": "^1.13.2",
     "copy-to-clipboard": "^3.3.3",

@@ -22,7 +22,7 @@ export const JobTable: React.FC = () => {
           job =>
             job.jobId.toLowerCase().includes(term) ||
             job.fileName?.toLowerCase().includes(term) ||
-            job.submittedMd?.toLowerCase().includes(term)
+            job.md.toLowerCase().includes(term)
         )
       : jobs;
     return result.slice(0, 20);
@@ -126,7 +126,7 @@ export const JobTable: React.FC = () => {
                   <td>
                     <div style={{ display: 'flex', flexDirection: 'column' }}>
                       <span style={{ fontSize: '13px' }}>{job.fileName ?? '—'}</span>
-                      <span style={{ fontSize: '11px', color: '#94a3b8' }}>{job.submittedMd ?? '—'}</span>
+                      <span style={{ fontSize: '11px', color: '#94a3b8' }}>{job.md || '—'}</span>
                     </div>
                   </td>
                   <td>
@@ -137,7 +137,7 @@ export const JobTable: React.FC = () => {
                   <td>
                     <div style={{ fontSize: '12px', color: '#475569' }}>
                       <div>{job.preset ?? 'preset?'}</div>
-                      <div>{formatMode(job.runMode)}</div>
+                      <div>{formatMode(job.mode)}</div>
                     </div>
                   </td>
                   <td style={{ fontSize: '12px' }}>
@@ -148,7 +148,7 @@ export const JobTable: React.FC = () => {
                       <button
                         type="button"
                         style={secondaryButtonStyle}
-                        onClick={() => handleCopy(job.notionUrl ?? job.manifestPath ?? job.submittedMd)}
+                        onClick={() => handleCopy(job.notionUrl ?? job.manifestPath ?? job.md)}
                       >
                         Copy link
                       </button>
@@ -219,7 +219,7 @@ const controlsWrapStyle: React.CSSProperties = {
   justifyContent: 'flex-end',
 };
 
-function formatMode(mode: JobEntry['runMode']): string {
+function formatMode(mode: JobEntry['mode']): string {
   const value = mode ?? 'auto';
   return value.charAt(0).toUpperCase() + value.slice(1);
 }

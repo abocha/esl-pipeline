@@ -10,6 +10,15 @@
  * - GET /jobs/events (SSE) for live updates
  * - GET /user/profile, /user/files (authenticated)
  */
+import type {
+  JobStatusDto,
+  JobEventMessage,
+  JobEventPayload as ContractJobEventPayload,
+  JobEventType as ContractJobEventType,
+  JobState as ContractJobState,
+  JobMode as ContractJobMode,
+  JobUploadOption,
+} from '@esl-pipeline/contracts';
 import apiClient, {
   handleApiError,
   isAuthError,
@@ -17,9 +26,15 @@ import apiClient, {
   getApiAuthToken,
 } from './api-client';
 
-export type JobState = 'queued' | 'running' | 'succeeded' | 'failed';
+export type JobState = ContractJobState;
+export type JobMode = ContractJobMode;
 export type UserRole = 'admin' | 'user' | 'viewer';
 export type RegisterRole = Exclude<UserRole, 'admin'>;
+
+export type JobStatus = JobStatusDto;
+export type JobEventType = ContractJobEventType;
+export type JobEventPayload = ContractJobEventPayload;
+export type JobEvent = JobEventMessage;
 
 export interface SubmitJobRequest {
   md: string;
@@ -27,8 +42,8 @@ export interface SubmitJobRequest {
   withTts?: boolean;
   forceTts?: boolean;
   notionDatabase?: string;
-  upload?: 'auto' | 's3' | 'none';
-  mode?: 'auto' | 'dialogue' | 'monologue';
+  upload?: JobUploadOption;
+  mode?: JobMode;
 }
 
 export interface UploadMarkdownResponse {
@@ -38,26 +53,6 @@ export interface UploadMarkdownResponse {
 
 export interface SubmitJobResponse {
   jobId: string;
-}
-
-export interface JobStatus {
-  jobId: string;
-  state: JobState;
-  createdAt: string;
-  updatedAt: string;
-  startedAt: string | null;
-  finishedAt: string | null;
-  error: string | null;
-  manifestPath: string | null;
-  preset?: string | null;
-  voiceId?: string | null;
-  voiceAccent?: string | null;
-  notionDatabase?: string | null;
-  notionUrl?: string | null;
-  submittedMd?: string | null;
-  runMode?: SubmitJobRequest['mode'];
-  upload?: SubmitJobRequest['upload'];
-  withTts?: boolean;
 }
 
 // Authentication interfaces
@@ -120,8 +115,8 @@ export interface JobOptionsResponse {
   voiceAccents: string[];
   voices: VoiceOption[];
   notionDatabases: Array<{ id: string; name: string }>;
-  uploadOptions: Array<'auto' | 's3' | 'none'>;
-  modes: Array<'auto' | 'dialogue' | 'monologue'>;
+  uploadOptions: JobUploadOption[];
+  modes: JobMode[];
 }
 
 export interface VoiceOption {
@@ -131,26 +126,6 @@ export interface VoiceOption {
   gender?: string | null;
   category?: string | null;
 }
-
-export type JobEventType = 'job_state_changed' | string;
-
-export interface JobEventPayload {
-  manifestPath?: string | null;
-  error?: string | null;
-  finishedAt?: string | null;
-  runMode?: SubmitJobRequest['mode'];
-  submittedMd?: string | null;
-  notionUrl?: string | null;
-}
-
-export interface JobStateChangedEvent {
-  type: 'job_state_changed';
-  jobId: string;
-  state: JobState;
-  payload?: JobEventPayload;
-}
-
-export type JobEvent = JobStateChangedEvent;
 
 export interface JobEventsOptions {
   signal?: AbortSignal;

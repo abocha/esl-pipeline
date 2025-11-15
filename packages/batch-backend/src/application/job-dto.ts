@@ -2,28 +2,10 @@
 //
 // Shared helpers for serializing JobRecord data into the public HTTP/SSE DTO.
 
-import type { JobRecord, JobMode } from '../domain/job-model';
+import type { JobStatusDto } from '@esl-pipeline/contracts';
+import type { JobRecord } from '../domain/job-model';
 
-export interface JobStatusDto {
-  jobId: string;
-  md: string;
-  preset: string | null;
-  withTts: boolean | null;
-  voiceId: string | null;
-  upload: string | null;
-  voiceAccent: string | null;
-  forceTts: boolean | null;
-  notionDatabase: string | null;
-  mode: JobMode | null;
-  notionUrl: string | null;
-  state: JobRecord['state'];
-  createdAt: string;
-  updatedAt: string;
-  startedAt: string | null;
-  finishedAt: string | null;
-  error: string | null;
-  manifestPath: string | null;
-}
+export type { JobStatusDto };
 
 export function jobRecordToDto(job: JobRecord): JobStatusDto {
   return {
