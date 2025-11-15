@@ -78,6 +78,9 @@ importers:
       '@aws-sdk/s3-request-presigner':
         specifier: ^3.931.0
         version: 3.931.0
+      '@esl-pipeline/contracts':
+        specifier: workspace:*
+        version: link:../contracts
       '@esl-pipeline/orchestrator':
         specifier: workspace:*
         version: link:../orchestrator
@@ -151,6 +154,9 @@ importers:
 
   packages/batch-frontend:
     dependencies:
+      '@esl-pipeline/contracts':
+        specifier: workspace:*
+        version: link:../contracts
       '@tanstack/react-query':
         specifier: ^5.90.9
         version: 5.90.9(react@19.2.0)
@@ -200,6 +206,18 @@ importers:
       vite:
         specifier: ^7.2.2
         version: 7.2.2(@types/node@24.10.1)(tsx@4.20.6)
+
+  packages/contracts:
+    devDependencies:
+      '@types/node':
+        specifier: ^24.10.1
+        version: 24.10.1
+      rimraf:
+        specifier: ^6.1.0
+        version: 6.1.0
+      typescript:
+        specifier: ^5.9.3
+        version: 5.9.3
 
   packages/md-extractor:
     dependencies:
@@ -3111,6 +3129,10 @@ packages:
     resolution: {integrity: sha512-okMH7OXXJ7YrN9Ok3/SXrnu4iX9yOk+25nqX4imS2npuvTYDmo/QEZoqwZkYaIDk3jVvBOTOIEgEhaLOynBS9g==}
     hasBin: true
 
+  js-yaml@3.14.2:
+    resolution: {integrity: sha512-PMSmkqxr106Xa156c2M265Z+FTrPl+oxd/rgOQy2tijQeK5TxQ43psO1ZCwhVOSdnn+RzkzlRz/eY4BgJBYVpg==}
+    hasBin: true
+
   js-yaml@4.1.1:
     resolution: {integrity: sha512-qQKT4zQxXl8lLwBtHMWwaTcGfFOZviOJet3Oy/xmGk2gZH677CJM9EvtfdSkgWcATZhj/55JZ0rmy3myCT5lsA==}
     hasBin: true
@@ -5195,7 +5217,7 @@ snapshots:
   '@changesets/parse@0.4.1':
     dependencies:
       '@changesets/types': 6.1.0
-      js-yaml: 3.14.1
+      js-yaml: 3.14.2
 
   '@changesets/pre@2.0.2':
     dependencies:
@@ -7612,6 +7634,11 @@ snapshots:
       argparse: 1.0.10
       esprima: 4.0.1
 
+  js-yaml@3.14.2:
+    dependencies:
+      argparse: 1.0.10
+      esprima: 4.0.1
+
   js-yaml@4.1.1:
     dependencies:
       argparse: 2.0.1
@@ -8335,7 +8362,7 @@ snapshots:
   read-yaml-file@1.1.0:
     dependencies:
       graceful-fs: 4.2.11
-      js-yaml: 3.14.1
+      js-yaml: 3.14.2
       pify: 4.0.1
       strip-bom: 3.0.0
 

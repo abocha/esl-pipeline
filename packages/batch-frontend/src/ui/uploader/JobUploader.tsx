@@ -130,7 +130,7 @@ export const JobUploader: React.FC = () => {
         registerJob({
           jobId: jobResponse.jobId,
           fileName: jobFile.name,
-          submittedMd: uploadResponse.md,
+          md: uploadResponse.md,
           preset: jobSettings.preset,
           notionDatabase: jobSettings.notionDatabase,
           upload: jobSettings.upload,

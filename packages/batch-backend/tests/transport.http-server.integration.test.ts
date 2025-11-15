@@ -426,7 +426,8 @@ describe('transport/http-server - integration (in-process)', () => {
             expect(payload.type).toBe('job_state_changed');
             expect(payload.jobId).toBe(job.id);
             expect(payload.state).toBe('running');
-            expect(payload.payload?.runMode).toBeUndefined();
+            expect(payload.payload?.mode).toBeNull();
+            expect(payload.payload?.md).toBe(job.md);
             cleanup();
           }
         });

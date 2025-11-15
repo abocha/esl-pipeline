@@ -69,6 +69,7 @@ Use this as a quick map; detailed contracts live in the SSOT.
 | `@esl-pipeline/tts-elevenlabs`   | ElevenLabs integration        |
 | `@esl-pipeline/storage-uploader` | S3 uploads                    |
 | `@esl-pipeline/notion-add-audio` | Attach audio blocks in Notion |
+| `@esl-pipeline/contracts`        | Shared DTO + SSE event types  |
 
 For per-package responsibilities, extension points, and invariants:
 see [`docs/agents-ssot.md`](docs/agents-ssot.md) §4.

@@ -15,7 +15,6 @@ type ConnectionState = 'idle' | 'connecting' | 'connected' | 'error' | 'reconnec
 
 export type JobEntry = JobStatus & {
   fileName?: string;
-  submittedMd?: string | null;
   submittedAt?: string;
 };
 
@@ -24,7 +23,7 @@ type JobMap = Record<string, JobEntry>;
 interface RegisterJobOptions {
   jobId: string;
   fileName?: string;
-  submittedMd?: string | null;
+  md?: string | null;
   preset?: string;
   notionDatabase?: string;
   upload?: SubmitJobRequest['upload'];
@@ -53,6 +52,16 @@ const createDefaultJob = (jobId: string): JobEntry => {
   const now = new Date().toISOString();
   return {
     jobId,
+    md: '',
+    preset: null,
+    withTts: true,
+    voiceId: null,
+    upload: 'auto',
+    voiceAccent: null,
+    forceTts: null,
+    notionDatabase: null,
+    mode: 'auto',
+    notionUrl: null,
     state: 'queued',
     createdAt: now,
     updatedAt: now,
@@ -60,15 +69,6 @@ const createDefaultJob = (jobId: string): JobEntry => {
     finishedAt: null,
     manifestPath: null,
     error: null,
-    preset: null,
-    voiceId: null,
-    voiceAccent: null,
-    notionDatabase: null,
-    notionUrl: null,
-    submittedMd: null,
-    runMode: 'auto',
-    upload: 'auto',
-    withTts: true,
   };
 };
 
@@ -101,13 +101,13 @@ export function JobMonitorProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const registerJob = useCallback(
-    ({ jobId, fileName, submittedMd, preset, notionDatabase, upload, withTts, mode }: RegisterJobOptions) => {
+    ({ jobId, fileName, md, preset, notionDatabase, upload, withTts, mode }: RegisterJobOptions) => {
       const now = new Date().toISOString();
       updateJob(jobId, prev => ({
         ...prev,
         jobId,
         fileName: fileName ?? prev.fileName,
-        submittedMd: submittedMd ?? prev.submittedMd,
+        md: md ?? prev.md,
         preset: preset ?? prev.preset,
         notionDatabase: notionDatabase ?? prev.notionDatabase,
         upload: upload ?? prev.upload,
@@ -118,7 +118,7 @@ export function JobMonitorProvider({ children }: { children: ReactNode }) {
         error: null,
         finishedAt: null,
         state: prev.state,
-        runMode: mode ?? prev.runMode ?? 'auto',
+        mode: mode ?? prev.mode ?? 'auto',
       }));
     },
     [updateJob]
@@ -155,7 +155,7 @@ export function JobMonitorProvider({ children }: { children: ReactNode }) {
             ...prev,
             ...status,
             fileName: prev.fileName,
-            submittedMd: status.submittedMd ?? prev.submittedMd,
+            md: status.md ?? prev.md,
             updatedAt: status.updatedAt ?? prev.updatedAt,
           }));
         }
@@ -181,8 +181,8 @@ export function JobMonitorProvider({ children }: { children: ReactNode }) {
         manifestPath: event.payload?.manifestPath ?? prev.manifestPath,
         error: event.payload?.error ?? prev.error,
         finishedAt: event.payload?.finishedAt ?? prev.finishedAt,
-        runMode: event.payload?.runMode ?? prev.runMode,
-        submittedMd: event.payload?.submittedMd ?? prev.submittedMd,
+        mode: event.payload?.mode ?? prev.mode,
+        md: event.payload?.md ?? prev.md,
         updatedAt: new Date().toISOString(),
       }));
     },
@@ -274,7 +274,7 @@ export function JobMonitorProvider({ children }: { children: ReactNode }) {
           ...prev,
           ...status,
           fileName: prev.fileName,
-          submittedMd: status.submittedMd ?? prev.submittedMd,
+          md: status.md ?? prev.md,
         }));
       } catch (error: any) {
         updateJob(trimmed, prev => ({

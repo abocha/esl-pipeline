@@ -11,6 +11,7 @@ import { randomUUID } from 'node:crypto';
 import path from 'node:path';
 import { Readable } from 'node:stream';
 import { z } from 'zod';
+import type { JobEventMessage } from '@esl-pipeline/contracts';
 import { loadConfig } from '../config/env';
 import { logger } from '../infrastructure/logger';
 import { registerErrorHandler } from './error-handler';
@@ -279,7 +280,7 @@ export function createHttpServer(): import('fastify').FastifyInstance {
     const unsubscribe = subscribeJobEvents(event => {
       try {
         const dto = jobRecordToDto(event.job);
-        const payload = {
+        const payload: JobEventMessage = {
           type: event.type,
           jobId: dto.jobId,
           state: dto.state,
@@ -287,8 +288,8 @@ export function createHttpServer(): import('fastify').FastifyInstance {
             manifestPath: dto.manifestPath,
             error: dto.error,
             finishedAt: dto.finishedAt,
-            runMode: dto.mode ?? undefined,
-            submittedMd: dto.md,
+            mode: dto.mode,
+            md: dto.md,
             notionUrl: dto.notionUrl,
           },
         };
