@@ -1,5 +1,11 @@
 # @esl-pipeline/md-extractor
 
+## 1.4.2
+
+### Patch Changes
+
+- optimized dependancies
+
 ## 1.4.1
 
 ### Patch Changes

@@ -1,6 +1,6 @@
 {
   "name": "@esl-pipeline/contracts",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "private": true,
   "type": "module",
   "license": "UNLICENSED",
@@ -28,7 +28,7 @@
   },
   "devDependencies": {
     "@types/node": "^24.10.1",
-    "rimraf": "^6.1.0",
+    "rimraf": "^6.1.2",
     "typescript": "^5.9.3"
   }
 }

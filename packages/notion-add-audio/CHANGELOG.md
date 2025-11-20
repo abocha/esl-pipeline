@@ -1,5 +1,11 @@
 # @esl-pipeline/notion-add-audio
 
+## 1.2.2
+
+### Patch Changes
+
+- optimized dependancies
+
 ## 1.2.1
 
 ### Patch Changes

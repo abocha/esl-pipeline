@@ -2,7 +2,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { Command } from 'commander';
-import chalk from 'chalk';
+import pc from 'picocolors';
 import { validateMarkdownFile } from '../src/validator.js';
 
 const program = new Command()
@@ -13,41 +13,41 @@ const program = new Command()
   .action(async (file: string, opts: { strict?: boolean }) => {
     const p = path.resolve(process.cwd(), file);
     if (!fs.existsSync(p)) {
-      console.error(chalk.red(`File not found: ${p}`));
+      console.error(pc.red(`File not found: ${p}`));
       process.exit(1);
     }
     const result = await validateMarkdownFile(p, { strict: !!opts.strict });
 
     if (result.ok && (!opts.strict || result.warnings.length === 0)) {
-      console.log(chalk.green('✔ Validation passed'));
+      console.log(pc.green('✔ Validation passed'));
       if (result.warnings.length) {
-        console.log(chalk.yellow(`Warnings (${result.warnings.length}):`));
-        for (const w of result.warnings) console.log(chalk.yellow(`  • ${w}`));
+        console.log(pc.yellow(`Warnings (${result.warnings.length}):`));
+        for (const w of result.warnings) console.log(pc.yellow(`  • ${w}`));
       }
       if (result.meta) {
         const topicValue = Array.isArray(result.meta.topic)
           ? result.meta.topic.join(', ')
           : result.meta.topic;
-        console.log(chalk.gray(`title: ${result.meta.title}`));
-        console.log(chalk.gray(`student: ${result.meta.student}`));
-        console.log(chalk.gray(`topic: ${topicValue}`));
-        console.log(chalk.gray(`input_type: ${result.meta.input_type}`));
+        console.log(pc.gray(`title: ${result.meta.title}`));
+        console.log(pc.gray(`student: ${result.meta.student}`));
+        console.log(pc.gray(`topic: ${topicValue}`));
+        console.log(pc.gray(`input_type: ${result.meta.input_type}`));
       }
       return;
     }
 
     if (result.errors.length) {
-      console.log(chalk.red(`✖ Errors (${result.errors.length}):`));
-      for (const e of result.errors) console.log(chalk.red(`  • ${e}`));
+      console.log(pc.red(`✖ Errors (${result.errors.length}):`));
+      for (const e of result.errors) console.log(pc.red(`  • ${e}`));
     }
     if (result.warnings.length) {
-      console.log(chalk.yellow(`Warnings (${result.warnings.length}):`));
-      for (const w of result.warnings) console.log(chalk.yellow(`  • ${w}`));
+      console.log(pc.yellow(`Warnings (${result.warnings.length}):`));
+      for (const w of result.warnings) console.log(pc.yellow(`  • ${w}`));
     }
     process.exit(1);
   });
 
 program.parseAsync().catch(err => {
-  console.error(chalk.red(err instanceof Error ? err.message : String(err)));
+  console.error(pc.red(err instanceof Error ? err.message : String(err)));
   process.exit(1);
 });
