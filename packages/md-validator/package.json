@@ -1,6 +1,6 @@
 {
   "name": "@esl-pipeline/md-validator",
-  "version": "1.5.1",
+  "version": "1.5.2",
   "private": true,
   "type": "module",
   "license": "UNLICENSED",
@@ -31,16 +31,16 @@
     "md-validator": "dist/bin/cli.js"
   },
   "scripts": {
-    "clean": "rimraf dist",
+    "clean": "node -e \"fs.rmSync('dist', {recursive:true, force:true})\"",
     "build": "tsc -p tsconfig.json",
     "dev": "tsx watch src/index.ts",
     "test": "vitest run",
     "test:watch": "vitest"
   },
   "dependencies": {
-    "chalk": "^5.6.2",
     "commander": "^14.0.2",
     "gray-matter": "^4.0.3",
+    "picocolors": "^1.1.1",
     "remark-parse": "^11.0.0",
     "unified": "^11.0.5",
     "zod": "^4.1.12"
@@ -48,9 +48,8 @@
   "devDependencies": {
     "@types/mdast": "^4.0.4",
     "@types/node": "^24.10.1",
-    "rimraf": "^6.1.0",
     "tsx": "^4.20.6",
     "typescript": "^5.9.3",
-    "vitest": "^4.0.9"
+    "vitest": "^4.0.12"
   }
 }

@@ -1,5 +1,11 @@
 # @esl-pipeline/md-validator
 
+## 1.5.2
+
+### Patch Changes
+
+- optimized dependancies
+
 ## 1.5.1
 
 ### Patch Changes

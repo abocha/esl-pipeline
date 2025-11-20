@@ -1,6 +1,6 @@
 {
   "name": "@esl-pipeline/tts-elevenlabs",
-  "version": "2.0.0",
+  "version": "2.0.1",
   "private": true,
   "type": "module",
   "license": "UNLICENSED",
@@ -33,14 +33,14 @@
   },
   "scripts": {
     "build": "tsc -p tsconfig.json",
-    "clean": "rimraf dist",
+    "clean": "node -e \"fs.rmSync('dist', {recursive:true, force:true})\"",
     "dev": "tsx watch bin/cli.ts",
     "test": "vitest run",
     "test:watch": "vitest",
     "voices:sync": "node dist/bin/voices.js"
   },
   "dependencies": {
-    "@elevenlabs/elevenlabs-js": "^2.24.0",
+    "@elevenlabs/elevenlabs-js": "^2.24.1",
     "@esl-pipeline/md-extractor": "workspace:*",
     "commander": "^14.0.2",
     "js-yaml": "^4.1.1"
@@ -48,9 +48,8 @@
   "devDependencies": {
     "@types/js-yaml": "^4.0.9",
     "@types/node": "^24.10.1",
-    "rimraf": "^6.1.0",
     "tsx": "^4.20.6",
     "typescript": "^5.9.3",
-    "vitest": "^4.0.9"
+    "vitest": "^4.0.12"
   }
 }

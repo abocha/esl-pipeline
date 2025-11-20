@@ -1,6 +1,6 @@
 import { resolve, dirname } from 'node:path';
 import { readFile, writeFile, mkdir, unlink, access } from 'node:fs/promises';
-import prompts, { PromptObject } from 'prompts';
+import Enquirer from 'enquirer';
 import { NewAssignmentFlags } from './index.js';
 import {
   StudentProfile,
@@ -13,6 +13,13 @@ import {
   type MarkdownSummary,
 } from './config.js';
 import { pickFile, PathPickerCancelledError } from './pathPicker.js';
+
+const { Select, Input, Toggle, NumberPrompt } = Enquirer as unknown as {
+  Select: new (options: any) => any;
+  Input: new (options: any) => any;
+  Toggle: new (options: any) => any;
+  NumberPrompt: new (options: any) => any;
+};
 
 type WizardContext = {
   cwd?: string;
@@ -40,13 +47,13 @@ export type WizardSelections = {
   preset?: string;
   accentPreference?: string;
   withTts: boolean;
-  
+
   // New TTS mode fields
   ttsMode?: 'auto' | 'dialogue' | 'monologue';
   dialogueLanguage?: string;
   dialogueStability?: number;
   dialogueSeed?: number;
-  
+
   voices?: string;
   force?: boolean;
   upload?: 's3';
@@ -71,6 +78,21 @@ function onCancel(): never {
   throw new WizardAbortedError();
 }
 
+/**
+ * Helper function to run an enquirer prompt and handle cancellation uniformly.
+ * Returns an object with the answer keyed by the prompt name.
+ */
+async function runPrompt<T>(PromptClass: any, options: any): Promise<{ [key: string]: T }> {
+  const prompt = new PromptClass(options);
+  try {
+    const answer = await prompt.run();
+    return { [options.name]: answer };
+  } catch {
+    // Enquirer throws on cancel/abort
+    onCancel();
+  }
+}
+
 const DEFAULT_WIZARD_DEFAULTS_PATH = 'configs/wizard.defaults.json';
 
 const PERSISTABLE_KEYS: Array<keyof NewAssignmentFlags> = [
@@ -90,7 +112,7 @@ const PERSISTABLE_KEYS: Array<keyof NewAssignmentFlags> = [
   'dataSourceId',
   'presign',
   'out',
-  
+
   // New TTS mode fields
   'ttsMode',
   'dialogueLanguage',
@@ -246,27 +268,25 @@ async function manageSavedDefaults(
 
   while (true) {
     const existsNow = await exists(defaultsPath);
-    const choice = await prompts(
-      {
-        type: 'select',
-        name: 'defaults',
-        message: 'Saved defaults',
-        choices: [
-          { title: 'Save current settings', value: 'save' },
-          {
-            title: 'Clear saved defaults',
-            value: 'clear',
-            disabled: !existsNow,
-          },
-          {
-            title: 'Show defaults file location',
-            value: 'show',
-          },
-          { title: 'Back', value: 'back' },
-        ],
-      } satisfies PromptObject<'defaults'>,
-      { onCancel }
-    );
+    const choice = await runPrompt<string>(Select, {
+      name: 'defaults',
+      message: 'Saved defaults',
+      choices: [
+        'Save current settings',
+        { name: 'Clear saved defaults', disabled: !existsNow },
+        'Show defaults file location',
+        'Back'
+      ],
+      result(value: string) {
+        const map: Record<string, string> = {
+          'Save current settings': 'save',
+          'Clear saved defaults': 'clear',
+          'Show defaults file location': 'show',
+          'Back': 'back'
+        };
+        return map[value] || value;
+      }
+    });
 
     switch (choice.defaults as string) {
       case 'save': {
@@ -354,27 +374,33 @@ export async function runInteractiveWizard(
   }
 
   while (true) {
-    const action = await prompts(
-      {
-        type: 'select',
-        name: 'main',
-        message: 'Interactive wizard',
-        choices: [
-          { title: 'Start (run with current settings)', value: 'start' },
-          { title: 'Configure settings…', value: 'settings' },
-          {
-            title: hasSavedDefaults ? 'Saved defaults…' : 'Saved defaults… (none yet)',
-            value: 'defaults',
-          },
-          ...(presetNames.length ? [{ title: 'Quick select preset…', value: 'preset' }] : []),
-          { title: 'Review current summary', value: 'summary' },
-          { title: 'Reset to defaults', value: 'reset' },
-          { title: 'Cancel', value: 'cancel' },
-        ],
-        initial: state.md ? 0 : 1,
-      } satisfies PromptObject<'main'>,
-      { onCancel }
-    );
+    const action = await runPrompt<string>(Select, {
+      name: 'main',
+      message: 'Interactive wizard',
+      choices: [
+        'Start (run with current settings)',
+        'Configure settings…',
+        hasSavedDefaults ? 'Saved defaults…' : 'Saved defaults… (none yet)',
+        ...(presetNames.length ? ['Quick select preset…'] : []),
+        'Review current summary',
+        'Reset to defaults',
+        'Cancel'
+      ],
+      initial: state.md ? 0 : 1,
+      result(value: string) {
+        const map: Record<string, string> = {
+          'Start (run with current settings)': 'start',
+          'Configure settings…': 'settings',
+          'Saved defaults…': 'defaults',
+          'Saved defaults… (none yet)': 'defaults',
+          'Quick select preset…': 'preset',
+          'Review current summary': 'summary',
+          'Reset to defaults': 'reset',
+          'Cancel': 'cancel'
+        };
+        return map[value] || value;
+      }
+    });
 
     switch (action.main as string) {
       case 'start': {
@@ -546,25 +572,35 @@ async function openSettingsMenu(
   } = options;
 
   while (true) {
-    const choice = await prompts(
-      {
-        type: 'select',
-        name: 'setting',
-        message: 'Settings',
-        choices: [
-          { title: 'Select markdown file…', value: 'md' },
-          { title: 'Choose student…', value: 'student' },
-          { title: 'Set Notion database ID…', value: 'db' },
-          { title: 'Select color preset…', value: 'preset', disabled: !presetNames.length },
-          { title: 'Configure TTS…', value: 'tts' },
-          { title: 'Configure upload…', value: 'upload' },
-          { title: 'Toggle dry-run mode', value: 'dryrun' },
-          { title: 'Set accent preference…', value: 'accent' },
-          { title: 'Back', value: 'back' },
-        ],
-      } satisfies PromptObject<'setting'>,
-      { onCancel }
-    );
+    const choice = await runPrompt<string>(Select, {
+      name: 'setting',
+      message: 'Settings',
+      choices: [
+        'Select markdown file…',
+        'Choose student…',
+        'Set Notion database ID…',
+        ...(presetNames.length ? ['Select color preset…'] : []),
+        'Configure TTS…',
+        'Configure upload…',
+        'Toggle dry-run mode',
+        'Set accent preference…',
+        'Back'
+      ],
+      result(value: string) {
+        const map: Record<string, string> = {
+          'Select markdown file…': 'md',
+          'Choose student…': 'student',
+          'Set Notion database ID…': 'db',
+          'Select color preset…': 'preset',
+          'Configure TTS…': 'tts',
+          'Configure upload…': 'upload',
+          'Toggle dry-run mode': 'dryrun',
+          'Set accent preference…': 'accent',
+          'Back': 'back'
+        };
+        return map[value] || value;
+      }
+    });
 
     switch (choice.setting as string) {
       case 'md':
@@ -606,16 +642,22 @@ async function selectMarkdown(
   const choices = suggestions.map(p => ({ title: p, value: resolve(cwd, p) }));
   choices.push({ title: 'Browse manually…', value: '__manual__' });
   choices.push({ title: 'Cancel', value: '__cancel__' });
-  const mdPick = await prompts(
-    {
-      type: 'select',
-      name: 'md',
-      message: 'Select the markdown lesson',
-      choices,
-      initial: suggestions.length ? 0 : choices.length - 1,
-    } satisfies PromptObject<'md'>,
-    { onCancel }
-  );
+  const mdPick = await runPrompt<string>(Select, {
+    name: 'md',
+    message: 'Select the markdown lesson',
+    choices,
+    initial: suggestions.length ? 0 : choices.length - 1,
+    result(value: string) {
+      // Map choice titles back to values (enquirer returns the title)
+      const map: Record<string, string> = {};
+      choices.forEach(c => {
+        // c may be {title, value}
+        // @ts-ignore
+        map[c.title] = c.value;
+      });
+      return map[value] || value;
+    }
+  });
 
   let mdPath = mdPick.md as string | undefined;
   if (mdPath === '__cancel__') return;
@@ -660,15 +702,19 @@ async function selectStudent(
     { title: 'Back', value: '__back__' },
   ].filter((choice, index, arr) => arr.findIndex(other => other.value === choice.value) === index);
 
-  const picked = await prompts(
-    {
-      type: 'select',
-      name: 'studentChoice',
-      message: 'Which student is this for?',
-      choices,
-    } satisfies PromptObject<'studentChoice'>,
-    { onCancel }
-  );
+  const picked = await runPrompt<string>(Select, {
+    name: 'studentChoice',
+    message: 'Which student is this for?',
+    choices,
+    result(value: string) {
+      const map: Record<string, string> = {};
+      choices.forEach(c => {
+        // @ts-ignore
+        map[c.title] = c.value;
+      });
+      return map[value] || value;
+    }
+  });
 
   const choice = picked.studentChoice as string | undefined;
   if (!choice || choice === '__back__') return;
@@ -693,17 +739,14 @@ async function selectStudent(
   }
 
   if (choice === '__custom__') {
-    const custom = await prompts(
-      {
-        type: 'text',
-        name: 'customStudent',
-        message: 'Student name',
-        initial: state.student ?? frontmatterStudent ?? '',
-        validate: (input: string) =>
-          (!!input && input.trim().length > 0) || 'Please provide a student name',
-      } satisfies PromptObject<'customStudent'>,
-      { onCancel }
-    );
+    const custom = await runPrompt<string>(Input, {
+      name: 'customStudent',
+      message: 'Student name',
+      initial: state.student ?? frontmatterStudent ?? '',
+      validate(value: string) {
+        return (value && value.trim().length > 0) || 'Please provide a student name';
+      }
+    });
     const raw = custom.customStudent?.toString().trim();
     if (!raw) return;
     setStateValue(state, 'student', raw, 'manual', { overwrite: true, preserveManual: false });
@@ -738,15 +781,11 @@ async function configureDatabase(
     process.env.NOTION_DB_ID ??
     process.env.STUDENTS_DB_ID;
 
-  const dbAnswer = await prompts(
-    {
-      type: 'text',
-      name: 'dbId',
-      message: 'Target Notion database ID (leave blank to clear)',
-      initial: envDbId ?? '',
-    } satisfies PromptObject<'dbId'>,
-    { onCancel }
-  );
+  const dbAnswer = await runPrompt<string>(Input, {
+    name: 'dbId',
+    message: 'Target Notion database ID (leave blank to clear)',
+    initial: envDbId ?? ''
+  });
 
   const rawDbId = dbAnswer.dbId?.toString().trim();
   if (rawDbId && rawDbId.length > 0) {
@@ -771,15 +810,19 @@ async function selectPreset(state: WizardState, options: { presetNames: string[]
     })),
   ];
 
-  const presetAnswer = await prompts(
-    {
-      type: 'select',
-      name: 'preset',
-      message: 'Select a heading color preset',
-      choices: presetChoices,
-    } satisfies PromptObject<'preset'>,
-    { onCancel }
-  );
+  const presetAnswer = await runPrompt<string>(Select, {
+    name: 'preset',
+    message: 'Select a heading color preset',
+    choices: presetChoices,
+    result(value: string) {
+      const map: Record<string, string> = {};
+      presetChoices.forEach(c => {
+        // @ts-ignore
+        map[c.title] = c.value;
+      });
+      return map[value] || value;
+    }
+  });
 
   if (presetAnswer.preset === '__none__') {
     setStateValue(state, 'preset', undefined, 'manual');
@@ -800,20 +843,16 @@ async function configureTts(
     configProvider: ConfigProvider;
   }
 ): Promise<void> {
-  const { cwd, ctx, initialFlags, configProvider } = options;
+  const { cwd, ctx, initialFlags } = options;
 
   // Step 1: TTS Enable/Disable
-  const ttsAnswer = await prompts(
-    {
-      type: 'toggle',
-      name: 'withTts',
-      message: 'Generate ElevenLabs audio?',
-      initial: state.withTts ?? initialFlags.withTts ?? true,
-      active: 'yes',
-      inactive: 'no',
-    },
-    { onCancel }
-  );
+  const ttsAnswer = await runPrompt<boolean>(Toggle, {
+    name: 'withTts',
+    message: 'Generate ElevenLabs audio?',
+    initial: state.withTts ?? initialFlags.withTts ?? true,
+    enabled: 'yes',
+    disabled: 'no'
+  });
   const withTts = Boolean(ttsAnswer.withTts);
   setStateValue(state, 'withTts', withTts, 'manual', { overwrite: true, preserveManual: false });
 
@@ -829,79 +868,70 @@ async function configureTts(
   }
 
   // Step 2: TTS Mode Selection
-  const modeAnswer = await prompts(
-    {
-      type: 'select',
-      name: 'ttsMode',
-      message: 'Select TTS mode',
-      choices: [
-        { title: 'Auto-detect (recommended)', value: 'auto', description: 'Automatically detects dialogue vs monologue' },
-        { title: 'Dialogue mode (Text-to-Dialogue API)', value: 'dialogue', description: 'For multi-speaker conversations' },
-        { title: 'Monologue mode (Text-to-Speech API)', value: 'monologue', description: 'For single-speaker narration' },
-      ],
-      initial:
-        state.ttsMode === 'dialogue' ? 1 :
+  const modeAnswer = await runPrompt<string>(Select, {
+    name: 'ttsMode',
+    message: 'Select TTS mode',
+    choices: [
+      'Auto-detect (recommended)',
+      'Dialogue mode (Text-to-Dialogue API)',
+      'Monologue mode (Text-to-Speech API)'
+    ],
+    initial:
+      state.ttsMode === 'dialogue' ? 1 :
         state.ttsMode === 'monologue' ? 2 :
-        0,
-    },
-    { onCancel }
-  );
+          0,
+    result(value: string) {
+      const map: Record<string, string> = {
+        'Auto-detect (recommended)': 'auto',
+        'Dialogue mode (Text-to-Dialogue API)': 'dialogue',
+        'Monologue mode (Text-to-Speech API)': 'monologue'
+      };
+      return map[value] || value;
+    }
+  });
   const ttsMode = modeAnswer.ttsMode as 'auto' | 'dialogue' | 'monologue';
   setStateValue(state, 'ttsMode', ttsMode, 'manual', { overwrite: true, preserveManual: false });
 
   // Step 3: Dialogue-Specific Options (conditional)
   if (ttsMode === 'dialogue') {
     // Language Code
-    const languageAnswer = await prompts(
-      {
-        type: 'text',
-        name: 'dialogueLanguage',
-        message: 'Dialogue language code (ISO 639-1, optional, e.g., en, es, fr)',
-        initial: state.dialogueLanguage ?? initialFlags.dialogueLanguage ?? '',
-        validate: (input: string) => {
-          if (!input.trim()) return true; // Optional
-          const langRegex = /^[a-z]{2}$/i;
-          return langRegex.test(input) || 'Please enter a valid 2-letter language code (e.g., en, es, fr)';
-        },
-      },
-      { onCancel }
-    );
+    const languageAnswer = await runPrompt<string>(Input, {
+      name: 'dialogueLanguage',
+      message: 'Dialogue language code (ISO 639-1, optional, e.g., en, es, fr)',
+      initial: state.dialogueLanguage ?? initialFlags.dialogueLanguage ?? '',
+      validate(value: string) {
+        if (!value.trim()) return true; // Optional
+        const langRegex = /^[a-z]{2}$/i;
+        return langRegex.test(value) || 'Please enter a valid 2-letter language code (e.g., en, es, fr)';
+      }
+    });
     const languageValue = languageAnswer.dialogueLanguage?.toString().trim() || undefined;
     setStateValue(state, 'dialogueLanguage', languageValue, 'manual', { overwrite: true, preserveManual: false });
 
     // Stability
-    const stabilityAnswer = await prompts(
-      {
-        type: 'number',
-        name: 'dialogueStability',
-        message: 'Dialogue voice stability (0.0-1.0, optional, default 0.5)',
-        initial: state.dialogueStability ?? initialFlags.dialogueStability ?? 0.5,
-        min: 0,
-        max: 1,
-        float: true,
-        round: 2,
-        increment: 0.1,
-      },
-      { onCancel }
-    );
+    const stabilityAnswer = await runPrompt<number>(NumberPrompt, {
+      name: 'dialogueStability',
+      message: 'Dialogue voice stability (0.0-1.0, optional, default 0.5)',
+      initial: state.dialogueStability ?? initialFlags.dialogueStability ?? 0.5,
+      min: 0,
+      max: 1,
+      float: true
+    });
     const stabilityValue = stabilityAnswer.dialogueStability;
     setStateValue(state, 'dialogueStability', stabilityValue, 'manual', { overwrite: true, preserveManual: false });
 
     // Seed
-    const seedAnswer = await prompts(
-      {
-        type: 'number',
-        name: 'dialogueSeed',
-        message: 'Dialogue generation seed (for reproducible results, optional)',
-        initial: state.dialogueSeed ?? initialFlags.dialogueSeed ?? 0,
-        min: 0,
-        validate: (input: number) => {
-          const num = Number(input);
-          return (Number.isInteger(num) && num >= 0) || 'Please enter a non-negative integer';
-        },
-      },
-      { onCancel }
-    );
+    const seedAnswer = await runPrompt<number>(NumberPrompt, {
+      name: 'dialogueSeed',
+      message: 'Dialogue seed (integer, optional)',
+      initial: state.dialogueSeed ?? initialFlags.dialogueSeed ?? undefined,
+      min: 0,
+      max: 2147483647,
+      float: false,
+      validate(value: number | undefined) {
+        return value === undefined || Number.isInteger(value) || 'Must be an integer';
+      }
+    });
     const seedValue = seedAnswer.dialogueSeed;
     setStateValue(state, 'dialogueSeed', seedValue, 'manual', { overwrite: true, preserveManual: false });
   } else {
@@ -917,17 +947,14 @@ async function configureTts(
     ctx.voicesPath ??
     initialFlags.voices ??
     'configs/voices.yml';
-  const voicesAnswer = await prompts(
-    {
-      type: 'text',
-      name: 'voices',
-      message: 'Path to voices.yml',
-      initial: voicesGuess,
-      validate: (input: string) =>
-        (!!input && input.trim().length > 0) || 'Provide a path to voices.yml',
-    },
-    { onCancel }
-  );
+  const voicesAnswer = await runPrompt<string>(Input, {
+    name: 'voices',
+    message: 'Path to voices.yml',
+    initial: voicesGuess,
+    validate(value: string) {
+      return (value && value.trim().length > 0) || 'Provide a path to voices.yml';
+    }
+  });
   const rawVoices = voicesAnswer.voices?.toString().trim();
   if (rawVoices) {
     setStateValue(state, 'voices', resolve(cwd, rawVoices), 'manual', {
@@ -938,17 +965,13 @@ async function configureTts(
     setStateValue(state, 'voices', undefined, 'manual');
   }
 
-  const forceAnswer = await prompts(
-    {
-      type: 'toggle',
-      name: 'force',
-      message: 'Force regenerate audio even if cached?',
-      initial: Boolean(state.force ?? initialFlags.force),
-      active: 'yes',
-      inactive: 'no',
-    },
-    { onCancel }
-  );
+  const forceAnswer = await runPrompt<boolean>(Toggle, {
+    name: 'force',
+    message: 'Force regenerate audio even if cached?',
+    initial: Boolean(state.force ?? initialFlags.force),
+    enabled: 'yes',
+    disabled: 'no'
+  });
   setStateValue(state, 'force', Boolean(forceAnswer.force), 'manual', {
     overwrite: true,
     preserveManual: false,
@@ -961,20 +984,16 @@ async function configureTts(
       state.out ??
       initialFlags.out ??
       (state.md ? await getDefaultOutputDir(state.md) : await getDefaultOutputDir(cwd));
-  } catch (error) {
+  } catch {
     // If we can't determine a default, use current directory
     outDefault = cwd;
   }
-  
-  const outAnswer = await prompts(
-    {
-      type: 'text',
-      name: 'out',
-      message: 'Audio output directory',
-      initial: outDefault,
-    },
-    { onCancel }
-  );
+
+  const outAnswer = await runPrompt<string>(Input, {
+    name: 'out',
+    message: 'Audio output directory',
+    initial: outDefault
+  });
   const rawOut = outAnswer.out?.toString().trim();
   if (rawOut) {
     setStateValue(state, 'out', resolve(cwd, rawOut), 'manual', {
@@ -990,19 +1009,18 @@ async function configureUpload(
   state: WizardState,
   options: { initialFlags: Partial<NewAssignmentFlags> }
 ): Promise<void> {
-  const uploadAnswer = await prompts(
-    {
-      type: 'select',
-      name: 'upload',
-      message: 'Upload audio after generation?',
-      choices: [
-        { title: 'No upload', value: 'none' },
-        { title: 'S3 (default)', value: 's3' },
-      ],
-      initial: state.upload === 's3' || options.initialFlags.upload === 's3' ? 1 : 0,
-    } satisfies PromptObject<'upload'>,
-    { onCancel }
-  );
+  const uploadAnswer = await runPrompt<string>(Select, {
+    name: 'upload',
+    message: 'Upload audio after generation?',
+    choices: [
+      'No upload',
+      'S3 (default)'
+    ],
+    initial: state.upload === 's3' || options.initialFlags.upload === 's3' ? 1 : 0,
+    result(value: string) {
+      return value === 'S3 (default)' ? 's3' : 'none';
+    }
+  });
 
   if (uploadAnswer.upload === 's3') {
     setStateValue(state, 'upload', 's3', 'manual', { overwrite: true, preserveManual: false });
@@ -1016,30 +1034,22 @@ async function configureUpload(
     return;
   }
 
-  const prefixAnswer = await prompts(
-    {
-      type: 'text',
-      name: 'prefix',
-      message: 'S3 key prefix (optional)',
-      initial:
-        state.prefix ?? options.initialFlags.prefix ?? process.env.S3_PREFIX ?? 'audio/assignments',
-    } satisfies PromptObject<'prefix'>,
-    { onCancel }
-  );
+  const prefixAnswer = await runPrompt<string>(Input, {
+    name: 'prefix',
+    message: 'S3 key prefix (optional)',
+    initial:
+      state.prefix ?? options.initialFlags.prefix ?? process.env.S3_PREFIX ?? 'audio/assignments'
+  });
   const prefixValue = prefixAnswer.prefix?.toString().trim() || undefined;
   setStateValue(state, 'prefix', prefixValue, 'manual', { overwrite: true, preserveManual: false });
 
-  const publicAnswer = await prompts(
-    {
-      type: 'toggle',
-      name: 'publicRead',
-      message: 'Make uploaded audio public?',
-      initial: Boolean(state.publicRead ?? options.initialFlags.publicRead),
-      active: 'yes',
-      inactive: 'no',
-    } satisfies PromptObject<'publicRead'>,
-    { onCancel }
-  );
+  const publicAnswer = await runPrompt<boolean>(Toggle, {
+    name: 'publicRead',
+    message: 'Make uploaded audio public?',
+    initial: Boolean(state.publicRead ?? options.initialFlags.publicRead),
+    enabled: 'yes',
+    disabled: 'no'
+  });
   setStateValue(state, 'publicRead', Boolean(publicAnswer.publicRead), 'manual', {
     overwrite: true,
     preserveManual: false,
@@ -1050,17 +1060,13 @@ async function toggleDryRun(
   state: WizardState,
   options: { initialFlags: Partial<NewAssignmentFlags> }
 ): Promise<void> {
-  const dryRunAnswer = await prompts(
-    {
-      type: 'toggle',
-      name: 'dryRun',
-      message: 'Run in dry-run mode?',
-      initial: state.dryRun ?? options.initialFlags.dryRun ?? true,
-      active: 'yes',
-      inactive: 'no',
-    } satisfies PromptObject<'dryRun'>,
-    { onCancel }
-  );
+  const dryRunAnswer = await runPrompt<boolean>(Toggle, {
+    name: 'dryRun',
+    message: 'Run in dry-run mode?',
+    initial: state.dryRun ?? options.initialFlags.dryRun ?? true,
+    enabled: 'yes',
+    disabled: 'no'
+  });
   setStateValue(state, 'dryRun', Boolean(dryRunAnswer.dryRun), 'manual', {
     overwrite: true,
     preserveManual: false,
@@ -1068,15 +1074,11 @@ async function toggleDryRun(
 }
 
 async function configureAccent(state: WizardState): Promise<void> {
-  const accentAnswer = await prompts(
-    {
-      type: 'text',
-      name: 'accent',
-      message: 'Accent preference (leave blank to clear)',
-      initial: state.accentPreference ?? '',
-    } satisfies PromptObject<'accent'>,
-    { onCancel }
-  );
+  const accentAnswer = await runPrompt<string>(Input, {
+    name: 'accent',
+    message: 'Accent preference (leave blank to clear)',
+    initial: state.accentPreference ?? ''
+  });
   const value = accentAnswer.accent?.toString().trim();
   if (value) {
     setStateValue(state, 'accentPreference', value, 'manual', {
@@ -1160,13 +1162,13 @@ function buildFlags(state: WizardState, initial: Partial<NewAssignmentFlags>, ct
     presetsPath: initial.presetsPath,
     accentPreference: state.accentPreference ?? initial.accentPreference,
     withTts: Boolean(state.withTts),
-    
+
     // New TTS mode fields
     ttsMode: state.ttsMode ?? initial.ttsMode,
     dialogueLanguage: state.dialogueLanguage ?? initial.dialogueLanguage,
     dialogueStability: state.dialogueStability ?? initial.dialogueStability,
     dialogueSeed: state.dialogueSeed ?? initial.dialogueSeed,
-    
+
     upload: state.upload,
     presign: initial.presign,
     publicRead: state.publicRead,
@@ -1196,13 +1198,13 @@ function buildSelections(state: WizardState, flags: NewAssignmentFlags): WizardS
     preset: flags.preset,
     accentPreference: state.accentPreference ?? undefined,
     withTts: Boolean(flags.withTts),
-    
+
     // New TTS mode fields
     ttsMode: flags.ttsMode,
     dialogueLanguage: flags.dialogueLanguage,
     dialogueStability: flags.dialogueStability,
     dialogueSeed: flags.dialogueSeed,
-    
+
     voices: flags.voices,
     force: state.force,
     upload: flags.upload,

@@ -1,7 +1,7 @@
-import { existsSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { resolve, join, isAbsolute, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { config as loadDotEnv } from 'dotenv';
+import { parseEnv } from 'node:util';
 import type { AssignmentProgressCallbacks, NewAssignmentFlags, RerunFlags } from './index.js';
 import { manifestPathFor, createFilesystemManifestStore } from './manifest.js';
 import type { ManifestStore } from './manifest.js';
@@ -281,20 +281,33 @@ export function loadEnvFiles(options: LoadEnvOptions = {}): Record<string, strin
   );
   const override = options.override ?? false;
   const assignToProcess = options.assignToProcess ?? true;
-  const envTarget: Record<string, string> = assignToProcess
-    ? (process.env as unknown as Record<string, string>)
-    : {};
+
   const collected: Record<string, string> = {};
 
   for (const file of files) {
     if (!existsSync(file)) continue;
-    const result = loadDotEnv({
-      path: file,
-      override,
-      processEnv: envTarget,
-    });
-    if (result.parsed) {
-      Object.assign(collected, result.parsed);
+    try {
+      const content = readFileSync(file, 'utf8');
+      const parsed = parseEnv(content);
+
+      for (const [key, value] of Object.entries(parsed)) {
+        if (value === undefined) continue;
+
+        // Update collected map
+        if (override || collected[key] === undefined) {
+          collected[key] = value;
+        }
+
+        // Update process.env if requested
+        if (assignToProcess) {
+          if (override || process.env[key] === undefined) {
+            process.env[key] = value;
+          }
+        }
+      }
+    } catch {
+      // Ignore parsing errors to match dotenv behavior (mostly)
+      // or log debug if we had a logger here
     }
   }
 

@@ -1,5 +1,13 @@
 # @esl-pipeline/tts-elevenlabs
 
+## 2.0.1
+
+### Patch Changes
+
+- optimized dependancies
+- Updated dependencies
+  - @esl-pipeline/md-extractor@1.4.2
+
 ## 2.0.0
 
 ### Major Changes

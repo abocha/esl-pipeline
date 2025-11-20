@@ -1,6 +1,6 @@
 {
   "name": "@esl-pipeline/orchestrator",
-  "version": "2.0.0",
+  "version": "2.0.1",
   "private": false,
   "type": "module",
   "license": "UNLICENSED",
@@ -40,7 +40,7 @@
   "scripts": {
     "build": "tsup --config tsup.config.ts && tsc -p tsconfig.types.json",
     "postbuild": "node ./scripts/postbuild.js",
-    "clean": "rimraf dist",
+    "clean": "node -e \"fs.rmSync('dist', {recursive:true, force:true})\"",
     "dev": "tsx watch bin/cli.ts",
     "test": "vitest run",
     "test:watch": "vitest",
@@ -50,20 +50,18 @@
     "examples/service": "pnpm --dir examples/service exec"
   },
   "dependencies": {
-    "@aws-sdk/client-s3": "^3.931.0",
-    "@aws-sdk/s3-request-presigner": "^3.931.0",
-    "@elevenlabs/elevenlabs-js": "^2.24.0",
+    "@aws-sdk/client-s3": "^3.936.0",
+    "@aws-sdk/s3-request-presigner": "^3.936.0",
+    "@elevenlabs/elevenlabs-js": "^2.24.1",
     "@notionhq/client": "^5.4.0",
     "commander": "^14.0.2",
-    "dotenv": "^17.2.3",
     "enquirer": "^2.4.1",
     "find-up": "^8.0.0",
-    "globby": "^15.0.0",
+    "globby": "^16.0.0",
     "gray-matter": "^4.0.3",
     "js-yaml": "^4.1.1",
     "ora": "9.0.0",
     "picocolors": "^1.1.1",
-    "prompts": "^2.4.2",
     "remark-parse": "^11.0.0",
     "unified": "^11.0.5",
     "zod": "^4.1.12"
@@ -77,11 +75,9 @@
     "@esl-pipeline/storage-uploader": "workspace:*",
     "@esl-pipeline/tts-elevenlabs": "workspace:*",
     "@types/node": "^24.10.1",
-    "@types/prompts": "^2.4.9",
-    "rimraf": "^6.1.0",
     "tsup": "8.5.1",
     "tsx": "^4.20.6",
     "typescript": "^5.9.3",
-    "vitest": "^4.0.9"
+    "vitest": "^4.0.12"
   }
 }

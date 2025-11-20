@@ -1,6 +1,6 @@
 {
   "name": "@esl-pipeline/batch-backend",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "private": true,
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -14,19 +14,19 @@
     "test:watch": "vitest watch --config ../../vitest.config.ts --dir ../../packages/batch-backend/tests"
   },
   "dependencies": {
+    "@aws-sdk/client-s3": "^3.936.0",
+    "@aws-sdk/lib-storage": "^3.936.0",
+    "@aws-sdk/s3-request-presigner": "^3.936.0",
     "@esl-pipeline/contracts": "workspace:*",
-    "@aws-sdk/client-s3": "^3.931.0",
-    "@aws-sdk/lib-storage": "^3.931.0",
-    "@aws-sdk/s3-request-presigner": "^3.931.0",
     "@esl-pipeline/orchestrator": "workspace:*",
     "@fastify/multipart": "^9.3.0",
     "bcrypt": "^6.0.0",
-    "bullmq": "^5.63.1",
+    "bullmq": "^5.64.0",
     "fastify": "^5.6.2",
-    "file-type": "^21.1.0",
+    "file-type": "^21.1.1",
     "ioredis": "^5.8.2",
     "jsonwebtoken": "^9.0.2",
-    "mime-types": "^3.0.1",
+    "mime-types": "^3.0.2",
     "minio": "^8.0.6",
     "nodemailer": "^7.0.10",
     "pg": "^8.16.3",
@@ -40,7 +40,7 @@
     "@types/jsonwebtoken": "^9.0.10",
     "@types/mime-types": "^3.0.1",
     "@types/node": "^24.10.1",
-    "@types/nodemailer": "^7.0.3",
+    "@types/nodemailer": "^7.0.4",
     "@types/pg": "^8.15.6",
     "typescript": "^5.9.3"
   }

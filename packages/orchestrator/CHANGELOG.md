@@ -1,5 +1,11 @@
 # @esl-pipeline/orchestrator
 
+## 2.0.1
+
+### Patch Changes
+
+- optimized dependancies
+
 ## 2.0.0
 
 ### Major Changes
