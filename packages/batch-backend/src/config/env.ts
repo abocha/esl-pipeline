@@ -5,6 +5,8 @@
 // - Postgres/Redis/MinIO are optional and enabled via env flags.
 // - Only throws when a feature is explicitly enabled but misconfigured.
 
+import { readBool, readInt, readString } from '@esl-pipeline/shared-infrastructure';
+
 export type NodeEnv = 'development' | 'test' | 'production';
 
 export interface BatchBackendConfig {
@@ -56,6 +58,7 @@ export interface BatchBackendConfig {
     configProvider: 'local' | 'http';
     configEndpoint?: string;
     configToken?: string;
+    configDir?: string;
   };
   auth: {
     jwtSecret: string;
@@ -89,25 +92,6 @@ export interface BatchBackendConfig {
   experimental: {
     extendedApiEnabled: boolean;
   };
-}
-
-function readBool(name: string, def: boolean): boolean {
-  const v = process.env[name];
-  if (v == null || v === '') return def;
-  return v === '1' || v.toLowerCase() === 'true';
-}
-
-function readInt(name: string, def: number): number {
-  const v = process.env[name];
-  if (!v) return def;
-  const n = Number(v);
-  return Number.isFinite(n) ? n : def;
-}
-
-function readString(name: string, def?: string): string | undefined {
-  const v = process.env[name];
-  if (v == null || v === '') return def;
-  return v;
 }
 
 // loadConfig.declaration()
@@ -193,6 +177,8 @@ export function loadConfig(): BatchBackendConfig {
   if (configProviderEnv === 'http' && !configEndpoint) {
     throw new Error('ESL_PIPELINE_CONFIG_PROVIDER=http requires ESL_PIPELINE_CONFIG_ENDPOINT');
   }
+
+  const configDir = readString('ESL_PIPELINE_CONFIG_DIR');
 
   // Authentication configuration
   const jwtSecret = readString('JWT_SECRET', 'your-super-secret-jwt-key-change-in-production')!;
@@ -290,6 +276,7 @@ export function loadConfig(): BatchBackendConfig {
       configProvider: configProviderEnv,
       configEndpoint,
       configToken,
+      configDir,
     },
     auth: {
       jwtSecret,

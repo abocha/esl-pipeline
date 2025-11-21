@@ -1,11 +1,11 @@
-import { existsSync, readFileSync } from 'node:fs';
+import { existsSync } from 'node:fs';
 import { resolve, join, isAbsolute, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { parseEnv } from 'node:util';
 import type { AssignmentProgressCallbacks, NewAssignmentFlags, RerunFlags } from './index.js';
 import { manifestPathFor, createFilesystemManifestStore } from './manifest.js';
 import type { ManifestStore } from './manifest.js';
 import { createFilesystemConfigProvider } from './config.js';
+import { ConfigurationError } from '@esl-pipeline/contracts';
 import type { ConfigProvider } from './config.js';
 import {
   noopLogger,
@@ -18,6 +18,15 @@ import {
   RemoteConfigProvider,
   type RemoteConfigProviderOptions,
 } from './adapters/config/remote.js';
+import {
+  loadEnvFiles as sharedLoadEnvFiles,
+  type LoadEnvOptions,
+  resolveManifestStoreConfig,
+} from '@esl-pipeline/shared-infrastructure';
+
+// Re-export loadEnvFiles for backward compatibility
+export { type LoadEnvOptions };
+export const loadEnvFiles = sharedLoadEnvFiles;
 
 type OrchestratorModule = typeof import('./index.js');
 
@@ -68,7 +77,7 @@ export function resolveConfigPaths(options: ResolveConfigPathsOptions = {}): Res
       : findFirstExistingPath(candidateConfigDirs.map(dir => join(dir, 'presets.json')));
 
   if (!presetsPath) {
-    throw new Error(
+    throw new ConfigurationError(
       `Unable to locate presets.json. Checked: ${candidateConfigDirs
         .map(dir => join(dir, 'presets.json'))
         .join(', ')}`
@@ -81,7 +90,7 @@ export function resolveConfigPaths(options: ResolveConfigPathsOptions = {}): Res
       : findFirstExistingPath(candidateConfigDirs.map(dir => join(dir, 'voices.yml')));
 
   if (!voicesPath) {
-    throw new Error(
+    throw new ConfigurationError(
       `Unable to locate voices.yml. Checked: ${candidateConfigDirs
         .map(dir => join(dir, 'voices.yml'))
         .join(', ')}`
@@ -94,7 +103,7 @@ export function resolveConfigPaths(options: ResolveConfigPathsOptions = {}): Res
       : findFirstExistingPath(candidateConfigDirs.map(dir => join(dir, 'students')));
 
   if (!studentsDir) {
-    throw new Error(
+    throw new ConfigurationError(
       `Unable to locate students directory. Checked: ${candidateConfigDirs
         .map(dir => join(dir, 'students'))
         .join(', ')}`
@@ -163,6 +172,14 @@ export function createPipeline(options: CreatePipelineOptions = {}): Orchestrato
       : undefined,
   };
 
+  // Add new validation checks as per the user's request, ensuring correct placement
+  if (!existsSync(defaults.presetsPath)) {
+    throw new ConfigurationError(`Presets file not found at ${defaults.presetsPath}`);
+  }
+  if (!existsSync(defaults.voicesPath)) {
+    throw new ConfigurationError(`Voices file not found at ${defaults.voicesPath}`);
+  }
+
   const manifestStore = resolveManifestStore(options);
   const configProvider = resolveConfigProvider(options, configPaths);
   const logger = options.logger ?? noopLogger;
@@ -212,21 +229,13 @@ function resolveManifestStore(options: CreatePipelineOptions): ManifestStore {
     return new S3ManifestStore(options.manifestStoreConfig.options);
   }
 
-  const envBackend = process.env.ESL_PIPELINE_MANIFEST_STORE?.toLowerCase();
-  if (envBackend === 's3') {
-    const bucket = process.env.ESL_PIPELINE_MANIFEST_BUCKET;
-    if (!bucket) {
-      throw new Error(
-        'ESL_PIPELINE_MANIFEST_BUCKET must be set when ESL_PIPELINE_MANIFEST_STORE is "s3".'
-      );
-    }
-    const prefix = process.env.ESL_PIPELINE_MANIFEST_PREFIX;
-    const rootDir = process.env.ESL_PIPELINE_MANIFEST_ROOT ?? options.cwd ?? process.cwd();
+  const config = resolveManifestStoreConfig({ cwd: options.cwd });
+  if (config.type === 's3' && config.s3Options) {
     return new S3ManifestStore({
-      bucket,
-      prefix,
-      region: process.env.AWS_REGION,
-      rootDir,
+      bucket: config.s3Options.bucket,
+      prefix: config.s3Options.prefix,
+      region: config.s3Options.region,
+      rootDir: config.s3Options.rootDir,
     });
   }
 
@@ -247,7 +256,7 @@ function resolveConfigProvider(
   if (envProvider === 'remote' || envProvider === 'http') {
     const baseUrl = process.env.ESL_PIPELINE_CONFIG_ENDPOINT;
     if (!baseUrl) {
-      throw new Error(
+      throw new ConfigurationError(
         'ESL_PIPELINE_CONFIG_ENDPOINT must be set when ESL_PIPELINE_CONFIG_PROVIDER is remote/http.'
       );
     }
@@ -265,53 +274,6 @@ function resolveConfigProvider(
     voicesPath: configPaths.voicesPath,
     studentsDir: configPaths.studentsDir,
   });
-}
-
-export type LoadEnvOptions = {
-  cwd?: string;
-  files?: string[];
-  override?: boolean;
-  assignToProcess?: boolean;
-};
-
-export function loadEnvFiles(options: LoadEnvOptions = {}): Record<string, string> {
-  const cwd = resolve(options.cwd ?? process.cwd());
-  const files = (options.files && options.files.length > 0 ? options.files : ['.env']).map(file =>
-    isAbsolute(file) ? file : resolve(cwd, file)
-  );
-  const override = options.override ?? false;
-  const assignToProcess = options.assignToProcess ?? true;
-
-  const collected: Record<string, string> = {};
-
-  for (const file of files) {
-    if (!existsSync(file)) continue;
-    try {
-      const content = readFileSync(file, 'utf8');
-      const parsed = parseEnv(content);
-
-      for (const [key, value] of Object.entries(parsed)) {
-        if (value === undefined) continue;
-
-        // Update collected map
-        if (override || collected[key] === undefined) {
-          collected[key] = value;
-        }
-
-        // Update process.env if requested
-        if (assignToProcess) {
-          if (override || process.env[key] === undefined) {
-            process.env[key] = value;
-          }
-        }
-      }
-    } catch {
-      // Ignore parsing errors to match dotenv behavior (mostly)
-      // or log debug if we had a logger here
-    }
-  }
-
-  return collected;
 }
 
 function findFirstExistingPath(paths: string[]): string | undefined {

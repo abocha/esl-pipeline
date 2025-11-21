@@ -14,18 +14,214 @@ This document captures the gaps between the new batch frontend (Phase 7/8 UI) an
 
 ---
 
-## Current Mismatch
+## Phase 6: Job Actions Infrastructure ✅
 
-- Frontend now expects:
-  - A real SSE endpoint (`GET /jobs/events`) that streams `job_state_changed` events.
-  - A `/config/job-options` endpoint to populate presets, voice accents, Notion DBs, upload options, and (soon) dialogue/monologue modes.
-  - Job status payloads that include extra metadata (`preset`, `voiceAccent`, `notionDatabase`, `notionUrl`, `mode`, etc.).
-  - Fully functional `/auth/*`, `/uploads`, `/jobs` routes with the extended API enabled.
-- Backend currently:
-  - Returns `501` for `/jobs/events`.
-  - Lacks `/config/job-options`.
-  - Stores only `md`, `preset`, `withTts`, `upload` on the job; no fields for voice, notion DB, run mode, or Notion links.
-  - Emits no events when job states change.
+**Status:** Complete (2025-01-21)
+
+### Job Actions Contract
+
+The backend now supports a generic job action system that allows the frontend to perform operations on existing jobs. Currently all actions are stubbed and return `501 Not Implemented`, but the infrastructure is in place for future implementation.
+
+#### Discover Available Actions
+
+**Endpoint:** `GET /config/job-options`  
+**Auth:** Required (Bearer token)
+
+**Response includes:**
+```json
+{
+  "presets": [...],
+  "voices": [...],
+  "supportedActions": [
+    {
+      "type": "rerun_audio",
+      "label": "Rerun Audio Generation",
+      "description": "Regenerate TTS audio for this job with optional voice/TTS overrides",
+      "requiresFields": [],
+      "implemented": false
+    },
+    {
+      "type": "cancel",
+      "label": "Cancel Job",
+      "description": "Cancel a queued or running job",
+      "requiresFields": [],
+      "implemented": false
+    },
+    {
+      "type": "edit_metadata",
+      "label": "Edit Job Metadata",
+      "description": "Update job configuration (preset, Notion database) without rerunning",
+      "requiresFields": [],
+      "implemented": false
+    }
+  ]
+}
+```
+
+#### Execute Job Action
+
+**Endpoint:** `POST /jobs/:jobId/actions`  
+**Auth:** Required (Bearer token)
+
+**Request Body:**
+```json
+{
+  "type": "rerun_audio" | "cancel" | "edit_metadata",
+  "payload": {
+    // Action-specific payload
+  }
+}
+```
+
+**Action-Specific Payloads:**
+
+**Rerun Audio:**
+```json
+{
+  "type": "rerun_audio",
+  "payload": {
+    "voiceId": "voice-123",      // Optional: override voice
+    "voiceAccent": "british_male",  // Optional: override accent
+    "forceTts": true             // Optional: force TTS regeneration
+  }
+}
+```
+
+**Cancel Job:**
+```json
+{
+  "type": "cancel",
+  "payload": {
+    "reason": "User requested cancellation"  // Optional
+  }
+}
+```
+
+**Edit Metadata:**
+```json
+{
+  "type": "edit_metadata",
+  "payload": {
+    "preset": "b2-advanced",           // Optional
+    "notionDatabase": "notion-db-uuid"  // Optional
+  }
+}
+```
+
+**Response (Current - Not Implemented):**
+```json
+{
+  "error": "not_implemented",
+  "message": "Audio rerun not yet implemented",
+  "actionType": "rerun_audio"
+}
+```
+Status: `501 Not Implemented`
+
+**Response (Future - Success):**
+```json
+{
+  "success": true,
+  "message": "Action completed successfully",
+  "jobId": "job-uuid",
+  "actionType": "rerun_audio",
+  "timestamp": "2025-01-21T12:00:00Z"
+}
+```
+Status: `200 OK`
+
+**Error Responses:**
+- `400 Bad Request` - Invalid action type or malformed payload
+- `404 Not Found` - Job does not exist
+- `422 Unprocessable Entity` - Job state invalid for action (e.g., cancelling succeeded job)
+- `501 Not Implemented` - Action infrastructure exists but logic not yet implemented
+
+#### Frontend Integration
+
+**Capabilities Discovery:**
+1. On app load, fetch `GET /config/job-options`
+2. Parse `supportedActions` array
+3. Render action buttons/menus based on `type` and `label`
+4. Disable or hide actions where `implemented: false`
+5. Show tooltip with `description` on hover
+
+**Action Execution:**
+1. User clicks action button (e.g., "Rerun Audio")
+2. Frontend shows confirmation dialog with action-specific form fields
+3. On confirm, `POST /jobs/:jobId/actions` with appropriate payload
+4. Handle response:
+   - `501`: Show "Coming soon" message
+   - `200`: Show success toast, refresh job status via SSE
+   - `4xx`: Show validation error to user
+   - `5xx`: Show generic error message
+
+**Shared Types:**
+Import from `@esl-pipeline/contracts`:
+```typescript
+import { 
+  JobActionType,
+  JobActionRequest, 
+  JobActionResponse,
+  ActionCapability 
+} from '@esl-pipeline/contracts';
+```
+
+### Implementation Status
+
+- ✅ Domain model (`domain/job-actions.ts`)
+- ✅ Action handlers (stubbed in `application/job-actions/`)
+- ✅ Generic endpoint (`POST /jobs/:jobId/actions`)
+- ✅ Capability exposure in `/config/job-options`
+- ✅ Shared types in `@esl-pipeline/contracts`
+- ⏳ Rerun audio logic (Stage 7 - pending)
+- ⏳ Cancel job logic (Stage 8 - pending)
+- ⏳ Edit metadata logic (Stage 9 - pending)
+
+---
+
+## Current Status
+
+### ✅ Completed Infrastructure
+
+- **SSE Event Stream:** `GET /jobs/events` is fully implemented
+  - Streams `job_created` and `job_state_changed` events in real-time
+  - Includes heartbeat mechanism for connection stability
+  - Requires authentication when extended API is enabled
+
+- **Configuration Endpoint:** `GET /config/job-options` is operational
+  - Dynamically pulls from orchestrator config (with fallback)
+  - Returns presets, voices, voice accents, Notion databases, upload options, modes
+  - Now includes `supportedActions` array for job action capabilities
+
+- **Job Metadata:** Jobs store and return full metadata
+  - Extended fields: `voiceAccent`, `forceTts`, `notionDatabase`, `mode`, `notionUrl`
+  - DTO serialization consistent between HTTP and SSE
+  - Database schema supports all frontend requirements
+
+- **Job Actions Infrastructure:** Generic action system in place (Phase 6)
+  - `POST /jobs/:jobId/actions` endpoint available
+  - Three action types defined: `rerun_audio`, `cancel`, `edit_metadata`
+  - Actions currently return `501 Not Implemented` (logic pending Stages 7-9)
+
+- **Extended API:** Fully functional routes
+  - Authentication (`/auth/register`, `/auth/login`, `/auth/refresh`, `/auth/me`)
+  - File uploads (`/uploads` with validation and sanitization)
+  - Admin endpoints (`/admin/users`, `/admin/jobs`, `/admin/stats`)
+  - User profile (`/user/profile`, `/user/jobs`, `/user/files`)
+
+### ⏳ Pending Work
+
+- **Job Action Implementations:**
+  - Stage 7: Implement `rerun_audio` logic (orchestrator integration)
+  - Stage 8: Implement `cancel` logic (BullMQ queue management)
+  - Stage 9: Implement `edit_metadata` logic (database + manifest updates)
+
+- **Future Enhancements:**
+  - User-scoped job filtering (multi-tenant support)
+  - Pagination for job lists
+  - Job priority/scheduling options
+  - Advanced search and filtering capabilities
+
 
 ---
 

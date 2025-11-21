@@ -9,12 +9,8 @@ const BINARY_CANDIDATES = isWindows ? ['ffmpeg.exe', 'ffmpeg'] : ['ffmpeg'];
 
 let cachedBinary: string | null = null;
 
-export class FfmpegNotFoundError extends Error {
-  constructor(message: string) {
-    super(message);
-    this.name = 'FfmpegNotFoundError';
-  }
-}
+import { FfmpegNotFoundError } from '@esl-pipeline/contracts';
+export { FfmpegNotFoundError };
 
 async function canSpawn(command: string): Promise<boolean> {
   return new Promise(resolve => {
@@ -172,7 +168,7 @@ export async function concatMp3Segments(
   } finally {
     try {
       await unlink(listFile);
-    } catch {}
+    } catch { }
   }
 }
 
@@ -208,7 +204,7 @@ export async function setMp3TitleMetadata(
     await runFfmpeg(args, 'ffmpeg-set-metadata-title', ffmpegPath);
     await copyFile(tempPath, filePath);
   } finally {
-    await unlink(tempPath).catch(() => {});
+    await unlink(tempPath).catch(() => { });
   }
 }
 

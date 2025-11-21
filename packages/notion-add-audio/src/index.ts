@@ -1,4 +1,5 @@
 import { Client } from '@notionhq/client';
+import { ConfigurationError, ValidationError, InfrastructureError } from '@esl-pipeline/contracts';
 
 export type AddAudioOpts = {
   replace?: boolean;
@@ -12,7 +13,7 @@ export function getClient(): Client {
 
 export function createNotionClient() {
   const token = process.env.NOTION_TOKEN;
-  if (!token) throw new Error('NOTION_TOKEN is required in environment');
+  if (!token) throw new ConfigurationError('NOTION_TOKEN is required in environment');
   return new Client({ auth: token, notionVersion: '2025-09-03' });
 }
 
@@ -31,7 +32,7 @@ async function withRetry<T>(fn: () => Promise<T>, label: string, tries = 5): Pro
     }
   }
   // should never reach
-  throw new Error(`withRetry(${label}) exhausted`);
+  throw new InfrastructureError(`withRetry(${label}) exhausted`);
 }
 
 export async function addOrReplaceAudioUnderStudyText(
@@ -39,8 +40,8 @@ export async function addOrReplaceAudioUnderStudyText(
   url: string,
   opts: AddAudioOpts = {}
 ): Promise<{ replaced: boolean; appended: boolean }> {
-  if (!pageId.trim()) throw new Error('pageId is required');
-  if (!url.trim()) throw new Error('url is required');
+  if (!pageId.trim()) throw new ValidationError('pageId is required');
+  if (!url.trim()) throw new ValidationError('url is required');
 
   const client = opts.client ?? getClient();
 
@@ -83,7 +84,7 @@ export async function addOrReplaceAudioUnderStudyText(
   } while (cursor);
 
   if (!studyTextBlockId) {
-    throw new Error('study-text toggle not found on page');
+    throw new ValidationError('study-text toggle not found on page');
   }
 
   // Remove or respect existing audio blocks at the page level

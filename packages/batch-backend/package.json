@@ -1,6 +1,6 @@
 {
   "name": "@esl-pipeline/batch-backend",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "private": true,
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -19,6 +19,7 @@
     "@aws-sdk/s3-request-presigner": "^3.936.0",
     "@esl-pipeline/contracts": "workspace:*",
     "@esl-pipeline/orchestrator": "workspace:*",
+    "@esl-pipeline/shared-infrastructure": "workspace:*",
     "@fastify/multipart": "^9.3.0",
     "bcrypt": "^6.0.0",
     "bullmq": "^5.64.0",

@@ -1,5 +1,15 @@
 # @esl-pipeline/notion-importer
 
+## 1.2.4
+
+### Patch Changes
+
+- refactor p5&6 and many issues from REVIEW.md
+- Updated dependencies
+  - @esl-pipeline/md-extractor@1.4.3
+  - @esl-pipeline/md-validator@1.5.3
+  - @esl-pipeline/contracts@0.1.2
+
 ## 1.2.3
 
 ### Patch Changes

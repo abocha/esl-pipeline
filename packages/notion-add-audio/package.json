@@ -1,6 +1,6 @@
 {
   "name": "@esl-pipeline/notion-add-audio",
-  "version": "1.2.2",
+  "version": "1.2.3",
   "private": true,
   "type": "module",
   "license": "UNLICENSED",
@@ -38,7 +38,8 @@
   },
   "dependencies": {
     "@notionhq/client": "^5.4.0",
-    "commander": "^14.0.2"
+    "commander": "^14.0.2",
+    "@esl-pipeline/contracts": "workspace:*"
   },
   "devDependencies": {
     "@types/node": "^24.10.1",

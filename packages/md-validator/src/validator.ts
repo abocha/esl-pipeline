@@ -4,6 +4,7 @@ import remarkParse from 'remark-parse';
 import type { Root, RootContent, Heading } from 'mdast';
 import { z } from 'zod';
 import { readFile } from 'node:fs/promises';
+import { ValidationError } from '@esl-pipeline/contracts';
 
 export type ValidateOptions = {
   strict?: boolean;
@@ -64,7 +65,7 @@ function extractFirstCodeBlock(raw: string): { lang: string; content: string } {
   // matches ```lang?\n ... \n```
   const m = raw.match(/```([a-zA-Z0-9_-]*)\s*\n([\s\S]*?)```/m);
   if (!m)
-    throw new Error(
+    throw new ValidationError(
       'No fenced code block found. Output must be inside a single triple-backtick block.'
     );
   const [, lang, content] = m;

@@ -5,24 +5,29 @@
 // - Configured via env (see config/env).
 // - Keeps ESL pipeline wiring in one place so workers/controllers stay simple.
 
+import { fork } from 'node:child_process';
+import path from 'node:path';
 import {
   createPipeline,
   S3ManifestStore,
   RemoteConfigProvider,
-  type NewAssignmentFlags,
-  type OrchestratorDependencies,
   resolveJobOptions,
+  resolveConfigPaths,
   type JobOptionsPayload,
 } from '@esl-pipeline/orchestrator';
 import { S3Client } from '@aws-sdk/client-s3';
-import { loadConfig, type BatchBackendConfig } from '../config/env';
-import { logger as rootLogger, Logger } from './logger';
-import { metrics } from './metrics';
-import type { JobMode } from '../domain/job-model';
+import { loadConfig } from '../config/env.js';
+import { logger as rootLogger, Logger } from './logger.js';
+import { metrics } from './metrics.js';
+import type { JobMode } from '../domain/job-model.js';
 
 // Lazily initialized, module-local cache.
 // Populated only inside getPipeline(), never at import time.
 let cachedPipeline: ReturnType<typeof createPipeline> | null = null;
+
+export function resetPipelineCache() {
+  cachedPipeline = null;
+}
 
 // getPipeline.declaration()
 export function getPipeline(configOverride?: ReturnType<typeof loadConfig>) {
@@ -104,12 +109,20 @@ export function getPipeline(configOverride?: ReturnType<typeof loadConfig>) {
     });
   }
 
+  const configPaths = resolveConfigPaths({
+    configDir: config.orchestrator.configDir,
+    cwd: process.env.PIPELINE_CWD || process.cwd(),
+  });
+
   cachedPipeline = createPipeline({
     cwd: process.env.PIPELINE_CWD || process.cwd(),
     logger: orchestratorLogger,
     metrics: orchestratorMetrics,
     manifestStore,
     configProvider,
+    presetsPath: configPaths.presetsPath,
+    voicesPath: configPaths.voicesPath,
+    studentsDir: configPaths.studentsDir,
   });
 
   return cachedPipeline;
@@ -133,73 +146,49 @@ export async function runAssignmentJob(
   payload: RunAssignmentPayload,
   runId: string
 ): Promise<{ manifestPath?: string; notionUrl?: string }> {
-  const config = loadConfig();
   const log = rootLogger.child({ jobId: payload.jobId, runId });
 
-  const execute = async (activeConfig: BatchBackendConfig) => {
-    const pipeline = getPipeline(activeConfig);
-    const flags: NewAssignmentFlags = {
-      md: payload.md,
-      preset: payload.preset,
-      withTts: payload.withTts,
-      upload: payload.upload,
-    };
+  return new Promise((resolve, reject) => {
+    const workerPath = path.join(__dirname, 'pipeline-worker-entry');
+    const child = fork(workerPath);
 
-    if (payload.notionDatabase) {
-      flags.dbId = payload.notionDatabase;
-    }
+    let resolved = false;
 
-    if (payload.forceTts) {
-      flags.redoTts = payload.forceTts;
-    }
-
-    if (payload.mode) {
-      flags.ttsMode = payload.mode;
-    }
-
-    const dependencies: OrchestratorDependencies = {
-      runId,
-    };
-
-    const started = Date.now();
-    const result = await (pipeline as any).newAssignment(flags as any, dependencies as any);
-    const duration = Date.now() - started;
-
-    log.info('Assignment pipeline succeeded', {
-      manifestPath: result.manifestPath,
-      durationMs: duration,
-    });
-
-    return { manifestPath: result.manifestPath, notionUrl: result.pageUrl };
-  };
-
-  try {
-    return await execute(config);
-  } catch (err) {
-    if (isManifestBucketMissingError(err) && config.orchestrator.manifestStore === 's3') {
-      log.warn(
-        'Manifest bucket missing; falling back to filesystem manifest store for this worker session',
-        {
-          bucket: config.orchestrator.manifestBucket,
+    child.on('message', (msg: any) => {
+      if (msg.type === 'success') {
+        resolved = true;
+        resolve(msg.result);
+      } else if (msg.type === 'error') {
+        resolved = true;
+        const err = new Error(msg.error.message || String(msg.error));
+        if (msg.error.stack) {
+          err.stack = msg.error.stack;
         }
-      );
-      cachedPipeline = null;
-      const fallbackConfig: BatchBackendConfig = {
-        ...config,
-        orchestrator: {
-          ...config.orchestrator,
-          manifestStore: 'filesystem',
-          manifestBucket: undefined,
-        },
-      };
-      return execute(fallbackConfig);
-    }
-
-    log.error(err instanceof Error ? err : String(err), {
-      message: 'Assignment pipeline failed',
+        if (msg.error.name) {
+          err.name = msg.error.name;
+        }
+        reject(err);
+      }
     });
-    throw err;
-  }
+
+    child.on('error', (err) => {
+      log.error(err, { message: 'Pipeline worker process error' });
+      if (!resolved) {
+        resolved = true;
+        reject(err);
+      }
+    });
+
+    child.on('exit', (code) => {
+      if (code !== 0 && !resolved) {
+        const err = new Error(`Pipeline worker exited with code ${code}`);
+        log.error(err, { message: 'Pipeline worker exited abnormally' });
+        reject(err);
+      }
+    });
+
+    child.send({ payload, runId });
+  });
 }
 
 export async function getJobOptionsFromOrchestrator(): Promise<JobOptionsPayload> {
@@ -207,7 +196,7 @@ export async function getJobOptionsFromOrchestrator(): Promise<JobOptionsPayload
   return resolveJobOptions(pipeline);
 }
 
-function isManifestBucketMissingError(error: unknown): boolean {
+export function isManifestBucketMissingError(error: unknown): boolean {
   if (!error) return false;
   if (
     error instanceof Error &&

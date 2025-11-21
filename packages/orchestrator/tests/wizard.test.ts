@@ -9,17 +9,30 @@ type PromptResponse = Record<string, unknown>;
 
 const promptQueue: PromptResponse[] = [];
 
-vi.mock('prompts', () => {
-  return {
-    default: (question: { name?: string }) => {
+vi.mock('enquirer', () => {
+  // Create mock prompt class inside the factory
+  class MockPrompt {
+    constructor(private options: any) { }
+
+    async run() {
       if (!promptQueue.length) {
-        throw new Error(`No prompt response queued for question "${question?.name ?? 'unknown'}".`);
+        throw new Error(`No prompt response queued for question.`);
       }
       const next: any = promptQueue.shift();
       if (typeof next === 'function') {
-        return Promise.resolve(next(question));
+        return next(this.options);
       }
-      return Promise.resolve(next);
+      // Return the value from promptQueue keyed by the prompt name
+      return next[this.options.name];
+    }
+  }
+
+  return {
+    default: {
+      Select: MockPrompt,
+      Input: MockPrompt,
+      Toggle: MockPrompt,
+      NumberPrompt: MockPrompt,
     },
   };
 });

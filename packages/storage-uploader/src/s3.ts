@@ -1,6 +1,7 @@
 import { readFile } from 'node:fs/promises';
 import { basename } from 'node:path';
 import { S3Client, PutObjectCommand } from '@aws-sdk/client-s3';
+import { ConfigurationError } from '@esl-pipeline/contracts';
 
 function isAclNotSupported(e: any): boolean {
   // SDK v3 S3 error shape is a ServiceException with a Code field in the body.
@@ -24,7 +25,7 @@ export async function uploadToS3(
     publicRead?: boolean;
   } = {}
 ): Promise<{ url: string; key: string; etag?: string }> {
-  if (!bucket) throw new Error('S3 bucket not configured');
+  if (!bucket) throw new ConfigurationError('S3 bucket not configured');
 
   const s3 = new S3Client({ region });
   const fileContent = await readFile(localPath);

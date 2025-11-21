@@ -63,10 +63,12 @@ The project generally follows the guidelines outlined in `AGENTS.md` and `docs/a
 
 ## 5. Potential Issues and Improvements
 
-### 5.1. Error Handling
+### 5.1. Error Handling (Fixed)
 
--   **TTS Mode Errors**: The `orchestrator` has specific error handling for `ttsMode` mismatches (e.g., dialogue mode requiring voice mappings). This is good, but could be further enhanced with more specific error types.
--   **Notion Rate Limiting**: The `notion-importer` handles rate limiting with retries, but large imports might still hit limits.
+-   **Standardized Error Classes**: Created shared error classes in `@esl-pipeline/contracts` (`PipelineError`, `ConfigurationError`, `ValidationError`, `InfrastructureError`, `ManifestError`).
+-   **Package Updates**: All packages now use specific error types instead of generic `Error`. This provides better error categorization and consistent error handling across CLI and Backend.
+-   **TTS Mode Errors**: The `orchestrator` uses `ConfigurationError` for TTS mode mismatches (e.g., dialogue mode requiring voice mappings).
+-   **Notion Rate Limiting**: The `notion-importer` handles rate limiting with retries using `InfrastructureError`.
 
 ### 5.2. Dependency Management
 
@@ -74,7 +76,7 @@ The project generally follows the guidelines outlined in `AGENTS.md` and `docs/a
 
 ### 5.3. Code Consistency
 
--   **Type Definitions**: Some packages export types directly, while others wrap them. Consistent export patterns would be beneficial.
+-   **Type Definitions** (Fixed): Standardized export patterns across packages (`orchestrator`, `tts-elevenlabs`, `notion-importer`, `storage-uploader`). Types are now explicitly exported, improving consistency and usability.
 
 ### 5.4. Batch Backend
 
@@ -83,7 +85,7 @@ The project generally follows the guidelines outlined in `AGENTS.md` and `docs/a
 
 ### 5.5. Deep Dive Findings (Fundamental Issues)
 
-1.  **In-Process Worker Execution**:
+1.  **In-Process Worker Execution** (Fixed):
     -   The `batch-backend` worker executes the pipeline (`orchestrator`) within the same Node.js process.
     -   **Risk**: Any synchronous CPU-intensive operations in the pipeline (e.g., heavy parsing, synchronous file I/O) will block the Node.js event loop. This can cause the BullMQ worker to stall (miss heartbeats) and affect other concurrent jobs in the same process.
     -   **Recommendation**: Offload the pipeline execution to a child process (e.g., using `child_process.fork`) to isolate the worker loop from the heavy lifting.
@@ -101,15 +103,16 @@ The project generally follows the guidelines outlined in `AGENTS.md` and `docs/a
 
 ### 5.6. Consistency & Stability Analysis
 
-1.  **Configuration Divergence**:
-    -   **Issue**: The CLI (`orchestrator/src/pipeline.ts`) and Backend (`batch-backend/src/config/env.ts`) use different logic to resolve configuration. The CLI supports local config files (presets, voices) and complex path resolution, while the Backend relies almost exclusively on environment variables.
-    -   **Risk**: A pipeline run might behave differently in the CLI vs the Backend if the environment variables don't perfectly mimic the local config file structure.
-    -   **Recommendation**: Unify configuration loading. Consider making the `ConfigProvider` in the orchestrator the single source of truth for both CLI and Backend, or ensure the Backend explicitly loads the same config files as the CLI.
+1.  **Configuration Divergence** (Fixed):
+    -   **Issue**: The CLI (`orchestrator/src/pipeline.ts`) and Backend (`batch-backend/src/config/env.ts`) used different logic to resolve configuration.
+    -   **Action**: Updated `batch-backend` to use the orchestrator's `resolveConfigPaths` utility.
+    -   **Benefit**: Both tools now respect `ESL_PIPELINE_CONFIG_DIR` and search for `presets.json`, `voices.yml`, and student profiles in standard locations (CWD, dist, repo root).
 
-2.  **Error Handling Inconsistency**:
-    -   **Issue**: The CLI prints errors to stderr and exits. The Backend uses a structured error handler. However, they don't share a common set of Error classes for domain failures (e.g., `FfmpegNotFoundError` is defined in `tts-elevenlabs` but not explicitly handled in the Backend's error classifier).
-    -   **Risk**: The API might return generic 500 errors for known domain issues (like missing FFmpeg or Notion rate limits), making debugging difficult for API users.
-    -   **Recommendation**: Create a shared `errors` package or export error types from `contracts` to ensure consistent error mapping across all interfaces.
+2.  **Error Handling Inconsistency** (Fixed):
+    -   **Issue**: The CLI prints errors to stderr and exits. The Backend uses a structured error handler. However, they didn't share a common set of Error classes for domain failures.
+    -   **Action**: Created shared error classes in `@esl-pipeline/contracts` (`PipelineError`, `ConfigurationError`, `ValidationError`, `InfrastructureError`, `ManifestError`).
+    -   **Implementation**: Updated all packages (`orchestrator`, `tts-elevenlabs`, `notion-importer`, `storage-uploader`, `md-extractor`, `md-validator`, `notion-add-audio`, `notion-colorizer`, `shared-infrastructure`, `batch-backend`) to use specific error types.
+    -   **Benefit**: Both CLI and Backend now use the same error classes, enabling consistent error mapping and better debugging. The API can map specific errors (e.g., `ConfigurationError` → 400, `InfrastructureError` → 503) instead of generic 500 errors.
 
 3.  **Dependency Management**:
     -   **Status**: Dependencies are largely consistent (e.g., `@notionhq/client`, `zod`).
@@ -146,6 +149,17 @@ The project generally follows the guidelines outlined in `AGENTS.md` and `docs/a
             -   2 NumberPrompt (dialogue stability, dialogue seed)
         -   Added helper function for uniform error handling
     -   **Benefit**: Single prompt library, more powerful feature set, consistent API, reduced dependencies.
+
+### 5.8. Completed Architectural Improvements
+
+1.  **In-Process Worker Execution**:
+    -   **Issue**: CPU-intensive pipeline operations were blocking the Node.js event loop in the `batch-backend` worker.
+    -   **Action**: Refactored the worker to execute the pipeline in a child process using `child_process.fork`.
+    -   **Implementation**:
+        -   Created `packages/batch-backend/src/infrastructure/pipeline-worker-entry.ts` as the isolated worker entry point.
+        -   Updated `packages/batch-backend/src/infrastructure/orchestrator-service.ts` to spawn the child process and manage IPC.
+        -   Added `process.on('disconnect')` handler to prevent zombie processes.
+    -   **Benefit**: Ensures the main worker loop remains responsive (heartbeats, job progress) even during heavy processing.
 
 ## 6. Conclusion
 

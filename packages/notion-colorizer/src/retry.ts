@@ -1,3 +1,5 @@
+import { InfrastructureError } from '@esl-pipeline/contracts';
+
 const MAX_RETRIES = Number(process.env.NOTION_COLORIZER_MAX_RETRIES ?? 5);
 const INITIAL_DELAY_MS = Number(process.env.NOTION_COLORIZER_RETRY_DELAY_MS ?? 350);
 
@@ -24,5 +26,5 @@ export async function withRetry<T>(fn: () => Promise<T>, label: string, tries = 
     }
   }
 
-  throw new Error(`withRetry(${label}) exhausted`);
+  throw new InfrastructureError(`withRetry(${label}) exhausted`);
 }

@@ -74,6 +74,8 @@ The ESL Pipeline is a pnpm-based monorepo. Core directories:
 
 - [`packages/orchestrator`](packages/orchestrator)
   - Primary entry point (CLI and programmatic API).
+- [`packages/shared-infrastructure`](packages/shared-infrastructure)
+  - Shared infrastructure utilities for environment loading, storage configuration, and manifest resolution.
 - [`packages/md-validator`](packages/md-validator)
   - Markdown validation.
 - [`packages/md-extractor`](packages/md-extractor)
@@ -415,6 +417,36 @@ For all subsections:
   - Output: URLs and/or identifiers used by Notion and manifest.
 - Safe extensions:
   - New backends allowed; orchestrator updates required to route to them.
+
+#### 4.2.8. [`packages/shared-infrastructure`](packages/shared-infrastructure)
+
+- Role:
+  - Centralized infrastructure utilities shared between orchestrator and batch-backend.
+  - Single source of truth for environment loading, storage configuration, and manifest resolution.
+- Key exports:
+  - Environment utilities (`src/env/loaders.ts`):
+    - `loadEnvFiles(options)` - Load `.env` files from specified directories
+    - `readBool(key, defaultValue)` - Parse boolean environment variables
+    - `readInt(key, defaultValue)` - Parse integer environment variables  
+    - `readString(key, defaultValue)` - Read string environment variables
+  - Storage configuration (`src/storage/config.ts`):
+    - `StorageConfigurationService` - Resolves S3/MinIO/filesystem storage configurations
+    - `createStorageConfigService(options)` - Factory function for storage config service
+  - Manifest resolution (`src/storage/manifest-resolver.ts`):
+    - `resolveManifestStoreConfig(options)` - Determines manifest store type and configuration
+- Contracts:
+  - MUST provide backward-compatible interfaces for orchestrator and batch-backend
+  - Environment variable parsing MUST match legacy behavior exactly
+  - Storage configuration resolution MUST support all existing backends (S3, MinIO, filesystem)
+- Safe extensions:
+  - New utility functions for infrastructure concerns
+  - Additional storage backend support
+  - Enhanced environment variable parsing (with backward compatibility)
+- Migration notes:
+  - As of Stage 5 (2025-11-21), both orchestrator and batch-backend import from this package
+  - Orchestrator maintains backward-compatible re-exports for `loadEnvFiles`
+  - Batch-backend imports `readBool`, `readInt`, `readString` directly
+  - Eliminated ~250 lines of duplicated code across packages
 
 ---
 
