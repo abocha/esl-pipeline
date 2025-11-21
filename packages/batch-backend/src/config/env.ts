@@ -30,6 +30,10 @@ export interface BatchBackendConfig {
   queue: {
     name: string;
   };
+  worker: {
+    concurrency: number;
+    maxConcurrentFfmpeg: number;
+  };
   minio: {
     enabled: boolean;
     endpoint: string;
@@ -125,6 +129,15 @@ export function loadConfig(): BatchBackendConfig {
 
   // Queue
   const queueName = readString('BATCH_JOBS_QUEUE_NAME', 'esl-jobs')!;
+
+  // Worker concurrency
+  const workerConcurrency = readInt('WORKER_CONCURRENCY', 5);
+  const maxConcurrentFfmpeg = readInt('MAX_CONCURRENT_FFMPEG', 3);
+  if (maxConcurrentFfmpeg > workerConcurrency) {
+    throw new Error(
+      `MAX_CONCURRENT_FFMPEG (${maxConcurrentFfmpeg}) cannot exceed WORKER_CONCURRENCY (${workerConcurrency})`
+    );
+  }
 
   // MinIO / S3-compatible (optional; defaults on for dev/docker, off in prod unless explicitly set)
   const minioEnabled = readBool('MINIO_ENABLED', nodeEnv === 'development' || nodeEnv === 'test');
@@ -247,6 +260,10 @@ export function loadConfig(): BatchBackendConfig {
     },
     queue: {
       name: queueName,
+    },
+    worker: {
+      concurrency: workerConcurrency,
+      maxConcurrentFfmpeg,
     },
     minio: {
       enabled: minioEnabled,

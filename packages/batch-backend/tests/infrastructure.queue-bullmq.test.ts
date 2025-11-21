@@ -122,6 +122,10 @@ describe('infrastructure/queue-bullmq', () => {
     // Stable test-local config values.
     getMockStorage().loadConfig.mockReturnValue({
       queue: { name: 'esl-jobs-test' },
+      worker: {
+        concurrency: 5,
+        maxConcurrentFfmpeg: 3,
+      },
       redis: {
         enabled: true,
         host: 'localhost',

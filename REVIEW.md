@@ -61,120 +61,114 @@ The project generally follows the guidelines outlined in `AGENTS.md` and `docs/a
 -   **Node.js Version**: The project requires Node.js 24.10.0+, which is consistent with the documentation.
 -   **Environment Variables**: It uses `dotenv` for environment variable loading and respects the `ESL_PIPELINE_` prefix for configuration.
 
-## 5. Potential Issues and Improvements
+## 5. Outstanding Issues and Implementation Plan
 
-### 5.1. Error Handling (Fixed)
+### 5.1. FFmpeg Dependency Management
 
--   **Standardized Error Classes**: Created shared error classes in `@esl-pipeline/contracts` (`PipelineError`, `ConfigurationError`, `ValidationError`, `InfrastructureError`, `ManifestError`).
--   **Package Updates**: All packages now use specific error types instead of generic `Error`. This provides better error categorization and consistent error handling across CLI and Backend.
--   **TTS Mode Errors**: The `orchestrator` uses `ConfigurationError` for TTS mode mismatches (e.g., dialogue mode requiring voice mappings).
--   **Notion Rate Limiting**: The `notion-importer` handles rate limiting with retries using `InfrastructureError`.
+**Current State**: FFmpeg detection and error handling is already well-implemented in `packages/tts-elevenlabs/src/ffmpeg.ts`.
 
-### 5.2. Dependency Management
+**Features**:
+- Automatic detection with fallback search (explicit path → cache → system PATH)
+- Clear,helpful error messages with platform-specific installation instructions
+- Support for `FFMPEG_PATH` environment variable
+- Comprehensive error handling with `FfmpegNotFoundError`
 
--   **FFmpeg**: The reliance on system `ffmpeg` is documented but could be a hurdle for new users. Consider adding a check or a setup script.
+**No action required** - the existing implementation provides excellent user experience with detailed guidance when FFmpeg is missing.
 
-### 5.3. Code Consistency
+### 5.2. Resource Contention (FFmpeg Concurrency) - **IMPLEMENTED**
 
--   **Type Definitions** (Fixed): Standardized export patterns across packages (`orchestrator`, `tts-elevenlabs`, `notion-importer`, `storage-uploader`). Types are now explicitly exported, improving consistency and usability.
+**Problem**: The batch-backend worker processes up to 5 jobs concurrently (configurable), with each potentially spawning FFmpeg processes. Without limits, this could exhaust CPU/memory.
 
-### 5.4. Batch Backend
+**Solution Implemented**: Redis-based distributed semaphore to limit concurrent FFmpeg operations across all worker processes (now fully wired and tested).
 
--   **Complexity**: The batch backend is significantly more complex than the CLI tools. While well-architected, it introduces dependencies on Postgres and Redis, which increases the deployment burden.
--   **Security**: The extended API features (auth, sanitization) are toggleable, which is good, but requires careful configuration to ensure security in production.
+**Components**:
+1. **FFmpeg Semaphore** (`packages/batch-backend/src/infrastructure/ffmpeg-semaphore.ts`):
+   - **TTL-based locks** (fixes P1): each lock uses `SET ... EX` with periodic cleanup to recover from crashed workers.
+   - **BLPOP blocking** (fixes P2): blocking queue wait restores FIFO fairness and removes busy-spin.
+   - **Test safety fixes**: mocks now target correct module specifiers and provide default Redis responses to avoid runaway loops and OOMs during tests.
+   - Instance registry, optional periodic cleanup (on in prod, off in tests), and `getStats()` monitoring.
 
-### 5.5. Deep Dive Findings (Fundamental Issues)
+2. **Configuration** (`packages/batch-backend/src/config/env.ts`):
+   - `WORKER_CONCURRENCY` (default: 5): Number of jobs processed simultaneously
+   - `MAX_CONCURRENT_FFMPEG` (default: 3): Maximum concurrent FFmpeg operations
+   - Validation ensures `MAX_CONCURRENT_FFMPEG ≤ WORKER_CONCURRENCY`
 
-1.  **In-Process Worker Execution** (Fixed):
-    -   The `batch-backend` worker executes the pipeline (`orchestrator`) within the same Node.js process.
-    -   **Risk**: Any synchronous CPU-intensive operations in the pipeline (e.g., heavy parsing, synchronous file I/O) will block the Node.js event loop. This can cause the BullMQ worker to stall (miss heartbeats) and affect other concurrent jobs in the same process.
-    -   **Recommendation**: Offload the pipeline execution to a child process (e.g., using `child_process.fork`) to isolate the worker loop from the heavy lifting.
+3. **Integration** (`packages/batch-backend/src/infrastructure/pipeline-worker-entry.ts`):
+   - Semaphore acquired before TTS operations
+   - Released in `finally` block to ensure cleanup
+   - Logging for acquire/release events
 
-2.  **Resource Contention (FFmpeg)**:
-    -   The worker is configured with a concurrency of 5 (`queue-bullmq.ts`).
-    -   Each job may spawn an `ffmpeg` process. This means up to 5 concurrent `ffmpeg` processes could run in a single container.
-    -   **Risk**: This could easily exhaust the container's CPU or memory, leading to OOM kills or severe performance degradation.
-    -   **Recommendation**: Implement resource limits or a semaphore for `ffmpeg` calls, or lower the worker concurrency based on available resources.
+**Critical Bugs Fixed**:
+- **[P1] Crashed worker leak**: Implemented TTL-based locks with automatic expiry (5min) + periodic cleanup
+- **[P2] Busy-spin wait loop**: Replaced polling with Redis `BLPOP` (30s timeout) for efficient blocking
 
-3.  **Event Scalability**:
-    -   The system uses Redis Pub/Sub to broadcast job events to all API instances.
-    -   **Risk**: As the number of jobs and API instances grows, every API instance receives every event, which is inefficient.
-    -   **Recommendation**: For high scale, consider a more targeted event delivery mechanism or filtering at the subscriber level.
+**Test Status**:
+- ✅ Build successful
+- ✅ Batch-backend tests now pass without OOM after fixing semaphore test mocks (Redis/logger specifiers and default stub returns)
 
-### 5.6. Consistency & Stability Analysis
+**Remaining Work**:
+- [ ] (optional) High-load validation of new semaphore under multi-worker contention
+- [ ] Conduct high-load testing to validate limits and tune defaults
+- [ ] Document configuration in batch-backend README
 
-1.  **Configuration Divergence** (Fixed):
-    -   **Issue**: The CLI (`orchestrator/src/pipeline.ts`) and Backend (`batch-backend/src/config/env.ts`) used different logic to resolve configuration.
-    -   **Action**: Updated `batch-backend` to use the orchestrator's `resolveConfigPaths` utility.
-    -   **Benefit**: Both tools now respect `ESL_PIPELINE_CONFIG_DIR` and search for `presets.json`, `voices.yml`, and student profiles in standard locations (CWD, dist, repo root).
+### 5.3. Event Scalability Optimization
 
-2.  **Error Handling Inconsistency** (Fixed):
-    -   **Issue**: The CLI prints errors to stderr and exits. The Backend uses a structured error handler. However, they didn't share a common set of Error classes for domain failures.
-    -   **Action**: Created shared error classes in `@esl-pipeline/contracts` (`PipelineError`, `ConfigurationError`, `ValidationError`, `InfrastructureError`, `ManifestError`).
-    -   **Implementation**: Updated all packages (`orchestrator`, `tts-elevenlabs`, `notion-importer`, `storage-uploader`, `md-extractor`, `md-validator`, `notion-add-audio`, `notion-colorizer`, `shared-infrastructure`, `batch-backend`) to use specific error types.
-    -   **Benefit**: Both CLI and Backend now use the same error classes, enabling consistent error mapping and better debugging. The API can map specific errors (e.g., `ConfigurationError` → 400, `InfrastructureError` → 503) instead of generic 500 errors.
+**Problem**: The system uses Redis Pub/Sub to broadcast job events to all API instances. As jobs and API instances scale, every instance receives every event, creating inefficiency.
 
-3.  **Dependency Management**:
-    -   **Status**: Dependencies are largely consistent (e.g., `@notionhq/client`, `zod`).
-    -   **Observation**: `batch-backend` and `orchestrator` both depend on `@aws-sdk/client-s3`. Ensure these versions stay in sync to avoid subtle bugs.
+**Action Items**:
+1. Implement event filtering at the subscriber level (subscribe only to relevant job IDs)
+2. Add metrics to monitor event delivery efficiency
+3. Document scaling considerations for production deployments
+4. Consider targeted event delivery for high-scale scenarios
 
-### 5.7. Dependency Cleanup
+### 5.4. Batch Backend Deployment Complexity
 
-**Completed Actions:**
+**Issue**: The batch backend requires Postgres and Redis, increasing deployment complexity compared to the CLI.
 
-1.  **Removed `dotenv`**:
-    -   Removed unused import from `batch-backend`.
-    -   Replaced `dotenv` with native Node.js `process.loadEnvFile()` and `node:util.parseEnv()` in `orchestrator/src/pipeline.ts`.
-    -   **Benefit**: Leverages Node.js 24+ native features, reduces external dependencies, improves startup performance.
-
-2.  **Removed `rimraf`**:
-    -   Replaced all `clean` scripts with `node -e "fs.rmSync('dist', {recursive:true, force:true})"` in 8 packages.
-    -   Removed `rimraf` from `devDependencies` in all affected packages.
-    -   **Benefit**: Uses Node.js native `fs.rmSync()`, eliminates dev dependency from multiple packages.
-
-3.  **Standardized Colors**:
-    -   Replaced `chalk` (35 KB) with `picocolors` (3 KB) in `md-validator`.
-    -   **Benefit**: Reduces bundle size, ensures visual consistency with `orchestrator` which already uses `picocolors`, and improves installation speed.
-
-4.  **Consolidated Prompt Libraries**:
-    -   **Investigation**: Analyzed both directions:
-        -   ❌ `enquirer` → `prompts`: Not feasible - path picker requires `enquirer`'s advanced AutoComplete features (dynamic footers, result transformers, context-aware validation)
-        -   ✅ `prompts` → `enquirer`: Feasible! All wizard prompt types supported by `enquirer`.
-    -   **Action**: Replaced `prompts` with `enquirer` in `orchestrator`:
-        -   Removed `prompts` and `@types/prompts` from `package.json`
-        -   Refactored all 21 prompt calls in `wizard.ts`:
-            -   8 Select prompts (main menu, settings, md/student/preset/mode/upload selection)
-            -   7 Input prompts (custom student, dbId, dialogue language, voices, output, s3 prefix, accent)
-            -   4 Toggle prompts (TTS enable, force, publicRead, dryRun)
-            -   2 NumberPrompt (dialogue stability, dialogue seed)
-        -   Added helper function for uniform error handling
-    -   **Benefit**: Single prompt library, more powerful feature set, consistent API, reduced dependencies.
-
-### 5.8. Completed Architectural Improvements
-
-1.  **In-Process Worker Execution**:
-    -   **Issue**: CPU-intensive pipeline operations were blocking the Node.js event loop in the `batch-backend` worker.
-    -   **Action**: Refactored the worker to execute the pipeline in a child process using `child_process.fork`.
-    -   **Implementation**:
-        -   Created `packages/batch-backend/src/infrastructure/pipeline-worker-entry.ts` as the isolated worker entry point.
-        -   Updated `packages/batch-backend/src/infrastructure/orchestrator-service.ts` to spawn the child process and manage IPC.
-        -   Added `process.on('disconnect')` handler to prevent zombie processes.
-    -   **Benefit**: Ensures the main worker loop remains responsive (heartbeats, job progress) even during heavy processing.
+**Action Items**:
+1. Create comprehensive deployment guide covering Postgres/Redis setup
+2. Document all required environment variables
+3. Provide example Docker Compose configuration for local testing
+4. Add production deployment best practices (HA, backups, monitoring)
 
 ## 6. Conclusion
 
-The `esl-pipeline` is a mature and well-engineered project. The recent addition of "Text-to-Dialogue" support in `tts-elevenlabs` and `orchestrator` is a major enhancement. The code is readable, modular, and follows best practices. The batch processing system is a robust addition that transforms the tool from a local CLI to a scalable service.
+The `esl-pipeline` is a mature and well-engineered project with significant recent improvements:
 
-However, to achieve true stability and consistency, the project needs to address the architectural risks in the batch worker (blocking event loop) and unify the configuration and error handling strategies between the CLI and Backend.
+**Completed Enhancements**:
+- ✅ Standardized error handling across all packages using shared error classes
+- ✅ Unified configuration resolution between CLI and batch backend
+- ✅ Modernized dependencies (removed `dotenv`, `rimraf`; standardized on `picocolors` and `enquirer`)
+- ✅ Fixed architectural issues (worker event loop blocking via child process isolation)
+- ✅ Improved type consistency and exports across packages
 
-The dependency cleanup effort has successfully modernized the project by removing `dotenv`, `rimraf`, and standardizing on `picocolors`, reducing the overall dependency footprint and leveraging native Node.js features.
+**Remaining Focus Areas**:
+The project needs attention in four areas to achieve production-ready status:
+1. **FFmpeg dependency management**: Add detection and helpful error messages
+2. **Resource contention**: Implement semaphore for concurrent FFmpeg operations
+3. **Event scalability**: Optimize Redis Pub/Sub for high-scale scenarios
+4. **Deployment documentation**: Comprehensive guides for batch backend setup
 
-## 7. Recommendations
+## 7. Next Steps
 
-1.  **Enhance Tests**: Ensure that the new `dialogue` mode in TTS is thoroughly tested, especially edge cases with missing voice mappings.
-2.  **Documentation**: Update `README.md` and other docs to fully reflect the new `ttsMode` options and requirements.
-3.  **Error Messages**: Continue to improve error messages to guide users when configuration is missing (e.g., missing voice in `voices.yml`).
-4.  **Deployment Guide**: Create a specific guide for deploying the batch backend, covering Postgres/Redis setup and environment variables.
-5.  **Architecture Refactor**: Prioritize moving the pipeline execution in the worker to a child process to prevent event loop blocking.
-6.  **Unify Configuration**: Refactor `batch-backend` to use the `orchestrator`'s config resolution logic where possible, or strictly define the mapping between env vars and config files.
-7.  **Shared Error Handling**: specific domain errors should be mapped to HTTP status codes in the backend to provide better feedback.
+Based on section 5 analysis, implement the following in priority order:
+
+1. **FFmpeg Detection** (High Priority):
+   - Add startup check in orchestrator
+   - Provide installation instructions in error messages
+   - Update setup documentation
+
+2. **Resource Management** (High Priority):
+   - Implement FFmpeg operation semaphore in batch-backend
+   - Add `MAX_CONCURRENT_FFMPEG` environment variable
+   - Test under high-load scenarios
+
+3. **Event Optimization** (Medium Priority):
+   - Implement subscriber-level event filtering
+   - Add event delivery metrics
+   - Document scaling best practices
+
+4. **Documentation** (Medium Priority):
+   - Create batch backend deployment guide
+   - Add Docker Compose example configuration
+   - Document production deployment considerations

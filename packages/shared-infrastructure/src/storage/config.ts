@@ -172,7 +172,7 @@ export function createStorageConfigService(
         },
         lifecycle: {
             presignedUrlExpiresIn: readInt('PRESIGNED_URL_EXPIRES_IN', 3600),
-            enableMultipartUploads: !readBool('ENABLE_MULTIPART_UPLOADS', true),
+            enableMultipartUploads: readBool('ENABLE_MULTIPART_UPLOADS', true),
             maxMultipartSize: readInt('MAX_MULTIPART_SIZE', 100 * 1024 * 1024),
         },
     };
