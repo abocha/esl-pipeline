@@ -18,6 +18,7 @@ import type { ReadableStream as NodeReadableStream } from 'node:stream/web';
 import { resolveSpeakerVoices, type VoiceMapConfig } from './speakerAssignment.js';
 import type { TtsMode, DialogueInput } from './types.js';
 import { synthesizeDialogue } from './dialogue.js';
+import { ConfigurationError, ValidationError, InfrastructureError } from '@esl-pipeline/contracts';
 
 const DEFAULT_MODEL_ID = process.env.ELEVENLABS_MODEL_ID ?? 'eleven_multilingual_v2';
 const DEFAULT_OUTPUT_FORMAT = process.env.ELEVENLABS_OUTPUT_FORMAT ?? 'mp3_22050_32';
@@ -44,39 +45,7 @@ function buildOutputFileName(hash: string, frontmatter: Frontmatter): string {
   return prefix ? `${prefix}-${hash}.mp3` : `${hash}.mp3`;
 }
 
-type BuildStudyTextOptions = {
-  voiceMapPath: string;
-  outPath: string;
-  preview?: boolean;
-  force?: boolean;
-  defaultAccent?: string;
-  defaultVoiceId?: string;
-  ffmpegPath?: string;
-  outputFormat?: string;
-  
-  // New fields for dual TTS mode
-  ttsMode?: 'auto' | 'dialogue' | 'monologue';
-  dialogueLanguage?: string;
-  dialogueStability?: number;
-  dialogueSeed?: number;
-};
-
-export type BuildStudyTextResult = {
-  path: string;
-  duration?: number;
-  hash: string;
-  voices: {
-    speaker: string;
-    voiceId: string;
-    source: string;
-    score?: number;
-    voiceName?: string;
-    gender?: string;
-    accent?: string;
-    useCase?: string;
-  }[];
-  voiceAssignments?: Record<string, string>;
-};
+import type { BuildStudyTextOptions, BuildStudyTextResult } from './types.js';
 
 /**
  * Determines which TTS mode to use based on options and content type
@@ -95,7 +64,7 @@ function selectTtsMode(
   if (mode === 'monologue') {
     return 'monologue';
   }
-  
+
   // Auto mode: use dialogue for dialogue/mixed content, monologue otherwise
   return studyTextType === 'monologue' ? 'monologue' : 'dialogue';
 }
@@ -112,13 +81,13 @@ async function buildDialogueMp3(
   outputDir: string
 ): Promise<BuildStudyTextResult> {
   const { dialogueLanguage, dialogueStability, dialogueSeed } = options;
-  
+
   // Convert segments to dialogue inputs
   const inputs: DialogueInput[] = segments.map(seg => {
     const speaker = seg.speaker ?? 'default';
     const voiceId = voiceAssignments.get(speaker);
     if (!voiceId) {
-      throw new Error(
+      throw new ConfigurationError(
         `No voice mapping found for speaker "${speaker}". ` +
         `Available speakers: ${Array.from(voiceAssignments.keys()).join(', ')}`
       );
@@ -225,12 +194,12 @@ export async function buildStudyTextMp3(
     const apiKey = process.env.ELEVENLABS_API_KEY || process.env.ELEVENLABS_API_TOKEN || '';
     const outputDir = resolve(opts.outPath || dirname(mdPath));
     await mkdir(outputDir, { recursive: true });
-    
+
     return buildDialogueMp3(segments, speakerVoiceMap, voiceSummaries, opts, apiKey, outputDir);
   }
 
   // Continue with existing monologue path...
-  
+
   // Generate hash based on study text and voice map
   const hashInput = JSON.stringify({ text: normalizedText, voices: resolvedVoiceDescriptor });
   const hash = hashStudyText(hashInput);
@@ -295,9 +264,9 @@ export async function buildStudyTextMp3(
     if (!speechText) continue;
 
     if (!voiceId) {
-      throw new Error(
+      throw new ConfigurationError(
         `No ElevenLabs voice could be resolved for line "${segment.raw}". ` +
-          `Ensure frontmatter speaker profiles or voices.yml provide enough information.`
+        `Ensure frontmatter speaker profiles or voices.yml provide enough information.`
       );
     }
 
@@ -317,7 +286,7 @@ export async function buildStudyTextMp3(
     cleanupTargets.push(lineFilePath);
   }
   if (segmentFiles.length === 0) {
-    throw new Error(
+    throw new ValidationError(
       'TTS produced 0 segments. Check voices.yml (default/auto) and study-text content.'
     );
   }
@@ -459,8 +428,8 @@ function resolveStudyTextSegments(lines: string[], frontmatter: Frontmatter): St
   const segments: StudyTextSegment[] = [];
   const labelOrder = Array.isArray(frontmatter.speaker_labels)
     ? frontmatter.speaker_labels
-        .map(label => (typeof label === 'string' ? label.trim() : ''))
-        .filter(Boolean)
+      .map(label => (typeof label === 'string' ? label.trim() : ''))
+      .filter(Boolean)
     : [];
   const nonNarratorFallback = labelOrder.find(label => label.toLowerCase() !== 'narrator');
   const singleFallback = labelOrder.length === 1 ? labelOrder[0] : undefined;
@@ -568,7 +537,7 @@ function calculateApproxDuration(bytes: number): number | undefined {
 
 function wrapSynthesisError(error: unknown, voiceId: string, text: string): Error {
   const message = error instanceof Error ? error.message : String(error);
-  return new Error(`Failed to synthesize line with voice "${voiceId}": ${message}\nLine: ${text}`);
+  return new InfrastructureError(`Failed to synthesize line with voice "${voiceId}": ${message}\nLine: ${text}`);
 }
 
 function wait(ms: number): Promise<void> {
@@ -580,7 +549,7 @@ export { loadVoicesCatalog } from './assign.js';
 export type { VoiceCatalog } from './assign.js';
 
 // Export types for orchestrator integration
-export type { TtsMode, DialogueInput, DialogueSynthesisOptions, DialogueSynthesisResult, DialogueChunk } from './types.js';
+export type { TtsMode, DialogueInput, DialogueSynthesisOptions, DialogueSynthesisResult, DialogueChunk, BuildStudyTextOptions, BuildStudyTextResult } from './types.js';
 
 // Export dialogue functions for orchestrator integration
 export { chunkDialogueInputs, buildDialogueHash, synthesizeDialogue } from './dialogue.js';

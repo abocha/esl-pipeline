@@ -5,8 +5,10 @@ import { mdToBlocks } from './mdToBlocks.js';
 import { extractFrontmatter } from '@esl-pipeline/md-extractor';
 import { validateMarkdownFile } from '@esl-pipeline/md-validator';
 import type { ImportOptions, FrontmatterShape } from './types.js';
+export type { ImportOptions, FrontmatterShape } from './types.js';
 import { chunk } from './chunk.js';
 import { withRetry } from './retry.js';
+import { ValidationError } from '@esl-pipeline/contracts';
 
 const MAX_BLOCKS_PER_REQUEST = 50;
 
@@ -17,13 +19,13 @@ export async function runImport(opts: ImportOptions) {
   const v = await validateMarkdownFile(opts.mdPath, { strict: true });
   if (!v.ok) {
     const msg = ['Validation failed:', ...v.errors.map((e: string) => `- ${e}`)].join('\n');
-    throw new Error(msg);
+    throw new ValidationError(msg);
   }
 
   // --- Step 2: extract code block content (like validator does) ---
   const blockMatch = rawMd.match(/```([a-zA-Z0-9_-]*)\s*\n([\s\S]*?)```/m);
   if (!blockMatch) {
-    throw new Error(
+    throw new ValidationError(
       'No fenced code block found. Output must be inside a single triple-backtick block.'
     );
   }

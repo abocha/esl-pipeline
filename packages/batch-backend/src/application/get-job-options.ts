@@ -7,6 +7,7 @@ import { readFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
 import { logger } from '../infrastructure/logger';
 import { getJobOptionsFromOrchestrator } from '../infrastructure/orchestrator-service';
+import { getActionMetadata } from './job-actions/action-handler';
 
 export type UploadOption = 'auto' | 's3' | 'none';
 export type JobModeOption = 'auto' | 'dialogue' | 'monologue';
@@ -24,6 +25,14 @@ export interface VoiceOption {
   category?: string | null;
 }
 
+export interface ActionCapability {
+  type: string;
+  label: string;
+  description: string;
+  implemented: boolean;
+  requiresFields?: string[];
+}
+
 export interface JobOptionsResponse {
   presets: string[];
   voiceAccents: string[];
@@ -31,11 +40,12 @@ export interface JobOptionsResponse {
   notionDatabases: NotionDatabaseOption[];
   uploadOptions: UploadOption[];
   modes: JobModeOption[];
+  supportedActions: ActionCapability[];
 }
 
 // TODO: Replace these with data pulled from the orchestrator config provider or
 // dedicated metadata service once available (tracked in backend/frontend Phase 5).
-const STATIC_OPTIONS: JobOptionsResponse = {
+const STATIC_OPTIONS: Omit<JobOptionsResponse, 'supportedActions'> = {
   presets: ['b1-default'],
   voiceAccents: ['american_female', 'british_male'],
   voices: [],
@@ -50,7 +60,15 @@ const STATIC_OPTIONS: JobOptionsResponse = {
 export async function getJobOptions(): Promise<JobOptionsResponse> {
   try {
     const result = await getJobOptionsFromOrchestrator();
-    return result;
+    // Add supported actions to orchestrator response
+    const actionMetadata = getActionMetadata();
+    const supportedActions: ActionCapability[] = Object.entries(actionMetadata).map(
+      ([type, meta]) => ({ type, ...meta })
+    );
+    return {
+      ...result,
+      supportedActions,
+    };
   } catch (error) {
     logger.warn('Failed to load job options from orchestrator. Falling back to static config.', {
       error: error instanceof Error ? error.message : String(error),
@@ -65,15 +83,20 @@ async function loadStaticJobOptions(): Promise<JobOptionsResponse> {
   const voiceAccents =
     voices.length > 0
       ? Array.from(
-          new Set(
-            voices
-              .map(voice =>
-                typeof voice.accent === 'string' ? voice.accent.trim() || undefined : undefined
-              )
-              .filter((accent): accent is string => Boolean(accent))
-          )
+        new Set(
+          voices
+            .map(voice =>
+              typeof voice.accent === 'string' ? voice.accent.trim() || undefined : undefined
+            )
+            .filter((accent): accent is string => Boolean(accent))
         )
+      )
       : [...STATIC_OPTIONS.voiceAccents];
+
+  const actionMetadata = getActionMetadata();
+  const supportedActions: ActionCapability[] = Object.entries(actionMetadata).map(
+    ([type, meta]) => ({ type, ...meta })
+  );
 
   return {
     presets: [...STATIC_OPTIONS.presets],
@@ -82,6 +105,7 @@ async function loadStaticJobOptions(): Promise<JobOptionsResponse> {
     notionDatabases,
     uploadOptions: [...STATIC_OPTIONS.uploadOptions],
     modes: [...STATIC_OPTIONS.modes],
+    supportedActions,
   };
 }
 

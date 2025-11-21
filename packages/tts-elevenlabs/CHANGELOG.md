@@ -1,5 +1,14 @@
 # @esl-pipeline/tts-elevenlabs
 
+## 2.0.2
+
+### Patch Changes
+
+- refactor p5&6 and many issues from REVIEW.md
+- Updated dependencies
+  - @esl-pipeline/md-extractor@1.4.3
+  - @esl-pipeline/contracts@0.1.2
+
 ## 2.0.1
 
 ### Patch Changes

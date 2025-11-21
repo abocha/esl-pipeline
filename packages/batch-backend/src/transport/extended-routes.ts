@@ -759,6 +759,83 @@ export function registerExtendedRoutes(app: FastifyInstance, options: ExtendedRo
       });
     }
   });
+
+  // Job actions endpoint
+  app.post(
+    '/jobs/:jobId/actions',
+    { preHandler: authenticate },
+    async (request, reply) => {
+      const { jobId } = request.params as { jobId: string };
+      const body = request.body as any;
+
+      try {
+        // Validate action type
+        const validActionTypes = ['rerun_audio', 'cancel', 'edit_metadata'];
+        if (!body || !body.type || !validActionTypes.includes(body.type)) {
+          return reply.code(400).send({
+            error: 'validation_failed',
+            message: 'Invalid or missing action type',
+            code: 'invalid_action_type',
+          });
+        }
+
+        // Dynamically import to avoid circular dependencies
+        const { executeJobAction } = await import('../application/job-actions/action-handler.js');
+
+        // Construct action object
+        const action: any = {
+          type: body.type,
+          requestedAt: new Date(),
+          payload: body.payload || {},
+        };
+
+        // Execute action
+        const result = await executeJobAction(jobId, action);
+
+        if (result.error === 'not_found') {
+          return reply.code(404).send({
+            error: 'not_found',
+            message: result.message,
+          });
+        }
+
+        if (result.error === 'not_implemented') {
+          return reply.code(501).send({
+            error: 'not_implemented',
+            message: result.message,
+            actionType: result.actionType,
+          });
+        }
+
+        logger.info('Job action executed', {
+          event: 'job_action_executed',
+          userId: getAuthenticatedUser(request)?.id,
+          jobId,
+          actionType: result.actionType,
+          success: result.success,
+        });
+
+        return reply.send({
+          success: result.success,
+          message: result.message,
+          jobId: result.jobId,
+          actionType: result.actionType,
+          timestamp: result.timestamp.toISOString(),
+        });
+      } catch (err: any) {
+        logger.error(err instanceof Error ? err : String(err), {
+          event: 'job_action_failed',
+          userId: getAuthenticatedUser(request)?.id,
+          jobId,
+          error: 'internal_error',
+        });
+
+        return reply.code(500).send({
+          error: 'internal_error',
+        });
+      }
+    }
+  );
 }
 
 async function readFileBuffer(fileStream: Readable): Promise<Buffer> {

@@ -9,57 +9,48 @@ import {
   loadVoicesCatalog,
   type VoiceCatalog,
 } from '@esl-pipeline/tts-elevenlabs';
+import { ValidationError, ManifestError, InfrastructureError } from '@esl-pipeline/contracts';
 import { uploadFile } from '@esl-pipeline/storage-uploader';
 import { addOrReplaceAudioUnderStudyText } from '@esl-pipeline/notion-add-audio';
 import { runImport } from '@esl-pipeline/notion-importer';
 import {
   type AssignmentManifest,
-  type ManifestStore,
   createFilesystemManifestStore,
   CURRENT_MANIFEST_SCHEMA_VERSION,
 } from './manifest.js';
-import type { ConfigProvider } from './config.js';
 import {
   noopLogger,
   noopMetrics,
-  type PipelineLogger,
-  type PipelineMetrics,
 } from './observability.js';
 import { access, readFile } from 'node:fs/promises';
 import { constants as FS } from 'node:fs';
 
-export type AssignmentStage =
-  | 'validate'
-  | 'import'
-  | 'colorize'
-  | 'tts'
-  | 'upload'
-  | 'add-audio'
-  | 'manifest';
+import type {
+  AssignmentStage,
+  AssignmentStageStatus,
+  AssignmentProgressCallbacks,
+  OrchestratorDependencies,
+  NewAssignmentFlags,
+  AssignmentStatus,
+  RerunFlags,
+} from './types.js';
 
-export type AssignmentStageStatus = 'start' | 'success' | 'skipped';
-
-export type AssignmentProgressEvent = {
-  stage: AssignmentStage;
-  status: AssignmentStageStatus;
-  detail?: Record<string, unknown>;
-};
-
-export type AssignmentProgressCallbacks = {
-  onStage?: (event: AssignmentProgressEvent) => void;
-};
+export type {
+  AssignmentStage,
+  AssignmentStageStatus,
+  AssignmentProgressEvent,
+  AssignmentProgressCallbacks,
+  OrchestratorDependencies,
+  NewAssignmentFlags,
+  AssignmentStatus,
+  RerunFlags,
+} from './types.js';
 
 const fallbackManifestStore = createFilesystemManifestStore();
 const fallbackLogger = noopLogger;
 const fallbackMetrics = noopMetrics;
 
-export type OrchestratorDependencies = {
-  manifestStore?: ManifestStore;
-  configProvider?: ConfigProvider;
-  logger?: PipelineLogger;
-  metrics?: PipelineMetrics;
-  runId?: string;
-};
+
 
 export {
   manifestPathFor,
@@ -138,38 +129,7 @@ export function summarizeVoiceSelections(
     .join(', ');
 }
 
-export type NewAssignmentFlags = {
-  md: string;
-  student?: string;
-  preset?: string;
-  presetsPath?: string;
-  accentPreference?: string;
-  voiceId?: string;
-  withTts?: boolean;
-  
-  // New TTS mode fields
-  ttsMode?: 'auto' | 'dialogue' | 'monologue';
-  dialogueLanguage?: string;
-  dialogueStability?: number;
-  dialogueSeed?: number;
-  
-  upload?: 's3';
-  presign?: number;
-  publicRead?: boolean;
-  prefix?: string;
-  dryRun?: boolean;
-  force?: boolean;
-  skipImport?: boolean;
-  skipTts?: boolean;
-  skipUpload?: boolean;
-  redoTts?: boolean;
-  voices?: string;
-  out?: string;
-  dbId?: string;
-  db?: string;
-  dataSourceId?: string;
-  dataSource?: string;
-};
+
 
 export async function newAssignment(
   flags: NewAssignmentFlags,
@@ -271,7 +231,7 @@ export async function newAssignment(
       steps.push('skip:validate');
       steps.push('skip:import');
       if (!pageId && !flags.dryRun) {
-        throw new Error(
+        throw new ValidationError(
           'Cannot skip import because no existing pageId was found. Run a full pipeline first.'
         );
       }
@@ -310,7 +270,7 @@ export async function newAssignment(
         colorized = true;
       } else {
         if (!pageId) {
-          throw new Error(
+          throw new ValidationError(
             'Cannot apply color preset because no Notion pageId is available. Run import first.'
           );
         }
@@ -340,7 +300,7 @@ export async function newAssignment(
         recordSkip('tts', 'skip-tts flag set');
         steps.push('skip:tts');
         if (!audio?.path && !flags.dryRun) {
-          throw new Error(
+          throw new ManifestError(
             'Cannot skip TTS because manifest has no audio.path. Run TTS at least once first.'
           );
         }
@@ -371,7 +331,7 @@ export async function newAssignment(
             force: flags.force || flags.redoTts,
             defaultAccent: flags.accentPreference,
             defaultVoiceId: flags.voiceId,
-            
+
             // NEW: Pass TTS mode options to TTS package
             ttsMode: flags.ttsMode,
             dialogueLanguage: flags.dialogueLanguage,
@@ -382,7 +342,7 @@ export async function newAssignment(
           if (error instanceof FfmpegNotFoundError) {
             throw new Error(`TTS requires FFmpeg.\n\n${error.message}`, { cause: error });
           }
-          
+
           // Enhanced TTS mode error handling
           if (error instanceof Error) {
             if (error.message.includes('voice mapping') && flags.ttsMode === 'dialogue') {
@@ -412,9 +372,9 @@ export async function newAssignment(
         if (!flags.dryRun && audio?.path) {
           const audioPath = audio.path;
           await access(audioPath, FS.F_OK).catch(() => {
-            throw new Error(
+            throw new InfrastructureError(
               `No audio file produced at ${audioPath}. ` +
-                `Check that :::study-text has lines and voices.yml has 'default' or 'auto: true'.`
+              `Check that :::study-text has lines and voices.yml has 'default' or 'auto: true'.`
             );
           });
         }
@@ -429,7 +389,7 @@ export async function newAssignment(
         recordSkip('upload', 'skip-upload flag set');
         steps.push('skip:upload');
         if (!audio.url && !flags.dryRun) {
-          throw new Error(
+          throw new ManifestError(
             'Cannot skip upload because manifest has no existing audio.url. Upload once before skipping.'
           );
         }
@@ -487,13 +447,13 @@ export async function newAssignment(
       pageUrl,
       audio,
       preset: flags.preset,
-      
+
       // NEW: Include TTS mode information for reproducibility
       ttsMode: flags.ttsMode,
       dialogueLanguage: flags.dialogueLanguage,
       dialogueStability: flags.dialogueStability,
       dialogueSeed: flags.dialogueSeed,
-      
+
       timestamp: new Date().toISOString(),
     };
 
@@ -539,12 +499,7 @@ export async function newAssignment(
   }
 }
 
-export type AssignmentStatus = {
-  manifestPath: string;
-  manifest: AssignmentManifest | null;
-  mdHashMatches: boolean;
-  audioFileExists: boolean;
-};
+
 
 export async function getAssignmentStatus(
   mdPath: string,
@@ -628,26 +583,7 @@ export async function getAssignmentStatus(
   }
 }
 
-export type RerunFlags = {
-  md: string;
-  steps?: Array<'tts' | 'upload' | 'add-audio'>;
-  voices?: string;
-  out?: string;
-  force?: boolean;
-  dryRun?: boolean;
-  upload?: 's3';
-  prefix?: string;
-  publicRead?: boolean;
-  presign?: number;
-  accentPreference?: string;
-  voiceId?: string;
-  
-  // TTS mode options for rerun
-  ttsMode?: 'auto' | 'dialogue' | 'monologue';
-  dialogueLanguage?: string;
-  dialogueStability?: number;
-  dialogueSeed?: number;
-};
+
 
 export async function rerunAssignment(
   flags: RerunFlags,
@@ -770,7 +706,7 @@ export async function rerunAssignment(
           force: flags.force,
           defaultAccent: flags.accentPreference,
           defaultVoiceId: flags.voiceId,
-          
+
           // NEW: Pass TTS mode options to TTS package
           ttsMode: flags.ttsMode,
           dialogueLanguage: flags.dialogueLanguage,
@@ -781,7 +717,7 @@ export async function rerunAssignment(
         if (error instanceof FfmpegNotFoundError) {
           throw new Error(`TTS requires FFmpeg.\n\n${error.message}`, { cause: error });
         }
-        
+
         // Enhanced TTS mode error handling
         if (error instanceof Error) {
           if (error.message.includes('voice mapping') && flags.ttsMode === 'dialogue') {
@@ -882,13 +818,13 @@ export async function rerunAssignment(
         hash: audioHash,
         voices: audioVoices,
       },
-      
+
       // NEW: Include TTS mode information for reproducibility
       ttsMode: flags.ttsMode,
       dialogueLanguage: flags.dialogueLanguage,
       dialogueStability: flags.dialogueStability,
       dialogueSeed: flags.dialogueSeed,
-      
+
       timestamp: new Date().toISOString(),
     };
 

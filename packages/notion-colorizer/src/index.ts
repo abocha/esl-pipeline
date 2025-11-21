@@ -2,22 +2,23 @@ import { readFile } from 'node:fs/promises';
 import { Client } from '@notionhq/client';
 import { PresetSchema, type ColorPreset, type PresetsFile } from './types.js';
 import { withRetry } from './retry.js';
+import { ConfigurationError } from '@esl-pipeline/contracts';
 
 type Counts = { h2: number; h3: number; toggles: number };
 
-function getClient() {
+export function createNotionClient() {
   const token = process.env.NOTION_TOKEN;
-  if (!token) throw new Error('Missing NOTION_TOKEN');
+  if (!token) throw new ConfigurationError('Missing NOTION_TOKEN');
   return new Client({ auth: token, notionVersion: '2025-09-03' });
 }
 
-async function loadPreset(presetName: string, presetsPath: string): Promise<ColorPreset> {
+export async function loadPreset(presetName: string, presetsPath: string): Promise<ColorPreset> {
   const raw = await readFile(presetsPath, 'utf8');
   const parsed: PresetsFile = JSON.parse(raw);
   const p = parsed[presetName];
-  if (!p) throw new Error(`Preset not found: ${presetName}`);
+  if (!p) throw new ConfigurationError(`Preset not found: ${presetName}`);
   const res = PresetSchema.safeParse(p);
-  if (!res.success) throw new Error(`Invalid preset: ${presetName}`);
+  if (!res.success) throw new ConfigurationError(`Invalid preset: ${presetName}`);
   return res.data;
 }
 
@@ -26,7 +27,7 @@ export async function applyHeadingPreset(
   presetName: string,
   presetsPath = 'configs/presets.json'
 ): Promise<{ applied: boolean; counts: Counts }> {
-  const client = getClient();
+  const client = createNotionClient();
   const preset = await loadPreset(presetName, presetsPath);
 
   const counts: Counts = { h2: 0, h3: 0, toggles: 0 };
@@ -35,7 +36,7 @@ export async function applyHeadingPreset(
     if (!preset.h3) return;
     let childCursor: string | undefined = undefined;
     do {
-      const childResp = await withRetry(
+      const childResp = (await withRetry(
         () =>
           client.blocks.children.list({
             block_id: parentId,
@@ -43,7 +44,7 @@ export async function applyHeadingPreset(
             page_size: 100,
           }),
         'blocks.children.list'
-      );
+      )) as any;
       await maybeThrottle();
       for (const child of childResp.results) {
         if ('type' in child && child.type === 'heading_3') {
@@ -74,10 +75,10 @@ export async function applyHeadingPreset(
   let prevWasH2 = false;
 
   do {
-    const resp = await withRetry(
+    const resp = (await withRetry(
       () => client.blocks.children.list({ block_id: pageId, start_cursor: cursor, page_size: 100 }),
       'blocks.children.list'
-    );
+    )) as any;
     await maybeThrottle();
 
     for (const block of resp.results) {
@@ -136,9 +137,9 @@ export async function applyHeadingPreset(
                 toggle: {
                   rich_text: annotated,
                 },
-            }),
-          'blocks.update.toggle'
-        );
+              }),
+            'blocks.update.toggle'
+          );
           await maybeThrottle();
           counts.toggles++;
         }

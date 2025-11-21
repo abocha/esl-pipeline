@@ -1,5 +1,6 @@
 import matter from 'gray-matter';
 import type { Frontmatter, StudyText, Section } from './types.js';
+import { ValidationError } from '@esl-pipeline/contracts';
 
 const NBSP = /\u00A0/g;
 const ZWSP = /\u200B/g;
@@ -49,7 +50,7 @@ export function extractFrontmatter(md: string): Frontmatter {
 export function extractStudyText(md: string): StudyText {
   const n = normalize(md);
   const inner = findBlock(n, /(^|\n)[ \t]*:::study-text[^\n]*\n/i);
-  if (!inner) throw new Error('study-text block not found');
+  if (!inner) throw new ValidationError('study-text block not found');
   const rawLines = inner.body.split('\n').map(s => s.trim());
   if (inner.inlineLabel) {
     const first = rawLines[0];
@@ -66,7 +67,7 @@ export function extractStudyText(md: string): StudyText {
 export function extractAnswerKey(md: string): string {
   const n = normalize(md);
   const block = findBlock(n, /(^|\n)[ \t]*:::toggle-heading\s+Answer Key[^\n]*\n/i);
-  if (!block) throw new Error('Answer Key toggle not found');
+  if (!block) throw new ValidationError('Answer Key toggle not found');
   return block.body;
 }
 
@@ -77,7 +78,7 @@ export function extractTeacherNotes(md: string): string {
     n,
     /(^|\n)[ \t]*:::toggle-heading\s+Teacher[’']s\s+Follow-up\s+Plan[^\n]*\n/i
   );
-  if (!block) throw new Error("Teacher's Follow-up Plan toggle not found");
+  if (!block) throw new ValidationError("Teacher's Follow-up Plan toggle not found");
   return block.body;
 }
 

@@ -41,3 +41,37 @@ export interface DialogueChunk {
   chunkIndex: number;
   totalChunks: number;
 }
+
+export type BuildStudyTextOptions = {
+  voiceMapPath: string;
+  outPath: string;
+  preview?: boolean;
+  force?: boolean;
+  defaultAccent?: string;
+  defaultVoiceId?: string;
+  ffmpegPath?: string;
+  outputFormat?: string;
+
+  // New fields for dual TTS mode
+  ttsMode?: 'auto' | 'dialogue' | 'monologue';
+  dialogueLanguage?: string;
+  dialogueStability?: number;
+  dialogueSeed?: number;
+};
+
+export type BuildStudyTextResult = {
+  path: string;
+  duration?: number;
+  hash: string;
+  voices: {
+    speaker: string;
+    voiceId: string;
+    source: string;
+    score?: number;
+    voiceName?: string;
+    gender?: string;
+    accent?: string;
+    useCase?: string;
+  }[];
+  voiceAssignments?: Record<string, string>;
+};

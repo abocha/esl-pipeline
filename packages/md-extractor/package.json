@@ -1,6 +1,6 @@
 {
   "name": "@esl-pipeline/md-extractor",
-  "version": "1.4.2",
+  "version": "1.4.3",
   "private": true,
   "type": "module",
   "license": "UNLICENSED",
@@ -36,7 +36,8 @@
   "dependencies": {
     "gray-matter": "^4.0.3",
     "remark-parse": "^11.0.0",
-    "unified": "^11.0.5"
+    "unified": "^11.0.5",
+    "@esl-pipeline/contracts": "workspace:*"
   },
   "devDependencies": {
     "@types/node": "^24.10.1",

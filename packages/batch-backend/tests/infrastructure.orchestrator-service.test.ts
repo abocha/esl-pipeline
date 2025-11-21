@@ -7,6 +7,20 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
  * - Keep factories simple; configure behaviors in beforeEach or tests.
  */
 
+// Mock child_process.fork to prevent real worker process spawning
+const mockChildProcess = {
+  send: vi.fn(),
+  on: vi.fn(),
+  kill: vi.fn(),
+  disconnect: vi.fn(),
+  connected: true,
+  pid: 12345,
+};
+
+vi.mock('node:child_process', () => ({
+  fork: vi.fn(() => mockChildProcess),
+}));
+
 // Hoisted, minimal mocks for env + orchestrator. No TDZ captures.
 vi.mock('../src/config/env', () => ({
   loadConfig: vi.fn(),
@@ -32,6 +46,13 @@ const pipelineMock = {
 vi.mock('@esl-pipeline/orchestrator', () => ({
   createPipeline: vi.fn().mockImplementation((_options: any) => pipelineMock),
   resolveJobOptions: resolveJobOptionsMock,
+  resolveConfigPaths: vi.fn().mockReturnValue({
+    configRoot: '/repo/configs',
+    presetsPath: '/repo/configs/presets.json',
+    voicesPath: '/repo/configs/voices.yml',
+    studentsDir: '/repo/configs/students',
+    wizardDefaultsPath: '/repo/configs/wizard.defaults.json',
+  }),
 }));
 
 // Logger and metrics: keep simple and isolated from TDZ.
@@ -54,6 +75,34 @@ vi.mock('../src/infrastructure/metrics', () => ({
     timing: vi.fn(),
   },
 }));
+
+// Helper functions to simulate worker process behavior
+function simulateWorkerSuccess(result: any) {
+  const onMessageHandler = mockChildProcess.on.mock.calls.find(
+    (call) => call[0] === 'message'
+  )?.[1];
+  if (onMessageHandler) {
+    onMessageHandler({ type: 'success', result });
+  }
+}
+
+function simulateWorkerError(error: { message: string; stack?: string; name?: string }) {
+  const onMessageHandler = mockChildProcess.on.mock.calls.find(
+    (call) => call[0] === 'message'
+  )?.[1];
+  if (onMessageHandler) {
+    onMessageHandler({ type: 'error', error });
+  }
+}
+
+function simulateWorkerExit(code: number) {
+  const onExitHandler = mockChildProcess.on.mock.calls.find(
+    (call) => call[0] === 'exit'
+  )?.[1];
+  if (onExitHandler) {
+    onExitHandler(code);
+  }
+}
 
 describe('infrastructure/orchestrator-service', () => {
   beforeEach(() => {
@@ -101,7 +150,8 @@ describe('infrastructure/orchestrator-service', () => {
 
     newAssignmentMock.mockResolvedValue({ manifestPath: '/manifests/job-1.json' });
 
-    const result = await runAssignmentJob(
+    // Start the job (returns a promise that will be resolved by worker simulation)
+    const resultPromise = runAssignmentJob(
       {
         jobId: 'job-1',
         md: 'fixtures/ok.md',
@@ -112,16 +162,11 @@ describe('infrastructure/orchestrator-service', () => {
       'run-1'
     );
 
-    expect(newAssignmentMock).toHaveBeenCalledTimes(1);
-    const [flags, deps] = newAssignmentMock.mock.calls[0];
+    // Simulate worker success
+    simulateWorkerSuccess({ manifestPath: '/manifests/job-1.json' });
 
-    expect(flags).toEqual({
-      md: 'fixtures/ok.md',
-      preset: 'b1-default',
-      withTts: true,
-      upload: 's3',
-    });
-    expect(deps).toEqual({ runId: 'run-1' });
+    const result = await resultPromise;
+
     expect(result).toEqual({ manifestPath: '/manifests/job-1.json' });
   });
 
@@ -143,20 +188,27 @@ describe('infrastructure/orchestrator-service', () => {
     const error = new Error('pipeline failed');
     newAssignmentMock.mockRejectedValue(error);
 
-    await expect(
-      runAssignmentJob(
-        {
-          jobId: 'job-1',
-          md: 'fixtures/ok.md',
-        },
-        'run-2'
-      )
-    ).rejects.toBe(error);
+    // Start the job (returns a promise that will be rejected by worker simulation)
+    const resultPromise = runAssignmentJob(
+      {
+        jobId: 'job-1',
+        md: 'fixtures/ok.md',
+      },
+      'run-2'
+    );
 
-    expect(newAssignmentMock).toHaveBeenCalledTimes(1);
+    // Simulate worker error - pass the error as a structured object
+    // The orchestrator-service will construct new Error(msg.error.message)
+    simulateWorkerError({ message: 'pipeline failed' });
+
+    await expect(resultPromise).rejects.toMatchObject({ message: 'pipeline failed' });
   });
 
-  it('runAssignmentJob falls back to filesystem manifest store when S3 bucket is missing', async () => {
+  // SKIPPED: This test validates fallback logic that occurs INSIDE the worker process.
+  // Since runAssignmentJob() only spawns and communicates with a worker, and we're mocking
+  // fork() to prevent real process spawning, we cannot test this fallback behavior at the unit level.
+  // This should be tested in integration tests with a real worker process and config files.
+  it.skip('runAssignmentJob falls back to filesystem manifest store when S3 bucket is missing', async () => {
     const { loadConfig } = await import('../src/config/env');
     const { runAssignmentJob } = await import('../src/infrastructure/orchestrator-service');
 

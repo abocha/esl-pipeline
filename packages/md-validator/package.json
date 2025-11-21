@@ -1,6 +1,6 @@
 {
   "name": "@esl-pipeline/md-validator",
-  "version": "1.5.2",
+  "version": "1.5.3",
   "private": true,
   "type": "module",
   "license": "UNLICENSED",
@@ -43,7 +43,8 @@
     "picocolors": "^1.1.1",
     "remark-parse": "^11.0.0",
     "unified": "^11.0.5",
-    "zod": "^4.1.12"
+    "zod": "^4.1.12",
+    "@esl-pipeline/contracts": "workspace:*"
   },
   "devDependencies": {
     "@types/mdast": "^4.0.4",

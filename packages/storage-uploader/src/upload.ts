@@ -1,5 +1,6 @@
 // packages/storage-uploader/src/upload.ts
 import { uploadToS3 } from './s3.js';
+import { ConfigurationError } from '@esl-pipeline/contracts';
 
 export type UploadOpts = {
   backend: 's3';
@@ -22,11 +23,11 @@ export async function uploadFile(
   presignExpiresIn?: number;
 }> {
   if (opts.backend !== 's3') {
-    throw new Error(`Unsupported backend: ${opts.backend}`);
+    throw new ConfigurationError(`Unsupported backend: ${opts.backend}`);
   }
 
   const bucket = opts.bucket ?? process.env.S3_BUCKET;
-  if (!bucket) throw new Error('S3 bucket not configured (set S3_BUCKET or pass opts.bucket)');
+  if (!bucket) throw new ConfigurationError('S3 bucket not configured (set S3_BUCKET or pass opts.bucket)');
 
   // Pass only a key prefix; s3.ts builds "<prefix>/<filename>" itself
   const keyPrefix = (opts.prefix ?? process.env.S3_PREFIX ?? '')

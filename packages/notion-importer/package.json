@@ -1,6 +1,6 @@
 {
   "name": "@esl-pipeline/notion-importer",
-  "version": "1.2.3",
+  "version": "1.2.4",
   "private": true,
   "type": "module",
   "license": "UNLICENSED",
@@ -38,6 +38,7 @@
     "test:watch": "vitest"
   },
   "dependencies": {
+    "@esl-pipeline/contracts": "workspace:*",
     "@esl-pipeline/md-extractor": "workspace:*",
     "@esl-pipeline/md-validator": "workspace:*",
     "@notionhq/client": "^5.4.0"

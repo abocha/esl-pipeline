@@ -48,6 +48,29 @@ describe('application/get-job-options', () => {
       notionDatabases: [{ id: 'db-1', name: 'DB One' }],
       uploadOptions: ['auto', 's3', 'none'],
       modes: ['auto', 'dialogue', 'monologue'],
+      supportedActions: [
+        {
+          type: 'rerun_audio',
+          label: 'Rerun Audio Generation',
+          description: 'Regenerate TTS audio for this job with optional voice/TTS overrides',
+          requiresFields: [],
+          implemented: false,
+        },
+        {
+          type: 'cancel',
+          label: 'Cancel Job',
+          description: 'Cancel a queued or running job',
+          requiresFields: [],
+          implemented: false,
+        },
+        {
+          type: 'edit_metadata',
+          label: 'Edit Job Metadata',
+          description: 'Update job configuration (preset, Notion database) without rerunning',
+          requiresFields: [],
+          implemented: false,
+        },
+      ],
     });
   });
 
@@ -71,6 +94,7 @@ describe('application/get-job-options', () => {
     ]);
     expect(result.voiceAccents.length).toBeGreaterThan(0);
     expect(result.voices.length).toBeGreaterThan(0);
+    expect(result.supportedActions).toHaveLength(3);
 
     expect(logger.warn).toHaveBeenCalledWith(
       'Failed to load job options from orchestrator. Falling back to static config.',

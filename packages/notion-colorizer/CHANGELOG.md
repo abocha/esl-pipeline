@@ -1,5 +1,13 @@
 # @esl-pipeline/notion-colorizer
 
+## 1.2.3
+
+### Patch Changes
+
+- refactor p5&6 and many issues from REVIEW.md
+- Updated dependencies
+  - @esl-pipeline/contracts@0.1.2
+
 ## 1.2.2
 
 ### Patch Changes
