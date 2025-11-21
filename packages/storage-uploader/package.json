@@ -38,8 +38,8 @@
     "test:watch": "vitest"
   },
   "dependencies": {
-    "@aws-sdk/client-s3": "^3.936.0",
-    "@aws-sdk/s3-request-presigner": "^3.936.0",
+    "@aws-sdk/client-s3": "^3.937.0",
+    "@aws-sdk/s3-request-presigner": "^3.937.0",
     "@esl-pipeline/contracts": "workspace:*",
     "commander": "^14.0.2"
   },
