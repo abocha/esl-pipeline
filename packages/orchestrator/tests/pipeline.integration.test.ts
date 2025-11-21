@@ -1,21 +1,14 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { mkdtemp, writeFile } from 'node:fs/promises';
-import { rmSync } from 'node:fs';
+import { rmSync, readFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { createPipeline, type AssignmentProgressEvent } from '../src/index.js';
 
-const sampleMarkdown = `---
-title: "Integration Test"
-student: "Case Study"
----
-
-## Lesson
-
-:::study-text
-Case: Hello there!
-:::
-`;
+const sampleMarkdown = readFileSync(
+  new URL('../examples/service/fixtures/lesson.md', import.meta.url),
+  'utf8'
+);
 
 const tempDirs: string[] = [];
 
@@ -124,7 +117,7 @@ describe('pipeline integration', () => {
     );
 
     expect(result.steps).toEqual([
-      'skip:validate',
+      'validate',
       'skip:import',
       'colorize:b1-default:0/0/0',
       'tts',
@@ -132,7 +125,7 @@ describe('pipeline integration', () => {
       'manifest',
     ]);
     expect(result.manifestPath?.endsWith('.manifest.json')).toBe(true);
-    expect(events.some(event => event.stage === 'validate' && event.status === 'skipped')).toBe(
+    expect(events.some(event => event.stage === 'validate' && event.status === 'success')).toBe(
       true
     );
     expect(events.some(event => event.stage === 'import' && event.status === 'skipped')).toBe(true);
@@ -189,7 +182,7 @@ describe('pipeline integration', () => {
     );
 
     expect(result.steps).toEqual([
-      'skip:validate',
+      'validate',
       'skip:import',
       'colorize:b1-default:0/0/0',
       'tts',
@@ -197,7 +190,7 @@ describe('pipeline integration', () => {
       'manifest',
     ]);
     expect(
-      events.filter(event => event.stage === 'validate' && event.status === 'skipped')
+      events.filter(event => event.stage === 'validate' && event.status === 'success')
     ).toHaveLength(1);
     expect(
       events.filter(event => event.stage === 'import' && event.status === 'skipped')

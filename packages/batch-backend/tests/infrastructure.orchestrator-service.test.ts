@@ -95,15 +95,6 @@ function simulateWorkerError(error: { message: string; stack?: string; name?: st
   }
 }
 
-function simulateWorkerExit(code: number) {
-  const onExitHandler = mockChildProcess.on.mock.calls.find(
-    (call) => call[0] === 'exit'
-  )?.[1];
-  if (onExitHandler) {
-    onExitHandler(code);
-  }
-}
-
 describe('infrastructure/orchestrator-service', () => {
   beforeEach(() => {
     vi.clearAllMocks();

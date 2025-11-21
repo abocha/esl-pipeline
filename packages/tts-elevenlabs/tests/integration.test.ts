@@ -4,11 +4,9 @@ import * as ffm from '../src/ffmpeg.js';
 import * as eleven from '../src/eleven.js';
 import * as assign from '../src/assign.js';
 import * as dialogue from '../src/dialogue.js';
-import { mkdtemp, writeFile, readFile } from 'node:fs/promises';
+import { mkdtemp, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { fileURLToPath } from 'node:url';
-import { dirname } from 'node:path';
 
 const encoder = new TextEncoder();
 
@@ -417,7 +415,7 @@ auto: true
         `.trim()
       );
 
-      const convertMock = setupClientMock();
+      const _convertMock = setupClientMock();
       mockConcat();
       
       const result = await buildStudyTextMp3(tempMdPath, {

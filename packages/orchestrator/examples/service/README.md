@@ -55,7 +55,3 @@ observability tooling when embedding this pattern in a real worker.
 ```bash
 pnpm --filter @esl-pipeline/orchestrator examples/service vitest run
 ```
-
-```
-
-```

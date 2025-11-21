@@ -265,7 +265,7 @@ default: voice_id_default
         `
       );
 
-      const convertMock = setupClientMock();
+      const _convertMock = setupClientMock();
       mockConcat();
       
       // Call with original interface structure only
@@ -319,7 +319,7 @@ default: voice_id_default
         `
       );
 
-      const convertMock = setupClientMock();
+      const _convertMock = setupClientMock();
       mockConcat();
       
       const result = await buildStudyTextMp3(tempMdPath, {
@@ -491,7 +491,7 @@ auto: true
         `
       );
 
-      const convertMock = setupClientMock();
+      const _convertMock = setupClientMock();
       mockConcat();
       
       const result = await buildStudyTextMp3(tempMdPath, {

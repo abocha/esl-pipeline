@@ -79,7 +79,7 @@ describe('chunkDialogueInputs', () => {
   });
 
   it('handles custom maxInputs and maxChars', () => {
-    const inputs: DialogueInput[] = Array.from({ length: 10 }, (_, i) => ({
+    const inputs: DialogueInput[] = Array.from({ length: 10 }, () => ({
       text: 'x'.repeat(100),
       voice_id: 'voice1',
     }));

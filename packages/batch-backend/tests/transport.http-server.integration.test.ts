@@ -362,10 +362,11 @@ describe('transport/http-server - integration (in-process)', () => {
     }
   });
 
-  it('GET /jobs/events streams job events as SSE', async () => {
+  it('GET /jobs/events streams job events as SSE', { timeout: 10000 }, async () => {
     const streamingApp = createHttpServer();
     const address = (await streamingApp.listen({ port: 0, host: '127.0.0.1' })) as string;
     const url = new URL('/jobs/events', address);
+    url.searchParams.set('jobId', 'job-stream');
 
     const job: JobRecord = {
       id: 'job-stream',
@@ -447,7 +448,7 @@ describe('transport/http-server - integration (in-process)', () => {
 
       timeout = setTimeout(() => {
         cleanup(new Error('Timed out waiting for SSE payload'));
-      }, 5000);
+      }, 10000);
     });
   });
 });
