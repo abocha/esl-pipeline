@@ -639,24 +639,18 @@ async function selectMarkdown(
   options: { cwd: string; suggestions: string[] }
 ): Promise<void> {
   const { cwd, suggestions } = options;
-  const choices = suggestions.map(p => ({ title: p, value: resolve(cwd, p) }));
-  choices.push({ title: 'Browse manually…', value: '__manual__' });
-  choices.push({ title: 'Cancel', value: '__cancel__' });
+  const choices = suggestions.map(p => ({
+    name: p,
+    message: p,
+    value: resolve(cwd, p)
+  }));
+  choices.push({ name: '__manual__', message: 'Browse manually…', value: '__manual__' });
+  choices.push({ name: '__cancel__', message: 'Cancel', value: '__cancel__' });
   const mdPick = await runPrompt<string>(Select, {
     name: 'md',
     message: 'Select the markdown lesson',
     choices,
-    initial: suggestions.length ? 0 : choices.length - 1,
-    result(value: string) {
-      // Map choice titles back to values (enquirer returns the title)
-      const map: Record<string, string> = {};
-      choices.forEach(c => {
-        // c may be {title, value}
-        // @ts-ignore
-        map[c.title] = c.value;
-      });
-      return map[value] || value;
-    }
+    initial: suggestions.length ? 0 : choices.length - 1
   });
 
   let mdPath = mdPick.md as string | undefined;
@@ -691,29 +685,28 @@ async function selectStudent(
 
   const choices = [
     ...(frontmatterStudent
-      ? [{ title: `Use frontmatter student (${frontmatterStudent})`, value: frontmatterStudent }]
+      ? [
+        {
+          name: '__frontmatter__',
+          message: `Use frontmatter student (${frontmatterStudent})`,
+          value: frontmatterStudent
+        }
+      ]
       : []),
     ...profiles.map(profile => ({
-      title: profile.student === DEFAULT_STUDENT_NAME ? 'Default profile (auto)' : profile.student,
-      value: profile.student,
+      name: profile.student,
+      message: profile.student === DEFAULT_STUDENT_NAME ? 'Default profile (auto)' : profile.student,
+      value: profile.student
     })),
-    { title: 'Enter custom student…', value: '__custom__' },
-    { title: 'Clear student', value: '__clear__' },
-    { title: 'Back', value: '__back__' },
+    { name: '__custom__', message: 'Enter custom student…', value: '__custom__' },
+    { name: '__clear__', message: 'Clear student', value: '__clear__' },
+    { name: '__back__', message: 'Back', value: '__back__' },
   ].filter((choice, index, arr) => arr.findIndex(other => other.value === choice.value) === index);
 
   const picked = await runPrompt<string>(Select, {
     name: 'studentChoice',
     message: 'Which student is this for?',
-    choices,
-    result(value: string) {
-      const map: Record<string, string> = {};
-      choices.forEach(c => {
-        // @ts-ignore
-        map[c.title] = c.value;
-      });
-      return map[value] || value;
-    }
+    choices
   });
 
   const choice = picked.studentChoice as string | undefined;
@@ -803,9 +796,10 @@ async function selectPreset(state: WizardState, options: { presetNames: string[]
   }
 
   const presetChoices = [
-    { title: 'Use no preset', value: '__none__' },
+    { name: '__none__', message: 'Use no preset', value: '__none__' },
     ...presetNames.map(name => ({
-      title: name === state.preset ? `${name} (current)` : name,
+      name,
+      message: name === state.preset ? `${name} (current)` : name,
       value: name,
     })),
   ];
@@ -813,15 +807,7 @@ async function selectPreset(state: WizardState, options: { presetNames: string[]
   const presetAnswer = await runPrompt<string>(Select, {
     name: 'preset',
     message: 'Select a heading color preset',
-    choices: presetChoices,
-    result(value: string) {
-      const map: Record<string, string> = {};
-      presetChoices.forEach(c => {
-        // @ts-ignore
-        map[c.title] = c.value;
-      });
-      return map[value] || value;
-    }
+    choices: presetChoices
   });
 
   if (presetAnswer.preset === '__none__') {

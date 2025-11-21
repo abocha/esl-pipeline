@@ -80,7 +80,7 @@ export function createJobWorker(processor: Processor<QueueJobPayload>): Worker<Q
 
   const worker = new Worker<QueueJobPayload>(config.queue.name, processor, {
     connection,
-    concurrency: 5,
+    concurrency: config.worker.concurrency,
   });
 
   worker.on('active', (job: import('bullmq').Job<QueueJobPayload>) => {

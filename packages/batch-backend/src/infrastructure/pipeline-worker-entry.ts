@@ -4,10 +4,11 @@ import {
     isManifestBucketMissingError,
     type RunAssignmentPayload,
 } from './orchestrator-service.js';
-import { loadConfig, type BatchBackendConfig } from '../config/env.js';
+import { loadConfig, type BatchBackendConfig } from '../config/env';
 import { logger as rootLogger } from './logger.js';
 import { PipelineError } from '@esl-pipeline/contracts';
 import type { NewAssignmentFlags, OrchestratorDependencies } from '@esl-pipeline/orchestrator';
+import { getFfmpegSemaphore } from './ffmpeg-semaphore.js';
 
 interface WorkerMessage {
     payload: RunAssignmentPayload;
@@ -21,6 +22,9 @@ async function executePipeline(
 ) {
     const log = rootLogger.child({ jobId: payload.jobId, runId, component: 'pipeline-worker' });
     const pipeline = getPipeline(config);
+
+    // Initialize FFmpeg semaphore with configured limit
+    const ffmpegSemaphore = getFfmpegSemaphore(config.worker.maxConcurrentFfmpeg);
 
     const flags: NewAssignmentFlags = {
         md: payload.md,
@@ -41,22 +45,40 @@ async function executePipeline(
         flags.ttsMode = payload.mode;
     }
 
+    // Acquire semaphore before TTS operations if TTS is enabled
+    let semaphoreAcquired = false;
+    const operationId = `job-${payload.jobId}-${runId}`;
+
+    if (payload.withTts) {
+        await ffmpegSemaphore.acquire(operationId);
+        semaphoreAcquired = true;
+        log.debug('Acquired FFmpeg semaphore', { operationId });
+    }
+
     const dependencies: OrchestratorDependencies = {
         runId,
     };
 
-    const started = Date.now();
-    // Cast to any because newAssignment is protected/internal in some contexts or types might be strict
-    // but orchestrator-service.ts was doing it, so we follow suit.
-    const result = await (pipeline as any).newAssignment(flags as any, dependencies as any);
-    const duration = Date.now() - started;
+    try {
+        const started = Date.now();
+        // Cast to any because newAssignment is protected/internal in some contexts or types might be strict
+        // but orchestrator-service.ts was doing it, so we follow suit.
+        const result = await (pipeline as any).newAssignment(flags as any, dependencies as any);
+        const duration = Date.now() - started;
 
-    log.info('Assignment pipeline succeeded (worker)', {
-        manifestPath: result.manifestPath,
-        durationMs: duration,
-    });
+        log.info('Assignment pipeline succeeded (worker)', {
+            manifestPath: result.manifestPath,
+            durationMs: duration,
+        });
 
-    return { manifestPath: result.manifestPath, notionUrl: result.pageUrl };
+        return { manifestPath: result.manifestPath, notionUrl: result.pageUrl };
+    } finally {
+        // Release semaphore after TTS operations complete
+        if (semaphoreAcquired) {
+            await ffmpegSemaphore.release(operationId);
+            log.debug('Released FFmpeg semaphore', { operationId });
+        }
+    }
 }
 
 async function main() {
