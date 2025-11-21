@@ -8,6 +8,8 @@ import type { Redis } from 'ioredis';
 import {
   publishJobEvent,
   subscribeJobEvents,
+  onJobSubscriptionChange,
+  getJobSubscriptionSnapshot,
   type JobEvent,
   type JobEventType,
 } from '../domain/job-events';
@@ -15,7 +17,8 @@ import type { JobRecord, JobUploadOption } from '../domain/job-model';
 import { createRedisClient } from './redis';
 import { logger } from './logger';
 
-const CHANNEL_NAME = 'batch_job_events';
+const CHANNEL_BASE = 'batch_job_events';
+const JOB_CHANNEL_PREFIX = `${CHANNEL_BASE}:`;
 const INSTANCE_ID = randomUUID();
 
 type SerializedJobRecord = {
@@ -40,38 +43,64 @@ interface SerializedJobEvent {
 }
 
 let bridgePromise: Promise<void> | null = null;
+let bridgeInstance: RedisJobEventBridge | null = null;
 
 export function enableRedisJobEventBridge(): Promise<void> {
   if (bridgePromise) return bridgePromise;
-  const bridge = new RedisJobEventBridge();
-  bridgePromise = bridge.start();
+  bridgeInstance = new RedisJobEventBridge();
+  bridgePromise = bridgeInstance.start();
   return bridgePromise;
+}
+
+export function resetJobEventBridgeForTests(): void {
+  bridgePromise = null;
+  bridgeInstance?.destroy();
+  bridgeInstance = null;
 }
 
 class RedisJobEventBridge {
   private publisher: Redis | null = null;
   private subscriber: Redis | null = null;
   private unsubscribeLocal: (() => void) | null = null;
+  private unsubscribeSubscriptionTracker: (() => void) | null = null;
   private suppressForwarding = false;
+  private subscribedJobIds = new Set<string>();
+  private wildcardSubscribed = false;
 
   async start(): Promise<void> {
     const baseClient = createRedisClient();
     this.publisher = baseClient.duplicate();
     this.subscriber = baseClient.duplicate();
 
-    await this.subscriber.subscribe(CHANNEL_NAME);
     this.subscriber.on('message', (_channel, payload) => {
       this.handleRemoteEvent(payload);
     });
 
-    this.unsubscribeLocal = subscribeJobEvents(event => {
-      if (this.suppressForwarding) return;
-      this.publishToRedis(event);
+    // Listen to local events and forward them to Redis, but do not register as a remote consumer.
+    this.unsubscribeLocal = subscribeJobEvents(
+      event => {
+        if (this.suppressForwarding) return;
+        this.publishToRedis(event);
+      },
+      { allJobs: true, trackRemote: false }
+    );
+
+    // Honor existing subscriptions (if any) and then react to new ones.
+    const snapshot = getJobSubscriptionSnapshot();
+    await this.syncSubscriptions(snapshot);
+
+    this.unsubscribeSubscriptionTracker = onJobSubscriptionChange(change => {
+      this.handleSubscriptionChange(change).catch(err => {
+        logger.error(err as Error, {
+          component: 'job-event-bridge',
+          message: 'Failed to handle subscription change',
+        });
+      });
     });
 
     logger.info('Redis job event bridge enabled', {
       component: 'job-event-bridge',
-      channel: CHANNEL_NAME,
+      channel: `${CHANNEL_BASE}[targeted]`,
     });
   }
 
@@ -89,12 +118,24 @@ class RedisJobEventBridge {
       job: serializeJobRecord(event.job),
     };
 
-    void this.publisher.publish(CHANNEL_NAME, JSON.stringify(payload)).catch(err => {
-      logger.error(err as Error, {
-        component: 'job-event-bridge',
-        message: 'Failed to publish job event',
-      });
-    });
+    const message = JSON.stringify(payload);
+
+    const channels = [
+      `${JOB_CHANNEL_PREFIX}${event.job.id}`, // targeted channel
+      CHANNEL_BASE, // legacy/fallback broadcast
+    ];
+
+    void Promise.all(
+      channels.map(channel =>
+        this.publisher!.publish(channel, message).catch(err => {
+          logger.error(err as Error, {
+            component: 'job-event-bridge',
+            message: 'Failed to publish job event',
+            channel,
+          });
+        })
+      )
+    );
   }
 
   private handleRemoteEvent(rawPayload: string): void {
@@ -120,6 +161,71 @@ class RedisJobEventBridge {
     } finally {
       this.suppressForwarding = false;
     }
+  }
+
+  private async syncSubscriptions(snapshot: { all: number; jobs: Map<string, number> }): Promise<
+    void
+  > {
+    if (!this.subscriber) return;
+
+    // Wildcard subscribers (all jobs)
+    if (snapshot.all > 0) {
+      // When wildcard subscribers exist, only subscribe to the broadcast channel once.
+      if (!this.wildcardSubscribed) {
+        await this.subscriber.subscribe(CHANNEL_BASE);
+        this.wildcardSubscribed = true;
+      }
+      // Drop any targeted subscriptions to avoid duplicate deliveries.
+      if (this.subscribedJobIds.size > 0) {
+        await this.subscriber.unsubscribe(
+          ...Array.from(this.subscribedJobIds).map(jobId => `${JOB_CHANNEL_PREFIX}${jobId}`)
+        );
+        this.subscribedJobIds.clear();
+      }
+      return;
+    }
+
+    // No wildcard subscribers: ensure broadcast is unsubscribed and manage targeted channels.
+    if (this.wildcardSubscribed) {
+      await this.subscriber.unsubscribe(CHANNEL_BASE);
+      this.wildcardSubscribed = false;
+    }
+
+    const desired = new Set(snapshot.jobs.keys());
+    const toSubscribe = Array.from(desired).filter(jobId => !this.subscribedJobIds.has(jobId));
+    const toUnsubscribe = Array.from(this.subscribedJobIds).filter(jobId => !desired.has(jobId));
+
+    if (toSubscribe.length > 0) {
+      await this.subscriber.subscribe(...toSubscribe.map(jobId => `${JOB_CHANNEL_PREFIX}${jobId}`));
+      toSubscribe.forEach(jobId => this.subscribedJobIds.add(jobId));
+    }
+
+    if (toUnsubscribe.length > 0) {
+      await this.subscriber.unsubscribe(
+        ...toUnsubscribe.map(jobId => `${JOB_CHANNEL_PREFIX}${jobId}`)
+      );
+      toUnsubscribe.forEach(jobId => this.subscribedJobIds.delete(jobId));
+    }
+  }
+
+  private async handleSubscriptionChange(change: {
+    scope: 'all' | 'job';
+    jobId?: string;
+    count: number;
+  }): Promise<void> {
+    if (!this.subscriber) return;
+    // Re-compute subscriptions from snapshot to keep wildcard/targeted states coherent.
+    const snapshot = getJobSubscriptionSnapshot();
+    await this.syncSubscriptions(snapshot);
+  }
+
+  destroy(): void {
+    this.unsubscribeLocal?.();
+    this.unsubscribeSubscriptionTracker?.();
+    this.subscribedJobIds.clear();
+    this.wildcardSubscribed = false;
+    this.publisher = null;
+    this.subscriber = null;
   }
 }
 
