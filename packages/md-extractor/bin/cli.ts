@@ -1,18 +1,19 @@
 #!/usr/bin/env node
 import { readFile } from 'node:fs/promises';
+
 import {
-  extractFrontmatter,
-  extractStudyText,
   extractAnswerKey,
-  extractTeacherNotes,
+  extractFrontmatter,
   extractSections,
+  extractStudyText,
+  extractTeacherNotes,
 } from '../src/index.js';
 
 function requireArg(args: string[], flag: string): string {
   const i = args.indexOf(flag);
   if (i === -1 || !args[i + 1]) {
     console.error(
-      'Usage: md-extractor --md <file.md> --what <frontmatter|study|answer|notes|sections>'
+      'Usage: md-extractor --md <file.md> --what <frontmatter|study|answer|notes|sections>',
     );
     process.exit(1);
   }
@@ -32,25 +33,30 @@ async function main() {
   const md = await readFile(file, 'utf8');
 
   switch (what) {
-    case 'frontmatter':
+    case 'frontmatter': {
       console.log(JSON.stringify(extractFrontmatter(md), null, 2));
       break;
-    case 'study':
+    }
+    case 'study': {
       console.log(JSON.stringify(extractStudyText(md), null, 2));
       break;
-    case 'answer':
+    }
+    case 'answer': {
       console.log(extractAnswerKey(md));
       break;
-    case 'notes':
+    }
+    case 'notes': {
       console.log(extractTeacherNotes(md));
       break;
-    case 'sections':
+    }
+    case 'sections': {
       console.log(JSON.stringify(extractSections(md), null, 2));
       break;
+    }
   }
 }
 
-main().catch(err => {
-  console.error(err instanceof Error ? err.message : String(err));
+main().catch((error) => {
+  console.error(error instanceof Error ? error.message : String(error));
   process.exit(1);
 });

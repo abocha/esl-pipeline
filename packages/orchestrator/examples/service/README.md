@@ -30,19 +30,19 @@ The orchestrator already accepts injected `logger`, `metrics`, and `runId` so th
 emit structured telemetry per job:
 
 ```ts
-import pino from 'pino';
 import StatsD from 'hot-shots';
+import pino from 'pino';
 
 const statsd = new StatsD();
 const pipeline = createPipeline({
-  logger: { log: event => pino().info(event, event.message) },
+  logger: { log: (event) => pino().info(event, event.message) },
   metrics: {
     timing: (metric, value, tags) => statsd.timing(metric, value, tags),
     increment: (metric, value, tags) => statsd.increment(metric, value, tags),
   },
 });
 
-queue.process(async job => {
+queue.process(async (job) => {
   await pipeline.newAssignment(job.payload, undefined, { runId: job.id });
 });
 ```

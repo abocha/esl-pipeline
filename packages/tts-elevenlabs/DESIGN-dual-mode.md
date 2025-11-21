@@ -5,6 +5,7 @@
 This document specifies the architecture for adding Text-to-Dialogue API support to `@esl-pipeline/tts-elevenlabs` while maintaining backward compatibility with the existing Text-to-Speech API implementation.
 
 **Key Design Decisions:**
+
 - Automatic mode selection based on content type detection (already available via `extractStudyText`)
 - Separate API client methods for dialogue vs. monologue synthesis
 - Minimal changes to existing code paths to ensure backward compatibility
@@ -76,13 +77,14 @@ export async function synthesizeDialogue(
     seed?: number;
     applyTextNormalization?: 'auto' | 'on' | 'off';
     outputFormat?: string;
-  }
+  },
 ): Promise<ReadableStream> {
   const apiKey = process.env.ELEVENLABS_API_KEY || process.env.ELEVENLABS_API_TOKEN;
   if (!apiKey) throw new Error('Missing ELEVENLABS_API_KEY');
 
-  const outputFormat = options?.outputFormat ?? process.env.ELEVENLABS_OUTPUT_FORMAT ?? 'mp3_22050_32';
-  
+  const outputFormat =
+    options?.outputFormat ?? process.env.ELEVENLABS_OUTPUT_FORMAT ?? 'mp3_22050_32';
+
   const response = await fetch('https://api.elevenlabs.io/v1/text-to-dialogue', {
     method: 'POST',
     headers: {
@@ -101,9 +103,7 @@ export async function synthesizeDialogue(
 
   if (!response.ok) {
     const errorText = await response.text().catch(() => 'Unknown error');
-    throw new Error(
-      `Text-to-Dialogue API failed (${response.status}): ${errorText}`
-    );
+    throw new Error(`Text-to-Dialogue API failed (${response.status}): ${errorText}`);
   }
 
   if (!response.body) {
@@ -116,14 +116,14 @@ export async function synthesizeDialogue(
 
 ### 2.2 API Comparison
 
-| Feature | Text-to-Speech (Current) | Text-to-Dialogue (New) |
-|---------|-------------------------|------------------------|
-| Model ID | `eleven_multilingual_v2` | `eleven_v3` |
-| Endpoint | `/v1/text-to-speech/{voice_id}` | `/v1/text-to-dialogue` |
-| Input | Single text + voice_id | Array of {text, voice_id} |
-| Use Case | Monologue, single speaker | Multi-speaker dialogue |
-| Voice Settings | stability, similarity_boost, use_speaker_boost | stability only |
-| Language Code | Not supported | Optional language_code parameter |
+| Feature        | Text-to-Speech (Current)                       | Text-to-Dialogue (New)           |
+| -------------- | ---------------------------------------------- | -------------------------------- |
+| Model ID       | `eleven_multilingual_v2`                       | `eleven_v3`                      |
+| Endpoint       | `/v1/text-to-speech/{voice_id}`                | `/v1/text-to-dialogue`           |
+| Input          | Single text + voice_id                         | Array of {text, voice_id}        |
+| Use Case       | Monologue, single speaker                      | Multi-speaker dialogue           |
+| Voice Settings | stability, similarity_boost, use_speaker_boost | stability only                   |
+| Language Code  | Not supported                                  | Optional language_code parameter |
 
 ---
 
@@ -162,29 +162,29 @@ type BuildStudyTextOptions = {
 
 export async function buildStudyTextMp3(
   mdPath: string,
-  opts: BuildStudyTextOptions
+  opts: BuildStudyTextOptions,
 ): Promise<BuildStudyTextResult> {
   // ... existing code ...
   const studyText = extractStudyText(mdContent);
-  
+
   // Determine effective TTS mode
   const effectiveMode = resolveEffectiveTtsMode(studyText.type, opts.ttsMode);
-  
+
   // ... rest of existing code ...
-  
+
   // Branch based on mode
   if (effectiveMode === 'dialogue') {
     await synthesizeDialogueSegments(segments, speakerVoiceMap, outputDir, opts);
   } else {
     await synthesizeMonologueSegments(segments, speakerVoiceMap, outputDir, opts);
   }
-  
+
   // ... concatenation and return ...
 }
 
 function resolveEffectiveTtsMode(
   contentType: 'monologue' | 'dialogue',
-  override?: 'auto' | 'dialogue' | 'monologue'
+  override?: 'auto' | 'dialogue' | 'monologue',
 ): 'dialogue' | 'monologue' {
   if (override === 'dialogue') return 'dialogue';
   if (override === 'monologue') return 'monologue';
@@ -219,16 +219,14 @@ The dialogue mode **reuses** the existing [`resolveSpeakerVoices()`](packages/tt
 // Existing code in buildStudyTextMp3 already does this:
 const assignments = await resolveSpeakerVoices({
   speakers,
-  profiles: Array.isArray(frontmatter.speaker_profiles)
-    ? frontmatter.speaker_profiles
-    : undefined,
+  profiles: Array.isArray(frontmatter.speaker_profiles) ? frontmatter.speaker_profiles : undefined,
   voiceMap,
   catalog,
   mode: studyText.type, // 'dialogue' or 'monologue'
   defaultAccent: opts.defaultAccent,
 });
 
-const speakerVoiceMap = new Map(assignments.map(a => [a.speaker, a.voiceId]));
+const speakerVoiceMap = new Map(assignments.map((a) => [a.speaker, a.voiceId]));
 ```
 
 **No changes needed** - dialogue mode uses the same `speakerVoiceMap` to build API inputs.
@@ -240,17 +238,17 @@ const speakerVoiceMap = new Map(assignments.map(a => [a.speaker, a.voiceId]));
 function buildDialogueInputs(
   segments: StudyTextSegment[],
   speakerVoiceMap: Map<string, string>,
-  fallbackVoiceId: string
+  fallbackVoiceId: string,
 ): Array<{ text: string; voice_id: string }> {
   const inputs: Array<{ text: string; voice_id: string }> = [];
-  
+
   for (const segment of segments) {
     const speechText = cleanSpeechText(segment.text);
     if (!speechText) continue;
-    
+
     const normalizedSpeaker = segment.speaker?.trim() ?? '';
     let voiceId = speakerVoiceMap.get(normalizedSpeaker);
-    
+
     if (!voiceId && normalizedSpeaker) {
       // Case-insensitive fallback
       for (const [speaker, vid] of speakerVoiceMap.entries()) {
@@ -260,20 +258,20 @@ function buildDialogueInputs(
         }
       }
     }
-    
+
     if (!voiceId) {
       voiceId = fallbackVoiceId;
     }
-    
+
     if (!voiceId) {
       throw new Error(
-        `No voice ID resolved for speaker "${normalizedSpeaker}" in segment: ${segment.raw}`
+        `No voice ID resolved for speaker "${normalizedSpeaker}" in segment: ${segment.raw}`,
       );
     }
-    
+
     inputs.push({ text: speechText, voice_id: voiceId });
   }
-  
+
   return inputs;
 }
 ```
@@ -287,6 +285,7 @@ function buildDialogueInputs(
 **Decision:** Send entire dialogue in a single API request when possible, with chunking for very long dialogues.
 
 **Rationale:**
+
 - Text-to-Dialogue API is designed for multi-turn conversations
 - Single request maintains better speaker continuity and natural flow
 - Reduces API calls and latency
@@ -296,38 +295,35 @@ function buildDialogueInputs(
 
 ```typescript
 const MAX_DIALOGUE_INPUTS = 100; // Conservative limit
-const MAX_TOTAL_CHARS = 5000;    // Prevent timeouts
+const MAX_TOTAL_CHARS = 5000; // Prevent timeouts
 
 function chunkDialogueInputs(
-  inputs: Array<{ text: string; voice_id: string }>
+  inputs: Array<{ text: string; voice_id: string }>,
 ): Array<Array<{ text: string; voice_id: string }>> {
   const chunks: Array<Array<{ text: string; voice_id: string }>> = [];
   let currentChunk: Array<{ text: string; voice_id: string }> = [];
   let currentChars = 0;
-  
+
   for (const input of inputs) {
     const inputChars = input.text.length;
-    
+
     // Start new chunk if limits exceeded
-    if (
-      currentChunk.length >= MAX_DIALOGUE_INPUTS ||
-      currentChars + inputChars > MAX_TOTAL_CHARS
-    ) {
+    if (currentChunk.length >= MAX_DIALOGUE_INPUTS || currentChars + inputChars > MAX_TOTAL_CHARS) {
       if (currentChunk.length > 0) {
         chunks.push(currentChunk);
         currentChunk = [];
         currentChars = 0;
       }
     }
-    
+
     currentChunk.push(input);
     currentChars += inputChars;
   }
-  
+
   if (currentChunk.length > 0) {
     chunks.push(currentChunk);
   }
-  
+
   return chunks.length > 0 ? chunks : [inputs];
 }
 ```
@@ -344,41 +340,37 @@ async function synthesizeDialogueSegments(
   segments: StudyTextSegment[],
   speakerVoiceMap: Map<string, string>,
   outputDir: string,
-  opts: BuildStudyTextOptions
+  opts: BuildStudyTextOptions,
 ): Promise<string[]> {
   const segmentFiles: string[] = [];
   const fallbackVoiceId = speakerVoiceMap.values().next().value;
-  
+
   // Build dialogue inputs
   const inputs = buildDialogueInputs(segments, speakerVoiceMap, fallbackVoiceId);
-  
+
   // Chunk if necessary
   const chunks = chunkDialogueInputs(inputs);
-  
+
   // Generate hash for caching
-  const dialogueHash = createHash('sha256')
-    .update(JSON.stringify(inputs))
-    .digest('hex');
-  
+  const dialogueHash = createHash('sha256').update(JSON.stringify(inputs)).digest('hex');
+
   for (let i = 0; i < chunks.length; i++) {
     const chunk = chunks[i]!;
-    const chunkHash = chunks.length > 1 
-      ? `${dialogueHash}-chunk${i}` 
-      : dialogueHash;
+    const chunkHash = chunks.length > 1 ? `${dialogueHash}-chunk${i}` : dialogueHash;
     const chunkFileName = `${chunkHash}.mp3`;
     const chunkFilePath = resolve(outputDir, chunkFileName);
-    
+
     // Check cache
-    if (!opts.force && await fileExistsNonEmpty(chunkFilePath)) {
+    if (!opts.force && (await fileExistsNonEmpty(chunkFilePath))) {
       segmentFiles.push(chunkFilePath);
       continue;
     }
-    
+
     // Synthesize with retry
     await synthesizeDialogueWithRetry(chunk, chunkFilePath);
     segmentFiles.push(chunkFilePath);
   }
-  
+
   return segmentFiles;
 }
 
@@ -389,29 +381,29 @@ async function synthesizeMonologueSegments(
   segments: StudyTextSegment[],
   speakerVoiceMap: Map<string, string>,
   outputDir: string,
-  opts: BuildStudyTextOptions
+  opts: BuildStudyTextOptions,
 ): Promise<string[]> {
   // This is the EXISTING code from buildStudyTextMp3 (lines 166-214)
   // Extract into separate function for clarity
   const segmentFiles: string[] = [];
   const eleven = getElevenClient();
   const fallbackVoiceId = speakerVoiceMap.values().next().value;
-  
+
   for (const segment of segments) {
     // ... existing line-by-line synthesis logic ...
   }
-  
+
   return segmentFiles;
 }
 
 async function synthesizeDialogueWithRetry(
   inputs: Array<{ text: string; voice_id: string }>,
   outFile: string,
-  maxAttempts = 3
+  maxAttempts = 3,
 ): Promise<void> {
   let attempt = 0;
   let lastError: unknown;
-  
+
   while (attempt < maxAttempts) {
     try {
       const stream = await synthesizeDialogue(inputs);
@@ -423,17 +415,15 @@ async function synthesizeDialogueWithRetry(
       const status = err?.status ?? err?.statusCode ?? err?.response?.status;
       if (!RETRYABLE_STATUS.has(status) || attempt === maxAttempts - 1) {
         throw new Error(
-          `Failed to synthesize dialogue: ${err instanceof Error ? err.message : String(err)}`
+          `Failed to synthesize dialogue: ${err instanceof Error ? err.message : String(err)}`,
         );
       }
       await wait(400 * Math.pow(2, attempt));
       attempt++;
     }
   }
-  
-  throw new Error(
-    `Failed to synthesize dialogue after ${maxAttempts} attempts: ${lastError}`
-  );
+
+  throw new Error(`Failed to synthesize dialogue after ${maxAttempts} attempts: ${lastError}`);
 }
 ```
 
@@ -468,10 +458,10 @@ type BuildStudyTextOptions = {
   force?: boolean;
   defaultAccent?: string;
   ffmpegPath?: string;
-  
+
   // NEW: TTS mode control
   ttsMode?: 'auto' | 'dialogue' | 'monologue';
-  
+
   // NEW: Dialogue-specific options
   dialogueLanguage?: string;
   dialogueStability?: number;
@@ -491,11 +481,7 @@ program
   .option('--force', 'Force regeneration (ignore cache)')
   .option('--default-accent <accent>', 'Default accent for auto voice selection')
   .option('--ffmpeg-path <path>', 'Path to ffmpeg binary')
-  .option(
-    '--tts-mode <mode>',
-    'TTS mode: auto (default), dialogue, monologue',
-    'auto'
-  )
+  .option('--tts-mode <mode>', 'TTS mode: auto (default), dialogue, monologue', 'auto')
   .option('--dialogue-language <code>', 'Language code for dialogue API (e.g., en, es)')
   .option('--dialogue-stability <value>', 'Stability for dialogue API (0.0-1.0)', parseFloat);
 ```
@@ -514,11 +500,11 @@ const RETRYABLE_STATUS = new Set([408, 409, 425, 429, 500, 502, 503, 504]);
 async function synthesizeDialogueWithRetry(
   inputs: Array<{ text: string; voice_id: string }>,
   outFile: string,
-  maxAttempts = 3
+  maxAttempts = 3,
 ): Promise<void> {
   let attempt = 0;
   let lastError: unknown;
-  
+
   while (attempt < maxAttempts) {
     try {
       await synthesizeDialogueChunk(inputs, outFile);
@@ -526,32 +512,32 @@ async function synthesizeDialogueWithRetry(
     } catch (err: any) {
       lastError = err;
       const status = err?.status ?? err?.statusCode ?? err?.response?.status;
-      
+
       // Don't retry on client errors (except rate limit)
       if (!RETRYABLE_STATUS.has(status) || attempt === maxAttempts - 1) {
         throw wrapDialogueError(err, inputs);
       }
-      
+
       // Exponential backoff
       const delayMs = 400 * Math.pow(2, attempt);
       await wait(delayMs);
       attempt++;
     }
   }
-  
+
   throw wrapDialogueError(lastError, inputs);
 }
 
 function wrapDialogueError(
   error: unknown,
-  inputs: Array<{ text: string; voice_id: string }>
+  inputs: Array<{ text: string; voice_id: string }>,
 ): Error {
   const message = error instanceof Error ? error.message : String(error);
-  const speakerCount = new Set(inputs.map(i => i.voice_id)).size;
+  const speakerCount = new Set(inputs.map((i) => i.voice_id)).size;
   const lineCount = inputs.length;
-  
+
   return new Error(
-    `Failed to synthesize dialogue (${lineCount} lines, ${speakerCount} speakers): ${message}`
+    `Failed to synthesize dialogue (${lineCount} lines, ${speakerCount} speakers): ${message}`,
   );
 }
 ```
@@ -562,9 +548,7 @@ function wrapDialogueError(
 // Handle 429 (rate limit) with longer backoff
 if (status === 429) {
   const retryAfter = err?.response?.headers?.['retry-after'];
-  const delayMs = retryAfter 
-    ? parseInt(retryAfter, 10) * 1000 
-    : 2000 * Math.pow(2, attempt);
+  const delayMs = retryAfter ? parseInt(retryAfter, 10) * 1000 : 2000 * Math.pow(2, attempt);
   await wait(delayMs);
 }
 ```
@@ -576,11 +560,11 @@ const DIALOGUE_TIMEOUT_MS = 60000; // 60 seconds for dialogue API
 
 async function synthesizeDialogueChunk(
   inputs: Array<{ text: string; voice_id: string }>,
-  outFile: string
+  outFile: string,
 ): Promise<void> {
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), DIALOGUE_TIMEOUT_MS);
-  
+
   try {
     const stream = await synthesizeDialogue(inputs, {
       signal: controller.signal,
@@ -602,7 +586,7 @@ async function synthesizeWithFallback(
   speakerVoiceMap: Map<string, string>,
   outputDir: string,
   opts: BuildStudyTextOptions,
-  preferredMode: 'dialogue' | 'monologue'
+  preferredMode: 'dialogue' | 'monologue',
 ): Promise<string[]> {
   try {
     if (preferredMode === 'dialogue') {
@@ -636,6 +620,7 @@ async function synthesizeWithFallback(
 ### 8.2 Migration Path
 
 **Phase 1: Opt-in (Initial Release)**
+
 ```typescript
 // Users must explicitly enable dialogue mode
 const result = await buildStudyTextMp3(mdPath, {
@@ -645,6 +630,7 @@ const result = await buildStudyTextMp3(mdPath, {
 ```
 
 **Phase 2: Auto-detection (Future Release)**
+
 ```typescript
 // After validation period, enable auto-detection by default
 // Users can still override if needed
@@ -667,9 +653,10 @@ No deprecations needed - this is purely additive functionality.
 **File:** `packages/tts-elevenlabs/tests/dual-mode.test.ts`
 
 ```typescript
-import { describe, it, expect, vi } from 'vitest';
-import { buildStudyTextMp3 } from '../src/index.js';
+import { describe, expect, it, vi } from 'vitest';
+
 import * as eleven from '../src/eleven.js';
+import { buildStudyTextMp3 } from '../src/index.js';
 
 describe('Dual TTS Mode', () => {
   describe('Mode Selection', () => {
@@ -683,7 +670,7 @@ describe('Dual TTS Mode', () => {
       });
       expect(spy).toHaveBeenCalled();
     });
-    
+
     it('should use monologue mode for monologue content with auto mode', async () => {
       const spy = vi.spyOn(eleven, 'getElevenClient');
       // Test with monologue content
@@ -694,7 +681,7 @@ describe('Dual TTS Mode', () => {
       });
       expect(spy).toHaveBeenCalled();
     });
-    
+
     it('should force dialogue mode when explicitly set', async () => {
       const spy = vi.spyOn(eleven, 'synthesizeDialogue');
       // Even with monologue content
@@ -706,40 +693,40 @@ describe('Dual TTS Mode', () => {
       expect(spy).toHaveBeenCalled();
     });
   });
-  
+
   describe('Voice Mapping', () => {
     it('should map multiple speakers to voice IDs in dialogue mode', async () => {
       // Test speaker-to-voice resolution
     });
-    
+
     it('should handle missing speaker mappings gracefully', async () => {
       // Test fallback logic
     });
   });
-  
+
   describe('Chunking', () => {
     it('should chunk large dialogues', () => {
       const inputs = Array(150).fill({ text: 'test', voice_id: 'voice1' });
       const chunks = chunkDialogueInputs(inputs);
       expect(chunks.length).toBeGreaterThan(1);
     });
-    
+
     it('should not chunk small dialogues', () => {
       const inputs = Array(10).fill({ text: 'test', voice_id: 'voice1' });
       const chunks = chunkDialogueInputs(inputs);
       expect(chunks.length).toBe(1);
     });
   });
-  
+
   describe('Error Handling', () => {
     it('should retry on 429 rate limit', async () => {
       // Mock 429 response
     });
-    
+
     it('should not retry on 400 bad request', async () => {
       // Mock 400 response
     });
-    
+
     it('should timeout after configured duration', async () => {
       // Mock slow response
     });
@@ -758,11 +745,11 @@ describe('Integration: Dual Mode Pipeline', () => {
       outPath: './test-output',
       ttsMode: 'dialogue',
     });
-    
+
     expect(result.path).toMatch(/\.mp3$/);
     expect(result.voices.length).toBeGreaterThan(1);
   });
-  
+
   it('should maintain backward compatibility with monologue mode', async () => {
     // Ensure existing behavior unchanged
   });
@@ -840,15 +827,15 @@ import { synthesizeMonologueSegments } from './monologue.js';
 // MODIFY: buildStudyTextMp3 function
 export async function buildStudyTextMp3(
   mdPath: string,
-  opts: BuildStudyTextOptions
+  opts: BuildStudyTextOptions,
 ): Promise<BuildStudyTextResult> {
   // ... existing code up to line 102 ...
-  
+
   // ADD: Determine effective mode
   const effectiveMode = resolveEffectiveTtsMode(studyText.type, opts.ttsMode);
-  
+
   // ... existing code for hash, output path, cache check ...
-  
+
   // REPLACE: Lines 166-214 with mode-based dispatch
   let segmentFiles: string[];
   if (effectiveMode === 'dialogue') {
@@ -857,7 +844,7 @@ export async function buildStudyTextMp3(
       speakerVoiceMap,
       outputDir,
       opts,
-      fallbackVoiceId
+      fallbackVoiceId,
     );
   } else {
     segmentFiles = await synthesizeMonologueSegments(
@@ -865,21 +852,21 @@ export async function buildStudyTextMp3(
       speakerVoiceMap,
       outputDir,
       opts,
-      fallbackVoiceId
+      fallbackVoiceId,
     );
   }
-  
+
   // ... rest unchanged (concatenation, metadata, return) ...
 }
 
 // ADD: Helper function
 function resolveEffectiveTtsMode(
   contentType: 'monologue' | 'dialogue',
-  override?: 'auto' | 'dialogue' | 'monologue'
+  override?: 'auto' | 'dialogue' | 'monologue',
 ): 'dialogue' | 'monologue' {
   const envMode = process.env.ELEVENLABS_TTS_MODE?.toLowerCase();
   const effectiveOverride = override ?? envMode;
-  
+
   if (effectiveOverride === 'dialogue') return 'dialogue';
   if (effectiveOverride === 'monologue') return 'monologue';
   return contentType; // auto or undefined
@@ -907,9 +894,10 @@ import { resolve } from 'node:path';
 import { Readable } from 'node:stream';
 import { pipeline } from 'node:stream/promises';
 import type { ReadableStream as NodeReadableStream } from 'node:stream/web';
+
 import { synthesizeDialogue } from './eleven.js';
 import { cleanSpeechText, fileExistsNonEmpty, wait } from './index.js';
-import type { StudyTextSegment, BuildStudyTextOptions } from './types.js';
+import type { BuildStudyTextOptions, StudyTextSegment } from './types.js';
 
 const RETRYABLE_STATUS = new Set([408, 409, 425, 429, 500, 502, 503, 504]);
 const MAX_DIALOGUE_INPUTS = 100;
@@ -920,7 +908,7 @@ export async function synthesizeDialogueSegments(
   speakerVoiceMap: Map<string, string>,
   outputDir: string,
   opts: BuildStudyTextOptions,
-  fallbackVoiceId?: string
+  fallbackVoiceId?: string,
 ): Promise<string[]> {
   // Implementation from section 5.3
 }
@@ -928,13 +916,13 @@ export async function synthesizeDialogueSegments(
 function buildDialogueInputs(
   segments: StudyTextSegment[],
   speakerVoiceMap: Map<string, string>,
-  fallbackVoiceId?: string
+  fallbackVoiceId?: string,
 ): Array<{ text: string; voice_id: string }> {
   // Implementation from section 4.3
 }
 
 function chunkDialogueInputs(
-  inputs: Array<{ text: string; voice_id: string }>
+  inputs: Array<{ text: string; voice_id: string }>,
 ): Array<Array<{ text: string; voice_id: string }>> {
   // Implementation from section 5.2
 }
@@ -942,7 +930,7 @@ function chunkDialogueInputs(
 async function synthesizeDialogueWithRetry(
   inputs: Array<{ text: string; voice_id: string }>,
   outFile: string,
-  maxAttempts = 3
+  maxAttempts = 3,
 ): Promise<void> {
   // Implementation from section 7.1
 }
@@ -954,24 +942,25 @@ async function synthesizeDialogueWithRetry(
 // Extract existing line-by-line synthesis logic from index.ts (lines 166-214)
 import { createHash } from 'node:crypto';
 import { resolve } from 'node:path';
+
 import { getElevenClient } from './eleven.js';
-import { synthesizeLineWithRetry, cleanSpeechText, fileExistsNonEmpty } from './index.js';
-import type { StudyTextSegment, BuildStudyTextOptions } from './types.js';
+import { cleanSpeechText, fileExistsNonEmpty, synthesizeLineWithRetry } from './index.js';
+import type { BuildStudyTextOptions, StudyTextSegment } from './types.js';
 
 export async function synthesizeMonologueSegments(
   segments: StudyTextSegment[],
   speakerVoiceMap: Map<string, string>,
   outputDir: string,
   opts: BuildStudyTextOptions,
-  fallbackVoiceId?: string
+  fallbackVoiceId?: string,
 ): Promise<string[]> {
   const segmentFiles: string[] = [];
   const eleven = getElevenClient();
-  
+
   for (const segment of segments) {
     // ... existing logic from buildStudyTextMp3 lines 172-213 ...
   }
-  
+
   return segmentFiles;
 }
 ```
@@ -1003,28 +992,33 @@ export type BuildStudyTextOptions = {
 ## 11. Implementation Checklist
 
 ### Phase 1: Core Infrastructure
+
 - [ ] Add `synthesizeDialogue()` to `src/eleven.ts`
 - [ ] Create `src/types.ts` with shared types
 - [ ] Add `resolveEffectiveTtsMode()` helper
 - [ ] Extend `BuildStudyTextOptions` interface
 
 ### Phase 2: Dialogue Mode
+
 - [ ] Create `src/dialogue.ts` with dialogue synthesis logic
 - [ ] Implement `buildDialogueInputs()`
 - [ ] Implement `chunkDialogueInputs()`
 - [ ] Implement `synthesizeDialogueWithRetry()`
 
 ### Phase 3: Refactoring
+
 - [ ] Create `src/monologue.ts` and extract existing logic
 - [ ] Update `buildStudyTextMp3()` to dispatch based on mode
 - [ ] Add mode selection logic
 
 ### Phase 4: CLI & Configuration
+
 - [ ] Add `--tts-mode` flag to CLI
 - [ ] Add `--dialogue-language` and `--dialogue-stability` flags
 - [ ] Add environment variable support
 
 ### Phase 5: Testing
+
 - [ ] Write unit tests for mode selection
 - [ ] Write unit tests for dialogue synthesis
 - [ ] Write unit tests for chunking logic
@@ -1032,6 +1026,7 @@ export type BuildStudyTextOptions = {
 - [ ] Add mock strategy for API calls
 
 ### Phase 6: Documentation
+
 - [ ] Update README.md with dual-mode documentation
 - [ ] Add examples for dialogue mode usage
 - [ ] Document environment variables
@@ -1044,6 +1039,7 @@ export type BuildStudyTextOptions = {
 ### 12.1 No New Dependencies Required
 
 All functionality can be implemented using existing dependencies:
+
 - `@elevenlabs/elevenlabs-js` - Already installed (v2.22.0)
 - `node:fetch` - Built-in (Node 24.10.0+)
 - `node:stream` - Built-in
@@ -1075,13 +1071,11 @@ All functionality can be implemented using existing dependencies:
 
 ```typescript
 // Cache dialogue chunks independently
-const chunkHash = createHash('sha256')
-  .update(JSON.stringify(chunk))
-  .digest('hex');
+const chunkHash = createHash('sha256').update(JSON.stringify(chunk)).digest('hex');
 
 // Parallel chunk processing (if multiple chunks)
-const chunkPromises = chunks.map((chunk, i) => 
-  synthesizeDialogueChunk(chunk, `${hash}-chunk${i}.mp3`)
+const chunkPromises = chunks.map((chunk, i) =>
+  synthesizeDialogueChunk(chunk, `${hash}-chunk${i}.mp3`),
 );
 await Promise.all(chunkPromises);
 ```
@@ -1098,13 +1092,11 @@ await Promise.all(chunkPromises);
 ### 14.2 Input Validation
 
 ```typescript
-function validateDialogueInputs(
-  inputs: Array<{ text: string; voice_id: string }>
-): void {
+function validateDialogueInputs(inputs: Array<{ text: string; voice_id: string }>): void {
   if (inputs.length === 0) {
     throw new Error('Dialogue inputs cannot be empty');
   }
-  
+
   for (const input of inputs) {
     if (!input.text || typeof input.text !== 'string') {
       throw new Error('Invalid dialogue input: text must be a non-empty string');
@@ -1147,6 +1139,7 @@ console.log(`[TTS] Dialogue chunk synthesized in ${duration}ms`);
 ### 15.2 Metrics
 
 Track these metrics for monitoring:
+
 - Mode selection distribution (dialogue vs. monologue)
 - API call success/failure rates by mode
 - Average synthesis time by mode
@@ -1164,7 +1157,7 @@ function reportSynthesisError(
     segmentCount: number;
     speakerCount: number;
     totalChars: number;
-  }
+  },
 ): void {
   console.error('[TTS] Synthesis failed', {
     mode,
@@ -1211,16 +1204,19 @@ function reportSynthesisError(
 ### 17.2 To Enable Dialogue Mode
 
 **Option 1: Environment Variable**
+
 ```bash
 export ELEVENLABS_TTS_MODE=auto
 ```
 
 **Option 2: CLI Flag**
+
 ```bash
 pnpm cli:tts --md lesson.md --voice-map voices.yml --tts-mode dialogue
 ```
 
 **Option 3: Programmatic**
+
 ```typescript
 const result = await buildStudyTextMp3(mdPath, {
   voiceMapPath: 'voices.yml',
@@ -1232,11 +1228,13 @@ const result = await buildStudyTextMp3(mdPath, {
 ### 17.3 Troubleshooting
 
 **Issue:** Dialogue mode not working
+
 - Check `ELEVENLABS_API_KEY` is set
 - Verify content type is detected as 'dialogue' (at least 2 speaker lines)
 - Check logs for mode selection output
 
 **Issue:** Voice mapping errors
+
 - Ensure `voices.yml` has entries for all speakers
 - Check speaker names match between markdown and voice map
 - Verify fallback voice is configured
@@ -1256,6 +1254,7 @@ This design provides a robust, backward-compatible implementation of dual TTS mo
 The implementation can be completed in phases, with each phase independently testable and deployable.
 
 **Key Success Metrics:**
+
 - Zero breaking changes to existing functionality
 - Successful synthesis of multi-speaker dialogues
 - Improved performance for dialogue content (fewer API calls)

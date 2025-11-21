@@ -1,6 +1,6 @@
 /**
  * @esl-pipeline/shared-infrastructure
- * 
+ *
  * Shared infrastructure utilities for env parsing, storage configuration,
  * and other common functionality used across ESL Pipeline packages.
  */

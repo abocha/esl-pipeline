@@ -5,7 +5,7 @@ export type ErrorResponseType = 'validation_failed' | 'not_found' | 'internal_er
 export function errorResponse(
   reply: FastifyReply,
   type: ErrorResponseType,
-  extras?: Record<string, any>
+  extras?: Record<string, unknown>,
 ) {
   if (type === 'validation_failed') {
     const { message, code } = extras ?? {};
@@ -25,7 +25,7 @@ export function errorResponse(
 
 export const resolveRoutePath = (request: FastifyRequest, fallback: string): string => {
   return (
-    ((request as any).routerPath as string | undefined) ??
+    ((request as { routerPath?: string }).routerPath as string | undefined) ??
     request.routeOptions?.url ??
     request.raw?.url ??
     request.url ??

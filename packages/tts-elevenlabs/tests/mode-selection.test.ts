@@ -1,12 +1,13 @@
-import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest';
 import { mkdtemp, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { buildStudyTextMp3 } from '../src/index.js';
-import * as eleven from '../src/eleven.js';
-import * as ffm from '../src/ffmpeg.js';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+
 import * as assign from '../src/assign.js';
 import * as dialogue from '../src/dialogue.js';
+import * as eleven from '../src/eleven.js';
+import * as ffm from '../src/ffmpeg.js';
+import { buildStudyTextMp3 } from '../src/index.js';
 
 const encoder = new TextEncoder();
 
@@ -77,7 +78,7 @@ describe('TTS Mode Selection', () => {
       const dir = await mkdtemp(join(tmpdir(), 'tts-mode-'));
       const tempMdPath = join(dir, 'lesson.md');
       const tempVoiceMapPath = join(dir, 'voices.yml');
-      
+
       await writeFixture(
         tempMdPath,
         `
@@ -98,12 +99,12 @@ speaker_profiles:
 This is a simple monologue.
 Another line of monologue.
 :::
-      `
+      `,
       );
       await writeFixture(tempVoiceMapPath, 'default: voice_id_default');
 
       const convertMock = vi.fn(async (_voiceId: string, request: any) =>
-        makeMockStream(request?.text ?? 'audio')
+        makeMockStream(request?.text ?? 'audio'),
       );
       vi.spyOn(eleven, 'getElevenClient').mockReturnValue({
         textToSpeech: { convert: convertMock },
@@ -118,9 +119,7 @@ Another line of monologue.
         outPath: dir,
       });
 
-      expect(consoleSpy).toHaveBeenCalledWith(
-        expect.stringContaining('Using TTS mode: monologue')
-      );
+      expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining('Using TTS mode: monologue'));
       expect(dialogueSpy).not.toHaveBeenCalled();
       expect(convertMock).toHaveBeenCalled();
 
@@ -133,7 +132,7 @@ Another line of monologue.
       const dir = await mkdtemp(join(tmpdir(), 'tts-mode-'));
       const tempMdPath = join(dir, 'lesson.md');
       const tempVoiceMapPath = join(dir, 'voices.yml');
-      
+
       await writeFixture(
         tempMdPath,
         `
@@ -157,20 +156,20 @@ speaker_profiles:
 Alex: Hello there!
 Mara: Hi, how are you?
 :::
-      `
+      `,
       );
       await writeFixture(
         tempVoiceMapPath,
         `
 Alex: voice_alex
 Mara: voice_mara
-      `
+      `,
       );
 
       const dialogueSpy = vi.spyOn(dialogue, 'synthesizeDialogue').mockResolvedValue({
         audioPath: join(dir, 'test.mp3'),
         hash: 'test-hash',
-        duration: 5.0,
+        duration: 5,
       });
 
       const convertMock = vi.fn();
@@ -185,9 +184,7 @@ Mara: voice_mara
         outPath: dir,
       });
 
-      expect(consoleSpy).toHaveBeenCalledWith(
-        expect.stringContaining('Using TTS mode: dialogue')
-      );
+      expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining('Using TTS mode: dialogue'));
       expect(dialogueSpy).toHaveBeenCalled();
       expect(convertMock).not.toHaveBeenCalled();
 
@@ -200,7 +197,7 @@ Mara: voice_mara
       const dir = await mkdtemp(join(tmpdir(), 'tts-mode-'));
       const tempMdPath = join(dir, 'lesson.md');
       const tempVoiceMapPath = join(dir, 'voices.yml');
-      
+
       await writeFixture(
         tempMdPath,
         `
@@ -224,20 +221,20 @@ speaker_profiles:
 Narrator: Welcome to the lesson.
 Alex: Hello!
 :::
-      `
+      `,
       );
       await writeFixture(
         tempVoiceMapPath,
         `
 Narrator: voice_narrator
 Alex: voice_alex
-      `
+      `,
       );
 
       const dialogueSpy = vi.spyOn(dialogue, 'synthesizeDialogue').mockResolvedValue({
         audioPath: join(dir, 'test.mp3'),
         hash: 'test-hash',
-        duration: 5.0,
+        duration: 5,
       });
 
       const consoleSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
@@ -247,9 +244,7 @@ Alex: voice_alex
         outPath: dir,
       });
 
-      expect(consoleSpy).toHaveBeenCalledWith(
-        expect.stringContaining('Using TTS mode: dialogue')
-      );
+      expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining('Using TTS mode: dialogue'));
       expect(dialogueSpy).toHaveBeenCalled();
 
       consoleSpy.mockRestore();
@@ -261,7 +256,7 @@ Alex: voice_alex
       const dir = await mkdtemp(join(tmpdir(), 'tts-mode-'));
       const tempMdPath = join(dir, 'lesson.md');
       const tempVoiceMapPath = join(dir, 'voices.yml');
-      
+
       await writeFixture(
         tempMdPath,
         `
@@ -281,14 +276,14 @@ speaker_profiles:
 :::study-text
 This is a monologue.
 :::
-      `
+      `,
       );
       await writeFixture(tempVoiceMapPath, 'Narrator: voice_narrator');
 
       const dialogueSpy = vi.spyOn(dialogue, 'synthesizeDialogue').mockResolvedValue({
         audioPath: join(dir, 'test.mp3'),
         hash: 'test-hash',
-        duration: 5.0,
+        duration: 5,
       });
 
       const convertMock = vi.fn();
@@ -304,9 +299,7 @@ This is a monologue.
         ttsMode: 'dialogue',
       });
 
-      expect(consoleSpy).toHaveBeenCalledWith(
-        expect.stringContaining('Using TTS mode: dialogue')
-      );
+      expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining('Using TTS mode: dialogue'));
       expect(dialogueSpy).toHaveBeenCalled();
       expect(convertMock).not.toHaveBeenCalled();
 
@@ -319,7 +312,7 @@ This is a monologue.
       const dir = await mkdtemp(join(tmpdir(), 'tts-mode-'));
       const tempMdPath = join(dir, 'lesson.md');
       const tempVoiceMapPath = join(dir, 'voices.yml');
-      
+
       await writeFixture(
         tempMdPath,
         `
@@ -343,18 +336,18 @@ speaker_profiles:
 Alex: Hello!
 Mara: Hi there!
 :::
-      `
+      `,
       );
       await writeFixture(
         tempVoiceMapPath,
         `
 Alex: voice_alex
 Mara: voice_mara
-      `
+      `,
       );
 
       const convertMock = vi.fn(async (_voiceId: string, request: any) =>
-        makeMockStream(request?.text ?? 'audio')
+        makeMockStream(request?.text ?? 'audio'),
       );
       vi.spyOn(eleven, 'getElevenClient').mockReturnValue({
         textToSpeech: { convert: convertMock },
@@ -370,9 +363,7 @@ Mara: voice_mara
         ttsMode: 'monologue',
       });
 
-      expect(consoleSpy).toHaveBeenCalledWith(
-        expect.stringContaining('Using TTS mode: monologue')
-      );
+      expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining('Using TTS mode: monologue'));
       expect(dialogueSpy).not.toHaveBeenCalled();
       expect(convertMock).toHaveBeenCalled();
 
@@ -387,7 +378,7 @@ Mara: voice_mara
       const dir = await mkdtemp(join(tmpdir(), 'tts-mode-'));
       const tempMdPath = join(dir, 'lesson.md');
       const tempVoiceMapPath = join(dir, 'voices.yml');
-      
+
       await writeFixture(
         tempMdPath,
         `
@@ -407,14 +398,14 @@ speaker_profiles:
 :::study-text
 This is a monologue.
 :::
-      `
+      `,
       );
       await writeFixture(tempVoiceMapPath, 'Narrator: voice_narrator');
 
       const dialogueSpy = vi.spyOn(dialogue, 'synthesizeDialogue').mockResolvedValue({
         audioPath: join(dir, 'test.mp3'),
         hash: 'test-hash',
-        duration: 5.0,
+        duration: 5,
       });
 
       const consoleSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
@@ -424,9 +415,7 @@ This is a monologue.
         outPath: dir,
       });
 
-      expect(consoleSpy).toHaveBeenCalledWith(
-        expect.stringContaining('Using TTS mode: dialogue')
-      );
+      expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining('Using TTS mode: dialogue'));
       expect(dialogueSpy).toHaveBeenCalled();
 
       consoleSpy.mockRestore();
@@ -438,7 +427,7 @@ This is a monologue.
       const dir = await mkdtemp(join(tmpdir(), 'tts-mode-'));
       const tempMdPath = join(dir, 'lesson.md');
       const tempVoiceMapPath = join(dir, 'voices.yml');
-      
+
       await writeFixture(
         tempMdPath,
         `
@@ -462,18 +451,18 @@ speaker_profiles:
 Alex: Hello!
 Mara: Hi!
 :::
-      `
+      `,
       );
       await writeFixture(
         tempVoiceMapPath,
         `
 Alex: voice_alex
 Mara: voice_mara
-      `
+      `,
       );
 
       const convertMock = vi.fn(async (_voiceId: string, request: any) =>
-        makeMockStream(request?.text ?? 'audio')
+        makeMockStream(request?.text ?? 'audio'),
       );
       vi.spyOn(eleven, 'getElevenClient').mockReturnValue({
         textToSpeech: { convert: convertMock },
@@ -488,9 +477,7 @@ Mara: voice_mara
         outPath: dir,
       });
 
-      expect(consoleSpy).toHaveBeenCalledWith(
-        expect.stringContaining('Using TTS mode: monologue')
-      );
+      expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining('Using TTS mode: monologue'));
       expect(dialogueSpy).not.toHaveBeenCalled();
       expect(convertMock).toHaveBeenCalled();
 
@@ -505,7 +492,7 @@ Mara: voice_mara
       const dir = await mkdtemp(join(tmpdir(), 'tts-mode-'));
       const tempMdPath = join(dir, 'lesson.md');
       const tempVoiceMapPath = join(dir, 'voices.yml');
-      
+
       await writeFixture(
         tempMdPath,
         `
@@ -525,14 +512,14 @@ speaker_profiles:
 :::study-text
 Test content.
 :::
-      `
+      `,
       );
       await writeFixture(tempVoiceMapPath, 'Narrator: voice_narrator');
 
       const dialogueSpy = vi.spyOn(dialogue, 'synthesizeDialogue').mockResolvedValue({
         audioPath: join(dir, 'test.mp3'),
         hash: 'test-hash',
-        duration: 5.0,
+        duration: 5,
       });
 
       const consoleSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
@@ -543,9 +530,7 @@ Test content.
         ttsMode: 'dialogue', // Option overrides env
       });
 
-      expect(consoleSpy).toHaveBeenCalledWith(
-        expect.stringContaining('Using TTS mode: dialogue')
-      );
+      expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining('Using TTS mode: dialogue'));
       expect(dialogueSpy).toHaveBeenCalled();
 
       consoleSpy.mockRestore();
@@ -557,7 +542,7 @@ Test content.
       const dir = await mkdtemp(join(tmpdir(), 'tts-mode-'));
       const tempMdPath = join(dir, 'lesson.md');
       const tempVoiceMapPath = join(dir, 'voices.yml');
-      
+
       await writeFixture(
         tempMdPath,
         `
@@ -577,14 +562,14 @@ speaker_profiles:
 :::study-text
 Monologue content.
 :::
-      `
+      `,
       );
       await writeFixture(tempVoiceMapPath, 'Narrator: voice_narrator');
 
       const dialogueSpy = vi.spyOn(dialogue, 'synthesizeDialogue').mockResolvedValue({
         audioPath: join(dir, 'test.mp3'),
         hash: 'test-hash',
-        duration: 5.0,
+        duration: 5,
       });
 
       const consoleSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
@@ -595,9 +580,7 @@ Monologue content.
         outPath: dir,
       });
 
-      expect(consoleSpy).toHaveBeenCalledWith(
-        expect.stringContaining('Using TTS mode: dialogue')
-      );
+      expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining('Using TTS mode: dialogue'));
       expect(dialogueSpy).toHaveBeenCalled();
 
       consoleSpy.mockRestore();
@@ -609,7 +592,7 @@ Monologue content.
       const dir = await mkdtemp(join(tmpdir(), 'tts-mode-'));
       const tempMdPath = join(dir, 'lesson.md');
       const tempVoiceMapPath = join(dir, 'voices.yml');
-      
+
       await writeFixture(
         tempMdPath,
         `
@@ -633,7 +616,7 @@ speaker_profiles:
 Alex: Hello!
 Mara: Hi there!
 :::
-      `
+      `,
       );
       await writeFixture(
         tempVoiceMapPath,
@@ -641,7 +624,7 @@ Mara: Hi there!
 Alex: voice_alex
 # Mara is missing - will use auto assignment
 default: voice_default
-      `
+      `,
       );
 
       // The test should verify that Mara gets auto-assigned a voice
@@ -649,7 +632,7 @@ default: voice_default
       const dialogueSpy = vi.spyOn(dialogue, 'synthesizeDialogue').mockResolvedValue({
         audioPath: join(dir, 'test.mp3'),
         hash: 'test-hash',
-        duration: 5.0,
+        duration: 5,
       });
 
       const result = await buildStudyTextMp3(tempMdPath, {
@@ -660,18 +643,18 @@ default: voice_default
 
       // Verify dialogue was called
       expect(dialogueSpy).toHaveBeenCalled();
-      
+
       // Verify both speakers got voices (Mara should be auto-assigned)
       expect(result.voices).toHaveLength(2);
-      expect(result.voices.some(v => v.speaker === 'Alex')).toBe(true);
-      expect(result.voices.some(v => v.speaker === 'Mara')).toBe(true);
+      expect(result.voices.some((v) => v.speaker === 'Alex')).toBe(true);
+      expect(result.voices.some((v) => v.speaker === 'Mara')).toBe(true);
     });
 
     it('passes correct voice IDs to dialogue API', async () => {
       const dir = await mkdtemp(join(tmpdir(), 'tts-mode-'));
       const tempMdPath = join(dir, 'lesson.md');
       const tempVoiceMapPath = join(dir, 'voices.yml');
-      
+
       await writeFixture(
         tempMdPath,
         `
@@ -696,20 +679,20 @@ Alex: Hello there!
 Mara: Hi, how are you?
 Alex: I'm great!
 :::
-      `
+      `,
       );
       await writeFixture(
         tempVoiceMapPath,
         `
 Alex: voice_alex_123
 Mara: voice_mara_456
-      `
+      `,
       );
 
       const dialogueSpy = vi.spyOn(dialogue, 'synthesizeDialogue').mockResolvedValue({
         audioPath: join(dir, 'test.mp3'),
         hash: 'test-hash',
-        duration: 5.0,
+        duration: 5,
       });
 
       await buildStudyTextMp3(tempMdPath, {
@@ -722,7 +705,7 @@ Mara: voice_mara_456
       const callArgs = dialogueSpy.mock.calls[0];
       expect(callArgs).toBeDefined();
       const options = callArgs![0];
-      
+
       expect(options.inputs).toHaveLength(3);
       expect(options.inputs[0]).toEqual({
         text: 'Hello there!',

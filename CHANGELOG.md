@@ -103,7 +103,7 @@ Use this scaffold when cutting a new version (see `CONTRIBUTING.md` for the full
 
 ### Added
 
-- All CLI entry points now auto-load `.env` via `dotenv/config`, so orchestrator, importer, and helper tools pick up credentials without manual `source` steps.
+- All CLI entry points now rely on standard process environment (no `dotenv` runtime dependency).
 - Quick start docs highlight the interactive wizard as the fastest way to run the pipeline.
 - Interactive orchestrator wizard now streams step-by-step progress with a spinner and prints a richer recap (deliverables, next steps) at the end.
 

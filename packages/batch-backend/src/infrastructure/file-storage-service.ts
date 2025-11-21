@@ -1,11 +1,11 @@
 // packages/batch-backend/src/infrastructure/file-storage-service.ts
+import * as fs from 'node:fs/promises';
+import * as path from 'node:path';
+import { Readable } from 'node:stream';
 
-import * as fs from 'fs/promises';
-import * as path from 'path';
-import { Readable } from 'stream';
-import { logger } from './logger';
-import { S3StorageAdapter, PresignedUrlOptions } from './s3-storage-adapter';
-import { StorageConfigurationService, StorageProvider } from './storage-config';
+import { logger } from './logger.js';
+import { PresignedUrlOptions, S3StorageAdapter } from './s3-storage-adapter.js';
+import { StorageConfigurationService, StorageProvider } from './storage-config.js';
 
 export interface FileStorageResult {
   key: string;
@@ -52,7 +52,7 @@ export class FileStorageService {
     key: string,
     content: Readable | Buffer | string,
     mimeType: string,
-    size?: number
+    size?: number,
   ): Promise<FileStorageResult> {
     try {
       if (this.storageConfig.isS3Provider() && this.s3Adapter) {
@@ -210,7 +210,7 @@ export class FileStorageService {
         key,
         fileContent,
         fsMetadata.mimeType,
-        fsMetadata.size
+        fsMetadata.size,
       );
       const url = await this.s3Adapter.generatePresignedUrl(key);
 
@@ -238,7 +238,7 @@ export class FileStorageService {
   private async uploadToFilesystem(
     key: string,
     content: Readable | Buffer | string,
-    mimeType: string
+    mimeType: string,
   ): Promise<FileStorageResult> {
     const fsConfig = this.storageConfig.getFilesystemConfig();
     const filePath = path.join(fsConfig.uploadDir, key);
@@ -320,7 +320,7 @@ export class FileStorageService {
  * Create file storage service from configuration
  */
 export function createFileStorageService(
-  storageConfig: StorageConfigurationService
+  storageConfig: StorageConfigurationService,
 ): FileStorageService {
   return new FileStorageService(storageConfig);
 }

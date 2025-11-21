@@ -1,13 +1,13 @@
-import { describe, it, expect, vi, beforeAll, afterAll } from 'vitest';
 import { request as httpRequest } from 'node:http';
-import type { JobRecord } from '../src/domain/job-model';
-import { publishJobEvent } from '../src/domain/job-events';
+import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 
-import { createHttpServer } from '../src/transport/http-server';
-import * as submitJobModule from '../src/application/submit-job';
-import * as getJobStatusModule from '../src/application/get-job-status';
-import * as loggerModule from '../src/infrastructure/logger';
-import { getJobOptions } from '../src/application/get-job-options';
+import { getJobOptions } from '../src/application/get-job-options.js';
+import * as getJobStatusModule from '../src/application/get-job-status.js';
+import * as submitJobModule from '../src/application/submit-job.js';
+import { publishJobEvent } from '../src/domain/job-events.js';
+import type { JobRecord } from '../src/domain/job-model.js';
+import * as loggerModule from '../src/infrastructure/logger.js';
+import { createHttpServer } from '../src/transport/http-server.js';
 
 /**
  * Intent:
@@ -25,7 +25,7 @@ import { getJobOptions } from '../src/application/get-job-options';
 // Mock auth middleware to bypass authentication for integration tests
 vi.mock('../src/transport/auth-middleware', async () => {
   const actual = await vi.importActual<typeof import('../src/transport/auth-middleware')>(
-    '../src/transport/auth-middleware'
+    '../src/transport/auth-middleware',
   );
   return {
     ...actual,
@@ -41,23 +41,23 @@ vi.mock('../src/transport/auth-middleware', async () => {
     requireRole: vi.fn(() =>
       vi.fn((request, reply, done) => {
         done?.();
-      })
+      }),
     ),
-    getAuthenticatedUser: vi.fn(request => (request as any).user),
+    getAuthenticatedUser: vi.fn((request) => (request as any).user),
   };
 });
 
 // Mock rate limiting middleware to avoid Redis dependencies
 vi.mock('../src/transport/rate-limit-middleware', async () => {
   const actual = await vi.importActual<typeof import('../src/transport/rate-limit-middleware')>(
-    '../src/transport/rate-limit-middleware'
+    '../src/transport/rate-limit-middleware',
   );
   return {
     ...actual,
     createUploadRateLimitMiddleware: vi.fn(() =>
       vi.fn((request, reply, done) => {
         done?.();
-      })
+      }),
     ),
   };
 });
@@ -94,12 +94,12 @@ vi.mock('../src/infrastructure/orchestrator-service', () => {
 });
 
 describe('transport/http-server - integration (in-process)', () => {
-  let app: ReturnType<typeof createHttpServer>;
+  let app: Awaited<ReturnType<typeof createHttpServer>>;
 
   beforeAll(async () => {
     vi.clearAllMocks();
     // Use real route implementation via createHttpServer; no network listen.
-    app = createHttpServer();
+    app = await createHttpServer();
   });
 
   afterAll(async () => {
@@ -169,7 +169,7 @@ describe('transport/http-server - integration (in-process)', () => {
   });
 
   it('POST /jobs maps ValidationError to canonical 400 schema', async () => {
-    const { ValidationError } = await import('../src/application/submit-job');
+    const { ValidationError } = await import('../src/application/submit-job.js');
     const submitJob = vi.spyOn(submitJobModule, 'submitJob');
     const error = new ValidationError('md is required', 'md_required');
     submitJob.mockRejectedValue(error);
@@ -343,7 +343,7 @@ describe('transport/http-server - integration (in-process)', () => {
   it('GET /config/job-options returns 404 when extended API disabled', async () => {
     const originalFlag = process.env.BATCH_BACKEND_ENABLE_EXTENDED_API;
     process.env.BATCH_BACKEND_ENABLE_EXTENDED_API = 'false';
-    const disabledApp = createHttpServer();
+    const disabledApp = await createHttpServer();
 
     try {
       const response = await disabledApp.inject({
@@ -362,8 +362,8 @@ describe('transport/http-server - integration (in-process)', () => {
     }
   });
 
-  it('GET /jobs/events streams job events as SSE', { timeout: 10000 }, async () => {
-    const streamingApp = createHttpServer();
+  it('GET /jobs/events streams job events as SSE', { timeout: 10_000 }, async () => {
+    const streamingApp = await createHttpServer();
     const address = (await streamingApp.listen({ port: 0, host: '127.0.0.1' })) as string;
     const url = new URL('/jobs/events', address);
     url.searchParams.set('jobId', 'job-stream');
@@ -409,11 +409,11 @@ describe('transport/http-server - integration (in-process)', () => {
         }
       };
 
-      const req = httpRequest(url, res => {
+      const req = httpRequest(url, (res) => {
         resRef = res;
         res.setEncoding('utf8');
 
-        res.on('data', chunk => {
+        res.on('data', (chunk) => {
           buffer += chunk;
 
           if (!published && buffer.includes(': connected')) {
@@ -433,14 +433,14 @@ describe('transport/http-server - integration (in-process)', () => {
           }
         });
 
-        res.on('error', err => {
+        res.on('error', (err) => {
           cleanup(err as Error);
         });
       });
 
       requestRef = req;
 
-      req.on('error', err => {
+      req.on('error', (err) => {
         cleanup(err as Error);
       });
 
@@ -448,7 +448,7 @@ describe('transport/http-server - integration (in-process)', () => {
 
       timeout = setTimeout(() => {
         cleanup(new Error('Timed out waiting for SSE payload'));
-      }, 10000);
+      }, 10_000);
     });
   });
 });

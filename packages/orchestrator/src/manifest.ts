@@ -1,10 +1,11 @@
-import { basename, dirname, join } from 'node:path';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
+import { basename, dirname, join } from 'node:path';
+
 import type { BuildStudyTextResult } from '@esl-pipeline/tts-elevenlabs';
 
 export const CURRENT_MANIFEST_SCHEMA_VERSION = 1;
 
-export type AssignmentManifest = {
+export interface AssignmentManifest {
   schemaVersion?: number;
   mdHash: string;
   pageId?: string;
@@ -16,21 +17,21 @@ export type AssignmentManifest = {
     voices?: BuildStudyTextResult['voices'];
   };
   preset?: string;
-  
+
   // TTS mode information for reproducibility
   ttsMode?: 'auto' | 'dialogue' | 'monologue';
   dialogueLanguage?: string;
   dialogueStability?: number;
   dialogueSeed?: number;
-  
-  timestamp: string;
-};
 
-export type ManifestStore = {
+  timestamp: string;
+}
+
+export interface ManifestStore {
   manifestPathFor(mdPath: string): string;
   writeManifest(mdPath: string, manifest: AssignmentManifest): Promise<string>;
   readManifest(mdPath: string): Promise<AssignmentManifest | null>;
-};
+}
 
 export function createFilesystemManifestStore(): ManifestStore {
   const manifestPathFor = (mdPath: string): string => {
@@ -44,16 +45,18 @@ export function createFilesystemManifestStore(): ManifestStore {
     async writeManifest(mdPath, manifest) {
       const target = manifestPathFor(mdPath);
       await mkdir(dirname(target), { recursive: true });
-      
+
       // Ensure backward compatibility: only include TTS mode fields if they exist
       const compatibleManifest = {
         ...manifest,
         ...(manifest.ttsMode && { ttsMode: manifest.ttsMode }),
         ...(manifest.dialogueLanguage && { dialogueLanguage: manifest.dialogueLanguage }),
-        ...(manifest.dialogueStability !== undefined && { dialogueStability: manifest.dialogueStability }),
+        ...(manifest.dialogueStability !== undefined && {
+          dialogueStability: manifest.dialogueStability,
+        }),
         ...(manifest.dialogueSeed !== undefined && { dialogueSeed: manifest.dialogueSeed }),
       };
-      
+
       await writeFile(target, JSON.stringify(compatibleManifest, null, 2));
       return target;
     },

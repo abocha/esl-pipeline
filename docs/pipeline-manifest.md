@@ -44,7 +44,7 @@ This document captures the canonical schema so remote stores and services can va
   "ttsMode": "dialogue",
   "dialogueLanguage": "en",
   "dialogueStability": 0.7,
-  "dialogueSeed": 42
+  "dialogueSeed": 42,
 }
 ```
 

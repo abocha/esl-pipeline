@@ -1,7 +1,8 @@
-import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest';
-import { writeFile, unlink } from 'node:fs/promises';
+import { unlink, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
-import { join, basename } from 'node:path';
+import { basename, join } from 'node:path';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+
 import { uploadFile } from '../src/index.js';
 
 const sendMock = vi.fn();
@@ -45,7 +46,7 @@ describe('uploadFile', () => {
     });
     const fileName = basename(tempFile);
     expect(result.url).toBe(
-      `https://test-bucket.s3.us-east-1.amazonaws.com/audio/tests/${fileName}`
+      `https://test-bucket.s3.us-east-1.amazonaws.com/audio/tests/${fileName}`,
     );
     expect(result.key).toBe(`audio/tests/${fileName}`);
     expect(result.etag).toBe('"mock-etag"');
@@ -70,7 +71,7 @@ describe('uploadFile', () => {
 
   it('throws error for unsupported backend', async () => {
     await expect(uploadFile(tempFile, { backend: 'unsupported' as any })).rejects.toThrow(
-      'Unsupported backend: unsupported'
+      'Unsupported backend: unsupported',
     );
   });
 });

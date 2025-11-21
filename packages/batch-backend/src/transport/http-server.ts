@@ -4,36 +4,37 @@
 // - POST /jobs      -> submit a new ESL pipeline job
 // - GET /jobs/:id   -> fetch job status
 // Designed to be run as a containerized service.
-
 import Fastify, { type FastifyInstance } from 'fastify';
-import { loadConfig } from '../config/env';
-import { logger } from '../infrastructure/logger';
-import { registerErrorHandler } from './error-handler';
-import { registerSecurityHeaders } from './security-headers';
-import { authenticate } from './auth-middleware';
+import { fileURLToPath } from 'node:url';
+
+import { loadConfig } from '../config/env.js';
 import {
-  createFileValidationService,
-  type FileValidationService,
-} from '../infrastructure/file-validation-service';
-import {
-  createFileSanitizationService,
   type FileSanitizationService,
-} from '../infrastructure/file-sanitization-service';
+  createFileSanitizationService,
+} from '../infrastructure/file-sanitization-service.js';
+import { createFileStorageService } from '../infrastructure/file-storage-service.js';
 import {
-  createRateLimiterService,
-  createUploadRateLimitMiddleware,
-  RateLimiterService,
-} from './rate-limit-middleware';
+  type FileValidationService,
+  createFileValidationService,
+} from '../infrastructure/file-validation-service.js';
+import { enableRedisJobEventBridge } from '../infrastructure/job-event-redis-bridge.js';
+import { logger } from '../infrastructure/logger.js';
+import { createRedisClient } from '../infrastructure/redis.js';
 import {
-  createStorageConfigService,
   type StorageConfig,
   StorageConfigurationService,
-} from '../infrastructure/storage-config';
-import { createFileStorageService } from '../infrastructure/file-storage-service';
-import { createRedisClient } from '../infrastructure/redis';
-import { enableRedisJobEventBridge } from '../infrastructure/job-event-redis-bridge';
-import { registerCoreRoutes } from './core-routes';
-import { registerExtendedRoutes } from './extended-routes';
+  createStorageConfigService,
+} from '../infrastructure/storage-config.js';
+import { authenticate } from './auth-middleware.js';
+import { registerCoreRoutes } from './core-routes.js';
+import { registerErrorHandler } from './error-handler.js';
+import { registerExtendedRoutes } from './extended-routes.js';
+import {
+  RateLimiterService,
+  createRateLimiterService,
+  createUploadRateLimitMiddleware,
+} from './rate-limit-middleware.js';
+import { registerSecurityHeaders } from './security-headers.js';
 
 function createJobSubmissionRateLimiter(config: ReturnType<typeof loadConfig>) {
   if (!config.security.enableRateLimiting || config.security.jobSubmissionRateLimit <= 0) {
@@ -88,7 +89,7 @@ function buildStorageConfigurationService(config: ReturnType<typeof loadConfig>)
   });
 }
 
-export function createHttpServer(): FastifyInstance {
+export async function createHttpServer(): Promise<FastifyInstance> {
   const config = loadConfig();
   const app = Fastify({
     logger: false,
@@ -113,10 +114,12 @@ export function createHttpServer(): FastifyInstance {
     const fileValidationService: FileValidationService | null = config.security.enableFileValidation
       ? createFileValidationService()
       : null;
-    const fileSanitizationService: FileSanitizationService | null =
-      config.security.enableFileSanitization ? createFileSanitizationService() : null;
+    const fileSanitizationService: FileSanitizationService | null = config.security
+      .enableFileSanitization
+      ? createFileSanitizationService()
+      : null;
 
-    const rateLimiterService = createRateLimiterService();
+    const rateLimiterService = await createRateLimiterService();
     const uploadRateLimitMiddleware = createUploadRateLimitMiddleware(rateLimiterService);
 
     const storageConfig: StorageConfigurationService = buildStorageConfigurationService(config);
@@ -143,7 +146,7 @@ export function createHttpServer(): FastifyInstance {
 export async function startHttpServer(): Promise<void> {
   const config = loadConfig();
   await enableRedisJobEventBridge();
-  const app = createHttpServer();
+  const app = await createHttpServer();
 
   try {
     await app.listen({
@@ -154,14 +157,14 @@ export async function startHttpServer(): Promise<void> {
       event: 'http_server_started',
       port: config.httpPort,
     });
-  } catch (err: any) {
-    logger.error(err instanceof Error ? err : String(err), {
+  } catch (error: unknown) {
+    logger.error(error instanceof Error ? error : String(error), {
       event: 'http_server_start_failed',
     });
     process.exit(1);
   }
 }
 
-if (require.main === module) {
+if (process.argv[1] === fileURLToPath(import.meta.url)) {
   void startHttpServer();
 }

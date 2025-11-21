@@ -1,7 +1,8 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { getJobStatus } from '../src/application/get-job-status';
-import * as jobRepository from '../src/domain/job-repository';
-import * as jobDto from '../src/application/job-dto';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+
+import { getJobStatus } from '../src/application/get-job-status.js';
+import * as jobDto from '../src/application/job-dto.js';
+import * as jobRepository from '../src/domain/job-repository.js';
 
 describe('application/get-job-status', () => {
   /**

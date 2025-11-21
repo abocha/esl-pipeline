@@ -1,11 +1,7 @@
 // packages/batch-backend/src/domain/job-model.ts
-
 // Minimal job domain model for the batch-backend.
 // Keeps semantics simple and mirrors the `jobs` table schema used in db.ts.
-
 import type { JobMode, JobState, JobUploadOption } from '@esl-pipeline/contracts';
-
-export type { JobMode, JobState, JobUploadOption };
 
 export interface JobRecord {
   id: string;
@@ -34,17 +30,21 @@ export function canTransition(from: JobState, to: JobState): boolean {
   if (from === to) return true;
 
   switch (from) {
-    case 'queued':
+    case 'queued': {
       // queued -> running or directly failed (if unrecoverable before start)
       return to === 'running' || to === 'failed';
-    case 'running':
+    }
+    case 'running': {
       // running -> succeeded/failed
       return to === 'succeeded' || to === 'failed';
+    }
     case 'succeeded':
-    case 'failed':
+    case 'failed': {
       return false;
-    default:
+    }
+    default: {
       return false;
+    }
   }
 }
 
@@ -53,3 +53,5 @@ export function assertTransition(from: JobState, to: JobState): void {
     throw new Error(`Invalid job state transition: ${from} -> ${to}`);
   }
 }
+
+export { type JobMode, type JobState, type JobUploadOption } from '@esl-pipeline/contracts';

@@ -1,7 +1,9 @@
 import { spawn } from 'node:child_process';
-import { writeFile, unlink, copyFile } from 'node:fs/promises';
+import { copyFile, unlink, writeFile } from 'node:fs/promises';
 import { homedir, platform, tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
+
+import { FfmpegNotFoundError } from '@esl-pipeline/contracts';
 
 const isWindows = platform() === 'win32';
 const PATH_SEPARATOR = isWindows ? ';' : ':';
@@ -9,14 +11,11 @@ const BINARY_CANDIDATES = isWindows ? ['ffmpeg.exe', 'ffmpeg'] : ['ffmpeg'];
 
 let cachedBinary: string | null = null;
 
-import { FfmpegNotFoundError } from '@esl-pipeline/contracts';
-export { FfmpegNotFoundError };
-
 async function canSpawn(command: string): Promise<boolean> {
-  return new Promise(resolve => {
+  return new Promise((resolve) => {
     const proc = spawn(command, ['-version'], { stdio: 'ignore' });
     proc.on('error', () => resolve(false));
-    proc.on('exit', code => resolve(code === 0));
+    proc.on('exit', (code) => resolve(code === 0));
   });
 }
 
@@ -25,7 +24,7 @@ function cachePathCandidates(): string[] {
     process.env.ESL_PIPELINE_FFMPEG_CACHE && process.env.ESL_PIPELINE_FFMPEG_CACHE.length > 0
       ? process.env.ESL_PIPELINE_FFMPEG_CACHE
       : join(homedir(), '.cache', 'esl-pipeline', 'ffmpeg');
-  return BINARY_CANDIDATES.map(name => join(base, `${platform()}-${process.arch}`, name));
+  return BINARY_CANDIDATES.map((name) => join(base, `${platform()}-${process.arch}`, name));
 }
 
 function systemPathCandidates(): string[] {
@@ -38,7 +37,7 @@ function systemPathCandidates(): string[] {
     }
   }
   // Also allow bare command for spawn when PATH is configured
-  return candidates.concat(BINARY_CANDIDATES);
+  return [...candidates, ...BINARY_CANDIDATES];
 }
 
 async function resolveCandidateList(candidates: string[]): Promise<string | null> {
@@ -93,23 +92,23 @@ export async function resolveFfmpegPath(explicit?: string): Promise<string> {
 export async function runFfmpeg(
   args: string[],
   label = 'ffmpeg',
-  explicitPath?: string
+  explicitPath?: string,
 ): Promise<void> {
   const bin = await resolveFfmpegPath(explicitPath);
-  await new Promise<void>((resolvePromise, reject) => {
+  await new Promise<void>((resolve, reject) => {
     const proc = spawn(bin, args, { stdio: ['ignore', 'pipe', 'pipe'] });
     let stdout = '';
     let stderr = '';
-    proc.stdout?.on('data', chunk => {
+    proc.stdout?.on('data', (chunk) => {
       stdout += chunk.toString();
     });
-    proc.stderr?.on('data', chunk => {
+    proc.stderr?.on('data', (chunk) => {
       stderr += chunk.toString();
     });
     proc.on('error', reject);
-    proc.on('exit', code => {
+    proc.on('exit', (code) => {
       if (code === 0) {
-        resolvePromise();
+        resolve();
       } else {
         const parts = [`${label} exited with code ${code}`];
         const trimmedStdout = stdout.trim();
@@ -130,13 +129,13 @@ export async function concatMp3Segments(
   segmentPaths: string[],
   outFile: string,
   reencode = false,
-  ffmpegPath?: string
+  ffmpegPath?: string,
 ): Promise<void> {
   if (segmentPaths.length === 0) throw new Error('No segments to concatenate');
-  const abs = segmentPaths.map(p => resolve(p));
+  const abs = segmentPaths.map((p) => resolve(p));
 
   const listFile = join(tmpdir(), `ffconcat_${Date.now()}.txt`);
-  const lines = abs.map(p => `file '${p.replace(/'/g, "'\\''")}'`).join('\n');
+  const lines = abs.map((p) => `file '${p.replaceAll("'", String.raw`'\''`)}'`).join('\n');
   await writeFile(listFile, lines, 'utf8');
 
   const argsFast = ['-y', '-f', 'concat', '-safe', '0', '-i', listFile, '-c', 'copy', outFile];
@@ -168,7 +167,7 @@ export async function concatMp3Segments(
   } finally {
     try {
       await unlink(listFile);
-    } catch { }
+    } catch {}
   }
 }
 
@@ -180,14 +179,14 @@ export async function concatMp3Segments(
 export async function setMp3TitleMetadata(
   filePath: string,
   title: string,
-  ffmpegPath?: string
+  ffmpegPath?: string,
 ): Promise<void> {
   const trimmedTitle = title.trim();
   if (!trimmedTitle) return;
 
   const tempPath = join(
     tmpdir(),
-    `ffmeta-title-${Date.now()}-${Math.random().toString(36).slice(2)}.mp3`
+    `ffmeta-title-${Date.now()}-${Math.random().toString(36).slice(2)}.mp3`,
   );
   const args = [
     '-y',
@@ -204,14 +203,14 @@ export async function setMp3TitleMetadata(
     await runFfmpeg(args, 'ffmpeg-set-metadata-title', ffmpegPath);
     await copyFile(tempPath, filePath);
   } finally {
-    await unlink(tempPath).catch(() => { });
+    await unlink(tempPath).catch(() => {});
   }
 }
 
 export async function synthSilenceMp3(
   outFile: string,
   seconds: number,
-  ffmpegPath?: string
+  ffmpegPath?: string,
 ): Promise<void> {
   const dur = Math.max(0.3, Math.min(seconds, 10)); // keep sane bounds
   const args = [
@@ -230,3 +229,5 @@ export async function synthSilenceMp3(
   ];
   await runFfmpeg(args, 'ffmpeg-synth-silence', ffmpegPath);
 }
+
+export { FfmpegNotFoundError } from '@esl-pipeline/contracts';

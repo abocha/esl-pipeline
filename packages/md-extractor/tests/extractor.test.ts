@@ -1,10 +1,11 @@
-import { describe, it, expect } from 'vitest';
+import { describe, expect, it } from 'vitest';
+
 import {
-  extractFrontmatter,
-  extractStudyText,
   extractAnswerKey,
-  extractTeacherNotes,
+  extractFrontmatter,
   extractSections,
+  extractStudyText,
+  extractTeacherNotes,
 } from '../src/index.js';
 
 const sample = `---
@@ -67,7 +68,7 @@ describe('md-extractor', () => {
 
   it('sections h2/h3 slice', () => {
     const sections = extractSections(sample);
-    const titles = sections.map(s => s.title.toLowerCase());
+    const titles = sections.map((s) => s.title.toLowerCase());
     expect(titles.join('|')).toContain('study text');
   });
 });

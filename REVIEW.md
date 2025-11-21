@@ -10,56 +10,56 @@ The project is well-structured using `pnpm` workspaces and follows a clear separ
 
 The monorepo layout is logical and modular:
 
--   **`packages/orchestrator`**: The core logic, CLI, and API. It defines the pipeline stages and manages data flow.
--   **`packages/md-validator`**: Responsible for validating the input Markdown files.
--   **`packages/md-extractor`**: Extracts study text and metadata from the Markdown.
--   **`packages/notion-importer`**: Handles the creation and updating of Notion pages.
--   **`packages/tts-elevenlabs`**: Integrates with ElevenLabs for TTS generation.
--   **`packages/storage-uploader`**: Manages file uploads (e.g., to S3).
--   **`configs`**: Contains configuration files for presets, voices, and students.
+- **`packages/orchestrator`**: The core logic, CLI, and API. It defines the pipeline stages and manages data flow.
+- **`packages/md-validator`**: Responsible for validating the input Markdown files.
+- **`packages/md-extractor`**: Extracts study text and metadata from the Markdown.
+- **`packages/notion-importer`**: Handles the creation and updating of Notion pages.
+- **`packages/tts-elevenlabs`**: Integrates with ElevenLabs for TTS generation.
+- **`packages/storage-uploader`**: Manages file uploads (e.g., to S3).
+- **`configs`**: Contains configuration files for presets, voices, and students.
 
 ## 3. Key Components Analysis
 
 ### 3.1. Orchestrator
 
--   **CLI & API**: The orchestrator provides both a CLI (`esl`) and a programmatic API (`createPipeline`). This is a good design choice, allowing for flexible usage.
--   **Pipeline Stages**: The pipeline is defined as a sequence of stages (`validate`, `import`, `colorize`, `tts`, `upload`, `add-audio`, `manifest`). This makes the flow easy to understand and debug.
--   **Adapters**: The use of adapters for `ManifestStore` and `ConfigProvider` promotes extensibility and testability.
--   **Observability**: The `PipelineLogger` and `PipelineMetrics` interfaces allow for pluggable logging and metrics collection.
+- **CLI & API**: The orchestrator provides both a CLI (`esl`) and a programmatic API (`createPipeline`). This is a good design choice, allowing for flexible usage.
+- **Pipeline Stages**: The pipeline is defined as a sequence of stages (`validate`, `import`, `colorize`, `tts`, `upload`, `add-audio`, `manifest`). This makes the flow easy to understand and debug.
+- **Adapters**: The use of adapters for `ManifestStore` and `ConfigProvider` promotes extensibility and testability.
+- **Observability**: The `PipelineLogger` and `PipelineMetrics` interfaces allow for pluggable logging and metrics collection.
 
 ### 3.2. TTS ElevenLabs
 
--   **Dual Mode**: The package supports both `monologue` and `dialogue` modes. The `dialogue` mode uses the new ElevenLabs Text-to-Dialogue API, which is a significant feature.
--   **Caching**: It implements caching based on content hash to avoid unnecessary API calls, which is cost-effective.
--   **FFmpeg Integration**: It uses `ffmpeg` for audio processing (concatenation, silence generation), which is robust but adds a system dependency.
+- **Dual Mode**: The package supports both `monologue` and `dialogue` modes. The `dialogue` mode uses the new ElevenLabs Text-to-Dialogue API, which is a significant feature.
+- **Caching**: It implements caching based on content hash to avoid unnecessary API calls, which is cost-effective.
+- **FFmpeg Integration**: It uses `ffmpeg` for audio processing (concatenation, silence generation), which is robust but adds a system dependency.
 
 ### 3.3. MD Extractor & Validator
 
--   **Regex-based Parsing**: The extractor uses regex for parsing specific blocks (e.g., `:::study-text`). While simple, it might be brittle if the Markdown syntax evolves.
--   **Frontmatter**: It relies on `gray-matter` for frontmatter parsing, which is standard.
+- **Regex-based Parsing**: The extractor uses regex for parsing specific blocks (e.g., `:::study-text`). While simple, it might be brittle if the Markdown syntax evolves.
+- **Frontmatter**: It relies on `gray-matter` for frontmatter parsing, which is standard.
 
 ### 3.4. Batch Functionality
 
 The project includes a robust batch processing system, split into `batch-backend` and `batch-frontend`.
 
--   **Batch Backend**:
-    -   **Architecture**: Implements a clean architecture (Domain, Application, Infrastructure, Transport layers), which is excellent for maintainability and testability.
-    -   **API**: Exposes a Fastify-based REST API for job submission and status checking, plus Server-Sent Events (SSE) for real-time updates.
-    -   **Database**: Uses PostgreSQL for job persistence, with a schema that mirrors the domain models.
-    -   **Features**: Includes advanced features like rate limiting (Redis-backed), file sanitization, and abstract storage providers (S3, MinIO, Filesystem).
-    -   **Contracts**: The `contracts` package ensures type safety between the frontend and backend, sharing DTOs and event definitions.
+- **Batch Backend**:
+  - **Architecture**: Implements a clean architecture (Domain, Application, Infrastructure, Transport layers), which is excellent for maintainability and testability.
+  - **API**: Exposes a Fastify-based REST API for job submission and status checking, plus Server-Sent Events (SSE) for real-time updates.
+  - **Database**: Uses PostgreSQL for job persistence, with a schema that mirrors the domain models.
+  - **Features**: Includes advanced features like rate limiting (Redis-backed), file sanitization, and abstract storage providers (S3, MinIO, Filesystem).
+  - **Contracts**: The `contracts` package ensures type safety between the frontend and backend, sharing DTOs and event definitions.
 
--   **Batch Frontend**:
-    -   **Stack**: Built with React, Vite, and React Query.
-    -   **Integration**: Consumes the backend API and listens to SSE for live job updates.
+- **Batch Frontend**:
+  - **Stack**: Built with React, Vite, and React Query.
+  - **Integration**: Consumes the backend API and listens to SSE for live job updates.
 
 ## 4. Adherence to Agent Guidelines
 
 The project generally follows the guidelines outlined in `AGENTS.md` and `docs/agents-ssot.md`:
 
--   **SSOT**: The `docs/agents-ssot.md` file acts as the single source of truth, and the code seems to align with it.
--   **Node.js Version**: The project requires Node.js 24.10.0+, which is consistent with the documentation.
--   **Environment Variables**: It uses `dotenv` for environment variable loading and respects the `ESL_PIPELINE_` prefix for configuration.
+- **SSOT**: The `docs/agents-ssot.md` file acts as the single source of truth, and the code seems to align with it.
+- **Node.js Version**: The project requires Node.js 24.10.0+, which is consistent with the documentation.
+- **Environment Variables**: Uses native process environment loading (no `dotenv`), respecting the `ESL_PIPELINE_` prefix for configuration.
 
 ## 5. Outstanding Issues and Implementation Plan
 
@@ -68,6 +68,7 @@ The project generally follows the guidelines outlined in `AGENTS.md` and `docs/a
 **Current State**: FFmpeg detection and error handling is already well-implemented in `packages/tts-elevenlabs/src/ffmpeg.ts`.
 
 **Features**:
+
 - Automatic detection with fallback search (explicit path → cache → system PATH)
 - Clear,helpful error messages with platform-specific installation instructions
 - Support for `FFMPEG_PATH` environment variable
@@ -82,6 +83,7 @@ The project generally follows the guidelines outlined in `AGENTS.md` and `docs/a
 **Solution Implemented**: Redis-based distributed semaphore to limit concurrent FFmpeg operations across all worker processes (now fully wired and tested).
 
 **Components**:
+
 1. **FFmpeg Semaphore** (`packages/batch-backend/src/infrastructure/ffmpeg-semaphore.ts`):
    - **TTL-based locks** (fixes P1): each lock uses `SET ... EX` with periodic cleanup to recover from crashed workers.
    - **BLPOP blocking** (fixes P2): blocking queue wait restores FIFO fairness and removes busy-spin.
@@ -99,14 +101,17 @@ The project generally follows the guidelines outlined in `AGENTS.md` and `docs/a
    - Logging for acquire/release events
 
 **Critical Bugs Fixed**:
+
 - **[P1] Crashed worker leak**: Implemented TTL-based locks with automatic expiry (5min) + periodic cleanup
 - **[P2] Busy-spin wait loop**: Replaced polling with Redis `BLPOP` (30s timeout) for efficient blocking
 
 **Test Status**:
+
 - ✅ Build successful
 - ✅ Batch-backend tests now pass without OOM after fixing semaphore test mocks (Redis/logger specifiers and default stub returns)
 
 **Remaining Work**:
+
 - [ ] (optional) High-load validation of new semaphore under multi-worker contention
 - [ ] Conduct high-load testing to validate limits and tune defaults
 - [ ] Document configuration in batch-backend README
@@ -118,6 +123,7 @@ The project generally follows the guidelines outlined in `AGENTS.md` and `docs/a
 **Status**: Partially implemented (event filtering + targeted delivery)
 
 **Changes**:
+
 - Job event subscriptions now accept per-job filters or wildcard, with subscription change tracking (`packages/batch-backend/src/domain/job-events.ts`).
 - Redis bridge publishes to per-job channels and a legacy broadcast; dynamically subscribes only to the needed channels and avoids duplicate deliveries when wildcard + targeted listeners coexist (`packages/batch-backend/src/infrastructure/job-event-redis-bridge.ts`).
 - `/jobs/events` SSE now requires `jobId` (comma list) or `jobId=*`, subscribing only to requested jobs (`packages/batch-backend/src/transport/core-routes.ts`).
@@ -125,6 +131,7 @@ The project generally follows the guidelines outlined in `AGENTS.md` and `docs/a
 - Bridge metrics snapshot exposed for monitoring/publishing error counts (`getJobEventBridgeMetrics`).
 
 **Next Steps**:
+
 1. (Optional) Add external metrics export (Prometheus/JSON) for publish/consume counts and channel fan-out.
 2. Document the new SSE contract and channel format in backend docs. ✅ (alignment doc updated)
 3. Optional: integration test for SSE endpoint filtering and high-scale simulations.
@@ -134,6 +141,7 @@ The project generally follows the guidelines outlined in `AGENTS.md` and `docs/a
 **Issue**: The batch backend requires Postgres and Redis, increasing deployment complexity compared to the CLI.
 
 **Action Items**:
+
 1. Create comprehensive deployment guide covering Postgres/Redis setup
 2. Document all required environment variables
 3. Provide example Docker Compose configuration for local testing
@@ -144,6 +152,7 @@ The project generally follows the guidelines outlined in `AGENTS.md` and `docs/a
 The `esl-pipeline` is a mature and well-engineered project with significant recent improvements:
 
 **Completed Enhancements**:
+
 - ✅ Standardized error handling across all packages using shared error classes
 - ✅ Unified configuration resolution between CLI and batch backend
 - ✅ Modernized dependencies (removed `dotenv`, `rimraf`; standardized on `picocolors` and `enquirer`)
@@ -152,6 +161,7 @@ The `esl-pipeline` is a mature and well-engineered project with significant rece
 
 **Remaining Focus Areas**:
 The project needs attention in four areas to achieve production-ready status:
+
 1. **FFmpeg dependency management**: Add detection and helpful error messages
 2. **Resource contention**: Implement semaphore for concurrent FFmpeg operations
 3. **Event scalability**: Optimize Redis Pub/Sub for high-scale scenarios

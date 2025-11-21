@@ -1,15 +1,14 @@
 // packages/batch-backend/src/infrastructure/queue-bullmq.ts
-
 // BullMQ-based queue adapter for batch jobs.
 // - Uses shared Redis connection from ./redis.
 // - Queue name from env via config/env.
 // - Sane defaults: exponential backoff, limited history.
 // - Purposefully small so it is easy to replace or extend.
+import { JobsOptions, Processor, Queue, QueueEvents, Worker } from 'bullmq';
 
-import { Queue, Worker, JobsOptions, Processor, QueueEvents } from 'bullmq';
-import { createRedisClient } from './redis';
-import { loadConfig } from '../config/env';
-import { logger, createJobLogger } from './logger';
+import { loadConfig } from '../config/env.js';
+import { createJobLogger, logger } from './logger.js';
+import { createRedisClient } from './redis.js';
 
 export interface QueueJobPayload {
   jobId: string;
@@ -46,7 +45,7 @@ export function createJobQueue() {
           event: 'queue_failed',
           retryCount: event.retryCount,
         });
-      }
+      },
     );
 
     queueEventsSingleton.on('waiting', (event: { jobId: string | number }) => {

@@ -8,12 +8,12 @@
 export function sanitizeHtml(input: string): string {
   // Basic XSS prevention - escape HTML entities
   return input
-    .replace(/&/g, '&')
-    .replace(/</g, '<')
-    .replace(/>/g, '>')
-    .replace(/"/g, '"')
-    .replace(/'/g, '&#x27;')
-    .replace(/\//g, '&#x2F;');
+    .replaceAll('&', '&')
+    .replaceAll('<', '<')
+    .replaceAll('>', '>')
+    .replaceAll('"', '"')
+    .replaceAll("'", '&#x27;')
+    .replaceAll('/', '&#x2F;');
 }
 
 // Input sanitization for forms
@@ -21,9 +21,9 @@ export function sanitizeInput(input: string): string {
   // Remove potentially dangerous characters and normalize whitespace
   return input
     .trim()
-    .replace(/[<>\"'&]/g, '') // Remove HTML/XML injection chars
-    .replace(/\s+/g, ' ') // Normalize whitespace
-    .substring(0, 1000); // Limit length
+    .replaceAll(/[<>\"'&]/g, '') // Remove HTML/XML injection chars
+    .replaceAll(/\s+/g, ' ') // Normalize whitespace
+    .slice(0, 1000); // Limit length
 }
 
 // Email validation (additional security layer)
@@ -79,11 +79,11 @@ export function validatePasswordStrength(password: string): {
 export function sanitizeFilename(filename: string): string {
   // Remove path traversal attempts and dangerous characters
   return filename
-    .replace(/[/\\]/g, '_') // Replace path separators
-    .replace(/[<>:"|?*]/g, '_') // Replace Windows forbidden chars
-    .replace(/\.\./g, '_') // Prevent directory traversal
+    .replaceAll(/[/\\]/g, '_') // Replace path separators
+    .replaceAll(/[<>:"|?*]/g, '_') // Replace Windows forbidden chars
+    .replaceAll('..', '_') // Prevent directory traversal
     .replace(/^\.+/, '') // Remove leading dots
-    .substring(0, 255); // Limit length
+    .slice(0, 255); // Limit length
 }
 
 // Security event logging (client-side)
@@ -96,13 +96,13 @@ export interface SecurityEvent {
 }
 
 export function logSecurityEvent(
-  event: Omit<SecurityEvent, 'timestamp' | 'userAgent' | 'url'>
+  event: Omit<SecurityEvent, 'timestamp' | 'userAgent' | 'url'>,
 ): void {
   const securityEvent: SecurityEvent = {
     ...event,
     timestamp: new Date().toISOString(),
-    userAgent: typeof navigator !== 'undefined' ? navigator.userAgent : 'unknown',
-    url: typeof window !== 'undefined' ? window.location.href : 'unknown',
+    userAgent: typeof navigator === 'undefined' ? 'unknown' : navigator.userAgent,
+    url: globalThis.window === undefined ? 'unknown' : globalThis.location.href,
   };
 
   // In development, log to console
@@ -134,12 +134,12 @@ export function logSecurityEvent(
 export function generateCsrfToken(): string {
   const array = new Uint8Array(32);
   crypto.getRandomValues(array);
-  return Array.from(array, byte => byte.toString(16).padStart(2, '0')).join('');
+  return Array.from(array, (byte) => byte.toString(16).padStart(2, '0')).join('');
 }
 
 // Content Security Policy violation reporting
 export function setupCSPViolationReporting(): void {
-  document.addEventListener('securitypolicyviolation', event => {
+  document.addEventListener('securitypolicyviolation', (event) => {
     logSecurityEvent({
       type: 'suspicious_input',
       details: {
@@ -158,24 +158,24 @@ export function initializeSecurity(): void {
   setupCSPViolationReporting();
 
   // Monitor for suspicious DOM manipulation attempts
-  const observer = new MutationObserver(mutations => {
-    mutations.forEach(mutation => {
-      mutation.addedNodes.forEach(node => {
+  const observer = new MutationObserver((mutations) => {
+    for (const mutation of mutations) {
+      for (const node of mutation.addedNodes) {
         if (node.nodeType === Node.ELEMENT_NODE) {
           const element = node as Element;
           // Check for suspicious script injections
-          if (element.tagName === 'SCRIPT' && !element.hasAttribute('data-trusted')) {
+          if (element.tagName === 'SCRIPT' && !Object.hasOwn(element.dataset, 'trusted')) {
             logSecurityEvent({
               type: 'xss_attempt',
               details: {
                 tagName: element.tagName,
-                attributes: Array.from(element.attributes).map(attr => attr.name),
+                attributes: [...element.attributes].map((attr) => attr.name),
               },
             });
           }
         }
-      });
-    });
+      }
+    }
   });
 
   observer.observe(document.body, {

@@ -1,5 +1,4 @@
 // packages/batch-backend/src/transport/worker-runner.ts
-
 // Worker entrypoint wiring BullMQ to our processQueueJob application service.
 // Usage (after build):
 //   node dist/transport/worker-runner.js
@@ -8,16 +7,17 @@
 // - Listens to the configured BullMQ queue.
 // - For each message { jobId }, calls processQueueJob.
 // - Logs lifecycle events and shuts down gracefully on SIGINT/SIGTERM.
+import { fileURLToPath } from 'node:url';
 
-import { createJobWorker } from '../infrastructure/queue-bullmq';
-import { processQueueJob } from '../application/process-queue-job';
-import { logger } from '../infrastructure/logger';
-import { enableRedisJobEventBridge } from '../infrastructure/job-event-redis-bridge';
+import { processQueueJob } from '../application/process-queue-job.js';
+import { enableRedisJobEventBridge } from '../infrastructure/job-event-redis-bridge.js';
+import { logger } from '../infrastructure/logger.js';
+import { createJobWorker } from '../infrastructure/queue-bullmq.js';
 
 // startWorker.declaration()
 export async function startWorker(): Promise<void> {
   await enableRedisJobEventBridge();
-  const worker = createJobWorker(async bullJob => {
+  const worker = createJobWorker(async (bullJob) => {
     const { jobId } = bullJob.data;
     await processQueueJob({ jobId });
   });
@@ -35,8 +35,8 @@ export async function startWorker(): Promise<void> {
       await worker.close();
       logger.info('Worker closed cleanly', { component: 'worker' });
       process.exit(0);
-    } catch (err) {
-      logger.error(err as Error, {
+    } catch (error) {
+      logger.error(error as Error, {
         component: 'worker',
         message: 'Error during worker shutdown',
       });
@@ -51,9 +51,9 @@ export async function startWorker(): Promise<void> {
 }
 
 // Allow running directly: node dist/transport/worker-runner.js
-if (require.main === module) {
-  void startWorker().catch(err => {
-    logger.error(err as Error, {
+if (process.argv[1] === fileURLToPath(import.meta.url)) {
+  void startWorker().catch((error) => {
+    logger.error(error as Error, {
       component: 'worker',
       message: 'Failed to start worker',
     });

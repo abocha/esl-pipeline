@@ -9,14 +9,14 @@ type ToggleBlock = Extract<BlockObjectRequest, { type?: 'toggle' }>;
 type RichTextItem = ParagraphBlock['paragraph']['rich_text'][number];
 type ToggleChild = NonNullable<ToggleBlock['toggle']['children']>[number];
 type BulletChildren = NonNullable<BulletBlock['bulleted_list_item']['children']>;
-type BulletListEntry = {
+interface BulletListEntry {
   indent: number;
   block: BulletBlock & {
     bulleted_list_item: BulletBlock['bulleted_list_item'] & {
       children?: BulletChildren;
     };
   };
-};
+}
 
 /**
  * Extremely pragmatic MD→Notion mapper that:
@@ -33,11 +33,11 @@ type BulletListEntry = {
  * - Maps everything else (non-empty) to paragraph
  */
 export function mdToBlocks(md: string): BlockObjectRequest[] {
-  const normalized = md.replace(/\r\n/g, '\n');
+  const normalized = md.replaceAll('\r\n', '\n');
   const rawLines = normalized.split('\n');
 
   let lines = rawLines;
-  const firstContentIndex = rawLines.findIndex(line => line.trim().length > 0);
+  const firstContentIndex = rawLines.findIndex((line) => line.trim().length > 0);
   if (firstContentIndex !== -1 && rawLines[firstContentIndex]?.trim() === '---') {
     let end = firstContentIndex + 1;
     let foundTerminator = false;
@@ -50,7 +50,7 @@ export function mdToBlocks(md: string): BlockObjectRequest[] {
       end += 1;
     }
     if (foundTerminator) {
-      lines = rawLines.slice(0, firstContentIndex).concat(rawLines.slice(end));
+      lines = [...rawLines.slice(0, firstContentIndex), ...rawLines.slice(end)];
     }
   }
   const blocks: BlockObjectRequest[] = [];
@@ -69,7 +69,7 @@ export function mdToBlocks(md: string): BlockObjectRequest[] {
 
   const createRichTextItem = (
     content: string,
-    annotationsOverride?: Partial<NonNullable<RichTextItem['annotations']>>
+    annotationsOverride?: Partial<NonNullable<RichTextItem['annotations']>>,
   ): RichTextItem => ({
     type: 'text',
     text: { content },
@@ -88,28 +88,29 @@ export function mdToBlocks(md: string): BlockObjectRequest[] {
           bold: active.bold,
           italic: active.italic,
           strikethrough: active.strikethrough,
-        })
+        }),
       );
       buffer = '';
     };
 
-    const hasClosing = (delimiter: string, start: number) => input.indexOf(delimiter, start) !== -1;
+    const hasClosing = (delimiter: string, start: number) => input.includes(delimiter, start);
     const isWhitespace = (value: string | undefined) => value === undefined || /\s/.test(value);
 
     for (let idx = 0; idx < input.length; ) {
       const ch = input[idx];
       const next = input[idx + 1];
 
-      if (ch === '\\' && next) {
-        if ('*_`~'.includes(next)) {
-          buffer += next;
-          idx += 2;
-          continue;
-        }
+      if (ch === '\\' && next && '*_`~'.includes(next)) {
+        buffer += next;
+        idx += 2;
+        continue;
       }
 
       if (input.startsWith('**', idx)) {
-        if (!active.bold) {
+        if (active.bold) {
+          flush();
+          active.bold = false;
+        } else {
           const after = input[idx + 2];
           if (isWhitespace(after) || !hasClosing('**', idx + 2)) {
             buffer += '**';
@@ -118,16 +119,16 @@ export function mdToBlocks(md: string): BlockObjectRequest[] {
           }
           flush();
           active.bold = true;
-        } else {
-          flush();
-          active.bold = false;
         }
         idx += 2;
         continue;
       }
 
       if (ch === '*' && next !== '*') {
-        if (!active.italic) {
+        if (active.italic) {
+          flush();
+          active.italic = false;
+        } else {
           const before = input[idx - 1];
           if (
             isWhitespace(next) ||
@@ -140,16 +141,16 @@ export function mdToBlocks(md: string): BlockObjectRequest[] {
           }
           flush();
           active.italic = true;
-        } else {
-          flush();
-          active.italic = false;
         }
         idx += 1;
         continue;
       }
 
       if (input.startsWith('~~', idx)) {
-        if (!active.strikethrough) {
+        if (active.strikethrough) {
+          flush();
+          active.strikethrough = false;
+        } else {
           const after = input[idx + 2];
           if (isWhitespace(after) || !hasClosing('~~', idx + 2)) {
             buffer += '~~';
@@ -158,9 +159,6 @@ export function mdToBlocks(md: string): BlockObjectRequest[] {
           }
           flush();
           active.strikethrough = true;
-        } else {
-          flush();
-          active.strikethrough = false;
         }
         idx += 2;
         continue;
@@ -181,7 +179,7 @@ export function mdToBlocks(md: string): BlockObjectRequest[] {
             italic: false,
             code: true,
             color: 'red',
-          })
+          }),
         );
         idx = close + 1;
         continue;
@@ -235,7 +233,7 @@ export function mdToBlocks(md: string): BlockObjectRequest[] {
 
   const toggleBlock = (title: string, childrenLines: string[]): ToggleBlock => {
     const nested = childrenLines.length > 0 ? mdToBlocks(childrenLines.join('\n')) : [];
-    const children = nested.map(block => block as ToggleChild);
+    const children = nested.map((block) => block as ToggleChild);
     const block = {
       type: 'toggle',
       toggle: {
@@ -259,7 +257,7 @@ export function mdToBlocks(md: string): BlockObjectRequest[] {
     const [, indentStrRaw, bodyRaw] = match;
     const indentStr = indentStrRaw ?? '';
     const body = bodyRaw ?? '';
-    const indent = indentStr.replace(/\t/g, '    ').length;
+    const indent = indentStr.replaceAll('\t', '    ').length;
     const paragraph = paragraphBlock(body.trim());
     if (indent > 0) {
       for (let idx = listStack.length - 1; idx >= 0; idx--) {
@@ -279,14 +277,14 @@ export function mdToBlocks(md: string): BlockObjectRequest[] {
   const handleBullet = (indent: number, content: string) => {
     const block = bulletBlock(content.trim()) as BulletListEntry['block'];
     while (listStack.length > 0) {
-      const top = listStack[listStack.length - 1];
+      const top = listStack.at(-1);
       if (top && indent <= top.indent) {
         listStack.pop();
       } else {
         break;
       }
     }
-    const parentEntry = listStack[listStack.length - 1];
+    const parentEntry = listStack.at(-1);
     if (parentEntry && indent > parentEntry.indent) {
       const children = (parentEntry.block.bulleted_list_item.children ??=
         [] as unknown as BulletChildren);
@@ -356,7 +354,7 @@ export function mdToBlocks(md: string): BlockObjectRequest[] {
     // bullets (with optional indentation)
     const bullet = /^(\s*)([-*])\s+(.+)$/.exec(current);
     if (bullet?.[3]) {
-      const indentWidth = bullet[1]?.replace(/\t/g, '    ').length ?? 0;
+      const indentWidth = bullet[1]?.replaceAll('\t', '    ').length ?? 0;
       handleBullet(indentWidth, bullet[3]);
       i++;
       continue;

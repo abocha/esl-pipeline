@@ -1,8 +1,9 @@
 #!/usr/bin/env node
+import { Command } from 'commander';
 import fs from 'node:fs';
 import path from 'node:path';
-import { Command } from 'commander';
 import pc from 'picocolors';
+
 import { validateMarkdownFile } from '../src/validator.js';
 
 const program = new Command()
@@ -20,7 +21,7 @@ const program = new Command()
 
     if (result.ok && (!opts.strict || result.warnings.length === 0)) {
       console.log(pc.green('✔ Validation passed'));
-      if (result.warnings.length) {
+      if (result.warnings.length > 0) {
         console.log(pc.yellow(`Warnings (${result.warnings.length}):`));
         for (const w of result.warnings) console.log(pc.yellow(`  • ${w}`));
       }
@@ -36,18 +37,18 @@ const program = new Command()
       return;
     }
 
-    if (result.errors.length) {
+    if (result.errors.length > 0) {
       console.log(pc.red(`✖ Errors (${result.errors.length}):`));
       for (const e of result.errors) console.log(pc.red(`  • ${e}`));
     }
-    if (result.warnings.length) {
+    if (result.warnings.length > 0) {
       console.log(pc.yellow(`Warnings (${result.warnings.length}):`));
       for (const w of result.warnings) console.log(pc.yellow(`  • ${w}`));
     }
     process.exit(1);
   });
 
-program.parseAsync().catch(err => {
-  console.error(pc.red(err instanceof Error ? err.message : String(err)));
+program.parseAsync().catch((error) => {
+  console.error(pc.red(error instanceof Error ? error.message : String(error)));
   process.exit(1);
 });

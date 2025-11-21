@@ -1,11 +1,11 @@
-import { describe, it, expect, vi, beforeAll, afterAll } from 'vitest';
 import Fastify from 'fastify';
+import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 
-import { startWorker } from '../src/transport/worker-runner';
-import * as submitJobModule from '../src/application/submit-job';
-import * as getJobStatusModule from '../src/application/get-job-status';
-import * as orchestratorService from '../src/infrastructure/orchestrator-service';
-import { withPgClient } from '../src/infrastructure/db';
+import * as getJobStatusModule from '../src/application/get-job-status.js';
+import * as submitJobModule from '../src/application/submit-job.js';
+import { withPgClient } from '../src/infrastructure/db.js';
+import * as orchestratorService from '../src/infrastructure/orchestrator-service.js';
+import { startWorker } from '../src/transport/worker-runner.js';
 
 /**
  * Intent:
@@ -43,7 +43,7 @@ let app: ReturnType<typeof Fastify>;
 let workerStop: (() => Promise<void>) | null = null;
 
 async function truncateJobs() {
-  await withPgClient(async client => {
+  await withPgClient(async (client) => {
     await client.query('TRUNCATE TABLE jobs');
   });
 }
@@ -67,8 +67,8 @@ beforeAll(async () => {
         upload: body?.upload,
       });
       return reply.code(202).send(result);
-    } catch (err: any) {
-      return reply.code(400).send({ error: err?.message ?? 'Failed to submit job' });
+    } catch (error: any) {
+      return reply.code(400).send({ error: error?.message ?? 'Failed to submit job' });
     }
   });
 
@@ -100,7 +100,7 @@ beforeAll(async () => {
       // In CI, test runner will exit the process.
     };
   })();
-}, 60000);
+}, 60_000);
 
 afterAll(async () => {
   if (workerStop) {
@@ -110,7 +110,7 @@ afterAll(async () => {
     await app.close();
   }
   await truncateJobs();
-}, 60000);
+}, 60_000);
 
 describe.skip('transport/worker-runner - full pipeline (requires Postgres + Redis)', () => {
   /**
@@ -135,7 +135,7 @@ describe.skip('transport/worker-runner - full pipeline (requires Postgres + Redi
     expect(jobId).toBeDefined();
 
     // Poll GET /jobs/:jobId until job reaches succeeded or timeout.
-    const deadline = Date.now() + 20000;
+    const deadline = Date.now() + 20_000;
     let finalStatus: any = null;
 
     while (Date.now() < deadline) {
@@ -152,13 +152,13 @@ describe.skip('transport/worker-runner - full pipeline (requires Postgres + Redi
         }
       }
 
-      await new Promise(r => setTimeout(r, 500));
+      await new Promise((resolve) => setTimeout(resolve, 500));
     }
 
     expect(finalStatus).not.toBeNull();
     expect(finalStatus.state).toBe('succeeded');
     expect(finalStatus.manifestPath).toBe('/manifests/integration.json');
-  }, 30000);
+  }, 30_000);
 
   it('eventually marks job failed when orchestrator consistently fails', async () => {
     runAssignmentJobMock.mockRejectedValue(new Error('orchestrator down'));
@@ -173,7 +173,7 @@ describe.skip('transport/worker-runner - full pipeline (requires Postgres + Redi
     const { jobId } = submitRes.json() as { jobId: string };
     expect(jobId).toBeDefined();
 
-    const deadline = Date.now() + 30000;
+    const deadline = Date.now() + 30_000;
     let finalStatus: any = null;
 
     while (Date.now() < deadline) {
@@ -190,11 +190,11 @@ describe.skip('transport/worker-runner - full pipeline (requires Postgres + Redi
         }
       }
 
-      await new Promise(r => setTimeout(r, 1000));
+      await new Promise((resolve) => setTimeout(resolve, 1000));
     }
 
     expect(finalStatus).not.toBeNull();
     expect(finalStatus.state).toBe('failed');
     expect(finalStatus.error).toContain('orchestrator down');
-  }, 40000);
+  }, 40_000);
 });

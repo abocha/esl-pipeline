@@ -4,12 +4,11 @@
 // - Validates input.
 // - Persists a queued job via JobRepository.
 // - Enqueues a BullMQ job via createJobQueue.
-
-import { insertJob } from '../domain/job-repository';
-import { createJobQueue } from '../infrastructure/queue-bullmq';
-import { logger } from '../infrastructure/logger';
-import { publishJobEvent } from '../domain/job-events';
-import type { JobMode as DomainJobMode } from '../domain/job-model';
+import { publishJobEvent } from '../domain/job-events.js';
+import type { JobMode as DomainJobMode } from '../domain/job-model.js';
+import { insertJob } from '../domain/job-repository.js';
+import { logger } from '../infrastructure/logger.js';
+import { createJobQueue } from '../infrastructure/queue-bullmq.js';
 
 export type UploadTarget = 'auto' | 's3' | 'none';
 export type JobMode = DomainJobMode;
@@ -60,21 +59,36 @@ function validateSubmitJobRequest(req: SubmitJobRequest): void {
     throw new ValidationError('withTts must be a boolean when provided', 'invalid_with_tts');
   }
 
-  if (req.upload !== undefined && req.upload !== 's3' && req.upload !== 'none') {
-    if (req.upload !== 'auto') {
-      throw new ValidationError('upload must be "auto", "s3" or "none" when provided', 'invalid_upload');
-    }
+  if (
+    req.upload !== undefined &&
+    req.upload !== 's3' &&
+    req.upload !== 'none' &&
+    req.upload !== 'auto'
+  ) {
+    throw new ValidationError(
+      'upload must be "auto", "s3" or "none" when provided',
+      'invalid_upload',
+    );
   }
 
   if (
     req.voiceAccent !== undefined &&
     (typeof req.voiceAccent !== 'string' || req.voiceAccent.trim().length === 0)
   ) {
-    throw new ValidationError('voiceAccent must be a non-empty string when provided', 'invalid_voice_accent');
+    throw new ValidationError(
+      'voiceAccent must be a non-empty string when provided',
+      'invalid_voice_accent',
+    );
   }
 
-  if (req.voiceId !== undefined && (typeof req.voiceId !== 'string' || req.voiceId.trim().length === 0)) {
-    throw new ValidationError('voiceId must be a non-empty string when provided', 'invalid_voice_id');
+  if (
+    req.voiceId !== undefined &&
+    (typeof req.voiceId !== 'string' || req.voiceId.trim().length === 0)
+  ) {
+    throw new ValidationError(
+      'voiceId must be a non-empty string when provided',
+      'invalid_voice_id',
+    );
   }
 
   if (req.forceTts !== undefined && typeof req.forceTts !== 'boolean') {
@@ -87,12 +101,15 @@ function validateSubmitJobRequest(req: SubmitJobRequest): void {
   ) {
     throw new ValidationError(
       'notionDatabase must be a non-empty string when provided',
-      'invalid_notion_database'
+      'invalid_notion_database',
     );
   }
 
   if (req.mode && !['auto', 'dialogue', 'monologue'].includes(req.mode)) {
-    throw new ValidationError('mode must be auto, dialogue, or monologue when provided', 'invalid_mode');
+    throw new ValidationError(
+      'mode must be auto, dialogue, or monologue when provided',
+      'invalid_mode',
+    );
   }
 }
 

@@ -1,12 +1,13 @@
 {
   "name": "@esl-pipeline/batch-backend",
-  "version": "0.1.2",
+  "version": "1.0.0",
   "private": true,
+  "license": "MIT",
+  "type": "module",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
-  "license": "MIT",
   "scripts": {
-    "build": "tsc -b",
+    "build": "tsc -p tsconfig.build.json",
     "start:api": "node dist/transport/http-server.js",
     "start:worker": "node dist/transport/worker-runner.js",
     "test": "vitest run --config ../../vitest.config.ts --dir ../../packages/batch-backend/tests --reporter=dot",

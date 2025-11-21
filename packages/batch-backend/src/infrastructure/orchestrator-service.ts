@@ -1,25 +1,29 @@
 // packages/batch-backend/src/infrastructure/orchestrator-service.ts
-
 // Orchestrator integration:
 // - Wraps createPipeline from @esl-pipeline/orchestrator.
 // - Configured via env (see config/env).
 // - Keeps ESL pipeline wiring in one place so workers/controllers stay simple.
-
+import { S3Client } from '@aws-sdk/client-s3';
 import { fork } from 'node:child_process';
 import path from 'node:path';
+
 import {
-  createPipeline,
-  S3ManifestStore,
-  RemoteConfigProvider,
-  resolveJobOptions,
-  resolveConfigPaths,
+  type ConfigProvider,
   type JobOptionsPayload,
+  type ManifestStore,
+  type PipelineLogEvent,
+  type PipelineLogger,
+  RemoteConfigProvider,
+  S3ManifestStore,
+  createPipeline,
+  resolveConfigPaths,
+  resolveJobOptions,
 } from '@esl-pipeline/orchestrator';
-import { S3Client } from '@aws-sdk/client-s3';
+
 import { loadConfig } from '../config/env.js';
-import { logger as rootLogger, Logger } from './logger.js';
-import { metrics } from './metrics.js';
 import type { JobMode } from '../domain/job-model.js';
+import { Logger, logger as rootLogger } from './logger.js';
+import { metrics } from './metrics.js';
 
 // Lazily initialized, module-local cache.
 // Populated only inside getPipeline(), never at import time.
@@ -37,22 +41,21 @@ export function getPipeline(configOverride?: ReturnType<typeof loadConfig>) {
 
   const config = configOverride ?? loadConfig();
 
-  // Adapt orchestrator's logger contract into our Logger.
-  const orchestratorLogger = {
-    log(event: any) {
+  const orchestratorLogger: PipelineLogger = {
+    log(event: PipelineLogEvent) {
       const level = (event && event.level) || 'info';
-      const msg = event.message || event.msg || 'orchestrator';
-      const data = { ...event };
-      delete (data as any).level;
-      delete (data as any).message;
-      delete (data as any).msg;
+      const msg = (event as { msg?: string }).msg || event.message || 'orchestrator';
+      const data = { ...(event as unknown as Record<string, unknown>) };
+      delete data.level;
+      delete data.message;
+      delete data.msg;
 
       const logFn =
-        (rootLogger as any)[level] && typeof (rootLogger as any)[level] === 'function'
-          ? (rootLogger as any)[level].bind(rootLogger)
-          : (rootLogger as Logger).info.bind(rootLogger);
+        level in rootLogger && typeof rootLogger[level as keyof Logger] === 'function'
+          ? (rootLogger[level as keyof Logger] as (msg: string, data: unknown) => void)
+          : rootLogger.info;
 
-      logFn(msg, data);
+      logFn.call(rootLogger, msg, data);
     },
   };
 
@@ -61,7 +64,7 @@ export function getPipeline(configOverride?: ReturnType<typeof loadConfig>) {
     timing: metrics.timing.bind(metrics),
   };
 
-  let manifestStore: any | undefined;
+  let manifestStore: ManifestStore | undefined;
   if (config.orchestrator.manifestStore === 's3') {
     const manifestRegion =
       process.env.AWS_REGION || process.env.S3_REGION || process.env.MINIO_REGION || 'us-east-1';
@@ -101,7 +104,7 @@ export function getPipeline(configOverride?: ReturnType<typeof loadConfig>) {
     });
   }
 
-  let configProvider: any | undefined;
+  let configProvider: ConfigProvider | undefined;
   if (config.orchestrator.configProvider === 'http') {
     configProvider = new RemoteConfigProvider({
       baseUrl: config.orchestrator.configEndpoint!,
@@ -144,28 +147,37 @@ export interface RunAssignmentPayload {
 // runAssignmentJob.declaration()
 export async function runAssignmentJob(
   payload: RunAssignmentPayload,
-  runId: string
+  runId: string,
 ): Promise<{ manifestPath?: string; notionUrl?: string }> {
   const log = rootLogger.child({ jobId: payload.jobId, runId });
 
   return new Promise((resolve, reject) => {
-    const workerPath = path.join(__dirname, 'pipeline-worker-entry');
+    const workerPath = path.join(import.meta.dirname, 'pipeline-worker-entry');
     const child = fork(workerPath);
 
     let resolved = false;
 
-    child.on('message', (msg: any) => {
-      if (msg.type === 'success') {
+    child.on('message', (msg: unknown) => {
+      // Type guard for worker message
+      if (typeof msg !== 'object' || msg === null) return;
+
+      const message = msg as {
+        type?: string;
+        result?: unknown;
+        error?: { message?: string; stack?: string; name?: string };
+      };
+
+      if (message.type === 'success') {
         resolved = true;
-        resolve(msg.result);
-      } else if (msg.type === 'error') {
+        resolve(message.result as { manifestPath?: string; notionUrl?: string });
+      } else if (message.type === 'error') {
         resolved = true;
-        const err = new Error(msg.error.message || String(msg.error));
-        if (msg.error.stack) {
-          err.stack = msg.error.stack;
+        const err = new Error(message.error?.message || String(message.error));
+        if (message.error?.stack) {
+          err.stack = message.error.stack;
         }
-        if (msg.error.name) {
-          err.name = msg.error.name;
+        if (message.error?.name) {
+          err.name = message.error.name;
         }
         reject(err);
       }
@@ -204,7 +216,10 @@ export function isManifestBucketMissingError(error: unknown): boolean {
   ) {
     return true;
   }
-  const message = typeof error === 'object' && 'message' in error ? (error as any).message : undefined;
+  const message =
+    typeof error === 'object' && error !== null && 'message' in error
+      ? (error as { message: unknown }).message
+      : undefined;
   if (typeof message === 'string' && message.toLowerCase().includes('no such bucket')) {
     return true;
   }

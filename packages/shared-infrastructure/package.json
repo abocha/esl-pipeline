@@ -1,23 +1,23 @@
 {
-    "name": "@esl-pipeline/shared-infrastructure",
-    "version": "0.1.1",
-    "private": true,
-    "type": "module",
-    "main": "dist/index.js",
-    "types": "dist/index.d.ts",
-    "license": "MIT",
-    "scripts": {
-        "build": "tsc -b",
-        "test": "vitest run --config ../../vitest.config.ts --dir ../../packages/shared-infrastructure/tests --reporter=dot",
-        "test:verbose": "vitest run --config ../../vitest.config.ts --dir ../../packages/shared-infrastructure/tests --reporter=verbose"
-    },
-    "dependencies": {
-        "@esl-pipeline/contracts": "workspace:*",
-        "ioredis": "^5.8.2"
-    },
-    "devDependencies": {
-        "@types/node": "^24.10.1",
-        "typescript": "^5.9.3",
-        "vitest": "^4.0.12"
-    }
+  "name": "@esl-pipeline/shared-infrastructure",
+  "version": "1.0.0",
+  "private": true,
+  "license": "MIT",
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "scripts": {
+    "build": "tsc -b tsconfig.build.json",
+    "test": "vitest run --config ../../vitest.config.ts --dir ../../packages/shared-infrastructure/tests --reporter=dot",
+    "test:verbose": "vitest run --config ../../vitest.config.ts --dir ../../packages/shared-infrastructure/tests --reporter=verbose"
+  },
+  "dependencies": {
+    "@esl-pipeline/contracts": "workspace:*",
+    "ioredis": "^5.8.2"
+  },
+  "devDependencies": {
+    "@types/node": "^24.10.1",
+    "typescript": "^5.9.3",
+    "vitest": "^4.0.13"
+  }
 }

@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const createRedisClientMock = vi.fn();
 
@@ -15,7 +15,7 @@ vi.mock('../src/infrastructure/redis', () => ({
 }));
 
 function createFakeRedisConnection() {
-  const handlers = new Map<string, Array<(...args: any[]) => void>>();
+  const handlers = new Map<string, ((...args: any[]) => void)[]>();
   return {
     publish: vi.fn().mockResolvedValue(1),
     subscribe: vi.fn().mockResolvedValue(1),
@@ -29,7 +29,9 @@ function createFakeRedisConnection() {
     }),
     emit(event: string, ...args: any[]) {
       const arr = handlers.get(event) ?? [];
-      arr.forEach(handler => handler(...args));
+      for (const handler of arr) {
+        handler(...args);
+      }
     },
   };
 }
@@ -56,7 +58,7 @@ describe('infrastructure/job-event-redis-bridge', () => {
   beforeEach(async () => {
     vi.resetModules();
     createRedisClientMock.mockReset();
-    const bridgeModule = await import('../src/infrastructure/job-event-redis-bridge');
+    const bridgeModule = await import('../src/infrastructure/job-event-redis-bridge.js');
     bridgeModule.resetJobEventBridgeForTests();
   });
 
@@ -72,17 +74,19 @@ describe('infrastructure/job-event-redis-bridge', () => {
       duplicate: duplicateMock,
     } as any);
 
-    const { enableRedisJobEventBridge } = await import('../src/infrastructure/job-event-redis-bridge');
-    const jobEvents = await import('../src/domain/job-events');
+    const { enableRedisJobEventBridge } = await import(
+      '../src/infrastructure/job-event-redis-bridge'
+    );
+    const jobEvents = await import('../src/domain/job-events.js');
 
     await enableRedisJobEventBridge();
 
-    const received: Array<{ type: string; job: any }> = [];
-    const dispose = jobEvents.subscribeJobEvents(event => received.push(event), {
+    const received: { type: string; job: any }[] = [];
+    const dispose = jobEvents.subscribeJobEvents((event) => received.push(event), {
       jobIds: ['job-1'],
     });
 
-    await new Promise(resolve => setImmediate(resolve));
+    await new Promise((resolve) => setImmediate(resolve));
 
     const job = makeJob('queued');
     jobEvents.publishJobEvent({ type: 'job_created', job });
@@ -133,20 +137,22 @@ describe('infrastructure/job-event-redis-bridge', () => {
       duplicate: duplicateMock,
     } as any);
 
-    const { enableRedisJobEventBridge } = await import('../src/infrastructure/job-event-redis-bridge');
-    const jobEvents = await import('../src/domain/job-events');
+    const { enableRedisJobEventBridge } = await import(
+      '../src/infrastructure/job-event-redis-bridge'
+    );
+    const jobEvents = await import('../src/domain/job-events.js');
 
     await enableRedisJobEventBridge();
 
     const received: string[] = [];
-    const disposeAll = jobEvents.subscribeJobEvents(event => received.push(event.type), {
+    const disposeAll = jobEvents.subscribeJobEvents((event) => received.push(event.type), {
       allJobs: true,
     });
-    const disposeTargeted = jobEvents.subscribeJobEvents(event => received.push(event.type), {
+    const disposeTargeted = jobEvents.subscribeJobEvents((event) => received.push(event.type), {
       jobIds: ['job-1'],
     });
 
-    await new Promise(resolve => setImmediate(resolve));
+    await new Promise((resolve) => setImmediate(resolve));
 
     const job = makeJob('queued');
     const payload = JSON.stringify({

@@ -1,4 +1,4 @@
-import axios, { AxiosInstance, InternalAxiosRequestConfig, AxiosResponse, AxiosError } from 'axios';
+import axios, { AxiosError, AxiosInstance, AxiosResponse, InternalAxiosRequestConfig } from 'axios';
 
 type MaybeString = string | undefined | null;
 
@@ -10,15 +10,26 @@ function normalizeBaseUrl(url: MaybeString): string {
 }
 
 function resolveBackendBaseUrl(): string {
-  const globalAny: any = typeof window !== 'undefined' ? window : undefined;
-  const globalOverride = normalizeBaseUrl(globalAny?.__BATCH_BACKEND_URL__);
+  type GlobalWithOverrides = typeof globalThis & {
+    __BATCH_BACKEND_URL__?: string;
+    process?: { env?: Record<string, unknown> };
+  };
+  const globalObj: GlobalWithOverrides =
+    globalThis.window === undefined
+      ? (globalThis as GlobalWithOverrides)
+      : (globalThis as GlobalWithOverrides);
+
+  const globalOverride = normalizeBaseUrl(globalObj?.__BATCH_BACKEND_URL__);
   if (globalOverride) return globalOverride;
 
-  const viteEnv = normalizeBaseUrl((import.meta as any)?.env?.VITE_BATCH_BACKEND_URL);
+  const viteEnv = normalizeBaseUrl(
+    (import.meta as { env?: Record<string, unknown> }).env?.VITE_BATCH_BACKEND_URL as
+      | string
+      | undefined,
+  );
   if (viteEnv) return viteEnv;
 
-  const nodeEnvSource =
-    typeof globalThis !== 'undefined' ? (globalThis as any)?.process?.env : undefined;
+  const nodeEnvSource = typeof globalThis === 'undefined' ? undefined : globalObj.process?.env;
   const nodeEnv = normalizeBaseUrl(nodeEnvSource?.BATCH_BACKEND_URL as MaybeString);
   if (nodeEnv) return nodeEnv;
 
@@ -30,7 +41,7 @@ export const backendBaseUrl = resolveBackendBaseUrl();
 let currentAccessToken: string | null = null;
 
 export function setApiAuthToken(token: MaybeString): void {
-  currentAccessToken = token ? token : null;
+  currentAccessToken = token ?? null;
 }
 
 export function getApiAuthToken(): string | null {
@@ -58,7 +69,7 @@ export function buildApiProxyPath(path: string): string {
 // Create axios instance with default config
 const apiClient: AxiosInstance = axios.create({
   baseURL: backendBaseUrl || undefined,
-  timeout: 30000, // 30 seconds
+  timeout: 30_000, // 30 seconds
   withCredentials: true,
   headers: {
     'Content-Type': 'application/json',
@@ -77,7 +88,7 @@ apiClient.interceptors.request.use(
   },
   (error: AxiosError) => {
     return Promise.reject(error);
-  }
+  },
 );
 
 // Response interceptor for error handling and token refresh
@@ -99,11 +110,11 @@ apiClient.interceptors.response.use(
         // The AuthContext will handle automatic redirects
 
         // For now, just reject and let the component handle it
-        return Promise.reject(error);
+        throw error;
       } catch (refreshError) {
         console.warn('Token refresh attempt failed inside API client', refreshError);
         // Token refresh failed, reject with original error
-        return Promise.reject(error);
+        throw error;
       }
     }
 
@@ -116,17 +127,21 @@ apiClient.interceptors.response.use(
       });
     }
 
-    return Promise.reject(error);
-  }
+    throw error;
+  },
 );
 
 // Helper function to handle API errors consistently
 export function handleApiError(error: AxiosError): string {
   if (error.response) {
     // Server responded with error status
-    const data = error.response.data as any;
+    const data = error.response.data as Record<string, unknown> | string | undefined;
     return (
-      data?.message || data?.error || `HTTP ${error.response.status}: ${error.response.statusText}`
+      (typeof data === 'object' && data
+        ? ((data.message as string | undefined) ?? (data.error as string | undefined))
+        : undefined) ??
+      (typeof data === 'string' ? data : undefined) ??
+      `HTTP ${error.response.status}: ${error.response.statusText}`
     );
   } else if (error.request) {
     // Request was made but no response received

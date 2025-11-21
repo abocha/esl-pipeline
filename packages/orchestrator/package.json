@@ -1,9 +1,7 @@
 {
   "name": "@esl-pipeline/orchestrator",
-  "version": "2.0.2",
+  "version": "3.0.0",
   "private": false,
-  "type": "module",
-  "license": "UNLICENSED",
   "description": "One-command ESL assignment pipeline (validation, Notion import, TTS, upload).",
   "keywords": [
     "esl",
@@ -12,11 +10,8 @@
     "tts",
     "cli"
   ],
-  "engines": {
-    "node": ">=24.10.0"
-  },
-  "main": "./dist/index.js",
-  "types": "./dist/index.d.ts",
+  "license": "UNLICENSED",
+  "type": "module",
   "exports": {
     ".": {
       "types": "./dist/index.d.ts",
@@ -25,29 +20,28 @@
     },
     "./package.json": "./package.json"
   },
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "bin": {
+    "esl": "dist/cli.js"
+  },
   "files": [
     "dist",
     "README.md",
     "CHANGELOG.md",
     "docs"
   ],
-  "publishConfig": {
-    "access": "public"
-  },
-  "bin": {
-    "esl": "dist/cli.js"
-  },
   "scripts": {
     "build": "tsup --config tsup.config.ts && tsc -p tsconfig.types.json",
     "postbuild": "node ./scripts/postbuild.js",
     "clean": "node -e \"fs.rmSync('dist', {recursive:true, force:true})\"",
     "dev": "tsx watch bin/cli.ts",
-    "test": "vitest run",
-    "test:watch": "vitest",
-    "prepack": "pnpm run build",
     "docker:build": "cd ../.. && docker build -f packages/orchestrator/Dockerfile -t esl-pipeline/orchestrator:local .",
     "docker:run": "docker run --rm esl-pipeline/orchestrator:local --version",
-    "examples/service": "pnpm --dir examples/service exec"
+    "examples/service": "pnpm --dir examples/service exec",
+    "prepack": "pnpm run build",
+    "test": "vitest run",
+    "test:watch": "vitest"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.937.0",
@@ -80,6 +74,12 @@
     "tsup": "8.5.1",
     "tsx": "^4.20.6",
     "typescript": "^5.9.3",
-    "vitest": "^4.0.12"
+    "vitest": "^4.0.13"
+  },
+  "engines": {
+    "node": ">=24.10.0"
+  },
+  "publishConfig": {
+    "access": "public"
   }
 }

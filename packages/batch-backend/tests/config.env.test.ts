@@ -1,5 +1,4 @@
-import { describe, it, expect, beforeEach } from 'vitest';
-import { loadConfig } from '../src/config/env';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 /**
  * Intent:
@@ -9,38 +8,33 @@ import { loadConfig } from '../src/config/env';
  * - Focused on stability-critical paths; does not exhaustively test all env branches.
  */
 
-function withEnv(env: Record<string, string | undefined>, fn: () => void) {
+async function withEnv(env: Record<string, string | undefined>, fn: () => void | Promise<void>) {
   const oldEnv = { ...process.env };
   process.env = { ...process.env, ...env };
   try {
-    fn();
+    await fn();
   } finally {
     process.env = oldEnv;
   }
 }
 
-function resetEnvModule() {
-  try {
-    const id = require.resolve('../src/config/env');
-    // Best-effort cache busting for CJS; Vitest ESM loader will re-evaluate on next import/usage.
-    delete require.cache[id];
-  } catch {
-    // Ignore resolution errors to avoid MODULE_NOT_FOUND during test setup.
-  }
+async function loadConfigFresh() {
+  const module = await import('../src/config/env.js');
+  return module.loadConfig();
 }
 
 describe('config/env - core defaults', () => {
   beforeEach(() => {
-    resetEnvModule();
+    vi.resetModules();
   });
 
-  it('provides sane defaults for queue and orchestrator when minimal env is set', () => {
-    withEnv(
+  it('provides sane defaults for queue and orchestrator when minimal env is set', async () => {
+    await withEnv(
       {
         NODE_ENV: 'test',
       },
-      () => {
-        const cfg = loadConfig();
+      async () => {
+        const cfg = await loadConfigFresh();
 
         // HTTP
         expect(cfg.httpPort).toBe(8080);
@@ -52,18 +46,18 @@ describe('config/env - core defaults', () => {
         expect(cfg.orchestrator.manifestStore).toBeDefined();
         expect(['filesystem', 's3']).toContain(cfg.orchestrator.manifestStore);
         expect(['local', 'http']).toContain(cfg.orchestrator.configProvider);
-      }
+      },
     );
   });
 });
 
 describe('config/env - orchestrator manifest store mapping', () => {
   beforeEach(() => {
-    resetEnvModule();
+    vi.resetModules();
   });
 
-  it('maps ESL_PIPELINE_MANIFEST_STORE=s3 and bucket into orchestrator config', () => {
-    withEnv(
+  it('maps ESL_PIPELINE_MANIFEST_STORE=s3 and bucket into orchestrator config', async () => {
+    await withEnv(
       {
         NODE_ENV: 'test',
         ESL_PIPELINE_MANIFEST_STORE: 's3',
@@ -71,36 +65,36 @@ describe('config/env - orchestrator manifest store mapping', () => {
         ESL_PIPELINE_MANIFEST_PREFIX: 'prefix/',
         ESL_PIPELINE_MANIFEST_ROOT: '/root',
       },
-      () => {
-        const cfg = loadConfig();
+      async () => {
+        const cfg = await loadConfigFresh();
         expect(cfg.orchestrator.manifestStore).toBe('s3');
         expect(cfg.orchestrator.manifestBucket).toBe('my-bucket');
         expect(cfg.orchestrator.manifestPrefix).toBe('prefix/');
         expect(cfg.orchestrator.manifestRoot).toBe('/root');
-      }
+      },
     );
   });
 });
 
 describe('config/env - orchestrator remote config provider mapping', () => {
   beforeEach(() => {
-    resetEnvModule();
+    vi.resetModules();
   });
 
-  it('maps ESL_PIPELINE_CONFIG_PROVIDER=http into orchestrator config', () => {
-    withEnv(
+  it('maps ESL_PIPELINE_CONFIG_PROVIDER=http into orchestrator config', async () => {
+    await withEnv(
       {
         NODE_ENV: 'test',
         ESL_PIPELINE_CONFIG_PROVIDER: 'http',
         ESL_PIPELINE_CONFIG_ENDPOINT: 'https://config.example.com',
         ESL_PIPELINE_CONFIG_TOKEN: 'secret-token',
       },
-      () => {
-        const cfg = loadConfig();
+      async () => {
+        const cfg = await loadConfigFresh();
         expect(cfg.orchestrator.configProvider).toBe('http');
         expect(cfg.orchestrator.configEndpoint).toBe('https://config.example.com');
         expect(cfg.orchestrator.configToken).toBe('secret-token');
-      }
+      },
     );
   });
 });

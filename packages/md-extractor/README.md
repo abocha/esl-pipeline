@@ -4,11 +4,11 @@ Tiny helpers to pull structured pieces from a validated ESL homework markdown.
 
 ```ts
 import {
-  extractFrontmatter,
-  extractStudyText,
   extractAnswerKey,
-  extractTeacherNotes,
+  extractFrontmatter,
   extractSections,
+  extractStudyText,
+  extractTeacherNotes,
 } from '@esl-pipeline/md-extractor';
 
 const fm = extractFrontmatter(md);
@@ -16,6 +16,7 @@ const study = extractStudyText(md); // { type: 'dialogue'|'monologue', lines: st
 ```
 
 ## 2) Wire into the monorepo
+
 - Add `packages/md-extractor` to your workspace (should auto-pick via `packages/*`).
 - Install deps from repo root:
 
@@ -23,4 +24,4 @@ const study = extractStudyText(md); // { type: 'dialogue'|'monologue', lines: st
 pnpm install
 pnpm --filter @esl-pipeline/md-extractor build
 pnpm --filter @esl-pipeline/md-extractor test
-````
+```

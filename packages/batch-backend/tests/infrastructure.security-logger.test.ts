@@ -2,14 +2,14 @@
 //
 // Tests for security audit logging service covering event logging,
 // severity handling, threshold alerts, and audit trail persistence.
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import {
-  SecurityLogger,
   SecurityEventType,
-  SecuritySeverity,
   SecurityLogConfig,
-} from '../src/infrastructure/security-logger';
+  SecurityLogger,
+  SecuritySeverity,
+} from '../src/infrastructure/security-logger.js';
 
 // Mock logger
 vi.mock('../src/infrastructure/logger', () => ({
@@ -48,7 +48,7 @@ describe('SecurityLogger', () => {
 
   describe('Event Logging', () => {
     it('should log low severity events', async () => {
-      const { logger } = await import('../src/infrastructure/logger');
+      const { logger } = await import('../src/infrastructure/logger.js');
 
       await securityLogger.logEvent({
         eventType: SecurityEventType.LOGIN_SUCCESS,
@@ -65,12 +65,12 @@ describe('SecurityLogger', () => {
           severity: SecuritySeverity.LOW,
           user_id: 'user123',
           outcome: 'success',
-        })
+        }),
       );
     });
 
     it('should log medium severity events as warnings', async () => {
-      const { logger } = await import('../src/infrastructure/logger');
+      const { logger } = await import('../src/infrastructure/logger.js');
 
       await securityLogger.logEvent({
         eventType: SecurityEventType.LOGIN_FAILURE,
@@ -84,12 +84,12 @@ describe('SecurityLogger', () => {
         expect.objectContaining({
           event_type: SecurityEventType.LOGIN_FAILURE,
           severity: SecuritySeverity.MEDIUM,
-        })
+        }),
       );
     });
 
     it('should log high severity events as warnings', async () => {
-      const { logger } = await import('../src/infrastructure/logger');
+      const { logger } = await import('../src/infrastructure/logger.js');
 
       await securityLogger.logEvent({
         eventType: SecurityEventType.UNAUTHORIZED_ACCESS_ATTEMPT,
@@ -103,12 +103,12 @@ describe('SecurityLogger', () => {
         expect.objectContaining({
           event_type: SecurityEventType.UNAUTHORIZED_ACCESS_ATTEMPT,
           severity: SecuritySeverity.HIGH,
-        })
+        }),
       );
     });
 
     it('should log critical severity events as errors', async () => {
-      const { logger } = await import('../src/infrastructure/logger');
+      const { logger } = await import('../src/infrastructure/logger.js');
 
       await securityLogger.logEvent({
         eventType: SecurityEventType.PRIVILEGE_ESCALATION_ATTEMPT,
@@ -122,20 +122,20 @@ describe('SecurityLogger', () => {
         expect.objectContaining({
           event_type: SecurityEventType.PRIVILEGE_ESCALATION_ATTEMPT,
           severity: SecuritySeverity.CRITICAL,
-        })
+        }),
       );
     });
   });
 
   describe('Typed Event Logging Methods', () => {
     it('should log authentication events', async () => {
-      const { logger } = await import('../src/infrastructure/logger');
+      const { logger } = await import('../src/infrastructure/logger.js');
 
       await securityLogger.logAuthEvent(
         SecurityEventType.LOGIN_SUCCESS,
         'user123',
         'session456',
-        'success'
+        'success',
       );
 
       expect(logger.info).toHaveBeenCalledWith(
@@ -147,19 +147,19 @@ describe('SecurityLogger', () => {
           session_id: 'session456',
           outcome: 'success',
           action: 'authentication',
-        })
+        }),
       );
     });
 
     it('should log file upload events with proper severity', async () => {
-      const { logger } = await import('../src/infrastructure/logger');
+      const { logger } = await import('../src/infrastructure/logger.js');
 
       await securityLogger.logFileUploadEvent(
         SecurityEventType.FILE_UPLOAD_SUCCESS,
         'user123',
         'test.md',
         1024,
-        'success'
+        'success',
       );
 
       expect(logger.info).toHaveBeenCalledWith(
@@ -174,19 +174,19 @@ describe('SecurityLogger', () => {
             fileSize: 1024,
             filename: 'test.md',
           }),
-        })
+        }),
       );
     });
 
     it('should assign high severity to malicious file detection', async () => {
-      const { logger } = await import('../src/infrastructure/logger');
+      const { logger } = await import('../src/infrastructure/logger.js');
 
       await securityLogger.logFileUploadEvent(
         SecurityEventType.MALICIOUS_FILE_DETECTED,
         'user123',
         'malicious.exe',
         2048,
-        'blocked'
+        'blocked',
       );
 
       expect(logger.warn).toHaveBeenCalledWith(
@@ -195,12 +195,12 @@ describe('SecurityLogger', () => {
           event_type: SecurityEventType.MALICIOUS_FILE_DETECTED,
           severity: SecuritySeverity.HIGH,
           resource: 'malicious.exe',
-        })
+        }),
       );
     });
 
     it('should log rate limiting events', async () => {
-      const { logger } = await import('../src/infrastructure/logger');
+      const { logger } = await import('../src/infrastructure/logger.js');
 
       await securityLogger.logRateLimitEvent(
         SecurityEventType.RATE_LIMIT_EXCEEDED,
@@ -208,7 +208,7 @@ describe('SecurityLogger', () => {
         'ip:192.168.1.1',
         10,
         15,
-        60
+        60,
       );
 
       expect(logger.warn).toHaveBeenCalledWith(
@@ -224,19 +224,19 @@ describe('SecurityLogger', () => {
             count: 15,
             retryAfter: 60,
           }),
-        })
+        }),
       );
     });
 
     it('should log authorization events', async () => {
-      const { logger } = await import('../src/infrastructure/logger');
+      const { logger } = await import('../src/infrastructure/logger.js');
 
       await securityLogger.logAuthorizationEvent(
         SecurityEventType.PRIVILEGE_ESCALATION_ATTEMPT,
         'user123',
         '/admin/users',
         'DELETE',
-        { originalRole: 'user', requestedRole: 'admin' }
+        { originalRole: 'user', requestedRole: 'admin' },
       );
 
       expect(logger.error).toHaveBeenCalledWith(
@@ -252,17 +252,17 @@ describe('SecurityLogger', () => {
             originalRole: 'user',
             requestedRole: 'admin',
           }),
-        })
+        }),
       );
     });
 
     it('should log system events', async () => {
-      const { logger } = await import('../src/infrastructure/logger');
+      const { logger } = await import('../src/infrastructure/logger.js');
 
       await securityLogger.logSystemEvent(
         SecurityEventType.SECURITY_CONFIGURATION_ERROR,
         SecuritySeverity.HIGH,
-        { configPath: '/etc/security.yml', error: 'Invalid syntax' }
+        { configPath: '/etc/security.yml', error: 'Invalid syntax' },
       );
 
       expect(logger.warn).toHaveBeenCalledWith(
@@ -276,7 +276,7 @@ describe('SecurityLogger', () => {
             configPath: '/etc/security.yml',
             error: 'Invalid syntax',
           }),
-        })
+        }),
       );
     });
   });
@@ -323,7 +323,7 @@ describe('SecurityLogger', () => {
 
   describe('Alert Threshold Checking', () => {
     it('should trigger alerts when thresholds are exceeded', async () => {
-      const { logger } = await import('../src/infrastructure/logger');
+      const { logger } = await import('../src/infrastructure/logger.js');
 
       // Simulate multiple failed logins
       for (let i = 0; i < 6; i++) {
@@ -339,12 +339,12 @@ describe('SecurityLogger', () => {
         'Security alert thresholds exceeded',
         expect.objectContaining({
           exceeded_thresholds: expect.arrayContaining(['failed_logins: 6']),
-        })
+        }),
       );
     });
 
     it('should not trigger alerts below threshold', async () => {
-      const { logger } = await import('../src/infrastructure/logger');
+      const { logger } = await import('../src/infrastructure/logger.js');
 
       // Simulate few failed logins (below threshold)
       for (let i = 0; i < 3; i++) {
@@ -358,7 +358,7 @@ describe('SecurityLogger', () => {
 
       expect(logger.warn).not.toHaveBeenCalledWith(
         'Security alert thresholds exceeded',
-        expect.any(Object)
+        expect.any(Object),
       );
     });
   });
@@ -392,7 +392,7 @@ describe('SecurityLogger', () => {
       const firstActivity = sessionsBefore[0].lastActivity;
 
       // Wait a bit and log another event
-      await new Promise(resolve => setTimeout(resolve, 10));
+      await new Promise((resolve) => setTimeout(resolve, 10));
 
       await securityLogger.logEvent({
         eventType: SecurityEventType.FILE_UPLOAD_SUCCESS,
@@ -411,7 +411,7 @@ describe('SecurityLogger', () => {
 
   describe('Error Handling', () => {
     it('should not crash application on logging errors', async () => {
-      const { logger } = await import('../src/infrastructure/logger');
+      const { logger } = await import('../src/infrastructure/logger.js');
       logger.info.mockImplementation(() => {
         throw new Error('Logging failed');
       });
@@ -422,7 +422,7 @@ describe('SecurityLogger', () => {
           eventType: SecurityEventType.LOGIN_SUCCESS,
           severity: SecuritySeverity.LOW,
           outcome: 'success',
-        })
+        }),
       ).resolves.toBeUndefined();
 
       // Error should be logged
@@ -444,7 +444,7 @@ describe('SecurityLogger', () => {
     });
 
     it('should handle missing optional fields gracefully', async () => {
-      const { logger } = await import('../src/infrastructure/logger');
+      const { logger } = await import('../src/infrastructure/logger.js');
 
       await securityLogger.logEvent({
         eventType: SecurityEventType.SYSTEM_ERROR,
@@ -460,7 +460,7 @@ describe('SecurityLogger', () => {
           session_id: undefined,
           ip_address: undefined,
           user_agent: undefined,
-        })
+        }),
       );
     });
   });
@@ -488,14 +488,14 @@ describe('SecurityLogger', () => {
 
   describe('Integration Tests', () => {
     it('should handle complete security event workflow', async () => {
-      const { logger } = await import('../src/infrastructure/logger');
+      const { logger } = await import('../src/infrastructure/logger.js');
 
       // Simulate a complete attack scenario
       await securityLogger.logAuthEvent(
         SecurityEventType.LOGIN_FAILURE,
         'attacker',
         'session123',
-        'failure'
+        'failure',
       );
 
       await securityLogger.logFileUploadEvent(
@@ -503,7 +503,7 @@ describe('SecurityLogger', () => {
         'attacker',
         'malware.exe',
         1024,
-        'blocked'
+        'blocked',
       );
 
       await securityLogger.logRateLimitEvent(
@@ -511,7 +511,7 @@ describe('SecurityLogger', () => {
         'attacker',
         'ip:192.168.1.100',
         10,
-        15
+        15,
       );
 
       // Verify events were logged
@@ -543,7 +543,7 @@ describe('SecurityLogger', () => {
         correlationId,
       });
 
-      const { logger } = await import('../src/infrastructure/logger');
+      const { logger } = await import('../src/infrastructure/logger.js');
       const calls = logger.info.mock.calls;
 
       expect(calls[0][1]).toHaveProperty('correlation_id', correlationId);

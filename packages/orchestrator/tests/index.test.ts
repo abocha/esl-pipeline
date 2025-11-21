@@ -1,13 +1,13 @@
-import { describe, expect, it, vi } from 'vitest';
 import { mkdtemp, readFile, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
-import { join, dirname } from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { join } from 'node:path';
+import { describe, expect, it, vi } from 'vitest';
+
 import { newAssignment } from '../src/index.js';
 
 vi.mock('@esl-pipeline/tts-elevenlabs', async () => {
   const actual = await vi.importActual<typeof import('@esl-pipeline/tts-elevenlabs')>(
-    '@esl-pipeline/tts-elevenlabs'
+    '@esl-pipeline/tts-elevenlabs',
   );
   return {
     ...actual,
@@ -15,8 +15,7 @@ vi.mock('@esl-pipeline/tts-elevenlabs', async () => {
   };
 });
 
-const __dirname = dirname(fileURLToPath(import.meta.url));
-const okFixturePath = join(__dirname, '../../md-validator/fixtures/ok.md');
+const okFixturePath = join(import.meta.dirname, '../../md-validator/fixtures/ok.md');
 
 describe('orchestrator stub', () => {
   it('produces manifest and step summary', async () => {
@@ -29,7 +28,7 @@ describe('orchestrator stub', () => {
       voiceMapPath,
       `
 default: voice_id_default
-    `.trim()
+    `.trim(),
     );
     // Set required env vars for dry-run upload preview
     process.env.S3_BUCKET = 'test-bucket';
@@ -56,9 +55,9 @@ default: voice_id_default
     expect(result.manifestPath).toBeDefined();
     expect(result.pageId).toBeUndefined();
     expect(result.audio?.url).toMatch(
-      /^https:\/\/test-bucket\.s3\.amazonaws\.com\/audio\/assignments\/.*\.mp3$/
+      /^https:\/\/test-bucket\.s3\.amazonaws\.com\/audio\/assignments\/.*\.mp3$/,
     );
-  }, 30000);
+  }, 30_000);
 
   it('reuses manifest assets when skip flags are provided', async () => {
     const dir = await mkdtemp(join(tmpdir(), 'orchestrator-skip-'));
@@ -70,7 +69,7 @@ default: voice_id_default
       voiceMapPath,
       `
 default: voice_id_default
-    `.trim()
+    `.trim(),
     );
     process.env.S3_BUCKET = 'test-bucket';
     process.env.AWS_REGION = 'us-east-1';

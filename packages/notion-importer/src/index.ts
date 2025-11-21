@@ -1,14 +1,17 @@
 import { readFile } from 'node:fs/promises';
 import { basename } from 'node:path';
-import { createNotionClient, resolveStudentId, resolveDataSourceId } from './notion.js';
-import { mdToBlocks } from './mdToBlocks.js';
+
+import { ValidationError } from '@esl-pipeline/contracts';
 import { extractFrontmatter } from '@esl-pipeline/md-extractor';
 import { validateMarkdownFile } from '@esl-pipeline/md-validator';
-import type { ImportOptions, FrontmatterShape } from './types.js';
-export type { ImportOptions, FrontmatterShape } from './types.js';
+
 import { chunk } from './chunk.js';
+import { mdToBlocks } from './mdToBlocks.js';
+import { createNotionClient, resolveDataSourceId, resolveStudentId } from './notion.js';
 import { withRetry } from './retry.js';
-import { ValidationError } from '@esl-pipeline/contracts';
+import type { FrontmatterShape, ImportOptions } from './types.js';
+
+export type { ImportOptions, FrontmatterShape } from './types.js';
 
 const MAX_BLOCKS_PER_REQUEST = 50;
 
@@ -26,7 +29,7 @@ export async function runImport(opts: ImportOptions) {
   const blockMatch = rawMd.match(/```([a-zA-Z0-9_-]*)\s*\n([\s\S]*?)```/m);
   if (!blockMatch) {
     throw new ValidationError(
-      'No fenced code block found. Output must be inside a single triple-backtick block.'
+      'No fenced code block found. Output must be inside a single triple-backtick block.',
     );
   }
   const blockContent = blockMatch[2]?.trim() ?? '';
@@ -41,7 +44,7 @@ export async function runImport(opts: ImportOptions) {
   const properties: Record<string, any> = {
     Name: { title: [{ type: 'text', text: { content: title } }] },
   };
-  if (topics.length) {
+  if (topics.length > 0) {
     properties['Topic'] = { multi_select: topics.map((t: string) => ({ name: t })) };
   }
 
@@ -58,7 +61,7 @@ export async function runImport(opts: ImportOptions) {
     const dryRunOutput = {
       dataSourceId: opts.dataSourceId ?? opts.dbId ?? 'dry-run-placeholder',
       propertiesPreview: properties,
-      blocksPreview: children.map(b => b.type),
+      blocksPreview: children.map((b) => b.type),
       totalBlocks: children.length,
       studentLinked: Boolean(studentName),
     };
@@ -84,7 +87,7 @@ export async function runImport(opts: ImportOptions) {
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       console.warn(
-        `[notion-importer] Continuing without linking student "${studentName}": ${message}`
+        `[notion-importer] Continuing without linking student "${studentName}": ${message}`,
       );
     }
   }
@@ -106,7 +109,7 @@ export async function runImport(opts: ImportOptions) {
           properties: properties as any,
           children,
         }),
-      'pages.create'
+      'pages.create',
     );
   } else {
     page = await withRetry(
@@ -115,7 +118,7 @@ export async function runImport(opts: ImportOptions) {
           parent,
           properties: properties as any,
         }),
-      'pages.create'
+      'pages.create',
     );
     const chunks = chunk(children, MAX_BLOCKS_PER_REQUEST);
     for (const batch of chunks) {
@@ -125,7 +128,7 @@ export async function runImport(opts: ImportOptions) {
             block_id: page.id,
             children: batch,
           }),
-        'blocks.children.append'
+        'blocks.children.append',
       );
     }
   }

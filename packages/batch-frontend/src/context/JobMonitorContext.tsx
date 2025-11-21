@@ -1,4 +1,5 @@
-import React, {
+import {
+  type ReactNode,
   createContext,
   useCallback,
   useContext,
@@ -6,9 +7,9 @@ import React, {
   useMemo,
   useRef,
   useState,
-  ReactNode,
 } from 'react';
-import type { JobEvent, JobStatus, JobState, SubmitJobRequest } from '../utils/api';
+
+import type { JobEvent, JobState, JobStatus, SubmitJobRequest } from '../utils/api';
 import { getJobStatus, subscribeToJobEvents } from '../utils/api';
 
 type ConnectionState = 'idle' | 'connecting' | 'connected' | 'error' | 'reconnecting';
@@ -90,7 +91,7 @@ export function JobMonitorProvider({ children }: { children: ReactNode }) {
   }, [jobs]);
 
   const updateJob = useCallback((jobId: string, mutator: (prev: JobEntry) => JobEntry) => {
-    setJobs(prev => {
+    setJobs((prev) => {
       const previous = prev[jobId] ?? createDefaultJob(jobId);
       const next = mutator(previous);
       return {
@@ -101,9 +102,18 @@ export function JobMonitorProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const registerJob = useCallback(
-    ({ jobId, fileName, md, preset, notionDatabase, upload, withTts, mode }: RegisterJobOptions) => {
+    ({
+      jobId,
+      fileName,
+      md,
+      preset,
+      notionDatabase,
+      upload,
+      withTts,
+      mode,
+    }: RegisterJobOptions) => {
       const now = new Date().toISOString();
-      updateJob(jobId, prev => ({
+      updateJob(jobId, (prev) => ({
         ...prev,
         jobId,
         fileName: fileName ?? prev.fileName,
@@ -121,7 +131,7 @@ export function JobMonitorProvider({ children }: { children: ReactNode }) {
         mode: mode ?? prev.mode ?? 'auto',
       }));
     },
-    [updateJob]
+    [updateJob],
   );
 
   const stopPolling = useCallback(() => {
@@ -135,10 +145,10 @@ export function JobMonitorProvider({ children }: { children: ReactNode }) {
   const runPolling = useCallback(async () => {
     if (pollingInFlightRef.current) return;
     const activeJobIds = Object.values(jobsRef.current)
-      .filter(job => !isTerminalState(job.state))
-      .map(job => job.jobId);
+      .filter((job) => !isTerminalState(job.state))
+      .map((job) => job.jobId);
 
-    if (!activeJobIds.length) {
+    if (activeJobIds.length === 0) {
       stopPolling();
       return;
     }
@@ -146,12 +156,12 @@ export function JobMonitorProvider({ children }: { children: ReactNode }) {
     pollingInFlightRef.current = true;
     try {
       const results = await Promise.allSettled(
-        activeJobIds.map(jobId => getJobStatus(jobId).then(status => ({ jobId, status })))
+        activeJobIds.map((jobId) => getJobStatus(jobId).then((status) => ({ jobId, status }))),
       );
-      results.forEach(result => {
+      for (const result of results) {
         if (result.status === 'fulfilled') {
           const { jobId, status } = result.value;
-          updateJob(jobId, prev => ({
+          updateJob(jobId, (prev) => ({
             ...prev,
             ...status,
             fileName: prev.fileName,
@@ -159,7 +169,7 @@ export function JobMonitorProvider({ children }: { children: ReactNode }) {
             updatedAt: status.updatedAt ?? prev.updatedAt,
           }));
         }
-      });
+      }
     } finally {
       pollingInFlightRef.current = false;
     }
@@ -175,7 +185,7 @@ export function JobMonitorProvider({ children }: { children: ReactNode }) {
   const handleJobEvent = useCallback(
     (event: JobEvent) => {
       if (event.type !== 'job_state_changed') return;
-      updateJob(event.jobId, prev => ({
+      updateJob(event.jobId, (prev) => ({
         ...prev,
         state: event.state,
         manifestPath: event.payload?.manifestPath ?? prev.manifestPath,
@@ -186,7 +196,7 @@ export function JobMonitorProvider({ children }: { children: ReactNode }) {
         updatedAt: new Date().toISOString(),
       }));
     },
-    [updateJob]
+    [updateJob],
   );
 
   const connectEventSource = useCallback(() => {
@@ -200,8 +210,12 @@ export function JobMonitorProvider({ children }: { children: ReactNode }) {
     eventSourceAbortRef.current?.abort();
     const abortController = new AbortController();
     eventSourceAbortRef.current = abortController;
-    setConnectionState(prev =>
-      prev === 'connected' ? 'connected' : reconnectAttemptRef.current ? 'reconnecting' : 'connecting'
+    setConnectionState((prev) =>
+      prev === 'connected'
+        ? 'connected'
+        : reconnectAttemptRef.current
+          ? 'reconnecting'
+          : 'connecting',
     );
     setLastError(null);
 
@@ -213,7 +227,7 @@ export function JobMonitorProvider({ children }: { children: ReactNode }) {
         setLastError(null);
         stopPolling();
       },
-      onError: _event => {
+      onError: (_event) => {
         if (abortController.signal.aborted) {
           return;
         }
@@ -224,7 +238,7 @@ export function JobMonitorProvider({ children }: { children: ReactNode }) {
         if (reconnectTimeoutRef.current) {
           clearTimeout(reconnectTimeoutRef.current);
         }
-        const delay = Math.min(30000, 1000 * 2 ** reconnectAttemptRef.current);
+        const delay = Math.min(30_000, 1000 * 2 ** reconnectAttemptRef.current);
         reconnectTimeoutRef.current = setTimeout(() => {
           connectEventSource();
         }, delay);
@@ -266,28 +280,28 @@ export function JobMonitorProvider({ children }: { children: ReactNode }) {
     async (jobId: string) => {
       const trimmed = jobId.trim();
       if (!trimmed) return;
-      updateJob(trimmed, prev => ({ ...prev, jobId: trimmed }));
+      updateJob(trimmed, (prev) => ({ ...prev, jobId: trimmed }));
 
       try {
         const status = await getJobStatus(trimmed);
-        updateJob(trimmed, prev => ({
+        updateJob(trimmed, (prev) => ({
           ...prev,
           ...status,
           fileName: prev.fileName,
           md: status.md ?? prev.md,
         }));
-      } catch (error: any) {
-        updateJob(trimmed, prev => ({
+      } catch (error: unknown) {
+        updateJob(trimmed, (prev) => ({
           ...prev,
           jobId: trimmed,
           state: 'failed',
-          error: error?.message ?? 'Unable to fetch job status.',
+          error: error instanceof Error ? error.message : 'Unable to fetch job status.',
           updatedAt: new Date().toISOString(),
         }));
         throw error;
       }
     },
-    [updateJob]
+    [updateJob],
   );
 
   const jobsArray = useMemo(() => {
@@ -322,7 +336,7 @@ export function JobMonitorProvider({ children }: { children: ReactNode }) {
       liveUpdatesPaused,
       pauseLiveUpdates,
       resumeLiveUpdates,
-    ]
+    ],
   );
 
   return <JobMonitorContext.Provider value={value}>{children}</JobMonitorContext.Provider>;

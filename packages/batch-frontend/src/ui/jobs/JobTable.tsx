@@ -1,7 +1,8 @@
-import React, { useMemo, useState } from 'react';
 import copy from 'copy-to-clipboard';
+import React, { useMemo, useState } from 'react';
 import toast from 'react-hot-toast';
-import { useJobMonitor, type JobEntry } from '../../context/JobMonitorContext';
+
+import { type JobEntry, useJobMonitor } from '../../context/JobMonitorContext';
 
 const stateColors: Record<string, string> = {
   queued: '#94a3b8',
@@ -11,7 +12,8 @@ const stateColors: Record<string, string> = {
 };
 
 export const JobTable: React.FC = () => {
-  const { jobs, trackJob, liveUpdatesPaused, pauseLiveUpdates, resumeLiveUpdates } = useJobMonitor();
+  const { jobs, trackJob, liveUpdatesPaused, pauseLiveUpdates, resumeLiveUpdates } =
+    useJobMonitor();
   const [search, setSearch] = useState('');
   const [manualJobId, setManualJobId] = useState('');
   const [isAdding, setIsAdding] = useState(false);
@@ -19,10 +21,10 @@ export const JobTable: React.FC = () => {
     const term = search.trim().toLowerCase();
     const result = term
       ? jobs.filter(
-          job =>
+          (job) =>
             job.jobId.toLowerCase().includes(term) ||
             job.fileName?.toLowerCase().includes(term) ||
-            job.md.toLowerCase().includes(term)
+            job.md.toLowerCase().includes(term),
         )
       : jobs;
     return result.slice(0, 20);
@@ -52,8 +54,9 @@ export const JobTable: React.FC = () => {
       await trackJob(trimmed);
       toast.success(`Tracking job ${trimmed}`);
       setManualJobId('');
-    } catch (error: any) {
-      toast.error(error?.message ?? 'Unable to fetch job status.');
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : 'Unable to fetch job status.';
+      toast.error(message);
     } finally {
       setIsAdding(false);
     }
@@ -82,7 +85,7 @@ export const JobTable: React.FC = () => {
             type="text"
             placeholder="Search jobs…"
             value={search}
-            onChange={event => setSearch(event.target.value)}
+            onChange={(event) => setSearch(event.target.value)}
             style={searchInputStyle}
           />
           <div style={addJobWrapStyle}>
@@ -90,10 +93,15 @@ export const JobTable: React.FC = () => {
               type="text"
               placeholder="Track job ID…"
               value={manualJobId}
-              onChange={event => setManualJobId(event.target.value)}
+              onChange={(event) => setManualJobId(event.target.value)}
               style={searchInputStyle}
             />
-            <button type="button" onClick={() => void handleAddJob()} style={primaryButtonStyle} disabled={isAdding}>
+            <button
+              type="button"
+              onClick={() => void handleAddJob()}
+              style={primaryButtonStyle}
+              disabled={isAdding}
+            >
               {isAdding ? 'Adding…' : 'Add'}
             </button>
           </div>
@@ -120,7 +128,7 @@ export const JobTable: React.FC = () => {
                 </td>
               </tr>
             ) : (
-              filteredJobs.map(job => (
+              filteredJobs.map((job) => (
                 <tr key={job.jobId}>
                   <td style={{ fontWeight: 600, fontSize: '13px' }}>{job.jobId}</td>
                   <td>
@@ -130,7 +138,12 @@ export const JobTable: React.FC = () => {
                     </div>
                   </td>
                   <td>
-                    <span style={{ ...statusPillStyle, backgroundColor: stateColors[job.state] ?? '#cbd5f5' }}>
+                    <span
+                      style={{
+                        ...statusPillStyle,
+                        backgroundColor: stateColors[job.state] ?? '#cbd5f5',
+                      }}
+                    >
                       {job.state}
                     </span>
                   </td>
@@ -219,8 +232,8 @@ const controlsWrapStyle: React.CSSProperties = {
   justifyContent: 'flex-end',
 };
 
-function formatMode(mode: JobEntry['mode']): string {
-  const value = mode ?? 'auto';
+function formatMode(mode: JobEntry['mode'] = 'auto'): string {
+  const value = mode === null ? 'auto' : mode;
   return value.charAt(0).toUpperCase() + value.slice(1);
 }
 

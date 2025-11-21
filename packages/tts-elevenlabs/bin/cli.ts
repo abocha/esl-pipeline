@@ -1,23 +1,12 @@
 #!/usr/bin/env node
-import { config as loadEnv } from 'dotenv';
-import { existsSync } from 'node:fs';
-import { dirname, resolve } from 'node:path';
-import { fileURLToPath } from 'node:url';
 import { buildStudyTextMp3 } from '../src/index.js';
-
-const moduleDir = dirname(fileURLToPath(import.meta.url));
-loadEnv();
-const repoEnvPath = resolve(moduleDir, '../../../../.env');
-if (existsSync(repoEnvPath)) {
-  loadEnv({ path: repoEnvPath, override: false });
-}
 
 const args = process.argv.slice(2);
 
 // Helper to get flag value
 const flag = (name: string) => {
   const idx = args.indexOf(name);
-  return idx >= 0 ? args[idx + 1] : undefined;
+  return idx === -1 ? undefined : args[idx + 1];
 };
 
 // Helper to check if flag exists
@@ -38,7 +27,7 @@ const dialogueSeed = flag('--dialogue-seed');
 
 // Show help if requested
 if (hasFlag('--help') || hasFlag('-h')) {
-  console.log(`
+  console.log(String.raw`
 Usage: tts-elevenlabs --md <file.md> --voice-map <voices.json> [options]
 
 Required:
@@ -77,11 +66,11 @@ Examples:
   $ tts-elevenlabs --md lesson.md --voice-map voices.yml --tts-mode monologue
 
   # Dialogue mode with custom settings
-  $ tts-elevenlabs --md lesson.md --voice-map voices.yml \\
+  $ tts-elevenlabs --md lesson.md --voice-map voices.yml \
     --tts-mode dialogue --dialogue-language en --dialogue-stability 0.7
 
   # Reproducible dialogue generation
-  $ tts-elevenlabs --md lesson.md --voice-map voices.yml \\
+  $ tts-elevenlabs --md lesson.md --voice-map voices.yml \
     --tts-mode dialogue --dialogue-seed 42
 `);
   process.exit(0);
@@ -104,8 +93,10 @@ if (ttsMode && !['auto', 'dialogue', 'monologue'].includes(ttsMode)) {
 let parsedStability: number | undefined;
 if (dialogueStability !== undefined) {
   parsedStability = Number(dialogueStability);
-  if (isNaN(parsedStability) || parsedStability < 0 || parsedStability > 1) {
-    console.error(`Error: --dialogue-stability must be a number between 0 and 1 (got: ${dialogueStability})`);
+  if (Number.isNaN(parsedStability) || parsedStability < 0 || parsedStability > 1) {
+    console.error(
+      `Error: --dialogue-stability must be a number between 0 and 1 (got: ${dialogueStability})`,
+    );
     process.exit(1);
   }
 }
@@ -114,7 +105,7 @@ if (dialogueStability !== undefined) {
 let parsedSeed: number | undefined;
 if (dialogueSeed !== undefined) {
   parsedSeed = Number(dialogueSeed);
-  if (isNaN(parsedSeed) || !Number.isInteger(parsedSeed)) {
+  if (Number.isNaN(parsedSeed) || !Number.isInteger(parsedSeed)) {
     console.error(`Error: --dialogue-seed must be an integer (got: ${dialogueSeed})`);
     process.exit(1);
   }
@@ -133,8 +124,8 @@ const options = {
 };
 
 buildStudyTextMp3(md, options)
-  .then(result => console.log(JSON.stringify(result, null, 2)))
-  .catch(err => {
-    console.error(err instanceof Error ? err.message : String(err));
+  .then((result) => console.log(JSON.stringify(result, null, 2)))
+  .catch((error) => {
+    console.error(error instanceof Error ? error.message : String(error));
     process.exit(1);
   });

@@ -1,10 +1,11 @@
-import { describe, it, expect, afterEach, vi } from 'vitest';
-import { mkdtempSync, rmSync, writeFileSync, existsSync } from 'node:fs';
+import { existsSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { resolveConfigPaths, createPipeline, loadEnvFiles } from '../src/pipeline.js';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+
 import { RemoteConfigProvider } from '../src/adapters/config/remote.js';
 import { S3ManifestStore } from '../src/adapters/manifest/s3.js';
+import { createPipeline, loadEnvFiles, resolveConfigPaths } from '../src/pipeline.js';
 
 const mockSend = vi.fn().mockResolvedValue({});
 
@@ -18,7 +19,7 @@ vi.mock('@aws-sdk/client-s3', () => ({
 
 const tempDirs: string[] = [];
 afterEach(() => {
-  while (tempDirs.length) {
+  while (tempDirs.length > 0) {
     const dir = tempDirs.pop();
     if (!dir) continue;
     rmSync(dir, { recursive: true, force: true });

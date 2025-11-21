@@ -1,26 +1,14 @@
 #!/usr/bin/env node
-import { config as loadEnv } from 'dotenv';
-import { existsSync } from 'node:fs';
-import { dirname, resolve } from 'node:path';
-import { fileURLToPath } from 'node:url';
 import { Command } from 'commander';
+
 import { uploadFile } from '../src/index.js';
 
-type StorageUploaderCliOptions = {
+interface StorageUploaderCliOptions {
   file: string;
   prefix?: string;
   publicRead?: boolean;
   presign?: number;
-};
-
-const moduleDir = dirname(fileURLToPath(import.meta.url));
-loadEnv();
-
-const repoEnvPath = resolve(moduleDir, '../../../../.env');
-if (existsSync(repoEnvPath)) {
-  loadEnv({ path: repoEnvPath, override: false });
 }
-
 const program = new Command()
   .name('storage-uploader')
   .description('Upload files to storage backends')
@@ -30,7 +18,7 @@ const program = new Command()
   .option(
     '--presign <seconds>',
     'Generate presigned URL with specified expiration in seconds',
-    parseInt
+    Number.parseInt,
   )
   .action(async (opts: StorageUploaderCliOptions) => {
     try {

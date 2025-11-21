@@ -201,4 +201,4 @@ Backend dependencies for these actions (especially audio reruns) are tracked in 
 
 ---
 
-By following this design, the batch frontend will provide a smooth, real-time experience for tutors: log in, drag/drop lessons, tweak options, watch jobs progress instantly, and re-run audio when necessary—all while respecting backend constraints and paving the way for future features. Let's keep this document updated as the implementation evolves. 
+By following this design, the batch frontend will provide a smooth, real-time experience for tutors: log in, drag/drop lessons, tweak options, watch jobs progress instantly, and re-run audio when necessary—all while respecting backend constraints and paving the way for future features. Let's keep this document updated as the implementation evolves.

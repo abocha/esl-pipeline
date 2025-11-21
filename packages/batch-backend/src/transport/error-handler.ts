@@ -2,21 +2,21 @@
 //
 // Centralized error handling middleware for Fastify.
 // Provides structured error responses, logging, and security considerations.
-
-import { FastifyRequest, FastifyReply } from 'fastify';
-import { logger } from '../infrastructure/logger';
-import { AuthenticationError, AuthorizationError } from './auth-middleware';
-import { RateLimitError } from './rate-limit-middleware';
-import { FileValidationError } from '../infrastructure/file-validation-service';
-import { FileSanitizationError } from '../infrastructure/file-sanitization-service';
-import { ValidationError } from '../application/submit-job';
+import { FastifyReply, FastifyRequest } from 'fastify';
 import { ZodError } from 'zod';
+
+import { ValidationError } from '../application/submit-job.js';
+import { FileSanitizationError } from '../infrastructure/file-sanitization-service.js';
+import { FileValidationError } from '../infrastructure/file-validation-service.js';
+import { logger } from '../infrastructure/logger.js';
+import { AuthenticationError, AuthorizationError } from './auth-middleware.js';
+import { RateLimitError } from './rate-limit-middleware.js';
 
 export interface ErrorResponse {
   error: string;
   message: string;
   code?: string;
-  details?: Record<string, any>;
+  details?: Record<string, unknown>;
   timestamp?: string;
   requestId?: string;
 }
@@ -36,7 +36,7 @@ export enum ErrorType {
 /**
  * Classify error type from various error sources
  */
-function classifyError(error: any): ErrorType {
+function classifyError(error: unknown): ErrorType {
   if (error instanceof AuthenticationError) {
     return ErrorType.AUTHENTICATION_ERROR;
   }
@@ -54,8 +54,11 @@ function classifyError(error: any): ErrorType {
   ) {
     return ErrorType.VALIDATION_ERROR;
   }
-  if (error.statusCode && error.statusCode >= 400 && error.statusCode < 500) {
-    return ErrorType.CLIENT_ERROR;
+  if (error && typeof error === 'object' && 'statusCode' in error) {
+    const statusCode = (error as { statusCode?: unknown }).statusCode;
+    if (typeof statusCode === 'number' && statusCode >= 400 && statusCode < 500) {
+      return ErrorType.CLIENT_ERROR;
+    }
   }
   return ErrorType.SERVER_ERROR;
 }
@@ -64,26 +67,39 @@ function classifyError(error: any): ErrorType {
  * Create standardized error response
  */
 function createErrorResponse(
-  error: any,
+  error: unknown,
   request: FastifyRequest,
-  errorType: ErrorType
+  errorType: ErrorType,
 ): ErrorResponse {
   const baseResponse: ErrorResponse = {
     error: getErrorCode(errorType),
     message: getSafeErrorMessage(error, errorType),
-    code: error.code || error.name || undefined,
+    code:
+      error &&
+      typeof error === 'object' &&
+      'code' in error &&
+      typeof (error as { code?: unknown }).code === 'string'
+        ? (error as { code: string }).code
+        : error &&
+            typeof error === 'object' &&
+            'name' in error &&
+            typeof (error as { name?: unknown }).name === 'string'
+          ? (error as { name: string }).name
+          : undefined,
     timestamp: new Date().toISOString(),
-    requestId: (request as any).id,
+    requestId: (request as { id?: string }).id,
   };
 
   // For ZodError, extract first error details for backward compatibility
-  if (errorType === ErrorType.VALIDATION_ERROR && error instanceof ZodError) {
-    if (error.issues.length > 0) {
-      const firstError = error.issues[0];
-      if (firstError) {
-        baseResponse.message = firstError.message;
-        baseResponse.code = firstError.code || 'validation_failed';
-      }
+  if (
+    errorType === ErrorType.VALIDATION_ERROR &&
+    error instanceof ZodError &&
+    error.issues.length > 0
+  ) {
+    const firstError = error.issues[0];
+    if (firstError) {
+      baseResponse.message = firstError.message;
+      baseResponse.code = firstError.code || 'validation_failed';
     }
   }
 
@@ -102,21 +118,31 @@ function createErrorResponse(
 /**
  * Get HTTP status code for error type
  */
-function getHttpStatus(errorType: ErrorType, originalError?: any): number {
+function getHttpStatus(errorType: ErrorType, originalError?: unknown): number {
   switch (errorType) {
-    case ErrorType.AUTHENTICATION_ERROR:
+    case ErrorType.AUTHENTICATION_ERROR: {
       return 401;
-    case ErrorType.AUTHORIZATION_ERROR:
+    }
+    case ErrorType.AUTHORIZATION_ERROR: {
       return 403;
-    case ErrorType.RATE_LIMIT_ERROR:
+    }
+    case ErrorType.RATE_LIMIT_ERROR: {
       return 429;
-    case ErrorType.VALIDATION_ERROR:
+    }
+    case ErrorType.VALIDATION_ERROR: {
       return 400;
-    case ErrorType.CLIENT_ERROR:
-      return originalError?.statusCode || 400;
-    case ErrorType.SERVER_ERROR:
-    default:
+    }
+    case ErrorType.CLIENT_ERROR: {
+      return originalError &&
+        typeof originalError === 'object' &&
+        'statusCode' in originalError &&
+        typeof originalError.statusCode === 'number'
+        ? originalError.statusCode
+        : 400;
+    }
+    default: {
       return 500;
+    }
   }
 }
 
@@ -125,26 +151,31 @@ function getHttpStatus(errorType: ErrorType, originalError?: any): number {
  */
 function getErrorCode(errorType: ErrorType): string {
   switch (errorType) {
-    case ErrorType.AUTHENTICATION_ERROR:
+    case ErrorType.AUTHENTICATION_ERROR: {
       return 'unauthorized';
-    case ErrorType.AUTHORIZATION_ERROR:
+    }
+    case ErrorType.AUTHORIZATION_ERROR: {
       return 'forbidden';
-    case ErrorType.RATE_LIMIT_ERROR:
+    }
+    case ErrorType.RATE_LIMIT_ERROR: {
       return 'rate_limit_exceeded';
-    case ErrorType.VALIDATION_ERROR:
+    }
+    case ErrorType.VALIDATION_ERROR: {
       return 'validation_failed';
-    case ErrorType.CLIENT_ERROR:
+    }
+    case ErrorType.CLIENT_ERROR: {
       return 'client_error';
-    case ErrorType.SERVER_ERROR:
-    default:
+    }
+    default: {
       return 'internal_error';
+    }
   }
 }
 
 /**
  * Get safe error message that doesn't leak sensitive information
  */
-function getSafeErrorMessage(error: any, errorType: ErrorType): string {
+function getSafeErrorMessage(error: unknown, errorType: ErrorType): string {
   // For server errors, always use generic message
   if (errorType === ErrorType.SERVER_ERROR) {
     return 'An internal server error occurred';
@@ -152,12 +183,22 @@ function getSafeErrorMessage(error: any, errorType: ErrorType): string {
 
   // For authentication/authorization errors, use safe messages
   if (errorType === ErrorType.AUTHENTICATION_ERROR || errorType === ErrorType.AUTHORIZATION_ERROR) {
-    return error.message || 'Access denied';
+    return error &&
+      typeof error === 'object' &&
+      'message' in error &&
+      typeof error.message === 'string'
+      ? error.message
+      : 'Access denied';
   }
 
   // For validation errors, use the error message but sanitize if needed
   if (errorType === ErrorType.VALIDATION_ERROR) {
-    return error.message || 'Validation failed';
+    return error &&
+      typeof error === 'object' &&
+      'message' in error &&
+      typeof error.message === 'string'
+      ? error.message
+      : 'Validation failed';
   }
 
   // For rate limiting, use standard message
@@ -166,7 +207,13 @@ function getSafeErrorMessage(error: any, errorType: ErrorType): string {
   }
 
   // For other client errors, use the original message if safe
-  if (typeof error.message === 'string' && error.message.length < 200) {
+  if (
+    error &&
+    typeof error === 'object' &&
+    'message' in error &&
+    typeof error.message === 'string' &&
+    error.message.length < 200
+  ) {
     return error.message;
   }
 
@@ -176,16 +223,16 @@ function getSafeErrorMessage(error: any, errorType: ErrorType): string {
 /**
  * Redact sensitive data from error context
  */
-function redactSensitiveData(context: Record<string, any>): Record<string, any> {
+function redactSensitiveData(context: Record<string, unknown>): Record<string, unknown> {
   const sensitiveKeys = ['password', 'token', 'secret', 'key', 'auth', 'authorization'];
-  const redacted: Record<string, any> = {};
+  const redacted: Record<string, unknown> = {};
 
   for (const [key, value] of Object.entries(context)) {
     const lowerKey = key.toLowerCase();
-    if (sensitiveKeys.some(sensitive => lowerKey.includes(sensitive))) {
+    if (sensitiveKeys.some((sensitive) => lowerKey.includes(sensitive))) {
       redacted[key] = '[REDACTED]';
     } else if (typeof value === 'object' && value !== null) {
-      redacted[key] = redactSensitiveData(value);
+      redacted[key] = redactSensitiveData(value as Record<string, unknown>);
     } else {
       redacted[key] = value;
     }
@@ -197,7 +244,7 @@ function redactSensitiveData(context: Record<string, any>): Record<string, any> 
 /**
  * Log error with appropriate level and context
  */
-function logError(error: any, request: FastifyRequest, errorType: ErrorType): void {
+function logError(error: unknown, request: FastifyRequest, errorType: ErrorType): void {
   const logContext = {
     event: 'http_error',
     errorType,
@@ -205,8 +252,8 @@ function logError(error: any, request: FastifyRequest, errorType: ErrorType): vo
     url: request.url,
     ip: request.ip,
     userAgent: request.headers['user-agent'],
-    requestId: (request as any).id,
-    userId: (request as any).user?.id,
+    requestId: (request as { id?: string }).id,
+    userId: (request as { user?: { id?: string } }).user?.id,
     ...redactSensitiveData({
       error:
         error instanceof Error
@@ -230,7 +277,7 @@ function logError(error: any, request: FastifyRequest, errorType: ErrorType): vo
 /**
  * Global error handler middleware for Fastify
  */
-export function errorHandler(error: any, request: FastifyRequest, reply: FastifyReply): void {
+export function errorHandler(error: unknown, request: FastifyRequest, reply: FastifyReply): void {
   try {
     const errorType = classifyError(error);
     const statusCode = getHttpStatus(errorType, error);
@@ -248,7 +295,7 @@ export function errorHandler(error: any, request: FastifyRequest, reply: Fastify
     logger.error('Error handler failed', {
       originalError: String(error),
       handlerError: handlerError instanceof Error ? handlerError.message : String(handlerError),
-      requestId: (request as any).id,
+      requestId: (request as { id?: string }).id,
       method: request.method,
       url: request.url,
     });
@@ -257,7 +304,7 @@ export function errorHandler(error: any, request: FastifyRequest, reply: Fastify
       error: 'internal_error',
       message: 'An internal server error occurred',
       timestamp: new Date().toISOString(),
-      requestId: (request as any).id,
+      requestId: (request as { id?: string }).id,
     });
   }
 }
@@ -270,8 +317,8 @@ export function registerErrorHandler(app: import('fastify').FastifyInstance): vo
 
   // Add request ID generation
   app.addHook('onRequest', (request, reply, done) => {
-    (request as any).id =
-      request.id || `req_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+    (request as { id?: string }).id =
+      request.id || `req_${Date.now()}_${Math.random().toString(36).slice(2, 11)}`;
     done();
   });
 }

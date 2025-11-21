@@ -69,18 +69,18 @@ Dialogue mode requires speaker-to-voice mappings in your voice configuration:
 # configs/voices.yml (example)
 speakers:
   Alex:
-    voice_id: "21m00Tcm4TlvDq8ikWAM"  # Rachel voice
+    voice_id: '21m00Tcm4TlvDq8ikWAM' # Rachel voice
   Sarah:
-    voice_id: "AZnzlk1XvdvUeBnXmlld"  # Bella voice
-  
+    voice_id: 'AZnzlk1XvdvUeBnXmlld' # Bella voice
+
 # Or use profiles
 speaker_profiles:
-  - id: "teacher"
-    gender: "female"
-    accent: "american"
-  - id: "student"
-    gender: "male"
-    accent: "british"
+  - id: 'teacher'
+    gender: 'female'
+    accent: 'american'
+  - id: 'student'
+    gender: 'male'
+    accent: 'british'
 ```
 
 ### Programmatic Usage
@@ -92,7 +92,7 @@ import { buildStudyTextMp3 } from '@esl-pipeline/tts-elevenlabs';
 const result1 = await buildStudyTextMp3({
   md: 'lesson.md',
   voicesYml: 'voices.yml',
-  ttsMode: 'auto'  // Will detect content type automatically
+  ttsMode: 'auto', // Will detect content type automatically
 });
 
 // Force dialogue mode
@@ -102,13 +102,14 @@ const result2 = await buildStudyTextMp3({
   ttsMode: 'dialogue',
   dialogueLanguage: 'en',
   dialogueStability: 0.7,
-  dialogueSeed: 42
+  dialogueSeed: 42,
 });
 ```
 
 ### Backward Compatibility
 
 ✅ **Fully backward compatible** - Existing usage works without changes:
+
 - Default mode is 'auto' which defaults to monologue for backward compatibility
 - All existing CLI flags and options remain unchanged
 - No breaking changes to API or output format
@@ -116,6 +117,7 @@ const result2 = await buildStudyTextMp3({
 ### Performance Benefits
 
 Dialogue mode provides:
+
 - **Fewer API calls**: 1 request vs. N requests (where N = dialogue lines)
 - **Better speaker continuity**: Natural voice transitions between speakers
 - **Reduced latency**: Parallel processing within ElevenLabs
@@ -165,7 +167,7 @@ interface BuildStudyTextOptions {
   voiceMap?: Record<string, string>;
   voiceSettings?: VoiceSettings;
   outputFormat?: string;
-  
+
   // New options for dual TTS mode
   ttsMode?: 'auto' | 'dialogue' | 'monologue';
   dialogueLanguage?: string;
@@ -194,7 +196,7 @@ Synchronize available voices from ElevenLabs account.
 import { syncVoices } from '@esl-pipeline/tts-elevenlabs';
 
 await syncVoices({
-  output: './configs/elevenlabs.voices.json'
+  output: './configs/elevenlabs.voices.json',
 });
 ```
 
@@ -211,12 +213,14 @@ yarn add @esl-pipeline/tts-elevenlabs
 ## Setup
 
 1. **Set Environment Variables**:
+
    ```bash
    export ELEVENLABS_API_KEY=your_api_key_here
    export ELEVENLABS_TTS_MODE=auto  # Optional: defaults to auto
    ```
 
 2. **Configure Voices** (see `bin/voices.ts` for interactive setup):
+
    ```bash
    tts-elevenlabs voices --sync  # Sync from your ElevenLabs account
    tts-elevenlabs voices --interactive  # Interactive voice mapping setup
@@ -227,9 +231,9 @@ yarn add @esl-pipeline/tts-elevenlabs
    # configs/voices.yml
    speakers:
      Teacher:
-       voice_id: "21m00Tcm4TlvDq8ikWAM"
+       voice_id: '21m00Tcm4TlvDq8ikWAM'
      Student:
-       voice_id: "AZnzlk1XvdvUeBnXmlld"
+       voice_id: 'AZnzlk1XvdvUeBnXmlld'
    ```
 
 ## Changelog
@@ -237,6 +241,7 @@ yarn add @esl-pipeline/tts-elevenlabs
 ### v2.0.0 - 2025-11-12
 
 #### Added
+
 - **Dual TTS Mode Support**: Automatic content-type detection with mode selection
 - **Text-to-Dialogue API**: Support for multi-speaker conversations using ElevenLabs v3
 - **CLI Flags**: `--tts-mode`, `--dialogue-language`, `--dialogue-stability`, `--dialogue-seed`
@@ -245,18 +250,22 @@ yarn add @esl-pipeline/tts-elevenlabs
 - **Documentation**: API notes and updated README
 
 #### Changed
+
 - Enhanced `buildStudyTextMp3()` to support mode selection
 - Extended `BuildStudyTextOptions` with new optional fields
 - Improved speaker continuity in dialogue mode
 
 #### Fixed
+
 - Better error messages for missing voice mappings
 - Proper cleanup of temporary files in all scenarios
 
 #### Breaking Changes
+
 - **None** - Fully backward compatible
 
 ### v1.0.0 - 2024-XX-XX
+
 - Initial release with basic Text-to-Speech support
 - Speaker assignment functionality
 - Basic ElevenLabs API integration

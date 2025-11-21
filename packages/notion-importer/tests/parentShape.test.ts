@@ -1,10 +1,11 @@
 // packages/notion-importer/tests/parentShape.test.ts
-import { describe, it, expect, vi } from 'vitest';
-import { runImport } from '../src/index.js';
-import * as notion from '../src/notion.js';
-import { writeFileSync, mkdtempSync, rmSync } from 'node:fs';
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { describe, expect, it, vi } from 'vitest';
+
+import { runImport } from '../src/index.js';
+import * as notion from '../src/notion.js';
 
 describe('parent object shape', () => {
   it('uses the chosen data source parent shape', async () => {
@@ -67,7 +68,7 @@ Test plan
 \`\`\``;
       const normalized = md
         .split('\n')
-        .map(line => line.replace(/^\s+/, ''))
+        .map((line) => line.replace(/^\s+/, ''))
         .join('\n');
       const mdPath = join(tempDir, 'lesson.md');
       writeFileSync(mdPath, normalized);
@@ -86,7 +87,7 @@ Test plan
       vi.spyOn(notion, 'resolveStudentId' as any).mockResolvedValue('student-page-id');
 
       // Mock withRetry to avoid actual network calls during test
-      const withRetry = vi.fn(async fn => fn());
+      const withRetry = vi.fn(async (fn) => fn());
       vi.doMock('../src/retry.js', () => ({ withRetry }));
 
       await runImport({ mdPath: mdPath, dbId: 'db-456' });

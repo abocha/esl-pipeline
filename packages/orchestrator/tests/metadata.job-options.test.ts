@@ -1,8 +1,10 @@
-import { describe, it, expect, beforeEach, vi } from 'vitest';
-import { resolveJobOptions } from '../src/metadata/job-options.js';
-import type { ConfigProvider } from '../src/config.js';
-import type { ResolvedConfigPaths } from '../src/pipeline.js';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+
 import { loadVoicesCatalog } from '@esl-pipeline/tts-elevenlabs';
+
+import type { ConfigProvider } from '../src/config.js';
+import { resolveJobOptions } from '../src/metadata/job-options.js';
+import type { ResolvedConfigPaths } from '../src/pipeline.js';
 
 vi.mock('@esl-pipeline/tts-elevenlabs', () => ({
   loadVoicesCatalog: vi.fn(),
@@ -20,7 +22,7 @@ function createConfigProvider(overrides: Partial<ConfigProvider> = {}): ConfigPr
   const base: ConfigProvider = {
     loadPresets: vi.fn().mockResolvedValue({}),
     loadStudentProfiles: vi.fn().mockResolvedValue([]),
-    resolveVoicesPath: vi.fn().mockResolvedValue(undefined),
+    resolveVoicesPath: vi.fn().mockResolvedValue(),
   };
   return { ...base, ...overrides };
 }
@@ -93,11 +95,13 @@ describe('metadata/job-options', () => {
   it('omits duplicate/missing databases and tolerates empty voice catalogs', async () => {
     const configProvider = createConfigProvider({
       loadPresets: vi.fn().mockResolvedValue({}),
-      loadStudentProfiles: vi.fn().mockResolvedValue([
-        { student: 'Anna', dbId: 'db-123' },
-        { student: 'Duplicate', dbId: 'db-123' },
-        { student: 'No DB' },
-      ]),
+      loadStudentProfiles: vi
+        .fn()
+        .mockResolvedValue([
+          { student: 'Anna', dbId: 'db-123' },
+          { student: 'Duplicate', dbId: 'db-123' },
+          { student: 'No DB' },
+        ]),
     });
     vi.mocked(loadVoicesCatalog).mockResolvedValue({ voices: [] });
 

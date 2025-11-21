@@ -1,9 +1,7 @@
 {
   "name": "@esl-pipeline/md-validator",
-  "version": "1.5.3",
+  "version": "2.0.0",
   "private": true,
-  "type": "module",
-  "license": "UNLICENSED",
   "description": "Validate ESL homework markdown structure and frontmatter.",
   "keywords": [
     "esl",
@@ -11,11 +9,8 @@
     "validator",
     "cli"
   ],
-  "engines": {
-    "node": ">=24.10.0"
-  },
-  "main": "./dist/src/index.js",
-  "types": "./dist/src/index.d.ts",
+  "license": "UNLICENSED",
+  "type": "module",
   "exports": {
     ".": {
       "types": "./dist/src/index.d.ts",
@@ -24,33 +19,38 @@
     },
     "./package.json": "./package.json"
   },
-  "files": [
-    "dist"
-  ],
+  "main": "./dist/src/index.js",
+  "types": "./dist/src/index.d.ts",
   "bin": {
     "md-validator": "dist/bin/cli.js"
   },
+  "files": [
+    "dist"
+  ],
   "scripts": {
+    "build": "tsc -p tsconfig.build.json",
     "clean": "node -e \"fs.rmSync('dist', {recursive:true, force:true})\"",
-    "build": "tsc -p tsconfig.json",
     "dev": "tsx watch src/index.ts",
     "test": "vitest run",
     "test:watch": "vitest"
   },
   "dependencies": {
+    "@esl-pipeline/contracts": "workspace:*",
     "commander": "^14.0.2",
     "gray-matter": "^4.0.3",
     "picocolors": "^1.1.1",
     "remark-parse": "^11.0.0",
     "unified": "^11.0.5",
-    "zod": "^4.1.12",
-    "@esl-pipeline/contracts": "workspace:*"
+    "zod": "^4.1.12"
   },
   "devDependencies": {
     "@types/mdast": "^4.0.4",
     "@types/node": "^24.10.1",
     "tsx": "^4.20.6",
     "typescript": "^5.9.3",
-    "vitest": "^4.0.12"
+    "vitest": "^4.0.13"
+  },
+  "engines": {
+    "node": ">=24.10.0"
   }
 }

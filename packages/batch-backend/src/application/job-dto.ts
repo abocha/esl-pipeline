@@ -1,11 +1,9 @@
 // packages/batch-backend/src/application/job-dto.ts
 //
 // Shared helpers for serializing JobRecord data into the public HTTP/SSE DTO.
-
 import type { JobStatusDto } from '@esl-pipeline/contracts';
-import type { JobRecord } from '../domain/job-model';
 
-export type { JobStatusDto };
+import type { JobRecord } from '../domain/job-model.js';
 
 export function jobRecordToDto(job: JobRecord): JobStatusDto {
   return {
@@ -29,3 +27,5 @@ export function jobRecordToDto(job: JobRecord): JobStatusDto {
     manifestPath: job.manifestPath ?? null,
   };
 }
+
+export { type JobStatusDto } from '@esl-pipeline/contracts';

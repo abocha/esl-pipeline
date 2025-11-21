@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
-import { addOrReplaceAudioUnderStudyText, AddAudioOpts } from '../src/index.js';
+
+import { AddAudioOpts, addOrReplaceAudioUnderStudyText } from '../src/index.js';
 
 function makeMockClient() {
   return {
@@ -16,7 +17,7 @@ function makeMockClient() {
 describe('addOrReplaceAudioUnderStudyText', () => {
   it('throws on missing pageId', async () => {
     await expect(
-      addOrReplaceAudioUnderStudyText('', 'https://example.com/audio.mp3')
+      addOrReplaceAudioUnderStudyText('', 'https://example.com/audio.mp3'),
     ).rejects.toThrow('pageId is required');
   });
 
@@ -51,7 +52,7 @@ describe('addOrReplaceAudioUnderStudyText', () => {
     const result = await addOrReplaceAudioUnderStudyText(
       'page123',
       'https://example.com/audio.mp3',
-      opts
+      opts,
     );
     expect(result.replaced).toBe(false);
     expect(result.appended).toBe(true);
@@ -99,7 +100,7 @@ describe('addOrReplaceAudioUnderStudyText', () => {
     const result = await addOrReplaceAudioUnderStudyText(
       'page123',
       'https://example.com/audio.mp3',
-      opts
+      opts,
     );
     expect(result.replaced).toBe(true);
     expect(result.appended).toBe(true);
@@ -142,7 +143,7 @@ describe('addOrReplaceAudioUnderStudyText', () => {
     const result = await addOrReplaceAudioUnderStudyText(
       'page123',
       'https://example.com/audio.mp3',
-      opts
+      opts,
     );
     expect(result.replaced).toBe(false);
     expect(result.appended).toBe(false);

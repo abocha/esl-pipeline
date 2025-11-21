@@ -1,11 +1,11 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
 import path from 'node:path';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { processQueueJob } from '../src/application/process-queue-job';
-import * as jobRepository from '../src/domain/job-repository';
-import * as orchestratorService from '../src/infrastructure/orchestrator-service';
-import * as loggerModule from '../src/infrastructure/logger';
-import * as jobEvents from '../src/domain/job-events';
+import { processQueueJob } from '../src/application/process-queue-job.js';
+import * as jobEvents from '../src/domain/job-events.js';
+import * as jobRepository from '../src/domain/job-repository.js';
+import * as loggerModule from '../src/infrastructure/logger.js';
+import * as orchestratorService from '../src/infrastructure/orchestrator-service.js';
 
 vi.mock('../src/infrastructure/logger', async () => {
   const actual = await vi.importActual<typeof loggerModule>('../src/infrastructure/logger');
@@ -44,13 +44,13 @@ describe('application/process-queue-job', () => {
       ReturnType<(typeof jobRepository)['getJobById']> extends Promise<infer R>
         ? NonNullable<R>
         : never
-    > = {}
+    > = {},
   ): any {
     const now = new Date('2024-01-01T10:00:00Z');
     return {
       id: 'job-1',
       state: 'queued',
-      md: path.resolve(__dirname, '../../../fixtures/ok.md'),
+      md: path.resolve(import.meta.dirname, '../../../fixtures/ok.md'),
       preset: 'b1-default',
       withTts: true,
       upload: 's3',
@@ -135,7 +135,7 @@ describe('application/process-queue-job', () => {
       mode: initial.mode,
     });
     expect(path.isAbsolute(payload.md)).toBe(true);
-    expect(payload.md.replace(/\\/g, '/').endsWith(initial.md)).toBe(true);
+    expect(payload.md.replaceAll('\\', '/').endsWith(initial.md)).toBe(true);
     expect(typeof runId).toBe('string');
     expect(runId.length).toBeGreaterThan(0);
 

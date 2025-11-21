@@ -1,10 +1,8 @@
 // packages/batch-backend/src/domain/job-events.ts
 //
 // Lightweight in-memory event bus used by the batch backend to broadcast job lifecycle updates.
-// Implemented with a singleton EventEmitter so all publishers/subscribers share the same bus.
-
-import { EventEmitter } from 'node:events';
-import type { JobRecord } from './job-model';
+// Implemented with EventTarget (web standard) for better portability and modern event handling.
+import type { JobRecord } from './job-model.js';
 
 export type JobEventType = 'job_created' | 'job_state_changed';
 
@@ -13,10 +11,33 @@ export interface JobEvent {
   job: JobRecord;
 }
 
-const jobEventEmitter = new EventEmitter();
-jobEventEmitter.setMaxListeners(0);
+/**
+ * Custom event class for job events
+ */
+class JobEventCustomEvent extends Event {
+  constructor(
+    type: string,
+    public readonly jobEvent: JobEvent,
+  ) {
+    super(type);
+  }
+}
 
-export type JobSubscriptionOptions = {
+/**
+ * Custom event for subscription changes
+ */
+class SubscriptionChangeEvent extends Event {
+  constructor(
+    type: string,
+    public readonly change: SubscriptionChange,
+  ) {
+    super(type);
+  }
+}
+
+const jobEventTarget = new EventTarget();
+
+export interface JobSubscriptionOptions {
   /**
    * One or more job IDs to listen for. If omitted or empty, all jobs are delivered.
    */
@@ -30,39 +51,43 @@ export type JobSubscriptionOptions = {
    * Internal relays can disable to avoid unnecessary remote subscriptions.
    */
   trackRemote?: boolean;
-};
+}
 
 type SubscriptionChange =
   | { scope: 'all'; count: number }
   | { scope: 'job'; jobId: string; count: number };
 
-const subscriptionChangeEmitter = new EventEmitter();
+const subscriptionChangeTarget = new EventTarget();
 const jobSubscriptionCounts = new Map<string, number>();
 let wildcardSubscriptionCount = 0;
 
 function emitSubscriptionChange(change: SubscriptionChange): void {
-  subscriptionChangeEmitter.emit('change', change);
+  const event = new SubscriptionChangeEvent('change', change);
+  subscriptionChangeTarget.dispatchEvent(event);
 }
 
 export function publishJobEvent(event: JobEvent): void {
-  jobEventEmitter.emit(event.type, event);
+  const customEvent = new JobEventCustomEvent(event.type, event);
+  jobEventTarget.dispatchEvent(customEvent);
 }
 
 export function subscribeJobEvents(
   listener: (event: JobEvent) => void,
-  options?: JobSubscriptionOptions
+  options?: JobSubscriptionOptions,
 ): () => void {
   const trackRemote = options?.trackRemote !== false;
   const isAllJobs = options?.allJobs === true || !options?.jobIds || options.jobIds.length === 0;
-  const jobIds = isAllJobs ? null : Array.from(new Set(options?.jobIds ?? []));
+  const jobIds = isAllJobs ? null : [...new Set(options?.jobIds)];
 
-  const handler = (event: JobEvent) => {
+  const handler = (evt: Event) => {
+    if (!(evt instanceof JobEventCustomEvent)) return;
+    const event = evt.jobEvent;
     if (!isAllJobs && jobIds && !jobIds.includes(event.job.id)) return;
     listener(event);
   };
 
-  jobEventEmitter.on('job_created', handler);
-  jobEventEmitter.on('job_state_changed', handler);
+  jobEventTarget.addEventListener('job_created', handler);
+  jobEventTarget.addEventListener('job_state_changed', handler);
 
   if (trackRemote) {
     if (isAllJobs) {
@@ -78,8 +103,8 @@ export function subscribeJobEvents(
   }
 
   return () => {
-    jobEventEmitter.off('job_created', handler);
-    jobEventEmitter.off('job_state_changed', handler);
+    jobEventTarget.removeEventListener('job_created', handler);
+    jobEventTarget.removeEventListener('job_state_changed', handler);
 
     if (trackRemote) {
       if (isAllJobs) {
@@ -102,10 +127,15 @@ export function subscribeJobEvents(
 }
 
 export function onJobSubscriptionChange(
-  listener: (change: SubscriptionChange) => void
+  listener: (change: SubscriptionChange) => void,
 ): () => void {
-  subscriptionChangeEmitter.on('change', listener);
-  return () => subscriptionChangeEmitter.off('change', listener);
+  const handler = (evt: Event) => {
+    if (!(evt instanceof SubscriptionChangeEvent)) return;
+    listener(evt.change);
+  };
+
+  subscriptionChangeTarget.addEventListener('change', handler);
+  return () => subscriptionChangeTarget.removeEventListener('change', handler);
 }
 
 export function getJobSubscriptionSnapshot(): {

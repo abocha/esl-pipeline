@@ -7,12 +7,14 @@ Successfully implemented dual TTS mode support in the orchestrator's interactive
 ## Components Implemented
 
 ### 1. Type System
+
 - Extended `NewAssignmentFlags` interface with TTS mode fields
 - Updated `WizardState` and `WizardSelections` types
 - Added fields to `PERSISTABLE_KEYS` for wizard defaults
 - Maintained full TypeScript type safety
 
 ### 2. Wizard UI Flow
+
 - Redesigned `configureTts()` with multi-mode support
 - Added mode selection: auto/dialogue/monologue
 - Conditional dialogue-specific options (language, stability, seed)
@@ -20,6 +22,7 @@ Successfully implemented dual TTS mode support in the orchestrator's interactive
 - Intuitive multi-step flow with smart defaults
 
 ### 3. Environment Support
+
 - Added 4 new environment variables:
   - `ELEVENLABS_TTS_MODE` (auto/dialogue/monologue)
   - `ELEVENLABS_DIALOGUE_LANGUAGE` (ISO 639-1 code)
@@ -29,18 +32,21 @@ Successfully implemented dual TTS mode support in the orchestrator's interactive
 - Clear documentation in README
 
 ### 4. Integration
+
 - Updated pipeline.ts to pass TTS mode options to tts-elevenlabs package
 - Enhanced logging and error handling
 - Manifest updated to include TTS mode information
 - Complete CLI integration with flag parsing
 
 ### 5. Backward Compatibility
+
 - All new fields are optional
 - Automatic migration for existing wizard defaults
 - CLI scripts continue to work without modification
 - Clear migration documentation for existing users
 
 ### 6. Documentation
+
 - Comprehensive design document (DESIGN-wizard-tts-extension.md)
 - Environment variable documentation in README
 - Migration guide for existing users
@@ -49,6 +55,7 @@ Successfully implemented dual TTS mode support in the orchestrator's interactive
 ## Testing
 
 ### Integration Tests Created
+
 - `tests/wizard-tts-mode.integration.test.ts` - 6 comprehensive tests
 - Tests wizard flow with all TTS modes
 - Environment variable integration testing
@@ -56,6 +63,7 @@ Successfully implemented dual TTS mode support in the orchestrator's interactive
 - Type compatibility verification
 
 ### Validation Tools
+
 - `scripts/validate-tts-mode.ts` - End-to-end validation script
 - Type safety verification
 - Environment variable parsing validation
@@ -63,6 +71,7 @@ Successfully implemented dual TTS mode support in the orchestrator's interactive
 - Backward compatibility confirmation
 
 ### Build Verification
+
 - All packages build successfully
 - Full test suite passes (73 tests in tts-elevenlabs, 21 tests in orchestrator)
 - No breaking changes introduced
@@ -70,12 +79,14 @@ Successfully implemented dual TTS mode support in the orchestrator's interactive
 ## Key Files Created/Modified
 
 **Created:**
+
 - `DESIGN-wizard-tts-extension.md` - Comprehensive design document (1,490 lines)
 - `WIZARD-IMPLEMENTATION-SUMMARY.md` - This summary document
 - `tests/wizard-tts-mode.integration.test.ts` - Integration test suite
 - `scripts/validate-tts-mode.ts` - Validation script
 
 **Modified:**
+
 - `src/index.ts` - NewAssignmentFlags interface with TTS mode fields
 - `src/wizard.ts` - configureTts, applyEnvDefaults, state management
 - `src/pipeline.ts` - TTS integration and flag passing
@@ -86,6 +97,7 @@ Successfully implemented dual TTS mode support in the orchestrator's interactive
 ## Usage
 
 ### Wizard Mode
+
 ```bash
 pnpm esl --interactive
 # Select TTS options in the wizard:
@@ -96,6 +108,7 @@ pnpm esl --interactive
 ```
 
 ### CLI Mode
+
 ```bash
 # Basic usage with default auto mode
 pnpm esl --md lesson.md --with-tts
@@ -108,6 +121,7 @@ pnpm esl --md lesson.md --with-tts --tts-mode monologue
 ```
 
 ### Environment Variables
+
 ```bash
 # Set defaults for consistent behavior
 export ELEVENLABS_TTS_MODE=dialogue
@@ -122,12 +136,14 @@ pnpm esl --md lesson.md --with-tts
 ## Migration
 
 ### For Existing Users
+
 1. **No Action Required** - All existing configurations continue to work
 2. **Automatic Migration** - Wizard defaults automatically get `ttsMode: 'auto'`
 3. **CLI Compatibility** - Existing scripts work unchanged
 4. **Gradual Adoption** - New features are opt-in
 
 ### Recommended Migration Path
+
 1. Update to new version (backward compatible)
 2. Use `ELEVENLABS_TTS_MODE=auto` in environment for consistent behavior
 3. Use dialogue mode for conversation lessons with multiple speakers
@@ -138,29 +154,34 @@ pnpm esl --md lesson.md --with-tts
 
 ✅ **All Phases Completed** (1-7, 10, 13, 14)
 ✅ **Build Verification Passed**
+
 - All packages build successfully
 - Orchestrator: 21 tests passed
 - TTS-ElevenLabs: 73 tests passed
 - Integration tests: 6 tests passed
 
 ✅ **Type Safety Maintained**
+
 - Full TypeScript coverage
 - All new fields are optional
 - Backward compatibility guaranteed
 
 ✅ **Comprehensive Documentation**
+
 - Design document: 1,490 lines
 - README updated with environment variables
 - Migration guide provided
 - Usage examples documented
 
 ✅ **Integration Testing**
+
 - Wizard flow tested end-to-end
 - Environment variable parsing validated
 - Persistence and migration verified
 - CLI integration confirmed
 
 ✅ **No Breaking Changes**
+
 - Existing functionality preserved
 - Automatic migration for configurations
 - CLI scripts continue to work
@@ -169,23 +190,27 @@ pnpm esl --md lesson.md --with-tts
 ## Technical Highlights
 
 ### Smart Defaults
+
 - Auto mode defaults for new users
 - Environment variable integration
 - Sensible defaults for dialogue options
 
 ### Robust Validation
+
 - Input validation for all TTS mode fields
 - Language code validation (ISO 639-1)
 - Stability range validation (0.0-1.0)
 - Seed value validation (non-negative integers)
 
 ### User Experience
+
 - Multi-step wizard flow
 - Clear descriptions for each mode
 - Helpful validation messages
 - Consistent with existing wizard patterns
 
 ### State Management
+
 - Origin tracking for all fields
 - Proper cleanup when switching modes
 - Persistence of user preferences

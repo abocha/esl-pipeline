@@ -1,5 +1,6 @@
-import { describe, it, expect } from 'vitest';
-import { canTransition, assertTransition } from '../src/domain/job-model';
+import { describe, expect, it } from 'vitest';
+
+import { assertTransition, canTransition } from '../src/domain/job-model.js';
 
 describe('domain/job-model - job state transitions', () => {
   /**

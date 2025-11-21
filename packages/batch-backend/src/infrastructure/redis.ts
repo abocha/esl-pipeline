@@ -1,12 +1,11 @@
 // packages/batch-backend/src/infrastructure/redis.ts
-
 // Thin Redis adapter (ioredis) for BullMQ and optional caching.
 // - Controlled via REDIS_ENABLED and related envs.
 // - Safe defaults for docker-compose and easy to replace in other environments.
+import { Redis } from 'ioredis';
 
-import IORedis, { Redis } from 'ioredis';
-import { loadConfig } from '../config/env';
-import { logger } from './logger';
+import { loadConfig } from '../config/env.js';
+import { logger } from './logger.js';
 
 let client: Redis | null = null;
 
@@ -20,7 +19,7 @@ export function createRedisClient(): Redis {
     throw new Error('Redis requested but REDIS_ENABLED=false');
   }
 
-  client = new IORedis({
+  client = new Redis({
     host: config.redis.host,
     port: config.redis.port,
     password: config.redis.password,

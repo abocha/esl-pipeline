@@ -1,9 +1,9 @@
 // packages/batch-backend/tests/infrastructure.auth-service.test.ts
-
-import { describe, it, expect, vi, beforeEach } from 'vitest';
-import jwt from 'jsonwebtoken';
 import bcrypt from 'bcrypt';
-import { AuthService, createAuthService } from '../src/infrastructure/auth-service';
+import jwt from 'jsonwebtoken';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+
+import { AuthService, createAuthService } from '../src/infrastructure/auth-service.js';
 
 /**
  * NOTE ON VITEST HOISTING:
@@ -131,7 +131,7 @@ describe('infrastructure/auth-service', () => {
         {
           expiresIn: '15m',
           issuer: '@esl-pipeline/batch-backend',
-        }
+        },
       );
 
       // Second call should be refresh token
@@ -147,14 +147,14 @@ describe('infrastructure/auth-service', () => {
         {
           expiresIn: '7d',
           issuer: '@esl-pipeline/batch-backend',
-        }
+        },
       );
 
       expect(result).toEqual({
         accessToken: 'mock-access-token',
         refreshToken: 'mock-refresh-token',
         expiresIn: 900, // 15 minutes in seconds
-        refreshExpiresIn: 604800, // 7 days in seconds
+        refreshExpiresIn: 604_800, // 7 days in seconds
       });
     });
 
@@ -163,8 +163,8 @@ describe('infrastructure/auth-service', () => {
         sub: 'user-123',
         email: 'test@example.com',
         role: 'user',
-        iat: 1234567890,
-        exp: 1234567890 + 900,
+        iat: 1_234_567_890,
+        exp: 1_234_567_890 + 900,
       };
 
       vi.mocked(jwt.verify).mockReturnValue(mockPayload as any);
@@ -207,8 +207,8 @@ describe('infrastructure/auth-service', () => {
         email: 'test@example.com',
         role: 'user',
         type: 'refresh',
-        iat: 1234567890,
-        exp: 1234567890 + 604800,
+        iat: 1_234_567_890,
+        exp: 1_234_567_890 + 604_800,
       };
 
       vi.mocked(jwt.verify).mockReturnValue(mockPayload as any);
@@ -231,8 +231,8 @@ describe('infrastructure/auth-service', () => {
         sub: 'user-123',
         email: 'test@example.com',
         role: 'user',
-        iat: 1234567890,
-        exp: 1234567890 + 900,
+        iat: 1_234_567_890,
+        exp: 1_234_567_890 + 900,
       } as any);
 
       const authService = new AuthService({
@@ -252,8 +252,8 @@ describe('infrastructure/auth-service', () => {
         email: 'test@example.com',
         role: 'user',
         type: 'refresh',
-        iat: 1234567890,
-        exp: 1234567890 + 604800,
+        iat: 1_234_567_890,
+        exp: 1_234_567_890 + 604_800,
       } as any);
 
       // Mock jwt.sign for token generation
@@ -279,7 +279,7 @@ describe('infrastructure/auth-service', () => {
         accessToken: 'mock-access-token',
         refreshToken: 'mock-refresh-token',
         expiresIn: 900,
-        refreshExpiresIn: 604800,
+        refreshExpiresIn: 604_800,
       });
     });
 
@@ -369,7 +369,7 @@ describe('infrastructure/auth-service', () => {
             refreshTokens: vi.fn(),
             validatePassword: vi.fn(),
             validateEmail: vi.fn(),
-          }) as any
+          }) as any,
       );
 
       const authService = createAuthService(mockConfig);

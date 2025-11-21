@@ -3,10 +3,10 @@
 // File validation service implementing comprehensive security checks for uploads with security logging.
 // Validates file types using magic numbers, enforces size limits, and scans content
 // for malicious patterns while ensuring markdown integrity with comprehensive security event logging.
-
 import { fileTypeFromBuffer } from 'file-type';
 import { lookup as mimeLookup } from 'mime-types';
-import { logger } from './logger';
+
+import { logger } from './logger.js';
 
 export interface FileValidationResult {
   isValid: boolean;
@@ -43,7 +43,7 @@ export class FileValidationError extends Error {
   constructor(
     message: string,
     public code: string,
-    public field?: string
+    public field?: string,
   ) {
     super(message);
     this.name = 'FileValidationError';
@@ -104,10 +104,10 @@ export class FileValidationService {
     if (this.config.maxFileSize <= 0) {
       throw new Error('maxFileSize must be greater than 0');
     }
-    if (!this.config.allowedMimeTypes.length) {
+    if (this.config.allowedMimeTypes.length === 0) {
       throw new Error('allowedMimeTypes cannot be empty');
     }
-    if (!this.config.allowedExtensions.length) {
+    if (this.config.allowedExtensions.length === 0) {
       throw new Error('allowedExtensions cannot be empty');
     }
   }
@@ -199,7 +199,7 @@ export class FileValidationService {
       const contentValidation = this.validateFileContent(
         fileBuffer,
         fileTypeResult.mimeType,
-        originalFilename
+        originalFilename,
       );
       errors.push(...contentValidation.errors);
       warnings.push(...contentValidation.warnings);
@@ -219,8 +219,8 @@ export class FileValidationService {
         filename: originalFilename,
         fileSize,
         mimeType: fileTypeResult.mimeType,
-        errors: errors.map(e => e.code),
-        warnings: warnings.map(w => w.code),
+        errors: errors.map((e) => e.code),
+        warnings: warnings.map((w) => w.code),
       });
     }
 
@@ -303,7 +303,7 @@ export class FileValidationService {
 
     const normalizedExtension = extension.toLowerCase();
     const isAllowed = this.config.allowedExtensions.some(
-      allowed => allowed.toLowerCase() === normalizedExtension
+      (allowed) => allowed.toLowerCase() === normalizedExtension,
     );
 
     if (!isAllowed) {
@@ -324,7 +324,7 @@ export class FileValidationService {
    */
   private async validateFileType(
     fileBuffer: Buffer,
-    originalFilename: string
+    originalFilename: string,
   ): Promise<{ mimeType?: string; extension?: string }> {
     try {
       // First check if the file looks like actual text content (invert binary detection)
@@ -373,7 +373,7 @@ export class FileValidationService {
       if (
         extension &&
         this.config.allowedExtensions.some(
-          allowed => allowed.toLowerCase() === extension.toLowerCase()
+          (allowed) => allowed.toLowerCase() === extension.toLowerCase(),
         )
       ) {
         const fallbackMimeType = mimeLookup(extension);
@@ -400,7 +400,7 @@ export class FileValidationService {
    */
   private validateMimeType(
     mimeType?: string,
-    _originalFilename?: string
+    _originalFilename?: string,
   ): { isValid: boolean; error?: ValidationError } {
     if (!mimeType) {
       return {
@@ -432,7 +432,7 @@ export class FileValidationService {
   private validateFileContent(
     fileBuffer: Buffer,
     mimeType?: string,
-    originalFilename?: string
+    originalFilename?: string,
   ): { errors: ValidationError[]; warnings: ValidationWarning[] } {
     const errors: ValidationError[] = [];
     const warnings: ValidationWarning[] = [];
@@ -474,11 +474,11 @@ export class FileValidationService {
 
       // Check for null bytes AFTER decoding - only fail if they appear in the decoded string
       // This allows us to detect binary content warnings before failing on null bytes
-      const hasNullBytes = content.includes('\x00');
+      const hasNullBytes = content.includes('\u0000');
 
       if (hasNullBytes) {
         // Check if it's mostly null bytes (test buffer) or embedded nulls (malicious)
-        const nullByteCount = fileBuffer.filter(byte => byte === 0).length;
+        const nullByteCount = fileBuffer.filter((byte) => byte === 0).length;
         const nullByteRatio = fileBuffer.length > 0 ? nullByteCount / fileBuffer.length : 0;
 
         // Only fail on embedded null bytes for buffers that aren't all nulls and are reasonably sized
@@ -537,7 +537,7 @@ export class FileValidationService {
   private validateMarkdownContent(
     content: string,
     errors: ValidationError[],
-    warnings: ValidationWarning[]
+    warnings: ValidationWarning[],
   ): void {
     // TEST COMPATIBILITY: Only warn about balanced brackets, don't fail
     const openBrackets = (content.match(/\[/g) || []).length;
@@ -586,7 +586,7 @@ export class FileValidationService {
           url.startsWith('javascript:') ||
           url.startsWith('data:text/html') ||
           url.startsWith('file:') ||
-          url.includes('\\x00') ||
+          url.includes(String.raw`\x00`) ||
           url.includes('%00')
         ) {
           errors.push({
@@ -620,7 +620,7 @@ export class FileValidationService {
 
     // Check for unusually long lines (might indicate corruption) - only warn
     const lines = content.split('\n');
-    const longLines = lines.filter(line => line.length > 10000);
+    const longLines = lines.filter((line) => line.length > 10_000);
 
     if (longLines.length > 0) {
       warnings.push({
@@ -649,7 +649,7 @@ export class FileValidationService {
    */
   private detectMaliciousPatterns(
     fileBuffer: Buffer,
-    mimeType?: string
+    mimeType?: string,
   ): { errors: ValidationError[] } {
     const errors: ValidationError[] = [];
 
@@ -692,7 +692,7 @@ export class FileValidationService {
       // If we can't read content as text, that's actually suspicious - only report for truly unreadable content
       // Check for embedded null bytes in the decoded content
       const content = fileBuffer.toString('utf8');
-      if (content.includes('\x00')) {
+      if (content.includes('\u0000')) {
         errors.push({
           code: 'CONTENT_NOT_READABLE',
           message: 'File content contains null bytes',
@@ -717,7 +717,7 @@ export class FileValidationService {
       /```/g, // Code blocks
     ];
 
-    return markdownIndicators.some(pattern => pattern.test(content));
+    return markdownIndicators.some((pattern) => pattern.test(content));
   }
 
   /**
@@ -730,7 +730,7 @@ export class FileValidationService {
 
     // Optimization: For large all-null buffers (like Buffer.alloc), quickly detect and return high binary content
     // This prevents expensive entropy calculations for test scenarios
-    if (fileBuffer.length > 100000) {
+    if (fileBuffer.length > 100_000) {
       // 100KB threshold
       // Quick scan to check if buffer is mostly null bytes
       let nullByteCount = 0;
@@ -746,7 +746,7 @@ export class FileValidationService {
 
       // If sampled data is mostly null bytes, extrapolate and return high ratio
       if (totalBytes > 0 && nullByteCount / totalBytes > 0.9) {
-        return 1.0; // High binary content ratio
+        return 1; // High binary content ratio
       }
     }
 
@@ -757,8 +757,8 @@ export class FileValidationService {
       let controlCharCount = 0;
       let highValueCount = 0;
 
-      for (let i = 0; i < fileBuffer.length; i++) {
-        const byte = fileBuffer[i]!; // Non-null assertion
+      for (const element of fileBuffer) {
+        const byte = element!; // Non-null assertion
         if (byte === 0) nullByteCount++;
         else if (byte < 7 || (byte > 13 && byte < 32)) controlCharCount++;
         else if (byte > 126) highValueCount++;
@@ -766,12 +766,12 @@ export class FileValidationService {
 
       // For very small buffers, be much more lenient
       if (nullByteCount === fileBuffer.length) {
-        return 1.0; // Only if ALL bytes are null (extreme case)
+        return 1; // Only if ALL bytes are null (extreme case)
       }
 
       // Calculate with much more lenient thresholds
       const totalSuspicious = nullByteCount * 2 + controlCharCount + highValueCount;
-      return Math.min(1.0, totalSuspicious / (fileBuffer.length * 4)); // Much more lenient divisor
+      return Math.min(1, totalSuspicious / (fileBuffer.length * 4)); // Much more lenient divisor
     }
 
     // For medium-sized buffers, use moderate sensitivity
@@ -780,8 +780,8 @@ export class FileValidationService {
       let controlCharCount = 0;
       let highValueCount = 0;
 
-      for (let i = 0; i < fileBuffer.length; i++) {
-        const byte = fileBuffer[i]!; // Non-null assertion
+      for (const element of fileBuffer) {
+        const byte = element!; // Non-null assertion
         if (byte === 0) nullByteCount++;
         else if (byte < 7 || (byte > 13 && byte < 32)) controlCharCount++;
         else if (byte > 126) highValueCount++;
@@ -789,7 +789,7 @@ export class FileValidationService {
 
       // More sensitive calculation - detect even small amounts of binary content
       const totalSuspicious = nullByteCount * 3 + controlCharCount * 2 + highValueCount;
-      return Math.min(1.0, totalSuspicious / fileBuffer.length);
+      return Math.min(1, totalSuspicious / fileBuffer.length);
     }
 
     // Enhanced binary detection with multiple criteria - use single pass for efficiency
@@ -797,8 +797,8 @@ export class FileValidationService {
     let totalScore = 0;
 
     // Single pass through buffer to count all types of binary content
-    for (let i = 0; i < fileBuffer.length; i++) {
-      const byte = fileBuffer[i]!; // Non-null assertion
+    for (const element of fileBuffer) {
+      const byte = element!; // Non-null assertion
 
       if (byte === 0) {
         binaryScore += 3; // Triple penalty for null bytes
@@ -812,7 +812,7 @@ export class FileValidationService {
     }
 
     // 4. Entropy-based detection for large files (with sampling to avoid performance issues)
-    if (fileBuffer.length > 10000) {
+    if (fileBuffer.length > 10_000) {
       // Only for files > 10KB
       const entropy = this.calculateEntropyWithSampling(fileBuffer);
       if (entropy > 7.5) {
@@ -823,20 +823,20 @@ export class FileValidationService {
     }
 
     const ratio = binaryScore / totalScore;
-    return Math.min(1.0, Math.max(0.0, ratio));
+    return Math.min(1, Math.max(0, ratio));
   }
 
   /**
    * Calculate Shannon entropy of buffer content with sampling for large files
    */
   private calculateEntropyWithSampling(buffer: Buffer): number {
-    const sampleSize = Math.min(10000, buffer.length); // Sample up to 10KB
-    const frequency = new Array(256).fill(0);
+    const sampleSize = Math.min(10_000, buffer.length); // Sample up to 10KB
+    const frequency: number[] = Array.from({ length: 256 }).fill(0) as number[];
 
     // Count byte frequencies in sample
     for (let i = 0; i < sampleSize; i++) {
-      const byte = buffer[i]!; // Non-null assertion
-      frequency[byte]++;
+      const byte = buffer[i] as number;
+      frequency[byte] = (frequency[byte] ?? 0) + 1;
     }
 
     let entropy = 0;
@@ -1015,29 +1015,20 @@ export class FileValidationService {
    * Check for invalid Unicode sequences
    */
   private containsInvalidUnicode(content: string): boolean {
-    // Check for surrogate pairs that are not properly formed
-    for (let i = 0; i < content.length; i++) {
-      const charCode = content.charCodeAt(i);
+    // Iterate by code points (handles surrogate pairs automatically)
+    for (const char of content) {
+      const codePoint = char.codePointAt(0);
 
-      // Check for unpaired surrogates
-      if (charCode >= 0xd800 && charCode <= 0xdbff) {
-        // High surrogate - should be followed by low surrogate
-        if (
-          i + 1 >= content.length ||
-          content.charCodeAt(i + 1) < 0xdc00 ||
-          content.charCodeAt(i + 1) > 0xdfff
-        ) {
-          return true; // Unpaired high surrogate
-        }
-      } else if (charCode >= 0xdc00 && charCode <= 0xdfff) {
-        // Low surrogate - should be preceded by high surrogate
-        if (i === 0 || content.charCodeAt(i - 1) < 0xd800 || content.charCodeAt(i - 1) > 0xdbff) {
-          return true; // Unpaired low surrogate
-        }
+      if (codePoint === undefined) continue;
+
+      // If we see a surrogate code point here, it must be unpaired
+      // (because valid pairs are combined into a single code point by the iterator)
+      if (codePoint >= 0xd8_00 && codePoint <= 0xdf_ff) {
+        return true;
       }
 
       // Check for control characters that might indicate tampering
-      if (charCode < 32 && charCode !== 9 && charCode !== 10 && charCode !== 13) {
+      if (codePoint < 32 && codePoint !== 9 && codePoint !== 10 && codePoint !== 13) {
         // Potentially problematic control character
         return true;
       }

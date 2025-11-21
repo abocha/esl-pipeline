@@ -2,10 +2,10 @@
 //
 // Tests for rate limiting middleware covering Redis-based rate limiting,
 // burst handling, and middleware integration.
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { RateLimiterService } from '../src/transport/rate-limit-middleware';
-import { createRedisClient } from '../src/infrastructure/redis';
+import { createRedisClient } from '../src/infrastructure/redis.js';
+import { RateLimiterService } from '../src/transport/rate-limit-middleware.js';
 
 // Mock Redis client
 vi.mock('../src/infrastructure/redis', () => ({
@@ -70,12 +70,12 @@ describe('RateLimiterService', () => {
       expect(mockRedis.zadd).toHaveBeenCalledWith(
         expect.stringContaining('user:123:main'),
         expect.any(Number),
-        expect.any(String)
+        expect.any(String),
       );
       expect(mockRedis.zadd).toHaveBeenCalledWith(
         expect.stringContaining('user:123:burst'),
         expect.any(Number),
-        expect.any(String)
+        expect.any(String),
       );
     });
 
@@ -124,7 +124,7 @@ describe('RateLimiterService', () => {
       expect(mockRedis.zremrangebyscore).toHaveBeenCalledWith(
         expect.any(String),
         0,
-        expect.any(Number)
+        expect.any(Number),
       );
     });
 
@@ -171,7 +171,7 @@ describe('RateLimiterService', () => {
       const result = await rateLimiter.checkRateLimit('user:123');
 
       expect(result.allowed).toBe(false);
-      expect(result.retryAfter).toBe(60000); // Default to window size
+      expect(result.retryAfter).toBe(60_000); // Default to window size
     });
   });
 });
@@ -231,7 +231,7 @@ describe('Rate Limit Middleware', () => {
     expect(mockRedis.zadd).toHaveBeenCalledWith(
       expect.stringContaining('192.168.1.1'),
       expect.any(Number),
-      expect.any(String)
+      expect.any(String),
     );
   });
 

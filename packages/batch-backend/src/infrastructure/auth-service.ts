@@ -1,8 +1,8 @@
 // packages/batch-backend/src/infrastructure/auth-service.ts
-
-import jwt from 'jsonwebtoken';
 import bcrypt from 'bcrypt';
-import { logger } from './logger';
+import jwt from 'jsonwebtoken';
+
+import { logger } from './logger.js';
 
 export interface JwtPayload {
   sub: string; // user ID
@@ -231,20 +231,25 @@ export class AuthService {
       throw new Error(`Invalid expiration format: ${expiresIn}`);
     }
 
-    const value = parseInt(match[1], 10);
+    const value = Number.parseInt(match[1], 10);
     const unit = match[2];
 
     switch (unit) {
-      case 's':
+      case 's': {
         return value;
-      case 'm':
+      }
+      case 'm': {
         return value * 60;
-      case 'h':
+      }
+      case 'h': {
         return value * 60 * 60;
-      case 'd':
+      }
+      case 'd': {
         return value * 60 * 60 * 24;
-      default:
+      }
+      default: {
         throw new Error(`Unknown time unit: ${unit}`);
+      }
     }
   }
 }
@@ -262,7 +267,7 @@ export function createAuthService(config?: AuthServiceConfig): AuthService {
     jwtSecret: process.env.JWT_SECRET || 'your-super-secret-jwt-key',
     jwtExpiresIn: process.env.JWT_EXPIRES_IN || '15m',
     refreshTokenExpiresIn: process.env.REFRESH_TOKEN_EXPIRES_IN || '7d',
-    bcryptRounds: parseInt(process.env.BCRYPT_ROUNDS || '12'),
+    bcryptRounds: Number.parseInt(process.env.BCRYPT_ROUNDS || '12'),
   };
 
   return new AuthService(fallbackConfig);

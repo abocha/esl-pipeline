@@ -10,6 +10,9 @@
     "target": "ES2022",
     "strict": true
   },
-  "references": [{ "path": "../md-extractor" }, { "path": "../md-validator" }],
+  "references": [
+    { "path": "../md-extractor/tsconfig.build.json" },
+    { "path": "../md-validator/tsconfig.build.json" }
+  ],
   "include": ["src", "bin", "tests"]
 }

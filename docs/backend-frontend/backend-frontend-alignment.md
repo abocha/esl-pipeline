@@ -28,6 +28,7 @@ The backend now supports a generic job action system that allows the frontend to
 **Auth:** Required (Bearer token)
 
 **Response includes:**
+
 ```json
 {
   "presets": [...],
@@ -64,6 +65,7 @@ The backend now supports a generic job action system that allows the frontend to
 **Auth:** Required (Bearer token)
 
 **Request Body:**
+
 ```json
 {
   "type": "rerun_audio" | "cancel" | "edit_metadata",
@@ -76,39 +78,43 @@ The backend now supports a generic job action system that allows the frontend to
 **Action-Specific Payloads:**
 
 **Rerun Audio:**
+
 ```json
 {
   "type": "rerun_audio",
   "payload": {
-    "voiceId": "voice-123",      // Optional: override voice
-    "voiceAccent": "british_male",  // Optional: override accent
-    "forceTts": true             // Optional: force TTS regeneration
+    "voiceId": "voice-123", // Optional: override voice
+    "voiceAccent": "british_male", // Optional: override accent
+    "forceTts": true // Optional: force TTS regeneration
   }
 }
 ```
 
 **Cancel Job:**
+
 ```json
 {
   "type": "cancel",
   "payload": {
-    "reason": "User requested cancellation"  // Optional
+    "reason": "User requested cancellation" // Optional
   }
 }
 ```
 
 **Edit Metadata:**
+
 ```json
 {
   "type": "edit_metadata",
   "payload": {
-    "preset": "b2-advanced",           // Optional
-    "notionDatabase": "notion-db-uuid"  // Optional
+    "preset": "b2-advanced", // Optional
+    "notionDatabase": "notion-db-uuid" // Optional
   }
 }
 ```
 
 **Response (Current - Not Implemented):**
+
 ```json
 {
   "error": "not_implemented",
@@ -116,9 +122,11 @@ The backend now supports a generic job action system that allows the frontend to
   "actionType": "rerun_audio"
 }
 ```
+
 Status: `501 Not Implemented`
 
 **Response (Future - Success):**
+
 ```json
 {
   "success": true,
@@ -128,9 +136,11 @@ Status: `501 Not Implemented`
   "timestamp": "2025-01-21T12:00:00Z"
 }
 ```
+
 Status: `200 OK`
 
 **Error Responses:**
+
 - `400 Bad Request` - Invalid action type or malformed payload
 - `404 Not Found` - Job does not exist
 - `422 Unprocessable Entity` - Job state invalid for action (e.g., cancelling succeeded job)
@@ -139,6 +149,7 @@ Status: `200 OK`
 #### Frontend Integration
 
 **Capabilities Discovery:**
+
 1. On app load, fetch `GET /config/job-options`
 2. Parse `supportedActions` array
 3. Render action buttons/menus based on `type` and `label`
@@ -146,6 +157,7 @@ Status: `200 OK`
 5. Show tooltip with `description` on hover
 
 **Action Execution:**
+
 1. User clicks action button (e.g., "Rerun Audio")
 2. Frontend shows confirmation dialog with action-specific form fields
 3. On confirm, `POST /jobs/:jobId/actions` with appropriate payload
@@ -157,12 +169,13 @@ Status: `200 OK`
 
 **Shared Types:**
 Import from `@esl-pipeline/contracts`:
+
 ```typescript
-import { 
-  JobActionType,
-  JobActionRequest, 
+import {
+  ActionCapability,
+  JobActionRequest,
   JobActionResponse,
-  ActionCapability 
+  JobActionType,
 } from '@esl-pipeline/contracts';
 ```
 
@@ -223,7 +236,6 @@ import {
   - Job priority/scheduling options
   - Advanced search and filtering capabilities
 
-
 ---
 
 ## Required Backend Work
@@ -234,13 +246,19 @@ import {
 
 1. **Event bus module**
    - Create `packages/batch-backend/src/domain/job-events.ts`:
+
      ```ts
      import { EventEmitter } from 'node:events';
+
      export type JobEventType = 'job_created' | 'job_state_changed';
-     export interface JobEvent { type: JobEventType; job: JobRecord; }
+     export interface JobEvent {
+       type: JobEventType;
+       job: JobRecord;
+     }
      export function publishJobEvent(event: JobEvent): void;
      export function subscribeJobEvents(listener: (event: JobEvent) => void): () => void;
      ```
+
    - Use a single `EventEmitter` instance (`setMaxListeners(0)` to avoid warnings).
 
 2. **Emit events**
@@ -257,13 +275,16 @@ import {
    - In `http-server.ts`, replace the placeholder with an SSE implementation:
      - Set headers: `Content-Type: text/event-stream`, `Cache-Control: no-cache`, `Connection: keep-alive`.
      - Subscribe to the event bus; on each event, write:
+
        ```
        event: job_state_changed
        data: {...serialized job...}
 
        ```
+
      - Send periodic heartbeats (e.g., `:\n\n`) to keep proxies from timing out.
      - On connection close, unsubscribe and clear any heartbeat timers.
+
    - Decide whether SSE requires authentication (frontend currently sends cookies). If yes, reuse the existing auth middleware.
 
 ### 2. `/config/job-options` Endpoint
@@ -317,6 +338,7 @@ These schema updates can follow after SSE is working; just keep the plan documen
 Each phase is sized so a junior developer can complete it in a focused session. Work through them sequentially.
 
 ### Phase 1 – Job Event Bus Scaffolding
+
 1. Create `src/domain/job-events.ts` with a shared `EventEmitter` as described above.
 2. Export helpers: `publishJobEvent`, `subscribeJobEvents`.
    - Import `JobRecord` from [`domain/job-model`](../../packages/batch-backend/src/domain/job-model.ts) so the event payload is typed.
@@ -331,6 +353,7 @@ _Deliverable_: Backend can publish/subscribe to in-memory job events (even thoug
 ---
 
 ### Phase 2 – Emit Events from Application Services
+
 1. Wire `submitJob` (`packages/batch-backend/src/application/submit-job.ts`) into the event bus.
    - Import `publishJobEvent` from the new domain module.
    - Immediately after `insertJob` resolves, call `publishJobEvent({ type: 'job_created', job })`.
@@ -348,6 +371,7 @@ _Deliverable_: Event bus fires whenever a job is created or its state changes, w
 ---
 
 ### Phase 3 – Shared Job DTO Helper
+
 1. Create `packages/batch-backend/src/application/job-dto.ts` with:
    - `export interface JobStatusDto` (superset of the current HTTP response, e.g., include `md`, `preset`, `withTts`, `upload` to prep for frontend metadata).
    - `export function jobRecordToDto(job: JobRecord): JobStatusDto` that handles ISO date serialization and `null` normalization.
@@ -363,6 +387,7 @@ _Deliverable_: Single source of truth for job serialization, with targeted tests
 ---
 
 ### Phase 4 – `/jobs/events` SSE Endpoint
+
 **Status: complete.**
 
 1. `/jobs/events` now streams real job updates from Fastify (auth-gated whenever the extended API flag is on):
@@ -379,6 +404,7 @@ _Deliverable_: ✅ `/jobs/events` streams live DTOs (matching `/jobs/:id`) for b
 ---
 
 ### Phase 5 – `/config/job-options` Endpoint
+
 **Status: complete.**
 
 - `GET /config/job-options` now lives in `http-server.ts`, inherits the extended API/auth gate, and sets `Cache-Control: private, max-age=60` so the React Query call can memoize the response.
@@ -391,6 +417,7 @@ _Deliverable_: Frontend fetches dropdown metadata from the orchestrator-configur
 ---
 
 ### Phase 6 – Schema Extensions & Additional Fields
+
 **Status: complete.**
 
 1. Persistence:
@@ -415,6 +442,7 @@ _Deliverable_: Job rows carry the advanced metadata required by the Phase 8 UI, 
 ---
 
 ### Phase 7 – Audio Rerun Endpoint (pending orchestrator support)
+
 1. Vendor dependency:
    - After `@esl-pipeline/orchestrator` exposes a rerun API, add an application service (`packages/batch-backend/src/application/rerun-audio.ts`) that validates the request and calls the orchestrator helper.
 2. HTTP contract:
@@ -432,4 +460,4 @@ _Deliverable_: Frontend “Regenerate audio” action triggers a real backend wo
 
 ---
 
-Edit this document as work progresses so backend and frontend stay aligned. 
+Edit this document as work progresses so backend and frontend stay aligned.

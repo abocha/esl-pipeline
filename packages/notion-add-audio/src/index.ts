@@ -1,11 +1,12 @@
 import { Client } from '@notionhq/client';
-import { ConfigurationError, ValidationError, InfrastructureError } from '@esl-pipeline/contracts';
 
-export type AddAudioOpts = {
+import { ConfigurationError, InfrastructureError, ValidationError } from '@esl-pipeline/contracts';
+
+export interface AddAudioOpts {
   replace?: boolean;
   target?: 'study-text';
   client?: Client;
-};
+}
 
 export function getClient(): Client {
   return createNotionClient();
@@ -22,12 +23,17 @@ async function withRetry<T>(fn: () => Promise<T>, label: string, tries = 5): Pro
   for (let i = 0; i < tries; i++) {
     try {
       return await fn();
-    } catch (e: any) {
-      const status = e?.status ?? e?.code;
+    } catch (error: unknown) {
+      const status = (error as { status?: unknown })?.status ?? (error as { code?: unknown })?.code;
+      const statusCode =
+        typeof status === 'string' || typeof status === 'number' ? status : undefined;
       const retryable =
-        status === 429 || status === 503 || status === 'ECONNRESET' || status === 'ETIMEDOUT';
-      if (!retryable || i === tries - 1) throw e;
-      await new Promise(r => setTimeout(r, delay + Math.floor(Math.random() * 120)));
+        statusCode === 429 ||
+        statusCode === 503 ||
+        statusCode === 'ECONNRESET' ||
+        statusCode === 'ETIMEDOUT';
+      if (!retryable || i === tries - 1) throw error;
+      await new Promise((resolve) => setTimeout(resolve, delay + Math.floor(Math.random() * 120)));
       delay *= 2;
     }
   }
@@ -38,7 +44,7 @@ async function withRetry<T>(fn: () => Promise<T>, label: string, tries = 5): Pro
 export async function addOrReplaceAudioUnderStudyText(
   pageId: string,
   url: string,
-  opts: AddAudioOpts = {}
+  opts: AddAudioOpts = {},
 ): Promise<{ replaced: boolean; appended: boolean }> {
   if (!pageId.trim()) throw new ValidationError('pageId is required');
   if (!url.trim()) throw new ValidationError('url is required');
@@ -55,7 +61,7 @@ export async function addOrReplaceAudioUnderStudyText(
   do {
     const resp = await withRetry(
       () => client.blocks.children.list({ block_id: pageId, start_cursor: cursor, page_size: 100 }),
-      'blocks.children.list'
+      'blocks.children.list',
     );
 
     for (const block of resp.results) {
@@ -102,7 +108,7 @@ export async function addOrReplaceAudioUnderStudyText(
   // List children of the study-text toggle to find existing audio blocks
   const childrenResp = await withRetry(
     () => client.blocks.children.list({ block_id: studyTextBlockId }),
-    'blocks.children.list'
+    'blocks.children.list',
   );
 
   // Remove existing audio blocks if replace is true
@@ -119,7 +125,7 @@ export async function addOrReplaceAudioUnderStudyText(
   }
 
   // Append new audio block as a sibling before the study-text toggle
-  const appendPayload: any = {
+  const appendPayload: Parameters<Client['blocks']['children']['append']>[0] = {
     block_id: pageId,
     children: [
       {

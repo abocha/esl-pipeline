@@ -1,5 +1,4 @@
 // packages/batch-backend/src/application/process-queue-job.ts
-
 // Application service executed by the BullMQ worker.
 // Flow:
 // 1. Load job from DB.
@@ -8,15 +7,15 @@
 // 4. Call ESL pipeline via runAssignmentJob.
 // 5. On success, transition running -> succeeded with manifestPath.
 // 6. On failure, transition running -> failed with error and rethrow so BullMQ can retry.
-
-import path from 'node:path';
 import fs from 'node:fs/promises';
-import { getJobById, updateJobStateAndResult } from '../domain/job-repository';
-import { runAssignmentJob } from '../infrastructure/orchestrator-service';
-import { createJobLogger } from '../infrastructure/logger';
-import type { QueueJobPayload } from '../infrastructure/queue-bullmq';
-import { publishJobEvent } from '../domain/job-events';
-import { loadConfig, type BatchBackendConfig } from '../config/env';
+import path from 'node:path';
+
+import { type BatchBackendConfig, loadConfig } from '../config/env.js';
+import { publishJobEvent } from '../domain/job-events.js';
+import { getJobById, updateJobStateAndResult } from '../domain/job-repository.js';
+import { createJobLogger } from '../infrastructure/logger.js';
+import { runAssignmentJob } from '../infrastructure/orchestrator-service.js';
+import type { QueueJobPayload } from '../infrastructure/queue-bullmq.js';
 
 // processQueueJob.declaration()
 export async function processQueueJob(payload: QueueJobPayload): Promise<void> {
@@ -77,7 +76,7 @@ export async function processQueueJob(payload: QueueJobPayload): Promise<void> {
         notionDatabase: running.notionDatabase ?? undefined,
         mode: running.mode ?? undefined,
       },
-      runId
+      runId,
     );
 
     const succeeded = await updateJobStateAndResult({
@@ -96,8 +95,8 @@ export async function processQueueJob(payload: QueueJobPayload): Promise<void> {
     log.info('Job processed successfully', {
       manifestPath: result.manifestPath,
     });
-  } catch (err) {
-    log.error(err instanceof Error ? err : String(err), {
+  } catch (error) {
+    log.error(error instanceof Error ? error : String(error), {
       event: 'job_failed',
     });
 
@@ -105,7 +104,7 @@ export async function processQueueJob(payload: QueueJobPayload): Promise<void> {
       id: jobId,
       expectedState: 'running',
       nextState: 'failed',
-      error: err instanceof Error ? err.message : String(err),
+      error: error instanceof Error ? error.message : String(error),
       finishedAt: new Date(),
     });
 
@@ -114,7 +113,7 @@ export async function processQueueJob(payload: QueueJobPayload): Promise<void> {
     }
 
     // Propagate so BullMQ can apply retry/backoff policy.
-    throw err;
+    throw error;
   }
 }
 
@@ -134,7 +133,7 @@ async function resolveMarkdownPath(mdPath: string): Promise<string> {
 
   const uploadDir = process.env.FILESYSTEM_UPLOAD_DIR || './uploads';
   const uploadRoot = path.resolve(uploadDir);
-  const repoRoot = path.resolve(__dirname, '../../..');
+  const repoRoot = path.resolve(import.meta.dirname, '../../..');
   const normalizedMd = sanitized.replace(/^\.?[\\/]/, '');
   const normalizedWithoutUploadsPrefix = normalizedMd.replace(/^uploads[\\/]/, '');
 
@@ -165,7 +164,7 @@ async function fileExists(filePath: string): Promise<boolean> {
 
 function resolveUploadTarget(
   upload: string | null | undefined,
-  provider: BatchBackendConfig['storage']['provider']
+  provider: BatchBackendConfig['storage']['provider'],
 ): 's3' | undefined {
   if (upload === 'none') {
     return undefined;

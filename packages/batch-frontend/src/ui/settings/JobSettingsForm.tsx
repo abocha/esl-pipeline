@@ -1,10 +1,18 @@
 import React from 'react';
+
 import { useJobSettings } from '../../context/JobSettingsContext';
 import type { JobSettings as JobSettingsValue } from '../../context/JobSettingsContext';
 
 export const JobSettingsForm: React.FC = () => {
-  const { settings, updateSettings, resetSettings, options, isLoading, errorMessage, isUsingFallback } =
-    useJobSettings();
+  const {
+    settings,
+    updateSettings,
+    resetSettings,
+    options,
+    isLoading,
+    errorMessage,
+    isUsingFallback,
+  } = useJobSettings();
 
   const notionOptions = options.notionDatabases;
 
@@ -39,10 +47,10 @@ export const JobSettingsForm: React.FC = () => {
           Preset
           <select
             value={settings.preset}
-            onChange={event => updateSettings({ preset: event.target.value })}
+            onChange={(event) => updateSettings({ preset: event.target.value })}
             style={selectStyle}
           >
-            {options.presets.map(preset => (
+            {options.presets.map((preset) => (
               <option key={preset} value={preset}>
                 {preset}
               </option>
@@ -54,10 +62,10 @@ export const JobSettingsForm: React.FC = () => {
           Notion database
           <select
             value={settings.notionDatabase}
-            onChange={event => updateSettings({ notionDatabase: event.target.value })}
+            onChange={(event) => updateSettings({ notionDatabase: event.target.value })}
             style={selectStyle}
           >
-            {notionOptions.map(db => (
+            {notionOptions.map((db) => (
               <option key={db.id} value={db.id}>
                 {db.name}
               </option>
@@ -68,7 +76,7 @@ export const JobSettingsForm: React.FC = () => {
         <label style={fieldStyle}>
           Upload destination
           <div style={radioGroupStyle}>
-            {options.uploadOptions.map(option => (
+            {options.uploadOptions.map((option) => (
               <label key={option} style={radioOptionStyle}>
                 <input
                   type="radio"
@@ -87,17 +95,20 @@ export const JobSettingsForm: React.FC = () => {
           Mode
           <select
             value={settings.mode}
-            onChange={event => updateSettings({ mode: event.target.value as JobSettingsValue['mode'] })}
+            onChange={(event) =>
+              updateSettings({ mode: event.target.value as JobSettingsValue['mode'] })
+            }
             style={selectStyle}
           >
-            {options.modes.map(mode => (
+            {options.modes.map((mode) => (
               <option key={mode} value={mode}>
                 {mode}
               </option>
             ))}
           </select>
           <span style={helperTextStyle}>
-            Auto lets the backend decide; use dialogue for multi-speaker lessons or monologue for single voices.
+            Auto lets the backend decide; use dialogue for multi-speaker lessons or monologue for
+            single voices.
           </span>
         </label>
 
@@ -105,14 +116,14 @@ export const JobSettingsForm: React.FC = () => {
           label="Generate TTS"
           description="Control if ElevenLabs audio should be generated for each job."
           checked={settings.withTts}
-          onChange={value => updateSettings({ withTts: value })}
+          onChange={(value) => updateSettings({ withTts: value })}
         />
 
         <ToggleField
           label="Force regenerate TTS"
           description="Even if audio exists, re-run TTS with freshly generated audio."
           checked={settings.forceTts}
-          onChange={value => updateSettings({ forceTts: value })}
+          onChange={(value) => updateSettings({ forceTts: value })}
           disabled={!settings.withTts}
         />
       </div>
@@ -121,7 +132,7 @@ export const JobSettingsForm: React.FC = () => {
         <input
           type="checkbox"
           checked={settings.applyToPending}
-          onChange={event => updateSettings({ applyToPending: event.target.checked })}
+          onChange={(event) => updateSettings({ applyToPending: event.target.checked })}
         />
         Apply these settings to pending uploads
       </label>
@@ -129,21 +140,36 @@ export const JobSettingsForm: React.FC = () => {
   );
 };
 
-type ToggleFieldProps = {
+interface ToggleFieldProps {
   label: string;
   description?: string;
   checked: boolean;
   disabled?: boolean;
   onChange: (value: boolean) => void;
-};
+}
 
-const ToggleField: React.FC<ToggleFieldProps> = ({ label, description, checked, disabled, onChange }) => {
+const ToggleField: React.FC<ToggleFieldProps> = ({
+  label,
+  description,
+  checked,
+  disabled,
+  onChange,
+}) => {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '12px' }}>
+      <div
+        style={{
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+          gap: '12px',
+        }}
+      >
         <div>
           <p style={{ margin: 0, fontWeight: 600 }}>{label}</p>
-          {description && <p style={{ margin: '2px 0 0', color: '#475569', fontSize: '13px' }}>{description}</p>}
+          {description && (
+            <p style={{ margin: '2px 0 0', color: '#475569', fontSize: '13px' }}>{description}</p>
+          )}
         </div>
         <button
           type="button"
@@ -284,11 +310,14 @@ const errorBannerStyle: React.CSSProperties = {
 
 function uploadLabel(option: JobSettingsValue['upload']): string {
   switch (option) {
-    case 's3':
+    case 's3': {
       return 'Force S3 upload';
-    case 'none':
+    }
+    case 'none': {
       return 'Skip upload';
-    default:
+    }
+    default: {
       return 'Auto (backend decides)';
+    }
   }
 }

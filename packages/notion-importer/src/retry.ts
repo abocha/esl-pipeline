@@ -3,12 +3,12 @@ export async function withRetry<T>(fn: () => Promise<T>, label: string, tries = 
   for (let i = 0; i < tries; i++) {
     try {
       return await fn();
-    } catch (e: any) {
-      const status = e?.status ?? e?.code;
+    } catch (error: any) {
+      const status = error?.status ?? error?.code;
       const retryable =
         status === 429 || status === 503 || status === 'ECONNRESET' || status === 'ETIMEDOUT';
-      if (!retryable || i === tries - 1) throw e;
-      await new Promise(r => setTimeout(r, delay + Math.floor(Math.random() * 120)));
+      if (!retryable || i === tries - 1) throw error;
+      await new Promise((resolve) => setTimeout(resolve, delay + Math.floor(Math.random() * 120)));
       delay *= 2;
     }
   }

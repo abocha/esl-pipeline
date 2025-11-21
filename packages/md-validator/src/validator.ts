@@ -1,16 +1,17 @@
 import matter from 'gray-matter';
-import { unified } from 'unified';
-import remarkParse from 'remark-parse';
-import type { Root, RootContent, Heading } from 'mdast';
-import { z } from 'zod';
+import type { Heading, Root, RootContent } from 'mdast';
 import { readFile } from 'node:fs/promises';
+import remarkParse from 'remark-parse';
+import { unified } from 'unified';
+import { z } from 'zod';
+
 import { ValidationError } from '@esl-pipeline/contracts';
 
-export type ValidateOptions = {
+export interface ValidateOptions {
   strict?: boolean;
-};
+}
 
-export type ValidateResult = {
+export interface ValidateResult {
   ok: boolean;
   errors: string[];
   warnings: string[];
@@ -22,7 +23,7 @@ export type ValidateResult = {
     input_type: string;
     speaker_labels?: string[];
   };
-};
+}
 
 const FrontSchema = z.object({
   title: z.string().min(1),
@@ -43,19 +44,19 @@ const EXPECTED_H2 = [
   '7. Why This Mission Helps You',
   '8. Answer Key & Sample Mission',
   "9. Teacher's Follow-up Plan",
-].map(s => normalizeHeadingText(s));
+].map((s) => normalizeHeadingText(s));
 
 function normalizeHeadingText(s: string): string {
   // strip emoji
-  const noEmoji = s.replace(/[\p{Emoji_Presentation}\p{Extended_Pictographic}]/gu, '');
+  const noEmoji = s.replaceAll(/[\p{Emoji_Presentation}\p{Extended_Pictographic}]/gu, '');
   // strip zero-width: ZWSP, ZWNJ, ZWJ, WJ, VS15/VS16
-  const noZW = noEmoji.replace(/[\u200B\u200C\u200D\u2060\uFE0E\uFE0F]/g, '');
+  const noZW = noEmoji.replaceAll(/[\u200B\u200C\u200D\u2060\uFE0E\uFE0F]/g, '');
   // collapse any whitespace incl NBSP into a single space
-  const oneSpace = noZW.replace(/[\s\u00A0]+/g, ' ');
+  const oneSpace = noZW.replaceAll(/[\s\u00A0]+/g, ' ');
   return (
     oneSpace
       // keep letters/digits/space/._- quotes & colon; drop the rest
-      .replace(/[^\w\s\.\-’'&:]/g, '')
+      .replaceAll(/[^\w\s\.\-’'&:]/g, '')
       .trim()
       .toLowerCase()
   );
@@ -66,7 +67,7 @@ function extractFirstCodeBlock(raw: string): { lang: string; content: string } {
   const m = raw.match(/```([a-zA-Z0-9_-]*)\s*\n([\s\S]*?)```/m);
   if (!m)
     throw new ValidationError(
-      'No fenced code block found. Output must be inside a single triple-backtick block.'
+      'No fenced code block found. Output must be inside a single triple-backtick block.',
     );
   const [, lang, content] = m;
   return { lang: lang ?? '', content: content ?? '' };
@@ -74,8 +75,8 @@ function extractFirstCodeBlock(raw: string): { lang: string; content: string } {
 
 function textFromHeading(h: Heading): string {
   const txt = (h.children ?? [])
-    .map(ch => {
-      // @ts-ignore
+    .map((ch) => {
+      // @ts-expect-error mdast children typing does not expose value on all node kinds
       return ch.value ?? (ch.children ? ch.children.map((c: any) => c.value ?? '').join('') : '');
     })
     .join('');
@@ -164,7 +165,7 @@ function sectionSlice(root: Root, startHeading: Heading): RootContent[] {
 
 export async function validateMarkdownFile(
   rawFile: string,
-  opts: ValidateOptions = {}
+  opts: ValidateOptions = {},
 ): Promise<ValidateResult> {
   const errors: string[] = [];
   const warnings: string[] = [];
@@ -176,8 +177,8 @@ export async function validateMarkdownFile(
   let block: { lang: string; content: string };
   try {
     block = extractFirstCodeBlock(content);
-  } catch (e: any) {
-    return { ok: false, errors: [e.message], warnings };
+  } catch (error: any) {
+    return { ok: false, errors: [error.message], warnings };
   }
   const inside = block.content.trim();
 
@@ -195,21 +196,21 @@ export async function validateMarkdownFile(
   const ast = parseMarkdownAst(fm.content);
 
   // a) H2 order check
-  const h2 = collectHeadings(ast, 2).map(textFromHeading);
-  if (h2.length !== 9) {
-    errors.push(`Expected 9 H2 sections, found ${h2.length}.`);
-  } else {
+  const h2 = collectHeadings(ast, 2).map((heading) => textFromHeading(heading));
+  if (h2.length === 9) {
     for (let i = 0; i < 9; i++) {
       if (h2[i] !== EXPECTED_H2[i]) {
         errors.push(`H2 #${i + 1} mismatch. Found: "${h2[i]}"`);
       }
     }
+  } else {
+    errors.push(`Expected 9 H2 sections, found ${h2.length}.`);
   }
 
   // b) markers
   const hasAnswerKeyToggle = /:::toggle-heading\s+answer\s+key/i.test(fm.content);
   const hasTeacherPlanToggle = /:::toggle-heading\s+teacher[’']s\s+follow-up\s+plan/i.test(
-    fm.content
+    fm.content,
   );
   if (!hasAnswerKeyToggle) errors.push('Missing marker: ":::toggle-heading Answer Key"');
   if (!hasTeacherPlanToggle)
@@ -227,7 +228,7 @@ export async function validateMarkdownFile(
     const hasSpeakerLabels = Boolean(meta?.speaker_labels && meta.speaker_labels.length > 0);
     let enforceExplicitSpeakers = false;
     if (hasSpeakerLabels) {
-      const labelSet = new Set(meta!.speaker_labels!.map(s => s.trim().toLowerCase()));
+      const labelSet = new Set(meta!.speaker_labels!.map((s) => s.trim().toLowerCase()));
       const onlyNarrator = labelSet.size === 1 && labelSet.has('narrator');
       if (!onlyNarrator) {
         enforceExplicitSpeakers = true;
@@ -241,14 +242,14 @@ export async function validateMarkdownFile(
             const who = (m[1] ?? m[2] ?? '').trim();
             if (!who) {
               errors.push(
-                `study-text line ${i + 1}: could not extract speaker from line: "${line}".`
+                `study-text line ${i + 1}: could not extract speaker from line: "${line}".`,
               );
               currentSpeaker = null;
               continue;
             }
             if (!labelSet.has(who.toLowerCase())) {
               errors.push(
-                `study-text line ${i + 1}: unknown speaker "${who}". Allowed: [${meta!.speaker_labels!.join(', ')}].`
+                `study-text line ${i + 1}: unknown speaker "${who}". Allowed: [${meta!.speaker_labels!.join(', ')}].`,
               );
             }
             currentSpeaker = who;
@@ -256,7 +257,7 @@ export async function validateMarkdownFile(
           }
           if (!currentSpeaker) {
             errors.push(
-              `study-text line ${i + 1}: expected "Speaker: text" or continuation, got "${line}".`
+              `study-text line ${i + 1}: expected "Speaker: text" or continuation, got "${line}".`,
             );
           }
         }
@@ -265,10 +266,10 @@ export async function validateMarkdownFile(
 
     if (!enforceExplicitSpeakers) {
       // monologue: soft check — at least 3 paragraphs or 10 short lines
-      const paras = studyBody.split(/\n\s*\n/).filter(p => p.trim().length > 0);
+      const paras = studyBody.split(/\n\s*\n/).filter((p) => p.trim().length > 0);
       const lines = studyBody
         .split(/\r?\n/)
-        .map(s => s.trim())
+        .map((s) => s.trim())
         .filter(Boolean);
       if (paras.length < 3 && lines.length < 10) {
         warnings.push('study-text looks short. Aim for 3–5 paragraphs or 10–15 lines.');
@@ -319,7 +320,7 @@ export async function validateMarkdownFile(
   }
 
   // e) no nested code blocks inside the doc
-  const codeInside = (ast.children as any[]).some(n => n.type === 'code');
+  const codeInside = (ast.children as any[]).some((n) => n.type === 'code');
   if (codeInside) {
     errors.push('Found code block(s) inside the main document. Avoid nested ``` blocks.');
   }

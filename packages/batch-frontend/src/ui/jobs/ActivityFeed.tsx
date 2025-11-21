@@ -1,4 +1,5 @@
 import React, { useMemo } from 'react';
+
 import { useJobMonitor } from '../../context/JobMonitorContext';
 
 const stateLabels: Record<string, string> = {
@@ -12,16 +13,16 @@ export const ActivityFeed: React.FC = () => {
   const { jobs } = useJobMonitor();
   const items = useMemo(() => {
     return jobs
-      .map(job => ({
+      .map((job) => ({
         jobId: job.jobId,
         state: job.state,
         updatedAt: job.updatedAt ?? job.createdAt,
         message:
           job.state === 'failed'
-            ? job.error ?? 'Job failed.'
+            ? (job.error ?? 'Job failed.')
             : job.state === 'succeeded'
-            ? 'Job finished successfully.'
-            : `Job is ${stateLabels[job.state] ?? job.state}.`,
+              ? 'Job finished successfully.'
+              : `Job is ${stateLabels[job.state] ?? job.state}.`,
       }))
       .sort((a, b) => (b.updatedAt ?? '').localeCompare(a.updatedAt ?? ''))
       .slice(0, 8);
@@ -35,14 +36,19 @@ export const ActivityFeed: React.FC = () => {
         <p style={{ margin: 0, color: '#94a3b8', fontSize: '13px' }}>No job activity yet.</p>
       ) : (
         <ul style={listStyle}>
-          {items.map(item => (
+          {items.map((item) => (
             <li key={`${item.jobId}-${item.updatedAt}`} style={listItemStyle}>
               <div>
                 <p style={{ margin: 0, fontWeight: 600, fontSize: '13px' }}>Job {item.jobId}</p>
-                <p style={{ margin: '2px 0 0', fontSize: '12px', color: '#475569' }}>{item.message}</p>
+                <p style={{ margin: '2px 0 0', fontSize: '12px', color: '#475569' }}>
+                  {item.message}
+                </p>
               </div>
               <span style={{ fontSize: '11px', color: '#94a3b8' }}>
-                {new Date(item.updatedAt ?? '').toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                {new Date(item.updatedAt ?? '').toLocaleTimeString([], {
+                  hour: '2-digit',
+                  minute: '2-digit',
+                })}
               </span>
             </li>
           ))}

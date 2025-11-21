@@ -1,20 +1,15 @@
 {
   "name": "@esl-pipeline/notion-add-audio",
-  "version": "1.2.3",
+  "version": "2.0.0",
   "private": true,
-  "type": "module",
-  "license": "UNLICENSED",
   "description": "Attach generated audio blocks to Notion study-text toggles.",
   "keywords": [
     "esl",
     "notion",
     "audio"
   ],
-  "engines": {
-    "node": ">=24.10.0"
-  },
-  "main": "./dist/src/index.js",
-  "types": "./dist/src/index.d.ts",
+  "license": "UNLICENSED",
+  "type": "module",
   "exports": {
     ".": {
       "types": "./dist/src/index.d.ts",
@@ -23,28 +18,33 @@
     },
     "./package.json": "./package.json"
   },
-  "files": [
-    "dist"
-  ],
+  "main": "./dist/src/index.js",
+  "types": "./dist/src/index.d.ts",
   "bin": {
     "notion-add-audio": "dist/bin/cli.js"
   },
+  "files": [
+    "dist"
+  ],
   "scripts": {
-    "build": "tsc -p tsconfig.json",
+    "build": "tsc -p tsconfig.build.json",
     "clean": "node -e \"fs.rmSync('dist', {recursive:true, force:true})\"",
     "dev": "tsx watch bin/cli.ts",
     "test": "vitest run",
     "test:watch": "vitest"
   },
   "dependencies": {
+    "@esl-pipeline/contracts": "workspace:*",
     "@notionhq/client": "^5.4.0",
-    "commander": "^14.0.2",
-    "@esl-pipeline/contracts": "workspace:*"
+    "commander": "^14.0.2"
   },
   "devDependencies": {
     "@types/node": "^24.10.1",
     "tsx": "^4.20.6",
     "typescript": "^5.9.3",
-    "vitest": "^4.0.12"
+    "vitest": "^4.0.13"
+  },
+  "engines": {
+    "node": ">=24.10.0"
   }
 }

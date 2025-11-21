@@ -1,21 +1,22 @@
 import React, { useCallback, useMemo, useState } from 'react';
 import toast from 'react-hot-toast';
+
 import { useAuth } from '../context/AuthContext';
-import { JobSettingsProvider } from '../context/JobSettingsContext';
 import { JobMonitorProvider } from '../context/JobMonitorContext';
+import { JobSettingsProvider } from '../context/JobSettingsContext';
 import { NotificationProvider } from '../context/NotificationContext';
 import { AuthDialog, AuthMode } from './auth/AuthDialog';
-import { JobSettingsForm } from './settings/JobSettingsForm';
-import { JobUploader } from './uploader/JobUploader';
+import { ActivityFeed } from './jobs/ActivityFeed';
 import { JobConnectionBanner } from './jobs/JobConnectionBanner';
 import { JobTable } from './jobs/JobTable';
-import { ActivityFeed } from './jobs/ActivityFeed';
+import { JobSettingsForm } from './settings/JobSettingsForm';
+import { JobUploader } from './uploader/JobUploader';
 
-type PlaceholderProps = {
+interface PlaceholderProps {
   title: string;
   description: string;
   hint?: string;
-};
+}
 
 const PlaceholderCard: React.FC<PlaceholderProps> = ({ title, description, hint }) => (
   <section
@@ -81,8 +82,10 @@ export const App: React.FC = () => {
     try {
       await logout();
       toast.success('Logged out');
-    } catch (error: any) {
-      toast.error(error?.message ?? 'Unable to logout. Please try again.');
+    } catch (error: unknown) {
+      const message =
+        error instanceof Error ? error.message : 'Unable to logout. Please try again.';
+      toast.error(message);
     }
   }, [logout]);
 
@@ -251,7 +254,7 @@ export const App: React.FC = () => {
         initialEmail={prefillEmail}
         onRegistered={handleRegistered}
         onClose={closeDialog}
-        onSwitchMode={mode => {
+        onSwitchMode={(mode) => {
           if (mode === 'register') {
             setPrefillEmail('');
           }

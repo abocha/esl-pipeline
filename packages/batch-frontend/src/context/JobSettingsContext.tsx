@@ -1,17 +1,18 @@
-import React, {
+import { useQuery } from '@tanstack/react-query';
+import {
+  type ReactNode,
   createContext,
   useCallback,
   useContext,
+  useEffect,
   useMemo,
   useState,
-  useEffect,
-  ReactNode,
 } from 'react';
-import { useQuery } from '@tanstack/react-query';
+
 import type { JobOptionsResponse, SubmitJobRequest } from '../utils/api';
 import { fetchJobOptions } from '../utils/api';
 
-export type JobSettings = {
+export interface JobSettings {
   preset: string;
   notionDatabase: string;
   withTts: boolean;
@@ -19,11 +20,11 @@ export type JobSettings = {
   upload: NonNullable<SubmitJobRequest['upload']>;
   mode: NonNullable<SubmitJobRequest['mode']>;
   applyToPending: boolean;
-};
+}
 
 export type AppliedJobSettings = Omit<JobSettings, 'applyToPending'>;
 
-type JobSettingsContextValue = {
+interface JobSettingsContextValue {
   settings: JobSettings;
   updateSettings: (updates: Partial<JobSettings>) => void;
   resetSettings: () => void;
@@ -31,7 +32,7 @@ type JobSettingsContextValue = {
   isLoading: boolean;
   errorMessage: string | null;
   isUsingFallback: boolean;
-};
+}
 
 const DEFAULT_JOB_OPTIONS: JobOptionsResponse = {
   presets: ['b1-default', 'b2-general', 'c1-science'],
@@ -76,10 +77,14 @@ export function JobSettingsProvider({ children }: { children: ReactNode }) {
   }));
 
   useEffect(() => {
-    setSettings(prev => {
-      const preset = ensureOption(prev.preset, options.presets) ?? options.presets[0] ?? DEFAULT_SETTINGS.preset;
+    setSettings((prev) => {
+      const preset =
+        ensureOption(prev.preset, options.presets) ?? options.presets[0] ?? DEFAULT_SETTINGS.preset;
       const notionDatabase =
-        ensureOption(prev.notionDatabase, options.notionDatabases.map(db => db.id)) ??
+        ensureOption(
+          prev.notionDatabase,
+          options.notionDatabases.map((db) => db.id),
+        ) ??
         options.notionDatabases[0]?.id ??
         DEFAULT_SETTINGS.notionDatabase;
       const upload =
@@ -102,7 +107,7 @@ export function JobSettingsProvider({ children }: { children: ReactNode }) {
   }, [options]);
 
   const updateSettings = useCallback((updates: Partial<JobSettings>) => {
-    setSettings(prev => ({ ...prev, ...updates }));
+    setSettings((prev) => ({ ...prev, ...updates }));
   }, []);
 
   const resetSettings = useCallback(() => {
@@ -125,7 +130,7 @@ export function JobSettingsProvider({ children }: { children: ReactNode }) {
       errorMessage: error ? (error as Error).message : null,
       isUsingFallback,
     }),
-    [settings, updateSettings, resetSettings, options, isLoading, error, isUsingFallback]
+    [settings, updateSettings, resetSettings, options, isLoading, error, isUsingFallback],
   );
 
   return <JobSettingsContext.Provider value={contextValue}>{children}</JobSettingsContext.Provider>;

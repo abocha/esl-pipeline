@@ -1,4 +1,4 @@
-export type Frontmatter = {
+export interface Frontmatter {
   title: string;
   student: string;
   level: string;
@@ -8,19 +8,19 @@ export type Frontmatter = {
   speaker_profiles?: SpeakerProfile[];
   // allow arbitrary extras without breaking
   [k: string]: unknown;
-};
+}
 
 export type StudyText =
   | { type: 'dialogue'; lines: string[] }
   | { type: 'monologue'; lines: string[] };
 
-export type Section = {
+export interface Section {
   depth: 2 | 3;
   title: string;
   content: string;
-};
+}
 
-export type SpeakerProfile = {
+export interface SpeakerProfile {
   id: string;
   display_name?: string;
   role?: 'narrator' | 'teacher' | 'student' | 'system';
@@ -30,4 +30,4 @@ export type SpeakerProfile = {
   style?: string;
   voice?: string;
   [k: string]: unknown;
-};
+}

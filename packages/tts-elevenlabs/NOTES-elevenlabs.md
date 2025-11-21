@@ -27,26 +27,29 @@
 ```
 
 ### Headers
+
 - `xi-api-key`: Your API key
 - `Content-Type`: application/json
 
 ### Query Parameters
+
 - `output_format`: Optional, defaults to `mp3_44100_128`
   - Supported: `mp3_22050_32`, `mp3_44100_128`, `mp3_44100_192`, `pcm_44100`, `opus_48000_128`, etc.
 
 ### Response
+
 - **Type**: `application/octet-stream`
 - **Content**: Binary audio file
 
 ### Key Differences from Text-to-Speech
 
-| Feature | Text-to-Dialogue | Text-to-Speech |
-|---------|------------------|----------------|
-| Model | `eleven_v3` | `eleven_multilingual_v2` |
-| Input | Array of `{text, voice_id}` | Single `text` string |
-| Speakers | Multiple per request | One per request |
-| Endpoint | `/v1/text-to-dialogue` | `/v1/text-to-speech/{voice_id}` |
-| Use Case | Conversations, dialogues | Monologues, narration |
+| Feature  | Text-to-Dialogue            | Text-to-Speech                  |
+| -------- | --------------------------- | ------------------------------- |
+| Model    | `eleven_v3`                 | `eleven_multilingual_v2`        |
+| Input    | Array of `{text, voice_id}` | Single `text` string            |
+| Speakers | Multiple per request        | One per request                 |
+| Endpoint | `/v1/text-to-dialogue`      | `/v1/text-to-speech/{voice_id}` |
+| Use Case | Conversations, dialogues    | Monologues, narration           |
 
 ### Best Practices
 

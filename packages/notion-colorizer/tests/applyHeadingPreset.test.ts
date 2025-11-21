@@ -1,5 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { applyHeadingPreset } from '../src/index.js';
+
 const { listMock, updateMock, ClientCtor } = vi.hoisted(() => {
   const listMock = vi.fn();
   const updateMock = vi.fn();
@@ -20,8 +22,6 @@ const { listMock, updateMock, ClientCtor } = vi.hoisted(() => {
 vi.mock('@notionhq/client', () => ({
   Client: ClientCtor,
 }));
-
-import { applyHeadingPreset } from '../src/index.js';
 
 describe('applyHeadingPreset', () => {
   beforeEach(() => {

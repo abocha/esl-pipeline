@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, vi, afterEach } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('../src/infrastructure/logger', () => ({
   logger: {
@@ -25,7 +25,7 @@ describe('application/get-job-options', () => {
   });
 
   it('returns orchestrator metadata when helper succeeds', async () => {
-    const { getJobOptions } = await import('../src/application/get-job-options');
+    const { getJobOptions } = await import('../src/application/get-job-options.js');
     const { getJobOptionsFromOrchestrator } = await import(
       '../src/infrastructure/orchestrator-service'
     );
@@ -75,11 +75,11 @@ describe('application/get-job-options', () => {
   });
 
   it('falls back to static options when orchestrator helper fails', async () => {
-    const { getJobOptions } = await import('../src/application/get-job-options');
+    const { getJobOptions } = await import('../src/application/get-job-options.js');
     const { getJobOptionsFromOrchestrator } = await import(
       '../src/infrastructure/orchestrator-service'
     );
-    const { logger } = await import('../src/infrastructure/logger');
+    const { logger } = await import('../src/infrastructure/logger.js');
 
     vi.mocked(getJobOptionsFromOrchestrator).mockRejectedValue(new Error('boom'));
 
@@ -98,7 +98,7 @@ describe('application/get-job-options', () => {
 
     expect(logger.warn).toHaveBeenCalledWith(
       'Failed to load job options from orchestrator. Falling back to static config.',
-      expect.objectContaining({ error: 'boom' })
+      expect.objectContaining({ error: 'boom' }),
     );
   });
 });

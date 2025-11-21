@@ -1,6 +1,7 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { publishJobEvent, subscribeJobEvents } from '../src/domain/job-events';
-import type { JobRecord } from '../src/domain/job-model';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+
+import { publishJobEvent, subscribeJobEvents } from '../src/domain/job-events.js';
+import type { JobRecord } from '../src/domain/job-model.js';
 
 describe('domain/job-events', () => {
   const baseJob: JobRecord = {
@@ -60,7 +61,7 @@ describe('domain/job-events', () => {
       publishJobEvent({
         type: 'job_state_changed',
         job: { ...baseJob, state: 'failed', error: 'oops' },
-      })
+      }),
     ).not.toThrow();
   });
 });

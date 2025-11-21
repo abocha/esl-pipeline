@@ -1,9 +1,9 @@
-import { globby } from 'globby';
+import Enquirer from 'enquirer';
 import { findUp } from 'find-up';
+import { globby } from 'globby';
 import { access, stat } from 'node:fs/promises';
 import { basename, dirname, isAbsolute, resolve } from 'node:path';
 import process from 'node:process';
-import Enquirer from 'enquirer';
 import pc from 'picocolors';
 
 const { AutoComplete } = Enquirer as unknown as {
@@ -22,17 +22,18 @@ const DEFAULT_IGNORE = [
 ];
 
 const DEFAULT_LIMIT = 20;
+const DEFAULT_BEHAVIOUR = { applyLimit: true } as const;
 
 type RootStrategy = 'git' | 'cwd' | 'pkg';
 
-type BaseOptions = {
+interface BaseOptions {
   cwd?: string;
   initial?: string;
   limit?: number;
   message?: string;
   rootStrategy?: RootStrategy;
   showAbsolute?: boolean;
-};
+}
 
 export type DirOptions = BaseOptions & {
   contains?: string | string[];
@@ -47,17 +48,17 @@ export type FileOptions = BaseOptions & {
   includeDotFiles?: boolean;
 };
 
-export type PathCandidate = {
+export interface PathCandidate {
   absolute: string;
   relative: string;
-};
+}
 
-type PromptChoice = {
+interface PromptChoice {
   name: string;
   message?: string;
   value?: unknown;
   hint?: string;
-};
+}
 
 export class PathPickerCancelledError extends Error {
   constructor(message = 'Selection cancelled') {
@@ -66,7 +67,7 @@ export class PathPickerCancelledError extends Error {
   }
 }
 
-type AutoCompleteOptions = {
+interface AutoCompleteOptions {
   name: string;
   message: string;
   limit?: number;
@@ -76,20 +77,24 @@ type AutoCompleteOptions = {
   styles?: Record<string, unknown>;
   result?(value: string): unknown;
   validate?(value: string): boolean | string | Promise<boolean | string>;
-};
+}
 
-type AutoCompletePrompt = {
+interface AutoCompletePrompt {
   run(): Promise<string>;
   value: string;
   focused?: { value?: string };
-};
+}
+
+interface PromptContext {
+  focused?: { value?: unknown };
+}
 
 const toArray = <T>(input: T | T[] | undefined): T[] =>
   input === undefined ? [] : Array.isArray(input) ? input : [input];
 
 export async function pickDirectory(options: DirOptions = {}): Promise<string> {
   const { candidates, root } = await createDirectoryCandidateList(options);
-  if (!candidates.length) {
+  if (candidates.length === 0) {
     throw new Error('No directories match the provided filters.');
   }
 
@@ -112,7 +117,7 @@ export async function pickDirectory(options: DirOptions = {}): Promise<string> {
 
 export async function pickFile(options: FileOptions = {}): Promise<string> {
   const { candidates, root } = await createFileCandidateList(options);
-  if (!candidates.length) {
+  if (candidates.length === 0) {
     throw new Error('No files match the provided filters.');
   }
 
@@ -134,7 +139,7 @@ export async function pickFile(options: FileOptions = {}): Promise<string> {
 }
 
 export async function resolveDirectoryCandidates(
-  options: DirOptions = {}
+  options: DirOptions = {},
 ): Promise<PathCandidate[]> {
   const { candidates } = await createDirectoryCandidateList(options, { applyLimit: false });
   return candidates;
@@ -147,7 +152,7 @@ export async function resolveFileCandidates(options: FileOptions = {}): Promise<
 
 async function createDirectoryCandidateList(
   options: DirOptions,
-  behaviour: { applyLimit: boolean } = { applyLimit: true }
+  behaviour: { applyLimit: boolean } = DEFAULT_BEHAVIOUR,
 ): Promise<{ candidates: PathCandidate[]; root: string }> {
   const root = await resolveRoot(options.rootStrategy, options.cwd);
   const limit = resolveLimit(options.limit);
@@ -169,12 +174,12 @@ async function createDirectoryCandidateList(
       throw new Error('suffix mode requires a suffix value.');
     }
     const suffix = options.suffix;
-    directories = directories.filter(entry => basename(entry).endsWith(suffix));
+    directories = directories.filter((entry) => basename(entry).endsWith(suffix));
   } else if (mode === 'contains') {
     const requirements = toArray(options.contains)
-      .map(value => value.trim())
+      .map((value) => value.trim())
       .filter(Boolean);
-    if (!requirements.length) {
+    if (requirements.length === 0) {
       throw new Error('contains mode requires at least one filename.');
     }
     directories = await filterDirectoriesByContents(directories, requirements, root);
@@ -183,14 +188,14 @@ async function createDirectoryCandidateList(
   const candidates = finalizeCandidates(
     directories,
     root,
-    behaviour.applyLimit ? limit : undefined
+    behaviour.applyLimit ? limit : undefined,
   );
   return { candidates, root };
 }
 
 async function createFileCandidateList(
   options: FileOptions,
-  behaviour: { applyLimit: boolean } = { applyLimit: true }
+  behaviour: { applyLimit: boolean } = DEFAULT_BEHAVIOUR,
 ): Promise<{ candidates: PathCandidate[]; root: string }> {
   const root = await resolveRoot(options.rootStrategy, options.cwd);
   const limit = resolveLimit(options.limit);
@@ -210,7 +215,7 @@ async function createFileCandidateList(
   const candidates = finalizeCandidates(
     uniqueSorted(files),
     root,
-    behaviour.applyLimit ? limit : undefined
+    behaviour.applyLimit ? limit : undefined,
   );
   return { candidates, root };
 }
@@ -222,19 +227,15 @@ async function resolveRoot(strategy: RootStrategy | undefined, cwd?: string): Pr
   if (mode === 'cwd') return start;
 
   if (mode === 'git') {
-    const gitDirectory = await findUp('.git', { cwd: start, type: 'directory' }).catch(
-      () => undefined
-    );
+    const gitDirectory = await findUp('.git', { cwd: start, type: 'directory' }).catch(() => {});
     if (gitDirectory) return dirname(gitDirectory);
-    const gitFile = await findUp('.git', { cwd: start, type: 'file' }).catch(() => undefined);
+    const gitFile = await findUp('.git', { cwd: start, type: 'file' }).catch(() => {});
     if (gitFile) return dirname(gitFile);
     return start;
   }
 
   if (mode === 'pkg') {
-    const pkgJson = await findUp('package.json', { cwd: start, type: 'file' }).catch(
-      () => undefined
-    );
+    const pkgJson = await findUp('package.json', { cwd: start, type: 'file' }).catch(() => {});
     return pkgJson ? dirname(pkgJson) : start;
   }
 
@@ -250,14 +251,14 @@ function resolveLimit(limit?: number): number {
 
 function uniqueSorted(values: string[]): string[] {
   return [...new Set(values)].sort((a, b) =>
-    a.localeCompare(b, undefined, { sensitivity: 'base' })
+    a.localeCompare(b, undefined, { sensitivity: 'base' }),
   );
 }
 
 async function filterDirectoriesByContents(
   directories: string[],
   requirements: string[],
-  root: string
+  root: string,
 ): Promise<string[]> {
   const result: string[] = [];
   for (const entry of directories) {
@@ -278,8 +279,8 @@ async function filterDirectoriesByContents(
 }
 
 function finalizeCandidates(entries: string[], root: string, limit?: number): PathCandidate[] {
-  const prefixed = entries.map(entry => entry || '.');
-  const normalized = prefixed.map(relativePath => ({
+  const prefixed = entries.map((entry) => entry || '.');
+  const normalized = prefixed.map((relativePath) => ({
     relative: relativePath,
     absolute: resolve(root, relativePath),
   }));
@@ -292,11 +293,11 @@ function resolveFilePatterns(options: FileOptions): string[] {
     return toArray(options.glob).filter(Boolean);
   }
   const extensions = toArray(options.extensions)
-    .map(ext => ext.trim())
+    .map((ext) => ext.trim())
     .filter(Boolean)
-    .map(ext => (ext.startsWith('.') ? ext.slice(1) : ext));
+    .map((ext) => (ext.startsWith('.') ? ext.slice(1) : ext));
 
-  if (!extensions.length) {
+  if (extensions.length === 0) {
     return ['**/*'];
   }
 
@@ -319,7 +320,7 @@ function createAutoCompletePrompt(args: {
   const { candidates, options, root, name, message, validator } = args;
   const showAbsolute = Boolean(options.showAbsolute);
   const limit = resolveLimit(options.limit);
-  const choices: PromptChoice[] = candidates.map(candidate => {
+  const choices: PromptChoice[] = candidates.map((candidate) => {
     const display = showAbsolute ? candidate.absolute : candidate.relative;
     const hint = showAbsolute ? candidate.relative : candidate.absolute;
     const hintMessage = hint === display ? undefined : pc.dim(hint);
@@ -340,16 +341,16 @@ function createAutoCompletePrompt(args: {
     choices,
     footer: () => pc.dim(`Root: ${root}`),
     initial: initialIndex >= 0 ? initialIndex : undefined,
-    result(this: any, value: string) {
+    result(this: PromptContext, value: string) {
       const focusedValue = this?.focused?.value as string | undefined;
       if (focusedValue) return focusedValue;
-      const match = choices.find(choice => choice.name === value);
+      const match = choices.find((choice) => choice.name === value);
       return (match?.value as string) ?? value;
     },
-    async validate(this: any, value: string) {
+    async validate(this: PromptContext, value: string) {
       const target = typeof value === 'string' && value.length > 0 ? value : '';
       const selected =
-        candidates.find(candidate => candidate.absolute === target)?.absolute ??
+        candidates.find((candidate) => candidate.absolute === target)?.absolute ??
         (this?.focused?.value as string | undefined);
       if (!selected) return 'Please select a valid path.';
       try {
@@ -373,11 +374,11 @@ function createAutoCompletePrompt(args: {
 function resolveInitialIndex(
   initial: string | undefined,
   candidates: PathCandidate[],
-  root: string
+  root: string,
 ): number {
   if (!initial) return -1;
   const absolute = isAbsolute(initial) ? resolve(initial) : resolve(root, initial);
-  return candidates.findIndex(candidate => candidate.absolute === absolute);
+  return candidates.findIndex((candidate) => candidate.absolute === absolute);
 }
 
 async function ensureDirectory(path: string): Promise<void> {
@@ -413,7 +414,7 @@ function ensureError(error: unknown): Error {
 }
 
 export async function resolveSearchRoot(
-  options: { rootStrategy?: RootStrategy; cwd?: string } = {}
+  options: { rootStrategy?: RootStrategy; cwd?: string } = {},
 ): Promise<string> {
   return resolveRoot(options.rootStrategy, options.cwd);
 }

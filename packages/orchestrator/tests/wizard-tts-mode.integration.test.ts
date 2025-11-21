@@ -1,8 +1,9 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { mkdtemp, writeFile, readFile, rm } from 'node:fs/promises';
+import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import type { ConfigProvider, StudentProfile, PresetMap } from '../src/config.js';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+
+import type { ConfigProvider, PresetMap, StudentProfile } from '../src/config.js';
 import { runInteractiveWizard } from '../src/wizard.js';
 
 type PromptResponse = Record<string, unknown>;
@@ -12,10 +13,10 @@ const promptQueue: PromptResponse[] = [];
 vi.mock('enquirer', () => {
   // Create mock prompt class inside the factory
   class MockPrompt {
-    constructor(private options: any) { }
+    constructor(private options: any) {}
 
     async run() {
-      if (!promptQueue.length) {
+      if (promptQueue.length === 0) {
         throw new Error(`No prompt response queued for question.`);
       }
       const next: any = promptQueue.shift();
@@ -85,7 +86,7 @@ Teacher: Great! Let's start our lesson.
 :::
 
 Content here
-    `.trim()
+    `.trim(),
     );
   });
 
@@ -97,20 +98,20 @@ Content here
       // Settings menu: configure TTS
       { setting: 'tts' },
       // TTS configuration prompts
-      { withTts: true },      // Enable TTS toggle
+      { withTts: true }, // Enable TTS toggle
       { ttsMode: 'dialogue' }, // Select dialogue mode
       { dialogueLanguage: 'en' }, // Set language
       { dialogueStability: 0.75 }, // Set stability
-      { dialogueSeed: 42 },    // Set seed
-      { voices: 'configs/voices.yml' },    // Voice map path
-      { force: true },                    // Force regenerate
-      { out: 'audio-output' },          // Output directory
+      { dialogueSeed: 42 }, // Set seed
+      { voices: 'configs/voices.yml' }, // Voice map path
+      { force: true }, // Force regenerate
+      { out: 'audio-output' }, // Output directory
       // Settings menu: back
       { setting: 'back' },
       // Main menu: start
       { main: 'start' },
       // Markdown selection
-      { md: mdPath }
+      { md: mdPath },
     );
 
     const result = await runInteractiveWizard(
@@ -119,7 +120,7 @@ Content here
         cwd,
         defaultsPath,
         configProvider,
-      }
+      },
     );
 
     // Verify flags flow through correctly
@@ -142,7 +143,7 @@ Content here
       { out: 'audio-output' },
       { setting: 'back' },
       { main: 'start' },
-      { md: mdPath }
+      { md: mdPath },
     );
 
     const firstRun = await runInteractiveWizard(
@@ -151,7 +152,7 @@ Content here
         cwd,
         defaultsPath,
         configProvider,
-      }
+      },
     );
 
     expect(firstRun.flags.ttsMode).toBe('monologue');
@@ -173,7 +174,7 @@ Content here
         cwd,
         defaultsPath,
         configProvider,
-      }
+      },
     );
 
     expect(secondRun.flags.withTts).toBe(true);
@@ -204,14 +205,14 @@ Content here
           cwd,
           defaultsPath,
           configProvider,
-        }
+        },
       );
 
       // Simulate applyEnvDefaults behavior
       const ttsMode = process.env.ELEVENLABS_TTS_MODE as 'auto' | 'dialogue' | 'monologue';
       const dialogueLanguage = process.env.ELEVENLABS_DIALOGUE_LANGUAGE;
-      const dialogueStability = parseFloat(process.env.ELEVENLABS_DIALOGUE_STABILITY);
-      const dialogueSeed = parseInt(process.env.ELEVENLABS_DIALOGUE_SEED, 10);
+      const dialogueStability = Number.parseFloat(process.env.ELEVENLABS_DIALOGUE_STABILITY);
+      const dialogueSeed = Number.parseInt(process.env.ELEVENLABS_DIALOGUE_SEED, 10);
 
       // Verify environment defaults are applied
       expect(ttsMode).toBe('dialogue');
@@ -220,25 +221,25 @@ Content here
       expect(dialogueSeed).toBe(123);
     } finally {
       // Restore original environment
-      if (originalEnv.ELEVENLABS_TTS_MODE !== undefined) {
-        process.env.ELEVENLABS_TTS_MODE = originalEnv.ELEVENLABS_TTS_MODE;
-      } else {
+      if (originalEnv.ELEVENLABS_TTS_MODE === undefined) {
         delete process.env.ELEVENLABS_TTS_MODE;
-      }
-      if (originalEnv.ELEVENLABS_DIALOGUE_LANGUAGE !== undefined) {
-        process.env.ELEVENLABS_DIALOGUE_LANGUAGE = originalEnv.ELEVENLABS_DIALOGUE_LANGUAGE;
       } else {
+        process.env.ELEVENLABS_TTS_MODE = originalEnv.ELEVENLABS_TTS_MODE;
+      }
+      if (originalEnv.ELEVENLABS_DIALOGUE_LANGUAGE === undefined) {
         delete process.env.ELEVENLABS_DIALOGUE_LANGUAGE;
-      }
-      if (originalEnv.ELEVENLABS_DIALOGUE_STABILITY !== undefined) {
-        process.env.ELEVENLABS_DIALOGUE_STABILITY = originalEnv.ELEVENLABS_DIALOGUE_STABILITY;
       } else {
+        process.env.ELEVENLABS_DIALOGUE_LANGUAGE = originalEnv.ELEVENLABS_DIALOGUE_LANGUAGE;
+      }
+      if (originalEnv.ELEVENLABS_DIALOGUE_STABILITY === undefined) {
         delete process.env.ELEVENLABS_DIALOGUE_STABILITY;
-      }
-      if (originalEnv.ELEVENLABS_DIALOGUE_SEED !== undefined) {
-        process.env.ELEVENLABS_DIALOGUE_SEED = originalEnv.ELEVENLABS_DIALOGUE_SEED;
       } else {
+        process.env.ELEVENLABS_DIALOGUE_STABILITY = originalEnv.ELEVENLABS_DIALOGUE_STABILITY;
+      }
+      if (originalEnv.ELEVENLABS_DIALOGUE_SEED === undefined) {
         delete process.env.ELEVENLABS_DIALOGUE_SEED;
+      } else {
+        process.env.ELEVENLABS_DIALOGUE_SEED = originalEnv.ELEVENLABS_DIALOGUE_SEED;
       }
     }
   });
@@ -254,7 +255,7 @@ Content here
       { out: 'audio-output' },
       { setting: 'back' },
       { main: 'start' },
-      { md: mdPath }
+      { md: mdPath },
     );
 
     const result = await runInteractiveWizard(
@@ -263,7 +264,7 @@ Content here
         cwd,
         defaultsPath,
         configProvider,
-      }
+      },
     );
 
     expect(result.flags.ttsMode).toBe('auto');
@@ -287,7 +288,7 @@ Content here
       { out: 'audio-output-custom' },
       { setting: 'back' },
       { main: 'start' },
-      { md: mdPath }
+      { md: mdPath },
     );
 
     const result = await runInteractiveWizard(
@@ -296,7 +297,7 @@ Content here
         cwd,
         defaultsPath,
         configProvider,
-      }
+      },
     );
 
     expect(result.flags.ttsMode).toBe('dialogue');
@@ -321,7 +322,7 @@ Content here
       { out: 'audio-output' },
       { setting: 'back' },
       { main: 'start' },
-      { md: mdPath }
+      { md: mdPath },
     );
 
     const result = await runInteractiveWizard(
@@ -330,7 +331,7 @@ Content here
         cwd,
         defaultsPath,
         configProvider,
-      }
+      },
     );
 
     // Stability should be a valid number within range

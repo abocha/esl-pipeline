@@ -1,18 +1,19 @@
-import { resolve, dirname } from 'node:path';
-import { readFile, writeFile, mkdir, unlink, access } from 'node:fs/promises';
 import Enquirer from 'enquirer';
-import { NewAssignmentFlags } from './index.js';
+import { access, mkdir, readFile, unlink, writeFile } from 'node:fs/promises';
+import { dirname, resolve } from 'node:path';
+
 import {
-  StudentProfile,
-  findMarkdownCandidates,
-  summarizeMarkdown,
-  getDefaultOutputDir,
-  DEFAULT_STUDENT_NAME,
-  createFilesystemConfigProvider,
   type ConfigProvider,
+  DEFAULT_STUDENT_NAME,
   type MarkdownSummary,
+  StudentProfile,
+  createFilesystemConfigProvider,
+  findMarkdownCandidates,
+  getDefaultOutputDir,
+  summarizeMarkdown,
 } from './config.js';
-import { pickFile, PathPickerCancelledError } from './pathPicker.js';
+import { NewAssignmentFlags } from './index.js';
+import { PathPickerCancelledError, pickFile } from './pathPicker.js';
 
 const { Select, Input, Toggle, NumberPrompt } = Enquirer as unknown as {
   Select: new (options: any) => any;
@@ -21,14 +22,14 @@ const { Select, Input, Toggle, NumberPrompt } = Enquirer as unknown as {
   NumberPrompt: new (options: any) => any;
 };
 
-type WizardContext = {
+interface WizardContext {
   cwd?: string;
   presetsPath?: string;
   studentsDir?: string;
   voicesPath?: string;
   defaultsPath?: string;
   configProvider?: ConfigProvider;
-};
+}
 
 type ValueOrigin = 'manual' | 'saved' | 'env' | 'profile' | 'cli' | 'default';
 
@@ -39,7 +40,7 @@ type WizardState = Partial<NewAssignmentFlags> & {
   origins: Partial<Record<keyof NewAssignmentFlags, ValueOrigin>>;
 };
 
-export type WizardSelections = {
+export interface WizardSelections {
   md: string;
   student?: string;
   studentProfile?: StudentProfile | null;
@@ -60,12 +61,12 @@ export type WizardSelections = {
   prefix?: string;
   publicRead?: boolean;
   dryRun: boolean;
-};
+}
 
-export type WizardRunResult = {
+export interface WizardRunResult {
   flags: NewAssignmentFlags;
   selections: WizardSelections;
-};
+}
 
 export class WizardAbortedError extends Error {
   constructor(message = 'Interactive wizard aborted') {
@@ -82,7 +83,7 @@ function onCancel(): never {
  * Helper function to run an enquirer prompt and handle cancellation uniformly.
  * Returns an object with the answer keyed by the prompt name.
  */
-async function runPrompt<T>(PromptClass: any, options: any): Promise<{ [key: string]: T }> {
+async function runPrompt<T>(PromptClass: any, options: any): Promise<Record<string, T>> {
   const prompt = new PromptClass(options);
   try {
     const answer = await prompt.run();
@@ -95,7 +96,7 @@ async function runPrompt<T>(PromptClass: any, options: any): Promise<{ [key: str
 
 const DEFAULT_WIZARD_DEFAULTS_PATH = 'configs/wizard.defaults.json';
 
-const PERSISTABLE_KEYS: Array<keyof NewAssignmentFlags> = [
+const PERSISTABLE_KEYS: (keyof NewAssignmentFlags)[] = [
   'student',
   'preset',
   'accentPreference',
@@ -131,7 +132,7 @@ async function loadWizardDefaults(path: string): Promise<Partial<NewAssignmentFl
 
 async function saveWizardDefaults(
   path: string,
-  values: Partial<NewAssignmentFlags>
+  values: Partial<NewAssignmentFlags>,
 ): Promise<void> {
   await mkdir(dirname(path), { recursive: true });
   await writeFile(path, JSON.stringify(values, null, 2));
@@ -167,7 +168,7 @@ function setStateValue<K extends keyof NewAssignmentFlags>(
   key: K,
   value: NewAssignmentFlags[K] | undefined,
   origin: ValueOrigin,
-  options: { overwrite?: boolean; preserveManual?: boolean } = {}
+  options: { overwrite?: boolean; preserveManual?: boolean } = {},
 ): void {
   const { overwrite = true, preserveManual = true } = options;
   const currentOrigin = state.origins[key];
@@ -200,7 +201,7 @@ function collectPersistableSettings(state: WizardState): Partial<NewAssignmentFl
 }
 
 function removeValuesByOrigin(state: WizardState, origin: ValueOrigin): void {
-  for (const key of Object.keys(state.origins) as Array<keyof NewAssignmentFlags>) {
+  for (const key of Object.keys(state.origins) as (keyof NewAssignmentFlags)[]) {
     if (state.origins[key] === origin) {
       delete state[key];
       delete state.origins[key];
@@ -209,10 +210,10 @@ function removeValuesByOrigin(state: WizardState, origin: ValueOrigin): void {
 }
 
 function applySavedOrigins(state: WizardState, payload: Partial<NewAssignmentFlags>): void {
-  for (const key of Object.keys(payload) as Array<keyof NewAssignmentFlags>) {
+  for (const key of Object.keys(payload) as (keyof NewAssignmentFlags)[]) {
     state.origins[key] = 'saved';
   }
-  for (const key of Object.keys(state.origins) as Array<keyof NewAssignmentFlags>) {
+  for (const key of Object.keys(state.origins) as (keyof NewAssignmentFlags)[]) {
     if (state.origins[key] === 'saved' && !(key in payload)) {
       delete state[key];
       delete state.origins[key];
@@ -235,7 +236,7 @@ function defaultsEqual(a: Partial<NewAssignmentFlags>, b: Partial<NewAssignmentF
 async function autoPersistDefaults(
   state: WizardState,
   defaultsPath: string,
-  previous: Partial<NewAssignmentFlags>
+  previous: Partial<NewAssignmentFlags>,
 ): Promise<Partial<NewAssignmentFlags>> {
   const payload = collectPersistableSettings(state);
   const hasValues = Object.keys(payload).length > 0;
@@ -258,7 +259,7 @@ async function autoPersistDefaults(
 
 async function manageSavedDefaults(
   state: WizardState,
-  options: { defaultsPath: string; savedExists: boolean }
+  options: { defaultsPath: string; savedExists: boolean },
 ): Promise<{
   changed: boolean;
   savedDefaults?: Partial<NewAssignmentFlags>;
@@ -275,17 +276,17 @@ async function manageSavedDefaults(
         'Save current settings',
         { name: 'Clear saved defaults', disabled: !existsNow },
         'Show defaults file location',
-        'Back'
+        'Back',
       ],
       result(value: string) {
         const map: Record<string, string> = {
           'Save current settings': 'save',
           'Clear saved defaults': 'clear',
           'Show defaults file location': 'show',
-          'Back': 'back'
+          Back: 'back',
         };
         return map[value] || value;
-      }
+      },
     });
 
     switch (choice.defaults as string) {
@@ -317,16 +318,16 @@ async function manageSavedDefaults(
         continue;
       }
 
-      case 'back':
-      default:
+      default: {
         return { changed: false };
+      }
     }
   }
 }
 
 export async function runInteractiveWizard(
   initial: Partial<NewAssignmentFlags> = {},
-  ctx: WizardContext = {}
+  ctx: WizardContext = {},
 ): Promise<WizardRunResult> {
   const cwd = resolve(ctx.cwd ?? process.cwd());
   const defaultsPath =
@@ -349,7 +350,8 @@ export async function runInteractiveWizard(
 
   // Migrate existing defaults to include TTS mode
   const migratedDefaults = migrateTtsDefaults(savedDefaults);
-  const defaultProfile = profiles.find(profile => profile.student === DEFAULT_STUDENT_NAME) ?? null;
+  const defaultProfile =
+    profiles.find((profile) => profile.student === DEFAULT_STUDENT_NAME) ?? null;
   const presetNames = Object.keys(presets);
 
   let currentSavedDefaults = migratedDefaults;
@@ -369,7 +371,7 @@ export async function runInteractiveWizard(
 
   if (!hasSavedDefaults) {
     console.log(
-      '\n⚠️  No saved wizard defaults found. Open "Configure settings…" or "Saved defaults…" to set up your preferences.'
+      '\n⚠️  No saved wizard defaults found. Open "Configure settings…" or "Saved defaults…" to set up your preferences.',
     );
   }
 
@@ -381,10 +383,10 @@ export async function runInteractiveWizard(
         'Start (run with current settings)',
         'Configure settings…',
         hasSavedDefaults ? 'Saved defaults…' : 'Saved defaults… (none yet)',
-        ...(presetNames.length ? ['Quick select preset…'] : []),
+        ...(presetNames.length > 0 ? ['Quick select preset…'] : []),
         'Review current summary',
         'Reset to defaults',
-        'Cancel'
+        'Cancel',
       ],
       initial: state.md ? 0 : 1,
       result(value: string) {
@@ -396,10 +398,10 @@ export async function runInteractiveWizard(
           'Quick select preset…': 'preset',
           'Review current summary': 'summary',
           'Reset to defaults': 'reset',
-          'Cancel': 'cancel'
+          Cancel: 'cancel',
         };
         return map[value] || value;
-      }
+      },
     });
 
     switch (action.main as string) {
@@ -479,9 +481,9 @@ export async function runInteractiveWizard(
         break;
       }
 
-      case 'cancel':
-      default:
+      default: {
         onCancel();
+      }
     }
   }
 }
@@ -507,9 +509,9 @@ async function resetState(options: {
   const apply = (
     source: Partial<NewAssignmentFlags>,
     origin: ValueOrigin,
-    opts?: { overwrite?: boolean; preserveManual?: boolean }
+    opts?: { overwrite?: boolean; preserveManual?: boolean },
   ) => {
-    for (const key of Object.keys(source) as Array<keyof NewAssignmentFlags>) {
+    for (const key of Object.keys(source) as (keyof NewAssignmentFlags)[]) {
       const value = source[key];
       if (value === undefined) continue;
       setStateValue(state, key, value, origin, opts);
@@ -520,7 +522,7 @@ async function resetState(options: {
   apply(initialFlags, 'cli', { overwrite: true, preserveManual: false });
 
   if (state.student) {
-    state.studentProfile = profiles.find(profile => profile.student === state.student) ?? null;
+    state.studentProfile = profiles.find((profile) => profile.student === state.student) ?? null;
   }
   if (!state.studentProfile && defaultProfile) {
     state.studentProfile = defaultProfile;
@@ -558,7 +560,7 @@ async function openSettingsMenu(
     initialFlags: Partial<NewAssignmentFlags>;
     ctx: WizardContext;
     configProvider: ConfigProvider;
-  }
+  },
 ): Promise<void> {
   const {
     cwd,
@@ -579,12 +581,12 @@ async function openSettingsMenu(
         'Select markdown file…',
         'Choose student…',
         'Set Notion database ID…',
-        ...(presetNames.length ? ['Select color preset…'] : []),
+        ...(presetNames.length > 0 ? ['Select color preset…'] : []),
         'Configure TTS…',
         'Configure upload…',
         'Toggle dry-run mode',
         'Set accent preference…',
-        'Back'
+        'Back',
       ],
       result(value: string) {
         const map: Record<string, string> = {
@@ -596,61 +598,71 @@ async function openSettingsMenu(
           'Configure upload…': 'upload',
           'Toggle dry-run mode': 'dryrun',
           'Set accent preference…': 'accent',
-          'Back': 'back'
+          Back: 'back',
         };
         return map[value] || value;
-      }
+      },
     });
 
     switch (choice.setting as string) {
-      case 'md':
+      case 'md': {
         await selectMarkdown(state, { cwd, suggestions: mdSuggestions });
         break;
-      case 'student':
+      }
+      case 'student': {
         await selectStudent(state, { profiles, defaultProfile });
         break;
-      case 'db':
+      }
+      case 'db': {
         await configureDatabase(state, { initialFlags });
         break;
-      case 'preset':
+      }
+      case 'preset': {
         await selectPreset(state, { presetNames });
         break;
-      case 'tts':
+      }
+      case 'tts': {
         await configureTts(state, { cwd, ctx, initialFlags, configProvider });
         break;
-      case 'upload':
+      }
+      case 'upload': {
         await configureUpload(state, { initialFlags });
         break;
-      case 'dryrun':
+      }
+      case 'dryrun': {
         await toggleDryRun(state, { initialFlags });
         break;
-      case 'accent':
+      }
+      case 'accent': {
         await configureAccent(state);
         break;
-      case 'back':
-      default:
+      }
+      default: {
         return;
+      }
     }
   }
 }
 
 async function selectMarkdown(
   state: WizardState,
-  options: { cwd: string; suggestions: string[] }
+  options: { cwd: string; suggestions: string[] },
 ): Promise<void> {
   const { cwd, suggestions } = options;
-  const choices = suggestions.map(p => ({
+  const choices = suggestions.map((p) => ({
     name: p,
     message: p,
-    value: resolve(cwd, p)
+    value: resolve(cwd, p),
   }));
-  choices.push({ name: '__manual__', message: 'Browse manually…', value: '__manual__' });
-  choices.push({ name: '__cancel__', message: 'Cancel', value: '__cancel__' });
+  choices.push(
+    { name: '__manual__', message: 'Browse manually…', value: '__manual__' },
+    { name: '__cancel__', message: 'Cancel', value: '__cancel__' },
+  );
   const mdPick = await runPrompt<string>(Select, {
     name: 'md',
     message: 'Select the markdown lesson',
     choices,
-    initial: suggestions.length ? 0 : choices.length - 1
+    initial: suggestions.length > 0 ? 0 : choices.length - 1,
   });
 
   let mdPath = mdPick.md as string | undefined;
@@ -678,7 +690,7 @@ async function selectMarkdown(
 
 async function selectStudent(
   state: WizardState,
-  options: { profiles: StudentProfile[]; defaultProfile: StudentProfile | null }
+  options: { profiles: StudentProfile[]; defaultProfile: StudentProfile | null },
 ): Promise<void> {
   const { profiles, defaultProfile } = options;
   const frontmatterStudent = state.summary?.student;
@@ -686,27 +698,30 @@ async function selectStudent(
   const choices = [
     ...(frontmatterStudent
       ? [
-        {
-          name: '__frontmatter__',
-          message: `Use frontmatter student (${frontmatterStudent})`,
-          value: frontmatterStudent
-        }
-      ]
+          {
+            name: '__frontmatter__',
+            message: `Use frontmatter student (${frontmatterStudent})`,
+            value: frontmatterStudent,
+          },
+        ]
       : []),
-    ...profiles.map(profile => ({
+    ...profiles.map((profile) => ({
       name: profile.student,
-      message: profile.student === DEFAULT_STUDENT_NAME ? 'Default profile (auto)' : profile.student,
-      value: profile.student
+      message:
+        profile.student === DEFAULT_STUDENT_NAME ? 'Default profile (auto)' : profile.student,
+      value: profile.student,
     })),
     { name: '__custom__', message: 'Enter custom student…', value: '__custom__' },
     { name: '__clear__', message: 'Clear student', value: '__clear__' },
     { name: '__back__', message: 'Back', value: '__back__' },
-  ].filter((choice, index, arr) => arr.findIndex(other => other.value === choice.value) === index);
+  ].filter(
+    (choice, index, arr) => arr.findIndex((other) => other.value === choice.value) === index,
+  );
 
   const picked = await runPrompt<string>(Select, {
     name: 'studentChoice',
     message: 'Which student is this for?',
-    choices
+    choices,
   });
 
   const choice = picked.studentChoice as string | undefined;
@@ -715,15 +730,15 @@ async function selectStudent(
   if (choice === '__clear__') {
     setStateValue(state, 'student', undefined, 'manual');
     state.studentProfile = defaultProfile;
-    if (defaultProfile?.accentPreference !== undefined) {
+    if (defaultProfile?.accentPreference === undefined) {
+      setStateValue(state, 'accentPreference', undefined, 'manual');
+    } else {
       setStateValue(
         state,
         'accentPreference',
         defaultProfile.accentPreference ?? undefined,
-        'profile'
+        'profile',
       );
-    } else {
-      setStateValue(state, 'accentPreference', undefined, 'manual');
     }
     if (state.studentProfile) {
       applyProfileDefaults(state, state.studentProfile);
@@ -738,7 +753,7 @@ async function selectStudent(
       initial: state.student ?? frontmatterStudent ?? '',
       validate(value: string) {
         return (value && value.trim().length > 0) || 'Please provide a student name';
-      }
+      },
     });
     const raw = custom.customStudent?.toString().trim();
     if (!raw) return;
@@ -748,14 +763,14 @@ async function selectStudent(
   }
 
   state.studentProfile =
-    profiles.find(profile => profile.student === state.student) ?? defaultProfile;
+    profiles.find((profile) => profile.student === state.student) ?? defaultProfile;
   if (state.studentProfile?.accentPreference !== undefined) {
     setStateValue(
       state,
       'accentPreference',
       state.studentProfile.accentPreference ?? undefined,
       'profile',
-      { overwrite: false }
+      { overwrite: false },
     );
   }
   if (state.studentProfile) {
@@ -765,7 +780,7 @@ async function selectStudent(
 
 async function configureDatabase(
   state: WizardState,
-  options: { initialFlags: Partial<NewAssignmentFlags> }
+  options: { initialFlags: Partial<NewAssignmentFlags> },
 ): Promise<void> {
   const envDbId =
     state.dbId ??
@@ -777,7 +792,7 @@ async function configureDatabase(
   const dbAnswer = await runPrompt<string>(Input, {
     name: 'dbId',
     message: 'Target Notion database ID (leave blank to clear)',
-    initial: envDbId ?? ''
+    initial: envDbId ?? '',
   });
 
   const rawDbId = dbAnswer.dbId?.toString().trim();
@@ -790,14 +805,14 @@ async function configureDatabase(
 
 async function selectPreset(state: WizardState, options: { presetNames: string[] }): Promise<void> {
   const { presetNames } = options;
-  if (!presetNames.length) {
+  if (presetNames.length === 0) {
     console.log('No presets available. Add entries to configs/presets.json to enable this option.');
     return;
   }
 
   const presetChoices = [
     { name: '__none__', message: 'Use no preset', value: '__none__' },
-    ...presetNames.map(name => ({
+    ...presetNames.map((name) => ({
       name,
       message: name === state.preset ? `${name} (current)` : name,
       value: name,
@@ -807,7 +822,7 @@ async function selectPreset(state: WizardState, options: { presetNames: string[]
   const presetAnswer = await runPrompt<string>(Select, {
     name: 'preset',
     message: 'Select a heading color preset',
-    choices: presetChoices
+    choices: presetChoices,
   });
 
   if (presetAnswer.preset === '__none__') {
@@ -827,7 +842,7 @@ async function configureTts(
     ctx: WizardContext;
     initialFlags: Partial<NewAssignmentFlags>;
     configProvider: ConfigProvider;
-  }
+  },
 ): Promise<void> {
   const { cwd, ctx, initialFlags } = options;
 
@@ -837,7 +852,7 @@ async function configureTts(
     message: 'Generate ElevenLabs audio?',
     initial: state.withTts ?? initialFlags.withTts ?? true,
     enabled: 'yes',
-    disabled: 'no'
+    disabled: 'no',
   });
   const withTts = Boolean(ttsAnswer.withTts);
   setStateValue(state, 'withTts', withTts, 'manual', { overwrite: true, preserveManual: false });
@@ -860,20 +875,17 @@ async function configureTts(
     choices: [
       'Auto-detect (recommended)',
       'Dialogue mode (Text-to-Dialogue API)',
-      'Monologue mode (Text-to-Speech API)'
+      'Monologue mode (Text-to-Speech API)',
     ],
-    initial:
-      state.ttsMode === 'dialogue' ? 1 :
-        state.ttsMode === 'monologue' ? 2 :
-          0,
+    initial: state.ttsMode === 'dialogue' ? 1 : state.ttsMode === 'monologue' ? 2 : 0,
     result(value: string) {
       const map: Record<string, string> = {
         'Auto-detect (recommended)': 'auto',
         'Dialogue mode (Text-to-Dialogue API)': 'dialogue',
-        'Monologue mode (Text-to-Speech API)': 'monologue'
+        'Monologue mode (Text-to-Speech API)': 'monologue',
       };
       return map[value] || value;
-    }
+    },
   });
   const ttsMode = modeAnswer.ttsMode as 'auto' | 'dialogue' | 'monologue';
   setStateValue(state, 'ttsMode', ttsMode, 'manual', { overwrite: true, preserveManual: false });
@@ -888,11 +900,16 @@ async function configureTts(
       validate(value: string) {
         if (!value.trim()) return true; // Optional
         const langRegex = /^[a-z]{2}$/i;
-        return langRegex.test(value) || 'Please enter a valid 2-letter language code (e.g., en, es, fr)';
-      }
+        return (
+          langRegex.test(value) || 'Please enter a valid 2-letter language code (e.g., en, es, fr)'
+        );
+      },
     });
     const languageValue = languageAnswer.dialogueLanguage?.toString().trim() || undefined;
-    setStateValue(state, 'dialogueLanguage', languageValue, 'manual', { overwrite: true, preserveManual: false });
+    setStateValue(state, 'dialogueLanguage', languageValue, 'manual', {
+      overwrite: true,
+      preserveManual: false,
+    });
 
     // Stability
     const stabilityAnswer = await runPrompt<number>(NumberPrompt, {
@@ -901,10 +918,13 @@ async function configureTts(
       initial: state.dialogueStability ?? initialFlags.dialogueStability ?? 0.5,
       min: 0,
       max: 1,
-      float: true
+      float: true,
     });
     const stabilityValue = stabilityAnswer.dialogueStability;
-    setStateValue(state, 'dialogueStability', stabilityValue, 'manual', { overwrite: true, preserveManual: false });
+    setStateValue(state, 'dialogueStability', stabilityValue, 'manual', {
+      overwrite: true,
+      preserveManual: false,
+    });
 
     // Seed
     const seedAnswer = await runPrompt<number>(NumberPrompt, {
@@ -912,14 +932,17 @@ async function configureTts(
       message: 'Dialogue seed (integer, optional)',
       initial: state.dialogueSeed ?? initialFlags.dialogueSeed ?? undefined,
       min: 0,
-      max: 2147483647,
+      max: 2_147_483_647,
       float: false,
       validate(value: number | undefined) {
         return value === undefined || Number.isInteger(value) || 'Must be an integer';
-      }
+      },
     });
     const seedValue = seedAnswer.dialogueSeed;
-    setStateValue(state, 'dialogueSeed', seedValue, 'manual', { overwrite: true, preserveManual: false });
+    setStateValue(state, 'dialogueSeed', seedValue, 'manual', {
+      overwrite: true,
+      preserveManual: false,
+    });
   } else {
     // Clear dialogue-specific values if not in dialogue mode
     setStateValue(state, 'dialogueLanguage', undefined, 'manual');
@@ -928,18 +951,14 @@ async function configureTts(
   }
 
   // Step 4: Existing Options (simplified path resolution)
-  const voicesGuess =
-    state.voices ??
-    ctx.voicesPath ??
-    initialFlags.voices ??
-    'configs/voices.yml';
+  const voicesGuess = state.voices ?? ctx.voicesPath ?? initialFlags.voices ?? 'configs/voices.yml';
   const voicesAnswer = await runPrompt<string>(Input, {
     name: 'voices',
     message: 'Path to voices.yml',
     initial: voicesGuess,
     validate(value: string) {
       return (value && value.trim().length > 0) || 'Provide a path to voices.yml';
-    }
+    },
   });
   const rawVoices = voicesAnswer.voices?.toString().trim();
   if (rawVoices) {
@@ -956,7 +975,7 @@ async function configureTts(
     message: 'Force regenerate audio even if cached?',
     initial: Boolean(state.force ?? initialFlags.force),
     enabled: 'yes',
-    disabled: 'no'
+    disabled: 'no',
   });
   setStateValue(state, 'force', Boolean(forceAnswer.force), 'manual', {
     overwrite: true,
@@ -978,7 +997,7 @@ async function configureTts(
   const outAnswer = await runPrompt<string>(Input, {
     name: 'out',
     message: 'Audio output directory',
-    initial: outDefault
+    initial: outDefault,
   });
   const rawOut = outAnswer.out?.toString().trim();
   if (rawOut) {
@@ -993,19 +1012,16 @@ async function configureTts(
 
 async function configureUpload(
   state: WizardState,
-  options: { initialFlags: Partial<NewAssignmentFlags> }
+  options: { initialFlags: Partial<NewAssignmentFlags> },
 ): Promise<void> {
   const uploadAnswer = await runPrompt<string>(Select, {
     name: 'upload',
     message: 'Upload audio after generation?',
-    choices: [
-      'No upload',
-      'S3 (default)'
-    ],
+    choices: ['No upload', 'S3 (default)'],
     initial: state.upload === 's3' || options.initialFlags.upload === 's3' ? 1 : 0,
     result(value: string) {
       return value === 'S3 (default)' ? 's3' : 'none';
-    }
+    },
   });
 
   if (uploadAnswer.upload === 's3') {
@@ -1024,7 +1040,7 @@ async function configureUpload(
     name: 'prefix',
     message: 'S3 key prefix (optional)',
     initial:
-      state.prefix ?? options.initialFlags.prefix ?? process.env.S3_PREFIX ?? 'audio/assignments'
+      state.prefix ?? options.initialFlags.prefix ?? process.env.S3_PREFIX ?? 'audio/assignments',
   });
   const prefixValue = prefixAnswer.prefix?.toString().trim() || undefined;
   setStateValue(state, 'prefix', prefixValue, 'manual', { overwrite: true, preserveManual: false });
@@ -1034,7 +1050,7 @@ async function configureUpload(
     message: 'Make uploaded audio public?',
     initial: Boolean(state.publicRead ?? options.initialFlags.publicRead),
     enabled: 'yes',
-    disabled: 'no'
+    disabled: 'no',
   });
   setStateValue(state, 'publicRead', Boolean(publicAnswer.publicRead), 'manual', {
     overwrite: true,
@@ -1044,14 +1060,14 @@ async function configureUpload(
 
 async function toggleDryRun(
   state: WizardState,
-  options: { initialFlags: Partial<NewAssignmentFlags> }
+  options: { initialFlags: Partial<NewAssignmentFlags> },
 ): Promise<void> {
   const dryRunAnswer = await runPrompt<boolean>(Toggle, {
     name: 'dryRun',
     message: 'Run in dry-run mode?',
     initial: state.dryRun ?? options.initialFlags.dryRun ?? true,
     enabled: 'yes',
-    disabled: 'no'
+    disabled: 'no',
   });
   setStateValue(state, 'dryRun', Boolean(dryRunAnswer.dryRun), 'manual', {
     overwrite: true,
@@ -1063,7 +1079,7 @@ async function configureAccent(state: WizardState): Promise<void> {
   const accentAnswer = await runPrompt<string>(Input, {
     name: 'accent',
     message: 'Accent preference (leave blank to clear)',
-    initial: state.accentPreference ?? ''
+    initial: state.accentPreference ?? '',
   });
   const value = accentAnswer.accent?.toString().trim();
   if (value) {
@@ -1107,7 +1123,11 @@ function applyEnvDefaults(state: WizardState): void {
   }
 
   // New TTS mode environment variables with 'auto' fallback
-  const envTtsMode = process.env.ELEVENLABS_TTS_MODE as 'auto' | 'dialogue' | 'monologue' | undefined;
+  const envTtsMode = process.env.ELEVENLABS_TTS_MODE as
+    | 'auto'
+    | 'dialogue'
+    | 'monologue'
+    | undefined;
   if (envTtsMode && ['auto', 'dialogue', 'monologue'].includes(envTtsMode)) {
     setStateValue(state, 'ttsMode', envTtsMode, 'env', { overwrite: false });
   } else if (state.withTts !== false && !envTtsMode) {
@@ -1119,22 +1139,24 @@ function applyEnvDefaults(state: WizardState): void {
   if (envDialogueLanguage && envDialogueLanguage.trim()) {
     const langRegex = /^[a-z]{2}$/i;
     if (langRegex.test(envDialogueLanguage)) {
-      setStateValue(state, 'dialogueLanguage', envDialogueLanguage.toLowerCase(), 'env', { overwrite: false });
+      setStateValue(state, 'dialogueLanguage', envDialogueLanguage.toLowerCase(), 'env', {
+        overwrite: false,
+      });
     }
   }
 
   const envDialogueStability = process.env.ELEVENLABS_DIALOGUE_STABILITY;
   if (envDialogueStability) {
-    const stability = parseFloat(envDialogueStability);
-    if (!isNaN(stability) && stability >= 0 && stability <= 1) {
+    const stability = Number.parseFloat(envDialogueStability);
+    if (!Number.isNaN(stability) && stability >= 0 && stability <= 1) {
       setStateValue(state, 'dialogueStability', stability, 'env', { overwrite: false });
     }
   }
 
   const envDialogueSeed = process.env.ELEVENLABS_DIALOGUE_SEED;
   if (envDialogueSeed) {
-    const seed = parseInt(envDialogueSeed, 10);
-    if (!isNaN(seed) && seed >= 0) {
+    const seed = Number.parseInt(envDialogueSeed, 10);
+    if (!Number.isNaN(seed) && seed >= 0) {
       setStateValue(state, 'dialogueSeed', seed, 'env', { overwrite: false });
     }
   }
@@ -1203,10 +1225,27 @@ function buildSelections(state: WizardState, flags: NewAssignmentFlags): WizardS
 function formatValue(value: unknown, origin?: ValueOrigin): string {
   if (value === undefined || value === null) return '(not set)';
   let suffix = '';
-  if (origin === 'env') suffix = ' (from .env)';
-  else if (origin === 'saved') suffix = ' (saved default)';
-  else if (origin === 'profile') suffix = ' (profile)';
-  else if (origin === 'cli') suffix = ' (from flags)';
+  switch (origin) {
+    case 'env': {
+      suffix = ' (from .env)';
+      break;
+    }
+    case 'saved': {
+      suffix = ' (saved default)';
+      break;
+    }
+    case 'profile': {
+      suffix = ' (profile)';
+      break;
+    }
+    case 'cli': {
+      {
+        suffix = ' (from flags)';
+        // No default
+      }
+      break;
+    }
+  }
   return `${value}${suffix}`;
 }
 
@@ -1221,9 +1260,9 @@ function warnMissingSettings(state: WizardState): void {
   if (state.withTts && !state.voices) missing.push('Voice map path');
   if (state.upload === 's3' && !state.prefix) missing.push('S3 prefix');
 
-  if (missing.length) {
+  if (missing.length > 0) {
     console.log(
-      `\n⚠️  Missing configuration: ${missing.join(', ')}. Use "Configure settings…" or "Saved defaults…" to populate these before running.\n`
+      `\n⚠️  Missing configuration: ${missing.join(', ')}. Use "Configure settings…" or "Saved defaults…" to populate these before running.\n`,
     );
   }
 }
@@ -1240,18 +1279,24 @@ function printSummary(state: WizardState): void {
   console.log(`  Database : ${formatValue(state.dbId, state.origins.dbId)}`);
   console.log(`  Preset   : ${formatValue(state.preset, state.origins.preset)}`);
   console.log(
-    `  Accent   : ${formatValue(state.accentPreference, state.origins.accentPreference)}`
+    `  Accent   : ${formatValue(state.accentPreference, state.origins.accentPreference)}`,
   );
 
   console.log(`  TTS      : ${formatBoolean(state.withTts, state.origins.withTts)}`);
   if (state.withTts) {
-    console.log(`  Mode     : ${formatValue(state.ttsMode, state.origins.ttsMode)} (${state.ttsMode === 'auto' ? 'auto-detect' : state.ttsMode === 'dialogue' ? 'Text-to-Dialogue' : 'Text-to-Speech'})`);
+    console.log(
+      `  Mode     : ${formatValue(state.ttsMode, state.origins.ttsMode)} (${state.ttsMode === 'auto' ? 'auto-detect' : state.ttsMode === 'dialogue' ? 'Text-to-Dialogue' : 'Text-to-Speech'})`,
+    );
     if (state.ttsMode === 'dialogue') {
       if (state.dialogueLanguage) {
-        console.log(`  Language : ${formatValue(state.dialogueLanguage, state.origins.dialogueLanguage)}`);
+        console.log(
+          `  Language : ${formatValue(state.dialogueLanguage, state.origins.dialogueLanguage)}`,
+        );
       }
       if (state.dialogueStability !== undefined) {
-        console.log(`  Stability: ${formatValue(state.dialogueStability, state.origins.dialogueStability)}`);
+        console.log(
+          `  Stability: ${formatValue(state.dialogueStability, state.origins.dialogueStability)}`,
+        );
       }
       if (state.dialogueSeed !== undefined && state.dialogueSeed > 0) {
         console.log(`  Seed     : ${formatValue(state.dialogueSeed, state.origins.dialogueSeed)}`);
