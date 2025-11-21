@@ -109,8 +109,8 @@ class RedisJobEventBridge {
     const snapshot = getJobSubscriptionSnapshot();
     await this.syncSubscriptions(snapshot);
 
-    this.unsubscribeSubscriptionTracker = onJobSubscriptionChange(change => {
-      this.handleSubscriptionChange(change).catch(err => {
+    this.unsubscribeSubscriptionTracker = onJobSubscriptionChange(_change => {
+      this.handleSubscriptionChange(_change).catch(err => {
         logger.error(err as Error, {
           component: 'job-event-bridge',
           message: 'Failed to handle subscription change',
@@ -233,7 +233,7 @@ class RedisJobEventBridge {
     }
   }
 
-  private async handleSubscriptionChange(change: {
+  private async handleSubscriptionChange(_change: {
     scope: 'all' | 'job';
     jobId?: string;
     count: number;

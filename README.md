@@ -96,6 +96,7 @@ Types such as `PipelineNewAssignmentOptions`, `PipelineRerunOptions`, and `Assig
 | Notion DB / data source | `NOTION_DB_ID`, overrides via CLI flags                    | Student profiles can pin defaults                                       |
 | ElevenLabs API key      | `ELEVENLABS_API_KEY` env variable                          | Required if `--with-tts`                                                |
 | AWS credentials         | `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `AWS_REGION` | Needed for `--upload s3`                                                |
+| S3 bucket/prefix        | `S3_BUCKET`, optional `S3_PREFIX`                          | Used by `--upload s3` uploads                                           |
 | Voices mapping          | `configs/voices.yml` (override with `--voices`)            | Resolved via `resolveConfigPaths`; can be overridden via CLI/options    |
 | Presets                 | `configs/presets.json` (override with `--presets-path`)    | Resolved via `resolveConfigPaths`                                       |
 | Student profiles        | `configs/students/*.json`                                  | Optional per-student defaults                                           |

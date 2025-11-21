@@ -198,7 +198,7 @@ Content here
     try {
       promptQueue.push({ main: 'start' }, { md: mdPath });
 
-      const result = await runInteractiveWizard(
+      await runInteractiveWizard(
         {},
         {
           cwd,

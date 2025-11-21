@@ -13,6 +13,7 @@ import { ValidationError, ManifestError, InfrastructureError } from '@esl-pipeli
 import { uploadFile } from '@esl-pipeline/storage-uploader';
 import { addOrReplaceAudioUnderStudyText } from '@esl-pipeline/notion-add-audio';
 import { runImport } from '@esl-pipeline/notion-importer';
+import { validateMarkdownFile } from '@esl-pipeline/md-validator';
 import {
   type AssignmentManifest,
   createFilesystemManifestStore,
@@ -225,10 +226,18 @@ export async function newAssignment(
   });
 
   try {
+    // Validation stage always runs, even when skipping import
+    emitStage('validate', 'start');
+    steps.push('validate');
+    const validation = await validateMarkdownFile(flags.md, { strict: true });
+    if (!validation.ok) {
+      const msg = ['Validation failed:', ...validation.errors.map(e => `- ${e}`)].join('\n');
+      throw new ValidationError(msg);
+    }
+    emitStage('validate', 'success');
+
     if (flags.skipImport) {
-      recordSkip('validate', 'skip-import flag set');
       recordSkip('import', 'skip-import flag set');
-      steps.push('skip:validate');
       steps.push('skip:import');
       if (!pageId && !flags.dryRun) {
         throw new ValidationError(
@@ -236,9 +245,7 @@ export async function newAssignment(
         );
       }
     } else {
-      emitStage('validate', 'start');
       emitStage('import', 'start');
-      steps.push('validate');
       steps.push('import');
       const importResult = await runImport({
         mdPath: flags.md,
@@ -251,7 +258,6 @@ export async function newAssignment(
       });
       pageId = importResult.page_id;
       pageUrl = importResult.url;
-      emitStage('validate', 'success');
       emitStage('import', 'success', {
         pageUrl,
         studentLinked: importResult.studentLinked ?? undefined,
@@ -448,11 +454,11 @@ export async function newAssignment(
       audio,
       preset: flags.preset,
 
-      // NEW: Include TTS mode information for reproducibility
-      ttsMode: flags.ttsMode,
-      dialogueLanguage: flags.dialogueLanguage,
-      dialogueStability: flags.dialogueStability,
-      dialogueSeed: flags.dialogueSeed,
+      // Preserve TTS metadata from previous runs when flags are omitted
+      ttsMode: flags.ttsMode ?? previousManifest?.ttsMode,
+      dialogueLanguage: flags.dialogueLanguage ?? previousManifest?.dialogueLanguage,
+      dialogueStability: flags.dialogueStability ?? previousManifest?.dialogueStability,
+      dialogueSeed: flags.dialogueSeed ?? previousManifest?.dialogueSeed,
 
       timestamp: new Date().toISOString(),
     };
@@ -819,11 +825,11 @@ export async function rerunAssignment(
         voices: audioVoices,
       },
 
-      // NEW: Include TTS mode information for reproducibility
-      ttsMode: flags.ttsMode,
-      dialogueLanguage: flags.dialogueLanguage,
-      dialogueStability: flags.dialogueStability,
-      dialogueSeed: flags.dialogueSeed,
+      // Preserve prior TTS metadata unless explicitly overridden
+      ttsMode: flags.ttsMode ?? manifest.ttsMode,
+      dialogueLanguage: flags.dialogueLanguage ?? manifest.dialogueLanguage,
+      dialogueStability: flags.dialogueStability ?? manifest.dialogueStability,
+      dialogueSeed: flags.dialogueSeed ?? manifest.dialogueSeed,
 
       timestamp: new Date().toISOString(),
     };

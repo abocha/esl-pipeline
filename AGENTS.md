@@ -4,7 +4,7 @@ This document is a concise, human-readable overview for maintainers and “agent
 For authoritative, machine-consumable guidance (contracts, invariants, and workflows), always defer to
 [`docs/agents-ssot.md`](docs/agents-ssot.md). If anything here conflicts with that SSOT, the SSOT wins.
 
-Everything below assumes **Node.js 24.10.0+**, pnpm, and system ffmpeg.
+Everything below assumes **Node.js 24.11.1+**, pnpm, and system ffmpeg.
 
 ---
 
@@ -45,7 +45,7 @@ Everything below assumes **Node.js 24.10.0+**, pnpm, and system ffmpeg.
 
 ## 2. Runtime & Dependencies (Summary)
 
-- **Node**: 24.10.0 or newer (see repo `.nvmrc` / `package.json`).
+- **Node**: 24.11.1 or newer (see repo `.nvmrc` / `package.json`).
 - **pnpm**: 8+ (`corepack enable`).
 - **ffmpeg**: must be present on PATH or provided via `FFMPEG_PATH`.
 - **Env variables**:
@@ -147,7 +147,7 @@ For exact rules (manifest schema, adapter selection, validation invariants), see
 - Programmatic usage? See `createPipeline` example above, and details in [`docs/agents-ssot.md`](docs/agents-ssot.md) §7.2.
 - Custom configs/adapters? Follow extension rules in [`docs/agents-ssot.md`](docs/agents-ssot.md) §§4–5.
 - New CLI flags? Add behavior in orchestrator first, then wire CLI; see [`docs/agents-ssot.md`](docs/agents-ssot.md) §9.6.
-- Node version? Node **24.10.0+** (enforced).
+- Node version? Node **24.11.1+** (enforced).
 - Remote manifests/config? Use documented adapters/env vars; SSOT + `docs/groundwork-for-backend.md` describe the contract.
 
 ---

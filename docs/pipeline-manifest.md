@@ -40,6 +40,11 @@ This document captures the canonical schema so remote stores and services can va
       },
     ],
   },
+  // TTS metadata (additive, optional)
+  "ttsMode": "dialogue",
+  "dialogueLanguage": "en",
+  "dialogueStability": 0.7,
+  "dialogueSeed": 42
 }
 ```
 
@@ -49,6 +54,8 @@ This document captures the canonical schema so remote stores and services can va
 - `timestamp` reflects the last pipeline write and is updated on reruns.
 - `audio.voices` mirrors the response from `@esl-pipeline/tts-elevenlabs`; the structure is defined
   in that package.
+- `ttsMode` and related dialogue fields capture the TTS mode used for reproducibility. These fields
+  are optional and additive under schema version `1`.
 
 ## Backwards Compatibility
 

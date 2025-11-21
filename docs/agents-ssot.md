@@ -84,6 +84,8 @@ The ESL Pipeline is a pnpm-based monorepo. Core directories:
   - Notion page creation and data source resolution.
 - [`packages/notion-colorizer`](packages/notion-colorizer)
   - Heading/preset colorization in Notion.
+- [`packages/notion-color-headings`](packages/notion-color-headings)
+  - Legacy color-heading helper not wired into the orchestrator; treat as deprecated/for reference only.
 - [`packages/notion-add-audio`](packages/notion-add-audio)
   - Attach audio to Notion content.
 - [`packages/tts-elevenlabs`](packages/tts-elevenlabs)
@@ -145,6 +147,11 @@ Textual diagram (for reference):
   -> attach audio in Notion
   -> write/update manifest
 
+Validation invariants:
+
+- Markdown validation MUST run before any import is skipped; `--skip-import` still performs the full
+  validation stage to catch structural issues.
+
 ### 2.3. Data Artifacts and Ownership
 
 Key artifacts:
@@ -173,7 +180,8 @@ Agents MUST respect:
 
 - Node.js:
   - Minimum version: as specified in [`package.json`](package.json) / [`.nvmrc`](.nvmrc).
-  - At time of writing: Node 24.10.0+ is required.
+  - At time of writing: Node 24.11.1+ is required (LTS).
+  - The root `package.json` sets `engines.node >=24.11.1` to enforce this in tooling/CI.
 - Package manager:
   - `pnpm` 8+ (use `corepack enable`).
 - FFmpeg:
@@ -492,12 +500,22 @@ Config provider selection:
 - `ESL_PIPELINE_CONFIG_TOKEN`
 - Optional: paths for presets/students/voices endpoints.
 
+Upload (S3) selection:
+
+- `--upload s3` uses:
+  - `S3_BUCKET` (required)
+  - `S3_PREFIX` (optional key prefix)
+  - `AWS_REGION` (for S3 client)
+- Credentials rely on standard AWS env vars (`AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`).
+
 Mapping to behavior is implemented in:
 
 - [`packages/orchestrator/src/pipeline.ts`](packages/orchestrator/src/pipeline.ts)
 - [`packages/orchestrator/src/adapters/config/remote.ts`](packages/orchestrator/src/adapters/config/remote.ts)
 - [`packages/orchestrator/src/adapters/manifest/s3.ts`](packages/orchestrator/src/adapters/manifest/s3.ts)
 - [`packages/orchestrator/src/manifest.ts`](packages/orchestrator/src/manifest.ts)
+- Uploads are performed via [`@esl-pipeline/storage-uploader`](packages/storage-uploader), which
+  consumes the `S3_*` variables above.
 
 Agents:
 
@@ -552,6 +570,8 @@ Manifest schema:
     - `AssignmentManifest` type.
     - `CURRENT_MANIFEST_SCHEMA_VERSION`.
     - Filesystem-based `ManifestStore`.
+    - Optional TTS metadata fields persisted alongside audio:
+      - `ttsMode`, `dialogueLanguage`, `dialogueStability`, `dialogueSeed`.
 
 Agents MUST:
 

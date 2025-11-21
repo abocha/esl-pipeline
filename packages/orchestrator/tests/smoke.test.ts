@@ -1,7 +1,8 @@
 import { describe, it, expect, vi, afterEach } from 'vitest';
 import { mkdtemp, writeFile, readFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { join, dirname } from 'node:path';
+import { fileURLToPath } from 'node:url';
 
 vi.mock('@esl-pipeline/notion-importer', () => ({
   runImport: vi.fn().mockResolvedValue({ page_id: 'page-123', url: 'https://notion.so/page-123' }),
@@ -101,5 +102,59 @@ describe('orchestrator smoke', () => {
     if (initialTimestamp && statusAfter.manifest?.timestamp) {
       expect(statusAfter.manifest.timestamp >= initialTimestamp).toBe(true);
     }
+  });
+
+  it('preserves TTS metadata when rerun without passing TTS flags', async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'orchestrator-tts-metadata-'));
+    const mdPath = join(dir, 'assignment.md');
+    const audioPath = join(dir, 'lesson.mp3');
+
+    const __dirname = dirname(fileURLToPath(import.meta.url));
+    const okFixturePath = join(__dirname, '../../md-validator/fixtures/ok.md');
+    const okDoc = await readFile(okFixturePath, 'utf8');
+    await writeFile(mdPath, okDoc);
+    await writeFile(audioPath, 'dummy audio');
+
+    const { buildStudyTextMp3 } = await import('@esl-pipeline/tts-elevenlabs');
+    vi.mocked(buildStudyTextMp3).mockResolvedValue({
+      path: audioPath,
+      hash: 'abc123',
+      voices: [{ speaker: 'Anna', voiceId: 'voice_id_default', source: 'default' }],
+    });
+
+    const { newAssignment, rerunAssignment } = await import('../src/index.js');
+    const firstRun = await newAssignment({
+      md: mdPath,
+      preset: 'default',
+      withTts: true,
+      upload: 's3',
+      voices: 'configs/voices.yml',
+      ttsMode: 'dialogue',
+      dialogueLanguage: 'es',
+      dialogueStability: 0.55,
+      dialogueSeed: 999,
+      dryRun: false,
+    });
+
+    const manifestFirst = JSON.parse(await readFile(firstRun.manifestPath!, 'utf8'));
+    expect(manifestFirst.ttsMode).toBe('dialogue');
+    expect(manifestFirst.dialogueLanguage).toBe('es');
+    expect(manifestFirst.dialogueStability).toBe(0.55);
+    expect(manifestFirst.dialogueSeed).toBe(999);
+
+    vi.mocked(buildStudyTextMp3).mockClear();
+
+    const rerun = await rerunAssignment({
+      md: mdPath,
+      steps: ['upload', 'add-audio'],
+      upload: 's3',
+      dryRun: false,
+    });
+
+    const manifestSecond = JSON.parse(await readFile(rerun.manifestPath, 'utf8'));
+    expect(manifestSecond.ttsMode).toBe('dialogue');
+    expect(manifestSecond.dialogueLanguage).toBe('es');
+    expect(manifestSecond.dialogueStability).toBe(0.55);
+    expect(manifestSecond.dialogueSeed).toBe(999);
   });
 });

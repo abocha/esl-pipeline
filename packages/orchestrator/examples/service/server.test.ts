@@ -49,7 +49,7 @@ describe('service example', () => {
     });
     expect(response.status).toBe(200);
     const data = (await response.json()) as { result: { steps: string[]; manifestPath?: string } };
-    expect(data.result.steps).toEqual(['skip:validate', 'skip:import', 'manifest']);
+    expect(data.result.steps).toEqual(['validate', 'skip:import', 'manifest']);
     expect(typeof data.result.manifestPath).toBe('string');
   });
 });

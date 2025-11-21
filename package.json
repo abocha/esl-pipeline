@@ -17,6 +17,9 @@
     "type": "git",
     "url": "https://github.com/abocha/esl-pipeline.git"
   },
+  "engines": {
+    "node": ">=24.11.1"
+  },
   "main": "index.js",
   "scripts": {
     "build": "pnpm -r --filter './packages/*' run build",

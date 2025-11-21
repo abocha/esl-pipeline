@@ -167,14 +167,13 @@ Based on section 5 analysis, implement the following in priority order:
    - Update setup documentation
 
 2. **Resource Management** (High Priority):
-   - Implement FFmpeg operation semaphore in batch-backend
-   - Add `MAX_CONCURRENT_FFMPEG` environment variable
-   - Test under high-load scenarios
+   - High-load validation/tuning of FFmpeg semaphore defaults
+   - Document configuration (`MAX_CONCURRENT_FFMPEG`, `WORKER_CONCURRENCY`) in batch-backend README
 
 3. **Event Optimization** (Medium Priority):
-   - Implement subscriber-level event filtering
-   - Add event delivery metrics
-   - Document scaling best practices
+   - (Optional) Expose bridge metrics via Prometheus/JSON for publish/consume/error counts
+   - Add integration test for `/jobs/events` filtering with multiple subscribers/high scale
+   - Document SSE contract and scaling best practices (SSE filtering already implemented)
 
 4. **Documentation** (Medium Priority):
    - Create batch backend deployment guide

@@ -90,6 +90,10 @@ default: voice_id_default
       upload: 's3' as const,
       dryRun: true,
       voices: voiceMapPath,
+      ttsMode: 'dialogue' as const,
+      dialogueLanguage: 'es',
+      dialogueStability: 0.65,
+      dialogueSeed: 321,
     };
 
     const first = await newAssignment(baseFlags);
@@ -108,7 +112,7 @@ default: voice_id_default
     });
 
     expect(second.steps).toEqual([
-      'skip:validate',
+      'validate',
       'skip:import',
       'skip:tts',
       'skip:upload',
@@ -116,5 +120,11 @@ default: voice_id_default
     ]);
     expect(buildStudyTextMp3).not.toHaveBeenCalled();
     expect(second.audio?.url).toBe(first.audio?.url);
+
+    const manifestJsonUpdated = JSON.parse(await readFile(second.manifestPath!, 'utf8'));
+    expect(manifestJsonUpdated.ttsMode).toBe('dialogue');
+    expect(manifestJsonUpdated.dialogueLanguage).toBe('es');
+    expect(manifestJsonUpdated.dialogueStability).toBe(0.65);
+    expect(manifestJsonUpdated.dialogueSeed).toBe(321);
   });
 });
