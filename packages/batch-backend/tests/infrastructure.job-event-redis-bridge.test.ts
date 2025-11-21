@@ -72,7 +72,7 @@ describe('infrastructure/job-event-redis-bridge', () => {
       duplicate: duplicateMock,
     } as any);
 
-    const { enableRedisJobEventBridge } = await import(
+    const { enableRedisJobEventBridge, getJobEventBridgeMetrics } = await import(
       '../src/infrastructure/job-event-redis-bridge'
     );
     const jobEvents = await import('../src/domain/job-events');
@@ -135,7 +135,7 @@ describe('infrastructure/job-event-redis-bridge', () => {
       duplicate: duplicateMock,
     } as any);
 
-    const { enableRedisJobEventBridge } = await import(
+    const { enableRedisJobEventBridge, getJobEventBridgeMetrics } = await import(
       '../src/infrastructure/job-event-redis-bridge'
     );
     const jobEvents = await import('../src/domain/job-events');
@@ -172,6 +172,11 @@ describe('infrastructure/job-event-redis-bridge', () => {
 
     // Should deliver once per local listener, not multiplied by channel overlap
     expect(received).toEqual(['job_state_changed', 'job_state_changed']);
+
+    const metrics = getJobEventBridgeMetrics();
+    expect(metrics.publishedEvents).toBe(0); // only remote inbound in this test
+    expect(metrics.receivedEvents).toBe(1);
+    expect(metrics.publishErrors).toBe(0);
 
     disposeAll();
     disposeTargeted();

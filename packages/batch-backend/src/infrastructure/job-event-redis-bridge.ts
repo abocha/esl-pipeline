@@ -58,6 +58,20 @@ export function resetJobEventBridgeForTests(): void {
   bridgeInstance = null;
 }
 
+export function getJobEventBridgeMetrics(): {
+  publishedEvents: number;
+  publishErrors: number;
+  receivedEvents: number;
+  lastError: string | null;
+} {
+  return bridgeInstance?.getMetrics() ?? {
+    publishedEvents: 0,
+    publishErrors: 0,
+    receivedEvents: 0,
+    lastError: null,
+  };
+}
+
 class RedisJobEventBridge {
   private publisher: Redis | null = null;
   private subscriber: Redis | null = null;
@@ -66,6 +80,12 @@ class RedisJobEventBridge {
   private suppressForwarding = false;
   private subscribedJobIds = new Set<string>();
   private wildcardSubscribed = false;
+  private metrics = {
+    publishedEvents: 0,
+    publishErrors: 0,
+    receivedEvents: 0,
+    lastError: null as string | null,
+  };
 
   async start(): Promise<void> {
     const baseClient = createRedisClient();
@@ -112,6 +132,8 @@ class RedisJobEventBridge {
       return;
     }
 
+    this.metrics.publishedEvents += 1;
+
     const payload: SerializedJobEvent = {
       sourceId: INSTANCE_ID,
       type: event.type,
@@ -128,6 +150,8 @@ class RedisJobEventBridge {
     void Promise.all(
       channels.map(channel =>
         this.publisher!.publish(channel, message).catch(err => {
+          this.metrics.publishErrors += 1;
+          this.metrics.lastError = err instanceof Error ? err.message : String(err);
           logger.error(err as Error, {
             component: 'job-event-bridge',
             message: 'Failed to publish job event',
@@ -154,6 +178,7 @@ class RedisJobEventBridge {
     if (!parsed || parsed.sourceId === INSTANCE_ID) return;
 
     const job = deserializeJobRecord(parsed.job);
+    this.metrics.receivedEvents += 1;
 
     this.suppressForwarding = true;
     try {
@@ -226,6 +251,15 @@ class RedisJobEventBridge {
     this.wildcardSubscribed = false;
     this.publisher = null;
     this.subscriber = null;
+  }
+
+  getMetrics(): {
+    publishedEvents: number;
+    publishErrors: number;
+    receivedEvents: number;
+    lastError: string | null;
+  } {
+    return { ...this.metrics };
   }
 }
 
