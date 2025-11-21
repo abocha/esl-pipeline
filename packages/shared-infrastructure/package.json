@@ -12,12 +12,12 @@
         "test:verbose": "vitest run --config ../../vitest.config.ts --dir ../../packages/shared-infrastructure/tests --reporter=verbose"
     },
     "dependencies": {
-        "ioredis": "^5.8.2",
-        "@esl-pipeline/contracts": "workspace:*"
+        "@esl-pipeline/contracts": "workspace:*",
+        "ioredis": "^5.8.2"
     },
     "devDependencies": {
-        "@types/node": "^24.0.0",
-        "typescript": "^5.7.2",
-        "vitest": "^3.0.0"
+        "@types/node": "^24.10.1",
+        "typescript": "^5.9.3",
+        "vitest": "^4.0.12"
     }
 }

@@ -40,7 +40,7 @@
     "voices:sync": "node dist/bin/voices.js"
   },
   "dependencies": {
-    "@elevenlabs/elevenlabs-js": "^2.24.1",
+    "@elevenlabs/elevenlabs-js": "^2.25.0",
     "@esl-pipeline/contracts": "workspace:*",
     "@esl-pipeline/md-extractor": "workspace:*",
     "commander": "^14.0.2",
