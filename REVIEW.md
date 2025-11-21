@@ -122,10 +122,11 @@ The project generally follows the guidelines outlined in `AGENTS.md` and `docs/a
 - Redis bridge publishes to per-job channels and a legacy broadcast; dynamically subscribes only to the needed channels and avoids duplicate deliveries when wildcard + targeted listeners coexist (`packages/batch-backend/src/infrastructure/job-event-redis-bridge.ts`).
 - `/jobs/events` SSE now requires `jobId` (comma list) or `jobId=*`, subscribing only to requested jobs (`packages/batch-backend/src/transport/core-routes.ts`).
 - Added coverage to prevent double/triple delivery under mixed wildcard/targeted subscriptions (`packages/batch-backend/tests/infrastructure.job-event-redis-bridge.test.ts`).
+- Bridge metrics snapshot exposed for monitoring/publishing error counts (`getJobEventBridgeMetrics`).
 
 **Next Steps**:
-1. Add metrics for event publish/consume counts and channel fan-out.
-2. Document the new SSE contract and channel format in backend docs.
+1. (Optional) Add external metrics export (Prometheus/JSON) for publish/consume counts and channel fan-out.
+2. Document the new SSE contract and channel format in backend docs. ✅ (alignment doc updated)
 3. Optional: integration test for SSE endpoint filtering and high-scale simulations.
 
 ### 5.4. Batch Backend Deployment Complexity

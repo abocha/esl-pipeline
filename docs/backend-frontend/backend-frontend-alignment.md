@@ -187,6 +187,7 @@ import {
   - Streams `job_created` and `job_state_changed` events in real-time
   - Includes heartbeat mechanism for connection stability
   - Requires authentication when extended API is enabled
+  - Clients must pass `jobId` (comma-separated IDs) or `jobId=*`; backend filters events and uses per-job Redis channels to avoid duplicate delivery when wildcard + targeted listeners coexist.
 
 - **Configuration Endpoint:** `GET /config/job-options` is operational
   - Dynamically pulls from orchestrator config (with fallback)
