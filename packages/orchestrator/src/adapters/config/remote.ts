@@ -1,11 +1,12 @@
-import { URL } from 'node:url';
 import { randomUUID } from 'node:crypto';
 import { writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { URL } from 'node:url';
+
 import type { ConfigProvider, PresetMap, StudentProfile } from '../../config.js';
 
-export type RemoteConfigProviderOptions = {
+export interface RemoteConfigProviderOptions {
   baseUrl: string;
   token?: string;
   presetsPath?: string;
@@ -13,7 +14,7 @@ export type RemoteConfigProviderOptions = {
   voicesPath?: string;
   timeoutMs?: number;
   fetchImplementation?: typeof fetch;
-};
+}
 
 const DEFAULT_PRESETS_PATH = '/presets.json';
 const DEFAULT_STUDENTS_PATH = '/students.json';
@@ -39,7 +40,7 @@ export class RemoteConfigProvider implements ConfigProvider {
     this.presetsPath = options.presetsPath ?? DEFAULT_PRESETS_PATH;
     this.studentsPath = options.studentsPath ?? DEFAULT_STUDENTS_PATH;
     this.voicesPath = options.voicesPath ?? DEFAULT_VOICES_PATH;
-    this.timeoutMs = options.timeoutMs ?? 10000;
+    this.timeoutMs = options.timeoutMs ?? 10_000;
     this.fetchImpl = options.fetchImplementation ?? globalThis.fetch;
 
     if (!this.fetchImpl) {
@@ -75,7 +76,7 @@ export class RemoteConfigProvider implements ConfigProvider {
       });
       if (!response.ok) {
         throw new Error(
-          `Failed to fetch remote voices.yml (${response.status} ${response.statusText})`
+          `Failed to fetch remote voices.yml (${response.status} ${response.statusText})`,
         );
       }
       const body = await response.text();
@@ -106,7 +107,7 @@ export class RemoteConfigProvider implements ConfigProvider {
       });
       if (!response.ok) {
         throw new Error(
-          `Failed to fetch remote config (${response.status} ${response.statusText})`
+          `Failed to fetch remote config (${response.status} ${response.statusText})`,
         );
       }
       return (await response.json()) as T;

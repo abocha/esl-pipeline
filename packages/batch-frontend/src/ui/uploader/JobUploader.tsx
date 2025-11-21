@@ -1,14 +1,15 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useDropzone } from 'react-dropzone';
 import toast from 'react-hot-toast';
-import { uploadMarkdown, createJob } from '../../utils/api';
+
+import { useJobMonitor } from '../../context/JobMonitorContext';
 import { useJobSettings } from '../../context/JobSettingsContext';
 import type { AppliedJobSettings, JobSettings } from '../../context/JobSettingsContext';
-import { useJobMonitor } from '../../context/JobMonitorContext';
+import { createJob, uploadMarkdown } from '../../utils/api';
 
 type FileStatus = 'idle' | 'uploading' | 'submitting' | 'success' | 'error';
 
-type QueuedFile = {
+interface QueuedFile {
   id: string;
   file: File;
   status: FileStatus;
@@ -17,7 +18,7 @@ type QueuedFile = {
   jobId?: string;
   mdPath?: string;
   appliedSettings: AppliedJobSettings;
-};
+}
 
 export const JobUploader: React.FC = () => {
   const { settings } = useJobSettings();
@@ -28,18 +29,18 @@ export const JobUploader: React.FC = () => {
 
   const onDrop = useCallback(
     (acceptedFiles: File[]) => {
-      if (!acceptedFiles.length) return;
+      if (acceptedFiles.length === 0) return;
       const snapshot = buildAppliedSettings(settings);
-      const newEntries: QueuedFile[] = acceptedFiles.map(file => ({
+      const newEntries: QueuedFile[] = acceptedFiles.map((file) => ({
         id: `${file.name}-${file.size}-${file.lastModified}-${Math.random().toString(36).slice(2)}`,
         file,
         status: 'idle',
         appliedSettings: snapshot,
       }));
-      setQueue(prev => [...prev, ...newEntries]);
+      setQueue((prev) => [...prev, ...newEntries]);
       toast.success(`${acceptedFiles.length} file(s) added to queue`);
     },
-    [settings]
+    [settings],
   );
 
   const { getRootProps, getInputProps, isDragActive } = useDropzone({
@@ -48,14 +49,14 @@ export const JobUploader: React.FC = () => {
     multiple: true,
   });
 
-  const pendingFiles = queue.filter(item => item.status === 'idle' || item.status === 'error');
+  const pendingFiles = queue.filter((item) => item.status === 'idle' || item.status === 'error');
 
   useEffect(() => {
     if (!settings.applyToPending) return;
     const snapshot = buildAppliedSettings(settings);
-    setQueue(prev => {
+    setQueue((prev) => {
       let changed = false;
-      const next = prev.map(file => {
+      const next = prev.map((file) => {
         if (file.status !== 'idle') return file;
         if (areSettingsEqual(file.appliedSettings, snapshot)) return file;
         changed = true;
@@ -75,13 +76,14 @@ export const JobUploader: React.FC = () => {
 
   const processFile = useCallback(
     async (id: string, overrideSettings?: AppliedJobSettings) => {
-      const target = queue.find(file => file.id === id);
+      const target = queue.find((file) => file.id === id);
       if (!target) return;
       const jobFile = target.file;
-      const jobSettings = overrideSettings ?? target.appliedSettings ?? buildAppliedSettings(settings);
+      const jobSettings =
+        overrideSettings ?? target.appliedSettings ?? buildAppliedSettings(settings);
 
-      setQueue(prev =>
-        prev.map(file =>
+      setQueue((prev) =>
+        prev.map((file) =>
           file.id === id
             ? {
                 ...file,
@@ -90,8 +92,8 @@ export const JobUploader: React.FC = () => {
                 jobError: undefined,
                 appliedSettings: jobSettings,
               }
-            : file
-        )
+            : file,
+        ),
       );
 
       let phase: 'upload' | 'job' = 'upload';
@@ -99,10 +101,10 @@ export const JobUploader: React.FC = () => {
       try {
         const uploadResponse = await uploadMarkdown(jobFile);
         phase = 'job';
-        setQueue(prev =>
-          prev.map(file =>
-            file.id === id ? { ...file, status: 'submitting', mdPath: uploadResponse.md } : file
-          )
+        setQueue((prev) =>
+          prev.map((file) =>
+            file.id === id ? { ...file, status: 'submitting', mdPath: uploadResponse.md } : file,
+          ),
         );
 
         const jobResponse = await createJob({
@@ -115,8 +117,8 @@ export const JobUploader: React.FC = () => {
           mode: jobSettings.mode,
         });
 
-        setQueue(prev =>
-          prev.map(file =>
+        setQueue((prev) =>
+          prev.map((file) =>
             file.id === id
               ? {
                   ...file,
@@ -124,8 +126,8 @@ export const JobUploader: React.FC = () => {
                   jobId: jobResponse.jobId,
                   jobError: undefined,
                 }
-              : file
-          )
+              : file,
+          ),
         );
         registerJob({
           jobId: jobResponse.jobId,
@@ -138,10 +140,10 @@ export const JobUploader: React.FC = () => {
           mode: jobSettings.mode,
         });
         toast.success(`Job ${jobResponse.jobId} created`);
-      } catch (error: any) {
-        const message = error?.message ?? 'Failed to process file';
-        setQueue(prev =>
-          prev.map(file =>
+      } catch (error: unknown) {
+        const message = error instanceof Error ? error.message : 'Failed to process file';
+        setQueue((prev) =>
+          prev.map((file) =>
             file.id === id
               ? {
                   ...file,
@@ -149,19 +151,21 @@ export const JobUploader: React.FC = () => {
                   uploadError: phase === 'upload' ? message : file.uploadError,
                   jobError: phase === 'job' ? message : file.jobError,
                 }
-              : file
-          )
+              : file,
+          ),
         );
         toast.error(message);
       }
     },
-    [queue, settings]
+    [queue, settings],
   );
 
   const startProcessing = useCallback(async () => {
     if (sequentialLock.current) return;
-    const filesToProcess = queue.filter(file => file.status === 'idle' || file.status === 'error');
-    if (!filesToProcess.length) return;
+    const filesToProcess = queue.filter(
+      (file) => file.status === 'idle' || file.status === 'error',
+    );
+    if (filesToProcess.length === 0) return;
     sequentialLock.current = true;
     setIsProcessing(true);
 
@@ -178,8 +182,8 @@ export const JobUploader: React.FC = () => {
   const handleRetry = useCallback(
     async (id: string) => {
       const snapshot = buildAppliedSettings(settings);
-      setQueue(prev =>
-        prev.map(file =>
+      setQueue((prev) =>
+        prev.map((file) =>
           file.id === id
             ? {
                 ...file,
@@ -188,18 +192,18 @@ export const JobUploader: React.FC = () => {
                 jobError: undefined,
                 appliedSettings: snapshot,
               }
-            : file
-        )
+            : file,
+        ),
       );
       await processFile(id, snapshot);
     },
-    [processFile, settings]
+    [processFile, settings],
   );
 
   const summary = useMemo(() => {
     const total = queue.length;
-    const success = queue.filter(item => item.status === 'success').length;
-    const failed = queue.filter(item => item.status === 'error').length;
+    const success = queue.filter((item) => item.status === 'success').length;
+    const failed = queue.filter((item) => item.status === 'error').length;
     return { total, success, failed };
   }, [queue]);
 
@@ -225,20 +229,24 @@ export const JobUploader: React.FC = () => {
         <p style={{ margin: 0, fontSize: '15px' }}>
           {isDragActive ? 'Drop the files here…' : 'Drag & drop Markdown files, or click to select'}
         </p>
-        <p style={{ margin: '4px 0 0', fontSize: '13px', color: '#475569' }}>Only .md/.markdown files</p>
+        <p style={{ margin: '4px 0 0', fontSize: '13px', color: '#475569' }}>
+          Only .md/.markdown files
+        </p>
       </div>
 
       {queue.length === 0 ? (
         <p style={{ margin: 0, color: '#94a3b8', fontSize: '13px' }}>No files queued yet.</p>
       ) : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-          {queue.map(file => (
+          {queue.map((file) => (
             <FileRow
               key={file.id}
               entry={file}
               onRetry={() => void handleRetry(file.id)}
               isProcessing={isProcessing}
-              settingsHint={settings.applyToPending ? 'Pending uploads inherit current settings.' : undefined}
+              settingsHint={
+                settings.applyToPending ? 'Pending uploads inherit current settings.' : undefined
+              }
             />
           ))}
         </div>
@@ -254,12 +262,12 @@ export const JobUploader: React.FC = () => {
   );
 };
 
-type FileRowProps = {
+interface FileRowProps {
   entry: QueuedFile;
   onRetry: () => void;
   isProcessing: boolean;
   settingsHint?: string;
-};
+}
 
 const statusColorMap: Record<FileStatus, string> = {
   idle: '#94a3b8',
@@ -293,7 +301,9 @@ const FileRow: React.FC<FileRowProps> = ({ entry, onRetry, isProcessing, setting
         )}
       </div>
       <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '4px' }}>
-        <span style={{ fontSize: '12px', color: statusColorMap[entry.status] }}>{entry.status}</span>
+        <span style={{ fontSize: '12px', color: statusColorMap[entry.status] }}>
+          {entry.status}
+        </span>
         {entry.status === 'error' && (
           <button type="button" onClick={onRetry} disabled={isProcessing} style={retryButtonStyle}>
             Retry
@@ -380,16 +390,21 @@ function prettyBytes(size: number): string {
 
 function statusLabel(status: FileStatus): string {
   switch (status) {
-    case 'uploading':
+    case 'uploading': {
       return 'Uploading to /uploads…';
-    case 'submitting':
+    }
+    case 'submitting': {
       return 'Posting job…';
-    case 'success':
+    }
+    case 'success': {
       return 'Job created';
-    case 'error':
+    }
+    case 'error': {
       return 'Failed';
-    default:
+    }
+    default: {
       return 'Waiting to submit';
+    }
   }
 }
 
@@ -408,5 +423,5 @@ const APPLIED_KEYS: (keyof AppliedJobSettings)[] = [
 ];
 
 function areSettingsEqual(a: AppliedJobSettings, b: AppliedJobSettings): boolean {
-  return APPLIED_KEYS.every(key => a[key] === b[key]);
+  return APPLIED_KEYS.every((key) => a[key] === b[key]);
 }

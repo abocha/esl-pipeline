@@ -6,7 +6,7 @@ services:
       POSTGRES_USER: esl
       POSTGRES_PASSWORD: esl
       POSTGRES_DB: esl_batch
-    command: ["postgres", "-c", "fsync=off", "-c", "listen_addresses=*"]
+    command: ['postgres', '-c', 'fsync=off', '-c', 'listen_addresses=*']
     ports:
       - '5432:5432'
     volumes:

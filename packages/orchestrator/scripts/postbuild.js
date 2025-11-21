@@ -3,8 +3,6 @@ import { chmod, cp } from 'node:fs/promises';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-const __dirname = dirname(fileURLToPath(import.meta.url));
-
 async function ensureExecutable(file) {
   try {
     await chmod(file, 0o755);
@@ -14,9 +12,9 @@ async function ensureExecutable(file) {
 }
 
 async function copySharedConfigs() {
-  const repoRoot = resolve(__dirname, '../../..');
+  const repoRoot = resolve(import.meta.dirname, '../../..');
   const source = resolve(repoRoot, 'configs');
-  const target = resolve(__dirname, '../dist/configs');
+  const target = resolve(import.meta.dirname, '../dist/configs');
   try {
     await cp(source, target, { recursive: true, force: true });
   } catch (error) {
@@ -25,9 +23,9 @@ async function copySharedConfigs() {
 }
 
 async function copyEnvExample() {
-  const repoRoot = resolve(__dirname, '../../..');
+  const repoRoot = resolve(import.meta.dirname, '../../..');
   const source = resolve(repoRoot, '.env.example');
-  const target = resolve(__dirname, '../dist/.env.example');
+  const target = resolve(import.meta.dirname, '../dist/.env.example');
   try {
     await cp(source, target, { dereference: true });
   } catch (error) {
@@ -36,7 +34,7 @@ async function copyEnvExample() {
 }
 
 await Promise.all([
-  ensureExecutable(resolve(__dirname, '../dist/cli.js')),
+  ensureExecutable(resolve(import.meta.dirname, '../dist/cli.js')),
   copyEnvExample(),
   copySharedConfigs(),
 ]);

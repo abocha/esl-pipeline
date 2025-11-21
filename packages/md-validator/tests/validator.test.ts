@@ -1,10 +1,11 @@
-import path from 'node:path';
-import { describe, it, expect } from 'vitest';
 import { mkdtemp, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
+import path from 'node:path';
+import { describe, expect, it } from 'vitest';
+
 import { validateMarkdownFile } from '../src/validator.js';
 
-const fixturesPath = path.join(__dirname, '..', 'fixtures');
+const fixturesPath = path.join(import.meta.dirname, '..', 'fixtures');
 
 describe('md-validator', () => {
   it('passes ok fixture', async () => {
@@ -82,7 +83,7 @@ content
 content
 :::
 \`\`\`
-    `.trim()
+    `.trim(),
     );
 
     const res = await validateMarkdownFile(file);
@@ -154,7 +155,7 @@ content
 content
 :::
 \`\`\`
-    `.trim()
+    `.trim(),
     );
 
     const res = await validateMarkdownFile(file);
@@ -222,7 +223,7 @@ content
 content
 :::
 \`\`\`
-    `.trim()
+    `.trim(),
     );
 
     const res = await validateMarkdownFile(file);
@@ -299,7 +300,7 @@ content
 content
 :::
 \`\`\`
-    `.trim()
+    `.trim(),
     );
 
     const res = await validateMarkdownFile(file);
@@ -369,7 +370,7 @@ content
 content
 :::
 \`\`\`
-    `.trim()
+    `.trim(),
     );
 
     const res = await validateMarkdownFile(file);
@@ -437,7 +438,7 @@ content
 content
 :::
 \`\`\`
-    `.trim()
+    `.trim(),
     );
 
     const res = await validateMarkdownFile(file);
@@ -505,7 +506,7 @@ content
 content
 :::
 \`\`\`
-    `.trim()
+    `.trim(),
     );
 
     const res = await validateMarkdownFile(file);

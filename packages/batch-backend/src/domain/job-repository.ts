@@ -1,14 +1,44 @@
 // packages/batch-backend/src/domain/job-repository.ts
-
 // PostgreSQL-backed repository for JobRecord.
 // - Uses withPgClient() from infrastructure/db.
 // - All queries parameterized.
 // - State transitions guarded by expectedState to avoid races.
+import { randomUUID } from 'node:crypto';
+import { PoolClient } from 'pg';
 
-import { randomUUID } from 'crypto';
-import { withPgClient } from '../infrastructure/db';
-import { JobRecord, JobState, JobMode, JobUploadOption, assertTransition } from './job-model';
-import { logger } from '../infrastructure/logger';
+import { withPgClient } from '../infrastructure/db.js';
+import { logger } from '../infrastructure/logger.js';
+import { JobMode, JobRecord, JobState, JobUploadOption, assertTransition } from './job-model.js';
+
+/**
+ * PostgreSQL row structure for jobs table
+ */
+interface JobRow {
+  id: string;
+  state: string;
+  md: string;
+  preset: string | null;
+  with_tts: boolean | null;
+  upload: string | null;
+  voice_id: string | null;
+  voice_accent: string | null;
+  force_tts: boolean | null;
+  compress_image: boolean | null;
+  user_id: string | null;
+  created_at: Date;
+  updated_at: Date;
+  error_message: string | null;
+  result_path: string | null;
+  voice_accents: string | null;
+  voice_persona: string | null;
+  notion_database: string | null;
+  mode: string | null;
+  notion_url: string | null;
+  started_at: Date | null;
+  finished_at: Date | null;
+  error: string | null;
+  manifest_path: string | null;
+}
 
 // insertJob.declaration()
 export async function insertJob(params: {
@@ -25,7 +55,7 @@ export async function insertJob(params: {
   const id = randomUUID();
   const now = new Date();
 
-  const row = await withPgClient(async client => {
+  const row = await withPgClient(async (client: PoolClient) => {
     const result = await client.query(
       `
       INSERT INTO jobs (
@@ -78,7 +108,7 @@ export async function insertJob(params: {
         params.mode ?? null,
         now,
         now,
-      ]
+      ],
     );
     return result.rows[0];
   });
@@ -90,7 +120,7 @@ export async function insertJob(params: {
 
 // getJobById.declaration()
 export async function getJobById(id: string): Promise<JobRecord | null> {
-  const row = await withPgClient(async client => {
+  const row = await withPgClient(async (client: PoolClient) => {
     const result = await client.query(
       `
       SELECT id, state, md, preset, with_tts, upload,
@@ -99,7 +129,7 @@ export async function getJobById(id: string): Promise<JobRecord | null> {
       FROM jobs
       WHERE id = $1
       `,
-      [id]
+      [id],
     );
     return result.rows[0];
   });
@@ -131,7 +161,7 @@ export async function updateJobStateAndResult(args: {
 
   assertTransition(expectedState, nextState);
 
-  const row = await withPgClient(async client => {
+  const row = await withPgClient(async (client: PoolClient) => {
     const result = await client.query(
       `
       UPDATE jobs
@@ -165,7 +195,7 @@ export async function updateJobStateAndResult(args: {
         error,
         manifest_path
       `,
-      [nextState, error, manifestPath, notionUrl, startedAt, finishedAt, id, expectedState]
+      [nextState, error, manifestPath, notionUrl, startedAt, finishedAt, id, expectedState],
     );
     return result.rows[0];
   });
@@ -179,10 +209,10 @@ export async function updateJobStateAndResult(args: {
   return mapRowToJob(row);
 }
 
-function mapRowToJob(row: any): JobRecord {
+function mapRowToJob(row: JobRow): JobRecord {
   return {
     id: row.id,
-    state: row.state,
+    state: row.state as JobState,
     md: row.md,
     preset: row.preset ?? null,
     withTts: row.with_tts ?? null,

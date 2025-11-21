@@ -1,13 +1,12 @@
 // packages/batch-backend/src/infrastructure/minio.ts
-
 // Optional MinIO/S3-compatible client wrapper.
 // Enabled via MINIO_ENABLED + ESL_PIPELINE_MANIFEST_STORE where needed.
 // Intentionally small so it can be swapped or ignored.
-
 import { Client as MinioClient } from 'minio';
 import type { Readable } from 'node:stream';
-import { loadConfig } from '../config/env';
-import { logger } from './logger';
+
+import { loadConfig } from '../config/env.js';
+import { logger } from './logger.js';
 
 export interface MinioWrapper {
   client: MinioClient;
@@ -16,7 +15,7 @@ export interface MinioWrapper {
     key: string,
     data: Buffer | Readable,
     size?: number,
-    contentType?: string
+    contentType?: string,
   ): Promise<void>;
 }
 
@@ -49,12 +48,12 @@ export function createMinioClient(): MinioWrapper {
         });
         await client.makeBucket(config.minio.bucket, '');
       }
-    } catch (err) {
-      logger.error(err as Error, {
+    } catch (error) {
+      logger.error(error as Error, {
         component: 'minio',
         message: 'Failed to ensure MinIO bucket',
       });
-      throw err;
+      throw error;
     }
   }
 
@@ -62,10 +61,10 @@ export function createMinioClient(): MinioWrapper {
     key: string,
     data: Buffer | Readable,
     size?: number,
-    contentType?: string
+    contentType?: string,
   ): Promise<void> {
     try {
-      await client.putObject(config.minio.bucket, key, data as any, size, {
+      await client.putObject(config.minio.bucket, key, data, size, {
         'Content-Type': contentType ?? 'application/octet-stream',
       });
       logger.info('Uploaded object to MinIO', {
@@ -73,13 +72,13 @@ export function createMinioClient(): MinioWrapper {
         bucket: config.minio.bucket,
         key,
       });
-    } catch (err) {
-      logger.error(err as Error, {
+    } catch (error) {
+      logger.error(error as Error, {
         component: 'minio',
         message: 'Failed to upload object',
         key,
       });
-      throw err;
+      throw error;
     }
   }
 

@@ -1,8 +1,9 @@
-import { access, readdir, readFile, stat } from 'node:fs/promises';
-import { relative, resolve, join, dirname } from 'node:path';
+import { access, readFile, readdir, stat } from 'node:fs/promises';
+import { dirname, join, relative, resolve } from 'node:path';
+
 import { extractFrontmatter } from '@esl-pipeline/md-extractor';
 
-export type StudentProfile = {
+export interface StudentProfile {
   student: string;
   dbId?: string | null;
   pageParentId?: string | null;
@@ -10,7 +11,7 @@ export type StudentProfile = {
   voices?: Record<string, string>;
   manifestPreset?: string | null;
   accentPreference?: string | null;
-};
+}
 
 export type PresetMap = Record<
   string,
@@ -26,20 +27,20 @@ const DEFAULT_VOICES_PATH = 'configs/voices.yml';
 const DEFAULT_STUDENTS_DIR = 'configs/students';
 export const DEFAULT_STUDENT_NAME = 'Default';
 
-export type ConfigProvider = {
+export interface ConfigProvider {
   loadPresets(presetsPath?: string): Promise<PresetMap>;
   loadStudentProfiles(studentsDir?: string): Promise<StudentProfile[]>;
   resolveVoicesPath(voicesPath?: string, fallback?: string): Promise<string | undefined>;
-};
+}
 
-export type FilesystemConfigProviderOptions = {
+export interface FilesystemConfigProviderOptions {
   presetsPath?: string;
   voicesPath?: string;
   studentsDir?: string;
-};
+}
 
 export function createFilesystemConfigProvider(
-  options: FilesystemConfigProviderOptions = {}
+  options: FilesystemConfigProviderOptions = {},
 ): ConfigProvider {
   const defaults = {
     presetsPath: options.presetsPath ?? DEFAULT_PRESETS_PATH,
@@ -76,7 +77,7 @@ export function createFilesystemConfigProvider(
             }
           }
         }
-        if (!profiles.some(profile => profile.student === DEFAULT_STUDENT_NAME)) {
+        if (!profiles.some((profile) => profile.student === DEFAULT_STUDENT_NAME)) {
           profiles.push({
             student: DEFAULT_STUDENT_NAME,
             dbId: null,
@@ -98,7 +99,7 @@ export function createFilesystemConfigProvider(
     },
     async resolveVoicesPath(voicesPath, fallback) {
       const candidates = [voicesPath, fallback, defaults.voicesPath].filter(
-        (value): value is string => typeof value === 'string' && value.length > 0
+        (value): value is string => typeof value === 'string' && value.length > 0,
       );
       for (const candidate of candidates) {
         try {
@@ -108,7 +109,7 @@ export function createFilesystemConfigProvider(
           continue;
         }
       }
-      return undefined;
+      return;
     },
   };
 }
@@ -122,14 +123,14 @@ export async function loadPresets(presetsPath = DEFAULT_PRESETS_PATH): Promise<P
 }
 
 export async function loadStudentProfiles(
-  studentsDir = DEFAULT_STUDENTS_DIR
+  studentsDir = DEFAULT_STUDENTS_DIR,
 ): Promise<StudentProfile[]> {
   return defaultConfigProvider.loadStudentProfiles(studentsDir);
 }
 
 export async function resolveVoicesPath(
   voicesPath?: string,
-  fallback = DEFAULT_VOICES_PATH
+  fallback = DEFAULT_VOICES_PATH,
 ): Promise<string | undefined> {
   return defaultConfigProvider.resolveVoicesPath(voicesPath, fallback);
 }
@@ -143,11 +144,11 @@ export async function fileExists(path: string): Promise<boolean> {
   }
 }
 
-export type MarkdownSummary = {
+export interface MarkdownSummary {
   path: string;
   title?: string;
   student?: string;
-};
+}
 
 export async function summarizeMarkdown(mdPath: string): Promise<MarkdownSummary> {
   const summary: MarkdownSummary = { path: mdPath };
@@ -169,17 +170,17 @@ export async function summarizeMarkdown(mdPath: string): Promise<MarkdownSummary
 export async function findMarkdownCandidates(
   cwd: string,
   limit = 10,
-  maxDepth = 3
+  maxDepth = 3,
 ): Promise<string[]> {
   const results: string[] = [];
-  const queue: Array<{ dir: string; depth: number }> = [{ dir: resolve(cwd), depth: 0 }];
+  const queue: { dir: string; depth: number }[] = [{ dir: resolve(cwd), depth: 0 }];
 
-  while (queue.length && results.length < limit) {
+  while (queue.length > 0 && results.length < limit) {
     const { dir, depth } = queue.shift()!;
-    let entries: Array<{ name: string; isFile: boolean; isDir: boolean }> = [];
+    let entries: { name: string; isFile: boolean; isDir: boolean }[] = [];
     try {
       const raw = await readdir(dir, { withFileTypes: true });
-      entries = raw.map(d => ({ name: d.name, isFile: d.isFile(), isDir: d.isDirectory() }));
+      entries = raw.map((d) => ({ name: d.name, isFile: d.isFile(), isDir: d.isDirectory() }));
     } catch {
       continue;
     }

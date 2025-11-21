@@ -1,9 +1,10 @@
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import React from 'react';
 import ReactDOM from 'react-dom/client';
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { Toaster } from 'react-hot-toast';
-import { App } from './ui/App';
+
 import { AuthProvider } from './context/AuthContext';
+import { App } from './ui/App';
 
 // Entry for the minimal batch frontend.
 // Assumes dev is run via `pnpm --filter @esl-pipeline/batch-frontend dev`.
@@ -12,7 +13,7 @@ import { AuthProvider } from './context/AuthContext';
 
 const queryClient = new QueryClient();
 
-ReactDOM.createRoot(document.getElementById('root') as HTMLElement).render(
+ReactDOM.createRoot(document.querySelector('#root') as HTMLElement).render(
   <React.StrictMode>
     <QueryClientProvider client={queryClient}>
       <AuthProvider>
@@ -28,5 +29,5 @@ ReactDOM.createRoot(document.getElementById('root') as HTMLElement).render(
         />
       </AuthProvider>
     </QueryClientProvider>
-  </React.StrictMode>
+  </React.StrictMode>,
 );

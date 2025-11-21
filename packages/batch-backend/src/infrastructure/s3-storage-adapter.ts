@@ -1,15 +1,15 @@
 // packages/batch-backend/src/infrastructure/s3-storage-adapter.ts
-
 import {
-  S3Client,
-  GetObjectCommand,
   DeleteObjectCommand,
+  GetObjectCommand,
   HeadObjectCommand,
+  S3Client,
 } from '@aws-sdk/client-s3';
-import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import { Upload } from '@aws-sdk/lib-storage';
-import { Readable } from 'stream';
-import { logger } from './logger';
+import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
+import { Readable } from 'node:stream';
+
+import { logger } from './logger.js';
 
 export interface S3StorageConfig {
   endpoint?: string; // For MinIO compatibility
@@ -65,7 +65,7 @@ export class S3StorageAdapter {
     key: string,
     content: Readable | Buffer | string,
     mimeType: string,
-    size?: number
+    size?: number,
   ): Promise<FileUploadResult> {
     try {
       const fullKey = this.getFullKey(key);
@@ -165,7 +165,7 @@ export class S3StorageAdapter {
       };
     } catch (error) {
       // If object doesn't exist, return null
-      if ((error as any).name === 'NotFound') {
+      if (error && typeof error === 'object' && 'name' in error && error.name === 'NotFound') {
         return null;
       }
 

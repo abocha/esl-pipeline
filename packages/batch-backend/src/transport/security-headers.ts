@@ -2,10 +2,10 @@
 //
 // Security headers middleware for Fastify.
 // Implements Helmet.js-like functionality with configurable security headers.
+import { FastifyReply, FastifyRequest } from 'fastify';
 
-import { FastifyRequest, FastifyReply } from 'fastify';
-import { loadConfig } from '../config/env';
-import { logger } from '../infrastructure/logger';
+import { loadConfig } from '../config/env.js';
+import { logger } from '../infrastructure/logger.js';
 
 export interface SecurityHeadersConfig {
   enabled: boolean;
@@ -172,7 +172,7 @@ function applyCorsHeaders(reply: FastifyReply, config: SecurityHeadersConfig['co
 export function securityHeadersMiddleware(
   request: FastifyRequest,
   reply: FastifyReply,
-  done: () => void
+  done: () => void,
 ): void {
   try {
     const config = getDefaultSecurityConfig();
@@ -188,10 +188,10 @@ export function securityHeadersMiddleware(
     applyCorsHeaders(reply, config.cors);
 
     // Add additional security headers
-    reply.header('X-Request-ID', (request as any).id || 'unknown');
+    reply.header('X-Request-ID', request.id || 'unknown');
 
     logger.debug('Security headers applied', {
-      requestId: (request as any).id,
+      requestId: request.id,
       method: request.method,
       url: request.url,
       corsEnabled: config.cors.enabled,
@@ -202,7 +202,7 @@ export function securityHeadersMiddleware(
   } catch (error) {
     logger.error('Security headers middleware error', {
       error: error instanceof Error ? error.message : String(error),
-      requestId: (request as any).id,
+      requestId: request.id,
       method: request.method,
       url: request.url,
     });
@@ -217,7 +217,7 @@ export function securityHeadersMiddleware(
  */
 export async function handleCorsPreflight(
   request: FastifyRequest,
-  reply: FastifyReply
+  reply: FastifyReply,
 ): Promise<void> {
   const config = getDefaultSecurityConfig();
 

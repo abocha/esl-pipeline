@@ -1,11 +1,12 @@
-import { describe, expect, it, vi, afterEach, beforeEach } from 'vitest';
-import { buildStudyTextMp3 } from '../src/index.js';
-import * as ffm from '../src/ffmpeg.js';
-import * as eleven from '../src/eleven.js';
-import * as assign from '../src/assign.js';
 import { mkdtemp, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+
+import * as assign from '../src/assign.js';
+import * as eleven from '../src/eleven.js';
+import * as ffm from '../src/ffmpeg.js';
+import { buildStudyTextMp3 } from '../src/index.js';
 
 const encoder = new TextEncoder();
 
@@ -52,7 +53,7 @@ const catalogMock = {
 
 const setupClientMock = () => {
   const convertMock = vi.fn(async (_voiceId: string, request: any) =>
-    makeMockStream(request?.text ?? 'audio')
+    makeMockStream(request?.text ?? 'audio'),
   );
   vi.spyOn(eleven, 'getElevenClient').mockReturnValue({
     textToSpeech: { convert: convertMock },
@@ -86,7 +87,7 @@ describe('backward compatibility', () => {
       const dir = await mkdtemp(join(tmpdir(), 'tts-'));
       const tempMdPath = join(dir, 'lesson.md');
       const tempVoiceMapPath = join(dir, 'voices.yml');
-      
+
       await writeFixture(
         tempMdPath,
         `
@@ -108,25 +109,25 @@ speaker_profiles:
 :::study-text
 This is a monologue line.
 :::
-        `
+        `,
       );
-      
+
       await writeFixture(
         tempVoiceMapPath,
         `
 default: voice_id_default
-        `
+        `,
       );
 
       const convertMock = setupClientMock();
       mockConcat();
-      
+
       // Call with original signature only
       const result = await buildStudyTextMp3(tempMdPath, {
         voiceMapPath: tempVoiceMapPath,
         outPath: dir,
       });
-      
+
       expect(result.path.endsWith('.mp3')).toBe(true);
       expect(result.hash).toHaveLength(64);
       expect(convertMock).toHaveBeenCalledTimes(1);
@@ -142,7 +143,7 @@ default: voice_id_default
       const dir = await mkdtemp(join(tmpdir(), 'tts-'));
       const tempMdPath = join(dir, 'lesson.md');
       const tempVoiceMapPath = join(dir, 'voices.yml');
-      
+
       await writeFixture(
         tempMdPath,
         `
@@ -162,25 +163,25 @@ speaker_profiles:
 :::study-text
 This is a single monologue line.
 :::
-        `
+        `,
       );
-      
+
       await writeFixture(
         tempVoiceMapPath,
         `
 default: voice_id_default
-        `
+        `,
       );
 
       const convertMock = setupClientMock();
       mockConcat();
-      
+
       // Should default to monologue for monologue content
       const result = await buildStudyTextMp3(tempMdPath, {
         voiceMapPath: tempVoiceMapPath,
         outPath: dir,
       });
-      
+
       // Should use monologue mode (single TTS call)
       expect(convertMock).toHaveBeenCalledTimes(1);
       expect(result.path).toMatch(/\.mp3$/);
@@ -190,7 +191,7 @@ default: voice_id_default
       const dir = await mkdtemp(join(tmpdir(), 'tts-'));
       const tempMdPath = join(dir, 'lesson.md');
       const tempVoiceMapPath = join(dir, 'voices.yml');
-      
+
       await writeFixture(
         tempMdPath,
         `
@@ -209,25 +210,25 @@ speaker_profiles:
 :::study-text
 This line should not be synthesized in preview mode.
 :::
-        `
+        `,
       );
-      
+
       await writeFixture(
         tempVoiceMapPath,
         `
 default: voice_id_default
-        `
+        `,
       );
 
       const convertMock = setupClientMock();
-      
+
       // Original preview behavior should be unchanged
       const result = await buildStudyTextMp3(tempMdPath, {
         voiceMapPath: tempVoiceMapPath,
         outPath: dir,
         preview: true, // Original preview flag
       });
-      
+
       expect(result.path).toMatch(/\.mp3$/);
       expect(result.voices).toHaveLength(1);
       expect(convertMock).not.toHaveBeenCalled(); // Preview should not synthesize
@@ -239,7 +240,7 @@ default: voice_id_default
       const dir = await mkdtemp(join(tmpdir(), 'tts-'));
       const tempMdPath = join(dir, 'lesson.md');
       const tempVoiceMapPath = join(dir, 'voices.yml');
-      
+
       await writeFixture(
         tempMdPath,
         `
@@ -255,19 +256,19 @@ speaker_profiles:
 :::study-text
 Test line.
 :::
-        `
+        `,
       );
-      
+
       await writeFixture(
         tempVoiceMapPath,
         `
 default: voice_id_default
-        `
+        `,
       );
 
       const _convertMock = setupClientMock();
       mockConcat();
-      
+
       // Call with original interface structure only
       const result = await buildStudyTextMp3(tempMdPath, {
         voiceMapPath: tempVoiceMapPath,
@@ -278,7 +279,7 @@ default: voice_id_default
         ffmpegPath: '/usr/bin/ffmpeg',
         outputFormat: 'mp3_22050_32',
       });
-      
+
       expect(result.path).toBeDefined();
       expect(result.hash).toBeDefined();
       expect(result.voices).toBeDefined();
@@ -293,7 +294,7 @@ default: voice_id_default
       const dir = await mkdtemp(join(tmpdir(), 'tts-'));
       const tempMdPath = join(dir, 'lesson.md');
       const tempVoiceMapPath = join(dir, 'voices.yml');
-      
+
       await writeFixture(
         tempMdPath,
         `
@@ -309,24 +310,24 @@ speaker_profiles:
 :::study-text
 Test line for structure verification.
 :::
-        `
+        `,
       );
-      
+
       await writeFixture(
         tempVoiceMapPath,
         `
 default: voice_id_default
-        `
+        `,
       );
 
       const _convertMock = setupClientMock();
       mockConcat();
-      
+
       const result = await buildStudyTextMp3(tempMdPath, {
         voiceMapPath: tempVoiceMapPath,
         outPath: dir,
       });
-      
+
       // Verify original result structure
       expect(result).toHaveProperty('path');
       expect(result).toHaveProperty('hash');
@@ -345,7 +346,7 @@ default: voice_id_default
       const dir = await mkdtemp(join(tmpdir(), 'tts-'));
       const tempMdPath = join(dir, 'lesson.md');
       const tempVoiceMapPath = join(dir, 'voices.yml');
-      
+
       await writeFixture(
         tempMdPath,
         `
@@ -361,28 +362,28 @@ speaker_profiles:
 :::study-text
 Alex: This should cause an error since Alex is not mapped.
 :::
-        `
+        `,
       );
-      
+
       // Voice map with no Alex mapping - but this now has better fallback behavior
       await writeFixture(
         tempVoiceMapPath,
         `
 # No Alex mapping, only default
 default: voice_id_default
-        `
+        `,
       );
 
       const convertMock = setupClientMock();
       mockConcat();
-      
+
       // With improved fallback, this should now work (using default voice for unmapped speakers)
       // But we test that it still handles missing voices gracefully
       const result = await buildStudyTextMp3(tempMdPath, {
         voiceMapPath: tempVoiceMapPath,
         outPath: dir,
       });
-      
+
       expect(result.path).toBeDefined();
       expect(result.voices).toHaveLength(1);
       expect(result.voices[0]).toMatchObject({
@@ -390,7 +391,7 @@ default: voice_id_default
         voiceId: 'voice_id_default', // Should fall back to default
         source: 'default',
       });
-      
+
       // TTS should still be called since we have a valid voice assignment now
       expect(convertMock).toHaveBeenCalled();
     });
@@ -401,7 +402,7 @@ default: voice_id_default
       const dir = await mkdtemp(join(tmpdir(), 'tts-'));
       const tempMdPath = join(dir, 'lesson.md');
       const tempVoiceMapPath = join(dir, 'voices.yml');
-      
+
       await writeFixture(
         tempMdPath,
         `
@@ -422,9 +423,9 @@ speaker_profiles:
 Alex: Hello there!
 Mara: Hi Alex!
 :::
-        `
+        `,
       );
-      
+
       // Use existing voice mapping format
       await writeFixture(
         tempVoiceMapPath,
@@ -432,24 +433,32 @@ Mara: Hi Alex!
 Alex: voice_id_alex
 Mara: voice_id_mara
 default: voice_id_default
-        `
+        `,
       );
 
       const convertMock = setupClientMock();
       mockConcat();
-      
+
       const result = await buildStudyTextMp3(tempMdPath, {
         voiceMapPath: tempVoiceMapPath,
         outPath: dir,
         ttsMode: 'monologue', // Force monologue to test original behavior
       });
-      
+
       expect(result.voices).toHaveLength(2);
       expect(result.voices).toEqual(
         expect.arrayContaining([
-          expect.objectContaining({ speaker: 'Alex', voiceId: 'voice_id_alex', source: 'voiceMap' }),
-          expect.objectContaining({ speaker: 'Mara', voiceId: 'voice_id_mara', source: 'voiceMap' }),
-        ])
+          expect.objectContaining({
+            speaker: 'Alex',
+            voiceId: 'voice_id_alex',
+            source: 'voiceMap',
+          }),
+          expect.objectContaining({
+            speaker: 'Mara',
+            voiceId: 'voice_id_mara',
+            source: 'voiceMap',
+          }),
+        ]),
       );
       expect(convertMock).toHaveBeenCalledTimes(2);
     });
@@ -458,7 +467,7 @@ default: voice_id_default
       const dir = await mkdtemp(join(tmpdir(), 'tts-'));
       const tempMdPath = join(dir, 'lesson.md');
       const tempVoiceMapPath = join(dir, 'voices.yml');
-      
+
       await writeFixture(
         tempMdPath,
         `
@@ -480,32 +489,40 @@ speaker_profiles:
 Narrator: Welcome to the lesson.
 Student: I'm ready to learn.
 :::
-        `
+        `,
       );
-      
+
       // Use auto detection format (existing)
       await writeFixture(
         tempVoiceMapPath,
         `
 auto: true
-        `
+        `,
       );
 
       const _convertMock = setupClientMock();
       mockConcat();
-      
+
       const result = await buildStudyTextMp3(tempMdPath, {
         voiceMapPath: tempVoiceMapPath,
         outPath: dir,
         ttsMode: 'monologue', // Force monologue to test original behavior
       });
-      
+
       expect(result.voices).toHaveLength(2);
       expect(result.voices).toEqual(
         expect.arrayContaining([
-          expect.objectContaining({ speaker: 'Narrator', voiceId: 'voice_narrator', source: 'auto' }),
-          expect.objectContaining({ speaker: 'Student', voiceId: 'voice_student_female', source: 'auto' }),
-        ])
+          expect.objectContaining({
+            speaker: 'Narrator',
+            voiceId: 'voice_narrator',
+            source: 'auto',
+          }),
+          expect.objectContaining({
+            speaker: 'Student',
+            voiceId: 'voice_student_female',
+            source: 'auto',
+          }),
+        ]),
       );
     });
 
@@ -513,7 +530,7 @@ auto: true
       const dir = await mkdtemp(join(tmpdir(), 'tts-'));
       const tempMdPath = join(dir, 'letter.md');
       const tempVoiceMapPath = join(dir, 'voices.yml');
-      
+
       await writeFixture(
         tempMdPath,
         `
@@ -536,15 +553,15 @@ This should all be attributed to Alex.
 Talk soon,
 Alex
 :::
-        `
+        `,
       );
-      
+
       await writeFixture(
         tempVoiceMapPath,
         `
 Alex: voice_id_alex
 default: voice_id_default
-        `
+        `,
       );
 
       const result = await buildStudyTextMp3(tempMdPath, {
@@ -568,7 +585,7 @@ default: voice_id_default
       const dir = await mkdtemp(join(tmpdir(), 'tts-'));
       const tempMdPath = join(dir, 'lesson.md');
       const tempVoiceMapPath = join(dir, 'voices.yml');
-      
+
       await writeFixture(
         tempMdPath,
         `
@@ -584,27 +601,27 @@ speaker_profiles:
 :::study-text
 Test line.
 :::
-        `
+        `,
       );
-      
+
       await writeFixture(
         tempVoiceMapPath,
         `
 default: voice_id_default
-        `
+        `,
       );
 
       const convertMock = setupClientMock();
       mockConcat();
-      
+
       // Clear any new environment variables that might be set
       delete process.env.ELEVENLABS_TTS_MODE;
-      
+
       const result = await buildStudyTextMp3(tempMdPath, {
         voiceMapPath: tempVoiceMapPath,
         outPath: dir,
       });
-      
+
       expect(result.path).toBeDefined();
       expect(convertMock).toHaveBeenCalled();
     });
@@ -613,7 +630,7 @@ default: voice_id_default
       const dir = await mkdtemp(join(tmpdir(), 'tts-'));
       const tempMdPath = join(dir, 'lesson.md');
       const tempVoiceMapPath = join(dir, 'voices.yml');
-      
+
       await writeFixture(
         tempMdPath,
         `
@@ -629,32 +646,32 @@ speaker_profiles:
 :::study-text
 Test line for graceful handling.
 :::
-        `
+        `,
       );
-      
+
       await writeFixture(
         tempVoiceMapPath,
         `
 default: voice_id_default
-        `
+        `,
       );
 
       const convertMock = setupClientMock();
       mockConcat();
-      
+
       // Ensure environment variables that didn't exist before are not set
       const originalEnv = { ...process.env };
       delete process.env.ELEVENLABS_TTS_MODE;
       delete process.env.ELEVENLABS_DIALOGUE_LANGUAGE;
       delete process.env.ELEVENLABS_DIALOGUE_STABILITY;
       delete process.env.ELEVENLABS_DIALOGUE_SEED;
-      
+
       try {
         const result = await buildStudyTextMp3(tempMdPath, {
           voiceMapPath: tempVoiceMapPath,
           outPath: dir,
         });
-        
+
         expect(result.path).toBeDefined();
         expect(convertMock).toHaveBeenCalled();
       } finally {
@@ -670,7 +687,7 @@ default: voice_id_default
       const dir = await mkdtemp(join(tmpdir(), 'tts-'));
       const tempMdPath = join(dir, 'fixture.md');
       const tempVoiceMapPath = join(dir, 'voices.yml');
-      
+
       // Use a format similar to existing fixtures
       await writeFixture(
         tempMdPath,
@@ -680,24 +697,24 @@ default: voice_id_default
 :::study-text
 This is a test lesson with basic content.
 :::
-        `
+        `,
       );
-      
+
       await writeFixture(
         tempVoiceMapPath,
         `
 default: voice_id_default
-        `
+        `,
       );
 
       const convertMock = setupClientMock();
       mockConcat();
-      
+
       const result = await buildStudyTextMp3(tempMdPath, {
         voiceMapPath: tempVoiceMapPath,
         outPath: dir,
       });
-      
+
       expect(result.path).toMatch(/\.mp3$/);
       expect(result.hash).toHaveLength(64);
       expect(convertMock).toHaveBeenCalled();

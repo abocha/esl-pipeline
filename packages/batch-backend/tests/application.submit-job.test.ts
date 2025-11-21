@@ -1,13 +1,13 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 // We import from compiled paths relative to this test file.
 // Vitest in this monorepo typically runs from package root,
 // so we resolve via ../src/...
-import { submitJob } from '../src/application/submit-job';
-import * as jobRepository from '../src/domain/job-repository';
-import * as queueBullmq from '../src/infrastructure/queue-bullmq';
-import * as loggerModule from '../src/infrastructure/logger';
-import * as jobEvents from '../src/domain/job-events';
+import { submitJob } from '../src/application/submit-job.js';
+import * as jobEvents from '../src/domain/job-events.js';
+import * as jobRepository from '../src/domain/job-repository.js';
+import * as loggerModule from '../src/infrastructure/logger.js';
+import * as queueBullmq from '../src/infrastructure/queue-bullmq.js';
 
 vi.mock('../src/infrastructure/logger', async () => {
   const actual = await vi.importActual<typeof loggerModule>('../src/infrastructure/logger');
@@ -68,26 +68,28 @@ describe('application/submit-job', () => {
 
     insertJobSpy.mockResolvedValue(fakeJob as any);
 
-    const enqueue = vi.fn().mockResolvedValue(undefined);
+    const enqueue = vi.fn().mockResolvedValue();
     createJobQueueSpy.mockReturnValue({
       queue: {} as any,
       queueEvents: {} as any,
       enqueue,
     });
 
-    const result = await submitJob({ md: fakeJob.md });
+    const request: Parameters<typeof submitJob>[0] = { md: fakeJob.md };
+
+    const result = await submitJob(request);
 
     expect(insertJobSpy).toHaveBeenCalledTimes(1);
     expect(insertJobSpy).toHaveBeenCalledWith({
-      md: fakeJob.md,
-      preset: undefined,
-      withTts: undefined,
-      upload: undefined,
-      voiceId: undefined,
-      voiceAccent: undefined,
-      forceTts: undefined,
-      notionDatabase: undefined,
-      mode: undefined,
+      md: request.md,
+      preset: request.preset,
+      withTts: request.withTts,
+      upload: request.upload,
+      voiceId: request.voiceId,
+      voiceAccent: request.voiceAccent,
+      forceTts: request.forceTts,
+      notionDatabase: request.notionDatabase,
+      mode: request.mode,
     });
 
     expect(createJobQueueSpy).toHaveBeenCalledTimes(1);
@@ -123,7 +125,7 @@ describe('application/submit-job', () => {
 
     insertJobSpy.mockResolvedValue(fakeJob as any);
 
-    const enqueue = vi.fn().mockResolvedValue(undefined);
+    const enqueue = vi.fn().mockResolvedValue();
     createJobQueueSpy.mockReturnValue({
       queue: {} as any,
       queueEvents: {} as any,
@@ -159,7 +161,7 @@ describe('application/submit-job', () => {
   it('rejects when md is missing or not a string', async () => {
     insertJobSpy.mockResolvedValue(null as any);
 
-    const enqueue = vi.fn().mockResolvedValue(undefined);
+    const enqueue = vi.fn().mockResolvedValue();
     createJobQueueSpy.mockReturnValue({
       queue: {} as any,
       queueEvents: {} as any,

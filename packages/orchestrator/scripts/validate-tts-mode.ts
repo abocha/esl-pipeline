@@ -61,8 +61,8 @@ if (envDialogueLanguage && /^[a-z]{2}$/i.test(envDialogueLanguage)) {
 }
 
 if (envDialogueStability) {
-  const stability = parseFloat(envDialogueStability);
-  if (!isNaN(stability) && stability >= 0 && stability <= 1) {
+  const stability = Number.parseFloat(envDialogueStability);
+  if (!Number.isNaN(stability) && stability >= 0 && stability <= 1) {
     console.log('  ✅ Stability validation passed');
   } else {
     console.log('  ❌ Stability validation failed');
@@ -70,8 +70,8 @@ if (envDialogueStability) {
 }
 
 if (envDialogueSeed) {
-  const seed = parseInt(envDialogueSeed, 10);
-  if (!isNaN(seed) && seed >= 0) {
+  const seed = Number.parseInt(envDialogueSeed, 10);
+  if (!Number.isNaN(seed) && seed >= 0) {
     console.log('  ✅ Seed validation passed');
   } else {
     console.log('  ❌ Seed validation failed');
@@ -84,10 +84,10 @@ console.log('\n🎭 Testing Mode-Specific Behaviors:');
 // Auto mode
 const autoFlags: Partial<NewAssignmentFlags> = { ttsMode: 'auto' };
 console.log('  Auto mode flags:', autoFlags);
-console.log('  ✅ Auto mode doesn\'t require dialogue options');
+console.log("  ✅ Auto mode doesn't require dialogue options");
 
 // Dialogue mode
-const dialogueFlags: Partial<NewAssignmentFlags> = { 
+const dialogueFlags: Partial<NewAssignmentFlags> = {
   ttsMode: 'dialogue',
   dialogueLanguage: 'en',
   dialogueStability: 0.75,
@@ -96,10 +96,10 @@ const dialogueFlags: Partial<NewAssignmentFlags> = {
 console.log('  Dialogue mode flags:', dialogueFlags);
 console.log('  ✅ Dialogue mode includes all dialogue options');
 
-// Monologue mode  
+// Monologue mode
 const monologueFlags: Partial<NewAssignmentFlags> = { ttsMode: 'monologue' };
 console.log('  Monologue mode flags:', monologueFlags);
-console.log('  ✅ Monologue mode doesn\'t require dialogue options');
+console.log("  ✅ Monologue mode doesn't require dialogue options");
 
 // Test backward compatibility
 console.log('\n🔄 Testing Backward Compatibility:');
@@ -125,6 +125,6 @@ console.log('\n🎉 All validation tests passed!');
 console.log('\n📋 Summary:');
 console.log('  ✅ Type safety maintained');
 console.log('  ✅ Environment variable support');
-console.log('  ✅ Mode-specific validation');  
+console.log('  ✅ Mode-specific validation');
 console.log('  ✅ Backward compatibility');
 console.log('  ✅ Wizard integration ready');

@@ -1,6 +1,16 @@
-import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
-import { useJobMonitor } from './JobMonitorContext';
+import {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react';
+import type React from 'react';
 import toast from 'react-hot-toast';
+
+import { useJobMonitor } from './JobMonitorContext';
 
 type NotificationPermissionState = 'default' | 'granted' | 'denied';
 
@@ -13,7 +23,7 @@ interface NotificationContextValue {
 
 const NotificationContext = createContext<NotificationContextValue | undefined>(undefined);
 
-const isBrowser = typeof window !== 'undefined' && typeof Notification !== 'undefined';
+const isBrowser = globalThis.window !== undefined && typeof Notification !== 'undefined';
 
 export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [permission, setPermission] = useState<NotificationPermissionState>(() => {
@@ -34,7 +44,7 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
       const result = await Notification.requestPermission();
       setPermission(result);
       return result;
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('Failed to request notification permission', error);
       toast.error('Unable to request notification permission.');
       return 'denied';
@@ -53,7 +63,7 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
         icon: '/favicon.ico',
       });
     },
-    [permission]
+    [permission],
   );
 
   const notifyJobFailure = useCallback(
@@ -65,7 +75,7 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
         icon: '/favicon.ico',
       });
     },
-    [permission]
+    [permission],
   );
 
   const hadActiveJobsRef = useRef(false);
@@ -75,23 +85,23 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
   useEffect(() => {
     if (!isBrowser || permission !== 'granted') return;
 
-    const hasActiveJobs = jobs.some(job => job.state === 'queued' || job.state === 'running');
+    const hasActiveJobs = jobs.some((job) => job.state === 'queued' || job.state === 'running');
     if (hasActiveJobs && !hadActiveJobsRef.current) {
       currentBatchStartedRef.current = true;
       currentBatchHasFailureRef.current = false;
     }
     hadActiveJobsRef.current = hasActiveJobs;
 
-    const failedJobs = jobs.filter(job => job.state === 'failed');
-    failedJobs.forEach(job => {
+    const failedJobs = jobs.filter((job) => job.state === 'failed');
+    for (const job of failedJobs) {
       if (!failedJobsRef.current.has(job.jobId)) {
         void notifyJobFailure(job.jobId, job.error);
         failedJobsRef.current.add(job.jobId);
         currentBatchHasFailureRef.current = true;
       }
-    });
+    }
 
-    const succeededJobs = jobs.filter(job => job.state === 'succeeded');
+    const succeededJobs = jobs.filter((job) => job.state === 'succeeded');
     if (
       !hasActiveJobs &&
       currentBatchStartedRef.current &&
@@ -100,7 +110,7 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
     ) {
       if (succeededJobs.length !== lastNotifiedBatchRef.current) {
         lastNotifiedBatchRef.current = succeededJobs.length;
-        void notifyBatchComplete(succeededJobs.map(job => job.jobId));
+        void notifyBatchComplete(succeededJobs.map((job) => job.jobId));
       }
       currentBatchStartedRef.current = false;
     }
@@ -117,7 +127,7 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
       notifyBatchComplete,
       notifyJobFailure,
     }),
-    [permission, requestPermission, notifyBatchComplete, notifyJobFailure]
+    [permission, requestPermission, notifyBatchComplete, notifyJobFailure],
   );
 
   return <NotificationContext.Provider value={value}>{children}</NotificationContext.Provider>;

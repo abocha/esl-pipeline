@@ -1,14 +1,8 @@
 {
-  "extends": "../../tsconfig.base.json",
+  "extends": "./tsconfig.build.json",
   "compilerOptions": {
-    "composite": true,
-    "declaration": true,
-    "outDir": "dist",
-    "rootDir": ".",
-    "module": "NodeNext",
-    "moduleResolution": "NodeNext",
-    "target": "ES2022",
-    "strict": true
+    "noEmit": true
   },
-  "include": ["src", "bin"]
+  "include": ["src", "bin", "tests"],
+  "exclude": ["dist", "node_modules"]
 }

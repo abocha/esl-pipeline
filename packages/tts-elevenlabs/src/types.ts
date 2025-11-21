@@ -42,7 +42,7 @@ export interface DialogueChunk {
   totalChunks: number;
 }
 
-export type BuildStudyTextOptions = {
+export interface BuildStudyTextOptions {
   voiceMapPath: string;
   outPath: string;
   preview?: boolean;
@@ -57,9 +57,9 @@ export type BuildStudyTextOptions = {
   dialogueLanguage?: string;
   dialogueStability?: number;
   dialogueSeed?: number;
-};
+}
 
-export type BuildStudyTextResult = {
+export interface BuildStudyTextResult {
   path: string;
   duration?: number;
   hash: string;
@@ -74,4 +74,4 @@ export type BuildStudyTextResult = {
     useCase?: string;
   }[];
   voiceAssignments?: Record<string, string>;
-};
+}

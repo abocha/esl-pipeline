@@ -1,41 +1,46 @@
-import type { OrchestratorPipeline, ResolvedConfigPaths } from '../pipeline.js';
+import { type VoiceCatalog, loadVoicesCatalog } from '@esl-pipeline/tts-elevenlabs';
+
 import type { ConfigProvider, StudentProfile } from '../config.js';
-import { loadVoicesCatalog, type VoiceCatalog } from '@esl-pipeline/tts-elevenlabs';
+import type { OrchestratorPipeline, ResolvedConfigPaths } from '../pipeline.js';
 
 export type UploadOption = 'auto' | 's3' | 'none';
 export type JobModeOption = 'auto' | 'dialogue' | 'monologue';
 
-export type NotionDatabaseOption = {
+export interface NotionDatabaseOption {
   id: string;
   name: string;
-};
+}
 
-export type VoiceOption = {
+export interface VoiceOption {
   id: string;
   name: string;
   accent?: string | null;
   gender?: string | null;
   category?: string | null;
-};
+}
 
-export type JobOptionsPayload = {
+export interface JobOptionsPayload {
   presets: string[];
   voiceAccents: string[];
   voices: VoiceOption[];
   notionDatabases: NotionDatabaseOption[];
   uploadOptions: UploadOption[];
   modes: JobModeOption[];
-};
+}
 
-type ResolveJobOptionsSource = Pick<OrchestratorPipeline, 'configProvider' | 'configPaths'> | {
-  configProvider: ConfigProvider;
-  configPaths: ResolvedConfigPaths;
-};
+type ResolveJobOptionsSource =
+  | Pick<OrchestratorPipeline, 'configProvider' | 'configPaths'>
+  | {
+      configProvider: ConfigProvider;
+      configPaths: ResolvedConfigPaths;
+    };
 
 const DEFAULT_UPLOAD_OPTIONS: UploadOption[] = ['auto', 's3', 'none'];
 const DEFAULT_JOB_MODES: JobModeOption[] = ['auto', 'dialogue', 'monologue'];
 
-export async function resolveJobOptions(source: ResolveJobOptionsSource): Promise<JobOptionsPayload> {
+export async function resolveJobOptions(
+  source: ResolveJobOptionsSource,
+): Promise<JobOptionsPayload> {
   const { configProvider, configPaths } = source;
 
   const [presetsMap, studentProfiles, voiceCatalog] = await Promise.all([
@@ -67,9 +72,10 @@ function extractNotionDatabases(profiles: StudentProfile[]): NotionDatabaseOptio
     if (!raw) continue;
     if (seen.has(raw)) continue;
     seen.add(raw);
-    const label = typeof profile.student === 'string' && profile.student.trim().length > 0
-      ? profile.student.trim()
-      : raw;
+    const label =
+      typeof profile.student === 'string' && profile.student.trim().length > 0
+        ? profile.student.trim()
+        : raw;
     options.push({ id: raw, name: label });
   }
 
@@ -100,13 +106,9 @@ function normalizeVoiceCatalog(catalog: VoiceCatalog | undefined): {
   }
 
   voices.sort((a, b) => a.name.localeCompare(b.name));
-  const voiceAccents = Array.from(
-    new Set(
-      voices
-        .map(voice => (voice.accent ? voice.accent.trim() : ''))
-        .filter((value): value is string => Boolean(value))
-    )
-  );
+  const voiceAccents = [
+    ...new Set(voices.map((voice) => (voice.accent ? voice.accent.trim() : '')).filter(Boolean)),
+  ];
 
   return { voices, voiceAccents };
 }
@@ -115,5 +117,5 @@ function normalizeToken(value: unknown): string | undefined {
   if (typeof value !== 'string') return undefined;
   const trimmed = value.trim();
   if (!trimmed) return undefined;
-  return trimmed.toLowerCase().replace(/\s+/g, '_');
+  return trimmed.toLowerCase().replaceAll(/\s+/g, '_');
 }

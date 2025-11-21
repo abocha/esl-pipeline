@@ -1,7 +1,8 @@
-import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest';
-import { writeFile, unlink } from 'node:fs/promises';
+import { unlink, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
-import { join, basename } from 'node:path';
+import { basename, join } from 'node:path';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+
 import { uploadToS3 } from '../src/s3.js';
 
 const sendMock = vi.fn();
@@ -45,7 +46,7 @@ describe('uploadToS3', () => {
     });
 
     expect(res.url).toBe(
-      `https://test-bucket.s3.us-east-1.amazonaws.com/audio/tests/${basename(tempFile)}`
+      `https://test-bucket.s3.us-east-1.amazonaws.com/audio/tests/${basename(tempFile)}`,
     );
     expect(res.key).toBe(`audio/tests/${basename(tempFile)}`);
     expect(res.etag).toBe('"mock-etag"');
@@ -70,7 +71,7 @@ describe('uploadToS3', () => {
     });
 
     expect(res.url).toBe(
-      `https://test-bucket.s3.us-east-1.amazonaws.com/audio/tests/${basename(tempFile)}`
+      `https://test-bucket.s3.us-east-1.amazonaws.com/audio/tests/${basename(tempFile)}`,
     );
     expect(sendMock).toHaveBeenCalledTimes(2);
 

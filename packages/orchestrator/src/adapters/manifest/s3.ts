@@ -1,22 +1,23 @@
+import { GetObjectCommand, PutObjectCommand, S3Client } from '@aws-sdk/client-s3';
 import { basename, extname, isAbsolute, relative } from 'node:path';
 import { posix as posixPath } from 'node:path';
-import { S3Client, GetObjectCommand, PutObjectCommand } from '@aws-sdk/client-s3';
+
 import type { AssignmentManifest, ManifestStore } from '../../manifest.js';
 
-export type S3ManifestStoreOptions = {
+export interface S3ManifestStoreOptions {
   bucket: string;
   prefix?: string;
   region?: string;
   rootDir?: string;
   client?: S3Client;
-};
+}
 
 const sanitizePathComponent = (value: string): string =>
-  value.replace(/^[./\\]+/, '').replace(/:/g, '_');
+  value.replace(/^[./\\]+/, '').replaceAll(':', '_');
 
 const trimPrefix = (value?: string): string | undefined => {
   if (!value) return undefined;
-  return value.replace(/^\/+|\/+$/g, '');
+  return value.replaceAll(/^\/+|\/+$/g, '');
 };
 
 export class S3ManifestStore implements ManifestStore {
@@ -45,7 +46,7 @@ export class S3ManifestStore implements ManifestStore {
         Key: key,
         Body: JSON.stringify(manifest, null, 2),
         ContentType: 'application/json',
-      })
+      }),
     );
     return `s3://${this.bucket}/${key}`;
   }
@@ -54,7 +55,7 @@ export class S3ManifestStore implements ManifestStore {
     const key = this.keyFor(mdPath);
     try {
       const response = await this.client.send(
-        new GetObjectCommand({ Bucket: this.bucket, Key: key })
+        new GetObjectCommand({ Bucket: this.bucket, Key: key }),
       );
       const body = await response.Body?.transformToString();
       if (!body) return null;
@@ -73,11 +74,7 @@ export class S3ManifestStore implements ManifestStore {
     let relativePath = mdPath;
     if (this.rootDir && isAbsolute(mdPath)) {
       const candidate = relative(this.rootDir, mdPath);
-      if (candidate && !candidate.startsWith('..')) {
-        relativePath = candidate;
-      } else {
-        relativePath = basename(mdPath);
-      }
+      relativePath = candidate && !candidate.startsWith('..') ? candidate : basename(mdPath);
     }
 
     const withoutExt = relativePath

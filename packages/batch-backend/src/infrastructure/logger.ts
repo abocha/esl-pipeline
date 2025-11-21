@@ -1,10 +1,8 @@
 // packages/batch-backend/src/infrastructure/logger.ts
-
 // Pino-based JSON logger with a minimal typed wrapper.
 // - Container-friendly (stdout JSON).
 // - Pretty printing in development only.
 // - Supports child loggers with jobId/runId bindings.
-
 import pino from 'pino';
 
 export interface LogFields {
@@ -50,14 +48,14 @@ function createRootLogger(): Logger {
       if (msg instanceof Error) {
         instance.error(
           {
-            ...(fields ?? {}),
+            ...fields,
             err: {
               message: msg.message,
               stack: msg.stack,
               name: msg.name,
             },
           },
-          msg.message
+          msg.message,
         );
       } else {
         instance.error(fields ?? {}, msg);

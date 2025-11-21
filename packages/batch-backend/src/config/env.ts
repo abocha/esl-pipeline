@@ -1,10 +1,8 @@
 // packages/batch-backend/src/config/env.ts
-
 // Centralized environment-based configuration for the batch-backend.
 // - Safe Docker/Docker Compose defaults.
 // - Postgres/Redis/MinIO are optional and enabled via env flags.
 // - Only throws when a feature is explicitly enabled but misconfigured.
-
 import { readBool, readInt, readString } from '@esl-pipeline/shared-infrastructure';
 
 export type NodeEnv = 'development' | 'test' | 'production';
@@ -112,10 +110,8 @@ export function loadConfig(): BatchBackendConfig {
   const pgPassword = readString('PG_PASSWORD', 'esl')!;
   const pgDatabase = readString('PG_DATABASE', 'esl_batch')!;
   const pgConnectionString = readString('PG_CONNECTION_STRING');
-  if (pgEnabled) {
-    if (!pgConnectionString && (!pgUser || !pgPassword || !pgDatabase || !pgHost)) {
-      throw new Error('PG_ENABLED=true but Postgres configuration is incomplete');
-    }
+  if (pgEnabled && !pgConnectionString && (!pgUser || !pgPassword || !pgDatabase || !pgHost)) {
+    throw new Error('PG_ENABLED=true but Postgres configuration is incomplete');
   }
 
   // Redis (optional; enabled by default as queue backend)
@@ -135,7 +131,7 @@ export function loadConfig(): BatchBackendConfig {
   const maxConcurrentFfmpeg = readInt('MAX_CONCURRENT_FFMPEG', 3);
   if (maxConcurrentFfmpeg > workerConcurrency) {
     throw new Error(
-      `MAX_CONCURRENT_FFMPEG (${maxConcurrentFfmpeg}) cannot exceed WORKER_CONCURRENCY (${workerConcurrency})`
+      `MAX_CONCURRENT_FFMPEG (${maxConcurrentFfmpeg}) cannot exceed WORKER_CONCURRENCY (${workerConcurrency})`,
     );
   }
 
@@ -147,10 +143,8 @@ export function loadConfig(): BatchBackendConfig {
   const minioAccessKey = readString('MINIO_ACCESS_KEY', 'minioadmin')!;
   const minioSecretKey = readString('MINIO_SECRET_KEY', 'minioadmin')!;
   const minioBucket = readString('MINIO_BUCKET', 'esl-pipeline')!;
-  if (minioEnabled) {
-    if (!minioEndpoint || !minioAccessKey || !minioSecretKey || !minioBucket) {
-      throw new Error('MINIO_ENABLED=true but MinIO configuration is incomplete');
-    }
+  if (minioEnabled && (!minioEndpoint || !minioAccessKey || !minioSecretKey || !minioBucket)) {
+    throw new Error('MINIO_ENABLED=true but MinIO configuration is incomplete');
   }
 
   // Mail (fully optional; dev default MailHog-like, but not required)
@@ -179,7 +173,7 @@ export function loadConfig(): BatchBackendConfig {
   const manifestRoot = readString('ESL_PIPELINE_MANIFEST_ROOT', process.cwd());
   if (manifestStoreEnv === 's3' && !manifestBucket) {
     throw new Error(
-      'ESL_PIPELINE_MANIFEST_STORE=s3 requires ESL_PIPELINE_MANIFEST_BUCKET (or MINIO_BUCKET)'
+      'ESL_PIPELINE_MANIFEST_STORE=s3 requires ESL_PIPELINE_MANIFEST_BUCKET (or MINIO_BUCKET)',
     );
   }
 
@@ -203,7 +197,7 @@ export function loadConfig(): BatchBackendConfig {
   const maxFileSize = readInt('MAX_FILE_SIZE', 10 * 1024 * 1024); // 10MB default
   const allowedMimeTypesEnv =
     readString('ALLOWED_MIME_TYPES', 'text/markdown,text/plain') || 'text/markdown,text/plain';
-  const allowedMimeTypes = allowedMimeTypesEnv.split(',').map(type => type.trim());
+  const allowedMimeTypes = allowedMimeTypesEnv.split(',').map((type) => type.trim());
   const uploadRateLimit = readInt('UPLOAD_RATE_LIMIT', 10); // 10 uploads per minute
   const uploadBurstLimit = readInt('UPLOAD_BURST_LIMIT', 20); // 20 uploads burst
   const enableFileValidation = readBool('ENABLE_FILE_VALIDATION', true);
@@ -214,7 +208,7 @@ export function loadConfig(): BatchBackendConfig {
   const corsCredentials = readBool('CORS_CREDENTIALS', false);
   const enableCors = readBool('ENABLE_CORS', false);
   const securityHeadersEnabled = readBool('SECURITY_HEADERS_ENABLED', true);
-  const hstsMaxAge = readInt('HSTS_MAX_AGE', 31536000); // 1 year in seconds
+  const hstsMaxAge = readInt('HSTS_MAX_AGE', 31_536_000); // 1 year in seconds
   const uploadQuotaPerUser = readInt('UPLOAD_QUOTA_PER_USER', 100 * 1024 * 1024); // 100MB default
   const jobSubmissionRateLimit = readInt('JOB_SUBMISSION_RATE_LIMIT', 5); // 5 jobs per minute
 

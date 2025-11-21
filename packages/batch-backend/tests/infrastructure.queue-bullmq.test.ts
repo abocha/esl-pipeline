@@ -1,4 +1,7 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+
+// Import SUT after mocks so it binds to the mocked modules.
+import { createJobQueue, createJobWorker } from '../src/infrastructure/queue-bullmq.js';
 
 // Helper to get or create global mock storage
 function getMockStorage() {
@@ -103,9 +106,6 @@ vi.mock('../src/infrastructure/logger', () => {
   };
 });
 
-// Import SUT after mocks so it binds to the mocked modules.
-import { createJobQueue, createJobWorker } from '../src/infrastructure/queue-bullmq';
-
 describe('infrastructure/queue-bullmq', () => {
   /**
    * Intent:
@@ -148,14 +148,14 @@ describe('infrastructure/queue-bullmq', () => {
       'esl-jobs-test',
       expect.objectContaining({
         connection: { mock: 'redis-connection' },
-      })
+      }),
     );
 
     expect(mocks.QueueEvents).toHaveBeenCalledWith(
       'esl-jobs-test',
       expect.objectContaining({
         connection: { mock: 'redis-connection' },
-      })
+      }),
     );
 
     await enqueue({ jobId: 'job-1' });

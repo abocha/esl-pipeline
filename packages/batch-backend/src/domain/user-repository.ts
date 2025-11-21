@@ -1,14 +1,28 @@
 // packages/batch-backend/src/domain/user-repository.ts
-
 // PostgreSQL-backed repository for UserRecord.
 // - Uses withPgClient() from infrastructure/db.
 // - All queries parameterized.
 // - Follows same patterns as job-repository.ts
+import { randomUUID } from 'node:crypto';
+import { PoolClient } from 'pg';
 
-import { randomUUID } from 'crypto';
-import { withPgClient } from '../infrastructure/db';
-import { UserRecord, UserRole } from './user-model';
-import { logger } from '../infrastructure/logger';
+import { withPgClient } from '../infrastructure/db.js';
+import { logger } from '../infrastructure/logger.js';
+import { UserRecord, UserRole } from './user-model.js';
+
+/**
+ * PostgreSQL row structure for users table
+ */
+interface UserRow {
+  id: string;
+  email: string;
+  password_hash: string;
+  role: string;
+  is_active: boolean;
+  created_at: Date;
+  updated_at: Date;
+  last_login_at: Date | null;
+}
 
 // createUser.declaration()
 export async function createUser(params: {
@@ -20,16 +34,16 @@ export async function createUser(params: {
   const id = randomUUID();
   const now = new Date();
   const role = params.role || 'user';
-  const isActive = params.isActive !== undefined ? params.isActive : true;
+  const isActive = params.isActive === undefined ? true : params.isActive;
 
-  const row = await withPgClient(async client => {
+  const row = await withPgClient(async (client: PoolClient) => {
     const result = await client.query(
       `
       INSERT INTO users (id, email, password_hash, role, is_active, created_at, updated_at)
       VALUES ($1, $2, $3, $4, $5, $6, $6)
       RETURNING id, email, password_hash, role, is_active, created_at, updated_at, last_login_at
       `,
-      [id, params.email, params.passwordHash, role, isActive, now]
+      [id, params.email, params.passwordHash, role, isActive, now],
     );
     return result.rows[0];
   });
@@ -41,14 +55,14 @@ export async function createUser(params: {
 
 // getUserById.declaration()
 export async function getUserById(id: string): Promise<UserRecord | null> {
-  const row = await withPgClient(async client => {
+  const row = await withPgClient(async (client: PoolClient) => {
     const result = await client.query(
       `
       SELECT id, email, password_hash, role, is_active, created_at, updated_at, last_login_at
       FROM users
       WHERE id = $1
       `,
-      [id]
+      [id],
     );
     return result.rows[0];
   });
@@ -58,14 +72,14 @@ export async function getUserById(id: string): Promise<UserRecord | null> {
 
 // getUserByEmail.declaration()
 export async function getUserByEmail(email: string): Promise<UserRecord | null> {
-  const row = await withPgClient(async client => {
+  const row = await withPgClient(async (client: PoolClient) => {
     const result = await client.query(
       `
       SELECT id, email, password_hash, role, is_active, created_at, updated_at, last_login_at
       FROM users
       WHERE email = $1
       `,
-      [email.toLowerCase()]
+      [email.toLowerCase()],
     );
     return result.rows[0];
   });
@@ -85,7 +99,7 @@ export async function updateUser(params: {
 
   // Build dynamic SET clause
   const setClauses: string[] = [];
-  const values: any[] = [];
+  const values: (string | boolean)[] = [];
   let paramIndex = 1;
 
   if (updateFields.email) {
@@ -117,7 +131,7 @@ export async function updateUser(params: {
 
   values.push(id);
 
-  const row = await withPgClient(async client => {
+  const row = await withPgClient(async (client: PoolClient) => {
     const result = await client.query(
       `
       UPDATE users
@@ -125,7 +139,7 @@ export async function updateUser(params: {
       WHERE id = $${paramIndex}
       RETURNING id, email, password_hash, role, is_active, created_at, updated_at, last_login_at
       `,
-      values
+      values,
     );
     return result.rows[0];
   });
@@ -141,14 +155,14 @@ export async function updateUser(params: {
 
 // updateUserLastLogin.declaration()
 export async function updateUserLastLogin(userId: string): Promise<void> {
-  await withPgClient(async client => {
+  await withPgClient(async (client: PoolClient) => {
     await client.query(
       `
       UPDATE users
       SET last_login_at = NOW(), updated_at = NOW()
       WHERE id = $1
       `,
-      [userId]
+      [userId],
     );
   });
 
@@ -157,14 +171,14 @@ export async function updateUserLastLogin(userId: string): Promise<void> {
 
 // deleteUser.declaration()
 export async function deleteUser(userId: string): Promise<boolean> {
-  const result = await withPgClient(async client => {
+  const result = await withPgClient(async (client: PoolClient) => {
     const queryResult = await client.query(
       `
       DELETE FROM users
       WHERE id = $1
       RETURNING id
       `,
-      [userId]
+      [userId],
     );
     return queryResult;
   });
@@ -182,7 +196,7 @@ export async function deleteUser(userId: string): Promise<boolean> {
 
 // activateUser.declaration()
 export async function activateUser(userId: string): Promise<UserRecord | null> {
-  const row = await withPgClient(async client => {
+  const row = await withPgClient(async (client: PoolClient) => {
     const result = await client.query(
       `
       UPDATE users
@@ -190,7 +204,7 @@ export async function activateUser(userId: string): Promise<UserRecord | null> {
       WHERE id = $1
       RETURNING id, email, password_hash, role, is_active, created_at, updated_at, last_login_at
       `,
-      [userId]
+      [userId],
     );
     return result.rows[0];
   });
@@ -206,7 +220,7 @@ export async function activateUser(userId: string): Promise<UserRecord | null> {
 
 // deactivateUser.declaration()
 export async function deactivateUser(userId: string): Promise<UserRecord | null> {
-  const row = await withPgClient(async client => {
+  const row = await withPgClient(async (client: PoolClient) => {
     const result = await client.query(
       `
       UPDATE users
@@ -214,7 +228,7 @@ export async function deactivateUser(userId: string): Promise<UserRecord | null>
       WHERE id = $1
       RETURNING id, email, password_hash, role, is_active, created_at, updated_at, last_login_at
       `,
-      [userId]
+      [userId],
     );
     return result.rows[0];
   });
@@ -229,8 +243,8 @@ export async function deactivateUser(userId: string): Promise<UserRecord | null>
 }
 
 // getAllUsers.declaration()
-export async function getAllUsers(limit: number = 100, offset: number = 0): Promise<UserRecord[]> {
-  const rows = await withPgClient(async client => {
+export async function getAllUsers(limit = 100, offset = 0): Promise<UserRecord[]> {
+  const rows = await withPgClient(async (client: PoolClient) => {
     const result = await client.query(
       `
       SELECT id, email, password_hash, role, is_active, created_at, updated_at, last_login_at
@@ -238,30 +252,30 @@ export async function getAllUsers(limit: number = 100, offset: number = 0): Prom
       ORDER BY created_at DESC
       LIMIT $1 OFFSET $2
       `,
-      [limit, offset]
+      [limit, offset],
     );
     return result.rows;
   });
 
-  return rows.map(mapRowToUser);
+  return rows.map((row) => mapRowToUser(row));
 }
 
 // countUsers.declaration()
 export async function countUsers(): Promise<number> {
-  const result = await withPgClient(async client => {
+  const result = await withPgClient(async (client: PoolClient) => {
     const queryResult = await client.query('SELECT COUNT(*) as count FROM users');
     return queryResult;
   });
 
-  return parseInt(result.rows[0].count, 10);
+  return Number.parseInt(result.rows[0].count, 10);
 }
 
-function mapRowToUser(row: any): UserRecord {
+function mapRowToUser(row: UserRow): UserRecord {
   return {
     id: row.id,
     email: row.email,
     passwordHash: row.password_hash,
-    role: row.role,
+    role: row.role as UserRole,
     isActive: row.is_active,
     createdAt: row.created_at,
     updatedAt: row.updated_at,

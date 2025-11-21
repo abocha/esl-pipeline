@@ -43,10 +43,10 @@ function usageAndExit() {
 function extractNotionId(input) {
   const m = String(input).match(/([0-9a-f]{32}|[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})/i);
   if (!m) return String(input).trim();
-  return m[1].replace(/-/g, "").toLowerCase();
+  return m[1].replaceAll('-', "").toLowerCase();
 }
 function toDashedUuid(hex32) {
-  const h = hex32.replace(/-/g, "").toLowerCase();
+  const h = hex32.replaceAll('-', "").toLowerCase();
   if (!/^[0-9a-f]{32}$/.test(h)) return hex32;
   return `${h.slice(0,8)}-${h.slice(8,12)}-${h.slice(12,16)}-${h.slice(16,20)}-${h.slice(20)}`;
 }
@@ -66,7 +66,7 @@ function normalizeLevels(s) {
   const map = { h1: "heading_1", h2: "heading_2", h3: "heading_3" };
   const out = [];
   for (const k of ["h1","h2","h3"]) if (wanted.has(k)) out.push(map[k]);
-  return out.length ? out : ["heading_1","heading_2","heading_3"];
+  return out.length > 0 ? out : ["heading_1","heading_2","heading_3"];
 }
 function parseColorMap(s) {
   const map = {};
@@ -83,7 +83,7 @@ function parseColorMap(s) {
 }
 
 /* ---------------- Rich-text helpers ---------------- */
-const sleep = (ms) => new Promise(r => setTimeout(r, ms));
+const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
 function toRequestRichText(items = []) {
   return items.map(it => {
@@ -105,7 +105,7 @@ function applyTextColorToRichText(rtItems, colorToken) {
   // colorToken may be "yellow" or "yellow_background"
   return rtItems.map(span => ({
     ...span,
-    annotations: { ...(span.annotations || {}), color: colorToken }
+    annotations: { ...span.annotations, color: colorToken }
   }));
 }
 
@@ -186,8 +186,8 @@ async function main() {
     await walk(id);
     console.log(`${dry ? "[DRY-RUN] " : ""}Scanned ${scanned} blocks; ${dry ? "Would update" : "Updated"} ${updated} heading(s).`);
     if (dry) console.log("No changes made. Remove --dry-run to apply.");
-  } catch (e) {
-    console.error("Failed:", e.message);
+  } catch (error) {
+    console.error("Failed:", error.message);
     process.exit(1);
   }
 }

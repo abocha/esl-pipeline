@@ -10,5 +10,12 @@
     "target": "ES2022",
     "strict": true
   },
-  "include": ["src/**/*.ts", "bin/**/*.ts", "tests/**/*.ts"]
+  "include": [
+    "src/**/*.ts",
+    "bin/**/*.ts",
+    "tests/**/*.ts",
+    "examples/**/*.ts",
+    "scripts/**/*.ts",
+    "tsup.config.ts"
+  ]
 }

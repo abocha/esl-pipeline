@@ -1,23 +1,13 @@
 #!/usr/bin/env node
-import { config as loadEnv } from 'dotenv';
-import { existsSync } from 'node:fs';
-import { dirname, resolve } from 'node:path';
-import { fileURLToPath } from 'node:url';
-import { runImport } from '../src/index.js';
 
-const moduleDir = dirname(fileURLToPath(import.meta.url));
-loadEnv();
-const repoEnvPath = resolve(moduleDir, '../../../.env');
-if (existsSync(repoEnvPath)) {
-  loadEnv({ path: repoEnvPath, override: false });
-}
+import { runImport } from '../src/index.js';
 
 function arg(flag: string): string | undefined {
   const i = process.argv.indexOf(flag);
-  return i !== -1 ? process.argv[i + 1] : undefined;
+  return i === -1 ? undefined : process.argv[i + 1];
 }
 
-(async () => {
+void (async () => {
   const md = arg('--md');
   const dbId = arg('--db-id');
   const dbName = arg('--db');
@@ -28,14 +18,14 @@ function arg(flag: string): string | undefined {
 
   if (!md) {
     console.error(
-      'Usage: notion-importer --md <file.md> [--data-source-id <id> | (--db-id <id> | --db "Homework Assignments") [--data-source <name>]] [--student "Name"] [--dry-run]'
+      'Usage: notion-importer --md <file.md> [--data-source-id <id> | (--db-id <id> | --db "Homework Assignments") [--data-source <name>]] [--student "Name"] [--dry-run]',
     );
     process.exit(1);
   }
 
   if (!dataSourceId && !dbId && !dbName) {
     console.error(
-      'Provide --data-source-id or --db-id/--db (optionally with --data-source <name>) to resolve a data source.'
+      'Provide --data-source-id or --db-id/--db (optionally with --data-source <name>) to resolve a data source.',
     );
     process.exit(1);
   }
@@ -51,8 +41,8 @@ function arg(flag: string): string | undefined {
       dryRun,
     });
     console.log(JSON.stringify(res, null, 2));
-  } catch (e) {
-    console.error(e instanceof Error ? e.message : String(e));
+  } catch (error) {
+    console.error(error instanceof Error ? error.message : String(error));
     process.exit(1);
   }
 })();

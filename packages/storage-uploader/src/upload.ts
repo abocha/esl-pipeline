@@ -1,8 +1,9 @@
 // packages/storage-uploader/src/upload.ts
-import { uploadToS3 } from './s3.js';
 import { ConfigurationError } from '@esl-pipeline/contracts';
 
-export type UploadOpts = {
+import { uploadToS3 } from './s3.js';
+
+export interface UploadOpts {
   backend: 's3';
   bucket?: string; // optional; defaults to env S3_BUCKET
   prefix?: string; // e.g. "audio/assignments"
@@ -10,11 +11,11 @@ export type UploadOpts = {
   presign?: number; // seconds (only if your s3 helper supports presign)
   region?: string; // optional; defaults to env AWS_REGION
   presignExpiresIn?: number;
-};
+}
 
 export async function uploadFile(
   localPath: string,
-  opts: UploadOpts
+  opts: UploadOpts,
 ): Promise<{
   url: string;
   key: string;
@@ -27,7 +28,8 @@ export async function uploadFile(
   }
 
   const bucket = opts.bucket ?? process.env.S3_BUCKET;
-  if (!bucket) throw new ConfigurationError('S3 bucket not configured (set S3_BUCKET or pass opts.bucket)');
+  if (!bucket)
+    throw new ConfigurationError('S3 bucket not configured (set S3_BUCKET or pass opts.bucket)');
 
   // Pass only a key prefix; s3.ts builds "<prefix>/<filename>" itself
   const keyPrefix = (opts.prefix ?? process.env.S3_PREFIX ?? '')

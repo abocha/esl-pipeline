@@ -1,38 +1,36 @@
-import { dirname, basename } from 'node:path';
 import { randomUUID } from 'node:crypto';
+import { constants as FS } from 'node:fs';
+import { access, readFile } from 'node:fs/promises';
+import { basename, dirname } from 'node:path';
+
+import { InfrastructureError, ManifestError, ValidationError } from '@esl-pipeline/contracts';
+import { validateMarkdownFile } from '@esl-pipeline/md-validator';
+import { addOrReplaceAudioUnderStudyText } from '@esl-pipeline/notion-add-audio';
 import { applyHeadingPreset } from '@esl-pipeline/notion-colorizer';
+import { runImport } from '@esl-pipeline/notion-importer';
+import { uploadFile } from '@esl-pipeline/storage-uploader';
 import {
+  type BuildStudyTextResult,
+  FfmpegNotFoundError,
+  type VoiceCatalog,
   buildStudyTextMp3,
   hashStudyText,
-  FfmpegNotFoundError,
-  type BuildStudyTextResult,
   loadVoicesCatalog,
-  type VoiceCatalog,
 } from '@esl-pipeline/tts-elevenlabs';
-import { ValidationError, ManifestError, InfrastructureError } from '@esl-pipeline/contracts';
-import { uploadFile } from '@esl-pipeline/storage-uploader';
-import { addOrReplaceAudioUnderStudyText } from '@esl-pipeline/notion-add-audio';
-import { runImport } from '@esl-pipeline/notion-importer';
-import { validateMarkdownFile } from '@esl-pipeline/md-validator';
+
 import {
   type AssignmentManifest,
-  createFilesystemManifestStore,
   CURRENT_MANIFEST_SCHEMA_VERSION,
+  createFilesystemManifestStore,
 } from './manifest.js';
-import {
-  noopLogger,
-  noopMetrics,
-} from './observability.js';
-import { access, readFile } from 'node:fs/promises';
-import { constants as FS } from 'node:fs';
-
+import { noopLogger, noopMetrics } from './observability.js';
 import type {
+  AssignmentProgressCallbacks,
   AssignmentStage,
   AssignmentStageStatus,
-  AssignmentProgressCallbacks,
-  OrchestratorDependencies,
-  NewAssignmentFlags,
   AssignmentStatus,
+  NewAssignmentFlags,
+  OrchestratorDependencies,
   RerunFlags,
 } from './types.js';
 
@@ -50,8 +48,6 @@ export type {
 const fallbackManifestStore = createFilesystemManifestStore();
 const fallbackLogger = noopLogger;
 const fallbackMetrics = noopMetrics;
-
-
 
 export {
   manifestPathFor,
@@ -95,47 +91,51 @@ export {
 } from './metadata/job-options.js';
 
 export function summarizeVoiceSelections(
-  voices?: BuildStudyTextResult['voices']
+  voices?: BuildStudyTextResult['voices'],
 ): string | undefined {
   if (!voices || voices.length === 0) return undefined;
   return voices
-    .map(voice => {
+    .map((voice) => {
       const name = voice.voiceName ?? voice.voiceId;
       const tags: string[] = [];
       if (voice.gender) tags.push(voice.gender);
       switch (voice.source) {
-        case 'profile':
+        case 'profile': {
           tags.push('profile');
           break;
-        case 'voiceMap':
+        }
+        case 'voiceMap': {
           tags.push('map');
           break;
-        case 'auto':
+        }
+        case 'auto': {
           tags.push(typeof voice.score === 'number' ? `auto ${Math.round(voice.score)}` : 'auto');
           break;
-        case 'default':
+        }
+        case 'default': {
           tags.push('default');
           break;
-        case 'fallback':
+        }
+        case 'fallback': {
           tags.push('fallback');
           break;
-        case 'reuse':
+        }
+        case 'reuse': {
           tags.push('reuse');
           break;
+        }
       }
       if (voice.accent && tags.length < 3) tags.push(voice.accent);
-      const tagString = tags.length ? ` (${tags.join(', ')})` : '';
+      const tagString = tags.length > 0 ? ` (${tags.join(', ')})` : '';
       return `${voice.speaker}→${name}${tagString}`;
     })
     .join(', ');
 }
 
-
-
 export async function newAssignment(
   flags: NewAssignmentFlags,
   callbacks: AssignmentProgressCallbacks = {},
-  dependencies: OrchestratorDependencies = {}
+  dependencies: OrchestratorDependencies = {},
 ): Promise<{
   pageId?: string;
   pageUrl?: string;
@@ -155,7 +155,7 @@ export async function newAssignment(
   const emitStage = (
     stage: AssignmentStage,
     status: AssignmentStageStatus,
-    detail?: Record<string, unknown>
+    detail?: Record<string, unknown>,
   ) => {
     callbacks.onStage?.({ stage, status, detail });
     if (status === 'start') {
@@ -174,9 +174,8 @@ export async function newAssignment(
     if (startedAt !== undefined) {
       stageStartTimes.delete(stage);
     }
-    const durationMs = startedAt !== undefined ? Math.max(Date.now() - startedAt, 0) : undefined;
-    const detailWithDuration =
-      durationMs !== undefined ? { ...(detail ?? {}), durationMs } : detail;
+    const durationMs = startedAt === undefined ? undefined : Math.max(Date.now() - startedAt, 0);
+    const detailWithDuration = durationMs === undefined ? detail : { ...detail, durationMs };
 
     if (status === 'success') {
       logger.log({
@@ -231,7 +230,7 @@ export async function newAssignment(
     steps.push('validate');
     const validation = await validateMarkdownFile(flags.md, { strict: true });
     if (!validation.ok) {
-      const msg = ['Validation failed:', ...validation.errors.map(e => `- ${e}`)].join('\n');
+      const msg = ['Validation failed:', ...validation.errors.map((e) => `- ${e}`)].join('\n');
       throw new ValidationError(msg);
     }
     emitStage('validate', 'success');
@@ -241,7 +240,7 @@ export async function newAssignment(
       steps.push('skip:import');
       if (!pageId && !flags.dryRun) {
         throw new ValidationError(
-          'Cannot skip import because no existing pageId was found. Run a full pipeline first.'
+          'Cannot skip import because no existing pageId was found. Run a full pipeline first.',
         );
       }
     } else {
@@ -277,7 +276,7 @@ export async function newAssignment(
       } else {
         if (!pageId) {
           throw new ValidationError(
-            'Cannot apply color preset because no Notion pageId is available. Run import first.'
+            'Cannot apply color preset because no Notion pageId is available. Run import first.',
           );
         }
         emitStage('colorize', 'start');
@@ -285,10 +284,10 @@ export async function newAssignment(
         const color = await applyHeadingPreset(
           pageId,
           flags.preset,
-          flags.presetsPath ?? 'configs/presets.json'
+          flags.presetsPath ?? 'configs/presets.json',
         );
         steps.push(
-          `colorize:${flags.preset}:${color.counts.h2}/${color.counts.h3}/${color.counts.toggles}`
+          `colorize:${flags.preset}:${color.counts.h2}/${color.counts.h3}/${color.counts.toggles}`,
         );
         emitStage('colorize', 'success', {
           preset: flags.preset,
@@ -307,7 +306,7 @@ export async function newAssignment(
         steps.push('skip:tts');
         if (!audio?.path && !flags.dryRun) {
           throw new ManifestError(
-            'Cannot skip TTS because manifest has no audio.path. Run TTS at least once first.'
+            'Cannot skip TTS because manifest has no audio.path. Run TTS at least once first.',
           );
         }
       } else {
@@ -354,13 +353,13 @@ export async function newAssignment(
             if (error.message.includes('voice mapping') && flags.ttsMode === 'dialogue') {
               throw new Error(
                 `Dialogue mode requires voice mappings for all speakers. ` +
-                `Check your voices.yml file. ${error.message}`
+                  `Check your voices.yml file. ${error.message}`,
               );
             }
             if (error.message.includes('text-to-dialogue') && flags.ttsMode === 'dialogue') {
               throw new Error(
                 `Dialogue mode failed: ${error.message}\n` +
-                'Try switching to monologue mode with --tts-mode monologue'
+                  'Try switching to monologue mode with --tts-mode monologue',
               );
             }
           }
@@ -380,7 +379,7 @@ export async function newAssignment(
           await access(audioPath, FS.F_OK).catch(() => {
             throw new InfrastructureError(
               `No audio file produced at ${audioPath}. ` +
-              `Check that :::study-text has lines and voices.yml has 'default' or 'auto: true'.`
+                `Check that :::study-text has lines and voices.yml has 'default' or 'auto: true'.`,
             );
           });
         }
@@ -396,7 +395,7 @@ export async function newAssignment(
         steps.push('skip:upload');
         if (!audio.url && !flags.dryRun) {
           throw new ManifestError(
-            'Cannot skip upload because manifest has no existing audio.url. Upload once before skipping.'
+            'Cannot skip upload because manifest has no existing audio.url. Upload once before skipping.',
           );
         }
       } else {
@@ -505,11 +504,9 @@ export async function newAssignment(
   }
 }
 
-
-
 export async function getAssignmentStatus(
   mdPath: string,
-  dependencies: OrchestratorDependencies = {}
+  dependencies: OrchestratorDependencies = {},
 ): Promise<AssignmentStatus> {
   const manifestStore = dependencies.manifestStore ?? fallbackManifestStore;
   const logger = dependencies.logger ?? fallbackLogger;
@@ -589,11 +586,9 @@ export async function getAssignmentStatus(
   }
 }
 
-
-
 export async function rerunAssignment(
   flags: RerunFlags,
-  dependencies: OrchestratorDependencies = {}
+  dependencies: OrchestratorDependencies = {},
 ): Promise<{
   steps: string[];
   audio?: { path?: string; url?: string; hash?: string; voices?: BuildStudyTextResult['voices'] };
@@ -612,7 +607,7 @@ export async function rerunAssignment(
   const emitStage = (
     stage: AssignmentStage,
     status: AssignmentStageStatus,
-    detail?: Record<string, unknown>
+    detail?: Record<string, unknown>,
   ) => {
     if (status === 'start') {
       stageStartTimes.set(stage, Date.now());
@@ -630,9 +625,8 @@ export async function rerunAssignment(
     if (startedAt !== undefined) {
       stageStartTimes.delete(stage);
     }
-    const durationMs = startedAt !== undefined ? Math.max(Date.now() - startedAt, 0) : undefined;
-    const detailWithDuration =
-      durationMs !== undefined ? { ...(detail ?? {}), durationMs } : detail;
+    const durationMs = startedAt === undefined ? undefined : Math.max(Date.now() - startedAt, 0);
+    const detailWithDuration = durationMs === undefined ? detail : { ...detail, durationMs };
 
     if (status === 'success') {
       logger.log({
@@ -676,7 +670,7 @@ export async function rerunAssignment(
     }
 
     const stepsToRun = new Set(
-      flags.steps && flags.steps.length ? flags.steps : ['upload', 'add-audio']
+      flags.steps && flags.steps.length > 0 ? flags.steps : ['upload', 'add-audio'],
     );
     const executed: string[] = [];
 
@@ -729,13 +723,13 @@ export async function rerunAssignment(
           if (error.message.includes('voice mapping') && flags.ttsMode === 'dialogue') {
             throw new Error(
               `Dialogue mode requires voice mappings for all speakers. ` +
-              `Check your voices.yml file. ${error.message}`
+                `Check your voices.yml file. ${error.message}`,
             );
           }
           if (error.message.includes('text-to-dialogue') && flags.ttsMode === 'dialogue') {
             throw new Error(
               `Dialogue mode failed: ${error.message}\n` +
-              'Try switching to monologue mode with --tts-mode monologue'
+                'Try switching to monologue mode with --tts-mode monologue',
             );
           }
         }
@@ -757,7 +751,7 @@ export async function rerunAssignment(
       emitStage('upload', 'start');
       if (!audioPath) {
         throw new Error(
-          'Cannot upload audio: no audio path found. Re-run TTS or provide a manifest with audio.path.'
+          'Cannot upload audio: no audio path found. Re-run TTS or provide a manifest with audio.path.',
         );
       }
 
@@ -797,7 +791,7 @@ export async function rerunAssignment(
       const targetPageId = manifest.pageId;
       if (!targetPageId) {
         throw new Error(
-          'Cannot add audio: manifest does not have a pageId. Re-run the import step first.'
+          'Cannot add audio: manifest does not have a pageId. Re-run the import step first.',
         );
       }
       if (!audioUrl) {
@@ -885,9 +879,9 @@ async function getVoiceCatalog(): Promise<VoiceCatalog> {
 function findVoiceByToken(token: string, catalog: VoiceCatalog) {
   const normalized = token.trim().toLowerCase();
   return catalog.voices.find(
-    voice =>
+    (voice) =>
       voice.id === token ||
-      (typeof voice.name === 'string' && voice.name.toLowerCase() === normalized)
+      (typeof voice.name === 'string' && voice.name.toLowerCase() === normalized),
   );
 }
 

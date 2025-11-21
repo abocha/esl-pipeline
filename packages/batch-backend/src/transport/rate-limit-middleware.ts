@@ -3,18 +3,18 @@
 // Redis-based rate limiting middleware for file uploads with comprehensive security logging.
 // Implements per-user rate limiting with burst support for optimal UX while maintaining security.
 // Includes comprehensive security event logging for all rate limiting operations.
-
-import { Redis } from 'ioredis';
 import { FastifyReply, FastifyRequest } from 'fastify';
-import { createRedisClient } from '../infrastructure/redis';
-import { loadConfig } from '../config/env';
-import { logger } from '../infrastructure/logger';
+import { Redis } from 'ioredis';
+
+import { loadConfig } from '../config/env.js';
+import { logger } from '../infrastructure/logger.js';
+import { createRedisClient } from '../infrastructure/redis.js';
 import {
-  SecurityLogger,
   SecurityEventType,
-  SecuritySeverity,
   SecurityLogConfig,
-} from '../infrastructure/security-logger';
+  SecurityLogger,
+  SecuritySeverity,
+} from '../infrastructure/security-logger.js';
 
 export interface RateLimitResult {
   allowed: boolean;
@@ -38,7 +38,7 @@ export class RateLimitError extends Error {
     message: string,
     public retryAfter: number,
     public limit: number,
-    public count: number
+    public count: number,
   ) {
     super(message);
     this.name = 'RateLimitError';
@@ -77,14 +77,14 @@ export class RateLimiterService {
    * Log security event with comprehensive context
    */
   private async logSecurityEvent(params: {
-    eventType: string;
+    eventType: SecurityEventType;
     severity: SecuritySeverity;
     identifier: string;
-    details: Record<string, any>;
+    details: Record<string, unknown>;
   }): Promise<void> {
     try {
       await this.securityLogger.logEvent({
-        eventType: params.eventType as any,
+        eventType: params.eventType,
         severity: params.severity,
         outcome: 'success',
         details: {
@@ -202,7 +202,7 @@ export class RateLimiterService {
       const oldestRequest = await this.redis.zrange(mainKey, 0, 0, 'WITHSCORES');
 
       if (oldestRequest && oldestRequest.length >= 2 && oldestRequest[1]) {
-        const oldestTimestamp = parseInt(oldestRequest[1]);
+        const oldestTimestamp = Number.parseInt(oldestRequest[1]);
         const elapsedTime = now - oldestTimestamp;
         const remainingTime = this.config.windowSize - elapsedTime;
 
@@ -297,9 +297,9 @@ export class RateLimiterService {
 
 /**
  * Create rate limiter service from configuration
- * CRITICAL FIX: Enhanced Redis dependency failure handling and NoOp mode error handling
  */
-export function createRateLimiterService(): RateLimiterService {
+export async function createRateLimiterService(): Promise<RateLimiterService> {
+  const REDIS_READY_TIMEOUT_MS = 300;
   const config = loadConfig();
 
   // CRITICAL FIX: If rate limiting is explicitly disabled, return no-op limiter
@@ -326,24 +326,28 @@ export function createRateLimiterService(): RateLimiterService {
       keyPrefix: 'rate_limit:upload',
     };
 
-    // Create service
-    const service = new RateLimiterService(redis, rateLimitConfig);
+    // Fast readiness probe with timeout to avoid hanging server startup
+    const readinessResult = await Promise.race([
+      redis.ping().then(
+        () => 'ready' as const,
+        () => 'error' as const,
+      ),
+      new Promise<'timeout'>((resolve) =>
+        setTimeout(() => resolve('timeout'), REDIS_READY_TIMEOUT_MS),
+      ),
+    ]);
 
-    // Test connection with a simple operation
-    redis
-      .ping()
-      .then(() => {
-        logger.info('Redis connection established successfully for rate limiting');
-        return true;
-      })
-      .catch(error => {
-        logger.error('Redis connection test failed, falling back to no-op rate limiter', {
-          error: error instanceof Error ? error.message : String(error),
-        });
-        throw new Error('Redis connection test failed');
+    if (readinessResult !== 'ready') {
+      logger.warn('Redis not ready for rate limiting, falling back to no-op limiter', {
+        readinessResult,
+        timeoutMs: REDIS_READY_TIMEOUT_MS,
       });
+      return new NoOpRateLimiter();
+    }
 
-    return service;
+    logger.info('Redis connection established successfully for rate limiting');
+
+    return new RateLimiterService(redis, rateLimitConfig);
   } catch (error) {
     // Enhanced error handling for Redis failures
     const errorMessage = error instanceof Error ? error.message : String(error);
@@ -367,7 +371,7 @@ export function createRateLimiterService(): RateLimiterService {
  */
 class NoOpRateLimiter extends RateLimiterService {
   private static readonly MAX_REQUESTS = 1000;
-  private static readonly WINDOW_SIZE = 60000;
+  private static readonly WINDOW_SIZE = 60_000;
   private readonly fallbackActive: boolean = true;
 
   constructor() {
@@ -376,7 +380,7 @@ class NoOpRateLimiter extends RateLimiterService {
       windowSize: NoOpRateLimiter.WINDOW_SIZE,
       maxRequests: NoOpRateLimiter.MAX_REQUESTS,
       burstLimit: 2000,
-      burstWindow: 10000,
+      burstWindow: 10_000,
       keyPrefix: 'noop',
     });
 
@@ -428,8 +432,8 @@ class NoOpRateLimiter extends RateLimiterService {
       },
       burstWindow: {
         count: 0,
-        windowStart: Math.floor(now / 10000) * 10000,
-        windowEnd: Math.floor(now / 10000) * 10000 + 10000,
+        windowStart: Math.floor(now / 10_000) * 10_000,
+        windowEnd: Math.floor(now / 10_000) * 10_000 + 10_000,
       },
     };
   }
@@ -442,7 +446,7 @@ class NoOpRateLimiter extends RateLimiterService {
     });
 
     // Intentionally do nothing - Redis operations are not available
-    return Promise.resolve();
+    return;
   }
 
   /**
@@ -468,7 +472,7 @@ class NoOpRateLimiter extends RateLimiterService {
 export function createUploadRateLimitMiddleware(rateLimiter: RateLimiterService) {
   return async function rateLimitMiddleware(
     request: FastifyRequest,
-    reply: FastifyReply
+    reply: FastifyReply,
   ): Promise<void> {
     // Get user identifier (user ID if authenticated, IP if not)
     const identifier = getRequestIdentifier(request);
@@ -518,7 +522,7 @@ export function createUploadRateLimitMiddleware(rateLimiter: RateLimiterService)
  */
 function getRequestIdentifier(request: FastifyRequest): string {
   // Try to get user ID from authenticated request
-  const user = (request as any).user;
+  const user = (request as { user?: { id: string } }).user;
   if (user?.id) {
     return `user:${user.id}`;
   }

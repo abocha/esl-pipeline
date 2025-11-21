@@ -116,7 +116,7 @@ Manifests live on disk by default. To use Amazon S3 instead:
 - Or provide a manifest store explicitly:
 
 ```ts
-import { createPipeline, S3ManifestStore } from '@esl-pipeline/orchestrator';
+import { S3ManifestStore, createPipeline } from '@esl-pipeline/orchestrator';
 
 const pipeline = createPipeline({
   manifestStore: new S3ManifestStore({
@@ -138,7 +138,7 @@ filesystem. To plug in your own loader (e.g., HTTP API, database) provide any ob
 the `ConfigProvider` interface returned by `@esl-pipeline/orchestrator`.
 
 ```ts
-import { createPipeline, type ConfigProvider } from '@esl-pipeline/orchestrator';
+import { type ConfigProvider, createPipeline } from '@esl-pipeline/orchestrator';
 
 const myConfigProvider: ConfigProvider = {
   async loadPresets() {

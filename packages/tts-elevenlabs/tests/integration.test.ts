@@ -1,12 +1,13 @@
-import { describe, expect, it, vi, afterEach, beforeEach } from 'vitest';
-import { buildStudyTextMp3 } from '../src/index.js';
-import * as ffm from '../src/ffmpeg.js';
-import * as eleven from '../src/eleven.js';
-import * as assign from '../src/assign.js';
-import * as dialogue from '../src/dialogue.js';
 import { mkdtemp, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+
+import * as assign from '../src/assign.js';
+import * as dialogue from '../src/dialogue.js';
+import * as eleven from '../src/eleven.js';
+import * as ffm from '../src/ffmpeg.js';
+import { buildStudyTextMp3 } from '../src/index.js';
 
 const encoder = new TextEncoder();
 
@@ -61,7 +62,7 @@ const catalogMock = {
 
 const setupClientMock = () => {
   const convertMock = vi.fn(async (_voiceId: string, request: any) =>
-    makeMockStream(request?.text ?? 'audio')
+    makeMockStream(request?.text ?? 'audio'),
   );
   vi.spyOn(eleven, 'getElevenClient').mockReturnValue({
     textToSpeech: { convert: convertMock },
@@ -75,13 +76,15 @@ const mockConcat = () =>
   });
 
 const mockDialogue = () =>
-  vi.spyOn(dialogue, 'synthesizeDialogue').mockImplementation(async (_options, _apiKey, _outputDir) => {
-    return {
-      audioPath: 'mock-dialogue.mp3',
-      duration: 5.2,
-      hash: 'a1b2c3d4e5f6789012345678901234567890abcdef1234567890abcdef123456' // 64 chars
-    };
-  });
+  vi
+    .spyOn(dialogue, 'synthesizeDialogue')
+    .mockImplementation(async (_options, _apiKey, _outputDir) => {
+      return {
+        audioPath: 'mock-dialogue.mp3',
+        duration: 5.2,
+        hash: 'a1b2c3d4e5f6789012345678901234567890abcdef1234567890abcdef123456', // 64 chars
+      };
+    });
 
 afterEach(() => {
   vi.restoreAllMocks();
@@ -104,7 +107,7 @@ describe('integration tests', () => {
       const dir = await mkdtemp(join(tmpdir(), 'tts-'));
       const tempMdPath = join(dir, 'ok.md'); // Use name similar to existing fixtures
       const tempVoiceMapPath = join(dir, 'voices.yml');
-      
+
       // Create fixture similar to existing test fixtures
       const fixtureContent = `
 # Lesson 1: Greetings
@@ -114,7 +117,7 @@ Hello! Welcome to our English lesson.
 Today we'll practice greetings and introductions.
 :::
       `;
-      
+
       await writeFile(tempMdPath, fixtureContent.trim());
       await writeFile(
         tempVoiceMapPath,
@@ -122,17 +125,17 @@ Today we'll practice greetings and introductions.
 default: voice_narrator
 Narrator: voice_narrator
 auto: true
-        `.trim()
+        `.trim(),
       );
 
       const convertMock = setupClientMock();
       mockConcat();
-      
+
       const result = await buildStudyTextMp3(tempMdPath, {
         voiceMapPath: tempVoiceMapPath,
         outPath: dir,
       });
-      
+
       expect(result.path).toMatch(/\.mp3$/);
       expect(result.hash).toHaveLength(64);
       expect(result.voices).toHaveLength(1);
@@ -148,7 +151,7 @@ auto: true
       const dir = await mkdtemp(join(tmpdir(), 'tts-'));
       const tempMdPath = join(dir, 'dialogue.md');
       const tempVoiceMapPath = join(dir, 'voices.yml');
-      
+
       // Create dialogue fixture
       const dialogueContent = `
 # Conversation Practice
@@ -161,32 +164,40 @@ Student: My name is Sarah. Nice to meet you!
 Teacher: Nice to meet you too, Sarah!
 :::
       `;
-      
+
       await writeFile(tempMdPath, dialogueContent.trim());
       await writeFile(
         tempVoiceMapPath,
         `
 Teacher: voice_narrator
 Student: voice_student_female
-        `.trim()
+        `.trim(),
       );
 
       const convertMock = setupClientMock();
       mockConcat();
-      
+
       const result = await buildStudyTextMp3(tempMdPath, {
         voiceMapPath: tempVoiceMapPath,
         outPath: dir,
         ttsMode: 'monologue', // Force monologue to test original behavior
       });
-      
+
       expect(result.path).toMatch(/\.mp3$/);
       expect(result.voices).toHaveLength(2);
       expect(result.voices).toEqual(
         expect.arrayContaining([
-          expect.objectContaining({ speaker: 'Teacher', voiceId: 'voice_narrator', source: 'voiceMap' }),
-          expect.objectContaining({ speaker: 'Student', voiceId: 'voice_student_female', source: 'voiceMap' }),
-        ])
+          expect.objectContaining({
+            speaker: 'Teacher',
+            voiceId: 'voice_narrator',
+            source: 'voiceMap',
+          }),
+          expect.objectContaining({
+            speaker: 'Student',
+            voiceId: 'voice_student_female',
+            source: 'voiceMap',
+          }),
+        ]),
       );
       expect(convertMock).toHaveBeenCalledTimes(5); // 5 dialogue lines
     });
@@ -195,7 +206,7 @@ Student: voice_student_female
       const dir = await mkdtemp(join(tmpdir(), 'tts-'));
       const tempMdPath = join(dir, 'lesson.md');
       const tempVoiceMapPath = join(dir, 'voices.yml');
-      
+
       // Create fixture with detailed frontmatter
       const lessonContent = `
 ---
@@ -226,7 +237,7 @@ Instructor: That's a valid point. How do you feel about work-life balance?
 Student: I believe remote work improves it significantly.
 :::
       `;
-      
+
       await writeFile(tempMdPath, lessonContent.trim());
       await writeFile(
         tempVoiceMapPath,
@@ -234,18 +245,18 @@ Student: I believe remote work improves it significantly.
 Instructor: voice_narrator
 Student: voice_student_female
 auto: true
-        `.trim()
+        `.trim(),
       );
 
       const convertMock = setupClientMock();
       mockConcat();
-      
+
       const result = await buildStudyTextMp3(tempMdPath, {
         voiceMapPath: tempVoiceMapPath,
         outPath: dir,
         ttsMode: 'monologue', // Force monologue to test original behavior
       });
-      
+
       expect(result.path).toMatch(/\.mp3$/);
       expect(result.voices).toHaveLength(2);
       expect(result.voices[0]).toMatchObject({
@@ -265,7 +276,7 @@ auto: true
       const dir = await mkdtemp(join(tmpdir(), 'tts-'));
       const tempMdPath = join(dir, 'mixed.md');
       const tempVoiceMapPath = join(dir, 'voices.yml');
-      
+
       // Create fixture that could work in both modes
       const mixedContent = `
 # Lesson: Daily Routines
@@ -281,33 +292,33 @@ Teacher: Excellent! Tell me about your breakfast.
 Student: I usually have toast and coffee.
 :::
       `;
-      
+
       await writeFile(tempMdPath, mixedContent.trim());
       await writeFile(
         tempVoiceMapPath,
         `
 Teacher: voice_narrator
 Student: voice_student_female
-        `.trim()
+        `.trim(),
       );
 
       // Test both modes
       const convertMock = setupClientMock();
       mockConcat();
-      
+
       // Monologue mode
       const monologueResult = await buildStudyTextMp3(tempMdPath, {
         voiceMapPath: tempVoiceMapPath,
         outPath: dir,
         ttsMode: 'monologue',
       });
-      
+
       expect(monologueResult.path).toMatch(/\.mp3$/);
       expect(convertMock).toHaveBeenCalled(); // Should use monologue path
-      
+
       // Clear mocks
       convertMock.mockClear();
-      
+
       // Dialogue mode
       const dialogueMock = mockDialogue();
       const dialogueResult = await buildStudyTextMp3(tempMdPath, {
@@ -315,7 +326,7 @@ Student: voice_student_female
         outPath: dir,
         ttsMode: 'dialogue',
       });
-      
+
       expect(dialogueResult.path).toMatch(/\.mp3$/);
       expect(dialogueMock).toHaveBeenCalled(); // Should use dialogue path
     });
@@ -325,11 +336,11 @@ Student: voice_student_female
     it('should export all necessary functions for orchestrator', async () => {
       // This tests that the exports are available for the orchestrator package
       const indexExports = await import('../src/index.js');
-      
+
       // Verify main function is exported
       expect(typeof indexExports.buildStudyTextMp3).toBe('function');
       expect(typeof indexExports.hashStudyText).toBe('function');
-      
+
       // Verify utility functions are exported
       expect(typeof indexExports.resolveFfmpegPath).toBe('function');
     });
@@ -338,7 +349,7 @@ Student: voice_student_female
       // This tests that types are properly exported for orchestrator usage
       // We can't test type exports at runtime, but we can verify the module loads
       const typesModule = await import('../src/types.js');
-      
+
       // Verify the module loaded successfully
       expect(typesModule).toBeDefined();
       // Types are available for TypeScript compilation, not runtime
@@ -348,7 +359,7 @@ Student: voice_student_female
       const dir = await mkdtemp(join(tmpdir(), 'tts-'));
       const tempMdPath = join(dir, 'orchestrator-test.md');
       const tempVoiceMapPath = join(dir, 'voices.yml');
-      
+
       // Test configuration similar to what orchestrator would provide
       const orchestratorConfig = {
         voiceMapPath: tempVoiceMapPath,
@@ -359,9 +370,9 @@ Student: voice_student_female
         ttsMode: 'auto' as const, // New field - use const assertion for proper typing
         dialogueLanguage: 'en', // New field
         dialogueStability: 0.75, // New field
-        dialogueSeed: 12345, // New field
+        dialogueSeed: 12_345, // New field
       };
-      
+
       const lessonContent = `
 # Orchestrator Test
 
@@ -370,7 +381,7 @@ This is a test for orchestrator integration.
 We need to ensure all configuration options work properly.
 :::
       `;
-      
+
       await writeFile(tempMdPath, lessonContent.trim());
       await writeFile(
         tempVoiceMapPath,
@@ -378,14 +389,14 @@ We need to ensure all configuration options work properly.
 default: voice_narrator
 Narrator: voice_narrator
 auto: true
-        `.trim()
+        `.trim(),
       );
 
       const convertMock = setupClientMock();
       mockConcat();
-      
+
       const result = await buildStudyTextMp3(tempMdPath, orchestratorConfig);
-      
+
       expect(result.path).toBeDefined();
       expect(result.hash).toBeDefined();
       expect(result.voices).toBeDefined();
@@ -396,7 +407,7 @@ auto: true
       const dir = await mkdtemp(join(tmpdir(), 'tts-'));
       const tempMdPath = join(dir, 'manifest-test.md');
       const tempVoiceMapPath = join(dir, 'voices.yml');
-      
+
       const lessonContent = `
 # Manifest Test
 
@@ -404,7 +415,7 @@ auto: true
 This should produce output compatible with orchestrator manifests.
 :::
       `;
-      
+
       await writeFile(tempMdPath, lessonContent.trim());
       await writeFile(
         tempVoiceMapPath,
@@ -412,17 +423,17 @@ This should produce output compatible with orchestrator manifests.
 default: voice_narrator
 Narrator: voice_narrator
 auto: true
-        `.trim()
+        `.trim(),
       );
 
       const _convertMock = setupClientMock();
       mockConcat();
-      
+
       const result = await buildStudyTextMp3(tempMdPath, {
         voiceMapPath: tempVoiceMapPath,
         outPath: dir,
       });
-      
+
       // Verify result structure matches what orchestrator expects
       expect(result).toHaveProperty('path');
       expect(result).toHaveProperty('hash');
@@ -432,7 +443,7 @@ auto: true
       expect(result.voices[0]).toHaveProperty('speaker');
       expect(result.voices[0]).toHaveProperty('voiceId');
       expect(result.voices[0]).toHaveProperty('source');
-      
+
       // File should exist at expected location
       expect(result.path).toContain(dir);
     });
@@ -443,7 +454,7 @@ auto: true
       const dir = await mkdtemp(join(tmpdir(), 'tts-'));
       const tempMdPath = join(dir, 'cli-test.md');
       const tempVoiceMapPath = join(dir, 'voices.yml');
-      
+
       const lessonContent = `
 # CLI Flag Test
 
@@ -451,7 +462,7 @@ auto: true
 This tests CLI-style flag handling.
 :::
       `;
-      
+
       await writeFile(tempMdPath, lessonContent.trim());
       await writeFile(
         tempVoiceMapPath,
@@ -459,12 +470,12 @@ This tests CLI-style flag handling.
 default: voice_narrator
 Narrator: voice_narrator
 auto: true
-        `.trim()
+        `.trim(),
       );
 
       const convertMock = setupClientMock();
       mockConcat();
-      
+
       // Simulate various CLI flag combinations
       const cliScenarios = [
         {
@@ -473,7 +484,7 @@ auto: true
             voiceMapPath: tempVoiceMapPath,
             outPath: dir,
             ttsMode: 'monologue' as const, // Force monologue to ensure consistent behavior
-          }
+          },
         },
         {
           name: 'with preview',
@@ -481,7 +492,7 @@ auto: true
             voiceMapPath: tempVoiceMapPath,
             outPath: dir,
             preview: true,
-          }
+          },
         },
         {
           name: 'with force',
@@ -490,7 +501,7 @@ auto: true
             outPath: dir,
             force: true,
             ttsMode: 'monologue' as const,
-          }
+          },
         },
         {
           name: 'with new TTS mode flags',
@@ -500,7 +511,7 @@ auto: true
             ttsMode: 'monologue' as const,
             dialogueLanguage: 'en',
             dialogueStability: 0.5,
-          }
+          },
         },
         {
           name: 'with all new flags',
@@ -511,18 +522,18 @@ auto: true
             dialogueLanguage: 'en',
             dialogueStability: 0.75,
             dialogueSeed: 123,
-          }
+          },
         },
       ];
 
       for (const scenario of cliScenarios) {
         convertMock.mockClear();
-        
+
         const result = await buildStudyTextMp3(tempMdPath, scenario.options);
-        
+
         expect(result.path).toBeDefined();
         expect(result.hash).toBeDefined();
-        
+
         // Just verify that preview mode doesn't call TTS
         if (scenario.options.preview) {
           expect(convertMock).not.toHaveBeenCalled();
@@ -550,7 +561,7 @@ auto: true
         dialogueStability: 0.5,
         dialogueSeed: 123,
       };
-      
+
       // Verify all expected properties exist
       expect(options.voiceMapPath).toBeDefined();
       expect(options.outPath).toBeDefined();
@@ -559,7 +570,7 @@ auto: true
       expect(options.defaultAccent).toBeDefined();
       expect(options.ffmpegPath).toBeDefined();
       expect(options.outputFormat).toBeDefined();
-      
+
       // Verify new properties don't break existing structure
       expect(options.ttsMode).toBeDefined();
       expect(options.dialogueLanguage).toBeDefined();
@@ -571,7 +582,7 @@ auto: true
       const dir = await mkdtemp(join(tmpdir(), 'tts-'));
       const tempMdPath = join(dir, 'env-test.md');
       const tempVoiceMapPath = join(dir, 'voices.yml');
-      
+
       const lessonContent = `
 # Environment Override Test
 
@@ -579,7 +590,7 @@ auto: true
 This tests environment variable handling.
 :::
       `;
-      
+
       await writeFile(tempMdPath, lessonContent.trim());
       await writeFile(
         tempVoiceMapPath,
@@ -587,29 +598,28 @@ This tests environment variable handling.
 default: voice_narrator
 Narrator: voice_narrator
 auto: true
-        `.trim()
+        `.trim(),
       );
 
       const convertMock = setupClientMock();
       mockConcat();
-      
+
       // Set environment variables like CLI would
       const originalEnv = { ...process.env };
       process.env.ELEVENLABS_TTS_MODE = 'monologue';
       process.env.ELEVENLABS_DIALOGUE_LANGUAGE = 'en';
       process.env.ELEVENLABS_DIALOGUE_STABILITY = '0.8';
-      
+
       try {
         // Call without specifying TTS mode - should use env var
         const result = await buildStudyTextMp3(tempMdPath, {
           voiceMapPath: tempVoiceMapPath,
           outPath: dir,
         });
-        
+
         expect(result.path).toBeDefined();
         expect(result.hash).toBeDefined();
         expect(convertMock).toHaveBeenCalled(); // Should use monologue mode
-        
       } finally {
         // Restore environment
         process.env = originalEnv;
@@ -622,7 +632,7 @@ auto: true
       const dir = await mkdtemp(join(tmpdir(), 'tts-'));
       const tempMdPath = join(dir, 'full-workflow.md');
       const tempVoiceMapPath = join(dir, 'voices.yml');
-      
+
       const fullLesson = `
 ---
 title: "Complete Lesson"
@@ -652,26 +662,26 @@ Customer: I'll have a glass of water, please.
 Waiter: Certainly! Take your time looking at the menu.
 :::
       `;
-      
+
       await writeFile(tempMdPath, fullLesson.trim());
       await writeFile(
         tempVoiceMapPath,
         `
 Waiter: voice_student_male
 Customer: voice_student_female
-        `.trim()
+        `.trim(),
       );
 
       const convertMock = setupClientMock();
       mockConcat();
-      
+
       // Complete workflow
       const result = await buildStudyTextMp3(tempMdPath, {
         voiceMapPath: tempVoiceMapPath,
         outPath: dir,
         ttsMode: 'monologue', // Force monologue for testing
       });
-      
+
       // Verify complete workflow
       expect(result.path).toMatch(/\.mp3$/);
       expect(result.hash).toHaveLength(64);
@@ -689,9 +699,9 @@ Customer: voice_student_female
             voiceId: 'voice_student_female',
             source: 'voiceMap',
           }),
-        ])
+        ]),
       );
-      
+
       // Verify multiple TTS calls for dialogue (monologue mode)
       expect(convertMock).toHaveBeenCalledTimes(7); // 6 dialogue lines + 1 for continuation detection
     });
@@ -700,7 +710,7 @@ Customer: voice_student_female
       const dir = await mkdtemp(join(tmpdir(), 'tts-'));
       const tempMdPath = join(dir, 'mode-comparison.md');
       const tempVoiceMapPath = join(dir, 'voices.yml');
-      
+
       const comparisonLesson = `
 # Mode Comparison Lesson
 
@@ -712,43 +722,43 @@ Student: Which method do you think is more effective?
 Teacher: That depends on the learning objectives and student preferences.
 :::
       `;
-      
+
       await writeFile(tempMdPath, comparisonLesson.trim());
       await writeFile(
         tempVoiceMapPath,
         `
 Teacher: voice_narrator
 Student: voice_student_female
-        `.trim()
+        `.trim(),
       );
 
       // Test both modes produce valid results
       const convertMock = setupClientMock();
       mockConcat();
       const dialogueMock = mockDialogue();
-      
+
       // Monologue mode
       const monologueResult = await buildStudyTextMp3(tempMdPath, {
         voiceMapPath: tempVoiceMapPath,
         outPath: dir,
         ttsMode: 'monologue' as const,
       });
-      
+
       expect(monologueResult.path).toMatch(/\.mp3$/);
       expect(monologueResult.hash).toHaveLength(64);
       expect(convertMock).toHaveBeenCalled(); // Used monologue path
-      
+
       // Dialogue mode
       const dialogueResult = await buildStudyTextMp3(tempMdPath, {
         voiceMapPath: tempVoiceMapPath,
         outPath: dir,
         ttsMode: 'dialogue' as const,
       });
-      
+
       expect(dialogueResult.path).toMatch(/\.mp3$/);
       expect(dialogueResult.hash).toHaveLength(64);
       expect(dialogueMock).toHaveBeenCalled(); // Used dialogue path
-      
+
       // Both should have valid voice assignments
       expect(monologueResult.voices).toHaveLength(2);
       expect(dialogueResult.voices).toHaveLength(2);

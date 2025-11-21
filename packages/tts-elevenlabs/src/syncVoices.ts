@@ -1,14 +1,15 @@
-import { writeFile, mkdir } from 'node:fs/promises';
+import { mkdir, writeFile } from 'node:fs/promises';
 import { dirname, resolve } from 'node:path';
+
 import { getElevenClient } from './eleven.js';
 
-type VoiceRow = {
+interface VoiceRow {
   id: string;
   name: string;
   category?: string | null;
   labels?: Record<string, string | boolean | number>;
   preview_url?: string | null;
-};
+}
 
 export async function syncVoices(outPath = 'configs/elevenlabs.voices.json') {
   const client = getElevenClient();

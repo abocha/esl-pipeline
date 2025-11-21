@@ -1,5 +1,6 @@
-import { describe, expect, it, vi } from 'vitest';
 import type { Client } from '@notionhq/client';
+import { describe, expect, it, vi } from 'vitest';
+
 import { resolveDataSourceId } from '../src/notion.js';
 import type { ResolveDataSourceInput } from '../src/types.js';
 
@@ -45,7 +46,7 @@ describe('resolveDataSourceId', () => {
     } as unknown as Client;
 
     await expect(resolveDataSourceId(client, { dbId: 'db-456' })).rejects.toThrow(
-      /Multiple data sources found under db-456/
+      /Multiple data sources found under db-456/,
     );
   });
 
@@ -72,7 +73,7 @@ describe('resolveDataSourceId', () => {
     const client = {} as unknown as Client;
 
     await expect(resolveDataSourceId(client, {} as ResolveDataSourceInput)).rejects.toThrow(
-      'Provide --data-source-id or --db-id/--db.'
+      'Provide --data-source-id or --db-id/--db.',
     );
   });
 });

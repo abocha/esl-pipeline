@@ -2,19 +2,20 @@ import { createHash } from 'node:crypto';
 import { createWriteStream } from 'node:fs';
 import { stat } from 'node:fs/promises';
 import { resolve } from 'node:path';
+
+import { concatMp3Segments } from './ffmpeg.js';
 import type {
+  DialogueChunk,
   DialogueInput,
   DialogueSynthesisOptions,
   DialogueSynthesisResult,
-  DialogueChunk,
 } from './types.js';
-import { concatMp3Segments } from './ffmpeg.js';
 
 const DEFAULT_DIALOGUE_MODEL_ID = 'eleven_v3';
 const DEFAULT_OUTPUT_FORMAT = process.env.ELEVENLABS_OUTPUT_FORMAT ?? 'mp3_22050_32';
 const MAX_DIALOGUE_INPUTS = 100;
 const MAX_TOTAL_CHARS = 5000;
-const DIALOGUE_TIMEOUT_MS = 60000;
+const DIALOGUE_TIMEOUT_MS = 60_000;
 
 /**
  * Splits large dialogue arrays into manageable chunks
@@ -26,7 +27,7 @@ const DIALOGUE_TIMEOUT_MS = 60000;
 export function chunkDialogueInputs(
   inputs: DialogueInput[],
   maxInputs = MAX_DIALOGUE_INPUTS,
-  maxChars = MAX_TOTAL_CHARS
+  maxChars = MAX_TOTAL_CHARS,
 ): DialogueChunk[] {
   if (inputs.length === 0) {
     return [];
@@ -83,10 +84,10 @@ export function chunkDialogueInputs(
  */
 export function buildDialogueHash(
   inputs: DialogueInput[],
-  options: Partial<DialogueSynthesisOptions>
+  options: Partial<DialogueSynthesisOptions>,
 ): string {
   const hashInput = {
-    inputs: inputs.map(i => ({ text: i.text, voice_id: i.voice_id })),
+    inputs: inputs.map((i) => ({ text: i.text, voice_id: i.voice_id })),
     modelId: options.modelId ?? DEFAULT_DIALOGUE_MODEL_ID,
     languageCode: options.languageCode,
     stability: options.stability,
@@ -107,7 +108,7 @@ export function buildDialogueHash(
 export async function synthesizeDialogueChunk(
   chunk: DialogueInput[],
   options: DialogueSynthesisOptions,
-  apiKey: string
+  apiKey: string,
 ): Promise<Buffer> {
   if (!apiKey) {
     throw new Error('Missing ELEVENLABS_API_KEY');
@@ -161,7 +162,7 @@ export async function synthesizeDialogueChunk(
     if (!response.ok) {
       const errorText = await response.text().catch(() => 'Unknown error');
       throw new Error(
-        `Text-to-Dialogue API failed (${response.status} ${response.statusText}): ${errorText}`
+        `Text-to-Dialogue API failed (${response.status} ${response.statusText}): ${errorText}`,
       );
     }
 
@@ -186,9 +187,7 @@ export async function synthesizeDialogueChunk(
     return Buffer.concat(chunks);
   } catch (error: unknown) {
     if (error instanceof Error && error.name === 'AbortError') {
-      throw new Error(
-        `Text-to-Dialogue API request timed out after ${DIALOGUE_TIMEOUT_MS}ms`
-      );
+      throw new Error(`Text-to-Dialogue API request timed out after ${DIALOGUE_TIMEOUT_MS}ms`);
     }
     throw error;
   } finally {
@@ -207,7 +206,7 @@ export async function synthesizeDialogueChunk(
 export async function synthesizeDialogue(
   options: DialogueSynthesisOptions,
   apiKey: string,
-  outputDir: string
+  outputDir: string,
 ): Promise<DialogueSynthesisResult> {
   if (!options.inputs || options.inputs.length === 0) {
     throw new Error('Dialogue synthesis requires at least one input');
@@ -229,23 +228,18 @@ export async function synthesizeDialogue(
 
   try {
     for (const chunk of chunks) {
-      const chunkHash =
-        chunks.length > 1 ? `${hash}-chunk${chunk.chunkIndex}` : hash;
+      const chunkHash = chunks.length > 1 ? `${hash}-chunk${chunk.chunkIndex}` : hash;
       const chunkFileName = `${chunkHash}.mp3`;
       const chunkFilePath = resolve(outputDir, chunkFileName);
 
       // Synthesize chunk
-      const audioBuffer = await synthesizeDialogueChunk(
-        chunk.inputs,
-        options,
-        apiKey
-      );
+      const audioBuffer = await synthesizeDialogueChunk(chunk.inputs, options, apiKey);
 
       // Write to file
-      await new Promise<void>((resolvePromise, reject) => {
+      await new Promise<void>((resolve, reject) => {
         const writeStream = createWriteStream(chunkFilePath);
         writeStream.on('error', reject);
-        writeStream.on('finish', resolvePromise);
+        writeStream.on('finish', resolve);
         writeStream.write(audioBuffer);
         writeStream.end();
       });
@@ -272,7 +266,7 @@ export async function synthesizeDialogue(
 
       // Clean up temp chunk files
       const { unlink } = await import('node:fs/promises');
-      await Promise.allSettled(tempFiles.map(f => unlink(f)));
+      await Promise.allSettled(tempFiles.map((f) => unlink(f)));
     }
 
     // Calculate approximate duration
@@ -301,7 +295,7 @@ export async function synthesizeDialogue(
   } catch (error) {
     // Clean up any created files on error
     const { unlink } = await import('node:fs/promises');
-    await Promise.allSettled([...chunkFiles, ...tempFiles].map(f => unlink(f)));
+    await Promise.allSettled([...chunkFiles, ...tempFiles].map((f) => unlink(f)));
     throw error;
   }
 }

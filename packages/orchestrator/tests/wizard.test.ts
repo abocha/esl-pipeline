@@ -1,7 +1,8 @@
-import { describe, expect, it, beforeEach, afterEach, vi } from 'vitest';
-import { mkdtemp, writeFile, readFile, rm, mkdir } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+
 import type { ConfigProvider, StudentProfile } from '../src/config.js';
 import { runInteractiveWizard } from '../src/wizard.js';
 
@@ -12,10 +13,10 @@ const promptQueue: PromptResponse[] = [];
 vi.mock('enquirer', () => {
   // Create mock prompt class inside the factory
   class MockPrompt {
-    constructor(private options: any) { }
+    constructor(private options: any) {}
 
     async run() {
-      if (!promptQueue.length) {
+      if (promptQueue.length === 0) {
         throw new Error(`No prompt response queued for question.`);
       }
       const next: any = promptQueue.shift();
@@ -51,7 +52,7 @@ const configProvider: ConfigProvider = {
     return [defaultProfile];
   },
   async resolveVoicesPath() {
-    return undefined;
+    return;
   },
 };
 
@@ -73,7 +74,7 @@ describe('interactive wizard persistence', () => {
 # Sample Lesson
 
 Content
-    `.trim()
+    `.trim(),
     );
   });
 
@@ -86,7 +87,7 @@ Content
       { publicRead: true },
       { setting: 'back' },
       { main: 'start' },
-      { md: mdPath }
+      { md: mdPath },
     );
 
     const firstRun = await runInteractiveWizard(
@@ -95,7 +96,7 @@ Content
         cwd,
         defaultsPath,
         configProvider,
-      }
+      },
     );
 
     expect(firstRun.flags.upload).toBe('s3');
@@ -117,7 +118,7 @@ Content
         cwd,
         defaultsPath,
         configProvider,
-      }
+      },
     );
 
     expect(secondRun.flags.upload).toBe('s3');
@@ -132,7 +133,7 @@ Content
       { withTts: false },
       { setting: 'back' },
       { main: 'start' },
-      { md: mdPath }
+      { md: mdPath },
     );
 
     await runInteractiveWizard(
@@ -141,7 +142,7 @@ Content
         cwd,
         defaultsPath,
         configProvider,
-      }
+      },
     );
 
     const saved = JSON.parse(await readFile(defaultsPath, 'utf8'));
@@ -158,7 +159,7 @@ Content
         cwd,
         defaultsPath,
         configProvider,
-      }
+      },
     );
 
     expect(secondRun.flags.withTts).toBe(false);
@@ -174,9 +175,9 @@ Content
           withTts: true,
         },
         null,
-        2
+        2,
       ),
-      'utf8'
+      'utf8',
     );
 
     // Second run without initial.withTts: saved true should be applied.
@@ -189,7 +190,7 @@ Content
         cwd,
         defaultsPath,
         configProvider,
-      }
+      },
     );
 
     expect(secondRun.flags.withTts).toBe(true);
@@ -207,9 +208,9 @@ Content
           withTts: false,
         },
         null,
-        2
+        2,
       ),
-      'utf8'
+      'utf8',
     );
 
     // Provide an explicit initial override (simulating --with-tts).
@@ -221,7 +222,7 @@ Content
         cwd,
         defaultsPath,
         configProvider,
-      }
+      },
     );
 
     // Explicit CLI choice takes precedence over saved default.

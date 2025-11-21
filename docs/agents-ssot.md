@@ -435,7 +435,7 @@ For all subsections:
   - Environment utilities (`src/env/loaders.ts`):
     - `loadEnvFiles(options)` - Load `.env` files from specified directories
     - `readBool(key, defaultValue)` - Parse boolean environment variables
-    - `readInt(key, defaultValue)` - Parse integer environment variables  
+    - `readInt(key, defaultValue)` - Parse integer environment variables
     - `readString(key, defaultValue)` - Read string environment variables
   - Storage configuration (`src/storage/config.ts`):
     - `StorageConfigurationService` - Resolves S3/MinIO/filesystem storage configurations

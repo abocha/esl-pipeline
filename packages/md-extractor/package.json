@@ -1,20 +1,15 @@
 {
   "name": "@esl-pipeline/md-extractor",
-  "version": "1.4.3",
+  "version": "2.0.0",
   "private": true,
-  "type": "module",
-  "license": "UNLICENSED",
   "description": "Extract study text, answer keys, and sections from ESL markdown.",
   "keywords": [
     "esl",
     "markdown",
     "extract"
   ],
-  "engines": {
-    "node": ">=24.10.0"
-  },
-  "main": "./dist/src/index.js",
-  "types": "./dist/src/index.d.ts",
+  "license": "UNLICENSED",
+  "type": "module",
   "exports": {
     ".": {
       "types": "./dist/src/index.d.ts",
@@ -23,29 +18,34 @@
     },
     "./package.json": "./package.json"
   },
+  "main": "./dist/src/index.js",
+  "types": "./dist/src/index.d.ts",
+  "bin": {
+    "md-extractor": "dist/bin/cli.js"
+  },
   "files": [
     "dist"
   ],
   "scripts": {
-    "build": "tsc -p tsconfig.json",
+    "build": "tsc -p tsconfig.build.json",
     "clean": "node -e \"fs.rmSync('dist', {recursive:true, force:true})\"",
     "dev": "tsx watch bin/cli.ts",
     "test": "vitest run",
     "test:watch": "vitest"
   },
   "dependencies": {
+    "@esl-pipeline/contracts": "workspace:*",
     "gray-matter": "^4.0.3",
     "remark-parse": "^11.0.0",
-    "unified": "^11.0.5",
-    "@esl-pipeline/contracts": "workspace:*"
+    "unified": "^11.0.5"
   },
   "devDependencies": {
     "@types/node": "^24.10.1",
     "tsx": "^4.20.6",
     "typescript": "^5.9.3",
-    "vitest": "^4.0.12"
+    "vitest": "^4.0.13"
   },
-  "bin": {
-    "md-extractor": "dist/bin/cli.js"
+  "engines": {
+    "node": ">=24.10.0"
   }
 }

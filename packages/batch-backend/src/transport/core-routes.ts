@@ -1,18 +1,15 @@
-import type {
-  FastifyInstance,
-  FastifyReply,
-  FastifyRequest,
-  RouteHandlerMethod,
-} from 'fastify';
+import type { FastifyInstance, FastifyReply, FastifyRequest, RouteHandlerMethod } from 'fastify';
 import { z } from 'zod';
+
 import type { JobEventMessage } from '@esl-pipeline/contracts';
-import type { BatchBackendConfig } from '../config/env';
-import { submitJob, type SubmitJobRequest } from '../application/submit-job';
-import { getJobStatus } from '../application/get-job-status';
-import { jobRecordToDto } from '../application/job-dto';
-import { subscribeJobEvents } from '../domain/job-events';
-import { logger } from '../infrastructure/logger';
-import { errorResponse, resolveRoutePath } from './route-helpers';
+
+import { getJobStatus } from '../application/get-job-status.js';
+import { jobRecordToDto } from '../application/job-dto.js';
+import { type SubmitJobRequest, submitJob } from '../application/submit-job.js';
+import type { BatchBackendConfig } from '../config/env.js';
+import { subscribeJobEvents } from '../domain/job-events.js';
+import { logger } from '../infrastructure/logger.js';
+import { errorResponse, resolveRoutePath } from './route-helpers.js';
 
 type AsyncPreHandler = (request: FastifyRequest, reply: FastifyReply) => Promise<void>;
 
@@ -96,8 +93,8 @@ export function registerCoreRoutes(app: FastifyInstance, options: CoreRouteOptio
       });
 
       return reply.send(status);
-    } catch (err: any) {
-      logger.error(err instanceof Error ? err : String(err), {
+    } catch (error: unknown) {
+      logger.error(error instanceof Error ? error : String(error), {
         event: 'http_request',
         route: routePath,
         statusCode: 500,
@@ -118,8 +115,12 @@ export function registerCoreRoutes(app: FastifyInstance, options: CoreRouteOptio
 
   app.get('/jobs/events', jobEventsRouteOptions, (request, reply) => {
     const routePath = resolveRoutePath(request, 'GET /jobs/events');
-    const jobIdParam = (request.query as any)?.jobId as string | undefined;
-    const rawIds = jobIdParam?.split(',').map(id => id.trim()).filter(Boolean) ?? [];
+    const jobIdParam = (request.query as { jobId?: unknown })?.jobId as string | undefined;
+    const rawIds =
+      jobIdParam
+        ?.split(',')
+        .map((id) => id.trim())
+        .filter(Boolean) ?? [];
     const wantsAll = jobIdParam === '*' || rawIds.includes('*') || rawIds.includes('all');
     const jobIds = wantsAll ? [] : rawIds;
 
@@ -150,22 +151,28 @@ export function registerCoreRoutes(app: FastifyInstance, options: CoreRouteOptio
       if (closed) return;
       try {
         reply.raw.write(':\n\n');
-      } catch (err) {
+      } catch (error) {
         logger.warn('Failed to write SSE heartbeat', {
           event: 'job_events_sse_heartbeat_failed',
           route: routePath,
-          error: err instanceof Error ? err.message : String(err),
+          error: error instanceof Error ? error.message : String(error),
         });
         cleanup();
       }
-    }, 25000);
+    }, 25_000);
 
     const unsubscribe = subscribeJobEvents(
-      event => {
+      (event: unknown) => {
         try {
-          const dto = jobRecordToDto(event.job);
+          // Type guard: Check if event has expected structure
+          if (!event || typeof event !== 'object' || !('job' in event) || !('type' in event)) {
+            return;
+          }
+          // Cast to JobEvent-like structure (job-events.ts defines the actual type)
+          const typedEvent = event as { job: unknown; type: string };
+          const dto = jobRecordToDto(typedEvent.job as Parameters<typeof jobRecordToDto>[0]);
           const payload: JobEventMessage = {
-            type: event.type,
+            type: typedEvent.type as JobEventMessage['type'],
             jobId: dto.jobId,
             state: dto.state,
             payload: {
@@ -177,17 +184,17 @@ export function registerCoreRoutes(app: FastifyInstance, options: CoreRouteOptio
               notionUrl: dto.notionUrl,
             },
           };
-          reply.raw.write(`event: ${event.type}\n`);
+          reply.raw.write(`event: ${typedEvent.type}\n`);
           reply.raw.write(`data: ${JSON.stringify(payload)}\n\n`);
-        } catch (err: any) {
+        } catch (error: unknown) {
           logger.warn('Failed to publish SSE job event', {
             event: 'job_events_sse_publish_failed',
             route: routePath,
-            error: err instanceof Error ? err.message : String(err),
+            error: error instanceof Error ? error.message : String(error),
           });
         }
       },
-      wantsAll ? { allJobs: true } : { jobIds }
+      wantsAll ? { allJobs: true } : { jobIds },
     );
 
     const cleanup = () => {

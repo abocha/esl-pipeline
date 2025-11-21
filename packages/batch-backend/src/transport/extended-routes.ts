@@ -1,39 +1,40 @@
-import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import multipart from '@fastify/multipart';
-import path from 'node:path';
+import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { randomUUID } from 'node:crypto';
+import path from 'node:path';
 import { Readable } from 'node:stream';
-import { logger } from '../infrastructure/logger';
-import type { BatchBackendConfig } from '../config/env';
-import { getJobOptions } from '../application/get-job-options';
-import { errorResponse, resolveRoutePath } from './route-helpers';
-import { requireRole, getAuthenticatedUser } from './auth-middleware';
-import { createAuthService } from '../infrastructure/auth-service';
+
+import { getJobOptions } from '../application/get-job-options.js';
+import type { BatchBackendConfig } from '../config/env.js';
 import {
-  createUser,
-  getUserByEmail,
-  updateUserLastLogin,
-  getUserById,
-  getAllUsers,
-  countUsers,
-} from '../domain/user-repository';
-import {
-  UserRegistration,
   UserLogin,
+  UserRegistration,
   UserRole,
   isValidRole,
   sanitizeUser,
-} from '../domain/user-model';
+} from '../domain/user-model.js';
 import {
-  FileValidationError,
-  type FileValidationService,
-} from '../infrastructure/file-validation-service';
+  countUsers,
+  createUser,
+  getAllUsers,
+  getUserByEmail,
+  getUserById,
+  updateUserLastLogin,
+} from '../domain/user-repository.js';
+import { createAuthService } from '../infrastructure/auth-service.js';
 import {
   FileSanitizationError,
   type FileSanitizationService,
-} from '../infrastructure/file-sanitization-service';
-import { FileStorageService } from '../infrastructure/file-storage-service';
-import { StorageConfigurationService } from '../infrastructure/storage-config';
+} from '../infrastructure/file-sanitization-service.js';
+import { FileStorageService } from '../infrastructure/file-storage-service.js';
+import {
+  FileValidationError,
+  type FileValidationService,
+} from '../infrastructure/file-validation-service.js';
+import { logger } from '../infrastructure/logger.js';
+import { StorageConfigurationService } from '../infrastructure/storage-config.js';
+import { getAuthenticatedUser, requireRole } from './auth-middleware.js';
+import { errorResponse, resolveRoutePath } from './route-helpers.js';
 
 type AsyncPreHandler = (request: FastifyRequest, reply: FastifyReply) => Promise<void>;
 
@@ -76,8 +77,8 @@ export function registerExtendedRoutes(app: FastifyInstance, options: ExtendedRo
         });
 
         return reply.send(options);
-      } catch (err: any) {
-        logger.error(err instanceof Error ? err : String(err), {
+      } catch (error: unknown) {
+        logger.error(error instanceof Error ? error : String(error), {
           event: 'http_request',
           route: routePath,
           statusCode: 500,
@@ -86,7 +87,7 @@ export function registerExtendedRoutes(app: FastifyInstance, options: ExtendedRo
 
         return errorResponse(reply, 'internal_error');
       }
-    }
+    },
   );
 
   void app.register(multipart, {
@@ -113,7 +114,11 @@ export function registerExtendedRoutes(app: FastifyInstance, options: ExtendedRo
           });
         }
 
-        const file = await (request as any).file();
+        const file = await (
+          request as FastifyRequest & {
+            file: () => Promise<{ filename?: string; file: Readable } | undefined>;
+          }
+        ).file();
         if (!file) {
           return reply.code(400).send({
             error: 'validation_failed',
@@ -134,8 +139,8 @@ export function registerExtendedRoutes(app: FastifyInstance, options: ExtendedRo
                 event: 'file_validation_failed',
                 userId: authenticatedUser.id,
                 filename,
-                errors: validationResult.errors.map(e => e.code),
-                warnings: validationResult.warnings.map(w => w.code),
+                errors: validationResult.errors.map((e: { code: string }) => e.code),
+                warnings: validationResult.warnings.map((w: { code: string }) => w.code),
               });
 
               return reply.code(400).send({
@@ -165,27 +170,32 @@ export function registerExtendedRoutes(app: FastifyInstance, options: ExtendedRo
                 userId: authenticatedUser.id,
                 originalFilename: filename,
                 sanitizedFilename: sanitizedFilename,
-                warnings: sanitizationResult.warnings.map(w => ({
-                  code: w.code,
-                  severity: w.severity,
-                })),
+                warnings: sanitizationResult.warnings.map(
+                  (w: { code: string; severity: string }) => ({
+                    code: w.code,
+                    severity: w.severity,
+                  }),
+                ),
               });
             }
           }
 
           const id = randomUUID();
-          const storageKey = `${authenticatedUser.id}/${id}_${sanitizedFilename.replace(/[^\w.-]/g, '_')}`;
+          const storageKey = `${authenticatedUser.id}/${id}_${sanitizedFilename.replaceAll(/[^\w.-]/g, '_')}`;
 
           const uploadResult = await fileStorageService.uploadFile(
             storageKey,
             sanitizedBuffer,
             validationResult?.mimeType || 'application/octet-stream',
-            sanitizedBuffer.length
+            sanitizedBuffer.length,
           );
 
           const mdReference =
             fileStorageService.getProvider() === 'filesystem'
-              ? buildFilesystemMdReference(storageConfig.getFilesystemConfig().uploadDir, storageKey)
+              ? buildFilesystemMdReference(
+                  storageConfig.getFilesystemConfig().uploadDir,
+                  storageKey,
+                )
               : storageKey;
 
           logger.info('Secure upload completed', {
@@ -216,7 +226,7 @@ export function registerExtendedRoutes(app: FastifyInstance, options: ExtendedRo
               ...(sanitizationResult?.warnings || []),
             ],
           });
-        } catch (securityError) {
+        } catch (securityError: unknown) {
           if (
             securityError instanceof FileValidationError ||
             securityError instanceof FileSanitizationError
@@ -237,8 +247,8 @@ export function registerExtendedRoutes(app: FastifyInstance, options: ExtendedRo
           }
           throw securityError;
         }
-      } catch (err: any) {
-        logger.error(err instanceof Error ? err : String(err), {
+      } catch (error: unknown) {
+        logger.error(error instanceof Error ? error : String(error), {
           event: 'upload_failed',
           userId: authenticatedUser?.id,
           error: 'internal_error',
@@ -248,7 +258,7 @@ export function registerExtendedRoutes(app: FastifyInstance, options: ExtendedRo
           error: 'internal_error',
         });
       }
-    }
+    },
   );
 
   app.post('/auth/register', async (request, reply) => {
@@ -323,8 +333,8 @@ export function registerExtendedRoutes(app: FastifyInstance, options: ExtendedRo
         message: 'User registered successfully',
         user: sanitizedUser,
       });
-    } catch (err: any) {
-      logger.error(err instanceof Error ? err : String(err), {
+    } catch (error: unknown) {
+      logger.error(error instanceof Error ? error : String(error), {
         event: 'http_request',
         route: 'POST /auth/register',
         statusCode: 500,
@@ -387,8 +397,8 @@ export function registerExtendedRoutes(app: FastifyInstance, options: ExtendedRo
         },
         ...tokens,
       });
-    } catch (err: any) {
-      logger.error(err instanceof Error ? err : String(err), {
+    } catch (error: unknown) {
+      logger.error(error instanceof Error ? error : String(error), {
         event: 'http_request',
         route: 'POST /auth/login',
         statusCode: 500,
@@ -447,8 +457,8 @@ export function registerExtendedRoutes(app: FastifyInstance, options: ExtendedRo
         message: 'Token refresh successful',
         ...tokens,
       });
-    } catch (err: any) {
-      logger.error(err instanceof Error ? err : String(err), {
+    } catch (error: unknown) {
+      logger.error(error instanceof Error ? error : String(error), {
         event: 'http_request',
         route: 'POST /auth/refresh',
         statusCode: 500,
@@ -469,7 +479,7 @@ export function registerExtendedRoutes(app: FastifyInstance, options: ExtendedRo
     async (request, reply) => {
       try {
         const users = await getAllUsers();
-        const sanitizedUsers = users.map(user => sanitizeUser(user));
+        const sanitizedUsers = users.map((user) => sanitizeUser(user));
 
         logger.info('Admin listed all users', {
           userId: getAuthenticatedUser(request)?.id,
@@ -480,8 +490,8 @@ export function registerExtendedRoutes(app: FastifyInstance, options: ExtendedRo
           users: sanitizedUsers,
           total: users.length,
         });
-      } catch (err: any) {
-        logger.error(err instanceof Error ? err : String(err), {
+      } catch (error: unknown) {
+        logger.error(error instanceof Error ? error : String(error), {
           event: 'admin_list_users_failed',
           userId: getAuthenticatedUser(request)?.id,
         });
@@ -490,7 +500,7 @@ export function registerExtendedRoutes(app: FastifyInstance, options: ExtendedRo
           error: 'internal_error',
         });
       }
-    }
+    },
   );
 
   app.get(
@@ -498,7 +508,7 @@ export function registerExtendedRoutes(app: FastifyInstance, options: ExtendedRo
     { preHandler: [authenticate, requireRole(['admin'])] },
     async (request, reply) => {
       try {
-        const jobs: any[] = [];
+        const jobs: unknown[] = [];
 
         logger.info('Admin listed all jobs', {
           userId: getAuthenticatedUser(request)?.id,
@@ -509,8 +519,8 @@ export function registerExtendedRoutes(app: FastifyInstance, options: ExtendedRo
           jobs,
           total: jobs.length,
         });
-      } catch (err: any) {
-        logger.error(err instanceof Error ? err : String(err), {
+      } catch (error: unknown) {
+        logger.error(error instanceof Error ? error : String(error), {
           event: 'admin_list_jobs_failed',
           userId: getAuthenticatedUser(request)?.id,
         });
@@ -519,7 +529,7 @@ export function registerExtendedRoutes(app: FastifyInstance, options: ExtendedRo
           error: 'internal_error',
         });
       }
-    }
+    },
   );
 
   app.delete(
@@ -546,8 +556,8 @@ export function registerExtendedRoutes(app: FastifyInstance, options: ExtendedRo
         return reply.code(200).send({
           message: 'Job deleted successfully',
         });
-      } catch (err: any) {
-        logger.error(err instanceof Error ? err : String(err), {
+      } catch (error: unknown) {
+        logger.error(error instanceof Error ? error : String(error), {
           event: 'admin_delete_job_failed',
           userId: getAuthenticatedUser(request)?.id,
           jobId,
@@ -557,7 +567,7 @@ export function registerExtendedRoutes(app: FastifyInstance, options: ExtendedRo
           error: 'internal_error',
         });
       }
-    }
+    },
   );
 
   app.get(
@@ -576,8 +586,8 @@ export function registerExtendedRoutes(app: FastifyInstance, options: ExtendedRo
         });
 
         return reply.code(200).send(stats);
-      } catch (err: any) {
-        logger.error(err instanceof Error ? err : String(err), {
+      } catch (error: unknown) {
+        logger.error(error instanceof Error ? error : String(error), {
           event: 'admin_stats_failed',
           userId: getAuthenticatedUser(request)?.id,
         });
@@ -586,7 +596,7 @@ export function registerExtendedRoutes(app: FastifyInstance, options: ExtendedRo
           error: 'internal_error',
         });
       }
-    }
+    },
   );
 
   app.get('/user/profile', { preHandler: authenticate }, async (request, reply) => {
@@ -610,8 +620,8 @@ export function registerExtendedRoutes(app: FastifyInstance, options: ExtendedRo
       return reply.code(200).send({
         user: sanitizeUser(user),
       });
-    } catch (err: any) {
-      logger.error(err instanceof Error ? err : String(err), {
+    } catch (error: unknown) {
+      logger.error(error instanceof Error ? error : String(error), {
         event: 'get_user_profile_failed',
         userId: getAuthenticatedUser(request)?.id,
       });
@@ -649,8 +659,8 @@ export function registerExtendedRoutes(app: FastifyInstance, options: ExtendedRo
       return reply.code(200).send({
         message: 'Profile update not yet implemented',
       });
-    } catch (err: any) {
-      logger.error(err instanceof Error ? err : String(err), {
+    } catch (error: unknown) {
+      logger.error(error instanceof Error ? error : String(error), {
         event: 'update_user_profile_failed',
         userId: authenticatedUser.id,
       });
@@ -671,14 +681,14 @@ export function registerExtendedRoutes(app: FastifyInstance, options: ExtendedRo
     }
 
     try {
-      const jobs: any[] = [];
+      const jobs: unknown[] = [];
 
       return reply.code(200).send({
         jobs,
         total: jobs.length,
       });
-    } catch (err: any) {
-      logger.error(err instanceof Error ? err : String(err), {
+    } catch (error: unknown) {
+      logger.error(error instanceof Error ? error : String(error), {
         event: 'get_user_jobs_failed',
         userId: authenticatedUser.id,
       });
@@ -699,14 +709,14 @@ export function registerExtendedRoutes(app: FastifyInstance, options: ExtendedRo
     }
 
     try {
-      const files: any[] = [];
+      const files: unknown[] = [];
 
       return reply.code(200).send({
         files,
         total: files.length,
       });
-    } catch (err: any) {
-      logger.error(err instanceof Error ? err : String(err), {
+    } catch (error: unknown) {
+      logger.error(error instanceof Error ? error : String(error), {
         event: 'get_user_files_failed',
         userId: authenticatedUser.id,
       });
@@ -746,8 +756,8 @@ export function registerExtendedRoutes(app: FastifyInstance, options: ExtendedRo
       return reply.code(200).send({
         user: sanitizeUser(user),
       });
-    } catch (err: any) {
-      logger.error(err instanceof Error ? err : String(err), {
+    } catch (error: unknown) {
+      logger.error(error instanceof Error ? error : String(error), {
         event: 'http_request',
         route: 'GET /auth/me',
         statusCode: 500,
@@ -761,88 +771,87 @@ export function registerExtendedRoutes(app: FastifyInstance, options: ExtendedRo
   });
 
   // Job actions endpoint
-  app.post(
-    '/jobs/:jobId/actions',
-    { preHandler: authenticate },
-    async (request, reply) => {
-      const { jobId } = request.params as { jobId: string };
-      const body = request.body as any;
+  app.post('/jobs/:jobId/actions', { preHandler: authenticate }, async (request, reply) => {
+    const { jobId } = request.params as { jobId: string };
+    const body = request.body as { type?: string; payload?: unknown };
 
-      try {
-        // Validate action type
-        const validActionTypes = ['rerun_audio', 'cancel', 'edit_metadata'];
-        if (!body || !body.type || !validActionTypes.includes(body.type)) {
-          return reply.code(400).send({
-            error: 'validation_failed',
-            message: 'Invalid or missing action type',
-            code: 'invalid_action_type',
-          });
-        }
-
-        // Dynamically import to avoid circular dependencies
-        const { executeJobAction } = await import('../application/job-actions/action-handler.js');
-
-        // Construct action object
-        const action: any = {
-          type: body.type,
-          requestedAt: new Date(),
-          payload: body.payload || {},
-        };
-
-        // Execute action
-        const result = await executeJobAction(jobId, action);
-
-        if (result.error === 'not_found') {
-          return reply.code(404).send({
-            error: 'not_found',
-            message: result.message,
-          });
-        }
-
-        if (result.error === 'not_implemented') {
-          return reply.code(501).send({
-            error: 'not_implemented',
-            message: result.message,
-            actionType: result.actionType,
-          });
-        }
-
-        logger.info('Job action executed', {
-          event: 'job_action_executed',
-          userId: getAuthenticatedUser(request)?.id,
-          jobId,
-          actionType: result.actionType,
-          success: result.success,
-        });
-
-        return reply.send({
-          success: result.success,
-          message: result.message,
-          jobId: result.jobId,
-          actionType: result.actionType,
-          timestamp: result.timestamp.toISOString(),
-        });
-      } catch (err: any) {
-        logger.error(err instanceof Error ? err : String(err), {
-          event: 'job_action_failed',
-          userId: getAuthenticatedUser(request)?.id,
-          jobId,
-          error: 'internal_error',
-        });
-
-        return reply.code(500).send({
-          error: 'internal_error',
+    try {
+      // Validate action type
+      const validActionTypes = ['rerun_audio', 'cancel', 'edit_metadata'];
+      if (!body || !body.type || !validActionTypes.includes(body.type)) {
+        return reply.code(400).send({
+          error: 'validation_failed',
+          message: 'Invalid or missing action type',
+          code: 'invalid_action_type',
         });
       }
+
+      // Dynamically import to avoid circular dependencies
+      const { executeJobAction } = await import('../application/job-actions/action-handler.js');
+
+      // Construct action object
+      const action: { type: string; requestedAt: Date; payload: unknown } = {
+        type: body.type,
+        requestedAt: new Date(),
+        payload: body.payload || {},
+      };
+
+      // Execute action (cast to expected type per action-handler contract)
+      const result = await executeJobAction(
+        jobId,
+        action as unknown as Parameters<typeof executeJobAction>[1],
+      );
+
+      if (result.error === 'not_found') {
+        return reply.code(404).send({
+          error: 'not_found',
+          message: result.message,
+        });
+      }
+
+      if (result.error === 'not_implemented') {
+        return reply.code(501).send({
+          error: 'not_implemented',
+          message: result.message,
+          actionType: result.actionType,
+        });
+      }
+
+      logger.info('Job action executed', {
+        event: 'job_action_executed',
+        userId: getAuthenticatedUser(request)?.id,
+        jobId,
+        actionType: result.actionType,
+        success: result.success,
+      });
+
+      return reply.send({
+        success: result.success,
+        message: result.message,
+        jobId: result.jobId,
+        actionType: result.actionType,
+        timestamp: result.timestamp.toISOString(),
+      });
+    } catch (error: unknown) {
+      logger.error(error instanceof Error ? error : String(error), {
+        event: 'job_action_failed',
+        userId: getAuthenticatedUser(request)?.id,
+        jobId,
+        error: 'internal_error',
+      });
+
+      return reply.code(500).send({
+        error: 'internal_error',
+      });
     }
-  );
+  });
 }
 
 async function readFileBuffer(fileStream: Readable): Promise<Buffer> {
   const chunks: Buffer[] = [];
 
   return new Promise((resolve, reject) => {
-    fileStream.on('data', chunk => chunks.push(Buffer.from(chunk)));
+    fileStream.on('data', (chunk) => chunks.push(Buffer.from(chunk)));
     fileStream.on('end', () => resolve(Buffer.concat(chunks)));
     fileStream.on('error', reject);
   });

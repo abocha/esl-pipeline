@@ -1,13 +1,14 @@
-import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import { readFileSync, rmSync } from 'node:fs';
 import { mkdtemp, writeFile } from 'node:fs/promises';
-import { rmSync, readFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { createPipeline, type AssignmentProgressEvent } from '../src/index.js';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+
+import { type AssignmentProgressEvent, createPipeline } from '../src/index.js';
 
 const sampleMarkdown = readFileSync(
   new URL('../examples/service/fixtures/lesson.md', import.meta.url),
-  'utf8'
+  'utf8',
 );
 
 const tempDirs: string[] = [];
@@ -43,7 +44,7 @@ vi.mock('@aws-sdk/client-s3', () => {
 
 vi.mock('@esl-pipeline/tts-elevenlabs', async () => {
   const actual = await vi.importActual<typeof import('@esl-pipeline/tts-elevenlabs')>(
-    '@esl-pipeline/tts-elevenlabs'
+    '@esl-pipeline/tts-elevenlabs',
   );
   return {
     ...actual,
@@ -80,7 +81,7 @@ afterEach(() => {
   delete process.env.ESL_PIPELINE_MANIFEST_PREFIX;
   delete process.env.ESL_PIPELINE_MANIFEST_ROOT;
   delete process.env.AWS_REGION;
-  while (tempDirs.length) {
+  while (tempDirs.length > 0) {
     const dir = tempDirs.pop();
     if (!dir) continue;
     rmSync(dir, { recursive: true, force: true });
@@ -113,7 +114,7 @@ describe('pipeline integration', () => {
         dryRun: true,
         skipImport: true,
       },
-      { onStage: event => events.push(event) }
+      { onStage: (event) => events.push(event) },
     );
 
     expect(result.steps).toEqual([
@@ -125,11 +126,15 @@ describe('pipeline integration', () => {
       'manifest',
     ]);
     expect(result.manifestPath?.endsWith('.manifest.json')).toBe(true);
-    expect(events.some(event => event.stage === 'validate' && event.status === 'success')).toBe(
-      true
+    expect(events.some((event) => event.stage === 'validate' && event.status === 'success')).toBe(
+      true,
     );
-    expect(events.some(event => event.stage === 'import' && event.status === 'skipped')).toBe(true);
-    expect(events.some(event => event.stage === 'upload' && event.status === 'success')).toBe(true);
+    expect(events.some((event) => event.stage === 'import' && event.status === 'skipped')).toBe(
+      true,
+    );
+    expect(events.some((event) => event.stage === 'upload' && event.status === 'success')).toBe(
+      true,
+    );
   });
 
   it('runs newAssignment with the remote config provider', async () => {
@@ -178,7 +183,7 @@ describe('pipeline integration', () => {
         dryRun: true,
         skipImport: true,
       },
-      { onStage: event => events.push(event) }
+      { onStage: (event) => events.push(event) },
     );
 
     expect(result.steps).toEqual([
@@ -190,10 +195,10 @@ describe('pipeline integration', () => {
       'manifest',
     ]);
     expect(
-      events.filter(event => event.stage === 'validate' && event.status === 'success')
+      events.filter((event) => event.stage === 'validate' && event.status === 'success'),
     ).toHaveLength(1);
     expect(
-      events.filter(event => event.stage === 'import' && event.status === 'skipped')
+      events.filter((event) => event.stage === 'import' && event.status === 'skipped'),
     ).toHaveLength(1);
   });
 
@@ -201,7 +206,7 @@ describe('pipeline integration', () => {
     const PutCommand = PutObjectCommandClass!;
     const GetCommand = GetObjectCommandClass!;
 
-    mockSend.mockImplementation(async command => {
+    mockSend.mockImplementation(async (command) => {
       if (command instanceof GetCommand) {
         const error = new Error('NotFound');
         (error as any).$metadata = { httpStatusCode: 404 };

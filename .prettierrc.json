@@ -1,7 +1,11 @@
 {
   "singleQuote": true,
-  "trailingComma": "es5",
+  "trailingComma": "all",
   "printWidth": 100,
   "semi": true,
-  "arrowParens": "avoid"
+  "arrowParens": "always",
+  "plugins": ["@trivago/prettier-plugin-sort-imports", "prettier-plugin-packagejson"],
+  "importOrder": ["<THIRD_PARTY_MODULES>", "^@esl-pipeline/(.*)$", "^[./]"],
+  "importOrderSeparation": true,
+  "importOrderSortSpecifiers": true
 }

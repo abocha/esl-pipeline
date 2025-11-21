@@ -1,24 +1,25 @@
 import React, { useEffect, useState } from 'react';
 import toast from 'react-hot-toast';
-import { useAuth, UserRole } from '../../context/AuthContext';
+
+import { UserRole, useAuth } from '../../context/AuthContext';
 
 export type AuthMode = 'login' | 'register';
 type RegisterableRole = Extract<UserRole, 'user' | 'viewer'>;
 
-type AuthDialogProps = {
+interface AuthDialogProps {
   mode: AuthMode | null;
   onClose: () => void;
   onSwitchMode: (mode: AuthMode) => void;
   onRegistered?: (email: string) => void;
   initialEmail?: string;
-};
+}
 
-type RegisterFormState = {
+interface RegisterFormState {
   email: string;
   password: string;
   confirmPassword: string;
   role: RegisterableRole;
-};
+}
 
 const defaultRegisterState: RegisterFormState = {
   email: '',
@@ -44,7 +45,7 @@ export const AuthDialog: React.FC<AuthDialogProps> = ({
     setError(null);
     setSubmitting(false);
     if (mode === 'login') {
-      setLoginForm(prev => ({
+      setLoginForm((prev) => ({
         email: initialEmail ?? prev.email ?? '',
         password: '',
       }));
@@ -58,7 +59,7 @@ export const AuthDialog: React.FC<AuthDialogProps> = ({
 
   useEffect(() => {
     if (mode === 'login' && initialEmail) {
-      setLoginForm(prev => ({ ...prev, email: initialEmail }));
+      setLoginForm((prev) => ({ ...prev, email: initialEmail }));
     }
   }, [initialEmail, mode]);
 
@@ -79,8 +80,8 @@ export const AuthDialog: React.FC<AuthDialogProps> = ({
       await login(loginForm.email, loginForm.password);
       toast.success('Welcome back!');
       close();
-    } catch (err: any) {
-      setError(err.message ?? 'Login failed.');
+    } catch (error_: unknown) {
+      setError(error_ instanceof Error ? error_.message : 'Login failed.');
     } finally {
       setSubmitting(false);
     }
@@ -100,8 +101,8 @@ export const AuthDialog: React.FC<AuthDialogProps> = ({
       await register(registerForm.email, registerForm.password, registerForm.role);
       toast.success('Account created! Please log in.');
       onRegistered?.(registerForm.email);
-    } catch (err: any) {
-      setError(err.message ?? 'Registration failed.');
+    } catch (error_: unknown) {
+      setError(error_ instanceof Error ? error_.message : 'Registration failed.');
     } finally {
       setSubmitting(false);
     }
@@ -133,7 +134,7 @@ export const AuthDialog: React.FC<AuthDialogProps> = ({
           boxShadow: '0 30px 120px rgba(15, 23, 42, 0.35)',
           position: 'relative',
         }}
-        onClick={event => event.stopPropagation()}
+        onClick={(event) => event.stopPropagation()}
       >
         <button
           aria-label="Close authentication dialog"
@@ -176,14 +177,14 @@ export const AuthDialog: React.FC<AuthDialogProps> = ({
   );
 };
 
-type LoginFormProps = {
+interface LoginFormProps {
   form: { email: string; password: string };
   setForm: React.Dispatch<React.SetStateAction<{ email: string; password: string }>>;
   submitting: boolean;
   error: string | null;
   onSubmit: (event: React.FormEvent<HTMLFormElement>) => void;
   onSwitchMode: () => void;
-};
+}
 
 const LoginForm: React.FC<LoginFormProps> = ({
   form,
@@ -232,7 +233,7 @@ const LoginForm: React.FC<LoginFormProps> = ({
           type="email"
           required
           value={form.email}
-          onChange={event => setForm(prev => ({ ...prev, email: event.target.value }))}
+          onChange={(event) => setForm((prev) => ({ ...prev, email: event.target.value }))}
           placeholder="you@school.org"
           style={inputStyle}
         />
@@ -244,7 +245,7 @@ const LoginForm: React.FC<LoginFormProps> = ({
           type="password"
           required
           value={form.password}
-          onChange={event => setForm(prev => ({ ...prev, password: event.target.value }))}
+          onChange={(event) => setForm((prev) => ({ ...prev, password: event.target.value }))}
           placeholder="••••••••"
           style={inputStyle}
         />
@@ -274,14 +275,14 @@ const LoginForm: React.FC<LoginFormProps> = ({
   );
 };
 
-type RegisterFormProps = {
+interface RegisterFormProps {
   form: RegisterFormState;
   setForm: React.Dispatch<React.SetStateAction<RegisterFormState>>;
   submitting: boolean;
   error: string | null;
   onSubmit: (event: React.FormEvent<HTMLFormElement>) => void;
   onSwitchMode: () => void;
-};
+}
 
 const RegisterForm: React.FC<RegisterFormProps> = ({
   form,
@@ -330,7 +331,7 @@ const RegisterForm: React.FC<RegisterFormProps> = ({
           type="email"
           required
           value={form.email}
-          onChange={event => setForm(prev => ({ ...prev, email: event.target.value }))}
+          onChange={(event) => setForm((prev) => ({ ...prev, email: event.target.value }))}
           placeholder="you@school.org"
           style={inputStyle}
         />
@@ -343,7 +344,7 @@ const RegisterForm: React.FC<RegisterFormProps> = ({
           required
           minLength={8}
           value={form.password}
-          onChange={event => setForm(prev => ({ ...prev, password: event.target.value }))}
+          onChange={(event) => setForm((prev) => ({ ...prev, password: event.target.value }))}
           placeholder="Minimum 8 characters"
           style={inputStyle}
         />
@@ -355,7 +356,9 @@ const RegisterForm: React.FC<RegisterFormProps> = ({
           type="password"
           required
           value={form.confirmPassword}
-          onChange={event => setForm(prev => ({ ...prev, confirmPassword: event.target.value }))}
+          onChange={(event) =>
+            setForm((prev) => ({ ...prev, confirmPassword: event.target.value }))
+          }
           placeholder="Repeat password"
           style={inputStyle}
         />
@@ -365,8 +368,8 @@ const RegisterForm: React.FC<RegisterFormProps> = ({
         Role
         <select
           value={form.role}
-          onChange={event =>
-            setForm(prev => ({ ...prev, role: event.target.value as RegisterableRole }))
+          onChange={(event) =>
+            setForm((prev) => ({ ...prev, role: event.target.value as RegisterableRole }))
           }
           style={{
             ...inputStyle,

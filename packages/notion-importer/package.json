@@ -1,9 +1,7 @@
 {
   "name": "@esl-pipeline/notion-importer",
-  "version": "1.2.4",
+  "version": "2.0.0",
   "private": true,
-  "type": "module",
-  "license": "UNLICENSED",
   "description": "Import validated ESL assignments into Notion databases.",
   "keywords": [
     "esl",
@@ -11,11 +9,8 @@
     "import",
     "cli"
   ],
-  "engines": {
-    "node": ">=24.10.0"
-  },
-  "main": "./dist/src/index.js",
-  "types": "./dist/src/index.d.ts",
+  "license": "UNLICENSED",
+  "type": "module",
   "exports": {
     ".": {
       "types": "./dist/src/index.d.ts",
@@ -24,12 +19,14 @@
     },
     "./package.json": "./package.json"
   },
-  "files": [
-    "dist"
-  ],
+  "main": "./dist/src/index.js",
+  "types": "./dist/src/index.d.ts",
   "bin": {
     "notion-importer": "dist/bin/cli.js"
   },
+  "files": [
+    "dist"
+  ],
   "scripts": {
     "build": "tsc --build tsconfig.json",
     "clean": "node -e \"fs.rmSync('dist', {recursive:true, force:true})\"",
@@ -47,6 +44,9 @@
     "@types/node": "^24.10.1",
     "tsx": "^4.20.6",
     "typescript": "^5.9.3",
-    "vitest": "^4.0.12"
+    "vitest": "^4.0.13"
+  },
+  "engines": {
+    "node": ">=24.10.0"
   }
 }

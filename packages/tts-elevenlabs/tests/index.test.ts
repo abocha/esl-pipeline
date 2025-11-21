@@ -1,12 +1,13 @@
-import { describe, expect, it, vi, afterEach, beforeEach } from 'vitest';
-import { hashStudyText, buildStudyTextMp3 } from '../src/index.js';
-import * as ffm from '../src/ffmpeg.js';
-import * as eleven from '../src/eleven.js';
-import * as assign from '../src/assign.js';
-import * as speakers from '../src/speakerAssignment.js';
 import { mkdtemp, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+
+import * as assign from '../src/assign.js';
+import * as eleven from '../src/eleven.js';
+import * as ffm from '../src/ffmpeg.js';
+import { buildStudyTextMp3, hashStudyText } from '../src/index.js';
+import * as speakers from '../src/speakerAssignment.js';
 
 const encoder = new TextEncoder();
 
@@ -89,7 +90,7 @@ const catalogMock = {
 
 const setupClientMock = () => {
   const convertMock = vi.fn(async (_voiceId: string, request: any) =>
-    makeMockStream(request?.text ?? 'audio')
+    makeMockStream(request?.text ?? 'audio'),
   );
   vi.spyOn(eleven, 'getElevenClient').mockReturnValue({
     textToSpeech: { convert: convertMock },
@@ -148,13 +149,13 @@ speaker_profiles:
 :::study-text
 This is a monologue line for preview.
 :::
-    `
+    `,
     );
     await writeFixture(
       tempVoiceMapPath,
       `
 default: voice_id_default
-    `
+    `,
     );
 
     const convertMock = setupClientMock();
@@ -202,13 +203,13 @@ speaker_profiles:
 :::study-text
 [Alex]: Hello there!
 :::
-    `
+    `,
     );
     await writeFixture(
       tempVoiceMapPath,
       `
 auto: true
-    `
+    `,
     );
 
     vi.spyOn(eleven, 'getElevenClient').mockReturnValue({
@@ -265,7 +266,7 @@ Alex: Hello, how are you?
 Mara: I'm fine, thank you. And you?
 Alex: Very well, thanks.
 :::
-    `
+    `,
     );
     await writeFixture(
       tempVoiceMapPath,
@@ -273,7 +274,7 @@ Alex: Very well, thanks.
 Alex: voice_id_1
 Mara: voice_id_2
 default: voice_id_default
-    `
+    `,
     );
 
     const convertMock = setupClientMock();
@@ -289,14 +290,14 @@ default: voice_id_default
       expect.any(Array),
       expect.stringContaining('.mp3'),
       true,
-      'ffmpeg'
+      'ffmpeg',
     );
     expect(convertMock).toHaveBeenCalledTimes(3);
     expect(result.voices).toEqual(
       expect.arrayContaining([
         expect.objectContaining({ speaker: 'Alex', voiceId: 'voice_id_1', source: 'voiceMap' }),
         expect.objectContaining({ speaker: 'Mara', voiceId: 'voice_id_2', source: 'voiceMap' }),
-      ])
+      ]),
     );
   });
 
@@ -327,13 +328,13 @@ speaker_profiles:
 This is a monologue line.
 This is another line.
 :::
-    `
+    `,
     );
     await writeFixture(
       tempVoiceMapPath,
       `
 default: voice_id_default
-    `
+    `,
     );
 
     const convertMock = setupClientMock();
@@ -348,10 +349,10 @@ default: voice_id_default
       expect.any(Array),
       expect.stringContaining('.mp3'),
       true,
-      'ffmpeg'
+      'ffmpeg',
     );
     expect(convertMock).toHaveBeenCalledTimes(2);
-    const voiceIds = convertMock.mock.calls.map(call => call[0]);
+    const voiceIds = convertMock.mock.calls.map((call) => call[0]);
     expect(new Set(voiceIds).size).toBe(1);
     expect(result.voices).toEqual([
       expect.objectContaining({ speaker: 'Narrator', source: 'default' }),
@@ -388,14 +389,14 @@ speaker_profiles:
 Alex: Hello, how are you?
 Observer: Just listening.
 :::
-    `
+    `,
     );
     await writeFixture(
       tempVoiceMapPath,
       `
 Alex: voice_id_1
 default: voice_id_default
-    `
+    `,
     );
 
     const convertMock = setupClientMock();
@@ -411,10 +412,10 @@ default: voice_id_default
       expect.any(Array),
       expect.stringContaining('.mp3'),
       true,
-      'ffmpeg'
+      'ffmpeg',
     );
     expect(convertMock).toHaveBeenCalledTimes(2);
-    const voiceIds = convertMock.mock.calls.map(call => call[0]);
+    const voiceIds = convertMock.mock.calls.map((call) => call[0]);
     expect(new Set(voiceIds).size).toBe(2);
     expect(result.voices).toEqual(
       expect.arrayContaining([
@@ -428,7 +429,7 @@ default: voice_id_default
           speaker: 'Mara',
           source: expect.stringMatching(/auto|fallback/),
         }),
-      ])
+      ]),
     );
   });
 
@@ -467,14 +468,14 @@ What would you do if you were in my shoes?
 Talk soon,
 Alex
 :::
-    `
+    `,
     );
     await writeFixture(
       tempVoiceMapPath,
       `
 Alex: voice_id_alex
 default: voice_id_default
-    `
+    `,
     );
 
     const result = await buildStudyTextMp3(tempMdPath, {
@@ -531,13 +532,13 @@ Chloe: Hey, I'm ready to learn.
 Mia: Great, let's get started.
 Ethan: I'm here to explain the steps.
 :::
-    `
+    `,
     );
     await writeFixture(
       tempVoiceMapPath,
       `
 auto: true
-    `
+    `,
     );
 
     const convertMock = setupClientMock();
@@ -548,7 +549,7 @@ auto: true
       ttsMode: 'monologue', // Force monologue mode for this test
     });
     expect(convertMock).toHaveBeenCalledTimes(4);
-    const voiceIds = convertMock.mock.calls.map(call => call[0]);
+    const voiceIds = convertMock.mock.calls.map((call) => call[0]);
     expect(new Set(voiceIds).size).toBe(4);
     expect(result.voices).toEqual(
       expect.arrayContaining([
@@ -568,7 +569,7 @@ auto: true
           voiceId: 'voice_student_male',
           source: 'auto',
         }),
-      ])
+      ]),
     );
   });
 
@@ -593,13 +594,13 @@ speaker_profiles:
 :::study-text
 Alex: I **really** _love_ \`code\`!
 :::
-    `
+    `,
     );
     await writeFixture(
       tempVoiceMapPath,
       `
 default: voice_id_default
-    `
+    `,
     );
 
     const convertMock = setupClientMock();
@@ -610,7 +611,7 @@ default: voice_id_default
     });
     expect(convertMock).toHaveBeenCalledWith(
       expect.any(String),
-      expect.objectContaining({ text: 'I really love code!' })
+      expect.objectContaining({ text: 'I really love code!' }),
     );
   });
 
@@ -635,13 +636,13 @@ input_type: monologue
 :::study-text
 This is a monologue line.
 :::
-    `
+    `,
     );
     await writeFixture(
       tempVoiceMapPath,
       `
 default: voice_id_default
-    `
+    `,
     );
 
     const convertMock = setupClientMock();

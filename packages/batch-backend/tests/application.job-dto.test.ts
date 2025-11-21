@@ -1,6 +1,7 @@
-import { describe, it, expect } from 'vitest';
-import { jobRecordToDto } from '../src/application/job-dto';
-import type { JobRecord } from '../src/domain/job-model';
+import { describe, expect, it } from 'vitest';
+
+import { jobRecordToDto } from '../src/application/job-dto.js';
+import type { JobRecord } from '../src/domain/job-model.js';
 
 describe('application/job-dto', () => {
   it('serializes JobRecord fields with ISO timestamps', () => {

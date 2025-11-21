@@ -1,32 +1,28 @@
 import { existsSync } from 'node:fs';
-import { resolve, join, isAbsolute, dirname } from 'node:path';
+import { dirname, isAbsolute, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import type { AssignmentProgressCallbacks, NewAssignmentFlags, RerunFlags } from './index.js';
-import { manifestPathFor, createFilesystemManifestStore } from './manifest.js';
-import type { ManifestStore } from './manifest.js';
-import { createFilesystemConfigProvider } from './config.js';
+
 import { ConfigurationError } from '@esl-pipeline/contracts';
-import type { ConfigProvider } from './config.js';
-import {
-  noopLogger,
-  noopMetrics,
-  type PipelineLogger,
-  type PipelineMetrics,
-} from './observability.js';
-import { S3ManifestStore, type S3ManifestStoreOptions } from './adapters/manifest/s3.js';
+import { resolveManifestStoreConfig } from '@esl-pipeline/shared-infrastructure';
+
 import {
   RemoteConfigProvider,
   type RemoteConfigProviderOptions,
 } from './adapters/config/remote.js';
+import { S3ManifestStore, type S3ManifestStoreOptions } from './adapters/manifest/s3.js';
+import { createFilesystemConfigProvider } from './config.js';
+import type { ConfigProvider } from './config.js';
+import type { AssignmentProgressCallbacks, NewAssignmentFlags, RerunFlags } from './index.js';
+import { createFilesystemManifestStore, manifestPathFor } from './manifest.js';
+import type { ManifestStore } from './manifest.js';
 import {
-  loadEnvFiles as sharedLoadEnvFiles,
-  type LoadEnvOptions,
-  resolveManifestStoreConfig,
-} from '@esl-pipeline/shared-infrastructure';
+  type PipelineLogger,
+  type PipelineMetrics,
+  noopLogger,
+  noopMetrics,
+} from './observability.js';
 
 // Re-export loadEnvFiles for backward compatibility
-export { type LoadEnvOptions };
-export const loadEnvFiles = sharedLoadEnvFiles;
 
 type OrchestratorModule = typeof import('./index.js');
 
@@ -40,21 +36,21 @@ const orchestratorModuleLoader = (() => {
   };
 })();
 
-export type ResolveConfigPathsOptions = {
+export interface ResolveConfigPathsOptions {
   cwd?: string;
   configDir?: string;
   presetsPath?: string;
   voicesPath?: string;
   studentsDir?: string;
-};
+}
 
-export type ResolvedConfigPaths = {
+export interface ResolvedConfigPaths {
   configRoot: string;
   presetsPath: string;
   voicesPath: string;
   studentsDir: string;
   wizardDefaultsPath: string;
-};
+}
 
 export function resolveConfigPaths(options: ResolveConfigPathsOptions = {}): ResolvedConfigPaths {
   const cwd = resolve(options.cwd ?? process.cwd());
@@ -69,44 +65,44 @@ export function resolveConfigPaths(options: ResolveConfigPathsOptions = {}): Res
     repoConfigs,
   ]
     .filter(Boolean)
-    .map(dir => resolve(String(dir)));
+    .map((dir) => resolve(String(dir)));
 
   const presetsPath =
     options.presetsPath && existsSync(resolvePath(options.presetsPath, cwd))
       ? resolvePath(options.presetsPath, cwd)
-      : findFirstExistingPath(candidateConfigDirs.map(dir => join(dir, 'presets.json')));
+      : findFirstExistingPath(candidateConfigDirs.map((dir) => join(dir, 'presets.json')));
 
   if (!presetsPath) {
     throw new ConfigurationError(
       `Unable to locate presets.json. Checked: ${candidateConfigDirs
-        .map(dir => join(dir, 'presets.json'))
-        .join(', ')}`
+        .map((dir) => join(dir, 'presets.json'))
+        .join(', ')}`,
     );
   }
 
   const voicesPath =
     options.voicesPath && existsSync(resolvePath(options.voicesPath, cwd))
       ? resolvePath(options.voicesPath, cwd)
-      : findFirstExistingPath(candidateConfigDirs.map(dir => join(dir, 'voices.yml')));
+      : findFirstExistingPath(candidateConfigDirs.map((dir) => join(dir, 'voices.yml')));
 
   if (!voicesPath) {
     throw new ConfigurationError(
       `Unable to locate voices.yml. Checked: ${candidateConfigDirs
-        .map(dir => join(dir, 'voices.yml'))
-        .join(', ')}`
+        .map((dir) => join(dir, 'voices.yml'))
+        .join(', ')}`,
     );
   }
 
   const studentsDir =
     options.studentsDir && existsSync(resolvePath(options.studentsDir, cwd))
       ? resolvePath(options.studentsDir, cwd)
-      : findFirstExistingPath(candidateConfigDirs.map(dir => join(dir, 'students')));
+      : findFirstExistingPath(candidateConfigDirs.map((dir) => join(dir, 'students')));
 
   if (!studentsDir) {
     throw new ConfigurationError(
       `Unable to locate students directory. Checked: ${candidateConfigDirs
-        .map(dir => join(dir, 'students'))
-        .join(', ')}`
+        .map((dir) => join(dir, 'students'))
+        .join(', ')}`,
     );
   }
 
@@ -135,7 +131,7 @@ export type CreatePipelineOptions = ResolveConfigPathsOptions & {
 export type PipelineNewAssignmentOptions = NewAssignmentFlags;
 export type PipelineRerunOptions = RerunFlags;
 
-export type OrchestratorPipeline = {
+export interface OrchestratorPipeline {
   configPaths: ResolvedConfigPaths;
   defaults: {
     presetsPath: string;
@@ -148,15 +144,15 @@ export type OrchestratorPipeline = {
   metrics: PipelineMetrics;
   newAssignment(
     flags: PipelineNewAssignmentOptions,
-    callbacks?: AssignmentProgressCallbacks
+    callbacks?: AssignmentProgressCallbacks,
   ): Promise<Awaited<ReturnType<OrchestratorModule['newAssignment']>>>;
   rerunAssignment(
-    flags: PipelineRerunOptions
+    flags: PipelineRerunOptions,
   ): Promise<Awaited<ReturnType<OrchestratorModule['rerunAssignment']>>>;
   getAssignmentStatus(
-    mdPath: string
+    mdPath: string,
   ): Promise<Awaited<ReturnType<OrchestratorModule['getAssignmentStatus']>>>;
-};
+}
 
 export function createPipeline(options: CreatePipelineOptions = {}): OrchestratorPipeline {
   const configPaths = resolveConfigPaths(options);
@@ -244,7 +240,7 @@ function resolveManifestStore(options: CreatePipelineOptions): ManifestStore {
 
 function resolveConfigProvider(
   options: CreatePipelineOptions,
-  configPaths: ResolvedConfigPaths
+  configPaths: ResolvedConfigPaths,
 ): ConfigProvider {
   if (options.configProvider) return options.configProvider;
 
@@ -257,7 +253,7 @@ function resolveConfigProvider(
     const baseUrl = process.env.ESL_PIPELINE_CONFIG_ENDPOINT;
     if (!baseUrl) {
       throw new ConfigurationError(
-        'ESL_PIPELINE_CONFIG_ENDPOINT must be set when ESL_PIPELINE_CONFIG_PROVIDER is remote/http.'
+        'ESL_PIPELINE_CONFIG_ENDPOINT must be set when ESL_PIPELINE_CONFIG_PROVIDER is remote/http.',
       );
     }
     return new RemoteConfigProvider({
@@ -292,3 +288,5 @@ function resolvePath(input: string, base: string): string {
 export function resolveManifestPath(mdPath: string): string {
   return manifestPathFor(mdPath);
 }
+
+export { type LoadEnvOptions, loadEnvFiles } from '@esl-pipeline/shared-infrastructure';

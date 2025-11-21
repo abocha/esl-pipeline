@@ -11,19 +11,20 @@
  * - GET /user/profile, /user/files (authenticated)
  */
 import type {
-  JobStatusDto,
-  JobEventMessage,
   JobEventPayload as ContractJobEventPayload,
   JobEventType as ContractJobEventType,
-  JobState as ContractJobState,
   JobMode as ContractJobMode,
+  JobState as ContractJobState,
+  JobEventMessage,
+  JobStatusDto,
   JobUploadOption,
 } from '@esl-pipeline/contracts';
+
 import apiClient, {
-  handleApiError,
-  isAuthError,
   buildApiProxyPath,
   getApiAuthToken,
+  handleApiError,
+  isAuthError,
 } from './api-client';
 
 export type JobState = ContractJobState;
@@ -114,7 +115,7 @@ export interface JobOptionsResponse {
   presets: string[];
   voiceAccents: string[];
   voices: VoiceOption[];
-  notionDatabases: Array<{ id: string; name: string }>;
+  notionDatabases: { id: string; name: string }[];
   uploadOptions: JobUploadOption[];
   modes: JobMode[];
 }
@@ -157,7 +158,9 @@ export async function register(userData: RegisterRequest): Promise<void> {
     const status = error.response?.status;
     const message = (error.response?.data as any)?.message;
     const isRouteMissing =
-      status === 404 && typeof message === 'string' && message.toLowerCase().includes('route post:/auth/register not found');
+      status === 404 &&
+      typeof message === 'string' &&
+      message.toLowerCase().includes('route post:/auth/register not found');
 
     if (status === 404 && !error.config?.url?.includes('/auth/register')) {
       try {
@@ -166,7 +169,7 @@ export async function register(userData: RegisterRequest): Promise<void> {
       } catch (fallbackError: any) {
         if (fallbackError.response?.status === 404 || isRouteMissing) {
           throw new Error(
-            'Registration endpoint is unavailable. Enable extended API support on the backend or contact an administrator.'
+            'Registration endpoint is unavailable. Enable extended API support on the backend or contact an administrator.',
           );
         }
         throw new Error(handleApiError(fallbackError));
@@ -175,7 +178,7 @@ export async function register(userData: RegisterRequest): Promise<void> {
 
     if (status === 404 || isRouteMissing) {
       throw new Error(
-        'Registration endpoint is unavailable. Enable extended API support on the backend or contact an administrator.'
+        'Registration endpoint is unavailable. Enable extended API support on the backend or contact an administrator.',
       );
     }
 
@@ -185,7 +188,9 @@ export async function register(userData: RegisterRequest): Promise<void> {
 
 export async function refreshToken(refreshTokenValue: string): Promise<AuthResponse> {
   try {
-    const response = await apiClient.post(buildApiProxyPath('/auth/refresh'), { refreshToken: refreshTokenValue });
+    const response = await apiClient.post(buildApiProxyPath('/auth/refresh'), {
+      refreshToken: refreshTokenValue,
+    });
     return response.data;
   } catch (error: any) {
     throw new Error(handleApiError(error));
@@ -267,9 +272,7 @@ export async function uploadMarkdown(file: File): Promise<UploadMarkdownResponse
  */
 export async function getJobStatus(jobId: string): Promise<JobStatus> {
   try {
-    const response = await apiClient.get(
-      buildApiProxyPath(`/jobs/${encodeURIComponent(jobId)}`)
-    );
+    const response = await apiClient.get(buildApiProxyPath(`/jobs/${encodeURIComponent(jobId)}`));
     return response.data;
   } catch (error: any) {
     if (isAuthError(error)) {
@@ -290,22 +293,20 @@ export async function fetchJobOptions(): Promise<JobOptionsResponse> {
 
 export function subscribeToJobEvents(
   onEvent: (event: JobEvent) => void,
-  options: JobEventsOptions = {}
+  options: JobEventsOptions = {},
 ): EventSource {
   const url = buildApiProxyPath('/jobs/events');
   const accessToken = getApiAuthToken();
   const tokenizedUrl =
-    accessToken && accessToken.length > 0
-      ? appendTokenQueryParam(url, accessToken)
-      : url;
+    accessToken && accessToken.length > 0 ? appendTokenQueryParam(url, accessToken) : url;
 
   const eventSource = new EventSource(tokenizedUrl, { withCredentials: true });
 
   if (options.onOpen) {
-    eventSource.onopen = options.onOpen;
+    eventSource.addEventListener('open', options.onOpen);
   }
 
-  eventSource.onmessage = event => {
+  const handleMessage = (event: MessageEvent) => {
     try {
       const parsed = JSON.parse(event.data) as JobEvent;
       onEvent(parsed);
@@ -314,8 +315,10 @@ export function subscribeToJobEvents(
     }
   };
 
+  eventSource.addEventListener('message', handleMessage);
+
   if (options.onError) {
-    eventSource.onerror = options.onError;
+    eventSource.addEventListener('error', options.onError);
   }
 
   if (options.signal) {
@@ -324,7 +327,7 @@ export function subscribeToJobEvents(
       () => {
         eventSource.close();
       },
-      { once: true }
+      { once: true },
     );
   }
 

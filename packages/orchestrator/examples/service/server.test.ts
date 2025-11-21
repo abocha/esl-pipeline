@@ -1,13 +1,14 @@
-import { beforeAll, afterAll, describe, it, expect } from 'vitest';
 import Fastify from 'fastify';
 import { resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+
 import { createPipeline, noopLogger, noopMetrics } from '../../src/index.js';
 
 const fastify = Fastify({ logger: false });
 
 beforeAll(async () => {
-  const fixturesDir = fileURLToPath(new URL('./fixtures', import.meta.url));
+  const fixturesDir = fileURLToPath(new URL('fixtures', import.meta.url));
   const pipeline = createPipeline({
     cwd: fixturesDir,
     logger: noopLogger,

@@ -2,12 +2,12 @@
 //
 // Batch frontend metadata endpoint. Primarily proxies orchestrator config,
 // with the static section below serving as a fallback when orchestration fails.
-
 import { readFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
-import { logger } from '../infrastructure/logger';
-import { getJobOptionsFromOrchestrator } from '../infrastructure/orchestrator-service';
-import { getActionMetadata } from './job-actions/action-handler';
+
+import { logger } from '../infrastructure/logger.js';
+import { getJobOptionsFromOrchestrator } from '../infrastructure/orchestrator-service.js';
+import { getActionMetadata } from './job-actions/action-handler.js';
 
 export type UploadOption = 'auto' | 's3' | 'none';
 export type JobModeOption = 'auto' | 'dialogue' | 'monologue';
@@ -63,7 +63,7 @@ export async function getJobOptions(): Promise<JobOptionsResponse> {
     // Add supported actions to orchestrator response
     const actionMetadata = getActionMetadata();
     const supportedActions: ActionCapability[] = Object.entries(actionMetadata).map(
-      ([type, meta]) => ({ type, ...meta })
+      ([type, meta]) => ({ type, ...(meta as object) }) as ActionCapability,
     );
     return {
       ...result,
@@ -82,20 +82,20 @@ async function loadStaticJobOptions(): Promise<JobOptionsResponse> {
   const voices = await loadVoiceOptions();
   const voiceAccents =
     voices.length > 0
-      ? Array.from(
-        new Set(
-          voices
-            .map(voice =>
-              typeof voice.accent === 'string' ? voice.accent.trim() || undefined : undefined
-            )
-            .filter((accent): accent is string => Boolean(accent))
-        )
-      )
+      ? ([
+          ...new Set(
+            voices
+              .map((voice) =>
+                typeof voice.accent === 'string' ? voice.accent.trim() || undefined : undefined,
+              )
+              .filter(Boolean),
+          ),
+        ] as string[])
       : [...STATIC_OPTIONS.voiceAccents];
 
   const actionMetadata = getActionMetadata();
   const supportedActions: ActionCapability[] = Object.entries(actionMetadata).map(
-    ([type, meta]) => ({ type, ...meta })
+    ([type, meta]) => ({ type, ...(meta as object) }) as ActionCapability,
   );
 
   return {
@@ -114,9 +114,9 @@ function resolveNotionDatabases(): NotionDatabaseOption[] {
   if (rawList) {
     const parsed = rawList
       .split(',')
-      .map(entry => entry.trim())
+      .map((entry) => entry.trim())
       .filter(Boolean)
-      .map(entry => {
+      .map((entry) => {
         const [idPart, ...nameParts] = entry.split(':');
         const id = idPart?.trim();
         if (!id) {
@@ -138,11 +138,13 @@ function resolveNotionDatabases(): NotionDatabaseOption[] {
   const singleDbId = process.env.NOTION_DB_ID?.trim();
   if (singleDbId) {
     const singleName =
-      process.env.NOTION_DB_NAME?.trim() || process.env.NOTION_DB_LABEL?.trim() || 'Primary database';
+      process.env.NOTION_DB_NAME?.trim() ||
+      process.env.NOTION_DB_LABEL?.trim() ||
+      'Primary database';
     return [{ id: singleDbId, name: singleName }];
   }
 
-  return STATIC_OPTIONS.notionDatabases.map(db => ({ ...db }));
+  return STATIC_OPTIONS.notionDatabases.map((db) => ({ ...db }));
 }
 
 const VOICE_CATALOG_RELATIVE_PATH = 'configs/elevenlabs.voices.json';
@@ -152,25 +154,28 @@ async function loadVoiceOptions(): Promise<VoiceOption[]> {
   for (const voiceFile of candidates) {
     try {
       const raw = await readFile(voiceFile, 'utf8');
-      const parsed = JSON.parse(raw) as { voices?: Array<Record<string, any>> };
+      const parsed = JSON.parse(raw) as { voices?: Record<string, unknown>[] };
       if (!parsed?.voices || !Array.isArray(parsed.voices)) {
         continue;
       }
 
       return parsed.voices
-        .map(voice => {
+        .map((voice) => {
           const id = typeof voice.id === 'string' ? voice.id : undefined;
           const name = typeof voice.name === 'string' ? voice.name : undefined;
           if (!id || !name) {
             return null;
           }
-          const labels = voice.labels ?? {};
+          const labels =
+            typeof voice.labels === 'object' && voice.labels !== null
+              ? (voice.labels as Record<string, unknown>)
+              : {};
           const normalizedAccent = normalizeLabel(labels.accent);
           const normalizedGender = normalizeLabel(labels.gender);
           const accentToken =
             normalizedAccent && normalizedGender
               ? `${normalizedAccent}_${normalizedGender}`
-              : normalizedAccent ?? null;
+              : (normalizedAccent ?? null);
           const option: VoiceOption = {
             id,
             name,
@@ -182,8 +187,13 @@ async function loadVoiceOptions(): Promise<VoiceOption[]> {
         })
         .filter((voice): voice is VoiceOption => voice !== null)
         .sort((a, b) => a.name.localeCompare(b.name));
-    } catch (error: any) {
-      if (error?.code === 'ENOENT' || error?.code === 'EISDIR') {
+    } catch (error: unknown) {
+      if (
+        error &&
+        typeof error === 'object' &&
+        'code' in error &&
+        (error.code === 'ENOENT' || error.code === 'EISDIR')
+      ) {
         continue;
       }
       // Swallow other errors so the API can continue serving fallback options.
@@ -195,11 +205,7 @@ async function loadVoiceOptions(): Promise<VoiceOption[]> {
 
 function getVoiceCatalogCandidates(): string[] {
   const cwd = process.cwd();
-  const roots = [
-    cwd,
-    resolve(cwd, '..'),
-    resolve(cwd, '..', '..'),
-  ];
+  const roots = [cwd, resolve(cwd, '..'), resolve(cwd, '..', '..')];
   const overridePath = process.env.ELEVENLABS_VOICES_PATH
     ? resolve(process.env.ELEVENLABS_VOICES_PATH)
     : null;
@@ -209,15 +215,15 @@ function getVoiceCatalogCandidates(): string[] {
   }
   const paths = [
     overridePath,
-    ...roots.map(root => resolve(root, VOICE_CATALOG_RELATIVE_PATH)),
-  ].filter((value): value is string => Boolean(value));
+    ...roots.map((root) => resolve(root, VOICE_CATALOG_RELATIVE_PATH)),
+  ].filter(Boolean);
 
-  return Array.from(new Set(paths));
+  return [...new Set(paths)] as string[];
 }
 
 function normalizeLabel(value: unknown): string | null {
   if (typeof value !== 'string') return null;
   const trimmed = value.trim().toLowerCase();
   if (!trimmed) return null;
-  return trimmed.replace(/\s+/g, '_');
+  return trimmed.replaceAll(/\s+/g, '_');
 }

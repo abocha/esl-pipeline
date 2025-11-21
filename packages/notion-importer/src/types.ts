@@ -1,4 +1,4 @@
-export type ImportOptions = {
+export interface ImportOptions {
   mdPath: string;
   dbId?: string;
   dbName?: string;
@@ -6,22 +6,22 @@ export type ImportOptions = {
   dataSourceName?: string;
   student?: string;
   dryRun?: boolean;
-};
+}
 
-export type FrontmatterShape = {
+export interface FrontmatterShape {
   title?: string;
   student?: string;
   topic?: string | string[];
-};
+}
 
-export type ResolveDataSourceInput = {
+export interface ResolveDataSourceInput {
   dataSourceId?: string;
   dataSourceName?: string;
   dbId?: string;
   dbName?: string;
-};
+}
 
-export type ResolveDataSourceResult = {
+export interface ResolveDataSourceResult {
   dataSourceId: string;
   databaseId: string;
-};
+}

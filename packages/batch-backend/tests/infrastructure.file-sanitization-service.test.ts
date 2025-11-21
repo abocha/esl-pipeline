@@ -2,12 +2,12 @@
 //
 // Comprehensive tests for file sanitization service covering security-focused
 // content sanitization, path traversal prevention, and safety validations.
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import {
   FileSanitizationService,
   SanitizationConfig,
-} from '../src/infrastructure/file-sanitization-service';
+} from '../src/infrastructure/file-sanitization-service.js';
 
 describe('FileSanitizationService', () => {
   let sanitizationService: FileSanitizationService;
@@ -30,7 +30,7 @@ describe('FileSanitizationService', () => {
     it('should sanitize basic filenames', async () => {
       const result = await sanitizationService.sanitizeFile(
         Buffer.from('test content'),
-        'normal-file.md'
+        'normal-file.md',
       );
 
       expect(result.sanitizedFilename).toBe('normal-file.md');
@@ -40,28 +40,28 @@ describe('FileSanitizationService', () => {
     it('should remove path traversal patterns', async () => {
       const result = await sanitizationService.sanitizeFile(
         Buffer.from('test content'),
-        '../../../etc/passwd.md'
+        '../../../etc/passwd.md',
       );
 
       expect(result.sanitizedFilename).toBe('passwd.md');
-      expect(result.warnings.some(w => w.code === 'PATH_TRAVERSAL_DETECTED')).toBe(true);
+      expect(result.warnings.some((w) => w.code === 'PATH_TRAVERSAL_DETECTED')).toBe(true);
     });
 
     it('should remove dangerous characters from filenames', async () => {
       const result = await sanitizationService.sanitizeFile(
         Buffer.from('test content'),
-        'file<>:|?*.md'
+        'file<>:|?*.md',
       );
 
       expect(result.sanitizedFilename).toBe('file.md');
-      expect(result.warnings.some(w => w.code === 'DANGEROUS_CHARS_REMOVED')).toBe(true);
+      expect(result.warnings.some((w) => w.code === 'DANGEROUS_CHARS_REMOVED')).toBe(true);
     });
 
     it('should handle reserved Windows filenames', async () => {
       const result = await sanitizationService.sanitizeFile(Buffer.from('test content'), 'con.md');
 
       expect(result.sanitizedFilename).toBe('con_safe.md');
-      expect(result.warnings.some(w => w.code === 'RESERVED_FILENAME_DETECTED')).toBe(true);
+      expect(result.warnings.some((w) => w.code === 'RESERVED_FILENAME_DETECTED')).toBe(true);
     });
 
     it('should truncate long filenames', async () => {
@@ -70,14 +70,14 @@ describe('FileSanitizationService', () => {
 
       expect(result.sanitizedFilename.length).toBeLessThanOrEqual(255);
       expect(result.sanitizedFilename.endsWith('.md')).toBe(true);
-      expect(result.warnings.some(w => w.code === 'FILENAME_TRUNCATED')).toBe(true);
+      expect(result.warnings.some((w) => w.code === 'FILENAME_TRUNCATED')).toBe(true);
     });
 
     it('should replace empty filenames', async () => {
       const result = await sanitizationService.sanitizeFile(Buffer.from('test content'), '');
 
       expect(result.sanitizedFilename).toMatch(/^file_\d+\.md$/);
-      expect(result.warnings.some(w => w.code === 'EMPTY_FILENAME_REPLACED')).toBe(true);
+      expect(result.warnings.some((w) => w.code === 'EMPTY_FILENAME_REPLACED')).toBe(true);
     });
   });
 
@@ -92,7 +92,7 @@ Normal content`);
       const result = await sanitizationService.sanitizeFile(maliciousContent, 'test.md');
 
       expect(result.sanitizedContent.toString()).not.toContain('<script>');
-      expect(result.warnings.some(w => w.code === 'MALICIOUS_CONTENT_SANITIZED')).toBe(true);
+      expect(result.warnings.some((w) => w.code === 'MALICIOUS_CONTENT_SANITIZED')).toBe(true);
     });
 
     it('should remove iframe tags', async () => {
@@ -103,7 +103,7 @@ Normal content`);
       const result = await sanitizationService.sanitizeFile(maliciousContent, 'test.md');
 
       expect(result.sanitizedContent.toString()).not.toContain('<iframe>');
-      expect(result.warnings.some(w => w.code === 'MALICIOUS_CONTENT_SANITIZED')).toBe(true);
+      expect(result.warnings.some((w) => w.code === 'MALICIOUS_CONTENT_SANITIZED')).toBe(true);
     });
 
     it('should sanitize javascript: links', async () => {
@@ -114,7 +114,7 @@ Normal content`);
       const result = await sanitizationService.sanitizeFile(maliciousContent, 'test.md');
 
       expect(result.sanitizedContent.toString()).not.toContain('javascript:');
-      expect(result.warnings.some(w => w.code === 'MALICIOUS_CONTENT_SANITIZED')).toBe(true);
+      expect(result.warnings.some((w) => w.code === 'MALICIOUS_CONTENT_SANITIZED')).toBe(true);
     });
 
     it('should sanitize data: URLs', async () => {
@@ -125,7 +125,7 @@ Normal content`);
       const result = await sanitizationService.sanitizeFile(maliciousContent, 'test.md');
 
       expect(result.sanitizedContent.toString()).not.toContain('data:');
-      expect(result.warnings.some(w => w.code === 'MALICIOUS_CONTENT_SANITIZED')).toBe(true);
+      expect(result.warnings.some((w) => w.code === 'MALICIOUS_CONTENT_SANITIZED')).toBe(true);
     });
 
     it('should remove BOM', async () => {
@@ -133,7 +133,7 @@ Normal content`);
       const result = await sanitizationService.sanitizeFile(contentWithBOM, 'test.md');
 
       expect(result.sanitizedContent.toString()).toBe('# Title\n\nContent');
-      expect(result.warnings.some(w => w.code === 'BOM_REMOVED')).toBe(true);
+      expect(result.warnings.some((w) => w.code === 'BOM_REMOVED')).toBe(true);
     });
 
     it('should normalize line endings', async () => {
@@ -141,22 +141,22 @@ Normal content`);
       const result = await sanitizationService.sanitizeFile(contentWithMixedLineEndings, 'test.md');
 
       expect(result.sanitizedContent.toString()).toBe('Line 1\nLine 2\nLine 3\n');
-      expect(result.warnings.some(w => w.code === 'LINE_ENDINGS_NORMALIZED')).toBe(true);
+      expect(result.warnings.some((w) => w.code === 'LINE_ENDINGS_NORMALIZED')).toBe(true);
     });
 
     it('should handle invalid UTF-8 characters', async () => {
       const contentWithInvalidUTF8 = Buffer.from([0xff, 0xfe, 0x41, 0x42, 0x43]); // Invalid UTF-8
       const result = await sanitizationService.sanitizeFile(contentWithInvalidUTF8, 'test.md');
 
-      expect(result.warnings.some(w => w.code === 'INVALID_UTF8_REMOVED')).toBe(true);
+      expect(result.warnings.some((w) => w.code === 'INVALID_UTF8_REMOVED')).toBe(true);
     });
 
     it('should remove null bytes', async () => {
-      const contentWithNullBytes = Buffer.from('test\x00content\x00more');
+      const contentWithNullBytes = Buffer.from('test\u0000content\u0000more');
       const result = await sanitizationService.sanitizeFile(contentWithNullBytes, 'test.md');
 
       expect(result.sanitizedContent.toString()).toBe('testcontentmore');
-      expect(result.warnings.some(w => w.code === 'NULL_BYTES_REMOVED')).toBe(true);
+      expect(result.warnings.some((w) => w.code === 'NULL_BYTES_REMOVED')).toBe(true);
     });
   });
 
@@ -165,21 +165,21 @@ Normal content`);
       const unbalanced = Buffer.from('# Title\n\n[unclosed link text');
       const result = await sanitizationService.sanitizeFile(unbalanced, 'test.md');
 
-      expect(result.warnings.some(w => w.code === 'UNBALANCED_BRACKETS')).toBe(true);
+      expect(result.warnings.some((w) => w.code === 'UNBALANCED_BRACKETS')).toBe(true);
     });
 
     it('should warn about excessive special characters', async () => {
       const excessiveSpecial = Buffer.from('# Title\n\n' + '!@#$%^&*()'.repeat(20));
       const result = await sanitizationService.sanitizeFile(excessiveSpecial, 'test.md');
 
-      expect(result.warnings.some(w => w.code === 'EXCESSIVE_SPECIAL_CHARACTERS')).toBe(true);
+      expect(result.warnings.some((w) => w.code === 'EXCESSIVE_SPECIAL_CHARACTERS')).toBe(true);
     });
 
     it('should warn about unusually long lines', async () => {
-      const longLine = Buffer.from('# Title\n\n' + 'A'.repeat(15000));
+      const longLine = Buffer.from('# Title\n\n' + 'A'.repeat(15_000));
       const result = await sanitizationService.sanitizeFile(longLine, 'test.md');
 
-      expect(result.warnings.some(w => w.code === 'UNUSUALLY_LONG_LINES')).toBe(true);
+      expect(result.warnings.some((w) => w.code === 'UNUSUALLY_LONG_LINES')).toBe(true);
     });
   });
 
@@ -191,7 +191,7 @@ Normal content`);
 
       const result = await sanitizationService.sanitizeFile(polyglot, 'test.md');
 
-      expect(result.warnings.some(w => w.code === 'MALICIOUS_CONTENT_SANITIZED')).toBe(true);
+      expect(result.warnings.some((w) => w.code === 'MALICIOUS_CONTENT_SANITIZED')).toBe(true);
     });
 
     it('should handle command injection attempts', async () => {
@@ -215,7 +215,7 @@ rm -rf /; echo "pwned"
       const result = await sanitizationService.sanitizeFile(objectInjection, 'test.md');
 
       expect(result.sanitizedContent.toString()).not.toContain('<object>');
-      expect(result.warnings.some(w => w.code === 'MALICIOUS_CONTENT_SANITIZED')).toBe(true);
+      expect(result.warnings.some((w) => w.code === 'MALICIOUS_CONTENT_SANITIZED')).toBe(true);
     });
   });
 
@@ -239,7 +239,7 @@ rm -rf /; echo "pwned"
       const largeContent = 'A'.repeat(15 * 1024 * 1024); // 15MB
       const result = await sanitizationService.sanitizeFile(Buffer.from(largeContent), 'large.md');
 
-      expect(result.warnings.some(w => w.code === 'CONTENT_SIZE_EXCEEDED')).toBe(true);
+      expect(result.warnings.some((w) => w.code === 'CONTENT_SIZE_EXCEEDED')).toBe(true);
       expect(result.sanitizedContent.length).toBeLessThanOrEqual(10 * 1024 * 1024);
     });
   });
@@ -251,7 +251,7 @@ rm -rf /; echo "pwned"
           new FileSanitizationService({
             ...testConfig,
             maxFilenameLength: 0,
-          })
+          }),
       ).toThrow('maxFilenameLength must be greater than 0');
     });
 
@@ -261,14 +261,14 @@ rm -rf /; echo "pwned"
           new FileSanitizationService({
             ...testConfig,
             allowedSpecialChars: null as any,
-          })
+          }),
       ).toThrow('allowedSpecialChars must be an array');
     });
   });
 
   describe('Performance Tests', () => {
     it('should process large files efficiently', async () => {
-      const largeContent = '# Large File\n\n' + 'Content line\n'.repeat(10000);
+      const largeContent = '# Large File\n\n' + 'Content line\n'.repeat(10_000);
       const buffer = Buffer.from(largeContent);
 
       const start = Date.now();
@@ -283,16 +283,16 @@ rm -rf /; echo "pwned"
       const promises = Array.from({ length: 5 }, (_, i) =>
         sanitizationService.sanitizeFile(
           Buffer.from(`# Test ${i}\n\nContent for test ${i}`),
-          `test-${i}.md`
-        )
+          `test-${i}.md`,
+        ),
       );
 
       const results = await Promise.all(promises);
 
       expect(results).toHaveLength(5);
-      results.forEach(result => {
+      for (const result of results) {
         expect(result.sanitizedFilename).toMatch(/^test-\d+\.md$/);
-      });
+      }
     });
   });
 
@@ -301,17 +301,17 @@ rm -rf /; echo "pwned"
       const result = await sanitizationService.sanitizeFile(Buffer.from('test'), 'safe-file.md');
 
       // Should pass final safety check
-      expect(result.warnings.some(w => w.code === 'FILENAME_SAFETY_CHECK_FAILED')).toBe(false);
+      expect(result.warnings.some((w) => w.code === 'FILENAME_SAFETY_CHECK_FAILED')).toBe(false);
     });
 
     it('should detect content truncation', async () => {
       const veryLargeContent = 'A'.repeat(20 * 1024 * 1024); // 20MB
       const result = await sanitizationService.sanitizeFile(
         Buffer.from(veryLargeContent),
-        'large.md'
+        'large.md',
       );
 
-      expect(result.warnings.some(w => w.code === 'CONTENT_SIZE_EXCEEDED')).toBe(true);
+      expect(result.warnings.some((w) => w.code === 'CONTENT_SIZE_EXCEEDED')).toBe(true);
       expect(result.sanitizedContent.length).toBe(10 * 1024 * 1024); // Should be truncated to 10MB
     });
   });
@@ -328,7 +328,7 @@ More content`;
 
       const result = await sanitizationService.sanitizeFile(
         Buffer.from(originalContent),
-        '../../../malicious<script>.md'
+        '../../../malicious<script>.md',
       );
 
       // Should sanitize both filename and content
@@ -354,7 +354,7 @@ console.log('This is safe code');
 
       const result = await sanitizationService.sanitizeFile(
         Buffer.from(safeContent),
-        'safe-content.md'
+        'safe-content.md',
       );
 
       expect(result.sanitizedContent.toString()).toBe(safeContent);

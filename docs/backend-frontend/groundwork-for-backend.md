@@ -60,7 +60,7 @@ Optional (remote adapters):
 **S3 manifests + remote config:**
 
 ```ts
-import { createPipeline, S3ManifestStore, RemoteConfigProvider } from '@esl-pipeline/orchestrator';
+import { RemoteConfigProvider, S3ManifestStore, createPipeline } from '@esl-pipeline/orchestrator';
 
 const pipeline = createPipeline({
   cwd: process.env.PIPELINE_CWD ?? process.cwd(),
@@ -83,6 +83,7 @@ Start with the example worker (`packages/orchestrator/examples/service`):
 
 ```ts
 import Fastify from 'fastify';
+
 import { createPipeline, noopLogger, noopMetrics } from '@esl-pipeline/orchestrator';
 
 const pipeline = createPipeline({
@@ -106,7 +107,7 @@ app.post('/jobs', async (req, reply) => {
       skipUpload: true,
     },
     undefined,
-    { runId: body.jobId }
+    { runId: body.jobId },
   );
 
   return { jobId: body.jobId ?? body.md, result };
@@ -140,13 +141,16 @@ Example payload contract:
 ### Step 5 – Observability
 
 1. Replace `noopLogger` with a real logger:
+
    ```ts
    import pino from 'pino';
+
    const log = pino();
    const logger = {
-     log: event => log.info({ ...event }, event.message),
+     log: (event) => log.info({ ...event }, event.message),
    };
    ```
+
 2. Replace `noopMetrics` with your metrics sink (statsd, Prometheus client). The pipeline emits `timing` and `increment` calls for each stage.
 3. Propagate `runId` (usually the queue job ID) to tie logs and metrics together.
 

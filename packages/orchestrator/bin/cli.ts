@@ -1,41 +1,42 @@
 #!/usr/bin/env node
+import { Command, CommanderError, InvalidOptionArgumentError } from 'commander';
 import { existsSync } from 'node:fs';
 import { stat } from 'node:fs/promises';
-import { dirname, resolve, relative } from 'node:path';
-import { fileURLToPath } from 'node:url';
-import process from 'node:process';
 import { createRequire } from 'node:module';
+import { dirname, relative, resolve } from 'node:path';
+import process from 'node:process';
+import { fileURLToPath } from 'node:url';
 import ora from 'ora';
-import { Command, CommanderError, InvalidOptionArgumentError } from 'commander';
 import pc from 'picocolors';
+
+import { DEFAULT_STUDENT_NAME, type StudentProfile } from '../src/config.js';
 import {
-  summarizeVoiceSelections,
-  createPipeline,
-  loadEnvFiles,
-  type OrchestratorPipeline,
   type AssignmentProgressEvent,
   type AssignmentStage,
+  type OrchestratorPipeline,
   type PipelineLogger,
+  createPipeline,
+  loadEnvFiles,
+  summarizeVoiceSelections,
 } from '../src/index.js';
 import type { NewAssignmentFlags, RerunFlags } from '../src/index.js';
 import { createLogger } from '../src/logger.js';
 import {
-  runInteractiveWizard,
-  WizardAbortedError,
-  type WizardRunResult,
-  type WizardSelections,
-} from '../src/wizard.js';
-import { DEFAULT_STUDENT_NAME, type StudentProfile } from '../src/config.js';
-import {
+  type DirOptions,
+  type FileOptions,
+  PathPickerCancelledError,
   pickDirectory,
   pickFile,
   resolveDirectoryCandidates,
   resolveFileCandidates,
   resolveSearchRoot,
-  PathPickerCancelledError,
-  type DirOptions,
-  type FileOptions,
 } from '../src/pathPicker.js';
+import {
+  WizardAbortedError,
+  type WizardRunResult,
+  type WizardSelections,
+  runInteractiveWizard,
+} from '../src/wizard.js';
 
 const moduleDir = dirname(fileURLToPath(import.meta.url));
 const repoEnvPath = resolve(moduleDir, '../../../.env');
@@ -82,7 +83,7 @@ const logNotionToken = (): void => {
   logger.info('Loaded NOTION_TOKEN from environment', details);
   if (token.length < 40) {
     logger.warn(
-      'NOTION_TOKEN looks unusually short – double-check your .env or shell exports. Notion tokens normally start with "secret_" and are ~50 chars.'
+      'NOTION_TOKEN looks unusually short – double-check your .env or shell exports. Notion tokens normally start with "secret_" and are ~50 chars.',
     );
   }
 };
@@ -124,7 +125,7 @@ const usage = (): never => {
   process.exit(1);
 };
 
-type RunFlags = {
+interface RunFlags {
   md?: string;
   student?: string;
   preset?: string;
@@ -148,7 +149,7 @@ type RunFlags = {
   skipUpload: boolean;
   redoTts: boolean;
   interactive: boolean;
-};
+}
 
 const parseNumber = (value?: string): number | undefined => {
   if (!value) return undefined;
@@ -188,9 +189,9 @@ type RootChoice = (typeof ROOT_CHOICES)[number];
 const collectCsv = (value: string, previous: string[] = []): string[] => {
   const parsed = value
     .split(',')
-    .map(part => part.trim())
+    .map((part) => part.trim())
     .filter(Boolean);
-  return Array.from(new Set([...previous, ...parsed]));
+  return [...new Set([...previous, ...parsed])];
 };
 
 const parseLimitOption = (value: string): number => {
@@ -217,32 +218,32 @@ async function handleSelect(args: string[]): Promise<void> {
       '--contains <files...>',
       'When selecting directories, require specific file(s) to exist inside',
       collectCsv,
-      []
+      [],
     )
     .option(
       '--ext <extensions...>',
       'Comma-separated list of allowed file extensions (e.g. .md,.mp3)',
       collectCsv,
-      []
+      [],
     )
     .option(
       '--glob <patterns...>',
       'One or more glob patterns to match files (overrides --ext)',
       collectCsv,
-      []
+      [],
     )
     .option(
       '--root <strategy>',
       'Root detection strategy (git|cwd|pkg)',
-      value => {
+      (value) => {
         if (!ROOT_CHOICES.includes(value as RootChoice)) {
           throw new InvalidOptionArgumentError(
-            `Unknown root strategy "${value}". Use one of: ${ROOT_CHOICES.join(', ')}`
+            `Unknown root strategy "${value}". Use one of: ${ROOT_CHOICES.join(', ')}`,
           );
         }
         return value as RootChoice;
       },
-      'git' satisfies RootChoice
+      'git' satisfies RootChoice,
     )
     .option('--absolute', 'Display absolute paths in the picker', false)
     .option('--limit <n>', 'Visible suggestions limit', parseLimitOption)
@@ -285,16 +286,16 @@ async function handleSelect(args: string[]): Promise<void> {
   }
 
   const mode: 'dir' | 'file' = wantsDir ? 'dir' : 'file';
-  const containsList = Array.from(new Set(opts.contains ?? []));
-  const extList = Array.from(new Set(opts.ext ?? []));
-  const globList = Array.from(new Set(opts.glob ?? []));
+  const containsList = [...new Set(opts.contains)];
+  const extList = [...new Set(opts.ext)];
+  const globList = [...new Set(opts.glob)];
 
   if (mode === 'dir') {
-    if (extList.length) exitWithError('--ext can only be used with --file');
-    if (globList.length) exitWithError('--glob can only be used with --file');
+    if (extList.length > 0) exitWithError('--ext can only be used with --file');
+    if (globList.length > 0) exitWithError('--glob can only be used with --file');
   } else {
     if (opts.suffix) exitWithError('--suffix can only be used with --dir');
-    if (containsList.length) exitWithError('--contains can only be used with --dir');
+    if (containsList.length > 0) exitWithError('--contains can only be used with --dir');
   }
 
   const sharedOptions = {
@@ -307,7 +308,7 @@ async function handleSelect(args: string[]): Promise<void> {
   if (mode === 'dir') {
     const dirOptions: DirOptions = {
       ...sharedOptions,
-      mode: containsList.length ? 'contains' : opts.suffix ? 'suffix' : 'any',
+      mode: containsList.length > 0 ? 'contains' : opts.suffix ? 'suffix' : 'any',
       suffix: opts.suffix,
       contains: containsList,
       includeDotDirs: Boolean(opts.includeDot),
@@ -319,8 +320,8 @@ async function handleSelect(args: string[]): Promise<void> {
 
   const fileOptions: FileOptions = {
     ...sharedOptions,
-    glob: globList.length ? globList : undefined,
-    extensions: globList.length ? undefined : extList,
+    glob: globList.length > 0 ? globList : undefined,
+    extensions: globList.length > 0 ? undefined : extList,
     includeDotFiles: Boolean(opts.includeDot),
     message: 'Select a file',
   };
@@ -330,7 +331,7 @@ async function handleSelect(args: string[]): Promise<void> {
 async function runDirectorySelection(
   options: DirOptions,
   providedPath: string | undefined,
-  verbose: boolean
+  verbose: boolean,
 ): Promise<void> {
   const lookupOptions = { ...(options as DirOptions) };
   delete (lookupOptions as Partial<DirOptions>).message;
@@ -347,7 +348,7 @@ async function runDirectorySelection(
     }
 
     const candidates = await resolveDirectoryCandidates(lookupOptions);
-    const match = candidates.find(candidate => candidate.absolute === absolute);
+    const match = candidates.find((candidate) => candidate.absolute === absolute);
     if (!match) {
       exitWithError('Provided directory does not satisfy the current filters.');
       return;
@@ -370,7 +371,7 @@ async function runDirectorySelection(
 async function runFileSelection(
   options: FileOptions,
   providedPath: string | undefined,
-  verbose: boolean
+  verbose: boolean,
 ): Promise<void> {
   const lookupOptions = { ...(options as FileOptions) };
   delete (lookupOptions as Partial<FileOptions>).message;
@@ -387,7 +388,7 @@ async function runFileSelection(
     }
 
     const candidates = await resolveFileCandidates(lookupOptions);
-    const match = candidates.find(candidate => candidate.absolute === absolute);
+    const match = candidates.find((candidate) => candidate.absolute === absolute);
     if (!match) {
       exitWithError('Provided file does not satisfy the current filters.');
       return;
@@ -410,7 +411,7 @@ async function runFileSelection(
 async function outputSelection(
   absolutePath: string,
   verbose: boolean,
-  options: { rootStrategy?: RootChoice; cwd?: string }
+  options: { rootStrategy?: RootChoice; cwd?: string },
 ): Promise<void> {
   if (verbose) {
     const root = await resolveSearchRoot({
@@ -449,18 +450,22 @@ const pipelineLogger: PipelineLogger = {
     }
 
     switch (level) {
-      case 'error':
+      case 'error': {
         logger.error(message, payload);
         break;
-      case 'warn':
+      }
+      case 'warn': {
         logger.warn(message, payload);
         break;
-      case 'debug':
+      }
+      case 'debug': {
         logger.info(message, payload);
         break;
-      default:
+      }
+      default: {
         logger.info(message, payload);
         break;
+      }
     }
   },
 };
@@ -476,7 +481,7 @@ const ensurePipeline = (): OrchestratorPipeline => {
 let cachedProfiles: { key: string; profiles: StudentProfile[] } | null = null;
 
 const normalizeProfileName = (value?: string): string | undefined =>
-  value && value.trim().length ? value.trim().toLowerCase() : undefined;
+  value && value.trim().length > 0 ? value.trim().toLowerCase() : undefined;
 
 const getStudentProfiles = async (pipeline: OrchestratorPipeline): Promise<StudentProfile[]> => {
   const cacheKey = pipeline.configPaths.studentsDir;
@@ -488,18 +493,18 @@ const getStudentProfiles = async (pipeline: OrchestratorPipeline): Promise<Stude
 
 const applyProfileDefaults = async (
   pipeline: OrchestratorPipeline,
-  flags: NewAssignmentFlags
+  flags: NewAssignmentFlags,
 ): Promise<StudentProfile | undefined> => {
   const profiles = await getStudentProfiles(pipeline);
-  if (!profiles.length) return undefined;
+  if (profiles.length === 0) return undefined;
 
   const requested = normalizeProfileName(flags.student);
   let profile = requested
-    ? profiles.find(p => normalizeProfileName(p.student) === requested)
+    ? profiles.find((p) => normalizeProfileName(p.student) === requested)
     : undefined;
 
   if (!profile) {
-    profile = profiles.find(p => p.student === DEFAULT_STUDENT_NAME) ?? undefined;
+    profile = profiles.find((p) => p.student === DEFAULT_STUDENT_NAME) ?? undefined;
   }
 
   if (!profile) return undefined;
@@ -513,7 +518,7 @@ const applyProfileDefaults = async (
 
 const outputRunSummary = (
   result: Awaited<ReturnType<OrchestratorPipeline['newAssignment']>>,
-  flags: RunFlags
+  flags: RunFlags,
 ): void => {
   if (jsonOutput) return;
   console.log('\nSummary');
@@ -532,7 +537,7 @@ const outputRunSummary = (
 
 const outputStatusSummary = (
   status: Awaited<ReturnType<OrchestratorPipeline['getAssignmentStatus']>>,
-  md: string
+  md: string,
 ): void => {
   if (jsonOutput) return;
   console.log(`Status for ${md}`);
@@ -564,7 +569,7 @@ async function handleRerun(args: string[]): Promise<void> {
   const steps = stepsRaw
     ? (stepsRaw
         .split(',')
-        .map(s => s.trim())
+        .map((s) => s.trim())
         .filter(Boolean) as RerunStep[])
     : undefined;
 
@@ -696,7 +701,7 @@ async function handleRun(args: string[]): Promise<void> {
           voicesPath: pipeline.defaults.voicesPath,
           defaultsPath: pipeline.configPaths.wizardDefaultsPath,
           configProvider: pipeline.configProvider,
-        }
+        },
       );
       assignmentFlags = wizardResult.flags;
       wizardSelections = wizardResult.selections;
@@ -834,7 +839,7 @@ async function handleRun(args: string[]): Promise<void> {
 const printWizardSummary = (
   result: Awaited<ReturnType<OrchestratorPipeline['newAssignment']>>,
   selections: WizardSelections,
-  stages: AssignmentProgressEvent[]
+  stages: AssignmentProgressEvent[],
 ): void => {
   console.log('\n✨ Wizard Complete');
 
@@ -847,7 +852,9 @@ const printWizardSummary = (
   if (selections.withTts) {
     console.log(`  Audio    : Enabled`);
     if (selections.ttsMode) {
-      console.log(`  Mode     : ${selections.ttsMode} (${selections.ttsMode === 'auto' ? 'auto-detect' : selections.ttsMode === 'dialogue' ? 'Text-to-Dialogue' : 'Text-to-Speech'})`);
+      console.log(
+        `  Mode     : ${selections.ttsMode} (${selections.ttsMode === 'auto' ? 'auto-detect' : selections.ttsMode === 'dialogue' ? 'Text-to-Dialogue' : 'Text-to-Speech'})`,
+      );
       if (selections.ttsMode === 'dialogue') {
         if (selections.dialogueLanguage) {
           console.log(`  Language : ${selections.dialogueLanguage}`);

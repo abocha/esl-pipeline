@@ -1,5 +1,16 @@
 # @esl-pipeline/orchestrator
 
+## 3.0.0
+
+### Major Changes
+
+- large format and lint edit, bring to modern standarts & much much more robust typing; several large refactors removing duplicate code; many bugs fixed; unnecessary deps removed
+
+### Patch Changes
+
+- Updated dependencies
+  - @esl-pipeline/shared-infrastructure@1.0.0
+
 ## 2.0.2
 
 ### Patch Changes

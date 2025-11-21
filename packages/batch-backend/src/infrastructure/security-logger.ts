@@ -3,8 +3,7 @@
 // Security audit logging service for comprehensive security event tracking.
 // Provides structured logging for security incidents, suspicious activities,
 // and compliance audit trails.
-
-import { logger } from './logger';
+import { logger } from './logger.js';
 
 export interface SecurityEvent {
   eventType: SecurityEventType;
@@ -16,10 +15,10 @@ export interface SecurityEvent {
   resource?: string;
   action?: string;
   outcome: 'success' | 'failure' | 'blocked';
-  details?: Record<string, any>;
+  details?: Record<string, unknown>;
   timestamp: Date;
   correlationId?: string;
-  metadata?: Record<string, any>;
+  metadata?: Record<string, unknown>;
 }
 
 export enum SecurityEventType {
@@ -96,11 +95,11 @@ export interface SecurityLogConfig {
 
 export class SecurityLogger {
   private config: SecurityLogConfig;
-  private eventCounter: Map<SecurityEventType, number> = new Map();
-  private userSessionTracking: Map<
+  private eventCounter = new Map<SecurityEventType, number>();
+  private userSessionTracking = new Map<
     string,
     { userId: string; sessionId: string; lastActivity: Date }
-  > = new Map();
+  >();
 
   constructor(config: SecurityLogConfig) {
     this.config = config;
@@ -108,9 +107,9 @@ export class SecurityLogger {
   }
 
   private initializeCounters(): void {
-    Object.values(SecurityEventType).forEach(eventType => {
+    for (const eventType of Object.values(SecurityEventType)) {
       this.eventCounter.set(eventType, 0);
-    });
+    }
   }
 
   /**
@@ -165,7 +164,7 @@ export class SecurityLogger {
     userId: string,
     sessionId: string,
     outcome: 'success' | 'failure' | 'blocked',
-    details?: Record<string, any>
+    details?: Record<string, unknown>,
   ): Promise<void> {
     await this.logEvent({
       eventType: type,
@@ -194,7 +193,7 @@ export class SecurityLogger {
     filename: string,
     fileSize: number,
     outcome: 'success' | 'failure' | 'blocked',
-    details?: Record<string, any>
+    details?: Record<string, unknown>,
   ): Promise<void> {
     const severity = this.getFileUploadEventSeverity(type, outcome, filename);
 
@@ -225,7 +224,7 @@ export class SecurityLogger {
     identifier: string,
     limit: number,
     count: number,
-    retryAfter?: number
+    retryAfter?: number,
   ): Promise<void> {
     await this.logEvent({
       eventType: type,
@@ -252,7 +251,7 @@ export class SecurityLogger {
     userId: string,
     resource: string,
     action: string,
-    details?: Record<string, any>
+    details?: Record<string, unknown>,
   ): Promise<void> {
     await this.logEvent({
       eventType: type,
@@ -277,7 +276,7 @@ export class SecurityLogger {
       | SecurityEventType.SECURITY_CONFIGURATION_ERROR
       | SecurityEventType.DEPENDENCY_FAILURE,
     severity: SecuritySeverity,
-    details: Record<string, any>
+    details: Record<string, unknown>,
   ): Promise<void> {
     await this.logEvent({
       eventType: type,
@@ -297,7 +296,7 @@ export class SecurityLogger {
       | SecurityEventType.INVALID_DATA_FORMAT
       | SecurityEventType.ENCODING_ERROR,
     resource: string,
-    details: Record<string, any>
+    details: Record<string, unknown>,
   ): Promise<void> {
     await this.logEvent({
       eventType: type,
@@ -325,10 +324,10 @@ export class SecurityLogger {
     let totalEvents = 0;
     let highSeverityEvents = 0;
 
-    this.eventCounter.forEach((count, eventType) => {
+    for (const [eventType, count] of this.eventCounter.entries()) {
       eventsByType[eventType] = count;
       totalEvents += count;
-    });
+    }
 
     // Calculate severity distribution and high severity count
     // Note: This is a simplified calculation - in production, you'd track this properly
@@ -348,8 +347,8 @@ export class SecurityLogger {
   /**
    * Get active user sessions
    */
-  getActiveUserSessions(): Array<{ userId: string; sessionId: string; lastActivity: Date }> {
-    return Array.from(this.userSessionTracking.values());
+  getActiveUserSessions(): { userId: string; sessionId: string; lastActivity: Date }[] {
+    return [...this.userSessionTracking.values()];
   }
 
   /**
@@ -393,24 +392,28 @@ export class SecurityLogger {
     };
 
     switch (event.severity) {
-      case SecuritySeverity.LOW:
+      case SecuritySeverity.LOW: {
         logger.info('Security event', logData);
         break;
-      case SecuritySeverity.MEDIUM:
+      }
+      case SecuritySeverity.MEDIUM: {
         logger.warn('Security event', logData);
         break;
-      case SecuritySeverity.HIGH:
+      }
+      case SecuritySeverity.HIGH: {
         logger.warn('High severity security event', logData);
         break;
-      case SecuritySeverity.CRITICAL:
+      }
+      case SecuritySeverity.CRITICAL: {
         logger.error('CRITICAL security event', logData);
         break;
+      }
     }
   }
 
   private getAuthEventSeverity(
     type: SecurityEventType,
-    outcome: 'success' | 'failure' | 'blocked'
+    outcome: 'success' | 'failure' | 'blocked',
   ): SecuritySeverity {
     if (outcome === 'success' && type === SecurityEventType.LOGIN_SUCCESS) {
       return SecuritySeverity.LOW;
@@ -427,7 +430,7 @@ export class SecurityLogger {
   private getFileUploadEventSeverity(
     type: SecurityEventType,
     outcome: 'success' | 'failure' | 'blocked',
-    _filename: string
+    _filename: string,
   ): SecuritySeverity {
     if (
       type === SecurityEventType.MALICIOUS_FILE_DETECTED ||
@@ -525,22 +528,41 @@ export function createSecurityLogger(): SecurityLogger {
 /**
  * Get context information for security logging from request
  */
-export function getSecurityContext(request: any): {
+export function getSecurityContext(request: unknown): {
   userId?: string;
   sessionId?: string;
   ipAddress?: string;
   userAgent?: string;
   correlationId?: string;
 } {
-  const user = request.user;
-  const headers = request.headers;
+  // Type guard for request object
+  if (typeof request !== 'object' || request === null) {
+    return {};
+  }
+
+  const req = request as {
+    user?: { id?: string; sessionId?: string };
+    headers?: Record<string, string | string[] | undefined>;
+    ip?: string;
+  };
+
+  const user = req.user;
+  const headers = req.headers || {};
+
+  // Helper to get first header value if it's an array
+  const getHeader = (key: string): string | undefined => {
+    const value = headers[key];
+    return Array.isArray(value) ? value[0] : value;
+  };
+
+  const forwardedFor = getHeader('x-forwarded-for');
+  const ipAddress = forwardedFor?.split(',')[0]?.trim() || getHeader('x-real-ip') || req.ip;
 
   return {
     userId: user?.id,
     sessionId: user?.sessionId,
-    ipAddress:
-      headers['x-forwarded-for']?.split(',')[0]?.trim() || headers['x-real-ip'] || request.ip,
-    userAgent: headers['user-agent'],
-    correlationId: headers['x-correlation-id'] || headers['x-request-id'],
+    ipAddress,
+    userAgent: getHeader('user-agent'),
+    correlationId: getHeader('x-correlation-id') || getHeader('x-request-id'),
   };
 }

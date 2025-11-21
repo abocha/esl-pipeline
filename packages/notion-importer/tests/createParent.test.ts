@@ -1,10 +1,11 @@
 // packages/notion-importer/tests/createParent.test.ts
-import { describe, it, expect, vi } from 'vitest';
-import * as notionMod from '../src/notion.js';
-import { runImport } from '../src/index.js';
-import { writeFileSync, mkdtempSync, rmSync } from 'node:fs';
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { describe, expect, it, vi } from 'vitest';
+
+import { runImport } from '../src/index.js';
+import * as notionMod from '../src/notion.js';
 
 describe('pages.create parent uses data_source', () => {
   it('calls pages.create with parent.data_source.id', async () => {
@@ -68,7 +69,7 @@ Test plan
 \`\`\``;
       const md = mdRaw
         .split('\n')
-        .map(line => line.replace(/^\s+/, ''))
+        .map((line) => line.replace(/^\s+/, ''))
         .join('\n');
       const mdPath = join(tempDir, 'lesson.md');
       writeFileSync(mdPath, md);

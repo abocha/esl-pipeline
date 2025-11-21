@@ -2,7 +2,7 @@ import { readFile } from 'node:fs/promises';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-export type VoiceCatalog = {
+export interface VoiceCatalog {
   voices: {
     id: string;
     name: string;
@@ -10,25 +10,25 @@ export type VoiceCatalog = {
     labels?: Record<string, any>;
     preview_url?: string | null;
   }[];
-};
+}
 
-export type SpeakerMeta = {
+export interface SpeakerMeta {
   gender?: 'male' | 'female' | 'child' | 'neutral';
   role?: 'narrator' | 'teacher' | 'student' | 'system';
   age?: 'child' | 'teen' | 'young' | 'adult' | 'middle_aged' | 'senior' | 'universal';
   accent?: string;
   style?: string;
-};
+}
 
-export type PickedVoice = {
+export interface PickedVoice {
   id: string;
   score: number;
-};
+}
 
 let cachedCatalog: VoiceCatalog | null = null;
 
 export async function loadVoicesCatalog(
-  file = 'configs/elevenlabs.voices.json'
+  file = 'configs/elevenlabs.voices.json',
 ): Promise<VoiceCatalog> {
   if (cachedCatalog) return cachedCatalog;
 
@@ -50,7 +50,7 @@ export async function loadVoicesCatalog(
   return { voices: [] };
 }
 
-function getVoiceCatalogCandidates(file: string): Array<string | null> {
+function getVoiceCatalogCandidates(file: string): (string | null)[] {
   const override = process.env.ELEVENLABS_VOICES_PATH;
   const cwd = process.cwd();
   const moduleDir = dirname(fileURLToPath(import.meta.url));
@@ -69,11 +69,15 @@ function getVoiceCatalogCandidates(file: string): Array<string | null> {
     roots.unshift(pipelineCwd);
   }
 
-  const resolvedRoots = roots.map(root => resolve(root, file));
+  const resolvedRoots = roots.map((root) => resolve(root, file));
 
-  return Array.from(
-    new Set<string | null>([override ? resolve(override) : null, resolve(file), ...resolvedRoots])
-  );
+  return [
+    ...new Set<string | null>([
+      override ? resolve(override) : null,
+      resolve(file),
+      ...resolvedRoots,
+    ]),
+  ];
 }
 
 // crude heuristic for gender from speaker name if user didn't provide metadata
@@ -141,17 +145,28 @@ function score(voice: any, need: SpeakerMeta): number {
     else if (vAccent && vAccent !== accent) s -= 5;
   }
 
-  if (role === 'narrator') {
-    if (vUse.includes('narration') || vCat.includes('narration')) s += 30;
-    if (vUse.includes('news')) s += 10;
-  } else if (role === 'teacher') {
-    // prefer “narration”, “news” or “conversational” tones for clarity
-    if (vUse.includes('narration') || vUse.includes('news') || vUse.includes('conversation'))
-      s += 20;
-  } else if (role === 'student') {
-    // neutral/conversational is fine
-    if (vUse.includes('conversation')) s += 10;
-    if (vUse.includes('social')) s += 5;
+  switch (role) {
+    case 'narrator': {
+      if (vUse.includes('narration') || vCat.includes('narration')) s += 30;
+      if (vUse.includes('news')) s += 10;
+
+      break;
+    }
+    case 'teacher': {
+      // prefer “narration”, “news” or “conversational” tones for clarity
+      if (vUse.includes('narration') || vUse.includes('news') || vUse.includes('conversation'))
+        s += 20;
+
+      break;
+    }
+    case 'student': {
+      // neutral/conversational is fine
+      if (vUse.includes('conversation')) s += 10;
+      if (vUse.includes('social')) s += 5;
+
+      break;
+    }
+    // No default
   }
 
   // small bonus if there's an accent label (variety), but not critical
@@ -159,7 +174,7 @@ function score(voice: any, need: SpeakerMeta): number {
 
   if (role && ROLE_USE_CASE_HINTS[role as keyof typeof ROLE_USE_CASE_HINTS]) {
     const hints = ROLE_USE_CASE_HINTS[role as keyof typeof ROLE_USE_CASE_HINTS];
-    if (hints.some(h => vUse.includes(h))) s += 10;
+    if (hints.some((h) => vUse.includes(h))) s += 10;
   }
 
   if (style) {
@@ -167,7 +182,7 @@ function score(voice: any, need: SpeakerMeta): number {
     else if (vDesc.includes(style)) s += 10;
     else if (STYLE_HINTS[style]) {
       const hints = STYLE_HINTS[style]!;
-      if (hints.some(h => vDesc.includes(h) || vUse.includes(h))) s += 8;
+      if (hints.some((h) => vDesc.includes(h) || vUse.includes(h))) s += 8;
     }
   }
 
@@ -177,10 +192,10 @@ function score(voice: any, need: SpeakerMeta): number {
 export async function pickVoiceForSpeaker(
   speakerName: string,
   meta: SpeakerMeta = {},
-  opts: { catalog?: VoiceCatalog; exclude?: Set<string>; requireGenderMatch?: boolean } = {}
+  opts: { catalog?: VoiceCatalog; exclude?: Set<string>; requireGenderMatch?: boolean } = {},
 ): Promise<PickedVoice | null> {
   const catalog = opts.catalog ?? (await loadVoicesCatalog());
-  if (!catalog.voices.length) return null;
+  if (catalog.voices.length === 0) return null;
 
   const guessedGender = meta.gender ?? guessGenderFromName(speakerName);
   const guessed: SpeakerMeta = {
@@ -206,17 +221,17 @@ export async function pickVoiceForSpeaker(
 
   if (requireGender && normalizedGender) {
     const matching = catalog.voices.filter(
-      v => getLabel(v, 'gender') === normalizedGender && !opts.exclude?.has(v.id)
+      (v) => getLabel(v, 'gender') === normalizedGender && !opts.exclude?.has(v.id),
     );
-    if (matching.length) {
+    if (matching.length > 0) {
       const pick = considerList(matching);
       if (pick) return pick;
     }
 
     const neutral = catalog.voices.filter(
-      v => getLabel(v, 'gender') === 'neutral' && !opts.exclude?.has(v.id)
+      (v) => getLabel(v, 'gender') === 'neutral' && !opts.exclude?.has(v.id),
     );
-    if (neutral.length) {
+    if (neutral.length > 0) {
       const pickNeutral = considerList(neutral);
       if (pickNeutral) return pickNeutral;
     }

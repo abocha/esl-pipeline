@@ -77,10 +77,10 @@ The v2.0 update adds TTS mode selection while maintaining full backward compatib
 ### Migration Recommendations
 
 To take advantage of the new features:
+
 - Use the interactive wizard to configure TTS modes
 - Set `ELEVENLABS_TTS_MODE=auto` in your environment for consistent behavior
 - Use dialogue mode for conversation lessons with multiple speakers
-
 
 ## Quickstart (published package)
 

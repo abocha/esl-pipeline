@@ -1,8 +1,9 @@
 import Fastify from 'fastify';
 import { resolve } from 'node:path';
+
 import {
-  createPipeline,
   type PipelineNewAssignmentOptions,
+  createPipeline,
   noopLogger,
   noopMetrics,
 } from '../../src/index.js';

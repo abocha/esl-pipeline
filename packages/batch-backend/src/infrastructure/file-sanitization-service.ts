@@ -2,8 +2,7 @@
 //
 // File sanitization service providing security-focused file processing.
 // Sanitizes content, prevents path traversal attacks, and ensures safe filename handling.
-
-import { logger } from './logger';
+import { logger } from './logger.js';
 
 export interface SanitizationConfig {
   maxFilenameLength: number;
@@ -34,7 +33,7 @@ export class FileSanitizationError extends Error {
   constructor(
     message: string,
     public code: string,
-    public field?: string
+    public field?: string,
   ) {
     super(message);
     this.name = 'FileSanitizationError';
@@ -99,7 +98,7 @@ export class FileSanitizationService {
       throw new Error('maxFilenameLength must be greater than 0');
     }
     if (!Array.isArray(this.config.allowedSpecialChars)) {
-      throw new Error('allowedSpecialChars must be an array');
+      throw new TypeError('allowedSpecialChars must be an array');
     }
   }
 
@@ -196,7 +195,7 @@ export class FileSanitizationService {
       });
 
       // Remove entire HTML tags, not just angle brackets
-      sanitized = sanitized.replace(/<[^>]*>/g, '');
+      sanitized = sanitized.replaceAll(/<[^>]*>/g, '');
     }
 
     // Remove remaining dangerous characters (for any that weren't part of HTML tags)
@@ -210,7 +209,7 @@ export class FileSanitizationService {
       });
 
       // Remove ALL dangerous characters completely (including < and >)
-      sanitized = sanitized.replace(/[<>:"/\\|?*]/g, '');
+      sanitized = sanitized.replaceAll(/[<>:"/\\|?*]/g, '');
     }
 
     // Check reserved filenames
@@ -237,7 +236,7 @@ export class FileSanitizationService {
       const nameWithoutExt = sanitized.replace(/\.[^/.]+$/, '');
 
       const maxNameLength = this.config.maxFilenameLength - extensionPart.length;
-      sanitized = nameWithoutExt.substring(0, Math.max(0, maxNameLength)) + extensionPart;
+      sanitized = nameWithoutExt.slice(0, Math.max(0, Math.max(0, maxNameLength))) + extensionPart;
 
       warnings.push({
         code: 'FILENAME_TRUNCATED',
@@ -272,7 +271,7 @@ export class FileSanitizationService {
           field: 'filename',
         });
 
-        sanitized = sanitized.replace(/[^\w\s.-]/g, '_');
+        sanitized = sanitized.replaceAll(/[^\w\s.-]/g, '_');
       }
     }
 
@@ -290,7 +289,7 @@ export class FileSanitizationService {
     let content = fileBuffer.toString('utf8');
 
     // Remove BOM if configured
-    if (this.config.removeBOM && content.charCodeAt(0) === 0xfeff) {
+    if (this.config.removeBOM && content.codePointAt(0) === 0xfe_ff) {
       content = content.slice(1);
       warnings.push({
         code: 'BOM_REMOVED',
@@ -388,8 +387,8 @@ export class FileSanitizationService {
    */
   private normalizeLineEndings(content: string): string {
     return content
-      .replace(/\r\n/g, '\n') // Windows CRLF to LF
-      .replace(/\r/g, '\n'); // Mac CR to LF
+      .replaceAll('\r\n', '\n') // Windows CRLF to LF
+      .replaceAll('\r', '\n'); // Mac CR to LF
   }
 
   /**
@@ -409,16 +408,13 @@ export class FileSanitizationService {
         modifications += matches.length;
 
         // Replace with safe alternatives
-        if (pattern.toString().includes('javascript:') || pattern.toString().includes('data:')) {
-          // Replace dangerous links with their text content
-          sanitized = sanitized.replace(pattern, match => {
-            const linkText = match.match(/\[(.*?)\]/)?.[1] || 'Link';
-            return `[${linkText}]`;
-          });
-        } else {
-          // Remove potentially dangerous HTML tags
-          sanitized = sanitized.replace(pattern, '[Sanitized Content]');
-        }
+        sanitized =
+          pattern.toString().includes('javascript:') || pattern.toString().includes('data:')
+            ? sanitized.replace(pattern, (match) => {
+                const linkText = match.match(/\[(.*?)\]/)?.[1] || 'Link';
+                return `[${linkText}]`;
+              })
+            : sanitized.replace(pattern, '[Sanitized Content]');
       }
     }
 
@@ -455,7 +451,7 @@ export class FileSanitizationService {
     // Check for unusually long lines
     const lines = content.split('\n');
     for (const line of lines) {
-      if (line.length > 10000) {
+      if (line.length > 10_000) {
         warnings.push({
           code: 'UNUSUALLY_LONG_LINES',
           message: 'Found line longer than 10,000 characters',
@@ -472,7 +468,7 @@ export class FileSanitizationService {
    */
   private applyFinalSanitization(
     sanitizedContent: Buffer,
-    sanitizedFilename: string
+    sanitizedFilename: string,
   ): {
     sanitizedContent: Buffer;
     warnings: SanitizationWarning[];
@@ -492,8 +488,8 @@ export class FileSanitizationService {
 
       // Create new buffer without null bytes
       const cleanBytes: number[] = [];
-      for (let i = 0; i < buffer.length; i++) {
-        const byte = buffer[i]!; // Use non-null assertion since buffer[i] should always return a number
+      for (const element of buffer) {
+        const byte = element!; // Use non-null assertion since buffer[i] should always return a number
         if (byte !== 0) {
           cleanBytes.push(byte);
         }
@@ -536,8 +532,8 @@ export class FileSanitizationService {
    */
   private countNullBytes(buffer: Buffer): number {
     let count = 0;
-    for (let i = 0; i < buffer.length; i++) {
-      if (buffer[i] === 0) count++;
+    for (const element of buffer) {
+      if (element === 0) count++;
     }
     return count;
   }
@@ -568,7 +564,7 @@ export class FileSanitizationService {
     }
 
     // Check for null bytes
-    if (filename.includes('\x00')) {
+    if (filename.includes('\u0000')) {
       return false;
     }
 
@@ -613,7 +609,7 @@ export function createFileSanitizationService(): FileSanitizationService {
  * Factory function to create a custom file sanitization service
  */
 export function createCustomFileSanitizationService(
-  config: SanitizationConfig
+  config: SanitizationConfig,
 ): FileSanitizationService {
   return new FileSanitizationService(config);
 }

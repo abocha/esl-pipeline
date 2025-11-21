@@ -1,7 +1,8 @@
-import { describe, it, expect, beforeAll, afterAll, beforeEach } from 'vitest';
 import { randomUUID } from 'node:crypto';
-import { insertJob, getJobById, updateJobStateAndResult } from '../src/domain/job-repository';
-import { withPgClient } from '../src/infrastructure/db';
+import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
+
+import { getJobById, insertJob, updateJobStateAndResult } from '../src/domain/job-repository.js';
+import { withPgClient } from '../src/infrastructure/db.js';
 
 /**
  * Intent:
@@ -18,7 +19,7 @@ const hasTestDb = !!process.env.BATCH_BACKEND_TEST_PG;
 const describeIfDb = hasTestDb ? describe : describe.skip;
 
 async function truncateJobs() {
-  await withPgClient(async client => {
+  await withPgClient(async (client) => {
     await client.query('TRUNCATE TABLE jobs');
   });
 }
@@ -165,7 +166,7 @@ describeIfDb('domain/job-repository', () => {
           id: job.id,
           expectedState: 'succeeded', // invalid given current state is queued
           nextState: 'running',
-        } as any)
+        } as any),
       ).rejects.toThrow();
     });
   });

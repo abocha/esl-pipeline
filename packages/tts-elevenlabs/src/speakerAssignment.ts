@@ -1,16 +1,17 @@
 import type { SpeakerProfile } from '@esl-pipeline/md-extractor';
+
 import {
-  pickVoiceForSpeaker,
+  type PickedVoice,
   type SpeakerMeta,
   type VoiceCatalog,
-  type PickedVoice,
+  pickVoiceForSpeaker,
 } from './assign.js';
 
-export type VoiceMapConfig = {
+export interface VoiceMapConfig {
   default?: string;
   auto?: boolean;
   [speaker: string]: unknown;
-};
+}
 
 const GENERIC_VOICE_PRIORITY = [
   'Liam',
@@ -39,22 +40,22 @@ function normalize(str: string | undefined | null): string {
 
 function findProfile(
   profiles: SpeakerProfile[] | undefined,
-  speakerId: string
+  speakerId: string,
 ): SpeakerProfile | undefined {
   if (!profiles?.length) return undefined;
-  const exact = profiles.find(p => p.id === speakerId);
+  const exact = profiles.find((p) => p.id === speakerId);
   if (exact) return exact;
   const lowered = normalize(speakerId);
-  return profiles.find(p => normalize(p.id) === lowered);
+  return profiles.find((p) => normalize(p.id) === lowered);
 }
 
 function resolveVoiceToken(token: string, catalog: VoiceCatalog): string | undefined {
   const trimmed = token.trim();
   if (!trimmed) return undefined;
-  const byId = catalog.voices.find(v => v.id === trimmed);
+  const byId = catalog.voices.find((v) => v.id === trimmed);
   if (byId) return byId.id;
   const lower = trimmed.toLowerCase();
-  const byName = catalog.voices.find(v => v.name?.toLowerCase() === lower);
+  const byName = catalog.voices.find((v) => v.name?.toLowerCase() === lower);
   if (byName) return byName.id;
   return trimmed;
 }
@@ -62,7 +63,7 @@ function resolveVoiceToken(token: string, catalog: VoiceCatalog): string | undef
 function pickFromGenericPool(catalog: VoiceCatalog, used: Set<string>): string | undefined {
   for (const name of GENERIC_VOICE_PRIORITY) {
     const match = catalog.voices.find(
-      v => v.name && v.name.toLowerCase() === name.toLowerCase() && !used.has(v.id)
+      (v) => v.name && v.name.toLowerCase() === name.toLowerCase() && !used.has(v.id),
     );
     if (match) return match.id;
   }
@@ -78,14 +79,14 @@ function coerceVoiceToken(value: unknown): string | undefined {
   return undefined;
 }
 
-export type SpeakerVoiceAssignment = {
+export interface SpeakerVoiceAssignment {
   speaker: string;
   voiceId: string;
   source: 'profile' | 'voiceMap' | 'default' | 'auto' | 'fallback' | 'reuse';
   score?: number;
   profile?: SpeakerProfile;
   catalogEntry?: VoiceCatalog['voices'][number];
-};
+}
 
 export async function resolveSpeakerVoices(opts: {
   speakers: string[];
@@ -111,7 +112,7 @@ export async function resolveSpeakerVoices(opts: {
     const normalizedSpeaker = normalize(speaker);
     const explicitVoice =
       profile?.voice ?? coerceVoiceToken((voiceMap as Record<string, unknown>)[speaker]);
-    const candidates: Array<{ source: 'profile' | 'voiceMap' | 'default'; token: string }> = [];
+    const candidates: { source: 'profile' | 'voiceMap' | 'default'; token: string }[] = [];
 
     if (explicitVoice) {
       candidates.push({ source: profile?.voice ? 'profile' : 'voiceMap', token: explicitVoice });
@@ -204,7 +205,7 @@ export async function resolveSpeakerVoices(opts: {
     }
 
     usedVoices.add(assigned);
-    const catalogEntry = catalog.voices.find(v => v.id === assigned);
+    const catalogEntry = catalog.voices.find((v) => v.id === assigned);
     assignments.push({
       speaker,
       voiceId: assigned,

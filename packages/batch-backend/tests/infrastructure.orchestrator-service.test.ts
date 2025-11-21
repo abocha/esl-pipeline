@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 /**
  * NOTE ON VITEST HOISTING:
@@ -14,7 +14,7 @@ const mockChildProcess = {
   kill: vi.fn(),
   disconnect: vi.fn(),
   connected: true,
-  pid: 12345,
+  pid: 12_345,
 };
 
 vi.mock('node:child_process', () => ({
@@ -79,7 +79,7 @@ vi.mock('../src/infrastructure/metrics', () => ({
 // Helper functions to simulate worker process behavior
 function simulateWorkerSuccess(result: any) {
   const onMessageHandler = mockChildProcess.on.mock.calls.find(
-    (call) => call[0] === 'message'
+    (call) => call[0] === 'message',
   )?.[1];
   if (onMessageHandler) {
     onMessageHandler({ type: 'success', result });
@@ -88,7 +88,7 @@ function simulateWorkerSuccess(result: any) {
 
 function simulateWorkerError(error: { message: string; stack?: string; name?: string }) {
   const onMessageHandler = mockChildProcess.on.mock.calls.find(
-    (call) => call[0] === 'message'
+    (call) => call[0] === 'message',
   )?.[1];
   if (onMessageHandler) {
     onMessageHandler({ type: 'error', error });
@@ -103,7 +103,7 @@ describe('infrastructure/orchestrator-service', () => {
   });
 
   it('getPipeline creates pipeline once, maps env, and caches result', async () => {
-    const { loadConfig } = await import('../src/config/env');
+    const { loadConfig } = await import('../src/config/env.js');
     const { createPipeline } = await import('@esl-pipeline/orchestrator');
 
     (loadConfig as any).mockReturnValue({
@@ -113,7 +113,7 @@ describe('infrastructure/orchestrator-service', () => {
       },
     });
 
-    const { getPipeline } = await import('../src/infrastructure/orchestrator-service');
+    const { getPipeline } = await import('../src/infrastructure/orchestrator-service.js');
 
     const p1 = getPipeline();
     const p2 = getPipeline();
@@ -124,7 +124,7 @@ describe('infrastructure/orchestrator-service', () => {
   });
 
   it('runAssignmentJob calls pipeline.newAssignment with expected flags and dependencies and returns manifestPath', async () => {
-    const { loadConfig } = await import('../src/config/env');
+    const { loadConfig } = await import('../src/config/env.js');
     const { getPipeline, runAssignmentJob } = await import(
       '../src/infrastructure/orchestrator-service'
     );
@@ -150,7 +150,7 @@ describe('infrastructure/orchestrator-service', () => {
         withTts: true,
         upload: 's3',
       },
-      'run-1'
+      'run-1',
     );
 
     // Simulate worker success
@@ -162,7 +162,7 @@ describe('infrastructure/orchestrator-service', () => {
   });
 
   it('runAssignmentJob rethrows when pipeline.newAssignment fails', async () => {
-    const { loadConfig } = await import('../src/config/env');
+    const { loadConfig } = await import('../src/config/env.js');
     const { getPipeline, runAssignmentJob } = await import(
       '../src/infrastructure/orchestrator-service'
     );
@@ -185,7 +185,7 @@ describe('infrastructure/orchestrator-service', () => {
         jobId: 'job-1',
         md: 'fixtures/ok.md',
       },
-      'run-2'
+      'run-2',
     );
 
     // Simulate worker error - pass the error as a structured object
@@ -200,8 +200,8 @@ describe('infrastructure/orchestrator-service', () => {
   // fork() to prevent real process spawning, we cannot test this fallback behavior at the unit level.
   // This should be tested in integration tests with a real worker process and config files.
   it.skip('runAssignmentJob falls back to filesystem manifest store when S3 bucket is missing', async () => {
-    const { loadConfig } = await import('../src/config/env');
-    const { runAssignmentJob } = await import('../src/infrastructure/orchestrator-service');
+    const { loadConfig } = await import('../src/config/env.js');
+    const { runAssignmentJob } = await import('../src/infrastructure/orchestrator-service.js');
 
     (loadConfig as any).mockReturnValue({
       orchestrator: {
@@ -222,7 +222,7 @@ describe('infrastructure/orchestrator-service', () => {
         jobId: 'job-2',
         md: 'fixtures/ok.md',
       },
-      'run-3'
+      'run-3',
     );
 
     expect(newAssignmentMock).toHaveBeenCalledTimes(2);
@@ -230,7 +230,7 @@ describe('infrastructure/orchestrator-service', () => {
   });
 
   it('getJobOptionsFromOrchestrator delegates to orchestrator metadata helper', async () => {
-    const { loadConfig } = await import('../src/config/env');
+    const { loadConfig } = await import('../src/config/env.js');
     const { getPipeline, getJobOptionsFromOrchestrator } = await import(
       '../src/infrastructure/orchestrator-service'
     );

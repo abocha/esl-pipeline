@@ -1,18 +1,20 @@
 import matter from 'gray-matter';
-import type { Frontmatter, StudyText, Section } from './types.js';
+
 import { ValidationError } from '@esl-pipeline/contracts';
+
+import type { Frontmatter, Section, StudyText } from './types.js';
 
 const NBSP = /\u00A0/g;
 const ZWSP = /\u200B/g;
 const BOM = /^\uFEFF/;
 
 function normalize(md: string): string {
-  return md.replace(BOM, '').replace(NBSP, ' ').replace(ZWSP, '').replace(/\r\n/g, '\n');
+  return md.replace(BOM, '').replaceAll(NBSP, ' ').replaceAll(ZWSP, '').replaceAll('\r\n', '\n');
 }
 
 function findBlock(
   md: string,
-  openerRegex: RegExp
+  openerRegex: RegExp,
 ): { body: string; inlineLabel: string; markerLine: number } | null {
   const m = openerRegex.exec(md);
   if (!m) return null;
@@ -28,7 +30,7 @@ function findBlock(
   const lineEnd = md.indexOf('\n', markerStart);
   const markerLine = md.slice(
     lineStart === -1 ? 0 : lineStart + 1,
-    lineEnd === -1 ? md.length : lineEnd
+    lineEnd === -1 ? md.length : lineEnd,
   );
   const inlineLabel = markerLine.replace(/^[ \t]*:::[^\s]+/i, '').trim();
   const markerLineNumber = md.slice(0, markerStart).split(/\r?\n/).length;
@@ -51,7 +53,7 @@ export function extractStudyText(md: string): StudyText {
   const n = normalize(md);
   const inner = findBlock(n, /(^|\n)[ \t]*:::study-text[^\n]*\n/i);
   if (!inner) throw new ValidationError('study-text block not found');
-  const rawLines = inner.body.split('\n').map(s => s.trim());
+  const rawLines = inner.body.split('\n').map((s) => s.trim());
   if (inner.inlineLabel) {
     const first = rawLines[0];
     if (first && first.toLowerCase() === inner.inlineLabel.toLowerCase()) {
@@ -59,7 +61,7 @@ export function extractStudyText(md: string): StudyText {
     }
   }
   const lines = rawLines.filter(Boolean);
-  const dialogueCount = lines.filter(isDialogueLine).length;
+  const dialogueCount = lines.filter((line) => isDialogueLine(line)).length;
   const type: StudyText['type'] = dialogueCount >= 2 ? 'dialogue' : 'monologue';
   return { type, lines };
 }
@@ -76,7 +78,7 @@ export function extractTeacherNotes(md: string): string {
   // match Teacher’s / Teacher's (curly or straight apostrophe)
   const block = findBlock(
     n,
-    /(^|\n)[ \t]*:::toggle-heading\s+Teacher[’']s\s+Follow-up\s+Plan[^\n]*\n/i
+    /(^|\n)[ \t]*:::toggle-heading\s+Teacher[’']s\s+Follow-up\s+Plan[^\n]*\n/i,
   );
   if (!block) throw new ValidationError("Teacher's Follow-up Plan toggle not found");
   return block.body;
@@ -88,7 +90,7 @@ export function extractSections(md: string): Section[] {
 
   // capture: 1) hashes (## or ###), 2) title text
   const headingRe = /^(#{2,3})\s+(.+)\s*$/gm;
-  const positions: Array<{ depth: 2 | 3; title: string; start: number }> = [];
+  const positions: { depth: 2 | 3; title: string; start: number }[] = [];
 
   let match: RegExpExecArray | null;
   while ((match = headingRe.exec(n)) !== null) {

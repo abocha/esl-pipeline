@@ -1,13 +1,12 @@
 // packages/batch-backend/src/infrastructure/db.ts
-
 // Thin Postgres adapter for the batch-backend.
 // - Uses env from config/env.
 // - Optional: only required if PG_ENABLED=true.
 // - Exposed helpers are minimal and easy to swap if your platform provides its own client.
-
 import { Pool, PoolClient } from 'pg';
-import { loadConfig } from '../config/env';
-import { logger } from './logger';
+
+import { loadConfig } from '../config/env.js';
+import { logger } from './logger.js';
 
 let pool: Pool | null = null;
 let schemaReadyPromise: Promise<void> | null = null;
@@ -70,9 +69,9 @@ async function ensureJobsSchema(client: PoolClient): Promise<void> {
       component: 'pg',
       event: 'jobs_schema_ready',
     });
-  })().catch(err => {
+  })().catch((error) => {
     schemaReadyPromise = null;
-    throw err;
+    throw error;
   });
 
   await schemaReadyPromise;
@@ -91,14 +90,14 @@ export function createPgPool(): Pool {
   const connectionString =
     config.pg.connectionString ||
     `postgresql://${encodeURIComponent(config.pg.user)}:${encodeURIComponent(
-      config.pg.password
+      config.pg.password,
     )}@${config.pg.host}:${config.pg.port}/${config.pg.database}`;
 
   pool = new Pool({
     connectionString,
     max: 10,
     idleTimeoutMillis: 30_000,
-    connectionTimeoutMillis: 5_000,
+    connectionTimeoutMillis: 5000,
   });
 
   pool.on('error', (err: Error) => {
@@ -114,7 +113,7 @@ export function createPgPool(): Pool {
 // withPgClient.declaration()
 export async function withPgClient<T>(
   fn: (client: PoolClient) => Promise<T>,
-  attempt = 1
+  attempt = 1,
 ): Promise<T> {
   const p = createPgPool();
 
@@ -126,24 +125,24 @@ export async function withPgClient<T>(
     } finally {
       client.release();
     }
-  } catch (err) {
+  } catch (error) {
     if (attempt < 5) {
       const delay = 500 * attempt;
       logger.warn('Postgres connection failed; retrying', {
         component: 'pg',
         attempt,
         delay,
-        error: err instanceof Error ? err.message : String(err),
+        error: error instanceof Error ? error.message : String(error),
       });
-      await new Promise(resolve => setTimeout(resolve, delay));
+      await new Promise((resolve) => setTimeout(resolve, delay));
       return withPgClient(fn, attempt + 1);
     }
 
-    logger.error(err instanceof Error ? err : String(err), {
+    logger.error(error instanceof Error ? error : String(error), {
       component: 'pg',
       message: 'Postgres operation failed',
     });
-    throw err;
+    throw error;
   }
 }
 

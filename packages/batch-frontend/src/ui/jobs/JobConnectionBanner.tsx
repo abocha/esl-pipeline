@@ -1,4 +1,5 @@
 import React from 'react';
+
 import { useJobMonitor } from '../../context/JobMonitorContext';
 import { useNotification } from '../../context/NotificationContext';
 
@@ -24,13 +25,19 @@ export const JobConnectionBanner: React.FC = () => {
         <div>
           <p style={{ margin: 0, fontWeight: 600, color: stateInfo.color }}>{stateInfo.label}</p>
           {isPolling ? (
-            <p style={subtitleStyle}>Falling back to 5s polling while the SSE connection recovers.</p>
+            <p style={subtitleStyle}>
+              Falling back to 5s polling while the SSE connection recovers.
+            </p>
           ) : (
             <p style={subtitleStyle}>Job rows will update instantly as events stream in.</p>
           )}
         </div>
         {showPermissionCta && (
-          <button type="button" onClick={() => void requestPermission()} style={permissionButtonStyle}>
+          <button
+            type="button"
+            onClick={() => void requestPermission()}
+            style={permissionButtonStyle}
+          >
             Enable notifications
           </button>
         )}
@@ -41,9 +48,7 @@ export const JobConnectionBanner: React.FC = () => {
         </p>
       )}
       {lastError && (
-        <p style={{ ...subtitleStyle, color: '#dc2626', marginTop: '6px' }}>
-          {lastError}
-        </p>
+        <p style={{ ...subtitleStyle, color: '#dc2626', marginTop: '6px' }}>{lastError}</p>
       )}
     </section>
   );

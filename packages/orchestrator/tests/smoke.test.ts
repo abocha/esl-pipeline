@@ -1,8 +1,7 @@
-import { describe, it, expect, vi, afterEach } from 'vitest';
-import { mkdtemp, writeFile, readFile } from 'node:fs/promises';
+import { mkdtemp, readFile, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
-import { join, dirname } from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { join } from 'node:path';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('@esl-pipeline/notion-importer', () => ({
   runImport: vi.fn().mockResolvedValue({ page_id: 'page-123', url: 'https://notion.so/page-123' }),
@@ -16,7 +15,7 @@ vi.mock('@esl-pipeline/notion-colorizer', () => ({
 
 vi.mock('@esl-pipeline/tts-elevenlabs', async () => {
   const actual = await vi.importActual<typeof import('@esl-pipeline/tts-elevenlabs')>(
-    '@esl-pipeline/tts-elevenlabs'
+    '@esl-pipeline/tts-elevenlabs',
   );
   return {
     ...actual,
@@ -109,8 +108,7 @@ describe('orchestrator smoke', () => {
     const mdPath = join(dir, 'assignment.md');
     const audioPath = join(dir, 'lesson.mp3');
 
-    const __dirname = dirname(fileURLToPath(import.meta.url));
-    const okFixturePath = join(__dirname, '../../md-validator/fixtures/ok.md');
+    const okFixturePath = join(import.meta.dirname, '../../md-validator/fixtures/ok.md');
     const okDoc = await readFile(okFixturePath, 'utf8');
     await writeFile(mdPath, okDoc);
     await writeFile(audioPath, 'dummy audio');

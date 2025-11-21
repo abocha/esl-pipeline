@@ -1,5 +1,5 @@
-import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react-swc';
+import { defineConfig } from 'vite';
 
 // Minimal Vite config for local dev inside the monorepo.
 // - Serves frontend on :5173 by default.
@@ -32,16 +32,16 @@ export default defineConfig({
   server: {
     port: 5173,
     strictPort: true,
-    proxy: proxyRoutes.reduce(
-      (acc, route) => {
-        acc[route] = {
+    proxy: (() => {
+      const proxyConfig: Record<string, any> = {};
+      for (const route of proxyRoutes) {
+        proxyConfig[route] = {
           ...withCookieForwarding(),
           rewrite: (path: string) => path.replace(/^\/api/, ''),
         };
-        return acc;
-      },
-      {} as Record<string, any>
-    ),
+      }
+      return proxyConfig;
+    })(),
     // Security headers for development
     headers: {
       'X-Content-Type-Options': 'nosniff',

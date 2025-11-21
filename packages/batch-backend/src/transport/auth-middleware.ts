@@ -1,8 +1,8 @@
 // packages/batch-backend/src/transport/auth-middleware.ts
+import { FastifyReply, FastifyRequest } from 'fastify';
 
-import { FastifyRequest, FastifyReply } from 'fastify';
-import { UserRole } from '../domain/user-model';
-import { logger } from '../infrastructure/logger';
+import { UserRole } from '../domain/user-model.js';
+import { logger } from '../infrastructure/logger.js';
 
 export interface AuthenticatedUser {
   id: string;
