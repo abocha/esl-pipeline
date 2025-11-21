@@ -118,6 +118,17 @@ export function registerCoreRoutes(app: FastifyInstance, options: CoreRouteOptio
 
   app.get('/jobs/events', jobEventsRouteOptions, (request, reply) => {
     const routePath = resolveRoutePath(request, 'GET /jobs/events');
+    const jobIdParam = (request.query as any)?.jobId as string | undefined;
+    const rawIds = jobIdParam?.split(',').map(id => id.trim()).filter(Boolean) ?? [];
+    const wantsAll = jobIdParam === '*' || rawIds.includes('*') || rawIds.includes('all');
+    const jobIds = wantsAll ? [] : rawIds;
+
+    if (!wantsAll && jobIds.length === 0) {
+      return reply.code(400).send({
+        error: 'jobId query param is required (use jobId=<id>[,id2] or jobId=* for all events)',
+      });
+    }
+
     reply.raw.setHeader('Content-Type', 'text/event-stream');
     reply.raw.setHeader('Cache-Control', 'no-cache');
     reply.raw.setHeader('Connection', 'keep-alive');
@@ -149,32 +160,35 @@ export function registerCoreRoutes(app: FastifyInstance, options: CoreRouteOptio
       }
     }, 25000);
 
-    const unsubscribe = subscribeJobEvents(event => {
-      try {
-        const dto = jobRecordToDto(event.job);
-        const payload: JobEventMessage = {
-          type: event.type,
-          jobId: dto.jobId,
-          state: dto.state,
-          payload: {
-            manifestPath: dto.manifestPath,
-            error: dto.error,
-            finishedAt: dto.finishedAt,
-            mode: dto.mode,
-            md: dto.md,
-            notionUrl: dto.notionUrl,
-          },
-        };
-        reply.raw.write(`event: ${event.type}\n`);
-        reply.raw.write(`data: ${JSON.stringify(payload)}\n\n`);
-      } catch (err: any) {
-        logger.warn('Failed to publish SSE job event', {
-          event: 'job_events_sse_publish_failed',
-          route: routePath,
-          error: err instanceof Error ? err.message : String(err),
-        });
-      }
-    });
+    const unsubscribe = subscribeJobEvents(
+      event => {
+        try {
+          const dto = jobRecordToDto(event.job);
+          const payload: JobEventMessage = {
+            type: event.type,
+            jobId: dto.jobId,
+            state: dto.state,
+            payload: {
+              manifestPath: dto.manifestPath,
+              error: dto.error,
+              finishedAt: dto.finishedAt,
+              mode: dto.mode,
+              md: dto.md,
+              notionUrl: dto.notionUrl,
+            },
+          };
+          reply.raw.write(`event: ${event.type}\n`);
+          reply.raw.write(`data: ${JSON.stringify(payload)}\n\n`);
+        } catch (err: any) {
+          logger.warn('Failed to publish SSE job event', {
+            event: 'job_events_sse_publish_failed',
+            route: routePath,
+            error: err instanceof Error ? err.message : String(err),
+          });
+        }
+      },
+      wantsAll ? { allJobs: true } : { jobIds }
+    );
 
     const cleanup = () => {
       if (closed) return;

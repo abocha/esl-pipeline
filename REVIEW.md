@@ -115,11 +115,18 @@ The project generally follows the guidelines outlined in `AGENTS.md` and `docs/a
 
 **Problem**: The system uses Redis Pub/Sub to broadcast job events to all API instances. As jobs and API instances scale, every instance receives every event, creating inefficiency.
 
-**Action Items**:
-1. Implement event filtering at the subscriber level (subscribe only to relevant job IDs)
-2. Add metrics to monitor event delivery efficiency
-3. Document scaling considerations for production deployments
-4. Consider targeted event delivery for high-scale scenarios
+**Status**: Partially implemented (event filtering + targeted delivery)
+
+**Changes**:
+- Job event subscriptions now accept per-job filters or wildcard, with subscription change tracking (`packages/batch-backend/src/domain/job-events.ts`).
+- Redis bridge publishes to per-job channels and a legacy broadcast; dynamically subscribes only to the needed channels and avoids duplicate deliveries when wildcard + targeted listeners coexist (`packages/batch-backend/src/infrastructure/job-event-redis-bridge.ts`).
+- `/jobs/events` SSE now requires `jobId` (comma list) or `jobId=*`, subscribing only to requested jobs (`packages/batch-backend/src/transport/core-routes.ts`).
+- Added coverage to prevent double/triple delivery under mixed wildcard/targeted subscriptions (`packages/batch-backend/tests/infrastructure.job-event-redis-bridge.test.ts`).
+
+**Next Steps**:
+1. Add metrics for event publish/consume counts and channel fan-out.
+2. Document the new SSE contract and channel format in backend docs.
+3. Optional: integration test for SSE endpoint filtering and high-scale simulations.
 
 ### 5.4. Batch Backend Deployment Complexity
 
