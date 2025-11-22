@@ -6,12 +6,29 @@ export interface ImportOptions {
   dataSourceName?: string;
   student?: string;
   dryRun?: boolean;
+  /**
+   * If provided, skip re-validating the markdown and reuse this result.
+   * Useful when callers already performed validation upstream.
+   */
+  validationResult?: {
+    ok: boolean;
+    errors: string[];
+    warnings: string[];
+  };
+  /**
+   * Controls strictness when importer validates the markdown itself.
+   * Defaults to false (warnings stay warnings).
+   */
+  strictValidation?: boolean;
 }
 
 export interface FrontmatterShape {
   title?: string;
   student?: string;
-  topic?: string | string[];
+  topic?: string; // Always a single string (arrays will be normalized)
+  icon?: string;
+  cover?: string;
+  properties?: Record<string, any>;
 }
 
 export interface ResolveDataSourceInput {

@@ -228,10 +228,19 @@ export async function newAssignment(
     // Validation stage always runs, even when skipping import
     emitStage('validate', 'start');
     steps.push('validate');
-    const validation = await validateMarkdownFile(flags.md, { strict: true });
+    const validation = await validateMarkdownFile(flags.md, { strict: false });
     if (!validation.ok) {
       const msg = ['Validation failed:', ...validation.errors.map((e) => `- ${e}`)].join('\n');
       throw new ValidationError(msg);
+    }
+    if (validation.warnings.length > 0) {
+      logger.log({
+        level: 'warn',
+        message: 'validation.warnings',
+        runId,
+        stage: 'validate',
+        detail: { warnings: validation.warnings },
+      });
     }
     emitStage('validate', 'success');
 
@@ -254,6 +263,8 @@ export async function newAssignment(
         dataSourceName: flags.dataSource,
         student: flags.student,
         dryRun: flags.dryRun,
+        validationResult: validation,
+        strictValidation: false,
       });
       pageId = importResult.page_id;
       pageUrl = importResult.url;

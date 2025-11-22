@@ -1,16 +1,16 @@
-// packages/notion-importer/tests/createParent.test.ts
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, expect, it, vi } from 'vitest';
 
+import { ValidationError } from '@esl-pipeline/contracts';
+
 import { runImport } from '../src/index.js';
 import * as notionMod from '../src/notion.js';
 
-describe('pages.create parent uses data_source', () => {
-  it('calls pages.create with parent.data_source.id', async () => {
-    // MD fixture with proper structure that passes validation
-    const tempDir = mkdtempSync(join(tmpdir(), 'create-parent-'));
+describe('runImport - unknown properties', () => {
+  it('fails fast when frontmatter properties are not in the database', async () => {
+    const tempDir = mkdtempSync(join(tmpdir(), 'unknown-props-'));
     try {
       const mdRaw = `\`\`\`md
 ---
@@ -19,13 +19,14 @@ student: "Anna"
 level: A2
 topic: weather
 input_type: "authentic"
-speaker_labels: ["Anna"]
+properties:
+  Foo: "bar"
 ---
 ## 1. This Week's Mission Briefing
-Test briefing
+text
 
 ## 2. Your Homework Roadmap
-Test roadmap
+text
 
 ## 3. Input Material: The Source
 ### B. Generated Material
@@ -35,7 +36,7 @@ Test roadmap
 :::
 
 ## 4. Language Toolkit: Useful Language
-Test toolkit
+text
 
 ## 5. Practice & Pronunciation
 ### A. Controlled Practice
@@ -52,10 +53,10 @@ Test toolkit
 2) question two
 
 ## 6. Your Turn: Complete the Mission!
-Test mission
+text
 
 ## 7. Why This Mission Helps You
-Test explanation
+text
 
 ## 8. Answer Key & Sample Mission
 :::toggle-heading Answer Key
@@ -81,30 +82,23 @@ Test plan
       });
 
       // Mock notion client and pages.create
-      const pagesCreate = vi.fn().mockResolvedValue({ id: 'p1', url: 'https://notion.so/x' });
       vi.spyOn(notionMod, 'createNotionClient' as any).mockReturnValue({
-        pages: { create: pagesCreate },
+        pages: { create: vi.fn() },
         databases: {
           retrieve: vi.fn().mockResolvedValue({
             id: 'db-456',
-            properties: { Topic: { type: 'rich_text' } },
+            properties: { Name: { type: 'title' }, Topic: { type: 'rich_text' } },
           }),
         },
       });
 
-      // Mock resolveStudentId to return student page ID
-      vi.spyOn(notionMod, 'resolveStudentId' as any).mockResolvedValue('student-page-id');
-
-      const res = await runImport({
-        mdPath: mdPath,
-        dbId: 'db-456',
-        dryRun: false,
-      });
-
-      expect(pagesCreate).toHaveBeenCalled();
-      const arg = pagesCreate.mock.calls[0]?.[0];
-      expect(arg?.parent).toEqual({ data_source_id: 'ds-123' });
-      expect(res.page_id).toBe('p1');
+      await expect(
+        runImport({
+          mdPath,
+          dbId: 'db-456',
+          dryRun: false,
+        }),
+      ).rejects.toThrow(ValidationError);
     } finally {
       rmSync(tempDir, { recursive: true, force: true });
     }

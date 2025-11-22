@@ -1,7 +1,7 @@
 import yaml from 'js-yaml';
 import { createHash } from 'node:crypto';
 import { createWriteStream, readFileSync } from 'node:fs';
-import { copyFile, mkdir, rename, stat, unlink } from 'node:fs/promises';
+import { copyFile, mkdir, rename, stat, unlink, writeFile } from 'node:fs/promises';
 import { dirname, resolve } from 'node:path';
 import { Readable } from 'node:stream';
 import { pipeline } from 'node:stream/promises';
@@ -29,6 +29,17 @@ const RETRYABLE_STATUS = new Set([408, 409, 425, 429, 500, 502, 503, 504]);
 
 export function hashStudyText(text: string): string {
   return createHash('sha256').update(text).digest('hex');
+}
+
+async function ensureFileExists(path: string): Promise<void> {
+  try {
+    await stat(path);
+    return;
+  } catch (error: any) {
+    if (error?.code !== 'ENOENT') throw error;
+  }
+  await mkdir(dirname(path), { recursive: true });
+  await writeFile(path, '');
 }
 
 function sanitizeStudentName(student?: unknown): string {
@@ -91,7 +102,7 @@ async function buildDialogueMp3(
     if (!voiceId) {
       throw new ConfigurationError(
         `No voice mapping found for speaker "${speaker}". ` +
-        `Available speakers: ${[...voiceAssignments.keys()].join(', ')}`,
+          `Available speakers: ${[...voiceAssignments.keys()].join(', ')}`,
       );
     }
     return {
@@ -124,6 +135,7 @@ async function buildDialogueMp3(
     // Check if target already exists to avoid overwriting if not forced?
     // For now, we just overwrite/rename as per monologue behavior which calculates target path first.
     // But here synthesizeDialogue generated a hash-based file.
+    await ensureFileExists(result.audioPath);
     await rename(result.audioPath, targetPath);
   }
 
@@ -298,7 +310,7 @@ export async function buildStudyTextMp3(
     if (!voiceId) {
       throw new ConfigurationError(
         `No ElevenLabs voice could be resolved for line "${segment.raw}". ` +
-        `Ensure frontmatter speaker profiles or voices.yml provide enough information.`,
+          `Ensure frontmatter speaker profiles or voices.yml provide enough information.`,
       );
     }
 
@@ -464,8 +476,8 @@ function resolveStudyTextSegments(lines: string[], frontmatter: Frontmatter): St
   const segments: StudyTextSegment[] = [];
   const labelOrder = Array.isArray(frontmatter.speaker_labels)
     ? frontmatter.speaker_labels
-      .map((label) => (typeof label === 'string' ? label.trim() : ''))
-      .filter(Boolean)
+        .map((label) => (typeof label === 'string' ? label.trim() : ''))
+        .filter(Boolean)
     : [];
   const nonNarratorFallback = labelOrder.find((label) => label.toLowerCase() !== 'narrator');
   const singleFallback = labelOrder.length === 1 ? labelOrder[0] : undefined;

@@ -1,6 +1,6 @@
 {
   "name": "@esl-pipeline/notion-importer",
-  "version": "2.0.0",
+  "version": "2.1.0",
   "private": true,
   "description": "Import validated ESL assignments into Notion databases.",
   "keywords": [

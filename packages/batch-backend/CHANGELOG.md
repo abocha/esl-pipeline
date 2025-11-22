@@ -1,5 +1,12 @@
 # @esl-pipeline/batch-backend
 
+## 1.0.1
+
+### Patch Changes
+
+- Updated dependencies
+  - @esl-pipeline/orchestrator@3.0.1
+
 ## 1.0.0
 
 ### Major Changes

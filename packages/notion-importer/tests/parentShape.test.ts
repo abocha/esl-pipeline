@@ -81,7 +81,15 @@ Test plan
 
       // Mock createNotionClient and pages.create
       const create = vi.fn().mockResolvedValue({ id: 'p1' });
-      vi.spyOn(notion, 'createNotionClient' as any).mockReturnValue({ pages: { create } });
+      vi.spyOn(notion, 'createNotionClient' as any).mockReturnValue({
+        pages: { create },
+        databases: {
+          retrieve: vi.fn().mockResolvedValue({
+            id: 'db-456',
+            properties: { Topic: { type: 'rich_text' } },
+          }),
+        },
+      });
 
       // Mock resolveStudentId to return student page ID
       vi.spyOn(notion, 'resolveStudentId' as any).mockResolvedValue('student-page-id');

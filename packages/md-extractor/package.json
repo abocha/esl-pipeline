@@ -1,6 +1,6 @@
 {
   "name": "@esl-pipeline/md-extractor",
-  "version": "2.0.0",
+  "version": "2.0.1",
   "private": true,
   "description": "Extract study text, answer keys, and sections from ESL markdown.",
   "keywords": [

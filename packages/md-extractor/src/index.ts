@@ -38,8 +38,10 @@ function findBlock(
 }
 
 function isDialogueLine(line: string): boolean {
-  // e.g., "A:", "Anna:", "[Teacher]:", "S1:"
-  return /^[\s]*[\[\(]?[A-Za-zА-Яа-яЁё0-9 _.-]{1,32}[\]\)]?:\s+/.test(line);
+  // e.g., "A:", "Anna:", "[Teacher]:", "S1:", "**Teacher**:", "**Teacher:**"
+  return /^\s*(?:\[([^\]]+)\]|(?:\*\*)?([A-Za-zА-Яа-яЁё0-9 _.\-]{1,32})(?:\*\*)?)\s*:(?:\*\*)?\s+/.test(
+    line,
+  );
 }
 
 export function extractFrontmatter(md: string): Frontmatter {
@@ -68,17 +70,17 @@ export function extractStudyText(md: string): StudyText {
 
 export function extractAnswerKey(md: string): string {
   const n = normalize(md);
-  const block = findBlock(n, /(^|\n)[ \t]*:::toggle-heading\s+Answer Key[^\n]*\n/i);
+  const block = findBlock(n, /(^|\n)[ \t]*:::(toggle-heading|toggle-h2)\s+Answer Key[^\n]*\n/i);
   if (!block) throw new ValidationError('Answer Key toggle not found');
   return block.body;
 }
 
 export function extractTeacherNotes(md: string): string {
   const n = normalize(md);
-  // match Teacher’s / Teacher's (curly or straight apostrophe)
+  // Match Teacher's with any apostrophe variant: ' (U+0027), ' (U+2018), ' (U+2019)
   const block = findBlock(
     n,
-    /(^|\n)[ \t]*:::toggle-heading\s+Teacher[’']s\s+Follow-up\s+Plan[^\n]*\n/i,
+    /(^|\n)[ \t]*:::(toggle-heading|toggle-h[23])\s+Teacher[\u0027\u2018\u2019]s\s+Follow-up\s+Plan[^\n]*\n/i,
   );
   if (!block) throw new ValidationError("Teacher's Follow-up Plan toggle not found");
   return block.body;

@@ -19,8 +19,8 @@ type CommandInput = Record<string, unknown>;
 
 type CommandConstructor = new (input: CommandInput) => { input: CommandInput };
 
-var PutObjectCommandClass: CommandConstructor | undefined;
-var GetObjectCommandClass: CommandConstructor | undefined;
+let PutObjectCommandClass: CommandConstructor | undefined;
+let GetObjectCommandClass: CommandConstructor | undefined;
 
 vi.mock('@aws-sdk/client-s3', () => {
   class PutObjectCommand {

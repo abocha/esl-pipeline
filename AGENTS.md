@@ -135,6 +135,7 @@ For CI, release, and workflow invariants, follow [`docs/agents-ssot.md`](docs/ag
 - Manifests: by default live next to the Markdown; adapters (e.g. S3) are configured via orchestrator (`createPipeline`) and env vars.
 - External deps (Notion, ElevenLabs, AWS/S3) are real; tests use mocks.
 - Markdown: validator enforces stricter rules (e.g. flush-left `:::study-text`).
+- Notion importer: frontmatter `properties` must exist in the target DB (unknown keys fail fast); `Topic` type is inferred from the DB schema (multi-select if missing/defined that way, otherwise rich_text). Advanced blocks (callout/columns/toggle headings/synced/table) are serialized exactly per Notion API.
 - Binary: `esl` is the canonical CLI; legacy aliases are removed.
 - We do not bundle ffmpeg; users must install it.
 

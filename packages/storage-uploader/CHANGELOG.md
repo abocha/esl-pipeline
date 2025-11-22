@@ -1,5 +1,11 @@
 # @esl-pipeline/storage-uploader
 
+## 2.0.1
+
+### Patch Changes
+
+- almost full rewrite of mdToBlocks to match advansed formatting directives in Notion API
+
 ## 2.0.0
 
 ### Major Changes
