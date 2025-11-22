@@ -1,7 +1,7 @@
 import yaml from 'js-yaml';
 import { createHash } from 'node:crypto';
 import { createWriteStream, readFileSync } from 'node:fs';
-import { copyFile, mkdir, stat, unlink } from 'node:fs/promises';
+import { copyFile, mkdir, rename, stat, unlink } from 'node:fs/promises';
 import { dirname, resolve } from 'node:path';
 import { Readable } from 'node:stream';
 import { pipeline } from 'node:stream/promises';
@@ -80,6 +80,7 @@ async function buildDialogueMp3(
   options: BuildStudyTextOptions,
   apiKey: string,
   outputDir: string,
+  frontmatter: Frontmatter,
 ): Promise<BuildStudyTextResult> {
   const { dialogueLanguage, dialogueStability, dialogueSeed } = options;
 
@@ -90,7 +91,7 @@ async function buildDialogueMp3(
     if (!voiceId) {
       throw new ConfigurationError(
         `No voice mapping found for speaker "${speaker}". ` +
-          `Available speakers: ${[...voiceAssignments.keys()].join(', ')}`,
+        `Available speakers: ${[...voiceAssignments.keys()].join(', ')}`,
       );
     }
     return {
@@ -114,8 +115,30 @@ async function buildDialogueMp3(
     outputDir,
   );
 
+  // Rename file to include student name prefix
+  const fileName = buildOutputFileName(result.hash, frontmatter);
+  const targetPath = resolve(outputDir, fileName);
+
+  // If the target path is different from the generated path, rename it
+  if (targetPath !== result.audioPath) {
+    // Check if target already exists to avoid overwriting if not forced?
+    // For now, we just overwrite/rename as per monologue behavior which calculates target path first.
+    // But here synthesizeDialogue generated a hash-based file.
+    await rename(result.audioPath, targetPath);
+  }
+
+  // Set ID3 title metadata
+  const titleMeta =
+    typeof frontmatter.title === 'string' && frontmatter.title.trim().length > 0
+      ? frontmatter.title.trim()
+      : '';
+
+  if (titleMeta) {
+    await setMp3TitleMetadata(targetPath, titleMeta, await resolveFfmpegPath(options.ffmpegPath));
+  }
+
   return {
-    path: result.audioPath,
+    path: targetPath,
     duration: result.duration,
     hash: result.hash,
     voices: voiceSummaries,
@@ -196,7 +219,15 @@ export async function buildStudyTextMp3(
     const outputDir = resolve(opts.outPath || dirname(mdPath));
     await mkdir(outputDir, { recursive: true });
 
-    return buildDialogueMp3(segments, speakerVoiceMap, voiceSummaries, opts, apiKey, outputDir);
+    return buildDialogueMp3(
+      segments,
+      speakerVoiceMap,
+      voiceSummaries,
+      opts,
+      apiKey,
+      outputDir,
+      frontmatter,
+    );
   }
 
   // Continue with existing monologue path...
@@ -267,7 +298,7 @@ export async function buildStudyTextMp3(
     if (!voiceId) {
       throw new ConfigurationError(
         `No ElevenLabs voice could be resolved for line "${segment.raw}". ` +
-          `Ensure frontmatter speaker profiles or voices.yml provide enough information.`,
+        `Ensure frontmatter speaker profiles or voices.yml provide enough information.`,
       );
     }
 
@@ -433,8 +464,8 @@ function resolveStudyTextSegments(lines: string[], frontmatter: Frontmatter): St
   const segments: StudyTextSegment[] = [];
   const labelOrder = Array.isArray(frontmatter.speaker_labels)
     ? frontmatter.speaker_labels
-        .map((label) => (typeof label === 'string' ? label.trim() : ''))
-        .filter(Boolean)
+      .map((label) => (typeof label === 'string' ? label.trim() : ''))
+      .filter(Boolean)
     : [];
   const nonNarratorFallback = labelOrder.find((label) => label.toLowerCase() !== 'narrator');
   const singleFallback = labelOrder.length === 1 ? labelOrder[0] : undefined;

@@ -1,5 +1,11 @@
 # @esl-pipeline/tts-elevenlabs
 
+## 3.0.1
+
+### Patch Changes
+
+- fix prepend and metadata bug
+
 ## 3.0.0
 
 ### Major Changes
