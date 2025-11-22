@@ -7,6 +7,94 @@ import { validateMarkdownFile } from '../src/validator.js';
 
 const fixturesPath = path.join(import.meta.dirname, '..', 'fixtures');
 
+function buildBaseDoc(firstSectionContent: string): string {
+  return `
+\`\`\`markdown
+---
+title: 'Homework Assignment: Conditionals Type 2'
+student: Anna
+level: A2
+topic: Second Conditional
+input_type: generate
+speaker_labels: [Alex, Mara]
+---
+
+## 1. 🎯 This Week's Mission Briefing
+
+${firstSectionContent}
+
+## 2. 🗺️ Your Homework Roadmap
+
+Text
+
+## 3. 🎧 Input Material: The Source
+
+### B. 🤖 Generated Material
+
+- **Text:**
+:::study-text
+[Alex]: Hi!
+[Mara]: Hello!
+:::
+
+## 4. 🛠️ Language Toolkit: Useful Language
+
+### A. 👀 Notice the Grammar
+
+text
+
+### B. 🗣️ Useful Chunks & Vocabulary
+
+text
+
+## 5. ✍️ Practice & Pronunciation
+
+### A. 🔩 Controlled Practice
+
+1. a
+2. b
+3. c
+4. d
+5. e
+6. f
+7. g
+8. h
+
+### B. 🤔 Comprehension Check
+
+1. x
+2. y
+
+### C. 🎙️ Pronunciation Micro-Focus (≈1 min)
+
+text
+
+## 6. ✅ Your Turn: Complete the Mission!
+
+text
+
+## 7. 🧠 Why This Mission Helps You
+
+text
+
+## 8. 🔑 Answer Key & Sample Mission
+
+:::toggle-heading Answer Key
+
+### A. Controlled Practice Answers
+
+...
+:::
+
+## 9. 👨‍🏫 Teacher's Follow-up Plan
+
+:::toggle-heading Teacher’s Follow-up Plan
+notes
+:::
+\`\`\`
+  `.trim();
+}
+
 describe('md-validator', () => {
   it('passes ok fixture', async () => {
     const res = await validateMarkdownFile(path.join(fixturesPath, 'ok.md'));
@@ -512,5 +600,61 @@ content
     const res = await validateMarkdownFile(file);
     expect(res.ok).toBe(false);
     expect(res.errors.join('\n')).toMatch(/closing marker must be ":::"/i);
+  });
+
+  it('fails when column-list has no columns', async () => {
+    const tempDir = await mkdtemp(path.join(tmpdir(), 'validator-'));
+    const file = path.join(tempDir, 'column-list-empty.md');
+    const md = buildBaseDoc(
+      ['Text', ':::column-list', 'This has no column markers', ':::'].join('\n'),
+    );
+    await writeFile(file, md);
+    const res = await validateMarkdownFile(file);
+    expect(res.ok).toBe(false);
+    expect(res.errors.join('\n')).toMatch(/column-list.*at least one ":::column"/i);
+  });
+
+  it('accepts column-list with columns', async () => {
+    const tempDir = await mkdtemp(path.join(tmpdir(), 'validator-'));
+    const file = path.join(tempDir, 'column-list-ok.md');
+    const md = buildBaseDoc(
+      [
+        'Text',
+        ':::column-list',
+        ':::column',
+        'Left content',
+        ':::',
+        ':::column',
+        'Right content',
+        ':::',
+        ':::',
+      ].join('\n'),
+    );
+    await writeFile(file, md);
+    const res = await validateMarkdownFile(file);
+    expect(res.ok).toBe(true);
+    expect(res.errors).toHaveLength(0);
+  });
+
+  it('fails when synced-block has no content and no source id', async () => {
+    const tempDir = await mkdtemp(path.join(tmpdir(), 'validator-'));
+    const file = path.join(tempDir, 'synced-empty.md');
+    const md = buildBaseDoc(['Text', ':::synced-block', ':::'].join('\n'));
+    await writeFile(file, md);
+    const res = await validateMarkdownFile(file);
+    expect(res.ok).toBe(false);
+    expect(res.errors.join('\n')).toMatch(/synced-block.*must include content/i);
+  });
+
+  it('fails when table rows are ragged', async () => {
+    const tempDir = await mkdtemp(path.join(tmpdir(), 'validator-'));
+    const file = path.join(tempDir, 'table-ragged.md');
+    const md = buildBaseDoc(
+      ['Text', '| A | B |', '| -- | -- |', '| 1 | 2 |', '| only-one |'].join('\n'),
+    );
+    await writeFile(file, md);
+    const res = await validateMarkdownFile(file);
+    expect(res.ok).toBe(false);
+    expect(res.errors.join('\n')).toMatch(/Table .* inconsistent column counts/i);
   });
 });

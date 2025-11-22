@@ -1,5 +1,6 @@
 import matter from 'gray-matter';
 import type { Heading, Root, RootContent } from 'mdast';
+import type { PhrasingContent } from 'mdast';
 import { readFile } from 'node:fs/promises';
 import remarkParse from 'remark-parse';
 import { unified } from 'unified';
@@ -29,9 +30,15 @@ const FrontSchema = z.object({
   title: z.string().min(1),
   student: z.string().min(1),
   level: z.string().min(1),
-  topic: z.union([z.string().min(1), z.array(z.string().min(1))]),
+  // Topic is always a single string (preprocess arrays to join with commas)
+  topic: z.string().min(1),
   input_type: z.string().min(1),
   speaker_labels: z.array(z.string().min(1)).optional(),
+  // New fields for advanced Notion features
+  icon: z.emoji().optional(),
+  cover: z.url().optional(),
+  properties: z.record(z.string(), z.unknown()).optional(),
+  speaker_profiles: z.array(z.any()).optional(), // Already in fixtures, add for completeness
 });
 
 const EXPECTED_H2 = [
@@ -73,13 +80,18 @@ function extractFirstCodeBlock(raw: string): { lang: string; content: string } {
   return { lang: lang ?? '', content: content ?? '' };
 }
 
+function getTextFromNode(node: PhrasingContent): string {
+  if ('value' in node) {
+    return node.value;
+  }
+  if ('children' in node && Array.isArray(node.children)) {
+    return (node.children as PhrasingContent[]).map((n) => getTextFromNode(n)).join('');
+  }
+  return '';
+}
+
 function textFromHeading(h: Heading): string {
-  const txt = (h.children ?? [])
-    .map((ch) => {
-      // @ts-expect-error mdast children typing does not expose value on all node kinds
-      return ch.value ?? (ch.children ? ch.children.map((c: any) => c.value ?? '').join('') : '');
-    })
-    .join('');
+  const txt = (h.children ?? []).map((n) => getTextFromNode(n)).join('');
   return normalizeHeadingText(txt);
 }
 
@@ -87,6 +99,243 @@ type StudyTextSearch =
   | { status: 'missing' }
   | { status: 'error'; message: string }
   | { status: 'ok'; body: string; markerLine: number; inlineAfterMarker: string };
+
+function validateColumnLists(source: string, errors: string[]): void {
+  const lines = source.split(/\r?\n/);
+  for (let i = 0; i < lines.length; i++) {
+    const raw = lines[i] ?? '';
+    const trimmed = raw.trim();
+    if (!/^:::column-list\b/i.test(trimmed)) continue;
+
+    const startLine = i + 1;
+    let hasColumn = false;
+    let depth = 1;
+    let j = i + 1;
+
+    for (; j < lines.length; j++) {
+      const line = lines[j];
+      if (line === undefined) break;
+      const t = line.trim();
+
+      if (/^:::column\b/i.test(t)) {
+        hasColumn = true;
+        depth++;
+      } else if (/^:::(column-list|callout|toggle-|study-text|synced-block)/i.test(t)) {
+        depth++;
+      } else if (/^:::\s*$/.test(t)) {
+        depth--;
+        if (depth === 0) {
+          j++; // move past the closing marker
+          break;
+        }
+      }
+    }
+
+    if (depth > 0) {
+      errors.push(
+        `column-list starting at line ${startLine} is missing a closing ":::" after its contents.`,
+      );
+      break;
+    }
+    if (!hasColumn) {
+      errors.push(
+        `column-list starting at line ${startLine} must contain at least one ":::column" section.`,
+      );
+    }
+    i = j - 1; // skip past processed block
+  }
+}
+
+interface ExtractedDirective {
+  content: string[];
+  endIndex: number;
+  closed: boolean;
+}
+
+function extractDirectiveContent(lines: string[], startIndex: number): ExtractedDirective {
+  let idx = startIndex;
+  const inner: string[] = [];
+  let depth = 1;
+
+  while (idx < lines.length) {
+    const line = lines[idx];
+    if (line === undefined) break;
+    const t = line.trim();
+
+    if (/^:::(column|callout|toggle-|study-text|synced-block|column-list)/i.test(t)) {
+      depth++;
+    } else if (/^:::\s*$/.test(t)) {
+      depth--;
+      if (depth === 0) {
+        return { content: inner, endIndex: idx + 1, closed: true };
+      }
+    }
+
+    inner.push(line);
+    idx++;
+  }
+
+  return { content: inner, endIndex: lines.length, closed: false };
+}
+
+function validateAdvancedDirectives(source: string, errors: string[]): void {
+  const lines = source.split(/\r?\n/);
+  for (let i = 0; i < lines.length; i++) {
+    const raw = lines[i] ?? '';
+    const trimmed = raw.trim();
+
+    // callout
+    const calloutMatch = /^:::callout\s*(.+)?$/i.exec(trimmed);
+    if (calloutMatch) {
+      const icon = calloutMatch[1]?.trim() ?? '';
+      const { content, endIndex, closed } = extractDirectiveContent(lines, i + 1);
+      if (!closed) {
+        errors.push(
+          `callout starting at line ${i + 1} is missing a closing ":::" after its content.`,
+        );
+        break;
+      }
+      if (!icon) {
+        errors.push(
+          `callout starting at line ${i + 1} must provide an emoji/icon after ":::callout".`,
+        );
+      }
+      const hasContent = content.some((line) => line.trim().length > 0);
+      if (!hasContent) {
+        errors.push(
+          `callout starting at line ${i + 1} must contain content before the closing ":::" marker.`,
+        );
+      }
+      i = endIndex - 1;
+      continue;
+    }
+
+    // column-list
+    if (/^:::column-list\b/i.test(trimmed)) {
+      const { content, endIndex, closed } = extractDirectiveContent(lines, i + 1);
+      if (!closed) {
+        errors.push(
+          `column-list starting at line ${i + 1} is missing a closing ":::" after its contents.`,
+        );
+        break;
+      }
+      const columns: string[][] = [];
+      let current: string[] = [];
+      let inColumn = false;
+      for (const line of content) {
+        const t = line.trim();
+        if (/^:::column\b/i.test(t)) {
+          if (inColumn) {
+            columns.push(current);
+            current = [];
+          }
+          inColumn = true;
+        } else if (/^:::\s*$/.test(t) && inColumn) {
+          columns.push(current);
+          current = [];
+          inColumn = false;
+        } else if (inColumn) {
+          current.push(line);
+        }
+      }
+      if (inColumn) columns.push(current);
+      if (columns.length === 0) {
+        errors.push(
+          `column-list starting at line ${i + 1} must contain at least one ":::column" section with content.`,
+        );
+      } else {
+        const emptyIdx = columns.findIndex((col) => col.every((ln) => ln.trim().length === 0));
+        if (emptyIdx !== -1) {
+          errors.push(
+            `column-list starting at line ${i + 1} has an empty column #${emptyIdx + 1}; add content or remove it.`,
+          );
+        }
+      }
+      i = endIndex - 1;
+      continue;
+    }
+
+    // synced-block
+    const syncedMatch = /^:::synced-block(?:\s+(.+))?\s*$/i.exec(trimmed);
+    if (syncedMatch) {
+      const syncId = syncedMatch[1]?.trim();
+      const { content, endIndex, closed } = extractDirectiveContent(lines, i + 1);
+      if (!closed) {
+        errors.push(
+          `synced-block starting at line ${i + 1} is missing a closing ":::" after its contents.`,
+        );
+        break;
+      }
+      const hasContent = content.some((line) => line.trim().length > 0);
+      if (!syncId && !hasContent) {
+        errors.push(
+          `synced-block starting at line ${i + 1} must include content when no source block id is provided.`,
+        );
+      }
+      i = endIndex - 1;
+      continue;
+    }
+
+    // audio / video
+    const audioMatch = /^:::audio\s+(.+)$/i.exec(trimmed);
+    if (audioMatch) {
+      const audioUrl = audioMatch[1]?.trim() ?? '';
+      if (!audioUrl) {
+        errors.push(`Line ${i + 1}: audio directive requires a URL after ":::audio".`);
+      }
+      continue;
+    }
+    const videoMatch = /^:::video\s+(.+)$/i.exec(trimmed);
+    if (videoMatch) {
+      const videoUrl = videoMatch[1]?.trim() ?? '';
+      if (!videoUrl) {
+        errors.push(`Line ${i + 1}: video directive requires a URL after ":::video".`);
+      }
+      continue;
+    }
+
+    // table rows: ensure consistent cell counts and at least one data row
+    if (trimmed.startsWith('|')) {
+      const tableLines: string[] = [];
+      let j = i;
+      while (j < lines.length && (lines[j]?.trim().startsWith('|') ?? false)) {
+        tableLines.push(lines[j]!.trim());
+        j++;
+      }
+
+      if (tableLines.length > 0) {
+        const parseRow = (line: string) => {
+          const cells = line.split('|');
+          if (cells[0] === '') cells.shift();
+          if (cells.at(-1) === '') cells.pop();
+          return cells.map((c) => c.trim());
+        };
+
+        const rows = tableLines.map((line) => parseRow(line));
+        const width = rows[0]?.length ?? 0;
+        if (width === 0) {
+          errors.push(`Table starting at line ${i + 1} must have at least one column.`);
+        }
+        const ragged = rows.findIndex((r) => r.length !== width);
+        if (ragged !== -1) {
+          errors.push(
+            `Table starting at line ${i + 1} has inconsistent column counts (row ${
+              ragged + 1
+            } differs). Make all rows the same length.`,
+          );
+        }
+        const hasHeader = rows.length >= 2 && rows[1]!.every((cell) => /^[-:]+$/.test(cell));
+        const dataRows = hasHeader ? rows.slice(2) : rows.slice(1);
+        if ((hasHeader && dataRows.length === 0) || rows.length === 0) {
+          errors.push(`Table starting at line ${i + 1} must include at least one data row.`);
+        }
+      }
+
+      i = j - 1;
+      continue;
+    }
+  }
+}
 
 function findStudyTextRegion(source: string): StudyTextSearch {
   const lines = source.split(/\r?\n/);
@@ -143,10 +392,9 @@ function parseMarkdownAst(md: string): Root {
 
 function collectHeadings(root: Root, depth: 2 | 3): Heading[] {
   const out: Heading[] = [];
-  const stack: RootContent[] = [...(root.children as RootContent[])];
-  for (const node of stack) {
-    if ((node as any).type === 'heading' && (node as any).depth === depth) {
-      out.push(node as any);
+  for (const node of root.children) {
+    if (node.type === 'heading' && node.depth === depth) {
+      out.push(node);
     }
   }
   return out;
@@ -154,11 +402,11 @@ function collectHeadings(root: Root, depth: 2 | 3): Heading[] {
 
 function sectionSlice(root: Root, startHeading: Heading): RootContent[] {
   // return nodes after startHeading until next heading with depth <= start.depth
-  const ch = root.children as RootContent[];
-  const idx = ch.indexOf(startHeading as unknown as RootContent);
+  const ch = root.children;
+  const idx = ch.indexOf(startHeading);
   const rel = ch
     .slice(idx + 1)
-    .findIndex((n: any) => n.type === 'heading' && n.depth <= (startHeading as any).depth);
+    .findIndex((n) => n.type === 'heading' && n.depth <= startHeading.depth);
   const endIdx = rel === -1 ? ch.length : idx + 1 + rel;
   return ch.slice(idx + 1, endIdx);
 }
@@ -177,13 +425,19 @@ export async function validateMarkdownFile(
   let block: { lang: string; content: string };
   try {
     block = extractFirstCodeBlock(content);
-  } catch (error: any) {
-    return { ok: false, errors: [error.message], warnings };
+  } catch (error: unknown) {
+    const msg = error instanceof Error ? error.message : String(error);
+    return { ok: false, errors: [msg], warnings };
   }
   const inside = block.content.trim();
 
   // 2) front matter
   const fm = matter(inside);
+  // Normalize topic: if it's an array (from unquoted YAML like "topic: Grammar, Speaking"),
+  // join it into a single string. Topic should always be a single value.
+  if (fm.data.topic && Array.isArray(fm.data.topic)) {
+    fm.data.topic = fm.data.topic.join(', ');
+  }
   const metaParse = FrontSchema.safeParse(fm.data);
   if (!metaParse.success) {
     for (const issue of metaParse.error.issues) {
@@ -199,8 +453,18 @@ export async function validateMarkdownFile(
   const h2 = collectHeadings(ast, 2).map((heading) => textFromHeading(heading));
   if (h2.length === 9) {
     for (let i = 0; i < 9; i++) {
-      if (h2[i] !== EXPECTED_H2[i]) {
-        errors.push(`H2 #${i + 1} mismatch. Found: "${h2[i]}"`);
+      const expected = EXPECTED_H2[i];
+      const actual = h2[i];
+      // Relaxed check: if expected is "3. input material...", allow actual to just start with it
+      // This handles "3. Input Material: The Story of Zaika"
+      if (i === 2) {
+        if (!actual?.startsWith('3. input material')) {
+          errors.push(
+            `H2 #3 mismatch. Expected to start with "3. input material", found: "${actual}"`,
+          );
+        }
+      } else if (actual !== expected) {
+        errors.push(`H2 #${i + 1} mismatch. Found: "${actual}"`);
       }
     }
   } else {
@@ -208,13 +472,18 @@ export async function validateMarkdownFile(
   }
 
   // b) markers
-  const hasAnswerKeyToggle = /:::toggle-heading\s+answer\s+key/i.test(fm.content);
-  const hasTeacherPlanToggle = /:::toggle-heading\s+teacher[’']s\s+follow-up\s+plan/i.test(
-    fm.content,
-  );
-  if (!hasAnswerKeyToggle) errors.push('Missing marker: ":::toggle-heading Answer Key"');
+  const hasAnswerKeyToggle = /:::(toggle-heading|toggle-h2)\s+answer\s+key/i.test(fm.content);
+  // Match Teacher's with any apostrophe variant: ' (U+0027), ' (U+2018), ' (U+2019)
+  const hasTeacherPlanToggle =
+    /:::(toggle-heading|toggle-h[23])\s+teacher[\u0027\u2018\u2019]s\s+follow-up\s+plan/i.test(
+      fm.content,
+    );
+  if (!hasAnswerKeyToggle)
+    errors.push('Missing marker: ":::toggle-heading Answer Key" or ":::toggle-h2 Answer Key"');
   if (!hasTeacherPlanToggle)
-    errors.push('Missing marker: ":::toggle-heading Teacher’s Follow-up Plan"');
+    errors.push(
+      'Missing marker: ":::toggle-heading Teacher\'s Follow-up Plan" or ":::toggle-h2/h3 Teacher\'s Follow-up Plan"',
+    );
 
   const study = findStudyTextRegion(fm.content);
   if (study.status === 'missing') {
@@ -237,7 +506,10 @@ export async function validateMarkdownFile(
         for (const [i, raw] of rawLines.entries()) {
           const line = raw.trim();
           if (!line) continue;
-          const m = line.match(/^\s*(?:\[([^\]]+)\]|([A-Za-zА-Яа-яЁё0-9 _.\-]{1,32}))\s*:\s+.+$/);
+          // Relaxed regex: allow markdown like **Name**: or [Name]: or **Name:**
+          const m = line.match(
+            /^\s*(?:\[([^\]]+)\]|(?:\*\*)?([A-Za-zА-Яа-яЁё0-9 _.\-]{1,32})(?:\*\*)?)\s*:(?:\*\*)?\s+.+$/,
+          );
           if (m) {
             const who = (m[1] ?? m[2] ?? '').trim();
             if (!who) {
@@ -247,12 +519,16 @@ export async function validateMarkdownFile(
               currentSpeaker = null;
               continue;
             }
-            if (!labelSet.has(who.toLowerCase())) {
+            // Strip markdown from the extracted name for validation
+            const cleanWho = who.replaceAll('**', '').trim();
+            if (!labelSet.has(cleanWho.toLowerCase())) {
               errors.push(
-                `study-text line ${i + 1}: unknown speaker "${who}". Allowed: [${meta!.speaker_labels!.join(', ')}].`,
+                `study-text line ${i + 1}: unknown speaker "${cleanWho}". Allowed: [${meta!.speaker_labels!.join(
+                  ', ',
+                )}].`,
               );
             }
-            currentSpeaker = who;
+            currentSpeaker = cleanWho;
             continue;
           }
           if (!currentSpeaker) {
@@ -322,14 +598,24 @@ export async function validateMarkdownFile(
   // e) no nested code blocks inside the doc
   const codeInside = (ast.children as any[]).some((n) => n.type === 'code');
   if (codeInside) {
-    errors.push('Found code block(s) inside the main document. Avoid nested ``` blocks.');
+    warnings.push('Found code block(s) inside the main document. Avoid nested ``` blocks.');
   }
+
+  // f) column-list blocks must contain at least one column and have a closing marker
+  validateColumnLists(fm.content, errors);
+  // g) advanced directives sanity checks (callout, audio/video, synced-block, tables)
+  validateAdvancedDirectives(fm.content, errors);
 
   if (meta?.input_type && !['generate', 'authentic'].includes(meta.input_type)) {
     warnings.push(`input_type "${meta.input_type}" is not one of "generate"|"authentic".`);
   }
 
+  // In strict mode, warnings should surface to callers that expect actionable feedback.
+  if (strict && warnings.length > 0 && errors.length === 0) {
+    errors.push(...warnings);
+  }
+
   const ok = errors.length === 0 && (!strict || warnings.length === 0);
 
-  return { ok, errors, warnings, meta: meta as any };
+  return { ok, errors, warnings, meta };
 }

@@ -385,6 +385,15 @@ For all subsections:
   - Create/update Notion pages; manage hierarchy and sources.
 - Contracts:
   - Input from extractor and config; output Notion references consumed later.
+  - Frontmatter `properties` MUST already exist in the target database; unknown property names are a validation error (fail fast before calling Notion).
+  - Topic handling is DB-driven: if a `Topic` property is missing or is `multi_select`, send multi-select (split by commas); otherwise send rich_text.
+  - Advanced blocks MUST match Notion API schemas:
+    - callout children inside `callout.children`
+    - column lists under `column_list.column_list.children -> column.column.children`
+    - toggle headings (`toggle-h1/h2/h3`) keep children under the heading payload
+    - synced blocks use `synced_block.children` when creating new content; references use `synced_from`
+    - tables put rows in `table.table.children`
+    - list-item nesting stays under list-item payload (`bulleted_list_item.children`, `numbered_list_item.children`)
 - Safe extensions:
   - New options that do not break existing orchestrator calls.
 

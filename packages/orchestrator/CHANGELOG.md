@@ -1,5 +1,11 @@
 # @esl-pipeline/orchestrator
 
+## 3.0.1
+
+### Patch Changes
+
+- almost full rewrite of mdToBlocks to match advansed formatting directives in Notion API
+
 ## 3.0.0
 
 ### Major Changes

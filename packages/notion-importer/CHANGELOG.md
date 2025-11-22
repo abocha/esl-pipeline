@@ -1,10 +1,28 @@
 # @esl-pipeline/notion-importer
 
+## 2.1.0
+
+### Minor Changes
+
+- almost full rewrite of mdToBlocks to match advansed formatting directives in Notion API
+
+### Patch Changes
+
+- Updated dependencies
+  - @esl-pipeline/md-extractor@2.0.1
+  - @esl-pipeline/md-validator@2.0.1
+
 ## 2.0.0
 
 ### Major Changes
 
-- large format and lint edit, bring to modern standarts & much much more robust typing; several large refactors removing duplicate code; many bugs fixed; unnecessary deps removed
+- Large format and lint edit, bring to modern standards & much more robust typing; several large refactors removing duplicate code; many bugs fixed; unnecessary deps removed
+- **Advanced Notion Features**: Added support for page icons, cover images, callouts, column layouts, table of contents, audio/video embeds, toggle headings (h1/h2/h3), and synced blocks
+- **Custom Properties**: Added support for arbitrary properties via frontmatter `properties` field
+- **Topic Normalization**: Fixed topic handling - arrays (from unquoted YAML with commas) are now auto-joined into single strings; changed Topic property from `multi_select` to `rich_text`
+- **Frontmatter Extensions**: Added `icon`, `cover`, and `properties` fields to frontmatter
+- **Directive Parsing**: Implemented comprehensive parsing for `:::callout`, `:::column-list`, `:::toc`, `:::audio`, `:::video`, `:::toggle-h1/h2/h3`, and `:::synced-block`
+- **Breaking Change**: Topic is now always a single text value, not an array of tags
 
 ### Patch Changes
 

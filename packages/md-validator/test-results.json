@@ -1,0 +1,123 @@
+{
+  "numTotalTestSuites": 2,
+  "numPassedTestSuites": 0,
+  "numFailedTestSuites": 2,
+  "numPendingTestSuites": 0,
+  "numTotalTests": 9,
+  "numPassedTests": 8,
+  "numFailedTests": 1,
+  "numPendingTests": 0,
+  "numTodoTests": 0,
+  "snapshot": {
+    "added": 0,
+    "failure": false,
+    "filesAdded": 0,
+    "filesRemoved": 0,
+    "filesRemovedList": [],
+    "filesUnmatched": 0,
+    "filesUpdated": 0,
+    "matched": 0,
+    "total": 0,
+    "unchecked": 0,
+    "uncheckedKeysByFile": [],
+    "unmatched": 0,
+    "updated": 0,
+    "didUpdate": false
+  },
+  "startTime": 1763807967368,
+  "success": false,
+  "testResults": [
+    {
+      "assertionResults": [
+        {
+          "ancestorTitles": ["md-validator"],
+          "fullName": "md-validator passes ok fixture",
+          "status": "failed",
+          "title": "passes ok fixture",
+          "duration": 40.39154800000006,
+          "failureMessages": [
+            "AssertionError: expected false to be true // Object.is equality\n    at /home/abocha/code/esl-pipeline/packages/md-validator/tests/validator.test.ts:13:20\n    at file:///home/abocha/code/esl-pipeline/node_modules/.pnpm/@vitest+runner@4.0.13/node_modules/@vitest/runner/dist/index.js:912:20"
+          ],
+          "meta": {}
+        },
+        {
+          "ancestorTitles": ["md-validator"],
+          "fullName": "md-validator fails bad fixture",
+          "status": "passed",
+          "title": "fails bad fixture",
+          "duration": 4.788397000000032,
+          "failureMessages": [],
+          "meta": {}
+        },
+        {
+          "ancestorTitles": ["md-validator"],
+          "fullName": "md-validator accepts dialogue lines without brackets",
+          "status": "passed",
+          "title": "accepts dialogue lines without brackets",
+          "duration": 13.433824000000072,
+          "failureMessages": [],
+          "meta": {}
+        },
+        {
+          "ancestorTitles": ["md-validator"],
+          "fullName": "md-validator flags unknown speaker labels with helpful message",
+          "status": "passed",
+          "title": "flags unknown speaker labels with helpful message",
+          "duration": 8.786774000000037,
+          "failureMessages": [],
+          "meta": {}
+        },
+        {
+          "ancestorTitles": ["md-validator"],
+          "fullName": "md-validator allows inline descriptor after study-text marker",
+          "status": "passed",
+          "title": "allows inline descriptor after study-text marker",
+          "duration": 6.794766999999979,
+          "failureMessages": [],
+          "meta": {}
+        },
+        {
+          "ancestorTitles": ["md-validator"],
+          "fullName": "md-validator allows letter-style study text continuation after speaker line",
+          "status": "passed",
+          "title": "allows letter-style study text continuation after speaker line",
+          "duration": 15.300844999999981,
+          "failureMessages": [],
+          "meta": {}
+        },
+        {
+          "ancestorTitles": ["md-validator"],
+          "fullName": "md-validator allows narrator-only story without explicit speaker prefixes",
+          "status": "passed",
+          "title": "allows narrator-only story without explicit speaker prefixes",
+          "duration": 5.235076999999933,
+          "failureMessages": [],
+          "meta": {}
+        },
+        {
+          "ancestorTitles": ["md-validator"],
+          "fullName": "md-validator fails when study-text marker is indented",
+          "status": "passed",
+          "title": "fails when study-text marker is indented",
+          "duration": 5.258916999999997,
+          "failureMessages": [],
+          "meta": {}
+        },
+        {
+          "ancestorTitles": ["md-validator"],
+          "fullName": "md-validator fails when study-text closing marker is missing or indented",
+          "status": "passed",
+          "title": "fails when study-text closing marker is missing or indented",
+          "duration": 4.764954999999986,
+          "failureMessages": [],
+          "meta": {}
+        }
+      ],
+      "startTime": 1763807967880,
+      "endTime": 1763807967985.765,
+      "status": "failed",
+      "message": "",
+      "name": "/home/abocha/code/esl-pipeline/packages/md-validator/tests/validator.test.ts"
+    }
+  ]
+}

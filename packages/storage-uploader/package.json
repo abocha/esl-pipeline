@@ -1,6 +1,6 @@
 {
   "name": "@esl-pipeline/storage-uploader",
-  "version": "2.0.0",
+  "version": "2.0.1",
   "private": true,
   "description": "Upload ESL assignment assets (audio) to S3-compatible storage.",
   "keywords": [

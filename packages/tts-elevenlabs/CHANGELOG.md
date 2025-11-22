@@ -1,5 +1,13 @@
 # @esl-pipeline/tts-elevenlabs
 
+## 3.0.2
+
+### Patch Changes
+
+- almost full rewrite of mdToBlocks to match advansed formatting directives in Notion API
+- Updated dependencies
+  - @esl-pipeline/md-extractor@2.0.1
+
 ## 3.0.1
 
 ### Patch Changes

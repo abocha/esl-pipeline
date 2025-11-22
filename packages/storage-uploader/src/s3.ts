@@ -4,10 +4,10 @@ import { basename } from 'node:path';
 
 import { ConfigurationError } from '@esl-pipeline/contracts';
 
-type S3ErrorShape = {
+interface S3ErrorShape {
   Code?: string;
   message?: string;
-};
+}
 
 function isAclNotSupported(error: unknown): boolean {
   const e = error as Partial<S3ErrorShape>;

@@ -81,6 +81,10 @@ Useful exports:
 - `resolveConfigPaths(options)` — returns the resolved presets/voices/students/wizard-defaults paths.
 - `loadEnvFiles(options)` — convenience helper for loading `.env` files without mutating `process.env` (set `assignToProcess: false` to opt out).
 - `resolveManifestPath(mdPath)` — deterministic manifest location for a given Markdown file.
+- Notion import specifics:
+  - Frontmatter `properties` must already exist in the target database; unknown properties now fail fast with a clear error.
+  - `Topic` is sent as multi-select when the DB has (or is missing) a multi-select Topic; otherwise it is sent as rich text.
+  - Advanced blocks (callouts, columns, toggle headings, synced blocks, tables) are serialized to the Notion API schema and validated before sending.
 
 For full type signatures and behavioral contracts, see [`docs/agents-ssot.md`](docs/agents-ssot.md).
 
