@@ -12,7 +12,7 @@ import {
 import type { JobEvent, JobState, JobStatus, SubmitJobRequest } from '../utils/api';
 import { getJobStatus, subscribeToJobEvents } from '../utils/api';
 
-type ConnectionState = 'idle' | 'connecting' | 'connected' | 'error' | 'reconnecting';
+type ConnectionState = 'idle' | 'connecting' | 'connected' | 'error' | 'reconnecting' | 'paused';
 
 export type JobEntry = JobStatus & {
   fileName?: string;
@@ -193,6 +193,7 @@ export function JobMonitorProvider({ children }: { children: ReactNode }) {
         finishedAt: event.payload?.finishedAt ?? prev.finishedAt,
         mode: event.payload?.mode ?? prev.mode,
         md: event.payload?.md ?? prev.md,
+        notionUrl: event.payload?.notionUrl ?? prev.notionUrl,
         updatedAt: new Date().toISOString(),
       }));
     },
@@ -264,6 +265,7 @@ export function JobMonitorProvider({ children }: { children: ReactNode }) {
 
   const pauseLiveUpdates = useCallback(() => {
     if (liveUpdatesPaused) return;
+    setConnectionState('paused');
     setLiveUpdatesPaused(true);
     eventSourceAbortRef.current?.abort();
     startPolling();
@@ -271,6 +273,7 @@ export function JobMonitorProvider({ children }: { children: ReactNode }) {
 
   const resumeLiveUpdates = useCallback(() => {
     if (!liveUpdatesPaused) return;
+    setConnectionState('connecting');
     setLiveUpdatesPaused(false);
     reconnectAttemptRef.current = 0;
     connectEventSource();

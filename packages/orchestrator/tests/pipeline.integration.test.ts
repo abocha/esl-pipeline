@@ -19,10 +19,10 @@ type CommandInput = Record<string, unknown>;
 
 type CommandConstructor = new (input: CommandInput) => { input: CommandInput };
 // Initialize with dummy constructors to satisfy hoisting in vi.mock
-var PutObjectCommandClass: CommandConstructor = class {
+let PutObjectCommandClass: CommandConstructor = class {
   constructor(readonly input: CommandInput) {}
 };
-var GetObjectCommandClass: CommandConstructor = class {
+let GetObjectCommandClass: CommandConstructor = class {
   constructor(readonly input: CommandInput) {}
 };
 

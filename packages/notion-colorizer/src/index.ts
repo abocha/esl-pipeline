@@ -17,6 +17,12 @@ interface Counts {
   toggles: number;
 }
 
+type NotionRichText = any[];
+
+function toRequestRichText(value: unknown): NotionRichText {
+  return Array.isArray(value) ? (value as NotionRichText) : [];
+}
+
 export function createNotionClient() {
   const token = process.env.NOTION_TOKEN;
   if (!token) throw new ConfigurationError('Missing NOTION_TOKEN');
@@ -79,7 +85,7 @@ export async function applyHeadingPreset(
               client.blocks.update({
                 block_id: child.id,
                 heading_3: {
-                  rich_text: child.heading_3.rich_text,
+                  rich_text: toRequestRichText(child.heading_3.rich_text) as any,
                   color: preset.h3,
                 },
               }),
@@ -114,7 +120,7 @@ export async function applyHeadingPreset(
             client.blocks.update({
               block_id: block.id,
               heading_2: {
-                rich_text: block.heading_2.rich_text,
+                rich_text: toRequestRichText(block.heading_2.rich_text) as any,
                 color: preset.h2,
               },
             }),
@@ -132,7 +138,7 @@ export async function applyHeadingPreset(
             client.blocks.update({
               block_id: block.id,
               heading_3: {
-                rich_text: block.heading_3.rich_text,
+                rich_text: toRequestRichText(block.heading_3.rich_text) as any,
                 color: preset.h3,
               },
             }),
@@ -161,7 +167,7 @@ export async function applyHeadingPreset(
               client.blocks.update({
                 block_id: block.id,
                 toggle: {
-                  rich_text: annotated,
+                  rich_text: toRequestRichText(annotated) as any,
                 },
               }),
             'blocks.update.toggle',

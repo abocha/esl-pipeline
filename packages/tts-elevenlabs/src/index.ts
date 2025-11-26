@@ -533,14 +533,15 @@ async function synthesizeLineWithRetry(
       lastError = error;
       const status =
         typeof error === 'object' && error
-          ? (error as { status?: number; statusCode?: number; response?: { status?: number } })
+          ? ((error as { status?: number; statusCode?: number; response?: { status?: number } })
               .status ??
             (error as { status?: number; statusCode?: number; response?: { status?: number } })
               .statusCode ??
             (error as { status?: number; statusCode?: number; response?: { status?: number } })
-              .response?.status
+              .response?.status)
           : undefined;
-      if (!RETRYABLE_STATUS.has(status) || attempt === maxAttempts - 1) {
+      const statusNum = status ?? -1;
+      if (!RETRYABLE_STATUS.has(statusNum) || attempt === maxAttempts - 1) {
         throw wrapSynthesisError(error, voiceId, text);
       }
       await wait(400 * Math.pow(2, attempt));
@@ -559,7 +560,7 @@ async function synthesizeLine(
   const responseStream = await client.textToSpeech.convert(voiceId, {
     text,
     modelId: DEFAULT_MODEL_ID,
-    outputFormat: DEFAULT_OUTPUT_FORMAT,
+    outputFormat: DEFAULT_OUTPUT_FORMAT as any,
   });
   const nodeStream = Readable.fromWeb(responseStream as unknown as NodeReadableStream);
   await pipeline(nodeStream, createWriteStream(outFile));

@@ -86,7 +86,10 @@ function onCancel(): never {
  * Helper function to run an enquirer prompt and handle cancellation uniformly.
  * Returns an object with the answer keyed by the prompt name.
  */
-async function runPrompt<T>(PromptClass: PromptCtor<T>, options: PromptOptions): Promise<Record<string, T>> {
+async function runPrompt<T>(
+  PromptClass: PromptCtor<T>,
+  options: PromptOptions,
+): Promise<Record<string, T>> {
   const prompt = new PromptClass(options);
   try {
     const answer = await prompt.run();

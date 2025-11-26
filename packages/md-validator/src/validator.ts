@@ -38,9 +38,7 @@ const FrontSchema = z.object({
   icon: z.emoji().optional(),
   cover: z.url().optional(),
   properties: z.record(z.string(), z.unknown()).optional(),
-  speaker_profiles: z
-    .array(z.record(z.string(), z.unknown()))
-    .optional(), // Already in fixtures, add for completeness
+  speaker_profiles: z.array(z.record(z.string(), z.unknown())).optional(), // Already in fixtures, add for completeness
 });
 
 const EXPECTED_H2 = [
@@ -76,7 +74,17 @@ function extractFirstCodeBlock(raw: string): { lang: string; content: string } {
   const m = raw.match(/```([a-zA-Z0-9_-]*)\s*\n([\s\S]*?)```/m);
   if (!m)
     throw new ValidationError(
-      'No fenced code block found. Output must be inside a single triple-backtick block.',
+      [
+        'No fenced code block found.',
+        'Wrap the entire assignment in a single triple-backtick block, e.g.:',
+        '```',
+        '---',
+        'title: ...',
+        '---',
+        "# 1. This Week's Mission Briefing",
+        '...lesson content...',
+        '```',
+      ].join(' '),
     );
   const [, lang, content] = m;
   return { lang: lang ?? '', content: content ?? '' };
@@ -569,9 +577,7 @@ export async function validateMarkdownFile(
     for (const n of nodes) {
       if (n.type === 'list') count += n.children?.length ?? 0;
       if (n.type === 'paragraph') {
-        const txt = (n.children ?? [])
-          .map((c) => getTextFromNode(c as PhrasingContent))
-          .join('');
+        const txt = (n.children ?? []).map((c) => getTextFromNode(c as PhrasingContent)).join('');
         if (/^\s*\d+\)/.test(txt) || /^\s*-\s+/.test(txt) || /^\s*\*\s+/.test(txt)) count++;
       }
     }
@@ -590,9 +596,7 @@ export async function validateMarkdownFile(
     for (const n of nodes) {
       if (n.type === 'list') count += n.children?.length ?? 0;
       if (n.type === 'paragraph') {
-        const txt = (n.children ?? [])
-          .map((c) => getTextFromNode(c as PhrasingContent))
-          .join('');
+        const txt = (n.children ?? []).map((c) => getTextFromNode(c as PhrasingContent)).join('');
         if (/^\s*\d+\)/.test(txt) || /^\s*-\s+/.test(txt) || /^\s*\*\s+/.test(txt)) count++;
       }
     }

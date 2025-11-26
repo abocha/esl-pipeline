@@ -13,7 +13,9 @@ export async function withRetry<T>(
     try {
       return await fn();
     } catch (error: unknown) {
-      const status = (error as { status?: number; code?: string })?.status ?? (error as { status?: number; code?: string })?.code;
+      const status =
+        (error as { status?: number; code?: string })?.status ??
+        (error as { status?: number; code?: string })?.code;
       const retryable =
         status === 429 ||
         status === 503 ||

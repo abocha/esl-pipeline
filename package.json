@@ -40,6 +40,9 @@
     "cli:orchestrator": "node packages/orchestrator/dist/cli.js",
     "cli:tts": "node packages/tts-elevenlabs/dist/bin/cli.js",
     "cli:uploader": "node packages/storage-uploader/dist/bin/cli.js",
+    "deps:check": "pnpm deps:pin && git diff --quiet --exit-code",
+    "deps:pin": "node configs/pin-shared-deps.mjs",
+    "deps:upgrade:safe": "node configs/safe-upgrade.mjs",
     "dev:add-audio": "pnpm --filter @esl-pipeline/notion-add-audio dev",
     "dev:colorizer": "pnpm --filter @esl-pipeline/notion-colorizer dev",
     "dev:extractor": "pnpm --filter @esl-pipeline/md-extractor dev",
@@ -58,10 +61,7 @@
     "smoke": "pnpm --filter @esl-pipeline/orchestrator test",
     "test": "pnpm -r --filter './packages/*' run test",
     "test:watch": "pnpm -r --filter './packages/*' run test:watch",
-    "typecheck": "pnpm -r --filter './packages/*' --if-present run typecheck",
-    "deps:pin": "node configs/pin-shared-deps.mjs",
-    "deps:upgrade:safe": "node configs/safe-upgrade.mjs",
-    "deps:check": "pnpm deps:pin && git diff --quiet --exit-code"
+    "typecheck": "pnpm -r --filter './packages/*' --if-present run typecheck"
   },
   "dependencies": {},
   "devDependencies": {
