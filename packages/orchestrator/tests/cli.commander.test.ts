@@ -54,7 +54,7 @@ const resetPipelineMocks = () => {
 };
 
 describe('cli (commander parsing)', () => {
-  const originalArgv = process.argv.slice();
+  const originalArgv = [...process.argv];
   const originalCwd = process.cwd();
 
   beforeEach(() => {
@@ -63,7 +63,7 @@ describe('cli (commander parsing)', () => {
     loadEnvFilesWithSummary.mockClear();
     summarizeVoiceSelections.mockReturnValue('voice-summary');
     process.chdir(originalCwd);
-    process.argv = originalArgv.slice(0, 2);
+    process.argv = [...originalArgv];
   });
 
   it('parses run flags via Commander and forwards to pipeline.newAssignment', async () => {

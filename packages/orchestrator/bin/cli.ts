@@ -1099,13 +1099,14 @@ async function main(): Promise<void> {
 
     const args = command ? rawArgs.slice(1) : rawArgs;
     await handleRun(args);
-  } catch (error: any) {
-    const message = error?.message ?? String(error);
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : String(error);
+    const name = error instanceof Error ? error.name : 'Error';
     logger.error(message, {
-      name: error?.name ?? 'Error',
-      stack: error?.stack,
+      name,
+      stack: error instanceof Error ? error.stack : undefined,
     });
-    logger.flush({ command: command ?? 'run', error: { message, name: error?.name } });
+    logger.flush({ command: command ?? 'run', error: { message, name } });
     process.exit(1);
   }
 }

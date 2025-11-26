@@ -17,8 +17,8 @@ function withCookieForwarding() {
     target: batchBackendUrl,
     changeOrigin: true,
     secure: false,
-    configure: (proxy: any) => {
-      proxy.on('proxyReq', (proxyReq: any, req: any) => {
+    configure: (proxy) => {
+      proxy.on('proxyReq', (proxyReq: { setHeader: (name: string, value: string) => void }, req: { headers: Record<string, string | undefined> }) => {
         if (req.headers.cookie) {
           proxyReq.setHeader('cookie', req.headers.cookie);
         }
@@ -33,7 +33,7 @@ export default defineConfig({
     port: 5173,
     strictPort: true,
     proxy: (() => {
-      const proxyConfig: Record<string, any> = {};
+      const proxyConfig: Record<string, { target: string; changeOrigin: boolean; secure: boolean; configure: (proxy: { on: (event: string, handler: (...args: unknown[]) => void) => void }) => void; rewrite: (path: string) => string }> = {};
       for (const route of proxyRoutes) {
         proxyConfig[route] = {
           ...withCookieForwarding(),
