@@ -3,13 +3,15 @@ import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 export interface VoiceCatalog {
-  voices: {
-    id: string;
-    name: string;
-    category?: string | null;
-    labels?: Record<string, any>;
-    preview_url?: string | null;
-  }[];
+  voices: Voice[];
+}
+
+export interface Voice {
+  id: string;
+  name: string;
+  category?: string | null;
+  labels?: Record<string, unknown>;
+  preview_url?: string | null;
 }
 
 export interface SpeakerMeta {
@@ -39,8 +41,9 @@ export async function loadVoicesCatalog(
       const raw = await readFile(candidate, 'utf8');
       cachedCatalog = JSON.parse(raw) as VoiceCatalog;
       return cachedCatalog;
-    } catch (error: any) {
-      if (error?.code === 'ENOENT' || error?.code === 'EISDIR') {
+    } catch (error: unknown) {
+      const code = (error as NodeJS.ErrnoException | undefined)?.code;
+      if (code === 'ENOENT' || code === 'EISDIR') {
         continue;
       }
       continue;
@@ -90,7 +93,7 @@ function guessGenderFromName(name: string): SpeakerMeta['gender'] {
   return 'neutral';
 }
 
-function getLabel(voice: any, key: string): string {
+function getLabel(voice: Voice, key: string): string {
   const v = voice?.labels?.[key];
   return typeof v === 'string' ? v.toLowerCase() : '';
 }
@@ -112,7 +115,7 @@ const STYLE_HINTS: Record<string, string[]> = {
   thoughtful: ['thoughtful', 'calm', 'narration'],
 };
 
-function score(voice: any, need: SpeakerMeta): number {
+function score(voice: Voice, need: SpeakerMeta): number {
   // higher is better
   let s = 0;
 

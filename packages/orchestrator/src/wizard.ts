@@ -15,11 +15,14 @@ import {
 import { NewAssignmentFlags } from './index.js';
 import { PathPickerCancelledError, pickFile } from './pathPicker.js';
 
+type PromptOptions = { name: string; message: string } & Record<string, unknown>;
+type PromptCtor<T> = new (options: PromptOptions) => { run: () => Promise<T> };
+
 const { Select, Input, Toggle, NumberPrompt } = Enquirer as unknown as {
-  Select: new (options: any) => any;
-  Input: new (options: any) => any;
-  Toggle: new (options: any) => any;
-  NumberPrompt: new (options: any) => any;
+  Select: PromptCtor<string>;
+  Input: PromptCtor<string>;
+  Toggle: PromptCtor<boolean>;
+  NumberPrompt: PromptCtor<number>;
 };
 
 interface WizardContext {
@@ -83,7 +86,7 @@ function onCancel(): never {
  * Helper function to run an enquirer prompt and handle cancellation uniformly.
  * Returns an object with the answer keyed by the prompt name.
  */
-async function runPrompt<T>(PromptClass: any, options: any): Promise<Record<string, T>> {
+async function runPrompt<T>(PromptClass: PromptCtor<T>, options: PromptOptions): Promise<Record<string, T>> {
   const prompt = new PromptClass(options);
   try {
     const answer = await prompt.run();
@@ -182,7 +185,7 @@ function setStateValue<K extends keyof NewAssignmentFlags>(
     return;
   }
 
-  (state as any)[key] = value;
+  state[key] = value;
   state.origins[key] = origin;
 }
 
@@ -194,7 +197,7 @@ function collectPersistableSettings(state: WizardState): Partial<NewAssignmentFl
     if (origin !== 'manual' && origin !== 'saved') continue;
     const value = state[key];
     if (value !== undefined) {
-      (result as any)[key] = value;
+      result[key] = value;
     }
   }
   return result;
@@ -225,8 +228,8 @@ function defaultsEqual(a: Partial<NewAssignmentFlags>, b: Partial<NewAssignmentF
   const aKeys = Object.keys(a);
   const bKeys = Object.keys(b);
   if (aKeys.length !== bKeys.length) return false;
-  for (const key of aKeys) {
-    if ((a as any)[key] !== (b as any)[key]) {
+  for (const key of aKeys as (keyof NewAssignmentFlags)[]) {
+    if (a[key] !== b[key]) {
       return false;
     }
   }

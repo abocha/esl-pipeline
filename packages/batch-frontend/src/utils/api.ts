@@ -19,6 +19,7 @@ import type {
   JobStatusDto,
   JobUploadOption,
 } from '@esl-pipeline/contracts';
+import { isAxiosError, type AxiosError } from 'axios';
 
 import apiClient, {
   buildApiProxyPath,
@@ -134,6 +135,14 @@ export interface JobEventsOptions {
   onOpen?: (event: Event) => void;
 }
 
+const toAxiosError = (error: unknown): AxiosError | null => (isAxiosError(error) ? error : null);
+
+const formatUnknownError = (error: unknown): string => {
+  if (error instanceof Error) return error.message;
+  if (typeof error === 'string') return error;
+  return 'An unexpected error occurred';
+};
+
 /**
  * Authentication API functions
  */
@@ -141,8 +150,9 @@ export async function login(credentials: LoginRequest): Promise<AuthResponse> {
   try {
     const response = await apiClient.post(buildApiProxyPath('/auth/login'), credentials);
     return response.data;
-  } catch (error: any) {
-    throw new Error(handleApiError(error));
+  } catch (error: unknown) {
+    const axiosError = toAxiosError(error);
+    throw new Error(axiosError ? handleApiError(axiosError) : formatUnknownError(error));
   }
 }
 
@@ -154,25 +164,31 @@ export async function register(userData: RegisterRequest): Promise<void> {
 
   try {
     await attempt(buildApiProxyPath('/auth/register'));
-  } catch (error: any) {
-    const status = error.response?.status;
-    const message = (error.response?.data as any)?.message;
+  } catch (error: unknown) {
+    const err = error as {
+      response?: { status?: number; data?: { message?: unknown } };
+      config?: { url?: string };
+    };
+    const status = err.response?.status;
+    const message = err.response?.data?.message;
     const isRouteMissing =
       status === 404 &&
       typeof message === 'string' &&
       message.toLowerCase().includes('route post:/auth/register not found');
 
-    if (status === 404 && !error.config?.url?.includes('/auth/register')) {
+    if (status === 404 && !err.config?.url?.includes('/auth/register')) {
       try {
         await attempt(buildApiProxyPath('/auth/register'));
         return;
-      } catch (fallbackError: any) {
-        if (fallbackError.response?.status === 404 || isRouteMissing) {
+      } catch (fallbackError: unknown) {
+        const fallback = fallbackError as { response?: { status?: number } };
+        if (fallback.response?.status === 404 || isRouteMissing) {
           throw new Error(
             'Registration endpoint is unavailable. Enable extended API support on the backend or contact an administrator.',
           );
         }
-        throw new Error(handleApiError(fallbackError));
+        const axiosError = toAxiosError(fallbackError);
+        throw new Error(axiosError ? handleApiError(axiosError) : formatUnknownError(fallbackError));
       }
     }
 
@@ -182,7 +198,8 @@ export async function register(userData: RegisterRequest): Promise<void> {
       );
     }
 
-    throw new Error(handleApiError(error));
+    const axiosError = toAxiosError(error);
+    throw new Error(axiosError ? handleApiError(axiosError) : formatUnknownError(error));
   }
 }
 
@@ -192,19 +209,22 @@ export async function refreshToken(refreshTokenValue: string): Promise<AuthRespo
       refreshToken: refreshTokenValue,
     });
     return response.data;
-  } catch (error: any) {
-    throw new Error(handleApiError(error));
+  } catch (error: unknown) {
+    const axiosError = toAxiosError(error);
+    throw new Error(axiosError ? handleApiError(axiosError) : formatUnknownError(error));
   }
 }
 
 export async function logoutSession(): Promise<void> {
   try {
     await apiClient.post(buildApiProxyPath('/auth/logout'));
-  } catch (error: any) {
-    if (error.response?.status === 404) {
+  } catch (error: unknown) {
+    const err = error as { response?: { status?: number } };
+    if (err.response?.status === 404) {
       return;
     }
-    throw new Error(handleApiError(error));
+    const axiosError = toAxiosError(error);
+    throw new Error(axiosError ? handleApiError(axiosError) : formatUnknownError(error));
   }
 }
 
@@ -212,8 +232,9 @@ export async function getUserProfile(): Promise<UserProfile> {
   try {
     const response = await apiClient.get(buildApiProxyPath('/auth/me'));
     return response.data.user;
-  } catch (error: any) {
-    throw new Error(handleApiError(error));
+  } catch (error: unknown) {
+    const axiosError = toAxiosError(error);
+    throw new Error(axiosError ? handleApiError(axiosError) : formatUnknownError(error));
   }
 }
 
@@ -221,8 +242,9 @@ export async function getUserFiles(): Promise<UserFile[]> {
   try {
     const response = await apiClient.get(buildApiProxyPath('/user/files'));
     return response.data.files || [];
-  } catch (error: any) {
-    throw new Error(handleApiError(error));
+  } catch (error: unknown) {
+    const axiosError = toAxiosError(error);
+    throw new Error(axiosError ? handleApiError(axiosError) : formatUnknownError(error));
   }
 }
 
@@ -234,11 +256,12 @@ export async function createJob(body: SubmitJobRequest): Promise<SubmitJobRespon
   try {
     const response = await apiClient.post(buildApiProxyPath('/jobs'), body);
     return response.data;
-  } catch (error: any) {
-    if (isAuthError(error)) {
+  } catch (error: unknown) {
+    const axiosError = toAxiosError(error);
+    if (axiosError && isAuthError(axiosError)) {
       throw new Error('Authentication required. Please login to submit jobs.');
     }
-    throw new Error(handleApiError(error));
+    throw new Error(axiosError ? handleApiError(axiosError) : formatUnknownError(error));
   }
 }
 
@@ -258,11 +281,12 @@ export async function uploadMarkdown(file: File): Promise<UploadMarkdownResponse
     });
 
     return response.data;
-  } catch (error: any) {
-    if (isAuthError(error)) {
+  } catch (error: unknown) {
+    const axiosError = toAxiosError(error);
+    if (axiosError && isAuthError(axiosError)) {
       throw new Error('Authentication required. Please login to upload files.');
     }
-    throw new Error(handleApiError(error));
+    throw new Error(axiosError ? handleApiError(axiosError) : formatUnknownError(error));
   }
 }
 
@@ -274,11 +298,12 @@ export async function getJobStatus(jobId: string): Promise<JobStatus> {
   try {
     const response = await apiClient.get(buildApiProxyPath(`/jobs/${encodeURIComponent(jobId)}`));
     return response.data;
-  } catch (error: any) {
-    if (isAuthError(error)) {
+  } catch (error: unknown) {
+    const axiosError = toAxiosError(error);
+    if (axiosError && isAuthError(axiosError)) {
       throw new Error('Authentication required. Please login to view job status.');
     }
-    throw new Error(handleApiError(error));
+    throw new Error(axiosError ? handleApiError(axiosError) : formatUnknownError(error));
   }
 }
 
@@ -286,8 +311,9 @@ export async function fetchJobOptions(): Promise<JobOptionsResponse> {
   try {
     const response = await apiClient.get(buildApiProxyPath('/config/job-options'));
     return response.data;
-  } catch (error: any) {
-    throw new Error(handleApiError(error));
+  } catch (error: unknown) {
+    const axiosError = toAxiosError(error);
+    throw new Error(axiosError ? handleApiError(axiosError) : formatUnknownError(error));
   }
 }
 

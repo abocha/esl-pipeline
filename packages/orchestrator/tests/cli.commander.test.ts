@@ -27,12 +27,17 @@ const loadEnvFilesWithSummary = vi
   .fn()
   .mockReturnValue({ loadedFiles: [], missingFiles: [], assignedKeys: [], overriddenKeys: [] });
 const summarizeVoiceSelections = vi.fn().mockReturnValue('voice-summary');
+const runInteractiveWizard = vi.fn();
 
 vi.mock('../src/config.js', () => ({ DEFAULT_STUDENT_NAME: 'Default Student' }));
 vi.mock('../src/index.js', () => ({
   createPipeline: vi.fn(() => pipelineMock),
   loadEnvFilesWithSummary,
   summarizeVoiceSelections,
+}));
+vi.mock('../src/wizard.js', () => ({
+  runInteractiveWizard,
+  WizardAbortedError: class WizardAbortedError extends Error {},
 }));
 
 const importCli = async (): Promise<void> => {
@@ -45,6 +50,7 @@ const resetPipelineMocks = () => {
   pipelineMock.rerunAssignment.mockReset();
   pipelineMock.getAssignmentStatus.mockReset();
   summarizeVoiceSelections.mockClear();
+  runInteractiveWizard.mockReset();
 };
 
 describe('cli (commander parsing)', () => {
@@ -180,6 +186,84 @@ describe('cli (commander parsing)', () => {
         dialogueSeed: 7,
       }),
     );
+  });
+
+  it('runs interactive wizard and applies defaults', async () => {
+    const tmp = await mkdtemp(join(tmpdir(), 'cli-wizard-'));
+    const mdPath = join(tmp, 'lesson.md');
+    await writeFile(mdPath, '# test');
+
+    runInteractiveWizard.mockResolvedValue({
+      flags: {
+        md: mdPath,
+        withTts: true,
+        upload: 's3',
+        voices: 'wizard-voices.yml',
+        preset: 'wizard-preset',
+      },
+      selections: { md: mdPath, withTts: true },
+    });
+
+    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
+    process.argv = ['node', 'cli', '--interactive', '--json'];
+
+    pipelineMock.newAssignment.mockResolvedValue({
+      steps: ['validate', 'tts', 'upload', 'manifest'],
+      manifestPath: join(tmp, 'manifest.json'),
+    });
+
+    await importCli();
+
+    expect(runInteractiveWizard).toHaveBeenCalledTimes(1);
+    expect(pipelineMock.newAssignment).toHaveBeenCalledWith(
+      expect.objectContaining({
+        md: mdPath,
+        withTts: true,
+        upload: 's3',
+        preset: 'wizard-preset',
+        voices: 'wizard-voices.yml',
+        presetsPath: pipelineMock.defaults.presetsPath,
+        out: pipelineMock.defaults.outDir,
+      }),
+      expect.any(Object),
+    );
+    logSpy.mockRestore();
+  });
+
+  it('parses manifest reuse flags (--skip-*) on run', async () => {
+    const tmp = await mkdtemp(join(tmpdir(), 'cli-skip-'));
+    const mdPath = join(tmp, 'lesson.md');
+    await writeFile(mdPath, '# test');
+
+    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
+    process.argv = [
+      'node',
+      'cli',
+      '--md',
+      mdPath,
+      '--skip-import',
+      '--skip-tts',
+      '--skip-upload',
+      '--json',
+    ];
+
+    pipelineMock.newAssignment.mockResolvedValue({
+      steps: ['manifest'],
+      manifestPath: join(tmp, 'manifest.json'),
+    });
+
+    await importCli();
+
+    expect(pipelineMock.newAssignment).toHaveBeenCalledWith(
+      expect.objectContaining({
+        md: mdPath,
+        skipImport: true,
+        skipTts: true,
+        skipUpload: true,
+      }),
+      expect.any(Object),
+    );
+    logSpy.mockRestore();
   });
 
   it('supports select command without interactive prompt when path is provided', async () => {
