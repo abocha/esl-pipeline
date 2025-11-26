@@ -3,8 +3,10 @@ export async function withRetry<T>(fn: () => Promise<T>, label: string, tries = 
   for (let i = 0; i < tries; i++) {
     try {
       return await fn();
-    } catch (error: any) {
-      const status = error?.status ?? error?.code;
+    } catch (error: unknown) {
+      const status =
+        (error as { status?: number; code?: string })?.status ??
+        (error as { status?: number; code?: string })?.code;
       const retryable =
         status === 429 || status === 503 || status === 'ECONNRESET' || status === 'ETIMEDOUT';
       if (!retryable || i === tries - 1) throw error;

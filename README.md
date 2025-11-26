@@ -219,6 +219,7 @@ pnpm smoke
 # Dependency alignment
 pnpm deps:pin             # normalize shared versions (AWS, Notion, ElevenLabs, React/Vite, Fastify/pg/Redis/bullmq, etc.)
 pnpm deps:upgrade:safe     # upgrade allowlisted SDKs (Notion/ElevenLabs/AWS S3) and stable utils, then reapply pins
+pnpm deps:check           # run deps:pin and fail if manifests drift (same guard as CI)
 
 # Publish orchestrator (from packages/orchestrator)
 npm publish --access public

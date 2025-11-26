@@ -12,8 +12,8 @@ export async function withRetry<T>(
   for (let attempt = 0; attempt < tries; attempt++) {
     try {
       return await fn();
-    } catch (error: any) {
-      const status = error?.status ?? error?.code;
+    } catch (error: unknown) {
+      const status = (error as { status?: number; code?: string })?.status ?? (error as { status?: number; code?: string })?.code;
       const retryable =
         status === 429 ||
         status === 503 ||

@@ -1,6 +1,12 @@
 import { readFile } from 'node:fs/promises';
 import { basename } from 'node:path';
 
+import type {
+  CreatePageParameters,
+  CreatePageResponse,
+  DatabaseObjectResponse,
+  DatabaseProperty,
+} from '@notionhq/client/build/src/api-endpoints.js';
 import { ValidationError } from '@esl-pipeline/contracts';
 import { extractFrontmatter } from '@esl-pipeline/md-extractor';
 import { validateMarkdownFile } from '@esl-pipeline/md-validator';
@@ -51,7 +57,7 @@ export async function runImport(opts: ImportOptions) {
   const studentName = (opts.student ?? fm.student ?? '').trim();
 
   // --- Step 4: properties payload ---
-  const properties: Record<string, any> = {
+  const properties: NonNullable<CreatePageParameters['properties']> = {
     Name: { title: [{ type: 'text', text: { content: title } }] },
   };
   // Merge extra properties from frontmatter
@@ -112,7 +118,7 @@ export async function runImport(opts: ImportOptions) {
       }),
     'databases.retrieve',
   );
-  const propertiesEntries = Object.entries((database as any)?.properties ?? {});
+  const propertiesEntries = Object.entries((database as DatabaseObjectResponse).properties ?? {});
   const dbPropertyNames = new Set(propertiesEntries.map(([name]) => name.trim().toLowerCase()));
 
   // Validate that all requested properties exist in the target database
@@ -128,7 +134,7 @@ export async function runImport(opts: ImportOptions) {
     );
   }
   const topicEntry = propertiesEntries.find(([name]) => name.trim().toLowerCase() === 'topic');
-  const topicPropType = topicEntry ? (topicEntry[1] as any)?.type : undefined;
+  const topicPropType = topicEntry ? (topicEntry[1] as DatabaseProperty)?.type : undefined;
   if (topic) {
     const defaultToMultiSelect = !topicPropType || topicPropType === 'multi_select';
     if (defaultToMultiSelect) {
@@ -163,9 +169,9 @@ export async function runImport(opts: ImportOptions) {
   // --- Step 7: create ---
   const parent = { data_source_id: dataSourceId };
 
-  const pageCreatePayload: any = {
+  const pageCreatePayload: CreatePageParameters = {
     parent,
-    properties: properties as any,
+    properties,
   };
 
   if (fm.icon) {
@@ -175,7 +181,7 @@ export async function runImport(opts: ImportOptions) {
     pageCreatePayload.cover = { type: 'external', external: { url: fm.cover } };
   }
 
-  let page: any;
+  let page: CreatePageResponse;
   if (children.length <= MAX_BLOCKS_PER_REQUEST) {
     page = await withRetry(
       () =>
@@ -202,7 +208,7 @@ export async function runImport(opts: ImportOptions) {
 
   return {
     page_id: page.id,
-    url: (page as any).url as string | undefined,
+    url: page.url as string | undefined,
     studentLinked: Boolean(studentPageId),
   };
 }

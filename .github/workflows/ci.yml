@@ -32,6 +32,9 @@ jobs:
       - name: Install deps
         run: pnpm install --frozen-lockfile
 
+      - name: Enforce dependency pins
+        run: pnpm deps:check
+
       - name: Build
         run: pnpm -r build
 
