@@ -18,17 +18,22 @@ const mockSend = vi.fn();
 type CommandInput = Record<string, unknown>;
 
 type CommandConstructor = new (input: CommandInput) => { input: CommandInput };
-
-let PutObjectCommandClass: CommandConstructor | undefined;
-let GetObjectCommandClass: CommandConstructor | undefined;
+// Initialize with dummy constructors to satisfy hoisting in vi.mock
+var PutObjectCommandClass: CommandConstructor = class {
+  constructor(readonly input: CommandInput) {}
+};
+var GetObjectCommandClass: CommandConstructor = class {
+  constructor(readonly input: CommandInput) {}
+};
 
 vi.mock('@aws-sdk/client-s3', () => {
-  class PutObjectCommand {
+  // Assign before exporting to avoid TDZ issues during hoisting
+  const PutObjectCommand = class {
     constructor(readonly input: CommandInput) {}
-  }
-  class GetObjectCommand {
+  };
+  const GetObjectCommand = class {
     constructor(readonly input: CommandInput) {}
-  }
+  };
 
   PutObjectCommandClass = PutObjectCommand;
   GetObjectCommandClass = GetObjectCommand;
@@ -248,7 +253,7 @@ describe('pipeline integration', () => {
 
     expect(result.manifestPath).toBe('s3://pipeline-test/manifests/int-tests/lesson.manifest.json');
     expect(mockSend).toHaveBeenCalledTimes(2);
-    expect(mockSend.mock.calls[0]?.[0]).toBeInstanceOf(GetCommand);
-    expect(mockSend.mock.calls[1]?.[0]).toBeInstanceOf(PutCommand);
+    expect(mockSend.mock.calls[0]?.[0]?.constructor?.name).toBe('GetObjectCommand');
+    expect(mockSend.mock.calls[1]?.[0]?.constructor?.name).toBe('PutObjectCommand');
   });
 });

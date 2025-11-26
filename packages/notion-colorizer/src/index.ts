@@ -1,4 +1,9 @@
 import { Client } from '@notionhq/client';
+import type {
+  BlockObjectResponse,
+  ListBlockChildrenResponse,
+  PartialBlockObjectResponse,
+} from '@notionhq/client/build/src/api-endpoints.js';
 import { readFile } from 'node:fs/promises';
 
 import { ConfigurationError } from '@esl-pipeline/contracts';
@@ -38,6 +43,21 @@ export async function applyHeadingPreset(
 
   const counts: Counts = { h2: 0, h3: 0, toggles: 0 };
 
+  type BlockResult = BlockObjectResponse | PartialBlockObjectResponse;
+
+  const isHeading2 = (
+    block: BlockResult,
+  ): block is Extract<BlockObjectResponse, { type: 'heading_2' }> =>
+    'type' in block && block.type === 'heading_2';
+  const isHeading3 = (
+    block: BlockResult,
+  ): block is Extract<BlockObjectResponse, { type: 'heading_3' }> =>
+    'type' in block && block.type === 'heading_3';
+  const isToggle = (
+    block: BlockResult,
+  ): block is Extract<BlockObjectResponse, { type: 'toggle' }> =>
+    'type' in block && block.type === 'toggle';
+
   const colorHeading3Descendants = async (parentId: string) => {
     if (!preset.h3) return;
     let childCursor: string | undefined;
@@ -50,16 +70,16 @@ export async function applyHeadingPreset(
             page_size: 100,
           }),
         'blocks.children.list',
-      )) as any;
+      )) as ListBlockChildrenResponse;
       await maybeThrottle();
       for (const child of childResp.results) {
-        if ('type' in child && child.type === 'heading_3') {
+        if (isHeading3(child)) {
           await withRetry(
             () =>
               client.blocks.update({
                 block_id: child.id,
                 heading_3: {
-                  rich_text: (child as any).heading_3.rich_text,
+                  rich_text: child.heading_3.rich_text,
                   color: preset.h3,
                 },
               }),
@@ -84,17 +104,17 @@ export async function applyHeadingPreset(
     const resp = (await withRetry(
       () => client.blocks.children.list({ block_id: pageId, start_cursor: cursor, page_size: 100 }),
       'blocks.children.list',
-    )) as any;
+    )) as ListBlockChildrenResponse;
     await maybeThrottle();
 
     for (const block of resp.results) {
-      if ('type' in block && block.type === 'heading_2' && preset.h2) {
+      if (isHeading2(block) && preset.h2) {
         await withRetry(
           () =>
             client.blocks.update({
               block_id: block.id,
               heading_2: {
-                rich_text: (block as any).heading_2.rich_text,
+                rich_text: block.heading_2.rich_text,
                 color: preset.h2,
               },
             }),
@@ -106,13 +126,13 @@ export async function applyHeadingPreset(
         continue;
       }
 
-      if ('type' in block && block.type === 'heading_3' && preset.h3) {
+      if (isHeading3(block) && preset.h3) {
         await withRetry(
           () =>
             client.blocks.update({
               block_id: block.id,
               heading_3: {
-                rich_text: (block as any).heading_3.rich_text,
+                rich_text: block.heading_3.rich_text,
                 color: preset.h3,
               },
             }),
@@ -125,11 +145,11 @@ export async function applyHeadingPreset(
       }
 
       // TOGGLES right after an H2 (optional)
-      if ('type' in block && block.type === 'toggle') {
+      if (isToggle(block)) {
         if (prevWasH2 && preset.toggleMap?.h2) {
-          const toggle = (block as any).toggle;
-          const richText = Array.isArray(toggle?.rich_text) ? toggle.rich_text : [];
-          const annotated = richText.map((item: any) => ({
+          const toggle = block.toggle;
+          const richText = Array.isArray(toggle.rich_text) ? toggle.rich_text : [];
+          const annotated = richText.map((item) => ({
             ...item,
             annotations: {
               ...item.annotations,

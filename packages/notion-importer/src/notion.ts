@@ -71,7 +71,7 @@ async function fetchDatabaseWithSources(
 async function findDatabaseByName(client: Client, dbName: string): Promise<string> {
   const resp = (await withRetry(
     () =>
-      (client.search as any)({
+      client.search({
         query: dbName,
         filter: { value: 'database', property: 'object' },
       }),
@@ -174,7 +174,7 @@ export async function findStudentPageId(
 
   const resp = (await withRetry(
     () =>
-      (client.search as any)({
+      client.search({
         query: trimmedName,
         filter: { value: 'page', property: 'object' },
       }),

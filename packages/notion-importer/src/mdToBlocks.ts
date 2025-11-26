@@ -319,7 +319,7 @@ export function mdToBlocks(md: string): BlockObjectRequest[] {
           rich_text: makeRichText(content),
           is_toggleable: toggleable,
           ...(children?.length ? { children } : {}),
-        } as any,
+        },
       } as Heading1Block;
     }
     if (depth === 2) {
@@ -329,7 +329,7 @@ export function mdToBlocks(md: string): BlockObjectRequest[] {
           rich_text: makeRichText(content),
           is_toggleable: toggleable,
           ...(children?.length ? { children } : {}),
-        } as any,
+        },
       } as Heading2Block;
     }
     return {
@@ -338,7 +338,7 @@ export function mdToBlocks(md: string): BlockObjectRequest[] {
         rich_text: makeRichText(content),
         is_toggleable: toggleable,
         ...(children?.length ? { children } : {}),
-      } as any,
+      },
     } as Heading3Block;
   };
 
@@ -360,7 +360,7 @@ export function mdToBlocks(md: string): BlockObjectRequest[] {
       type: 'code',
       code: {
         rich_text: [createRichTextItem(content)],
-        language: (language as any) || 'plain text',
+        language: language || 'plain text',
       },
     } satisfies CodeBlock;
     return block;
@@ -416,13 +416,14 @@ export function mdToBlocks(md: string): BlockObjectRequest[] {
     // to avoid an empty callout header.
     if (nested.length > 0 && nested[0]?.type === 'paragraph') {
       const firstPara = nested.shift() as ParagraphBlock;
-      block.callout.rich_text = firstPara.paragraph.rich_text as any;
+      block.callout.rich_text = firstPara.paragraph.rich_text;
     } else {
-      block.callout.rich_text = [createRichTextItem(' ')] as any;
+      block.callout.rich_text = [createRichTextItem(' ')];
     }
     // Notion expects nested content inside callout payload
     if (nested.length > 0) {
-      (block.callout as any).children = nested as BlockObjectRequest[];
+      (block.callout as CalloutBlock['callout'] & { children?: BlockObjectRequest[] }).children =
+        nested as BlockObjectRequest[];
     }
 
     return block;
@@ -505,8 +506,9 @@ export function mdToBlocks(md: string): BlockObjectRequest[] {
               [] as unknown as BulletChildren);
             children.push(paragraph as unknown as BulletChildren[number]);
           } else {
-            const children = ((entry.block as any).numbered_list_item.children ??= []);
-            children.push(paragraph);
+            const numbered = entry.block as NumberedListItemBlock;
+            const children = (numbered.numbered_list_item.children ??= []);
+            children.push(paragraph as BlockObjectRequest);
           }
           return;
         }
@@ -536,13 +538,14 @@ export function mdToBlocks(md: string): BlockObjectRequest[] {
           [] as unknown as BulletChildren);
         children.push(block as unknown as BulletChildren[number]);
       } else {
-        const children = ((parentEntry.block as any).numbered_list_item.children ??= []);
-        children.push(block);
+        const numbered = parentEntry.block as NumberedListItemBlock;
+        const children = (numbered.numbered_list_item.children ??= []);
+        children.push(block as BlockObjectRequest);
       }
     } else {
       blocks.push(block);
     }
-    listStack.push({ indent, block: block as any, type });
+    listStack.push({ indent, block, type });
   };
 
   const extractDirectiveContent = (startIndex: number): { content: string[]; endIndex: number } => {
@@ -689,9 +692,9 @@ export function mdToBlocks(md: string): BlockObjectRequest[] {
       if (type === 'toggle-heading') {
         blocks.push(toggleBlock(label, content));
       } else {
-        const depth = type === 'toggle-h1' ? 1 : type === 'toggle-h2' ? 2 : 3;
+        const depth: 1 | 2 | 3 = type === 'toggle-h1' ? 1 : type === 'toggle-h2' ? 2 : 3;
         const nested = content.length > 0 ? mdToBlocks(content.join('\n')) : [];
-        blocks.push(headingBlock(depth as any, label, true, nested));
+        blocks.push(headingBlock(depth, label, true, nested));
       }
       continue;
     }

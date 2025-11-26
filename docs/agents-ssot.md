@@ -200,6 +200,7 @@ Verification commands (MUST pass before merging behavior changes):
 - Dependency alignment:
   - `pnpm deps:pin` — normalize shared versions (AWS SDK, Notion, ElevenLabs, React/Vite, Fastify/pg/Redis/bullmq, etc.).
   - `pnpm deps:upgrade:safe` — upgrade allowlisted SDKs (Notion/ElevenLabs/AWS S3) and stable utilities (axios/remark/unified/commander/ora/picocolors; extras via `SAFE_UPGRADE_EXTRA`), then reapply pins.
+  - `pnpm deps:check` — runs `deps:pin` and fails on drift (same guard used in CI).
 
 CI workflows under [`.github/workflows`](.github/workflows) encode required checks; agents MUST keep them green or update them explicitly when compatibility changes.
 

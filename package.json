@@ -60,7 +60,8 @@
     "test:watch": "pnpm -r --filter './packages/*' run test:watch",
     "typecheck": "pnpm -r --filter './packages/*' --if-present run typecheck",
     "deps:pin": "node configs/pin-shared-deps.mjs",
-    "deps:upgrade:safe": "node configs/safe-upgrade.mjs"
+    "deps:upgrade:safe": "node configs/safe-upgrade.mjs",
+    "deps:check": "pnpm deps:pin && git diff --quiet --exit-code"
   },
   "dependencies": {},
   "devDependencies": {

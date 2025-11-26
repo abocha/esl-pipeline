@@ -28,7 +28,7 @@ export interface FrontmatterShape {
   topic?: string; // Always a single string (arrays will be normalized)
   icon?: string;
   cover?: string;
-  properties?: Record<string, any>;
+  properties?: Record<string, unknown>;
 }
 
 export interface ResolveDataSourceInput {
