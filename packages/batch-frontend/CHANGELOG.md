@@ -1,5 +1,11 @@
 # @esl-pipeline/batch-frontend
 
+## 1.0.2
+
+### Patch Changes
+
+- prune unused scripts
+
 ## 1.0.1
 
 ### Patch Changes

@@ -1,5 +1,11 @@
 # @esl-pipeline/storage-uploader
 
+## 2.0.3
+
+### Patch Changes
+
+- prune unused scripts
+
 ## 2.0.2
 
 ### Patch Changes

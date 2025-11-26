@@ -7,13 +7,6 @@ settings:
 importers:
 
   .:
-    dependencies:
-      '@types/mdast':
-        specifier: ^4.0.4
-        version: 4.0.4
-      remark-parse:
-        specifier: ^11.0.0
-        version: 11.0.0
     devDependencies:
       '@changesets/cli':
         specifier: ^2.29.7
@@ -520,9 +513,6 @@ importers:
   packages/storage-uploader:
     dependencies:
       '@aws-sdk/client-s3':
-        specifier: ^3.940.0
-        version: 3.940.0
-      '@aws-sdk/s3-request-presigner':
         specifier: ^3.940.0
         version: 3.940.0
       '@esl-pipeline/contracts':

@@ -1,5 +1,11 @@
 # @esl-pipeline/orchestrator
 
+## 3.0.3
+
+### Patch Changes
+
+- readme update & prune abandoned scripts
+
 ## 3.0.2
 
 ### Patch Changes
