@@ -60,6 +60,11 @@ const STATIC_OPTIONS: Omit<JobOptionsResponse, 'supportedActions'> = {
 export async function getJobOptions(): Promise<JobOptionsResponse> {
   try {
     const result = await getJobOptionsFromOrchestrator();
+    const notionDatabases =
+      result.notionDatabases && result.notionDatabases.length > 0
+        ? result.notionDatabases
+        : resolveNotionDatabases();
+
     // Add supported actions to orchestrator response
     const actionMetadata = getActionMetadata();
     const supportedActions: ActionCapability[] = Object.entries(actionMetadata).map(
@@ -67,6 +72,7 @@ export async function getJobOptions(): Promise<JobOptionsResponse> {
     );
     return {
       ...result,
+      notionDatabases,
       supportedActions,
     };
   } catch (error) {
