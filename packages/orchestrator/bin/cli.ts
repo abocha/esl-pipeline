@@ -156,6 +156,14 @@ const parseOptionalInt = (value: string, label: string): number => {
   return parsed;
 };
 
+const parseOptionalFloat = (value: string, label: string): number => {
+  const parsed = Number.parseFloat(value);
+  if (!Number.isFinite(parsed)) {
+    throw new InvalidOptionArgumentError(`${label} must be a number.`);
+  }
+  return parsed;
+};
+
 const parseRunFlags = async (args: string[]): Promise<RunFlags> => {
   const program = new Command('run')
     .usage('--md <file.md> [options]')
@@ -667,10 +675,40 @@ const parseRerunFlags = async (args: string[]): Promise<RerunFlags> => {
     .option('--presign <seconds>', 'Presign URL expiry in seconds', (value) =>
       parseOptionalInt(value, 'Presign'),
     )
-    .option('--accent <name>', 'Preferred voice accent');
+    .option('--accent <name>', 'Preferred voice accent')
+    .option('--tts-mode <mode>', 'TTS mode (auto|dialogue|monologue)', (value) => {
+      const allowed = ['auto', 'dialogue', 'monologue'] as const;
+      if (!allowed.includes(value as (typeof allowed)[number])) {
+        throw new InvalidOptionArgumentError(
+          `Unknown TTS mode "${value}". Use one of: ${allowed.join(', ')}`,
+        );
+      }
+      return value as RerunFlags['ttsMode'];
+    })
+    .option(
+      '--dialogue-language <code>',
+      'Dialogue language code (e.g. en, es) for dialogue TTS mode',
+    )
+    .option(
+      '--dialogue-stability <value>',
+      'Dialogue stability (0.0-1.0)',
+      (value) => parseOptionalFloat(value, 'Dialogue stability'),
+    )
+    .option('--dialogue-seed <value>', 'Dialogue seed', (value) =>
+      parseOptionalInt(value, 'Dialogue seed'),
+    );
 
   const parsed = await parseWithCommander(program, args);
-  const opts = parsed.opts<RerunFlags & { steps?: RerunStep[]; accent?: string }>();
+  const opts = parsed.opts<
+    RerunFlags & {
+      steps?: RerunStep[];
+      accent?: string;
+      ttsMode?: RerunFlags['ttsMode'];
+      dialogueLanguage?: string;
+      dialogueStability?: number;
+      dialogueSeed?: number;
+    }
+  >();
 
   return {
     md: opts.md,
@@ -684,6 +722,10 @@ const parseRerunFlags = async (args: string[]): Promise<RerunFlags> => {
     publicRead: Boolean(opts.publicRead),
     presign: opts.presign,
     accentPreference: opts.accent,
+    ttsMode: opts.ttsMode,
+    dialogueLanguage: opts.dialogueLanguage,
+    dialogueStability: opts.dialogueStability,
+    dialogueSeed: opts.dialogueSeed,
   };
 };
 
