@@ -72,7 +72,27 @@ describe('cli (commander parsing)', () => {
     await writeFile(mdPath, '# test');
 
     const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
-    process.argv = ['node', 'cli', '--md', mdPath, '--with-tts', '--upload', 's3', '--presign', '600', '--public-read', '--voices', 'custom-voices.yml', '--out', 'custom-out', '--accent', 'british', '--dry-run', '--force', '--json'];
+    process.argv = [
+      'node',
+      'cli',
+      '--md',
+      mdPath,
+      '--with-tts',
+      '--upload',
+      's3',
+      '--presign',
+      '600',
+      '--public-read',
+      '--voices',
+      'custom-voices.yml',
+      '--out',
+      'custom-out',
+      '--accent',
+      'british',
+      '--dry-run',
+      '--force',
+      '--json',
+    ];
 
     pipelineMock.newAssignment.mockResolvedValue({
       steps: ['validate', 'tts', 'upload', 'add-audio', 'manifest'],

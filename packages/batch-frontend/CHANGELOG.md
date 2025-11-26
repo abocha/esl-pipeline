@@ -1,5 +1,11 @@
 # @esl-pipeline/batch-frontend
 
+## 1.0.3
+
+### Patch Changes
+
+- Improve job options env fallback, fix wizard build, and enhance frontend UX (live updates pause state, Notion link copying); clarify md-validator fence error
+
 ## 1.0.2
 
 ### Patch Changes

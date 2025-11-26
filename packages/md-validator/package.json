@@ -1,6 +1,6 @@
 {
   "name": "@esl-pipeline/md-validator",
-  "version": "2.0.2",
+  "version": "2.0.3",
   "private": true,
   "description": "Validate ESL homework markdown structure and frontmatter.",
   "keywords": [

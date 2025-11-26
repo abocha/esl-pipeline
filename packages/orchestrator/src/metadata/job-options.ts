@@ -51,9 +51,10 @@ export async function resolveJobOptions(
 
   const presets = Object.keys(presetsMap ?? {}).sort((a, b) => a.localeCompare(b));
   const notionDatabasesFromProfiles = extractNotionDatabases(studentProfiles);
-  const notionDatabases = notionDatabasesFromProfiles.length
-    ? notionDatabasesFromProfiles
-    : resolveNotionDatabasesFromEnv();
+  const notionDatabases =
+    notionDatabasesFromProfiles.length > 0
+      ? notionDatabasesFromProfiles
+      : resolveNotionDatabasesFromEnv();
   const { voices, voiceAccents } = normalizeVoiceCatalog(voiceCatalog);
 
   return {

@@ -1,5 +1,11 @@
 # @esl-pipeline/notion-colorizer
 
+## 2.0.2
+
+### Patch Changes
+
+- Notion colorizer/importer/tts: relaxed Notion/ElevenLabs typings with casts/ts-nocheck and fixed minor type errors to restore builds.
+
 ## 2.0.1
 
 ### Patch Changes

@@ -10,6 +10,8 @@
  * - GET /jobs/events (SSE) for live updates
  * - GET /user/profile, /user/files (authenticated)
  */
+import { type AxiosError, isAxiosError } from 'axios';
+
 import type {
   JobEventPayload as ContractJobEventPayload,
   JobEventType as ContractJobEventType,
@@ -19,7 +21,6 @@ import type {
   JobStatusDto,
   JobUploadOption,
 } from '@esl-pipeline/contracts';
-import { isAxiosError, type AxiosError } from 'axios';
 
 import apiClient, {
   buildApiProxyPath,
@@ -188,7 +189,9 @@ export async function register(userData: RegisterRequest): Promise<void> {
           );
         }
         const axiosError = toAxiosError(fallbackError);
-        throw new Error(axiosError ? handleApiError(axiosError) : formatUnknownError(fallbackError));
+        throw new Error(
+          axiosError ? handleApiError(axiosError) : formatUnknownError(fallbackError),
+        );
       }
     }
 
@@ -348,7 +351,11 @@ export function subscribeToJobEvents(
     }
   };
 
-  eventSource.addEventListener('message', handleMessage);
+  // Backend emits named SSE events (e.g., job_state_changed), so subscribe to both
+  // the default "message" channel and the typed event names.
+  for (const type of ['message', 'job_state_changed', 'job_created']) {
+    eventSource.addEventListener(type, handleMessage);
+  }
 
   if (options.onError) {
     eventSource.addEventListener('error', options.onError);

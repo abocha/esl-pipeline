@@ -689,10 +689,8 @@ const parseRerunFlags = async (args: string[]): Promise<RerunFlags> => {
       '--dialogue-language <code>',
       'Dialogue language code (e.g. en, es) for dialogue TTS mode',
     )
-    .option(
-      '--dialogue-stability <value>',
-      'Dialogue stability (0.0-1.0)',
-      (value) => parseOptionalFloat(value, 'Dialogue stability'),
+    .option('--dialogue-stability <value>', 'Dialogue stability (0.0-1.0)', (value) =>
+      parseOptionalFloat(value, 'Dialogue stability'),
     )
     .option('--dialogue-seed <value>', 'Dialogue seed', (value) =>
       parseOptionalInt(value, 'Dialogue seed'),

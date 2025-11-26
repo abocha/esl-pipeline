@@ -1,5 +1,11 @@
 # @esl-pipeline/orchestrator
 
+## 3.0.4
+
+### Patch Changes
+
+- env fallback for job options.
+
 ## 3.0.3
 
 ### Patch Changes

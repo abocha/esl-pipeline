@@ -12,7 +12,7 @@ const stateColors: Record<string, string> = {
 };
 
 export const JobTable: React.FC = () => {
-  const { jobs, trackJob, liveUpdatesPaused, pauseLiveUpdates, resumeLiveUpdates } =
+  const { jobs, jobMap, trackJob, liveUpdatesPaused, pauseLiveUpdates, resumeLiveUpdates } =
     useJobMonitor();
   const [search, setSearch] = useState('');
   const [manualJobId, setManualJobId] = useState('');
@@ -30,13 +30,31 @@ export const JobTable: React.FC = () => {
     return result.slice(0, 20);
   }, [jobs, search]);
 
-  const handleCopy = (text?: string | null) => {
-    if (!text) {
-      toast.error('Link is not available yet.');
+  const handleCopy = async (job: JobEntry) => {
+    // Happy path: already have the Notion URL.
+    if (job.notionUrl) {
+      copy(job.notionUrl);
+      toast.success('Notion link copied to clipboard.');
       return;
     }
-    copy(text);
-    toast.success('Link copied to clipboard.');
+
+    // Fallback: refetch latest status to pick up notionUrl from backend.
+    toast.loading('Fetching latest link…', { id: `copy-${job.jobId}` });
+    try {
+      await trackJob(job.jobId);
+      const refreshed = jobMap[job.jobId] ?? jobs.find((j) => j.jobId === job.jobId);
+      if (refreshed?.notionUrl) {
+        copy(refreshed.notionUrl);
+        toast.success('Notion link copied to clipboard.', { id: `copy-${job.jobId}` });
+      } else {
+        toast.error('Notion link is not available yet. Try again after the job finishes.', {
+          id: `copy-${job.jobId}`,
+        });
+      }
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Unable to fetch latest job status.';
+      toast.error(message, { id: `copy-${job.jobId}` });
+    }
   };
 
   const handleRegenerate = (jobId: string) => {
@@ -161,7 +179,7 @@ export const JobTable: React.FC = () => {
                       <button
                         type="button"
                         style={secondaryButtonStyle}
-                        onClick={() => handleCopy(job.notionUrl ?? job.manifestPath ?? job.md)}
+                        onClick={() => handleCopy(job)}
                       >
                         Copy link
                       </button>

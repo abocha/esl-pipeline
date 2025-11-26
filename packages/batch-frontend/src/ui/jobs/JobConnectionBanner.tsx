@@ -7,6 +7,7 @@ const connectionStyles = {
   idle: { label: 'Preparing live updates…', color: '#94a3b8' },
   connecting: { label: 'Connecting to live updates…', color: '#0ea5e9' },
   connected: { label: 'Live updates active', color: '#16a34a' },
+  paused: { label: 'Live updates paused (polling)', color: '#eab308' },
   error: { label: 'Live updates offline', color: '#dc2626' },
   reconnecting: { label: 'Reconnecting…', color: '#f97316' },
 } as const;
@@ -24,7 +25,9 @@ export const JobConnectionBanner: React.FC = () => {
         <span style={{ ...statusDotStyle, backgroundColor: stateInfo.color }} />
         <div>
           <p style={{ margin: 0, fontWeight: 600, color: stateInfo.color }}>{stateInfo.label}</p>
-          {isPolling ? (
+          {connectionState === 'paused' ? (
+            <p style={subtitleStyle}>Event stream paused. We will keep polling every 5s.</p>
+          ) : isPolling ? (
             <p style={subtitleStyle}>
               Falling back to 5s polling while the SSE connection recovers.
             </p>
