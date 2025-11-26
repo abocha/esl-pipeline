@@ -74,6 +74,7 @@ export {
   createPipeline,
   resolveConfigPaths,
   loadEnvFiles,
+  loadEnvFilesWithSummary,
   resolveManifestPath,
 } from './pipeline.js';
 export type {
@@ -82,6 +83,8 @@ export type {
   ResolvedConfigPaths,
   PipelineNewAssignmentOptions,
   PipelineRerunOptions,
+  LoadEnvOptions,
+  LoadEnvSummary,
 } from './pipeline.js';
 export {
   resolveJobOptions,

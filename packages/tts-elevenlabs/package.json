@@ -34,8 +34,8 @@
     "dev": "tsx watch bin/cli.ts",
     "test": "vitest run",
     "test:watch": "vitest",
-    "voices:sync": "node dist/bin/voices.js",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "voices:sync": "node dist/bin/voices.js"
   },
   "dependencies": {
     "@elevenlabs/elevenlabs-js": "^2.25.0",
@@ -52,6 +52,6 @@
     "vitest": "^4.0.14"
   },
   "engines": {
-    "node": ">=24.10.0"
+    "node": ">=24.11.1"
   }
 }

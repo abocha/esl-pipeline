@@ -16,7 +16,7 @@ import {
   type OrchestratorPipeline,
   type PipelineLogger,
   createPipeline,
-  loadEnvFiles,
+  loadEnvFilesWithSummary,
   summarizeVoiceSelections,
 } from '../src/index.js';
 import type { NewAssignmentFlags, RerunFlags } from '../src/index.js';
@@ -44,7 +44,12 @@ const envFiles = ['.env'];
 if (existsSync(repoEnvPath)) {
   envFiles.push(repoEnvPath);
 }
-loadEnvFiles({ files: envFiles, cwd: process.cwd(), assignToProcess: true, override: false });
+const envSummary = loadEnvFilesWithSummary({
+  files: envFiles,
+  cwd: process.cwd(),
+  assignToProcess: true,
+  override: false,
+});
 
 type RerunStep = NonNullable<RerunFlags['steps']>[number];
 
@@ -87,14 +92,6 @@ const logNotionToken = (): void => {
     );
   }
 };
-
-const getFlag = (args: string[], name: string): string | undefined => {
-  const idx = args.indexOf(name);
-  if (idx === -1) return undefined;
-  return args[idx + 1] && !args[idx + 1]!.startsWith('--') ? args[idx + 1] : undefined;
-};
-
-const hasFlag = (args: string[], name: string): boolean => args.includes(name);
 
 const usage = (): never => {
   console.error(`Usage:
@@ -151,37 +148,97 @@ interface RunFlags {
   interactive: boolean;
 }
 
-const parseNumber = (value?: string): number | undefined => {
-  if (!value) return undefined;
+const parseOptionalInt = (value: string, label: string): number => {
   const parsed = Number.parseInt(value, 10);
-  return Number.isNaN(parsed) ? undefined : parsed;
+  if (!Number.isFinite(parsed)) {
+    throw new InvalidOptionArgumentError(`${label} must be an integer.`);
+  }
+  return parsed;
 };
 
-const parseRunFlags = (args: string[]): RunFlags => ({
-  md: getFlag(args, '--md'),
-  student: getFlag(args, '--student'),
-  preset: getFlag(args, '--preset'),
-  presetsPath: getFlag(args, '--presets-path'),
-  accentPreference: getFlag(args, '--accent'),
-  withTts: hasFlag(args, '--with-tts'),
-  upload: (getFlag(args, '--upload') as 's3' | undefined) ?? undefined,
-  presign: parseNumber(getFlag(args, '--presign')),
-  publicRead: hasFlag(args, '--public-read'),
-  prefix: getFlag(args, '--prefix'),
-  dryRun: hasFlag(args, '--dry-run'),
-  force: hasFlag(args, '--force'),
-  voices: getFlag(args, '--voices'),
-  out: getFlag(args, '--out'),
-  dbId: getFlag(args, '--db-id'),
-  db: getFlag(args, '--db'),
-  dataSourceId: getFlag(args, '--data-source-id'),
-  dataSource: getFlag(args, '--data-source'),
-  skipImport: hasFlag(args, '--skip-import'),
-  skipTts: hasFlag(args, '--skip-tts'),
-  skipUpload: hasFlag(args, '--skip-upload'),
-  redoTts: hasFlag(args, '--redo-tts'),
-  interactive: hasFlag(args, '--interactive'),
-});
+const parseRunFlags = async (args: string[]): Promise<RunFlags> => {
+  const program = new Command('run')
+    .usage('--md <file.md> [options]')
+    .allowExcessArguments(false)
+    .option('--md <file>', 'Markdown assignment file')
+    .option('--student <name>', 'Student name')
+    .option('--preset <name>', 'Color preset name')
+    .option('--presets-path <path>', 'Path to presets JSON')
+    .option('--accent <name>', 'Preferred voice accent')
+    .option('--with-tts', 'Generate ElevenLabs audio')
+    .option('--upload <mode>', 'Upload audio to S3', parseUploadOption)
+    .option('--presign <seconds>', 'Presign URL expiry in seconds', (value) =>
+      parseOptionalInt(value, 'Presign'),
+    )
+    .option('--public-read', 'Mark uploaded audio as public-read')
+    .option('--prefix <path>', 'S3 key prefix')
+    .option('--dry-run', 'Skip writes to remote services')
+    .option('--force', 'Force overwrite existing artifacts')
+    .option('--voices <file>', 'Voice map file (YAML/JSON)')
+    .option('--out <dir>', 'Output directory for artifacts')
+    .option('--db-id <id>', 'Notion database ID')
+    .option('--db <name>', 'Notion database name')
+    .option('--data-source-id <id>', 'Notion data source ID')
+    .option('--data-source <name>', 'Notion data source name')
+    .option('--skip-import', 'Reuse existing Notion page from manifest')
+    .option('--skip-tts', 'Reuse existing audio from manifest')
+    .option('--skip-upload', 'Skip uploading audio')
+    .option('--redo-tts', 'Force regenerate audio even if cached')
+    .option('--interactive', 'Launch guided wizard for missing flags');
+
+  const parsed = await parseWithCommander(program, args);
+  const opts = parsed.opts<{
+    md?: string;
+    student?: string;
+    preset?: string;
+    presetsPath?: string;
+    accent?: string;
+    withTts?: boolean;
+    upload?: 's3';
+    presign?: number;
+    publicRead?: boolean;
+    prefix?: string;
+    dryRun?: boolean;
+    force?: boolean;
+    voices?: string;
+    out?: string;
+    dbId?: string;
+    db?: string;
+    dataSourceId?: string;
+    dataSource?: string;
+    skipImport?: boolean;
+    skipTts?: boolean;
+    skipUpload?: boolean;
+    redoTts?: boolean;
+    interactive?: boolean;
+  }>();
+
+  return {
+    md: opts.md,
+    student: opts.student,
+    preset: opts.preset,
+    presetsPath: opts.presetsPath,
+    accentPreference: opts.accent,
+    withTts: Boolean(opts.withTts),
+    upload: opts.upload,
+    presign: opts.presign,
+    publicRead: Boolean(opts.publicRead),
+    prefix: opts.prefix,
+    dryRun: Boolean(opts.dryRun),
+    force: Boolean(opts.force),
+    voices: opts.voices,
+    out: opts.out,
+    dbId: opts.dbId,
+    db: opts.db,
+    dataSourceId: opts.dataSourceId,
+    dataSource: opts.dataSource,
+    skipImport: Boolean(opts.skipImport),
+    skipTts: Boolean(opts.skipTts),
+    skipUpload: Boolean(opts.skipUpload),
+    redoTts: Boolean(opts.redoTts),
+    interactive: Boolean(opts.interactive),
+  };
+};
 
 const ROOT_CHOICES = ['git', 'cwd', 'pkg'] as const;
 type RootChoice = (typeof ROOT_CHOICES)[number];
@@ -200,6 +257,43 @@ const parseLimitOption = (value: string): number => {
     throw new InvalidOptionArgumentError('Limit must be a positive integer.');
   }
   return parsed;
+};
+
+const parseUploadOption = (value: string): 's3' => {
+  if (value !== 's3') {
+    throw new InvalidOptionArgumentError('Upload must be "s3".');
+  }
+  return 's3';
+};
+
+const parseRerunSteps = (value: string): RerunStep[] => {
+  const parsed = collectCsv(value) as RerunStep[];
+  const allowed: RerunStep[] = ['tts', 'upload', 'add-audio'];
+  const invalid = parsed.filter((step) => !allowed.includes(step));
+  if (invalid.length > 0) {
+    throw new InvalidOptionArgumentError(
+      `Unknown steps: ${invalid.join(', ')}. Use one of: ${allowed.join(', ')}`,
+    );
+  }
+  return parsed;
+};
+
+const stripGlobalFlags = (args: string[]): string[] => args.filter((arg) => arg !== '--json');
+
+const parseWithCommander = async (program: Command, args: string[]): Promise<Command> => {
+  program.exitOverride();
+  try {
+    return await program.parseAsync(['node', 'cli.js', ...stripGlobalFlags(args)], {
+      from: 'node',
+    });
+  } catch (error) {
+    if (error instanceof CommanderError) {
+      const message = error.message.trim();
+      if (message) console.error(pc.red(message));
+      process.exit(error.exitCode);
+    }
+    throw error;
+  }
 };
 
 const exitWithError = (message: string): never => {
@@ -250,19 +344,7 @@ async function handleSelect(args: string[]): Promise<void> {
     .option('--include-dot', 'Include dot-prefixed files or directories', false)
     .option('--verbose', 'Print additional metadata alongside the selected path', false);
 
-  program.exitOverride();
-
-  let parsed: Command;
-  try {
-    parsed = await program.parseAsync(['node', 'cli.js', ...args], { from: 'node' });
-  } catch (error) {
-    if (error instanceof CommanderError) {
-      const message = error.message.trim();
-      if (message) console.error(pc.red(message));
-      process.exit(error.exitCode);
-    }
-    throw error;
-  }
+  const parsed = await parseWithCommander(program, args);
 
   const opts = parsed.opts<{
     dir?: boolean;
@@ -432,8 +514,17 @@ async function outputSelection(
 }
 
 const command = rawArgs[0] && !rawArgs[0].startsWith('--') ? rawArgs[0] : null;
-const jsonOutput = hasFlag(rawArgs, '--json');
+const jsonOutput = rawArgs.includes('--json');
 const logger = createLogger({ json: jsonOutput });
+
+const loadedEnvRelative = envSummary.loadedFiles.map((file) => relative(process.cwd(), file));
+const missingEnvRelative = envSummary.missingFiles.map((file) => relative(process.cwd(), file));
+logger.info('Environment files processed', {
+  loaded: loadedEnvRelative,
+  missing: missingEnvRelative,
+  assignedKeys: envSummary.assignedKeys.length,
+  overriddenKeys: envSummary.overriddenKeys.length,
+});
 
 const pipelineLogger: PipelineLogger = {
   log(event) {
@@ -549,10 +640,55 @@ const outputStatusSummary = (
   if (status.manifest?.audio?.url) console.log(`  Audio URL: ${status.manifest.audio.url}`);
 };
 
+const parseStatusFlags = async (args: string[]): Promise<{ md: string }> => {
+  const program = new Command('status')
+    .usage('--md <file.md>')
+    .allowExcessArguments(false)
+    .requiredOption('--md <file>', 'Markdown assignment file');
+
+  const parsed = await parseWithCommander(program, args);
+  const opts = parsed.opts<{ md: string }>();
+  return { md: opts.md };
+};
+
+const parseRerunFlags = async (args: string[]): Promise<RerunFlags> => {
+  const program = new Command('rerun')
+    .usage('--md <file.md> [--steps tts,upload,add-audio] [options]')
+    .allowExcessArguments(false)
+    .requiredOption('--md <file>', 'Markdown assignment file')
+    .option('--steps <steps>', 'Comma-separated steps (tts,upload,add-audio)', parseRerunSteps)
+    .option('--voices <file>', 'Voice map file (YAML/JSON)')
+    .option('--out <dir>', 'Output directory for artifacts')
+    .option('--force', 'Force overwrite existing artifacts')
+    .option('--dry-run', 'Skip writes to remote services')
+    .option('--upload <mode>', 'Upload audio to S3', parseUploadOption)
+    .option('--prefix <path>', 'S3 key prefix')
+    .option('--public-read', 'Mark uploaded audio as public-read')
+    .option('--presign <seconds>', 'Presign URL expiry in seconds', (value) =>
+      parseOptionalInt(value, 'Presign'),
+    )
+    .option('--accent <name>', 'Preferred voice accent');
+
+  const parsed = await parseWithCommander(program, args);
+  const opts = parsed.opts<RerunFlags & { steps?: RerunStep[]; accent?: string }>();
+
+  return {
+    md: opts.md,
+    steps: opts.steps && opts.steps.length > 0 ? opts.steps : undefined,
+    voices: opts.voices,
+    out: opts.out,
+    force: Boolean(opts.force),
+    dryRun: Boolean(opts.dryRun),
+    upload: opts.upload,
+    prefix: opts.prefix,
+    publicRead: Boolean(opts.publicRead),
+    presign: opts.presign,
+    accentPreference: opts.accent,
+  };
+};
+
 async function handleStatus(args: string[]): Promise<void> {
-  const mdArg = getFlag(args, '--md');
-  if (!mdArg) usage();
-  const md = mdArg!;
+  const { md } = await parseStatusFlags(args);
   const pipeline = ensurePipeline();
   logger.info('Loading assignment status', { md });
   const status = await pipeline.getAssignmentStatus(md);
@@ -562,32 +698,9 @@ async function handleStatus(args: string[]): Promise<void> {
 }
 
 async function handleRerun(args: string[]): Promise<void> {
-  const mdArg = getFlag(args, '--md');
-  if (!mdArg) usage();
-  const md = mdArg!;
-  const stepsRaw = getFlag(args, '--steps');
-  const steps = stepsRaw
-    ? (stepsRaw
-        .split(',')
-        .map((s) => s.trim())
-        .filter(Boolean) as RerunStep[])
-    : undefined;
-
+  const rerunFlags = await parseRerunFlags(args);
+  const { md, steps } = rerunFlags;
   const pipeline = ensurePipeline();
-
-  const rerunFlags: RerunFlags = {
-    md,
-    steps,
-    voices: getFlag(args, '--voices'),
-    out: getFlag(args, '--out'),
-    force: hasFlag(args, '--force'),
-    dryRun: hasFlag(args, '--dry-run'),
-    upload: (getFlag(args, '--upload') as 's3' | undefined) ?? undefined,
-    prefix: getFlag(args, '--prefix'),
-    publicRead: hasFlag(args, '--public-read'),
-    presign: parseNumber(getFlag(args, '--presign')),
-    accentPreference: getFlag(args, '--accent'),
-  };
 
   const appliedFlags: RerunFlags = {
     ...rerunFlags,
@@ -661,7 +774,7 @@ const formatSkipText = (event: AssignmentProgressEvent): string => {
 
 async function handleRun(args: string[]): Promise<void> {
   const pipeline = ensurePipeline();
-  const parsed = parseRunFlags(args);
+  const parsed = await parseRunFlags(args);
   if (!parsed.md && !parsed.interactive) usage();
 
   const useFancy = parsed.interactive && !jsonOutput;

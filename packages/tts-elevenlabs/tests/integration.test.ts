@@ -98,7 +98,7 @@ beforeEach(() => {
   });
   vi.spyOn(ffm, 'setMp3TitleMetadata').mockResolvedValue();
   // Mock console.log to suppress TTS mode selection messages
-  vi.spyOn(console, 'log').mockImplementation(() => { });
+  vi.spyOn(console, 'log').mockImplementation(() => {});
 });
 
 describe('integration tests', () => {

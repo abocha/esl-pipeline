@@ -1,5 +1,6 @@
 import js from '@eslint/js';
 import queryPlugin from '@tanstack/eslint-plugin-query';
+import vitestPlugin from '@vitest/eslint-plugin';
 import eslintConfigPrettier from 'eslint-config-prettier';
 import importPlugin from 'eslint-plugin-import-x';
 import nodePlugin from 'eslint-plugin-n';
@@ -7,7 +8,6 @@ import promisePlugin from 'eslint-plugin-promise';
 import reactPlugin from 'eslint-plugin-react';
 import reactRefreshPlugin from 'eslint-plugin-react-refresh';
 import unicornPlugin from 'eslint-plugin-unicorn';
-import vitestPlugin from '@vitest/eslint-plugin';
 import globals from 'globals';
 import tseslint from 'typescript-eslint';
 
