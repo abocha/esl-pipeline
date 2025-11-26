@@ -24,10 +24,10 @@ let GetObjectCommandClass: CommandConstructor | undefined;
 
 vi.mock('@aws-sdk/client-s3', () => {
   class PutObjectCommand {
-    constructor(readonly input: CommandInput) {}
+    constructor(readonly input: CommandInput) { }
   }
   class GetObjectCommand {
-    constructor(readonly input: CommandInput) {}
+    constructor(readonly input: CommandInput) { }
   }
 
   PutObjectCommandClass = PutObjectCommand;
@@ -162,9 +162,9 @@ describe('pipeline integration', () => {
     expect(students[0]?.student).toBe('Remote Student');
     expect(voicesPath).toMatch(/voices-.*\.yml$/);
     expect(fetchMock).toHaveBeenCalledTimes(3);
-    expect(fetchMock.mock.calls[0][0]).toBe('https://config.test/presets.json');
-    expect(fetchMock.mock.calls[1][0]).toBe('https://config.test/students.json');
-    expect(fetchMock.mock.calls[2][0]).toBe('https://config.test/voices.yml');
+    expect(fetchMock.mock.calls[0]?.[0]).toBe('https://config.test/presets.json');
+    expect(fetchMock.mock.calls[1]?.[0]).toBe('https://config.test/students.json');
+    expect(fetchMock.mock.calls[2]?.[0]).toBe('https://config.test/voices.yml');
 
     const { buildStudyTextMp3 } = await import('@esl-pipeline/tts-elevenlabs');
     vi.mocked(buildStudyTextMp3).mockResolvedValueOnce({
@@ -248,7 +248,7 @@ describe('pipeline integration', () => {
 
     expect(result.manifestPath).toBe('s3://pipeline-test/manifests/int-tests/lesson.manifest.json');
     expect(mockSend).toHaveBeenCalledTimes(2);
-    expect(mockSend.mock.calls[0][0]).toBeInstanceOf(GetCommand);
-    expect(mockSend.mock.calls[1][0]).toBeInstanceOf(PutCommand);
+    expect(mockSend.mock.calls[0]?.[0]).toBeInstanceOf(GetCommand);
+    expect(mockSend.mock.calls[1]?.[0]).toBeInstanceOf(PutCommand);
   });
 });

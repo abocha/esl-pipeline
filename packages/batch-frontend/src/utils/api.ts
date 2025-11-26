@@ -297,8 +297,15 @@ export function subscribeToJobEvents(
 ): EventSource {
   const url = buildApiProxyPath('/jobs/events');
   const accessToken = getApiAuthToken();
+
+  // Add jobId=* to subscribe to all jobs
+  const separator = url.includes('?') ? '&' : '?';
+  const urlWithJobId = `${url}${separator}jobId=*`;
+
   const tokenizedUrl =
-    accessToken && accessToken.length > 0 ? appendTokenQueryParam(url, accessToken) : url;
+    accessToken && accessToken.length > 0
+      ? appendTokenQueryParam(urlWithJobId, accessToken)
+      : urlWithJobId;
 
   const eventSource = new EventSource(tokenizedUrl, { withCredentials: true });
 

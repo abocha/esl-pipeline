@@ -10,7 +10,7 @@ import { defineConfig } from 'vite';
 // - BATCH_BACKEND_URL (e.g. http://localhost:8080)
 // - Or rely on the default below.
 const batchBackendUrl = process.env.BATCH_BACKEND_URL || 'http://localhost:8080';
-const proxyRoutes = ['/auth', '/jobs', '/uploads', '/config', '/user', '/api'];
+const proxyRoutes = ['/auth', '/jobs/events', '/jobs', '/uploads', '/config', '/user', '/api'];
 
 function withCookieForwarding() {
   return {

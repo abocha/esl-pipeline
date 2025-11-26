@@ -98,9 +98,9 @@ describe('orchestrator smoke', () => {
     expect(rerun.steps).toEqual(['upload', 'add-audio']);
     const statusAfter = await getAssignmentStatus(mdPath);
     expect(statusAfter.manifest?.audio?.url).toBe('https://s3.amazonaws.com/audio/file.mp3');
-    if (initialTimestamp && statusAfter.manifest?.timestamp) {
-      expect(statusAfter.manifest.timestamp >= initialTimestamp).toBe(true);
-    }
+    expect(initialTimestamp).toBeDefined();
+    expect(statusAfter.manifest?.timestamp).toBeDefined();
+    expect(statusAfter.manifest!.timestamp >= initialTimestamp!).toBe(true);
   });
 
   it('preserves TTS metadata when rerun without passing TTS flags', async () => {

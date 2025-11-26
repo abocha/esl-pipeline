@@ -1,6 +1,6 @@
 {
   "name": "esl-pipeline",
-  "version": "1.9.1",
+  "version": "1.9.2",
   "private": true,
   "description": "ESL assignment pipeline tooling (validation, Notion import, TTS, S3 upload).",
   "keywords": [
@@ -57,7 +57,8 @@
     "release:prepare": "pnpm changeset version && pnpm install",
     "smoke": "pnpm --filter @esl-pipeline/orchestrator test",
     "test": "pnpm -r --filter './packages/*' run test",
-    "test:watch": "pnpm -r --filter './packages/*' run test:watch"
+    "test:watch": "pnpm -r --filter './packages/*' run test:watch",
+    "typecheck": "pnpm -r --filter './packages/*' --if-present run typecheck"
   },
   "dependencies": {
     "@types/mdast": "^4.0.4",
@@ -69,8 +70,9 @@
     "@tanstack/eslint-plugin-query": "^5.91.2",
     "@trivago/prettier-plugin-sort-imports": "^6.0.0",
     "@types/node": "^24.10.1",
-    "@typescript-eslint/eslint-plugin": "^8.47.0",
-    "@typescript-eslint/parser": "^8.47.0",
+    "@typescript-eslint/eslint-plugin": "^8.48.0",
+    "@typescript-eslint/parser": "^8.48.0",
+    "@vitest/eslint-plugin": "^1.5.0",
     "eslint": "^9.39.1",
     "eslint-config-prettier": "^10.1.8",
     "eslint-import-resolver-typescript": "^4.4.4",
@@ -80,14 +82,13 @@
     "eslint-plugin-react": "^7.37.5",
     "eslint-plugin-react-refresh": "^0.4.24",
     "eslint-plugin-unicorn": "^62.0.0",
-    "eslint-plugin-vitest": "^0.5.4",
     "globals": "^16.5.0",
     "prettier": "^3.6.2",
     "prettier-plugin-packagejson": "^2.5.19",
     "tsx": "^4.20.6",
     "typescript": "^5.9.3",
-    "typescript-eslint": "^8.47.0",
-    "vitest": "^4.0.13"
+    "typescript-eslint": "^8.48.0",
+    "vitest": "^4.0.14"
   },
   "packageManager": "pnpm@10.23.0+sha512.21c4e5698002ade97e4efe8b8b4a89a8de3c85a37919f957e7a0f30f38fbc5bbdd05980ffe29179b2fb6e6e691242e098d945d1601772cad0fef5fb6411e2a4b",
   "engines": {

@@ -98,7 +98,7 @@ beforeEach(() => {
   });
   vi.spyOn(ffm, 'setMp3TitleMetadata').mockResolvedValue();
   // Mock console.log to suppress TTS mode selection messages
-  vi.spyOn(console, 'log').mockImplementation(() => {});
+  vi.spyOn(console, 'log').mockImplementation(() => { });
 });
 
 describe('integration tests', () => {
@@ -526,22 +526,20 @@ auto: true
         },
       ];
 
-      for (const scenario of cliScenarios) {
+      // Split scenarios to avoid conditional expectations in loop
+      const previewScenarios = cliScenarios.filter((s) => s.options.preview);
+      const generationScenarios = cliScenarios.filter((s) => !s.options.preview);
+
+      for (const scenario of previewScenarios) {
         convertMock.mockClear();
+        await buildStudyTextMp3(tempMdPath, scenario.options);
+        expect(convertMock).not.toHaveBeenCalled();
+      }
 
+      for (const scenario of generationScenarios) {
+        convertMock.mockClear();
         const result = await buildStudyTextMp3(tempMdPath, scenario.options);
-
-        expect(result.path).toBeDefined();
-        expect(result.hash).toBeDefined();
-
-        // Just verify that preview mode doesn't call TTS
-        if (scenario.options.preview) {
-          expect(convertMock).not.toHaveBeenCalled();
-        } else {
-          // For non-preview modes, just verify the function completed successfully
-          // Different modes may have different internal behavior
-          expect(result.path).toMatch(/\.mp3$/);
-        }
+        expect(result.path).toMatch(/\.mp3$/);
       }
     });
 

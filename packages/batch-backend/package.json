@@ -1,6 +1,6 @@
 {
   "name": "@esl-pipeline/batch-backend",
-  "version": "1.0.1",
+  "version": "1.1.0",
   "private": true,
   "license": "MIT",
   "type": "module",
@@ -8,22 +8,25 @@
   "types": "dist/index.d.ts",
   "scripts": {
     "build": "tsc -p tsconfig.build.json",
+    "dev:api": "tsx watch src/transport/http-server.ts",
+    "dev:worker": "tsx watch src/transport/worker-runner.ts",
     "start:api": "node dist/transport/http-server.js",
     "start:worker": "node dist/transport/worker-runner.js",
     "test": "vitest run --config ../../vitest.config.ts --dir ../../packages/batch-backend/tests --reporter=dot",
     "test:verbose": "vitest run --config ../../vitest.config.ts --dir ../../packages/batch-backend/tests --reporter=verbose",
-    "test:watch": "vitest watch --config ../../vitest.config.ts --dir ../../packages/batch-backend/tests"
+    "test:watch": "vitest watch --config ../../vitest.config.ts --dir ../../packages/batch-backend/tests",
+    "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@aws-sdk/client-s3": "^3.937.0",
-    "@aws-sdk/lib-storage": "^3.937.0",
-    "@aws-sdk/s3-request-presigner": "^3.937.0",
+    "@aws-sdk/client-s3": "^3.940.0",
+    "@aws-sdk/lib-storage": "^3.940.0",
+    "@aws-sdk/s3-request-presigner": "^3.940.0",
     "@esl-pipeline/contracts": "workspace:*",
     "@esl-pipeline/orchestrator": "workspace:*",
     "@esl-pipeline/shared-infrastructure": "workspace:*",
     "@fastify/multipart": "^9.3.0",
     "bcrypt": "^6.0.0",
-    "bullmq": "^5.64.1",
+    "bullmq": "^5.65.0",
     "fastify": "^5.6.2",
     "file-type": "^21.1.1",
     "ioredis": "^5.8.2",
@@ -34,7 +37,7 @@
     "pg": "^8.16.3",
     "pino": "^10.1.0",
     "pino-pretty": "^13.1.2",
-    "zod": "^4.1.12",
+    "zod": "^4.1.13",
     "zod-validation-error": "^5.0.0"
   },
   "devDependencies": {
@@ -44,6 +47,7 @@
     "@types/node": "^24.10.1",
     "@types/nodemailer": "^7.0.4",
     "@types/pg": "^8.15.6",
+    "tsx": "^4.20.6",
     "typescript": "^5.9.3"
   }
 }

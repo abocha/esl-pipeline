@@ -172,10 +172,10 @@ export async function findMarkdownCandidates(
   limit = 10,
   maxDepth = 3,
 ): Promise<string[]> {
-  const results: string[] = [];
+  const results: { path: string; mtimeMs: number }[] = [];
   const queue: { dir: string; depth: number }[] = [{ dir: resolve(cwd), depth: 0 }];
 
-  while (queue.length > 0 && results.length < limit) {
+  while (queue.length > 0) {
     const { dir, depth } = queue.shift()!;
     let entries: { name: string; isFile: boolean; isDir: boolean }[] = [];
     try {
@@ -188,15 +188,24 @@ export async function findMarkdownCandidates(
     for (const entry of entries) {
       const fullPath = join(dir, entry.name);
       if (entry.isFile && entry.name.toLowerCase().endsWith('.md')) {
-        results.push(relative(cwd, fullPath));
-        if (results.length >= limit) break;
+        let mtimeMs = 0;
+        try {
+          const stats = await stat(fullPath);
+          mtimeMs = stats.mtimeMs;
+        } catch {
+          // ignore
+        }
+        results.push({ path: relative(cwd, fullPath), mtimeMs });
       } else if (entry.isDir && depth < maxDepth && !IGNORED_DIRS.has(entry.name)) {
         queue.push({ dir: fullPath, depth: depth + 1 });
       }
     }
   }
 
-  return results;
+  return results
+    .sort((a, b) => b.mtimeMs - a.mtimeMs || a.path.localeCompare(b.path))
+    .slice(0, limit)
+    .map((entry) => entry.path);
 }
 
 export async function getDefaultOutputDir(mdPath: string): Promise<string> {

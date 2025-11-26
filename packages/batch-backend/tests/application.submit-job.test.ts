@@ -68,7 +68,7 @@ describe('application/submit-job', () => {
 
     insertJobSpy.mockResolvedValue(fakeJob as any);
 
-    const enqueue = vi.fn().mockResolvedValue();
+    const enqueue = vi.fn().mockResolvedValue(void 0);
     createJobQueueSpy.mockReturnValue({
       queue: {} as any,
       queueEvents: {} as any,
@@ -125,7 +125,7 @@ describe('application/submit-job', () => {
 
     insertJobSpy.mockResolvedValue(fakeJob as any);
 
-    const enqueue = vi.fn().mockResolvedValue();
+    const enqueue = vi.fn().mockResolvedValue(void 0);
     createJobQueueSpy.mockReturnValue({
       queue: {} as any,
       queueEvents: {} as any,
@@ -161,7 +161,7 @@ describe('application/submit-job', () => {
   it('rejects when md is missing or not a string', async () => {
     insertJobSpy.mockResolvedValue(null as any);
 
-    const enqueue = vi.fn().mockResolvedValue();
+    const enqueue = vi.fn().mockResolvedValue(void 0);
     createJobQueueSpy.mockReturnValue({
       queue: {} as any,
       queueEvents: {} as any,

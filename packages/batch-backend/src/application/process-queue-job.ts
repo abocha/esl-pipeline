@@ -73,7 +73,7 @@ export async function processQueueJob(payload: QueueJobPayload): Promise<void> {
         // Any other persisted value (e.g. 'none' or null) is treated as "no override".
         upload: uploadFlag,
         forceTts: running.forceTts ?? undefined,
-        notionDatabase: running.notionDatabase ?? undefined,
+        notionDatabase: running.notionDatabase ?? config.orchestrator.notionDatabaseId ?? undefined,
         mode: running.mode ?? undefined,
       },
       runId,

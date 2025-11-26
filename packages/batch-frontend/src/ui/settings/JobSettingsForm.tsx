@@ -14,7 +14,7 @@ export const JobSettingsForm: React.FC = () => {
     isUsingFallback,
   } = useJobSettings();
 
-  const notionOptions = options.notionDatabases;
+  // const notionOptions = options.notionDatabases; // Temporarily unused
 
   return (
     <section style={cardStyle}>
@@ -58,7 +58,8 @@ export const JobSettingsForm: React.FC = () => {
           </select>
         </label>
 
-        <label style={fieldStyle}>
+        {/* Notion database selector temporarily hidden - using default from env */}
+        {/* <label style={fieldStyle}>
           Notion database
           <select
             value={settings.notionDatabase}
@@ -71,7 +72,7 @@ export const JobSettingsForm: React.FC = () => {
               </option>
             ))}
           </select>
-        </label>
+        </label> */}
 
         <label style={fieldStyle}>
           Upload destination

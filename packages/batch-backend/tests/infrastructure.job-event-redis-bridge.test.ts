@@ -75,7 +75,7 @@ describe('infrastructure/job-event-redis-bridge', () => {
     } as any);
 
     const { enableRedisJobEventBridge } = await import(
-      '../src/infrastructure/job-event-redis-bridge'
+      '../src/infrastructure/job-event-redis-bridge.js'
     );
     const jobEvents = await import('../src/domain/job-events.js');
 
@@ -89,16 +89,16 @@ describe('infrastructure/job-event-redis-bridge', () => {
     await new Promise((resolve) => setImmediate(resolve));
 
     const job = makeJob('queued');
-    jobEvents.publishJobEvent({ type: 'job_created', job });
+    jobEvents.publishJobEvent({ type: 'job_created', job: job as any });
 
     expect(subscriber.subscribe).toHaveBeenCalledWith('batch_job_events:job-1');
 
     // Publishes to targeted channel and legacy broadcast
     expect(publisher.publish).toHaveBeenCalledTimes(2);
-    expect(publisher.publish.mock.calls[0][0]).toBe('batch_job_events:job-1');
-    expect(publisher.publish.mock.calls[1][0]).toBe('batch_job_events');
+    expect(publisher.publish.mock.calls[0]?.[0]).toBe('batch_job_events:job-1');
+    expect(publisher.publish.mock.calls[1]?.[0]).toBe('batch_job_events');
 
-    const payloadStr = publisher.publish.mock.calls[0][1];
+    const payloadStr = publisher.publish.mock.calls[0]?.[1];
     const payloadJson = JSON.parse(payloadStr);
     expect(payloadJson.type).toBe('job_created');
     expect(payloadJson.job.id).toBe(job.id);
@@ -118,9 +118,9 @@ describe('infrastructure/job-event-redis-bridge', () => {
 
     expect(received).toHaveLength(2);
     expect(received[0]).toEqual({ type: 'job_created', job });
-    expect(received[1].type).toBe('job_state_changed');
-    expect(received[1].job.state).toBe('running');
-    expect(received[1].job.startedAt).toEqual(new Date('2024-01-01T00:01:00.000Z'));
+    expect(received[1]?.type).toBe('job_state_changed');
+    expect(received[1]?.job.state).toBe('running');
+    expect(received[1]?.job.startedAt).toEqual(new Date('2024-01-01T00:01:00.000Z'));
 
     dispose();
   });
@@ -138,7 +138,7 @@ describe('infrastructure/job-event-redis-bridge', () => {
     } as any);
 
     const { enableRedisJobEventBridge } = await import(
-      '../src/infrastructure/job-event-redis-bridge'
+      '../src/infrastructure/job-event-redis-bridge.js'
     );
     const jobEvents = await import('../src/domain/job-events.js');
 
@@ -187,7 +187,7 @@ describe('infrastructure/job-event-redis-bridge', () => {
     } as any);
 
     const { enableRedisJobEventBridge } = await import(
-      '../src/infrastructure/job-event-redis-bridge'
+      '../src/infrastructure/job-event-redis-bridge.js'
     );
 
     await enableRedisJobEventBridge();

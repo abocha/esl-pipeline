@@ -35,6 +35,8 @@ async function executePipeline(
 
   if (payload.notionDatabase) {
     flags.dbId = payload.notionDatabase;
+  } else if (config.orchestrator.notionDatabaseId) {
+    flags.dbId = config.orchestrator.notionDatabaseId;
   }
 
   if (payload.forceTts) {

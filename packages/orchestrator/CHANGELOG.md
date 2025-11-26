@@ -1,5 +1,13 @@
 # @esl-pipeline/orchestrator
 
+## 3.0.2
+
+### Patch Changes
+
+- set up proper vitest eslint; set up proper typescript cli typechecking; small fixes in tess; bug: some files could not be chosen manually by the interactive wizard, now fixed; updated deps.
+- Updated dependencies
+  - @esl-pipeline/shared-infrastructure@1.0.1
+
 ## 3.0.1
 
 ### Patch Changes

@@ -5,7 +5,11 @@
     // Frontend-specific overrides.
     "target": "ES2022",
     "module": "ESNext",
-    "lib": ["ES2022", "DOM"],
+    "lib": [
+      "ES2022",
+      "DOM",
+      "DOM.Iterable"
+    ],
     "moduleResolution": "Node",
     "jsx": "react-jsx",
     "jsxImportSource": "react",
@@ -13,14 +17,16 @@
     "esModuleInterop": true,
     "allowJs": false,
     "resolveJsonModule": true,
-
     // Make sure Vite/DOM types are available in the editor for ESLint/TS.
-    "types": ["vite/client"],
-
+    "types": [
+      "vite/client"
+    ],
     // Local path aliases for this package.
     "baseUrl": "./",
     "paths": {
-      "@/*": ["src/*"]
+      "@/*": [
+        "src/*"
+      ]
     }
   },
   // Include this package's sources and the workspace root so that
@@ -28,10 +34,13 @@
   // like "vite", "@vitejs/plugin-react-swc", "react", etc.
   "include": [
     "../../**/*.d.ts",
-    "../../node_modules/**/*",
     "src/**/*.ts",
     "src/**/*.tsx",
     "vite.config.ts"
   ],
-  "exclude": ["dist"]
+  "exclude": [
+    "dist",
+    "node_modules",
+    "../../node_modules"
+  ]
 }

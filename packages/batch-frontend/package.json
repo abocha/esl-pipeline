@@ -1,6 +1,6 @@
 {
   "name": "@esl-pipeline/batch-frontend",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "private": true,
   "scripts": {
     "build": "vite build",
@@ -11,7 +11,7 @@
   },
   "dependencies": {
     "@esl-pipeline/contracts": "workspace:*",
-    "@tanstack/react-query": "^5.90.10",
+    "@tanstack/react-query": "^5.90.11",
     "axios": "^1.13.2",
     "copy-to-clipboard": "^3.3.3",
     "react": "^19.2.0",
@@ -20,10 +20,10 @@
     "react-hot-toast": "^2.6.0"
   },
   "devDependencies": {
-    "@types/react": "^19.2.6",
+    "@types/react": "^19.2.7",
     "@types/react-dom": "^19.2.3",
-    "@typescript-eslint/eslint-plugin": "^8.47.0",
-    "@typescript-eslint/parser": "^8.47.0",
+    "@typescript-eslint/eslint-plugin": "^8.48.0",
+    "@typescript-eslint/parser": "^8.48.0",
     "@vitejs/plugin-react-swc": "^4.2.2",
     "eslint": "^9.39.1",
     "eslint-plugin-react-hooks": "^7.0.1",

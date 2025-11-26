@@ -1,5 +1,11 @@
 # @esl-pipeline/contracts
 
+## 1.0.1
+
+### Patch Changes
+
+- set up proper vitest eslint; set up proper typescript cli typechecking; small fixes in tess; bug: some files could not be chosen manually by the interactive wizard, now fixed; updated deps.
+
 ## 1.0.0
 
 ### Major Changes

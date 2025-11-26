@@ -21,7 +21,8 @@ const DEFAULT_IGNORE = [
   '**/.pnpm/**',
 ];
 
-const DEFAULT_LIMIT = 20;
+// Higher limit so manual browsing in large repos still lists new files (e.g., fixtures)
+const DEFAULT_LIMIT = 200;
 const DEFAULT_BEHAVIOUR = { applyLimit: true } as const;
 
 type RootStrategy = 'git' | 'cwd' | 'pkg';

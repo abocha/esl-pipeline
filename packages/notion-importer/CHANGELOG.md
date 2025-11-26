@@ -1,5 +1,15 @@
 # @esl-pipeline/notion-importer
 
+## 2.1.1
+
+### Patch Changes
+
+- set up proper vitest eslint; set up proper typescript cli typechecking; small fixes in tess; bug: some files could not be chosen manually by the interactive wizard, now fixed; updated deps.
+- Updated dependencies
+  - @esl-pipeline/md-extractor@2.0.2
+  - @esl-pipeline/md-validator@2.0.2
+  - @esl-pipeline/contracts@1.0.1
+
 ## 2.1.0
 
 ### Minor Changes

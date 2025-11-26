@@ -47,10 +47,31 @@ services:
       timeout: 5s
       retries: 10
 
+  batch-frontend:
+    build:
+      context: .
+      dockerfile: packages/batch-frontend/Dockerfile.dev
+    container_name: esl-batch-frontend
+    environment:
+      - NODE_ENV=development
+      - BATCH_BACKEND_URL=http://batch-backend:8080
+    volumes:
+      - ./:/app
+      - /app/node_modules
+      - /app/packages/batch-frontend/node_modules
+      - /app/packages/contracts/node_modules
+    command: >
+      sh -c "
+        pnpm install &&
+        pnpm --filter @esl-pipeline/batch-frontend dev --host
+      "
+    ports:
+      - '5173:5173'
+
   batch-backend:
     build:
       context: .
-      dockerfile: packages/orchestrator/Dockerfile
+      dockerfile: packages/batch-backend/Dockerfile.dev
     container_name: esl-batch-backend
     depends_on:
       postgres:
@@ -61,13 +82,20 @@ services:
         condition: service_started
     env_file:
       - .env.batch-backend
+    environment:
+      - NODE_ENV=development
     volumes:
       - uploads_data:/app/uploads
+      - ./:/app
+      - /app/node_modules
+      - /app/packages/batch-backend/node_modules
+      - /app/packages/orchestrator/node_modules
+      - /app/packages/contracts/node_modules
+      - /app/packages/shared-infrastructure/node_modules
     command: >
       sh -c "
         pnpm install &&
-        pnpm -r build &&
-        pnpm --filter @esl-pipeline/batch-backend start:api
+        pnpm --filter @esl-pipeline/batch-backend dev:api
       "
     ports:
       - '8080:8080'
@@ -75,7 +103,7 @@ services:
   batch-worker:
     build:
       context: .
-      dockerfile: packages/orchestrator/Dockerfile
+      dockerfile: packages/batch-backend/Dockerfile.dev
     container_name: esl-batch-worker
     depends_on:
       postgres:
@@ -86,13 +114,20 @@ services:
         condition: service_started
     env_file:
       - .env.batch-backend
+    environment:
+      - NODE_ENV=development
     volumes:
       - uploads_data:/app/uploads
+      - ./:/app
+      - /app/node_modules
+      - /app/packages/batch-backend/node_modules
+      - /app/packages/orchestrator/node_modules
+      - /app/packages/contracts/node_modules
+      - /app/packages/shared-infrastructure/node_modules
     command: >
       sh -c "
         pnpm install &&
-        pnpm -r build &&
-        pnpm --filter @esl-pipeline/batch-backend start:worker
+        pnpm --filter @esl-pipeline/batch-backend dev:worker
       "
 
 volumes:
