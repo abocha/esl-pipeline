@@ -58,7 +58,8 @@
     "smoke": "pnpm --filter @esl-pipeline/orchestrator test",
     "test": "pnpm -r --filter './packages/*' run test",
     "test:watch": "pnpm -r --filter './packages/*' run test:watch",
-    "typecheck": "pnpm -r --filter './packages/*' --if-present run typecheck"
+    "typecheck": "pnpm -r --filter './packages/*' --if-present run typecheck",
+    "deps:pin": "node configs/pin-shared-deps.mjs"
   },
   "dependencies": {},
   "devDependencies": {
