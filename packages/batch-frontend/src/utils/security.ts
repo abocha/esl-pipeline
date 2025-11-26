@@ -164,7 +164,7 @@ export function initializeSecurity(): void {
         if (node.nodeType === Node.ELEMENT_NODE) {
           const element = node as Element;
           // Check for suspicious script injections
-          if (element.tagName === 'SCRIPT' && !Object.hasOwn(element.dataset, 'trusted')) {
+          if (element.tagName === 'SCRIPT' && !Object.hasOwn((element as HTMLElement).dataset, 'trusted')) {
             logSecurityEvent({
               type: 'xss_attempt',
               details: {

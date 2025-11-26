@@ -27,7 +27,7 @@ describe('application/get-job-options', () => {
   it('returns orchestrator metadata when helper succeeds', async () => {
     const { getJobOptions } = await import('../src/application/get-job-options.js');
     const { getJobOptionsFromOrchestrator } = await import(
-      '../src/infrastructure/orchestrator-service'
+      '../src/infrastructure/orchestrator-service.js'
     );
 
     vi.mocked(getJobOptionsFromOrchestrator).mockResolvedValue({
@@ -77,7 +77,7 @@ describe('application/get-job-options', () => {
   it('falls back to static options when orchestrator helper fails', async () => {
     const { getJobOptions } = await import('../src/application/get-job-options.js');
     const { getJobOptionsFromOrchestrator } = await import(
-      '../src/infrastructure/orchestrator-service'
+      '../src/infrastructure/orchestrator-service.js'
     );
     const { logger } = await import('../src/infrastructure/logger.js');
 

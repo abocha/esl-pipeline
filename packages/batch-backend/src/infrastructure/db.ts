@@ -50,6 +50,19 @@ const JOBS_INDEX_PATCHES: string[] = [
   'CREATE INDEX IF NOT EXISTS idx_jobs_state_created_at ON jobs (state, created_at)',
 ];
 
+const USERS_TABLE_SQL = `
+CREATE TABLE IF NOT EXISTS users (
+  id UUID PRIMARY KEY,
+  email TEXT NOT NULL UNIQUE,
+  password_hash TEXT NOT NULL,
+  role TEXT NOT NULL DEFAULT 'user',
+  is_active BOOLEAN NOT NULL DEFAULT TRUE,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  last_login_at TIMESTAMPTZ NULL
+);
+`;
+
 async function ensureJobsSchema(client: PoolClient): Promise<void> {
   if (schemaReadyPromise) {
     await schemaReadyPromise;
@@ -57,6 +70,7 @@ async function ensureJobsSchema(client: PoolClient): Promise<void> {
   }
 
   schemaReadyPromise = (async () => {
+    // Jobs table
     await client.query(JOBS_TABLE_SQL);
     for (const statement of JOBS_SCHEMA_PATCHES) {
       await client.query(statement);
@@ -65,9 +79,12 @@ async function ensureJobsSchema(client: PoolClient): Promise<void> {
       await client.query(indexSql);
     }
 
-    logger.info('Ensured jobs table schema', {
+    // Users table
+    await client.query(USERS_TABLE_SQL);
+
+    logger.info('Ensured database schema (jobs, users)', {
       component: 'pg',
-      event: 'jobs_schema_ready',
+      event: 'schema_ready',
     });
   })().catch((error) => {
     schemaReadyPromise = null;

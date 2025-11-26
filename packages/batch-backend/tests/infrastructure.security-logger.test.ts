@@ -375,8 +375,8 @@ describe('SecurityLogger', () => {
 
       const sessions = securityLogger.getActiveUserSessions();
       expect(sessions).toHaveLength(1);
-      expect(sessions[0].userId).toBe('user123');
-      expect(sessions[0].sessionId).toBe('session456');
+      expect(sessions[0]?.userId).toBe('user123');
+      expect(sessions[0]?.sessionId).toBe('session456');
     });
 
     it('should update session activity timestamps', async () => {
@@ -389,7 +389,7 @@ describe('SecurityLogger', () => {
       });
 
       const sessionsBefore = securityLogger.getActiveUserSessions();
-      const firstActivity = sessionsBefore[0].lastActivity;
+      const firstActivity = sessionsBefore[0]?.lastActivity;
 
       // Wait a bit and log another event
       await new Promise((resolve) => setTimeout(resolve, 10));
@@ -403,16 +403,16 @@ describe('SecurityLogger', () => {
       });
 
       const sessionsAfter = securityLogger.getActiveUserSessions();
-      const secondActivity = sessionsAfter[0].lastActivity;
+      const secondActivity = sessionsAfter[0]?.lastActivity;
 
-      expect(secondActivity.getTime()).toBeGreaterThanOrEqual(firstActivity.getTime());
+      expect(secondActivity?.getTime()).toBeGreaterThanOrEqual(firstActivity?.getTime() ?? 0);
     });
   });
 
   describe('Error Handling', () => {
     it('should not crash application on logging errors', async () => {
       const { logger } = await import('../src/infrastructure/logger.js');
-      logger.info.mockImplementation(() => {
+      (logger.info as any).mockImplementation(() => {
         throw new Error('Logging failed');
       });
 
@@ -544,7 +544,7 @@ describe('SecurityLogger', () => {
       });
 
       const { logger } = await import('../src/infrastructure/logger.js');
-      const calls = logger.info.mock.calls;
+      const calls = (logger.info as any).mock.calls;
 
       expect(calls[0][1]).toHaveProperty('correlation_id', correlationId);
       expect(calls[1][1]).toHaveProperty('correlation_id', correlationId);

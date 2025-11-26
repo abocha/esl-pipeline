@@ -42,10 +42,10 @@ describe('RemoteConfigProvider', () => {
     const voicesUrl = await provider.resolveVoicesPath();
 
     expect(fetchMock).toHaveBeenCalledTimes(3);
-    expect(fetchMock.mock.calls[0][0]).toBe('https://config.test/presets.json');
-    expect(fetchMock.mock.calls[1][0]).toBe('https://config.test/students.json');
-    expect(fetchMock.mock.calls[2][0]).toBe('https://config.test/voices.yml');
-    const headers = fetchMock.mock.calls[0][1]?.headers as Record<string, string>;
+    expect(fetchMock.mock.calls[0]?.[0]).toBe('https://config.test/presets.json');
+    expect(fetchMock.mock.calls[1]?.[0]).toBe('https://config.test/students.json');
+    expect(fetchMock.mock.calls[2]?.[0]).toBe('https://config.test/voices.yml');
+    const headers = fetchMock.mock.calls[0]?.[1]?.headers as Record<string, string>;
     expect(headers.Authorization).toBe('Bearer abc');
     expect(presets['b1-default']?.h2).toBe('#ff0000');
     expect(students[0]?.student).toBe('Test Student');

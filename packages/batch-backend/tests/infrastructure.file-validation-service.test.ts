@@ -40,7 +40,7 @@ describe('FileValidationService', () => {
 
       expect(result.isValid).toBe(false);
       expect(result.errors).toHaveLength(1);
-      expect(result.errors[0].code).toBe('FILE_SIZE_EXCEEDED');
+      expect(result.errors[0]?.code).toBe('FILE_SIZE_EXCEEDED');
     });
 
     it('should warn about files approaching size limit', async () => {
@@ -72,11 +72,11 @@ describe('FileValidationService', () => {
 
       const phpResult = await validationService.validateFile(buffer, 'test.php');
       expect(phpResult.isValid).toBe(false);
-      expect(phpResult.errors[0].code).toBe('FILE_EXTENSION_NOT_ALLOWED');
+      expect(phpResult.errors[0]?.code).toBe('FILE_EXTENSION_NOT_ALLOWED');
 
       const exeResult = await validationService.validateFile(buffer, 'test.exe');
       expect(exeResult.isValid).toBe(false);
-      expect(exeResult.errors[0].code).toBe('FILE_EXTENSION_NOT_ALLOWED');
+      expect(exeResult.errors[0]?.code).toBe('FILE_EXTENSION_NOT_ALLOWED');
     });
 
     it('should reject files without extensions', async () => {
@@ -84,7 +84,7 @@ describe('FileValidationService', () => {
       const result = await validationService.validateFile(buffer, 'testfile');
 
       expect(result.isValid).toBe(false);
-      expect(result.errors[0].code).toBe('FILE_EXTENSION_MISSING');
+      expect(result.errors[0]?.code).toBe('FILE_EXTENSION_MISSING');
     });
   });
 

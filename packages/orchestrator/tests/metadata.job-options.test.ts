@@ -22,7 +22,7 @@ function createConfigProvider(overrides: Partial<ConfigProvider> = {}): ConfigPr
   const base: ConfigProvider = {
     loadPresets: vi.fn().mockResolvedValue({}),
     loadStudentProfiles: vi.fn().mockResolvedValue([]),
-    resolveVoicesPath: vi.fn().mockResolvedValue(),
+    resolveVoicesPath: vi.fn().mockResolvedValue(void 0),
   };
   return { ...base, ...overrides };
 }

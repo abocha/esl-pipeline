@@ -23,9 +23,9 @@ import { createHttpServer } from '../src/transport/http-server.js';
  */
 
 // Mock auth middleware to bypass authentication for integration tests
-vi.mock('../src/transport/auth-middleware', async () => {
-  const actual = await vi.importActual<typeof import('../src/transport/auth-middleware')>(
-    '../src/transport/auth-middleware',
+vi.mock('../src/transport/auth-middleware.js', async () => {
+  const actual = await vi.importActual<typeof import('../src/transport/auth-middleware.js')>(
+    '../src/transport/auth-middleware.js',
   );
   return {
     ...actual,
@@ -49,7 +49,7 @@ vi.mock('../src/transport/auth-middleware', async () => {
 
 // Mock rate limiting middleware to avoid Redis dependencies
 vi.mock('../src/transport/rate-limit-middleware', async () => {
-  const actual = await vi.importActual<typeof import('../src/transport/rate-limit-middleware')>(
+  const actual = await vi.importActual<typeof import('../src/transport/rate-limit-middleware.js')>(
     '../src/transport/rate-limit-middleware',
   );
   return {
@@ -385,7 +385,7 @@ describe('transport/http-server - integration (in-process)', () => {
       manifestPath: null,
     };
 
-    await new Promise<void>((resolve, reject) => {
+    const eventPayload = await new Promise<any>((resolve, reject) => {
       let resRef: import('node:http').IncomingMessage | null = null;
       let settled = false;
       let buffer = '';
@@ -393,7 +393,7 @@ describe('transport/http-server - integration (in-process)', () => {
       let requestRef: import('node:http').ClientRequest | null = null;
       let timeout: ReturnType<typeof setTimeout> | null = null;
 
-      const cleanup = (err?: Error) => {
+      const cleanup = (err?: Error, result?: any) => {
         if (settled) return;
         settled = true;
         requestRef?.destroy();
@@ -405,7 +405,7 @@ describe('transport/http-server - integration (in-process)', () => {
         if (err) {
           reject(err);
         } else {
-          resolve();
+          resolve(result);
         }
       };
 
@@ -424,12 +424,7 @@ describe('transport/http-server - integration (in-process)', () => {
           const dataMatch = buffer.match(/data: (.+)\n\n/);
           if (dataMatch) {
             const payload = JSON.parse(dataMatch[1]!);
-            expect(payload.type).toBe('job_state_changed');
-            expect(payload.jobId).toBe(job.id);
-            expect(payload.state).toBe('running');
-            expect(payload.payload?.mode).toBeNull();
-            expect(payload.payload?.md).toBe(job.md);
-            cleanup();
+            cleanup(undefined, payload);
           }
         });
 
@@ -450,5 +445,11 @@ describe('transport/http-server - integration (in-process)', () => {
         cleanup(new Error('Timed out waiting for SSE payload'));
       }, 10_000);
     });
+
+    expect(eventPayload.type).toBe('job_state_changed');
+    expect(eventPayload.jobId).toBe(job.id);
+    expect(eventPayload.state).toBe('running');
+    expect(eventPayload.payload?.mode).toBeNull();
+    expect(eventPayload.payload?.md).toBe(job.md);
   });
 });

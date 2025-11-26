@@ -1,5 +1,21 @@
 # @esl-pipeline/batch-backend
 
+## 1.1.0
+
+### Minor Changes
+
+- modified dockerfile setup significantly
+
+## 1.0.2
+
+### Patch Changes
+
+- set up proper vitest eslint; set up proper typescript cli typechecking; small fixes in tess; bug: some files could not be chosen manually by the interactive wizard, now fixed; updated deps.
+- Updated dependencies
+  - @esl-pipeline/shared-infrastructure@1.0.1
+  - @esl-pipeline/orchestrator@3.0.2
+  - @esl-pipeline/contracts@1.0.1
+
 ## 1.0.1
 
 ### Patch Changes

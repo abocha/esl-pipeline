@@ -1,6 +1,6 @@
 {
   "name": "@esl-pipeline/shared-infrastructure",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "private": true,
   "license": "MIT",
   "type": "module",
@@ -9,7 +9,8 @@
   "scripts": {
     "build": "tsc -b tsconfig.build.json",
     "test": "vitest run --config ../../vitest.config.ts --dir ../../packages/shared-infrastructure/tests --reporter=dot",
-    "test:verbose": "vitest run --config ../../vitest.config.ts --dir ../../packages/shared-infrastructure/tests --reporter=verbose"
+    "test:verbose": "vitest run --config ../../vitest.config.ts --dir ../../packages/shared-infrastructure/tests --reporter=verbose",
+    "typecheck": "tsc --noEmit"
   },
   "dependencies": {
     "@esl-pipeline/contracts": "workspace:*",
@@ -18,6 +19,6 @@
   "devDependencies": {
     "@types/node": "^24.10.1",
     "typescript": "^5.9.3",
-    "vitest": "^4.0.13"
+    "vitest": "^4.0.14"
   }
 }

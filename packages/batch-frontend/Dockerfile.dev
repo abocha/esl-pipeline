@@ -1,0 +1,21 @@
+# syntax=docker/dockerfile:1.6
+
+FROM node:24-bullseye-slim
+
+ENV PNPM_HOME=/root/.local/share/pnpm \
+    PATH="$PNPM_HOME:$PATH" \
+    NODE_ENV=development \
+    CI=false
+
+# Install system dependencies
+RUN corepack enable && corepack prepare pnpm@10 --activate \
+    && apt-get update \
+    && apt-get install -y --no-install-recommends ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /app
+
+EXPOSE 5173
+
+# No COPY or RUN pnpm install here.
+# We rely on volume mounts and running pnpm install at runtime.

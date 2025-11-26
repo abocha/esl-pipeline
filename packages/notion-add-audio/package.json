@@ -1,6 +1,6 @@
 {
   "name": "@esl-pipeline/notion-add-audio",
-  "version": "2.0.0",
+  "version": "2.0.1",
   "private": true,
   "description": "Attach generated audio blocks to Notion study-text toggles.",
   "keywords": [
@@ -31,7 +31,8 @@
     "clean": "node -e \"fs.rmSync('dist', {recursive:true, force:true})\"",
     "dev": "tsx watch bin/cli.ts",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "typecheck": "tsc --noEmit"
   },
   "dependencies": {
     "@esl-pipeline/contracts": "workspace:*",
@@ -42,7 +43,7 @@
     "@types/node": "^24.10.1",
     "tsx": "^4.20.6",
     "typescript": "^5.9.3",
-    "vitest": "^4.0.13"
+    "vitest": "^4.0.14"
   },
   "engines": {
     "node": ">=24.10.0"

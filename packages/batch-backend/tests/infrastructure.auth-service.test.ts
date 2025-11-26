@@ -18,10 +18,10 @@ vi.mock('jsonwebtoken', () => ({
     sign: vi.fn(),
     verify: vi.fn(),
     TokenExpiredError: class TokenExpiredError extends Error {
-      message = 'Token expired';
+      override message = 'Token expired';
     },
     JsonWebTokenError: class JsonWebTokenError extends Error {
-      message = 'Invalid token';
+      override message = 'Invalid token';
     },
   },
 }));

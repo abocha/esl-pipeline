@@ -7,7 +7,7 @@ import promisePlugin from 'eslint-plugin-promise';
 import reactPlugin from 'eslint-plugin-react';
 import reactRefreshPlugin from 'eslint-plugin-react-refresh';
 import unicornPlugin from 'eslint-plugin-unicorn';
-import vitestPlugin from 'eslint-plugin-vitest';
+import vitestPlugin from '@vitest/eslint-plugin';
 import globals from 'globals';
 import tseslint from 'typescript-eslint';
 

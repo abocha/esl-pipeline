@@ -42,8 +42,8 @@ describe('application/process-queue-job', () => {
   function makeJob(
     overrides: Partial<
       ReturnType<(typeof jobRepository)['getJobById']> extends Promise<infer R>
-        ? NonNullable<R>
-        : never
+      ? NonNullable<R>
+      : never
     > = {},
   ): any {
     const now = new Date('2024-01-01T10:00:00Z');
@@ -124,7 +124,9 @@ describe('application/process-queue-job', () => {
     });
 
     expect(runAssignmentJobSpy).toHaveBeenCalledTimes(1);
-    const [payload, runId] = runAssignmentJobSpy.mock.calls[0];
+    const callArgs = runAssignmentJobSpy.mock.calls[0];
+    expect(callArgs).toBeDefined();
+    const [payload, runId] = callArgs!;
     expect(payload).toMatchObject({
       jobId: 'job-1',
       preset: initial.preset!,
