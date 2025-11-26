@@ -185,8 +185,8 @@ function setStateValue<K extends keyof NewAssignmentFlags>(
     return;
   }
 
-  state[key] = value;
-  state.origins[key] = origin;
+  (state as Record<keyof NewAssignmentFlags, unknown>)[key] = value;
+  (state.origins as Record<keyof NewAssignmentFlags, ValueOrigin>)[key] = origin;
 }
 
 function collectPersistableSettings(state: WizardState): Partial<NewAssignmentFlags> {
@@ -197,7 +197,7 @@ function collectPersistableSettings(state: WizardState): Partial<NewAssignmentFl
     if (origin !== 'manual' && origin !== 'saved') continue;
     const value = state[key];
     if (value !== undefined) {
-      result[key] = value;
+      (result as Record<keyof NewAssignmentFlags, unknown>)[key] = value;
     }
   }
   return result;

@@ -50,7 +50,10 @@ export async function resolveJobOptions(
   ]);
 
   const presets = Object.keys(presetsMap ?? {}).sort((a, b) => a.localeCompare(b));
-  const notionDatabases = extractNotionDatabases(studentProfiles);
+  const notionDatabasesFromProfiles = extractNotionDatabases(studentProfiles);
+  const notionDatabases = notionDatabasesFromProfiles.length
+    ? notionDatabasesFromProfiles
+    : resolveNotionDatabasesFromEnv();
   const { voices, voiceAccents } = normalizeVoiceCatalog(voiceCatalog);
 
   return {
@@ -80,6 +83,45 @@ function extractNotionDatabases(profiles: StudentProfile[]): NotionDatabaseOptio
   }
 
   return options.sort((a, b) => a.name.localeCompare(b.name));
+}
+
+function resolveNotionDatabasesFromEnv(): NotionDatabaseOption[] {
+  const rawList = process.env.NOTION_DB_OPTIONS;
+  if (rawList) {
+    const parsed = rawList
+      .split(',')
+      .map((entry) => entry.trim())
+      .filter(Boolean)
+      .map((entry) => {
+        const [idPart, ...nameParts] = entry.split(':');
+        const id = idPart?.trim();
+        if (!id) {
+          return null;
+        }
+        const name = nameParts.length > 0 ? nameParts.join(':').trim() : undefined;
+        return {
+          id,
+          name: name && name.length > 0 ? name : id,
+        };
+      })
+      .filter((option): option is NotionDatabaseOption => option !== null);
+
+    if (parsed.length > 0) {
+      return parsed;
+    }
+  }
+
+  const singleDbId =
+    process.env.NOTION_DATABASE_ID?.trim() || process.env.NOTION_DB_ID?.trim() || null;
+  if (singleDbId) {
+    const singleName =
+      process.env.NOTION_DB_NAME?.trim() ||
+      process.env.NOTION_DB_LABEL?.trim() ||
+      'Primary database';
+    return [{ id: singleDbId, name: singleName }];
+  }
+
+  return [];
 }
 
 function normalizeVoiceCatalog(catalog: VoiceCatalog | undefined): {
