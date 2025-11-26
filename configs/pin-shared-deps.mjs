@@ -12,6 +12,21 @@ const SHARED = {
   '@notionhq/client': '^5.4.0',
   commander: '^14.0.2',
   zod: '^4.1.13',
+  // Frontend
+  react: '^19.2.0',
+  'react-dom': '^19.2.0',
+  axios: '^1.13.2',
+  '@tanstack/react-query': '^5.90.11',
+  vite: '^7.2.4',
+  '@vitejs/plugin-react-swc': '^4.2.2',
+  // Backend
+  fastify: '^5.6.2',
+  pg: '^8.16.3',
+  ioredis: '^5.8.2',
+  bullmq: '^5.65.0',
+  bcrypt: '^6.0.0',
+  jsonwebtoken: '^9.0.2',
+  minio: '^8.0.6',
 };
 
 const fields = ['dependencies', 'devDependencies'];

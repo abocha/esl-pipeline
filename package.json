@@ -59,7 +59,8 @@
     "test": "pnpm -r --filter './packages/*' run test",
     "test:watch": "pnpm -r --filter './packages/*' run test:watch",
     "typecheck": "pnpm -r --filter './packages/*' --if-present run typecheck",
-    "deps:pin": "node configs/pin-shared-deps.mjs"
+    "deps:pin": "node configs/pin-shared-deps.mjs",
+    "deps:upgrade:safe": "node configs/safe-upgrade.mjs"
   },
   "dependencies": {},
   "devDependencies": {

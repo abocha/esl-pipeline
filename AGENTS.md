@@ -124,6 +124,7 @@ Treat the alignment doc as the only human-readable status tracker; the SSOT and 
 - Lint: `pnpm lint`
 - Test: `pnpm test` or `pnpm --filter @esl-pipeline/orchestrator test`
 - Smoke: `pnpm smoke` (orchestrator-focused)
+- Dependencies: `pnpm deps:pin` to normalize shared versions; `pnpm deps:upgrade:safe` to bump allowlisted SDKs (Notion/ElevenLabs/AWS S3 + stable utils) then reapply pins.
 - Zero-install: `npx @esl-pipeline/orchestrator esl --help`
 
 For CI, release, and workflow invariants, follow [`docs/agents-ssot.md`](docs/agents-ssot.md) §§10–12.
