@@ -1,6 +1,6 @@
 {
   "name": "esl-pipeline",
-  "version": "1.9.2",
+  "version": "1.9.3",
   "private": true,
   "description": "ESL assignment pipeline tooling (validation, Notion import, TTS, S3 upload).",
   "keywords": [
@@ -60,10 +60,7 @@
     "test:watch": "pnpm -r --filter './packages/*' run test:watch",
     "typecheck": "pnpm -r --filter './packages/*' --if-present run typecheck"
   },
-  "dependencies": {
-    "@types/mdast": "^4.0.4",
-    "remark-parse": "^11.0.0"
-  },
+  "dependencies": {},
   "devDependencies": {
     "@changesets/cli": "^2.29.7",
     "@eslint/js": "^9.39.1",
