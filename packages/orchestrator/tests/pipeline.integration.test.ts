@@ -24,10 +24,10 @@ let GetObjectCommandClass: CommandConstructor | undefined;
 
 vi.mock('@aws-sdk/client-s3', () => {
   class PutObjectCommand {
-    constructor(readonly input: CommandInput) { }
+    constructor(readonly input: CommandInput) {}
   }
   class GetObjectCommand {
-    constructor(readonly input: CommandInput) { }
+    constructor(readonly input: CommandInput) {}
   }
 
   PutObjectCommandClass = PutObjectCommand;

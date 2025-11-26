@@ -13,7 +13,7 @@ const promptQueue: PromptResponse[] = [];
 vi.mock('enquirer', () => {
   // Create mock prompt class inside the factory
   class MockPrompt {
-    constructor(private options: any) { }
+    constructor(private options: any) {}
 
     async run() {
       if (promptQueue.length === 0) {

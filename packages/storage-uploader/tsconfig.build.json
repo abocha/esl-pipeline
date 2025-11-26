@@ -5,8 +5,8 @@
     "declaration": true,
     "outDir": "dist",
     "rootDir": ".",
-    "module": "NodeNext",
-    "moduleResolution": "NodeNext",
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
     "target": "ES2022",
     "strict": true,
     "noImplicitAny": true

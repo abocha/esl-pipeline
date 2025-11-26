@@ -289,4 +289,9 @@ export function resolveManifestPath(mdPath: string): string {
   return manifestPathFor(mdPath);
 }
 
-export { type LoadEnvOptions, loadEnvFiles } from '@esl-pipeline/shared-infrastructure';
+export {
+  type LoadEnvOptions,
+  type LoadEnvSummary,
+  loadEnvFiles,
+  loadEnvFilesWithSummary,
+} from '@esl-pipeline/shared-infrastructure';

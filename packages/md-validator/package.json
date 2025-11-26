@@ -15,7 +15,7 @@
     ".": {
       "types": "./dist/src/index.d.ts",
       "import": "./dist/src/index.js",
-      "default": "./dist/srcindex.js"
+      "default": "./dist/src/index.js"
     },
     "./package.json": "./package.json"
   },
@@ -52,6 +52,6 @@
     "vitest": "^4.0.14"
   },
   "engines": {
-    "node": ">=24.10.0"
+    "node": ">=24.11.1"
   }
 }

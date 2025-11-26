@@ -199,35 +199,7 @@ describe('infrastructure/orchestrator-service', () => {
   // Since runAssignmentJob() only spawns and communicates with a worker, and we're mocking
   // fork() to prevent real process spawning, we cannot test this fallback behavior at the unit level.
   // This should be tested in integration tests with a real worker process and config files.
-  it.skip('runAssignmentJob falls back to filesystem manifest store when S3 bucket is missing', async () => {
-    const { loadConfig } = await import('../src/config/env.js');
-    const { runAssignmentJob } = await import('../src/infrastructure/orchestrator-service.js');
-
-    (loadConfig as any).mockReturnValue({
-      orchestrator: {
-        manifestStore: 's3',
-        manifestBucket: 'missing-bucket',
-        configProvider: 'local',
-      },
-    });
-
-    const bucketError = new Error('bucket missing');
-    bucketError.name = 'NoSuchBucket';
-
-    newAssignmentMock.mockRejectedValueOnce(bucketError);
-    newAssignmentMock.mockResolvedValueOnce({ manifestPath: '/manifests/job-2.json' });
-
-    const result = await runAssignmentJob(
-      {
-        jobId: 'job-2',
-        md: 'fixtures/ok.md',
-      },
-      'run-3',
-    );
-
-    expect(newAssignmentMock).toHaveBeenCalledTimes(2);
-    expect(result).toEqual({ manifestPath: '/manifests/job-2.json' });
-  });
+  it.todo('runAssignmentJob falls back to filesystem manifest store when S3 bucket is missing');
 
   it('getJobOptionsFromOrchestrator delegates to orchestrator metadata helper', async () => {
     const { loadConfig } = await import('../src/config/env.js');

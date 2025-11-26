@@ -12,6 +12,7 @@ pnpm esl --interactive
 ```
 
 The wizard will:
+
 - **Prompt for a markdown file** (or let you use the file picker)
 - **Load student profiles** and apply their defaults (database ID, color preset, accent preference)
 - **Manage saved preferences** (persistent across runs)
@@ -64,6 +65,7 @@ pnpm esl --interactive
 ```
 
 **What happens:**
+
 1. You select a markdown file (or provide `--md` to skip this step)
 2. The wizard loads student profiles from `configs/students/`
 3. Saved defaults from `configs/wizard.defaults.json` are applied
@@ -74,6 +76,7 @@ pnpm esl --interactive
 ### Managing Saved Defaults
 
 The wizard automatically persists your choices to `configs/wizard.defaults.json`. You can:
+
 - **Review saved settings** at the start of each wizard run
 - **Update defaults** by choosing "Update and continue"
 - **Clear defaults** by choosing "Clear saved defaults"
@@ -96,6 +99,7 @@ When you select a student in the wizard, their settings are automatically applie
 ### TTS Configuration
 
 The wizard guides you through TTS options:
+
 - **Mode**: `auto` (detect dialogue), `dialogue` (force multi-speaker), `monologue` (single voice)
 - **Language**: ISO 639-1 code (e.g., `en`, `es`, `fr`)
 - **Voices**: Path to voices configuration file
@@ -137,27 +141,27 @@ pnpm esl rerun \
 
 ### Available Commands
 
-| Command | Description |
-|---------|-------------|
-| `esl [options]` | Run the pipeline (default: interactive wizard) |
-| `esl status --md <file>` | Show manifest status for an assignment |
-| `esl rerun --md <file> --steps <steps>` | Rerun specific pipeline steps |
-| `esl select [path] [options]` | Interactive file/directory picker |
+| Command                                 | Description                                    |
+| --------------------------------------- | ---------------------------------------------- |
+| `esl [options]`                         | Run the pipeline (default: interactive wizard) |
+| `esl status --md <file>`                | Show manifest status for an assignment         |
+| `esl rerun --md <file> --steps <steps>` | Rerun specific pipeline steps                  |
+| `esl select [path] [options]`           | Interactive file/directory picker              |
 
 ### Common Options
 
-| Option | Description |
-|--------|-------------|
-| `--interactive` | Launch the interactive wizard |
-| `--md <file>` | Path to markdown file |
-| `--student <name>` | Student profile name |
-| `--preset <name>` | Notion color preset |
-| `--accent <name>` | Voice accent preference (american, british, etc.) |
-| `--with-tts` | Generate ElevenLabs audio |
-| `--upload s3` | Upload audio to S3 |
-| `--dry-run` | Preview actions without executing |
-| `--force` | Force regeneration even if cached |
-| `--json` | Output structured JSON logs |
+| Option             | Description                                       |
+| ------------------ | ------------------------------------------------- |
+| `--interactive`    | Launch the interactive wizard                     |
+| `--md <file>`      | Path to markdown file                             |
+| `--student <name>` | Student profile name                              |
+| `--preset <name>`  | Notion color preset                               |
+| `--accent <name>`  | Voice accent preference (american, british, etc.) |
+| `--with-tts`       | Generate ElevenLabs audio                         |
+| `--upload s3`      | Upload audio to S3                                |
+| `--dry-run`        | Preview actions without executing                 |
+| `--force`          | Force regeneration even if cached                 |
+| `--json`           | Output structured JSON logs                       |
 
 ## Path Picker
 
@@ -181,6 +185,7 @@ pnpm esl select ./lessons/unit1.md --file --ext .md
 ```
 
 **Picker Options:**
+
 - `--file` / `--dir`: Restrict to files or directories
 - `--ext <extensions>`: Filter by file extensions
 - `--glob <patterns>`: Match glob patterns
@@ -232,6 +237,7 @@ The orchestrator looks for configuration in these locations:
 ```
 
 **Configuration files:**
+
 - `presets/*.yml`: Notion color presets
 - `voices/*.yml`: ElevenLabs voice configurations
 - `students/*.yml`: Student profiles
@@ -260,41 +266,41 @@ console.log('MD Hash:', manifest.mdHash);
 
 ### Core Credentials
 
-| Variable | Required | Description |
-|----------|----------|-------------|
-| `NOTION_TOKEN` | Yes | Notion integration token |
-| `ELEVENLABS_API_KEY` | Yes (if using TTS) | ElevenLabs API key |
-| `AWS_ACCESS_KEY_ID` | Yes (if using S3) | AWS access key |
-| `AWS_SECRET_ACCESS_KEY` | Yes (if using S3) | AWS secret key |
-| `AWS_REGION` | Yes (if using S3) | AWS region |
-| `S3_BUCKET` | Yes (if using S3) | S3 bucket name |
+| Variable                | Required           | Description              |
+| ----------------------- | ------------------ | ------------------------ |
+| `NOTION_TOKEN`          | Yes                | Notion integration token |
+| `ELEVENLABS_API_KEY`    | Yes (if using TTS) | ElevenLabs API key       |
+| `AWS_ACCESS_KEY_ID`     | Yes (if using S3)  | AWS access key           |
+| `AWS_SECRET_ACCESS_KEY` | Yes (if using S3)  | AWS secret key           |
+| `AWS_REGION`            | Yes (if using S3)  | AWS region               |
+| `S3_BUCKET`             | Yes (if using S3)  | S3 bucket name           |
 
 ### Database Configuration
 
-| Variable | Description |
-|----------|-------------|
-| `NOTION_DB_ID` | Default Notion database ID |
+| Variable         | Description                  |
+| ---------------- | ---------------------------- |
+| `NOTION_DB_ID`   | Default Notion database ID   |
 | `DATA_SOURCE_ID` | Notion search data source ID |
 
 ### TTS Configuration
 
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `ELEVENLABS_TTS_MODE` | `auto` | TTS mode (auto, dialogue, monologue) |
-| `ELEVENLABS_DIALOGUE_LANGUAGE` | - | ISO 639-1 language code |
-| `ELEVENLABS_DIALOGUE_STABILITY` | - | Voice stability (0.0-1.0) |
-| `ELEVENLABS_DIALOGUE_SEED` | - | Seed for reproducible generation |
+| Variable                        | Default | Description                          |
+| ------------------------------- | ------- | ------------------------------------ |
+| `ELEVENLABS_TTS_MODE`           | `auto`  | TTS mode (auto, dialogue, monologue) |
+| `ELEVENLABS_DIALOGUE_LANGUAGE`  | -       | ISO 639-1 language code              |
+| `ELEVENLABS_DIALOGUE_STABILITY` | -       | Voice stability (0.0-1.0)            |
+| `ELEVENLABS_DIALOGUE_SEED`      | -       | Seed for reproducible generation     |
 
 ### Upload Configuration
 
-| Variable | Description |
-|----------|-------------|
+| Variable    | Description               |
+| ----------- | ------------------------- |
 | `S3_PREFIX` | S3 key prefix for uploads |
 
 ### Development
 
-| Variable | Description |
-|----------|-------------|
+| Variable                     | Description                          |
+| ---------------------------- | ------------------------------------ |
 | `ORCHESTRATOR_DEBUG_SECRETS` | Set to `true` to log unmasked tokens |
 
 ## Development
