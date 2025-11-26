@@ -156,8 +156,10 @@ export async function summarizeMarkdown(mdPath: string): Promise<MarkdownSummary
     const content = await readFile(mdPath, 'utf8');
     const frontmatter = extractFrontmatter(content);
     if (frontmatter && typeof frontmatter === 'object') {
-      const maybeTitle = (frontmatter as any).title;
-      const maybeStudent = (frontmatter as any).student;
+      const { title: maybeTitle, student: maybeStudent } = frontmatter as Record<
+        string,
+        unknown
+      >;
       if (typeof maybeTitle === 'string') summary.title = maybeTitle;
       if (typeof maybeStudent === 'string') summary.student = maybeStudent;
     }

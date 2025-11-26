@@ -38,7 +38,9 @@ const FrontSchema = z.object({
   icon: z.emoji().optional(),
   cover: z.url().optional(),
   properties: z.record(z.string(), z.unknown()).optional(),
-  speaker_profiles: z.array(z.any()).optional(), // Already in fixtures, add for completeness
+  speaker_profiles: z
+    .array(z.record(z.string(), z.unknown()))
+    .optional(), // Already in fixtures, add for completeness
 });
 
 const EXPECTED_H2 = [
@@ -564,10 +566,12 @@ export async function validateMarkdownFile(
     const nodes = sectionSlice(ast, cp);
     // count list items or numbered lines
     let count = 0;
-    for (const n of nodes as any[]) {
+    for (const n of nodes) {
       if (n.type === 'list') count += n.children?.length ?? 0;
       if (n.type === 'paragraph') {
-        const txt = (n.children ?? []).map((c: any) => c.value ?? '').join('');
+        const txt = (n.children ?? [])
+          .map((c) => getTextFromNode(c as PhrasingContent))
+          .join('');
         if (/^\s*\d+\)/.test(txt) || /^\s*-\s+/.test(txt) || /^\s*\*\s+/.test(txt)) count++;
       }
     }
@@ -583,10 +587,12 @@ export async function validateMarkdownFile(
   if (cc) {
     const nodes = sectionSlice(ast, cc);
     let count = 0;
-    for (const n of nodes as any[]) {
+    for (const n of nodes) {
       if (n.type === 'list') count += n.children?.length ?? 0;
       if (n.type === 'paragraph') {
-        const txt = (n.children ?? []).map((c: any) => c.value ?? '').join('');
+        const txt = (n.children ?? [])
+          .map((c) => getTextFromNode(c as PhrasingContent))
+          .join('');
         if (/^\s*\d+\)/.test(txt) || /^\s*-\s+/.test(txt) || /^\s*\*\s+/.test(txt)) count++;
       }
     }
@@ -596,7 +602,7 @@ export async function validateMarkdownFile(
   }
 
   // e) no nested code blocks inside the doc
-  const codeInside = (ast.children as any[]).some((n) => n.type === 'code');
+  const codeInside = ast.children.some((n) => n.type === 'code');
   if (codeInside) {
     warnings.push('Found code block(s) inside the main document. Avoid nested ``` blocks.');
   }

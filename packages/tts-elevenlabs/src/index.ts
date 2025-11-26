@@ -35,8 +35,10 @@ async function ensureFileExists(path: string): Promise<void> {
   try {
     await stat(path);
     return;
-  } catch (error: any) {
-    if (error?.code !== 'ENOENT') throw error;
+  } catch (error: unknown) {
+    if (!(error instanceof Error) || (error as NodeJS.ErrnoException).code !== 'ENOENT') {
+      throw error;
+    }
   }
   await mkdir(dirname(path), { recursive: true });
   await writeFile(path, '');
@@ -527,9 +529,17 @@ async function synthesizeLineWithRetry(
     try {
       await synthesizeLine(client, voiceId, text, outFile);
       return;
-    } catch (error: any) {
+    } catch (error: unknown) {
       lastError = error;
-      const status = error?.status ?? error?.statusCode ?? error?.response?.status;
+      const status =
+        typeof error === 'object' && error
+          ? (error as { status?: number; statusCode?: number; response?: { status?: number } })
+              .status ??
+            (error as { status?: number; statusCode?: number; response?: { status?: number } })
+              .statusCode ??
+            (error as { status?: number; statusCode?: number; response?: { status?: number } })
+              .response?.status
+          : undefined;
       if (!RETRYABLE_STATUS.has(status) || attempt === maxAttempts - 1) {
         throw wrapSynthesisError(error, voiceId, text);
       }
@@ -548,8 +558,8 @@ async function synthesizeLine(
 ): Promise<void> {
   const responseStream = await client.textToSpeech.convert(voiceId, {
     text,
-    modelId: DEFAULT_MODEL_ID as any,
-    outputFormat: DEFAULT_OUTPUT_FORMAT as any,
+    modelId: DEFAULT_MODEL_ID,
+    outputFormat: DEFAULT_OUTPUT_FORMAT,
   });
   const nodeStream = Readable.fromWeb(responseStream as unknown as NodeReadableStream);
   await pipeline(nodeStream, createWriteStream(outFile));
