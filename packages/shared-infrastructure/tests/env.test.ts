@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
-import { loadEnvFiles, readBool, readInt, readString } from '../src/env/loaders.js';
+import { loadEnvFiles, loadEnvFilesWithSummary, readBool, readInt, readString } from '../src/env/loaders.js';
 
 describe('env utilities', () => {
   describe('readBool', () => {
@@ -165,6 +165,33 @@ describe('env utilities', () => {
     it('handles missing files gracefully', () => {
       const result = loadEnvFiles({ cwd: testDir });
       expect(result).toEqual({});
+    });
+
+    it('supports memoization with invalidation on mtime change', async () => {
+      const envFile = join(testDir, '.env');
+      writeFileSync(envFile, 'FOO=one');
+
+      const first = loadEnvFiles({ cwd: testDir, assignToProcess: false, memoize: true });
+      expect(first.FOO).toBe('one');
+
+      // Update file to change mtime and contents
+      await new Promise((resolvePromise) => setTimeout(resolvePromise, 5));
+      writeFileSync(envFile, 'FOO=two');
+
+      const second = loadEnvFiles({ cwd: testDir, assignToProcess: false, memoize: true });
+      expect(second.FOO).toBe('two');
+    });
+
+    it('returns empty assigned/overridden on cached no-op runs', () => {
+      const envFile = join(testDir, '.env');
+      writeFileSync(envFile, 'CACHED_VAR=one');
+
+      const first = loadEnvFilesWithSummary({ cwd: testDir, memoize: true });
+      expect(first.assignedKeys).toContain('CACHED_VAR');
+
+      const second = loadEnvFilesWithSummary({ cwd: testDir, memoize: true });
+      expect(second.assignedKeys).toEqual([]);
+      expect(second.overriddenKeys).toEqual([]);
     });
   });
 });

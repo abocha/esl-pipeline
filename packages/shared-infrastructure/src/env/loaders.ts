@@ -2,7 +2,7 @@
  * Shared environment variable loading utilities.
  * Consolidates orchestrator's loadEnvFiles and batch-backend's config helpers.
  */
-import { existsSync, readFileSync } from 'node:fs';
+import { existsSync, readFileSync, statSync } from 'node:fs';
 import { isAbsolute, resolve } from 'node:path';
 import { parseEnv } from 'node:util';
 
@@ -11,6 +11,8 @@ export interface LoadEnvOptions {
   files?: string[];
   override?: boolean;
   assignToProcess?: boolean;
+  memoize?: boolean;
+  memoizeKey?: string;
 }
 
 export interface LoadEnvSummary {
@@ -18,6 +20,44 @@ export interface LoadEnvSummary {
   missingFiles: string[];
   assignedKeys: string[];
   overriddenKeys: string[];
+}
+
+type EnvFileMeta = { path: string; mtimeMs: number; size: number; exists: boolean };
+
+type EnvCacheEntry = {
+  collected: Record<string, string>;
+  loadedFiles: string[];
+  missingFiles: string[];
+  assignedKeys: string[];
+  overriddenKeys: string[];
+  metas: EnvFileMeta[];
+};
+
+const envCache = new Map<string, EnvCacheEntry>();
+
+function statFile(path: string): EnvFileMeta {
+  try {
+    const stats = statSync(path);
+    return { path, mtimeMs: stats.mtimeMs, size: stats.size, exists: true };
+  } catch {
+    return { path, mtimeMs: 0, size: 0, exists: false };
+  }
+}
+
+function buildCacheKey(opts: {
+  cwd: string;
+  files: string[];
+  override: boolean;
+  assignToProcess: boolean;
+  memoizeKey?: string;
+}): string {
+  return JSON.stringify({
+    cwd: opts.cwd,
+    files: opts.files,
+    override: opts.override,
+    assignToProcess: opts.assignToProcess,
+    memoizeKey: opts.memoizeKey ?? '',
+  });
 }
 
 /**
@@ -31,6 +71,35 @@ export function loadEnvFiles(options: LoadEnvOptions = {}): Record<string, strin
   );
   const override = options.override ?? false;
   const assignToProcess = options.assignToProcess ?? true;
+  const memoize = options.memoize ?? false;
+
+  const cacheKey = memoize ? buildCacheKey({ cwd, files, override, assignToProcess, memoizeKey: options.memoizeKey }) : null;
+  const metas = files.map((file) => (existsSync(file) ? statFile(file) : { path: file, mtimeMs: 0, size: 0, exists: false }));
+
+  if (memoize && cacheKey) {
+    const cached = envCache.get(cacheKey);
+    if (cached && cached.metas.length === metas.length) {
+      const fresh = cached.metas.every((meta, idx) => {
+        const current = metas[idx];
+        return (
+          meta.path === current.path &&
+          meta.exists === current.exists &&
+          meta.mtimeMs === current.mtimeMs &&
+          meta.size === current.size
+        );
+      });
+      if (fresh) {
+        if (assignToProcess) {
+          for (const [key, value] of Object.entries(cached.collected)) {
+            if (override || process.env[key] === undefined) {
+              process.env[key] = value;
+            }
+          }
+        }
+        return cached.collected;
+      }
+    }
+  }
 
   const collected: Record<string, string> = {};
 
@@ -58,6 +127,17 @@ export function loadEnvFiles(options: LoadEnvOptions = {}): Record<string, strin
     }
   }
 
+  if (memoize && cacheKey) {
+    envCache.set(cacheKey, {
+      collected: { ...collected },
+      loadedFiles: files.filter((file, idx) => metas[idx]?.exists),
+      missingFiles: files.filter((file, idx) => !metas[idx]?.exists),
+      assignedKeys: [],
+      overriddenKeys: [],
+      metas,
+    });
+  }
+
   return collected;
 }
 
@@ -71,12 +151,53 @@ export function loadEnvFilesWithSummary(options: LoadEnvOptions = {}): LoadEnvSu
   );
   const override = options.override ?? false;
   const assignToProcess = options.assignToProcess ?? true;
+  const memoize = options.memoize ?? false;
+  const cacheKey = memoize ? buildCacheKey({ cwd, files, override, assignToProcess, memoizeKey: options.memoizeKey }) : null;
 
   const assignedKeys = new Set<string>();
   const overriddenKeys = new Set<string>();
   const collected: Record<string, string> = {};
   const loadedFiles: string[] = [];
   const missingFiles: string[] = [];
+
+  const metas = files.map((file) => (existsSync(file) ? statFile(file) : { path: file, mtimeMs: 0, size: 0, exists: false }));
+
+  if (memoize && cacheKey) {
+    const cached = envCache.get(cacheKey);
+    if (cached && cached.metas.length === metas.length) {
+      const fresh = cached.metas.every((meta, idx) => {
+        const current = metas[idx];
+        return (
+          meta.path === current.path &&
+          meta.exists === current.exists &&
+          meta.mtimeMs === current.mtimeMs &&
+          meta.size === current.size
+        );
+      });
+      if (fresh) {
+        if (assignToProcess) {
+          for (const [key, value] of Object.entries(cached.collected)) {
+            const alreadySet = process.env[key] !== undefined;
+            if (override || !alreadySet) {
+              if (alreadySet) {
+                overriddenKeys.add(key);
+              } else {
+                assignedKeys.add(key);
+              }
+              process.env[key] = value;
+            }
+          }
+        }
+
+        return {
+          loadedFiles: cached.loadedFiles,
+          missingFiles: cached.missingFiles,
+          assignedKeys: [...assignedKeys],
+          overriddenKeys: [...overriddenKeys],
+        };
+      }
+    }
+  }
 
   for (const file of files) {
     if (!existsSync(file)) {
@@ -111,6 +232,17 @@ export function loadEnvFilesWithSummary(options: LoadEnvOptions = {}): LoadEnvSu
     } catch {
       // Ignore parsing errors to match dotenv behavior
     }
+  }
+
+  if (memoize && cacheKey) {
+    envCache.set(cacheKey, {
+      collected: { ...collected },
+      loadedFiles: [...loadedFiles],
+      missingFiles: [...missingFiles],
+      assignedKeys: [...assignedKeys],
+      overriddenKeys: [...overriddenKeys],
+      metas,
+    });
   }
 
   return {

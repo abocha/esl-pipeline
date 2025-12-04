@@ -10,6 +10,10 @@ import { ValidationError } from '@esl-pipeline/contracts';
 
 export interface ValidateOptions {
   strict?: boolean;
+  /**
+   * Optional preloaded markdown content to avoid fs reads.
+   */
+  content?: string;
 }
 
 export interface ValidateResult {
@@ -429,7 +433,7 @@ export async function validateMarkdownFile(
   const warnings: string[] = [];
   const strict = opts?.strict ?? false;
 
-  const content = await readFile(rawFile, 'utf8');
+  const content = opts.content ?? (await readFile(rawFile, 'utf8'));
 
   // 1) get the single code block
   let block: { lang: string; content: string };

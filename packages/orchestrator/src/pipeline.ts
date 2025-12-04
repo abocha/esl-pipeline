@@ -1,4 +1,4 @@
-import { existsSync } from 'node:fs';
+import { existsSync, statSync } from 'node:fs';
 import { dirname, isAbsolute, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -42,6 +42,7 @@ export interface ResolveConfigPathsOptions {
   presetsPath?: string;
   voicesPath?: string;
   studentsDir?: string;
+  memoizeConfigPaths?: boolean;
 }
 
 export interface ResolvedConfigPaths {
@@ -52,11 +53,50 @@ export interface ResolvedConfigPaths {
   wizardDefaultsPath: string;
 }
 
+type ConfigPathsCacheEntry = {
+  result: ResolvedConfigPaths;
+  meta: {
+    presets: { path: string; mtimeMs: number; size: number; exists: boolean };
+    voices: { path: string; mtimeMs: number; size: number; exists: boolean };
+    students: { path: string; mtimeMs: number; size: number; exists: boolean };
+    wizardDefaults: { path: string; mtimeMs: number; size: number; exists: boolean };
+  };
+};
+
+const configPathsCache = new Map<string, ConfigPathsCacheEntry>();
+
+function readBoolEnv(key: string, def: boolean): boolean {
+  const raw = process.env[key];
+  if (raw === undefined || raw === '') return def;
+  const lowered = raw.toLowerCase();
+  return lowered === '1' || lowered === 'true' || lowered === 'yes';
+}
+
+function statPath(path: string): { path: string; mtimeMs: number; size: number; exists: boolean } {
+  try {
+    const stats = statSync(path);
+    return { path, mtimeMs: stats.mtimeMs, size: stats.size, exists: true };
+  } catch {
+    return { path, mtimeMs: 0, size: 0, exists: false };
+  }
+}
+
 export function resolveConfigPaths(options: ResolveConfigPathsOptions = {}): ResolvedConfigPaths {
   const cwd = resolve(options.cwd ?? process.cwd());
   const moduleDir = dirname(fileURLToPath(import.meta.url));
   const distConfigs = resolve(moduleDir, './configs');
   const repoConfigs = resolve(moduleDir, '../../../configs');
+  const memoizeEnabled =
+    options.memoizeConfigPaths ?? readBoolEnv('ESL_PIPELINE_CACHE_CONFIG', false);
+  const cacheKey = memoizeEnabled
+    ? JSON.stringify({
+        cwd,
+        configDir: options.configDir ? resolve(options.configDir) : undefined,
+        presetsPath: options.presetsPath ? resolvePath(options.presetsPath, cwd) : undefined,
+        voicesPath: options.voicesPath ? resolvePath(options.voicesPath, cwd) : undefined,
+        studentsDir: options.studentsDir ? resolvePath(options.studentsDir, cwd) : undefined,
+      })
+    : null;
   const candidateConfigDirs = [
     options.configDir,
     process.env.ESL_PIPELINE_CONFIG_DIR,
@@ -109,13 +149,51 @@ export function resolveConfigPaths(options: ResolveConfigPathsOptions = {}): Res
   const configRoot = dirname(presetsPath);
   const wizardDefaultsPath = join(configRoot, 'wizard.defaults.json');
 
-  return {
+  const result: ResolvedConfigPaths = {
     configRoot,
     presetsPath,
     voicesPath,
     studentsDir,
     wizardDefaultsPath,
   };
+
+  if (!memoizeEnabled || !cacheKey) {
+    return result;
+  }
+
+  const currentMeta = {
+    presets: statPath(presetsPath),
+    voices: statPath(voicesPath),
+    students: statPath(studentsDir),
+    wizardDefaults: statPath(wizardDefaultsPath),
+  };
+
+  const cached = configPathsCache.get(cacheKey);
+  if (cached) {
+    const fresh =
+      cached.meta.presets.path === currentMeta.presets.path &&
+      cached.meta.presets.exists === currentMeta.presets.exists &&
+      cached.meta.presets.mtimeMs === currentMeta.presets.mtimeMs &&
+      cached.meta.presets.size === currentMeta.presets.size &&
+      cached.meta.voices.path === currentMeta.voices.path &&
+      cached.meta.voices.exists === currentMeta.voices.exists &&
+      cached.meta.voices.mtimeMs === currentMeta.voices.mtimeMs &&
+      cached.meta.voices.size === currentMeta.voices.size &&
+      cached.meta.students.path === currentMeta.students.path &&
+      cached.meta.students.exists === currentMeta.students.exists &&
+      cached.meta.students.mtimeMs === currentMeta.students.mtimeMs &&
+      cached.meta.students.size === currentMeta.students.size &&
+      cached.meta.wizardDefaults.path === currentMeta.wizardDefaults.path &&
+      cached.meta.wizardDefaults.exists === currentMeta.wizardDefaults.exists &&
+      cached.meta.wizardDefaults.mtimeMs === currentMeta.wizardDefaults.mtimeMs &&
+      cached.meta.wizardDefaults.size === currentMeta.wizardDefaults.size;
+    if (fresh) {
+      return cached.result;
+    }
+  }
+
+  configPathsCache.set(cacheKey, { result, meta: currentMeta });
+  return result;
 }
 
 export type CreatePipelineOptions = ResolveConfigPathsOptions & {

@@ -44,11 +44,15 @@ const envFiles = ['.env'];
 if (existsSync(repoEnvPath)) {
   envFiles.push(repoEnvPath);
 }
+const memoizeEnv = (process.env.ESL_PIPELINE_CACHE_ENV ?? '').toLowerCase();
+const envCacheEnabled = memoizeEnv === '1' || memoizeEnv === 'true' || memoizeEnv === 'yes';
 const envSummary = loadEnvFilesWithSummary({
   files: envFiles,
   cwd: process.cwd(),
   assignToProcess: true,
   override: false,
+  memoize: envCacheEnabled,
+  memoizeKey: 'cli',
 });
 
 type RerunStep = NonNullable<RerunFlags['steps']>[number];
