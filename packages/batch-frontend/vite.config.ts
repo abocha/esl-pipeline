@@ -1,4 +1,5 @@
 import react from '@vitejs/plugin-react-swc';
+import type { ProxyOptions } from 'vite';
 import { defineConfig } from 'vite';
 
 // Minimal Vite config for local dev inside the monorepo.
@@ -12,23 +13,18 @@ import { defineConfig } from 'vite';
 const batchBackendUrl = process.env.BATCH_BACKEND_URL || 'http://localhost:8080';
 const proxyRoutes = ['/auth', '/jobs/events', '/jobs', '/uploads', '/config', '/user', '/api'];
 
-function withCookieForwarding() {
+function withCookieForwarding(): ProxyOptions {
   return {
     target: batchBackendUrl,
     changeOrigin: true,
     secure: false,
     configure: (proxy) => {
-      proxy.on(
-        'proxyReq',
-        (
-          proxyReq: { setHeader: (name: string, value: string) => void },
-          req: { headers: Record<string, string | undefined> },
-        ) => {
-          if (req.headers.cookie) {
-            proxyReq.setHeader('cookie', req.headers.cookie);
-          }
-        },
-      );
+      proxy.on('proxyReq', (proxyReq, req) => {
+        const cookie = req.headers.cookie;
+        if (cookie) {
+          proxyReq.setHeader('cookie', cookie);
+        }
+      });
     },
   };
 }
@@ -39,18 +35,7 @@ export default defineConfig({
     port: 5173,
     strictPort: true,
     proxy: (() => {
-      const proxyConfig: Record<
-        string,
-        {
-          target: string;
-          changeOrigin: boolean;
-          secure: boolean;
-          configure: (proxy: {
-            on: (event: string, handler: (...args: unknown[]) => void) => void;
-          }) => void;
-          rewrite: (path: string) => string;
-        }
-      > = {};
+      const proxyConfig: Record<string, ProxyOptions> = {};
       for (const route of proxyRoutes) {
         proxyConfig[route] = {
           ...withCookieForwarding(),
