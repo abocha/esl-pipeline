@@ -17,6 +17,7 @@ type NotificationPermissionState = 'default' | 'granted' | 'denied';
 interface NotificationContextValue {
   permission: NotificationPermissionState;
   requestPermission: () => Promise<NotificationPermissionState>;
+  disableNotifications: () => void;
   notifyBatchComplete: (jobIds: string[]) => Promise<void>;
   notifyJobFailure: (jobId: string, error?: string | null) => Promise<void>;
 }
@@ -78,6 +79,10 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
     [permission],
   );
 
+  const disableNotifications = useCallback(() => {
+    setPermission('denied');
+  }, []);
+
   const hadActiveJobsRef = useRef(false);
   const currentBatchStartedRef = useRef(false);
   const currentBatchHasFailureRef = useRef(false);
@@ -124,10 +129,11 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
     () => ({
       permission,
       requestPermission,
+      disableNotifications,
       notifyBatchComplete,
       notifyJobFailure,
     }),
-    [permission, requestPermission, notifyBatchComplete, notifyJobFailure],
+    [permission, requestPermission, disableNotifications, notifyBatchComplete, notifyJobFailure],
   );
 
   return <NotificationContext.Provider value={value}>{children}</NotificationContext.Provider>;

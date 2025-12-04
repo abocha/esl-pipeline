@@ -1,30 +1,40 @@
 <!doctype html>
 <html lang="en">
-  <head>
-    <meta charset="UTF-8" />
-    <title>ESL Pipeline Batch Jobs</title>
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 
-    <!-- Security Headers -->
-    <meta http-equiv="X-Content-Type-Options" content="nosniff" />
-    <meta http-equiv="X-Frame-Options" content="DENY" />
-    <meta http-equiv="X-XSS-Protection" content="1; mode=block" />
-    <meta name="referrer" content="strict-origin-when-cross-origin" />
+<head>
+  <meta charset="UTF-8" />
+  <title>ESL Pipeline - Batch Jobs Console</title>
+  <meta name="description"
+    content="Upload lessons, submit jobs, and monitor progress in real time with the ESL Pipeline batch processing system." />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 
-    <!-- Content Security Policy -->
-    <meta http-equiv="Content-Security-Policy" content="
+  <!-- Google Fonts - Inter -->
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link
+    href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap"
+    rel="stylesheet" />
+
+  <!-- Security Headers -->
+  <meta http-equiv="X-Content-Type-Options" content="nosniff" />
+  <meta http-equiv="X-Frame-Options" content="DENY" />
+  <meta http-equiv="X-XSS-Protection" content="1; mode=block" />
+  <meta name="referrer" content="strict-origin-when-cross-origin" />
+
+  <!-- Content Security Policy -->
+  <meta http-equiv="Content-Security-Policy" content="
       default-src 'self';
       script-src 'self' 'unsafe-inline';
-      style-src 'self' 'unsafe-inline';
+      style-src 'self' 'unsafe-inline' https://fonts.googleapis.com;
       img-src 'self' data: https:;
-      font-src 'self';
-      connect-src 'self' http://localhost:8080;
+      font-src 'self' https://fonts.gstatic.com;
+      connect-src 'self' http://localhost:8080 http://batch-backend:8080;
       frame-ancestors 'none';
       base-uri 'self';
       form-action 'self';
     " />
 
-    <!--
+  <!--
       Minimal host page for the batch-frontend with security enhancements.
 
       Security Features:
@@ -41,9 +51,11 @@
       - You can serve this bundle behind the same origin as batch-backend
         or set window.__BATCH_BACKEND_URL__ / VITE_BATCH_BACKEND_URL.
     -->
-  </head>
-  <body>
-    <div id="root"></div>
-    <script type="module" src="/src/main.tsx"></script>
-  </body>
+</head>
+
+<body>
+  <div id="root"></div>
+  <script type="module" src="/src/main.tsx"></script>
+</body>
+
 </html>
