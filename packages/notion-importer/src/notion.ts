@@ -1,3 +1,5 @@
+import { createHash } from 'node:crypto';
+
 import { Client } from '@notionhq/client';
 import type {
   DataSourceObjectResponse,
@@ -27,6 +29,26 @@ const extractDatabaseTitle = (database: SearchResult): string | undefined => {
 
 const normalize = (value?: string | null) => value?.trim().toLowerCase();
 
+type CachedDatabase = {
+  expiresAt: number;
+  payload: { databaseId: string; dataSources: DataSourceSummary[] };
+};
+
+const databaseCache = new Map<string, CachedDatabase>();
+const DATABASE_CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes per process
+
+function tokenFingerprint(): string | undefined {
+  const token = process.env.NOTION_TOKEN;
+  if (!token) return undefined;
+  return createHash('sha256').update(token).digest('hex');
+}
+
+function cacheKeyForDatabase(dbId: string): string | undefined {
+  const fp = tokenFingerprint();
+  if (!fp) return undefined;
+  return `${fp}:${dbId}`;
+}
+
 export function createNotionClient() {
   const token = process.env.NOTION_TOKEN;
   if (!token) throw new Error('NOTION_TOKEN is required in environment');
@@ -54,6 +76,14 @@ async function fetchDatabaseWithSources(
   client: Client,
   databaseId: string,
 ): Promise<{ databaseId: string; dataSources: DataSourceSummary[] }> {
+  const cacheKey = cacheKeyForDatabase(databaseId);
+  if (cacheKey) {
+    const cached = databaseCache.get(cacheKey);
+    if (cached && cached.expiresAt > Date.now()) {
+      return cached.payload;
+    }
+  }
+
   const response = (await withRetry(
     () =>
       client.databases.retrieve({
@@ -62,10 +92,17 @@ async function fetchDatabaseWithSources(
     'databases.retrieve',
   )) as DatabaseObjectResponse & { data_sources?: DataSourceSummary[] };
   const dataSources = Array.isArray(response.data_sources) ? response.data_sources : [];
-  return {
+  const payload = {
     databaseId: response.id,
     dataSources: dataSources.map((ds) => ({ id: ds.id, name: ds.name })),
   };
+  if (cacheKey) {
+    databaseCache.set(cacheKey, {
+      expiresAt: Date.now() + DATABASE_CACHE_TTL_MS,
+      payload,
+    });
+  }
+  return payload;
 }
 
 async function findDatabaseByName(client: Client, dbName: string): Promise<string> {

@@ -9,6 +9,18 @@ interface S3ErrorShape {
   message?: string;
 }
 
+type ClientKey = string;
+const s3ClientCache = new Map<ClientKey, S3Client>();
+
+function getS3Client(region: string): S3Client {
+  const key = region || 'default';
+  const existing = s3ClientCache.get(key);
+  if (existing) return existing;
+  const client = new S3Client({ region });
+  s3ClientCache.set(key, client);
+  return client;
+}
+
 function isAclNotSupported(error: unknown): boolean {
   const e = error as Partial<S3ErrorShape>;
   // SDK v3 S3 error shape is a ServiceException with a Code field in the body.
@@ -34,7 +46,7 @@ export async function uploadToS3(
 ): Promise<{ url: string; key: string; etag?: string }> {
   if (!bucket) throw new ConfigurationError('S3 bucket not configured');
 
-  const s3 = new S3Client({ region });
+  const s3 = getS3Client(region);
   const fileContent = await readFile(localPath);
   const normalizedPrefix = keyPrefix
     ? keyPrefix.replace(/^[\/\\]+/, '').replace(/[\/\\]+$/, '')

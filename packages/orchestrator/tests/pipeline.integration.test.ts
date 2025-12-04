@@ -17,27 +17,18 @@ const mockSend = vi.fn();
 
 type CommandInput = Record<string, unknown>;
 
-type CommandConstructor = new (input: CommandInput) => { input: CommandInput };
-// Initialize with dummy constructors to satisfy hoisting in vi.mock
-let PutObjectCommandClass: CommandConstructor = class {
-  constructor(readonly input: CommandInput) {}
-};
-let GetObjectCommandClass: CommandConstructor = class {
-  constructor(readonly input: CommandInput) {}
-};
+const s3CommandClasses = vi.hoisted(() => {
+  class PutObjectCommand {
+    constructor(readonly input: CommandInput) {}
+  }
+  class GetObjectCommand {
+    constructor(readonly input: CommandInput) {}
+  }
+  return { PutObjectCommand, GetObjectCommand };
+});
 
 vi.mock('@aws-sdk/client-s3', () => {
-  // Assign before exporting to avoid TDZ issues during hoisting
-  const PutObjectCommand = class {
-    constructor(readonly input: CommandInput) {}
-  };
-  const GetObjectCommand = class {
-    constructor(readonly input: CommandInput) {}
-  };
-
-  PutObjectCommandClass = PutObjectCommand;
-  GetObjectCommandClass = GetObjectCommand;
-
+  const { PutObjectCommand, GetObjectCommand } = s3CommandClasses;
   return {
     S3Client: class {
       send = mockSend;
@@ -208,8 +199,7 @@ describe('pipeline integration', () => {
   });
 
   it('writes manifests to S3 when configured via environment variables', async () => {
-    const PutCommand = PutObjectCommandClass!;
-    const GetCommand = GetObjectCommandClass!;
+    const { PutObjectCommand: PutCommand, GetObjectCommand: GetCommand } = s3CommandClasses;
 
     mockSend.mockImplementation(async (command) => {
       if (command instanceof GetCommand) {

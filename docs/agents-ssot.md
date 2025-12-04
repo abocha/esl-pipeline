@@ -520,6 +520,9 @@ Upload (S3) selection:
   - `S3_PREFIX` (optional key prefix)
   - `AWS_REGION` (for S3 client)
 - Credentials rely on standard AWS env vars (`AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`).
+- Optional caching toggles (per-process, default off):
+  - `ESL_PIPELINE_CACHE_ENV`: memoizes `.env` loading; invalidates on mtime/size change.
+  - `ESL_PIPELINE_CACHE_CONFIG`: memoizes `resolveConfigPaths`; invalidates on mtime/size change of presets/voices/students/wizard defaults or when inputs differ.
 
 Mapping to behavior is implemented in:
 

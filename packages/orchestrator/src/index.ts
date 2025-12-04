@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import { constants as FS } from 'node:fs';
-import { access, readFile } from 'node:fs/promises';
+import { access, readFile, stat } from 'node:fs/promises';
 import { basename, dirname } from 'node:path';
 
 import { InfrastructureError, ManifestError, ValidationError } from '@esl-pipeline/contracts';
@@ -48,6 +48,26 @@ export type {
 const fallbackManifestStore = createFilesystemManifestStore();
 const fallbackLogger = noopLogger;
 const fallbackMetrics = noopMetrics;
+
+type CachedMarkdown = { content: string; mtimeMs: number; size: number };
+const markdownCache = new Map<string, CachedMarkdown>();
+
+async function readMarkdownCached(mdPath: string): Promise<string> {
+  try {
+    const stats = await stat(mdPath);
+    const cached = markdownCache.get(mdPath);
+    if (cached && cached.mtimeMs === stats.mtimeMs && cached.size === stats.size) {
+      return cached.content;
+    }
+    const content = await readFile(mdPath, 'utf8');
+    markdownCache.set(mdPath, { content, mtimeMs: stats.mtimeMs, size: stats.size });
+    return content;
+  } catch {
+    const content = await readFile(mdPath, 'utf8');
+    markdownCache.set(mdPath, { content, mtimeMs: 0, size: content.length });
+    return content;
+  }
+}
 
 export {
   manifestPathFor,
@@ -211,7 +231,7 @@ export async function newAssignment(
     emitStage(stage, 'skipped', { reason });
 
   const steps: string[] = [];
-  const mdContents = await readFile(flags.md, 'utf8');
+  const mdContents = await readMarkdownCached(flags.md);
   const previousManifest = await manifestStore.readManifest(flags.md);
 
   let pageId = previousManifest?.pageId;
@@ -231,7 +251,7 @@ export async function newAssignment(
     // Validation stage always runs, even when skipping import
     emitStage('validate', 'start');
     steps.push('validate');
-    const validation = await validateMarkdownFile(flags.md, { strict: false });
+    const validation = await validateMarkdownFile(flags.md, { strict: false, content: mdContents });
     if (!validation.ok) {
       const msg = ['Validation failed:', ...validation.errors.map((e) => `- ${e}`)].join('\n');
       throw new ValidationError(msg);
@@ -542,7 +562,7 @@ export async function getAssignmentStatus(
 
     let currentHash: string | null = null;
     try {
-      currentHash = hashStudyText(await readFile(mdPath, 'utf8'));
+      currentHash = hashStudyText(await readMarkdownCached(mdPath));
     } catch {
       currentHash = null;
     }
@@ -688,7 +708,7 @@ export async function rerunAssignment(
     );
     const executed: string[] = [];
 
-    const mdContents = await readFile(flags.md, 'utf8');
+    const mdContents = await readMarkdownCached(flags.md);
     let audioPath = manifest.audio?.path;
     let audioUrl = manifest.audio?.url;
     let audioHash = manifest.audio?.hash;

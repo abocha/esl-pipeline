@@ -212,7 +212,7 @@ export function loadConfig(): BatchBackendConfig {
   const securityHeadersEnabled = readBool('SECURITY_HEADERS_ENABLED', true);
   const hstsMaxAge = readInt('HSTS_MAX_AGE', 31_536_000); // 1 year in seconds
   const uploadQuotaPerUser = readInt('UPLOAD_QUOTA_PER_USER', 100 * 1024 * 1024); // 100MB default
-  const jobSubmissionRateLimit = readInt('JOB_SUBMISSION_RATE_LIMIT', 5); // 5 jobs per minute
+  const jobSubmissionRateLimit = readInt('JOB_SUBMISSION_RATE_LIMIT', 0); // disabled by default; set >0 to enable rate limiting
 
   // Storage configuration
   let storageProvider = readString('STORAGE_PROVIDER') as 's3' | 'minio' | 'filesystem' | undefined;
