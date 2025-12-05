@@ -49,7 +49,11 @@ const fallbackManifestStore = createFilesystemManifestStore();
 const fallbackLogger = noopLogger;
 const fallbackMetrics = noopMetrics;
 
-type CachedMarkdown = { content: string; mtimeMs: number; size: number };
+interface CachedMarkdown {
+  content: string;
+  mtimeMs: number;
+  size: number;
+}
 const markdownCache = new Map<string, CachedMarkdown>();
 
 async function readMarkdownCached(mdPath: string): Promise<string> {

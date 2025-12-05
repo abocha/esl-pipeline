@@ -66,26 +66,20 @@ export function getPipeline(configOverride?: ReturnType<typeof loadConfig>) {
 
   let manifestStore: ManifestStore | undefined;
   if (config.orchestrator.manifestStore === 's3') {
-    const manifestRegion =
-      process.env.AWS_REGION || process.env.S3_REGION || process.env.MINIO_REGION || 'us-east-1';
+    const manifestRegion = process.env.AWS_REGION || process.env.S3_REGION || 'us-east-1';
 
-    const manifestEndpoint =
-      process.env.S3_ENDPOINT ||
-      (config.minio.enabled
-        ? `${config.minio.useSSL ? 'https' : 'http'}://${config.minio.endpoint}:${config.minio.port}`
-        : undefined);
+    const manifestEndpoint = process.env.S3_ENDPOINT;
 
-    const preferMinioCreds = Boolean(manifestEndpoint) || config.minio.enabled;
     let manifestCredentials: { accessKeyId: string; secretAccessKey: string } | undefined;
-    if (preferMinioCreds) {
-      manifestCredentials = {
-        accessKeyId: config.minio.accessKey,
-        secretAccessKey: config.minio.secretKey,
-      };
-    } else if (process.env.AWS_ACCESS_KEY_ID && process.env.AWS_SECRET_ACCESS_KEY) {
+    if (process.env.AWS_ACCESS_KEY_ID && process.env.AWS_SECRET_ACCESS_KEY) {
       manifestCredentials = {
         accessKeyId: process.env.AWS_ACCESS_KEY_ID,
         secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY,
+      };
+    } else if (process.env.S3_ACCESS_KEY_ID && process.env.S3_SECRET_ACCESS_KEY) {
+      manifestCredentials = {
+        accessKeyId: process.env.S3_ACCESS_KEY_ID,
+        secretAccessKey: process.env.S3_SECRET_ACCESS_KEY,
       };
     }
 

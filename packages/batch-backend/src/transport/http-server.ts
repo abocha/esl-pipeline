@@ -54,23 +54,11 @@ function buildStorageConfigurationService(config: ReturnType<typeof loadConfig>)
   const baseStorageConfig = createStorageConfigService().getFullConfig();
   const s3Overrides: Partial<StorageConfig['s3']> = {};
 
-  if (config.storage.provider === 'minio') {
-    Object.assign(s3Overrides, {
-      endpoint: config.minio.endpoint,
-      region: 'us-east-1',
-      accessKeyId: config.minio.accessKey,
-      secretAccessKey: config.minio.secretKey,
-      bucket: config.storage.bucketName || config.minio.bucket,
-      pathPrefix: config.storage.pathPrefix,
-      forcePathStyle: true,
-    });
-  } else {
-    if (config.storage.bucketName) {
-      Object.assign(s3Overrides, { bucket: config.storage.bucketName });
-    }
-    if (config.storage.pathPrefix) {
-      Object.assign(s3Overrides, { pathPrefix: config.storage.pathPrefix });
-    }
+  if (config.storage.bucketName) {
+    Object.assign(s3Overrides, { bucket: config.storage.bucketName });
+  }
+  if (config.storage.pathPrefix) {
+    Object.assign(s3Overrides, { pathPrefix: config.storage.pathPrefix });
   }
 
   return createStorageConfigService({

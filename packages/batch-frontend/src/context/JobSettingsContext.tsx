@@ -17,7 +17,6 @@ export interface JobSettings {
   notionDatabase: string;
   withTts: boolean;
   forceTts: boolean;
-  upload: NonNullable<SubmitJobRequest['upload']>;
   mode: NonNullable<SubmitJobRequest['mode']>;
   applyToPending: boolean;
 }
@@ -42,7 +41,6 @@ const DEFAULT_JOB_OPTIONS: JobOptionsResponse = {
     { id: 'default-b1', name: 'B1 Lessons' },
     { id: 'default-b2', name: 'B2 Lessons' },
   ],
-  uploadOptions: ['auto', 's3', 'none'],
   modes: ['auto', 'dialogue', 'monologue'],
 };
 
@@ -51,7 +49,6 @@ const DEFAULT_SETTINGS: JobSettings = {
   notionDatabase: DEFAULT_JOB_OPTIONS.notionDatabases[0]?.id ?? 'default-b1',
   withTts: true,
   forceTts: false,
-  upload: 'auto',
   mode: 'auto',
   applyToPending: false,
 };
@@ -72,7 +69,6 @@ export function JobSettingsProvider({ children }: { children: ReactNode }) {
     ...DEFAULT_SETTINGS,
     preset: options.presets[0] ?? DEFAULT_SETTINGS.preset,
     notionDatabase: options.notionDatabases[0]?.id ?? DEFAULT_SETTINGS.notionDatabase,
-    upload: options.uploadOptions[0] ?? DEFAULT_SETTINGS.upload,
     mode: options.modes[0] ?? DEFAULT_SETTINGS.mode,
   }));
 
@@ -87,10 +83,6 @@ export function JobSettingsProvider({ children }: { children: ReactNode }) {
         ) ??
         options.notionDatabases[0]?.id ??
         DEFAULT_SETTINGS.notionDatabase;
-      const upload =
-        (ensureOption(prev.upload, options.uploadOptions) as JobSettings['upload']) ??
-        options.uploadOptions[0] ??
-        DEFAULT_SETTINGS.upload;
       const mode =
         (ensureOption(prev.mode, options.modes) as JobSettings['mode']) ??
         options.modes[0] ??
@@ -100,7 +92,6 @@ export function JobSettingsProvider({ children }: { children: ReactNode }) {
         ...prev,
         preset,
         notionDatabase,
-        upload,
         mode,
       };
     });
@@ -115,7 +106,6 @@ export function JobSettingsProvider({ children }: { children: ReactNode }) {
       ...DEFAULT_SETTINGS,
       preset: options.presets[0] ?? DEFAULT_SETTINGS.preset,
       notionDatabase: options.notionDatabases[0]?.id ?? DEFAULT_SETTINGS.notionDatabase,
-      upload: options.uploadOptions[0] ?? DEFAULT_SETTINGS.upload,
       mode: options.modes[0] ?? DEFAULT_SETTINGS.mode,
     });
   }, [options]);

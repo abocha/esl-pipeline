@@ -1,5 +1,11 @@
 # @esl-pipeline/shared-infrastructure
 
+## 1.1.0
+
+### Minor Changes
+
+- removed minio support, set aws s3 as default, else filesystem
+
 ## 1.0.1
 
 ### Patch Changes

@@ -22,16 +22,21 @@ export interface LoadEnvSummary {
   overriddenKeys: string[];
 }
 
-type EnvFileMeta = { path: string; mtimeMs: number; size: number; exists: boolean };
+interface EnvFileMeta {
+  path: string;
+  mtimeMs: number;
+  size: number;
+  exists: boolean;
+}
 
-type EnvCacheEntry = {
+interface EnvCacheEntry {
   collected: Record<string, string>;
   loadedFiles: string[];
   missingFiles: string[];
   assignedKeys: string[];
   overriddenKeys: string[];
   metas: EnvFileMeta[];
-};
+}
 
 const envCache = new Map<string, EnvCacheEntry>();
 
@@ -73,14 +78,18 @@ export function loadEnvFiles(options: LoadEnvOptions = {}): Record<string, strin
   const assignToProcess = options.assignToProcess ?? true;
   const memoize = options.memoize ?? false;
 
-  const cacheKey = memoize ? buildCacheKey({ cwd, files, override, assignToProcess, memoizeKey: options.memoizeKey }) : null;
-  const metas = files.map((file) => (existsSync(file) ? statFile(file) : { path: file, mtimeMs: 0, size: 0, exists: false }));
+  const cacheKey = memoize
+    ? buildCacheKey({ cwd, files, override, assignToProcess, memoizeKey: options.memoizeKey })
+    : null;
+  const metas = files.map((file) =>
+    existsSync(file) ? statFile(file) : { path: file, mtimeMs: 0, size: 0, exists: false },
+  );
 
   if (memoize && cacheKey) {
     const cached = envCache.get(cacheKey);
     if (cached && cached.metas.length === metas.length) {
       const fresh = cached.metas.every((meta, idx) => {
-        const current = metas[idx];
+        const current = metas[idx]!;
         return (
           meta.path === current.path &&
           meta.exists === current.exists &&
@@ -152,7 +161,9 @@ export function loadEnvFilesWithSummary(options: LoadEnvOptions = {}): LoadEnvSu
   const override = options.override ?? false;
   const assignToProcess = options.assignToProcess ?? true;
   const memoize = options.memoize ?? false;
-  const cacheKey = memoize ? buildCacheKey({ cwd, files, override, assignToProcess, memoizeKey: options.memoizeKey }) : null;
+  const cacheKey = memoize
+    ? buildCacheKey({ cwd, files, override, assignToProcess, memoizeKey: options.memoizeKey })
+    : null;
 
   const assignedKeys = new Set<string>();
   const overriddenKeys = new Set<string>();
@@ -160,13 +171,15 @@ export function loadEnvFilesWithSummary(options: LoadEnvOptions = {}): LoadEnvSu
   const loadedFiles: string[] = [];
   const missingFiles: string[] = [];
 
-  const metas = files.map((file) => (existsSync(file) ? statFile(file) : { path: file, mtimeMs: 0, size: 0, exists: false }));
+  const metas = files.map((file) =>
+    existsSync(file) ? statFile(file) : { path: file, mtimeMs: 0, size: 0, exists: false },
+  );
 
   if (memoize && cacheKey) {
     const cached = envCache.get(cacheKey);
     if (cached && cached.metas.length === metas.length) {
       const fresh = cached.metas.every((meta, idx) => {
-        const current = metas[idx];
+        const current = metas[idx]!;
         return (
           meta.path === current.path &&
           meta.exists === current.exists &&

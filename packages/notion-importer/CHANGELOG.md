@@ -1,5 +1,11 @@
 # @esl-pipeline/notion-importer
 
+## 2.2.0
+
+### Minor Changes
+
+- removed minio support, set aws s3 as default, else filesystem
+
 ## 2.1.3
 
 ### Patch Changes

@@ -41,7 +41,7 @@ vi.mock('../src/wizard.js', () => ({
 }));
 
 const importCli = async (): Promise<void> => {
-  await import('../bin/cli.ts');
+  await import('../bin/cli.js');
 };
 
 const resetPipelineMocks = () => {

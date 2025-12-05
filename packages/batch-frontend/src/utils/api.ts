@@ -118,7 +118,6 @@ export interface JobOptionsResponse {
   voiceAccents: string[];
   voices: VoiceOption[];
   notionDatabases: { id: string; name: string }[];
-  uploadOptions: JobUploadOption[];
   modes: JobMode[];
 }
 

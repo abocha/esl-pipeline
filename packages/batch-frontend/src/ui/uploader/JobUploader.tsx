@@ -22,7 +22,16 @@ interface QueuedFile {
 
 // Icons
 const UploadIcon = () => (
-  <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+  <svg
+    width="32"
+    height="32"
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="2"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+  >
     <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
     <polyline points="17 8 12 3 7 8" />
     <line x1="12" y1="3" x2="12" y2="15" />
@@ -30,7 +39,16 @@ const UploadIcon = () => (
 );
 
 const FileIcon = () => (
-  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+  <svg
+    width="20"
+    height="20"
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="2"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+  >
     <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
     <polyline points="14 2 14 8 20 8" />
     <line x1="16" y1="13" x2="8" y2="13" />
@@ -40,20 +58,47 @@ const FileIcon = () => (
 );
 
 const CheckIcon = () => (
-  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+  <svg
+    width="16"
+    height="16"
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="3"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+  >
     <polyline points="20 6 9 17 4 12" />
   </svg>
 );
 
 const XIcon = () => (
-  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+  <svg
+    width="16"
+    height="16"
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="3"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+  >
     <line x1="18" y1="6" x2="6" y2="18" />
     <line x1="6" y1="6" x2="18" y2="18" />
   </svg>
 );
 
 const RefreshIcon = () => (
-  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+  <svg
+    width="14"
+    height="14"
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="2"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+  >
     <polyline points="23 4 23 10 17 10" />
     <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10" />
   </svg>
@@ -109,7 +154,6 @@ export const JobUploader: React.FC = () => {
     settings.notionDatabase,
     settings.withTts,
     settings.forceTts,
-    settings.upload,
     settings.mode,
   ]);
 
@@ -118,23 +162,25 @@ export const JobUploader: React.FC = () => {
       const target = queue.find((file) => file.id === id);
       if (!target) return;
       const jobFile = target.file;
-      const jobSettings = overrideSettings ?? target.appliedSettings ?? buildAppliedSettings(settings);
+      const jobSettings =
+        overrideSettings ?? target.appliedSettings ?? buildAppliedSettings(settings);
 
       setQueue((prev) =>
         prev.map((file) =>
           file.id === id
             ? {
-              ...file,
-              status: 'uploading',
-              uploadError: undefined,
-              jobError: undefined,
-              appliedSettings: jobSettings,
-            }
+                ...file,
+                status: 'uploading',
+                uploadError: undefined,
+                jobError: undefined,
+                appliedSettings: jobSettings,
+              }
             : file,
         ),
       );
 
       let phase: 'upload' | 'job' = 'upload';
+      const uploadTarget = 's3';
 
       try {
         const uploadResponse = await uploadMarkdown(jobFile);
@@ -151,7 +197,7 @@ export const JobUploader: React.FC = () => {
           withTts: jobSettings.withTts,
           forceTts: jobSettings.forceTts,
           notionDatabase: jobSettings.notionDatabase,
-          upload: jobSettings.upload,
+          upload: uploadTarget,
           mode: jobSettings.mode,
         });
 
@@ -159,11 +205,11 @@ export const JobUploader: React.FC = () => {
           prev.map((file) =>
             file.id === id
               ? {
-                ...file,
-                status: 'success',
-                jobId: jobResponse.jobId,
-                jobError: undefined,
-              }
+                  ...file,
+                  status: 'success',
+                  jobId: jobResponse.jobId,
+                  jobError: undefined,
+                }
               : file,
           ),
         );
@@ -173,26 +219,34 @@ export const JobUploader: React.FC = () => {
           md: uploadResponse.md,
           preset: jobSettings.preset,
           notionDatabase: jobSettings.notionDatabase,
-          upload: jobSettings.upload,
           withTts: jobSettings.withTts,
           mode: jobSettings.mode,
         });
         toast.success(`Job ${jobResponse.jobId} created`);
       } catch (error: unknown) {
         const message = error instanceof Error ? error.message : 'Failed to process file';
+        const contextMessage =
+          phase === 'upload'
+            ? 'Failed to upload Markdown to S3. Check connectivity and credentials.'
+            : 'Job submission failed; upload was required and did not complete.';
+        console.error(contextMessage, {
+          file: jobFile.name,
+          phase,
+          error,
+        });
         setQueue((prev) =>
           prev.map((file) =>
             file.id === id
               ? {
-                ...file,
-                status: 'error',
-                uploadError: phase === 'upload' ? message : file.uploadError,
-                jobError: phase === 'job' ? message : file.jobError,
-              }
+                  ...file,
+                  status: 'error',
+                  uploadError: phase === 'upload' ? message : file.uploadError,
+                  jobError: phase === 'job' ? message : file.jobError,
+                }
               : file,
           ),
         );
-        toast.error(message);
+        toast.error(contextMessage);
       }
     },
     [queue, settings, registerJob],
@@ -224,12 +278,12 @@ export const JobUploader: React.FC = () => {
         prev.map((file) =>
           file.id === id
             ? {
-              ...file,
-              status: 'idle',
-              uploadError: undefined,
-              jobError: undefined,
-              appliedSettings: snapshot,
-            }
+                ...file,
+                status: 'idle',
+                uploadError: undefined,
+                jobError: undefined,
+                appliedSettings: snapshot,
+              }
             : file,
         ),
       );
@@ -248,7 +302,7 @@ export const JobUploader: React.FC = () => {
     const failed = queue.filter((item) => item.status === 'error').length;
     const pending = queue.filter((item) => item.status === 'idle').length;
     const inProgress = queue.filter(
-      (item) => item.status === 'uploading' || item.status === 'submitting'
+      (item) => item.status === 'uploading' || item.status === 'submitting',
     ).length;
     return { total, success, failed, pending, inProgress };
   }, [queue]);
@@ -499,13 +553,25 @@ const FileRow: React.FC<FileRowProps> = ({ entry, onRetry, isProcessing }) => {
   const getStatusConfig = () => {
     switch (entry.status) {
       case 'uploading': {
-        return { color: 'var(--color-info-500)', bg: 'rgba(14, 165, 233, 0.1)', label: 'Uploading…' };
+        return {
+          color: 'var(--color-info-500)',
+          bg: 'rgba(14, 165, 233, 0.1)',
+          label: 'Uploading…',
+        };
       }
       case 'submitting': {
-        return { color: 'var(--color-warning-500)', bg: 'rgba(245, 158, 11, 0.1)', label: 'Creating job…' };
+        return {
+          color: 'var(--color-warning-500)',
+          bg: 'rgba(245, 158, 11, 0.1)',
+          label: 'Creating job…',
+        };
       }
       case 'success': {
-        return { color: 'var(--color-success-500)', bg: 'rgba(16, 185, 129, 0.1)', label: 'Success' };
+        return {
+          color: 'var(--color-success-500)',
+          bg: 'rgba(16, 185, 129, 0.1)',
+          label: 'Success',
+        };
       }
       case 'error': {
         return { color: 'var(--color-error-500)', bg: 'rgba(244, 63, 94, 0.1)', label: 'Failed' };
@@ -533,7 +599,9 @@ const FileRow: React.FC<FileRowProps> = ({ entry, onRetry, isProcessing }) => {
               Job <code>{entry.jobId}</code>
             </span>
           ) : entry.status === 'error' ? (
-            <span className="file-error">{entry.uploadError || entry.jobError || 'Unknown error'}</span>
+            <span className="file-error">
+              {entry.uploadError || entry.jobError || 'Unknown error'}
+            </span>
           ) : (
             <span>{prettyBytes(entry.file.size)}</span>
           )}
@@ -552,12 +620,7 @@ const FileRow: React.FC<FileRowProps> = ({ entry, onRetry, isProcessing }) => {
         </span>
 
         {entry.status === 'error' && (
-          <button
-            type="button"
-            onClick={onRetry}
-            disabled={isProcessing}
-            className="btn-retry"
-          >
+          <button type="button" onClick={onRetry} disabled={isProcessing} className="btn-retry">
             <RefreshIcon />
             Retry
           </button>
@@ -707,7 +770,6 @@ const APPLIED_KEYS: (keyof AppliedJobSettings)[] = [
   'notionDatabase',
   'withTts',
   'forceTts',
-  'upload',
   'mode',
 ];
 

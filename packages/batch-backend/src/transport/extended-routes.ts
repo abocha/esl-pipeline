@@ -9,6 +9,17 @@ import { getJobOptions } from '../application/get-job-options.js';
 import { SubmitJobRequest, submitJob } from '../application/submit-job.js';
 import type { BatchBackendConfig } from '../config/env.js';
 import {
+  UserSettingsInput,
+  isValidTtsMode,
+  isValidTtsProvider,
+  sanitizeSettings,
+} from '../domain/settings-model.js';
+import {
+  createDefaultSettings,
+  getSettingsByUserId,
+  upsertSettings,
+} from '../domain/settings-repository.js';
+import {
   UserLogin,
   UserRegistration,
   UserRole,
@@ -23,17 +34,6 @@ import {
   getUserById,
   updateUserLastLogin,
 } from '../domain/user-repository.js';
-import {
-  UserSettingsInput,
-  isValidTtsMode,
-  isValidTtsProvider,
-  sanitizeSettings,
-} from '../domain/settings-model.js';
-import {
-  createDefaultSettings,
-  getSettingsByUserId,
-  upsertSettings,
-} from '../domain/settings-repository.js';
 import { createAuthService } from '../infrastructure/auth-service.js';
 import {
   FileSanitizationError,
@@ -206,9 +206,9 @@ export function registerExtendedRoutes(app: FastifyInstance, options: ExtendedRo
           const mdReference =
             fileStorageService.getProvider() === 'filesystem'
               ? buildFilesystemMdReference(
-                storageConfig.getFilesystemConfig().uploadDir,
-                storageKey,
-              )
+                  storageConfig.getFilesystemConfig().uploadDir,
+                  storageKey,
+                )
               : storageKey;
 
           logger.info('Secure upload completed', {
@@ -886,7 +886,7 @@ export function registerExtendedRoutes(app: FastifyInstance, options: ExtendedRo
         return reply.code(400).send({
           error: 'validation_failed',
           message: 'Invalid request body',
-          details: error.errors,
+          details: error.issues,
         });
       }
 

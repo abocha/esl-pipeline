@@ -46,8 +46,8 @@ describe('application/process-queue-job', () => {
   function makeJob(
     overrides: Partial<
       ReturnType<(typeof jobRepository)['getJobById']> extends Promise<infer R>
-      ? NonNullable<R>
-      : never
+        ? NonNullable<R>
+        : never
     > = {},
   ): any {
     const now = new Date('2024-01-01T10:00:00Z');

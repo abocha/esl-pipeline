@@ -1,18 +1,36 @@
 import React from 'react';
 
 import { useJobSettings } from '../../context/JobSettingsContext';
-import type { JobSettings as JobSettingsValue } from '../../context/JobSettingsContext';
+import type { JobSettings } from '../../context/JobSettingsContext';
 
 // Icons
 const SettingsIcon = () => (
-  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+  <svg
+    width="20"
+    height="20"
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="2"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+  >
     <circle cx="12" cy="12" r="3" />
     <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z" />
   </svg>
 );
 
 const RefreshIcon = () => (
-  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+  <svg
+    width="16"
+    height="16"
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="2"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+  >
     <polyline points="23 4 23 10 17 10" />
     <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10" />
   </svg>
@@ -96,7 +114,7 @@ export const JobSettingsForm: React.FC = () => {
           </label>
           <select
             value={settings.mode}
-            onChange={(e) => updateSettings({ mode: e.target.value as JobSettingsValue['mode'] })}
+            onChange={(e) => updateSettings({ mode: e.target.value as JobSettings['mode'] })}
             className="field-select"
           >
             {options.modes.map((mode) => (
@@ -105,28 +123,6 @@ export const JobSettingsForm: React.FC = () => {
               </option>
             ))}
           </select>
-        </div>
-
-        {/* Upload Destination */}
-        <div className="form-field field-full">
-          <label className="field-label">
-            <span>Upload Destination</span>
-          </label>
-          <div className="radio-group">
-            {options.uploadOptions.map((option) => (
-              <label key={option} className={`radio-option ${settings.upload === option ? 'selected' : ''}`}>
-                <input
-                  type="radio"
-                  name="upload-option"
-                  value={option}
-                  checked={settings.upload === option}
-                  onChange={() => updateSettings({ upload: option })}
-                />
-                <span className="radio-dot" />
-                <span className="radio-label">{uploadLabel(option)}</span>
-              </label>
-            ))}
-          </div>
         </div>
 
         {/* TTS Toggle */}
@@ -322,76 +318,6 @@ export const JobSettingsForm: React.FC = () => {
           box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.15);
         }
 
-        .radio-group {
-          display: flex;
-          gap: var(--space-2);
-          flex-wrap: wrap;
-        }
-
-        .radio-option {
-          display: flex;
-          align-items: center;
-          gap: var(--space-2);
-          padding: var(--space-3) var(--space-4);
-          background: var(--bg-secondary);
-          border: 1px solid var(--border-light);
-          border-radius: var(--radius-lg);
-          cursor: pointer;
-          transition: all var(--transition-fast);
-        }
-
-        .radio-option:hover {
-          border-color: var(--border-medium);
-        }
-
-        .radio-option.selected {
-          background: var(--color-primary-50);
-          border-color: var(--color-primary-300);
-        }
-
-        [data-theme="dark"] .radio-option.selected {
-          background: rgba(99, 102, 241, 0.15);
-        }
-
-        .radio-option input {
-          display: none;
-        }
-
-        .radio-dot {
-          width: 16px;
-          height: 16px;
-          border-radius: 50%;
-          border: 2px solid var(--border-medium);
-          position: relative;
-          transition: all var(--transition-fast);
-        }
-
-        .radio-option.selected .radio-dot {
-          border-color: var(--color-primary-500);
-        }
-
-        .radio-option.selected .radio-dot::after {
-          content: '';
-          position: absolute;
-          top: 50%;
-          left: 50%;
-          transform: translate(-50%, -50%);
-          width: 8px;
-          height: 8px;
-          background: var(--color-primary-500);
-          border-radius: 50%;
-        }
-
-        .radio-label {
-          font-size: var(--text-sm);
-          font-weight: 500;
-          color: var(--text-secondary);
-        }
-
-        .radio-option.selected .radio-label {
-          color: var(--color-primary-600);
-        }
-
         .apply-pending {
           padding-top: var(--space-4);
           border-top: 1px solid var(--border-light);
@@ -551,17 +477,3 @@ const ToggleField: React.FC<ToggleFieldProps> = ({
     </div>
   );
 };
-
-function uploadLabel(option: JobSettingsValue['upload']): string {
-  switch (option) {
-    case 's3': {
-      return 'Force S3';
-    }
-    case 'none': {
-      return 'Skip upload';
-    }
-    default: {
-      return 'Auto';
-    }
-  }
-}

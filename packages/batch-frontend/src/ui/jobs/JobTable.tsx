@@ -6,34 +6,79 @@ import { type JobEntry, useJobMonitor } from '../../context/JobMonitorContext';
 
 // Icons
 const CopyIcon = () => (
-  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+  <svg
+    width="14"
+    height="14"
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="2"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+  >
     <rect x="9" y="9" width="13" height="13" rx="2" ry="2" />
     <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
   </svg>
 );
 
 const RefreshIcon = () => (
-  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+  <svg
+    width="14"
+    height="14"
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="2"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+  >
     <polyline points="23 4 23 10 17 10" />
     <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10" />
   </svg>
 );
 
 const SearchIcon = () => (
-  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+  <svg
+    width="16"
+    height="16"
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="2"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+  >
     <circle cx="11" cy="11" r="8" />
     <line x1="21" y1="21" x2="16.65" y2="16.65" />
   </svg>
 );
 
 const PlayIcon = () => (
-  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+  <svg
+    width="12"
+    height="12"
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="2"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+  >
     <polygon points="5 3 19 12 5 21 5 3" />
   </svg>
 );
 
 const PauseIcon = () => (
-  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+  <svg
+    width="12"
+    height="12"
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="2"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+  >
     <rect x="6" y="4" width="4" height="16" />
     <rect x="14" y="4" width="4" height="16" />
   </svg>
@@ -45,12 +90,20 @@ interface StateConfig {
   label: string;
 }
 
-const defaultConfig: StateConfig = { color: 'var(--color-gray-500)', bg: 'var(--color-gray-100)', label: 'Unknown' };
+const defaultConfig: StateConfig = {
+  color: 'var(--color-gray-500)',
+  bg: 'var(--color-gray-100)',
+  label: 'Unknown',
+};
 
 const stateConfig: Record<string, StateConfig> = {
   queued: { color: 'var(--color-gray-500)', bg: 'var(--color-gray-100)', label: 'Queued' },
   running: { color: 'var(--color-info-600)', bg: 'rgba(14, 165, 233, 0.15)', label: 'Running' },
-  succeeded: { color: 'var(--color-success-600)', bg: 'rgba(16, 185, 129, 0.15)', label: 'Succeeded' },
+  succeeded: {
+    color: 'var(--color-success-600)',
+    bg: 'rgba(16, 185, 129, 0.15)',
+    label: 'Succeeded',
+  },
   failed: { color: 'var(--color-error-600)', bg: 'rgba(244, 63, 94, 0.15)', label: 'Failed' },
 };
 
@@ -65,11 +118,11 @@ export const JobTable: React.FC = () => {
     const term = search.trim().toLowerCase();
     const result = term
       ? jobs.filter(
-        (job) =>
-          job.jobId.toLowerCase().includes(term) ||
-          job.fileName?.toLowerCase().includes(term) ||
-          job.md.toLowerCase().includes(term),
-      )
+          (job) =>
+            job.jobId.toLowerCase().includes(term) ||
+            job.fileName?.toLowerCase().includes(term) ||
+            job.md.toLowerCase().includes(term),
+        )
       : jobs;
     return result.slice(0, 20);
   }, [jobs, search]);
@@ -150,7 +203,9 @@ export const JobTable: React.FC = () => {
                 {stats.running} running
               </span>
             )}
-            {stats.succeeded > 0 && <span className="stat stat-success">{stats.succeeded} done</span>}
+            {stats.succeeded > 0 && (
+              <span className="stat stat-success">{stats.succeeded} done</span>
+            )}
             {stats.failed > 0 && <span className="stat stat-error">{stats.failed} failed</span>}
           </div>
         </div>

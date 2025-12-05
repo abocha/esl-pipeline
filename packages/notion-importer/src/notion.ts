@@ -1,5 +1,3 @@
-import { createHash } from 'node:crypto';
-
 import { Client } from '@notionhq/client';
 import type {
   DataSourceObjectResponse,
@@ -8,6 +6,7 @@ import type {
   PartialPageObjectResponse,
   SearchResponse,
 } from '@notionhq/client/build/src/api-endpoints.js';
+import { createHash } from 'node:crypto';
 
 import { withRetry } from './retry.js';
 import type { ResolveDataSourceInput, ResolveDataSourceResult } from './types.js';
@@ -29,10 +28,10 @@ const extractDatabaseTitle = (database: SearchResult): string | undefined => {
 
 const normalize = (value?: string | null) => value?.trim().toLowerCase();
 
-type CachedDatabase = {
+interface CachedDatabase {
   expiresAt: number;
   payload: { databaseId: string; dataSources: DataSourceSummary[] };
-};
+}
 
 const databaseCache = new Map<string, CachedDatabase>();
 const DATABASE_CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes per process

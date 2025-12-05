@@ -12,13 +12,13 @@ import { Readable } from 'node:stream';
 import { logger } from './logger.js';
 
 export interface S3StorageConfig {
-  endpoint?: string; // For MinIO compatibility
+  endpoint?: string; // For S3-compatible services
   region: string;
   accessKeyId: string;
   secretAccessKey: string;
   bucket: string;
   pathPrefix?: string;
-  forcePathStyle?: boolean; // For MinIO
+  forcePathStyle?: boolean; // For path-style S3 URLs
 }
 
 export interface FileUploadResult {

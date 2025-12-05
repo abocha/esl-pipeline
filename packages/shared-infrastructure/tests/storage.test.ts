@@ -26,7 +26,7 @@ describe('storage utilities', () => {
             bucket: '',
           },
         });
-      }).toThrow('S3/MinIO configuration incomplete');
+      }).toThrow('S3 configuration incomplete');
     });
 
     it('accepts valid S3 configuration', () => {
@@ -81,14 +81,32 @@ describe('storage utilities', () => {
       expect(service.getProvider()).toBe('s3');
     });
 
-    it('creates minio provider when MINIO_ENABLED is true', () => {
-      process.env.MINIO_ENABLED = 'true';
-      process.env.MINIO_ACCESS_KEY = 'test-key';
-      process.env.MINIO_SECRET_KEY = 'test-secret';
-      process.env.MINIO_BUCKET = 'test-bucket';
+    it('falls back to filesystem when S3 credentials are incomplete', () => {
+      process.env.S3_BUCKET = 'test-bucket';
+      process.env.AWS_ACCESS_KEY_ID = 'test-key';
+      process.env.AWS_SECRET_ACCESS_KEY = '';
+      process.env.S3_SECRET_ACCESS_KEY = '';
 
       const service = createStorageConfigService();
-      expect(service.getProvider()).toBe('minio');
+      expect(service.getProvider()).toBe('filesystem');
+    });
+
+    it('throws on unsupported STORAGE_PROVIDER', () => {
+      process.env.STORAGE_PROVIDER = 'minio';
+
+      expect(() => createStorageConfigService()).toThrow(
+        'Invalid STORAGE_PROVIDER "minio": expected "s3" or "filesystem"',
+      );
+    });
+
+    it('throws when STORAGE_PROVIDER is s3 but credentials are missing', () => {
+      process.env.STORAGE_PROVIDER = 's3';
+      process.env.S3_BUCKET = '';
+      process.env.AWS_ACCESS_KEY_ID = '';
+      process.env.AWS_SECRET_ACCESS_KEY = '';
+      process.env.S3_SECRET_ACCESS_KEY = '';
+
+      expect(() => createStorageConfigService()).toThrow('S3 configuration incomplete');
     });
   });
 

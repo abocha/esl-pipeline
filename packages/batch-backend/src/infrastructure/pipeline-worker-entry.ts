@@ -15,7 +15,10 @@ interface WorkerMessage {
   runId: string;
 }
 
-function applyUserSettingsToEnv(settings?: { elevenLabsApiKey?: string | null; notionToken?: string | null }) {
+function applyUserSettingsToEnv(settings?: {
+  elevenLabsApiKey?: string | null;
+  notionToken?: string | null;
+}) {
   if (!settings) return;
 
   if (settings.elevenLabsApiKey) {

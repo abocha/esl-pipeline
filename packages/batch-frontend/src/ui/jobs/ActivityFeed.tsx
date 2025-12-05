@@ -4,20 +4,47 @@ import { type JobEntry, useJobMonitor } from '../../context/JobMonitorContext';
 
 // Icons
 const ActivityIcon = () => (
-  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+  <svg
+    width="20"
+    height="20"
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="2"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+  >
     <polyline points="22 12 18 12 15 21 9 3 6 12 2 12" />
   </svg>
 );
 
 const CheckCircleIcon = () => (
-  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+  <svg
+    width="16"
+    height="16"
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="2"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+  >
     <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" />
     <polyline points="22 4 12 14.01 9 11.01" />
   </svg>
 );
 
 const XCircleIcon = () => (
-  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+  <svg
+    width="16"
+    height="16"
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="2"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+  >
     <circle cx="12" cy="12" r="10" />
     <line x1="15" y1="9" x2="9" y2="15" />
     <line x1="9" y1="9" x2="15" y2="15" />
@@ -25,7 +52,16 @@ const XCircleIcon = () => (
 );
 
 const LoaderIcon = () => (
-  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+  <svg
+    width="16"
+    height="16"
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="2"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+  >
     <line x1="12" y1="2" x2="12" y2="6" />
     <line x1="12" y1="18" x2="12" y2="22" />
     <line x1="4.93" y1="4.93" x2="7.76" y2="7.76" />
@@ -38,7 +74,16 @@ const LoaderIcon = () => (
 );
 
 const ClockIcon = () => (
-  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+  <svg
+    width="16"
+    height="16"
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="2"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+  >
     <circle cx="12" cy="12" r="10" />
     <polyline points="12 6 12 12 16 14" />
   </svg>
@@ -57,15 +102,13 @@ export const ActivityFeed: React.FC = () => {
 
   // Generate activity events from jobs list
   const events: ActivityEvent[] = useMemo(() => {
-    return jobs
-      .slice(0, 15)
-      .map((job: JobEntry) => ({
-        id: `${job.jobId}-${job.state}-${job.updatedAt}`,
-        type: job.state as ActivityEvent['type'],
-        jobId: job.jobId,
-        fileName: job.fileName,
-        timestamp: new Date(job.updatedAt ?? job.createdAt),
-      }));
+    return jobs.slice(0, 15).map((job: JobEntry) => ({
+      id: `${job.jobId}-${job.state}-${job.updatedAt}`,
+      type: job.state as ActivityEvent['type'],
+      jobId: job.jobId,
+      fileName: job.fileName,
+      timestamp: new Date(job.updatedAt ?? job.createdAt),
+    }));
   }, [jobs]);
 
   const getEventIcon = (type: ActivityEvent['type']) => {
@@ -91,7 +134,11 @@ export const ActivityFeed: React.FC = () => {
   const getEventConfig = (type: ActivityEvent['type']) => {
     switch (type) {
       case 'succeeded': {
-        return { color: 'var(--color-success-500)', bg: 'rgba(16, 185, 129, 0.1)', label: 'Completed' };
+        return {
+          color: 'var(--color-success-500)',
+          bg: 'rgba(16, 185, 129, 0.1)',
+          label: 'Completed',
+        };
       }
       case 'failed': {
         return { color: 'var(--color-error-500)', bg: 'rgba(244, 63, 94, 0.1)', label: 'Failed' };
@@ -100,7 +147,11 @@ export const ActivityFeed: React.FC = () => {
         return { color: 'var(--color-info-500)', bg: 'rgba(14, 165, 233, 0.1)', label: 'Running' };
       }
       case 'queued': {
-        return { color: 'var(--color-primary-500)', bg: 'rgba(99, 102, 241, 0.1)', label: 'Queued' };
+        return {
+          color: 'var(--color-primary-500)',
+          bg: 'rgba(99, 102, 241, 0.1)',
+          label: 'Queued',
+        };
       }
       default: {
         return { color: 'var(--text-tertiary)', bg: 'var(--bg-tertiary)', label: 'Unknown' };
@@ -135,10 +186,7 @@ export const ActivityFeed: React.FC = () => {
                 className={`feed-item ${event.type === 'running' ? 'running' : ''}`}
                 style={{ animationDelay: `${index * 50}ms` }}
               >
-                <div
-                  className="item-icon"
-                  style={{ color: config.color, background: config.bg }}
-                >
+                <div className="item-icon" style={{ color: config.color, background: config.bg }}>
                   {getEventIcon(event.type)}
                 </div>
                 <div className="item-content">
