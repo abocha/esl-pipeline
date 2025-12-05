@@ -1,7 +1,8 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import toast from 'react-hot-toast';
 
 import { useAuth } from '../../context/AuthContext';
+import apiClient, { handleApiError } from '../../utils/api-client';
 
 // Icons
 const UserIcon = () => (
@@ -32,11 +33,6 @@ const VolumeIcon = () => (
     </svg>
 );
 
-const CloudIcon = () => (
-    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-        <path d="M18 10h-1.26A8 8 0 1 0 9 20h9a5 5 0 0 0 0-10z" />
-    </svg>
-);
 
 const ShieldIcon = () => (
     <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -73,18 +69,21 @@ interface ProfilePageProps {
 export const ProfilePage: React.FC<ProfilePageProps> = ({ onClose }) => {
     const { user } = useAuth();
 
-    // Stub state for API keys (will be loaded from backend later)
+    // Loading state
+    const [isLoading, setIsLoading] = useState(true);
+    const [isSaving, setIsSaving] = useState(false);
+
+    // API keys (only store when user is editing)
     const [elevenLabsKey, setElevenLabsKey] = useState('');
     const [notionToken, setNotionToken] = useState('');
-    const [s3AccessKey, setS3AccessKey] = useState('');
-    const [s3SecretKey, setS3SecretKey] = useState('');
-    const [s3Bucket, setS3Bucket] = useState('');
-    const [s3Endpoint, setS3Endpoint] = useState('');
+
+    // Indicators for existing keys (from backend)
+    const [hasElevenLabsKey, setHasElevenLabsKey] = useState(false);
+    const [hasNotionToken, setHasNotionToken] = useState(false);
 
     // Show/hide toggles for sensitive fields
     const [showElevenLabs, setShowElevenLabs] = useState(false);
     const [showNotion, setShowNotion] = useState(false);
-    const [showS3Secret, setShowS3Secret] = useState(false);
 
     // Preferences
     const [defaultPreset, setDefaultPreset] = useState('b1-default');
@@ -92,9 +91,66 @@ export const ProfilePage: React.FC<ProfilePageProps> = ({ onClose }) => {
     const [defaultTtsMode, setDefaultTtsMode] = useState<'auto' | 'dialogue' | 'monologue'>('auto');
     const [enableNotifications, setEnableNotifications] = useState(true);
 
-    const handleSave = () => {
-        // TODO: Implement save to backend
-        toast.success('Settings saved (stub - not yet implemented)');
+    // Fetch settings on mount
+    useEffect(() => {
+        const fetchSettings = async () => {
+            try {
+                const response = await apiClient.get('/user/settings');
+                const { settings } = response.data;
+
+                setHasElevenLabsKey(settings.hasElevenLabsKey);
+                setHasNotionToken(settings.hasNotionToken);
+                setDefaultPreset(settings.defaultPreset);
+                setDefaultVoiceAccent(settings.defaultVoiceAccent);
+                setDefaultTtsMode(settings.defaultTtsMode);
+                setEnableNotifications(settings.enableNotifications);
+            } catch (error) {
+                console.error('Failed to fetch settings:', error);
+                toast.error('Failed to load settings');
+            } finally {
+                setIsLoading(false);
+            }
+        };
+
+        void fetchSettings();
+    }, []);
+
+    const handleSave = async () => {
+        setIsSaving(true);
+        try {
+            const payload: Record<string, unknown> = {
+                defaultPreset,
+                defaultVoiceAccent,
+                defaultTtsMode,
+                enableNotifications,
+            };
+
+            // Only include API keys if they were modified
+            if (elevenLabsKey) {
+                payload.elevenLabsKey = elevenLabsKey;
+            }
+            if (notionToken) {
+                payload.notionToken = notionToken;
+            }
+
+            const response = await apiClient.put('/user/settings', payload);
+            const { settings } = response.data;
+
+            // Update state with new values
+            setHasElevenLabsKey(settings.hasElevenLabsKey);
+            setHasNotionToken(settings.hasNotionToken);
+
+            // Clear the input fields after successful save
+            setElevenLabsKey('');
+            setNotionToken('');
+
+            toast.success('Settings saved successfully');
+        } catch (error) {
+            console.error('Failed to save settings:', error);
+            toast.error(handleApiError(error as Parameters<typeof handleApiError>[0]));
+        } finally {
+            setIsSaving(false);
+        }
     };
 
     return (
@@ -148,13 +204,16 @@ export const ProfilePage: React.FC<ProfilePageProps> = ({ onClose }) => {
                     </div>
                     <div className="section-content">
                         <div className="form-field">
-                            <label>API Key</label>
+                            <label>
+                                API Key
+                                {hasElevenLabsKey && <span className="key-status configured">✓ Configured</span>}
+                            </label>
                             <div className="input-with-toggle">
                                 <input
                                     type={showElevenLabs ? 'text' : 'password'}
                                     value={elevenLabsKey}
                                     onChange={(e) => setElevenLabsKey(e.target.value)}
-                                    placeholder="sk_..."
+                                    placeholder={hasElevenLabsKey ? '••••••••••••••••' : 'sk_...'}
                                 />
                                 <button
                                     type="button"
@@ -164,7 +223,11 @@ export const ProfilePage: React.FC<ProfilePageProps> = ({ onClose }) => {
                                     {showElevenLabs ? <EyeOffIcon /> : <EyeIcon />}
                                 </button>
                             </div>
-                            <span className="field-hint">Your ElevenLabs API key for voice generation</span>
+                            <span className="field-hint">
+                                {hasElevenLabsKey
+                                    ? 'Enter a new key to replace the existing one'
+                                    : 'Your ElevenLabs API key for voice generation'}
+                            </span>
                         </div>
                         <div className="form-field">
                             <label>Default TTS Mode</label>
@@ -203,13 +266,16 @@ export const ProfilePage: React.FC<ProfilePageProps> = ({ onClose }) => {
                     </div>
                     <div className="section-content">
                         <div className="form-field">
-                            <label>Integration Token</label>
+                            <label>
+                                Integration Token
+                                {hasNotionToken && <span className="key-status configured">✓ Configured</span>}
+                            </label>
                             <div className="input-with-toggle">
                                 <input
                                     type={showNotion ? 'text' : 'password'}
                                     value={notionToken}
                                     onChange={(e) => setNotionToken(e.target.value)}
-                                    placeholder="secret_..."
+                                    placeholder={hasNotionToken ? '••••••••••••••••' : 'secret_...'}
                                 />
                                 <button
                                     type="button"
@@ -220,77 +286,19 @@ export const ProfilePage: React.FC<ProfilePageProps> = ({ onClose }) => {
                                 </button>
                             </div>
                             <span className="field-hint">
-                                Create an integration at{' '}
-                                <a href="https://www.notion.so/my-integrations" target="_blank" rel="noopener noreferrer">
-                                    notion.so/my-integrations
-                                </a>
+                                {hasNotionToken
+                                    ? 'Enter a new token to replace the existing one'
+                                    : (
+                                        <>Create an integration at{' '}
+                                            <a href="https://www.notion.so/my-integrations" target="_blank" rel="noopener noreferrer">
+                                                notion.so/my-integrations
+                                            </a></>)}
                             </span>
                         </div>
                     </div>
                 </section>
 
-                {/* S3 Storage Section */}
-                <section className="settings-section card">
-                    <div className="section-header">
-                        <CloudIcon />
-                        <div>
-                            <h2>S3 Storage</h2>
-                            <p>Configure cloud storage for audio files</p>
-                        </div>
-                    </div>
-                    <div className="section-content">
-                        <div className="form-row">
-                            <div className="form-field">
-                                <label>Access Key ID</label>
-                                <input
-                                    type="text"
-                                    value={s3AccessKey}
-                                    onChange={(e) => setS3AccessKey(e.target.value)}
-                                    placeholder="AKIA..."
-                                />
-                            </div>
-                            <div className="form-field">
-                                <label>Secret Access Key</label>
-                                <div className="input-with-toggle">
-                                    <input
-                                        type={showS3Secret ? 'text' : 'password'}
-                                        value={s3SecretKey}
-                                        onChange={(e) => setS3SecretKey(e.target.value)}
-                                        placeholder="••••••••"
-                                    />
-                                    <button
-                                        type="button"
-                                        onClick={() => setShowS3Secret(!showS3Secret)}
-                                        className="toggle-visibility"
-                                    >
-                                        {showS3Secret ? <EyeOffIcon /> : <EyeIcon />}
-                                    </button>
-                                </div>
-                            </div>
-                        </div>
-                        <div className="form-row">
-                            <div className="form-field">
-                                <label>Bucket Name</label>
-                                <input
-                                    type="text"
-                                    value={s3Bucket}
-                                    onChange={(e) => setS3Bucket(e.target.value)}
-                                    placeholder="my-audio-bucket"
-                                />
-                            </div>
-                            <div className="form-field">
-                                <label>Endpoint (optional)</label>
-                                <input
-                                    type="text"
-                                    value={s3Endpoint}
-                                    onChange={(e) => setS3Endpoint(e.target.value)}
-                                    placeholder="https://s3.amazonaws.com"
-                                />
-                                <span className="field-hint">For S3-compatible services like MinIO</span>
-                            </div>
-                        </div>
-                    </div>
-                </section>
+
 
                 {/* Preferences Section */}
                 <section className="settings-section card">
@@ -332,12 +340,20 @@ export const ProfilePage: React.FC<ProfilePageProps> = ({ onClose }) => {
             </div>
 
             <footer className="profile-footer">
-                <button type="button" onClick={onClose} className="btn-secondary">
+                <button type="button" onClick={onClose} className="btn-secondary" disabled={isSaving}>
                     Cancel
                 </button>
-                <button type="button" onClick={handleSave} className="btn-primary">
-                    <SaveIcon />
-                    Save Changes
+                <button
+                    type="button"
+                    onClick={handleSave}
+                    className="btn-primary"
+                    disabled={isSaving || isLoading}
+                >
+                    {isSaving ? (
+                        <>Saving...</>
+                    ) : (
+                        <><SaveIcon /> Save Changes</>
+                    )}
                 </button>
             </footer>
 
@@ -495,6 +511,16 @@ export const ProfilePage: React.FC<ProfilePageProps> = ({ onClose }) => {
 
         .field-hint a {
           color: var(--color-primary-500);
+        }
+
+        .key-status {
+          margin-left: var(--space-2);
+          font-size: var(--text-xs);
+          font-weight: 500;
+        }
+
+        .key-status.configured {
+          color: var(--color-success-500, #10b981);
         }
 
         .input-with-toggle {
