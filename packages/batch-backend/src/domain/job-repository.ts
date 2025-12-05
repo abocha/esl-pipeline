@@ -51,6 +51,7 @@ export async function insertJob(params: {
   forceTts?: boolean;
   notionDatabase?: string;
   mode?: JobMode;
+  userId?: string;
 }): Promise<JobRecord> {
   const id = randomUUID();
   const now = new Date();
@@ -71,9 +72,10 @@ export async function insertJob(params: {
         notion_database,
         mode,
         created_at,
-        updated_at
+        updated_at,
+        user_id
       )
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
       RETURNING
         id,
         state,
@@ -92,7 +94,8 @@ export async function insertJob(params: {
         started_at,
         finished_at,
         error,
-        manifest_path
+        manifest_path,
+        user_id
       `,
       [
         id,
@@ -108,6 +111,7 @@ export async function insertJob(params: {
         params.mode ?? null,
         now,
         now,
+        params.userId ?? null,
       ],
     );
     return result.rows[0];
@@ -125,7 +129,7 @@ export async function getJobById(id: string): Promise<JobRecord | null> {
       `
       SELECT id, state, md, preset, with_tts, upload,
              voice_id, voice_accent, force_tts, notion_database, mode, notion_url,
-             created_at, updated_at, started_at, finished_at, error, manifest_path
+             created_at, updated_at, started_at, finished_at, error, manifest_path, user_id
       FROM jobs
       WHERE id = $1
       `,
@@ -193,7 +197,8 @@ export async function updateJobStateAndResult(args: {
         started_at,
         finished_at,
         error,
-        manifest_path
+        manifest_path,
+        user_id
       `,
       [nextState, error, manifestPath, notionUrl, startedAt, finishedAt, id, expectedState],
     );
@@ -229,6 +234,7 @@ function mapRowToJob(row: JobRow): JobRecord {
     finishedAt: row.finished_at,
     error: row.error,
     manifestPath: row.manifest_path,
+    userId: row.user_id,
   };
 }
 
