@@ -136,8 +136,8 @@ export const JobTable: React.FC = () => {
 
     toast.loading('Fetching latest link…', { id: `copy-${job.jobId}` });
     try {
-      await trackJob(job.jobId);
-      const refreshed = jobMap[job.jobId] ?? jobs.find((j) => j.jobId === job.jobId);
+      const latest = (await trackJob(job.jobId)) ?? jobMap[job.jobId] ?? job;
+      const refreshed = latest ?? jobs.find((j) => j.jobId === job.jobId);
       if (refreshed?.notionUrl) {
         copy(refreshed.notionUrl);
         toast.success('Notion link copied!', { id: `copy-${job.jobId}` });
