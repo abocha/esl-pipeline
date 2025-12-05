@@ -35,7 +35,7 @@ interface JobMonitorContextValue {
   jobs: JobEntry[];
   jobMap: JobMap;
   registerJob: (options: RegisterJobOptions) => void;
-  trackJob: (jobId: string) => Promise<void>;
+  trackJob: (jobId: string) => Promise<JobEntry | undefined>;
   connectionState: ConnectionState;
   isPolling: boolean;
   lastError: string | null;
@@ -45,6 +45,9 @@ interface JobMonitorContextValue {
 }
 
 const JobMonitorContext = createContext<JobMonitorContextValue | undefined>(undefined);
+
+const isBrowser = typeof window !== 'undefined';
+const ACTIVE_JOBS_STORAGE_KEY = 'esl-active-jobs';
 
 const isTerminalState = (state: JobState): boolean => state === 'succeeded' || state === 'failed';
 
@@ -72,8 +75,51 @@ const createDefaultJob = (jobId: string): JobEntry => {
   };
 };
 
+const buildJobMap = (entries: JobEntry[]): JobMap =>
+  entries.reduce<JobMap>((acc, job) => {
+    acc[job.jobId] = { ...createDefaultJob(job.jobId), ...job };
+    return acc;
+  }, {});
+
+const loadPersistedActiveJobs = (): JobMap => {
+  if (!isBrowser) return {};
+  const serialized = window.localStorage.getItem(ACTIVE_JOBS_STORAGE_KEY);
+  if (!serialized) return {};
+
+  try {
+    const parsed = JSON.parse(serialized);
+    if (!Array.isArray(parsed)) return {};
+    const entries = parsed
+      .map((item) => (item && typeof item.jobId === 'string' ? item : null))
+      .filter((item): item is JobEntry => item !== null)
+      .map((job) => ({ ...createDefaultJob(job.jobId), ...job }));
+    return buildJobMap(entries);
+  } catch (error) {
+    console.warn('Failed to restore active jobs from storage', error);
+    window.localStorage.removeItem(ACTIVE_JOBS_STORAGE_KEY);
+    return {};
+  }
+};
+
+const persistActiveJobs = (jobs: JobMap) => {
+  if (!isBrowser) return;
+  const activeJobs = Object.values(jobs).filter(
+    (job) => job.jobId && !isTerminalState(job.state),
+  );
+  if (activeJobs.length === 0) {
+    window.localStorage.removeItem(ACTIVE_JOBS_STORAGE_KEY);
+    return;
+  }
+  try {
+    window.localStorage.setItem(ACTIVE_JOBS_STORAGE_KEY, JSON.stringify(activeJobs));
+  } catch (error) {
+    console.warn('Failed to persist active jobs', error);
+  }
+};
+
 export function JobMonitorProvider({ children }: { children: ReactNode }) {
-  const [jobs, setJobs] = useState<JobMap>({});
+  const persistedJobsRef = useRef<JobMap>(loadPersistedActiveJobs());
+  const [jobs, setJobs] = useState<JobMap>(persistedJobsRef.current);
   const [connectionState, setConnectionState] = useState<ConnectionState>('idle');
   const [lastError, setLastError] = useState<string | null>(null);
   const [isPolling, setIsPolling] = useState(false);
@@ -87,6 +133,10 @@ export function JobMonitorProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     jobsRef.current = jobs;
+  }, [jobs]);
+
+  useEffect(() => {
+    persistActiveJobs(jobs);
   }, [jobs]);
 
   const updateJob = useCallback((jobId: string, mutator: (prev: JobEntry) => JobEntry) => {
@@ -271,17 +321,23 @@ export function JobMonitorProvider({ children }: { children: ReactNode }) {
   const trackJob = useCallback(
     async (jobId: string) => {
       const trimmed = jobId.trim();
-      if (!trimmed) return;
+      if (!trimmed) return undefined;
       updateJob(trimmed, (prev) => ({ ...prev, jobId: trimmed }));
 
       try {
         const status = await getJobStatus(trimmed);
-        updateJob(trimmed, (prev) => ({
-          ...prev,
-          ...status,
-          fileName: prev.fileName,
-          md: status.md ?? prev.md,
-        }));
+        let nextSnapshot: JobEntry | undefined;
+        updateJob(trimmed, (prev) => {
+          const next = {
+            ...prev,
+            ...status,
+            fileName: prev.fileName,
+            md: status.md ?? prev.md,
+          };
+          nextSnapshot = next;
+          return next;
+        });
+        return nextSnapshot;
       } catch (error: unknown) {
         updateJob(trimmed, (prev) => ({
           ...prev,
@@ -295,6 +351,17 @@ export function JobMonitorProvider({ children }: { children: ReactNode }) {
     },
     [updateJob],
   );
+
+  const hydratedFromStorageRef = useRef(false);
+  useEffect(() => {
+    if (hydratedFromStorageRef.current) return;
+    hydratedFromStorageRef.current = true;
+    const entries = Object.values(persistedJobsRef.current);
+    if (entries.length === 0) return;
+    for (const job of entries) {
+      void trackJob(job.jobId);
+    }
+  }, [trackJob]);
 
   const jobsArray = useMemo(() => {
     return Object.values(jobs).sort((a, b) => {
