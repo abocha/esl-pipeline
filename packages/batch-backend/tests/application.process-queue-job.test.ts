@@ -4,6 +4,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { processQueueJob } from '../src/application/process-queue-job.js';
 import * as jobEvents from '../src/domain/job-events.js';
 import * as jobRepository from '../src/domain/job-repository.js';
+import * as settingsRepository from '../src/domain/settings-repository.js';
 import * as loggerModule from '../src/infrastructure/logger.js';
 import * as orchestratorService from '../src/infrastructure/orchestrator-service.js';
 
@@ -34,6 +35,9 @@ describe('application/process-queue-job', () => {
   const updateJobStateAndResultSpy = vi.spyOn(jobRepository, 'updateJobStateAndResult');
   const runAssignmentJobSpy = vi.spyOn(orchestratorService, 'runAssignmentJob');
   const publishJobEventSpy = vi.spyOn(jobEvents, 'publishJobEvent');
+  const getSettingsByUserIdSpy = vi.spyOn(settingsRepository, 'getSettingsByUserId');
+  const getDecryptedElevenLabsKeySpy = vi.spyOn(settingsRepository, 'getDecryptedElevenLabsKey');
+  const getDecryptedNotionTokenSpy = vi.spyOn(settingsRepository, 'getDecryptedNotionToken');
 
   beforeEach(() => {
     vi.clearAllMocks();
@@ -42,8 +46,8 @@ describe('application/process-queue-job', () => {
   function makeJob(
     overrides: Partial<
       ReturnType<(typeof jobRepository)['getJobById']> extends Promise<infer R>
-        ? NonNullable<R>
-        : never
+      ? NonNullable<R>
+      : never
     > = {},
   ): any {
     const now = new Date('2024-01-01T10:00:00Z');
@@ -214,6 +218,46 @@ describe('application/process-queue-job', () => {
     expect(publishJobEventSpy).toHaveBeenNthCalledWith(2, {
       type: 'job_state_changed',
       job: failed,
+    });
+  });
+  it('injects user settings when job is linked to a user', async () => {
+    const initial = makeJob({ state: 'queued', userId: 'user-123' });
+    getJobByIdSpy.mockResolvedValue(initial);
+
+    const running = makeJob({
+      state: 'running',
+      userId: 'user-123',
+      startedAt: new Date('2024-01-01T10:01:00Z'),
+    });
+    const succeeded = {
+      ...running,
+      state: 'succeeded',
+      manifestPath: '/manifests/job-1.json',
+      finishedAt: new Date('2024-01-01T10:02:00Z'),
+    };
+
+    updateJobStateAndResultSpy
+      .mockResolvedValueOnce(running as any)
+      .mockResolvedValueOnce(succeeded as any);
+
+    runAssignmentJobSpy.mockResolvedValue({ manifestPath: '/manifests/job-1.json' });
+
+    // Mock settings repository
+    getSettingsByUserIdSpy.mockResolvedValue({ id: 'settings-1', userId: 'user-123' } as any);
+    getDecryptedElevenLabsKeySpy.mockResolvedValue('user-eleven-key');
+    getDecryptedNotionTokenSpy.mockResolvedValue('user-notion-token');
+
+    await processQueueJob({ jobId: 'job-1' });
+
+    expect(getSettingsByUserIdSpy).toHaveBeenCalledWith('user-123');
+    expect(getDecryptedElevenLabsKeySpy).toHaveBeenCalledWith('user-123');
+    expect(getDecryptedNotionTokenSpy).toHaveBeenCalledWith('user-123');
+
+    expect(runAssignmentJobSpy).toHaveBeenCalledTimes(1);
+    const [payload] = runAssignmentJobSpy.mock.calls[0]!;
+    expect(payload.settings).toEqual({
+      elevenLabsApiKey: 'user-eleven-key',
+      notionToken: 'user-notion-token',
     });
   });
 });

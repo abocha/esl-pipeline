@@ -23,6 +23,7 @@ export interface SubmitJobRequest {
   forceTts?: boolean;
   notionDatabase?: string;
   mode?: JobMode;
+  userId?: string;
 }
 
 export interface SubmitJobResponse {
@@ -129,6 +130,7 @@ export async function submitJob(req: SubmitJobRequest): Promise<SubmitJobRespons
     forceTts: req.forceTts,
     notionDatabase: req.notionDatabase,
     mode: req.mode,
+    userId: req.userId,
   });
 
   publishJobEvent({ type: 'job_created', job });

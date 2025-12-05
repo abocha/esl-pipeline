@@ -15,6 +15,18 @@ interface WorkerMessage {
   runId: string;
 }
 
+function applyUserSettingsToEnv(settings?: { elevenLabsApiKey?: string | null; notionToken?: string | null }) {
+  if (!settings) return;
+
+  if (settings.elevenLabsApiKey) {
+    process.env.ELEVENLABS_API_KEY = settings.elevenLabsApiKey;
+  }
+
+  if (settings.notionToken) {
+    process.env.NOTION_TOKEN = settings.notionToken;
+  }
+}
+
 async function executePipeline(
   payload: RunAssignmentPayload,
   runId: string,
@@ -94,6 +106,16 @@ async function main() {
     const { payload, runId } = msg;
     const log = rootLogger.child({ jobId: payload.jobId, runId, component: 'pipeline-worker' });
     const config = loadConfig();
+
+    // Apply user settings overrides
+    if (payload.settings?.elevenLabsApiKey) {
+      config.orchestrator.elevenLabsApiKey = payload.settings.elevenLabsApiKey;
+    }
+    if (payload.settings?.notionToken) {
+      config.orchestrator.notionToken = payload.settings.notionToken;
+    }
+
+    applyUserSettingsToEnv(payload.settings);
 
     try {
       const result = await executePipeline(payload, runId, config);

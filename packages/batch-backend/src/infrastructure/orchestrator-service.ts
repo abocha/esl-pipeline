@@ -142,6 +142,10 @@ export interface RunAssignmentPayload {
   forceTts?: boolean | null;
   notionDatabase?: string | null;
   mode?: JobMode | null;
+  settings?: {
+    elevenLabsApiKey?: string | null;
+    notionToken?: string | null;
+  };
 }
 
 // runAssignmentJob.declaration()

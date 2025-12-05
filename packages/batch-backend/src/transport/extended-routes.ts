@@ -3,8 +3,10 @@ import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { randomUUID } from 'node:crypto';
 import path from 'node:path';
 import { Readable } from 'node:stream';
+import { z } from 'zod';
 
 import { getJobOptions } from '../application/get-job-options.js';
+import { SubmitJobRequest, submitJob } from '../application/submit-job.js';
 import type { BatchBackendConfig } from '../config/env.js';
 import {
   UserLogin,
@@ -21,6 +23,17 @@ import {
   getUserById,
   updateUserLastLogin,
 } from '../domain/user-repository.js';
+import {
+  UserSettingsInput,
+  isValidTtsMode,
+  isValidTtsProvider,
+  sanitizeSettings,
+} from '../domain/settings-model.js';
+import {
+  createDefaultSettings,
+  getSettingsByUserId,
+  upsertSettings,
+} from '../domain/settings-repository.js';
 import { createAuthService } from '../infrastructure/auth-service.js';
 import {
   FileSanitizationError,
@@ -193,9 +206,9 @@ export function registerExtendedRoutes(app: FastifyInstance, options: ExtendedRo
           const mdReference =
             fileStorageService.getProvider() === 'filesystem'
               ? buildFilesystemMdReference(
-                  storageConfig.getFilesystemConfig().uploadDir,
-                  storageKey,
-                )
+                storageConfig.getFilesystemConfig().uploadDir,
+                storageKey,
+              )
               : storageKey;
 
           logger.info('Secure upload completed', {
@@ -671,6 +684,129 @@ export function registerExtendedRoutes(app: FastifyInstance, options: ExtendedRo
     }
   });
 
+  // GET /user/settings - Get current user settings
+  app.get('/user/settings', { preHandler: authenticate }, async (request, reply) => {
+    const authenticatedUser = getAuthenticatedUser(request);
+    if (!authenticatedUser) {
+      return reply.code(401).send({
+        error: 'unauthorized',
+        message: 'Authentication required',
+      });
+    }
+
+    try {
+      let settings = await getSettingsByUserId(authenticatedUser.id);
+
+      // Create default settings if none exist
+      if (!settings) {
+        settings = await createDefaultSettings(authenticatedUser.id);
+      }
+
+      return reply.code(200).send({
+        settings: sanitizeSettings(settings),
+      });
+    } catch (error: unknown) {
+      logger.error(error instanceof Error ? error : String(error), {
+        event: 'get_user_settings_failed',
+        userId: authenticatedUser.id,
+      });
+
+      return reply.code(500).send({
+        error: 'internal_error',
+      });
+    }
+  });
+
+  // PUT /user/settings - Update user settings
+  app.put('/user/settings', { preHandler: authenticate }, async (request, reply) => {
+    const authenticatedUser = getAuthenticatedUser(request);
+    if (!authenticatedUser) {
+      return reply.code(401).send({
+        error: 'unauthorized',
+        message: 'Authentication required',
+      });
+    }
+
+    try {
+      const body = request.body as UserSettingsInput | undefined;
+
+      if (!body || typeof body !== 'object') {
+        return reply.code(400).send({
+          error: 'validation_failed',
+          message: 'Request body is required',
+          code: 'missing_body',
+        });
+      }
+
+      // Validate TTS provider if provided
+      if (body.ttsProvider !== undefined && !isValidTtsProvider(body.ttsProvider)) {
+        return reply.code(400).send({
+          error: 'validation_failed',
+          message: 'Invalid TTS provider. Must be one of: elevenlabs, openai, azure, google',
+          code: 'invalid_tts_provider',
+        });
+      }
+
+      // Validate TTS mode if provided
+      if (body.defaultTtsMode !== undefined && !isValidTtsMode(body.defaultTtsMode)) {
+        return reply.code(400).send({
+          error: 'validation_failed',
+          message: 'Invalid TTS mode. Must be one of: auto, dialogue, monologue',
+          code: 'invalid_tts_mode',
+        });
+      }
+
+      // Validate API key formats (basic checks)
+      if (
+        body.elevenLabsKey !== undefined &&
+        body.elevenLabsKey !== null &&
+        body.elevenLabsKey !== '' &&
+        (typeof body.elevenLabsKey !== 'string' || body.elevenLabsKey.length < 10)
+      ) {
+        return reply.code(400).send({
+          error: 'validation_failed',
+          message: 'Invalid ElevenLabs API key format',
+          code: 'invalid_elevenlabs_key',
+        });
+      }
+
+      if (
+        body.notionToken !== undefined &&
+        body.notionToken !== null &&
+        body.notionToken !== '' &&
+        (typeof body.notionToken !== 'string' || body.notionToken.length < 10)
+      ) {
+        return reply.code(400).send({
+          error: 'validation_failed',
+          message: 'Invalid Notion token format',
+          code: 'invalid_notion_token',
+        });
+      }
+
+      const updatedSettings = await upsertSettings(authenticatedUser.id, body);
+
+      logger.info('User settings updated', {
+        userId: authenticatedUser.id,
+        updatedFields: Object.keys(body).filter(
+          (k) => body[k as keyof UserSettingsInput] !== undefined,
+        ),
+      });
+
+      return reply.code(200).send({
+        settings: sanitizeSettings(updatedSettings),
+      });
+    } catch (error: unknown) {
+      logger.error(error instanceof Error ? error : String(error), {
+        event: 'update_user_settings_failed',
+        userId: authenticatedUser.id,
+      });
+
+      return reply.code(500).send({
+        error: 'internal_error',
+      });
+    }
+  });
+
   app.get('/user/jobs', { preHandler: authenticate }, async (request, reply) => {
     const authenticatedUser = getAuthenticatedUser(request);
     if (!authenticatedUser) {
@@ -690,6 +826,72 @@ export function registerExtendedRoutes(app: FastifyInstance, options: ExtendedRo
     } catch (error: unknown) {
       logger.error(error instanceof Error ? error : String(error), {
         event: 'get_user_jobs_failed',
+        userId: authenticatedUser.id,
+      });
+
+      return reply.code(500).send({
+        error: 'internal_error',
+      });
+    }
+  });
+
+  app.post('/user/jobs', { preHandler: authenticate }, async (request, reply) => {
+    const authenticatedUser = getAuthenticatedUser(request);
+    if (!authenticatedUser) {
+      return reply.code(401).send({
+        error: 'unauthorized',
+        message: 'Authentication required',
+      });
+    }
+
+    const body = request.body as SubmitJobRequest | undefined;
+
+    const jobSchema = z.object({
+      md: z.string().min(1, 'md is required'),
+      preset: z.string().optional(),
+      withTts: z.boolean().optional(),
+      upload: z.enum(['auto', 's3', 'none']).optional(),
+      voiceAccent: z.string().min(1).optional(),
+      voiceId: z.string().min(1).optional(),
+      forceTts: z.boolean().optional(),
+      notionDatabase: z.string().min(1).optional(),
+      mode: z.enum(['auto', 'dialogue', 'monologue']).optional(),
+    });
+
+    try {
+      const validatedData = jobSchema.parse(body);
+
+      const result = await submitJob({
+        md: validatedData.md,
+        preset: validatedData.preset,
+        withTts: validatedData.withTts,
+        upload: validatedData.upload,
+        voiceId: validatedData.voiceId,
+        voiceAccent: validatedData.voiceAccent,
+        forceTts: validatedData.forceTts,
+        notionDatabase: validatedData.notionDatabase,
+        mode: validatedData.mode,
+        userId: authenticatedUser.id,
+      });
+
+      logger.info('User submitted job', {
+        event: 'user_job_submitted',
+        userId: authenticatedUser.id,
+        jobId: result.jobId,
+      });
+
+      return reply.code(202).send(result);
+    } catch (error: unknown) {
+      if (error instanceof z.ZodError) {
+        return reply.code(400).send({
+          error: 'validation_failed',
+          message: 'Invalid request body',
+          details: error.errors,
+        });
+      }
+
+      logger.error(error instanceof Error ? error : String(error), {
+        event: 'user_submit_job_failed',
         userId: authenticatedUser.id,
       });
 

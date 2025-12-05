@@ -12,6 +12,7 @@ services:
     volumes:
       - postgres_data:/var/lib/postgresql/data
       - ./packages/batch-backend/schema.sql:/schema/batch-backend/schema.sql:ro
+      - ./packages/batch-backend/docker-entrypoint-initdb.d:/docker-entrypoint-initdb.d:ro
     healthcheck:
       # Check against the configured DB (esl_batch), not the default "esl"
       test: ['CMD-SHELL', 'pg_isready -U esl -d esl_batch']

@@ -13,6 +13,11 @@ import path from 'node:path';
 import { type BatchBackendConfig, loadConfig } from '../config/env.js';
 import { publishJobEvent } from '../domain/job-events.js';
 import { getJobById, updateJobStateAndResult } from '../domain/job-repository.js';
+import {
+  getDecryptedElevenLabsKey,
+  getDecryptedNotionToken,
+  getSettingsByUserId,
+} from '../domain/settings-repository.js';
 import { createJobLogger } from '../infrastructure/logger.js';
 import { runAssignmentJob } from '../infrastructure/orchestrator-service.js';
 import type { QueueJobPayload } from '../infrastructure/queue-bullmq.js';
@@ -63,6 +68,28 @@ export async function processQueueJob(payload: QueueJobPayload): Promise<void> {
     const config = loadConfig();
     const uploadFlag = resolveUploadTarget(running.upload, config.storage.provider);
 
+    // Fetch user settings if job is linked to a user
+    let userSettings: { elevenLabsApiKey?: string | null; notionToken?: string | null } | undefined;
+    if (running.userId) {
+      const settings = await getSettingsByUserId(running.userId);
+      if (settings) {
+        const elevenLabsApiKey = await getDecryptedElevenLabsKey(running.userId);
+        const notionToken = await getDecryptedNotionToken(running.userId);
+
+        if (elevenLabsApiKey || notionToken) {
+          userSettings = {
+            elevenLabsApiKey: elevenLabsApiKey ?? null,
+            notionToken: notionToken ?? null,
+          };
+          log.info('Using user-specific settings for job', {
+            userId: running.userId,
+            hasElevenLabsKey: !!elevenLabsApiKey,
+            hasNotionToken: !!notionToken,
+          });
+        }
+      }
+    }
+
     const result = await runAssignmentJob(
       {
         jobId,
@@ -75,6 +102,7 @@ export async function processQueueJob(payload: QueueJobPayload): Promise<void> {
         forceTts: running.forceTts ?? undefined,
         notionDatabase: running.notionDatabase ?? config.orchestrator.notionDatabaseId ?? undefined,
         mode: running.mode ?? undefined,
+        settings: userSettings,
       },
       runId,
     );

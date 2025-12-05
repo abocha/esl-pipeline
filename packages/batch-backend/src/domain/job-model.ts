@@ -22,6 +22,7 @@ export interface JobRecord {
   finishedAt?: Date | null;
   error?: string | null;
   manifestPath?: string | null;
+  userId?: string | null;
 }
 // JobRecord.declaration()
 

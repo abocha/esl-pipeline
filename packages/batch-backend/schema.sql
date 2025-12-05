@@ -14,6 +14,19 @@
 
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 
+-- Users table for authentication
+CREATE TABLE IF NOT EXISTS users (
+  id UUID PRIMARY KEY,
+  email TEXT NOT NULL UNIQUE,
+  password_hash TEXT NOT NULL,
+  role TEXT NOT NULL DEFAULT 'user',
+  is_active BOOLEAN NOT NULL DEFAULT true,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  last_login_at TIMESTAMPTZ NULL
+);
+
+-- Jobs table (references users for ownership/auditing)
 CREATE TABLE IF NOT EXISTS jobs (
   id UUID PRIMARY KEY,
   md TEXT NOT NULL,
@@ -32,20 +45,17 @@ CREATE TABLE IF NOT EXISTS jobs (
   started_at TIMESTAMPTZ NULL,
   finished_at TIMESTAMPTZ NULL,
   manifest_path TEXT NULL,
-  error TEXT NULL
+  error TEXT NULL,
+  user_id UUID NULL REFERENCES users(id) ON DELETE SET NULL
 );
 
--- Users table for authentication
-CREATE TABLE IF NOT EXISTS users (
-  id UUID PRIMARY KEY,
-  email TEXT NOT NULL UNIQUE,
-  password_hash TEXT NOT NULL,
-  role TEXT NOT NULL DEFAULT 'user',
-  is_active BOOLEAN NOT NULL DEFAULT true,
-  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-  last_login_at TIMESTAMPTZ NULL
-);
+-- Ensure user_id is present on upgrades and has the correct FK
+ALTER TABLE jobs ADD COLUMN IF NOT EXISTS user_id UUID NULL;
+ALTER TABLE jobs DROP CONSTRAINT IF EXISTS jobs_user_id_fkey;
+ALTER TABLE jobs
+  ADD CONSTRAINT jobs_user_id_fkey FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE SET NULL;
+
+CREATE INDEX IF NOT EXISTS idx_jobs_user_id ON jobs(user_id);
 
 -- Trigger function to keep updated_at in sync on any UPDATE.
 CREATE OR REPLACE FUNCTION set_jobs_updated_at()
@@ -145,3 +155,48 @@ ALTER TABLE uploaded_files ADD CONSTRAINT uploaded_files_storage_provider_check
 -- File size validation (prevent negative sizes)
 ALTER TABLE uploaded_files ADD CONSTRAINT uploaded_files_file_size_check
   CHECK (file_size >= 0);
+
+-- User settings table for API keys and preferences
+CREATE TABLE IF NOT EXISTS user_settings (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  user_id UUID NOT NULL UNIQUE REFERENCES users(id) ON DELETE CASCADE,
+  -- API Keys (encrypted at rest)
+  elevenlabs_key_encrypted TEXT NULL,
+  notion_token_encrypted TEXT NULL,
+  -- TTS Provider (groundwork for future expansion: 'openai', 'azure', etc.)
+  tts_provider TEXT NOT NULL DEFAULT 'elevenlabs',
+  -- Preferences
+  default_preset TEXT NOT NULL DEFAULT 'b1-default',
+  default_voice_accent TEXT NOT NULL DEFAULT 'american',
+  default_tts_mode TEXT NOT NULL DEFAULT 'auto',
+  enable_notifications BOOLEAN NOT NULL DEFAULT true,
+  -- Timestamps
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+-- Trigger function for user_settings updated_at
+CREATE OR REPLACE FUNCTION set_user_settings_updated_at()
+RETURNS TRIGGER AS $$
+BEGIN
+  NEW.updated_at = NOW();
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+DROP TRIGGER IF EXISTS set_user_settings_updated_at ON user_settings;
+
+CREATE TRIGGER set_user_settings_updated_at
+BEFORE UPDATE ON user_settings
+FOR EACH ROW
+EXECUTE FUNCTION set_user_settings_updated_at();
+
+-- Indexes for user_settings
+CREATE INDEX IF NOT EXISTS idx_user_settings_user_id ON user_settings(user_id);
+
+-- Constraints for user_settings
+ALTER TABLE user_settings ADD CONSTRAINT user_settings_tts_mode_check
+  CHECK (default_tts_mode IN ('auto', 'dialogue', 'monologue'));
+
+ALTER TABLE user_settings ADD CONSTRAINT user_settings_tts_provider_check
+  CHECK (tts_provider IN ('elevenlabs', 'openai', 'azure', 'google'));
