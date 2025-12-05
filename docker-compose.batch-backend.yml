@@ -32,22 +32,6 @@ services:
       timeout: 3s
       retries: 10
 
-  minio:
-    image: minio/minio:latest
-    container_name: esl-backend-minio
-    environment:
-      MINIO_ROOT_USER: minioadmin
-      MINIO_ROOT_PASSWORD: minioadmin
-    command: server /data --console-address ":9002"
-    ports:
-      - '9000:9000'
-      - '9002:9002'
-    healthcheck:
-      test: ['CMD', 'curl', '-f', 'http://localhost:9000/minio/health/live']
-      interval: 10s
-      timeout: 5s
-      retries: 10
-
   batch-frontend:
     build:
       context: .
@@ -79,8 +63,7 @@ services:
         condition: service_healthy
       redis:
         condition: service_started
-      minio:
-        condition: service_started
+
     env_file:
       - .env.batch-backend
     environment:
@@ -111,8 +94,7 @@ services:
         condition: service_healthy
       redis:
         condition: service_started
-      minio:
-        condition: service_started
+
     env_file:
       - .env.batch-backend
     environment:

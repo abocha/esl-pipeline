@@ -16,7 +16,16 @@ import { JobUploader } from './uploader/JobUploader';
 
 // Icons
 const SunIcon = () => (
-  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+  <svg
+    width="20"
+    height="20"
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="2"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+  >
     <circle cx="12" cy="12" r="5" />
     <line x1="12" y1="1" x2="12" y2="3" />
     <line x1="12" y1="21" x2="12" y2="23" />
@@ -30,13 +39,31 @@ const SunIcon = () => (
 );
 
 const MoonIcon = () => (
-  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+  <svg
+    width="20"
+    height="20"
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="2"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+  >
     <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z" />
   </svg>
 );
 
 const LogoutIcon = () => (
-  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+  <svg
+    width="18"
+    height="18"
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="2"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+  >
     <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
     <polyline points="16 17 21 12 16 7" />
     <line x1="21" y1="12" x2="9" y2="12" />
@@ -44,14 +71,32 @@ const LogoutIcon = () => (
 );
 
 const SettingsIcon = () => (
-  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+  <svg
+    width="20"
+    height="20"
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="2"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+  >
     <path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.38a2 2 0 0 0-.73-2.73l-.15-.1a2 2 0 0 1-1-1.72v-.51a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z" />
     <circle cx="12" cy="12" r="3" />
   </svg>
 );
 
 const BellIcon = () => (
-  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+  <svg
+    width="20"
+    height="20"
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="2"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+  >
     <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9" />
     <path d="M13.73 21a2 2 0 0 1-3.46 0" />
   </svg>
@@ -80,7 +125,8 @@ export const App: React.FC = () => {
       await logout();
       toast.success('Logged out successfully');
     } catch (error: unknown) {
-      const message = error instanceof Error ? error.message : 'Unable to logout. Please try again.';
+      const message =
+        error instanceof Error ? error.message : 'Unable to logout. Please try again.';
       toast.error(message);
     }
   }, [logout]);
@@ -125,10 +171,29 @@ export const App: React.FC = () => {
               <div className="logo-icon">
                 <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
                   <path d="M12 2L2 7L12 12L22 7L12 2Z" fill="url(#logoGradient)" />
-                  <path d="M2 17L12 22L22 17" stroke="url(#logoGradient)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-                  <path d="M2 12L12 17L22 12" stroke="url(#logoGradient)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                  <path
+                    d="M2 17L12 22L22 17"
+                    stroke="url(#logoGradient)"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  />
+                  <path
+                    d="M2 12L12 17L22 12"
+                    stroke="url(#logoGradient)"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  />
                   <defs>
-                    <linearGradient id="logoGradient" x1="2" y1="2" x2="22" y2="22" gradientUnits="userSpaceOnUse">
+                    <linearGradient
+                      id="logoGradient"
+                      x1="2"
+                      y1="2"
+                      x2="22"
+                      y2="22"
+                      gradientUnits="userSpaceOnUse"
+                    >
                       <stop stopColor="#4f46e5" />
                       <stop offset="1" stopColor="#8b5cf6" />
                     </linearGradient>
@@ -173,11 +238,7 @@ export const App: React.FC = () => {
                 >
                   <SettingsIcon />
                 </button>
-                <button
-                  type="button"
-                  onClick={() => void handleLogout()}
-                  className="btn-logout"
-                >
+                <button type="button" onClick={() => void handleLogout()} className="btn-logout">
                   <LogoutIcon />
                   <span>Logout</span>
                 </button>
@@ -493,7 +554,7 @@ const NotificationsPanel: React.FC = () => {
 
     if (notificationsEnabled) {
       disableNotifications();
-      toast.success('Notifications disabled');
+      toast('Notifications paused', { icon: '⏸️' });
       return;
     }
 
@@ -526,9 +587,7 @@ const NotificationsPanel: React.FC = () => {
         <span className="toggle-track">
           <span className="toggle-thumb" />
         </span>
-        <span className="toggle-label">
-          {notificationsEnabled ? 'Enabled' : 'Disabled'}
-        </span>
+        <span className="toggle-label">{notificationsEnabled ? 'Enabled' : 'Disabled'}</span>
       </button>
 
       <style>{`
@@ -701,7 +760,16 @@ const UnauthenticatedNotice: React.FC<{ onLogin: () => void; onRegister: () => v
         <div className="circle circle-3" />
       </div>
       <div className="graphic-icon">
-        <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+        <svg
+          width="48"
+          height="48"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="1.5"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        >
           <path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4" />
           <polyline points="10 17 15 12 10 7" />
           <line x1="15" y1="12" x2="3" y2="12" />
@@ -713,8 +781,8 @@ const UnauthenticatedNotice: React.FC<{ onLogin: () => void; onRegister: () => v
       <span className="unauth-eyebrow">Authentication Required</span>
       <h2>Sign in to get started</h2>
       <p>
-        Upload markdown lessons, configure job settings, and monitor processing in real-time.
-        Create an account or log in to access all features.
+        Upload markdown lessons, configure job settings, and monitor processing in real-time. Create
+        an account or log in to access all features.
       </p>
 
       <div className="unauth-buttons">

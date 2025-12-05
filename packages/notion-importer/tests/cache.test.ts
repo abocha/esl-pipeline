@@ -1,6 +1,5 @@
-import { describe, expect, it, vi } from 'vitest';
-
 import type { Client } from '@notionhq/client';
+import { describe, expect, it, vi } from 'vitest';
 
 import { resolveDataSourceId } from '../src/notion.js';
 

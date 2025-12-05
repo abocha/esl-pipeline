@@ -63,10 +63,8 @@ describe('orchestrator observability', () => {
     });
 
     const logs: PipelineLogEvent[] = [];
-    const timings: Array<{ metric: string; durationMs: number; tags?: Record<string, string> }> =
-      [];
-    const increments: Array<{ metric: string; value?: number; tags?: Record<string, string> }> =
-      [];
+    const timings: { metric: string; durationMs: number; tags?: Record<string, string> }[] = [];
+    const increments: { metric: string; value?: number; tags?: Record<string, string> }[] = [];
 
     const logger: PipelineLogger = { log: (event) => logs.push(event) };
     const metrics: PipelineMetrics = {
@@ -88,7 +86,15 @@ describe('orchestrator observability', () => {
       { logger, metrics, runId: 'run-new' },
     );
 
-    const expectedStages = ['validate', 'import', 'colorize', 'tts', 'upload', 'add-audio', 'manifest'];
+    const expectedStages = [
+      'validate',
+      'import',
+      'colorize',
+      'tts',
+      'upload',
+      'add-audio',
+      'manifest',
+    ];
     for (const stage of expectedStages) {
       const start = logs.find((e) => e.message === `stage.${stage}.start`);
       const success = logs.find((e) => e.message === `stage.${stage}.success`);
@@ -98,14 +104,11 @@ describe('orchestrator observability', () => {
 
     // Ensure one timing metric per successful stage (stage.*) plus the pipeline summary metric.
     const stageTimings = timings.filter((t) => t.metric === 'esl.pipeline.stage.duration_ms');
-    expect(stageTimings.map((t) => t.tags?.stage)).toEqual(
-      expect.arrayContaining(expectedStages),
-    );
+    expect(stageTimings.map((t) => t.tags?.stage)).toEqual(expect.arrayContaining(expectedStages));
     expect(
       timings.some(
         (t) =>
-          t.metric === 'esl.pipeline.new_assignment.duration_ms' &&
-          t.tags?.result === 'success',
+          t.metric === 'esl.pipeline.new_assignment.duration_ms' && t.tags?.result === 'success',
       ),
     ).toBe(true);
 
@@ -152,10 +155,8 @@ describe('orchestrator observability', () => {
     );
 
     const logs: PipelineLogEvent[] = [];
-    const timings: Array<{ metric: string; durationMs: number; tags?: Record<string, string> }> =
-      [];
-    const increments: Array<{ metric: string; value?: number; tags?: Record<string, string> }> =
-      [];
+    const timings: { metric: string; durationMs: number; tags?: Record<string, string> }[] = [];
+    const increments: { metric: string; value?: number; tags?: Record<string, string> }[] = [];
 
     const logger: PipelineLogger = { log: (event) => logs.push(event) };
     const metrics: PipelineMetrics = {
@@ -188,14 +189,11 @@ describe('orchestrator observability', () => {
     expect(skippedTts?.message).toBe('stage.tts.skipped');
 
     const stageTimings = timings.filter((t) => t.metric === 'esl.pipeline.stage.duration_ms');
-    expect(stageTimings.map((t) => t.tags?.stage)).toEqual(
-      expect.arrayContaining(executedStages),
-    );
+    expect(stageTimings.map((t) => t.tags?.stage)).toEqual(expect.arrayContaining(executedStages));
     expect(
       timings.some(
         (t) =>
-          t.metric === 'esl.pipeline.rerun_assignment.duration_ms' &&
-          t.tags?.result === 'success',
+          t.metric === 'esl.pipeline.rerun_assignment.duration_ms' && t.tags?.result === 'success',
       ),
     ).toBe(true);
 

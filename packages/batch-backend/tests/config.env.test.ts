@@ -98,3 +98,77 @@ describe('config/env - orchestrator remote config provider mapping', () => {
     );
   });
 });
+
+describe('config/env - storage provider defaults', () => {
+  beforeEach(() => {
+    vi.resetModules();
+  });
+
+  it('defaults to s3 when credentials are present', async () => {
+    await withEnv(
+      {
+        NODE_ENV: 'test',
+        S3_BUCKET: 'test-bucket',
+        AWS_ACCESS_KEY_ID: 'test-key',
+        AWS_SECRET_ACCESS_KEY: 'test-secret',
+      },
+      async () => {
+        const cfg = await loadConfigFresh();
+        expect(cfg.storage.provider).toBe('s3');
+      },
+    );
+  });
+
+  it('falls back to filesystem when s3 credentials are missing', async () => {
+    await withEnv(
+      {
+        NODE_ENV: 'test',
+        S3_BUCKET: 'test-bucket',
+        AWS_ACCESS_KEY_ID: 'test-key',
+        AWS_SECRET_ACCESS_KEY: '',
+        S3_SECRET_ACCESS_KEY: '',
+      },
+      async () => {
+        const cfg = await loadConfigFresh();
+        expect(cfg.storage.provider).toBe('filesystem');
+      },
+    );
+  });
+
+  it('throws on invalid STORAGE_PROVIDER', async () => {
+    await expect(
+      withEnv(
+        {
+          NODE_ENV: 'test',
+          STORAGE_PROVIDER: 'minio',
+        },
+        async () => {
+          await loadConfigFresh();
+        },
+      ),
+    ).rejects.toThrow('STORAGE_PROVIDER must be either "s3" or "filesystem"');
+  });
+
+  it('throws when STORAGE_PROVIDER is s3 but credentials are missing', async () => {
+    await expect(
+      withEnv(
+        {
+          NODE_ENV: 'test',
+          STORAGE_PROVIDER: 's3',
+          S3_BUCKET: '',
+          S3_BUCKET_NAME: '',
+          STORAGE_BUCKET_NAME: '',
+          AWS_ACCESS_KEY_ID: '',
+          AWS_SECRET_ACCESS_KEY: '',
+          S3_ACCESS_KEY_ID: '',
+          S3_SECRET_ACCESS_KEY: '',
+        },
+        async () => {
+          await loadConfigFresh();
+        },
+      ),
+    ).rejects.toThrow(
+      'STORAGE_PROVIDER=s3 requires S3_BUCKET_NAME/STORAGE_BUCKET_NAME and S3_ACCESS_KEY_ID/S3_SECRET_ACCESS_KEY (or AWS_ equivalents)',
+    );
+  });
+});

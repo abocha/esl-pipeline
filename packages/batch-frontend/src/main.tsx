@@ -5,9 +5,8 @@ import { Toaster } from 'react-hot-toast';
 
 import { AuthProvider } from './context/AuthContext';
 import { ThemeProvider } from './context/ThemeContext';
-import { App } from './ui/App';
-
 import './index.css';
+import { App } from './ui/App';
 
 // Entry for the ESL Pipeline batch frontend.
 // Assumes dev is run via `pnpm --filter @esl-pipeline/batch-frontend dev`.

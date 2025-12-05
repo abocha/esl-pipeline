@@ -26,7 +26,7 @@ const SHARED = {
   bullmq: '^5.65.0',
   bcrypt: '^6.0.0',
   jsonwebtoken: '^9.0.2',
-  minio: '^8.0.6',
+
 };
 
 const fields = ['dependencies', 'devDependencies'];

@@ -53,7 +53,7 @@ export interface ResolvedConfigPaths {
   wizardDefaultsPath: string;
 }
 
-type ConfigPathsCacheEntry = {
+interface ConfigPathsCacheEntry {
   result: ResolvedConfigPaths;
   meta: {
     presets: { path: string; mtimeMs: number; size: number; exists: boolean };
@@ -61,7 +61,7 @@ type ConfigPathsCacheEntry = {
     students: { path: string; mtimeMs: number; size: number; exists: boolean };
     wizardDefaults: { path: string; mtimeMs: number; size: number; exists: boolean };
   };
-};
+}
 
 const configPathsCache = new Map<string, ConfigPathsCacheEntry>();
 

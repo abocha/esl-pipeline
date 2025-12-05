@@ -1,7 +1,7 @@
 // packages/batch-backend/src/config/env.ts
 // Centralized environment-based configuration for the batch-backend.
 // - Safe Docker/Docker Compose defaults.
-// - Postgres/Redis/MinIO are optional and enabled via env flags.
+// - Postgres/Redis are optional and enabled via env flags.
 // - Only throws when a feature is explicitly enabled but misconfigured.
 import { readBool, readInt, readString } from '@esl-pipeline/shared-infrastructure';
 
@@ -32,15 +32,7 @@ export interface BatchBackendConfig {
     concurrency: number;
     maxConcurrentFfmpeg: number;
   };
-  minio: {
-    enabled: boolean;
-    endpoint: string;
-    port: number;
-    useSSL: boolean;
-    accessKey: string;
-    secretKey: string;
-    bucket: string;
-  };
+
   mail: {
     enabled: boolean;
     host: string;
@@ -87,7 +79,7 @@ export interface BatchBackendConfig {
     jobSubmissionRateLimit: number;
   };
   storage: {
-    provider: 's3' | 'minio' | 'filesystem';
+    provider: 's3' | 'filesystem';
     bucketName?: string;
     pathPrefix?: string;
     presignedUrlExpiresIn: number;
@@ -136,18 +128,6 @@ export function loadConfig(): BatchBackendConfig {
     );
   }
 
-  // MinIO / S3-compatible (optional; defaults on for dev/docker, off in prod unless explicitly set)
-  const minioEnabled = readBool('MINIO_ENABLED', nodeEnv === 'development' || nodeEnv === 'test');
-  const minioEndpoint = readString('MINIO_ENDPOINT', 'minio')!;
-  const minioPort = readInt('MINIO_PORT', 9000);
-  const minioUseSSL = readBool('MINIO_USE_SSL', false);
-  const minioAccessKey = readString('MINIO_ACCESS_KEY', 'minioadmin')!;
-  const minioSecretKey = readString('MINIO_SECRET_KEY', 'minioadmin')!;
-  const minioBucket = readString('MINIO_BUCKET', 'esl-pipeline')!;
-  if (minioEnabled && (!minioEndpoint || !minioAccessKey || !minioSecretKey || !minioBucket)) {
-    throw new Error('MINIO_ENABLED=true but MinIO configuration is incomplete');
-  }
-
   // Mail (fully optional; dev default MailHog-like, but not required)
   const mailEnabled = readBool('MAIL_ENABLED', false);
   const mailHost = readString('MAIL_HOST', 'mailhog')!;
@@ -166,17 +146,12 @@ export function loadConfig(): BatchBackendConfig {
   const elevenLabsApiKey = readString('ELEVENLABS_API_KEY');
 
   const manifestStoreEnv =
-    (readString('ESL_PIPELINE_MANIFEST_STORE') as 'filesystem' | 's3' | undefined) ||
-    (minioEnabled ? 's3' : 'filesystem');
-  const manifestBucket =
-    readString('ESL_PIPELINE_MANIFEST_BUCKET') ||
-    (manifestStoreEnv === 's3' ? minioBucket : undefined);
+    (readString('ESL_PIPELINE_MANIFEST_STORE') as 'filesystem' | 's3' | undefined) || 'filesystem';
+  const manifestBucket = readString('ESL_PIPELINE_MANIFEST_BUCKET');
   const manifestPrefix = readString('ESL_PIPELINE_MANIFEST_PREFIX');
   const manifestRoot = readString('ESL_PIPELINE_MANIFEST_ROOT', process.cwd());
   if (manifestStoreEnv === 's3' && !manifestBucket) {
-    throw new Error(
-      'ESL_PIPELINE_MANIFEST_STORE=s3 requires ESL_PIPELINE_MANIFEST_BUCKET (or MINIO_BUCKET)',
-    );
+    throw new Error('ESL_PIPELINE_MANIFEST_STORE=s3 requires ESL_PIPELINE_MANIFEST_BUCKET');
   }
 
   const configProviderEnv =
@@ -215,22 +190,29 @@ export function loadConfig(): BatchBackendConfig {
   const jobSubmissionRateLimit = readInt('JOB_SUBMISSION_RATE_LIMIT', 0); // disabled by default; set >0 to enable rate limiting
 
   // Storage configuration
-  let storageProvider = readString('STORAGE_PROVIDER') as 's3' | 'minio' | 'filesystem' | undefined;
-  if (!storageProvider) {
-    if (minioEnabled) {
-      storageProvider = 'minio';
-    } else if (
-      readString('S3_BUCKET') ||
-      readString('S3_BUCKET_NAME') ||
-      readString('STORAGE_BUCKET_NAME')
-    ) {
-      storageProvider = 's3';
-    } else {
-      storageProvider = 'filesystem';
+  const requestedStorageProvider = readString('STORAGE_PROVIDER');
+  const storageBucketName =
+    readString('S3_BUCKET_NAME') || readString('S3_BUCKET') || readString('STORAGE_BUCKET_NAME');
+  const s3AccessKeyId = readString('S3_ACCESS_KEY_ID') || readString('AWS_ACCESS_KEY_ID');
+  const s3SecretAccessKey =
+    readString('S3_SECRET_ACCESS_KEY') || readString('AWS_SECRET_ACCESS_KEY');
+  const hasS3Credentials = Boolean(storageBucketName && s3AccessKeyId && s3SecretAccessKey);
+
+  let resolvedStorageProvider: 's3' | 'filesystem';
+  if (requestedStorageProvider) {
+    if (requestedStorageProvider !== 's3' && requestedStorageProvider !== 'filesystem') {
+      throw new Error('STORAGE_PROVIDER must be either "s3" or "filesystem"');
     }
+    resolvedStorageProvider = requestedStorageProvider;
+  } else {
+    resolvedStorageProvider = hasS3Credentials ? 's3' : 'filesystem';
   }
-  const resolvedStorageProvider = storageProvider as 's3' | 'minio' | 'filesystem';
-  const storageBucketName = readString('S3_BUCKET_NAME') || readString('STORAGE_BUCKET_NAME');
+
+  if (resolvedStorageProvider === 's3' && !hasS3Credentials) {
+    throw new Error(
+      'STORAGE_PROVIDER=s3 requires S3_BUCKET_NAME/STORAGE_BUCKET_NAME and S3_ACCESS_KEY_ID/S3_SECRET_ACCESS_KEY (or AWS_ equivalents)',
+    );
+  }
   const storagePathPrefix = readString('S3_PATH_PREFIX') || readString('STORAGE_PATH_PREFIX');
   const presignedUrlExpiresIn = readInt('PRESIGNED_URL_EXPIRES_IN', 3600);
 
@@ -261,15 +243,7 @@ export function loadConfig(): BatchBackendConfig {
       concurrency: workerConcurrency,
       maxConcurrentFfmpeg,
     },
-    minio: {
-      enabled: minioEnabled,
-      endpoint: minioEndpoint,
-      port: minioPort,
-      useSSL: minioUseSSL,
-      accessKey: minioAccessKey,
-      secretKey: minioSecretKey,
-      bucket: minioBucket,
-    },
+
     mail: {
       enabled: mailEnabled,
       host: mailHost,

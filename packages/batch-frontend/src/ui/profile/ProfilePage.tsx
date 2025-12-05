@@ -6,358 +6,435 @@ import apiClient, { handleApiError } from '../../utils/api-client';
 
 // Icons
 const UserIcon = () => (
-    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-        <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
-        <circle cx="12" cy="7" r="4" />
-    </svg>
+  <svg
+    width="24"
+    height="24"
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="2"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+  >
+    <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
+    <circle cx="12" cy="7" r="4" />
+  </svg>
 );
 
 const KeyIcon = () => (
-    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-        <path d="m21 2-2 2m-7.61 7.61a5.5 5.5 0 1 1-7.778 7.778 5.5 5.5 0 0 1 7.777-7.777zm0 0L15.5 7.5m0 0 3 3L22 7l-3-3m-3.5 3.5L19 4" />
-    </svg>
+  <svg
+    width="20"
+    height="20"
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="2"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+  >
+    <path d="m21 2-2 2m-7.61 7.61a5.5 5.5 0 1 1-7.778 7.778 5.5 5.5 0 0 1 7.777-7.777zm0 0L15.5 7.5m0 0 3 3L22 7l-3-3m-3.5 3.5L19 4" />
+  </svg>
 );
 
 const DatabaseIcon = () => (
-    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-        <ellipse cx="12" cy="5" rx="9" ry="3" />
-        <path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3" />
-        <path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5" />
-    </svg>
+  <svg
+    width="20"
+    height="20"
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="2"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+  >
+    <ellipse cx="12" cy="5" rx="9" ry="3" />
+    <path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3" />
+    <path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5" />
+  </svg>
 );
 
 const VolumeIcon = () => (
-    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-        <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5" />
-        <path d="M19.07 4.93a10 10 0 0 1 0 14.14M15.54 8.46a5 5 0 0 1 0 7.07" />
-    </svg>
+  <svg
+    width="20"
+    height="20"
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="2"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+  >
+    <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5" />
+    <path d="M19.07 4.93a10 10 0 0 1 0 14.14M15.54 8.46a5 5 0 0 1 0 7.07" />
+  </svg>
 );
 
-
 const ShieldIcon = () => (
-    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-        <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
-    </svg>
+  <svg
+    width="20"
+    height="20"
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="2"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+  >
+    <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
+  </svg>
 );
 
 const SaveIcon = () => (
-    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-        <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z" />
-        <polyline points="17 21 17 13 7 13 7 21" />
-        <polyline points="7 3 7 8 15 8" />
-    </svg>
+  <svg
+    width="16"
+    height="16"
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="2"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+  >
+    <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z" />
+    <polyline points="17 21 17 13 7 13 7 21" />
+    <polyline points="7 3 7 8 15 8" />
+  </svg>
 );
 
 const EyeIcon = () => (
-    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-        <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
-        <circle cx="12" cy="12" r="3" />
-    </svg>
+  <svg
+    width="18"
+    height="18"
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="2"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+  >
+    <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
+    <circle cx="12" cy="12" r="3" />
+  </svg>
 );
 
 const EyeOffIcon = () => (
-    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-        <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24" />
-        <line x1="1" y1="1" x2="23" y2="23" />
-    </svg>
+  <svg
+    width="18"
+    height="18"
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="2"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+  >
+    <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24" />
+    <line x1="1" y1="1" x2="23" y2="23" />
+  </svg>
 );
 
 interface ProfilePageProps {
-    onClose: () => void;
+  onClose: () => void;
 }
 
 export const ProfilePage: React.FC<ProfilePageProps> = ({ onClose }) => {
-    const { user } = useAuth();
+  const { user } = useAuth();
 
-    // Loading state
-    const [isLoading, setIsLoading] = useState(true);
-    const [isSaving, setIsSaving] = useState(false);
+  // Loading state
+  const [isLoading, setIsLoading] = useState(true);
+  const [isSaving, setIsSaving] = useState(false);
 
-    // API keys (only store when user is editing)
-    const [elevenLabsKey, setElevenLabsKey] = useState('');
-    const [notionToken, setNotionToken] = useState('');
+  // API keys (only store when user is editing)
+  const [elevenLabsKey, setElevenLabsKey] = useState('');
+  const [notionToken, setNotionToken] = useState('');
 
-    // Indicators for existing keys (from backend)
-    const [hasElevenLabsKey, setHasElevenLabsKey] = useState(false);
-    const [hasNotionToken, setHasNotionToken] = useState(false);
+  // Indicators for existing keys (from backend)
+  const [hasElevenLabsKey, setHasElevenLabsKey] = useState(false);
+  const [hasNotionToken, setHasNotionToken] = useState(false);
 
-    // Show/hide toggles for sensitive fields
-    const [showElevenLabs, setShowElevenLabs] = useState(false);
-    const [showNotion, setShowNotion] = useState(false);
+  // Show/hide toggles for sensitive fields
+  const [showElevenLabs, setShowElevenLabs] = useState(false);
+  const [showNotion, setShowNotion] = useState(false);
 
-    // Preferences
-    const [defaultPreset, setDefaultPreset] = useState('b1-default');
-    const [defaultVoiceAccent, setDefaultVoiceAccent] = useState('american');
-    const [defaultTtsMode, setDefaultTtsMode] = useState<'auto' | 'dialogue' | 'monologue'>('auto');
-    const [enableNotifications, setEnableNotifications] = useState(true);
+  // Preferences
+  const [defaultPreset, setDefaultPreset] = useState('b1-default');
+  const [defaultVoiceAccent, setDefaultVoiceAccent] = useState('american');
+  const [defaultTtsMode, setDefaultTtsMode] = useState<'auto' | 'dialogue' | 'monologue'>('auto');
+  const [enableNotifications, setEnableNotifications] = useState(true);
 
-    // Fetch settings on mount
-    useEffect(() => {
-        const fetchSettings = async () => {
-            try {
-                const response = await apiClient.get('/user/settings');
-                const { settings } = response.data;
+  // Fetch settings on mount
+  useEffect(() => {
+    const fetchSettings = async () => {
+      try {
+        const response = await apiClient.get('/user/settings');
+        const { settings } = response.data;
 
-                setHasElevenLabsKey(settings.hasElevenLabsKey);
-                setHasNotionToken(settings.hasNotionToken);
-                setDefaultPreset(settings.defaultPreset);
-                setDefaultVoiceAccent(settings.defaultVoiceAccent);
-                setDefaultTtsMode(settings.defaultTtsMode);
-                setEnableNotifications(settings.enableNotifications);
-            } catch (error) {
-                console.error('Failed to fetch settings:', error);
-                toast.error('Failed to load settings');
-            } finally {
-                setIsLoading(false);
-            }
-        };
-
-        void fetchSettings();
-    }, []);
-
-    const handleSave = async () => {
-        setIsSaving(true);
-        try {
-            const payload: Record<string, unknown> = {
-                defaultPreset,
-                defaultVoiceAccent,
-                defaultTtsMode,
-                enableNotifications,
-            };
-
-            // Only include API keys if they were modified
-            if (elevenLabsKey) {
-                payload.elevenLabsKey = elevenLabsKey;
-            }
-            if (notionToken) {
-                payload.notionToken = notionToken;
-            }
-
-            const response = await apiClient.put('/user/settings', payload);
-            const { settings } = response.data;
-
-            // Update state with new values
-            setHasElevenLabsKey(settings.hasElevenLabsKey);
-            setHasNotionToken(settings.hasNotionToken);
-
-            // Clear the input fields after successful save
-            setElevenLabsKey('');
-            setNotionToken('');
-
-            toast.success('Settings saved successfully');
-        } catch (error) {
-            console.error('Failed to save settings:', error);
-            toast.error(handleApiError(error as Parameters<typeof handleApiError>[0]));
-        } finally {
-            setIsSaving(false);
-        }
+        setHasElevenLabsKey(settings.hasElevenLabsKey);
+        setHasNotionToken(settings.hasNotionToken);
+        setDefaultPreset(settings.defaultPreset);
+        setDefaultVoiceAccent(settings.defaultVoiceAccent);
+        setDefaultTtsMode(settings.defaultTtsMode);
+        setEnableNotifications(settings.enableNotifications);
+      } catch (error) {
+        console.error('Failed to fetch settings:', error);
+        toast.error('Failed to load settings');
+      } finally {
+        setIsLoading(false);
+      }
     };
 
-    return (
-        <div className="profile-page">
-            <header className="profile-header">
-                <button type="button" onClick={onClose} className="back-button">
-                    ← Back to Dashboard
-                </button>
-                <div className="profile-title">
-                    <div className="profile-avatar">
-                        <UserIcon />
-                    </div>
-                    <div>
-                        <h1>Profile Settings</h1>
-                        <p className="profile-email">{user?.email}</p>
-                    </div>
-                </div>
-            </header>
+    void fetchSettings();
+  }, []);
 
-            <div className="profile-sections">
-                {/* Account Section */}
-                <section className="settings-section card">
-                    <div className="section-header">
-                        <ShieldIcon />
-                        <div>
-                            <h2>Account</h2>
-                            <p>Manage your account details</p>
-                        </div>
-                    </div>
-                    <div className="section-content">
-                        <div className="form-field">
-                            <label>Email</label>
-                            <input type="email" value={user?.email ?? ''} disabled className="field-disabled" />
-                            <span className="field-hint">Contact support to change your email</span>
-                        </div>
-                        <div className="form-field">
-                            <label>Role</label>
-                            <input type="text" value={user?.role ?? 'user'} disabled className="field-disabled" />
-                        </div>
-                    </div>
-                </section>
+  const handleSave = async () => {
+    setIsSaving(true);
+    try {
+      const payload: Record<string, unknown> = {
+        defaultPreset,
+        defaultVoiceAccent,
+        defaultTtsMode,
+        enableNotifications,
+      };
 
-                {/* ElevenLabs Section */}
-                <section className="settings-section card">
-                    <div className="section-header">
-                        <VolumeIcon />
-                        <div>
-                            <h2>ElevenLabs TTS</h2>
-                            <p>Configure text-to-speech generation</p>
-                        </div>
-                    </div>
-                    <div className="section-content">
-                        <div className="form-field">
-                            <label>
-                                API Key
-                                {hasElevenLabsKey && <span className="key-status configured">✓ Configured</span>}
-                            </label>
-                            <div className="input-with-toggle">
-                                <input
-                                    type={showElevenLabs ? 'text' : 'password'}
-                                    value={elevenLabsKey}
-                                    onChange={(e) => setElevenLabsKey(e.target.value)}
-                                    placeholder={hasElevenLabsKey ? '••••••••••••••••' : 'sk_...'}
-                                />
-                                <button
-                                    type="button"
-                                    onClick={() => setShowElevenLabs(!showElevenLabs)}
-                                    className="toggle-visibility"
-                                >
-                                    {showElevenLabs ? <EyeOffIcon /> : <EyeIcon />}
-                                </button>
-                            </div>
-                            <span className="field-hint">
-                                {hasElevenLabsKey
-                                    ? 'Enter a new key to replace the existing one'
-                                    : 'Your ElevenLabs API key for voice generation'}
-                            </span>
-                        </div>
-                        <div className="form-field">
-                            <label>Default TTS Mode</label>
-                            <select
-                                value={defaultTtsMode}
-                                onChange={(e) => setDefaultTtsMode(e.target.value as 'auto' | 'dialogue' | 'monologue')}
-                            >
-                                <option value="auto">Auto (detect from content)</option>
-                                <option value="dialogue">Dialogue (multi-speaker)</option>
-                                <option value="monologue">Monologue (single speaker)</option>
-                            </select>
-                        </div>
-                        <div className="form-field">
-                            <label>Default Voice Accent</label>
-                            <select
-                                value={defaultVoiceAccent}
-                                onChange={(e) => setDefaultVoiceAccent(e.target.value)}
-                            >
-                                <option value="american">American</option>
-                                <option value="british">British</option>
-                                <option value="australian">Australian</option>
-                                <option value="indian">Indian</option>
-                            </select>
-                        </div>
-                    </div>
-                </section>
+      // Only include API keys if they were modified
+      if (elevenLabsKey) {
+        payload.elevenLabsKey = elevenLabsKey;
+      }
+      if (notionToken) {
+        payload.notionToken = notionToken;
+      }
 
-                {/* Notion Section */}
-                <section className="settings-section card">
-                    <div className="section-header">
-                        <DatabaseIcon />
-                        <div>
-                            <h2>Notion Integration</h2>
-                            <p>Connect to your Notion workspace</p>
-                        </div>
-                    </div>
-                    <div className="section-content">
-                        <div className="form-field">
-                            <label>
-                                Integration Token
-                                {hasNotionToken && <span className="key-status configured">✓ Configured</span>}
-                            </label>
-                            <div className="input-with-toggle">
-                                <input
-                                    type={showNotion ? 'text' : 'password'}
-                                    value={notionToken}
-                                    onChange={(e) => setNotionToken(e.target.value)}
-                                    placeholder={hasNotionToken ? '••••••••••••••••' : 'secret_...'}
-                                />
-                                <button
-                                    type="button"
-                                    onClick={() => setShowNotion(!showNotion)}
-                                    className="toggle-visibility"
-                                >
-                                    {showNotion ? <EyeOffIcon /> : <EyeIcon />}
-                                </button>
-                            </div>
-                            <span className="field-hint">
-                                {hasNotionToken
-                                    ? 'Enter a new token to replace the existing one'
-                                    : (
-                                        <>Create an integration at{' '}
-                                            <a href="https://www.notion.so/my-integrations" target="_blank" rel="noopener noreferrer">
-                                                notion.so/my-integrations
-                                            </a></>)}
-                            </span>
-                        </div>
-                    </div>
-                </section>
+      const response = await apiClient.put('/user/settings', payload);
+      const { settings } = response.data;
 
+      // Update state with new values
+      setHasElevenLabsKey(settings.hasElevenLabsKey);
+      setHasNotionToken(settings.hasNotionToken);
 
+      // Clear the input fields after successful save
+      setElevenLabsKey('');
+      setNotionToken('');
 
-                {/* Preferences Section */}
-                <section className="settings-section card">
-                    <div className="section-header">
-                        <KeyIcon />
-                        <div>
-                            <h2>Preferences</h2>
-                            <p>Default settings for new jobs</p>
-                        </div>
-                    </div>
-                    <div className="section-content">
-                        <div className="form-field">
-                            <label>Default Color Preset</label>
-                            <select
-                                value={defaultPreset}
-                                onChange={(e) => setDefaultPreset(e.target.value)}
-                            >
-                                <option value="b1-default">B1 Default</option>
-                                <option value="a2-beginner">A2 Beginner</option>
-                                <option value="b2-intermediate">B2 Intermediate</option>
-                                <option value="c1-advanced">C1 Advanced</option>
-                            </select>
-                        </div>
-                        <div className="form-field toggle-row">
-                            <div className="toggle-info">
-                                <label>Browser Notifications</label>
-                                <span className="field-hint">Get notified when jobs complete</span>
-                            </div>
-                            <button
-                                type="button"
-                                onClick={() => setEnableNotifications(!enableNotifications)}
-                                className={`toggle-switch ${enableNotifications ? 'active' : ''}`}
-                            >
-                                <span className="toggle-thumb" />
-                            </button>
-                        </div>
-                    </div>
-                </section>
+      toast.success('Settings saved successfully');
+    } catch (error) {
+      console.error('Failed to save settings:', error);
+      toast.error(handleApiError(error as Parameters<typeof handleApiError>[0]));
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  return (
+    <div className="profile-page">
+      <header className="profile-header">
+        <button type="button" onClick={onClose} className="back-button">
+          ← Back to Dashboard
+        </button>
+        <div className="profile-title">
+          <div className="profile-avatar">
+            <UserIcon />
+          </div>
+          <div>
+            <h1>Profile Settings</h1>
+            <p className="profile-email">{user?.email}</p>
+          </div>
+        </div>
+      </header>
+
+      <div className="profile-sections">
+        {/* Account Section */}
+        <section className="settings-section card">
+          <div className="section-header">
+            <ShieldIcon />
+            <div>
+              <h2>Account</h2>
+              <p>Manage your account details</p>
             </div>
+          </div>
+          <div className="section-content">
+            <div className="form-field">
+              <label>Email</label>
+              <input type="email" value={user?.email ?? ''} disabled className="field-disabled" />
+              <span className="field-hint">Contact support to change your email</span>
+            </div>
+            <div className="form-field">
+              <label>Role</label>
+              <input type="text" value={user?.role ?? 'user'} disabled className="field-disabled" />
+            </div>
+          </div>
+        </section>
 
-            <footer className="profile-footer">
-                <button type="button" onClick={onClose} className="btn-secondary" disabled={isSaving}>
-                    Cancel
-                </button>
+        {/* ElevenLabs Section */}
+        <section className="settings-section card">
+          <div className="section-header">
+            <VolumeIcon />
+            <div>
+              <h2>ElevenLabs TTS</h2>
+              <p>Configure text-to-speech generation</p>
+            </div>
+          </div>
+          <div className="section-content">
+            <div className="form-field">
+              <label>
+                API Key
+                {hasElevenLabsKey && <span className="key-status configured">✓ Configured</span>}
+              </label>
+              <div className="input-with-toggle">
+                <input
+                  type={showElevenLabs ? 'text' : 'password'}
+                  value={elevenLabsKey}
+                  onChange={(e) => setElevenLabsKey(e.target.value)}
+                  placeholder={hasElevenLabsKey ? '••••••••••••••••' : 'sk_...'}
+                />
                 <button
-                    type="button"
-                    onClick={handleSave}
-                    className="btn-primary"
-                    disabled={isSaving || isLoading}
+                  type="button"
+                  onClick={() => setShowElevenLabs(!showElevenLabs)}
+                  className="toggle-visibility"
                 >
-                    {isSaving ? (
-                        <>Saving...</>
-                    ) : (
-                        <><SaveIcon /> Save Changes</>
-                    )}
+                  {showElevenLabs ? <EyeOffIcon /> : <EyeIcon />}
                 </button>
-            </footer>
+              </div>
+              <span className="field-hint">
+                {hasElevenLabsKey
+                  ? 'Enter a new key to replace the existing one'
+                  : 'Your ElevenLabs API key for voice generation'}
+              </span>
+            </div>
+            <div className="form-field">
+              <label>Default TTS Mode</label>
+              <select
+                value={defaultTtsMode}
+                onChange={(e) =>
+                  setDefaultTtsMode(e.target.value as 'auto' | 'dialogue' | 'monologue')
+                }
+              >
+                <option value="auto">Auto (detect from content)</option>
+                <option value="dialogue">Dialogue (multi-speaker)</option>
+                <option value="monologue">Monologue (single speaker)</option>
+              </select>
+            </div>
+            <div className="form-field">
+              <label>Default Voice Accent</label>
+              <select
+                value={defaultVoiceAccent}
+                onChange={(e) => setDefaultVoiceAccent(e.target.value)}
+              >
+                <option value="american">American</option>
+                <option value="british">British</option>
+                <option value="australian">Australian</option>
+                <option value="indian">Indian</option>
+              </select>
+            </div>
+          </div>
+        </section>
 
-            <style>{`
+        {/* Notion Section */}
+        <section className="settings-section card">
+          <div className="section-header">
+            <DatabaseIcon />
+            <div>
+              <h2>Notion Integration</h2>
+              <p>Connect to your Notion workspace</p>
+            </div>
+          </div>
+          <div className="section-content">
+            <div className="form-field">
+              <label>
+                Integration Token
+                {hasNotionToken && <span className="key-status configured">✓ Configured</span>}
+              </label>
+              <div className="input-with-toggle">
+                <input
+                  type={showNotion ? 'text' : 'password'}
+                  value={notionToken}
+                  onChange={(e) => setNotionToken(e.target.value)}
+                  placeholder={hasNotionToken ? '••••••••••••••••' : 'secret_...'}
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowNotion(!showNotion)}
+                  className="toggle-visibility"
+                >
+                  {showNotion ? <EyeOffIcon /> : <EyeIcon />}
+                </button>
+              </div>
+              <span className="field-hint">
+                {hasNotionToken ? (
+                  'Enter a new token to replace the existing one'
+                ) : (
+                  <>
+                    Create an integration at{' '}
+                    <a
+                      href="https://www.notion.so/my-integrations"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                    >
+                      notion.so/my-integrations
+                    </a>
+                  </>
+                )}
+              </span>
+            </div>
+          </div>
+        </section>
+
+        {/* Preferences Section */}
+        <section className="settings-section card">
+          <div className="section-header">
+            <KeyIcon />
+            <div>
+              <h2>Preferences</h2>
+              <p>Default settings for new jobs</p>
+            </div>
+          </div>
+          <div className="section-content">
+            <div className="form-field">
+              <label>Default Color Preset</label>
+              <select value={defaultPreset} onChange={(e) => setDefaultPreset(e.target.value)}>
+                <option value="b1-default">B1 Default</option>
+                <option value="a2-beginner">A2 Beginner</option>
+                <option value="b2-intermediate">B2 Intermediate</option>
+                <option value="c1-advanced">C1 Advanced</option>
+              </select>
+            </div>
+            <div className="form-field toggle-row">
+              <div className="toggle-info">
+                <label>Browser Notifications</label>
+                <span className="field-hint">Get notified when jobs complete</span>
+              </div>
+              <button
+                type="button"
+                onClick={() => setEnableNotifications(!enableNotifications)}
+                className={`toggle-switch ${enableNotifications ? 'active' : ''}`}
+              >
+                <span className="toggle-thumb" />
+              </button>
+            </div>
+          </div>
+        </section>
+      </div>
+
+      <footer className="profile-footer">
+        <button type="button" onClick={onClose} className="btn-secondary" disabled={isSaving}>
+          Cancel
+        </button>
+        <button
+          type="button"
+          onClick={handleSave}
+          className="btn-primary"
+          disabled={isSaving || isLoading}
+        >
+          {isSaving ? (
+            <>Saving...</>
+          ) : (
+            <>
+              <SaveIcon /> Save Changes
+            </>
+          )}
+        </button>
+      </footer>
+
+      <style>{`
         .profile-page {
           max-width: 800px;
           margin: 0 auto;
@@ -626,6 +703,6 @@ export const ProfilePage: React.FC<ProfilePageProps> = ({ onClose }) => {
           border-color: var(--border-medium);
         }
       `}</style>
-        </div>
-    );
+    </div>
+  );
 };

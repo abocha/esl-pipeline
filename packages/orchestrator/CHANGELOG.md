@@ -1,5 +1,16 @@
 # @esl-pipeline/orchestrator
 
+## 3.1.0
+
+### Minor Changes
+
+- removed minio support, set aws s3 as default, else filesystem
+
+### Patch Changes
+
+- Updated dependencies
+  - @esl-pipeline/shared-infrastructure@1.1.0
+
 ## 3.0.4
 
 ### Patch Changes

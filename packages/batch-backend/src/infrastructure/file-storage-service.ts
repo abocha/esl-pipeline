@@ -31,7 +31,7 @@ export class FileStorageService {
     this.storageConfig = storageConfig;
 
     if (this.storageConfig.isS3Provider()) {
-      // Initialize S3 adapter for S3/MinIO providers
+      // Initialize S3 adapter for S3 providers
       const s3Config = this.storageConfig.getS3Config();
       this.s3Adapter = new S3StorageAdapter({
         endpoint: s3Config.endpoint,
@@ -56,7 +56,7 @@ export class FileStorageService {
   ): Promise<FileStorageResult> {
     try {
       if (this.storageConfig.isS3Provider() && this.s3Adapter) {
-        // Upload to S3/MinIO
+        // Upload to S3
         const result = await this.s3Adapter.uploadFile(key, content, mimeType, size);
 
         // Generate presigned URL for access

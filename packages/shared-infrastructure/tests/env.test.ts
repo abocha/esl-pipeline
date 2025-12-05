@@ -3,7 +3,13 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
-import { loadEnvFiles, loadEnvFilesWithSummary, readBool, readInt, readString } from '../src/env/loaders.js';
+import {
+  loadEnvFiles,
+  loadEnvFilesWithSummary,
+  readBool,
+  readInt,
+  readString,
+} from '../src/env/loaders.js';
 
 describe('env utilities', () => {
   describe('readBool', () => {
@@ -175,7 +181,7 @@ describe('env utilities', () => {
       expect(first.FOO).toBe('one');
 
       // Update file to change mtime and contents
-      await new Promise((resolvePromise) => setTimeout(resolvePromise, 5));
+      await new Promise((resolve) => setTimeout(resolve, 5));
       writeFileSync(envFile, 'FOO=two');
 
       const second = loadEnvFiles({ cwd: testDir, assignToProcess: false, memoize: true });
