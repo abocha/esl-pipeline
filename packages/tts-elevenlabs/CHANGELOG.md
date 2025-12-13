@@ -1,5 +1,11 @@
 # @esl-pipeline/tts-elevenlabs
 
+## 3.1.1
+
+### Patch Changes
+
+- hotfix
+
 ## 3.1.0
 
 ### Minor Changes
