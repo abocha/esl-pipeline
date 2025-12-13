@@ -52,7 +52,12 @@ function cacheKeyForDatabase(dbId: string): string | undefined {
 export function createNotionClient() {
   const token = process.env.NOTION_TOKEN;
   if (!token) throw new Error('NOTION_TOKEN is required in environment');
-  return new Client({ auth: token, notionVersion: '2025-09-03' });
+  const timeoutRaw = process.env.NOTION_CLIENT_TIMEOUT;
+  const timeoutMs =
+    timeoutRaw && Number.isFinite(Number(timeoutRaw)) && Number(timeoutRaw) > 0
+      ? Math.floor(Number(timeoutRaw))
+      : undefined;
+  return new Client({ auth: token, notionVersion: '2025-09-03', timeoutMs });
 }
 
 interface DataSourceSummary {

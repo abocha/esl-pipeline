@@ -1,5 +1,11 @@
 # @esl-pipeline/notion-importer
 
+## 2.2.2
+
+### Patch Changes
+
+- add notion timeout and colorizer sleep
+
 ## 2.2.1
 
 ### Patch Changes

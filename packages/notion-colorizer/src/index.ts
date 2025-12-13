@@ -28,7 +28,12 @@ function toRequestRichText(value: unknown): NotionRequestRichText {
 export function createNotionClient() {
   const token = process.env.NOTION_TOKEN;
   if (!token) throw new ConfigurationError('Missing NOTION_TOKEN');
-  return new Client({ auth: token, notionVersion: '2025-09-03' });
+  const timeoutRaw = process.env.NOTION_CLIENT_TIMEOUT;
+  const timeoutMs =
+    timeoutRaw && Number.isFinite(Number(timeoutRaw)) && Number(timeoutRaw) > 0
+      ? Math.floor(Number(timeoutRaw))
+      : undefined;
+  return new Client({ auth: token, notionVersion: '2025-09-03', timeoutMs });
 }
 
 export async function loadPreset(presetName: string, presetsPath: string): Promise<ColorPreset> {
