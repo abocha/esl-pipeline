@@ -51,8 +51,10 @@ function findProfile(
   if (!profiles?.length) return undefined;
   const exact = profiles.find((p) => p.id === speakerId);
   if (exact) return exact;
+  const exactDisplay = profiles.find((p) => p.display_name === speakerId);
+  if (exactDisplay) return exactDisplay;
   const lowered = normalize(speakerId);
-  return profiles.find((p) => normalize(p.id) === lowered);
+  return profiles.find((p) => normalize(p.id) === lowered || normalize(p.display_name) === lowered);
 }
 
 function resolveVoiceToken(token: string, catalog: VoiceCatalog): string | undefined {
@@ -146,7 +148,12 @@ export async function resolveSpeakerVoices(opts: {
     const profile = findProfile(opts.profiles, speaker);
     const normalizedSpeaker = normalize(speaker);
     const explicitVoice =
-      profile?.voice ?? coerceVoiceToken((voiceMap as Record<string, unknown>)[speaker]);
+      profile?.voice ??
+      coerceVoiceToken((voiceMap as Record<string, unknown>)[speaker]) ??
+      (profile
+        ? coerceVoiceToken((voiceMap as Record<string, unknown>)[profile.id]) ??
+          coerceVoiceToken((voiceMap as Record<string, unknown>)[profile.display_name ?? ''])
+        : undefined);
     const candidates: { source: 'profile' | 'voiceMap' | 'default'; token: string }[] = [];
 
     if (explicitVoice) {
