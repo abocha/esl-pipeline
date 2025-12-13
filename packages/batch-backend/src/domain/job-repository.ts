@@ -242,7 +242,7 @@ function normalizeTtsStrategy(value: unknown, ctx: { jobId: string }): TtsStrate
   if (value == null) return null;
   if (value === 'auto' || value === 'dialogue' || value === 'tts') return value;
   if (typeof value === 'string') {
-    throw new Error(
+    throw new TypeError(
       `Unsupported jobs.mode value "${value}" for job ${ctx.jobId}; migrate legacy rows before running this version`,
     );
   }

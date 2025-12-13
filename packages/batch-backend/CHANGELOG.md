@@ -1,5 +1,11 @@
 # @esl-pipeline/batch-backend
 
+## 1.2.2
+
+### Patch Changes
+
+- lint hotfix
+
 ## 1.2.1
 
 ### Patch Changes
