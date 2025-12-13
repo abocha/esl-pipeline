@@ -1,5 +1,11 @@
 # @esl-pipeline/notion-add-audio
 
+## 2.0.3
+
+### Patch Changes
+
+- add notion timeout and colorizer sleep
+
 ## 2.0.2
 
 ### Patch Changes
