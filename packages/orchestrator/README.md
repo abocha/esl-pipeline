@@ -100,7 +100,7 @@ When you select a student in the wizard, their settings are automatically applie
 
 The wizard guides you through TTS options:
 
-- **Mode**: `auto` (detect dialogue), `dialogue` (force multi-speaker), `monologue` (single voice)
+- **Strategy**: `auto` (best-effort), `dialogue` (Text-to-Dialogue), `tts` (Text-to-Speech)
 - **Language**: ISO 639-1 code (e.g., `en`, `es`, `fr`)
 - **Voices**: Path to voices configuration file
 - **Stability, Seed**: Advanced dialogue generation options
@@ -108,7 +108,7 @@ The wizard guides you through TTS options:
 You can also set environment variables to skip TTS prompts:
 
 ```bash
-ELEVENLABS_TTS_MODE=dialogue
+ELEVENLABS_TTS_STRATEGY=dialogue
 ELEVENLABS_DIALOGUE_LANGUAGE=en
 ELEVENLABS_DIALOGUE_STABILITY=0.75
 ELEVENLABS_DIALOGUE_SEED=42
@@ -286,7 +286,7 @@ console.log('MD Hash:', manifest.mdHash);
 
 | Variable                        | Default | Description                          |
 | ------------------------------- | ------- | ------------------------------------ |
-| `ELEVENLABS_TTS_MODE`           | `auto`  | TTS mode (auto, dialogue, monologue) |
+| `ELEVENLABS_TTS_STRATEGY`       | `auto`  | TTS strategy (auto, dialogue, tts) |
 | `ELEVENLABS_DIALOGUE_LANGUAGE`  | -       | ISO 639-1 language code              |
 | `ELEVENLABS_DIALOGUE_STABILITY` | -       | Voice stability (0.0-1.0)            |
 | `ELEVENLABS_DIALOGUE_SEED`      | -       | Seed for reproducible generation     |

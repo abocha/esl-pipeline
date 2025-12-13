@@ -10,6 +10,7 @@ import { createHash } from 'node:crypto';
 
 import { withRetry } from './retry.js';
 import type { ResolveDataSourceInput, ResolveDataSourceResult } from './types.js';
+import type { SearchParameters } from '@notionhq/client/build/src/api-endpoints.js';
 
 type SearchResult = SearchResponse['results'][number];
 type PageLike = PageObjectResponse | PartialPageObjectResponse;
@@ -109,7 +110,8 @@ async function findDatabaseByName(client: Client, dbName: string): Promise<strin
     () =>
       client.search({
         query: dbName,
-        filter: { value: 'database', property: 'object' } as any,
+        // Notion API now distinguishes data_sources; treat "database by name" as data_source search.
+        filter: { value: 'data_source', property: 'object' } satisfies SearchParameters['filter'],
       }),
     'search',
   )) as SearchResponse;

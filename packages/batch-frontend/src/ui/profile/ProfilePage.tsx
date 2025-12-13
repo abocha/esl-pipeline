@@ -159,7 +159,7 @@ export const ProfilePage: React.FC<ProfilePageProps> = ({ onClose }) => {
   // Preferences
   const [defaultPreset, setDefaultPreset] = useState('b1-default');
   const [defaultVoiceAccent, setDefaultVoiceAccent] = useState('american');
-  const [defaultTtsMode, setDefaultTtsMode] = useState<'auto' | 'dialogue' | 'monologue'>('auto');
+  const [defaultTtsStrategy, setDefaultTtsStrategy] = useState<'auto' | 'dialogue' | 'tts'>('auto');
   const [enableNotifications, setEnableNotifications] = useState(true);
 
   // Fetch settings on mount
@@ -173,7 +173,7 @@ export const ProfilePage: React.FC<ProfilePageProps> = ({ onClose }) => {
         setHasNotionToken(settings.hasNotionToken);
         setDefaultPreset(settings.defaultPreset);
         setDefaultVoiceAccent(settings.defaultVoiceAccent);
-        setDefaultTtsMode(settings.defaultTtsMode);
+        setDefaultTtsStrategy(settings.defaultTtsStrategy);
         setEnableNotifications(settings.enableNotifications);
       } catch (error) {
         console.error('Failed to fetch settings:', error);
@@ -192,7 +192,7 @@ export const ProfilePage: React.FC<ProfilePageProps> = ({ onClose }) => {
       const payload: Record<string, unknown> = {
         defaultPreset,
         defaultVoiceAccent,
-        defaultTtsMode,
+        defaultTtsStrategy,
         enableNotifications,
       };
 
@@ -301,16 +301,16 @@ export const ProfilePage: React.FC<ProfilePageProps> = ({ onClose }) => {
               </span>
             </div>
             <div className="form-field">
-              <label>Default TTS Mode</label>
+              <label>Default TTS Strategy</label>
               <select
-                value={defaultTtsMode}
+                value={defaultTtsStrategy}
                 onChange={(e) =>
-                  setDefaultTtsMode(e.target.value as 'auto' | 'dialogue' | 'monologue')
+                  setDefaultTtsStrategy(e.target.value as 'auto' | 'dialogue' | 'tts')
                 }
               >
-                <option value="auto">Auto (detect from content)</option>
-                <option value="dialogue">Dialogue (multi-speaker)</option>
-                <option value="monologue">Monologue (single speaker)</option>
+                <option value="auto">Auto (best-effort)</option>
+                <option value="dialogue">Dialogue (Text-to-Dialogue)</option>
+                <option value="tts">TTS (Text-to-Speech)</option>
               </select>
             </div>
             <div className="form-field">

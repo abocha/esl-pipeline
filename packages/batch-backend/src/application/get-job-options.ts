@@ -10,7 +10,7 @@ import { getJobOptionsFromOrchestrator } from '../infrastructure/orchestrator-se
 import { getActionMetadata } from './job-actions/action-handler.js';
 
 export type UploadOption = 'auto' | 's3' | 'none';
-export type JobModeOption = 'auto' | 'dialogue' | 'monologue';
+export type TtsStrategyOption = 'auto' | 'dialogue' | 'tts';
 
 export interface NotionDatabaseOption {
   id: string;
@@ -39,7 +39,7 @@ export interface JobOptionsResponse {
   voices: VoiceOption[];
   notionDatabases: NotionDatabaseOption[];
   uploadOptions: UploadOption[];
-  modes: JobModeOption[];
+  ttsStrategies: TtsStrategyOption[];
   supportedActions: ActionCapability[];
 }
 
@@ -54,7 +54,7 @@ const STATIC_OPTIONS: Omit<JobOptionsResponse, 'supportedActions'> = {
     { id: 'notion-db-b2', name: 'B2 Lessons' },
   ],
   uploadOptions: ['auto', 's3', 'none'],
-  modes: ['auto'],
+  ttsStrategies: ['auto'],
 };
 
 export async function getJobOptions(): Promise<JobOptionsResponse> {
@@ -110,7 +110,7 @@ async function loadStaticJobOptions(): Promise<JobOptionsResponse> {
     voices,
     notionDatabases,
     uploadOptions: [...STATIC_OPTIONS.uploadOptions],
-    modes: [...STATIC_OPTIONS.modes],
+    ttsStrategies: [...STATIC_OPTIONS.ttsStrategies],
     supportedActions,
   };
 }

@@ -105,6 +105,10 @@ ALTER TABLE users ADD CONSTRAINT users_role_check
 ALTER TABLE jobs ADD CONSTRAINT jobs_state_check 
   CHECK (state IN ('queued', 'running', 'succeeded', 'failed'));
 
+-- Jobs mode validation (TTS strategy)
+ALTER TABLE jobs ADD CONSTRAINT jobs_mode_check
+  CHECK (mode IS NULL OR mode IN ('auto', 'dialogue', 'tts'));
+
 -- Email format validation (basic)
 ALTER TABLE users ADD CONSTRAINT users_email_check
   CHECK (email ~* '^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$');
@@ -168,7 +172,7 @@ CREATE TABLE IF NOT EXISTS user_settings (
   -- Preferences
   default_preset TEXT NOT NULL DEFAULT 'b1-default',
   default_voice_accent TEXT NOT NULL DEFAULT 'american',
-  default_tts_mode TEXT NOT NULL DEFAULT 'auto',
+  default_tts_strategy TEXT NOT NULL DEFAULT 'auto',
   enable_notifications BOOLEAN NOT NULL DEFAULT true,
   -- Timestamps
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
@@ -195,8 +199,8 @@ EXECUTE FUNCTION set_user_settings_updated_at();
 CREATE INDEX IF NOT EXISTS idx_user_settings_user_id ON user_settings(user_id);
 
 -- Constraints for user_settings
-ALTER TABLE user_settings ADD CONSTRAINT user_settings_tts_mode_check
-  CHECK (default_tts_mode IN ('auto', 'dialogue', 'monologue'));
+ALTER TABLE user_settings ADD CONSTRAINT user_settings_tts_strategy_check
+  CHECK (default_tts_strategy IN ('auto', 'dialogue', 'tts'));
 
 ALTER TABLE user_settings ADD CONSTRAINT user_settings_tts_provider_check
   CHECK (tts_provider IN ('elevenlabs', 'openai', 'azure', 'google'));

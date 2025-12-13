@@ -1,5 +1,15 @@
 # @esl-pipeline/orchestrator
 
+## 3.2.0
+
+### Minor Changes
+
+- feat(tts): strict gender voice picking + ttsStrategy naming, debug-gated logs, and type-safety fixes
+
+### Patch Changes
+
+- @esl-pipeline/shared-infrastructure@1.1.1
+
 ## 3.1.0
 
 ### Minor Changes
@@ -66,7 +76,7 @@
 
 ### Major Changes
 
-- elevenlabs eleven_v3 model support in tts and automatic detection of dialogue or monologue mode in study text. all working in the interactive wizard
+- ElevenLabs `eleven_v3` support + automatic selection of `dialogue` vs `tts` strategy from study text (wired through the interactive wizard)
 
 ## 1.7.3
 

@@ -271,7 +271,7 @@ HTTP:
   - `voiceAccent?: string` — passed through as `accentPreference`.
   - `forceTts?: boolean` — persisted for Phase 8 UI controls (orchestrator wiring TBD).
   - `notionDatabase?: string` — forwarded as `dbId`.
-  - `mode?: 'auto' | 'dialogue' | 'monologue'` — stored for UI state and SSE payloads.
+  - `mode?: 'auto' | 'dialogue' | 'tts'` — stored for UI state and SSE payloads.
 - Responses:
   - `202 Accepted`:
     - Body: `{ "jobId": "<uuid>" }`

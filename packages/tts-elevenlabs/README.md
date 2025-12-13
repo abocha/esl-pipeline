@@ -11,30 +11,30 @@ High-performance Text-to-Speech and Text-to-Dialogue synthesis using ElevenLabs 
 - **Chunking & Concurrency**: Handles large content with intelligent chunking
 - **Caching**: SHA-256 based caching for optimal performance
 
-## New: Dual TTS Mode Support
+## Strategy Selection (TTS vs Dialogue)
 
 This package now supports both **Text-to-Speech** and **Text-to-Dialogue** APIs for enhanced audio generation:
 
-### Supported Modes
+### Supported Strategies
 
 - **Auto** (default): Automatically detects content type and selects appropriate mode
 - **Dialogue**: Forces use of ElevenLabs Text-to-Dialogue API for multi-speaker content
-- **Monologue**: Uses traditional Text-to-Speech API for single-speaker content
+- **TTS**: Uses traditional Text-to-Speech API
 
 ### API Models
 
 - **Dialogue Mode**: ElevenLabs v3 (`model_id: "eleven_v3"`) - Optimized for multi-speaker conversations
-- **Monologue Mode**: ElevenLabs v2 (`model_id: "eleven_multilingual_v2"`) - Optimized for single-speaker narration
+- **TTS**: Defaults to ElevenLabs v2 (`model_id: "eleven_multilingual_v2"`) unless overridden via `ELEVENLABS_MODEL_ID`
 
 ### Environment Variables
 
-Add these new environment variables to control TTS mode:
+Use these environment variables to control strategy:
 
 ```bash
-# TTS mode selection: auto, dialogue, or monologue
-ELEVENLABS_TTS_MODE=auto
+# TTS strategy selection: auto, dialogue, or tts
+ELEVENLABS_TTS_STRATEGY=auto
 
-# Dialogue mode settings (optional)
+# Dialogue strategy settings (optional)
 ELEVENLABS_DIALOGUE_LANGUAGE=en
 ELEVENLABS_DIALOGUE_STABILITY=0.5
 ELEVENLABS_DIALOGUE_SEED=42
@@ -46,16 +46,16 @@ ELEVENLABS_DIALOGUE_SEED=42
 # Auto-detect mode (default behavior)
 tts-elevenlabs --md lesson.md --voice-map voices.yml
 
-# Force dialogue mode
-tts-elevenlabs --md lesson.md --voice-map voices.yml --tts-mode dialogue
+# Force dialogue strategy
+tts-elevenlabs --md lesson.md --voice-map voices.yml --tts-strategy dialogue
 
-# Force monologue mode
-tts-elevenlabs --md lesson.md --voice-map voices.yml -m monologue
+# Force TTS strategy
+tts-elevenlabs --md lesson.md --voice-map voices.yml --tts-strategy tts
 
-# Dialogue mode with custom settings
+# Dialogue strategy with custom settings
 tts-elevenlabs --md lesson.md \
   --voice-map voices.yml \
-  --tts-mode dialogue \
+  --tts-strategy dialogue \
   --dialogue-language en \
   --dialogue-stability 0.7 \
   --dialogue-seed 42
@@ -92,27 +92,19 @@ import { buildStudyTextMp3 } from '@esl-pipeline/tts-elevenlabs';
 const result1 = await buildStudyTextMp3({
   md: 'lesson.md',
   voicesYml: 'voices.yml',
-  ttsMode: 'auto', // Will detect content type automatically
+  ttsStrategy: 'auto', // Best-effort based on content heuristics
 });
 
-// Force dialogue mode
+// Force dialogue strategy
 const result2 = await buildStudyTextMp3({
   md: 'lesson.md',
   voicesYml: 'voices.yml',
-  ttsMode: 'dialogue',
+  ttsStrategy: 'dialogue',
   dialogueLanguage: 'en',
   dialogueStability: 0.7,
   dialogueSeed: 42,
 });
 ```
-
-### Backward Compatibility
-
-✅ **Fully backward compatible** - Existing usage works without changes:
-
-- Default mode is 'auto' which defaults to monologue for backward compatibility
-- All existing CLI flags and options remain unchanged
-- No breaking changes to API or output format
 
 ### Performance Benefits
 
@@ -138,12 +130,12 @@ To fix: Add the missing speaker to your voice configuration.
 
 - [NOTES-elevenlabs.md](NOTES-elevenlabs.md) - Detailed API documentation
 - [DESIGN-dual-mode.md](DESIGN-dual-mode.md) - Technical design document
-- Tests: [tests/dialogue.test.ts](tests/dialogue.test.ts), [tests/mode-selection.test.ts](tests/mode-selection.test.ts)
+- Tests: [tests/dialogue.test.ts](tests/dialogue.test.ts), [tests/strategy-selection.test.ts](tests/strategy-selection.test.ts)
 
 ## CLI
 
 ```
-tts-elevenlabs --md lesson.md --voice-map ./configs/voices.yml --out ./out [--tts-mode auto|dialogue|monologue] [--preview]
+tts-elevenlabs --md lesson.md --voice-map ./configs/voices.yml --out ./out [--tts-strategy auto|dialogue|tts] [--preview]
 ```
 
 Outputs JSON containing the destination path and hash with speaker metadata.
@@ -168,8 +160,8 @@ interface BuildStudyTextOptions {
   voiceSettings?: VoiceSettings;
   outputFormat?: string;
 
-  // New options for dual TTS mode
-  ttsMode?: 'auto' | 'dialogue' | 'monologue';
+  // Strategy selection (auto chooses based on content heuristics)
+  ttsStrategy?: 'auto' | 'dialogue' | 'tts';
   dialogueLanguage?: string;
   dialogueStability?: number;
   dialogueSeed?: number;
@@ -216,7 +208,7 @@ yarn add @esl-pipeline/tts-elevenlabs
 
    ```bash
    export ELEVENLABS_API_KEY=your_api_key_here
-   export ELEVENLABS_TTS_MODE=auto  # Optional: defaults to auto
+   export ELEVENLABS_TTS_STRATEGY=auto  # Optional: defaults to auto
    ```
 
 2. **Configure Voices** (see `bin/voices.ts` for interactive setup):
@@ -244,8 +236,8 @@ yarn add @esl-pipeline/tts-elevenlabs
 
 - **Dual TTS Mode Support**: Automatic content-type detection with mode selection
 - **Text-to-Dialogue API**: Support for multi-speaker conversations using ElevenLabs v3
-- **CLI Flags**: `--tts-mode`, `--dialogue-language`, `--dialogue-stability`, `--dialogue-seed`
-- **Environment Variables**: `ELEVENLABS_TTS_MODE`, `ELEVENLABS_DIALOGUE_LANGUAGE`, etc.
+- **CLI Flags**: `--tts-strategy`, `--dialogue-language`, `--dialogue-stability`, `--dialogue-seed`
+- **Environment Variables**: `ELEVENLABS_TTS_STRATEGY`, `ELEVENLABS_DIALOGUE_LANGUAGE`, etc.
 - **Comprehensive Tests**: 48 tests covering all new functionality
 - **Documentation**: API notes and updated README
 

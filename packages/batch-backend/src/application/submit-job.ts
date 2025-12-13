@@ -5,13 +5,13 @@
 // - Persists a queued job via JobRepository.
 // - Enqueues a BullMQ job via createJobQueue.
 import { publishJobEvent } from '../domain/job-events.js';
-import type { JobMode as DomainJobMode } from '../domain/job-model.js';
+import type { TtsStrategy as DomainTtsStrategy } from '../domain/job-model.js';
 import { insertJob } from '../domain/job-repository.js';
 import { logger } from '../infrastructure/logger.js';
 import { createJobQueue } from '../infrastructure/queue-bullmq.js';
 
 export type UploadTarget = 'auto' | 's3' | 'none';
-export type JobMode = DomainJobMode;
+export type TtsStrategy = DomainTtsStrategy;
 
 export interface SubmitJobRequest {
   md: string;
@@ -22,7 +22,7 @@ export interface SubmitJobRequest {
   voiceAccent?: string;
   forceTts?: boolean;
   notionDatabase?: string;
-  mode?: JobMode;
+  ttsStrategy?: TtsStrategy;
   userId?: string;
 }
 
@@ -106,10 +106,10 @@ function validateSubmitJobRequest(req: SubmitJobRequest): void {
     );
   }
 
-  if (req.mode && !['auto', 'dialogue', 'monologue'].includes(req.mode)) {
+  if (req.ttsStrategy && !['auto', 'dialogue', 'tts'].includes(req.ttsStrategy)) {
     throw new ValidationError(
-      'mode must be auto, dialogue, or monologue when provided',
-      'invalid_mode',
+      'ttsStrategy must be auto, dialogue, or tts when provided',
+      'invalid_tts_strategy',
     );
   }
 }
@@ -129,7 +129,7 @@ export async function submitJob(req: SubmitJobRequest): Promise<SubmitJobRespons
     voiceAccent: req.voiceAccent,
     forceTts: req.forceTts,
     notionDatabase: req.notionDatabase,
-    mode: req.mode,
+    ttsStrategy: req.ttsStrategy,
     userId: req.userId,
   });
 

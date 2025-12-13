@@ -19,7 +19,7 @@ Through systematic debugging, the issue was identified as an **invalid `initial`
 **Problematic Code:**
 
 ```typescript
-initial: state.ttsMode ?? initialFlags.ttsMode ?? 'auto',
+initial: state.ttsStrategy ?? initialFlags.ttsStrategy ?? 'auto',
 ```
 
 For `type: 'select'` prompts in the `prompts` library, the `initial` property must be the **index** (number) of the choice to select, not the value itself.
@@ -30,8 +30,8 @@ For `type: 'select'` prompts in the `prompts` library, the `initial` property mu
 
 ```typescript
 initial:
-  state.ttsMode === 'dialogue' ? 1 :
-  state.ttsMode === 'monologue' ? 2 :
+  state.ttsStrategy === 'dialogue' ? 1 :
+  state.ttsStrategy === 'tts' ? 2 :
   0,
 ```
 
@@ -39,7 +39,7 @@ This ensures the correct index is passed:
 
 - 0 = "Auto-detect (recommended)"
 - 1 = "Dialogue mode (Text-to-Dialogue API)"
-- 2 = "Monologue mode (Text-to-Speech API)"
+  - 2 = "TTS strategy (Text-to-Speech API)"
 
 ## Files Modified
 

@@ -1,5 +1,16 @@
 # @esl-pipeline/batch-backend
 
+## 1.2.1
+
+### Patch Changes
+
+- compatibility with orchestrator and tts-elevenlabs packages update
+- Updated dependencies
+- Updated dependencies
+  - @esl-pipeline/contracts@1.0.2
+  - @esl-pipeline/orchestrator@3.2.0
+  - @esl-pipeline/shared-infrastructure@1.1.1
+
 ## 1.2.0
 
 ### Minor Changes

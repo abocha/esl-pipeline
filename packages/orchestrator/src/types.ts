@@ -40,8 +40,8 @@ export interface NewAssignmentFlags {
   voiceId?: string;
   withTts?: boolean;
 
-  // New TTS mode fields
-  ttsMode?: 'auto' | 'dialogue' | 'monologue';
+  // TTS strategy fields
+  ttsStrategy?: 'auto' | 'dialogue' | 'tts';
   dialogueLanguage?: string;
   dialogueStability?: number;
   dialogueSeed?: number;
@@ -85,8 +85,8 @@ export interface RerunFlags {
   accentPreference?: string;
   voiceId?: string;
 
-  // TTS mode options for rerun
-  ttsMode?: 'auto' | 'dialogue' | 'monologue';
+  // TTS strategy options for rerun
+  ttsStrategy?: 'auto' | 'dialogue' | 'tts';
   dialogueLanguage?: string;
   dialogueStability?: number;
   dialogueSeed?: number;

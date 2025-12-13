@@ -106,20 +106,22 @@ export const JobSettingsForm: React.FC = () => {
           </select>
         </div>
 
-        {/* Mode */}
+        {/* TTS Strategy */}
         <div className="form-field">
           <label className="field-label">
-            <span>TTS Mode</span>
-            <span className="field-hint">Auto detects speaker count</span>
+            <span>TTS Strategy</span>
+            <span className="field-hint">Auto chooses dialogue vs TTS</span>
           </label>
           <select
-            value={settings.mode}
-            onChange={(e) => updateSettings({ mode: e.target.value as JobSettings['mode'] })}
+            value={settings.ttsStrategy}
+            onChange={(e) =>
+              updateSettings({ ttsStrategy: e.target.value as JobSettings['ttsStrategy'] })
+            }
             className="field-select"
           >
-            {options.modes.map((mode) => (
-              <option key={mode} value={mode}>
-                {mode.charAt(0).toUpperCase() + mode.slice(1)}
+            {options.ttsStrategies.map((strategy) => (
+              <option key={strategy} value={strategy}>
+                {strategy.charAt(0).toUpperCase() + strategy.slice(1)}
               </option>
             ))}
           </select>

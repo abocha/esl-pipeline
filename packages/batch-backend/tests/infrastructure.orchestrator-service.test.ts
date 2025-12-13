@@ -220,7 +220,7 @@ describe('infrastructure/orchestrator-service', () => {
       voices: [],
       notionDatabases: [],
       uploadOptions: ['auto', 's3', 'none'],
-      modes: ['auto'],
+      ttsStrategies: ['auto'],
     });
 
     getPipeline();

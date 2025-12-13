@@ -1,7 +1,7 @@
 /**
- * TTS mode selection
+ * TTS strategy selection
  */
-export type TtsMode = 'auto' | 'dialogue' | 'monologue';
+export type TtsStrategy = 'auto' | 'tts' | 'dialogue';
 
 /**
  * Dialogue input for ElevenLabs Text-to-Dialogue API
@@ -52,8 +52,8 @@ export interface BuildStudyTextOptions {
   ffmpegPath?: string;
   outputFormat?: string;
 
-  // New fields for dual TTS mode
-  ttsMode?: 'auto' | 'dialogue' | 'monologue';
+  // Strategy selection (auto chooses based on content heuristics)
+  ttsStrategy?: TtsStrategy;
   dialogueLanguage?: string;
   dialogueStability?: number;
   dialogueSeed?: number;

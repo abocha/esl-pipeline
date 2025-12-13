@@ -50,6 +50,6 @@
     ]
   },
   "preset": "b1-default",
-  "ttsMode": "auto",
+  "ttsStrategy": "auto",
   "timestamp": "2025-11-12T13:08:45.274Z"
 }

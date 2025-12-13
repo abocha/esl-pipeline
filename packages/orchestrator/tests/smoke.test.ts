@@ -127,7 +127,7 @@ describe('orchestrator smoke', () => {
       withTts: true,
       upload: 's3',
       voices: 'configs/voices.yml',
-      ttsMode: 'dialogue',
+      ttsStrategy: 'dialogue',
       dialogueLanguage: 'es',
       dialogueStability: 0.55,
       dialogueSeed: 999,
@@ -135,7 +135,7 @@ describe('orchestrator smoke', () => {
     });
 
     const manifestFirst = JSON.parse(await readFile(firstRun.manifestPath!, 'utf8'));
-    expect(manifestFirst.ttsMode).toBe('dialogue');
+    expect(manifestFirst.ttsStrategy).toBe('dialogue');
     expect(manifestFirst.dialogueLanguage).toBe('es');
     expect(manifestFirst.dialogueStability).toBe(0.55);
     expect(manifestFirst.dialogueSeed).toBe(999);
@@ -150,7 +150,7 @@ describe('orchestrator smoke', () => {
     });
 
     const manifestSecond = JSON.parse(await readFile(rerun.manifestPath, 'utf8'));
-    expect(manifestSecond.ttsMode).toBe('dialogue');
+    expect(manifestSecond.ttsStrategy).toBe('dialogue');
     expect(manifestSecond.dialogueLanguage).toBe('es');
     expect(manifestSecond.dialogueStability).toBe(0.55);
     expect(manifestSecond.dialogueSeed).toBe(999);

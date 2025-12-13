@@ -72,7 +72,7 @@ describe('metadata/job-options', () => {
       { id: 'db-456', name: 'Leo' },
     ]);
     expect(result.uploadOptions).toEqual(['auto', 's3', 'none']);
-    expect(result.modes).toEqual(['auto', 'dialogue', 'monologue']);
+    expect(result.ttsStrategies).toEqual(['auto', 'dialogue', 'tts']);
     expect(result.voices).toEqual([
       {
         id: 'voice_a',

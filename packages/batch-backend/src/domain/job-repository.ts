@@ -8,7 +8,7 @@ import { PoolClient } from 'pg';
 
 import { withPgClient } from '../infrastructure/db.js';
 import { logger } from '../infrastructure/logger.js';
-import { JobMode, JobRecord, JobState, JobUploadOption, assertTransition } from './job-model.js';
+import { JobRecord, JobState, JobUploadOption, TtsStrategy, assertTransition } from './job-model.js';
 
 /**
  * PostgreSQL row structure for jobs table
@@ -50,7 +50,7 @@ export async function insertJob(params: {
   voiceAccent?: string;
   forceTts?: boolean;
   notionDatabase?: string;
-  mode?: JobMode;
+  ttsStrategy?: TtsStrategy;
   userId?: string;
 }): Promise<JobRecord> {
   const id = randomUUID();
@@ -108,7 +108,7 @@ export async function insertJob(params: {
         params.voiceAccent ?? null,
         params.forceTts ?? null,
         params.notionDatabase ?? null,
-        params.mode ?? null,
+        params.ttsStrategy ?? null,
         now,
         now,
         params.userId ?? null,
@@ -226,7 +226,7 @@ function mapRowToJob(row: JobRow): JobRecord {
     voiceAccent: row.voice_accent ?? null,
     forceTts: row.force_tts ?? null,
     notionDatabase: row.notion_database ?? null,
-    mode: normalizeJobMode(row.mode),
+    ttsStrategy: normalizeTtsStrategy(row.mode, { jobId: row.id }),
     notionUrl: row.notion_url ?? null,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
@@ -238,11 +238,17 @@ function mapRowToJob(row: JobRow): JobRecord {
   };
 }
 
-function normalizeJobMode(value: unknown): JobMode | null {
-  if (value === 'auto' || value === 'dialogue' || value === 'monologue') {
-    return value;
+function normalizeTtsStrategy(value: unknown, ctx: { jobId: string }): TtsStrategy | null {
+  if (value == null) return null;
+  if (value === 'auto' || value === 'dialogue' || value === 'tts') return value;
+  if (typeof value === 'string') {
+    throw new Error(
+      `Unsupported jobs.mode value "${value}" for job ${ctx.jobId}; migrate legacy rows before running this version`,
+    );
   }
-  return null;
+  throw new Error(
+    `Unsupported jobs.mode value type "${typeof value}" for job ${ctx.jobId}; expected null or a TtsStrategy string`,
+  );
 }
 
 const JOB_UPLOAD_OPTIONS: ReadonlySet<JobUploadOption> = new Set(['auto', 's3', 'none']);

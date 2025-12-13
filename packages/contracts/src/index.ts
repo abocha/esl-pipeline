@@ -1,6 +1,6 @@
 export type JobState = 'queued' | 'running' | 'succeeded' | 'failed';
 
-export type JobMode = 'auto' | 'dialogue' | 'monologue';
+export type TtsStrategy = 'auto' | 'dialogue' | 'tts';
 
 export type JobUploadOption = 'auto' | 's3' | 'none';
 
@@ -14,7 +14,7 @@ export interface JobStatusDto {
   voiceAccent: string | null;
   forceTts: boolean | null;
   notionDatabase: string | null;
-  mode: JobMode | null;
+  ttsStrategy: TtsStrategy | null;
   notionUrl: string | null;
   state: JobState;
   createdAt: string;
@@ -31,7 +31,7 @@ export interface JobEventPayload {
   manifestPath?: string | null;
   error?: string | null;
   finishedAt?: string | null;
-  mode?: JobMode | null;
+  ttsStrategy?: TtsStrategy | null;
   md?: string | null;
   notionUrl?: string | null;
 }

@@ -52,7 +52,7 @@ describeIfDb('domain/job-repository', () => {
       expect(job.voiceAccent).toBeNull();
       expect(job.forceTts).toBeNull();
       expect(job.notionDatabase).toBeNull();
-      expect(job.mode).toBeNull();
+      expect(job.ttsStrategy).toBeNull();
       expect(job.notionUrl).toBeNull();
       expect(job.createdAt instanceof Date).toBe(true);
       expect(job.updatedAt instanceof Date).toBe(true);
@@ -77,20 +77,35 @@ describeIfDb('domain/job-repository', () => {
         voiceAccent: 'american_female',
         forceTts: true,
         notionDatabase: 'db-123',
-        mode: 'dialogue',
+        ttsStrategy: 'dialogue',
       });
 
       expect(job.voiceId).toBe('voice_amanda');
       expect(job.voiceAccent).toBe('american_female');
       expect(job.forceTts).toBe(true);
       expect(job.notionDatabase).toBe('db-123');
-      expect(job.mode).toBe('dialogue');
+      expect(job.ttsStrategy).toBe('dialogue');
       expect(job.notionUrl).toBeNull();
     });
 
     it('returns null for unknown id', async () => {
       const loaded = await getJobById(randomUUID());
       expect(loaded).toBeNull();
+    });
+
+    it('fails fast when loading a row with an unsupported mode', async () => {
+      const id = randomUUID();
+
+      await withPgClient(async (client) => {
+        await client.query('INSERT INTO jobs (id, md, state, mode) VALUES ($1, $2, $3, $4)', [
+          id,
+          'fixtures/ok.md',
+          'queued',
+          'monologue',
+        ]);
+      });
+
+      await expect(getJobById(id)).rejects.toThrow(/Unsupported jobs\.mode value "monologue"/);
     });
   });
 

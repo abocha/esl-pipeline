@@ -101,7 +101,7 @@ export async function processQueueJob(payload: QueueJobPayload): Promise<void> {
         upload: uploadFlag,
         forceTts: running.forceTts ?? undefined,
         notionDatabase: running.notionDatabase ?? config.orchestrator.notionDatabaseId ?? undefined,
-        mode: running.mode ?? undefined,
+        ttsStrategy: running.ttsStrategy ?? undefined,
         settings: userSettings,
       },
       runId,

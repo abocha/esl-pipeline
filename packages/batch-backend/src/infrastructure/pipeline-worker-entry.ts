@@ -58,8 +58,8 @@ async function executePipeline(
     flags.redoTts = payload.forceTts;
   }
 
-  if (payload.mode) {
-    flags.ttsMode = payload.mode;
+  if (payload.ttsStrategy) {
+    flags.ttsStrategy = payload.ttsStrategy;
   }
 
   // Acquire semaphore before TTS operations if TTS is enabled

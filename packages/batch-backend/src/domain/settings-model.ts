@@ -1,15 +1,17 @@
 // packages/batch-backend/src/domain/settings-model.ts
 // Domain model for user settings (API keys and preferences).
 
+import type { TtsStrategy } from '@esl-pipeline/contracts';
+
 /**
  * TTS provider type - extensible for future providers
  */
 export type TtsProvider = 'elevenlabs' | 'openai' | 'azure' | 'google';
 
 /**
- * TTS mode for audio generation
+ * TTS strategy for audio generation
  */
-export type TtsMode = 'auto' | 'dialogue' | 'monologue';
+export type UserTtsStrategy = TtsStrategy;
 
 /**
  * Database record representation of user settings
@@ -25,7 +27,7 @@ export interface UserSettingsRecord {
   // Preferences
   defaultPreset: string;
   defaultVoiceAccent: string;
-  defaultTtsMode: TtsMode;
+  defaultTtsStrategy: UserTtsStrategy;
   enableNotifications: boolean;
   // Timestamps
   createdAt: Date;
@@ -44,7 +46,7 @@ export interface UserSettingsInput {
   // Preferences
   defaultPreset?: string;
   defaultVoiceAccent?: string;
-  defaultTtsMode?: TtsMode;
+  defaultTtsStrategy?: UserTtsStrategy;
   enableNotifications?: boolean;
 }
 
@@ -60,7 +62,7 @@ export interface UserSettingsOutput {
   // Preferences
   defaultPreset: string;
   defaultVoiceAccent: string;
-  defaultTtsMode: TtsMode;
+  defaultTtsStrategy: UserTtsStrategy;
   enableNotifications: boolean;
   // Timestamps
   createdAt: Date;
@@ -73,9 +75,9 @@ export interface UserSettingsOutput {
 export const VALID_TTS_PROVIDERS: TtsProvider[] = ['elevenlabs', 'openai', 'azure', 'google'];
 
 /**
- * Valid TTS modes
+ * Valid TTS strategies
  */
-export const VALID_TTS_MODES: TtsMode[] = ['auto', 'dialogue', 'monologue'];
+export const VALID_TTS_STRATEGIES: UserTtsStrategy[] = ['auto', 'dialogue', 'tts'];
 
 /**
  * Check if a string is a valid TTS provider
@@ -85,10 +87,10 @@ export function isValidTtsProvider(provider: string): provider is TtsProvider {
 }
 
 /**
- * Check if a string is a valid TTS mode
+ * Check if a string is a valid TTS strategy
  */
-export function isValidTtsMode(mode: string): mode is TtsMode {
-  return VALID_TTS_MODES.includes(mode as TtsMode);
+export function isValidTtsStrategy(strategy: string): strategy is UserTtsStrategy {
+  return VALID_TTS_STRATEGIES.includes(strategy as UserTtsStrategy);
 }
 
 /**
@@ -101,7 +103,7 @@ export function sanitizeSettings(record: UserSettingsRecord): UserSettingsOutput
     ttsProvider: record.ttsProvider,
     defaultPreset: record.defaultPreset,
     defaultVoiceAccent: record.defaultVoiceAccent,
-    defaultTtsMode: record.defaultTtsMode,
+    defaultTtsStrategy: record.defaultTtsStrategy,
     enableNotifications: record.enableNotifications,
     createdAt: record.createdAt,
     updatedAt: record.updatedAt,
@@ -121,7 +123,7 @@ export function getDefaultSettings(): Omit<
     ttsProvider: 'elevenlabs',
     defaultPreset: 'b1-default',
     defaultVoiceAccent: 'american',
-    defaultTtsMode: 'auto',
+    defaultTtsStrategy: 'auto',
     enableNotifications: true,
   };
 }

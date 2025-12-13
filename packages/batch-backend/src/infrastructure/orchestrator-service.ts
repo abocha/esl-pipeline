@@ -21,7 +21,7 @@ import {
 } from '@esl-pipeline/orchestrator';
 
 import { loadConfig } from '../config/env.js';
-import type { JobMode } from '../domain/job-model.js';
+import type { TtsStrategy } from '../domain/job-model.js';
 import { Logger, logger as rootLogger } from './logger.js';
 import { metrics } from './metrics.js';
 
@@ -135,7 +135,7 @@ export interface RunAssignmentPayload {
   upload?: 's3';
   forceTts?: boolean | null;
   notionDatabase?: string | null;
-  mode?: JobMode | null;
+  ttsStrategy?: TtsStrategy | null;
   settings?: {
     elevenLabsApiKey?: string | null;
     notionToken?: string | null;

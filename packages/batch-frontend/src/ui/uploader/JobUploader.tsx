@@ -154,7 +154,7 @@ export const JobUploader: React.FC = () => {
     settings.notionDatabase,
     settings.withTts,
     settings.forceTts,
-    settings.mode,
+    settings.ttsStrategy,
   ]);
 
   const processFile = useCallback(
@@ -198,7 +198,7 @@ export const JobUploader: React.FC = () => {
           forceTts: jobSettings.forceTts,
           notionDatabase: jobSettings.notionDatabase,
           upload: uploadTarget,
-          mode: jobSettings.mode,
+          ttsStrategy: jobSettings.ttsStrategy,
         });
 
         setQueue((prev) =>
@@ -220,7 +220,7 @@ export const JobUploader: React.FC = () => {
           preset: jobSettings.preset,
           notionDatabase: jobSettings.notionDatabase,
           withTts: jobSettings.withTts,
-          mode: jobSettings.mode,
+          ttsStrategy: jobSettings.ttsStrategy,
         });
         toast.success(`Job ${jobResponse.jobId} created`);
       } catch (error: unknown) {
@@ -770,7 +770,7 @@ const APPLIED_KEYS: (keyof AppliedJobSettings)[] = [
   'notionDatabase',
   'withTts',
   'forceTts',
-  'mode',
+  'ttsStrategy',
 ];
 
 function areSettingsEqual(a: AppliedJobSettings, b: AppliedJobSettings): boolean {

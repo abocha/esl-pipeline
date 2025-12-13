@@ -1,7 +1,7 @@
 import yaml from 'js-yaml';
 import { createHash } from 'node:crypto';
 import { createWriteStream, readFileSync } from 'node:fs';
-import { copyFile, mkdir, rename, stat, unlink, writeFile } from 'node:fs/promises';
+import { copyFile, mkdir, rename, stat, unlink } from 'node:fs/promises';
 import { dirname, resolve } from 'node:path';
 import { Readable } from 'node:stream';
 import { pipeline } from 'node:stream/promises';
@@ -11,7 +11,7 @@ import { ConfigurationError, InfrastructureError, ValidationError } from '@esl-p
 import { type Frontmatter, extractFrontmatter, extractStudyText } from '@esl-pipeline/md-extractor';
 
 import { type VoiceCatalog, loadVoicesCatalog } from './assign.js';
-import { synthesizeDialogue } from './dialogue.js';
+import { buildDialogueHash, synthesizeDialogue } from './dialogue.js';
 import { getElevenClient } from './eleven.js';
 import {
   concatMp3Segments,
@@ -20,12 +20,25 @@ import {
   synthSilenceMp3,
 } from './ffmpeg.js';
 import { type VoiceMapConfig, resolveSpeakerVoices } from './speakerAssignment.js';
-import type { DialogueInput, TtsMode } from './types.js';
+import type { DialogueInput, TtsStrategy } from './types.js';
 import type { BuildStudyTextOptions, BuildStudyTextResult } from './types.js';
 
 const DEFAULT_MODEL_ID = process.env.ELEVENLABS_MODEL_ID ?? 'eleven_multilingual_v2';
-const DEFAULT_OUTPUT_FORMAT = process.env.ELEVENLABS_OUTPUT_FORMAT ?? 'mp3_22050_32';
+type TextToSpeechConvertBody = Parameters<ReturnType<typeof getElevenClient>['textToSpeech']['convert']>[1];
+type TtsConvertRequest = Pick<TextToSpeechConvertBody, 'modelId' | 'outputFormat'>;
+type TtsOutputFormat = NonNullable<TextToSpeechConvertBody['outputFormat']>;
+
+const DEFAULT_OUTPUT_FORMAT = (process.env.ELEVENLABS_OUTPUT_FORMAT ??
+  'mp3_22050_32') as unknown as TtsOutputFormat;
+const DEFAULT_TTS_MAX_CHARS = 4500;
 const RETRYABLE_STATUS = new Set([408, 409, 425, 429, 500, 502, 503, 504]);
+
+function isTtsDebugEnabled(): boolean {
+  const raw = process.env.ELEVENLABS_TTS_DEBUG ?? process.env.ESL_TTS_DEBUG;
+  if (!raw) return false;
+  const normalized = raw.trim().toLowerCase();
+  return normalized === '1' || normalized === 'true' || normalized === 'yes' || normalized === 'on';
+}
 
 export function hashStudyText(text: string): string {
   return createHash('sha256').update(text).digest('hex');
@@ -40,8 +53,10 @@ async function ensureFileExists(path: string): Promise<void> {
       throw error;
     }
   }
-  await mkdir(dirname(path), { recursive: true });
-  await writeFile(path, '');
+  throw new InfrastructureError(
+    `Expected output file to exist but it was missing: ${path}. ` +
+      `This likely indicates a failed TTS synthesis or an unexpected output path.`,
+  );
 }
 
 function sanitizeStudentName(student?: unknown): string {
@@ -62,30 +77,175 @@ function buildOutputFileName(hash: string, frontmatter: Frontmatter): string {
 }
 
 /**
- * Determines which TTS mode to use based on options and content type
+ * Determines which TTS strategy to use based on options and content heuristics.
  */
-function selectTtsMode(
+function selectTtsStrategy(
   options: BuildStudyTextOptions,
-  studyTextType: 'monologue' | 'dialogue' | 'mixed',
-): 'dialogue' | 'monologue' {
-  // Check environment variable first
-  const envMode = process.env.ELEVENLABS_TTS_MODE as TtsMode | undefined;
-  const mode = options.ttsMode ?? envMode ?? 'auto';
+  segments: StudyTextSegment[],
+): 'dialogue' | 'tts' {
+  const envStrategy = process.env.ELEVENLABS_TTS_STRATEGY as TtsStrategy | undefined;
+  const strategy = options.ttsStrategy ?? envStrategy ?? 'auto';
 
-  if (mode === 'dialogue') {
-    return 'dialogue';
-  }
-  if (mode === 'monologue') {
-    return 'monologue';
+  if (strategy === 'dialogue') return 'dialogue';
+  if (strategy === 'tts') return 'tts';
+
+  const speakersUsed = new Set(
+    segments
+      .map((s) => s.speaker?.trim())
+      .filter((speaker): speaker is string => speaker !== undefined && speaker.length > 0),
+  );
+  const uniqueSpeakers = speakersUsed.size;
+
+  // Hard rule: any actual multi-speaker content uses Text-to-Dialogue.
+  if (uniqueSpeakers >= 2) return 'dialogue';
+
+  const statsText = segments
+    .map((s) => cleanSpeechText(s.text))
+    .map((t) => (t.length > 0 ? t : '\n\n'))
+    .join('\n')
+    .replaceAll(/\n{3,}/g, '\n\n')
+    .trim();
+
+  const sentences = splitIntoSentences(statsText);
+  const sentenceLengths = sentences.map((s) => s.length).filter((n) => n > 0);
+
+  const sentenceCount = sentenceLengths.length;
+  const totalChars = statsText.length;
+
+  if (sentenceCount === 0) return 'tts';
+
+  const medianSentenceChars = percentile(sentenceLengths, 50);
+  const p90SentenceChars = percentile(sentenceLengths, 90);
+  const shortSentenceRatio = sentenceLengths.filter((n) => n <= 90).length / sentenceCount;
+
+  // Heuristic: "simple + sentence-choppy" tends to sound better in Eleven v3 / Text-to-Dialogue
+  // (clearer pacing for short, low-level texts).
+  const wantsDialogue =
+    (sentenceCount >= 6 && medianSentenceChars <= 90) ||
+    (sentenceCount >= 8 && shortSentenceRatio >= 0.6) ||
+    (totalChars <= 1200 && medianSentenceChars <= 90);
+
+  // Heuristic: longer, higher-level monologues are generally fine (and cheaper) via standard TTS.
+  const wantsTts = medianSentenceChars >= 120 || p90SentenceChars >= 220;
+
+  if (wantsDialogue && !wantsTts) return 'dialogue';
+  return 'tts';
+}
+
+function splitIntoSentences(text: string): string[] {
+  const normalized = text.replaceAll(/\s+/g, ' ').trim();
+  if (!normalized) return [];
+  return normalized.split(/(?<=[.!?])\s+/);
+}
+
+function percentile(values: number[], p: number): number {
+  if (values.length === 0) return 0;
+  const sorted = [...values].sort((a, b) => a - b);
+  const idx = Math.max(0, Math.min(sorted.length - 1, Math.round((p / 100) * (sorted.length - 1))));
+  return sorted[idx] ?? 0;
+}
+
+function resolveTtsMaxChars(): number {
+  const raw = process.env.ELEVENLABS_TTS_MAX_CHARS;
+  if (raw === undefined) return DEFAULT_TTS_MAX_CHARS;
+  const parsed = Number(raw);
+  if (Number.isFinite(parsed) && parsed >= 500) return Math.floor(parsed);
+  return DEFAULT_TTS_MAX_CHARS;
+}
+
+function resolveOutputFormat(raw?: string): TtsOutputFormat {
+  return (raw ?? DEFAULT_OUTPUT_FORMAT) as unknown as TtsOutputFormat;
+}
+
+function chunkTextForTts(text: string, maxChars: number): string[] {
+  const normalized = text.replaceAll('\r\n', '\n').trim();
+  if (!normalized) return [];
+  if (normalized.length <= maxChars) return [normalized];
+
+  const chunks: string[] = [];
+  let current = '';
+
+  const push = () => {
+    const trimmed = current.trim();
+    if (trimmed) chunks.push(trimmed);
+    current = '';
+  };
+
+  const addPiece = (piece: string) => {
+    const p = piece.trim();
+    if (!p) return;
+    if (!current) {
+      current = p;
+      return;
+    }
+    if (current.length + 1 + p.length <= maxChars) {
+      current = `${current} ${p}`;
+      return;
+    }
+    push();
+    current = p;
+  };
+
+  const paragraphs = normalized.split(/\n{2,}/);
+  for (const paragraph of paragraphs) {
+    const para = paragraph.trim();
+    if (!para) continue;
+    if (para.length <= maxChars) {
+      addPiece(para);
+      continue;
+    }
+
+    const sentences = splitIntoSentences(para);
+    if (sentences.length <= 1) {
+      for (let i = 0; i < para.length; i += maxChars) {
+        addPiece(para.slice(i, i + maxChars));
+      }
+      continue;
+    }
+
+    for (const sentence of sentences) {
+      if (sentence.length <= maxChars) {
+        addPiece(sentence);
+        continue;
+      }
+      for (let i = 0; i < sentence.length; i += maxChars) {
+        addPiece(sentence.slice(i, i + maxChars));
+      }
+    }
   }
 
-  // Auto mode: use dialogue for dialogue/mixed content, monologue otherwise
-  return studyTextType === 'monologue' ? 'monologue' : 'dialogue';
+  push();
+  return chunks;
 }
 
 /**
  * Builds MP3 using dialogue mode (Text-to-Dialogue API)
  */
+function toDialogueInputs(
+  segments: StudyTextSegment[],
+  voiceAssignments: Map<string, string>,
+): DialogueInput[] {
+  const fallbackSpeaker =
+    voiceAssignments.has('Narrator')
+      ? 'Narrator'
+      : (voiceAssignments.keys().next().value as string | undefined);
+  const fallbackVoiceId =
+    (fallbackSpeaker ? voiceAssignments.get(fallbackSpeaker) : undefined) ??
+    (voiceAssignments.values().next().value as string | undefined);
+
+  return segments.map((seg) => {
+    const speaker = seg.speaker?.trim() || fallbackSpeaker || 'default';
+    const voiceId = voiceAssignments.get(speaker) ?? fallbackVoiceId;
+    if (!voiceId) {
+      throw new ConfigurationError(
+        `No voice mapping found for speaker "${speaker}". ` +
+          `Available speakers: ${[...voiceAssignments.keys()].join(', ') || '(none)'}`,
+      );
+    }
+    return { text: seg.text, voice_id: voiceId };
+  });
+}
+
 async function buildDialogueMp3(
   segments: StudyTextSegment[],
   voiceAssignments: Map<string, string>,
@@ -96,22 +256,7 @@ async function buildDialogueMp3(
   frontmatter: Frontmatter,
 ): Promise<BuildStudyTextResult> {
   const { dialogueLanguage, dialogueStability, dialogueSeed } = options;
-
-  // Convert segments to dialogue inputs
-  const inputs: DialogueInput[] = segments.map((seg) => {
-    const speaker = seg.speaker ?? 'default';
-    const voiceId = voiceAssignments.get(speaker);
-    if (!voiceId) {
-      throw new ConfigurationError(
-        `No voice mapping found for speaker "${speaker}". ` +
-          `Available speakers: ${[...voiceAssignments.keys()].join(', ')}`,
-      );
-    }
-    return {
-      text: seg.text,
-      voice_id: voiceId,
-    };
-  });
+  const inputs = toDialogueInputs(segments, voiceAssignments);
 
   // Synthesize dialogue
   const result = await synthesizeDialogue(
@@ -223,14 +368,36 @@ export async function buildStudyTextMp3(
         : undefined,
   }));
 
-  // Determine TTS mode
-  const selectedMode = selectTtsMode(opts, studyText.type);
-  console.log(`Using TTS mode: ${selectedMode} (content type: ${studyText.type})`);
+  // Determine TTS strategy
+  const selectedStrategy = selectTtsStrategy(opts, segments);
+  if (isTtsDebugEnabled()) {
+    console.log(`Using TTS strategy: ${selectedStrategy} (content type: ${studyText.type})`);
+  }
 
   // Route to appropriate synthesis path
-  if (selectedMode === 'dialogue') {
+  if (selectedStrategy === 'dialogue') {
     const apiKey = process.env.ELEVENLABS_API_KEY || process.env.ELEVENLABS_API_TOKEN || '';
     const outputDir = resolve(opts.outPath || dirname(mdPath));
+
+    if (opts.preview) {
+      const inputs = toDialogueInputs(segments, speakerVoiceMap);
+      const hash = buildDialogueHash(inputs, {
+        modelId: 'eleven_v3',
+        languageCode: opts.dialogueLanguage,
+        stability: opts.dialogueStability,
+        seed: opts.dialogueSeed,
+      });
+      const fileName = buildOutputFileName(hash, frontmatter);
+      const targetPath = resolve(outputDir, fileName);
+      return {
+        path: targetPath,
+        duration: undefined,
+        hash,
+        voices: voiceSummaries,
+        voiceAssignments: Object.fromEntries(speakerVoiceMap),
+      };
+    }
+
     await mkdir(outputDir, { recursive: true });
 
     return buildDialogueMp3(
@@ -244,7 +411,7 @@ export async function buildStudyTextMp3(
     );
   }
 
-  // Continue with existing monologue path...
+  // Continue with existing TTS path...
 
   // Generate hash based on study text and voice map
   const hashInput = JSON.stringify({ text: normalizedText, voices: resolvedVoiceDescriptor });
@@ -282,11 +449,31 @@ export async function buildStudyTextMp3(
     }
   }
 
-  // Generate TTS for each line or chunk (monologue mode)
+  // Generate TTS in larger chunks to preserve prosody (avoid per-line resets).
   const segmentFiles: string[] = [];
   const cleanupTargets: string[] = [];
   const eleven = getElevenClient();
   const fallbackVoiceId = assignments[0]?.voiceId;
+  const maxChars = resolveTtsMaxChars();
+
+  interface TtsRun {
+    voiceId: string;
+    lines: string[];
+  }
+  const runs: TtsRun[] = [];
+  let currentRun: TtsRun | null = null;
+  let pendingParagraphBreak = false;
+
+  const flushRun = () => {
+    if (!currentRun) return;
+    while (currentRun.lines.length > 0 && currentRun.lines.at(-1) === '') {
+      currentRun.lines.pop();
+    }
+    if (currentRun.lines.length > 0) {
+      runs.push(currentRun);
+    }
+    currentRun = null;
+  };
 
   for (const segment of segments) {
     const normalizedSpeaker = segment.speaker?.trim() ?? '';
@@ -307,7 +494,10 @@ export async function buildStudyTextMp3(
     }
 
     const speechText = cleanSpeechText(segment.text);
-    if (!speechText) continue;
+    if (!speechText) {
+      pendingParagraphBreak = true;
+      continue;
+    }
 
     if (!voiceId) {
       throw new ConfigurationError(
@@ -316,20 +506,47 @@ export async function buildStudyTextMp3(
       );
     }
 
-    // Create a temporary file for this line's audio
-    const lineHash = createHash('sha256').update(`${speechText}-${voiceId}`).digest('hex');
-    const lineFileName = `${lineHash}.mp3`;
-    const lineFilePath = resolve(outputDir, lineFileName);
-
-    if (!opts.force && (await fileExistsNonEmpty(lineFilePath))) {
-      segmentFiles.push(lineFilePath);
-      cleanupTargets.push(lineFilePath);
-      continue;
+    if (currentRun && currentRun.voiceId !== voiceId) {
+      flushRun();
     }
+    if (!currentRun) {
+      currentRun = { voiceId, lines: [] };
+    }
+    if (pendingParagraphBreak && currentRun.lines.length > 0) {
+      currentRun.lines.push('');
+      pendingParagraphBreak = false;
+    }
+    currentRun.lines.push(speechText);
+  }
+  flushRun();
 
-    await synthesizeLineWithRetry(eleven, voiceId, speechText, lineFilePath);
-    segmentFiles.push(lineFilePath);
-    cleanupTargets.push(lineFilePath);
+  for (const run of runs) {
+    const runText = run.lines.join('\n').replaceAll(/\n{3,}/g, '\n\n').trim();
+    const chunks = chunkTextForTts(runText, maxChars);
+    for (const chunkText of chunks) {
+      const chunkHashInput = JSON.stringify({
+        voiceId: run.voiceId,
+        text: chunkText,
+        modelId: DEFAULT_MODEL_ID,
+        outputFormat: resolveOutputFormat(opts.outputFormat),
+      });
+      const chunkHash = createHash('sha256').update(chunkHashInput).digest('hex');
+      const chunkFileName = `${chunkHash}.mp3`;
+      const chunkFilePath = resolve(outputDir, chunkFileName);
+
+      if (!opts.force && (await fileExistsNonEmpty(chunkFilePath))) {
+        segmentFiles.push(chunkFilePath);
+        cleanupTargets.push(chunkFilePath);
+        continue;
+      }
+
+      await synthesizeLineWithRetry(eleven, run.voiceId, chunkText, chunkFilePath, {
+        modelId: DEFAULT_MODEL_ID,
+        outputFormat: resolveOutputFormat(opts.outputFormat),
+      });
+      segmentFiles.push(chunkFilePath);
+      cleanupTargets.push(chunkFilePath);
+    }
   }
   if (segmentFiles.length === 0) {
     throw new ValidationError(
@@ -525,13 +742,14 @@ async function synthesizeLineWithRetry(
   voiceId: string,
   text: string,
   outFile: string,
+  request: TtsConvertRequest,
   maxAttempts = 3,
 ): Promise<void> {
   let attempt = 0;
   let lastError: unknown;
   while (attempt < maxAttempts) {
     try {
-      await synthesizeLine(client, voiceId, text, outFile);
+      await synthesizeLine(client, voiceId, text, outFile, request);
       return;
     } catch (error: unknown) {
       lastError = error;
@@ -560,11 +778,12 @@ async function synthesizeLine(
   voiceId: string,
   text: string,
   outFile: string,
+  request: TtsConvertRequest,
 ): Promise<void> {
   const responseStream = await client.textToSpeech.convert(voiceId, {
     text,
-    modelId: DEFAULT_MODEL_ID,
-    outputFormat: DEFAULT_OUTPUT_FORMAT as any,
+    modelId: request.modelId,
+    outputFormat: request.outputFormat,
   });
   const nodeStream = Readable.fromWeb(responseStream as unknown as NodeReadableStream);
   await pipeline(nodeStream, createWriteStream(outFile));
@@ -615,7 +834,7 @@ export type { VoiceCatalog } from './assign.js';
 
 // Export types for orchestrator integration
 export type {
-  TtsMode,
+  TtsStrategy,
   DialogueInput,
   DialogueSynthesisOptions,
   DialogueSynthesisResult,

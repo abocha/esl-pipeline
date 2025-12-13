@@ -62,7 +62,7 @@ describe('application/process-queue-job', () => {
       voiceAccent: 'american_female',
       forceTts: false,
       notionDatabase: 'db-123',
-      mode: 'auto',
+      ttsStrategy: 'auto',
       createdAt: now,
       updatedAt: now,
       startedAt: null,
@@ -138,7 +138,7 @@ describe('application/process-queue-job', () => {
       upload: 's3',
       forceTts: initial.forceTts,
       notionDatabase: initial.notionDatabase,
-      mode: initial.mode,
+      ttsStrategy: initial.ttsStrategy,
     });
     expect(path.isAbsolute(payload.md)).toBe(true);
     expect(payload.md.replaceAll('\\', '/').endsWith(initial.md)).toBe(true);

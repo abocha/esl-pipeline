@@ -152,6 +152,16 @@ Postgres (job store):
 
 If Postgres is enabled but required values are missing, startup fails fast.
 
+### Postgres schema and migrations
+
+- Initialize the DB schema with `packages/batch-backend/schema.sql` (the root `docker-compose.batch-backend.yml` mounts and applies it for local dev).
+- `jobs.mode` persists the job’s TTS strategy and must be `auto`, `dialogue`, `tts`, or `NULL`.
+- Older databases that contain legacy values (for example `mode='monologue'`) must be migrated (or those rows removed) before running newer versions:
+
+  ```sql
+  UPDATE jobs SET mode = 'tts' WHERE mode = 'monologue';
+  ```
+
 Redis (queue):
 
 - `REDIS_ENABLED`

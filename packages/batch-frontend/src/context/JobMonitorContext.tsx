@@ -28,7 +28,7 @@ interface RegisterJobOptions {
   preset?: string;
   notionDatabase?: string;
   withTts?: boolean;
-  mode?: SubmitJobRequest['mode'];
+  ttsStrategy?: SubmitJobRequest['ttsStrategy'];
 }
 
 interface JobMonitorContextValue {
@@ -63,7 +63,7 @@ const createDefaultJob = (jobId: string): JobEntry => {
     voiceAccent: null,
     forceTts: null,
     notionDatabase: null,
-    mode: 'auto',
+    ttsStrategy: 'auto',
     notionUrl: null,
     state: 'queued',
     createdAt: now,
@@ -93,8 +93,15 @@ const loadPersistedActiveJobs = (): JobMap => {
     if (!Array.isArray(parsed)) return {};
     const entries = parsed
       .map((item) => (item && typeof item.jobId === 'string' ? item : null))
-      .filter((item): item is JobEntry => item !== null)
-      .map((job) => ({ ...createDefaultJob(job.jobId), ...job }));
+      .filter((item): item is Partial<JobEntry> & { jobId: string; mode?: unknown } => item !== null)
+      .map((job) => ({
+        ...createDefaultJob(job.jobId),
+        ...job,
+        ttsStrategy:
+          job.ttsStrategy ??
+          (typeof job.mode === 'string' ? (job.mode as JobEntry['ttsStrategy']) : undefined) ??
+          'auto',
+      }));
     return buildJobMap(entries);
   } catch (error) {
     console.warn('Failed to restore active jobs from storage', error);
@@ -153,7 +160,7 @@ export function JobMonitorProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const registerJob = useCallback(
-    ({ jobId, fileName, md, preset, notionDatabase, withTts, mode }: RegisterJobOptions) => {
+    ({ jobId, fileName, md, preset, notionDatabase, withTts, ttsStrategy }: RegisterJobOptions) => {
       const now = new Date().toISOString();
       updateJob(jobId, (prev) => ({
         ...prev,
@@ -169,7 +176,7 @@ export function JobMonitorProvider({ children }: { children: ReactNode }) {
         error: null,
         finishedAt: null,
         state: prev.state,
-        mode: mode ?? prev.mode ?? 'auto',
+        ttsStrategy: ttsStrategy ?? prev.ttsStrategy ?? 'auto',
       }));
     },
     [updateJob],
@@ -232,7 +239,7 @@ export function JobMonitorProvider({ children }: { children: ReactNode }) {
         manifestPath: event.payload?.manifestPath ?? prev.manifestPath,
         error: event.payload?.error ?? prev.error,
         finishedAt: event.payload?.finishedAt ?? prev.finishedAt,
-        mode: event.payload?.mode ?? prev.mode,
+        ttsStrategy: event.payload?.ttsStrategy ?? prev.ttsStrategy,
         md: event.payload?.md ?? prev.md,
         notionUrl: event.payload?.notionUrl ?? prev.notionUrl,
         updatedAt: new Date().toISOString(),

@@ -1,7 +1,7 @@
 // packages/batch-backend/src/domain/job-model.ts
 // Minimal job domain model for the batch-backend.
 // Keeps semantics simple and mirrors the `jobs` table schema used in db.ts.
-import type { JobMode, JobState, JobUploadOption } from '@esl-pipeline/contracts';
+import type { JobState, JobUploadOption, TtsStrategy } from '@esl-pipeline/contracts';
 
 export interface JobRecord {
   id: string;
@@ -14,7 +14,7 @@ export interface JobRecord {
   voiceAccent?: string | null;
   forceTts?: boolean | null;
   notionDatabase?: string | null;
-  mode?: JobMode | null;
+  ttsStrategy?: TtsStrategy | null;
   notionUrl?: string | null;
   createdAt: Date;
   updatedAt: Date;
@@ -55,4 +55,4 @@ export function assertTransition(from: JobState, to: JobState): void {
   }
 }
 
-export { type JobMode, type JobState, type JobUploadOption } from '@esl-pipeline/contracts';
+export { type JobState, type JobUploadOption, type TtsStrategy } from '@esl-pipeline/contracts';

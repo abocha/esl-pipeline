@@ -254,13 +254,14 @@ export async function pickVoiceForSpeaker(
       (v) => getVoiceGender(v) !== opposite && !opts.exclude?.has(v.id),
     );
 
-    return (
-      considerList(preferred) ??
-      considerList(neutral) ??
-      considerList(notOpposite) ??
-      considerList(catalog.voices) ??
-      null
-    );
+    const strict = opts.requireGenderMatch === true;
+    if (strict) {
+      // Strict policy: never return the opposite gender when the user explicitly set male/female.
+      // Neutral is allowed only as a fallback.
+      return considerList(preferred) ?? considerList(neutral) ?? null;
+    }
+
+    return considerList(preferred) ?? considerList(neutral) ?? considerList(notOpposite) ?? null;
   }
 
   if (explicitGender === 'neutral') {

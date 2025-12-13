@@ -16,7 +16,7 @@ export function jobRecordToDto(job: JobRecord): JobStatusDto {
     voiceAccent: job.voiceAccent ?? null,
     forceTts: job.forceTts ?? null,
     notionDatabase: job.notionDatabase ?? null,
-    mode: job.mode ?? null,
+    ttsStrategy: job.ttsStrategy ?? null,
     notionUrl: job.notionUrl ?? null,
     state: job.state,
     createdAt: job.createdAt.toISOString(),

@@ -204,11 +204,11 @@ import {
 
 - **Configuration Endpoint:** `GET /config/job-options` is operational
   - Dynamically pulls from orchestrator config (with fallback)
-  - Returns presets, voices, voice accents, Notion databases, upload options, modes
+  - Returns presets, voices, voice accents, Notion databases, upload options, and TTS strategies
   - Now includes `supportedActions` array for job action capabilities
 
 - **Job Metadata:** Jobs store and return full metadata
-  - Extended fields: `voiceAccent`, `forceTts`, `notionDatabase`, `mode`, `notionUrl`
+  - Extended fields: `voiceAccent`, `forceTts`, `notionDatabase`, `ttsStrategy`, `notionUrl`
   - DTO serialization consistent between HTTP and SSE
   - Database schema supports all frontend requirements
 
@@ -300,10 +300,10 @@ import {
       { "id": "uuid2", "name": "B2 Lessons" }
     ],
     "uploadOptions": ["auto", "s3", "none"],
-    "modes": ["auto", "dialogue", "monologue"]
+    "ttsStrategies": ["auto", "dialogue", "tts"]
   }
   ```
-- Until the orchestrator branch merges the new modes, return `"modes": ["auto"]` and let the frontend disable the selector.
+- (Historical note) Older drafts used a `"modes"` field; the current field name is `"ttsStrategies"`.
 - Voice accent list can come from env/config (match whatever the orchestrator uses for ElevenLabs voices).
 
 ### 3. Job Schema Extensions (Upcoming)
@@ -425,7 +425,7 @@ _Deliverable_: Frontend fetches dropdown metadata from the orchestrator-configur
    - `JobRecord`/`insertJob`/`updateJobStateAndResult` round-trip the new columns, and `job-dto.ts` exposes them to both HTTP and SSE consumers. See `packages/batch-backend/src/domain/job-repository.ts` for the canonical mapping.
 2. Submission + workers:
    - `/jobs` validation accepts `voiceAccent`, `forceTts`, `notionDatabase`, `mode`, and the new `'auto'` upload option, passing those fields through `submitJob`.
-   - `process-queue-job.ts` forwards `voiceAccent` → `accentPreference`, `mode` → `ttsMode`, `forceTts` → `redoTts`, and `notionDatabase` → `dbId` when calling the orchestrator, and captures `pageUrl` as `notionUrl` on success (persisted + emitted to clients).
+   - `process-queue-job.ts` forwards `voiceAccent` → `accentPreference`, `mode` → `ttsStrategy`, `forceTts` → `redoTts`, and `notionDatabase` → `dbId` when calling the orchestrator, and captures `pageUrl` as `notionUrl` on success (persisted + emitted to clients).
 3. Storage path hygiene:
    - `FILESYSTEM_UPLOAD_DIR` now defaults to an absolute path, and Docker Compose mounts a shared `uploads_data` volume at `/app/uploads` for both API + worker so local filesystem jobs are readable across processes. The DTO/logger surface both the sanitized storage key and the resolved absolute path for observability.
 4. Manifest credentials:
