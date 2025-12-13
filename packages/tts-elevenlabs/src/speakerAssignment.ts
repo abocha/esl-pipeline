@@ -35,7 +35,10 @@ const ROLE_FALLBACK_BY_MODE: Record<'monologue' | 'dialogue', SpeakerMeta['role'
 };
 
 function normalize(str: string | undefined | null): string {
-  return (str ?? '').trim().toLowerCase();
+  const s = (str ?? '').trim().toLowerCase();
+  // Keep this small and deterministic: strip common markdown punctuation from speaker ids
+  // (e.g. "**Mark" from "**Mark:**").
+  return s.replaceAll(/[*_`~>#]/g, '').replaceAll(/\s+/g, ' ').trim();
 }
 
 function findProfile(

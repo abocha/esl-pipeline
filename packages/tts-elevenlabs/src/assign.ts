@@ -192,6 +192,21 @@ function score(voice: Voice, need: SpeakerMeta): number {
   return s;
 }
 
+type NormalizedGender = 'male' | 'female' | 'neutral' | 'child' | '';
+
+function normalizeGender(gender: unknown): NormalizedGender {
+  const normalized = typeof gender === 'string' ? gender.trim().toLowerCase() : '';
+  if (normalized === 'male') return 'male';
+  if (normalized === 'female') return 'female';
+  if (normalized === 'neutral') return 'neutral';
+  if (normalized === 'child') return 'child';
+  return '';
+}
+
+function getVoiceGender(voice: Voice): NormalizedGender {
+  return normalizeGender(getLabel(voice, 'gender'));
+}
+
 export async function pickVoiceForSpeaker(
   speakerName: string,
   meta: SpeakerMeta = {},
@@ -200,17 +215,15 @@ export async function pickVoiceForSpeaker(
   const catalog = opts.catalog ?? (await loadVoicesCatalog());
   if (catalog.voices.length === 0) return null;
 
-  const guessedGender = meta.gender ?? guessGenderFromName(speakerName);
+  const explicitGender = normalizeGender(meta.gender);
+  const guessedGender = explicitGender || guessGenderFromName(speakerName);
   const guessed: SpeakerMeta = {
-    gender: guessedGender,
+    gender: guessedGender || undefined,
     role: meta.role ?? (speakerName.toLowerCase() === 'narrator' ? 'narrator' : undefined),
     age: meta.age,
     accent: meta.accent,
     style: meta.style,
   };
-
-  const normalizedGender = (guessed.gender || '').toLowerCase();
-  const requireGender = opts.requireGenderMatch && Boolean(meta.gender);
 
   const considerList = (voices: VoiceCatalog['voices']) => {
     let best = { id: '', score: -Infinity };
@@ -222,23 +235,40 @@ export async function pickVoiceForSpeaker(
     return best.id ? best : null;
   };
 
-  if (requireGender && normalizedGender) {
-    const matching = catalog.voices.filter(
-      (v) => getLabel(v, 'gender') === normalizedGender && !opts.exclude?.has(v.id),
+  // Gender selection policy (when explicit gender is provided by the user/profile):
+  // - male -> prefer male; fallback to neutral; avoid female unless no other option exists.
+  // - female -> prefer female; fallback to neutral; avoid male unless no other option exists.
+  // - neutral -> prefer neutral; fallback to any gender.
+  //
+  // If gender is inferred (not explicit), keep "best score" behavior.
+  if (explicitGender === 'male' || explicitGender === 'female') {
+    const opposite = explicitGender === 'male' ? 'female' : 'male';
+    const preferred = catalog.voices.filter(
+      (v) => getVoiceGender(v) === explicitGender && !opts.exclude?.has(v.id),
     );
-    if (matching.length > 0) {
-      const pick = considerList(matching);
-      if (pick) return pick;
-    }
+    const neutral = catalog.voices.filter((v) => {
+      const g = getVoiceGender(v);
+      return (g === 'neutral' || g === '') && !opts.exclude?.has(v.id);
+    });
+    const notOpposite = catalog.voices.filter(
+      (v) => getVoiceGender(v) !== opposite && !opts.exclude?.has(v.id),
+    );
 
-    const neutral = catalog.voices.filter(
-      (v) => getLabel(v, 'gender') === 'neutral' && !opts.exclude?.has(v.id),
+    return (
+      considerList(preferred) ??
+      considerList(neutral) ??
+      considerList(notOpposite) ??
+      considerList(catalog.voices) ??
+      null
     );
-    if (neutral.length > 0) {
-      const pickNeutral = considerList(neutral);
-      if (pickNeutral) return pickNeutral;
-    }
-    // fall through to full catalog if no strict match was available
+  }
+
+  if (explicitGender === 'neutral') {
+    const neutral = catalog.voices.filter((v) => {
+      const g = getVoiceGender(v);
+      return (g === 'neutral' || g === '') && !opts.exclude?.has(v.id);
+    });
+    return considerList(neutral) ?? considerList(catalog.voices) ?? null;
   }
 
   const pick = considerList(catalog.voices);

@@ -46,7 +46,7 @@ interface JobMonitorContextValue {
 
 const JobMonitorContext = createContext<JobMonitorContextValue | undefined>(undefined);
 
-const isBrowser = typeof window !== 'undefined';
+const isBrowser = globalThis.window !== undefined && globalThis.localStorage !== undefined;
 const ACTIVE_JOBS_STORAGE_KEY = 'esl-active-jobs';
 
 const isTerminalState = (state: JobState): boolean => state === 'succeeded' || state === 'failed';
@@ -75,15 +75,17 @@ const createDefaultJob = (jobId: string): JobEntry => {
   };
 };
 
-const buildJobMap = (entries: JobEntry[]): JobMap =>
-  entries.reduce<JobMap>((acc, job) => {
-    acc[job.jobId] = { ...createDefaultJob(job.jobId), ...job };
-    return acc;
-  }, {});
+const buildJobMap = (entries: JobEntry[]): JobMap => {
+  const map: JobMap = {};
+  for (const job of entries) {
+    map[job.jobId] = { ...createDefaultJob(job.jobId), ...job };
+  }
+  return map;
+};
 
 const loadPersistedActiveJobs = (): JobMap => {
   if (!isBrowser) return {};
-  const serialized = window.localStorage.getItem(ACTIVE_JOBS_STORAGE_KEY);
+  const serialized = globalThis.localStorage.getItem(ACTIVE_JOBS_STORAGE_KEY);
   if (!serialized) return {};
 
   try {
@@ -96,7 +98,7 @@ const loadPersistedActiveJobs = (): JobMap => {
     return buildJobMap(entries);
   } catch (error) {
     console.warn('Failed to restore active jobs from storage', error);
-    window.localStorage.removeItem(ACTIVE_JOBS_STORAGE_KEY);
+    globalThis.localStorage.removeItem(ACTIVE_JOBS_STORAGE_KEY);
     return {};
   }
 };
@@ -107,11 +109,11 @@ const persistActiveJobs = (jobs: JobMap) => {
     (job) => job.jobId && !isTerminalState(job.state),
   );
   if (activeJobs.length === 0) {
-    window.localStorage.removeItem(ACTIVE_JOBS_STORAGE_KEY);
+    globalThis.localStorage.removeItem(ACTIVE_JOBS_STORAGE_KEY);
     return;
   }
   try {
-    window.localStorage.setItem(ACTIVE_JOBS_STORAGE_KEY, JSON.stringify(activeJobs));
+    globalThis.localStorage.setItem(ACTIVE_JOBS_STORAGE_KEY, JSON.stringify(activeJobs));
   } catch (error) {
     console.warn('Failed to persist active jobs', error);
   }
@@ -321,7 +323,7 @@ export function JobMonitorProvider({ children }: { children: ReactNode }) {
   const trackJob = useCallback(
     async (jobId: string) => {
       const trimmed = jobId.trim();
-      if (!trimmed) return undefined;
+      if (!trimmed) return;
       updateJob(trimmed, (prev) => ({ ...prev, jobId: trimmed }));
 
       try {

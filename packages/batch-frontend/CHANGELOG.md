@@ -1,5 +1,11 @@
 # @esl-pipeline/batch-frontend
 
+## 1.1.1
+
+### Patch Changes
+
+- fix: harden localStorage access
+
 ## 1.1.0
 
 ### Minor Changes
