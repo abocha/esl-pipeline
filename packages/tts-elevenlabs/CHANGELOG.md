@@ -1,5 +1,11 @@
 # @esl-pipeline/tts-elevenlabs
 
+## 3.0.5
+
+### Patch Changes
+
+- improve ElevenLabs voice selection based on assigned gender instead of assumed gender
+
 ## 3.0.4
 
 ### Patch Changes

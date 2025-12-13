@@ -423,6 +423,10 @@ function cleanSpeechText(text: string): string {
   return sanitized;
 }
 
+function cleanSpeakerName(name: string): string {
+  return cleanSpeechText(name);
+}
+
 interface StudyTextSegment {
   speaker?: string;
   text: string;
@@ -433,7 +437,7 @@ function collectSpeakers(segments: StudyTextSegment[], frontmatter: Frontmatter)
   const ordered: string[] = [];
   const seen = new Set<string>();
   const add = (name: string | undefined | null) => {
-    const trimmed = name?.trim();
+    const trimmed = typeof name === 'string' ? cleanSpeakerName(name) : '';
     if (!trimmed) return;
     if (seen.has(trimmed)) return;
     seen.add(trimmed);
@@ -451,7 +455,7 @@ function collectSpeakers(segments: StudyTextSegment[], frontmatter: Frontmatter)
     const hasAnySegmentSpeakers = ordered.length > 0;
     for (const label of frontmatter.speaker_labels) {
       if (typeof label !== 'string') continue;
-      const trimmed = label.trim();
+      const trimmed = cleanSpeakerName(label);
       if (!trimmed) continue;
       if (trimmed.toLowerCase() === 'narrator' && hasAnySegmentSpeakers && !hasNarratorInSegments) {
         continue;
@@ -478,7 +482,7 @@ function resolveStudyTextSegments(lines: string[], frontmatter: Frontmatter): St
   const segments: StudyTextSegment[] = [];
   const labelOrder = Array.isArray(frontmatter.speaker_labels)
     ? frontmatter.speaker_labels
-        .map((label) => (typeof label === 'string' ? label.trim() : ''))
+        .map((label) => (typeof label === 'string' ? cleanSpeakerName(label) : ''))
         .filter(Boolean)
     : [];
   const nonNarratorFallback = labelOrder.find((label) => label.toLowerCase() !== 'narrator');
@@ -487,7 +491,7 @@ function resolveStudyTextSegments(lines: string[], frontmatter: Frontmatter): St
 
   for (const raw of lines) {
     const { speaker, text } = parseSpeaker(raw);
-    let resolvedSpeaker = speaker?.trim();
+    let resolvedSpeaker = speaker ? cleanSpeakerName(speaker) : undefined;
     if (!resolvedSpeaker && lastSpeaker) {
       resolvedSpeaker = lastSpeaker;
     } else if (!resolvedSpeaker && !lastSpeaker) {

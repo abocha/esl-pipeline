@@ -31,15 +31,15 @@ const NOTIFICATIONS_DISABLED_KEY = 'esl-notifications-disabled';
 
 export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   // Track if user has explicitly disabled notifications (separate from browser permission)
-  const [userDisabled, setUserDisabled] = useState<boolean>(() => {
+  const [_userDisabled, setUserDisabled] = useState<boolean>(() => {
     if (!isBrowser) return false;
-    return localStorage.getItem(NOTIFICATIONS_DISABLED_KEY) === 'true';
+    return globalThis.localStorage?.getItem(NOTIFICATIONS_DISABLED_KEY) === 'true';
   });
 
   const [permission, setPermission] = useState<NotificationPermissionState>(() => {
     if (!isBrowser) return 'denied';
     // If user has explicitly disabled, report as denied
-    if (localStorage.getItem(NOTIFICATIONS_DISABLED_KEY) === 'true') return 'denied';
+    if (globalThis.localStorage?.getItem(NOTIFICATIONS_DISABLED_KEY) === 'true') return 'denied';
     return Notification.permission;
   });
 
@@ -54,7 +54,7 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
     }
     try {
       // Clear the user-disabled flag when requesting permission
-      localStorage.removeItem(NOTIFICATIONS_DISABLED_KEY);
+      globalThis.localStorage?.removeItem(NOTIFICATIONS_DISABLED_KEY);
       setUserDisabled(false);
 
       const result = await Notification.requestPermission();
@@ -96,7 +96,7 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
 
   const disableNotifications = useCallback(() => {
     // Persist the user's preference to localStorage
-    localStorage.setItem(NOTIFICATIONS_DISABLED_KEY, 'true');
+    globalThis.localStorage?.setItem(NOTIFICATIONS_DISABLED_KEY, 'true');
     setUserDisabled(true);
     setPermission('denied');
   }, []);
