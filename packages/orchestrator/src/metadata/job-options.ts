@@ -4,7 +4,7 @@ import type { ConfigProvider, StudentProfile } from '../config.js';
 import type { OrchestratorPipeline, ResolvedConfigPaths } from '../pipeline.js';
 
 export type UploadOption = 'auto' | 's3' | 'none';
-export type JobModeOption = 'auto' | 'dialogue' | 'monologue';
+export type TtsStrategyOption = 'auto' | 'dialogue' | 'tts';
 
 export interface NotionDatabaseOption {
   id: string;
@@ -25,7 +25,7 @@ export interface JobOptionsPayload {
   voices: VoiceOption[];
   notionDatabases: NotionDatabaseOption[];
   uploadOptions: UploadOption[];
-  modes: JobModeOption[];
+  ttsStrategies: TtsStrategyOption[];
 }
 
 type ResolveJobOptionsSource =
@@ -36,7 +36,7 @@ type ResolveJobOptionsSource =
     };
 
 const DEFAULT_UPLOAD_OPTIONS: UploadOption[] = ['auto', 's3', 'none'];
-const DEFAULT_JOB_MODES: JobModeOption[] = ['auto', 'dialogue', 'monologue'];
+const DEFAULT_TTS_STRATEGIES: TtsStrategyOption[] = ['auto', 'dialogue', 'tts'];
 
 export async function resolveJobOptions(
   source: ResolveJobOptionsSource,
@@ -63,7 +63,7 @@ export async function resolveJobOptions(
     voices,
     notionDatabases,
     uploadOptions: [...DEFAULT_UPLOAD_OPTIONS],
-    modes: [...DEFAULT_JOB_MODES],
+    ttsStrategies: [...DEFAULT_TTS_STRATEGIES],
   };
 }
 

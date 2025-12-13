@@ -7,8 +7,8 @@ import { withPgClient } from '../infrastructure/db.js';
 import { getEncryptionService } from '../infrastructure/encryption-service.js';
 import { logger } from '../infrastructure/logger.js';
 import {
-  TtsMode,
   TtsProvider,
+  UserTtsStrategy,
   UserSettingsInput,
   UserSettingsRecord,
   getDefaultSettings,
@@ -25,7 +25,7 @@ interface UserSettingsRow {
   tts_provider: string;
   default_preset: string;
   default_voice_accent: string;
-  default_tts_mode: string;
+  default_tts_strategy: string;
   enable_notifications: boolean;
   created_at: Date;
   updated_at: Date;
@@ -43,7 +43,7 @@ function mapRowToSettings(row: UserSettingsRow): UserSettingsRecord {
     ttsProvider: row.tts_provider as TtsProvider,
     defaultPreset: row.default_preset,
     defaultVoiceAccent: row.default_voice_accent,
-    defaultTtsMode: row.default_tts_mode as TtsMode,
+    defaultTtsStrategy: row.default_tts_strategy as UserTtsStrategy,
     enableNotifications: row.enable_notifications,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
@@ -59,7 +59,7 @@ export async function getSettingsByUserId(userId: string): Promise<UserSettingsR
     const result = await client.query<UserSettingsRow>(
       `
       SELECT id, user_id, elevenlabs_key_encrypted, notion_token_encrypted,
-             tts_provider, default_preset, default_voice_accent, default_tts_mode,
+             tts_provider, default_preset, default_voice_accent, default_tts_strategy,
              enable_notifications, created_at, updated_at
       FROM user_settings
       WHERE user_id = $1
@@ -87,14 +87,14 @@ export async function createDefaultSettings(userId: string): Promise<UserSetting
       `
       INSERT INTO user_settings (
         id, user_id, elevenlabs_key_encrypted, notion_token_encrypted,
-        tts_provider, default_preset, default_voice_accent, default_tts_mode,
+        tts_provider, default_preset, default_voice_accent, default_tts_strategy,
         enable_notifications
       )
       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
       ON CONFLICT (user_id) DO UPDATE SET
         updated_at = user_settings.updated_at  -- No-op update to return the row
       RETURNING id, user_id, elevenlabs_key_encrypted, notion_token_encrypted,
-                tts_provider, default_preset, default_voice_accent, default_tts_mode,
+                tts_provider, default_preset, default_voice_accent, default_tts_strategy,
                 enable_notifications, created_at, updated_at
       `,
       [
@@ -105,7 +105,7 @@ export async function createDefaultSettings(userId: string): Promise<UserSetting
         defaults.ttsProvider,
         defaults.defaultPreset,
         defaults.defaultVoiceAccent,
-        defaults.defaultTtsMode,
+        defaults.defaultTtsStrategy,
         defaults.enableNotifications,
       ],
     );
@@ -159,7 +159,7 @@ export async function upsertSettings(
       `
       INSERT INTO user_settings (
         id, user_id, elevenlabs_key_encrypted, notion_token_encrypted,
-        tts_provider, default_preset, default_voice_accent, default_tts_mode,
+        tts_provider, default_preset, default_voice_accent, default_tts_strategy,
         enable_notifications
       )
       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
@@ -184,9 +184,9 @@ export async function upsertSettings(
           WHEN $14 THEN EXCLUDED.default_voice_accent 
           ELSE user_settings.default_voice_accent 
         END,
-        default_tts_mode = CASE 
-          WHEN $15 THEN EXCLUDED.default_tts_mode 
-          ELSE user_settings.default_tts_mode 
+        default_tts_strategy = CASE 
+          WHEN $15 THEN EXCLUDED.default_tts_strategy 
+          ELSE user_settings.default_tts_strategy 
         END,
         enable_notifications = CASE 
           WHEN $16 THEN EXCLUDED.enable_notifications 
@@ -194,7 +194,7 @@ export async function upsertSettings(
         END,
         updated_at = NOW()
       RETURNING id, user_id, elevenlabs_key_encrypted, notion_token_encrypted,
-                tts_provider, default_preset, default_voice_accent, default_tts_mode,
+                tts_provider, default_preset, default_voice_accent, default_tts_strategy,
                 enable_notifications, created_at, updated_at
       `,
       [
@@ -206,7 +206,7 @@ export async function upsertSettings(
         input.ttsProvider ?? defaults.ttsProvider,
         input.defaultPreset ?? defaults.defaultPreset,
         input.defaultVoiceAccent ?? defaults.defaultVoiceAccent,
-        input.defaultTtsMode ?? defaults.defaultTtsMode,
+        input.defaultTtsStrategy ?? defaults.defaultTtsStrategy,
         input.enableNotifications ?? defaults.enableNotifications,
         // Boolean flags for CASE expressions (true = update this field)
         input.elevenLabsKey !== undefined,
@@ -214,7 +214,7 @@ export async function upsertSettings(
         input.ttsProvider !== undefined,
         input.defaultPreset !== undefined,
         input.defaultVoiceAccent !== undefined,
-        input.defaultTtsMode !== undefined,
+        input.defaultTtsStrategy !== undefined,
         input.enableNotifications !== undefined,
       ],
     );

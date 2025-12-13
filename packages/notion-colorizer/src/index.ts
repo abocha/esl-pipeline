@@ -3,6 +3,7 @@ import type {
   BlockObjectResponse,
   ListBlockChildrenResponse,
   PartialBlockObjectResponse,
+  UpdateBlockParameters,
 } from '@notionhq/client/build/src/api-endpoints.js';
 import { readFile } from 'node:fs/promises';
 
@@ -17,10 +18,11 @@ interface Counts {
   toggles: number;
 }
 
-type NotionRichText = any[];
+type Heading2UpdateParams = Extract<UpdateBlockParameters, { heading_2: unknown }>;
+type NotionRequestRichText = NonNullable<Heading2UpdateParams['heading_2']>['rich_text'];
 
-function toRequestRichText(value: unknown): NotionRichText {
-  return Array.isArray(value) ? (value as NotionRichText) : [];
+function toRequestRichText(value: unknown): NotionRequestRichText {
+  return Array.isArray(value) ? (value as unknown as NotionRequestRichText) : [];
 }
 
 export function createNotionClient() {
@@ -85,7 +87,7 @@ export async function applyHeadingPreset(
               client.blocks.update({
                 block_id: child.id,
                 heading_3: {
-                  rich_text: toRequestRichText(child.heading_3.rich_text) as any,
+                  rich_text: toRequestRichText(child.heading_3.rich_text),
                   color: preset.h3,
                 },
               }),
@@ -120,7 +122,7 @@ export async function applyHeadingPreset(
             client.blocks.update({
               block_id: block.id,
               heading_2: {
-                rich_text: toRequestRichText(block.heading_2.rich_text) as any,
+                rich_text: toRequestRichText(block.heading_2.rich_text),
                 color: preset.h2,
               },
             }),
@@ -138,7 +140,7 @@ export async function applyHeadingPreset(
             client.blocks.update({
               block_id: block.id,
               heading_3: {
-                rich_text: toRequestRichText(block.heading_3.rich_text) as any,
+                rich_text: toRequestRichText(block.heading_3.rich_text),
                 color: preset.h3,
               },
             }),
@@ -167,7 +169,7 @@ export async function applyHeadingPreset(
               client.blocks.update({
                 block_id: block.id,
                 toggle: {
-                  rich_text: toRequestRichText(annotated) as any,
+                  rich_text: toRequestRichText(annotated),
                 },
               }),
             'blocks.update.toggle',

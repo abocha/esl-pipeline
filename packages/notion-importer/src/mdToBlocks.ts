@@ -1,4 +1,5 @@
-// Notion SDK types are unstable; use loose typing for block requests.
+// Notion SDK request types frequently change; keep this mapper permissive.
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 type BlockObjectRequest = any;
 
 type ParagraphBlock = Extract<BlockObjectRequest, { type?: 'paragraph' }>;
@@ -361,7 +362,7 @@ export function mdToBlocks(md: string): BlockObjectRequest[] {
       type: 'code',
       code: {
         rich_text: [createRichTextItem(content)],
-        language: (language || 'plain text') as any,
+        language: language || 'plain text',
       },
     } satisfies CodeBlock;
     return block;

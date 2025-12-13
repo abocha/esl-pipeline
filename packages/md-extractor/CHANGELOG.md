@@ -1,5 +1,12 @@
 # @esl-pipeline/md-extractor
 
+## 2.0.3
+
+### Patch Changes
+
+- Updated dependencies
+  - @esl-pipeline/contracts@1.0.2
+
 ## 2.0.2
 
 ### Patch Changes

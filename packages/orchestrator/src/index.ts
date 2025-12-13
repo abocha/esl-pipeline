@@ -351,13 +351,13 @@ export async function newAssignment(
         emitStage('tts', 'start');
         steps.push('tts');
 
-        // TTS mode debug logging
-        if (flags.ttsMode) {
+        // TTS strategy debug logging
+        if (flags.ttsStrategy) {
           logger.log({
             level: 'info',
-            message: `Using TTS mode: ${flags.ttsMode}`,
+            message: `Using TTS strategy: ${flags.ttsStrategy}`,
             detail: {
-              ttsMode: flags.ttsMode,
+              ttsStrategy: flags.ttsStrategy,
               dialogueLanguage: flags.dialogueLanguage,
               dialogueStability: flags.dialogueStability,
               dialogueSeed: flags.dialogueSeed,
@@ -375,8 +375,8 @@ export async function newAssignment(
             defaultAccent: flags.accentPreference,
             defaultVoiceId: flags.voiceId,
 
-            // NEW: Pass TTS mode options to TTS package
-            ttsMode: flags.ttsMode,
+            // Pass TTS strategy options to TTS package
+            ttsStrategy: flags.ttsStrategy,
             dialogueLanguage: flags.dialogueLanguage,
             dialogueStability: flags.dialogueStability,
             dialogueSeed: flags.dialogueSeed,
@@ -388,16 +388,16 @@ export async function newAssignment(
 
           // Enhanced TTS mode error handling
           if (error instanceof Error) {
-            if (error.message.includes('voice mapping') && flags.ttsMode === 'dialogue') {
+            if (error.message.includes('voice mapping') && flags.ttsStrategy === 'dialogue') {
               throw new Error(
                 `Dialogue mode requires voice mappings for all speakers. ` +
                   `Check your voices.yml file. ${error.message}`,
               );
             }
-            if (error.message.includes('text-to-dialogue') && flags.ttsMode === 'dialogue') {
+            if (error.message.includes('text-to-dialogue') && flags.ttsStrategy === 'dialogue') {
               throw new Error(
                 `Dialogue mode failed: ${error.message}\n` +
-                  'Try switching to monologue mode with --tts-mode monologue',
+                  'Try switching to TTS strategy with --tts-strategy tts',
               );
             }
           }
@@ -492,7 +492,7 @@ export async function newAssignment(
       preset: flags.preset,
 
       // Preserve TTS metadata from previous runs when flags are omitted
-      ttsMode: flags.ttsMode ?? previousManifest?.ttsMode,
+      ttsStrategy: flags.ttsStrategy ?? previousManifest?.ttsStrategy,
       dialogueLanguage: flags.dialogueLanguage ?? previousManifest?.dialogueLanguage,
       dialogueStability: flags.dialogueStability ?? previousManifest?.dialogueStability,
       dialogueSeed: flags.dialogueSeed ?? previousManifest?.dialogueSeed,
@@ -722,18 +722,18 @@ export async function rerunAssignment(
       emitStage('tts', 'start');
 
       // TTS mode debug logging for rerun
-      if (flags.ttsMode) {
-        logger.log({
-          level: 'info',
-          message: `Using TTS mode: ${flags.ttsMode}`,
-          detail: {
-            ttsMode: flags.ttsMode,
-            dialogueLanguage: flags.dialogueLanguage,
-            dialogueStability: flags.dialogueStability,
-            dialogueSeed: flags.dialogueSeed,
-          },
-        });
-      }
+        if (flags.ttsStrategy) {
+          logger.log({
+            level: 'info',
+            message: `Using TTS strategy: ${flags.ttsStrategy}`,
+            detail: {
+              ttsStrategy: flags.ttsStrategy,
+              dialogueLanguage: flags.dialogueLanguage,
+              dialogueStability: flags.dialogueStability,
+              dialogueSeed: flags.dialogueSeed,
+            },
+          });
+        }
 
       let ttsResult: Awaited<ReturnType<typeof buildStudyTextMp3>>;
       try {
@@ -745,8 +745,8 @@ export async function rerunAssignment(
           defaultAccent: flags.accentPreference,
           defaultVoiceId: flags.voiceId,
 
-          // NEW: Pass TTS mode options to TTS package
-          ttsMode: flags.ttsMode,
+          // Pass TTS strategy options to TTS package
+          ttsStrategy: flags.ttsStrategy,
           dialogueLanguage: flags.dialogueLanguage,
           dialogueStability: flags.dialogueStability,
           dialogueSeed: flags.dialogueSeed,
@@ -758,16 +758,16 @@ export async function rerunAssignment(
 
         // Enhanced TTS mode error handling
         if (error instanceof Error) {
-          if (error.message.includes('voice mapping') && flags.ttsMode === 'dialogue') {
+          if (error.message.includes('voice mapping') && flags.ttsStrategy === 'dialogue') {
             throw new Error(
               `Dialogue mode requires voice mappings for all speakers. ` +
                 `Check your voices.yml file. ${error.message}`,
             );
           }
-          if (error.message.includes('text-to-dialogue') && flags.ttsMode === 'dialogue') {
+          if (error.message.includes('text-to-dialogue') && flags.ttsStrategy === 'dialogue') {
             throw new Error(
               `Dialogue mode failed: ${error.message}\n` +
-                'Try switching to monologue mode with --tts-mode monologue',
+                'Try switching to TTS strategy with --tts-strategy tts',
             );
           }
         }
@@ -858,7 +858,7 @@ export async function rerunAssignment(
       },
 
       // Preserve prior TTS metadata unless explicitly overridden
-      ttsMode: flags.ttsMode ?? manifest.ttsMode,
+      ttsStrategy: flags.ttsStrategy ?? manifest.ttsStrategy,
       dialogueLanguage: flags.dialogueLanguage ?? manifest.dialogueLanguage,
       dialogueStability: flags.dialogueStability ?? manifest.dialogueStability,
       dialogueSeed: flags.dialogueSeed ?? manifest.dialogueSeed,

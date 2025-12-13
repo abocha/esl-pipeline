@@ -36,7 +36,7 @@ describe('application/get-job-options', () => {
       voices: [{ id: 'voice-1', name: 'Voice One', accent: 'accent_one', gender: 'female' }],
       notionDatabases: [{ id: 'db-1', name: 'DB One' }],
       uploadOptions: ['auto', 's3', 'none'],
-      modes: ['auto', 'dialogue', 'monologue'],
+      ttsStrategies: ['auto', 'dialogue', 'tts'],
     });
 
     const result = await getJobOptions();
@@ -47,7 +47,7 @@ describe('application/get-job-options', () => {
       voices: [{ id: 'voice-1', name: 'Voice One', accent: 'accent_one', gender: 'female' }],
       notionDatabases: [{ id: 'db-1', name: 'DB One' }],
       uploadOptions: ['auto', 's3', 'none'],
-      modes: ['auto', 'dialogue', 'monologue'],
+      ttsStrategies: ['auto', 'dialogue', 'tts'],
       supportedActions: [
         {
           type: 'rerun_audio',
@@ -87,7 +87,7 @@ describe('application/get-job-options', () => {
 
     expect(result.presets).toEqual(['b1-default']);
     expect(result.uploadOptions).toEqual(['auto', 's3', 'none']);
-    expect(result.modes).toEqual(['auto']);
+    expect(result.ttsStrategies).toEqual(['auto']);
     expect(result.notionDatabases).toEqual([
       { id: 'notion-db-b1', name: 'B1 Lessons' },
       { id: 'notion-db-b2', name: 'B2 Lessons' },

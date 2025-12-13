@@ -282,7 +282,7 @@ default: voice_id_default
     const result = await buildStudyTextMp3(tempMdPath, {
       voiceMapPath: tempVoiceMapPath,
       outPath: dir,
-      ttsMode: 'monologue', // Force monologue mode for this test
+      ttsStrategy: 'tts', // Force TTS strategy for this test
     });
     expect(result.path.endsWith('.mp3')).toBe(true);
     expect(result.hash).toHaveLength(64);
@@ -342,6 +342,7 @@ default: voice_id_default
     const result = await buildStudyTextMp3(tempMdPath, {
       voiceMapPath: tempVoiceMapPath,
       outPath: dir,
+      ttsStrategy: 'tts',
     });
     expect(result.path.endsWith('.mp3')).toBe(true);
     expect(result.hash).toHaveLength(64);
@@ -351,7 +352,7 @@ default: voice_id_default
       true,
       'ffmpeg',
     );
-    expect(convertMock).toHaveBeenCalledTimes(2);
+    expect(convertMock).toHaveBeenCalledTimes(1);
     const voiceIds = convertMock.mock.calls.map((call) => call[0]);
     expect(new Set(voiceIds).size).toBe(1);
     expect(result.voices).toEqual([
@@ -404,7 +405,7 @@ default: voice_id_default
     const result = await buildStudyTextMp3(tempMdPath, {
       voiceMapPath: tempVoiceMapPath,
       outPath: dir,
-      ttsMode: 'monologue', // Force monologue mode for this test
+      ttsStrategy: 'tts', // Force TTS strategy for this test
     });
     expect(result.path.endsWith('.mp3')).toBe(true);
     expect(result.hash).toHaveLength(64);
@@ -546,7 +547,7 @@ auto: true
     const result = await buildStudyTextMp3(tempMdPath, {
       voiceMapPath: tempVoiceMapPath,
       outPath: dir,
-      ttsMode: 'monologue', // Force monologue mode for this test
+      ttsStrategy: 'tts', // Force TTS strategy for this test
     });
     expect(convertMock).toHaveBeenCalledTimes(4);
     const voiceIds = convertMock.mock.calls.map((call) => call[0]);
@@ -608,6 +609,7 @@ default: voice_id_default
     await buildStudyTextMp3(tempMdPath, {
       voiceMapPath: tempVoiceMapPath,
       outPath: dir,
+      ttsStrategy: 'tts',
     });
     expect(convertMock).toHaveBeenCalledWith(
       expect.any(String),
@@ -650,6 +652,7 @@ default: voice_id_default
     await buildStudyTextMp3(tempMdPath, {
       voiceMapPath: tempVoiceMapPath,
       outPath: dir,
+      ttsStrategy: 'tts',
     });
     expect(convertMock).toHaveBeenCalledTimes(1);
 
@@ -657,6 +660,7 @@ default: voice_id_default
     const result = await buildStudyTextMp3(tempMdPath, {
       voiceMapPath: tempVoiceMapPath,
       outPath: dir,
+      ttsStrategy: 'tts',
     });
     expect(result.hash).toHaveLength(64);
     expect(convertMock).not.toHaveBeenCalled();

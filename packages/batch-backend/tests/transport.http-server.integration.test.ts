@@ -86,7 +86,7 @@ vi.mock('../src/infrastructure/orchestrator-service', () => {
     voices: [{ id: 'voice-1', name: 'Voice One', accent: 'american_female', gender: 'female' }],
     notionDatabases: [{ id: 'db-1', name: 'DB One' }],
     uploadOptions: ['auto', 's3', 'none'] as const,
-    modes: ['auto', 'dialogue', 'monologue'] as const,
+    ttsStrategies: ['auto', 'dialogue', 'tts'] as const,
   };
   return {
     getJobOptionsFromOrchestrator: vi.fn().mockResolvedValue(orchestratorJobOptionsMock),
@@ -130,7 +130,7 @@ describe('transport/http-server - integration (in-process)', () => {
       voiceAccent: undefined,
       forceTts: undefined,
       notionDatabase: undefined,
-      mode: undefined,
+      ttsStrategy: undefined,
     });
   });
 
@@ -150,7 +150,7 @@ describe('transport/http-server - integration (in-process)', () => {
         voiceAccent: 'american_female',
         forceTts: true,
         notionDatabase: 'db-123',
-        mode: 'dialogue',
+        ttsStrategy: 'dialogue',
       },
     });
 
@@ -164,7 +164,7 @@ describe('transport/http-server - integration (in-process)', () => {
       voiceAccent: 'american_female',
       forceTts: true,
       notionDatabase: 'db-123',
-      mode: 'dialogue',
+      ttsStrategy: 'dialogue',
     });
   });
 
@@ -224,7 +224,7 @@ describe('transport/http-server - integration (in-process)', () => {
       voiceAccent: 'american_female',
       forceTts: true,
       notionDatabase: 'db-123',
-      mode: 'dialogue',
+      ttsStrategy: 'dialogue',
       notionUrl: 'https://notion.so/job-1',
       state: 'queued',
       createdAt: '2024-01-01T00:00:00.000Z',
@@ -251,7 +251,7 @@ describe('transport/http-server - integration (in-process)', () => {
       voiceAccent: 'american_female',
       forceTts: true,
       notionDatabase: 'db-123',
-      mode: 'dialogue',
+      ttsStrategy: 'dialogue',
       notionUrl: 'https://notion.so/job-1',
       state: 'queued',
       createdAt: '2024-01-01T00:00:00.000Z',
@@ -277,7 +277,7 @@ describe('transport/http-server - integration (in-process)', () => {
       voiceAccent: null,
       forceTts: null,
       notionDatabase: null,
-      mode: null,
+      ttsStrategy: null,
       notionUrl: null,
       state: 'queued',
       createdAt: '2024-01-01T00:00:00.000Z',
@@ -377,6 +377,10 @@ describe('transport/http-server - integration (in-process)', () => {
       upload: 's3',
       voiceAccent: 'american_female',
       voiceId: 'voice_amanda',
+      ttsStrategy: null,
+      notionDatabase: null,
+      forceTts: null,
+      notionUrl: null,
       createdAt: new Date('2024-01-01T10:00:00Z'),
       updatedAt: new Date('2024-01-01T10:01:00Z'),
       startedAt: new Date('2024-01-01T10:01:00Z'),
@@ -449,7 +453,7 @@ describe('transport/http-server - integration (in-process)', () => {
     expect(eventPayload.type).toBe('job_state_changed');
     expect(eventPayload.jobId).toBe(job.id);
     expect(eventPayload.state).toBe('running');
-    expect(eventPayload.payload?.mode).toBeNull();
+    expect(eventPayload.payload?.ttsStrategy).toBeNull();
     expect(eventPayload.payload?.md).toBe(job.md);
   });
 });

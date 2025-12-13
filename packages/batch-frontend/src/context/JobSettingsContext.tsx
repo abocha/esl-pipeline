@@ -17,7 +17,7 @@ export interface JobSettings {
   notionDatabase: string;
   withTts: boolean;
   forceTts: boolean;
-  mode: NonNullable<SubmitJobRequest['mode']>;
+  ttsStrategy: NonNullable<SubmitJobRequest['ttsStrategy']>;
   applyToPending: boolean;
 }
 
@@ -41,7 +41,7 @@ const DEFAULT_JOB_OPTIONS: JobOptionsResponse = {
     { id: 'default-b1', name: 'B1 Lessons' },
     { id: 'default-b2', name: 'B2 Lessons' },
   ],
-  modes: ['auto', 'dialogue', 'monologue'],
+  ttsStrategies: ['auto', 'dialogue', 'tts'],
 };
 
 const DEFAULT_SETTINGS: JobSettings = {
@@ -49,7 +49,7 @@ const DEFAULT_SETTINGS: JobSettings = {
   notionDatabase: DEFAULT_JOB_OPTIONS.notionDatabases[0]?.id ?? 'default-b1',
   withTts: true,
   forceTts: false,
-  mode: 'auto',
+  ttsStrategy: 'auto',
   applyToPending: false,
 };
 
@@ -69,7 +69,7 @@ export function JobSettingsProvider({ children }: { children: ReactNode }) {
     ...DEFAULT_SETTINGS,
     preset: options.presets[0] ?? DEFAULT_SETTINGS.preset,
     notionDatabase: options.notionDatabases[0]?.id ?? DEFAULT_SETTINGS.notionDatabase,
-    mode: options.modes[0] ?? DEFAULT_SETTINGS.mode,
+    ttsStrategy: options.ttsStrategies[0] ?? DEFAULT_SETTINGS.ttsStrategy,
   }));
 
   useEffect(() => {
@@ -83,16 +83,16 @@ export function JobSettingsProvider({ children }: { children: ReactNode }) {
         ) ??
         options.notionDatabases[0]?.id ??
         DEFAULT_SETTINGS.notionDatabase;
-      const mode =
-        (ensureOption(prev.mode, options.modes) as JobSettings['mode']) ??
-        options.modes[0] ??
-        DEFAULT_SETTINGS.mode;
+      const ttsStrategy =
+        (ensureOption(prev.ttsStrategy, options.ttsStrategies) as JobSettings['ttsStrategy']) ??
+        options.ttsStrategies[0] ??
+        DEFAULT_SETTINGS.ttsStrategy;
 
       return {
         ...prev,
         preset,
         notionDatabase,
-        mode,
+        ttsStrategy,
       };
     });
   }, [options]);
@@ -106,7 +106,7 @@ export function JobSettingsProvider({ children }: { children: ReactNode }) {
       ...DEFAULT_SETTINGS,
       preset: options.presets[0] ?? DEFAULT_SETTINGS.preset,
       notionDatabase: options.notionDatabases[0]?.id ?? DEFAULT_SETTINGS.notionDatabase,
-      mode: options.modes[0] ?? DEFAULT_SETTINGS.mode,
+      ttsStrategy: options.ttsStrategies[0] ?? DEFAULT_SETTINGS.ttsStrategy,
     });
   }, [options]);
 

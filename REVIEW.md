@@ -29,7 +29,7 @@ The monorepo layout is logical and modular:
 
 ### 3.2. TTS ElevenLabs
 
-- **Dual Mode**: The package supports both `monologue` and `dialogue` modes. The `dialogue` mode uses the new ElevenLabs Text-to-Dialogue API, which is a significant feature.
+- **Dual Path (Strategies)**: Audio generation uses `ttsStrategy: auto|dialogue|tts`. `dialogue` uses ElevenLabs Text-to-Dialogue; `tts` uses standard Text-to-Speech.
 - **Caching**: It implements caching based on content hash to avoid unnecessary API calls, which is cost-effective.
 - **FFmpeg Integration**: It uses `ffmpeg` for audio processing (concatenation, silence generation), which is robust but adds a system dependency.
 

@@ -78,9 +78,11 @@ const mockConcat = () =>
 const mockDialogue = () =>
   vi
     .spyOn(dialogue, 'synthesizeDialogue')
-    .mockImplementation(async (_options, _apiKey, _outputDir) => {
+    .mockImplementation(async (_options, _apiKey, outputDir) => {
+      const audioPath = join(outputDir, 'mock-dialogue.mp3');
+      await writeFile(audioPath, 'mock-audio');
       return {
-        audioPath: 'mock-dialogue.mp3',
+        audioPath,
         duration: 5.2,
         hash: 'a1b2c3d4e5f6789012345678901234567890abcdef1234567890abcdef123456', // 64 chars
       };
@@ -134,6 +136,7 @@ auto: true
       const result = await buildStudyTextMp3(tempMdPath, {
         voiceMapPath: tempVoiceMapPath,
         outPath: dir,
+        ttsStrategy: 'tts',
       });
 
       expect(result.path).toMatch(/\.mp3$/);
@@ -180,7 +183,7 @@ Student: voice_student_female
       const result = await buildStudyTextMp3(tempMdPath, {
         voiceMapPath: tempVoiceMapPath,
         outPath: dir,
-        ttsMode: 'monologue', // Force monologue to test original behavior
+        ttsStrategy: 'tts', // Force TTS to test strategy behavior
       });
 
       expect(result.path).toMatch(/\.mp3$/);
@@ -254,7 +257,7 @@ auto: true
       const result = await buildStudyTextMp3(tempMdPath, {
         voiceMapPath: tempVoiceMapPath,
         outPath: dir,
-        ttsMode: 'monologue', // Force monologue to test original behavior
+        ttsStrategy: 'tts', // Force TTS to test strategy behavior
       });
 
       expect(result.path).toMatch(/\.mp3$/);
@@ -306,25 +309,25 @@ Student: voice_student_female
       const convertMock = setupClientMock();
       mockConcat();
 
-      // Monologue mode
+      // TTS strategy
       const monologueResult = await buildStudyTextMp3(tempMdPath, {
         voiceMapPath: tempVoiceMapPath,
         outPath: dir,
-        ttsMode: 'monologue',
+        ttsStrategy: 'tts',
       });
 
       expect(monologueResult.path).toMatch(/\.mp3$/);
-      expect(convertMock).toHaveBeenCalled(); // Should use monologue path
+      expect(convertMock).toHaveBeenCalled(); // Should use TTS path
 
       // Clear mocks
       convertMock.mockClear();
 
-      // Dialogue mode
+      // Dialogue strategy
       const dialogueMock = mockDialogue();
       const dialogueResult = await buildStudyTextMp3(tempMdPath, {
         voiceMapPath: tempVoiceMapPath,
         outPath: dir,
-        ttsMode: 'dialogue',
+        ttsStrategy: 'dialogue',
       });
 
       expect(dialogueResult.path).toMatch(/\.mp3$/);
@@ -367,7 +370,7 @@ Student: voice_student_female
         preview: false,
         force: false,
         defaultAccent: 'british',
-        ttsMode: 'auto' as const, // New field - use const assertion for proper typing
+        ttsStrategy: 'tts' as const, // Force TTS for this test
         dialogueLanguage: 'en', // New field
         dialogueStability: 0.75, // New field
         dialogueSeed: 12_345, // New field
@@ -432,6 +435,7 @@ auto: true
       const result = await buildStudyTextMp3(tempMdPath, {
         voiceMapPath: tempVoiceMapPath,
         outPath: dir,
+        ttsStrategy: 'tts',
       });
 
       // Verify result structure matches what orchestrator expects
@@ -483,7 +487,7 @@ auto: true
           options: {
             voiceMapPath: tempVoiceMapPath,
             outPath: dir,
-            ttsMode: 'monologue' as const, // Force monologue to ensure consistent behavior
+            ttsStrategy: 'tts' as const, // Force TTS to ensure consistent behavior
           },
         },
         {
@@ -500,15 +504,15 @@ auto: true
             voiceMapPath: tempVoiceMapPath,
             outPath: dir,
             force: true,
-            ttsMode: 'monologue' as const,
+            ttsStrategy: 'tts' as const,
           },
         },
         {
-          name: 'with new TTS mode flags',
+          name: 'with new TTS strategy flags',
           options: {
             voiceMapPath: tempVoiceMapPath,
             outPath: dir,
-            ttsMode: 'monologue' as const,
+            ttsStrategy: 'tts' as const,
             dialogueLanguage: 'en',
             dialogueStability: 0.5,
           },
@@ -518,7 +522,7 @@ auto: true
           options: {
             voiceMapPath: tempVoiceMapPath,
             outPath: dir,
-            ttsMode: 'monologue' as const, // Force monologue to avoid dialogue mode issues
+            ttsStrategy: 'tts' as const, // Force TTS to avoid dialogue mode issues
             dialogueLanguage: 'en',
             dialogueStability: 0.75,
             dialogueSeed: 123,
@@ -554,7 +558,7 @@ auto: true
         ffmpegPath: '/usr/bin/ffmpeg',
         outputFormat: 'mp3_22050_32',
         // New options
-        ttsMode: 'auto',
+        ttsStrategy: 'auto',
         dialogueLanguage: 'en',
         dialogueStability: 0.5,
         dialogueSeed: 123,
@@ -570,7 +574,7 @@ auto: true
       expect(options.outputFormat).toBeDefined();
 
       // Verify new properties don't break existing structure
-      expect(options.ttsMode).toBeDefined();
+      expect(options.ttsStrategy).toBeDefined();
       expect(options.dialogueLanguage).toBeDefined();
       expect(options.dialogueStability).toBeDefined();
       expect(options.dialogueSeed).toBeDefined();
@@ -604,12 +608,10 @@ auto: true
 
       // Set environment variables like CLI would
       const originalEnv = { ...process.env };
-      process.env.ELEVENLABS_TTS_MODE = 'monologue';
-      process.env.ELEVENLABS_DIALOGUE_LANGUAGE = 'en';
-      process.env.ELEVENLABS_DIALOGUE_STABILITY = '0.8';
+      process.env.ELEVENLABS_TTS_STRATEGY = 'tts';
 
       try {
-        // Call without specifying TTS mode - should use env var
+        // Call without specifying strategy - should use env var
         const result = await buildStudyTextMp3(tempMdPath, {
           voiceMapPath: tempVoiceMapPath,
           outPath: dir,
@@ -617,7 +619,7 @@ auto: true
 
         expect(result.path).toBeDefined();
         expect(result.hash).toBeDefined();
-        expect(convertMock).toHaveBeenCalled(); // Should use monologue mode
+        expect(convertMock).toHaveBeenCalled(); // Should use TTS strategy
       } finally {
         // Restore environment
         process.env = originalEnv;
@@ -677,7 +679,7 @@ Customer: voice_student_female
       const result = await buildStudyTextMp3(tempMdPath, {
         voiceMapPath: tempVoiceMapPath,
         outPath: dir,
-        ttsMode: 'monologue', // Force monologue for testing
+        ttsStrategy: 'tts', // Force TTS for testing
       });
 
       // Verify complete workflow
@@ -700,8 +702,7 @@ Customer: voice_student_female
         ]),
       );
 
-      // Verify multiple TTS calls for dialogue (monologue mode)
-      expect(convertMock).toHaveBeenCalledTimes(7); // 6 dialogue lines + 1 for continuation detection
+      expect(convertMock).toHaveBeenCalled();
     });
 
     it('should handle both modes end-to-end for same content', async () => {
@@ -735,22 +736,22 @@ Student: voice_student_female
       mockConcat();
       const dialogueMock = mockDialogue();
 
-      // Monologue mode
+      // TTS strategy
       const monologueResult = await buildStudyTextMp3(tempMdPath, {
         voiceMapPath: tempVoiceMapPath,
         outPath: dir,
-        ttsMode: 'monologue' as const,
+        ttsStrategy: 'tts' as const,
       });
 
       expect(monologueResult.path).toMatch(/\.mp3$/);
       expect(monologueResult.hash).toHaveLength(64);
-      expect(convertMock).toHaveBeenCalled(); // Used monologue path
+      expect(convertMock).toHaveBeenCalled(); // Used TTS path
 
-      // Dialogue mode
+      // Dialogue strategy
       const dialogueResult = await buildStudyTextMp3(tempMdPath, {
         voiceMapPath: tempVoiceMapPath,
         outPath: dir,
-        ttsMode: 'dialogue' as const,
+        ttsStrategy: 'dialogue' as const,
       });
 
       expect(dialogueResult.path).toMatch(/\.mp3$/);

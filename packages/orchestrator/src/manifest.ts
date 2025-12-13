@@ -18,8 +18,8 @@ export interface AssignmentManifest {
   };
   preset?: string;
 
-  // TTS mode information for reproducibility
-  ttsMode?: 'auto' | 'dialogue' | 'monologue';
+  // TTS strategy information for reproducibility
+  ttsStrategy?: 'auto' | 'dialogue' | 'tts';
   dialogueLanguage?: string;
   dialogueStability?: number;
   dialogueSeed?: number;
@@ -46,10 +46,10 @@ export function createFilesystemManifestStore(): ManifestStore {
       const target = manifestPathFor(mdPath);
       await mkdir(dirname(target), { recursive: true });
 
-      // Ensure backward compatibility: only include TTS mode fields if they exist
+      // Only include optional TTS fields if they exist
       const compatibleManifest = {
         ...manifest,
-        ...(manifest.ttsMode && { ttsMode: manifest.ttsMode }),
+        ...(manifest.ttsStrategy && { ttsStrategy: manifest.ttsStrategy }),
         ...(manifest.dialogueLanguage && { dialogueLanguage: manifest.dialogueLanguage }),
         ...(manifest.dialogueStability !== undefined && {
           dialogueStability: manifest.dialogueStability,

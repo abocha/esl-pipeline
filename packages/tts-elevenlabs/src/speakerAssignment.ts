@@ -1,4 +1,5 @@
 import type { SpeakerProfile } from '@esl-pipeline/md-extractor';
+import { ConfigurationError } from '@esl-pipeline/contracts';
 
 import {
   type PickedVoice,
@@ -38,7 +39,9 @@ function normalize(str: string | undefined | null): string {
   const s = (str ?? '').trim().toLowerCase();
   // Keep this small and deterministic: strip common markdown punctuation from speaker ids
   // (e.g. "**Mark" from "**Mark:**").
-  return s.replaceAll(/[*_`~>#]/g, '').replaceAll(/\s+/g, ' ').trim();
+  const stripped = s.replaceAll(/[*_`~>#]/g, '').replaceAll(/\s+/g, ' ').trim();
+  // Also strip trailing colon-like punctuation commonly used in dialogue labels.
+  return stripped.replaceAll(/[:：]+$/g, '').trim();
 }
 
 function findProfile(
@@ -73,6 +76,35 @@ function pickFromGenericPool(catalog: VoiceCatalog, used: Set<string>): string |
   // fallback to first unused voice
   for (const voice of catalog.voices) {
     if (!used.has(voice.id)) return voice.id;
+  }
+  return undefined;
+}
+
+function pickFromGenericPoolWithGender(
+  catalog: VoiceCatalog,
+  used: Set<string>,
+  allowed: ReadonlySet<string>,
+): string | undefined {
+  const isAllowed = (voice: VoiceCatalog['voices'][number]) => {
+    const gender =
+      typeof voice.labels?.gender === 'string' ? voice.labels.gender.trim().toLowerCase() : '';
+    const normalized = gender || 'neutral';
+    return allowed.has(normalized);
+  };
+
+  for (const name of GENERIC_VOICE_PRIORITY) {
+    const match = catalog.voices.find(
+      (v) =>
+        v.name &&
+        v.name.toLowerCase() === name.toLowerCase() &&
+        !used.has(v.id) &&
+        isAllowed(v),
+    );
+    if (match) return match.id;
+  }
+
+  for (const voice of catalog.voices) {
+    if (!used.has(voice.id) && isAllowed(voice)) return voice.id;
   }
   return undefined;
 }
@@ -184,7 +216,13 @@ export async function resolveSpeakerVoices(opts: {
     }
 
     if (!assigned) {
-      const fallbackVoice = pickFromGenericPool(catalog, usedVoices);
+      const profileGender = profile?.gender?.toString().trim().toLowerCase();
+      const fallbackVoice =
+        profileGender === 'male'
+          ? pickFromGenericPoolWithGender(catalog, usedVoices, new Set(['male', 'neutral']))
+          : profileGender === 'female'
+            ? pickFromGenericPoolWithGender(catalog, usedVoices, new Set(['female', 'neutral']))
+            : pickFromGenericPool(catalog, usedVoices);
       if (fallbackVoice) {
         assigned = fallbackVoice;
         assignmentSource = 'fallback';
@@ -192,6 +230,15 @@ export async function resolveSpeakerVoices(opts: {
     }
 
     if (!assigned) {
+      const profileGender = profile?.gender?.toString().trim().toLowerCase();
+      const strictGender = profileGender === 'male' || profileGender === 'female';
+      if (strictGender) {
+        throw new ConfigurationError(
+          `No acceptable ElevenLabs voice found for speaker "${speaker}" with gender "${profileGender}". ` +
+            `Add a matching voice to your voice catalog or override via voices.yml.`,
+        );
+      }
+
       // as final fallback reuse default even if already taken
       const reuse = resolveVoiceToken(defaultToken ?? '', catalog);
       if (reuse) {

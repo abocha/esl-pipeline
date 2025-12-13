@@ -133,6 +133,10 @@ interface RunFlags {
   presetsPath?: string;
   accentPreference?: string;
   withTts: boolean;
+  ttsStrategy?: 'auto' | 'dialogue' | 'tts';
+  dialogueLanguage?: string;
+  dialogueStability?: number;
+  dialogueSeed?: number;
   upload?: 's3';
   presign?: number;
   publicRead: boolean;
@@ -178,6 +182,22 @@ const parseRunFlags = async (args: string[]): Promise<RunFlags> => {
     .option('--presets-path <path>', 'Path to presets JSON')
     .option('--accent <name>', 'Preferred voice accent')
     .option('--with-tts', 'Generate ElevenLabs audio')
+    .option('--tts-strategy <strategy>', 'TTS strategy (auto|dialogue|tts)', (value) => {
+      const allowed = ['auto', 'dialogue', 'tts'] as const;
+      if (!allowed.includes(value as (typeof allowed)[number])) {
+        throw new InvalidOptionArgumentError(
+          `Unknown TTS strategy "${value}". Use one of: ${allowed.join(', ')}`,
+        );
+      }
+      return value as RunFlags['ttsStrategy'];
+    })
+    .option('--dialogue-language <code>', 'Dialogue language code (e.g. en, es) for dialogue strategy')
+    .option('--dialogue-stability <value>', 'Dialogue stability (0.0-1.0)', (value) =>
+      parseOptionalFloat(value, 'Dialogue stability'),
+    )
+    .option('--dialogue-seed <value>', 'Dialogue seed', (value) =>
+      parseOptionalInt(value, 'Dialogue seed'),
+    )
     .option('--upload <mode>', 'Upload audio to S3', parseUploadOption)
     .option('--presign <seconds>', 'Presign URL expiry in seconds', (value) =>
       parseOptionalInt(value, 'Presign'),
@@ -206,6 +226,10 @@ const parseRunFlags = async (args: string[]): Promise<RunFlags> => {
     presetsPath?: string;
     accent?: string;
     withTts?: boolean;
+    ttsStrategy?: RunFlags['ttsStrategy'];
+    dialogueLanguage?: string;
+    dialogueStability?: number;
+    dialogueSeed?: number;
     upload?: 's3';
     presign?: number;
     publicRead?: boolean;
@@ -232,6 +256,10 @@ const parseRunFlags = async (args: string[]): Promise<RunFlags> => {
     presetsPath: opts.presetsPath,
     accentPreference: opts.accent,
     withTts: Boolean(opts.withTts),
+    ttsStrategy: opts.ttsStrategy,
+    dialogueLanguage: opts.dialogueLanguage,
+    dialogueStability: opts.dialogueStability,
+    dialogueSeed: opts.dialogueSeed,
     upload: opts.upload,
     presign: opts.presign,
     publicRead: Boolean(opts.publicRead),
@@ -680,18 +708,18 @@ const parseRerunFlags = async (args: string[]): Promise<RerunFlags> => {
       parseOptionalInt(value, 'Presign'),
     )
     .option('--accent <name>', 'Preferred voice accent')
-    .option('--tts-mode <mode>', 'TTS mode (auto|dialogue|monologue)', (value) => {
-      const allowed = ['auto', 'dialogue', 'monologue'] as const;
+    .option('--tts-strategy <strategy>', 'TTS strategy (auto|dialogue|tts)', (value) => {
+      const allowed = ['auto', 'dialogue', 'tts'] as const;
       if (!allowed.includes(value as (typeof allowed)[number])) {
         throw new InvalidOptionArgumentError(
-          `Unknown TTS mode "${value}". Use one of: ${allowed.join(', ')}`,
+          `Unknown TTS strategy "${value}". Use one of: ${allowed.join(', ')}`,
         );
       }
-      return value as RerunFlags['ttsMode'];
+      return value as RerunFlags['ttsStrategy'];
     })
     .option(
       '--dialogue-language <code>',
-      'Dialogue language code (e.g. en, es) for dialogue TTS mode',
+      'Dialogue language code (e.g. en, es) for dialogue strategy',
     )
     .option('--dialogue-stability <value>', 'Dialogue stability (0.0-1.0)', (value) =>
       parseOptionalFloat(value, 'Dialogue stability'),
@@ -705,7 +733,7 @@ const parseRerunFlags = async (args: string[]): Promise<RerunFlags> => {
     RerunFlags & {
       steps?: RerunStep[];
       accent?: string;
-      ttsMode?: RerunFlags['ttsMode'];
+      ttsStrategy?: RerunFlags['ttsStrategy'];
       dialogueLanguage?: string;
       dialogueStability?: number;
       dialogueSeed?: number;
@@ -724,7 +752,7 @@ const parseRerunFlags = async (args: string[]): Promise<RerunFlags> => {
     publicRead: Boolean(opts.publicRead),
     presign: opts.presign,
     accentPreference: opts.accent,
-    ttsMode: opts.ttsMode,
+    ttsStrategy: opts.ttsStrategy,
     dialogueLanguage: opts.dialogueLanguage,
     dialogueStability: opts.dialogueStability,
     dialogueSeed: opts.dialogueSeed,
@@ -839,6 +867,10 @@ async function handleRun(args: string[]): Promise<void> {
           // - Only an explicit --with-tts should force true here.
           // - This allows saved wizard.defaults.json withTts to be respected.
           withTts: parsed.withTts ? true : undefined,
+          ttsStrategy: parsed.ttsStrategy,
+          dialogueLanguage: parsed.dialogueLanguage,
+          dialogueStability: parsed.dialogueStability,
+          dialogueSeed: parsed.dialogueSeed,
           upload: parsed.upload,
           publicRead: parsed.publicRead,
           prefix: parsed.prefix,
@@ -879,6 +911,10 @@ async function handleRun(args: string[]): Promise<void> {
       presetsPath: parsed.presetsPath ?? undefined,
       accentPreference: parsed.accentPreference ?? undefined,
       withTts: parsed.withTts ? true : undefined,
+      ttsStrategy: parsed.ttsStrategy ?? undefined,
+      dialogueLanguage: parsed.dialogueLanguage ?? undefined,
+      dialogueStability: parsed.dialogueStability ?? undefined,
+      dialogueSeed: parsed.dialogueSeed ?? undefined,
       upload: parsed.upload,
       presign: parsed.presign ?? undefined,
       publicRead: parsed.publicRead ? true : undefined,
@@ -1008,11 +1044,11 @@ const printWizardSummary = (
   if (selections.accentPreference) console.log(`  Accent   : ${selections.accentPreference}`);
   if (selections.withTts) {
     console.log(`  Audio    : Enabled`);
-    if (selections.ttsMode) {
+    if (selections.ttsStrategy) {
       console.log(
-        `  Mode     : ${selections.ttsMode} (${selections.ttsMode === 'auto' ? 'auto-detect' : selections.ttsMode === 'dialogue' ? 'Text-to-Dialogue' : 'Text-to-Speech'})`,
+        `  Strategy : ${selections.ttsStrategy} (${selections.ttsStrategy === 'auto' ? 'auto' : selections.ttsStrategy === 'dialogue' ? 'Text-to-Dialogue' : 'Text-to-Speech'})`,
       );
-      if (selections.ttsMode === 'dialogue') {
+      if (selections.ttsStrategy === 'dialogue') {
         if (selections.dialogueLanguage) {
           console.log(`  Language : ${selections.dialogueLanguage}`);
         }

@@ -34,7 +34,7 @@ export function registerCoreRoutes(app: FastifyInstance, options: CoreRouteOptio
       voiceId: z.string().min(1).optional(),
       forceTts: z.boolean().optional(),
       notionDatabase: z.string().min(1).optional(),
-      mode: z.enum(['auto', 'dialogue', 'monologue']).optional(),
+      ttsStrategy: z.enum(['auto', 'dialogue', 'tts']).optional(),
     });
 
     const validatedData = jobSchema.parse(body);
@@ -48,7 +48,7 @@ export function registerCoreRoutes(app: FastifyInstance, options: CoreRouteOptio
       voiceAccent: validatedData.voiceAccent,
       forceTts: validatedData.forceTts,
       notionDatabase: validatedData.notionDatabase,
-      mode: validatedData.mode,
+      ttsStrategy: validatedData.ttsStrategy,
     });
 
     logger.info('HTTP request handled', {
@@ -179,7 +179,7 @@ export function registerCoreRoutes(app: FastifyInstance, options: CoreRouteOptio
               manifestPath: dto.manifestPath,
               error: dto.error,
               finishedAt: dto.finishedAt,
-              mode: dto.mode,
+              ttsStrategy: dto.ttsStrategy,
               md: dto.md,
               notionUrl: dto.notionUrl,
             },

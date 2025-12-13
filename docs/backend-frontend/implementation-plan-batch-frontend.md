@@ -16,7 +16,7 @@ The detailed step-by-step “Phase 1–8” guide has been replaced with this li
    - All HTTP/SSE clients import DTO types from the shared `@esl-pipeline/contracts` package once available (see alignment doc Phase 6).
    - Fallback polling when SSE disconnects.
 4. **UI slices**
-   - Uploader + settings panel share a context for defaults (preset, voice, Notion DB, upload choice, mode).
+   - Uploader + settings panel share a context for defaults (preset, voice, Notion DB, upload choice, ttsStrategy).
    - Job table renders the DTO as-is; new fields flow through automatically.
    - Activity feed + notification manager subscribe to the same store.
 
@@ -31,7 +31,7 @@ Use these slices when breaking work into issues or PRs. Each slice assumes backe
    - Friendly empty state when unauthenticated.
 2. **Metadata + settings**
    - Fetch `/config/job-options`, memoize for 60 s, populate presets/voices/DBs.
-   - Include disabled UI hints for upcoming features (e.g., dialogue/monologue modes).
+   - Include disabled UI hints for upcoming features (e.g., dialogue/TTS strategies).
 3. **Uploader + queue**
    - Drag/drop, sequential uploads, POST `/jobs`, per-file retries.
    - Share selected settings with each queued upload item.

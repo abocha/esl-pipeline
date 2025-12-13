@@ -3,10 +3,10 @@ import { describe, expect, it } from 'vitest';
 
 import {
   UserSettingsRecord,
-  VALID_TTS_MODES,
+  VALID_TTS_STRATEGIES,
   VALID_TTS_PROVIDERS,
   getDefaultSettings,
-  isValidTtsMode,
+  isValidTtsStrategy,
   isValidTtsProvider,
   sanitizeSettings,
 } from '../src/domain/settings-model.js';
@@ -27,17 +27,17 @@ describe('domain/settings-model', () => {
     });
   });
 
-  describe('isValidTtsMode', () => {
-    it('returns true for valid modes', () => {
-      expect(isValidTtsMode('auto')).toBe(true);
-      expect(isValidTtsMode('dialogue')).toBe(true);
-      expect(isValidTtsMode('monologue')).toBe(true);
+  describe('isValidTtsStrategy', () => {
+    it('returns true for valid strategies', () => {
+      expect(isValidTtsStrategy('auto')).toBe(true);
+      expect(isValidTtsStrategy('dialogue')).toBe(true);
+      expect(isValidTtsStrategy('tts')).toBe(true);
     });
 
-    it('returns false for invalid modes', () => {
-      expect(isValidTtsMode('invalid')).toBe(false);
-      expect(isValidTtsMode('')).toBe(false);
-      expect(isValidTtsMode('AUTO')).toBe(false); // case-sensitive
+    it('returns false for invalid strategies', () => {
+      expect(isValidTtsStrategy('invalid')).toBe(false);
+      expect(isValidTtsStrategy('')).toBe(false);
+      expect(isValidTtsStrategy('AUTO')).toBe(false); // case-sensitive
     });
   });
 
@@ -50,7 +50,7 @@ describe('domain/settings-model', () => {
       expect(defaults.ttsProvider).toBe('elevenlabs');
       expect(defaults.defaultPreset).toBe('b1-default');
       expect(defaults.defaultVoiceAccent).toBe('american');
-      expect(defaults.defaultTtsMode).toBe('auto');
+      expect(defaults.defaultTtsStrategy).toBe('auto');
       expect(defaults.enableNotifications).toBe(true);
     });
   });
@@ -64,7 +64,7 @@ describe('domain/settings-model', () => {
       ttsProvider: 'elevenlabs',
       defaultPreset: 'b2-intermediate',
       defaultVoiceAccent: 'british',
-      defaultTtsMode: 'dialogue',
+      defaultTtsStrategy: 'dialogue',
       enableNotifications: false,
       createdAt: new Date('2024-01-01'),
       updatedAt: new Date('2024-01-02'),
@@ -92,7 +92,7 @@ describe('domain/settings-model', () => {
       expect(sanitized.ttsProvider).toBe('elevenlabs');
       expect(sanitized.defaultPreset).toBe('b2-intermediate');
       expect(sanitized.defaultVoiceAccent).toBe('british');
-      expect(sanitized.defaultTtsMode).toBe('dialogue');
+      expect(sanitized.defaultTtsStrategy).toBe('dialogue');
       expect(sanitized.enableNotifications).toBe(false);
     });
 
@@ -127,12 +127,12 @@ describe('domain/settings-model', () => {
     });
   });
 
-  describe('VALID_TTS_MODES', () => {
-    it('contains expected modes', () => {
-      expect(VALID_TTS_MODES).toContain('auto');
-      expect(VALID_TTS_MODES).toContain('dialogue');
-      expect(VALID_TTS_MODES).toContain('monologue');
-      expect(VALID_TTS_MODES).toHaveLength(3);
+  describe('VALID_TTS_STRATEGIES', () => {
+    it('contains expected strategies', () => {
+    expect(VALID_TTS_STRATEGIES).toContain('auto');
+    expect(VALID_TTS_STRATEGIES).toContain('dialogue');
+    expect(VALID_TTS_STRATEGIES).toContain('tts');
+    expect(VALID_TTS_STRATEGIES).toHaveLength(3);
     });
   });
 });

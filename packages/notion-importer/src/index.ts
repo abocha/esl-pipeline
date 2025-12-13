@@ -10,11 +10,10 @@ import { mdToBlocks } from './mdToBlocks.js';
 import { createNotionClient, resolveDataSourceId, resolveStudentId } from './notion.js';
 import { withRetry } from './retry.js';
 import type { FrontmatterShape, ImportOptions } from './types.js';
-
-// Notion SDK types evolve frequently; use loose types to remain forward-compatible.
-type CreatePageParameters = any;
-type CreatePageResponse = any;
-type DatabaseObjectResponse = any;
+import type {
+  CreatePageParameters,
+  CreatePageResponse,
+} from '@notionhq/client/build/src/api-endpoints.js';
 
 interface ValidationSnapshot {
   ok: boolean;
@@ -117,25 +116,40 @@ export async function runImport(opts: ImportOptions) {
       }),
     'databases.retrieve',
   );
-  const propertiesEntries = Object.entries((database as DatabaseObjectResponse).properties ?? {});
+  const rawDatabaseProperties = (() => {
+    if (!database || typeof database !== 'object') return null;
+    if (!('properties' in database)) return null;
+    const props = (database as { properties?: unknown }).properties;
+    if (!props || typeof props !== 'object') return null;
+    return props as Record<string, unknown>;
+  })();
+
+  const propertiesEntries = Object.entries(rawDatabaseProperties ?? {});
   const dbPropertyNames = new Set(propertiesEntries.map(([name]) => name.trim().toLowerCase()));
 
-  // Validate that all requested properties exist in the target database
-  const unknownProps = Object.keys(properties)
-    .filter((key) => key.toLowerCase() !== 'name')
-    .filter((key) => !dbPropertyNames.has(key.trim().toLowerCase()));
-  if (unknownProps.length > 0) {
-    const available = [...dbPropertyNames].join(', ') || '(none)';
-    throw new ValidationError(
-      `Unknown Notion properties in frontmatter: ${unknownProps.join(
-        ', ',
-      )}. Available properties: ${available}`,
-    );
+  // Validate that all requested properties exist in the target database (best-effort).
+  // Some Notion SDK versions/types may omit the database `properties` field from typings.
+  if (rawDatabaseProperties) {
+    const unknownProps = Object.keys(properties)
+      .filter((key) => key.toLowerCase() !== 'name')
+      .filter((key) => !dbPropertyNames.has(key.trim().toLowerCase()));
+    if (unknownProps.length > 0) {
+      const available = [...dbPropertyNames].join(', ') || '(none)';
+      throw new ValidationError(
+        `Unknown Notion properties in frontmatter: ${unknownProps.join(
+          ', ',
+        )}. Available properties: ${available}`,
+      );
+    }
   }
   const topicEntry = propertiesEntries.find(([name]) => name.trim().toLowerCase() === 'topic');
-  const topicPropType = topicEntry ? (topicEntry[1] as any)?.type : undefined;
+  const topicPropType =
+    topicEntry && typeof topicEntry[1] === 'object' && topicEntry[1] && 'type' in topicEntry[1]
+      ? (topicEntry[1] as { type?: unknown }).type
+      : undefined;
+  const topicPropTypeString = typeof topicPropType === 'string' ? topicPropType : undefined;
   if (topic) {
-    const defaultToMultiSelect = !topicPropType || topicPropType === 'multi_select';
+    const defaultToMultiSelect = !topicPropTypeString || topicPropTypeString === 'multi_select';
     if (defaultToMultiSelect) {
       const topics = topic
         .split(',')
@@ -207,7 +221,7 @@ export async function runImport(opts: ImportOptions) {
 
   return {
     page_id: page.id,
-    url: (page as any).url as string | undefined,
+    url: 'url' in page && typeof page.url === 'string' ? page.url : undefined,
     studentLinked: Boolean(studentPageId),
   };
 }

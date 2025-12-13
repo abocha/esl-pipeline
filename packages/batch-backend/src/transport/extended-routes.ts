@@ -10,7 +10,7 @@ import { SubmitJobRequest, submitJob } from '../application/submit-job.js';
 import type { BatchBackendConfig } from '../config/env.js';
 import {
   UserSettingsInput,
-  isValidTtsMode,
+  isValidTtsStrategy,
   isValidTtsProvider,
   sanitizeSettings,
 } from '../domain/settings-model.js';
@@ -747,12 +747,12 @@ export function registerExtendedRoutes(app: FastifyInstance, options: ExtendedRo
         });
       }
 
-      // Validate TTS mode if provided
-      if (body.defaultTtsMode !== undefined && !isValidTtsMode(body.defaultTtsMode)) {
+      // Validate TTS strategy if provided
+      if (body.defaultTtsStrategy !== undefined && !isValidTtsStrategy(body.defaultTtsStrategy)) {
         return reply.code(400).send({
           error: 'validation_failed',
-          message: 'Invalid TTS mode. Must be one of: auto, dialogue, monologue',
-          code: 'invalid_tts_mode',
+          message: 'Invalid TTS strategy. Must be one of: auto, dialogue, tts',
+          code: 'invalid_tts_strategy',
         });
       }
 
@@ -855,7 +855,7 @@ export function registerExtendedRoutes(app: FastifyInstance, options: ExtendedRo
       voiceId: z.string().min(1).optional(),
       forceTts: z.boolean().optional(),
       notionDatabase: z.string().min(1).optional(),
-      mode: z.enum(['auto', 'dialogue', 'monologue']).optional(),
+      ttsStrategy: z.enum(['auto', 'dialogue', 'tts']).optional(),
     });
 
     try {
@@ -870,7 +870,7 @@ export function registerExtendedRoutes(app: FastifyInstance, options: ExtendedRo
         voiceAccent: validatedData.voiceAccent,
         forceTts: validatedData.forceTts,
         notionDatabase: validatedData.notionDatabase,
-        mode: validatedData.mode,
+        ttsStrategy: validatedData.ttsStrategy,
         userId: authenticatedUser.id,
       });
 

@@ -15,11 +15,11 @@ import { type AxiosError, isAxiosError } from 'axios';
 import type {
   JobEventPayload as ContractJobEventPayload,
   JobEventType as ContractJobEventType,
-  JobMode as ContractJobMode,
   JobState as ContractJobState,
   JobEventMessage,
   JobStatusDto,
   JobUploadOption,
+  TtsStrategy as ContractTtsStrategy,
 } from '@esl-pipeline/contracts';
 
 import apiClient, {
@@ -30,7 +30,7 @@ import apiClient, {
 } from './api-client';
 
 export type JobState = ContractJobState;
-export type JobMode = ContractJobMode;
+export type TtsStrategy = ContractTtsStrategy;
 export type UserRole = 'admin' | 'user' | 'viewer';
 export type RegisterRole = Exclude<UserRole, 'admin'>;
 
@@ -46,7 +46,7 @@ export interface SubmitJobRequest {
   forceTts?: boolean;
   notionDatabase?: string;
   upload?: JobUploadOption;
-  mode?: JobMode;
+  ttsStrategy?: TtsStrategy;
 }
 
 export interface UploadMarkdownResponse {
@@ -118,7 +118,7 @@ export interface JobOptionsResponse {
   voiceAccents: string[];
   voices: VoiceOption[];
   notionDatabases: { id: string; name: string }[];
-  modes: JobMode[];
+  ttsStrategies: TtsStrategy[];
 }
 
 export interface VoiceOption {

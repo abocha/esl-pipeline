@@ -52,8 +52,8 @@ export interface WizardSelections {
   accentPreference?: string;
   withTts: boolean;
 
-  // New TTS mode fields
-  ttsMode?: 'auto' | 'dialogue' | 'monologue';
+  // TTS strategy fields
+  ttsStrategy?: 'auto' | 'dialogue' | 'tts';
   dialogueLanguage?: string;
   dialogueStability?: number;
   dialogueSeed?: number;
@@ -120,8 +120,8 @@ const PERSISTABLE_KEYS: (keyof NewAssignmentFlags)[] = [
   'presign',
   'out',
 
-  // New TTS mode fields
-  'ttsMode',
+  // TTS strategy fields
+  'ttsStrategy',
   'dialogueLanguage',
   'dialogueStability',
   'dialogueSeed',
@@ -153,9 +153,9 @@ async function clearWizardDefaults(path: string): Promise<void> {
 }
 
 function migrateTtsDefaults(defaults: Partial<NewAssignmentFlags>): Partial<NewAssignmentFlags> {
-  // If user has TTS enabled but no TTS mode set, default to 'auto'
-  if (defaults.withTts !== false && !defaults.ttsMode) {
-    return { ...defaults, ttsMode: 'auto' };
+  // If user has TTS enabled but no strategy set, default to 'auto'
+  if (defaults.withTts !== false && !defaults.ttsStrategy) {
+    return { ...defaults, ttsStrategy: 'auto' };
   }
   return defaults;
 }
@@ -867,37 +867,40 @@ async function configureTts(
     setStateValue(state, 'voices', undefined, 'manual');
     setStateValue(state, 'force', undefined, 'manual');
     setStateValue(state, 'out', undefined, 'manual');
-    setStateValue(state, 'ttsMode', undefined, 'manual');
+    setStateValue(state, 'ttsStrategy', undefined, 'manual');
     setStateValue(state, 'dialogueLanguage', undefined, 'manual');
     setStateValue(state, 'dialogueStability', undefined, 'manual');
     setStateValue(state, 'dialogueSeed', undefined, 'manual');
     return;
   }
 
-  // Step 2: TTS Mode Selection
+  // Step 2: TTS Strategy Selection
   const modeAnswer = await runPrompt<string>(Select, {
-    name: 'ttsMode',
-    message: 'Select TTS mode',
+    name: 'ttsStrategy',
+    message: 'Select TTS strategy',
     choices: [
       'Auto-detect (recommended)',
-      'Dialogue mode (Text-to-Dialogue API)',
-      'Monologue mode (Text-to-Speech API)',
+      'Dialogue (Text-to-Dialogue API / Eleven v3)',
+      'TTS (Text-to-Speech API)',
     ],
-    initial: state.ttsMode === 'dialogue' ? 1 : state.ttsMode === 'monologue' ? 2 : 0,
+    initial: state.ttsStrategy === 'dialogue' ? 1 : state.ttsStrategy === 'tts' ? 2 : 0,
     result(value: string) {
       const map: Record<string, string> = {
         'Auto-detect (recommended)': 'auto',
-        'Dialogue mode (Text-to-Dialogue API)': 'dialogue',
-        'Monologue mode (Text-to-Speech API)': 'monologue',
+        'Dialogue (Text-to-Dialogue API / Eleven v3)': 'dialogue',
+        'TTS (Text-to-Speech API)': 'tts',
       };
       return map[value] || value;
     },
   });
-  const ttsMode = modeAnswer.ttsMode as 'auto' | 'dialogue' | 'monologue';
-  setStateValue(state, 'ttsMode', ttsMode, 'manual', { overwrite: true, preserveManual: false });
+  const ttsStrategy = modeAnswer.ttsStrategy as 'auto' | 'dialogue' | 'tts';
+  setStateValue(state, 'ttsStrategy', ttsStrategy, 'manual', {
+    overwrite: true,
+    preserveManual: false,
+  });
 
   // Step 3: Dialogue-Specific Options (conditional)
-  if (ttsMode === 'dialogue') {
+  if (ttsStrategy === 'dialogue') {
     // Language Code
     const languageAnswer = await runPrompt<string>(Input, {
       name: 'dialogueLanguage',
@@ -1128,17 +1131,11 @@ function applyEnvDefaults(state: WizardState): void {
     setStateValue(state, 'prefix', envPrefix, 'env', { overwrite: false });
   }
 
-  // New TTS mode environment variables with 'auto' fallback
-  const envTtsMode = process.env.ELEVENLABS_TTS_MODE as
-    | 'auto'
-    | 'dialogue'
-    | 'monologue'
-    | undefined;
-  if (envTtsMode && ['auto', 'dialogue', 'monologue'].includes(envTtsMode)) {
-    setStateValue(state, 'ttsMode', envTtsMode, 'env', { overwrite: false });
-  } else if (state.withTts !== false && !envTtsMode) {
-    // Default to 'auto' mode for backward compatibility when TTS is enabled and no env var is set
-    setStateValue(state, 'ttsMode', 'auto', 'default');
+  const envTtsStrategy = process.env.ELEVENLABS_TTS_STRATEGY as 'auto' | 'dialogue' | 'tts' | undefined;
+  if (envTtsStrategy && ['auto', 'dialogue', 'tts'].includes(envTtsStrategy)) {
+    setStateValue(state, 'ttsStrategy', envTtsStrategy, 'env', { overwrite: false });
+  } else if (state.withTts !== false && !envTtsStrategy) {
+    setStateValue(state, 'ttsStrategy', 'auto', 'default');
   }
 
   const envDialogueLanguage = process.env.ELEVENLABS_DIALOGUE_LANGUAGE;
@@ -1177,8 +1174,8 @@ function buildFlags(state: WizardState, initial: Partial<NewAssignmentFlags>, ct
     accentPreference: state.accentPreference ?? initial.accentPreference,
     withTts: Boolean(state.withTts),
 
-    // New TTS mode fields
-    ttsMode: state.ttsMode ?? initial.ttsMode,
+    // TTS strategy fields
+    ttsStrategy: state.ttsStrategy ?? initial.ttsStrategy,
     dialogueLanguage: state.dialogueLanguage ?? initial.dialogueLanguage,
     dialogueStability: state.dialogueStability ?? initial.dialogueStability,
     dialogueSeed: state.dialogueSeed ?? initial.dialogueSeed,
@@ -1213,8 +1210,8 @@ function buildSelections(state: WizardState, flags: NewAssignmentFlags): WizardS
     accentPreference: state.accentPreference ?? undefined,
     withTts: Boolean(flags.withTts),
 
-    // New TTS mode fields
-    ttsMode: flags.ttsMode,
+    // TTS strategy fields
+    ttsStrategy: flags.ttsStrategy,
     dialogueLanguage: flags.dialogueLanguage,
     dialogueStability: flags.dialogueStability,
     dialogueSeed: flags.dialogueSeed,
@@ -1291,9 +1288,9 @@ function printSummary(state: WizardState): void {
   console.log(`  TTS      : ${formatBoolean(state.withTts, state.origins.withTts)}`);
   if (state.withTts) {
     console.log(
-      `  Mode     : ${formatValue(state.ttsMode, state.origins.ttsMode)} (${state.ttsMode === 'auto' ? 'auto-detect' : state.ttsMode === 'dialogue' ? 'Text-to-Dialogue' : 'Text-to-Speech'})`,
+      `  Strategy : ${formatValue(state.ttsStrategy, state.origins.ttsStrategy)} (${state.ttsStrategy === 'auto' ? 'auto' : state.ttsStrategy === 'dialogue' ? 'Text-to-Dialogue' : 'Text-to-Speech'})`,
     );
-    if (state.ttsMode === 'dialogue') {
+    if (state.ttsStrategy === 'dialogue') {
       if (state.dialogueLanguage) {
         console.log(
           `  Language : ${formatValue(state.dialogueLanguage, state.origins.dialogueLanguage)}`,

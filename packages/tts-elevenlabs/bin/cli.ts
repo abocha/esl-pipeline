@@ -19,8 +19,8 @@ const out = flag('--out') ?? process.cwd();
 const preview = hasFlag('--preview');
 const force = hasFlag('--force');
 
-// Parse new TTS mode flags
-const ttsMode = flag('--tts-mode') ?? flag('-m');
+// Parse TTS strategy flags
+const ttsStrategy = flag('--tts-strategy') ?? flag('-s');
 const dialogueLanguage = flag('--dialogue-language');
 const dialogueStability = flag('--dialogue-stability');
 const dialogueSeed = flag('--dialogue-seed');
@@ -39,12 +39,12 @@ Options:
   --preview                Preview mode - don't generate audio
   --force                  Force regeneration even if cached file exists
   
-TTS Mode Options:
-  --tts-mode, -m <mode>    TTS mode selection (default: auto)
-                           Values: auto, dialogue, monologue
-                           - auto: detect from content
-                           - dialogue: force dialogue API
-                           - monologue: force monologue API
+TTS Strategy Options:
+  --tts-strategy, -s <strategy>  Strategy selection (default: auto)
+                                Values: auto, dialogue, tts
+                                - auto: choose based on content heuristics
+                                - dialogue: force Text-to-Dialogue (Eleven v3)
+                                - tts: force Text-to-Speech (configurable model)
   
   --dialogue-language <code>    Language code for dialogue mode (ISO 639-1)
                                 Examples: en, es, fr, de
@@ -59,19 +59,19 @@ Examples:
   # Auto-detect mode based on content
   $ tts-elevenlabs --md lesson.md --voice-map voices.yml
 
-  # Force dialogue mode
-  $ tts-elevenlabs --md lesson.md --voice-map voices.yml --tts-mode dialogue
+  # Force dialogue strategy
+  $ tts-elevenlabs --md lesson.md --voice-map voices.yml --tts-strategy dialogue
 
-  # Force monologue mode
-  $ tts-elevenlabs --md lesson.md --voice-map voices.yml --tts-mode monologue
+  # Force TTS strategy
+  $ tts-elevenlabs --md lesson.md --voice-map voices.yml --tts-strategy tts
 
   # Dialogue mode with custom settings
   $ tts-elevenlabs --md lesson.md --voice-map voices.yml \
-    --tts-mode dialogue --dialogue-language en --dialogue-stability 0.7
+    --tts-strategy dialogue --dialogue-language en --dialogue-stability 0.7
 
   # Reproducible dialogue generation
   $ tts-elevenlabs --md lesson.md --voice-map voices.yml \
-    --tts-mode dialogue --dialogue-seed 42
+    --tts-strategy dialogue --dialogue-seed 42
 `);
   process.exit(0);
 }
@@ -83,9 +83,11 @@ if (!md || !voiceMap) {
   process.exit(1);
 }
 
-// Validate TTS mode
-if (ttsMode && !['auto', 'dialogue', 'monologue'].includes(ttsMode)) {
-  console.error(`Error: --tts-mode must be one of: auto, dialogue, monologue (got: ${ttsMode})`);
+// Validate TTS strategy
+if (ttsStrategy && !['auto', 'dialogue', 'tts'].includes(ttsStrategy)) {
+  console.error(
+    `Error: --tts-strategy must be one of: auto, dialogue, tts (got: ${ttsStrategy})`,
+  );
   process.exit(1);
 }
 
@@ -117,7 +119,7 @@ const options = {
   outPath: out,
   preview,
   force,
-  ...(ttsMode && { ttsMode: ttsMode as 'auto' | 'dialogue' | 'monologue' }),
+  ...(ttsStrategy && { ttsStrategy: ttsStrategy as 'auto' | 'dialogue' | 'tts' }),
   ...(dialogueLanguage && { dialogueLanguage }),
   ...(parsedStability !== undefined && { dialogueStability: parsedStability }),
   ...(parsedSeed !== undefined && { dialogueSeed: parsedSeed }),

@@ -581,13 +581,13 @@ SecretProvider and advanced patterns:
 Manifest schema:
 
 - Primary reference: [`docs/pipeline-manifest.md`](docs/pipeline-manifest.md).
-- Implementation: [`packages/orchestrator/src/manifest.ts`](packages/orchestrator/src/manifest.ts).
+  - Implementation: [`packages/orchestrator/src/manifest.ts`](packages/orchestrator/src/manifest.ts).
   - Contains:
     - `AssignmentManifest` type.
     - `CURRENT_MANIFEST_SCHEMA_VERSION`.
     - Filesystem-based `ManifestStore`.
     - Optional TTS metadata fields persisted alongside audio:
-      - `ttsMode`, `dialogueLanguage`, `dialogueStability`, `dialogueSeed`.
+      - `ttsStrategy`, `dialogueLanguage`, `dialogueStability`, `dialogueSeed`.
 
 Agents MUST:
 

@@ -199,7 +199,7 @@ describe('pipeline integration', () => {
   });
 
   it('writes manifests to S3 when configured via environment variables', async () => {
-    const { PutObjectCommand: PutCommand, GetObjectCommand: GetCommand } = s3CommandClasses;
+    const { GetObjectCommand: GetCommand } = s3CommandClasses;
 
     mockSend.mockImplementation(async (command) => {
       if (command instanceof GetCommand) {

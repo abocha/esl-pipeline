@@ -1,5 +1,13 @@
 # @esl-pipeline/batch-frontend
 
+## 1.1.2
+
+### Patch Changes
+
+- compatibility with orchestrator and tts-elevenlabs packages update
+- Updated dependencies
+  - @esl-pipeline/contracts@1.0.2
+
 ## 1.1.1
 
 ### Patch Changes

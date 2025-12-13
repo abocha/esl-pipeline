@@ -1,5 +1,17 @@
 # @esl-pipeline/tts-elevenlabs
 
+## 3.1.0
+
+### Minor Changes
+
+- feat(tts): strict gender voice picking + ttsStrategy naming, debug-gated logs, and type-safety fixes
+
+### Patch Changes
+
+- Updated dependencies
+  - @esl-pipeline/contracts@1.0.2
+  - @esl-pipeline/md-extractor@2.0.3
+
 ## 3.0.5
 
 ### Patch Changes
@@ -68,7 +80,7 @@
 
 ### Major Changes
 
-- elevenlabs eleven_v3 model support in tts and automatic detection of dialogue or monologue mode in study text. all working in the interactive wizard
+- ElevenLabs `eleven_v3` support + automatic selection of `dialogue` vs `tts` strategy from study text (used by the wizard/orchestrator)
 
 ## 1.6.0
 

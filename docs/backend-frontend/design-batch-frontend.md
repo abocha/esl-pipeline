@@ -171,7 +171,7 @@ Backend dependencies for these actions (especially audio reruns) are tracked in 
 
 ## 10. Extensibility Roadmap
 
-- Plug in the upcoming “mode” options (auto/dialogue/monologue) once orchestrator merges `feature/new-module`.
+- Plug in the upcoming “mode” options (auto/dialogue/tts) once orchestrator merges `feature/new-module`.
 - Replace SSE with WebSockets if we later need bi-directional control (e.g., cancel jobs).
 - Add global job search once backend exposes list endpoints.
 - Integrate email/SMS notifications when backend supports it.

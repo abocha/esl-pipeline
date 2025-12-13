@@ -62,7 +62,7 @@ const configProvider: ConfigProvider = {
   },
 };
 
-describe('Wizard TTS Mode Integration', () => {
+describe('Wizard TTS Strategy Integration', () => {
   let cwd: string;
   let defaultsPath: string;
   let mdPath: string;
@@ -99,7 +99,7 @@ Content here
       { setting: 'tts' },
       // TTS configuration prompts
       { withTts: true }, // Enable TTS toggle
-      { ttsMode: 'dialogue' }, // Select dialogue mode
+      { ttsStrategy: 'dialogue' }, // Select dialogue strategy
       { dialogueLanguage: 'en' }, // Set language
       { dialogueStability: 0.75 }, // Set stability
       { dialogueSeed: 42 }, // Set seed
@@ -125,7 +125,7 @@ Content here
 
     // Verify flags flow through correctly
     expect(result.flags.withTts).toBe(true);
-    expect(result.flags.ttsMode).toBe('dialogue');
+    expect(result.flags.ttsStrategy).toBe('dialogue');
     expect(result.flags.dialogueLanguage).toBe('en');
     expect(result.flags.dialogueStability).toBe(0.75);
     expect(result.flags.dialogueSeed).toBe(42);
@@ -137,7 +137,7 @@ Content here
       { main: 'settings' },
       { setting: 'tts' },
       { withTts: true },
-      { ttsMode: 'monologue' },
+      { ttsStrategy: 'tts' },
       { voices: 'configs/voices.yml' },
       { force: false },
       { out: 'audio-output' },
@@ -155,13 +155,13 @@ Content here
       },
     );
 
-    expect(firstRun.flags.ttsMode).toBe('monologue');
+    expect(firstRun.flags.ttsStrategy).toBe('tts');
 
     // Verify persistence is working
     const saved = JSON.parse(await readFile(defaultsPath, 'utf8'));
     expect(saved).toMatchObject({
       withTts: true,
-      ttsMode: 'monologue',
+      ttsStrategy: 'tts',
     });
 
     // Second run: should load saved preferences
@@ -179,19 +179,19 @@ Content here
 
     expect(secondRun.flags.withTts).toBe(true);
     // The mode might be 'auto' due to env defaults overriding, which is acceptable
-    expect(['monologue', 'auto']).toContain(secondRun.flags.ttsMode);
+    expect(['tts', 'auto']).toContain(secondRun.flags.ttsStrategy);
   });
 
   it('should handle environment variable defaults', async () => {
     // Set environment variables
     const originalEnv = {
-      ELEVENLABS_TTS_MODE: process.env.ELEVENLABS_TTS_MODE,
+      ELEVENLABS_TTS_STRATEGY: process.env.ELEVENLABS_TTS_STRATEGY,
       ELEVENLABS_DIALOGUE_LANGUAGE: process.env.ELEVENLABS_DIALOGUE_LANGUAGE,
       ELEVENLABS_DIALOGUE_STABILITY: process.env.ELEVENLABS_DIALOGUE_STABILITY,
       ELEVENLABS_DIALOGUE_SEED: process.env.ELEVENLABS_DIALOGUE_SEED,
     };
 
-    process.env.ELEVENLABS_TTS_MODE = 'dialogue';
+    process.env.ELEVENLABS_TTS_STRATEGY = 'dialogue';
     process.env.ELEVENLABS_DIALOGUE_LANGUAGE = 'es';
     process.env.ELEVENLABS_DIALOGUE_STABILITY = '0.8';
     process.env.ELEVENLABS_DIALOGUE_SEED = '123';
@@ -209,22 +209,22 @@ Content here
       );
 
       // Simulate applyEnvDefaults behavior
-      const ttsMode = process.env.ELEVENLABS_TTS_MODE as 'auto' | 'dialogue' | 'monologue';
+      const ttsStrategy = process.env.ELEVENLABS_TTS_STRATEGY as 'auto' | 'dialogue' | 'tts';
       const dialogueLanguage = process.env.ELEVENLABS_DIALOGUE_LANGUAGE;
       const dialogueStability = Number.parseFloat(process.env.ELEVENLABS_DIALOGUE_STABILITY);
       const dialogueSeed = Number.parseInt(process.env.ELEVENLABS_DIALOGUE_SEED, 10);
 
       // Verify environment defaults are applied
-      expect(ttsMode).toBe('dialogue');
+      expect(ttsStrategy).toBe('dialogue');
       expect(dialogueLanguage).toBe('es');
       expect(dialogueStability).toBe(0.8);
       expect(dialogueSeed).toBe(123);
     } finally {
       // Restore original environment
-      if (originalEnv.ELEVENLABS_TTS_MODE === undefined) {
-        delete process.env.ELEVENLABS_TTS_MODE;
+      if (originalEnv.ELEVENLABS_TTS_STRATEGY === undefined) {
+        delete process.env.ELEVENLABS_TTS_STRATEGY;
       } else {
-        process.env.ELEVENLABS_TTS_MODE = originalEnv.ELEVENLABS_TTS_MODE;
+        process.env.ELEVENLABS_TTS_STRATEGY = originalEnv.ELEVENLABS_TTS_STRATEGY;
       }
       if (originalEnv.ELEVENLABS_DIALOGUE_LANGUAGE === undefined) {
         delete process.env.ELEVENLABS_DIALOGUE_LANGUAGE;
@@ -249,7 +249,7 @@ Content here
       { main: 'settings' },
       { setting: 'tts' },
       { withTts: true },
-      { ttsMode: 'auto' },
+      { ttsStrategy: 'auto' },
       { voices: 'configs/voices.yml' },
       { force: false },
       { out: 'audio-output' },
@@ -267,7 +267,7 @@ Content here
       },
     );
 
-    expect(result.flags.ttsMode).toBe('auto');
+    expect(result.flags.ttsStrategy).toBe('auto');
     // Auto mode should not require dialogue-specific options
     expect(result.flags.dialogueLanguage).toBeUndefined();
     expect(result.flags.dialogueStability).toBeUndefined();
@@ -279,7 +279,7 @@ Content here
       { main: 'settings' },
       { setting: 'tts' },
       { withTts: true },
-      { ttsMode: 'dialogue' },
+      { ttsStrategy: 'dialogue' },
       { dialogueLanguage: 'en' },
       { dialogueStability: 0.5 },
       { dialogueSeed: 999 },
@@ -300,7 +300,7 @@ Content here
       },
     );
 
-    expect(result.flags.ttsMode).toBe('dialogue');
+    expect(result.flags.ttsStrategy).toBe('dialogue');
     expect(result.flags.dialogueLanguage).toBe('en');
     expect(result.flags.dialogueStability).toBe(0.5);
     expect(result.flags.dialogueSeed).toBe(999);
@@ -312,7 +312,7 @@ Content here
       { main: 'settings' },
       { setting: 'tts' },
       { withTts: true },
-      { ttsMode: 'dialogue' },
+      { ttsStrategy: 'dialogue' },
       { dialogueLanguage: 'en' },
       // Use a valid stability value (wizard's prompts library handles validation)
       { dialogueStability: 0.8 },

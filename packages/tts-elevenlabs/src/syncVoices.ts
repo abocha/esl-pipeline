@@ -14,7 +14,7 @@ interface VoiceRow {
 export async function syncVoices(outPath = 'configs/elevenlabs.voices.json') {
   const client = getElevenClient();
   // SDK: voices.getAll() returns list of voices the key can use
-  const list = await client.voices.getAll();
+  const list = (await client.voices.getAll()) as unknown;
   interface RawVoice {
     voiceId?: string;
     voice_id?: string;
@@ -25,7 +25,13 @@ export async function syncVoices(outPath = 'configs/elevenlabs.voices.json') {
     preview_url?: string | null;
   }
 
-  const rows: VoiceRow[] = ((list as any).voices ?? []).map((v: RawVoice) => ({
+  const rawVoices = (() => {
+    if (!list || typeof list !== 'object') return [];
+    const maybeVoices = (list as { voices?: unknown }).voices;
+    return Array.isArray(maybeVoices) ? (maybeVoices as RawVoice[]) : [];
+  })();
+
+  const rows: VoiceRow[] = rawVoices.map((v) => ({
     id: v.voiceId ?? v.voice_id ?? v.id ?? '',
     name: v.name,
     category: v.category ?? null,

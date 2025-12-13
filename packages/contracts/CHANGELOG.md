@@ -1,5 +1,11 @@
 # @esl-pipeline/contracts
 
+## 1.0.2
+
+### Patch Changes
+
+- compatibility with orchestrator and tts-elevenlabs packages update
+
 ## 1.0.1
 
 ### Patch Changes

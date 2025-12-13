@@ -15,10 +15,11 @@ Set these in `.env` (or your shell) when running `esl` or programmatic API calls
 - `ELEVENLABS_API_KEY` — ElevenLabs API key for TTS.
 - `ELEVENLABS_MODEL_ID` (optional, default `eleven_multilingual_v2`) — ElevenLabs model.
 - `ELEVENLABS_OUTPUT_FORMAT` (optional, default `mp3_22050_32`) — Audio format.
-- `ELEVENLABS_TTS_MODE` (optional, `auto`|`dialogue`|`monologue`, default `auto`) — TTS mode.
-- `ELEVENLABS_DIALOGUE_LANGUAGE` (optional) — Language code for dialogue mode.
-- `ELEVENLABS_DIALOGUE_STABILITY` (optional) — Stability for dialogue mode (0–1).
-- `ELEVENLABS_DIALOGUE_SEED` (optional) — Seed for dialogue mode.
+- `ELEVENLABS_TTS_STRATEGY` (optional, `auto`|`dialogue`|`tts`, default `auto`) — TTS strategy.
+- `ELEVENLABS_TTS_MAX_CHARS` (optional, default `4500`) — Max chars per Text-to-Speech request (chunking).
+- `ELEVENLABS_DIALOGUE_LANGUAGE` (optional) — Language code for dialogue strategy.
+- `ELEVENLABS_DIALOGUE_STABILITY` (optional) — Stability for dialogue strategy (0–1).
+- `ELEVENLABS_DIALOGUE_SEED` (optional) — Seed for dialogue strategy.
 - `AWS_REGION`, `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY` — AWS creds for uploads.
 - `S3_BUCKET` — Bucket for audio uploads.
 - `S3_PREFIX` (optional) — Key prefix for uploads (e.g., `audio/assignments`).
@@ -55,4 +56,4 @@ Notes:
 - Keep `.env` focused on CLI usage; `.env.batch-backend` adds DB/Redis/MinIO/SMTP for the service.
 - Both orchestrator and batch-backend need `NOTION_TOKEN` and `ELEVENLABS_API_KEY`.
 - For S3 manifests or uploads, set the `ESL_PIPELINE_MANIFEST_*` vars and `S3_*`/AWS creds together.
-- TTS mode defaults can be provided via `ELEVENLABS_TTS_MODE` and related dialogue options; manifests now persist these for reruns.
+- TTS strategy defaults can be provided via `ELEVENLABS_TTS_STRATEGY` and related dialogue options; manifests now persist these for reruns.

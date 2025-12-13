@@ -1,5 +1,15 @@
 # @esl-pipeline/notion-importer
 
+## 2.2.1
+
+### Patch Changes
+
+- compatibility with orchestrator and tts-elevenlabs packages update
+- Updated dependencies
+  - @esl-pipeline/contracts@1.0.2
+  - @esl-pipeline/md-extractor@2.0.3
+  - @esl-pipeline/md-validator@2.0.4
+
 ## 2.2.0
 
 ### Minor Changes

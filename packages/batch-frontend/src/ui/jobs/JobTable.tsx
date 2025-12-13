@@ -257,7 +257,7 @@ export const JobTable: React.FC = () => {
               <th>Job ID</th>
               <th>File</th>
               <th>Status</th>
-              <th>Preset / Mode</th>
+              <th>Preset / Strategy</th>
               <th>Updated</th>
               <th>Actions</th>
             </tr>
@@ -518,7 +518,7 @@ const JobRow: React.FC<JobRowProps> = ({ job, onCopy, onRegenerate, style }) => 
       <td>
         <div className="preset-cell">
           <span className="preset-name">{job.preset ?? '—'}</span>
-          <span className="preset-mode">{formatMode(job.mode)}</span>
+          <span className="preset-mode">{formatStrategy(job.ttsStrategy)}</span>
         </div>
       </td>
       <td>
@@ -662,8 +662,8 @@ const JobRow: React.FC<JobRowProps> = ({ job, onCopy, onRegenerate, style }) => 
   );
 };
 
-function formatMode(mode: JobEntry['mode'] = 'auto'): string {
-  const value = mode === null ? 'auto' : mode;
+function formatStrategy(ttsStrategy: JobEntry['ttsStrategy'] = 'auto'): string {
+  const value = ttsStrategy === null ? 'auto' : ttsStrategy;
   return value.charAt(0).toUpperCase() + value.slice(1);
 }
 

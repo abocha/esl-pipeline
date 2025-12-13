@@ -1,5 +1,12 @@
 # @esl-pipeline/notion-add-audio
 
+## 2.0.2
+
+### Patch Changes
+
+- Updated dependencies
+  - @esl-pipeline/contracts@1.0.2
+
 ## 2.0.1
 
 ### Patch Changes

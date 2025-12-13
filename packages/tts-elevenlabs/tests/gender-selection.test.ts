@@ -117,7 +117,7 @@ auto: true
       voiceMapPath: tempVoiceMapPath,
       outPath: dir,
       preview: true,
-      ttsMode: 'monologue',
+      ttsStrategy: 'tts',
     });
 
     expect(result.voices).toEqual(
@@ -131,4 +131,3 @@ auto: true
     );
   });
 });
-
