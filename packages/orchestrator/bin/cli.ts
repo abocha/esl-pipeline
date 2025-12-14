@@ -191,7 +191,10 @@ const parseRunFlags = async (args: string[]): Promise<RunFlags> => {
       }
       return value as RunFlags['ttsStrategy'];
     })
-    .option('--dialogue-language <code>', 'Dialogue language code (e.g. en, es) for dialogue strategy')
+    .option(
+      '--dialogue-language <code>',
+      'Dialogue language code (e.g. en, es) for dialogue strategy',
+    )
     .option('--dialogue-stability <value>', 'Dialogue stability (0.0-1.0)', (value) =>
       parseOptionalFloat(value, 'Dialogue stability'),
     )

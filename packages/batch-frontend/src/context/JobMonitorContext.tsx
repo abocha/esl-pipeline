@@ -93,7 +93,9 @@ const loadPersistedActiveJobs = (): JobMap => {
     if (!Array.isArray(parsed)) return {};
     const entries = parsed
       .map((item) => (item && typeof item.jobId === 'string' ? item : null))
-      .filter((item): item is Partial<JobEntry> & { jobId: string; mode?: unknown } => item !== null)
+      .filter(
+        (item): item is Partial<JobEntry> & { jobId: string; mode?: unknown } => item !== null,
+      )
       .map((job) => ({
         ...createDefaultJob(job.jobId),
         ...job,
@@ -112,9 +114,7 @@ const loadPersistedActiveJobs = (): JobMap => {
 
 const persistActiveJobs = (jobs: JobMap) => {
   if (!isBrowser) return;
-  const activeJobs = Object.values(jobs).filter(
-    (job) => job.jobId && !isTerminalState(job.state),
-  );
+  const activeJobs = Object.values(jobs).filter((job) => job.jobId && !isTerminalState(job.state));
   if (activeJobs.length === 0) {
     globalThis.localStorage.removeItem(ACTIVE_JOBS_STORAGE_KEY);
     return;

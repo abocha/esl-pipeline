@@ -3,11 +3,11 @@ import { describe, expect, it } from 'vitest';
 
 import {
   UserSettingsRecord,
-  VALID_TTS_STRATEGIES,
   VALID_TTS_PROVIDERS,
+  VALID_TTS_STRATEGIES,
   getDefaultSettings,
-  isValidTtsStrategy,
   isValidTtsProvider,
+  isValidTtsStrategy,
   sanitizeSettings,
 } from '../src/domain/settings-model.js';
 
@@ -129,10 +129,10 @@ describe('domain/settings-model', () => {
 
   describe('VALID_TTS_STRATEGIES', () => {
     it('contains expected strategies', () => {
-    expect(VALID_TTS_STRATEGIES).toContain('auto');
-    expect(VALID_TTS_STRATEGIES).toContain('dialogue');
-    expect(VALID_TTS_STRATEGIES).toContain('tts');
-    expect(VALID_TTS_STRATEGIES).toHaveLength(3);
+      expect(VALID_TTS_STRATEGIES).toContain('auto');
+      expect(VALID_TTS_STRATEGIES).toContain('dialogue');
+      expect(VALID_TTS_STRATEGIES).toContain('tts');
+      expect(VALID_TTS_STRATEGIES).toHaveLength(3);
     });
   });
 });

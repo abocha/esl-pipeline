@@ -722,18 +722,18 @@ export async function rerunAssignment(
       emitStage('tts', 'start');
 
       // TTS mode debug logging for rerun
-        if (flags.ttsStrategy) {
-          logger.log({
-            level: 'info',
-            message: `Using TTS strategy: ${flags.ttsStrategy}`,
-            detail: {
-              ttsStrategy: flags.ttsStrategy,
-              dialogueLanguage: flags.dialogueLanguage,
-              dialogueStability: flags.dialogueStability,
-              dialogueSeed: flags.dialogueSeed,
-            },
-          });
-        }
+      if (flags.ttsStrategy) {
+        logger.log({
+          level: 'info',
+          message: `Using TTS strategy: ${flags.ttsStrategy}`,
+          detail: {
+            ttsStrategy: flags.ttsStrategy,
+            dialogueLanguage: flags.dialogueLanguage,
+            dialogueStability: flags.dialogueStability,
+            dialogueSeed: flags.dialogueSeed,
+          },
+        });
+      }
 
       let ttsResult: Awaited<ReturnType<typeof buildStudyTextMp3>>;
       try {

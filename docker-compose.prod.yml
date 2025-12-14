@@ -1,0 +1,90 @@
+services:
+  postgres:
+    image: postgres:17-alpine
+    container_name: esl-backend-postgres
+    environment:
+      POSTGRES_USER: esl
+      POSTGRES_PASSWORD: esl
+      POSTGRES_DB: esl_batch
+    command: ['postgres', '-c', 'fsync=off', '-c', 'listen_addresses=*']
+    ports:
+      - '5432:5432'
+    # Ephemeral DB by default (flip to a named volume if you want persistence).
+    tmpfs:
+      - /var/lib/postgresql/data
+    volumes:
+      - ./packages/batch-backend/schema.sql:/schema/batch-backend/schema.sql:ro
+      - ./packages/batch-backend/docker-entrypoint-initdb.d:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U esl -d esl_batch']
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  redis:
+    image: redis:alpine
+    container_name: esl-backend-redis
+    command: ['redis-server', '--save', '', '--appendonly', 'no']
+    ports:
+      - '6379:6379'
+    tmpfs:
+      - /data
+    healthcheck:
+      test: ['CMD', 'redis-cli', 'ping']
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  batch-backend:
+    build:
+      context: .
+      dockerfile: packages/batch-backend/Dockerfile
+    image: esl-pipeline/batch-backend:local
+    container_name: esl-batch-backend
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_started
+    env_file:
+      - .env.batch-backend
+    environment:
+      NODE_ENV: production
+      PIPELINE_CWD: /app
+      FILESYSTEM_UPLOAD_DIR: /app/uploads
+    volumes:
+      - ./uploads:/app/uploads
+    ports:
+      - '8080:8080'
+    restart: unless-stopped
+
+  batch-worker:
+    image: esl-pipeline/batch-backend:local
+    container_name: esl-batch-worker
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_started
+    env_file:
+      - .env.batch-backend
+    environment:
+      NODE_ENV: production
+      PIPELINE_CWD: /app
+      FILESYSTEM_UPLOAD_DIR: /app/uploads
+    volumes:
+      - ./uploads:/app/uploads
+    command: ['node', 'dist/transport/worker-runner.js']
+    restart: unless-stopped
+
+  batch-frontend:
+    build:
+      context: .
+      dockerfile: packages/batch-frontend/Dockerfile
+    image: esl-pipeline/batch-frontend:local
+    container_name: esl-batch-frontend
+    depends_on:
+      - batch-backend
+    ports:
+      - '5173:80'
+    restart: unless-stopped

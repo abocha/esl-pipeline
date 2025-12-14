@@ -284,12 +284,12 @@ console.log('MD Hash:', manifest.mdHash);
 
 ### TTS Configuration
 
-| Variable                        | Default | Description                          |
-| ------------------------------- | ------- | ------------------------------------ |
+| Variable                        | Default | Description                        |
+| ------------------------------- | ------- | ---------------------------------- |
 | `ELEVENLABS_TTS_STRATEGY`       | `auto`  | TTS strategy (auto, dialogue, tts) |
-| `ELEVENLABS_DIALOGUE_LANGUAGE`  | -       | ISO 639-1 language code              |
-| `ELEVENLABS_DIALOGUE_STABILITY` | -       | Voice stability (0.0-1.0)            |
-| `ELEVENLABS_DIALOGUE_SEED`      | -       | Seed for reproducible generation     |
+| `ELEVENLABS_DIALOGUE_LANGUAGE`  | -       | ISO 639-1 language code            |
+| `ELEVENLABS_DIALOGUE_STABILITY` | -       | Voice stability (0.0-1.0)          |
+| `ELEVENLABS_DIALOGUE_SEED`      | -       | Seed for reproducible generation   |
 
 ### Upload Configuration
 

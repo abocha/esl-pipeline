@@ -9,12 +9,13 @@ services:
     command: ['postgres', '-c', 'fsync=off', '-c', 'listen_addresses=*']
     ports:
       - '5432:5432'
+    # Ephemeral DB for local dev (prevents Docker Desktop disk bloat).
+    tmpfs:
+      - /var/lib/postgresql/data
     volumes:
-      - postgres_data:/var/lib/postgresql/data
       - ./packages/batch-backend/schema.sql:/schema/batch-backend/schema.sql:ro
       - ./packages/batch-backend/docker-entrypoint-initdb.d:/docker-entrypoint-initdb.d:ro
     healthcheck:
-      # Check against the configured DB (esl_batch), not the default "esl"
       test: ['CMD-SHELL', 'pg_isready -U esl -d esl_batch']
       interval: 5s
       timeout: 3s
@@ -26,93 +27,105 @@ services:
     command: ['redis-server', '--save', '', '--appendonly', 'no']
     ports:
       - '6379:6379'
+    # Ephemeral data for local dev (prevents Docker Desktop disk bloat).
+    tmpfs:
+      - /data
     healthcheck:
       test: ['CMD', 'redis-cli', 'ping']
       interval: 5s
       timeout: 3s
       retries: 10
 
-  batch-frontend:
-    build:
-      context: .
-      dockerfile: packages/batch-frontend/Dockerfile.dev
-    container_name: esl-batch-frontend
-    environment:
-      - NODE_ENV=development
-      - BATCH_BACKEND_URL=http://batch-backend:8080
-    volumes:
-      - ./:/app
-      - /app/node_modules
-      - /app/packages/batch-frontend/node_modules
-      - /app/packages/contracts/node_modules
-    command: >
-      sh -c "
-        pnpm install &&
-        pnpm --filter @esl-pipeline/batch-frontend dev --host
-      "
-    ports:
-      - '5173:5173'
-
-  batch-backend:
+  deps:
     build:
       context: .
       dockerfile: packages/batch-backend/Dockerfile.dev
+    image: esl-pipeline/dev-node:local
+    pull_policy: never
+    container_name: esl-dev-deps
+    working_dir: /app
+    environment:
+      CI: 'true'
+    volumes:
+      - ./:/app
+      - ./.pnpm-store:/root/.local/share/pnpm/store
+    command: >
+      sh -lc "
+        pnpm install &&
+        pnpm -r --filter './packages/*' run build
+      "
+
+  batch-backend:
+    image: esl-pipeline/dev-node:local
+    pull_policy: never
     container_name: esl-batch-backend
     depends_on:
+      deps:
+        condition: service_completed_successfully
       postgres:
         condition: service_healthy
       redis:
         condition: service_started
-
     env_file:
       - .env.batch-backend
     environment:
-      - NODE_ENV=development
+      NODE_ENV: development
+      PIPELINE_CWD: /app
+      FILESYSTEM_UPLOAD_DIR: /app/uploads
     volumes:
-      - uploads_data:/app/uploads
+      - ./uploads:/app/uploads
       - ./:/app
-      - /app/node_modules
-      - /app/packages/batch-backend/node_modules
-      - /app/packages/orchestrator/node_modules
-      - /app/packages/contracts/node_modules
-      - /app/packages/shared-infrastructure/node_modules
     command: >
-      sh -c "
-        pnpm install &&
+      sh -lc "
         pnpm --filter @esl-pipeline/batch-backend dev:api
       "
     ports:
       - '8080:8080'
 
   batch-worker:
-    build:
-      context: .
-      dockerfile: packages/batch-backend/Dockerfile.dev
+    image: esl-pipeline/dev-node:local
+    pull_policy: never
     container_name: esl-batch-worker
     depends_on:
+      deps:
+        condition: service_completed_successfully
       postgres:
         condition: service_healthy
       redis:
         condition: service_started
-
     env_file:
       - .env.batch-backend
     environment:
-      - NODE_ENV=development
+      NODE_ENV: development
+      PIPELINE_CWD: /app
+      FILESYSTEM_UPLOAD_DIR: /app/uploads
     volumes:
-      - uploads_data:/app/uploads
+      - ./uploads:/app/uploads
       - ./:/app
-      - /app/node_modules
-      - /app/packages/batch-backend/node_modules
-      - /app/packages/orchestrator/node_modules
-      - /app/packages/contracts/node_modules
-      - /app/packages/shared-infrastructure/node_modules
     command: >
-      sh -c "
-        pnpm install &&
+      sh -lc "
         pnpm --filter @esl-pipeline/batch-backend dev:worker
       "
 
-volumes:
-  postgres_data:
-  uploads_data:
+  batch-frontend:
+    build:
+      context: .
+      dockerfile: packages/batch-frontend/Dockerfile.dev
+    image: esl-pipeline/batch-frontend:dev
+    pull_policy: never
+    container_name: esl-batch-frontend
+    depends_on:
+      deps:
+        condition: service_completed_successfully
+    environment:
+      NODE_ENV: development
+      BATCH_BACKEND_URL: http://batch-backend:8080
+    volumes:
+      - ./:/app
+      - ./.pnpm-store:/root/.local/share/pnpm/store
+    command: >
+      sh -lc "
+        pnpm --filter @esl-pipeline/batch-frontend dev --host 0.0.0.0
+      "
+    ports:
+      - '5173:5173'

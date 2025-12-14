@@ -8,9 +8,9 @@ import { getEncryptionService } from '../infrastructure/encryption-service.js';
 import { logger } from '../infrastructure/logger.js';
 import {
   TtsProvider,
-  UserTtsStrategy,
   UserSettingsInput,
   UserSettingsRecord,
+  UserTtsStrategy,
   getDefaultSettings,
 } from './settings-model.js';
 

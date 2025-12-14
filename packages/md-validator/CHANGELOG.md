@@ -1,5 +1,13 @@
 # @esl-pipeline/md-validator
 
+## 2.0.5
+
+### Patch Changes
+
+- update deps
+- Updated dependencies
+  - @esl-pipeline/contracts@1.0.3
+
 ## 2.0.4
 
 ### Patch Changes

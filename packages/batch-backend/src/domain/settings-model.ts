@@ -1,6 +1,5 @@
 // packages/batch-backend/src/domain/settings-model.ts
 // Domain model for user settings (API keys and preferences).
-
 import type { TtsStrategy } from '@esl-pipeline/contracts';
 
 /**

@@ -79,7 +79,7 @@ Prerequisites:
   - SMTP endpoint (for potential email integration)
   - Notion, ElevenLabs, AWS credentials as required by `@esl-pipeline/orchestrator`
 - Recommended:
-  - Containerized deployment via `docker-compose.batch-backend.yml` and associated images.
+  - Containerized deployment via `docker-compose.yml` (dev) / `docker-compose.prod.yml` (prod-like) and associated images.
 
 Install and build inside the monorepo:
 
@@ -117,7 +117,7 @@ Install and build inside the monorepo:
 
 Both require consistent `PG_*`, `REDIS_*`, and orchestrator-related env configuration.
 
-For local development, use the root `docker-compose.batch-backend.yml` (or equivalent) to start:
+For local development, use the root `docker-compose.yml` to start:
 
 - Postgres
 - Redis
@@ -154,7 +154,7 @@ If Postgres is enabled but required values are missing, startup fails fast.
 
 ### Postgres schema and migrations
 
-- Initialize the DB schema with `packages/batch-backend/schema.sql` (the root `docker-compose.batch-backend.yml` mounts and applies it for local dev).
+- Initialize the DB schema with `packages/batch-backend/schema.sql` (the root `docker-compose.yml` mounts and applies it for local dev).
 - `jobs.mode` persists the job’s TTS strategy and must be `auto`, `dialogue`, `tts`, or `NULL`.
 - Older databases that contain legacy values (for example `mode='monologue'`) must be migrated (or those rows removed) before running newer versions:
 
@@ -449,10 +449,10 @@ Integrations should treat the HTTP and queue contracts above as the supported pu
 
 ### Initialize and run locally
 
-Using Docker Compose (conceptual):
+Using Docker Compose (dev):
 
 ```bash
-docker-compose -f docker-compose.batch-backend.yml up -d
+docker compose up -d
 ```
 
 This should start:
@@ -711,7 +711,7 @@ Tests live under [`packages/batch-backend/tests`](packages/batch-backend/tests) 
 
 For local development:
 
-- Use `docker-compose.batch-backend.yml` to run dependencies and the service.
+- Use `docker-compose.yml` (dev) or `docker-compose.prod.yml` (prod-like) to run dependencies and the service.
 - Edit sources in [`packages/batch-backend/src`](packages/batch-backend/src) and rebuild or use Node with TS output.
 - Follow repo-wide guidelines:
   - [`AGENTS.md`](AGENTS.md)

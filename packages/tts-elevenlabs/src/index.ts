@@ -24,7 +24,9 @@ import type { DialogueInput, TtsStrategy } from './types.js';
 import type { BuildStudyTextOptions, BuildStudyTextResult } from './types.js';
 
 const DEFAULT_MODEL_ID = process.env.ELEVENLABS_MODEL_ID ?? 'eleven_multilingual_v2';
-type TextToSpeechConvertBody = Parameters<ReturnType<typeof getElevenClient>['textToSpeech']['convert']>[1];
+type TextToSpeechConvertBody = Parameters<
+  ReturnType<typeof getElevenClient>['textToSpeech']['convert']
+>[1];
 type TtsConvertRequest = Pick<TextToSpeechConvertBody, 'modelId' | 'outputFormat'>;
 type TtsOutputFormat = NonNullable<TextToSpeechConvertBody['outputFormat']>;
 
@@ -225,10 +227,9 @@ function toDialogueInputs(
   segments: StudyTextSegment[],
   voiceAssignments: Map<string, string>,
 ): DialogueInput[] {
-  const fallbackSpeaker =
-    voiceAssignments.has('Narrator')
-      ? 'Narrator'
-      : (voiceAssignments.keys().next().value as string | undefined);
+  const fallbackSpeaker = voiceAssignments.has('Narrator')
+    ? 'Narrator'
+    : (voiceAssignments.keys().next().value as string | undefined);
   const fallbackVoiceId =
     (fallbackSpeaker ? voiceAssignments.get(fallbackSpeaker) : undefined) ??
     (voiceAssignments.values().next().value as string | undefined);
@@ -521,7 +522,10 @@ export async function buildStudyTextMp3(
   flushRun();
 
   for (const run of runs) {
-    const runText = run.lines.join('\n').replaceAll(/\n{3,}/g, '\n\n').trim();
+    const runText = run.lines
+      .join('\n')
+      .replaceAll(/\n{3,}/g, '\n\n')
+      .trim();
     const chunks = chunkTextForTts(runText, maxChars);
     for (const chunkText of chunks) {
       const chunkHashInput = JSON.stringify({

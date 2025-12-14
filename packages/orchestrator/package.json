@@ -1,6 +1,6 @@
 {
   "name": "@esl-pipeline/orchestrator",
-  "version": "3.2.0",
+  "version": "3.2.1",
   "private": false,
   "description": "One-command ESL assignment pipeline (validation, Notion import, TTS, upload).",
   "keywords": [
@@ -45,9 +45,9 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@aws-sdk/client-s3": "^3.940.0",
-    "@aws-sdk/s3-request-presigner": "^3.940.0",
-    "@elevenlabs/elevenlabs-js": "^2.25.0",
+    "@aws-sdk/client-s3": "^3.948.0",
+    "@aws-sdk/s3-request-presigner": "^3.948.0",
+    "@elevenlabs/elevenlabs-js": "^2.27.0",
     "@esl-pipeline/shared-infrastructure": "workspace:*",
     "@notionhq/client": "^5.4.0",
     "commander": "^14.0.2",
@@ -71,11 +71,11 @@
     "@esl-pipeline/notion-importer": "workspace:*",
     "@esl-pipeline/storage-uploader": "workspace:*",
     "@esl-pipeline/tts-elevenlabs": "workspace:*",
-    "@types/node": "^24.10.1",
+    "@types/node": "^25.0.2",
     "tsup": "8.5.1",
-    "tsx": "^4.20.6",
+    "tsx": "^4.21.0",
     "typescript": "^5.9.3",
-    "vitest": "^4.0.14"
+    "vitest": "^4.0.15"
   },
   "engines": {
     "node": ">=24.11.1"
