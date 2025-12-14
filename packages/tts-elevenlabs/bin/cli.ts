@@ -85,9 +85,7 @@ if (!md || !voiceMap) {
 
 // Validate TTS strategy
 if (ttsStrategy && !['auto', 'dialogue', 'tts'].includes(ttsStrategy)) {
-  console.error(
-    `Error: --tts-strategy must be one of: auto, dialogue, tts (got: ${ttsStrategy})`,
-  );
+  console.error(`Error: --tts-strategy must be one of: auto, dialogue, tts (got: ${ttsStrategy})`);
   process.exit(1);
 }
 

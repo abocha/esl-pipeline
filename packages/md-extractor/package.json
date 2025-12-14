@@ -1,6 +1,6 @@
 {
   "name": "@esl-pipeline/md-extractor",
-  "version": "2.0.3",
+  "version": "2.0.4",
   "private": true,
   "description": "Extract study text, answer keys, and sections from ESL markdown.",
   "keywords": [
@@ -41,10 +41,10 @@
     "unified": "^11.0.5"
   },
   "devDependencies": {
-    "@types/node": "^24.10.1",
-    "tsx": "^4.20.6",
+    "@types/node": "^25.0.2",
+    "tsx": "^4.21.0",
     "typescript": "^5.9.3",
-    "vitest": "^4.0.14"
+    "vitest": "^4.0.15"
   },
   "engines": {
     "node": ">=24.11.1"

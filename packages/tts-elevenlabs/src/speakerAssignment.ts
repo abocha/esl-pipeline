@@ -1,5 +1,5 @@
-import type { SpeakerProfile } from '@esl-pipeline/md-extractor';
 import { ConfigurationError } from '@esl-pipeline/contracts';
+import type { SpeakerProfile } from '@esl-pipeline/md-extractor';
 
 import {
   type PickedVoice,
@@ -39,7 +39,10 @@ function normalize(str: string | undefined | null): string {
   const s = (str ?? '').trim().toLowerCase();
   // Keep this small and deterministic: strip common markdown punctuation from speaker ids
   // (e.g. "**Mark" from "**Mark:**").
-  const stripped = s.replaceAll(/[*_`~>#]/g, '').replaceAll(/\s+/g, ' ').trim();
+  const stripped = s
+    .replaceAll(/[*_`~>#]/g, '')
+    .replaceAll(/\s+/g, ' ')
+    .trim();
   // Also strip trailing colon-like punctuation commonly used in dialogue labels.
   return stripped.replaceAll(/[:：]+$/g, '').trim();
 }
@@ -97,10 +100,7 @@ function pickFromGenericPoolWithGender(
   for (const name of GENERIC_VOICE_PRIORITY) {
     const match = catalog.voices.find(
       (v) =>
-        v.name &&
-        v.name.toLowerCase() === name.toLowerCase() &&
-        !used.has(v.id) &&
-        isAllowed(v),
+        v.name && v.name.toLowerCase() === name.toLowerCase() && !used.has(v.id) && isAllowed(v),
     );
     if (match) return match.id;
   }
@@ -151,8 +151,8 @@ export async function resolveSpeakerVoices(opts: {
       profile?.voice ??
       coerceVoiceToken((voiceMap as Record<string, unknown>)[speaker]) ??
       (profile
-        ? coerceVoiceToken((voiceMap as Record<string, unknown>)[profile.id]) ??
-          coerceVoiceToken((voiceMap as Record<string, unknown>)[profile.display_name ?? ''])
+        ? (coerceVoiceToken((voiceMap as Record<string, unknown>)[profile.id]) ??
+          coerceVoiceToken((voiceMap as Record<string, unknown>)[profile.display_name ?? '']))
         : undefined);
     const candidates: { source: 'profile' | 'voiceMap' | 'default'; token: string }[] = [];
 

@@ -1,3 +1,7 @@
+import type {
+  CreatePageParameters,
+  CreatePageResponse,
+} from '@notionhq/client/build/src/api-endpoints.js';
 import { readFile } from 'node:fs/promises';
 import { basename } from 'node:path';
 
@@ -10,10 +14,6 @@ import { mdToBlocks } from './mdToBlocks.js';
 import { createNotionClient, resolveDataSourceId, resolveStudentId } from './notion.js';
 import { withRetry } from './retry.js';
 import type { FrontmatterShape, ImportOptions } from './types.js';
-import type {
-  CreatePageParameters,
-  CreatePageResponse,
-} from '@notionhq/client/build/src/api-endpoints.js';
 
 interface ValidationSnapshot {
   ok: boolean;

@@ -16,10 +16,10 @@ import type {
   JobEventPayload as ContractJobEventPayload,
   JobEventType as ContractJobEventType,
   JobState as ContractJobState,
+  TtsStrategy as ContractTtsStrategy,
   JobEventMessage,
   JobStatusDto,
   JobUploadOption,
-  TtsStrategy as ContractTtsStrategy,
 } from '@esl-pipeline/contracts';
 
 import apiClient, {

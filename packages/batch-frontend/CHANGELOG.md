@@ -1,5 +1,13 @@
 # @esl-pipeline/batch-frontend
 
+## 1.1.3
+
+### Patch Changes
+
+- update deps
+- Updated dependencies
+  - @esl-pipeline/contracts@1.0.3
+
 ## 1.1.2
 
 ### Patch Changes

@@ -6,11 +6,11 @@ import type {
   PartialPageObjectResponse,
   SearchResponse,
 } from '@notionhq/client/build/src/api-endpoints.js';
+import type { SearchParameters } from '@notionhq/client/build/src/api-endpoints.js';
 import { createHash } from 'node:crypto';
 
 import { withRetry } from './retry.js';
 import type { ResolveDataSourceInput, ResolveDataSourceResult } from './types.js';
-import type { SearchParameters } from '@notionhq/client/build/src/api-endpoints.js';
 
 type SearchResult = SearchResponse['results'][number];
 type PageLike = PageObjectResponse | PartialPageObjectResponse;

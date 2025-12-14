@@ -8,7 +8,13 @@ import { PoolClient } from 'pg';
 
 import { withPgClient } from '../infrastructure/db.js';
 import { logger } from '../infrastructure/logger.js';
-import { JobRecord, JobState, JobUploadOption, TtsStrategy, assertTransition } from './job-model.js';
+import {
+  JobRecord,
+  JobState,
+  JobUploadOption,
+  TtsStrategy,
+  assertTransition,
+} from './job-model.js';
 
 /**
  * PostgreSQL row structure for jobs table

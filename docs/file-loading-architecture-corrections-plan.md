@@ -408,7 +408,7 @@ _Technical documentation, runbooks, and team training_
 - **Files to Modify:**
   - `packages/batch-backend/Dockerfile`
   - `packages/orchestrator/Dockerfile`
-  - `docker-compose.batch-backend.yml`
+  - `docker-compose.yml`
   - `docker-compose.security.yml` (new)
 - **Technical Details:**
   - Run containers as non-root user

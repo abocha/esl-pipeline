@@ -1,5 +1,13 @@
 # @esl-pipeline/shared-infrastructure
 
+## 1.1.2
+
+### Patch Changes
+
+- update deps
+- Updated dependencies
+  - @esl-pipeline/contracts@1.0.3
+
 ## 1.1.1
 
 ### Patch Changes

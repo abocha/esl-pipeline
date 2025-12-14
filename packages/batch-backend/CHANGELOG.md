@@ -1,5 +1,15 @@
 # @esl-pipeline/batch-backend
 
+## 1.2.3
+
+### Patch Changes
+
+- update deps
+- Updated dependencies
+  - @esl-pipeline/shared-infrastructure@1.1.2
+  - @esl-pipeline/orchestrator@3.2.1
+  - @esl-pipeline/contracts@1.0.3
+
 ## 1.2.2
 
 ### Patch Changes

@@ -405,7 +405,7 @@ No in-memory caching is implemented; model is deliberately simple.
 
 Configuration is centralized in [`loadConfig`](packages/batch-backend/src/config/env.ts:81).
 For a runnable reference, see [`.env.batch-backend.example`](.env.batch-backend.example) and
-[`docker-compose.batch-backend.yml`](docker-compose.batch-backend.yml).
+[`docker-compose.yml`](docker-compose.yml) (dev) / [`docker-compose.prod.yml`](docker-compose.prod.yml) (prod-like).
 
 Keys (summarized):
 

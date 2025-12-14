@@ -94,7 +94,7 @@ Typical local workflow:
 2. Start batch-backend and its dependencies.
 
    For example (conceptual; see repo docs/compose):
-   - `docker-compose -f docker-compose.batch-backend.yml up -d`
+   - `docker compose up -d`
    - This should expose `batch-backend` HTTP API on `http://localhost:8080`.
 
 3. Start this frontend:

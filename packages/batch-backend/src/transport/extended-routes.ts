@@ -10,8 +10,8 @@ import { SubmitJobRequest, submitJob } from '../application/submit-job.js';
 import type { BatchBackendConfig } from '../config/env.js';
 import {
   UserSettingsInput,
-  isValidTtsStrategy,
   isValidTtsProvider,
+  isValidTtsStrategy,
   sanitizeSettings,
 } from '../domain/settings-model.js';
 import {

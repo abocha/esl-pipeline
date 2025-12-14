@@ -125,9 +125,8 @@ describe('infrastructure/orchestrator-service', () => {
 
   it('runAssignmentJob calls pipeline.newAssignment with expected flags and dependencies and returns manifestPath', async () => {
     const { loadConfig } = await import('../src/config/env.js');
-    const { getPipeline, runAssignmentJob } = await import(
-      '../src/infrastructure/orchestrator-service.js'
-    );
+    const { getPipeline, runAssignmentJob } =
+      await import('../src/infrastructure/orchestrator-service.js');
 
     (loadConfig as any).mockReturnValue({
       orchestrator: {
@@ -163,9 +162,8 @@ describe('infrastructure/orchestrator-service', () => {
 
   it('runAssignmentJob rethrows when pipeline.newAssignment fails', async () => {
     const { loadConfig } = await import('../src/config/env.js');
-    const { getPipeline, runAssignmentJob } = await import(
-      '../src/infrastructure/orchestrator-service.js'
-    );
+    const { getPipeline, runAssignmentJob } =
+      await import('../src/infrastructure/orchestrator-service.js');
 
     (loadConfig as any).mockReturnValue({
       orchestrator: {
@@ -203,9 +201,8 @@ describe('infrastructure/orchestrator-service', () => {
 
   it('getJobOptionsFromOrchestrator delegates to orchestrator metadata helper', async () => {
     const { loadConfig } = await import('../src/config/env.js');
-    const { getPipeline, getJobOptionsFromOrchestrator } = await import(
-      '../src/infrastructure/orchestrator-service.js'
-    );
+    const { getPipeline, getJobOptionsFromOrchestrator } =
+      await import('../src/infrastructure/orchestrator-service.js');
 
     (loadConfig as any).mockReturnValue({
       orchestrator: {

@@ -1131,7 +1131,11 @@ function applyEnvDefaults(state: WizardState): void {
     setStateValue(state, 'prefix', envPrefix, 'env', { overwrite: false });
   }
 
-  const envTtsStrategy = process.env.ELEVENLABS_TTS_STRATEGY as 'auto' | 'dialogue' | 'tts' | undefined;
+  const envTtsStrategy = process.env.ELEVENLABS_TTS_STRATEGY as
+    | 'auto'
+    | 'dialogue'
+    | 'tts'
+    | undefined;
   if (envTtsStrategy && ['auto', 'dialogue', 'tts'].includes(envTtsStrategy)) {
     setStateValue(state, 'ttsStrategy', envTtsStrategy, 'env', { overwrite: false });
   } else if (state.withTts !== false && !envTtsStrategy) {

@@ -8,7 +8,7 @@
 -- - Public contracts documented in packages/batch-backend/README.md
 --
 -- This file is intended to be mounted into the Postgres container in
--- docker-compose.batch-backend.yml and applied manually or via CI with:
+-- docker-compose.yml / docker-compose.prod.yml and applied manually or via CI with:
 --   docker exec -i esl-backend-postgres \
 --     psql -U esl -d esl_batch -f /schema/batch-backend/schema.sql
 
