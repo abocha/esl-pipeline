@@ -8,6 +8,7 @@ import * as dialogue from '../src/dialogue.js';
 import * as eleven from '../src/eleven.js';
 import * as ffm from '../src/ffmpeg.js';
 import { buildStudyTextMp3 } from '../src/index.js';
+import type { DialogueInput } from '../src/types.js';
 
 const encoder = new TextEncoder();
 
@@ -203,6 +204,59 @@ Student: voice_student_female
         ]),
       );
       expect(convertMock).toHaveBeenCalledTimes(5); // 5 dialogue lines
+    });
+
+    it('sanitizes dialogue inputs before synthesis', async () => {
+      const dir = await mkdtemp(join(tmpdir(), 'tts-'));
+      const tempMdPath = join(dir, 'dialogue-sanitize.md');
+      const tempVoiceMapPath = join(dir, 'voices.yml');
+
+      const dialogueContent = `
+# Markdown Noise
+
+:::study-text
+Teacher: **Hello** *there*.
+Student: This is \`code\` and ~~strikethrough~~.
+:::
+      `;
+
+      await writeFile(tempMdPath, dialogueContent.trim());
+      await writeFile(
+        tempVoiceMapPath,
+        `
+Teacher: voice_narrator
+Student: voice_student_female
+        `.trim(),
+      );
+
+      let capturedInputs: DialogueInput[] = [];
+      const dialogueSpy = vi
+        .spyOn(dialogue, 'synthesizeDialogue')
+        .mockImplementation(async (options, _apiKey, outputDir) => {
+          capturedInputs = options.inputs ?? [];
+          const audioPath = join(outputDir, 'mock-dialogue.mp3');
+          await writeFile(audioPath, 'mock-audio');
+          return {
+            audioPath,
+            duration: 5.2,
+            hash: 'a1b2c3d4e5f6789012345678901234567890abcdef1234567890abcdef123456',
+          };
+        });
+
+      const result = await buildStudyTextMp3(tempMdPath, {
+        voiceMapPath: tempVoiceMapPath,
+        outPath: dir,
+        ttsStrategy: 'dialogue',
+      });
+
+      expect(result.path).toMatch(/\.mp3$/);
+      expect(dialogueSpy).toHaveBeenCalled();
+      expect(capturedInputs).toHaveLength(2);
+      expect(capturedInputs[0].text).toBe('Hello there.');
+      expect(capturedInputs[1].text).toBe('This is code and strikethrough.');
+      for (const input of capturedInputs) {
+        expect(input.text).not.toMatch(/[*_`~]/);
+      }
     });
 
     it('should handle fixtures with speaker profiles in frontmatter', async () => {

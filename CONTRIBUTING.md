@@ -4,7 +4,7 @@ Thanks for helping improve the ESL pipeline! The notes below keep local developm
 
 ## Prerequisites
 
-- Node.js 24.10.0 (`nvm use 24.10.0` or `asdf install nodejs 24.10.0`).
+- Node.js 24.11.1 (`nvm use 24.11.1` or `asdf install nodejs 24.11.1`).
 - pnpm 8+ (`corepack enable` installs the pinned version automatically).
 - Docker Desktop or the Docker CLI for image builds.
 - `ffmpeg` available on your `PATH` (or set the `FFMPEG_PATH` environment variable).
