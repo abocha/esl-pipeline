@@ -535,64 +535,6 @@ describe('synthesizeDialogue', () => {
       },
     });
 
-    describe('Dialogue API Integration', () => {
-      it.skipIf(!process.env.ELEVENLABS_API_KEY)(
-        'should synthesize dialogue using real API',
-        async () => {
-          const tempDir = await mkdtemp(join(tmpdir(), 'dialogue-integration-'));
-
-          try {
-            const inputs: DialogueInput[] = [
-              {
-                text: 'Hello, how are you?',
-                voice_id: process.env.ELEVENLABS_VOICE_ID_1 || 'EXAVITQu4vr4xnSDxMaL',
-              },
-              {
-                text: 'I am doing well, thank you!',
-                voice_id: process.env.ELEVENLABS_VOICE_ID_2 || 'pNInz6obpgDQGcFmaJgB',
-              },
-            ];
-
-            const options: DialogueSynthesisOptions = {
-              inputs,
-              modelId: 'eleven_v3',
-              languageCode: 'en',
-            };
-
-            const result = await synthesizeDialogue(
-              options,
-              process.env.ELEVENLABS_API_KEY!,
-              tempDir,
-            );
-
-            expect(result.audioPath).toContain('.mp3');
-            expect(result.hash).toHaveLength(64);
-
-            // Verify file exists and has content
-            const { stat } = await import('node:fs/promises');
-            const stats = await stat(result.audioPath);
-            expect(stats.size).toBeGreaterThan(0);
-
-            console.log('Integration test result:', {
-              path: result.audioPath,
-              size: stats.size,
-              duration: result.duration,
-              hash: result.hash,
-            });
-          } finally {
-            // Clean up
-            try {
-              const { rm } = await import('node:fs/promises');
-              await rm(tempDir, { recursive: true, force: true });
-            } catch {
-              // Ignore cleanup errors
-            }
-          }
-        },
-        120_000, // 2 minute timeout for real API call
-      );
-    });
-
     const result1 = await synthesizeDialogue(options, 'test-key', tempDir);
 
     // Clean up for second run
@@ -602,4 +544,62 @@ describe('synthesizeDialogue', () => {
 
     expect(result1.hash).toBe(result2.hash);
   });
+});
+
+describe('Dialogue API Integration', () => {
+  it.skipIf(!process.env.ELEVENLABS_API_KEY)(
+    'should synthesize dialogue using real API',
+    async () => {
+      const tempDir = await mkdtemp(join(tmpdir(), 'dialogue-integration-'));
+
+      try {
+        const inputs: DialogueInput[] = [
+          {
+            text: 'Hello, how are you?',
+            voice_id: process.env.ELEVENLABS_VOICE_ID_1 || 'EXAVITQu4vr4xnSDxMaL',
+          },
+          {
+            text: 'I am doing well, thank you!',
+            voice_id: process.env.ELEVENLABS_VOICE_ID_2 || 'pNInz6obpgDQGcFmaJgB',
+          },
+        ];
+
+        const options: DialogueSynthesisOptions = {
+          inputs,
+          modelId: 'eleven_v3',
+          languageCode: 'en',
+        };
+
+        const result = await synthesizeDialogue(
+          options,
+          process.env.ELEVENLABS_API_KEY!,
+          tempDir,
+        );
+
+        expect(result.audioPath).toContain('.mp3');
+        expect(result.hash).toHaveLength(64);
+
+        // Verify file exists and has content
+        const { stat } = await import('node:fs/promises');
+        const stats = await stat(result.audioPath);
+        expect(stats.size).toBeGreaterThan(0);
+
+        console.log('Integration test result:', {
+          path: result.audioPath,
+          size: stats.size,
+          duration: result.duration,
+          hash: result.hash,
+        });
+      } finally {
+        // Clean up
+        try {
+          const { rm } = await import('node:fs/promises');
+          await rm(tempDir, { recursive: true, force: true });
+        } catch {
+          // Ignore cleanup errors
+        }
+      }
+    },
+    120_000, // 2 minute timeout for real API call
+  );
 });

@@ -180,18 +180,19 @@ Example payload contract:
 Ensure your CI executes:
 
 ```bash
+pnpm -r build
+pnpm typecheck
+pnpm lint
+pnpm test
 pnpm --filter @esl-pipeline/orchestrator test -- --runInBand
-pnpm --filter @esl-pipeline/orchestrator examples/service vitest run
-pnpm --filter @esl-pipeline/orchestrator docker:build
 ```
 
-Release flow (using Changesets):
+Release flow (manual):
 
-1. `pnpm changeset`
-2. Merge; CI runs tests + docker build.
-3. `pnpm changeset version` + `pnpm install`
-4. `pnpm publish --filter @esl-pipeline/orchestrator --access public`
-5. Tag (`git tag vX.Y.Z && git push --tags`).
+1. Update versions in the root `package.json` and any released packages.
+2. Run `pnpm -r build`, `pnpm typecheck`, `pnpm lint`, and `pnpm test`.
+3. `pnpm publish --filter @esl-pipeline/orchestrator --access public` (if publishing).
+4. Tag (`git tag vX.Y.Z && git push --tags`).
 
 ---
 

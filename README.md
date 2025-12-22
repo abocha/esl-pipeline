@@ -271,14 +271,12 @@ Key takeaways:
 ## Contributing / Release Checklist
 
 1. Work against Node 24.10.0 (`nvm use 24.10.0` or `.tool-versions`).
-2. Run `pnpm lint`, `pnpm test`, and `pnpm --filter @esl-pipeline/orchestrator build`.
+2. Run `pnpm -r build`, `pnpm typecheck`, `pnpm lint`, and `pnpm test`.
 3. When behavior changes:
    - Update `CHANGELOG.md`.
    - Update [`docs/agents-ssot.md`](docs/agents-ssot.md) as the canonical contract.
    - Update `AGENTS.md` and [`docs/groundwork-for-backend.md`](docs/groundwork-for-backend.md) where relevant.
-4. Record pending work with `pnpm changeset` (one Changeset per logical change).
-5. When ready to ship:
-   - Apply versions via `pnpm changeset version` and re-run `pnpm install`.
-   - Publish with `pnpm --filter @esl-pipeline/orchestrator publish --access public`.
+4. When ready to ship:
+   - Bump versions manually in `package.json` and any released packages under `packages/*`.
+   - Publish with `pnpm --filter @esl-pipeline/orchestrator publish --access public` if needed.
    - Tag: `git tag vX.Y.Z && git push origin vX.Y.Z`.
-   - Optionally trigger the GitHub “Release” workflow for an automated publish.

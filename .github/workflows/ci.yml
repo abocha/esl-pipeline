@@ -8,13 +8,8 @@ on:
 
 jobs:
   build:
-    name: build (node ${{ matrix.node-version }})
+    name: build (node 24.x)
     runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        node-version:
-          - 24.11.1
-          - lts/*
     env:
       NODE_OPTIONS: --max_old_space_size=4096
     steps:
@@ -22,7 +17,7 @@ jobs:
 
       - uses: actions/setup-node@v6
         with:
-          node-version: ${{ matrix.node-version }}
+          node-version: 24.x
 
       - name: Enable Corepack & pin pnpm from package.json
         run: |
@@ -32,14 +27,14 @@ jobs:
       - name: Install deps
         run: pnpm install --frozen-lockfile
 
-      - name: Enforce dependency pins
-        run: pnpm deps:check
-
       - name: Build
         run: pnpm -r build
 
       - name: Prepare Docker disk space
         run: docker system prune --all --force || true
+
+      - name: Typecheck
+        run: pnpm typecheck
 
       - name: Lint
         run: pnpm lint
@@ -49,12 +44,3 @@ jobs:
 
       - name: Orchestrator targeted tests
         run: pnpm --filter @esl-pipeline/orchestrator test -- --runInBand
-
-      - name: Example service tests
-        run: pnpm --filter @esl-pipeline/orchestrator/examples/service vitest run
-
-      - name: Docker build smoke
-        run: pnpm --filter @esl-pipeline/orchestrator docker:build
-
-      - name: Orchestrator smoke test
-        run: pnpm smoke

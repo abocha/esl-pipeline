@@ -45,22 +45,22 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@aws-sdk/client-s3": "^3.948.0",
-    "@aws-sdk/s3-request-presigner": "^3.948.0",
-    "@elevenlabs/elevenlabs-js": "^2.27.0",
+    "@aws-sdk/client-s3": "^3.956.0",
+    "@aws-sdk/s3-request-presigner": "^3.956.0",
+    "@elevenlabs/elevenlabs-js": "^2.28.0",
     "@esl-pipeline/shared-infrastructure": "workspace:*",
-    "@notionhq/client": "^5.4.0",
+    "@notionhq/client": "^5.6.0",
     "commander": "^14.0.2",
     "enquirer": "^2.4.1",
     "find-up": "^8.0.0",
-    "globby": "^16.0.0",
+    "globby": "^16.1.0",
     "gray-matter": "^4.0.3",
     "js-yaml": "^4.1.1",
     "ora": "9.0.0",
     "picocolors": "^1.1.1",
     "remark-parse": "^11.0.0",
     "unified": "^11.0.5",
-    "zod": "^4.1.13"
+    "zod": "^4.2.1"
   },
   "devDependencies": {
     "@esl-pipeline/contracts": "workspace:*",
@@ -71,11 +71,11 @@
     "@esl-pipeline/notion-importer": "workspace:*",
     "@esl-pipeline/storage-uploader": "workspace:*",
     "@esl-pipeline/tts-elevenlabs": "workspace:*",
-    "@types/node": "^25.0.2",
+    "@types/node": "^25.0.3",
     "tsup": "8.5.1",
     "tsx": "^4.21.0",
     "typescript": "^5.9.3",
-    "vitest": "^4.0.15"
+    "vitest": "^4.0.16"
   },
   "engines": {
     "node": ">=24.11.1"
