@@ -1,5 +1,11 @@
 # @esl-pipeline/tts-elevenlabs
 
+## 3.1.3
+
+### Patch Changes
+
+- tts-elevenlabs: sanitize dialogue text before synthesis
+
 ## 3.1.2
 
 ### Patch Changes

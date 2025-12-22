@@ -234,7 +234,8 @@ function toDialogueInputs(
     (fallbackSpeaker ? voiceAssignments.get(fallbackSpeaker) : undefined) ??
     (voiceAssignments.values().next().value as string | undefined);
 
-  return segments.map((seg) => {
+  const inputs: DialogueInput[] = [];
+  for (const seg of segments) {
     const speaker = seg.speaker?.trim() || fallbackSpeaker || 'default';
     const voiceId = voiceAssignments.get(speaker) ?? fallbackVoiceId;
     if (!voiceId) {
@@ -243,8 +244,11 @@ function toDialogueInputs(
           `Available speakers: ${[...voiceAssignments.keys()].join(', ') || '(none)'}`,
       );
     }
-    return { text: seg.text, voice_id: voiceId };
-  });
+    const sanitizedText = cleanSpeechText(seg.text);
+    if (!sanitizedText) continue;
+    inputs.push({ text: sanitizedText, voice_id: voiceId });
+  }
+  return inputs;
 }
 
 async function buildDialogueMp3(
