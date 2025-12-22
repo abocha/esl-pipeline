@@ -252,8 +252,13 @@ Student: voice_student_female
       expect(result.path).toMatch(/\.mp3$/);
       expect(dialogueSpy).toHaveBeenCalled();
       expect(capturedInputs).toHaveLength(2);
-      expect(capturedInputs[0].text).toBe('Hello there.');
-      expect(capturedInputs[1].text).toBe('This is code and strikethrough.');
+      const first = capturedInputs[0];
+      const second = capturedInputs[1];
+      if (!first || !second) {
+        throw new Error('Expected two dialogue inputs.');
+      }
+      expect(first.text).toBe('Hello there.');
+      expect(second.text).toBe('This is code and strikethrough.');
       for (const input of capturedInputs) {
         expect(input.text).not.toMatch(/[*_`~]/);
       }

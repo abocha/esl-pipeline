@@ -12,17 +12,15 @@ Thanks for helping improve the ESL pipeline! The notes below keep local developm
 ## Development Workflow
 
 - Install dependencies with `pnpm install`.
-- Lint and test everything via `pnpm lint`, `pnpm test`, and `pnpm --filter @esl-pipeline/orchestrator build`.
+- Lint and test everything via `pnpm lint`, `pnpm test`, and `pnpm -r build`.
 - Match CI locally by running:
-  - `pnpm --filter @esl-pipeline/orchestrator/examples/service vitest run`
-  - `pnpm --filter @esl-pipeline/orchestrator docker:build`
-- Use `pnpm changeset` to record user-facing changes before merging.
+  - `pnpm typecheck`
+  - `pnpm --filter @esl-pipeline/orchestrator test -- --runInBand`
 
 ## Release Process Overview
 
-1. Merge any pending Changesets that describe the release.
-2. Run `pnpm changeset version` followed by `pnpm install` to apply version bumps.
-3. Review and polish `CHANGELOG.md` (see the template in `CHANGELOG.md`).
+1. Update versions manually (root `package.json` plus any package releases in `packages/*`).
+2. Review and polish `CHANGELOG.md` (see the template in `CHANGELOG.md`).
+3. Run `pnpm -r build`, `pnpm typecheck`, `pnpm lint`, and `pnpm test`.
 4. Commit the version update, then tag and push: `git tag vX.Y.Z && git push origin vX.Y.Z`.
-5. Publish the orchestrator package with `pnpm --filter @esl-pipeline/orchestrator publish --access public`.
-6. Optionally trigger the “Release” GitHub workflow for an automated publish using `NPM_TOKEN`.
+5. Publish the orchestrator package if needed: `pnpm --filter @esl-pipeline/orchestrator publish --access public`.
