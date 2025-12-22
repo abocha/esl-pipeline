@@ -19,3 +19,4 @@ configs/wizard.defaults.json
 
 /uploads
 *.mp3
+packages/orchestrator/examples/service/fixtures/lesson.manifest.json
