@@ -19,8 +19,9 @@ Thanks for helping improve the ESL pipeline! The notes below keep local developm
 
 ## Release Process Overview
 
-1. Update versions manually (root `package.json` plus any package releases in `packages/*`).
-2. Review and polish `CHANGELOG.md` (see the template in `CHANGELOG.md`).
-3. Run `pnpm -r build`, `pnpm typecheck`, `pnpm lint`, and `pnpm test`.
-4. Commit the version update, then tag and push: `git tag vX.Y.Z && git push origin vX.Y.Z`.
-5. Publish the orchestrator package if needed: `pnpm --filter @esl-pipeline/orchestrator publish --access public`.
+1. Capture changes with Changesets: `pnpm changeset` (one per logical change).
+2. When cutting a release, run `pnpm changeset version` to update package versions + changelogs.
+3. Review and polish `CHANGELOG.md` (see the template in `CHANGELOG.md`).
+4. Run `pnpm -r build`, `pnpm typecheck`, `pnpm lint`, and `pnpm test`.
+5. Commit the version update, then tag and push: `git tag vX.Y.Z && git push origin vX.Y.Z`.
+6. Publish the orchestrator package if needed: `pnpm --filter @esl-pipeline/orchestrator publish --access public`.

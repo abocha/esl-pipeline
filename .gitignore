@@ -12,7 +12,6 @@ configs/wizard.defaults.json
 .pnpm-store
 .roo
 .vscode
-.changeset
 
 .env
 .env.batch-backend
