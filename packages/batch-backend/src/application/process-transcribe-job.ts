@@ -19,27 +19,32 @@ import type { TranscriptionStorage } from '../infrastructure/transcription-stora
 import { createTranscriptionStorage } from '../infrastructure/transcription-storage.js';
 import type { TranscribeQueuePayload } from '../infrastructure/transcribe-queue.js';
 
-type DeepgramResult = {
+interface DeepgramResult {
   metadata?: Record<string, unknown>;
   results?: {
-    channels?: Array<{
-      alternatives?: Array<{
+    channels?: {
+      alternatives?: {
         transcript?: string;
-        words?: Array<{ speaker?: number; start?: number; punctuated_word?: string; word?: string }>;
-      }>;
-    }>;
-    utterances?: Array<{
+        words?: {
+          speaker?: number;
+          start?: number;
+          punctuated_word?: string;
+          word?: string;
+        }[];
+      }[];
+    }[];
+    utterances?: {
       transcript?: string;
       speaker?: number;
       start?: number;
-    }>;
+    }[];
   };
-};
+}
 
-type DeepgramResponseLike = {
+interface DeepgramResponseLike {
   result?: unknown;
   error?: unknown;
-};
+}
 
 export interface TranscribeDependencies {
   config: BatchBackendConfig;
@@ -249,7 +254,7 @@ function formatTranscript(result: DeepgramResult, mode: TranscriptMode): string 
   }
 
   if (mode === 'stack') {
-    const grouped: Map<number, string[]> = new Map();
+    const grouped = new Map<number, string[]>();
     for (const utterance of utterances) {
       const speaker = utterance.speaker ?? 0;
       const list = grouped.get(speaker) ?? [];
@@ -285,11 +290,11 @@ function asDeepgramResult(value: unknown): DeepgramResult {
   return value as DeepgramResult;
 }
 
-function getUtterances(result: DeepgramResult): Array<{
+function getUtterances(result: DeepgramResult): {
   text: string;
   speaker?: number;
   start?: number;
-}> {
+}[] {
   const utterances = result.results?.utterances;
   if (Array.isArray(utterances) && utterances.length > 0) {
     return utterances

@@ -70,7 +70,7 @@ describe('application/scan-recordings', () => {
       glob: '**/*.{opus,mp3,wav,m4a}',
       storage,
       repository: repo,
-      enqueue: async () => undefined,
+      enqueue: async () => {},
     });
 
     const second = await scanRecordings({
@@ -78,7 +78,7 @@ describe('application/scan-recordings', () => {
       glob: '**/*.{opus,mp3,wav,m4a}',
       storage,
       repository: repo,
-      enqueue: async () => undefined,
+      enqueue: async () => {},
     });
 
     expect(first.discovered).toBe(1);

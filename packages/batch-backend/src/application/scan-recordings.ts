@@ -79,7 +79,9 @@ export async function scanRecordings(options: ScanRecordingsOptions): Promise<Re
       const sha256 = await sha256File(absolutePath);
       const existing =
         (sha256 ? await options.repository.getRecordingBySha256(sha256) : null) ??
-        (stats.size ? await options.repository.getRecordingBySourcePath(absolutePath, stats.size) : null);
+        (stats.size > 0
+          ? await options.repository.getRecordingBySourcePath(absolutePath, stats.size)
+          : null);
 
       if (existing) {
         skipped += 1;
