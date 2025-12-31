@@ -55,7 +55,16 @@ const createDefaultJob = (jobId: string): JobEntry => {
   const now = new Date().toISOString();
   return {
     jobId,
-    md: '',
+    md: null,
+    transcribeWorkdir: null,
+    transcriptPath: null,
+    promptPayload: null,
+    promptNotes: null,
+    profilePath: null,
+    recordingId: null,
+    transcriptId: null,
+    promptPackageId: null,
+    draftId: null,
     preset: null,
     withTts: true,
     voiceId: null,

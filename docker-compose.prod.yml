@@ -9,10 +9,9 @@ services:
     command: ['postgres', '-c', 'fsync=off', '-c', 'listen_addresses=*']
     ports:
       - '5432:5432'
-    # Ephemeral DB by default (flip to a named volume if you want persistence).
-    tmpfs:
-      - /var/lib/postgresql/data
+    # Persistent DB (named volume).
     volumes:
+      - postgres_data:/var/lib/postgresql/data
       - ./packages/batch-backend/schema.sql:/schema/batch-backend/schema.sql:ro
       - ./packages/batch-backend/docker-entrypoint-initdb.d:/docker-entrypoint-initdb.d:ro
     healthcheck:
@@ -27,8 +26,8 @@ services:
     command: ['redis-server', '--save', '', '--appendonly', 'no']
     ports:
       - '6379:6379'
-    tmpfs:
-      - /data
+    volumes:
+      - redis_data:/data
     healthcheck:
       test: ['CMD', 'redis-cli', 'ping']
       interval: 5s
@@ -88,3 +87,7 @@ services:
     ports:
       - '5173:80'
     restart: unless-stopped
+
+volumes:
+  postgres_data:
+  redis_data:

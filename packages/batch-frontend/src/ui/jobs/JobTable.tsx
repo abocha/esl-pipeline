@@ -1,8 +1,9 @@
 import copy from 'copy-to-clipboard';
-import React, { useMemo, useState } from 'react';
+import React, { useMemo, useRef, useState } from 'react';
 import toast from 'react-hot-toast';
 
 import { type JobEntry, useJobMonitor } from '../../context/JobMonitorContext';
+import { approveJob, uploadMarkdown } from '../../utils/api';
 
 // Icons
 const CopyIcon = () => (
@@ -34,6 +35,21 @@ const RefreshIcon = () => (
   >
     <polyline points="23 4 23 10 17 10" />
     <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10" />
+  </svg>
+);
+
+const CheckIcon = () => (
+  <svg
+    width="14"
+    height="14"
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="2"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+  >
+    <polyline points="20 6 9 17 4 12" />
   </svg>
 );
 
@@ -99,6 +115,11 @@ const defaultConfig: StateConfig = {
 const stateConfig: Record<string, StateConfig> = {
   queued: { color: 'var(--color-gray-500)', bg: 'var(--color-gray-100)', label: 'Queued' },
   running: { color: 'var(--color-info-600)', bg: 'rgba(14, 165, 233, 0.15)', label: 'Running' },
+  awaiting_approval: {
+    color: 'var(--color-warning-600)',
+    bg: 'rgba(234, 179, 8, 0.15)',
+    label: 'Awaiting approval',
+  },
   succeeded: {
     color: 'var(--color-success-600)',
     bg: 'rgba(16, 185, 129, 0.15)',
@@ -113,6 +134,7 @@ export const JobTable: React.FC = () => {
   const [search, setSearch] = useState('');
   const [manualJobId, setManualJobId] = useState('');
   const [isAdding, setIsAdding] = useState(false);
+  const [approvingJobId, setApprovingJobId] = useState<string | null>(null);
 
   const filteredJobs = useMemo(() => {
     const term = search.trim().toLowerCase();
@@ -121,7 +143,7 @@ export const JobTable: React.FC = () => {
           (job) =>
             job.jobId.toLowerCase().includes(term) ||
             job.fileName?.toLowerCase().includes(term) ||
-            job.md.toLowerCase().includes(term),
+            (job.md ? job.md.toLowerCase().includes(term) : false),
         )
       : jobs;
     return result.slice(0, 20);
@@ -152,6 +174,31 @@ export const JobTable: React.FC = () => {
 
   const handleRegenerate = (jobId: string) => {
     toast(`Audio regeneration for ${jobId} coming soon!`, { icon: '🔊' });
+  };
+
+  const handleCopyPrompt = (job: JobEntry) => {
+    if (!job.promptPayload) {
+      toast.error('Prompt payload is not available yet');
+      return;
+    }
+    copy(job.promptPayload);
+    toast.success('Prompt copied to clipboard');
+  };
+
+  const handleApprove = async (job: JobEntry, file: File) => {
+    if (approvingJobId) return;
+    setApprovingJobId(job.jobId);
+    try {
+      const uploadResponse = await uploadMarkdown(file);
+      await approveJob(job.jobId, uploadResponse.md);
+      await trackJob(job.jobId);
+      toast.success('Job approved and queued');
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : 'Unable to approve job';
+      toast.error(message);
+    } finally {
+      setApprovingJobId(null);
+    }
   };
 
   const handleAddJob = async () => {
@@ -185,9 +232,10 @@ export const JobTable: React.FC = () => {
 
   const stats = useMemo(() => {
     const running = jobs.filter((j) => j.state === 'running').length;
+    const awaitingApproval = jobs.filter((j) => j.state === 'awaiting_approval').length;
     const succeeded = jobs.filter((j) => j.state === 'succeeded').length;
     const failed = jobs.filter((j) => j.state === 'failed').length;
-    return { running, succeeded, failed };
+    return { running, awaitingApproval, succeeded, failed };
   }, [jobs]);
 
   return (
@@ -202,6 +250,9 @@ export const JobTable: React.FC = () => {
                 <span className="stat-dot animate-pulse" />
                 {stats.running} running
               </span>
+            )}
+            {stats.awaitingApproval > 0 && (
+              <span className="stat stat-warning">{stats.awaitingApproval} awaiting</span>
             )}
             {stats.succeeded > 0 && (
               <span className="stat stat-success">{stats.succeeded} done</span>
@@ -278,6 +329,9 @@ export const JobTable: React.FC = () => {
                   key={job.jobId}
                   job={job}
                   onCopy={() => void handleCopy(job)}
+                  onCopyPrompt={() => handleCopyPrompt(job)}
+                  onApprove={(file) => handleApprove(job, file)}
+                  isApproving={approvingJobId === job.jobId}
                   onRegenerate={() => handleRegenerate(job.jobId)}
                   style={{ animationDelay: `${index * 50}ms` }}
                 />
@@ -341,6 +395,10 @@ export const JobTable: React.FC = () => {
 
         .stat-success {
           color: var(--color-success-500);
+        }
+
+        .stat-warning {
+          color: var(--color-warning-500);
         }
 
         .stat-error {
@@ -488,12 +546,35 @@ interface JobRowProps {
   job: JobEntry;
   onCopy: () => void;
   onRegenerate: () => void;
+  onCopyPrompt?: () => void;
+  onApprove?: (file: File) => void;
+  isApproving?: boolean;
   style?: React.CSSProperties;
 }
 
-const JobRow: React.FC<JobRowProps> = ({ job, onCopy, onRegenerate, style }) => {
+const JobRow: React.FC<JobRowProps> = ({
+  job,
+  onCopy,
+  onRegenerate,
+  onCopyPrompt,
+  onApprove,
+  isApproving,
+  style,
+}) => {
   const config: StateConfig = stateConfig[job.state] ?? defaultConfig;
   const isRunning = job.state === 'running';
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
+
+  const handleApproveClick = () => {
+    fileInputRef.current?.click();
+  };
+
+  const handleApproveChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file || !onApprove) return;
+    void onApprove(file);
+    event.target.value = '';
+  };
 
   return (
     <tr style={style}>
@@ -532,6 +613,32 @@ const JobRow: React.FC<JobRowProps> = ({ job, onCopy, onRegenerate, style }) => 
             <CopyIcon />
             <span>Copy link</span>
           </button>
+          {job.promptPayload && onCopyPrompt && (
+            <button type="button" onClick={onCopyPrompt} className="btn-action">
+              <CopyIcon />
+              <span>Copy prompt</span>
+            </button>
+          )}
+          {job.state === 'awaiting_approval' && onApprove && (
+            <>
+              <button
+                type="button"
+                onClick={handleApproveClick}
+                disabled={isApproving}
+                className="btn-action btn-accent"
+              >
+                <CheckIcon />
+                <span>{isApproving ? 'Approving...' : 'Approve'}</span>
+              </button>
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept=".md,.markdown"
+                onChange={handleApproveChange}
+                style={{ display: 'none' }}
+              />
+            </>
+          )}
           <button
             type="button"
             onClick={onRegenerate}

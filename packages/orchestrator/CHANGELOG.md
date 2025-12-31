@@ -1,5 +1,11 @@
 # @esl-pipeline/orchestrator
 
+## 3.2.2
+
+### Patch Changes
+
+- @esl-pipeline/shared-infrastructure@1.1.3
+
 ## 3.2.1
 
 ### Patch Changes

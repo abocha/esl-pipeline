@@ -1,4 +1,4 @@
-export type JobState = 'queued' | 'running' | 'succeeded' | 'failed';
+export type JobState = 'queued' | 'running' | 'awaiting_approval' | 'succeeded' | 'failed';
 
 export type TtsStrategy = 'auto' | 'dialogue' | 'tts';
 
@@ -6,7 +6,16 @@ export type JobUploadOption = 'auto' | 's3' | 'none';
 
 export interface JobStatusDto {
   jobId: string;
-  md: string;
+  md: string | null;
+  transcribeWorkdir: string | null;
+  transcriptPath: string | null;
+  promptPayload: string | null;
+  promptNotes: string | null;
+  profilePath: string | null;
+  recordingId: string | null;
+  transcriptId: string | null;
+  promptPackageId: string | null;
+  draftId: string | null;
   preset: string | null;
   withTts: boolean | null;
   voiceId: string | null;

@@ -91,7 +91,7 @@ const ClockIcon = () => (
 
 interface ActivityEvent {
   id: string;
-  type: 'queued' | 'running' | 'succeeded' | 'failed';
+  type: 'queued' | 'running' | 'awaiting_approval' | 'succeeded' | 'failed';
   jobId: string;
   fileName?: string;
   timestamp: Date;
@@ -122,6 +122,9 @@ export const ActivityFeed: React.FC = () => {
       case 'running': {
         return <LoaderIcon />;
       }
+      case 'awaiting_approval': {
+        return <ClockIcon />;
+      }
       case 'queued': {
         return <ClockIcon />;
       }
@@ -145,6 +148,13 @@ export const ActivityFeed: React.FC = () => {
       }
       case 'running': {
         return { color: 'var(--color-info-500)', bg: 'rgba(14, 165, 233, 0.1)', label: 'Running' };
+      }
+      case 'awaiting_approval': {
+        return {
+          color: 'var(--color-warning-500)',
+          bg: 'rgba(234, 179, 8, 0.1)',
+          label: 'Awaiting approval',
+        };
       }
       case 'queued': {
         return {

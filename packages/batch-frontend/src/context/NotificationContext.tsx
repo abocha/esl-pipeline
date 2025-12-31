@@ -108,7 +108,10 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
   useEffect(() => {
     if (!isBrowser || permission !== 'granted') return;
 
-    const hasActiveJobs = jobs.some((job) => job.state === 'queued' || job.state === 'running');
+    const hasActiveJobs = jobs.some(
+      (job) =>
+        job.state === 'queued' || job.state === 'running' || job.state === 'awaiting_approval',
+    );
     if (hasActiveJobs && !hadActiveJobsRef.current) {
       currentBatchStartedRef.current = true;
       currentBatchHasFailureRef.current = false;

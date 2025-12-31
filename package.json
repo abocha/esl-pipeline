@@ -1,6 +1,6 @@
 {
   "name": "esl-pipeline",
-  "version": "1.9.7",
+  "version": "2.0.0-alpha",
   "private": true,
   "description": "ESL assignment pipeline tooling (validation, Notion import, TTS, S3 upload).",
   "keywords": [
@@ -71,6 +71,7 @@
     "typecheck": "pnpm -r --filter './packages/*' --if-present run typecheck"
   },
   "devDependencies": {
+    "@changesets/cli": "^2.29.8",
     "@eslint/js": "^9.39.2",
     "@tanstack/eslint-plugin-query": "^5.91.2",
     "@trivago/prettier-plugin-sort-imports": "^6.0.0",

@@ -40,7 +40,10 @@ export type JobEventPayload = ContractJobEventPayload;
 export type JobEvent = JobEventMessage;
 
 export interface SubmitJobRequest {
-  md: string;
+  md?: string | null;
+  transcribeWorkdir?: string;
+  promptNotes?: string;
+  profilePath?: string;
   preset?: string;
   withTts?: boolean;
   forceTts?: boolean;
@@ -56,6 +59,22 @@ export interface UploadMarkdownResponse {
 
 export interface SubmitJobResponse {
   jobId: string;
+}
+
+export async function approveJob(jobId: string, md: string): Promise<JobStatus> {
+  try {
+    const response = await apiClient.post(
+      buildApiProxyPath(`/jobs/${encodeURIComponent(jobId)}/approve`),
+      { md },
+    );
+    return response.data;
+  } catch (error: unknown) {
+    const axiosError = toAxiosError(error);
+    if (axiosError && isAuthError(axiosError)) {
+      throw new Error('Authentication required. Please login to approve jobs.');
+    }
+    throw new Error(axiosError ? handleApiError(axiosError) : formatUnknownError(error));
+  }
 }
 
 // Authentication interfaces
@@ -127,6 +146,20 @@ export interface VoiceOption {
   accent?: string | null;
   gender?: string | null;
   category?: string | null;
+}
+
+export interface RecordingFolderEntry {
+  path: string;
+  relativePath: string;
+  student: string;
+  name: string;
+  updatedAt: string;
+}
+
+export interface RecordingsIndexResponse {
+  root: string;
+  exists: boolean;
+  items: RecordingFolderEntry[];
 }
 
 export interface JobEventsOptions {
@@ -312,6 +345,18 @@ export async function getJobStatus(jobId: string): Promise<JobStatus> {
 export async function fetchJobOptions(): Promise<JobOptionsResponse> {
   try {
     const response = await apiClient.get(buildApiProxyPath('/config/job-options'));
+    return response.data;
+  } catch (error: unknown) {
+    const axiosError = toAxiosError(error);
+    throw new Error(axiosError ? handleApiError(axiosError) : formatUnknownError(error));
+  }
+}
+
+export async function fetchRecordingsIndex(limit = 200): Promise<RecordingsIndexResponse> {
+  try {
+    const response = await apiClient.get(buildApiProxyPath('/config/recordings'), {
+      params: { limit },
+    });
     return response.data;
   } catch (error: unknown) {
     const axiosError = toAxiosError(error);

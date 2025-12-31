@@ -6,7 +6,16 @@ import type { JobState, JobUploadOption, TtsStrategy } from '@esl-pipeline/contr
 export interface JobRecord {
   id: string;
   state: JobState;
-  md: string;
+  md: string | null;
+  transcribeWorkdir?: string | null;
+  transcriptPath?: string | null;
+  promptPayload?: string | null;
+  promptNotes?: string | null;
+  profilePath?: string | null;
+  recordingId?: string | null;
+  transcriptId?: string | null;
+  promptPackageId?: string | null;
+  draftId?: string | null;
   preset?: string | null;
   withTts?: boolean | null;
   upload?: JobUploadOption | null;
@@ -36,8 +45,12 @@ export function canTransition(from: JobState, to: JobState): boolean {
       return to === 'running' || to === 'failed';
     }
     case 'running': {
-      // running -> succeeded/failed
-      return to === 'succeeded' || to === 'failed';
+      // running -> awaiting_approval/succeeded/failed
+      return to === 'awaiting_approval' || to === 'succeeded' || to === 'failed';
+    }
+    case 'awaiting_approval': {
+      // awaiting_approval -> queued (approval) or failed (cancel/error)
+      return to === 'queued' || to === 'failed';
     }
     case 'succeeded':
     case 'failed': {

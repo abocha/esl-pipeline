@@ -84,6 +84,16 @@ export interface BatchBackendConfig {
     pathPrefix?: string;
     presignedUrlExpiresIn: number;
   };
+  ttdg: {
+    runCommand: string;
+    runCwd?: string;
+    extraArgs?: string;
+    recordingsRoot: string;
+  };
+  prompt: {
+    templatePath: string;
+    defaultProfilePath: string;
+  };
   experimental: {
     extendedApiEnabled: boolean;
   };
@@ -163,6 +173,20 @@ export function loadConfig(): BatchBackendConfig {
   }
 
   const configDir = readString('ESL_PIPELINE_CONFIG_DIR');
+
+  const ttdgRunCommand = readString('TTDG_RUN_COMMAND', 'uv run ttdg run')!;
+  const ttdgRunCwd = readString('TTDG_RUN_CWD');
+  const ttdgExtraArgs = readString('TTDG_EXTRA_ARGS');
+  const ttdgRecordingsRoot = readString('TTDG_RECORDINGS_ROOT', '/recordings')!;
+
+  const promptTemplatePath = readString(
+    'PROMPT_TEMPLATE_PATH',
+    'docs/misc/hw_prompt_v4_clean.md',
+  )!;
+  const promptProfilePath = readString(
+    'PROMPT_PROFILE_PATH',
+    'docs/misc/PROFILE_2025-11-16.md',
+  )!;
 
   // Authentication configuration
   const jwtSecret = readString('JWT_SECRET', 'your-super-secret-jwt-key-change-in-production')!;
@@ -294,6 +318,16 @@ export function loadConfig(): BatchBackendConfig {
       bucketName: storageBucketName,
       pathPrefix: storagePathPrefix,
       presignedUrlExpiresIn,
+    },
+    ttdg: {
+      runCommand: ttdgRunCommand,
+      runCwd: ttdgRunCwd ?? undefined,
+      extraArgs: ttdgExtraArgs ?? undefined,
+      recordingsRoot: ttdgRecordingsRoot,
+    },
+    prompt: {
+      templatePath: promptTemplatePath,
+      defaultProfilePath: promptProfilePath,
     },
     experimental: {
       extendedApiEnabled,

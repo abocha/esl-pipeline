@@ -1,6 +1,9 @@
 FROM node:24-bullseye-slim
 
-ENV PNPM_HOME=/root/.local/share/pnpm \
+ENV PNPM_HOME=/pnpm \
+    UV_CACHE_DIR=/uv/cache \
+    UV_PYTHON_INSTALL_DIR=/uv/python \
+    UV_PYTHON=3.12 \
     PATH="$PNPM_HOME:$PATH" \
     NODE_ENV=development \
     CI=false
@@ -8,8 +11,12 @@ ENV PNPM_HOME=/root/.local/share/pnpm \
 # Install system dependencies
 RUN corepack enable && corepack prepare pnpm@10 --activate \
     && apt-get update \
-    && apt-get install -y --no-install-recommends ca-certificates ffmpeg \
-    && rm -rf /var/lib/apt/lists/*
+    && apt-get install -y --no-install-recommends ca-certificates curl ffmpeg \
+    && rm -rf /var/lib/apt/lists/* \
+    && curl -LsSf https://astral.sh/uv/install.sh | env XDG_BIN_HOME=/usr/local/bin sh -s -- --no-modify-path \
+    && mkdir -p /pnpm /uv/cache /uv/python \
+    && chmod 0777 /pnpm /uv/cache /uv/python \
+    && uv python install 3.12 --install-dir /uv/python --default --no-progress
 
 WORKDIR /app
 

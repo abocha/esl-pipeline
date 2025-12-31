@@ -5,6 +5,10 @@ into `esl-pipeline` and running the full lesson-to-homework workflow. It is
 written for a solo owner who needs long-term memory and for an assistant who
 needs explicit, stable context.
 
+Note: This manual documents the Phase 1, CLI-driven workflow. The pipeline-native
+transcription system that will supersede it is specified in
+docs/design/TRANSCRIPTION_PIPELINE_SPEC.md and is not the current operational path.
+
 ## 1) System map (end-to-end)
 
 1. Record lesson on Windows (Opus files per student).
@@ -73,8 +77,8 @@ Core runtime packages and entry points:
 - Supporting packages: md validation/extraction, Notion import, TTS, storage uploader.
 
 System-level docs (authoritative):
-- `docs/agents-ssot.md` (contracts and invariants).
-- `docs/pipeline-manifest.md` (manifest schema).
+- `docs/reference/agents-ssot.md` (contracts and invariants).
+- `docs/reference/pipeline-manifest.md` (manifest schema).
 - `docs/backend-frontend/backend-frontend-alignment.md` (frontend/backend roadmap).
 
 ### 2.3 Prompts and profile assets
@@ -244,6 +248,13 @@ Phase 1: Acceptance criteria
 - User can paste manual LLM output into the UI and approve it.
 - Orchestrator runs on the approved `.md` and writes a manifest.
 
+Phase 2+ (pipeline-native transcription; successor to Phase 1)
+- Replace ttdg CLI with a native ingestion/transcription service.
+- Support folder-scan ingestion first; upload ingestion later (S3-backed).
+- Persist recordings/transcripts/prompts as artifacts with storage URIs.
+- Materialize drafts to filesystem before orchestrator approval.
+- See docs/design/TRANSCRIPTION_PIPELINE_SPEC.md for the full Phase 2+ spec.
+
 Phase 2: Profile store + LLM draft
 - Store student profile and recent lesson context.
 - Assemble the LLM prompt automatically (template + profile + transcript).
@@ -269,8 +280,8 @@ Phase 4: Storage modernization
 
 ## 12) If you forget where to look
 
-- `esl-pipeline/docs/agents-ssot.md` is the authoritative contract.
-- `esl-pipeline/docs/pipeline-manifest.md` defines manifest structure.
+- `esl-pipeline/docs/reference/agents-ssot.md` is the authoritative contract.
+- `esl-pipeline/docs/reference/pipeline-manifest.md` defines manifest structure.
 - `esl-pipeline/docs/backend-frontend/backend-frontend-alignment.md` tracks UI/backend gaps.
 - `to-text-deepgram/README.md` and `to-text-deepgram/AGENTS.md` cover CLI usage and repo rules.
 

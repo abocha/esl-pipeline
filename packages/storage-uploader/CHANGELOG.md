@@ -1,5 +1,12 @@
 # @esl-pipeline/storage-uploader
 
+## 2.0.6
+
+### Patch Changes
+
+- Updated dependencies
+  - @esl-pipeline/contracts@1.1.0
+
 ## 2.0.5
 
 ### Patch Changes

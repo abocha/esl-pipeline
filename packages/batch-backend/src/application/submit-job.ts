@@ -14,7 +14,10 @@ export type UploadTarget = 'auto' | 's3' | 'none';
 export type TtsStrategy = DomainTtsStrategy;
 
 export interface SubmitJobRequest {
-  md: string;
+  md?: string | null;
+  transcribeWorkdir?: string;
+  promptNotes?: string;
+  profilePath?: string;
   preset?: string;
   withTts?: boolean;
   upload?: UploadTarget;
@@ -45,8 +48,19 @@ function validateSubmitJobRequest(req: SubmitJobRequest): void {
     throw new ValidationError('Body must be an object', 'invalid_body');
   }
 
-  if (!req.md || typeof req.md !== 'string' || req.md.trim().length === 0) {
-    throw new ValidationError('md is required', 'md_required');
+  const hasMd = typeof req.md === 'string' && req.md.trim().length > 0;
+  const hasTranscribeWorkdir =
+    typeof req.transcribeWorkdir === 'string' && req.transcribeWorkdir.trim().length > 0;
+
+  if (!hasMd && !hasTranscribeWorkdir) {
+    throw new ValidationError('md or transcribeWorkdir is required', 'md_or_transcribe_required');
+  }
+
+  if (hasMd && hasTranscribeWorkdir) {
+    throw new ValidationError(
+      'Provide either md or transcribeWorkdir, not both',
+      'md_and_transcribe_conflict',
+    );
   }
 
   if (
@@ -112,6 +126,21 @@ function validateSubmitJobRequest(req: SubmitJobRequest): void {
       'invalid_tts_strategy',
     );
   }
+
+  if (req.transcribeWorkdir !== undefined && typeof req.transcribeWorkdir !== 'string') {
+    throw new ValidationError(
+      'transcribeWorkdir must be a string when provided',
+      'invalid_transcribe_workdir',
+    );
+  }
+
+  if (req.promptNotes !== undefined && typeof req.promptNotes !== 'string') {
+    throw new ValidationError('promptNotes must be a string when provided', 'invalid_prompt_notes');
+  }
+
+  if (req.profilePath !== undefined && typeof req.profilePath !== 'string') {
+    throw new ValidationError('profilePath must be a string when provided', 'invalid_profile_path');
+  }
 }
 
 // submitJob.declaration()
@@ -120,7 +149,10 @@ export async function submitJob(req: SubmitJobRequest): Promise<SubmitJobRespons
   validateSubmitJobRequest(req);
 
   const job = await insertJob({
-    md: req.md,
+    md: req.md ?? null,
+    transcribeWorkdir: req.transcribeWorkdir ?? null,
+    promptNotes: req.promptNotes ?? null,
+    profilePath: req.profilePath ?? null,
     preset: req.preset,
     withTts: req.withTts,
     // Persist explicit upload choice for observability; downstream decides how to interpret.

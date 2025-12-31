@@ -82,6 +82,9 @@ describe('application/submit-job', () => {
     expect(insertJobSpy).toHaveBeenCalledTimes(1);
     expect(insertJobSpy).toHaveBeenCalledWith({
       md: request.md,
+      transcribeWorkdir: null,
+      promptNotes: null,
+      profilePath: null,
       preset: request.preset,
       withTts: request.withTts,
       upload: request.upload,
@@ -90,6 +93,7 @@ describe('application/submit-job', () => {
       forceTts: request.forceTts,
       notionDatabase: request.notionDatabase,
       ttsStrategy: request.ttsStrategy,
+      userId: request.userId,
     });
 
     expect(createJobQueueSpy).toHaveBeenCalledTimes(1);
@@ -146,6 +150,9 @@ describe('application/submit-job', () => {
 
     expect(insertJobSpy).toHaveBeenCalledWith({
       md: fakeJob.md,
+      transcribeWorkdir: null,
+      promptNotes: null,
+      profilePath: null,
       preset: fakeJob.preset,
       withTts: fakeJob.withTts,
       upload: fakeJob.upload,
@@ -154,6 +161,7 @@ describe('application/submit-job', () => {
       forceTts: fakeJob.forceTts,
       notionDatabase: fakeJob.notionDatabase,
       ttsStrategy: fakeJob.ttsStrategy,
+      userId: undefined,
     });
     expect(enqueue).toHaveBeenCalledWith({ jobId: fakeJob.id });
   });
@@ -168,9 +176,9 @@ describe('application/submit-job', () => {
       enqueue,
     });
 
-    await expect(submitJob({} as any)).rejects.toThrow('md is required');
-    await expect(submitJob({ md: '' as any })).rejects.toThrow('md is required');
-    await expect(submitJob({ md: 42 as any })).rejects.toThrow('md is required');
+    await expect(submitJob({} as any)).rejects.toThrow('md or transcribeWorkdir is required');
+    await expect(submitJob({ md: '' as any })).rejects.toThrow('md or transcribeWorkdir is required');
+    await expect(submitJob({ md: 42 as any })).rejects.toThrow('md or transcribeWorkdir is required');
 
     expect(insertJobSpy).not.toHaveBeenCalled();
     expect(enqueue).not.toHaveBeenCalled();

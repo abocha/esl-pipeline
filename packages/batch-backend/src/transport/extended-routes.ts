@@ -6,6 +6,7 @@ import { Readable } from 'node:stream';
 import { z } from 'zod';
 
 import { getJobOptions } from '../application/get-job-options.js';
+import { getRecordingsIndex } from '../application/get-recordings-index.js';
 import { SubmitJobRequest, submitJob } from '../application/submit-job.js';
 import type { BatchBackendConfig } from '../config/env.js';
 import {
@@ -91,6 +92,57 @@ export function registerExtendedRoutes(app: FastifyInstance, options: ExtendedRo
 
         return reply.send(options);
       } catch (error: unknown) {
+        logger.error(error instanceof Error ? error : String(error), {
+          event: 'http_request',
+          route: routePath,
+          statusCode: 500,
+          error: 'internal_error',
+        });
+
+        return errorResponse(reply, 'internal_error');
+      }
+    },
+  );
+
+  app.get(
+    '/config/recordings',
+    {
+      preHandler: [authenticate],
+    },
+    async (request, reply) => {
+      const routePath = resolveRoutePath(request, 'GET /config/recordings');
+
+      const querySchema = z.object({
+        limit: z.coerce.number().int().min(1).max(1000).optional(),
+        student: z.string().min(1).optional(),
+      });
+
+      try {
+        const query = querySchema.parse(request.query ?? {});
+        const recordings = await getRecordingsIndex({
+          root: config.ttdg.recordingsRoot,
+          limit: query.limit,
+          student: query.student,
+        });
+
+        reply.header('Cache-Control', 'private, max-age=30');
+
+        logger.info('HTTP request handled', {
+          event: 'http_request',
+          route: routePath,
+          statusCode: 200,
+        });
+
+        return reply.send(recordings);
+      } catch (error: unknown) {
+        if (error instanceof z.ZodError) {
+          return reply.code(400).send({
+            error: 'validation_failed',
+            message: 'Invalid query parameters',
+            details: error.issues,
+          });
+        }
+
         logger.error(error instanceof Error ? error : String(error), {
           event: 'http_request',
           route: routePath,
@@ -846,23 +898,49 @@ export function registerExtendedRoutes(app: FastifyInstance, options: ExtendedRo
 
     const body = request.body as SubmitJobRequest | undefined;
 
-    const jobSchema = z.object({
-      md: z.string().min(1, 'md is required'),
-      preset: z.string().optional(),
-      withTts: z.boolean().optional(),
-      upload: z.enum(['auto', 's3', 'none']).optional(),
-      voiceAccent: z.string().min(1).optional(),
-      voiceId: z.string().min(1).optional(),
-      forceTts: z.boolean().optional(),
-      notionDatabase: z.string().min(1).optional(),
-      ttsStrategy: z.enum(['auto', 'dialogue', 'tts']).optional(),
-    });
+    const jobSchema = z
+      .object({
+        md: z.string().min(1).optional(),
+        transcribeWorkdir: z.string().min(1).optional(),
+        promptNotes: z.string().optional(),
+        profilePath: z.string().min(1).optional(),
+        preset: z.string().optional(),
+        withTts: z.boolean().optional(),
+        upload: z.enum(['auto', 's3', 'none']).optional(),
+        voiceAccent: z.string().min(1).optional(),
+        voiceId: z.string().min(1).optional(),
+        forceTts: z.boolean().optional(),
+        notionDatabase: z.string().min(1).optional(),
+        ttsStrategy: z.enum(['auto', 'dialogue', 'tts']).optional(),
+      })
+      .superRefine((data, ctx) => {
+        const hasMd = typeof data.md === 'string' && data.md.trim().length > 0;
+        const hasTranscribe =
+          typeof data.transcribeWorkdir === 'string' && data.transcribeWorkdir.trim().length > 0;
+        if (!hasMd && !hasTranscribe) {
+          ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            message: 'md or transcribeWorkdir is required',
+            path: ['md'],
+          });
+        }
+        if (hasMd && hasTranscribe) {
+          ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            message: 'Provide either md or transcribeWorkdir, not both',
+            path: ['md'],
+          });
+        }
+      });
 
     try {
       const validatedData = jobSchema.parse(body);
 
       const result = await submitJob({
         md: validatedData.md,
+        transcribeWorkdir: validatedData.transcribeWorkdir,
+        promptNotes: validatedData.promptNotes,
+        profilePath: validatedData.profilePath,
         preset: validatedData.preset,
         withTts: validatedData.withTts,
         upload: validatedData.upload,
