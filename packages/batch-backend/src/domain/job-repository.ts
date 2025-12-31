@@ -355,6 +355,68 @@ export async function updateJobPromptData(args: {
   return mapRowToJob(row);
 }
 
+export async function updateJobDraftLink(args: {
+  id: string;
+  expectedState: JobState;
+  md: string;
+  draftId: string;
+}): Promise<JobRecord | null> {
+  const { id, expectedState, md, draftId } = args;
+
+  const row = await withPgClient(async (client: PoolClient) => {
+    const result = await client.query(
+      `
+      UPDATE jobs
+      SET
+        md = $1,
+        draft_id = $2,
+        updated_at = now()
+      WHERE id = $3
+        AND state = $4
+      RETURNING
+        id,
+        state,
+        md,
+        transcribe_workdir,
+        transcript_path,
+        prompt_payload,
+        prompt_notes,
+        profile_path,
+        recording_id,
+        transcript_id,
+        prompt_package_id,
+        draft_id,
+        preset,
+        with_tts,
+        upload,
+        voice_id,
+        voice_accent,
+        force_tts,
+        notion_database,
+        mode,
+        notion_url,
+        created_at,
+        updated_at,
+        started_at,
+        finished_at,
+        error,
+        manifest_path,
+        user_id
+      `,
+      [md, draftId, id, expectedState],
+    );
+    return result.rows[0];
+  });
+
+  if (!row) {
+    logger.warn('No job row updated (state race or missing)', { jobId: id });
+    return null;
+  }
+
+  logger.info('Job draft link updated', { jobId: id, draftId });
+  return mapRowToJob(row);
+}
+
 export async function approveJob(args: {
   id: string;
   expectedState: JobState;
