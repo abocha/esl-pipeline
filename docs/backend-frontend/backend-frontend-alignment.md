@@ -240,7 +240,7 @@ import {
 
 ## Phase 2+ Transcription Pipeline (In Progress)
 
-**Status:** Stages 1–7 implemented; UI integration pending (tracked via `docs/design/TRANSCRIPTION_PIPELINE_IMPLEMENTATION_MANUAL.md`).
+**Status:** Stages 1–9 implemented; Phase 2 MVP ready for review (tracked via `docs/design/TRANSCRIPTION_PIPELINE_IMPLEMENTATION_MANUAL.md`).
 
 ### Proposed Endpoints (MVP scan ingestion)
 

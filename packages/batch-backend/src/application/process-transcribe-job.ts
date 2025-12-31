@@ -26,6 +26,7 @@ interface DeepgramResult {
       alternatives?: {
         transcript?: string;
         words?: {
+          end?: number;
           speaker?: number;
           start?: number;
           punctuated_word?: string;
@@ -34,6 +35,8 @@ interface DeepgramResult {
       }[];
     }[];
     utterances?: {
+      channel?: number;
+      end?: number;
       transcript?: string;
       speaker?: number;
       start?: number;
@@ -211,10 +214,30 @@ async function transcribeWithDeepgram(args: {
     model: args.model,
     language: args.language,
     multichannel: true,
+    punctuate: true,
+    smart_format: true,
+    utterances: true,
   });
 
   if (primary.result && !primary.error) {
-    return { result: asDeepgramResult(primary.result), fallbackUsed: false };
+    const primaryResult = asDeepgramResult(primary.result);
+    const channelCount = getChannelCount(primaryResult);
+    if (channelCount === 1) {
+      const fallback = await transcribeAttempt(args, {
+        model: args.model,
+        language: args.language,
+        diarize: true,
+        utterances: true,
+        punctuate: true,
+        smart_format: true,
+      });
+
+      if (fallback.result && !fallback.error) {
+        return { result: asDeepgramResult(fallback.result), fallbackUsed: true };
+      }
+    }
+
+    return { result: primaryResult, fallbackUsed: false };
   }
 
   const fallback = await transcribeAttempt(args, {
@@ -222,6 +245,8 @@ async function transcribeWithDeepgram(args: {
     language: args.language,
     diarize: true,
     utterances: true,
+    punctuate: true,
+    smart_format: true,
   });
 
   if (fallback.error || !fallback.result) {
@@ -247,7 +272,7 @@ async function transcribeAttempt(
 
 function formatTranscript(result: DeepgramResult, mode: TranscriptMode): string {
   const transcript = getRawTranscript(result);
-  const utterances = getUtterances(result);
+  const utterances = mergeSegments(getTranscriptSegments(result));
 
   if (utterances.length === 0) {
     return transcript;
@@ -263,15 +288,16 @@ function formatTranscript(result: DeepgramResult, mode: TranscriptMode): string 
     }
 
     return [...grouped.entries()]
-      .map(([speaker, lines]) => `Speaker ${speaker + 1}:\n${lines.join(' ')}`)
+      .map(([speaker, lines]) => `${formatSpeakerLabel(speaker)}:\n${lines.join('\n')}`)
       .join('\n\n');
   }
 
   return utterances
     .map((utterance) => {
-      const timestamp = formatTimestamp(utterance.start ?? 0);
-      const speaker = `Speaker ${((utterance.speaker ?? 0) + 1).toString()}`;
-      return `[${timestamp}] ${speaker}: ${utterance.text}`;
+      const start = formatTimestamp(utterance.start ?? 0);
+      const end = formatTimestamp(utterance.end ?? utterance.start ?? 0);
+      const speaker = formatSpeakerLabel(utterance.speaker ?? 0);
+      return `[${speaker} ${start}-${end}] ${utterance.text}`;
     })
     .join('\n');
 }
@@ -290,23 +316,26 @@ function asDeepgramResult(value: unknown): DeepgramResult {
   return value as DeepgramResult;
 }
 
-function getUtterances(result: DeepgramResult): {
+function getTranscriptSegments(result: DeepgramResult): {
   text: string;
   speaker?: number;
   start?: number;
+  end?: number;
 }[] {
   const utterances = result.results?.utterances;
   if (Array.isArray(utterances) && utterances.length > 0) {
-    return utterances
+    const segments = utterances
       .map((item) => ({
         text: (item.transcript ?? '').trim(),
-        speaker: typeof item.speaker === 'number' ? item.speaker : undefined,
+        speaker: resolveSpeakerIndex(item.channel, item.speaker),
         start: typeof item.start === 'number' ? item.start : undefined,
+        end: typeof item.end === 'number' ? item.end : undefined,
       }))
       .filter((item) => item.text.length > 0);
+    return normalizeSegmentEnds(segments).sort((a, b) => (a.start ?? 0) - (b.start ?? 0));
   }
 
-  return [];
+  return buildSegmentsFromWords(result);
 }
 
 function buildSummary(result: DeepgramResult): Record<string, unknown> | null {
@@ -326,8 +355,136 @@ function buildSummary(result: DeepgramResult): Record<string, unknown> | null {
 }
 
 function formatTimestamp(seconds: number): string {
-  if (!Number.isFinite(seconds)) return '00:00';
-  const mins = Math.floor(seconds / 60);
-  const secs = Math.floor(seconds % 60);
-  return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+  if (!Number.isFinite(seconds)) return '00:00.000';
+  const totalMillis = Math.round(seconds * 1000);
+  const mins = Math.floor(totalMillis / 60_000);
+  const secs = Math.floor((totalMillis % 60_000) / 1000);
+  const millis = totalMillis % 1000;
+  return `${mins.toString().padStart(2, '0')}:${secs
+    .toString()
+    .padStart(2, '0')}.${millis.toString().padStart(3, '0')}`;
 }
+
+function formatSpeakerLabel(index: number): string {
+  if (index === 0) return 'Teacher';
+  if (index === 1) return 'Student';
+  return `Speaker ${index + 1}`;
+}
+
+function getChannelCount(result: DeepgramResult): number | null {
+  const metadataChannels = (result.metadata as { channels?: unknown } | undefined)?.channels;
+  if (typeof metadataChannels === 'number') {
+    return metadataChannels;
+  }
+  if (Array.isArray(result.results?.channels)) {
+    return result.results?.channels?.length ?? null;
+  }
+  return null;
+}
+
+function resolveSpeakerIndex(channel?: number, speaker?: number): number | undefined {
+  if (typeof channel === 'number') return channel;
+  if (typeof speaker === 'number') return speaker;
+  return undefined;
+}
+
+function buildSegmentsFromWords(result: DeepgramResult): {
+  text: string;
+  speaker?: number;
+  start?: number;
+  end?: number;
+}[] {
+  const channels = result.results?.channels;
+  if (!Array.isArray(channels) || channels.length === 0) {
+    return [];
+  }
+
+  const segments: {
+    text: string;
+    speaker?: number;
+    start?: number;
+    end?: number;
+  }[] = [];
+
+  for (const [channelIndex, channel] of channels.entries()) {
+    const words = channel.alternatives?.[0]?.words;
+    if (!Array.isArray(words) || words.length === 0) {
+      continue;
+    }
+
+    let current: { text: string; speaker?: number; start?: number; end?: number } | null = null;
+
+    for (const word of words) {
+      const text = (word.punctuated_word ?? word.word ?? '').trim();
+      if (!text) continue;
+      const start = typeof word.start === 'number' ? word.start : undefined;
+      const end = typeof word.end === 'number' ? word.end : start;
+
+      if (!current) {
+        current = { text, speaker: channelIndex, start, end };
+        continue;
+      }
+
+      const gap = getGapSeconds(current.end, start);
+      if (gap > UTTERANCE_GAP_SEC) {
+        segments.push(current);
+        current = { text, speaker: channelIndex, start, end };
+        continue;
+      }
+
+      current.text = `${current.text} ${text}`;
+      current.end = end ?? current.end;
+    }
+
+    if (current) {
+      segments.push(current);
+    }
+  }
+
+  return segments.sort((a, b) => (a.start ?? 0) - (b.start ?? 0));
+}
+
+function normalizeSegmentEnds<T extends { start?: number; end?: number }>(segments: T[]): T[] {
+  return segments.map((segment, index) => {
+    if (typeof segment.end === 'number') return segment;
+    const nextStart = segments[index + 1]?.start;
+    return {
+      ...segment,
+      end: typeof nextStart === 'number' ? nextStart : segment.start,
+    };
+  });
+}
+
+function mergeSegments(
+  segments: { text: string; speaker?: number; start?: number; end?: number }[],
+): { text: string; speaker?: number; start?: number; end?: number }[] {
+  if (segments.length === 0) return segments;
+  const merged: { text: string; speaker?: number; start?: number; end?: number }[] = [];
+
+  for (const segment of segments) {
+    const previous = merged.at(-1);
+    if (
+      previous &&
+      previous.speaker === segment.speaker &&
+      getGapSeconds(previous.end, segment.start) <= UTTERANCE_GAP_SEC
+    ) {
+      previous.text = `${previous.text} ${segment.text}`.trim();
+      previous.end = segment.end ?? previous.end;
+      continue;
+    }
+    merged.push({ ...segment });
+  }
+
+  return merged;
+}
+
+function getGapSeconds(previousEnd?: number, nextStart?: number): number {
+  const previous = typeof previousEnd === 'number' ? previousEnd : Number.NaN;
+  const next = typeof nextStart === 'number' ? nextStart : Number.NaN;
+  if (!Number.isFinite(previous) || !Number.isFinite(next)) {
+    return 0;
+  }
+  return next - previous;
+}
+
+const UTTERANCE_GAP_SEC = 1.5;
