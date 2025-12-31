@@ -8,9 +8,12 @@ import { z } from 'zod';
 import { getJobOptions } from '../application/get-job-options.js';
 import { getRecordingsIndex } from '../application/get-recordings-index.js';
 import { getRecordingTranscript } from '../application/get-recording-transcript.js';
+import { createPromptPackage } from '../application/create-prompt-package.js';
+import { getPromptPackage } from '../application/get-prompt-package.js';
 import { scanRecordingsWithDefaults } from '../application/scan-recordings.js';
-import { SubmitJobRequest, submitJob } from '../application/submit-job.js';
+import { SubmitJobRequest, ValidationError, submitJob } from '../application/submit-job.js';
 import { updateRecordingTranscript } from '../application/update-recording-transcript.js';
+import { ProfilePathError } from '../application/profile-path.js';
 import type { BatchBackendConfig } from '../config/env.js';
 import {
   UserSettingsInput,
@@ -286,6 +289,116 @@ export function registerExtendedRoutes(app: FastifyInstance, options: ExtendedRo
           statusCode: 500,
           error: 'internal_error',
           recordingId,
+        });
+
+        return errorResponse(reply, 'internal_error');
+      }
+    },
+  );
+
+  app.post(
+    '/recordings/:recordingId/prompt-package',
+    {
+      preHandler: [authenticate],
+    },
+    async (request, reply) => {
+      const { recordingId } = request.params as { recordingId: string };
+      const routePath = resolveRoutePath(request, 'POST /recordings/:recordingId/prompt-package');
+
+      const schema = z.object({
+        notes: z.string().optional(),
+        profilePath: z.string().min(1).optional(),
+      });
+
+      try {
+        const body = schema.parse(request.body ?? {});
+        const promptPackage = await createPromptPackage({
+          recordingId,
+          notes: body.notes,
+          profilePath: body.profilePath,
+        });
+
+        if (!promptPackage) {
+          logger.info('Prompt package creation skipped; transcript missing', {
+            event: 'prompt_package_create_not_found',
+            route: routePath,
+            recordingId,
+          });
+          return errorResponse(reply, 'not_found');
+        }
+
+        logger.info('HTTP request handled', {
+          event: 'http_request',
+          route: routePath,
+          statusCode: 200,
+          recordingId,
+        });
+
+        return reply.send(promptPackage);
+      } catch (error: unknown) {
+        if (error instanceof z.ZodError) {
+          return reply.code(400).send({
+            error: 'validation_failed',
+            message: 'Invalid request body',
+            details: error.issues,
+          });
+        }
+        if (error instanceof ProfilePathError) {
+          return reply.code(400).send({
+            error: 'validation_failed',
+            message: error.message,
+            code: error.code,
+          });
+        }
+
+        logger.error(error instanceof Error ? error : String(error), {
+          event: 'http_request',
+          route: routePath,
+          statusCode: 500,
+          error: 'internal_error',
+          recordingId,
+        });
+
+        return errorResponse(reply, 'internal_error');
+      }
+    },
+  );
+
+  app.get(
+    '/prompt-packages/:promptPackageId',
+    {
+      preHandler: [authenticate],
+    },
+    async (request, reply) => {
+      const { promptPackageId } = request.params as { promptPackageId: string };
+      const routePath = resolveRoutePath(request, 'GET /prompt-packages/:promptPackageId');
+
+      try {
+        const promptPackage = await getPromptPackage(promptPackageId);
+        if (!promptPackage) {
+          logger.info('Prompt package not found', {
+            event: 'prompt_package_not_found',
+            route: routePath,
+            promptPackageId,
+          });
+          return errorResponse(reply, 'not_found');
+        }
+
+        logger.info('HTTP request handled', {
+          event: 'http_request',
+          route: routePath,
+          statusCode: 200,
+          promptPackageId,
+        });
+
+        return reply.send(promptPackage);
+      } catch (error: unknown) {
+        logger.error(error instanceof Error ? error : String(error), {
+          event: 'http_request',
+          route: routePath,
+          statusCode: 500,
+          error: 'internal_error',
+          promptPackageId,
         });
 
         return errorResponse(reply, 'internal_error');
@@ -1103,6 +1216,13 @@ export function registerExtendedRoutes(app: FastifyInstance, options: ExtendedRo
           error: 'validation_failed',
           message: 'Invalid request body',
           details: error.issues,
+        });
+      }
+      if (error instanceof ValidationError) {
+        return reply.code(400).send({
+          error: 'validation_failed',
+          message: error.message,
+          code: error.code,
         });
       }
 

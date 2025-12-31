@@ -24,6 +24,7 @@ import { runAssignmentJob } from '../infrastructure/orchestrator-service.js';
 import { runTtdg } from '../infrastructure/ttdg-runner.js';
 import type { QueueJobPayload } from '../infrastructure/queue-bullmq.js';
 import { assemblePromptPayload, resolveRepoPath } from './prompt-assembly.js';
+import { resolveProfileRoot, resolveUserProfilePath } from './profile-path.js';
 
 // processQueueJob.declaration()
 export async function processQueueJob(payload: QueueJobPayload): Promise<void> {
@@ -93,9 +94,10 @@ export async function processQueueJob(payload: QueueJobPayload): Promise<void> {
 
       const transcriptPath = ttdgResult.outputs[0] ?? '';
       const templatePath = resolvePromptPath(config.prompt.templatePath);
-      const profilePath = resolvePromptPath(
-        running.profilePath ?? config.prompt.defaultProfilePath,
-      );
+      const profileRoot = await resolveProfileRoot(config.prompt.defaultProfilePath);
+      const profilePath = running.profilePath
+        ? await resolveUserProfilePath(running.profilePath, profileRoot)
+        : resolvePromptPath(config.prompt.defaultProfilePath);
 
       const prompt = await assemblePromptPayload({
         templatePath,

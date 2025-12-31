@@ -2,10 +2,13 @@ import { request as httpRequest } from 'node:http';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 
 import { getJobOptions } from '../src/application/get-job-options.js';
+import * as createPromptPackageModule from '../src/application/create-prompt-package.js';
 import * as getRecordingTranscriptModule from '../src/application/get-recording-transcript.js';
 import * as getJobStatusModule from '../src/application/get-job-status.js';
+import * as getPromptPackageModule from '../src/application/get-prompt-package.js';
 import * as submitJobModule from '../src/application/submit-job.js';
 import * as updateRecordingTranscriptModule from '../src/application/update-recording-transcript.js';
+import { ProfilePathError } from '../src/application/profile-path.js';
 import { publishJobEvent } from '../src/domain/job-events.js';
 import type { JobRecord } from '../src/domain/job-model.js';
 import { publishRecordingEvent } from '../src/domain/recording-events.js';
@@ -502,6 +505,138 @@ describe('transport/http-server - integration (in-process)', () => {
       method: 'PUT',
       url: '/recordings/missing/transcript',
       payload: { text: 'Updated text' },
+    });
+
+    expect(response.statusCode).toBe(404);
+    expect(response.json()).toEqual({ error: 'not_found' });
+  });
+
+  it('POST /recordings/:id/prompt-package returns assembled payload', async () => {
+    const createPromptPackage = vi.spyOn(createPromptPackageModule, 'createPromptPackage');
+    createPromptPackage.mockClear();
+    createPromptPackage.mockResolvedValue({
+      id: 'prompt-1',
+      recordingId: 'recording-1',
+      transcriptId: 'transcript-1',
+      profilePath: '/profiles/p1.md',
+      templateVersion: '/templates/t1.md',
+      notes: 'Some notes',
+      storageUri: 'local://prompt-packages/prompt-1.txt',
+      text: 'PROMPT TEXT',
+      createdAt: '2024-01-01T00:00:00.000Z',
+      updatedAt: '2024-01-01T00:10:00.000Z',
+    });
+
+    const response = await app.inject({
+      method: 'POST',
+      url: '/recordings/recording-1/prompt-package',
+      payload: { notes: 'Some notes', profilePath: '/profiles/p1.md' },
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toEqual({
+      id: 'prompt-1',
+      recordingId: 'recording-1',
+      transcriptId: 'transcript-1',
+      profilePath: '/profiles/p1.md',
+      templateVersion: '/templates/t1.md',
+      notes: 'Some notes',
+      storageUri: 'local://prompt-packages/prompt-1.txt',
+      text: 'PROMPT TEXT',
+      createdAt: '2024-01-01T00:00:00.000Z',
+      updatedAt: '2024-01-01T00:10:00.000Z',
+    });
+    expect(createPromptPackage).toHaveBeenCalledWith({
+      recordingId: 'recording-1',
+      notes: 'Some notes',
+      profilePath: '/profiles/p1.md',
+    });
+  });
+
+  it('POST /recordings/:id/prompt-package returns 404 when transcript missing', async () => {
+    const createPromptPackage = vi.spyOn(createPromptPackageModule, 'createPromptPackage');
+    createPromptPackage.mockClear();
+    createPromptPackage.mockResolvedValue(null);
+
+    const response = await app.inject({
+      method: 'POST',
+      url: '/recordings/missing/prompt-package',
+      payload: { notes: 'Some notes' },
+    });
+
+    expect(response.statusCode).toBe(404);
+    expect(response.json()).toEqual({ error: 'not_found' });
+  });
+
+  it('POST /recordings/:id/prompt-package rejects profilePath outside repo', async () => {
+    const createPromptPackage = vi.spyOn(createPromptPackageModule, 'createPromptPackage');
+    createPromptPackage.mockClear();
+    createPromptPackage.mockRejectedValue(
+      new ProfilePathError(
+        'profilePath must resolve within the configured profile root',
+        'profile_path_outside_root',
+      ),
+    );
+
+    const response = await app.inject({
+      method: 'POST',
+      url: '/recordings/recording-1/prompt-package',
+      payload: { profilePath: '/etc/passwd' },
+    });
+
+    expect(response.statusCode).toBe(400);
+    expect(response.json()).toEqual({
+      error: 'validation_failed',
+      message: 'profilePath must resolve within the configured profile root',
+      code: 'profile_path_outside_root',
+    });
+  });
+
+  it('GET /prompt-packages/:id returns prompt package payload', async () => {
+    const getPromptPackage = vi.spyOn(getPromptPackageModule, 'getPromptPackage');
+    getPromptPackage.mockClear();
+    getPromptPackage.mockResolvedValue({
+      id: 'prompt-1',
+      recordingId: 'recording-1',
+      transcriptId: 'transcript-1',
+      profilePath: '/profiles/p1.md',
+      templateVersion: '/templates/t1.md',
+      notes: 'Some notes',
+      storageUri: 'local://prompt-packages/prompt-1.txt',
+      text: 'PROMPT TEXT',
+      createdAt: '2024-01-01T00:00:00.000Z',
+      updatedAt: '2024-01-01T00:10:00.000Z',
+    });
+
+    const response = await app.inject({
+      method: 'GET',
+      url: '/prompt-packages/prompt-1',
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toEqual({
+      id: 'prompt-1',
+      recordingId: 'recording-1',
+      transcriptId: 'transcript-1',
+      profilePath: '/profiles/p1.md',
+      templateVersion: '/templates/t1.md',
+      notes: 'Some notes',
+      storageUri: 'local://prompt-packages/prompt-1.txt',
+      text: 'PROMPT TEXT',
+      createdAt: '2024-01-01T00:00:00.000Z',
+      updatedAt: '2024-01-01T00:10:00.000Z',
+    });
+    expect(getPromptPackage).toHaveBeenCalledWith('prompt-1');
+  });
+
+  it('GET /prompt-packages/:id returns 404 when missing', async () => {
+    const getPromptPackage = vi.spyOn(getPromptPackageModule, 'getPromptPackage');
+    getPromptPackage.mockClear();
+    getPromptPackage.mockResolvedValue(null);
+
+    const response = await app.inject({
+      method: 'GET',
+      url: '/prompt-packages/missing',
     });
 
     expect(response.statusCode).toBe(404);

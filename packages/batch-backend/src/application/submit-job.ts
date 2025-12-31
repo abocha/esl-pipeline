@@ -5,10 +5,12 @@
 // - Persists a queued job via JobRepository.
 // - Enqueues a BullMQ job via createJobQueue.
 import { publishJobEvent } from '../domain/job-events.js';
+import { loadConfig } from '../config/env.js';
 import type { TtsStrategy as DomainTtsStrategy } from '../domain/job-model.js';
 import { insertJob } from '../domain/job-repository.js';
 import { logger } from '../infrastructure/logger.js';
 import { createJobQueue } from '../infrastructure/queue-bullmq.js';
+import { ProfilePathError, resolveProfileRoot, resolveUserProfilePath } from './profile-path.js';
 
 export type UploadTarget = 'auto' | 's3' | 'none';
 export type TtsStrategy = DomainTtsStrategy;
@@ -141,6 +143,12 @@ function validateSubmitJobRequest(req: SubmitJobRequest): void {
   if (req.profilePath !== undefined && typeof req.profilePath !== 'string') {
     throw new ValidationError('profilePath must be a string when provided', 'invalid_profile_path');
   }
+  if (typeof req.profilePath === 'string' && req.profilePath.trim().length === 0) {
+    throw new ValidationError(
+      'profilePath must be a non-empty string when provided',
+      'invalid_profile_path',
+    );
+  }
 }
 
 // submitJob.declaration()
@@ -148,11 +156,25 @@ function validateSubmitJobRequest(req: SubmitJobRequest): void {
 export async function submitJob(req: SubmitJobRequest): Promise<SubmitJobResponse> {
   validateSubmitJobRequest(req);
 
+  const profilePath = req.profilePath?.trim();
+  if (profilePath) {
+    const config = loadConfig();
+    const profileRoot = await resolveProfileRoot(config.prompt.defaultProfilePath);
+    try {
+      await resolveUserProfilePath(profilePath, profileRoot);
+    } catch (error) {
+      if (error instanceof ProfilePathError) {
+        throw new ValidationError(error.message, error.code);
+      }
+      throw error;
+    }
+  }
+
   const job = await insertJob({
     md: req.md ?? null,
     transcribeWorkdir: req.transcribeWorkdir ?? null,
     promptNotes: req.promptNotes ?? null,
-    profilePath: req.profilePath ?? null,
+    profilePath: profilePath ?? null,
     preset: req.preset,
     withTts: req.withTts,
     // Persist explicit upload choice for observability; downstream decides how to interpret.

@@ -16,6 +16,13 @@ export interface PromptAssemblyResult {
   transcriptPath: string;
 }
 
+export interface PromptStitchOptions {
+  template: string;
+  profile: string;
+  transcript: string;
+  notes?: string | null;
+}
+
 export async function assemblePromptPayload(
   options: PromptAssemblyOptions,
 ): Promise<PromptAssemblyResult> {
@@ -23,11 +30,12 @@ export async function assemblePromptPayload(
   const profile = await fs.readFile(options.profilePath, 'utf8');
   const transcript = await fs.readFile(options.transcriptPath, 'utf8');
 
-  const { merged } = replaceProfileBlock(template, profile);
-  const notesBlock = `[NOTES]\n${(options.notes ?? '').trim()}`;
-  const transcriptBlock = `[TRANSCRIPT]\n${transcript.trimEnd()}`;
-
-  const payload = [merged.trimEnd(), notesBlock, transcriptBlock, ''].join('\n\n');
+  const payload = stitchPromptPayload({
+    template,
+    profile,
+    transcript,
+    notes: options.notes,
+  });
 
   return {
     payload,
@@ -35,6 +43,13 @@ export async function assemblePromptPayload(
     profilePath: options.profilePath,
     transcriptPath: options.transcriptPath,
   };
+}
+
+export function stitchPromptPayload(options: PromptStitchOptions): string {
+  const { merged } = replaceProfileBlock(options.template, options.profile);
+  const notesBlock = `[NOTES]\n${(options.notes ?? '').trim()}`;
+  const transcriptBlock = `[TRANSCRIPT]\n${options.transcript.trimEnd()}`;
+  return [merged.trimEnd(), notesBlock, transcriptBlock, ''].join('\n\n');
 }
 
 function replaceProfileBlock(template: string, profile: string): { merged: string } {
