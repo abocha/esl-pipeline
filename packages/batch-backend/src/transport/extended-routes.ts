@@ -7,8 +7,10 @@ import { z } from 'zod';
 
 import { getJobOptions } from '../application/get-job-options.js';
 import { getRecordingsIndex } from '../application/get-recordings-index.js';
+import { getRecordingTranscript } from '../application/get-recording-transcript.js';
 import { scanRecordingsWithDefaults } from '../application/scan-recordings.js';
 import { SubmitJobRequest, submitJob } from '../application/submit-job.js';
+import { updateRecordingTranscript } from '../application/update-recording-transcript.js';
 import type { BatchBackendConfig } from '../config/env.js';
 import {
   UserSettingsInput,
@@ -183,6 +185,107 @@ export function registerExtendedRoutes(app: FastifyInstance, options: ExtendedRo
           route: routePath,
           statusCode: 500,
           error: 'internal_error',
+        });
+
+        return errorResponse(reply, 'internal_error');
+      }
+    },
+  );
+
+  app.get(
+    '/recordings/:recordingId/transcript',
+    {
+      preHandler: [authenticate],
+    },
+    async (request, reply) => {
+      const { recordingId } = request.params as { recordingId: string };
+      const routePath = resolveRoutePath(request, 'GET /recordings/:recordingId/transcript');
+
+      try {
+        const transcript = await getRecordingTranscript(recordingId);
+        if (!transcript) {
+          logger.info('Recording transcript not found', {
+            event: 'recording_transcript_not_found',
+            route: routePath,
+            recordingId,
+          });
+          return errorResponse(reply, 'not_found');
+        }
+
+        logger.info('HTTP request handled', {
+          event: 'http_request',
+          route: routePath,
+          statusCode: 200,
+          recordingId,
+        });
+
+        return reply.send(transcript);
+      } catch (error: unknown) {
+        logger.error(error instanceof Error ? error : String(error), {
+          event: 'http_request',
+          route: routePath,
+          statusCode: 500,
+          error: 'internal_error',
+          recordingId,
+        });
+
+        return errorResponse(reply, 'internal_error');
+      }
+    },
+  );
+
+  app.put(
+    '/recordings/:recordingId/transcript',
+    {
+      preHandler: [authenticate],
+    },
+    async (request, reply) => {
+      const { recordingId } = request.params as { recordingId: string };
+      const routePath = resolveRoutePath(request, 'PUT /recordings/:recordingId/transcript');
+
+      const schema = z.object({
+        text: z.string(),
+      });
+
+      try {
+        const body = schema.parse(request.body ?? {});
+        const updated = await updateRecordingTranscript({
+          recordingId,
+          text: body.text,
+        });
+
+        if (!updated) {
+          logger.info('Recording transcript update skipped; not found', {
+            event: 'recording_transcript_update_not_found',
+            route: routePath,
+            recordingId,
+          });
+          return errorResponse(reply, 'not_found');
+        }
+
+        logger.info('HTTP request handled', {
+          event: 'http_request',
+          route: routePath,
+          statusCode: 200,
+          recordingId,
+        });
+
+        return reply.send(updated);
+      } catch (error: unknown) {
+        if (error instanceof z.ZodError) {
+          return reply.code(400).send({
+            error: 'validation_failed',
+            message: 'Invalid request body',
+            details: error.issues,
+          });
+        }
+
+        logger.error(error instanceof Error ? error : String(error), {
+          event: 'http_request',
+          route: routePath,
+          statusCode: 500,
+          error: 'internal_error',
+          recordingId,
         });
 
         return errorResponse(reply, 'internal_error');

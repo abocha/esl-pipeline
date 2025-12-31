@@ -108,6 +108,45 @@ export async function insertTranscript(params: InsertTranscriptParams): Promise<
   return mapRowToTranscript(row);
 }
 
+export async function updateTranscriptStorage(params: {
+  id: string;
+  storageUri?: string | null;
+}): Promise<TranscriptRecord | null> {
+  const row = await withPgClient(async (client: PoolClient) => {
+    const result = await client.query(
+      `
+      UPDATE transcripts
+      SET
+        storage_uri = COALESCE($2, storage_uri),
+        updated_at = now()
+      WHERE id = $1
+      RETURNING
+        id,
+        recording_id,
+        storage_uri,
+        raw_response_uri,
+        mode,
+        model,
+        language,
+        fallback_used,
+        summary_json,
+        created_at,
+        updated_at
+      `,
+      [params.id, params.storageUri ?? null],
+    );
+    return result.rows[0];
+  });
+
+  if (!row) {
+    logger.warn('Transcript update skipped; record missing', { transcriptId: params.id });
+    return null;
+  }
+
+  logger.info('Transcript updated', { transcriptId: params.id });
+  return mapRowToTranscript(row);
+}
+
 function mapRowToTranscript(row: TranscriptRow): TranscriptRecord {
   const mode = TranscriptModeSchema.parse(row.mode);
   return {
