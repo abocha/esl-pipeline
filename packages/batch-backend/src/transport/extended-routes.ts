@@ -8,8 +8,10 @@ import { z } from 'zod';
 import { getJobOptions } from '../application/get-job-options.js';
 import { getRecordingsIndex } from '../application/get-recordings-index.js';
 import { getRecordingTranscript } from '../application/get-recording-transcript.js';
+import { createDraft } from '../application/create-draft.js';
 import { createPromptPackage } from '../application/create-prompt-package.js';
 import { getPromptPackage } from '../application/get-prompt-package.js';
+import { materializeDraft } from '../application/materialize-draft.js';
 import { scanRecordingsWithDefaults } from '../application/scan-recordings.js';
 import { SubmitJobRequest, ValidationError, submitJob } from '../application/submit-job.js';
 import { updateRecordingTranscript } from '../application/update-recording-transcript.js';
@@ -399,6 +401,127 @@ export function registerExtendedRoutes(app: FastifyInstance, options: ExtendedRo
           statusCode: 500,
           error: 'internal_error',
           promptPackageId,
+        });
+
+        return errorResponse(reply, 'internal_error');
+      }
+    },
+  );
+
+  app.post(
+    '/prompt-packages/:promptPackageId/draft',
+    {
+      preHandler: [authenticate],
+    },
+    async (request, reply) => {
+      const { promptPackageId } = request.params as { promptPackageId: string };
+      const routePath = resolveRoutePath(request, 'POST /prompt-packages/:promptPackageId/draft');
+
+      const schema = z.object({
+        text: z.string().min(1),
+      });
+
+      try {
+        const body = schema.parse(request.body ?? {});
+        const draft = await createDraft({
+          promptPackageId,
+          text: body.text,
+          createdBy: getAuthenticatedUser(request)?.id ?? null,
+        });
+
+        if (!draft) {
+          logger.info('Draft creation skipped; prompt package missing', {
+            event: 'draft_create_not_found',
+            route: routePath,
+            promptPackageId,
+          });
+          return errorResponse(reply, 'not_found');
+        }
+
+        logger.info('HTTP request handled', {
+          event: 'http_request',
+          route: routePath,
+          statusCode: 200,
+          promptPackageId,
+        });
+
+        return reply.send(draft);
+      } catch (error: unknown) {
+        if (error instanceof z.ZodError) {
+          return reply.code(400).send({
+            error: 'validation_failed',
+            message: 'Invalid request body',
+            details: error.issues,
+          });
+        }
+
+        logger.error(error instanceof Error ? error : String(error), {
+          event: 'http_request',
+          route: routePath,
+          statusCode: 500,
+          error: 'internal_error',
+          promptPackageId,
+        });
+
+        return errorResponse(reply, 'internal_error');
+      }
+    },
+  );
+
+  app.post(
+    '/drafts/:draftId/materialize',
+    {
+      preHandler: [authenticate],
+    },
+    async (request, reply) => {
+      const { draftId } = request.params as { draftId: string };
+      const routePath = resolveRoutePath(request, 'POST /drafts/:draftId/materialize');
+
+      const schema = z.object({
+        jobId: z.string().min(1),
+      });
+
+      try {
+        const body = schema.parse(request.body ?? {});
+        const materialized = await materializeDraft({
+          draftId,
+          jobId: body.jobId,
+        });
+
+        if (!materialized) {
+          logger.info('Draft materialization skipped; draft or job missing', {
+            event: 'draft_materialize_not_found',
+            route: routePath,
+            draftId,
+            jobId: body.jobId,
+          });
+          return errorResponse(reply, 'not_found');
+        }
+
+        logger.info('HTTP request handled', {
+          event: 'http_request',
+          route: routePath,
+          statusCode: 200,
+          draftId,
+          jobId: body.jobId,
+        });
+
+        return reply.send(materialized);
+      } catch (error: unknown) {
+        if (error instanceof z.ZodError) {
+          return reply.code(400).send({
+            error: 'validation_failed',
+            message: 'Invalid request body',
+            details: error.issues,
+          });
+        }
+
+        logger.error(error instanceof Error ? error : String(error), {
+          event: 'http_request',
+          route: routePath,
+          statusCode: 500,
+          error: 'internal_error',
+          draftId,
         });
 
         return errorResponse(reply, 'internal_error');

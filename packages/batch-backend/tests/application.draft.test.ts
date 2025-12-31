@@ -1,0 +1,176 @@
+import fs from 'node:fs/promises';
+import os from 'node:os';
+import path from 'node:path';
+import { Readable } from 'node:stream';
+import { describe, expect, it, vi } from 'vitest';
+
+import { createDraft } from '../src/application/create-draft.js';
+import { materializeDraft } from '../src/application/materialize-draft.js';
+import type { DraftRecord } from '../src/domain/draft-model.js';
+import type { PromptPackageRecord } from '../src/domain/prompt-package-model.js';
+import type { TranscriptionStorage } from '../src/infrastructure/transcription-storage.js';
+
+describe('application/draft', () => {
+  it('creates a draft for a prompt package', async () => {
+    const promptPackage: PromptPackageRecord = {
+      id: 'prompt-1',
+      recordingId: 'recording-1',
+      transcriptId: 'transcript-1',
+      profilePath: null,
+      templateVersion: '/templates/t1.md',
+      notes: null,
+      storageUri: 'local://prompt-packages/prompt-1.txt',
+      createdAt: new Date('2024-01-01T00:00:00Z'),
+      updatedAt: new Date('2024-01-01T00:00:00Z'),
+    };
+
+    const storage = createStorageStub({
+      putDraft: async ({ draftId, text }) => {
+        expect(text).toBe('DRAFT TEXT');
+        return { uri: `local://drafts/${draftId}.md`, bytes: text.length };
+      },
+    });
+
+    const draft = await createDraft(
+      {
+        promptPackageId: promptPackage.id,
+        text: 'DRAFT TEXT',
+        createdBy: 'user-1',
+      },
+      {
+        storage,
+        promptPackages: {
+          getById: async () => promptPackage,
+        },
+        drafts: {
+          insert: async (params) => ({
+            id: params.id ?? 'draft-1',
+            promptPackageId: params.promptPackageId,
+            storageUri: params.storageUri,
+            createdBy: params.createdBy ?? null,
+            createdAt: new Date('2024-01-01T00:10:00Z'),
+            updatedAt: new Date('2024-01-01T00:10:00Z'),
+          }),
+        },
+      },
+    );
+
+    expect(draft).not.toBeNull();
+    expect(draft?.promptPackageId).toBe(promptPackage.id);
+    expect(draft?.createdBy).toBe('user-1');
+    expect(draft?.storageUri).toContain('local://drafts/');
+    expect(draft?.text).toBe('DRAFT TEXT');
+  });
+
+  it('returns null when prompt package is missing', async () => {
+    const storage = createStorageStub();
+    const insert = vi.fn();
+
+    const draft = await createDraft(
+      {
+        promptPackageId: 'missing',
+        text: 'DRAFT TEXT',
+      },
+      {
+        storage,
+        promptPackages: {
+          getById: async () => null,
+        },
+        drafts: {
+          insert,
+        },
+      },
+    );
+
+    expect(draft).toBeNull();
+    expect(insert).not.toHaveBeenCalled();
+  });
+
+  it('materializes a draft and updates the job', async () => {
+    const uploadDir = await fs.mkdtemp(path.join(os.tmpdir(), 'esl-drafts-'));
+    const draft: DraftRecord = {
+      id: 'draft-1',
+      promptPackageId: 'prompt-1',
+      storageUri: 'local://drafts/draft-1.md',
+      createdBy: 'user-1',
+      createdAt: new Date('2024-01-01T00:00:00Z'),
+      updatedAt: new Date('2024-01-01T00:00:00Z'),
+    };
+
+    const updateDraftLink = vi.fn().mockResolvedValue({
+      id: 'job-1',
+      state: 'awaiting_approval',
+      md: null,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    });
+
+    const response = await materializeDraft(
+      { draftId: draft.id, jobId: 'job-1' },
+      {
+        uploadDir,
+        storage: createStorageStub({
+          getText: async () => 'DRAFT TEXT',
+        }),
+        drafts: {
+          getById: async () => draft,
+        },
+        jobs: {
+          updateDraftLink,
+        },
+      },
+    );
+
+    expect(response).toEqual({
+      draftId: 'draft-1',
+      jobId: 'job-1',
+      mdPath: path.resolve(uploadDir, 'drafts', 'draft-1.md'),
+    });
+
+    const stored = await fs.readFile(
+      path.resolve(uploadDir, 'drafts', 'draft-1.md'),
+      'utf8',
+    );
+    expect(stored).toBe('DRAFT TEXT');
+    expect(updateDraftLink).toHaveBeenCalledWith({
+      id: 'job-1',
+      expectedState: 'awaiting_approval',
+      md: path.resolve(uploadDir, 'drafts', 'draft-1.md'),
+      draftId: 'draft-1',
+    });
+  });
+
+  it('returns null when draft is missing during materialization', async () => {
+    const response = await materializeDraft(
+      { draftId: 'missing', jobId: 'job-1' },
+      {
+        uploadDir: '/tmp',
+        storage: createStorageStub(),
+        drafts: {
+          getById: async () => null,
+        },
+        jobs: {
+          updateDraftLink: vi.fn(),
+        },
+      },
+    );
+
+    expect(response).toBeNull();
+  });
+});
+
+function createStorageStub(
+  overrides: Partial<TranscriptionStorage> = {},
+): TranscriptionStorage {
+  return {
+    putAudio: async () => ({ uri: 'local://recordings/recording.opus', bytes: 1 }),
+    putTranscript: async () => ({ uri: 'local://transcripts/transcript.txt', bytes: 1 }),
+    putRawResponse: async () => ({ uri: 'local://transcripts/transcript.json', bytes: 1 }),
+    putPromptPackage: async () => ({ uri: 'local://prompt-packages/prompt.txt', bytes: 1 }),
+    putDraft: async () => ({ uri: 'local://drafts/draft.md', bytes: 1 }),
+    getText: async () => '',
+    getStream: async () => Readable.from(['']),
+    delete: async () => {},
+    ...overrides,
+  };
+}

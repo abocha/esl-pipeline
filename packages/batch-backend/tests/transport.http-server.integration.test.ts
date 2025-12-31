@@ -2,10 +2,12 @@ import { request as httpRequest } from 'node:http';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 
 import { getJobOptions } from '../src/application/get-job-options.js';
+import * as createDraftModule from '../src/application/create-draft.js';
 import * as createPromptPackageModule from '../src/application/create-prompt-package.js';
 import * as getRecordingTranscriptModule from '../src/application/get-recording-transcript.js';
 import * as getJobStatusModule from '../src/application/get-job-status.js';
 import * as getPromptPackageModule from '../src/application/get-prompt-package.js';
+import * as materializeDraftModule from '../src/application/materialize-draft.js';
 import * as submitJobModule from '../src/application/submit-job.js';
 import * as updateRecordingTranscriptModule from '../src/application/update-recording-transcript.js';
 import { ProfilePathError } from '../src/application/profile-path.js';
@@ -637,6 +639,99 @@ describe('transport/http-server - integration (in-process)', () => {
     const response = await app.inject({
       method: 'GET',
       url: '/prompt-packages/missing',
+    });
+
+    expect(response.statusCode).toBe(404);
+    expect(response.json()).toEqual({ error: 'not_found' });
+  });
+
+  it('POST /prompt-packages/:id/draft returns draft payload', async () => {
+    const createDraft = vi.spyOn(createDraftModule, 'createDraft');
+    createDraft.mockClear();
+    createDraft.mockResolvedValue({
+      id: 'draft-1',
+      promptPackageId: 'prompt-1',
+      storageUri: 'local://drafts/draft-1.md',
+      createdBy: 'test-user-id',
+      text: 'DRAFT TEXT',
+      createdAt: '2024-01-01T00:00:00.000Z',
+      updatedAt: '2024-01-01T00:10:00.000Z',
+    });
+
+    const response = await app.inject({
+      method: 'POST',
+      url: '/prompt-packages/prompt-1/draft',
+      payload: { text: 'DRAFT TEXT' },
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toEqual({
+      id: 'draft-1',
+      promptPackageId: 'prompt-1',
+      storageUri: 'local://drafts/draft-1.md',
+      createdBy: 'test-user-id',
+      text: 'DRAFT TEXT',
+      createdAt: '2024-01-01T00:00:00.000Z',
+      updatedAt: '2024-01-01T00:10:00.000Z',
+    });
+    expect(createDraft).toHaveBeenCalledWith({
+      promptPackageId: 'prompt-1',
+      text: 'DRAFT TEXT',
+      createdBy: 'test-user-id',
+    });
+  });
+
+  it('POST /prompt-packages/:id/draft returns 404 when missing', async () => {
+    const createDraft = vi.spyOn(createDraftModule, 'createDraft');
+    createDraft.mockClear();
+    createDraft.mockResolvedValue(null);
+
+    const response = await app.inject({
+      method: 'POST',
+      url: '/prompt-packages/missing/draft',
+      payload: { text: 'DRAFT TEXT' },
+    });
+
+    expect(response.statusCode).toBe(404);
+    expect(response.json()).toEqual({ error: 'not_found' });
+  });
+
+  it('POST /drafts/:id/materialize returns md path', async () => {
+    const materializeDraft = vi.spyOn(materializeDraftModule, 'materializeDraft');
+    materializeDraft.mockClear();
+    materializeDraft.mockResolvedValue({
+      draftId: 'draft-1',
+      jobId: 'job-1',
+      mdPath: '/uploads/drafts/draft-1.md',
+    });
+
+    const response = await app.inject({
+      method: 'POST',
+      url: '/drafts/draft-1/materialize',
+      payload: { jobId: 'job-1' },
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toEqual({
+      draftId: 'draft-1',
+      jobId: 'job-1',
+      mdPath: '/uploads/drafts/draft-1.md',
+    });
+    expect(materializeDraft).toHaveBeenCalledWith({
+      draftId: 'draft-1',
+      jobId: 'job-1',
+    });
+  });
+
+  it('POST /drafts/:id/materialize returns 404 when missing', async () => {
+    const materializeDraft = vi.spyOn(materializeDraftModule, 'materializeDraft');
+    materializeDraft.mockClear();
+    materializeDraft.mockResolvedValue(null);
+
+    const response = await app.inject({
+      method: 'POST',
+      url: '/drafts/missing/materialize',
+      payload: { jobId: 'job-1' },
     });
 
     expect(response.statusCode).toBe(404);
