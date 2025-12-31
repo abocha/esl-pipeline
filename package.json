@@ -32,6 +32,8 @@
     "build:tts": "pnpm --filter @esl-pipeline/tts-elevenlabs build",
     "build:uploader": "pnpm --filter @esl-pipeline/storage-uploader build",
     "build:validator": "pnpm --filter @esl-pipeline/md-validator build",
+    "changeset": "changeset",
+    "changeset:version": "changeset version",
     "clean": "pnpm -r --filter './packages/*' run clean",
     "cli:add-audio": "node packages/notion-add-audio/dist/bin/cli.js",
     "cli:colorizer": "node packages/notion-colorizer/dist/bin/cli.js",
