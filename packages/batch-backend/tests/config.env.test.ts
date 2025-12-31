@@ -42,9 +42,14 @@ describe('config/env - core defaults', () => {
         // Queue
         expect(cfg.queue.name).toBe('esl-jobs');
         expect(cfg.transcription.queueName).toBe('transcribe-queue');
+        expect(cfg.transcription.mode).toBe('timeline');
+        expect(cfg.transcription.maxConcurrency).toBe(2);
         expect(cfg.recordings.root).toBe('');
         expect(cfg.recordings.glob).toBe('**/*.{opus,mp3,wav,m4a}');
         expect(cfg.recordings.scanIntervalSec).toBe(120);
+        expect(cfg.deepgram.model).toBe('nova-3');
+        expect(cfg.deepgram.language).toBe('multi');
+        expect(cfg.deepgram.storeRawResponse).toBe(true);
 
         // Orchestrator core defaults
         expect(cfg.orchestrator.manifestStore).toBeDefined();

@@ -59,6 +59,23 @@ export async function getRecordingBySha256(sha256: string): Promise<RecordingRec
   return row ? mapRowToRecording(row) : null;
 }
 
+export async function getRecordingById(id: string): Promise<RecordingRecord | null> {
+  const row = await withPgClient(async (client: PoolClient) => {
+    const result = await client.query(
+      `
+      SELECT id, source, student_id, source_path, storage_uri, sha256, bytes,
+             duration_sec, channels, status, error, created_at, updated_at
+      FROM recordings
+      WHERE id = $1
+      `,
+      [id],
+    );
+    return result.rows[0];
+  });
+
+  return row ? mapRowToRecording(row) : null;
+}
+
 export async function getRecordingBySourcePath(
   sourcePath: string,
   bytes: number,

@@ -21,6 +21,7 @@
     "@aws-sdk/client-s3": "^3.956.0",
     "@aws-sdk/lib-storage": "^3.956.0",
     "@aws-sdk/s3-request-presigner": "^3.956.0",
+    "@deepgram/sdk": "^4.4.0",
     "@esl-pipeline/contracts": "workspace:*",
     "@esl-pipeline/orchestrator": "workspace:*",
     "@esl-pipeline/shared-infrastructure": "workspace:*",

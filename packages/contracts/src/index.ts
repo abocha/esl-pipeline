@@ -4,6 +4,8 @@ export type TtsStrategy = 'auto' | 'dialogue' | 'tts';
 
 export type JobUploadOption = 'auto' | 's3' | 'none';
 
+export type RecordingStatus = 'ingested' | 'queued' | 'transcribing' | 'transcribed' | 'failed';
+
 export interface JobStatusDto {
   jobId: string;
   md: string | null;
@@ -43,6 +45,8 @@ export interface JobEventPayload {
   ttsStrategy?: TtsStrategy | null;
   md?: string | null;
   notionUrl?: string | null;
+  recordingId?: string | null;
+  transcriptId?: string | null;
 }
 
 export interface JobEventMessage {
@@ -51,6 +55,18 @@ export interface JobEventMessage {
   state: JobState;
   payload?: JobEventPayload;
 }
+
+export type RecordingEventType = 'recording_state_changed';
+
+export interface RecordingEventMessage {
+  type: RecordingEventType;
+  recordingId: string;
+  status: RecordingStatus;
+  transcriptId?: string | null;
+  error?: string | null;
+}
+
+export type StreamEventMessage = JobEventMessage | RecordingEventMessage;
 
 // Job actions exports
 // Job actions exports

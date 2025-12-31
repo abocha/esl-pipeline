@@ -1,4 +1,4 @@
-import { JobsOptions, Queue, QueueEvents } from 'bullmq';
+import { JobsOptions, Processor, Queue, QueueEvents, Worker } from 'bullmq';
 
 import { loadConfig } from '../config/env.js';
 import { createJobLogger, logger } from './logger.js';
@@ -59,4 +59,45 @@ export function createTranscribeQueue() {
       await queueSingleton!.add('transcribe', payload, opts);
     },
   };
+}
+
+export function createTranscribeWorker(
+  processor: Processor<TranscribeQueuePayload>,
+): Worker<TranscribeQueuePayload> {
+  const config = loadConfig();
+  const connection = createRedisClient();
+  const queueName = config.transcription.queueName;
+
+  const worker = new Worker<TranscribeQueuePayload>(queueName, processor, {
+    connection,
+    concurrency: config.transcription.maxConcurrency,
+  });
+
+  worker.on('active', (job: import('bullmq').Job<TranscribeQueuePayload>) => {
+    createJobLogger(job.data.recordingId, job.id?.toString()).info('Processing recording', {
+      event: 'transcribe_worker_active',
+    });
+  });
+
+  worker.on('completed', (job: import('bullmq').Job<TranscribeQueuePayload>) => {
+    createJobLogger(job.data.recordingId, job.id?.toString()).info('Recording transcribed', {
+      event: 'transcribe_worker_completed',
+    });
+  });
+
+  worker.on('failed', (job, err: Error) => {
+    const recordingId = job?.data?.recordingId ?? job?.id?.toString() ?? 'unknown';
+    createJobLogger(recordingId, job?.id?.toString()).error(err, {
+      event: 'transcribe_worker_failed',
+    });
+  });
+
+  worker.on('error', (err: Error) => {
+    logger.error(err, {
+      component: 'bullmq-transcribe-worker',
+      message: 'Unhandled BullMQ transcribe worker error',
+    });
+  });
+
+  return worker;
 }
