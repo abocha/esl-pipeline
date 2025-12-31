@@ -8,6 +8,7 @@ import Fastify, { type FastifyInstance } from 'fastify';
 import { fileURLToPath } from 'node:url';
 
 import { loadConfig } from '../config/env.js';
+import { scanRecordingsWithDefaults } from '../application/scan-recordings.js';
 import {
   type FileSanitizationService,
   createFileSanitizationService,
@@ -145,6 +146,7 @@ export async function startHttpServer(): Promise<void> {
       event: 'http_server_started',
       port: config.httpPort,
     });
+    startRecordingScanner(config);
   } catch (error: unknown) {
     logger.error(error instanceof Error ? error : String(error), {
       event: 'http_server_start_failed',
@@ -155,4 +157,40 @@ export async function startHttpServer(): Promise<void> {
 
 if (process.argv[1] === fileURLToPath(import.meta.url)) {
   void startHttpServer();
+}
+
+function startRecordingScanner(config: ReturnType<typeof loadConfig>): void {
+  const intervalSec = config.recordings.scanIntervalSec;
+  const root = config.recordings.root.trim();
+  if (!root || intervalSec <= 0) {
+    return;
+  }
+
+  const runScan = async () => {
+    try {
+      const result = await scanRecordingsWithDefaults({
+        root: config.recordings.root,
+        glob: config.recordings.glob,
+      });
+      if (result.discovered > 0) {
+        logger.info('Recording scan completed', {
+          component: 'recording-scan',
+          discovered: result.discovered,
+          skipped: result.skipped,
+        });
+      }
+    } catch (error) {
+      logger.error(error instanceof Error ? error : String(error), {
+        component: 'recording-scan',
+        message: 'Recording scan failed',
+      });
+    }
+  };
+
+  void runScan();
+
+  const timer = setInterval(() => {
+    void runScan();
+  }, intervalSec * 1000);
+  timer.unref?.();
 }

@@ -41,6 +41,10 @@ describe('config/env - core defaults', () => {
 
         // Queue
         expect(cfg.queue.name).toBe('esl-jobs');
+        expect(cfg.transcription.queueName).toBe('transcribe-queue');
+        expect(cfg.recordings.root).toBe('');
+        expect(cfg.recordings.glob).toBe('**/*.{opus,mp3,wav,m4a}');
+        expect(cfg.recordings.scanIntervalSec).toBe(120);
 
         // Orchestrator core defaults
         expect(cfg.orchestrator.manifestStore).toBeDefined();
