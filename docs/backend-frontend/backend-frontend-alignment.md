@@ -238,19 +238,20 @@ import {
 
 ---
 
-## Phase 2+ Transcription Pipeline (In Progress)
+## Phase 2+ Transcription Pipeline (Implemented With Gaps)
 
-**Status:** Stages 1–9 implemented; Phase 2 MVP ready for review (tracked via `docs/design/TRANSCRIPTION_PIPELINE_IMPLEMENTATION_MANUAL.md`).
+**Status:** Phase 2+ MVP is implemented in the repo; remaining gaps are tracked in
+`docs/PIPELINE_INTEGRATION_VISION.md` and `docs/design/TRANSCRIPTION_PIPELINE_SPEC.md`.
+Gap-closure steps live in `docs/design/TRANSCRIPTION_PIPELINE_IMPLEMENTATION_MANUAL.md`.
+The staged implementation manual is archived at
+`docs/archive/TRANSCRIPTION_PIPELINE_IMPLEMENTATION_MANUAL.md`.
 
-### Proposed Endpoints (MVP scan ingestion)
+### Implemented Endpoints (scan ingestion)
 
 - Recordings:
-  - `GET /recordings?status=...`
   - `POST /recordings/sync`
-  - `GET /recordings/:id`
   - `GET /recordings/:id/transcript`
   - `PUT /recordings/:id/transcript`
-  - `POST /recordings/:id/transcribe` (optional manual retry)
 - Prompt packages:
   - `POST /recordings/:id/prompt-package`
   - `GET /prompt-packages/:id`
@@ -258,11 +259,23 @@ import {
   - `POST /prompt-packages/:id/draft`
   - `POST /drafts/:id/materialize`
 
+### Deferred Endpoints
+
+- `GET /recordings?status=...`
+- `GET /recordings/:id`
+- `POST /recordings/:id/transcribe` (optional manual retry)
+
 ### Dependencies and Notes
 
 - Progress updates should reuse `/jobs/events` with extended payloads (`recordingId`, `transcriptId`).
 - Draft materialization writes to `FILESYSTEM_UPLOAD_DIR/drafts/<draftId>.md` and feeds `/jobs/:jobId/approve`.
 - Storage adapter abstraction (filesystem now, S3 later) is required for recordings/transcripts/prompt packages/drafts.
+
+### Known Gaps (MVP polish)
+
+- Draft approval still requires manually choosing an `awaiting_approval` job ID.
+- Recording list/backfill endpoints are not implemented; UI relies on SSE deltas.
+- Upload ingestion and student association are not implemented.
 
 ---
 
