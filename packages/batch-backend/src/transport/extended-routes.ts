@@ -7,6 +7,7 @@ import { z } from 'zod';
 
 import { getJobOptions } from '../application/get-job-options.js';
 import { getRecordingsIndex } from '../application/get-recordings-index.js';
+import { scanRecordingsWithDefaults } from '../application/scan-recordings.js';
 import { SubmitJobRequest, submitJob } from '../application/submit-job.js';
 import type { BatchBackendConfig } from '../config/env.js';
 import {
@@ -143,6 +144,40 @@ export function registerExtendedRoutes(app: FastifyInstance, options: ExtendedRo
           });
         }
 
+        logger.error(error instanceof Error ? error : String(error), {
+          event: 'http_request',
+          route: routePath,
+          statusCode: 500,
+          error: 'internal_error',
+        });
+
+        return errorResponse(reply, 'internal_error');
+      }
+    },
+  );
+
+  app.post(
+    '/recordings/sync',
+    {
+      preHandler: [authenticate],
+    },
+    async (request, reply) => {
+      const routePath = resolveRoutePath(request, 'POST /recordings/sync');
+
+      try {
+        const result = await scanRecordingsWithDefaults({
+          root: config.recordings.root,
+          glob: config.recordings.glob,
+        });
+
+        logger.info('HTTP request handled', {
+          event: 'http_request',
+          route: routePath,
+          statusCode: 200,
+        });
+
+        return reply.send({ discovered: result.discovered });
+      } catch (error: unknown) {
         logger.error(error instanceof Error ? error : String(error), {
           event: 'http_request',
           route: routePath,

@@ -28,6 +28,14 @@ export interface BatchBackendConfig {
   queue: {
     name: string;
   };
+  transcription: {
+    queueName: string;
+  };
+  recordings: {
+    root: string;
+    glob: string;
+    scanIntervalSec: number;
+  };
   worker: {
     concurrency: number;
     maxConcurrentFfmpeg: number;
@@ -128,6 +136,11 @@ export function loadConfig(): BatchBackendConfig {
 
   // Queue
   const queueName = readString('BATCH_JOBS_QUEUE_NAME', 'esl-jobs')!;
+  const transcribeQueueName = readString('TRANSCRIBE_QUEUE_NAME', 'transcribe-queue')!;
+
+  const recordingsRoot = readString('RECORDINGS_ROOT', '')!;
+  const recordingsGlob = readString('RECORDINGS_GLOB', '**/*.{opus,mp3,wav,m4a}')!;
+  const recordingsScanIntervalSec = readInt('RECORDINGS_SCAN_INTERVAL_SEC', 120);
 
   // Worker concurrency
   const workerConcurrency = readInt('WORKER_CONCURRENCY', 5);
@@ -262,6 +275,14 @@ export function loadConfig(): BatchBackendConfig {
     },
     queue: {
       name: queueName,
+    },
+    transcription: {
+      queueName: transcribeQueueName,
+    },
+    recordings: {
+      root: recordingsRoot,
+      glob: recordingsGlob,
+      scanIntervalSec: recordingsScanIntervalSec,
     },
     worker: {
       concurrency: workerConcurrency,
