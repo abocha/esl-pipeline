@@ -419,11 +419,16 @@ Queue payload:
 Job record shape (Postgres and `GET /jobs/:jobId`):
 
 - `id: string` (UUID; exposed as `jobId`)
-- `md: string`
+- `md: string | null`
+- `transcribeWorkdir?: string | null`
+- `transcriptPath?: string | null`
+- `promptPayload?: string | null`
+- `promptNotes?: string | null`
+- `profilePath?: string | null`
 - `preset?: string | null`
 - `withTts?: boolean | null`
 - `upload?: string | null`
-- `state: 'queued' | 'running' | 'succeeded' | 'failed'`
+- `state: 'queued' | 'running' | 'awaiting_approval' | 'succeeded' | 'failed'`
 - `createdAt`, `updatedAt`, `startedAt?`, `finishedAt?`
 - `manifestPath?: string | null`
 - `error?: string | null`

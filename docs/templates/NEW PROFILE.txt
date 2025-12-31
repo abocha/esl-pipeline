@@ -1,0 +1,6 @@
+## Foundational Student Profile
+This is the Foundational Student Profile. It is the same as in your system prompt. Acknowledge and standby for lesson transcripts.
+
+This is a transcript of the first ever lesson with this student. You need to provide me with a complete profile of this student, including their growth timeline, explored topics, learned grammar, studied vocabulary. be as thorough as possibly needed to reset this session but pass all useful information onward and keep the quality of the assignments
+
+please provide me with a complete profile of this student, including their growth timeline, explored topics, learned grammar, studied vocabulary. be as thorough as possibly needed to reset this session but pass all useful information onward and keep the quality of the assignments

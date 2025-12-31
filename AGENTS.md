@@ -2,7 +2,7 @@
 
 This document is a concise, human-readable overview for maintainers and “agents” working in this repo.
 For authoritative, machine-consumable guidance (contracts, invariants, and workflows), always defer to
-[`docs/agents-ssot.md`](docs/agents-ssot.md). If anything here conflicts with that SSOT, the SSOT wins.
+[`docs/reference/agents-ssot.md`](docs/reference/agents-ssot.md). If anything here conflicts with that SSOT, the SSOT wins.
 
 Everything below assumes **Node.js 24.11.1+**, pnpm, and system ffmpeg.
 
@@ -51,7 +51,7 @@ Everything below assumes **Node.js 24.11.1+**, pnpm, and system ffmpeg.
 - **Env variables**:
   - CLI auto-loads `.env` from repo root + CWD.
   - Programmatic use should call [`loadEnvFiles.declaration()`](packages/orchestrator/src/index.ts) or inject env directly.
-- For exhaustive requirements and env contracts, see [`docs/agents-ssot.md`](docs/agents-ssot.md) §§3 and 5.
+- For exhaustive requirements and env contracts, see [`docs/reference/agents-ssot.md`](docs/reference/agents-ssot.md) §§3 and 5.
 
 ---
 
@@ -72,7 +72,7 @@ Use this as a quick map; detailed contracts live in the SSOT.
 | `@esl-pipeline/contracts`        | Shared DTO + SSE event types  |
 
 For per-package responsibilities, extension points, and invariants:
-see [`docs/agents-ssot.md`](docs/agents-ssot.md) §4.
+see [`docs/reference/agents-ssot.md`](docs/reference/agents-ssot.md) §4.
 
 The orchestrator package now exports type definitions (e.g. `PipelineNewAssignmentOptions`, `AssignmentManifest`) alongside the runtime API.
 
@@ -102,7 +102,7 @@ Key points:
 - `pipeline.rerunAssignment` and `pipeline.getAssignmentStatus` mirror CLI subcommands.
 
 For full type signatures, merging rules, and flag semantics (e.g., `withTts` precedence, `wizardDefaultsPath`):
-see [`docs/agents-ssot.md`](docs/agents-ssot.md) §§4, 5, and 7.
+see [`docs/reference/agents-ssot.md`](docs/reference/agents-ssot.md) §§4, 5, and 7.
 
 ---
 
@@ -110,8 +110,8 @@ see [`docs/agents-ssot.md`](docs/agents-ssot.md) §§4, 5, and 7.
 
 - Roadmap and backend scaffolding are documented in:
   - [`docs/backend-frontend/backend-frontend-alignment.md`](docs/backend-frontend/backend-frontend-alignment.md) — canonical status for backend ↔ frontend APIs and milestone tracking.
-  - [`docs/groundwork-for-backend.md`](docs/backend-frontend/groundwork-for-backend.md)
-  - [`docs/agents-ssot.md`](docs/agents-ssot.md) (adapters, manifest store, config provider rules)
+  - [`docs/backend-frontend/BATCH_SYSTEM.md`](docs/backend-frontend/BATCH_SYSTEM.md) — unified batch system guide.
+  - [`docs/reference/agents-ssot.md`](docs/reference/agents-ssot.md) (adapters, manifest store, config provider rules)
 
 Treat the alignment doc as the only human-readable status tracker; the SSOT and code remain the ultimate source of truth.
 
@@ -128,7 +128,7 @@ Treat the alignment doc as the only human-readable status tracker; the SSOT and 
 - Drift check: `pnpm deps:check` runs `deps:pin` and fails on manifest drift (CI uses this).
 - Zero-install: `npx @esl-pipeline/orchestrator esl --help`
 
-For CI, release, and workflow invariants, follow [`docs/agents-ssot.md`](docs/agents-ssot.md) §§10–12.
+For CI, release, and workflow invariants, follow [`docs/reference/agents-ssot.md`](docs/reference/agents-ssot.md) §§10–12.
 
 ---
 
@@ -141,24 +141,24 @@ For CI, release, and workflow invariants, follow [`docs/agents-ssot.md`](docs/ag
 - Binary: `esl` is the canonical CLI; legacy aliases are removed.
 - We do not bundle ffmpeg; users must install it.
 
-For exact rules (manifest schema, adapter selection, validation invariants), see [`docs/agents-ssot.md`](docs/agents-ssot.md).
+For exact rules (manifest schema, adapter selection, validation invariants), see [`docs/reference/agents-ssot.md`](docs/reference/agents-ssot.md).
 
 ---
 
 ## 8. FAQ (Forward-Looking, Defer to SSOT)
 
-- Programmatic usage? See `createPipeline` example above, and details in [`docs/agents-ssot.md`](docs/agents-ssot.md) §7.2.
-- Custom configs/adapters? Follow extension rules in [`docs/agents-ssot.md`](docs/agents-ssot.md) §§4–5.
-- New CLI flags? Add behavior in orchestrator first, then wire CLI; see [`docs/agents-ssot.md`](docs/agents-ssot.md) §9.6.
+- Programmatic usage? See `createPipeline` example above, and details in [`docs/reference/agents-ssot.md`](docs/reference/agents-ssot.md) §7.2.
+- Custom configs/adapters? Follow extension rules in [`docs/reference/agents-ssot.md`](docs/reference/agents-ssot.md) §§4–5.
+- New CLI flags? Add behavior in orchestrator first, then wire CLI; see [`docs/reference/agents-ssot.md`](docs/reference/agents-ssot.md) §9.6.
 - Node version? Node **24.11.1+** (enforced).
-- Remote manifests/config? Use documented adapters/env vars; SSOT + `docs/groundwork-for-backend.md` describe the contract.
+- Remote manifests/config? Use documented adapters/env vars; SSOT describes the contract.
 
 ---
 
 This handbook is intentionally high-level. For any non-trivial change or automation:
 
 - Start here for orientation.
-- Then consult [`docs/agents-ssot.md`](docs/agents-ssot.md) as the single source of truth for:
+- Then consult [`docs/reference/agents-ssot.md`](docs/reference/agents-ssot.md) as the single source of truth for:
   - Contracts and invariants.
   - Allowed operations and extension points.
   - Cross-file consistency requirements.
