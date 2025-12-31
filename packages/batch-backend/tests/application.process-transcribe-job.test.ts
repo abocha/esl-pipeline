@@ -140,6 +140,77 @@ describe('application/process-transcribe-job', () => {
 
     expect(inserted[0]?.fallbackUsed).toBe(true);
   });
+
+  it('formats transcript with speaker labels and merges adjacent utterances', async () => {
+    const recording = createRecording('recording-3');
+    const stored: { text?: string } = {};
+
+    const storage: TranscriptionStorage = {
+      ...createStorageStub(),
+      async putTranscript({ text }) {
+        stored.text = text;
+        return { uri: 'local://transcripts/transcript.txt', bytes: text.length };
+      },
+    };
+
+    const deepgramClient = createDeepgramStub({
+      metadata: { channels: 2 },
+      results: {
+        utterances: [
+          { transcript: 'Hello', speaker: 0, start: 0, end: 0.5 },
+          { transcript: 'there.', speaker: 0, start: 0.7, end: 1.2 },
+          { transcript: 'Hi.', speaker: 1, start: 2, end: 2.4 },
+        ],
+        channels: [
+          { alternatives: [{ transcript: 'Hello there.' }] },
+          { alternatives: [{ transcript: 'Hi.' }] },
+        ],
+      },
+    });
+
+    await processTranscribeJob(
+      { recordingId: recording.id },
+      {
+        config: createConfig(),
+        storage,
+        deepgramClient,
+        recordings: {
+          async getById() {
+            return recording;
+          },
+          async updateStatus({ status }) {
+            recording.status = status;
+            return recording;
+          },
+        },
+        transcripts: {
+          async getByRecordingId() {
+            return null;
+          },
+          async insert(params) {
+            return {
+              id: params.id ?? 'transcript-3',
+              recordingId: params.recordingId,
+              storageUri: params.storageUri,
+              rawResponseUri: params.rawResponseUri ?? null,
+              mode: params.mode,
+              model: params.model,
+              language: params.language,
+              fallbackUsed: params.fallbackUsed,
+              summaryJson: params.summaryJson ?? null,
+              createdAt: new Date(),
+              updatedAt: new Date(),
+            };
+          },
+        },
+        publishEvent: vi.fn(),
+      },
+    );
+
+    expect(stored.text).toBe(
+      '[Teacher 00:00.000-00:01.200] Hello there.\n[Student 00:02.000-00:02.400] Hi.',
+    );
+  });
 });
 
 function createRecording(id: string): RecordingRecord {

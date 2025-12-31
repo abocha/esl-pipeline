@@ -16,8 +16,8 @@ import type {
   JobEventPayload as ContractJobEventPayload,
   JobEventType as ContractJobEventType,
   JobState as ContractJobState,
+  RecordingStatus as ContractRecordingStatus,
   TtsStrategy as ContractTtsStrategy,
-  JobEventMessage,
   StreamEventMessage,
   JobStatusDto,
   JobUploadOption,
@@ -32,6 +32,7 @@ import apiClient, {
 
 export type JobState = ContractJobState;
 export type TtsStrategy = ContractTtsStrategy;
+export type RecordingStatus = ContractRecordingStatus;
 export type UserRole = 'admin' | 'user' | 'viewer';
 export type RegisterRole = Exclude<UserRole, 'admin'>;
 
@@ -39,6 +40,47 @@ export type JobStatus = JobStatusDto;
 export type JobEventType = ContractJobEventType;
 export type JobEventPayload = ContractJobEventPayload;
 export type JobEvent = StreamEventMessage;
+
+export interface RecordingTranscriptResponse {
+  recordingId: string;
+  transcriptId: string;
+  text: string;
+  summaryJson: Record<string, unknown> | null;
+  model: string;
+  language: string;
+  mode: 'timeline' | 'stack';
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface PromptPackageResponse {
+  id: string;
+  recordingId: string;
+  transcriptId: string;
+  profilePath: string | null;
+  templateVersion: string;
+  notes: string | null;
+  storageUri: string;
+  text: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface DraftResponse {
+  id: string;
+  promptPackageId: string;
+  storageUri: string;
+  createdBy: string | null;
+  text: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface MaterializeDraftResponse {
+  draftId: string;
+  jobId: string;
+  mdPath: string;
+}
 
 export interface SubmitJobRequest {
   md?: string | null;
@@ -361,6 +403,129 @@ export async function fetchRecordingsIndex(limit = 200): Promise<RecordingsIndex
     return response.data;
   } catch (error: unknown) {
     const axiosError = toAxiosError(error);
+    throw new Error(axiosError ? handleApiError(axiosError) : formatUnknownError(error));
+  }
+}
+
+export async function syncRecordings(): Promise<{ discovered: number }> {
+  try {
+    const response = await apiClient.post(buildApiProxyPath('/recordings/sync'));
+    return response.data;
+  } catch (error: unknown) {
+    const axiosError = toAxiosError(error);
+    if (axiosError && isAuthError(axiosError)) {
+      throw new Error('Authentication required. Please login to sync recordings.');
+    }
+    throw new Error(axiosError ? handleApiError(axiosError) : formatUnknownError(error));
+  }
+}
+
+export async function fetchRecordingTranscript(
+  recordingId: string,
+): Promise<RecordingTranscriptResponse> {
+  try {
+    const response = await apiClient.get(
+      buildApiProxyPath(`/recordings/${encodeURIComponent(recordingId)}/transcript`),
+    );
+    return response.data;
+  } catch (error: unknown) {
+    const axiosError = toAxiosError(error);
+    if (axiosError && isAuthError(axiosError)) {
+      throw new Error('Authentication required. Please login to view transcripts.');
+    }
+    throw new Error(axiosError ? handleApiError(axiosError) : formatUnknownError(error));
+  }
+}
+
+export async function updateRecordingTranscript(
+  recordingId: string,
+  text: string,
+): Promise<RecordingTranscriptResponse> {
+  try {
+    const response = await apiClient.put(
+      buildApiProxyPath(`/recordings/${encodeURIComponent(recordingId)}/transcript`),
+      { text },
+    );
+    return response.data;
+  } catch (error: unknown) {
+    const axiosError = toAxiosError(error);
+    if (axiosError && isAuthError(axiosError)) {
+      throw new Error('Authentication required. Please login to update transcripts.');
+    }
+    throw new Error(axiosError ? handleApiError(axiosError) : formatUnknownError(error));
+  }
+}
+
+export async function createPromptPackage(
+  recordingId: string,
+  params: { notes?: string; profilePath?: string },
+): Promise<PromptPackageResponse> {
+  try {
+    const response = await apiClient.post(
+      buildApiProxyPath(`/recordings/${encodeURIComponent(recordingId)}/prompt-package`),
+      params,
+    );
+    return response.data;
+  } catch (error: unknown) {
+    const axiosError = toAxiosError(error);
+    if (axiosError && isAuthError(axiosError)) {
+      throw new Error('Authentication required. Please login to create prompt packages.');
+    }
+    throw new Error(axiosError ? handleApiError(axiosError) : formatUnknownError(error));
+  }
+}
+
+export async function fetchPromptPackage(
+  promptPackageId: string,
+): Promise<PromptPackageResponse> {
+  try {
+    const response = await apiClient.get(
+      buildApiProxyPath(`/prompt-packages/${encodeURIComponent(promptPackageId)}`),
+    );
+    return response.data;
+  } catch (error: unknown) {
+    const axiosError = toAxiosError(error);
+    if (axiosError && isAuthError(axiosError)) {
+      throw new Error('Authentication required. Please login to view prompt packages.');
+    }
+    throw new Error(axiosError ? handleApiError(axiosError) : formatUnknownError(error));
+  }
+}
+
+export async function createDraft(
+  promptPackageId: string,
+  text: string,
+): Promise<DraftResponse> {
+  try {
+    const response = await apiClient.post(
+      buildApiProxyPath(`/prompt-packages/${encodeURIComponent(promptPackageId)}/draft`),
+      { text },
+    );
+    return response.data;
+  } catch (error: unknown) {
+    const axiosError = toAxiosError(error);
+    if (axiosError && isAuthError(axiosError)) {
+      throw new Error('Authentication required. Please login to create drafts.');
+    }
+    throw new Error(axiosError ? handleApiError(axiosError) : formatUnknownError(error));
+  }
+}
+
+export async function materializeDraft(
+  draftId: string,
+  jobId: string,
+): Promise<MaterializeDraftResponse> {
+  try {
+    const response = await apiClient.post(
+      buildApiProxyPath(`/drafts/${encodeURIComponent(draftId)}/materialize`),
+      { jobId },
+    );
+    return response.data;
+  } catch (error: unknown) {
+    const axiosError = toAxiosError(error);
+    if (axiosError && isAuthError(axiosError)) {
+      throw new Error('Authentication required. Please login to materialize drafts.');
+    }
     throw new Error(axiosError ? handleApiError(axiosError) : formatUnknownError(error));
   }
 }

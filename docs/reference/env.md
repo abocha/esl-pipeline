@@ -52,6 +52,13 @@ Use `.env.batch-backend` for the service stack. It includes all core keys above 
 - Optional S3 upload prefix: `S3_PREFIX`.
 - Prompt assembly: `TTDG_RUN_COMMAND`, `TTDG_RUN_CWD` (optional), `TTDG_EXTRA_ARGS` (optional),
   `PROMPT_TEMPLATE_PATH`, `PROMPT_PROFILE_PATH`.
+- Transcription pipeline:
+  - `RECORDINGS_ROOT`, `RECORDINGS_GLOB` (default `**/*.{opus,mp3,wav,m4a}`),
+    `RECORDINGS_SCAN_INTERVAL_SEC`
+  - `TRANSCRIBE_QUEUE_NAME`, `TRANSCRIBE_MODE` (`timeline`|`stack`), `TRANSCRIBE_MAX_CONCURRENCY`
+  - `DEEPGRAM_API_KEY`, `DEEPGRAM_ACCESS_TOKEN` (optional), `DEEPGRAM_MODEL`, `DEEPGRAM_LANGUAGE`,
+    `DEEPGRAM_STORE_RAW_RESPONSE`
+  - `WORKER_CONCURRENCY`, `MAX_CONCURRENT_FFMPEG`
 
 Notes:
 

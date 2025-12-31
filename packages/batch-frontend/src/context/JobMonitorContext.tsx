@@ -9,7 +9,13 @@ import {
   useState,
 } from 'react';
 
-import type { JobEvent, JobState, JobStatus, SubmitJobRequest } from '../utils/api';
+import type {
+  JobEvent,
+  JobState,
+  JobStatus,
+  RecordingStatus,
+  SubmitJobRequest,
+} from '../utils/api';
 import { getJobStatus, subscribeToJobEvents } from '../utils/api';
 
 type ConnectionState = 'idle' | 'connecting' | 'connected' | 'error' | 'reconnecting' | 'paused';
@@ -20,6 +26,16 @@ export type JobEntry = JobStatus & {
 };
 
 type JobMap = Record<string, JobEntry>;
+
+export interface RecordingEntry {
+  recordingId: string;
+  status: RecordingStatus;
+  transcriptId: string | null;
+  error: string | null;
+  updatedAt: string;
+}
+
+type RecordingMap = Record<string, RecordingEntry>;
 
 interface RegisterJobOptions {
   jobId: string;
@@ -34,7 +50,10 @@ interface RegisterJobOptions {
 interface JobMonitorContextValue {
   jobs: JobEntry[];
   jobMap: JobMap;
+  recordings: RecordingEntry[];
+  recordingMap: RecordingMap;
   registerJob: (options: RegisterJobOptions) => void;
+  registerRecording: (recordingId: string) => void;
   trackJob: (jobId: string) => Promise<JobEntry | undefined>;
   connectionState: ConnectionState;
   isPolling: boolean;
@@ -81,6 +100,17 @@ const createDefaultJob = (jobId: string): JobEntry => {
     finishedAt: null,
     manifestPath: null,
     error: null,
+  };
+};
+
+const createDefaultRecording = (recordingId: string): RecordingEntry => {
+  const now = new Date().toISOString();
+  return {
+    recordingId,
+    status: 'queued',
+    transcriptId: null,
+    error: null,
+    updatedAt: now,
   };
 };
 
@@ -138,6 +168,7 @@ const persistActiveJobs = (jobs: JobMap) => {
 export function JobMonitorProvider({ children }: { children: ReactNode }) {
   const persistedJobsRef = useRef<JobMap>(loadPersistedActiveJobs());
   const [jobs, setJobs] = useState<JobMap>(persistedJobsRef.current);
+  const [recordings, setRecordings] = useState<RecordingMap>({});
   const [connectionState, setConnectionState] = useState<ConnectionState>('idle');
   const [lastError, setLastError] = useState<string | null>(null);
   const [isPolling, setIsPolling] = useState(false);
@@ -153,6 +184,7 @@ export function JobMonitorProvider({ children }: { children: ReactNode }) {
     jobsRef.current = jobs;
   }, [jobs]);
 
+
   useEffect(() => {
     persistActiveJobs(jobs);
   }, [jobs]);
@@ -167,6 +199,20 @@ export function JobMonitorProvider({ children }: { children: ReactNode }) {
       };
     });
   }, []);
+
+  const updateRecording = useCallback(
+    (recordingId: string, mutator: (prev: RecordingEntry) => RecordingEntry) => {
+      setRecordings((prev) => {
+        const previous = prev[recordingId] ?? createDefaultRecording(recordingId);
+        const next = mutator(previous);
+        return {
+          ...prev,
+          [recordingId]: next,
+        };
+      });
+    },
+    [],
+  );
 
   const registerJob = useCallback(
     ({ jobId, fileName, md, preset, notionDatabase, withTts, ttsStrategy }: RegisterJobOptions) => {
@@ -189,6 +235,19 @@ export function JobMonitorProvider({ children }: { children: ReactNode }) {
       }));
     },
     [updateJob],
+  );
+
+  const registerRecording = useCallback(
+    (recordingId: string) => {
+      const trimmed = recordingId.trim();
+      if (!trimmed) return;
+      updateRecording(trimmed, (prev) => ({
+        ...prev,
+        recordingId: trimmed,
+        updatedAt: new Date().toISOString(),
+      }));
+    },
+    [updateRecording],
   );
 
   const stopPolling = useCallback(() => {
@@ -241,20 +300,33 @@ export function JobMonitorProvider({ children }: { children: ReactNode }) {
 
   const handleJobEvent = useCallback(
     (event: JobEvent) => {
-      if (event.type !== 'job_state_changed') return;
-      updateJob(event.jobId, (prev) => ({
-        ...prev,
-        state: event.state,
-        manifestPath: event.payload?.manifestPath ?? prev.manifestPath,
-        error: event.payload?.error ?? prev.error,
-        finishedAt: event.payload?.finishedAt ?? prev.finishedAt,
-        ttsStrategy: event.payload?.ttsStrategy ?? prev.ttsStrategy,
-        md: event.payload?.md ?? prev.md,
-        notionUrl: event.payload?.notionUrl ?? prev.notionUrl,
-        updatedAt: new Date().toISOString(),
-      }));
+      if (event.type === 'job_state_changed') {
+        updateJob(event.jobId, (prev) => ({
+          ...prev,
+          state: event.state,
+          manifestPath: event.payload?.manifestPath ?? prev.manifestPath,
+          error: event.payload?.error ?? prev.error,
+          finishedAt: event.payload?.finishedAt ?? prev.finishedAt,
+          ttsStrategy: event.payload?.ttsStrategy ?? prev.ttsStrategy,
+          md: event.payload?.md ?? prev.md,
+          notionUrl: event.payload?.notionUrl ?? prev.notionUrl,
+          updatedAt: new Date().toISOString(),
+        }));
+        return;
+      }
+
+      if (event.type === 'recording_state_changed') {
+        updateRecording(event.recordingId, (prev) => ({
+          ...prev,
+          recordingId: event.recordingId,
+          status: event.status,
+          transcriptId: event.transcriptId ?? prev.transcriptId,
+          error: event.error ?? null,
+          updatedAt: new Date().toISOString(),
+        }));
+      }
     },
-    [updateJob],
+    [updateJob, updateRecording],
   );
 
   const connectEventSource = useCallback(() => {
@@ -389,11 +461,18 @@ export function JobMonitorProvider({ children }: { children: ReactNode }) {
     });
   }, [jobs]);
 
+  const recordingsArray = useMemo(() => {
+    return Object.values(recordings).sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
+  }, [recordings]);
+
   const value = useMemo<JobMonitorContextValue>(
     () => ({
       jobs: jobsArray,
       jobMap: jobs,
+      recordings: recordingsArray,
+      recordingMap: recordings,
       registerJob,
+      registerRecording,
       trackJob,
       connectionState,
       isPolling,
@@ -405,7 +484,10 @@ export function JobMonitorProvider({ children }: { children: ReactNode }) {
     [
       jobs,
       jobsArray,
+      recordings,
+      recordingsArray,
       registerJob,
+      registerRecording,
       trackJob,
       connectionState,
       isPolling,

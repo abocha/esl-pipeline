@@ -113,6 +113,34 @@ services:
         pnpm --filter @esl-pipeline/batch-backend dev:worker
       "
 
+  transcribe-worker:
+    image: esl-pipeline/dev-node:local
+    pull_policy: never
+    container_name: esl-transcribe-worker
+    user: "${UID:-1000}:${GID:-1000}"
+    depends_on:
+      deps:
+        condition: service_completed_successfully
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_started
+    env_file:
+      - .env.batch-backend
+    environment:
+      NODE_ENV: development
+      PIPELINE_CWD: /app
+      FILESYSTEM_UPLOAD_DIR: /app/uploads
+    volumes:
+      - ./uploads:/app/uploads
+      - ./:/app
+      - /mnt/d/Download/Videos/_lessons:/recordings
+      - /home/abocha/code/to-text-deepgram:/ttdg
+    command: >
+      sh -lc "
+        pnpm --filter @esl-pipeline/batch-backend exec tsx watch src/transport/transcribe-worker.ts
+      "
+
   batch-frontend:
     build:
       context: .

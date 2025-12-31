@@ -241,13 +241,16 @@ delete(uri) -> void
 - Server-side SDK usage: createClient(apiKey) with DEEPGRAM_API_KEY.
 - Token auth: pass a temporary access token via the accessToken option (not a raw string).
 - Browser transcription: requires a backend proxy (Deepgram does not allow custom CORS origins).
+- MVP channel mapping: assume 2-channel Opus; channel 0 is Teacher, channel 1 is Student.
+  Only run diarization when the source is mono.
 
 ---
 
 ## 9) UI Flow Mapping (Frontend Vision Alignment)
 
 1) Select student (future) + choose recording
-   - GET /recordings?status=ingested|transcribed
+   - Recording feed from `/jobs/events` (recording_state_changed) for now
+   - GET /recordings?status=ingested|transcribed (planned for full listing)
 2) Auto-transcribe (background)
    - UI shows progress via /jobs/events SSE (existing stream)
 3) Review transcript
@@ -281,6 +284,10 @@ delete(uri) -> void
 ### Drafts
 - POST /prompt-packages/:id/draft
 - POST /drafts/:id/materialize (returns md_path for /jobs/:jobId/approve)
+
+Implementation note:
+- GET /recordings?status=... and GET /recordings/:id are deferred; the Phase 2 UI currently relies
+  on `/jobs/events` for live recording status and manual recording ID input for transcript review.
 
 ---
 
@@ -328,6 +335,8 @@ No pipeline code changes required if adapter is isolated.
 1) Student association (auto-detect from folder vs manual UI selection)
 2) Transcript edit UX (inline editing vs text editor modal)
 3) How to handle multiple recordings in the same lesson block?
+4) Add recordings list endpoints (GET /recordings, GET /recordings/:id) for UI backfill vs
+   continuing with SSE-only recording feeds?
 
 ---
 
