@@ -6,7 +6,7 @@ Get the ESL Pipeline running in 5 minutes.
 
 ## Prerequisites
 
-- **Node.js 24.10+** (use `nvm use 24` or check `.nvmrc`)
+- **Node.js 24.11.1+** (use `nvm use 24` or check `.nvmrc`)
 - **pnpm 8+** (`corepack enable`)
 - **ffmpeg** on PATH (install via brew/apt/choco)
 
@@ -64,17 +64,15 @@ pnpm esl --version                           # Version info
 For the web-based batch processing interface:
 
 ```bash
-# Start infrastructure
-docker-compose up -d postgres redis
-
-# Start backend
-cd packages/batch-backend && pnpm dev
-
-# Start frontend (new terminal)
-cd packages/batch-frontend && pnpm dev
+# Start the stack (includes API, workers, Redis, Postgres)
+docker compose up -d
 ```
 
 Open http://localhost:5173 to access the batch interface.
+
+Notes:
+- Configure `.env.batch-backend` for backend services.
+- Phase 2+ transcription requires the transcribe worker and a recordings mount.
 
 ---
 

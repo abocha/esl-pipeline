@@ -1,257 +1,161 @@
-# Transcription Pipeline Implementation Manual (Phase 2+)
+# Transcription Pipeline Implementation Manual (Phase 2+ Gap Closure)
 
-Purpose: a step-by-step, coder-AI friendly manual for implementing the Phase 2+ pipeline-native transcription system defined in `docs/design/TRANSCRIPTION_PIPELINE_SPEC.md`. Each stage ends with a review gate. Do not proceed to the next stage until the review gate is explicitly approved.
+Purpose: step-by-step manual for closing the remaining gaps in the Phase 2+
+transcription system. This manual assumes the Phase 2+ foundation is already
+implemented. Use this document for future work only.
 
-Audience: a coder-AI implementing the backend + UI integration in this repo.
+Audience: maintainers and agents finishing Phase 2+ and moving toward the
+FRONTEND_VISION end-state.
+
+Scope:
+- Close the known gaps that prevent Phase 2+ from being a complete, smooth flow.
+- Do not re-implement Phase 1 (ttdg) or the already shipped Phase 2+ core.
 
 ---
 
 ## Pre-flight (Required Reading)
 
-Read and confirm alignment with (start here):
-- `AGENTS.md` (entry point and SSOT pointer)
-- `docs/design/TRANSCRIPTION_PIPELINE_SPEC.md` (Phase 2+ requirements and terminology)
-- `docs/PIPELINE_INTEGRATION_VISION.md` (Phase 1 manual; this work is the successor)
-- `docs/design/FRONTEND_VISION.md` (end-state UI journey)
-- `docs/reference/agents-ssot.md` (repo-wide invariants)
-- `docs/backend-frontend/batch-backend-ssot.md` (batch-backend invariants)
-- `docs/reference/env.md` (environment variable conventions)
-- `docs/backend-frontend/backend-frontend-alignment.md` (API status tracker)
+- AGENTS.md (SSOT pointer)
+- docs/reference/agents-ssot.md (repo invariants)
+- docs/backend-frontend/batch-backend-ssot.md (backend invariants)
+- docs/design/TRANSCRIPTION_PIPELINE_SPEC.md (Phase 2+ spec + as-built status)
+- docs/PIPELINE_INTEGRATION_VISION.md (operational runbook + roadmap)
+- docs/design/FRONTEND_VISION.md (target UX)
+- docs/reference/env.md (env conventions)
+- docs/backend-frontend/backend-frontend-alignment.md (API status tracker)
 
-Confirm these decisions (already approved):
-- Store Deepgram raw JSON in MVP via `raw_response_uri`, optional via config.
-- Add nullable job linkage columns: `recording_id`, `transcript_id`, `prompt_package_id`, `draft_id`.
-- Reuse `/jobs/events` SSE stream for transcription progress (extend payloads if needed).
-- Drafts are materialized to filesystem before `/jobs/:jobId/approve`.
-- Scan ingestion is MVP; upload ingestion is future (S3-backed).
+Confirm these guardrails:
+- Phase 1 remains supported until Phase 2+ is production-ready.
+- Phase 2+ work is additive; do not break existing pipelines.
+- Orchestrator still expects a filesystem markdown path.
 
 ---
 
-## Stage 0: Baseline Alignment and Planning
+## Stage 0: Baseline Audit
 
-Goal: lock scope, names, and review checkpoints before any new code.
+Goal: confirm current Phase 2+ behavior and document the active gaps.
 
 Steps:
-1) Confirm all phase/terminology references in docs are consistent (Phase 1 vs Phase 2+).
-2) Confirm config naming alignment:
-   - Deepgram: `DEEPGRAM_API_KEY`, `DEEPGRAM_MODEL`, `DEEPGRAM_LANGUAGE`, `DEEPGRAM_STORE_RAW_RESPONSE`.
-   - Ingestion: `RECORDINGS_ROOT`, `RECORDINGS_SCAN_INTERVAL_SEC`, `RECORDINGS_GLOB`.
-   - Storage: `STORAGE_PROVIDER`, `FILESYSTEM_UPLOAD_DIR`, `S3_*` / `AWS_*`.
-3) Update `docs/backend-frontend/backend-frontend-alignment.md` with new endpoints and state if needed.
+1) Verify end-to-end Phase 2+ flow up to draft creation.
+2) Confirm recording ingestion, transcript edit, prompt package, and draft save.
+3) Confirm remaining gaps (approval job, recording list/backfill, upload ingestion,
+   student association, template/profile UX).
+4) Update docs/PIPELINE_INTEGRATION_VISION.md gaps list if it has drifted.
 
-Review Gate 0 (stop here):
-- Post a short summary of the confirmed config names and endpoints.
-- Confirm no conflicts with SSOT docs.
+Review Gate 0:
+- Post a short summary of verified behaviors and the confirmed gap list.
 
 ---
 
-## Stage 1: Data Model and Migrations
+## Stage 1: Phase 2+ Approval Job Bridge
 
-Goal: add the Phase 2+ data model and job linkage without breaking Phase 1.
+Goal: remove the manual "job ID" requirement when approving a Phase 2+ draft.
 
-Steps:
-1) Add DB tables for:
-   - `recordings`
-   - `transcripts`
-   - `prompt_packages`
-   - `drafts`
-2) Add job linkage columns:
-   - `recording_id`, `transcript_id`, `prompt_package_id`, `draft_id`
-3) Update schema sources:
-   - `packages/batch-backend/schema.sql`
-   - `packages/batch-backend/src/infrastructure/db.ts` (runtime patching)
-4) Update domain and DTOs:
-   - `packages/batch-backend/src/domain/job-model.ts`
-   - `packages/batch-backend/src/domain/job-repository.ts`
-   - `packages/batch-backend/src/application/job-dto.ts`
-   - `packages/batch-backend/src/infrastructure/job-event-redis-bridge.ts`
-   - `packages/contracts/src/index.ts` (JobStatusDto additions)
-5) Add/update tests:
-   - repository mapping tests
-   - DTO serialization tests
+Preferred approach:
+- Materialization should create or attach an approval job automatically.
+- The UI should not ask for a job ID.
 
-Review Gate 1 (stop here):
-- Provide the SQL table definitions and new columns list.
-- Confirm DTO shape changes are reflected in contracts + backend.
-- Confirm tests covering new fields.
+Implementation steps:
+1) Backend: add a new use case to create an approval job from a draft + prompt
+   package + recording metadata. Persist:
+   - recordingId, transcriptId, promptPackageId, draftId
+   - userId (if available)
+   - state = awaiting_approval
+2) Backend: extend the materialize endpoint to accept optional jobId.
+   - If jobId is missing, create a new approval job and use it.
+   - Return { draftId, jobId, mdPath }.
+3) Frontend: remove manual job ID input in the transcription workspace.
+   - Use the returned jobId for approve.
+   - Show the created job in the UI.
+4) Tests:
+   - Backend: materialize without jobId creates a job in awaiting_approval.
+   - Frontend: approval flow succeeds without manual job input.
+
+Review Gate 1:
+- Provide request/response examples and confirm the UI no longer needs jobId.
 
 ---
 
-## Stage 2: Storage Adapter (Artifacts)
+## Stage 2: Recording List + Backfill
 
-Goal: implement artifact storage for audio, transcripts, raw JSON, prompt packages, drafts.
+Goal: remove reliance on SSE-only recording feed for listing.
 
-Steps:
-1) Define a storage interface matching the spec (put/get/delete).
-2) Implement filesystem adapter:
-   - Base directory: `FILESYSTEM_UPLOAD_DIR`.
-   - Suggested paths:
-     - `recordings/<recordingId>.<ext>`
-     - `transcripts/<transcriptId>.txt`
-     - `transcripts/<transcriptId>.json`
-     - `prompt-packages/<promptPackageId>.txt`
-     - `drafts/<draftId>.md`
-3) Add config wiring using `packages/shared-infrastructure/src/storage/config.ts`.
-4) Add unit tests for:
-   - path resolution
-   - read/write behavior
-   - optional raw JSON storage
+Implementation steps:
+1) Backend: implement GET /recordings?status=... with pagination and ordering.
+2) Backend: implement GET /recordings/:id.
+3) Frontend: load recordings on page load and merge with SSE updates.
+4) Tests:
+   - Add API tests for list + get.
+   - Add frontend tests for initial render + SSE merge.
 
-Review Gate 2 (stop here):
-- Show interface + filesystem adapter API surface.
-- Confirm path conventions and config usage.
+Review Gate 2:
+- Provide endpoint contracts and confirm the UI can show recordings after reload.
 
 ---
 
-## Stage 3: Ingestion Service (Scan Mode)
+## Stage 3: Upload Ingestion (S3-backed)
 
-Goal: auto-ingest recordings from a local folder into `recordings` and enqueue transcription jobs.
+Goal: enable direct UI uploads instead of only scan mode.
 
-Steps:
-1) Implement scanner:
-   - `RECORDINGS_ROOT` + `RECORDINGS_GLOB`.
-   - Deduplicate by `sha256` or `(path + mtime + size)`.
-2) Store discovered audio using the storage adapter.
-3) Insert `recordings` row with `source="scan"` and `status="queued"`.
-4) Enqueue `transcribe-queue` with `{ recordingId }`.
-5) Add manual sync endpoint:
-   - `POST /recordings/sync` returns `{ discovered: number }`.
+Implementation steps:
+1) Define upload endpoint and storage adapter wiring.
+2) Create Recording rows from upload source with storage URI.
+3) Enqueue transcribe jobs the same way as scan ingestion.
+4) Update UI to upload recordings and reflect progress.
+5) Tests for upload -> recording -> transcribe queue.
 
-Review Gate 3 (stop here):
-- Provide scan algorithm and dedupe rules.
-- Confirm `recordings` schema and queue payload.
-- Confirm endpoint contract.
+Review Gate 3:
+- Provide API shapes and confirm a UI upload produces a transcript.
 
 ---
 
-## Stage 4: Transcription Worker (Deepgram)
+## Stage 4: Student Association
 
-Goal: create a worker that transcribes recordings and persists artifacts.
+Goal: attach recordings/transcripts to student entities.
 
-Steps:
-1) Use Deepgram SDK:
-   - Server-side: `createClient(DEEPGRAM_API_KEY)`.
-   - Token auth: pass temporary token via `accessToken`.
-   - No browser direct calls; proxy required.
-2) Worker flow:
-   - Load `recordings` row.
-   - If transcript exists: no-op.
-   - Mark recording `transcribing`.
-   - Call Deepgram (primary multichannel, fallback diarized).
-   - Format transcript (timeline/stack).
-   - Store transcript + optional raw JSON + summary_json.
-   - Mark recording `transcribed` or `failed`.
-3) Emit progress via `/jobs/events` (extend payload with `recordingId` + `transcriptId`).
+Implementation steps:
+1) Define student ID mapping strategy (folder name, UI selection, or explicit ID).
+2) Persist student_id on recordings and propagate to prompt packages/drafts.
+3) Update UI to filter recordings by student.
+4) Tests for mapping and persistence.
 
-Review Gate 4 (stop here):
-- Provide worker flow pseudocode + error handling.
-- Confirm SSE payload extension.
-- Confirm raw JSON storage toggle.
+Review Gate 4:
+- Confirm how student association is chosen and persisted.
 
 ---
 
-## Stage 5: Transcript Review API
+## Stage 5: Template/Profile UX and Versioning
 
-Goal: allow UI to fetch and edit transcripts.
+Goal: make prompt inputs explicit and safe without path fiddling.
 
-Steps:
-1) `GET /recordings/:id/transcript`:
-   - Read transcript from storage.
-   - Return text + metadata (summary_json, model, language, mode).
-2) `PUT /recordings/:id/transcript`:
-   - Replace transcript text in storage.
-   - Update transcript record `updated_at`.
+Implementation steps:
+1) Add server-side allowlist for profiles/templates (no arbitrary file paths).
+2) Expose available templates and profiles in config endpoints.
+3) Update UI to choose template/profile by ID instead of path.
+4) Tests for allowlist and selection.
 
-Review Gate 5 (stop here):
-- Provide request/response shapes.
-- Confirm storage update behavior.
+Review Gate 5:
+- Provide the allowlist rules and UI selection behavior.
 
 ---
 
-## Stage 6: Prompt Package Assembly
+## Stage 6: Phase 2+ Hardening
 
-Goal: assemble prompt packages using the canonical stitching order.
+Goal: remove duct tape and edge-case fragility.
 
-Steps:
-1) Load:
-   - prompt template (configurable path)
-   - profile (DB record or file export)
-   - notes (from UI)
-   - transcript (storage)
-2) Stitch in canonical order:
-   - Replace `INSERT PROFILE HERE` with full profile.
-   - Append `[NOTES]` + notes.
-   - Append `[TRANSCRIPT]` + transcript text.
-3) Store prompt package artifact + DB row.
-4) Expose endpoints:
-   - `POST /recordings/:id/prompt-package`
-   - `GET /prompt-packages/:id`
+Implementation steps:
+1) Add clearer error surfacing in the transcription workspace.
+2) Add retry actions for failed transcriptions.
+3) Add explicit status in the UI for transcription queue states.
+4) Validate storage and path configuration at startup.
 
-Review Gate 6 (stop here):
-- Provide canonical stitching output example.
-- Confirm endpoints and storage URIs.
+Review Gate 6:
+- Provide the final UX flow and list of known failure modes.
 
 ---
 
-## Stage 7: Draft Creation + Materialization
+## Notes
 
-Goal: store draft content and materialize to filesystem for orchestrator approval.
-
-Steps:
-1) `POST /prompt-packages/:id/draft`:
-   - Store draft content via storage adapter.
-   - Insert `drafts` row.
-2) `POST /drafts/:id/materialize`:
-   - Write `.md` to `FILESYSTEM_UPLOAD_DIR/drafts/<draftId>.md`.
-   - Update job record with `md` path + `draft_id`.
-   - Return `md_path` for `/jobs/:jobId/approve`.
-3) Continue to use `/jobs/:jobId/approve` (existing).
-
-Review Gate 7 (stop here):
-- Confirm materialization path and security (no path injection).
-- Confirm job update behavior.
-
----
-
-## Stage 8: UI Integration (Phase 2 MVP)
-
-Goal: wire UI flows to the new endpoints and `/jobs/events`.
-
-Steps:
-1) Add recording list + transcript review UI.
-2) Add notes + prompt package view/download.
-3) Add draft paste + approve flow:
-   - Draft save -> materialize -> approve.
-4) Subscribe to `/jobs/events` for transcription status updates.
-5) Ensure error states and retries surface clearly.
-
-Review Gate 8 (stop here):
-- Provide UI flow screenshots or component list.
-- Confirm SSE payload usage and state mapping.
-
----
-
-## Stage 9: Documentation and Final Checks
-
-Goal: keep docs and contracts in sync before release.
-
-Steps:
-1) Update docs:
-   - `docs/design/TRANSCRIPTION_PIPELINE_SPEC.md` if implementation diverges.
-   - `docs/backend-frontend/backend-frontend-alignment.md` for new endpoints.
-   - `docs/reference/env.md` for new env vars.
-2) Verify test coverage for new data paths.
-3) Record any deferred work in `docs/design/TRANSCRIPTION_PIPELINE_SPEC.md` open questions.
-
-Review Gate 9 (stop here):
-- Provide a final changelog summary and test results.
-- Confirm the Phase 1 workflow remains operational.
-
----
-
-## Notes for Coder-AI Execution
-
-- Do not change orchestrator behavior (it still expects a filesystem path).
-- Keep Phase 1 ttdg flow intact; Phase 2 is additive until cutover.
-- Prefer small, reviewable changes per stage.
-- When in doubt, pause and request clarification before proceeding.
+- Do not remove Phase 1 until Phase 2+ is production-ready.
+- Keep orchestrator integration unchanged; it still expects a filesystem path.
+- Prefer incremental, reviewable changes; update docs at each stage.

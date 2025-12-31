@@ -12,10 +12,11 @@ This spec is designed to align with:
 - docs/design/FRONTEND_VISION.md (end-state UI journey)
 - docs/PROJECT_OVERVIEW.md (product intent)
 
-This is a near-final Phase 2+ draft intended to be implemented with minimal ambiguity.
-
-Implementation manual (step-by-step with review gates):
-- docs/design/TRANSCRIPTION_PIPELINE_IMPLEMENTATION_MANUAL.md
+This spec is implemented in the repo with known gaps. Current status and
+roadmap live in `docs/PIPELINE_INTEGRATION_VISION.md`. Gap-closure steps are
+tracked in `docs/design/TRANSCRIPTION_PIPELINE_IMPLEMENTATION_MANUAL.md`.
+The original staged manual is archived at
+`docs/archive/TRANSCRIPTION_PIPELINE_IMPLEMENTATION_MANUAL.md`.
 
 ---
 
@@ -348,3 +349,22 @@ Phase 2 Acceptance:
 - Transcript can be reviewed and edited.
 - Prompt package assembles with correct template + profile + notes + transcript.
 - Draft is materialized to filesystem and approved markdown triggers orchestrator + manifest.
+
+---
+
+## 15) Implementation Status (as-built)
+
+Implemented in repo:
+- Scan ingestion (`/recordings/sync`) and transcribe queue.
+- Deepgram worker with multichannel + utterances + punctuation; diarize fallback for mono.
+- Transcript read/update endpoints.
+- Prompt package creation + retrieval.
+- Draft save + materialize to `FILESYSTEM_UPLOAD_DIR/drafts/<draftId>.md`.
+- Recording status SSE via `/jobs/events` and a Phase 2 transcription workspace UI.
+
+Known gaps to reach full Phase 2 acceptance:
+- No `GET /recordings` or `GET /recordings/:id` listing/backfill; UI relies on SSE deltas.
+- Draft approval requires manual job selection (no auto-created Phase 2 approval job yet).
+- Upload ingestion (UI → storage) not implemented; scan mode only.
+- Student association is not implemented.
+- Template/profile paths must be configured explicitly (repo templates live under `docs/templates`).
