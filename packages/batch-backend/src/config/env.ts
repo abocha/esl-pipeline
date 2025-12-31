@@ -30,11 +30,20 @@ export interface BatchBackendConfig {
   };
   transcription: {
     queueName: string;
+    mode: 'timeline' | 'stack';
+    maxConcurrency: number;
   };
   recordings: {
     root: string;
     glob: string;
     scanIntervalSec: number;
+  };
+  deepgram: {
+    apiKey?: string;
+    accessToken?: string;
+    model: string;
+    language: string;
+    storeRawResponse: boolean;
   };
   worker: {
     concurrency: number;
@@ -141,6 +150,17 @@ export function loadConfig(): BatchBackendConfig {
   const recordingsRoot = readString('RECORDINGS_ROOT', '')!;
   const recordingsGlob = readString('RECORDINGS_GLOB', '**/*.{opus,mp3,wav,m4a}')!;
   const recordingsScanIntervalSec = readInt('RECORDINGS_SCAN_INTERVAL_SEC', 120);
+  const transcribeMode = readString('TRANSCRIBE_MODE', 'timeline') as 'timeline' | 'stack';
+  if (transcribeMode !== 'timeline' && transcribeMode !== 'stack') {
+    throw new Error('TRANSCRIBE_MODE must be "timeline" or "stack"');
+  }
+  const transcribeMaxConcurrency = readInt('TRANSCRIBE_MAX_CONCURRENCY', 2);
+
+  const deepgramApiKey = readString('DEEPGRAM_API_KEY');
+  const deepgramAccessToken = readString('DEEPGRAM_ACCESS_TOKEN');
+  const deepgramModel = readString('DEEPGRAM_MODEL', 'nova-3')!;
+  const deepgramLanguage = readString('DEEPGRAM_LANGUAGE', 'multi')!;
+  const deepgramStoreRawResponse = readBool('DEEPGRAM_STORE_RAW_RESPONSE', true);
 
   // Worker concurrency
   const workerConcurrency = readInt('WORKER_CONCURRENCY', 5);
@@ -278,11 +298,20 @@ export function loadConfig(): BatchBackendConfig {
     },
     transcription: {
       queueName: transcribeQueueName,
+      mode: transcribeMode,
+      maxConcurrency: transcribeMaxConcurrency,
     },
     recordings: {
       root: recordingsRoot,
       glob: recordingsGlob,
       scanIntervalSec: recordingsScanIntervalSec,
+    },
+    deepgram: {
+      apiKey: deepgramApiKey,
+      accessToken: deepgramAccessToken,
+      model: deepgramModel,
+      language: deepgramLanguage,
+      storeRawResponse: deepgramStoreRawResponse,
     },
     worker: {
       concurrency: workerConcurrency,

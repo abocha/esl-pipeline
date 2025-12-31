@@ -1,7 +1,7 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest, RouteHandlerMethod } from 'fastify';
 import { z } from 'zod';
 
-import type { JobEventMessage } from '@esl-pipeline/contracts';
+import type { JobEventMessage, RecordingEventMessage } from '@esl-pipeline/contracts';
 
 import { approveJobForPipeline } from '../application/approve-job.js';
 import { getJobStatus } from '../application/get-job-status.js';
@@ -9,6 +9,7 @@ import { jobRecordToDto } from '../application/job-dto.js';
 import { type SubmitJobRequest, submitJob } from '../application/submit-job.js';
 import type { BatchBackendConfig } from '../config/env.js';
 import { subscribeJobEvents } from '../domain/job-events.js';
+import { subscribeRecordingEvents } from '../domain/recording-events.js';
 import { logger } from '../infrastructure/logger.js';
 import { errorResponse, resolveRoutePath } from './route-helpers.js';
 
@@ -194,7 +195,7 @@ export function registerCoreRoutes(app: FastifyInstance, options: CoreRouteOptio
         }
       : {};
 
-  app.get('/jobs/events', jobEventsRouteOptions, (request, reply) => {
+  app.get('/jobs/events', jobEventsRouteOptions, async (request, reply) => {
     const routePath = resolveRoutePath(request, 'GET /jobs/events');
     const jobIdParam = (request.query as { jobId?: unknown })?.jobId as string | undefined;
     const rawIds =
@@ -242,7 +243,97 @@ export function registerCoreRoutes(app: FastifyInstance, options: CoreRouteOptio
       }
     }, 25_000);
 
-    const unsubscribe = subscribeJobEvents(
+    const recordingIds = new Set<string>();
+    const addRecordingId = (recordingId?: string | null) => {
+      if (!recordingId || wantsAll) return false;
+      if (recordingIds.has(recordingId)) return false;
+      recordingIds.add(recordingId);
+      return true;
+    };
+
+    if (!wantsAll && jobIds.length > 0) {
+      try {
+        const statuses = await Promise.all(jobIds.map((jobId) => getJobStatus(jobId)));
+        for (const status of statuses) {
+          if (status?.recordingId) {
+            recordingIds.add(status.recordingId);
+          }
+        }
+      } catch (error) {
+        logger.warn('Failed to resolve recording IDs for job SSE subscription', {
+          event: 'recording_events_sse_resolve_failed',
+          route: routePath,
+          error: error instanceof Error ? error.message : String(error),
+        });
+      }
+    }
+
+    let unsubscribeRecordings = () => {};
+
+    const subscribeRecordings = () => {
+      unsubscribeRecordings();
+      if (wantsAll) {
+        unsubscribeRecordings = subscribeRecordingEvents(
+          (event) => {
+            try {
+              if (!event || !event.recording) return;
+              const payload: RecordingEventMessage = {
+                type: 'recording_state_changed',
+                recordingId: event.recording.id,
+                status: event.recording.status,
+                transcriptId: event.transcriptId ?? null,
+                error: event.recording.error ?? null,
+              };
+              reply.raw.write(`event: recording_state_changed\n`);
+              reply.raw.write(`data: ${JSON.stringify(payload)}\n\n`);
+            } catch (error: unknown) {
+              logger.warn('Failed to publish SSE recording event', {
+                event: 'recording_events_sse_publish_failed',
+                route: routePath,
+                error: error instanceof Error ? error.message : String(error),
+              });
+            }
+          },
+          { allRecordings: true },
+        );
+        return;
+      }
+
+      const ids = [...recordingIds];
+      if (ids.length === 0) {
+        unsubscribeRecordings = () => {};
+        return;
+      }
+
+      unsubscribeRecordings = subscribeRecordingEvents(
+        (event) => {
+          try {
+            if (!event || !event.recording) return;
+            if (!recordingIds.has(event.recording.id)) return;
+            const payload: RecordingEventMessage = {
+              type: 'recording_state_changed',
+              recordingId: event.recording.id,
+              status: event.recording.status,
+              transcriptId: event.transcriptId ?? null,
+              error: event.recording.error ?? null,
+            };
+            reply.raw.write(`event: recording_state_changed\n`);
+            reply.raw.write(`data: ${JSON.stringify(payload)}\n\n`);
+          } catch (error: unknown) {
+            logger.warn('Failed to publish SSE recording event', {
+              event: 'recording_events_sse_publish_failed',
+              route: routePath,
+              error: error instanceof Error ? error.message : String(error),
+            });
+          }
+        },
+        { recordingIds: ids },
+      );
+    };
+
+    subscribeRecordings();
+
+    const unsubscribeJobs = subscribeJobEvents(
       (event: unknown) => {
         try {
           // Type guard: Check if event has expected structure
@@ -252,6 +343,9 @@ export function registerCoreRoutes(app: FastifyInstance, options: CoreRouteOptio
           // Cast to JobEvent-like structure (job-events.ts defines the actual type)
           const typedEvent = event as { job: unknown; type: string };
           const dto = jobRecordToDto(typedEvent.job as Parameters<typeof jobRecordToDto>[0]);
+          if (addRecordingId(dto.recordingId)) {
+            subscribeRecordings();
+          }
           const payload: JobEventMessage = {
             type: typedEvent.type as JobEventMessage['type'],
             jobId: dto.jobId,
@@ -263,6 +357,8 @@ export function registerCoreRoutes(app: FastifyInstance, options: CoreRouteOptio
               ttsStrategy: dto.ttsStrategy,
               md: dto.md,
               notionUrl: dto.notionUrl,
+              recordingId: dto.recordingId,
+              transcriptId: dto.transcriptId,
             },
           };
           reply.raw.write(`event: ${typedEvent.type}\n`);
@@ -282,7 +378,8 @@ export function registerCoreRoutes(app: FastifyInstance, options: CoreRouteOptio
       if (closed) return;
       closed = true;
       clearInterval(heartbeat);
-      unsubscribe();
+      unsubscribeJobs();
+      unsubscribeRecordings();
       logger.info('SSE client disconnected', {
         event: 'job_events_sse_disconnected',
         route: routePath,

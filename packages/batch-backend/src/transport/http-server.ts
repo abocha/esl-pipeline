@@ -21,6 +21,7 @@ import {
 import { enableRedisJobEventBridge } from '../infrastructure/job-event-redis-bridge.js';
 import { logger } from '../infrastructure/logger.js';
 import { createRedisClient } from '../infrastructure/redis.js';
+import { enableRedisRecordingEventBridge } from '../infrastructure/recording-event-redis-bridge.js';
 import {
   type StorageConfig,
   StorageConfigurationService,
@@ -135,6 +136,7 @@ export async function createHttpServer(): Promise<FastifyInstance> {
 export async function startHttpServer(): Promise<void> {
   const config = loadConfig();
   await enableRedisJobEventBridge();
+  await enableRedisRecordingEventBridge();
   const app = await createHttpServer();
 
   try {

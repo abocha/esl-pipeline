@@ -18,6 +18,7 @@ import type {
   JobState as ContractJobState,
   TtsStrategy as ContractTtsStrategy,
   JobEventMessage,
+  StreamEventMessage,
   JobStatusDto,
   JobUploadOption,
 } from '@esl-pipeline/contracts';
@@ -37,7 +38,7 @@ export type RegisterRole = Exclude<UserRole, 'admin'>;
 export type JobStatus = JobStatusDto;
 export type JobEventType = ContractJobEventType;
 export type JobEventPayload = ContractJobEventPayload;
-export type JobEvent = JobEventMessage;
+export type JobEvent = StreamEventMessage;
 
 export interface SubmitJobRequest {
   md?: string | null;
@@ -397,7 +398,7 @@ export function subscribeToJobEvents(
 
   // Backend emits named SSE events (e.g., job_state_changed), so subscribe to both
   // the default "message" channel and the typed event names.
-  for (const type of ['message', 'job_state_changed', 'job_created']) {
+  for (const type of ['message', 'job_state_changed', 'job_created', 'recording_state_changed']) {
     eventSource.addEventListener(type, handleMessage);
   }
 
