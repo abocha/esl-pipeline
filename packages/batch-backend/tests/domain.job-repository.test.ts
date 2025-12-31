@@ -54,6 +54,10 @@ describeIfDb('domain/job-repository', () => {
       expect(job.notionDatabase).toBeNull();
       expect(job.ttsStrategy).toBeNull();
       expect(job.notionUrl).toBeNull();
+      expect(job.recordingId).toBeNull();
+      expect(job.transcriptId).toBeNull();
+      expect(job.promptPackageId).toBeNull();
+      expect(job.draftId).toBeNull();
       expect(job.createdAt instanceof Date).toBe(true);
       expect(job.updatedAt instanceof Date).toBe(true);
 
@@ -68,8 +72,17 @@ describeIfDb('domain/job-repository', () => {
     });
 
     it('persists optional metadata fields when provided', async () => {
+      const recordingId = randomUUID();
+      const transcriptId = randomUUID();
+      const promptPackageId = randomUUID();
+      const draftId = randomUUID();
+
       const job = await insertJob({
         md: 'fixtures/ok.md',
+        recordingId,
+        transcriptId,
+        promptPackageId,
+        draftId,
         preset: 'b1-default',
         withTts: true,
         upload: 's3',
@@ -86,6 +99,10 @@ describeIfDb('domain/job-repository', () => {
       expect(job.notionDatabase).toBe('db-123');
       expect(job.ttsStrategy).toBe('dialogue');
       expect(job.notionUrl).toBeNull();
+      expect(job.recordingId).toBe(recordingId);
+      expect(job.transcriptId).toBe(transcriptId);
+      expect(job.promptPackageId).toBe(promptPackageId);
+      expect(job.draftId).toBe(draftId);
     });
 
     it('returns null for unknown id', async () => {

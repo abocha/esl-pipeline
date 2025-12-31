@@ -14,6 +14,9 @@ This spec is designed to align with:
 
 This is a near-final Phase 2+ draft intended to be implemented with minimal ambiguity.
 
+Implementation manual (step-by-step with review gates):
+- docs/design/TRANSCRIPTION_PIPELINE_IMPLEMENTATION_MANUAL.md
+
 ---
 
 ## 1) Scope and Non-Goals

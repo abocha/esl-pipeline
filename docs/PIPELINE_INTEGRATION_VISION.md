@@ -8,6 +8,8 @@ needs explicit, stable context.
 Note: This manual documents the Phase 1, CLI-driven workflow. The pipeline-native
 transcription system that will supersede it is specified in
 docs/design/TRANSCRIPTION_PIPELINE_SPEC.md and is not the current operational path.
+Implementation steps for that Phase 2+ work live in
+docs/design/TRANSCRIPTION_PIPELINE_IMPLEMENTATION_MANUAL.md.
 
 ## 1) System map (end-to-end)
 

@@ -238,6 +238,34 @@ import {
 
 ---
 
+## Phase 2+ Transcription Pipeline (Planned)
+
+**Status:** Not started (tracked via `docs/design/TRANSCRIPTION_PIPELINE_IMPLEMENTATION_MANUAL.md`).
+
+### Proposed Endpoints (MVP scan ingestion)
+
+- Recordings:
+  - `GET /recordings?status=...`
+  - `POST /recordings/sync`
+  - `GET /recordings/:id`
+  - `GET /recordings/:id/transcript`
+  - `PUT /recordings/:id/transcript`
+  - `POST /recordings/:id/transcribe` (optional manual retry)
+- Prompt packages:
+  - `POST /recordings/:id/prompt-package`
+  - `GET /prompt-packages/:id`
+- Drafts:
+  - `POST /prompt-packages/:id/draft`
+  - `POST /drafts/:id/materialize`
+
+### Dependencies and Notes
+
+- Progress updates should reuse `/jobs/events` with extended payloads (`recordingId`, `transcriptId`).
+- Draft materialization writes to `FILESYSTEM_UPLOAD_DIR/drafts/<draftId>.md` and feeds `/jobs/:jobId/approve`.
+- Storage adapter abstraction (filesystem now, S3 later) is required for recordings/transcripts/prompt packages/drafts.
+
+---
+
 ## Required Backend Work
 
 > **Routing split**: `packages/batch-backend/src/transport/core-routes.ts` now owns the mandatory job endpoints, while `transport/extended-routes.ts` contains `/config/job-options`, uploads, auth, and admin routes. `createHttpServer` registers the extended plugin only when `config.experimental.extendedApiEnabled` / `BATCH_BACKEND_ENABLE_EXTENDED_API` is true, so any new optional surface should land inside that plugin.
