@@ -2,8 +2,10 @@ import { request as httpRequest } from 'node:http';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 
 import { getJobOptions } from '../src/application/get-job-options.js';
+import * as getRecordingTranscriptModule from '../src/application/get-recording-transcript.js';
 import * as getJobStatusModule from '../src/application/get-job-status.js';
 import * as submitJobModule from '../src/application/submit-job.js';
+import * as updateRecordingTranscriptModule from '../src/application/update-recording-transcript.js';
 import { publishJobEvent } from '../src/domain/job-events.js';
 import type { JobRecord } from '../src/domain/job-model.js';
 import { publishRecordingEvent } from '../src/domain/recording-events.js';
@@ -389,6 +391,121 @@ describe('transport/http-server - integration (in-process)', () => {
         process.env.BATCH_BACKEND_ENABLE_EXTENDED_API = originalFlag;
       }
     }
+  });
+
+  it('GET /recordings/:id/transcript returns transcript payload', async () => {
+    const getRecordingTranscript = vi.spyOn(
+      getRecordingTranscriptModule,
+      'getRecordingTranscript',
+    );
+    getRecordingTranscript.mockClear();
+    getRecordingTranscript.mockResolvedValue({
+      recordingId: 'recording-1',
+      transcriptId: 'transcript-1',
+      text: 'Hello transcript',
+      summaryJson: { channels: 2 },
+      model: 'nova-3',
+      language: 'en',
+      mode: 'timeline',
+      createdAt: '2024-01-01T00:00:00.000Z',
+      updatedAt: '2024-01-01T00:10:00.000Z',
+    });
+
+    const response = await app.inject({
+      method: 'GET',
+      url: '/recordings/recording-1/transcript',
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toEqual({
+      recordingId: 'recording-1',
+      transcriptId: 'transcript-1',
+      text: 'Hello transcript',
+      summaryJson: { channels: 2 },
+      model: 'nova-3',
+      language: 'en',
+      mode: 'timeline',
+      createdAt: '2024-01-01T00:00:00.000Z',
+      updatedAt: '2024-01-01T00:10:00.000Z',
+    });
+    expect(getRecordingTranscript).toHaveBeenCalledWith('recording-1');
+  });
+
+  it('GET /recordings/:id/transcript returns 404 when missing', async () => {
+    const getRecordingTranscript = vi.spyOn(
+      getRecordingTranscriptModule,
+      'getRecordingTranscript',
+    );
+    getRecordingTranscript.mockClear();
+    getRecordingTranscript.mockResolvedValue(null);
+
+    const response = await app.inject({
+      method: 'GET',
+      url: '/recordings/missing/transcript',
+    });
+
+    expect(response.statusCode).toBe(404);
+    expect(response.json()).toEqual({ error: 'not_found' });
+  });
+
+  it('PUT /recordings/:id/transcript updates transcript text', async () => {
+    const updateRecordingTranscript = vi.spyOn(
+      updateRecordingTranscriptModule,
+      'updateRecordingTranscript',
+    );
+    updateRecordingTranscript.mockClear();
+    updateRecordingTranscript.mockResolvedValue({
+      recordingId: 'recording-1',
+      transcriptId: 'transcript-1',
+      text: 'Updated text',
+      summaryJson: null,
+      model: 'nova-3',
+      language: 'en',
+      mode: 'timeline',
+      createdAt: '2024-01-01T00:00:00.000Z',
+      updatedAt: '2024-01-01T00:20:00.000Z',
+    });
+
+    const response = await app.inject({
+      method: 'PUT',
+      url: '/recordings/recording-1/transcript',
+      payload: { text: 'Updated text' },
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toEqual({
+      recordingId: 'recording-1',
+      transcriptId: 'transcript-1',
+      text: 'Updated text',
+      summaryJson: null,
+      model: 'nova-3',
+      language: 'en',
+      mode: 'timeline',
+      createdAt: '2024-01-01T00:00:00.000Z',
+      updatedAt: '2024-01-01T00:20:00.000Z',
+    });
+    expect(updateRecordingTranscript).toHaveBeenCalledWith({
+      recordingId: 'recording-1',
+      text: 'Updated text',
+    });
+  });
+
+  it('PUT /recordings/:id/transcript returns 404 when missing', async () => {
+    const updateRecordingTranscript = vi.spyOn(
+      updateRecordingTranscriptModule,
+      'updateRecordingTranscript',
+    );
+    updateRecordingTranscript.mockClear();
+    updateRecordingTranscript.mockResolvedValue(null);
+
+    const response = await app.inject({
+      method: 'PUT',
+      url: '/recordings/missing/transcript',
+      payload: { text: 'Updated text' },
+    });
+
+    expect(response.statusCode).toBe(404);
+    expect(response.json()).toEqual({ error: 'not_found' });
   });
 
   it('GET /jobs/events streams job events as SSE', { timeout: 10_000 }, async () => {
