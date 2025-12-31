@@ -50,6 +50,8 @@ Use `.env.batch-backend` for the service stack. It includes all core keys above 
 - SMTP (optional): `MAIL_ENABLED`, `MAIL_HOST`, `MAIL_PORT`, `MAIL_FROM`, `MAIL_SECURE`, `MAIL_USER`, `MAIL_PASSWORD`.
 - Manifest/config selection: same `ESL_PIPELINE_*` keys as core (see above).
 - Optional S3 upload prefix: `S3_PREFIX`.
+- Prompt assembly: `TTDG_RUN_COMMAND`, `TTDG_RUN_CWD` (optional), `TTDG_EXTRA_ARGS` (optional),
+  `PROMPT_TEMPLATE_PATH`, `PROMPT_PROFILE_PATH`.
 
 Notes:
 

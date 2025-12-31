@@ -86,7 +86,7 @@ Useful exports:
   - `Topic` is sent as multi-select when the DB has (or is missing) a multi-select Topic; otherwise it is sent as rich text.
   - Advanced blocks (callouts, columns, toggle headings, synced blocks, tables) are serialized to the Notion API schema and validated before sending.
 
-For full type signatures and behavioral contracts, see [`docs/agents-ssot.md`](docs/agents-ssot.md).
+For full type signatures and behavioral contracts, see [`docs/reference/agents-ssot.md`](docs/reference/agents-ssot.md).
 
 Types such as `PipelineNewAssignmentOptions`, `PipelineRerunOptions`, and `AssignmentManifest` are exported for TypeScript consumers.
 
@@ -163,8 +163,8 @@ const pipeline = createPipeline({ configProvider: myConfigProvider });
 
 Environment-variable shortcuts for selecting remote providers are documented in:
 
-- [`docs/agents-ssot.md`](docs/agents-ssot.md) §5.2
-- [`docs/groundwork-for-backend.md`](docs/groundwork-for-backend.md)
+- [`docs/reference/agents-ssot.md`](docs/reference/agents-ssot.md) §5.2
+- [`docs/backend-frontend/BATCH_SYSTEM.md`](docs/backend-frontend/BATCH_SYSTEM.md)
 
 To experiment with the built-in HTTP provider, set the following environment variables:
 
@@ -190,11 +190,14 @@ packages/
   tts-elevenlabs/        # ElevenLabs integration (ffmpeg)
   storage-uploader/      # S3 uploads
   notion-add-audio/      # Attach audio blocks
-configs/                 # Default presets, voices, students, wizard.defaults
 docs/
-  agents-ssot.md         # Agent SSOT (authoritative contracts)
-  groundwork-for-backend.md # Backend scaffolding roadmap
-AGENTS.md                # Concise maintainer guide pointing to agents-ssot.md
+  PROJECT_OVERVIEW.md    # What is this project?
+  QUICK_START.md         # 5-minute getting started
+  reference/             # Authoritative technical docs
+  backend-frontend/      # Batch system docs
+  design/                # Frontend design vision
+  templates/             # Homework prompt, profiles
+AGENTS.md                # Concise maintainer guide pointing to SSOTs
 ```
 
 All packages target ESM (`"type": "module"`), and CLI builds run through `tsup` + `tsc` for declarations.
@@ -274,8 +277,8 @@ Key takeaways:
 2. Run `pnpm -r build`, `pnpm typecheck`, `pnpm lint`, and `pnpm test`.
 3. When behavior changes:
    - Update `CHANGELOG.md`.
-   - Update [`docs/agents-ssot.md`](docs/agents-ssot.md) as the canonical contract.
-   - Update `AGENTS.md` and [`docs/groundwork-for-backend.md`](docs/groundwork-for-backend.md) where relevant.
+   - Update [`docs/reference/agents-ssot.md`](docs/reference/agents-ssot.md) as the canonical contract.
+   - Update `AGENTS.md` and relevant docs in [`docs/backend-frontend/`](docs/backend-frontend/) where relevant.
 4. When ready to ship:
    - Bump versions manually in `package.json` and any released packages under `packages/*`.
    - Publish with `pnpm --filter @esl-pipeline/orchestrator publish --access public` if needed.
