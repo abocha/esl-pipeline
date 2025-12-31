@@ -1,5 +1,13 @@
 # @esl-pipeline/tts-elevenlabs
 
+## 3.1.4
+
+### Patch Changes
+
+- Updated dependencies
+  - @esl-pipeline/contracts@1.1.0
+  - @esl-pipeline/md-extractor@2.0.5
+
 ## 3.1.3
 
 ### Patch Changes

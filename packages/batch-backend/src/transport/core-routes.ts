@@ -3,6 +3,7 @@ import { z } from 'zod';
 
 import type { JobEventMessage } from '@esl-pipeline/contracts';
 
+import { approveJobForPipeline } from '../application/approve-job.js';
 import { getJobStatus } from '../application/get-job-status.js';
 import { jobRecordToDto } from '../application/job-dto.js';
 import { type SubmitJobRequest, submitJob } from '../application/submit-job.js';
@@ -25,22 +26,48 @@ export function registerCoreRoutes(app: FastifyInstance, options: CoreRouteOptio
   const handleSubmitJob: RouteHandlerMethod = async (request, reply) => {
     const body = request.body as SubmitJobRequest | undefined;
 
-    const jobSchema = z.object({
-      md: z.string().min(1, 'md is required'),
-      preset: z.string().optional(),
-      withTts: z.boolean().optional(),
-      upload: z.enum(['auto', 's3', 'none']).optional(),
-      voiceAccent: z.string().min(1).optional(),
-      voiceId: z.string().min(1).optional(),
-      forceTts: z.boolean().optional(),
-      notionDatabase: z.string().min(1).optional(),
-      ttsStrategy: z.enum(['auto', 'dialogue', 'tts']).optional(),
-    });
+    const jobSchema = z
+      .object({
+        md: z.string().min(1).optional(),
+        transcribeWorkdir: z.string().min(1).optional(),
+        promptNotes: z.string().optional(),
+        profilePath: z.string().min(1).optional(),
+        preset: z.string().optional(),
+        withTts: z.boolean().optional(),
+        upload: z.enum(['auto', 's3', 'none']).optional(),
+        voiceAccent: z.string().min(1).optional(),
+        voiceId: z.string().min(1).optional(),
+        forceTts: z.boolean().optional(),
+        notionDatabase: z.string().min(1).optional(),
+        ttsStrategy: z.enum(['auto', 'dialogue', 'tts']).optional(),
+      })
+      .superRefine((data, ctx) => {
+        const hasMd = typeof data.md === 'string' && data.md.trim().length > 0;
+        const hasTranscribe =
+          typeof data.transcribeWorkdir === 'string' && data.transcribeWorkdir.trim().length > 0;
+        if (!hasMd && !hasTranscribe) {
+          ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            message: 'md or transcribeWorkdir is required',
+            path: ['md'],
+          });
+        }
+        if (hasMd && hasTranscribe) {
+          ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            message: 'Provide either md or transcribeWorkdir, not both',
+            path: ['md'],
+          });
+        }
+      });
 
     const validatedData = jobSchema.parse(body);
 
     const result = await submitJob({
       md: validatedData.md,
+      transcribeWorkdir: validatedData.transcribeWorkdir,
+      promptNotes: validatedData.promptNotes,
+      profilePath: validatedData.profilePath,
       preset: validatedData.preset,
       withTts: validatedData.withTts,
       upload: validatedData.upload,
@@ -66,6 +93,60 @@ export function registerCoreRoutes(app: FastifyInstance, options: CoreRouteOptio
   } else {
     app.post('/jobs', handleSubmitJob);
   }
+
+  const approveJobRouteOptions = authenticate ? { preHandler: [authenticate] } : {};
+
+  app.post('/jobs/:jobId/approve', approveJobRouteOptions, async (request, reply) => {
+    const { jobId } = request.params as { jobId: string };
+    const routePath = resolveRoutePath(request, 'POST /jobs/:jobId/approve');
+
+    const body = request.body as { md?: string } | undefined;
+    const schema = z.object({
+      md: z.string().min(1, 'md is required'),
+    });
+
+    try {
+      const validated = schema.parse(body);
+      const approved = await approveJobForPipeline(jobId, validated.md);
+
+      if (!approved) {
+        logger.info('Approval request rejected', {
+          event: 'job_approve_not_found',
+          route: routePath,
+          jobId,
+        });
+        return errorResponse(reply, 'not_found', {
+          message: 'Job not found or not awaiting approval',
+          code: 'job_not_awaiting_approval',
+        });
+      }
+
+      const dto = jobRecordToDto(approved);
+      logger.info('Job approved', {
+        event: 'job_approved',
+        route: routePath,
+        jobId,
+      });
+
+      return reply.code(202).send(dto);
+    } catch (error: unknown) {
+      if (error instanceof z.ZodError) {
+        return reply.code(400).send({
+          error: 'validation_failed',
+          message: 'Invalid request body',
+          details: error.issues,
+        });
+      }
+
+      logger.error(error instanceof Error ? error : String(error), {
+        event: 'job_approve_failed',
+        route: routePath,
+        jobId,
+      });
+
+      return errorResponse(reply, 'internal_error');
+    }
+  });
 
   async function handleJobStatusRequest(request: FastifyRequest, reply: FastifyReply) {
     const { jobId } = request.params as { jobId: string };

@@ -1,5 +1,18 @@
 # @esl-pipeline/batch-backend
 
+## 1.3.0
+
+### Minor Changes
+
+- Add transcription job linkage fields, recordings discovery, and pipeline-native ttdg orchestration.
+
+### Patch Changes
+
+- Updated dependencies
+  - @esl-pipeline/contracts@1.1.0
+  - @esl-pipeline/orchestrator@3.2.2
+  - @esl-pipeline/shared-infrastructure@1.1.3
+
 ## 1.2.3
 
 ### Patch Changes

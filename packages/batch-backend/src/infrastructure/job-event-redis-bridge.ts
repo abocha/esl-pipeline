@@ -24,7 +24,16 @@ const INSTANCE_ID = randomUUID();
 interface SerializedJobRecord {
   id: string;
   state: JobRecord['state'];
-  md: string;
+  md: string | null;
+  transcribeWorkdir: string | null;
+  transcriptPath: string | null;
+  promptPayload: string | null;
+  promptNotes: string | null;
+  profilePath: string | null;
+  recordingId: string | null;
+  transcriptId: string | null;
+  promptPackageId: string | null;
+  draftId: string | null;
   preset: string | null;
   withTts: boolean | null;
   upload: JobUploadOption | null;
@@ -273,6 +282,15 @@ function serializeJobRecord(job: JobRecord): SerializedJobRecord {
     id: job.id,
     state: job.state,
     md: job.md,
+    transcribeWorkdir: job.transcribeWorkdir ?? null,
+    transcriptPath: job.transcriptPath ?? null,
+    promptPayload: job.promptPayload ?? null,
+    promptNotes: job.promptNotes ?? null,
+    profilePath: job.profilePath ?? null,
+    recordingId: job.recordingId ?? null,
+    transcriptId: job.transcriptId ?? null,
+    promptPackageId: job.promptPackageId ?? null,
+    draftId: job.draftId ?? null,
     preset: job.preset ?? null,
     withTts: job.withTts ?? null,
     upload: job.upload ?? null,
@@ -290,6 +308,15 @@ function deserializeJobRecord(serialized: SerializedJobRecord): JobRecord {
     id: serialized.id,
     state: serialized.state,
     md: serialized.md,
+    transcribeWorkdir: serialized.transcribeWorkdir ?? null,
+    transcriptPath: serialized.transcriptPath ?? null,
+    promptPayload: serialized.promptPayload ?? null,
+    promptNotes: serialized.promptNotes ?? null,
+    profilePath: serialized.profilePath ?? null,
+    recordingId: serialized.recordingId ?? null,
+    transcriptId: serialized.transcriptId ?? null,
+    promptPackageId: serialized.promptPackageId ?? null,
+    draftId: serialized.draftId ?? null,
     preset: serialized.preset ?? null,
     withTts: serialized.withTts ?? null,
     upload: serialized.upload ?? null,

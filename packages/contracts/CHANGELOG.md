@@ -1,5 +1,11 @@
 # @esl-pipeline/contracts
 
+## 1.1.0
+
+### Minor Changes
+
+- Add transcription job linkage fields, recordings discovery, and pipeline-native ttdg orchestration.
+
 ## 1.0.3
 
 ### Patch Changes

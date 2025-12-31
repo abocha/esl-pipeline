@@ -192,20 +192,31 @@ Job:
 [`JobRecord`](packages/batch-backend/src/domain/job-model.ts:9):
 
 - `id: string` (UUID).
-- `state: JobState` (`queued` | `running` | `succeeded` | `failed`).
-- `md: string` (Markdown path).
+- `state: JobState` (`queued` | `running` | `awaiting_approval` | `succeeded` | `failed`).
+- `md: string | null` (Markdown path; null while awaiting approval).
+- `transcribeWorkdir?: string | null` — ttdg workdir for Phase 1 runs.
+- `transcriptPath?: string | null` — transcript output path (Phase 1).
+- `promptPayload?: string | null` — assembled prompt payload.
+- `promptNotes?: string | null` — notes text used for prompt assembly.
+- `profilePath?: string | null` — profile source path (file or DB export).
+- `recordingId?: string | null` — Recording UUID (Phase 2+).
+- `transcriptId?: string | null` — Transcript UUID (Phase 2+).
+- `promptPackageId?: string | null` — PromptPackage UUID (Phase 2+).
+- `draftId?: string | null` — Draft UUID (Phase 2+).
 - `preset?: string | null`.
 - `withTts?: boolean | null`:
   - When omitted at submission, treated as `false` (no TTS) by current pipeline semantics.
 - `upload?: string | null` (`'auto' | 's3' | 'none'` semantics mirror the frontend selector; only `'s3'` is forwarded to the orchestrator today).
+- `voiceId?: string | null` — selected voice (stored for replay).
 - `voiceAccent?: string | null` — forwarded to the orchestrator as `accentPreference`.
 - `forceTts?: boolean | null` — persisted for observability; orchestration wiring is pending.
 - `notionDatabase?: string | null` — forwarded to the orchestrator as `dbId`.
-- `mode?: string | null` — stored for the UI (future orchestrator support).
+- `ttsStrategy?: string | null` — stored in the `mode` column for UI defaults.
 - `notionUrl?: string | null` — populated when the orchestrator returns a Notion `pageUrl`.
+- `manifestPath?: string | null`.
+- `userId?: string | null`.
 - Timestamps: `createdAt`, `updatedAt`, `startedAt`, `finishedAt`.
 - `error?: string | null`.
-- `manifestPath?: string | null`.
 
 ### 4.2 Schema and Repository
 
@@ -220,13 +231,16 @@ See comments in [`db.ts`](packages/batch-backend/src/infrastructure/db.ts:64). T
 - Allowed transitions (see [`canTransition.declaration()`](packages/batch-backend/src/domain/job-model.ts:26)):
   - `queued` → `running`
   - `queued` → `failed` (for unrecoverable failures before processing can start)
+  - `running` → `awaiting_approval`
   - `running` → `succeeded`
   - `running` → `failed`
+  - `awaiting_approval` → `queued`
+  - `awaiting_approval` → `failed`
 - No transitions are allowed out of terminal states (`succeeded`, `failed`).
 - Repository updates enforce `expectedState` to avoid races.
-- `md` is required at submission.
+- `md` or `transcribeWorkdir` is required at submission.
 
-### 4.5 Schema Migration – Phase 6 Columns
+### 4.5 Schema Migration – Phase 6+ Columns
 
 Existing deployments can add the new metadata columns without recreating the `jobs` table:
 
@@ -236,6 +250,10 @@ ALTER TABLE jobs ADD COLUMN IF NOT EXISTS force_tts BOOLEAN NULL;
 ALTER TABLE jobs ADD COLUMN IF NOT EXISTS notion_database TEXT NULL;
 ALTER TABLE jobs ADD COLUMN IF NOT EXISTS mode TEXT NULL;
 ALTER TABLE jobs ADD COLUMN IF NOT EXISTS notion_url TEXT NULL;
+ALTER TABLE jobs ADD COLUMN IF NOT EXISTS recording_id UUID NULL;
+ALTER TABLE jobs ADD COLUMN IF NOT EXISTS transcript_id UUID NULL;
+ALTER TABLE jobs ADD COLUMN IF NOT EXISTS prompt_package_id UUID NULL;
+ALTER TABLE jobs ADD COLUMN IF NOT EXISTS draft_id UUID NULL;
 ```
 
 All columns default to `NULL`, so historical rows remain valid.
@@ -261,7 +279,8 @@ HTTP:
 - Method: `POST`
 - Path: `/jobs`
 - Request body (JSON):
-  - `md: string` (required)
+  - `md?: string` (required when `transcribeWorkdir` is omitted)
+  - `transcribeWorkdir?: string` (required when `md` is omitted)
   - `preset?: string`
   - `withTts?: boolean`
     - When omitted, treated as `false` (no TTS) in current canonical behavior.
@@ -271,7 +290,7 @@ HTTP:
   - `voiceAccent?: string` — passed through as `accentPreference`.
   - `forceTts?: boolean` — persisted for Phase 8 UI controls (orchestrator wiring TBD).
   - `notionDatabase?: string` — forwarded as `dbId`.
-  - `mode?: 'auto' | 'dialogue' | 'tts'` — stored for UI state and SSE payloads.
+  - `ttsStrategy?: 'auto' | 'dialogue' | 'tts'` — stored for UI state and SSE payloads.
 - Responses:
   - `202 Accepted`:
     - Body: `{ "jobId": "<uuid>" }`
@@ -285,7 +304,7 @@ Flow:
 
 1. HTTP route in [`http-server.ts`](packages/batch-backend/src/transport/http-server.ts:25).
 2. Calls [`submitJob`](packages/batch-backend/src/application/submit-job.ts:21):
-   - Validates `md`.
+   - Validates `md` or `transcribeWorkdir` (mutually exclusive).
    - [`insertJob`](packages/batch-backend/src/domain/job-repository.ts:14) → `queued`.
    - [`createJobQueue().enqueue`](packages/batch-backend/src/infrastructure/queue-bullmq.ts:49) with `{ jobId }`.
 3. Returns 202 with `{ jobId }` on success.

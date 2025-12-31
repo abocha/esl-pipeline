@@ -1,4 +1,4 @@
-import { mkdirSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdirSync, rmSync, utimesSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
@@ -181,8 +181,9 @@ describe('env utilities', () => {
       expect(first.FOO).toBe('one');
 
       // Update file to change mtime and contents
-      await new Promise((resolve) => setTimeout(resolve, 5));
       writeFileSync(envFile, 'FOO=two');
+      const future = new Date(Date.now() + 2000);
+      utimesSync(envFile, future, future);
 
       const second = loadEnvFiles({ cwd: testDir, assignToProcess: false, memoize: true });
       expect(second.FOO).toBe('two');

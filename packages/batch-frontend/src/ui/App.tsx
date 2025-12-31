@@ -12,6 +12,7 @@ import { JobConnectionBanner } from './jobs/JobConnectionBanner';
 import { JobTable } from './jobs/JobTable';
 import { ProfilePage } from './profile/ProfilePage';
 import { JobSettingsForm } from './settings/JobSettingsForm';
+import { PromptJobBuilder } from './uploader/PromptJobBuilder';
 import { JobUploader } from './uploader/JobUploader';
 
 // Icons
@@ -499,6 +500,7 @@ const AuthenticatedPanels: React.FC = () => (
   <div className="panels-grid">
     <div className="panels-main">
       <JobSettingsForm />
+      <PromptJobBuilder />
       <JobUploader />
       <JobConnectionBanner />
       <JobTable />

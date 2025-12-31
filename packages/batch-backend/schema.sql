@@ -29,7 +29,7 @@ CREATE TABLE IF NOT EXISTS users (
 -- Jobs table (references users for ownership/auditing)
 CREATE TABLE IF NOT EXISTS jobs (
   id UUID PRIMARY KEY,
-  md TEXT NOT NULL,
+  md TEXT NULL,
   preset TEXT NULL,
   with_tts BOOLEAN NULL,
   upload TEXT NULL,
@@ -46,11 +46,22 @@ CREATE TABLE IF NOT EXISTS jobs (
   finished_at TIMESTAMPTZ NULL,
   manifest_path TEXT NULL,
   error TEXT NULL,
-  user_id UUID NULL REFERENCES users(id) ON DELETE SET NULL
+  user_id UUID NULL REFERENCES users(id) ON DELETE SET NULL,
+  transcribe_workdir TEXT NULL,
+  transcript_path TEXT NULL,
+  prompt_payload TEXT NULL,
+  prompt_notes TEXT NULL,
+  profile_path TEXT NULL
 );
 
 -- Ensure user_id is present on upgrades and has the correct FK
 ALTER TABLE jobs ADD COLUMN IF NOT EXISTS user_id UUID NULL;
+ALTER TABLE jobs ADD COLUMN IF NOT EXISTS transcribe_workdir TEXT NULL;
+ALTER TABLE jobs ADD COLUMN IF NOT EXISTS transcript_path TEXT NULL;
+ALTER TABLE jobs ADD COLUMN IF NOT EXISTS prompt_payload TEXT NULL;
+ALTER TABLE jobs ADD COLUMN IF NOT EXISTS prompt_notes TEXT NULL;
+ALTER TABLE jobs ADD COLUMN IF NOT EXISTS profile_path TEXT NULL;
+ALTER TABLE jobs ALTER COLUMN md DROP NOT NULL;
 ALTER TABLE jobs DROP CONSTRAINT IF EXISTS jobs_user_id_fkey;
 ALTER TABLE jobs
   ADD CONSTRAINT jobs_user_id_fkey FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE SET NULL;
@@ -103,7 +114,7 @@ ALTER TABLE users ADD CONSTRAINT users_role_check
 
 -- Jobs state validation
 ALTER TABLE jobs ADD CONSTRAINT jobs_state_check 
-  CHECK (state IN ('queued', 'running', 'succeeded', 'failed'));
+  CHECK (state IN ('queued', 'running', 'awaiting_approval', 'succeeded', 'failed'));
 
 -- Jobs mode validation (TTS strategy)
 ALTER TABLE jobs ADD CONSTRAINT jobs_mode_check

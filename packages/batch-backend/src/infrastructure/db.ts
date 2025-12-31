@@ -15,10 +15,20 @@ const JOBS_TABLE_SQL = `
 CREATE TABLE IF NOT EXISTS jobs (
   id UUID PRIMARY KEY,
   state TEXT NOT NULL,
-  md TEXT NOT NULL,
+  md TEXT NULL,
+  transcribe_workdir TEXT NULL,
+  transcript_path TEXT NULL,
+  prompt_payload TEXT NULL,
+  prompt_notes TEXT NULL,
+  profile_path TEXT NULL,
+  recording_id UUID NULL,
+  transcript_id UUID NULL,
+  prompt_package_id UUID NULL,
+  draft_id UUID NULL,
   preset TEXT NULL,
   with_tts BOOLEAN NULL,
   upload TEXT NULL,
+  voice_id TEXT NULL,
   voice_accent TEXT NULL,
   force_tts BOOLEAN NULL,
   notion_database TEXT NULL,
@@ -29,11 +39,22 @@ CREATE TABLE IF NOT EXISTS jobs (
   updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   started_at TIMESTAMPTZ NULL,
   finished_at TIMESTAMPTZ NULL,
-  error TEXT NULL
+  error TEXT NULL,
+  user_id UUID NULL
 );
 `;
 
 const JOBS_SCHEMA_PATCHES: string[] = [
+  'ALTER TABLE jobs ALTER COLUMN md DROP NOT NULL',
+  'ALTER TABLE jobs ADD COLUMN IF NOT EXISTS transcribe_workdir TEXT NULL',
+  'ALTER TABLE jobs ADD COLUMN IF NOT EXISTS transcript_path TEXT NULL',
+  'ALTER TABLE jobs ADD COLUMN IF NOT EXISTS prompt_payload TEXT NULL',
+  'ALTER TABLE jobs ADD COLUMN IF NOT EXISTS prompt_notes TEXT NULL',
+  'ALTER TABLE jobs ADD COLUMN IF NOT EXISTS profile_path TEXT NULL',
+  'ALTER TABLE jobs ADD COLUMN IF NOT EXISTS recording_id UUID NULL',
+  'ALTER TABLE jobs ADD COLUMN IF NOT EXISTS transcript_id UUID NULL',
+  'ALTER TABLE jobs ADD COLUMN IF NOT EXISTS prompt_package_id UUID NULL',
+  'ALTER TABLE jobs ADD COLUMN IF NOT EXISTS draft_id UUID NULL',
   'ALTER TABLE jobs ADD COLUMN IF NOT EXISTS preset TEXT NULL',
   'ALTER TABLE jobs ADD COLUMN IF NOT EXISTS with_tts BOOLEAN NULL',
   'ALTER TABLE jobs ADD COLUMN IF NOT EXISTS upload TEXT NULL',
@@ -44,6 +65,7 @@ const JOBS_SCHEMA_PATCHES: string[] = [
   'ALTER TABLE jobs ADD COLUMN IF NOT EXISTS mode TEXT NULL',
   'ALTER TABLE jobs ADD COLUMN IF NOT EXISTS notion_url TEXT NULL',
   'ALTER TABLE jobs ADD COLUMN IF NOT EXISTS manifest_path TEXT NULL',
+  'ALTER TABLE jobs ADD COLUMN IF NOT EXISTS user_id UUID NULL',
 ];
 
 const JOBS_INDEX_PATCHES: string[] = [
@@ -169,16 +191,32 @@ Example schema compatible with the batch-backend domain (JobRecord):
 CREATE TABLE IF NOT EXISTS jobs (
   id UUID PRIMARY KEY,
   state TEXT NOT NULL,
-  md TEXT NOT NULL,
+  md TEXT NULL,
+  transcribe_workdir TEXT,
+  transcript_path TEXT,
+  prompt_payload TEXT,
+  prompt_notes TEXT,
+  profile_path TEXT,
+  recording_id UUID,
+  transcript_id UUID,
+  prompt_package_id UUID,
+  draft_id UUID,
   preset TEXT,
   with_tts BOOLEAN DEFAULT FALSE,
   upload TEXT,
+  voice_id TEXT,
+  voice_accent TEXT,
+  force_tts BOOLEAN,
+  notion_database TEXT,
+  mode TEXT,
+  notion_url TEXT,
+  manifest_path TEXT,
   created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
   updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
   started_at TIMESTAMPTZ,
   finished_at TIMESTAMPTZ,
   error TEXT,
-  manifest_path TEXT
+  user_id UUID
 );
 
 CREATE INDEX IF NOT EXISTS idx_jobs_state_created_at ON jobs (state, created_at);
