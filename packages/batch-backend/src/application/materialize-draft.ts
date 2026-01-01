@@ -7,7 +7,7 @@ import { getPromptPackageById } from '../domain/prompt-package-repository.js';
 import { updateJobDraftLink } from '../domain/job-repository.js';
 import { createStorageConfigService } from '../infrastructure/storage-config.js';
 import type { TranscriptionStorage } from '../infrastructure/transcription-storage.js';
-import { createTranscriptionStorage } from '../infrastructure/transcription-storage.js';
+import { createTranscriptionStorageForUri } from '../infrastructure/transcription-storage.js';
 
 export interface MaterializeDraftParams {
   draftId: string;
@@ -41,7 +41,6 @@ export async function materializeDraft(
 ): Promise<MaterializeDraftResponse | null> {
   if (!params.draftId) return null;
 
-  const storage = overrides?.storage ?? createTranscriptionStorage();
   const drafts = overrides?.drafts ?? {
     getById: getDraftById,
   };
@@ -59,6 +58,8 @@ export async function materializeDraft(
 
   const draft = await drafts.getById(params.draftId);
   if (!draft) return null;
+
+  const storage = overrides?.storage ?? createTranscriptionStorageForUri(draft.storageUri);
 
   if (!resolvedJobId) {
     const promptPackage = await promptPackages.getById(draft.promptPackageId);

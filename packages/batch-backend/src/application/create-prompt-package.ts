@@ -8,7 +8,10 @@ import { getRecordingById } from '../domain/recording-repository.js';
 import { insertPromptPackage } from '../domain/prompt-package-repository.js';
 import type { PromptPackageRecord } from '../domain/prompt-package-model.js';
 import type { TranscriptionStorage } from '../infrastructure/transcription-storage.js';
-import { createTranscriptionStorage } from '../infrastructure/transcription-storage.js';
+import {
+  createTranscriptionStorage,
+  createTranscriptionStorageForUri,
+} from '../infrastructure/transcription-storage.js';
 import { stitchPromptPayload } from './prompt-assembly.js';
 import { resolvePromptSelection } from './prompt-options.js';
 
@@ -80,10 +83,11 @@ export async function createPromptPackage(
   );
   const templatePath = selection.templatePath;
   const profilePath = selection.profilePath;
+  const readStorage = overrides?.storage ?? createTranscriptionStorageForUri(transcript.storageUri);
   const [template, profile, transcriptText] = await Promise.all([
     fs.readFile(templatePath, 'utf8'),
     fs.readFile(profilePath, 'utf8'),
-    storage.getText(transcript.storageUri),
+    readStorage.getText(transcript.storageUri),
   ]);
 
   const payload = stitchPromptPayload({

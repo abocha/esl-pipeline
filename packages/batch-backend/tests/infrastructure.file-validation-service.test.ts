@@ -116,6 +116,22 @@ describe('FileValidationService', () => {
     });
   });
 
+  describe('MIME Type Validation', () => {
+    it('accepts allowed MIME types with parameters', () => {
+      const service = new FileValidationService({
+        maxFileSize: 10 * 1024 * 1024,
+        allowedMimeTypes: ['audio/ogg'],
+        allowedExtensions: ['opus'],
+        enableContentScanning: false,
+        enableMaliciousPatternDetection: false,
+      });
+
+      const result = (service as any).validateMimeType('audio/ogg; codecs=opus');
+
+      expect(result.isValid).toBe(true);
+    });
+  });
+
   describe('Malicious Pattern Detection', () => {
     it('should detect script injection attempts', async () => {
       const maliciousContent = Buffer.from(`# Normal markdown

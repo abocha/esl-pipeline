@@ -412,7 +412,9 @@ export class FileValidationService {
       };
     }
 
-    const isAllowed = this.config.allowedMimeTypes.includes(mimeType);
+    const normalizedMimeType = normalizeMimeType(mimeType);
+    const normalizedAllowed = this.config.allowedMimeTypes.map((value) => normalizeMimeType(value));
+    const isAllowed = normalizedAllowed.includes(normalizedMimeType);
     if (!isAllowed) {
       return {
         isValid: false,
@@ -1036,6 +1038,11 @@ export class FileValidationService {
 
     return false;
   }
+}
+
+function normalizeMimeType(value: string): string {
+  const base = value.split(';')[0];
+  return base ? base.trim().toLowerCase() : '';
 }
 
 /**
