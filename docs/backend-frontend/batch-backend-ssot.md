@@ -177,7 +177,19 @@ Internal:
 - All TS modules under `src/*`.
 - External systems SHOULD NOT import internal functions directly; interact via HTTP/queue.
 
-Experimental/extended HTTP routes (uploads/auth/admin/user management) exist in the codebase but are guarded by `BATCH_BACKEND_ENABLE_EXTENDED_API`. They are considered non-canonical until explicitly documented here.
+Experimental/extended HTTP routes exist in the codebase but are guarded by `BATCH_BACKEND_ENABLE_EXTENDED_API`.
+They are considered non-canonical until explicitly documented here.
+
+Extended transcription routes (require auth when the extended API is enabled):
+- POST /recordings/sync
+- GET /recordings (supports `status`, `limit`, `offset`, `order`)
+- GET /recordings/:recordingId
+- GET /recordings/:recordingId/transcript
+- PUT /recordings/:recordingId/transcript
+- POST /recordings/:recordingId/prompt-package
+- GET /prompt-packages/:promptPackageId
+- POST /prompt-packages/:promptPackageId/draft
+- POST /drafts/:draftId/materialize
 
 ---
 

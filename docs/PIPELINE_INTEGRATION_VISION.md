@@ -43,9 +43,9 @@ Implemented successfully (current as-built state):
 - Recording status SSE events consumed by the transcription workspace.
 
 Notes for Phase 2+:
-- Recording feed is SSE-only for now (no listing/backfill endpoint).
+- Recording list/backfill endpoint is available; UI hydrates on load and merges SSE updates.
 - Only new audio content is discovered; renames do not re-ingest.
-- Approval currently requires an existing job in awaiting_approval state.
+- Draft approval auto-creates an awaiting_approval job during materialization.
 
 ---
 
@@ -110,7 +110,7 @@ Flow:
 3) Wait for transcribe queue to complete.
 4) Open transcript by Recording ID; edit if needed.
 5) Build prompt package, then save draft.
-6) Materialize + approve using an existing awaiting_approval job ID.
+6) Materialize + approve (job is created automatically; no manual job ID).
    (Current gap: Phase 2+ does not create a job automatically.)
 
 ---
@@ -129,8 +129,8 @@ See docs/reference/env.md for the full list. Key Phase 2+ entries:
 ## 5) Known risks and gotchas
 
 - Recording scan is delta-only; use a brand new file to test ingestion.
-- Recording feed is SSE-only; no historical list endpoint yet.
-- Draft approval requires a job ID in awaiting_approval state.
+- Recording list loads on page load and stays in sync with SSE updates.
+- Draft approval auto-creates a job; no manual job selection needed.
 - Prompt profile path is constrained to configured root; ensure the env paths exist.
 
 ---
@@ -147,18 +147,16 @@ Implemented in repo:
 - Scan ingestion, transcribe queue, Deepgram worker.
 - Transcript review/edit UI and APIs.
 - Prompt package and draft creation.
-- Draft materialization to filesystem.
+- Draft materialization to filesystem (auto-creates approval job).
 
 ### Shortcomings to achieve full Phase 2+
-- Auto-create/attach approval job for Phase 2+ drafts.
-- Recording listing/backfill endpoints (GET /recordings, GET /recordings/:id).
 - Upload ingestion (S3-backed) and student association.
 - Cleaner template/profile selection + versioning in UI.
 
 ### New phases (fresh roadmap)
 Phase 3: Phase 2+ polish
 - One-click approval (no manual job ID).
-- Recording list view with backfill and search.
+- Recording search + filters on the list view.
 - Clear error states and retries in the transcription workspace.
 
 Phase 4: Student-centric workflow

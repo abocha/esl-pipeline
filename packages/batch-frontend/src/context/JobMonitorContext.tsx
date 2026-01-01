@@ -13,10 +13,11 @@ import type {
   JobEvent,
   JobState,
   JobStatus,
+  RecordingListItem,
   RecordingStatus,
   SubmitJobRequest,
 } from '../utils/api';
-import { getJobStatus, subscribeToJobEvents } from '../utils/api';
+import { getJobStatus, listRecordings, subscribeToJobEvents } from '../utils/api';
 
 type ConnectionState = 'idle' | 'connecting' | 'connected' | 'error' | 'reconnecting' | 'paused';
 
@@ -32,6 +33,12 @@ export interface RecordingEntry {
   status: RecordingStatus;
   transcriptId: string | null;
   error: string | null;
+  source?: RecordingListItem['source'];
+  studentId?: string | null;
+  durationSec?: number | null;
+  channels?: number | null;
+  bytes?: number;
+  createdAt: string;
   updatedAt: string;
 }
 
@@ -110,6 +117,12 @@ const createDefaultRecording = (recordingId: string): RecordingEntry => {
     status: 'queued',
     transcriptId: null,
     error: null,
+    source: 'scan',
+    studentId: null,
+    durationSec: null,
+    channels: null,
+    bytes: 0,
+    createdAt: now,
     updatedAt: now,
   };
 };
@@ -244,11 +257,53 @@ export function JobMonitorProvider({ children }: { children: ReactNode }) {
       updateRecording(trimmed, (prev) => ({
         ...prev,
         recordingId: trimmed,
+        createdAt: prev.createdAt ?? new Date().toISOString(),
         updatedAt: new Date().toISOString(),
       }));
     },
     [updateRecording],
   );
+
+  const mergeRecordingList = useCallback((items: RecordingListItem[]) => {
+    setRecordings((prev) => {
+      const next = { ...prev };
+      for (const item of items) {
+        const existing = next[item.recordingId] ?? createDefaultRecording(item.recordingId);
+        next[item.recordingId] = {
+          ...existing,
+          recordingId: item.recordingId,
+          status: item.status,
+          transcriptId: item.transcriptId ?? null,
+          error: item.error ?? null,
+          source: item.source,
+          studentId: item.studentId ?? null,
+          durationSec: item.durationSec ?? null,
+          channels: item.channels ?? null,
+          bytes: item.bytes ?? existing.bytes,
+          createdAt: item.createdAt ?? existing.createdAt,
+          updatedAt: item.updatedAt ?? existing.updatedAt,
+        };
+      }
+      return next;
+    });
+  }, []);
+
+  const recordingsHydratedRef = useRef(false);
+  useEffect(() => {
+    if (recordingsHydratedRef.current) return;
+    recordingsHydratedRef.current = true;
+
+    const loadRecordings = async () => {
+      try {
+        const response = await listRecordings();
+        mergeRecordingList(response.items);
+      } catch (error: unknown) {
+        console.warn('Failed to load recordings list', error);
+      }
+    };
+
+    void loadRecordings();
+  }, [mergeRecordingList]);
 
   const stopPolling = useCallback(() => {
     if (pollingIntervalRef.current) {
@@ -322,6 +377,7 @@ export function JobMonitorProvider({ children }: { children: ReactNode }) {
           status: event.status,
           transcriptId: event.transcriptId ?? prev.transcriptId,
           error: event.error ?? null,
+          createdAt: prev.createdAt ?? new Date().toISOString(),
           updatedAt: new Date().toISOString(),
         }));
       }

@@ -250,6 +250,8 @@ The staged implementation manual is archived at
 
 - Recordings:
   - `POST /recordings/sync`
+  - `GET /recordings`
+  - `GET /recordings/:id`
   - `GET /recordings/:id/transcript`
   - `PUT /recordings/:id/transcript`
 - Prompt packages:
@@ -261,19 +263,17 @@ The staged implementation manual is archived at
 
 ### Deferred Endpoints
 
-- `GET /recordings?status=...`
-- `GET /recordings/:id`
 - `POST /recordings/:id/transcribe` (optional manual retry)
 
 ### Dependencies and Notes
 
 - Progress updates should reuse `/jobs/events` with extended payloads (`recordingId`, `transcriptId`).
 - Draft materialization writes to `FILESYSTEM_UPLOAD_DIR/drafts/<draftId>.md` and feeds `/jobs/:jobId/approve`.
+- Draft materialization auto-creates an `awaiting_approval` job when none is supplied.
 - Storage adapter abstraction (filesystem now, S3 later) is required for recordings/transcripts/prompt packages/drafts.
 
 ### Known Gaps (MVP polish)
 
-- Draft approval still requires manually choosing an `awaiting_approval` job ID.
 - Recording list/backfill endpoints are not implemented; UI relies on SSE deltas.
 - Upload ingestion and student association are not implemented.
 

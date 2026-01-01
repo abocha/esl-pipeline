@@ -56,7 +56,7 @@ interface JobRow {
 }
 
 // insertJob.declaration()
-export async function insertJob(params: {
+export interface InsertJobParams {
   md?: string | null;
   transcribeWorkdir?: string | null;
   transcriptPath?: string | null;
@@ -76,7 +76,20 @@ export async function insertJob(params: {
   notionDatabase?: string;
   ttsStrategy?: TtsStrategy;
   userId?: string;
-}): Promise<JobRecord> {
+}
+
+export async function insertJob(params: InsertJobParams): Promise<JobRecord> {
+  return insertJobWithState(params, 'queued');
+}
+
+export async function insertApprovalJob(params: InsertJobParams): Promise<JobRecord> {
+  return insertJobWithState(params, 'awaiting_approval');
+}
+
+async function insertJobWithState(
+  params: InsertJobParams,
+  state: JobState,
+): Promise<JobRecord> {
   const id = randomUUID();
   const now = new Date();
 
@@ -141,7 +154,7 @@ export async function insertJob(params: {
       `,
       [
         id,
-        'queued',
+        state,
         params.md ?? null,
         params.transcribeWorkdir ?? null,
         params.transcriptPath ?? null,
@@ -168,7 +181,7 @@ export async function insertJob(params: {
     return result.rows[0];
   });
 
-  logger.info('Job inserted', { jobId: id });
+  logger.info('Job inserted', { jobId: id, state });
 
   return mapRowToJob(row);
 }

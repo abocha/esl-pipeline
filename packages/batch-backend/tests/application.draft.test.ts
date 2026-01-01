@@ -140,6 +140,77 @@ describe('application/draft', () => {
     });
   });
 
+  it('materializes a draft and creates an approval job when jobId is missing', async () => {
+    const uploadDir = await fs.mkdtemp(path.join(os.tmpdir(), 'esl-drafts-'));
+    const draft: DraftRecord = {
+      id: 'draft-2',
+      promptPackageId: 'prompt-2',
+      storageUri: 'local://drafts/draft-2.md',
+      createdBy: 'user-2',
+      createdAt: new Date('2024-01-01T00:00:00Z'),
+      updatedAt: new Date('2024-01-01T00:00:00Z'),
+    };
+    const promptPackage: PromptPackageRecord = {
+      id: 'prompt-2',
+      recordingId: 'recording-2',
+      transcriptId: 'transcript-2',
+      profilePath: '/profiles/p2.md',
+      templateVersion: '/templates/t2.md',
+      notes: 'Notes',
+      storageUri: 'local://prompt-packages/prompt-2.txt',
+      createdAt: new Date('2024-01-01T00:00:00Z'),
+      updatedAt: new Date('2024-01-01T00:00:00Z'),
+    };
+
+    const createApprovalJob = vi.fn().mockResolvedValue({
+      id: 'job-2',
+      state: 'awaiting_approval',
+      md: null,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    });
+    const updateDraftLink = vi.fn().mockResolvedValue({
+      id: 'job-2',
+      state: 'awaiting_approval',
+      md: null,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    });
+
+    const response = await materializeDraft(
+      { draftId: draft.id },
+      {
+        uploadDir,
+        storage: createStorageStub({
+          getText: async () => 'DRAFT TEXT',
+        }),
+        drafts: {
+          getById: async () => draft,
+        },
+        promptPackages: {
+          getById: async () => promptPackage,
+        },
+        createApprovalJob,
+        jobs: {
+          updateDraftLink,
+        },
+      },
+    );
+
+    expect(response).toEqual({
+      draftId: 'draft-2',
+      jobId: 'job-2',
+      mdPath: path.resolve(uploadDir, 'drafts', 'draft-2.md'),
+    });
+    expect(createApprovalJob).toHaveBeenCalledWith({ draft, promptPackage });
+    expect(updateDraftLink).toHaveBeenCalledWith({
+      id: 'job-2',
+      expectedState: 'awaiting_approval',
+      md: path.resolve(uploadDir, 'drafts', 'draft-2.md'),
+      draftId: 'draft-2',
+    });
+  });
+
   it('returns null when draft is missing during materialization', async () => {
     const response = await materializeDraft(
       { draftId: 'missing', jobId: 'job-1' },
