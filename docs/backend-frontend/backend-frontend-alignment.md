@@ -257,6 +257,7 @@ The staged implementation manual is archived at
   - `GET /recordings/:id/transcript`
   - `PUT /recordings/:id/transcript`
   - `GET /config/students`
+  - `GET /config/prompts`
 - Prompt packages:
   - `POST /recordings/:id/prompt-package`
   - `GET /prompt-packages/:id`
@@ -274,9 +275,10 @@ The staged implementation manual is archived at
 - Draft materialization writes to `FILESYSTEM_UPLOAD_DIR/drafts/<draftId>.md` and feeds `/jobs/:jobId/approve`.
 - Draft materialization auto-creates an `awaiting_approval` job when none is supplied.
 - Storage adapter abstraction (filesystem + S3 supported) is required for recordings/transcripts/prompt packages/drafts.
+- Prompt packages accept `templateId`/`profileId` from `/config/prompts` (no raw paths).
 
 ### Known Gaps (MVP polish)
-None (Stage 4 closed student association).
+None (Stages 4-5 closed student association + prompt allowlists).
 
 ---
 

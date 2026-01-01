@@ -53,6 +53,7 @@ Use `.env.batch-backend` for the service stack. It includes all core keys above 
 - Prompt assembly: `TTDG_RUN_COMMAND`, `TTDG_RUN_CWD` (optional), `TTDG_EXTRA_ARGS` (optional),
   `PROMPT_TEMPLATE_PATH`, `PROMPT_PROFILE_PATH`.
   - Repo defaults live under `docs/templates`; set these explicitly in `.env.batch-backend`.
+  - Template/profile allowlists are derived from the directories containing these paths.
 - Transcription pipeline:
   - `RECORDINGS_ROOT`, `RECORDINGS_GLOB` (default `**/*.{opus,mp3,wav,m4a}`),
     `RECORDINGS_SCAN_INTERVAL_SEC`

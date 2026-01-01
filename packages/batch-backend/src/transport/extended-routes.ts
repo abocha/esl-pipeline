@@ -13,6 +13,7 @@ import { listRecordingsWithDefaults } from '../application/list-recordings.js';
 import { ingestRecordingUpload } from '../application/ingest-recording-upload.js';
 import { recordingToDto } from '../application/recording-dto.js';
 import { getStudentProfiles } from '../application/get-student-profiles.js';
+import { getPromptOptions } from '../application/get-prompt-options.js';
 import { createDraft } from '../application/create-draft.js';
 import { createPromptPackage } from '../application/create-prompt-package.js';
 import { getPromptPackage } from '../application/get-prompt-package.js';
@@ -21,6 +22,7 @@ import { scanRecordingsWithDefaults } from '../application/scan-recordings.js';
 import { SubmitJobRequest, ValidationError, submitJob } from '../application/submit-job.js';
 import { updateRecordingTranscript } from '../application/update-recording-transcript.js';
 import { ProfilePathError } from '../application/profile-path.js';
+import { PromptOptionError } from '../application/prompt-options.js';
 import type { BatchBackendConfig } from '../config/env.js';
 import { RecordingStatusSchema } from '../domain/recording-model.js';
 import {
@@ -147,6 +149,37 @@ export function registerExtendedRoutes(app: FastifyInstance, options: ExtendedRo
         });
 
         return reply.send(students);
+      } catch (error: unknown) {
+        logger.error(error instanceof Error ? error : String(error), {
+          event: 'http_request',
+          route: routePath,
+          statusCode: 500,
+          error: 'internal_error',
+        });
+
+        return errorResponse(reply, 'internal_error');
+      }
+    },
+  );
+
+  app.get(
+    '/config/prompts',
+    {
+      preHandler: [authenticate],
+    },
+    async (request, reply) => {
+      const routePath = resolveRoutePath(request, 'GET /config/prompts');
+      try {
+        const prompts = await getPromptOptions();
+        reply.header('Cache-Control', 'private, max-age=60');
+
+        logger.info('HTTP request handled', {
+          event: 'http_request',
+          route: routePath,
+          statusCode: 200,
+        });
+
+        return reply.send(prompts);
       } catch (error: unknown) {
         logger.error(error instanceof Error ? error : String(error), {
           event: 'http_request',
@@ -588,6 +621,8 @@ export function registerExtendedRoutes(app: FastifyInstance, options: ExtendedRo
       const schema = z.object({
         notes: z.string().optional(),
         profilePath: z.string().min(1).optional(),
+        profileId: z.string().min(1).optional(),
+        templateId: z.string().min(1).optional(),
       });
 
       try {
@@ -596,6 +631,8 @@ export function registerExtendedRoutes(app: FastifyInstance, options: ExtendedRo
           recordingId,
           notes: body.notes,
           profilePath: body.profilePath,
+          profileId: body.profileId,
+          templateId: body.templateId,
         });
 
         if (!promptPackage) {
@@ -623,7 +660,7 @@ export function registerExtendedRoutes(app: FastifyInstance, options: ExtendedRo
             details: error.issues,
           });
         }
-        if (error instanceof ProfilePathError) {
+        if (error instanceof ProfilePathError || error instanceof PromptOptionError) {
           return reply.code(400).send({
             error: 'validation_failed',
             message: error.message,

@@ -182,16 +182,17 @@ They are considered non-canonical until explicitly documented here.
 
 Extended transcription routes (require auth when the extended API is enabled):
 - POST /recordings/sync
- - POST /recordings/upload (optional `studentId` or `student` query param)
+- POST /recordings/upload (optional `studentId` or `student` query param)
 - GET /recordings (supports `status`, `studentId`/`student`, `limit`, `offset`, `order`)
 - GET /recordings/:recordingId
 - GET /recordings/:recordingId/transcript
 - PUT /recordings/:recordingId/transcript
-- POST /recordings/:recordingId/prompt-package
+- POST /recordings/:recordingId/prompt-package (optional `templateId`, `profileId`)
 - GET /prompt-packages/:promptPackageId
 - POST /prompt-packages/:promptPackageId/draft
 - POST /drafts/:draftId/materialize
 - GET /config/students
+- GET /config/prompts
 
 ---
 

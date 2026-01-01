@@ -6,12 +6,14 @@ import { useJobMonitor } from '../../context/JobMonitorContext';
 import {
   type DraftResponse,
   type MaterializeDraftResponse,
+  type PromptOptionsResponse,
   type PromptPackageResponse,
   type RecordingTranscriptResponse,
   type StudentOption,
   approveJob,
   createDraft,
   createPromptPackage,
+  fetchPromptOptions,
   fetchStudentOptions,
   fetchPromptPackage,
   fetchRecordingTranscript,
@@ -126,7 +128,9 @@ export const TranscriptionWorkspace: React.FC = () => {
   const [transcriptError, setTranscriptError] = useState<string | null>(null);
 
   const [notes, setNotes] = useState('');
-  const [profilePath, setProfilePath] = useState('');
+  const [promptTemplateId, setPromptTemplateId] = useState('');
+  const [promptProfileId, setPromptProfileId] = useState('');
+  const [promptOptions, setPromptOptions] = useState<PromptOptionsResponse | null>(null);
   const [promptPackage, setPromptPackage] = useState<PromptPackageResponse | null>(null);
   const [promptPackageId, setPromptPackageId] = useState('');
   const [promptLoading, setPromptLoading] = useState(false);
@@ -160,6 +164,9 @@ export const TranscriptionWorkspace: React.FC = () => {
     return recordings.filter((recording) => recording.studentId === studentFilter);
   }, [recordings, studentFilter]);
 
+  const templateOptions = promptOptions?.templates ?? [];
+  const profileOptions = promptOptions?.profiles ?? [];
+
   useEffect(() => {
     let active = true;
     const loadStudents = async () => {
@@ -173,6 +180,28 @@ export const TranscriptionWorkspace: React.FC = () => {
       }
     };
     void loadStudents();
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    let active = true;
+    const loadPromptOptions = async () => {
+      try {
+        const response = await fetchPromptOptions();
+        if (!active) return;
+        setPromptOptions(response);
+        const templateFallback = response.defaults.templateId ?? response.templates?.[0]?.id ?? '';
+        const profileFallback = response.defaults.profileId ?? response.profiles?.[0]?.id ?? '';
+        setPromptTemplateId((prev) => prev || templateFallback);
+        setPromptProfileId((prev) => prev || profileFallback);
+      } catch (error) {
+        if (!active) return;
+        console.warn('Failed to load prompt options', error);
+      }
+    };
+    void loadPromptOptions();
     return () => {
       active = false;
     };
@@ -299,7 +328,8 @@ export const TranscriptionWorkspace: React.FC = () => {
     try {
       const result = await createPromptPackage(selectedRecordingId, {
         notes: notes.trim() || undefined,
-        profilePath: profilePath.trim() || undefined,
+        profileId: promptProfileId || undefined,
+        templateId: promptTemplateId || undefined,
       });
       setPromptPackage(result);
       setPromptPackageId(result.id);
@@ -638,13 +668,47 @@ export const TranscriptionWorkspace: React.FC = () => {
               rows={3}
             />
 
-            <label className="field-label">Profile path (optional)</label>
-            <input
-              type="text"
-              value={profilePath}
-              onChange={(event) => setProfilePath(event.target.value)}
-              placeholder="profiles/student.md"
-            />
+            <div className="prompt-selection">
+              <label className="field-label" htmlFor="prompt-template-select">
+                Template
+              </label>
+              <select
+                id="prompt-template-select"
+                value={promptTemplateId}
+                onChange={(event) => setPromptTemplateId(event.target.value)}
+                disabled={templateOptions.length === 0}
+              >
+                {templateOptions.length === 0 ? (
+                  <option value="">No templates available</option>
+                ) : null}
+                {templateOptions.map((option) => (
+                  <option key={option.id} value={option.id}>
+                    {option.label}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div className="prompt-selection">
+              <label className="field-label" htmlFor="prompt-profile-select">
+                Profile
+              </label>
+              <select
+                id="prompt-profile-select"
+                value={promptProfileId}
+                onChange={(event) => setPromptProfileId(event.target.value)}
+                disabled={profileOptions.length === 0}
+              >
+                {profileOptions.length === 0 ? (
+                  <option value="">No profiles available</option>
+                ) : null}
+                {profileOptions.map((option) => (
+                  <option key={option.id} value={option.id}>
+                    {option.label}
+                  </option>
+                ))}
+              </select>
+            </div>
 
             <div className="detail-actions">
               <button
@@ -924,6 +988,19 @@ export const TranscriptionWorkspace: React.FC = () => {
           display: grid;
           grid-template-columns: 1fr auto;
           gap: var(--space-2);
+        }
+
+        .prompt-selection {
+          display: grid;
+          gap: var(--space-2);
+        }
+
+        .prompt-selection select {
+          background: var(--bg-secondary);
+          border: 1px solid var(--border-light);
+          border-radius: var(--radius-lg);
+          padding: var(--space-2) var(--space-3);
+          color: var(--text-primary);
         }
 
         .prompt-output {
