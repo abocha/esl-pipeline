@@ -250,8 +250,8 @@ delete(uri) -> void
 ## 9) UI Flow Mapping (Frontend Vision Alignment)
 
 1) Select student (future) + choose recording
-   - Recording feed from `/jobs/events` (recording_state_changed) for now
-   - GET /recordings?status=ingested|transcribed (planned for full listing)
+   - Recording list from `GET /recordings?status=...`
+   - Live updates from `/jobs/events` (recording_state_changed)
 2) Auto-transcribe (background)
    - UI shows progress via /jobs/events SSE (existing stream)
 3) Review transcript
@@ -287,8 +287,8 @@ delete(uri) -> void
 - POST /drafts/:id/materialize (returns md_path for /jobs/:jobId/approve)
 
 Implementation note:
-- GET /recordings?status=... and GET /recordings/:id are deferred; the Phase 2 UI currently relies
-  on `/jobs/events` for live recording status and manual recording ID input for transcript review.
+- GET /recordings?status=... and GET /recordings/:id are available; the Phase 2 UI hydrates on load
+  and merges `/jobs/events` for live recording status updates.
 
 ---
 
@@ -336,8 +336,7 @@ No pipeline code changes required if adapter is isolated.
 1) Student association (auto-detect from folder vs manual UI selection)
 2) Transcript edit UX (inline editing vs text editor modal)
 3) How to handle multiple recordings in the same lesson block?
-4) Add recordings list endpoints (GET /recordings, GET /recordings/:id) for UI backfill vs
-   continuing with SSE-only recording feeds?
+4) Should recordings list endpoints support filters beyond status (e.g. date range, student)?
 
 ---
 
@@ -360,11 +359,10 @@ Implemented in repo:
 - Transcript read/update endpoints.
 - Prompt package creation + retrieval.
 - Draft save + materialize to `FILESYSTEM_UPLOAD_DIR/drafts/<draftId>.md`.
+- Draft materialization auto-creates an awaiting_approval job.
 - Recording status SSE via `/jobs/events` and a Phase 2 transcription workspace UI.
 
 Known gaps to reach full Phase 2 acceptance:
-- No `GET /recordings` or `GET /recordings/:id` listing/backfill; UI relies on SSE deltas.
-- Draft approval requires manual job selection (no auto-created Phase 2 approval job yet).
 - Upload ingestion (UI → storage) not implemented; scan mode only.
 - Student association is not implemented.
 - Template/profile paths must be configured explicitly (repo templates live under `docs/templates`).

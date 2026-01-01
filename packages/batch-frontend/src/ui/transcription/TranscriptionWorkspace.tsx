@@ -105,7 +105,7 @@ const DraftIcon = () => (
 );
 
 export const TranscriptionWorkspace: React.FC = () => {
-  const { recordings, registerRecording, jobs, trackJob } = useJobMonitor();
+  const { recordings, registerRecording, trackJob } = useJobMonitor();
   const [selectedRecordingId, setSelectedRecordingId] = useState('');
   const [recordingInput, setRecordingInput] = useState('');
   const [syncing, setSyncing] = useState(false);
@@ -129,16 +129,10 @@ export const TranscriptionWorkspace: React.FC = () => {
   const [materializeLoading, setMaterializeLoading] = useState(false);
   const [materialized, setMaterialized] = useState<MaterializeDraftResponse | null>(null);
   const [draftError, setDraftError] = useState<string | null>(null);
-  const [jobId, setJobId] = useState('');
 
   const selectedRecording = useMemo(
     () => recordings.find((item) => item.recordingId === selectedRecordingId) ?? null,
     [recordings, selectedRecordingId],
-  );
-
-  const approvalJobs = useMemo(
-    () => jobs.filter((job) => job.state === 'awaiting_approval'),
-    [jobs],
   );
 
   const handleSync = async () => {
@@ -304,19 +298,14 @@ export const TranscriptionWorkspace: React.FC = () => {
       toast.error('Save the draft first');
       return;
     }
-    const trimmedJobId = jobId.trim();
-    if (!trimmedJobId) {
-      toast.error('Select a job to approve');
-      return;
-    }
 
     setMaterializeLoading(true);
     setDraftError(null);
     try {
-      const materializedResult = await materializeDraft(draft.id, trimmedJobId);
+      const materializedResult = await materializeDraft(draft.id);
       setMaterialized(materializedResult);
-      await approveJob(trimmedJobId, materializedResult.mdPath);
-      await trackJob(trimmedJobId);
+      await approveJob(materializedResult.jobId, materializedResult.mdPath);
+      await trackJob(materializedResult.jobId);
       toast.success('Draft materialized and job approved');
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Unable to materialize draft';
@@ -584,23 +573,6 @@ export const TranscriptionWorkspace: React.FC = () => {
               </div>
             )}
 
-            <label className="field-label">Job to approve</label>
-            <input
-              list="approval-jobs"
-              value={jobId}
-              onChange={(event) => setJobId(event.target.value)}
-              placeholder="Job ID awaiting approval"
-            />
-            <datalist id="approval-jobs">
-              {approvalJobs.map((job) => (
-                <option
-                  key={job.jobId}
-                  value={job.jobId}
-                  label={`${job.jobId} (${job.fileName ?? job.md ?? 'awaiting approval'})`}
-                />
-              ))}
-            </datalist>
-
             <div className="detail-actions">
               <button
                 type="button"
@@ -615,6 +587,8 @@ export const TranscriptionWorkspace: React.FC = () => {
             {materialized && (
               <div className="draft-meta">
                 Materialized: <span className="mono">{materialized.mdPath}</span>
+                <br />
+                Approval job: <span className="mono">{materialized.jobId}</span>
               </div>
             )}
           </section>

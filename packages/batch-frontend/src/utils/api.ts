@@ -53,6 +53,28 @@ export interface RecordingTranscriptResponse {
   updatedAt: string;
 }
 
+export interface RecordingListItem {
+  recordingId: string;
+  status: RecordingStatus;
+  transcriptId: string | null;
+  error: string | null;
+  source: 'scan' | 'upload';
+  studentId: string | null;
+  durationSec: number | null;
+  channels: number | null;
+  bytes: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface RecordingsListResponse {
+  items: RecordingListItem[];
+  limit: number;
+  offset: number;
+  total: number;
+  order: 'asc' | 'desc';
+}
+
 export interface PromptPackageResponse {
   id: string;
   recordingId: string;
@@ -102,6 +124,56 @@ export interface UploadMarkdownResponse {
 
 export interface SubmitJobResponse {
   jobId: string;
+}
+
+export async function listRecordings(params: {
+  status?: RecordingStatus | RecordingStatus[];
+  limit?: number;
+  offset?: number;
+  order?: 'asc' | 'desc';
+} = {}): Promise<RecordingsListResponse> {
+  try {
+    const search = new URLSearchParams();
+    if (params.status) {
+      const values = Array.isArray(params.status) ? params.status : [params.status];
+      search.set('status', values.join(','));
+    }
+    if (typeof params.limit === 'number') {
+      search.set('limit', String(params.limit));
+    }
+    if (typeof params.offset === 'number') {
+      search.set('offset', String(params.offset));
+    }
+    if (params.order) {
+      search.set('order', params.order);
+    }
+
+    const query = search.toString();
+    const url = query ? `/recordings?${query}` : '/recordings';
+    const response = await apiClient.get(buildApiProxyPath(url));
+    return response.data;
+  } catch (error: unknown) {
+    const axiosError = toAxiosError(error);
+    if (axiosError && isAuthError(axiosError)) {
+      throw new Error('Authentication required. Please login to view recordings.');
+    }
+    throw new Error(axiosError ? handleApiError(axiosError) : formatUnknownError(error));
+  }
+}
+
+export async function getRecording(recordingId: string): Promise<RecordingListItem> {
+  try {
+    const response = await apiClient.get(
+      buildApiProxyPath(`/recordings/${encodeURIComponent(recordingId)}`),
+    );
+    return response.data;
+  } catch (error: unknown) {
+    const axiosError = toAxiosError(error);
+    if (axiosError && isAuthError(axiosError)) {
+      throw new Error('Authentication required. Please login to view recordings.');
+    }
+    throw new Error(axiosError ? handleApiError(axiosError) : formatUnknownError(error));
+  }
 }
 
 export async function approveJob(jobId: string, md: string): Promise<JobStatus> {
@@ -513,12 +585,13 @@ export async function createDraft(
 
 export async function materializeDraft(
   draftId: string,
-  jobId: string,
+  jobId?: string,
 ): Promise<MaterializeDraftResponse> {
   try {
+    const payload = jobId ? { jobId } : {};
     const response = await apiClient.post(
       buildApiProxyPath(`/drafts/${encodeURIComponent(draftId)}/materialize`),
-      { jobId },
+      payload,
     );
     return response.data;
   } catch (error: unknown) {

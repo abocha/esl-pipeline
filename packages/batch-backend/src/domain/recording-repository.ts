@@ -27,6 +27,10 @@ interface RecordingRow {
   updated_at: Date;
 }
 
+interface RecordingListRow extends RecordingRow {
+  transcript_id: string | null;
+}
+
 export interface InsertRecordingParams {
   id?: string;
   source: RecordingSource;
@@ -203,6 +207,101 @@ export async function updateRecordingStatus(params: {
   return mapRowToRecording(row);
 }
 
+export interface RecordingListOptions {
+  statuses?: RecordingStatus[];
+  limit: number;
+  offset: number;
+  order: 'asc' | 'desc';
+}
+
+export interface RecordingWithTranscript extends RecordingRecord {
+  transcriptId: string | null;
+}
+
+export async function listRecordings(
+  options: RecordingListOptions,
+): Promise<RecordingWithTranscript[]> {
+  const { statuses, limit, offset, order } = options;
+  const values: (string | string[] | number)[] = [];
+  const clauses: string[] = [];
+
+  if (statuses && statuses.length > 0) {
+    values.push(statuses);
+    clauses.push(`r.status = ANY($${values.length}::text[])`);
+  }
+
+  const whereClause = clauses.length > 0 ? `WHERE ${clauses.join(' AND ')}` : '';
+  const orderDirection = order === 'asc' ? 'ASC' : 'DESC';
+
+  values.push(limit);
+  const limitParam = values.length;
+  values.push(offset);
+  const offsetParam = values.length;
+
+  const rows = await withPgClient(async (client: PoolClient) => {
+    const result = await client.query(
+      `
+      SELECT
+        r.id,
+        r.source,
+        r.student_id,
+        r.source_path,
+        r.storage_uri,
+        r.sha256,
+        r.bytes,
+        r.duration_sec,
+        r.channels,
+        r.status,
+        r.error,
+        r.created_at,
+        r.updated_at,
+        t.id AS transcript_id
+      FROM recordings r
+      LEFT JOIN LATERAL (
+        SELECT id
+        FROM transcripts
+        WHERE recording_id = r.id
+        ORDER BY created_at DESC
+        LIMIT 1
+      ) t ON true
+      ${whereClause}
+      ORDER BY r.created_at ${orderDirection}, r.id ${orderDirection}
+      LIMIT $${limitParam} OFFSET $${offsetParam}
+      `,
+      values,
+    );
+    return result.rows;
+  });
+
+  return rows.map((row) => mapRowToRecordingWithTranscript(row));
+}
+
+export async function countRecordings(statuses?: RecordingStatus[]): Promise<number> {
+  const values: (string | string[])[] = [];
+  const clauses: string[] = [];
+
+  if (statuses && statuses.length > 0) {
+    values.push(statuses);
+    clauses.push(`status = ANY($${values.length}::text[])`);
+  }
+
+  const whereClause = clauses.length > 0 ? `WHERE ${clauses.join(' AND ')}` : '';
+
+  const result = await withPgClient(async (client: PoolClient) => {
+    const queryResult = await client.query(
+      `
+      SELECT COUNT(*) as count
+      FROM recordings
+      ${whereClause}
+      `,
+      values,
+    );
+    return queryResult;
+  });
+
+  return Number.parseInt(result.rows[0]?.count ?? '0', 10);
+}
+
 function mapRowToRecording(row: RecordingRow): RecordingRecord {
   const source = RecordingSourceSchema.parse(row.source);
   const status = RecordingStatusSchema.parse(row.status);
@@ -222,5 +321,12 @@ function mapRowToRecording(row: RecordingRow): RecordingRecord {
     error: row.error ?? null,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
+  };
+}
+
+function mapRowToRecordingWithTranscript(row: RecordingListRow): RecordingWithTranscript {
+  return {
+    ...mapRowToRecording(row),
+    transcriptId: row.transcript_id ?? null,
   };
 }

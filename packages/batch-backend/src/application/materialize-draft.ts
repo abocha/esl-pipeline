@@ -1,7 +1,9 @@
 import fs from 'node:fs/promises';
 import path from 'node:path';
 
+import { createApprovalJobFromDraft } from './create-approval-job.js';
 import { getDraftById } from '../domain/draft-repository.js';
+import { getPromptPackageById } from '../domain/prompt-package-repository.js';
 import { updateJobDraftLink } from '../domain/job-repository.js';
 import { createStorageConfigService } from '../infrastructure/storage-config.js';
 import type { TranscriptionStorage } from '../infrastructure/transcription-storage.js';
@@ -9,7 +11,7 @@ import { createTranscriptionStorage } from '../infrastructure/transcription-stor
 
 export interface MaterializeDraftParams {
   draftId: string;
-  jobId: string;
+  jobId?: string;
 }
 
 export interface MaterializeDraftResponse {
@@ -23,6 +25,10 @@ export interface MaterializeDraftDependencies {
   drafts: {
     getById: typeof getDraftById;
   };
+  promptPackages: {
+    getById: typeof getPromptPackageById;
+  };
+  createApprovalJob: typeof createApprovalJobFromDraft;
   jobs: {
     updateDraftLink: typeof updateJobDraftLink;
   };
@@ -33,20 +39,36 @@ export async function materializeDraft(
   params: MaterializeDraftParams,
   overrides?: Partial<MaterializeDraftDependencies>,
 ): Promise<MaterializeDraftResponse | null> {
-  if (!params.draftId || !params.jobId) return null;
+  if (!params.draftId) return null;
 
   const storage = overrides?.storage ?? createTranscriptionStorage();
   const drafts = overrides?.drafts ?? {
     getById: getDraftById,
   };
+  const promptPackages = overrides?.promptPackages ?? {
+    getById: getPromptPackageById,
+  };
+  const createApprovalJob = overrides?.createApprovalJob ?? createApprovalJobFromDraft;
   const jobs = overrides?.jobs ?? {
     updateDraftLink: updateJobDraftLink,
   };
   const uploadDir =
     overrides?.uploadDir ?? createStorageConfigService().getFilesystemConfig().uploadDir;
 
+  let resolvedJobId = params.jobId?.trim() || '';
+
   const draft = await drafts.getById(params.draftId);
   if (!draft) return null;
+
+  if (!resolvedJobId) {
+    const promptPackage = await promptPackages.getById(draft.promptPackageId);
+    if (!promptPackage) return null;
+    const approvalJob = await createApprovalJob({
+      draft,
+      promptPackage,
+    });
+    resolvedJobId = approvalJob.id;
+  }
 
   const text = await storage.getText(draft.storageUri);
   const mdPath = resolveDraftMaterializePath(uploadDir, draft.id);
@@ -55,7 +77,7 @@ export async function materializeDraft(
   await fs.writeFile(mdPath, text, 'utf8');
 
   const updated = await jobs.updateDraftLink({
-    id: params.jobId,
+    id: resolvedJobId,
     expectedState: 'awaiting_approval',
     md: mdPath,
     draftId: draft.id,
@@ -65,7 +87,7 @@ export async function materializeDraft(
 
   return {
     draftId: draft.id,
-    jobId: params.jobId,
+    jobId: resolvedJobId,
     mdPath,
   };
 }

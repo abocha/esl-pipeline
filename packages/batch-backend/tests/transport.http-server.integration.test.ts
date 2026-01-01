@@ -4,9 +4,11 @@ import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { getJobOptions } from '../src/application/get-job-options.js';
 import * as createDraftModule from '../src/application/create-draft.js';
 import * as createPromptPackageModule from '../src/application/create-prompt-package.js';
+import * as getRecordingModule from '../src/application/get-recording.js';
 import * as getRecordingTranscriptModule from '../src/application/get-recording-transcript.js';
 import * as getJobStatusModule from '../src/application/get-job-status.js';
 import * as getPromptPackageModule from '../src/application/get-prompt-package.js';
+import * as listRecordingsModule from '../src/application/list-recordings.js';
 import * as materializeDraftModule from '../src/application/materialize-draft.js';
 import * as submitJobModule from '../src/application/submit-job.js';
 import * as updateRecordingTranscriptModule from '../src/application/update-recording-transcript.js';
@@ -398,6 +400,119 @@ describe('transport/http-server - integration (in-process)', () => {
     }
   });
 
+  it('GET /recordings returns paginated recording list', async () => {
+    const listRecordings = vi.spyOn(listRecordingsModule, 'listRecordingsWithDefaults');
+    listRecordings.mockClear();
+    listRecordings.mockResolvedValue({
+      items: [
+        {
+          recordingId: 'recording-1',
+          status: 'transcribed',
+          transcriptId: 'transcript-1',
+          error: null,
+          source: 'scan',
+          studentId: null,
+          durationSec: 120,
+          channels: 2,
+          bytes: 2048,
+          createdAt: '2024-01-01T00:00:00.000Z',
+          updatedAt: '2024-01-01T00:10:00.000Z',
+        },
+      ],
+      limit: 10,
+      offset: 5,
+      total: 42,
+      order: 'asc',
+    });
+
+    const response = await app.inject({
+      method: 'GET',
+      url: '/recordings?status=transcribed&limit=10&offset=5&order=asc',
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toEqual({
+      items: [
+        {
+          recordingId: 'recording-1',
+          status: 'transcribed',
+          transcriptId: 'transcript-1',
+          error: null,
+          source: 'scan',
+          studentId: null,
+          durationSec: 120,
+          channels: 2,
+          bytes: 2048,
+          createdAt: '2024-01-01T00:00:00.000Z',
+          updatedAt: '2024-01-01T00:10:00.000Z',
+        },
+      ],
+      limit: 10,
+      offset: 5,
+      total: 42,
+      order: 'asc',
+    });
+    expect(listRecordings).toHaveBeenCalledWith({
+      statuses: ['transcribed'],
+      limit: 10,
+      offset: 5,
+      order: 'asc',
+    });
+  });
+
+  it('GET /recordings/:id returns recording payload', async () => {
+    const getRecording = vi.spyOn(getRecordingModule, 'getRecording');
+    getRecording.mockClear();
+    getRecording.mockResolvedValue({
+      recordingId: 'recording-1',
+      status: 'queued',
+      transcriptId: null,
+      error: null,
+      source: 'scan',
+      studentId: null,
+      durationSec: null,
+      channels: null,
+      bytes: 1234,
+      createdAt: '2024-01-01T00:00:00.000Z',
+      updatedAt: '2024-01-01T00:05:00.000Z',
+    });
+
+    const response = await app.inject({
+      method: 'GET',
+      url: '/recordings/recording-1',
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toEqual({
+      recordingId: 'recording-1',
+      status: 'queued',
+      transcriptId: null,
+      error: null,
+      source: 'scan',
+      studentId: null,
+      durationSec: null,
+      channels: null,
+      bytes: 1234,
+      createdAt: '2024-01-01T00:00:00.000Z',
+      updatedAt: '2024-01-01T00:05:00.000Z',
+    });
+    expect(getRecording).toHaveBeenCalledWith('recording-1');
+  });
+
+  it('GET /recordings/:id returns 404 when missing', async () => {
+    const getRecording = vi.spyOn(getRecordingModule, 'getRecording');
+    getRecording.mockClear();
+    getRecording.mockResolvedValue(null);
+
+    const response = await app.inject({
+      method: 'GET',
+      url: '/recordings/missing',
+    });
+
+    expect(response.statusCode).toBe(404);
+    expect(response.json()).toEqual({ error: 'not_found' });
+  });
+
   it('GET /recordings/:id/transcript returns transcript payload', async () => {
     const getRecordingTranscript = vi.spyOn(
       getRecordingTranscriptModule,
@@ -720,6 +835,33 @@ describe('transport/http-server - integration (in-process)', () => {
     expect(materializeDraft).toHaveBeenCalledWith({
       draftId: 'draft-1',
       jobId: 'job-1',
+    });
+  });
+
+  it('POST /drafts/:id/materialize accepts missing jobId', async () => {
+    const materializeDraft = vi.spyOn(materializeDraftModule, 'materializeDraft');
+    materializeDraft.mockClear();
+    materializeDraft.mockResolvedValue({
+      draftId: 'draft-2',
+      jobId: 'job-2',
+      mdPath: '/uploads/drafts/draft-2.md',
+    });
+
+    const response = await app.inject({
+      method: 'POST',
+      url: '/drafts/draft-2/materialize',
+      payload: {},
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toEqual({
+      draftId: 'draft-2',
+      jobId: 'job-2',
+      mdPath: '/uploads/drafts/draft-2.md',
+    });
+    expect(materializeDraft).toHaveBeenCalledWith({
+      draftId: 'draft-2',
+      jobId: undefined,
     });
   });
 

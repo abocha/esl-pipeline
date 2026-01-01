@@ -6,8 +6,10 @@ import { Readable } from 'node:stream';
 import { z } from 'zod';
 
 import { getJobOptions } from '../application/get-job-options.js';
+import { getRecording } from '../application/get-recording.js';
 import { getRecordingsIndex } from '../application/get-recordings-index.js';
 import { getRecordingTranscript } from '../application/get-recording-transcript.js';
+import { listRecordingsWithDefaults } from '../application/list-recordings.js';
 import { createDraft } from '../application/create-draft.js';
 import { createPromptPackage } from '../application/create-prompt-package.js';
 import { getPromptPackage } from '../application/get-prompt-package.js';
@@ -17,6 +19,7 @@ import { SubmitJobRequest, ValidationError, submitJob } from '../application/sub
 import { updateRecordingTranscript } from '../application/update-recording-transcript.js';
 import { ProfilePathError } from '../application/profile-path.js';
 import type { BatchBackendConfig } from '../config/env.js';
+import { RecordingStatusSchema } from '../domain/recording-model.js';
 import {
   UserSettingsInput,
   isValidTtsProvider,
@@ -190,6 +193,101 @@ export function registerExtendedRoutes(app: FastifyInstance, options: ExtendedRo
           route: routePath,
           statusCode: 500,
           error: 'internal_error',
+        });
+
+        return errorResponse(reply, 'internal_error');
+      }
+    },
+  );
+
+  app.get(
+    '/recordings',
+    {
+      preHandler: [authenticate],
+    },
+    async (request, reply) => {
+      const routePath = resolveRoutePath(request, 'GET /recordings');
+
+      const querySchema = z.object({
+        status: z.union([z.string(), z.array(z.string())]).optional(),
+        limit: z.coerce.number().int().min(1).max(200).optional(),
+        offset: z.coerce.number().int().min(0).optional(),
+        order: z.enum(['asc', 'desc']).optional(),
+      });
+
+      try {
+        const query = querySchema.parse(request.query ?? {});
+        const statuses = normalizeStatusFilter(query.status);
+        const recordings = await listRecordingsWithDefaults({
+          statuses,
+          limit: query.limit,
+          offset: query.offset,
+          order: query.order,
+        });
+
+        logger.info('HTTP request handled', {
+          event: 'http_request',
+          route: routePath,
+          statusCode: 200,
+        });
+
+        return reply.send(recordings);
+      } catch (error: unknown) {
+        if (error instanceof z.ZodError) {
+          return reply.code(400).send({
+            error: 'validation_failed',
+            message: 'Invalid query parameters',
+            details: error.issues,
+          });
+        }
+
+        logger.error(error instanceof Error ? error : String(error), {
+          event: 'http_request',
+          route: routePath,
+          statusCode: 500,
+          error: 'internal_error',
+        });
+
+        return errorResponse(reply, 'internal_error');
+      }
+    },
+  );
+
+  app.get(
+    '/recordings/:recordingId',
+    {
+      preHandler: [authenticate],
+    },
+    async (request, reply) => {
+      const { recordingId } = request.params as { recordingId: string };
+      const routePath = resolveRoutePath(request, 'GET /recordings/:recordingId');
+
+      try {
+        const recording = await getRecording(recordingId);
+        if (!recording) {
+          logger.info('Recording not found', {
+            event: 'recording_not_found',
+            route: routePath,
+            recordingId,
+          });
+          return errorResponse(reply, 'not_found');
+        }
+
+        logger.info('HTTP request handled', {
+          event: 'http_request',
+          route: routePath,
+          statusCode: 200,
+          recordingId,
+        });
+
+        return reply.send(recording);
+      } catch (error: unknown) {
+        logger.error(error instanceof Error ? error : String(error), {
+          event: 'http_request',
+          route: routePath,
+          statusCode: 500,
+          error: 'internal_error',
+          recordingId,
         });
 
         return errorResponse(reply, 'internal_error');
@@ -478,7 +576,7 @@ export function registerExtendedRoutes(app: FastifyInstance, options: ExtendedRo
       const routePath = resolveRoutePath(request, 'POST /drafts/:draftId/materialize');
 
       const schema = z.object({
-        jobId: z.string().min(1),
+        jobId: z.string().min(1).optional(),
       });
 
       try {
@@ -528,6 +626,16 @@ export function registerExtendedRoutes(app: FastifyInstance, options: ExtendedRo
       }
     },
   );
+
+  function normalizeStatusFilter(
+    status?: string | string[] | null,
+  ): string[] | null {
+    if (!status) return null;
+    const values = Array.isArray(status) ? status : status.split(',');
+    const trimmed = values.map((value) => value.trim()).filter(Boolean);
+    if (trimmed.length === 0) return null;
+    return trimmed.map((value) => RecordingStatusSchema.parse(value));
+  }
 
   void app.register(multipart, {
     limits: {
