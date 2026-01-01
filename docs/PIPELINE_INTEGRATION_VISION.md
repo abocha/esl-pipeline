@@ -49,6 +49,7 @@ Notes for Phase 2+:
 - Student association uses a deterministic student ID derived from folder names or upload selection.
   - `/config/students` exposes configured student profiles for UI selection.
   - Recording list supports `studentId` filtering; UI supports filtering and upload association.
+- Prompt templates/profiles are allowlisted; `/config/prompts` exposes IDs for UI selection.
 - Only new audio content is discovered; renames do not re-ingest.
 - Draft approval auto-creates an awaiting_approval job during materialization.
 
@@ -138,6 +139,7 @@ See docs/reference/env.md for the full list. Key Phase 2+ entries:
 - Draft approval auto-creates a job; no manual job selection needed.
 - Prompt profile path is constrained to configured root; ensure the env paths exist.
 - Student IDs are derived from normalized names; renaming folders or changing names creates a new ID.
+- Prompt selection uses IDs; keep template/profile files under the configured directories.
 
 ---
 
@@ -156,7 +158,7 @@ Implemented in repo:
 - Draft materialization to filesystem (auto-creates approval job).
 
 ### Shortcomings to achieve full Phase 2+
-- Cleaner template/profile selection + versioning in UI.
+- Hardening: clearer errors, retries, and queue status in the transcription workspace.
 
 ### New phases (fresh roadmap)
 Phase 3: Phase 2+ polish

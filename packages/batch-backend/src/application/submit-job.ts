@@ -10,7 +10,8 @@ import type { TtsStrategy as DomainTtsStrategy } from '../domain/job-model.js';
 import { insertJob } from '../domain/job-repository.js';
 import { logger } from '../infrastructure/logger.js';
 import { createJobQueue } from '../infrastructure/queue-bullmq.js';
-import { ProfilePathError, resolveProfileRoot, resolveUserProfilePath } from './profile-path.js';
+import { ProfilePathError } from './profile-path.js';
+import { PromptOptionError, resolveAllowlistedProfilePath } from './prompt-options.js';
 
 export type UploadTarget = 'auto' | 's3' | 'none';
 export type TtsStrategy = DomainTtsStrategy;
@@ -159,11 +160,10 @@ export async function submitJob(req: SubmitJobRequest): Promise<SubmitJobRespons
   const profilePath = req.profilePath?.trim();
   if (profilePath) {
     const config = loadConfig();
-    const profileRoot = await resolveProfileRoot(config.prompt.defaultProfilePath);
     try {
-      await resolveUserProfilePath(profilePath, profileRoot);
+      await resolveAllowlistedProfilePath(profilePath, { config });
     } catch (error) {
-      if (error instanceof ProfilePathError) {
+      if (error instanceof PromptOptionError || error instanceof ProfilePathError) {
         throw new ValidationError(error.message, error.code);
       }
       throw error;

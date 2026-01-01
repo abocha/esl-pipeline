@@ -1,6 +1,5 @@
 import { randomUUID } from 'node:crypto';
 import fs from 'node:fs/promises';
-import path from 'node:path';
 
 import type { BatchBackendConfig } from '../config/env.js';
 import { loadConfig } from '../config/env.js';
@@ -10,13 +9,15 @@ import { insertPromptPackage } from '../domain/prompt-package-repository.js';
 import type { PromptPackageRecord } from '../domain/prompt-package-model.js';
 import type { TranscriptionStorage } from '../infrastructure/transcription-storage.js';
 import { createTranscriptionStorage } from '../infrastructure/transcription-storage.js';
-import { resolveRepoPath, stitchPromptPayload } from './prompt-assembly.js';
-import { resolveProfileRoot, resolveUserProfilePath } from './profile-path.js';
+import { stitchPromptPayload } from './prompt-assembly.js';
+import { resolvePromptSelection } from './prompt-options.js';
 
 export interface CreatePromptPackageParams {
   recordingId: string;
   notes?: string | null;
   profilePath?: string | null;
+  profileId?: string | null;
+  templateId?: string | null;
 }
 
 export interface PromptPackageResponse {
@@ -69,11 +70,16 @@ export async function createPromptPackage(
   if (!transcript) return null;
   const recording = await recordings.getById(transcript.recordingId);
 
-  const profileRoot = await resolveProfileRoot(config.prompt.defaultProfilePath);
-  const templatePath = resolvePromptPath(config.prompt.templatePath);
-  const profilePath = params.profilePath
-    ? await resolveUserProfilePath(params.profilePath, profileRoot)
-    : resolvePromptPath(config.prompt.defaultProfilePath);
+  const selection = await resolvePromptSelection(
+    {
+      templateId: params.templateId,
+      profileId: params.profileId,
+      profilePath: params.profilePath,
+    },
+    { config },
+  );
+  const templatePath = selection.templatePath;
+  const profilePath = selection.profilePath;
   const [template, profile, transcriptText] = await Promise.all([
     fs.readFile(templatePath, 'utf8'),
     fs.readFile(profilePath, 'utf8'),
@@ -99,7 +105,7 @@ export async function createPromptPackage(
     transcriptId: transcript.id,
     studentId: recording?.studentId ?? null,
     profilePath,
-    templateVersion: templatePath,
+    templateVersion: selection.templateId,
     notes: params.notes ?? null,
     storageUri: stored.uri,
   });
@@ -124,14 +130,4 @@ export function toPromptPackageResponse(
     createdAt: promptPackage.createdAt.toISOString(),
     updatedAt: promptPackage.updatedAt.toISOString(),
   };
-}
-
-function resolvePromptPath(inputPath: string): string {
-  if (!inputPath) {
-    throw new Error('Prompt path is required');
-  }
-  if (path.isAbsolute(inputPath)) {
-    return inputPath;
-  }
-  return resolveRepoPath(inputPath);
 }

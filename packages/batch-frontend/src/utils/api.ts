@@ -9,6 +9,7 @@
  * - POST /recordings/upload (authenticated)
  * - GET /config/job-options for metadata
  * - GET /config/students for student profiles
+ * - GET /config/prompts for prompt templates and profiles
  * - GET /jobs/events (SSE) for live updates
  * - GET /user/profile, /user/files (authenticated)
  */
@@ -84,6 +85,20 @@ export interface StudentOption {
 
 export interface StudentOptionsResponse {
   students: StudentOption[];
+}
+
+export interface PromptOption {
+  id: string;
+  label: string;
+}
+
+export interface PromptOptionsResponse {
+  templates: PromptOption[];
+  profiles: PromptOption[];
+  defaults: {
+    templateId: string | null;
+    profileId: string | null;
+  };
 }
 
 export interface PromptPackageResponse {
@@ -519,6 +534,19 @@ export async function fetchStudentOptions(): Promise<StudentOptionsResponse> {
   }
 }
 
+export async function fetchPromptOptions(): Promise<PromptOptionsResponse> {
+  try {
+    const response = await apiClient.get(buildApiProxyPath('/config/prompts'));
+    return response.data;
+  } catch (error: unknown) {
+    const axiosError = toAxiosError(error);
+    if (axiosError && isAuthError(axiosError)) {
+      throw new Error('Authentication required. Please login to load prompt options.');
+    }
+    throw new Error(axiosError ? handleApiError(axiosError) : formatUnknownError(error));
+  }
+}
+
 export async function fetchRecordingsIndex(limit = 200): Promise<RecordingsIndexResponse> {
   try {
     const response = await apiClient.get(buildApiProxyPath('/config/recordings'), {
@@ -582,7 +610,7 @@ export async function updateRecordingTranscript(
 
 export async function createPromptPackage(
   recordingId: string,
-  params: { notes?: string; profilePath?: string },
+  params: { notes?: string; profileId?: string; templateId?: string; profilePath?: string },
 ): Promise<PromptPackageResponse> {
   try {
     const response = await apiClient.post(

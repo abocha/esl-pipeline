@@ -62,7 +62,12 @@ describe('application/prompt-package', () => {
     };
 
     const result = await createPromptPackage(
-      { recordingId: transcript.recordingId, notes: 'Some notes' },
+      {
+        recordingId: transcript.recordingId,
+        notes: 'Some notes',
+        templateId: 'template.md',
+        profileId: 'profile.md',
+      },
       {
         config: createConfig(templatePath, profilePath),
         storage,
@@ -95,7 +100,7 @@ describe('application/prompt-package', () => {
     expect(result?.transcriptId).toBe(transcript.id);
     expect(result?.studentId).toBe('student-1');
     expect(result?.notes).toBe('Some notes');
-    expect(result?.templateVersion).toBe(templatePath);
+    expect(result?.templateVersion).toBe('template.md');
     expect(result?.profilePath).toBe(profilePath);
   });
 
@@ -111,7 +116,7 @@ describe('application/prompt-package', () => {
         transcriptId: 'transcript-1',
         studentId: 'student-1',
         profilePath: '/profiles/p1.md',
-        templateVersion: '/templates/t1.md',
+        templateVersion: 't1.md',
         notes: 'Notes',
         storageUri: 'local://prompt-packages/prompt-1.txt',
         createdAt: new Date('2024-01-01T00:00:00Z'),
@@ -130,13 +135,70 @@ describe('application/prompt-package', () => {
       transcriptId: 'transcript-1',
       studentId: 'student-1',
       profilePath: '/profiles/p1.md',
-      templateVersion: '/templates/t1.md',
+      templateVersion: 't1.md',
       notes: 'Notes',
       storageUri: 'local://prompt-packages/prompt-1.txt',
       text: 'Prompt package text',
       createdAt: '2024-01-01T00:00:00.000Z',
       updatedAt: '2024-01-01T00:10:00.000Z',
     });
+  });
+
+  it('rejects unknown profileId selections', async () => {
+    const allowedDir = await fs.mkdtemp(path.join(os.tmpdir(), 'esl-prompt-allowed-'));
+    const templatePath = path.join(allowedDir, 'template.md');
+    const profilePath = path.join(allowedDir, 'profile.md');
+
+    await fs.writeFile(templatePath, 'Hello\nINSERT PROFILE HERE\nFooter\n', 'utf8');
+    await fs.writeFile(profilePath, 'PROFILE CONTENT\n', 'utf8');
+
+    const transcript = createTranscriptRecord();
+    const storage = createStorageStub({
+      getText: async () => 'TRANSCRIPT BODY',
+      putPromptPackage: async ({ promptPackageId, text }) => {
+        return { uri: `local://prompt-packages/${promptPackageId}.txt`, bytes: text.length };
+      },
+    });
+
+    await expect(
+      createPromptPackage(
+        {
+          recordingId: transcript.recordingId,
+          notes: 'Some notes',
+          templateId: 'template.md',
+          profileId: 'missing.md',
+        },
+        {
+          config: createConfig(templatePath, profilePath),
+          storage,
+          transcripts: {
+            getByRecordingId: async () => transcript,
+          },
+          recordings: {
+            getById: async () => ({
+              id: transcript.recordingId,
+              source: 'scan',
+              studentId: 'student-1',
+              sourcePath: null,
+              storageUri: 'local://recordings/recording-1.opus',
+              sha256: null,
+              bytes: 1,
+              durationSec: null,
+              channels: null,
+              status: 'transcribed',
+              error: null,
+              createdAt: new Date('2024-01-01T00:00:00Z'),
+              updatedAt: new Date('2024-01-01T00:00:00Z'),
+            }),
+          },
+          promptPackages: {
+            insert: async () => {
+              throw new Error('insert should not be called');
+            },
+          },
+        },
+      ),
+    ).rejects.toThrow('profileId is not allowlisted');
   });
 
   it('rejects profilePath outside the repository root', async () => {

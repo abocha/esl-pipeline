@@ -94,6 +94,7 @@ The original staged manual is archived at
 
 - Prompt assembly service
   - Uses template + profile + notes + transcript.
+  - Template/profile selections are allowlisted and selected by ID.
   - Stores prompt package artifact and metadata.
   - Stitching order (canonical, matches docs/PIPELINE_INTEGRATION_VISION.md):
     1. Start with the prompt template.
@@ -154,7 +155,7 @@ Student association:
 - transcript_id (fk)
 - student_id (nullable)
 - profile_id or profile_path (nullable)
-- template_version (text)
+- template_version (text; stores template ID)
 - notes (text, nullable)
 - storage_uri (text)  // assembled prompt payload
 - created_at, updated_at
@@ -290,7 +291,7 @@ delete(uri) -> void
 - POST /recordings/:id/transcribe (optional manual retry)
 
 ### Prompt Packages
-- POST /recordings/:id/prompt-package
+- POST /recordings/:id/prompt-package (optional `templateId`, `profileId`)
 - GET /prompt-packages/:id
 
 ### Drafts
@@ -299,6 +300,7 @@ delete(uri) -> void
 
 ### Config
 - GET /config/students
+- GET /config/prompts
 
 Implementation note:
 - GET /recordings?status=... and GET /recordings/:id are available; the Phase 2 UI hydrates on load
@@ -320,6 +322,11 @@ Ingestion:
 - RECORDINGS_ROOT (local path)
 - RECORDINGS_SCAN_INTERVAL_SEC
 - RECORDINGS_GLOB (default: **/*.{opus,mp3,wav,m4a})
+
+Prompt allowlist:
+- Templates are scanned from the directory containing `PROMPT_TEMPLATE_PATH`.
+- Profiles are scanned from the directory containing `PROMPT_PROFILE_PATH`.
+- The UI selects `templateId`/`profileId` from `GET /config/prompts`.
 
 Storage:
 - STORAGE_PROVIDER (filesystem|s3)
@@ -376,4 +383,4 @@ Implemented in repo:
 - Recording status SSE via `/jobs/events` and a Phase 2 transcription workspace UI.
 
 Known gaps to reach full Phase 2 acceptance:
-- Template/profile paths must be configured explicitly (repo templates live under `docs/templates`).
+- None (prompt allowlists, uploads, and student association are implemented).

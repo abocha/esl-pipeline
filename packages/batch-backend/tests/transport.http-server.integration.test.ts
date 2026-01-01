@@ -111,6 +111,16 @@ vi.mock('../src/infrastructure/orchestrator-service', () => {
   };
 });
 
+vi.mock('../src/application/get-prompt-options.js', () => {
+  return {
+    getPromptOptions: vi.fn().mockResolvedValue({
+      templates: [{ id: 'template.md', label: 'Template' }],
+      profiles: [{ id: 'profile.md', label: 'Profile' }],
+      defaults: { templateId: 'template.md', profileId: 'profile.md' },
+    }),
+  };
+});
+
 describe('transport/http-server - integration (in-process)', () => {
   let app: Awaited<ReturnType<typeof createHttpServer>>;
 
@@ -422,6 +432,20 @@ describe('transport/http-server - integration (in-process)', () => {
     });
   });
 
+  it('GET /config/prompts returns prompt options', async () => {
+    const response = await app.inject({
+      method: 'GET',
+      url: '/config/prompts',
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toEqual({
+      templates: [{ id: 'template.md', label: 'Template' }],
+      profiles: [{ id: 'profile.md', label: 'Profile' }],
+      defaults: { templateId: 'template.md', profileId: 'profile.md' },
+    });
+  });
+
   it('GET /recordings returns paginated recording list', async () => {
     const listRecordings = vi.spyOn(listRecordingsModule, 'listRecordingsWithDefaults');
     listRecordings.mockClear();
@@ -711,11 +735,13 @@ describe('transport/http-server - integration (in-process)', () => {
       createdAt: '2024-01-01T00:00:00.000Z',
       updatedAt: '2024-01-01T00:10:00.000Z',
     });
-    expect(createPromptPackage).toHaveBeenCalledWith({
-      recordingId: 'recording-1',
-      notes: 'Some notes',
-      profilePath: '/profiles/p1.md',
-    });
+    expect(createPromptPackage).toHaveBeenCalledWith(
+      expect.objectContaining({
+        recordingId: 'recording-1',
+        notes: 'Some notes',
+        profilePath: '/profiles/p1.md',
+      }),
+    );
   });
 
   it('POST /recordings/:id/prompt-package returns 404 when transcript missing', async () => {
