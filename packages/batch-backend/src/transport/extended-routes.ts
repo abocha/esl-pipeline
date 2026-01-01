@@ -12,6 +12,10 @@ import { getRecordingTranscript } from '../application/get-recording-transcript.
 import { listRecordingsWithDefaults } from '../application/list-recordings.js';
 import { ingestRecordingUpload } from '../application/ingest-recording-upload.js';
 import { recordingToDto } from '../application/recording-dto.js';
+import {
+  RecordingRetryError,
+  retryRecordingTranscription,
+} from '../application/retry-recording-transcription.js';
 import { getStudentProfiles } from '../application/get-student-profiles.js';
 import { getPromptOptions } from '../application/get-prompt-options.js';
 import { createDraft } from '../application/create-draft.js';
@@ -501,6 +505,57 @@ export function registerExtendedRoutes(app: FastifyInstance, options: ExtendedRo
           statusCode: 500,
           error: 'internal_error',
           recordingId,
+        });
+
+        return errorResponse(reply, 'internal_error');
+      }
+    },
+  );
+
+  app.post(
+    '/recordings/:recordingId/transcribe',
+    {
+      preHandler: [authenticate],
+    },
+    async (request, reply) => {
+      const { recordingId } = request.params as { recordingId: string };
+      const routePath = resolveRoutePath(request, 'POST /recordings/:recordingId/transcribe');
+
+      try {
+        const result = await retryRecordingTranscription(recordingId, {
+          enqueue: transcribeQueue.enqueue,
+        });
+
+        if (!result) {
+          logger.info('Recording not found for retry', {
+            event: 'recording_retry_not_found',
+            route: routePath,
+            recordingId,
+          });
+          return errorResponse(reply, 'not_found');
+        }
+
+        logger.info('Recording retry requested', {
+          event: 'recording_retry_requested',
+          route: routePath,
+          recordingId,
+        });
+
+        return reply.send(result);
+      } catch (error: unknown) {
+        if (error instanceof RecordingRetryError) {
+          return errorResponse(reply, 'validation_failed', {
+            message: error.message,
+            code: error.code,
+          });
+        }
+
+        logger.error(error instanceof Error ? error : String(error), {
+          event: 'recording_retry_failed',
+          route: routePath,
+          statusCode: 500,
+          recordingId,
+          error: 'internal_error',
         });
 
         return errorResponse(reply, 'internal_error');

@@ -288,7 +288,7 @@ delete(uri) -> void
 - GET /recordings/:id
 - GET /recordings/:id/transcript
 - PUT /recordings/:id/transcript
-- POST /recordings/:id/transcribe (optional manual retry)
+- POST /recordings/:id/transcribe (manual retry)
 
 ### Prompt Packages
 - POST /recordings/:id/prompt-package (optional `templateId`, `profileId`)
@@ -377,10 +377,12 @@ Implemented in repo:
 - Upload ingestion (`/recordings/upload`) with optional student association.
 - Deepgram worker with multichannel + utterances + punctuation; diarize fallback for mono.
 - Transcript read/update endpoints.
+- Manual retry endpoint (`POST /recordings/:id/transcribe`) and queue-state UI surfacing.
 - Prompt package creation + retrieval.
 - Draft save + materialize to `FILESYSTEM_UPLOAD_DIR/drafts/<draftId>.md`.
 - Draft materialization auto-creates an awaiting_approval job.
 - Recording status SSE via `/jobs/events` and a Phase 2 transcription workspace UI.
+- Startup validation for storage + prompt/recordings paths.
 
 Known gaps to reach full Phase 2 acceptance:
 - None (prompt allowlists, uploads, and student association are implemented).

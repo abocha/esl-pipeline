@@ -7,6 +7,7 @@
  * - GET /jobs/:jobId (authenticated)
  * - POST /uploads (authenticated)
  * - POST /recordings/upload (authenticated)
+ * - POST /recordings/:id/transcribe (authenticated)
  * - GET /config/job-options for metadata
  * - GET /config/students for student profiles
  * - GET /config/prompts for prompt templates and profiles
@@ -199,6 +200,23 @@ export async function getRecording(recordingId: string): Promise<RecordingListIt
     const axiosError = toAxiosError(error);
     if (axiosError && isAuthError(axiosError)) {
       throw new Error('Authentication required. Please login to view recordings.');
+    }
+    throw new Error(axiosError ? handleApiError(axiosError) : formatUnknownError(error));
+  }
+}
+
+export async function retryRecordingTranscription(
+  recordingId: string,
+): Promise<RecordingListItem> {
+  try {
+    const response = await apiClient.post(
+      buildApiProxyPath(`/recordings/${encodeURIComponent(recordingId)}/transcribe`),
+    );
+    return response.data;
+  } catch (error: unknown) {
+    const axiosError = toAxiosError(error);
+    if (axiosError && isAuthError(axiosError)) {
+      throw new Error('Authentication required. Please login to retry transcriptions.');
     }
     throw new Error(axiosError ? handleApiError(axiosError) : formatUnknownError(error));
   }

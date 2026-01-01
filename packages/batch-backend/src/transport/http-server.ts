@@ -9,6 +9,7 @@ import { fileURLToPath } from 'node:url';
 
 import { loadConfig } from '../config/env.js';
 import { scanRecordingsWithDefaults } from '../application/scan-recordings.js';
+import { validateTranscriptionConfig } from '../application/validate-transcription-config.js';
 import {
   type FileSanitizationService,
   createFileSanitizationService,
@@ -143,11 +144,11 @@ export async function createHttpServer(): Promise<FastifyInstance> {
 // Public entrypoint used in production; behavior MUST remain unchanged.
 export async function startHttpServer(): Promise<void> {
   const config = loadConfig();
-  await enableRedisJobEventBridge();
-  await enableRedisRecordingEventBridge();
-  const app = await createHttpServer();
-
   try {
+    await validateTranscriptionConfig({ config });
+    await enableRedisJobEventBridge();
+    await enableRedisRecordingEventBridge();
+    const app = await createHttpServer();
     await app.listen({
       port: config.httpPort,
       host: '0.0.0.0',
