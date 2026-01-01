@@ -10,6 +10,7 @@ describe('application/create-approval-job', () => {
     const draft: DraftRecord = {
       id: 'draft-1',
       promptPackageId: 'prompt-1',
+      studentId: 'student-1',
       storageUri: 'local://drafts/draft-1.md',
       createdBy: 'user-1',
       createdAt: new Date('2024-01-01T00:00:00Z'),
@@ -19,6 +20,7 @@ describe('application/create-approval-job', () => {
       id: 'prompt-1',
       recordingId: 'recording-1',
       transcriptId: 'transcript-1',
+      studentId: 'student-1',
       profilePath: '/profiles/p1.md',
       templateVersion: '/templates/t1.md',
       notes: 'Notes',

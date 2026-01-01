@@ -16,6 +16,7 @@ describe('application/draft', () => {
       id: 'prompt-1',
       recordingId: 'recording-1',
       transcriptId: 'transcript-1',
+      studentId: 'student-1',
       profilePath: null,
       templateVersion: '/templates/t1.md',
       notes: null,
@@ -46,6 +47,7 @@ describe('application/draft', () => {
           insert: async (params) => ({
             id: params.id ?? 'draft-1',
             promptPackageId: params.promptPackageId,
+            studentId: params.studentId ?? null,
             storageUri: params.storageUri,
             createdBy: params.createdBy ?? null,
             createdAt: new Date('2024-01-01T00:10:00Z'),
@@ -57,6 +59,7 @@ describe('application/draft', () => {
 
     expect(draft).not.toBeNull();
     expect(draft?.promptPackageId).toBe(promptPackage.id);
+    expect(draft?.studentId).toBe('student-1');
     expect(draft?.createdBy).toBe('user-1');
     expect(draft?.storageUri).toContain('local://drafts/');
     expect(draft?.text).toBe('DRAFT TEXT');
@@ -91,6 +94,7 @@ describe('application/draft', () => {
     const draft: DraftRecord = {
       id: 'draft-1',
       promptPackageId: 'prompt-1',
+      studentId: 'student-1',
       storageUri: 'local://drafts/draft-1.md',
       createdBy: 'user-1',
       createdAt: new Date('2024-01-01T00:00:00Z'),
@@ -145,6 +149,7 @@ describe('application/draft', () => {
     const draft: DraftRecord = {
       id: 'draft-2',
       promptPackageId: 'prompt-2',
+      studentId: 'student-2',
       storageUri: 'local://drafts/draft-2.md',
       createdBy: 'user-2',
       createdAt: new Date('2024-01-01T00:00:00Z'),
@@ -154,6 +159,7 @@ describe('application/draft', () => {
       id: 'prompt-2',
       recordingId: 'recording-2',
       transcriptId: 'transcript-2',
+      studentId: 'student-2',
       profilePath: '/profiles/p2.md',
       templateVersion: '/templates/t2.md',
       notes: 'Notes',

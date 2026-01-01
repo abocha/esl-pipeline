@@ -277,12 +277,20 @@ export function registerCoreRoutes(app: FastifyInstance, options: CoreRouteOptio
           (event) => {
             try {
               if (!event || !event.recording) return;
+              const recording = event.recording;
               const payload: RecordingEventMessage = {
                 type: 'recording_state_changed',
-                recordingId: event.recording.id,
-                status: event.recording.status,
+                recordingId: recording.id,
+                status: recording.status,
                 transcriptId: event.transcriptId ?? null,
-                error: event.recording.error ?? null,
+                error: recording.error ?? null,
+                studentId: recording.studentId ?? null,
+                source: recording.source,
+                durationSec: recording.durationSec ?? null,
+                channels: recording.channels ?? null,
+                bytes: recording.bytes,
+                createdAt: recording.createdAt.toISOString(),
+                updatedAt: recording.updatedAt.toISOString(),
               };
               reply.raw.write(`event: recording_state_changed\n`);
               reply.raw.write(`data: ${JSON.stringify(payload)}\n\n`);
@@ -306,17 +314,25 @@ export function registerCoreRoutes(app: FastifyInstance, options: CoreRouteOptio
       }
 
       unsubscribeRecordings = subscribeRecordingEvents(
-        (event) => {
-          try {
-            if (!event || !event.recording) return;
-            if (!recordingIds.has(event.recording.id)) return;
-            const payload: RecordingEventMessage = {
-              type: 'recording_state_changed',
-              recordingId: event.recording.id,
-              status: event.recording.status,
-              transcriptId: event.transcriptId ?? null,
-              error: event.recording.error ?? null,
-            };
+          (event) => {
+            try {
+              if (!event || !event.recording) return;
+              const recording = event.recording;
+              if (!recordingIds.has(recording.id)) return;
+              const payload: RecordingEventMessage = {
+                type: 'recording_state_changed',
+                recordingId: recording.id,
+                status: recording.status,
+                transcriptId: event.transcriptId ?? null,
+                error: recording.error ?? null,
+                studentId: recording.studentId ?? null,
+                source: recording.source,
+                durationSec: recording.durationSec ?? null,
+                channels: recording.channels ?? null,
+                bytes: recording.bytes,
+                createdAt: recording.createdAt.toISOString(),
+                updatedAt: recording.updatedAt.toISOString(),
+              };
             reply.raw.write(`event: recording_state_changed\n`);
             reply.raw.write(`data: ${JSON.stringify(payload)}\n\n`);
           } catch (error: unknown) {

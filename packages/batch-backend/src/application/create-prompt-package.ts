@@ -5,6 +5,7 @@ import path from 'node:path';
 import type { BatchBackendConfig } from '../config/env.js';
 import { loadConfig } from '../config/env.js';
 import { getTranscriptByRecordingId } from '../domain/transcript-repository.js';
+import { getRecordingById } from '../domain/recording-repository.js';
 import { insertPromptPackage } from '../domain/prompt-package-repository.js';
 import type { PromptPackageRecord } from '../domain/prompt-package-model.js';
 import type { TranscriptionStorage } from '../infrastructure/transcription-storage.js';
@@ -22,6 +23,7 @@ export interface PromptPackageResponse {
   id: string;
   recordingId: string;
   transcriptId: string;
+  studentId: string | null;
   profilePath: string | null;
   templateVersion: string;
   notes: string | null;
@@ -36,6 +38,9 @@ export interface CreatePromptPackageDependencies {
   storage: TranscriptionStorage;
   transcripts: {
     getByRecordingId: typeof getTranscriptByRecordingId;
+  };
+  recordings: {
+    getById: typeof getRecordingById;
   };
   promptPackages: {
     insert: typeof insertPromptPackage;
@@ -53,12 +58,16 @@ export async function createPromptPackage(
   const transcripts = overrides?.transcripts ?? {
     getByRecordingId: getTranscriptByRecordingId,
   };
+  const recordings = overrides?.recordings ?? {
+    getById: getRecordingById,
+  };
   const promptPackages = overrides?.promptPackages ?? {
     insert: insertPromptPackage,
   };
 
   const transcript = await transcripts.getByRecordingId(params.recordingId);
   if (!transcript) return null;
+  const recording = await recordings.getById(transcript.recordingId);
 
   const profileRoot = await resolveProfileRoot(config.prompt.defaultProfilePath);
   const templatePath = resolvePromptPath(config.prompt.templatePath);
@@ -88,6 +97,7 @@ export async function createPromptPackage(
     id: promptPackageId,
     recordingId: transcript.recordingId,
     transcriptId: transcript.id,
+    studentId: recording?.studentId ?? null,
     profilePath,
     templateVersion: templatePath,
     notes: params.notes ?? null,
@@ -105,6 +115,7 @@ export function toPromptPackageResponse(
     id: promptPackage.id,
     recordingId: promptPackage.recordingId,
     transcriptId: promptPackage.transcriptId,
+    studentId: promptPackage.studentId ?? null,
     profilePath: promptPackage.profilePath ?? null,
     templateVersion: promptPackage.templateVersion,
     notes: promptPackage.notes ?? null,

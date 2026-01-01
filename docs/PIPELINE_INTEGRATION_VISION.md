@@ -26,7 +26,7 @@ Status snapshot:
 7. Generate TTS, publish to Notion, persist manifest.
 
 ### Phase 2+ (native transcription, implemented with gaps)
-1. Recording scan ingests new audio and creates Recording rows.
+1. Recording scan or upload ingestion creates Recording rows.
 2. Transcribe worker runs Deepgram and stores transcript artifacts.
 3. UI reviews/edits transcript.
 4. UI assembles prompt package from template + profile + notes + transcript.
@@ -35,6 +35,7 @@ Status snapshot:
 
 Implemented successfully (current as-built state):
 - Scan ingestion with dedupe; manual sync endpoint.
+- Upload ingestion via `POST /recordings/upload`.
 - Transcribe queue + worker using Deepgram multichannel with utterances + punctuation.
 - Diarization fallback for mono audio; transcript formatting with Teacher/Student labels.
 - Transcript read/update endpoints wired to the UI.
@@ -44,6 +45,10 @@ Implemented successfully (current as-built state):
 
 Notes for Phase 2+:
 - Recording list/backfill endpoint is available; UI hydrates on load and merges SSE updates.
+- Upload ingestion via `POST /recordings/upload` (S3 recommended).
+- Student association uses a deterministic student ID derived from folder names or upload selection.
+  - `/config/students` exposes configured student profiles for UI selection.
+  - Recording list supports `studentId` filtering; UI supports filtering and upload association.
 - Only new audio content is discovered; renames do not re-ingest.
 - Draft approval auto-creates an awaiting_approval job during materialization.
 
@@ -105,13 +110,12 @@ Prereqs:
 - DEEPGRAM_API_KEY set in .env.batch-backend.
 
 Flow:
-1) Drop a new audio file into the mounted recordings folder.
-2) Click Sync recordings (UI) or POST /recordings/sync.
+1) Drop a new audio file into the mounted recordings folder, or upload via the UI (`POST /recordings/upload`).
+2) Click Sync recordings (UI) or POST /recordings/sync (scan mode only).
 3) Wait for transcribe queue to complete.
 4) Open transcript by Recording ID; edit if needed.
 5) Build prompt package, then save draft.
 6) Materialize + approve (job is created automatically; no manual job ID).
-   (Current gap: Phase 2+ does not create a job automatically.)
 
 ---
 
@@ -130,8 +134,10 @@ See docs/reference/env.md for the full list. Key Phase 2+ entries:
 
 - Recording scan is delta-only; use a brand new file to test ingestion.
 - Recording list loads on page load and stays in sync with SSE updates.
+- Recording uploads honor `MAX_FILE_SIZE`; increase it for longer lessons.
 - Draft approval auto-creates a job; no manual job selection needed.
 - Prompt profile path is constrained to configured root; ensure the env paths exist.
+- Student IDs are derived from normalized names; renaming folders or changing names creates a new ID.
 
 ---
 
@@ -150,7 +156,6 @@ Implemented in repo:
 - Draft materialization to filesystem (auto-creates approval job).
 
 ### Shortcomings to achieve full Phase 2+
-- Upload ingestion (S3-backed) and student association.
 - Cleaner template/profile selection + versioning in UI.
 
 ### New phases (fresh roadmap)
@@ -160,11 +165,11 @@ Phase 3: Phase 2+ polish
 - Clear error states and retries in the transcription workspace.
 
 Phase 4: Student-centric workflow
-- Student selection, profile CRUD, and automatic association on recordings.
+- Student selection, profile CRUD, and per-student timelines.
 - Per-student history and transcript/draft timeline.
 
 Phase 5: FRONTEND_VISION alignment
-- Upload ingestion (S3), richer editor, dashboard/activity stream.
+- Richer upload UX, editor, dashboard/activity stream.
 - Full guided multi-step flow for lesson -> transcript -> draft -> publish.
 
 Phase 6: Storage modernization

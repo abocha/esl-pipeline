@@ -1,6 +1,7 @@
 export interface DraftRecord {
   id: string;
   promptPackageId: string;
+  studentId?: string | null;
   storageUri: string;
   createdBy?: string | null;
   createdAt: Date;

@@ -29,6 +29,16 @@ import { metrics } from './metrics.js';
 // Populated only inside getPipeline(), never at import time.
 let cachedPipeline: ReturnType<typeof createPipeline> | null = null;
 
+export interface StudentProfile {
+  student: string;
+  dbId?: string | null;
+  pageParentId?: string | null;
+  colorPreset?: string | null;
+  voices?: Record<string, string>;
+  manifestPreset?: string | null;
+  accentPreference?: string | null;
+}
+
 export function resetPipelineCache() {
   cachedPipeline = null;
 }
@@ -204,6 +214,11 @@ export async function runAssignmentJob(
 export async function getJobOptionsFromOrchestrator(): Promise<JobOptionsPayload> {
   const pipeline = getPipeline();
   return resolveJobOptions(pipeline);
+}
+
+export async function getStudentProfilesFromOrchestrator(): Promise<StudentProfile[]> {
+  const pipeline = getPipeline();
+  return pipeline.configProvider.loadStudentProfiles(pipeline.configPaths.studentsDir);
 }
 
 export function isManifestBucketMissingError(error: unknown): boolean {

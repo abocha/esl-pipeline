@@ -6,6 +6,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 import { scanRecordings, type RecordingRepository } from '../src/application/scan-recordings.js';
 import type { RecordingRecord } from '../src/domain/recording-model.js';
 import { FilesystemTranscriptionStorage } from '../src/infrastructure/transcription-storage.js';
+import { deriveStudentId } from '../src/domain/student-utils.js';
 
 async function createTempDir(): Promise<string> {
   return fs.mkdtemp(path.join(os.tmpdir(), 'esl-recordings-'));
@@ -31,7 +32,10 @@ describe('application/scan-recordings', () => {
     rootDir = await createTempDir();
     uploadDir = await createTempDir();
 
-    const audioPath = path.join(rootDir, 'lesson.opus');
+    const studentName = 'Anna';
+    const studentDir = path.join(rootDir, studentName);
+    await fs.mkdir(studentDir, { recursive: true });
+    const audioPath = path.join(studentDir, 'lesson.opus');
     await fs.writeFile(audioPath, 'audio-data');
 
     const storage = new FilesystemTranscriptionStorage(uploadDir);
@@ -53,6 +57,7 @@ describe('application/scan-recordings', () => {
     expect(repo.records).toHaveLength(1);
     expect(enqueued).toHaveLength(1);
     expect(repo.records[0]?.storageUri).toBe(`local://recordings/${enqueued[0]}.opus`);
+    expect(repo.records[0]?.studentId).toBe(deriveStudentId(studentName));
   });
 
   it('deduplicates recordings by sha256', async () => {

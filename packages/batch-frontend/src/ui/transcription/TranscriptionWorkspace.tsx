@@ -1,5 +1,5 @@
 import copy from 'copy-to-clipboard';
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import toast from 'react-hot-toast';
 
 import { useJobMonitor } from '../../context/JobMonitorContext';
@@ -8,13 +8,16 @@ import {
   type MaterializeDraftResponse,
   type PromptPackageResponse,
   type RecordingTranscriptResponse,
+  type StudentOption,
   approveJob,
   createDraft,
   createPromptPackage,
+  fetchStudentOptions,
   fetchPromptPackage,
   fetchRecordingTranscript,
   materializeDraft,
   syncRecordings,
+  uploadRecording,
   updateRecordingTranscript,
 } from '../../utils/api';
 
@@ -109,6 +112,12 @@ export const TranscriptionWorkspace: React.FC = () => {
   const [selectedRecordingId, setSelectedRecordingId] = useState('');
   const [recordingInput, setRecordingInput] = useState('');
   const [syncing, setSyncing] = useState(false);
+  const [uploadFile, setUploadFile] = useState<File | null>(null);
+  const [uploading, setUploading] = useState(false);
+  const [uploadKey, setUploadKey] = useState(0);
+  const [studentOptions, setStudentOptions] = useState<StudentOption[]>([]);
+  const [studentFilter, setStudentFilter] = useState('all');
+  const [uploadStudentId, setUploadStudentId] = useState('');
 
   const [transcript, setTranscript] = useState<RecordingTranscriptResponse | null>(null);
   const [transcriptText, setTranscriptText] = useState('');
@@ -135,6 +144,40 @@ export const TranscriptionWorkspace: React.FC = () => {
     [recordings, selectedRecordingId],
   );
 
+  const studentLabelById = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const student of studentOptions) {
+      map.set(student.id, student.name);
+    }
+    return map;
+  }, [studentOptions]);
+
+  const filteredRecordings = useMemo(() => {
+    if (studentFilter === 'all') return recordings;
+    if (studentFilter === 'unassigned') {
+      return recordings.filter((recording) => !recording.studentId);
+    }
+    return recordings.filter((recording) => recording.studentId === studentFilter);
+  }, [recordings, studentFilter]);
+
+  useEffect(() => {
+    let active = true;
+    const loadStudents = async () => {
+      try {
+        const response = await fetchStudentOptions();
+        if (!active) return;
+        setStudentOptions(response.students ?? []);
+      } catch (error) {
+        if (!active) return;
+        console.warn('Failed to load student options', error);
+      }
+    };
+    void loadStudents();
+    return () => {
+      active = false;
+    };
+  }, []);
+
   const handleSync = async () => {
     if (syncing) return;
     setSyncing(true);
@@ -146,6 +189,44 @@ export const TranscriptionWorkspace: React.FC = () => {
       toast.error(message);
     } finally {
       setSyncing(false);
+    }
+  };
+
+  const handleUploadRecording = async () => {
+    if (uploading) return;
+    if (!uploadFile) {
+      toast.error('Select an audio file to upload');
+      return;
+    }
+    setUploading(true);
+    try {
+      const record = await uploadRecording(uploadFile, {
+        studentId: uploadStudentId || undefined,
+      });
+      registerRecording(record.recordingId, {
+        recordingId: record.recordingId,
+        status: record.status,
+        transcriptId: record.transcriptId ?? null,
+        error: record.error ?? null,
+        source: record.source,
+        studentId: record.studentId ?? null,
+        durationSec: record.durationSec ?? null,
+        channels: record.channels ?? null,
+        bytes: record.bytes,
+        createdAt: record.createdAt,
+        updatedAt: record.updatedAt,
+      });
+      setSelectedRecordingId(record.recordingId);
+      setRecordingInput(record.recordingId);
+      resetPromptState();
+      toast.success('Recording uploaded');
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Unable to upload recording';
+      toast.error(message);
+    } finally {
+      setUploading(false);
+      setUploadFile(null);
+      setUploadKey((prev) => prev + 1);
     }
   };
 
@@ -358,14 +439,72 @@ export const TranscriptionWorkspace: React.FC = () => {
             </button>
           </div>
 
+          <div className="recording-filter">
+            <label className="field-label" htmlFor="recording-student-filter">
+              Filter by student
+            </label>
+            <select
+              id="recording-student-filter"
+              value={studentFilter}
+              onChange={(event) => setStudentFilter(event.target.value)}
+            >
+              <option value="all">All students</option>
+              <option value="unassigned">Unassigned</option>
+              {studentOptions.map((student) => (
+                <option key={student.id} value={student.id}>
+                  {student.name}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div className="recording-upload">
+            <input
+              key={uploadKey}
+              type="file"
+              accept=".opus,.mp3,.wav,.m4a"
+              onChange={(event) => setUploadFile(event.target.files?.[0] ?? null)}
+            />
+            <button
+              type="button"
+              className="btn-primary btn-small"
+              onClick={handleUploadRecording}
+              disabled={!uploadFile || uploading}
+            >
+              {uploading ? 'Uploading…' : 'Upload recording'}
+            </button>
+          </div>
+          <div className="recording-upload-options">
+            <label className="field-label" htmlFor="recording-student-upload">
+              Upload student
+            </label>
+            <select
+              id="recording-student-upload"
+              value={uploadStudentId}
+              onChange={(event) => setUploadStudentId(event.target.value)}
+            >
+              <option value="">Unassigned</option>
+              {studentOptions.map((student) => (
+                <option key={student.id} value={student.id}>
+                  {student.name}
+                </option>
+              ))}
+            </select>
+          </div>
+          {uploadFile && <div className="upload-meta">Selected: {uploadFile.name}</div>}
+
           <div className="recordings-list">
-            {recordings.length === 0 ? (
+            {filteredRecordings.length === 0 ? (
               <div className="empty-state">
-                <p>No recording events yet.</p>
-                <span>Run a sync or wait for new audio to arrive.</span>
+                <p>No recordings for this filter.</p>
+                <span>Adjust the filter or ingest new audio.</span>
               </div>
             ) : (
-              recordings.map((recording) => (
+              filteredRecordings.map((recording) => {
+                const studentLabel = recording.studentId
+                  ? studentLabelById.get(recording.studentId) ?? recording.studentId
+                  : 'Unassigned';
+                return (
                 <button
                   type="button"
                   key={recording.recordingId}
@@ -381,15 +520,18 @@ export const TranscriptionWorkspace: React.FC = () => {
                     </span>
                   </div>
                   <div className="recording-sub">
-                    {recording.transcriptId
-                      ? `Transcript: ${recording.transcriptId}`
-                      : 'Transcript pending'}
+                    {`${recording.source === 'upload' ? 'Upload' : 'Scan'} • ${studentLabel} | ${
+                      recording.transcriptId
+                        ? `Transcript: ${recording.transcriptId}`
+                        : 'Transcript pending'
+                    }`}
                   </div>
                   <div className="recording-meta">
                     Updated {new Date(recording.updatedAt).toLocaleString()}
                   </div>
                 </button>
-              ))
+                );
+              })
             )}
           </div>
         </div>
@@ -646,6 +788,38 @@ export const TranscriptionWorkspace: React.FC = () => {
           gap: var(--space-3);
         }
 
+        .recording-filter,
+        .recording-upload-options {
+          display: grid;
+          gap: var(--space-2);
+        }
+
+        .recording-filter select,
+        .recording-upload-options select {
+          background: var(--bg-secondary);
+          border: 1px solid var(--border-light);
+          border-radius: var(--radius-lg);
+          padding: var(--space-2) var(--space-3);
+          color: var(--text-primary);
+        }
+
+        .recording-upload {
+          display: grid;
+          grid-template-columns: 1fr auto;
+          gap: var(--space-3);
+          align-items: center;
+        }
+
+        .recording-upload input[type='file'] {
+          color: var(--text-secondary);
+          font-size: var(--text-xs);
+        }
+
+        .upload-meta {
+          font-size: var(--text-xs);
+          color: var(--text-tertiary);
+        }
+
         .recordings-list {
           display: flex;
           flex-direction: column;
@@ -830,6 +1004,9 @@ export const TranscriptionWorkspace: React.FC = () => {
           }
 
           .recording-input,
+          .recording-filter,
+          .recording-upload,
+          .recording-upload-options,
           .prompt-controls {
             grid-template-columns: 1fr;
           }

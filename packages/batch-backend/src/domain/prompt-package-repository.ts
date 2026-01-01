@@ -9,6 +9,7 @@ interface PromptPackageRow {
   id: string;
   recording_id: string;
   transcript_id: string;
+  student_id: string | null;
   profile_path: string | null;
   template_version: string;
   notes: string | null;
@@ -21,6 +22,7 @@ export interface InsertPromptPackageParams {
   id?: string;
   recordingId: string;
   transcriptId: string;
+  studentId?: string | null;
   profilePath?: string | null;
   templateVersion: string;
   notes?: string | null;
@@ -40,6 +42,7 @@ export async function insertPromptPackage(
         id,
         recording_id,
         transcript_id,
+        student_id,
         profile_path,
         template_version,
         notes,
@@ -47,11 +50,12 @@ export async function insertPromptPackage(
         created_at,
         updated_at
       )
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
       RETURNING
         id,
         recording_id,
         transcript_id,
+        student_id,
         profile_path,
         template_version,
         notes,
@@ -63,6 +67,7 @@ export async function insertPromptPackage(
         id,
         params.recordingId,
         params.transcriptId,
+        params.studentId ?? null,
         params.profilePath ?? null,
         params.templateVersion,
         params.notes ?? null,
@@ -85,7 +90,7 @@ export async function getPromptPackageById(
     const result = await client.query(
       `
       SELECT id, recording_id, transcript_id, profile_path, template_version,
-             notes, storage_uri, created_at, updated_at
+             student_id, notes, storage_uri, created_at, updated_at
       FROM prompt_packages
       WHERE id = $1
       `,
@@ -102,6 +107,7 @@ function mapRowToPromptPackage(row: PromptPackageRow): PromptPackageRecord {
     id: row.id,
     recordingId: row.recording_id,
     transcriptId: row.transcript_id,
+    studentId: row.student_id ?? null,
     profilePath: row.profile_path ?? null,
     templateVersion: row.template_version,
     notes: row.notes ?? null,

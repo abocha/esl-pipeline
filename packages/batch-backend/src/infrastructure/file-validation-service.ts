@@ -1053,6 +1053,28 @@ export function createFileValidationService(): FileValidationService {
   return new FileValidationService(config);
 }
 
+export function createRecordingUploadValidationService(options?: {
+  maxFileSize?: number;
+}): FileValidationService {
+  const config: ValidationConfig = {
+    maxFileSize: options?.maxFileSize ?? 10 * 1024 * 1024,
+    allowedMimeTypes: [
+      'audio/ogg',
+      'audio/mpeg',
+      'audio/wav',
+      'audio/x-wav',
+      'audio/mp4',
+      'audio/aac',
+      'audio/x-m4a',
+    ],
+    allowedExtensions: ['opus', 'mp3', 'wav', 'm4a', 'aac', 'ogg'],
+    enableContentScanning: false,
+    enableMaliciousPatternDetection: false,
+  };
+
+  return new FileValidationService(config);
+}
+
 /**
  * Factory function to create a custom file validation service
  */

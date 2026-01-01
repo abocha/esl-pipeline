@@ -24,6 +24,7 @@ The original staged manual is archived at
 
 ### Scope (Phase 2 MVP)
 - Auto-ingest recordings from a local folder (scan mode) and enqueue transcription jobs.
+- Upload recordings via the UI (`POST /recordings/upload`) and enqueue transcription jobs.
 - Transcribe via Deepgram using the Node SDK.
 - Persist transcript artifacts and metadata in DB + storage adapter.
 - Expose transcript review/edit in the UI.
@@ -37,7 +38,6 @@ The original staged manual is archived at
 - File moving/renaming in the recordings folder.
 - Any requirement for the user to type paths.
 - Browser-direct Deepgram calls (CORS requires a backend proxy).
-- Upload ingestion (UI uploads backed by S3) in the Phase 2 MVP.
 
 ---
 
@@ -60,7 +60,7 @@ The original staged manual is archived at
    - Optional retention policy can delete audio after N days.
 
 5) Storage adapter abstraction
-   - Local storage now, S3 later.
+   - Local storage and S3 supported.
    - Swap storage without rewriting pipeline logic.
 
 6) Phase coexistence
@@ -84,7 +84,7 @@ The original staged manual is archived at
 ### Services
 - Ingestion service
   - Scan mode (MVP): scans a recordings root folder (local).
-  - Upload mode (future): accepts UI uploads into storage (likely S3).
+  - Upload mode: accepts UI uploads into storage (S3 recommended).
   - Creates Recording rows and enqueues transcription jobs.
   - Manual sync endpoint triggers an immediate scan.
 
@@ -121,7 +121,7 @@ The original staged manual is archived at
 ### recordings
 - id (uuid, pk)
 - source (enum: "scan" | "upload")
-- student_id (nullable, future)
+- student_id (nullable; derived from folder name or upload selection)
 - source_path (text, original path for audit, nullable)
 - storage_uri (text, canonical)
 - sha256 (text, optional but recommended)
@@ -131,6 +131,10 @@ The original staged manual is archived at
 - status (enum: "ingested" | "queued" | "transcribing" | "transcribed" | "failed")
 - error (text, nullable)
 - created_at, updated_at
+
+Student association:
+- student_id is a deterministic UUID derived from the normalized student name.
+- Scan ingestion uses the top-level folder name; uploads accept `studentId` or `student` name.
 
 ### transcripts
 - id (uuid, pk)
@@ -148,6 +152,7 @@ The original staged manual is archived at
 - id (uuid, pk)
 - recording_id (fk)
 - transcript_id (fk)
+- student_id (nullable)
 - profile_id or profile_path (nullable)
 - template_version (text)
 - notes (text, nullable)
@@ -157,6 +162,7 @@ The original staged manual is archived at
 ### drafts
 - id (uuid, pk)
 - prompt_package_id (fk)
+- student_id (nullable)
 - storage_uri (text)  // markdown draft content
 - created_by (user id)
 - created_at, updated_at
@@ -190,7 +196,7 @@ delete(uri) -> void
 - Retention policy for recordings:
   - keep N days (config), delete after successful transcription.
 
-### S3 (later)
+### S3 (supported)
 - URI format: s3://bucket/prefix/...
 - Retention via S3 lifecycle rule.
 
@@ -203,6 +209,7 @@ delete(uri) -> void
 - Find new files by extension and optional glob (opus/mp3/wav/m4a).
 - Deduplicate by sha256 or (path + mtime + size).
 - For each new file:
+  - derive student_id from the first folder segment when present
   - store audio in storage adapter
   - create Recording row
   - enqueue transcription job
@@ -212,8 +219,10 @@ delete(uri) -> void
 - triggers a scan immediately
 - returns count of new recordings discovered
 
-### Upload Ingestion (future)
+### Upload Ingestion
+- `POST /recordings/upload` accepts audio uploads.
 - UI uploads create Recording rows with source="upload".
+- Optional student association via `studentId` or `student` name query params.
 - Uses the same storage adapter (S3 recommended) and transcribe-queue.
 - Progress still flows through /jobs/events SSE.
 
@@ -249,8 +258,9 @@ delete(uri) -> void
 
 ## 9) UI Flow Mapping (Frontend Vision Alignment)
 
-1) Select student (future) + choose recording
-   - Recording list from `GET /recordings?status=...`
+1) Filter by student + choose recording
+   - Student list from `GET /config/students`
+   - Recording list from `GET /recordings?status=...&studentId=...` (or `student` name)
    - Live updates from `/jobs/events` (recording_state_changed)
 2) Auto-transcribe (background)
    - UI shows progress via /jobs/events SSE (existing stream)
@@ -271,8 +281,9 @@ delete(uri) -> void
 ## 10) API Endpoints (Minimal Set)
 
 ### Recordings
-- GET /recordings?status=...
+- GET /recordings?status=...&studentId=... (or `student` name)
 - POST /recordings/sync
+- POST /recordings/upload
 - GET /recordings/:id
 - GET /recordings/:id/transcript
 - PUT /recordings/:id/transcript
@@ -285,6 +296,9 @@ delete(uri) -> void
 ### Drafts
 - POST /prompt-packages/:id/draft
 - POST /drafts/:id/materialize (returns md_path for /jobs/:jobId/approve)
+
+### Config
+- GET /config/students
 
 Implementation note:
 - GET /recordings?status=... and GET /recordings/:id are available; the Phase 2 UI hydrates on load
@@ -333,10 +347,8 @@ No pipeline code changes required if adapter is isolated.
 
 ## 13) Open Questions
 
-1) Student association (auto-detect from folder vs manual UI selection)
-2) Transcript edit UX (inline editing vs text editor modal)
-3) How to handle multiple recordings in the same lesson block?
-4) Should recordings list endpoints support filters beyond status (e.g. date range, student)?
+1) Transcript edit UX (inline editing vs text editor modal)
+2) How to handle multiple recordings in the same lesson block?
 
 ---
 
@@ -355,6 +367,7 @@ Phase 2 Acceptance:
 
 Implemented in repo:
 - Scan ingestion (`/recordings/sync`) and transcribe queue.
+- Upload ingestion (`/recordings/upload`) with optional student association.
 - Deepgram worker with multichannel + utterances + punctuation; diarize fallback for mono.
 - Transcript read/update endpoints.
 - Prompt package creation + retrieval.
@@ -363,6 +376,4 @@ Implemented in repo:
 - Recording status SSE via `/jobs/events` and a Phase 2 transcription workspace UI.
 
 Known gaps to reach full Phase 2 acceptance:
-- Upload ingestion (UI → storage) not implemented; scan mode only.
-- Student association is not implemented.
 - Template/profile paths must be configured explicitly (repo templates live under `docs/templates`).
