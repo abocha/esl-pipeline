@@ -8,6 +8,7 @@ import { recordingToDto, type RecordingDto } from './recording-dto.js';
 
 export interface ListRecordingsParams {
   statuses?: string[] | null;
+  studentId?: string | null;
   limit?: number;
   offset?: number;
   order?: RecordingListOptions['order'];
@@ -43,6 +44,7 @@ export async function listRecordingsWithDefaults(
   const limit = clampNumber(params.limit ?? DEFAULT_LIMIT, 1, MAX_LIMIT);
   const offset = Math.max(0, params.offset ?? 0);
   const order = params.order === 'asc' ? 'asc' : 'desc';
+  const studentId = params.studentId ?? null;
   const statuses =
     params.statuses && params.statuses.length > 0
       ? params.statuses.map((status) => RecordingStatusSchema.parse(status))
@@ -51,11 +53,12 @@ export async function listRecordingsWithDefaults(
   const [items, total] = await Promise.all([
     recordings.list({
       statuses,
+      studentId,
       limit,
       offset,
       order,
     }),
-    recordings.count(statuses),
+    recordings.count(statuses, studentId),
   ]);
 
   return {

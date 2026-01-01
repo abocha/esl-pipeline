@@ -6,7 +6,9 @@
  * - POST /jobs (authenticated)
  * - GET /jobs/:jobId (authenticated)
  * - POST /uploads (authenticated)
+ * - POST /recordings/upload (authenticated)
  * - GET /config/job-options for metadata
+ * - GET /config/students for student profiles
  * - GET /jobs/events (SSE) for live updates
  * - GET /user/profile, /user/files (authenticated)
  */
@@ -75,10 +77,20 @@ export interface RecordingsListResponse {
   order: 'asc' | 'desc';
 }
 
+export interface StudentOption {
+  id: string;
+  name: string;
+}
+
+export interface StudentOptionsResponse {
+  students: StudentOption[];
+}
+
 export interface PromptPackageResponse {
   id: string;
   recordingId: string;
   transcriptId: string;
+  studentId: string | null;
   profilePath: string | null;
   templateVersion: string;
   notes: string | null;
@@ -91,6 +103,7 @@ export interface PromptPackageResponse {
 export interface DraftResponse {
   id: string;
   promptPackageId: string;
+  studentId: string | null;
   storageUri: string;
   createdBy: string | null;
   text: string;
@@ -441,6 +454,35 @@ export async function uploadMarkdown(file: File): Promise<UploadMarkdownResponse
 }
 
 /**
+ * Upload an audio recording via POST /recordings/upload.
+ * Returns the created recording metadata.
+ */
+export async function uploadRecording(
+  file: File,
+  options?: { studentId?: string },
+): Promise<RecordingListItem> {
+  try {
+    const formData = new FormData();
+    formData.append('file', file);
+
+    const response = await apiClient.post(buildApiProxyPath('/recordings/upload'), formData, {
+      params: options?.studentId ? { studentId: options.studentId } : undefined,
+      headers: {
+        'Content-Type': 'multipart/form-data',
+      },
+    });
+
+    return response.data;
+  } catch (error: unknown) {
+    const axiosError = toAxiosError(error);
+    if (axiosError && isAuthError(axiosError)) {
+      throw new Error('Authentication required. Please login to upload recordings.');
+    }
+    throw new Error(axiosError ? handleApiError(axiosError) : formatUnknownError(error));
+  }
+}
+
+/**
  * Fetch job status via GET /jobs/:jobId.
  * Now uses authenticated API client.
  */
@@ -460,6 +502,16 @@ export async function getJobStatus(jobId: string): Promise<JobStatus> {
 export async function fetchJobOptions(): Promise<JobOptionsResponse> {
   try {
     const response = await apiClient.get(buildApiProxyPath('/config/job-options'));
+    return response.data;
+  } catch (error: unknown) {
+    const axiosError = toAxiosError(error);
+    throw new Error(axiosError ? handleApiError(axiosError) : formatUnknownError(error));
+  }
+}
+
+export async function fetchStudentOptions(): Promise<StudentOptionsResponse> {
+  try {
+    const response = await apiClient.get(buildApiProxyPath('/config/students'));
     return response.data;
   } catch (error: unknown) {
     const axiosError = toAxiosError(error);

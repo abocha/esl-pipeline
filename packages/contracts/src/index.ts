@@ -64,6 +64,13 @@ export interface RecordingEventMessage {
   status: RecordingStatus;
   transcriptId?: string | null;
   error?: string | null;
+  studentId?: string | null;
+  source?: 'scan' | 'upload';
+  durationSec?: number | null;
+  channels?: number | null;
+  bytes?: number;
+  createdAt?: string;
+  updatedAt?: string;
 }
 
 export type StreamEventMessage = JobEventMessage | RecordingEventMessage;

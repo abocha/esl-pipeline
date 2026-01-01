@@ -40,6 +40,7 @@ describe('application/prompt-package', () => {
         id?: string;
         recordingId: string;
         transcriptId: string;
+        studentId?: string | null;
         profilePath?: string | null;
         templateVersion: string;
         notes?: string | null;
@@ -49,6 +50,7 @@ describe('application/prompt-package', () => {
           id: params.id ?? 'prompt-1',
           recordingId: params.recordingId,
           transcriptId: params.transcriptId,
+          studentId: params.studentId ?? null,
           profilePath: params.profilePath ?? null,
           templateVersion: params.templateVersion,
           notes: params.notes ?? null,
@@ -67,6 +69,23 @@ describe('application/prompt-package', () => {
         transcripts: {
           getByRecordingId: async () => transcript,
         },
+        recordings: {
+          getById: async () => ({
+            id: transcript.recordingId,
+            source: 'scan',
+            studentId: 'student-1',
+            sourcePath: null,
+            storageUri: 'local://recordings/recording-1.opus',
+            sha256: null,
+            bytes: 1,
+            durationSec: null,
+            channels: null,
+            status: 'transcribed',
+            error: null,
+            createdAt: new Date('2024-01-01T00:00:00Z'),
+            updatedAt: new Date('2024-01-01T00:00:00Z'),
+          }),
+        },
         promptPackages,
       },
     );
@@ -74,6 +93,7 @@ describe('application/prompt-package', () => {
     expect(result).not.toBeNull();
     expect(result?.recordingId).toBe(transcript.recordingId);
     expect(result?.transcriptId).toBe(transcript.id);
+    expect(result?.studentId).toBe('student-1');
     expect(result?.notes).toBe('Some notes');
     expect(result?.templateVersion).toBe(templatePath);
     expect(result?.profilePath).toBe(profilePath);
@@ -89,6 +109,7 @@ describe('application/prompt-package', () => {
         id: 'prompt-1',
         recordingId: 'recording-1',
         transcriptId: 'transcript-1',
+        studentId: 'student-1',
         profilePath: '/profiles/p1.md',
         templateVersion: '/templates/t1.md',
         notes: 'Notes',
@@ -107,6 +128,7 @@ describe('application/prompt-package', () => {
       id: 'prompt-1',
       recordingId: 'recording-1',
       transcriptId: 'transcript-1',
+      studentId: 'student-1',
       profilePath: '/profiles/p1.md',
       templateVersion: '/templates/t1.md',
       notes: 'Notes',
@@ -144,6 +166,9 @@ describe('application/prompt-package', () => {
           storage,
           transcripts: {
             getByRecordingId: async () => transcript,
+          },
+          recordings: {
+            getById: async () => null,
           },
           promptPackages: {
             insert: async () => {

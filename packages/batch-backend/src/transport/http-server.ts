@@ -17,6 +17,7 @@ import { createFileStorageService } from '../infrastructure/file-storage-service
 import {
   type FileValidationService,
   createFileValidationService,
+  createRecordingUploadValidationService,
 } from '../infrastructure/file-validation-service.js';
 import { enableRedisJobEventBridge } from '../infrastructure/job-event-redis-bridge.js';
 import { logger } from '../infrastructure/logger.js';
@@ -104,6 +105,12 @@ export async function createHttpServer(): Promise<FastifyInstance> {
     const fileValidationService: FileValidationService | null = config.security.enableFileValidation
       ? createFileValidationService()
       : null;
+    const recordingUploadValidationService: FileValidationService | null =
+      config.security.enableFileValidation
+        ? createRecordingUploadValidationService({
+            maxFileSize: config.security.maxFileSize,
+          })
+        : null;
     const fileSanitizationService: FileSanitizationService | null = config.security
       .enableFileSanitization
       ? createFileSanitizationService()
@@ -120,6 +127,7 @@ export async function createHttpServer(): Promise<FastifyInstance> {
       authenticate,
       uploadRateLimitMiddleware,
       fileValidationService,
+      recordingUploadValidationService,
       fileSanitizationService,
       storageConfig,
       fileStorageService,

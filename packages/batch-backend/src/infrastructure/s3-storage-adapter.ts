@@ -143,6 +143,42 @@ export class S3StorageAdapter {
   }
 
   /**
+   * Fetch an object as a readable stream.
+   */
+  async getObjectStream(key: string): Promise<Readable> {
+    try {
+      const fullKey = this.getFullKey(key);
+      const command = new GetObjectCommand({
+        Bucket: this.config.bucket,
+        Key: fullKey,
+      });
+      const response = await this.s3Client.send(command);
+      const body = response.Body;
+
+      if (!body) {
+        throw new Error('S3 object body is empty');
+      }
+
+      if (body instanceof Readable) {
+        return body;
+      }
+
+      if (typeof (body as AsyncIterable<Uint8Array>)[Symbol.asyncIterator] === 'function') {
+        return Readable.from(body as AsyncIterable<Uint8Array>);
+      }
+
+      return Readable.from(body as unknown as Uint8Array | string);
+    } catch (error) {
+      logger.error('Failed to fetch object stream from S3', {
+        bucket: this.config.bucket,
+        key: this.getFullKey(key),
+        error: String(error),
+      });
+      throw new Error(`S3 get stream failed: ${error}`);
+    }
+  }
+
+  /**
    * Get file metadata from S3
    */
   async getFileMetadata(key: string): Promise<FileMetadata | null> {

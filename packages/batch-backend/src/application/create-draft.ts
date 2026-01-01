@@ -15,6 +15,7 @@ export interface CreateDraftParams {
 export interface DraftResponse {
   id: string;
   promptPackageId: string;
+  studentId: string | null;
   storageUri: string;
   createdBy: string | null;
   text: string;
@@ -58,6 +59,7 @@ export async function createDraft(
   const draft = await drafts.insert({
     id: draftId,
     promptPackageId: promptPackage.id,
+    studentId: promptPackage.studentId ?? null,
     storageUri: stored.uri,
     createdBy: params.createdBy ?? null,
   });
@@ -69,6 +71,7 @@ export function toDraftResponse(draft: DraftRecord, text: string): DraftResponse
   return {
     id: draft.id,
     promptPackageId: draft.promptPackageId,
+    studentId: draft.studentId ?? null,
     storageUri: draft.storageUri,
     createdBy: draft.createdBy ?? null,
     text,

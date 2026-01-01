@@ -220,6 +220,7 @@ import {
 - **Extended API:** Fully functional routes
   - Authentication (`/auth/register`, `/auth/login`, `/auth/refresh`, `/auth/me`)
   - File uploads (`/uploads` with validation and sanitization)
+  - Recording uploads (`/recordings/upload`)
   - Admin endpoints (`/admin/users`, `/admin/jobs`, `/admin/stats`)
   - User profile (`/user/profile`, `/user/jobs`, `/user/files`)
 
@@ -246,14 +247,16 @@ Gap-closure steps live in `docs/design/TRANSCRIPTION_PIPELINE_IMPLEMENTATION_MAN
 The staged implementation manual is archived at
 `docs/archive/TRANSCRIPTION_PIPELINE_IMPLEMENTATION_MANUAL.md`.
 
-### Implemented Endpoints (scan ingestion)
+### Implemented Endpoints (scan + upload ingestion)
 
 - Recordings:
   - `POST /recordings/sync`
-  - `GET /recordings`
+  - `POST /recordings/upload`
+  - `GET /recordings` (supports `studentId`/`student` filters)
   - `GET /recordings/:id`
   - `GET /recordings/:id/transcript`
   - `PUT /recordings/:id/transcript`
+  - `GET /config/students`
 - Prompt packages:
   - `POST /recordings/:id/prompt-package`
   - `GET /prompt-packages/:id`
@@ -270,12 +273,10 @@ The staged implementation manual is archived at
 - Progress updates should reuse `/jobs/events` with extended payloads (`recordingId`, `transcriptId`).
 - Draft materialization writes to `FILESYSTEM_UPLOAD_DIR/drafts/<draftId>.md` and feeds `/jobs/:jobId/approve`.
 - Draft materialization auto-creates an `awaiting_approval` job when none is supplied.
-- Storage adapter abstraction (filesystem now, S3 later) is required for recordings/transcripts/prompt packages/drafts.
+- Storage adapter abstraction (filesystem + S3 supported) is required for recordings/transcripts/prompt packages/drafts.
 
 ### Known Gaps (MVP polish)
-
-- Recording list/backfill endpoints are not implemented; UI relies on SSE deltas.
-- Upload ingestion and student association are not implemented.
+None (Stage 4 closed student association).
 
 ---
 

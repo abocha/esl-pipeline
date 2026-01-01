@@ -17,6 +17,7 @@ import { publishJobEvent } from '../src/domain/job-events.js';
 import type { JobRecord } from '../src/domain/job-model.js';
 import { publishRecordingEvent } from '../src/domain/recording-events.js';
 import type { RecordingRecord } from '../src/domain/recording-model.js';
+import { deriveStudentId } from '../src/domain/student-utils.js';
 import * as loggerModule from '../src/infrastructure/logger.js';
 import { createHttpServer } from '../src/transport/http-server.js';
 
@@ -99,8 +100,14 @@ vi.mock('../src/infrastructure/orchestrator-service', () => {
     uploadOptions: ['auto', 's3', 'none'] as const,
     ttsStrategies: ['auto', 'dialogue', 'tts'] as const,
   };
+  const orchestratorStudentProfilesMock = [
+    { student: 'Anna' },
+    { student: 'Bob' },
+    { student: '  ' },
+  ];
   return {
     getJobOptionsFromOrchestrator: vi.fn().mockResolvedValue(orchestratorJobOptionsMock),
+    getStudentProfilesFromOrchestrator: vi.fn().mockResolvedValue(orchestratorStudentProfilesMock),
   };
 });
 
@@ -400,6 +407,21 @@ describe('transport/http-server - integration (in-process)', () => {
     }
   });
 
+  it('GET /config/students returns student options', async () => {
+    const response = await app.inject({
+      method: 'GET',
+      url: '/config/students',
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toEqual({
+      students: [
+        { id: deriveStudentId('Anna'), name: 'Anna' },
+        { id: deriveStudentId('Bob'), name: 'Bob' },
+      ],
+    });
+  });
+
   it('GET /recordings returns paginated recording list', async () => {
     const listRecordings = vi.spyOn(listRecordingsModule, 'listRecordingsWithDefaults');
     listRecordings.mockClear();
@@ -454,10 +476,34 @@ describe('transport/http-server - integration (in-process)', () => {
     });
     expect(listRecordings).toHaveBeenCalledWith({
       statuses: ['transcribed'],
+      studentId: null,
       limit: 10,
       offset: 5,
       order: 'asc',
     });
+  });
+
+  it('GET /recordings maps student filter to studentId', async () => {
+    const listRecordings = vi.spyOn(listRecordingsModule, 'listRecordingsWithDefaults');
+    listRecordings.mockResolvedValue({
+      items: [],
+      limit: 50,
+      offset: 0,
+      total: 0,
+      order: 'desc',
+    });
+
+    const response = await app.inject({
+      method: 'GET',
+      url: '/recordings?student=Anna',
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(listRecordings).toHaveBeenCalledWith(
+      expect.objectContaining({
+        studentId: deriveStudentId('Anna'),
+      }),
+    );
   });
 
   it('GET /recordings/:id returns recording payload', async () => {
@@ -635,6 +681,7 @@ describe('transport/http-server - integration (in-process)', () => {
       id: 'prompt-1',
       recordingId: 'recording-1',
       transcriptId: 'transcript-1',
+      studentId: null,
       profilePath: '/profiles/p1.md',
       templateVersion: '/templates/t1.md',
       notes: 'Some notes',
@@ -655,6 +702,7 @@ describe('transport/http-server - integration (in-process)', () => {
       id: 'prompt-1',
       recordingId: 'recording-1',
       transcriptId: 'transcript-1',
+      studentId: null,
       profilePath: '/profiles/p1.md',
       templateVersion: '/templates/t1.md',
       notes: 'Some notes',
@@ -716,6 +764,7 @@ describe('transport/http-server - integration (in-process)', () => {
       id: 'prompt-1',
       recordingId: 'recording-1',
       transcriptId: 'transcript-1',
+      studentId: 'student-1',
       profilePath: '/profiles/p1.md',
       templateVersion: '/templates/t1.md',
       notes: 'Some notes',
@@ -735,6 +784,7 @@ describe('transport/http-server - integration (in-process)', () => {
       id: 'prompt-1',
       recordingId: 'recording-1',
       transcriptId: 'transcript-1',
+      studentId: 'student-1',
       profilePath: '/profiles/p1.md',
       templateVersion: '/templates/t1.md',
       notes: 'Some notes',
@@ -766,6 +816,7 @@ describe('transport/http-server - integration (in-process)', () => {
     createDraft.mockResolvedValue({
       id: 'draft-1',
       promptPackageId: 'prompt-1',
+      studentId: 'student-1',
       storageUri: 'local://drafts/draft-1.md',
       createdBy: 'test-user-id',
       text: 'DRAFT TEXT',
@@ -783,6 +834,7 @@ describe('transport/http-server - integration (in-process)', () => {
     expect(response.json()).toEqual({
       id: 'draft-1',
       promptPackageId: 'prompt-1',
+      studentId: 'student-1',
       storageUri: 'local://drafts/draft-1.md',
       createdBy: 'test-user-id',
       text: 'DRAFT TEXT',
@@ -1029,7 +1081,7 @@ describe('transport/http-server - integration (in-process)', () => {
       const recording: RecordingRecord = {
         id: 'recording-1',
         source: 'scan',
-        studentId: null,
+        studentId: 'student-1',
         sourcePath: '/tmp/recording.opus',
         storageUri: 'local://recordings/recording.opus',
         sha256: 'hash',
@@ -1120,6 +1172,9 @@ describe('transport/http-server - integration (in-process)', () => {
       expect(eventPayload.status).toBe('transcribed');
       expect(eventPayload.transcriptId).toBe('transcript-1');
       expect(eventPayload.error).toBeNull();
+      expect(eventPayload.studentId).toBe('student-1');
+      expect(eventPayload.source).toBe('scan');
+      expect(eventPayload.bytes).toBe(12);
     },
   );
 });

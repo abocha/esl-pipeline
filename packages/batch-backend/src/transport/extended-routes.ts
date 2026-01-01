@@ -10,6 +10,9 @@ import { getRecording } from '../application/get-recording.js';
 import { getRecordingsIndex } from '../application/get-recordings-index.js';
 import { getRecordingTranscript } from '../application/get-recording-transcript.js';
 import { listRecordingsWithDefaults } from '../application/list-recordings.js';
+import { ingestRecordingUpload } from '../application/ingest-recording-upload.js';
+import { recordingToDto } from '../application/recording-dto.js';
+import { getStudentProfiles } from '../application/get-student-profiles.js';
 import { createDraft } from '../application/create-draft.js';
 import { createPromptPackage } from '../application/create-prompt-package.js';
 import { getPromptPackage } from '../application/get-prompt-package.js';
@@ -58,6 +61,13 @@ import {
 } from '../infrastructure/file-validation-service.js';
 import { logger } from '../infrastructure/logger.js';
 import { StorageConfigurationService } from '../infrastructure/storage-config.js';
+import { createTranscriptionStorage } from '../infrastructure/transcription-storage.js';
+import { createTranscribeQueue } from '../infrastructure/transcribe-queue.js';
+import {
+  insertRecording,
+  updateRecordingStatus,
+} from '../domain/recording-repository.js';
+import { deriveStudentId, normalizeStudentName } from '../domain/student-utils.js';
 import { getAuthenticatedUser, requireRole } from './auth-middleware.js';
 import { errorResponse, resolveRoutePath } from './route-helpers.js';
 
@@ -68,6 +78,7 @@ export interface ExtendedRouteOptions {
   authenticate: AsyncPreHandler;
   uploadRateLimitMiddleware: AsyncPreHandler;
   fileValidationService: FileValidationService | null;
+  recordingUploadValidationService: FileValidationService | null;
   fileSanitizationService: FileSanitizationService | null;
   storageConfig: StorageConfigurationService;
   fileStorageService: FileStorageService;
@@ -79,10 +90,13 @@ export function registerExtendedRoutes(app: FastifyInstance, options: ExtendedRo
     authenticate,
     uploadRateLimitMiddleware,
     fileValidationService,
+    recordingUploadValidationService,
     fileSanitizationService,
     storageConfig,
     fileStorageService,
   } = options;
+  const transcriptionStorage = createTranscriptionStorage({ storageConfig });
+  const transcribeQueue = createTranscribeQueue();
 
   app.get(
     '/config/job-options',
@@ -102,6 +116,37 @@ export function registerExtendedRoutes(app: FastifyInstance, options: ExtendedRo
         });
 
         return reply.send(options);
+      } catch (error: unknown) {
+        logger.error(error instanceof Error ? error : String(error), {
+          event: 'http_request',
+          route: routePath,
+          statusCode: 500,
+          error: 'internal_error',
+        });
+
+        return errorResponse(reply, 'internal_error');
+      }
+    },
+  );
+
+  app.get(
+    '/config/students',
+    {
+      preHandler: [authenticate],
+    },
+    async (request, reply) => {
+      const routePath = resolveRoutePath(request, 'GET /config/students');
+      try {
+        const students = await getStudentProfiles();
+        reply.header('Cache-Control', 'private, max-age=60');
+
+        logger.info('HTTP request handled', {
+          event: 'http_request',
+          route: routePath,
+          statusCode: 200,
+        });
+
+        return reply.send(students);
       } catch (error: unknown) {
         logger.error(error instanceof Error ? error : String(error), {
           event: 'http_request',
@@ -200,6 +245,136 @@ export function registerExtendedRoutes(app: FastifyInstance, options: ExtendedRo
     },
   );
 
+  app.post(
+    '/recordings/upload',
+    {
+      preHandler: [authenticate, uploadRateLimitMiddleware],
+    },
+    async (request, reply) => {
+      const routePath = resolveRoutePath(request, 'POST /recordings/upload');
+      const querySchema = z.object({
+        studentId: z.string().uuid().optional(),
+        student: z.string().min(1).optional(),
+      });
+      let authenticatedUser;
+
+      try {
+        authenticatedUser = getAuthenticatedUser(request);
+        if (!authenticatedUser) {
+          return reply.code(401).send({
+            error: 'unauthorized',
+            message: 'Authentication required',
+            code: 'not_authenticated',
+          });
+        }
+
+        const file = await (
+          request as FastifyRequest & {
+            file: () => Promise<{ filename?: string; file: Readable } | undefined>;
+          }
+        ).file();
+
+        if (!file) {
+          return reply.code(400).send({
+            error: 'validation_failed',
+            message: 'No file uploaded',
+            code: 'no_file',
+          });
+        }
+
+        const query = querySchema.parse(request.query ?? {});
+        const studentName = query.student ? normalizeStudentName(query.student) : null;
+        const studentId = query.studentId ?? (studentName ? deriveStudentId(studentName) : null);
+
+        const filename = file.filename || '';
+        const fileBuffer = await readFileBuffer(file.file);
+
+        let validationResult;
+        if (recordingUploadValidationService) {
+          validationResult = await recordingUploadValidationService.validateFile(
+            fileBuffer,
+            filename,
+          );
+          if (!validationResult.isValid) {
+            logger.warn('Recording upload validation failed', {
+              event: 'recording_upload_validation_failed',
+              userId: authenticatedUser.id,
+              filename,
+              errors: validationResult.errors.map((e: { code: string }) => e.code),
+              warnings: validationResult.warnings.map((w: { code: string }) => w.code),
+            });
+
+            return reply.code(400).send({
+              error: 'validation_failed',
+              message: 'File validation failed',
+              code: 'file_validation_failed',
+              details: {
+                errors: validationResult.errors,
+                warnings: validationResult.warnings,
+              },
+            });
+          }
+        }
+
+        const sanitizedFilename = sanitizeRecordingFilename(filename);
+        const storageFilename = sanitizedFilename.replaceAll(/[^\w.-]/g, '_');
+        const sourcePath = storageFilename || sanitizedFilename || filename;
+
+        const record = await ingestRecordingUpload({
+          filename: storageFilename || sanitizedFilename || filename,
+          stream: Readable.from(fileBuffer),
+          sourcePath,
+          studentId,
+          storage: transcriptionStorage,
+          repository: {
+            insertRecording,
+            updateRecordingStatus,
+          },
+          enqueue: transcribeQueue.enqueue,
+        });
+
+        logger.info('Recording uploaded', {
+          event: 'recording_uploaded',
+          route: routePath,
+          userId: authenticatedUser.id,
+          recordingId: record.id,
+          filename,
+          sanitizedFilename,
+          bytes: record.bytes,
+          storageProvider: storageConfig.getProvider(),
+        });
+
+        return reply.code(201).send(recordingToDto(record));
+      } catch (error: unknown) {
+        if (error instanceof z.ZodError) {
+          return reply.code(400).send({
+            error: 'validation_failed',
+            message: 'Invalid query parameters',
+            details: error.issues,
+          });
+        }
+        if (error instanceof FileValidationError) {
+          return reply.code(400).send({
+            error: 'validation_failed',
+            message: error.message,
+            code: error.code,
+          });
+        }
+
+        logger.error(error instanceof Error ? error : String(error), {
+          event: 'recording_upload_failed',
+          userId: authenticatedUser?.id,
+          route: routePath,
+          error: 'internal_error',
+        });
+
+        return reply.code(500).send({
+          error: 'internal_error',
+        });
+      }
+    },
+  );
+
   app.get(
     '/recordings',
     {
@@ -210,6 +385,8 @@ export function registerExtendedRoutes(app: FastifyInstance, options: ExtendedRo
 
       const querySchema = z.object({
         status: z.union([z.string(), z.array(z.string())]).optional(),
+        studentId: z.string().uuid().optional(),
+        student: z.string().min(1).optional(),
         limit: z.coerce.number().int().min(1).max(200).optional(),
         offset: z.coerce.number().int().min(0).optional(),
         order: z.enum(['asc', 'desc']).optional(),
@@ -218,8 +395,11 @@ export function registerExtendedRoutes(app: FastifyInstance, options: ExtendedRo
       try {
         const query = querySchema.parse(request.query ?? {});
         const statuses = normalizeStatusFilter(query.status);
+        const studentName = query.student ? normalizeStudentName(query.student) : null;
+        const studentId = query.studentId ?? (studentName ? deriveStudentId(studentName) : null);
         const recordings = await listRecordingsWithDefaults({
           statuses,
+          studentId,
           limit: query.limit,
           offset: query.offset,
           order: query.order,
@@ -1624,6 +1804,15 @@ async function readFileBuffer(fileStream: Readable): Promise<Buffer> {
     fileStream.on('end', () => resolve(Buffer.concat(chunks)));
     fileStream.on('error', reject);
   });
+}
+
+function sanitizeRecordingFilename(filename: string): string {
+  const base = path.basename(filename || '').trim();
+  const sanitized = base && base !== '.' && base !== '..' ? base : '';
+  const fallback = `recording-${Date.now()}.bin`;
+  const candidate = sanitized || fallback;
+  const ext = path.extname(candidate);
+  return ext ? candidate : `${candidate}.bin`;
 }
 
 function buildFilesystemMdReference(uploadDir: string, storageKey: string): string {

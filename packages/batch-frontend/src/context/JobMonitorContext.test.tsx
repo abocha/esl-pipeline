@@ -28,7 +28,7 @@ const RecordingList = () => {
     <ul>
       {recordings.map((recording) => (
         <li key={recording.recordingId}>
-          {recording.recordingId}:{recording.status}
+          {recording.recordingId}:{recording.status}:{recording.studentId ?? 'none'}
         </li>
       ))}
     </ul>
@@ -81,7 +81,7 @@ describe('JobMonitorContext recordings hydration', () => {
     );
 
     await waitFor(() => {
-      expect(screen.getByText('recording-1:transcribed')).not.toBeNull();
+      expect(screen.getByText('recording-1:transcribed:none')).not.toBeNull();
     });
   });
 
@@ -113,7 +113,7 @@ describe('JobMonitorContext recordings hydration', () => {
     );
 
     await waitFor(() => {
-      expect(screen.getByText('recording-1:queued')).not.toBeNull();
+      expect(screen.getByText('recording-1:queued:none')).not.toBeNull();
     });
 
     const handler = eventHandler as ((event: JobEvent) => void) | null;
@@ -123,10 +123,11 @@ describe('JobMonitorContext recordings hydration', () => {
       status: 'transcribing',
       transcriptId: null,
       error: null,
+      studentId: 'student-2',
     });
 
     await waitFor(() => {
-      expect(screen.getByText('recording-2:transcribing')).not.toBeNull();
+      expect(screen.getByText('recording-2:transcribing:student-2')).not.toBeNull();
     });
   });
 });

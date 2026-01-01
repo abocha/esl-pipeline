@@ -18,6 +18,10 @@ import {
   createTranscriptionStorage,
 } from '../infrastructure/transcription-storage.js';
 import { createTranscribeQueue } from '../infrastructure/transcribe-queue.js';
+import {
+  deriveStudentId,
+  extractStudentNameFromPath,
+} from '../domain/student-utils.js';
 
 export interface RecordingScanResult {
   discovered: number;
@@ -76,6 +80,8 @@ export async function scanRecordings(options: ScanRecordingsOptions): Promise<Re
     if (!stats.isFile()) continue;
 
     try {
+      const studentName = extractStudentNameFromPath(relativePath);
+      const studentId = studentName ? deriveStudentId(studentName) : null;
       const sha256 = await sha256File(absolutePath);
       const existing =
         (sha256 ? await options.repository.getRecordingBySha256(sha256) : null) ??
@@ -97,6 +103,7 @@ export async function scanRecordings(options: ScanRecordingsOptions): Promise<Re
       await options.repository.insertRecording({
         id: recordingId,
         source: 'scan',
+        studentId,
         sourcePath: absolutePath,
         storageUri: storageResult.uri,
         sha256: sha256 ?? storageResult.sha256 ?? null,

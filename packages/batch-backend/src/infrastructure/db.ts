@@ -148,6 +148,7 @@ CREATE TABLE IF NOT EXISTS prompt_packages (
   id UUID PRIMARY KEY,
   recording_id UUID NOT NULL,
   transcript_id UUID NOT NULL,
+  student_id UUID NULL,
   profile_path TEXT NULL,
   template_version TEXT NOT NULL,
   notes TEXT NULL,
@@ -160,6 +161,7 @@ CREATE TABLE IF NOT EXISTS prompt_packages (
 const PROMPT_PACKAGES_SCHEMA_PATCHES: string[] = [
   'ALTER TABLE prompt_packages ADD COLUMN IF NOT EXISTS recording_id UUID NULL',
   'ALTER TABLE prompt_packages ADD COLUMN IF NOT EXISTS transcript_id UUID NULL',
+  'ALTER TABLE prompt_packages ADD COLUMN IF NOT EXISTS student_id UUID NULL',
   'ALTER TABLE prompt_packages ADD COLUMN IF NOT EXISTS profile_path TEXT NULL',
   'ALTER TABLE prompt_packages ADD COLUMN IF NOT EXISTS template_version TEXT NULL',
   'ALTER TABLE prompt_packages ADD COLUMN IF NOT EXISTS notes TEXT NULL',
@@ -171,12 +173,14 @@ const PROMPT_PACKAGES_SCHEMA_PATCHES: string[] = [
 const PROMPT_PACKAGES_INDEX_PATCHES: string[] = [
   'CREATE INDEX IF NOT EXISTS idx_prompt_packages_recording_id ON prompt_packages (recording_id)',
   'CREATE INDEX IF NOT EXISTS idx_prompt_packages_transcript_id ON prompt_packages (transcript_id)',
+  'CREATE INDEX IF NOT EXISTS idx_prompt_packages_student_id ON prompt_packages (student_id)',
 ];
 
 const DRAFTS_TABLE_SQL = `
 CREATE TABLE IF NOT EXISTS drafts (
   id UUID PRIMARY KEY,
   prompt_package_id UUID NOT NULL,
+  student_id UUID NULL,
   storage_uri TEXT NOT NULL,
   created_by UUID NULL,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
@@ -186,6 +190,7 @@ CREATE TABLE IF NOT EXISTS drafts (
 
 const DRAFTS_SCHEMA_PATCHES: string[] = [
   'ALTER TABLE drafts ADD COLUMN IF NOT EXISTS prompt_package_id UUID NULL',
+  'ALTER TABLE drafts ADD COLUMN IF NOT EXISTS student_id UUID NULL',
   'ALTER TABLE drafts ADD COLUMN IF NOT EXISTS storage_uri TEXT NULL',
   'ALTER TABLE drafts ADD COLUMN IF NOT EXISTS created_by UUID NULL',
   'ALTER TABLE drafts ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ NULL',
@@ -194,6 +199,7 @@ const DRAFTS_SCHEMA_PATCHES: string[] = [
 
 const DRAFTS_INDEX_PATCHES: string[] = [
   'CREATE INDEX IF NOT EXISTS idx_drafts_prompt_package_id ON drafts (prompt_package_id)',
+  'CREATE INDEX IF NOT EXISTS idx_drafts_student_id ON drafts (student_id)',
   'CREATE INDEX IF NOT EXISTS idx_drafts_created_by ON drafts (created_by)',
 ];
 

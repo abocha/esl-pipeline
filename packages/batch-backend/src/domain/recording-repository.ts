@@ -209,6 +209,7 @@ export async function updateRecordingStatus(params: {
 
 export interface RecordingListOptions {
   statuses?: RecordingStatus[];
+  studentId?: string | null;
   limit: number;
   offset: number;
   order: 'asc' | 'desc';
@@ -221,13 +222,18 @@ export interface RecordingWithTranscript extends RecordingRecord {
 export async function listRecordings(
   options: RecordingListOptions,
 ): Promise<RecordingWithTranscript[]> {
-  const { statuses, limit, offset, order } = options;
+  const { statuses, studentId, limit, offset, order } = options;
   const values: (string | string[] | number)[] = [];
   const clauses: string[] = [];
 
   if (statuses && statuses.length > 0) {
     values.push(statuses);
     clauses.push(`r.status = ANY($${values.length}::text[])`);
+  }
+
+  if (studentId) {
+    values.push(studentId);
+    clauses.push(`r.student_id = $${values.length}`);
   }
 
   const whereClause = clauses.length > 0 ? `WHERE ${clauses.join(' AND ')}` : '';
@@ -276,13 +282,21 @@ export async function listRecordings(
   return rows.map((row) => mapRowToRecordingWithTranscript(row));
 }
 
-export async function countRecordings(statuses?: RecordingStatus[]): Promise<number> {
+export async function countRecordings(
+  statuses?: RecordingStatus[],
+  studentId?: string | null,
+): Promise<number> {
   const values: (string | string[])[] = [];
   const clauses: string[] = [];
 
   if (statuses && statuses.length > 0) {
     values.push(statuses);
     clauses.push(`status = ANY($${values.length}::text[])`);
+  }
+
+  if (studentId) {
+    values.push(studentId);
+    clauses.push(`student_id = $${values.length}`);
   }
 
   const whereClause = clauses.length > 0 ? `WHERE ${clauses.join(' AND ')}` : '';

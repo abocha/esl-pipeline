@@ -60,7 +60,7 @@ interface JobMonitorContextValue {
   recordings: RecordingEntry[];
   recordingMap: RecordingMap;
   registerJob: (options: RegisterJobOptions) => void;
-  registerRecording: (recordingId: string) => void;
+  registerRecording: (recordingId: string, data?: Partial<RecordingEntry>) => void;
   trackJob: (jobId: string) => Promise<JobEntry | undefined>;
   connectionState: ConnectionState;
   isPolling: boolean;
@@ -251,14 +251,16 @@ export function JobMonitorProvider({ children }: { children: ReactNode }) {
   );
 
   const registerRecording = useCallback(
-    (recordingId: string) => {
+    (recordingId: string, data?: Partial<RecordingEntry>) => {
       const trimmed = recordingId.trim();
       if (!trimmed) return;
+      const now = new Date().toISOString();
       updateRecording(trimmed, (prev) => ({
         ...prev,
+        ...data,
         recordingId: trimmed,
-        createdAt: prev.createdAt ?? new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
+        createdAt: data?.createdAt ?? prev.createdAt ?? now,
+        updatedAt: data?.updatedAt ?? now,
       }));
     },
     [updateRecording],
@@ -377,8 +379,13 @@ export function JobMonitorProvider({ children }: { children: ReactNode }) {
           status: event.status,
           transcriptId: event.transcriptId ?? prev.transcriptId,
           error: event.error ?? null,
-          createdAt: prev.createdAt ?? new Date().toISOString(),
-          updatedAt: new Date().toISOString(),
+          studentId: event.studentId ?? prev.studentId ?? null,
+          source: event.source ?? prev.source,
+          durationSec: event.durationSec ?? prev.durationSec ?? null,
+          channels: event.channels ?? prev.channels ?? null,
+          bytes: event.bytes ?? prev.bytes ?? 0,
+          createdAt: event.createdAt ?? prev.createdAt ?? new Date().toISOString(),
+          updatedAt: event.updatedAt ?? new Date().toISOString(),
         }));
       }
     },
