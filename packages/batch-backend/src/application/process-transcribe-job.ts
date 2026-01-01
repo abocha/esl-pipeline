@@ -16,7 +16,10 @@ import { getTranscriptByRecordingId, insertTranscript } from '../domain/transcri
 import { createDeepgramClient } from '../infrastructure/deepgram-client.js';
 import { createJobLogger } from '../infrastructure/logger.js';
 import type { TranscriptionStorage } from '../infrastructure/transcription-storage.js';
-import { createTranscriptionStorage } from '../infrastructure/transcription-storage.js';
+import {
+  createTranscriptionStorage,
+  createTranscriptionStorageForUri,
+} from '../infrastructure/transcription-storage.js';
 import type { TranscribeQueuePayload } from '../infrastructure/transcribe-queue.js';
 
 interface DeepgramResult {
@@ -127,9 +130,11 @@ export async function processTranscribeJob(
   const transcriptId = randomUUID();
 
   try {
+    const readStorage =
+      overrides?.storage ?? createTranscriptionStorageForUri(recording.storageUri);
     const { result, fallbackUsed } = await transcribeWithDeepgram({
       client: deepgramClient,
-      storage,
+      storage: readStorage,
       storageUri: recording.storageUri,
       model: config.deepgram.model,
       language: config.deepgram.language,

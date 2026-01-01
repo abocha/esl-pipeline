@@ -1,7 +1,7 @@
 import type { TranscriptMode, TranscriptRecord } from '../domain/transcript-model.js';
 import { getTranscriptByRecordingId } from '../domain/transcript-repository.js';
 import type { TranscriptionStorage } from '../infrastructure/transcription-storage.js';
-import { createTranscriptionStorage } from '../infrastructure/transcription-storage.js';
+import { createTranscriptionStorageForUri } from '../infrastructure/transcription-storage.js';
 
 export interface RecordingTranscriptResponse {
   recordingId: string;
@@ -28,7 +28,6 @@ export async function getRecordingTranscript(
 ): Promise<RecordingTranscriptResponse | null> {
   if (!recordingId) return null;
 
-  const storage = overrides?.storage ?? createTranscriptionStorage();
   const transcripts = overrides?.transcripts ?? {
     getByRecordingId: getTranscriptByRecordingId,
   };
@@ -36,6 +35,7 @@ export async function getRecordingTranscript(
   const transcript = await transcripts.getByRecordingId(recordingId);
   if (!transcript) return null;
 
+  const storage = overrides?.storage ?? createTranscriptionStorageForUri(transcript.storageUri);
   const text = await storage.getText(transcript.storageUri);
   return buildRecordingTranscriptResponse(transcript, text);
 }

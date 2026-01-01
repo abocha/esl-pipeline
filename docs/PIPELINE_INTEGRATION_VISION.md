@@ -52,6 +52,8 @@ Notes for Phase 2+:
   - Recording list supports `studentId` filtering; UI supports filtering and upload association.
 - Prompt templates/profiles are allowlisted; `/config/prompts` exposes IDs for UI selection.
 - Transcription workspace surfaces queue status, errors, and retry actions for failed recordings.
+- Draft approval jobs apply user settings defaults for preset + TTS strategy and set `upload=auto`.
+  TTS runs when an ElevenLabs key is configured (user or env); otherwise TTS stays disabled.
 - Only new audio content is discovered; renames do not re-ingest.
 - Draft approval auto-creates an awaiting_approval job during materialization.
 

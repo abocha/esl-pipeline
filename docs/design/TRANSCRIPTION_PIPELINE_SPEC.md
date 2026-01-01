@@ -305,6 +305,8 @@ delete(uri) -> void
 Implementation note:
 - GET /recordings?status=... and GET /recordings/:id are available; the Phase 2 UI hydrates on load
   and merges `/jobs/events` for live recording status updates.
+- Approval jobs created from drafts apply user defaults for preset + TTS strategy, set `upload=auto`,
+  and enable TTS when an ElevenLabs key is configured.
 
 ---
 

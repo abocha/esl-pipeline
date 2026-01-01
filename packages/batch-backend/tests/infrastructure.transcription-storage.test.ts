@@ -5,7 +5,13 @@ import path from 'node:path';
 import { Readable } from 'node:stream';
 import { afterEach, describe, expect, it } from 'vitest';
 
-import { FilesystemTranscriptionStorage } from '../src/infrastructure/transcription-storage.js';
+import { StorageConfigurationService } from '@esl-pipeline/shared-infrastructure';
+
+import {
+  createTranscriptionStorageForUri,
+  FilesystemTranscriptionStorage,
+  S3TranscriptionStorage,
+} from '../src/infrastructure/transcription-storage.js';
 
 async function createTempDir(): Promise<string> {
   return fs.mkdtemp(path.join(os.tmpdir(), 'esl-transcription-'));
@@ -78,5 +84,48 @@ describe('infrastructure/transcription-storage', () => {
 
     const stored = await fs.readFile(expectedPath);
     expect(stored.equals(content)).toBe(true);
+  });
+
+  it('selects filesystem storage for local URIs even when provider is s3', async () => {
+    tempDir = await createTempDir();
+    const storageConfig = new StorageConfigurationService({
+      provider: 's3',
+      s3: {
+        region: 'us-east-1',
+        accessKeyId: 'test',
+        secretAccessKey: 'secret',
+        bucket: 'bucket',
+      },
+      filesystem: {
+        uploadDir: tempDir,
+      },
+    });
+
+    const storage = createTranscriptionStorageForUri('local://transcripts/t-local.txt', {
+      storageConfig,
+    });
+
+    expect(storage).toBeInstanceOf(FilesystemTranscriptionStorage);
+
+    const stored = await storage.putTranscript({ transcriptId: 't-local', text: 'Hello' });
+    expect(stored.uri).toBe('local://transcripts/t-local.txt');
+  });
+
+  it('selects s3 storage for s3 URIs', () => {
+    const storageConfig = new StorageConfigurationService({
+      provider: 's3',
+      s3: {
+        region: 'us-east-1',
+        accessKeyId: 'test',
+        secretAccessKey: 'secret',
+        bucket: 'bucket',
+      },
+    });
+
+    const storage = createTranscriptionStorageForUri('s3://bucket/transcripts/t.txt', {
+      storageConfig,
+    });
+
+    expect(storage).toBeInstanceOf(S3TranscriptionStorage);
   });
 });

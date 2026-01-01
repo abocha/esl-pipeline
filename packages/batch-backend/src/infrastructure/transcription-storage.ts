@@ -269,6 +269,33 @@ export function createTranscriptionStorage(options?: {
   );
 }
 
+export function isLocalUri(uri: string): boolean {
+  return uri.startsWith(LOCAL_URI_PREFIX);
+}
+
+export function isS3Uri(uri: string): boolean {
+  return uri.startsWith(S3_URI_PREFIX);
+}
+
+export function createTranscriptionStorageForUri(
+  uri: string,
+  options?: {
+    storageConfig?: StorageConfigurationService;
+  },
+): TranscriptionStorage {
+  const storageConfig = options?.storageConfig ?? createStorageConfigService();
+
+  if (isLocalUri(uri)) {
+    return new FilesystemTranscriptionStorage(storageConfig.getFilesystemConfig().uploadDir);
+  }
+
+  if (isS3Uri(uri)) {
+    return new S3TranscriptionStorage(storageConfig);
+  }
+
+  return createTranscriptionStorage({ storageConfig });
+}
+
 function resolveAudioExtension(options: PutAudioOptions): string {
   if (options.extension) {
     return normalizeExtension(options.extension);
@@ -323,7 +350,7 @@ function toS3Uri(bucket: string, key: string): string {
 }
 
 function parseLocalUri(uri: string): string {
-  if (!uri.startsWith(LOCAL_URI_PREFIX)) {
+  if (!isLocalUri(uri)) {
     throw new Error(`Unsupported storage uri: ${uri}`);
   }
   const relative = uri.slice(LOCAL_URI_PREFIX.length);
@@ -334,7 +361,7 @@ function parseLocalUri(uri: string): string {
 }
 
 function parseS3Uri(uri: string): { bucket: string; key: string } {
-  if (!uri.startsWith(S3_URI_PREFIX)) {
+  if (!isS3Uri(uri)) {
     throw new Error(`Unsupported storage uri: ${uri}`);
   }
 
