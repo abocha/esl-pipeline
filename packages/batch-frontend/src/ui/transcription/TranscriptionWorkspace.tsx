@@ -9,6 +9,7 @@ import {
   type PromptOptionsResponse,
   type PromptPackageResponse,
   type RecordingTranscriptResponse,
+  type RecordingStatus,
   type StudentOption,
   approveJob,
   createDraft,
@@ -18,10 +19,12 @@ import {
   fetchPromptPackage,
   fetchRecordingTranscript,
   materializeDraft,
+  retryRecordingTranscription,
   syncRecordings,
   uploadRecording,
   updateRecordingTranscript,
 } from '../../utils/api';
+import { JobConnectionBanner } from '../jobs/JobConnectionBanner';
 
 const ClipboardIcon = () => (
   <svg
@@ -109,6 +112,48 @@ const DraftIcon = () => (
   </svg>
 );
 
+const RECORDING_STATUS_META: Record<
+  RecordingStatus,
+  { label: string; note: string; detail: string }
+> = {
+  ingested: {
+    label: 'Ingested',
+    note: 'Ingested, awaiting queue',
+    detail: 'Ingested and waiting for the transcription queue.',
+  },
+  queued: {
+    label: 'Queued',
+    note: 'Queued for transcription',
+    detail: 'Queued for transcription.',
+  },
+  transcribing: {
+    label: 'Transcribing',
+    note: 'Transcription in progress',
+    detail: 'Transcription in progress.',
+  },
+  transcribed: {
+    label: 'Transcribed',
+    note: 'Transcript ready',
+    detail: 'Transcript ready.',
+  },
+  failed: {
+    label: 'Failed',
+    note: 'Transcription failed',
+    detail: 'Transcription failed.',
+  },
+};
+
+const getRecordingStatusMeta = (status?: RecordingStatus | null) => {
+  if (!status) {
+    return {
+      label: 'Unknown',
+      note: 'Status unavailable',
+      detail: 'Status unavailable.',
+    };
+  }
+  return RECORDING_STATUS_META[status];
+};
+
 export const TranscriptionWorkspace: React.FC = () => {
   const { recordings, registerRecording, trackJob } = useJobMonitor();
   const [selectedRecordingId, setSelectedRecordingId] = useState('');
@@ -120,6 +165,11 @@ export const TranscriptionWorkspace: React.FC = () => {
   const [studentOptions, setStudentOptions] = useState<StudentOption[]>([]);
   const [studentFilter, setStudentFilter] = useState('all');
   const [uploadStudentId, setUploadStudentId] = useState('');
+  const [recordingPanelError, setRecordingPanelError] = useState<string | null>(null);
+  const [recordingDetailError, setRecordingDetailError] = useState<string | null>(null);
+  const [studentOptionsError, setStudentOptionsError] = useState<string | null>(null);
+  const [promptOptionsError, setPromptOptionsError] = useState<string | null>(null);
+  const [retrying, setRetrying] = useState(false);
 
   const [transcript, setTranscript] = useState<RecordingTranscriptResponse | null>(null);
   const [transcriptText, setTranscriptText] = useState('');
@@ -166,6 +216,9 @@ export const TranscriptionWorkspace: React.FC = () => {
 
   const templateOptions = promptOptions?.templates ?? [];
   const profileOptions = promptOptions?.profiles ?? [];
+  const selectedStatusMeta = selectedRecording
+    ? getRecordingStatusMeta(selectedRecording.status)
+    : null;
 
   useEffect(() => {
     let active = true;
@@ -174,9 +227,12 @@ export const TranscriptionWorkspace: React.FC = () => {
         const response = await fetchStudentOptions();
         if (!active) return;
         setStudentOptions(response.students ?? []);
+        setStudentOptionsError(null);
       } catch (error) {
         if (!active) return;
         console.warn('Failed to load student options', error);
+        const message = error instanceof Error ? error.message : 'Unable to load student options';
+        setStudentOptionsError(message);
       }
     };
     void loadStudents();
@@ -192,6 +248,7 @@ export const TranscriptionWorkspace: React.FC = () => {
         const response = await fetchPromptOptions();
         if (!active) return;
         setPromptOptions(response);
+        setPromptOptionsError(null);
         const templateFallback = response.defaults.templateId ?? response.templates?.[0]?.id ?? '';
         const profileFallback = response.defaults.profileId ?? response.profiles?.[0]?.id ?? '';
         setPromptTemplateId((prev) => prev || templateFallback);
@@ -199,6 +256,8 @@ export const TranscriptionWorkspace: React.FC = () => {
       } catch (error) {
         if (!active) return;
         console.warn('Failed to load prompt options', error);
+        const message = error instanceof Error ? error.message : 'Unable to load prompt options';
+        setPromptOptionsError(message);
       }
     };
     void loadPromptOptions();
@@ -210,11 +269,13 @@ export const TranscriptionWorkspace: React.FC = () => {
   const handleSync = async () => {
     if (syncing) return;
     setSyncing(true);
+    setRecordingPanelError(null);
     try {
       const result = await syncRecordings();
       toast.success(`Recording scan complete. Discovered ${result.discovered}.`);
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Unable to sync recordings';
+      setRecordingPanelError(message);
       toast.error(message);
     } finally {
       setSyncing(false);
@@ -228,6 +289,7 @@ export const TranscriptionWorkspace: React.FC = () => {
       return;
     }
     setUploading(true);
+    setRecordingPanelError(null);
     try {
       const record = await uploadRecording(uploadFile, {
         studentId: uploadStudentId || undefined,
@@ -251,6 +313,7 @@ export const TranscriptionWorkspace: React.FC = () => {
       toast.success('Recording uploaded');
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Unable to upload recording';
+      setRecordingPanelError(message);
       toast.error(message);
     } finally {
       setUploading(false);
@@ -267,12 +330,14 @@ export const TranscriptionWorkspace: React.FC = () => {
     setDraftText('');
     setMaterialized(null);
     setDraftError(null);
+    setRecordingDetailError(null);
   };
 
   const handleSelectRecording = (recordingId: string) => {
     setSelectedRecordingId(recordingId);
     setRecordingInput(recordingId);
     registerRecording(recordingId);
+    setTranscriptError(null);
     resetPromptState();
   };
 
@@ -315,6 +380,39 @@ export const TranscriptionWorkspace: React.FC = () => {
       setTranscriptError(message);
     } finally {
       setTranscriptSaving(false);
+    }
+  };
+
+  const handleRetryTranscription = async () => {
+    if (!selectedRecordingId) {
+      toast.error('Select a recording first');
+      return;
+    }
+    setRetrying(true);
+    setRecordingDetailError(null);
+    try {
+      const updated = await retryRecordingTranscription(selectedRecordingId);
+      registerRecording(updated.recordingId, {
+        recordingId: updated.recordingId,
+        status: updated.status,
+        transcriptId: updated.transcriptId ?? null,
+        error: updated.error ?? null,
+        source: updated.source,
+        studentId: updated.studentId ?? null,
+        durationSec: updated.durationSec ?? null,
+        channels: updated.channels ?? null,
+        bytes: updated.bytes,
+        createdAt: updated.createdAt,
+        updatedAt: updated.updatedAt,
+      });
+      toast.success('Transcription retry queued');
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message : 'Unable to retry transcription';
+      setRecordingDetailError(message);
+      toast.error(message);
+    } finally {
+      setRetrying(false);
     }
   };
 
@@ -448,6 +546,8 @@ export const TranscriptionWorkspace: React.FC = () => {
         </button>
       </header>
 
+      <JobConnectionBanner />
+
       <div className="workspace-grid">
         <div className="workspace-panel recordings-panel">
           <div className="panel-header">
@@ -456,6 +556,9 @@ export const TranscriptionWorkspace: React.FC = () => {
               <p>Live state changes from /jobs/events. Select a recording to review.</p>
             </div>
           </div>
+
+          {recordingPanelError && <p className="error-text">{recordingPanelError}</p>}
+          {studentOptionsError && <p className="error-text">{studentOptionsError}</p>}
 
           <div className="recording-input">
             <input
@@ -534,32 +637,34 @@ export const TranscriptionWorkspace: React.FC = () => {
                 const studentLabel = recording.studentId
                   ? studentLabelById.get(recording.studentId) ?? recording.studentId
                   : 'Unassigned';
+                const statusMeta = getRecordingStatusMeta(recording.status);
+                const transcriptLabel = recording.transcriptId
+                  ? `Transcript: ${recording.transcriptId}`
+                  : 'Transcript pending';
                 return (
-                <button
-                  type="button"
-                  key={recording.recordingId}
-                  className={`recording-card${
-                    recording.recordingId === selectedRecordingId ? ' active' : ''
-                  }`}
-                  onClick={() => handleSelectRecording(recording.recordingId)}
-                >
-                  <div className="recording-title">
-                    <span className="mono">{recording.recordingId}</span>
-                    <span className={`status-pill status-${recording.status}`}>
-                      {recording.status}
-                    </span>
-                  </div>
-                  <div className="recording-sub">
-                    {`${recording.source === 'upload' ? 'Upload' : 'Scan'} • ${studentLabel} | ${
-                      recording.transcriptId
-                        ? `Transcript: ${recording.transcriptId}`
-                        : 'Transcript pending'
+                  <button
+                    type="button"
+                    key={recording.recordingId}
+                    className={`recording-card${
+                      recording.recordingId === selectedRecordingId ? ' active' : ''
                     }`}
-                  </div>
-                  <div className="recording-meta">
-                    Updated {new Date(recording.updatedAt).toLocaleString()}
-                  </div>
-                </button>
+                    onClick={() => handleSelectRecording(recording.recordingId)}
+                  >
+                    <div className="recording-title">
+                      <span className="mono">{recording.recordingId}</span>
+                      <span className={`status-pill status-${recording.status}`}>
+                        {statusMeta.label}
+                      </span>
+                    </div>
+                    <div className="recording-sub">
+                      {`${recording.source === 'upload' ? 'Upload' : 'Scan'} • ${studentLabel} | ${
+                        statusMeta.note
+                      } | ${transcriptLabel}`}
+                    </div>
+                    <div className="recording-meta">
+                      Updated {new Date(recording.updatedAt).toLocaleString()}
+                    </div>
+                  </button>
                 );
               })
             )}
@@ -572,15 +677,26 @@ export const TranscriptionWorkspace: React.FC = () => {
               <h3>Transcript review</h3>
               <div className="detail-meta">
                 <span>{selectedRecordingId || 'No recording selected'}</span>
-                {selectedRecording && (
-                  <span className={`status-pill status-${selectedRecording.status}`}>
-                    {selectedRecording.status}
-                  </span>
+                {selectedRecording && selectedStatusMeta && (
+                  <>
+                    <span className={`status-pill status-${selectedRecording.status}`}>
+                      {selectedStatusMeta.label}
+                    </span>
+                    <span className="status-note">{selectedStatusMeta.detail}</span>
+                  </>
                 )}
               </div>
             </header>
 
             {transcriptError && <p className="error-text">{transcriptError}</p>}
+            {recordingDetailError && <p className="error-text">{recordingDetailError}</p>}
+            {selectedRecording?.status === 'failed' && (
+              <p className="error-text">
+                {selectedRecording.error
+                  ? `Transcription failed: ${selectedRecording.error}`
+                  : 'Transcription failed.'}
+              </p>
+            )}
 
             {transcript ? (
               <div className="transcript-meta">
@@ -630,6 +746,17 @@ export const TranscriptionWorkspace: React.FC = () => {
               >
                 Save transcript
               </button>
+              {selectedRecording?.status === 'failed' && (
+                <button
+                  type="button"
+                  className="btn-secondary btn-small"
+                  onClick={handleRetryTranscription}
+                  disabled={retrying}
+                >
+                  <RefreshIcon />
+                  {retrying ? 'Retrying…' : 'Retry transcription'}
+                </button>
+              )}
             </div>
           </section>
 
@@ -642,6 +769,7 @@ export const TranscriptionWorkspace: React.FC = () => {
             </header>
 
             {promptError && <p className="error-text">{promptError}</p>}
+            {promptOptionsError && <p className="error-text">{promptOptionsError}</p>}
 
             <div className="prompt-controls">
               <input
@@ -968,6 +1096,7 @@ export const TranscriptionWorkspace: React.FC = () => {
           gap: var(--space-2);
           font-size: var(--text-sm);
           color: var(--text-secondary);
+          flex-wrap: wrap;
         }
 
         .transcript-meta {
@@ -1032,6 +1161,11 @@ export const TranscriptionWorkspace: React.FC = () => {
           font-size: var(--text-sm);
         }
 
+        .status-note {
+          font-size: var(--text-xs);
+          color: var(--text-tertiary);
+        }
+
         .field-label {
           font-size: var(--text-xs);
           color: var(--text-secondary);
@@ -1053,6 +1187,11 @@ export const TranscriptionWorkspace: React.FC = () => {
           color: var(--color-primary-600);
         }
 
+        .status-queued {
+          background: rgba(59, 130, 246, 0.12);
+          color: var(--color-info-600);
+        }
+
         .status-transcribing {
           background: rgba(14, 165, 233, 0.15);
           color: var(--color-info-600);
@@ -1062,6 +1201,11 @@ export const TranscriptionWorkspace: React.FC = () => {
         .status-transcribed {
           background: rgba(16, 185, 129, 0.15);
           color: var(--color-success-600);
+        }
+
+        .status-failed {
+          background: rgba(244, 63, 94, 0.15);
+          color: var(--color-error-600);
         }
 
         @media (max-width: 1024px) {

@@ -11,6 +11,10 @@ Scope:
 - Close the known gaps that prevent Phase 2+ from being a complete, smooth flow.
 - Do not re-implement Phase 1 (ttdg) or the already shipped Phase 2+ core.
 
+Status:
+- Stages 0-6 complete; Phase 2+ gap closure finished.
+- Ongoing enhancements belong to Phase 3+ in docs/PIPELINE_INTEGRATION_VISION.md.
+
 ---
 
 ## Pre-flight (Required Reading)

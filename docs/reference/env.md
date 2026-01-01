@@ -68,3 +68,4 @@ Notes:
 - Both orchestrator and batch-backend need `NOTION_TOKEN` and `ELEVENLABS_API_KEY`.
 - For S3 manifests or uploads, set the `ESL_PIPELINE_MANIFEST_*` vars and `S3_*`/AWS creds together.
 - TTS strategy defaults can be provided via `ELEVENLABS_TTS_STRATEGY` and related dialogue options; manifests now persist these for reruns.
+- Batch backend startup validates `FILESYSTEM_UPLOAD_DIR`, `RECORDINGS_ROOT`, and `PROMPT_*` paths; misconfigured paths fail fast.

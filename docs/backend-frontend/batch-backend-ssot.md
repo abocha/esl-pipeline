@@ -187,6 +187,7 @@ Extended transcription routes (require auth when the extended API is enabled):
 - GET /recordings/:recordingId
 - GET /recordings/:recordingId/transcript
 - PUT /recordings/:recordingId/transcript
+- POST /recordings/:recordingId/transcribe
 - POST /recordings/:recordingId/prompt-package (optional `templateId`, `profileId`)
 - GET /prompt-packages/:promptPackageId
 - POST /prompt-packages/:promptPackageId/draft

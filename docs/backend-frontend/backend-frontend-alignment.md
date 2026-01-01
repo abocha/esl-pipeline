@@ -239,7 +239,7 @@ import {
 
 ---
 
-## Phase 2+ Transcription Pipeline (Implemented With Gaps)
+## Phase 2+ Transcription Pipeline (Implemented)
 
 **Status:** Phase 2+ MVP is implemented in the repo; remaining gaps are tracked in
 `docs/PIPELINE_INTEGRATION_VISION.md` and `docs/design/TRANSCRIPTION_PIPELINE_SPEC.md`.
@@ -256,6 +256,7 @@ The staged implementation manual is archived at
   - `GET /recordings/:id`
   - `GET /recordings/:id/transcript`
   - `PUT /recordings/:id/transcript`
+  - `POST /recordings/:id/transcribe`
   - `GET /config/students`
   - `GET /config/prompts`
 - Prompt packages:
@@ -267,7 +268,7 @@ The staged implementation manual is archived at
 
 ### Deferred Endpoints
 
-- `POST /recordings/:id/transcribe` (optional manual retry)
+- None (manual retry endpoint implemented).
 
 ### Dependencies and Notes
 

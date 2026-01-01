@@ -3,11 +3,13 @@
 import { fileURLToPath } from 'node:url';
 
 import { processTranscribeJob } from '../application/process-transcribe-job.js';
+import { validateTranscriptionConfig } from '../application/validate-transcription-config.js';
 import { enableRedisRecordingEventBridge } from '../infrastructure/recording-event-redis-bridge.js';
 import { logger } from '../infrastructure/logger.js';
 import { createTranscribeWorker } from '../infrastructure/transcribe-queue.js';
 
 export async function startTranscribeWorker(): Promise<void> {
+  await validateTranscriptionConfig();
   await enableRedisRecordingEventBridge();
   const worker = createTranscribeWorker(async (bullJob) => {
     const { recordingId } = bullJob.data;

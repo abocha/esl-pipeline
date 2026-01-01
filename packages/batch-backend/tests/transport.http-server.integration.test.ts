@@ -10,6 +10,7 @@ import * as getJobStatusModule from '../src/application/get-job-status.js';
 import * as getPromptPackageModule from '../src/application/get-prompt-package.js';
 import * as listRecordingsModule from '../src/application/list-recordings.js';
 import * as materializeDraftModule from '../src/application/materialize-draft.js';
+import * as retryRecordingModule from '../src/application/retry-recording-transcription.js';
 import * as submitJobModule from '../src/application/submit-job.js';
 import * as updateRecordingTranscriptModule from '../src/application/update-recording-transcript.js';
 import { ProfilePathError } from '../src/application/profile-path.js';
@@ -581,6 +582,51 @@ describe('transport/http-server - integration (in-process)', () => {
 
     expect(response.statusCode).toBe(404);
     expect(response.json()).toEqual({ error: 'not_found' });
+  });
+
+  it('POST /recordings/:id/transcribe enqueues retry', async () => {
+    const retryRecording = vi.spyOn(
+      retryRecordingModule,
+      'retryRecordingTranscription',
+    );
+    retryRecording.mockClear();
+    retryRecording.mockResolvedValue({
+      recordingId: 'recording-1',
+      status: 'queued',
+      transcriptId: null,
+      error: null,
+      source: 'scan',
+      studentId: null,
+      durationSec: null,
+      channels: null,
+      bytes: 1234,
+      createdAt: '2024-01-01T00:00:00.000Z',
+      updatedAt: '2024-01-01T00:05:00.000Z',
+    });
+
+    const response = await app.inject({
+      method: 'POST',
+      url: '/recordings/recording-1/transcribe',
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toEqual({
+      recordingId: 'recording-1',
+      status: 'queued',
+      transcriptId: null,
+      error: null,
+      source: 'scan',
+      studentId: null,
+      durationSec: null,
+      channels: null,
+      bytes: 1234,
+      createdAt: '2024-01-01T00:00:00.000Z',
+      updatedAt: '2024-01-01T00:05:00.000Z',
+    });
+    expect(retryRecording).toHaveBeenCalledWith(
+      'recording-1',
+      expect.objectContaining({ enqueue: expect.any(Function) }),
+    );
   });
 
   it('GET /recordings/:id/transcript returns transcript payload', async () => {

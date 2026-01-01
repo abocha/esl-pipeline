@@ -6,8 +6,7 @@ esl-pipeline and running the end-to-end lesson workflow.
 Status snapshot:
 - Phase 1 (ttdg CLI) is the current operational path but is legacy and unstable.
   It will be removed once Phase 2+ is production-ready.
-- Phase 2+ (pipeline-native transcription) is implemented with gaps and is
-  usable with a few manual steps.
+- Phase 2+ (pipeline-native transcription) is implemented and hardened; usable end-to-end.
 - Gap-closure manual: docs/design/TRANSCRIPTION_PIPELINE_IMPLEMENTATION_MANUAL.md.
 - The original staged manual is archived at
   docs/archive/TRANSCRIPTION_PIPELINE_IMPLEMENTATION_MANUAL.md.
@@ -25,7 +24,7 @@ Status snapshot:
 6. batch-backend runs orchestrator on approved .md.
 7. Generate TTS, publish to Notion, persist manifest.
 
-### Phase 2+ (native transcription, implemented with gaps)
+### Phase 2+ (native transcription, implemented)
 1. Recording scan or upload ingestion creates Recording rows.
 2. Transcribe worker runs Deepgram and stores transcript artifacts.
 3. UI reviews/edits transcript.
@@ -42,6 +41,8 @@ Implemented successfully (current as-built state):
 - Prompt package creation and retrieval.
 - Draft creation and materialization to FILESYSTEM_UPLOAD_DIR.
 - Recording status SSE events consumed by the transcription workspace.
+- Manual retry endpoint (`POST /recordings/:id/transcribe`) with queue status surfaced in UI.
+- Startup validation for storage + prompt/recordings paths.
 
 Notes for Phase 2+:
 - Recording list/backfill endpoint is available; UI hydrates on load and merges SSE updates.
@@ -50,6 +51,7 @@ Notes for Phase 2+:
   - `/config/students` exposes configured student profiles for UI selection.
   - Recording list supports `studentId` filtering; UI supports filtering and upload association.
 - Prompt templates/profiles are allowlisted; `/config/prompts` exposes IDs for UI selection.
+- Transcription workspace surfaces queue status, errors, and retry actions for failed recordings.
 - Only new audio content is discovered; renames do not re-ingest.
 - Draft approval auto-creates an awaiting_approval job during materialization.
 
@@ -150,7 +152,7 @@ See docs/reference/env.md for the full list. Key Phase 2+ entries:
 - Orchestrator runs on approved .md and writes manifest.
 - Kept only as a bridge; no new investment planned.
 
-### Phase 2+ (implemented with gaps)
+### Phase 2+ (implemented)
 Implemented in repo:
 - Scan ingestion, transcribe queue, Deepgram worker.
 - Transcript review/edit UI and APIs.
@@ -158,13 +160,12 @@ Implemented in repo:
 - Draft materialization to filesystem (auto-creates approval job).
 
 ### Shortcomings to achieve full Phase 2+
-- Hardening: clearer errors, retries, and queue status in the transcription workspace.
+- None (hardening complete).
 
 ### New phases (fresh roadmap)
 Phase 3: Phase 2+ polish
 - One-click approval (no manual job ID).
 - Recording search + filters on the list view.
-- Clear error states and retries in the transcription workspace.
 
 Phase 4: Student-centric workflow
 - Student selection, profile CRUD, and per-student timelines.
