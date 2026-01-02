@@ -76,7 +76,7 @@ services:
     volumes:
       - ./uploads:/app/uploads
       - ./:/app
-      - /mnt/d/Download/Videos/_lessons:/recordings
+      - /mnt/d/Download/Videos/recordings:/recordings
     command: >
       sh -lc "
         pnpm --filter @esl-pipeline/batch-backend dev:api
@@ -105,7 +105,7 @@ services:
     volumes:
       - ./uploads:/app/uploads
       - ./:/app
-      - /mnt/d/Download/Videos/_lessons:/recordings
+      - /mnt/d/Download/Videos/recordings:/recordings
     command: >
       sh -lc "
         pnpm --filter @esl-pipeline/batch-backend dev:worker
@@ -132,7 +132,7 @@ services:
     volumes:
       - ./uploads:/app/uploads
       - ./:/app
-      - /mnt/d/Download/Videos/_lessons:/recordings
+      - /mnt/d/Download/Videos/recordings:/recordings
     command: >
       sh -lc "
         pnpm --filter @esl-pipeline/batch-backend exec tsx watch src/transport/transcribe-worker.ts
