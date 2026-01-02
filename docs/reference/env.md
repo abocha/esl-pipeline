@@ -12,6 +12,8 @@ Node: 24.11.1+ (see `.nvmrc` / `package.json`).
 Set these in `.env` (or your shell) when running `esl` or programmatic API calls:
 
 - `NOTION_TOKEN` — Notion integration token.
+- `NOTION_CLIENT_TIMEOUT` (optional) — Notion client timeout (ms).
+- `NOTION_COLORIZER_THROTTLE_MS`, `NOTION_COLORIZER_MAX_RETRIES`, `NOTION_COLORIZER_RETRY_DELAY_MS` (optional) — Notion colorizer pacing.
 - `ELEVENLABS_API_KEY` — ElevenLabs API key for TTS.
 - `ELEVENLABS_MODEL_ID` (optional, default `eleven_multilingual_v2`) — ElevenLabs model.
 - `ELEVENLABS_OUTPUT_FORMAT` (optional, default `mp3_22050_32`) — Audio format.
@@ -23,6 +25,7 @@ Set these in `.env` (or your shell) when running `esl` or programmatic API calls
 - `AWS_REGION`, `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY` — AWS creds for uploads.
 - `S3_BUCKET` — Bucket for audio uploads.
 - `S3_PREFIX` (optional) — Key prefix for uploads (e.g., `audio/assignments`).
+- `S3_ENDPOINT` (optional) — S3-compatible endpoint (MinIO/etc).
 - `ESL_PIPELINE_MANIFEST_STORE` (optional, `filesystem`|`s3`, default `filesystem`) — Manifest backend.
 - `ESL_PIPELINE_MANIFEST_BUCKET` (when store=`s3`) — Bucket for manifests.
 - `ESL_PIPELINE_MANIFEST_PREFIX` (optional) — Manifest key prefix.
@@ -42,30 +45,48 @@ Use `.env.batch-backend` for the service stack. It includes all core keys above 
 
 - `NODE_ENV` — `development` for local.
 - `BATCH_BACKEND_HTTP_PORT` — HTTP port.
+- `BATCH_BACKEND_ENABLE_EXTENDED_API` — Enable uploads/auth/admin routes.
 - `FILESYSTEM_UPLOAD_DIR` — Local uploads path (shared volume).
+- `PIPELINE_CWD` — Orchestrator working directory for pipeline runs.
 - Postgres: `PG_ENABLED`, `PG_HOST`, `PG_PORT`, `PG_USER`, `PG_PASSWORD`, `PG_DATABASE` (or `PG_CONNECTION_STRING`).
 - Redis: `REDIS_ENABLED`, `REDIS_HOST`, `REDIS_PORT`, `REDIS_PASSWORD` (optional).
-- BullMQ: `BATCH_JOBS_QUEUE_NAME` — Queue name.
-- MinIO (S3-compatible): `MINIO_ENABLED`, `MINIO_ENDPOINT`, `MINIO_PORT`, `MINIO_USE_SSL`, `MINIO_ACCESS_KEY`, `MINIO_SECRET_KEY`, `MINIO_BUCKET`, `S3_ENDPOINT` (if using MinIO endpoints).
+- BullMQ: `BATCH_JOBS_QUEUE_NAME`, `TRANSCRIBE_QUEUE_NAME`.
 - SMTP (optional): `MAIL_ENABLED`, `MAIL_HOST`, `MAIL_PORT`, `MAIL_FROM`, `MAIL_SECURE`, `MAIL_USER`, `MAIL_PASSWORD`.
 - Manifest/config selection: same `ESL_PIPELINE_*` keys as core (see above).
-- Optional S3 upload prefix: `S3_PREFIX`.
-- Prompt assembly: `TTDG_RUN_COMMAND`, `TTDG_RUN_CWD` (optional), `TTDG_EXTRA_ARGS` (optional),
-  `PROMPT_TEMPLATE_PATH`, `PROMPT_PROFILE_PATH`.
-  - Repo defaults live under `docs/templates`; set these explicitly in `.env.batch-backend`.
+- Prompt templates/profiles: `PROMPT_TEMPLATE_PATH`, `PROMPT_PROFILE_PATH`.
+  - Defaults live under `docs/misc` unless overridden.
   - Template/profile allowlists are derived from the directories containing these paths.
+- Prompt/job metadata fallbacks:
+  - `NOTION_DB_OPTIONS`, `NOTION_DB_ID`, `NOTION_DB_NAME`, `NOTION_DB_LABEL`
+  - `ELEVENLABS_VOICES_PATH`, `REPO_ROOT`, `APP_ROOT`, `PROJECT_ROOT`
 - Transcription pipeline:
   - `RECORDINGS_ROOT`, `RECORDINGS_GLOB` (default `**/*.{opus,mp3,wav,m4a}`),
     `RECORDINGS_SCAN_INTERVAL_SEC`
-  - `TRANSCRIBE_QUEUE_NAME`, `TRANSCRIBE_MODE` (`timeline`|`stack`), `TRANSCRIBE_MAX_CONCURRENCY`
+  - `TRANSCRIBE_MODE` (`timeline`|`stack`), `TRANSCRIBE_MAX_CONCURRENCY`
   - `DEEPGRAM_API_KEY`, `DEEPGRAM_ACCESS_TOKEN` (optional), `DEEPGRAM_MODEL`, `DEEPGRAM_LANGUAGE`,
     `DEEPGRAM_STORE_RAW_RESPONSE`
   - `WORKER_CONCURRENCY`, `MAX_CONCURRENT_FFMPEG`
+- Storage (recordings, transcripts, drafts):
+  - `STORAGE_PROVIDER` (`filesystem`|`s3`, auto-selects when unset)
+  - `S3_REGION` or `AWS_REGION`
+  - `S3_BUCKET_NAME` or `S3_BUCKET` or `STORAGE_BUCKET_NAME`
+  - `S3_ACCESS_KEY_ID`/`S3_SECRET_ACCESS_KEY` or `AWS_ACCESS_KEY_ID`/`AWS_SECRET_ACCESS_KEY`
+  - `S3_ENDPOINT`, `S3_FORCE_PATH_STYLE`
+  - `S3_PATH_PREFIX` or `STORAGE_PATH_PREFIX`
+  - `PRESIGNED_URL_EXPIRES_IN`
+  - `ENABLE_MULTIPART_UPLOADS`, `MAX_MULTIPART_SIZE`
+- Upload + security controls:
+  - `MAX_FILE_SIZE`, `ALLOWED_MIME_TYPES`
+  - `UPLOAD_RATE_LIMIT`, `UPLOAD_BURST_LIMIT`, `UPLOAD_QUOTA_PER_USER`
+  - `ENABLE_FILE_VALIDATION`, `ENABLE_FILE_SANITIZATION`, `ENABLE_RATE_LIMITING`, `ENABLE_SECURITY_LOGGING`
+  - `JOB_SUBMISSION_RATE_LIMIT`
+  - `ENABLE_CORS`, `CORS_CREDENTIALS`, `CORS_ORIGIN`
+  - `SECURITY_HEADERS_ENABLED`, `HSTS_MAX_AGE`
 
 Notes:
 
-- Keep `.env` focused on CLI usage; `.env.batch-backend` adds DB/Redis/MinIO/SMTP for the service.
+- Keep `.env` focused on CLI usage; `.env.batch-backend` adds DB/Redis/storage/SMTP for the service.
 - Both orchestrator and batch-backend need `NOTION_TOKEN` and `ELEVENLABS_API_KEY`.
 - For S3 manifests or uploads, set the `ESL_PIPELINE_MANIFEST_*` vars and `S3_*`/AWS creds together.
 - TTS strategy defaults can be provided via `ELEVENLABS_TTS_STRATEGY` and related dialogue options; manifests now persist these for reruns.
-- Batch backend startup validates `FILESYSTEM_UPLOAD_DIR`, `RECORDINGS_ROOT`, and `PROMPT_*` paths; misconfigured paths fail fast.
+- Batch backend startup validates `FILESYSTEM_UPLOAD_DIR`, `RECORDINGS_ROOT` (if set), and `PROMPT_*` allowlists; misconfigured paths fail fast.

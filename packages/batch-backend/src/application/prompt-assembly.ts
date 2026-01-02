@@ -1,48 +1,11 @@
 // packages/batch-backend/src/application/prompt-assembly.ts
-import fs from 'node:fs/promises';
 import path from 'node:path';
-
-export interface PromptAssemblyOptions {
-  templatePath: string;
-  profilePath: string;
-  transcriptPath: string;
-  notes?: string | null;
-}
-
-export interface PromptAssemblyResult {
-  payload: string;
-  templatePath: string;
-  profilePath: string;
-  transcriptPath: string;
-}
 
 export interface PromptStitchOptions {
   template: string;
   profile: string;
   transcript: string;
   notes?: string | null;
-}
-
-export async function assemblePromptPayload(
-  options: PromptAssemblyOptions,
-): Promise<PromptAssemblyResult> {
-  const template = await fs.readFile(options.templatePath, 'utf8');
-  const profile = await fs.readFile(options.profilePath, 'utf8');
-  const transcript = await fs.readFile(options.transcriptPath, 'utf8');
-
-  const payload = stitchPromptPayload({
-    template,
-    profile,
-    transcript,
-    notes: options.notes,
-  });
-
-  return {
-    payload,
-    templatePath: options.templatePath,
-    profilePath: options.profilePath,
-    transcriptPath: options.transcriptPath,
-  };
 }
 
 export function stitchPromptPayload(options: PromptStitchOptions): string {

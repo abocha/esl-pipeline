@@ -4,16 +4,15 @@
 // 1. Load job from DB.
 // 2. If not found or already terminal -> no-op.
 // 3. Transition queued -> running.
-// 4. If prompt assembly is needed, run ttdg + assemble prompt, then mark awaiting_approval.
-// 5. If approved markdown is present, call ESL pipeline via runAssignmentJob.
-// 6. On success, transition running -> succeeded with manifestPath.
-// 7. On failure, transition running -> failed with error and rethrow so BullMQ can retry.
+// 4. If approved markdown is present, call ESL pipeline via runAssignmentJob.
+// 5. On success, transition running -> succeeded with manifestPath.
+// 6. On failure, transition running -> failed with error and rethrow so BullMQ can retry.
 import fs from 'node:fs/promises';
 import path from 'node:path';
 
 import { type BatchBackendConfig, loadConfig } from '../config/env.js';
 import { publishJobEvent } from '../domain/job-events.js';
-import { getJobById, updateJobPromptData, updateJobStateAndResult } from '../domain/job-repository.js';
+import { getJobById, updateJobStateAndResult } from '../domain/job-repository.js';
 import {
   getDecryptedElevenLabsKey,
   getDecryptedNotionToken,
@@ -21,10 +20,7 @@ import {
 } from '../domain/settings-repository.js';
 import { createJobLogger } from '../infrastructure/logger.js';
 import { runAssignmentJob } from '../infrastructure/orchestrator-service.js';
-import { runTtdg } from '../infrastructure/ttdg-runner.js';
 import type { QueueJobPayload } from '../infrastructure/queue-bullmq.js';
-import { assemblePromptPayload, resolveRepoPath } from './prompt-assembly.js';
-import { resolveProfileRoot, resolveUserProfilePath } from './profile-path.js';
 
 // processQueueJob.declaration()
 export async function processQueueJob(payload: QueueJobPayload): Promise<void> {
@@ -67,69 +63,6 @@ export async function processQueueJob(payload: QueueJobPayload): Promise<void> {
 
   try {
     const config = loadConfig();
-
-    if (running.transcribeWorkdir && !running.promptPayload && !running.transcriptPath) {
-      const ttdgInvocation = resolveTtdgInvocation({
-        requestedWorkdir: running.transcribeWorkdir,
-        recordingsRoot: config.ttdg.recordingsRoot,
-        baseExtraArgs: config.ttdg.extraArgs,
-      });
-
-      const ttdgResult = await runTtdg({
-        command: config.ttdg.runCommand,
-        workdir: ttdgInvocation.workdir,
-        cwd: config.ttdg.runCwd,
-        extraArgs: ttdgInvocation.extraArgs,
-      });
-
-      if (ttdgResult.outputs.length === 0) {
-        throw new Error('ttdg did not produce any transcript outputs');
-      }
-
-      if (ttdgResult.outputs.length > 1) {
-        throw new Error(
-          `ttdg produced multiple transcripts (${ttdgResult.outputs.length}); narrow the workdir or pattern`,
-        );
-      }
-
-      const transcriptPath = ttdgResult.outputs[0] ?? '';
-      const templatePath = resolvePromptPath(config.prompt.templatePath);
-      const profileRoot = await resolveProfileRoot(config.prompt.defaultProfilePath);
-      const profilePath = running.profilePath
-        ? await resolveUserProfilePath(running.profilePath, profileRoot)
-        : resolvePromptPath(config.prompt.defaultProfilePath);
-
-      const prompt = await assemblePromptPayload({
-        templatePath,
-        profilePath,
-        transcriptPath,
-        notes: running.promptNotes ?? undefined,
-      });
-
-      const awaiting = await updateJobPromptData({
-        id: jobId,
-        expectedState: 'running',
-        nextState: 'awaiting_approval',
-        transcriptPath,
-        promptPayload: prompt.payload,
-        promptNotes: running.promptNotes ?? null,
-        profilePath,
-      });
-
-      if (awaiting) {
-        publishJobEvent({ type: 'job_state_changed', job: awaiting });
-      }
-
-      log.info('Prompt package assembled; awaiting approval', {
-        transcriptPath,
-        templatePath,
-        profilePath,
-        ttdgWorkdir: ttdgInvocation.workdir,
-        ttdgPattern: ttdgInvocation.pattern,
-      });
-
-      return;
-    }
 
     if (!running.md) {
       throw new Error('Job is missing an approved markdown path');
@@ -258,13 +191,6 @@ async function resolveMarkdownPath(mdPath: string): Promise<string> {
   throw new Error(`Markdown file not found: ${sanitized}`);
 }
 
-function resolvePromptPath(inputPath: string): string {
-  if (path.isAbsolute(inputPath)) {
-    return inputPath;
-  }
-  return resolveRepoPath(inputPath);
-}
-
 async function fileExists(filePath: string): Promise<boolean> {
   try {
     await fs.access(filePath);
@@ -288,57 +214,4 @@ function resolveUploadTarget(
     return provider === 'filesystem' ? undefined : 's3';
   }
   return undefined;
-}
-
-function resolveTtdgInvocation(options: {
-  requestedWorkdir: string;
-  recordingsRoot: string;
-  baseExtraArgs?: string;
-}): { workdir: string; extraArgs?: string; pattern?: string } {
-  const trimmedRequest = options.requestedWorkdir?.trim();
-  const trimmedRoot = options.recordingsRoot?.trim();
-  if (!trimmedRequest) {
-    return { workdir: '', extraArgs: options.baseExtraArgs };
-  }
-
-  const rootResolved = trimmedRoot ? path.resolve(trimmedRoot) : '';
-  const requestResolved = path.resolve(
-    trimmedRoot && !path.isAbsolute(trimmedRequest)
-      ? path.join(trimmedRoot, trimmedRequest)
-      : trimmedRequest,
-  );
-
-  if (rootResolved && isSubpath(rootResolved, requestResolved) && rootResolved !== requestResolved) {
-    const relative = path.relative(rootResolved, requestResolved).replaceAll('\\', '/');
-    const pattern = `${relative.replaceAll(/\/+$/g, '')}/**/*.opus`;
-    const extraArgs = appendPatternArg(options.baseExtraArgs, pattern);
-    return {
-      workdir: rootResolved,
-      extraArgs,
-      pattern,
-    };
-  }
-
-  return {
-    workdir: requestResolved,
-    extraArgs: options.baseExtraArgs,
-  };
-}
-
-function isSubpath(root: string, target: string): boolean {
-  const relative = path.relative(root, target);
-  return relative !== '' && !relative.startsWith('..') && !path.isAbsolute(relative);
-}
-
-function appendPatternArg(extraArgs: string | undefined, pattern: string): string {
-  const hasPattern =
-    typeof extraArgs === 'string' && /(^|\s)(--pattern|-p)(\s|$)/.test(extraArgs);
-  if (hasPattern) {
-    return extraArgs ?? '';
-  }
-  const arg = `--pattern "${pattern}"`;
-  if (!extraArgs || !extraArgs.trim()) {
-    return arg;
-  }
-  return `${extraArgs.trim()} ${arg}`;
 }

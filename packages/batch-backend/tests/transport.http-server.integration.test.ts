@@ -206,14 +206,16 @@ describe('transport/http-server - integration (in-process)', () => {
     const response = await app.inject({
       method: 'POST',
       url: '/jobs',
-      payload: {},
+      payload: {
+        md: 'fixtures/ok.md',
+      },
     });
 
     expect(response.statusCode).toBe(400);
     expect(response.json()).toEqual({
       error: 'validation_failed',
-      message: 'md or transcribeWorkdir is required',
-      code: 'custom',
+      message: 'md is required',
+      code: 'md_required',
       requestId: expect.any(String),
       timestamp: expect.any(String),
     });
@@ -246,11 +248,6 @@ describe('transport/http-server - integration (in-process)', () => {
     getJobStatus.mockResolvedValue({
       jobId: 'job-1',
       md: 'fixtures/ok.md',
-      transcribeWorkdir: null,
-      transcriptPath: null,
-      promptPayload: null,
-      promptNotes: null,
-      profilePath: null,
       recordingId: null,
       transcriptId: null,
       promptPackageId: null,
@@ -282,11 +279,6 @@ describe('transport/http-server - integration (in-process)', () => {
     expect(response.json()).toEqual({
       jobId: 'job-1',
       md: 'fixtures/ok.md',
-      transcribeWorkdir: null,
-      transcriptPath: null,
-      promptPayload: null,
-      promptNotes: null,
-      profilePath: null,
       recordingId: null,
       transcriptId: null,
       promptPackageId: null,
@@ -317,11 +309,6 @@ describe('transport/http-server - integration (in-process)', () => {
     getJobStatus.mockResolvedValue({
       jobId: 'job-2',
       md: 'fixtures/ok.md',
-      transcribeWorkdir: null,
-      transcriptPath: null,
-      promptPayload: null,
-      promptNotes: null,
-      profilePath: null,
       recordingId: null,
       transcriptId: null,
       promptPackageId: null,
@@ -1118,11 +1105,6 @@ describe('transport/http-server - integration (in-process)', () => {
       getJobStatus.mockResolvedValue({
         jobId: 'job-stream',
         md: 'fixtures/ok.md',
-        transcribeWorkdir: null,
-        transcriptPath: null,
-        promptPayload: null,
-        promptNotes: null,
-        profilePath: null,
         recordingId: 'recording-1',
         transcriptId: null,
         promptPackageId: null,

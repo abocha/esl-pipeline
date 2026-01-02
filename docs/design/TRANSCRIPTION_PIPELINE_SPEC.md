@@ -1,14 +1,12 @@
 # Transcription Pipeline Spec (Phase 2+ Draft)
 
-Goal: define a pipeline-native transcription service that supersedes the Phase 1
-ttdg CLI flow once the UI-driven pipeline is ready. Phase 1 remains the current
-operational path; see docs/PIPELINE_INTEGRATION_VISION.md for the active manual.
+Goal: define a pipeline-native transcription service for the UI-driven pipeline.
 The user should never touch file paths or manage cache. Recordings appear,
 transcription runs in the background, and the UI presents the transcript for
 review and prompt assembly.
 
 This spec is designed to align with:
-- docs/PIPELINE_INTEGRATION_VISION.md (Phase 1 manual; this spec is the Phase 2+ successor)
+- docs/PIPELINE_INTEGRATION_VISION.md (current operational manual)
 - docs/design/FRONTEND_VISION.md (end-state UI journey)
 - docs/PROJECT_OVERVIEW.md (product intent)
 
@@ -32,8 +30,7 @@ The original staged manual is archived at
 - Materialize approved drafts to filesystem and run the existing pipeline on the resulting markdown.
 
 ### Non-goals (explicitly out of scope)
-- Replacing the Phase 1 ttdg CLI workflow before this system is production-ready.
-- CLI tools (no new transcription CLI; Phase 1 ttdg remains for now).
+- CLI tools (no transcription CLI).
 - Archive reports, cache reports, manual file management.
 - File moving/renaming in the recordings folder.
 - Any requirement for the user to type paths.
@@ -62,9 +59,6 @@ The original staged manual is archived at
 5) Storage adapter abstraction
    - Local storage and S3 supported.
    - Swap storage without rewriting pipeline logic.
-
-6) Phase coexistence
-   - Phase 1 (ttdg CLI) remains the active path until Phase 2 is production-ready.
 
 ---
 
@@ -337,7 +331,6 @@ Storage:
 - RECORDINGS_RETENTION_DAYS (optional)
 
 Compatibility notes:
-- Phase 1 ttdg CLI uses TTDG_RUN_COMMAND/TTDG_RUN_CWD/TTDG_EXTRA_ARGS (see docs/reference/env.md).
 - Phase 2+ transcription uses DEEPGRAM_* config and the shared storage adapter settings above.
 
 ---

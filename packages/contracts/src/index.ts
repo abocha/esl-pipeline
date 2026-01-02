@@ -9,11 +9,6 @@ export type RecordingStatus = 'ingested' | 'queued' | 'transcribing' | 'transcri
 export interface JobStatusDto {
   jobId: string;
   md: string | null;
-  transcribeWorkdir: string | null;
-  transcriptPath: string | null;
-  promptPayload: string | null;
-  promptNotes: string | null;
-  profilePath: string | null;
   recordingId: string | null;
   transcriptId: string | null;
   promptPackageId: string | null;

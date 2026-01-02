@@ -9,7 +9,7 @@ FRONTEND_VISION end-state.
 
 Scope:
 - Close the known gaps that prevent Phase 2+ from being a complete, smooth flow.
-- Do not re-implement Phase 1 (ttdg) or the already shipped Phase 2+ core.
+- Do not rework the already shipped Phase 2+ core.
 
 Status:
 - Stages 0-6 complete; Phase 2+ gap closure finished.
@@ -29,8 +29,7 @@ Status:
 - docs/backend-frontend/backend-frontend-alignment.md (API status tracker)
 
 Confirm these guardrails:
-- Phase 1 remains supported until Phase 2+ is production-ready.
-- Phase 2+ work is additive; do not break existing pipelines.
+- Phase 2+ is the active path; do not break the existing pipeline.
 - Orchestrator still expects a filesystem markdown path.
 
 ---

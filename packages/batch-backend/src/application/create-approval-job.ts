@@ -63,8 +63,6 @@ export async function createApprovalJobFromDraft(
     transcriptId: params.promptPackage.transcriptId,
     promptPackageId: params.promptPackage.id,
     draftId: params.draft.id,
-    promptNotes: params.promptPackage.notes ?? null,
-    profilePath: params.promptPackage.profilePath ?? null,
     userId: params.draft.createdBy ?? undefined,
     preset,
     withTts: hasTtsKey,

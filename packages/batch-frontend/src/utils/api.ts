@@ -134,10 +134,7 @@ export interface MaterializeDraftResponse {
 }
 
 export interface SubmitJobRequest {
-  md?: string | null;
-  transcribeWorkdir?: string;
-  promptNotes?: string;
-  profilePath?: string;
+  md: string;
   preset?: string;
   withTts?: boolean;
   forceTts?: boolean;

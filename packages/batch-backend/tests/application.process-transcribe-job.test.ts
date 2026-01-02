@@ -299,10 +299,6 @@ function createConfig(): BatchBackendConfig {
       provider: 'filesystem',
       presignedUrlExpiresIn: 0,
     },
-    ttdg: {
-      runCommand: '',
-      recordingsRoot: '',
-    },
     prompt: {
       templatePath: '',
       defaultProfilePath: '',

@@ -77,7 +77,6 @@ services:
       - ./uploads:/app/uploads
       - ./:/app
       - /mnt/d/Download/Videos/_lessons:/recordings
-      - /home/abocha/code/to-text-deepgram:/ttdg
     command: >
       sh -lc "
         pnpm --filter @esl-pipeline/batch-backend dev:api
@@ -107,7 +106,6 @@ services:
       - ./uploads:/app/uploads
       - ./:/app
       - /mnt/d/Download/Videos/_lessons:/recordings
-      - /home/abocha/code/to-text-deepgram:/ttdg
     command: >
       sh -lc "
         pnpm --filter @esl-pipeline/batch-backend dev:worker
@@ -135,7 +133,6 @@ services:
       - ./uploads:/app/uploads
       - ./:/app
       - /mnt/d/Download/Videos/_lessons:/recordings
-      - /home/abocha/code/to-text-deepgram:/ttdg
     command: >
       sh -lc "
         pnpm --filter @esl-pipeline/batch-backend exec tsx watch src/transport/transcribe-worker.ts

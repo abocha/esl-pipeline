@@ -29,10 +29,7 @@ export function registerCoreRoutes(app: FastifyInstance, options: CoreRouteOptio
 
     const jobSchema = z
       .object({
-        md: z.string().min(1).optional(),
-        transcribeWorkdir: z.string().min(1).optional(),
-        promptNotes: z.string().optional(),
-        profilePath: z.string().min(1).optional(),
+        md: z.string().min(1),
         preset: z.string().optional(),
         withTts: z.boolean().optional(),
         upload: z.enum(['auto', 's3', 'none']).optional(),
@@ -41,34 +38,12 @@ export function registerCoreRoutes(app: FastifyInstance, options: CoreRouteOptio
         forceTts: z.boolean().optional(),
         notionDatabase: z.string().min(1).optional(),
         ttsStrategy: z.enum(['auto', 'dialogue', 'tts']).optional(),
-      })
-      .superRefine((data, ctx) => {
-        const hasMd = typeof data.md === 'string' && data.md.trim().length > 0;
-        const hasTranscribe =
-          typeof data.transcribeWorkdir === 'string' && data.transcribeWorkdir.trim().length > 0;
-        if (!hasMd && !hasTranscribe) {
-          ctx.addIssue({
-            code: z.ZodIssueCode.custom,
-            message: 'md or transcribeWorkdir is required',
-            path: ['md'],
-          });
-        }
-        if (hasMd && hasTranscribe) {
-          ctx.addIssue({
-            code: z.ZodIssueCode.custom,
-            message: 'Provide either md or transcribeWorkdir, not both',
-            path: ['md'],
-          });
-        }
       });
 
     const validatedData = jobSchema.parse(body);
 
     const result = await submitJob({
       md: validatedData.md,
-      transcribeWorkdir: validatedData.transcribeWorkdir,
-      promptNotes: validatedData.promptNotes,
-      profilePath: validatedData.profilePath,
       preset: validatedData.preset,
       withTts: validatedData.withTts,
       upload: validatedData.upload,

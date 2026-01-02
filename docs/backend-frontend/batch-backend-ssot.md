@@ -210,11 +210,6 @@ Job:
 - `id: string` (UUID).
 - `state: JobState` (`queued` | `running` | `awaiting_approval` | `succeeded` | `failed`).
 - `md: string | null` (Markdown path; null while awaiting approval).
-- `transcribeWorkdir?: string | null` — ttdg workdir for Phase 1 runs.
-- `transcriptPath?: string | null` — transcript output path (Phase 1).
-- `promptPayload?: string | null` — assembled prompt payload.
-- `promptNotes?: string | null` — notes text used for prompt assembly.
-- `profilePath?: string | null` — profile source path (file or DB export).
 - `recordingId?: string | null` — Recording UUID (Phase 2+).
 - `transcriptId?: string | null` — Transcript UUID (Phase 2+).
 - `promptPackageId?: string | null` — PromptPackage UUID (Phase 2+).
@@ -254,7 +249,7 @@ See comments in [`db.ts`](packages/batch-backend/src/infrastructure/db.ts:64). T
   - `awaiting_approval` → `failed`
 - No transitions are allowed out of terminal states (`succeeded`, `failed`).
 - Repository updates enforce `expectedState` to avoid races.
-- `md` or `transcribeWorkdir` is required at submission.
+- `md` is required at submission.
 
 ### 4.5 Schema Migration – Phase 6+ Columns
 
@@ -295,8 +290,7 @@ HTTP:
 - Method: `POST`
 - Path: `/jobs`
 - Request body (JSON):
-  - `md?: string` (required when `transcribeWorkdir` is omitted)
-  - `transcribeWorkdir?: string` (required when `md` is omitted)
+  - `md: string`
   - `preset?: string`
   - `withTts?: boolean`
     - When omitted, treated as `false` (no TTS) in current canonical behavior.
@@ -320,7 +314,7 @@ Flow:
 
 1. HTTP route in [`http-server.ts`](packages/batch-backend/src/transport/http-server.ts:25).
 2. Calls [`submitJob`](packages/batch-backend/src/application/submit-job.ts:21):
-   - Validates `md` or `transcribeWorkdir` (mutually exclusive).
+   - Validates `md`.
    - [`insertJob`](packages/batch-backend/src/domain/job-repository.ts:14) → `queued`.
    - [`createJobQueue().enqueue`](packages/batch-backend/src/infrastructure/queue-bullmq.ts:49) with `{ jobId }`.
 3. Returns 202 with `{ jobId }` on success.
