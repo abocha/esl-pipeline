@@ -32,7 +32,7 @@
     "docs"
   ],
   "scripts": {
-    "build": "tsup --config tsup.config.ts && tsc -p tsconfig.types.json",
+    "build": "pnpm --filter @esl-pipeline/shared-infrastructure build && tsup --config tsup.config.ts && tsc -p tsconfig.types.json",
     "postbuild": "node ./scripts/postbuild.js",
     "clean": "node -e \"fs.rmSync('dist', {recursive:true, force:true})\"",
     "dev": "tsx watch bin/cli.ts",

@@ -203,11 +203,11 @@ export function loadConfig(): BatchBackendConfig {
 
   const promptTemplatePath = readString(
     'PROMPT_TEMPLATE_PATH',
-    'docs/misc/hw_prompt_v4_clean.md',
+    'docs/templates/hw_prompt_v4_clean.md',
   )!;
   const promptProfilePath = readString(
     'PROMPT_PROFILE_PATH',
-    'docs/misc/PROFILE_2025-11-16.md',
+    'docs/templates/PROFILE_2025-11-16.md',
   )!;
 
   // Authentication configuration

@@ -54,7 +54,7 @@ Use `.env.batch-backend` for the service stack. It includes all core keys above 
 - SMTP (optional): `MAIL_ENABLED`, `MAIL_HOST`, `MAIL_PORT`, `MAIL_FROM`, `MAIL_SECURE`, `MAIL_USER`, `MAIL_PASSWORD`.
 - Manifest/config selection: same `ESL_PIPELINE_*` keys as core (see above).
 - Prompt templates/profiles: `PROMPT_TEMPLATE_PATH`, `PROMPT_PROFILE_PATH`.
-  - Defaults live under `docs/misc` unless overridden.
+  - Defaults live under `docs/templates` unless overridden.
   - Template/profile allowlists are derived from the directories containing these paths.
 - Prompt/job metadata fallbacks:
   - `NOTION_DB_OPTIONS`, `NOTION_DB_ID`, `NOTION_DB_NAME`, `NOTION_DB_LABEL`
