@@ -18,7 +18,7 @@
     "dist"
   ],
   "scripts": {
-    "build": "tsc -b tsconfig.build.json",
+    "build": "tsc -b tsconfig.build.json --force",
     "test": "vitest run --config ../../vitest.config.ts --dir ../../packages/shared-infrastructure/tests --reporter=dot",
     "test:verbose": "vitest run --config ../../vitest.config.ts --dir ../../packages/shared-infrastructure/tests --reporter=verbose",
     "typecheck": "tsc --noEmit"
