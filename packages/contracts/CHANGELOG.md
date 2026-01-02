@@ -1,10 +1,16 @@
 # @esl-pipeline/contracts
 
+## 1.2.0
+
+### Minor Changes
+
+- Remove Phase 1 ttdg/legacy prompt assembly and align batch APIs with Phase 2 prompt packages.
+
 ## 1.1.0
 
 ### Minor Changes
 
-- Add transcription job linkage fields, recordings discovery, and pipeline-native ttdg orchestration.
+- Add transcription job linkage fields and recordings discovery for pipeline-native transcription.
 
 ## 1.0.3
 

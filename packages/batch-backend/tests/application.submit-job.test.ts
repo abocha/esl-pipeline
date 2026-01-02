@@ -1,6 +1,3 @@
-import fs from 'node:fs/promises';
-import os from 'node:os';
-import path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 // We import from compiled paths relative to this test file.
@@ -85,9 +82,6 @@ describe('application/submit-job', () => {
     expect(insertJobSpy).toHaveBeenCalledTimes(1);
     expect(insertJobSpy).toHaveBeenCalledWith({
       md: request.md,
-      transcribeWorkdir: null,
-      promptNotes: null,
-      profilePath: null,
       preset: request.preset,
       withTts: request.withTts,
       upload: request.upload,
@@ -153,9 +147,6 @@ describe('application/submit-job', () => {
 
     expect(insertJobSpy).toHaveBeenCalledWith({
       md: fakeJob.md,
-      transcribeWorkdir: null,
-      promptNotes: null,
-      profilePath: null,
       preset: fakeJob.preset,
       withTts: fakeJob.withTts,
       upload: fakeJob.upload,
@@ -179,43 +170,13 @@ describe('application/submit-job', () => {
       enqueue,
     });
 
-    await expect(submitJob({} as any)).rejects.toThrow('md or transcribeWorkdir is required');
-    await expect(submitJob({ md: '' as any })).rejects.toThrow('md or transcribeWorkdir is required');
-    await expect(submitJob({ md: 42 as any })).rejects.toThrow('md or transcribeWorkdir is required');
+    await expect(submitJob({} as any)).rejects.toThrow('md is required');
+    await expect(submitJob({ md: '' as any })).rejects.toThrow('md is required');
+    await expect(submitJob({ md: 42 as any })).rejects.toThrow('md is required');
 
     expect(insertJobSpy).not.toHaveBeenCalled();
     expect(enqueue).not.toHaveBeenCalled();
     expect(publishJobEventSpy).not.toHaveBeenCalled();
   });
 
-  it('rejects profilePath outside the repository root', async () => {
-    const originalProfilePath = process.env.PROMPT_PROFILE_PATH;
-    const rootDir = await fs.mkdtemp(path.join(os.tmpdir(), 'esl-profile-root-'));
-    const rootProfilePath = path.join(rootDir, 'PROFILE.md');
-    await fs.writeFile(rootProfilePath, 'ROOT PROFILE', 'utf8');
-    process.env.PROMPT_PROFILE_PATH = rootProfilePath;
-
-    const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'esl-profile-'));
-    const profilePath = path.join(tempDir, 'profile.md');
-    await fs.writeFile(profilePath, 'PROFILE', 'utf8');
-
-    try {
-      await expect(
-        submitJob({
-          md: 'fixtures/ok.md',
-          profilePath,
-        }),
-      ).rejects.toThrow('profilePath must resolve within the configured profile root');
-    } finally {
-      if (originalProfilePath === undefined) {
-        delete process.env.PROMPT_PROFILE_PATH;
-      } else {
-        process.env.PROMPT_PROFILE_PATH = originalProfilePath;
-      }
-    }
-
-    expect(insertJobSpy).not.toHaveBeenCalled();
-    expect(createJobQueueSpy).not.toHaveBeenCalled();
-    expect(publishJobEventSpy).not.toHaveBeenCalled();
-  });
 });

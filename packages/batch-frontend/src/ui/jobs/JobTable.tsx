@@ -176,15 +176,6 @@ export const JobTable: React.FC = () => {
     toast(`Audio regeneration for ${jobId} coming soon!`, { icon: '🔊' });
   };
 
-  const handleCopyPrompt = (job: JobEntry) => {
-    if (!job.promptPayload) {
-      toast.error('Prompt payload is not available yet');
-      return;
-    }
-    copy(job.promptPayload);
-    toast.success('Prompt copied to clipboard');
-  };
-
   const handleApprove = async (job: JobEntry, file: File) => {
     if (approvingJobId) return;
     setApprovingJobId(job.jobId);
@@ -329,7 +320,6 @@ export const JobTable: React.FC = () => {
                   key={job.jobId}
                   job={job}
                   onCopy={() => void handleCopy(job)}
-                  onCopyPrompt={() => handleCopyPrompt(job)}
                   onApprove={(file) => handleApprove(job, file)}
                   isApproving={approvingJobId === job.jobId}
                   onRegenerate={() => handleRegenerate(job.jobId)}
@@ -546,7 +536,6 @@ interface JobRowProps {
   job: JobEntry;
   onCopy: () => void;
   onRegenerate: () => void;
-  onCopyPrompt?: () => void;
   onApprove?: (file: File) => void;
   isApproving?: boolean;
   style?: React.CSSProperties;
@@ -556,7 +545,6 @@ const JobRow: React.FC<JobRowProps> = ({
   job,
   onCopy,
   onRegenerate,
-  onCopyPrompt,
   onApprove,
   isApproving,
   style,
@@ -613,12 +601,6 @@ const JobRow: React.FC<JobRowProps> = ({
             <CopyIcon />
             <span>Copy link</span>
           </button>
-          {job.promptPayload && onCopyPrompt && (
-            <button type="button" onClick={onCopyPrompt} className="btn-action">
-              <CopyIcon />
-              <span>Copy prompt</span>
-            </button>
-          )}
           {job.state === 'awaiting_approval' && onApprove && (
             <>
               <button

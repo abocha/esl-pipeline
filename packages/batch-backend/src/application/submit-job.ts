@@ -5,22 +5,16 @@
 // - Persists a queued job via JobRepository.
 // - Enqueues a BullMQ job via createJobQueue.
 import { publishJobEvent } from '../domain/job-events.js';
-import { loadConfig } from '../config/env.js';
 import type { TtsStrategy as DomainTtsStrategy } from '../domain/job-model.js';
 import { insertJob } from '../domain/job-repository.js';
 import { logger } from '../infrastructure/logger.js';
 import { createJobQueue } from '../infrastructure/queue-bullmq.js';
-import { ProfilePathError } from './profile-path.js';
-import { PromptOptionError, resolveAllowlistedProfilePath } from './prompt-options.js';
 
 export type UploadTarget = 'auto' | 's3' | 'none';
 export type TtsStrategy = DomainTtsStrategy;
 
 export interface SubmitJobRequest {
-  md?: string | null;
-  transcribeWorkdir?: string;
-  promptNotes?: string;
-  profilePath?: string;
+  md: string;
   preset?: string;
   withTts?: boolean;
   upload?: UploadTarget;
@@ -52,18 +46,8 @@ function validateSubmitJobRequest(req: SubmitJobRequest): void {
   }
 
   const hasMd = typeof req.md === 'string' && req.md.trim().length > 0;
-  const hasTranscribeWorkdir =
-    typeof req.transcribeWorkdir === 'string' && req.transcribeWorkdir.trim().length > 0;
-
-  if (!hasMd && !hasTranscribeWorkdir) {
-    throw new ValidationError('md or transcribeWorkdir is required', 'md_or_transcribe_required');
-  }
-
-  if (hasMd && hasTranscribeWorkdir) {
-    throw new ValidationError(
-      'Provide either md or transcribeWorkdir, not both',
-      'md_and_transcribe_conflict',
-    );
+  if (!hasMd) {
+    throw new ValidationError('md is required', 'md_required');
   }
 
   if (
@@ -130,26 +114,6 @@ function validateSubmitJobRequest(req: SubmitJobRequest): void {
     );
   }
 
-  if (req.transcribeWorkdir !== undefined && typeof req.transcribeWorkdir !== 'string') {
-    throw new ValidationError(
-      'transcribeWorkdir must be a string when provided',
-      'invalid_transcribe_workdir',
-    );
-  }
-
-  if (req.promptNotes !== undefined && typeof req.promptNotes !== 'string') {
-    throw new ValidationError('promptNotes must be a string when provided', 'invalid_prompt_notes');
-  }
-
-  if (req.profilePath !== undefined && typeof req.profilePath !== 'string') {
-    throw new ValidationError('profilePath must be a string when provided', 'invalid_profile_path');
-  }
-  if (typeof req.profilePath === 'string' && req.profilePath.trim().length === 0) {
-    throw new ValidationError(
-      'profilePath must be a non-empty string when provided',
-      'invalid_profile_path',
-    );
-  }
 }
 
 // submitJob.declaration()
@@ -157,24 +121,8 @@ function validateSubmitJobRequest(req: SubmitJobRequest): void {
 export async function submitJob(req: SubmitJobRequest): Promise<SubmitJobResponse> {
   validateSubmitJobRequest(req);
 
-  const profilePath = req.profilePath?.trim();
-  if (profilePath) {
-    const config = loadConfig();
-    try {
-      await resolveAllowlistedProfilePath(profilePath, { config });
-    } catch (error) {
-      if (error instanceof PromptOptionError || error instanceof ProfilePathError) {
-        throw new ValidationError(error.message, error.code);
-      }
-      throw error;
-    }
-  }
-
   const job = await insertJob({
-    md: req.md ?? null,
-    transcribeWorkdir: req.transcribeWorkdir ?? null,
-    promptNotes: req.promptNotes ?? null,
-    profilePath: profilePath ?? null,
+    md: req.md,
     preset: req.preset,
     withTts: req.withTts,
     // Persist explicit upload choice for observability; downstream decides how to interpret.

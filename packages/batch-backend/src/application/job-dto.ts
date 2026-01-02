@@ -9,11 +9,6 @@ export function jobRecordToDto(job: JobRecord): JobStatusDto {
   return {
     jobId: job.id,
     md: job.md,
-    transcribeWorkdir: job.transcribeWorkdir ?? null,
-    transcriptPath: job.transcriptPath ?? null,
-    promptPayload: job.promptPayload ?? null,
-    promptNotes: job.promptNotes ?? null,
-    profilePath: job.profilePath ?? null,
     recordingId: job.recordingId ?? null,
     transcriptId: job.transcriptId ?? null,
     promptPackageId: job.promptPackageId ?? null,

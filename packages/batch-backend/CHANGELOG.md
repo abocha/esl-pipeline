@@ -1,10 +1,23 @@
 # @esl-pipeline/batch-backend
 
+## 1.4.0
+
+### Minor Changes
+
+- Remove Phase 1 ttdg/legacy prompt assembly and align batch APIs with Phase 2 prompt packages.
+
+### Patch Changes
+
+- Updated dependencies
+  - @esl-pipeline/contracts@1.2.0
+  - @esl-pipeline/orchestrator@3.2.3
+  - @esl-pipeline/shared-infrastructure@1.1.4
+
 ## 1.3.0
 
 ### Minor Changes
 
-- Add transcription job linkage fields, recordings discovery, and pipeline-native ttdg orchestration.
+- Add transcription job linkage fields and recordings discovery for pipeline-native transcription.
 
 ### Patch Changes
 

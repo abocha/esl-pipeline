@@ -82,11 +82,6 @@ const createDefaultJob = (jobId: string): JobEntry => {
   return {
     jobId,
     md: null,
-    transcribeWorkdir: null,
-    transcriptPath: null,
-    promptPayload: null,
-    promptNotes: null,
-    profilePath: null,
     recordingId: null,
     transcriptId: null,
     promptPackageId: null,

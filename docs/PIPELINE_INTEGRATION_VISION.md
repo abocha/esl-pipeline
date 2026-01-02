@@ -4,9 +4,7 @@ This is the primary operational manual for integrating transcription into
 esl-pipeline and running the end-to-end lesson workflow.
 
 Status snapshot:
-- Phase 1 (ttdg CLI) is the current operational path but is legacy and unstable.
-  It will be removed once Phase 2+ is production-ready.
-- Phase 2+ (pipeline-native transcription) is implemented and hardened; usable end-to-end.
+- Phase 2+ (pipeline-native transcription) is the active path and implemented end-to-end.
 - Gap-closure manual: docs/design/TRANSCRIPTION_PIPELINE_IMPLEMENTATION_MANUAL.md.
 - The original staged manual is archived at
   docs/archive/TRANSCRIPTION_PIPELINE_IMPLEMENTATION_MANUAL.md.
@@ -14,15 +12,6 @@ Status snapshot:
 ---
 
 ## 1) System map (end-to-end)
-
-### Phase 1 (legacy path)
-1. Record lesson on Windows (Opus files per student).
-2. Run to-text-deepgram (ttdg) CLI to transcribe.
-3. Assemble LLM prompt package (template + profile + transcript + notes).
-4. Generate homework draft in external LLM UI.
-5. Paste draft into web UI and approve.
-6. batch-backend runs orchestrator on approved .md.
-7. Generate TTS, publish to Notion, persist manifest.
 
 ### Phase 2+ (native transcription, implemented)
 1. Recording scan or upload ingestion creates Recording rows.
@@ -61,15 +50,7 @@ Notes for Phase 2+:
 
 ## 2) Current assets and where they live
 
-### 2.1 to-text-deepgram (Phase 1)
-- Legacy CLI for transcription, caching, archiving, reports.
-- Incomplete and minimally maintained; do not invest in new features.
-- Intended to be fully removed once Phase 2+ is production-ready.
-- Outputs per student folder:
-  - {stem}.txt transcript
-  - {parent}_{stem}.md stub
-
-### 2.2 esl-pipeline (Phase 1 + Phase 2+)
+### 2.1 esl-pipeline (Phase 2+)
 Core runtime packages:
 - packages/batch-backend
 - packages/batch-frontend
@@ -80,7 +61,7 @@ System docs:
 - docs/reference/pipeline-manifest.md
 - docs/backend-frontend/backend-frontend-alignment.md
 
-### 2.3 Prompt assets (Phase 1 + Phase 2+)
+### 2.2 Prompt assets (Phase 2+)
 - Prompt template: docs/templates/hw_prompt_v4_clean.md
 - Student profile example: docs/templates/PROFILE_2025-11-16.md
 - Profile creation prompt: docs/templates/NEW PROFILE.txt
@@ -95,20 +76,7 @@ Prompt assembly order (canonical):
 
 ## 3) Runbooks
 
-### 3.1 Phase 1 (ttdg CLI)
-Daily transcription (Windows):
-```powershell
-uv run python -m to_text_deepgram run --workdir D:\Download\Videos\_lessons
-```
-- Verify {stem}.txt and {parent}_{stem}.md exist.
-- Use ttdg report for cache/history if needed.
-
-Pipeline execution (web UI):
-- Submit a prompt job (ttdg run + prompt assembly).
-- Paste LLM output into the UI draft box.
-- Approve job to run orchestrator.
-
-### 3.2 Phase 2+ (native transcription)
+### 3.1 Phase 2+ (native transcription)
 Prereqs:
 - docker compose includes the transcribe-worker service.
 - RECORDINGS_ROOT is mounted to /recordings.
@@ -148,11 +116,6 @@ See docs/reference/env.md for the full list. Key Phase 2+ entries:
 ---
 
 ## 6) Roadmap (restructured phases)
-
-### Phase 1 (legacy, unstable)
-- ttdg CLI transcription + prompt assembly + manual LLM + approval.
-- Orchestrator runs on approved .md and writes manifest.
-- Kept only as a bridge; no new investment planned.
 
 ### Phase 2+ (implemented)
 Implemented in repo:

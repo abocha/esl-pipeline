@@ -250,13 +250,13 @@ Steps:
 
 Review Gate 9 (stop here):
 - Provide a final changelog summary and test results.
-- Confirm the Phase 1 workflow remains operational.
+- Confirm the Phase 2+ workflow remains operational.
 
 ---
 
 ## Notes for Coder-AI Execution
 
 - Do not change orchestrator behavior (it still expects a filesystem path).
-- Keep Phase 1 ttdg flow intact; Phase 2 is additive until cutover.
+- Phase 1 flow has been removed; keep Phase 2+ intact.
 - Prefer small, reviewable changes per stage.
 - When in doubt, pause and request clarification before proceeding.
