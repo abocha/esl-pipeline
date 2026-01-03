@@ -42,6 +42,7 @@ const createRecording = (overrides: Partial<RecordingListItem>): RecordingListIt
   error: null,
   source: 'scan',
   studentId: null,
+  displayName: 'recording-1.opus',
   durationSec: null,
   channels: null,
   bytes: 1024,

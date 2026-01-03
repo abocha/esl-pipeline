@@ -98,6 +98,32 @@ const RECORDINGS_SCHEMA_PATCHES: string[] = [
 const RECORDINGS_INDEX_PATCHES: string[] = [
   'CREATE INDEX IF NOT EXISTS idx_recordings_status ON recordings (status)',
   'CREATE INDEX IF NOT EXISTS idx_recordings_created_at ON recordings (created_at)',
+  'CREATE INDEX IF NOT EXISTS idx_recordings_source ON recordings (source)',
+  'CREATE INDEX IF NOT EXISTS idx_recordings_student_id ON recordings (student_id)',
+  `DO $$
+  BEGIN
+    IF NOT EXISTS (SELECT 1 FROM pg_extension WHERE extname = 'pg_trgm') THEN
+      BEGIN
+        CREATE EXTENSION pg_trgm;
+      EXCEPTION
+        WHEN insufficient_privilege THEN
+          NULL;
+      END;
+    END IF;
+  END
+  $$;`,
+  `DO $$
+  BEGIN
+    IF EXISTS (SELECT 1 FROM pg_extension WHERE extname = 'pg_trgm') THEN
+      CREATE INDEX IF NOT EXISTS idx_recordings_source_path_trgm
+        ON recordings USING gin (source_path gin_trgm_ops);
+      CREATE INDEX IF NOT EXISTS idx_recordings_storage_uri_trgm
+        ON recordings USING gin (storage_uri gin_trgm_ops);
+      CREATE INDEX IF NOT EXISTS idx_recordings_id_trgm
+        ON recordings USING gin ((id::text) gin_trgm_ops);
+    END IF;
+  END
+  $$;`,
 ];
 
 const TRANSCRIPTS_TABLE_SQL = `

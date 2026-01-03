@@ -1,4 +1,4 @@
-import { RecordingStatusSchema } from '../domain/recording-model.js';
+import { RecordingSourceSchema, RecordingStatusSchema } from '../domain/recording-model.js';
 import {
   countRecordings,
   listRecordings,
@@ -8,6 +8,8 @@ import { recordingToDto, type RecordingDto } from './recording-dto.js';
 
 export interface ListRecordingsParams {
   statuses?: string[] | null;
+  sources?: string[] | null;
+  search?: string | null;
   studentId?: string | null;
   limit?: number;
   offset?: number;
@@ -49,16 +51,23 @@ export async function listRecordingsWithDefaults(
     params.statuses && params.statuses.length > 0
       ? params.statuses.map((status) => RecordingStatusSchema.parse(status))
       : undefined;
+  const sources =
+    params.sources && params.sources.length > 0
+      ? params.sources.map((source) => RecordingSourceSchema.parse(source))
+      : undefined;
+  const search = params.search?.trim() || undefined;
 
   const [items, total] = await Promise.all([
     recordings.list({
       statuses,
+      sources,
+      search,
       studentId,
       limit,
       offset,
       order,
     }),
-    recordings.count(statuses, studentId),
+    recordings.count(statuses, studentId, sources, search),
   ]);
 
   return {

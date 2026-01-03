@@ -6,6 +6,7 @@ esl-pipeline and running the end-to-end lesson workflow.
 Status snapshot:
 - Phase 2+ (pipeline-native transcription) is the active path and implemented end-to-end.
 - Gap-closure manual: docs/design/TRANSCRIPTION_PIPELINE_IMPLEMENTATION_MANUAL.md.
+- Phase 3 manual: docs/design/PIPELINE_INTEGRATION_PHASE_3_MANUAL.md.
 - The original staged manual is archived at
   docs/archive/TRANSCRIPTION_PIPELINE_IMPLEMENTATION_MANUAL.md.
 
@@ -128,9 +129,10 @@ Implemented in repo:
 - None (hardening complete).
 
 ### New phases (fresh roadmap)
-Phase 3: Phase 2+ polish
+Phase 3: Phase 2+ polish (implemented)
 - One-click approval (no manual job ID).
 - Recording search + filters on the list view.
+  - Implementation manual: docs/design/PIPELINE_INTEGRATION_PHASE_3_MANUAL.md.
 
 Phase 4: Student-centric workflow
 - Student selection, profile CRUD, and per-student timelines.

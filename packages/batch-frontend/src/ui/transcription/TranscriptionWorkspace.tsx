@@ -143,6 +143,14 @@ const RECORDING_STATUS_META: Record<
   },
 };
 
+const RECORDING_STATUS_OPTIONS: { value: RecordingStatus; label: string }[] = [
+  { value: 'ingested', label: 'Ingested' },
+  { value: 'queued', label: 'Queued' },
+  { value: 'transcribing', label: 'Transcribing' },
+  { value: 'transcribed', label: 'Transcribed' },
+  { value: 'failed', label: 'Failed' },
+];
+
 const getRecordingStatusMeta = (status?: RecordingStatus | null) => {
   if (!status) {
     return {
@@ -155,7 +163,7 @@ const getRecordingStatusMeta = (status?: RecordingStatus | null) => {
 };
 
 export const TranscriptionWorkspace: React.FC = () => {
-  const { recordings, registerRecording, trackJob } = useJobMonitor();
+  const { recordings, registerRecording, refreshRecordings, trackJob } = useJobMonitor();
   const [selectedRecordingId, setSelectedRecordingId] = useState('');
   const [recordingInput, setRecordingInput] = useState('');
   const [syncing, setSyncing] = useState(false);
@@ -164,6 +172,9 @@ export const TranscriptionWorkspace: React.FC = () => {
   const [uploadKey, setUploadKey] = useState(0);
   const [studentOptions, setStudentOptions] = useState<StudentOption[]>([]);
   const [studentFilter, setStudentFilter] = useState('all');
+  const [statusFilter, setStatusFilter] = useState<'all' | RecordingStatus>('all');
+  const [sourceFilter, setSourceFilter] = useState<'all' | 'scan' | 'upload'>('all');
+  const [searchQuery, setSearchQuery] = useState('');
   const [uploadStudentId, setUploadStudentId] = useState('');
   const [recordingPanelError, setRecordingPanelError] = useState<string | null>(null);
   const [recordingDetailError, setRecordingDetailError] = useState<string | null>(null);
@@ -207,18 +218,70 @@ export const TranscriptionWorkspace: React.FC = () => {
   }, [studentOptions]);
 
   const filteredRecordings = useMemo(() => {
-    if (studentFilter === 'all') return recordings;
+    let items = recordings;
     if (studentFilter === 'unassigned') {
-      return recordings.filter((recording) => !recording.studentId);
+      items = items.filter((recording) => !recording.studentId);
+    } else if (studentFilter !== 'all') {
+      items = items.filter((recording) => recording.studentId === studentFilter);
     }
-    return recordings.filter((recording) => recording.studentId === studentFilter);
-  }, [recordings, studentFilter]);
+
+    if (statusFilter !== 'all') {
+      items = items.filter((recording) => recording.status === statusFilter);
+    }
+
+    if (sourceFilter !== 'all') {
+      items = items.filter((recording) => recording.source === sourceFilter);
+    }
+
+    const query = searchQuery.trim().toLowerCase();
+    if (!query) return items;
+
+    return items.filter((recording) => {
+      const haystack = [recording.displayName ?? '', recording.recordingId];
+      return haystack.some((value) => value.toLowerCase().includes(query));
+    });
+  }, [recordings, studentFilter, statusFilter, sourceFilter, searchQuery]);
 
   const templateOptions = promptOptions?.templates ?? [];
   const profileOptions = promptOptions?.profiles ?? [];
   const selectedStatusMeta = selectedRecording
     ? getRecordingStatusMeta(selectedRecording.status)
     : null;
+
+  useEffect(() => {
+    let active = true;
+    const status = statusFilter === 'all' ? undefined : statusFilter;
+    const source = sourceFilter === 'all' ? undefined : sourceFilter;
+    const studentId =
+      studentFilter === 'all' || studentFilter === 'unassigned' ? undefined : studentFilter;
+    const q = searchQuery.trim() || undefined;
+
+    const timeout = setTimeout(() => {
+      const run = async () => {
+        try {
+          await refreshRecordings({
+            status,
+            source,
+            studentId,
+            q,
+          });
+          if (!active) return;
+          setRecordingPanelError(null);
+        } catch (error) {
+          if (!active) return;
+          const message =
+            error instanceof Error ? error.message : 'Unable to load recordings';
+          setRecordingPanelError(message);
+        }
+      };
+      void run();
+    }, q ? 250 : 0);
+
+    return () => {
+      active = false;
+      clearTimeout(timeout);
+    };
+  }, [refreshRecordings, searchQuery, sourceFilter, statusFilter, studentFilter]);
 
   useEffect(() => {
     let active = true;
@@ -301,6 +364,7 @@ export const TranscriptionWorkspace: React.FC = () => {
         error: record.error ?? null,
         source: record.source,
         studentId: record.studentId ?? null,
+        displayName: record.displayName ?? null,
         durationSec: record.durationSec ?? null,
         channels: record.channels ?? null,
         bytes: record.bytes,
@@ -399,6 +463,7 @@ export const TranscriptionWorkspace: React.FC = () => {
         error: updated.error ?? null,
         source: updated.source,
         studentId: updated.studentId ?? null,
+        displayName: updated.displayName ?? null,
         durationSec: updated.durationSec ?? null,
         channels: updated.channels ?? null,
         bytes: updated.bytes,
@@ -573,22 +638,71 @@ export const TranscriptionWorkspace: React.FC = () => {
           </div>
 
           <div className="recording-filter">
-            <label className="field-label" htmlFor="recording-student-filter">
-              Filter by student
-            </label>
-            <select
-              id="recording-student-filter"
-              value={studentFilter}
-              onChange={(event) => setStudentFilter(event.target.value)}
-            >
-              <option value="all">All students</option>
-              <option value="unassigned">Unassigned</option>
-              {studentOptions.map((student) => (
-                <option key={student.id} value={student.id}>
-                  {student.name}
-                </option>
-              ))}
-            </select>
+            <div className="filter-field">
+              <label className="field-label" htmlFor="recording-search">
+                Search
+              </label>
+              <input
+                id="recording-search"
+                type="search"
+                placeholder="ID or filename"
+                value={searchQuery}
+                onChange={(event) => setSearchQuery(event.target.value)}
+              />
+            </div>
+            <div className="filter-field">
+              <label className="field-label" htmlFor="recording-student-filter">
+                Student
+              </label>
+              <select
+                id="recording-student-filter"
+                value={studentFilter}
+                onChange={(event) => setStudentFilter(event.target.value)}
+              >
+                <option value="all">All students</option>
+                <option value="unassigned">Unassigned</option>
+                {studentOptions.map((student) => (
+                  <option key={student.id} value={student.id}>
+                    {student.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div className="filter-field">
+              <label className="field-label" htmlFor="recording-status-filter">
+                Status
+              </label>
+              <select
+                id="recording-status-filter"
+                value={statusFilter}
+                onChange={(event) =>
+                  setStatusFilter(event.target.value as 'all' | RecordingStatus)
+                }
+              >
+                <option value="all">All statuses</option>
+                {RECORDING_STATUS_OPTIONS.map((status) => (
+                  <option key={status.value} value={status.value}>
+                    {status.label}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div className="filter-field">
+              <label className="field-label" htmlFor="recording-source-filter">
+                Source
+              </label>
+              <select
+                id="recording-source-filter"
+                value={sourceFilter}
+                onChange={(event) =>
+                  setSourceFilter(event.target.value as 'all' | 'scan' | 'upload')
+                }
+              >
+                <option value="all">All sources</option>
+                <option value="scan">Scan</option>
+                <option value="upload">Upload</option>
+              </select>
+            </div>
           </div>
 
           <div className="recording-upload">
@@ -641,6 +755,8 @@ export const TranscriptionWorkspace: React.FC = () => {
                 const transcriptLabel = recording.transcriptId
                   ? `Transcript: ${recording.transcriptId}`
                   : 'Transcript pending';
+                const displayName = recording.displayName || recording.recordingId;
+                const showId = displayName !== recording.recordingId;
                 return (
                   <button
                     type="button"
@@ -651,7 +767,10 @@ export const TranscriptionWorkspace: React.FC = () => {
                     onClick={() => handleSelectRecording(recording.recordingId)}
                   >
                     <div className="recording-title">
-                      <span className="mono">{recording.recordingId}</span>
+                      <div className="recording-title-text">
+                        <span className="recording-name">{displayName}</span>
+                        {showId && <span className="mono recording-id">{recording.recordingId}</span>}
+                      </div>
                       <span className={`status-pill status-${recording.status}`}>
                         {statusMeta.label}
                       </span>
@@ -676,7 +795,15 @@ export const TranscriptionWorkspace: React.FC = () => {
             <header>
               <h3>Transcript review</h3>
               <div className="detail-meta">
-                <span>{selectedRecordingId || 'No recording selected'}</span>
+                <span>
+                  {(selectedRecording?.displayName ?? selectedRecordingId) ||
+                    'No recording selected'}
+                </span>
+                {selectedRecording?.displayName &&
+                  selectedRecordingId &&
+                  selectedRecording.displayName !== selectedRecordingId && (
+                    <span className="mono">{selectedRecordingId}</span>
+                  )}
                 {selectedRecording && selectedStatusMeta && (
                   <>
                     <span className={`status-pill status-${selectedRecording.status}`}>
@@ -986,7 +1113,17 @@ export const TranscriptionWorkspace: React.FC = () => {
           gap: var(--space-2);
         }
 
+        .recording-filter {
+          grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+        }
+
+        .recording-filter .filter-field {
+          display: grid;
+          gap: var(--space-1);
+        }
+
         .recording-filter select,
+        .recording-filter input[type='search'],
         .recording-upload-options select {
           background: var(--bg-secondary);
           border: 1px solid var(--border-light);
@@ -1050,6 +1187,22 @@ export const TranscriptionWorkspace: React.FC = () => {
           align-items: center;
           gap: var(--space-2);
           font-size: var(--text-sm);
+        }
+
+        .recording-title-text {
+          display: flex;
+          flex-direction: column;
+          gap: var(--space-1);
+        }
+
+        .recording-name {
+          font-weight: 600;
+          color: var(--text-primary);
+        }
+
+        .recording-id {
+          color: var(--text-tertiary);
+          font-size: var(--text-xs);
         }
 
         .recording-sub {

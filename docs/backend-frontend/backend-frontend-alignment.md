@@ -252,7 +252,7 @@ The staged implementation manual is archived at
 - Recordings:
   - `POST /recordings/sync`
   - `POST /recordings/upload`
-  - `GET /recordings` (supports `studentId`/`student` filters)
+  - `GET /recordings` (supports `status`, `studentId`/`student`, `source`, `q`, `limit`, `offset`, `order`)
   - `GET /recordings/:id`
   - `GET /recordings/:id/transcript`
   - `PUT /recordings/:id/transcript`

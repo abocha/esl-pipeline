@@ -61,6 +61,7 @@ export interface RecordingEventMessage {
   error?: string | null;
   studentId?: string | null;
   source?: 'scan' | 'upload';
+  displayName?: string | null;
   durationSec?: number | null;
   channels?: number | null;
   bytes?: number;

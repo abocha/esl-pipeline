@@ -37,6 +37,7 @@ Phase 2+ (native transcription, implemented with gaps):
 1. Recordings are scanned from a mounted folder and transcribed via Deepgram.
 2. Tutor reviews transcript, assembles prompt package, and saves draft.
 3. Draft is materialized and approved through the existing job approval flow.
+4. Recording list supports search plus status/source/student filters.
 
 ---
 
