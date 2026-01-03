@@ -39,7 +39,7 @@
     "@esl-pipeline/contracts": "workspace:*",
     "@notionhq/client": "^5.6.0",
     "commander": "^14.0.2",
-    "zod": "^4.2.1"
+    "zod": "^4.3.4"
   },
   "devDependencies": {
     "@types/node": "^25.0.3",

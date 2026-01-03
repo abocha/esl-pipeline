@@ -19,18 +19,18 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@aws-sdk/client-s3": "^3.956.0",
-    "@aws-sdk/lib-storage": "^3.956.0",
-    "@aws-sdk/s3-request-presigner": "^3.956.0",
-    "@deepgram/sdk": "^4.4.0",
+    "@aws-sdk/client-s3": "^3.962.0",
+    "@aws-sdk/lib-storage": "^3.962.0",
+    "@aws-sdk/s3-request-presigner": "^3.962.0",
+    "@deepgram/sdk": "^4.11.3",
     "@esl-pipeline/contracts": "workspace:*",
     "@esl-pipeline/orchestrator": "workspace:*",
     "@esl-pipeline/shared-infrastructure": "workspace:*",
     "@fastify/multipart": "^9.3.0",
     "bcrypt": "^6.0.0",
-    "bullmq": "^5.66.2",
+    "bullmq": "^5.66.4",
     "fastify": "^5.6.2",
-    "file-type": "^21.1.1",
+    "file-type": "^21.2.0",
     "ioredis": "^5.8.2",
     "jsonwebtoken": "^9.0.3",
     "mime-types": "^3.0.2",
@@ -38,7 +38,7 @@
     "pg": "^8.16.3",
     "pino": "^10.1.0",
     "pino-pretty": "^13.1.3",
-    "zod": "^4.2.1",
+    "zod": "^4.3.4",
     "zod-validation-error": "^5.0.0"
   },
   "devDependencies": {
