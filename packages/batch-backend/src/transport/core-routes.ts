@@ -4,6 +4,7 @@ import { z } from 'zod';
 import type { JobEventMessage, RecordingEventMessage } from '@esl-pipeline/contracts';
 
 import { approveJobForPipeline } from '../application/approve-job.js';
+import { deriveRecordingDisplayName } from '../application/recording-dto.js';
 import { getJobStatus } from '../application/get-job-status.js';
 import { jobRecordToDto } from '../application/job-dto.js';
 import { type SubmitJobRequest, submitJob } from '../application/submit-job.js';
@@ -261,6 +262,7 @@ export function registerCoreRoutes(app: FastifyInstance, options: CoreRouteOptio
                 error: recording.error ?? null,
                 studentId: recording.studentId ?? null,
                 source: recording.source,
+                displayName: deriveRecordingDisplayName(recording),
                 durationSec: recording.durationSec ?? null,
                 channels: recording.channels ?? null,
                 bytes: recording.bytes,
@@ -302,6 +304,7 @@ export function registerCoreRoutes(app: FastifyInstance, options: CoreRouteOptio
                 error: recording.error ?? null,
                 studentId: recording.studentId ?? null,
                 source: recording.source,
+                displayName: deriveRecordingDisplayName(recording),
                 durationSec: recording.durationSec ?? null,
                 channels: recording.channels ?? null,
                 bytes: recording.bytes,

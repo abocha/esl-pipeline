@@ -64,6 +64,7 @@ export interface RecordingListItem {
   error: string | null;
   source: 'scan' | 'upload';
   studentId: string | null;
+  displayName: string;
   durationSec: number | null;
   channels: number | null;
   bytes: number;
@@ -154,6 +155,10 @@ export interface SubmitJobResponse {
 
 export async function listRecordings(params: {
   status?: RecordingStatus | RecordingStatus[];
+  source?: RecordingListItem['source'] | RecordingListItem['source'][];
+  studentId?: string;
+  student?: string;
+  q?: string;
   limit?: number;
   offset?: number;
   order?: 'asc' | 'desc';
@@ -163,6 +168,19 @@ export async function listRecordings(params: {
     if (params.status) {
       const values = Array.isArray(params.status) ? params.status : [params.status];
       search.set('status', values.join(','));
+    }
+    if (params.source) {
+      const values = Array.isArray(params.source) ? params.source : [params.source];
+      search.set('source', values.join(','));
+    }
+    if (params.studentId) {
+      search.set('studentId', params.studentId);
+    }
+    if (params.student) {
+      search.set('student', params.student);
+    }
+    if (params.q) {
+      search.set('q', params.q);
     }
     if (typeof params.limit === 'number') {
       search.set('limit', String(params.limit));

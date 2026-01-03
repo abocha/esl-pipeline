@@ -45,6 +45,7 @@ describe('retryRecordingTranscription', () => {
       error: null,
       source: 'scan',
       studentId: null,
+      displayName: 'recording-1.opus',
       durationSec: null,
       channels: null,
       bytes: 2048,

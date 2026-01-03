@@ -209,6 +209,8 @@ export async function updateRecordingStatus(params: {
 
 export interface RecordingListOptions {
   statuses?: RecordingStatus[];
+  sources?: RecordingSource[];
+  search?: string | null;
   studentId?: string | null;
   limit: number;
   offset: number;
@@ -222,7 +224,7 @@ export interface RecordingWithTranscript extends RecordingRecord {
 export async function listRecordings(
   options: RecordingListOptions,
 ): Promise<RecordingWithTranscript[]> {
-  const { statuses, studentId, limit, offset, order } = options;
+  const { statuses, sources, search, studentId, limit, offset, order } = options;
   const values: (string | string[] | number)[] = [];
   const clauses: string[] = [];
 
@@ -234,6 +236,18 @@ export async function listRecordings(
   if (studentId) {
     values.push(studentId);
     clauses.push(`r.student_id = $${values.length}`);
+  }
+
+  if (sources && sources.length > 0) {
+    values.push(sources);
+    clauses.push(`r.source = ANY($${values.length}::text[])`);
+  }
+
+  if (search && search.length > 0) {
+    values.push(`%${escapeLike(search)}%`);
+    clauses.push(
+      String.raw`(r.id::text ILIKE $${values.length} ESCAPE '\\' OR r.source_path ILIKE $${values.length} ESCAPE '\\' OR r.storage_uri ILIKE $${values.length} ESCAPE '\\')`,
+    );
   }
 
   const whereClause = clauses.length > 0 ? `WHERE ${clauses.join(' AND ')}` : '';
@@ -285,6 +299,8 @@ export async function listRecordings(
 export async function countRecordings(
   statuses?: RecordingStatus[],
   studentId?: string | null,
+  sources?: RecordingSource[],
+  search?: string | null,
 ): Promise<number> {
   const values: (string | string[])[] = [];
   const clauses: string[] = [];
@@ -297,6 +313,18 @@ export async function countRecordings(
   if (studentId) {
     values.push(studentId);
     clauses.push(`student_id = $${values.length}`);
+  }
+
+  if (sources && sources.length > 0) {
+    values.push(sources);
+    clauses.push(`source = ANY($${values.length}::text[])`);
+  }
+
+  if (search && search.length > 0) {
+    values.push(`%${escapeLike(search)}%`);
+    clauses.push(
+      String.raw`(id::text ILIKE $${values.length} ESCAPE '\\' OR source_path ILIKE $${values.length} ESCAPE '\\' OR storage_uri ILIKE $${values.length} ESCAPE '\\')`,
+    );
   }
 
   const whereClause = clauses.length > 0 ? `WHERE ${clauses.join(' AND ')}` : '';
@@ -343,4 +371,8 @@ function mapRowToRecordingWithTranscript(row: RecordingListRow): RecordingWithTr
     ...mapRowToRecording(row),
     transcriptId: row.transcript_id ?? null,
   };
+}
+
+function escapeLike(value: string): string {
+  return value.replaceAll(/[\\%_]/g, String.raw`\\$&`);
 }

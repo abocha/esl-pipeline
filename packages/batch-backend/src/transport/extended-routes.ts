@@ -28,7 +28,7 @@ import { updateRecordingTranscript } from '../application/update-recording-trans
 import { ProfilePathError } from '../application/profile-path.js';
 import { PromptOptionError } from '../application/prompt-options.js';
 import type { BatchBackendConfig } from '../config/env.js';
-import { RecordingStatusSchema } from '../domain/recording-model.js';
+import { RecordingSourceSchema, RecordingStatusSchema } from '../domain/recording-model.js';
 import {
   UserSettingsInput,
   isValidTtsProvider,
@@ -422,6 +422,8 @@ export function registerExtendedRoutes(app: FastifyInstance, options: ExtendedRo
 
       const querySchema = z.object({
         status: z.union([z.string(), z.array(z.string())]).optional(),
+        source: z.union([z.string(), z.array(z.string())]).optional(),
+        q: z.string().min(1).optional(),
         studentId: z.string().uuid().optional(),
         student: z.string().min(1).optional(),
         limit: z.coerce.number().int().min(1).max(200).optional(),
@@ -432,10 +434,13 @@ export function registerExtendedRoutes(app: FastifyInstance, options: ExtendedRo
       try {
         const query = querySchema.parse(request.query ?? {});
         const statuses = normalizeStatusFilter(query.status);
+        const sources = normalizeSourceFilter(query.source);
         const studentName = query.student ? normalizeStudentName(query.student) : null;
         const studentId = query.studentId ?? (studentName ? deriveStudentId(studentName) : null);
         const recordings = await listRecordingsWithDefaults({
           statuses,
+          sources,
+          search: query.q ?? null,
           studentId,
           limit: query.limit,
           offset: query.offset,
@@ -907,6 +912,16 @@ export function registerExtendedRoutes(app: FastifyInstance, options: ExtendedRo
     const trimmed = values.map((value) => value.trim()).filter(Boolean);
     if (trimmed.length === 0) return null;
     return trimmed.map((value) => RecordingStatusSchema.parse(value));
+  }
+
+  function normalizeSourceFilter(
+    source?: string | string[] | null,
+  ): string[] | null {
+    if (!source) return null;
+    const values = Array.isArray(source) ? source : source.split(',');
+    const trimmed = values.map((value) => value.trim()).filter(Boolean);
+    if (trimmed.length === 0) return null;
+    return trimmed.map((value) => RecordingSourceSchema.parse(value));
   }
 
   void app.register(multipart, {

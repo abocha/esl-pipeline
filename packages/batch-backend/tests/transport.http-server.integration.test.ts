@@ -2,6 +2,7 @@ import { request as httpRequest } from 'node:http';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 
 import { getJobOptions } from '../src/application/get-job-options.js';
+import * as approveJobModule from '../src/application/approve-job.js';
 import * as createDraftModule from '../src/application/create-draft.js';
 import * as createPromptPackageModule from '../src/application/create-prompt-package.js';
 import * as getRecordingModule from '../src/application/get-recording.js';
@@ -243,6 +244,101 @@ describe('transport/http-server - integration (in-process)', () => {
     });
   });
 
+  it('POST /jobs/:jobId/approve returns 202 with job payload when approved', async () => {
+    const approveJobForPipeline = vi.spyOn(approveJobModule, 'approveJobForPipeline');
+    approveJobForPipeline.mockResolvedValue({
+      id: 'job-approve-1',
+      state: 'queued',
+      md: '/uploads/drafts/draft-1.md',
+      recordingId: 'recording-1',
+      transcriptId: 'transcript-1',
+      promptPackageId: 'prompt-1',
+      draftId: 'draft-1',
+      preset: 'b1-default',
+      withTts: true,
+      upload: 's3',
+      voiceId: 'voice_amanda',
+      voiceAccent: 'american_female',
+      forceTts: false,
+      notionDatabase: 'db-123',
+      ttsStrategy: 'dialogue',
+      notionUrl: 'https://notion.so/job-approve-1',
+      createdAt: new Date('2024-01-01T00:00:00Z'),
+      updatedAt: new Date('2024-01-01T00:01:00Z'),
+      startedAt: null,
+      finishedAt: null,
+      error: null,
+      manifestPath: '/manifests/job-approve-1.json',
+    });
+
+    const response = await app.inject({
+      method: 'POST',
+      url: '/jobs/job-approve-1/approve',
+      payload: { md: '/uploads/drafts/draft-1.md' },
+    });
+
+    expect(response.statusCode).toBe(202);
+    expect(response.json()).toEqual({
+      jobId: 'job-approve-1',
+      md: '/uploads/drafts/draft-1.md',
+      recordingId: 'recording-1',
+      transcriptId: 'transcript-1',
+      promptPackageId: 'prompt-1',
+      draftId: 'draft-1',
+      preset: 'b1-default',
+      withTts: true,
+      upload: 's3',
+      voiceId: 'voice_amanda',
+      voiceAccent: 'american_female',
+      forceTts: false,
+      notionDatabase: 'db-123',
+      ttsStrategy: 'dialogue',
+      notionUrl: 'https://notion.so/job-approve-1',
+      state: 'queued',
+      createdAt: '2024-01-01T00:00:00.000Z',
+      updatedAt: '2024-01-01T00:01:00.000Z',
+      startedAt: null,
+      finishedAt: null,
+      error: null,
+      manifestPath: '/manifests/job-approve-1.json',
+    });
+    expect(approveJobForPipeline).toHaveBeenCalledWith(
+      'job-approve-1',
+      '/uploads/drafts/draft-1.md',
+    );
+  });
+
+  it('POST /jobs/:jobId/approve returns 404 when job not awaiting approval', async () => {
+    const approveJobForPipeline = vi.spyOn(approveJobModule, 'approveJobForPipeline');
+    approveJobForPipeline.mockResolvedValue(null);
+
+    const response = await app.inject({
+      method: 'POST',
+      url: '/jobs/job-missing/approve',
+      payload: { md: '/uploads/drafts/missing.md' },
+    });
+
+    expect(response.statusCode).toBe(404);
+    expect(response.json()).toEqual({
+      error: 'not_found',
+    });
+  });
+
+  it('POST /jobs/:jobId/approve validates request body', async () => {
+    const response = await app.inject({
+      method: 'POST',
+      url: '/jobs/job-approve-1/approve',
+      payload: {},
+    });
+
+    expect(response.statusCode).toBe(400);
+    expect(response.json()).toEqual({
+      error: 'validation_failed',
+      message: 'Invalid request body',
+      details: expect.any(Array),
+    });
+  });
+
   it('GET /jobs/:jobId returns 200 with status when job exists', async () => {
     const getJobStatus = vi.spyOn(getJobStatusModule, 'getJobStatus');
     getJobStatus.mockResolvedValue({
@@ -446,6 +542,7 @@ describe('transport/http-server - integration (in-process)', () => {
           error: null,
           source: 'scan',
           studentId: null,
+          displayName: 'recording-1.opus',
           durationSec: 120,
           channels: 2,
           bytes: 2048,
@@ -474,6 +571,7 @@ describe('transport/http-server - integration (in-process)', () => {
           error: null,
           source: 'scan',
           studentId: null,
+          displayName: 'recording-1.opus',
           durationSec: 120,
           channels: 2,
           bytes: 2048,
@@ -488,6 +586,8 @@ describe('transport/http-server - integration (in-process)', () => {
     });
     expect(listRecordings).toHaveBeenCalledWith({
       statuses: ['transcribed'],
+      sources: null,
+      search: null,
       studentId: null,
       limit: 10,
       offset: 5,
@@ -518,6 +618,30 @@ describe('transport/http-server - integration (in-process)', () => {
     );
   });
 
+  it('GET /recordings maps source and query filters', async () => {
+    const listRecordings = vi.spyOn(listRecordingsModule, 'listRecordingsWithDefaults');
+    listRecordings.mockResolvedValue({
+      items: [],
+      limit: 50,
+      offset: 0,
+      total: 0,
+      order: 'desc',
+    });
+
+    const response = await app.inject({
+      method: 'GET',
+      url: '/recordings?source=upload&q=lesson',
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(listRecordings).toHaveBeenCalledWith(
+      expect.objectContaining({
+        sources: ['upload'],
+        search: 'lesson',
+      }),
+    );
+  });
+
   it('GET /recordings/:id returns recording payload', async () => {
     const getRecording = vi.spyOn(getRecordingModule, 'getRecording');
     getRecording.mockClear();
@@ -528,6 +652,7 @@ describe('transport/http-server - integration (in-process)', () => {
       error: null,
       source: 'scan',
       studentId: null,
+      displayName: 'recording-1.opus',
       durationSec: null,
       channels: null,
       bytes: 1234,
@@ -548,6 +673,7 @@ describe('transport/http-server - integration (in-process)', () => {
       error: null,
       source: 'scan',
       studentId: null,
+      displayName: 'recording-1.opus',
       durationSec: null,
       channels: null,
       bytes: 1234,
@@ -584,6 +710,7 @@ describe('transport/http-server - integration (in-process)', () => {
       error: null,
       source: 'scan',
       studentId: null,
+      displayName: 'recording-1.opus',
       durationSec: null,
       channels: null,
       bytes: 1234,
@@ -604,6 +731,7 @@ describe('transport/http-server - integration (in-process)', () => {
       error: null,
       source: 'scan',
       studentId: null,
+      displayName: 'recording-1.opus',
       durationSec: null,
       channels: null,
       bytes: 1234,

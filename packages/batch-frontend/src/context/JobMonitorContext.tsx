@@ -35,6 +35,7 @@ export interface RecordingEntry {
   error: string | null;
   source?: RecordingListItem['source'];
   studentId?: string | null;
+  displayName?: string | null;
   durationSec?: number | null;
   channels?: number | null;
   bytes?: number;
@@ -43,6 +44,17 @@ export interface RecordingEntry {
 }
 
 type RecordingMap = Record<string, RecordingEntry>;
+
+interface RecordingsQueryParams {
+  status?: RecordingStatus | RecordingStatus[];
+  source?: RecordingListItem['source'] | RecordingListItem['source'][];
+  studentId?: string;
+  student?: string;
+  q?: string;
+  limit?: number;
+  offset?: number;
+  order?: 'asc' | 'desc';
+}
 
 interface RegisterJobOptions {
   jobId: string;
@@ -61,6 +73,7 @@ interface JobMonitorContextValue {
   recordingMap: RecordingMap;
   registerJob: (options: RegisterJobOptions) => void;
   registerRecording: (recordingId: string, data?: Partial<RecordingEntry>) => void;
+  refreshRecordings: (params?: RecordingsQueryParams) => Promise<void>;
   trackJob: (jobId: string) => Promise<JobEntry | undefined>;
   connectionState: ConnectionState;
   isPolling: boolean;
@@ -114,6 +127,7 @@ const createDefaultRecording = (recordingId: string): RecordingEntry => {
     error: null,
     source: 'scan',
     studentId: null,
+    displayName: null,
     durationSec: null,
     channels: null,
     bytes: 0,
@@ -261,29 +275,36 @@ export function JobMonitorProvider({ children }: { children: ReactNode }) {
     [updateRecording],
   );
 
-  const mergeRecordingList = useCallback((items: RecordingListItem[]) => {
-    setRecordings((prev) => {
-      const next = { ...prev };
-      for (const item of items) {
-        const existing = next[item.recordingId] ?? createDefaultRecording(item.recordingId);
-        next[item.recordingId] = {
-          ...existing,
-          recordingId: item.recordingId,
-          status: item.status,
-          transcriptId: item.transcriptId ?? null,
-          error: item.error ?? null,
-          source: item.source,
-          studentId: item.studentId ?? null,
-          durationSec: item.durationSec ?? null,
-          channels: item.channels ?? null,
-          bytes: item.bytes ?? existing.bytes,
-          createdAt: item.createdAt ?? existing.createdAt,
-          updatedAt: item.updatedAt ?? existing.updatedAt,
-        };
-      }
-      return next;
-    });
+  const replaceRecordingList = useCallback((items: RecordingListItem[]) => {
+    const next: RecordingMap = {};
+    for (const item of items) {
+      const existing = createDefaultRecording(item.recordingId);
+      next[item.recordingId] = {
+        ...existing,
+        recordingId: item.recordingId,
+        status: item.status,
+        transcriptId: item.transcriptId ?? null,
+        error: item.error ?? null,
+        source: item.source,
+        studentId: item.studentId ?? null,
+        displayName: item.displayName ?? existing.displayName ?? null,
+        durationSec: item.durationSec ?? null,
+        channels: item.channels ?? null,
+        bytes: item.bytes ?? existing.bytes,
+        createdAt: item.createdAt ?? existing.createdAt,
+        updatedAt: item.updatedAt ?? existing.updatedAt,
+      };
+    }
+    setRecordings(next);
   }, []);
+
+  const refreshRecordings = useCallback(
+    async (params: RecordingsQueryParams = {}) => {
+      const response = await listRecordings(params);
+      replaceRecordingList(response.items);
+    },
+    [replaceRecordingList],
+  );
 
   const recordingsHydratedRef = useRef(false);
   useEffect(() => {
@@ -292,15 +313,14 @@ export function JobMonitorProvider({ children }: { children: ReactNode }) {
 
     const loadRecordings = async () => {
       try {
-        const response = await listRecordings();
-        mergeRecordingList(response.items);
+        await refreshRecordings();
       } catch (error: unknown) {
         console.warn('Failed to load recordings list', error);
       }
     };
 
     void loadRecordings();
-  }, [mergeRecordingList]);
+  }, [refreshRecordings]);
 
   const stopPolling = useCallback(() => {
     if (pollingIntervalRef.current) {
@@ -376,6 +396,7 @@ export function JobMonitorProvider({ children }: { children: ReactNode }) {
           error: event.error ?? null,
           studentId: event.studentId ?? prev.studentId ?? null,
           source: event.source ?? prev.source,
+          displayName: event.displayName ?? prev.displayName ?? null,
           durationSec: event.durationSec ?? prev.durationSec ?? null,
           channels: event.channels ?? prev.channels ?? null,
           bytes: event.bytes ?? prev.bytes ?? 0,
@@ -531,6 +552,7 @@ export function JobMonitorProvider({ children }: { children: ReactNode }) {
       recordingMap: recordings,
       registerJob,
       registerRecording,
+      refreshRecordings,
       trackJob,
       connectionState,
       isPolling,
