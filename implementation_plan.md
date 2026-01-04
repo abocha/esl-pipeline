@@ -291,6 +291,16 @@ Add a proper markdown editing experience for draft review.
 - Click to jump to line (if editor supports)
 - Collapsible panel
 
+#### [MODIFY] `Step4ReviewDraft.tsx` uses the editor stack
+- Replace the placeholder textarea with `SplitEditor`
+- Call `POST /validation/markdown` on debounced draft updates
+- Surface warnings/errors in `ValidationPanel`
+- Keep the Save/Approve flow intact
+
+#### [MODIFY] API helpers (`src/utils/api.ts`)
+- Add `validateMarkdown(text, strict?)` helper for `POST /validation/markdown`
+- Standardize error handling and return `MarkdownValidationResponse`
+
 ---
 
 ### Stage 5: Visual Polish & Design System Enhancements

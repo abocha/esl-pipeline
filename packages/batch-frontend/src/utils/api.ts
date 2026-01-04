@@ -20,7 +20,7 @@
  * - GET /jobs/events (SSE) for live updates
  * - GET /user/profile, /user/files (authenticated)
  */
-import { type AxiosError, isAxiosError } from 'axios';
+import { type AxiosError, type AxiosProgressEvent, isAxiosError } from 'axios';
 
 import type {
   JobEventPayload as ContractJobEventPayload,
@@ -226,6 +226,8 @@ export interface UploadMarkdownResponse {
 export interface SubmitJobResponse {
   jobId: string;
 }
+
+export type UploadProgressCallback = (progress: number, loaded: number, total?: number) => void;
 
 export interface JobActionResponse {
   success: boolean;
@@ -641,7 +643,10 @@ export async function createJob(body: SubmitJobRequest): Promise<SubmitJobRespon
  * Upload a markdown file via POST /uploads and receive an md identifier
  * that can be passed through to POST /jobs. Now uses authenticated API client.
  */
-export async function uploadMarkdown(file: File): Promise<UploadMarkdownResponse> {
+export async function uploadMarkdown(
+  file: File,
+  options: { onProgress?: UploadProgressCallback; signal?: AbortSignal } = {},
+): Promise<UploadMarkdownResponse> {
   try {
     const formData = new FormData();
     formData.append('file', file);
@@ -650,6 +655,8 @@ export async function uploadMarkdown(file: File): Promise<UploadMarkdownResponse
       headers: {
         'Content-Type': 'multipart/form-data',
       },
+      onUploadProgress: (event) => reportUploadProgress(event, options.onProgress),
+      signal: options.signal,
     });
 
     return response.data;
@@ -668,7 +675,7 @@ export async function uploadMarkdown(file: File): Promise<UploadMarkdownResponse
  */
 export async function uploadRecording(
   file: File,
-  options?: { studentId?: string },
+  options?: { studentId?: string; onProgress?: UploadProgressCallback; signal?: AbortSignal },
 ): Promise<RecordingListItem> {
   try {
     const formData = new FormData();
@@ -679,6 +686,8 @@ export async function uploadRecording(
       headers: {
         'Content-Type': 'multipart/form-data',
       },
+      onUploadProgress: (event) => reportUploadProgress(event, options?.onProgress),
+      signal: options?.signal,
     });
 
     return response.data;
@@ -1170,4 +1179,14 @@ function appendTokenQueryParam(url: string, token: string): string {
   const separator = base.includes('?') ? '&' : '?';
   const queryAppended = `${base}${separator}access_token=${encodeURIComponent(token)}`;
   return hash ? `${queryAppended}#${hash}` : queryAppended;
+}
+
+function reportUploadProgress(
+  event: AxiosProgressEvent,
+  onProgress?: UploadProgressCallback,
+): void {
+  if (!onProgress) return;
+  const total = event.total ?? 0;
+  const progress = total ? Math.min(100, Math.round((event.loaded / total) * 100)) : 0;
+  onProgress(progress, event.loaded, event.total ?? undefined);
 }

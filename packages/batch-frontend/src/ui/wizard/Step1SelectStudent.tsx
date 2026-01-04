@@ -1,10 +1,12 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import toast from 'react-hot-toast';
 
 import { useJobMonitor } from '../../context/JobMonitorContext';
 import { useStudentSelection } from '../../context/StudentSelectionContext';
 import type { RecordingListItem, StudentOption } from '../../utils/api';
 import { fetchStudentOptions, uploadRecording } from '../../utils/api';
+import { DropZone } from '../shared/DropZone';
+import { UploadProgress } from '../shared/UploadProgress';
 import { WizardStep } from './WizardStep';
 
 interface Step1SelectStudentProps {
@@ -13,7 +15,7 @@ interface Step1SelectStudentProps {
   onNext: () => void;
 }
 
-const ACCEPTED_AUDIO = '.wav,.mp3,.m4a,.aac,.ogg,.opus,audio/*';
+const AUDIO_EXTENSIONS = ['.wav', '.mp3', '.m4a', '.aac', '.ogg', '.opus'];
 
 export const Step1SelectStudent: React.FC<Step1SelectStudentProps> = ({
   recordingId,
@@ -26,7 +28,9 @@ export const Step1SelectStudent: React.FC<Step1SelectStudentProps> = ({
   const [loadingStudents, setLoadingStudents] = useState(true);
   const [uploading, setUploading] = useState(false);
   const [uploadError, setUploadError] = useState<string | null>(null);
+  const [uploadProgress, setUploadProgress] = useState(0);
   const [selectedFileName, setSelectedFileName] = useState<string | null>(null);
+  const uploadAbortRef = useRef<AbortController | null>(null);
 
   useEffect(() => {
     let active = true;
@@ -67,12 +71,19 @@ export const Step1SelectStudent: React.FC<Step1SelectStudentProps> = ({
 
   const handleUpload = async (file: File | null) => {
     if (!file) return;
+    if (uploading) return;
     setSelectedFileName(file.name);
+    uploadAbortRef.current?.abort();
+    const controller = new AbortController();
+    uploadAbortRef.current = controller;
     setUploading(true);
     setUploadError(null);
+    setUploadProgress(0);
     try {
       const recording = await uploadRecording(file, {
         studentId: selectedStudentId ?? undefined,
+        signal: controller.signal,
+        onProgress: (progress) => setUploadProgress(progress),
       });
       registerRecording(recording.recordingId, {
         status: recording.status,
@@ -89,11 +100,27 @@ export const Step1SelectStudent: React.FC<Step1SelectStudentProps> = ({
       onRecordingReady(recording);
       toast.success('Recording uploaded');
     } catch (error) {
+      if (controller.signal.aborted) {
+        setUploadError('Upload canceled.');
+        return;
+      }
       const message = error instanceof Error ? error.message : 'Unable to upload recording';
       setUploadError(message);
     } finally {
       setUploading(false);
+      uploadAbortRef.current = null;
     }
+  };
+
+  const handleCancel = () => {
+    if (!uploadAbortRef.current) return;
+    uploadAbortRef.current.abort();
+  };
+
+  const handleFiles = (files: File[]) => {
+    const target = files[0];
+    if (!target) return;
+    void handleUpload(target);
   };
 
   const helperText = useMemo(() => {
@@ -152,15 +179,22 @@ export const Step1SelectStudent: React.FC<Step1SelectStudentProps> = ({
         <div className="wizard-panel upload-panel">
           <h3>Upload audio</h3>
           <p>Supported formats: wav, mp3, m4a, aac, ogg, opus.</p>
-          <label className="upload-box">
-            <input
-              type="file"
-              accept={ACCEPTED_AUDIO}
-              onChange={(event) => handleUpload(event.target.files?.[0] ?? null)}
-              disabled={uploading}
+          <DropZone
+            title={uploading ? 'Uploading audio...' : 'Drop audio file'}
+            description="Drag an audio file here or click to browse."
+            hint="Single file upload"
+            accept={{ 'audio/*': AUDIO_EXTENSIONS }}
+            multiple={false}
+            disabled={uploading}
+            onFiles={handleFiles}
+          />
+          {uploading ? (
+            <UploadProgress
+              fileName={selectedFileName}
+              progress={uploadProgress}
+              onCancel={handleCancel}
             />
-            <span>{uploading ? 'Uploading...' : 'Choose file'}</span>
-          </label>
+          ) : null}
           {uploadError ? <p className="error-text">{uploadError}</p> : null}
           <p className="muted">{helperText}</p>
           {recordingId ? (
@@ -224,25 +258,6 @@ export const Step1SelectStudent: React.FC<Step1SelectStudentProps> = ({
         .student-meta {
           font-size: var(--text-xs);
           color: var(--text-tertiary);
-        }
-
-        .upload-panel input {
-          display: none;
-        }
-
-        .upload-box {
-          border: 1px dashed var(--border-medium);
-          border-radius: var(--radius-xl);
-          padding: var(--space-5);
-          text-align: center;
-          cursor: pointer;
-          background: var(--bg-primary);
-          font-weight: 600;
-        }
-
-        .upload-box:hover {
-          border-color: var(--color-primary-400);
-          color: var(--color-primary-500);
         }
 
         .recording-pill {

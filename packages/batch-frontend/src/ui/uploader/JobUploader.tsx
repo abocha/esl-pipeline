@@ -1,11 +1,12 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { useDropzone } from 'react-dropzone';
 import toast from 'react-hot-toast';
 
 import { useJobMonitor } from '../../context/JobMonitorContext';
 import { useJobSettings } from '../../context/JobSettingsContext';
 import type { AppliedJobSettings, JobSettings } from '../../context/JobSettingsContext';
 import { createJob, uploadMarkdown } from '../../utils/api';
+import { DropZone } from '../shared/DropZone';
+import { UploadProgress } from '../shared/UploadProgress';
 
 type FileStatus = 'idle' | 'uploading' | 'submitting' | 'success' | 'error';
 
@@ -17,26 +18,9 @@ interface QueuedFile {
   jobError?: string;
   jobId?: string;
   mdPath?: string;
+  uploadProgress: number;
   appliedSettings: AppliedJobSettings;
 }
-
-// Icons
-const UploadIcon = () => (
-  <svg
-    width="32"
-    height="32"
-    viewBox="0 0 24 24"
-    fill="none"
-    stroke="currentColor"
-    strokeWidth="2"
-    strokeLinecap="round"
-    strokeLinejoin="round"
-  >
-    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
-    <polyline points="17 8 12 3 7 8" />
-    <line x1="12" y1="3" x2="12" y2="15" />
-  </svg>
-);
 
 const FileIcon = () => (
   <svg
@@ -110,8 +94,9 @@ export const JobUploader: React.FC = () => {
   const [queue, setQueue] = useState<QueuedFile[]>([]);
   const [isProcessing, setIsProcessing] = useState(false);
   const sequentialLock = useRef(false);
+  const uploadControllersRef = useRef<Map<string, AbortController>>(new Map());
 
-  const onDrop = useCallback(
+  const handleFiles = useCallback(
     (acceptedFiles: File[]) => {
       if (acceptedFiles.length === 0) return;
       const snapshot = buildAppliedSettings(settings);
@@ -119,6 +104,7 @@ export const JobUploader: React.FC = () => {
         id: `${file.name}-${file.size}-${file.lastModified}-${Math.random().toString(36).slice(2)}`,
         file,
         status: 'idle',
+        uploadProgress: 0,
         appliedSettings: snapshot,
       }));
       setQueue((prev) => [...prev, ...newEntries]);
@@ -126,12 +112,6 @@ export const JobUploader: React.FC = () => {
     },
     [settings],
   );
-
-  const { getRootProps, getInputProps, isDragActive } = useDropzone({
-    onDrop,
-    accept: { 'text/markdown': ['.md', '.markdown'] },
-    multiple: true,
-  });
 
   const pendingFiles = queue.filter((item) => item.status === 'idle' || item.status === 'error');
 
@@ -164,6 +144,8 @@ export const JobUploader: React.FC = () => {
       const jobFile = target.file;
       const jobSettings =
         overrideSettings ?? target.appliedSettings ?? buildAppliedSettings(settings);
+      const abortController = new AbortController();
+      uploadControllersRef.current.set(id, abortController);
 
       setQueue((prev) =>
         prev.map((file) =>
@@ -173,6 +155,7 @@ export const JobUploader: React.FC = () => {
                 status: 'uploading',
                 uploadError: undefined,
                 jobError: undefined,
+                uploadProgress: 0,
                 appliedSettings: jobSettings,
               }
             : file,
@@ -183,11 +166,28 @@ export const JobUploader: React.FC = () => {
       const uploadTarget = 's3';
 
       try {
-        const uploadResponse = await uploadMarkdown(jobFile);
+        const uploadResponse = await uploadMarkdown(jobFile, {
+          signal: abortController.signal,
+          onProgress: (progress) => {
+            setQueue((prev) =>
+              prev.map((file) =>
+                file.id === id ? { ...file, uploadProgress: progress } : file,
+              ),
+            );
+          },
+        });
+        uploadControllersRef.current.delete(id);
         phase = 'job';
         setQueue((prev) =>
           prev.map((file) =>
-            file.id === id ? { ...file, status: 'submitting', mdPath: uploadResponse.md } : file,
+            file.id === id
+              ? {
+                  ...file,
+                  status: 'submitting',
+                  mdPath: uploadResponse.md,
+                  uploadProgress: 100,
+                }
+              : file,
           ),
         );
 
@@ -224,6 +224,23 @@ export const JobUploader: React.FC = () => {
         });
         toast.success(`Job ${jobResponse.jobId} created`);
       } catch (error: unknown) {
+        if (abortController.signal.aborted) {
+          uploadControllersRef.current.delete(id);
+          setQueue((prev) =>
+            prev.map((file) =>
+              file.id === id
+                ? {
+                    ...file,
+                    status: 'error',
+                    uploadError: 'Upload canceled.',
+                    uploadProgress: 0,
+                  }
+                : file,
+            ),
+          );
+          return;
+        }
+        uploadControllersRef.current.delete(id);
         const message = error instanceof Error ? error.message : 'Failed to process file';
         const contextMessage =
           phase === 'upload'
@@ -251,6 +268,25 @@ export const JobUploader: React.FC = () => {
     },
     [queue, settings, registerJob],
   );
+
+  const handleCancel = useCallback((id: string) => {
+    const controller = uploadControllersRef.current.get(id);
+    if (!controller) return;
+    controller.abort();
+    uploadControllersRef.current.delete(id);
+    setQueue((prev) =>
+      prev.map((file) =>
+        file.id === id
+          ? {
+              ...file,
+              status: 'error',
+              uploadError: 'Upload canceled.',
+              uploadProgress: 0,
+            }
+          : file,
+      ),
+    );
+  }, []);
 
   const startProcessing = useCallback(async () => {
     if (sequentialLock.current) return;
@@ -338,18 +374,14 @@ export const JobUploader: React.FC = () => {
         </div>
       </header>
 
-      <div {...getRootProps()} className={`dropzone ${isDragActive ? 'active' : ''}`}>
-        <input {...getInputProps()} />
-        <div className="dropzone-content">
-          <div className={`dropzone-icon ${isDragActive ? 'bounce' : ''}`}>
-            <UploadIcon />
-          </div>
-          <p className="dropzone-text">
-            {isDragActive ? 'Drop files here…' : 'Drag & drop Markdown files, or click to browse'}
-          </p>
-          <span className="dropzone-hint">Accepts .md and .markdown files</span>
-        </div>
-      </div>
+      <DropZone
+        title="Drop Markdown files"
+        description="Drag & drop Markdown files, or click to browse."
+        hint="Accepts .md and .markdown files"
+        accept={{ 'text/markdown': ['.md', '.markdown'] }}
+        multiple
+        onFiles={handleFiles}
+      />
 
       {queue.length > 0 && (
         <>
@@ -359,6 +391,7 @@ export const JobUploader: React.FC = () => {
                 key={file.id}
                 entry={file}
                 onRetry={() => void handleRetry(file.id)}
+                onCancel={() => handleCancel(file.id)}
                 isProcessing={isProcessing}
               />
             ))}
@@ -425,67 +458,6 @@ export const JobUploader: React.FC = () => {
           gap: var(--space-2);
         }
 
-        .dropzone {
-          border: 2px dashed var(--border-light);
-          border-radius: var(--radius-xl);
-          padding: var(--space-10);
-          text-align: center;
-          cursor: pointer;
-          transition: all var(--transition-base);
-          background: var(--bg-secondary);
-        }
-
-        .dropzone:hover {
-          border-color: var(--color-primary-300);
-          background: var(--color-primary-50);
-        }
-
-        .dropzone.active {
-          border-color: var(--color-primary-500);
-          background: var(--color-primary-50);
-          border-style: solid;
-        }
-
-        [data-theme="dark"] .dropzone:hover,
-        [data-theme="dark"] .dropzone.active {
-          background: rgba(99, 102, 241, 0.1);
-        }
-
-        .dropzone-content {
-          display: flex;
-          flex-direction: column;
-          align-items: center;
-          gap: var(--space-3);
-        }
-
-        .dropzone-icon {
-          width: 64px;
-          height: 64px;
-          background: var(--gradient-primary);
-          border-radius: var(--radius-xl);
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          color: white;
-          transition: transform var(--transition-bounce);
-        }
-
-        .dropzone-icon.bounce {
-          animation: bounce-subtle 0.5s ease-in-out infinite;
-        }
-
-        .dropzone-text {
-          font-size: var(--text-base);
-          font-weight: 500;
-          color: var(--text-primary);
-          margin: 0;
-        }
-
-        .dropzone-hint {
-          font-size: var(--text-sm);
-          color: var(--text-tertiary);
-        }
-
         .file-list {
           display: flex;
           flex-direction: column;
@@ -546,10 +518,11 @@ export const JobUploader: React.FC = () => {
 interface FileRowProps {
   entry: QueuedFile;
   onRetry: () => void;
+  onCancel: () => void;
   isProcessing: boolean;
 }
 
-const FileRow: React.FC<FileRowProps> = ({ entry, onRetry, isProcessing }) => {
+const FileRow: React.FC<FileRowProps> = ({ entry, onRetry, onCancel, isProcessing }) => {
   const getStatusConfig = () => {
     switch (entry.status) {
       case 'uploading': {
@@ -618,6 +591,14 @@ const FileRow: React.FC<FileRowProps> = ({ entry, onRetry, isProcessing }) => {
           {isActive && <span className="spinner-tiny" />}
           {statusConfig.label}
         </span>
+
+        {entry.status === 'uploading' ? (
+          <UploadProgress
+            fileName={entry.file.name}
+            progress={entry.uploadProgress}
+            onCancel={onCancel}
+          />
+        ) : null}
 
         {entry.status === 'error' && (
           <button type="button" onClick={onRetry} disabled={isProcessing} className="btn-retry">
@@ -700,7 +681,8 @@ const FileRow: React.FC<FileRowProps> = ({ entry, onRetry, isProcessing }) => {
 
         .file-status {
           display: flex;
-          align-items: center;
+          flex-direction: column;
+          align-items: flex-end;
           gap: var(--space-2);
           flex-shrink: 0;
         }
