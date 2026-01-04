@@ -5,8 +5,11 @@ import {
   JobMonitorProvider,
   useJobMonitor,
 } from './JobMonitorContext';
+import { AuthProvider } from './AuthContext';
 import {
+  getUserProfile,
   listRecordings,
+  listUserJobs,
   subscribeToJobEvents,
   type JobEvent,
   type RecordingListItem,
@@ -17,8 +20,10 @@ vi.mock('../utils/api', async () => {
   return {
     ...actual,
     listRecordings: vi.fn(),
+    listUserJobs: vi.fn(),
     subscribeToJobEvents: vi.fn(),
     getJobStatus: vi.fn().mockResolvedValue(null),
+    getUserProfile: vi.fn(),
   };
 });
 
@@ -54,6 +59,20 @@ const createRecording = (overrides: Partial<RecordingListItem>): RecordingListIt
 describe('JobMonitorContext recordings hydration', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    vi.mocked(getUserProfile).mockResolvedValue({
+      id: 'user-1',
+      email: 'test@example.com',
+      role: 'user',
+      isActive: true,
+      createdAt: '2024-01-01T00:00:00.000Z',
+      updatedAt: '2024-01-01T00:00:00.000Z',
+    });
+    vi.mocked(listUserJobs).mockResolvedValue({
+      jobs: [],
+      total: 0,
+      limit: 50,
+      offset: 0,
+    });
   });
 
   it('hydrates recordings list on mount', async () => {
@@ -76,9 +95,11 @@ describe('JobMonitorContext recordings hydration', () => {
     });
 
     render(
-      <JobMonitorProvider>
-        <RecordingList />
-      </JobMonitorProvider>,
+      <AuthProvider>
+        <JobMonitorProvider>
+          <RecordingList />
+        </JobMonitorProvider>
+      </AuthProvider>,
     );
 
     await waitFor(() => {
@@ -108,9 +129,11 @@ describe('JobMonitorContext recordings hydration', () => {
     });
 
     render(
-      <JobMonitorProvider>
-        <RecordingList />
-      </JobMonitorProvider>,
+      <AuthProvider>
+        <JobMonitorProvider>
+          <RecordingList />
+        </JobMonitorProvider>
+      </AuthProvider>,
     );
 
     await waitFor(() => {

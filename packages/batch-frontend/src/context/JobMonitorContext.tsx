@@ -17,7 +17,8 @@ import type {
   RecordingStatus,
   SubmitJobRequest,
 } from '../utils/api';
-import { getJobStatus, listRecordings, subscribeToJobEvents } from '../utils/api';
+import { getJobStatus, listRecordings, listUserJobs, subscribeToJobEvents } from '../utils/api';
+import { useAuth } from './AuthContext';
 
 type ConnectionState = 'idle' | 'connecting' | 'connected' | 'error' | 'reconnecting' | 'paused';
 
@@ -188,6 +189,7 @@ const persistActiveJobs = (jobs: JobMap) => {
 };
 
 export function JobMonitorProvider({ children }: { children: ReactNode }) {
+  const { isAuthenticated, isLoading } = useAuth();
   const persistedJobsRef = useRef<JobMap>(loadPersistedActiveJobs());
   const [jobs, setJobs] = useState<JobMap>(persistedJobsRef.current);
   const [recordings, setRecordings] = useState<RecordingMap>({});
@@ -219,6 +221,22 @@ export function JobMonitorProvider({ children }: { children: ReactNode }) {
         ...prev,
         [jobId]: next,
       };
+    });
+  }, []);
+
+  const mergeJobs = useCallback((entries: JobStatus[]) => {
+    setJobs((prev) => {
+      const next = { ...prev };
+      for (const entry of entries) {
+        const previous = prev[entry.jobId] ?? createDefaultJob(entry.jobId);
+        next[entry.jobId] = {
+          ...previous,
+          ...entry,
+          fileName: previous.fileName,
+          submittedAt: previous.submittedAt,
+        };
+      }
+      return next;
     });
   }, []);
 
@@ -322,6 +340,24 @@ export function JobMonitorProvider({ children }: { children: ReactNode }) {
     void loadRecordings();
   }, [refreshRecordings]);
 
+  const jobsHydratedRef = useRef(false);
+  useEffect(() => {
+    if (isLoading || !isAuthenticated) return;
+    if (jobsHydratedRef.current) return;
+    jobsHydratedRef.current = true;
+
+    const loadJobs = async () => {
+      try {
+        const response = await listUserJobs({ limit: 40, order: 'desc' });
+        mergeJobs(response.jobs);
+      } catch (error: unknown) {
+        console.warn('Failed to load jobs list', error);
+      }
+    };
+
+    void loadJobs();
+  }, [isAuthenticated, isLoading, mergeJobs]);
+
   const stopPolling = useCallback(() => {
     if (pollingIntervalRef.current) {
       clearInterval(pollingIntervalRef.current);
@@ -372,6 +408,19 @@ export function JobMonitorProvider({ children }: { children: ReactNode }) {
 
   const handleJobEvent = useCallback(
     (event: JobEvent) => {
+      if (event.type === 'job_created') {
+        updateJob(event.jobId, (prev) => ({
+          ...prev,
+          jobId: event.jobId,
+          state: event.state,
+          recordingId: event.payload?.recordingId ?? prev.recordingId,
+          transcriptId: event.payload?.transcriptId ?? prev.transcriptId,
+          md: event.payload?.md ?? prev.md,
+          createdAt: prev.createdAt ?? new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+        }));
+        return;
+      }
       if (event.type === 'job_state_changed') {
         updateJob(event.jobId, (prev) => ({
           ...prev,
@@ -382,6 +431,8 @@ export function JobMonitorProvider({ children }: { children: ReactNode }) {
           ttsStrategy: event.payload?.ttsStrategy ?? prev.ttsStrategy,
           md: event.payload?.md ?? prev.md,
           notionUrl: event.payload?.notionUrl ?? prev.notionUrl,
+          recordingId: event.payload?.recordingId ?? prev.recordingId,
+          transcriptId: event.payload?.transcriptId ?? prev.transcriptId,
           updatedAt: new Date().toISOString(),
         }));
         return;

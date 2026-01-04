@@ -151,11 +151,16 @@ Create the dashboard as the new home view, replacing the current flat panel layo
 - Activity Stream (refactored from existing `ActivityFeed`)
 - Pending Approvals panel showing awaiting_approval jobs
 - This Week summary with job counts and student overview
+  - Data sources:
+    - `GET /user/jobs?state=awaiting_approval` for Pending Approvals
+    - `GET /user/jobs` (limit + order desc) to hydrate Activity Feed alongside SSE
+    - `GET /user/jobs/summary` + `GET /students/summary` for Weekly Summary
 
 #### [MODIFY] `App.tsx` (`src/ui/App.tsx`)
 - Add router-backed navigation for Dashboard, Wizard, Students, Jobs, Settings
 - Create a simple tab-based navigation in the header or as a sidebar
 - Refactor `AuthenticatedPanels` to render the active view
+  - Trigger initial job hydration via `/user/jobs` on login and merge with SSE updates
 
 #### [NEW] `QuickActions.tsx` (`src/ui/dashboard/QuickActions.tsx`)
 - Card-style buttons: New Upload, Recent Jobs, Students, Settings
@@ -175,45 +180,54 @@ Create the dashboard as the new home view, replacing the current flat panel layo
 
 ### Stage 2: Multi-Step Assignment Wizard
 
-Implement the guided 5-step workflow from FRONTEND_VISION §2.2.
+Implement the guided 5-step workflow from FRONTEND_VISION §2.2 and replace the
+current `/wizard` placeholder. Support deep links from the dashboard.
 
 #### [NEW] `AssignmentWizard.tsx` (`src/ui/wizard/AssignmentWizard.tsx`)
-- Main wizard container with step indicator
-- State management for current step and form data
-- Progress persistence in local state (not persisted across page reload for simplicity)
+- Main wizard container with step indicator and router integration
+- Read query params: `jobId` and `step` (expected: `select`, `transcript`, `notes`, `review`, `publish`)
+  - `PendingApprovals` links to `/wizard?jobId=...&step=review`, so map `review` to Step 4
+- Hydrate job context from `JobMonitorContext` or `GET /jobs/:id` when `jobId` is provided
+- State management via local reducer or `WizardContext` (keep state in-session)
 
 #### [NEW] `WizardStep.tsx` (`src/ui/wizard/WizardStep.tsx`)
 - Wrapper component for each step with consistent styling
 - Navigation buttons (Back, Continue, Skip where applicable)
+- Guard required actions before moving to the next step
 
 #### [NEW] `Step1SelectStudent.tsx` (`src/ui/wizard/Step1SelectStudent.tsx`)
-- Student selection grid (reimagined from StudentWorkspace list)
-- Drag-and-drop upload zone for audio files
-- Upload progress with file name display
+- Student selection grid (reuse student options APIs + `StudentSelectionContext`)
+- Upload audio via `POST /recordings/upload`
+- Track uploaded recording in `JobMonitorContext`
 
 #### [NEW] `Step2ReviewTranscript.tsx` (`src/ui/wizard/Step2ReviewTranscript.tsx`)
-- Transcript display (read-only or with minor edits)
-- Audio player backed by `GET /recordings/:recordingId/audio`
-- Approve & Continue or Skip buttons
+- Load transcript via `GET /recordings/:id/transcript`
+- Allow minor edits with `PUT /recordings/:id/transcript`
+- Audio player backed by `GET /recordings/:id/audio`
+- Approve & Continue or Skip
 
 #### [NEW] `Step3AddNotes.tsx` (`src/ui/wizard/Step3AddNotes.tsx`)
-- Notes textarea with markdown support hints
-- Quick-add tags/chips for common grammar topics
-- Student profile summary (read-only, from API)
+- Notes textarea plus prompt template/profile selectors (from `GET /config/prompts`)
+- Create prompt package when advancing
 
 #### [NEW] `Step4ReviewDraft.tsx` (`src/ui/wizard/Step4ReviewDraft.tsx`)
-- Split view: Markdown editor (left) + Live preview (right)
-- Validation warnings panel (from `POST /validation/markdown`)
-- Actions: Save draft, Edit in Full Editor, Approve
-  - Save draft via `POST /prompt-packages/:id/draft` (existing)
+- Create/load draft via `POST /prompt-packages/:id/draft` and `GET /drafts/:id`
+- Use a simple textarea/preview placeholder in Stage 2
+  - Stage 4 replaces this with `SplitEditor` + markdown validation
 
 #### [NEW] `Step5Publish.tsx` (`src/ui/wizard/Step5Publish.tsx`)
 - TTS settings (enable/disable, voice, strategy)
-- Notion publishing settings (database + preset; colorization follows preset unless a toggle is added)
+- Notion publishing settings (database + preset)
 - Storage target selection (auto, S3, none)
-- Publish button (omit cost estimate until pricing config/API exists)
-  - Use `jobOverrides` on draft materialization when creating the approval job
-  - If an approval job already exists, apply `edit_metadata` before approval
+- Publish flow:
+  - If creating a new approval job, call `POST /drafts/:id/materialize` with `jobOverrides`
+  - If an approval job already exists, call `POST /jobs/:id/actions` with `edit_metadata` before approval
+  - Approve via `POST /jobs/:id/approve` and register in `JobMonitorContext`
+
+#### Cross-cutting
+- Use existing styling primitives in `index.css` (cards, panels, buttons)
+- Keep wizard state in-session; no persistence across reload required
+- Extend `src/utils/api.ts` for any missing helper calls (`jobOverrides`, `edit_metadata`)
 
 ---
 
