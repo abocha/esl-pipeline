@@ -1,6 +1,7 @@
 // packages/contracts/src/job-actions.ts
 //
 // Shared types for job actions between backend and frontend
+import type { JobConfigOverrides } from './index.js';
 
 /**
  * Supported job action types
@@ -14,10 +15,25 @@ export enum JobActionType {
 /**
  * Request to execute a job action
  */
-export interface JobActionRequest {
-  type: JobActionType;
-  payload?: Record<string, unknown>;
-}
+export type JobActionRequest =
+  | {
+      type: JobActionType.RERUN_AUDIO;
+      payload?: {
+        forceTts?: boolean;
+        voiceId?: string;
+        voiceAccent?: string;
+      };
+    }
+  | {
+      type: JobActionType.CANCEL;
+      payload?: {
+        reason?: string;
+      };
+    }
+  | {
+      type: JobActionType.EDIT_METADATA;
+      payload?: JobConfigOverrides;
+    };
 
 /**
  * Response from executing a job action

@@ -268,11 +268,21 @@ Request:
   - `preset?: string` (optional)
     - Forwarded as-is to orchestrator.
   - `withTts?: boolean` (optional)
-    - Forwarded to orchestrator; absence uses orchestrator defaults.
+    - Persisted on the job; when omitted, current behavior treats it as `false` (no TTS).
   - `upload?: string` (optional)
     - Persisted as-is on the job record.
     - If value is `'s3'`, the worker forwards it as an explicit upload target.
     - Other values result in no explicit upload override.
+  - `ttsStrategy?: 'auto' | 'dialogue' | 'tts'` (optional)
+    - Stored for UI state and forwarded when provided.
+  - `voiceId?: string` (optional)
+    - Explicit voice selection for TTS (stored for observability/replay).
+  - `voiceAccent?: string` (optional)
+    - Passed through as `accentPreference`.
+  - `forceTts?: boolean` (optional)
+    - Persisted for replay/observability (orchestrator wiring pending).
+  - `notionDatabase?: string` (optional)
+    - Forwarded as `dbId`.
 
 Responses:
 
@@ -305,12 +315,17 @@ Request:
 
 Successful response (`200 OK`):
 
-- JSON body derived from the persisted job record:
+- JSON body derived from the persisted job record (see "Job record shape" below for full fields). Example:
 
   ```json
   {
     "jobId": "string",
-    "state": "queued | running | succeeded | failed",
+    "state": "queued | running | awaiting_approval | succeeded | failed",
+    "md": "string or null",
+    "preset": "string or null",
+    "withTts": "boolean or null",
+    "upload": "auto | s3 | none | null",
+    "notionUrl": "string or null",
     "createdAt": "ISO-8601 string",
     "updatedAt": "ISO-8601 string",
     "startedAt": "ISO-8601 string or null",
@@ -335,6 +350,20 @@ Side effects:
 
 - Read-only.
 - Emits structured logs with request and resolution details.
+
+---
+
+## Extended API (experimental)
+
+When `BATCH_BACKEND_ENABLE_EXTENDED_API=true`, authenticated endpoints are enabled in `transport/extended-routes.ts`.
+See [`docs/batch-backend-ssot.md`](docs/batch-backend-ssot.md) for the canonical list. Key additions used by the batch UI:
+
+- `GET /recordings/:id/audio` (Range support for playback)
+- `POST /validation/markdown` (returns warnings/errors/meta)
+- `GET /students/summary` (dashboard aggregation)
+- `GET /user/jobs` and `GET /user/jobs/summary`
+- `POST /jobs/:jobId/actions` (`edit_metadata` implemented)
+- `POST /drafts/:id/materialize` (optional `jobOverrides`)
 
 ---
 
@@ -420,9 +449,19 @@ Job record shape (Postgres and `GET /jobs/:jobId`):
 
 - `id: string` (UUID; exposed as `jobId`)
 - `md: string | null`
+- `recordingId?: string | null`
+- `transcriptId?: string | null`
+- `promptPackageId?: string | null`
+- `draftId?: string | null`
 - `preset?: string | null`
 - `withTts?: boolean | null`
 - `upload?: string | null`
+- `voiceId?: string | null`
+- `voiceAccent?: string | null`
+- `forceTts?: boolean | null`
+- `notionDatabase?: string | null`
+- `ttsStrategy?: string | null`
+- `notionUrl?: string | null`
 - `state: 'queued' | 'running' | 'awaiting_approval' | 'succeeded' | 'failed'`
 - `createdAt`, `updatedAt`, `startedAt?`, `finishedAt?`
 - `manifestPath?: string | null`

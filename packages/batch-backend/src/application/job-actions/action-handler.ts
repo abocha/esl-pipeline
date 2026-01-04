@@ -66,9 +66,9 @@ export function getActionMetadata(): Record<JobActionType, ActionMetadata> {
     },
     edit_metadata: {
       label: 'Edit Job Metadata',
-      description: 'Update job configuration (preset, Notion database) without rerunning',
+      description: 'Update job configuration without rerunning',
       requiresFields: [],
-      implemented: false, // Stub only
+      implemented: true,
     },
   };
 }

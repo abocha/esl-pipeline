@@ -25,10 +25,10 @@ import type {
   JobEventType as ContractJobEventType,
   JobState as ContractJobState,
   RecordingStatus as ContractRecordingStatus,
+  SubmitJobRequest as ContractSubmitJobRequest,
   TtsStrategy as ContractTtsStrategy,
   StreamEventMessage,
   JobStatusDto,
-  JobUploadOption,
 } from '@esl-pipeline/contracts';
 
 import apiClient, {
@@ -48,6 +48,7 @@ export type JobStatus = JobStatusDto;
 export type JobEventType = ContractJobEventType;
 export type JobEventPayload = ContractJobEventPayload;
 export type JobEvent = StreamEventMessage;
+export type SubmitJobRequest = ContractSubmitJobRequest;
 
 export interface RecordingTranscriptResponse {
   recordingId: string;
@@ -205,16 +206,6 @@ export interface MaterializeDraftResponse {
   draftId: string;
   jobId: string;
   mdPath: string;
-}
-
-export interface SubmitJobRequest {
-  md: string;
-  preset?: string;
-  withTts?: boolean;
-  forceTts?: boolean;
-  notionDatabase?: string;
-  upload?: JobUploadOption;
-  ttsStrategy?: TtsStrategy;
 }
 
 export interface UploadMarkdownResponse {

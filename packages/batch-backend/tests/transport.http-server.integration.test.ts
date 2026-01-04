@@ -1,17 +1,23 @@
 import { request as httpRequest } from 'node:http';
+import { Readable } from 'node:stream';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
+
+import { validateMarkdownFile } from '@esl-pipeline/md-validator';
 
 import { getJobOptions } from '../src/application/get-job-options.js';
 import * as approveJobModule from '../src/application/approve-job.js';
 import * as createDraftModule from '../src/application/create-draft.js';
 import * as createPromptPackageModule from '../src/application/create-prompt-package.js';
+import * as jobSummaryModule from '../src/application/job-summary.js';
 import * as getRecordingModule from '../src/application/get-recording.js';
 import * as getRecordingTranscriptModule from '../src/application/get-recording-transcript.js';
 import * as getJobStatusModule from '../src/application/get-job-status.js';
 import * as getPromptPackageModule from '../src/application/get-prompt-package.js';
+import * as listJobsModule from '../src/application/list-jobs.js';
 import * as listRecordingsModule from '../src/application/list-recordings.js';
 import * as materializeDraftModule from '../src/application/materialize-draft.js';
 import * as retryRecordingModule from '../src/application/retry-recording-transcription.js';
+import * as studentSummaryModule from '../src/application/student-summary.js';
 import * as submitJobModule from '../src/application/submit-job.js';
 import * as updateRecordingTranscriptModule from '../src/application/update-recording-transcript.js';
 import { ProfilePathError } from '../src/application/profile-path.js';
@@ -22,8 +28,10 @@ import { publishJobEvent } from '../src/domain/job-events.js';
 import type { JobRecord } from '../src/domain/job-model.js';
 import { publishRecordingEvent } from '../src/domain/recording-events.js';
 import type { RecordingRecord } from '../src/domain/recording-model.js';
+import * as recordingRepositoryModule from '../src/domain/recording-repository.js';
 import { deriveStudentId } from '../src/domain/student-utils.js';
 import * as loggerModule from '../src/infrastructure/logger.js';
+import * as transcriptionStorageModule from '../src/infrastructure/transcription-storage.js';
 import { createHttpServer } from '../src/transport/http-server.js';
 
 /**
@@ -113,6 +121,12 @@ vi.mock('../src/infrastructure/orchestrator-service', () => {
   return {
     getJobOptionsFromOrchestrator: vi.fn().mockResolvedValue(orchestratorJobOptionsMock),
     getStudentProfilesFromOrchestrator: vi.fn().mockResolvedValue(orchestratorStudentProfilesMock),
+  };
+});
+
+vi.mock('@esl-pipeline/md-validator', () => {
+  return {
+    validateMarkdownFile: vi.fn(),
   };
 });
 
@@ -1381,6 +1395,7 @@ describe('transport/http-server - integration (in-process)', () => {
     expect(materializeDraft).toHaveBeenCalledWith({
       draftId: 'draft-1',
       jobId: 'job-1',
+      jobOverrides: undefined,
     });
   });
 
@@ -1408,6 +1423,43 @@ describe('transport/http-server - integration (in-process)', () => {
     expect(materializeDraft).toHaveBeenCalledWith({
       draftId: 'draft-2',
       jobId: undefined,
+      jobOverrides: undefined,
+    });
+  });
+
+  it('POST /drafts/:id/materialize forwards jobOverrides', async () => {
+    const materializeDraft = vi.spyOn(materializeDraftModule, 'materializeDraft');
+    materializeDraft.mockClear();
+    materializeDraft.mockResolvedValue({
+      draftId: 'draft-3',
+      jobId: 'job-3',
+      mdPath: '/uploads/drafts/draft-3.md',
+    });
+
+    const payload = {
+      jobOverrides: {
+        preset: 'b1-default',
+        notionDatabase: 'notion-db',
+        withTts: true,
+        forceTts: true,
+        ttsStrategy: 'dialogue',
+        upload: 's3',
+        voiceId: 'voice-1',
+        voiceAccent: 'american_female',
+      },
+    };
+
+    const response = await app.inject({
+      method: 'POST',
+      url: '/drafts/draft-3/materialize',
+      payload,
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(materializeDraft).toHaveBeenCalledWith({
+      draftId: 'draft-3',
+      jobId: undefined,
+      jobOverrides: payload.jobOverrides,
     });
   });
 
@@ -1424,6 +1476,278 @@ describe('transport/http-server - integration (in-process)', () => {
 
     expect(response.statusCode).toBe(404);
     expect(response.json()).toEqual({ error: 'not_found' });
+  });
+
+  it('POST /validation/markdown returns validation payload', async () => {
+    const mockValidateMarkdownFile = vi.mocked(validateMarkdownFile);
+    mockValidateMarkdownFile.mockResolvedValue({
+      ok: false,
+      errors: ['Missing header'],
+      warnings: ['Minor issue'],
+      meta: {
+        title: 'Lesson',
+        student: 'Anna',
+        level: 'B1',
+        topic: 'Grammar',
+        input_type: 'dialogue',
+        speaker_labels: ['A', 'B'],
+      },
+    });
+
+    const response = await app.inject({
+      method: 'POST',
+      url: '/validation/markdown',
+      payload: { text: 'raw markdown', strict: true },
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toEqual({
+      ok: false,
+      errors: ['Missing header'],
+      warnings: ['Minor issue'],
+      meta: {
+        title: 'Lesson',
+        student: 'Anna',
+        level: 'B1',
+        topic: 'Grammar',
+        input_type: 'dialogue',
+        speaker_labels: ['A', 'B'],
+      },
+    });
+    expect(mockValidateMarkdownFile).toHaveBeenCalledWith('inline.md', {
+      content: 'raw markdown',
+      strict: true,
+    });
+  });
+
+  it('GET /user/jobs applies filters and pagination', async () => {
+    const listJobs = vi.spyOn(listJobsModule, 'listJobsWithDefaults');
+    listJobs.mockResolvedValue({
+      jobs: [
+        {
+          jobId: 'job-1',
+          md: 'fixtures/ok.md',
+          recordingId: null,
+          transcriptId: null,
+          promptPackageId: null,
+          draftId: null,
+          preset: 'b1-default',
+          withTts: true,
+          voiceId: 'voice-1',
+          upload: 's3',
+          voiceAccent: 'american_female',
+          forceTts: false,
+          notionDatabase: null,
+          ttsStrategy: 'auto',
+          notionUrl: null,
+          state: 'queued',
+          createdAt: '2024-01-01T00:00:00.000Z',
+          updatedAt: '2024-01-01T00:00:00.000Z',
+          startedAt: null,
+          finishedAt: null,
+          error: null,
+          manifestPath: null,
+        },
+      ],
+      total: 1,
+      limit: 10,
+      offset: 5,
+    });
+
+    const studentId = deriveStudentId('Anna');
+    const response = await app.inject({
+      method: 'GET',
+      url:
+        '/user/jobs?state=queued,failed' +
+        `&studentId=${studentId}` +
+        '&from=2024-01-01T00:00:00.000Z' +
+        '&to=2024-02-01T00:00:00.000Z' +
+        '&limit=10&offset=5&order=asc',
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toEqual({
+      jobs: [
+        {
+          jobId: 'job-1',
+          md: 'fixtures/ok.md',
+          recordingId: null,
+          transcriptId: null,
+          promptPackageId: null,
+          draftId: null,
+          preset: 'b1-default',
+          withTts: true,
+          voiceId: 'voice-1',
+          upload: 's3',
+          voiceAccent: 'american_female',
+          forceTts: false,
+          notionDatabase: null,
+          ttsStrategy: 'auto',
+          notionUrl: null,
+          state: 'queued',
+          createdAt: '2024-01-01T00:00:00.000Z',
+          updatedAt: '2024-01-01T00:00:00.000Z',
+          startedAt: null,
+          finishedAt: null,
+          error: null,
+          manifestPath: null,
+        },
+      ],
+      total: 1,
+      limit: 10,
+      offset: 5,
+    });
+
+    const call = listJobs.mock.calls[0]?.[0];
+    expect(call?.states).toEqual(['queued', 'failed']);
+    expect(call?.studentId).toBe(studentId);
+    expect(call?.limit).toBe(10);
+    expect(call?.offset).toBe(5);
+    expect(call?.order).toBe('asc');
+    expect(call?.userId).toBe('test-user-id');
+    expect(call?.from?.toISOString()).toBe('2024-01-01T00:00:00.000Z');
+    expect(call?.to?.toISOString()).toBe('2024-02-01T00:00:00.000Z');
+  });
+
+  it('GET /user/jobs/summary returns summary response', async () => {
+    const getSummary = vi.spyOn(jobSummaryModule, 'getJobSummaryWithDefaults');
+    getSummary.mockResolvedValue({
+      total: 12,
+      byState: {
+        queued: 1,
+        running: 2,
+        awaiting_approval: 3,
+        succeeded: 4,
+        failed: 2,
+      },
+      pendingApprovals: 3,
+      last7Days: {
+        total: 5,
+        succeeded: 3,
+        failed: 1,
+      },
+      tts: {
+        enabled: 6,
+        succeeded: 4,
+      },
+    });
+
+    const response = await app.inject({
+      method: 'GET',
+      url: '/user/jobs/summary?from=2024-03-01T00:00:00.000Z&to=2024-03-07T00:00:00.000Z',
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toEqual({
+      total: 12,
+      byState: {
+        queued: 1,
+        running: 2,
+        awaiting_approval: 3,
+        succeeded: 4,
+        failed: 2,
+      },
+      pendingApprovals: 3,
+      last7Days: {
+        total: 5,
+        succeeded: 3,
+        failed: 1,
+      },
+      tts: {
+        enabled: 6,
+        succeeded: 4,
+      },
+    });
+
+    const call = getSummary.mock.calls[0]?.[0];
+    expect(call?.userId).toBe('test-user-id');
+    expect(call?.from?.toISOString()).toBe('2024-03-01T00:00:00.000Z');
+    expect(call?.to?.toISOString()).toBe('2024-03-07T00:00:00.000Z');
+  });
+
+  it('GET /students/summary returns student summary response', async () => {
+    const getSummary = vi.spyOn(studentSummaryModule, 'getStudentSummaryWithDefaults');
+    getSummary.mockResolvedValue({
+      items: [
+        {
+          id: deriveStudentId('Anna'),
+          name: 'Anna',
+          lastLessonAt: '2024-02-01T10:00:00.000Z',
+          pendingDrafts: 1,
+        },
+      ],
+      total: 1,
+      limit: 5,
+      offset: 10,
+    });
+
+    const response = await app.inject({
+      method: 'GET',
+      url: '/students/summary?limit=5&offset=10&order=desc',
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toEqual({
+      items: [
+        {
+          id: deriveStudentId('Anna'),
+          name: 'Anna',
+          lastLessonAt: '2024-02-01T10:00:00.000Z',
+          pendingDrafts: 1,
+        },
+      ],
+      total: 1,
+      limit: 5,
+      offset: 10,
+    });
+
+    expect(getSummary).toHaveBeenCalledWith({
+      limit: 5,
+      offset: 10,
+      order: 'desc',
+    });
+  });
+
+  it('GET /recordings/:id/audio supports range requests', async () => {
+    const getRecordingById = vi.spyOn(recordingRepositoryModule, 'getRecordingById');
+    getRecordingById.mockResolvedValue({
+      id: 'recording-1',
+      source: 'upload',
+      studentId: null,
+      sourcePath: null,
+      storageUri: 'local://recordings/recording.opus',
+      sha256: null,
+      bytes: 11,
+      durationSec: null,
+      channels: null,
+      status: 'transcribed',
+      error: null,
+      createdAt: new Date('2024-01-01T00:00:00.000Z'),
+      updatedAt: new Date('2024-01-01T00:00:00.000Z'),
+    });
+
+    const createStorage = vi.spyOn(
+      transcriptionStorageModule,
+      'createTranscriptionStorageForUri',
+    );
+    createStorage.mockReturnValue({
+      getStream: async () => Readable.from(Buffer.from('hello world')),
+    } as any);
+
+    const response = await app.inject({
+      method: 'GET',
+      url: '/recordings/recording-1/audio',
+      headers: {
+        range: 'bytes=0-4',
+      },
+    });
+
+    expect(response.statusCode).toBe(206);
+    expect(response.headers['accept-ranges']).toBe('bytes');
+    expect(response.headers['content-range']).toBe('bytes 0-4/11');
+    expect(response.headers['content-length']).toBe('5');
+    expect(response.headers['content-type']).toBe('audio/ogg');
+    expect(response.payload).toBe('hello');
   });
 
   it('GET /jobs/events streams job events as SSE', { timeout: 10_000 }, async () => {

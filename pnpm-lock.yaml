@@ -98,6 +98,9 @@ importers:
       '@esl-pipeline/contracts':
         specifier: workspace:*
         version: link:../contracts
+      '@esl-pipeline/md-validator':
+        specifier: workspace:*
+        version: link:../md-validator
       '@esl-pipeline/orchestrator':
         specifier: workspace:*
         version: link:../orchestrator

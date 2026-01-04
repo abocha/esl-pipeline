@@ -180,11 +180,12 @@ Internal:
 Experimental/extended HTTP routes exist in the codebase but are guarded by `BATCH_BACKEND_ENABLE_EXTENDED_API`.
 They are considered non-canonical until explicitly documented here.
 
-Extended transcription routes (require auth when the extended API is enabled):
+Extended API routes (require auth when the extended API is enabled):
 - POST /recordings/sync
 - POST /recordings/upload (optional `studentId` or `student` query param)
 - GET /recordings (supports `status`, `studentId`/`student`, `source`, `q`, `limit`, `offset`, `order`)
 - GET /recordings/:recordingId
+- GET /recordings/:recordingId/audio (supports `Range` requests)
 - GET /recordings/:recordingId/transcript
 - PUT /recordings/:recordingId/transcript
 - POST /recordings/:recordingId/transcribe
@@ -192,10 +193,12 @@ Extended transcription routes (require auth when the extended API is enabled):
 - GET /prompt-packages/:promptPackageId
 - POST /prompt-packages/:promptPackageId/draft
 - GET /drafts/:draftId
-- POST /drafts/:draftId/materialize
+- POST /drafts/:draftId/materialize (optional body: `{ jobId?, jobOverrides? }`)
+- POST /validation/markdown (body: `{ text, strict? }`)
 - GET /config/students
 - GET /config/prompts
 - GET /students
+- GET /students/summary
 - GET /students/:id
 - POST /students
 - PUT /students/:id
@@ -205,6 +208,9 @@ Extended transcription routes (require auth when the extended API is enabled):
 - GET /profiles/:id
 - PUT /profiles/:id
 - DELETE /profiles/:id
+- GET /user/jobs (supports `state`, `studentId`, `from`, `to`, `limit`, `offset`, `order`)
+- GET /user/jobs/summary (optional `from`, `to`, default: last 7 days)
+- POST /jobs/:jobId/actions (includes `edit_metadata` for awaiting_approval jobs)
 - Recording payloads include `displayName` derived from `source_path` or `storage_uri`.
 - `GET /students/:id/timeline` returns `{ items, total, limit, offset, order }` with items containing
   `type`, `studentId`, `recordingId`, `transcriptId`, `promptPackageId`, `draftId`, `jobId`, `status`,
@@ -317,6 +323,7 @@ HTTP:
     - `'s3'`: request orchestrator to upload via S3-compatible backend.
     - `'auto' | 'none'` (or omitted): do not override orchestrator defaults.
   - `voiceAccent?: string` — passed through as `accentPreference`.
+  - `voiceId?: string` — stored for job metadata and reuse.
   - `forceTts?: boolean` — persisted for Phase 8 UI controls (orchestrator wiring TBD).
   - `notionDatabase?: string` — forwarded as `dbId`.
   - `ttsStrategy?: 'auto' | 'dialogue' | 'tts'` — stored for UI state and SSE payloads.
@@ -348,7 +355,21 @@ HTTP:
   - `200 OK`:
     - Body:
       - `jobId: string`
-      - `state: 'queued' | 'running' | 'succeeded' | 'failed'`
+      - `state: 'queued' | 'running' | 'awaiting_approval' | 'succeeded' | 'failed'`
+      - `md?: string | null`
+      - `recordingId?: string | null`
+      - `transcriptId?: string | null`
+      - `promptPackageId?: string | null`
+      - `draftId?: string | null`
+      - `preset?: string | null`
+      - `withTts?: boolean | null`
+      - `upload?: 'auto' | 's3' | 'none' | null`
+      - `voiceId?: string | null`
+      - `voiceAccent?: string | null`
+      - `forceTts?: boolean | null`
+      - `notionDatabase?: string | null`
+      - `ttsStrategy?: 'auto' | 'dialogue' | 'tts' | null`
+      - `notionUrl?: string | null`
       - `createdAt: string` (ISO 8601)
       - `updatedAt: string` (ISO 8601)
       - `startedAt?: string | null`
@@ -370,6 +391,7 @@ Notes:
 
 - `/jobs/:jobId/status` is maintained as a backwards-compatible alias that hits the identical handler.
 - No authentication is enforced by default; deploy behind trusted ingress as stated in §8. Additional endpoints that require authentication stay disabled unless `BATCH_BACKEND_ENABLE_EXTENDED_API=true`.
+- Job actions are exposed via `POST /jobs/:jobId/actions` (extended API). `edit_metadata` accepts `JobConfigOverrides` and is only allowed when the job is `awaiting_approval`; other actions may return `501` until implemented.
 
 ### 5.4 Worker Processing
 

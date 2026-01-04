@@ -2,6 +2,7 @@
 //
 // Domain model for job actions (rerun, cancel, metadata edit)
 // Defines action types, payloads, and result interfaces
+import type { JobConfigOverrides } from '@esl-pipeline/contracts';
 
 /**
  * Supported job action types
@@ -48,10 +49,7 @@ export interface CancelJobAction extends JobAction {
  */
 export interface EditMetadataAction extends JobAction {
   type: JobActionType.EDIT_METADATA;
-  payload: {
-    preset?: string;
-    notionDatabase?: string;
-  };
+  payload: JobConfigOverrides;
 }
 
 /**

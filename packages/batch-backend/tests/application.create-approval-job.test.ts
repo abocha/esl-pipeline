@@ -103,6 +103,9 @@ describe('application/create-approval-job', () => {
       withTts: true,
       ttsStrategy: 'dialogue',
       voiceAccent: 'british',
+      voiceId: undefined,
+      forceTts: undefined,
+      notionDatabase: undefined,
       upload: 'auto',
     });
     expect(publishEvent).toHaveBeenCalledWith({ type: 'job_created', job });

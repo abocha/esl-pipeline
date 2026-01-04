@@ -188,7 +188,7 @@ import {
 - ✅ Shared types in `@esl-pipeline/contracts`
 - ⏳ Rerun audio logic (Stage 7 - pending)
 - ⏳ Cancel job logic (Stage 8 - pending)
-- ⏳ Edit metadata logic (Stage 9 - pending)
+- ✅ Edit metadata logic (awaiting_approval only)
 
 ---
 
@@ -215,25 +215,25 @@ import {
 - **Job Actions Infrastructure:** Generic action system in place (Phase 6)
   - `POST /jobs/:jobId/actions` endpoint available
   - Three action types defined: `rerun_audio`, `cancel`, `edit_metadata`
-  - Actions currently return `501 Not Implemented` (logic pending Stages 7-9)
+  - `edit_metadata` is implemented for `awaiting_approval` jobs; other actions still return `501`
 
 - **Extended API:** Fully functional routes
   - Authentication (`/auth/register`, `/auth/login`, `/auth/refresh`, `/auth/me`)
   - File uploads (`/uploads` with validation and sanitization)
   - Recording uploads (`/recordings/upload`)
+  - Recording playback (`/recordings/:id/audio`)
+  - Markdown validation (`/validation/markdown`)
   - Admin endpoints (`/admin/users`, `/admin/jobs`, `/admin/stats`)
-  - User profile (`/user/profile`, `/user/jobs`, `/user/files`)
+  - User profile (`/user/profile`, `/user/jobs`, `/user/jobs/summary`, `/user/files`)
+  - Student summary (`/students/summary`)
 
 ### ⏳ Pending Work
 
 - **Job Action Implementations:**
   - Stage 7: Implement `rerun_audio` logic (orchestrator integration)
   - Stage 8: Implement `cancel` logic (BullMQ queue management)
-  - Stage 9: Implement `edit_metadata` logic (database + manifest updates)
 
 - **Future Enhancements:**
-  - User-scoped job filtering (multi-tenant support)
-  - Pagination for job lists
   - Job priority/scheduling options
   - Advanced search and filtering capabilities
 
@@ -254,6 +254,7 @@ The staged implementation manual is archived at
   - `POST /recordings/upload`
   - `GET /recordings` (supports `status`, `studentId`/`student`, `source`, `q`, `limit`, `offset`, `order`)
   - `GET /recordings/:id`
+  - `GET /recordings/:id/audio`
   - `GET /recordings/:id/transcript`
   - `PUT /recordings/:id/transcript`
   - `POST /recordings/:id/transcribe`
@@ -276,6 +277,7 @@ The staged implementation manual is archived at
 - Progress updates should reuse `/jobs/events` with extended payloads (`recordingId`, `transcriptId`).
 - Draft materialization writes to `FILESYSTEM_UPLOAD_DIR/drafts/<draftId>.md` and feeds `/jobs/:jobId/approve`.
 - Draft materialization auto-creates an `awaiting_approval` job when none is supplied.
+- Draft materialization accepts optional job overrides (preset/tts/voice/upload) to seed the approval job.
 - Storage adapter abstraction (filesystem + S3 supported) is required for recordings/transcripts/prompt packages/drafts.
 - Prompt packages accept `templateId`/`profileId` from `/config/prompts` (no raw paths).
 - Approval jobs apply user defaults for preset + TTS strategy and set `upload=auto`; TTS runs when an ElevenLabs key is configured.

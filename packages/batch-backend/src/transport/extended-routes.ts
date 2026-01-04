@@ -2,13 +2,18 @@ import multipart from '@fastify/multipart';
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { randomUUID } from 'node:crypto';
 import path from 'node:path';
-import { Readable } from 'node:stream';
+import { Readable, Transform } from 'node:stream';
 import { z } from 'zod';
 
+import type { JobState } from '@esl-pipeline/contracts';
+import { validateMarkdownFile } from '@esl-pipeline/md-validator';
+
 import { getJobOptions } from '../application/get-job-options.js';
+import { getJobSummaryWithDefaults } from '../application/job-summary.js';
 import { getRecording } from '../application/get-recording.js';
 import { getRecordingsIndex } from '../application/get-recordings-index.js';
 import { getRecordingTranscript } from '../application/get-recording-transcript.js';
+import { listJobsWithDefaults } from '../application/list-jobs.js';
 import { listRecordingsWithDefaults } from '../application/list-recordings.js';
 import { ingestRecordingUpload } from '../application/ingest-recording-upload.js';
 import { recordingToDto } from '../application/recording-dto.js';
@@ -26,6 +31,7 @@ import {
   StudentProfileStoreError,
   updateStudentProfile,
 } from '../application/student-profiles-store.js';
+import { getStudentSummaryWithDefaults } from '../application/student-summary.js';
 import {
   deleteProfileContent,
   getProfileContent,
@@ -84,9 +90,13 @@ import {
 } from '../infrastructure/file-validation-service.js';
 import { logger } from '../infrastructure/logger.js';
 import { StorageConfigurationService } from '../infrastructure/storage-config.js';
-import { createTranscriptionStorage } from '../infrastructure/transcription-storage.js';
+import {
+  createTranscriptionStorage,
+  createTranscriptionStorageForUri,
+} from '../infrastructure/transcription-storage.js';
 import { createTranscribeQueue } from '../infrastructure/transcribe-queue.js';
 import {
+  getRecordingById,
   insertRecording,
   updateRecordingStatus,
 } from '../domain/recording-repository.js';
@@ -214,6 +224,53 @@ export function registerExtendedRoutes(app: FastifyInstance, options: ExtendedRo
     },
   );
 
+  app.post(
+    '/validation/markdown',
+    {
+      preHandler: [authenticate],
+    },
+    async (request, reply) => {
+      const routePath = resolveRoutePath(request, 'POST /validation/markdown');
+      const schema = z.object({
+        text: z.string().min(1),
+        strict: z.boolean().optional(),
+      });
+
+      try {
+        const body = schema.parse(request.body ?? {});
+        const result = await validateMarkdownFile('inline.md', {
+          content: body.text,
+          strict: body.strict,
+        });
+
+        logger.info('HTTP request handled', {
+          event: 'http_request',
+          route: routePath,
+          statusCode: 200,
+        });
+
+        return reply.send(result);
+      } catch (error: unknown) {
+        if (error instanceof z.ZodError) {
+          return reply.code(400).send({
+            error: 'validation_failed',
+            message: 'Invalid request body',
+            details: error.issues,
+          });
+        }
+
+        logger.error(error instanceof Error ? error : String(error), {
+          event: 'http_request',
+          route: routePath,
+          statusCode: 500,
+          error: 'internal_error',
+        });
+
+        return errorResponse(reply, 'internal_error');
+      }
+    },
+  );
+
   app.get(
     '/students',
     {
@@ -257,6 +314,55 @@ export function registerExtendedRoutes(app: FastifyInstance, options: ExtendedRo
             error: error.code,
             message: error.message,
             code: error.code,
+          });
+        }
+
+        logger.error(error instanceof Error ? error : String(error), {
+          event: 'http_request',
+          route: routePath,
+          statusCode: 500,
+          error: 'internal_error',
+        });
+
+        return errorResponse(reply, 'internal_error');
+      }
+    },
+  );
+
+  app.get(
+    '/students/summary',
+    {
+      preHandler: [authenticate],
+    },
+    async (request, reply) => {
+      const routePath = resolveRoutePath(request, 'GET /students/summary');
+      const querySchema = z.object({
+        limit: z.coerce.number().int().min(1).max(500).optional(),
+        offset: z.coerce.number().int().min(0).optional(),
+        order: z.enum(['asc', 'desc']).optional(),
+      });
+
+      try {
+        const query = querySchema.parse(request.query ?? {});
+        const result = await getStudentSummaryWithDefaults({
+          limit: query.limit,
+          offset: query.offset,
+          order: query.order,
+        });
+
+        logger.info('HTTP request handled', {
+          event: 'http_request',
+          route: routePath,
+          statusCode: 200,
+        });
+
+        return reply.send(result);
+      } catch (error: unknown) {
+        if (error instanceof z.ZodError) {
+          return reply.code(400).send({
+            error: 'validation_failed',
+            message: 'Invalid query parameters',
+            details: error.issues,
           });
         }
 
@@ -1095,6 +1201,86 @@ export function registerExtendedRoutes(app: FastifyInstance, options: ExtendedRo
     },
   );
 
+  app.get(
+    '/recordings/:recordingId/audio',
+    {
+      preHandler: [authenticate],
+    },
+    async (request, reply) => {
+      const { recordingId } = request.params as { recordingId: string };
+      const routePath = resolveRoutePath(request, 'GET /recordings/:recordingId/audio');
+
+      try {
+        const recording = await getRecordingById(recordingId);
+        if (!recording) {
+          logger.info('Recording audio not found', {
+            event: 'recording_audio_not_found',
+            route: routePath,
+            recordingId,
+          });
+          return errorResponse(reply, 'not_found');
+        }
+
+        const totalBytes = Number(recording.bytes ?? 0);
+        const rangeHeader = request.headers.range;
+        const range = parseRangeHeader(
+          typeof rangeHeader === 'string' ? rangeHeader : undefined,
+          totalBytes,
+        );
+
+        reply.header('Accept-Ranges', 'bytes');
+        reply.header('Content-Type', resolveAudioMimeType(recording.storageUri));
+
+        if (range === 'invalid') {
+          reply.header('Content-Range', `bytes */${totalBytes}`);
+          return reply.code(416).send();
+        }
+
+        const storage = createTranscriptionStorageForUri(recording.storageUri, { storageConfig });
+        const stream = await storage.getStream(recording.storageUri);
+
+        if (range) {
+          const chunkSize = range.end - range.start + 1;
+          reply.header('Content-Length', String(chunkSize));
+          reply.header(
+            'Content-Range',
+            `bytes ${range.start}-${range.end}/${totalBytes}`,
+          );
+
+          logger.info('HTTP request handled', {
+            event: 'http_request',
+            route: routePath,
+            statusCode: 206,
+            recordingId,
+          });
+
+          return reply.code(206).send(createRangeStream(stream, range.start, range.end));
+        }
+
+        reply.header('Content-Length', String(totalBytes));
+
+        logger.info('HTTP request handled', {
+          event: 'http_request',
+          route: routePath,
+          statusCode: 200,
+          recordingId,
+        });
+
+        return reply.send(stream);
+      } catch (error: unknown) {
+        logger.error(error instanceof Error ? error : String(error), {
+          event: 'http_request',
+          route: routePath,
+          statusCode: 500,
+          error: 'internal_error',
+          recordingId,
+        });
+
+        return errorResponse(reply, 'internal_error');
+      }
+    },
+  );
+
   app.post(
     '/recordings/:recordingId/transcribe',
     {
@@ -1473,8 +1659,20 @@ export function registerExtendedRoutes(app: FastifyInstance, options: ExtendedRo
       const { draftId } = request.params as { draftId: string };
       const routePath = resolveRoutePath(request, 'POST /drafts/:draftId/materialize');
 
+      const jobOverridesSchema = z.object({
+        preset: z.string().min(1).optional(),
+        notionDatabase: z.string().min(1).optional(),
+        withTts: z.boolean().optional(),
+        forceTts: z.boolean().optional(),
+        ttsStrategy: z.enum(['auto', 'dialogue', 'tts']).optional(),
+        upload: z.enum(['auto', 's3', 'none']).optional(),
+        voiceId: z.string().min(1).optional(),
+        voiceAccent: z.string().min(1).optional(),
+      });
+
       const schema = z.object({
         jobId: z.string().min(1).optional(),
+        jobOverrides: jobOverridesSchema.optional(),
       });
 
       try {
@@ -1482,6 +1680,7 @@ export function registerExtendedRoutes(app: FastifyInstance, options: ExtendedRo
         const materialized = await materializeDraft({
           draftId,
           jobId: body.jobId,
+          jobOverrides: body.jobOverrides,
         });
 
         if (!materialized) {
@@ -1543,6 +1742,23 @@ export function registerExtendedRoutes(app: FastifyInstance, options: ExtendedRo
     const trimmed = values.map((value) => value.trim()).filter(Boolean);
     if (trimmed.length === 0) return null;
     return trimmed.map((value) => RecordingSourceSchema.parse(value));
+  }
+
+  function normalizeJobStateFilter(
+    state?: string | string[] | null,
+  ): JobState[] | null {
+    if (!state) return null;
+    const values = Array.isArray(state) ? state : state.split(',');
+    const trimmed = values.map((value) => value.trim()).filter(Boolean);
+    if (trimmed.length === 0) return null;
+    const jobStateSchema = z.enum([
+      'queued',
+      'running',
+      'awaiting_approval',
+      'succeeded',
+      'failed',
+    ]);
+    return trimmed.map((value) => jobStateSchema.parse(value)) as JobState[];
   }
 
   void app.register(multipart, {
@@ -2249,6 +2465,57 @@ export function registerExtendedRoutes(app: FastifyInstance, options: ExtendedRo
     }
   });
 
+  app.get('/user/jobs/summary', { preHandler: authenticate }, async (request, reply) => {
+    const authenticatedUser = getAuthenticatedUser(request);
+    if (!authenticatedUser) {
+      return reply.code(401).send({
+        error: 'unauthorized',
+        message: 'Authentication required',
+      });
+    }
+
+    const routePath = resolveRoutePath(request, 'GET /user/jobs/summary');
+    const querySchema = z.object({
+      from: z.coerce.date().optional(),
+      to: z.coerce.date().optional(),
+    });
+
+    try {
+      const query = querySchema.parse(request.query ?? {});
+      const summary = await getJobSummaryWithDefaults({
+        from: query.from ?? null,
+        to: query.to ?? null,
+        userId: authenticatedUser.id,
+      });
+
+      logger.info('HTTP request handled', {
+        event: 'http_request',
+        route: routePath,
+        statusCode: 200,
+        userId: authenticatedUser.id,
+      });
+
+      return reply.code(200).send(summary);
+    } catch (error: unknown) {
+      if (error instanceof z.ZodError) {
+        return reply.code(400).send({
+          error: 'validation_failed',
+          message: 'Invalid query parameters',
+          details: error.issues,
+        });
+      }
+
+      logger.error(error instanceof Error ? error : String(error), {
+        event: 'get_user_jobs_summary_failed',
+        userId: authenticatedUser.id,
+      });
+
+      return reply.code(500).send({
+        error: 'internal_error',
+      });
+    }
+  });
+
   app.get('/user/jobs', { preHandler: authenticate }, async (request, reply) => {
     const authenticatedUser = getAuthenticatedUser(request);
     if (!authenticatedUser) {
@@ -2258,14 +2525,48 @@ export function registerExtendedRoutes(app: FastifyInstance, options: ExtendedRo
       });
     }
 
-    try {
-      const jobs: unknown[] = [];
+    const routePath = resolveRoutePath(request, 'GET /user/jobs');
+    const querySchema = z.object({
+      state: z.union([z.string(), z.array(z.string())]).optional(),
+      studentId: z.string().uuid().optional(),
+      from: z.coerce.date().optional(),
+      to: z.coerce.date().optional(),
+      limit: z.coerce.number().int().min(1).max(200).optional(),
+      offset: z.coerce.number().int().min(0).optional(),
+      order: z.enum(['asc', 'desc']).optional(),
+    });
 
-      return reply.code(200).send({
-        jobs,
-        total: jobs.length,
+    try {
+      const query = querySchema.parse(request.query ?? {});
+      const states = normalizeJobStateFilter(query.state);
+      const jobs = await listJobsWithDefaults({
+        states,
+        studentId: query.studentId ?? null,
+        from: query.from ?? null,
+        to: query.to ?? null,
+        limit: query.limit,
+        offset: query.offset,
+        order: query.order,
+        userId: authenticatedUser.id,
       });
+
+      logger.info('HTTP request handled', {
+        event: 'http_request',
+        route: routePath,
+        statusCode: 200,
+        userId: authenticatedUser.id,
+      });
+
+      return reply.code(200).send(jobs);
     } catch (error: unknown) {
+      if (error instanceof z.ZodError) {
+        return reply.code(400).send({
+          error: 'validation_failed',
+          message: 'Invalid query parameters',
+          details: error.issues,
+        });
+      }
+
       logger.error(error instanceof Error ? error : String(error), {
         event: 'get_user_jobs_failed',
         userId: authenticatedUser.id,
@@ -2469,6 +2770,22 @@ export function registerExtendedRoutes(app: FastifyInstance, options: ExtendedRo
         });
       }
 
+      if (result.error === 'invalid_state') {
+        return reply.code(409).send({
+          error: 'invalid_state',
+          message: result.message,
+          actionType: result.actionType,
+        });
+      }
+
+      if (result.error === 'validation_failed') {
+        return reply.code(400).send({
+          error: 'validation_failed',
+          message: result.message,
+          actionType: result.actionType,
+        });
+      }
+
       logger.info('Job action executed', {
         event: 'job_action_executed',
         userId: getAuthenticatedUser(request)?.id,
@@ -2522,4 +2839,105 @@ function buildFilesystemMdReference(uploadDir: string, storageKey: string): stri
   const absoluteRoot = path.resolve(uploadDir || '.');
   const absoluteFilePath = path.join(absoluteRoot, storageKey);
   return absoluteFilePath.split(path.sep).join('/');
+}
+
+type RangeParseResult = { start: number; end: number } | 'invalid' | null;
+
+function parseRangeHeader(header: string | undefined, size: number): RangeParseResult {
+  if (!header) return null;
+  const match = /^bytes=(\d*)-(\d*)$/.exec(header.trim());
+  if (!match) return 'invalid';
+
+  const startRaw = match[1] ?? '';
+  const endRaw = match[2] ?? '';
+  if (!(startRaw || endRaw)) return 'invalid';
+  if (size <= 0) return 'invalid';
+
+  let start = 0;
+  let end = size - 1;
+
+  if (startRaw) {
+    start = Number.parseInt(startRaw, 10);
+    if (Number.isNaN(start) || start < 0) return 'invalid';
+    if (endRaw) {
+      end = Number.parseInt(endRaw, 10);
+      if (Number.isNaN(end) || end < start) return 'invalid';
+      end = Math.min(end, size - 1);
+    }
+  } else {
+    const suffix = Number.parseInt(endRaw, 10);
+    if (Number.isNaN(suffix) || suffix <= 0) return 'invalid';
+    start = Math.max(size - suffix, 0);
+  }
+
+  if (start >= size) return 'invalid';
+
+  return { start, end };
+}
+
+function createRangeStream(source: Readable, start: number, end: number): Readable {
+  let position = 0;
+  let remaining = end - start + 1;
+  const transformer = new Transform({
+    transform(chunk, _encoding, callback) {
+      const buffer = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk);
+      const chunkStart = position;
+      const chunkEnd = position + buffer.length - 1;
+      position += buffer.length;
+
+      if (chunkEnd < start) {
+        return callback();
+      }
+
+      if (remaining <= 0) {
+        source.destroy();
+        this.end();
+        return callback();
+      }
+
+      let sliceStart = 0;
+      if (chunkStart < start) {
+        sliceStart = start - chunkStart;
+      }
+
+      const available = buffer.length - sliceStart;
+      const take = Math.min(remaining, available);
+      if (take > 0) {
+        this.push(buffer.subarray(sliceStart, sliceStart + take));
+        remaining -= take;
+      }
+
+      if (remaining <= 0) {
+        source.destroy();
+        this.end();
+      }
+
+      return callback();
+    },
+  });
+
+  source.on('error', (error) => transformer.destroy(error));
+  return source.pipe(transformer);
+}
+
+function resolveAudioMimeType(uri: string): string {
+  const cleaned = uri.split('?')[0]?.split('#')[0] ?? uri;
+  const ext = path.extname(cleaned).toLowerCase();
+  switch (ext) {
+    case '.opus': {
+      return 'audio/ogg';
+    }
+    case '.mp3': {
+      return 'audio/mpeg';
+    }
+    case '.wav': {
+      return 'audio/wav';
+    }
+    case '.m4a': {
+      return 'audio/mp4';
+    }
+    default: {
+      return 'application/octet-stream';
+    }
+  }
 }

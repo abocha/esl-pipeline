@@ -1,3 +1,5 @@
+import type { JobConfigOverrides } from '@esl-pipeline/contracts';
+
 import type { BatchBackendConfig } from '../config/env.js';
 import { loadConfig } from '../config/env.js';
 import type { DraftRecord } from '../domain/draft-model.js';
@@ -14,6 +16,7 @@ import { getDefaultSettings } from '../domain/settings-model.js';
 export interface CreateApprovalJobParams {
   draft: DraftRecord;
   promptPackage: PromptPackageRecord;
+  jobOverrides?: JobConfigOverrides;
 }
 
 export interface CreateApprovalJobDependencies {
@@ -58,17 +61,23 @@ export async function createApprovalJobFromDraft(
     hasTtsKey = hasTtsKey || Boolean(resolved.elevenLabsKeyEncrypted);
   }
 
+  const jobOverrides = params.jobOverrides ?? {};
+  const withTts = jobOverrides.withTts ?? hasTtsKey;
+
   const job = await jobs.insertApprovalJob({
     recordingId: params.promptPackage.recordingId,
     transcriptId: params.promptPackage.transcriptId,
     promptPackageId: params.promptPackage.id,
     draftId: params.draft.id,
     userId: params.draft.createdBy ?? undefined,
-    preset,
-    withTts: hasTtsKey,
-    ttsStrategy,
-    voiceAccent,
-    upload: 'auto',
+    preset: jobOverrides.preset ?? preset,
+    withTts,
+    ttsStrategy: jobOverrides.ttsStrategy ?? ttsStrategy,
+    voiceAccent: jobOverrides.voiceAccent ?? voiceAccent,
+    voiceId: jobOverrides.voiceId,
+    forceTts: jobOverrides.forceTts,
+    notionDatabase: jobOverrides.notionDatabase,
+    upload: jobOverrides.upload ?? 'auto',
   });
 
   publishEvent({ type: 'job_created', job });
