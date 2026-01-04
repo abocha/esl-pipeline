@@ -14,7 +14,7 @@ export interface PromptOption {
   label: string;
 }
 
-interface PromptOptionWithPath extends PromptOption {
+export interface PromptOptionWithPath extends PromptOption {
   path: string;
 }
 
@@ -62,6 +62,14 @@ export async function resolveAllowlistedProfilePath(
     );
   }
   return resolvedPath;
+}
+
+export async function listPromptProfilesWithPath(
+  overrides?: Partial<{ config: BatchBackendConfig }>,
+): Promise<{ profiles: PromptOptionWithPath[]; profileRoot: string; defaultProfileId: string | null }> {
+  const config = overrides?.config ?? loadConfig();
+  const { profiles, profileRoot, defaultProfileId } = await loadProfileOptionList(config);
+  return { profiles, profileRoot, defaultProfileId };
 }
 
 export async function getPromptOptions(

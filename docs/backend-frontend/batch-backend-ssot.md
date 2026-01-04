@@ -191,10 +191,28 @@ Extended transcription routes (require auth when the extended API is enabled):
 - POST /recordings/:recordingId/prompt-package (optional `templateId`, `profileId`)
 - GET /prompt-packages/:promptPackageId
 - POST /prompt-packages/:promptPackageId/draft
+- GET /drafts/:draftId
 - POST /drafts/:draftId/materialize
 - GET /config/students
 - GET /config/prompts
+- GET /students
+- GET /students/:id
+- POST /students
+- PUT /students/:id
+- DELETE /students/:id
+- GET /students/:id/timeline
+- GET /profiles
+- GET /profiles/:id
+- PUT /profiles/:id
+- DELETE /profiles/:id
 - Recording payloads include `displayName` derived from `source_path` or `storage_uri`.
+- `GET /students/:id/timeline` returns `{ items, total, limit, offset, order }` with items containing
+  `type`, `studentId`, `recordingId`, `transcriptId`, `promptPackageId`, `draftId`, `jobId`, `status`,
+  `createdAt`, `displayName`, and optional `details`.
+  - `type` values: `recording_ingested`, `transcript_ready`, `prompt_package_created`,
+    `draft_saved`, `job_awaiting_approval`, `job_completed`.
+  - `type`/`status` filters accept comma-delimited lists; `job_approved` is accepted as an alias for
+    `job_awaiting_approval` for backward compatibility.
 
 ---
 

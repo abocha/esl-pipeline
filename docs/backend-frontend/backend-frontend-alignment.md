@@ -264,6 +264,7 @@ The staged implementation manual is archived at
   - `GET /prompt-packages/:id`
 - Drafts:
   - `POST /prompt-packages/:id/draft`
+  - `GET /drafts/:id`
   - `POST /drafts/:id/materialize`
 
 ### Deferred Endpoints
@@ -281,6 +282,40 @@ The staged implementation manual is archived at
 
 ### Known Gaps (MVP polish)
 None (Stages 4-5 closed student association + prompt allowlists).
+
+---
+
+## Phase 4 Student-Centric Workflow (Implemented)
+
+**Status:** Implemented
+
+### Implemented Endpoints (student workflows)
+
+- Student profiles:
+  - `GET /students`
+  - `GET /students/:id`
+  - `POST /students`
+  - `PUT /students/:id`
+  - `DELETE /students/:id`
+  - `GET /students/:id/timeline`
+- Profile content:
+  - `GET /profiles`
+  - `GET /profiles/:id`
+  - `PUT /profiles/:id`
+  - `DELETE /profiles/:id`
+- Config compatibility:
+  - `GET /config/students` (backward compatible; surfaces `profileId`)
+
+### Frontend Integration Notes
+
+- Student list + selection drive upload defaults and prompt profile defaults.
+- Student detail view edits metadata + linked profile content.
+- Timeline supports filters (`type`, `status`) and DB-backed pagination parameters.
+- Timeline types include `job_awaiting_approval` for pending approvals (`job_approved` is accepted as an alias).
+
+### Known Gaps
+
+- None (Phase 4 manual fully implemented).
 
 ---
 

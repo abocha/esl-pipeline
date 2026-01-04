@@ -11,6 +11,7 @@ export interface StudentProfile {
   voices?: Record<string, string>;
   manifestPreset?: string | null;
   accentPreference?: string | null;
+  profileId?: string | null;
 }
 
 export type PresetMap = Record<

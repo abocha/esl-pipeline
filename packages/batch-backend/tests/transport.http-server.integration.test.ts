@@ -15,6 +15,9 @@ import * as retryRecordingModule from '../src/application/retry-recording-transc
 import * as submitJobModule from '../src/application/submit-job.js';
 import * as updateRecordingTranscriptModule from '../src/application/update-recording-transcript.js';
 import { ProfilePathError } from '../src/application/profile-path.js';
+import * as profileContentModule from '../src/application/profile-content.js';
+import * as studentTimelineModule from '../src/application/student-timeline.js';
+import * as studentStoreModule from '../src/application/student-profiles-store.js';
 import { publishJobEvent } from '../src/domain/job-events.js';
 import type { JobRecord } from '../src/domain/job-model.js';
 import { publishRecordingEvent } from '../src/domain/recording-events.js';
@@ -113,6 +116,31 @@ vi.mock('../src/infrastructure/orchestrator-service', () => {
   };
 });
 
+vi.mock('../src/application/student-profiles-store', () => {
+  return {
+    listStudentProfiles: vi.fn(),
+    getStudentProfileById: vi.fn(),
+    createStudentProfile: vi.fn(),
+    updateStudentProfile: vi.fn(),
+    deleteStudentProfile: vi.fn(),
+  };
+});
+
+vi.mock('../src/application/profile-content', () => {
+  return {
+    listProfileContents: vi.fn(),
+    getProfileContent: vi.fn(),
+    upsertProfileContent: vi.fn(),
+    deleteProfileContent: vi.fn(),
+  };
+});
+
+vi.mock('../src/application/student-timeline', () => {
+  return {
+    getStudentTimeline: vi.fn(),
+  };
+});
+
 vi.mock('../src/application/get-prompt-options.js', () => {
   return {
     getPromptOptions: vi.fn().mockResolvedValue({
@@ -125,9 +153,118 @@ vi.mock('../src/application/get-prompt-options.js', () => {
 
 describe('transport/http-server - integration (in-process)', () => {
   let app: Awaited<ReturnType<typeof createHttpServer>>;
+  const mockListStudentProfiles = vi.mocked(studentStoreModule.listStudentProfiles);
+  const mockGetStudentProfileById = vi.mocked(studentStoreModule.getStudentProfileById);
+  const mockCreateStudentProfile = vi.mocked(studentStoreModule.createStudentProfile);
+  const mockUpdateStudentProfile = vi.mocked(studentStoreModule.updateStudentProfile);
+  const mockDeleteStudentProfile = vi.mocked(studentStoreModule.deleteStudentProfile);
+  const mockListProfileContents = vi.mocked(profileContentModule.listProfileContents);
+  const mockGetProfileContent = vi.mocked(profileContentModule.getProfileContent);
+  const mockUpsertProfileContent = vi.mocked(profileContentModule.upsertProfileContent);
+  const mockDeleteProfileContent = vi.mocked(profileContentModule.deleteProfileContent);
+  const mockGetStudentTimeline = vi.mocked(studentTimelineModule.getStudentTimeline);
 
   beforeAll(async () => {
     vi.clearAllMocks();
+    mockListStudentProfiles.mockResolvedValue({
+      items: [
+        {
+          id: deriveStudentId('Anna'),
+          student: 'Anna',
+          dbId: null,
+          pageParentId: null,
+          colorPreset: null,
+          accentPreference: null,
+          voices: {},
+          manifestPreset: null,
+          profileId: null,
+        },
+        {
+          id: deriveStudentId('Bob'),
+          student: 'Bob',
+          dbId: null,
+          pageParentId: null,
+          colorPreset: null,
+          accentPreference: null,
+          voices: {},
+          manifestPreset: null,
+          profileId: null,
+        },
+      ],
+      total: 2,
+      limit: 50,
+      offset: 0,
+      order: 'asc',
+    });
+    mockGetStudentProfileById.mockResolvedValue({
+      id: deriveStudentId('Anna'),
+      student: 'Anna',
+      dbId: null,
+      pageParentId: null,
+      colorPreset: null,
+      accentPreference: null,
+      voices: {},
+      manifestPreset: null,
+      profileId: null,
+    });
+    mockCreateStudentProfile.mockResolvedValue({
+      id: deriveStudentId('New Student'),
+      student: 'New Student',
+      dbId: null,
+      pageParentId: null,
+      colorPreset: null,
+      accentPreference: null,
+      voices: {},
+      manifestPreset: null,
+      profileId: null,
+    });
+    mockUpdateStudentProfile.mockResolvedValue({
+      id: deriveStudentId('Anna'),
+      student: 'Anna',
+      dbId: null,
+      pageParentId: null,
+      colorPreset: 'b1-default',
+      accentPreference: null,
+      voices: {},
+      manifestPreset: null,
+      profileId: 'profile.md',
+    });
+    mockDeleteStudentProfile.mockResolvedValue(true);
+    mockListProfileContents.mockResolvedValue({
+      profiles: [{ id: 'profile.md', label: 'Profile' }],
+    });
+    mockGetProfileContent.mockResolvedValue({
+      id: 'profile.md',
+      label: 'Profile',
+      content: 'Profile content',
+    });
+    mockUpsertProfileContent.mockResolvedValue({
+      id: 'profile.md',
+      label: 'Profile',
+      content: 'Updated content',
+    });
+    mockDeleteProfileContent.mockResolvedValue(true);
+    mockGetStudentTimeline.mockResolvedValue({
+      items: [
+        {
+          type: 'recording_ingested',
+          studentId: deriveStudentId('Anna'),
+          recordingId: 'recording-1',
+          transcriptId: null,
+          promptPackageId: null,
+          draftId: null,
+          jobId: null,
+          status: 'queued',
+          createdAt: '2024-01-01T00:00:00.000Z',
+          displayName: 'recording-1.opus',
+        },
+      ],
+      total: 1,
+      limit: 20,
+      offset: 0,
+      order: 'desc',
+    });
+
     // Use real route implementation via createHttpServer; no network listen.
     app = await createHttpServer();
   });
@@ -510,8 +647,8 @@ describe('transport/http-server - integration (in-process)', () => {
     expect(response.statusCode).toBe(200);
     expect(response.json()).toEqual({
       students: [
-        { id: deriveStudentId('Anna'), name: 'Anna' },
-        { id: deriveStudentId('Bob'), name: 'Bob' },
+        { id: deriveStudentId('Anna'), name: 'Anna', profileId: null },
+        { id: deriveStudentId('Bob'), name: 'Bob', profileId: null },
       ],
     });
   });
@@ -527,6 +664,176 @@ describe('transport/http-server - integration (in-process)', () => {
       templates: [{ id: 'template.md', label: 'Template' }],
       profiles: [{ id: 'profile.md', label: 'Profile' }],
       defaults: { templateId: 'template.md', profileId: 'profile.md' },
+    });
+  });
+
+  it('GET /students returns student profiles', async () => {
+    const response = await app.inject({
+      method: 'GET',
+      url: '/students',
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toEqual({
+      items: [
+        {
+          id: deriveStudentId('Anna'),
+          student: 'Anna',
+          dbId: null,
+          pageParentId: null,
+          colorPreset: null,
+          accentPreference: null,
+          voices: {},
+          manifestPreset: null,
+          profileId: null,
+        },
+        {
+          id: deriveStudentId('Bob'),
+          student: 'Bob',
+          dbId: null,
+          pageParentId: null,
+          colorPreset: null,
+          accentPreference: null,
+          voices: {},
+          manifestPreset: null,
+          profileId: null,
+        },
+      ],
+      total: 2,
+      limit: 50,
+      offset: 0,
+      order: 'asc',
+    });
+  });
+
+  it('GET /students/:id returns a student profile', async () => {
+    const response = await app.inject({
+      method: 'GET',
+      url: `/students/${deriveStudentId('Anna')}`,
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toEqual({
+      id: deriveStudentId('Anna'),
+      student: 'Anna',
+      dbId: null,
+      pageParentId: null,
+      colorPreset: null,
+      accentPreference: null,
+      voices: {},
+      manifestPreset: null,
+      profileId: null,
+    });
+  });
+
+  it('POST /students creates a student profile', async () => {
+    const response = await app.inject({
+      method: 'POST',
+      url: '/students',
+      payload: {
+        student: 'New Student',
+      },
+    });
+
+    expect(response.statusCode).toBe(201);
+    expect(response.json()).toEqual({
+      id: deriveStudentId('New Student'),
+      student: 'New Student',
+      dbId: null,
+      pageParentId: null,
+      colorPreset: null,
+      accentPreference: null,
+      voices: {},
+      manifestPreset: null,
+      profileId: null,
+    });
+  });
+
+  it('PUT /students/:id updates a student profile', async () => {
+    const response = await app.inject({
+      method: 'PUT',
+      url: `/students/${deriveStudentId('Anna')}`,
+      payload: {
+        colorPreset: 'b1-default',
+        profileId: 'profile.md',
+      },
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toEqual({
+      id: deriveStudentId('Anna'),
+      student: 'Anna',
+      dbId: null,
+      pageParentId: null,
+      colorPreset: 'b1-default',
+      accentPreference: null,
+      voices: {},
+      manifestPreset: null,
+      profileId: 'profile.md',
+    });
+  });
+
+  it('DELETE /students/:id removes a student profile', async () => {
+    const response = await app.inject({
+      method: 'DELETE',
+      url: `/students/${deriveStudentId('Anna')}`,
+    });
+
+    expect(response.statusCode).toBe(204);
+  });
+
+  it('GET /students/:id/timeline returns timeline entries', async () => {
+    const response = await app.inject({
+      method: 'GET',
+      url: `/students/${deriveStudentId('Anna')}/timeline`,
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toEqual({
+      items: [
+        {
+          type: 'recording_ingested',
+          studentId: deriveStudentId('Anna'),
+          recordingId: 'recording-1',
+          transcriptId: null,
+          promptPackageId: null,
+          draftId: null,
+          jobId: null,
+          status: 'queued',
+          createdAt: '2024-01-01T00:00:00.000Z',
+          displayName: 'recording-1.opus',
+        },
+      ],
+      total: 1,
+      limit: 20,
+      offset: 0,
+      order: 'desc',
+    });
+  });
+
+  it('GET /profiles returns profile list', async () => {
+    const response = await app.inject({
+      method: 'GET',
+      url: '/profiles',
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toEqual({
+      profiles: [{ id: 'profile.md', label: 'Profile' }],
+    });
+  });
+
+  it('GET /profiles/:id returns profile content', async () => {
+    const response = await app.inject({
+      method: 'GET',
+      url: '/profiles/profile.md',
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toEqual({
+      id: 'profile.md',
+      label: 'Profile',
+      content: 'Profile content',
     });
   });
 

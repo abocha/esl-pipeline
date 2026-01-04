@@ -1,8 +1,9 @@
 import copy from 'copy-to-clipboard';
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import toast from 'react-hot-toast';
 
 import { useJobMonitor } from '../../context/JobMonitorContext';
+import { useStudentSelection } from '../../context/StudentSelectionContext';
 import {
   type DraftResponse,
   type MaterializeDraftResponse,
@@ -164,6 +165,7 @@ const getRecordingStatusMeta = (status?: RecordingStatus | null) => {
 
 export const TranscriptionWorkspace: React.FC = () => {
   const { recordings, registerRecording, refreshRecordings, trackJob } = useJobMonitor();
+  const { selectedStudent } = useStudentSelection();
   const [selectedRecordingId, setSelectedRecordingId] = useState('');
   const [recordingInput, setRecordingInput] = useState('');
   const [syncing, setSyncing] = useState(false);
@@ -203,6 +205,8 @@ export const TranscriptionWorkspace: React.FC = () => {
   const [materializeLoading, setMaterializeLoading] = useState(false);
   const [materialized, setMaterialized] = useState<MaterializeDraftResponse | null>(null);
   const [draftError, setDraftError] = useState<string | null>(null);
+  const lastStudentSelectionRef = useRef<string | null>(null);
+  const lastStudentProfileRef = useRef<string | null>(null);
 
   const selectedRecording = useMemo(
     () => recordings.find((item) => item.recordingId === selectedRecordingId) ?? null,
@@ -247,6 +251,33 @@ export const TranscriptionWorkspace: React.FC = () => {
   const selectedStatusMeta = selectedRecording
     ? getRecordingStatusMeta(selectedRecording.status)
     : null;
+
+  useEffect(() => {
+    if (!selectedStudent) {
+      setUploadStudentId('');
+      setPromptProfileId('');
+      lastStudentSelectionRef.current = null;
+      lastStudentProfileRef.current = null;
+      return;
+    }
+    const selectionChanged = lastStudentSelectionRef.current !== selectedStudent.id;
+    const profileChanged =
+      (selectedStudent.profileId ?? null) !== lastStudentProfileRef.current;
+
+    if (selectionChanged) {
+      setUploadStudentId(selectedStudent.id);
+    }
+    if (selectionChanged || profileChanged) {
+      if (selectedStudent.profileId) {
+        setPromptProfileId(selectedStudent.profileId);
+      } else {
+        setPromptProfileId('');
+      }
+    }
+
+    lastStudentSelectionRef.current = selectedStudent.id;
+    lastStudentProfileRef.current = selectedStudent.profileId ?? null;
+  }, [selectedStudent]);
 
   useEffect(() => {
     let active = true;
@@ -505,8 +536,8 @@ export const TranscriptionWorkspace: React.FC = () => {
     }
   };
 
-  const handleFetchPromptPackage = async () => {
-    const target = promptPackageId.trim();
+  const handleFetchPromptPackage = async (overrideId?: string) => {
+    const target = (overrideId ?? promptPackageId).trim();
     if (!target) {
       toast.error('Enter a prompt package ID');
       return;
@@ -516,6 +547,7 @@ export const TranscriptionWorkspace: React.FC = () => {
     try {
       const result = await fetchPromptPackage(target);
       setPromptPackage(result);
+      setPromptPackageId(target);
       toast.success('Prompt package loaded');
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Unable to load prompt package';
@@ -524,6 +556,32 @@ export const TranscriptionWorkspace: React.FC = () => {
       setPromptLoading(false);
     }
   };
+
+  useEffect(() => {
+    const handleOpenTranscript = (event: Event) => {
+      if (!(event instanceof CustomEvent)) return;
+      const recordingId = event.detail?.recordingId as string | undefined;
+      if (recordingId) {
+        void handleLoadTranscript(recordingId);
+      }
+    };
+
+    const handleOpenPrompt = (event: Event) => {
+      if (!(event instanceof CustomEvent)) return;
+      const promptPackageId = event.detail?.promptPackageId as string | undefined;
+      if (promptPackageId) {
+        void handleFetchPromptPackage(promptPackageId);
+      }
+    };
+
+    globalThis.addEventListener('esl:open-transcript', handleOpenTranscript);
+    globalThis.addEventListener('esl:open-prompt-package', handleOpenPrompt);
+
+    return () => {
+      globalThis.removeEventListener('esl:open-transcript', handleOpenTranscript);
+      globalThis.removeEventListener('esl:open-prompt-package', handleOpenPrompt);
+    };
+  }, [handleFetchPromptPackage, handleLoadTranscript]);
 
   const handleCopyPrompt = () => {
     if (!promptPackage?.text) return;
@@ -590,7 +648,7 @@ export const TranscriptionWorkspace: React.FC = () => {
   };
 
   return (
-    <section className="transcription-workspace card animate-fade-in-up">
+    <section id="transcription-workspace" className="transcription-workspace card animate-fade-in-up">
       <header className="workspace-header">
         <div>
           <span className="eyebrow">Phase 2</span>
@@ -908,7 +966,7 @@ export const TranscriptionWorkspace: React.FC = () => {
               <button
                 type="button"
                 className="btn-secondary btn-small"
-                onClick={handleFetchPromptPackage}
+                onClick={() => void handleFetchPromptPackage()}
                 disabled={promptLoading}
               >
                 Load
