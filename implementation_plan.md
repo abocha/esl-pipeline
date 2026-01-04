@@ -311,44 +311,67 @@ Apply premium aesthetics across the application, aligning with the `FRONTEND_VIS
 - **Color Palette:** Enforce vision tokens (`--background: #0f0f17`, `--surface: #1e1e2e`, `--primary: #6366f1`).
 - **Glassmorphism:** Add utility class `.glass-panel` (backdrop-filter blur + semi-transparent border).
 - **Typography:** Ensure modern font stack (Inter/Roboto) with refined weights.
+- **Animations:** Add `@keyframes` for `fadeIn`, `slideIn`, `pulse` and utility classes like `.animate-in`.
+
+#### [NEW] `Icons.tsx` (`src/ui/shared/Icons.tsx`)
+- Create a lightweight set of inline SVG components (Heroicons style) for:
+  - Navigation (Back, Next, Home)
+  - Stages (Upload, Document, Edit, Check, Publish)
+  - Actions (Save, Copy, Refresh)
+- Avoid adding new heavy dependencies; use "zero-install" compatible approach.
 
 #### [NEW] `StepIndicator.tsx` (`src/ui/wizard/StepIndicator.tsx`)
-- Implement "Step X of Y ━━○○○○" visual style.
+- Implement "Step X of Y ━━○○○○" visual style using the new icons.
 - Animated progress filling (gradient transition).
+- Responsive labels (hide on small screens).
 
 #### [MODIFY] Wizard Layout (`AssignmentWizard.tsx`)
-- Apply "Card variant" with larger padding and subtle shadow.
+- Apply "Card variant" with larger padding (`--space-6`) and subtle shadow (`--shadow-card`).
+- Use `.glass-panel` for the main container.
 - Ensure responsive "stacking" of panels (e.g., Student Selection / Upload split).
 
 #### [MODIFY] Shared Components
-- **Buttons:** Add `transform: scale(0.98)` on active, subtle shadow on hover.
-- **Inputs/Selects:** Style with `--surface` background and `--border-light` borders.
-- **Toasts:** Ensure `react-hot-toast` uses custom styles (dark mode compatible).
+- **Buttons:** Update `index.css` button classes for `transform: scale(0.98)` on active, subtle shadow on hover.
+- **Inputs/Selects:** Style with `--surface` background, `--border-light` borders, and ring focus states.
+- **Toasts:** Ensure `react-hot-toast` uses custom styles (dark background, light text).
 
-#### Animations
-- **Page Transitions:** Fade-in for wizard steps (CSS transitions).
-- **Micro-interactions:** Hover states for student cards, job list rows.
+#### Animations & Micro-interactions
+- **Page Transitions:** Wrap wizard steps in a container with generic fade-in animation.
+- **Micro-interactions:** Add hover states for student cards, job list rows, and interactive elements.
 
 ---
 
 ### Stage 6: Integration & Testing
 
-Wire everything together and ensure it works end-to-end.
-
-#### [MODIFY] `App.tsx` — Final integration
-- Finalize view routing: 'dashboard' | 'wizard' | 'students' | 'jobs' | 'settings'
-- Deep links for pending approvals (wizard step + draft/job context)
-- Context for wizard state to persist across steps
-- Handle deep links (e.g., open wizard at step 4 from pending approvals)
+Refactor the Wizard to use a centralized Context for state management (replacing local state in `AssignmentWizard`) and finalize application routing.
 
 #### [NEW] `WizardContext.tsx` (`src/context/WizardContext.tsx`)
-- State: selectedStudent, recordingId, transcriptId, promptPackageId, draftId, notes, markdownContent
-- Methods: setStep, resetWizard, loadFromPending
+- **State:** `currentStep`, `activeJobId`, `studentId`, `recordingId`, `transcriptId`, `promptPackageId`, `draftId`, `notes`, `metadataOverrides`
+- **Actions:**
+  - `loadJob(jobId)`: Hydrate state from backend/JobMonitor
+  - `updateField(field, value)`: Generic updater
+  - `goToStep(step)`: Navigation guard
+  - `reset()`: Clear state
+- **Integration:** Wrap `AssignmentWizard` (or `App` specific route) in `WizardContext.Provider`.
 
-#### [MODIFY] Tests
-- Add tests for new components (Vitest + RTL)
-- Ensure wizard navigation works
-- Test dropzone file handling
+#### [MODIFY] `AssignmentWizard.tsx`
+- Refactor to consume `useWizardContext` instead of local `useState`.
+- Move deep link parsing (URLSearchParams) into the `WizardContext` initialization or a `useWizardInitialization` hook.
+- Ensure back/next buttons trigger Context actions.
+
+#### [MODIFY] `App.tsx`
+- Ensure all routes are protected (`AuthenticatedRoutes`).
+- Verify `Navigate to="/" ` catch-all works.
+
+#### [NEW] `src/ui/wizard/Wizard.test.tsx`
+- **Integration Test:** Render `AssignmentWizard` within `JobMonitorProvider` and `WizardContext`.
+- **Scenarios:**
+  - "Happy Path": Select student -> Upload (mock) -> Transcript (mock) -> Review -> Publish.
+  - "Deep Link": Render with `?step=review&jobId=123`. Verify it loads Step 4.
+
+#### [NEW] `src/ui/editor/Editor.test.tsx`
+- **Unit Test:** `MetricValidationPanel` shows errors when passed.
+- **Unit Test:** `SplitEditor` toggles views (Editor/Preview/Split).
 
 ---
 
@@ -372,7 +395,16 @@ Wire everything together and ensure it works end-to-end.
    - Skip functionality (step 2 transcript review)
    - Back navigation preserves state
 
-3. Run existing test suite: `pnpm --filter @esl-pipeline/batch-frontend test`
+3. **Wizard Integration Test (`src/ui/wizard/Wizard.test.tsx`):**
+   - Use `vi.mock` for the API layer.
+   - Test flow:
+     - 1. Render `<AssignmentWizard />`.
+     - 2. Select a student (click grid item).
+     - 3. Verify transition to Step 1 (Upload).
+     - 4. Simulate file drop -> wait for "Mock Recording" -> click Next.
+     - 5. Verify transition to Step 2 (Transcript).
+
+4. **Run existing test suite:** `pnpm --filter @esl-pipeline/batch-frontend test`
 
 ### Manual Verification
 1. End-to-end flow:
