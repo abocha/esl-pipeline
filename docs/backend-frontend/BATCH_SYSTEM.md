@@ -16,22 +16,24 @@ The batch system enables tutors to process multiple ESL homework assignments thr
 ```
 
 **Key capabilities:**
+- Dashboard home with quick actions, activity stream, pending approvals, and weekly summary
+- Route-based navigation (Dashboard, Wizard, Students, Jobs, Settings)
 - Multi-file drag-and-drop upload
 - Real-time job progress via Server-Sent Events (SSE)
 - Job actions: copy Notion link, regenerate audio (pending)
 - Authentication with email/password
-- Phase 2+ transcription workspace (recording scan, transcript review, prompt package, draft)
-- Phase 4 student workspace (student selection, profile CRUD, timeline)
+- Transcription workspace (recording scan, transcript review, prompt package, draft)
+- Student workspace (student selection, profile CRUD, timeline)
 
 ---
 
 ## 2. User Journey
 
 1. Tutor logs in with email + password
-2. Drags lesson `.md` files into the uploader
-3. Configures job settings (TTS, preset, voice, Notion DB)
-4. Clicks "Submit" — files upload, then jobs are created
-5. SSE stream shows real-time progress in the jobs table
+2. Lands on the Dashboard with quick actions and pending approvals
+3. Starts a new assignment or opens an awaiting approval job
+4. Configures job settings (TTS, preset, voice, Notion DB) and submits
+5. SSE stream shows real-time progress in the jobs table and activity feed
 6. On completion, tutor receives notification and can copy Notion link
 
 Phase 2+ (native transcription, implemented with gaps):
@@ -49,17 +51,15 @@ Phase 2+ (native transcription, implemented with gaps):
 
 ```
 ┌────────────────────────────────────────────────────────────┐
-│ Header (branding, auth status, logout)                     │
-├─────────────────────────────────┬──────────────────────────┤
-│ Left Column (2/3)               │ Right Column (1/3)       │
-│ ├─ Job Submission Panel         │ ├─ Help/Instructions     │
-│ │  ├─ Drag/drop zone            │ ├─ Activity feed         │
-│ │  ├─ Settings form             │ └─ Notification toggle   │
-│ │  └─ Upload queue              │                          │
-│ └─ Active Jobs Table            │                          │
-│    ├─ Status, times, actions    │                          │
-│    └─ Copy link, Regen audio    │                          │
-└─────────────────────────────────┴──────────────────────────┘
+│ Header (branding, nav, theme, user)                        │
+├────────────────────────────────────────────────────────────┤
+│ Route content                                              │
+│ - Dashboard: quick actions, activity feed, pending approvals, weekly summary
+│ - Wizard: placeholder (Stage 2)
+│ - Students: student workspace
+│ - Jobs: job table + activity feed + notifications
+│ - Settings: job settings + notifications
+└────────────────────────────────────────────────────────────┘
 ```
 
 ### Components
@@ -67,18 +67,22 @@ Phase 2+ (native transcription, implemented with gaps):
 | Component | Responsibility |
 |-----------|---------------|
 | `AuthProvider` | Login/register modals, session context |
+| `Dashboard` | Quick actions + summary panels |
+| `PendingApprovals` | Awaiting approval jobs + deep links |
+| `WeeklySummary` | Job + student summary panels |
+| `JobMonitorProvider` | SSE + job/recording hydration |
 | `JobUploader` | Multi-file upload, per-file progress |
 | `JobSettingsForm` | Preset, TTS, voice, Notion DB dropdowns |
 | `StudentWorkspace` | Student list, profile metadata/content, timeline |
 | `JobTable` | Job list with actions |
 | `ActivityFeed` | Chronological event log from SSE |
-| `NotificationManager` | Browser notifications on completion |
+| `NotificationsPanel` | Notification settings + recent notices |
 
 ### State Management
 
 - **React Query**: cache API responses (jobs, config, user)
-- **React Context**: auth state, SSE connection
-- **Local state**: upload queue, activity feed
+- **React Context**: auth, job monitor, settings, student selection, notifications, theme
+- **Local state**: upload queue, activity feed, wizard forms
 
 ---
 
@@ -168,8 +172,10 @@ All extended routes require `BATCH_BACKEND_ENABLE_EXTENDED_API=true`.
 # Install
 pnpm install
 
-# Configure backend URL
-export VITE_BACKEND_URL=http://localhost:8080
+# Configure backend URL (optional)
+export VITE_BATCH_BACKEND_URL=http://localhost:8080
+# or set the dev proxy target
+export BATCH_BACKEND_URL=http://localhost:8080
 
 # Start frontend
 cd packages/batch-frontend && pnpm dev

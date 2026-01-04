@@ -5,6 +5,8 @@
  * - POST /auth/login, /auth/register, /auth/refresh
  * - POST /jobs (authenticated)
  * - GET /jobs/:jobId (authenticated)
+ * - GET /user/jobs, /user/jobs/summary (authenticated)
+ * - GET /students/summary (authenticated)
  * - POST /uploads (authenticated)
  * - POST /recordings/upload (authenticated)
  * - POST /recordings/:id/transcribe (authenticated)
@@ -23,8 +25,11 @@ import { type AxiosError, isAxiosError } from 'axios';
 import type {
   JobEventPayload as ContractJobEventPayload,
   JobEventType as ContractJobEventType,
+  JobListResponse as ContractJobListResponse,
   JobState as ContractJobState,
+  JobSummaryResponse as ContractJobSummaryResponse,
   RecordingStatus as ContractRecordingStatus,
+  StudentSummaryResponse as ContractStudentSummaryResponse,
   SubmitJobRequest as ContractSubmitJobRequest,
   TtsStrategy as ContractTtsStrategy,
   StreamEventMessage,
@@ -49,6 +54,9 @@ export type JobEventType = ContractJobEventType;
 export type JobEventPayload = ContractJobEventPayload;
 export type JobEvent = StreamEventMessage;
 export type SubmitJobRequest = ContractSubmitJobRequest;
+export type JobListResponse = ContractJobListResponse;
+export type JobSummaryResponse = ContractJobSummaryResponse;
+export type StudentSummaryResponse = ContractStudentSummaryResponse;
 
 export interface RecordingTranscriptResponse {
   recordingId: string;
@@ -400,6 +408,85 @@ export interface RecordingsIndexResponse {
   root: string;
   exists: boolean;
   items: RecordingFolderEntry[];
+}
+
+export async function listUserJobs(params: {
+  state?: JobState | JobState[];
+  studentId?: string;
+  from?: string;
+  to?: string;
+  limit?: number;
+  offset?: number;
+  order?: 'asc' | 'desc';
+} = {}): Promise<JobListResponse> {
+  try {
+    const search = new URLSearchParams();
+    if (params.state) {
+      const values = Array.isArray(params.state) ? params.state : [params.state];
+      search.set('state', values.join(','));
+    }
+    if (params.studentId) {
+      search.set('studentId', params.studentId);
+    }
+    if (params.from) {
+      search.set('from', params.from);
+    }
+    if (params.to) {
+      search.set('to', params.to);
+    }
+    if (typeof params.limit === 'number') {
+      search.set('limit', String(params.limit));
+    }
+    if (typeof params.offset === 'number') {
+      search.set('offset', String(params.offset));
+    }
+    if (params.order) {
+      search.set('order', params.order);
+    }
+    const query = search.toString();
+    const url = query ? `/user/jobs?${query}` : '/user/jobs';
+    const response = await apiClient.get(buildApiProxyPath(url));
+    return response.data;
+  } catch (error: unknown) {
+    const axiosError = toAxiosError(error);
+    if (axiosError && isAuthError(axiosError)) {
+      throw new Error('Authentication required. Please login to view jobs.');
+    }
+    throw new Error(axiosError ? handleApiError(axiosError) : formatUnknownError(error));
+  }
+}
+
+export async function getJobSummary(params: {
+  from?: string;
+  to?: string;
+} = {}): Promise<JobSummaryResponse> {
+  try {
+    const response = await apiClient.get(buildApiProxyPath('/user/jobs/summary'), { params });
+    return response.data;
+  } catch (error: unknown) {
+    const axiosError = toAxiosError(error);
+    if (axiosError && isAuthError(axiosError)) {
+      throw new Error('Authentication required. Please login to view job summaries.');
+    }
+    throw new Error(axiosError ? handleApiError(axiosError) : formatUnknownError(error));
+  }
+}
+
+export async function getStudentSummary(params: {
+  limit?: number;
+  offset?: number;
+  order?: 'asc' | 'desc';
+} = {}): Promise<StudentSummaryResponse> {
+  try {
+    const response = await apiClient.get(buildApiProxyPath('/students/summary'), { params });
+    return response.data;
+  } catch (error: unknown) {
+    const axiosError = toAxiosError(error);
+    if (axiosError && isAuthError(axiosError)) {
+      throw new Error('Authentication required. Please login to view student summaries.');
+    }
+    throw new Error(axiosError ? handleApiError(axiosError) : formatUnknownError(error));
+  }
 }
 
 export interface JobEventsOptions {

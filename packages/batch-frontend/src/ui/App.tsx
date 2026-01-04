@@ -1,16 +1,19 @@
 import React, { useCallback, useMemo, useState } from 'react';
 import toast from 'react-hot-toast';
+import { NavLink, Navigate, Route, Routes } from 'react-router-dom';
 
 import { useAuth } from '../context/AuthContext';
 import { JobMonitorProvider } from '../context/JobMonitorContext';
 import { JobSettingsProvider } from '../context/JobSettingsContext';
-import { NotificationProvider, useNotification } from '../context/NotificationContext';
+import { NotificationProvider } from '../context/NotificationContext';
 import { StudentSelectionProvider } from '../context/StudentSelectionContext';
 import { useTheme } from '../context/ThemeContext';
 import { AuthDialog, AuthMode } from './auth/AuthDialog';
+import { Dashboard } from './dashboard/Dashboard';
 import { ActivityFeed } from './jobs/ActivityFeed';
 import { JobConnectionBanner } from './jobs/JobConnectionBanner';
 import { JobTable } from './jobs/JobTable';
+import { NotificationsPanel } from './notifications/NotificationsPanel';
 import { ProfilePage } from './profile/ProfilePage';
 import { JobSettingsForm } from './settings/JobSettingsForm';
 import { StudentWorkspace } from './students/StudentWorkspace';
@@ -89,22 +92,6 @@ const SettingsIcon = () => (
   </svg>
 );
 
-const BellIcon = () => (
-  <svg
-    width="20"
-    height="20"
-    viewBox="0 0 24 24"
-    fill="none"
-    stroke="currentColor"
-    strokeWidth="2"
-    strokeLinecap="round"
-    strokeLinejoin="round"
-  >
-    <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9" />
-    <path d="M13.73 21a2 2 0 0 1-3.46 0" />
-  </svg>
-);
-
 export const App: React.FC = () => {
   const { user, isAuthenticated, isLoading, logout } = useAuth();
   const { theme, toggleTheme } = useTheme();
@@ -158,7 +145,7 @@ export const App: React.FC = () => {
         <JobSettingsProvider>
           <JobMonitorProvider>
             <NotificationProvider>
-              <AuthenticatedPanels />
+              <AuthenticatedRoutes />
             </NotificationProvider>
           </JobMonitorProvider>
         </JobSettingsProvider>
@@ -211,6 +198,26 @@ export const App: React.FC = () => {
               </div>
             </div>
           </div>
+
+          {isAuthenticated && (
+            <nav className="header-nav" aria-label="Primary">
+              <NavLink to="/" end className="nav-link">
+                Dashboard
+              </NavLink>
+              <NavLink to="/wizard" className="nav-link">
+                Wizard
+              </NavLink>
+              <NavLink to="/students" className="nav-link">
+                Students
+              </NavLink>
+              <NavLink to="/jobs" className="nav-link">
+                Jobs
+              </NavLink>
+              <NavLink to="/settings" className="nav-link">
+                Settings
+              </NavLink>
+            </nav>
+          )}
 
           <div className="header-actions">
             <button
@@ -311,6 +318,7 @@ export const App: React.FC = () => {
           display: flex;
           align-items: center;
           gap: var(--space-4);
+          flex-shrink: 0;
         }
 
         .header-logo {
@@ -351,6 +359,7 @@ export const App: React.FC = () => {
           font-size: var(--text-xl);
           font-weight: 700;
           margin: 0;
+          font-family: var(--font-display);
           background: var(--gradient-primary);
           -webkit-background-clip: text;
           -webkit-text-fill-color: transparent;
@@ -361,6 +370,42 @@ export const App: React.FC = () => {
           display: flex;
           align-items: center;
           gap: var(--space-3);
+          flex-shrink: 0;
+        }
+
+        .header-nav {
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          gap: var(--space-2);
+          padding: var(--space-2);
+          background: var(--bg-secondary);
+          border: 1px solid var(--border-light);
+          border-radius: var(--radius-full);
+          flex: 1;
+          min-width: 320px;
+        }
+
+        .nav-link {
+          font-size: var(--text-sm);
+          font-weight: 600;
+          font-family: var(--font-display);
+          padding: var(--space-2) var(--space-3);
+          border-radius: var(--radius-full);
+          color: var(--text-secondary);
+          text-decoration: none;
+          transition: all var(--transition-fast);
+        }
+
+        .nav-link:hover {
+          color: var(--text-primary);
+          background: var(--bg-tertiary);
+        }
+
+        .nav-link[aria-current='page'] {
+          color: var(--text-primary);
+          background: var(--bg-primary);
+          box-shadow: var(--shadow-sm);
         }
 
         .btn-icon {
@@ -451,6 +496,51 @@ export const App: React.FC = () => {
           animation: fadeInUp 0.4s ease-out;
         }
 
+        .page-grid {
+          display: grid;
+          grid-template-columns: minmax(0, 2fr) minmax(260px, 1fr);
+          gap: var(--space-5);
+        }
+
+        .page-main,
+        .page-side {
+          display: flex;
+          flex-direction: column;
+          gap: var(--space-5);
+        }
+
+        .page-single {
+          display: flex;
+          flex-direction: column;
+          gap: var(--space-5);
+        }
+
+        .page-hero {
+          display: flex;
+          flex-direction: column;
+          gap: var(--space-3);
+        }
+
+        .page-eyebrow {
+          font-size: var(--text-xs);
+          font-weight: 600;
+          letter-spacing: 0.12em;
+          text-transform: uppercase;
+          color: var(--color-primary-500);
+          margin: 0;
+        }
+
+        .page-hero h2 {
+          margin: 0;
+          font-size: var(--text-2xl);
+          font-family: var(--font-display);
+        }
+
+        .page-hero p {
+          margin: 0;
+          color: var(--text-tertiary);
+        }
+
         /* Footer */
         .footer {
           text-align: center;
@@ -494,198 +584,88 @@ export const App: React.FC = () => {
           .btn-logout span {
             display: none;
           }
+
+          .header-nav {
+            width: 100%;
+            justify-content: space-between;
+            flex-wrap: wrap;
+          }
+        }
+
+        @media (max-width: 1024px) {
+          .page-grid {
+            grid-template-columns: 1fr;
+          }
+
+          .page-side {
+            order: -1;
+          }
         }
       `}</style>
     </div>
   );
 };
 
-const AuthenticatedPanels: React.FC = () => (
-  <div className="panels-grid">
-  <div className="panels-main">
-    <JobSettingsForm />
-    <StudentWorkspace />
-    <TranscriptionWorkspace />
+const AuthenticatedRoutes: React.FC = () => (
+  <Routes>
+    <Route path="/" element={<Dashboard />} />
+    <Route path="/wizard" element={<WizardPage />} />
+    <Route path="/students" element={<StudentsPage />} />
+    <Route path="/jobs" element={<JobsPage />} />
+    <Route path="/settings" element={<SettingsPage />} />
+    <Route path="*" element={<Navigate to="/" replace />} />
+  </Routes>
+);
+
+const WizardPage: React.FC = () => (
+  <div className="page-grid">
+    <div className="page-main">
+      <section className="page-hero card animate-fade-in-up">
+        <p className="page-eyebrow">Assignment Wizard</p>
+        <h2>Guided flow is coming next</h2>
+        <p>
+          Keep using the upload and transcription tools below. The step-by-step wizard will layer
+          in after the dashboard foundation.
+        </p>
+      </section>
       <JobUploader />
-      <JobConnectionBanner />
-      <JobTable />
+      <TranscriptionWorkspace />
     </div>
-
-    <aside className="panels-sidebar">
-      <ActivityFeed />
-      <NotificationsPanel />
+    <aside className="page-side">
+      <StudentWorkspace />
     </aside>
-
-    <style>{`
-      .panels-grid {
-        display: grid;
-        grid-template-columns: minmax(0, 2.2fr) minmax(280px, 1fr);
-        gap: var(--space-5);
-      }
-
-      .panels-main {
-        display: flex;
-        flex-direction: column;
-        gap: var(--space-5);
-      }
-
-      .panels-sidebar {
-        display: flex;
-        flex-direction: column;
-        gap: var(--space-5);
-      }
-
-      @media (max-width: 1024px) {
-        .panels-grid {
-          grid-template-columns: 1fr;
-        }
-
-        .panels-sidebar {
-          order: -1;
-        }
-      }
-    `}</style>
   </div>
 );
 
-const NotificationsPanel: React.FC = () => {
-  const { permission, requestPermission, disableNotifications } = useNotification();
-  const notificationsEnabled = permission === 'granted';
-  const isSupported = typeof Notification !== 'undefined';
+const StudentsPage: React.FC = () => (
+  <div className="page-single">
+    <StudentWorkspace />
+  </div>
+);
 
-  const handleToggle = async () => {
-    if (!isSupported) {
-      toast.error('Browser notifications are not supported');
-      return;
-    }
+const JobsPage: React.FC = () => (
+  <div className="page-grid">
+    <div className="page-main">
+      <JobConnectionBanner />
+      <JobTable />
+    </div>
+    <aside className="page-side">
+      <ActivityFeed />
+      <NotificationsPanel />
+    </aside>
+  </div>
+);
 
-    if (notificationsEnabled) {
-      disableNotifications();
-      toast('Notifications paused', { icon: '⏸️' });
-      return;
-    }
-
-    const result = await requestPermission();
-    if (result === 'granted') {
-      toast.success('Notifications enabled!');
-    } else if (result === 'denied') {
-      toast.error('Notifications are blocked. Please enable them in your browser settings.');
-    } else {
-      toast.error('Notification permission not granted');
-    }
-  };
-
-  return (
-    <section className="notifications-panel card">
-      <div className="notifications-header">
-        <div className="notifications-icon">
-          <BellIcon />
-        </div>
-        <div className="notifications-info">
-          <h3>Notifications</h3>
-          <p>Get notified when jobs complete</p>
-        </div>
-      </div>
-      <button
-        type="button"
-        onClick={() => void handleToggle()}
-        className={`notifications-toggle ${notificationsEnabled ? 'active' : ''}`}
-      >
-        <span className="toggle-track">
-          <span className="toggle-thumb" />
-        </span>
-        <span className="toggle-label">{notificationsEnabled ? 'Enabled' : 'Disabled'}</span>
-      </button>
-
-      <style>{`
-        .notifications-panel {
-          display: flex;
-          flex-direction: column;
-          gap: var(--space-4);
-        }
-
-        .notifications-header {
-          display: flex;
-          align-items: center;
-          gap: var(--space-3);
-        }
-
-        .notifications-icon {
-          width: 44px;
-          height: 44px;
-          background: var(--gradient-primary);
-          border-radius: var(--radius-lg);
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          color: white;
-        }
-
-        .notifications-info h3 {
-          font-size: var(--text-base);
-          margin: 0;
-        }
-
-        .notifications-info p {
-          font-size: var(--text-sm);
-          color: var(--text-tertiary);
-          margin: 0;
-        }
-
-        .notifications-toggle {
-          display: flex;
-          align-items: center;
-          gap: var(--space-3);
-          padding: var(--space-3) var(--space-4);
-          background: var(--bg-secondary);
-          border: 1px solid var(--border-light);
-          border-radius: var(--radius-lg);
-          cursor: pointer;
-          transition: all var(--transition-fast);
-        }
-
-        .notifications-toggle:hover {
-          border-color: var(--border-medium);
-        }
-
-        .toggle-track {
-          width: 44px;
-          height: 24px;
-          background: var(--color-gray-300);
-          border-radius: var(--radius-full);
-          position: relative;
-          transition: background var(--transition-fast);
-        }
-
-        .notifications-toggle.active .toggle-track {
-          background: var(--color-primary-500);
-        }
-
-        .toggle-thumb {
-          position: absolute;
-          top: 2px;
-          left: 2px;
-          width: 20px;
-          height: 20px;
-          background: white;
-          border-radius: 50%;
-          transition: transform var(--transition-fast);
-          box-shadow: var(--shadow-sm);
-        }
-
-        .notifications-toggle.active .toggle-thumb {
-          transform: translateX(20px);
-        }
-
-        .toggle-label {
-          font-size: var(--text-sm);
-          font-weight: 500;
-          color: var(--text-secondary);
-        }
-      `}</style>
-    </section>
-  );
-};
+const SettingsPage: React.FC = () => (
+  <div className="page-grid">
+    <div className="page-main">
+      <JobSettingsForm />
+    </div>
+    <aside className="page-side">
+      <NotificationsPanel />
+    </aside>
+  </div>
+);
 
 const LoadingPanel: React.FC = () => (
   <section className="loading-panel card animate-fade-in">
