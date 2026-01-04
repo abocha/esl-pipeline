@@ -26,6 +26,8 @@ import {
   updateRecordingTranscript,
 } from '../../utils/api';
 import { JobConnectionBanner } from '../jobs/JobConnectionBanner';
+import { DropZone } from '../shared/DropZone';
+import { UploadProgress } from '../shared/UploadProgress';
 
 const ClipboardIcon = () => (
   <svg
@@ -152,6 +154,8 @@ const RECORDING_STATUS_OPTIONS: { value: RecordingStatus; label: string }[] = [
   { value: 'failed', label: 'Failed' },
 ];
 
+const AUDIO_EXTENSIONS = ['.wav', '.mp3', '.m4a', '.aac', '.ogg', '.opus'];
+
 const getRecordingStatusMeta = (status?: RecordingStatus | null) => {
   if (!status) {
     return {
@@ -171,7 +175,7 @@ export const TranscriptionWorkspace: React.FC = () => {
   const [syncing, setSyncing] = useState(false);
   const [uploadFile, setUploadFile] = useState<File | null>(null);
   const [uploading, setUploading] = useState(false);
-  const [uploadKey, setUploadKey] = useState(0);
+  const [uploadProgress, setUploadProgress] = useState(0);
   const [studentOptions, setStudentOptions] = useState<StudentOption[]>([]);
   const [studentFilter, setStudentFilter] = useState('all');
   const [statusFilter, setStatusFilter] = useState<'all' | RecordingStatus>('all');
@@ -207,6 +211,7 @@ export const TranscriptionWorkspace: React.FC = () => {
   const [draftError, setDraftError] = useState<string | null>(null);
   const lastStudentSelectionRef = useRef<string | null>(null);
   const lastStudentProfileRef = useRef<string | null>(null);
+  const uploadAbortRef = useRef<AbortController | null>(null);
 
   const selectedRecording = useMemo(
     () => recordings.find((item) => item.recordingId === selectedRecordingId) ?? null,
@@ -382,11 +387,17 @@ export const TranscriptionWorkspace: React.FC = () => {
       toast.error('Select an audio file to upload');
       return;
     }
+    uploadAbortRef.current?.abort();
+    const controller = new AbortController();
+    uploadAbortRef.current = controller;
     setUploading(true);
+    setUploadProgress(0);
     setRecordingPanelError(null);
     try {
       const record = await uploadRecording(uploadFile, {
         studentId: uploadStudentId || undefined,
+        signal: controller.signal,
+        onProgress: (progress) => setUploadProgress(progress),
       });
       registerRecording(record.recordingId, {
         recordingId: record.recordingId,
@@ -407,14 +418,33 @@ export const TranscriptionWorkspace: React.FC = () => {
       resetPromptState();
       toast.success('Recording uploaded');
     } catch (error) {
+      if (controller.signal.aborted) {
+        setRecordingPanelError('Upload canceled.');
+        return;
+      }
       const message = error instanceof Error ? error.message : 'Unable to upload recording';
       setRecordingPanelError(message);
       toast.error(message);
     } finally {
       setUploading(false);
       setUploadFile(null);
-      setUploadKey((prev) => prev + 1);
+      setUploadProgress(0);
+      uploadAbortRef.current = null;
     }
+  };
+
+  const handleUploadFiles = (files: File[]) => {
+    if (uploading) return;
+    const nextFile = files[0];
+    if (!nextFile) return;
+    setUploadFile(nextFile);
+    setUploadProgress(0);
+    setRecordingPanelError(null);
+  };
+
+  const handleCancelUpload = () => {
+    if (!uploadAbortRef.current) return;
+    uploadAbortRef.current.abort();
   };
 
   const resetPromptState = () => {
@@ -764,20 +794,33 @@ export const TranscriptionWorkspace: React.FC = () => {
           </div>
 
           <div className="recording-upload">
-            <input
-              key={uploadKey}
-              type="file"
-              accept=".opus,.mp3,.wav,.m4a"
-              onChange={(event) => setUploadFile(event.target.files?.[0] ?? null)}
+            <DropZone
+              title={uploading ? 'Uploading audio...' : 'Drop audio file'}
+              description="Drag an audio file here or click to browse."
+              hint="Single file upload"
+              accept={{ 'audio/*': AUDIO_EXTENSIONS }}
+              multiple={false}
+              disabled={uploading}
+              onFiles={handleUploadFiles}
             />
-            <button
-              type="button"
-              className="btn-primary btn-small"
-              onClick={handleUploadRecording}
-              disabled={!uploadFile || uploading}
-            >
-              {uploading ? 'Uploading…' : 'Upload recording'}
-            </button>
+            {uploading ? (
+              <UploadProgress
+                fileName={uploadFile?.name}
+                progress={uploadProgress}
+                onCancel={handleCancelUpload}
+              />
+            ) : null}
+            {uploadFile && <div className="upload-meta">Selected: {uploadFile.name}</div>}
+            <div className="recording-upload-actions">
+              <button
+                type="button"
+                className="btn-primary btn-small"
+                onClick={handleUploadRecording}
+                disabled={!uploadFile || uploading}
+              >
+                {uploading ? 'Uploading...' : 'Upload recording'}
+              </button>
+            </div>
           </div>
           <div className="recording-upload-options">
             <label className="field-label" htmlFor="recording-student-upload">
@@ -796,7 +839,6 @@ export const TranscriptionWorkspace: React.FC = () => {
               ))}
             </select>
           </div>
-          {uploadFile && <div className="upload-meta">Selected: {uploadFile.name}</div>}
 
           <div className="recordings-list">
             {filteredRecordings.length === 0 ? (
@@ -1191,15 +1233,14 @@ export const TranscriptionWorkspace: React.FC = () => {
         }
 
         .recording-upload {
-          display: grid;
-          grid-template-columns: 1fr auto;
+          display: flex;
+          flex-direction: column;
           gap: var(--space-3);
-          align-items: center;
         }
 
-        .recording-upload input[type='file'] {
-          color: var(--text-secondary);
-          font-size: var(--text-xs);
+        .recording-upload-actions {
+          display: flex;
+          justify-content: flex-end;
         }
 
         .upload-meta {
