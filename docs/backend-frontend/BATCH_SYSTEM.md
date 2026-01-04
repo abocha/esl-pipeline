@@ -55,7 +55,7 @@ Phase 2+ (native transcription, implemented with gaps):
 ├────────────────────────────────────────────────────────────┤
 │ Route content                                              │
 │ - Dashboard: quick actions, activity feed, pending approvals, weekly summary
-│ - Wizard: placeholder (Stage 2)
+│ - Wizard: multi-step assignment flow (select → transcript → notes → review → publish)
 │ - Students: student workspace
 │ - Jobs: job table + activity feed + notifications
 │ - Settings: job settings + notifications

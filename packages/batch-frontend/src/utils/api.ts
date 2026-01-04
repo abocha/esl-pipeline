@@ -25,6 +25,7 @@ import { type AxiosError, isAxiosError } from 'axios';
 import type {
   JobEventPayload as ContractJobEventPayload,
   JobEventType as ContractJobEventType,
+  JobConfigOverrides as ContractJobConfigOverrides,
   JobListResponse as ContractJobListResponse,
   JobState as ContractJobState,
   JobSummaryResponse as ContractJobSummaryResponse,
@@ -57,6 +58,7 @@ export type SubmitJobRequest = ContractSubmitJobRequest;
 export type JobListResponse = ContractJobListResponse;
 export type JobSummaryResponse = ContractJobSummaryResponse;
 export type StudentSummaryResponse = ContractStudentSummaryResponse;
+export type JobConfigOverrides = ContractJobConfigOverrides;
 
 export interface RecordingTranscriptResponse {
   recordingId: string;
@@ -223,6 +225,14 @@ export interface UploadMarkdownResponse {
 
 export interface SubmitJobResponse {
   jobId: string;
+}
+
+export interface JobActionResponse {
+  success: boolean;
+  message?: string;
+  jobId?: string;
+  actionType?: string;
+  timestamp?: string;
 }
 
 export async function listRecordings(params: {
@@ -698,6 +708,12 @@ export async function getJobStatus(jobId: string): Promise<JobStatus> {
   }
 }
 
+export function buildRecordingAudioUrl(recordingId: string): string {
+  const url = buildApiProxyPath(`/recordings/${encodeURIComponent(recordingId)}/audio`);
+  const accessToken = getApiAuthToken();
+  return accessToken ? appendTokenQueryParam(url, accessToken) : url;
+}
+
 export async function fetchJobOptions(): Promise<JobOptionsResponse> {
   try {
     const response = await apiClient.get(buildApiProxyPath('/config/job-options'));
@@ -1046,10 +1062,13 @@ export async function createDraft(
 
 export async function materializeDraft(
   draftId: string,
-  jobId?: string,
+  options: { jobId?: string; jobOverrides?: JobConfigOverrides } = {},
 ): Promise<MaterializeDraftResponse> {
   try {
-    const payload = jobId ? { jobId } : {};
+    const payload = {
+      ...(options.jobId ? { jobId: options.jobId } : {}),
+      ...(options.jobOverrides ? { jobOverrides: options.jobOverrides } : {}),
+    };
     const response = await apiClient.post(
       buildApiProxyPath(`/drafts/${encodeURIComponent(draftId)}/materialize`),
       payload,
@@ -1059,6 +1078,28 @@ export async function materializeDraft(
     const axiosError = toAxiosError(error);
     if (axiosError && isAuthError(axiosError)) {
       throw new Error('Authentication required. Please login to materialize drafts.');
+    }
+    throw new Error(axiosError ? handleApiError(axiosError) : formatUnknownError(error));
+  }
+}
+
+export async function editJobMetadata(
+  jobId: string,
+  overrides: JobConfigOverrides,
+): Promise<JobActionResponse> {
+  try {
+    const response = await apiClient.post(
+      buildApiProxyPath(`/jobs/${encodeURIComponent(jobId)}/actions`),
+      {
+        type: 'edit_metadata',
+        payload: overrides,
+      },
+    );
+    return response.data;
+  } catch (error: unknown) {
+    const axiosError = toAxiosError(error);
+    if (axiosError && isAuthError(axiosError)) {
+      throw new Error('Authentication required. Please login to update job metadata.');
     }
     throw new Error(axiosError ? handleApiError(axiosError) : formatUnknownError(error));
   }

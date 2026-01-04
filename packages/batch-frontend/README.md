@@ -6,7 +6,8 @@ for operators and assumes the extended API is enabled with authentication.
 ## Features
 
 - Authenticated dashboard with quick actions, activity feed, pending approvals, and weekly summary.
-- Route-based navigation: Dashboard, Wizard (placeholder), Students, Jobs, Settings.
+- Route-based navigation: Dashboard, Wizard, Students, Jobs, Settings.
+- Multi-step assignment wizard (select, transcript, notes, review, publish) with deep links.
 - Job monitoring with SSE plus persisted active jobs.
 - Transcription workspace for recordings, transcript review, prompt packages, and draft materialization.
 - Student workspace with CRUD, profiles, and timelines.
@@ -30,7 +31,8 @@ The frontend uses the authenticated, extended HTTP API exposed by `batch-backend
 Common endpoints:
 
 - Auth: `POST /auth/login`, `POST /auth/register`, `POST /auth/refresh`, `POST /auth/logout`, `GET /auth/me`
-- Jobs: `POST /jobs`, `GET /jobs/:jobId`, `GET /user/jobs`, `GET /user/jobs/summary`, `GET /jobs/events`
+- Jobs: `POST /jobs`, `GET /jobs/:jobId`, `POST /jobs/:jobId/approve`,
+  `POST /jobs/:jobId/actions`, `GET /user/jobs`, `GET /user/jobs/summary`, `GET /jobs/events`
 - Recordings: `POST /recordings/upload`, `POST /recordings/:id/transcribe`, `GET /recordings/:id`,
   `GET /recordings/:id/transcript`, `PUT /recordings/:id/transcript`, `GET /recordings/:id/audio`
 - Drafts: `GET /drafts/:id`, `POST /prompt-packages/:id/draft`, `POST /drafts/:id/materialize`
@@ -70,5 +72,5 @@ Prereqs: Node.js 24.11.1+, pnpm 8+, running `@esl-pipeline/batch-backend` with
 
 ## Notes
 
-- `/wizard` is currently a placeholder; Stage 2 replaces it with the multi-step wizard.
+- `/wizard` is the primary guided flow; draft editing upgrades in Stage 4.
 - The app depends on authenticated sessions; register/login in the UI to populate the auth context.

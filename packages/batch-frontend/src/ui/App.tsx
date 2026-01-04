@@ -17,8 +17,7 @@ import { NotificationsPanel } from './notifications/NotificationsPanel';
 import { ProfilePage } from './profile/ProfilePage';
 import { JobSettingsForm } from './settings/JobSettingsForm';
 import { StudentWorkspace } from './students/StudentWorkspace';
-import { TranscriptionWorkspace } from './transcription/TranscriptionWorkspace';
-import { JobUploader } from './uploader/JobUploader';
+import { AssignmentWizard } from './wizard/AssignmentWizard';
 
 // Icons
 const SunIcon = () => (
@@ -609,32 +608,12 @@ export const App: React.FC = () => {
 const AuthenticatedRoutes: React.FC = () => (
   <Routes>
     <Route path="/" element={<Dashboard />} />
-    <Route path="/wizard" element={<WizardPage />} />
+    <Route path="/wizard" element={<AssignmentWizard />} />
     <Route path="/students" element={<StudentsPage />} />
     <Route path="/jobs" element={<JobsPage />} />
     <Route path="/settings" element={<SettingsPage />} />
     <Route path="*" element={<Navigate to="/" replace />} />
   </Routes>
-);
-
-const WizardPage: React.FC = () => (
-  <div className="page-grid">
-    <div className="page-main">
-      <section className="page-hero card animate-fade-in-up">
-        <p className="page-eyebrow">Assignment Wizard</p>
-        <h2>Guided flow is coming next</h2>
-        <p>
-          Keep using the upload and transcription tools below. The step-by-step wizard will layer
-          in after the dashboard foundation.
-        </p>
-      </section>
-      <JobUploader />
-      <TranscriptionWorkspace />
-    </div>
-    <aside className="page-side">
-      <StudentWorkspace />
-    </aside>
-  </div>
 );
 
 const StudentsPage: React.FC = () => (
