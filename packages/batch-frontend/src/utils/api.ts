@@ -11,6 +11,10 @@
  * - GET /config/job-options for metadata
  * - GET /config/students for student profiles
  * - GET /config/prompts for prompt templates and profiles
+ * - GET /students, /students/:id, /students/:id/timeline
+ * - POST /students, PUT /students/:id, DELETE /students/:id
+ * - GET /profiles, /profiles/:id, PUT /profiles/:id, DELETE /profiles/:id
+ * - GET /drafts/:id
  * - GET /jobs/events (SSE) for live updates
  * - GET /user/profile, /user/files (authenticated)
  */
@@ -83,10 +87,79 @@ export interface RecordingsListResponse {
 export interface StudentOption {
   id: string;
   name: string;
+  profileId?: string | null;
 }
 
 export interface StudentOptionsResponse {
   students: StudentOption[];
+}
+
+export interface StudentProfile {
+  id: string;
+  student: string;
+  dbId?: string | null;
+  pageParentId?: string | null;
+  colorPreset?: string | null;
+  accentPreference?: string | null;
+  voices?: Record<string, string>;
+  manifestPreset?: string | null;
+  profileId?: string | null;
+}
+
+export type StudentProfileInput = Omit<StudentProfile, 'id'>;
+export type StudentProfileUpdate = Partial<StudentProfileInput>;
+
+export interface StudentProfileListResponse {
+  items: StudentProfile[];
+  total: number;
+  limit: number;
+  offset: number;
+  order: 'asc' | 'desc';
+}
+
+export interface ProfileContentOption {
+  id: string;
+  label: string;
+}
+
+export interface ProfileContentListResponse {
+  profiles: ProfileContentOption[];
+}
+
+export interface ProfileContentResponse {
+  id: string;
+  label: string;
+  content: string;
+}
+
+export type StudentTimelineType =
+  | 'recording_ingested'
+  | 'transcript_ready'
+  | 'prompt_package_created'
+  | 'draft_saved'
+  | 'job_awaiting_approval'
+  | 'job_completed';
+
+export interface StudentTimelineItem {
+  type: StudentTimelineType;
+  studentId: string;
+  recordingId?: string | null;
+  transcriptId?: string | null;
+  promptPackageId?: string | null;
+  draftId?: string | null;
+  jobId?: string | null;
+  status: string;
+  createdAt: string;
+  displayName: string;
+  details?: Record<string, unknown>;
+}
+
+export interface StudentTimelineResponse {
+  items: StudentTimelineItem[];
+  total: number;
+  limit: number;
+  offset: number;
+  order: 'asc' | 'desc';
 }
 
 export interface PromptOption {
@@ -567,6 +640,188 @@ export async function fetchStudentOptions(): Promise<StudentOptionsResponse> {
   }
 }
 
+export async function listStudents(params: {
+  q?: string;
+  limit?: number;
+  offset?: number;
+  order?: 'asc' | 'desc';
+} = {}): Promise<StudentProfileListResponse> {
+  try {
+    const response = await apiClient.get(buildApiProxyPath('/students'), {
+      params,
+    });
+    return response.data;
+  } catch (error: unknown) {
+    const axiosError = toAxiosError(error);
+    if (axiosError && isAuthError(axiosError)) {
+      throw new Error('Authentication required. Please login to view students.');
+    }
+    throw new Error(axiosError ? handleApiError(axiosError) : formatUnknownError(error));
+  }
+}
+
+export async function getStudentProfile(studentId: string): Promise<StudentProfile> {
+  try {
+    const response = await apiClient.get(
+      buildApiProxyPath(`/students/${encodeURIComponent(studentId)}`),
+    );
+    return response.data;
+  } catch (error: unknown) {
+    const axiosError = toAxiosError(error);
+    if (axiosError && isAuthError(axiosError)) {
+      throw new Error('Authentication required. Please login to view student profiles.');
+    }
+    throw new Error(axiosError ? handleApiError(axiosError) : formatUnknownError(error));
+  }
+}
+
+export async function createStudentProfile(
+  payload: StudentProfileInput,
+): Promise<StudentProfile> {
+  try {
+    const response = await apiClient.post(buildApiProxyPath('/students'), payload);
+    return response.data;
+  } catch (error: unknown) {
+    const axiosError = toAxiosError(error);
+    if (axiosError && isAuthError(axiosError)) {
+      throw new Error('Authentication required. Please login to create students.');
+    }
+    throw new Error(axiosError ? handleApiError(axiosError) : formatUnknownError(error));
+  }
+}
+
+export async function updateStudentProfile(
+  studentId: string,
+  payload: StudentProfileUpdate,
+): Promise<StudentProfile> {
+  try {
+    const response = await apiClient.put(
+      buildApiProxyPath(`/students/${encodeURIComponent(studentId)}`),
+      payload,
+    );
+    return response.data;
+  } catch (error: unknown) {
+    const axiosError = toAxiosError(error);
+    if (axiosError && isAuthError(axiosError)) {
+      throw new Error('Authentication required. Please login to update students.');
+    }
+    throw new Error(axiosError ? handleApiError(axiosError) : formatUnknownError(error));
+  }
+}
+
+export async function deleteStudentProfile(studentId: string): Promise<void> {
+  try {
+    await apiClient.delete(buildApiProxyPath(`/students/${encodeURIComponent(studentId)}`));
+  } catch (error: unknown) {
+    const axiosError = toAxiosError(error);
+    if (axiosError && isAuthError(axiosError)) {
+      throw new Error('Authentication required. Please login to delete students.');
+    }
+    throw new Error(axiosError ? handleApiError(axiosError) : formatUnknownError(error));
+  }
+}
+
+export async function listProfileContents(): Promise<ProfileContentListResponse> {
+  try {
+    const response = await apiClient.get(buildApiProxyPath('/profiles'));
+    return response.data;
+  } catch (error: unknown) {
+    const axiosError = toAxiosError(error);
+    throw new Error(axiosError ? handleApiError(axiosError) : formatUnknownError(error));
+  }
+}
+
+export async function getProfileContent(profileId: string): Promise<ProfileContentResponse> {
+  try {
+    const response = await apiClient.get(
+      buildApiProxyPath(`/profiles/${encodeURIComponent(profileId)}`),
+    );
+    return response.data;
+  } catch (error: unknown) {
+    const axiosError = toAxiosError(error);
+    if (axiosError && isAuthError(axiosError)) {
+      throw new Error('Authentication required. Please login to view profiles.');
+    }
+    throw new Error(axiosError ? handleApiError(axiosError) : formatUnknownError(error));
+  }
+}
+
+export async function upsertProfileContent(
+  profileId: string,
+  content: string,
+): Promise<ProfileContentResponse> {
+  try {
+    const response = await apiClient.put(
+      buildApiProxyPath(`/profiles/${encodeURIComponent(profileId)}`),
+      { content },
+    );
+    return response.data;
+  } catch (error: unknown) {
+    const axiosError = toAxiosError(error);
+    if (axiosError && isAuthError(axiosError)) {
+      throw new Error('Authentication required. Please login to edit profiles.');
+    }
+    throw new Error(axiosError ? handleApiError(axiosError) : formatUnknownError(error));
+  }
+}
+
+export async function deleteProfileContent(profileId: string): Promise<void> {
+  try {
+    await apiClient.delete(buildApiProxyPath(`/profiles/${encodeURIComponent(profileId)}`));
+  } catch (error: unknown) {
+    const axiosError = toAxiosError(error);
+    if (axiosError && isAuthError(axiosError)) {
+      throw new Error('Authentication required. Please login to delete profiles.');
+    }
+    throw new Error(axiosError ? handleApiError(axiosError) : formatUnknownError(error));
+  }
+}
+
+export async function getStudentTimeline(
+  studentId: string,
+  params: {
+    type?: StudentTimelineType | StudentTimelineType[];
+    status?: string | string[];
+    limit?: number;
+    offset?: number;
+    order?: 'asc' | 'desc';
+  } = {},
+): Promise<StudentTimelineResponse> {
+  try {
+    const search = new URLSearchParams();
+    if (params.type) {
+      const values = Array.isArray(params.type) ? params.type : [params.type];
+      search.set('type', values.join(','));
+    }
+    if (params.status) {
+      const values = Array.isArray(params.status) ? params.status : [params.status];
+      search.set('status', values.join(','));
+    }
+    if (typeof params.limit === 'number') {
+      search.set('limit', String(params.limit));
+    }
+    if (typeof params.offset === 'number') {
+      search.set('offset', String(params.offset));
+    }
+    if (params.order) {
+      search.set('order', params.order);
+    }
+
+    const query = search.toString();
+    const url = query
+      ? `/students/${encodeURIComponent(studentId)}/timeline?${query}`
+      : `/students/${encodeURIComponent(studentId)}/timeline`;
+    const response = await apiClient.get(buildApiProxyPath(url));
+    return response.data;
+  } catch (error: unknown) {
+    const axiosError = toAxiosError(error);
+    if (axiosError && isAuthError(axiosError)) {
+      throw new Error('Authentication required. Please login to view timelines.');
+    }
+    throw new Error(axiosError ? handleApiError(axiosError) : formatUnknownError(error));
+  }
+}
+
 export async function fetchPromptOptions(): Promise<PromptOptionsResponse> {
   try {
     const response = await apiClient.get(buildApiProxyPath('/config/prompts'));
@@ -575,6 +830,21 @@ export async function fetchPromptOptions(): Promise<PromptOptionsResponse> {
     const axiosError = toAxiosError(error);
     if (axiosError && isAuthError(axiosError)) {
       throw new Error('Authentication required. Please login to load prompt options.');
+    }
+    throw new Error(axiosError ? handleApiError(axiosError) : formatUnknownError(error));
+  }
+}
+
+export async function fetchDraft(draftId: string): Promise<DraftResponse> {
+  try {
+    const response = await apiClient.get(
+      buildApiProxyPath(`/drafts/${encodeURIComponent(draftId)}`),
+    );
+    return response.data;
+  } catch (error: unknown) {
+    const axiosError = toAxiosError(error);
+    if (axiosError && isAuthError(axiosError)) {
+      throw new Error('Authentication required. Please login to view drafts.');
     }
     throw new Error(axiosError ? handleApiError(axiosError) : formatUnknownError(error));
   }

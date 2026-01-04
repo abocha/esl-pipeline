@@ -18,7 +18,24 @@ import {
 } from '../application/retry-recording-transcription.js';
 import { getStudentProfiles } from '../application/get-student-profiles.js';
 import { getPromptOptions } from '../application/get-prompt-options.js';
+import {
+  createStudentProfile,
+  deleteStudentProfile,
+  getStudentProfileById,
+  listStudentProfiles,
+  StudentProfileStoreError,
+  updateStudentProfile,
+} from '../application/student-profiles-store.js';
+import {
+  deleteProfileContent,
+  getProfileContent,
+  listProfileContents,
+  ProfileContentError,
+  upsertProfileContent,
+} from '../application/profile-content.js';
+import { getStudentTimeline, type StudentTimelineType } from '../application/student-timeline.js';
 import { createDraft } from '../application/create-draft.js';
+import { getDraft } from '../application/get-draft.js';
 import { createPromptPackage } from '../application/create-prompt-package.js';
 import { getPromptPackage } from '../application/get-prompt-package.js';
 import { materializeDraft } from '../application/materialize-draft.js';
@@ -185,6 +202,567 @@ export function registerExtendedRoutes(app: FastifyInstance, options: ExtendedRo
 
         return reply.send(prompts);
       } catch (error: unknown) {
+        logger.error(error instanceof Error ? error : String(error), {
+          event: 'http_request',
+          route: routePath,
+          statusCode: 500,
+          error: 'internal_error',
+        });
+
+        return errorResponse(reply, 'internal_error');
+      }
+    },
+  );
+
+  app.get(
+    '/students',
+    {
+      preHandler: [authenticate],
+    },
+    async (request, reply) => {
+      const routePath = resolveRoutePath(request, 'GET /students');
+      const querySchema = z.object({
+        q: z.string().min(1).optional(),
+        limit: z.coerce.number().int().min(1).max(500).optional(),
+        offset: z.coerce.number().int().min(0).optional(),
+        order: z.enum(['asc', 'desc']).optional(),
+      });
+
+      try {
+        const query = querySchema.parse(request.query ?? {});
+        const result = await listStudentProfiles({
+          search: query.q,
+          limit: query.limit,
+          offset: query.offset,
+          order: query.order,
+        });
+
+        logger.info('HTTP request handled', {
+          event: 'http_request',
+          route: routePath,
+          statusCode: 200,
+        });
+
+        return reply.send(result);
+      } catch (error: unknown) {
+        if (error instanceof z.ZodError) {
+          return reply.code(400).send({
+            error: 'validation_failed',
+            message: 'Invalid query parameters',
+            details: error.issues,
+          });
+        }
+        if (error instanceof StudentProfileStoreError) {
+          return reply.code(error.status).send({
+            error: error.code,
+            message: error.message,
+            code: error.code,
+          });
+        }
+
+        logger.error(error instanceof Error ? error : String(error), {
+          event: 'http_request',
+          route: routePath,
+          statusCode: 500,
+          error: 'internal_error',
+        });
+
+        return errorResponse(reply, 'internal_error');
+      }
+    },
+  );
+
+  app.get(
+    '/students/:id',
+    {
+      preHandler: [authenticate],
+    },
+    async (request, reply) => {
+      const routePath = resolveRoutePath(request, 'GET /students/:id');
+      const paramsSchema = z.object({
+        id: z.string().min(1),
+      });
+
+      try {
+        const params = paramsSchema.parse(request.params ?? {});
+        const profile = await getStudentProfileById(params.id);
+        if (!profile) {
+          return errorResponse(reply, 'not_found');
+        }
+
+        logger.info('HTTP request handled', {
+          event: 'http_request',
+          route: routePath,
+          statusCode: 200,
+          studentId: params.id,
+        });
+
+        return reply.send(profile);
+      } catch (error: unknown) {
+        if (error instanceof z.ZodError) {
+          return reply.code(400).send({
+            error: 'validation_failed',
+            message: 'Invalid student id',
+            details: error.issues,
+          });
+        }
+        if (error instanceof StudentProfileStoreError) {
+          return reply.code(error.status).send({
+            error: error.code,
+            message: error.message,
+            code: error.code,
+          });
+        }
+
+        logger.error(error instanceof Error ? error : String(error), {
+          event: 'http_request',
+          route: routePath,
+          statusCode: 500,
+          error: 'internal_error',
+        });
+
+        return errorResponse(reply, 'internal_error');
+      }
+    },
+  );
+
+  app.post(
+    '/students',
+    {
+      preHandler: [authenticate],
+    },
+    async (request, reply) => {
+      const routePath = resolveRoutePath(request, 'POST /students');
+      const schema = z.object({
+        student: z.string().min(1),
+        dbId: z.string().nullable().optional(),
+        pageParentId: z.string().nullable().optional(),
+        colorPreset: z.string().nullable().optional(),
+        accentPreference: z.string().nullable().optional(),
+        voices: z.record(z.string(), z.string()).optional(),
+        manifestPreset: z.string().nullable().optional(),
+        profileId: z.string().nullable().optional(),
+      });
+
+      try {
+        const body = schema.parse(request.body ?? {});
+        const created = await createStudentProfile(body);
+
+        logger.info('HTTP request handled', {
+          event: 'http_request',
+          route: routePath,
+          statusCode: 201,
+          studentId: created.id,
+        });
+
+        return reply.code(201).send(created);
+      } catch (error: unknown) {
+        if (error instanceof z.ZodError) {
+          return reply.code(400).send({
+            error: 'validation_failed',
+            message: 'Invalid request body',
+            details: error.issues,
+          });
+        }
+        if (error instanceof StudentProfileStoreError) {
+          return reply.code(error.status).send({
+            error: error.code,
+            message: error.message,
+            code: error.code,
+          });
+        }
+
+        logger.error(error instanceof Error ? error : String(error), {
+          event: 'http_request',
+          route: routePath,
+          statusCode: 500,
+          error: 'internal_error',
+        });
+
+        return errorResponse(reply, 'internal_error');
+      }
+    },
+  );
+
+  app.put(
+    '/students/:id',
+    {
+      preHandler: [authenticate],
+    },
+    async (request, reply) => {
+      const routePath = resolveRoutePath(request, 'PUT /students/:id');
+      const paramsSchema = z.object({
+        id: z.string().min(1),
+      });
+      const schema = z
+        .object({
+          student: z.string().min(1).optional(),
+          dbId: z.string().nullable().optional(),
+          pageParentId: z.string().nullable().optional(),
+          colorPreset: z.string().nullable().optional(),
+          accentPreference: z.string().nullable().optional(),
+          voices: z.record(z.string(), z.string()).optional(),
+          manifestPreset: z.string().nullable().optional(),
+          profileId: z.string().nullable().optional(),
+        })
+        .partial();
+
+      try {
+        const params = paramsSchema.parse(request.params ?? {});
+        const body = schema.parse(request.body ?? {});
+        const updated = await updateStudentProfile(params.id, body);
+
+        if (!updated) {
+          return errorResponse(reply, 'not_found');
+        }
+
+        logger.info('HTTP request handled', {
+          event: 'http_request',
+          route: routePath,
+          statusCode: 200,
+          studentId: params.id,
+        });
+
+        return reply.send(updated);
+      } catch (error: unknown) {
+        if (error instanceof z.ZodError) {
+          return reply.code(400).send({
+            error: 'validation_failed',
+            message: 'Invalid request body',
+            details: error.issues,
+          });
+        }
+        if (error instanceof StudentProfileStoreError) {
+          return reply.code(error.status).send({
+            error: error.code,
+            message: error.message,
+            code: error.code,
+          });
+        }
+
+        logger.error(error instanceof Error ? error : String(error), {
+          event: 'http_request',
+          route: routePath,
+          statusCode: 500,
+          error: 'internal_error',
+        });
+
+        return errorResponse(reply, 'internal_error');
+      }
+    },
+  );
+
+  app.delete(
+    '/students/:id',
+    {
+      preHandler: [authenticate],
+    },
+    async (request, reply) => {
+      const routePath = resolveRoutePath(request, 'DELETE /students/:id');
+      const paramsSchema = z.object({
+        id: z.string().min(1),
+      });
+
+      try {
+        const params = paramsSchema.parse(request.params ?? {});
+        const removed = await deleteStudentProfile(params.id);
+
+        if (!removed) {
+          return errorResponse(reply, 'not_found');
+        }
+
+        logger.info('HTTP request handled', {
+          event: 'http_request',
+          route: routePath,
+          statusCode: 204,
+          studentId: params.id,
+        });
+
+        return reply.code(204).send();
+      } catch (error: unknown) {
+        if (error instanceof z.ZodError) {
+          return reply.code(400).send({
+            error: 'validation_failed',
+            message: 'Invalid student id',
+            details: error.issues,
+          });
+        }
+        if (error instanceof StudentProfileStoreError) {
+          return reply.code(error.status).send({
+            error: error.code,
+            message: error.message,
+            code: error.code,
+          });
+        }
+
+        logger.error(error instanceof Error ? error : String(error), {
+          event: 'http_request',
+          route: routePath,
+          statusCode: 500,
+          error: 'internal_error',
+        });
+
+        return errorResponse(reply, 'internal_error');
+      }
+    },
+  );
+
+  app.get(
+    '/students/:id/timeline',
+    {
+      preHandler: [authenticate],
+    },
+    async (request, reply) => {
+      const routePath = resolveRoutePath(request, 'GET /students/:id/timeline');
+      const paramsSchema = z.object({
+        id: z.string().min(1),
+      });
+      const querySchema = z.object({
+        type: z.string().optional(),
+        status: z.string().optional(),
+        limit: z.coerce.number().int().min(1).max(500).optional(),
+        offset: z.coerce.number().int().min(0).optional(),
+        order: z.enum(['asc', 'desc']).optional(),
+      });
+
+      try {
+        const params = paramsSchema.parse(request.params ?? {});
+        const query = querySchema.parse(request.query ?? {});
+        const types = query.type
+          ? (query.type.split(',').map((value) => value.trim()).filter(Boolean) as StudentTimelineType[])
+          : undefined;
+        const statuses = query.status
+          ? query.status.split(',').map((value) => value.trim()).filter(Boolean)
+          : undefined;
+
+        const timeline = await getStudentTimeline(params.id, {
+          types,
+          statuses,
+          limit: query.limit,
+          offset: query.offset,
+          order: query.order,
+        });
+
+        logger.info('HTTP request handled', {
+          event: 'http_request',
+          route: routePath,
+          statusCode: 200,
+          studentId: params.id,
+        });
+
+        return reply.send(timeline);
+      } catch (error: unknown) {
+        if (error instanceof z.ZodError) {
+          return reply.code(400).send({
+            error: 'validation_failed',
+            message: 'Invalid query parameters',
+            details: error.issues,
+          });
+        }
+
+        logger.error(error instanceof Error ? error : String(error), {
+          event: 'http_request',
+          route: routePath,
+          statusCode: 500,
+          error: 'internal_error',
+        });
+
+        return errorResponse(reply, 'internal_error');
+      }
+    },
+  );
+
+  app.get(
+    '/profiles',
+    {
+      preHandler: [authenticate],
+    },
+    async (request, reply) => {
+      const routePath = resolveRoutePath(request, 'GET /profiles');
+      try {
+        const profiles = await listProfileContents();
+
+        logger.info('HTTP request handled', {
+          event: 'http_request',
+          route: routePath,
+          statusCode: 200,
+        });
+
+        return reply.send(profiles);
+      } catch (error: unknown) {
+        if (error instanceof ProfileContentError) {
+          return reply.code(error.status).send({
+            error: error.code,
+            message: error.message,
+            code: error.code,
+          });
+        }
+
+        logger.error(error instanceof Error ? error : String(error), {
+          event: 'http_request',
+          route: routePath,
+          statusCode: 500,
+          error: 'internal_error',
+        });
+
+        return errorResponse(reply, 'internal_error');
+      }
+    },
+  );
+
+  app.get(
+    '/profiles/:id',
+    {
+      preHandler: [authenticate],
+    },
+    async (request, reply) => {
+      const routePath = resolveRoutePath(request, 'GET /profiles/:id');
+      const paramsSchema = z.object({
+        id: z.string().min(1),
+      });
+
+      try {
+        const params = paramsSchema.parse(request.params ?? {});
+        const profile = await getProfileContent(params.id);
+
+        if (!profile) {
+          return errorResponse(reply, 'not_found');
+        }
+
+        logger.info('HTTP request handled', {
+          event: 'http_request',
+          route: routePath,
+          statusCode: 200,
+          profileId: params.id,
+        });
+
+        return reply.send(profile);
+      } catch (error: unknown) {
+        if (error instanceof z.ZodError) {
+          return reply.code(400).send({
+            error: 'validation_failed',
+            message: 'Invalid profile id',
+            details: error.issues,
+          });
+        }
+        if (error instanceof ProfileContentError) {
+          return reply.code(error.status).send({
+            error: error.code,
+            message: error.message,
+            code: error.code,
+          });
+        }
+
+        logger.error(error instanceof Error ? error : String(error), {
+          event: 'http_request',
+          route: routePath,
+          statusCode: 500,
+          error: 'internal_error',
+        });
+
+        return errorResponse(reply, 'internal_error');
+      }
+    },
+  );
+
+  app.put(
+    '/profiles/:id',
+    {
+      preHandler: [authenticate],
+    },
+    async (request, reply) => {
+      const routePath = resolveRoutePath(request, 'PUT /profiles/:id');
+      const paramsSchema = z.object({
+        id: z.string().min(1),
+      });
+      const schema = z.object({
+        content: z.string(),
+      });
+
+      try {
+        const params = paramsSchema.parse(request.params ?? {});
+        const body = schema.parse(request.body ?? {});
+        const updated = await upsertProfileContent(params.id, body.content);
+
+        logger.info('HTTP request handled', {
+          event: 'http_request',
+          route: routePath,
+          statusCode: 200,
+          profileId: params.id,
+        });
+
+        return reply.send(updated);
+      } catch (error: unknown) {
+        if (error instanceof z.ZodError) {
+          return reply.code(400).send({
+            error: 'validation_failed',
+            message: 'Invalid request body',
+            details: error.issues,
+          });
+        }
+        if (error instanceof ProfileContentError) {
+          return reply.code(error.status).send({
+            error: error.code,
+            message: error.message,
+            code: error.code,
+          });
+        }
+
+        logger.error(error instanceof Error ? error : String(error), {
+          event: 'http_request',
+          route: routePath,
+          statusCode: 500,
+          error: 'internal_error',
+        });
+
+        return errorResponse(reply, 'internal_error');
+      }
+    },
+  );
+
+  app.delete(
+    '/profiles/:id',
+    {
+      preHandler: [authenticate],
+    },
+    async (request, reply) => {
+      const routePath = resolveRoutePath(request, 'DELETE /profiles/:id');
+      const paramsSchema = z.object({
+        id: z.string().min(1),
+      });
+
+      try {
+        const params = paramsSchema.parse(request.params ?? {});
+        const removed = await deleteProfileContent(params.id);
+
+        if (!removed) {
+          return errorResponse(reply, 'not_found');
+        }
+
+        logger.info('HTTP request handled', {
+          event: 'http_request',
+          route: routePath,
+          statusCode: 204,
+          profileId: params.id,
+        });
+
+        return reply.code(204).send();
+      } catch (error: unknown) {
+        if (error instanceof z.ZodError) {
+          return reply.code(400).send({
+            error: 'validation_failed',
+            message: 'Invalid profile id',
+            details: error.issues,
+          });
+        }
+        if (error instanceof ProfileContentError) {
+          return reply.code(error.status).send({
+            error: error.code,
+            message: error.message,
+            code: error.code,
+          });
+        }
+
         logger.error(error instanceof Error ? error : String(error), {
           event: 'http_request',
           route: routePath,
@@ -836,6 +1414,49 @@ export function registerExtendedRoutes(app: FastifyInstance, options: ExtendedRo
           statusCode: 500,
           error: 'internal_error',
           promptPackageId,
+        });
+
+        return errorResponse(reply, 'internal_error');
+      }
+    },
+  );
+
+  app.get(
+    '/drafts/:draftId',
+    {
+      preHandler: [authenticate],
+    },
+    async (request, reply) => {
+      const { draftId } = request.params as { draftId: string };
+      const routePath = resolveRoutePath(request, 'GET /drafts/:draftId');
+
+      try {
+        const draft = await getDraft(draftId);
+
+        if (!draft) {
+          logger.info('Draft retrieval skipped; draft missing', {
+            event: 'draft_get_not_found',
+            route: routePath,
+            draftId,
+          });
+          return errorResponse(reply, 'not_found');
+        }
+
+        logger.info('HTTP request handled', {
+          event: 'http_request',
+          route: routePath,
+          statusCode: 200,
+          draftId,
+        });
+
+        return reply.send(draft);
+      } catch (error: unknown) {
+        logger.error(error instanceof Error ? error : String(error), {
+          event: 'http_request',
+          route: routePath,
+          statusCode: 500,
+          error: 'internal_error',
+          draftId,
         });
 
         return errorResponse(reply, 'internal_error');

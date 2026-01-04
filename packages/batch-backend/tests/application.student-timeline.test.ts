@@ -1,0 +1,103 @@
+import { randomUUID } from 'node:crypto';
+
+import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
+
+import { getStudentTimeline } from '../src/application/student-timeline.js';
+import { deriveStudentId } from '../src/domain/student-utils.js';
+import { withPgClient } from '../src/infrastructure/db.js';
+
+const hasTestDb = !!process.env.BATCH_BACKEND_TEST_PG;
+const describeIfDb = hasTestDb ? describe : describe.skip;
+
+async function truncateTimelineTables() {
+  await withPgClient(async (client) => {
+    await client.query('TRUNCATE TABLE transcripts, drafts, prompt_packages, recordings, jobs');
+  });
+}
+
+describeIfDb('student-timeline', () => {
+  beforeAll(async () => {
+    await truncateTimelineTables();
+  });
+
+  afterAll(async () => {
+    await truncateTimelineTables();
+  });
+
+  beforeEach(async () => {
+    await truncateTimelineTables();
+  });
+
+  it('orders timeline items and supports type/status filters', async () => {
+    const studentId = deriveStudentId('Anna');
+    const recordingId = randomUUID();
+    const transcriptId = randomUUID();
+    const promptPackageId = randomUUID();
+    const draftId = randomUUID();
+    const jobId = randomUUID();
+
+    const times = {
+      recording: new Date('2024-01-01T00:00:00.000Z'),
+      transcript: new Date('2024-01-02T00:00:00.000Z'),
+      prompt: new Date('2024-01-03T00:00:00.000Z'),
+      draft: new Date('2024-01-04T00:00:00.000Z'),
+      job: new Date('2024-01-05T00:00:00.000Z'),
+    };
+
+    await withPgClient(async (client) => {
+      await client.query(
+        `
+        INSERT INTO recordings (id, source, student_id, source_path, storage_uri, bytes, status, created_at, updated_at)
+        VALUES ($1, 'upload', $2, 'anna/lesson-1.opus', 's3://bucket/lesson-1.opus', 1024, 'queued', $3, $3)
+        `,
+        [recordingId, studentId, times.recording],
+      );
+      await client.query(
+        `
+        INSERT INTO transcripts (id, recording_id, storage_uri, mode, model, language, fallback_used, created_at, updated_at)
+        VALUES ($1, $2, 's3://bucket/transcript.txt', 'timeline', 'nova-3', 'multi', false, $3, $3)
+        `,
+        [transcriptId, recordingId, times.transcript],
+      );
+      await client.query(
+        `
+        INSERT INTO prompt_packages (id, recording_id, transcript_id, student_id, template_version, storage_uri, created_at, updated_at)
+        VALUES ($1, $2, $3, $4, 'template.md', 's3://bucket/prompt.txt', $5, $5)
+        `,
+        [promptPackageId, recordingId, transcriptId, studentId, times.prompt],
+      );
+      await client.query(
+        `
+        INSERT INTO drafts (id, prompt_package_id, student_id, storage_uri, created_at, updated_at)
+        VALUES ($1, $2, $3, 's3://bucket/draft.txt', $4, $4)
+        `,
+        [draftId, promptPackageId, studentId, times.draft],
+      );
+      await client.query(
+        `
+        INSERT INTO jobs (id, state, recording_id, transcript_id, prompt_package_id, draft_id, created_at, updated_at, finished_at, error)
+        VALUES ($1, 'failed', $2, $3, $4, $5, $6, $6, $6, 'boom')
+        `,
+        [jobId, recordingId, transcriptId, promptPackageId, draftId, times.job],
+      );
+    });
+
+    const timeline = await getStudentTimeline(studentId, { order: 'desc' });
+    expect(timeline.items[0]?.type).toBe('job_completed');
+    expect(timeline.items.map((item) => item.type)).toEqual([
+      'job_completed',
+      'draft_saved',
+      'prompt_package_created',
+      'transcript_ready',
+      'recording_ingested',
+    ]);
+
+    const draftOnly = await getStudentTimeline(studentId, { types: ['draft_saved'] });
+    expect(draftOnly.items).toHaveLength(1);
+    expect(draftOnly.items[0]?.type).toBe('draft_saved');
+
+    const failedOnly = await getStudentTimeline(studentId, { statuses: ['failed'] });
+    expect(failedOnly.items).toHaveLength(1);
+    expect(failedOnly.items[0]?.status).toBe('failed');
+  });
+});

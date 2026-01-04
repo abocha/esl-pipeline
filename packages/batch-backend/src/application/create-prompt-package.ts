@@ -14,6 +14,7 @@ import {
 } from '../infrastructure/transcription-storage.js';
 import { stitchPromptPayload } from './prompt-assembly.js';
 import { resolvePromptSelection } from './prompt-options.js';
+import { getStudentProfileById } from './student-profiles-store.js';
 
 export interface CreatePromptPackageParams {
   recordingId: string;
@@ -46,6 +47,9 @@ export interface CreatePromptPackageDependencies {
   recordings: {
     getById: typeof getRecordingById;
   };
+  students: {
+    getById: typeof getStudentProfileById;
+  };
   promptPackages: {
     insert: typeof insertPromptPackage;
   };
@@ -65,6 +69,9 @@ export async function createPromptPackage(
   const recordings = overrides?.recordings ?? {
     getById: getRecordingById,
   };
+  const students = overrides?.students ?? {
+    getById: getStudentProfileById,
+  };
   const promptPackages = overrides?.promptPackages ?? {
     insert: insertPromptPackage,
   };
@@ -73,10 +80,19 @@ export async function createPromptPackage(
   if (!transcript) return null;
   const recording = await recordings.getById(transcript.recordingId);
 
+  let studentProfileId: string | null = null;
+  if (recording?.studentId) {
+    const studentProfile = await students.getById(recording.studentId, { config });
+    studentProfileId = studentProfile?.profileId ?? null;
+  }
+
+  const fallbackProfileId =
+    params.profileId ?? (params.profilePath ? undefined : studentProfileId ?? undefined);
+
   const selection = await resolvePromptSelection(
     {
       templateId: params.templateId,
-      profileId: params.profileId,
+      profileId: fallbackProfileId,
       profilePath: params.profilePath,
     },
     { config },

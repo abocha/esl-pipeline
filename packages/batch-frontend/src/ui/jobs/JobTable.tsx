@@ -230,7 +230,7 @@ export const JobTable: React.FC = () => {
   }, [jobs]);
 
   return (
-    <section className="job-table card animate-fade-in-up">
+    <section id="job-table" className="job-table card animate-fade-in-up">
       <header className="table-header">
         <div className="table-title">
           <span className="eyebrow">Jobs</span>

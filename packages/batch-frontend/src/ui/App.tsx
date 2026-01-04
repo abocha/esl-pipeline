@@ -5,6 +5,7 @@ import { useAuth } from '../context/AuthContext';
 import { JobMonitorProvider } from '../context/JobMonitorContext';
 import { JobSettingsProvider } from '../context/JobSettingsContext';
 import { NotificationProvider, useNotification } from '../context/NotificationContext';
+import { StudentSelectionProvider } from '../context/StudentSelectionContext';
 import { useTheme } from '../context/ThemeContext';
 import { AuthDialog, AuthMode } from './auth/AuthDialog';
 import { ActivityFeed } from './jobs/ActivityFeed';
@@ -12,6 +13,7 @@ import { JobConnectionBanner } from './jobs/JobConnectionBanner';
 import { JobTable } from './jobs/JobTable';
 import { ProfilePage } from './profile/ProfilePage';
 import { JobSettingsForm } from './settings/JobSettingsForm';
+import { StudentWorkspace } from './students/StudentWorkspace';
 import { TranscriptionWorkspace } from './transcription/TranscriptionWorkspace';
 import { JobUploader } from './uploader/JobUploader';
 
@@ -152,13 +154,15 @@ export const App: React.FC = () => {
     }
 
     return (
-      <JobSettingsProvider>
-        <JobMonitorProvider>
-          <NotificationProvider>
-            <AuthenticatedPanels />
-          </NotificationProvider>
-        </JobMonitorProvider>
-      </JobSettingsProvider>
+      <StudentSelectionProvider>
+        <JobSettingsProvider>
+          <JobMonitorProvider>
+            <NotificationProvider>
+              <AuthenticatedPanels />
+            </NotificationProvider>
+          </JobMonitorProvider>
+        </JobSettingsProvider>
+      </StudentSelectionProvider>
     );
   }, [isLoading, isAuthenticated, showProfile]);
 
@@ -498,9 +502,10 @@ export const App: React.FC = () => {
 
 const AuthenticatedPanels: React.FC = () => (
   <div className="panels-grid">
-    <div className="panels-main">
-      <JobSettingsForm />
-      <TranscriptionWorkspace />
+  <div className="panels-main">
+    <JobSettingsForm />
+    <StudentWorkspace />
+    <TranscriptionWorkspace />
       <JobUploader />
       <JobConnectionBanner />
       <JobTable />

@@ -91,6 +91,9 @@ describe('application/prompt-package', () => {
             updatedAt: new Date('2024-01-01T00:00:00Z'),
           }),
         },
+        students: {
+          getById: async () => null,
+        },
         promptPackages,
       },
     );
@@ -191,6 +194,9 @@ describe('application/prompt-package', () => {
               updatedAt: new Date('2024-01-01T00:00:00Z'),
             }),
           },
+          students: {
+            getById: async () => null,
+          },
           promptPackages: {
             insert: async () => {
               throw new Error('insert should not be called');
@@ -230,6 +236,9 @@ describe('application/prompt-package', () => {
             getByRecordingId: async () => transcript,
           },
           recordings: {
+            getById: async () => null,
+          },
+          students: {
             getById: async () => null,
           },
           promptPackages: {

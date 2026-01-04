@@ -21,6 +21,7 @@ The batch system enables tutors to process multiple ESL homework assignments thr
 - Job actions: copy Notion link, regenerate audio (pending)
 - Authentication with email/password
 - Phase 2+ transcription workspace (recording scan, transcript review, prompt package, draft)
+- Phase 4 student workspace (student selection, profile CRUD, timeline)
 
 ---
 
@@ -38,6 +39,7 @@ Phase 2+ (native transcription, implemented with gaps):
 2. Tutor reviews transcript, assembles prompt package, and saves draft.
 3. Draft is materialized and approved through the existing job approval flow.
 4. Recording list supports search plus status/source/student filters.
+5. Student workspace allows selection, profile editing, and timeline review.
 
 ---
 
@@ -67,6 +69,7 @@ Phase 2+ (native transcription, implemented with gaps):
 | `AuthProvider` | Login/register modals, session context |
 | `JobUploader` | Multi-file upload, per-file progress |
 | `JobSettingsForm` | Preset, TTS, voice, Notion DB dropdowns |
+| `StudentWorkspace` | Student list, profile metadata/content, timeline |
 | `JobTable` | Job list with actions |
 | `ActivityFeed` | Chronological event log from SSE |
 | `NotificationManager` | Browser notifications on completion |
@@ -91,6 +94,17 @@ Phase 2+ (native transcription, implemented with gaps):
 | `POST /auth/login` | Email/password login |
 | `POST /auth/register` | User registration |
 | `GET /auth/me` | Session restoration |
+| `GET /students` | List student profiles |
+| `GET /students/:id` | Read student profile |
+| `POST /students` | Create student profile |
+| `PUT /students/:id` | Update student profile |
+| `DELETE /students/:id` | Delete student profile |
+| `GET /students/:id/timeline` | Student timeline (supports `type`/`status` filters and pagination; `job_awaiting_approval` for pending approvals) |
+| `GET /profiles` | List prompt profiles |
+| `GET /profiles/:id` | Read prompt profile text |
+| `PUT /profiles/:id` | Update prompt profile text |
+| `DELETE /profiles/:id` | Delete prompt profile text |
+| `GET /drafts/:id` | Read draft text |
 
 All extended routes require `BATCH_BACKEND_ENABLE_EXTENDED_API=true`.
 

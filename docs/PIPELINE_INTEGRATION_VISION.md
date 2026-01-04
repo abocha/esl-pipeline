@@ -134,9 +134,10 @@ Phase 3: Phase 2+ polish (implemented)
 - Recording search + filters on the list view.
   - Implementation manual: docs/design/PIPELINE_INTEGRATION_PHASE_3_MANUAL.md.
 
-Phase 4: Student-centric workflow
+Phase 4: Student-centric workflow (implemented)
 - Student selection, profile CRUD, and per-student timelines.
 - Per-student history and transcript/draft timeline.
+- Implementation manual: docs/design/PIPELINE_INTEGRATION_PHASE_4_MANUAL.md.
 
 Phase 5: FRONTEND_VISION alignment
 - Richer upload UX, editor, dashboard/activity stream.

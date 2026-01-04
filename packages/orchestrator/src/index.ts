@@ -80,6 +80,7 @@ export {
   createFilesystemManifestStore,
 } from './manifest.js';
 export { createFilesystemConfigProvider } from './config.js';
+export type { StudentProfile } from './config.js';
 export { S3ManifestStore, type S3ManifestStoreOptions } from './adapters/manifest/s3.js';
 export {
   RemoteConfigProvider,
