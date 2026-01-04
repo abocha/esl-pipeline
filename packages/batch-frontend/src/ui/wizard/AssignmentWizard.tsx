@@ -10,6 +10,7 @@ import { Step2ReviewTranscript } from './Step2ReviewTranscript';
 import { Step3AddNotes } from './Step3AddNotes';
 import { Step4ReviewDraft } from './Step4ReviewDraft';
 import { Step5Publish } from './Step5Publish';
+import { StepIndicator } from './StepIndicator';
 
 const STEPS = [
   { key: 'select', label: 'Select & Upload' },
@@ -279,109 +280,124 @@ export const AssignmentWizard: React.FC = () => {
 
   return (
     <div className="wizard-shell">
-      <header className="wizard-header card-glass">
-        <div>
+      <header className="wizard-header glass-panel animate-in">
+        <div className="header-content">
           <p className="wizard-eyebrow">Assignment Wizard</p>
           <h1>Build a new assignment</h1>
-          <p>Guide your recording through transcript, drafting, and approval.</p>
+          <p className="header-desc">Guide your recording through transcript, drafting, and approval.</p>
         </div>
+
         <div className="wizard-progress">
-          {STEPS.map((step, index) => (
-            <button
-              key={step.key}
-              type="button"
-              className={`wizard-stepper ${index === currentStep ? 'active' : ''}`}
-              onClick={() => goToStep(index)}
-            >
-              <span>{index + 1}</span>
-              <span>{step.label}</span>
-            </button>
-          ))}
+          <StepIndicator
+            currentStep={currentStep + 1}
+            totalSteps={STEPS.length}
+            labels={STEPS.map(s => s.label)}
+          />
         </div>
       </header>
 
-      {stepContent}
+      <main className="wizard-content animate-in" style={{ animationDelay: '100ms' }}>
+        {stepContent}
+      </main>
 
       <style>{`
         .wizard-shell {
           display: flex;
           flex-direction: column;
           gap: var(--space-6);
+          max-width: 1200px;
+          margin: 0 auto;
+          width: 100%;
         }
 
         .wizard-header {
-          padding: var(--space-5) var(--space-6);
-          border-radius: var(--radius-2xl);
+          padding: var(--space-6) var(--space-8);
           display: flex;
-          align-items: flex-start;
+          align-items: flex-start; /* Changed from center to allow side-by-side */
           justify-content: space-between;
-          gap: var(--space-5);
-          flex-wrap: wrap;
+          gap: var(--space-8);
+          position: relative;
+          overflow: hidden;
+        }
+        
+        /* Subtle background decoration */
+        .wizard-header::before {
+          content: '';
+          position: absolute;
+          top: -50%;
+          right: -10%;
+          width: 400px;
+          height: 400px;
+          background: radial-gradient(circle, rgba(99, 102, 241, 0.1) 0%, rgba(0,0,0,0) 70%);
+          border-radius: 50%;
+          pointer-events: none;
+        }
+
+        .header-content {
+          flex: 1;
+          max-width: 600px;
+          position: relative;
+          z-index: 1;
         }
 
         .wizard-header h1 {
-          margin: 0;
+          margin: var(--space-2) 0;
           font-size: var(--text-3xl);
           font-family: var(--font-display);
+          letter-spacing: -0.02em;
+          background: linear-gradient(to right, var(--text-primary), var(--text-secondary));
+          -webkit-background-clip: text;
+          -webkit-text-fill-color: transparent;
         }
 
-        .wizard-header p {
-          margin: var(--space-2) 0 0;
-          color: var(--text-tertiary);
+        .header-desc {
+          margin: 0;
+          color: var(--text-secondary);
+          font-size: var(--text-lg);
         }
 
         .wizard-eyebrow {
           font-size: var(--text-xs);
-          font-weight: 600;
-          letter-spacing: 0.14em;
+          font-weight: 700;
+          letter-spacing: 0.1em;
           text-transform: uppercase;
           color: var(--color-primary-500);
-          margin-bottom: var(--space-2);
+          display: flex;
+          align-items: center;
+          gap: var(--space-2);
+        }
+        
+        .wizard-eyebrow::before {
+          content: '';
+          width: 8px;
+          height: 8px;
+          border-radius: 50%;
+          background: var(--color-primary-500);
+          display: inline-block;
         }
 
         .wizard-progress {
-          display: flex;
-          flex-wrap: wrap;
-          gap: var(--space-2);
-          align-items: center;
+          flex-shrink: 0;
+          min-width: 200px;
         }
-
-        .wizard-stepper {
-          display: flex;
-          align-items: center;
-          gap: var(--space-2);
-          border-radius: var(--radius-full);
-          border: 1px solid var(--border-light);
-          padding: var(--space-2) var(--space-3);
-          background: var(--bg-secondary);
-          cursor: pointer;
-          font-size: var(--text-xs);
-          font-weight: 600;
-          color: var(--text-secondary);
-          transition: all var(--transition-fast);
-        }
-
-        .wizard-stepper span:first-child {
-          width: 24px;
-          height: 24px;
-          border-radius: 50%;
-          background: var(--bg-primary);
-          display: inline-flex;
-          align-items: center;
-          justify-content: center;
-          font-weight: 700;
-        }
-
-        .wizard-stepper.active {
-          background: var(--bg-primary);
-          border-color: rgba(99, 102, 241, 0.4);
-          color: var(--text-primary);
-          box-shadow: var(--shadow-md);
+        
+        .wizard-content {
+          /* No container styles needed, steps handle their own layout */
         }
 
         @media (max-width: 768px) {
           .wizard-header {
             flex-direction: column;
+            gap: var(--space-6);
+            padding: var(--space-5);
+            align-items: stretch;
+          }
+          
+          .wizard-progress {
+            width: 100%;
+            min-width: 0;
+            border-top: 1px solid var(--border-light);
+            padding-top: var(--space-4);
           }
         }
       `}</style>

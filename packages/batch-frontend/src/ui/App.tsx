@@ -1,5 +1,5 @@
 import React, { useCallback, useMemo, useState } from 'react';
-import toast from 'react-hot-toast';
+import { Toaster, toast } from 'react-hot-toast';
 import { NavLink, Navigate, Route, Routes } from 'react-router-dom';
 
 import { useAuth } from '../context/AuthContext';
@@ -286,6 +286,34 @@ export const App: React.FC = () => {
             setPrefillEmail('');
           }
           setAuthMode(mode);
+        }}
+      />
+
+      <Toaster
+        position="bottom-right"
+        toastOptions={{
+          className: 'custom-toast',
+          style: {
+            background: 'var(--bg-secondary)',
+            color: 'var(--text-primary)',
+            border: '1px solid var(--border-light)',
+            boxShadow: 'var(--shadow-lg)',
+            borderRadius: 'var(--radius-lg)',
+            padding: '12px 16px',
+            fontSize: 'var(--text-sm)',
+          },
+          success: {
+            iconTheme: {
+              primary: 'var(--color-success-500)',
+              secondary: 'white',
+            },
+          },
+          error: {
+            iconTheme: {
+              primary: 'var(--color-error-500)',
+              secondary: 'white',
+            },
+          },
         }}
       />
 
