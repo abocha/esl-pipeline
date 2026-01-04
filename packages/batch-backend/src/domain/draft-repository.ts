@@ -93,3 +93,38 @@ function mapRowToDraft(row: DraftRow): DraftRecord {
     updatedAt: row.updated_at,
   };
 }
+
+export interface UpdateDraftParams {
+  id: string;
+  storageUri?: string;
+}
+
+export async function updateDraft(params: UpdateDraftParams): Promise<DraftRecord | null> {
+  const now = new Date();
+
+  const row = await withPgClient(async (client: PoolClient) => {
+    const result = await client.query(
+      `
+      UPDATE drafts
+      SET
+        storage_uri = COALESCE($2, storage_uri),
+        updated_at = $3
+      WHERE id = $1
+      RETURNING
+        id,
+        prompt_package_id,
+        student_id,
+        storage_uri,
+        created_by,
+        created_at,
+        updated_at
+      `,
+      [params.id, params.storageUri, now],
+    );
+    return result.rows[0];
+  });
+
+  if (!row) return null;
+  logger.info('Draft updated', { draftId: params.id });
+  return mapRowToDraft(row);
+}

@@ -7,6 +7,7 @@
  * - GET /jobs/:jobId (authenticated)
  * - GET /user/jobs, /user/jobs/summary (authenticated)
  * - GET /students/summary (authenticated)
+ * - POST /validation/markdown (authenticated)
  * - POST /uploads (authenticated)
  * - POST /recordings/upload (authenticated)
  * - POST /recordings/:id/transcribe (authenticated)
@@ -29,6 +30,7 @@ import type {
   JobListResponse as ContractJobListResponse,
   JobState as ContractJobState,
   JobSummaryResponse as ContractJobSummaryResponse,
+  MarkdownValidationResponse as ContractMarkdownValidationResponse,
   RecordingStatus as ContractRecordingStatus,
   StudentSummaryResponse as ContractStudentSummaryResponse,
   SubmitJobRequest as ContractSubmitJobRequest,
@@ -59,6 +61,7 @@ export type JobListResponse = ContractJobListResponse;
 export type JobSummaryResponse = ContractJobSummaryResponse;
 export type StudentSummaryResponse = ContractStudentSummaryResponse;
 export type JobConfigOverrides = ContractJobConfigOverrides;
+export type MarkdownValidationResponse = ContractMarkdownValidationResponse;
 
 export interface RecordingTranscriptResponse {
   recordingId: string;
@@ -382,12 +385,12 @@ export interface UserFile {
 
 export interface ErrorEnvelope {
   error:
-    | 'validation_failed'
-    | 'not_found'
-    | 'internal_error'
-    | 'unauthorized'
-    | 'forbidden'
-    | string;
+  | 'validation_failed'
+  | 'not_found'
+  | 'internal_error'
+  | 'unauthorized'
+  | 'forbidden'
+  | string;
   message?: string;
   code?: string;
 }
@@ -496,6 +499,25 @@ export async function getStudentSummary(params: {
     const axiosError = toAxiosError(error);
     if (axiosError && isAuthError(axiosError)) {
       throw new Error('Authentication required. Please login to view student summaries.');
+    }
+    throw new Error(axiosError ? handleApiError(axiosError) : formatUnknownError(error));
+  }
+}
+
+export async function validateMarkdown(
+  text: string,
+  strict?: boolean,
+): Promise<MarkdownValidationResponse> {
+  try {
+    const response = await apiClient.post(buildApiProxyPath('/validation/markdown'), {
+      text,
+      strict,
+    });
+    return response.data;
+  } catch (error: unknown) {
+    const axiosError = toAxiosError(error);
+    if (axiosError && isAuthError(axiosError)) {
+      throw new Error('Authentication required. Please login to validate markdown.');
     }
     throw new Error(axiosError ? handleApiError(axiosError) : formatUnknownError(error));
   }
@@ -1189,4 +1211,19 @@ function reportUploadProgress(
   const total = event.total ?? 0;
   const progress = total ? Math.min(100, Math.round((event.loaded / total) * 100)) : 0;
   onProgress(progress, event.loaded, event.total ?? undefined);
+}
+
+export async function updateDraft(id: string, text: string): Promise<DraftResponse> {
+  try {
+    const response = await apiClient.put(buildApiProxyPath(`/drafts/${encodeURIComponent(id)}`), {
+      text,
+    });
+    return response.data;
+  } catch (error: unknown) {
+    const axiosError = toAxiosError(error);
+    if (axiosError && isAuthError(axiosError)) {
+      throw new Error('Authentication required. Please login to update drafts.');
+    }
+    throw new Error(axiosError ? handleApiError(axiosError) : formatUnknownError(error));
+  }
 }

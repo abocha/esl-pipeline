@@ -1864,9 +1864,9 @@ export function registerExtendedRoutes(app: FastifyInstance, options: ExtendedRo
           const mdReference =
             fileStorageService.getProvider() === 'filesystem'
               ? buildFilesystemMdReference(
-                  storageConfig.getFilesystemConfig().uploadDir,
-                  storageKey,
-                )
+                storageConfig.getFilesystemConfig().uploadDir,
+                storageKey,
+              )
               : storageKey;
 
           logger.info('Secure upload completed', {
@@ -2814,6 +2814,63 @@ export function registerExtendedRoutes(app: FastifyInstance, options: ExtendedRo
       });
     }
   });
+
+  app.put(
+    '/drafts/:id',
+    {
+      preHandler: [authenticate],
+    },
+    async (request, reply) => {
+      const routePath = resolveRoutePath(request, 'PUT /drafts/:id');
+      const paramsSchema = z.object({
+        id: z.string().min(1),
+      });
+      const bodySchema = z.object({
+        text: z.string(),
+      });
+
+      try {
+        const params = paramsSchema.parse(request.params ?? {});
+        const body = bodySchema.parse(request.body ?? {});
+        // Lazy import to avoid circular dependencies if any
+        const { updateDraft } = await import('../application/update-draft.js');
+        const updated = await updateDraft({
+          id: params.id,
+          text: body.text,
+        });
+
+        if (!updated) {
+          return errorResponse(reply, 'not_found');
+        }
+
+        logger.info('HTTP request handled', {
+          event: 'http_request',
+          route: routePath,
+          statusCode: 200,
+          draftId: params.id,
+        });
+
+        return reply.send(updated);
+      } catch (error: unknown) {
+        if (error instanceof z.ZodError) {
+          return reply.code(400).send({
+            error: 'validation_failed',
+            message: 'Invalid request',
+            details: error.issues,
+          });
+        }
+
+        logger.error(error instanceof Error ? error : String(error), {
+          event: 'http_request',
+          route: routePath,
+          statusCode: 500,
+          error: 'internal_error',
+        });
+
+        return errorResponse(reply, 'internal_error');
+      }
+    },
+  );
 }
 
 async function readFileBuffer(fileStream: Readable): Promise<Buffer> {
