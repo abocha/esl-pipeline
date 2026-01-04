@@ -95,6 +95,7 @@ Phase 2+ (native transcription, implemented with gaps):
 | `POST /auth/register` | User registration |
 | `GET /auth/me` | Session restoration |
 | `GET /students` | List student profiles |
+| `GET /students/summary` | Student summary (last lesson + pending drafts) |
 | `GET /students/:id` | Read student profile |
 | `POST /students` | Create student profile |
 | `PUT /students/:id` | Update student profile |
@@ -105,6 +106,12 @@ Phase 2+ (native transcription, implemented with gaps):
 | `PUT /profiles/:id` | Update prompt profile text |
 | `DELETE /profiles/:id` | Delete prompt profile text |
 | `GET /drafts/:id` | Read draft text |
+| `POST /drafts/:id/materialize` | Materialize draft (optional job overrides) |
+| `GET /recordings/:id/audio` | Stream recording audio (Range supported) |
+| `POST /validation/markdown` | Validate markdown (errors/warnings/meta) |
+| `GET /user/jobs` | List jobs for current user (filters + pagination) |
+| `GET /user/jobs/summary` | Job summary counts for dashboard |
+| `POST /jobs/:jobId/actions` | Job actions (`edit_metadata`, `rerun_audio`, `cancel`) |
 
 All extended routes require `BATCH_BACKEND_ENABLE_EXTENDED_API=true`.
 
@@ -128,9 +135,10 @@ All extended routes require `BATCH_BACKEND_ENABLE_EXTENDED_API=true`.
 | `withTts` | switch | Enable TTS generation |
 | `forceTts` | switch | Force regenerate even if cached |
 | `voiceAccent` | dropdown | british/american preference |
+| `voiceId` | dropdown | explicit voice selection |
 | `notionDatabase` | dropdown | Target Notion DB |
-| `mode` | dropdown | auto/dialogue/tts (future) |
-| `uploadOption` | radio | auto/force s3/skip |
+| `ttsStrategy` | dropdown | auto/dialogue/tts |
+| `upload` | radio | auto/s3/none |
 
 ---
 
@@ -139,7 +147,8 @@ All extended routes require `BATCH_BACKEND_ENABLE_EXTENDED_API=true`.
 | Action | Status | Behavior |
 |--------|--------|----------|
 | Copy Notion Link | ✅ Ready | Copies `notionUrl` to clipboard |
-| Regenerate Audio | ⏳ Pending | Shows "coming soon" modal |
+| Edit Metadata | ✅ Ready | Updates preset/voice/tts fields for awaiting_approval jobs |
+| Regenerate Audio | ⏳ Pending | Stub returns 501 |
 | Cancel Job | ⏳ Pending | Stub returns 501 |
 
 ---

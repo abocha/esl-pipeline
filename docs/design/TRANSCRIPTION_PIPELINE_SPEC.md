@@ -262,6 +262,7 @@ delete(uri) -> void
 3) Review transcript
    - GET /recordings/:id/transcript
    - PUT /recordings/:id/transcript (edit)
+   - GET /recordings/:id/audio (playback)
 4) Add notes + build prompt
    - POST /recordings/:id/prompt-package
    - GET /prompt-packages/:id
@@ -280,6 +281,7 @@ delete(uri) -> void
 - POST /recordings/sync
 - POST /recordings/upload
 - GET /recordings/:id
+- GET /recordings/:id/audio
 - GET /recordings/:id/transcript
 - PUT /recordings/:id/transcript
 - POST /recordings/:id/transcribe (manual retry)

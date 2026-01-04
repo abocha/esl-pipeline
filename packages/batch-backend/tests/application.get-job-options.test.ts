@@ -65,9 +65,9 @@ describe('application/get-job-options', () => {
         {
           type: 'edit_metadata',
           label: 'Edit Job Metadata',
-          description: 'Update job configuration (preset, Notion database) without rerunning',
+          description: 'Update job configuration without rerunning',
           requiresFields: [],
-          implemented: false,
+          implemented: true,
         },
       ],
     });

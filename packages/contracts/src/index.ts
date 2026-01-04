@@ -6,6 +6,29 @@ export type JobUploadOption = 'auto' | 's3' | 'none';
 
 export type RecordingStatus = 'ingested' | 'queued' | 'transcribing' | 'transcribed' | 'failed';
 
+export interface SubmitJobRequest {
+  md: string;
+  preset?: string;
+  withTts?: boolean;
+  forceTts?: boolean;
+  notionDatabase?: string;
+  upload?: JobUploadOption;
+  ttsStrategy?: TtsStrategy;
+  voiceId?: string;
+  voiceAccent?: string;
+}
+
+export interface JobConfigOverrides {
+  preset?: string;
+  notionDatabase?: string;
+  withTts?: boolean;
+  forceTts?: boolean;
+  ttsStrategy?: TtsStrategy;
+  upload?: JobUploadOption;
+  voiceId?: string;
+  voiceAccent?: string;
+}
+
 export interface JobStatusDto {
   jobId: string;
   md: string | null;
@@ -29,6 +52,54 @@ export interface JobStatusDto {
   finishedAt: string | null;
   error: string | null;
   manifestPath: string | null;
+}
+
+export interface JobListResponse {
+  jobs: JobStatusDto[];
+  total: number;
+  limit: number;
+  offset: number;
+}
+
+export interface JobSummaryResponse {
+  total: number;
+  byState: Record<JobState, number>;
+  pendingApprovals: number;
+  last7Days: {
+    total: number;
+    succeeded: number;
+    failed: number;
+  };
+  tts: {
+    enabled: number;
+    succeeded: number;
+  };
+}
+
+export interface StudentSummaryResponse {
+  items: {
+    id: string;
+    name: string;
+    lastLessonAt: string | null;
+    pendingDrafts: number;
+  }[];
+  total: number;
+  limit: number;
+  offset: number;
+}
+
+export interface MarkdownValidationResponse {
+  ok: boolean;
+  errors: string[];
+  warnings: string[];
+  meta?: {
+    title: string;
+    student: string;
+    level: string;
+    topic: string | string[];
+    input_type: string;
+    speaker_labels?: string[];
+  };
 }
 
 export type JobEventType = 'job_created' | 'job_state_changed';

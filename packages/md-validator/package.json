@@ -13,19 +13,20 @@
   "type": "module",
   "exports": {
     ".": {
-      "types": "./dist/src/index.d.ts",
+      "types": "./src/index.ts",
       "import": "./dist/src/index.js",
       "default": "./dist/src/index.js"
     },
     "./package.json": "./package.json"
   },
   "main": "./dist/src/index.js",
-  "types": "./dist/src/index.d.ts",
+  "types": "./src/index.ts",
   "bin": {
     "md-validator": "dist/bin/cli.js"
   },
   "files": [
-    "dist"
+    "dist",
+    "src"
   ],
   "scripts": {
     "build": "tsc -p tsconfig.build.json",

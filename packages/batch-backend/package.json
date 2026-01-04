@@ -24,6 +24,7 @@
     "@aws-sdk/s3-request-presigner": "^3.962.0",
     "@deepgram/sdk": "^4.11.3",
     "@esl-pipeline/contracts": "workspace:*",
+    "@esl-pipeline/md-validator": "workspace:*",
     "@esl-pipeline/orchestrator": "workspace:*",
     "@esl-pipeline/shared-infrastructure": "workspace:*",
     "@fastify/multipart": "^9.3.0",

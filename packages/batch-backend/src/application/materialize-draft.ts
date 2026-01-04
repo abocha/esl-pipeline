@@ -1,6 +1,8 @@
 import fs from 'node:fs/promises';
 import path from 'node:path';
 
+import type { JobConfigOverrides } from '@esl-pipeline/contracts';
+
 import { createApprovalJobFromDraft } from './create-approval-job.js';
 import { getDraftById } from '../domain/draft-repository.js';
 import { getPromptPackageById } from '../domain/prompt-package-repository.js';
@@ -12,6 +14,7 @@ import { createTranscriptionStorageForUri } from '../infrastructure/transcriptio
 export interface MaterializeDraftParams {
   draftId: string;
   jobId?: string;
+  jobOverrides?: JobConfigOverrides;
 }
 
 export interface MaterializeDraftResponse {
@@ -67,6 +70,7 @@ export async function materializeDraft(
     const approvalJob = await createApprovalJob({
       draft,
       promptPackage,
+      jobOverrides: params.jobOverrides,
     });
     resolvedJobId = approvalJob.id;
   }
