@@ -240,17 +240,28 @@ Improve the file upload experience throughout the application.
 - Visual feedback: drag-over state, file validation
 - Accepts audio files (opus, mp3, wav, m4a, aac, ogg)
 - Progress indicator with cancel support
-
-#### [MODIFY] `TranscriptionWorkspace.tsx` → `DropZone` integration
-- Replace current file input with DropZone
-- Show upload progress inline
+- Single-file mode for the wizard; multi-file mode for job uploader
 
 #### [MODIFY] `Step1SelectStudent.tsx` uses DropZone
+- Replace the file input with `DropZone` (single-file)
+- Keep existing `uploadRecording` flow and status messaging
+
+#### [MODIFY] `JobUploader.tsx` → `DropZone` integration
+- Replace the multi-file input with `DropZone` (multi-file)
+- Preserve upload queue behavior and error handling
+
+#### [MODIFY] `TranscriptionWorkspace.tsx` → `DropZone` integration (optional if time)
+- Replace the recording upload input with `DropZone`
+- Show upload progress inline
 
 #### [NEW] `UploadProgress.tsx` (`src/ui/shared/UploadProgress.tsx`)
 - Animated progress bar with percentage
 - File name and size display
 - Cancel button
+
+#### [MODIFY] API helpers (`src/utils/api.ts`)
+- Add optional `onProgress` + `signal`/`AbortController` support to `uploadMarkdown` and `uploadRecording`
+- Use these hooks in `DropZone` + upload flows to drive progress and cancel
 
 ---
 
