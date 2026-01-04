@@ -11,7 +11,7 @@ The current frontend (`packages/batch-frontend`) is functional but presents a fl
 1. **Create a Dashboard** with quick actions, activity stream, and pending approvals
 2. **Implement a guided multi-step wizard** for the assignment creation flow
 3. **Enhance the upload UX** with drag-and-drop and better progress feedback
-4. **Add a Markdown editor** with split/preview modes and validation feedback
+4. **Add a Markdown editor** with split/preview modes and validation feedback (COMPLETED)
 5. **Polish visual aesthetics** to match the premium design vision
 
 ---
@@ -305,27 +305,29 @@ Add a proper markdown editing experience for draft review.
 
 ### Stage 5: Visual Polish & Design System Enhancements
 
-Apply premium aesthetics across the application.
+Apply premium aesthetics across the application, aligning with the `FRONTEND_VISION.md` guidelines (Glassmorphism, Indigo/Slate palette).
 
-#### [MODIFY] `index.css` — Design tokens updates
-- Add new gradient variants for wizard step indicators
-- Add card variant for wizard panels (larger padding, subtle shadow)
-- Add step indicator styles (connected dots/progress bar)
+#### [MODIFY] `index.css` & Global Styles
+- **Color Palette:** Enforce vision tokens (`--background: #0f0f17`, `--surface: #1e1e2e`, `--primary: #6366f1`).
+- **Glassmorphism:** Add utility class `.glass-panel` (backdrop-filter blur + semi-transparent border).
+- **Typography:** Ensure modern font stack (Inter/Roboto) with refined weights.
 
 #### [NEW] `StepIndicator.tsx` (`src/ui/wizard/StepIndicator.tsx`)
-- Visual step progress with dots/numbers
-- Current step highlight with animation
-- Step labels (optional, responsive)
+- Implement "Step X of Y ━━○○○○" visual style.
+- Animated progress filling (gradient transition).
 
-#### [MODIFY] Header enhancements
-- Add search input (placeholder, can be implemented later)
-- Add notification badge on bell icon
-- Improve user menu dropdown
+#### [MODIFY] Wizard Layout (`AssignmentWizard.tsx`)
+- Apply "Card variant" with larger padding and subtle shadow.
+- Ensure responsive "stacking" of panels (e.g., Student Selection / Upload split).
 
-#### Micro-animations throughout
-- Button hover/press effects (refine existing)
-- Card entrance animations (stagger)
-- Step transition animations (fade/slide)
+#### [MODIFY] Shared Components
+- **Buttons:** Add `transform: scale(0.98)` on active, subtle shadow on hover.
+- **Inputs/Selects:** Style with `--surface` background and `--border-light` borders.
+- **Toasts:** Ensure `react-hot-toast` uses custom styles (dark mode compatible).
+
+#### Animations
+- **Page Transitions:** Fade-in for wizard steps (CSS transitions).
+- **Micro-interactions:** Hover states for student cards, job list rows.
 
 ---
 

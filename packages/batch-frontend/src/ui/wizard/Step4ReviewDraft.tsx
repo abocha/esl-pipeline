@@ -1,7 +1,9 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 
-import type { DraftResponse } from '../../utils/api';
-import { createDraft, fetchDraft } from '../../utils/api';
+import type { DraftResponse, MarkdownValidationResponse } from '../../utils/api';
+import { createDraft, fetchDraft, updateDraft, validateMarkdown } from '../../utils/api';
+import { SplitEditor } from '../editor/SplitEditor';
+import { ValidationPanel } from '../editor/ValidationPanel';
 import { WizardStep } from './WizardStep';
 
 interface Step4ReviewDraftProps {
@@ -25,10 +27,19 @@ export const Step4ReviewDraft: React.FC<Step4ReviewDraftProps> = ({
 }) => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [validation, setValidation] = useState<MarkdownValidationResponse | null>(null);
+  const [validationError, setValidationError] = useState<string | null>(null);
+  const [validating, setValidating] = useState(false);
+  const [strictValidation, setStrictValidation] = useState(false);
 
   useEffect(() => {
     let active = true;
     if (!draftId) return;
+
+    // improved: avoid overwriting existing edits
+    if (draftText) {
+      return;
+    }
 
     const loadDraft = async () => {
       setLoading(true);
@@ -54,7 +65,46 @@ export const Step4ReviewDraft: React.FC<Step4ReviewDraftProps> = ({
     return () => {
       active = false;
     };
-  }, [draftId, onDraftReady, setDraftText]);
+  }, [draftId, onDraftReady, setDraftText, draftText]);
+
+  useEffect(() => {
+    if (!draftText.trim()) {
+      setValidation(null);
+      setValidationError(null);
+      setValidating(false);
+      return;
+    }
+
+    let active = true;
+    const timeout = setTimeout(() => {
+      const runValidation = async () => {
+        setValidating(true);
+        setValidationError(null);
+        try {
+          const response = await validateMarkdown(draftText, strictValidation);
+          if (!active) return;
+          setValidation(response);
+        } catch (error_) {
+          if (!active) return;
+          const message =
+            error_ instanceof Error
+              ? error_.message
+              : 'Unable to validate markdown';
+          setValidationError(message);
+        } finally {
+          if (active) {
+            setValidating(false);
+          }
+        }
+      };
+      void runValidation();
+    }, 500);
+
+    return () => {
+      active = false;
+      clearTimeout(timeout);
+    };
+  }, [draftText, strictValidation]);
 
   const handleSaveDraft = async () => {
     if (!promptPackageId) {
@@ -67,8 +117,15 @@ export const Step4ReviewDraft: React.FC<Step4ReviewDraftProps> = ({
     }
     setLoading(true);
     setError(null);
+    setLoading(true);
+    setError(null);
     try {
-      const response = await createDraft(promptPackageId, draftText.trim());
+      let response: DraftResponse;
+      if (draftId) {
+        response = await updateDraft(draftId, draftText.trim());
+      } else {
+        response = await createDraft(promptPackageId, draftText.trim());
+      }
       onDraftReady(response);
       onNext();
     } catch (createError) {
@@ -78,8 +135,6 @@ export const Step4ReviewDraft: React.FC<Step4ReviewDraftProps> = ({
       setLoading(false);
     }
   };
-
-  const preview = useMemo(() => draftText.trim() || 'Draft preview will appear here.', [draftText]);
 
   return (
     <WizardStep
@@ -92,69 +147,22 @@ export const Step4ReviewDraft: React.FC<Step4ReviewDraftProps> = ({
       isBusy={loading}
     >
       <div className="draft-layout">
-        <div className="draft-panel">
-          <h3>Draft text</h3>
-          <textarea
-            value={draftText}
-            onChange={(event) => setDraftText(event.target.value)}
-            rows={14}
-            placeholder="Write or paste the draft markdown here..."
-          />
-        </div>
-        <div className="draft-panel">
-          <h3>Preview</h3>
-          <div className="draft-preview">
-            <pre>{preview}</pre>
-          </div>
-        </div>
+        <SplitEditor value={draftText} onChange={setDraftText} />
+        <ValidationPanel
+          validation={validation}
+          error={validationError}
+          isValidating={validating}
+          strict={strictValidation}
+          onToggleStrict={setStrictValidation}
+        />
       </div>
       {error ? <p className="error-text">{error}</p> : null}
 
       <style>{`
         .draft-layout {
-          display: grid;
-          grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
-          gap: var(--space-4);
-        }
-
-        .draft-panel {
-          background: var(--bg-secondary);
-          border-radius: var(--radius-xl);
-          padding: var(--space-4);
-          border: 1px solid var(--border-light);
           display: flex;
           flex-direction: column;
-          gap: var(--space-3);
-        }
-
-        .draft-panel h3 {
-          margin: 0;
-        }
-
-        .draft-panel textarea {
-          width: 100%;
-          border-radius: var(--radius-lg);
-          border: 1px solid var(--border-medium);
-          padding: var(--space-3);
-          min-height: 240px;
-          background: var(--bg-primary);
-          font-family: var(--font-mono);
-        }
-
-        .draft-preview {
-          border-radius: var(--radius-lg);
-          border: 1px solid var(--border-medium);
-          padding: var(--space-3);
-          background: var(--bg-primary);
-          min-height: 240px;
-          overflow: auto;
-        }
-
-        .draft-preview pre {
-          margin: 0;
-          white-space: pre-wrap;
-          font-family: var(--font-mono);
-          font-size: var(--text-sm);
+          gap: var(--space-4);
         }
       `}</style>
     </WizardStep>
