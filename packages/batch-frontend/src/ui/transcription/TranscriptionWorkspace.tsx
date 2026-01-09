@@ -1,5 +1,5 @@
 import copy from 'copy-to-clipboard';
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import toast from 'react-hot-toast';
 
 import { useJobMonitor } from '../../context/JobMonitorContext';
@@ -466,7 +466,7 @@ export const TranscriptionWorkspace: React.FC = () => {
     resetPromptState();
   };
 
-  const handleLoadTranscript = async (recordingId?: string) => {
+  const handleLoadTranscript = useCallback(async (recordingId?: string) => {
     const target = (recordingId ?? recordingInput ?? selectedRecordingId).trim();
     if (!target) {
       toast.error('Enter a recording ID first');
@@ -487,7 +487,7 @@ export const TranscriptionWorkspace: React.FC = () => {
     } finally {
       setTranscriptLoading(false);
     }
-  };
+  }, [recordingInput, selectedRecordingId, registerRecording]);
 
   const handleSaveTranscript = async () => {
     if (!selectedRecordingId) {
@@ -566,7 +566,7 @@ export const TranscriptionWorkspace: React.FC = () => {
     }
   };
 
-  const handleFetchPromptPackage = async (overrideId?: string) => {
+  const handleFetchPromptPackage = useCallback(async (overrideId?: string) => {
     const target = (overrideId ?? promptPackageId).trim();
     if (!target) {
       toast.error('Enter a prompt package ID');
@@ -585,7 +585,7 @@ export const TranscriptionWorkspace: React.FC = () => {
     } finally {
       setPromptLoading(false);
     }
-  };
+  }, [promptPackageId]);
 
   useEffect(() => {
     const handleOpenTranscript = (event: Event) => {
@@ -861,9 +861,8 @@ export const TranscriptionWorkspace: React.FC = () => {
                   <button
                     type="button"
                     key={recording.recordingId}
-                    className={`recording-card${
-                      recording.recordingId === selectedRecordingId ? ' active' : ''
-                    }`}
+                    className={`recording-card${recording.recordingId === selectedRecordingId ? ' active' : ''
+                      }`}
                     onClick={() => handleSelectRecording(recording.recordingId)}
                   >
                     <div className="recording-title">
@@ -876,9 +875,8 @@ export const TranscriptionWorkspace: React.FC = () => {
                       </span>
                     </div>
                     <div className="recording-sub">
-                      {`${recording.source === 'upload' ? 'Upload' : 'Scan'} • ${studentLabel} | ${
-                        statusMeta.note
-                      } | ${transcriptLabel}`}
+                      {`${recording.source === 'upload' ? 'Upload' : 'Scan'} • ${studentLabel} | ${statusMeta.note
+                        } | ${transcriptLabel}`}
                     </div>
                     <div className="recording-meta">
                       Updated {new Date(recording.updatedAt).toLocaleString()}

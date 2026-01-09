@@ -1,5 +1,5 @@
 import React, { useCallback } from 'react';
-import { type Accept, useDropzone } from 'react-dropzone';
+import { type Accept, type FileRejection, useDropzone } from 'react-dropzone';
 
 interface DropZoneProps {
   title: string;
@@ -45,12 +45,15 @@ export const DropZone: React.FC<DropZoneProps> = ({
     [onFiles],
   );
 
-  const { getRootProps, getInputProps, isDragActive } = useDropzone({
+  const { getRootProps, getInputProps, isDragActive, fileRejections } = useDropzone({
     onDrop: handleDrop,
     accept,
     multiple,
     disabled,
+    maxFiles: multiple ? undefined : 1,
   });
+
+  const rejectionMessages = formatRejections(fileRejections);
 
   return (
     <div
@@ -68,6 +71,15 @@ export const DropZone: React.FC<DropZoneProps> = ({
         </div>
         <span className="dropzone-hint">{hint ?? 'Drag & drop files or click to browse'}</span>
       </div>
+      {rejectionMessages.length > 0 ? (
+        <div className="dropzone-errors">
+          {rejectionMessages.map((message, index) => (
+            <p key={`${message}-${index}`} className="dropzone-error">
+              {message}
+            </p>
+          ))}
+        </div>
+      ) : null}
 
       <style>{`
         .dropzone-shell {
@@ -129,7 +141,51 @@ export const DropZone: React.FC<DropZoneProps> = ({
           letter-spacing: 0.05em;
           text-transform: uppercase;
         }
+
+        .dropzone-errors {
+          margin-top: var(--space-3);
+          display: grid;
+          gap: var(--space-1);
+          text-align: center;
+        }
+
+        .dropzone-error {
+          margin: 0;
+          font-size: var(--text-xs);
+          color: var(--color-error-500);
+        }
       `}</style>
     </div>
   );
 };
+
+function formatRejections(rejections: readonly FileRejection[]): string[] {
+  const messages: string[] = [];
+  for (const rejection of rejections) {
+    const name = rejection.file.name;
+    for (const error of rejection.errors) {
+      messages.push(`${name}: ${formatRejectionReason(error.code)}`);
+    }
+  }
+  return messages;
+}
+
+function formatRejectionReason(code: string): string {
+  switch (code) {
+    case 'file-invalid-type': {
+      return 'Unsupported file type.';
+    }
+    case 'file-too-large': {
+      return 'File is too large.';
+    }
+    case 'file-too-small': {
+      return 'File is too small.';
+    }
+    case 'too-many-files': {
+      return 'Too many files selected.';
+    }
+    default: {
+      return 'File rejected.';
+    }
+  }
+}

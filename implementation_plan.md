@@ -94,7 +94,37 @@ The implementation is organized into 7 stages, each building on the previous.
 
 ---
 
-### Stage 0: Backend Enablement (APIs + Contracts)
+## Implementation Status (Current)
+
+Status legend: DONE / PARTIAL / MISSING
+
+- Stage 0 (Backend Enablement): PARTIAL
+  - DONE: DTOs in `@esl-pipeline/contracts`, `/user/jobs`, `/user/jobs/summary`, `/students/summary`,
+    `/recordings/:recordingId/audio` with range support, `/validation/markdown`, `jobOverrides`
+    on draft materialize, `edit_metadata` action wired.
+  - MISSING: `edit_metadata` should update manifest + emit job_state_changed (TODO in code).
+- Stage 1 (Dashboard): DONE
+  - Dashboard view, quick actions, pending approvals, weekly summary, and router-backed navigation are in place.
+- Stage 2 (Wizard): DONE
+  - 5-step flow, deep links, audio playback, prompt package creation, draft review, publish flow wired.
+- Stage 3 (Enhanced Upload UX): PARTIAL
+  - DONE: DropZone + UploadProgress integrated in wizard, uploader, and transcription workspace; progress + cancel hooks.
+  - MISSING: DropZone rejection feedback for invalid file types (plan called out file validation UX).
+- Stage 4 (Markdown Editor with Preview): PARTIAL
+  - DONE: CodeMirror editor, preview, split view, validation panel, debounced validation calls.
+  - MISSING: toolbar actions, scroll sync, and “jump to line” validation affordances.
+- Stage 5 (Visual Polish & Design System): PARTIAL
+  - DONE: glass panels, animations, shared icons, step indicator, custom toasts.
+  - MISSING: palette/token alignment to `FRONTEND_VISION` values, button active scale across variants,
+    step indicator gradient progress + stage icons.
+- Stage 6 (Integration & Testing): PARTIAL
+  - DONE: WizardContext in place and used; routes protected.
+  - MISSING: deep-link parsing in context, wizard integration tests (skipped), and unit tests for
+    StepIndicator, DropZone, WizardContext, and MarkdownEditor.
+
+---
+
+### Stage 0: Backend Enablement (APIs + Contracts) — PARTIAL
 
 Build the API surface needed by the dashboard and wizard so frontend work can ship without mocks.
 
@@ -142,7 +172,7 @@ Build the API surface needed by the dashboard and wizard so frontend work can sh
 
 ---
 
-### Stage 1: Dashboard Foundation
+### Stage 1: Dashboard Foundation — DONE
 
 Create the dashboard as the new home view, replacing the current flat panel layout.
 
@@ -178,7 +208,7 @@ Create the dashboard as the new home view, replacing the current flat panel layo
 
 ---
 
-### Stage 2: Multi-Step Assignment Wizard
+### Stage 2: Multi-Step Assignment Wizard — DONE
 
 Implement the guided 5-step workflow from FRONTEND_VISION §2.2 and replace the
 current `/wizard` placeholder. Support deep links from the dashboard.
@@ -231,7 +261,7 @@ current `/wizard` placeholder. Support deep links from the dashboard.
 
 ---
 
-### Stage 3: Enhanced Upload UX
+### Stage 3: Enhanced Upload UX — PARTIAL
 
 Improve the file upload experience throughout the application.
 
@@ -265,7 +295,7 @@ Improve the file upload experience throughout the application.
 
 ---
 
-### Stage 4: Markdown Editor with Preview
+### Stage 4: Markdown Editor with Preview — PARTIAL
 
 Add a proper markdown editing experience for draft review.
 
@@ -303,7 +333,7 @@ Add a proper markdown editing experience for draft review.
 
 ---
 
-### Stage 5: Visual Polish & Design System Enhancements
+### Stage 5: Visual Polish & Design System Enhancements — PARTIAL
 
 Apply premium aesthetics across the application, aligning with the `FRONTEND_VISION.md` guidelines (Glassmorphism, Indigo/Slate palette).
 
@@ -341,7 +371,7 @@ Apply premium aesthetics across the application, aligning with the `FRONTEND_VIS
 
 ---
 
-### Stage 6: Integration & Testing
+### Stage 6: Integration & Testing — PARTIAL
 
 Refactor the Wizard to use a centralized Context for state management (replacing local state in `AssignmentWizard`) and finalize application routing.
 

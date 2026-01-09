@@ -1,7 +1,8 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 
 import type { DraftResponse, MarkdownValidationResponse } from '../../utils/api';
 import { createDraft, fetchDraft, updateDraft, validateMarkdown } from '../../utils/api';
+import type { SplitEditorHandle } from '../editor/SplitEditor';
 import { SplitEditor } from '../editor/SplitEditor';
 import { ValidationPanel } from '../editor/ValidationPanel';
 import { WizardStep } from './WizardStep';
@@ -31,6 +32,7 @@ export const Step4ReviewDraft: React.FC<Step4ReviewDraftProps> = ({
   const [validationError, setValidationError] = useState<string | null>(null);
   const [validating, setValidating] = useState(false);
   const [strictValidation, setStrictValidation] = useState(false);
+  const editorRef = useRef<SplitEditorHandle | null>(null);
 
   useEffect(() => {
     let active = true;
@@ -120,12 +122,9 @@ export const Step4ReviewDraft: React.FC<Step4ReviewDraftProps> = ({
     setLoading(true);
     setError(null);
     try {
-      let response: DraftResponse;
-      if (draftId) {
-        response = await updateDraft(draftId, draftText.trim());
-      } else {
-        response = await createDraft(promptPackageId, draftText.trim());
-      }
+      const response = draftId
+        ? await updateDraft(draftId, draftText.trim())
+        : await createDraft(promptPackageId, draftText.trim());
       onDraftReady(response);
       onNext();
     } catch (createError) {
@@ -147,13 +146,14 @@ export const Step4ReviewDraft: React.FC<Step4ReviewDraftProps> = ({
       isBusy={loading}
     >
       <div className="draft-layout">
-        <SplitEditor value={draftText} onChange={setDraftText} />
+        <SplitEditor ref={editorRef} value={draftText} onChange={setDraftText} />
         <ValidationPanel
           validation={validation}
           error={validationError}
           isValidating={validating}
           strict={strictValidation}
           onToggleStrict={setStrictValidation}
+          onJumpToLine={(line) => editorRef.current?.jumpToLine(line)}
         />
       </div>
       {error ? <p className="error-text">{error}</p> : null}

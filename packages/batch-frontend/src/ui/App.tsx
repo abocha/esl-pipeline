@@ -8,6 +8,7 @@ import { JobSettingsProvider } from '../context/JobSettingsContext';
 import { NotificationProvider } from '../context/NotificationContext';
 import { StudentSelectionProvider } from '../context/StudentSelectionContext';
 import { useTheme } from '../context/ThemeContext';
+import { WizardProvider } from '../context/WizardContext';
 import { AuthDialog, AuthMode } from './auth/AuthDialog';
 import { Dashboard } from './dashboard/Dashboard';
 import { ActivityFeed } from './jobs/ActivityFeed';
@@ -144,7 +145,9 @@ export const App: React.FC = () => {
         <JobSettingsProvider>
           <JobMonitorProvider>
             <NotificationProvider>
-              <AuthenticatedRoutes />
+              <WizardProvider>
+                <AuthenticatedRoutes />
+              </WizardProvider>
             </NotificationProvider>
           </JobMonitorProvider>
         </JobSettingsProvider>

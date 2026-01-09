@@ -4,7 +4,6 @@ import {
   createContext,
   useCallback,
   useContext,
-  useEffect,
   useMemo,
   useState,
 } from 'react';
@@ -65,44 +64,44 @@ export function JobSettingsProvider({ children }: { children: ReactNode }) {
   const isUsingFallback = !data;
   const options = data ?? DEFAULT_JOB_OPTIONS;
 
-  const [settings, setSettings] = useState<JobSettings>(() => ({
+  const [rawSettings, setRawSettings] = useState<JobSettings>(() => ({
     ...DEFAULT_SETTINGS,
     preset: options.presets[0] ?? DEFAULT_SETTINGS.preset,
     notionDatabase: options.notionDatabases[0]?.id ?? DEFAULT_SETTINGS.notionDatabase,
     ttsStrategy: options.ttsStrategies[0] ?? DEFAULT_SETTINGS.ttsStrategy,
   }));
 
-  useEffect(() => {
-    setSettings((prev) => {
-      const preset =
-        ensureOption(prev.preset, options.presets) ?? options.presets[0] ?? DEFAULT_SETTINGS.preset;
-      const notionDatabase =
-        ensureOption(
-          prev.notionDatabase,
-          options.notionDatabases.map((db) => db.id),
-        ) ??
-        options.notionDatabases[0]?.id ??
-        DEFAULT_SETTINGS.notionDatabase;
-      const ttsStrategy =
-        (ensureOption(prev.ttsStrategy, options.ttsStrategies) as JobSettings['ttsStrategy']) ??
-        options.ttsStrategies[0] ??
-        DEFAULT_SETTINGS.ttsStrategy;
+  const settings = useMemo(() => {
+    const preset =
+      ensureOption(rawSettings.preset, options.presets) ??
+      options.presets[0] ??
+      DEFAULT_SETTINGS.preset;
+    const notionDatabase =
+      ensureOption(
+        rawSettings.notionDatabase,
+        options.notionDatabases.map((db) => db.id),
+      ) ??
+      options.notionDatabases[0]?.id ??
+      DEFAULT_SETTINGS.notionDatabase;
+    const ttsStrategy =
+      (ensureOption(rawSettings.ttsStrategy, options.ttsStrategies) as JobSettings['ttsStrategy']) ??
+      options.ttsStrategies[0] ??
+      DEFAULT_SETTINGS.ttsStrategy;
 
-      return {
-        ...prev,
-        preset,
-        notionDatabase,
-        ttsStrategy,
-      };
-    });
-  }, [options]);
+    return {
+      ...rawSettings,
+      preset,
+      notionDatabase,
+      ttsStrategy,
+    };
+  }, [rawSettings, options]);
 
   const updateSettings = useCallback((updates: Partial<JobSettings>) => {
-    setSettings((prev) => ({ ...prev, ...updates }));
+    setRawSettings((prev) => ({ ...prev, ...updates }));
   }, []);
 
   const resetSettings = useCallback(() => {
-    setSettings({
+    setRawSettings({
       ...DEFAULT_SETTINGS,
       preset: options.presets[0] ?? DEFAULT_SETTINGS.preset,
       notionDatabase: options.notionDatabases[0]?.id ?? DEFAULT_SETTINGS.notionDatabase,

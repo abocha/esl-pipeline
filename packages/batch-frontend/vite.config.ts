@@ -1,6 +1,7 @@
+/// <reference types="vitest" />
 import react from '@vitejs/plugin-react-swc';
 import type { ProxyOptions } from 'vite';
-import { defineConfig } from 'vite';
+import { defineConfig } from 'vitest/config';
 
 // Minimal Vite config for local dev inside the monorepo.
 // - Serves frontend on :5173 by default.
@@ -77,5 +78,8 @@ export default defineConfig({
       'base-uri': ["'self'"],
       'form-action': ["'self'"],
     }),
+  },
+  test: {
+    exclude: ['tests/e2e/**', 'node_modules/**'],
   },
 });

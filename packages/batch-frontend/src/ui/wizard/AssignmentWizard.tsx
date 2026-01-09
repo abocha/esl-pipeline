@@ -1,9 +1,10 @@
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useRef } from 'react';
 import { useSearchParams } from 'react-router-dom';
 
 import { useJobMonitor } from '../../context/JobMonitorContext';
 import { useJobSettings } from '../../context/JobSettingsContext';
-import type { JobConfigOverrides, JobState, JobStatus } from '../../utils/api';
+import { useWizard } from '../../context/WizardContext';
+import type { JobStatus } from '../../utils/api';
 import { getJobStatus } from '../../utils/api';
 import { Step1SelectStudent } from './Step1SelectStudent';
 import { Step2ReviewTranscript } from './Step2ReviewTranscript';
@@ -11,13 +12,14 @@ import { Step3AddNotes } from './Step3AddNotes';
 import { Step4ReviewDraft } from './Step4ReviewDraft';
 import { Step5Publish } from './Step5Publish';
 import { StepIndicator } from './StepIndicator';
+import { Icons } from '../shared/Icons';
 
 const STEPS = [
-  { key: 'select', label: 'Select & Upload' },
-  { key: 'transcript', label: 'Transcript' },
-  { key: 'notes', label: 'Notes' },
-  { key: 'review', label: 'Review Draft' },
-  { key: 'publish', label: 'Publish' },
+  { key: 'select', label: 'Select & Upload', icon: <Icons.CloudArrowUp /> },
+  { key: 'transcript', label: 'Transcript', icon: <Icons.DocumentText /> },
+  { key: 'notes', label: 'Notes', icon: <Icons.PencilSquare /> },
+  { key: 'review', label: 'Review Draft', icon: <Icons.Check /> },
+  { key: 'publish', label: 'Publish', icon: <Icons.RocketLaunch /> },
 ];
 
 const parseStepParam = (value: string | null): number => {
@@ -33,167 +35,191 @@ const parseStepParam = (value: string | null): number => {
   return 0;
 };
 
-const buildOverrides = (base: JobConfigOverrides): JobConfigOverrides => ({
-  preset: base.preset,
-  notionDatabase: base.notionDatabase,
-  withTts: base.withTts,
-  forceTts: base.forceTts,
-  ttsStrategy: base.ttsStrategy,
-  upload: base.upload,
-  voiceId: base.voiceId,
-  voiceAccent: base.voiceAccent,
-});
-
 export const AssignmentWizard: React.FC = () => {
   const [searchParams, setSearchParams] = useSearchParams();
   const { jobMap } = useJobMonitor();
   const { settings } = useJobSettings();
+  const { state, dispatch, actions } = useWizard();
 
   const stepParam = searchParams.get('step');
   const jobParam = searchParams.get('jobId');
   const derivedStep = parseStepParam(stepParam);
 
-  const [currentStep, setCurrentStep] = useState(derivedStep);
-  const [activeJobId, setActiveJobId] = useState(jobParam || null);
-  const [jobState, setJobState] = useState<JobState | null>(null);
-  const [jobMd, setJobMd] = useState<string | null>(null);
+  const {
+    currentStep,
+    activeJobId,
+    recordingId,
+    transcriptId,
+    transcriptText,
+    promptPackageId,
+    draftId,
+    draftText,
+    notes,
+    templateId,
+    profileId,
+    overrides,
+    jobState,
+    jobMd,
+  } = state;
 
-  const [recordingId, setRecordingId] = useState<string | null>(null);
-  const [transcriptId, setTranscriptId] = useState<string | null>(null);
-  const [transcriptText, setTranscriptText] = useState('');
-  const [promptPackageId, setPromptPackageId] = useState<string | null>(null);
-  const [draftId, setDraftId] = useState<string | null>(null);
-  const [draftText, setDraftText] = useState('');
-  const [notes, setNotes] = useState('');
-  const [templateId, setTemplateId] = useState('');
-  const [profileId, setProfileId] = useState('');
+  // Initialize overrides from settings globally once if not set?
+  // Actually, we should sync default settings if job overrides are empty/undefined.
+  // The original code did this in an effect.
+  useEffect(() => {
+    // Only set if we haven't modified them yet? Or strictly sync defaults?
+    // Let's rely on the user manually changing them, but seed with settings.
+    // We can do a smart check: update undefined fields.
+    const updates: Partial<typeof overrides> = {};
+    let needsUpdate = false;
 
-  const [overrides, setOverrides] = useState<JobConfigOverrides>(() => ({
-    preset: settings.preset,
-    notionDatabase: settings.notionDatabase,
-    withTts: settings.withTts,
-    forceTts: settings.forceTts,
-    ttsStrategy: settings.ttsStrategy,
-    upload: 'auto',
-    voiceId: undefined,
-    voiceAccent: undefined,
-  }));
+    if (!overrides.preset && settings.preset) {
+      updates.preset = settings.preset;
+      needsUpdate = true;
+    }
+    if (!overrides.notionDatabase && settings.notionDatabase) {
+      updates.notionDatabase = settings.notionDatabase;
+      needsUpdate = true;
+    }
+    if (overrides.withTts === undefined && settings.withTts !== undefined) {
+      updates.withTts = settings.withTts;
+      needsUpdate = true;
+    }
+    if (overrides.forceTts === undefined && settings.forceTts !== undefined) {
+      updates.forceTts = settings.forceTts;
+      needsUpdate = true;
+    }
+    if (overrides.ttsStrategy === undefined && settings.ttsStrategy !== undefined) {
+      updates.ttsStrategy = settings.ttsStrategy;
+      needsUpdate = true;
+    }
 
-  const jobFetchRef = useRef<string | null>(null);
+    if (needsUpdate) {
+      actions.updateOverrides(updates);
+    }
+  }, [settings, overrides, actions]);
 
+  // Sync URL -> Context (Step)
   useEffect(() => {
     if (derivedStep !== currentStep) {
-      setCurrentStep(derivedStep);
+      actions.goToStep(derivedStep);
     }
-  }, [derivedStep, currentStep]);
+    // Only react to URL changes, not internal state changes, to avoid race conditions.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [derivedStep, actions]);
 
-  useEffect(() => {
-    setOverrides((prev) => ({
-      ...prev,
-      preset: prev.preset ?? settings.preset,
-      notionDatabase: prev.notionDatabase ?? settings.notionDatabase,
-      withTts: prev.withTts ?? settings.withTts,
-      forceTts: prev.forceTts ?? settings.forceTts,
-      ttsStrategy: prev.ttsStrategy ?? settings.ttsStrategy,
-    }));
-  }, [settings]);
-
+  // Sync URL -> Context (Job ID)
   useEffect(() => {
     if (jobParam !== activeJobId) {
-      setActiveJobId(jobParam || null);
+      actions.setJob(jobParam || null);
     }
-  }, [jobParam, activeJobId]);
+    // Only react to URL changes.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [jobParam, actions]);
 
+  // Sync Context -> URL
   useEffect(() => {
     const params = new URLSearchParams(searchParams);
     const stepKey = STEPS[currentStep]?.key ?? STEPS[0]?.key ?? 'select';
+
+    let changed = false;
     if (params.get('step') !== stepKey) {
       params.set('step', stepKey);
+      changed = true;
     }
+
     if (activeJobId) {
-      params.set('jobId', activeJobId);
-    } else {
+      if (params.get('jobId') !== activeJobId) {
+        params.set('jobId', activeJobId);
+        changed = true;
+      }
+    } else if (params.has('jobId')) {
       params.delete('jobId');
+      changed = true;
     }
-    if (params.toString() !== searchParams.toString()) {
+
+    if (changed) {
       setSearchParams(params, { replace: true });
     }
   }, [currentStep, activeJobId, searchParams, setSearchParams]);
 
-  const applyJobSnapshot = (job: JobStatus) => {
-    setJobState(job.state ?? null);
-    setJobMd(job.md ?? null);
-    setRecordingId((prev) => prev ?? job.recordingId ?? null);
-    setTranscriptId((prev) => prev ?? job.transcriptId ?? null);
-    setPromptPackageId((prev) => prev ?? job.promptPackageId ?? null);
-    setDraftId((prev) => prev ?? job.draftId ?? null);
-    setOverrides((prev) => ({
-      ...prev,
-      preset: job.preset ?? prev.preset,
-      notionDatabase: job.notionDatabase ?? prev.notionDatabase,
-      withTts: job.withTts ?? prev.withTts,
-      forceTts: job.forceTts ?? prev.forceTts,
-      ttsStrategy: job.ttsStrategy ?? prev.ttsStrategy,
-      upload: job.upload ?? prev.upload,
-      voiceId: job.voiceId ?? prev.voiceId,
-      voiceAccent: job.voiceAccent ?? prev.voiceAccent,
-    }));
-  };
+  // Job Hydration Logic
+  const jobFetchRef = useRef<string | null>(null);
+
+  const hydrateJob = useCallback((job: JobStatus) => {
+    dispatch({
+      type: 'HYDRATE_JOB',
+      payload: {
+        jobState: job.state ?? null,
+        jobMd: job.md ?? null,
+        recordingId: job.recordingId ?? null,
+        transcriptId: job.transcriptId ?? null,
+        promptPackageId: job.promptPackageId ?? null,
+        draftId: job.draftId ?? null,
+        overrides: {
+          preset: job.preset ?? undefined,
+          notionDatabase: job.notionDatabase ?? undefined,
+          withTts: job.withTts ?? undefined,
+          forceTts: job.forceTts ?? undefined,
+          ttsStrategy: job.ttsStrategy ?? undefined,
+          upload: job.upload ?? undefined,
+          voiceId: job.voiceId ?? undefined,
+          voiceAccent: job.voiceAccent ?? undefined,
+        },
+      },
+    });
+  }, [dispatch]);
 
   useEffect(() => {
     if (!activeJobId) return;
+
+    // Check JobMonitor first
     const jobEntry = jobMap[activeJobId];
     if (jobEntry) {
-      applyJobSnapshot(jobEntry);
+      hydrateJob(jobEntry);
       return;
     }
+
+    // Fetch if needed
     if (jobFetchRef.current === activeJobId) return;
     jobFetchRef.current = activeJobId;
+
     const loadJob = async () => {
       try {
         const response = await getJobStatus(activeJobId);
-        applyJobSnapshot(response);
+        hydrateJob(response);
       } catch (error) {
         console.warn('Failed to load job details', error);
       }
     };
     void loadJob();
-  }, [activeJobId, jobMap]);
+  }, [activeJobId, jobMap, hydrateJob]);
 
-  const goToStep = (index: number) => {
-    const nextIndex = Math.max(0, Math.min(STEPS.length - 1, index));
-    setCurrentStep(nextIndex);
-  };
-
+  // Handlers
   const handleRecordingReady = useCallback(
     (recording: { recordingId: string; transcriptId: string | null }) => {
-      setRecordingId(recording.recordingId);
-      setTranscriptId(recording.transcriptId ?? null);
+      dispatch({ type: 'SET_RECORDING', payload: recording });
     },
-    [],
+    [dispatch],
   );
 
   const handleTranscriptReady = useCallback(
     (response: { transcriptId: string; text: string }, text: string) => {
-      setTranscriptId(response.transcriptId ?? null);
-      setTranscriptText(text);
+      dispatch({ type: 'SET_TRANSCRIPT', payload: { transcriptId: response.transcriptId, text } });
     },
-    [],
+    [dispatch],
   );
 
   const handlePromptReady = useCallback((promptPackage: { id: string }) => {
-    setPromptPackageId(promptPackage.id);
-  }, []);
+    dispatch({ type: 'SET_PROMPT_PACKAGE', payload: promptPackage.id });
+  }, [dispatch]);
 
   const handleDraftReady = useCallback((draft: { id: string; text: string }) => {
-    setDraftId(draft.id);
-    setDraftText(draft.text ?? '');
-  }, []);
+    dispatch({ type: 'SET_DRAFT', payload: { draftId: draft.id, text: draft.text } });
+  }, [dispatch]);
 
   const handlePublish = useCallback((jobId: string) => {
-    setActiveJobId(jobId);
-    setJobState('queued');
-  }, []);
+    actions.setJob(jobId, 'queued');
+  }, [actions]);
 
   let stepContent: React.ReactNode = null;
   switch (STEPS[currentStep]?.key) {
@@ -202,7 +228,7 @@ export const AssignmentWizard: React.FC = () => {
         <Step1SelectStudent
           recordingId={recordingId}
           onRecordingReady={handleRecordingReady}
-          onNext={() => goToStep(1)}
+          onNext={() => actions.goToStep(1)}
         />
       );
       break;
@@ -214,9 +240,9 @@ export const AssignmentWizard: React.FC = () => {
           transcriptId={transcriptId}
           transcriptText={transcriptText}
           onTranscriptReady={handleTranscriptReady}
-          onNext={() => goToStep(2)}
-          onBack={() => goToStep(0)}
-          onSkip={() => goToStep(2)}
+          onNext={() => actions.goToStep(2)}
+          onBack={() => actions.goToStep(0)}
+          onSkip={() => actions.goToStep(2)}
         />
       );
       break;
@@ -226,15 +252,15 @@ export const AssignmentWizard: React.FC = () => {
         <Step3AddNotes
           recordingId={recordingId}
           notes={notes}
-          setNotes={setNotes}
+          setNotes={(val) => dispatch({ type: 'SET_NOTES', payload: val })}
           templateId={templateId}
-          setTemplateId={setTemplateId}
+          setTemplateId={(val) => dispatch({ type: 'SET_TEMPLATE', payload: val })}
           profileId={profileId}
-          setProfileId={setProfileId}
+          setProfileId={(val) => dispatch({ type: 'SET_PROFILE', payload: val })}
           promptPackageId={promptPackageId}
           onPromptReady={handlePromptReady}
-          onNext={() => goToStep(3)}
-          onBack={() => goToStep(1)}
+          onNext={() => actions.goToStep(3)}
+          onBack={() => actions.goToStep(1)}
         />
       );
       break;
@@ -245,10 +271,10 @@ export const AssignmentWizard: React.FC = () => {
           promptPackageId={promptPackageId}
           draftId={draftId}
           draftText={draftText}
-          setDraftText={setDraftText}
+          setDraftText={(val) => dispatch({ type: 'SET_DRAFT_TEXT', payload: val })}
           onDraftReady={handleDraftReady}
-          onNext={() => goToStep(4)}
-          onBack={() => goToStep(2)}
+          onNext={() => actions.goToStep(4)}
+          onBack={() => actions.goToStep(2)}
         />
       );
       break;
@@ -260,15 +286,10 @@ export const AssignmentWizard: React.FC = () => {
           jobId={activeJobId}
           jobState={jobState}
           jobMd={jobMd}
-          overrides={buildOverrides(overrides)}
-          onOverridesChange={(updates) =>
-            setOverrides((prev) => ({
-              ...prev,
-              ...updates,
-            }))
-          }
+          overrides={overrides}
+          onOverridesChange={actions.updateOverrides}
           onJobPublished={handlePublish}
-          onBack={() => goToStep(3)}
+          onBack={() => actions.goToStep(3)}
         />
       );
       break;
@@ -291,7 +312,7 @@ export const AssignmentWizard: React.FC = () => {
           <StepIndicator
             currentStep={currentStep + 1}
             totalSteps={STEPS.length}
-            labels={STEPS.map(s => s.label)}
+            steps={STEPS.map((step) => ({ label: step.label, icon: step.icon }))}
           />
         </div>
       </header>
@@ -313,7 +334,7 @@ export const AssignmentWizard: React.FC = () => {
         .wizard-header {
           padding: var(--space-6) var(--space-8);
           display: flex;
-          align-items: flex-start; /* Changed from center to allow side-by-side */
+          align-items: flex-start;
           justify-content: space-between;
           gap: var(--space-8);
           position: relative;

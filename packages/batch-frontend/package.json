@@ -7,13 +7,16 @@
     "dev": "vite",
     "lint": "eslint .",
     "test": "vitest run --environment jsdom",
+    "test:e2e": "playwright test --project=chromium --project=webkit && (playwright test --project=firefox || true)",
+    "test:e2e:real": "playwright test --project=real-api",
+    "test:e2e:ui": "playwright test --ui",
     "preview": "vite preview",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
     "@codemirror/lang-markdown": "^6.5.0",
     "@codemirror/state": "^6.5.3",
-    "@codemirror/view": "^6.39.8",
+    "@codemirror/view": "^6.39.9",
     "@esl-pipeline/contracts": "workspace:*",
     "@tanstack/react-query": "^5.90.16",
     "axios": "^1.13.2",
@@ -23,24 +26,26 @@
     "react-dom": "^19.2.3",
     "react-dropzone": "^14.3.8",
     "react-hot-toast": "^2.6.0",
-    "react-router-dom": "^6.30.1",
+    "react-router-dom": "^7.12.0",
     "rehype-stringify": "^10.0.1",
     "remark-parse": "^11.0.0",
     "remark-rehype": "^11.1.2",
     "unified": "^11.0.5"
   },
   "devDependencies": {
+    "@playwright/test": "^1.57.0",
     "@testing-library/react": "^16.3.1",
+    "@types/node": "^25.0.3",
     "@types/react": "^19.2.7",
     "@types/react-dom": "^19.2.3",
-    "@typescript-eslint/eslint-plugin": "^8.51.0",
-    "@typescript-eslint/parser": "^8.51.0",
+    "@typescript-eslint/eslint-plugin": "^8.52.0",
+    "@typescript-eslint/parser": "^8.52.0",
     "@vitejs/plugin-react-swc": "^4.2.2",
     "eslint": "^9.39.2",
     "eslint-plugin-react-hooks": "^7.0.1",
     "jsdom": "^27.4.0",
     "typescript": "^5.9.3",
-    "vite": "^7.3.0"
+    "vite": "^7.3.1"
   },
   "peerDependencies": {
     "react": "^19.2.0",

@@ -8,6 +8,7 @@ interface ValidationPanelProps {
   isValidating: boolean;
   strict: boolean;
   onToggleStrict: (next: boolean) => void;
+  onJumpToLine?: (lineNumber: number) => void;
 }
 
 export const ValidationPanel: React.FC<ValidationPanelProps> = ({
@@ -16,6 +17,7 @@ export const ValidationPanel: React.FC<ValidationPanelProps> = ({
   isValidating,
   strict,
   onToggleStrict,
+  onJumpToLine,
 }) => {
   const errors = validation?.errors ?? [];
   const warnings = validation?.warnings ?? [];
@@ -55,9 +57,26 @@ export const ValidationPanel: React.FC<ValidationPanelProps> = ({
             <div className="validation-block">
               <h4>Errors</h4>
               <ul>
-                {errors.map((item, index) => (
-                  <li key={`${item}-${index}`}>{item}</li>
-                ))}
+                {errors.map((item, index) => {
+                  const lineNumber = extractLineNumber(item);
+                  const displayText = lineNumber ? stripLinePrefix(item) : item;
+                  return (
+                    <li key={`${item}-${index}`}>
+                      {lineNumber && onJumpToLine ? (
+                        <button
+                          type="button"
+                          className="validation-link"
+                          onClick={() => onJumpToLine(lineNumber)}
+                        >
+                          <span className="validation-line">Line {lineNumber}</span>
+                          {displayText}
+                        </button>
+                      ) : (
+                        item
+                      )}
+                    </li>
+                  );
+                })}
               </ul>
             </div>
           )}
@@ -66,9 +85,26 @@ export const ValidationPanel: React.FC<ValidationPanelProps> = ({
             <div className="validation-block">
               <h4>Warnings</h4>
               <ul>
-                {warnings.map((item, index) => (
-                  <li key={`${item}-${index}`}>{item}</li>
-                ))}
+                {warnings.map((item, index) => {
+                  const lineNumber = extractLineNumber(item);
+                  const displayText = lineNumber ? stripLinePrefix(item) : item;
+                  return (
+                    <li key={`${item}-${index}`}>
+                      {lineNumber && onJumpToLine ? (
+                        <button
+                          type="button"
+                          className="validation-link"
+                          onClick={() => onJumpToLine(lineNumber)}
+                        >
+                          <span className="validation-line">Line {lineNumber}</span>
+                          {displayText}
+                        </button>
+                      ) : (
+                        item
+                      )}
+                    </li>
+                  );
+                })}
               </ul>
             </div>
           )}
@@ -186,6 +222,27 @@ export const ValidationPanel: React.FC<ValidationPanelProps> = ({
           gap: var(--space-1);
         }
 
+        .validation-link {
+          display: inline-flex;
+          align-items: center;
+          gap: var(--space-2);
+          background: transparent;
+          border: none;
+          color: inherit;
+          text-align: left;
+          padding: 0;
+          cursor: pointer;
+          font-size: inherit;
+        }
+
+        .validation-line {
+          font-size: var(--text-xs);
+          text-transform: uppercase;
+          letter-spacing: 0.08em;
+          font-weight: 600;
+          color: var(--color-primary-500);
+        }
+
         .validation-meta {
           display: grid;
           grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
@@ -216,3 +273,17 @@ export const ValidationPanel: React.FC<ValidationPanelProps> = ({
     </section>
   );
 };
+
+function extractLineNumber(message: string): number | null {
+  const match = message.match(/\bline\s+(\d+)\b/i);
+  if (!match) return null;
+  const parsed = Number.parseInt(match[1] ?? '', 10);
+  if (Number.isNaN(parsed) || parsed <= 0) return null;
+  return parsed;
+}
+
+function stripLinePrefix(message: string): string {
+  return message
+    .replace(/\bline\s+\d+\b:?\s*/i, '')
+    .trim();
+}

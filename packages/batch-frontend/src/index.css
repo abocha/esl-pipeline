@@ -5,13 +5,17 @@
    ======================================== */
 
 :root {
+  --background: #f8fafc;
+  --surface: #ffffff;
+  --primary: #6366f1;
+
   /* Colors - Light Theme */
   --color-primary-50: #eef2ff;
   --color-primary-100: #e0e7ff;
   --color-primary-200: #c7d2fe;
   --color-primary-300: #a5b4fc;
   --color-primary-400: #818cf8;
-  --color-primary-500: #6366f1;
+  --color-primary-500: var(--primary);
   --color-primary-600: #4f46e5;
   --color-primary-700: #4338ca;
   --color-primary-800: #3730a3;
@@ -50,10 +54,10 @@
   --color-gray-900: #0f172a;
 
   /* Semantic Colors - Light Theme */
-  --bg-primary: #ffffff;
+  --bg-primary: var(--surface);
   --bg-secondary: #f8fafc;
   --bg-tertiary: #f1f5f9;
-  --bg-page: linear-gradient(135deg, #e0e7ff 0%, #ede9fe 50%, #fae8ff 100%);
+  --bg-page: linear-gradient(135deg, var(--background) 0%, #ede9fe 50%, #fae8ff 100%);
   
   --text-primary: #0f172a;
   --text-secondary: #475569;
@@ -145,10 +149,14 @@
 
 /* Dark Theme */
 [data-theme="dark"] {
-  --bg-primary: #1e293b;
-  --bg-secondary: #0f172a;
-  --bg-tertiary: #334155;
-  --bg-page: linear-gradient(135deg, #0f172a 0%, #1e1b4b 50%, #1e1b4b 100%);
+  --background: #0f0f17;
+  --surface: #1e1e2e;
+  --primary: #6366f1;
+
+  --bg-primary: var(--surface);
+  --bg-secondary: #151526;
+  --bg-tertiary: #26263a;
+  --bg-page: linear-gradient(135deg, var(--background) 0%, #151528 50%, #1e1e2e 100%);
   
   --text-primary: #f1f5f9;
   --text-secondary: #cbd5e1;
@@ -319,6 +327,10 @@ button:disabled {
   color: var(--text-primary);
 }
 
+.btn-icon:active:not(:disabled) {
+  transform: scale(0.98);
+}
+
 .btn-primary {
   background: var(--gradient-primary);
   color: var(--text-inverse);
@@ -331,7 +343,7 @@ button:disabled {
 }
 
 .btn-primary:active:not(:disabled) {
-  transform: translateY(0);
+  transform: translateY(0) scale(0.98);
 }
 
 .btn-secondary {
@@ -345,6 +357,10 @@ button:disabled {
   border-color: var(--border-medium);
 }
 
+.btn-secondary:active:not(:disabled) {
+  transform: scale(0.98);
+}
+
 .btn-ghost {
   background: transparent;
   color: var(--text-secondary);
@@ -355,14 +371,26 @@ button:disabled {
   color: var(--text-primary);
 }
 
+.btn-ghost:active:not(:disabled) {
+  transform: scale(0.98);
+}
+
 .btn-danger {
   background: var(--gradient-error);
   color: var(--text-inverse);
 }
 
+.btn-danger:active:not(:disabled) {
+  transform: scale(0.98);
+}
+
 .btn-success {
   background: var(--gradient-success);
   color: var(--text-inverse);
+}
+
+.btn-success:active:not(:disabled) {
+  transform: scale(0.98);
 }
 
 /* ========================================
