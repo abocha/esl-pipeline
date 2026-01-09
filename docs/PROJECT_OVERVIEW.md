@@ -8,6 +8,14 @@
 
 ESL Pipeline is a **lesson-to-homework automation system** for private English tutors. It takes a lesson recording and transforms it into a complete, personalized homework assignment published to Notion—with professional text-to-speech audio included.
 
+## If You’re a Maintainer
+
+Recommended reading order:
+1. `docs/README.md` (documentation index)
+2. `docs/reference/agents-ssot.md` (contracts and invariants)
+3. `docs/backend-frontend/backend-frontend-alignment.md` (API status + dependencies)
+4. `docs/design/FRONTEND_VISION_V2.md` (target frontend experience)
+
 ---
 
 ## Who Is It For?

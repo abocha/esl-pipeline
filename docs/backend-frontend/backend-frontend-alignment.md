@@ -1,12 +1,14 @@
 # Backend–Frontend Alignment Plan (Batch System)
 
-> **Canonical status tracker** — This file is now the single human-readable source for backend ↔ frontend API status, milestones, and dependencies. All other docs (UI design, implementation notes) should link here instead of duplicating requirements. For runtime contracts always defer to `docs/agents-ssot.md`.
+> **Canonical status tracker** — This file is now the single human-readable source for backend ↔ frontend API status, milestones, and dependencies. All other docs (UI design, implementation notes) should link here instead of duplicating requirements. For runtime contracts always defer to `docs/reference/agents-ssot.md`.
 
 ## Document Map
 
-- [`design-batch-frontend.md`](design-batch-frontend.md) — UI/UX narrative (user journey, layout, component responsibilities). Backend requirements referenced there link back to this plan.
-- [`implementation-plan-batch-frontend.md`](implementation-plan-batch-frontend.md) — lightweight execution tips and checklists; any blocking backend work must be reflected here first.
-- Additional backend scaffolding lives in [`groundwork-for-backend.md`](groundwork-for-backend.md) and the SSOTs referenced from `AGENTS.md`.
+- [`docs/design/FRONTEND_VISION_V2.md`](../design/FRONTEND_VISION_V2.md) — current target experience.
+- [`docs/design/FRONTEND_VISION_V2_IMPLEMENTATION_MANUAL.md`](../design/FRONTEND_VISION_V2_IMPLEMENTATION_MANUAL.md) — delivery steps and acceptance criteria.
+- [`docs/design/FRONTEND_VISION.md`](../design/FRONTEND_VISION.md) — baseline reference.
+- [`docs/frontend-vision-alignment.md`](../frontend-vision-alignment.md) — current implementation coverage.
+- Additional backend scaffolding lives in `docs/backend-frontend/` and SSOTs in `docs/reference/`.
 
 ---
 
