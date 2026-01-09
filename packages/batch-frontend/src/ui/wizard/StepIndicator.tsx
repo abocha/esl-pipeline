@@ -2,17 +2,28 @@ import React from 'react';
 
 import { Icons } from '../shared/Icons';
 
+type StepInfo = { label: string; icon?: React.ReactNode };
+
 interface StepIndicatorProps {
   currentStep: number;
   totalSteps: number;
   labels?: string[];
+  steps?: StepInfo[];
 }
 
 export const StepIndicator: React.FC<StepIndicatorProps> = ({
   currentStep,
   totalSteps,
   labels = [],
+  steps,
 }) => {
+  const resolvedSteps: StepInfo[] =
+    steps?.length
+      ? steps
+      : Array.from({ length: totalSteps }).map((_, index) => ({
+          label: labels[index] ?? `Step ${index + 1}`,
+        }));
+
   return (
     <div className="step-indicator">
       <div className="step-progress">
@@ -21,29 +32,33 @@ export const StepIndicator: React.FC<StepIndicatorProps> = ({
           const isActive = stepNumber === currentStep;
           const isCompleted = stepNumber < currentStep;
           const isFuture = stepNumber > currentStep;
+          const step = resolvedSteps[index];
+          let stepContent: React.ReactNode = (
+            <span className="step-number">{stepNumber}</span>
+          );
+          if (step?.icon) {
+            stepContent = step.icon;
+          }
+          if (isCompleted) {
+            stepContent = <Icons.Check />;
+          }
 
           return (
             <React.Fragment key={stepNumber}>
               {/* Connector Line */}
               {index > 0 && (
                 <div
-                  className={`step-connector ${isCompleted || isActive ? 'completed' : ''
-                    }`}
+                  className={`step-connector ${isCompleted || isActive ? 'completed' : ''}`}
                 />
               )}
 
               {/* Step Circle */}
               <div
-                className={`step-circle ${isActive ? 'active' : ''} ${isCompleted ? 'completed' : ''
-                  } ${isFuture ? 'future' : ''}`}
-                title={labels[index] ?? `Step ${stepNumber}`}
+                className={`step-circle ${isActive ? 'active' : ''} ${isCompleted ? 'completed' : ''} ${isFuture ? 'future' : ''}`}
+                title={step?.label ?? labels[index] ?? `Step ${stepNumber}`}
                 aria-current={isActive ? 'step' : undefined}
               >
-                {isCompleted ? (
-                  <Icons.Check />
-                ) : (
-                  <span className="step-number">{stepNumber}</span>
-                )}
+                {stepContent}
               </div>
             </React.Fragment>
           );
@@ -53,7 +68,7 @@ export const StepIndicator: React.FC<StepIndicatorProps> = ({
       {/* Optional Mobile Label for Active Step */}
       <div className="current-step-label">
         <span className="label-text">
-          {labels[currentStep - 1] ?? `Step ${currentStep}`}
+          {resolvedSteps[currentStep - 1]?.label ?? `Step ${currentStep}`}
         </span>
         <span className="label-counter">
           {currentStep} of {totalSteps}
@@ -84,7 +99,7 @@ export const StepIndicator: React.FC<StepIndicatorProps> = ({
         }
 
         .step-connector.completed {
-          background: var(--color-primary-500);
+          background: var(--gradient-primary);
         }
 
         .step-circle {
@@ -108,7 +123,7 @@ export const StepIndicator: React.FC<StepIndicatorProps> = ({
         }
 
         .step-circle.active {
-          background: var(--color-primary-500);
+          background: var(--gradient-primary);
           color: white;
           box-shadow: 0 0 0 4px var(--color-primary-100);
           transform: scale(1.1);
@@ -119,7 +134,7 @@ export const StepIndicator: React.FC<StepIndicatorProps> = ({
         }
 
         .step-circle.completed {
-          background: var(--color-primary-500);
+          background: var(--gradient-primary);
           color: white;
         }
         

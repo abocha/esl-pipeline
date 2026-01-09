@@ -293,9 +293,10 @@ export function JobMonitorProvider({ children }: { children: ReactNode }) {
     [updateRecording],
   );
 
-  const replaceRecordingList = useCallback((items: RecordingListItem[]) => {
+  const replaceRecordingList = useCallback((items: RecordingListItem[] = []) => {
     const next: RecordingMap = {};
-    for (const item of items) {
+    const safeItems = Array.isArray(items) ? items : [];
+    for (const item of safeItems) {
       const existing = createDefaultRecording(item.recordingId);
       next[item.recordingId] = {
         ...existing,
@@ -612,21 +613,7 @@ export function JobMonitorProvider({ children }: { children: ReactNode }) {
       pauseLiveUpdates,
       resumeLiveUpdates,
     }),
-    [
-      jobs,
-      jobsArray,
-      recordings,
-      recordingsArray,
-      registerJob,
-      registerRecording,
-      trackJob,
-      connectionState,
-      isPolling,
-      lastError,
-      liveUpdatesPaused,
-      pauseLiveUpdates,
-      resumeLiveUpdates,
-    ],
+    [jobsArray, jobs, recordingsArray, recordings, registerJob, registerRecording, refreshRecordings, trackJob, connectionState, isPolling, lastError, liveUpdatesPaused, pauseLiveUpdates, resumeLiveUpdates],
   );
 
   return <JobMonitorContext.Provider value={value}>{children}</JobMonitorContext.Provider>;

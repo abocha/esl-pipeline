@@ -5,7 +5,11 @@
     // Frontend-specific overrides.
     "target": "ES2022",
     "module": "ESNext",
-    "lib": ["ES2022", "DOM", "DOM.Iterable"],
+    "lib": [
+      "ES2022",
+      "DOM",
+      "DOM.Iterable"
+    ],
     "moduleResolution": "Bundler",
     "jsx": "react-jsx",
     "jsxImportSource": "react",
@@ -14,16 +18,32 @@
     "allowJs": false,
     "resolveJsonModule": true,
     // Make sure Vite/DOM types are available in the editor for ESLint/TS.
-    "types": ["vite/client"],
+    "types": [
+      "vite/client",
+      "vitest"
+    ],
     // Local path aliases for this package.
     "baseUrl": "./",
     "paths": {
-      "@/*": ["src/*"]
+      "@/*": [
+        "src/*"
+      ]
     }
   },
   // Include this package's sources and the workspace root so that
   // eslint-import-resolver-typescript / TS can resolve workspace deps
   // like "vite", "@vitejs/plugin-react-swc", "react", etc.
-  "include": ["../../**/*.d.ts", "src/**/*.ts", "src/**/*.tsx", "vite.config.ts"],
-  "exclude": ["dist", "node_modules", "../../node_modules"]
+  "include": [
+    "../../**/*.d.ts",
+    "src/**/*.ts",
+    "src/**/*.tsx",
+    "vite.config.ts",
+    "playwright.config.ts",
+    "tests/**/*.ts"
+  ],
+  "exclude": [
+    "dist",
+    "node_modules",
+    "../../node_modules"
+  ]
 }

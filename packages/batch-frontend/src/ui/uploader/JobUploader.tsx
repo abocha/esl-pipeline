@@ -128,14 +128,7 @@ export const JobUploader: React.FC = () => {
       });
       return changed ? next : prev;
     });
-  }, [
-    settings.applyToPending,
-    settings.preset,
-    settings.notionDatabase,
-    settings.withTts,
-    settings.forceTts,
-    settings.ttsStrategy,
-  ]);
+  }, [settings.applyToPending, settings.preset, settings.notionDatabase, settings.withTts, settings.forceTts, settings.ttsStrategy, settings]);
 
   const processFile = useCallback(
     async (id: string, overrideSettings?: AppliedJobSettings) => {
@@ -151,13 +144,13 @@ export const JobUploader: React.FC = () => {
         prev.map((file) =>
           file.id === id
             ? {
-                ...file,
-                status: 'uploading',
-                uploadError: undefined,
-                jobError: undefined,
-                uploadProgress: 0,
-                appliedSettings: jobSettings,
-              }
+              ...file,
+              status: 'uploading',
+              uploadError: undefined,
+              jobError: undefined,
+              uploadProgress: 0,
+              appliedSettings: jobSettings,
+            }
             : file,
         ),
       );
@@ -182,11 +175,11 @@ export const JobUploader: React.FC = () => {
           prev.map((file) =>
             file.id === id
               ? {
-                  ...file,
-                  status: 'submitting',
-                  mdPath: uploadResponse.md,
-                  uploadProgress: 100,
-                }
+                ...file,
+                status: 'submitting',
+                mdPath: uploadResponse.md,
+                uploadProgress: 100,
+              }
               : file,
           ),
         );
@@ -205,11 +198,11 @@ export const JobUploader: React.FC = () => {
           prev.map((file) =>
             file.id === id
               ? {
-                  ...file,
-                  status: 'success',
-                  jobId: jobResponse.jobId,
-                  jobError: undefined,
-                }
+                ...file,
+                status: 'success',
+                jobId: jobResponse.jobId,
+                jobError: undefined,
+              }
               : file,
           ),
         );
@@ -230,11 +223,11 @@ export const JobUploader: React.FC = () => {
             prev.map((file) =>
               file.id === id
                 ? {
-                    ...file,
-                    status: 'error',
-                    uploadError: 'Upload canceled.',
-                    uploadProgress: 0,
-                  }
+                  ...file,
+                  status: 'error',
+                  uploadError: 'Upload canceled.',
+                  uploadProgress: 0,
+                }
                 : file,
             ),
           );
@@ -255,11 +248,11 @@ export const JobUploader: React.FC = () => {
           prev.map((file) =>
             file.id === id
               ? {
-                  ...file,
-                  status: 'error',
-                  uploadError: phase === 'upload' ? message : file.uploadError,
-                  jobError: phase === 'job' ? message : file.jobError,
-                }
+                ...file,
+                status: 'error',
+                uploadError: phase === 'upload' ? message : file.uploadError,
+                jobError: phase === 'job' ? message : file.jobError,
+              }
               : file,
           ),
         );
@@ -278,11 +271,11 @@ export const JobUploader: React.FC = () => {
       prev.map((file) =>
         file.id === id
           ? {
-              ...file,
-              status: 'error',
-              uploadError: 'Upload canceled.',
-              uploadProgress: 0,
-            }
+            ...file,
+            status: 'error',
+            uploadError: 'Upload canceled.',
+            uploadProgress: 0,
+          }
           : file,
       ),
     );
@@ -314,12 +307,12 @@ export const JobUploader: React.FC = () => {
         prev.map((file) =>
           file.id === id
             ? {
-                ...file,
-                status: 'idle',
-                uploadError: undefined,
-                jobError: undefined,
-                appliedSettings: snapshot,
-              }
+              ...file,
+              status: 'idle',
+              uploadError: undefined,
+              jobError: undefined,
+              appliedSettings: snapshot,
+            }
             : file,
         ),
       );

@@ -64,6 +64,11 @@ Prereqs: Node.js 24.11.1+, pnpm 8+, running `@esl-pipeline/batch-backend` with
 3. Start frontend: `pnpm --filter @esl-pipeline/batch-frontend dev`
 4. Open `http://localhost:5173`
 
+## E2E testing
+
+- Mocked UI e2e (fast, deterministic): `pnpm --filter @esl-pipeline/batch-frontend test:e2e`
+- Real API smoke (requires backend on `http://localhost:8080`): `pnpm --filter @esl-pipeline/batch-frontend test:e2e:real`
+
 ### Dev configuration knobs
 
 - `BATCH_BACKEND_URL` - sets the Vite dev proxy target (default `http://localhost:8080`)

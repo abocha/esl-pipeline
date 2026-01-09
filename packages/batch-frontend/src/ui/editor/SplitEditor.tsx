@@ -1,4 +1,5 @@
-import React, { useState } from 'react';
+import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from 'react';
+import type { EditorView } from '@codemirror/view';
 
 import { MarkdownEditor } from './MarkdownEditor';
 import { MarkdownPreview } from './MarkdownPreview';
@@ -10,14 +11,72 @@ interface SplitEditorProps {
   onChange: (value: string) => void;
 }
 
+export interface SplitEditorHandle {
+  jumpToLine: (lineNumber: number) => void;
+}
+
 const LAYOUT_LABELS: Record<EditorLayout, string> = {
   split: 'Split',
   editor: 'Editor',
   preview: 'Preview',
 };
 
-export const SplitEditor: React.FC<SplitEditorProps> = ({ value, onChange }) => {
+export const SplitEditor = forwardRef<SplitEditorHandle, SplitEditorProps>(({ value, onChange }, ref) => {
   const [layout, setLayout] = useState<EditorLayout>('split');
+  const previewRef = useRef<HTMLDivElement | null>(null);
+  const editorViewRef = useRef<EditorView | null>(null);
+  const syncingRef = useRef<null | 'editor' | 'preview'>(null);
+
+  useImperativeHandle(ref, () => ({
+    jumpToLine: (lineNumber: number) => {
+      const view = editorViewRef.current;
+      if (!view) return;
+      const maxLine = view.state.doc.lines;
+      const target = Math.min(Math.max(lineNumber, 1), maxLine);
+      const line = view.state.doc.line(target);
+      if (layout === 'preview') {
+        setLayout('editor');
+      }
+      view.dispatch({
+        selection: { anchor: line.from },
+        scrollIntoView: true,
+      });
+      view.focus();
+    },
+  }), [layout]);
+
+  useEffect(() => {
+    const view = editorViewRef.current;
+    const preview = previewRef.current;
+    if (!view || !preview) return;
+    if (layout !== 'split') return;
+
+    const editorScroll = view.scrollDOM;
+    const syncScroll = (source: HTMLElement, target: HTMLElement, tag: 'editor' | 'preview') => {
+      if (syncingRef.current && syncingRef.current !== tag) return;
+      syncingRef.current = tag;
+      const sourceMax = source.scrollHeight - source.clientHeight;
+      const targetMax = target.scrollHeight - target.clientHeight;
+      const ratio = sourceMax > 0 ? source.scrollTop / sourceMax : 0;
+      target.scrollTop = ratio * targetMax;
+      globalThis.requestAnimationFrame(() => {
+        if (syncingRef.current === tag) {
+          syncingRef.current = null;
+        }
+      });
+    };
+
+    const onEditorScroll = () => syncScroll(editorScroll, preview, 'editor');
+    const onPreviewScroll = () => syncScroll(preview, editorScroll, 'preview');
+
+    editorScroll.addEventListener('scroll', onEditorScroll);
+    preview.addEventListener('scroll', onPreviewScroll);
+
+    return () => {
+      editorScroll.removeEventListener('scroll', onEditorScroll);
+      preview.removeEventListener('scroll', onPreviewScroll);
+    };
+  }, [layout]);
 
   return (
     <section className="split-editor">
@@ -40,12 +99,18 @@ export const SplitEditor: React.FC<SplitEditorProps> = ({ value, onChange }) => 
         </div>
       </header>
 
-      <div className={`split-editor-panels ${layout}`}>
+      <div data-testid="split-panels" className={`split-editor-panels ${layout}`}>
         <div className="split-editor-panel editor-panel">
-          <MarkdownEditor value={value} onChange={onChange} />
+          <MarkdownEditor
+            value={value}
+            onChange={onChange}
+            onViewReady={(view) => {
+              editorViewRef.current = view;
+            }}
+          />
         </div>
         <div className="split-editor-panel preview-panel">
-          <div className="preview-shell">
+          <div className="preview-shell" ref={previewRef}>
             <MarkdownPreview value={value} />
           </div>
         </div>
@@ -188,4 +253,6 @@ export const SplitEditor: React.FC<SplitEditorProps> = ({ value, onChange }) => 
       `}</style>
     </section>
   );
-};
+});
+
+SplitEditor.displayName = 'SplitEditor';

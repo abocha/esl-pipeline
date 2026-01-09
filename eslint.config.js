@@ -7,11 +7,14 @@ import nodePlugin from 'eslint-plugin-n';
 import promisePlugin from 'eslint-plugin-promise';
 import reactPlugin from 'eslint-plugin-react';
 import reactRefreshPlugin from 'eslint-plugin-react-refresh';
+import reactHooksPlugin from 'eslint-plugin-react-hooks';
 import unicornPlugin from 'eslint-plugin-unicorn';
 import globals from 'globals';
 import tseslint from 'typescript-eslint';
+import { fixupPluginRules } from '@eslint/compat';
+import { defineConfig } from 'eslint/config';
 
-export default tseslint.config(
+export default defineConfig(
   {
     ignores: ['**/dist/**', 'node_modules/**', 'out/**', 'coverage/**', '.pnpm-store/**'],
   },
@@ -58,6 +61,7 @@ export default tseslint.config(
       'unicorn/import-style': 'off',
       'unicorn/no-array-sort': 'off',
       'unicorn/consistent-function-scoping': 'off',
+      "unicorn/numeric-separators-style": "off",
     },
   },
   // TypeScript rules
@@ -94,6 +98,7 @@ export default tseslint.config(
     ],
     plugins: {
       'react-refresh': reactRefreshPlugin,
+      'react-hooks': fixupPluginRules(reactHooksPlugin),
     },
     languageOptions: {
       globals: {
@@ -106,6 +111,7 @@ export default tseslint.config(
       },
     },
     rules: {
+      ...reactHooksPlugin.configs.recommended.rules,
       'react-refresh/only-export-components': ['warn', { allowConstantExport: true }],
     },
   },
