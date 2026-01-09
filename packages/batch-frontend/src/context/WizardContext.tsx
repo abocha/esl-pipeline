@@ -1,4 +1,5 @@
-import React, { createContext, useContext, useMemo, useReducer } from 'react';
+import React, { createContext, useContext, useEffect, useMemo, useReducer, useRef } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import type { JobConfigOverrides, JobState } from '../utils/api';
 
 export interface WizardState {
@@ -170,3 +171,75 @@ export const useWizard = () => {
     }
     return context;
 };
+
+export function useWizardRouting(stepKeys: string[]) {
+    const [searchParams, setSearchParams] = useSearchParams();
+    const { state, actions } = useWizard();
+    const stateRef = useRef(state);
+    const didInitRef = useRef(false);
+    const searchString = searchParams.toString();
+
+    const derivedStep = parseStepParam(searchParams.get('step'), stepKeys);
+    const jobParam = searchParams.get('jobId');
+
+    useEffect(() => {
+        stateRef.current = state;
+    }, [state]);
+
+    useEffect(() => {
+        const currentState = stateRef.current;
+        if (derivedStep !== currentState.currentStep) {
+            actions.goToStep(derivedStep);
+        }
+        if (jobParam !== currentState.activeJobId) {
+            actions.setJob(jobParam || null);
+        }
+    }, [derivedStep, jobParam, actions]);
+
+    useEffect(() => {
+        const params = new URLSearchParams(searchString);
+        const hasSeedParams = params.has('step') || params.has('jobId');
+        if (!didInitRef.current) {
+            didInitRef.current = true;
+            if (hasSeedParams) {
+                return;
+            }
+        }
+        const stepKey = stepKeys[state.currentStep] ?? stepKeys[0] ?? 'select';
+        let changed = false;
+
+        if (params.get('step') !== stepKey) {
+            params.set('step', stepKey);
+            changed = true;
+        }
+
+        if (state.activeJobId) {
+            if (params.get('jobId') !== state.activeJobId) {
+                params.set('jobId', state.activeJobId);
+                changed = true;
+            }
+        } else if (params.has('jobId')) {
+            params.delete('jobId');
+            changed = true;
+        }
+
+        if (changed) {
+            setSearchParams(params, { replace: true });
+        }
+    }, [state.currentStep, state.activeJobId, searchString, setSearchParams, stepKeys]);
+}
+
+function parseStepParam(value: string | null, stepKeys: string[]): number {
+    if (!value) return 0;
+    const normalized = value.toLowerCase();
+    const index = stepKeys.findIndex((key) => key.toLowerCase() === normalized);
+    if (index !== -1) return index;
+    const numeric = Number.parseInt(normalized, 10);
+    if (!Number.isNaN(numeric)) {
+        const zeroBased = numeric - 1;
+        if (zeroBased >= 0 && zeroBased < stepKeys.length) {
+            return zeroBased;
+        }
+    }
+    return 0;
+}

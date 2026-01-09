@@ -29,6 +29,14 @@ vi.mock('../../utils/api', async (importOriginal) => {
         ...actual,
         fetchStudentOptions: vi.fn(),
         uploadRecording: vi.fn(),
+        fetchRecordingTranscript: vi.fn(),
+        updateRecordingTranscript: vi.fn(),
+        createPromptPackage: vi.fn(),
+        createDraft: vi.fn(),
+        updateDraft: vi.fn(),
+        materializeDraft: vi.fn(),
+        approveJob: vi.fn(),
+        validateMarkdown: vi.fn(),
         getJobStatus: vi.fn(),
         fetchDraft: vi.fn(),
         fetchJobOptions: vi.fn().mockResolvedValue({
@@ -74,6 +82,22 @@ vi.mock('../shared/DropZone', () => ({
     ),
 }));
 
+vi.mock('../editor/MarkdownEditor', () => ({
+    MarkdownEditor: ({ value, onChange }: { value: string; onChange: (val: string) => void }) => (
+        <textarea
+            data-testid="markdown-editor"
+            value={value}
+            onChange={(e) => onChange(e.target.value)}
+        />
+    ),
+}));
+
+vi.mock('../editor/MarkdownPreview', () => ({
+    MarkdownPreview: ({ value }: { value: string }) => (
+        <div data-testid="markdown-preview">{value}</div>
+    ),
+}));
+
 describe('AssignmentWizard Integration', () => {
     let queryClient: QueryClient;
 
@@ -89,6 +113,74 @@ describe('AssignmentWizard Integration', () => {
                 { id: 's1', name: 'Alice', profileId: 'p1' },
                 { id: 's2', name: 'Bob', profileId: 'p2' },
             ],
+        });
+        vi.mocked(api.fetchRecordingTranscript).mockResolvedValue({
+            recordingId: 'rec-123',
+            transcriptId: 'tx-123',
+            text: 'Transcript Text',
+            summaryJson: null,
+            model: 'test-model',
+            language: 'en',
+            mode: 'stack',
+            createdAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString(),
+        });
+        vi.mocked(api.createPromptPackage).mockResolvedValue({
+            id: 'pp-123',
+            recordingId: 'rec-123',
+            transcriptId: 'tx-123',
+            studentId: 's1',
+            profilePath: null,
+            templateVersion: 't1',
+            notes: null,
+            storageUri: 'memory://prompt',
+            text: 'Prompt Text',
+            createdAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString(),
+        });
+        vi.mocked(api.createDraft).mockResolvedValue({
+            id: 'draft-123',
+            promptPackageId: 'pp-123',
+            studentId: 's1',
+            storageUri: 'memory://draft',
+            createdBy: 'u1',
+            text: 'Draft Text',
+            createdAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString(),
+        });
+        vi.mocked(api.materializeDraft).mockResolvedValue({
+            draftId: 'draft-123',
+            jobId: 'job-123',
+            mdPath: '/uploads/draft-123.md',
+        });
+        vi.mocked(api.approveJob).mockResolvedValue({
+            jobId: 'job-123',
+            md: '/uploads/draft-123.md',
+            recordingId: null,
+            transcriptId: null,
+            promptPackageId: null,
+            draftId: 'draft-123',
+            preset: null,
+            withTts: null,
+            voiceId: null,
+            upload: null,
+            voiceAccent: null,
+            forceTts: null,
+            notionDatabase: null,
+            ttsStrategy: null,
+            notionUrl: null,
+            state: 'queued',
+            createdAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString(),
+            startedAt: null,
+            finishedAt: null,
+            error: null,
+            manifestPath: null,
+        });
+        vi.mocked(api.validateMarkdown).mockResolvedValue({
+            ok: true,
+            errors: [],
+            warnings: [],
         });
         vi.mocked(JobMonitorContext.useJobMonitor).mockReturnValue({
             jobMap: mockJobMap,
@@ -148,13 +240,21 @@ describe('AssignmentWizard Integration', () => {
         });
     });
 
-    it.skip('selects student and uploads file to advance', async () => {
+    it('selects student and uploads file to advance', async () => {
         vi.mocked(api.uploadRecording).mockResolvedValue({
             recordingId: 'rec-123',
             transcriptId: null,
             status: 'ingested',
+            error: null,
+            source: 'upload',
             studentId: 's1',
-        } as unknown as api.RecordingListItem);
+            displayName: 'Test recording',
+            durationSec: 120,
+            channels: 1,
+            bytes: 1024,
+            createdAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString(),
+        });
 
         renderWizard();
 
@@ -186,20 +286,42 @@ describe('AssignmentWizard Integration', () => {
         expect(screen.getByText('Review transcript')).not.toBeNull();
     });
 
-    it.skip('hydrates from deep link', async () => {
+    it('hydrates from deep link', async () => {
         vi.mocked(api.getJobStatus).mockResolvedValue({
             jobId: 'job-123',
             state: 'awaiting_approval',
             recordingId: 'rec-123',
             transcriptId: 'tx-123',
             draftId: 'draft-123',
-            draftText: '# Draft Content', // Note: draftText is not on JobStatusDto
-        } as unknown as api.JobStatus);
+            md: '/uploads/draft-123.md',
+            promptPackageId: 'pp-123',
+            preset: null,
+            withTts: null,
+            voiceId: null,
+            upload: null,
+            voiceAccent: null,
+            forceTts: null,
+            notionDatabase: null,
+            ttsStrategy: null,
+            notionUrl: null,
+            createdAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString(),
+            startedAt: null,
+            finishedAt: null,
+            error: null,
+            manifestPath: null,
+        });
 
         vi.mocked(api.fetchDraft).mockResolvedValue({
             id: 'draft-123',
+            promptPackageId: 'pp-123',
+            studentId: 's1',
+            storageUri: 'memory://draft',
+            createdBy: 'u1',
             text: '# Draft Content',
-        } as unknown as api.DraftResponse);
+            createdAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString(),
+        });
 
         renderWizard(['/wizard?step=review&jobId=job-123']);
 
@@ -210,7 +332,7 @@ describe('AssignmentWizard Integration', () => {
 
         // Verify we are on Step 4 (Review Draft)
         await waitFor(() => {
-            expect(screen.getByText('Review and edit draft')).not.toBeNull();
+            expect(screen.getByText('Review draft')).not.toBeNull();
         });
     });
 });

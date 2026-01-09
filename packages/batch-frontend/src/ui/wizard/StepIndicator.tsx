@@ -2,7 +2,10 @@ import React from 'react';
 
 import { Icons } from '../shared/Icons';
 
-type StepInfo = { label: string; icon?: React.ReactNode };
+interface StepInfo {
+  label: string;
+  icon?: React.ReactNode;
+}
 
 interface StepIndicatorProps {
   currentStep: number;
