@@ -107,20 +107,18 @@ Status legend: DONE / PARTIAL / MISSING
   - Dashboard view, quick actions, pending approvals, weekly summary, and router-backed navigation are in place.
 - Stage 2 (Wizard): DONE
   - 5-step flow, deep links, audio playback, prompt package creation, draft review, publish flow wired.
-- Stage 3 (Enhanced Upload UX): PARTIAL
-  - DONE: DropZone + UploadProgress integrated in wizard, uploader, and transcription workspace; progress + cancel hooks.
-  - MISSING: DropZone rejection feedback for invalid file types (plan called out file validation UX).
-- Stage 4 (Markdown Editor with Preview): PARTIAL
-  - DONE: CodeMirror editor, preview, split view, validation panel, debounced validation calls.
-  - MISSING: toolbar actions, scroll sync, and “jump to line” validation affordances.
-- Stage 5 (Visual Polish & Design System): PARTIAL
-  - DONE: glass panels, animations, shared icons, step indicator, custom toasts.
-  - MISSING: palette/token alignment to `FRONTEND_VISION` values, button active scale across variants,
-    step indicator gradient progress + stage icons.
-- Stage 6 (Integration & Testing): PARTIAL
-  - DONE: WizardContext in place and used; routes protected.
-  - MISSING: deep-link parsing in context, wizard integration tests (skipped), and unit tests for
-    StepIndicator, DropZone, WizardContext, and MarkdownEditor.
+- Stage 3 (Enhanced Upload UX): DONE
+  - DropZone + UploadProgress integrated in wizard, uploader, and transcription workspace; progress + cancel hooks.
+  - DropZone rejection feedback for invalid file types is implemented.
+- Stage 4 (Markdown Editor with Preview): DONE
+  - CodeMirror editor, preview, split view, validation panel, debounced validation calls, toolbar actions,
+    scroll sync, and “jump to line” validation affordances.
+- Stage 5 (Visual Polish & Design System): DONE
+  - Glass panels, animations, shared icons, custom toasts, palette/token alignment, button active scale,
+    and step indicator gradient progress + stage icons are in place.
+- Stage 6 (Integration & Testing): DONE
+  - WizardContext routing + deep-link parsing, wizard integration tests, and unit tests for StepIndicator,
+    DropZone, WizardContext, and MarkdownEditor are covered. Firefox e2e is allowed to fail.
 
 ---
 
@@ -371,7 +369,7 @@ Apply premium aesthetics across the application, aligning with the `FRONTEND_VIS
 
 ---
 
-### Stage 6: Integration & Testing — PARTIAL
+### Stage 6: Integration & Testing — DONE
 
 Refactor the Wizard to use a centralized Context for state management (replacing local state in `AssignmentWizard`) and finalize application routing.
 
@@ -402,6 +400,9 @@ Refactor the Wizard to use a centralized Context for state management (replacing
 #### [NEW] `src/ui/editor/Editor.test.tsx`
 - **Unit Test:** `MetricValidationPanel` shows errors when passed.
 - **Unit Test:** `SplitEditor` toggles views (Editor/Preview/Split).
+
+#### [NEW] `src/ui/editor/MarkdownEditor.test.tsx`
+- **Unit Test:** Toolbar actions apply formatting (bold/heading).
 
 ---
 

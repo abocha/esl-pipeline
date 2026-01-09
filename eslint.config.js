@@ -16,7 +16,15 @@ import { defineConfig } from 'eslint/config';
 
 export default defineConfig(
   {
-    ignores: ['**/dist/**', 'node_modules/**', 'out/**', 'coverage/**', '.pnpm-store/**'],
+    ignores: [
+      '**/dist/**',
+      'node_modules/**',
+      'out/**',
+      'coverage/**',
+      '.pnpm-store/**',
+      '**/playwright-report/**',
+      '**/test-results/**',
+    ],
   },
   // Base JS rules
   {

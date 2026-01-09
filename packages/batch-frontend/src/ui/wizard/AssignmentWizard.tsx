@@ -1,9 +1,8 @@
-import React, { useCallback, useEffect, useRef } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import React, { useCallback, useEffect, useMemo, useRef } from 'react';
 
 import { useJobMonitor } from '../../context/JobMonitorContext';
 import { useJobSettings } from '../../context/JobSettingsContext';
-import { useWizard } from '../../context/WizardContext';
+import { useWizard, useWizardRouting } from '../../context/WizardContext';
 import type { JobStatus } from '../../utils/api';
 import { getJobStatus } from '../../utils/api';
 import { Step1SelectStudent } from './Step1SelectStudent';
@@ -22,28 +21,12 @@ const STEPS = [
   { key: 'publish', label: 'Publish', icon: <Icons.RocketLaunch /> },
 ];
 
-const parseStepParam = (value: string | null): number => {
-  if (!value) return 0;
-  const normalized = value.toLowerCase();
-  const index = STEPS.findIndex((step) => step.key === normalized);
-  if (index !== -1) return index;
-  const numeric = Number(normalized);
-  if (!Number.isNaN(numeric) && numeric >= 1 && numeric <= STEPS.length) {
-    return numeric - 1;
-  }
-  if (normalized === 'review') return 3;
-  return 0;
-};
-
 export const AssignmentWizard: React.FC = () => {
-  const [searchParams, setSearchParams] = useSearchParams();
   const { jobMap } = useJobMonitor();
   const { settings } = useJobSettings();
   const { state, dispatch, actions } = useWizard();
-
-  const stepParam = searchParams.get('step');
-  const jobParam = searchParams.get('jobId');
-  const derivedStep = parseStepParam(stepParam);
+  const stepKeys = useMemo(() => STEPS.map((step) => step.key), []);
+  useWizardRouting(stepKeys);
 
   const {
     currentStep,
@@ -97,50 +80,6 @@ export const AssignmentWizard: React.FC = () => {
       actions.updateOverrides(updates);
     }
   }, [settings, overrides, actions]);
-
-  // Sync URL -> Context (Step)
-  useEffect(() => {
-    if (derivedStep !== currentStep) {
-      actions.goToStep(derivedStep);
-    }
-    // Only react to URL changes, not internal state changes, to avoid race conditions.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [derivedStep, actions]);
-
-  // Sync URL -> Context (Job ID)
-  useEffect(() => {
-    if (jobParam !== activeJobId) {
-      actions.setJob(jobParam || null);
-    }
-    // Only react to URL changes.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [jobParam, actions]);
-
-  // Sync Context -> URL
-  useEffect(() => {
-    const params = new URLSearchParams(searchParams);
-    const stepKey = STEPS[currentStep]?.key ?? STEPS[0]?.key ?? 'select';
-
-    let changed = false;
-    if (params.get('step') !== stepKey) {
-      params.set('step', stepKey);
-      changed = true;
-    }
-
-    if (activeJobId) {
-      if (params.get('jobId') !== activeJobId) {
-        params.set('jobId', activeJobId);
-        changed = true;
-      }
-    } else if (params.has('jobId')) {
-      params.delete('jobId');
-      changed = true;
-    }
-
-    if (changed) {
-      setSearchParams(params, { replace: true });
-    }
-  }, [currentStep, activeJobId, searchParams, setSearchParams]);
 
   // Job Hydration Logic
   const jobFetchRef = useRef<string | null>(null);
