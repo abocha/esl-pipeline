@@ -2,6 +2,33 @@
 
 > **Purpose:** This document visualizes the **fully realized** frontend as if all backend functionality is complete. It describes the end-user experience for teachers/tutors using the system to transform lesson recordings into polished, published homework assignments.
 
+## 0. Scope, Priorities, and Assumptions
+
+This vision is the **end-goal experience**. To keep delivery practical, the scope is organized into
+must-haves (core workflow) and nice-to-haves (enhancements once the core is solid).
+
+### Must-have (core workflow)
+- Dashboard with quick actions, activity stream, and pending approvals.
+- Wizard flow: select student → upload → transcript review → notes → draft review → publish.
+- Draft editor with split preview + validation feedback.
+- Job monitoring view with clear status and common actions.
+- Student management basics (CRUD + timeline).
+- Settings for job defaults and integration keys.
+
+### Nice-to-have (post-core)
+- Rich transcript UI (timestamps, speaker labels, inline metadata).
+- Job stage visualization, queue position, and ETA.
+- Student notification delivery and delivery status.
+- Advanced analytics and usage dashboards.
+- Collaboration features and template libraries.
+
+### Backend assumptions (must exist for the full vision)
+- LLM draft generation endpoint(s) and prompt package storage.
+- Transcript status signals that distinguish “processing” vs “missing.”
+- Job progress detail (per-stage status/ETA) and queue metadata.
+- Student notification pipeline and delivery state.
+- Billing/usage signal for TTS cost estimates.
+
 ---
 
 ## 1. The Complete User Journey
@@ -182,6 +209,11 @@ A guided, wizard-style multi-step process for creating homework.
 └─────────────────────────────────────────────────────────────────────────────┘
 ```
 
+**End-goal expectations**
+- Timestamped, speaker-labeled transcript with basic metadata (duration, model, status).
+- Inline edits with quick-save.
+- Clear indicator when transcript is still processing vs truly missing.
+
 #### Step 3: Add Lesson Notes
 
 ```
@@ -221,6 +253,10 @@ A guided, wizard-style multi-step process for creating homework.
 │                                     [← Back]   [Generate Homework →]        │
 └─────────────────────────────────────────────────────────────────────────────┘
 ```
+
+**End-goal expectations**
+- Quick-add chips for common notes.
+- Read-only student snapshot (goal, focus areas, recent activity).
 
 #### Step 4: Review & Edit Generated Homework
 
@@ -263,6 +299,10 @@ A guided, wizard-style multi-step process for creating homework.
 └─────────────────────────────────────────────────────────────────────────────┘
 ```
 
+**End-goal expectations**
+- Regenerate action available once LLM generation is live.
+- Validation warnings link to specific editor lines.
+
 #### Step 5: Configure & Publish
 
 ```
@@ -302,6 +342,10 @@ A guided, wizard-style multi-step process for creating homework.
 │                                     [← Back]   [🚀 Publish Homework]        │
 └─────────────────────────────────────────────────────────────────────────────┘
 ```
+
+**End-goal expectations**
+- Estimated TTS cost (based on backend usage data).
+- Toggles for heading colorization and audio attachment.
 
 ---
 
@@ -536,6 +580,12 @@ Real-time tracking of all pipeline jobs.
 - **Actionable errors:** Every error message includes a suggested fix
 - **Retry workflows:** One-click retry for failed jobs with preserved settings
 
+### 3.5 Delivery Reality Checks
+
+- **Backend gaps are explicit:** If a backend dependency is missing, the UI should fall back to a safe
+  manual step (e.g., edit draft directly instead of LLM generation).
+- **Degrade, don’t block:** Missing metadata should not prevent completing a lesson.
+
 ### 3.4 Accessibility & Responsiveness
 
 - **Keyboard navigation:** Full workflow accessible without mouse
@@ -642,4 +692,5 @@ flowchart TB
 
 ---
 
-> **This vision assumes all backend functionality is complete.** Current implementation status is tracked in [backend-frontend-alignment.md](file:///home/abocha/code/esl-pipeline/docs/backend-frontend/backend-frontend-alignment.md).
+> **This vision assumes all backend functionality is complete.** Current implementation status is tracked in
+> `docs/backend-frontend/backend-frontend-alignment.md`.

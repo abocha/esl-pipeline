@@ -6,7 +6,7 @@ esl-pipeline and running the end-to-end lesson workflow.
 Status snapshot:
 - Phase 2+ (pipeline-native transcription) is the active path and implemented end-to-end.
 - Phase 5 (FRONTEND_VISION alignment) is implemented in batch-frontend (dashboard + wizard + editor + polish).
-- Gap-closure manual: docs/design/TRANSCRIPTION_PIPELINE_IMPLEMENTATION_MANUAL.md.
+- Gap-closure manual: docs/archive/TRANSCRIPTION_PIPELINE_IMPLEMENTATION_MANUAL.md.
 - Phase 3 manual: docs/design/PIPELINE_INTEGRATION_PHASE_3_MANUAL.md.
 - The original staged manual is archived at
   docs/archive/TRANSCRIPTION_PIPELINE_IMPLEMENTATION_MANUAL.md.
