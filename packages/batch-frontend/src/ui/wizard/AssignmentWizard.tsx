@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef } from 'react';
+import { useNavigate } from 'react-router-dom';
 
 import { useJobMonitor } from '../../context/JobMonitorContext';
 import { useJobSettings } from '../../context/JobSettingsContext';
@@ -25,6 +26,7 @@ export const AssignmentWizard: React.FC = () => {
   const { jobMap } = useJobMonitor();
   const { settings } = useJobSettings();
   const { state, dispatch, actions } = useWizard();
+  const navigate = useNavigate();
   const stepKeys = useMemo(() => STEPS.map((step) => step.key), []);
   useWizardRouting(stepKeys);
 
@@ -156,9 +158,10 @@ export const AssignmentWizard: React.FC = () => {
     dispatch({ type: 'SET_DRAFT', payload: { draftId: draft.id, text: draft.text } });
   }, [dispatch]);
 
-  const handlePublish = useCallback((jobId: string) => {
-    actions.setJob(jobId, 'queued');
-  }, [actions]);
+  const handlePublish = useCallback((_jobId: string) => {
+    actions.reset();
+    void navigate('/', { replace: true });
+  }, [actions, navigate]);
 
   let stepContent: React.ReactNode = null;
   switch (STEPS[currentStep]?.key) {

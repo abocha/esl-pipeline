@@ -8,11 +8,19 @@ import {
   useState,
 } from 'react';
 import type React from 'react';
-import toast from 'react-hot-toast';
+import toast, { resolveValue, useToasterStore } from 'react-hot-toast';
 
 import { useJobMonitor } from './JobMonitorContext';
 
 type NotificationPermissionState = 'default' | 'granted' | 'denied';
+type NotificationToastType = 'success' | 'error' | 'loading' | 'blank' | 'custom';
+
+export interface NotificationLogEntry {
+  id: string;
+  type: NotificationToastType;
+  message: string;
+  createdAt: number;
+}
 
 interface NotificationContextValue {
   permission: NotificationPermissionState;
@@ -20,6 +28,8 @@ interface NotificationContextValue {
   disableNotifications: () => void;
   notifyBatchComplete: (jobIds: string[]) => Promise<void>;
   notifyJobFailure: (jobId: string, error?: string | null) => Promise<void>;
+  logEntries: NotificationLogEntry[];
+  clearLog: () => void;
 }
 
 const NotificationContext = createContext<NotificationContextValue | undefined>(undefined);
@@ -28,6 +38,7 @@ const isBrowser = globalThis.window !== undefined && typeof Notification !== 'un
 
 // Key for localStorage to persist user's notification preference across navigation
 const NOTIFICATIONS_DISABLED_KEY = 'esl-notifications-disabled';
+const MAX_LOG_ENTRIES = 50;
 
 export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   // Track if user has explicitly disabled notifications (separate from browser permission)
@@ -44,8 +55,11 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
   });
 
   const { jobs } = useJobMonitor();
+  const { toasts } = useToasterStore();
   const lastNotifiedBatchRef = useRef<number>(0);
   const failedJobsRef = useRef<Set<string>>(new Set());
+  const seenToastRef = useRef<Map<string, string>>(new Map());
+  const [logEntries, setLogEntries] = useState<NotificationLogEntry[]>([]);
 
   const requestPermission = useCallback(async () => {
     if (!isBrowser) {
@@ -146,6 +160,62 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
     }
   }, [jobs, permission, notifyBatchComplete, notifyJobFailure]);
 
+  useEffect(() => {
+    const currentIds = new Set(toasts.map((toastItem) => toastItem.id));
+    for (const id of seenToastRef.current.keys()) {
+      if (!currentIds.has(id)) {
+        seenToastRef.current.delete(id);
+      }
+    }
+
+    if (toasts.length === 0) return;
+
+    setLogEntries((prev) => {
+      let next = prev;
+      for (const toastItem of toasts) {
+        const resolved = resolveValue(toastItem.message, toastItem);
+        const message =
+          typeof resolved === 'string'
+            ? resolved
+            : typeof resolved === 'number'
+              ? String(resolved)
+              : 'Notification';
+        const signature = `${toastItem.type}|${message}`;
+        if (seenToastRef.current.get(toastItem.id) === signature) {
+          continue;
+        }
+        seenToastRef.current.set(toastItem.id, signature);
+
+        const entry: NotificationLogEntry = {
+          id: toastItem.id,
+          type: toastItem.type,
+          message,
+          createdAt: toastItem.createdAt,
+        };
+
+        const existingIndex = next.findIndex((item) => item.id === toastItem.id);
+        if (existingIndex === -1) {
+          next = [entry, ...next];
+        } else {
+          const copy = [...next];
+          copy[existingIndex] = entry;
+          next = copy;
+        }
+      }
+
+      if (next.length > MAX_LOG_ENTRIES) {
+        next = next.slice(0, MAX_LOG_ENTRIES);
+      }
+
+      return next;
+    });
+  }, [toasts]);
+
+  const clearLog = useCallback(() => {
+    setLogEntries([]);
+    seenToastRef.current.clear();
+  }, []);
+
   const value = useMemo(
     () => ({
       permission,
@@ -153,8 +223,18 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
       disableNotifications,
       notifyBatchComplete,
       notifyJobFailure,
+      logEntries,
+      clearLog,
     }),
-    [permission, requestPermission, disableNotifications, notifyBatchComplete, notifyJobFailure],
+    [
+      permission,
+      requestPermission,
+      disableNotifications,
+      notifyBatchComplete,
+      notifyJobFailure,
+      logEntries,
+      clearLog,
+    ],
   );
 
   return <NotificationContext.Provider value={value}>{children}</NotificationContext.Provider>;
