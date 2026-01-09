@@ -20,7 +20,8 @@ const BellIcon = () => (
 );
 
 export const NotificationsPanel: React.FC = () => {
-  const { permission, requestPermission, disableNotifications } = useNotification();
+  const { permission, requestPermission, disableNotifications, logEntries, clearLog } =
+    useNotification();
   const notificationsEnabled = permission === 'granted';
   const isSupported = typeof Notification !== 'undefined';
 
@@ -67,6 +68,37 @@ export const NotificationsPanel: React.FC = () => {
         </span>
         <span className="toggle-label">{notificationsEnabled ? 'Enabled' : 'Disabled'}</span>
       </button>
+
+      <div className="notifications-log">
+        <div className="log-header">
+          <h4>Recent alerts</h4>
+          {logEntries.length > 0 ? (
+            <button type="button" className="log-clear" onClick={clearLog}>
+              Clear
+            </button>
+          ) : null}
+        </div>
+        {logEntries.length > 0 ? (
+          <ul>
+            {logEntries.slice(0, 6).map((entry) => (
+              <li key={entry.id} className={`log-entry ${entry.type}`}>
+                <span className="log-dot" />
+                <div className="log-body">
+                  <span className="log-message">{entry.message}</span>
+                  <span className="log-time">
+                    {new Date(entry.createdAt).toLocaleTimeString([], {
+                      hour: '2-digit',
+                      minute: '2-digit',
+                    })}
+                  </span>
+                </div>
+              </li>
+            ))}
+          </ul>
+        ) : (
+          <p className="log-empty">No alerts yet.</p>
+        )}
+      </div>
 
       <style>{`
         .notifications-panel {
@@ -152,6 +184,102 @@ export const NotificationsPanel: React.FC = () => {
           font-size: var(--text-sm);
           font-weight: 500;
           color: var(--text-secondary);
+        }
+
+        .notifications-log {
+          display: flex;
+          flex-direction: column;
+          gap: var(--space-3);
+          border-top: 1px solid var(--border-light);
+          padding-top: var(--space-3);
+        }
+
+        .log-header {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          gap: var(--space-2);
+        }
+
+        .log-header h4 {
+          margin: 0;
+          font-size: var(--text-sm);
+          font-weight: 600;
+          color: var(--text-primary);
+        }
+
+        .log-clear {
+          border: none;
+          background: transparent;
+          color: var(--text-tertiary);
+          font-size: var(--text-xs);
+          cursor: pointer;
+        }
+
+        .log-clear:hover {
+          color: var(--text-secondary);
+        }
+
+        .notifications-log ul {
+          list-style: none;
+          padding: 0;
+          margin: 0;
+          display: flex;
+          flex-direction: column;
+          gap: var(--space-2);
+        }
+
+        .log-entry {
+          display: flex;
+          align-items: flex-start;
+          gap: var(--space-2);
+          padding: var(--space-2) var(--space-3);
+          background: var(--bg-secondary);
+          border-radius: var(--radius-lg);
+          border: 1px solid var(--border-light);
+        }
+
+        .log-dot {
+          width: 8px;
+          height: 8px;
+          border-radius: 999px;
+          background: var(--color-gray-400);
+          margin-top: 6px;
+          flex-shrink: 0;
+        }
+
+        .log-entry.success .log-dot {
+          background: var(--color-success-500);
+        }
+
+        .log-entry.error .log-dot {
+          background: var(--color-error-500);
+        }
+
+        .log-entry.loading .log-dot {
+          background: var(--color-warning-500);
+        }
+
+        .log-body {
+          display: flex;
+          flex-direction: column;
+          gap: 2px;
+        }
+
+        .log-message {
+          font-size: var(--text-xs);
+          color: var(--text-primary);
+        }
+
+        .log-time {
+          font-size: var(--text-xs);
+          color: var(--text-tertiary);
+        }
+
+        .log-empty {
+          font-size: var(--text-xs);
+          color: var(--text-tertiary);
+          margin: 0;
         }
       `}</style>
     </section>
