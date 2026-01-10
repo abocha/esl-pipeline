@@ -38,11 +38,10 @@
   },
   "dependencies": {
     "@esl-pipeline/contracts": "workspace:*",
+    "@esl-pipeline/pmd": "workspace:*",
     "commander": "^14.0.2",
     "gray-matter": "^4.0.3",
     "picocolors": "^1.1.1",
-    "remark-parse": "^11.0.0",
-    "unified": "^11.0.5",
     "zod": "^4.3.5"
   },
   "devDependencies": {

@@ -100,6 +100,7 @@ describe('md-validator', () => {
     const res = await validateMarkdownFile(path.join(fixturesPath, 'ok.md'));
     expect(res.ok).toBe(true);
     expect(res.errors.length).toBe(0);
+    expect(res.warnings).toContain('Legacy fenced markdown is deprecated; remove the code fence.');
   });
 
   it('fails bad fixture', async () => {

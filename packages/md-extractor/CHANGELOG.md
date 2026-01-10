@@ -1,5 +1,11 @@
 # @esl-pipeline/md-extractor
 
+## 2.0.8
+
+### Patch Changes
+
+- Switch directive extraction to the PMD AST for study-text and toggle blocks; legacy fenced inputs remain supported.
+
 ## 2.0.7
 
 ### Patch Changes
