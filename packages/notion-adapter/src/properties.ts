@@ -237,7 +237,7 @@ export function mapFrontmatterProperties(
   if (!fmProperties) return {};
   if (!databaseProperties) return {};
 
-  const skip = new Set((options.skipKeys ?? []).map(normalizeKey));
+  const skip = new Set((options.skipKeys ?? []).map((key) => normalizeKey(key)));
   const propertyIndex = buildPropertyIndex(databaseProperties);
   const mapped: PropertiesPayload = {};
 
@@ -268,38 +268,53 @@ export function mapFrontmatterProperties(
 
 function mapPropertyValue(type: string, value: unknown, name: string): PropertyValue {
   switch (type) {
-    case 'title':
+    case 'title': {
       return { title: [createTextItem(normalizeString(value, name))] };
-    case 'rich_text':
+    }
+    case 'rich_text': {
       return { rich_text: [createTextItem(normalizeString(value, name))] };
-    case 'number':
+    }
+    case 'number': {
       return { number: normalizeNumber(value, name) };
-    case 'select':
+    }
+    case 'select': {
       return { select: { name: normalizeSelect(value, name) } };
-    case 'multi_select':
+    }
+    case 'multi_select': {
       return {
         multi_select: normalizeStringArray(value, name).map((entry) => ({ name: entry })),
       };
-    case 'status':
+    }
+    case 'status': {
       return { status: { name: normalizeSelect(value, name) } };
-    case 'date':
+    }
+    case 'date': {
       return { date: normalizeDate(value, name) };
-    case 'people':
+    }
+    case 'people': {
       return { people: normalizeIdList(value, name) };
-    case 'files':
+    }
+    case 'files': {
       return { files: normalizeFiles(value, name) };
-    case 'checkbox':
+    }
+    case 'checkbox': {
       return { checkbox: normalizeBoolean(value, name) };
-    case 'url':
+    }
+    case 'url': {
       return { url: normalizeString(value, name) };
-    case 'email':
+    }
+    case 'email': {
       return { email: normalizeString(value, name) };
-    case 'phone_number':
+    }
+    case 'phone_number': {
       return { phone_number: normalizeString(value, name) };
-    case 'relation':
+    }
+    case 'relation': {
       return { relation: normalizeIdList(value, name) };
-    default:
+    }
+    default: {
       throw new ValidationError(`Property "${name}" has unsupported Notion type "${type}".`);
+    }
   }
 }
 

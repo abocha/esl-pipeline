@@ -92,4 +92,24 @@ describe('uploadToS3', () => {
     expect(res.key).toBe(basename(tempFile));
     expect(sendMock).toHaveBeenCalledWith(expect.objectContaining({ Key: basename(tempFile) }));
   });
+
+  it('rejects uploads that exceed S3_UPLOAD_MAX_MB', async () => {
+    const prev = process.env.S3_UPLOAD_MAX_MB;
+    process.env.S3_UPLOAD_MAX_MB = '0.000001';
+    try {
+      await expect(
+        uploadToS3(tempFile, {
+          bucket: 'test-bucket',
+          region: 'us-east-1',
+        }),
+      ).rejects.toThrow(/S3_UPLOAD_MAX_MB/);
+      expect(sendMock).not.toHaveBeenCalled();
+    } finally {
+      if (prev === undefined) {
+        delete process.env.S3_UPLOAD_MAX_MB;
+      } else {
+        process.env.S3_UPLOAD_MAX_MB = prev;
+      }
+    }
+  });
 });

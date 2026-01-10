@@ -1,8 +1,8 @@
 import { PutObjectCommand, S3Client } from '@aws-sdk/client-s3';
-import { readFile } from 'node:fs/promises';
+import { readFile, stat } from 'node:fs/promises';
 import { basename } from 'node:path';
 
-import { ConfigurationError } from '@esl-pipeline/contracts';
+import { ConfigurationError, ValidationError } from '@esl-pipeline/contracts';
 
 interface S3ErrorShape {
   Code?: string;
@@ -11,6 +11,7 @@ interface S3ErrorShape {
 
 type ClientKey = string;
 const s3ClientCache = new Map<ClientKey, S3Client>();
+const DEFAULT_UPLOAD_MAX_MB = 50;
 
 function getS3Client(region: string): S3Client {
   const key = region || 'default';
@@ -30,6 +31,18 @@ function isAclNotSupported(error: unknown): boolean {
   );
 }
 
+function resolveUploadMaxMb(): number {
+  const raw = process.env.S3_UPLOAD_MAX_MB;
+  if (raw === undefined) return DEFAULT_UPLOAD_MAX_MB;
+  const parsed = Number(raw);
+  if (Number.isFinite(parsed) && parsed > 0) return parsed;
+  return DEFAULT_UPLOAD_MAX_MB;
+}
+
+function formatMb(bytes: number): string {
+  return (bytes / (1024 * 1024)).toFixed(2);
+}
+
 export async function uploadToS3(
   localPath: string,
   {
@@ -45,6 +58,16 @@ export async function uploadToS3(
   } = {},
 ): Promise<{ url: string; key: string; etag?: string }> {
   if (!bucket) throw new ConfigurationError('S3 bucket not configured');
+
+  const stats = await stat(localPath);
+  const maxMb = resolveUploadMaxMb();
+  const maxBytes = maxMb * 1024 * 1024;
+  if (stats.size > maxBytes) {
+    throw new ValidationError(
+      `S3 upload size cap exceeded: ${formatMb(stats.size)} MB > ${maxMb} MB. ` +
+        'Set S3_UPLOAD_MAX_MB to increase the limit.',
+    );
+  }
 
   const s3 = getS3Client(region);
   const fileContent = await readFile(localPath);
