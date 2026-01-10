@@ -15,9 +15,11 @@ import { resolveDataSourceId, resolveStudentId } from './data-source.js';
 import { mdToBlocks } from './blocks/mdToBlocks.js';
 import {
   applyTopicProperty,
-  assertKnownProperties,
   buildBaseProperties,
+  buildTitleProperty,
+  findTitlePropertyName,
   getTopicPropertyType,
+  mapFrontmatterProperties,
 } from './properties.js';
 import { withRetry } from './retry.js';
 import type { FrontmatterShape, ImportOptions } from './types.js';
@@ -95,7 +97,7 @@ export async function runImport(opts: ImportOptions) {
   const studentName = (opts.student ?? fm.student ?? '').trim();
 
   // --- Step 3: properties payload ---
-  const properties = buildBaseProperties(title, fm);
+  let properties = buildBaseProperties(title, fm);
 
   // --- Step 4: blocks mapping ---
   const children = mdToBlocks(blockContent);
@@ -145,12 +147,15 @@ export async function runImport(opts: ImportOptions) {
     if (!props || typeof props !== 'object') return null;
     return props as Record<string, unknown>;
   })();
-
-  // Validate that all requested properties exist in the target database (best-effort).
-  // Some Notion SDK versions/types may omit the database `properties` field from typings.
-  assertKnownProperties(properties, rawDatabaseProperties);
-
   const topicPropTypeString = getTopicPropertyType(rawDatabaseProperties);
+  if (rawDatabaseProperties) {
+    const titlePropertyName = findTitlePropertyName(rawDatabaseProperties);
+    properties = buildTitleProperty(title, titlePropertyName);
+    const mapped = mapFrontmatterProperties(fm.properties, rawDatabaseProperties, {
+      skipKeys: [titlePropertyName, 'topic'],
+    });
+    Object.assign(properties, mapped);
+  }
   applyTopicProperty(properties, topic, topicPropTypeString);
   let studentPageId: string | undefined;
   if (studentName) {

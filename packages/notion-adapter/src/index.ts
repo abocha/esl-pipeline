@@ -9,7 +9,10 @@ export {
   applyTopicProperty,
   assertKnownProperties,
   buildBaseProperties,
+  buildTitleProperty,
+  findTitlePropertyName,
   getTopicPropertyType,
+  mapFrontmatterProperties,
 } from './properties.js';
 export { isProtectedToggleTitle, normalizeToggleLabel, shouldUsePlainToggle } from './rendering.js';
 export type { AddAudioOpts } from './audio.js';
