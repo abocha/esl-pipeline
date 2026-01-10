@@ -203,7 +203,7 @@ export function loadConfig(): BatchBackendConfig {
 
   const promptTemplatePath = readString(
     'PROMPT_TEMPLATE_PATH',
-    'docs/templates/hw_prompt_v4_clean.md',
+    'docs/templates/hw_prompt_v4-1_clean.md',
   )!;
   const promptProfilePath = readString(
     'PROMPT_PROFILE_PATH',
