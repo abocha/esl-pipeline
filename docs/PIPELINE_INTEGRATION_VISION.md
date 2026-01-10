@@ -64,7 +64,7 @@ System docs:
 - docs/backend-frontend/backend-frontend-alignment.md
 
 ### 2.2 Prompt assets (Phase 2+)
-- Prompt template: docs/templates/hw_prompt_v4_clean.md
+- Prompt template: docs/templates/hw_prompt_v4-1_clean.md
 - Student profile example: docs/templates/PROFILE_2025-11-16.md
 - Profile creation prompt: docs/templates/NEW PROFILE.txt
 
