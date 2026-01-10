@@ -3,6 +3,8 @@ import { tmpdir } from 'node:os';
 import { basename, join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import type { PipelineLogEvent, PipelineLogger } from '@esl-pipeline/contracts';
+
 import { uploadToS3 } from '../src/s3.js';
 
 const sendMock = vi.fn();
@@ -61,13 +63,15 @@ describe('uploadToS3', () => {
     sendMock
       .mockRejectedValueOnce({ Code: 'AccessControlListNotSupported' })
       .mockResolvedValueOnce({ ETag: '"mock-etag"' });
-    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const logs: PipelineLogEvent[] = [];
+    const logger: PipelineLogger = { log: (event) => logs.push(event) };
 
     const res = await uploadToS3(tempFile, {
       bucket: 'test-bucket',
       region: 'us-east-1',
       keyPrefix: 'audio/tests',
       publicRead: true,
+      logger,
     });
 
     expect(res.url).toBe(
@@ -79,9 +83,7 @@ describe('uploadToS3', () => {
     const secondCall = sendMock.mock.calls[1]?.[0];
     expect(firstCall.ACL).toBe('public-read');
     expect(secondCall.ACL).toBeUndefined();
-    expect(warnSpy).toHaveBeenCalledWith(expect.stringMatching(/ACL not supported/));
-
-    warnSpy.mockRestore();
+    expect(logs.some((log) => /ACL not supported/.test(log.message))).toBe(true);
   });
 
   it('builds object key without prefix when omitted', async () => {

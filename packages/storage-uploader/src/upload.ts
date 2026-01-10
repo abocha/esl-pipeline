@@ -1,4 +1,5 @@
 // packages/storage-uploader/src/upload.ts
+import type { PipelineLogger } from '@esl-pipeline/contracts';
 import { ConfigurationError } from '@esl-pipeline/contracts';
 
 import { uploadToS3 } from './s3.js';
@@ -11,6 +12,7 @@ export interface UploadOpts {
   presign?: number; // seconds (only if your s3 helper supports presign)
   region?: string; // optional; defaults to env AWS_REGION
   presignExpiresIn?: number;
+  logger?: PipelineLogger;
 }
 
 export async function uploadFile(
@@ -41,6 +43,7 @@ export async function uploadFile(
     region: opts.region ?? process.env.AWS_REGION ?? 'ap-southeast-1',
     keyPrefix,
     publicRead: !!opts.public,
+    logger: opts.logger,
     // If your s3.ts supports presign, uncomment/forward it:
     // presignSeconds: opts.presign ?? 0,
   });

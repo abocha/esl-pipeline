@@ -291,6 +291,7 @@ export async function newAssignment(
         dryRun: flags.dryRun,
         validationResult: validation,
         strictValidation: false,
+        logger,
       });
       pageId = importResult.page_id;
       pageUrl = importResult.url;
@@ -379,6 +380,7 @@ export async function newAssignment(
             dialogueLanguage: flags.dialogueLanguage,
             dialogueStability: flags.dialogueStability,
             dialogueSeed: flags.dialogueSeed,
+            logger,
           });
         } catch (error: unknown) {
           if (error instanceof FfmpegNotFoundError) {
@@ -452,6 +454,7 @@ export async function newAssignment(
             public: flags.publicRead,
             presignExpiresIn: flags.presign,
             prefix: flags.prefix,
+            logger,
           });
           audio.url = upload.url;
         }
@@ -749,6 +752,7 @@ export async function rerunAssignment(
           dialogueLanguage: flags.dialogueLanguage,
           dialogueStability: flags.dialogueStability,
           dialogueSeed: flags.dialogueSeed,
+          logger,
         });
       } catch (error: unknown) {
         if (error instanceof FfmpegNotFoundError) {
@@ -810,6 +814,7 @@ export async function rerunAssignment(
           public: flags.publicRead,
           presignExpiresIn: flags.presign,
           prefix: flags.prefix,
+          logger,
         });
         audioUrl = upload.url;
       }

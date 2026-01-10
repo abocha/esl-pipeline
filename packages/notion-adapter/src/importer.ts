@@ -6,7 +6,7 @@ import { readFile } from 'node:fs/promises';
 import { basename } from 'node:path';
 import matter from 'gray-matter';
 
-import { ValidationError } from '@esl-pipeline/contracts';
+import { ValidationError, noopLogger } from '@esl-pipeline/contracts';
 import { validateMarkdownFile } from '@esl-pipeline/md-validator';
 
 import { chunk } from './chunk.js';
@@ -71,6 +71,7 @@ function resolveSource(input: string): string {
 
 export async function runImport(opts: ImportOptions) {
   const rawMd = await readFile(opts.mdPath, 'utf8');
+  const logger = opts.logger ?? noopLogger;
 
   // --- Step 1: validate programmatically (fail fast) ---
   const validation: ValidationSnapshot =
@@ -163,9 +164,12 @@ export async function runImport(opts: ImportOptions) {
       studentPageId = await resolveStudentId(client, studentName);
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
-      console.warn(
-        `[notion-adapter] Continuing without linking student "${studentName}": ${message}`,
-      );
+      logger.log({
+        level: 'warn',
+        message: 'Notion student link failed; continuing without linking student.',
+        detail: { student: studentName, error: message },
+        stage: 'import',
+      });
     }
   }
 

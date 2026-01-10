@@ -2,7 +2,12 @@ import { PutObjectCommand, S3Client } from '@aws-sdk/client-s3';
 import { readFile, stat } from 'node:fs/promises';
 import { basename } from 'node:path';
 
-import { ConfigurationError, ValidationError } from '@esl-pipeline/contracts';
+import {
+  ConfigurationError,
+  ValidationError,
+  noopLogger,
+  type PipelineLogger,
+} from '@esl-pipeline/contracts';
 
 interface S3ErrorShape {
   Code?: string;
@@ -50,11 +55,13 @@ export async function uploadToS3(
     region = process.env.AWS_REGION ?? 'ap-southeast-1',
     keyPrefix = process.env.S3_PREFIX ?? '',
     publicRead = false, // whether to attempt ACL
+    logger = noopLogger,
   }: {
     bucket?: string;
     region?: string;
     keyPrefix?: string;
     publicRead?: boolean;
+    logger?: PipelineLogger;
   } = {},
 ): Promise<{ url: string; key: string; etag?: string }> {
   if (!bucket) throw new ConfigurationError('S3 bucket not configured');
@@ -95,9 +102,13 @@ export async function uploadToS3(
     } catch (error: unknown) {
       if (!isAclNotSupported(error)) throw error;
       // Fall back to no-ACL
-      console.warn(
-        '[S3] ACL not supported on this bucket (Object Ownership: Bucket owner enforced). Retrying without ACL…',
-      );
+      logger.log({
+        level: 'warn',
+        message:
+          '[S3] ACL not supported on this bucket (Object Ownership: Bucket owner enforced). Retrying without ACL…',
+        detail: { bucket, region, key },
+        stage: 'upload',
+      });
     }
   }
 

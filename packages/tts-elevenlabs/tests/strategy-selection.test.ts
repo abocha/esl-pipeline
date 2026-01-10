@@ -3,6 +3,8 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import type { PipelineLogEvent, PipelineLogger } from '@esl-pipeline/contracts';
+
 import * as assign from '../src/assign.js';
 import * as dialogue from '../src/dialogue.js';
 import * as eleven from '../src/eleven.js';
@@ -94,13 +96,14 @@ Mara: Hello!
     await writeFile(join(dir, 'dialogue.mp3'), 'mock-audio');
 
     process.env.ELEVENLABS_TTS_DEBUG = '1';
-    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
+    const logs: PipelineLogEvent[] = [];
+    const logger: PipelineLogger = { log: (event) => logs.push(event) };
 
-    await buildStudyTextMp3(md, { voiceMapPath: voiceMap, outPath: dir });
+    await buildStudyTextMp3(md, { voiceMapPath: voiceMap, outPath: dir, logger });
 
     expect(dialogueSpy).toHaveBeenCalled();
     expect(convertMock).not.toHaveBeenCalled();
-    expect(logSpy).toHaveBeenCalledWith(expect.stringContaining('Using TTS strategy: dialogue'));
+    expect(logs.some((log) => log.message.includes('Using TTS strategy: dialogue'))).toBe(true);
   });
 
   it('auto -> dialogue for short/simple single-speaker text (many short sentences)', async () => {
@@ -141,13 +144,14 @@ At work, I did many tasks. I met my colleagues. We said hello.
     await writeFile(join(dir, 'dialogue.mp3'), 'mock-audio');
 
     process.env.ELEVENLABS_TTS_DEBUG = '1';
-    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
+    const logs: PipelineLogEvent[] = [];
+    const logger: PipelineLogger = { log: (event) => logs.push(event) };
 
-    await buildStudyTextMp3(md, { voiceMapPath: voiceMap, outPath: dir });
+    await buildStudyTextMp3(md, { voiceMapPath: voiceMap, outPath: dir, logger });
 
     expect(dialogueSpy).toHaveBeenCalled();
     expect(convertMock).not.toHaveBeenCalled();
-    expect(logSpy).toHaveBeenCalledWith(expect.stringContaining('Using TTS strategy: dialogue'));
+    expect(logs.some((log) => log.message.includes('Using TTS strategy: dialogue'))).toBe(true);
   });
 
   it('auto -> tts for longer single-speaker text (longer sentences)', async () => {
@@ -182,13 +186,14 @@ Last month, I tried to organize a petition to collect signatures from the neighb
     const dialogueSpy = vi.spyOn(dialogue, 'synthesizeDialogue');
 
     process.env.ELEVENLABS_TTS_DEBUG = '1';
-    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
+    const logs: PipelineLogEvent[] = [];
+    const logger: PipelineLogger = { log: (event) => logs.push(event) };
 
-    await buildStudyTextMp3(md, { voiceMapPath: voiceMap, outPath: dir });
+    await buildStudyTextMp3(md, { voiceMapPath: voiceMap, outPath: dir, logger });
 
     expect(dialogueSpy).not.toHaveBeenCalled();
     expect(convertMock).toHaveBeenCalled();
-    expect(logSpy).toHaveBeenCalledWith(expect.stringContaining('Using TTS strategy: tts'));
+    expect(logs.some((log) => log.message.includes('Using TTS strategy: tts'))).toBe(true);
   });
 
   it('explicit override and env var: ttsStrategy wins', async () => {
