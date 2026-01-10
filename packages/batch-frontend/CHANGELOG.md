@@ -1,5 +1,16 @@
 # @esl-pipeline/batch-frontend
 
+## 1.4.0
+
+### Minor Changes
+
+- chore: milestone alpha3 version bumps
+
+### Patch Changes
+
+- Updated dependencies
+  - @esl-pipeline/contracts@1.3.0
+
 ## 1.3.0
 
 ### Minor Changes

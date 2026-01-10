@@ -1,6 +1,6 @@
 {
   "name": "@esl-pipeline/orchestrator",
-  "version": "3.2.3",
+  "version": "3.3.0",
   "private": false,
   "description": "One-command ESL assignment pipeline (validation, Notion import, TTS, upload).",
   "keywords": [

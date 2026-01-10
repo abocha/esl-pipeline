@@ -1,6 +1,6 @@
 {
   "name": "@esl-pipeline/notion-add-audio",
-  "version": "2.0.6",
+  "version": "2.0.7",
   "private": true,
   "description": "Attach generated audio blocks to Notion study-text toggles.",
   "keywords": [

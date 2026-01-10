@@ -1,5 +1,13 @@
 # @esl-pipeline/md-validator
 
+## 2.0.8
+
+### Patch Changes
+
+- chore: milestone alpha3 version bumps
+- Updated dependencies
+  - @esl-pipeline/contracts@1.3.0
+
 ## 2.0.7
 
 ### Patch Changes
