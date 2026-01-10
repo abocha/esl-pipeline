@@ -26,7 +26,7 @@ Set these in `.env` (or your shell) when running `esl` or programmatic API calls
 - `S3_BUCKET` — Bucket for audio uploads.
 - `S3_PREFIX` (optional) — Key prefix for uploads (e.g., `audio/assignments`).
 - `S3_ENDPOINT` (optional) — S3-compatible endpoint (MinIO/etc).
-- `S3_UPLOAD_MAX_MB` (optional, default `50`) — Planned upload size cap in MB for S3 audio uploads (enforced in Stage 6).
+- `S3_UPLOAD_MAX_MB` (optional, default `50`) — Upload size cap in MB for S3 audio uploads.
 - `ESL_PIPELINE_MANIFEST_STORE` (optional, `filesystem`|`s3`, default `filesystem`) — Manifest backend.
 - `ESL_PIPELINE_MANIFEST_BUCKET` (when store=`s3`) — Bucket for manifests.
 - `ESL_PIPELINE_MANIFEST_PREFIX` (optional) — Manifest key prefix.

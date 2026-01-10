@@ -1,7 +1,7 @@
 import yaml from 'js-yaml';
 import { createHash } from 'node:crypto';
-import { createWriteStream, readFileSync } from 'node:fs';
-import { copyFile, mkdir, rename, stat, unlink } from 'node:fs/promises';
+import { createWriteStream } from 'node:fs';
+import { copyFile, mkdir, readFile, rename, stat, unlink } from 'node:fs/promises';
 import { dirname, resolve } from 'node:path';
 import { Readable } from 'node:stream';
 import { pipeline } from 'node:stream/promises';
@@ -315,7 +315,7 @@ export async function buildStudyTextMp3(
   opts: BuildStudyTextOptions,
 ): Promise<BuildStudyTextResult> {
   // Read and extract study text
-  const mdContent = readFileSync(mdPath, 'utf8');
+  const mdContent = await readFile(mdPath, 'utf8');
   const frontmatter = loadFrontmatter(mdContent);
   const studyText = extractStudyText(mdContent);
   const segments = resolveStudyTextSegments(studyText.lines, frontmatter);
@@ -325,7 +325,7 @@ export async function buildStudyTextMp3(
   const normalizedText = sanitizedSegments.join('\n');
 
   // Load voice map
-  const voiceMapContent = readFileSync(opts.voiceMapPath, 'utf8');
+  const voiceMapContent = await readFile(opts.voiceMapPath, 'utf8');
   const rawVoiceMap = yaml.load(voiceMapContent) ?? {};
   const voiceMap =
     typeof rawVoiceMap === 'object' && rawVoiceMap
@@ -615,7 +615,7 @@ export async function buildStudyTextMp3(
   };
 }
 
-function parseSpeaker(line: string): { speaker?: string; text: string } {
+export function parseSpeaker(line: string): { speaker?: string; text: string } {
   const idx = line.indexOf(':');
   if (idx > 0 && idx < 40) {
     return { speaker: line.slice(0, idx).trim(), text: line.slice(idx + 1).trim() };
@@ -638,7 +638,7 @@ const MARKDOWN_STRIPPERS: [RegExp, string][] = [
   [/<[^>]+>/g, ''], // html tags
 ] as const;
 
-function cleanSpeechText(text: string): string {
+export function cleanSpeechText(text: string): string {
   let sanitized = text;
   for (const [pattern, replacement] of MARKDOWN_STRIPPERS) {
     sanitized = sanitized.replace(pattern, replacement);
