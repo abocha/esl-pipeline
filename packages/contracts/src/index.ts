@@ -146,3 +146,4 @@ export type StreamEventMessage = JobEventMessage | RecordingEventMessage;
 // Job actions exports
 export * from './job-actions.js';
 export * from './errors.js';
+export * from './observability.js';

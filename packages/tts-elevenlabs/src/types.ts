@@ -1,6 +1,8 @@
 /**
  * TTS strategy selection
  */
+import type { PipelineLogger } from '@esl-pipeline/contracts';
+
 export type TtsStrategy = 'auto' | 'tts' | 'dialogue';
 
 /**
@@ -51,6 +53,7 @@ export interface BuildStudyTextOptions {
   defaultVoiceId?: string;
   ffmpegPath?: string;
   outputFormat?: string;
+  logger?: PipelineLogger;
 
   // Strategy selection (auto chooses based on content heuristics)
   ttsStrategy?: TtsStrategy;

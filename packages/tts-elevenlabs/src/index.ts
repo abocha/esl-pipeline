@@ -7,7 +7,12 @@ import { Readable } from 'node:stream';
 import { pipeline } from 'node:stream/promises';
 import type { ReadableStream as NodeReadableStream } from 'node:stream/web';
 
-import { ConfigurationError, InfrastructureError, ValidationError } from '@esl-pipeline/contracts';
+import {
+  ConfigurationError,
+  InfrastructureError,
+  ValidationError,
+  noopLogger,
+} from '@esl-pipeline/contracts';
 import { type Frontmatter, extractFrontmatter, extractStudyText } from '@esl-pipeline/md-extractor';
 
 import { type VoiceCatalog, loadVoicesCatalog } from './assign.js';
@@ -314,6 +319,7 @@ export async function buildStudyTextMp3(
   mdPath: string,
   opts: BuildStudyTextOptions,
 ): Promise<BuildStudyTextResult> {
+  const logger = opts.logger ?? noopLogger;
   // Read and extract study text
   const mdContent = await readFile(mdPath, 'utf8');
   const frontmatter = loadFrontmatter(mdContent);
@@ -376,7 +382,12 @@ export async function buildStudyTextMp3(
   // Determine TTS strategy
   const selectedStrategy = selectTtsStrategy(opts, segments);
   if (isTtsDebugEnabled()) {
-    console.log(`Using TTS strategy: ${selectedStrategy} (content type: ${studyText.type})`);
+    logger.log({
+      level: 'debug',
+      message: `Using TTS strategy: ${selectedStrategy} (content type: ${studyText.type})`,
+      detail: { strategy: selectedStrategy, contentType: studyText.type },
+      stage: 'tts',
+    });
   }
 
   // Route to appropriate synthesis path

@@ -1,3 +1,4 @@
+import type { PipelineLogger } from '@esl-pipeline/contracts';
 export interface ImportOptions {
     mdPath: string;
     dbId?: string;
@@ -6,6 +7,7 @@ export interface ImportOptions {
     dataSourceName?: string;
     student?: string;
     dryRun?: boolean;
+    logger?: PipelineLogger;
     /**
      * If provided, skip re-validating the markdown and reuse this result.
      * Useful when callers already performed validation upstream.
