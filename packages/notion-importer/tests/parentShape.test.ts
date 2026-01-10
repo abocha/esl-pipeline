@@ -4,8 +4,10 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, expect, it, vi } from 'vitest';
 
-import { runImport } from '../src/index.js';
-import * as notion from '../src/notion.js';
+import { runImport } from '../../notion-adapter/src/importer.js';
+import * as clientMod from '../../notion-adapter/src/client.js';
+import * as dataSourceMod from '../../notion-adapter/src/data-source.js';
+import * as retryMod from '../../notion-adapter/src/retry.js';
 
 describe('parent object shape', () => {
   it('uses the chosen data source parent shape', async () => {
@@ -74,14 +76,14 @@ Test plan
       writeFileSync(mdPath, normalized);
 
       // Mock resolveDataSourceId to return specific IDs
-      vi.spyOn(notion, 'resolveDataSourceId' as any).mockResolvedValue({
+      vi.spyOn(dataSourceMod, 'resolveDataSourceId').mockResolvedValue({
         dataSourceId: 'ds-123',
         databaseId: 'db-456',
       });
 
       // Mock createNotionClient and pages.create
       const create = vi.fn().mockResolvedValue({ id: 'p1' });
-      vi.spyOn(notion, 'createNotionClient' as any).mockReturnValue({
+      vi.spyOn(clientMod, 'createNotionClient').mockReturnValue({
         pages: { create },
         databases: {
           retrieve: vi.fn().mockResolvedValue({
@@ -89,14 +91,13 @@ Test plan
             properties: { Topic: { type: 'rich_text' } },
           }),
         },
-      });
+      } as unknown as ReturnType<typeof clientMod.createNotionClient>);
 
       // Mock resolveStudentId to return student page ID
-      vi.spyOn(notion, 'resolveStudentId' as any).mockResolvedValue('student-page-id');
+      vi.spyOn(dataSourceMod, 'resolveStudentId').mockResolvedValue('student-page-id');
 
       // Mock withRetry to avoid actual network calls during test
-      const withRetry = vi.fn(async (fn) => fn());
-      vi.doMock('../src/retry.js', () => ({ withRetry }));
+      vi.spyOn(retryMod, 'withRetry').mockImplementation(async (fn) => fn());
 
       await runImport({ mdPath: mdPath, dbId: 'db-456' });
 

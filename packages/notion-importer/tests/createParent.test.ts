@@ -4,8 +4,9 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, expect, it, vi } from 'vitest';
 
-import { runImport } from '../src/index.js';
-import * as notionMod from '../src/notion.js';
+import { runImport } from '../../notion-adapter/src/importer.js';
+import * as clientMod from '../../notion-adapter/src/client.js';
+import * as dataSourceMod from '../../notion-adapter/src/data-source.js';
 
 describe('pages.create parent uses data_source', () => {
   it('calls pages.create with parent.data_source.id', async () => {
@@ -75,14 +76,14 @@ Test plan
       writeFileSync(mdPath, md);
 
       // Mock resolveDataSourceId to return specific IDs
-      vi.spyOn(notionMod, 'resolveDataSourceId' as any).mockResolvedValue({
+      vi.spyOn(dataSourceMod, 'resolveDataSourceId').mockResolvedValue({
         dataSourceId: 'ds-123',
         databaseId: 'db-456',
       });
 
       // Mock notion client and pages.create
       const pagesCreate = vi.fn().mockResolvedValue({ id: 'p1', url: 'https://notion.so/x' });
-      vi.spyOn(notionMod, 'createNotionClient' as any).mockReturnValue({
+      vi.spyOn(clientMod, 'createNotionClient').mockReturnValue({
         pages: { create: pagesCreate },
         databases: {
           retrieve: vi.fn().mockResolvedValue({
@@ -90,10 +91,10 @@ Test plan
             properties: { Topic: { type: 'rich_text' } },
           }),
         },
-      });
+      } as unknown as ReturnType<typeof clientMod.createNotionClient>);
 
       // Mock resolveStudentId to return student page ID
-      vi.spyOn(notionMod, 'resolveStudentId' as any).mockResolvedValue('student-page-id');
+      vi.spyOn(dataSourceMod, 'resolveStudentId').mockResolvedValue('student-page-id');
 
       const res = await runImport({
         mdPath: mdPath,

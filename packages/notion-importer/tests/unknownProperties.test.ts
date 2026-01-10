@@ -5,8 +5,9 @@ import { describe, expect, it, vi } from 'vitest';
 
 import { ValidationError } from '@esl-pipeline/contracts';
 
-import { runImport } from '../src/index.js';
-import * as notionMod from '../src/notion.js';
+import { runImport } from '../../notion-adapter/src/importer.js';
+import * as clientMod from '../../notion-adapter/src/client.js';
+import * as dataSourceMod from '../../notion-adapter/src/data-source.js';
 
 describe('runImport - unknown properties', () => {
   it('fails fast when frontmatter properties are not in the database', async () => {
@@ -76,13 +77,13 @@ Test plan
       writeFileSync(mdPath, md);
 
       // Mock resolveDataSourceId to return specific IDs
-      vi.spyOn(notionMod, 'resolveDataSourceId' as any).mockResolvedValue({
+      vi.spyOn(dataSourceMod, 'resolveDataSourceId').mockResolvedValue({
         dataSourceId: 'ds-123',
         databaseId: 'db-456',
       });
 
       // Mock notion client and pages.create
-      vi.spyOn(notionMod, 'createNotionClient' as any).mockReturnValue({
+      vi.spyOn(clientMod, 'createNotionClient').mockReturnValue({
         pages: { create: vi.fn() },
         databases: {
           retrieve: vi.fn().mockResolvedValue({
@@ -90,7 +91,7 @@ Test plan
             properties: { Name: { type: 'title' }, Topic: { type: 'rich_text' } },
           }),
         },
-      });
+      } as unknown as ReturnType<typeof clientMod.createNotionClient>);
 
       await expect(
         runImport({

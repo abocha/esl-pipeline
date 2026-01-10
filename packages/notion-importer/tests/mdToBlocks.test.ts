@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { mdToBlocks } from '../src/mdToBlocks.js';
+import { mdToBlocks } from '../../notion-adapter/src/blocks/mdToBlocks.js';
 
 const sample = `
 ## 1. study text

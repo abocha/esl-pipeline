@@ -5,9 +5,7 @@ import { basename, dirname } from 'node:path';
 
 import { InfrastructureError, ManifestError, ValidationError } from '@esl-pipeline/contracts';
 import { validateMarkdownFile } from '@esl-pipeline/md-validator';
-import { addOrReplaceAudioUnderStudyText } from '@esl-pipeline/notion-add-audio';
-import { applyHeadingPreset } from '@esl-pipeline/notion-colorizer';
-import { runImport } from '@esl-pipeline/notion-importer';
+import { addOrReplaceAudioUnderStudyText, applyHeadingPreset, runImport } from '@esl-pipeline/notion-adapter';
 import { uploadFile } from '@esl-pipeline/storage-uploader';
 import {
   type BuildStudyTextResult,
