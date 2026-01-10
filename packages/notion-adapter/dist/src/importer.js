@@ -7,7 +7,7 @@ import { chunk } from './chunk.js';
 import { createNotionClient } from './client.js';
 import { resolveDataSourceId, resolveStudentId } from './data-source.js';
 import { mdToBlocks } from './blocks/mdToBlocks.js';
-import { applyTopicProperty, assertKnownProperties, buildBaseProperties, getTopicPropertyType, } from './properties.js';
+import { applyTopicProperty, buildBaseProperties, buildTitleProperty, findTitlePropertyName, getTopicPropertyType, mapFrontmatterProperties, } from './properties.js';
 import { withRetry } from './retry.js';
 const MAX_BLOCKS_PER_REQUEST = 50;
 function extractLegacyFence(input) {
@@ -66,7 +66,7 @@ export async function runImport(opts) {
     const topic = Array.isArray(fm.topic) ? fm.topic.join(', ') : fm.topic;
     const studentName = (opts.student ?? fm.student ?? '').trim();
     // --- Step 3: properties payload ---
-    const properties = buildBaseProperties(title, fm);
+    let properties = buildBaseProperties(title, fm);
     // --- Step 4: blocks mapping ---
     const children = mdToBlocks(blockContent);
     // --- Step 5: dry run ---
@@ -111,10 +111,15 @@ export async function runImport(opts) {
             return null;
         return props;
     })();
-    // Validate that all requested properties exist in the target database (best-effort).
-    // Some Notion SDK versions/types may omit the database `properties` field from typings.
-    assertKnownProperties(properties, rawDatabaseProperties);
     const topicPropTypeString = getTopicPropertyType(rawDatabaseProperties);
+    if (rawDatabaseProperties) {
+        const titlePropertyName = findTitlePropertyName(rawDatabaseProperties);
+        properties = buildTitleProperty(title, titlePropertyName);
+        const mapped = mapFrontmatterProperties(fm.properties, rawDatabaseProperties, {
+            skipKeys: [titlePropertyName, 'topic'],
+        });
+        Object.assign(properties, mapped);
+    }
     applyTopicProperty(properties, topic, topicPropTypeString);
     let studentPageId;
     if (studentName) {
