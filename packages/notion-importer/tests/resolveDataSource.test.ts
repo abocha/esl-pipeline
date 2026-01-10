@@ -1,8 +1,10 @@
-import type { Client } from '@notionhq/client';
 import { describe, expect, it, vi } from 'vitest';
 
-import { resolveDataSourceId } from '../src/notion.js';
+import { createNotionClient } from '../../notion-adapter/src/client.js';
+import { resolveDataSourceId } from '../../notion-adapter/src/data-source.js';
 import type { ResolveDataSourceInput } from '../src/types.js';
+
+type NotionClient = ReturnType<typeof createNotionClient>;
 
 describe('resolveDataSourceId', () => {
   it('Test Case 1: dataSourceId provided', async () => {
@@ -12,7 +14,7 @@ describe('resolveDataSourceId', () => {
     });
     const client = {
       dataSources: { retrieve: mockRetrieve },
-    } as unknown as Client;
+    } as unknown as NotionClient;
 
     const result = await resolveDataSourceId(client, { dataSourceId: 'ds-123' });
     expect(result).toEqual({ dataSourceId: 'ds-123', databaseId: 'db-456' });
@@ -26,7 +28,7 @@ describe('resolveDataSourceId', () => {
     });
     const client = {
       databases: { retrieve: mockRetrieve },
-    } as unknown as Client;
+    } as unknown as NotionClient;
 
     const result = await resolveDataSourceId(client, { dbId: 'db-456' });
     expect(result).toEqual({ dataSourceId: 'ds-789', databaseId: 'db-456' });
@@ -43,7 +45,7 @@ describe('resolveDataSourceId', () => {
     });
     const client = {
       databases: { retrieve: mockRetrieve },
-    } as unknown as Client;
+    } as unknown as NotionClient;
 
     await expect(resolveDataSourceId(client, { dbId: 'db-456' })).rejects.toThrow(
       /Multiple data sources found under db-456/,
@@ -60,7 +62,7 @@ describe('resolveDataSourceId', () => {
     });
     const client = {
       databases: { retrieve: mockRetrieve },
-    } as unknown as Client;
+    } as unknown as NotionClient;
 
     const result = await resolveDataSourceId(client, {
       dbId: 'db-456',
@@ -70,7 +72,7 @@ describe('resolveDataSourceId', () => {
   });
 
   it('Test Case 5: No IDs/Names provided', async () => {
-    const client = {} as unknown as Client;
+    const client = {} as unknown as NotionClient;
 
     await expect(resolveDataSourceId(client, {} as ResolveDataSourceInput)).rejects.toThrow(
       'Provide --data-source-id or --db-id/--db.',

@@ -349,14 +349,45 @@ importers:
         specifier: ^4.0.16
         version: 4.0.16(@types/node@25.0.3)(jsdom@27.4.0)(tsx@4.21.0)
 
+  packages/notion-adapter:
+    dependencies:
+      '@esl-pipeline/contracts':
+        specifier: workspace:*
+        version: link:../contracts
+      '@esl-pipeline/md-validator':
+        specifier: workspace:*
+        version: link:../md-validator
+      '@notionhq/client':
+        specifier: ^5.6.0
+        version: 5.6.0
+      gray-matter:
+        specifier: ^4.0.3
+        version: 4.0.3
+      zod:
+        specifier: ^4.3.5
+        version: 4.3.5
+    devDependencies:
+      '@types/node':
+        specifier: ^25.0.3
+        version: 25.0.3
+      tsx:
+        specifier: ^4.21.0
+        version: 4.21.0
+      typescript:
+        specifier: ^5.9.3
+        version: 5.9.3
+      vitest:
+        specifier: ^4.0.16
+        version: 4.0.16(@types/node@25.0.3)(jsdom@27.4.0)(tsx@4.21.0)
+
   packages/notion-add-audio:
     dependencies:
       '@esl-pipeline/contracts':
         specifier: workspace:*
         version: link:../contracts
-      '@notionhq/client':
-        specifier: ^5.6.0
-        version: 5.6.0
+      '@esl-pipeline/notion-adapter':
+        specifier: workspace:*
+        version: link:../notion-adapter
       commander:
         specifier: ^14.0.2
         version: 14.0.2
@@ -385,15 +416,12 @@ importers:
       '@esl-pipeline/contracts':
         specifier: workspace:*
         version: link:../contracts
-      '@notionhq/client':
-        specifier: ^5.6.0
-        version: 5.6.0
+      '@esl-pipeline/notion-adapter':
+        specifier: workspace:*
+        version: link:../notion-adapter
       commander:
         specifier: ^14.0.2
         version: 14.0.2
-      zod:
-        specifier: ^4.3.5
-        version: 4.3.5
     devDependencies:
       '@types/node':
         specifier: ^25.0.3
@@ -413,15 +441,9 @@ importers:
       '@esl-pipeline/contracts':
         specifier: workspace:*
         version: link:../contracts
-      '@esl-pipeline/md-extractor':
+      '@esl-pipeline/notion-adapter':
         specifier: workspace:*
-        version: link:../md-extractor
-      '@esl-pipeline/md-validator':
-        specifier: workspace:*
-        version: link:../md-validator
-      '@notionhq/client':
-        specifier: ^5.6.0
-        version: 5.6.0
+        version: link:../notion-adapter
     devDependencies:
       '@types/node':
         specifier: ^25.0.3
@@ -496,15 +518,9 @@ importers:
       '@esl-pipeline/md-validator':
         specifier: workspace:*
         version: link:../md-validator
-      '@esl-pipeline/notion-add-audio':
+      '@esl-pipeline/notion-adapter':
         specifier: workspace:*
-        version: link:../notion-add-audio
-      '@esl-pipeline/notion-colorizer':
-        specifier: workspace:*
-        version: link:../notion-colorizer
-      '@esl-pipeline/notion-importer':
-        specifier: workspace:*
-        version: link:../notion-importer
+        version: link:../notion-adapter
       '@esl-pipeline/storage-uploader':
         specifier: workspace:*
         version: link:../storage-uploader

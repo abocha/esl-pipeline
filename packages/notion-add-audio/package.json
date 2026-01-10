@@ -36,7 +36,7 @@
   },
   "dependencies": {
     "@esl-pipeline/contracts": "workspace:*",
-    "@notionhq/client": "^5.6.0",
+    "@esl-pipeline/notion-adapter": "workspace:*",
     "commander": "^14.0.2"
   },
   "devDependencies": {

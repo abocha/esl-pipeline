@@ -1,5 +1,11 @@
 # @esl-pipeline/notion-color-headings
 
+## 2.0.1
+
+### Patch Changes
+
+- Deprecated in favor of `@esl-pipeline/notion-adapter` (no longer used by the pipeline).
+
 ## 2.0.0
 
 ### Major Changes

@@ -10,9 +10,6 @@
     "target": "ES2022",
     "strict": true
   },
-  "references": [
-    { "path": "../md-extractor/tsconfig.build.json" },
-    { "path": "../md-validator/tsconfig.build.json" }
-  ],
+  "references": [{ "path": "../notion-adapter/tsconfig.build.json" }],
   "include": ["src", "bin", "tests"]
 }

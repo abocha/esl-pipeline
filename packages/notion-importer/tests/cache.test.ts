@@ -1,7 +1,9 @@
-import type { Client } from '@notionhq/client';
 import { describe, expect, it, vi } from 'vitest';
 
-import { resolveDataSourceId } from '../src/notion.js';
+import { createNotionClient } from '../../notion-adapter/src/client.js';
+import { resolveDataSourceId } from '../../notion-adapter/src/data-source.js';
+
+type NotionClient = ReturnType<typeof createNotionClient>;
 
 const makeClient = () =>
   ({
@@ -15,7 +17,7 @@ const makeClient = () =>
     dataSources: {
       retrieve: vi.fn(),
     },
-  }) as unknown as Client;
+  }) as unknown as NotionClient;
 
 describe('notion database cache', () => {
   it('reuses database retrieve result within TTL for same token/db', async () => {

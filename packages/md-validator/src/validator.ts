@@ -320,9 +320,11 @@ export async function validateMarkdownFile(
   }
 
   const studyBlock = findFirstDirective(findDirectiveBlocks(doc, 'study-text'));
-  if (!studyBlock) {
+  if (studyBlock === null) {
     const markerIdx = contentLines.findIndex((line) => line.toLowerCase().includes(':::study-text'));
-    if (markerIdx !== -1) {
+    if (markerIdx === -1) {
+      errors.push('Missing ":::study-text ... :::" block.');
+    } else {
       const raw = contentLines[markerIdx] ?? '';
       if (/^\s+:::study-text\b/i.test(raw)) {
         errors.push(
@@ -333,12 +335,10 @@ export async function validateMarkdownFile(
           `Line ${markerIdx + 1}: malformed study-text marker. Use ":::study-text" (case-insensitive) on its own line.`,
         );
       }
-    } else {
-      errors.push('Missing ":::study-text ... :::" block.');
     }
   } else {
     const bounds = getDirectiveBounds(studyBlock, contentLines);
-    if (!bounds) {
+    if (bounds === null) {
       errors.push('Missing ":::study-text ... :::" block.');
     } else {
       const { startLine, markerLine, closingLine, innerLines } = bounds;

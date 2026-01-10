@@ -3,14 +3,12 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-vi.mock('@esl-pipeline/notion-importer', () => ({
+vi.mock('@esl-pipeline/notion-adapter', () => ({
   runImport: vi.fn().mockResolvedValue({ page_id: 'page-123', url: 'https://notion.so/page-123' }),
-}));
-
-vi.mock('@esl-pipeline/notion-colorizer', () => ({
   applyHeadingPreset: vi
     .fn()
     .mockResolvedValue({ applied: true, counts: { h2: 1, h3: 1, toggles: 0 } }),
+  addOrReplaceAudioUnderStudyText: vi.fn().mockResolvedValue({ replaced: false, appended: true }),
 }));
 
 vi.mock('@esl-pipeline/tts-elevenlabs', async () => {
@@ -29,9 +27,6 @@ vi.mock('@esl-pipeline/storage-uploader', () => ({
     .mockResolvedValue({ url: 'https://s3.amazonaws.com/audio/file.mp3', key: 'audio/file.mp3' }),
 }));
 
-vi.mock('@esl-pipeline/notion-add-audio', () => ({
-  addOrReplaceAudioUnderStudyText: vi.fn().mockResolvedValue({ replaced: false, appended: true }),
-}));
 
 describe('orchestrator smoke', () => {
   afterEach(() => {
