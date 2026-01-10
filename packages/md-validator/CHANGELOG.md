@@ -1,5 +1,11 @@
 # @esl-pipeline/md-validator
 
+## 2.0.9
+
+### Patch Changes
+
+- Refactor validation to traverse PMD AST instead of regex parsing, preserving legacy fenced inputs with warnings.
+
 ## 2.0.8
 
 ### Patch Changes

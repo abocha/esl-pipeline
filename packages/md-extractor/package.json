@@ -37,8 +37,7 @@
   "dependencies": {
     "@esl-pipeline/contracts": "workspace:*",
     "gray-matter": "^4.0.3",
-    "remark-parse": "^11.0.0",
-    "unified": "^11.0.5"
+    "@esl-pipeline/pmd": "workspace:*"
   },
   "devDependencies": {
     "@types/node": "^25.0.3",

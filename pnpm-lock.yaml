@@ -292,15 +292,12 @@ importers:
       '@esl-pipeline/contracts':
         specifier: workspace:*
         version: link:../contracts
+      '@esl-pipeline/pmd':
+        specifier: workspace:*
+        version: link:../pmd
       gray-matter:
         specifier: ^4.0.3
         version: 4.0.3
-      remark-parse:
-        specifier: ^11.0.0
-        version: 11.0.0
-      unified:
-        specifier: ^11.0.5
-        version: 11.0.5
     devDependencies:
       '@types/node':
         specifier: ^25.0.3
@@ -320,6 +317,9 @@ importers:
       '@esl-pipeline/contracts':
         specifier: workspace:*
         version: link:../contracts
+      '@esl-pipeline/pmd':
+        specifier: workspace:*
+        version: link:../pmd
       commander:
         specifier: ^14.0.2
         version: 14.0.2
@@ -329,12 +329,6 @@ importers:
       picocolors:
         specifier: ^1.1.1
         version: 1.1.1
-      remark-parse:
-        specifier: ^11.0.0
-        version: 11.0.0
-      unified:
-        specifier: ^11.0.5
-        version: 11.0.5
       zod:
         specifier: ^4.3.5
         version: 4.3.5

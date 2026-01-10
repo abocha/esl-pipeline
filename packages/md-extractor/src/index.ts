@@ -1,6 +1,8 @@
 import matter from 'gray-matter';
 
 import { ValidationError } from '@esl-pipeline/contracts';
+import { findDirectiveBlocks, parsePmdDocument } from '@esl-pipeline/pmd';
+import type { PmdBlock, PmdDirectiveBlock, PmdDocument, PmdHeading } from '@esl-pipeline/pmd';
 
 import type { Frontmatter, Section, StudyText } from './types.js';
 
@@ -8,33 +10,134 @@ const NBSP = /\u00A0/g;
 const ZWSP = /\u200B/g;
 const BOM = /^\uFEFF/;
 
-function normalize(md: string): string {
-  return md.replace(BOM, '').replaceAll(NBSP, ' ').replaceAll(ZWSP, '').replaceAll('\r\n', '\n');
+function normalizeNewlines(input: string): string {
+  return input.replaceAll('\r\n', '\n');
 }
 
-function findBlock(
-  md: string,
-  openerRegex: RegExp,
-): { body: string; inlineLabel: string; markerLine: number } | null {
-  const m = openerRegex.exec(md);
-  if (!m) return null;
-  const startIdx = m.index + m[0].length;
-  // find the next line that equals ':::' at column start
-  const rest = md.slice(startIdx);
-  const close = rest.search(/\n[ \t]*:::\s*$/m);
-  if (close === -1) return null;
-  const inner = rest.slice(0, close);
-  const body = inner.trim();
-  const markerStart = m.index;
-  const lineStart = md.lastIndexOf('\n', markerStart);
-  const lineEnd = md.indexOf('\n', markerStart);
-  const markerLine = md.slice(
-    lineStart === -1 ? 0 : lineStart + 1,
-    lineEnd === -1 ? md.length : lineEnd,
-  );
-  const inlineLabel = markerLine.replace(/^[ \t]*:::[^\s]+/i, '').trim();
-  const markerLineNumber = md.slice(0, markerStart).split(/\r?\n/).length;
-  return { body, inlineLabel, markerLine: markerLineNumber };
+function cleanLine(input: string): string {
+  return input.replace(BOM, '').replaceAll(NBSP, ' ').replaceAll(ZWSP, '');
+}
+
+function extractLegacyFence(input: string): string {
+  const lines = input.split('\n');
+  const opener = lines[0] ?? '';
+  if (!opener.startsWith('```')) {
+    throw new ValidationError('Legacy fenced markdown must start with ``` at byte 0.');
+  }
+
+  let closingIndex = -1;
+  for (let i = 1; i < lines.length; i += 1) {
+    if ((lines[i] ?? '').trim() === '```') {
+      closingIndex = i;
+      break;
+    }
+  }
+
+  if (closingIndex === -1) {
+    throw new ValidationError('Legacy fenced markdown must include a closing ``` fence.');
+  }
+
+  const after = lines.slice(closingIndex + 1);
+  const hasExtraContent = after.some((line) => line.trim().length > 0);
+  if (hasExtraContent) {
+    throw new ValidationError('Legacy fenced markdown must not include content outside the fence.');
+  }
+
+  return lines.slice(1, closingIndex).join('\n');
+}
+
+function resolveSource(markdown: string): { source: string; format: 'canonical' | 'legacy-fenced' } {
+  const normalized = normalizeNewlines(markdown);
+  if (normalized.startsWith('---')) {
+    return { source: normalized, format: 'canonical' };
+  }
+  if (normalized.startsWith('```')) {
+    return { source: extractLegacyFence(normalized), format: 'legacy-fenced' };
+  }
+  if (normalized.startsWith('\uFEFF')) {
+    throw new ValidationError('Frontmatter must start at byte 0 (no BOM).');
+  }
+  throw new ValidationError('Expected YAML frontmatter at byte 0 or a legacy fenced block.');
+}
+
+function getContentLines(markdown: string): string[] {
+  const { source } = resolveSource(markdown);
+  const parsed = matter(source);
+  return normalizeNewlines(parsed.content).split('\n');
+}
+
+function parseDocument(markdown: string): PmdDocument {
+  try {
+    return parsePmdDocument(markdown) as PmdDocument;
+  } catch (error: unknown) {
+    const msg = error instanceof Error ? error.message : String(error);
+    throw new ValidationError(msg);
+  }
+}
+
+function getDirectiveBounds(block: PmdDirectiveBlock, contentLines: string[]): {
+  startLine: number;
+  endLine: number;
+  markerLine: string;
+  closingLine: string;
+  innerLines: string[];
+} | null {
+  const startLine = block.position?.start.line ?? 0;
+  const endLine = block.position?.end.line ?? 0;
+  if (!startLine || !endLine) return null;
+  const markerLine = contentLines[startLine - 1] ?? '';
+  const closingLine = contentLines[endLine - 1] ?? '';
+  const innerLines = contentLines.slice(startLine, Math.max(startLine, endLine - 1));
+  return { startLine, endLine, markerLine, closingLine, innerLines };
+}
+
+function directiveLabel(block: PmdDirectiveBlock, markerLine: string): string {
+  if (block.label && block.label.trim().length > 0) {
+    return block.label.trim();
+  }
+  const match = /^:::\S+\s+(.+)$/.exec(markerLine.trim());
+  return match?.[1]?.trim() ?? '';
+}
+
+function normalizeLabel(value: string): string {
+  return value.replaceAll(/[\u2018\u2019]/g, "'").trim().toLowerCase();
+}
+
+function findFirstDirective(blocks: PmdDirectiveBlock[]): PmdDirectiveBlock | null {
+  if (blocks.length === 0) return null;
+  const sorted = [...blocks].sort((a, b) => {
+    const aLine = a.position?.start.line ?? 0;
+    const bLine = b.position?.start.line ?? 0;
+    return aLine - bLine;
+  });
+  return sorted[0] ?? null;
+}
+
+function getStudyTextLines(block: PmdDirectiveBlock, contentLines: string[]): string[] {
+  const bounds = getDirectiveBounds(block, contentLines);
+  if (!bounds) return [];
+  if (bounds.closingLine.trim() !== ':::') return [];
+  const rawLines = bounds.innerLines.map((line) => cleanLine(line).trim());
+
+  const markerLabel = directiveLabel(block, bounds.markerLine);
+  if (markerLabel) {
+    const first = rawLines[0];
+    if (first && first.toLowerCase() === markerLabel.toLowerCase()) {
+      rawLines.shift();
+    }
+  }
+
+  return rawLines.filter(Boolean);
+}
+
+function collectHeadings(body: PmdBlock[], depth: 2 | 3): PmdHeading[] {
+  return body.filter((block) => block.type === 'heading' && block.depth === depth) as PmdHeading[];
+}
+
+
+export function extractFrontmatter(md: string): Frontmatter {
+  const doc = parseDocument(md);
+  return doc.frontmatter as Frontmatter;
 }
 
 function isDialogueLine(line: string): boolean {
@@ -44,76 +147,80 @@ function isDialogueLine(line: string): boolean {
   );
 }
 
-export function extractFrontmatter(md: string): Frontmatter {
-  const { data } = matter(normalize(md));
-  // light runtime guard
-  const fm = data as Frontmatter;
-  return fm;
-}
-
 export function extractStudyText(md: string): StudyText {
-  const n = normalize(md);
-  const inner = findBlock(n, /(^|\n)[ \t]*:::study-text[^\n]*\n/i);
-  if (!inner) throw new ValidationError('study-text block not found');
-  const rawLines = inner.body.split('\n').map((s) => s.trim());
-  if (inner.inlineLabel) {
-    const first = rawLines[0];
-    if (first && first.toLowerCase() === inner.inlineLabel.toLowerCase()) {
-      rawLines.shift();
-    }
-  }
-  const lines = rawLines.filter(Boolean);
+  const doc = parseDocument(md);
+  const contentLines = getContentLines(md);
+  const block = findFirstDirective(findDirectiveBlocks(doc, 'study-text'));
+  if (!block) throw new ValidationError('study-text block not found');
+
+  const lines = getStudyTextLines(block, contentLines);
+  if (lines.length === 0) throw new ValidationError('study-text block not found');
+
   const dialogueCount = lines.filter((line) => isDialogueLine(line)).length;
   const type: StudyText['type'] = dialogueCount >= 2 ? 'dialogue' : 'monologue';
   return { type, lines };
 }
 
 export function extractAnswerKey(md: string): string {
-  const n = normalize(md);
-  const block = findBlock(n, /(^|\n)[ \t]*:::(toggle-heading|toggle-h2)\s+Answer Key[^\n]*\n/i);
-  if (!block) throw new ValidationError('Answer Key toggle not found');
-  return block.body;
+  const doc = parseDocument(md);
+  const contentLines = getContentLines(md);
+  const toggles = [
+    ...findDirectiveBlocks(doc, 'toggle-heading'),
+    ...findDirectiveBlocks(doc, 'toggle-h2'),
+  ];
+
+  const match = toggles.find((block) => {
+    const bounds = getDirectiveBounds(block, contentLines);
+    const label = bounds ? directiveLabel(block, bounds.markerLine) : block.label ?? '';
+    return normalizeLabel(label) === 'answer key';
+  });
+
+  if (!match) throw new ValidationError('Answer Key toggle not found');
+  const bounds = getDirectiveBounds(match, contentLines);
+  if (!bounds) throw new ValidationError('Answer Key toggle not found');
+  return bounds.innerLines.join('\n').trim();
 }
 
 export function extractTeacherNotes(md: string): string {
-  const n = normalize(md);
-  // Match Teacher's with any apostrophe variant: ' (U+0027), ' (U+2018), ' (U+2019)
-  const block = findBlock(
-    n,
-    /(^|\n)[ \t]*:::(toggle-heading|toggle-h[23])\s+Teacher[\u0027\u2018\u2019]s\s+Follow-up\s+Plan[^\n]*\n/i,
-  );
-  if (!block) throw new ValidationError("Teacher's Follow-up Plan toggle not found");
-  return block.body;
+  const doc = parseDocument(md);
+  const contentLines = getContentLines(md);
+  const toggles = [
+    ...findDirectiveBlocks(doc, 'toggle-heading'),
+    ...findDirectiveBlocks(doc, 'toggle-h2'),
+    ...findDirectiveBlocks(doc, 'toggle-h3'),
+  ];
+
+  const match = toggles.find((block) => {
+    const bounds = getDirectiveBounds(block, contentLines);
+    const label = bounds ? directiveLabel(block, bounds.markerLine) : block.label ?? '';
+    return normalizeLabel(label) === "teacher's follow-up plan";
+  });
+
+  if (!match) throw new ValidationError("Teacher's Follow-up Plan toggle not found");
+  const bounds = getDirectiveBounds(match, contentLines);
+  if (!bounds) throw new ValidationError("Teacher's Follow-up Plan toggle not found");
+  return bounds.innerLines.join('\n').trim();
 }
 
 export function extractSections(md: string): Section[] {
-  const n = normalize(md);
-  const out: Section[] = [];
+  const doc = parseDocument(md);
+  const contentLines = getContentLines(md);
+  const headings = [
+    ...collectHeadings(doc.body, 2),
+    ...collectHeadings(doc.body, 3),
+  ].sort((a, b) => (a.position?.start.line ?? 0) - (b.position?.start.line ?? 0));
 
-  // capture: 1) hashes (## or ###), 2) title text
-  const headingRe = /^(#{2,3})\s+(.+)\s*$/gm;
-  const positions: { depth: 2 | 3; title: string; start: number }[] = [];
-
-  let match: RegExpExecArray | null;
-  while ((match = headingRe.exec(n)) !== null) {
-    const hashes = match[1] ?? ''; // TS-safe default
-    const rawTitle = match[2] ?? '';
-    if (!hashes || !rawTitle) continue; // skip malformed headings just in case
-
-    const depth: 2 | 3 = hashes.length === 2 ? 2 : 3;
-    const title = rawTitle.trim();
-    const start = headingRe.lastIndex; // right after the heading line
-    positions.push({ depth, title, start });
-  }
-
-  for (let i = 0; i < positions.length; i++) {
-    const cur = positions[i]!; // we just populated these
-    const next = positions[i + 1];
-    const end = next ? next.start : n.length;
-    const content = n.slice(cur.start, end).trim();
-    out.push({ depth: cur.depth, title: cur.title, content });
-  }
-  return out;
+  return headings.map((heading, idx) => {
+    const startLine = heading.position?.start.line ?? 0;
+    const endLine = headings[idx + 1]?.position?.start.line ?? contentLines.length + 1;
+    const slice =
+      startLine > 0 ? contentLines.slice(startLine, Math.max(startLine, endLine - 1)) : [];
+    return {
+      depth: heading.depth as 2 | 3,
+      title: heading.text,
+      content: slice.join('\n').trim(),
+    };
+  });
 }
 
 export type { Frontmatter, StudyText, Section, SpeakerProfile } from './types.js';
