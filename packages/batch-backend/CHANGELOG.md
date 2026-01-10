@@ -1,5 +1,19 @@
 # @esl-pipeline/batch-backend
 
+## 1.5.0
+
+### Minor Changes
+
+- chore: milestone alpha3 version bumps
+
+### Patch Changes
+
+- Updated dependencies
+  - @esl-pipeline/contracts@1.3.0
+  - @esl-pipeline/orchestrator@3.3.0
+  - @esl-pipeline/md-validator@2.0.8
+  - @esl-pipeline/shared-infrastructure@1.1.5
+
 ## 1.4.0
 
 ### Minor Changes

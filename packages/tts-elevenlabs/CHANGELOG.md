@@ -1,5 +1,14 @@
 # @esl-pipeline/tts-elevenlabs
 
+## 3.1.6
+
+### Patch Changes
+
+- chore: milestone alpha3 version bumps
+- Updated dependencies
+  - @esl-pipeline/contracts@1.3.0
+  - @esl-pipeline/md-extractor@2.0.7
+
 ## 3.1.5
 
 ### Patch Changes

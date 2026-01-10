@@ -1,5 +1,16 @@
 # @esl-pipeline/orchestrator
 
+## 3.3.0
+
+### Minor Changes
+
+- chore: milestone alpha3 version bumps
+
+### Patch Changes
+
+- Updated dependencies
+  - @esl-pipeline/shared-infrastructure@1.1.5
+
 ## 3.2.3
 
 ### Patch Changes

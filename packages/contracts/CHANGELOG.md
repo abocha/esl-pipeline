@@ -1,5 +1,11 @@
 # @esl-pipeline/contracts
 
+## 1.3.0
+
+### Minor Changes
+
+- chore: milestone alpha3 version bumps
+
 ## 1.2.0
 
 ### Minor Changes

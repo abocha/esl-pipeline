@@ -1,5 +1,14 @@
 # @esl-pipeline/notion-importer
 
+## 2.2.6
+
+### Patch Changes
+
+- Updated dependencies
+  - @esl-pipeline/contracts@1.3.0
+  - @esl-pipeline/md-validator@2.0.8
+  - @esl-pipeline/md-extractor@2.0.7
+
 ## 2.2.5
 
 ### Patch Changes
