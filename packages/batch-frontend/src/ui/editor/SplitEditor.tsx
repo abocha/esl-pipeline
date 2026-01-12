@@ -209,6 +209,26 @@ export const SplitEditor = forwardRef<SplitEditorHandle, SplitEditorProps>(({ va
           margin: 0 0 var(--space-3) var(--space-4);
         }
 
+        .markdown-preview table {
+          width: 100%;
+          border-collapse: collapse;
+          margin: 0 0 var(--space-3);
+        }
+
+        .markdown-preview th,
+        .markdown-preview td {
+          border: 1px solid var(--border-light);
+          padding: var(--space-2);
+          text-align: left;
+          vertical-align: top;
+        }
+
+        .markdown-preview thead th {
+          background: var(--bg-tertiary);
+          color: var(--text-primary);
+          font-weight: 600;
+        }
+
         .markdown-preview blockquote {
           border-left: 3px solid var(--border-focus);
           padding-left: var(--space-3);

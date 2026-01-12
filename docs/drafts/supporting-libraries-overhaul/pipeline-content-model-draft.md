@@ -44,8 +44,7 @@ this path remains supported but deprecated (warn immediately).
 
 Block-level directives (containers):
 - `:::study-text <label?>`
-- `:::toggle-h2 <title>`
-- `:::toggle-h3 <title>`
+- `:::toggle <title>`
 - `:::callout <icon?>`
 - `:::column-list`
   - `:::column`
@@ -59,6 +58,7 @@ Leaf directives:
 Notes:
 - Directives can be nested where it makes sense (e.g., toggle contains headings).
 - Parsing must be nesting-aware (no regex-only parsing).
+- `:::toggle-h2` / `:::toggle-h3` remain accepted as legacy aliases.
 
 ## Pipeline Content Model (AST)
 
@@ -84,7 +84,7 @@ Blocks (subset):
 
 Directive mapping examples:
 - `:::callout target` -> `DirectiveBlock(type="callout", attrs={ icon: "target" })`
-- `:::toggle-h2 Answer Key` -> `DirectiveBlock(type="toggle", attrs={ level: 2, title: "Answer Key" })`
+- `:::toggle Answer Key` -> `DirectiveBlock(type="toggle", attrs={ title: "Answer Key" })`
 - `:::column-list` -> `DirectiveBlock(type="columns")` with child `DirectiveBlock(type="column")`
 
 ## Parser Responsibilities

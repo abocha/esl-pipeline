@@ -2,7 +2,7 @@ type BlockObjectRequest = any;
 /**
  * Extremely pragmatic MD→Notion mapper that:
  * - Emits heading_1 / heading_2 / heading_3 for '#', '##', '###'
- * - Emits toggles for :::toggle-heading / :::toggle-hX
+ * - Emits toggles for :::toggle / :::toggle-heading / :::toggle-hX
  * - Emits callouts for :::callout <emoji>
  * - Emits columns for :::column-list / :::column
  * - Emits ToC for :::toc

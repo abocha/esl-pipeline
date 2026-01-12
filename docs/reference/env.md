@@ -77,7 +77,7 @@ Use `.env.batch-backend` for the service stack. It includes all core keys above 
   - `PRESIGNED_URL_EXPIRES_IN`
   - `ENABLE_MULTIPART_UPLOADS`, `MAX_MULTIPART_SIZE`
 - Upload + security controls:
-  - `MAX_FILE_SIZE`, `ALLOWED_MIME_TYPES`
+  - `MAX_FILE_SIZE`, `RECORDINGS_MAX_FILE_SIZE`, `ALLOWED_MIME_TYPES`
   - `UPLOAD_RATE_LIMIT`, `UPLOAD_BURST_LIMIT`, `UPLOAD_QUOTA_PER_USER`
   - `ENABLE_FILE_VALIDATION`, `ENABLE_FILE_SANITIZATION`, `ENABLE_RATE_LIMITING`, `ENABLE_SECURITY_LOGGING`
   - `JOB_SUBMISSION_RATE_LIMIT`
@@ -91,3 +91,4 @@ Notes:
 - For S3 manifests or uploads, set the `ESL_PIPELINE_MANIFEST_*` vars and `S3_*`/AWS creds together.
 - TTS strategy defaults can be provided via `ELEVENLABS_TTS_STRATEGY` and related dialogue options; manifests now persist these for reruns.
 - Batch backend startup validates `FILESYSTEM_UPLOAD_DIR`, `RECORDINGS_ROOT` (if set), and `PROMPT_*` allowlists; misconfigured paths fail fast.
+- Use `RECORDINGS_MAX_FILE_SIZE` to raise audio upload limits without affecting general markdown uploads.

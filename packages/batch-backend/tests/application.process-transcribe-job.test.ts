@@ -250,7 +250,7 @@ function createConfig(): BatchBackendConfig {
     },
     queue: { name: 'esl-jobs' },
     transcription: { queueName: 'transcribe-queue', mode: 'timeline', maxConcurrency: 1 },
-    recordings: { root: '', glob: '**/*.{opus}', scanIntervalSec: 0 },
+    recordings: { root: '', glob: '**/*.{opus}', scanIntervalSec: 0, maxFileSize: 0 },
     deepgram: {
       apiKey: 'dg-key',
       accessToken: undefined,

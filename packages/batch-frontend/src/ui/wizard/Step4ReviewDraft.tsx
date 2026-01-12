@@ -33,6 +33,7 @@ export const Step4ReviewDraft: React.FC<Step4ReviewDraftProps> = ({
   const [validating, setValidating] = useState(false);
   const [strictValidation, setStrictValidation] = useState(false);
   const editorRef = useRef<SplitEditorHandle | null>(null);
+  const hasValidationErrors = (validation?.errors?.length ?? 0) > 0;
 
   useEffect(() => {
     let active = true;
@@ -117,6 +118,14 @@ export const Step4ReviewDraft: React.FC<Step4ReviewDraftProps> = ({
       setError('Draft text is empty.');
       return;
     }
+    if (validating) {
+      setError('Validation is still running.');
+      return;
+    }
+    if (hasValidationErrors) {
+      setError('Resolve validation errors before publishing.');
+      return;
+    }
     setLoading(true);
     setError(null);
     setLoading(true);
@@ -142,7 +151,7 @@ export const Step4ReviewDraft: React.FC<Step4ReviewDraftProps> = ({
       onBack={onBack}
       onNext={handleSaveDraft}
       nextLabel="Continue to publish"
-      isNextDisabled={!promptPackageId}
+      isNextDisabled={!promptPackageId || validating || hasValidationErrors}
       isBusy={loading}
     >
       <div className="draft-layout">

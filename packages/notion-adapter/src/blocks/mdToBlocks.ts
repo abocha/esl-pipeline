@@ -48,7 +48,7 @@ interface NumberedListEntry {
 /**
  * Extremely pragmatic MD→Notion mapper that:
  * - Emits heading_1 / heading_2 / heading_3 for '#', '##', '###'
- * - Emits toggles for :::toggle-heading / :::toggle-hX
+ * - Emits toggles for :::toggle / :::toggle-heading / :::toggle-hX
  * - Emits callouts for :::callout <emoji>
  * - Emits columns for :::column-list / :::column
  * - Emits ToC for :::toc
@@ -565,7 +565,7 @@ export function mdToBlocks(md: string): BlockObjectRequest[] {
       const trimmed = line.trim();
 
       // Check for start of new block
-      if (/^:::(column|callout|toggle-|study-text|synced-block|column-list)/i.test(trimmed)) {
+      if (/^:::(column|callout|toggle(?:-|\b)|study-text|synced-block|column-list)/i.test(trimmed)) {
         depth++;
       }
       // Check for end of block
@@ -682,9 +682,9 @@ export function mdToBlocks(md: string): BlockObjectRequest[] {
       continue;
     }
 
-    // toggle-heading block (Legacy & New)
+    // toggle block (Legacy & New)
     const toggleHeadingMatch =
-      /^:::(toggle-heading|toggle-h1|toggle-h2|toggle-h3)\s+(.+?)\s*$/i.exec(current);
+      /^:::(toggle|toggle-heading|toggle-h1|toggle-h2|toggle-h3)\s+(.+?)\s*$/i.exec(current);
     if (toggleHeadingMatch) {
       i++;
       const type = toggleHeadingMatch[1]!.toLowerCase();
@@ -695,7 +695,7 @@ export function mdToBlocks(md: string): BlockObjectRequest[] {
 
       listStack.length = 0;
 
-      if (type === 'toggle-heading' || shouldUsePlainToggle(label)) {
+      if (type === 'toggle' || type === 'toggle-heading' || shouldUsePlainToggle(label)) {
         blocks.push(toggleBlock(label, content));
       } else {
         const depth: 1 | 2 | 3 = type === 'toggle-h1' ? 1 : type === 'toggle-h2' ? 2 : 3;

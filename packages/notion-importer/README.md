@@ -80,10 +80,10 @@ Right content
 :::
 ```
 
-**Toggle Headings:**
+**Toggles:**
 
 ```markdown
-:::toggle-h2 Answer Key
+:::toggle Answer Key
 Hidden content
 :::
 ```

@@ -1,5 +1,12 @@
 # @esl-pipeline/notion-add-audio
 
+## 2.0.8
+
+### Patch Changes
+
+- Updated dependencies
+  - @esl-pipeline/notion-adapter@0.2.0
+
 ## 2.0.7
 
 ### Patch Changes

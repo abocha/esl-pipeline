@@ -68,7 +68,7 @@ text
 
 ## 8. 🔑 Answer Key & Sample Mission
 
-:::toggle-heading Answer Key
+:::toggle Answer Key
 
 ### A. Controlled Practice Answers
 
@@ -77,7 +77,7 @@ text
 
 ## 9. 👨‍🏫 Teacher's Follow-up Plan
 
-:::toggle-heading Teacher’s Follow-up Plan
+:::toggle Teacher’s Follow-up Plan
 notes
 :::
 ```

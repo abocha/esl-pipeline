@@ -1,5 +1,13 @@
 # @esl-pipeline/notion-importer
 
+## 2.2.7
+
+### Patch Changes
+
+- Ship alpha4 pipeline updates across wizard UX, markdown parsing, and Notion rendering.
+- Updated dependencies
+  - @esl-pipeline/notion-adapter@0.2.0
+
 ## 2.2.6
 
 ### Patch Changes

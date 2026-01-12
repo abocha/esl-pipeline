@@ -109,7 +109,7 @@ export async function createHttpServer(): Promise<FastifyInstance> {
     const recordingUploadValidationService: FileValidationService | null =
       config.security.enableFileValidation
         ? createRecordingUploadValidationService({
-            maxFileSize: config.security.maxFileSize,
+            maxFileSize: config.recordings.maxFileSize,
           })
         : null;
     const fileSanitizationService: FileSanitizationService | null = config.security

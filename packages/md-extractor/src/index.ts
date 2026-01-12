@@ -165,6 +165,7 @@ export function extractAnswerKey(md: string): string {
   const doc = parseDocument(md);
   const contentLines = getContentLines(md);
   const toggles = [
+    ...findDirectiveBlocks(doc, 'toggle'),
     ...findDirectiveBlocks(doc, 'toggle-heading'),
     ...findDirectiveBlocks(doc, 'toggle-h2'),
   ];
@@ -185,6 +186,7 @@ export function extractTeacherNotes(md: string): string {
   const doc = parseDocument(md);
   const contentLines = getContentLines(md);
   const toggles = [
+    ...findDirectiveBlocks(doc, 'toggle'),
     ...findDirectiveBlocks(doc, 'toggle-heading'),
     ...findDirectiveBlocks(doc, 'toggle-h2'),
     ...findDirectiveBlocks(doc, 'toggle-h3'),

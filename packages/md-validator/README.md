@@ -69,8 +69,8 @@ speaker_profiles: any[]
 
 - 9 H2 sections in specific order
 - `:::study-text ... :::` block
-- `:::toggle-heading Answer Key` or `:::toggle-h2 Answer Key`
-- `:::toggle-heading Teacher's Follow-up Plan` or `:::toggle-h2/h3 Teacher's Follow-up Plan`
+- `:::toggle Answer Key` (preferred) or `:::toggle-heading` / `:::toggle-h2` Answer Key
+- `:::toggle Teacher's Follow-up Plan` (preferred) or `:::toggle-heading` / `:::toggle-h2/h3` Teacher's Follow-up Plan
 
 ### Content Rules
 
@@ -83,6 +83,7 @@ speaker_profiles: any[]
 
 - Added validation for `icon` (emoji), `cover` (URL), and `properties` fields
 - Added toggle-heading syntax support (`:::toggle-h2`, `:::toggle-h3`)
+- Added support for `:::toggle` as the preferred toggle marker
 - Fixed apostrophe matching in "Teacher's Follow-up Plan" (supports `'`, `'`, `'`)
 - Added topic normalization (arrays auto-converted to comma-separated strings)
 

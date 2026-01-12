@@ -9,7 +9,7 @@ Extract structured data from ESL homework markdown files.
 - **Section Extraction**: Extract H2/H3 sections with content
 - **Answer Key Extraction**: Get Answer Key toggle content
 - **Teacher Notes Extraction**: Get Teacher's Follow-up Plan content
-- **Toggle Syntax Support**: Works with both `:::toggle-heading` and `:::toggle-h2/h3`
+- **Toggle Syntax Support**: Works with `:::toggle` (preferred) and legacy `:::toggle-heading` / `:::toggle-h2/h3`
 
 ## Installation
 
@@ -73,16 +73,18 @@ Detects dialogue if 2+ lines match `Speaker: text` format.
 
 Extracts content from:
 
+- `:::toggle Answer Key` (preferred)
 - `:::toggle-heading Answer Key` (legacy)
-- `:::toggle-h2 Answer Key` (new)
+- `:::toggle-h2 Answer Key` (legacy)
 
 ### `extractTeacherNotes(md: string): string`
 
 Extracts content from:
 
+- `:::toggle Teacher's Follow-up Plan` (preferred)
 - `:::toggle-heading Teacher's Follow-up Plan` (legacy)
-- `:::toggle-h2 Teacher's Follow-up Plan` (new)
-- `:::toggle-h3 Teacher's Follow-up Plan` (new)
+- `:::toggle-h2 Teacher's Follow-up Plan` (legacy)
+- `:::toggle-h3 Teacher's Follow-up Plan` (legacy)
 
 ### `extractSections(md: string): Section[]`
 
@@ -99,6 +101,7 @@ Returns array of:
 ## Version 2.0 Changes
 
 - Added support for new toggle-heading syntax (`:::toggle-h2`, `:::toggle-h3`)
+- Added support for `:::toggle` as the preferred toggle marker
 - Fixed apostrophe matching (supports `'`, `'`, `'`)
 - Maintains backward compatibility with `:::toggle-heading`
 

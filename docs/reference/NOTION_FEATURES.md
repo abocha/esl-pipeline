@@ -277,16 +277,24 @@ Watch this short clip:
 
 ---
 
-### Toggle Headings
+### Toggles
 
-Create collapsible headings at different levels.
+Create collapsible sections (plain toggles or heading-style toggles).
 
 **Syntax:**
 
 ```markdown
-:::toggle-h1 Main Section Title
+:::toggle Plain Toggle Title
 Content that can be collapsed/expanded.
 Multiple paragraphs supported.
+:::
+```
+
+**Heading toggle syntax (optional):**
+
+```markdown
+:::toggle-h1 Main Section Title
+Content that can be collapsed/expanded.
 :::
 
 :::toggle-h2 Subsection Title
@@ -309,7 +317,7 @@ Still works for backward compatibility (creates a generic toggle block).
 **Examples:**
 
 ```markdown
-:::toggle-h2 Answer Key
+:::toggle Answer Key
 
 ### A. Controlled Practice Answers
 
@@ -318,7 +326,7 @@ Still works for backward compatibility (creates a generic toggle block).
 3. would learn
    :::
 
-:::toggle-h2 Teacher's Follow-up Plan
+:::toggle Teacher's Follow-up Plan
 **Discussion Points:**
 
 - Review student errors
@@ -326,10 +334,11 @@ Still works for backward compatibility (creates a generic toggle block).
   :::
 ```
 
-**Important:** Both syntaxes are supported:
+**Important:** All syntaxes are supported:
 
+- `:::toggle Answer Key` (preferred)
 - `:::toggle-heading Answer Key` (legacy)
-- `:::toggle-h2 Answer Key` (new, recommended)
+- `:::toggle-h2 Answer Key` (legacy)
 
 ---
 
@@ -485,7 +494,7 @@ Understanding conditionals helps you...
 
 ## 8. Answer Key & Sample Mission
 
-:::toggle-h2 Answer Key
+:::toggle Answer Key
 
 ### A. Controlled Practice Answers
 
@@ -500,7 +509,7 @@ Example answer: "If I had a million dollars, I would..."
 
 ## 9. Teacher's Follow-up Plan
 
-:::toggle-h2 Teacher's Follow-up Plan
+:::toggle Teacher's Follow-up Plan
 
 **Review Focus:**
 
@@ -542,7 +551,7 @@ Example answer: "If I had a million dollars, I would..."
 
 # New (recommended):
 
-:::toggle-h2 Answer Key
+:::toggle Answer Key
 ```
 
 #### Quote Your Topics
@@ -566,6 +575,12 @@ topic: "Grammar, Conditionals"
 **Error:** Missing Teacher's Follow-up Plan
 
 **Fix:** Ensure you have either:
+
+```markdown
+:::toggle Teacher's Follow-up Plan
+```
+
+OR
 
 ```markdown
 :::toggle-heading Teacher's Follow-up Plan
@@ -644,10 +659,11 @@ More content
 | Table of Contents | `:::toc`                                 | No        |
 | Audio             | `:::audio URL`                           | No        |
 | Video             | `:::video URL`                           | No        |
+| Toggle            | `:::toggle Title`                        | No        |
 | Toggle Headings   | `:::toggle-h2 Title`                     | No        |
 | Synced Blocks     | `:::synced-block`                        | No        |
-| Answer Key        | `:::toggle-h2 Answer Key`                | **Yes**   |
-| Teacher's Plan    | `:::toggle-h2 Teacher's Follow-up Plan`  | **Yes**   |
+| Answer Key        | `:::toggle Answer Key`                   | **Yes**   |
+| Teacher's Plan    | `:::toggle Teacher's Follow-up Plan`     | **Yes**   |
 
 ---
 

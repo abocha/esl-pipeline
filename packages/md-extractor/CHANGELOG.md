@@ -1,10 +1,22 @@
 # @esl-pipeline/md-extractor
 
+## 2.1.0
+
+### Minor Changes
+
+- Ship alpha4 pipeline updates across wizard UX, markdown parsing, and Notion rendering.
+
+### Patch Changes
+
+- Updated dependencies
+  - @esl-pipeline/pmd@0.1.1
+
 ## 2.0.8
 
 ### Patch Changes
 
 - Switch directive extraction to the PMD AST for study-text and toggle blocks; legacy fenced inputs remain supported.
+- Add support for `:::toggle` as the preferred Answer Key/Teacher Plan marker.
 
 ## 2.0.7
 

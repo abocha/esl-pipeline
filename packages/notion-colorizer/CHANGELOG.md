@@ -1,5 +1,13 @@
 # @esl-pipeline/notion-colorizer
 
+## 2.0.9
+
+### Patch Changes
+
+- Ship alpha4 pipeline updates across wizard UX, markdown parsing, and Notion rendering.
+- Updated dependencies
+  - @esl-pipeline/notion-adapter@0.2.0
+
 ## 2.0.8
 
 ### Patch Changes

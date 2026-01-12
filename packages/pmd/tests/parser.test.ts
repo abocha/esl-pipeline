@@ -19,7 +19,7 @@ describe('parsePmdDocument', () => {
     const md =
       baseFrontmatter +
       [
-        ':::toggle-h2 Answer Key',
+        ':::toggle Answer Key',
         ':::callout target',
         'Inner content',
         ':::',
@@ -27,7 +27,7 @@ describe('parsePmdDocument', () => {
       ].join('\n');
 
     const doc = parsePmdDocument(md);
-    const toggles = findDirectiveBlocks(doc, 'toggle-h2');
+    const toggles = findDirectiveBlocks(doc, 'toggle');
     expect(toggles).toHaveLength(1);
 
     const callouts = findDirectiveBlocks(toggles[0]?.children ?? [], 'callout');
