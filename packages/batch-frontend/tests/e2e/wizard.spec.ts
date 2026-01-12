@@ -191,6 +191,8 @@ test.describe('Assignment Wizard', () => {
 
         await expect(page.getByRole('heading', { name: 'Add notes' })).toBeVisible({ timeout: 15000 });
         await page.locator('textarea').first().fill('Test notes');
+        await page.getByRole('button', { name: 'Generate prompt' }).click();
+        await expect(page.locator('.prompt-output')).toHaveValue('Prompt Text', { timeout: 15000 });
         await page.getByRole('button', { name: 'Continue to draft' }).click();
 
         await expect(page.getByRole('heading', { name: 'Review draft' })).toBeVisible({ timeout: 15000 });

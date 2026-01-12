@@ -1,8 +1,9 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { applyHeadingPreset } from '../src/index.js';
+import { applyHeadingPreset } from '../../notion-adapter/src/colorizer.js';
+import * as clientMod from '../../notion-adapter/src/client.js';
 
-const { listMock, updateMock, ClientCtor } = vi.hoisted(() => {
+const { listMock, updateMock, clientMock } = vi.hoisted(() => {
   const listMock = vi.fn();
   const updateMock = vi.fn();
   const clientMock = {
@@ -13,22 +14,25 @@ const { listMock, updateMock, ClientCtor } = vi.hoisted(() => {
       update: updateMock,
     },
   };
-  const ClientCtor = vi.fn(function ClientMock() {
-    return clientMock;
-  });
-  return { listMock, updateMock, ClientCtor };
+  return { listMock, updateMock, clientMock };
 });
 
-vi.mock('@notionhq/client', () => ({
-  Client: ClientCtor,
-}));
-
 describe('applyHeadingPreset', () => {
+  let createClientSpy: ReturnType<typeof vi.spyOn>;
+
   beforeEach(() => {
     process.env.NOTION_TOKEN = 'test-token';
     listMock.mockReset();
     updateMock.mockReset();
-    ClientCtor.mockClear();
+    createClientSpy = vi
+      .spyOn(clientMod, 'createNotionClient')
+      .mockReturnValue(
+        clientMock as unknown as ReturnType<typeof clientMod.createNotionClient>,
+      );
+  });
+
+  afterEach(() => {
+    createClientSpy.mockRestore();
   });
 
   it('colors toggle label and heading_3 children inside toggles', async () => {

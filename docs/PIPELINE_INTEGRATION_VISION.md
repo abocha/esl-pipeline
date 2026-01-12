@@ -109,7 +109,7 @@ See docs/reference/env.md for the full list. Key Phase 2+ entries:
 
 - Recording scan is delta-only; use a brand new file to test ingestion.
 - Recording list loads on page load and stays in sync with SSE updates.
-- Recording uploads honor `MAX_FILE_SIZE`; increase it for longer lessons.
+- Recording uploads honor `RECORDINGS_MAX_FILE_SIZE`; increase it for longer lessons.
 - Draft approval auto-creates a job; no manual job selection needed.
 - Prompt profile path is constrained to configured root; ensure the env paths exist.
 - Student IDs are derived from normalized names; renaming folders or changing names creates a new ID.

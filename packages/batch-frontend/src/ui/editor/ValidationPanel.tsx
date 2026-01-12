@@ -21,6 +21,10 @@ export const ValidationPanel: React.FC<ValidationPanelProps> = ({
 }) => {
   const errors = validation?.errors ?? [];
   const warnings = validation?.warnings ?? [];
+  const columnIndentWarning = warnings.find((item) => /indented ":::column"/i.test(item)) ?? null;
+  const displayWarnings = columnIndentWarning
+    ? warnings.filter((item) => item !== columnIndentWarning)
+    : warnings;
   const hasIssues = errors.length > 0 || warnings.length > 0;
 
   return (
@@ -81,11 +85,17 @@ export const ValidationPanel: React.FC<ValidationPanelProps> = ({
             </div>
           )}
 
-          {warnings.length > 0 && (
+          {columnIndentWarning ? (
+            <div className="validation-tip">
+              {columnIndentWarning}
+            </div>
+          ) : null}
+
+          {displayWarnings.length > 0 && (
             <div className="validation-block">
               <h4>Warnings</h4>
               <ul>
-                {warnings.map((item, index) => {
+                {displayWarnings.map((item, index) => {
                   const lineNumber = extractLineNumber(item);
                   const displayText = lineNumber ? stripLinePrefix(item) : item;
                   return (
@@ -267,6 +277,15 @@ export const ValidationPanel: React.FC<ValidationPanelProps> = ({
 
         .validation-panel .error-text {
           color: var(--color-error-500);
+          font-size: var(--text-sm);
+        }
+
+        .validation-tip {
+          border: 1px solid rgba(245, 158, 11, 0.4);
+          background: rgba(245, 158, 11, 0.12);
+          color: var(--color-warning-600);
+          border-radius: var(--radius-md);
+          padding: var(--space-2) var(--space-3);
           font-size: var(--text-sm);
         }
       `}</style>

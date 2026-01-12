@@ -37,6 +37,7 @@ export interface BatchBackendConfig {
     root: string;
     glob: string;
     scanIntervalSec: number;
+    maxFileSize: number;
   };
   deepgram: {
     apiKey?: string;
@@ -144,6 +145,7 @@ export function loadConfig(): BatchBackendConfig {
   const recordingsRoot = readString('RECORDINGS_ROOT', '')!;
   const recordingsGlob = readString('RECORDINGS_GLOB', '**/*.{opus,mp3,wav,m4a}')!;
   const recordingsScanIntervalSec = readInt('RECORDINGS_SCAN_INTERVAL_SEC', 120);
+  const recordingsMaxFileSize = readInt('RECORDINGS_MAX_FILE_SIZE', 100 * 1024 * 1024);
   const transcribeMode = readString('TRANSCRIBE_MODE', 'timeline') as 'timeline' | 'stack';
   if (transcribeMode !== 'timeline' && transcribeMode !== 'stack') {
     throw new Error('TRANSCRIBE_MODE must be "timeline" or "stack"');
@@ -294,6 +296,7 @@ export function loadConfig(): BatchBackendConfig {
       root: recordingsRoot,
       glob: recordingsGlob,
       scanIntervalSec: recordingsScanIntervalSec,
+      maxFileSize: recordingsMaxFileSize,
     },
     deepgram: {
       apiKey: deepgramApiKey,

@@ -1,10 +1,22 @@
 # @esl-pipeline/md-validator
 
+## 2.1.0
+
+### Minor Changes
+
+- Ship alpha4 pipeline updates across wizard UX, markdown parsing, and Notion rendering.
+
+### Patch Changes
+
+- Updated dependencies
+  - @esl-pipeline/pmd@0.1.1
+
 ## 2.0.9
 
 ### Patch Changes
 
 - Refactor validation to traverse PMD AST instead of regex parsing, preserving legacy fenced inputs with warnings.
+- Accept `:::toggle` as the preferred Answer Key/Teacher Plan marker.
 
 ## 2.0.8
 

@@ -12,6 +12,16 @@ import type { DialogueInput } from '../src/types.js';
 
 const encoder = new TextEncoder();
 
+const baseFrontmatter = [
+  '---',
+  'title: "Test Lesson"',
+  'student: "Test Student"',
+  'level: "A1"',
+  'topic: "test"',
+  'input_type: "generate"',
+  '---',
+].join('\n');
+
 const makeMockStream = (payload: string) =>
   new ReadableStream<Uint8Array>({
     start(controller) {
@@ -112,7 +122,8 @@ describe('integration tests', () => {
       const tempVoiceMapPath = join(dir, 'voices.yml');
 
       // Create fixture similar to existing test fixtures
-      const fixtureContent = `
+      const fixtureContent = `${baseFrontmatter}
+
 # Lesson 1: Greetings
 
 :::study-text
@@ -157,7 +168,8 @@ auto: true
       const tempVoiceMapPath = join(dir, 'voices.yml');
 
       // Create dialogue fixture
-      const dialogueContent = `
+      const dialogueContent = `${baseFrontmatter}
+
 # Conversation Practice
 
 :::study-text
@@ -211,7 +223,8 @@ Student: voice_student_female
       const tempMdPath = join(dir, 'dialogue-sanitize.md');
       const tempVoiceMapPath = join(dir, 'voices.yml');
 
-      const dialogueContent = `
+      const dialogueContent = `${baseFrontmatter}
+
 # Markdown Noise
 
 :::study-text
@@ -340,7 +353,8 @@ auto: true
       const tempVoiceMapPath = join(dir, 'voices.yml');
 
       // Create fixture that could work in both modes
-      const mixedContent = `
+      const mixedContent = `${baseFrontmatter}
+
 # Lesson: Daily Routines
 
 :::study-text
@@ -435,7 +449,8 @@ Student: voice_student_female
         dialogueSeed: 12_345, // New field
       };
 
-      const lessonContent = `
+      const lessonContent = `${baseFrontmatter}
+
 # Orchestrator Test
 
 :::study-text
@@ -470,7 +485,8 @@ auto: true
       const tempMdPath = join(dir, 'manifest-test.md');
       const tempVoiceMapPath = join(dir, 'voices.yml');
 
-      const lessonContent = `
+      const lessonContent = `${baseFrontmatter}
+
 # Manifest Test
 
 :::study-text
@@ -518,7 +534,8 @@ auto: true
       const tempMdPath = join(dir, 'cli-test.md');
       const tempVoiceMapPath = join(dir, 'voices.yml');
 
-      const lessonContent = `
+      const lessonContent = `${baseFrontmatter}
+
 # CLI Flag Test
 
 :::study-text
@@ -644,7 +661,8 @@ auto: true
       const tempMdPath = join(dir, 'env-test.md');
       const tempVoiceMapPath = join(dir, 'voices.yml');
 
-      const lessonContent = `
+      const lessonContent = `${baseFrontmatter}
+
 # Environment Override Test
 
 :::study-text
@@ -769,7 +787,8 @@ Customer: voice_student_female
       const tempMdPath = join(dir, 'mode-comparison.md');
       const tempVoiceMapPath = join(dir, 'voices.yml');
 
-      const comparisonLesson = `
+      const comparisonLesson = `${baseFrontmatter}
+
 # Mode Comparison Lesson
 
 :::study-text

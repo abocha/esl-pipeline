@@ -31,13 +31,13 @@ A: I'm fine.
 
 ## 9. teacher's follow-up plan
 
-:::toggle-heading Teacher’s Follow-up Plan
+:::toggle Teacher’s Follow-up Plan
 - Next time: focus on intonation.
 :::
 
 ## 8. answer key (for real doc it’s section #8)
 
-:::toggle-heading Answer Key
+:::toggle Answer Key
 1) She is fine.
 :::
 `;

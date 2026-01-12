@@ -25,7 +25,9 @@ Adapter guidance:
 - Alternatively, skip toggle coloring under sections 8 and 9.
 
 Prompt guidance:
-- Keep the content wrapped in a toggle block, but do not use heading toggles.
+- Keep the content wrapped in a toggle block using `:::toggle` for canonical
+  PMD; the adapter renders Answer Key and Teacher's Follow-up Plan as plain
+  toggles regardless of the heading level.
 
 ## Pronunciation Callout Formatting
 
@@ -52,4 +54,3 @@ Adapter guidance:
 Prompt guidance:
 - For pronunciation callout, output the Target line first (no bullet).
 - Use bold labels for Focus/Action/Deliverable in plain paragraphs.
-

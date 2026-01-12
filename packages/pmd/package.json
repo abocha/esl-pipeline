@@ -1,6 +1,6 @@
 {
   "name": "@esl-pipeline/pmd",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "private": true,
   "description": "Parse Pipeline Markdown (PMD) into a stable AST.",
   "keywords": [
@@ -35,18 +35,18 @@
   },
   "dependencies": {
     "gray-matter": "^4.0.3",
-    "remark-directive": "^3.0.0",
+    "remark-directive": "^4.0.0",
     "remark-frontmatter": "^5.0.0",
-    "remark-gfm": "^4.0.0",
+    "remark-gfm": "^4.0.1",
     "remark-parse": "^11.0.0",
     "unified": "^11.0.5"
   },
   "devDependencies": {
     "@types/mdast": "^4.0.4",
-    "@types/node": "^25.0.3",
+    "@types/node": "^25.0.6",
     "tsx": "^4.21.0",
     "typescript": "^5.9.3",
-    "vitest": "^4.0.16"
+    "vitest": "^4.0.17"
   },
   "engines": {
     "node": ">=24.11.1"

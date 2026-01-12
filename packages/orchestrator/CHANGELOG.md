@@ -1,5 +1,12 @@
 # @esl-pipeline/orchestrator
 
+## 3.3.1
+
+### Patch Changes
+
+- Updated dependencies
+  - @esl-pipeline/notion-adapter@0.2.0
+
 ## 3.3.0
 
 ### Minor Changes

@@ -1,6 +1,6 @@
 {
   "name": "@esl-pipeline/notion-importer",
-  "version": "2.2.6",
+  "version": "2.2.7",
   "private": true,
   "description": "Import validated ESL assignments into Notion databases.",
   "keywords": [
@@ -40,10 +40,10 @@
     "@esl-pipeline/notion-adapter": "workspace:*"
   },
   "devDependencies": {
-    "@types/node": "^25.0.3",
+    "@types/node": "^25.0.6",
     "tsx": "^4.21.0",
     "typescript": "^5.9.3",
-    "vitest": "^4.0.16"
+    "vitest": "^4.0.17"
   },
   "engines": {
     "node": ">=24.11.1"

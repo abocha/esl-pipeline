@@ -202,6 +202,28 @@ function hasNonEmptyLine(lines: string[]): boolean {
   return lines.some((line) => line.trim().length > 0);
 }
 
+function findContentLineOffset(rawLines: string[], contentLines: string[]): number {
+  if (contentLines.length === 0) return 0;
+  const maxStart = rawLines.length - contentLines.length;
+  for (let start = 0; start <= maxStart; start += 1) {
+    if (rawLines[start] !== contentLines[0]) continue;
+    let matches = true;
+    for (let i = 1; i < contentLines.length; i += 1) {
+      if (rawLines[start + i] !== contentLines[i]) {
+        matches = false;
+        break;
+      }
+    }
+    if (matches) return start;
+  }
+  return 0;
+}
+
+function applyLineOffset(line: number, lineOffset: number): number {
+  if (!line) return line;
+  return line + lineOffset;
+}
+
 function hasCodeBlocks(blocks: PmdBlock[]): boolean {
   for (const block of blocks) {
     if (block.type === 'code_block') return true;
@@ -246,12 +268,17 @@ export async function validateMarkdownFile(
 
   let doc: PmdDocument;
   let contentLines: string[] = [];
+  let rawLines: string[] = [];
+  let lineOffset = 0;
   try {
+    const normalized = normalizeNewlines(content);
+    rawLines = normalized.split('\n');
     doc = parsePmdDocument(content);
     warnings.push(...doc.warnings.map((warning) => warning.message));
     const resolved = resolveSource(content);
     const parsed = matter(resolved.source);
     contentLines = normalizeNewlines(parsed.content).split('\n');
+    lineOffset = findContentLineOffset(rawLines, contentLines);
   } catch (error: unknown) {
     const msg = error instanceof Error ? error.message : String(error);
     return { ok: false, errors: [msg], warnings };
@@ -293,6 +320,7 @@ export async function validateMarkdownFile(
 
   // b) markers
   const toggles = [
+    ...findDirectiveBlocks(doc, 'toggle'),
     ...findDirectiveBlocks(doc, 'toggle-heading'),
     ...findDirectiveBlocks(doc, 'toggle-h2'),
     ...findDirectiveBlocks(doc, 'toggle-h3'),
@@ -311,11 +339,13 @@ export async function validateMarkdownFile(
   });
 
   if (!hasAnswerKeyToggle) {
-    errors.push('Missing marker: ":::toggle-heading Answer Key" or ":::toggle-h2 Answer Key"');
+    errors.push(
+      'Missing marker: ":::toggle Answer Key" (preferred) or ":::toggle-heading Answer Key" / ":::toggle-h2 Answer Key"',
+    );
   }
   if (!hasTeacherPlanToggle) {
     errors.push(
-      'Missing marker: ":::toggle-heading Teacher\'s Follow-up Plan" or ":::toggle-h2/h3 Teacher\'s Follow-up Plan"',
+      'Missing marker: ":::toggle Teacher\'s Follow-up Plan" (preferred) or ":::toggle-heading Teacher\'s Follow-up Plan" / ":::toggle-h2/h3 Teacher\'s Follow-up Plan"',
     );
   }
 
@@ -328,11 +358,11 @@ export async function validateMarkdownFile(
       const raw = contentLines[markerIdx] ?? '';
       if (/^\s+:::study-text\b/i.test(raw)) {
         errors.push(
-          `Line ${markerIdx + 1}: study-text marker must start at column 1 with ":::study-text".`,
+          `Line ${markerIdx + 1 + lineOffset}: study-text marker must start at column 1 with ":::study-text".`,
         );
       } else {
         errors.push(
-          `Line ${markerIdx + 1}: malformed study-text marker. Use ":::study-text" (case-insensitive) on its own line.`,
+          `Line ${markerIdx + 1 + lineOffset}: malformed study-text marker. Use ":::study-text" (case-insensitive) on its own line.`,
         );
       }
     }
@@ -342,22 +372,24 @@ export async function validateMarkdownFile(
       errors.push('Missing ":::study-text ... :::" block.');
     } else {
       const { startLine, markerLine, closingLine, innerLines } = bounds;
+      const displayStartLine = applyLineOffset(startLine, lineOffset);
+      const displayEndLine = applyLineOffset(bounds.endLine, lineOffset);
       let studyOk = true;
       if (!markerLine.startsWith(':::study-text')) {
         errors.push(
-          `Line ${startLine}: study-text marker must start at column 1 with ":::study-text".`,
+          `Line ${displayStartLine}: study-text marker must start at column 1 with ":::study-text".`,
         );
         studyOk = false;
       }
 
       if (closingLine.trim() !== ':::') {
         errors.push(
-          `study-text block starting at line ${startLine} is missing a closing ":::" on its own line.`,
+          `study-text block starting at line ${displayStartLine} is missing a closing ":::" on its own line.`,
         );
         studyOk = false;
       } else if (closingLine !== ':::') {
         errors.push(
-          `Line ${bounds.endLine}: study-text closing marker must be ":::" with no leading spaces.`,
+          `Line ${displayEndLine}: study-text closing marker must be ":::" with no leading spaces.`,
         );
         studyOk = false;
       }
@@ -462,21 +494,22 @@ export async function validateMarkdownFile(
   for (const callout of findDirectiveBlocks(doc, 'callout')) {
     const bounds = getDirectiveBounds(callout, contentLines);
     if (!bounds) continue;
+    const displayStartLine = applyLineOffset(bounds.startLine, lineOffset);
     if (bounds.closingLine.trim() !== ':::') {
       errors.push(
-        `callout starting at line ${bounds.startLine} is missing a closing ":::" after its content.`,
+        `callout starting at line ${displayStartLine} is missing a closing ":::" after its content.`,
       );
       continue;
     }
     const icon = directiveLabel(callout, bounds.markerLine).trim();
     if (!icon) {
       errors.push(
-        `callout starting at line ${bounds.startLine} must provide an emoji/icon after ":::callout".`,
+        `callout starting at line ${displayStartLine} must provide an emoji/icon after ":::callout".`,
       );
     }
     if (!hasNonEmptyLine(bounds.innerLines)) {
       errors.push(
-        `callout starting at line ${bounds.startLine} must contain content before the closing ":::" marker.`,
+        `callout starting at line ${displayStartLine} must contain content before the closing ":::" marker.`,
       );
     }
   }
@@ -484,9 +517,10 @@ export async function validateMarkdownFile(
   for (const columnList of findDirectiveBlocks(doc, 'column-list')) {
     const bounds = getDirectiveBounds(columnList, contentLines);
     if (!bounds) continue;
+    const displayStartLine = applyLineOffset(bounds.startLine, lineOffset);
     if (bounds.closingLine.trim() !== ':::') {
       errors.push(
-        `column-list starting at line ${bounds.startLine} is missing a closing ":::" after its contents.`,
+        `column-list starting at line ${displayStartLine} is missing a closing ":::" after its contents.`,
       );
       continue;
     }
@@ -494,8 +528,14 @@ export async function validateMarkdownFile(
       (child) => child.type === 'directive_block' && child.name === 'column',
     ) as PmdDirectiveBlock[];
     if (columns.length === 0) {
+      const hasIndentedColumns = bounds.innerLines.some((line) => /^\s+:::column\b/i.test(line));
+      if (hasIndentedColumns) {
+        warnings.push(
+          'Hint: found indented ":::column" markers inside a column-list. Directives must be flush-left (no indentation).',
+        );
+      }
       errors.push(
-        `column-list starting at line ${bounds.startLine} must contain at least one ":::column" section with content.`,
+        `column-list starting at line ${displayStartLine} must contain at least one ":::column" section with content.`,
       );
       continue;
     }
@@ -506,7 +546,7 @@ export async function validateMarkdownFile(
     });
     if (emptyIdx !== -1) {
       errors.push(
-        `column-list starting at line ${bounds.startLine} has an empty column #${emptyIdx + 1}; add content or remove it.`,
+        `column-list starting at line ${displayStartLine} has an empty column #${emptyIdx + 1}; add content or remove it.`,
       );
     }
   }
@@ -514,16 +554,17 @@ export async function validateMarkdownFile(
   for (const syncedBlock of findDirectiveBlocks(doc, 'synced-block')) {
     const bounds = getDirectiveBounds(syncedBlock, contentLines);
     if (!bounds) continue;
+    const displayStartLine = applyLineOffset(bounds.startLine, lineOffset);
     if (bounds.closingLine.trim() !== ':::') {
       errors.push(
-        `synced-block starting at line ${bounds.startLine} is missing a closing ":::" after its contents.`,
+        `synced-block starting at line ${displayStartLine} is missing a closing ":::" after its contents.`,
       );
       continue;
     }
     const syncId = directiveLabel(syncedBlock, bounds.markerLine).trim();
     if (!syncId && !hasNonEmptyLine(bounds.innerLines)) {
       errors.push(
-        `synced-block starting at line ${bounds.startLine} must include content when no source block id is provided.`,
+        `synced-block starting at line ${displayStartLine} must include content when no source block id is provided.`,
       );
     }
   }
@@ -534,7 +575,7 @@ export async function validateMarkdownFile(
     if (leaf.name !== 'audio' && leaf.name !== 'video') continue;
     const label = leaf.label?.trim() ?? '';
     if (!label) {
-      const line = leaf.position?.start.line ?? 0;
+      const line = applyLineOffset(leaf.position?.start.line ?? 0, lineOffset);
       if (leaf.name === 'audio') {
         errors.push(`Line ${line}: audio directive requires a URL after ":::audio".`);
       } else {
@@ -547,24 +588,28 @@ export async function validateMarkdownFile(
     if (table.type !== 'table') continue;
     const rows = table.rows;
     if (rows.length === 0) {
-      errors.push(`Table starting at line ${table.position?.start.line ?? 1} must have at least one column.`);
+      const line = applyLineOffset(table.position?.start.line ?? 1, lineOffset);
+      errors.push(`Table starting at line ${line} must have at least one column.`);
       continue;
     }
     const width = rows[0]?.length ?? 0;
     if (width === 0) {
-      errors.push(`Table starting at line ${table.position?.start.line ?? 1} must have at least one column.`);
+      const line = applyLineOffset(table.position?.start.line ?? 1, lineOffset);
+      errors.push(`Table starting at line ${line} must have at least one column.`);
       continue;
     }
     const ragged = rows.findIndex((row) => row.length !== width);
     if (ragged !== -1) {
+      const line = applyLineOffset(table.position?.start.line ?? 1, lineOffset);
       errors.push(
-        `Table starting at line ${table.position?.start.line ?? 1} has inconsistent column counts (row ${
+        `Table starting at line ${line} has inconsistent column counts (row ${
           ragged + 1
         } differs). Make all rows the same length.`,
       );
     }
     if (rows.length < 2) {
-      errors.push(`Table starting at line ${table.position?.start.line ?? 1} must include at least one data row.`);
+      const line = applyLineOffset(table.position?.start.line ?? 1, lineOffset);
+      errors.push(`Table starting at line ${line} must include at least one data row.`);
     }
   }
 

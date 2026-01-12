@@ -991,9 +991,15 @@ export function registerExtendedRoutes(app: FastifyInstance, options: ExtendedRo
 
         const file = await (
           request as FastifyRequest & {
-            file: () => Promise<{ filename?: string; file: Readable } | undefined>;
+            file: (options?: {
+              limits?: { fileSize?: number };
+              throwFileSizeLimit?: boolean;
+            }) => Promise<{ filename?: string; file: Readable } | undefined>;
           }
-        ).file();
+        ).file({
+          limits: { fileSize: config.recordings.maxFileSize },
+          throwFileSizeLimit: false,
+        });
 
         if (!file) {
           return reply.code(400).send({
@@ -1009,6 +1015,13 @@ export function registerExtendedRoutes(app: FastifyInstance, options: ExtendedRo
 
         const filename = file.filename || '';
         const fileBuffer = await readFileBuffer(file.file);
+        if (isStreamTruncated(file.file)) {
+          return reply.code(413).send({
+            error: 'validation_failed',
+            message: `Recording exceeds max size (${formatBytes(config.recordings.maxFileSize)}).`,
+            code: 'file_too_large',
+          });
+        }
 
         let validationResult;
         if (recordingUploadValidationService) {
@@ -1761,9 +1774,13 @@ export function registerExtendedRoutes(app: FastifyInstance, options: ExtendedRo
     return trimmed.map((value) => jobStateSchema.parse(value)) as JobState[];
   }
 
+  const multipartMaxFileSize = Math.max(
+    config.security.maxFileSize,
+    config.recordings.maxFileSize,
+  );
   void app.register(multipart, {
     limits: {
-      fileSize: config.security.maxFileSize,
+      fileSize: multipartMaxFileSize,
       files: 1,
     },
   });
@@ -1787,9 +1804,15 @@ export function registerExtendedRoutes(app: FastifyInstance, options: ExtendedRo
 
         const file = await (
           request as FastifyRequest & {
-            file: () => Promise<{ filename?: string; file: Readable } | undefined>;
+            file: (options?: {
+              limits?: { fileSize?: number };
+              throwFileSizeLimit?: boolean;
+            }) => Promise<{ filename?: string; file: Readable } | undefined>;
           }
-        ).file();
+        ).file({
+          limits: { fileSize: config.security.maxFileSize },
+          throwFileSizeLimit: false,
+        });
         if (!file) {
           return reply.code(400).send({
             error: 'validation_failed',
@@ -1800,6 +1823,13 @@ export function registerExtendedRoutes(app: FastifyInstance, options: ExtendedRo
 
         const filename: string = file.filename || '';
         const fileBuffer = await readFileBuffer(file.file);
+        if (isStreamTruncated(file.file)) {
+          return reply.code(413).send({
+            error: 'validation_failed',
+            message: `Upload exceeds max size (${formatBytes(config.security.maxFileSize)}).`,
+            code: 'file_too_large',
+          });
+        }
 
         try {
           let validationResult;
@@ -2881,6 +2911,21 @@ async function readFileBuffer(fileStream: Readable): Promise<Buffer> {
     fileStream.on('end', () => resolve(Buffer.concat(chunks)));
     fileStream.on('error', reject);
   });
+}
+
+function isStreamTruncated(fileStream: Readable): boolean {
+  return (
+    typeof (fileStream as { truncated?: boolean }).truncated === 'boolean' &&
+    Boolean((fileStream as { truncated?: boolean }).truncated)
+  );
+}
+
+function formatBytes(bytes: number): string {
+  const mb = bytes / (1024 * 1024);
+  if (mb >= 1) {
+    return `${mb.toFixed(1)} MB`;
+  }
+  return `${Math.max(bytes, 0)} bytes`;
 }
 
 function sanitizeRecordingFilename(filename: string): string {

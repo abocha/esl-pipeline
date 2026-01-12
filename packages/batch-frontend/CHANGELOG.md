@@ -1,5 +1,11 @@
 # @esl-pipeline/batch-frontend
 
+## 1.5.0
+
+### Minor Changes
+
+- Ship alpha4 pipeline updates across wizard UX, markdown parsing, and Notion rendering.
+
 ## 1.4.0
 
 ### Minor Changes

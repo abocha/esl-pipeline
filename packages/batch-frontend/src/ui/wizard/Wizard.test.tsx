@@ -32,6 +32,7 @@ vi.mock('../../utils/api', async (importOriginal) => {
         fetchRecordingTranscript: vi.fn(),
         updateRecordingTranscript: vi.fn(),
         createPromptPackage: vi.fn(),
+        fetchPromptPackage: vi.fn(),
         createDraft: vi.fn(),
         updateDraft: vi.fn(),
         materializeDraft: vi.fn(),

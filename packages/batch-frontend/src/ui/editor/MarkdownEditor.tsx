@@ -21,10 +21,20 @@ export const MarkdownEditor: React.FC<MarkdownEditorProps> = ({
   const viewRef = useRef<EditorView | null>(null);
   const suppressChangeRef = useRef(false);
   const initialValueRef = useRef(value);
+  const onChangeRef = useRef(onChange);
+  const onViewReadyRef = useRef(onViewReady);
 
   useEffect(() => {
     initialValueRef.current = value;
   }, [value]);
+
+  useEffect(() => {
+    onChangeRef.current = onChange;
+  }, [onChange]);
+
+  useEffect(() => {
+    onViewReadyRef.current = onViewReady;
+  }, [onViewReady]);
 
   useEffect(() => {
     if (!hostRef.current || viewRef.current) return;
@@ -32,7 +42,7 @@ export const MarkdownEditor: React.FC<MarkdownEditorProps> = ({
     const updateListener = EditorView.updateListener.of((update) => {
       if (!update.docChanged || suppressChangeRef.current) return;
       const nextValue = update.state.doc.toString();
-      onChange(nextValue);
+      onChangeRef.current(nextValue);
     });
 
     const state = EditorState.create({
@@ -51,14 +61,14 @@ export const MarkdownEditor: React.FC<MarkdownEditorProps> = ({
       parent: hostRef.current,
     });
 
-    onViewReady?.(viewRef.current);
+    onViewReadyRef.current?.(viewRef.current);
 
     return () => {
-      onViewReady?.(null);
+      onViewReadyRef.current?.(null);
       viewRef.current?.destroy();
       viewRef.current = null;
     };
-  }, [onChange, readOnly, onViewReady]);
+  }, [readOnly]);
 
   useEffect(() => {
     const view = viewRef.current;
