@@ -278,6 +278,10 @@ function createConfig(): BatchBackendConfig {
       jwtExpiresIn: '1h',
       refreshTokenExpiresIn: '1d',
       bcryptRounds: 10,
+      refreshCookieName: 'esl_refresh',
+      refreshCookieSecure: false,
+      refreshCookieSameSite: 'lax',
+      refreshCookiePath: '/',
     },
     security: {
       maxFileSize: 0,

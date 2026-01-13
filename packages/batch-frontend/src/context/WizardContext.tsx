@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useEffect, useMemo, useReducer, useRef } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import type { JobConfigOverrides, JobState } from '../utils/api';
+import { useAuth } from './AuthContext';
 
 export interface WizardState {
     currentStep: number;
@@ -148,7 +149,36 @@ interface WizardContextValue {
 const WizardContext = createContext<WizardContextValue | null>(null);
 
 export const WizardProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+    const { user } = useAuth();
     const [state, dispatch] = useReducer(wizardReducer, initialState);
+    const didHydrateRef = useRef(false);
+    const restoredUserRef = useRef<string | null>(null);
+    const lastUserRef = useRef<string | null>(null);
+
+    useEffect(() => {
+        if (!user) {
+            if (lastUserRef.current) {
+                clearStoredWizardState(lastUserRef.current);
+                lastUserRef.current = null;
+            }
+            restoredUserRef.current = null;
+            didHydrateRef.current = false;
+            return;
+        }
+
+        if (restoredUserRef.current === user.id) {
+            return;
+        }
+
+        const storedState = readStoredWizardState(user.id);
+        if (storedState) {
+            dispatch({ type: 'HYDRATE_JOB', payload: storedState });
+        }
+
+        restoredUserRef.current = user.id;
+        lastUserRef.current = user.id;
+        didHydrateRef.current = true;
+    }, [user]);
 
     const actions = useMemo(() => ({
         goToStep: (step: number) => dispatch({ type: 'SET_STEP', payload: step }),
@@ -156,8 +186,18 @@ export const WizardProvider: React.FC<{ children: React.ReactNode }> = ({ childr
             dispatch({ type: 'SET_JOB', payload: { id, state, md } }),
         updateOverrides: (updates: Partial<JobConfigOverrides>) =>
             dispatch({ type: 'UPDATE_OVERRIDES', payload: updates }),
-        reset: () => dispatch({ type: 'RESET' }),
-    }), []);
+        reset: () => {
+            dispatch({ type: 'RESET' });
+            if (user?.id) {
+                clearStoredWizardState(user.id);
+            }
+        },
+    }), [user]);
+
+    useEffect(() => {
+        if (!user?.id || !didHydrateRef.current) return;
+        persistWizardState(user.id, state);
+    }, [state, user]);
 
     const value = useMemo(() => ({ state, dispatch, actions }), [state, actions]);
 
@@ -227,6 +267,54 @@ export function useWizardRouting(stepKeys: string[]) {
             setSearchParams(params, { replace: true });
         }
     }, [state.currentStep, state.activeJobId, searchString, setSearchParams, stepKeys]);
+}
+
+const WIZARD_STORAGE_VERSION = 1;
+const WIZARD_STORAGE_PREFIX = 'esl-wizard-state';
+
+function buildWizardStorageKey(userId: string): string {
+    return `${WIZARD_STORAGE_PREFIX}:${userId}`;
+}
+
+function readStoredWizardState(userId: string): Partial<WizardState> | null {
+    if (globalThis.window === undefined) return null;
+    const key = buildWizardStorageKey(userId);
+    try {
+        const serialized = globalThis.localStorage.getItem(key);
+        if (!serialized) return null;
+        const payload = JSON.parse(serialized) as {
+            version: number;
+            state: WizardState;
+        };
+        if (payload.version !== WIZARD_STORAGE_VERSION) {
+            return null;
+        }
+        return payload.state;
+    } catch (error) {
+        console.warn('Failed to parse stored wizard state', error);
+        globalThis.localStorage.removeItem(key);
+        return null;
+    }
+}
+
+function persistWizardState(userId: string, state: WizardState): void {
+    if (globalThis.window === undefined) return;
+    const key = buildWizardStorageKey(userId);
+    try {
+        const payload = {
+            version: WIZARD_STORAGE_VERSION,
+            updatedAt: new Date().toISOString(),
+            state,
+        };
+        globalThis.localStorage.setItem(key, JSON.stringify(payload));
+    } catch (error) {
+        console.warn('Failed to persist wizard state', error);
+    }
+}
+
+function clearStoredWizardState(userId: string): void {
+    if (globalThis.window === undefined) return;
+    globalThis.localStorage.removeItem(buildWizardStorageKey(userId));
 }
 
 function parseStepParam(value: string | null, stepKeys: string[]): number {

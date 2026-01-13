@@ -4,6 +4,7 @@
 // - POST /jobs      -> submit a new ESL pipeline job
 // - GET /jobs/:id   -> fetch job status
 // Designed to be run as a containerized service.
+import cookie from '@fastify/cookie';
 import Fastify, { type FastifyInstance } from 'fastify';
 import { fileURLToPath } from 'node:url';
 
@@ -87,6 +88,7 @@ export async function createHttpServer(): Promise<FastifyInstance> {
     logger: false,
   });
 
+  await app.register(cookie);
   registerErrorHandler(app);
   registerSecurityHeaders(app);
 

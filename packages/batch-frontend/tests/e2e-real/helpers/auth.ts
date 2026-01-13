@@ -2,7 +2,6 @@ import { randomUUID } from 'node:crypto';
 
 import type { APIRequestContext, Page } from '@playwright/test';
 
-const SESSION_STORAGE_KEY = 'esl-batch-session';
 const DEFAULT_BACKEND_URL = 'http://localhost:8080';
 
 export interface AuthSession {
@@ -13,7 +12,12 @@ export interface AuthSession {
     isActive: boolean;
   };
   accessToken: string;
-  refreshToken: string;
+  refreshCookie: {
+    name: string;
+    value: string;
+    domain: string;
+    path: string;
+  };
   credentials: {
     email: string;
     password: string;
@@ -51,17 +55,29 @@ export async function createAuthSession(
   const data = (await login.json()) as {
     user: AuthSession['user'];
     accessToken: string;
-    refreshToken: string;
   };
 
-  if (!data.accessToken || !data.refreshToken || !data.user) {
+  if (!data.accessToken || !data.user) {
     throw new Error('Login response missing auth fields');
   }
+
+  const setCookieHeader = login.headers()['set-cookie'];
+  if (!setCookieHeader) {
+    throw new Error('Login response missing refresh cookie');
+  }
+
+  const cookie = parseCookie(setCookieHeader);
+  const backendHost = new URL(backendUrl).hostname;
 
   return {
     user: data.user,
     accessToken: data.accessToken,
-    refreshToken: data.refreshToken,
+    refreshCookie: {
+      name: cookie.name,
+      value: cookie.value,
+      domain: backendHost,
+      path: '/',
+    },
     credentials: {
       email,
       password,
@@ -70,12 +86,29 @@ export async function createAuthSession(
 }
 
 export async function applyAuthSession(page: Page, session: AuthSession): Promise<void> {
-  await page.goto('/');
-  await page.evaluate(
-    ({ key, value }) => {
-      localStorage.setItem(key, value);
+  await page.context().addCookies([
+    {
+      name: session.refreshCookie.name,
+      value: session.refreshCookie.value,
+      domain: session.refreshCookie.domain,
+      path: session.refreshCookie.path,
+      httpOnly: true,
     },
-    { key: SESSION_STORAGE_KEY, value: JSON.stringify(session) },
-  );
-  await page.reload();
+  ]);
+  await page.goto('/');
+}
+
+function parseCookie(header: string): { name: string; value: string } {
+  const first = header.split('\n')[0] ?? header;
+  const pair = first.split(';')[0] ?? '';
+  const separatorIndex = pair.indexOf('=');
+  if (separatorIndex === -1) {
+    throw new Error('Refresh cookie header missing name/value');
+  }
+  const name = pair.slice(0, separatorIndex).trim();
+  const value = pair.slice(separatorIndex + 1).trim();
+  if (!name || !value) {
+    throw new Error('Refresh cookie header missing name/value');
+  }
+  return { name, value };
 }

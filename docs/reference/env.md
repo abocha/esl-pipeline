@@ -57,6 +57,10 @@ Use `.env.batch-backend` for the service stack. It includes all core keys above 
 - Prompt templates/profiles: `PROMPT_TEMPLATE_PATH`, `PROMPT_PROFILE_PATH`.
   - Defaults live under `docs/templates` unless overridden.
   - Template/profile allowlists are derived from the directories containing these paths.
+- Auth (extended API):
+  - `JWT_SECRET`, `JWT_EXPIRES_IN`, `REFRESH_TOKEN_EXPIRES_IN`, `BCRYPT_ROUNDS`
+  - `REFRESH_COOKIE_NAME`, `REFRESH_COOKIE_SAMESITE`, `REFRESH_COOKIE_SECURE`
+  - Optional: `REFRESH_COOKIE_DOMAIN`, `REFRESH_COOKIE_PATH`
 - Prompt/job metadata fallbacks:
   - `NOTION_DB_OPTIONS`, `NOTION_DB_ID`, `NOTION_DB_NAME`, `NOTION_DB_LABEL`
   - `ELEVENLABS_VOICES_PATH`, `REPO_ROOT`, `APP_ROOT`, `PROJECT_ROOT`

@@ -78,6 +78,11 @@ export interface BatchBackendConfig {
     jwtExpiresIn: string;
     refreshTokenExpiresIn: string;
     bcryptRounds: number;
+    refreshCookieName: string;
+    refreshCookieSecure: boolean;
+    refreshCookieSameSite: 'lax' | 'strict' | 'none';
+    refreshCookieDomain?: string;
+    refreshCookiePath: string;
   };
   security: {
     maxFileSize: number;
@@ -109,6 +114,14 @@ export interface BatchBackendConfig {
   experimental: {
     extendedApiEnabled: boolean;
   };
+}
+
+function normalizeSameSite(value: string): 'lax' | 'strict' | 'none' {
+  const normalized = value.trim().toLowerCase();
+  if (normalized === 'lax' || normalized === 'strict' || normalized === 'none') {
+    return normalized;
+  }
+  throw new Error('REFRESH_COOKIE_SAMESITE must be one of: lax, strict, none');
 }
 
 // loadConfig.declaration()
@@ -217,6 +230,14 @@ export function loadConfig(): BatchBackendConfig {
   const jwtExpiresIn = readString('JWT_EXPIRES_IN', '15m')!;
   const refreshTokenExpiresIn = readString('REFRESH_TOKEN_EXPIRES_IN', '7d')!;
   const bcryptRounds = readInt('BCRYPT_ROUNDS', 12);
+  const refreshCookieName = readString('REFRESH_COOKIE_NAME', 'esl_refresh')!;
+  const refreshCookieSameSiteRaw = readString('REFRESH_COOKIE_SAMESITE', 'lax')!;
+  const refreshCookieSecureDefault = nodeEnv === 'production';
+  const refreshCookieSecure = readBool('REFRESH_COOKIE_SECURE', refreshCookieSecureDefault);
+  const refreshCookieDomain = readString('REFRESH_COOKIE_DOMAIN');
+  const refreshCookiePath = readString('REFRESH_COOKIE_PATH', '/')!;
+
+  const refreshCookieSameSite = normalizeSameSite(refreshCookieSameSiteRaw);
 
   // Security configuration
   const maxFileSize = readInt('MAX_FILE_SIZE', 10 * 1024 * 1024); // 10MB default
@@ -337,6 +358,11 @@ export function loadConfig(): BatchBackendConfig {
       jwtExpiresIn,
       refreshTokenExpiresIn,
       bcryptRounds,
+      refreshCookieName,
+      refreshCookieSecure,
+      refreshCookieSameSite,
+      refreshCookieDomain,
+      refreshCookiePath,
     },
     security: {
       maxFileSize,
