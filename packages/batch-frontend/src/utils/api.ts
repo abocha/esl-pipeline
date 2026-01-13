@@ -360,7 +360,8 @@ export interface AuthResponse {
     isActive: boolean;
   };
   accessToken: string;
-  refreshToken: string;
+  refreshToken?: string;
+  expiresIn?: number;
 }
 
 export interface UserProfile {
@@ -599,11 +600,9 @@ export async function register(userData: RegisterRequest): Promise<void> {
   }
 }
 
-export async function refreshToken(refreshTokenValue: string): Promise<AuthResponse> {
+export async function refreshToken(): Promise<AuthResponse> {
   try {
-    const response = await apiClient.post(buildApiProxyPath('/auth/refresh'), {
-      refreshToken: refreshTokenValue,
-    });
+    const response = await apiClient.post(buildApiProxyPath('/auth/refresh'));
     return response.data;
   } catch (error: unknown) {
     const axiosError = toAxiosError(error);

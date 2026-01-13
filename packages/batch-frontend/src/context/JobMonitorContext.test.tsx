@@ -7,9 +7,9 @@ import {
 } from './JobMonitorContext';
 import { AuthProvider } from './AuthContext';
 import {
-  getUserProfile,
   listRecordings,
   listUserJobs,
+  refreshToken,
   subscribeToJobEvents,
   type JobEvent,
   type RecordingListItem,
@@ -23,7 +23,7 @@ vi.mock('../utils/api', async () => {
     listUserJobs: vi.fn(),
     subscribeToJobEvents: vi.fn(),
     getJobStatus: vi.fn().mockResolvedValue(null),
-    getUserProfile: vi.fn(),
+    refreshToken: vi.fn(),
   };
 });
 
@@ -59,13 +59,14 @@ const createRecording = (overrides: Partial<RecordingListItem>): RecordingListIt
 describe('JobMonitorContext recordings hydration', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    vi.mocked(getUserProfile).mockResolvedValue({
-      id: 'user-1',
-      email: 'test@example.com',
-      role: 'user',
-      isActive: true,
-      createdAt: '2024-01-01T00:00:00.000Z',
-      updatedAt: '2024-01-01T00:00:00.000Z',
+    vi.mocked(refreshToken).mockResolvedValue({
+      user: {
+        id: 'user-1',
+        email: 'test@example.com',
+        role: 'user',
+        isActive: true,
+      },
+      accessToken: 'access-token',
     });
     vi.mocked(listUserJobs).mockResolvedValue({
       jobs: [],

@@ -1,5 +1,11 @@
 # @esl-pipeline/batch-frontend
 
+## 1.6.0
+
+### Minor Changes
+
+- Improve auth session behavior and wizard persistence for the batch UI.
+
 ## 1.5.0
 
 ### Minor Changes

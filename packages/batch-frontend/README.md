@@ -31,6 +31,7 @@ The frontend uses the authenticated, extended HTTP API exposed by `batch-backend
 Common endpoints:
 
 - Auth: `POST /auth/login`, `POST /auth/register`, `POST /auth/refresh`, `POST /auth/logout`, `GET /auth/me`
+  - Refresh tokens are stored in HttpOnly cookies; the client refreshes on load.
 - Jobs: `POST /jobs`, `GET /jobs/:jobId`, `POST /jobs/:jobId/approve`,
   `POST /jobs/:jobId/actions`, `GET /user/jobs`, `GET /user/jobs/summary`, `GET /jobs/events`
 - Recordings: `POST /recordings/upload`, `POST /recordings/:id/transcribe`, `GET /recordings/:id`,

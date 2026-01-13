@@ -97,7 +97,9 @@ Phase 2+ (native transcription, implemented with gaps):
 | `GET /config/job-options` | Load presets, voices, Notion DBs |
 | `POST /auth/login` | Email/password login |
 | `POST /auth/register` | User registration |
-| `GET /auth/me` | Session restoration |
+| `POST /auth/refresh` | Refresh access token (uses refresh cookie) |
+| `POST /auth/logout` | Clear refresh cookie |
+| `GET /auth/me` | Fetch user profile (access token required) |
 | `GET /students` | List student profiles |
 | `GET /students/summary` | Student summary (last lesson + pending drafts) |
 | `GET /students/:id` | Read student profile |

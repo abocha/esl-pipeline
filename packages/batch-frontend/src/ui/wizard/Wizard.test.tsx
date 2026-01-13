@@ -47,6 +47,10 @@ vi.mock('../../utils/api', async (importOriginal) => {
             notionDatabases: [],
             ttsStrategies: ['auto'],
         }), // Mock for JobSettings
+        refreshToken: vi.fn().mockResolvedValue({
+            user: { id: 'u1', email: 'test@example.com', role: 'user', isActive: true },
+            accessToken: 'access-token',
+        }),
         checkAuthStatus: vi.fn().mockResolvedValue({ isAuthenticated: true, user: { id: 'u1', email: 'test@example.com' } }),
         subscribeToJobEvents: vi.fn().mockReturnValue(() => { }), // Returns cleanup fn
         listRecordings: vi.fn().mockResolvedValue({ items: [] }),

@@ -117,6 +117,47 @@ export interface ExtendedRouteOptions {
   fileStorageService: FileStorageService;
 }
 
+function buildRefreshCookieOptions(
+  config: BatchBackendConfig,
+  refreshExpiresInSeconds: number,
+): {
+  httpOnly: boolean;
+  secure: boolean;
+  sameSite: 'lax' | 'strict' | 'none';
+  path: string;
+  domain?: string;
+  expires: Date;
+} {
+  return {
+    httpOnly: true,
+    secure: config.auth.refreshCookieSecure,
+    sameSite: config.auth.refreshCookieSameSite,
+    path: config.auth.refreshCookiePath,
+    domain: config.auth.refreshCookieDomain,
+    expires: new Date(Date.now() + refreshExpiresInSeconds * 1000),
+  };
+}
+
+function setRefreshCookie(
+  reply: FastifyReply,
+  config: BatchBackendConfig,
+  refreshToken: string,
+  refreshExpiresInSeconds: number,
+): void {
+  reply.setCookie(
+    config.auth.refreshCookieName,
+    refreshToken,
+    buildRefreshCookieOptions(config, refreshExpiresInSeconds),
+  );
+}
+
+function clearRefreshCookie(reply: FastifyReply, config: BatchBackendConfig): void {
+  reply.clearCookie(config.auth.refreshCookieName, {
+    path: config.auth.refreshCookiePath,
+    domain: config.auth.refreshCookieDomain,
+  });
+}
+
 export function registerExtendedRoutes(app: FastifyInstance, options: ExtendedRouteOptions): void {
   const {
     config,
@@ -2088,6 +2129,8 @@ export function registerExtendedRoutes(app: FastifyInstance, options: ExtendedRo
         role: user.role,
       });
 
+      setRefreshCookie(reply, config, tokens.refreshToken, tokens.refreshExpiresIn);
+
       return reply.code(200).send({
         message: 'Login successful',
         user: {
@@ -2096,7 +2139,8 @@ export function registerExtendedRoutes(app: FastifyInstance, options: ExtendedRo
           role: user.role,
           isActive: user.isActive,
         },
-        ...tokens,
+        accessToken: tokens.accessToken,
+        expiresIn: tokens.expiresIn,
       });
     } catch (error: unknown) {
       logger.error(error instanceof Error ? error : String(error), {
@@ -2114,9 +2158,12 @@ export function registerExtendedRoutes(app: FastifyInstance, options: ExtendedRo
 
   app.post('/auth/refresh', async (request, reply) => {
     const body = request.body as { refreshToken?: string } | undefined;
+    const cookies = request.cookies as Record<string, string> | undefined;
+    const refreshToken =
+      cookies?.[config.auth.refreshCookieName] ?? body?.refreshToken ?? null;
 
     try {
-      if (!body || !body.refreshToken) {
+      if (!refreshToken) {
         return reply.code(400).send({
           error: 'validation_failed',
           message: 'Refresh token is required',
@@ -2127,7 +2174,7 @@ export function registerExtendedRoutes(app: FastifyInstance, options: ExtendedRo
       const authService = createAuthService();
       let refreshPayload;
       try {
-        refreshPayload = authService.verifyRefreshToken(body.refreshToken);
+        refreshPayload = authService.verifyRefreshToken(refreshToken);
       } catch (error) {
         logger.warn('Invalid refresh token presented', {
           error: error instanceof Error ? error.message : String(error),
@@ -2139,7 +2186,7 @@ export function registerExtendedRoutes(app: FastifyInstance, options: ExtendedRo
         });
       }
 
-      const tokens = authService.refreshTokens(body.refreshToken);
+      const tokens = authService.refreshTokens(refreshToken);
       const user = await getUserById(refreshPayload.sub);
       if (!user || !user.isActive) {
         return reply.code(401).send({
@@ -2154,9 +2201,18 @@ export function registerExtendedRoutes(app: FastifyInstance, options: ExtendedRo
         userEmail: refreshPayload.email,
       });
 
+      setRefreshCookie(reply, config, tokens.refreshToken, tokens.refreshExpiresIn);
+
       return reply.code(200).send({
         message: 'Token refresh successful',
-        ...tokens,
+        user: {
+          id: user.id,
+          email: user.email,
+          role: user.role,
+          isActive: user.isActive,
+        },
+        accessToken: tokens.accessToken,
+        expiresIn: tokens.expiresIn,
       });
     } catch (error: unknown) {
       logger.error(error instanceof Error ? error : String(error), {
@@ -2172,6 +2228,11 @@ export function registerExtendedRoutes(app: FastifyInstance, options: ExtendedRo
         code: 'refresh_failed',
       });
     }
+  });
+
+  app.post('/auth/logout', async (_request, reply) => {
+    clearRefreshCookie(reply, config);
+    return reply.code(200).send({ message: 'Logout successful' });
   });
 
   app.get(
