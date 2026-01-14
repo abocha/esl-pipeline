@@ -7,11 +7,14 @@ coverage/
 .DS_Store
 
 configs/wizard.defaults.json
+configs/students/*.json
+!configs/students/default.json
 
 .kilocode
 .pnpm-store
 .roo
 .vscode
+.agent
 
 .env
 .env.batch-backend
