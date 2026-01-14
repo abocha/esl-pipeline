@@ -2,14 +2,16 @@
 
 FROM node:24-bullseye-slim AS base
 
-ENV PNPM_HOME=/root/.local/share/pnpm \
-    PATH="$PNPM_HOME:$PATH" \
+ENV PNPM_HOME=/root/.local/share/pnpm
+ENV PATH="${PNPM_HOME}:${PATH}" \
     NODE_ENV=production \
     CI=true
 
 RUN corepack enable && corepack prepare pnpm@10 --activate \
  && apt-get update \
- && apt-get install -y --no-install-recommends ca-certificates ffmpeg \
+ && apt-get install -y --no-install-recommends \
+    ca-certificates=20210119 \
+    ffmpeg=7:4.3.9-0+deb11u1 \
  && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app

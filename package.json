@@ -63,6 +63,7 @@
     "esl": "node packages/orchestrator/dist/cli.js",
     "format": "pnpm exec prettier --check \"**/*.{ts,tsx,js,json,md,yml,yaml}\"",
     "format:write": "pnpm exec prettier --write \"**/*.{ts,tsx,js,json,md,yml,yaml}\"",
+    "hadolint": "rg --files -g 'Dockerfile*' | xargs -r hadolint",
     "lint": "pnpm exec eslint packages",
     "md-extractor": "node packages/md-extractor/dist/bin/cli.js",
     "md-validator": "node packages/md-validator/dist/src/index.js",

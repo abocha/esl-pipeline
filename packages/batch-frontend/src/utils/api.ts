@@ -364,6 +364,28 @@ export interface AuthResponse {
   expiresIn?: number;
 }
 
+const NOTION_DB_ID_REGEX =
+  /^[0-9a-f]{8}-?[0-9a-f]{4}-?[0-9a-f]{4}-?[0-9a-f]{4}-?[0-9a-f]{12}$/i;
+
+function normalizeNotionDatabase(value?: string | null): string | undefined {
+  if (!value) return undefined;
+  const trimmed = value.trim();
+  if (!trimmed) return undefined;
+  return NOTION_DB_ID_REGEX.test(trimmed) ? trimmed : undefined;
+}
+
+function sanitizeJobOverrides(overrides?: JobConfigOverrides): JobConfigOverrides | undefined {
+  if (!overrides) return undefined;
+  const next: JobConfigOverrides = { ...overrides };
+  const normalized = normalizeNotionDatabase(next.notionDatabase);
+  if (normalized) {
+    next.notionDatabase = normalized;
+  } else {
+    delete next.notionDatabase;
+  }
+  return next;
+}
+
 export interface UserProfile {
   id: string;
   email: string;
@@ -649,7 +671,14 @@ export async function getUserFiles(): Promise<UserFile[]> {
  */
 export async function createJob(body: SubmitJobRequest): Promise<SubmitJobResponse> {
   try {
-    const response = await apiClient.post(buildApiProxyPath('/jobs'), body);
+    const payload: SubmitJobRequest = { ...body };
+    const normalizedDb = normalizeNotionDatabase(body.notionDatabase);
+    if (normalizedDb) {
+      payload.notionDatabase = normalizedDb;
+    } else {
+      delete payload.notionDatabase;
+    }
+    const response = await apiClient.post(buildApiProxyPath('/jobs'), payload);
     return response.data;
   } catch (error: unknown) {
     const axiosError = toAxiosError(error);
@@ -1097,7 +1126,7 @@ export async function materializeDraft(
   try {
     const payload = {
       ...(options.jobId ? { jobId: options.jobId } : {}),
-      ...(options.jobOverrides ? { jobOverrides: options.jobOverrides } : {}),
+      ...(options.jobOverrides ? { jobOverrides: sanitizeJobOverrides(options.jobOverrides) } : {}),
     };
     const response = await apiClient.post(
       buildApiProxyPath(`/drafts/${encodeURIComponent(draftId)}/materialize`),
@@ -1122,7 +1151,7 @@ export async function editJobMetadata(
       buildApiProxyPath(`/jobs/${encodeURIComponent(jobId)}/actions`),
       {
         type: 'edit_metadata',
-        payload: overrides,
+        payload: sanitizeJobOverrides(overrides),
       },
     );
     return response.data;

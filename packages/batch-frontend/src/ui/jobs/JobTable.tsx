@@ -128,6 +128,10 @@ const stateConfig: Record<string, StateConfig> = {
   failed: { color: 'var(--color-error-600)', bg: 'rgba(244, 63, 94, 0.15)', label: 'Failed' },
 };
 
+const isActiveState = (state: string | null | undefined): boolean => {
+  return state !== 'succeeded' && state !== 'failed';
+};
+
 export const JobTable: React.FC = () => {
   const { jobs, jobMap, trackJob, liveUpdatesPaused, pauseLiveUpdates, resumeLiveUpdates } =
     useJobMonitor();
@@ -138,14 +142,15 @@ export const JobTable: React.FC = () => {
 
   const filteredJobs = useMemo(() => {
     const term = search.trim().toLowerCase();
+    const activeJobs = jobs.filter((job) => isActiveState(job.state));
     const result = term
-      ? jobs.filter(
+      ? activeJobs.filter(
           (job) =>
             job.jobId.toLowerCase().includes(term) ||
             job.fileName?.toLowerCase().includes(term) ||
             (job.md ? job.md.toLowerCase().includes(term) : false),
         )
-      : jobs;
+      : activeJobs;
     return result.slice(0, 20);
   }, [jobs, search]);
 

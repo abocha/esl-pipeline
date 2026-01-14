@@ -246,6 +246,7 @@ CI (`.github/workflows/ci.yml`) runs on Node 24.10.0 and executes build, lint, t
 - Trigger the orchestrator image locally with `pnpm --filter @esl-pipeline/orchestrator docker:build`, then sanity-check via `docker run --rm esl-pipeline/orchestrator:local --version`.
 - Re-run the service tests with `pnpm --filter @esl-pipeline/orchestrator/examples/service vitest run` to match the CI step.
 - The release workflow (`.github/workflows/release.yml`) prepares/publishes the orchestrator package once a Changeset is ready.
+- Dockerfiles pin system package versions for hadolint; update those pins whenever you bump the base image tags (and re-run `pnpm hadolint`).
 
 ---
 
