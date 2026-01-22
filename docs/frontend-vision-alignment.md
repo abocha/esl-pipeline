@@ -105,6 +105,30 @@ status matrix and verification guidance.
 - The notification log is an enhancement beyond the vision but supports the “don’t miss errors” goal.
 - Vision assumes all backend functionality exists; some missing items are blocked by that (LLM generation).
 
+## V2 Readiness Addendum (Reviewer Scan)
+
+These notes are specific to `docs/design/FRONTEND_VISION_V2.md` and its implementation manual.
+
+- Wizard completion panel requires a flow change: current publish callback resets state and navigates home immediately.
+- Transcript step already retries and shows a processing message; explicit processing/missing states should key off recording status.
+- Notification log is implemented but only surfaced as a panel on Dashboard/Jobs/Settings; v2 needs a global entry point.
+- Student workspace already includes profile editing + timeline + metrics; v2 "detail view" may be a layout/route change.
+- Job stage/ETA/queue are not present in `JobStatusDto` or API client yet; UI must be guarded until contracts extend.
+- LLM draft generation endpoints do not exist in the API client; UI is prompt package + manual draft today.
+
+### Phase A (UI-only) — Completed
+
+- Wizard completion panel with Notion link and quick actions is implemented.
+  - `packages/batch-frontend/src/ui/wizard/Step5Publish.tsx`
+  - `packages/batch-frontend/src/ui/wizard/AssignmentWizard.tsx`
+- Transcript processing indicator is explicit and status-driven (processing vs failed).
+  - `packages/batch-frontend/src/ui/wizard/Step2ReviewTranscript.tsx`
+- Wizard summary sidebar is visible on desktop and updates with wizard state.
+  - `packages/batch-frontend/src/ui/wizard/WizardSummary.tsx`
+- Global notification drawer is available across routes via the app shell.
+  - `packages/batch-frontend/src/ui/notifications/GlobalNotificationDrawer.tsx`
+  - `packages/batch-frontend/src/ui/App.tsx`
+
 ## Verification (recommended)
 
 ### Manual checks

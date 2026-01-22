@@ -12,6 +12,7 @@ import { Step3AddNotes } from './Step3AddNotes';
 import { Step4ReviewDraft } from './Step4ReviewDraft';
 import { Step5Publish } from './Step5Publish';
 import { StepIndicator } from './StepIndicator';
+import { WizardSummary } from './WizardSummary';
 import { Icons } from '../shared/Icons';
 
 const STEPS = [
@@ -45,6 +46,7 @@ export const AssignmentWizard: React.FC = () => {
     overrides,
     jobState,
     jobMd,
+    completedJobId,
   } = state;
 
   // Initialize overrides from settings globally once if not set?
@@ -158,7 +160,12 @@ export const AssignmentWizard: React.FC = () => {
     dispatch({ type: 'SET_DRAFT', payload: { draftId: draft.id, text: draft.text } });
   }, [dispatch]);
 
-  const handlePublish = useCallback((_jobId: string) => {
+  const handlePublish = useCallback((jobId: string) => {
+    // Instead of resetting immediately, show completion panel
+    dispatch({ type: 'SET_COMPLETED_JOB', payload: jobId });
+  }, [dispatch]);
+
+  const handleStartNew = useCallback(() => {
     actions.reset();
     void navigate('/', { replace: true });
   }, [actions, navigate]);
@@ -229,8 +236,10 @@ export const AssignmentWizard: React.FC = () => {
           jobState={jobState}
           jobMd={jobMd}
           overrides={overrides}
+          completedJobId={completedJobId}
           onOverridesChange={actions.updateOverrides}
           onJobPublished={handlePublish}
+          onStartNew={handleStartNew}
           onBack={() => actions.goToStep(3)}
         />
       );
@@ -259,9 +268,12 @@ export const AssignmentWizard: React.FC = () => {
         </div>
       </header>
 
-      <main className="wizard-content animate-in" style={{ animationDelay: '100ms' }}>
-        {stepContent}
-      </main>
+      <div className="wizard-body">
+        <WizardSummary />
+        <main className="wizard-content animate-in" style={{ animationDelay: '100ms' }}>
+          {stepContent}
+        </main>
+      </div>
 
       <style>{`
         .wizard-shell {
@@ -343,9 +355,22 @@ export const AssignmentWizard: React.FC = () => {
           flex-shrink: 0;
           min-width: 200px;
         }
+
+        .wizard-body {
+          display: grid;
+          grid-template-columns: auto 1fr;
+          gap: var(--space-6);
+          align-items: start;
+        }
         
         .wizard-content {
           /* No container styles needed, steps handle their own layout */
+        }
+
+        @media (max-width: 1024px) {
+          .wizard-body {
+            grid-template-columns: 1fr;
+          }
         }
 
         @media (max-width: 768px) {

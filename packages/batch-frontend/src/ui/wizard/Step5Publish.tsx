@@ -1,11 +1,13 @@
-import React, { useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import toast from 'react-hot-toast';
+import { useNavigate } from 'react-router-dom';
 
 import { useJobMonitor } from '../../context/JobMonitorContext';
 import { useJobSettings } from '../../context/JobSettingsContext';
 import type { JobConfigOverrides, JobState } from '../../utils/api';
 import { approveJob, editJobMetadata, materializeDraft } from '../../utils/api';
 import { WizardStep } from './WizardStep';
+import { Icons } from '../shared/Icons';
 
 interface Step5PublishProps {
   draftId: string | null;
@@ -13,8 +15,10 @@ interface Step5PublishProps {
   jobState: JobState | null;
   jobMd: string | null;
   overrides: JobConfigOverrides;
+  completedJobId: string | null;
   onOverridesChange: (updates: Partial<JobConfigOverrides>) => void;
   onJobPublished: (jobId: string) => void;
+  onStartNew: () => void;
   onBack: () => void;
 }
 
@@ -24,14 +28,28 @@ export const Step5Publish: React.FC<Step5PublishProps> = ({
   jobState,
   jobMd,
   overrides,
+  completedJobId,
   onOverridesChange,
   onJobPublished,
+  onStartNew,
   onBack,
 }) => {
   const { options } = useJobSettings();
-  const { registerJob, trackJob } = useJobMonitor();
+  const { jobMap, registerJob, trackJob } = useJobMonitor();
+  const navigate = useNavigate();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [linkCopied, setLinkCopied] = useState(false);
+
+  // Track the completed job for Notion URL updates
+  useEffect(() => {
+    if (completedJobId) {
+      void trackJob(completedJobId);
+    }
+  }, [completedJobId, trackJob]);
+
+  const completedJob = completedJobId ? jobMap[completedJobId] : null;
+  const notionUrl = completedJob?.notionUrl ?? null;
 
   const canPublish = !!draftId && !loading;
 
@@ -76,6 +94,191 @@ export const Step5Publish: React.FC<Step5PublishProps> = ({
       setLoading(false);
     }
   };
+
+  const handleCopyLink = useCallback(() => {
+    if (notionUrl) {
+      void navigator.clipboard.writeText(notionUrl);
+      setLinkCopied(true);
+      toast.success('Link copied to clipboard');
+      setTimeout(() => setLinkCopied(false), 2000);
+    }
+  }, [notionUrl]);
+
+  const handleViewJobs = useCallback(() => {
+    navigate('/jobs');
+  }, [navigate]);
+
+  // Render completion panel when job is published
+  if (completedJobId) {
+    return (
+      <div className="completion-panel glass-panel animate-in">
+        <div className="completion-icon">
+          <Icons.Check />
+        </div>
+        <h2>Assignment published!</h2>
+        <p className="completion-subtitle">
+          Your job is now queued for processing.
+        </p>
+        <p className="job-id">Job ID: {completedJobId}</p>
+
+        <div className="notion-link-section">
+          {notionUrl ? (
+            <div className="notion-link-ready">
+              <a href={notionUrl} target="_blank" rel="noopener noreferrer" className="btn-primary">
+                Open in Notion
+              </a>
+              <button
+                type="button"
+                className="btn-secondary"
+                onClick={handleCopyLink}
+              >
+                {linkCopied ? 'Copied!' : 'Copy link'}
+              </button>
+            </div>
+          ) : (
+            <div className="notion-link-pending">
+              <div className="completion-spinner" />
+              <span>Link pending... We&apos;ll update this when the job finishes.</span>
+            </div>
+          )}
+        </div>
+
+        <div className="completion-actions">
+          <button type="button" className="btn-primary" onClick={onStartNew}>
+            Start new assignment
+          </button>
+          <button type="button" className="btn-secondary" onClick={handleViewJobs}>
+            View jobs
+          </button>
+        </div>
+
+        <style>{`
+          .completion-panel {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            text-align: center;
+            padding: var(--space-8);
+            gap: var(--space-4);
+            max-width: 500px;
+            margin: 0 auto;
+          }
+
+          .completion-icon {
+            width: 64px;
+            height: 64px;
+            background: var(--color-success-500);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+          }
+
+          .completion-icon svg {
+            width: 32px;
+            height: 32px;
+          }
+
+          .completion-panel h2 {
+            margin: 0;
+            font-size: var(--text-2xl);
+            color: var(--text-primary);
+          }
+
+          .completion-subtitle {
+            margin: 0;
+            color: var(--text-secondary);
+            font-size: var(--text-base);
+          }
+
+          .job-id {
+            margin: 0;
+            font-size: var(--text-xs);
+            color: var(--text-tertiary);
+            font-family: var(--font-mono);
+          }
+
+          .notion-link-section {
+            width: 100%;
+            padding: var(--space-4);
+            background: var(--bg-secondary);
+            border-radius: var(--radius-lg);
+            border: 1px solid var(--border-light);
+          }
+
+          .notion-link-ready {
+            display: flex;
+            gap: var(--space-3);
+            justify-content: center;
+            flex-wrap: wrap;
+          }
+
+          .notion-link-pending {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: var(--space-3);
+            color: var(--text-secondary);
+            font-size: var(--text-sm);
+          }
+
+          .completion-spinner {
+            width: 16px;
+            height: 16px;
+            border: 2px solid var(--border-medium);
+            border-top-color: var(--color-primary-500);
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+          }
+
+          .completion-actions {
+            display: flex;
+            gap: var(--space-3);
+            margin-top: var(--space-4);
+            flex-wrap: wrap;
+            justify-content: center;
+          }
+
+          .completion-panel .btn-primary {
+            padding: var(--space-3) var(--space-5);
+            background: var(--gradient-primary);
+            border: none;
+            border-radius: var(--radius-lg);
+            color: white;
+            font-weight: 600;
+            cursor: pointer;
+            text-decoration: none;
+            display: inline-flex;
+            align-items: center;
+            gap: var(--space-2);
+            transition: transform var(--transition-fast), box-shadow var(--transition-fast);
+          }
+
+          .completion-panel .btn-primary:hover {
+            transform: translateY(-1px);
+            box-shadow: var(--shadow-md);
+          }
+
+          .completion-panel .btn-secondary {
+            padding: var(--space-3) var(--space-5);
+            background: var(--bg-secondary);
+            border: 1px solid var(--border-medium);
+            border-radius: var(--radius-lg);
+            color: var(--text-primary);
+            font-weight: 500;
+            cursor: pointer;
+            transition: background var(--transition-fast), border-color var(--transition-fast);
+          }
+
+          .completion-panel .btn-secondary:hover {
+            background: var(--bg-tertiary);
+            border-color: var(--border-hover);
+          }
+        `}</style>
+      </div>
+    );
+  }
 
   return (
     <WizardStep

@@ -8,6 +8,7 @@ export interface WizardState {
     activeJobId: string | null;
     jobState: JobState | null;
     jobMd: string | null;
+    completedJobId: string | null;
 
     // Workflow artifacts
     recordingId: string | null;
@@ -39,6 +40,7 @@ export type WizardAction =
     | { type: 'SET_TEMPLATE'; payload: string }
     | { type: 'SET_PROFILE'; payload: string }
     | { type: 'UPDATE_OVERRIDES'; payload: Partial<JobConfigOverrides> }
+    | { type: 'SET_COMPLETED_JOB'; payload: string | null }
     | { type: 'RESET' }
     | { type: 'HYDRATE_JOB'; payload: Partial<WizardState> };
 
@@ -47,6 +49,7 @@ const initialState: WizardState = {
     activeJobId: null,
     jobState: null,
     jobMd: null,
+    completedJobId: null,
     recordingId: null,
     transcriptId: null,
     transcriptText: '',
@@ -122,6 +125,9 @@ const wizardReducer = (state: WizardState, action: WizardAction): WizardState =>
         }
         case 'UPDATE_OVERRIDES': {
             return { ...state, overrides: { ...state.overrides, ...action.payload } };
+        }
+        case 'SET_COMPLETED_JOB': {
+            return { ...state, completedJobId: action.payload };
         }
         case 'RESET': {
             return initialState;
