@@ -12,7 +12,7 @@ import * as JobMonitorContext from '../../context/JobMonitorContext';
 
 // Mock JobMonitorContext
 const mockRegisterRecording = vi.fn();
-const mockJobMap = {};
+let mockJobMap: Record<string, any> = {};
 vi.mock('../../context/JobMonitorContext', async (importOriginal) => {
     const actual = await importOriginal<typeof JobMonitorContext>();
     return {
@@ -108,6 +108,8 @@ describe('AssignmentWizard Integration', () => {
 
     beforeEach(() => {
         vi.clearAllMocks();
+        window.localStorage.clear();
+        mockJobMap = {};
         queryClient = new QueryClient({
             defaultOptions: {
                 queries: { retry: false },
@@ -338,6 +340,70 @@ describe('AssignmentWizard Integration', () => {
         // Verify we are on Step 4 (Review Draft)
         await waitFor(() => {
             expect(screen.getByText('Review draft')).not.toBeNull();
+        });
+    });
+    it('shows completion panel after publishing', async () => {
+        const publishedJob = {
+            jobId: 'job-published',
+            state: 'queued',
+            recordingId: 'rec-1',
+            transcriptId: 'tx-1',
+            draftId: 'draft-1',
+            md: '/draft.md',
+            promptPackageId: 'pp-1',
+            preset: 'b1-default',
+            withTts: false,
+            voiceId: null,
+            upload: null,
+            voiceAccent: null,
+            forceTts: null,
+            notionDatabase: null,
+            ttsStrategy: null,
+            notionUrl: 'https://notion.so/page',
+            createdAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString(),
+            startedAt: null,
+            finishedAt: null,
+            error: null,
+            manifestPath: null,
+        };
+
+        mockJobMap['job-published'] = publishedJob;
+        vi.mocked(api.materializeDraft).mockResolvedValue({
+            draftId: 'draft-1',
+            jobId: 'job-published',
+            mdPath: '/draft.md',
+        });
+        vi.mocked(api.getJobStatus).mockResolvedValue({
+            ...publishedJob,
+        });
+
+        vi.mocked(api.approveJob).mockResolvedValue({
+            ...publishedJob,
+        });
+
+        // Start at publish step
+        renderWizard(['/wizard?step=publish&jobId=job-published']);
+
+        // Wait for publish step
+        const publishBtn = await screen.findByText(/Publish job/i);
+
+        // Click Publish
+        fireEvent.click(publishBtn);
+
+        // Should see completion panel
+        await waitFor(() => {
+            expect(screen.getByText('Assignment published!')).not.toBeNull();
+            expect(screen.getByText(/Open in Notion/i)).not.toBeNull();
+        });
+
+        // Check if we can start new
+        const newBtn = screen.getByText('Start new assignment');
+        fireEvent.click(newBtn);
+
+        // Should return to step 1
+        await waitFor(() => {
+            expect(screen.getByText('Select student and upload')).not.toBeNull();
         });
     });
 });

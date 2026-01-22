@@ -9,6 +9,8 @@ import {
 import { useJobMonitor } from '../../context/JobMonitorContext';
 import { WizardStep } from './WizardStep';
 
+type TranscriptStatus = 'loading' | 'processing' | 'ready' | 'failed';
+
 interface Step2ReviewTranscriptProps {
   recordingId: string | null;
   transcriptId: string | null;
@@ -45,6 +47,16 @@ export const Step2ReviewTranscript: React.FC<Step2ReviewTranscriptProps> = ({
     recordingStatus === 'transcribing';
   const maxRetryAttempts = 6;
   const baseRetryDelayMs = 2000;
+
+  // Derive status with text as primary signal (avoid regression once text is present)
+  const derivedStatus: TranscriptStatus = useMemo(() => {
+    if (text.trim()) return 'ready';
+    if (loading) return 'loading';
+    if (recordingStatus === 'failed' || error) return 'failed';
+    // If still pending/retrying or no status yet, show processing
+    if (pending || canRetry) return 'processing';
+    return 'failed';
+  }, [text, loading, recordingStatus, pending, canRetry, error]);
 
   useEffect(() => {
     setText(transcriptText);
@@ -106,9 +118,9 @@ export const Step2ReviewTranscript: React.FC<Step2ReviewTranscriptProps> = ({
           setPending(false);
           setError(
             recordingError ??
-              (retryAttemptsRef.current >= maxRetryAttempts
-                ? 'Transcript is still processing. Please try again shortly.'
-                : 'Transcript not available for this recording.'),
+            (retryAttemptsRef.current >= maxRetryAttempts
+              ? 'Transcript is still processing. Please try again shortly.'
+              : 'Transcript not available for this recording.'),
           );
           return;
         }
@@ -201,10 +213,24 @@ export const Step2ReviewTranscript: React.FC<Step2ReviewTranscriptProps> = ({
                 {saving ? 'Saving...' : 'Save edits'}
               </button>
             </div>
-            {loading ? (
-              <p className="muted">Loading transcript...</p>
-            ) : pending && !text.trim() ? (
-              <p className="muted">Transcript is still processing. We&apos;ll keep checking for it.</p>
+            {derivedStatus === 'loading' ? (
+              <div className="transcript-status-panel">
+                <div className="transcript-spinner" />
+                <p className="muted">Loading transcript...</p>
+              </div>
+            ) : derivedStatus === 'processing' ? (
+              <div className="transcript-status-panel">
+                <div className="transcript-spinner" />
+                <p className="muted">Transcribing audio... you can continue later.</p>
+                <p className="retry-info">We&apos;ll keep checking for it automatically.</p>
+              </div>
+            ) : derivedStatus === 'failed' ? (
+              <div className="transcript-status-panel error">
+                <p className="error-text">{error ?? recordingError ?? 'Transcription failed.'}</p>
+                <button type="button" className="btn-secondary btn-small" onClick={onSkip}>
+                  Skip transcript
+                </button>
+              </div>
             ) : (
               <textarea
                 className="transcript-input"
@@ -213,7 +239,7 @@ export const Step2ReviewTranscript: React.FC<Step2ReviewTranscriptProps> = ({
                 rows={12}
               />
             )}
-            {error ? <p className="error-text">{error}</p> : null}
+            {derivedStatus === 'ready' && error ? <p className="error-text">{error}</p> : null}
           </div>
         </div>
       ) : (
@@ -262,6 +288,38 @@ export const Step2ReviewTranscript: React.FC<Step2ReviewTranscriptProps> = ({
         .muted {
           color: var(--text-tertiary);
           font-size: var(--text-sm);
+        }
+
+        .transcript-status-panel {
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          justify-content: center;
+          gap: var(--space-3);
+          padding: var(--space-6);
+          min-height: 220px;
+          text-align: center;
+        }
+
+        .transcript-status-panel.error {
+          background: rgba(239, 68, 68, 0.05);
+          border-radius: var(--radius-lg);
+          border: 1px solid rgba(239, 68, 68, 0.2);
+        }
+
+        .transcript-spinner {
+          width: 24px;
+          height: 24px;
+          border: 3px solid var(--border-medium);
+          border-top-color: var(--color-primary-500);
+          border-radius: 50%;
+          animation: spin 1s linear infinite;
+        }
+
+        .retry-info {
+          font-size: var(--text-xs);
+          color: var(--text-tertiary);
+          margin: 0;
         }
       `}</style>
     </WizardStep>

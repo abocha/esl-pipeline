@@ -19,6 +19,7 @@ import { ProfilePage } from './profile/ProfilePage';
 import { JobSettingsForm } from './settings/JobSettingsForm';
 import { StudentWorkspace } from './students/StudentWorkspace';
 import { AssignmentWizard } from './wizard/AssignmentWizard';
+import { GlobalNotificationDrawer } from './notifications/GlobalNotificationDrawer';
 
 // Icons
 const SunIcon = () => (
@@ -637,14 +638,35 @@ export const App: React.FC = () => {
 };
 
 const AuthenticatedRoutes: React.FC = () => (
-  <Routes>
-    <Route path="/" element={<Dashboard />} />
-    <Route path="/wizard" element={<AssignmentWizard />} />
-    <Route path="/students" element={<StudentsPage />} />
-    <Route path="/jobs" element={<JobsPage />} />
-    <Route path="/settings" element={<SettingsPage />} />
-    <Route path="*" element={<Navigate to="/" replace />} />
-  </Routes>
+  <>
+    <div className="global-notification-container">
+      <GlobalNotificationDrawer />
+    </div>
+    <Routes>
+      <Route path="/" element={<Dashboard />} />
+      <Route path="/wizard" element={<AssignmentWizard />} />
+      <Route path="/students" element={<StudentsPage />} />
+      <Route path="/jobs" element={<JobsPage />} />
+      <Route path="/settings" element={<SettingsPage />} />
+      <Route path="*" element={<Navigate to="/" replace />} />
+    </Routes>
+
+    <style>{`
+      .global-notification-container {
+        position: fixed;
+        top: var(--space-6);
+        right: var(--space-6);
+        z-index: 1000;
+        /* Ensure it sits above header/content but doesn't block clicks unless drawer open */
+        pointer-events: none; 
+      }
+      
+      /* Make sure the trigger button itself is clickable */
+      .global-notification-container > * {
+        pointer-events: auto;
+      }
+    `}</style>
+  </>
 );
 
 const StudentsPage: React.FC = () => (
