@@ -132,6 +132,52 @@ const isActiveState = (state: string | null | undefined): boolean => {
   return state !== 'succeeded' && state !== 'failed';
 };
 
+interface JobQueueMeta {
+  stage?: string;
+  stageLabel?: string;
+  queuePosition?: number | string;
+  etaSec?: number | string;
+  etaSeconds?: number | string;
+}
+
+const normalizeNumber = (value: unknown): number | null => {
+  if (typeof value === 'number' && Number.isFinite(value)) return value;
+  if (typeof value === 'string' && value.trim() !== '') {
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? parsed : null;
+  }
+  return null;
+};
+
+const getJobStageLabel = (job: JobEntry): string | null => {
+  const { stage, stageLabel } = job as JobQueueMeta;
+  const candidate = stageLabel ?? stage;
+  if (typeof candidate !== 'string') return null;
+  const trimmed = candidate.trim();
+  return trimmed || null;
+};
+
+const getJobQueuePosition = (job: JobEntry): number | null => {
+  const { queuePosition } = job as JobQueueMeta;
+  return normalizeNumber(queuePosition);
+};
+
+const getJobEtaSeconds = (job: JobEntry): number | null => {
+  const { etaSec, etaSeconds } = job as JobQueueMeta;
+  return normalizeNumber(etaSec ?? etaSeconds);
+};
+
+const formatEtaSeconds = (seconds: number): string => {
+  if (!Number.isFinite(seconds)) return '--';
+  const totalSeconds = Math.max(0, Math.round(seconds));
+  if (totalSeconds < 60) return `${totalSeconds}s`;
+  const totalMinutes = Math.round(totalSeconds / 60);
+  if (totalMinutes < 60) return `${totalMinutes}m`;
+  const hours = Math.floor(totalMinutes / 60);
+  const minutes = totalMinutes % 60;
+  return minutes > 0 ? `${hours}h ${minutes}m` : `${hours}h`;
+};
+
 export const JobTable: React.FC = () => {
   const { jobs, jobMap, trackJob, liveUpdatesPaused, pauseLiveUpdates, resumeLiveUpdates } =
     useJobMonitor();
@@ -557,6 +603,10 @@ const JobRow: React.FC<JobRowProps> = ({
   const config: StateConfig = stateConfig[job.state] ?? defaultConfig;
   const isRunning = job.state === 'running';
   const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const stageLabel = getJobStageLabel(job);
+  const queuePosition = getJobQueuePosition(job);
+  const etaSeconds = getJobEtaSeconds(job);
+  const hasMeta = Boolean(stageLabel) || queuePosition !== null || etaSeconds !== null;
 
   const handleApproveClick = () => {
     fileInputRef.current?.click();
@@ -581,13 +631,22 @@ const JobRow: React.FC<JobRowProps> = ({
         </div>
       </td>
       <td>
-        <span
-          className={`status-pill ${isRunning ? 'animate-pulse' : ''}`}
-          style={{ color: config.color, background: config.bg }}
-        >
-          {isRunning && <span className="status-dot" />}
-          {config.label}
-        </span>
+        <div className="status-cell">
+          <span
+            className={`status-pill ${isRunning ? 'animate-pulse' : ''}`}
+            style={{ color: config.color, background: config.bg }}
+          >
+            {isRunning && <span className="status-dot" />}
+            {config.label}
+          </span>
+          {hasMeta && (
+            <div className="status-meta">
+              {stageLabel && <span>Stage: {stageLabel}</span>}
+              {queuePosition !== null && <span>Queue: #{queuePosition}</span>}
+              {etaSeconds !== null && <span>ETA: {formatEtaSeconds(etaSeconds)}</span>}
+            </div>
+          )}
+        </div>
       </td>
       <td>
         <div className="preset-cell">
@@ -683,6 +742,25 @@ const JobRow: React.FC<JobRowProps> = ({
           height: 6px;
           background: currentColor;
           border-radius: 50%;
+        }
+
+        .status-cell {
+          display: flex;
+          flex-direction: column;
+          align-items: flex-start;
+          gap: 4px;
+        }
+
+        .status-meta {
+          display: flex;
+          flex-direction: column;
+          gap: 2px;
+          font-size: var(--text-xs);
+          color: var(--text-tertiary);
+        }
+
+        .status-meta span {
+          line-height: 1.2;
         }
 
         .preset-cell {

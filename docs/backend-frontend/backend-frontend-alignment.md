@@ -229,6 +229,10 @@ import {
   - User profile (`/user/profile`, `/user/jobs`, `/user/jobs/summary`, `/user/files`)
   - Student summary (`/students/summary`)
 
+- **Frontend readiness (reference):**
+  - Job UI conditionally renders stage/queue/ETA metadata when backend fields exist; contracts still omit them.
+  - Student detail route exists with overview + timeline; focus/vocab sections remain placeholders pending API fields.
+
 ### ⏳ Pending Work
 
 - **Job Action Implementations:**

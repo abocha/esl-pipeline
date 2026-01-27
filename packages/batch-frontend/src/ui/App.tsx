@@ -17,6 +17,7 @@ import { JobTable } from './jobs/JobTable';
 import { NotificationsPanel } from './notifications/NotificationsPanel';
 import { ProfilePage } from './profile/ProfilePage';
 import { JobSettingsForm } from './settings/JobSettingsForm';
+import { StudentProfile } from './students/StudentProfile';
 import { StudentWorkspace } from './students/StudentWorkspace';
 import { AssignmentWizard } from './wizard/AssignmentWizard';
 import { GlobalNotificationDrawer } from './notifications/GlobalNotificationDrawer';
@@ -645,6 +646,7 @@ const AuthenticatedRoutes: React.FC = () => (
     <Routes>
       <Route path="/" element={<Dashboard />} />
       <Route path="/wizard" element={<AssignmentWizard />} />
+      <Route path="/students/:studentId" element={<StudentProfilePage />} />
       <Route path="/students" element={<StudentsPage />} />
       <Route path="/jobs" element={<JobsPage />} />
       <Route path="/settings" element={<SettingsPage />} />
@@ -672,6 +674,12 @@ const AuthenticatedRoutes: React.FC = () => (
 const StudentsPage: React.FC = () => (
   <div className="page-single">
     <StudentWorkspace />
+  </div>
+);
+
+const StudentProfilePage: React.FC = () => (
+  <div className="page-single">
+    <StudentProfile />
   </div>
 );
 

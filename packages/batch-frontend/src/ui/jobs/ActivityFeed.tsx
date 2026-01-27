@@ -95,7 +95,65 @@ interface ActivityEvent {
   jobId: string;
   fileName?: string;
   timestamp: Date;
+  meta?: string;
 }
+
+interface JobQueueMeta {
+  stage?: string;
+  stageLabel?: string;
+  queuePosition?: number | string;
+  etaSec?: number | string;
+  etaSeconds?: number | string;
+}
+
+const normalizeNumber = (value: unknown): number | null => {
+  if (typeof value === 'number' && Number.isFinite(value)) return value;
+  if (typeof value === 'string' && value.trim() !== '') {
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? parsed : null;
+  }
+  return null;
+};
+
+const getJobStageLabel = (job: JobEntry): string | null => {
+  const { stage, stageLabel } = job as JobQueueMeta;
+  const candidate = stageLabel ?? stage;
+  if (typeof candidate !== 'string') return null;
+  const trimmed = candidate.trim();
+  return trimmed || null;
+};
+
+const getJobQueuePosition = (job: JobEntry): number | null => {
+  const { queuePosition } = job as JobQueueMeta;
+  return normalizeNumber(queuePosition);
+};
+
+const getJobEtaSeconds = (job: JobEntry): number | null => {
+  const { etaSec, etaSeconds } = job as JobQueueMeta;
+  return normalizeNumber(etaSec ?? etaSeconds);
+};
+
+const formatEtaSeconds = (seconds: number): string => {
+  if (!Number.isFinite(seconds)) return '--';
+  const totalSeconds = Math.max(0, Math.round(seconds));
+  if (totalSeconds < 60) return `${totalSeconds}s`;
+  const totalMinutes = Math.round(totalSeconds / 60);
+  if (totalMinutes < 60) return `${totalMinutes}m`;
+  const hours = Math.floor(totalMinutes / 60);
+  const minutes = totalMinutes % 60;
+  return minutes > 0 ? `${hours}h ${minutes}m` : `${hours}h`;
+};
+
+const buildJobMeta = (job: JobEntry): string | undefined => {
+  const stageLabel = getJobStageLabel(job);
+  const queuePosition = getJobQueuePosition(job);
+  const etaSeconds = getJobEtaSeconds(job);
+  const parts: string[] = [];
+  if (stageLabel) parts.push(`Stage: ${stageLabel}`);
+  if (queuePosition !== null) parts.push(`Queue #${queuePosition}`);
+  if (etaSeconds !== null) parts.push(`ETA ${formatEtaSeconds(etaSeconds)}`);
+  return parts.length > 0 ? parts.join(' · ') : undefined;
+};
 
 export const ActivityFeed: React.FC = () => {
   const { jobs } = useJobMonitor();
@@ -108,6 +166,7 @@ export const ActivityFeed: React.FC = () => {
       jobId: job.jobId,
       fileName: job.fileName,
       timestamp: new Date(job.updatedAt ?? job.createdAt),
+      meta: buildJobMeta(job),
     }));
   }, [jobs]);
 
@@ -202,6 +261,7 @@ export const ActivityFeed: React.FC = () => {
                 <div className="item-content">
                   <span className="item-label">{config.label}</span>
                   <span className="item-file">{event.fileName || event.jobId}</span>
+                  {event.meta && <span className="item-meta">{event.meta}</span>}
                 </div>
                 <span className="item-time">{formatTimeAgo(event.timestamp)}</span>
               </div>
@@ -332,6 +392,11 @@ export const ActivityFeed: React.FC = () => {
           white-space: nowrap;
           overflow: hidden;
           text-overflow: ellipsis;
+        }
+
+        .item-meta {
+          font-size: var(--text-xs);
+          color: var(--text-muted);
         }
 
         .item-time {
