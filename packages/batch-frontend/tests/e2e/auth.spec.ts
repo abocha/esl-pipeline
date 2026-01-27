@@ -1,4 +1,5 @@
 import { test, expect } from '@playwright/test';
+import { setupApiMocks } from './mocks';
 
 const emptySummary = {
     total: 0,
@@ -9,29 +10,16 @@ const emptySummary = {
 };
 
 test.describe('Authentication', () => {
-    test.beforeEach(async ({ page }) => {
-        await page.route('**/jobs/events*', route => route.abort('blockedbyclient'));
-        await page.route('**/api/auth/refresh', route => route.fulfill({ status: 401 }));
+    test.beforeEach(async ({ page }, testInfo) => {
+        await page.route('**/auth/refresh', route => route.fulfill({ status: 401 }));
 
-        await page.route(
-            url => !url.pathname.includes('/auth/')
-                && (url.pathname.startsWith('/api/')
-                    || url.pathname.startsWith('/config')
-                    || url.pathname.startsWith('/jobs')
-                    || url.pathname.startsWith('/recordings')
-                    || url.pathname.startsWith('/students')
-                    || url.pathname.startsWith('/user')
-                    || url.pathname.startsWith('/validation')),
-            async (route) => {
-            const reqUrl = new URL(route.request().url());
-            const rawPath = reqUrl.pathname;
-            const p = rawPath.startsWith('/api/') ? rawPath : `/api${rawPath}`;
-
+        await setupApiMocks(page, async (p, route) => {
             if (p.startsWith('/api/jobs/events')) {
-                return route.abort('blockedbyclient');
+                await route.abort('blockedbyclient');
+                return true;
             }
             if (p === '/api/config/job-options') {
-                return route.fulfill({
+                await route.fulfill({
                     status: 200,
                     body: JSON.stringify({
                         presets: ['b1-default'],
@@ -41,34 +29,39 @@ test.describe('Authentication', () => {
                         ttsStrategies: ['auto']
                     })
                 });
+                return true;
             }
             if (p === '/api/recordings') {
-                return route.fulfill({
+                await route.fulfill({
                     status: 200,
                     body: JSON.stringify({ items: [], limit: 50, offset: 0, total: 0, order: 'desc' })
                 });
+                return true;
             }
             if (p === '/api/user/jobs') {
-                return route.fulfill({
+                await route.fulfill({
                     status: 200,
                     body: JSON.stringify({ jobs: [], total: 0, limit: 50, offset: 0 })
                 });
+                return true;
             }
             if (p === '/api/user/jobs/summary') {
-                return route.fulfill({
+                await route.fulfill({
                     status: 200,
                     body: JSON.stringify(emptySummary)
                 });
+                return true;
             }
             if (p === '/api/students/summary') {
-                return route.fulfill({
+                await route.fulfill({
                     status: 200,
                     body: JSON.stringify({ items: [], total: 0, limit: 50, offset: 0 })
                 });
+                return true;
             }
 
-            throw new Error(`Unhandled API route in auth e2e: ${p}`);
-        });
+            return false;
+        }, { includeAuth: false, testInfo });
     });
 
     test('should show unauthenticated notice when not logged in', async ({ page }) => {
