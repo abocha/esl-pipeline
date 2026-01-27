@@ -88,14 +88,35 @@ test.describe('Assignment Wizard', () => {
     test.beforeEach(async ({ page }) => {
         await page.route('**/jobs/events*', route => route.abort('blockedbyclient'));
 
-        await page.route(url => url.pathname.startsWith('/api/'), async (route) => {
+        await page.route(
+            url => url.pathname.startsWith('/api/')
+                || url.pathname.startsWith('/auth')
+                || url.pathname.startsWith('/config')
+                || url.pathname.startsWith('/jobs')
+                || url.pathname.startsWith('/recordings')
+                || url.pathname.startsWith('/students')
+                || url.pathname.startsWith('/user')
+                || url.pathname.startsWith('/validation'),
+            async (route) => {
             const reqUrl = new URL(route.request().url());
-            const p = reqUrl.pathname;
+            const rawPath = reqUrl.pathname;
+            const p = rawPath.startsWith('/api/') ? rawPath : `/api${rawPath}`;
 
             if (p.startsWith('/api/jobs/events')) {
                 return route.abort('blockedbyclient');
             }
             if (p.includes('/auth/me')) return route.fulfill({ status: 200, body: JSON.stringify({ user: { id: 'u1', email: 't@e.com', role: 'user', isActive: true } }) });
+            if (p === '/api/auth/refresh') {
+                return route.fulfill({
+                    status: 200,
+                    body: JSON.stringify({
+                        user: { id: 'u1', email: 't@e.com', role: 'user', isActive: true },
+                        accessToken: 'e2e-access-token',
+                        refreshToken: 'e2e-refresh-token',
+                        expiresIn: 3600
+                    })
+                });
+            }
             if (p === '/api/config/job-options') {
                 return route.fulfill({
                     status: 200,
