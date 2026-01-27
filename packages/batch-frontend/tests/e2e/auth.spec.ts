@@ -11,10 +11,21 @@ const emptySummary = {
 test.describe('Authentication', () => {
     test.beforeEach(async ({ page }) => {
         await page.route('**/jobs/events*', route => route.abort('blockedbyclient'));
+        await page.route('**/api/auth/refresh', route => route.fulfill({ status: 401 }));
 
-        await page.route(url => url.pathname.startsWith('/api/') && !url.pathname.includes('/auth/'), async (route) => {
+        await page.route(
+            url => !url.pathname.includes('/auth/')
+                && (url.pathname.startsWith('/api/')
+                    || url.pathname.startsWith('/config')
+                    || url.pathname.startsWith('/jobs')
+                    || url.pathname.startsWith('/recordings')
+                    || url.pathname.startsWith('/students')
+                    || url.pathname.startsWith('/user')
+                    || url.pathname.startsWith('/validation')),
+            async (route) => {
             const reqUrl = new URL(route.request().url());
-            const p = reqUrl.pathname;
+            const rawPath = reqUrl.pathname;
+            const p = rawPath.startsWith('/api/') ? rawPath : `/api${rawPath}`;
 
             if (p.startsWith('/api/jobs/events')) {
                 return route.abort('blockedbyclient');
