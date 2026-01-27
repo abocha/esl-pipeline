@@ -1,4 +1,5 @@
 import { test, expect } from '@playwright/test';
+import { setupApiMocks } from './mocks';
 
 const buildJob = (overrides: Record<string, unknown>) => ({
     jobId: 'job-1',
@@ -27,31 +28,18 @@ const buildJob = (overrides: Record<string, unknown>) => ({
 });
 
 test.describe('Dashboard', () => {
-    test.beforeEach(async ({ page }) => {
-        await page.route('**/jobs/events*', route => route.abort('blockedbyclient'));
-
-        await page.route(
-            url => url.pathname.startsWith('/api/')
-                || url.pathname.startsWith('/auth')
-                || url.pathname.startsWith('/config')
-                || url.pathname.startsWith('/jobs')
-                || url.pathname.startsWith('/recordings')
-                || url.pathname.startsWith('/students')
-                || url.pathname.startsWith('/user')
-                || url.pathname.startsWith('/validation'),
-            async (route) => {
-            const reqUrl = new URL(route.request().url());
-            const rawPath = reqUrl.pathname;
-            const p = rawPath.startsWith('/api/') ? rawPath : `/api${rawPath}`;
-
+    test.beforeEach(async ({ page }, testInfo) => {
+        await setupApiMocks(page, async (p, route) => {
             if (p.startsWith('/api/jobs/events')) {
-                return route.abort('blockedbyclient');
+                await route.abort('blockedbyclient');
+                return true;
             }
             if (p === '/api/auth/me') {
-                return route.fulfill({ status: 200, body: JSON.stringify({ user: { id: 'u1', email: 't@e.com', role: 'user', isActive: true } }) });
+                await route.fulfill({ status: 200, body: JSON.stringify({ user: { id: 'u1', email: 't@e.com', role: 'user', isActive: true } }) });
+                return true;
             }
             if (p === '/api/auth/refresh') {
-                return route.fulfill({
+                await route.fulfill({
                     status: 200,
                     body: JSON.stringify({
                         user: { id: 'u1', email: 't@e.com', role: 'user', isActive: true },
@@ -60,9 +48,10 @@ test.describe('Dashboard', () => {
                         expiresIn: 3600
                     })
                 });
+                return true;
             }
             if (p === '/api/config/job-options') {
-                return route.fulfill({
+                await route.fulfill({
                     status: 200,
                     body: JSON.stringify({
                         presets: ['b1-default'],
@@ -72,21 +61,24 @@ test.describe('Dashboard', () => {
                         ttsStrategies: ['auto']
                     })
                 });
+                return true;
             }
             if (p === '/api/config/students') {
-                return route.fulfill({
+                await route.fulfill({
                     status: 200,
                     body: JSON.stringify({ students: [{ id: 's1', name: 'Alice Smith' }] })
                 });
+                return true;
             }
             if (p === '/api/recordings') {
-                return route.fulfill({
+                await route.fulfill({
                     status: 200,
                     body: JSON.stringify({ items: [], limit: 50, offset: 0, total: 0, order: 'desc' })
                 });
+                return true;
             }
             if (p === '/api/user/jobs/summary') {
-                return route.fulfill({
+                await route.fulfill({
                     status: 200,
                     body: JSON.stringify({
                         total: 6,
@@ -96,9 +88,10 @@ test.describe('Dashboard', () => {
                         tts: { enabled: 6, succeeded: 4 }
                     })
                 });
+                return true;
             }
             if (p === '/api/user/jobs') {
-                return route.fulfill({
+                await route.fulfill({
                     status: 200,
                     body: JSON.stringify({
                         jobs: [
@@ -111,10 +104,11 @@ test.describe('Dashboard', () => {
                         offset: 0
                     })
                 });
+                return true;
             }
             if (p.startsWith('/api/jobs/')) {
                 const jobId = p.split('/').pop() ?? 'j1';
-                return route.fulfill({
+                await route.fulfill({
                     status: 200,
                     body: JSON.stringify({
                         ...buildJob({
@@ -123,9 +117,10 @@ test.describe('Dashboard', () => {
                         }),
                     })
                 });
+                return true;
             }
             if (p === '/api/students/summary') {
-                return route.fulfill({
+                await route.fulfill({
                     status: 200,
                     body: JSON.stringify({
                         items: [
@@ -136,10 +131,11 @@ test.describe('Dashboard', () => {
                         offset: 0
                     })
                 });
+                return true;
             }
 
-            throw new Error(`Unhandled API route in dashboard e2e: ${p}`);
-        });
+            return false;
+        }, { includeAuth: true, testInfo });
     });
 
     test('should render dashboard layout', async ({ page }) => {

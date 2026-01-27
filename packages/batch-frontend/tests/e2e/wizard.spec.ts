@@ -1,4 +1,5 @@
 import { test, expect } from '@playwright/test';
+import { setupApiMocks } from './mocks';
 
 const nowIso = () => new Date().toISOString();
 
@@ -85,29 +86,18 @@ const buildDraft = (overrides: Record<string, unknown>) => ({
 });
 
 test.describe('Assignment Wizard', () => {
-    test.beforeEach(async ({ page }) => {
-        await page.route('**/jobs/events*', route => route.abort('blockedbyclient'));
-
-        await page.route(
-            url => url.pathname.startsWith('/api/')
-                || url.pathname.startsWith('/auth')
-                || url.pathname.startsWith('/config')
-                || url.pathname.startsWith('/jobs')
-                || url.pathname.startsWith('/recordings')
-                || url.pathname.startsWith('/students')
-                || url.pathname.startsWith('/user')
-                || url.pathname.startsWith('/validation'),
-            async (route) => {
-            const reqUrl = new URL(route.request().url());
-            const rawPath = reqUrl.pathname;
-            const p = rawPath.startsWith('/api/') ? rawPath : `/api${rawPath}`;
-
+    test.beforeEach(async ({ page }, testInfo) => {
+        await setupApiMocks(page, async (p, route) => {
             if (p.startsWith('/api/jobs/events')) {
-                return route.abort('blockedbyclient');
+                await route.abort('blockedbyclient');
+                return true;
             }
-            if (p.includes('/auth/me')) return route.fulfill({ status: 200, body: JSON.stringify({ user: { id: 'u1', email: 't@e.com', role: 'user', isActive: true } }) });
+            if (p.includes('/auth/me')) {
+                await route.fulfill({ status: 200, body: JSON.stringify({ user: { id: 'u1', email: 't@e.com', role: 'user', isActive: true } }) });
+                return true;
+            }
             if (p === '/api/auth/refresh') {
-                return route.fulfill({
+                await route.fulfill({
                     status: 200,
                     body: JSON.stringify({
                         user: { id: 'u1', email: 't@e.com', role: 'user', isActive: true },
@@ -116,9 +106,10 @@ test.describe('Assignment Wizard', () => {
                         expiresIn: 3600
                     })
                 });
+                return true;
             }
             if (p === '/api/config/job-options') {
-                return route.fulfill({
+                await route.fulfill({
                     status: 200,
                     body: JSON.stringify({
                         presets: ['b1-default'],
@@ -128,21 +119,24 @@ test.describe('Assignment Wizard', () => {
                         ttsStrategies: ['auto']
                     })
                 });
+                return true;
             }
             if (p === '/api/recordings') {
-                return route.fulfill({
+                await route.fulfill({
                     status: 200,
                     body: JSON.stringify({ items: [], limit: 50, offset: 0, total: 0, order: 'desc' })
                 });
+                return true;
             }
             if (p === '/api/user/jobs') {
-                return route.fulfill({
+                await route.fulfill({
                     status: 200,
                     body: JSON.stringify({ jobs: [], total: 0, limit: 50, offset: 0 })
                 });
+                return true;
             }
             if (p === '/api/user/jobs/summary') {
-                return route.fulfill({
+                await route.fulfill({
                     status: 200,
                     body: JSON.stringify({
                         total: 0,
@@ -152,16 +146,21 @@ test.describe('Assignment Wizard', () => {
                         tts: { enabled: 0, succeeded: 0 }
                     })
                 });
+                return true;
             }
             if (p === '/api/students/summary') {
-                return route.fulfill({
+                await route.fulfill({
                     status: 200,
                     body: JSON.stringify({ items: [], total: 0, limit: 50, offset: 0 })
                 });
+                return true;
             }
-            if (p.includes('/config/students')) return route.fulfill({ status: 200, body: JSON.stringify({ students: [{ id: 's1', name: 'Alice Smith' }] }) });
+            if (p.includes('/config/students')) {
+                await route.fulfill({ status: 200, body: JSON.stringify({ students: [{ id: 's1', name: 'Alice Smith' }] }) });
+                return true;
+            }
             if (p.includes('/config/prompts')) {
-                return route.fulfill({
+                await route.fulfill({
                     status: 200,
                     body: JSON.stringify({
                         templates: [{ id: 't1', label: 'Default template' }],
@@ -169,29 +168,47 @@ test.describe('Assignment Wizard', () => {
                         defaults: { templateId: 't1', profileId: 'p1' }
                     })
                 });
+                return true;
             }
             if (p.includes('/recordings/') && p.endsWith('/audio')) {
-                return route.fulfill({ status: 200, body: '' });
+                await route.fulfill({ status: 200, body: '' });
+                return true;
             }
             if (p.includes('/recordings/upload')) {
-                return route.fulfill({ status: 200, body: JSON.stringify(buildRecording({})) });
+                await route.fulfill({ status: 200, body: JSON.stringify(buildRecording({})) });
+                return true;
             }
             if (p.includes('/transcript')) {
-                return route.fulfill({ status: 200, body: JSON.stringify(buildTranscript({})) });
+                await route.fulfill({ status: 200, body: JSON.stringify(buildTranscript({})) });
+                return true;
             }
             if (p.includes('/prompt-package')) {
-                return route.fulfill({ status: 200, body: JSON.stringify(buildPromptPackage({})) });
+                await route.fulfill({ status: 200, body: JSON.stringify(buildPromptPackage({})) });
+                return true;
             }
-            if (p.includes('/materialize')) return route.fulfill({ status: 200, body: JSON.stringify({ draftId: 'd1', jobId: 'j1', mdPath: '/uploads/d1.md' }) });
-            if (p.includes('/draft')) return route.fulfill({ status: 200, body: JSON.stringify(buildDraft({})) });
-            if (p.includes('/approve')) return route.fulfill({ status: 200, body: JSON.stringify(buildJob({ jobId: 'j1', state: 'queued' })) });
-            if (p.includes('/jobs/j1')) return route.fulfill({ status: 200, body: JSON.stringify(buildJob({ jobId: 'j1', state: 'queued' })) });
+            if (p.includes('/materialize')) {
+                await route.fulfill({ status: 200, body: JSON.stringify({ draftId: 'd1', jobId: 'j1', mdPath: '/uploads/d1.md' }) });
+                return true;
+            }
+            if (p.includes('/draft')) {
+                await route.fulfill({ status: 200, body: JSON.stringify(buildDraft({})) });
+                return true;
+            }
+            if (p.includes('/approve')) {
+                await route.fulfill({ status: 200, body: JSON.stringify(buildJob({ jobId: 'j1', state: 'queued' })) });
+                return true;
+            }
+            if (p.includes('/jobs/j1')) {
+                await route.fulfill({ status: 200, body: JSON.stringify(buildJob({ jobId: 'j1', state: 'queued' })) });
+                return true;
+            }
             if (p.includes('/validation/markdown')) {
-                return route.fulfill({ status: 200, body: JSON.stringify({ ok: true, errors: [], warnings: [] }) });
+                await route.fulfill({ status: 200, body: JSON.stringify({ ok: true, errors: [], warnings: [] }) });
+                return true;
             }
 
-            throw new Error(`Unhandled API route in wizard e2e: ${p}`);
-        });
+            return false;
+        }, { includeAuth: true, testInfo });
     });
 
     test('should navigate through full wizard flow', async ({ page }) => {
