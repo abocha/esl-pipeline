@@ -105,7 +105,7 @@ export const Step5Publish: React.FC<Step5PublishProps> = ({
   }, [notionUrl]);
 
   const handleViewJobs = useCallback(() => {
-    navigate('/jobs');
+    void navigate('/jobs');
   }, [navigate]);
 
   // Render completion panel when job is published

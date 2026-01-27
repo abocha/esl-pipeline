@@ -10,7 +10,7 @@ status matrix and verification guidance.
 
 - Strong alignment on dashboard layout, wizard flow, editor, and core job/student workflows.
 - Partial alignment on transcript review richness, notes UX, and publish-time controls.
-- Missing items are primarily LLM generation, deeper job stage visualization, and student profile detail views.
+- Missing items are primarily LLM generation and backend-backed job stage/ETA metadata; the student detail view exists but awaits richer data.
 - Dark theme and API key settings exist and are working.
 
 ## Status matrix (high-level)
@@ -24,8 +24,8 @@ status matrix and verification guidance.
 | Draft editor split view + validation | Implemented | None | Matches the vision. |
 | LLM draft generation | Missing | LLM service/API | Drafts are user-created. |
 | Publish settings (TTS/Notion/Upload) | Partial | Usage/cost data + toggles | Missing cost estimate + heading/audio toggles. |
-| Job stage visualization + ETA | Missing | Backend per-stage progress | Current view is state-based list. |
-| Student profile detail view | Missing | Dedicated view + data model | Student workspace is CRUD/timeline. |
+| Job stage visualization + ETA | Partial | Backend per-stage progress | Guarded UI renders when fields exist. |
+| Student profile detail view | Partial | Student detail metadata API | New route with overview + timeline; focus/vocab pending. |
 | Notifications log + browser notifications | Implemented | None | Log added in UI. |
 | Dark theme support | Implemented | None | Theme toggle + tokens exist. |
 | API keys settings | Implemented | Backend storage | Notion + ElevenLabs keys available. |
@@ -82,6 +82,9 @@ status matrix and verification guidance.
   - Vision includes estimated TTS cost, heading colorization toggle, and audio attach toggle.
   - Current UI covers preset, DB, upload target, TTS toggles/voices/strategy.
   - `packages/batch-frontend/src/ui/wizard/Step5Publish.tsx`
+- Student profile detail view:
+  - Detail route with overview + timeline is implemented; focus/vocab areas are placeholders pending API fields.
+  - `packages/batch-frontend/src/ui/students/StudentProfile.tsx`
 - Settings scope:
   - Notion + ElevenLabs keys are present; Deepgram/AWS keys are not exposed in the UI yet.
   - `packages/batch-frontend/src/ui/profile/ProfilePage.tsx`
@@ -90,8 +93,8 @@ status matrix and verification guidance.
 
 - LLM generation step ("Generate Homework via LLM") is not implemented.
   - Draft creation is user-driven rather than LLM-driven.
-- Student profile detail view with progress/focus/vocab log is not a separate screen.
-- Job monitoring does not show pipeline stage visualization, queue position, or ETA.
+- Student profile detail view lacks focus/vocab log data until the API provides those fields.
+- Job monitoring renders stage/queue/ETA only when backend metadata is present; contracts do not include them yet.
 - Student notification after publish is not implemented in the UI.
 
 ## Design system alignment
@@ -112,8 +115,8 @@ These notes are specific to `docs/design/FRONTEND_VISION_V2.md` and its implemen
 - Wizard completion panel requires a flow change: current publish callback resets state and navigates home immediately.
 - Transcript step already retries and shows a processing message; explicit processing/missing states should key off recording status.
 - Notification log is implemented but only surfaced as a panel on Dashboard/Jobs/Settings; v2 needs a global entry point.
-- Student workspace already includes profile editing + timeline + metrics; v2 "detail view" may be a layout/route change.
-- Job stage/ETA/queue are not present in `JobStatusDto` or API client yet; UI must be guarded until contracts extend.
+- Student profile detail route is implemented with overview + timeline; focus/vocab awaits backend metadata.
+- Job stage/ETA/queue are still absent from `JobStatusDto`; UI is guarded and will render when contracts extend.
 - LLM draft generation endpoints do not exist in the API client; UI is prompt package + manual draft today.
 
 ### Phase A (UI-only) — Completed

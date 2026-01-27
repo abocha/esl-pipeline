@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import copy from 'copy-to-clipboard';
 import toast from 'react-hot-toast';
+import { useNavigate } from 'react-router-dom';
 
 import { useJobMonitor } from '../../context/JobMonitorContext';
 import { useStudentSelection } from '../../context/StudentSelectionContext';
@@ -72,6 +73,7 @@ const timelineTypeOptions: { value: StudentTimelineType; label: string }[] = [
 ];
 
 export const StudentWorkspace: React.FC = () => {
+  const navigate = useNavigate();
   const { selectedStudent, setSelectedStudent, updateSelectedStudent } = useStudentSelection();
   const { recordings, trackJob } = useJobMonitor();
   const [students, setStudents] = useState<StudentProfile[]>([]);
@@ -366,6 +368,11 @@ export const StudentWorkspace: React.FC = () => {
     }
   };
 
+  const handleOpenProfile = () => {
+    if (!selectedStudent) return;
+    void navigate(`/students/${selectedStudent.id}`);
+  };
+
   const handleLoadProfileContent = async () => {
     const target = profileId.trim();
     if (!target) {
@@ -571,9 +578,14 @@ export const StudentWorkspace: React.FC = () => {
                 <p>Manage metadata and prompt profile linkage.</p>
               </div>
               {selectedStudent && (
-                <button type="button" className="btn-ghost" onClick={handleDeleteStudent}>
-                  Delete
-                </button>
+                <div className="student-header-actions">
+                  <button type="button" className="btn-ghost" onClick={handleOpenProfile}>
+                    Open profile
+                  </button>
+                  <button type="button" className="btn-ghost" onClick={handleDeleteStudent}>
+                    Delete
+                  </button>
+                </div>
               )}
             </header>
 
@@ -1074,6 +1086,13 @@ export const StudentWorkspace: React.FC = () => {
           align-items: center;
           justify-content: space-between;
           gap: var(--space-3);
+        }
+
+        .student-header-actions {
+          display: inline-flex;
+          gap: var(--space-2);
+          align-items: center;
+          flex-wrap: wrap;
         }
 
         .form-grid {

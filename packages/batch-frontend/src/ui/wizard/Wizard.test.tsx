@@ -4,6 +4,7 @@ import { MemoryRouter } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { WizardProvider } from '../../context/WizardContext';
 import { AssignmentWizard } from './AssignmentWizard';
+import type { JobStatus } from '../../utils/api';
 import * as api from '../../utils/api';
 import { StudentSelectionProvider } from '../../context/StudentSelectionContext';
 import { JobSettingsProvider } from '../../context/JobSettingsContext';
@@ -12,7 +13,7 @@ import * as JobMonitorContext from '../../context/JobMonitorContext';
 
 // Mock JobMonitorContext
 const mockRegisterRecording = vi.fn();
-let mockJobMap: Record<string, any> = {};
+let mockJobMap: Record<string, JobStatus> = {};
 vi.mock('../../context/JobMonitorContext', async (importOriginal) => {
     const actual = await importOriginal<typeof JobMonitorContext>();
     return {
@@ -108,7 +109,7 @@ describe('AssignmentWizard Integration', () => {
 
     beforeEach(() => {
         vi.clearAllMocks();
-        window.localStorage.clear();
+        globalThis.localStorage.clear();
         mockJobMap = {};
         queryClient = new QueryClient({
             defaultOptions: {
@@ -343,7 +344,7 @@ describe('AssignmentWizard Integration', () => {
         });
     });
     it('shows completion panel after publishing', async () => {
-        const publishedJob = {
+        const publishedJob: JobStatus = {
             jobId: 'job-published',
             state: 'queued',
             recordingId: 'rec-1',

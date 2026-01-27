@@ -1,4 +1,5 @@
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { MemoryRouter } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { StudentWorkspace } from './StudentWorkspace';
@@ -125,9 +126,11 @@ describe('StudentWorkspace', () => {
 
   const renderWorkspace = () =>
     render(
-      <StudentSelectionProvider>
-        <StudentWorkspace />
-      </StudentSelectionProvider>,
+      <MemoryRouter>
+        <StudentSelectionProvider>
+          <StudentWorkspace />
+        </StudentSelectionProvider>
+      </MemoryRouter>,
     );
 
   it('loads students and selects a profile', async () => {

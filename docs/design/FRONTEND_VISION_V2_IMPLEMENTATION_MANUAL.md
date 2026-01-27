@@ -210,6 +210,7 @@ These are mandatory for full v2 delivery. Track status in the alignment doc.
 
 **Implementation notes**
 - Current contracts and API client do not include stage metadata; UI must be guarded until added.
+ - Frontend now renders stage metadata inline when fields exist; remains hidden otherwise.
 
 **Implementation targets**
 - `packages/batch-frontend/src/ui/jobs/JobTable.tsx`
@@ -224,6 +225,7 @@ These are mandatory for full v2 delivery. Track status in the alignment doc.
 
 **Implementation notes**
 - Current contracts and API client do not include ETA/queue fields; UI must be guarded until added.
+ - Frontend now renders queue position and ETA when fields exist; remains hidden otherwise.
 
 **Acceptance criteria**
 - Jobs show “Waiting for TTS capacity” when queued.
@@ -238,6 +240,7 @@ These are mandatory for full v2 delivery. Track status in the alignment doc.
 
 **Implementation notes**
 - Student workspace already fetches profiles + timeline + metrics; a "detail view" may be a new layout/route using existing data.
+ - Student detail route now exists with overview + timeline; focus/vocab sections are placeholders pending API fields.
 
 **Implementation targets**
 - `packages/batch-frontend/src/ui/students/StudentWorkspace.tsx`

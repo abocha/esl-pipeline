@@ -1,8 +1,10 @@
 import { cleanup, render, screen } from '@testing-library/react';
 import { afterEach, describe, it, expect, vi } from 'vitest';
 import { WizardSummary } from './WizardSummary';
+import type { WizardState } from '../../context/WizardContext';
 import * as WizardContext from '../../context/WizardContext';
 import * as StudentSelectionContext from '../../context/StudentSelectionContext';
+import type { StudentProfile } from '../../utils/api';
 
 // Mock contexts
 vi.mock('../../context/WizardContext', async (importOriginal) => {
@@ -22,23 +24,46 @@ vi.mock('../../context/StudentSelectionContext', async (importOriginal) => {
 });
 
 describe('WizardSummary', () => {
-    const defaultWizardState = {
+    const defaultWizardState: WizardState = {
+        currentStep: 0,
+        activeJobId: null,
+        jobState: null,
+        jobMd: null,
+        completedJobId: null,
         recordingId: null,
         transcriptId: null,
+        transcriptText: '',
         promptPackageId: null,
         draftId: null,
-        jobId: null,
-        completedJobId: null,
-        step: 'select-student',
+        draftText: '',
+        notes: '',
+        templateId: '',
+        profileId: '',
+        overrides: {
+            preset: undefined,
+            notionDatabase: undefined,
+            withTts: undefined,
+            forceTts: undefined,
+            ttsStrategy: undefined,
+            upload: 'auto',
+            voiceId: undefined,
+            voiceAccent: undefined,
+        },
     };
 
     const setup = (
-        wizardStateOverride: Partial<typeof defaultWizardState> = {},
-        selectedStudent: any = null
+        wizardStateOverride: Partial<WizardState> = {},
+        selectedStudent: StudentProfile | null = null
     ) => {
         vi.mocked(WizardContext.useWizard).mockReturnValue({
-            state: { ...defaultWizardState, ...wizardStateOverride } as any,
+            state: { ...defaultWizardState, ...wizardStateOverride },
             dispatch: vi.fn(),
+            actions: {
+                goToStep: vi.fn(),
+                setJob: vi.fn(),
+                updateOverrides: vi.fn(),
+                reset: vi.fn(),
+            },
         });
 
         vi.mocked(StudentSelectionContext.useStudentSelection).mockReturnValue({
