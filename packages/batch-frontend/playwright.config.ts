@@ -45,6 +45,7 @@ export default defineConfig({
         ...devices['Desktop Firefox'],
         actionTimeout: 15_000,
         navigationTimeout: 30_000,
+        serviceWorkers: 'block',
       },
     },
 
