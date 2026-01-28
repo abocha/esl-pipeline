@@ -33,7 +33,27 @@ export async function setupApiMocks(
   await page.route(
     url => shouldIntercept(url.pathname, options.includeAuth ?? true),
     async (route) => {
-      const reqUrl = new URL(route.request().url());
+      const request = route.request();
+      const resourceType = request.resourceType();
+      if (resourceType !== 'xhr' && resourceType !== 'fetch') {
+        await route.continue();
+        return;
+      }
+
+      if (request.method() === 'OPTIONS') {
+        await route.fulfill({
+          status: 204,
+          headers: {
+            'access-control-allow-origin': '*',
+            'access-control-allow-methods': 'GET,POST,PUT,DELETE,PATCH,OPTIONS',
+            'access-control-allow-headers': 'content-type,authorization',
+          },
+          body: '',
+        });
+        return;
+      }
+
+      const reqUrl = new URL(request.url());
       const path = toApiPath(reqUrl.pathname);
       const handled = await handler(path, route);
       if (!handled) {
