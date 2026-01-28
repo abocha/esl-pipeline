@@ -201,6 +201,11 @@ These are mandatory for full v2 delivery. Track status in the alignment doc.
 
 **Goal:** Improve operational clarity for heavy users.
 
+**Current status (quick):**
+- B1 Stage visualization: UI renders stage metadata when fields exist (guarded).
+- B2 ETA + queue: UI renders queue/ETA when fields exist (guarded).
+- B3 Student detail view: route live with overview + timeline; focus/vocab placeholders pending API fields.
+
 ### B1. Job Stage Visualization
 **Deliverable**
 - Visual pipeline stage progress (validate → extract → notion → tts → upload → attach).
