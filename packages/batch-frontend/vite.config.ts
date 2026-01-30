@@ -12,7 +12,7 @@ import { defineConfig } from 'vitest/config';
 // - BATCH_BACKEND_URL (e.g. http://localhost:8080)
 // - Or rely on the default below.
 const batchBackendUrl = process.env.BATCH_BACKEND_URL || 'http://localhost:8080';
-const proxyRoutes = ['/auth', '/jobs/events', '/jobs', '/uploads', '/config', '/user', '/api'];
+const proxyRoutes = ['/api'];
 
 function withCookieForwarding(): ProxyOptions {
   return {

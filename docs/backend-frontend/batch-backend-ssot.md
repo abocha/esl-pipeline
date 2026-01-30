@@ -92,7 +92,7 @@ It complements:
 - Rationale:
   - Clear boundaries for testing and maintenance.
   - Easy to swap infra (DB/queue/storage) behind adapters.
-  - Aligns with [`docs/groundwork-for-backend.md`](docs/groundwork-for-backend.md).
+- Aligns with [`docs/backend-frontend/BATCH_SYSTEM.md`](BATCH_SYSTEM.md).
 
 ---
 

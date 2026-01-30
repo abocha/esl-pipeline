@@ -249,7 +249,7 @@ import {
 
 **Status:** Phase 2+ MVP is implemented in the repo; remaining gaps are tracked in
 `docs/PIPELINE_INTEGRATION_VISION.md` and `docs/design/TRANSCRIPTION_PIPELINE_SPEC.md`.
-Gap-closure steps live in `docs/design/TRANSCRIPTION_PIPELINE_IMPLEMENTATION_MANUAL.md`.
+Gap-closure steps live in `docs/PIPELINE_INTEGRATION_VISION.md`.
 The staged implementation manual is archived at
 `docs/archive/TRANSCRIPTION_PIPELINE_IMPLEMENTATION_MANUAL.md`.
 

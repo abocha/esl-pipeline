@@ -80,10 +80,15 @@ The ESL Pipeline is a pnpm-based monorepo. Core directories:
   - Markdown validation.
 - [`packages/md-extractor`](packages/md-extractor)
   - Study text extraction from Markdown.
+- [`packages/notion-adapter`](packages/notion-adapter)
+  - Notion-specific adapter used by orchestrator; serves as the template for future adapters.
+  - Internally composes the importer and colorizer packages.
 - [`packages/notion-importer`](packages/notion-importer)
   - Notion page creation and data source resolution.
+  - Legacy wrapper around `notion-adapter`; slated for deletion once fully removed from usage.
 - [`packages/notion-colorizer`](packages/notion-colorizer)
   - Heading/preset colorization in Notion.
+  - Legacy wrapper around `notion-adapter`; slated for deletion once fully removed from usage.
 - [`packages/notion-color-headings`](packages/notion-color-headings)
   - Legacy color-heading helper not wired into the orchestrator; treat as deprecated/for reference only.
 - [`packages/notion-add-audio`](packages/notion-add-audio)
@@ -112,9 +117,9 @@ Canonical pipeline stages (implemented via orchestrator and subpackages):
 2. Study text extraction
    - Uses [`packages/md-extractor`](packages/md-extractor).
 3. Notion import
-   - Uses [`packages/notion-importer`](packages/notion-importer) to create/update Notion pages.
+   - Uses [`packages/notion-adapter`](packages/notion-adapter) (internally composes importer).
 4. Heading/styling colorization
-   - Uses [`packages/notion-colorizer`](packages/notion-colorizer).
+   - Uses [`packages/notion-adapter`](packages/notion-adapter) (internally composes colorizer).
 5. Text-to-speech (TTS) generation
    - Uses [`packages/tts-elevenlabs`](packages/tts-elevenlabs) with system `ffmpeg`.
 6. Upload/storage
@@ -166,7 +171,7 @@ Key artifacts:
   - Owned by `tts-elevenlabs` + `storage-uploader`.
 - Assignment manifest
   - Canonical record of the pipeline run.
-  - Schema documented in [`docs/pipeline-manifest.md`](docs/pipeline-manifest.md).
+  - Schema documented in [`docs/reference/pipeline-manifest.md`](docs/reference/pipeline-manifest.md).
   - Implemented via [`packages/orchestrator/src/manifest.ts`](packages/orchestrator/src/manifest.ts).
   - Owned by orchestrator; MUST be considered the durable, machine-readable truth of run state.
 
@@ -231,7 +236,10 @@ Required/commonly used environment variables (non-exhaustive; see README/backend
   - `AWS_SECRET_ACCESS_KEY`
   - Optional manifest configuration vars (see section 5.2).
 - Config/manifest adapters:
-  - See section 5.2 and [`docs/groundwork-for-backend.md`](docs/groundwork-for-backend.md).
+  - See section 5.2 and the backend docs bundle (read together, in order):
+    - [`docs/backend-frontend/BATCH_SYSTEM.md`](docs/backend-frontend/BATCH_SYSTEM.md) - unified reference for the batch frontend and backend system.
+    - [`docs/backend-frontend/batch-backend-ssot.md`](docs/backend-frontend/batch-backend-ssot.md) - detailed backend internals and invariants.
+    - [`docs/backend-frontend/backend-frontend-alignment.md`](docs/backend-frontend/backend-frontend-alignment.md) - API contract status and gap tracking.
 
 Agents:
 
@@ -383,7 +391,18 @@ For all subsections:
 - Safe extensions:
   - Additional metadata allowed if orchestrator either ignores or explicitly supports it.
 
-#### 4.2.3. [`packages/notion-importer`](packages/notion-importer)
+#### 4.2.3. [`packages/notion-adapter`](packages/notion-adapter)
+
+- Role:
+  - Centralized Notion integration surface for the orchestrator.
+  - Internally composes importer/colorizer behavior for create/update + heading presets.
+- Contracts:
+  - Orchestrator MUST call the adapter rather than re-implementing importer/colorizer workflows.
+  - Adapter inputs/outputs are the stable integration surface; internal modules may evolve.
+- Safe extensions:
+  - Add new adapter operations as long as existing orchestrator calls remain backward compatible.
+
+#### 4.2.4. [`packages/notion-importer`](packages/notion-importer)
 
 - Role:
   - Create/update Notion pages; manage hierarchy and sources.
@@ -401,7 +420,7 @@ For all subsections:
 - Safe extensions:
   - New options that do not break existing orchestrator calls.
 
-#### 4.2.4. [`packages/notion-colorizer`](packages/notion-colorizer)
+#### 4.2.5. [`packages/notion-colorizer`](packages/notion-colorizer)
 
 - Role:
   - Apply heading/preset styling to Notion blocks.
@@ -410,7 +429,7 @@ For all subsections:
 - Safe extensions:
   - Additional presets or styles as long as existing presets remain valid.
 
-#### 4.2.5. [`packages/notion-add-audio`](packages/notion-add-audio)
+#### 4.2.6. [`packages/notion-add-audio`](packages/notion-add-audio)
 
 - Role:
   - Attach or update audio blocks in Notion based on uploaded files.
@@ -419,7 +438,7 @@ For all subsections:
 - Safe extensions:
   - Support for new audio layouts without breaking existing ones.
 
-#### 4.2.6. [`packages/tts-elevenlabs`](packages/tts-elevenlabs)
+#### 4.2.7. [`packages/tts-elevenlabs`](packages/tts-elevenlabs)
 
 - Role:
   - Integrate with ElevenLabs to produce audio files.
@@ -429,7 +448,7 @@ For all subsections:
 - Safe extensions:
   - Additional voices/options; MUST NOT break default voice behavior.
 
-#### 4.2.7. [`packages/storage-uploader`](packages/storage-uploader)
+#### 4.2.8. [`packages/storage-uploader`](packages/storage-uploader)
 
 - Role:
   - Upload files (e.g., audio) to storage backends such as S3.
@@ -439,7 +458,7 @@ For all subsections:
 - Safe extensions:
   - New backends allowed; orchestrator updates required to route to them.
 
-#### 4.2.8. [`packages/shared-infrastructure`](packages/shared-infrastructure)
+#### 4.2.9. [`packages/shared-infrastructure`](packages/shared-infrastructure)
 
 - Role:
   - Centralized infrastructure utilities shared between orchestrator and batch-backend.
@@ -495,7 +514,10 @@ Local defaults live under [`configs`](configs):
 
 ### 5.2. Environment-Based Configuration
 
-Key environment variables controlling adapters and behavior (see [`README.md`](README.md) and [`docs/groundwork-for-backend.md`](docs/groundwork-for-backend.md)):
+Key environment variables controlling adapters and behavior (see [`README.md`](README.md) and the backend docs bundle, in order):
+- [`docs/backend-frontend/BATCH_SYSTEM.md`](docs/backend-frontend/BATCH_SYSTEM.md) - unified reference for the batch frontend and backend system.
+- [`docs/backend-frontend/batch-backend-ssot.md`](docs/backend-frontend/batch-backend-ssot.md) - detailed backend internals and invariants.
+- [`docs/backend-frontend/backend-frontend-alignment.md`](docs/backend-frontend/backend-frontend-alignment.md) - API contract status and gap tracking.
 
 Manifest store selection:
 
@@ -580,7 +602,7 @@ SecretProvider and advanced patterns:
 
 Manifest schema:
 
-- Primary reference: [`docs/pipeline-manifest.md`](docs/pipeline-manifest.md).
+- Primary reference: [`docs/reference/pipeline-manifest.md`](docs/reference/pipeline-manifest.md).
   - Implementation: [`packages/orchestrator/src/manifest.ts`](packages/orchestrator/src/manifest.ts).
   - Contains:
     - `AssignmentManifest` type.
@@ -594,7 +616,7 @@ Agents MUST:
 - Treat `AssignmentManifest` and `CURRENT_MANIFEST_SCHEMA_VERSION` as authoritative.
 - Ensure any change in manifest structure is reflected:
   - In the code.
-  - In [`docs/pipeline-manifest.md`](docs/pipeline-manifest.md).
+  - In [`docs/reference/pipeline-manifest.md`](docs/reference/pipeline-manifest.md).
   - In this SSOT.
 
 ### 6.2. Lifecycle and Ownership
@@ -634,7 +656,7 @@ Rules:
 - Breaking changes:
   - REQUIRE:
     - Incrementing `CURRENT_MANIFEST_SCHEMA_VERSION`.
-    - Migration guidance in [`docs/pipeline-manifest.md`](docs/pipeline-manifest.md).
+    - Migration guidance in [`docs/reference/pipeline-manifest.md`](docs/reference/pipeline-manifest.md).
     - Coordinated orchestrator changes.
 - MUST NOT:
   - Remove or rename existing fields without full migration strategy.
@@ -751,9 +773,12 @@ When changing:
 - Pipeline behavior:
   - Update orchestrator tests and this SSOT.
 - Manifests:
-  - Update [`docs/pipeline-manifest.md`](docs/pipeline-manifest.md), orchestrator manifest code, and tests.
+  - Update [`docs/reference/pipeline-manifest.md`](docs/reference/pipeline-manifest.md), orchestrator manifest code, and tests.
 - Adapters or env toggles:
-  - Update [`README.md`](README.md) and [`docs/groundwork-for-backend.md`](docs/groundwork-for-backend.md).
+  - Update [`README.md`](README.md) and the backend docs bundle (in order):
+    - [`docs/backend-frontend/BATCH_SYSTEM.md`](docs/backend-frontend/BATCH_SYSTEM.md) - unified reference for the batch frontend and backend system.
+    - [`docs/backend-frontend/batch-backend-ssot.md`](docs/backend-frontend/batch-backend-ssot.md) - detailed backend internals and invariants.
+    - [`docs/backend-frontend/backend-frontend-alignment.md`](docs/backend-frontend/backend-frontend-alignment.md) - API contract status and gap tracking.
 - Agent guidance:
   - Update [`AGENTS.md`](AGENTS.md) if high-level narrative changes.
 
@@ -821,7 +846,7 @@ Steps:
    - Unit tests for the new store.
    - Integration tests showing orchestrator selecting and using it.
 4. Update:
-   - [`docs/pipeline-manifest.md`](docs/pipeline-manifest.md) if storage semantics impact usage.
+   - [`docs/reference/pipeline-manifest.md`](docs/reference/pipeline-manifest.md) if storage semantics impact usage.
    - [`README.md`](README.md) to document configuration.
 
 Constraints:
@@ -844,7 +869,10 @@ Steps:
 Update docs:
 
 - [`README.md`](README.md)
-- [`docs/groundwork-for-backend.md`](docs/groundwork-for-backend.md)
+- Backend docs bundle (in order):
+  - [`docs/backend-frontend/BATCH_SYSTEM.md`](docs/backend-frontend/BATCH_SYSTEM.md) - unified reference for the batch frontend and backend system.
+  - [`docs/backend-frontend/batch-backend-ssot.md`](docs/backend-frontend/batch-backend-ssot.md) - detailed backend internals and invariants.
+  - [`docs/backend-frontend/backend-frontend-alignment.md`](docs/backend-frontend/backend-frontend-alignment.md) - API contract status and gap tracking.
 - This SSOT if relevant.
 
 ### 9.6. Add a New CLI Flag
@@ -975,7 +1003,10 @@ If specific event naming patterns exist (e.g., `pipeline.newAssignment.*`, `stag
 
 ### 11.2. Future Extensions (To Be Confirmed)
 
-Planned (see [`docs/groundwork-for-backend.md`](docs/groundwork-for-backend.md)):
+Planned (see the backend docs bundle, in order):
+- [`docs/backend-frontend/BATCH_SYSTEM.md`](docs/backend-frontend/BATCH_SYSTEM.md) - unified reference for the batch frontend and backend system.
+- [`docs/backend-frontend/batch-backend-ssot.md`](docs/backend-frontend/batch-backend-ssot.md) - detailed backend internals and invariants.
+- [`docs/backend-frontend/backend-frontend-alignment.md`](docs/backend-frontend/backend-frontend-alignment.md) - API contract status and gap tracking.
 
 - Additional adapters (DB-backed stores, advanced config providers).
 - Richer observability (e.g., tracing).
@@ -1003,11 +1034,14 @@ Any change affecting:
 
 MUST:
 
-1. Update `docs/agents-ssot.md` (this file).
+1. Update `docs/reference/agents-ssot.md` (this file).
 2. Update:
    - [`README.md`](README.md) for user-facing behavior.
-   - [`docs/pipeline-manifest.md`](docs/pipeline-manifest.md) for manifest changes.
-   - [`docs/groundwork-for-backend.md`](docs/groundwork-for-backend.md) for backend scaffolding.
+   - [`docs/reference/pipeline-manifest.md`](docs/reference/pipeline-manifest.md) for manifest changes.
+   - Backend docs bundle (in order):
+     - [`docs/backend-frontend/BATCH_SYSTEM.md`](docs/backend-frontend/BATCH_SYSTEM.md) - unified reference for the batch frontend and backend system.
+     - [`docs/backend-frontend/batch-backend-ssot.md`](docs/backend-frontend/batch-backend-ssot.md) - detailed backend internals and invariants.
+     - [`docs/backend-frontend/backend-frontend-alignment.md`](docs/backend-frontend/backend-frontend-alignment.md) - API contract status and gap tracking.
    - [`AGENTS.md`](AGENTS.md) if high-level architecture guidance changes.
 3. Include these doc updates in the same PR as code changes.
 
@@ -1036,11 +1070,14 @@ If moving/renaming this file:
 
 For automation and authoritative guidance, the precedence order is:
 
-1. `docs/agents-ssot.md` (this file)
+1. `docs/reference/agents-ssot.md` (this file)
 2. Orchestrator code and exported types:
    - [`packages/orchestrator/src`](packages/orchestrator/src)
-3. [`docs/pipeline-manifest.md`](docs/pipeline-manifest.md)
-4. [`docs/groundwork-for-backend.md`](docs/groundwork-for-backend.md)
+3. [`docs/reference/pipeline-manifest.md`](docs/reference/pipeline-manifest.md)
+4. Backend docs bundle (read together, in order):
+   - [`docs/backend-frontend/BATCH_SYSTEM.md`](docs/backend-frontend/BATCH_SYSTEM.md) - unified reference for the batch frontend and backend system.
+   - [`docs/backend-frontend/batch-backend-ssot.md`](docs/backend-frontend/batch-backend-ssot.md) - detailed backend internals and invariants.
+   - [`docs/backend-frontend/backend-frontend-alignment.md`](docs/backend-frontend/backend-frontend-alignment.md) - API contract status and gap tracking.
 5. [`README.md`](README.md) and [`AGENTS.md`](AGENTS.md) and other human-facing docs
 
 Maintainers MUST preserve this hierarchy when editing documentation and code.
