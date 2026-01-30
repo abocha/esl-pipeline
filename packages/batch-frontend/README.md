@@ -53,7 +53,7 @@ Requests resolve the backend base URL in this order:
 4. empty string
 
 When no base URL is provided, the client prefixes requests with `/api`. The Vite
-dev server proxies `/api` (and other API routes) to the backend and strips the prefix.
+dev server proxies `/api` to the backend and strips the prefix.
 
 ## Local setup
 

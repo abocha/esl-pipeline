@@ -7,7 +7,7 @@ Status snapshot:
 - Phase 2+ (pipeline-native transcription) is the active path and implemented end-to-end.
 - Phase 5 (FRONTEND_VISION alignment) is implemented in batch-frontend (dashboard + wizard + editor + polish).
 - Gap-closure manual: docs/archive/TRANSCRIPTION_PIPELINE_IMPLEMENTATION_MANUAL.md.
-- Phase 3 manual: docs/design/PIPELINE_INTEGRATION_PHASE_3_MANUAL.md.
+- Phase 3 manual: docs/archive/PIPELINE_INTEGRATION_PHASE_3_MANUAL.md.
 - The original staged manual is archived at
   docs/archive/TRANSCRIPTION_PIPELINE_IMPLEMENTATION_MANUAL.md.
 
@@ -133,12 +133,12 @@ Implemented in repo:
 Phase 3: Phase 2+ polish (implemented)
 - One-click approval (no manual job ID).
 - Recording search + filters on the list view.
-  - Implementation manual: docs/design/PIPELINE_INTEGRATION_PHASE_3_MANUAL.md.
+  - Implementation manual: docs/archive/PIPELINE_INTEGRATION_PHASE_3_MANUAL.md.
 
 Phase 4: Student-centric workflow (implemented)
 - Student selection, profile CRUD, and per-student timelines.
 - Per-student history and transcript/draft timeline.
-- Implementation manual: docs/design/PIPELINE_INTEGRATION_PHASE_4_MANUAL.md.
+- Implementation manual: docs/archive/PIPELINE_INTEGRATION_PHASE_4_MANUAL.md.
 
 Phase 5: FRONTEND_VISION alignment
 - Richer upload UX, editor, dashboard/activity stream (implemented).
