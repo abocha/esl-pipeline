@@ -26,6 +26,16 @@ export interface WizardState {
 
     // Configuration
     overrides: JobConfigOverrides;
+
+    // Automation (opt-in)
+    automation: WizardAutomationState;
+}
+
+export interface WizardAutomationState {
+    autoMatchStudent: boolean;
+    autoSuggestPrompts: boolean;
+    autoDraftPreview: boolean;
+    autoPublish: boolean;
 }
 
 export type WizardAction =
@@ -43,6 +53,7 @@ export type WizardAction =
     | { type: 'SET_TEMPLATE'; payload: string }
     | { type: 'SET_PROFILE'; payload: string }
     | { type: 'UPDATE_OVERRIDES'; payload: Partial<JobConfigOverrides> }
+    | { type: 'UPDATE_AUTOMATION'; payload: Partial<WizardAutomationState> }
     | { type: 'SET_COMPLETED_JOB'; payload: string | null }
     | { type: 'RESET' }
     | { type: 'HYDRATE_JOB'; payload: Partial<WizardState> };
@@ -72,6 +83,12 @@ const initialState: WizardState = {
         upload: 'auto',
         voiceId: undefined,
         voiceAccent: undefined,
+    },
+    automation: {
+        autoMatchStudent: false,
+        autoSuggestPrompts: false,
+        autoDraftPreview: false,
+        autoPublish: false,
     },
 };
 
@@ -138,6 +155,9 @@ const wizardReducer = (state: WizardState, action: WizardAction): WizardState =>
         case 'UPDATE_OVERRIDES': {
             return { ...state, overrides: { ...state.overrides, ...action.payload } };
         }
+        case 'UPDATE_AUTOMATION': {
+            return { ...state, automation: { ...state.automation, ...action.payload } };
+        }
         case 'SET_COMPLETED_JOB': {
             return { ...state, completedJobId: action.payload };
         }
@@ -160,6 +180,7 @@ interface WizardContextValue {
         goToStep: (step: number) => void;
         setJob: (id: string | null, state?: JobState, md?: string) => void;
         updateOverrides: (updates: Partial<JobConfigOverrides>) => void;
+        updateAutomation: (updates: Partial<WizardAutomationState>) => void;
         reset: () => void;
     };
 }
@@ -204,6 +225,8 @@ export const WizardProvider: React.FC<{ children: React.ReactNode }> = ({ childr
             dispatch({ type: 'SET_JOB', payload: { id, state, md } }),
         updateOverrides: (updates: Partial<JobConfigOverrides>) =>
             dispatch({ type: 'UPDATE_OVERRIDES', payload: updates }),
+        updateAutomation: (updates: Partial<WizardAutomationState>) =>
+            dispatch({ type: 'UPDATE_AUTOMATION', payload: updates }),
         reset: () => {
             dispatch({ type: 'RESET' });
             if (user?.id) {

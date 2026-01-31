@@ -45,6 +45,7 @@ export const AssignmentWizard: React.FC = () => {
     templateId,
     profileId,
     overrides,
+    automation,
     jobState,
     jobMd,
     completedJobId,
@@ -189,6 +190,13 @@ export const AssignmentWizard: React.FC = () => {
     dispatch({ type: 'SET_COMPLETED_JOB', payload: jobId });
   }, [dispatch, actions]);
 
+  const handleAutomationChange = useCallback(
+    (updates: Partial<typeof automation>) => {
+      actions.updateAutomation(updates);
+    },
+    [actions],
+  );
+
   const handleStartNew = useCallback(() => {
     actions.reset();
     void navigate('/', { replace: true });
@@ -223,6 +231,8 @@ export const AssignmentWizard: React.FC = () => {
       stepContent = (
         <Step1SelectStudent
           recordingId={recordingId}
+          autoMatchEnabled={automation.autoMatchStudent}
+          onAutomationChange={handleAutomationChange}
           onRecordingReady={handleRecordingReady}
           onNext={() => actions.goToStep(1)}
         />
@@ -254,6 +264,8 @@ export const AssignmentWizard: React.FC = () => {
           profileId={profileId}
           setProfileId={(val) => dispatch({ type: 'SET_PROFILE', payload: val })}
           promptPackageId={promptPackageId}
+          autoSuggestEnabled={automation.autoSuggestPrompts}
+          onAutomationChange={handleAutomationChange}
           onPromptReady={handlePromptReady}
           onNext={() => actions.goToStep(3)}
           onBack={() => actions.goToStep(1)}
@@ -268,6 +280,8 @@ export const AssignmentWizard: React.FC = () => {
           draftId={draftId}
           draftText={draftText}
           setDraftText={(val) => dispatch({ type: 'SET_DRAFT_TEXT', payload: val })}
+          autoDraftEnabled={automation.autoDraftPreview}
+          onAutomationChange={handleAutomationChange}
           onDraftReady={handleDraftReady}
           onNext={() => actions.goToStep(4)}
           onBack={() => actions.goToStep(2)}
@@ -283,6 +297,8 @@ export const AssignmentWizard: React.FC = () => {
           jobState={jobState}
           jobMd={jobMd}
           overrides={overrides}
+          autoPublishEnabled={automation.autoPublish}
+          onAutomationChange={handleAutomationChange}
           completedJobId={completedJobId}
           transcriptSkipped={transcriptSkipped}
           onOverridesChange={actions.updateOverrides}

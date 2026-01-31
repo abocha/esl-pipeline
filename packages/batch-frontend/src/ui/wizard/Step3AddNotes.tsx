@@ -1,6 +1,8 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import copy from 'copy-to-clipboard';
 
+import { useJobMonitor } from '../../context/JobMonitorContext';
+import { useStudentSelection } from '../../context/StudentSelectionContext';
 import type { PromptOptionsResponse, PromptPackageResponse } from '../../utils/api';
 import { createPromptPackage, fetchPromptOptions, fetchPromptPackage } from '../../utils/api';
 import { WizardStep } from './WizardStep';
@@ -14,6 +16,8 @@ interface Step3AddNotesProps {
   profileId: string;
   setProfileId: (value: string) => void;
   promptPackageId: string | null;
+  autoSuggestEnabled: boolean;
+  onAutomationChange: (updates: { autoSuggestPrompts?: boolean }) => void;
   onPromptReady: (promptPackage: PromptPackageResponse) => void;
   onNext: () => void;
   onBack: () => void;
@@ -28,10 +32,14 @@ export const Step3AddNotes: React.FC<Step3AddNotesProps> = ({
   profileId,
   setProfileId,
   promptPackageId,
+  autoSuggestEnabled,
+  onAutomationChange,
   onPromptReady,
   onNext,
   onBack,
 }) => {
+  const { selectedStudent } = useStudentSelection();
+  const { logLedgerEntries } = useJobMonitor();
   const [promptOptions, setPromptOptions] = useState<PromptOptionsResponse | null>(null);
   const [promptText, setPromptText] = useState('');
   const [promptLoading, setPromptLoading] = useState(false);
@@ -40,6 +48,7 @@ export const Step3AddNotes: React.FC<Step3AddNotesProps> = ({
   const lastPromptInputsRef = useRef<{ notes: string; templateId: string; profileId: string } | null>(
     null,
   );
+  const autoSuggestAppliedRef = useRef(false);
 
   const normalizedNotes = notes.trim();
   const isPromptStale =
@@ -49,6 +58,25 @@ export const Step3AddNotes: React.FC<Step3AddNotesProps> = ({
       lastPromptInputsRef.current!.templateId !== templateId ||
       lastPromptInputsRef.current!.profileId !== profileId);
 
+  const suggestions = useMemo(() => {
+    if (!promptOptions) {
+      return {
+        suggestedTemplateId: '',
+        suggestedProfileId: '',
+      };
+    }
+    const suggestedTemplateId =
+      promptOptions.defaults.templateId ?? promptOptions.templates?.[0]?.id ?? '';
+    const studentProfile =
+      selectedStudent?.profileId &&
+        promptOptions.profiles.some((option) => option.id === selectedStudent.profileId)
+        ? selectedStudent.profileId
+        : '';
+    const suggestedProfileId =
+      studentProfile || promptOptions.defaults.profileId || promptOptions.profiles?.[0]?.id || '';
+    return { suggestedTemplateId, suggestedProfileId };
+  }, [promptOptions, selectedStudent?.profileId]);
+
   useEffect(() => {
     let active = true;
     const loadPromptOptions = async () => {
@@ -56,8 +84,10 @@ export const Step3AddNotes: React.FC<Step3AddNotesProps> = ({
         const response = await fetchPromptOptions();
         if (!active) return;
         setPromptOptions(response);
-        const templateFallback = response.defaults.templateId ?? response.templates?.[0]?.id ?? '';
-        const profileFallback = response.defaults.profileId ?? response.profiles?.[0]?.id ?? '';
+        const templateFallback =
+          response.defaults.templateId ?? response.templates?.[0]?.id ?? '';
+        const profileFallback =
+          response.defaults.profileId ?? response.profiles?.[0]?.id ?? '';
         if (!templateId) {
           setTemplateId(templateFallback);
         }
@@ -77,6 +107,48 @@ export const Step3AddNotes: React.FC<Step3AddNotesProps> = ({
       active = false;
     };
   }, [setTemplateId, setProfileId, templateId, profileId]);
+
+  useEffect(() => {
+    if (!autoSuggestEnabled) {
+      autoSuggestAppliedRef.current = false;
+      return;
+    }
+    if (!promptOptions) return;
+    if (autoSuggestAppliedRef.current) return;
+    let applied = false;
+    if (!templateId && suggestions.suggestedTemplateId) {
+      setTemplateId(suggestions.suggestedTemplateId);
+      applied = true;
+    }
+    if (!profileId && suggestions.suggestedProfileId) {
+      setProfileId(suggestions.suggestedProfileId);
+      applied = true;
+    }
+    if (applied) {
+      autoSuggestAppliedRef.current = true;
+      logLedgerEntries([
+        {
+          type: 'automation_prompt_suggestion_applied',
+          severity: 'info',
+          objectType: 'job',
+          objectId: recordingId ?? 'unassigned',
+          message: 'Applied automated prompt recommendations.',
+          source: 'session',
+        },
+      ]);
+    }
+  }, [
+    autoSuggestEnabled,
+    logLedgerEntries,
+    promptOptions,
+    recordingId,
+    profileId,
+    suggestions.suggestedProfileId,
+    suggestions.suggestedTemplateId,
+    setProfileId,
+    setTemplateId,
+    templateId,
+  ]);
 
   useEffect(() => {
     if (!promptPackageId) {
@@ -162,6 +234,19 @@ export const Step3AddNotes: React.FC<Step3AddNotesProps> = ({
     setCopyStatus(success ? 'copied' : 'error');
   };
 
+  const hasSuggestions =
+    Boolean(suggestions.suggestedTemplateId) || Boolean(suggestions.suggestedProfileId);
+  const templateLabel =
+    promptOptions?.templates.find((option) => option.id === suggestions.suggestedTemplateId)
+      ?.label ?? '—';
+  const profileLabel =
+    promptOptions?.profiles.find((option) => option.id === suggestions.suggestedProfileId)
+      ?.label ?? '—';
+  const suggestionApplied =
+    (!suggestions.suggestedTemplateId ||
+      suggestions.suggestedTemplateId === templateId) &&
+    (!suggestions.suggestedProfileId || suggestions.suggestedProfileId === profileId);
+
   return (
     <WizardStep
       title="Add notes"
@@ -184,6 +269,67 @@ export const Step3AddNotes: React.FC<Step3AddNotesProps> = ({
         </div>
         <div className="notes-panel">
           <h3>Prompt settings</h3>
+          <div className="automation-card">
+            <div className="automation-header">
+              <div>
+                <span className="automation-eyebrow">Automation</span>
+                <h4>Auto-suggest prompts</h4>
+                <p>Recommend prompt templates based on student history.</p>
+              </div>
+              <label className="automation-toggle">
+                <input
+                  type="checkbox"
+                  checked={autoSuggestEnabled}
+                  onChange={(event) =>
+                    onAutomationChange({ autoSuggestPrompts: event.target.checked })
+                  }
+                />
+                <span className="toggle-track" aria-hidden="true" />
+              </label>
+            </div>
+            {autoSuggestEnabled && hasSuggestions ? (
+              <div className="automation-suggestion">
+                <div className="suggestion-block">
+                  <span className="suggestion-label">Suggested template</span>
+                  <span className="suggestion-value">{templateLabel}</span>
+                </div>
+                <div className="suggestion-block">
+                  <span className="suggestion-label">Suggested profile</span>
+                  <span className="suggestion-value">{profileLabel}</span>
+                </div>
+                <button
+                  type="button"
+                  className="btn-secondary btn-small"
+                  onClick={() => {
+                    if (suggestions.suggestedTemplateId) {
+                      setTemplateId(suggestions.suggestedTemplateId);
+                    }
+                    if (suggestions.suggestedProfileId) {
+                      setProfileId(suggestions.suggestedProfileId);
+                    }
+                    autoSuggestAppliedRef.current = true;
+                    logLedgerEntries([
+                      {
+                        type: 'automation_prompt_suggestion_applied',
+                        severity: 'info',
+                        objectType: 'job',
+                        objectId: recordingId ?? 'unassigned',
+                        message: 'Applied automated prompt recommendations.',
+                        source: 'session',
+                      },
+                    ]);
+                  }}
+                  disabled={suggestionApplied}
+                >
+                  {suggestionApplied ? 'Applied' : 'Apply suggestions'}
+                </button>
+              </div>
+            ) : (
+              <p className="automation-muted">
+                {autoSuggestEnabled ? 'Recommendations will appear when options load.' : 'Enable to see suggestions.'}
+              </p>
+            )}
+          </div>
           {promptOptions ? (
             <>
               <label>
@@ -282,6 +428,118 @@ export const Step3AddNotes: React.FC<Step3AddNotesProps> = ({
           display: flex;
           flex-direction: column;
           gap: var(--space-3);
+        }
+
+        .automation-card {
+          border-radius: var(--radius-lg);
+          border: 1px dashed var(--border-light);
+          padding: var(--space-3);
+          background: rgba(15, 23, 42, 0.04);
+          display: flex;
+          flex-direction: column;
+          gap: var(--space-3);
+        }
+
+        .automation-header {
+          display: flex;
+          justify-content: space-between;
+          gap: var(--space-3);
+          align-items: flex-start;
+        }
+
+        .automation-eyebrow {
+          font-size: var(--text-xs);
+          text-transform: uppercase;
+          letter-spacing: 0.08em;
+          color: var(--text-tertiary);
+          font-weight: 600;
+        }
+
+        .automation-card h4 {
+          margin: var(--space-1) 0 0;
+          font-size: var(--text-base);
+        }
+
+        .automation-card p {
+          margin: 0;
+          font-size: var(--text-sm);
+          color: var(--text-secondary);
+        }
+
+        .automation-toggle {
+          display: inline-flex;
+          align-items: center;
+          gap: var(--space-2);
+          cursor: pointer;
+        }
+
+        .automation-toggle input {
+          position: absolute;
+          opacity: 0;
+          width: 1px;
+          height: 1px;
+        }
+
+        .automation-toggle .toggle-track {
+          width: 42px;
+          height: 24px;
+          border-radius: 999px;
+          background: var(--bg-tertiary);
+          border: 1px solid var(--border-light);
+          position: relative;
+          transition: background var(--transition-fast), border-color var(--transition-fast);
+        }
+
+        .automation-toggle .toggle-track::after {
+          content: '';
+          position: absolute;
+          top: 3px;
+          left: 3px;
+          width: 16px;
+          height: 16px;
+          border-radius: 50%;
+          background: var(--text-secondary);
+          transition: transform var(--transition-fast), background var(--transition-fast);
+        }
+
+        .automation-toggle input:checked + .toggle-track {
+          background: rgba(16, 185, 129, 0.16);
+          border-color: rgba(16, 185, 129, 0.35);
+        }
+
+        .automation-toggle input:checked + .toggle-track::after {
+          transform: translateX(18px);
+          background: var(--color-success-600);
+        }
+
+        .automation-suggestion {
+          display: grid;
+          gap: var(--space-2);
+        }
+
+        .suggestion-block {
+          display: flex;
+          flex-direction: column;
+          gap: 2px;
+        }
+
+        .suggestion-label {
+          font-size: var(--text-xs);
+          color: var(--text-tertiary);
+          text-transform: uppercase;
+          letter-spacing: 0.08em;
+          font-weight: 600;
+        }
+
+        .suggestion-value {
+          font-size: var(--text-sm);
+          font-weight: 600;
+          color: var(--text-primary);
+        }
+
+        .automation-muted {
+          font-size: var(--text-sm);
+          color: var(--text-tertiary);
         }
 
         .notes-panel h3 {

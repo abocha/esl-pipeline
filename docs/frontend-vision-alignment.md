@@ -7,9 +7,9 @@ This report tracks alignment between `docs/design/FRONTEND_VISION_V3.md` and the
 
 ## Summary
 
-- Phases 0–4 are complete: v3 tokens/shell, Work Context + Ledger, Jobs table pipeline strip + action gating, Wizard checklist + receipt flow, and Student Hub refinements.
-- Phase 5 remains pending; backend dependencies for automation DTOs remain.
-- Current UI reflects v3 shell, durable context/ledger, ops workflows, a checklist-driven wizard experience, and the student-centric hub/detail view.
+- Phases 0–5 are complete: v3 tokens/shell, Work Context + Ledger, Jobs table pipeline strip + action gating, Wizard checklist + receipt flow, Student Hub refinements, and Automation UI.
+- Phase 5 automation features are UI-complete; auto-draft and auto-publish are gated on backend support.
+- Current UI reflects v3 shell, durable context/ledger, ops workflows, a checklist-driven wizard experience, the student-centric hub/detail view, and automation toggles throughout the wizard.
 
 ## Phase Status Matrix
 
@@ -20,7 +20,7 @@ This report tracks alignment between `docs/design/FRONTEND_VISION_V3.md` and the
 | Phase 2: Jobs Table + Pipeline Strip | ✅ Complete | Pipeline strip renders neutral fallback without `Job.stages`, inline error expansion, and supportedActions gating. | `packages/batch-frontend/src/ui/jobs/JobTable.tsx`, `packages/batch-frontend/src/ui/jobs/PipelineStrip.tsx`, `packages/batch-frontend/src/utils/api.ts` |
 | Phase 3: Wizard Checklist + Receipt | ✅ Complete | Checklist-driven wizard summary, explicit entry/exit criteria, skip logging + publish warnings, and completion receipt updates. | `packages/batch-frontend/src/ui/wizard/*`, `packages/batch-frontend/src/context/WizardContext.tsx`, `packages/batch-frontend/src/context/JobMonitorContext.tsx` |
 | Phase 4: Student Hub + Detail | ✅ Complete | Student list status + activity metrics, refined detail view with focus areas, and timeline action links. | `packages/batch-frontend/src/ui/students/StudentWorkspace.tsx`, `packages/batch-frontend/src/ui/students/StudentWorkspace.test.tsx`, `packages/batch-frontend/tests/e2e/students.spec.ts` |
-| Phase 5: Automation Features | ⏳ Pending | Requires backend automation contracts. | TBD |
+| Phase 5: Automation Features | ✅ Complete | Auto-match (Step1), Auto-suggest (Step3), Auto-draft (Step4, disabled), Auto-publish (Step5, disabled). Backend-gated features show disabled state. | `packages/batch-frontend/src/ui/wizard/Step1SelectStudent.tsx`, `packages/batch-frontend/src/ui/wizard/Step3AddNotes.tsx`, `packages/batch-frontend/src/ui/wizard/Step4ReviewDraft.tsx`, `packages/batch-frontend/src/ui/wizard/Step5Publish.tsx` |
 
 ## Phase 0 Verification
 
@@ -57,7 +57,14 @@ This report tracks alignment between `docs/design/FRONTEND_VISION_V3.md` and the
 - Durable ledger history endpoint (`/events`) for Phase 1 (still missing; ledger labeled session-only).
 - Job stage map (`Job.stages`) for Phase 2 pipeline strip fidelity (optional field still not in contracts).
 - DTOs for Transcript/PromptPackage/Draft status enums (Phase 3/4).
-- Automation endpoints for Phase 5.
+- LLM draft generation endpoint for auto-draft (Phase 5).
+- Auto-publish endpoint for Phase 5.
+
+## Phase 5 Verification
+
+- Unit tests: `packages/batch-frontend/src/ui/wizard/Step5Publish.test.tsx` (automation card + toggle state + unavailable message).
+- E2E tests: `packages/batch-frontend/tests/e2e/wizard.spec.ts` (full wizard flow).
+- Manual: verify automation toggles on Steps 1, 3, 4, 5. Verify auto-match suggestion in Step 1. Verify auto-suggest recommendations in Step 3. Confirm disabled state messaging for auto-draft (Step 4) and auto-publish (Step 5).
 
 ## Notes
 

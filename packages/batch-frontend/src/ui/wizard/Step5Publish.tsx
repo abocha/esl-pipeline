@@ -17,6 +17,8 @@ interface Step5PublishProps {
   overrides: JobConfigOverrides;
   completedJobId: string | null;
   transcriptSkipped: boolean;
+  autoPublishEnabled: boolean;
+  onAutomationChange: (updates: { autoPublish?: boolean }) => void;
   onOverridesChange: (updates: Partial<JobConfigOverrides>) => void;
   onJobPublished: (jobId: string) => void;
   onStartNew: () => void;
@@ -31,17 +33,21 @@ export const Step5Publish: React.FC<Step5PublishProps> = ({
   overrides,
   completedJobId,
   transcriptSkipped,
+  autoPublishEnabled,
+  onAutomationChange,
   onOverridesChange,
   onJobPublished,
   onStartNew,
   onBack,
 }) => {
   const { options, settings } = useJobSettings();
-  const { jobMap, registerJob, trackJob } = useJobMonitor();
+  const { jobMap, registerJob, trackJob, logLedgerEntries } = useJobMonitor();
   const navigate = useNavigate();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [linkCopied, setLinkCopied] = useState(false);
+  const [showAutoPublishConfirm, setShowAutoPublishConfirm] = useState(false);
+  const autoPublishAvailable = false; // Backend auto-publish endpoint not yet available
 
   // Track the completed job for Notion URL updates
   useEffect(() => {
@@ -323,6 +329,91 @@ export const Step5Publish: React.FC<Step5PublishProps> = ({
         </div>
       ) : null}
 
+      <div className="automation-card">
+        <div className="automation-header">
+          <div>
+            <span className="automation-eyebrow">Automation</span>
+            <h4>Auto-publish</h4>
+            <p>Automatically publish when all prerequisites are ready.</p>
+          </div>
+          <label className="automation-toggle">
+            <input
+              type="checkbox"
+              checked={autoPublishEnabled}
+              disabled={!autoPublishAvailable}
+              onChange={(event) => {
+                onAutomationChange({ autoPublish: event.target.checked });
+                if (event.target.checked) {
+                  logLedgerEntries([
+                    {
+                      type: 'automation_auto_publish_enabled',
+                      severity: 'info',
+                      objectType: 'job',
+                      objectId: jobId ?? 'pending',
+                      message: 'Auto-publish enabled for this job.',
+                      source: 'session',
+                    },
+                  ]);
+                }
+              }}
+            />
+            <span className="toggle-track" aria-hidden="true" />
+          </label>
+        </div>
+        {autoPublishAvailable ? (
+          autoPublishEnabled ? (
+            <div className="automation-active">
+              <p className="automation-note">
+                <strong>Review required:</strong> Auto-publish will prompt for confirmation before submitting.
+              </p>
+              {showAutoPublishConfirm && (
+                <div className="automation-confirm">
+                  <p>Ready to auto-publish. Confirm to proceed?</p>
+                  <div className="confirm-actions">
+                    <button
+                      type="button"
+                      className="btn-primary btn-small"
+                      onClick={() => {
+                        setShowAutoPublishConfirm(false);
+                        void handlePublish();
+                      }}
+                    >
+                      Confirm publish
+                    </button>
+                    <button
+                      type="button"
+                      className="btn-ghost btn-small"
+                      onClick={() => {
+                        setShowAutoPublishConfirm(false);
+                        onAutomationChange({ autoPublish: false });
+                        logLedgerEntries([
+                          {
+                            type: 'automation_auto_publish_cancelled',
+                            severity: 'info',
+                            objectType: 'job',
+                            objectId: jobId ?? 'pending',
+                            message: 'Auto-publish cancelled by user.',
+                            source: 'session',
+                          },
+                        ]);
+                      }}
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+          ) : (
+            <p className="automation-muted">Enable to auto-publish when ready.</p>
+          )
+        ) : (
+          <p className="automation-muted">
+            Auto-publish requires backend support. This will be enabled once the auto-publish endpoint is available.
+          </p>
+        )}
+      </div>
+
       <div className="publish-grid">
         <div className="publish-panel">
           <div className="publish-panel-header">
@@ -458,6 +549,126 @@ export const Step5Publish: React.FC<Step5PublishProps> = ({
       ) : null}
 
       <style>{`
+        .automation-card {
+          border-radius: var(--radius-lg);
+          border: 1px dashed var(--border-light);
+          padding: var(--space-3);
+          background: rgba(15, 23, 42, 0.04);
+          display: flex;
+          flex-direction: column;
+          gap: var(--space-3);
+          margin-bottom: var(--space-4);
+        }
+
+        .automation-header {
+          display: flex;
+          justify-content: space-between;
+          gap: var(--space-3);
+          align-items: flex-start;
+        }
+
+        .automation-eyebrow {
+          font-size: var(--text-xs);
+          text-transform: uppercase;
+          letter-spacing: 0.08em;
+          color: var(--text-tertiary);
+          font-weight: 600;
+        }
+
+        .automation-card h4 {
+          margin: var(--space-1) 0 0;
+          font-size: var(--text-base);
+        }
+
+        .automation-card p {
+          margin: 0;
+          font-size: var(--text-sm);
+          color: var(--text-secondary);
+        }
+
+        .automation-toggle {
+          display: inline-flex;
+          align-items: center;
+          gap: var(--space-2);
+          cursor: pointer;
+        }
+
+        .automation-toggle input {
+          position: absolute;
+          opacity: 0;
+          width: 1px;
+          height: 1px;
+        }
+
+        .automation-toggle .toggle-track {
+          width: 42px;
+          height: 24px;
+          border-radius: 999px;
+          background: var(--bg-tertiary);
+          border: 1px solid var(--border-light);
+          position: relative;
+          transition: background var(--transition-fast), border-color var(--transition-fast);
+        }
+
+        .automation-toggle .toggle-track::after {
+          content: '';
+          position: absolute;
+          top: 3px;
+          left: 3px;
+          width: 16px;
+          height: 16px;
+          border-radius: 50%;
+          background: var(--text-secondary);
+          transition: transform var(--transition-fast), background var(--transition-fast);
+        }
+
+        .automation-toggle input:checked + .toggle-track {
+          background: rgba(16, 185, 129, 0.16);
+          border-color: rgba(16, 185, 129, 0.35);
+        }
+
+        .automation-toggle input:checked + .toggle-track::after {
+          transform: translateX(18px);
+          background: var(--color-success-600);
+        }
+
+        .automation-toggle input:disabled + .toggle-track {
+          opacity: 0.6;
+          cursor: not-allowed;
+        }
+
+        .automation-muted {
+          font-size: var(--text-sm);
+          color: var(--text-tertiary);
+        }
+
+        .automation-active {
+          display: flex;
+          flex-direction: column;
+          gap: var(--space-2);
+        }
+
+        .automation-note {
+          font-size: var(--text-sm);
+          color: var(--text-secondary);
+          background: rgba(99, 102, 241, 0.08);
+          padding: var(--space-2);
+          border-radius: var(--radius-md);
+        }
+
+        .automation-confirm {
+          background: var(--bg-secondary);
+          border: 1px solid var(--border-light);
+          border-radius: var(--radius-md);
+          padding: var(--space-3);
+        }
+
+        .confirm-actions {
+          display: flex;
+          gap: var(--space-2);
+          margin-top: var(--space-2);
+        }
+
         .publish-grid {
           display: grid;
           grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));

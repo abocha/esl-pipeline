@@ -217,6 +217,15 @@ test.describe('Assignment Wizard', () => {
     test('should navigate through full wizard flow', async ({ page }) => {
         await page.goto('/wizard');
 
+        // Step 1: Select Student
+        await expect(page.getByText('Automation')).toBeVisible();
+        await expect(page.getByText('Auto-match student')).toBeVisible();
+        // Verify toggle is present and unchecked by default
+        const autoMatchToggle = page.locator('.automation-toggle input').first();
+        await expect(autoMatchToggle).not.toBeChecked();
+        await page.locator('.automation-toggle').click(); // Toggle on
+        await expect(autoMatchToggle).toBeChecked();
+
         await expect(page.getByRole('button', { name: /Alice Smith/i })).toBeVisible({ timeout: 15000 });
         await page.getByRole('button', { name: /Alice Smith/i }).click();
 
@@ -229,25 +238,51 @@ test.describe('Assignment Wizard', () => {
         ).toBeVisible({ timeout: 20000 });
         await page.getByRole('button', { name: 'Continue to transcript' }).click();
 
+        // Step 2: Transcript (no automation toggle here)
         await expect(page.getByRole('heading', { name: 'Review transcript' })).toBeVisible({ timeout: 15000 });
         await page.getByRole('button', { name: 'Skip transcript (adds warning)' }).click();
 
+        // Step 3: Add Notes
         await expect(page.getByRole('heading', { name: 'Add notes' })).toBeVisible({ timeout: 15000 });
+
+        // Verify automation toggle
+        await expect(page.getByText('Auto-suggest prompts')).toBeVisible();
+        const autoSuggestToggle = page.locator('.automation-toggle input').first();
+        await expect(autoSuggestToggle).not.toBeChecked();
+        await page.locator('.automation-toggle').click(); // Toggle on
+        await expect(autoSuggestToggle).toBeChecked();
+
         await page.locator('textarea').first().fill('Test notes');
         await page.getByRole('button', { name: 'Generate prompt', exact: true }).click();
         await expect(page.locator('.prompt-output')).toHaveValue('Prompt Text', { timeout: 15000 });
         await page.getByRole('button', { name: 'Continue to draft' }).click();
 
+        // Step 4: Review Draft
         await expect(page.getByRole('heading', { name: 'Review draft' })).toBeVisible({ timeout: 15000 });
+
+        // Verify automation toggle (should be disabled)
+        await expect(page.getByRole('heading', { name: 'Auto-draft preview' })).toBeVisible();
+        const autoDraftToggle = page.locator('.automation-toggle input').first();
+        await expect(autoDraftToggle).toBeDisabled();
+        await expect(page.getByText(/Auto-draft preview requires backend LLM generation support/i)).toBeVisible();
+
         const editor = page.locator('.markdown-editor .cm-content');
         await editor.click();
         await page.keyboard.type(String.raw`# Draft\n\nTest content.`);
         await expect(page.getByRole('button', { name: 'Continue to publish' })).toBeEnabled({ timeout: 20000 });
         await page.getByRole('button', { name: 'Continue to publish' }).click();
 
+        // Step 5: Publish
         await expect(
             page.getByRole('heading', { name: 'Publish', exact: true }),
         ).toBeVisible({ timeout: 15000 });
+
+        // Verify automation toggle (should be disabled)
+        await expect(page.getByRole('heading', { name: 'Auto-publish' })).toBeVisible();
+        const autoPublishToggle = page.locator('.automation-toggle input').first();
+        await expect(autoPublishToggle).toBeDisabled();
+        await expect(page.getByText(/Auto-publish requires backend support/i)).toBeVisible();
+
         await page.getByRole('button', { name: 'Publish job', exact: true }).click();
 
         await expect(page.getByText('Job approved').first()).toBeVisible({ timeout: 15000 });
