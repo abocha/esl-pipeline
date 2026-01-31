@@ -54,6 +54,7 @@ describe('StudentWorkspace', () => {
   const mockUpdateStudentProfile = vi.mocked(updateStudentProfile);
   const mockListProfileContents = vi.mocked(listProfileContents);
   const mockGetStudentTimeline = vi.mocked(getStudentTimeline);
+  const mockTrackJob = vi.fn().mockResolvedValue(void 0);
 
   beforeEach(() => {
     vi.clearAllMocks();
@@ -68,7 +69,7 @@ describe('StudentWorkspace', () => {
       registerJob: vi.fn(),
       registerRecording: vi.fn(),
       refreshRecordings: vi.fn().mockResolvedValue(void 0),
-      trackJob: vi.fn().mockResolvedValue(void 0),
+      trackJob: mockTrackJob,
       connectionState: 'idle',
       isPolling: false,
       lastError: null,
@@ -203,6 +204,42 @@ describe('StudentWorkspace', () => {
       expect(mockGetStudentTimeline).toHaveBeenCalledWith('student-1', expect.objectContaining({
         type: 'draft_saved',
       }));
+    });
+  });
+
+  it('opens job from timeline actions', async () => {
+    mockGetStudentTimeline.mockResolvedValue({
+      items: [
+        {
+          type: 'job_completed',
+          studentId: 'student-1',
+          jobId: 'job-99',
+          status: 'succeeded',
+          createdAt: new Date().toISOString(),
+          displayName: 'Job complete',
+        },
+      ],
+      total: 1,
+      limit: 20,
+      offset: 0,
+      order: 'desc',
+    });
+
+    renderWorkspace();
+
+    await waitFor(() => {
+      expect(mockListStudents).toHaveBeenCalled();
+    });
+
+    fireEvent.click(screen.getByText('Anna'));
+
+    await waitFor(() => expect(mockGetStudentTimeline).toHaveBeenCalled());
+
+    const jobButton = await screen.findByRole('button', { name: 'Job' });
+    fireEvent.click(jobButton);
+
+    await waitFor(() => {
+      expect(mockTrackJob).toHaveBeenCalledWith('job-99');
     });
   });
 });

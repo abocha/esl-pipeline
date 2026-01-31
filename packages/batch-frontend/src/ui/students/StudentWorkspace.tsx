@@ -63,14 +63,53 @@ interface StudentMetrics {
   recentErrors: number;
 }
 
-const timelineTypeOptions: { value: StudentTimelineType; label: string }[] = [
-  { value: 'recording_ingested', label: 'Recording' },
-  { value: 'transcript_ready', label: 'Transcript' },
-  { value: 'prompt_package_created', label: 'Prompt package' },
-  { value: 'draft_saved', label: 'Draft' },
-  { value: 'job_awaiting_approval', label: 'Awaiting approval' },
-  { value: 'job_completed', label: 'Job' },
-];
+type StatusTone = 'success' | 'warning' | 'error' | 'info';
+
+const deriveStudentStatus = (metrics?: StudentMetrics): { label: string; tone: StatusTone } => {
+  if (!metrics) {
+    return { label: 'New', tone: 'info' };
+  }
+  if (metrics.recentErrors > 0) {
+    return { label: 'Needs attention', tone: 'error' };
+  }
+  if (metrics.pendingDrafts > 0) {
+    return { label: 'Drafts pending', tone: 'warning' };
+  }
+  if (metrics.lastActivityAt) {
+    return { label: 'Active', tone: 'success' };
+  }
+  return { label: 'New', tone: 'info' };
+};
+
+const timelineTypeMeta: Record<StudentTimelineType, { label: string; glyph: string }> = {
+  recording_ingested: { label: 'Recording ingested', glyph: 'R' },
+  transcript_ready: { label: 'Transcript ready', glyph: 'T' },
+  prompt_package_created: { label: 'Prompt package', glyph: 'P' },
+  draft_saved: { label: 'Draft saved', glyph: 'D' },
+  job_awaiting_approval: { label: 'Awaiting approval', glyph: 'A' },
+  job_completed: { label: 'Job completed', glyph: 'J' },
+};
+
+const timelineTypeOptions: { value: StudentTimelineType; label: string }[] = Object.entries(
+  timelineTypeMeta,
+).map(([value, meta]) => ({
+  value: value as StudentTimelineType,
+  label: meta.label,
+}));
+
+const deriveTimelineTone = (status: string): StatusTone => {
+  const normalized = status.toLowerCase();
+  if (normalized.includes('fail')) return 'error';
+  if (
+    normalized.includes('success') ||
+    normalized.includes('complete') ||
+    normalized.includes('succeed')
+  ) {
+    return 'success';
+  }
+  if (normalized.includes('await') || normalized.includes('pending')) return 'warning';
+  return 'info';
+};
 
 export const StudentWorkspace: React.FC = () => {
   const navigate = useNavigate();
@@ -113,6 +152,23 @@ export const StudentWorkspace: React.FC = () => {
 
   const metricsRefreshRef = useRef(0);
   const lastTimelineRefreshRef = useRef<string | null>(null);
+
+  const selectedMetrics = selectedStudent ? metricsById[selectedStudent.id] : undefined;
+  const studentStatus = deriveStudentStatus(selectedMetrics);
+  const focusItems = useMemo(() => {
+    if (!selectedStudent) return [];
+    const voiceKeys = Object.keys(selectedStudent.voices ?? {});
+    const profileValue = profileId || selectedStudent.profileId || 'None';
+    return [
+      { label: 'Manifest preset', value: selectedStudent.manifestPreset ?? 'Auto' },
+      { label: 'Accent preference', value: selectedStudent.accentPreference ?? 'Auto' },
+      { label: 'Color preset', value: selectedStudent.colorPreset ?? 'Auto' },
+      { label: 'Profile ID', value: profileValue },
+      { label: 'Voice map', value: voiceKeys.length > 0 ? voiceKeys.join(', ') : 'Auto' },
+      { label: 'Notion DB', value: selectedStudent.dbId ?? 'None' },
+      { label: 'Page parent', value: selectedStudent.pageParentId ?? 'None' },
+    ];
+  }, [selectedStudent, profileId]);
 
   const loadStudents = useCallback(async (query?: string) => {
     setLoadingStudents(true);
@@ -523,42 +579,44 @@ export const StudentWorkspace: React.FC = () => {
           {studentsError && <p className="error-text">{studentsError}</p>}
           {loadingStudents && <p className="muted-text">Loading students...</p>}
           <div className="students-list-grid">
-            {students.map((student) => {
-              const metrics = metricsById[student.id];
-              const isActive = selectedStudent?.id === student.id;
-              return (
-                <button
-                  key={student.id}
-                  type="button"
-                  className={`student-card ${isActive ? 'active' : ''}`}
-                  onClick={() => void handleSelectStudent(student)}
-                >
-                  <div className="student-card-header">
+          {students.map((student) => {
+            const metrics = metricsById[student.id];
+            const isActive = selectedStudent?.id === student.id;
+            const status = deriveStudentStatus(metrics);
+            return (
+              <button
+                key={student.id}
+                type="button"
+                className={`student-card ${isActive ? 'active' : ''}`}
+                onClick={() => void handleSelectStudent(student)}
+              >
+                <div className="student-card-header">
+                  <div>
                     <span className="student-name">{student.student}</span>
                     <span className="student-id" title={student.id}>
-                      {student.id.slice(0, 8)}
+                      ID {student.id.slice(0, 8)}
                     </span>
                   </div>
-                  <div className="student-card-metrics">
-                    <div>
-                      <span className="metric-label">Last lesson</span>
-                      <span className="metric-value">
-                        {metrics?.lastActivityLabel ?? '--'}
-                      </span>
-                    </div>
-                    <div>
-                      <span className="metric-label">Pending drafts</span>
-                      <span className="metric-value">{metrics?.pendingDrafts ?? 0}</span>
-                    </div>
-                    <div>
-                      <span className="metric-label">Recent errors</span>
-                      <span className="metric-value">{metrics?.recentErrors ?? 0}</span>
-                    </div>
+                  <span className={`status-pill ${status.tone}`}>{status.label}</span>
+                </div>
+                <div className="student-card-metrics">
+                  <div className="metric-block">
+                    <span className="metric-label">Last lesson</span>
+                    <span className="metric-value">{metrics?.lastActivityLabel ?? '--'}</span>
                   </div>
-                  <div className="student-card-footer">
-                    <span className="metric-label">Last activity</span>
-                    <span className="metric-value">
-                      {formatTimestamp(metrics?.lastActivityAt ?? null)}
+                  <div className="metric-block">
+                    <span className="metric-label">Pending drafts</span>
+                    <span className="metric-value">{metrics?.pendingDrafts ?? 0}</span>
+                  </div>
+                  <div className="metric-block">
+                    <span className="metric-label">Recent errors</span>
+                    <span className="metric-value">{metrics?.recentErrors ?? 0}</span>
+                  </div>
+                </div>
+                <div className="student-card-footer">
+                  <span className="metric-label">Last activity</span>
+                  <span className="metric-value">
+                    {formatTimestamp(metrics?.lastActivityAt ?? null)}
                     </span>
                   </div>
                 </button>
@@ -571,6 +629,73 @@ export const StudentWorkspace: React.FC = () => {
         </aside>
 
         <div className="students-detail">
+          <section className="student-overview-card">
+            <header className="overview-header">
+              <div>
+                <span className="eyebrow">Student hub</span>
+                <h3>{isCreating ? 'New student' : selectedStudent?.student ?? 'Select a student'}</h3>
+                <p className="muted-text">
+                  {selectedStudent
+                    ? `ID ${selectedStudent.id}`
+                    : 'Choose a student to view focus areas and history.'}
+                </p>
+              </div>
+              <div className="overview-actions">
+                {selectedStudent && (
+                  <>
+                    <button type="button" className="btn-primary" onClick={() => void navigate('/wizard')}>
+                      Start assignment
+                    </button>
+                    <button type="button" className="btn-ghost" onClick={handleOpenProfile}>
+                      Open profile
+                    </button>
+                    <button type="button" className="btn-ghost" onClick={handleDeleteStudent}>
+                      Delete
+                    </button>
+                  </>
+                )}
+              </div>
+            </header>
+
+            {selectedStudent ? (
+              <>
+                <div className="overview-metrics">
+                  <div className="metric-card">
+                    <span className="metric-label">Status</span>
+                    <span className={`status-pill ${studentStatus.tone}`}>{studentStatus.label}</span>
+                  </div>
+                  <div className="metric-card">
+                    <span className="metric-label">Last activity</span>
+                    <span className="metric-value">
+                      {formatTimestamp(selectedMetrics?.lastActivityAt ?? null)}
+                    </span>
+                  </div>
+                  <div className="metric-card">
+                    <span className="metric-label">Pending drafts</span>
+                    <span className="metric-value">{selectedMetrics?.pendingDrafts ?? 0}</span>
+                  </div>
+                  <div className="metric-card">
+                    <span className="metric-label">Recent errors</span>
+                    <span className="metric-value">{selectedMetrics?.recentErrors ?? 0}</span>
+                  </div>
+                </div>
+
+                <div className="focus-grid">
+                  {focusItems.map((item) => (
+                    <div key={item.label} className="focus-item">
+                      <span className="focus-label">{item.label}</span>
+                      <span className="focus-value">{item.value}</span>
+                    </div>
+                  ))}
+                </div>
+              </>
+            ) : (
+              <div className="overview-empty">
+                <p className="muted-text">Select a student to see activity, focus areas, and timeline.</p>
+              </div>
+            )}
+          </section>
+
           <section className="student-detail-card">
             <header>
               <div>
@@ -859,37 +984,56 @@ export const StudentWorkspace: React.FC = () => {
             {timelineLoading && <p className="muted-text">Loading timeline...</p>}
             <div className="timeline-list">
               {timelineItems.map((item) => (
-                <div key={`${item.type}-${item.createdAt}-${item.jobId ?? item.recordingId}`} className="timeline-item">
-                  <div className="timeline-summary">
-                    <span className="timeline-type">{item.type.replaceAll('_', ' ')}</span>
-                    <span className="timeline-title">{item.displayName}</span>
-                    <span className="timeline-status">{item.status}</span>
-                    <span className="timeline-time">{formatTimestamp(item.createdAt)}</span>
-                  </div>
-                  <div className="timeline-actions">
-                    {item.recordingId && (
-                      <button type="button" onClick={() => handleOpenTranscript(item.recordingId)}>
-                        Open transcript
-                      </button>
-                    )}
-                    {item.promptPackageId && (
-                      <button
-                        type="button"
-                        onClick={() => handleOpenPromptPackage(item.promptPackageId)}
-                      >
-                        Open prompt
-                      </button>
-                    )}
-                    {item.draftId && (
-                      <button type="button" onClick={() => void handleOpenDraft(item.draftId)}>
-                        Open draft
-                      </button>
-                    )}
-                    {item.jobId && (
-                      <button type="button" onClick={() => void handleOpenJob(item.jobId)}>
-                        Open job
-                      </button>
-                    )}
+                <div
+                  key={`${item.type}-${item.createdAt}-${item.jobId ?? item.recordingId}`}
+                  className="timeline-item"
+                >
+                  <div className="timeline-marker">{timelineTypeMeta[item.type].glyph}</div>
+                  <div className="timeline-content">
+                    <div className="timeline-header">
+                      <div className="timeline-title-group">
+                        <span className="timeline-type">{timelineTypeMeta[item.type].label}</span>
+                        <span className="timeline-title">{item.displayName}</span>
+                      </div>
+                      <div className="timeline-badges">
+                        <span className={`status-pill ${deriveTimelineTone(item.status)}`}>
+                          {item.status.replaceAll('_', ' ')}
+                        </span>
+                        <span className="timeline-time">{formatTimestamp(item.createdAt)}</span>
+                      </div>
+                    </div>
+                    <div className="timeline-meta">
+                      {item.recordingId && <span>Recording {item.recordingId.slice(0, 8)}</span>}
+                      {item.transcriptId && <span>Transcript {item.transcriptId.slice(0, 8)}</span>}
+                      {item.promptPackageId && <span>Prompt {item.promptPackageId.slice(0, 8)}</span>}
+                      {item.draftId && <span>Draft {item.draftId.slice(0, 8)}</span>}
+                      {item.jobId && <span>Job {item.jobId.slice(0, 8)}</span>}
+                    </div>
+                    <div className="timeline-actions">
+                      {item.recordingId && (
+                        <button type="button" onClick={() => handleOpenTranscript(item.recordingId)}>
+                          Transcript
+                        </button>
+                      )}
+                      {item.promptPackageId && (
+                        <button
+                          type="button"
+                          onClick={() => handleOpenPromptPackage(item.promptPackageId)}
+                        >
+                          Prompt
+                        </button>
+                      )}
+                      {item.draftId && (
+                        <button type="button" onClick={() => void handleOpenDraft(item.draftId)}>
+                          Draft
+                        </button>
+                      )}
+                      {item.jobId && (
+                        <button type="button" onClick={() => void handleOpenJob(item.jobId)}>
+                          Job
+                        </button>
+                      )}
+                    </div>
                   </div>
                 </div>
               ))}
@@ -977,14 +1121,19 @@ export const StudentWorkspace: React.FC = () => {
 
         .students-body {
           display: grid;
-          grid-template-columns: minmax(220px, 0.9fr) minmax(0, 2.1fr);
+          grid-template-columns: minmax(240px, 0.9fr) minmax(0, 2.3fr);
           gap: var(--space-4);
+          align-items: start;
         }
 
         .students-list {
           display: flex;
           flex-direction: column;
           gap: var(--space-3);
+          background: var(--bg-secondary);
+          border: 1px solid var(--border-light);
+          border-radius: var(--radius-2xl);
+          padding: var(--space-3);
         }
 
         .students-search input {
@@ -992,7 +1141,7 @@ export const StudentWorkspace: React.FC = () => {
           padding: var(--space-2) var(--space-3);
           border-radius: var(--radius-md);
           border: 1px solid var(--border-light);
-          background: white;
+          background: var(--bg-primary);
         }
 
         .students-list-grid {
@@ -1003,8 +1152,8 @@ export const StudentWorkspace: React.FC = () => {
 
         .student-card {
           border: 1px solid var(--border-light);
-          background: white;
-          border-radius: var(--radius-md);
+          background: var(--bg-primary);
+          border-radius: var(--radius-xl);
           padding: var(--space-3);
           text-align: left;
           display: flex;
@@ -1028,6 +1177,7 @@ export const StudentWorkspace: React.FC = () => {
           display: flex;
           justify-content: space-between;
           align-items: center;
+          gap: var(--space-2);
         }
 
         .student-name {
@@ -1040,6 +1190,38 @@ export const StudentWorkspace: React.FC = () => {
           color: var(--text-tertiary);
         }
 
+        .students-panel .status-pill {
+          font-size: var(--text-xs);
+          text-transform: uppercase;
+          letter-spacing: 0.08em;
+          padding: 2px 8px;
+          border-radius: var(--radius-full);
+          font-weight: 600;
+          background: var(--bg-tertiary);
+          color: var(--text-tertiary);
+          white-space: nowrap;
+        }
+
+        .students-panel .status-pill.success {
+          background: rgba(34, 197, 94, 0.16);
+          color: var(--color-success-600);
+        }
+
+        .students-panel .status-pill.warning {
+          background: rgba(245, 158, 11, 0.16);
+          color: var(--color-warning-600);
+        }
+
+        .students-panel .status-pill.error {
+          background: rgba(239, 68, 68, 0.16);
+          color: var(--color-error-600);
+        }
+
+        .students-panel .status-pill.info {
+          background: rgba(59, 130, 246, 0.16);
+          color: var(--color-primary-600);
+        }
+
         .student-card-metrics {
           display: grid;
           grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -1047,12 +1229,12 @@ export const StudentWorkspace: React.FC = () => {
           font-size: var(--text-xs);
         }
 
-        .metric-label {
+        .students-panel .metric-label {
           display: block;
           color: var(--text-muted);
         }
 
-        .metric-value {
+        .students-panel .metric-value {
           display: block;
           font-weight: 600;
           color: var(--text-secondary);
@@ -1071,11 +1253,106 @@ export const StudentWorkspace: React.FC = () => {
           gap: var(--space-4);
         }
 
+        .student-overview-card {
+          border: 1px solid var(--border-light);
+          border-radius: var(--radius-2xl);
+          padding: var(--space-4);
+          background: var(--bg-primary);
+          display: flex;
+          flex-direction: column;
+          gap: var(--space-4);
+          position: relative;
+          overflow: hidden;
+        }
+
+        .student-overview-card::before {
+          content: '';
+          position: absolute;
+          top: -40%;
+          right: -30%;
+          width: 280px;
+          height: 280px;
+          background: radial-gradient(circle, rgba(59, 130, 246, 0.16), rgba(255, 255, 255, 0));
+          opacity: 0.7;
+          pointer-events: none;
+        }
+
+        .overview-header {
+          display: flex;
+          align-items: flex-start;
+          justify-content: space-between;
+          gap: var(--space-3);
+          flex-wrap: wrap;
+          position: relative;
+          z-index: 1;
+        }
+
+        .overview-actions {
+          display: inline-flex;
+          gap: var(--space-2);
+          flex-wrap: wrap;
+        }
+
+        .overview-metrics {
+          display: grid;
+          grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+          gap: var(--space-3);
+          position: relative;
+          z-index: 1;
+        }
+
+        .metric-card {
+          background: var(--bg-secondary);
+          border: 1px solid var(--border-light);
+          border-radius: var(--radius-lg);
+          padding: var(--space-3);
+          display: flex;
+          flex-direction: column;
+          gap: var(--space-1);
+        }
+
+        .focus-grid {
+          display: grid;
+          grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+          gap: var(--space-3);
+          position: relative;
+          z-index: 1;
+        }
+
+        .focus-item {
+          border: 1px solid var(--border-light);
+          border-radius: var(--radius-lg);
+          padding: var(--space-2) var(--space-3);
+          background: var(--bg-secondary);
+          display: flex;
+          flex-direction: column;
+          gap: 4px;
+        }
+
+        .focus-label {
+          font-size: var(--text-xs);
+          text-transform: uppercase;
+          letter-spacing: 0.08em;
+          color: var(--text-tertiary);
+        }
+
+        .focus-value {
+          font-size: var(--text-sm);
+          color: var(--text-primary);
+        }
+
+        .overview-empty {
+          padding: var(--space-3);
+          border-radius: var(--radius-lg);
+          background: var(--bg-secondary);
+          border: 1px dashed var(--border-light);
+        }
+
         .student-detail-card {
           border: 1px solid var(--border-light);
           border-radius: var(--radius-lg);
           padding: var(--space-4);
-          background: white;
+          background: var(--bg-secondary);
           display: flex;
           flex-direction: column;
           gap: var(--space-3);
@@ -1112,7 +1389,7 @@ export const StudentWorkspace: React.FC = () => {
           border: 1px solid var(--border-light);
           border-radius: var(--radius-md);
           padding: var(--space-2);
-          background: white;
+          background: var(--bg-primary);
         }
 
         .field-inline {
@@ -1141,35 +1418,85 @@ export const StudentWorkspace: React.FC = () => {
         .timeline-list {
           display: flex;
           flex-direction: column;
-          gap: var(--space-2);
+          gap: var(--space-3);
         }
 
         .timeline-item {
           border: 1px solid var(--border-light);
-          border-radius: var(--radius-md);
+          border-radius: var(--radius-lg);
           padding: var(--space-3);
-          background: var(--bg-secondary);
+          background: var(--bg-primary);
+          display: grid;
+          grid-template-columns: 32px 1fr;
+          gap: var(--space-3);
+          align-items: start;
+          position: relative;
+        }
+
+        .timeline-marker {
+          width: 32px;
+          height: 32px;
+          border-radius: 50%;
+          background: var(--bg-tertiary);
+          border: 1px solid var(--border-light);
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          font-weight: 700;
+          color: var(--text-tertiary);
+        }
+
+        .timeline-content {
           display: flex;
           flex-direction: column;
           gap: var(--space-2);
         }
 
-        .timeline-summary {
-          display: grid;
-          grid-template-columns: 1fr 2fr 1fr 1fr;
-          gap: var(--space-2);
-          font-size: var(--text-sm);
-        }
-
         .timeline-type {
-          text-transform: capitalize;
+          text-transform: uppercase;
+          letter-spacing: 0.08em;
+          font-size: var(--text-xs);
+          color: var(--text-tertiary);
           font-weight: 600;
         }
 
-        .timeline-status {
+        .timeline-title {
+          font-size: var(--text-sm);
+          font-weight: 600;
+          color: var(--text-primary);
+        }
+
+        .timeline-header {
+          display: flex;
+          justify-content: space-between;
+          align-items: flex-start;
+          gap: var(--space-2);
+          flex-wrap: wrap;
+        }
+
+        .timeline-title-group {
+          display: flex;
+          flex-direction: column;
+          gap: 2px;
+        }
+
+        .timeline-badges {
+          display: inline-flex;
+          align-items: center;
+          gap: var(--space-2);
+          flex-wrap: wrap;
+        }
+
+        .timeline-time {
           font-size: var(--text-xs);
-          text-transform: uppercase;
-          letter-spacing: 0.04em;
+          color: var(--text-tertiary);
+        }
+
+        .timeline-meta {
+          display: flex;
+          flex-wrap: wrap;
+          gap: var(--space-2);
+          font-size: var(--text-xs);
           color: var(--text-tertiary);
         }
 
@@ -1180,12 +1507,18 @@ export const StudentWorkspace: React.FC = () => {
         }
 
         .timeline-actions button {
-          border: none;
-          background: var(--color-gray-100);
-          padding: var(--space-1) var(--space-2);
-          border-radius: var(--radius-sm);
+          border: 1px solid var(--border-light);
+          background: var(--bg-secondary);
+          padding: 4px 10px;
+          border-radius: var(--radius-full);
           font-size: var(--text-xs);
           cursor: pointer;
+          transition: border-color var(--transition-fast), background var(--transition-fast);
+        }
+
+        .timeline-actions button:hover {
+          border-color: var(--border-focus);
+          background: var(--bg-tertiary);
         }
 
         .timeline-pagination {
@@ -1195,12 +1528,12 @@ export const StudentWorkspace: React.FC = () => {
           font-size: var(--text-sm);
         }
 
-        .error-text {
+        .students-panel .error-text {
           color: var(--color-error-600);
           font-size: var(--text-sm);
         }
 
-        .muted-text {
+        .students-panel .muted-text {
           color: var(--text-tertiary);
           font-size: var(--text-sm);
         }
@@ -1216,8 +1549,18 @@ export const StudentWorkspace: React.FC = () => {
             grid-template-columns: 1fr;
           }
 
-          .timeline-summary {
+          .timeline-item {
             grid-template-columns: 1fr;
+          }
+
+          .timeline-marker {
+            width: 28px;
+            height: 28px;
+          }
+
+          .timeline-header {
+            flex-direction: column;
+            align-items: flex-start;
           }
 
           .students-header {
