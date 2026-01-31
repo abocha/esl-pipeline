@@ -41,6 +41,7 @@ const DEFAULT_JOB_OPTIONS: JobOptionsResponse = {
     { id: 'default-b2', name: 'B2 Lessons' },
   ],
   ttsStrategies: ['auto', 'dialogue', 'tts'],
+  supportedActions: [],
 };
 
 const DEFAULT_SETTINGS: JobSettings = {
