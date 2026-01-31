@@ -16,6 +16,7 @@ interface Step5PublishProps {
   jobMd: string | null;
   overrides: JobConfigOverrides;
   completedJobId: string | null;
+  transcriptSkipped: boolean;
   onOverridesChange: (updates: Partial<JobConfigOverrides>) => void;
   onJobPublished: (jobId: string) => void;
   onStartNew: () => void;
@@ -29,12 +30,13 @@ export const Step5Publish: React.FC<Step5PublishProps> = ({
   jobMd,
   overrides,
   completedJobId,
+  transcriptSkipped,
   onOverridesChange,
   onJobPublished,
   onStartNew,
   onBack,
 }) => {
-  const { options } = useJobSettings();
+  const { options, settings } = useJobSettings();
   const { jobMap, registerJob, trackJob } = useJobMonitor();
   const navigate = useNavigate();
   const [loading, setLoading] = useState(false);
@@ -52,6 +54,13 @@ export const Step5Publish: React.FC<Step5PublishProps> = ({
   const notionUrl = completedJob?.notionUrl ?? null;
 
   const canPublish = !!draftId && !loading;
+  const publishWarnings = useMemo(() => {
+    const warnings: string[] = [];
+    if (transcriptSkipped) {
+      warnings.push('Transcript review was skipped. Publishing without transcript edits.');
+    }
+    return warnings;
+  }, [transcriptSkipped]);
 
   const publishLabel = useMemo(() => {
     if (jobState === 'awaiting_approval') return 'Update and approve';
@@ -108,6 +117,19 @@ export const Step5Publish: React.FC<Step5PublishProps> = ({
     void navigate('/jobs');
   }, [navigate]);
 
+  const handleResetOverrides = () => {
+    onOverridesChange({
+      preset: settings.preset,
+      notionDatabase: settings.notionDatabase,
+      withTts: settings.withTts,
+      forceTts: settings.forceTts,
+      ttsStrategy: settings.ttsStrategy,
+      upload: 'auto',
+      voiceId: undefined,
+      voiceAccent: undefined,
+    });
+  };
+
   // Render completion panel when job is published
   if (completedJobId) {
     return (
@@ -116,9 +138,7 @@ export const Step5Publish: React.FC<Step5PublishProps> = ({
           <Icons.Check />
         </div>
         <h2>Assignment published!</h2>
-        <p className="completion-subtitle">
-          Your job is now queued for processing.
-        </p>
+        <p className="completion-subtitle">Your job is now queued for processing.</p>
         <p className="job-id">Job ID: {completedJobId}</p>
 
         <div className="notion-link-section">
@@ -290,9 +310,27 @@ export const Step5Publish: React.FC<Step5PublishProps> = ({
       isNextDisabled={!canPublish}
       isBusy={loading}
     >
+      {publishWarnings.length > 0 ? (
+        <div className="publish-warning">
+          <div>
+            <h4>Publish warnings</h4>
+            <ul>
+              {publishWarnings.map((warning) => (
+                <li key={warning}>{warning}</li>
+              ))}
+            </ul>
+          </div>
+        </div>
+      ) : null}
+
       <div className="publish-grid">
         <div className="publish-panel">
-          <h3>Job settings</h3>
+          <div className="publish-panel-header">
+            <h3>Job settings</h3>
+            <button type="button" className="btn-ghost btn-small" onClick={handleResetOverrides}>
+              Use defaults
+            </button>
+          </div>
           <label>
             Preset
             <select
@@ -402,7 +440,22 @@ export const Step5Publish: React.FC<Step5PublishProps> = ({
         </div>
       </div>
 
-      {error ? <p className="error-text">{error}</p> : null}
+      {error ? (
+        <div className="publish-error">
+          <div>
+            <h4>Publish failed</h4>
+            <p>{error}</p>
+          </div>
+          <div className="publish-error-actions">
+            <button type="button" className="btn-primary" onClick={() => void handlePublish()}>
+              Retry publish
+            </button>
+            <button type="button" className="btn-secondary" onClick={handleViewJobs}>
+              View jobs
+            </button>
+          </div>
+        </div>
+      ) : null}
 
       <style>{`
         .publish-grid {
@@ -419,6 +472,13 @@ export const Step5Publish: React.FC<Step5PublishProps> = ({
           display: flex;
           flex-direction: column;
           gap: var(--space-3);
+        }
+
+        .publish-panel-header {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          gap: var(--space-2);
         }
 
         .publish-panel h3 {
@@ -445,6 +505,58 @@ export const Step5Publish: React.FC<Step5PublishProps> = ({
           flex-direction: row;
           align-items: center;
           gap: var(--space-2);
+        }
+
+        .publish-warning {
+          padding: var(--space-4);
+          border-radius: var(--radius-lg);
+          border: 1px solid rgba(245, 158, 11, 0.3);
+          background: rgba(245, 158, 11, 0.08);
+          color: var(--color-warning-600);
+        }
+
+        .publish-warning h4 {
+          margin: 0 0 var(--space-2);
+          font-size: var(--text-sm);
+          text-transform: uppercase;
+          letter-spacing: 0.08em;
+        }
+
+        .publish-warning ul {
+          margin: 0;
+          padding-left: var(--space-4);
+          display: grid;
+          gap: var(--space-1);
+          font-size: var(--text-sm);
+        }
+
+        .publish-error {
+          margin-top: var(--space-4);
+          padding: var(--space-4);
+          border-radius: var(--radius-lg);
+          border: 1px solid rgba(239, 68, 68, 0.3);
+          background: rgba(239, 68, 68, 0.08);
+          display: flex;
+          flex-direction: column;
+          gap: var(--space-3);
+        }
+
+        .publish-error h4 {
+          margin: 0 0 var(--space-2);
+          font-size: var(--text-sm);
+          text-transform: uppercase;
+          letter-spacing: 0.08em;
+        }
+
+        .publish-error p {
+          margin: 0;
+          color: var(--text-secondary);
+        }
+
+        .publish-error-actions {
+          display: flex;
+          gap: var(--space-2);
+          flex-wrap: wrap;
         }
       `}</style>
     </WizardStep>

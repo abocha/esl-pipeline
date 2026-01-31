@@ -107,6 +107,7 @@ describe('WizardContext persistence', () => {
         recordingId: null,
         transcriptId: null,
         transcriptText: '',
+        transcriptSkipped: false,
         promptPackageId: null,
         draftId: null,
         draftText: '',

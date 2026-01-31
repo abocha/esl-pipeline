@@ -14,6 +14,7 @@ export interface WizardState {
     recordingId: string | null;
     transcriptId: string | null;
     transcriptText: string;
+    transcriptSkipped: boolean;
     promptPackageId: string | null;
     draftId: string | null;
     draftText: string;
@@ -33,6 +34,8 @@ export type WizardAction =
     | { type: 'SET_RECORDING'; payload: { recordingId: string; transcriptId?: string | null } }
     | { type: 'SET_TRANSCRIPT'; payload: { transcriptId: string; text?: string } }
     | { type: 'SET_TRANSCRIPT_TEXT'; payload: string }
+    | { type: 'SET_TRANSCRIPT_ID'; payload: string }
+    | { type: 'SET_TRANSCRIPT_SKIPPED'; payload: boolean }
     | { type: 'SET_PROMPT_PACKAGE'; payload: string }
     | { type: 'SET_DRAFT'; payload: { draftId: string; text?: string } }
     | { type: 'SET_DRAFT_TEXT'; payload: string }
@@ -53,6 +56,7 @@ const initialState: WizardState = {
     recordingId: null,
     transcriptId: null,
     transcriptText: '',
+    transcriptSkipped: false,
     promptPackageId: null,
     draftId: null,
     draftText: '',
@@ -89,6 +93,7 @@ const wizardReducer = (state: WizardState, action: WizardAction): WizardState =>
                 ...state,
                 recordingId: action.payload.recordingId,
                 transcriptId: action.payload.transcriptId ?? state.transcriptId,
+                transcriptSkipped: false,
             };
         }
         case 'SET_TRANSCRIPT': {
@@ -96,10 +101,17 @@ const wizardReducer = (state: WizardState, action: WizardAction): WizardState =>
                 ...state,
                 transcriptId: action.payload.transcriptId,
                 transcriptText: action.payload.text ?? state.transcriptText,
+                transcriptSkipped: false,
             };
         }
         case 'SET_TRANSCRIPT_TEXT': {
-            return { ...state, transcriptText: action.payload };
+            return { ...state, transcriptText: action.payload, transcriptSkipped: false };
+        }
+        case 'SET_TRANSCRIPT_ID': {
+            return { ...state, transcriptId: action.payload };
+        }
+        case 'SET_TRANSCRIPT_SKIPPED': {
+            return { ...state, transcriptSkipped: action.payload };
         }
         case 'SET_PROMPT_PACKAGE': {
             return { ...state, promptPackageId: action.payload };

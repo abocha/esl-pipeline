@@ -172,6 +172,10 @@ export const Step2ReviewTranscript: React.FC<Step2ReviewTranscriptProps> = ({
   };
 
   const handleContinue = async () => {
+    if (derivedStatus !== 'ready') {
+      setError('Transcript is not ready yet. Skip to continue without it.');
+      return;
+    }
     if (hasChanges) {
       const saved = await handleSave();
       if (!saved) return;
@@ -188,9 +192,10 @@ export const Step2ReviewTranscript: React.FC<Step2ReviewTranscriptProps> = ({
       subtitle="Listen to the recording, make quick transcript edits, or skip ahead."
       onBack={onBack}
       onSkip={onSkip}
+      skipLabel="Skip transcript (adds warning)"
       onNext={handleContinue}
       nextLabel="Continue to notes"
-      isNextDisabled={loading || hasRecording === false}
+      isNextDisabled={loading || hasRecording === false || derivedStatus !== 'ready'}
       isBusy={saving}
     >
       {hasRecording ? (
@@ -228,7 +233,7 @@ export const Step2ReviewTranscript: React.FC<Step2ReviewTranscriptProps> = ({
               <div className="transcript-status-panel error">
                 <p className="error-text">{error ?? recordingError ?? 'Transcription failed.'}</p>
                 <button type="button" className="btn-secondary btn-small" onClick={onSkip}>
-                  Skip transcript
+                  Skip transcript (adds warning)
                 </button>
               </div>
             ) : (

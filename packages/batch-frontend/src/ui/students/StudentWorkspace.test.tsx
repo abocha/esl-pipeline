@@ -64,6 +64,7 @@ describe('StudentWorkspace', () => {
       recordingMap: {},
       eventLog: [],
       lastUpdateAt: null,
+      logLedgerEntries: vi.fn(),
       registerJob: vi.fn(),
       registerRecording: vi.fn(),
       refreshRecordings: vi.fn().mockResolvedValue(void 0),

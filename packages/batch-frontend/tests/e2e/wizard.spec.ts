@@ -87,6 +87,9 @@ const buildDraft = (overrides: Record<string, unknown>) => ({
 
 test.describe('Assignment Wizard', () => {
     test.beforeEach(async ({ page }, testInfo) => {
+        page.on('dialog', async (dialog) => {
+            await dialog.accept();
+        });
         await setupApiMocks(page, async (p, route) => {
             if (p.startsWith('/api/jobs/events')) {
                 await route.abort('blockedbyclient');
@@ -221,15 +224,17 @@ test.describe('Assignment Wizard', () => {
         const buffer = Buffer.from('audio');
         await page.setInputFiles('input[type="file"]', { name: 'test.mp3', mimeType: 'audio/mpeg', buffer });
 
-        await expect(page.getByText(/Recording ready/i)).toBeVisible({ timeout: 20000 });
+        await expect(
+            page.getByText(/Recording ready\. Continue to review the transcript\./i),
+        ).toBeVisible({ timeout: 20000 });
         await page.getByRole('button', { name: 'Continue to transcript' }).click();
 
         await expect(page.getByRole('heading', { name: 'Review transcript' })).toBeVisible({ timeout: 15000 });
-        await page.getByRole('button', { name: 'Skip' }).click();
+        await page.getByRole('button', { name: 'Skip transcript (adds warning)' }).click();
 
         await expect(page.getByRole('heading', { name: 'Add notes' })).toBeVisible({ timeout: 15000 });
         await page.locator('textarea').first().fill('Test notes');
-        await page.getByRole('button', { name: 'Generate prompt' }).click();
+        await page.getByRole('button', { name: 'Generate prompt', exact: true }).click();
         await expect(page.locator('.prompt-output')).toHaveValue('Prompt Text', { timeout: 15000 });
         await page.getByRole('button', { name: 'Continue to draft' }).click();
 
@@ -240,8 +245,10 @@ test.describe('Assignment Wizard', () => {
         await expect(page.getByRole('button', { name: 'Continue to publish' })).toBeEnabled({ timeout: 20000 });
         await page.getByRole('button', { name: 'Continue to publish' }).click();
 
-        await expect(page.getByRole('heading', { name: 'Publish' })).toBeVisible({ timeout: 15000 });
-        await page.getByRole('button', { name: 'Publish job' }).click();
+        await expect(
+            page.getByRole('heading', { name: 'Publish', exact: true }),
+        ).toBeVisible({ timeout: 15000 });
+        await page.getByRole('button', { name: 'Publish job', exact: true }).click();
 
         await expect(page.getByText('Job approved').first()).toBeVisible({ timeout: 15000 });
     });

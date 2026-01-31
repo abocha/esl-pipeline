@@ -197,6 +197,7 @@ describe('AssignmentWizard Integration', () => {
             recordingMap: {},
             eventLog: [],
             lastUpdateAt: null,
+            logLedgerEntries: vi.fn(),
             registerJob: vi.fn(),
             registerRecording: mockRegisterRecording,
             refreshRecordings: vi.fn(),
@@ -285,7 +286,9 @@ describe('AssignmentWizard Integration', () => {
 
         // Check next button is enabled (Wait for "Recording ready")
         await waitFor(() => {
-            expect(screen.getByText(/Recording ready/i)).not.toBeNull();
+            expect(
+                screen.getByText(/Recording ready\. Continue to review the transcript\./i)
+            ).not.toBeNull();
         });
 
         // Click Continue
@@ -293,7 +296,7 @@ describe('AssignmentWizard Integration', () => {
         fireEvent.click(nextBtn);
 
         // Should be on Step 2
-        expect(screen.getByText('Review transcript')).not.toBeNull();
+        expect(screen.getByRole('heading', { name: 'Review transcript' })).not.toBeNull();
     });
 
     it('hydrates from deep link', async () => {
@@ -389,7 +392,7 @@ describe('AssignmentWizard Integration', () => {
         renderWizard(['/wizard?step=publish&jobId=job-published']);
 
         // Wait for publish step
-        const publishBtn = await screen.findByText(/Publish job/i);
+        const publishBtn = await screen.findByRole('button', { name: /^Publish job$/i });
 
         // Click Publish
         fireEvent.click(publishBtn);
