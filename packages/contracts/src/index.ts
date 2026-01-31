@@ -16,6 +16,7 @@ export interface SubmitJobRequest {
   ttsStrategy?: TtsStrategy;
   voiceId?: string;
   voiceAccent?: string;
+  autoPublish?: boolean;
 }
 
 export interface JobConfigOverrides {
@@ -27,6 +28,7 @@ export interface JobConfigOverrides {
   upload?: JobUploadOption;
   voiceId?: string;
   voiceAccent?: string;
+  autoPublish?: boolean;
 }
 
 export interface JobStatusDto {
@@ -44,6 +46,7 @@ export interface JobStatusDto {
   forceTts: boolean | null;
   notionDatabase: string | null;
   ttsStrategy: TtsStrategy | null;
+  autoPublish: boolean | null;
   notionUrl: string | null;
   state: JobState;
   createdAt: string;

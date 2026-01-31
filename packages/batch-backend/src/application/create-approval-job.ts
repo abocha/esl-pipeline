@@ -78,6 +78,7 @@ export async function createApprovalJobFromDraft(
     forceTts: jobOverrides.forceTts,
     notionDatabase: jobOverrides.notionDatabase,
     upload: jobOverrides.upload ?? 'auto',
+    autoPublish: jobOverrides.autoPublish,
   });
 
   publishEvent({ type: 'job_created', job });

@@ -20,6 +20,7 @@ export interface JobRecord {
   notionDatabase?: string | null;
   ttsStrategy?: TtsStrategy | null;
   notionUrl?: string | null;
+  autoPublish?: boolean | null;
   createdAt: Date;
   updatedAt: Date;
   startedAt?: Date | null;

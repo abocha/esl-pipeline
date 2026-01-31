@@ -22,6 +22,7 @@ export function jobRecordToDto(job: JobRecord): JobStatusDto {
     notionDatabase: job.notionDatabase ?? null,
     ttsStrategy: job.ttsStrategy ?? null,
     notionUrl: job.notionUrl ?? null,
+    autoPublish: job.autoPublish ?? null,
     state: job.state,
     createdAt: job.createdAt.toISOString(),
     updatedAt: job.updatedAt.toISOString(),
