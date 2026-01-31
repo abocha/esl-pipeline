@@ -455,6 +455,7 @@ export const JobTable: React.FC = () => {
                   job={job}
                   options={options}
                   actionCapabilities={actionCapabilities}
+                  trackJob={trackJob}
                   onCopy={() => void handleCopy(job)}
                   onApprove={(file) => handleApprove(job, file)}
                   isApproving={approvingJobId === job.jobId}
@@ -675,6 +676,7 @@ interface JobRowProps {
     notionDatabases: { id: string; name: string }[];
   };
   actionCapabilities: Map<string, ActionCapability>;
+  trackJob: (jobId: string) => Promise<JobEntry | undefined>;
   onCopy: () => void;
   onRunAction: (request: JobActionRequest) => void;
   onApprove?: (file: File) => void;
@@ -686,6 +688,7 @@ const JobRow: React.FC<JobRowProps> = ({
   job,
   options,
   actionCapabilities,
+  trackJob,
   onCopy,
   onRunAction,
   onApprove,

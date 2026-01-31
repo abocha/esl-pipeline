@@ -7,9 +7,9 @@ This report tracks alignment between `docs/design/FRONTEND_VISION_V3.md` and the
 
 ## Summary
 
-- Phases 0–2 are complete: v3 tokens/shell, Work Context + Ledger, and Jobs table pipeline strip + action gating.
-- Phases 3–5 are pending; backend dependencies for richer DTOs remain.
-- Current UI content reflects pre-v3 screens, now rendered inside the new shell with live context, log panels, and a phase-aware jobs table.
+- Phases 0–3 are complete: v3 tokens/shell, Work Context + Ledger, Jobs table pipeline strip + action gating, and Wizard checklist + receipt flow.
+- Phases 4–5 are pending; backend dependencies for richer DTOs remain.
+- Current UI reflects v3 shell, durable context/ledger, ops workflows, and a checklist-driven wizard experience.
 
 ## Phase Status Matrix
 
@@ -18,7 +18,7 @@ This report tracks alignment between `docs/design/FRONTEND_VISION_V3.md` and the
 | Phase 0: Tokens + Layout Shell | ✅ Complete | V3 tokens/typography applied; shell layout + right rail container in place; reduced-motion + high-contrast supported. | `packages/batch-frontend/src/index.css`, `packages/batch-frontend/index.html`, `packages/batch-frontend/src/layouts/WorkshopShell.tsx` |
 | Phase 1: Work Context + Ledger | ✅ Complete | Work context checklist + live ledger wired to SSE with polling fallback, stale indicator, and session-scoped labeling. | `packages/batch-frontend/src/ui/rail/WorkContextPanel.tsx`, `packages/batch-frontend/src/ui/rail/NotificationLedger.tsx`, `packages/batch-frontend/src/context/JobMonitorContext.tsx` |
 | Phase 2: Jobs Table + Pipeline Strip | ✅ Complete | Pipeline strip renders neutral fallback without `Job.stages`, inline error expansion, and supportedActions gating. | `packages/batch-frontend/src/ui/jobs/JobTable.tsx`, `packages/batch-frontend/src/ui/jobs/PipelineStrip.tsx`, `packages/batch-frontend/src/utils/api.ts` |
-| Phase 3: Wizard Checklist + Receipt | ⏳ Pending | Wizard flow exists but not mapped to v3 checklist/criteria; completion receipt to be aligned. | TBD |
+| Phase 3: Wizard Checklist + Receipt | ✅ Complete | Checklist-driven wizard summary, explicit entry/exit criteria, skip logging + publish warnings, and completion receipt updates. | `packages/batch-frontend/src/ui/wizard/*`, `packages/batch-frontend/src/context/WizardContext.tsx`, `packages/batch-frontend/src/context/JobMonitorContext.tsx` |
 | Phase 4: Student Hub + Detail | ⏳ Pending | Student hub exists but needs v3 refinements and DTO alignment. | TBD |
 | Phase 5: Automation Features | ⏳ Pending | Requires backend automation contracts. | TBD |
 
@@ -39,6 +39,12 @@ This report tracks alignment between `docs/design/FRONTEND_VISION_V3.md` and the
 - Unit tests: `packages/batch-frontend/src/ui/jobs/PipelineStrip.test.tsx` (stages vs neutral fallback).
 - E2E tests: `packages/batch-frontend/tests/e2e/jobs.spec.ts` (pipeline strip, error expansion, action gating).
 - Manual: verify jobs table filters, inline error expansion, and action disable tooltips.
+
+## Phase 3 Verification
+
+- Unit tests: `packages/batch-frontend/src/ui/wizard/WizardSummary.test.tsx`, `packages/batch-frontend/src/ui/wizard/Wizard.test.tsx` (checklist status + flow).
+- E2E tests: `packages/batch-frontend/tests/e2e/wizard.spec.ts` (full wizard flow with skip warnings).
+- Manual: validate checklist status changes, skip warnings in publish, and completion receipt with Notion actions.
 
 ## Open Dependencies
 

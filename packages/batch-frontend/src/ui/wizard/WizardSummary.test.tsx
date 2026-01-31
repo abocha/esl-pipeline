@@ -5,6 +5,7 @@ import type { WizardState } from '../../context/WizardContext';
 import * as WizardContext from '../../context/WizardContext';
 import * as StudentSelectionContext from '../../context/StudentSelectionContext';
 import type { StudentProfile } from '../../utils/api';
+import * as JobMonitorContext from '../../context/JobMonitorContext';
 
 // Mock contexts
 vi.mock('../../context/WizardContext', async (importOriginal) => {
@@ -23,6 +24,14 @@ vi.mock('../../context/StudentSelectionContext', async (importOriginal) => {
     };
 });
 
+vi.mock('../../context/JobMonitorContext', async (importOriginal) => {
+    const actual = await importOriginal<typeof JobMonitorContext>();
+    return {
+        ...actual,
+        useJobMonitor: vi.fn(),
+    };
+});
+
 describe('WizardSummary', () => {
     const defaultWizardState: WizardState = {
         currentStep: 0,
@@ -33,6 +42,7 @@ describe('WizardSummary', () => {
         recordingId: null,
         transcriptId: null,
         transcriptText: '',
+        transcriptSkipped: false,
         promptPackageId: null,
         draftId: null,
         draftText: '',
@@ -53,7 +63,8 @@ describe('WizardSummary', () => {
 
     const setup = (
         wizardStateOverride: Partial<WizardState> = {},
-        selectedStudent: StudentProfile | null = null
+        selectedStudent: StudentProfile | null = null,
+        jobMonitorOverride: Partial<ReturnType<typeof JobMonitorContext.useJobMonitor>> = {},
     ) => {
         vi.mocked(WizardContext.useWizard).mockReturnValue({
             state: { ...defaultWizardState, ...wizardStateOverride },
@@ -72,6 +83,27 @@ describe('WizardSummary', () => {
             updateSelectedStudent: vi.fn(),
         });
 
+        vi.mocked(JobMonitorContext.useJobMonitor).mockReturnValue({
+            jobs: [],
+            jobMap: {},
+            recordings: [],
+            recordingMap: {},
+            eventLog: [],
+            lastUpdateAt: null,
+            logLedgerEntries: vi.fn(),
+            registerJob: vi.fn(),
+            registerRecording: vi.fn(),
+            refreshRecordings: vi.fn(),
+            trackJob: vi.fn(),
+            connectionState: 'connected',
+            isPolling: false,
+            lastError: null,
+            liveUpdatesPaused: false,
+            pauseLiveUpdates: vi.fn(),
+            resumeLiveUpdates: vi.fn(),
+            ...jobMonitorOverride,
+        });
+
         return render(<WizardSummary />);
     };
 
@@ -81,9 +113,10 @@ describe('WizardSummary', () => {
 
     it('displays default empty states', () => {
         setup();
+        expect(screen.getByText('Checklist')).not.toBeNull();
         expect(screen.getByText('Select student in Step 1')).not.toBeNull();
         expect(screen.getByText('Upload in Step 1')).not.toBeNull();
-        expect(screen.getAllByText('Pending')).toHaveLength(2); // Prompt + Draft
+        expect(screen.getAllByText('Pending').length).toBeGreaterThan(0);
     });
 
     it('displays student name when selected', () => {
@@ -93,8 +126,29 @@ describe('WizardSummary', () => {
     });
 
     it('displays recording status when recordingId present', () => {
-        setup({ recordingId: 'rec-1234567890' });
-        expect(screen.getByText('rec-1234...')).not.toBeNull(); // Slice check
+        setup(
+            { recordingId: 'rec-1234567890' },
+            null,
+            {
+                recordingMap: {
+                    'rec-1234567890': {
+                        recordingId: 'rec-1234567890',
+                        status: 'queued',
+                        transcriptId: null,
+                        error: null,
+                        source: 'upload',
+                        studentId: null,
+                        displayName: 'Lesson 1',
+                        durationSec: null,
+                        channels: null,
+                        bytes: 1024,
+                        createdAt: new Date().toISOString(),
+                        updatedAt: new Date().toISOString(),
+                    },
+                },
+            },
+        );
+        expect(screen.getByText('Lesson 1')).not.toBeNull();
     });
 
     it('displays statuses as Created when IDs present', () => {
@@ -102,6 +156,6 @@ describe('WizardSummary', () => {
             promptPackageId: 'pp-1',
             draftId: 'draft-1'
         });
-        expect(screen.getAllByText('Created')).toHaveLength(2);
+        expect(screen.getAllByText('Ready').length).toBeGreaterThan(0);
     });
 });

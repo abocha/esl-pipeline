@@ -133,7 +133,9 @@ const LedgerRow: React.FC<{ entry: LedgerEntry }> = ({ entry }) => {
           <span>•</span>
           <span>{formatTime(entry.timestamp)}</span>
           <span>•</span>
-          <span>{entry.source === 'sse' ? 'SSE' : 'Polling'}</span>
+          <span>
+            {entry.source === 'sse' ? 'SSE' : entry.source === 'polling' ? 'Polling' : 'Session'}
+          </span>
         </div>
       </div>
     </div>

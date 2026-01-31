@@ -57,7 +57,7 @@ export interface LedgerEntry {
   objectId: string;
   timestamp: number;
   message: string;
-  source: 'sse' | 'polling';
+  source: 'sse' | 'polling' | 'session';
 }
 
 interface RecordingsQueryParams {
@@ -88,6 +88,7 @@ interface JobMonitorContextValue {
   recordingMap: RecordingMap;
   eventLog: LedgerEntry[];
   lastUpdateAt: number | null;
+  logLedgerEntries: (entries: Omit<LedgerEntry, 'id' | 'timestamp'>[]) => void;
   registerJob: (options: RegisterJobOptions) => void;
   registerRecording: (recordingId: string, data?: Partial<RecordingEntry>) => void;
   refreshRecordings: (params?: RecordingsQueryParams) => Promise<void>;
@@ -720,6 +721,7 @@ export function JobMonitorProvider({ children }: { children: ReactNode }) {
       recordingMap: recordings,
       eventLog,
       lastUpdateAt,
+      logLedgerEntries: appendLedgerEntries,
       registerJob,
       registerRecording,
       refreshRecordings,
@@ -738,6 +740,7 @@ export function JobMonitorProvider({ children }: { children: ReactNode }) {
       recordings,
       eventLog,
       lastUpdateAt,
+      appendLedgerEntries,
       registerJob,
       registerRecording,
       refreshRecordings,

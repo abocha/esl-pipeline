@@ -24,7 +24,7 @@ const STEPS = [
 ];
 
 export const AssignmentWizard: React.FC = () => {
-  const { jobMap } = useJobMonitor();
+  const { jobMap, recordingMap, logLedgerEntries } = useJobMonitor();
   const { settings } = useJobSettings();
   const { state, dispatch, actions } = useWizard();
   const navigate = useNavigate();
@@ -37,6 +37,7 @@ export const AssignmentWizard: React.FC = () => {
     recordingId,
     transcriptId,
     transcriptText,
+    transcriptSkipped,
     promptPackageId,
     draftId,
     draftText,
@@ -137,6 +138,28 @@ export const AssignmentWizard: React.FC = () => {
     void loadJob();
   }, [activeJobId, jobMap, hydrateJob]);
 
+  const recordingTranscriptId = recordingId ? recordingMap[recordingId]?.transcriptId ?? null : null;
+
+  useEffect(() => {
+    if (!recordingId) return;
+    if (!recordingTranscriptId) return;
+    if (recordingTranscriptId === transcriptId) return;
+    if (transcriptSkipped) {
+      dispatch({ type: 'SET_TRANSCRIPT_ID', payload: recordingTranscriptId });
+      return;
+    }
+    dispatch({ type: 'SET_TRANSCRIPT', payload: { transcriptId: recordingTranscriptId } });
+  }, [recordingId, recordingTranscriptId, transcriptId, transcriptSkipped, dispatch]);
+
+  useEffect(() => {
+    if (!activeJobId) return;
+    if (!jobState && !completedJobId) return;
+    if (completedJobId) return;
+    if (jobState === 'succeeded') {
+      dispatch({ type: 'SET_COMPLETED_JOB', payload: activeJobId });
+    }
+  }, [activeJobId, jobState, completedJobId, dispatch]);
+
   // Handlers
   const handleRecordingReady = useCallback(
     (recording: { recordingId: string; transcriptId: string | null }) => {
@@ -162,13 +185,37 @@ export const AssignmentWizard: React.FC = () => {
 
   const handlePublish = useCallback((jobId: string) => {
     // Instead of resetting immediately, show completion panel
+    actions.setJob(jobId);
     dispatch({ type: 'SET_COMPLETED_JOB', payload: jobId });
-  }, [dispatch]);
+  }, [dispatch, actions]);
 
   const handleStartNew = useCallback(() => {
     actions.reset();
     void navigate('/', { replace: true });
   }, [actions, navigate]);
+
+  const handleTranscriptSkip = useCallback(() => {
+    if (!recordingId) return;
+    const confirmed =
+      typeof globalThis.confirm === 'function'
+        ? globalThis.confirm(
+          'Skip transcript review? This adds a publish warning and logs the skip.',
+        )
+        : true;
+    if (!confirmed) return;
+    dispatch({ type: 'SET_TRANSCRIPT_SKIPPED', payload: true });
+    logLedgerEntries([
+      {
+        type: 'transcript_skipped',
+        severity: 'warning',
+        objectType: 'transcript',
+        objectId: transcriptId ?? recordingId,
+        message: `Transcript review skipped for recording ${recordingId}.`,
+        source: 'session',
+      },
+    ]);
+    actions.goToStep(2);
+  }, [recordingId, transcriptId, dispatch, logLedgerEntries, actions]);
 
   let stepContent: React.ReactNode = null;
   switch (STEPS[currentStep]?.key) {
@@ -191,7 +238,7 @@ export const AssignmentWizard: React.FC = () => {
           onTranscriptReady={handleTranscriptReady}
           onNext={() => actions.goToStep(2)}
           onBack={() => actions.goToStep(0)}
-          onSkip={() => actions.goToStep(2)}
+          onSkip={handleTranscriptSkip}
         />
       );
       break;
@@ -237,6 +284,7 @@ export const AssignmentWizard: React.FC = () => {
           jobMd={jobMd}
           overrides={overrides}
           completedJobId={completedJobId}
+          transcriptSkipped={transcriptSkipped}
           onOverridesChange={actions.updateOverrides}
           onJobPublished={handlePublish}
           onStartNew={handleStartNew}
