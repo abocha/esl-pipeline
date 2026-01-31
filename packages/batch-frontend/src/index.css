@@ -959,6 +959,64 @@ button:disabled {
   border-color: rgba(43, 81, 255, 0.3);
 }
 
+/* ========================================
+   Pipeline Strip
+   ======================================== */
+
+.pipeline-strip {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: 4px;
+  align-items: center;
+}
+
+.pipeline-stage {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 22px;
+  border-radius: 6px;
+  font-size: 0.65rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  border: 1px solid transparent;
+  background: var(--bg-secondary);
+  color: var(--text-tertiary);
+}
+
+.pipeline-neutral .pipeline-stage {
+  border-style: dashed;
+  border-color: var(--border-light);
+  background: transparent;
+  color: var(--text-muted);
+}
+
+.pipeline-pending {
+  background: var(--bg-secondary);
+  color: var(--text-tertiary);
+  border-color: var(--border-light);
+}
+
+.pipeline-running {
+  background: rgba(47, 118, 244, 0.18);
+  color: var(--color-info-600);
+  border-color: rgba(47, 118, 244, 0.35);
+  animation: pulse-status 2s ease-in-out infinite;
+}
+
+.pipeline-succeeded {
+  background: rgba(46, 125, 90, 0.18);
+  color: var(--color-success-600);
+  border-color: rgba(46, 125, 90, 0.35);
+}
+
+.pipeline-failed {
+  background: rgba(224, 78, 57, 0.18);
+  color: var(--color-error-600);
+  border-color: rgba(224, 78, 57, 0.35);
+}
+
 .rail-peek {
   display: none;
   flex-direction: column;

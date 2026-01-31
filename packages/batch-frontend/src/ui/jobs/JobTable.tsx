@@ -1,9 +1,12 @@
 import copy from 'copy-to-clipboard';
-import React, { useMemo, useRef, useState } from 'react';
+import React, { useMemo, useRef, useState, useEffect } from 'react';
 import toast from 'react-hot-toast';
 
 import { type JobEntry, useJobMonitor } from '../../context/JobMonitorContext';
-import { approveJob, uploadMarkdown } from '../../utils/api';
+import { useJobSettings } from '../../context/JobSettingsContext';
+import { approveJob, editJobMetadata, submitJobAction, uploadMarkdown } from '../../utils/api';
+import { JobActionType, type JobActionRequest, type ActionCapability } from '@esl-pipeline/contracts';
+import { PipelineStrip, type PipelineStageKey, type PipelineStageState } from './PipelineStrip';
 
 // Icons
 const CopyIcon = () => (
@@ -35,6 +38,39 @@ const RefreshIcon = () => (
   >
     <polyline points="23 4 23 10 17 10" />
     <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10" />
+  </svg>
+);
+
+const CancelIcon = () => (
+  <svg
+    width="14"
+    height="14"
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="2"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+  >
+    <circle cx="12" cy="12" r="10" />
+    <line x1="15" y1="9" x2="9" y2="15" />
+    <line x1="9" y1="9" x2="15" y2="15" />
+  </svg>
+);
+
+const EditIcon = () => (
+  <svg
+    width="14"
+    height="14"
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="2"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+  >
+    <path d="M12 20h9" />
+    <path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4 12.5-12.5z" />
   </svg>
 );
 
@@ -178,13 +214,43 @@ const formatEtaSeconds = (seconds: number): string => {
   return minutes > 0 ? `${hours}h ${minutes}m` : `${hours}h`;
 };
 
+interface JobStagesMeta {
+  stages?: Partial<Record<PipelineStageKey, PipelineStageState>>;
+}
+
+const getPipelineStages = (job: JobEntry): Partial<Record<PipelineStageKey, PipelineStageState>> | null => {
+  const rawStages = (job as JobStagesMeta).stages;
+  if (!rawStages || typeof rawStages !== 'object') return null;
+  return rawStages;
+};
+
+const getRecommendedFix = (job: JobEntry): string => {
+  if (job.state === 'awaiting_approval') {
+    return 'Upload the corrected markdown and approve the job to continue processing.';
+  }
+  if (job.state === 'failed') {
+    return 'Review the error, adjust inputs or settings, then retry the job when actions are available.';
+  }
+  return 'Review inputs and try again, or open logs for additional context.';
+};
+
 export const JobTable: React.FC = () => {
   const { jobs, jobMap, trackJob, liveUpdatesPaused, pauseLiveUpdates, resumeLiveUpdates } =
     useJobMonitor();
+  const { options } = useJobSettings();
   const [search, setSearch] = useState('');
   const [manualJobId, setManualJobId] = useState('');
   const [isAdding, setIsAdding] = useState(false);
   const [approvingJobId, setApprovingJobId] = useState<string | null>(null);
+
+  const actionCapabilities = useMemo(() => {
+    const entries = options.supportedActions ?? [];
+    const map = new Map<string, ActionCapability>();
+    for (const entry of entries) {
+      map.set(entry.type, entry);
+    }
+    return map;
+  }, [options.supportedActions]);
 
   const filteredJobs = useMemo(() => {
     const term = search.trim().toLowerCase();
@@ -223,8 +289,24 @@ export const JobTable: React.FC = () => {
     }
   };
 
-  const handleRegenerate = (jobId: string) => {
-    toast(`Audio regeneration for ${jobId} coming soon!`, { icon: '🔊' });
+
+  const handleJobAction = async (job: JobEntry, request: JobActionRequest) => {
+    try {
+      const response = await submitJobAction(job.jobId, request);
+      if (response?.success) {
+        toast.success(response.message ?? 'Action completed');
+        await trackJob(job.jobId);
+        return;
+      }
+      toast.error(response?.message ?? 'Action failed');
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : 'Unable to run action';
+      if (message.toLowerCase().includes('not_implemented') || message.toLowerCase().includes('not implemented')) {
+        toast('Action not implemented yet.', { icon: '⏳' });
+        return;
+      }
+      toast.error(message);
+    }
   };
 
   const handleApprove = async (job: JobEntry, file: File) => {
@@ -350,6 +432,7 @@ export const JobTable: React.FC = () => {
               <th>Job ID</th>
               <th>File</th>
               <th>Status</th>
+              <th>Pipeline</th>
               <th>Preset / Strategy</th>
               <th>Updated</th>
               <th>Actions</th>
@@ -358,7 +441,7 @@ export const JobTable: React.FC = () => {
           <tbody>
             {filteredJobs.length === 0 ? (
               <tr>
-                <td colSpan={6} className="empty-state">
+                <td colSpan={7} className="empty-state">
                   <div className="empty-content">
                     <span className="empty-icon">📋</span>
                     <span>No jobs yet. Upload markdown files to start.</span>
@@ -370,10 +453,12 @@ export const JobTable: React.FC = () => {
                 <JobRow
                   key={job.jobId}
                   job={job}
+                  options={options}
+                  actionCapabilities={actionCapabilities}
                   onCopy={() => void handleCopy(job)}
                   onApprove={(file) => handleApprove(job, file)}
                   isApproving={approvingJobId === job.jobId}
-                  onRegenerate={() => handleRegenerate(job.jobId)}
+                  onRunAction={(request) => handleJobAction(job, request)}
                   style={{ animationDelay: `${index * 50}ms` }}
                 />
               ))
@@ -585,8 +670,13 @@ export const JobTable: React.FC = () => {
 
 interface JobRowProps {
   job: JobEntry;
+  options: {
+    presets: string[];
+    notionDatabases: { id: string; name: string }[];
+  };
+  actionCapabilities: Map<string, ActionCapability>;
   onCopy: () => void;
-  onRegenerate: () => void;
+  onRunAction: (request: JobActionRequest) => void;
   onApprove?: (file: File) => void;
   isApproving?: boolean;
   style?: React.CSSProperties;
@@ -594,8 +684,10 @@ interface JobRowProps {
 
 const JobRow: React.FC<JobRowProps> = ({
   job,
+  options,
+  actionCapabilities,
   onCopy,
-  onRegenerate,
+  onRunAction,
   onApprove,
   isApproving,
   style,
@@ -603,10 +695,30 @@ const JobRow: React.FC<JobRowProps> = ({
   const config: StateConfig = stateConfig[job.state] ?? defaultConfig;
   const isRunning = job.state === 'running';
   const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const [showDetails, setShowDetails] = useState(false);
+  const [isEditing, setIsEditing] = useState(false);
+  const [editPreset, setEditPreset] = useState(job.preset ?? options.presets[0] ?? '');
+  const [editDatabase, setEditDatabase] = useState(
+    job.notionDatabase ?? options.notionDatabases[0]?.id ?? '',
+  );
+  const [actionPending, setActionPending] = useState<JobActionType | null>(null);
   const stageLabel = getJobStageLabel(job);
   const queuePosition = getJobQueuePosition(job);
   const etaSeconds = getJobEtaSeconds(job);
   const hasMeta = Boolean(stageLabel) || queuePosition !== null || etaSeconds !== null;
+  const pipelineStages = getPipelineStages(job);
+  const hasError = Boolean(job.error);
+
+  useEffect(() => {
+    setEditPreset(job.preset ?? options.presets[0] ?? '');
+    setEditDatabase(job.notionDatabase ?? options.notionDatabases[0]?.id ?? '');
+  }, [job.jobId, job.preset, job.notionDatabase, options.presets, options.notionDatabases]);
+
+  useEffect(() => {
+    if (!job.error && showDetails) {
+      setShowDetails(false);
+    }
+  }, [job.error, showDetails]);
 
   const handleApproveClick = () => {
     fileInputRef.current?.click();
@@ -619,83 +731,248 @@ const JobRow: React.FC<JobRowProps> = ({
     event.target.value = '';
   };
 
+  const getCapability = (type: string) => actionCapabilities.get(type);
+
+  const getActionState = (type: string) => {
+    const capability = getCapability(type);
+    if (!capability) {
+      return { disabled: true, reason: 'Not supported by backend' };
+    }
+    if (!capability.implemented) {
+      return { disabled: true, reason: capability.description || 'Coming soon' };
+    }
+    if (type === 'rerun_audio' && job.state !== 'succeeded') {
+      return { disabled: true, reason: 'Available after success' };
+    }
+    if (type === 'cancel' && (job.state === 'succeeded' || job.state === 'failed')) {
+      return { disabled: true, reason: 'Job already completed' };
+    }
+    if (type === 'edit_metadata' && job.state !== 'awaiting_approval') {
+      return { disabled: true, reason: 'Only available during approval' };
+    }
+    return { disabled: false, reason: capability.description || '' };
+  };
+
+  const handleActionClick = async (type: JobActionType) => {
+    const actionState = getActionState(type);
+    if (actionState.disabled) return;
+    setActionPending(type);
+    try {
+      await onRunAction({ type });
+    } finally {
+      setActionPending(null);
+    }
+  };
+
+  const handleEditMetadata = async () => {
+    if (!editPreset || !editDatabase) {
+      toast.error('Select a preset and database');
+      return;
+    }
+    setActionPending(JobActionType.EDIT_METADATA);
+    try {
+      await editJobMetadata(job.jobId, {
+        preset: editPreset,
+        notionDatabase: editDatabase,
+      });
+      await trackJob(job.jobId);
+      toast.success('Job metadata updated');
+      setIsEditing(false);
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : 'Unable to update metadata';
+      toast.error(message);
+    } finally {
+      setActionPending(null);
+    }
+  };
+
   return (
-    <tr style={style}>
-      <td>
-        <code className="job-id">{job.jobId}</code>
-      </td>
-      <td>
-        <div className="file-cell">
-          <span className="file-name">{job.fileName ?? '—'}</span>
-          <span className="file-path">{job.md || '—'}</span>
-        </div>
-      </td>
-      <td>
-        <div className="status-cell">
-          <span
-            className={`status-pill ${isRunning ? 'animate-pulse' : ''}`}
-            style={{ color: config.color, background: config.bg }}
-          >
-            {isRunning && <span className="status-dot" />}
-            {config.label}
-          </span>
-          {hasMeta && (
-            <div className="status-meta">
-              {stageLabel && <span>Stage: {stageLabel}</span>}
-              {queuePosition !== null && <span>Queue: #{queuePosition}</span>}
-              {etaSeconds !== null && <span>ETA: {formatEtaSeconds(etaSeconds)}</span>}
-            </div>
-          )}
-        </div>
-      </td>
-      <td>
-        <div className="preset-cell">
-          <span className="preset-name">{job.preset ?? '—'}</span>
-          <span className="preset-mode">{formatStrategy(job.ttsStrategy)}</span>
-        </div>
-      </td>
-      <td>
-        <span className="timestamp">
-          {job.updatedAt ? formatTime(new Date(job.updatedAt)) : '—'}
-        </span>
-      </td>
-      <td>
-        <div className="actions">
-          <button type="button" onClick={onCopy} className="btn-action">
-            <CopyIcon />
-            <span>Copy link</span>
-          </button>
-          {job.state === 'awaiting_approval' && onApprove && (
-            <>
+    <>
+      <tr style={style}>
+        <td>
+          <code className="job-id">{job.jobId}</code>
+        </td>
+        <td>
+          <div className="file-cell">
+            <span className="file-name">{job.fileName ?? '—'}</span>
+            <span className="file-path">{job.md || '—'}</span>
+          </div>
+        </td>
+        <td>
+          <div className="status-cell">
+            <span
+              className={`status-pill ${isRunning ? 'animate-pulse' : ''}`}
+              style={{ color: config.color, background: config.bg }}
+            >
+              {isRunning && <span className="status-dot" />}
+              {config.label}
+            </span>
+            {hasMeta && (
+              <div className="status-meta">
+                {stageLabel && <span>Stage: {stageLabel}</span>}
+                {queuePosition !== null && <span>Queue: #{queuePosition}</span>}
+                {etaSeconds !== null && <span>ETA: {formatEtaSeconds(etaSeconds)}</span>}
+              </div>
+            )}
+            {hasError && (
               <button
                 type="button"
-                onClick={handleApproveClick}
-                disabled={isApproving}
-                className="btn-action btn-accent"
+                className="btn-link"
+                onClick={() => setShowDetails((prev) => !prev)}
               >
-                <CheckIcon />
-                <span>{isApproving ? 'Approving...' : 'Approve'}</span>
+                {showDetails ? 'Hide error' : 'View error'}
               </button>
-              <input
-                ref={fileInputRef}
-                type="file"
-                accept=".md,.markdown"
-                onChange={handleApproveChange}
-                style={{ display: 'none' }}
-              />
-            </>
-          )}
-          <button
-            type="button"
-            onClick={onRegenerate}
-            disabled={job.state !== 'succeeded'}
-            className="btn-action btn-accent"
-          >
-            <RefreshIcon />
-            <span>Regen</span>
-          </button>
-        </div>
-      </td>
+            )}
+          </div>
+        </td>
+        <td>
+          <PipelineStrip stages={pipelineStages} />
+        </td>
+        <td>
+          <div className="preset-cell">
+            <span className="preset-name">{job.preset ?? '—'}</span>
+            <span className="preset-mode">{formatStrategy(job.ttsStrategy)}</span>
+          </div>
+        </td>
+        <td>
+          <span className="timestamp">
+            {job.updatedAt ? formatTime(new Date(job.updatedAt)) : '—'}
+          </span>
+        </td>
+        <td>
+          <div className="actions">
+            <button type="button" onClick={onCopy} className="btn-action">
+              <CopyIcon />
+              <span>Copy link</span>
+            </button>
+            {job.state === 'awaiting_approval' && onApprove && (
+              <>
+                <button
+                  type="button"
+                  onClick={handleApproveClick}
+                  disabled={isApproving}
+                  className="btn-action btn-accent"
+                >
+                  <CheckIcon />
+                  <span>{isApproving ? 'Approving...' : 'Approve'}</span>
+                </button>
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept=".md,.markdown"
+                  onChange={handleApproveChange}
+                  style={{ display: 'none' }}
+                />
+              </>
+            )}
+            <button
+              type="button"
+              onClick={() => handleActionClick(JobActionType.RERUN_AUDIO)}
+              disabled={
+                getActionState(JobActionType.RERUN_AUDIO).disabled ||
+                actionPending === JobActionType.RERUN_AUDIO
+              }
+              className="btn-action btn-accent"
+              title={getActionState(JobActionType.RERUN_AUDIO).reason}
+            >
+              <RefreshIcon />
+              <span>{actionPending === JobActionType.RERUN_AUDIO ? 'Running…' : 'Rerun'}</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => handleActionClick(JobActionType.CANCEL)}
+              disabled={
+                getActionState(JobActionType.CANCEL).disabled ||
+                actionPending === JobActionType.CANCEL
+              }
+              className="btn-action"
+              title={getActionState(JobActionType.CANCEL).reason}
+            >
+              <CancelIcon />
+              <span>{actionPending === JobActionType.CANCEL ? 'Cancelling…' : 'Cancel'}</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => setIsEditing((prev) => !prev)}
+              disabled={getActionState(JobActionType.EDIT_METADATA).disabled}
+              className="btn-action"
+              title={getActionState(JobActionType.EDIT_METADATA).reason}
+            >
+              <EditIcon />
+              <span>{isEditing ? 'Close' : 'Edit'}</span>
+            </button>
+          </div>
+        </td>
+      </tr>
+      {(showDetails || isEditing) && (
+        <tr className="job-detail-row">
+          <td colSpan={7}>
+            <div className="job-detail-grid">
+              {showDetails && (
+                <div className="job-detail-card">
+                  <div className="detail-header">
+                    <h4>Error details</h4>
+                    <span className="detail-tag">Recommended fix</span>
+                  </div>
+                  <p className="detail-message">{job.error ?? 'No error message recorded.'}</p>
+                  <p className="detail-recommendation">{getRecommendedFix(job)}</p>
+                </div>
+              )}
+              {isEditing && (
+                <div className="job-detail-card">
+                  <div className="detail-header">
+                    <h4>Edit metadata</h4>
+                    <span className="detail-tag">Awaiting approval</span>
+                  </div>
+                  <div className="detail-form">
+                    <label>
+                      Preset
+                      <select value={editPreset} onChange={(event) => setEditPreset(event.target.value)}>
+                        {options.presets.map((preset) => (
+                          <option key={preset} value={preset}>
+                            {preset}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                    <label>
+                      Notion database
+                      <select
+                        value={editDatabase}
+                        onChange={(event) => setEditDatabase(event.target.value)}
+                      >
+                        {options.notionDatabases.map((db) => (
+                          <option key={db.id} value={db.id}>
+                            {db.name}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                  </div>
+                  <div className="detail-actions">
+                    <button
+                      type="button"
+                      className="btn-secondary btn-sm"
+                      onClick={() => setIsEditing(false)}
+                      disabled={actionPending === JobActionType.EDIT_METADATA}
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      type="button"
+                      className="btn-primary btn-sm"
+                      onClick={() => void handleEditMetadata()}
+                      disabled={actionPending === JobActionType.EDIT_METADATA}
+                    >
+                      {actionPending === JobActionType.EDIT_METADATA ? 'Saving…' : 'Apply changes'}
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+          </td>
+        </tr>
+      )}
 
       <style>{`
         .job-id {
@@ -763,6 +1040,20 @@ const JobRow: React.FC<JobRowProps> = ({
           line-height: 1.2;
         }
 
+        .btn-link {
+          background: none;
+          border: none;
+          padding: 0;
+          color: var(--color-primary-600);
+          font-size: var(--text-xs);
+          font-weight: 600;
+          cursor: pointer;
+        }
+
+        .btn-link:hover {
+          color: var(--color-primary-700);
+        }
+
         .preset-cell {
           display: flex;
           flex-direction: column;
@@ -787,6 +1078,7 @@ const JobRow: React.FC<JobRowProps> = ({
         .actions {
           display: flex;
           gap: var(--space-2);
+          flex-wrap: wrap;
         }
 
         .btn-action {
@@ -829,8 +1121,81 @@ const JobRow: React.FC<JobRowProps> = ({
           background: var(--color-primary-100);
           border-color: var(--color-primary-300);
         }
+
+        .job-detail-row td {
+          background: var(--bg-secondary);
+          padding: var(--space-4);
+          border-bottom: 1px solid var(--border-light);
+        }
+
+        .job-detail-grid {
+          display: grid;
+          gap: var(--space-3);
+          grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+        }
+
+        .job-detail-card {
+          background: var(--bg-primary);
+          border: 1px solid var(--border-light);
+          border-radius: var(--radius-lg);
+          padding: var(--space-4);
+          display: flex;
+          flex-direction: column;
+          gap: var(--space-2);
+        }
+
+        .detail-header {
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
+          gap: var(--space-2);
+        }
+
+        .detail-header h4 {
+          margin: 0;
+          font-size: var(--text-sm);
+        }
+
+        .detail-tag {
+          font-size: var(--text-xs);
+          padding: 2px 8px;
+          border-radius: var(--radius-full);
+          background: var(--bg-tertiary);
+          color: var(--text-tertiary);
+        }
+
+        .detail-message {
+          font-size: var(--text-sm);
+          color: var(--text-secondary);
+          margin: 0;
+        }
+
+        .detail-recommendation {
+          margin: 0;
+          font-size: var(--text-xs);
+          color: var(--text-tertiary);
+        }
+
+        .detail-form {
+          display: grid;
+          gap: var(--space-2);
+        }
+
+        .detail-form label {
+          display: flex;
+          flex-direction: column;
+          gap: 4px;
+          font-size: var(--text-xs);
+          color: var(--text-tertiary);
+        }
+
+        .detail-actions {
+          display: flex;
+          justify-content: flex-end;
+          gap: var(--space-2);
+        }
       `}</style>
-    </tr>
+    </>
   );
 };
 

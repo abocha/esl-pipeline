@@ -35,6 +35,8 @@ import type {
   StudentSummaryResponse as ContractStudentSummaryResponse,
   SubmitJobRequest as ContractSubmitJobRequest,
   TtsStrategy as ContractTtsStrategy,
+  ActionCapability,
+  JobActionRequest,
   StreamEventMessage,
   JobStatusDto,
 } from '@esl-pipeline/contracts';
@@ -424,6 +426,7 @@ export interface JobOptionsResponse {
   voices: VoiceOption[];
   notionDatabases: { id: string; name: string }[];
   ttsStrategies: TtsStrategy[];
+  supportedActions?: ActionCapability[];
 }
 
 export interface VoiceOption {
@@ -1159,6 +1162,25 @@ export async function editJobMetadata(
     const axiosError = toAxiosError(error);
     if (axiosError && isAuthError(axiosError)) {
       throw new Error('Authentication required. Please login to update job metadata.');
+    }
+    throw new Error(axiosError ? handleApiError(axiosError) : formatUnknownError(error));
+  }
+}
+
+export async function submitJobAction(
+  jobId: string,
+  request: JobActionRequest,
+): Promise<JobActionResponse> {
+  try {
+    const response = await apiClient.post(
+      buildApiProxyPath(`/jobs/${encodeURIComponent(jobId)}/actions`),
+      request,
+    );
+    return response.data;
+  } catch (error: unknown) {
+    const axiosError = toAxiosError(error);
+    if (axiosError && isAuthError(axiosError)) {
+      throw new Error('Authentication required. Please login to run job actions.');
     }
     throw new Error(axiosError ? handleApiError(axiosError) : formatUnknownError(error));
   }
