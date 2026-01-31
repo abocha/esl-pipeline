@@ -24,6 +24,7 @@ export interface SubmitJobRequest {
   notionDatabase?: string;
   ttsStrategy?: TtsStrategy;
   userId?: string;
+  autoPublish?: boolean;
 }
 
 export interface SubmitJobResponse {
@@ -133,6 +134,7 @@ export async function submitJob(req: SubmitJobRequest): Promise<SubmitJobRespons
     notionDatabase: req.notionDatabase,
     ttsStrategy: req.ttsStrategy,
     userId: req.userId,
+    autoPublish: req.autoPublish,
   });
 
   publishJobEvent({ type: 'job_created', job });

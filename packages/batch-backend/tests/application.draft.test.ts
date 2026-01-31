@@ -234,6 +234,40 @@ describe('application/draft', () => {
 
     expect(response).toBeNull();
   });
+
+  it('materializes a draft and auto-publishes if requested', async () => {
+    const drafts = { getById: vi.fn() };
+    const promptPackages = { getById: vi.fn() };
+    const createApprovalJob = vi.fn();
+    const jobs = { updateDraftLink: vi.fn(), approveJob: vi.fn() };
+    const uploadDir = await fs.mkdtemp(path.join(os.tmpdir(), 'esl-drafts-'));
+    const storage = { getText: vi.fn().mockResolvedValue('markdown content') };
+
+    drafts.getById.mockResolvedValue({
+      id: 'draft-1',
+      storageUri: 'file:///tmp/draft.json',
+      promptPackageId: 'pp-1',
+    });
+
+    promptPackages.getById.mockResolvedValue({
+      recordingId: 'rec-1',
+      transcriptId: 'tx-1'
+    });
+
+    jobs.updateDraftLink.mockResolvedValue({ id: 'job-1' });
+
+    await materializeDraft(
+      { draftId: 'draft-1', jobId: 'job-1', jobOverrides: { autoPublish: true } },
+      // @ts-expect-error - partial mocks
+      { drafts, promptPackages, createApprovalJob, jobs, uploadDir, storage },
+    );
+
+    expect(jobs.approveJob).toHaveBeenCalledWith({
+      id: 'job-1',
+      expectedState: 'awaiting_approval',
+      md: path.resolve(uploadDir, 'drafts', 'draft-1.md'),
+    });
+  });
 });
 
 function createStorageStub(
@@ -247,7 +281,7 @@ function createStorageStub(
     putDraft: async () => ({ uri: 'local://drafts/draft.md', bytes: 1 }),
     getText: async () => '',
     getStream: async () => Readable.from(['']),
-    delete: async () => {},
+    delete: async () => { },
     ...overrides,
   };
 }

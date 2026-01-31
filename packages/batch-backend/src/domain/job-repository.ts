@@ -44,6 +44,7 @@ interface JobRow {
   notion_database: string | null;
   mode: string | null;
   notion_url: string | null;
+  auto_publish: boolean | null;
   started_at: Date | null;
   finished_at: Date | null;
   error: string | null;
@@ -66,6 +67,7 @@ export interface InsertJobParams {
   notionDatabase?: string;
   ttsStrategy?: TtsStrategy;
   userId?: string;
+  autoPublish?: boolean;
 }
 
 export interface JobListOptions {
@@ -151,11 +153,12 @@ async function insertJobWithState(
         force_tts,
         notion_database,
         mode,
+        auto_publish,
         created_at,
         updated_at,
         user_id
       )
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19)
       RETURNING
         id,
         state,
@@ -173,6 +176,7 @@ async function insertJobWithState(
         notion_database,
         mode,
         notion_url,
+        auto_publish,
         created_at,
         updated_at,
         started_at,
@@ -197,6 +201,7 @@ async function insertJobWithState(
         params.forceTts ?? null,
         params.notionDatabase ?? null,
         params.ttsStrategy ?? null,
+        params.autoPublish ?? false,
         now,
         now,
         params.userId ?? null,
@@ -717,6 +722,7 @@ function mapRowToJob(row: JobRow): JobRecord {
     notionDatabase: row.notion_database ?? null,
     ttsStrategy: normalizeTtsStrategy(row.mode, { jobId: row.id }),
     notionUrl: row.notion_url ?? null,
+    autoPublish: row.auto_publish ?? false,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
     startedAt: row.started_at,

@@ -5,7 +5,7 @@ import { useNavigate } from 'react-router-dom';
 import { useJobMonitor } from '../../context/JobMonitorContext';
 import { useJobSettings } from '../../context/JobSettingsContext';
 import type { JobConfigOverrides, JobState } from '../../utils/api';
-import { approveJob, editJobMetadata, materializeDraft } from '../../utils/api';
+import { approveJob, editJobMetadata, getJobStatus, materializeDraft } from '../../utils/api';
 import { WizardStep } from './WizardStep';
 import { Icons } from '../shared/Icons';
 
@@ -47,7 +47,7 @@ export const Step5Publish: React.FC<Step5PublishProps> = ({
   const [error, setError] = useState<string | null>(null);
   const [linkCopied, setLinkCopied] = useState(false);
   const [showAutoPublishConfirm, setShowAutoPublishConfirm] = useState(false);
-  const autoPublishAvailable = false; // Backend auto-publish endpoint not yet available
+  const autoPublishAvailable = true;
 
   // Track the completed job for Notion URL updates
   useEffect(() => {
@@ -96,12 +96,38 @@ export const Step5Publish: React.FC<Step5PublishProps> = ({
         return;
       }
 
-      const materialized = await materializeDraft(draftId, { jobOverrides: overrides });
-      await approveJob(materialized.jobId, materialized.mdPath);
+      const materialized = await materializeDraft(draftId, {
+        jobOverrides: {
+          ...overrides,
+          autoPublish: autoPublishEnabled,
+        },
+      });
+
+      // If auto-publish was requested, the backend might have already queued the job.
+      // We check the status to avoid redundant approval calls.
+      let shouldApprove = true;
+
+      if (autoPublishEnabled) {
+        try {
+          const status = await getJobStatus(materialized.jobId);
+          if (status.state !== 'awaiting_approval') {
+            shouldApprove = false;
+          }
+        } catch {
+          // If status check fails, assume we try to approve to be safe, or handle error.
+          // For now, proceed to attempt approval fallback.
+          console.warn('Failed to check job status after auto-publish, attempting approval anyway');
+        }
+      }
+
+      if (shouldApprove) {
+        await approveJob(materialized.jobId, materialized.mdPath);
+      }
+
       registerJob({ jobId: materialized.jobId, md: materialized.mdPath });
       await trackJob(materialized.jobId);
       onJobPublished(materialized.jobId);
-      toast.success('Job approved');
+      toast.success(autoPublishEnabled && !shouldApprove ? 'Job auto-published' : 'Job approved');
     } catch (publishError) {
       const message = publishError instanceof Error ? publishError.message : 'Unable to publish job';
       setError(message);

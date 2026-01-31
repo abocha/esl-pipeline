@@ -6,7 +6,7 @@ import type { JobConfigOverrides } from '@esl-pipeline/contracts';
 import { createApprovalJobFromDraft } from './create-approval-job.js';
 import { getDraftById } from '../domain/draft-repository.js';
 import { getPromptPackageById } from '../domain/prompt-package-repository.js';
-import { updateJobDraftLink } from '../domain/job-repository.js';
+import { approveJob, updateJobDraftLink } from '../domain/job-repository.js';
 import { createStorageConfigService } from '../infrastructure/storage-config.js';
 import type { TranscriptionStorage } from '../infrastructure/transcription-storage.js';
 import { createTranscriptionStorageForUri } from '../infrastructure/transcription-storage.js';
@@ -34,6 +34,7 @@ export interface MaterializeDraftDependencies {
   createApprovalJob: typeof createApprovalJobFromDraft;
   jobs: {
     updateDraftLink: typeof updateJobDraftLink;
+    approveJob?: typeof approveJob;
   };
   uploadDir: string;
 }
@@ -89,6 +90,15 @@ export async function materializeDraft(
   });
 
   if (!updated) return null;
+
+  if (params.jobOverrides?.autoPublish) {
+    const notifyApprove = overrides?.jobs?.approveJob ?? approveJob;
+    await notifyApprove({
+      id: resolvedJobId,
+      expectedState: 'awaiting_approval',
+      md: mdPath,
+    });
+  }
 
   return {
     draftId: draft.id,
