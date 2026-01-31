@@ -107,6 +107,8 @@ describe('TranscriptionWorkspace filters and approval flow', () => {
         }),
       ],
       recordingMap: {},
+      eventLog: [],
+      lastUpdateAt: null,
       registerJob: vi.fn(),
       registerRecording: vi.fn(),
       refreshRecordings: vi.fn().mockResolvedValue(void 0),

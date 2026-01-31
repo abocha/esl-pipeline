@@ -195,6 +195,8 @@ describe('AssignmentWizard Integration', () => {
             jobs: [],
             recordings: [],
             recordingMap: {},
+            eventLog: [],
+            lastUpdateAt: null,
             registerJob: vi.fn(),
             registerRecording: mockRegisterRecording,
             refreshRecordings: vi.fn(),
