@@ -58,24 +58,6 @@ export const App: React.FC = () => {
     toast.success('Account created! Please log in.');
   };
 
-  const authenticatedContent = (
-    <StudentSelectionProvider>
-      <JobSettingsProvider>
-        <JobMonitorProvider>
-          <NotificationProvider>
-            <WizardProvider>
-              {showProfile ? (
-                <ProfilePage onClose={() => setShowProfile(false)} />
-              ) : (
-                <AuthenticatedRoutes />
-              )}
-            </WizardProvider>
-          </NotificationProvider>
-        </JobMonitorProvider>
-      </JobSettingsProvider>
-    </StudentSelectionProvider>
-  );
-
   let appBody: React.ReactNode = null;
 
   if (isLoading) {
@@ -92,15 +74,29 @@ export const App: React.FC = () => {
     );
   } else {
     appBody = (
-      <WorkshopShell
-        user={user}
-        theme={theme}
-        onToggleTheme={toggleTheme}
-        onOpenProfile={() => setShowProfile(true)}
-        onLogout={handleLogout}
-      >
-        {authenticatedContent}
-      </WorkshopShell>
+      <StudentSelectionProvider>
+        <JobSettingsProvider>
+          <JobMonitorProvider>
+            <NotificationProvider>
+              <WizardProvider>
+                <WorkshopShell
+                  user={user}
+                  theme={theme}
+                  onToggleTheme={toggleTheme}
+                  onOpenProfile={() => setShowProfile(true)}
+                  onLogout={handleLogout}
+                >
+                  {showProfile ? (
+                    <ProfilePage onClose={() => setShowProfile(false)} />
+                  ) : (
+                    <AuthenticatedRoutes />
+                  )}
+                </WorkshopShell>
+              </WizardProvider>
+            </NotificationProvider>
+          </JobMonitorProvider>
+        </JobSettingsProvider>
+      </StudentSelectionProvider>
     );
   }
 

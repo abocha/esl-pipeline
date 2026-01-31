@@ -5,6 +5,14 @@ import { MemoryRouter } from 'react-router-dom';
 import { WorkshopShell } from './WorkshopShell';
 import * as viewportHook from '../utils/useViewport';
 
+vi.mock('../ui/rail/WorkContextPanel', () => ({
+  WorkContextPanel: () => <div data-testid="work-context-panel" />,
+}));
+
+vi.mock('../ui/rail/NotificationLedger', () => ({
+  NotificationLedger: () => <div data-testid="notification-ledger" />,
+}));
+
 const mockUser = {
   id: 'u1',
   email: 'tutor@example.com',

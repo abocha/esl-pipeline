@@ -46,6 +46,20 @@ export interface RecordingEntry {
 
 type RecordingMap = Record<string, RecordingEntry>;
 
+export type LedgerSeverity = 'success' | 'warning' | 'error' | 'info';
+export type LedgerObjectType = 'job' | 'recording' | 'transcript' | 'draft' | 'student';
+
+export interface LedgerEntry {
+  id: string;
+  type: string;
+  severity: LedgerSeverity;
+  objectType: LedgerObjectType;
+  objectId: string;
+  timestamp: number;
+  message: string;
+  source: 'sse' | 'polling';
+}
+
 interface RecordingsQueryParams {
   status?: RecordingStatus | RecordingStatus[];
   source?: RecordingListItem['source'] | RecordingListItem['source'][];
@@ -72,6 +86,8 @@ interface JobMonitorContextValue {
   jobMap: JobMap;
   recordings: RecordingEntry[];
   recordingMap: RecordingMap;
+  eventLog: LedgerEntry[];
+  lastUpdateAt: number | null;
   registerJob: (options: RegisterJobOptions) => void;
   registerRecording: (recordingId: string, data?: Partial<RecordingEntry>) => void;
   refreshRecordings: (params?: RecordingsQueryParams) => Promise<void>;
@@ -88,8 +104,31 @@ const JobMonitorContext = createContext<JobMonitorContextValue | undefined>(unde
 
 const isBrowser = globalThis.window !== undefined && globalThis.localStorage !== undefined;
 const ACTIVE_JOBS_STORAGE_KEY = 'esl-active-jobs';
+const MAX_LEDGER_ENTRIES = 120;
 
 const isTerminalState = (state: JobState): boolean => state === 'succeeded' || state === 'failed';
+
+const formatStateLabel = (value: string): string => value.replaceAll('_', ' ');
+
+const jobStateSeverity = (state: JobState): LedgerSeverity => {
+  if (state === 'failed') return 'error';
+  if (state === 'succeeded') return 'success';
+  if (state === 'awaiting_approval') return 'warning';
+  return 'info';
+};
+
+const recordingStatusSeverity = (status: RecordingStatus): LedgerSeverity => {
+  if (status === 'failed') return 'error';
+  if (status === 'transcribed') return 'success';
+  return 'info';
+};
+
+const createLedgerId = (): string => {
+  if (globalThis.crypto?.randomUUID) {
+    return globalThis.crypto.randomUUID();
+  }
+  return `ledger-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+};
 
 const createDefaultJob = (jobId: string): JobEntry => {
   const now = new Date().toISOString();
@@ -196,7 +235,10 @@ export function JobMonitorProvider({ children }: { children: ReactNode }) {
   const [connectionState, setConnectionState] = useState<ConnectionState>('idle');
   const [lastError, setLastError] = useState<string | null>(null);
   const [isPolling, setIsPolling] = useState(false);
+  const [eventLog, setEventLog] = useState<LedgerEntry[]>([]);
+  const [lastUpdateAt, setLastUpdateAt] = useState<number | null>(null);
   const jobsRef = useRef<JobMap>(jobs);
+  const lastUpdateRef = useRef<number | null>(null);
   const pollingIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const pollingInFlightRef = useRef(false);
   const reconnectTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -212,6 +254,29 @@ export function JobMonitorProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     persistActiveJobs(jobs);
   }, [jobs]);
+
+  const touchLastUpdate = useCallback(() => {
+    const now = Date.now();
+    lastUpdateRef.current = now;
+    setLastUpdateAt(now);
+  }, []);
+
+  const appendLedgerEntries = useCallback((entries: Omit<LedgerEntry, 'id' | 'timestamp'>[]) => {
+    if (entries.length === 0) return;
+    const now = Date.now();
+    const normalized = entries.map((entry, index) => ({
+      ...entry,
+      id: createLedgerId(),
+      timestamp: now + index,
+    }));
+    setEventLog((prev) => {
+      const next = [...normalized, ...prev];
+      return next.slice(0, MAX_LEDGER_ENTRIES);
+    });
+    const latestTimestamp = normalized[0]?.timestamp ?? now;
+    lastUpdateRef.current = latestTimestamp;
+    setLastUpdateAt(latestTimestamp);
+  }, []);
 
   const updateJob = useCallback((jobId: string, mutator: (prev: JobEntry) => JobEntry) => {
     setJobs((prev) => {
@@ -238,7 +303,8 @@ export function JobMonitorProvider({ children }: { children: ReactNode }) {
       }
       return next;
     });
-  }, []);
+    touchLastUpdate();
+  }, [touchLastUpdate]);
 
   const updateRecording = useCallback(
     (recordingId: string, mutator: (prev: RecordingEntry) => RecordingEntry) => {
@@ -321,8 +387,9 @@ export function JobMonitorProvider({ children }: { children: ReactNode }) {
     async (params: RecordingsQueryParams = {}) => {
       const response = await listRecordings(params);
       replaceRecordingList(response.items);
+      touchLastUpdate();
     },
-    [replaceRecordingList],
+    [replaceRecordingList, touchLastUpdate],
   );
 
   const recordingsHydratedRef = useRef(false);
@@ -383,9 +450,11 @@ export function JobMonitorProvider({ children }: { children: ReactNode }) {
       const results = await Promise.allSettled(
         activeJobIds.map((jobId) => getJobStatus(jobId).then((status) => ({ jobId, status }))),
       );
+      const entries: Omit<LedgerEntry, 'id' | 'timestamp'>[] = [];
       for (const result of results) {
         if (result.status === 'fulfilled') {
           const { jobId, status } = result.value;
+          const previousState = jobsRef.current[jobId]?.state;
           updateJob(jobId, (prev) => ({
             ...prev,
             ...status,
@@ -393,12 +462,25 @@ export function JobMonitorProvider({ children }: { children: ReactNode }) {
             md: status.md ?? prev.md,
             updatedAt: status.updatedAt ?? prev.updatedAt,
           }));
+          if (previousState && status?.state && previousState !== status.state) {
+            const stateLabel = formatStateLabel(status.state);
+            const errorDetail = status.error ? ` • ${status.error}` : '';
+            entries.push({
+              type: 'job_state_changed',
+              severity: jobStateSeverity(status.state),
+              objectType: 'job',
+              objectId: jobId,
+              message: `Job ${jobId} ${stateLabel}.${errorDetail}`,
+              source: 'polling',
+            });
+          }
         }
       }
+      appendLedgerEntries(entries);
     } finally {
       pollingInFlightRef.current = false;
     }
-  }, [stopPolling, updateJob]);
+  }, [appendLedgerEntries, stopPolling, updateJob]);
 
   const startPolling = useCallback(() => {
     if (pollingIntervalRef.current) return;
@@ -420,6 +502,16 @@ export function JobMonitorProvider({ children }: { children: ReactNode }) {
           createdAt: prev.createdAt ?? new Date().toISOString(),
           updatedAt: new Date().toISOString(),
         }));
+        appendLedgerEntries([
+          {
+            type: event.type,
+            severity: 'info',
+            objectType: 'job',
+            objectId: event.jobId,
+            message: `Job ${event.jobId} created.`,
+            source: 'sse',
+          },
+        ]);
         return;
       }
       if (event.type === 'job_state_changed') {
@@ -436,6 +528,18 @@ export function JobMonitorProvider({ children }: { children: ReactNode }) {
           transcriptId: event.payload?.transcriptId ?? prev.transcriptId,
           updatedAt: new Date().toISOString(),
         }));
+        const stateLabel = formatStateLabel(event.state);
+        const errorDetail = event.payload?.error ? ` • ${event.payload.error}` : '';
+        appendLedgerEntries([
+          {
+            type: event.type,
+            severity: jobStateSeverity(event.state),
+            objectType: 'job',
+            objectId: event.jobId,
+            message: `Job ${event.jobId} ${stateLabel}.${errorDetail}`,
+            source: 'sse',
+          },
+        ]);
         return;
       }
 
@@ -455,9 +559,21 @@ export function JobMonitorProvider({ children }: { children: ReactNode }) {
           createdAt: event.createdAt ?? prev.createdAt ?? new Date().toISOString(),
           updatedAt: event.updatedAt ?? new Date().toISOString(),
         }));
+        const statusLabel = formatStateLabel(event.status);
+        const errorDetail = event.error ? ` • ${event.error}` : '';
+        appendLedgerEntries([
+          {
+            type: event.type,
+            severity: recordingStatusSeverity(event.status),
+            objectType: 'recording',
+            objectId: event.recordingId,
+            message: `Recording ${event.recordingId} ${statusLabel}.${errorDetail}`,
+            source: 'sse',
+          },
+        ]);
       }
     },
-    [updateJob, updateRecording],
+    [appendLedgerEntries, updateJob, updateRecording],
   );
 
   const connectEventSource = useCallback(() => {
@@ -602,6 +718,8 @@ export function JobMonitorProvider({ children }: { children: ReactNode }) {
       jobMap: jobs,
       recordings: recordingsArray,
       recordingMap: recordings,
+      eventLog,
+      lastUpdateAt,
       registerJob,
       registerRecording,
       refreshRecordings,
@@ -613,7 +731,24 @@ export function JobMonitorProvider({ children }: { children: ReactNode }) {
       pauseLiveUpdates,
       resumeLiveUpdates,
     }),
-    [jobsArray, jobs, recordingsArray, recordings, registerJob, registerRecording, refreshRecordings, trackJob, connectionState, isPolling, lastError, liveUpdatesPaused, pauseLiveUpdates, resumeLiveUpdates],
+    [
+      jobsArray,
+      jobs,
+      recordingsArray,
+      recordings,
+      eventLog,
+      lastUpdateAt,
+      registerJob,
+      registerRecording,
+      refreshRecordings,
+      trackJob,
+      connectionState,
+      isPolling,
+      lastError,
+      liveUpdatesPaused,
+      pauseLiveUpdates,
+      resumeLiveUpdates,
+    ],
   );
 
   return <JobMonitorContext.Provider value={value}>{children}</JobMonitorContext.Provider>;

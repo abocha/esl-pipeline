@@ -3,6 +3,8 @@ import { NavLink, useNavigate } from 'react-router-dom';
 
 import type { User } from '../context/AuthContext';
 import { useViewport } from '../utils/useViewport';
+import { NotificationLedger } from '../ui/rail/NotificationLedger';
+import { WorkContextPanel } from '../ui/rail/WorkContextPanel';
 
 const RAIL_STORAGE_KEY = 'esl-right-rail-state';
 
@@ -252,14 +254,8 @@ export const WorkshopShell: React.FC<WorkshopShellProps> = ({
         </div>
 
         <div className="rail-content">
-          <section className="rail-panel">
-            <h3>Work Context</h3>
-            <p>Select a job or wizard step to keep context visible at all times.</p>
-          </section>
-          <section className="rail-panel">
-            <h3>Notification Ledger</h3>
-            <p>Events and failures will appear here once live updates are connected.</p>
-          </section>
+          <WorkContextPanel />
+          <NotificationLedger />
         </div>
       </aside>
 
