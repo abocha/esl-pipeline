@@ -167,7 +167,7 @@ const createDefaultRecording = (recordingId: string): RecordingEntry => {
     status: 'queued',
     transcriptId: null,
     error: null,
-    source: 'scan',
+    source: 'upload',
     studentId: null,
     displayName: null,
     durationSec: null,

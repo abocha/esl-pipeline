@@ -20,7 +20,6 @@ is archived at `docs/archive/TRANSCRIPTION_PIPELINE_IMPLEMENTATION_MANUAL.md`.
 ## 1) Scope and Non-Goals
 
 ### Scope (Phase 2 MVP)
-- Auto-ingest recordings from a local folder (scan mode) and enqueue transcription jobs.
 - Upload recordings via the UI (`POST /recordings/upload`) and enqueue transcription jobs.
 - Transcribe via Deepgram using the Node SDK.
 - Persist transcript artifacts and metadata in DB + storage adapter.
@@ -31,7 +30,7 @@ is archived at `docs/archive/TRANSCRIPTION_PIPELINE_IMPLEMENTATION_MANUAL.md`.
 ### Non-goals (explicitly out of scope)
 - CLI tools (no transcription CLI).
 - Archive reports, cache reports, manual file management.
-- File moving/renaming in the recordings folder.
+- File moving/renaming of uploaded recordings.
 - Any requirement for the user to type paths.
 - Browser-direct Deepgram calls (CORS requires a backend proxy).
 
@@ -76,10 +75,8 @@ is archived at `docs/archive/TRANSCRIPTION_PIPELINE_IMPLEMENTATION_MANUAL.md`.
 
 ### Services
 - Ingestion service
-  - Scan mode (MVP): scans a recordings root folder (local).
   - Upload mode: accepts UI uploads into storage (S3 recommended).
   - Creates Recording rows and enqueues transcription jobs.
-  - Manual sync endpoint triggers an immediate scan.
 
 - Transcriber service
   - Deepgram adapter, `transcribe(recordingId)` API.
@@ -114,8 +111,8 @@ is archived at `docs/archive/TRANSCRIPTION_PIPELINE_IMPLEMENTATION_MANUAL.md`.
 
 ### recordings
 - id (uuid, pk)
-- source (enum: "scan" | "upload")
-- student_id (nullable; derived from folder name or upload selection)
+- source (enum: "upload")
+- student_id (nullable; derived from upload selection)
 - source_path (text, original path for audit, nullable)
 - storage_uri (text, canonical)
 - sha256 (text, optional but recommended)
@@ -128,7 +125,7 @@ is archived at `docs/archive/TRANSCRIPTION_PIPELINE_IMPLEMENTATION_MANUAL.md`.
 
 Student association:
 - student_id is a deterministic UUID derived from the normalized student name.
-- Scan ingestion uses the top-level folder name; uploads accept `studentId` or `student` name.
+- Uploads accept `studentId` or `student` name.
 
 ### transcripts
 - id (uuid, pk)
@@ -196,22 +193,7 @@ delete(uri) -> void
 
 ---
 
-## 7) Ingestion Flow (Auto + Manual)
-
-### Auto Scan
-- Interval (e.g. every 1-2 minutes) scans configured root.
-- Find new files by extension and optional glob (opus/mp3/wav/m4a).
-- Deduplicate by sha256 or (path + mtime + size).
-- For each new file:
-  - derive student_id from the first folder segment when present
-  - store audio in storage adapter
-  - create Recording row
-  - enqueue transcription job
-
-### Manual Sync
-- POST /recordings/sync (admin)
-- triggers a scan immediately
-- returns count of new recordings discovered
+## 7) Ingestion Flow (Upload)
 
 ### Upload Ingestion
 - `POST /recordings/upload` accepts audio uploads.
@@ -277,7 +259,6 @@ delete(uri) -> void
 
 ### Recordings
 - GET /recordings?status=...&studentId=... (or `student` name)
-- POST /recordings/sync
 - POST /recordings/upload
 - GET /recordings/:id
 - GET /recordings/:id/audio
@@ -315,10 +296,8 @@ Transcription:
 - TRANSCRIBE_MAX_CONCURRENCY
 - DEEPGRAM_STORE_RAW_RESPONSE (optional, default: true)
 
-Ingestion:
-- RECORDINGS_ROOT (local path)
-- RECORDINGS_SCAN_INTERVAL_SEC
-- RECORDINGS_GLOB (default: **/*.{opus,mp3,wav,m4a})
+Recording uploads:
+- RECORDINGS_MAX_FILE_SIZE
 
 Prompt allowlist:
 - Templates are scanned from the directory containing `PROMPT_TEMPLATE_PATH`.
@@ -358,7 +337,7 @@ No pipeline code changes required if adapter is isolated.
 ## 14) Done When
 
 Phase 2 Acceptance:
-- New recording appears automatically in UI without manual path input (scan mode).
+- New recording appears automatically in UI after upload.
 - Transcription runs via queue and produces transcript artifact.
 - Transcript can be reviewed and edited.
 - Prompt package assembles with correct template + profile + notes + transcript.
@@ -369,7 +348,6 @@ Phase 2 Acceptance:
 ## 15) Implementation Status (as-built)
 
 Implemented in repo:
-- Scan ingestion (`/recordings/sync`) and transcribe queue.
 - Upload ingestion (`/recordings/upload`) with optional student association.
 - Deepgram worker with multichannel + utterances + punctuation; diarize fallback for mono.
 - Transcript read/update endpoints.
@@ -378,7 +356,7 @@ Implemented in repo:
 - Draft save + materialize to `FILESYSTEM_UPLOAD_DIR/drafts/<draftId>.md`.
 - Draft materialization auto-creates an awaiting_approval job.
 - Recording status SSE via `/jobs/events` and a Phase 2 transcription workspace UI.
-- Startup validation for storage + prompt/recordings paths.
+- Startup validation for storage + prompt paths.
 
 Known gaps to reach full Phase 2 acceptance:
 - None (prompt allowlists, uploads, and student association are implemented).

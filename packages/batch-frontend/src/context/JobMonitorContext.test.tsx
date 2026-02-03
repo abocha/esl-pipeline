@@ -45,7 +45,7 @@ const createRecording = (overrides: Partial<RecordingListItem>): RecordingListIt
   status: 'queued',
   transcriptId: null,
   error: null,
-  source: 'scan',
+  source: 'upload',
   studentId: null,
   displayName: 'recording-1.opus',
   durationSec: null,

@@ -1,6 +1,6 @@
 import { z } from 'zod';
 
-export type RecordingSource = 'scan' | 'upload';
+export type RecordingSource = 'upload';
 export type RecordingStatus = 'ingested' | 'queued' | 'transcribing' | 'transcribed' | 'failed';
 
 export interface RecordingRecord {
@@ -19,7 +19,7 @@ export interface RecordingRecord {
   updatedAt: Date;
 }
 
-export const RecordingSourceSchema = z.enum(['scan', 'upload']);
+export const RecordingSourceSchema = z.enum(['upload']);
 export const RecordingStatusSchema = z.enum([
   'ingested',
   'queued',

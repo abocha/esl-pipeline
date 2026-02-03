@@ -18,7 +18,6 @@ export async function validateTranscriptionConfig(
   const storageConfig = overrides?.storageConfig ?? createStorageConfigService();
 
   await validateStorageConfig(storageConfig);
-  await validateRecordingsRoot(config.recordings.root);
   await validatePromptAssets(config);
 }
 
@@ -56,32 +55,6 @@ async function validateStorageConfig(storageConfig: StorageConfigurationService)
     await fs.access(uploadDir, fsConstants.W_OK);
   } catch (error) {
     throw new ConfigurationError(`Filesystem upload directory is not writable: ${uploadDir}`, {
-      cause: error,
-    });
-  }
-}
-
-async function validateRecordingsRoot(root: string): Promise<void> {
-  const trimmed = root.trim();
-  if (!trimmed) return;
-
-  let stats;
-  try {
-    stats = await fs.stat(trimmed);
-  } catch (error) {
-    throw new ConfigurationError(`RECORDINGS_ROOT does not exist: ${trimmed}`, {
-      cause: error,
-    });
-  }
-
-  if (!stats.isDirectory()) {
-    throw new ConfigurationError(`RECORDINGS_ROOT must be a directory: ${trimmed}`);
-  }
-
-  try {
-    await fs.access(trimmed, fsConstants.R_OK);
-  } catch (error) {
-    throw new ConfigurationError(`RECORDINGS_ROOT is not readable: ${trimmed}`, {
       cause: error,
     });
   }

@@ -134,7 +134,7 @@ export interface RecordingEventMessage {
   transcriptId?: string | null;
   error?: string | null;
   studentId?: string | null;
-  source?: 'scan' | 'upload';
+  source?: 'upload';
   displayName?: string | null;
   durationSec?: number | null;
   channels?: number | null;

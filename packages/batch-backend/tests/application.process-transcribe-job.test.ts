@@ -216,7 +216,7 @@ describe('application/process-transcribe-job', () => {
 function createRecording(id: string): RecordingRecord {
   return {
     id,
-    source: 'scan',
+    source: 'upload',
     studentId: null,
     sourcePath: '/tmp/audio.opus',
     storageUri: 'local://recordings/recording.opus',
@@ -250,7 +250,7 @@ function createConfig(): BatchBackendConfig {
     },
     queue: { name: 'esl-jobs' },
     transcription: { queueName: 'transcribe-queue', mode: 'timeline', maxConcurrency: 1 },
-    recordings: { root: '', glob: '**/*.{opus}', scanIntervalSec: 0, maxFileSize: 0 },
+    recordings: { maxFileSize: 0 },
     deepgram: {
       apiKey: 'dg-key',
       accessToken: undefined,

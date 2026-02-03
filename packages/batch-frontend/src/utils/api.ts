@@ -82,7 +82,7 @@ export interface RecordingListItem {
   status: RecordingStatus;
   transcriptId: string | null;
   error: string | null;
-  source: 'scan' | 'upload';
+  source: 'upload';
   studentId: string | null;
   displayName: string;
   durationSec: number | null;
@@ -435,20 +435,6 @@ export interface VoiceOption {
   accent?: string | null;
   gender?: string | null;
   category?: string | null;
-}
-
-export interface RecordingFolderEntry {
-  path: string;
-  relativePath: string;
-  student: string;
-  name: string;
-  updatedAt: string;
-}
-
-export interface RecordingsIndexResponse {
-  root: string;
-  exists: boolean;
-  items: RecordingFolderEntry[];
 }
 
 export async function listUserJobs(params: {
@@ -1001,31 +987,6 @@ export async function fetchDraft(draftId: string): Promise<DraftResponse> {
     const axiosError = toAxiosError(error);
     if (axiosError && isAuthError(axiosError)) {
       throw new Error('Authentication required. Please login to view drafts.');
-    }
-    throw new Error(axiosError ? handleApiError(axiosError) : formatUnknownError(error));
-  }
-}
-
-export async function fetchRecordingsIndex(limit = 200): Promise<RecordingsIndexResponse> {
-  try {
-    const response = await apiClient.get(buildApiProxyPath('/config/recordings'), {
-      params: { limit },
-    });
-    return response.data;
-  } catch (error: unknown) {
-    const axiosError = toAxiosError(error);
-    throw new Error(axiosError ? handleApiError(axiosError) : formatUnknownError(error));
-  }
-}
-
-export async function syncRecordings(): Promise<{ discovered: number }> {
-  try {
-    const response = await apiClient.post(buildApiProxyPath('/recordings/sync'));
-    return response.data;
-  } catch (error: unknown) {
-    const axiosError = toAxiosError(error);
-    if (axiosError && isAuthError(axiosError)) {
-      throw new Error('Authentication required. Please login to sync recordings.');
     }
     throw new Error(axiosError ? handleApiError(axiosError) : formatUnknownError(error));
   }

@@ -21,7 +21,6 @@ import {
   fetchRecordingTranscript,
   materializeDraft,
   retryRecordingTranscription,
-  syncRecordings,
   uploadRecording,
   updateRecordingTranscript,
 } from '../../utils/api';
@@ -172,14 +171,12 @@ export const TranscriptionWorkspace: React.FC = () => {
   const { selectedStudent } = useStudentSelection();
   const [selectedRecordingId, setSelectedRecordingId] = useState('');
   const [recordingInput, setRecordingInput] = useState('');
-  const [syncing, setSyncing] = useState(false);
   const [uploadFile, setUploadFile] = useState<File | null>(null);
   const [uploading, setUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
   const [studentOptions, setStudentOptions] = useState<StudentOption[]>([]);
   const [studentFilter, setStudentFilter] = useState('all');
   const [statusFilter, setStatusFilter] = useState<'all' | RecordingStatus>('all');
-  const [sourceFilter, setSourceFilter] = useState<'all' | 'scan' | 'upload'>('all');
   const [searchQuery, setSearchQuery] = useState('');
   const [uploadStudentId, setUploadStudentId] = useState('');
   const [recordingPanelError, setRecordingPanelError] = useState<string | null>(null);
@@ -238,10 +235,6 @@ export const TranscriptionWorkspace: React.FC = () => {
       items = items.filter((recording) => recording.status === statusFilter);
     }
 
-    if (sourceFilter !== 'all') {
-      items = items.filter((recording) => recording.source === sourceFilter);
-    }
-
     const query = searchQuery.trim().toLowerCase();
     if (!query) return items;
 
@@ -249,7 +242,7 @@ export const TranscriptionWorkspace: React.FC = () => {
       const haystack = [recording.displayName ?? '', recording.recordingId];
       return haystack.some((value) => value.toLowerCase().includes(query));
     });
-  }, [recordings, studentFilter, statusFilter, sourceFilter, searchQuery]);
+  }, [recordings, studentFilter, statusFilter, searchQuery]);
 
   const templateOptions = promptOptions?.templates ?? [];
   const profileOptions = promptOptions?.profiles ?? [];
@@ -287,7 +280,6 @@ export const TranscriptionWorkspace: React.FC = () => {
   useEffect(() => {
     let active = true;
     const status = statusFilter === 'all' ? undefined : statusFilter;
-    const source = sourceFilter === 'all' ? undefined : sourceFilter;
     const studentId =
       studentFilter === 'all' || studentFilter === 'unassigned' ? undefined : studentFilter;
     const q = searchQuery.trim() || undefined;
@@ -297,7 +289,6 @@ export const TranscriptionWorkspace: React.FC = () => {
         try {
           await refreshRecordings({
             status,
-            source,
             studentId,
             q,
           });
@@ -317,7 +308,7 @@ export const TranscriptionWorkspace: React.FC = () => {
       active = false;
       clearTimeout(timeout);
     };
-  }, [refreshRecordings, searchQuery, sourceFilter, statusFilter, studentFilter]);
+  }, [refreshRecordings, searchQuery, statusFilter, studentFilter]);
 
   useEffect(() => {
     let active = true;
@@ -365,21 +356,6 @@ export const TranscriptionWorkspace: React.FC = () => {
     };
   }, []);
 
-  const handleSync = async () => {
-    if (syncing) return;
-    setSyncing(true);
-    setRecordingPanelError(null);
-    try {
-      const result = await syncRecordings();
-      toast.success(`Recording scan complete. Discovered ${result.discovered}.`);
-    } catch (error) {
-      const message = error instanceof Error ? error.message : 'Unable to sync recordings';
-      setRecordingPanelError(message);
-      toast.error(message);
-    } finally {
-      setSyncing(false);
-    }
-  };
 
   const handleUploadRecording = async () => {
     if (uploading) return;
@@ -688,15 +664,6 @@ export const TranscriptionWorkspace: React.FC = () => {
             updates.
           </p>
         </div>
-        <button
-          type="button"
-          className="btn-primary btn-small"
-          onClick={handleSync}
-          disabled={syncing}
-        >
-          <RefreshIcon />
-          {syncing ? 'Syncing…' : 'Sync recordings'}
-        </button>
       </header>
 
       <JobConnectionBanner />
@@ -773,22 +740,6 @@ export const TranscriptionWorkspace: React.FC = () => {
                     {status.label}
                   </option>
                 ))}
-              </select>
-            </div>
-            <div className="filter-field">
-              <label className="field-label" htmlFor="recording-source-filter">
-                Source
-              </label>
-              <select
-                id="recording-source-filter"
-                value={sourceFilter}
-                onChange={(event) =>
-                  setSourceFilter(event.target.value as 'all' | 'scan' | 'upload')
-                }
-              >
-                <option value="all">All sources</option>
-                <option value="scan">Scan</option>
-                <option value="upload">Upload</option>
               </select>
             </div>
           </div>
@@ -875,8 +826,7 @@ export const TranscriptionWorkspace: React.FC = () => {
                       </span>
                     </div>
                     <div className="recording-sub">
-                      {`${recording.source === 'upload' ? 'Upload' : 'Scan'} • ${studentLabel} | ${statusMeta.note
-                        } | ${transcriptLabel}`}
+                      {`Upload • ${studentLabel} | ${statusMeta.note} | ${transcriptLabel}`}
                     </div>
                     <div className="recording-meta">
                       Updated {new Date(recording.updatedAt).toLocaleString()}

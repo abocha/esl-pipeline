@@ -65,8 +65,6 @@ Use `.env.batch-backend` for the service stack. It includes all core keys above 
   - `NOTION_DB_OPTIONS`, `NOTION_DB_ID`, `NOTION_DB_NAME`, `NOTION_DB_LABEL`
   - `ELEVENLABS_VOICES_PATH`, `REPO_ROOT`, `APP_ROOT`, `PROJECT_ROOT`
 - Transcription pipeline:
-  - `RECORDINGS_ROOT`, `RECORDINGS_GLOB` (default `**/*.{opus,mp3,wav,m4a}`),
-    `RECORDINGS_SCAN_INTERVAL_SEC`
   - `TRANSCRIBE_MODE` (`timeline`|`stack`), `TRANSCRIBE_MAX_CONCURRENCY`
   - `DEEPGRAM_API_KEY`, `DEEPGRAM_ACCESS_TOKEN` (optional), `DEEPGRAM_MODEL`, `DEEPGRAM_LANGUAGE`,
     `DEEPGRAM_STORE_RAW_RESPONSE`
@@ -94,5 +92,5 @@ Notes:
 - Both orchestrator and batch-backend need `NOTION_TOKEN` and `ELEVENLABS_API_KEY`.
 - For S3 manifests or uploads, set the `ESL_PIPELINE_MANIFEST_*` vars and `S3_*`/AWS creds together.
 - TTS strategy defaults can be provided via `ELEVENLABS_TTS_STRATEGY` and related dialogue options; manifests now persist these for reruns.
-- Batch backend startup validates `FILESYSTEM_UPLOAD_DIR`, `RECORDINGS_ROOT` (if set), and `PROMPT_*` allowlists; misconfigured paths fail fast.
+- Batch backend startup validates `FILESYSTEM_UPLOAD_DIR` and `PROMPT_*` allowlists; misconfigured paths fail fast.
 - Use `RECORDINGS_MAX_FILE_SIZE` to raise audio upload limits without affecting general markdown uploads.

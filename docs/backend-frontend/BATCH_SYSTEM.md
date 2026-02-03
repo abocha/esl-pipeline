@@ -22,7 +22,7 @@ The batch system enables tutors to process multiple ESL homework assignments thr
 - Real-time job progress via Server-Sent Events (SSE)
 - Job actions: copy Notion link, regenerate audio (pending)
 - Authentication with email/password
-- Transcription workspace (recording scan, transcript review, prompt package, draft)
+- Transcription workspace (recording upload, transcript review, prompt package, draft)
 - Student workspace (student selection, profile CRUD, timeline)
 
 ---
@@ -37,10 +37,10 @@ The batch system enables tutors to process multiple ESL homework assignments thr
 6. On completion, tutor receives notification and can copy Notion link
 
 Phase 2+ (native transcription, implemented with gaps):
-1. Recordings are scanned from a mounted folder and transcribed via Deepgram.
+1. Recordings are uploaded via the UI and transcribed via Deepgram.
 2. Tutor reviews transcript, assembles prompt package, and saves draft.
 3. Draft is materialized and approved through the existing job approval flow.
-4. Recording list supports search plus status/source/student filters.
+4. Recording list supports search plus status/student filters.
 5. Student workspace allows selection, profile editing, and timeline review.
 
 ---

@@ -16,7 +16,7 @@ Status snapshot:
 ## 1) System map (end-to-end)
 
 ### Phase 2+ (native transcription, implemented)
-1. Recording scan or upload ingestion creates Recording rows.
+1. Recording upload ingestion creates Recording rows.
 2. Transcribe worker runs Deepgram and stores transcript artifacts.
 3. UI reviews/edits transcript.
 4. UI assembles prompt package from template + profile + notes + transcript.
@@ -24,7 +24,6 @@ Status snapshot:
 6. Draft is materialized to filesystem and approved job runs orchestrator.
 
 Implemented successfully (current as-built state):
-- Scan ingestion with dedupe; manual sync endpoint.
 - Upload ingestion via `POST /recordings/upload`.
 - Transcribe queue + worker using Deepgram multichannel with utterances + punctuation.
 - Diarization fallback for mono audio; transcript formatting with Teacher/Student labels.
@@ -33,7 +32,7 @@ Implemented successfully (current as-built state):
 - Draft creation and materialization to FILESYSTEM_UPLOAD_DIR.
 - Recording status SSE events consumed by the transcription workspace.
 - Manual retry endpoint (`POST /recordings/:id/transcribe`) with queue status surfaced in UI.
-- Startup validation for storage + prompt/recordings paths.
+- Startup validation for storage + prompt paths.
 
 Notes for Phase 2+:
 - Recording list/backfill endpoint is available; UI hydrates on load and merges SSE updates.
@@ -81,16 +80,14 @@ Prompt assembly order (canonical):
 ### 3.1 Phase 2+ (native transcription)
 Prereqs:
 - docker compose includes the transcribe-worker service.
-- RECORDINGS_ROOT is mounted to /recordings.
 - DEEPGRAM_API_KEY set in .env.batch-backend.
 
 Flow:
-1) Drop a new audio file into the mounted recordings folder, or upload via the UI (`POST /recordings/upload`).
-2) Click Sync recordings (UI) or POST /recordings/sync (scan mode only).
-3) Wait for transcribe queue to complete.
-4) Open transcript by Recording ID; edit if needed.
-5) Build prompt package, then save draft.
-6) Materialize + approve (job is created automatically; no manual job ID).
+1) Upload audio via the UI (`POST /recordings/upload`).
+2) Wait for transcribe queue to complete.
+3) Open transcript by Recording ID; edit if needed.
+4) Build prompt package, then save draft.
+5) Materialize + approve (job is created automatically; no manual job ID).
 
 ---
 
@@ -98,7 +95,6 @@ Flow:
 
 Use .env for CLI and .env.batch-backend for the service stack.
 See docs/reference/env.md for the full list. Key Phase 2+ entries:
-- RECORDINGS_ROOT, RECORDINGS_GLOB, RECORDINGS_SCAN_INTERVAL_SEC
 - DEEPGRAM_API_KEY, DEEPGRAM_MODEL, DEEPGRAM_LANGUAGE
 - TRANSCRIBE_QUEUE_NAME, TRANSCRIBE_MODE, TRANSCRIBE_MAX_CONCURRENCY
 - PROMPT_TEMPLATE_PATH, PROMPT_PROFILE_PATH (use docs/templates paths)
@@ -107,7 +103,6 @@ See docs/reference/env.md for the full list. Key Phase 2+ entries:
 
 ## 5) Known risks and gotchas
 
-- Recording scan is delta-only; use a brand new file to test ingestion.
 - Recording list loads on page load and stays in sync with SSE updates.
 - Recording uploads honor `RECORDINGS_MAX_FILE_SIZE`; increase it for longer lessons.
 - Draft approval auto-creates a job; no manual job selection needed.
@@ -121,7 +116,7 @@ See docs/reference/env.md for the full list. Key Phase 2+ entries:
 
 ### Phase 2+ (implemented)
 Implemented in repo:
-- Scan ingestion, transcribe queue, Deepgram worker.
+- Upload ingestion, transcribe queue, Deepgram worker.
 - Transcript review/edit UI and APIs.
 - Prompt package and draft creation.
 - Draft materialization to filesystem (auto-creates approval job).

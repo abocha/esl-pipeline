@@ -253,12 +253,11 @@ Gap-closure steps live in `docs/PIPELINE_INTEGRATION_VISION.md`.
 The staged implementation manual is archived at
 `docs/archive/TRANSCRIPTION_PIPELINE_IMPLEMENTATION_MANUAL.md`.
 
-### Implemented Endpoints (scan + upload ingestion)
+### Implemented Endpoints (upload ingestion)
 
 - Recordings:
-  - `POST /recordings/sync`
   - `POST /recordings/upload`
-  - `GET /recordings` (supports `status`, `studentId`/`student`, `source`, `q`, `limit`, `offset`, `order`)
+  - `GET /recordings` (supports `status`, `studentId`/`student`, `q`, `limit`, `offset`, `order`)
   - `GET /recordings/:id`
   - `GET /recordings/:id/audio`
   - `GET /recordings/:id/transcript`

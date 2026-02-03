@@ -29,7 +29,6 @@ vi.mock('../../utils/api', async () => {
     fetchStudentOptions: vi.fn(),
     materializeDraft: vi.fn(),
     retryRecordingTranscription: vi.fn(),
-    syncRecordings: vi.fn(),
     updateRecordingTranscript: vi.fn(),
     uploadRecording: vi.fn(),
   };
@@ -53,7 +52,7 @@ const createRecording = (overrides: Partial<RecordingEntry>): RecordingEntry => 
   status: 'queued',
   transcriptId: null,
   error: null,
-  source: 'scan',
+  source: 'upload',
   studentId: null,
   displayName: 'recording-1.opus',
   durationSec: null,
@@ -95,7 +94,7 @@ describe('TranscriptionWorkspace filters and approval flow', () => {
           recordingId: 'rec-2',
           displayName: 'Bob session.opus',
           status: 'failed',
-          source: 'scan',
+          source: 'upload',
           studentId: 'student-2',
         }),
         createRecording({
@@ -154,7 +153,7 @@ describe('TranscriptionWorkspace filters and approval flow', () => {
     expect(screen.getAllByText('Bob session.opus').length).toBeGreaterThan(0);
   });
 
-  it('filters recordings by student, status, and source', async () => {
+  it('filters recordings by student and status', async () => {
     render(<TranscriptionWorkspace />);
 
     await waitFor(() => {
@@ -166,9 +165,6 @@ describe('TranscriptionWorkspace filters and approval flow', () => {
     });
     fireEvent.change(screen.getByLabelText('Status'), {
       target: { value: 'transcribed' },
-    });
-    fireEvent.change(screen.getByLabelText('Source'), {
-      target: { value: 'upload' },
     });
 
     await waitFor(() => {
