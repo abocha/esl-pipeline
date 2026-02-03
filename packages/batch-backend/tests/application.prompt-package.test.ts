@@ -77,7 +77,7 @@ describe('application/prompt-package', () => {
         recordings: {
           getById: async () => ({
             id: transcript.recordingId,
-            source: 'scan',
+            source: 'upload',
             studentId: 'student-1',
             sourcePath: null,
             storageUri: 'local://recordings/recording-1.opus',
@@ -180,7 +180,7 @@ describe('application/prompt-package', () => {
           recordings: {
             getById: async () => ({
               id: transcript.recordingId,
-              source: 'scan',
+              source: 'upload',
               studentId: 'student-1',
               sourcePath: null,
               storageUri: 'local://recordings/recording-1.opus',

@@ -222,10 +222,11 @@ const DRAFTS_INDEX_PATCHES: string[] = [
 const TRANSCRIPTION_CONSTRAINT_PATCHES: string[] = [
   `DO $$
 BEGIN
-  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'recordings_source_check') THEN
-    ALTER TABLE recordings
-      ADD CONSTRAINT recordings_source_check CHECK (source IN ('scan', 'upload'));
+  IF EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'recordings_source_check') THEN
+    ALTER TABLE recordings DROP CONSTRAINT recordings_source_check;
   END IF;
+  ALTER TABLE recordings
+    ADD CONSTRAINT recordings_source_check CHECK (source IN ('upload'));
 END $$;`,
   `DO $$
 BEGIN

@@ -11,7 +11,6 @@ import { validateMarkdownFile } from '@esl-pipeline/md-validator';
 import { getJobOptions } from '../application/get-job-options.js';
 import { getJobSummaryWithDefaults } from '../application/job-summary.js';
 import { getRecording } from '../application/get-recording.js';
-import { getRecordingsIndex } from '../application/get-recordings-index.js';
 import { getRecordingTranscript } from '../application/get-recording-transcript.js';
 import { listJobsWithDefaults } from '../application/list-jobs.js';
 import { listRecordingsWithDefaults } from '../application/list-recordings.js';
@@ -45,7 +44,6 @@ import { getDraft } from '../application/get-draft.js';
 import { createPromptPackage } from '../application/create-prompt-package.js';
 import { getPromptPackage } from '../application/get-prompt-package.js';
 import { materializeDraft } from '../application/materialize-draft.js';
-import { scanRecordingsWithDefaults } from '../application/scan-recordings.js';
 import { SubmitJobRequest, ValidationError, submitJob } from '../application/submit-job.js';
 import { updateRecordingTranscript } from '../application/update-recording-transcript.js';
 import { ProfilePathError } from '../application/profile-path.js';
@@ -910,91 +908,6 @@ export function registerExtendedRoutes(app: FastifyInstance, options: ExtendedRo
           });
         }
 
-        logger.error(error instanceof Error ? error : String(error), {
-          event: 'http_request',
-          route: routePath,
-          statusCode: 500,
-          error: 'internal_error',
-        });
-
-        return errorResponse(reply, 'internal_error');
-      }
-    },
-  );
-
-  app.get(
-    '/config/recordings',
-    {
-      preHandler: [authenticate],
-    },
-    async (request, reply) => {
-      const routePath = resolveRoutePath(request, 'GET /config/recordings');
-
-      const querySchema = z.object({
-        limit: z.coerce.number().int().min(1).max(1000).optional(),
-        student: z.string().min(1).optional(),
-      });
-
-      try {
-        const query = querySchema.parse(request.query ?? {});
-        const recordings = await getRecordingsIndex({
-          root: config.recordings.root,
-          limit: query.limit,
-          student: query.student,
-        });
-
-        reply.header('Cache-Control', 'private, max-age=30');
-
-        logger.info('HTTP request handled', {
-          event: 'http_request',
-          route: routePath,
-          statusCode: 200,
-        });
-
-        return reply.send(recordings);
-      } catch (error: unknown) {
-        if (error instanceof z.ZodError) {
-          return reply.code(400).send({
-            error: 'validation_failed',
-            message: 'Invalid query parameters',
-            details: error.issues,
-          });
-        }
-
-        logger.error(error instanceof Error ? error : String(error), {
-          event: 'http_request',
-          route: routePath,
-          statusCode: 500,
-          error: 'internal_error',
-        });
-
-        return errorResponse(reply, 'internal_error');
-      }
-    },
-  );
-
-  app.post(
-    '/recordings/sync',
-    {
-      preHandler: [authenticate],
-    },
-    async (request, reply) => {
-      const routePath = resolveRoutePath(request, 'POST /recordings/sync');
-
-      try {
-        const result = await scanRecordingsWithDefaults({
-          root: config.recordings.root,
-          glob: config.recordings.glob,
-        });
-
-        logger.info('HTTP request handled', {
-          event: 'http_request',
-          route: routePath,
-          statusCode: 200,
-        });
-
-        return reply.send({ discovered: result.discovered });
-      } catch (error: unknown) {
         logger.error(error instanceof Error ? error : String(error), {
           event: 'http_request',
           route: routePath,

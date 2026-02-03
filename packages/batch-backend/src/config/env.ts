@@ -34,9 +34,6 @@ export interface BatchBackendConfig {
     maxConcurrency: number;
   };
   recordings: {
-    root: string;
-    glob: string;
-    scanIntervalSec: number;
     maxFileSize: number;
   };
   deepgram: {
@@ -155,9 +152,6 @@ export function loadConfig(): BatchBackendConfig {
   const queueName = readString('BATCH_JOBS_QUEUE_NAME', 'esl-jobs')!;
   const transcribeQueueName = readString('TRANSCRIBE_QUEUE_NAME', 'transcribe-queue')!;
 
-  const recordingsRoot = readString('RECORDINGS_ROOT', '')!;
-  const recordingsGlob = readString('RECORDINGS_GLOB', '**/*.{opus,mp3,wav,m4a}')!;
-  const recordingsScanIntervalSec = readInt('RECORDINGS_SCAN_INTERVAL_SEC', 120);
   const recordingsMaxFileSize = readInt('RECORDINGS_MAX_FILE_SIZE', 100 * 1024 * 1024);
   const transcribeMode = readString('TRANSCRIBE_MODE', 'timeline') as 'timeline' | 'stack';
   if (transcribeMode !== 'timeline' && transcribeMode !== 'stack') {
@@ -314,9 +308,6 @@ export function loadConfig(): BatchBackendConfig {
       maxConcurrency: transcribeMaxConcurrency,
     },
     recordings: {
-      root: recordingsRoot,
-      glob: recordingsGlob,
-      scanIntervalSec: recordingsScanIntervalSec,
       maxFileSize: recordingsMaxFileSize,
     },
     deepgram: {

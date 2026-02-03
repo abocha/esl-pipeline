@@ -7,7 +7,7 @@ import {
 
 const baseRecording = {
   id: 'recording-1',
-  source: 'scan' as const,
+  source: 'upload' as const,
   studentId: null,
   sourcePath: null,
   storageUri: 'local://recordings/recording-1.opus',
@@ -43,7 +43,7 @@ describe('retryRecordingTranscription', () => {
       status: 'queued',
       transcriptId: null,
       error: null,
-      source: 'scan',
+      source: 'upload',
       studentId: null,
       displayName: 'recording-1.opus',
       durationSec: null,

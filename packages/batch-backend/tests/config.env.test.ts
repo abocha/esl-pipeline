@@ -44,9 +44,7 @@ describe('config/env - core defaults', () => {
         expect(cfg.transcription.queueName).toBe('transcribe-queue');
         expect(cfg.transcription.mode).toBe('timeline');
         expect(cfg.transcription.maxConcurrency).toBe(2);
-        expect(cfg.recordings.root).toBe('');
-        expect(cfg.recordings.glob).toBe('**/*.{opus,mp3,wav,m4a}');
-        expect(cfg.recordings.scanIntervalSec).toBe(120);
+        expect(cfg.recordings.maxFileSize).toBe(100 * 1024 * 1024);
         expect(cfg.deepgram.model).toBe('nova-3');
         expect(cfg.deepgram.language).toBe('multi');
         expect(cfg.deepgram.storeRawResponse).toBe(true);

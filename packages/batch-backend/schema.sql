@@ -264,7 +264,7 @@ ALTER TABLE jobs ADD CONSTRAINT jobs_mode_check
 
 -- Recordings source validation
 ALTER TABLE recordings ADD CONSTRAINT recordings_source_check
-  CHECK (source IN ('scan', 'upload'));
+  CHECK (source IN ('upload'));
 
 -- Recordings status validation
 ALTER TABLE recordings ADD CONSTRAINT recordings_status_check
