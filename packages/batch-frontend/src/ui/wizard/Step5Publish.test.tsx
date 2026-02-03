@@ -156,24 +156,24 @@ describe('Step5Publish Automation', () => {
             expect(screen.getByText('Automation')).not.toBeNull();
         });
 
-        // Toggle should be visible but disabled (backend not available)
+        // Toggle should be visible and enabled
         // Find the automation card and get its checkbox
         const automationCard = document.querySelector('.automation-card');
         expect(automationCard).not.toBeNull();
         const toggle = automationCard?.querySelector('input[type="checkbox"]');
         expect(toggle).not.toBeNull();
-        expect(toggle).toHaveProperty('disabled', true);
+        expect(toggle).toHaveProperty('disabled', false);
     });
 
-    it('shows unavailable message when backend auto-publish is not available', async () => {
+    it('shows ready message when auto-publish is available', async () => {
         renderPublishStep();
 
         await waitFor(() => {
-            expect(screen.getByText(/Auto-publish requires backend support/i)).not.toBeNull();
+            expect(screen.getByText(/Enable to auto-publish when ready/i)).not.toBeNull();
         });
     });
 
-    it('displays automation toggle in disabled state', async () => {
+    it('displays automation toggle in enabled state', async () => {
         renderPublishStep({ autoPublishEnabled: false });
 
         await waitFor(() => {
@@ -181,7 +181,7 @@ describe('Step5Publish Automation', () => {
             const toggle = automationCard?.querySelector('input[type="checkbox"]') as HTMLInputElement | null;
             expect(toggle).not.toBeNull();
             expect(toggle?.checked).toBe(false);
-            expect(toggle?.disabled).toBe(true);
+            expect(toggle?.disabled).toBe(false);
         });
     });
 
