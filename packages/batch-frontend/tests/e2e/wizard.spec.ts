@@ -280,8 +280,8 @@ test.describe('Assignment Wizard', () => {
         // Verify automation toggle (should be disabled)
         await expect(page.getByRole('heading', { name: 'Auto-publish' })).toBeVisible();
         const autoPublishToggle = page.locator('.automation-toggle input').first();
-        await expect(autoPublishToggle).toBeDisabled();
-        await expect(page.getByText(/Auto-publish requires backend support/i)).toBeVisible();
+        await expect(autoPublishToggle).toBeEnabled();
+        await expect(page.getByText(/Enable to auto-publish when ready/i)).toBeVisible();
 
         await page.getByRole('button', { name: 'Publish job', exact: true }).click();
 

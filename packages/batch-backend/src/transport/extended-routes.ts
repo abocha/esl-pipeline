@@ -1722,6 +1722,7 @@ export function registerExtendedRoutes(app: FastifyInstance, options: ExtendedRo
         upload: z.enum(['auto', 's3', 'none']).optional(),
         voiceId: z.string().min(1).optional(),
         voiceAccent: z.string().min(1).optional(),
+        autoPublish: z.boolean().optional(),
       });
 
       const schema = z.object({

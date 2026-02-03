@@ -231,6 +231,7 @@ describe('TranscriptionWorkspace filters and approval flow', () => {
       notionDatabase: null,
       ttsStrategy: null,
       notionUrl: null,
+      autoPublish: null,
       state: 'queued',
       createdAt: '2024-01-01T00:00:00.000Z',
       updatedAt: '2024-01-01T00:00:00.000Z',

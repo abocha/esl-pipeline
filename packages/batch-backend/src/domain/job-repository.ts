@@ -223,7 +223,7 @@ export async function getJobById(id: string): Promise<JobRecord | null> {
       SELECT id, state, md,
              recording_id, transcript_id, prompt_package_id, draft_id,
              preset, with_tts, upload,
-             voice_id, voice_accent, force_tts, notion_database, mode, notion_url,
+             voice_id, voice_accent, force_tts, notion_database, mode, notion_url, auto_publish,
              created_at, updated_at, started_at, finished_at, error, manifest_path, user_id
       FROM jobs
       WHERE id = $1
@@ -267,6 +267,7 @@ export async function listJobs(options: JobListOptions): Promise<JobRecord[]> {
         j.notion_database,
         j.mode,
         j.notion_url,
+        j.auto_publish,
         j.created_at,
         j.updated_at,
         j.started_at,
@@ -417,6 +418,7 @@ export async function updateJobStateAndResult(args: {
         notion_database,
         mode,
         notion_url,
+        auto_publish,
         created_at,
         updated_at,
         started_at,
@@ -474,6 +476,7 @@ export async function updateJobDraftLink(args: {
         notion_database,
         mode,
         notion_url,
+        auto_publish,
         created_at,
         updated_at,
         started_at,
@@ -580,6 +583,7 @@ export async function updateJobMetadata(
         notion_database,
         mode,
         notion_url,
+        auto_publish,
         created_at,
         updated_at,
         started_at,
@@ -647,6 +651,7 @@ export async function approveJob(args: {
         notion_database,
         mode,
         notion_url,
+        auto_publish,
         created_at,
         updated_at,
         started_at,

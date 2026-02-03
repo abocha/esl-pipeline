@@ -59,6 +59,12 @@ describe('WizardSummary', () => {
             voiceId: undefined,
             voiceAccent: undefined,
         },
+        automation: {
+            autoMatchStudent: false,
+            autoSuggestPrompts: false,
+            autoDraftPreview: false,
+            autoPublish: false,
+        },
     };
 
     const setup = (
@@ -73,6 +79,7 @@ describe('WizardSummary', () => {
                 goToStep: vi.fn(),
                 setJob: vi.fn(),
                 updateOverrides: vi.fn(),
+                updateAutomation: vi.fn(),
                 reset: vi.fn(),
             },
         });

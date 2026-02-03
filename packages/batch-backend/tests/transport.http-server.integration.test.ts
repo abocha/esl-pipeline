@@ -445,6 +445,7 @@ describe('transport/http-server - integration (in-process)', () => {
       notionDatabase: 'db-123',
       ttsStrategy: 'dialogue',
       notionUrl: 'https://notion.so/job-approve-1',
+      autoPublish: null,
       state: 'queued',
       createdAt: '2024-01-01T00:00:00.000Z',
       updatedAt: '2024-01-01T00:01:00.000Z',

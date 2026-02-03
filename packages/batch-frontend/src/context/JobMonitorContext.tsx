@@ -149,6 +149,7 @@ const createDefaultJob = (jobId: string): JobEntry => {
     notionDatabase: null,
     ttsStrategy: 'auto',
     notionUrl: null,
+    autoPublish: null,
     state: 'queued',
     createdAt: now,
     updatedAt: now,
