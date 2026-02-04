@@ -28,7 +28,7 @@ import {
   CURRENT_MANIFEST_SCHEMA_VERSION,
   createFilesystemManifestStore,
 } from './manifest.js';
-import { noopLogger, noopMetrics } from './observability.js';
+import { noopLogger, noopMetrics, type PipelineLogger } from './observability.js';
 import type {
   AssignmentProgressCallbacks,
   AssignmentStage,
@@ -167,6 +167,42 @@ async function resolveAnytypeSpaceId(
   throw new ValidationError(
     'Anytype space not resolved. Set ANYTYPE_SPACE_ID or ANYTYPE_SPACE_NAME.',
   );
+}
+
+async function addAnytypePageToCollection(
+  client: ReturnType<typeof createAnytypeClient>,
+  spaceId: string,
+  pageId: string,
+  logger: PipelineLogger,
+  runId?: string,
+): Promise<boolean> {
+  const collectionId = process.env.ANYTYPE_COLLECTION_ID?.trim();
+  if (!collectionId) return false;
+
+  try {
+    await client.addObjectsToList(spaceId, collectionId, [pageId]);
+    logger.log({
+      level: 'info',
+      message: 'anytype.collection.added',
+      runId,
+      stage: 'import',
+      detail: { collectionId, pageId },
+    });
+    return true;
+  } catch (error) {
+    logger.log({
+      level: 'warn',
+      message: 'anytype.collection.add_failed',
+      runId,
+      stage: 'import',
+      detail: {
+        collectionId,
+        pageId,
+        error: error instanceof Error ? error.message : String(error),
+      },
+    });
+    return false;
+  }
 }
 
 export {
@@ -441,6 +477,10 @@ export async function newAssignment(
             body: mdContents,
           });
           anytypePageId = created.id;
+        }
+
+        if (anytypePageId) {
+          await addAnytypePageToCollection(client, spaceId, anytypePageId, logger, runId);
         }
 
         emitStage('import', 'success', {
