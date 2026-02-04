@@ -80,17 +80,22 @@ async function readMarkdownCached(mdPath: string): Promise<string> {
 
 const STUDY_TEXT_MARKER = ':::study-text Transcript';
 const AUDIO_LINK_REGEX = /^\[Audio recording\]\([^)]+\)\s*$/i;
+const STUDY_TEXT_REGEX = /^:::study-text\b/i;
+const TRANSCRIPT_REGEX = /transcript/i;
 
 function insertAudioBeforeStudyText(markdown: string, audioUrl: string): string {
   if (!audioUrl) return markdown;
   const lines = markdown.split('\n');
   const cleaned: string[] = [];
   let markerIndex = -1;
+  let fallbackIndex = -1;
 
   for (const line of lines) {
     const trimmed = line.trim();
-    if (trimmed === STUDY_TEXT_MARKER) {
-      markerIndex = cleaned.length;
+    if (trimmed === STUDY_TEXT_MARKER) markerIndex = cleaned.length;
+    if (STUDY_TEXT_REGEX.test(trimmed)) {
+      if (fallbackIndex === -1) fallbackIndex = cleaned.length;
+      if (TRANSCRIPT_REGEX.test(trimmed)) markerIndex = cleaned.length;
     }
     if (AUDIO_LINK_REGEX.test(trimmed)) {
       continue;
@@ -103,7 +108,8 @@ function insertAudioBeforeStudyText(markdown: string, audioUrl: string): string 
     return cleaned.join('\n');
   }
 
-  const insertAt = markerIndex === -1 ? cleaned.length : markerIndex;
+  const insertAt =
+    markerIndex !== -1 ? markerIndex : fallbackIndex !== -1 ? fallbackIndex : cleaned.length;
   const nextLines = [...cleaned];
   nextLines.splice(insertAt, 0, audioLine, '');
   return nextLines.join('\n');
@@ -730,8 +736,17 @@ export async function newAssignment(
           headingTheme = resolveHeadingTheme(preset);
         }
 
+        const publishMarkdown = insertAudioBeforeStudyText(mdContents, audio.url);
+        const publishTitle = resolveMarkdownTitle(
+          mdContents,
+          basename(flags.md).replace(/\.[^.]+$/, ''),
+          validation.meta?.title ?? null,
+        );
+
         const publishResult = await sharePageToS3(anytypeSpaceId, anytypePageId, {
           headingTheme,
+          title: publishTitle,
+          markdown: publishMarkdown,
         });
         anytypeUrl = publishResult.url;
 
@@ -1142,8 +1157,17 @@ export async function rerunAssignment(
             headingTheme = resolveHeadingTheme(preset);
           }
 
+          const publishMarkdown = insertAudioBeforeStudyText(mdContents, audioUrl);
+          const publishTitle = resolveMarkdownTitle(
+            mdContents,
+            basename(flags.md).replace(/\.[^.]+$/, ''),
+            null,
+          );
+
           const publishResult = await sharePageToS3(targetSpaceId, targetPageId, {
             headingTheme,
+            title: publishTitle,
+            markdown: publishMarkdown,
           });
           anytypeUrl = publishResult.url;
         }

@@ -82,7 +82,30 @@ export async function uploadToS3(
     ? keyPrefix.replace(/^[\/\\]+/, '').replace(/[\/\\]+$/, '')
     : '';
   const key = normalizedPrefix ? `${normalizedPrefix}/${basename(localPath)}` : basename(localPath);
-  const contentType = localPath.endsWith('.mp3') ? 'audio/mpeg' : 'application/octet-stream';
+  const normalizedPath = localPath.toLowerCase();
+  const contentType = normalizedPath.endsWith('.mp3')
+    ? 'audio/mpeg'
+    : normalizedPath.endsWith('.wav')
+      ? 'audio/wav'
+      : normalizedPath.endsWith('.m4a')
+        ? 'audio/mp4'
+        : normalizedPath.endsWith('.aac')
+          ? 'audio/aac'
+          : normalizedPath.endsWith('.ogg') || normalizedPath.endsWith('.opus')
+            ? 'audio/ogg'
+            : normalizedPath.endsWith('.html') || normalizedPath.endsWith('.htm')
+              ? 'text/html'
+              : normalizedPath.endsWith('.css')
+                ? 'text/css'
+                : normalizedPath.endsWith('.js')
+                  ? 'application/javascript'
+                  : normalizedPath.endsWith('.json')
+                    ? 'application/json'
+                    : normalizedPath.endsWith('.md')
+                      ? 'text/markdown'
+                      : normalizedPath.endsWith('.txt')
+                        ? 'text/plain'
+                        : 'application/octet-stream';
 
   const base = {
     Bucket: bucket,
