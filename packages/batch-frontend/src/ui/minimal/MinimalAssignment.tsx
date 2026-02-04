@@ -68,6 +68,7 @@ export const MinimalAssignment: React.FC = () => {
   const [publishing, setPublishing] = useState(false);
   const [publishError, setPublishError] = useState<string | null>(null);
   const [jobStatus, setJobStatusState] = useState<JobStatus | null>(null);
+  const [publishTarget, setPublishTarget] = useState<'notion' | 'anytype'>('notion');
 
   const resetFlow = useCallback(() => {
     uploadAbortRef.current?.abort();
@@ -366,6 +367,10 @@ export const MinimalAssignment: React.FC = () => {
   };
 
   const handlePublish = async () => {
+    if (publishTarget === 'anytype') {
+      setPublishError('Anytype publishing is not wired in the web UI yet. Switch to Notion to publish.');
+      return;
+    }
     setPublishError(null);
     setPublishing(true);
 
@@ -418,7 +423,8 @@ export const MinimalAssignment: React.FC = () => {
   const transcriptReady = transcriptStatus === 'ready' && transcriptText.trim().length > 0;
   const promptReady = promptPackage?.id && promptText.trim().length > 0;
   const jobReady = jobStatus?.jobId;
-  const canPublish = promptReady && draftText.trim().length > 0 && !publishing;
+  const canPublish =
+    promptReady && draftText.trim().length > 0 && !publishing && publishTarget === 'notion';
 
   return (
     <div className="minimal-assignment">
@@ -613,7 +619,22 @@ export const MinimalAssignment: React.FC = () => {
             {publishing ? 'Publishing...' : 'Publish assignment'}
           </button>
         </div>
+        <label className="minimal-select">
+          Publish to
+          <select
+            value={publishTarget}
+            onChange={(event) => setPublishTarget(event.target.value as 'notion' | 'anytype')}
+          >
+            <option value="notion">Notion</option>
+            <option value="anytype">Anytype</option>
+          </select>
+        </label>
         <p className="minimal-help">Publishes the markdown as a job and approves it.</p>
+        {publishTarget === 'anytype' ? (
+          <p className="minimal-muted">
+            Anytype export is available via the adapter package. Web UI publishing is Notion-only for now.
+          </p>
+        ) : null}
         {publishError ? <p className="minimal-error">{publishError}</p> : null}
         {jobReady ? (
           <div className="minimal-meta">
@@ -710,6 +731,21 @@ export const MinimalAssignment: React.FC = () => {
           display: flex;
           flex-direction: column;
           gap: var(--space-3);
+        }
+
+        .minimal-select {
+          display: flex;
+          flex-direction: column;
+          gap: var(--space-2);
+          font-size: var(--text-sm);
+          color: var(--text-secondary);
+        }
+
+        .minimal-select select {
+          padding: var(--space-2) var(--space-3);
+          border-radius: var(--radius-lg);
+          border: 1px solid var(--border-medium);
+          background: var(--bg-secondary);
         }
 
         textarea {
