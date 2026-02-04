@@ -62,6 +62,7 @@ describe('application/process-queue-job', () => {
       voiceAccent: 'american_female',
       forceTts: false,
       notionDatabase: 'db-123',
+      publishTarget: 'notion',
       ttsStrategy: 'auto',
       createdAt: now,
       updatedAt: now,
@@ -106,6 +107,7 @@ describe('application/process-queue-job', () => {
       manifestPath: '/manifests/job-1.json',
       finishedAt: new Date('2024-01-01T10:02:00Z'),
       notionUrl: 'https://notion.so/job-1',
+      anytypeUrl: null,
     };
     updateJobStateAndResultSpy
       .mockResolvedValueOnce(running as any) // queued -> running
@@ -138,6 +140,7 @@ describe('application/process-queue-job', () => {
       upload: 's3',
       forceTts: initial.forceTts,
       notionDatabase: initial.notionDatabase,
+      publishTarget: initial.publishTarget,
       ttsStrategy: initial.ttsStrategy,
     });
     expect(path.isAbsolute(payload.md)).toBe(true);
@@ -151,6 +154,7 @@ describe('application/process-queue-job', () => {
       nextState: 'succeeded',
       manifestPath: '/manifests/job-1.json',
       notionUrl: 'https://notion.so/job-1',
+      anytypeUrl: null,
       finishedAt: expect.any(Date),
     });
 

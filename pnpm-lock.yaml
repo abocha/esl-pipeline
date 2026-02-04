@@ -509,6 +509,9 @@ importers:
       '@elevenlabs/elevenlabs-js':
         specifier: ^2.30.0
         version: 2.30.0
+      '@esl-pipeline/anytype-adapter':
+        specifier: workspace:*
+        version: link:../anytype-adapter
       '@esl-pipeline/notion-adapter':
         specifier: workspace:*
         version: link:../notion-adapter

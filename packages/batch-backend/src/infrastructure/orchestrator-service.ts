@@ -146,6 +146,7 @@ export interface RunAssignmentPayload {
   upload?: 's3';
   forceTts?: boolean | null;
   notionDatabase?: string | null;
+  publishTarget?: 'notion' | 'anytype';
   ttsStrategy?: TtsStrategy | null;
   settings?: {
     elevenLabsApiKey?: string | null;
@@ -157,7 +158,7 @@ export interface RunAssignmentPayload {
 export async function runAssignmentJob(
   payload: RunAssignmentPayload,
   runId: string,
-): Promise<{ manifestPath?: string; notionUrl?: string }> {
+): Promise<{ manifestPath?: string; notionUrl?: string; anytypeUrl?: string }> {
   const log = rootLogger.child({ jobId: payload.jobId, runId });
 
   return new Promise((resolve, reject) => {
@@ -178,7 +179,7 @@ export async function runAssignmentJob(
 
       if (message.type === 'success') {
         resolved = true;
-        resolve(message.result as { manifestPath?: string; notionUrl?: string });
+        resolve(message.result as { manifestPath?: string; notionUrl?: string; anytypeUrl?: string });
       } else if (message.type === 'error') {
         resolved = true;
         const err = new Error(message.error?.message || String(message.error));

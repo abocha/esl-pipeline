@@ -10,6 +10,10 @@ export interface AssignmentManifest {
   mdHash: string;
   pageId?: string;
   pageUrl?: string;
+  publishTarget?: 'notion' | 'anytype';
+  anytypePageId?: string;
+  anytypeSpaceId?: string;
+  anytypeUrl?: string;
   audio?: {
     path?: string;
     url?: string;

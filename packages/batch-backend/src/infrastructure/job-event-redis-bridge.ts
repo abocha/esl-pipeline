@@ -32,6 +32,12 @@ interface SerializedJobRecord {
   preset: string | null;
   withTts: boolean | null;
   upload: JobUploadOption | null;
+  publishTarget: string | null;
+  notionDatabase: string | null;
+  ttsStrategy: string | null;
+  notionUrl: string | null;
+  anytypeUrl: string | null;
+  autoPublish: boolean | null;
   createdAt: string;
   updatedAt: string;
   startedAt: string | null;
@@ -284,6 +290,12 @@ function serializeJobRecord(job: JobRecord): SerializedJobRecord {
     preset: job.preset ?? null,
     withTts: job.withTts ?? null,
     upload: job.upload ?? null,
+    publishTarget: job.publishTarget ?? null,
+    notionDatabase: job.notionDatabase ?? null,
+    ttsStrategy: job.ttsStrategy ?? null,
+    notionUrl: job.notionUrl ?? null,
+    anytypeUrl: job.anytypeUrl ?? null,
+    autoPublish: job.autoPublish ?? null,
     createdAt: job.createdAt.toISOString(),
     updatedAt: job.updatedAt.toISOString(),
     startedAt: job.startedAt ? job.startedAt.toISOString() : null,
@@ -305,6 +317,12 @@ function deserializeJobRecord(serialized: SerializedJobRecord): JobRecord {
     preset: serialized.preset ?? null,
     withTts: serialized.withTts ?? null,
     upload: serialized.upload ?? null,
+    publishTarget: normalizePublishTarget(serialized.publishTarget),
+    notionDatabase: serialized.notionDatabase ?? null,
+    ttsStrategy: normalizeTtsStrategy(serialized.ttsStrategy),
+    notionUrl: serialized.notionUrl ?? null,
+    anytypeUrl: serialized.anytypeUrl ?? null,
+    autoPublish: serialized.autoPublish ?? null,
     createdAt: new Date(serialized.createdAt),
     updatedAt: new Date(serialized.updatedAt),
     startedAt: serialized.startedAt ? new Date(serialized.startedAt) : null,
@@ -312,4 +330,14 @@ function deserializeJobRecord(serialized: SerializedJobRecord): JobRecord {
     error: serialized.error ?? null,
     manifestPath: serialized.manifestPath ?? null,
   };
+}
+
+function normalizePublishTarget(value: string | null | undefined): JobRecord['publishTarget'] {
+  if (value === 'notion' || value === 'anytype') return value;
+  return null;
+}
+
+function normalizeTtsStrategy(value: string | null | undefined): JobRecord['ttsStrategy'] {
+  if (value === 'auto' || value === 'dialogue' || value === 'tts') return value;
+  return null;
 }

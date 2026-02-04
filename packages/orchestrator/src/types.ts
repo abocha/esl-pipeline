@@ -39,6 +39,8 @@ export interface NewAssignmentFlags {
   accentPreference?: string;
   voiceId?: string;
   withTts?: boolean;
+  publishTarget?: 'notion' | 'anytype';
+  anytypeSpaceId?: string;
 
   // TTS strategy fields
   ttsStrategy?: 'auto' | 'dialogue' | 'tts';

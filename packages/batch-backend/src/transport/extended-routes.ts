@@ -1629,6 +1629,7 @@ export function registerExtendedRoutes(app: FastifyInstance, options: ExtendedRo
       const jobOverridesSchema = z.object({
         preset: z.string().min(1).optional(),
         notionDatabase: z.string().min(1).optional(),
+        publishTarget: z.enum(['notion', 'anytype']).optional(),
         withTts: z.boolean().optional(),
         forceTts: z.boolean().optional(),
         ttsStrategy: z.enum(['auto', 'dialogue', 'tts']).optional(),

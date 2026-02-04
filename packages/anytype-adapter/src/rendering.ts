@@ -84,7 +84,7 @@ function createRenderer(): MarkdownIt {
 
   md.use(containerPlugin, 'toggle', {
     validate: (params: string) => params.trim().startsWith('toggle '),
-    render: (tokens: Array<{ info?: string; nesting?: number }>, idx: number) => {
+    render: (tokens: { info?: string; nesting?: number }[], idx: number) => {
       const info = tokens[idx]?.info?.trim() ?? '';
       const match = /^toggle\s+(.*)$/.exec(info);
       const label = match?.[1] ?? 'Details';
@@ -97,7 +97,7 @@ function createRenderer(): MarkdownIt {
 
   md.use(containerPlugin, 'callout', {
     validate: (params: string) => params.trim().startsWith('callout '),
-    render: (tokens: Array<{ info?: string; nesting?: number }>, idx: number) => {
+    render: (tokens: { info?: string; nesting?: number }[], idx: number) => {
       const info = tokens[idx]?.info?.trim() ?? '';
       const match = /^callout\s+(.*)$/.exec(info);
       const icon = match?.[1] ?? '💡';
@@ -110,13 +110,13 @@ function createRenderer(): MarkdownIt {
 
   md.use(containerPlugin, 'column-list', {
     validate: (params: string) => params.trim() === 'column-list',
-    render: (tokens: Array<{ nesting?: number }>, idx: number) =>
+    render: (tokens: { nesting?: number }[], idx: number) =>
       tokens[idx]?.nesting === 1 ? '<div class="column-list">' : '</div>',
   });
 
   md.use(containerPlugin, 'column', {
     validate: (params: string) => params.trim() === 'column',
-    render: (tokens: Array<{ nesting?: number }>, idx: number) =>
+    render: (tokens: { nesting?: number }[], idx: number) =>
       tokens[idx]?.nesting === 1 ? '<div class="column">' : '</div>',
   });
 

@@ -5,7 +5,14 @@ import { basename, dirname } from 'node:path';
 
 import { InfrastructureError, ManifestError, ValidationError } from '@esl-pipeline/contracts';
 import { validateMarkdownFile } from '@esl-pipeline/md-validator';
-import { addOrReplaceAudioUnderStudyText, applyHeadingPreset, runImport } from '@esl-pipeline/notion-adapter';
+import { createAnytypeClient, sharePageToS3 } from '@esl-pipeline/anytype-adapter';
+import {
+  addOrReplaceAudioUnderStudyText,
+  applyHeadingPreset,
+  loadPreset,
+  runImport,
+  type ColorPreset,
+} from '@esl-pipeline/notion-adapter';
 import { uploadFile } from '@esl-pipeline/storage-uploader';
 import {
   type BuildStudyTextResult,
@@ -69,6 +76,97 @@ async function readMarkdownCached(mdPath: string): Promise<string> {
     markdownCache.set(mdPath, { content, mtimeMs: 0, size: content.length });
     return content;
   }
+}
+
+const STUDY_TEXT_MARKER = ':::study-text Transcript';
+const AUDIO_LINK_REGEX = /^\[Audio recording\]\([^)]+\)\s*$/i;
+
+function insertAudioBeforeStudyText(markdown: string, audioUrl: string): string {
+  if (!audioUrl) return markdown;
+  const lines = markdown.split('\n');
+  const cleaned: string[] = [];
+  let markerIndex = -1;
+
+  for (const line of lines) {
+    const trimmed = line.trim();
+    if (trimmed === STUDY_TEXT_MARKER) {
+      markerIndex = cleaned.length;
+    }
+    if (AUDIO_LINK_REGEX.test(trimmed)) {
+      continue;
+    }
+    cleaned.push(line);
+  }
+
+  const audioLine = `[Audio recording](${audioUrl})`;
+  if (cleaned.some((line) => line.trim() === audioLine)) {
+    return cleaned.join('\n');
+  }
+
+  const insertAt = markerIndex === -1 ? cleaned.length : markerIndex;
+  const nextLines = [...cleaned];
+  nextLines.splice(insertAt, 0, audioLine, '');
+  return nextLines.join('\n');
+}
+
+function resolveMarkdownTitle(mdContents: string, fallback: string, metaTitle?: string | null): string {
+  if (metaTitle && metaTitle.trim()) return metaTitle.trim();
+  const headingMatch = mdContents.match(/^#\s+(.+)$/m);
+  if (headingMatch?.[1]) return headingMatch[1].trim();
+  return fallback;
+}
+
+const NOTION_COLOR_TO_HEX: Record<string, string> = {
+  default: '#1b1b1d',
+  gray: '#6b6f76',
+  brown: '#8d6e63',
+  orange: '#f2994a',
+  yellow: '#f2c94c',
+  green: '#27ae60',
+  blue: '#2d9cdb',
+  purple: '#9b51e0',
+  pink: '#d16ba5',
+  red: '#eb5757',
+  default_background: '#1b1b1d',
+  gray_background: '#6b6f76',
+  brown_background: '#8d6e63',
+  orange_background: '#f2994a',
+  yellow_background: '#f2c94c',
+  green_background: '#27ae60',
+  blue_background: '#2d9cdb',
+  purple_background: '#9b51e0',
+  pink_background: '#d16ba5',
+  red_background: '#eb5757',
+};
+
+function resolveHeadingTheme(preset?: ColorPreset): { h2?: string; h3?: string } | undefined {
+  if (!preset) return undefined;
+  const h2 = preset.h2 ? NOTION_COLOR_TO_HEX[preset.h2] ?? undefined : undefined;
+  const h3 = preset.h3 ? NOTION_COLOR_TO_HEX[preset.h3] ?? undefined : undefined;
+  if (!h2 && !h3) return undefined;
+  return { h2, h3 };
+}
+
+async function resolveAnytypeSpaceId(
+  client: ReturnType<typeof createAnytypeClient>,
+  explicitId?: string,
+): Promise<string> {
+  const fromEnv = process.env.ANYTYPE_SPACE_ID;
+  const candidateId = explicitId ?? fromEnv;
+  if (candidateId) return candidateId;
+
+  const spaces = await client.listSpaces();
+  if (spaces.length === 1 && spaces[0]?.id) return spaces[0].id;
+
+  const desiredName = process.env.ANYTYPE_SPACE_NAME?.trim();
+  if (desiredName) {
+    const match = spaces.find((space: { name?: string }) => space.name === desiredName);
+    if (match?.id) return match.id;
+  }
+
+  throw new ValidationError(
+    'Anytype space not resolved. Set ANYTYPE_SPACE_ID or ANYTYPE_SPACE_NAME.',
+  );
 }
 
 export {
@@ -165,6 +263,8 @@ export async function newAssignment(
 ): Promise<{
   pageId?: string;
   pageUrl?: string;
+  anytypeUrl?: string;
+  publishTarget?: 'notion' | 'anytype';
   audio?: { path?: string; url?: string; hash?: string; voices?: BuildStudyTextResult['voices'] };
   colorized?: boolean;
   manifestPath?: string;
@@ -237,17 +337,30 @@ export async function newAssignment(
   const mdContents = await readMarkdownCached(flags.md);
   const previousManifest = await manifestStore.readManifest(flags.md);
 
+  const publishTarget = flags.publishTarget ?? previousManifest?.publishTarget ?? 'notion';
   let pageId = previousManifest?.pageId;
   let pageUrl = previousManifest?.pageUrl;
+  let anytypePageId = previousManifest?.anytypePageId;
+  let anytypeSpaceId = flags.anytypeSpaceId ?? previousManifest?.anytypeSpaceId;
+  let anytypeUrl = previousManifest?.anytypeUrl;
 
   let colorized = false;
+
+  if (publishTarget === 'anytype') {
+    pageId = undefined;
+    pageUrl = undefined;
+  } else {
+    anytypePageId = undefined;
+    anytypeSpaceId = undefined;
+    anytypeUrl = undefined;
+  }
 
   logger.log({
     level: 'info',
     message: 'pipeline.newAssignment.start',
     runId,
     stage: 'pipeline',
-    detail: { md: flags.md, preset: flags.preset, student: flags.student },
+    detail: { md: flags.md, preset: flags.preset, student: flags.student, publishTarget },
   });
 
   try {
@@ -273,36 +386,74 @@ export async function newAssignment(
     if (flags.skipImport) {
       recordSkip('import', 'skip-import flag set');
       steps.push('skip:import');
-      if (!pageId && !flags.dryRun) {
+      if (publishTarget === 'notion' && !pageId && !flags.dryRun) {
         throw new ValidationError(
-          'Cannot skip import because no existing pageId was found. Run a full pipeline first.',
+          'Cannot skip import because no existing Notion pageId was found. Run a full pipeline first.',
+        );
+      }
+      if (publishTarget === 'anytype' && !anytypePageId && !flags.dryRun) {
+        throw new ValidationError(
+          'Cannot skip import because no existing Anytype pageId was found. Run a full pipeline first.',
         );
       }
     } else {
       emitStage('import', 'start');
       steps.push('import');
-      const importResult = await runImport({
-        mdPath: flags.md,
-        dbId: flags.dbId,
-        dbName: flags.db,
-        dataSourceId: flags.dataSourceId,
-        dataSourceName: flags.dataSource,
-        student: flags.student,
-        dryRun: flags.dryRun,
-        validationResult: validation,
-        strictValidation: false,
-        logger,
-      });
-      pageId = importResult.page_id;
-      pageUrl = importResult.url;
-      emitStage('import', 'success', {
-        pageUrl,
-        studentLinked: importResult.studentLinked ?? undefined,
-      });
+      if (publishTarget === 'notion') {
+        const importResult = await runImport({
+          mdPath: flags.md,
+          dbId: flags.dbId,
+          dbName: flags.db,
+          dataSourceId: flags.dataSourceId,
+          dataSourceName: flags.dataSource,
+          student: flags.student,
+          dryRun: flags.dryRun,
+          validationResult: validation,
+          strictValidation: false,
+          logger,
+        });
+        pageId = importResult.page_id;
+        pageUrl = importResult.url;
+        emitStage('import', 'success', {
+          pageUrl,
+          studentLinked: importResult.studentLinked ?? undefined,
+        });
+      } else {
+        const client = createAnytypeClient();
+        const spaceId = await resolveAnytypeSpaceId(client, anytypeSpaceId);
+        anytypeSpaceId = spaceId;
+
+        const title = resolveMarkdownTitle(
+          mdContents,
+          basename(flags.md).replace(/\.[^.]+$/, ''),
+          validation.meta?.title ?? null,
+        );
+
+        if (anytypePageId) {
+          await client.updateObject(spaceId, anytypePageId, {
+            name: title,
+            body: mdContents,
+          });
+        } else {
+          const created = await client.createObject(spaceId, {
+            name: title,
+            type_key: 'page',
+            body: mdContents,
+          });
+          anytypePageId = created.id;
+        }
+
+        emitStage('import', 'success', {
+          pageId: anytypePageId,
+          spaceId: anytypeSpaceId,
+        });
+      }
     }
 
     if (flags.preset) {
-      if (flags.dryRun) {
+      if (publishTarget === 'anytype') {
+        recordSkip('colorize', 'anytype uses static HTML theming');
+      } else if (flags.dryRun) {
         emitStage('colorize', 'start');
         steps.push(`colorize:${flags.preset}:0/0/0`);
         emitStage('colorize', 'success', {
@@ -467,7 +618,25 @@ export async function newAssignment(
       recordSkip('upload', flags.upload === 's3' ? 'no audio path available' : 'upload disabled');
     }
 
-    if (audio?.url && pageId) {
+    if (publishTarget === 'notion') {
+      if (audio?.url && pageId) {
+        if (flags.skipUpload) {
+          recordSkip('add-audio', 'skip-upload flag set');
+          steps.push('skip:add-audio');
+        } else if (flags.dryRun) {
+          emitStage('add-audio', 'start');
+          steps.push('add-audio');
+          emitStage('add-audio', 'success', { dryRun: true });
+        } else {
+          emitStage('add-audio', 'start');
+          steps.push('add-audio');
+          await addOrReplaceAudioUnderStudyText(pageId, audio.url, { replace: flags.force });
+          emitStage('add-audio', 'success', { pageId, url: audio.url });
+        }
+      } else {
+        recordSkip('add-audio', audio?.url ? 'missing pageId' : 'no audio url available');
+      }
+    } else if (anytypePageId && anytypeSpaceId) {
       if (flags.skipUpload) {
         recordSkip('add-audio', 'skip-upload flag set');
         steps.push('skip:add-audio');
@@ -478,11 +647,37 @@ export async function newAssignment(
       } else {
         emitStage('add-audio', 'start');
         steps.push('add-audio');
-        await addOrReplaceAudioUnderStudyText(pageId, audio.url, { replace: flags.force });
-        emitStage('add-audio', 'success', { pageId, url: audio.url });
+
+        const client = createAnytypeClient();
+        const page = await client.getObject(anytypeSpaceId, anytypePageId);
+        if (audio?.url) {
+          const updatedBody = insertAudioBeforeStudyText(page.body ?? '', audio.url);
+          if (updatedBody !== page.body) {
+            await client.updateObject(anytypeSpaceId, anytypePageId, {
+              body: updatedBody,
+            });
+          }
+        }
+
+        let headingTheme: { h2?: string; h3?: string } | undefined;
+        if (flags.preset) {
+          const preset = await loadPreset(flags.preset, flags.presetsPath ?? 'configs/presets.json');
+          headingTheme = resolveHeadingTheme(preset);
+        }
+
+        const publishResult = await sharePageToS3(anytypeSpaceId, anytypePageId, {
+          headingTheme,
+        });
+        anytypeUrl = publishResult.url;
+
+        emitStage('add-audio', 'success', {
+          pageId: anytypePageId,
+          url: audio?.url,
+          publishUrl: anytypeUrl,
+        });
       }
     } else {
-      recordSkip('add-audio', audio?.url ? 'missing pageId' : 'no audio url available');
+      recordSkip('add-audio', 'missing Anytype pageId/spaceId');
     }
 
     const manifest: AssignmentManifest = {
@@ -490,6 +685,10 @@ export async function newAssignment(
       mdHash: hashStudyText(mdContents),
       pageId,
       pageUrl,
+      publishTarget,
+      anytypePageId,
+      anytypeSpaceId,
+      anytypeUrl,
       audio,
       preset: flags.preset,
 
@@ -521,6 +720,8 @@ export async function newAssignment(
     return {
       pageId,
       pageUrl,
+      anytypeUrl,
+      publishTarget,
       audio,
       colorized,
       manifestPath,
@@ -634,6 +835,8 @@ export async function rerunAssignment(
   audio?: { path?: string; url?: string; hash?: string; voices?: BuildStudyTextResult['voices'] };
   pageId?: string;
   pageUrl?: string;
+  anytypeUrl?: string;
+  publishTarget?: 'notion' | 'anytype';
   manifestPath: string;
 }> {
   const manifestStore = dependencies.manifestStore ?? fallbackManifestStore;
@@ -719,6 +922,8 @@ export async function rerunAssignment(
     let audioUrl = manifest.audio?.url;
     let audioHash = manifest.audio?.hash;
     let audioVoices = manifest.audio?.voices;
+    const publishTarget = manifest.publishTarget ?? 'notion';
+    let anytypeUrl = manifest.anytypeUrl;
 
     if (stepsToRun.has('tts')) {
       emitStage('tts', 'start');
@@ -830,21 +1035,61 @@ export async function rerunAssignment(
 
     if (stepsToRun.has('add-audio')) {
       emitStage('add-audio', 'start');
-      const targetPageId = manifest.pageId;
-      if (!targetPageId) {
-        throw new Error(
-          'Cannot add audio: manifest does not have a pageId. Re-run the import step first.',
-        );
-      }
-      if (!audioUrl) {
-        throw new Error('Cannot add audio: no audio URL available. Rerun upload first.');
+      if (publishTarget === 'notion') {
+        const targetPageId = manifest.pageId;
+        if (!targetPageId) {
+          throw new Error(
+            'Cannot add audio: manifest does not have a pageId. Re-run the import step first.',
+          );
+        }
+        if (!audioUrl) {
+          throw new Error('Cannot add audio: no audio URL available. Rerun upload first.');
+        }
+
+        if (!flags.dryRun) {
+          await addOrReplaceAudioUnderStudyText(targetPageId, audioUrl, { replace: flags.force });
+        }
+
+        emitStage('add-audio', 'success', { pageId: targetPageId, url: audioUrl });
+      } else {
+        const targetPageId = manifest.anytypePageId;
+        const targetSpaceId = manifest.anytypeSpaceId;
+        if (!targetPageId || !targetSpaceId) {
+          throw new Error(
+            'Cannot add audio: manifest does not have an Anytype page/space id. Re-run import first.',
+          );
+        }
+        if (!audioUrl) {
+          throw new Error('Cannot add audio: no audio URL available. Rerun upload first.');
+        }
+
+        if (!flags.dryRun) {
+          const client = createAnytypeClient();
+          const page = await client.getObject(targetSpaceId, targetPageId);
+          const updatedBody = insertAudioBeforeStudyText(page.body ?? '', audioUrl);
+          if (updatedBody !== page.body) {
+            await client.updateObject(targetSpaceId, targetPageId, { body: updatedBody });
+          }
+
+          let headingTheme: { h2?: string; h3?: string } | undefined;
+          if (manifest.preset) {
+            const preset = await loadPreset(manifest.preset, 'configs/presets.json');
+            headingTheme = resolveHeadingTheme(preset);
+          }
+
+          const publishResult = await sharePageToS3(targetSpaceId, targetPageId, {
+            headingTheme,
+          });
+          anytypeUrl = publishResult.url;
+        }
+
+        emitStage('add-audio', 'success', {
+          pageId: targetPageId,
+          url: audioUrl,
+          publishUrl: anytypeUrl,
+        });
       }
 
-      if (!flags.dryRun) {
-        await addOrReplaceAudioUnderStudyText(targetPageId, audioUrl, { replace: flags.force });
-      }
-
-      emitStage('add-audio', 'success', { pageId: targetPageId, url: audioUrl });
       executed.push('add-audio');
     } else {
       emitStage('add-audio', 'skipped', { reason: 'not requested' });
@@ -854,6 +1099,8 @@ export async function rerunAssignment(
       ...manifest,
       schemaVersion: CURRENT_MANIFEST_SCHEMA_VERSION,
       mdHash: hashStudyText(mdContents),
+      publishTarget,
+      anytypeUrl,
       audio: {
         path: audioPath,
         url: audioUrl,
@@ -890,6 +1137,8 @@ export async function rerunAssignment(
       audio: updatedManifest.audio,
       pageId: updatedManifest.pageId,
       pageUrl: updatedManifest.pageUrl,
+      anytypeUrl: updatedManifest.anytypeUrl,
+      publishTarget: updatedManifest.publishTarget,
       manifestPath,
     };
   } catch (error) {
