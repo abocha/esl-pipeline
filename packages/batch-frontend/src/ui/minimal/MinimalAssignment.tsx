@@ -184,6 +184,7 @@ export const MinimalAssignment: React.FC = () => {
   useEffect(() => {
     if (!recording?.recordingId) return;
     let active = true;
+    let interval: ReturnType<typeof setInterval> | null = null;
 
     const pollRecording = async () => {
       try {
@@ -199,6 +200,10 @@ export const MinimalAssignment: React.FC = () => {
           setTranscriptStatus('failed');
           setTranscriptError(updated.error ?? 'Transcription failed.');
         }
+        if (updated.status === 'transcribed' || updated.status === 'failed') {
+          if (interval) clearInterval(interval);
+          interval = null;
+        }
       } catch (error) {
         if (!active) return;
         const message = error instanceof Error ? error.message : 'Unable to refresh recording status.';
@@ -207,11 +212,11 @@ export const MinimalAssignment: React.FC = () => {
     };
 
     void pollRecording();
-    const interval = setInterval(pollRecording, POLL_INTERVAL_MS);
+    interval = setInterval(pollRecording, POLL_INTERVAL_MS);
 
     return () => {
       active = false;
-      clearInterval(interval);
+      if (interval) clearInterval(interval);
     };
   }, [recording?.recordingId, loadTranscript, transcript?.transcriptId]);
 
