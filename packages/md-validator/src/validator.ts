@@ -48,17 +48,51 @@ const FrontSchema = z.object({
   speaker_profiles: z.array(z.record(z.string(), z.unknown())).optional(), // Already in fixtures, add for completeness
 });
 
-const EXPECTED_H2 = [
-  "1. This Week's Mission Briefing",
-  '2. Your Homework Roadmap',
-  '3. Input Material: The Source',
-  '4. Language Toolkit: Useful Language',
-  '5. Practice & Pronunciation',
-  '6. Your Turn: Complete the Mission!',
-  '7. Why This Mission Helps You',
-  '8. Answer Key & Sample Mission',
-  "9. Teacher's Follow-up Plan",
-].map((s) => normalizeHeadingText(s));
+interface HeadingRule {
+  label: string;
+  groups: string[][];
+}
+
+const H2_RULES: HeadingRule[] = [
+  {
+    label: "This Week's Mission Briefing",
+    groups: [['mission', 'briefing', 'overview', 'summary', 'recap', 'lesson']],
+  },
+  {
+    label: 'Your Homework Roadmap',
+    groups: [['homework', 'assignment', 'roadmap', 'plan', 'overview']],
+  },
+  {
+    label: 'Input Material: The Source',
+    groups: [['input', 'material', 'source', 'text', 'story', 'reading', 'audio']],
+  },
+  {
+    label: 'Language Toolkit: Useful Language',
+    groups: [['language', 'toolkit', 'tools', 'toolbox', 'grammar', 'useful', 'vocab', 'vocabulary']],
+  },
+  {
+    label: 'Practice & Pronunciation',
+    groups: [['practice', 'pronunciation', 'speaking', 'exercises']],
+  },
+  {
+    label: 'Your Turn: Complete the Mission!',
+    groups: [['your', 'turn', 'mission', 'task', 'story', 'practice', 'challenge']],
+  },
+  {
+    label: 'Why This Mission Helps You',
+    groups: [['why', 'benefit', 'benefits', 'help', 'helps', 'value', 'reason', 'purpose']],
+  },
+  {
+    label: 'Answer Key & Sample Mission',
+    groups: [['answer', 'answers', 'key', 'solutions', 'sample', 'example']],
+  },
+  {
+    label: "Teacher's Follow-up Plan",
+    groups: [['teacher', 'tutor', 'coach', 'instructor', 'follow', 'plan', 'next', 'lesson']],
+  },
+];
+
+const NON_BLOCKING_WARNING_PREFIXES = ['Controlled Practice has '];
 
 function normalizeNewlines(input: string): string {
   return input.replaceAll('\r\n', '\n');
@@ -78,6 +112,24 @@ function normalizeHeadingText(s: string): string {
       .trim()
       .toLowerCase()
   );
+}
+
+function tokenizeHeading(text: string): string[] {
+  const normalized = normalizeHeadingText(text);
+  const withoutNumber = normalized.replace(/^\d+\s*[\.\-:]?\s*/, '');
+  return withoutNumber
+    .split(/\s+/)
+    .map((token) => token.replaceAll(/[^a-z0-9]/g, ''))
+    .filter((token) => token.length > 0);
+}
+
+function matchesHeadingRule(tokens: string[], rule: HeadingRule): boolean {
+  const tokenSet = new Set(tokens);
+  for (const group of rule.groups) {
+    const matches = group.some((candidate) => tokenSet.has(candidate));
+    if (!matches) return false;
+  }
+  return true;
 }
 
 function extractLegacyFence(input: string): string {
@@ -256,6 +308,10 @@ function countListItems(blocks: PmdBlock[]): number {
   return count;
 }
 
+function isNonBlockingWarning(message: string): boolean {
+  return NON_BLOCKING_WARNING_PREFIXES.some((prefix) => message.startsWith(prefix));
+}
+
 export async function validateMarkdownFile(
   rawFile: string,
   opts: ValidateOptions = {},
@@ -297,25 +353,20 @@ export async function validateMarkdownFile(
   const meta = metaParse.success ? metaParse.data : undefined;
 
   // a) H2 order check
-  const h2 = collectHeadings(doc.body, 2).map((heading) => normalizeHeadingText(heading.text));
-  if (h2.length === 9) {
-    for (let i = 0; i < 9; i++) {
-      const expected = EXPECTED_H2[i];
-      const actual = h2[i];
-      // Relaxed check: if expected is "3. input material...", allow actual to just start with it
-      // This handles "3. Input Material: The Story of Zaika"
-      if (i === 2) {
-        if (!actual?.startsWith('3. input material')) {
-          errors.push(
-            `H2 #3 mismatch. Expected to start with "3. input material", found: "${actual}"`,
-          );
-        }
-      } else if (actual !== expected) {
-        errors.push(`H2 #${i + 1} mismatch. Found: "${actual}"`);
+  const h2 = collectHeadings(doc.body, 2);
+  if (h2.length === H2_RULES.length) {
+    for (const [index, rule] of H2_RULES.entries()) {
+      const heading = h2[index];
+      if (!heading) continue;
+      const tokens = tokenizeHeading(heading.text);
+      if (!matchesHeadingRule(tokens, rule)) {
+        errors.push(
+          `H2 #${index + 1} mismatch. Expected wording similar to "${rule.label}", found: "${heading.text}".`,
+        );
       }
     }
   } else {
-    errors.push(`Expected 9 H2 sections, found ${h2.length}.`);
+    errors.push(`Expected ${H2_RULES.length} H2 sections, found ${h2.length}.`);
   }
 
   // b) markers
@@ -617,12 +668,14 @@ export async function validateMarkdownFile(
     warnings.push(`input_type "${meta.input_type}" is not one of "generate"|"authentic".`);
   }
 
-  // In strict mode, warnings should surface to callers that expect actionable feedback.
-  if (strict && warnings.length > 0 && errors.length === 0) {
-    errors.push(...warnings);
+  const blockingWarnings = warnings.filter((warning) => !isNonBlockingWarning(warning));
+
+  // In strict mode, only blocking warnings should surface to callers that expect actionable feedback.
+  if (strict && blockingWarnings.length > 0 && errors.length === 0) {
+    errors.push(...blockingWarnings);
   }
 
-  const ok = errors.length === 0 && (!strict || warnings.length === 0);
+  const ok = errors.length === 0 && (!strict || blockingWarnings.length === 0);
 
   return { ok, errors, warnings, meta };
 }

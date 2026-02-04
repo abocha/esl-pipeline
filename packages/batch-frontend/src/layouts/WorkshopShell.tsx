@@ -130,7 +130,7 @@ export const WorkshopShell: React.FC<WorkshopShellProps> = ({
 
   const navItems = useMemo(
     () => [
-      { label: 'Dashboard', to: '/' },
+      { label: 'Dashboard', to: '/dashboard' },
       { label: 'Wizard', to: '/wizard' },
       { label: 'Students', to: '/students' },
       { label: 'Jobs', to: '/jobs' },

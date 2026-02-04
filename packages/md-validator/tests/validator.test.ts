@@ -109,6 +109,74 @@ describe('md-validator', () => {
     expect(res.errors.length).toBeGreaterThan(0);
   });
 
+  it('allows flexible H2 wording', async () => {
+    const tempDir = await mkdtemp(path.join(tmpdir(), 'validator-'));
+    const file = path.join(tempDir, 'flex-h2.md');
+    await writeFile(
+      file,
+      `
+\`\`\`markdown
+---
+title: "Flexible H2 Test"
+student: Anna
+level: B1
+topic: travel
+input_type: generate
+speaker_labels: ["Anna"]
+---
+
+## 1. Lesson Recap & Mission Overview
+text
+
+## 2. Homework Plan
+text
+
+## 3. Source Text (Input)
+:::study-text
+Anna: Hello there!
+:::
+
+## 4. Grammar & Useful Language
+text
+
+## 5. Practice and Speaking
+### A. Controlled Practice
+1) one
+2) two
+3) three
+4) four
+5) five
+6) six
+7) seven
+8) eight
+### B. Comprehension Check
+1) q1
+2) q2
+
+## 6. Your Task: Tell your story!
+text
+
+## 7. Why this helps
+text
+
+## 8. Answers & Example
+:::toggle-heading Answer Key
+answers
+:::
+
+## 9. Next Lesson Plan
+:::toggle-heading Teacher's Follow-up Plan
+plan
+:::
+\`\`\`
+      `.trim(),
+    );
+
+    const res = await validateMarkdownFile(file);
+    expect(res.ok).toBe(true);
+    expect(res.errors).toHaveLength(0);
+  });
+
   it('accepts dialogue lines without brackets', async () => {
     const tempDir = await mkdtemp(path.join(tmpdir(), 'validator-'));
     const file = path.join(tempDir, 'dialogue.md');

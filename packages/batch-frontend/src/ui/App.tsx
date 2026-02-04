@@ -1,6 +1,6 @@
 import React, { useCallback, useState } from 'react';
 import { toast } from 'react-hot-toast';
-import { Navigate, Route, Routes } from 'react-router-dom';
+import { Navigate, Outlet, Route, Routes } from 'react-router-dom';
 
 import { useAuth } from '../context/AuthContext';
 import { JobMonitorProvider } from '../context/JobMonitorContext';
@@ -14,6 +14,8 @@ import { AuthDialog, AuthMode } from './auth/AuthDialog';
 import { Dashboard } from './dashboard/Dashboard';
 import { JobConnectionBanner } from './jobs/JobConnectionBanner';
 import { JobTable } from './jobs/JobTable';
+import { MinimalAssignment } from './minimal/MinimalAssignment';
+import { MinimalShell } from './minimal/MinimalShell';
 import { ProfilePage } from './profile/ProfilePage';
 import { JobSettingsForm } from './settings/JobSettingsForm';
 import { StudentProfile } from './students/StudentProfile';
@@ -74,29 +76,15 @@ export const App: React.FC = () => {
     );
   } else {
     appBody = (
-      <StudentSelectionProvider>
-        <JobSettingsProvider>
-          <JobMonitorProvider>
-            <NotificationProvider>
-              <WizardProvider>
-                <WorkshopShell
-                  user={user}
-                  theme={theme}
-                  onToggleTheme={toggleTheme}
-                  onOpenProfile={() => setShowProfile(true)}
-                  onLogout={handleLogout}
-                >
-                  {showProfile ? (
-                    <ProfilePage onClose={() => setShowProfile(false)} />
-                  ) : (
-                    <AuthenticatedRoutes />
-                  )}
-                </WorkshopShell>
-              </WizardProvider>
-            </NotificationProvider>
-          </JobMonitorProvider>
-        </JobSettingsProvider>
-      </StudentSelectionProvider>
+      <AuthenticatedApp
+        user={user}
+        theme={theme}
+        onToggleTheme={toggleTheme}
+        onLogout={handleLogout}
+        showProfile={showProfile}
+        onOpenProfile={() => setShowProfile(true)}
+        onCloseProfile={() => setShowProfile(false)}
+      />
     );
   }
 
@@ -119,21 +107,71 @@ export const App: React.FC = () => {
   );
 };
 
-const AuthenticatedRoutes: React.FC = () => (
-  <>
-    <div className="global-notification-container">
-      <GlobalNotificationDrawer />
-    </div>
+interface AuthenticatedAppProps {
+  user: ReturnType<typeof useAuth>['user'];
+  theme: ReturnType<typeof useTheme>['theme'];
+  onToggleTheme: () => void;
+  onLogout: () => void;
+  showProfile: boolean;
+  onOpenProfile: () => void;
+  onCloseProfile: () => void;
+}
+
+const AuthenticatedApp: React.FC<AuthenticatedAppProps> = ({
+  user,
+  theme,
+  onToggleTheme,
+  onLogout,
+  showProfile,
+  onOpenProfile,
+  onCloseProfile,
+}) => {
+  if (!user) return null;
+  return (
     <Routes>
-      <Route path="/" element={<Dashboard />} />
-      <Route path="/wizard" element={<AssignmentWizard />} />
-      <Route path="/students/:studentId" element={<StudentProfilePage />} />
-      <Route path="/students" element={<StudentsPage />} />
-      <Route path="/jobs" element={<JobsPage />} />
-      <Route path="/settings" element={<SettingsPage />} />
+      <Route element={<MinimalShell user={user} onLogout={onLogout} />}>
+        <Route path="/" element={<MinimalAssignment />} />
+      </Route>
+      <Route
+        element={
+          <LegacyProviders>
+            <div className="global-notification-container">
+              <GlobalNotificationDrawer />
+            </div>
+            <WorkshopShell
+              user={user}
+              theme={theme}
+              onToggleTheme={onToggleTheme}
+              onOpenProfile={onOpenProfile}
+              onLogout={onLogout}
+            >
+              {showProfile ? <ProfilePage onClose={onCloseProfile} /> : <Outlet />}
+            </WorkshopShell>
+          </LegacyProviders>
+        }
+      >
+        <Route path="/dashboard" element={<Dashboard />} />
+        <Route path="/wizard" element={<AssignmentWizard />} />
+        <Route path="/students/:studentId" element={<StudentProfilePage />} />
+        <Route path="/students" element={<StudentsPage />} />
+        <Route path="/jobs" element={<JobsPage />} />
+        <Route path="/settings" element={<SettingsPage />} />
+      </Route>
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
-  </>
+  );
+};
+
+const LegacyProviders: React.FC<{ children: React.ReactNode }> = ({ children }) => (
+  <StudentSelectionProvider>
+    <JobSettingsProvider>
+      <JobMonitorProvider>
+        <NotificationProvider>
+          <WizardProvider>{children}</WizardProvider>
+        </NotificationProvider>
+      </JobMonitorProvider>
+    </JobSettingsProvider>
+  </StudentSelectionProvider>
 );
 
 const StudentsPage: React.FC = () => (
