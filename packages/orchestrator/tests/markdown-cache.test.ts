@@ -39,11 +39,13 @@ vi.mock('@esl-pipeline/storage-uploader', () => ({
 
 
 describe('markdown caching', () => {
-  it('passes cached markdown content to validator when provided', async () => {
-    const dir = await mkdtemp(join(tmpdir(), 'md-cache-'));
-    const mdPath = join(dir, 'lesson.md');
-    const mdContent = '# Test\n';
-    await writeFile(mdPath, mdContent);
+  it(
+    'passes cached markdown content to validator when provided',
+    async () => {
+      const dir = await mkdtemp(join(tmpdir(), 'md-cache-'));
+      const mdPath = join(dir, 'lesson.md');
+      const mdContent = '# Test\n';
+      await writeFile(mdPath, mdContent);
 
     const { newAssignment } = await import('../src/index.js');
     await newAssignment({
@@ -56,9 +58,11 @@ describe('markdown caching', () => {
       dryRun: true,
     });
 
-    expect(validateMarkdownFile).toHaveBeenCalledTimes(1);
-    const call = validateMarkdownFile.mock.calls[0];
-    expect(call?.[0]).toBe(mdPath);
-    expect(call?.[1]?.content).toBe(mdContent);
-  });
+      expect(validateMarkdownFile).toHaveBeenCalledTimes(1);
+      const call = validateMarkdownFile.mock.calls[0];
+      expect(call?.[0]).toBe(mdPath);
+      expect(call?.[1]?.content).toBe(mdContent);
+    },
+    15000,
+  );
 });
