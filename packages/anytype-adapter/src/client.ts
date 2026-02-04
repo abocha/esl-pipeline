@@ -98,7 +98,7 @@ export class AnytypeClient {
     return this.request<{ message?: string }>(
       `/spaces/${encodeURIComponent(spaceId)}/lists/${encodeURIComponent(listId)}/objects`,
       'POST',
-      objectIds,
+      { object_ids: objectIds },
     );
   }
 

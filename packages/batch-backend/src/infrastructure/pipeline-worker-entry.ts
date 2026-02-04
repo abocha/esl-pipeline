@@ -85,7 +85,11 @@ async function executePipeline(
       durationMs: duration,
     });
 
-    return { manifestPath: result.manifestPath, notionUrl: result.pageUrl };
+    return {
+      manifestPath: result.manifestPath,
+      notionUrl: result.pageUrl,
+      anytypeUrl: result.anytypeUrl,
+    };
   } finally {
     // Release semaphore after TTS operations complete
     if (semaphoreAcquired) {

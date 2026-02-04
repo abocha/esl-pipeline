@@ -12,6 +12,8 @@ export interface SharePageOptions {
   publicRead?: boolean;
   filename?: string;
   css?: string;
+  title?: string;
+  markdown?: string;
   headingTheme?: {
     h1?: string;
     h2?: string;
@@ -21,11 +23,18 @@ export interface SharePageOptions {
 
 export async function sharePageToS3(spaceId: string, pageId: string, options: SharePageOptions = {}) {
   const client = createAnytypeClient();
-  const page = await client.getObject(spaceId, pageId);
+  let title = options.title;
+  let body = options.markdown;
 
-  const title = page.name ?? 'Anytype Page';
-  const body = page.body ?? '';
-  const html = await renderToHtml(body, title, {
+  if (!title || !body) {
+    const page = await client.getObject(spaceId, pageId);
+    if (!title) title = page.name ?? 'Anytype Page';
+    if (!body) body = page.body ?? '';
+  }
+
+  const resolvedTitle = title ?? 'Anytype Page';
+  const resolvedBody = body ?? '';
+  const html = await renderToHtml(resolvedBody, resolvedTitle, {
     css: options.css,
     headingTheme: options.headingTheme,
   });
