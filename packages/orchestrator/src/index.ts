@@ -147,6 +147,26 @@ function resolveHeadingTheme(preset?: ColorPreset): { h2?: string; h3?: string }
   return { h2, h3 };
 }
 
+function resolveAnytypeObjectId(payload: unknown): string | undefined {
+  if (!payload || typeof payload !== 'object') return undefined;
+  const record = payload as Record<string, unknown>;
+  const direct = record.id;
+  if (typeof direct === 'string' && direct.length > 0) return direct;
+  const objectId = record.object_id ?? record.objectId;
+  if (typeof objectId === 'string' && objectId.length > 0) return objectId;
+  const nestedObject = record.object;
+  if (nestedObject && typeof nestedObject === 'object') {
+    const nestedId = (nestedObject as Record<string, unknown>).id;
+    if (typeof nestedId === 'string' && nestedId.length > 0) return nestedId;
+  }
+  const nestedData = record.data;
+  if (nestedData && typeof nestedData === 'object') {
+    const dataId = (nestedData as Record<string, unknown>).id;
+    if (typeof dataId === 'string' && dataId.length > 0) return dataId;
+  }
+  return undefined;
+}
+
 async function resolveAnytypeSpaceId(
   client: ReturnType<typeof createAnytypeClient>,
   explicitId?: string,
@@ -476,7 +496,12 @@ export async function newAssignment(
             type_key: 'page',
             body: mdContents,
           });
-          anytypePageId = created.id;
+          anytypePageId = resolveAnytypeObjectId(created);
+          if (!anytypePageId) {
+            throw new ValidationError(
+              'Anytype createObject did not return an object id. Cannot continue.',
+            );
+          }
         }
 
         if (anytypePageId) {
