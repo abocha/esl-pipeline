@@ -90,6 +90,18 @@ export class AnytypeClient {
     );
   }
 
+  public async addObjectsToList(
+    spaceId: string,
+    listId: string,
+    objectIds: string[],
+  ): Promise<{ message?: string }> {
+    return this.request<{ message?: string }>(
+      `/spaces/${encodeURIComponent(spaceId)}/lists/${encodeURIComponent(listId)}/objects`,
+      'POST',
+      objectIds,
+    );
+  }
+
   public async globalSearch(query: string, limit = 10): Promise<AnytypeObject[]> {
     return this.request<AnytypeObject[]>('/search', 'POST', { query, limit });
   }
