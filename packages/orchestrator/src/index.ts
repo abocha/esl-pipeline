@@ -108,8 +108,9 @@ function insertAudioBeforeStudyText(markdown: string, audioUrl: string): string 
     return cleaned.join('\n');
   }
 
-  const insertAt =
-    markerIndex !== -1 ? markerIndex : fallbackIndex !== -1 ? fallbackIndex : cleaned.length;
+  const hasMarker = markerIndex >= 0;
+  const hasFallback = fallbackIndex >= 0;
+  const insertAt = hasMarker ? markerIndex : hasFallback ? fallbackIndex : cleaned.length;
   const nextLines = [...cleaned];
   nextLines.splice(insertAt, 0, audioLine, '');
   return nextLines.join('\n');
@@ -736,7 +737,7 @@ export async function newAssignment(
           headingTheme = resolveHeadingTheme(preset);
         }
 
-        const publishMarkdown = insertAudioBeforeStudyText(mdContents, audio.url);
+        const publishMarkdown = insertAudioBeforeStudyText(mdContents, audio?.url ?? '');
         const publishTitle = resolveMarkdownTitle(
           mdContents,
           basename(flags.md).replace(/\.[^.]+$/, ''),

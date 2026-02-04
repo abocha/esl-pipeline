@@ -25,7 +25,7 @@
   },
   "dependencies": {
     "@esl-pipeline/contracts": "workspace:*",
-    "ioredis": "5.9.1"
+    "ioredis": "^5.8.2"
   },
   "devDependencies": {
     "@types/node": "^25.0.6",
