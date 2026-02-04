@@ -89,7 +89,9 @@ describe('application/submit-job', () => {
       voiceAccent: request.voiceAccent,
       forceTts: request.forceTts,
       notionDatabase: request.notionDatabase,
+      publishTarget: 'notion',
       ttsStrategy: request.ttsStrategy,
+      autoPublish: undefined,
       userId: request.userId,
     });
 
@@ -154,7 +156,9 @@ describe('application/submit-job', () => {
       voiceAccent: fakeJob.voiceAccent,
       forceTts: fakeJob.forceTts,
       notionDatabase: fakeJob.notionDatabase,
+      publishTarget: 'notion',
       ttsStrategy: fakeJob.ttsStrategy,
+      autoPublish: undefined,
       userId: undefined,
     });
     expect(enqueue).toHaveBeenCalledWith({ jobId: fakeJob.id });

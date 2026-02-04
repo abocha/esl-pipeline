@@ -367,10 +367,6 @@ export const MinimalAssignment: React.FC = () => {
   };
 
   const handlePublish = async () => {
-    if (publishTarget === 'anytype') {
-      setPublishError('Anytype publishing is not wired in the web UI yet. Switch to Notion to publish.');
-      return;
-    }
     setPublishError(null);
     setPublishing(true);
 
@@ -384,7 +380,11 @@ export const MinimalAssignment: React.FC = () => {
         return;
       }
 
-      const materialized = await materializeDraft(savedDraft.id, {});
+      const materialized = await materializeDraft(savedDraft.id, {
+        jobOverrides: {
+          publishTarget,
+        },
+      });
       await approveJob(materialized.jobId, materialized.mdPath);
       const refreshed = await getJobStatus(materialized.jobId);
       setJobStatusState(refreshed);
@@ -423,8 +423,13 @@ export const MinimalAssignment: React.FC = () => {
   const transcriptReady = transcriptStatus === 'ready' && transcriptText.trim().length > 0;
   const promptReady = promptPackage?.id && promptText.trim().length > 0;
   const jobReady = jobStatus?.jobId;
-  const canPublish =
-    promptReady && draftText.trim().length > 0 && !publishing && publishTarget === 'notion';
+  const canPublish = promptReady && draftText.trim().length > 0 && !publishing;
+  const jobPublishTarget = jobStatus?.publishTarget ?? publishTarget;
+  const publishUrl =
+    jobPublishTarget === 'anytype' ? jobStatus?.anytypeUrl : jobStatus?.notionUrl;
+  const publishLabel = jobPublishTarget === 'anytype' ? 'Open published page' : 'Open in Notion';
+  const publishPending =
+    jobPublishTarget === 'anytype' ? 'Publish link pending...' : 'Notion link pending...';
 
   return (
     <div className="minimal-assignment">
@@ -630,22 +635,17 @@ export const MinimalAssignment: React.FC = () => {
           </select>
         </label>
         <p className="minimal-help">Publishes the markdown as a job and approves it.</p>
-        {publishTarget === 'anytype' ? (
-          <p className="minimal-muted">
-            Anytype export is available via the adapter package. Web UI publishing is Notion-only for now.
-          </p>
-        ) : null}
         {publishError ? <p className="minimal-error">{publishError}</p> : null}
         {jobReady ? (
           <div className="minimal-meta">
             <span>Job ID: {jobStatus?.jobId}</span>
             <span>Status: {jobStatus?.state}</span>
-            {jobStatus?.notionUrl ? (
-              <a href={jobStatus.notionUrl} target="_blank" rel="noreferrer">
-                Open in Notion
+            {publishUrl ? (
+              <a href={publishUrl} target="_blank" rel="noreferrer">
+                {publishLabel}
               </a>
             ) : (
-              <span className="minimal-muted">Notion link pending...</span>
+              <span className="minimal-muted">{publishPending}</span>
             )}
           </div>
         ) : null}

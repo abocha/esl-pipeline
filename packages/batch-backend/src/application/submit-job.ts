@@ -22,6 +22,7 @@ export interface SubmitJobRequest {
   voiceAccent?: string;
   forceTts?: boolean;
   notionDatabase?: string;
+  publishTarget?: 'notion' | 'anytype';
   ttsStrategy?: TtsStrategy;
   userId?: string;
   autoPublish?: boolean;
@@ -108,6 +109,17 @@ function validateSubmitJobRequest(req: SubmitJobRequest): void {
     );
   }
 
+  if (
+    req.publishTarget !== undefined &&
+    req.publishTarget !== 'notion' &&
+    req.publishTarget !== 'anytype'
+  ) {
+    throw new ValidationError(
+      'publishTarget must be "notion" or "anytype" when provided',
+      'invalid_publish_target',
+    );
+  }
+
   if (req.ttsStrategy && !['auto', 'dialogue', 'tts'].includes(req.ttsStrategy)) {
     throw new ValidationError(
       'ttsStrategy must be auto, dialogue, or tts when provided',
@@ -132,6 +144,7 @@ export async function submitJob(req: SubmitJobRequest): Promise<SubmitJobRespons
     voiceAccent: req.voiceAccent,
     forceTts: req.forceTts,
     notionDatabase: req.notionDatabase,
+    publishTarget: req.publishTarget ?? 'notion',
     ttsStrategy: req.ttsStrategy,
     userId: req.userId,
     autoPublish: req.autoPublish,

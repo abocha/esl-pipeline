@@ -48,6 +48,7 @@
     "@aws-sdk/client-s3": "^3.966.0",
     "@aws-sdk/s3-request-presigner": "^3.966.0",
     "@elevenlabs/elevenlabs-js": "^2.30.0",
+    "@esl-pipeline/anytype-adapter": "workspace:*",
     "@esl-pipeline/notion-adapter": "workspace:*",
     "@esl-pipeline/shared-infrastructure": "workspace:*",
     "@notionhq/client": "^5.6.0",

@@ -235,6 +235,7 @@ describe('StudentWorkspace', () => {
 
     await waitFor(() => expect(mockGetStudentTimeline).toHaveBeenCalled());
 
+    await screen.findByText('Job complete');
     const jobButton = await screen.findByRole('button', { name: 'Job' });
     fireEvent.click(jobButton);
 

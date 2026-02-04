@@ -3,6 +3,7 @@ export type JobState = 'queued' | 'running' | 'awaiting_approval' | 'succeeded' 
 export type TtsStrategy = 'auto' | 'dialogue' | 'tts';
 
 export type JobUploadOption = 'auto' | 's3' | 'none';
+export type PublishTarget = 'notion' | 'anytype';
 
 export type RecordingStatus = 'ingested' | 'queued' | 'transcribing' | 'transcribed' | 'failed';
 
@@ -12,6 +13,7 @@ export interface SubmitJobRequest {
   withTts?: boolean;
   forceTts?: boolean;
   notionDatabase?: string;
+  publishTarget?: PublishTarget;
   upload?: JobUploadOption;
   ttsStrategy?: TtsStrategy;
   voiceId?: string;
@@ -22,6 +24,7 @@ export interface SubmitJobRequest {
 export interface JobConfigOverrides {
   preset?: string;
   notionDatabase?: string;
+  publishTarget?: PublishTarget;
   withTts?: boolean;
   forceTts?: boolean;
   ttsStrategy?: TtsStrategy;
@@ -45,9 +48,11 @@ export interface JobStatusDto {
   voiceAccent: string | null;
   forceTts: boolean | null;
   notionDatabase: string | null;
+  publishTarget: PublishTarget | null;
   ttsStrategy: TtsStrategy | null;
   autoPublish: boolean | null;
   notionUrl: string | null;
+  anytypeUrl: string | null;
   state: JobState;
   createdAt: string;
   updatedAt: string;
@@ -114,6 +119,8 @@ export interface JobEventPayload {
   ttsStrategy?: TtsStrategy | null;
   md?: string | null;
   notionUrl?: string | null;
+  anytypeUrl?: string | null;
+  publishTarget?: PublishTarget | null;
   recordingId?: string | null;
   transcriptId?: string | null;
 }

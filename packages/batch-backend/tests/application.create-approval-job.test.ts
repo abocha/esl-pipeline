@@ -101,6 +101,8 @@ describe('application/create-approval-job', () => {
       userId: 'user-1',
       preset: 'b2-intermediate',
       withTts: true,
+      autoPublish: undefined,
+      publishTarget: 'notion',
       ttsStrategy: 'dialogue',
       voiceAccent: 'british',
       voiceId: undefined,

@@ -12,6 +12,11 @@ export interface SharePageOptions {
   publicRead?: boolean;
   filename?: string;
   css?: string;
+  headingTheme?: {
+    h1?: string;
+    h2?: string;
+    h3?: string;
+  };
 }
 
 export async function sharePageToS3(spaceId: string, pageId: string, options: SharePageOptions = {}) {
@@ -20,7 +25,10 @@ export async function sharePageToS3(spaceId: string, pageId: string, options: Sh
 
   const title = page.name ?? 'Anytype Page';
   const body = page.body ?? '';
-  const html = await renderToHtml(body, title, { css: options.css });
+  const html = await renderToHtml(body, title, {
+    css: options.css,
+    headingTheme: options.headingTheme,
+  });
 
   const filename = options.filename ?? `${pageId}.html`;
   const localPath = join(tmpdir(), filename);

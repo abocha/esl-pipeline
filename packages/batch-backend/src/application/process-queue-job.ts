@@ -111,6 +111,7 @@ export async function processQueueJob(payload: QueueJobPayload): Promise<void> {
         upload: uploadFlag,
         forceTts: running.forceTts ?? undefined,
         notionDatabase: running.notionDatabase ?? config.orchestrator.notionDatabaseId ?? undefined,
+        publishTarget: running.publishTarget ?? undefined,
         ttsStrategy: running.ttsStrategy ?? undefined,
         settings: userSettings,
       },
@@ -123,6 +124,7 @@ export async function processQueueJob(payload: QueueJobPayload): Promise<void> {
       nextState: 'succeeded',
       manifestPath: result.manifestPath ?? null,
       notionUrl: result.notionUrl ?? null,
+      anytypeUrl: result.anytypeUrl ?? null,
       finishedAt: new Date(),
     });
 

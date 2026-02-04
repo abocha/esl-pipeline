@@ -46,6 +46,7 @@ async function executePipeline(
     preset: payload.preset,
     withTts: payload.withTts,
     upload: payload.upload,
+    publishTarget: payload.publishTarget,
   };
 
   if (payload.notionDatabase) {

@@ -38,6 +38,7 @@ export function registerCoreRoutes(app: FastifyInstance, options: CoreRouteOptio
         voiceId: z.string().min(1).optional(),
         forceTts: z.boolean().optional(),
         notionDatabase: z.string().min(1).optional(),
+        publishTarget: z.enum(['notion', 'anytype']).optional(),
         ttsStrategy: z.enum(['auto', 'dialogue', 'tts']).optional(),
       });
 
@@ -52,6 +53,7 @@ export function registerCoreRoutes(app: FastifyInstance, options: CoreRouteOptio
       voiceAccent: validatedData.voiceAccent,
       forceTts: validatedData.forceTts,
       notionDatabase: validatedData.notionDatabase,
+      publishTarget: validatedData.publishTarget,
       ttsStrategy: validatedData.ttsStrategy,
     });
 
@@ -351,6 +353,8 @@ export function registerCoreRoutes(app: FastifyInstance, options: CoreRouteOptio
               ttsStrategy: dto.ttsStrategy,
               md: dto.md,
               notionUrl: dto.notionUrl,
+              anytypeUrl: dto.anytypeUrl,
+              publishTarget: dto.publishTarget,
               recordingId: dto.recordingId,
               transcriptId: dto.transcriptId,
             },
