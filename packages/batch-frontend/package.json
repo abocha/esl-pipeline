@@ -18,12 +18,12 @@
     "@codemirror/state": "^6.5.3",
     "@codemirror/view": "^6.39.9",
     "@esl-pipeline/contracts": "workspace:*",
-    "@tanstack/react-query": "^5.90.11",
-    "axios": "^1.13.2",
+    "@tanstack/react-query": "^5.90.16",
+    "axios": "^1.13.4",
     "codemirror": "^6.0.2",
     "copy-to-clipboard": "^3.3.3",
-    "react": "^19.2.0",
-    "react-dom": "^19.2.0",
+    "react": "^19.2.3",
+    "react-dom": "^19.2.3",
     "react-dropzone": "^14.3.8",
     "react-hot-toast": "^2.6.0",
     "react-router-dom": "^7.12.0",
@@ -46,7 +46,7 @@
     "eslint-plugin-react-hooks": "^7.0.1",
     "jsdom": "^27.4.0",
     "typescript": "^5.9.3",
-    "vite": "^7.2.4"
+    "vite": "^7.3.1"
   },
   "peerDependencies": {
     "react": "^19.2.0",
