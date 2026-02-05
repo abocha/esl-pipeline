@@ -339,10 +339,27 @@ function preprocessMarkdown(markdown: string): string {
   const lines = withoutFrontmatter.split('\n');
   const out: string[] = [];
   const stack: string[] = [];
+  let fencedBy: '```' | '~~~' | null = null;
 
   for (const line of lines) {
     const normalizedLine = normalizeDirectiveLine(line);
     const trimmed = normalizedLine.trim();
+
+    if (isFenceLine(trimmed)) {
+      const fence = trimmed.startsWith('```') ? '```' : '~~~';
+      if (fencedBy && fence === fencedBy) {
+        fencedBy = null;
+      } else if (!fencedBy) {
+        fencedBy = fence;
+      }
+      out.push(normalizedLine);
+      continue;
+    }
+
+    if (fencedBy) {
+      out.push(normalizedLine);
+      continue;
+    }
 
     if (/^:::\s*toc$/.test(trimmed)) {
       out.push('[[toc]]');
@@ -405,6 +422,10 @@ function preprocessMarkdown(markdown: string): string {
   }
 
   return out.join('\n');
+}
+
+function isFenceLine(trimmed: string): boolean {
+  return trimmed.startsWith('```') || trimmed.startsWith('~~~');
 }
 
 function stripFrontmatter(markdown: string): string {

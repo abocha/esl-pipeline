@@ -14,7 +14,7 @@ function printUsage(): void {
 
 Options:
   --md     Path to markdown file (required)
-  --out    Output HTML path (default: /tmp/anytype-preview.html)
+  --out    Output HTML path (default: tmp/anytype-preview.html in the repo)
   --title  Page title (default: frontmatter title if present)`);
 }
 
