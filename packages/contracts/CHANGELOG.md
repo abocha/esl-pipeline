@@ -1,5 +1,12 @@
 # @esl-pipeline/contracts
 
+## 1.3.1
+
+### Patch Changes
+
+- chore: 2.1.0 release version bump.
+
+
 ## 1.3.0
 
 ### Minor Changes

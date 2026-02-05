@@ -1,5 +1,12 @@
 # @esl-pipeline/batch-backend
 
+## 1.6.2
+
+### Patch Changes
+
+- chore: 2.1.0 release version bump.
+
+
 ## 1.6.1
 
 ### Patch Changes

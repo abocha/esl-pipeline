@@ -1,5 +1,12 @@
 # @esl-pipeline/batch-frontend
 
+## 1.6.1
+
+### Patch Changes
+
+- chore: 2.1.0 release version bump.
+
+
 ## 1.6.0
 
 ### Minor Changes

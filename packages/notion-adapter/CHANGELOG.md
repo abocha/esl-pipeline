@@ -1,5 +1,12 @@
 # @esl-pipeline/notion-adapter
 
+## 0.2.1
+
+### Patch Changes
+
+- chore: 2.1.0 release version bump.
+
+
 ## 0.2.0
 
 ### Minor Changes

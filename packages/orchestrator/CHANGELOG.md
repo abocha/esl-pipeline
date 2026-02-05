@@ -1,5 +1,12 @@
 # @esl-pipeline/orchestrator
 
+## 3.3.2
+
+### Patch Changes
+
+- chore: 2.1.0 release version bump.
+
+
 ## 3.3.1
 
 ### Patch Changes
