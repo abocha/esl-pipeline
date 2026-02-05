@@ -36,4 +36,12 @@ describe('rendering', () => {
     expect(html).toContain('Homework Assignment: Demo');
     expect(html).toContain('<span class="tag">Vadim</span>');
   });
+
+  it('does not process column directives inside fenced code blocks', async () => {
+    const markdown = `\`\`\`\n:::column-list\n:::column\ncontent\n:::\n:::\n\`\`\``;
+    const html = await renderToHtml(markdown, 'Fence');
+    expect(html).toContain('::: column-list');
+    expect(html).not.toContain('<div class="column-list">');
+    expect(html).not.toContain('<!--COLUMN_LIST_START-->');
+  });
 });
