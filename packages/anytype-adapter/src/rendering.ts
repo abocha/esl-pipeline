@@ -274,6 +274,7 @@ function createRenderer(): MarkdownIt {
   const md = new MarkdownIt({
     html: true,
     linkify: true,
+    breaks: true,
   });
 
   md.use(anchor);
