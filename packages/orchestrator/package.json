@@ -58,7 +58,7 @@
     "globby": "^16.1.0",
     "gray-matter": "^4.0.3",
     "js-yaml": "^4.1.1",
-    "ora": "9.2.0",
+    "ora": "9.3.0",
     "picocolors": "^1.1.1",
     "remark-parse": "^11.0.0",
     "unified": "^11.0.5",
@@ -70,11 +70,11 @@
     "@esl-pipeline/md-validator": "workspace:*",
     "@esl-pipeline/storage-uploader": "workspace:*",
     "@esl-pipeline/tts-elevenlabs": "workspace:*",
-    "@types/node": "^25.0.6",
+    "@types/node": "^25.2.0",
     "tsup": "8.5.1",
     "tsx": "^4.21.0",
     "typescript": "^5.9.3",
-    "vitest": "^4.0.17"
+    "vitest": "^4.0.18"
   },
   "engines": {
     "node": ">=24.11.1"
