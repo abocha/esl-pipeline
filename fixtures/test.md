@@ -1,4 +1,3 @@
-```markdown
 ---
 title: 'Test Assignment'
 student: Anna
@@ -79,4 +78,3 @@ text
 :::toggle-heading Teacher’s Follow-up Plan
 notes
 :::
-```

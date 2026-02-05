@@ -1,4 +1,3 @@
-```markdown
 ---
 title: 'Homework Assignment: Conditionals Type 2'
 student: Anna
@@ -80,4 +79,3 @@ text
 :::toggle-heading Teacher’s Follow-up Plan
 notes
 :::
-```

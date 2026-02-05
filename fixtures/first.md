@@ -1,4 +1,3 @@
-```
 ---
 title: "Homework Assignment: Hacking Your Brain"
 student: Vadim
@@ -165,4 +164,3 @@ This mission is designed to move your knowledge of fundamental grammar from your
     1.  **Automaticity of Articles:** Did he say "I have *a* hack" or "It's *a* good routine"? Gently correct any omissions of `a/an` with singular countable nouns.
     2.  **Adjective vs. Adverb:** Listen for correct adjective usage after `feel`, `look`, `sound`, etc. ("I feel *calm*," not "*calmly*").
 :::
-```
