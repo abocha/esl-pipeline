@@ -673,7 +673,7 @@ More content
 | ----------------- | --------------- | -------------------------- |
 | `notion-adapter`  | 0.2.0           | All advanced features      |
 | `md-validator`    | 2.0.0           | Validates new directives   |
-| `md-extractor`    | 2.0.0           | Supports new toggle syntax |
+| `pmd`             | 0.1.2           | Supports new toggle syntax |
 
 ---
 

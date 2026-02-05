@@ -6,7 +6,7 @@ It intentionally replaces older “TTS mode” drafts. For authoritative contrac
 
 ## Terminology
 
-- **Study text content type** (from `@esl-pipeline/md-extractor`): `dialogue | monologue`
+- **Study text content type** (from `@esl-pipeline/pmd`): `dialogue | monologue`
 - **TTS strategy** (what the pipeline actually does): `auto | dialogue | tts`
   - `dialogue`: ElevenLabs Text-to-Dialogue
   - `tts`: ElevenLabs Text-to-Speech (standard TTS)

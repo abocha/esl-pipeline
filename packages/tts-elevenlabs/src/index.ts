@@ -13,7 +13,7 @@ import {
   ValidationError,
   noopLogger,
 } from '@esl-pipeline/contracts';
-import { type Frontmatter, extractFrontmatter, extractStudyText } from '@esl-pipeline/md-extractor';
+import { type Frontmatter, extractFrontmatter, extractStudyText } from '@esl-pipeline/pmd';
 
 import { type VoiceCatalog, loadVoicesCatalog } from './assign.js';
 import { buildDialogueHash, synthesizeDialogue } from './dialogue.js';

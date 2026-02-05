@@ -1,10 +1,10 @@
 import matter from 'gray-matter';
 
 import { ValidationError } from '@esl-pipeline/contracts';
-import { findDirectiveBlocks, parsePmdDocument } from '@esl-pipeline/pmd';
-import type { PmdBlock, PmdDirectiveBlock, PmdDocument, PmdHeading } from '@esl-pipeline/pmd';
 
-import type { Frontmatter, Section, StudyText } from './types.js';
+import { parsePmdDocument } from './parser.js';
+import { findDirectiveBlocks } from './query.js';
+import type { Frontmatter, PmdBlock, PmdDirectiveBlock, PmdDocument, PmdHeading, Section, StudyText } from './types.js';
 
 const NBSP = /\u00A0/g;
 const ZWSP = /\u200B/g;
@@ -75,7 +75,10 @@ function parseDocument(markdown: string): PmdDocument {
   }
 }
 
-function getDirectiveBounds(block: PmdDirectiveBlock, contentLines: string[]): {
+function getDirectiveBounds(
+  block: PmdDirectiveBlock,
+  contentLines: string[],
+): {
   startLine: number;
   endLine: number;
   markerLine: string;
@@ -133,7 +136,6 @@ function getStudyTextLines(block: PmdDirectiveBlock, contentLines: string[]): st
 function collectHeadings(body: PmdBlock[], depth: 2 | 3): PmdHeading[] {
   return body.filter((block) => block.type === 'heading' && block.depth === depth) as PmdHeading[];
 }
-
 
 export function extractFrontmatter(md: string): Frontmatter {
   const doc = parseDocument(md);
@@ -207,10 +209,9 @@ export function extractTeacherNotes(md: string): string {
 export function extractSections(md: string): Section[] {
   const doc = parseDocument(md);
   const contentLines = getContentLines(md);
-  const headings = [
-    ...collectHeadings(doc.body, 2),
-    ...collectHeadings(doc.body, 3),
-  ].sort((a, b) => (a.position?.start.line ?? 0) - (b.position?.start.line ?? 0));
+  const headings = [...collectHeadings(doc.body, 2), ...collectHeadings(doc.body, 3)].sort((a, b) => {
+    return (a.position?.start.line ?? 0) - (b.position?.start.line ?? 0);
+  });
 
   return headings.map((heading, idx) => {
     const startLine = heading.position?.start.line ?? 0;
@@ -225,4 +226,4 @@ export function extractSections(md: string): Section[] {
   });
 }
 
-export type { Frontmatter, StudyText, Section, SpeakerProfile } from './types.js';
+

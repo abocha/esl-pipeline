@@ -10,6 +10,6 @@
     "moduleResolution": "Bundler",
     "resolveJsonModule": true
   },
-  "include": ["src"],
+  "include": ["src", "bin"],
   "exclude": ["tests"]
 }

@@ -12,7 +12,7 @@ The monorepo layout is logical and modular:
 
 - **`packages/orchestrator`**: The core logic, CLI, and API. It defines the pipeline stages and manages data flow.
 - **`packages/md-validator`**: Responsible for validating the input Markdown files.
-- **`packages/md-extractor`**: Extracts study text and metadata from the Markdown.
+- **`packages/pmd`**: Parses PMD and extracts study text/metadata from Markdown.
 - **`packages/notion-adapter`**: Handles Notion import, color presets, and audio attach.
 - **`packages/tts-elevenlabs`**: Integrates with ElevenLabs for TTS generation.
 - **`packages/storage-uploader`**: Manages file uploads (e.g., to S3).

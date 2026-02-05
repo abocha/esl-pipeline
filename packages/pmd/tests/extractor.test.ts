@@ -42,7 +42,7 @@ A: I'm fine.
 :::
 `;
 
-describe('md-extractor', () => {
+describe('pmd extractor', () => {
   it('frontmatter', () => {
     const fm = extractFrontmatter(sample);
     expect(fm.title).toBe('Homework Assignment: Weather');

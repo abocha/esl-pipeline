@@ -25,7 +25,7 @@ Everything below assumes **Node.js 24.11.1+**, pnpm, and system ffmpeg.
   - CLI behavior MUST mirror these core APIs (see SSOT for exact contracts).
 - **Core packages**
   - `@esl-pipeline/md-validator` — Markdown validation.
-  - `@esl-pipeline/md-extractor` — study-text extraction.
+  - `@esl-pipeline/pmd` — PMD parsing + study-text extraction.
   - `@esl-pipeline/notion-adapter` — Notion import + color + audio attach.
   - `@esl-pipeline/tts-elevenlabs` — ElevenLabs integration (requires system `ffmpeg`).
   - `@esl-pipeline/storage-uploader` — S3 uploads.
@@ -61,7 +61,7 @@ Use this as a quick map; detailed contracts live in the SSOT.
 | -------------------------------- | ----------------------------- |
 | `@esl-pipeline/orchestrator`     | CLI and pipeline factory      |
 | `@esl-pipeline/md-validator`     | Markdown validation           |
-| `@esl-pipeline/md-extractor`     | Study text extraction         |
+| `@esl-pipeline/pmd`              | PMD parse + study text extraction |
 | `@esl-pipeline/notion-adapter`   | Notion adapter (import, color, audio) |
 | `@esl-pipeline/tts-elevenlabs`   | ElevenLabs integration        |
 | `@esl-pipeline/storage-uploader` | S3 uploads                    |

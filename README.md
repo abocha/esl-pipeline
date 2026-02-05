@@ -190,7 +190,7 @@ source-of-truth, so you can fall back to local files simply by unsetting the env
 packages/
   orchestrator/          # CLI + pipeline
   md-validator/          # Markdown linting
-  md-extractor/          # Study text extraction
+  pmd/                   # PMD parse + study text extraction
   notion-adapter/        # Notion adapter (import, color, audio)
   tts-elevenlabs/        # ElevenLabs integration (ffmpeg)
   storage-uploader/      # S3 uploads

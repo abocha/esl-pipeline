@@ -5,7 +5,7 @@ This document describes the current “dual path” audio generation behavior in
 
 ## Terminology
 
-- **Study text content type** (from `@esl-pipeline/md-extractor`): `dialogue | monologue`
+- **Study text content type** (from `@esl-pipeline/pmd`): `dialogue | monologue`
 - **TTS strategy** (this package): `auto | dialogue | tts`
   - `dialogue`: ElevenLabs Text-to-Dialogue (typically uses `eleven_v3`)
   - `tts`: ElevenLabs Text-to-Speech (typically uses `eleven_multilingual_v2`)

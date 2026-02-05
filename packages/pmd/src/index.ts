@@ -1,4 +1,5 @@
 export type {
+  Frontmatter,
   PmdBlock,
   PmdBlockQuote,
   PmdCodeBlock,
@@ -15,8 +16,18 @@ export type {
   PmdThematicBreak,
   PmdUnknown,
   PmdWarning,
+  Section,
+  SpeakerProfile,
+  StudyText,
 } from './types.js';
 
 export type { ParseOptions } from './parser.js';
 export { parsePmdDocument, parsePmdFromFile } from './parser.js';
 export { findDirectiveBlocks } from './query.js';
+export {
+  extractAnswerKey,
+  extractFrontmatter,
+  extractSections,
+  extractStudyText,
+  extractTeacherNotes,
+} from './extract.js';
