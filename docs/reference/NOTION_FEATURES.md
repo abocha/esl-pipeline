@@ -110,7 +110,7 @@ properties:
 
 **Important Notes:**
 
-- The `Audio` property is typically added by the `notion-add-audio` package post-import
+- The `Audio` property is typically added by the Notion adapter post-import
 - Add only properties that your database actually defines (e.g., Status/Tags must exist in Notion)
 
 ---
@@ -237,7 +237,7 @@ Embed audio files from external URLs.
 **Use Cases:**
 
 - **Pre-existing audio**: Link to pronunciation guides, example recordings, etc.
-- **Not for generated TTS**: The `notion-add-audio` package handles main lesson audio
+- **Not for generated TTS**: The pipeline handles main lesson audio via the Notion adapter
 
 **Example:**
 
@@ -671,7 +671,7 @@ More content
 
 | Package           | Minimum Version | Features                   |
 | ----------------- | --------------- | -------------------------- |
-| `notion-importer` | 2.0.0           | All advanced features      |
+| `notion-adapter`  | 0.2.0           | All advanced features      |
 | `md-validator`    | 2.0.0           | Validates new directives   |
 | `md-extractor`    | 2.0.0           | Supports new toggle syntax |
 
@@ -685,13 +685,13 @@ When generating markdown files programmatically:
 2. **Use straight quotes** in YAML frontmatter (`'` or `"`)
 3. **Use Unicode escapes** for special characters if needed
 4. **Validate** with `md-validator` before import
-5. **Test** with `notion-importer --dry-run` first
+5. **Test** with the orchestrator pipeline in a staging config first
 
 **Example validation:**
 
 ```bash
 npx md-validator path/to/lesson.md
-npx notion-importer --dry-run path/to/lesson.md
+npx esl --md path/to/lesson.md
 ```
 
 ---
@@ -701,5 +701,5 @@ npx notion-importer --dry-run path/to/lesson.md
 For issues or questions:
 
 1. Check validation output: `npx md-validator file.md`
-2. Review test fixtures: `packages/notion-importer/tests/fixtures/`
+2. Review test fixtures under `fixtures/`
 3. See demo: `fixtures/hw/anatoli_new_features_demo.md`

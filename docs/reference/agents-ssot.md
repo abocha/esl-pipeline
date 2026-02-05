@@ -82,17 +82,7 @@ The ESL Pipeline is a pnpm-based monorepo. Core directories:
   - Study text extraction from Markdown.
 - [`packages/notion-adapter`](packages/notion-adapter)
   - Notion-specific adapter used by orchestrator; serves as the template for future adapters.
-  - Internally composes the importer and colorizer packages.
-- [`packages/notion-importer`](packages/notion-importer)
-  - Notion page creation and data source resolution.
-  - Legacy wrapper around `notion-adapter`; slated for deletion once fully removed from usage.
-- [`packages/notion-colorizer`](packages/notion-colorizer)
-  - Heading/preset colorization in Notion.
-  - Legacy wrapper around `notion-adapter`; slated for deletion once fully removed from usage.
-- [`packages/notion-color-headings`](packages/notion-color-headings)
-  - Legacy color-heading helper not wired into the orchestrator; treat as deprecated/for reference only.
-- [`packages/notion-add-audio`](packages/notion-add-audio)
-  - Attach audio to Notion content.
+  - Handles Notion import, heading presets, and audio attachment.
 - [`packages/tts-elevenlabs`](packages/tts-elevenlabs)
   - ElevenLabs TTS integration (uses system `ffmpeg`).
 - [`packages/storage-uploader`](packages/storage-uploader)
@@ -116,17 +106,13 @@ Canonical pipeline stages (implemented via orchestrator and subpackages):
    - Uses [`packages/md-validator`](packages/md-validator) and related logic.
 2. Study text extraction
    - Uses [`packages/md-extractor`](packages/md-extractor).
-3. Notion import
-   - Uses [`packages/notion-adapter`](packages/notion-adapter) (internally composes importer).
-4. Heading/styling colorization
-   - Uses [`packages/notion-adapter`](packages/notion-adapter) (internally composes colorizer).
-5. Text-to-speech (TTS) generation
+3. Notion import + heading presets + audio attachment
+   - Uses [`packages/notion-adapter`](packages/notion-adapter).
+4. Text-to-speech (TTS) generation
    - Uses [`packages/tts-elevenlabs`](packages/tts-elevenlabs) with system `ffmpeg`.
 6. Upload/storage
    - Uses [`packages/storage-uploader`](packages/storage-uploader) (e.g., S3).
-7. Attach audio in Notion
-   - Uses [`packages/notion-add-audio`](packages/notion-add-audio).
-8. Manifest persistence
+7. Manifest persistence
    - Uses `ManifestStore` interface from [`packages/orchestrator/src/manifest.ts`](packages/orchestrator/src/manifest.ts).
 
 Stage order and semantics:
@@ -146,7 +132,7 @@ Textual diagram (for reference):
   -> validate
   -> extract study text
   -> create/update Notion page
-  -> colorize headings
+  -> apply heading presets + attach audio
   -> generate TTS audio
   -> upload audio (e.g., S3)
   -> attach audio in Notion
@@ -165,7 +151,7 @@ Key artifacts:
   - Ownership: caller; validated by `md-validator` and read by `md-extractor`.
 - Notion page(s)
   - Ownership: external Notion workspace.
-  - Managed via `notion-importer`, `notion-colorizer`, `notion-add-audio`.
+  - Managed via `notion-adapter`.
 - Audio files
   - Local temporary output + remote URLs (e.g., S3).
   - Owned by `tts-elevenlabs` + `storage-uploader`.
@@ -395,19 +381,10 @@ For all subsections:
 
 - Role:
   - Centralized Notion integration surface for the orchestrator.
-  - Internally composes importer/colorizer behavior for create/update + heading presets.
+  - Handles page creation/update, heading presets, and audio attachment.
 - Contracts:
-  - Orchestrator MUST call the adapter rather than re-implementing importer/colorizer workflows.
+  - Orchestrator MUST call the adapter rather than re-implementing Notion workflows.
   - Adapter inputs/outputs are the stable integration surface; internal modules may evolve.
-- Safe extensions:
-  - Add new adapter operations as long as existing orchestrator calls remain backward compatible.
-
-#### 4.2.4. [`packages/notion-importer`](packages/notion-importer)
-
-- Role:
-  - Create/update Notion pages; manage hierarchy and sources.
-- Contracts:
-  - Input from extractor and config; output Notion references consumed later.
   - Frontmatter `properties` MUST already exist in the target database; unknown property names are a validation error (fail fast before calling Notion).
   - Topic handling is DB-driven: if a `Topic` property is missing or is `multi_select`, send multi-select (split by commas); otherwise send rich_text.
   - Advanced blocks MUST match Notion API schemas:
@@ -417,26 +394,9 @@ For all subsections:
     - synced blocks use `synced_block.children` when creating new content; references use `synced_from`
     - tables put rows in `table.table.children`
     - list-item nesting stays under list-item payload (`bulleted_list_item.children`, `numbered_list_item.children`)
+  - Audio attachment requires the uploaded audio URL and target Notion page.
 - Safe extensions:
-  - New options that do not break existing orchestrator calls.
-
-#### 4.2.5. [`packages/notion-colorizer`](packages/notion-colorizer)
-
-- Role:
-  - Apply heading/preset styling to Notion blocks.
-- Contracts:
-  - Must accept and transform blocks in a stable format.
-- Safe extensions:
-  - Additional presets or styles as long as existing presets remain valid.
-
-#### 4.2.6. [`packages/notion-add-audio`](packages/notion-add-audio)
-
-- Role:
-  - Attach or update audio blocks in Notion based on uploaded files.
-- Contracts:
-  - Input: Notion page and audio URLs from uploader.
-- Safe extensions:
-  - Support for new audio layouts without breaking existing ones.
+  - Add new adapter operations as long as existing orchestrator calls remain backward compatible.
 
 #### 4.2.7. [`packages/tts-elevenlabs`](packages/tts-elevenlabs)
 
