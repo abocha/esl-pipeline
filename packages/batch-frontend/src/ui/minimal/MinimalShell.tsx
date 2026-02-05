@@ -1,5 +1,5 @@
 import React from 'react';
-import { Link, Outlet } from 'react-router-dom';
+import { Outlet } from 'react-router-dom';
 
 import type { User } from '../../context/AuthContext';
 
@@ -22,9 +22,6 @@ export const MinimalShell: React.FC<MinimalShellProps> = ({ user, onLogout, chil
         </div>
         <div className="minimal-actions">
           <span className="minimal-user">{user.email}</span>
-          <Link className="minimal-link" to="/dashboard">
-            Legacy UI
-          </Link>
           <button type="button" className="minimal-button" onClick={onLogout}>
             Logout
           </button>
@@ -94,15 +91,6 @@ export const MinimalShell: React.FC<MinimalShellProps> = ({ user, onLogout, chil
           color: var(--text-tertiary);
         }
 
-        .minimal-link {
-          color: var(--color-primary-600);
-          text-decoration: none;
-          font-weight: 600;
-        }
-
-        .minimal-link:hover {
-          text-decoration: underline;
-        }
 
         .minimal-button {
           padding: var(--space-2) var(--space-4);
