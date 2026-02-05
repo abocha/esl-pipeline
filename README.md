@@ -1,9 +1,15 @@
 # ESL Pipeline · Orchestrator & Pipeline API
 
+
 This repository powers the ESL homework pipeline end-to-end. It can be used either as:
 
 1. A **CLI** (`esl`) that validates Markdown, imports pages into Notion, generates ElevenLabs audio, uploads to S3, and attaches the audio to the page.
 2. A **programmatic pipeline** (`createPipeline`) you can embed in your own service or job runner.
+
+Key packages:
+
+- `@esl-pipeline/orchestrator` — main CLI + pipeline API.
+- `@esl-pipeline/anytype-adapter` — Anytype adapter + HTML renderer for student exports.
 
 > **Runtime requirements**
 >

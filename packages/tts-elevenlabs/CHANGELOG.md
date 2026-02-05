@@ -1,5 +1,12 @@
 # @esl-pipeline/tts-elevenlabs
 
+## 3.1.8
+
+### Patch Changes
+
+- chore: 2.1.0 release version bump.
+
+
 ## 3.1.7
 
 ### Patch Changes

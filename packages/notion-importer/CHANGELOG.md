@@ -1,5 +1,12 @@
 # @esl-pipeline/notion-importer
 
+## 2.2.8
+
+### Patch Changes
+
+- chore: 2.1.0 release version bump.
+
+
 ## 2.2.7
 
 ### Patch Changes

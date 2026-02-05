@@ -1,5 +1,12 @@
 # @esl-pipeline/shared-infrastructure
 
+## 1.1.6
+
+### Patch Changes
+
+- chore: 2.1.0 release version bump.
+
+
 ## 1.1.5
 
 ### Patch Changes

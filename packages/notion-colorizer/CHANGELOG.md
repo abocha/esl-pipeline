@@ -1,5 +1,12 @@
 # @esl-pipeline/notion-colorizer
 
+## 2.0.10
+
+### Patch Changes
+
+- chore: 2.1.0 release version bump.
+
+
 ## 2.0.9
 
 ### Patch Changes

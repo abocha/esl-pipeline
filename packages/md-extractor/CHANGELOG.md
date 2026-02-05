@@ -1,5 +1,12 @@
 # @esl-pipeline/md-extractor
 
+## 2.1.1
+
+### Patch Changes
+
+- chore: 2.1.0 release version bump.
+
+
 ## 2.1.0
 
 ### Minor Changes
