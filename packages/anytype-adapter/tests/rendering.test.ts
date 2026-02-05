@@ -44,4 +44,12 @@ describe('rendering', () => {
     expect(html).not.toContain('<div class="column-list">');
     expect(html).not.toContain('<!--COLUMN_LIST_START-->');
   });
+
+  it('treats single line breaks as soft breaks', async () => {
+    const markdown = `Line one\nLine two\n\nLine three`;
+    const html = await renderToHtml(markdown, 'Breaks');
+    expect(html).toContain('Line one<br>');
+    expect(html).toContain('Line two');
+    expect(html).toContain('<p>Line three</p>');
+  });
 });
