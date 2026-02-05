@@ -1,5 +1,5 @@
 import { ConfigurationError } from '@esl-pipeline/contracts';
-import type { SpeakerProfile } from '@esl-pipeline/md-extractor';
+import type { SpeakerProfile } from '@esl-pipeline/pmd';
 
 import {
   type PickedVoice,

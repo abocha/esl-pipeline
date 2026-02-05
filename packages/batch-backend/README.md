@@ -46,7 +46,7 @@ High-level view:
 - Redis/BullMQ provides the work queue:
   - Decouples API from processing and supports horizontal worker scaling.
 - Optional MinIO/S3 is used for pipeline manifests when configured.
-- `@esl-pipeline/orchestrator` (and downstream packages like `md-validator`, `md-extractor`, `notion-adapter`, `tts-elevenlabs`, `storage-uploader`) implements the actual ESL content pipeline.
+- `@esl-pipeline/orchestrator` (and downstream packages like `md-validator`, `pmd`, `notion-adapter`, `tts-elevenlabs`, `storage-uploader`) implements the actual ESL content pipeline.
 - `batch-backend` does not redefine pipeline behavior:
   - It orchestrates, persists, and observes orchestrator runs.
 

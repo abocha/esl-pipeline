@@ -78,8 +78,8 @@ The ESL Pipeline is a pnpm-based monorepo. Core directories:
   - Shared infrastructure utilities for environment loading, storage configuration, and manifest resolution.
 - [`packages/md-validator`](packages/md-validator)
   - Markdown validation.
-- [`packages/md-extractor`](packages/md-extractor)
-  - Study text extraction from Markdown.
+- [`packages/pmd`](packages/pmd)
+  - PMD parsing + study text extraction from Markdown.
 - [`packages/notion-adapter`](packages/notion-adapter)
   - Notion-specific adapter used by orchestrator; serves as the template for future adapters.
   - Handles Notion import, heading presets, and audio attachment.
@@ -105,7 +105,7 @@ Canonical pipeline stages (implemented via orchestrator and subpackages):
 1. Markdown validation
    - Uses [`packages/md-validator`](packages/md-validator) and related logic.
 2. Study text extraction
-   - Uses [`packages/md-extractor`](packages/md-extractor).
+   - Uses [`packages/pmd`](packages/pmd).
 3. Notion import + heading presets + audio attachment
    - Uses [`packages/notion-adapter`](packages/notion-adapter).
 4. Text-to-speech (TTS) generation
@@ -148,7 +148,7 @@ Validation invariants:
 Key artifacts:
 
 - Markdown lesson source (input)
-  - Ownership: caller; validated by `md-validator` and read by `md-extractor`.
+  - Ownership: caller; validated by `md-validator` and read by `pmd`.
 - Notion page(s)
   - Ownership: external Notion workspace.
   - Managed via `notion-adapter`.
@@ -366,12 +366,12 @@ For all subsections:
 - Safe extensions:
   - Adding new validation options is allowed if defaults remain backward compatible.
 
-#### 4.2.2. [`packages/md-extractor`](packages/md-extractor)
+#### 4.2.2. [`packages/pmd`](packages/pmd)
 
 - Role:
-  - Extract study text and relevant content from validated Markdown.
+  - Parse Pipeline Markdown into a stable AST and extract study text/metadata.
 - Key APIs:
-  - Exports in [`packages/md-extractor/src/index.ts`](packages/md-extractor/src/index.ts).
+  - Exports in [`packages/pmd/src/index.ts`](packages/pmd/src/index.ts).
 - Contracts:
   - Output format consumed by downstream stages MUST remain stable.
 - Safe extensions:

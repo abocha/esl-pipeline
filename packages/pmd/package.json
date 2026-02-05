@@ -1,6 +1,6 @@
 {
   "name": "@esl-pipeline/pmd",
-  "version": "0.1.2",
+  "version": "0.2.0",
   "private": true,
   "description": "Parse Pipeline Markdown (PMD) into a stable AST.",
   "keywords": [
@@ -21,6 +21,9 @@
   },
   "main": "./dist/src/index.js",
   "types": "./src/index.ts",
+  "bin": {
+    "md-extractor": "dist/bin/md-extractor.js"
+  },
   "files": [
     "dist",
     "src"
@@ -34,6 +37,7 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "@esl-pipeline/contracts": "workspace:*",
     "gray-matter": "^4.0.3",
     "remark-directive": "^4.0.0",
     "remark-frontmatter": "^5.0.0",

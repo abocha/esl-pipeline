@@ -1,7 +1,7 @@
 import { access, readFile, readdir, stat } from 'node:fs/promises';
 import { dirname, join, relative, resolve } from 'node:path';
 
-import { extractFrontmatter } from '@esl-pipeline/md-extractor';
+import { extractFrontmatter } from '@esl-pipeline/pmd';
 
 export interface StudentProfile {
   student: string;

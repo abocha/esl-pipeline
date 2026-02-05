@@ -1,11 +1,16 @@
 # Changelog
 
+## 0.2.0
+
+### Minor Changes
+
+- Added study-text extraction helpers and `md-extractor` CLI (merged from md-extractor).
+
 ## 0.1.2
 
 ### Patch Changes
 
 - Release alignment for 2.1.0.
-
 
 ## 0.1.1
 
