@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { renderToHtml } from '../src/rendering.js';
+import { createStaticPageHtml, renderToHtml } from '../src/rendering.js';
 
 describe('rendering', () => {
   it('renders toggles and audio links', async () => {
@@ -15,5 +15,25 @@ describe('rendering', () => {
     const markdown = `:::video https://youtu.be/dQw4w9WgXcQ`;
     const html = await renderToHtml(markdown, 'Video');
     expect(html).toContain('youtube.com/embed');
+  });
+
+  it('keeps columns and inner formatting intact', async () => {
+    const markdown = `## Section\n\n:::column-list\n:::column\n**Bold** *Italic*\n\n:::callout 💡\nCallout text\n:::\n\n:::\n:::column\nLine two\n:::\n:::`;
+    const html = await renderToHtml(markdown, 'Columns');
+    expect(html).toContain('<div class="column-list">');
+    expect(html).toContain('<div class="column">');
+    expect(html).toContain('<strong>Bold</strong>');
+    expect(html).toContain('<em>Italic</em>');
+    expect(html).toContain('<aside class="callout">');
+    expect(html).not.toContain('<p>:::</p>');
+  });
+
+  it('renders preview and main renderer consistently', async () => {
+    const markdown = `---\ntitle: \"Homework Assignment: Demo\"\nstudent: \"Vadim\"\ntopic: \"Past Continuous\"\nicon: ⏳\n---\n\n## A Title`;
+    const html = await renderToHtml(markdown, '');
+    const preview = await createStaticPageHtml(markdown, '');
+    expect(preview).toEqual(html);
+    expect(html).toContain('Homework Assignment: Demo');
+    expect(html).toContain('<span class="tag">Vadim</span>');
   });
 });
