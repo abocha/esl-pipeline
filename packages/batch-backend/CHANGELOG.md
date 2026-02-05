@@ -1,5 +1,13 @@
 # @esl-pipeline/batch-backend
 
+## 1.7.0
+
+### Minor Changes
+
+- Add Anytype publish target support and collection placement options.
+- Move to upload-only recording flow and improve auto-publish pipeline behavior.
+
+
 ## 1.6.2
 
 ### Patch Changes

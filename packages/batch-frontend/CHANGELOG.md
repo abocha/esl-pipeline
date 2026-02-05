@@ -1,5 +1,13 @@
 # @esl-pipeline/batch-frontend
 
+## 1.7.0
+
+### Minor Changes
+
+- Refresh wizard, jobs, and student flows with the latest pipeline UX updates.
+- Support Anytype as a publish target and streamline upload-only recording flow.
+
+
 ## 1.6.1
 
 ### Patch Changes

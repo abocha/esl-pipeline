@@ -1,5 +1,12 @@
 # @esl-pipeline/contracts
 
+## 1.4.0
+
+### Minor Changes
+
+- Add Anytype publish target fields and auto-publish alignment updates.
+
+
 ## 1.3.1
 
 ### Patch Changes
