@@ -1,16 +1,13 @@
 # @esl-pipeline/batch-frontend
 
-React + Vite console for `@esl-pipeline/batch-backend`. This is an internal UI
-for operators and assumes the extended API is enabled with authentication.
+React + Vite console for `@esl-pipeline/batch-backend`. This is a minimal,
+operator-facing UI that focuses on the core workflow only.
 
 ## Features
 
-- Authenticated dashboard with quick actions, activity feed, pending approvals, and weekly summary.
-- Route-based navigation: Dashboard, Wizard, Students, Jobs, Settings.
-- Multi-step assignment wizard (select, transcript, notes, review, publish) with deep links.
-- Job monitoring with SSE plus persisted active jobs.
-- Transcription workspace for recordings, transcript review, prompt packages, and draft materialization.
-- Student workspace with CRUD, profiles, and timelines.
+- Authenticated minimal assignment console.
+- Upload recording → review transcript → generate prompt → paste draft → validate → publish.
+- Optional Anytype/Notion publish target selection in the publish step.
 - Typed API client backed by `@esl-pipeline/contracts`.
 
 ## Directory structure
@@ -19,27 +16,24 @@ Key files and folders:
 
 - `packages/batch-frontend/src/main.tsx` - app entry, providers, router.
 - `packages/batch-frontend/src/utils/api.ts` - typed API helpers.
-- `packages/batch-frontend/src/ui/App.tsx` - layout shell + routes.
-- `packages/batch-frontend/src/ui/dashboard/*` - dashboard panels.
-- `packages/batch-frontend/src/ui/notifications/*` - notifications panel.
-- `packages/batch-frontend/src/ui/transcription`, `students`, `jobs`, `settings`, `uploader`.
-- `packages/batch-frontend/src/context/*` - auth, job monitor, settings, selections, notifications.
+- `packages/batch-frontend/src/ui/App.tsx` - minimal routes.
+- `packages/batch-frontend/src/ui/minimal/*` - minimal assignment flow.
+- `packages/batch-frontend/src/ui/shared/*` - shared widgets.
+- `packages/batch-frontend/src/context/*` - auth + theme providers.
 
 ## Backend integration
 
 The frontend uses the authenticated, extended HTTP API exposed by `batch-backend`.
-Common endpoints:
+Common endpoints for the minimal flow:
 
 - Auth: `POST /auth/login`, `POST /auth/register`, `POST /auth/refresh`, `POST /auth/logout`, `GET /auth/me`
   - Refresh tokens are stored in HttpOnly cookies; the client refreshes on load.
 - Jobs: `POST /jobs`, `GET /jobs/:jobId`, `POST /jobs/:jobId/approve`,
-  `POST /jobs/:jobId/actions`, `GET /user/jobs`, `GET /user/jobs/summary`, `GET /jobs/events`
+  `POST /jobs/:jobId/actions`
 - Recordings: `POST /recordings/upload`, `POST /recordings/:id/transcribe`, `GET /recordings/:id`,
   `GET /recordings/:id/transcript`, `PUT /recordings/:id/transcript`, `GET /recordings/:id/audio`
 - Drafts: `GET /drafts/:id`, `POST /prompt-packages/:id/draft`, `POST /drafts/:id/materialize`
-- Config + students: `GET /config/job-options`, `GET /config/students`, `GET /config/prompts`,
-  `GET /students`, `GET /students/:id`, `GET /students/:id/timeline`, `GET /students/summary`,
-  plus student/profile CRUD.
+- Config: `GET /config/job-options`, `GET /config/prompts`
 
 All requests go through `src/utils/api.ts` and are typed with `@esl-pipeline/contracts`.
 
@@ -65,11 +59,6 @@ Prereqs: Node.js 24.11.1+, pnpm 8+, running `@esl-pipeline/batch-backend` with
 3. Start frontend: `pnpm --filter @esl-pipeline/batch-frontend dev`
 4. Open `http://localhost:5173`
 
-## E2E testing
-
-- Mocked UI e2e (fast, deterministic): `pnpm --filter @esl-pipeline/batch-frontend test:e2e`
-- Real API smoke (requires backend on `http://localhost:8080`): `pnpm --filter @esl-pipeline/batch-frontend test:e2e:real`
-
 ### Dev configuration knobs
 
 - `BATCH_BACKEND_URL` - sets the Vite dev proxy target (default `http://localhost:8080`)
@@ -78,5 +67,5 @@ Prereqs: Node.js 24.11.1+, pnpm 8+, running `@esl-pipeline/batch-backend` with
 
 ## Notes
 
-- `/wizard` is the primary guided flow; draft editing upgrades in Stage 4.
+- The minimal console assumes authenticated sessions; register/login in the UI to populate the auth context.
 - The app depends on authenticated sessions; register/login in the UI to populate the auth context.
