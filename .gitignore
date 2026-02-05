@@ -20,6 +20,7 @@ configs/students/*.json
 .env.batch-backend
 
 /uploads
+/tmp
 *.mp3
 packages/orchestrator/examples/service/fixtures/lesson.manifest.json
 fixtures/2026-02-01_18-08-50.opus
