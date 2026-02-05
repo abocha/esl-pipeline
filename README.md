@@ -191,11 +191,9 @@ packages/
   orchestrator/          # CLI + pipeline
   md-validator/          # Markdown linting
   md-extractor/          # Study text extraction
-  notion-importer/       # Notion page creation
-  notion-colorizer/      # Heading presets
+  notion-adapter/        # Notion adapter (import, color, audio)
   tts-elevenlabs/        # ElevenLabs integration (ffmpeg)
   storage-uploader/      # S3 uploads
-  notion-add-audio/      # Attach audio blocks
 docs/
   PROJECT_OVERVIEW.md    # What is this project?
   QUICK_START.md         # 5-minute getting started

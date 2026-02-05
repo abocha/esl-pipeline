@@ -26,11 +26,9 @@ Everything below assumes **Node.js 24.11.1+**, pnpm, and system ffmpeg.
 - **Core packages**
   - `@esl-pipeline/md-validator` — Markdown validation.
   - `@esl-pipeline/md-extractor` — study-text extraction.
-  - `@esl-pipeline/notion-importer` — Notion creation and data source resolution.
-  - `@esl-pipeline/notion-colorizer` — Notion heading presets.
+  - `@esl-pipeline/notion-adapter` — Notion import + color + audio attach.
   - `@esl-pipeline/tts-elevenlabs` — ElevenLabs integration (requires system `ffmpeg`).
   - `@esl-pipeline/storage-uploader` — S3 uploads.
-  - `@esl-pipeline/notion-add-audio` — attach audio inside Notion.
 - **Pipeline flow (summary)**
   1. Validate Markdown.
   2. Extract study text.
@@ -64,11 +62,9 @@ Use this as a quick map; detailed contracts live in the SSOT.
 | `@esl-pipeline/orchestrator`     | CLI and pipeline factory      |
 | `@esl-pipeline/md-validator`     | Markdown validation           |
 | `@esl-pipeline/md-extractor`     | Study text extraction         |
-| `@esl-pipeline/notion-importer`  | Notion page creation          |
-| `@esl-pipeline/notion-colorizer` | Notion heading presets        |
+| `@esl-pipeline/notion-adapter`   | Notion adapter (import, color, audio) |
 | `@esl-pipeline/tts-elevenlabs`   | ElevenLabs integration        |
 | `@esl-pipeline/storage-uploader` | S3 uploads                    |
-| `@esl-pipeline/notion-add-audio` | Attach audio blocks in Notion |
 | `@esl-pipeline/contracts`        | Shared DTO + SSE event types  |
 
 For per-package responsibilities, extension points, and invariants:
