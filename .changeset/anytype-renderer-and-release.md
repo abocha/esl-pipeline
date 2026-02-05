@@ -1,11 +1,11 @@
 ---
 "@esl-pipeline/anytype-adapter": minor
-"@esl-pipeline/orchestrator": patch
-"@esl-pipeline/batch-backend": patch
-"@esl-pipeline/batch-frontend": patch
-"@esl-pipeline/contracts": patch
+"@esl-pipeline/orchestrator": minor
+"@esl-pipeline/batch-backend": minor
+"@esl-pipeline/batch-frontend": minor
+"@esl-pipeline/contracts": minor
+"@esl-pipeline/md-validator": minor
 "@esl-pipeline/md-extractor": patch
-"@esl-pipeline/md-validator": patch
 "@esl-pipeline/notion-adapter": patch
 "@esl-pipeline/notion-add-audio": patch
 "@esl-pipeline/notion-colorizer": patch
@@ -16,4 +16,4 @@
 "@esl-pipeline/tts-elevenlabs": patch
 ---
 
-Release 2.1.0: Anytype adapter renderer/preview improvements and monorepo version bump.
+Release 2.1.0: Anytype publish target, renderer improvements, and pipeline workflow updates.

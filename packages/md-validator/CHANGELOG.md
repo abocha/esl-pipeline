@@ -1,5 +1,13 @@
 # @esl-pipeline/md-validator
 
+## 2.2.0
+
+### Minor Changes
+
+- Relax validation rules: controlled practice counts now warn instead of failing.
+- Loosen expected heading matching to allow LLM phrasing variations.
+
+
 ## 2.1.1
 
 ### Patch Changes

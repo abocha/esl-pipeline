@@ -1,5 +1,13 @@
 # @esl-pipeline/orchestrator
 
+## 3.4.0
+
+### Minor Changes
+
+- Add Anytype publish target support (including collection placement).
+- Improve Anytype publish output handling for HTML exports.
+
+
 ## 3.3.2
 
 ### Patch Changes

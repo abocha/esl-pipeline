@@ -4,9 +4,10 @@
 
 ### Minor Changes
 
-- Add HTML renderer with frontmatter header tags and pastel styling for Anytype exports.
+- Add HTML renderer with frontmatter-driven header tags and pastel styling.
 - Support collapsible study-text blocks, column layouts, and soft line breaks.
-- Add preview CLI and rendering tests to keep pipeline output aligned.
+- Add preview CLI plus rendering tests to keep pipeline output aligned.
+
 
 ## 0.1.0
 

@@ -4,7 +4,7 @@
 
 ### Patch Changes
 
-- chore: 2.1.0 release version bump.
+- Ensure HTML uploads are served with correct content type for static exports.
 
 
 ## 2.0.8
