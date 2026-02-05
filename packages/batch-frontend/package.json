@@ -1,6 +1,6 @@
 {
   "name": "@esl-pipeline/batch-frontend",
-  "version": "1.6.0",
+  "version": "1.6.1",
   "private": true,
   "scripts": {
     "build": "vite build",

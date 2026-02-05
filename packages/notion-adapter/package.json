@@ -1,6 +1,6 @@
 {
   "name": "@esl-pipeline/notion-adapter",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "private": true,
   "description": "Centralized Notion adapter for ESL pipeline.",
   "keywords": [
