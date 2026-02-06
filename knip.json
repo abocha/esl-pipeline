@@ -1,0 +1,30 @@
+{
+  "$schema": "https://unpkg.com/knip@5/schema.json",
+  "entry": ["eslint.config.js", "vitest.config.ts", "scripts/**/*.mjs"],
+  "project": ["scripts/**/*.mjs"],
+  "ignoreDependencies": [
+    "@aws-sdk/s3-request-presigner",
+    "@elevenlabs/elevenlabs-js",
+    "@notionhq/client",
+    "gray-matter",
+    "js-yaml",
+    "remark-parse",
+    "unified",
+    "zod",
+    "pino-pretty"
+  ],
+  "ignoreBinaries": ["rg"],
+  "workspaces": {
+    "packages/*": {
+      "entry": ["src/index.ts", "bin/cli.ts", "bin/**/*.ts"],
+      "project": [
+        "src/**/*.ts",
+        "src/**/*.tsx",
+        "bin/**/*.ts",
+        "scripts/**/*.ts",
+        "tests/**/*.ts",
+        "tests/**/*.tsx"
+      ]
+    }
+  }
+}

@@ -26,8 +26,7 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@esl-pipeline/contracts": "workspace:*",
-    "ioredis": "^5.8.2"
+    "@esl-pipeline/contracts": "workspace:*"
   },
   "devDependencies": {
     "@types/node": "^25.2.0",

@@ -135,10 +135,27 @@ Treat the alignment doc as the only human-readable status tracker; the SSOT and 
 - Smoke: `pnpm smoke` (orchestrator-focused)
 - Batch local dev (API + worker + frontend): `pnpm dev:batch`
 - Dependencies: `pnpm deps:pin` to normalize shared versions; `pnpm deps:upgrade:safe` to bump allowlisted SDKs (Notion/ElevenLabs/AWS S3 + stable utils) then reapply pins.
+- Dependency audit (report): `pnpm deps:audit`
+- Dependency audit (strict, CI-style): `pnpm deps:audit:strict`
 - Drift check: `pnpm deps:check` runs `deps:pin` and fails on manifest drift (CI uses this).
 - Zero-install: `npx @esl-pipeline/orchestrator esl --help`
 
 For CI, release, and workflow invariants, follow [`docs/reference/agents-ssot.md`](docs/reference/agents-ssot.md) §§10–12.
+
+### Dependency Hygiene Procedure (Agent Checklist)
+
+When touching dependencies, use this order:
+
+1. `pnpm install`
+2. `pnpm deps:pin`
+3. `pnpm deps:audit:strict`
+4. `pnpm check:fast`
+
+Notes:
+
+- Treat audit output as advisory unless confirmed by code usage.
+- Prefer conservative removals (remove only clearly unused deps).
+- Keep `pnpm-lock.yaml` tracked in git.
 
 ---
 
@@ -150,12 +167,20 @@ For CI, release, and workflow invariants, follow [`docs/reference/agents-ssot.md
 - Notion importer: frontmatter `properties` must exist in the target DB (unknown keys fail fast); `Topic` type is inferred from the DB schema (multi-select if missing/defined that way, otherwise rich_text). Advanced blocks (callout/columns/toggle headings/synced/table) are serialized exactly per Notion API.
 - Binary: `esl` is the canonical CLI; legacy aliases are removed.
 - We do not bundle ffmpeg; users must install it.
+- For dependency audits, `knip` config lives in `knip.json`; update ignores only when false positives are proven.
+
+## 8. Repo Admin Workflow (GitHub)
+
+- Ownership routing is defined in `.github/CODEOWNERS`.
+- PRs should follow `.github/pull_request_template.md`.
+- Issues are structured via `.github/ISSUE_TEMPLATE/*`.
+- Security disclosures must go through `SECURITY.md` (private advisory flow, no public vuln issues).
 
 For exact rules (manifest schema, adapter selection, validation invariants), see [`docs/reference/agents-ssot.md`](docs/reference/agents-ssot.md).
 
 ---
 
-## 8. FAQ (Forward-Looking, Defer to SSOT)
+## 9. FAQ (Forward-Looking, Defer to SSOT)
 
 - Programmatic usage? See `createPipeline` example above, and details in [`docs/reference/agents-ssot.md`](docs/reference/agents-ssot.md) §7.2.
 - Custom configs/adapters? Follow extension rules in [`docs/reference/agents-ssot.md`](docs/reference/agents-ssot.md) §§4–5.
