@@ -13,6 +13,7 @@ import {
   type ManifestStore,
   type PipelineLogEvent,
   type PipelineLogger,
+  type RerunFlags,
   RemoteConfigProvider,
   S3ManifestStore,
   createPipeline,
@@ -148,15 +149,58 @@ export interface RunAssignmentPayload {
   notionDatabase?: string | null;
   publishTarget?: 'notion' | 'anytype';
   ttsStrategy?: TtsStrategy | null;
-  settings?: {
-    elevenLabsApiKey?: string | null;
-    notionToken?: string | null;
-  };
+  settings?: RunJobSettings;
+}
+
+interface RunJobSettings {
+  elevenLabsApiKey?: string | null;
+  notionToken?: string | null;
+}
+
+export interface RunRerunAssignmentPayload {
+  jobId: string;
+  md: string;
+  steps?: NonNullable<RerunFlags['steps']>;
+  upload?: 's3';
+  force?: boolean;
+  prefix?: string;
+  publicRead?: boolean;
+  presign?: number;
+  accentPreference?: string | null;
+  voiceId?: string | null;
+  ttsStrategy?: TtsStrategy | null;
+  dialogueLanguage?: string | null;
+  dialogueStability?: number | null;
+  dialogueSeed?: number | null;
+  settings?: RunJobSettings;
+}
+
+type WorkerExecutionMode = 'new_assignment' | 'rerun_assignment';
+
+interface WorkerMessagePayload {
+  executionMode: WorkerExecutionMode;
+  payload: RunAssignmentPayload | RunRerunAssignmentPayload;
+  runId: string;
 }
 
 // runAssignmentJob.declaration()
 export async function runAssignmentJob(
   payload: RunAssignmentPayload,
+  runId: string,
+): Promise<{ manifestPath?: string; notionUrl?: string; anytypeUrl?: string }> {
+  return runPipelineWorker('new_assignment', payload, runId);
+}
+
+export async function runRerunAssignmentJob(
+  payload: RunRerunAssignmentPayload,
+  runId: string,
+): Promise<{ manifestPath?: string; notionUrl?: string; anytypeUrl?: string }> {
+  return runPipelineWorker('rerun_assignment', payload, runId);
+}
+
+async function runPipelineWorker(
+  executionMode: WorkerExecutionMode,
+  payload: RunAssignmentPayload | RunRerunAssignmentPayload,
   runId: string,
 ): Promise<{ manifestPath?: string; notionUrl?: string; anytypeUrl?: string }> {
   const log = rootLogger.child({ jobId: payload.jobId, runId });
@@ -211,7 +255,12 @@ export async function runAssignmentJob(
       }
     });
 
-    child.send({ payload, runId });
+    const message: WorkerMessagePayload = {
+      executionMode,
+      payload,
+      runId,
+    };
+    child.send(message);
   });
 }
 

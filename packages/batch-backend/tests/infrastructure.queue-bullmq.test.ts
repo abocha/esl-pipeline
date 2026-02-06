@@ -13,6 +13,7 @@ function getMockStorage() {
 
 vi.mock('bullmq', () => {
   const queueAdd = vi.fn();
+  const queueGetJob = vi.fn();
   const queueOn = vi.fn();
   const queueEventsOn = vi.fn();
   const queueEventsClose = vi.fn();
@@ -24,6 +25,7 @@ vi.mock('bullmq', () => {
 
   const storage = getMockStorage();
   storage.queueAdd = queueAdd;
+  storage.queueGetJob = queueGetJob;
   storage.queueOn = queueOn;
   storage.queueEventsOn = queueEventsOn;
   storage.queueEventsClose = queueEventsClose;
@@ -39,6 +41,7 @@ vi.mock('bullmq', () => {
         name,
         opts,
         add: queueAdd,
+        getJob: queueGetJob,
         on: queueOn,
       };
       Queue(name, opts);
@@ -166,6 +169,7 @@ describe('infrastructure/queue-bullmq', () => {
     expect(name).toBe('assignment');
     expect(payload).toEqual({ jobId: 'job-1' });
     expect(opts).toMatchObject({
+      jobId: 'job-1',
       attempts: 5,
       backoff: { type: 'exponential', delay: 1000 },
       removeOnComplete: 1000,
@@ -202,5 +206,16 @@ describe('infrastructure/queue-bullmq', () => {
     expect(mocks.workerOn).toHaveBeenCalled();
     // Verify the returned object is the worker instance itself
     expect(worker).toBeDefined();
+  });
+
+  it('cancelQueuedJob removes queue job when it exists and is removable', async () => {
+    const { cancelQueuedJob } = createJobQueue();
+    const mocks = getMockStorage();
+    const remove = vi.fn().mockResolvedValue();
+    mocks.queueGetJob.mockResolvedValue({ remove });
+
+    await expect(cancelQueuedJob('job-2')).resolves.toBe('removed');
+    expect(mocks.queueGetJob).toHaveBeenCalledWith('job-2');
+    expect(remove).toHaveBeenCalledTimes(1);
   });
 });

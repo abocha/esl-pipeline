@@ -73,6 +73,7 @@ describe('application/submit-job', () => {
       queue: {} as any,
       queueEvents: {} as any,
       enqueue,
+      cancelQueuedJob: vi.fn(),
     });
 
     const request: Parameters<typeof submitJob>[0] = { md: fakeJob.md };
@@ -133,6 +134,7 @@ describe('application/submit-job', () => {
       queue: {} as any,
       queueEvents: {} as any,
       enqueue,
+      cancelQueuedJob: vi.fn(),
     });
 
     await submitJob({
@@ -172,6 +174,7 @@ describe('application/submit-job', () => {
       queue: {} as any,
       queueEvents: {} as any,
       enqueue,
+      cancelQueuedJob: vi.fn(),
     });
 
     await expect(submitJob({} as any)).rejects.toThrow('md is required');

@@ -34,6 +34,7 @@ describe('application/process-queue-job', () => {
   const getJobByIdSpy = vi.spyOn(jobRepository, 'getJobById');
   const updateJobStateAndResultSpy = vi.spyOn(jobRepository, 'updateJobStateAndResult');
   const runAssignmentJobSpy = vi.spyOn(orchestratorService, 'runAssignmentJob');
+  const runRerunAssignmentJobSpy = vi.spyOn(orchestratorService, 'runRerunAssignmentJob');
   const publishJobEventSpy = vi.spyOn(jobEvents, 'publishJobEvent');
   const getSettingsByUserIdSpy = vi.spyOn(settingsRepository, 'getSettingsByUserId');
   const getDecryptedElevenLabsKeySpy = vi.spyOn(settingsRepository, 'getDecryptedElevenLabsKey');
@@ -224,6 +225,128 @@ describe('application/process-queue-job', () => {
       job: failed,
     });
   });
+
+  it('does not overwrite cancelled jobs with succeeded on state race', async () => {
+    const initial = makeJob({ state: 'queued' });
+    getJobByIdSpy
+      .mockResolvedValueOnce(initial)
+      .mockResolvedValueOnce({
+        ...initial,
+        state: 'failed',
+        error: 'cancelled: user requested stop',
+      } as any);
+
+    const running = makeJob({ state: 'running', startedAt: new Date('2024-01-01T10:01:00Z') });
+    updateJobStateAndResultSpy
+      .mockResolvedValueOnce(running as any) // queued -> running
+      .mockResolvedValueOnce(null); // running -> succeeded (lost race to cancel)
+
+    runAssignmentJobSpy.mockResolvedValue({
+      manifestPath: '/manifests/job-1.json',
+      notionUrl: 'https://notion.so/job-1',
+    });
+
+    await expect(processQueueJob({ jobId: 'job-1' })).resolves.toBeUndefined();
+
+    expect(runAssignmentJobSpy).toHaveBeenCalledTimes(1);
+    expect(updateJobStateAndResultSpy).toHaveBeenNthCalledWith(2, {
+      id: 'job-1',
+      expectedState: 'running',
+      nextState: 'succeeded',
+      manifestPath: '/manifests/job-1.json',
+      notionUrl: 'https://notion.so/job-1',
+      anytypeUrl: null,
+      finishedAt: expect.any(Date),
+    });
+    expect(publishJobEventSpy).toHaveBeenCalledTimes(1);
+  });
+
+  it('suppresses retry throw when failure update loses race to cancel', async () => {
+    const initial = makeJob({ state: 'queued' });
+    getJobByIdSpy
+      .mockResolvedValueOnce(initial)
+      .mockResolvedValueOnce({
+        ...initial,
+        state: 'failed',
+        error: 'cancelled',
+      } as any);
+
+    const running = makeJob({ state: 'running' });
+    updateJobStateAndResultSpy
+      .mockResolvedValueOnce(running as any) // queued -> running
+      .mockResolvedValueOnce(null); // running -> failed (lost race)
+
+    runAssignmentJobSpy.mockRejectedValue(new Error('orchestrator boom'));
+
+    await expect(processQueueJob({ jobId: 'job-1' })).resolves.toBeUndefined();
+
+    expect(updateJobStateAndResultSpy).toHaveBeenNthCalledWith(2, {
+      id: 'job-1',
+      expectedState: 'running',
+      nextState: 'failed',
+      error: 'orchestrator boom',
+      finishedAt: expect.any(Date),
+    });
+    expect(publishJobEventSpy).toHaveBeenCalledTimes(1);
+  });
+
+  it('processes rerun jobs via rerunAssignment execution path', async () => {
+    const initial = makeJob({ state: 'queued' });
+    getJobByIdSpy.mockResolvedValue(initial);
+
+    const running = makeJob({ state: 'running', startedAt: new Date('2024-01-01T10:01:00Z') });
+    const succeeded = {
+      ...running,
+      state: 'succeeded',
+      manifestPath: '/manifests/job-rerun.json',
+      finishedAt: new Date('2024-01-01T10:02:00Z'),
+      notionUrl: 'https://notion.so/job-rerun',
+      anytypeUrl: null,
+    };
+    updateJobStateAndResultSpy
+      .mockResolvedValueOnce(running as any)
+      .mockResolvedValueOnce(succeeded as any);
+
+    runRerunAssignmentJobSpy.mockResolvedValue({
+      manifestPath: '/manifests/job-rerun.json',
+      notionUrl: 'https://notion.so/job-rerun',
+    });
+
+    await processQueueJob({
+      jobId: 'job-1',
+      executionMode: 'rerun_audio',
+      sourceJobId: 'job-source',
+      rerun: {
+        steps: ['tts', 'upload', 'add-audio'],
+        upload: 's3',
+        force: true,
+        voiceId: 'voice-new',
+        accentPreference: 'british',
+        ttsStrategy: 'dialogue',
+        dialogueLanguage: 'es',
+        dialogueStability: 0.42,
+        dialogueSeed: 7,
+      },
+    });
+
+    expect(runAssignmentJobSpy).not.toHaveBeenCalled();
+    expect(runRerunAssignmentJobSpy).toHaveBeenCalledWith(
+      expect.objectContaining({
+        jobId: 'job-1',
+        steps: ['tts', 'upload', 'add-audio'],
+        upload: 's3',
+        force: true,
+        voiceId: 'voice-new',
+        accentPreference: 'british',
+        ttsStrategy: 'dialogue',
+        dialogueLanguage: 'es',
+        dialogueStability: 0.42,
+        dialogueSeed: 7,
+      }),
+      expect.any(String),
+    );
+  });
+
   it('injects user settings when job is linked to a user', async () => {
     const initial = makeJob({ state: 'queued', userId: 'user-123' });
     getJobByIdSpy.mockResolvedValue(initial);

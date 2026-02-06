@@ -133,11 +133,12 @@ pnpm esl \
 # Check assignment status
 pnpm esl status --md ./lessons/unit1.md
 
-# Rerun specific steps (e.g., regenerate audio and re-upload)
+# Rerun full audio pipeline (regenerate, upload, reattach)
 pnpm esl rerun \
   --md ./lessons/unit1.md \
-  --steps tts,upload \
-  --upload s3
+  --audio \
+  --upload s3 \
+  --voice-id JBFqnCBsd6RMkjVDRZzb
 ```
 
 ### Available Commands
@@ -149,6 +150,11 @@ pnpm esl rerun \
 | `esl rerun --md <file> --steps <steps>` | Rerun specific pipeline steps                  |
 | `esl select [path] [options]`           | Interactive file/directory picker              |
 
+Rerun defaults:
+
+- `esl rerun --md <file>` defaults to `upload,add-audio` and auto-applies `--upload s3`.
+- Use `--audio` to run `tts,upload,add-audio` in one command.
+
 ### Common Options
 
 | Option             | Description                                       |
@@ -159,6 +165,7 @@ pnpm esl rerun \
 | `--preset <name>`  | Notion color preset                               |
 | `--accent <name>`  | Voice accent preference (american, british, etc.) |
 | `--with-tts`       | Generate ElevenLabs audio                         |
+| `--audio`          | Rerun full audio steps (`tts,upload,add-audio`)  |
 | `--upload s3`      | Upload audio to S3                                |
 | `--dry-run`        | Preview actions without executing                 |
 | `--force`          | Force regeneration even if cached                 |

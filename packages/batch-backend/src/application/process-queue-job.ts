@@ -19,7 +19,10 @@ import {
   getSettingsByUserId,
 } from '../domain/settings-repository.js';
 import { createJobLogger } from '../infrastructure/logger.js';
-import { runAssignmentJob } from '../infrastructure/orchestrator-service.js';
+import {
+  runAssignmentJob,
+  runRerunAssignmentJob,
+} from '../infrastructure/orchestrator-service.js';
 import type { QueueJobPayload } from '../infrastructure/queue-bullmq.js';
 
 // processQueueJob.declaration()
@@ -100,23 +103,46 @@ export async function processQueueJob(payload: QueueJobPayload): Promise<void> {
       }
     }
 
-    const result = await runAssignmentJob(
-      {
-        jobId,
-        md: resolvedMdPath,
-        preset: running.preset ?? undefined,
-        withTts: running.withTts ?? undefined,
-        // Only forward upload flag values supported by orchestrator.
-        // Any other persisted value (e.g. 'none' or null) is treated as "no override".
-        upload: uploadFlag,
-        forceTts: running.forceTts ?? undefined,
-        notionDatabase: running.notionDatabase ?? config.orchestrator.notionDatabaseId ?? undefined,
-        publishTarget: running.publishTarget ?? undefined,
-        ttsStrategy: running.ttsStrategy ?? undefined,
-        settings: userSettings,
-      },
-      runId,
-    );
+    const result =
+      payload.executionMode === 'rerun_audio'
+        ? await runRerunAssignmentJob(
+            {
+              jobId,
+              md: resolvedMdPath,
+              steps: payload.rerun?.steps ?? ['tts', 'upload', 'add-audio'],
+              upload: payload.rerun?.upload ?? 's3',
+              force: payload.rerun?.force ?? running.forceTts ?? true,
+              prefix: payload.rerun?.prefix,
+              publicRead: payload.rerun?.publicRead,
+              presign: payload.rerun?.presign,
+              accentPreference:
+                payload.rerun?.accentPreference ?? running.voiceAccent ?? undefined,
+              voiceId: payload.rerun?.voiceId ?? running.voiceId ?? undefined,
+              ttsStrategy: payload.rerun?.ttsStrategy ?? running.ttsStrategy ?? undefined,
+              dialogueLanguage: payload.rerun?.dialogueLanguage,
+              dialogueStability: payload.rerun?.dialogueStability,
+              dialogueSeed: payload.rerun?.dialogueSeed,
+              settings: userSettings,
+            },
+            runId,
+          )
+        : await runAssignmentJob(
+            {
+              jobId,
+              md: resolvedMdPath,
+              preset: running.preset ?? undefined,
+              withTts: running.withTts ?? undefined,
+              // Only forward upload flag values supported by orchestrator.
+              // Any other persisted value (e.g. 'none' or null) is treated as "no override".
+              upload: uploadFlag,
+              forceTts: running.forceTts ?? undefined,
+              notionDatabase: running.notionDatabase ?? config.orchestrator.notionDatabaseId ?? undefined,
+              publishTarget: running.publishTarget ?? undefined,
+              ttsStrategy: running.ttsStrategy ?? undefined,
+              settings: userSettings,
+            },
+            runId,
+          );
 
     const succeeded = await updateJobStateAndResult({
       id: jobId,
@@ -130,11 +156,31 @@ export async function processQueueJob(payload: QueueJobPayload): Promise<void> {
 
     if (succeeded) {
       publishJobEvent({ type: 'job_state_changed', job: succeeded });
+      log.info('Job processed successfully', {
+        manifestPath: result.manifestPath,
+      });
+      return;
     }
 
-    log.info('Job processed successfully', {
-      manifestPath: result.manifestPath,
+    const postSuccessAttempt = await getJobById(jobId);
+    if (!postSuccessAttempt) {
+      log.warn('Success transition lost due to missing job row', {
+        event: 'job_missing_success_transition',
+      });
+      return;
+    }
+    if (postSuccessAttempt.state === 'failed' && isCancellationError(postSuccessAttempt.error)) {
+      log.info('Job was cancelled before success transition could persist', {
+        event: 'job_cancelled_before_success',
+      });
+      return;
+    }
+
+    log.warn('Success transition skipped due to state race', {
+      event: 'job_success_state_conflict',
+      state: postSuccessAttempt.state,
     });
+    return;
   } catch (error) {
     log.error(error instanceof Error ? error : String(error), {
       event: 'job_failed',
@@ -150,11 +196,24 @@ export async function processQueueJob(payload: QueueJobPayload): Promise<void> {
 
     if (failed) {
       publishJobEvent({ type: 'job_state_changed', job: failed });
+      throw error;
+    }
+
+    const latest = await getJobById(jobId);
+    if (latest?.state === 'failed' && isCancellationError(latest.error)) {
+      log.info('Job failure transition skipped because job was cancelled', {
+        event: 'job_cancelled_during_failure',
+      });
+      return;
     }
 
     // Propagate so BullMQ can apply retry/backoff policy.
     throw error;
   }
+}
+
+function isCancellationError(error: string | null | undefined): boolean {
+  return typeof error === 'string' && error.toLowerCase().startsWith('cancelled');
 }
 
 async function resolveMarkdownPath(mdPath: string): Promise<string> {

@@ -12,7 +12,25 @@ import { createRedisClient } from './redis.js';
 
 export interface QueueJobPayload {
   jobId: string;
+  executionMode?: 'new_assignment' | 'rerun_audio';
+  sourceJobId?: string;
+  rerun?: {
+    steps?: ('tts' | 'upload' | 'add-audio')[];
+    upload?: 's3';
+    force?: boolean;
+    prefix?: string;
+    publicRead?: boolean;
+    presign?: number;
+    accentPreference?: string;
+    voiceId?: string;
+    ttsStrategy?: 'auto' | 'dialogue' | 'tts';
+    dialogueLanguage?: string;
+    dialogueStability?: number;
+    dialogueSeed?: number;
+  };
 }
+
+export type CancelQueuedJobResult = 'removed' | 'not_found' | 'active';
 
 // Internal helper to avoid multiple QueueEvents/Queue per call.
 // For now we construct lazily per process; acceptable for single service+worker.
@@ -62,12 +80,30 @@ export function createJobQueue() {
     queueEvents: queueEventsSingleton!,
     async enqueue(payload: QueueJobPayload) {
       const opts: JobsOptions = {
+        jobId: payload.jobId,
         attempts: 5,
         backoff: { type: 'exponential', delay: 1000 },
         removeOnComplete: 1000,
         removeOnFail: 1000,
       };
       await queue.add('assignment', payload, opts);
+    },
+    async cancelQueuedJob(jobId: string): Promise<CancelQueuedJobResult> {
+      const job = await queue.getJob(jobId);
+      if (!job) {
+        return 'not_found';
+      }
+
+      try {
+        await job.remove();
+        return 'removed';
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        if (message.toLowerCase().includes('locked')) {
+          return 'active';
+        }
+        throw error;
+      }
     },
   };
 }

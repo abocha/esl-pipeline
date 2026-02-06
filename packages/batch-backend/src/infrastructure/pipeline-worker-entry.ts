@@ -1,17 +1,21 @@
 import { PipelineError } from '@esl-pipeline/contracts';
-import type { NewAssignmentFlags } from '@esl-pipeline/orchestrator';
+import type { NewAssignmentFlags, RerunFlags } from '@esl-pipeline/orchestrator';
 
 import { type BatchBackendConfig, loadConfig } from '../config/env.js';
 import { getFfmpegSemaphore } from './ffmpeg-semaphore.js';
 import { logger as rootLogger } from './logger.js';
 import {
   type RunAssignmentPayload,
+  type RunRerunAssignmentPayload,
   getPipeline,
   isManifestBucketMissingError,
 } from './orchestrator-service.js';
 
+type WorkerExecutionMode = 'new_assignment' | 'rerun_assignment';
+
 interface WorkerMessage {
-  payload: RunAssignmentPayload;
+  executionMode?: WorkerExecutionMode;
+  payload: RunAssignmentPayload | RunRerunAssignmentPayload;
   runId: string;
 }
 
@@ -31,7 +35,8 @@ function applyUserSettingsToEnv(settings?: {
 }
 
 async function executePipeline(
-  payload: RunAssignmentPayload,
+  payload: RunAssignmentPayload | RunRerunAssignmentPayload,
+  executionMode: WorkerExecutionMode,
   runId: string,
   config: BatchBackendConfig,
 ) {
@@ -41,33 +46,18 @@ async function executePipeline(
   // Initialize FFmpeg semaphore with configured limit
   const ffmpegSemaphore = getFfmpegSemaphore(config.worker.maxConcurrentFfmpeg);
 
-  const flags: NewAssignmentFlags = {
-    md: payload.md,
-    preset: payload.preset,
-    withTts: payload.withTts,
-    upload: payload.upload,
-    publishTarget: payload.publishTarget,
-  };
-
-  if (payload.notionDatabase) {
-    flags.dbId = payload.notionDatabase;
-  } else if (config.orchestrator.notionDatabaseId) {
-    flags.dbId = config.orchestrator.notionDatabaseId;
-  }
-
-  if (payload.forceTts) {
-    flags.redoTts = payload.forceTts;
-  }
-
-  if (payload.ttsStrategy) {
-    flags.ttsStrategy = payload.ttsStrategy;
-  }
+  const requiresTtsSemaphore =
+    executionMode === 'rerun_assignment'
+      ? ((payload as RunRerunAssignmentPayload).steps ?? ['tts', 'upload', 'add-audio']).includes(
+          'tts',
+        )
+      : Boolean((payload as RunAssignmentPayload).withTts);
 
   // Acquire semaphore before TTS operations if TTS is enabled
   let semaphoreAcquired = false;
   const operationId = `job-${payload.jobId}-${runId}`;
 
-  if (payload.withTts) {
+  if (requiresTtsSemaphore) {
     await ffmpegSemaphore.acquire(operationId);
     semaphoreAcquired = true;
     log.debug('Acquired FFmpeg semaphore', { operationId });
@@ -75,9 +65,18 @@ async function executePipeline(
 
   try {
     const started = Date.now();
-    // Cast to any because newAssignment is protected/internal in some contexts or types might be strict
-    // but orchestrator-service.ts was doing it, so we follow suit.
-    const result = await pipeline.newAssignment(flags);
+    const result =
+      executionMode === 'rerun_assignment'
+        ? await runRerunPipeline(
+            pipeline,
+            payload as RunRerunAssignmentPayload,
+            config.orchestrator.notionDatabaseId,
+          )
+        : await runAssignmentPipeline(
+            pipeline,
+            payload as RunAssignmentPayload,
+            config.orchestrator.notionDatabaseId,
+          );
     const duration = Date.now() - started;
 
     log.info('Assignment pipeline succeeded (worker)', {
@@ -99,6 +98,63 @@ async function executePipeline(
   }
 }
 
+async function runAssignmentPipeline(
+  pipeline: ReturnType<typeof getPipeline>,
+  payload: RunAssignmentPayload,
+  defaultNotionDatabaseId?: string,
+) {
+  const flags: NewAssignmentFlags = {
+    md: payload.md,
+    preset: payload.preset,
+    withTts: payload.withTts,
+    upload: payload.upload,
+    publishTarget: payload.publishTarget,
+  };
+
+  if (payload.notionDatabase) {
+    flags.dbId = payload.notionDatabase;
+  } else if (defaultNotionDatabaseId) {
+    flags.dbId = defaultNotionDatabaseId;
+  }
+
+  if (payload.forceTts) {
+    flags.redoTts = payload.forceTts;
+  }
+
+  if (payload.ttsStrategy) {
+    flags.ttsStrategy = payload.ttsStrategy;
+  }
+
+  return pipeline.newAssignment(flags);
+}
+
+async function runRerunPipeline(
+  pipeline: ReturnType<typeof getPipeline>,
+  payload: RunRerunAssignmentPayload,
+  _defaultNotionDatabaseId?: string,
+) {
+  const flags: RerunFlags = {
+    md: payload.md,
+    steps:
+      payload.steps && payload.steps.length > 0
+        ? payload.steps
+        : (['tts', 'upload', 'add-audio'] as NonNullable<RerunFlags['steps']>),
+    upload: payload.upload ?? 's3',
+    force: payload.force ?? true,
+    prefix: payload.prefix,
+    publicRead: payload.publicRead,
+    presign: payload.presign,
+    accentPreference: payload.accentPreference ?? undefined,
+    voiceId: payload.voiceId ?? undefined,
+    ttsStrategy: payload.ttsStrategy ?? undefined,
+    dialogueLanguage: payload.dialogueLanguage ?? undefined,
+    dialogueStability: payload.dialogueStability ?? undefined,
+    dialogueSeed: payload.dialogueSeed ?? undefined,
+  };
+
+  return pipeline.rerunAssignment(flags);
+}
+
 async function main() {
   if (!process.send) {
     console.error('This script must be run as a child process with IPC channel open.');
@@ -112,6 +168,8 @@ async function main() {
 
   process.on('message', async (msg: WorkerMessage) => {
     const { payload, runId } = msg;
+    const executionMode: WorkerExecutionMode =
+      msg.executionMode === 'rerun_assignment' ? 'rerun_assignment' : 'new_assignment';
     const log = rootLogger.child({ jobId: payload.jobId, runId, component: 'pipeline-worker' });
     const config = loadConfig();
 
@@ -126,7 +184,7 @@ async function main() {
     applyUserSettingsToEnv(payload.settings);
 
     try {
-      const result = await executePipeline(payload, runId, config);
+      const result = await executePipeline(payload, executionMode, runId, config);
       process.send!({ type: 'success', result });
       process.exit(0);
     } catch (error) {
@@ -156,7 +214,7 @@ async function main() {
           const { resetPipelineCache } = await import('./orchestrator-service.js');
           resetPipelineCache();
 
-          const result = await executePipeline(payload, runId, fallbackConfig);
+          const result = await executePipeline(payload, executionMode, runId, fallbackConfig);
           process.send!({ type: 'success', result });
           process.exit(0);
         } catch (error_) {

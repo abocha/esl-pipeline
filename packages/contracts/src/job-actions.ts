@@ -22,6 +22,10 @@ export type JobActionRequest =
         forceTts?: boolean;
         voiceId?: string;
         voiceAccent?: string;
+        ttsStrategy?: 'auto' | 'dialogue' | 'tts';
+        dialogueLanguage?: string;
+        dialogueStability?: number;
+        dialogueSeed?: number;
       };
     }
   | {
