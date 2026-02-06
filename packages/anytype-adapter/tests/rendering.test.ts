@@ -8,7 +8,9 @@ describe('rendering', () => {
     const html = await renderToHtml(markdown, 'Lesson');
     expect(html).toContain('<details>');
     expect(html).toContain('<summary>Reveal answer</summary>');
-    expect(html).toContain('<audio controls src="https://example.com/audio.mp3"></audio>');
+    expect(html).toContain('<figure class="audio-figure">');
+    expect(html).toContain('preload="metadata"');
+    expect(html).toContain('data-audio-fallback="true"');
   });
 
   it('renders video directive', async () => {
@@ -52,4 +54,56 @@ describe('rendering', () => {
     expect(html).toContain('Line two');
     expect(html).toContain('<p>Line three</p>');
   });
+
+  it('renders rich header without skip link or study controls', async () => {
+    const markdown = `---\nicon: \"🎯\"\n---\n\n# Demo\n\n:::study-text\nHello\n:::\n\n\`\`\`ts\nconst x = 1;\n\`\`\``;
+    const html = await renderToHtml(markdown, 'Accessibility');
+    expect(html).toContain('<main id="content"');
+    expect(html).toContain('class="hero"');
+    expect(html).toContain('class="hero-emoji"');
+    expect(html).not.toContain('class="skip-link"');
+    expect(html).not.toContain('data-study-controls');
+    expect(html).toContain('copy-code-button');
+  });
+
+  it('wraps table of contents in a collapsed details shell', async () => {
+    const markdown = `:::toc\n\n## One\n\n## Two`;
+    const html = await renderToHtml(markdown, 'Toc');
+    expect(html).toContain('<details class="toc-shell"><summary>Contents</summary>');
+    expect(html).toContain('class="table-of-contents"');
+  });
+
+  it('styles inline code as soft pills without borders', async () => {
+    const markdown = `Line with \`Target_Time = 5:00 PM\` inside.`;
+    const html = await renderToHtml(markdown, 'Inline Code');
+    expect(html).toContain('Line with <code>Target_Time = 5:00 PM</code> inside.');
+    expect(html).toContain('.markdown-body p code');
+    expect(html).toContain('background: #ece8e1;');
+    expect(html).toContain('border-radius: 7px;');
+  });
+
+  it('escapes raw html by default but allows it when opted in', async () => {
+    const markdown = `<script>alert(\"x\")</script>\n<div>Unsafe block</div>`;
+    const safeHtml = await renderToHtml(markdown, 'Safe');
+    const rawHtml = await renderToHtml(markdown, 'Raw', { allowRawHtml: true });
+
+    expect(safeHtml).not.toContain('<script>alert("x")</script>');
+    expect(safeHtml).toContain('&lt;div&gt;Unsafe block&lt;/div&gt;');
+    expect(rawHtml).toContain('<div>Unsafe block</div>');
+  });
+
+  it('allows hiding generated date tag', async () => {
+    const markdown = `---\nstudent: \"Nika\"\n---\n\n# Lesson`;
+    const html = await renderToHtml(markdown, 'No Date', { showGeneratedDate: false });
+    expect(html).toContain('<span class="tag">Nika</span>');
+    expect(html).not.toContain(formatCurrentDateForAssertion());
+  });
 });
+
+function formatCurrentDateForAssertion(): string {
+  return new Intl.DateTimeFormat('en-US', {
+    month: 'long',
+    day: 'numeric',
+    year: 'numeric',
+  }).format(new Date());
+}

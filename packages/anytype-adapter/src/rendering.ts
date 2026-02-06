@@ -3,6 +3,26 @@ import anchor from 'markdown-it-anchor';
 import container from 'markdown-it-container';
 import toc from 'markdown-it-toc-done-right';
 
+export interface ThemeTokens {
+  pageBg?: string;
+  pageCard?: string;
+  pageText?: string;
+  pageMuted?: string;
+  pageLine?: string;
+  calloutBg?: string;
+  calloutBorder?: string;
+  tocBg?: string;
+  tocBorder?: string;
+  h1?: string;
+  h2?: string;
+  h3?: string;
+}
+
+export interface FeatureFlags {
+  stickyToc?: boolean;
+  copyCode?: boolean;
+}
+
 export interface RenderOptions {
   title?: string;
   css?: string;
@@ -11,22 +31,54 @@ export interface RenderOptions {
     h2?: string;
     h3?: string;
   };
+  theme?: ThemeTokens;
+  features?: FeatureFlags;
+  allowRawHtml?: boolean;
+  showGeneratedDate?: boolean;
 }
+
+interface ResolvedFeatures {
+  stickyToc: boolean;
+  copyCode: boolean;
+}
+
+interface ResolvedRenderOptions {
+  css?: string;
+  theme: ThemeTokens;
+  features: ResolvedFeatures;
+  allowRawHtml: boolean;
+  showGeneratedDate: boolean;
+}
+
+const DEFAULT_THEME: Required<ThemeTokens> = {
+  h1: '#e6ddcc',
+  h2: '#d8e5f2',
+  h3: '#e7dbe9',
+  pageBg: '#f5f1e8',
+  pageCard: '#ffffff',
+  pageText: '#1f1f1f',
+  pageMuted: '#565656',
+  pageLine: '#ddd6c8',
+  calloutBg: '#f8f4eb',
+  calloutBorder: '#d7b98f',
+  tocBg: '#f7f3ea',
+  tocBorder: '#e5dac8',
+};
 
 const DEFAULT_CSS = `
 :root {
-  --theme-h1: #e7def6;
-  --theme-h2: #dbe6ff;
-  --theme-h3: #efe3ff;
-  --page-bg: #f6f2ec;
-  --page-card: #ffffff;
-  --page-text: #1f1f1f;
-  --page-muted: #5f5f5f;
-  --page-line: #e7e2d8;
-  --callout-bg: #f8f5ed;
-  --callout-border: #f1d6a3;
-  --toc-bg: #f8f5ed;
-  --toc-border: #eadfcf;
+  --theme-h1: ${DEFAULT_THEME.h1};
+  --theme-h2: ${DEFAULT_THEME.h2};
+  --theme-h3: ${DEFAULT_THEME.h3};
+  --page-bg: ${DEFAULT_THEME.pageBg};
+  --page-card: ${DEFAULT_THEME.pageCard};
+  --page-text: ${DEFAULT_THEME.pageText};
+  --page-muted: ${DEFAULT_THEME.pageMuted};
+  --page-line: ${DEFAULT_THEME.pageLine};
+  --callout-bg: ${DEFAULT_THEME.calloutBg};
+  --callout-border: ${DEFAULT_THEME.calloutBorder};
+  --toc-bg: ${DEFAULT_THEME.tocBg};
+  --toc-border: ${DEFAULT_THEME.tocBorder};
 }
 * {
   box-sizing: border-box;
@@ -34,64 +86,107 @@ const DEFAULT_CSS = `
 body {
   margin: 0;
   padding: 0;
-  font-family: 'Inter', 'SF Pro Text', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-  line-height: 1.6;
+  font-family: 'Avenir Next', 'Segoe UI', 'Helvetica Neue', Arial, sans-serif;
+  line-height: 1.65;
   color: var(--page-text);
-  background: var(--page-bg);
+  background: radial-gradient(circle at top right, #efe8d8 0%, transparent 40%), var(--page-bg);
 }
 .page {
-  max-width: 880px;
-  margin: 32px auto 64px;
+  max-width: 940px;
+  margin: 28px auto 56px;
   background: var(--page-card);
   border-radius: 18px;
-  padding: 32px 40px 48px;
-  box-shadow: 0 14px 32px rgba(40, 30, 18, 0.08);
+  padding: 28px 34px 44px;
+  border: 1px solid color-mix(in srgb, var(--page-line) 70%, #ffffff 30%);
+  box-shadow: 0 12px 34px rgba(56, 44, 24, 0.08);
 }
 .page-header {
-  margin-bottom: 20px;
+  margin-bottom: 18px;
 }
-.page-icon {
-  font-size: 40px;
-  line-height: 1;
-  margin-bottom: 8px;
+.hero {
+  position: relative;
+  display: flex;
+  align-items: flex-end;
+  gap: 18px;
+  min-height: 170px;
+  padding: 20px 22px;
+  border-radius: 16px;
+  border: 1px solid color-mix(in srgb, var(--page-line) 72%, #ffffff 28%);
+  background:
+    radial-gradient(circle at 22% 24%, rgba(255, 255, 255, 0.7), transparent 55%),
+    linear-gradient(135deg, #efe4d1 0%, #dbe8f5 45%, #e8dced 100%);
+  overflow: hidden;
+}
+.hero::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background:
+    repeating-linear-gradient(135deg, rgba(255, 255, 255, 0.18), rgba(255, 255, 255, 0.18) 2px, transparent 2px, transparent 12px);
+  opacity: 0.45;
+  pointer-events: none;
+}
+.hero-emoji {
+  position: relative;
+  z-index: 1;
+  font-size: clamp(84px, 11vw, 136px);
+  line-height: 0.9;
+  filter: drop-shadow(0 7px 16px rgba(36, 30, 18, 0.2));
+}
+.hero-content {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  gap: 10px;
+  max-width: min(100%, 680px);
+}
+.hero-title {
+  margin: 0;
+  font-family: 'Iowan Old Style', 'Palatino Linotype', Palatino, Georgia, serif;
+  font-size: clamp(30px, 4.4vw, 44px);
+  font-weight: 700;
+  letter-spacing: -0.025em;
+  line-height: 1.08;
+  text-wrap: balance;
 }
 .page-tags {
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
-  margin-top: 12px;
 }
 .tag {
   display: inline-flex;
   align-items: center;
   padding: 4px 10px;
   border-radius: 999px;
-  background: #efe8dd;
+  background: #f0e8da;
   color: var(--page-text);
-  font-size: 13px;
-  font-weight: 600;
+  font-size: 12px;
+  font-weight: 650;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
 }
 .markdown-body h1,
 .markdown-body h2,
 .markdown-body h3 {
-  display: block;
   margin: 0;
   padding: 0;
   letter-spacing: -0.01em;
-  line-height: 1.3;
+  line-height: 1.25;
 }
 .markdown-body h1 {
-  font-size: 34px;
-  margin: 0 0 12px;
+  font-family: 'Iowan Old Style', 'Palatino Linotype', Palatino, Georgia, serif;
+  font-size: 35px;
   letter-spacing: -0.02em;
+  margin-bottom: 12px;
 }
 .markdown-body h2 {
-  font-size: 22px;
-  margin: 26px 0 12px;
+  font-size: 23px;
+  margin: 28px 0 12px;
 }
 .markdown-body h3 {
-  font-size: 18px;
-  margin: 20px 0 10px;
+  font-size: 19px;
+  margin: 21px 0 10px;
 }
 .markdown-body .heading-text {
   display: inline-block;
@@ -110,11 +205,19 @@ body {
   margin: 8px 0 14px;
 }
 .markdown-body a {
-  color: var(--theme-h2);
-  text-decoration: none;
+  color: #134278;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 2px;
 }
 .markdown-body a:hover {
-  text-decoration: underline;
+  color: #0e335c;
+}
+.markdown-body a:focus-visible,
+.markdown-body summary:focus-visible,
+.copy-code-button:focus-visible {
+  outline: 3px solid #2b6cb0;
+  outline-offset: 2px;
+  border-radius: 6px;
 }
 .markdown-body ul,
 .markdown-body ol {
@@ -129,9 +232,21 @@ body {
   border-top: 1px solid var(--page-line);
   margin: 24px 0;
 }
-.markdown-body audio {
+.audio-figure {
+  margin: 14px 0 20px;
+  padding: 12px 14px;
+  border: 1px solid var(--page-line);
+  border-radius: 12px;
+  background: #fbf8f1;
+}
+.audio-figure audio {
   width: 100%;
-  margin: 12px 0 20px;
+  margin: 0;
+}
+.audio-figure figcaption {
+  margin-top: 8px;
+  color: var(--page-muted);
+  font-size: 13px;
 }
 .callout {
   background: var(--callout-bg);
@@ -166,9 +281,11 @@ body {
   letter-spacing: 0.04em;
   text-transform: uppercase;
   color: var(--page-muted);
-  font-weight: 600;
+  font-weight: 700;
   cursor: pointer;
-  margin-bottom: 8px;
+}
+.study-text .content {
+  margin-top: 10px;
 }
 .study-text .content > :first-child {
   margin-top: 0;
@@ -181,16 +298,63 @@ body {
   grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
   gap: 20px;
 }
-.column { flex: 1; min-width: 240px; }
-.video-embed { position: relative; padding-top: 56.25%; margin: 16px 0; }
-.video-embed iframe { position: absolute; top: 0; left: 0; width: 100%; height: 100%; border: 0; }
+.column {
+  min-width: 240px;
+}
+.video-embed {
+  position: relative;
+  padding-top: 56.25%;
+  margin: 16px 0;
+  border-radius: 12px;
+  overflow: hidden;
+  border: 1px solid var(--page-line);
+  background: #0f172a;
+}
+.video-embed iframe {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  border: 0;
+}
 .table-of-contents {
   background: var(--toc-bg);
-  padding: 16px 18px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  border: 1px solid var(--toc-border);
+  margin: 10px 0 0;
+  color: var(--page-muted);
+}
+.toc-shell {
+  margin: 16px 0;
   border-radius: 12px;
   border: 1px solid var(--toc-border);
-  margin: 16px 0;
+  background: color-mix(in srgb, var(--toc-bg) 72%, #ffffff 28%);
+  overflow: hidden;
+}
+.toc-shell summary {
+  cursor: pointer;
+  font-weight: 700;
+  font-size: 14px;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
   color: var(--page-muted);
+  padding: 12px 14px;
+  background: color-mix(in srgb, var(--toc-bg) 82%, #ffffff 18%);
+}
+.toc-shell summary:hover {
+  color: var(--page-text);
+}
+.has-sticky-toc .toc-shell {
+  position: sticky;
+  top: 14px;
+  z-index: 5;
+  max-height: min(58vh, 420px);
+}
+.has-sticky-toc .toc-shell[open] .table-of-contents {
+  max-height: min(48vh, 320px);
+  overflow: auto;
 }
 .table-of-contents ul {
   list-style: none;
@@ -201,10 +365,12 @@ body {
   margin: 6px 0;
 }
 .table-of-contents a {
-  color: var(--page-muted);
+  color: #36475d;
+  text-decoration: none;
 }
 .table-of-contents a:hover {
   color: var(--page-text);
+  text-decoration: underline;
 }
 details:not(.study-text) {
   margin: 12px 0;
@@ -217,11 +383,58 @@ details:not(.study-text) summary {
   cursor: pointer;
   font-weight: 600;
 }
+pre {
+  position: relative;
+  margin: 14px 0;
+  border-radius: 12px;
+  border: 1px solid var(--page-line);
+  background: #f7f4ee;
+  padding: 14px 16px;
+  overflow-x: auto;
+}
+pre code {
+  font-family: 'SFMono-Regular', Menlo, Monaco, Consolas, 'Liberation Mono', monospace;
+  font-size: 13px;
+  line-height: 1.55;
+}
+.markdown-body p code,
+.markdown-body li code,
+.markdown-body td code,
+.markdown-body th code,
+.markdown-body blockquote code,
+.markdown-body h1 code,
+.markdown-body h2 code,
+.markdown-body h3 code {
+  background: #ece8e1;
+  color: #2a2a2a;
+  border-radius: 7px;
+  padding: 0.14em 0.46em;
+  font-family: 'SFMono-Regular', Menlo, Monaco, Consolas, 'Liberation Mono', monospace;
+  font-size: 0.92em;
+  line-height: 1.2;
+  box-decoration-break: clone;
+  -webkit-box-decoration-break: clone;
+}
+.copy-code-button {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  border: 1px solid var(--page-line);
+  background: #fff;
+  color: var(--page-text);
+  border-radius: 8px;
+  font-size: 12px;
+  font-weight: 600;
+  padding: 4px 8px;
+  cursor: pointer;
+}
 table {
   width: 100%;
   border-collapse: collapse;
   margin: 12px 0 18px;
   font-size: 14px;
+  display: block;
+  overflow-x: auto;
 }
 th,
 td {
@@ -229,10 +442,53 @@ td {
   padding: 8px 10px;
   text-align: left;
   vertical-align: top;
+  white-space: nowrap;
 }
 th {
   background: #f4efe6;
-  font-weight: 600;
+  font-weight: 700;
+}
+@media (max-width: 840px) {
+  .page {
+    margin: 10px;
+    padding: 20px 18px 30px;
+    border-radius: 14px;
+  }
+  .hero {
+    min-height: 148px;
+    padding: 16px 14px;
+    gap: 12px;
+  }
+  .hero-emoji {
+    font-size: clamp(64px, 20vw, 88px);
+  }
+  .markdown-body h1 {
+    font-size: 30px;
+  }
+  .markdown-body h2 {
+    font-size: 21px;
+  }
+  .has-sticky-toc .table-of-contents {
+    position: static;
+  }
+  .column-list {
+    grid-template-columns: 1fr;
+  }
+}
+@media print {
+  body {
+    background: #fff;
+  }
+  .page {
+    box-shadow: none;
+    border: none;
+    margin: 0;
+    max-width: none;
+    padding: 0;
+  }
+  .copy-code-button {
+    display: none !important;
+  }
 }
 `;
 
@@ -244,28 +500,38 @@ export async function renderToHtml(
   title: string,
   options: RenderOptions = {},
 ): Promise<string> {
+  const resolved = resolveRenderOptions(options);
   const md = createRenderer();
   const frontmatter = extractFrontmatter(markdown);
   const resolvedTitle = resolveTitle(markdown, title, frontmatter);
-  const prepared = preprocessMarkdown(markdown);
+  const prepared = preprocessMarkdown(markdown, resolved.allowRawHtml);
   const bodyHtml = replaceColumnMarkers(md.render(prepared));
-  const css = buildCss(options);
-  const withAudio = replaceAudioLinks(bodyHtml);
-  const header = renderHeader(resolvedTitle, frontmatter);
+  const withEmbeddedAudio = replaceAudioLinks(decorateAudioPlayers(bodyHtml));
+  const withCollapsibleToc = wrapTableOfContents(withEmbeddedAudio);
+  const safeBody = sanitizeRenderedHtml(withCollapsibleToc, resolved.allowRawHtml);
+  const css = buildCss(resolved);
+  const header = renderHeader(resolvedTitle, frontmatter, resolved);
+  const behaviorScript = buildBehaviorScript(resolved.features);
+  const pageClasses = ['page', 'markdown-body'];
+  if (resolved.features.stickyToc) {
+    pageClasses.push('has-sticky-toc');
+  }
 
   return `<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="color-scheme" content="light">
   <title>${escapeHtml(resolvedTitle)}</title>
   <style>${css}</style>
 </head>
 <body class="markdown-body">
-  <div class="page markdown-body">
+  <main id="content" class="${pageClasses.join(' ')}">
     ${header}
-    ${withAudio}
-  </div>
+    ${safeBody}
+  </main>
+  ${behaviorScript}
 </body>
 </html>`;
 }
@@ -308,7 +574,7 @@ function createRenderer(): MarkdownIt {
     render: (tokens: { info?: string; nesting?: number }[], idx: number) => {
       const info = tokens[idx]?.info?.trim() ?? '';
       const match = /^callout\s+(.*)$/.exec(info);
-      const icon = match?.[1] ?? '💡';
+      const icon = match?.[1] ?? 'Info';
       if (tokens[idx]?.nesting === 1) {
         return `<aside class="callout"><div class="icon">${escapeHtml(icon)}</div><div class="content">`;
       }
@@ -322,28 +588,28 @@ function createRenderer(): MarkdownIt {
       const info = tokens[idx]?.info?.trim() ?? '';
       const match = /^study-text\s*(.*)$/.exec(info);
       const label = match?.[1]?.trim();
-      const title = label ? `Study Text: ${label}` : 'Study Text';
+      const summaryTitle = label ? `Study Text: ${label}` : 'Study Text';
       if (tokens[idx]?.nesting === 1) {
-        return `<details class="study-text"><summary>${escapeHtml(title)}</summary><div class="content">`;
+        return `<details class="study-text"><summary>${escapeHtml(summaryTitle)}</summary><div class="content">`;
       }
       return '</div></details>';
     },
   });
 
-  md.renderer.rules.heading_open = (tokens, idx, options, _env, self) => {
-    const rendered = self.renderToken(tokens, idx, options);
+  md.renderer.rules.heading_open = (tokens, idx, renderOptions, _env, self) => {
+    const rendered = self.renderToken(tokens, idx, renderOptions);
     return `${rendered}<span class="heading-text">`;
   };
 
-  md.renderer.rules.heading_close = (tokens, idx, options, _env, self) => {
-    const rendered = self.renderToken(tokens, idx, options);
+  md.renderer.rules.heading_close = (tokens, idx, renderOptions, _env, self) => {
+    const rendered = self.renderToken(tokens, idx, renderOptions);
     return `</span>${rendered}`;
   };
 
   return md;
 }
 
-function preprocessMarkdown(markdown: string): string {
+function preprocessMarkdown(markdown: string, allowRawHtml: boolean): string {
   const withoutFrontmatter = stripFrontmatter(markdown);
   const lines = withoutFrontmatter.split('\n');
   const out: string[] = [];
@@ -374,14 +640,21 @@ function preprocessMarkdown(markdown: string): string {
       out.push('[[toc]]');
       continue;
     }
+
     if (/^:::\s*audio\s+/.test(trimmed)) {
-      const url = trimmed.replace(/^:::\s*audio\s+/, '').trim();
-      out.push(`<audio controls src="${url}"></audio>`);
+      const rawUrl = trimmed.replace(/^:::\s*audio\s+/, '').trim();
+      const safeUrl = sanitizeMediaUrl(rawUrl);
+      if (safeUrl) {
+        out.push(`<audio controls preload="metadata" src="${escapeHtmlAttribute(safeUrl)}"></audio>`);
+      } else {
+        out.push(`Audio: ${rawUrl}`);
+      }
       continue;
     }
+
     if (/^:::\s*video\s+/.test(trimmed)) {
-      const url = trimmed.replace(/^:::\s*video\s+/, '').trim();
-      out.push(buildVideoEmbed(url));
+      const rawUrl = trimmed.replace(/^:::\s*video\s+/, '').trim();
+      out.push(buildVideoEmbed(rawUrl));
       continue;
     }
 
@@ -389,9 +662,10 @@ function preprocessMarkdown(markdown: string): string {
     if (openMatch) {
       const name = openMatch[1] ?? '';
       if (!name) {
-        out.push(normalizedLine);
+        out.push(escapeRawHtmlLine(normalizedLine, allowRawHtml));
         continue;
       }
+
       stack.push(name);
       if (name === 'column-list') {
         out.push('<!--COLUMN_LIST_START-->');
@@ -404,6 +678,7 @@ function preprocessMarkdown(markdown: string): string {
       out.push(normalizedLine);
       continue;
     }
+
     if (trimmed === ':::') {
       const last = stack.pop();
       if (last === 'column') {
@@ -418,7 +693,7 @@ function preprocessMarkdown(markdown: string): string {
       continue;
     }
 
-    out.push(normalizedLine);
+    out.push(escapeRawHtmlLine(normalizedLine, allowRawHtml));
   }
 
   while (stack.length > 0) {
@@ -431,6 +706,16 @@ function preprocessMarkdown(markdown: string): string {
   }
 
   return out.join('\n');
+}
+
+function escapeRawHtmlLine(line: string, allowRawHtml: boolean): string {
+  if (allowRawHtml) {
+    return line;
+  }
+  if (!line.includes('<') && !line.includes('>')) {
+    return line;
+  }
+  return line.replaceAll('<', '&lt;').replaceAll('>', '&gt;');
 }
 
 function isFenceLine(trimmed: string): boolean {
@@ -487,6 +772,7 @@ function extractFrontmatter(markdown: string): Frontmatter {
   const block = match[0];
   const lines = block.split('\n').slice(1, -1);
   const result: Frontmatter = {};
+
   for (const line of lines) {
     const trimmed = line.trim();
     if (!trimmed || trimmed.startsWith('#')) continue;
@@ -500,6 +786,7 @@ function extractFrontmatter(markdown: string): Frontmatter {
     if (key === 'student') result.student = value;
     if (key === 'topic') result.topic = value;
   }
+
   return result;
 }
 
@@ -516,21 +803,23 @@ function normalizeFrontmatterValue(value: string): string {
   return trimmed.replaceAll(/^['"]|['"]$/g, '');
 }
 
-function renderHeader(title: string, frontmatter?: Frontmatter): string {
-  const icon = frontmatter?.icon
-    ? `<div class="page-icon">${escapeHtml(frontmatter.icon)}</div>`
-    : '';
-  const tags = [formatCurrentDate()];
-  if (frontmatter?.student) tags.push(frontmatter.student);
-  if (frontmatter?.topic) tags.push(frontmatter.topic);
+function renderHeader(title: string, frontmatter: Frontmatter, options: ResolvedRenderOptions): string {
+  const iconValue = frontmatter.icon?.trim() || '📘';
+  const icon = `<div class="hero-emoji" aria-hidden="true">${escapeHtml(iconValue)}</div>`;
+
+  const tags: string[] = [];
+  if (options.showGeneratedDate) {
+    tags.push(formatCurrentDate());
+  }
+  if (frontmatter.student) tags.push(frontmatter.student);
+  if (frontmatter.topic) tags.push(frontmatter.topic);
+
   const tagHtml =
     tags.length > 0
       ? `<div class="page-tags">${tags.map((tag) => `<span class="tag">${escapeHtml(tag)}</span>`).join('')}</div>`
       : '';
 
-  return `<header class="page-header">${icon}<h1><span class="heading-text">${escapeHtml(
-    title,
-  )}</span></h1>${tagHtml}</header>`;
+  return `<header class="page-header"><div class="hero">${icon}<div class="hero-content"><h1 class="hero-title">${escapeHtml(title)}</h1>${tagHtml}</div></div></header>`;
 }
 
 function formatCurrentDate(): string {
@@ -542,34 +831,197 @@ function formatCurrentDate(): string {
 }
 
 function buildVideoEmbed(url: string): string {
-  const normalized = url.trim();
-  const youtubeId = extractYouTubeId(normalized);
+  const parsed = parseHttpUrl(url);
+  if (!parsed) {
+    return `<p><a href="#">Video link is invalid</a></p>`;
+  }
+
+  const youtubeId = extractYouTubeId(parsed);
   if (youtubeId) {
-    return `<div class="video-embed"><iframe src="https://www.youtube.com/embed/${youtubeId}" allowfullscreen></iframe></div>`;
+    const src = `https://www.youtube.com/embed/${youtubeId}`;
+    return `<div class="video-embed"><iframe src="${src}" allowfullscreen loading="lazy" referrerpolicy="strict-origin-when-cross-origin"></iframe></div>`;
   }
-  const vimeoId = extractVimeoId(normalized);
+
+  const vimeoId = extractVimeoId(parsed);
   if (vimeoId) {
-    return `<div class="video-embed"><iframe src="https://player.vimeo.com/video/${vimeoId}" allowfullscreen></iframe></div>`;
+    const src = `https://player.vimeo.com/video/${vimeoId}`;
+    return `<div class="video-embed"><iframe src="${src}" allowfullscreen loading="lazy" referrerpolicy="strict-origin-when-cross-origin"></iframe></div>`;
   }
-  return `<div class="video-embed"><iframe src="${normalized}" allowfullscreen></iframe></div>`;
+
+  if (isAllowedEmbedUrl(parsed.href)) {
+    return `<div class="video-embed"><iframe src="${escapeHtmlAttribute(parsed.href)}" allowfullscreen loading="lazy" referrerpolicy="strict-origin-when-cross-origin"></iframe></div>`;
+  }
+
+  const safeHref = sanitizeLinkHref(parsed.href);
+  return `<p><a href="${escapeHtmlAttribute(safeHref)}" target="_blank" rel="noopener noreferrer">Open video</a></p>`;
 }
 
-function extractYouTubeId(url: string): string | null {
-  const match = /(?:v=|youtu.be\/)([\w-]{6,})/.exec(url);
-  return match?.[1] ?? null;
+function parseHttpUrl(url: string): URL | null {
+  try {
+    const parsed = new URL(url.trim());
+    if (parsed.protocol !== 'https:' && parsed.protocol !== 'http:') {
+      return null;
+    }
+    return parsed;
+  } catch {
+    return null;
+  }
 }
 
-function extractVimeoId(url: string): string | null {
-  const match = /vimeo\.com\/(\d+)/.exec(url);
-  return match?.[1] ?? null;
+function extractYouTubeId(url: URL): string | null {
+  const host = url.hostname.toLowerCase();
+  if (host.endsWith('youtube.com')) {
+    const idFromQuery = url.searchParams.get('v');
+    if (idFromQuery && /^[\w-]{6,}$/.test(idFromQuery)) {
+      return idFromQuery;
+    }
+    if (url.pathname.startsWith('/embed/')) {
+      const id = url.pathname.replace('/embed/', '').split('/')[0] ?? '';
+      return /^[\w-]{6,}$/.test(id) ? id : null;
+    }
+  }
+
+  if (host === 'youtu.be') {
+    const id = url.pathname.replace(/^\//, '').split('/')[0] ?? '';
+    return /^[\w-]{6,}$/.test(id) ? id : null;
+  }
+
+  return null;
+}
+
+function extractVimeoId(url: URL): string | null {
+  if (!url.hostname.toLowerCase().endsWith('vimeo.com')) {
+    return null;
+  }
+  const id = url.pathname.replace(/^\//, '').split('/')[0] ?? '';
+  return /^\d+$/.test(id) ? id : null;
+}
+
+function decorateAudioPlayers(html: string): string {
+  return html.replaceAll(
+    /<audio\s+controls(?:\s+preload="metadata")?\s+src=("|')([^"']+)\1\s*><\/audio>/gi,
+    (_full, _quote, rawUrl) => renderAudioFigure(rawUrl),
+  );
 }
 
 function replaceAudioLinks(html: string): string {
   return html.replaceAll(
-    /<a\s+href="([^"]+\.(?:mp3|wav|m4a|aac|ogg|opus))"[^>]*>.*?<\/a>/gi,
-    (_match, url) => {
-      return `<audio controls src="${url}"></audio>`;
+    /<a\b([^>]*)href=("|')([^"']+\.(?:mp3|wav|m4a|aac|ogg|opus)(?:\?[^"']*)?)\2([^>]*)>([\s\S]*?)<\/a>/gi,
+    (fullMatch, before, _quote, url, after, labelHtml) => {
+      const attrs = `${before ?? ''}${after ?? ''}`;
+      if (attrs.toLowerCase().includes('data-audio-fallback')) {
+        return fullMatch;
+      }
+      const label = stripHtml(labelHtml).trim() || 'Open audio in a new tab';
+      return renderAudioFigure(url, label);
     },
+  );
+}
+
+function renderAudioFigure(url: string, fallbackLabel = 'Open audio in a new tab'): string {
+  const safeUrl = sanitizeMediaUrl(url);
+  if (!safeUrl) {
+    return `<p>Audio link is invalid.</p>`;
+  }
+
+  const escapedUrl = escapeHtmlAttribute(safeUrl);
+  return `<figure class="audio-figure"><audio controls preload="metadata" src="${escapedUrl}"></audio><figcaption><a data-audio-fallback="true" href="${escapedUrl}" target="_blank" rel="noopener noreferrer">${escapeHtml(fallbackLabel)}</a></figcaption></figure>`;
+}
+
+function sanitizeRenderedHtml(html: string, allowRawHtml: boolean): string {
+  let sanitized = html;
+
+  sanitized = sanitized.replaceAll(/<script\b[\s\S]*?<\/script>/gi, '');
+  sanitized = sanitized.replaceAll(/<style\b[\s\S]*?<\/style>/gi, '');
+  sanitized = sanitized.replaceAll(/\son[a-z]+=("[^"]*"|'[^']*'|[^\s>]+)/gi, '');
+
+  sanitized = sanitized.replaceAll(/<iframe\b[\s\S]*?<\/iframe>/gi, (iframeBlock) => {
+    const srcMatch = iframeBlock.match(/\ssrc=("|')([^"']+)\1/i);
+    const src = srcMatch?.[2] ?? '';
+    return isAllowedEmbedUrl(src) ? iframeBlock : '';
+  });
+
+  sanitized = sanitized.replaceAll(/\s(href|src)=("|')([^"']*)(\2)/gi, (full, attr, quote, value) => {
+    const attribute = String(attr).toLowerCase();
+    const safeValue = attribute === 'href' ? sanitizeLinkHref(value) : sanitizeMediaUrl(value) ?? '#';
+    return ` ${attribute}=${quote}${escapeHtmlAttribute(safeValue)}${quote}`;
+  });
+
+  if (!allowRawHtml) {
+    sanitized = sanitized.replaceAll(/<object\b[\s\S]*?<\/object>/gi, '');
+    sanitized = sanitized.replaceAll(/<embed\b[^>]*>/gi, '');
+  }
+
+  return sanitized;
+}
+
+function sanitizeMediaUrl(url: string): string | null {
+  const trimmed = url.trim();
+  if (!trimmed) {
+    return null;
+  }
+
+  if (trimmed.startsWith('/')) {
+    return trimmed;
+  }
+
+  if (trimmed.startsWith('./') || trimmed.startsWith('../')) {
+    return trimmed;
+  }
+
+  try {
+    const parsed = new URL(trimmed);
+    if (parsed.protocol === 'https:' || parsed.protocol === 'http:') {
+      return parsed.href;
+    }
+    return null;
+  } catch {
+    return null;
+  }
+}
+
+function sanitizeLinkHref(url: string): string {
+  const trimmed = url.trim();
+  if (!trimmed) {
+    return '#';
+  }
+
+  if (trimmed.startsWith('#') || trimmed.startsWith('/')) {
+    return trimmed;
+  }
+
+  if (trimmed.startsWith('./') || trimmed.startsWith('../')) {
+    return trimmed;
+  }
+
+  if (trimmed.startsWith('mailto:') || trimmed.startsWith('tel:')) {
+    return trimmed;
+  }
+
+  try {
+    const parsed = new URL(trimmed);
+    if (parsed.protocol === 'https:' || parsed.protocol === 'http:') {
+      return parsed.href;
+    }
+    return '#';
+  } catch {
+    return '#';
+  }
+}
+
+function isAllowedEmbedUrl(url: string): boolean {
+  const parsed = parseHttpUrl(url);
+  if (!parsed || parsed.protocol !== 'https:') {
+    return false;
+  }
+
+  const host = parsed.hostname.toLowerCase();
+  return (
+    host === 'youtube.com' ||
+    host.endsWith('.youtube.com') ||
+    host === 'youtu.be' ||
+    host === 'player.vimeo.com' ||
+    host.endsWith('.player.vimeo.com')
   );
 }
 
@@ -581,17 +1033,126 @@ function replaceColumnMarkers(html: string): string {
     .replaceAll('<!--COLUMN_END-->', '</div>');
 }
 
-function buildCss(options: RenderOptions): string {
-  const theme = options.headingTheme ?? {};
-  const themeCss = [
-    theme.h1 ? `--theme-h1: ${theme.h1};` : '',
-    theme.h2 ? `--theme-h2: ${theme.h2};` : '',
-    theme.h3 ? `--theme-h3: ${theme.h3};` : '',
-  ]
-    .filter(Boolean)
-    .join('\n');
+function wrapTableOfContents(html: string): string {
+  return html.replaceAll(
+    /<(nav|div)\s+class="table-of-contents"[\s\S]*?<\/\1>/gi,
+    (tocHtml) => `<details class="toc-shell"><summary>Contents</summary>${tocHtml}</details>`,
+  );
+}
 
-  return `${DEFAULT_CSS}\n:root {${themeCss}}\n${options.css ?? ''}`.trim();
+function buildCss(options: ResolvedRenderOptions): string {
+  const theme = options.theme;
+  const themeCss = `
+:root {
+  --theme-h1: ${theme.h1};
+  --theme-h2: ${theme.h2};
+  --theme-h3: ${theme.h3};
+  --page-bg: ${theme.pageBg};
+  --page-card: ${theme.pageCard};
+  --page-text: ${theme.pageText};
+  --page-muted: ${theme.pageMuted};
+  --page-line: ${theme.pageLine};
+  --callout-bg: ${theme.calloutBg};
+  --callout-border: ${theme.calloutBorder};
+  --toc-bg: ${theme.tocBg};
+  --toc-border: ${theme.tocBorder};
+}`;
+
+  return `${DEFAULT_CSS}\n${themeCss}\n${options.css ?? ''}`.trim();
+}
+
+function buildBehaviorScript(features: ResolvedFeatures): string {
+  if (!features.copyCode) {
+    return '';
+  }
+
+  const copyCode = features.copyCode ? 'true' : 'false';
+
+  return `<script>
+(() => {
+  const copyCode = ${copyCode};
+
+  if (copyCode) {
+    const codeBlocks = document.querySelectorAll('pre > code');
+    codeBlocks.forEach((codeElement) => {
+      const pre = codeElement.parentElement;
+      if (!(pre instanceof HTMLElement)) {
+        return;
+      }
+      if (pre.querySelector('.copy-code-button')) {
+        return;
+      }
+
+      const button = document.createElement('button');
+      button.type = 'button';
+      button.className = 'copy-code-button';
+      button.textContent = 'Copy';
+      button.addEventListener('click', async () => {
+        const content = codeElement.textContent ?? '';
+        if (!content) {
+          return;
+        }
+
+        try {
+          if (navigator.clipboard && window.isSecureContext) {
+            await navigator.clipboard.writeText(content);
+          } else {
+            const area = document.createElement('textarea');
+            area.value = content;
+            area.style.position = 'fixed';
+            area.style.opacity = '0';
+            document.body.appendChild(area);
+            area.focus();
+            area.select();
+            document.execCommand('copy');
+            document.body.removeChild(area);
+          }
+          const previousLabel = button.textContent;
+          button.textContent = 'Copied';
+          window.setTimeout(() => {
+            button.textContent = previousLabel ?? 'Copy';
+          }, 1400);
+        } catch {
+          button.textContent = 'Failed';
+          window.setTimeout(() => {
+            button.textContent = 'Copy';
+          }, 1400);
+        }
+      });
+
+      pre.appendChild(button);
+    });
+  }
+})();
+</script>`;
+}
+
+function resolveRenderOptions(options: RenderOptions): ResolvedRenderOptions {
+  const theme = {
+    ...DEFAULT_THEME,
+    ...options.theme,
+  };
+
+  if (options.headingTheme) {
+    if (options.headingTheme.h1) theme.h1 = options.headingTheme.h1;
+    if (options.headingTheme.h2) theme.h2 = options.headingTheme.h2;
+    if (options.headingTheme.h3) theme.h3 = options.headingTheme.h3;
+  }
+
+  return {
+    css: options.css,
+    theme,
+    features: {
+      stickyToc: options.features?.stickyToc ?? false,
+      copyCode: options.features?.copyCode ?? true,
+    },
+    allowRawHtml: options.allowRawHtml ?? false,
+    showGeneratedDate: options.showGeneratedDate ?? true,
+  };
+}
+
+function stripHtml(value: string): string {
+  return value.replaceAll(/<[^>]+>/g, '');
 }
 
 function escapeHtml(value: string): string {
@@ -601,4 +1162,8 @@ function escapeHtml(value: string): string {
     .replaceAll('>', '&gt;')
     .replaceAll('"', '&quot;')
     .replaceAll("'", '&#39;');
+}
+
+function escapeHtmlAttribute(value: string): string {
+  return escapeHtml(value);
 }

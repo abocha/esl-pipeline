@@ -30,6 +30,30 @@ Override output path or title:
 pnpm --filter @esl-pipeline/anytype-adapter preview -- --md fixtures/actual_file.md --out tmp/anytype-preview.html --title "Preview"
 ```
 
+Useful preview flags:
+
+- `--raw-html`
+- `--hide-date`
+- `--sticky-toc`
+- `--no-sticky-toc`
+- `--no-copy-code`
+
+## Published HTML Defaults
+
+The renderer now defaults to:
+
+- safer output (`allowRawHtml: false`)
+- generated date tag shown in the header (`showGeneratedDate: true`)
+- non-sticky, collapsible ToC by default, with code copy buttons enabled
+
+When sharing to S3, you can override these in `sharePageToS3` options:
+
+- `allowRawHtml`
+- `showGeneratedDate`
+- `features` (`stickyToc`, `copyCode`)
+- `theme` (full color tokens)
+- `headingTheme` (legacy heading colors only)
+
 ## Frontmatter Support
 
 The renderer reads these frontmatter keys when present:

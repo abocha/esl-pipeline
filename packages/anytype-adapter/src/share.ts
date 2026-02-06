@@ -14,6 +14,26 @@ export interface SharePageOptions {
   css?: string;
   title?: string;
   markdown?: string;
+  allowRawHtml?: boolean;
+  showGeneratedDate?: boolean;
+  features?: {
+    stickyToc?: boolean;
+    copyCode?: boolean;
+  };
+  theme?: {
+    pageBg?: string;
+    pageCard?: string;
+    pageText?: string;
+    pageMuted?: string;
+    pageLine?: string;
+    calloutBg?: string;
+    calloutBorder?: string;
+    tocBg?: string;
+    tocBorder?: string;
+    h1?: string;
+    h2?: string;
+    h3?: string;
+  };
   headingTheme?: {
     h1?: string;
     h2?: string;
@@ -40,6 +60,10 @@ export async function sharePageToS3(
   const resolvedBody = body ?? '';
   const html = await renderToHtml(resolvedBody, resolvedTitle, {
     css: options.css,
+    allowRawHtml: options.allowRawHtml,
+    showGeneratedDate: options.showGeneratedDate,
+    features: options.features,
+    theme: options.theme,
     headingTheme: options.headingTheme,
   });
 
