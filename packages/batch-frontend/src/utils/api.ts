@@ -222,7 +222,8 @@ export interface DraftResponse {
 export interface MaterializeDraftResponse {
   draftId: string;
   jobId: string;
-  mdPath: string;
+  mdPath: string | null;
+  mdStorageUri: string;
 }
 
 export interface UploadMarkdownResponse {
@@ -342,11 +343,17 @@ export async function retryRecordingTranscription(recordingId: string): Promise<
   }
 }
 
-export async function approveJob(jobId: string, md: string): Promise<JobStatus> {
+export async function approveJob(
+  jobId: string,
+  source: { md?: string | null; mdStorageUri?: string | null } = {},
+): Promise<JobStatus> {
   try {
     const response = await apiClient.post(
       buildApiProxyPath(`/jobs/${encodeURIComponent(jobId)}/approve`),
-      { md },
+      {
+        ...(source.md ? { md: source.md } : {}),
+        ...(source.mdStorageUri ? { mdStorageUri: source.mdStorageUri } : {}),
+      },
     );
     return response.data;
   } catch (error: unknown) {

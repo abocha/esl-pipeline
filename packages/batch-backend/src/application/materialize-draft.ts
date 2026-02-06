@@ -2,6 +2,7 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 
 import type { JobConfigOverrides } from '@esl-pipeline/contracts';
+import { readBool } from '@esl-pipeline/shared-infrastructure';
 
 import { getDraftById } from '../domain/draft-repository.js';
 import { approveJob, updateJobDraftLink } from '../domain/job-repository.js';
@@ -20,7 +21,8 @@ export interface MaterializeDraftParams {
 export interface MaterializeDraftResponse {
   draftId: string;
   jobId: string;
-  mdPath: string;
+  mdPath: string | null;
+  mdStorageUri: string;
 }
 
 export interface MaterializeDraftDependencies {
@@ -37,6 +39,7 @@ export interface MaterializeDraftDependencies {
     approveJob?: typeof approveJob;
   };
   uploadDir: string;
+  localExport: boolean;
 }
 
 export async function materializeDraft(
@@ -57,6 +60,9 @@ export async function materializeDraft(
   };
   const uploadDir =
     overrides?.uploadDir ?? createStorageConfigService().getFilesystemConfig().uploadDir;
+  const localExport =
+    overrides?.localExport ??
+    readBool('DRAFT_LOCAL_EXPORT', process.env.NODE_ENV === 'development');
 
   let resolvedJobId = params.jobId?.trim() || '';
 
@@ -77,15 +83,18 @@ export async function materializeDraft(
   }
 
   const text = await storage.getText(draft.storageUri);
-  const mdPath = resolveDraftMaterializePath(uploadDir, draft.id);
-
-  await fs.mkdir(path.dirname(mdPath), { recursive: true });
-  await fs.writeFile(mdPath, text, 'utf8');
+  let mdPath: string | null = null;
+  if (localExport) {
+    mdPath = resolveDraftMaterializePath(uploadDir, draft.id);
+    await fs.mkdir(path.dirname(mdPath), { recursive: true });
+    await fs.writeFile(mdPath, text, 'utf8');
+  }
 
   const updated = await jobs.updateDraftLink({
     id: resolvedJobId,
     expectedState: 'awaiting_approval',
     md: mdPath,
+    mdStorageUri: draft.storageUri,
     draftId: draft.id,
   });
 
@@ -97,6 +106,7 @@ export async function materializeDraft(
       id: resolvedJobId,
       expectedState: 'awaiting_approval',
       md: mdPath,
+      mdStorageUri: draft.storageUri,
     });
   }
 
@@ -104,6 +114,7 @@ export async function materializeDraft(
     draftId: draft.id,
     jobId: resolvedJobId,
     mdPath,
+    mdStorageUri: draft.storageUri,
   };
 }
 

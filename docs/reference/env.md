@@ -48,6 +48,7 @@ Use `.env.batch-backend` for the service stack. It includes all core keys above 
 - `BATCH_BACKEND_HTTP_PORT` — HTTP port.
 - `BATCH_BACKEND_ENABLE_EXTENDED_API` — Enable uploads/auth/admin routes.
 - `FILESYSTEM_UPLOAD_DIR` — Local uploads path (shared volume).
+- `DRAFT_LOCAL_EXPORT` (optional, default `true` in dev, `false` otherwise) — Persist materialized draft markdown files under `FILESYSTEM_UPLOAD_DIR/drafts`.
 - `PIPELINE_CWD` — Orchestrator working directory for pipeline runs.
 - Postgres: `PG_ENABLED`, `PG_HOST`, `PG_PORT`, `PG_USER`, `PG_PASSWORD`, `PG_DATABASE` (or `PG_CONNECTION_STRING`).
 - Redis: `REDIS_ENABLED`, `REDIS_HOST`, `REDIS_PORT`, `REDIS_PASSWORD` (optional).

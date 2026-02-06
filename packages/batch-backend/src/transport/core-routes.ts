@@ -78,14 +78,18 @@ export function registerCoreRoutes(app: FastifyInstance, options: CoreRouteOptio
     const { jobId } = request.params as { jobId: string };
     const routePath = resolveRoutePath(request, 'POST /jobs/:jobId/approve');
 
-    const body = request.body as { md?: string } | undefined;
+    const body = request.body as { md?: string; mdStorageUri?: string } | undefined;
     const schema = z.object({
-      md: z.string().min(1, 'md is required'),
+      md: z.string().min(1).optional(),
+      mdStorageUri: z.string().min(1).optional(),
     });
 
     try {
-      const validated = schema.parse(body);
-      const approved = await approveJobForPipeline(jobId, validated.md);
+      const validated = schema.parse(body ?? {});
+      const approved = await approveJobForPipeline(jobId, {
+        md: validated.md,
+        mdStorageUri: validated.mdStorageUri,
+      });
 
       if (!approved) {
         logger.info('Approval request rejected', {
@@ -351,6 +355,7 @@ export function registerCoreRoutes(app: FastifyInstance, options: CoreRouteOptio
               finishedAt: dto.finishedAt,
               ttsStrategy: dto.ttsStrategy,
               md: dto.md,
+              mdStorageUri: dto.mdStorageUri,
               notionUrl: dto.notionUrl,
               anytypeUrl: dto.anytypeUrl,
               publishTarget: dto.publishTarget,

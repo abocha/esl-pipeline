@@ -25,6 +25,7 @@ interface SerializedJobRecord {
   id: string;
   state: JobRecord['state'];
   md: string | null;
+  mdStorageUri: string | null;
   recordingId: string | null;
   transcriptId: string | null;
   promptPackageId: string | null;
@@ -283,6 +284,7 @@ function serializeJobRecord(job: JobRecord): SerializedJobRecord {
     id: job.id,
     state: job.state,
     md: job.md,
+    mdStorageUri: job.mdStorageUri ?? null,
     recordingId: job.recordingId ?? null,
     transcriptId: job.transcriptId ?? null,
     promptPackageId: job.promptPackageId ?? null,
@@ -310,6 +312,7 @@ function deserializeJobRecord(serialized: SerializedJobRecord): JobRecord {
     id: serialized.id,
     state: serialized.state,
     md: serialized.md,
+    mdStorageUri: serialized.mdStorageUri ?? null,
     recordingId: serialized.recordingId ?? null,
     transcriptId: serialized.transcriptId ?? null,
     promptPackageId: serialized.promptPackageId ?? null,

@@ -52,7 +52,11 @@ services:
       PIPELINE_CWD: /app
       FILESYSTEM_UPLOAD_DIR: /app/uploads
     volumes:
-      - ./uploads:/app/uploads
+      - type: bind
+        source: ./uploads
+        target: /app/uploads
+        bind:
+          create_host_path: false
     ports:
       - '8080:8080'
     restart: unless-stopped
@@ -72,7 +76,11 @@ services:
       PIPELINE_CWD: /app
       FILESYSTEM_UPLOAD_DIR: /app/uploads
     volumes:
-      - ./uploads:/app/uploads
+      - type: bind
+        source: ./uploads
+        target: /app/uploads
+        bind:
+          create_host_path: false
     command: ['node', 'dist/transport/worker-runner.js']
     restart: unless-stopped
 

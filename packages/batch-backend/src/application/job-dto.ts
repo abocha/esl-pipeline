@@ -9,6 +9,7 @@ export function jobRecordToDto(job: JobRecord): JobStatusDto {
   return {
     jobId: job.id,
     md: job.md,
+    ...(job.mdStorageUri ? { mdStorageUri: job.mdStorageUri } : {}),
     recordingId: job.recordingId ?? null,
     transcriptId: job.transcriptId ?? null,
     promptPackageId: job.promptPackageId ?? null,

@@ -108,6 +108,9 @@ export interface BatchBackendConfig {
     templatePath: string;
     defaultProfilePath: string;
   };
+  drafts: {
+    localExport: boolean;
+  };
   experimental: {
     extendedApiEnabled: boolean;
   };
@@ -218,6 +221,7 @@ export function loadConfig(): BatchBackendConfig {
     'PROMPT_PROFILE_PATH',
     'docs/templates/PROFILE_2025-11-16.md',
   )!;
+  const draftLocalExport = readBool('DRAFT_LOCAL_EXPORT', nodeEnv === 'development');
 
   // Authentication configuration
   const jwtSecret = readString('JWT_SECRET', 'your-super-secret-jwt-key-change-in-production')!;
@@ -381,6 +385,9 @@ export function loadConfig(): BatchBackendConfig {
     prompt: {
       templatePath: promptTemplatePath,
       defaultProfilePath: promptProfilePath,
+    },
+    drafts: {
+      localExport: draftLocalExport,
     },
     experimental: {
       extendedApiEnabled,

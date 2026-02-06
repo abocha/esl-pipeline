@@ -401,6 +401,7 @@ describe('transport/http-server - integration (in-process)', () => {
       id: 'job-approve-1',
       state: 'queued',
       md: '/uploads/drafts/draft-1.md',
+      mdStorageUri: 'local://drafts/draft-1.md',
       recordingId: 'recording-1',
       transcriptId: 'transcript-1',
       promptPackageId: 'prompt-1',
@@ -432,6 +433,7 @@ describe('transport/http-server - integration (in-process)', () => {
     expect(response.json()).toEqual({
       jobId: 'job-approve-1',
       md: '/uploads/drafts/draft-1.md',
+      mdStorageUri: 'local://drafts/draft-1.md',
       recordingId: 'recording-1',
       transcriptId: 'transcript-1',
       promptPackageId: 'prompt-1',
@@ -458,7 +460,10 @@ describe('transport/http-server - integration (in-process)', () => {
     });
     expect(approveJobForPipeline).toHaveBeenCalledWith(
       'job-approve-1',
-      '/uploads/drafts/draft-1.md',
+      {
+        md: '/uploads/drafts/draft-1.md',
+        mdStorageUri: undefined,
+      },
     );
   });
 
@@ -482,7 +487,7 @@ describe('transport/http-server - integration (in-process)', () => {
     const response = await app.inject({
       method: 'POST',
       url: '/jobs/job-approve-1/approve',
-      payload: {},
+      payload: { md: '' },
     });
 
     expect(response.statusCode).toBe(400);
@@ -1381,6 +1386,7 @@ describe('transport/http-server - integration (in-process)', () => {
       draftId: 'draft-1',
       jobId: 'job-1',
       mdPath: '/uploads/drafts/draft-1.md',
+      mdStorageUri: 'local://drafts/draft-1.md',
     });
 
     const response = await app.inject({
@@ -1394,6 +1400,7 @@ describe('transport/http-server - integration (in-process)', () => {
       draftId: 'draft-1',
       jobId: 'job-1',
       mdPath: '/uploads/drafts/draft-1.md',
+      mdStorageUri: 'local://drafts/draft-1.md',
     });
     expect(materializeDraft).toHaveBeenCalledWith({
       draftId: 'draft-1',
@@ -1409,6 +1416,7 @@ describe('transport/http-server - integration (in-process)', () => {
       draftId: 'draft-2',
       jobId: 'job-2',
       mdPath: '/uploads/drafts/draft-2.md',
+      mdStorageUri: 'local://drafts/draft-2.md',
     });
 
     const response = await app.inject({
@@ -1422,6 +1430,7 @@ describe('transport/http-server - integration (in-process)', () => {
       draftId: 'draft-2',
       jobId: 'job-2',
       mdPath: '/uploads/drafts/draft-2.md',
+      mdStorageUri: 'local://drafts/draft-2.md',
     });
     expect(materializeDraft).toHaveBeenCalledWith({
       draftId: 'draft-2',
@@ -1437,6 +1446,7 @@ describe('transport/http-server - integration (in-process)', () => {
       draftId: 'draft-3',
       jobId: 'job-3',
       mdPath: '/uploads/drafts/draft-3.md',
+      mdStorageUri: 'local://drafts/draft-3.md',
     });
 
     const payload = {

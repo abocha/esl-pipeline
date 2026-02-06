@@ -16,6 +16,7 @@ CREATE TABLE IF NOT EXISTS jobs (
   id UUID PRIMARY KEY,
   state TEXT NOT NULL,
   md TEXT NULL,
+  md_storage_uri TEXT NULL,
   recording_id UUID NULL,
   transcript_id UUID NULL,
   prompt_package_id UUID NULL,
@@ -43,6 +44,7 @@ CREATE TABLE IF NOT EXISTS jobs (
 
 const JOBS_SCHEMA_PATCHES: string[] = [
   'ALTER TABLE jobs ALTER COLUMN md DROP NOT NULL',
+  'ALTER TABLE jobs ADD COLUMN IF NOT EXISTS md_storage_uri TEXT NULL',
   'ALTER TABLE jobs ADD COLUMN IF NOT EXISTS recording_id UUID NULL',
   'ALTER TABLE jobs ADD COLUMN IF NOT EXISTS transcript_id UUID NULL',
   'ALTER TABLE jobs ADD COLUMN IF NOT EXISTS prompt_package_id UUID NULL',
