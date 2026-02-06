@@ -125,7 +125,7 @@ export default defineConfig(
   },
   // Vitest rules
   {
-    files: ['**/*.test.ts', '**/*.spec.ts'],
+    files: ['**/*.test.{ts,tsx}', '**/*.spec.{ts,tsx}'],
     plugins: {
       vitest: vitestPlugin,
     },

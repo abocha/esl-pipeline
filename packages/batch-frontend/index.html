@@ -22,7 +22,6 @@
   <!-- Security Headers -->
   <meta http-equiv="X-Content-Type-Options" content="nosniff" />
   <meta http-equiv="X-Frame-Options" content="DENY" />
-  <meta http-equiv="X-XSS-Protection" content="1; mode=block" />
   <meta name="referrer" content="strict-origin-when-cross-origin" />
 
   <!-- Content Security Policy -->
@@ -45,7 +44,6 @@
       - Content Security Policy (CSP) to prevent XSS attacks
       - X-Frame-Options to prevent clickjacking
       - X-Content-Type-Options to prevent MIME sniffing
-      - X-XSS-Protection for additional XSS protection
 
       In dev:
       - Served by Vite (`pnpm --filter @esl-pipeline/batch-frontend dev`).
