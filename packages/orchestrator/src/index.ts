@@ -3,15 +3,15 @@ import { constants as FS } from 'node:fs';
 import { access, readFile, stat } from 'node:fs/promises';
 import { basename, dirname } from 'node:path';
 
+import { createAnytypeClient, sharePageToS3 } from '@esl-pipeline/anytype-adapter';
 import { InfrastructureError, ManifestError, ValidationError } from '@esl-pipeline/contracts';
 import { validateMarkdownFile } from '@esl-pipeline/md-validator';
-import { createAnytypeClient, sharePageToS3 } from '@esl-pipeline/anytype-adapter';
 import {
+  type ColorPreset,
   addOrReplaceAudioUnderStudyText,
   applyHeadingPreset,
   loadPreset,
   runImport,
-  type ColorPreset,
 } from '@esl-pipeline/notion-adapter';
 import { deriveS3UploadAddress, uploadFile } from '@esl-pipeline/storage-uploader';
 import {
@@ -23,13 +23,13 @@ import {
   loadVoicesCatalog,
 } from '@esl-pipeline/tts-elevenlabs';
 
+import { DEFAULT_PRESETS_PATH, DEFAULT_VOICES_PATH } from './config.js';
 import {
   type AssignmentManifest,
   CURRENT_MANIFEST_SCHEMA_VERSION,
   createFilesystemManifestStore,
 } from './manifest.js';
-import { DEFAULT_PRESETS_PATH, DEFAULT_VOICES_PATH } from './config.js';
-import { noopLogger, noopMetrics, type PipelineLogger } from './observability.js';
+import { type PipelineLogger, noopLogger, noopMetrics } from './observability.js';
 import type {
   AssignmentProgressCallbacks,
   AssignmentStage,
@@ -117,7 +117,11 @@ function insertAudioBeforeStudyText(markdown: string, audioUrl: string): string 
   return nextLines.join('\n');
 }
 
-function resolveMarkdownTitle(mdContents: string, fallback: string, metaTitle?: string | null): string {
+function resolveMarkdownTitle(
+  mdContents: string,
+  fallback: string,
+  metaTitle?: string | null,
+): string {
   if (metaTitle && metaTitle.trim()) return metaTitle.trim();
   const headingMatch = mdContents.match(/^#\s+(.+)$/m);
   if (headingMatch?.[1]) return headingMatch[1].trim();
@@ -149,8 +153,8 @@ const NOTION_COLOR_TO_HEX: Record<string, string> = {
 
 function resolveHeadingTheme(preset?: ColorPreset): { h2?: string; h3?: string } | undefined {
   if (!preset) return undefined;
-  const h2 = preset.h2 ? NOTION_COLOR_TO_HEX[preset.h2] ?? undefined : undefined;
-  const h3 = preset.h3 ? NOTION_COLOR_TO_HEX[preset.h3] ?? undefined : undefined;
+  const h2 = preset.h2 ? (NOTION_COLOR_TO_HEX[preset.h2] ?? undefined) : undefined;
+  const h3 = preset.h3 ? (NOTION_COLOR_TO_HEX[preset.h3] ?? undefined) : undefined;
   if (!h2 && !h3) return undefined;
   return { h2, h3 };
 }

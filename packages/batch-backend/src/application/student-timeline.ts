@@ -1,4 +1,5 @@
 import path from 'node:path';
+
 import { withPgClient } from '../infrastructure/db.js';
 
 export type StudentTimelineType =
@@ -69,7 +70,9 @@ function deriveDisplayName(params: {
   return base && base !== '.' && base !== '/' ? base : params.fallbackId;
 }
 
-function normalizeTypeFilter(types?: StudentTimelineType[] | string): Set<StudentTimelineType> | null {
+function normalizeTypeFilter(
+  types?: StudentTimelineType[] | string,
+): Set<StudentTimelineType> | null {
   if (!types) return null;
   const list = Array.isArray(types) ? types : String(types).split(',');
   const filtered = list

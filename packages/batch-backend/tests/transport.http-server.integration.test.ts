@@ -4,26 +4,26 @@ import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 
 import { validateMarkdownFile } from '@esl-pipeline/md-validator';
 
-import { getJobOptions } from '../src/application/get-job-options.js';
 import * as approveJobModule from '../src/application/approve-job.js';
 import * as createDraftModule from '../src/application/create-draft.js';
 import * as createPromptPackageModule from '../src/application/create-prompt-package.js';
-import * as jobSummaryModule from '../src/application/job-summary.js';
-import * as getRecordingModule from '../src/application/get-recording.js';
-import * as getRecordingTranscriptModule from '../src/application/get-recording-transcript.js';
+import { getJobOptions } from '../src/application/get-job-options.js';
 import * as getJobStatusModule from '../src/application/get-job-status.js';
 import * as getPromptPackageModule from '../src/application/get-prompt-package.js';
+import * as getRecordingTranscriptModule from '../src/application/get-recording-transcript.js';
+import * as getRecordingModule from '../src/application/get-recording.js';
+import * as jobSummaryModule from '../src/application/job-summary.js';
 import * as listJobsModule from '../src/application/list-jobs.js';
 import * as listRecordingsModule from '../src/application/list-recordings.js';
 import * as materializeDraftModule from '../src/application/materialize-draft.js';
+import * as profileContentModule from '../src/application/profile-content.js';
+import { ProfilePathError } from '../src/application/profile-path.js';
 import * as retryRecordingModule from '../src/application/retry-recording-transcription.js';
+import * as studentStoreModule from '../src/application/student-profiles-store.js';
 import * as studentSummaryModule from '../src/application/student-summary.js';
+import * as studentTimelineModule from '../src/application/student-timeline.js';
 import * as submitJobModule from '../src/application/submit-job.js';
 import * as updateRecordingTranscriptModule from '../src/application/update-recording-transcript.js';
-import { ProfilePathError } from '../src/application/profile-path.js';
-import * as profileContentModule from '../src/application/profile-content.js';
-import * as studentTimelineModule from '../src/application/student-timeline.js';
-import * as studentStoreModule from '../src/application/student-profiles-store.js';
 import { publishJobEvent } from '../src/domain/job-events.js';
 import type { JobRecord } from '../src/domain/job-model.js';
 import { publishRecordingEvent } from '../src/domain/recording-events.js';
@@ -1031,10 +1031,7 @@ describe('transport/http-server - integration (in-process)', () => {
   });
 
   it('POST /recordings/:id/transcribe enqueues retry', async () => {
-    const retryRecording = vi.spyOn(
-      retryRecordingModule,
-      'retryRecordingTranscription',
-    );
+    const retryRecording = vi.spyOn(retryRecordingModule, 'retryRecordingTranscription');
     retryRecording.mockClear();
     retryRecording.mockResolvedValue({
       recordingId: 'recording-1',
@@ -1078,10 +1075,7 @@ describe('transport/http-server - integration (in-process)', () => {
   });
 
   it('GET /recordings/:id/transcript returns transcript payload', async () => {
-    const getRecordingTranscript = vi.spyOn(
-      getRecordingTranscriptModule,
-      'getRecordingTranscript',
-    );
+    const getRecordingTranscript = vi.spyOn(getRecordingTranscriptModule, 'getRecordingTranscript');
     getRecordingTranscript.mockClear();
     getRecordingTranscript.mockResolvedValue({
       recordingId: 'recording-1',
@@ -1116,10 +1110,7 @@ describe('transport/http-server - integration (in-process)', () => {
   });
 
   it('GET /recordings/:id/transcript returns 404 when missing', async () => {
-    const getRecordingTranscript = vi.spyOn(
-      getRecordingTranscriptModule,
-      'getRecordingTranscript',
-    );
+    const getRecordingTranscript = vi.spyOn(getRecordingTranscriptModule, 'getRecordingTranscript');
     getRecordingTranscript.mockClear();
     getRecordingTranscript.mockResolvedValue(null);
 
@@ -1744,10 +1735,7 @@ describe('transport/http-server - integration (in-process)', () => {
       updatedAt: new Date('2024-01-01T00:00:00.000Z'),
     });
 
-    const createStorage = vi.spyOn(
-      transcriptionStorageModule,
-      'createTranscriptionStorageForUri',
-    );
+    const createStorage = vi.spyOn(transcriptionStorageModule, 'createTranscriptionStorageForUri');
     createStorage.mockReturnValue({
       getStream: async () => Readable.from(Buffer.from('hello world')),
     } as any);
@@ -1932,25 +1920,25 @@ describe('transport/http-server - integration (in-process)', () => {
         let resRef: import('node:http').IncomingMessage | null = null;
         let settled = false;
         let buffer = '';
-      let published = false;
-      let requestRef: import('node:http').ClientRequest | null = null;
-      let timeout: ReturnType<typeof setTimeout> | null = null;
-      let publishTimer: ReturnType<typeof setTimeout> | null = null;
+        let published = false;
+        let requestRef: import('node:http').ClientRequest | null = null;
+        let timeout: ReturnType<typeof setTimeout> | null = null;
+        let publishTimer: ReturnType<typeof setTimeout> | null = null;
 
-      const cleanup = (err?: Error, result?: any) => {
-        if (settled) return;
-        settled = true;
-        requestRef?.destroy();
-        resRef?.destroy();
-        if (timeout) {
-          clearTimeout(timeout);
-        }
-        if (publishTimer) {
-          clearTimeout(publishTimer);
-        }
-        void streamingApp.close();
-        if (err) {
-          reject(err);
+        const cleanup = (err?: Error, result?: any) => {
+          if (settled) return;
+          settled = true;
+          requestRef?.destroy();
+          resRef?.destroy();
+          if (timeout) {
+            clearTimeout(timeout);
+          }
+          if (publishTimer) {
+            clearTimeout(publishTimer);
+          }
+          void streamingApp.close();
+          if (err) {
+            reject(err);
           } else {
             resolve(result);
           }
@@ -1963,16 +1951,16 @@ describe('transport/http-server - integration (in-process)', () => {
           res.on('data', (chunk) => {
             buffer += chunk;
 
-          if (!published && buffer.includes(': connected')) {
-            published = true;
-            publishTimer = setTimeout(() => {
-              publishRecordingEvent({
-                type: 'recording_state_changed',
-                recording,
-                transcriptId: 'transcript-1',
-              });
-            }, 0);
-          }
+            if (!published && buffer.includes(': connected')) {
+              published = true;
+              publishTimer = setTimeout(() => {
+                publishRecordingEvent({
+                  type: 'recording_state_changed',
+                  recording,
+                  transcriptId: 'transcript-1',
+                });
+              }, 0);
+            }
 
             const dataMatch = buffer.match(/data: (.+)\n\n/);
             if (dataMatch) {

@@ -1,3 +1,4 @@
+import type { Client } from '@notionhq/client';
 import type {
   DataSourceObjectResponse,
   DatabaseObjectResponse,
@@ -6,7 +7,6 @@ import type {
   SearchResponse,
 } from '@notionhq/client/build/src/api-endpoints.js';
 import type { SearchParameters } from '@notionhq/client/build/src/api-endpoints.js';
-import type { Client } from '@notionhq/client';
 import { createHash } from 'node:crypto';
 
 import { withRetry } from './retry.js';

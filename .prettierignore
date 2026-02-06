@@ -10,3 +10,5 @@ fixtures_private
 fixtures_private/**
 packages/**/fixtures
 packages/**/fixtures/**
+packages/md-validator/test-results.json
+pnpm-lock.yaml

@@ -1,5 +1,5 @@
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import copy from 'copy-to-clipboard';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import type {
   DraftResponse,
@@ -45,7 +45,9 @@ export const MinimalAssignment: React.FC = () => {
 
   const [transcript, setTranscript] = useState<RecordingTranscriptResponse | null>(null);
   const [transcriptText, setTranscriptText] = useState('');
-  const [transcriptStatus, setTranscriptStatus] = useState<'idle' | 'loading' | 'processing' | 'ready' | 'failed'>('idle');
+  const [transcriptStatus, setTranscriptStatus] = useState<
+    'idle' | 'loading' | 'processing' | 'ready' | 'failed'
+  >('idle');
   const [transcriptError, setTranscriptError] = useState<string | null>(null);
   const [transcriptSaving, setTranscriptSaving] = useState(false);
   const [retryingTranscript, setRetryingTranscript] = useState(false);
@@ -116,37 +118,40 @@ export const MinimalAssignment: React.FC = () => {
     void loadPromptOptions();
   }, [loadPromptOptions]);
 
-  const handleUpload = useCallback(async (file: File) => {
-    if (uploading) return;
-    resetFlow();
-    setSelectedFileName(file.name);
-    setUploading(true);
-    setUploadError(null);
-    setUploadProgress(0);
+  const handleUpload = useCallback(
+    async (file: File) => {
+      if (uploading) return;
+      resetFlow();
+      setSelectedFileName(file.name);
+      setUploading(true);
+      setUploadError(null);
+      setUploadProgress(0);
 
-    const controller = new AbortController();
-    uploadAbortRef.current = controller;
-    try {
-      const response = await uploadRecording(file, {
-        signal: controller.signal,
-        onProgress: (progress) => setUploadProgress(progress),
-      });
-      setRecording(response);
-      setRecordingStatus(response.status);
-      setRecordingError(response.error ?? null);
-      setSelectedFileName(response.displayName || file.name);
-    } catch (error) {
-      if (controller.signal.aborted) {
-        setUploadError('Upload canceled.');
-      } else {
-        const message = error instanceof Error ? error.message : 'Unable to upload recording.';
-        setUploadError(message);
+      const controller = new AbortController();
+      uploadAbortRef.current = controller;
+      try {
+        const response = await uploadRecording(file, {
+          signal: controller.signal,
+          onProgress: (progress) => setUploadProgress(progress),
+        });
+        setRecording(response);
+        setRecordingStatus(response.status);
+        setRecordingError(response.error ?? null);
+        setSelectedFileName(response.displayName || file.name);
+      } catch (error) {
+        if (controller.signal.aborted) {
+          setUploadError('Upload canceled.');
+        } else {
+          const message = error instanceof Error ? error.message : 'Unable to upload recording.';
+          setUploadError(message);
+        }
+      } finally {
+        setUploading(false);
+        uploadAbortRef.current = null;
       }
-    } finally {
-      setUploading(false);
-      uploadAbortRef.current = null;
-    }
-  }, [resetFlow, uploading]);
+    },
+    [resetFlow, uploading],
+  );
 
   const handleFiles = (files: File[]) => {
     const file = files[0];
@@ -206,7 +211,8 @@ export const MinimalAssignment: React.FC = () => {
         }
       } catch (error) {
         if (!active) return;
-        const message = error instanceof Error ? error.message : 'Unable to refresh recording status.';
+        const message =
+          error instanceof Error ? error.message : 'Unable to refresh recording status.';
         setRecordingError(message);
       }
     };
@@ -237,7 +243,10 @@ export const MinimalAssignment: React.FC = () => {
     setTranscriptSaving(true);
     setTranscriptError(null);
     try {
-      const response = await updateRecordingTranscript(recording.recordingId, transcriptText.trim());
+      const response = await updateRecordingTranscript(
+        recording.recordingId,
+        transcriptText.trim(),
+      );
       setTranscript(response);
       setTranscriptText(response.text ?? transcriptText.trim());
       setTranscriptStatus('ready');
@@ -430,8 +439,7 @@ export const MinimalAssignment: React.FC = () => {
   const jobReady = jobStatus?.jobId;
   const canPublish = promptReady && draftText.trim().length > 0 && !publishing;
   const jobPublishTarget = jobStatus?.publishTarget ?? publishTarget;
-  const publishUrl =
-    jobPublishTarget === 'anytype' ? jobStatus?.anytypeUrl : jobStatus?.notionUrl;
+  const publishUrl = jobPublishTarget === 'anytype' ? jobStatus?.anytypeUrl : jobStatus?.notionUrl;
   const publishLabel = jobPublishTarget === 'anytype' ? 'Open published page' : 'Open in Notion';
   const publishPending =
     jobPublishTarget === 'anytype' ? 'Publish link pending...' : 'Notion link pending...';
@@ -493,7 +501,9 @@ export const MinimalAssignment: React.FC = () => {
         ) : (
           <p className="minimal-help">Upload a recording to begin transcription.</p>
         )}
-        {transcriptStatus === 'loading' ? <p className="minimal-help">Loading transcript...</p> : null}
+        {transcriptStatus === 'loading' ? (
+          <p className="minimal-help">Loading transcript...</p>
+        ) : null}
         {transcriptStatus === 'failed' ? (
           <div className="minimal-block">
             <p className="minimal-error">{transcriptError ?? 'Transcript failed to load.'}</p>
@@ -540,7 +550,11 @@ export const MinimalAssignment: React.FC = () => {
               onClick={() => void handleGeneratePrompt()}
               disabled={!transcriptReady || promptLoading || !promptOptions}
             >
-              {promptLoading ? 'Generating...' : promptReady ? 'Regenerate prompt' : 'Generate prompt'}
+              {promptLoading
+                ? 'Generating...'
+                : promptReady
+                  ? 'Regenerate prompt'
+                  : 'Generate prompt'}
             </button>
             <button
               type="button"
@@ -566,7 +580,11 @@ export const MinimalAssignment: React.FC = () => {
         </p>
         {promptError ? <p className="minimal-error">{promptError}</p> : null}
         {promptText ? (
-          <textarea value={promptText} onChange={(event) => setPromptText(event.target.value)} rows={12} />
+          <textarea
+            value={promptText}
+            onChange={(event) => setPromptText(event.target.value)}
+            rows={12}
+          />
         ) : (
           <p className="minimal-muted">Generate a prompt to continue.</p>
         )}

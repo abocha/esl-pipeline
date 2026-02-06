@@ -42,7 +42,7 @@ services:
     image: esl-pipeline/dev-node:local
     pull_policy: never
     container_name: esl-dev-deps
-    user: "${UID:-1000}:${GID:-1000}"
+    user: '${UID:-1000}:${GID:-1000}'
     working_dir: /app
     environment:
       CI: 'true'
@@ -59,7 +59,7 @@ services:
     image: esl-pipeline/dev-node:local
     pull_policy: never
     container_name: esl-batch-backend
-    user: "${UID:-1000}:${GID:-1000}"
+    user: '${UID:-1000}:${GID:-1000}'
     depends_on:
       deps:
         condition: service_completed_successfully
@@ -87,7 +87,7 @@ services:
     image: esl-pipeline/dev-node:local
     pull_policy: never
     container_name: esl-batch-worker
-    user: "${UID:-1000}:${GID:-1000}"
+    user: '${UID:-1000}:${GID:-1000}'
     depends_on:
       deps:
         condition: service_completed_successfully
@@ -113,7 +113,7 @@ services:
     image: esl-pipeline/dev-node:local
     pull_policy: never
     container_name: esl-transcribe-worker
-    user: "${UID:-1000}:${GID:-1000}"
+    user: '${UID:-1000}:${GID:-1000}'
     depends_on:
       deps:
         condition: service_completed_successfully
@@ -142,7 +142,7 @@ services:
     image: esl-pipeline/batch-frontend:dev
     pull_policy: never
     container_name: esl-batch-frontend
-    user: "${UID:-1000}:${GID:-1000}"
+    user: '${UID:-1000}:${GID:-1000}'
     depends_on:
       deps:
         condition: service_completed_successfully

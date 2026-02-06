@@ -13,7 +13,13 @@ import { loadVoicesCatalog } from '@esl-pipeline/tts-elevenlabs';
 import type { ConfigProvider, StudentProfile } from '../config.js';
 import type { OrchestratorPipeline, ResolvedConfigPaths } from '../pipeline.js';
 
-export type { JobOptionsPayload, NotionDatabaseOption, TtsStrategyOption, UploadOption, VoiceOption } from '@esl-pipeline/contracts';
+export type {
+  JobOptionsPayload,
+  NotionDatabaseOption,
+  TtsStrategyOption,
+  UploadOption,
+  VoiceOption,
+} from '@esl-pipeline/contracts';
 
 type ResolveJobOptionsSource =
   | Pick<OrchestratorPipeline, 'configProvider' | 'configPaths'>

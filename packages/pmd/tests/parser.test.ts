@@ -18,13 +18,7 @@ describe('parsePmdDocument', () => {
   it('parses nested directives in order', () => {
     const md =
       baseFrontmatter +
-      [
-        ':::toggle Answer Key',
-        ':::callout target',
-        'Inner content',
-        ':::',
-        ':::',
-      ].join('\n');
+      [':::toggle Answer Key', ':::callout target', 'Inner content', ':::', ':::'].join('\n');
 
     const doc = parsePmdDocument(md);
     const toggles = findDirectiveBlocks(doc, 'toggle');
@@ -52,12 +46,7 @@ describe('parsePmdDocument', () => {
 
   it('detects study-text directives', () => {
     const withStudyText =
-      baseFrontmatter +
-      [
-        ':::study-text Transcript',
-        'Line 1',
-        ':::',
-      ].join('\n');
+      baseFrontmatter + [':::study-text Transcript', 'Line 1', ':::'].join('\n');
 
     const withoutStudyText = baseFrontmatter + 'Plain paragraph.';
 

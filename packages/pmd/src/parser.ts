@@ -1,12 +1,12 @@
-import { readFile } from 'node:fs/promises';
-
 import matter from 'gray-matter';
-import { unified } from 'unified';
+import { readFile } from 'node:fs/promises';
 import remarkDirective from 'remark-directive';
 import remarkFrontmatter from 'remark-frontmatter';
 import remarkGfm from 'remark-gfm';
 import remarkParse from 'remark-parse';
+import { unified } from 'unified';
 
+import { normalizeMarkdownSource } from './source.js';
 import type {
   PmdBlock,
   PmdDirectiveBlock,
@@ -16,7 +16,6 @@ import type {
   PmdPosition,
   PmdWarning,
 } from './types.js';
-import { normalizeMarkdownSource } from './source.js';
 
 export interface ParseOptions {
   includePositions?: boolean;
@@ -46,7 +45,10 @@ interface MdastNode {
   position?: PmdPosition;
 }
 
-function parseFrontmatter(input: string): { frontmatter: Record<string, unknown>; content: string } {
+function parseFrontmatter(input: string): {
+  frontmatter: Record<string, unknown>;
+  content: string;
+} {
   const parsed = matter(input);
   return { frontmatter: parsed.data as Record<string, unknown>, content: parsed.content };
 }
@@ -100,7 +102,9 @@ function toText(node: MdastNode): string {
   return '';
 }
 
-function pickAttributes(input?: Record<string, unknown>): Record<string, string | number | boolean> | undefined {
+function pickAttributes(
+  input?: Record<string, unknown>,
+): Record<string, string | number | boolean> | undefined {
   if (!input) return undefined;
   const entries = Object.entries(input).filter(([, value]) => {
     return ['string', 'number', 'boolean'].includes(typeof value);
@@ -271,7 +275,10 @@ export function parsePmdDocument(markdown: string, opts: ParseOptions = {}): Pmd
   };
 }
 
-export async function parsePmdFromFile(path: string, opts: ParseOptions = {}): Promise<PmdDocument> {
+export async function parsePmdFromFile(
+  path: string,
+  opts: ParseOptions = {},
+): Promise<PmdDocument> {
   const input = await readFile(path, 'utf8');
   return parsePmdDocument(input, opts);
 }

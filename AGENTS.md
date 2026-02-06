@@ -9,6 +9,7 @@ Everything below assumes **Node.js 24.11.1+**, pnpm, and system ffmpeg.
 ## Agent Fast Path (AI-First)
 
 If you need baseline context quickly, read in this order:
+
 1. `docs/README.md` (router)
 2. `docs/PROJECT_OVERVIEW.md` (component baseline)
 3. `docs/backend-frontend/backend-frontend-alignment.md` (live status)
@@ -67,15 +68,15 @@ For historical rationale, use `docs/archive/` only after checking active docs.
 
 Use this as a quick map; detailed contracts live in the SSOT.
 
-| Package                          | Purpose (high level)          |
-| -------------------------------- | ----------------------------- |
-| `@esl-pipeline/orchestrator`     | CLI and pipeline factory      |
-| `@esl-pipeline/md-validator`     | Markdown validation           |
-| `@esl-pipeline/pmd`              | PMD parse + study text extraction |
+| Package                          | Purpose (high level)                  |
+| -------------------------------- | ------------------------------------- |
+| `@esl-pipeline/orchestrator`     | CLI and pipeline factory              |
+| `@esl-pipeline/md-validator`     | Markdown validation                   |
+| `@esl-pipeline/pmd`              | PMD parse + study text extraction     |
 | `@esl-pipeline/notion-adapter`   | Notion adapter (import, color, audio) |
-| `@esl-pipeline/tts-elevenlabs`   | ElevenLabs integration        |
-| `@esl-pipeline/storage-uploader` | S3 uploads                    |
-| `@esl-pipeline/contracts`        | Shared DTO + SSE event types  |
+| `@esl-pipeline/tts-elevenlabs`   | ElevenLabs integration                |
+| `@esl-pipeline/storage-uploader` | S3 uploads                            |
+| `@esl-pipeline/contracts`        | Shared DTO + SSE event types          |
 
 For per-package responsibilities, extension points, and invariants:
 see [`docs/reference/agents-ssot.md`](docs/reference/agents-ssot.md) §4.

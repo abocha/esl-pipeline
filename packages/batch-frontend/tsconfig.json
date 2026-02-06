@@ -5,11 +5,7 @@
     // Frontend-specific overrides.
     "target": "ES2022",
     "module": "ESNext",
-    "lib": [
-      "ES2022",
-      "DOM",
-      "DOM.Iterable"
-    ],
+    "lib": ["ES2022", "DOM", "DOM.Iterable"],
     "moduleResolution": "Bundler",
     "jsx": "react-jsx",
     "jsxImportSource": "react",
@@ -18,16 +14,11 @@
     "allowJs": false,
     "resolveJsonModule": true,
     // Make sure Vite/DOM types are available in the editor for ESLint/TS.
-    "types": [
-      "vite/client",
-      "vitest"
-    ],
+    "types": ["vite/client", "vitest"],
     // Local path aliases for this package.
     "baseUrl": "./",
     "paths": {
-      "@/*": [
-        "src/*"
-      ]
+      "@/*": ["src/*"]
     }
   },
   // Include only local package sources/config so project-service stays focused.
@@ -39,9 +30,5 @@
     "playwright.config.ts",
     "tests/**/*.ts"
   ],
-  "exclude": [
-    "dist",
-    "node_modules",
-    "../../node_modules"
-  ]
+  "exclude": ["dist", "node_modules", "../../node_modules"]
 }

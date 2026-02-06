@@ -4,23 +4,17 @@ import type { Readable } from 'node:stream';
 import type { BatchBackendConfig } from '../config/env.js';
 import { loadConfig } from '../config/env.js';
 import { publishRecordingEvent } from '../domain/recording-events.js';
-import {
-  getRecordingById,
-  updateRecordingStatus,
-} from '../domain/recording-repository.js';
-import {
-  type TranscriptMode,
-  type TranscriptRecord,
-} from '../domain/transcript-model.js';
+import { getRecordingById, updateRecordingStatus } from '../domain/recording-repository.js';
+import { type TranscriptMode, type TranscriptRecord } from '../domain/transcript-model.js';
 import { getTranscriptByRecordingId, insertTranscript } from '../domain/transcript-repository.js';
 import { createDeepgramClient } from '../infrastructure/deepgram-client.js';
 import { createJobLogger } from '../infrastructure/logger.js';
+import type { TranscribeQueuePayload } from '../infrastructure/transcribe-queue.js';
 import type { TranscriptionStorage } from '../infrastructure/transcription-storage.js';
 import {
   createTranscriptionStorage,
   createTranscriptionStorageForUri,
 } from '../infrastructure/transcription-storage.js';
-import type { TranscribeQueuePayload } from '../infrastructure/transcribe-queue.js';
 
 interface DeepgramResult {
   metadata?: Record<string, unknown>;
@@ -255,8 +249,7 @@ async function transcribeWithDeepgram(args: {
   });
 
   if (fallback.error || !fallback.result) {
-    const error =
-      fallback.error ?? primary.error ?? new Error('Deepgram transcription failed');
+    const error = fallback.error ?? primary.error ?? new Error('Deepgram transcription failed');
     throw error instanceof Error ? error : new Error(String(error));
   }
 

@@ -33,7 +33,10 @@ const normalizeString = (value: unknown, name: string): string => {
 
 const normalizeStringArray = (value: unknown, name: string): string[] => {
   if (Array.isArray(value)) {
-    return value.map((entry) => normalizeString(entry, name)).map((entry) => entry.trim()).filter(Boolean);
+    return value
+      .map((entry) => normalizeString(entry, name))
+      .map((entry) => entry.trim())
+      .filter(Boolean);
   }
   if (typeof value === 'string') {
     return value
@@ -120,7 +123,9 @@ const normalizeFiles = (
   value: unknown,
   name: string,
 ): { name: string; type: 'external'; external: { url: string } }[] => {
-  const toFile = (entry: unknown): { name: string; type: 'external'; external: { url: string } } => {
+  const toFile = (
+    entry: unknown,
+  ): { name: string; type: 'external'; external: { url: string } } => {
     if (typeof entry === 'string') {
       return { name: guessFileName(entry), type: 'external', external: { url: entry } };
     }
@@ -162,10 +167,7 @@ const buildPropertyIndex = (
   return index;
 };
 
-export function buildBaseProperties(
-  title: string,
-  fm: FrontmatterShape,
-): PropertiesPayload {
+export function buildBaseProperties(title: string, fm: FrontmatterShape): PropertiesPayload {
   const properties: PropertiesPayload = {
     Name: { title: [createTextItem(title)] },
   };
@@ -248,7 +250,8 @@ export function mapFrontmatterProperties(
 
     const meta = propertyIndex.get(key);
     if (!meta) {
-      const available = [...propertyIndex.values()].map((entry) => entry.name).join(', ') || '(none)';
+      const available =
+        [...propertyIndex.values()].map((entry) => entry.name).join(', ') || '(none)';
       throw new ValidationError(
         `Unknown Notion properties in frontmatter: ${rawKey}. Available properties: ${available}`,
       );

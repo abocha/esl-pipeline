@@ -131,10 +131,7 @@ describe('application/draft', () => {
       mdPath: path.resolve(uploadDir, 'drafts', 'draft-1.md'),
     });
 
-    const stored = await fs.readFile(
-      path.resolve(uploadDir, 'drafts', 'draft-1.md'),
-      'utf8',
-    );
+    const stored = await fs.readFile(path.resolve(uploadDir, 'drafts', 'draft-1.md'), 'utf8');
     expect(stored).toBe('DRAFT TEXT');
     expect(updateDraftLink).toHaveBeenCalledWith({
       id: 'job-1',
@@ -251,7 +248,7 @@ describe('application/draft', () => {
 
     promptPackages.getById.mockResolvedValue({
       recordingId: 'rec-1',
-      transcriptId: 'tx-1'
+      transcriptId: 'tx-1',
     });
 
     jobs.updateDraftLink.mockResolvedValue({ id: 'job-1' });
@@ -270,9 +267,7 @@ describe('application/draft', () => {
   });
 });
 
-function createStorageStub(
-  overrides: Partial<TranscriptionStorage> = {},
-): TranscriptionStorage {
+function createStorageStub(overrides: Partial<TranscriptionStorage> = {}): TranscriptionStorage {
   return {
     putAudio: async () => ({ uri: 'local://recordings/recording.opus', bytes: 1 }),
     putTranscript: async () => ({ uri: 'local://transcripts/transcript.txt', bytes: 1 }),
@@ -281,7 +276,7 @@ function createStorageStub(
     putDraft: async () => ({ uri: 'local://drafts/draft.md', bytes: 1 }),
     getText: async () => '',
     getStream: async () => Readable.from(['']),
-    delete: async () => { },
+    delete: async () => {},
     ...overrides,
   };
 }

@@ -68,7 +68,9 @@ const H2_RULES: HeadingRule[] = [
   },
   {
     label: 'Language Toolkit: Useful Language',
-    groups: [['language', 'toolkit', 'tools', 'toolbox', 'grammar', 'useful', 'vocab', 'vocabulary']],
+    groups: [
+      ['language', 'toolkit', 'tools', 'toolbox', 'grammar', 'useful', 'vocab', 'vocabulary'],
+    ],
   },
   {
     label: 'Practice & Pronunciation',
@@ -139,7 +141,9 @@ function collectHeadings(body: PmdBlock[], depth: 2 | 3): PmdHeading[] {
 function sectionSlice(body: PmdBlock[], startHeading: PmdHeading): PmdBlock[] {
   const idx = body.indexOf(startHeading);
   if (idx === -1) return [];
-  const rel = body.slice(idx + 1).findIndex((n) => n.type === 'heading' && n.depth <= startHeading.depth);
+  const rel = body
+    .slice(idx + 1)
+    .findIndex((n) => n.type === 'heading' && n.depth <= startHeading.depth);
   const endIdx = rel === -1 ? body.length : idx + 1 + rel;
   return body.slice(idx + 1, endIdx);
 }
@@ -181,7 +185,10 @@ function findFirstDirective(blocks: PmdDirectiveBlock[]): PmdDirectiveBlock | nu
 }
 
 function normalizeLabel(value: string): string {
-  return value.replaceAll(/[\u2018\u2019]/g, "'").trim().toLowerCase();
+  return value
+    .replaceAll(/[\u2018\u2019]/g, "'")
+    .trim()
+    .toLowerCase();
 }
 
 function directiveLabel(block: PmdDirectiveBlock, markerLine: string): string {
@@ -192,7 +199,10 @@ function directiveLabel(block: PmdDirectiveBlock, markerLine: string): string {
   return match?.[1]?.trim() ?? '';
 }
 
-function getDirectiveBounds(block: PmdDirectiveBlock, contentLines: string[]): {
+function getDirectiveBounds(
+  block: PmdDirectiveBlock,
+  contentLines: string[],
+): {
   startLine: number;
   endLine: number;
   markerLine: string;
@@ -337,13 +347,13 @@ export async function validateMarkdownFile(
 
   const hasAnswerKeyToggle = toggles.some((block) => {
     const bounds = getDirectiveBounds(block, contentLines);
-    const label = bounds ? directiveLabel(block, bounds.markerLine) : block.label ?? '';
+    const label = bounds ? directiveLabel(block, bounds.markerLine) : (block.label ?? '');
     return normalizeLabel(label) === 'answer key';
   });
 
   const hasTeacherPlanToggle = toggles.some((block) => {
     const bounds = getDirectiveBounds(block, contentLines);
-    const label = bounds ? directiveLabel(block, bounds.markerLine) : block.label ?? '';
+    const label = bounds ? directiveLabel(block, bounds.markerLine) : (block.label ?? '');
     return normalizeLabel(label) === "teacher's follow-up plan";
   });
 
@@ -360,7 +370,9 @@ export async function validateMarkdownFile(
 
   const studyBlock = findFirstDirective(findDirectiveBlocks(doc, 'study-text'));
   if (studyBlock === null) {
-    const markerIdx = contentLines.findIndex((line) => line.toLowerCase().includes(':::study-text'));
+    const markerIdx = contentLines.findIndex((line) =>
+      line.toLowerCase().includes(':::study-text'),
+    );
     if (markerIdx === -1) {
       errors.push('Missing ":::study-text ... :::" block.');
     } else {

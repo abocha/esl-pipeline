@@ -6,13 +6,11 @@
 
 - Add Anytype publish target fields and auto-publish alignment updates.
 
-
 ## 1.3.1
 
 ### Patch Changes
 
 - chore: 2.1.0 release version bump.
-
 
 ## 1.3.0
 

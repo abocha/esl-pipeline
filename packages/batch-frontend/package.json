@@ -7,9 +7,9 @@
     "clean": "node -e \"fs.rmSync('dist', {recursive:true, force:true})\"",
     "dev": "vite",
     "lint": "eslint .",
+    "preview": "vite preview",
     "test": "vitest run --passWithNoTests",
     "test:watch": "vitest",
-    "preview": "vite preview",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {

@@ -3,10 +3,10 @@ import fs from 'node:fs/promises';
 
 import type { BatchBackendConfig } from '../config/env.js';
 import { loadConfig } from '../config/env.js';
-import { getTranscriptByRecordingId } from '../domain/transcript-repository.js';
-import { getRecordingById } from '../domain/recording-repository.js';
-import { insertPromptPackage } from '../domain/prompt-package-repository.js';
 import type { PromptPackageRecord } from '../domain/prompt-package-model.js';
+import { insertPromptPackage } from '../domain/prompt-package-repository.js';
+import { getRecordingById } from '../domain/recording-repository.js';
+import { getTranscriptByRecordingId } from '../domain/transcript-repository.js';
 import type { TranscriptionStorage } from '../infrastructure/transcription-storage.js';
 import {
   createTranscriptionStorage,
@@ -87,7 +87,7 @@ export async function createPromptPackage(
   }
 
   const fallbackProfileId =
-    params.profileId ?? (params.profilePath ? undefined : studentProfileId ?? undefined);
+    params.profileId ?? (params.profilePath ? undefined : (studentProfileId ?? undefined));
 
   const selection = await resolvePromptSelection(
     {

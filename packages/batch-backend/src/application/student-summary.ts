@@ -1,10 +1,7 @@
 import type { StudentSummaryResponse } from '@esl-pipeline/contracts';
 
-import {
-  listStudentProfiles,
-  type StudentProfileListParams,
-} from './student-profiles-store.js';
 import { getStudentJobSummaries } from '../domain/job-repository.js';
+import { type StudentProfileListParams, listStudentProfiles } from './student-profiles-store.js';
 
 export interface StudentSummaryParams {
   limit?: number;

@@ -24,11 +24,12 @@
 import { type AxiosError, type AxiosProgressEvent, isAxiosError } from 'axios';
 
 import type {
+  ActionCapability,
+  JobConfigOverrides as ContractJobConfigOverrides,
   JobEventPayload as ContractJobEventPayload,
   JobEventType as ContractJobEventType,
-  JobConfigOverrides as ContractJobConfigOverrides,
-  JobOptionsPayload as ContractJobOptionsPayload,
   JobListResponse as ContractJobListResponse,
+  JobOptionsPayload as ContractJobOptionsPayload,
   JobState as ContractJobState,
   JobSummaryResponse as ContractJobSummaryResponse,
   MarkdownValidationResponse as ContractMarkdownValidationResponse,
@@ -36,11 +37,10 @@ import type {
   StudentSummaryResponse as ContractStudentSummaryResponse,
   SubmitJobRequest as ContractSubmitJobRequest,
   TtsStrategy as ContractTtsStrategy,
-  ActionCapability,
-  JobActionRequest,
-  StreamEventMessage,
-  JobStatusDto,
   VoiceOption as ContractVoiceOption,
+  JobActionRequest,
+  JobStatusDto,
+  StreamEventMessage,
 } from '@esl-pipeline/contracts';
 
 import apiClient, {
@@ -244,16 +244,18 @@ export interface JobActionResponse {
   timestamp?: string;
 }
 
-export async function listRecordings(params: {
-  status?: RecordingStatus | RecordingStatus[];
-  source?: RecordingListItem['source'] | RecordingListItem['source'][];
-  studentId?: string;
-  student?: string;
-  q?: string;
-  limit?: number;
-  offset?: number;
-  order?: 'asc' | 'desc';
-} = {}): Promise<RecordingsListResponse> {
+export async function listRecordings(
+  params: {
+    status?: RecordingStatus | RecordingStatus[];
+    source?: RecordingListItem['source'] | RecordingListItem['source'][];
+    studentId?: string;
+    student?: string;
+    q?: string;
+    limit?: number;
+    offset?: number;
+    order?: 'asc' | 'desc';
+  } = {},
+): Promise<RecordingsListResponse> {
   try {
     const search = new URLSearchParams();
     if (params.status) {
@@ -311,9 +313,7 @@ export async function getRecording(recordingId: string): Promise<RecordingListIt
   }
 }
 
-export async function retryRecordingTranscription(
-  recordingId: string,
-): Promise<RecordingListItem> {
+export async function retryRecordingTranscription(recordingId: string): Promise<RecordingListItem> {
   try {
     const response = await apiClient.post(
       buildApiProxyPath(`/recordings/${encodeURIComponent(recordingId)}/transcribe`),
@@ -368,8 +368,7 @@ export interface AuthResponse {
   expiresIn?: number;
 }
 
-const NOTION_DB_ID_REGEX =
-  /^[0-9a-f]{8}-?[0-9a-f]{4}-?[0-9a-f]{4}-?[0-9a-f]{4}-?[0-9a-f]{12}$/i;
+const NOTION_DB_ID_REGEX = /^[0-9a-f]{8}-?[0-9a-f]{4}-?[0-9a-f]{4}-?[0-9a-f]{4}-?[0-9a-f]{12}$/i;
 
 function normalizeNotionDatabase(value?: string | null): string | undefined {
   if (!value) return undefined;
@@ -412,12 +411,12 @@ export interface UserFile {
 
 export interface ErrorEnvelope {
   error:
-  | 'validation_failed'
-  | 'not_found'
-  | 'internal_error'
-  | 'unauthorized'
-  | 'forbidden'
-  | string;
+    | 'validation_failed'
+    | 'not_found'
+    | 'internal_error'
+    | 'unauthorized'
+    | 'forbidden'
+    | string;
   message?: string;
   code?: string;
 }
@@ -433,15 +432,17 @@ export interface JobOptionsResponse {
 
 export type VoiceOption = ContractVoiceOption;
 
-export async function listUserJobs(params: {
-  state?: JobState | JobState[];
-  studentId?: string;
-  from?: string;
-  to?: string;
-  limit?: number;
-  offset?: number;
-  order?: 'asc' | 'desc';
-} = {}): Promise<JobListResponse> {
+export async function listUserJobs(
+  params: {
+    state?: JobState | JobState[];
+    studentId?: string;
+    from?: string;
+    to?: string;
+    limit?: number;
+    offset?: number;
+    order?: 'asc' | 'desc';
+  } = {},
+): Promise<JobListResponse> {
   try {
     const search = new URLSearchParams();
     if (params.state) {
@@ -479,10 +480,12 @@ export async function listUserJobs(params: {
   }
 }
 
-export async function getJobSummary(params: {
-  from?: string;
-  to?: string;
-} = {}): Promise<JobSummaryResponse> {
+export async function getJobSummary(
+  params: {
+    from?: string;
+    to?: string;
+  } = {},
+): Promise<JobSummaryResponse> {
   try {
     const response = await apiClient.get(buildApiProxyPath('/user/jobs/summary'), { params });
     return response.data;
@@ -495,11 +498,13 @@ export async function getJobSummary(params: {
   }
 }
 
-export async function getStudentSummary(params: {
-  limit?: number;
-  offset?: number;
-  order?: 'asc' | 'desc';
-} = {}): Promise<StudentSummaryResponse> {
+export async function getStudentSummary(
+  params: {
+    limit?: number;
+    offset?: number;
+    order?: 'asc' | 'desc';
+  } = {},
+): Promise<StudentSummaryResponse> {
   try {
     const response = await apiClient.get(buildApiProxyPath('/students/summary'), { params });
     return response.data;
@@ -778,12 +783,14 @@ export async function fetchStudentOptions(): Promise<StudentOptionsResponse> {
   }
 }
 
-export async function listStudents(params: {
-  q?: string;
-  limit?: number;
-  offset?: number;
-  order?: 'asc' | 'desc';
-} = {}): Promise<StudentProfileListResponse> {
+export async function listStudents(
+  params: {
+    q?: string;
+    limit?: number;
+    offset?: number;
+    order?: 'asc' | 'desc';
+  } = {},
+): Promise<StudentProfileListResponse> {
   try {
     const response = await apiClient.get(buildApiProxyPath('/students'), {
       params,
@@ -813,9 +820,7 @@ export async function getStudentProfile(studentId: string): Promise<StudentProfi
   }
 }
 
-export async function createStudentProfile(
-  payload: StudentProfileInput,
-): Promise<StudentProfile> {
+export async function createStudentProfile(payload: StudentProfileInput): Promise<StudentProfile> {
   try {
     const response = await apiClient.post(buildApiProxyPath('/students'), payload);
     return response.data;
@@ -1043,9 +1048,7 @@ export async function createPromptPackage(
   }
 }
 
-export async function fetchPromptPackage(
-  promptPackageId: string,
-): Promise<PromptPackageResponse> {
+export async function fetchPromptPackage(promptPackageId: string): Promise<PromptPackageResponse> {
   try {
     const response = await apiClient.get(
       buildApiProxyPath(`/prompt-packages/${encodeURIComponent(promptPackageId)}`),
@@ -1060,10 +1063,7 @@ export async function fetchPromptPackage(
   }
 }
 
-export async function createDraft(
-  promptPackageId: string,
-  text: string,
-): Promise<DraftResponse> {
+export async function createDraft(promptPackageId: string, text: string): Promise<DraftResponse> {
   try {
     const response = await apiClient.post(
       buildApiProxyPath(`/prompt-packages/${encodeURIComponent(promptPackageId)}/draft`),

@@ -3,9 +3,9 @@ import { readFile, stat } from 'node:fs/promises';
 
 import {
   ConfigurationError,
+  type PipelineLogger,
   ValidationError,
   noopLogger,
-  type PipelineLogger,
 } from '@esl-pipeline/contracts';
 
 import { deriveS3UploadAddress } from './address.js';

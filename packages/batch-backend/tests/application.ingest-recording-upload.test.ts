@@ -5,8 +5,8 @@ import { Readable } from 'node:stream';
 import { afterEach, describe, expect, it } from 'vitest';
 
 import {
-  ingestRecordingUpload,
   type RecordingRepository,
+  ingestRecordingUpload,
 } from '../src/application/ingest-recording-upload.js';
 import type { RecordingRecord } from '../src/domain/recording-model.js';
 import { FilesystemTranscriptionStorage } from '../src/infrastructure/transcription-storage.js';

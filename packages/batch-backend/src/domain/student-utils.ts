@@ -12,9 +12,7 @@ export function deriveStudentId(name: string): string {
     throw new Error('Student name is required');
   }
 
-  const hash = createHash('sha256')
-    .update(`${STUDENT_NAMESPACE}:${normalized}`)
-    .digest();
+  const hash = createHash('sha256').update(`${STUDENT_NAMESPACE}:${normalized}`).digest();
   const bytes = Buffer.from(hash.subarray(0, 16));
   bytes[6] = ((bytes[6] ?? 0) & 0x0f) | 0x50;
   bytes[8] = ((bytes[8] ?? 0) & 0x3f) | 0x80;

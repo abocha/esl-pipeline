@@ -8,48 +8,53 @@ import { z } from 'zod';
 import type { JobState } from '@esl-pipeline/contracts';
 import { validateMarkdownFile } from '@esl-pipeline/md-validator';
 
+import { createDraft } from '../application/create-draft.js';
+import { createPromptPackage } from '../application/create-prompt-package.js';
+import { getDraft } from '../application/get-draft.js';
 import { getJobOptions } from '../application/get-job-options.js';
-import { getJobSummaryWithDefaults } from '../application/job-summary.js';
-import { getRecording } from '../application/get-recording.js';
+import { getPromptOptions } from '../application/get-prompt-options.js';
+import { getPromptPackage } from '../application/get-prompt-package.js';
 import { getRecordingTranscript } from '../application/get-recording-transcript.js';
+import { getRecording } from '../application/get-recording.js';
+import { getStudentProfiles } from '../application/get-student-profiles.js';
+import { ingestRecordingUpload } from '../application/ingest-recording-upload.js';
+import { getJobSummaryWithDefaults } from '../application/job-summary.js';
 import { listJobsWithDefaults } from '../application/list-jobs.js';
 import { listRecordingsWithDefaults } from '../application/list-recordings.js';
-import { ingestRecordingUpload } from '../application/ingest-recording-upload.js';
+import { materializeDraft } from '../application/materialize-draft.js';
+import {
+  ProfileContentError,
+  deleteProfileContent,
+  getProfileContent,
+  listProfileContents,
+  upsertProfileContent,
+} from '../application/profile-content.js';
+import { ProfilePathError } from '../application/profile-path.js';
+import { PromptOptionError } from '../application/prompt-options.js';
 import { recordingToDto } from '../application/recording-dto.js';
 import {
   RecordingRetryError,
   retryRecordingTranscription,
 } from '../application/retry-recording-transcription.js';
-import { getStudentProfiles } from '../application/get-student-profiles.js';
-import { getPromptOptions } from '../application/get-prompt-options.js';
 import {
+  StudentProfileStoreError,
   createStudentProfile,
   deleteStudentProfile,
   getStudentProfileById,
   listStudentProfiles,
-  StudentProfileStoreError,
   updateStudentProfile,
 } from '../application/student-profiles-store.js';
 import { getStudentSummaryWithDefaults } from '../application/student-summary.js';
-import {
-  deleteProfileContent,
-  getProfileContent,
-  listProfileContents,
-  ProfileContentError,
-  upsertProfileContent,
-} from '../application/profile-content.js';
-import { getStudentTimeline, type StudentTimelineType } from '../application/student-timeline.js';
-import { createDraft } from '../application/create-draft.js';
-import { getDraft } from '../application/get-draft.js';
-import { createPromptPackage } from '../application/create-prompt-package.js';
-import { getPromptPackage } from '../application/get-prompt-package.js';
-import { materializeDraft } from '../application/materialize-draft.js';
+import { type StudentTimelineType, getStudentTimeline } from '../application/student-timeline.js';
 import { SubmitJobRequest, ValidationError, submitJob } from '../application/submit-job.js';
 import { updateRecordingTranscript } from '../application/update-recording-transcript.js';
-import { ProfilePathError } from '../application/profile-path.js';
-import { PromptOptionError } from '../application/prompt-options.js';
 import type { BatchBackendConfig } from '../config/env.js';
 import { RecordingSourceSchema, RecordingStatusSchema } from '../domain/recording-model.js';
+import {
+  getRecordingById,
+  insertRecording,
+  updateRecordingStatus,
+} from '../domain/recording-repository.js';
 import {
   UserSettingsInput,
   isValidTtsProvider,
@@ -61,6 +66,7 @@ import {
   getSettingsByUserId,
   upsertSettings,
 } from '../domain/settings-repository.js';
+import { deriveStudentId, normalizeStudentName } from '../domain/student-utils.js';
 import {
   UserLogin,
   UserRegistration,
@@ -88,17 +94,11 @@ import {
 } from '../infrastructure/file-validation-service.js';
 import { logger } from '../infrastructure/logger.js';
 import { StorageConfigurationService } from '../infrastructure/storage-config.js';
+import { createTranscribeQueue } from '../infrastructure/transcribe-queue.js';
 import {
   createTranscriptionStorage,
   createTranscriptionStorageForUri,
 } from '../infrastructure/transcription-storage.js';
-import { createTranscribeQueue } from '../infrastructure/transcribe-queue.js';
-import {
-  getRecordingById,
-  insertRecording,
-  updateRecordingStatus,
-} from '../domain/recording-repository.js';
-import { deriveStudentId, normalizeStudentName } from '../domain/student-utils.js';
 import { getAuthenticatedUser, requireRole } from './auth-middleware.js';
 import { errorResponse, resolveRoutePath } from './route-helpers.js';
 
@@ -674,10 +674,16 @@ export function registerExtendedRoutes(app: FastifyInstance, options: ExtendedRo
         const params = paramsSchema.parse(request.params ?? {});
         const query = querySchema.parse(request.query ?? {});
         const types = query.type
-          ? (query.type.split(',').map((value) => value.trim()).filter(Boolean) as StudentTimelineType[])
+          ? (query.type
+              .split(',')
+              .map((value) => value.trim())
+              .filter(Boolean) as StudentTimelineType[])
           : undefined;
         const statuses = query.status
-          ? query.status.split(',').map((value) => value.trim()).filter(Boolean)
+          ? query.status
+              .split(',')
+              .map((value) => value.trim())
+              .filter(Boolean)
           : undefined;
 
         const timeline = await getStudentTimeline(params.id, {
@@ -1209,10 +1215,7 @@ export function registerExtendedRoutes(app: FastifyInstance, options: ExtendedRo
         if (range) {
           const chunkSize = range.end - range.start + 1;
           reply.header('Content-Length', String(chunkSize));
-          reply.header(
-            'Content-Range',
-            `bytes ${range.start}-${range.end}/${totalBytes}`,
-          );
+          reply.header('Content-Range', `bytes ${range.start}-${range.end}/${totalBytes}`);
 
           logger.info('HTTP request handled', {
             event: 'http_request',
@@ -1693,9 +1696,7 @@ export function registerExtendedRoutes(app: FastifyInstance, options: ExtendedRo
     },
   );
 
-  function normalizeStatusFilter(
-    status?: string | string[] | null,
-  ): string[] | null {
+  function normalizeStatusFilter(status?: string | string[] | null): string[] | null {
     if (!status) return null;
     const values = Array.isArray(status) ? status : status.split(',');
     const trimmed = values.map((value) => value.trim()).filter(Boolean);
@@ -1703,9 +1704,7 @@ export function registerExtendedRoutes(app: FastifyInstance, options: ExtendedRo
     return trimmed.map((value) => RecordingStatusSchema.parse(value));
   }
 
-  function normalizeSourceFilter(
-    source?: string | string[] | null,
-  ): string[] | null {
+  function normalizeSourceFilter(source?: string | string[] | null): string[] | null {
     if (!source) return null;
     const values = Array.isArray(source) ? source : source.split(',');
     const trimmed = values.map((value) => value.trim()).filter(Boolean);
@@ -1713,9 +1712,7 @@ export function registerExtendedRoutes(app: FastifyInstance, options: ExtendedRo
     return trimmed.map((value) => RecordingSourceSchema.parse(value));
   }
 
-  function normalizeJobStateFilter(
-    state?: string | string[] | null,
-  ): JobState[] | null {
+  function normalizeJobStateFilter(state?: string | string[] | null): JobState[] | null {
     if (!state) return null;
     const values = Array.isArray(state) ? state : state.split(',');
     const trimmed = values.map((value) => value.trim()).filter(Boolean);
@@ -1730,10 +1727,7 @@ export function registerExtendedRoutes(app: FastifyInstance, options: ExtendedRo
     return trimmed.map((value) => jobStateSchema.parse(value)) as JobState[];
   }
 
-  const multipartMaxFileSize = Math.max(
-    config.security.maxFileSize,
-    config.recordings.maxFileSize,
-  );
+  const multipartMaxFileSize = Math.max(config.security.maxFileSize, config.recordings.maxFileSize);
   void app.register(multipart, {
     limits: {
       fileSize: multipartMaxFileSize,
@@ -1850,9 +1844,9 @@ export function registerExtendedRoutes(app: FastifyInstance, options: ExtendedRo
           const mdReference =
             fileStorageService.getProvider() === 'filesystem'
               ? buildFilesystemMdReference(
-                storageConfig.getFilesystemConfig().uploadDir,
-                storageKey,
-              )
+                  storageConfig.getFilesystemConfig().uploadDir,
+                  storageKey,
+                )
               : storageKey;
 
           logger.info('Secure upload completed', {
@@ -2074,8 +2068,7 @@ export function registerExtendedRoutes(app: FastifyInstance, options: ExtendedRo
   app.post('/auth/refresh', async (request, reply) => {
     const body = request.body as { refreshToken?: string } | undefined;
     const cookies = request.cookies as Record<string, string> | undefined;
-    const refreshToken =
-      cookies?.[config.auth.refreshCookieName] ?? body?.refreshToken ?? null;
+    const refreshToken = cookies?.[config.auth.refreshCookieName] ?? body?.refreshToken ?? null;
 
     try {
       if (!refreshToken) {
@@ -2595,18 +2588,17 @@ export function registerExtendedRoutes(app: FastifyInstance, options: ExtendedRo
 
     const body = request.body as SubmitJobRequest | undefined;
 
-    const jobSchema = z
-      .object({
-        md: z.string().min(1),
-        preset: z.string().optional(),
-        withTts: z.boolean().optional(),
-        upload: z.enum(['auto', 's3', 'none']).optional(),
-        voiceAccent: z.string().min(1).optional(),
-        voiceId: z.string().min(1).optional(),
-        forceTts: z.boolean().optional(),
-        notionDatabase: z.string().min(1).optional(),
-        ttsStrategy: z.enum(['auto', 'dialogue', 'tts']).optional(),
-      });
+    const jobSchema = z.object({
+      md: z.string().min(1),
+      preset: z.string().optional(),
+      withTts: z.boolean().optional(),
+      upload: z.enum(['auto', 's3', 'none']).optional(),
+      voiceAccent: z.string().min(1).optional(),
+      voiceId: z.string().min(1).optional(),
+      forceTts: z.boolean().optional(),
+      notionDatabase: z.string().min(1).optional(),
+      ttsStrategy: z.enum(['auto', 'dialogue', 'tts']).optional(),
+    });
 
     try {
       const validatedData = jobSchema.parse(body);

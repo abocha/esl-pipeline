@@ -23,6 +23,7 @@ The current frontend (`packages/batch-frontend`) is functional but presents a fl
 
 > [!IMPORTANT]  
 > **Technology Decisions:**
+>
 > - The plan uses React + Vite (existing stack) with no additional frameworks
 > - Markdown editing uses CodeMirror 6 for a lightweight, extensible editor
 > - Use `react-router-dom` for view + wizard deep links
@@ -36,6 +37,7 @@ The current frontend (`packages/batch-frontend`) is functional but presents a fl
 ## Current State Analysis
 
 ### Existing Components (from `packages/batch-frontend/src/ui/`)
+
 - `App.tsx` — Main layout with header, footer, panel grid
 - `jobs/JobTable.tsx` — Job listing with status updates
 - `jobs/ActivityFeed.tsx` — Recent job activity sidebar
@@ -48,6 +50,7 @@ The current frontend (`packages/batch-frontend`) is functional but presents a fl
 - `auth/AuthDialog.tsx` — Login/register modal
 
 ### Current Layout
+
 ```
 ┌────────────────────────────────────────────────────────────────┐
 │ Header (logo, user, theme toggle)                              │
@@ -67,6 +70,7 @@ The current frontend (`packages/batch-frontend`) is functional but presents a fl
 ```
 
 ### Target Layout (FRONTEND_VISION)
+
 ```
 ┌────────────────────────────────────────────────────────────────┐
 │ Header (logo, search, notifications, user)                     │
@@ -127,6 +131,7 @@ Status legend: DONE / PARTIAL / MISSING
 Build the API surface needed by the dashboard and wizard so frontend work can ship without mocks.
 
 #### [NEW] Shared DTOs + overrides (`@esl-pipeline/contracts`)
+
 - `JobListResponse`: `{ jobs: JobStatusDto[]; total: number; limit: number; offset: number }`
 - `JobSummaryResponse`: `{ total: number; byState: Record<JobState, number>; pendingApprovals: number; last7Days: { total: number; succeeded: number; failed: number }; tts: { enabled: number; succeeded: number } }`
 - `StudentSummaryResponse`: `{ items: { id: string; name: string; lastLessonAt: string | null; pendingDrafts: number }[]; total: number; limit: number; offset: number }`
@@ -134,6 +139,7 @@ Build the API surface needed by the dashboard and wizard so frontend work can sh
 - `JobConfigOverrides`: subset of job settings (`preset`, `notionDatabase`, `withTts`, `forceTts`, `ttsStrategy`, `upload`, `voiceId`, `voiceAccent`)
 
 #### [MODIFY] Jobs list + summary (batch-backend)
+
 - Implement `GET /user/jobs` with pagination + filters:
   - Query: `state` (comma-separated), `studentId`, `from`, `to`, `limit`, `offset`, `order`
   - Response: `JobListResponse` (use `jobRecordToDto`)
@@ -144,20 +150,24 @@ Build the API surface needed by the dashboard and wizard so frontend work can sh
 - Add repository queries + DTO mapping in `job-repository` and tests
 
 #### [NEW] Student summary endpoint (batch-backend)
+
 - Add `GET /students/summary`:
   - Query: `limit`, `offset`, `order`
   - Response: `StudentSummaryResponse` (last lesson date + pending draft counts)
 
 #### [NEW] Recording audio playback (batch-backend)
+
 - Add `GET /recordings/:recordingId/audio` with auth + `Range` support
 - Resolve storage URI and stream content with proper MIME types
 - Include `Accept-Ranges`, `Content-Length`, and 206 responses when ranged
 
 #### [NEW] Markdown validation endpoint (batch-backend)
+
 - Add `POST /validation/markdown` accepting `{ text, strict?: boolean }`
 - Run `@esl-pipeline/md-validator` and return `MarkdownValidationResponse`
 
 #### [MODIFY] Job metadata updates (batch-backend + contracts)
+
 - Extend `SubmitJobRequest` with `voiceId` and `voiceAccent`
 - Implement `edit_metadata` job action:
   - Endpoint: `POST /jobs/:jobId/actions` with `{ type: "edit_metadata", payload: JobConfigOverrides }`
@@ -166,6 +176,7 @@ Build the API surface needed by the dashboard and wizard so frontend work can sh
   - Use overrides if provided; otherwise fall back to defaults
 
 #### [DEFERRED] Draft regeneration
+
 - No LLM generation service exists today; remove/regress “Regenerate” until a generator is added
 
 ---
@@ -175,6 +186,7 @@ Build the API surface needed by the dashboard and wizard so frontend work can sh
 Create the dashboard as the new home view, replacing the current flat panel layout.
 
 #### [NEW] `Dashboard.tsx` (`src/ui/dashboard/Dashboard.tsx`)
+
 - Quick Actions bar with prominent "New Assignment" button
 - Activity Stream (refactored from existing `ActivityFeed`)
 - Pending Approvals panel showing awaiting_approval jobs
@@ -185,21 +197,25 @@ Create the dashboard as the new home view, replacing the current flat panel layo
     - `GET /user/jobs/summary` + `GET /students/summary` for Weekly Summary
 
 #### [MODIFY] `App.tsx` (`src/ui/App.tsx`)
+
 - Add router-backed navigation for Dashboard, Wizard, Students, Jobs, Settings
 - Create a simple tab-based navigation in the header or as a sidebar
 - Refactor `AuthenticatedPanels` to render the active view
   - Trigger initial job hydration via `/user/jobs` on login and merge with SSE updates
 
 #### [NEW] `QuickActions.tsx` (`src/ui/dashboard/QuickActions.tsx`)
+
 - Card-style buttons: New Upload, Recent Jobs, Students, Settings
 - Each button navigates to the appropriate view
 
 #### [NEW] `PendingApprovals.tsx` (`src/ui/dashboard/PendingApprovals.tsx`)
+
 - List jobs with state `awaiting_approval`
 - Show student name, recording name, timestamp
 - Click to open directly in the review step of the wizard
 
 #### [NEW] `WeeklySummary.tsx` (`src/ui/dashboard/WeeklySummary.tsx`)
+
 - Summary stats: jobs completed, pending, failed
 - Student summary: last lesson dates, pending drafts
 - Data sourced from `GET /user/jobs/summary` + `GET /students/summary`
@@ -212,6 +228,7 @@ Implement the guided 5-step workflow from FRONTEND_VISION §2.2 and replace the
 current `/wizard` placeholder. Support deep links from the dashboard.
 
 #### [NEW] `AssignmentWizard.tsx` (`src/ui/wizard/AssignmentWizard.tsx`)
+
 - Main wizard container with step indicator and router integration
 - Read query params: `jobId` and `step` (expected: `select`, `transcript`, `notes`, `review`, `publish`)
   - `PendingApprovals` links to `/wizard?jobId=...&step=review`, so map `review` to Step 4
@@ -219,31 +236,37 @@ current `/wizard` placeholder. Support deep links from the dashboard.
 - State management via local reducer or `WizardContext` (keep state in-session)
 
 #### [NEW] `WizardStep.tsx` (`src/ui/wizard/WizardStep.tsx`)
+
 - Wrapper component for each step with consistent styling
 - Navigation buttons (Back, Continue, Skip where applicable)
 - Guard required actions before moving to the next step
 
 #### [NEW] `Step1SelectStudent.tsx` (`src/ui/wizard/Step1SelectStudent.tsx`)
+
 - Student selection grid (reuse student options APIs + `StudentSelectionContext`)
 - Upload audio via `POST /recordings/upload`
 - Track uploaded recording in `JobMonitorContext`
 
 #### [NEW] `Step2ReviewTranscript.tsx` (`src/ui/wizard/Step2ReviewTranscript.tsx`)
+
 - Load transcript via `GET /recordings/:id/transcript`
 - Allow minor edits with `PUT /recordings/:id/transcript`
 - Audio player backed by `GET /recordings/:id/audio`
 - Approve & Continue or Skip
 
 #### [NEW] `Step3AddNotes.tsx` (`src/ui/wizard/Step3AddNotes.tsx`)
+
 - Notes textarea plus prompt template/profile selectors (from `GET /config/prompts`)
 - Create prompt package when advancing
 
 #### [NEW] `Step4ReviewDraft.tsx` (`src/ui/wizard/Step4ReviewDraft.tsx`)
+
 - Create/load draft via `POST /prompt-packages/:id/draft` and `GET /drafts/:id`
 - Use a simple textarea/preview placeholder in Stage 2
   - Stage 4 replaces this with `SplitEditor` + markdown validation
 
 #### [NEW] `Step5Publish.tsx` (`src/ui/wizard/Step5Publish.tsx`)
+
 - TTS settings (enable/disable, voice, strategy)
 - Notion publishing settings (database + preset)
 - Storage target selection (auto, S3, none)
@@ -253,6 +276,7 @@ current `/wizard` placeholder. Support deep links from the dashboard.
   - Approve via `POST /jobs/:id/approve` and register in `JobMonitorContext`
 
 #### Cross-cutting
+
 - Use existing styling primitives in `index.css` (cards, panels, buttons)
 - Keep wizard state in-session; no persistence across reload required
 - Extend `src/utils/api.ts` for any missing helper calls (`jobOverrides`, `edit_metadata`)
@@ -264,6 +288,7 @@ current `/wizard` placeholder. Support deep links from the dashboard.
 Improve the file upload experience throughout the application.
 
 #### [NEW] `DropZone.tsx` (`src/ui/shared/DropZone.tsx`)
+
 - Reusable drag-and-drop component
 - Visual feedback: drag-over state, file validation
 - Accepts audio files (opus, mp3, wav, m4a, aac, ogg)
@@ -271,23 +296,28 @@ Improve the file upload experience throughout the application.
 - Single-file mode for the wizard; multi-file mode for job uploader
 
 #### [MODIFY] `Step1SelectStudent.tsx` uses DropZone
+
 - Replace the file input with `DropZone` (single-file)
 - Keep existing `uploadRecording` flow and status messaging
 
 #### [MODIFY] `JobUploader.tsx` → `DropZone` integration
+
 - Replace the multi-file input with `DropZone` (multi-file)
 - Preserve upload queue behavior and error handling
 
 #### [MODIFY] `TranscriptionWorkspace.tsx` → `DropZone` integration (optional if time)
+
 - Replace the recording upload input with `DropZone`
 - Show upload progress inline
 
 #### [NEW] `UploadProgress.tsx` (`src/ui/shared/UploadProgress.tsx`)
+
 - Animated progress bar with percentage
 - File name and size display
 - Cancel button
 
 #### [MODIFY] API helpers (`src/utils/api.ts`)
+
 - Add optional `onProgress` + `signal`/`AbortController` support to `uploadMarkdown` and `uploadRecording`
 - Use these hooks in `DropZone` + upload flows to drive progress and cancel
 
@@ -298,16 +328,19 @@ Improve the file upload experience throughout the application.
 Add a proper markdown editing experience for draft review.
 
 #### [NEW] `MarkdownEditor.tsx` (`src/ui/editor/MarkdownEditor.tsx`)
+
 - Uses CodeMirror 6 with markdown syntax highlighting
 - Line numbers, word wrap
 - Basic toolbar: Bold, Italic, Heading, Link, Code
 
 #### [NEW] `MarkdownPreview.tsx` (`src/ui/editor/MarkdownPreview.tsx`)
+
 - Renders markdown to HTML using remark/unified (add deps to batch-frontend)
 - Styled to match Notion-like output
 - Scrolls in sync with editor (if feasible)
 
 #### [NEW] `SplitEditor.tsx` (`src/ui/editor/SplitEditor.tsx`)
+
 - Two-column layout: Editor | Preview
 - Toggle buttons: Editor only, Preview only, Split
 - Responsive: stacks on mobile
@@ -315,17 +348,20 @@ Add a proper markdown editing experience for draft review.
 #### [MODIFY] `Step4ReviewDraft.tsx` uses `SplitEditor`
 
 #### [NEW] `ValidationPanel.tsx` (`src/ui/editor/ValidationPanel.tsx`)
+
 - Shows warnings/errors from `POST /validation/markdown`
 - Click to jump to line (if editor supports)
 - Collapsible panel
 
 #### [MODIFY] `Step4ReviewDraft.tsx` uses the editor stack
+
 - Replace the placeholder textarea with `SplitEditor`
 - Call `POST /validation/markdown` on debounced draft updates
 - Surface warnings/errors in `ValidationPanel`
 - Keep the Save/Approve flow intact
 
 #### [MODIFY] API helpers (`src/utils/api.ts`)
+
 - Add `validateMarkdown(text, strict?)` helper for `POST /validation/markdown`
 - Standardize error handling and return `MarkdownValidationResponse`
 
@@ -336,12 +372,14 @@ Add a proper markdown editing experience for draft review.
 Apply premium aesthetics across the application, aligning with the `FRONTEND_VISION.md` guidelines (Glassmorphism, Indigo/Slate palette).
 
 #### [MODIFY] `index.css` & Global Styles
+
 - **Color Palette:** Enforce vision tokens (`--background: #0f0f17`, `--surface: #1e1e2e`, `--primary: #6366f1`).
 - **Glassmorphism:** Add utility class `.glass-panel` (backdrop-filter blur + semi-transparent border).
 - **Typography:** Ensure modern font stack (Inter/Roboto) with refined weights.
 - **Animations:** Add `@keyframes` for `fadeIn`, `slideIn`, `pulse` and utility classes like `.animate-in`.
 
 #### [NEW] `Icons.tsx` (`src/ui/shared/Icons.tsx`)
+
 - Create a lightweight set of inline SVG components (Heroicons style) for:
   - Navigation (Back, Next, Home)
   - Stages (Upload, Document, Edit, Check, Publish)
@@ -349,21 +387,25 @@ Apply premium aesthetics across the application, aligning with the `FRONTEND_VIS
 - Avoid adding new heavy dependencies; use "zero-install" compatible approach.
 
 #### [NEW] `StepIndicator.tsx` (`src/ui/wizard/StepIndicator.tsx`)
+
 - Implement "Step X of Y ━━○○○○" visual style using the new icons.
 - Animated progress filling (gradient transition).
 - Responsive labels (hide on small screens).
 
 #### [MODIFY] Wizard Layout (`AssignmentWizard.tsx`)
+
 - Apply "Card variant" with larger padding (`--space-6`) and subtle shadow (`--shadow-card`).
 - Use `.glass-panel` for the main container.
 - Ensure responsive "stacking" of panels (e.g., Student Selection / Upload split).
 
 #### [MODIFY] Shared Components
+
 - **Buttons:** Update `index.css` button classes for `transform: scale(0.98)` on active, subtle shadow on hover.
 - **Inputs/Selects:** Style with `--surface` background, `--border-light` borders, and ring focus states.
 - **Toasts:** Ensure `react-hot-toast` uses custom styles (dark background, light text).
 
 #### Animations & Micro-interactions
+
 - **Page Transitions:** Wrap wizard steps in a container with generic fade-in animation.
 - **Micro-interactions:** Add hover states for student cards, job list rows, and interactive elements.
 
@@ -374,6 +416,7 @@ Apply premium aesthetics across the application, aligning with the `FRONTEND_VIS
 Refactor the Wizard to use a centralized Context for state management (replacing local state in `AssignmentWizard`) and finalize application routing.
 
 #### [NEW] `WizardContext.tsx` (`src/context/WizardContext.tsx`)
+
 - **State:** `currentStep`, `activeJobId`, `studentId`, `recordingId`, `transcriptId`, `promptPackageId`, `draftId`, `notes`, `metadataOverrides`
 - **Actions:**
   - `loadJob(jobId)`: Hydrate state from backend/JobMonitor
@@ -383,25 +426,30 @@ Refactor the Wizard to use a centralized Context for state management (replacing
 - **Integration:** Wrap `AssignmentWizard` (or `App` specific route) in `WizardContext.Provider`.
 
 #### [MODIFY] `AssignmentWizard.tsx`
+
 - Refactor to consume `useWizardContext` instead of local `useState`.
 - Move deep link parsing (URLSearchParams) into the `WizardContext` initialization or a `useWizardInitialization` hook.
 - Ensure back/next buttons trigger Context actions.
 
 #### [MODIFY] `App.tsx`
+
 - Ensure all routes are protected (`AuthenticatedRoutes`).
 - Verify `Navigate to="/" ` catch-all works.
 
 #### [NEW] `src/ui/wizard/Wizard.test.tsx`
+
 - **Integration Test:** Render `AssignmentWizard` within `JobMonitorProvider` and `WizardContext`.
 - **Scenarios:**
   - "Happy Path": Select student -> Upload (mock) -> Transcript (mock) -> Review -> Publish.
   - "Deep Link": Render with `?step=review&jobId=123`. Verify it loads Step 4.
 
 #### [NEW] `src/ui/editor/Editor.test.tsx`
+
 - **Unit Test:** `MetricValidationPanel` shows errors when passed.
 - **Unit Test:** `SplitEditor` toggles views (Editor/Preview/Split).
 
 #### [NEW] `src/ui/editor/MarkdownEditor.test.tsx`
+
 - **Unit Test:** Toolbar actions apply formatting (bold/heading).
 
 ---
@@ -409,6 +457,7 @@ Refactor the Wizard to use a centralized Context for state management (replacing
 ## Verification Plan
 
 ### Automated Tests
+
 0. **Backend tests** for new endpoints:
    - `/user/jobs` pagination + filtering
    - `/user/jobs/summary` aggregation
@@ -438,6 +487,7 @@ Refactor the Wizard to use a centralized Context for state management (replacing
 4. **Run existing test suite:** `pnpm --filter @esl-pipeline/batch-frontend test`
 
 ### Manual Verification
+
 1. End-to-end flow:
    - Login → Dashboard → New Assignment → Select student → Upload audio
    - Wait for transcription → Review → Add notes → Save draft
@@ -457,6 +507,7 @@ Refactor the Wizard to use a centralized Context for state management (replacing
 ## Dependencies
 
 **New npm packages:**
+
 - `@codemirror/lang-markdown` — Markdown mode for CodeMirror
 - `@codemirror/basic-setup` — Basic editor setup (may already be available)
 - `codemirror` — Core editor (if not already present)
@@ -469,20 +520,21 @@ Refactor the Wizard to use a centralized Context for state management (replacing
 
 ## Risks and Mitigations
 
-| Risk | Mitigation |
-|------|------------|
-| CodeMirror integration complexity | Start with basic setup, add features incrementally |
-| Wizard state management edge cases | Use reducer pattern for predictable state transitions |
-| Mobile responsiveness issues | Design mobile-first, test on real devices |
-| SSE reconnection during wizard | Keep JobMonitorContext, show reconnection banner |
-| Audio streaming (Range handling) | Use backend storage streaming helpers + add integration tests |
-| Jobs list/summary performance | Start with indexed queries + pagination limits |
+| Risk                               | Mitigation                                                    |
+| ---------------------------------- | ------------------------------------------------------------- |
+| CodeMirror integration complexity  | Start with basic setup, add features incrementally            |
+| Wizard state management edge cases | Use reducer pattern for predictable state transitions         |
+| Mobile responsiveness issues       | Design mobile-first, test on real devices                     |
+| SSE reconnection during wizard     | Keep JobMonitorContext, show reconnection banner              |
+| Audio streaming (Range handling)   | Use backend storage streaming helpers + add integration tests |
+| Jobs list/summary performance      | Start with indexed queries + pagination limits                |
 
 ---
 
 ## File Summary
 
 ### New Files (19)
+
 - `src/ui/dashboard/Dashboard.tsx`
 - `src/ui/dashboard/QuickActions.tsx`
 - `src/ui/dashboard/PendingApprovals.tsx`
@@ -504,6 +556,7 @@ Refactor the Wizard to use a centralized Context for state management (replacing
 - `src/context/WizardContext.tsx`
 
 ### Modified Frontend Files
+
 - `src/ui/App.tsx` — Navigation and view switching
 - `src/ui/transcription/TranscriptionWorkspace.tsx` — DropZone integration
 - `src/index.css` — New design tokens and styles
@@ -511,10 +564,12 @@ Refactor the Wizard to use a centralized Context for state management (replacing
 - `src/context/JobMonitorContext.tsx` — dashboard + wizard data sources
 
 ### Shared Contracts
+
 - `packages/contracts/src/index.ts` — extend `SubmitJobRequest` and add new DTOs
 - `packages/contracts/src/job-actions.ts` — refine `edit_metadata` payload typing (optional)
 
 ### Backend Files (Modified/New)
+
 - `packages/batch-backend/src/transport/extended-routes.ts` — new endpoints (jobs list/summary, validation, audio streaming)
 - `packages/batch-backend/src/domain/job-repository.ts` — list/summary queries
 - `packages/batch-backend/src/application/list-jobs.ts` — user jobs query orchestration
@@ -553,16 +608,16 @@ Refactor the Wizard to use a centralized Context for state management (replacing
 
 ## Estimated Effort
 
-| Stage | Estimated Tool Calls | Description |
-|-------|---------------------|-------------|
-| 0 | 12-16 | Backend enablement |
-| 1 | 15-20 | Dashboard and navigation |
-| 2 | 25-30 | Wizard components |
-| 3 | 10-12 | Upload UX |
-| 4 | 15-18 | Editor components |
-| 5 | 8-10 | Visual polish |
-| 6 | 10-12 | Integration and tests |
-| **Total** | **~95-120** | Full Phase 5 implementation |
+| Stage     | Estimated Tool Calls | Description                 |
+| --------- | -------------------- | --------------------------- |
+| 0         | 12-16                | Backend enablement          |
+| 1         | 15-20                | Dashboard and navigation    |
+| 2         | 25-30                | Wizard components           |
+| 3         | 10-12                | Upload UX                   |
+| 4         | 15-18                | Editor components           |
+| 5         | 8-10                 | Visual polish               |
+| 6         | 10-12                | Integration and tests       |
+| **Total** | **~95-120**          | Full Phase 5 implementation |
 
 ---
 

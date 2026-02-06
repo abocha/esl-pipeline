@@ -4,8 +4,7 @@ export async function withRetry<T>(fn: () => Promise<T>, label: string, tries = 
     try {
       return await fn();
     } catch (error: unknown) {
-      const status =
-        (error as { status?: unknown })?.status ?? (error as { code?: unknown })?.code;
+      const status = (error as { status?: unknown })?.status ?? (error as { code?: unknown })?.code;
       const statusCode =
         typeof status === 'string' || typeof status === 'number' ? status : undefined;
       const retryable =

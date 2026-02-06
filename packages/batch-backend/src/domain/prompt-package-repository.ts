@@ -83,9 +83,7 @@ export async function insertPromptPackage(
   return mapRowToPromptPackage(row);
 }
 
-export async function getPromptPackageById(
-  id: string,
-): Promise<PromptPackageRecord | null> {
+export async function getPromptPackageById(id: string): Promise<PromptPackageRecord | null> {
   const row = await withPgClient(async (client: PoolClient) => {
     const result = await client.query(
       `

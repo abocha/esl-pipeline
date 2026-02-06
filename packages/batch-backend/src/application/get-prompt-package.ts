@@ -1,7 +1,7 @@
 import { getPromptPackageById } from '../domain/prompt-package-repository.js';
 import type { TranscriptionStorage } from '../infrastructure/transcription-storage.js';
 import { createTranscriptionStorageForUri } from '../infrastructure/transcription-storage.js';
-import { toPromptPackageResponse, type PromptPackageResponse } from './create-prompt-package.js';
+import { type PromptPackageResponse, toPromptPackageResponse } from './create-prompt-package.js';
 
 export interface GetPromptPackageDependencies {
   storage: TranscriptionStorage;

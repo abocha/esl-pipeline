@@ -5,7 +5,15 @@ import { ValidationError } from '@esl-pipeline/contracts';
 import { parsePmdDocument } from './parser.js';
 import { findDirectiveBlocks } from './query.js';
 import { normalizeMarkdownSource } from './source.js';
-import type { Frontmatter, PmdBlock, PmdDirectiveBlock, PmdDocument, PmdHeading, Section, StudyText } from './types.js';
+import type {
+  Frontmatter,
+  PmdBlock,
+  PmdDirectiveBlock,
+  PmdDocument,
+  PmdHeading,
+  Section,
+  StudyText,
+} from './types.js';
 
 const NBSP = /\u00A0/g;
 const ZWSP = /\u200B/g;
@@ -14,7 +22,6 @@ const BOM = /^\uFEFF/;
 function cleanLine(input: string): string {
   return input.replace(BOM, '').replaceAll(NBSP, ' ').replaceAll(ZWSP, '');
 }
-
 
 function getContentLines(markdown: string): string[] {
   const { source } = normalizeOrThrow(markdown);
@@ -31,7 +38,10 @@ function parseDocument(markdown: string): PmdDocument {
   }
 }
 
-function normalizeOrThrow(markdown: string): { source: string; format: 'canonical' | 'legacy-fenced' } {
+function normalizeOrThrow(markdown: string): {
+  source: string;
+  format: 'canonical' | 'legacy-fenced';
+} {
   try {
     return normalizeMarkdownSource(markdown);
   } catch (error: unknown) {
@@ -68,7 +78,10 @@ function directiveLabel(block: PmdDirectiveBlock, markerLine: string): string {
 }
 
 function normalizeLabel(value: string): string {
-  return value.replaceAll(/[\u2018\u2019]/g, "'").trim().toLowerCase();
+  return value
+    .replaceAll(/[\u2018\u2019]/g, "'")
+    .trim()
+    .toLowerCase();
 }
 
 function findFirstDirective(blocks: PmdDirectiveBlock[]): PmdDirectiveBlock | null {
@@ -139,7 +152,7 @@ export function extractAnswerKey(md: string): string {
 
   const match = toggles.find((block) => {
     const bounds = getDirectiveBounds(block, contentLines);
-    const label = bounds ? directiveLabel(block, bounds.markerLine) : block.label ?? '';
+    const label = bounds ? directiveLabel(block, bounds.markerLine) : (block.label ?? '');
     return normalizeLabel(label) === 'answer key';
   });
 
@@ -161,7 +174,7 @@ export function extractTeacherNotes(md: string): string {
 
   const match = toggles.find((block) => {
     const bounds = getDirectiveBounds(block, contentLines);
-    const label = bounds ? directiveLabel(block, bounds.markerLine) : block.label ?? '';
+    const label = bounds ? directiveLabel(block, bounds.markerLine) : (block.label ?? '');
     return normalizeLabel(label) === "teacher's follow-up plan";
   });
 
@@ -174,9 +187,11 @@ export function extractTeacherNotes(md: string): string {
 export function extractSections(md: string): Section[] {
   const doc = parseDocument(md);
   const contentLines = getContentLines(md);
-  const headings = [...collectHeadings(doc.body, 2), ...collectHeadings(doc.body, 3)].sort((a, b) => {
-    return (a.position?.start.line ?? 0) - (b.position?.start.line ?? 0);
-  });
+  const headings = [...collectHeadings(doc.body, 2), ...collectHeadings(doc.body, 3)].sort(
+    (a, b) => {
+      return (a.position?.start.line ?? 0) - (b.position?.start.line ?? 0);
+    },
+  );
 
   return headings.map((heading, idx) => {
     const startLine = heading.position?.start.line ?? 0;
@@ -190,4 +205,3 @@ export function extractSections(md: string): Section[] {
     };
   });
 }
-

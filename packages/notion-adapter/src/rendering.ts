@@ -6,7 +6,10 @@ const LABELS = new Map([
 ]);
 
 export function normalizeToggleLabel(value: string): string {
-  return value.replaceAll(/[\u2018\u2019]/g, "'").trim().toLowerCase();
+  return value
+    .replaceAll(/[\u2018\u2019]/g, "'")
+    .trim()
+    .toLowerCase();
 }
 
 export function isProtectedToggleTitle(value: string): boolean {

@@ -17,7 +17,7 @@ describe('application/process-transcribe-job', () => {
     const deepgramClient = createDeepgramStub({
       results: {
         utterances: [
-          { transcript: 'Hello there', speaker: 0, start: .2 },
+          { transcript: 'Hello there', speaker: 0, start: 0.2 },
           { transcript: 'Hi!', speaker: 1, start: 1 },
         ],
         channels: [
@@ -85,15 +85,12 @@ describe('application/process-transcribe-job', () => {
   it('uses fallback diarized transcription when multichannel fails', async () => {
     const recording = createRecording('recording-2');
     const storage = createStorageStub();
-    const deepgramClient = createDeepgramStub(
-      null,
-      {
-        results: {
-          utterances: [{ transcript: 'Fallback text', speaker: 0, start: .1 }],
-          channels: [{ alternatives: [{ transcript: 'Fallback text' }] }],
-        },
+    const deepgramClient = createDeepgramStub(null, {
+      results: {
+        utterances: [{ transcript: 'Fallback text', speaker: 0, start: 0.1 }],
+        channels: [{ alternatives: [{ transcript: 'Fallback text' }] }],
       },
-    );
+    });
 
     const inserted: TranscriptRecord[] = [];
 

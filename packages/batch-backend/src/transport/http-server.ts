@@ -8,8 +8,8 @@ import cookie from '@fastify/cookie';
 import Fastify, { type FastifyInstance } from 'fastify';
 import { fileURLToPath } from 'node:url';
 
-import { loadConfig } from '../config/env.js';
 import { validateTranscriptionConfig } from '../application/validate-transcription-config.js';
+import { loadConfig } from '../config/env.js';
 import {
   type FileSanitizationService,
   createFileSanitizationService,
@@ -22,8 +22,8 @@ import {
 } from '../infrastructure/file-validation-service.js';
 import { enableRedisJobEventBridge } from '../infrastructure/job-event-redis-bridge.js';
 import { logger } from '../infrastructure/logger.js';
-import { createRedisClient } from '../infrastructure/redis.js';
 import { enableRedisRecordingEventBridge } from '../infrastructure/recording-event-redis-bridge.js';
+import { createRedisClient } from '../infrastructure/redis.js';
 import {
   type StorageConfig,
   StorageConfigurationService,
@@ -107,12 +107,12 @@ export async function createHttpServer(): Promise<FastifyInstance> {
     const fileValidationService: FileValidationService | null = config.security.enableFileValidation
       ? createFileValidationService()
       : null;
-    const recordingUploadValidationService: FileValidationService | null =
-      config.security.enableFileValidation
-        ? createRecordingUploadValidationService({
-            maxFileSize: config.recordings.maxFileSize,
-          })
-        : null;
+    const recordingUploadValidationService: FileValidationService | null = config.security
+      .enableFileValidation
+      ? createRecordingUploadValidationService({
+          maxFileSize: config.recordings.maxFileSize,
+        })
+      : null;
     const fileSanitizationService: FileSanitizationService | null = config.security
       .enableFileSanitization
       ? createFileSanitizationService()

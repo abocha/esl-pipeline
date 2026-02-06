@@ -50,11 +50,7 @@ function resolveProfilePathForId(profileId: string, profileRoot: string): string
   }
   const ext = path.extname(normalized).toLowerCase();
   if (!PROFILE_EXTENSIONS.has(ext)) {
-    throw new ProfileContentError(
-      'profileId must end with .md or .txt',
-      'profile_id_invalid',
-      400,
-    );
+    throw new ProfileContentError('profileId must end with .md or .txt', 'profile_id_invalid', 400);
   }
   const candidate = path.resolve(profileRoot, normalized);
   if (!isWithinRoot(profileRoot, candidate)) {
@@ -113,9 +109,7 @@ export async function upsertProfileContent(
 ): Promise<ProfileContentResponse> {
   const { profiles, profileRoot } = await loadProfileOptions(overrides);
   const entry = profiles.find((profile) => profile.id === profileId);
-  const targetPath = entry
-    ? entry.path
-    : resolveProfilePathForId(profileId, profileRoot);
+  const targetPath = entry ? entry.path : resolveProfilePathForId(profileId, profileRoot);
   await fs.mkdir(path.dirname(targetPath), { recursive: true });
   await fs.writeFile(targetPath, content ?? '', 'utf8');
 

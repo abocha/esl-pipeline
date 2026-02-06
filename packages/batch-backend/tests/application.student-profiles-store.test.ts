@@ -1,19 +1,18 @@
-import { mkdtemp, readFile, readdir, rm, writeFile, mkdir } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, readdir, rm, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
-
-import { describe, expect, it, afterEach } from 'vitest';
+import { afterEach, describe, expect, it } from 'vitest';
 
 import {
+  StudentProfileStoreError,
   createStudentProfile,
   deleteStudentProfile,
   getStudentProfileById,
   listStudentProfiles,
-  StudentProfileStoreError,
   updateStudentProfile,
 } from '../src/application/student-profiles-store.js';
-import { deriveStudentId } from '../src/domain/student-utils.js';
 import { loadConfig } from '../src/config/env.js';
+import { deriveStudentId } from '../src/domain/student-utils.js';
 
 const tempDirs: string[] = [];
 
@@ -81,16 +80,12 @@ describe('student-profiles-store', () => {
 
   it('rejects student name changes that would alter the derived ID', async () => {
     const studentsDir = await createStudentsDir();
-    await writeFile(
-      path.join(studentsDir, 'bob.json'),
-      JSON.stringify({ student: 'Bob' }),
-      'utf8',
-    );
+    await writeFile(path.join(studentsDir, 'bob.json'), JSON.stringify({ student: 'Bob' }), 'utf8');
 
     const id = deriveStudentId('Bob');
-    await expect(
-      updateStudentProfile(id, { student: 'Bobby' }, { studentsDir }),
-    ).rejects.toThrow(StudentProfileStoreError);
+    await expect(updateStudentProfile(id, { student: 'Bobby' }, { studentsDir })).rejects.toThrow(
+      StudentProfileStoreError,
+    );
   });
 
   it('treats remote config providers as read-only', async () => {

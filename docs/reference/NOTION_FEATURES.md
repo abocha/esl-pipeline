@@ -669,11 +669,11 @@ More content
 
 ## Package Version Compatibility
 
-| Package           | Minimum Version | Features                   |
-| ----------------- | --------------- | -------------------------- |
-| `notion-adapter`  | 0.2.0           | All advanced features      |
-| `md-validator`    | 2.0.0           | Validates new directives   |
-| `pmd`             | 0.1.2           | Supports new toggle syntax |
+| Package          | Minimum Version | Features                   |
+| ---------------- | --------------- | -------------------------- |
+| `notion-adapter` | 0.2.0           | All advanced features      |
+| `md-validator`   | 2.0.0           | Validates new directives   |
+| `pmd`            | 0.1.2           | Supports new toggle syntax |
 
 ---
 

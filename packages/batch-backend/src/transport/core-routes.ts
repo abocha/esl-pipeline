@@ -4,9 +4,9 @@ import { z } from 'zod';
 import type { JobEventMessage, RecordingEventMessage } from '@esl-pipeline/contracts';
 
 import { approveJobForPipeline } from '../application/approve-job.js';
-import { deriveRecordingDisplayName } from '../application/recording-dto.js';
 import { getJobStatus } from '../application/get-job-status.js';
 import { jobRecordToDto } from '../application/job-dto.js';
+import { deriveRecordingDisplayName } from '../application/recording-dto.js';
 import { type SubmitJobRequest, submitJob } from '../application/submit-job.js';
 import type { BatchBackendConfig } from '../config/env.js';
 import { subscribeJobEvents } from '../domain/job-events.js';
@@ -28,19 +28,18 @@ export function registerCoreRoutes(app: FastifyInstance, options: CoreRouteOptio
   const handleSubmitJob: RouteHandlerMethod = async (request, reply) => {
     const body = request.body as SubmitJobRequest | undefined;
 
-    const jobSchema = z
-      .object({
-        md: z.string().min(1),
-        preset: z.string().optional(),
-        withTts: z.boolean().optional(),
-        upload: z.enum(['auto', 's3', 'none']).optional(),
-        voiceAccent: z.string().min(1).optional(),
-        voiceId: z.string().min(1).optional(),
-        forceTts: z.boolean().optional(),
-        notionDatabase: z.string().min(1).optional(),
-        publishTarget: z.enum(['notion', 'anytype']).optional(),
-        ttsStrategy: z.enum(['auto', 'dialogue', 'tts']).optional(),
-      });
+    const jobSchema = z.object({
+      md: z.string().min(1),
+      preset: z.string().optional(),
+      withTts: z.boolean().optional(),
+      upload: z.enum(['auto', 's3', 'none']).optional(),
+      voiceAccent: z.string().min(1).optional(),
+      voiceId: z.string().min(1).optional(),
+      forceTts: z.boolean().optional(),
+      notionDatabase: z.string().min(1).optional(),
+      publishTarget: z.enum(['notion', 'anytype']).optional(),
+      ttsStrategy: z.enum(['auto', 'dialogue', 'tts']).optional(),
+    });
 
     const validatedData = jobSchema.parse(body);
 
@@ -293,26 +292,26 @@ export function registerCoreRoutes(app: FastifyInstance, options: CoreRouteOptio
       }
 
       unsubscribeRecordings = subscribeRecordingEvents(
-          (event) => {
-            try {
-              if (!event || !event.recording) return;
-              const recording = event.recording;
-              if (!recordingIds.has(recording.id)) return;
-              const payload: RecordingEventMessage = {
-                type: 'recording_state_changed',
-                recordingId: recording.id,
-                status: recording.status,
-                transcriptId: event.transcriptId ?? null,
-                error: recording.error ?? null,
-                studentId: recording.studentId ?? null,
-                source: recording.source,
-                displayName: deriveRecordingDisplayName(recording),
-                durationSec: recording.durationSec ?? null,
-                channels: recording.channels ?? null,
-                bytes: recording.bytes,
-                createdAt: recording.createdAt.toISOString(),
-                updatedAt: recording.updatedAt.toISOString(),
-              };
+        (event) => {
+          try {
+            if (!event || !event.recording) return;
+            const recording = event.recording;
+            if (!recordingIds.has(recording.id)) return;
+            const payload: RecordingEventMessage = {
+              type: 'recording_state_changed',
+              recordingId: recording.id,
+              status: recording.status,
+              transcriptId: event.transcriptId ?? null,
+              error: recording.error ?? null,
+              studentId: recording.studentId ?? null,
+              source: recording.source,
+              displayName: deriveRecordingDisplayName(recording),
+              durationSec: recording.durationSec ?? null,
+              channels: recording.channels ?? null,
+              bytes: recording.bytes,
+              createdAt: recording.createdAt.toISOString(),
+              updatedAt: recording.updatedAt.toISOString(),
+            };
             reply.raw.write(`event: recording_state_changed\n`);
             reply.raw.write(`data: ${JSON.stringify(payload)}\n\n`);
           } catch (error: unknown) {

@@ -56,11 +56,7 @@ const program = new Command()
   .option('--force', 'Force regeneration even if cached file exists')
   .option('--tts-strategy <strategy>', 'Strategy: auto, dialogue, or tts', parseTtsStrategy)
   .option('--dialogue-language <code>', 'Dialogue language code (e.g. en, es)')
-  .option(
-    '--dialogue-stability <value>',
-    'Dialogue stability (0.0-1.0)',
-    parseDialogueStability,
-  )
+  .option('--dialogue-stability <value>', 'Dialogue stability (0.0-1.0)', parseDialogueStability)
   .option('--dialogue-seed <value>', 'Dialogue seed', parseDialogueSeed)
   .action(async (options: CliOptions) => {
     const result = await buildStudyTextMp3(options.md, {
@@ -81,4 +77,3 @@ program.parseAsync().catch((error: unknown) => {
   console.error(message);
   process.exit(1);
 });
-

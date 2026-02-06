@@ -77,7 +77,7 @@ function toggleTitle(block: ToggleBlock): string {
   const richText = block.toggle?.rich_text ?? [];
   const first = richText[0];
   if (!first || typeof first !== 'object') return '';
-  return 'plain_text' in first ? (first.plain_text as ToggleText) ?? '' : '';
+  return 'plain_text' in first ? ((first.plain_text as ToggleText) ?? '') : '';
 }
 
 export async function loadPreset(presetName: string, presetsPath: string): Promise<ColorPreset> {

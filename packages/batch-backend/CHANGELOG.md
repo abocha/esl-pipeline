@@ -7,13 +7,11 @@
 - Add Anytype publish target support and collection placement options.
 - Move to upload-only recording flow and improve auto-publish pipeline behavior.
 
-
 ## 1.6.2
 
 ### Patch Changes
 
 - chore: 2.1.0 release version bump.
-
 
 ## 1.6.1
 

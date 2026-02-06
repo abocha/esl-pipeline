@@ -7,13 +7,11 @@
 - Add Anytype publish target support (including collection placement).
 - Improve Anytype publish output handling for HTML exports.
 
-
 ## 3.3.2
 
 ### Patch Changes
 
 - chore: 2.1.0 release version bump.
-
 
 ## 3.3.1
 

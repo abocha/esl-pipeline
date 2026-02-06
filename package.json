@@ -24,10 +24,10 @@
   "main": "index.js",
   "scripts": {
     "build": "pnpm -r --filter './packages/*' run build",
-    "check": "pnpm build && pnpm typecheck && pnpm lint && pnpm test",
-    "check:fast": "pnpm build && pnpm lint && pnpm --filter @esl-pipeline/orchestrator test && pnpm --filter @esl-pipeline/batch-backend test && pnpm --filter @esl-pipeline/batch-frontend test",
     "changeset": "changeset",
     "changeset:version": "changeset version",
+    "check": "pnpm build && pnpm typecheck && pnpm lint && pnpm test",
+    "check:fast": "pnpm build && pnpm lint && pnpm --filter @esl-pipeline/orchestrator test && pnpm --filter @esl-pipeline/batch-backend test && pnpm --filter @esl-pipeline/batch-frontend test",
     "clean": "pnpm -r --filter './packages/*' --if-present run clean",
     "clean:artifacts": "node -e \"const fs=require('node:fs'); for (const dir of ['out','tmp','uploads']) fs.rmSync(dir,{recursive:true,force:true});\"",
     "deps:check": "pnpm deps:pin && git diff --quiet --exit-code",

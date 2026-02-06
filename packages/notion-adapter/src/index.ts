@@ -17,4 +17,9 @@ export {
 export { isProtectedToggleTitle, normalizeToggleLabel, shouldUsePlainToggle } from './rendering.js';
 export type { AddAudioOpts } from './audio.js';
 export type { ColorPreset, PresetsFile } from './colorizer.js';
-export type { FrontmatterShape, ImportOptions, ResolveDataSourceInput, ResolveDataSourceResult } from './types.js';
+export type {
+  FrontmatterShape,
+  ImportOptions,
+  ResolveDataSourceInput,
+  ResolveDataSourceResult,
+} from './types.js';

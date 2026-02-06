@@ -26,3 +26,4 @@ packages/orchestrator/configs/students/*.json
 *.mp3
 packages/orchestrator/examples/service/fixtures/lesson.manifest.json
 fixtures/*.opus
+packages/md-validator/test-results.json

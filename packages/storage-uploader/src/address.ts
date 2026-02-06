@@ -30,4 +30,3 @@ export function deriveS3UploadAddress(options: S3UploadAddressOptions): {
 
   return { key, url };
 }
-

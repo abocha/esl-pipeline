@@ -15,7 +15,10 @@ export class ProfilePathError extends Error {
 
 export async function resolveProfileRoot(defaultProfilePath: string): Promise<string> {
   if (!defaultProfilePath) {
-    throw new ProfilePathError('Prompt profile root is not configured', 'profile_path_root_missing');
+    throw new ProfilePathError(
+      'Prompt profile root is not configured',
+      'profile_path_root_missing',
+    );
   }
 
   const repoRoot = await fs.realpath(resolveRepoPath());
@@ -31,10 +34,7 @@ export async function resolveProfileRoot(defaultProfilePath: string): Promise<st
   }
 }
 
-export async function resolveUserProfilePath(
-  inputPath: string,
-  rootDir: string,
-): Promise<string> {
+export async function resolveUserProfilePath(inputPath: string, rootDir: string): Promise<string> {
   if (!inputPath || inputPath.trim().length === 0) {
     throw new ProfilePathError('profilePath is required', 'profile_path_missing');
   }

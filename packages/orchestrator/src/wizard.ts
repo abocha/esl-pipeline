@@ -4,9 +4,9 @@ import { dirname, resolve } from 'node:path';
 
 import {
   type ConfigProvider,
+  DEFAULT_STUDENT_NAME,
   DEFAULT_VOICES_PATH,
   DEFAULT_WIZARD_DEFAULTS_PATH,
-  DEFAULT_STUDENT_NAME,
   type MarkdownSummary,
   StudentProfile,
   createFilesystemConfigProvider,

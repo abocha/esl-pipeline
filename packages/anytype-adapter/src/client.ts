@@ -59,8 +59,15 @@ export class AnytypeClient {
     return this.request<AnytypeSpace[]>('/spaces', 'GET');
   }
 
-  public async createObject(spaceId: string, data: AnytypeCreateObjectPayload): Promise<AnytypeObject> {
-    return this.request<AnytypeObject>(`/spaces/${encodeURIComponent(spaceId)}/objects`, 'POST', data);
+  public async createObject(
+    spaceId: string,
+    data: AnytypeCreateObjectPayload,
+  ): Promise<AnytypeObject> {
+    return this.request<AnytypeObject>(
+      `/spaces/${encodeURIComponent(spaceId)}/objects`,
+      'POST',
+      data,
+    );
   }
 
   public async getObject(spaceId: string, objectId: string): Promise<AnytypeObject> {

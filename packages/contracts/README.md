@@ -19,4 +19,3 @@ Shared cross-package TypeScript contracts for the ESL monorepo.
   - `@esl-pipeline/batch-frontend`
   - adapters and infrastructure packages
 - Keep runtime behavior out of this package; contracts should remain stable and serializable.
-
