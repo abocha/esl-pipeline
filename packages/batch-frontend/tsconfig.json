@@ -30,11 +30,8 @@
       ]
     }
   },
-  // Include this package's sources and the workspace root so that
-  // eslint-import-resolver-typescript / TS can resolve workspace deps
-  // like "vite", "@vitejs/plugin-react-swc", "react", etc.
+  // Include only local package sources/config so project-service stays focused.
   "include": [
-    "../../**/*.d.ts",
     "src/**/*.ts",
     "src/**/*.tsx",
     "vite.config.ts",
