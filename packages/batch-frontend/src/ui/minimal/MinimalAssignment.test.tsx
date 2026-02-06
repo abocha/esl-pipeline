@@ -7,14 +7,17 @@ import { MinimalAssignment } from './MinimalAssignment';
 
 vi.mock('../../utils/api', () => ({
   approveJob: vi.fn(),
+  cancelJob: vi.fn(),
   createDraft: vi.fn(),
   createPromptPackage: vi.fn(),
+  fetchJobOptions: vi.fn(),
   fetchPromptOptions: vi.fn(),
   fetchRecordingTranscript: vi.fn(),
   getJobStatus: vi.fn(),
   getRecording: vi.fn(),
   materializeDraft: vi.fn(),
   retryRecordingTranscription: vi.fn(),
+  rerunAudioJob: vi.fn(),
   updateDraft: vi.fn(),
   updateRecordingTranscript: vi.fn(),
   uploadRecording: vi.fn(),
@@ -84,6 +87,33 @@ function makeTranscript(
   };
 }
 
+async function publishAssignmentFlow(user: ReturnType<typeof userEvent.setup>) {
+  await user.click(screen.getByRole('button', { name: /Drop audio file/i }));
+
+  await waitFor(() => {
+    expect(screen.getByDisplayValue('Student transcript text')).toBeTruthy();
+  });
+
+  await user.click(screen.getByRole('button', { name: /Generate prompt/i }));
+
+  await waitFor(() => {
+    expect(screen.getByDisplayValue('Prompt package output')).toBeTruthy();
+  });
+
+  const draftTextarea = screen.getAllByRole('textbox').at(-1);
+  expect(draftTextarea).toBeTruthy();
+  if (!draftTextarea) {
+    throw new Error('Expected draft textarea to be rendered');
+  }
+  await user.type(draftTextarea, '# Final draft');
+
+  await user.click(screen.getByRole('button', { name: /Publish assignment/i }));
+
+  await waitFor(() => {
+    expect(screen.getAllByText(/Job ID: job-1/i).length).toBeGreaterThan(0);
+  });
+}
+
 describe('MinimalAssignment', () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -95,6 +125,27 @@ describe('MinimalAssignment', () => {
         templateId: 'tpl-default',
         profileId: 'profile-default',
       },
+    });
+    vi.mocked(api.fetchJobOptions).mockResolvedValue({
+      presets: ['b1-default'],
+      voiceAccents: ['american'],
+      voices: [{ id: 'voice-a', name: 'Voice A', accent: 'american' }],
+      notionDatabases: [{ id: 'db-1', name: 'DB One' }],
+      ttsStrategies: ['auto', 'dialogue', 'tts'],
+      supportedActions: [
+        {
+          type: 'rerun_audio',
+          label: 'Rerun audio',
+          description: 'Regenerate audio',
+          implemented: true,
+        },
+        {
+          type: 'cancel',
+          label: 'Cancel',
+          description: 'Cancel active job',
+          implemented: true,
+        },
+      ],
     });
 
     vi.mocked(api.uploadRecording).mockResolvedValue(makeRecording());
@@ -161,6 +212,18 @@ describe('MinimalAssignment', () => {
       publishTarget: 'notion',
       notionUrl: 'https://www.notion.so/published-assignment',
     } as never);
+    vi.mocked(api.rerunAudioJob).mockResolvedValue({
+      success: true,
+      message: 'Audio rerun queued',
+      actionType: 'rerun_audio',
+      jobId: 'job-1',
+    });
+    vi.mocked(api.cancelJob).mockResolvedValue({
+      success: true,
+      message: 'Job cancelled',
+      actionType: 'cancel',
+      jobId: 'job-1',
+    });
     vi.mocked(api.retryRecordingTranscription).mockResolvedValue(
       makeRecording({
         status: 'transcribing',
@@ -179,6 +242,7 @@ describe('MinimalAssignment', () => {
     await waitFor(() => {
       expect(api.fetchPromptOptions).toHaveBeenCalledTimes(1);
     });
+    expect(api.fetchJobOptions).toHaveBeenCalledTimes(1);
 
     expect(screen.getByRole('heading', { name: /1\. Upload recording/i })).toBeTruthy();
     expect(screen.getByRole('heading', { name: /5\. Publish/i })).toBeTruthy();
@@ -307,9 +371,99 @@ describe('MinimalAssignment', () => {
     expect(api.approveJob).toHaveBeenCalledWith('job-1', '/tmp/assignment.md');
 
     await waitFor(() => {
-      expect(screen.getByText(/Job ID: job-1/i)).toBeTruthy();
+      expect(screen.getAllByText(/Job ID: job-1/i).length).toBeGreaterThan(0);
     });
     const link = screen.getByRole('link', { name: /Open in Notion/i });
     expect(link.getAttribute('href')).toBe('https://www.notion.so/published-assignment');
+  });
+
+  it('queues a default rerun audio action for the current job', async () => {
+    const user = userEvent.setup();
+    render(<MinimalAssignment />);
+
+    await publishAssignmentFlow(user);
+
+    await user.click(screen.getByRole('button', { name: /Rerun audio/i }));
+
+    await waitFor(() => {
+      expect(api.rerunAudioJob).toHaveBeenCalledWith('job-1', {
+        forceTts: true,
+        ttsStrategy: 'auto',
+      });
+    });
+    expect(screen.getByText('Audio rerun queued')).toBeTruthy();
+  });
+
+  it('submits advanced rerun payload values', async () => {
+    const user = userEvent.setup();
+    render(<MinimalAssignment />);
+
+    await publishAssignmentFlow(user);
+
+    await user.click(screen.getByRole('button', { name: /Show advanced rerun/i }));
+    await user.type(screen.getByPlaceholderText('voice id override'), 'voice-new');
+    await user.type(screen.getByPlaceholderText('accent override'), 'british');
+    await user.selectOptions(screen.getByRole('combobox', { name: /TTS strategy/i }), 'dialogue');
+    await user.type(screen.getByPlaceholderText('e.g. es'), 'es');
+    await user.type(screen.getByPlaceholderText('0.42'), '0.42');
+    await user.type(screen.getByPlaceholderText('7'), '7');
+
+    await user.click(screen.getByRole('button', { name: /Rerun audio/i }));
+
+    await waitFor(() => {
+      expect(api.rerunAudioJob).toHaveBeenCalledWith(
+        'job-1',
+        expect.objectContaining({
+          forceTts: true,
+          voiceId: 'voice-new',
+          voiceAccent: 'british',
+          ttsStrategy: 'dialogue',
+          dialogueLanguage: 'es',
+          dialogueStability: 0.42,
+          dialogueSeed: 7,
+        }),
+      );
+    });
+  });
+
+  it('submits cancel action with an optional reason when job is running', async () => {
+    const user = userEvent.setup();
+    vi.mocked(api.getJobStatus)
+      .mockResolvedValueOnce({
+        jobId: 'job-1',
+        state: 'running',
+        publishTarget: 'notion',
+        notionUrl: null,
+      } as never)
+      .mockResolvedValueOnce({
+        jobId: 'job-1',
+        state: 'failed',
+        publishTarget: 'notion',
+        notionUrl: null,
+        error: 'cancelled: duplicate run',
+      } as never);
+
+    render(<MinimalAssignment />);
+    await publishAssignmentFlow(user);
+
+    const reasonInput = screen.getByPlaceholderText('reason for cancellation');
+    await user.type(reasonInput, 'duplicate run');
+    await user.click(screen.getByRole('button', { name: /Cancel job/i }));
+
+    await waitFor(() => {
+      expect(api.cancelJob).toHaveBeenCalledWith('job-1', { reason: 'duplicate run' });
+    });
+    expect(screen.getByText(/Job cancelled/i)).toBeTruthy();
+  });
+
+  it('keeps cancel disabled for terminal jobs', async () => {
+    const user = userEvent.setup();
+    render(<MinimalAssignment />);
+
+    await publishAssignmentFlow(user);
+
+    const cancelButton = screen.getByRole('button', { name: /Cancel job/i });
+    expect(cancelButton.getAttribute('disabled')).not.toBeNull();
+    expect(screen.getByText(/Cancel is only available for queued or running jobs\./i)).toBeTruthy();
   });
 });

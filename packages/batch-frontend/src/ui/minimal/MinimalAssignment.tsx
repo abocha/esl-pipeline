@@ -3,6 +3,7 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
 import type {
   DraftResponse,
+  JobOptionsResponse,
   JobStatus,
   MarkdownValidationResponse,
   PromptOptionsResponse,
@@ -13,14 +14,17 @@ import type {
 } from '../../utils/api';
 import {
   approveJob,
+  cancelJob,
   createDraft,
   createPromptPackage,
+  fetchJobOptions,
   fetchPromptOptions,
   fetchRecordingTranscript,
   getJobStatus,
   getRecording,
   materializeDraft,
   retryRecordingTranscription,
+  rerunAudioJob,
   updateDraft,
   updateRecordingTranscript,
   uploadRecording,
@@ -71,6 +75,22 @@ export const MinimalAssignment: React.FC = () => {
   const [publishError, setPublishError] = useState<string | null>(null);
   const [jobStatus, setJobStatusState] = useState<JobStatus | null>(null);
   const [publishTarget, setPublishTarget] = useState<'notion' | 'anytype'>('notion');
+  const [jobOptions, setJobOptions] = useState<JobOptionsResponse | null>(null);
+  const [jobOptionsError, setJobOptionsError] = useState<string | null>(null);
+
+  const [actionBusy, setActionBusy] = useState<'rerun' | 'cancel' | null>(null);
+  const [actionError, setActionError] = useState<string | null>(null);
+  const [actionSuccess, setActionSuccess] = useState<string | null>(null);
+
+  const [showRerunAdvanced, setShowRerunAdvanced] = useState(false);
+  const [rerunForceTts, setRerunForceTts] = useState(true);
+  const [rerunVoiceId, setRerunVoiceId] = useState('');
+  const [rerunVoiceAccent, setRerunVoiceAccent] = useState('');
+  const [rerunTtsStrategy, setRerunTtsStrategy] = useState<'auto' | 'dialogue' | 'tts'>('auto');
+  const [rerunDialogueLanguage, setRerunDialogueLanguage] = useState('');
+  const [rerunDialogueStability, setRerunDialogueStability] = useState('');
+  const [rerunDialogueSeed, setRerunDialogueSeed] = useState('');
+  const [cancelReason, setCancelReason] = useState('');
 
   const resetFlow = useCallback(() => {
     uploadAbortRef.current?.abort();
@@ -114,9 +134,21 @@ export const MinimalAssignment: React.FC = () => {
     }
   }, []);
 
+  const loadJobOptions = useCallback(async () => {
+    try {
+      const response = await fetchJobOptions();
+      setJobOptions(response);
+      setJobOptionsError(null);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Unable to load job options.';
+      setJobOptionsError(message);
+    }
+  }, []);
+
   useEffect(() => {
     void loadPromptOptions();
-  }, [loadPromptOptions]);
+    void loadJobOptions();
+  }, [loadJobOptions, loadPromptOptions]);
 
   const handleUpload = useCallback(
     async (file: File) => {
@@ -434,6 +466,89 @@ export const MinimalAssignment: React.FC = () => {
     };
   }, [jobStatus?.jobId]);
 
+  useEffect(() => {
+    setActionBusy(null);
+    setActionError(null);
+    setActionSuccess(null);
+    setShowRerunAdvanced(false);
+    setCancelReason('');
+  }, [jobStatus?.jobId]);
+
+  const handleRerunAudio = async () => {
+    if (!jobStatus?.jobId) return;
+
+    const stabilityInput = rerunDialogueStability.trim();
+    const seedInput = rerunDialogueSeed.trim();
+    const payload: Parameters<typeof rerunAudioJob>[1] = {
+      forceTts: rerunForceTts,
+      ttsStrategy: rerunTtsStrategy,
+    };
+
+    if (rerunVoiceId.trim()) {
+      payload.voiceId = rerunVoiceId.trim();
+    }
+    if (rerunVoiceAccent.trim()) {
+      payload.voiceAccent = rerunVoiceAccent.trim();
+    }
+    if (rerunDialogueLanguage.trim()) {
+      payload.dialogueLanguage = rerunDialogueLanguage.trim();
+    }
+    if (stabilityInput) {
+      const parsed = Number(stabilityInput);
+      if (Number.isNaN(parsed) || parsed < 0 || parsed > 1) {
+        setActionError('Dialogue stability must be a number between 0 and 1.');
+        return;
+      }
+      payload.dialogueStability = parsed;
+    }
+    if (seedInput) {
+      const parsed = Number(seedInput);
+      if (!Number.isInteger(parsed)) {
+        setActionError('Dialogue seed must be an integer.');
+        return;
+      }
+      payload.dialogueSeed = parsed;
+    }
+
+    setActionBusy('rerun');
+    setActionError(null);
+    setActionSuccess(null);
+    try {
+      const result = await rerunAudioJob(jobStatus.jobId, payload);
+      setActionSuccess(result.message ?? 'Audio rerun queued.');
+      const refreshed = await getJobStatus(jobStatus.jobId);
+      setJobStatusState(refreshed);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Unable to rerun audio.';
+      setActionError(message);
+    } finally {
+      setActionBusy(null);
+    }
+  };
+
+  const handleCancelJob = async () => {
+    if (!jobStatus?.jobId) return;
+
+    const trimmedReason = cancelReason.trim();
+    setActionBusy('cancel');
+    setActionError(null);
+    setActionSuccess(null);
+    try {
+      const result = await cancelJob(
+        jobStatus.jobId,
+        trimmedReason ? { reason: trimmedReason } : undefined,
+      );
+      setActionSuccess(result.message ?? 'Job cancellation requested.');
+      const refreshed = await getJobStatus(jobStatus.jobId);
+      setJobStatusState(refreshed);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Unable to cancel job.';
+      setActionError(message);
+    } finally {
+      setActionBusy(null);
+    }
+  };
+
   const transcriptReady = transcriptStatus === 'ready' && transcriptText.trim().length > 0;
   const promptReady = promptPackage?.id && promptText.trim().length > 0;
   const jobReady = jobStatus?.jobId;
@@ -443,6 +558,16 @@ export const MinimalAssignment: React.FC = () => {
   const publishLabel = jobPublishTarget === 'anytype' ? 'Open published page' : 'Open in Notion';
   const publishPending =
     jobPublishTarget === 'anytype' ? 'Publish link pending...' : 'Notion link pending...';
+  const actionCapabilities = jobOptions?.supportedActions ?? [];
+  const rerunImplemented =
+    actionCapabilities.find((capability) => capability.type === 'rerun_audio')?.implemented ??
+    false;
+  const cancelImplemented =
+    actionCapabilities.find((capability) => capability.type === 'cancel')?.implemented ?? false;
+  const cancelAllowedState = jobStatus?.state === 'queued' || jobStatus?.state === 'running';
+  const rerunEnabled = Boolean(jobStatus?.jobId) && rerunImplemented && actionBusy === null;
+  const cancelEnabled =
+    Boolean(jobStatus?.jobId) && cancelImplemented && cancelAllowedState && actionBusy === null;
 
   return (
     <div className="minimal-assignment">
@@ -674,6 +799,153 @@ export const MinimalAssignment: React.FC = () => {
         ) : null}
       </section>
 
+      <section className="minimal-section">
+        <div className="minimal-section-header">
+          <h2>6. Job actions</h2>
+          <button type="button" className="minimal-secondary" onClick={() => void loadJobOptions()}>
+            Refresh actions
+          </button>
+        </div>
+        {jobReady ? (
+          <>
+            <p className="minimal-help">
+              Rerun audio generation or cancel active jobs. Availability is driven by backend
+              capabilities.
+            </p>
+            <div className="minimal-meta">
+              <span>Job ID: {jobStatus?.jobId}</span>
+              <span>State: {jobStatus?.state}</span>
+            </div>
+            <div className="minimal-block">
+              <div className="minimal-inline">
+                <button
+                  type="button"
+                  className="minimal-primary"
+                  onClick={() => void handleRerunAudio()}
+                  disabled={!rerunEnabled}
+                >
+                  {actionBusy === 'rerun' ? 'Queuing rerun...' : 'Rerun audio'}
+                </button>
+                <button
+                  type="button"
+                  className="minimal-secondary"
+                  onClick={() => setShowRerunAdvanced((current) => !current)}
+                >
+                  {showRerunAdvanced ? 'Hide advanced' : 'Show advanced rerun'}
+                </button>
+              </div>
+              {showRerunAdvanced ? (
+                <div className="minimal-grid">
+                  <label className="minimal-field">
+                    <span>Voice ID</span>
+                    <input
+                      value={rerunVoiceId}
+                      onChange={(event) => setRerunVoiceId(event.target.value)}
+                      placeholder="voice id override"
+                    />
+                  </label>
+                  <label className="minimal-field">
+                    <span>Voice Accent</span>
+                    <input
+                      value={rerunVoiceAccent}
+                      onChange={(event) => setRerunVoiceAccent(event.target.value)}
+                      placeholder="accent override"
+                    />
+                  </label>
+                  <label className="minimal-field">
+                    <span>TTS strategy</span>
+                    <select
+                      value={rerunTtsStrategy}
+                      onChange={(event) =>
+                        setRerunTtsStrategy(event.target.value as 'auto' | 'dialogue' | 'tts')
+                      }
+                    >
+                      {jobOptions?.ttsStrategies?.length
+                        ? jobOptions.ttsStrategies.map((strategy) => (
+                            <option key={strategy} value={strategy}>
+                              {strategy}
+                            </option>
+                          ))
+                        : ['auto', 'dialogue', 'tts'].map((strategy) => (
+                            <option key={strategy} value={strategy}>
+                              {strategy}
+                            </option>
+                          ))}
+                    </select>
+                  </label>
+                  <label className="minimal-field">
+                    <span>Dialogue language</span>
+                    <input
+                      value={rerunDialogueLanguage}
+                      onChange={(event) => setRerunDialogueLanguage(event.target.value)}
+                      placeholder="e.g. es"
+                    />
+                  </label>
+                  <label className="minimal-field">
+                    <span>Dialogue stability (0..1)</span>
+                    <input
+                      value={rerunDialogueStability}
+                      onChange={(event) => setRerunDialogueStability(event.target.value)}
+                      placeholder="0.42"
+                    />
+                  </label>
+                  <label className="minimal-field">
+                    <span>Dialogue seed (integer)</span>
+                    <input
+                      value={rerunDialogueSeed}
+                      onChange={(event) => setRerunDialogueSeed(event.target.value)}
+                      placeholder="7"
+                    />
+                  </label>
+                  <label className="minimal-checkbox">
+                    <input
+                      type="checkbox"
+                      checked={rerunForceTts}
+                      onChange={(event) => setRerunForceTts(event.target.checked)}
+                    />
+                    <span>Force TTS regeneration</span>
+                  </label>
+                </div>
+              ) : null}
+            </div>
+            <div className="minimal-block">
+              <div className="minimal-inline">
+                <label className="minimal-field grow">
+                  <span>Cancel reason (optional)</span>
+                  <input
+                    value={cancelReason}
+                    onChange={(event) => setCancelReason(event.target.value)}
+                    placeholder="reason for cancellation"
+                  />
+                </label>
+                <button
+                  type="button"
+                  className="minimal-secondary"
+                  onClick={() => void handleCancelJob()}
+                  disabled={!cancelEnabled}
+                >
+                  {actionBusy === 'cancel' ? 'Cancelling...' : 'Cancel job'}
+                </button>
+              </div>
+              {!cancelAllowedState && jobStatus ? (
+                <p className="minimal-muted">Cancel is only available for queued or running jobs.</p>
+              ) : null}
+            </div>
+            {jobOptionsError ? <p className="minimal-error">{jobOptionsError}</p> : null}
+            {!rerunImplemented || !cancelImplemented ? (
+              <p className="minimal-muted">
+                Some actions are unavailable because backend capability metadata does not mark them as
+                implemented.
+              </p>
+            ) : null}
+            {actionError ? <p className="minimal-error">{actionError}</p> : null}
+            {actionSuccess ? <p className="minimal-success">{actionSuccess}</p> : null}
+          </>
+        ) : (
+          <p className="minimal-help">Publish once to create a job, then actions become available.</p>
+        )}
+      </section>
+
       <style>{`
         .minimal-assignment {
           max-width: 960px;
@@ -717,6 +989,12 @@ export const MinimalAssignment: React.FC = () => {
           font-size: var(--text-xs);
         }
 
+        .minimal-success {
+          margin: 0;
+          color: #0f8b4c;
+          font-size: var(--text-sm);
+        }
+
         .minimal-primary,
         .minimal-secondary {
           padding: var(--space-2) var(--space-4);
@@ -754,6 +1032,41 @@ export const MinimalAssignment: React.FC = () => {
           display: flex;
           flex-direction: column;
           gap: var(--space-3);
+        }
+
+        .minimal-grid {
+          display: grid;
+          gap: var(--space-3);
+          grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+        }
+
+        .minimal-field {
+          display: flex;
+          flex-direction: column;
+          gap: var(--space-2);
+          font-size: var(--text-sm);
+          color: var(--text-secondary);
+        }
+
+        .minimal-field.grow {
+          flex: 1;
+          min-width: 240px;
+        }
+
+        .minimal-field input,
+        .minimal-field select {
+          padding: var(--space-2) var(--space-3);
+          border-radius: var(--radius-lg);
+          border: 1px solid var(--border-medium);
+          background: var(--bg-secondary);
+        }
+
+        .minimal-checkbox {
+          display: flex;
+          align-items: center;
+          gap: var(--space-2);
+          font-size: var(--text-sm);
+          color: var(--text-secondary);
         }
 
         .minimal-select {

@@ -8,6 +8,7 @@ operator-facing UI that focuses on the core workflow only.
 - Authenticated minimal assignment console.
 - Upload recording → review transcript → generate prompt → paste draft → validate → publish.
 - Optional Anytype/Notion publish target selection in the publish step.
+- Job action controls for `rerun_audio` and `cancel` (capability-gated from backend metadata).
 - Typed API client backed by `@esl-pipeline/contracts`.
 
 ## Directory structure

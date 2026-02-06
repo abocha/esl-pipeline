@@ -244,6 +244,20 @@ export interface JobActionResponse {
   timestamp?: string;
 }
 
+export interface RerunAudioPayload {
+  forceTts?: boolean;
+  voiceId?: string;
+  voiceAccent?: string;
+  ttsStrategy?: 'auto' | 'dialogue' | 'tts';
+  dialogueLanguage?: string;
+  dialogueStability?: number;
+  dialogueSeed?: number;
+}
+
+export interface CancelJobPayload {
+  reason?: string;
+}
+
 export async function listRecordings(
   params: {
     status?: RecordingStatus | RecordingStatus[];
@@ -1141,6 +1155,26 @@ export async function submitJobAction(
     }
     throw new Error(axiosError ? handleApiError(axiosError) : formatUnknownError(error));
   }
+}
+
+export async function rerunAudioJob(
+  jobId: string,
+  payload?: RerunAudioPayload,
+): Promise<JobActionResponse> {
+  return submitJobAction(jobId, {
+    type: 'rerun_audio',
+    payload,
+  });
+}
+
+export async function cancelJob(
+  jobId: string,
+  payload?: CancelJobPayload,
+): Promise<JobActionResponse> {
+  return submitJobAction(jobId, {
+    type: 'cancel',
+    payload,
+  });
 }
 
 export function subscribeToJobEvents(
