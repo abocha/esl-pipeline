@@ -45,7 +45,14 @@
 
 - Do update status docs when capability readiness changes.
 - Do keep SSOT authoritative and read selectively for deep contract checks.
+- Do treat `pnpm deps:audit:strict` as a required CI and maintenance gate.
 - Don't keep long historical implementation narratives in active docs.
+
+## Dependency Audit Gate
+
+- `pnpm deps:audit:strict` must stay green in CI and before merge for admin/chore work.
+- If it fails, resolve by removing unused deps, moving mis-scoped deps, or adding missing deps.
+- Do not bypass this gate by disabling checks in scripts or workflows.
 
 ## Related
 

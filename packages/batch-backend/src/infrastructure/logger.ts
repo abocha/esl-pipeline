@@ -22,9 +22,16 @@ export interface Logger {
 // logger.declaration()
 export const logger: Logger = createRootLogger();
 
+function resolveLogLevel(): string {
+  if (process.env.NODE_ENV === 'test') {
+    return process.env.BATCH_BACKEND_TEST_LOG_LEVEL || process.env.LOG_LEVEL || 'silent';
+  }
+  return process.env.LOG_LEVEL || 'info';
+}
+
 function createRootLogger(): Logger {
   const base = pino({
-    level: process.env.LOG_LEVEL || 'info',
+    level: resolveLogLevel(),
     transport:
       process.env.NODE_ENV === 'development'
         ? {
