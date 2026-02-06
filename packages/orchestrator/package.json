@@ -38,7 +38,6 @@
     "dev": "tsx watch bin/cli.ts",
     "docker:build": "cd ../.. && docker build -f packages/orchestrator/Dockerfile -t esl-pipeline/orchestrator:local .",
     "docker:run": "docker run --rm esl-pipeline/orchestrator:local --version",
-    "examples/service": "pnpm --dir examples/service exec",
     "prepack": "pnpm run build",
     "test": "vitest run",
     "test:watch": "vitest",
