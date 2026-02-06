@@ -1,72 +1,79 @@
-# ESL Pipeline · Orchestrator & Pipeline API
+# ESL Pipeline
 
+ESL Pipeline automates the workflow from lesson input to published ESL homework.
+It supports both CLI usage and service-style programmatic integration.
 
-This repository powers the ESL homework pipeline end-to-end. It can be used either as:
+## What This Repo Is (Current State)
 
-1. A **CLI** (`esl`) that validates Markdown, imports pages into Notion, generates ElevenLabs audio, uploads to S3, and attaches the audio to the page.
-2. A **programmatic pipeline** (`createPipeline`) you can embed in your own service or job runner.
+This monorepo currently provides:
 
-Key packages:
+- A pipeline orchestrator (`@esl-pipeline/orchestrator`) for validation, publishing, optional TTS, upload, and manifest tracking.
+- A CLI (`esl`) for interactive and non-interactive assignment runs.
+- A batch backend/frontend system for upload -> transcript -> prompt -> draft -> publish workflows.
+- Shared packages for markdown validation, parsing, adapters, contracts, and infrastructure.
 
-- `@esl-pipeline/orchestrator` — main CLI + pipeline API.
-- `@esl-pipeline/anytype-adapter` — Anytype adapter + HTML renderer for student exports.
+Primary integrations:
 
-> **Runtime requirements**
->
-> - Node **24.11.1** or newer (enforced by `engines` and CI).
-> - `pnpm` 8+ (use `corepack enable`).
-> - ffmpeg available on PATH or supplied via `FFMPEG_PATH`.
+- Notion (publishing)
+- ElevenLabs (TTS)
+- AWS/S3 (upload/storage)
 
----
+## Quick Start (From Source Checkout)
 
-## Quick Start (CLI)
+### Prerequisites
 
-Install dependencies and copy the env template:
+- Node `24.11.1+`
+- pnpm (`corepack enable`)
+- ffmpeg on `PATH` (or set `FFMPEG_PATH`)
+
+### 1) Install + Configure
 
 ```bash
+corepack enable
 pnpm install
 cp .env.example .env
-# fill in NOTION_TOKEN, ELEVENLABS_API_KEY, AWS_* credentials
 ```
 
-Run the interactive workflow:
+Fill required credentials as needed (Notion/ElevenLabs/AWS). See `docs/reference/env.md`.
+
+### 2) Build CLI Package
+
+```bash
+pnpm --filter @esl-pipeline/orchestrator build
+```
+
+### 3) Run First Pipeline Command
+
+Interactive:
 
 ```bash
 pnpm esl --interactive
 ```
 
-Or run non-interactively:
+Non-interactive:
 
 ```bash
-pnpm esl --md ./lessons/mission.md \
-  --preset b1-default \
-  --with-tts \
-  --upload s3
+pnpm esl --md ./lessons/mission.md --preset b1-default --with-tts --upload s3
 ```
 
-Other commands:
+Expected outcome:
 
-```bash
-pnpm esl status --md ./lessons/mission.md
-pnpm esl rerun --md ./lessons/mission.md --steps upload,add-audio --upload s3
-pnpm esl select --file --ext .md
-pnpm esl --version
-```
+- pipeline stages execute
+- manifest is written
+- status/publish metadata is available for reruns and checks
 
-Zero-install usage (downloads the package on demand):
+### Zero-Install Option
 
 ```bash
 npx @esl-pipeline/orchestrator esl --interactive
 ```
 
----
-
-## Programmatic Usage
+## Programmatic API In 60 Seconds
 
 ```ts
 import { createPipeline, loadEnvFiles } from '@esl-pipeline/orchestrator';
 
-loadEnvFiles(); // loads .env and merges into process.env (see docs/reference/agents-ssot.md for exact behavior)
+loadEnvFiles();
 
 const pipeline = createPipeline({ cwd: process.cwd() });
 
@@ -80,218 +87,87 @@ const result = await pipeline.newAssignment({
 console.log(result.steps, result.manifestPath);
 ```
 
-Useful exports:
+Key exports:
 
-- `createPipeline(options)` — builds a pipeline with configurable config/manifest providers.
-- `createPipeline` also accepts optional `logger` and `metrics` hooks so services can stream stage telemetry to their own observability stack. Both default to no-ops when omitted.
-- `resolveConfigPaths(options)` — returns the resolved presets/voices/students/wizard-defaults paths.
-- `loadEnvFiles(options)` — convenience helper for loading `.env` files without mutating `process.env` (set `assignToProcess: false` to opt out).
-- `resolveManifestPath(mdPath)` — deterministic manifest location for a given Markdown file.
-- Notion import specifics:
-  - Frontmatter `properties` must already exist in the target database; unknown properties now fail fast with a clear error.
-  - `Topic` is sent as multi-select when the DB has (or is missing) a multi-select Topic; otherwise it is sent as rich text.
-  - Advanced blocks (callouts, columns, toggle headings, synced blocks, tables) are serialized to the Notion API schema and validated before sending.
+- `createPipeline`
+- `resolveConfigPaths`
+- `loadEnvFiles`
+- `resolveManifestPath`
 
-For full type signatures and behavioral contracts, see [`docs/reference/agents-ssot.md`](docs/reference/agents-ssot.md).
+For full contracts and behavior rules: `docs/reference/agents-ssot.md`.
 
-Types such as `PipelineNewAssignmentOptions`, `PipelineRerunOptions`, and `AssignmentManifest` are exported for TypeScript consumers.
+## Repository Map
 
----
+| Package | Purpose | Read Next |
+| --- | --- | --- |
+| `packages/orchestrator` | CLI + pipeline API | `packages/orchestrator/README.md` |
+| `packages/md-validator` | Markdown validation | `packages/md-validator/README.md` |
+| `packages/pmd` | PMD parsing + study-text extraction | `packages/pmd/README.md` |
+| `packages/notion-adapter` | Notion publishing adapter | `packages/notion-adapter/README.md` |
+| `packages/tts-elevenlabs` | ElevenLabs integration | `packages/tts-elevenlabs/README.md` |
+| `packages/storage-uploader` | Upload/storage adapter | `packages/storage-uploader/README.md` |
+| `packages/batch-backend` | Batch API + workers | `packages/batch-backend/README.md` |
+| `packages/batch-frontend` | Batch web UI | `packages/batch-frontend/README.md` |
+| `packages/contracts` | Shared backend/frontend contracts | `packages/contracts/README.md` |
+| `packages/shared-infrastructure` | Shared infra utilities | `packages/shared-infrastructure/README.md` |
+| `packages/anytype-adapter` | Anytype adapter support | `packages/anytype-adapter/README.md` |
 
-## Configuration & Secrets
+## Documentation Map (By Reader)
 
-| Setting                 | Source / Default                                           | Notes                                                                   |
-| ----------------------- | ---------------------------------------------------------- | ----------------------------------------------------------------------- |
-| Notion token            | `NOTION_TOKEN` env variable                                | Required                                                                |
-| Notion DB / data source | `NOTION_DB_ID`, overrides via CLI flags                    | Student profiles can pin defaults                                       |
-| ElevenLabs API key      | `ELEVENLABS_API_KEY` env variable                          | Required if `--with-tts`                                                |
-| AWS credentials         | `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `AWS_REGION` | Needed for `--upload s3`                                                |
-| S3 bucket/prefix        | `S3_BUCKET`, optional `S3_PREFIX`                          | Used by `--upload s3` uploads                                           |
-| Voices mapping          | `configs/voices.yml` (override with `--voices`)            | Resolved via `resolveConfigPaths`; can be overridden via CLI/options    |
-| Presets                 | `configs/presets.json` (override with `--presets-path`)    | Resolved via `resolveConfigPaths`                                       |
-| Student profiles        | `configs/students/*.json`                                  | Optional per-student defaults                                           |
-| Wizard defaults         | `configs/wizard.defaults.json`                             | Interactive wizard preferences; resolved next to presets (`configRoot`) |
-| ffmpeg                  | system install or `FFMPEG_PATH`                            | Not vendored; must be installed                                         |
+Newcomers:
 
-`loadEnvFiles()` mirrors the CLI’s behavior: it checks `.env` in the working directory and the repo root. Pass `files: [...]` to load custom locations. See [`docs/reference/agents-ssot.md`](docs/reference/agents-ssot.md) §3.2 for authoritative details.
+- `docs/README.md`
+- `docs/PROJECT_OVERVIEW.md`
+- `docs/QUICK_START.md`
 
-### Remote Manifest Storage
+Maintainers / Agents:
 
-Manifests live on disk by default. To use Amazon S3 instead:
+- `AGENTS.md` (core bootstrap)
+- `docs/reference/agents-ssot.md` (authoritative annex)
 
-- Set `ESL_PIPELINE_MANIFEST_STORE=s3` and `ESL_PIPELINE_MANIFEST_BUCKET=<bucket-name>`.
-- Optional environment variables:
-  - `ESL_PIPELINE_MANIFEST_PREFIX` – path prefix inside the bucket (`manifests/production`).
-  - `ESL_PIPELINE_MANIFEST_ROOT` – absolute directory considered the root when deriving manifest keys.
-- Or provide a manifest store explicitly:
+Backend/frontend integration work:
 
-```ts
-import { S3ManifestStore, createPipeline } from '@esl-pipeline/orchestrator';
+- `docs/backend-frontend/BATCH_SYSTEM.md`
+- `docs/backend-frontend/backend-frontend-alignment.md`
+- `docs/design/TRANSCRIPTION_PIPELINE_SPEC.md`
 
-const pipeline = createPipeline({
-  manifestStore: new S3ManifestStore({
-    bucket: 'my-manifest-bucket',
-    prefix: 'manifests/prod',
-    region: 'us-east-1',
-    rootDir: process.cwd(),
-  }),
-});
-```
-
-See `docs/reference/pipeline-manifest.md` for the schema details.
-
-### Config Providers
-
-`createPipeline` exposes a `configProvider` that the CLI, wizard, and pipeline stages rely on for
-presets, student profiles, and voices metadata. The default implementation reads from the local
-filesystem. To plug in your own loader (e.g., HTTP API, database) provide any object that implements
-the `ConfigProvider` interface returned by `@esl-pipeline/orchestrator`.
-
-```ts
-import { type ConfigProvider, createPipeline } from '@esl-pipeline/orchestrator';
-
-const myConfigProvider: ConfigProvider = {
-  async loadPresets() {
-    const response = await fetch('https://config.internal/presets');
-    return response.json();
-  },
-  async loadStudentProfiles() {
-    const response = await fetch('https://config.internal/students');
-    return response.json();
-  },
-  async resolveVoicesPath() {
-    return 'https://config.internal/voices.yml';
-  },
-};
-
-const pipeline = createPipeline({ configProvider: myConfigProvider });
-```
-
-Environment-variable shortcuts for selecting remote providers are documented in:
-
-- [`docs/reference/agents-ssot.md`](docs/reference/agents-ssot.md) §5.2
-- [`docs/backend-frontend/BATCH_SYSTEM.md`](docs/backend-frontend/BATCH_SYSTEM.md)
-
-To experiment with the built-in HTTP provider, set the following environment variables:
-
-- `ESL_PIPELINE_CONFIG_PROVIDER=http`
-- `ESL_PIPELINE_CONFIG_ENDPOINT=https://config.example.com/`
-- Optional: `ESL_PIPELINE_CONFIG_TOKEN`, `ESL_PIPELINE_CONFIG_PRESETS_PATH`, `ESL_PIPELINE_CONFIG_STUDENTS_PATH`, `ESL_PIPELINE_CONFIG_VOICES_PATH`
-
-**Migration tip:** run the pipeline once with filesystem configs to seed S3/manifests, then enable the
-remote provider in staging before promoting to production. The pipeline treats both providers as
-source-of-truth, so you can fall back to local files simply by unsetting the env variables.
-
----
-
-## Project Layout
-
-```
-packages/
-  orchestrator/          # CLI + pipeline
-  md-validator/          # Markdown linting
-  pmd/                   # PMD parse + study text extraction
-  notion-adapter/        # Notion adapter (import, color, audio)
-  tts-elevenlabs/        # ElevenLabs integration (ffmpeg)
-  storage-uploader/      # S3 uploads
-docs/
-  PROJECT_OVERVIEW.md    # What is this project?
-  QUICK_START.md         # 5-minute getting started
-  reference/             # Authoritative technical docs
-  backend-frontend/      # Batch system docs
-  design/                # Active design specs
-  archive/               # Historical docs (domain/date archive)
-  templates/             # Homework prompt, profiles
-AGENTS.md                # Concise maintainer guide pointing to SSOTs
-```
-
-All packages target ESM (`"type": "module"`), and CLI builds run through `tsup` + `tsc` for declarations.
-
----
-
-## Development Workflow
+## Development Commands (Minimal)
 
 ```bash
-# Type-check & build everything
 pnpm build
-
-# Lint (ESLint + Prettier checks)
 pnpm lint
-
-# Test all packages (Vitest)
 pnpm test
-
-# Orchestrator-only smoke tests
 pnpm smoke
-
-# Dependency alignment
-pnpm deps:pin             # normalize shared versions (AWS, Notion, ElevenLabs, React/Vite, Fastify/pg/Redis/bullmq, etc.)
-pnpm deps:upgrade:safe     # upgrade allowlisted SDKs (Notion/ElevenLabs/AWS S3) and stable utils, then reapply pins
-pnpm deps:check           # run deps:pin and fail if manifests drift (same guard as CI)
-
-# Publish orchestrator (from packages/orchestrator)
-npm publish --access public
 ```
 
-CI (`.github/workflows/ci.yml`) runs on Node 24.11.1 and executes build, lint, tests, and the smoke suite.
+Useful targeted runs:
 
----
-
-## Testing & Verification
-
-- `pnpm --filter @esl-pipeline/orchestrator test -- --runInBand` covers the unit suite plus new pipeline integrations (filesystem vs. remote config providers and the S3 manifest path assertions in `packages/orchestrator/tests/pipeline.integration.test.ts`).
-- `pnpm --filter @esl-pipeline/orchestrator examples/service vitest run` keeps the Fastify example’s `dryRun: true` submission path green; see `packages/orchestrator/examples/service/README.md` for a walkthrough.
-- Remote adapters rely on env toggles: set `ESL_PIPELINE_CONFIG_PROVIDER=http` with `ESL_PIPELINE_CONFIG_ENDPOINT=...` for the HTTP config provider, and `ESL_PIPELINE_MANIFEST_STORE=s3` with `ESL_PIPELINE_MANIFEST_BUCKET=...` (plus optional `ESL_PIPELINE_MANIFEST_PREFIX` / `ESL_PIPELINE_MANIFEST_ROOT`) to route manifests to S3. Tests mock external services so these variables never trigger real network calls.
-
----
-
-## Docker & CI
-
-- CI (`.github/workflows/ci.yml`) now runs lint/tests, builds the Docker image, and executes the Fastify example service tests.
-- Trigger the orchestrator image locally with `pnpm --filter @esl-pipeline/orchestrator docker:build`, then sanity-check via `docker run --rm esl-pipeline/orchestrator:local --version`.
-- Re-run the service tests with `pnpm --filter @esl-pipeline/orchestrator/examples/service vitest run` to match the CI step.
-- The release workflow (`.github/workflows/release.yml`) prepares/publishes the orchestrator package once a Changeset is ready.
-- Dockerfiles pin system package versions for hadolint; update those pins whenever you bump the base image tags (and re-run `pnpm hadolint`).
-
----
-
-## Backend Groundwork
-
-The orchestrator is consumable from other Node projects and continues to evolve for backend-hosted usage (storage adapters, observability hooks, deployment/runtime hardening). The current active guidance lives in:
-
-- [`docs/backend-frontend/BATCH_SYSTEM.md`](docs/backend-frontend/BATCH_SYSTEM.md)
-- [`docs/backend-frontend/batch-backend-ssot.md`](docs/backend-frontend/batch-backend-ssot.md)
-- [`docs/reference/agents-ssot.md`](docs/reference/agents-ssot.md)
-
-Historical backend-groundwork planning notes are archived at `docs/archive/notes/2026-02/groundwork-for-backend.md`.
-
-Key takeaways:
-
-- `createPipeline` will become the primary integration point for API/queue services.
-- Logger/metrics/tracing interfaces will keep business logic agnostic of the host environment.
-- Manifest/config storage is being abstracted so you can swap JSON files for S3 or a database without touching the pipeline core.
-
----
+```bash
+pnpm --filter @esl-pipeline/orchestrator test
+pnpm --filter @esl-pipeline/batch-frontend test
+pnpm --filter @esl-pipeline/batch-backend test
+```
 
 ## Troubleshooting
 
-- **`ffmpeg` not found** — install via `brew install ffmpeg`, `sudo apt install ffmpeg`, or `choco install ffmpeg`, then ensure it’s on PATH or set `FFMPEG_PATH`.
-- **Validation fails** — run `pnpm md-validate <file> --strict` to inspect exact Markdown errors. The validator enforces flush-left `:::study-text` blocks and the canonical ESL section order.
-- **Environment missing** — CLI warns when tokens/keys are not set. Use `loadEnvFiles({ assignToProcess: false })` if you want to load env files without polluting `process.env`.
-- **npx command fails** — make sure you invoke the `esl` binary: `npx @esl-pipeline/orchestrator esl --help`.
-- **Node version mismatch** — ensure your environment is running Node ≥ 24.11.1 (`node --version`).
+- ffmpeg not found:
+  install ffmpeg and ensure it is on `PATH`, or set `FFMPEG_PATH`.
+- Env/credentials issues:
+  verify variables in `.env` and `docs/reference/env.md`.
+- Node version mismatch:
+  run Node `>=24.11.1`.
+- Command works in docs but fails locally:
+  run package-local build/test commands first, then retry root command.
 
----
+## Contributing
 
-## Contributing / Release Checklist
+Before opening a PR:
 
-1. Work against Node 24.11.1 (`nvm use 24.11.1` or `.tool-versions`).
-2. Run `pnpm -r build`, `pnpm typecheck`, `pnpm lint`, and `pnpm test`.
-3. When behavior changes:
-   - Update `CHANGELOG.md`.
-   - Update [`docs/reference/agents-ssot.md`](docs/reference/agents-ssot.md) as the canonical contract.
-   - Update `AGENTS.md` and relevant docs in [`docs/backend-frontend/`](docs/backend-frontend/) where relevant.
-4. When ready to ship:
-   - Bump versions manually in `package.json` and any released packages under `packages/*`.
-   - Publish with `pnpm --filter @esl-pipeline/orchestrator publish --access public` if needed.
-   - Tag: `git tag vX.Y.Z && git push origin vX.Y.Z`.
+1. Run `pnpm build && pnpm lint && pnpm test`.
+2. Update docs affected by behavior/status changes.
+3. Keep `docs/reference/agents-ssot.md` consistent with code-level contracts.
+
+## Historical Material
+
+Historical design/planning docs live in `docs/archive/` and are non-authoritative.
+Use active docs first.
