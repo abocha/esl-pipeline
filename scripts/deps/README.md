@@ -9,3 +9,7 @@ Run via root scripts:
 - `pnpm deps:upgrade:safe`
 - `pnpm deps:audit` (report only)
 - `pnpm deps:audit:strict` (non-zero exit on issues)
+
+Reference:
+
+- Orchestrator runtime dependency evidence: `docs/reference/ORCHESTRATOR_DEPENDENCY_AUDIT.md`

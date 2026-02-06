@@ -46,9 +46,6 @@
   "dependencies": {
     "@aws-sdk/client-s3": "^3.940.0",
     "@elevenlabs/elevenlabs-js": "^2.25.0",
-    "@esl-pipeline/anytype-adapter": "workspace:*",
-    "@esl-pipeline/notion-adapter": "workspace:*",
-    "@esl-pipeline/shared-infrastructure": "workspace:*",
     "@notionhq/client": "^5.4.0",
     "commander": "^14.0.2",
     "enquirer": "^2.4.1",
@@ -63,9 +60,12 @@
     "zod": "^4.1.13"
   },
   "devDependencies": {
+    "@esl-pipeline/anytype-adapter": "workspace:*",
     "@esl-pipeline/contracts": "workspace:*",
     "@esl-pipeline/md-validator": "workspace:*",
+    "@esl-pipeline/notion-adapter": "workspace:*",
     "@esl-pipeline/pmd": "workspace:*",
+    "@esl-pipeline/shared-infrastructure": "workspace:*",
     "@esl-pipeline/storage-uploader": "workspace:*",
     "@esl-pipeline/tts-elevenlabs": "workspace:*",
     "@types/node": "^25.2.0",

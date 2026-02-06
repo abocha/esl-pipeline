@@ -358,15 +358,6 @@ importers:
       '@elevenlabs/elevenlabs-js':
         specifier: ^2.25.0
         version: 2.34.0
-      '@esl-pipeline/anytype-adapter':
-        specifier: workspace:*
-        version: link:../anytype-adapter
-      '@esl-pipeline/notion-adapter':
-        specifier: workspace:*
-        version: link:../notion-adapter
-      '@esl-pipeline/shared-infrastructure':
-        specifier: workspace:*
-        version: link:../shared-infrastructure
       '@notionhq/client':
         specifier: ^5.4.0
         version: 5.9.0
@@ -404,15 +395,24 @@ importers:
         specifier: ^4.1.13
         version: 4.3.6
     devDependencies:
+      '@esl-pipeline/anytype-adapter':
+        specifier: workspace:*
+        version: link:../anytype-adapter
       '@esl-pipeline/contracts':
         specifier: workspace:*
         version: link:../contracts
       '@esl-pipeline/md-validator':
         specifier: workspace:*
         version: link:../md-validator
+      '@esl-pipeline/notion-adapter':
+        specifier: workspace:*
+        version: link:../notion-adapter
       '@esl-pipeline/pmd':
         specifier: workspace:*
         version: link:../pmd
+      '@esl-pipeline/shared-infrastructure':
+        specifier: workspace:*
+        version: link:../shared-infrastructure
       '@esl-pipeline/storage-uploader':
         specifier: workspace:*
         version: link:../storage-uploader

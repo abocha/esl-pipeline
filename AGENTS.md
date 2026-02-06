@@ -168,6 +168,7 @@ Notes:
 - Binary: `esl` is the canonical CLI; legacy aliases are removed.
 - We do not bundle ffmpeg; users must install it.
 - For dependency audits, `knip` config lives in `knip.json`; update ignores only when false positives are proven.
+- For `@esl-pipeline/orchestrator`, treat internal `@esl-pipeline/*` packages as build-time (dev) deps unless emitted `dist` imports require runtime resolution. See `docs/reference/ORCHESTRATOR_DEPENDENCY_AUDIT.md`.
 
 ## 8. Repo Admin Workflow (GitHub)
 
