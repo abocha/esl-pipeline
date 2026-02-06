@@ -13,7 +13,7 @@ import {
   runImport,
   type ColorPreset,
 } from '@esl-pipeline/notion-adapter';
-import { uploadFile } from '@esl-pipeline/storage-uploader';
+import { deriveS3UploadAddress, uploadFile } from '@esl-pipeline/storage-uploader';
 import {
   type BuildStudyTextResult,
   FfmpegNotFoundError,
@@ -666,11 +666,13 @@ export async function newAssignment(
         if (flags.dryRun) {
           const bucket = process.env.S3_BUCKET ?? 'stub-bucket';
           const prefix = flags.prefix ?? process.env.S3_PREFIX ?? 'audio/assignments';
-          const normalizedPrefix = prefix.replace(/\/$/, '');
-          const key = normalizedPrefix
-            ? `${normalizedPrefix}/${basename(audio.path)}`
-            : basename(audio.path);
-          audio.url = `https://${bucket}.s3.amazonaws.com/${key}`;
+          const { url } = deriveS3UploadAddress({
+            bucket,
+            keyPrefix: prefix,
+            filePath: audio.path,
+            urlStyle: 'global',
+          });
+          audio.url = url;
         } else {
           const upload = await uploadFile(audio.path, {
             backend: 's3',
@@ -1089,11 +1091,13 @@ export async function rerunAssignment(
       if (flags.dryRun) {
         const bucket = process.env.S3_BUCKET ?? 'stub-bucket';
         const prefix = flags.prefix ?? process.env.S3_PREFIX ?? 'audio/assignments';
-        const normalizedPrefix = prefix.replace(/\/$/, '');
-        const key = normalizedPrefix
-          ? `${normalizedPrefix}/${basename(audioPath)}`
-          : basename(audioPath);
-        audioUrl = `https://${bucket}.s3.amazonaws.com/${key}`;
+        const { url } = deriveS3UploadAddress({
+          bucket,
+          keyPrefix: prefix,
+          filePath: audioPath,
+          urlStyle: 'global',
+        });
+        audioUrl = url;
       } else {
         const upload = await uploadFile(audioPath, {
           backend: 's3',

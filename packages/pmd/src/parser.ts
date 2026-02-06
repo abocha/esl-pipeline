@@ -16,6 +16,7 @@ import type {
   PmdPosition,
   PmdWarning,
 } from './types.js';
+import { normalizeMarkdownSource } from './source.js';
 
 export interface ParseOptions {
   includePositions?: boolean;
@@ -45,50 +46,7 @@ interface MdastNode {
   position?: PmdPosition;
 }
 
-function normalizeNewlines(input: string): string {
-  return input.replaceAll('\r\n', '\n');
-}
-
-function assertFrontmatterAtStart(input: string): void {
-  if (input.startsWith('\uFEFF')) {
-    throw new Error('Frontmatter must start at byte 0 (no BOM).');
-  }
-  if (!input.startsWith('---')) {
-    throw new Error('Expected YAML frontmatter at byte 0 or a legacy fenced block.');
-  }
-}
-
-function extractLegacyFence(input: string): { inner: string } {
-  const lines = input.split('\n');
-  const opener = lines[0] ?? '';
-  if (!opener.startsWith('```')) {
-    throw new Error('Legacy fenced markdown must start with ``` at byte 0.');
-  }
-
-  let closingIndex = -1;
-  for (let i = 1; i < lines.length; i += 1) {
-    if ((lines[i] ?? '').trim() === '```') {
-      closingIndex = i;
-      break;
-    }
-  }
-
-  if (closingIndex === -1) {
-    throw new Error('Legacy fenced markdown must include a closing ``` fence.');
-  }
-
-  const after = lines.slice(closingIndex + 1);
-  const hasExtraContent = after.some((line) => line.trim().length > 0);
-  if (hasExtraContent) {
-    throw new Error('Legacy fenced markdown must not include content outside the fence.');
-  }
-
-  const inner = lines.slice(1, closingIndex).join('\n');
-  return { inner };
-}
-
 function parseFrontmatter(input: string): { frontmatter: Record<string, unknown>; content: string } {
-  assertFrontmatterAtStart(input);
   const parsed = matter(input);
   return { frontmatter: parsed.data as Record<string, unknown>, content: parsed.content };
 }
@@ -285,20 +243,11 @@ function mapBlocks(nodes: MdastNode[], includePositions: boolean): PmdBlock[] {
 export function parsePmdDocument(markdown: string, opts: ParseOptions = {}): PmdDocument {
   const includePositions = opts.includePositions ?? true;
   const warnings: PmdWarning[] = [];
-  const normalized = normalizeNewlines(markdown);
-
-  let source = normalized;
-  let format: 'canonical' | 'legacy-fenced' = 'canonical';
-
-  if (source.startsWith('---')) {
-    // canonical
-  } else if (source.startsWith('```')) {
-    const legacy = extractLegacyFence(source);
-    source = legacy.inner;
-    format = 'legacy-fenced';
+  const normalized = normalizeMarkdownSource(markdown);
+  const source = normalized.source;
+  const format = normalized.format;
+  if (format === 'legacy-fenced') {
     warnings.push({ ...LEGACY_WARNING });
-  } else {
-    assertFrontmatterAtStart(source);
   }
 
   const { frontmatter, content } = parseFrontmatter(source);

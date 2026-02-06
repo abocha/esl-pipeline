@@ -49,10 +49,10 @@ vi.mock('../shared/UploadProgress', () => ({
 
 const now = '2026-02-05T00:00:00.000Z';
 
-function makeRecording(overrides: Record<string, unknown> = {}) {
+function makeRecording(overrides: Partial<api.RecordingListItem> = {}): api.RecordingListItem {
   return {
     recordingId: 'rec-1',
-    status: 'uploaded',
+    status: 'ingested',
     transcriptId: null,
     error: null,
     source: 'upload',
@@ -67,7 +67,9 @@ function makeRecording(overrides: Record<string, unknown> = {}) {
   };
 }
 
-function makeTranscript(overrides: Record<string, unknown> = {}) {
+function makeTranscript(
+  overrides: Partial<api.RecordingTranscriptResponse> = {},
+): api.RecordingTranscriptResponse {
   return {
     recordingId: 'rec-1',
     transcriptId: 'tx-1',

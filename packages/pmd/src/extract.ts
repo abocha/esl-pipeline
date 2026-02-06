@@ -4,71 +4,36 @@ import { ValidationError } from '@esl-pipeline/contracts';
 
 import { parsePmdDocument } from './parser.js';
 import { findDirectiveBlocks } from './query.js';
+import { normalizeMarkdownSource } from './source.js';
 import type { Frontmatter, PmdBlock, PmdDirectiveBlock, PmdDocument, PmdHeading, Section, StudyText } from './types.js';
 
 const NBSP = /\u00A0/g;
 const ZWSP = /\u200B/g;
 const BOM = /^\uFEFF/;
 
-function normalizeNewlines(input: string): string {
-  return input.replaceAll('\r\n', '\n');
-}
-
 function cleanLine(input: string): string {
   return input.replace(BOM, '').replaceAll(NBSP, ' ').replaceAll(ZWSP, '');
 }
 
-function extractLegacyFence(input: string): string {
-  const lines = input.split('\n');
-  const opener = lines[0] ?? '';
-  if (!opener.startsWith('```')) {
-    throw new ValidationError('Legacy fenced markdown must start with ``` at byte 0.');
-  }
-
-  let closingIndex = -1;
-  for (let i = 1; i < lines.length; i += 1) {
-    if ((lines[i] ?? '').trim() === '```') {
-      closingIndex = i;
-      break;
-    }
-  }
-
-  if (closingIndex === -1) {
-    throw new ValidationError('Legacy fenced markdown must include a closing ``` fence.');
-  }
-
-  const after = lines.slice(closingIndex + 1);
-  const hasExtraContent = after.some((line) => line.trim().length > 0);
-  if (hasExtraContent) {
-    throw new ValidationError('Legacy fenced markdown must not include content outside the fence.');
-  }
-
-  return lines.slice(1, closingIndex).join('\n');
-}
-
-function resolveSource(markdown: string): { source: string; format: 'canonical' | 'legacy-fenced' } {
-  const normalized = normalizeNewlines(markdown);
-  if (normalized.startsWith('---')) {
-    return { source: normalized, format: 'canonical' };
-  }
-  if (normalized.startsWith('```')) {
-    return { source: extractLegacyFence(normalized), format: 'legacy-fenced' };
-  }
-  if (normalized.startsWith('\uFEFF')) {
-    throw new ValidationError('Frontmatter must start at byte 0 (no BOM).');
-  }
-  throw new ValidationError('Expected YAML frontmatter at byte 0 or a legacy fenced block.');
-}
 
 function getContentLines(markdown: string): string[] {
-  const { source } = resolveSource(markdown);
+  const { source } = normalizeOrThrow(markdown);
   const parsed = matter(source);
-  return normalizeNewlines(parsed.content).split('\n');
+  return parsed.content.replaceAll('\r\n', '\n').split('\n');
 }
 
 function parseDocument(markdown: string): PmdDocument {
   try {
     return parsePmdDocument(markdown) as PmdDocument;
+  } catch (error: unknown) {
+    const msg = error instanceof Error ? error.message : String(error);
+    throw new ValidationError(msg);
+  }
+}
+
+function normalizeOrThrow(markdown: string): { source: string; format: 'canonical' | 'legacy-fenced' } {
+  try {
+    return normalizeMarkdownSource(markdown);
   } catch (error: unknown) {
     const msg = error instanceof Error ? error.message : String(error);
     throw new ValidationError(msg);
@@ -225,5 +190,4 @@ export function extractSections(md: string): Section[] {
     };
   });
 }
-
 

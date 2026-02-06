@@ -8,6 +8,7 @@ import matter from 'gray-matter';
 
 import { ValidationError, noopLogger } from '@esl-pipeline/contracts';
 import { validateMarkdownFile } from '@esl-pipeline/md-validator';
+import { normalizeMarkdownSource } from '@esl-pipeline/pmd';
 
 import { chunk } from './chunk.js';
 import { createNotionClient } from './client.js';
@@ -31,43 +32,6 @@ interface ValidationSnapshot {
 }
 
 const MAX_BLOCKS_PER_REQUEST = 50;
-
-function extractLegacyFence(input: string): string {
-  const lines = input.split('\n');
-  const opener = lines[0] ?? '';
-  if (!opener.startsWith('```')) {
-    throw new ValidationError('Legacy fenced markdown must start with ``` at byte 0.');
-  }
-
-  let closingIndex = -1;
-  for (let i = 1; i < lines.length; i += 1) {
-    if ((lines[i] ?? '').trim() === '```') {
-      closingIndex = i;
-      break;
-    }
-  }
-
-  if (closingIndex === -1) {
-    throw new ValidationError('Legacy fenced markdown must include a closing ``` fence.');
-  }
-
-  const after = lines.slice(closingIndex + 1);
-  const hasExtraContent = after.some((line) => line.trim().length > 0);
-  if (hasExtraContent) {
-    throw new ValidationError('Legacy fenced markdown must not include content outside the fence.');
-  }
-
-  return lines.slice(1, closingIndex).join('\n');
-}
-
-function resolveSource(input: string): string {
-  if (input.startsWith('---')) return input;
-  if (input.startsWith('```')) return extractLegacyFence(input);
-  if (input.startsWith('\uFEFF')) {
-    throw new ValidationError('Frontmatter must start at byte 0 (no BOM).');
-  }
-  throw new ValidationError('Expected YAML frontmatter at byte 0 or a legacy fenced block.');
-}
 
 export async function runImport(opts: ImportOptions) {
   const rawMd = await readFile(opts.mdPath, 'utf8');
@@ -223,4 +187,13 @@ export async function runImport(opts: ImportOptions) {
     url: 'url' in page && typeof page.url === 'string' ? page.url : undefined,
     studentLinked: Boolean(studentPageId),
   };
+}
+
+function resolveSource(input: string): string {
+  try {
+    return normalizeMarkdownSource(input).source;
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : String(error);
+    throw new ValidationError(message);
+  }
 }

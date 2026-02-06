@@ -348,6 +348,9 @@ importers:
       '@esl-pipeline/md-validator':
         specifier: workspace:*
         version: link:../md-validator
+      '@esl-pipeline/pmd':
+        specifier: workspace:*
+        version: link:../pmd
       '@notionhq/client':
         specifier: ^5.4.0
         version: 5.9.0

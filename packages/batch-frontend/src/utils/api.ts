@@ -27,6 +27,7 @@ import type {
   JobEventPayload as ContractJobEventPayload,
   JobEventType as ContractJobEventType,
   JobConfigOverrides as ContractJobConfigOverrides,
+  JobOptionsPayload as ContractJobOptionsPayload,
   JobListResponse as ContractJobListResponse,
   JobState as ContractJobState,
   JobSummaryResponse as ContractJobSummaryResponse,
@@ -39,6 +40,7 @@ import type {
   JobActionRequest,
   StreamEventMessage,
   JobStatusDto,
+  VoiceOption as ContractVoiceOption,
 } from '@esl-pipeline/contracts';
 
 import apiClient, {
@@ -421,21 +423,15 @@ export interface ErrorEnvelope {
 }
 
 export interface JobOptionsResponse {
-  presets: string[];
-  voiceAccents: string[];
-  voices: VoiceOption[];
-  notionDatabases: { id: string; name: string }[];
-  ttsStrategies: TtsStrategy[];
+  presets: ContractJobOptionsPayload['presets'];
+  voiceAccents: ContractJobOptionsPayload['voiceAccents'];
+  voices: ContractJobOptionsPayload['voices'];
+  notionDatabases: ContractJobOptionsPayload['notionDatabases'];
+  ttsStrategies: ContractJobOptionsPayload['ttsStrategies'];
   supportedActions?: ActionCapability[];
 }
 
-export interface VoiceOption {
-  id: string;
-  name: string;
-  accent?: string | null;
-  gender?: string | null;
-  category?: string | null;
-}
+export type VoiceOption = ContractVoiceOption;
 
 export async function listUserJobs(params: {
   state?: JobState | JobState[];

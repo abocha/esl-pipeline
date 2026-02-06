@@ -1,11 +1,35 @@
 export type JobState = 'queued' | 'running' | 'awaiting_approval' | 'succeeded' | 'failed';
 
 export type TtsStrategy = 'auto' | 'dialogue' | 'tts';
+export type TtsStrategyOption = TtsStrategy;
 
 export type JobUploadOption = 'auto' | 's3' | 'none';
+export type UploadOption = JobUploadOption;
 export type PublishTarget = 'notion' | 'anytype';
 
 export type RecordingStatus = 'ingested' | 'queued' | 'transcribing' | 'transcribed' | 'failed';
+
+export interface NotionDatabaseOption {
+  id: string;
+  name: string;
+}
+
+export interface VoiceOption {
+  id: string;
+  name: string;
+  accent?: string | null;
+  gender?: string | null;
+  category?: string | null;
+}
+
+export interface JobOptionsPayload {
+  presets: string[];
+  voiceAccents: string[];
+  voices: VoiceOption[];
+  notionDatabases: NotionDatabaseOption[];
+  uploadOptions: UploadOption[];
+  ttsStrategies: TtsStrategyOption[];
+}
 
 export interface SubmitJobRequest {
   md: string;
@@ -152,7 +176,6 @@ export interface RecordingEventMessage {
 
 export type StreamEventMessage = JobEventMessage | RecordingEventMessage;
 
-// Job actions exports
 // Job actions exports
 export * from './job-actions.js';
 export * from './errors.js';

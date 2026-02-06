@@ -2,16 +2,21 @@
 //
 // Domain model for job actions (rerun, cancel, metadata edit)
 // Defines action types, payloads, and result interfaces
-import type { JobConfigOverrides } from '@esl-pipeline/contracts';
+import {
+  JobActionType,
+  type JobActionRequest,
+  type JobActionResponse,
+  type JobConfigOverrides,
+} from '@esl-pipeline/contracts';
 
-/**
- * Supported job action types
- */
-export enum JobActionType {
-  RERUN_AUDIO = 'rerun_audio',
-  CANCEL = 'cancel',
-  EDIT_METADATA = 'edit_metadata',
-}
+export { JobActionType };
+
+type RerunAudioPayload = NonNullable<
+  Extract<JobActionRequest, { type: JobActionType.RERUN_AUDIO }>['payload']
+>;
+type CancelPayload = NonNullable<
+  Extract<JobActionRequest, { type: JobActionType.CANCEL }>['payload']
+>;
 
 /**
  * Base action interface
@@ -27,11 +32,7 @@ export interface JobAction {
  */
 export interface RerunAudioAction extends JobAction {
   type: JobActionType.RERUN_AUDIO;
-  payload: {
-    forceTts?: boolean;
-    voiceId?: string;
-    voiceAccent?: string;
-  };
+  payload: RerunAudioPayload;
 }
 
 /**
@@ -39,9 +40,7 @@ export interface RerunAudioAction extends JobAction {
  */
 export interface CancelJobAction extends JobAction {
   type: JobActionType.CANCEL;
-  payload: {
-    reason?: string;
-  };
+  payload: CancelPayload;
 }
 
 /**
@@ -61,10 +60,10 @@ export type AnyJobAction = RerunAudioAction | CancelJobAction | EditMetadataActi
  * Result of executing a job action
  */
 export interface JobActionResult {
-  success: boolean;
-  message: string;
-  jobId: string;
+  success: JobActionResponse['success'];
+  message: JobActionResponse['message'];
+  jobId: JobActionResponse['jobId'];
   actionType: JobActionType;
   timestamp: Date;
-  error?: string;
+  error?: JobActionResponse['error'];
 }

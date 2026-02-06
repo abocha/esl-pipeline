@@ -32,6 +32,10 @@ vi.mock('@esl-pipeline/tts-elevenlabs', async () => {
 });
 
 vi.mock('@esl-pipeline/storage-uploader', () => ({
+  deriveS3UploadAddress: vi.fn().mockReturnValue({
+    key: 'audio/file.mp3',
+    url: 'https://s3.amazonaws.com/audio/file.mp3',
+  }),
   uploadFile: vi
     .fn()
     .mockResolvedValue({ url: 'https://s3.amazonaws.com/audio/file.mp3', key: 'audio/file.mp3' }),

@@ -1,6 +1,5 @@
 import { PutObjectCommand, S3Client } from '@aws-sdk/client-s3';
 import { readFile, stat } from 'node:fs/promises';
-import { basename } from 'node:path';
 
 import {
   ConfigurationError,
@@ -8,6 +7,8 @@ import {
   noopLogger,
   type PipelineLogger,
 } from '@esl-pipeline/contracts';
+
+import { deriveS3UploadAddress } from './address.js';
 
 interface S3ErrorShape {
   Code?: string;
@@ -78,10 +79,12 @@ export async function uploadToS3(
 
   const s3 = getS3Client(region);
   const fileContent = await readFile(localPath);
-  const normalizedPrefix = keyPrefix
-    ? keyPrefix.replace(/^[\/\\]+/, '').replace(/[\/\\]+$/, '')
-    : '';
-  const key = normalizedPrefix ? `${normalizedPrefix}/${basename(localPath)}` : basename(localPath);
+  const { key, url } = deriveS3UploadAddress({
+    bucket,
+    region,
+    keyPrefix,
+    filePath: localPath,
+  });
   const normalizedPath = localPath.toLowerCase();
   const contentType = normalizedPath.endsWith('.mp3')
     ? 'audio/mpeg'
@@ -120,7 +123,6 @@ export async function uploadToS3(
     try {
       const put = new PutObjectCommand({ ...base, ACL: 'public-read' });
       const res = await s3.send(put);
-      const url = `https://${bucket}.s3.${region}.amazonaws.com/${key}`;
       return { url, key, etag: res.ETag };
     } catch (error: unknown) {
       if (!isAclNotSupported(error)) throw error;
@@ -138,6 +140,5 @@ export async function uploadToS3(
   // No ACL path (recommended with ACLs disabled)
   const putNoAcl = new PutObjectCommand(base);
   const res = await s3.send(putNoAcl);
-  const url = `https://${bucket}.s3.${region}.amazonaws.com/${key}`;
   return { url, key, etag: res.ETag };
 }
