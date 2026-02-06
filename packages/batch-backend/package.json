@@ -15,7 +15,7 @@
     "start:api": "node dist/transport/http-server.js",
     "start:worker": "node dist/transport/worker-runner.js",
     "test": "vitest run --config ../../vitest.config.ts --dir ../../packages/batch-backend/tests --reporter=dot",
-    "test:verbose": "vitest run --config ../../vitest.config.ts --dir ../../packages/batch-backend/tests --reporter=verbose",
+    "test:verbose": "BATCH_BACKEND_TEST_LOG_LEVEL=debug vitest run --config ../../vitest.config.ts --dir ../../packages/batch-backend/tests --reporter=verbose",
     "test:watch": "vitest watch --config ../../vitest.config.ts --dir ../../packages/batch-backend/tests",
     "typecheck": "tsc --noEmit"
   },
