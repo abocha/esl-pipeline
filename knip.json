@@ -3,7 +3,6 @@
   "entry": ["eslint.config.js", "vitest.config.ts", "scripts/**/*.mjs"],
   "project": ["scripts/**/*.mjs"],
   "ignoreDependencies": [
-    "@aws-sdk/s3-request-presigner",
     "@elevenlabs/elevenlabs-js",
     "@notionhq/client",
     "gray-matter",
