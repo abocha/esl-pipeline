@@ -9,7 +9,7 @@ import {
   type JobConfigOverrides,
 } from '@esl-pipeline/contracts';
 
-export { JobActionType };
+export { JobActionType } from '@esl-pipeline/contracts';
 
 type RerunAudioPayload = NonNullable<
   Extract<JobActionRequest, { type: JobActionType.RERUN_AUDIO }>['payload']

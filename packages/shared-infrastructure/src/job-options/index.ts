@@ -53,12 +53,12 @@ export function resolveNotionDatabasesFromEnv(
 }
 
 export interface VoiceCatalogLike {
-  voices?: Array<{
+  voices?: {
     id?: unknown;
     name?: unknown;
     category?: unknown;
     labels?: Record<string, unknown> | null;
-  }>;
+  }[];
 }
 
 export function normalizeVoiceCatalogToOptions(catalog: VoiceCatalogLike | undefined): {
@@ -98,4 +98,3 @@ function normalizeToken(value: unknown): string | undefined {
   if (!trimmed) return undefined;
   return trimmed.toLowerCase().replaceAll(/\s+/g, '_');
 }
-

@@ -94,7 +94,7 @@ describe('App', () => {
 
   it('logs out and shows a success toast', async () => {
     const user = userEvent.setup();
-    const logout = vi.fn().mockResolvedValue(undefined);
+    const logout = vi.fn(async () => {});
     useAuthMock.mockReturnValue(
       createAuthState({
         user: {
