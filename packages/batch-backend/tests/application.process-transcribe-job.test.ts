@@ -304,6 +304,9 @@ function createConfig(): BatchBackendConfig {
       templatePath: '',
       defaultProfilePath: '',
     },
+    drafts: {
+      localExport: false,
+    },
     experimental: {
       extendedApiEnabled: false,
     },

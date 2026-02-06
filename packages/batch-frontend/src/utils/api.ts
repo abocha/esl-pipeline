@@ -22,6 +22,7 @@
  * - GET /user/profile, /user/files (authenticated)
  */
 import { type AxiosError, type AxiosProgressEvent, isAxiosError } from 'axios';
+import { JobActionType } from '@esl-pipeline/contracts';
 
 import type {
   ActionCapability,
@@ -1131,7 +1132,7 @@ export async function editJobMetadata(
     const response = await apiClient.post(
       buildApiProxyPath(`/jobs/${encodeURIComponent(jobId)}/actions`),
       {
-        type: 'edit_metadata',
+        type: JobActionType.EDIT_METADATA,
         payload: sanitizeJobOverrides(overrides),
       },
     );
@@ -1169,7 +1170,7 @@ export async function rerunAudioJob(
   payload?: RerunAudioPayload,
 ): Promise<JobActionResponse> {
   return submitJobAction(jobId, {
-    type: 'rerun_audio',
+    type: JobActionType.RERUN_AUDIO,
     payload,
   });
 }
@@ -1179,7 +1180,7 @@ export async function cancelJob(
   payload?: CancelJobPayload,
 ): Promise<JobActionResponse> {
   return submitJobAction(jobId, {
-    type: 'cancel',
+    type: JobActionType.CANCEL,
     payload,
   });
 }
