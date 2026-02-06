@@ -161,6 +161,8 @@ describe('cli (commander parsing)', () => {
       '120',
       '--accent',
       'american',
+      '--voice-id',
+      'voice-123',
       '--voices',
       'voices.yml',
       '--out',
@@ -197,6 +199,7 @@ describe('cli (commander parsing)', () => {
         upload: 's3',
         presign: 120,
         accentPreference: 'american',
+        voiceId: 'voice-123',
         voices: 'voices.yml',
         out: 'out',
         publicRead: true,
@@ -204,6 +207,60 @@ describe('cli (commander parsing)', () => {
         dialogueLanguage: 'es',
         dialogueStability: 0.42,
         dialogueSeed: 7,
+      }),
+    );
+  });
+
+  it('maps --audio to full rerun steps and applies default upload', async () => {
+    const mdPath = resolve('lesson.md');
+    process.argv = ['node', 'cli', 'rerun', '--md', mdPath, '--audio', '--json'];
+
+    pipelineMock.rerunAssignment.mockResolvedValue({
+      steps: ['tts', 'upload', 'add-audio'],
+      manifestPath: '/tmp/manifest.json',
+    });
+    pipelineMock.getAssignmentStatus.mockResolvedValue({
+      manifestPath: '/tmp/manifest.json',
+      manifest: null,
+      mdHashMatches: true,
+      audioFileExists: true,
+    });
+
+    await importCli();
+
+    expect(pipelineMock.rerunAssignment).toHaveBeenCalledWith(
+      expect.objectContaining({
+        md: mdPath,
+        steps: ['tts', 'upload', 'add-audio'],
+        upload: 's3',
+        voices: pipelineMock.defaults.voicesPath,
+        out: pipelineMock.defaults.outDir,
+      }),
+    );
+  });
+
+  it('applies default upload for implicit rerun steps', async () => {
+    const mdPath = resolve('lesson.md');
+    process.argv = ['node', 'cli', 'rerun', '--md', mdPath, '--json'];
+
+    pipelineMock.rerunAssignment.mockResolvedValue({
+      steps: ['upload', 'add-audio'],
+      manifestPath: '/tmp/manifest.json',
+    });
+    pipelineMock.getAssignmentStatus.mockResolvedValue({
+      manifestPath: '/tmp/manifest.json',
+      manifest: null,
+      mdHashMatches: true,
+      audioFileExists: true,
+    });
+
+    await importCli();
+
+    expect(pipelineMock.rerunAssignment).toHaveBeenCalledWith(
+      expect.objectContaining({
+        md: mdPath,
+        steps: ['upload', 'add-audio'],
+        upload: 's3',
       }),
     );
   });

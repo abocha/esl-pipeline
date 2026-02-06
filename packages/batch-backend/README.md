@@ -356,13 +356,13 @@ Side effects:
 ## Extended API (experimental)
 
 When `BATCH_BACKEND_ENABLE_EXTENDED_API=true`, authenticated endpoints are enabled in `transport/extended-routes.ts`.
-See [`docs/batch-backend-ssot.md`](docs/batch-backend-ssot.md) for the canonical list. Key additions used by the batch UI:
+See [`docs/backend-frontend/batch-backend-ssot.md`](docs/backend-frontend/batch-backend-ssot.md) for the canonical list. Key additions used by the batch UI:
 
 - `GET /recordings/:id/audio` (Range support for playback)
 - `POST /validation/markdown` (returns warnings/errors/meta)
 - `GET /students/summary` (dashboard aggregation)
 - `GET /user/jobs` and `GET /user/jobs/summary`
-- `POST /jobs/:jobId/actions` (`edit_metadata` implemented)
+- `POST /jobs/:jobId/actions` (`edit_metadata`, `rerun_audio`, and best-effort `cancel` implemented)
 - `POST /drafts/:id/materialize` (optional `jobOverrides`)
 
 ---

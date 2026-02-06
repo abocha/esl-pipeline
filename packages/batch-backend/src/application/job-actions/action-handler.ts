@@ -56,13 +56,13 @@ export function getActionMetadata(): Record<JobActionType, ActionMetadata> {
       label: 'Rerun Audio Generation',
       description: 'Regenerate TTS audio for this job with optional voice/TTS overrides',
       requiresFields: [],
-      implemented: false, // Stub only
+      implemented: true,
     },
     cancel: {
       label: 'Cancel Job',
       description: 'Cancel a queued or running job',
       requiresFields: [],
-      implemented: false, // Stub only
+      implemented: true,
     },
     edit_metadata: {
       label: 'Edit Job Metadata',

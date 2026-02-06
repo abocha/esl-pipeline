@@ -53,14 +53,14 @@ describe('application/get-job-options', () => {
           label: 'Rerun Audio Generation',
           description: 'Regenerate TTS audio for this job with optional voice/TTS overrides',
           requiresFields: [],
-          implemented: false,
+          implemented: true,
         },
         {
           type: 'cancel',
           label: 'Cancel Job',
           description: 'Cancel a queued or running job',
           requiresFields: [],
-          implemented: false,
+          implemented: true,
         },
         {
           type: 'edit_metadata',

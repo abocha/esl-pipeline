@@ -391,7 +391,7 @@ Notes:
 
 - `/jobs/:jobId/status` is maintained as a backwards-compatible alias that hits the identical handler.
 - No authentication is enforced by default; deploy behind trusted ingress as stated in §8. Additional endpoints that require authentication stay disabled unless `BATCH_BACKEND_ENABLE_EXTENDED_API=true`.
-- Job actions are exposed via `POST /jobs/:jobId/actions` (extended API). `edit_metadata` accepts `JobConfigOverrides` and is only allowed when the job is `awaiting_approval`; other actions may return `501` until implemented.
+- Job actions are exposed via `POST /jobs/:jobId/actions` (extended API). `edit_metadata` accepts `JobConfigOverrides` and is only allowed when the job is `awaiting_approval`. `rerun_audio` is implemented as an async queued action for `succeeded` jobs. `cancel` is implemented for `queued` and `running` jobs as best-effort cancellation (`queued` job removal + state cancellation guard for in-flight work).
 
 ### 5.4 Worker Processing
 

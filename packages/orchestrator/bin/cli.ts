@@ -111,7 +111,7 @@ const usage = (): never => {
       --json                    Emit structured JSON log output
 
   esl status --md <file.md> [--json]                  
-  esl rerun --md <file.md> [--steps tts,upload,add-audio] [options]
+  esl rerun --md <file.md> [--steps tts,upload,add-audio|--audio] [options]
 
   esl select [path] [--dir|--file] [picker options]
       --suffix <.d>             (dir) Require directory name to end with suffix
@@ -696,11 +696,13 @@ const parseStatusFlags = async (args: string[]): Promise<{ md: string }> => {
 
 const parseRerunFlags = async (args: string[]): Promise<RerunFlags> => {
   const program = new Command('rerun')
-    .usage('--md <file.md> [--steps tts,upload,add-audio] [options]')
+    .usage('--md <file.md> [--steps tts,upload,add-audio|--audio] [options]')
     .allowExcessArguments(false)
     .requiredOption('--md <file>', 'Markdown assignment file')
     .option('--steps <steps>', 'Comma-separated steps (tts,upload,add-audio)', parseRerunSteps)
+    .option('--audio', 'Rerun the full audio pipeline (tts,upload,add-audio)')
     .option('--voices <file>', 'Voice map file (YAML/JSON)')
+    .option('--voice-id <id>', 'Preferred voice ID override')
     .option('--out <dir>', 'Output directory for artifacts')
     .option('--force', 'Force overwrite existing artifacts')
     .option('--dry-run', 'Skip writes to remote services')
@@ -735,6 +737,8 @@ const parseRerunFlags = async (args: string[]): Promise<RerunFlags> => {
   const opts = parsed.opts<
     RerunFlags & {
       steps?: RerunStep[];
+      audio?: boolean;
+      voiceId?: string;
       accent?: string;
       ttsStrategy?: RerunFlags['ttsStrategy'];
       dialogueLanguage?: string;
@@ -743,10 +747,18 @@ const parseRerunFlags = async (args: string[]): Promise<RerunFlags> => {
     }
   >();
 
+  const resolvedSteps =
+    opts.steps && opts.steps.length > 0
+      ? opts.steps
+      : opts.audio
+        ? (['tts', 'upload', 'add-audio'] as RerunStep[])
+        : undefined;
+
   return {
     md: opts.md,
-    steps: opts.steps && opts.steps.length > 0 ? opts.steps : undefined,
+    steps: resolvedSteps,
     voices: opts.voices,
+    voiceId: opts.voiceId,
     out: opts.out,
     force: Boolean(opts.force),
     dryRun: Boolean(opts.dryRun),
@@ -774,7 +786,7 @@ async function handleStatus(args: string[]): Promise<void> {
 
 async function handleRerun(args: string[]): Promise<void> {
   const rerunFlags = await parseRerunFlags(args);
-  const { md, steps } = rerunFlags;
+  const { md } = rerunFlags;
   const pipeline = ensurePipeline();
 
   const appliedFlags: RerunFlags = {
@@ -782,13 +794,21 @@ async function handleRerun(args: string[]): Promise<void> {
     voices: rerunFlags.voices ?? pipeline.defaults.voicesPath,
     out: rerunFlags.out ?? pipeline.defaults.outDir,
   };
+  const resolvedSteps =
+    appliedFlags.steps && appliedFlags.steps.length > 0
+      ? appliedFlags.steps
+      : (['upload', 'add-audio'] as RerunStep[]);
+  appliedFlags.steps = resolvedSteps;
+  if (resolvedSteps.includes('upload') && !appliedFlags.upload) {
+    appliedFlags.upload = 's3';
+  }
 
   logger.info('Rerunning pipeline steps', {
     md,
-    steps: steps ?? ['upload', 'add-audio'],
+    steps: resolvedSteps,
   });
 
-  const result = await pipeline.rerunAssignment(rerunFlags);
+  const result = await pipeline.rerunAssignment(appliedFlags);
   logger.success('Rerun completed', { steps: result.steps });
 
   if (!jsonOutput) {
