@@ -50,14 +50,14 @@
 | Student summary/list/profile routes                                                        | Done    | Partial  | Student routes                                | Expand UI usage only as needed by minimal workflow. |
 | Profile content routes                                                                     | Done    | Partial  | Profile routes                                | Same as above.                                      |
 | Job actions: `edit_metadata`                                                               | Done    | Partial  | Job action route and handler                  | Expose only where workflow needs it.                |
-| Job actions: `rerun_audio`                                                                 | Done    | Pending  | Job action contract                           | Expose UI flow and action controls.                 |
-| Job actions: `cancel`                                                                      | Done    | Pending  | Job action contract                           | Expose UI action; backend now applies best-effort cancellation semantics. |
+| Job actions: `rerun_audio`                                                                 | Done    | Done     | Job action contract                           | Maintain payload parity as backend adds rerun knobs. |
+| Job actions: `cancel`                                                                      | Done    | Done     | Job action contract                           | Keep terminal-state UX and best-effort semantics explicit. |
 
 ## Open Blockers
 
 1. SSE resilience remains partly dependent on polling fallback behavior in UI.
-2. Frontend does not yet expose full `rerun_audio` controls.
-3. Frontend does not yet expose `cancel` controls.
+2. Frontend currently keeps `edit_metadata` as a partial/operator path (not broad UX exposure).
+3. No hard-stop cancellation exists; running cancel remains best-effort by design.
 
 ## Do / Don't
 
