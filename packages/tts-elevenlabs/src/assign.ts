@@ -30,7 +30,7 @@ export interface PickedVoice {
 let cachedCatalog: VoiceCatalog | null = null;
 
 export async function loadVoicesCatalog(
-  file = 'configs/elevenlabs.voices.json',
+  file = 'packages/orchestrator/configs/elevenlabs.voices.json',
 ): Promise<VoiceCatalog> {
   if (cachedCatalog) return cachedCatalog;
 

@@ -20,7 +20,7 @@ The wizard will:
 - **Configure upload settings** (S3 prefix, presigned URLs, public read)
 - **Execute the pipeline** with visual progress spinners
 
-All your selections are automatically saved to `configs/wizard.defaults.json` for the next run, making subsequent executions even faster.
+All your selections are automatically saved to `packages/orchestrator/configs/wizard.defaults.json` for the next run, making subsequent executions even faster.
 
 ## Prerequisites
 
@@ -67,15 +67,15 @@ pnpm esl --interactive
 **What happens:**
 
 1. You select a markdown file (or provide `--md` to skip this step)
-2. The wizard loads student profiles from `configs/students/`
-3. Saved defaults from `configs/wizard.defaults.json` are applied
+2. The wizard loads student profiles from `packages/orchestrator/configs/students/`
+3. Saved defaults from `packages/orchestrator/configs/wizard.defaults.json` are applied
 4. You're prompted for missing settings (preset, TTS mode, upload options, etc.)
 5. The pipeline executes with real-time progress feedback
 6. Your selections are saved for next time
 
 ### Managing Saved Defaults
 
-The wizard automatically persists your choices to `configs/wizard.defaults.json`. You can:
+The wizard automatically persists your choices to `packages/orchestrator/configs/wizard.defaults.json`. You can:
 
 - **Review saved settings** at the start of each wizard run
 - **Update defaults** by choosing "Update and continue"
@@ -84,14 +84,15 @@ The wizard automatically persists your choices to `configs/wizard.defaults.json`
 
 ### Student Profiles
 
-Place student-specific configurations in `configs/students/*.yml`:
+Place student-specific configurations in `packages/orchestrator/configs/students/*.json`:
 
-```yaml
-# configs/students/alex.yml
-student: alex
-dbId: abc123...
-colorPreset: b1-default
-accentPreference: american
+```json
+{
+  "student": "alex",
+  "dbId": "abc123...",
+  "colorPreset": "b1-default",
+  "accentPreference": "american"
+}
 ```
 
 When you select a student in the wizard, their settings are automatically applied.
@@ -232,15 +233,15 @@ See `examples/service/` for a complete Fastify-based HTTP worker example.
 The orchestrator looks for configuration in these locations:
 
 ```
-<cwd>/configs/          # User-provided config (highest priority)
-<dist>/configs/         # Bundled defaults (fallback)
+packages/orchestrator/configs/  # Package-scoped defaults in this repo
+<dist>/configs/         # Bundled defaults for published package
 ```
 
 **Configuration files:**
 
-- `presets/*.yml`: Notion color presets
-- `voices/*.yml`: ElevenLabs voice configurations
-- `students/*.yml`: Student profiles
+- `presets.json`: Notion color presets
+- `voices.yml`: ElevenLabs voice configurations
+- `students/*.json`: Student profiles
 - `wizard.defaults.json`: Saved wizard preferences
 
 ### Manifest System

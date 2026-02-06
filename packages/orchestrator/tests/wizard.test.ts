@@ -66,7 +66,7 @@ describe('interactive wizard persistence', () => {
   beforeEach(async () => {
     promptQueue.length = 0;
     cwd = await mkdtemp(join(tmpdir(), 'wizard-'));
-    defaultsPath = join(cwd, 'configs', 'wizard.defaults.json');
+    defaultsPath = join(cwd, 'packages', 'orchestrator', 'configs', 'wizard.defaults.json');
     mdPath = join(cwd, 'lesson.md');
     cleanupDir = cwd;
     await writeFile(
@@ -168,7 +168,7 @@ Content
 
   it('restores saved withTts: true when no CLI override is provided', async () => {
     // Seed saved defaults directly to avoid exercising the interactive settings menu here.
-    await mkdir(join(cwd, 'configs'), { recursive: true });
+    await mkdir(join(cwd, 'packages', 'orchestrator', 'configs'), { recursive: true });
     await writeFile(
       defaultsPath,
       JSON.stringify(
@@ -199,7 +199,7 @@ Content
 
   it('allows explicit CLI withTts override to win over saved default', async () => {
     // Ensure the defaults directory exists before writing (mirrors saveWizardDefaults behavior).
-    await mkdir(join(cwd, 'configs'), { recursive: true });
+    await mkdir(join(cwd, 'packages', 'orchestrator', 'configs'), { recursive: true });
 
     // Seed defaults with withTts: false
     await writeFile(

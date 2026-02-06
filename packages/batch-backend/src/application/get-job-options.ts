@@ -9,8 +9,6 @@ import type {
   ActionCapability,
   JobOptionsPayload,
   NotionDatabaseOption,
-  TtsStrategyOption,
-  UploadOption,
   VoiceOption,
 } from '@esl-pipeline/contracts';
 import {
@@ -105,7 +103,7 @@ function resolveNotionDatabases(): NotionDatabaseOption[] {
   });
 }
 
-const VOICE_CATALOG_RELATIVE_PATH = 'configs/elevenlabs.voices.json';
+const VOICE_CATALOG_RELATIVE_PATH = 'packages/orchestrator/configs/elevenlabs.voices.json';
 
 async function loadVoiceOptions(): Promise<VoiceOption[]> {
   const candidates = getVoiceCatalogCandidates();

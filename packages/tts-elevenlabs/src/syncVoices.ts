@@ -11,7 +11,7 @@ interface VoiceRow {
   preview_url?: string | null;
 }
 
-export async function syncVoices(outPath = 'configs/elevenlabs.voices.json') {
+export async function syncVoices(outPath = 'packages/orchestrator/configs/elevenlabs.voices.json') {
   const client = getElevenClient();
   // SDK: voices.getAll() returns list of voices the key can use
   const list = (await client.voices.getAll()) as unknown;
