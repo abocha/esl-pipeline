@@ -2,6 +2,7 @@
 import type { PipelineLogger } from '@esl-pipeline/contracts';
 import { ConfigurationError } from '@esl-pipeline/contracts';
 
+import { sanitizeS3KeyPrefix } from './address.js';
 import { uploadToS3 } from './s3.js';
 
 export interface UploadOpts {
@@ -34,9 +35,7 @@ export async function uploadFile(
     throw new ConfigurationError('S3 bucket not configured (set S3_BUCKET or pass opts.bucket)');
 
   // Pass only a key prefix; s3.ts builds "<prefix>/<filename>" itself
-  const keyPrefix = (opts.prefix ?? process.env.S3_PREFIX ?? '')
-    .replace(/^\//, '')
-    .replace(/\/+$/, '');
+  const keyPrefix = sanitizeS3KeyPrefix(opts.prefix ?? process.env.S3_PREFIX ?? '');
 
   return uploadToS3(localPath, {
     bucket,

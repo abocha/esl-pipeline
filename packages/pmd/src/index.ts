@@ -23,6 +23,8 @@ export type {
 
 export type { ParseOptions } from './parser.js';
 export { parsePmdDocument, parsePmdFromFile } from './parser.js';
+export type { MarkdownSourceFormat, NormalizedMarkdownSource } from './source.js';
+export { normalizeMarkdownSource } from './source.js';
 export { findDirectiveBlocks } from './query.js';
 export {
   extractAnswerKey,

@@ -1,32 +1,26 @@
-import { type VoiceCatalog, loadVoicesCatalog } from '@esl-pipeline/tts-elevenlabs';
+import type {
+  JobOptionsPayload,
+  NotionDatabaseOption,
+  TtsStrategyOption,
+  UploadOption,
+  VoiceOption,
+} from '@esl-pipeline/contracts';
+import {
+  normalizeVoiceCatalogToOptions,
+  resolveNotionDatabasesFromEnv as resolveNotionDatabasesFromEnvShared,
+} from '@esl-pipeline/shared-infrastructure';
+import { loadVoicesCatalog } from '@esl-pipeline/tts-elevenlabs';
 
 import type { ConfigProvider, StudentProfile } from '../config.js';
 import type { OrchestratorPipeline, ResolvedConfigPaths } from '../pipeline.js';
 
-export type UploadOption = 'auto' | 's3' | 'none';
-export type TtsStrategyOption = 'auto' | 'dialogue' | 'tts';
-
-export interface NotionDatabaseOption {
-  id: string;
-  name: string;
-}
-
-export interface VoiceOption {
-  id: string;
-  name: string;
-  accent?: string | null;
-  gender?: string | null;
-  category?: string | null;
-}
-
-export interface JobOptionsPayload {
-  presets: string[];
-  voiceAccents: string[];
-  voices: VoiceOption[];
-  notionDatabases: NotionDatabaseOption[];
-  uploadOptions: UploadOption[];
-  ttsStrategies: TtsStrategyOption[];
-}
+export type {
+  JobOptionsPayload,
+  NotionDatabaseOption,
+  TtsStrategyOption,
+  UploadOption,
+  VoiceOption,
+};
 
 type ResolveJobOptionsSource =
   | Pick<OrchestratorPipeline, 'configProvider' | 'configPaths'>
@@ -54,8 +48,10 @@ export async function resolveJobOptions(
   const notionDatabases =
     notionDatabasesFromProfiles.length > 0
       ? notionDatabasesFromProfiles
-      : resolveNotionDatabasesFromEnv();
-  const { voices, voiceAccents } = normalizeVoiceCatalog(voiceCatalog);
+      : resolveNotionDatabasesFromEnvShared({
+          singleDbId: process.env.NOTION_DATABASE_ID?.trim() || process.env.NOTION_DB_ID?.trim(),
+        });
+  const { voices, voiceAccents } = normalizeVoiceCatalogToOptions(voiceCatalog);
 
   return {
     presets,
@@ -84,81 +80,4 @@ function extractNotionDatabases(profiles: StudentProfile[]): NotionDatabaseOptio
   }
 
   return options.sort((a, b) => a.name.localeCompare(b.name));
-}
-
-function resolveNotionDatabasesFromEnv(): NotionDatabaseOption[] {
-  const rawList = process.env.NOTION_DB_OPTIONS;
-  if (rawList) {
-    const parsed = rawList
-      .split(',')
-      .map((entry) => entry.trim())
-      .filter(Boolean)
-      .map((entry) => {
-        const [idPart, ...nameParts] = entry.split(':');
-        const id = idPart?.trim();
-        if (!id) {
-          return null;
-        }
-        const name = nameParts.length > 0 ? nameParts.join(':').trim() : undefined;
-        return {
-          id,
-          name: name && name.length > 0 ? name : id,
-        };
-      })
-      .filter((option): option is NotionDatabaseOption => option !== null);
-
-    if (parsed.length > 0) {
-      return parsed;
-    }
-  }
-
-  const singleDbId =
-    process.env.NOTION_DATABASE_ID?.trim() || process.env.NOTION_DB_ID?.trim() || null;
-  if (singleDbId) {
-    const singleName =
-      process.env.NOTION_DB_NAME?.trim() ||
-      process.env.NOTION_DB_LABEL?.trim() ||
-      'Primary database';
-    return [{ id: singleDbId, name: singleName }];
-  }
-
-  return [];
-}
-
-function normalizeVoiceCatalog(catalog: VoiceCatalog | undefined): {
-  voices: VoiceOption[];
-  voiceAccents: string[];
-} {
-  const voices: VoiceOption[] = [];
-  if (catalog?.voices && Array.isArray(catalog.voices)) {
-    for (const voice of catalog.voices) {
-      const id = typeof voice.id === 'string' ? voice.id : undefined;
-      const name = typeof voice.name === 'string' ? voice.name : undefined;
-      if (!id || !name) continue;
-      const accent = normalizeToken(voice.labels?.accent);
-      const gender = normalizeToken(voice.labels?.gender);
-      const accentToken = accent && gender ? `${accent}_${gender}` : accent;
-      voices.push({
-        id,
-        name,
-        category: typeof voice.category === 'string' ? voice.category : null,
-        accent: accentToken ?? null,
-        gender: gender ?? null,
-      });
-    }
-  }
-
-  voices.sort((a, b) => a.name.localeCompare(b.name));
-  const voiceAccents = [
-    ...new Set(voices.map((voice) => (voice.accent ? voice.accent.trim() : '')).filter(Boolean)),
-  ];
-
-  return { voices, voiceAccents };
-}
-
-function normalizeToken(value: unknown): string | undefined {
-  if (typeof value !== 'string') return undefined;
-  const trimmed = value.trim();
-  if (!trimmed) return undefined;
-  return trimmed.toLowerCase().replaceAll(/\s+/g, '_');
 }

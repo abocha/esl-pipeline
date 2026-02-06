@@ -5,41 +5,24 @@
 import { readFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
 
+import type {
+  ActionCapability,
+  JobOptionsPayload,
+  NotionDatabaseOption,
+  TtsStrategyOption,
+  UploadOption,
+  VoiceOption,
+} from '@esl-pipeline/contracts';
+import {
+  normalizeVoiceCatalogToOptions,
+  resolveNotionDatabasesFromEnv,
+} from '@esl-pipeline/shared-infrastructure';
+
 import { logger } from '../infrastructure/logger.js';
 import { getJobOptionsFromOrchestrator } from '../infrastructure/orchestrator-service.js';
 import { getActionMetadata } from './job-actions/action-handler.js';
 
-export type UploadOption = 'auto' | 's3' | 'none';
-export type TtsStrategyOption = 'auto' | 'dialogue' | 'tts';
-
-export interface NotionDatabaseOption {
-  id: string;
-  name: string;
-}
-
-export interface VoiceOption {
-  id: string;
-  name: string;
-  accent?: string | null;
-  gender?: string | null;
-  category?: string | null;
-}
-
-export interface ActionCapability {
-  type: string;
-  label: string;
-  description: string;
-  implemented: boolean;
-  requiresFields?: string[];
-}
-
-export interface JobOptionsResponse {
-  presets: string[];
-  voiceAccents: string[];
-  voices: VoiceOption[];
-  notionDatabases: NotionDatabaseOption[];
-  uploadOptions: UploadOption[];
-  ttsStrategies: TtsStrategyOption[];
+export interface JobOptionsResponse extends JobOptionsPayload {
   supportedActions: ActionCapability[];
 }
 
@@ -116,41 +99,10 @@ async function loadStaticJobOptions(): Promise<JobOptionsResponse> {
 }
 
 function resolveNotionDatabases(): NotionDatabaseOption[] {
-  const rawList = process.env.NOTION_DB_OPTIONS;
-  if (rawList) {
-    const parsed = rawList
-      .split(',')
-      .map((entry) => entry.trim())
-      .filter(Boolean)
-      .map((entry) => {
-        const [idPart, ...nameParts] = entry.split(':');
-        const id = idPart?.trim();
-        if (!id) {
-          return null;
-        }
-        const name = nameParts.length > 0 ? nameParts.join(':').trim() : undefined;
-        return {
-          id,
-          name: name && name.length > 0 ? name : id,
-        };
-      })
-      .filter((option): option is NotionDatabaseOption => option !== null);
-
-    if (parsed.length > 0) {
-      return parsed;
-    }
-  }
-
-  const singleDbId = process.env.NOTION_DB_ID?.trim();
-  if (singleDbId) {
-    const singleName =
-      process.env.NOTION_DB_NAME?.trim() ||
-      process.env.NOTION_DB_LABEL?.trim() ||
-      'Primary database';
-    return [{ id: singleDbId, name: singleName }];
-  }
-
-  return STATIC_OPTIONS.notionDatabases.map((db) => ({ ...db }));
+  return resolveNotionDatabasesFromEnv({
+    singleDbId: process.env.NOTION_DB_ID?.trim(),
+    fallback: STATIC_OPTIONS.notionDatabases,
+  });
 }
 
 const VOICE_CATALOG_RELATIVE_PATH = 'configs/elevenlabs.voices.json';
@@ -165,34 +117,7 @@ async function loadVoiceOptions(): Promise<VoiceOption[]> {
         continue;
       }
 
-      return parsed.voices
-        .map((voice) => {
-          const id = typeof voice.id === 'string' ? voice.id : undefined;
-          const name = typeof voice.name === 'string' ? voice.name : undefined;
-          if (!id || !name) {
-            return null;
-          }
-          const labels =
-            typeof voice.labels === 'object' && voice.labels !== null
-              ? (voice.labels as Record<string, unknown>)
-              : {};
-          const normalizedAccent = normalizeLabel(labels.accent);
-          const normalizedGender = normalizeLabel(labels.gender);
-          const accentToken =
-            normalizedAccent && normalizedGender
-              ? `${normalizedAccent}_${normalizedGender}`
-              : (normalizedAccent ?? null);
-          const option: VoiceOption = {
-            id,
-            name,
-            category: typeof voice.category === 'string' ? voice.category : null,
-            accent: accentToken,
-            gender: normalizedGender,
-          };
-          return option;
-        })
-        .filter((voice): voice is VoiceOption => voice !== null)
-        .sort((a, b) => a.name.localeCompare(b.name));
+      return normalizeVoiceCatalogToOptions(parsed).voices;
     } catch (error: unknown) {
       if (
         error &&
@@ -225,11 +150,4 @@ function getVoiceCatalogCandidates(): string[] {
   ].filter(Boolean);
 
   return [...new Set(paths)] as string[];
-}
-
-function normalizeLabel(value: unknown): string | null {
-  if (typeof value !== 'string') return null;
-  const trimmed = value.trim().toLowerCase();
-  if (!trimmed) return null;
-  return trimmed.replaceAll(/\s+/g, '_');
 }

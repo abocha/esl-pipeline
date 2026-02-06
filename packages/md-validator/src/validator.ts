@@ -9,7 +9,7 @@ import type {
   PmdDocument,
   PmdHeading,
 } from '@esl-pipeline/pmd';
-import { findDirectiveBlocks, parsePmdDocument } from '@esl-pipeline/pmd';
+import { findDirectiveBlocks, normalizeMarkdownSource, parsePmdDocument } from '@esl-pipeline/pmd';
 
 export interface ValidateOptions {
   strict?: boolean;
@@ -130,48 +130,6 @@ function matchesHeadingRule(tokens: string[], rule: HeadingRule): boolean {
     if (!matches) return false;
   }
   return true;
-}
-
-function extractLegacyFence(input: string): string {
-  const lines = input.split('\n');
-  const opener = lines[0] ?? '';
-  if (!opener.startsWith('```')) {
-    throw new Error('Legacy fenced markdown must start with ``` at byte 0.');
-  }
-
-  let closingIndex = -1;
-  for (let i = 1; i < lines.length; i += 1) {
-    if ((lines[i] ?? '').trim() === '```') {
-      closingIndex = i;
-      break;
-    }
-  }
-
-  if (closingIndex === -1) {
-    throw new Error('Legacy fenced markdown must include a closing ``` fence.');
-  }
-
-  const after = lines.slice(closingIndex + 1);
-  const hasExtraContent = after.some((line) => line.trim().length > 0);
-  if (hasExtraContent) {
-    throw new Error('Legacy fenced markdown must not include content outside the fence.');
-  }
-
-  return lines.slice(1, closingIndex).join('\n');
-}
-
-function resolveSource(markdown: string): { source: string; format: 'canonical' | 'legacy-fenced' } {
-  const normalized = normalizeNewlines(markdown);
-  if (normalized.startsWith('---')) {
-    return { source: normalized, format: 'canonical' };
-  }
-  if (normalized.startsWith('```')) {
-    return { source: extractLegacyFence(normalized), format: 'legacy-fenced' };
-  }
-  if (normalized.startsWith('\uFEFF')) {
-    throw new Error('Frontmatter must start at byte 0 (no BOM).');
-  }
-  throw new Error('Expected YAML frontmatter at byte 0 or a legacy fenced block.');
 }
 
 function collectHeadings(body: PmdBlock[], depth: 2 | 3): PmdHeading[] {
@@ -331,7 +289,7 @@ export async function validateMarkdownFile(
     rawLines = normalized.split('\n');
     doc = parsePmdDocument(content);
     warnings.push(...doc.warnings.map((warning) => warning.message));
-    const resolved = resolveSource(content);
+    const resolved = normalizeMarkdownSource(content);
     const parsed = matter(resolved.source);
     contentLines = normalizeNewlines(parsed.content).split('\n');
     lineOffset = findContentLineOffset(rawLines, contentLines);

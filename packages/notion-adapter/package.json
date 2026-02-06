@@ -35,6 +35,7 @@
   "dependencies": {
     "@esl-pipeline/contracts": "workspace:*",
     "@esl-pipeline/md-validator": "workspace:*",
+    "@esl-pipeline/pmd": "workspace:*",
     "@notionhq/client": "^5.4.0",
     "gray-matter": "^4.0.3",
     "zod": "^4.1.13"
