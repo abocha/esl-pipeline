@@ -13,7 +13,7 @@ Key packages:
 
 > **Runtime requirements**
 >
-> - Node **24.10.0** or newer (enforced by `engines` and CI).
+> - Node **24.11.1** or newer (enforced by `engines` and CI).
 > - `pnpm` 8+ (use `corepack enable`).
 > - ffmpeg available on PATH or supplied via `FFMPEG_PATH`.
 
@@ -66,7 +66,7 @@ npx @esl-pipeline/orchestrator esl --interactive
 ```ts
 import { createPipeline, loadEnvFiles } from '@esl-pipeline/orchestrator';
 
-loadEnvFiles(); // loads .env and merges into process.env (see docs/agents-ssot.md for exact behavior)
+loadEnvFiles(); // loads .env and merges into process.env (see docs/reference/agents-ssot.md for exact behavior)
 
 const pipeline = createPipeline({ cwd: process.cwd() });
 
@@ -113,7 +113,7 @@ Types such as `PipelineNewAssignmentOptions`, `PipelineRerunOptions`, and `Assig
 | Wizard defaults         | `configs/wizard.defaults.json`                             | Interactive wizard preferences; resolved next to presets (`configRoot`) |
 | ffmpeg                  | system install or `FFMPEG_PATH`                            | Not vendored; must be installed                                         |
 
-`loadEnvFiles()` mirrors the CLI’s behavior: it checks `.env` in the working directory and the repo root. Pass `files: [...]` to load custom locations. See [`docs/agents-ssot.md`](docs/agents-ssot.md) §3.2 for authoritative details.
+`loadEnvFiles()` mirrors the CLI’s behavior: it checks `.env` in the working directory and the repo root. Pass `files: [...]` to load custom locations. See [`docs/reference/agents-ssot.md`](docs/reference/agents-ssot.md) §3.2 for authoritative details.
 
 ### Remote Manifest Storage
 
@@ -138,7 +138,7 @@ const pipeline = createPipeline({
 });
 ```
 
-See `docs/pipeline-manifest.md` for the schema details.
+See `docs/reference/pipeline-manifest.md` for the schema details.
 
 ### Config Providers
 
@@ -199,7 +199,8 @@ docs/
   QUICK_START.md         # 5-minute getting started
   reference/             # Authoritative technical docs
   backend-frontend/      # Batch system docs
-  design/                # Frontend design vision
+  design/                # Active design specs
+  archive/               # Historical docs (domain/date archive)
   templates/             # Homework prompt, profiles
 AGENTS.md                # Concise maintainer guide pointing to SSOTs
 ```
@@ -232,7 +233,7 @@ pnpm deps:check           # run deps:pin and fail if manifests drift (same guard
 npm publish --access public
 ```
 
-CI (`.github/workflows/ci.yml`) runs on Node 24.10.0 and executes build, lint, tests, and the smoke suite.
+CI (`.github/workflows/ci.yml`) runs on Node 24.11.1 and executes build, lint, tests, and the smoke suite.
 
 ---
 
@@ -256,7 +257,13 @@ CI (`.github/workflows/ci.yml`) runs on Node 24.10.0 and executes build, lint, t
 
 ## Backend Groundwork
 
-The orchestrator is now consumable from other Node projects, but we’re actively adding scaffolding to make it backend-ready: pluggable storage adapters, observability hooks, Docker image, etc. See [`docs/groundwork-for-backend.md`](docs/groundwork-for-backend.md) for the detailed plan and progress.
+The orchestrator is consumable from other Node projects and continues to evolve for backend-hosted usage (storage adapters, observability hooks, deployment/runtime hardening). The current active guidance lives in:
+
+- [`docs/backend-frontend/BATCH_SYSTEM.md`](docs/backend-frontend/BATCH_SYSTEM.md)
+- [`docs/backend-frontend/batch-backend-ssot.md`](docs/backend-frontend/batch-backend-ssot.md)
+- [`docs/reference/agents-ssot.md`](docs/reference/agents-ssot.md)
+
+Historical backend-groundwork planning notes are archived at `docs/archive/notes/2026-02/groundwork-for-backend.md`.
 
 Key takeaways:
 
@@ -272,13 +279,13 @@ Key takeaways:
 - **Validation fails** — run `pnpm md-validate <file> --strict` to inspect exact Markdown errors. The validator enforces flush-left `:::study-text` blocks and the canonical ESL section order.
 - **Environment missing** — CLI warns when tokens/keys are not set. Use `loadEnvFiles({ assignToProcess: false })` if you want to load env files without polluting `process.env`.
 - **npx command fails** — make sure you invoke the `esl` binary: `npx @esl-pipeline/orchestrator esl --help`.
-- **Node version mismatch** — ensure your environment is running Node ≥ 24.10.0 (`node --version`).
+- **Node version mismatch** — ensure your environment is running Node ≥ 24.11.1 (`node --version`).
 
 ---
 
 ## Contributing / Release Checklist
 
-1. Work against Node 24.10.0 (`nvm use 24.10.0` or `.tool-versions`).
+1. Work against Node 24.11.1 (`nvm use 24.11.1` or `.tool-versions`).
 2. Run `pnpm -r build`, `pnpm typecheck`, `pnpm lint`, and `pnpm test`.
 3. When behavior changes:
    - Update `CHANGELOG.md`.

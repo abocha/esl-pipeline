@@ -754,7 +754,7 @@ For local development:
 - Edit sources in [`packages/batch-backend/src`](packages/batch-backend/src) and rebuild or use Node with TS output.
 - Follow repo-wide guidelines:
   - [`AGENTS.md`](AGENTS.md)
-  - [`docs/agents-ssot.md`](docs/agents-ssot.md)
+  - [`docs/reference/agents-ssot.md`](../../docs/reference/agents-ssot.md)
   - [`CONTRIBUTING.md`](CONTRIBUTING.md)
 
 ---

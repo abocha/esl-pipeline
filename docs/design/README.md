@@ -1,19 +1,21 @@
 # Design Docs Index
 
-This folder contains the frontend vision and design specs. Use the documents below
-in the order recommended.
+This directory contains active design/spec docs only.
 
-## Primary sources
+## Active
 
-- **Frontend Vision v2 (current target):** `docs/design/FRONTEND_VISION_V2.md`
-- **Frontend Vision v2 Implementation Manual:** `docs/design/FRONTEND_VISION_V2_IMPLEMENTATION_MANUAL.md`
-- **Frontend Vision v1 (baseline reference):** `docs/design/FRONTEND_VISION.md`
+- Transcription pipeline spec: `docs/design/TRANSCRIPTION_PIPELINE_SPEC.md`
 
-## Supporting specs
+## Historical Frontend Vision Docs
 
-- **Transcription pipeline spec:** `docs/design/TRANSCRIPTION_PIPELINE_SPEC.md`
+Frontend vision and implementation-manual generations were archived during the
+2026-02 documentation reorganization.
 
-## Notes
+- Frontend archive index: `docs/archive/frontend/README.md`
+- Archived files: `docs/archive/frontend/2026-02/`
 
-- Implementation status is tracked in `docs/frontend-vision-alignment.md`.
-- Backend dependencies are tracked in `docs/backend-frontend/backend-frontend-alignment.md`.
+## Canonical Status Tracking
+
+- Runtime and automation contracts: `docs/reference/agents-ssot.md`
+- Backend/frontend API status: `docs/backend-frontend/backend-frontend-alignment.md`
+- Batch system integration guide: `docs/backend-frontend/BATCH_SYSTEM.md`

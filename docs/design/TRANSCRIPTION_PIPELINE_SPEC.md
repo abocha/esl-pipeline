@@ -7,13 +7,13 @@ review and prompt assembly.
 
 This spec is designed to align with:
 - docs/PIPELINE_INTEGRATION_VISION.md (current operational manual)
-- docs/design/FRONTEND_VISION.md (end-state UI journey)
+- packages/batch-frontend/README.md (current frontend implementation)
 - docs/PROJECT_OVERVIEW.md (product intent)
 
 This spec is implemented in the repo with known gaps. Current status and
 roadmap live in `docs/PIPELINE_INTEGRATION_VISION.md`. Gap-closure steps are
 tracked in `docs/PIPELINE_INTEGRATION_VISION.md`. The original staged manual
-is archived at `docs/archive/TRANSCRIPTION_PIPELINE_IMPLEMENTATION_MANUAL.md`.
+is archived at `docs/archive/pipeline/2026-02/TRANSCRIPTION_PIPELINE_IMPLEMENTATION_MANUAL.md`.
 
 ---
 

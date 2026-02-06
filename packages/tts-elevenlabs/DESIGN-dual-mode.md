@@ -67,5 +67,5 @@ The package gates noisy strategy-selection logs behind:
 
 ## References
 
-- SSOT: `docs/agents-ssot.md`
+- SSOT: `docs/reference/agents-ssot.md`
 - Runtime entrypoint: `packages/tts-elevenlabs/src/index.ts`
