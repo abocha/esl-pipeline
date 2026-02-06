@@ -28,6 +28,7 @@ import {
   CURRENT_MANIFEST_SCHEMA_VERSION,
   createFilesystemManifestStore,
 } from './manifest.js';
+import { DEFAULT_PRESETS_PATH, DEFAULT_VOICES_PATH } from './config.js';
 import { noopLogger, noopMetrics, type PipelineLogger } from './observability.js';
 import type {
   AssignmentProgressCallbacks,
@@ -545,7 +546,7 @@ export async function newAssignment(
         const color = await applyHeadingPreset(
           pageId,
           flags.preset,
-          flags.presetsPath ?? 'configs/presets.json',
+          flags.presetsPath ?? DEFAULT_PRESETS_PATH,
         );
         steps.push(
           `colorize:${flags.preset}:${color.counts.h2}/${color.counts.h3}/${color.counts.toggles}`,
@@ -591,7 +592,7 @@ export async function newAssignment(
         let ttsResult: Awaited<ReturnType<typeof buildStudyTextMp3>>;
         try {
           ttsResult = await buildStudyTextMp3(flags.md, {
-            voiceMapPath: flags.voices ?? 'configs/voices.yml',
+            voiceMapPath: flags.voices ?? DEFAULT_VOICES_PATH,
             outPath: flags.out ?? dirname(flags.md),
             preview: flags.dryRun,
             force: flags.force || flags.redoTts,
@@ -735,7 +736,7 @@ export async function newAssignment(
 
         let headingTheme: { h2?: string; h3?: string } | undefined;
         if (flags.preset) {
-          const preset = await loadPreset(flags.preset, flags.presetsPath ?? 'configs/presets.json');
+          const preset = await loadPreset(flags.preset, flags.presetsPath ?? DEFAULT_PRESETS_PATH);
           headingTheme = resolveHeadingTheme(preset);
         }
 
@@ -1028,7 +1029,7 @@ export async function rerunAssignment(
       let ttsResult: Awaited<ReturnType<typeof buildStudyTextMp3>>;
       try {
         ttsResult = await buildStudyTextMp3(flags.md, {
-          voiceMapPath: flags.voices ?? 'configs/voices.yml',
+          voiceMapPath: flags.voices ?? DEFAULT_VOICES_PATH,
           outPath: flags.out ?? dirname(flags.md),
           preview: flags.dryRun,
           force: flags.force,
@@ -1158,7 +1159,7 @@ export async function rerunAssignment(
 
           let headingTheme: { h2?: string; h3?: string } | undefined;
           if (manifest.preset) {
-            const preset = await loadPreset(manifest.preset, 'configs/presets.json');
+            const preset = await loadPreset(manifest.preset, DEFAULT_PRESETS_PATH);
             headingTheme = resolveHeadingTheme(preset);
           }
 

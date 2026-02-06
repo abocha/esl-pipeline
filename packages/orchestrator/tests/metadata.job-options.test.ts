@@ -11,11 +11,11 @@ vi.mock('@esl-pipeline/tts-elevenlabs', () => ({
 }));
 
 const configPaths: ResolvedConfigPaths = {
-  configRoot: '/repo/configs',
-  presetsPath: '/repo/configs/presets.json',
-  voicesPath: '/repo/configs/voices.yml',
-  studentsDir: '/repo/configs/students',
-  wizardDefaultsPath: '/repo/configs/wizard.defaults.json',
+  configRoot: '/repo/packages/orchestrator/configs',
+  presetsPath: '/repo/packages/orchestrator/configs/presets.json',
+  voicesPath: '/repo/packages/orchestrator/configs/voices.yml',
+  studentsDir: '/repo/packages/orchestrator/configs/students',
+  wizardDefaultsPath: '/repo/packages/orchestrator/configs/wizard.defaults.json',
 };
 
 function createConfigProvider(overrides: Partial<ConfigProvider> = {}): ConfigProvider {

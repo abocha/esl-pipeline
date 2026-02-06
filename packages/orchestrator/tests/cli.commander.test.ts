@@ -5,15 +5,15 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const pipelineMock = {
   defaults: {
-    presetsPath: 'configs/presets.json',
-    voicesPath: 'configs/voices.yml',
+    presetsPath: 'packages/orchestrator/configs/presets.json',
+    voicesPath: 'packages/orchestrator/configs/voices.yml',
     outDir: 'out',
   },
   configPaths: {
-    studentsDir: 'configs/students',
-    presetsPath: 'configs/presets.json',
-    voicesPath: 'configs/voices.yml',
-    wizardDefaultsPath: 'configs/wizard.defaults.json',
+    studentsDir: 'packages/orchestrator/configs/students',
+    presetsPath: 'packages/orchestrator/configs/presets.json',
+    voicesPath: 'packages/orchestrator/configs/voices.yml',
+    wizardDefaultsPath: 'packages/orchestrator/configs/wizard.defaults.json',
   },
   configProvider: {
     loadStudentProfiles: vi.fn().mockResolvedValue([]),

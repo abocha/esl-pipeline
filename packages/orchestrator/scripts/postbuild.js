@@ -12,8 +12,7 @@ async function ensureExecutable(file) {
 }
 
 async function copySharedConfigs() {
-  const repoRoot = resolve(import.meta.dirname, '../../..');
-  const source = resolve(repoRoot, 'configs');
+  const source = resolve(import.meta.dirname, '../configs');
   const target = resolve(import.meta.dirname, '../dist/configs');
   try {
     await cp(source, target, { recursive: true, force: true });

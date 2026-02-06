@@ -62,7 +62,7 @@ describe('orchestrator smoke', () => {
       preset: 'default',
       withTts: true,
       upload: 's3',
-      voices: 'configs/voices.yml',
+      voices: 'packages/orchestrator/configs/voices.yml',
       dbId: 'db-123',
       dryRun: false,
     });
@@ -131,7 +131,7 @@ describe('orchestrator smoke', () => {
       preset: 'default',
       withTts: true,
       upload: 's3',
-      voices: 'configs/voices.yml',
+      voices: 'packages/orchestrator/configs/voices.yml',
       ttsStrategy: 'dialogue',
       dialogueLanguage: 'es',
       dialogueStability: 0.55,

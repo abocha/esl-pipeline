@@ -58,7 +58,7 @@ const configProvider: ConfigProvider = {
     return [defaultProfile];
   },
   async resolveVoicesPath() {
-    return 'configs/voices.yml';
+    return 'packages/orchestrator/configs/voices.yml';
   },
 };
 
@@ -71,7 +71,7 @@ describe('Wizard TTS Strategy Integration', () => {
   beforeEach(async () => {
     promptQueue.length = 0;
     cwd = await mkdtemp(join(tmpdir(), 'wizard-tts-'));
-    defaultsPath = join(cwd, 'configs', 'wizard.defaults.json');
+    defaultsPath = join(cwd, 'packages', 'orchestrator', 'configs', 'wizard.defaults.json');
     mdPath = join(cwd, 'lesson.md');
     cleanupDir = cwd;
     await writeFile(
@@ -103,7 +103,7 @@ Content here
       { dialogueLanguage: 'en' }, // Set language
       { dialogueStability: 0.75 }, // Set stability
       { dialogueSeed: 42 }, // Set seed
-      { voices: 'configs/voices.yml' }, // Voice map path
+      { voices: 'packages/orchestrator/configs/voices.yml' }, // Voice map path
       { force: true }, // Force regenerate
       { out: 'audio-output' }, // Output directory
       // Settings menu: back
@@ -138,7 +138,7 @@ Content here
       { setting: 'tts' },
       { withTts: true },
       { ttsStrategy: 'tts' },
-      { voices: 'configs/voices.yml' },
+      { voices: 'packages/orchestrator/configs/voices.yml' },
       { force: false },
       { out: 'audio-output' },
       { setting: 'back' },
@@ -250,7 +250,7 @@ Content here
       { setting: 'tts' },
       { withTts: true },
       { ttsStrategy: 'auto' },
-      { voices: 'configs/voices.yml' },
+      { voices: 'packages/orchestrator/configs/voices.yml' },
       { force: false },
       { out: 'audio-output' },
       { setting: 'back' },
@@ -283,7 +283,7 @@ Content here
       { dialogueLanguage: 'en' },
       { dialogueStability: 0.5 },
       { dialogueSeed: 999 },
-      { voices: 'configs/custom-voices.yml' },
+      { voices: 'packages/orchestrator/configs/custom-voices.yml' },
       { force: true },
       { out: 'audio-output-custom' },
       { setting: 'back' },
@@ -304,7 +304,7 @@ Content here
     expect(result.flags.dialogueLanguage).toBe('en');
     expect(result.flags.dialogueStability).toBe(0.5);
     expect(result.flags.dialogueSeed).toBe(999);
-    expect(result.flags.voices).toContain('configs/custom-voices.yml');
+    expect(result.flags.voices).toContain('packages/orchestrator/configs/custom-voices.yml');
   });
 
   it('should validate dialogue stability range', async () => {
@@ -317,7 +317,7 @@ Content here
       // Use a valid stability value (wizard's prompts library handles validation)
       { dialogueStability: 0.8 },
       { dialogueSeed: 42 },
-      { voices: 'configs/voices.yml' },
+      { voices: 'packages/orchestrator/configs/voices.yml' },
       { force: false },
       { out: 'audio-output' },
       { setting: 'back' },

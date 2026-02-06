@@ -93,7 +93,7 @@ export async function loadPreset(presetName: string, presetsPath: string): Promi
 export async function applyHeadingPreset(
   pageId: string,
   presetName: string,
-  presetsPath = 'configs/presets.json',
+  presetsPath = 'packages/orchestrator/configs/presets.json',
 ): Promise<{ applied: boolean; counts: Counts }> {
   const client = createNotionClient();
   const preset = await loadPreset(presetName, presetsPath);

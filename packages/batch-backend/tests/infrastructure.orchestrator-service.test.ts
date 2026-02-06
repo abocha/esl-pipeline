@@ -36,22 +36,22 @@ const pipelineMock = {
     resolveVoicesPath: vi.fn(),
   },
   configPaths: {
-    configRoot: '/repo/configs',
-    presetsPath: '/repo/configs/presets.json',
-    voicesPath: '/repo/configs/voices.yml',
-    studentsDir: '/repo/configs/students',
-    wizardDefaultsPath: '/repo/configs/wizard.defaults.json',
+    configRoot: '/repo/packages/orchestrator/configs',
+    presetsPath: '/repo/packages/orchestrator/configs/presets.json',
+    voicesPath: '/repo/packages/orchestrator/configs/voices.yml',
+    studentsDir: '/repo/packages/orchestrator/configs/students',
+    wizardDefaultsPath: '/repo/packages/orchestrator/configs/wizard.defaults.json',
   },
 };
 vi.mock('@esl-pipeline/orchestrator', () => ({
   createPipeline: vi.fn().mockImplementation((_options: any) => pipelineMock),
   resolveJobOptions: resolveJobOptionsMock,
   resolveConfigPaths: vi.fn().mockReturnValue({
-    configRoot: '/repo/configs',
-    presetsPath: '/repo/configs/presets.json',
-    voicesPath: '/repo/configs/voices.yml',
-    studentsDir: '/repo/configs/students',
-    wizardDefaultsPath: '/repo/configs/wizard.defaults.json',
+    configRoot: '/repo/packages/orchestrator/configs',
+    presetsPath: '/repo/packages/orchestrator/configs/presets.json',
+    voicesPath: '/repo/packages/orchestrator/configs/voices.yml',
+    studentsDir: '/repo/packages/orchestrator/configs/students',
+    wizardDefaultsPath: '/repo/packages/orchestrator/configs/wizard.defaults.json',
   }),
 }));
 

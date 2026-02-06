@@ -66,7 +66,7 @@ tts-elevenlabs --md lesson.md \
 Dialogue mode requires speaker-to-voice mappings in your voice configuration:
 
 ```yaml
-# configs/voices.yml (example)
+# packages/orchestrator/configs/voices.yml (example)
 speakers:
   Alex:
     voice_id: '21m00Tcm4TlvDq8ikWAM' # Rachel voice
@@ -135,7 +135,7 @@ To fix: Add the missing speaker to your voice configuration.
 ## CLI
 
 ```
-tts-elevenlabs --md lesson.md --voice-map ./configs/voices.yml --out ./out [--tts-strategy auto|dialogue|tts] [--preview]
+tts-elevenlabs --md lesson.md --voice-map ./packages/orchestrator/configs/voices.yml --out ./out [--tts-strategy auto|dialogue|tts] [--preview]
 ```
 
 Outputs JSON containing the destination path and hash with speaker metadata.
@@ -188,7 +188,7 @@ Synchronize available voices from ElevenLabs account.
 import { syncVoices } from '@esl-pipeline/tts-elevenlabs';
 
 await syncVoices({
-  output: './configs/elevenlabs.voices.json',
+  output: './packages/orchestrator/configs/elevenlabs.voices.json',
 });
 ```
 
@@ -220,7 +220,7 @@ yarn add @esl-pipeline/tts-elevenlabs
 
 3. **Create Voice Configuration**:
    ```yaml
-   # configs/voices.yml
+   # packages/orchestrator/configs/voices.yml
    speakers:
      Teacher:
        voice_id: '21m00Tcm4TlvDq8ikWAM'

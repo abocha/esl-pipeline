@@ -1,5 +1,6 @@
 import { access, readFile, readdir, stat } from 'node:fs/promises';
 import { dirname, join, relative, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
 
 import { extractFrontmatter } from '@esl-pipeline/pmd';
 
@@ -23,9 +24,12 @@ export type PresetMap = Record<
   }
 >;
 
-const DEFAULT_PRESETS_PATH = 'configs/presets.json';
-const DEFAULT_VOICES_PATH = 'configs/voices.yml';
-const DEFAULT_STUDENTS_DIR = 'configs/students';
+const moduleDir = dirname(fileURLToPath(import.meta.url));
+export const DEFAULT_CONFIG_ROOT = resolve(moduleDir, '../configs');
+export const DEFAULT_PRESETS_PATH = join(DEFAULT_CONFIG_ROOT, 'presets.json');
+export const DEFAULT_VOICES_PATH = join(DEFAULT_CONFIG_ROOT, 'voices.yml');
+export const DEFAULT_STUDENTS_DIR = join(DEFAULT_CONFIG_ROOT, 'students');
+export const DEFAULT_WIZARD_DEFAULTS_PATH = join(DEFAULT_CONFIG_ROOT, 'wizard.defaults.json');
 export const DEFAULT_STUDENT_NAME = 'Default';
 
 export interface ConfigProvider {

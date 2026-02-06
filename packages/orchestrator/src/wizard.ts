@@ -4,6 +4,8 @@ import { dirname, resolve } from 'node:path';
 
 import {
   type ConfigProvider,
+  DEFAULT_VOICES_PATH,
+  DEFAULT_WIZARD_DEFAULTS_PATH,
   DEFAULT_STUDENT_NAME,
   type MarkdownSummary,
   StudentProfile,
@@ -99,8 +101,6 @@ async function runPrompt<T>(
     onCancel();
   }
 }
-
-const DEFAULT_WIZARD_DEFAULTS_PATH = 'configs/wizard.defaults.json';
 
 const PERSISTABLE_KEYS: (keyof NewAssignmentFlags)[] = [
   'student',
@@ -812,7 +812,9 @@ async function configureDatabase(
 async function selectPreset(state: WizardState, options: { presetNames: string[] }): Promise<void> {
   const { presetNames } = options;
   if (presetNames.length === 0) {
-    console.log('No presets available. Add entries to configs/presets.json to enable this option.');
+    console.log(
+      'No presets available. Add entries to packages/orchestrator/configs/presets.json to enable this option.',
+    );
     return;
   }
 
@@ -960,7 +962,7 @@ async function configureTts(
   }
 
   // Step 4: Existing Options (simplified path resolution)
-  const voicesGuess = state.voices ?? ctx.voicesPath ?? initialFlags.voices ?? 'configs/voices.yml';
+  const voicesGuess = state.voices ?? ctx.voicesPath ?? initialFlags.voices ?? DEFAULT_VOICES_PATH;
   const voicesAnswer = await runPrompt<string>(Input, {
     name: 'voices',
     message: 'Path to voices.yml',

@@ -3,14 +3,14 @@
  * Safe upgrade script: bumps critical external SDKs while leaving core runtime pinned.
  *
  * It runs `pnpm up --latest` scoped to the allowlist below, then reapplies shared pins.
- * Usage: pnpm exec node configs/safe-upgrade.mjs
+ * Usage: pnpm exec node scripts/deps/safe-upgrade.mjs
  */
 import { execSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
-const root = join(__dirname, '..');
+const root = join(__dirname, '..', '..');
 
 const CRITICAL_ALLOWLIST = [
   // External API SDKs we want fresh

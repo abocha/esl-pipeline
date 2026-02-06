@@ -85,7 +85,7 @@ export function resolveConfigPaths(options: ResolveConfigPathsOptions = {}): Res
   const cwd = resolve(options.cwd ?? process.cwd());
   const moduleDir = dirname(fileURLToPath(import.meta.url));
   const distConfigs = resolve(moduleDir, './configs');
-  const repoConfigs = resolve(moduleDir, '../../../configs');
+  const packageConfigs = resolve(moduleDir, '../configs');
   const memoizeEnabled =
     options.memoizeConfigPaths ?? readBoolEnv('ESL_PIPELINE_CACHE_CONFIG', false);
   const cacheKey = memoizeEnabled
@@ -100,9 +100,8 @@ export function resolveConfigPaths(options: ResolveConfigPathsOptions = {}): Res
   const candidateConfigDirs = [
     options.configDir,
     process.env.ESL_PIPELINE_CONFIG_DIR,
-    join(cwd, 'configs'),
     distConfigs,
-    repoConfigs,
+    packageConfigs,
   ]
     .filter(Boolean)
     .map((dir) => resolve(String(dir)));

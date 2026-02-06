@@ -1,14 +1,15 @@
 node_modules/
 dist/
 coverage/
+/configs/
 
 *.tsbuildinfo
 *.log
 .DS_Store
 
-configs/wizard.defaults.json
-configs/students/*.json
-!configs/students/default.json
+packages/orchestrator/configs/wizard.defaults.json
+packages/orchestrator/configs/students/*.json
+!packages/orchestrator/configs/students/default.json
 
 .kilocode
 .pnpm-store
@@ -21,6 +22,7 @@ configs/students/*.json
 
 /uploads
 /tmp
+/out
 *.mp3
 packages/orchestrator/examples/service/fixtures/lesson.manifest.json
-fixtures/2026-02-01_18-08-50.opus
+fixtures/*.opus
