@@ -2,7 +2,7 @@
 
 This document describes the current TTS strategy UX and wiring in `@esl-pipeline/orchestrator`.
 It intentionally replaces older “TTS mode” drafts. For authoritative contracts, defer to
-`docs/agents-ssot.md`.
+`docs/reference/agents-ssot.md`.
 
 ## Terminology
 

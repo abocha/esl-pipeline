@@ -4,15 +4,15 @@
 
 ## Document Map
 
-- [`docs/design/FRONTEND_VISION_V3.md`](../design/FRONTEND_VISION_V3.md) — current target experience.
-- [`docs/design/FRONTEND_IMPLEMENTATION_GUIDE_V3.md`](../design/FRONTEND_IMPLEMENTATION_GUIDE_V3.md) — delivery steps and acceptance criteria.
-- [`docs/design/FRONTEND_VISION.md`](../design/FRONTEND_VISION.md) — baseline reference.
-- [`docs/frontend-vision-alignment.md`](../frontend-vision-alignment.md) — current implementation coverage.
+- [`docs/backend-frontend/BATCH_SYSTEM.md`](./BATCH_SYSTEM.md) — active system guide.
+- [`packages/batch-frontend/README.md`](../../packages/batch-frontend/README.md) — active frontend implementation reference.
+- [`docs/design/TRANSCRIPTION_PIPELINE_SPEC.md`](../design/TRANSCRIPTION_PIPELINE_SPEC.md) — active transcription spec.
+- Historical frontend vision generations are archived under `docs/archive/frontend/2026-02/`.
 - Additional backend scaffolding lives in `docs/backend-frontend/` and SSOTs in `docs/reference/`.
 
 ---
 
-This document captures the gaps between the new batch frontend (Phase 7/8 UI) and the existing batch-backend implementation, along with the concrete steps needed to bring the backend up to speed.
+This document captures backend/frontend API readiness, remaining gaps, and concrete implementation steps for the current batch system.
 
 ---
 
@@ -251,7 +251,7 @@ import {
 `docs/PIPELINE_INTEGRATION_VISION.md` and `docs/design/TRANSCRIPTION_PIPELINE_SPEC.md`.
 Gap-closure steps live in `docs/PIPELINE_INTEGRATION_VISION.md`.
 The staged implementation manual is archived at
-`docs/archive/TRANSCRIPTION_PIPELINE_IMPLEMENTATION_MANUAL.md`.
+`docs/archive/pipeline/2026-02/TRANSCRIPTION_PIPELINE_IMPLEMENTATION_MANUAL.md`.
 
 ### Implemented Endpoints (upload ingestion)
 
