@@ -6,7 +6,7 @@ Future work will stream files to S3 (or alternative backends) and return metadat
 ## CLI
 
 ```
-pnpm cli:uploader --file ./out/lesson.mp3 [--public]
+pnpm --filter @esl-pipeline/storage-uploader exec storage-uploader --file ./out/lesson.mp3 [--public]
 ```
 
 Outputs JSON containing the derived key and URL.

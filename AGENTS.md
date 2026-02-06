@@ -126,10 +126,13 @@ Treat the alignment doc as the only human-readable status tracker; the SSOT and 
 ## 6. Working with the Repo (Essentials)
 
 - Install: `pnpm install`
+- Fast checks: `pnpm check:fast`
+- Full checks: `pnpm check`
 - Build: `pnpm -r build`
 - Lint: `pnpm lint`
 - Test: `pnpm test` or `pnpm --filter @esl-pipeline/orchestrator test`
 - Smoke: `pnpm smoke` (orchestrator-focused)
+- Batch local dev (API + worker + frontend): `pnpm dev:batch`
 - Dependencies: `pnpm deps:pin` to normalize shared versions; `pnpm deps:upgrade:safe` to bump allowlisted SDKs (Notion/ElevenLabs/AWS S3 + stable utils) then reapply pins.
 - Drift check: `pnpm deps:check` runs `deps:pin` and fails on manifest drift (CI uses this).
 - Zero-install: `npx @esl-pipeline/orchestrator esl --help`

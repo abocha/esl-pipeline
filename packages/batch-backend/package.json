@@ -8,6 +8,7 @@
   "types": "dist/index.d.ts",
   "scripts": {
     "build": "tsc -p tsconfig.build.json",
+    "clean": "node -e \"fs.rmSync('dist', {recursive:true, force:true})\"",
     "dev:api": "tsx watch src/transport/http-server.ts",
     "dev:worker": "tsx watch src/transport/worker-runner.ts",
     "start:api": "node dist/transport/http-server.js",

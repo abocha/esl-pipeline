@@ -134,7 +134,15 @@ Backend/frontend integration work:
 ## Development Commands (Minimal)
 
 ```bash
+pnpm check:fast
+pnpm check
+```
+
+Core equivalents:
+
+```bash
 pnpm build
+pnpm typecheck
 pnpm lint
 pnpm test
 pnpm smoke
@@ -146,6 +154,7 @@ Useful targeted runs:
 pnpm --filter @esl-pipeline/orchestrator test
 pnpm --filter @esl-pipeline/batch-frontend test
 pnpm --filter @esl-pipeline/batch-backend test
+pnpm dev:batch
 ```
 
 ## Troubleshooting
@@ -163,7 +172,7 @@ pnpm --filter @esl-pipeline/batch-backend test
 
 Before opening a PR:
 
-1. Run `pnpm build && pnpm lint && pnpm test`.
+1. Run `pnpm check` (or `pnpm check:fast` during active iteration).
 2. Update docs affected by behavior/status changes.
 3. Keep `docs/reference/agents-ssot.md` consistent with code-level contracts.
 

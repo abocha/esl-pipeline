@@ -3,7 +3,8 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "vitest": "vitest"
+    "test": "vitest run",
+    "test:watch": "vitest"
   },
   "devDependencies": {
     "fastify": "^5.7.4"
