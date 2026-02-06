@@ -61,6 +61,7 @@ export interface JobConfigOverrides {
 export interface JobStatusDto {
   jobId: string;
   md: string | null;
+  mdStorageUri?: string | null;
   recordingId: string | null;
   transcriptId: string | null;
   promptPackageId: string | null;
@@ -142,6 +143,7 @@ export interface JobEventPayload {
   finishedAt?: string | null;
   ttsStrategy?: TtsStrategy | null;
   md?: string | null;
+  mdStorageUri?: string | null;
   notionUrl?: string | null;
   anytypeUrl?: string | null;
   publishTarget?: PublishTarget | null;

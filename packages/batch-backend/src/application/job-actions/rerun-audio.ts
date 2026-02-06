@@ -83,6 +83,7 @@ export async function rerunAudio(jobId: string, action: RerunAudioAction): Promi
 
   const rerunJob = await insertJob({
     md: job.md,
+    mdStorageUri: job.mdStorageUri ?? undefined,
     preset: job.preset ?? undefined,
     withTts: true,
     upload: 's3',

@@ -203,6 +203,7 @@ describe('MinimalAssignment', () => {
       draftId: 'draft-1',
       jobId: 'job-1',
       mdPath: '/tmp/assignment.md',
+      mdStorageUri: 's3://esl/drafts/draft-1.md',
     });
 
     vi.mocked(api.approveJob).mockResolvedValue({ jobId: 'job-1' } as never);
@@ -368,7 +369,10 @@ describe('MinimalAssignment', () => {
         publishTarget: 'notion',
       },
     });
-    expect(api.approveJob).toHaveBeenCalledWith('job-1', '/tmp/assignment.md');
+    expect(api.approveJob).toHaveBeenCalledWith('job-1', {
+      md: '/tmp/assignment.md',
+      mdStorageUri: 's3://esl/drafts/draft-1.md',
+    });
 
     await waitFor(() => {
       expect(screen.getAllByText(/Job ID: job-1/i).length).toBeGreaterThan(0);

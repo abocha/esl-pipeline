@@ -431,7 +431,10 @@ export const MinimalAssignment: React.FC = () => {
           publishTarget,
         },
       });
-      await approveJob(materialized.jobId, materialized.mdPath);
+      await approveJob(materialized.jobId, {
+        md: materialized.mdPath,
+        mdStorageUri: materialized.mdStorageUri,
+      });
       const refreshed = await getJobStatus(materialized.jobId);
       setJobStatusState(refreshed);
     } catch (error) {

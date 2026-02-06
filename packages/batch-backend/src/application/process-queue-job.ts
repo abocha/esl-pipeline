@@ -8,6 +8,7 @@
 // 5. On success, transition running -> succeeded with manifestPath.
 // 6. On failure, transition running -> failed with error and rethrow so BullMQ can retry.
 import fs from 'node:fs/promises';
+import os from 'node:os';
 import path from 'node:path';
 
 import { type BatchBackendConfig, loadConfig } from '../config/env.js';
@@ -24,6 +25,7 @@ import {
   runRerunAssignmentJob,
 } from '../infrastructure/orchestrator-service.js';
 import type { QueueJobPayload } from '../infrastructure/queue-bullmq.js';
+import { createTranscriptionStorageForUri } from '../infrastructure/transcription-storage.js';
 
 // processQueueJob.declaration()
 export async function processQueueJob(payload: QueueJobPayload): Promise<void> {
@@ -67,17 +69,7 @@ export async function processQueueJob(payload: QueueJobPayload): Promise<void> {
   try {
     const config = loadConfig();
 
-    if (!running.md) {
-      throw new Error('Job is missing an approved markdown path');
-    }
-
-    const resolvedMdPath = await resolveMarkdownPath(running.md);
-    if (resolvedMdPath !== running.md) {
-      log.info('Resolved markdown path for job', {
-        original: running.md,
-        resolved: resolvedMdPath,
-      });
-    }
+    const markdownInput = await resolveMarkdownInput(running);
 
     const uploadFlag = resolveUploadTarget(running.upload, config.storage.provider);
 
@@ -103,46 +95,58 @@ export async function processQueueJob(payload: QueueJobPayload): Promise<void> {
       }
     }
 
-    const result =
-      payload.executionMode === 'rerun_audio'
-        ? await runRerunAssignmentJob(
-            {
-              jobId,
-              md: resolvedMdPath,
-              steps: payload.rerun?.steps ?? ['tts', 'upload', 'add-audio'],
-              upload: payload.rerun?.upload ?? 's3',
-              force: payload.rerun?.force ?? running.forceTts ?? true,
-              prefix: payload.rerun?.prefix,
-              publicRead: payload.rerun?.publicRead,
-              presign: payload.rerun?.presign,
-              accentPreference:
-                payload.rerun?.accentPreference ?? running.voiceAccent ?? undefined,
-              voiceId: payload.rerun?.voiceId ?? running.voiceId ?? undefined,
-              ttsStrategy: payload.rerun?.ttsStrategy ?? running.ttsStrategy ?? undefined,
-              dialogueLanguage: payload.rerun?.dialogueLanguage,
-              dialogueStability: payload.rerun?.dialogueStability,
-              dialogueSeed: payload.rerun?.dialogueSeed,
-              settings: userSettings,
-            },
-            runId,
-          )
-        : await runAssignmentJob(
-            {
-              jobId,
-              md: resolvedMdPath,
-              preset: running.preset ?? undefined,
-              withTts: running.withTts ?? undefined,
-              // Only forward upload flag values supported by orchestrator.
-              // Any other persisted value (e.g. 'none' or null) is treated as "no override".
-              upload: uploadFlag,
-              forceTts: running.forceTts ?? undefined,
-              notionDatabase: running.notionDatabase ?? config.orchestrator.notionDatabaseId ?? undefined,
-              publishTarget: running.publishTarget ?? undefined,
-              ttsStrategy: running.ttsStrategy ?? undefined,
-              settings: userSettings,
-            },
-            runId,
-          );
+    let result: { manifestPath?: string; notionUrl?: string; anytypeUrl?: string };
+    try {
+      result =
+        payload.executionMode === 'rerun_audio'
+          ? await runRerunAssignmentJob(
+              {
+                jobId,
+                md: markdownInput.mdPath,
+                steps: payload.rerun?.steps ?? ['tts', 'upload', 'add-audio'],
+                upload: payload.rerun?.upload ?? 's3',
+                force: payload.rerun?.force ?? running.forceTts ?? true,
+                prefix: payload.rerun?.prefix,
+                publicRead: payload.rerun?.publicRead,
+                presign: payload.rerun?.presign,
+                accentPreference:
+                  payload.rerun?.accentPreference ?? running.voiceAccent ?? undefined,
+                voiceId: payload.rerun?.voiceId ?? running.voiceId ?? undefined,
+                ttsStrategy: payload.rerun?.ttsStrategy ?? running.ttsStrategy ?? undefined,
+                dialogueLanguage: payload.rerun?.dialogueLanguage,
+                dialogueStability: payload.rerun?.dialogueStability,
+                dialogueSeed: payload.rerun?.dialogueSeed,
+                settings: userSettings,
+              },
+              runId,
+            )
+          : await runAssignmentJob(
+              {
+                jobId,
+                md: markdownInput.mdPath,
+                preset: running.preset ?? undefined,
+                withTts: running.withTts ?? undefined,
+                // Only forward upload flag values supported by orchestrator.
+                // Any other persisted value (e.g. 'none' or null) is treated as "no override".
+                upload: uploadFlag,
+                forceTts: running.forceTts ?? undefined,
+                notionDatabase:
+                  running.notionDatabase ?? config.orchestrator.notionDatabaseId ?? undefined,
+                publishTarget: running.publishTarget ?? undefined,
+                ttsStrategy: running.ttsStrategy ?? undefined,
+                settings: userSettings,
+              },
+              runId,
+            );
+    } finally {
+      try {
+        await markdownInput.cleanup();
+      } catch (cleanupError) {
+        log.warn('Failed to clean up temporary markdown input', {
+          error: cleanupError instanceof Error ? cleanupError.message : String(cleanupError),
+        });
+      }
+    }
 
     const succeeded = await updateJobStateAndResult({
       id: jobId,
@@ -250,6 +254,53 @@ async function resolveMarkdownPath(mdPath: string): Promise<string> {
   }
 
   throw new Error(`Markdown file not found: ${sanitized}`);
+}
+
+interface ResolvedMarkdownInput {
+  mdPath: string;
+  cleanup: () => Promise<void>;
+}
+
+async function resolveMarkdownInput(job: {
+  id: string;
+  md: string | null;
+  mdStorageUri?: string | null;
+}): Promise<ResolvedMarkdownInput> {
+  if (job.mdStorageUri) {
+    return materializeMarkdownFromStorage(job.id, job.mdStorageUri);
+  }
+
+  if (job.md) {
+    const resolvedMdPath = await resolveMarkdownPath(job.md);
+    return {
+      mdPath: resolvedMdPath,
+      cleanup: async () => {},
+    };
+  }
+
+  throw new Error('Job is missing an approved markdown source');
+}
+
+async function materializeMarkdownFromStorage(
+  jobId: string,
+  storageUri: string,
+): Promise<ResolvedMarkdownInput> {
+  const storage = createTranscriptionStorageForUri(storageUri);
+  const contents = await storage.getText(storageUri);
+  const baseDir = await fs.mkdtemp(path.join(os.tmpdir(), `esl-job-${sanitizeForFs(jobId)}-`));
+  const mdPath = path.join(baseDir, 'assignment.md');
+  await fs.writeFile(mdPath, contents, 'utf8');
+
+  return {
+    mdPath,
+    cleanup: async () => {
+      await fs.rm(baseDir, { recursive: true, force: true });
+    },
+  };
+}
+
+function sanitizeForFs(value: string): string {
+  return value.replaceAll(/[^a-zA-Z0-9_-]/g, '_');
 }
 
 async function fileExists(filePath: string): Promise<boolean> {

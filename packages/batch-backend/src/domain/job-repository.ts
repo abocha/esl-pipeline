@@ -24,6 +24,7 @@ interface JobRow {
   id: string;
   state: string;
   md: string | null;
+  md_storage_uri: string | null;
   recording_id: string | null;
   transcript_id: string | null;
   prompt_package_id: string | null;
@@ -57,6 +58,7 @@ interface JobRow {
 // insertJob.declaration()
 export interface InsertJobParams {
   md?: string | null;
+  mdStorageUri?: string | null;
   recordingId?: string | null;
   transcriptId?: string | null;
   promptPackageId?: string | null;
@@ -143,6 +145,7 @@ async function insertJobWithState(params: InsertJobParams, state: JobState): Pro
         id,
         state,
         md,
+        md_storage_uri,
         recording_id,
         transcript_id,
         prompt_package_id,
@@ -161,11 +164,12 @@ async function insertJobWithState(params: InsertJobParams, state: JobState): Pro
         updated_at,
         user_id
       )
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21)
       RETURNING
         id,
         state,
         md,
+        md_storage_uri,
         recording_id,
         transcript_id,
         prompt_package_id,
@@ -194,6 +198,7 @@ async function insertJobWithState(params: InsertJobParams, state: JobState): Pro
         id,
         state,
         params.md ?? null,
+        params.mdStorageUri ?? null,
         params.recordingId ?? null,
         params.transcriptId ?? null,
         params.promptPackageId ?? null,
@@ -227,6 +232,7 @@ export async function getJobById(id: string): Promise<JobRecord | null> {
     const result = await client.query(
       `
       SELECT id, state, md,
+             md_storage_uri,
              recording_id, transcript_id, prompt_package_id, draft_id,
              preset, with_tts, upload,
              voice_id, voice_accent, force_tts, notion_database, publish_target, mode, notion_url, anytype_url, auto_publish,
@@ -260,6 +266,7 @@ export async function listJobs(options: JobListOptions): Promise<JobRecord[]> {
         j.id,
         j.state,
         j.md,
+        j.md_storage_uri,
         j.recording_id,
         j.transcript_id,
         j.prompt_package_id,
@@ -416,6 +423,7 @@ export async function updateJobStateAndResult(args: {
         id,
         state,
         md,
+        md_storage_uri,
         recording_id,
         transcript_id,
         prompt_package_id,
@@ -467,25 +475,28 @@ export async function updateJobStateAndResult(args: {
 export async function updateJobDraftLink(args: {
   id: string;
   expectedState: JobState;
-  md: string;
+  md?: string | null;
+  mdStorageUri?: string | null;
   draftId: string;
 }): Promise<JobRecord | null> {
-  const { id, expectedState, md, draftId } = args;
+  const { id, expectedState, md = null, mdStorageUri = null, draftId } = args;
 
   const row = await withPgClient(async (client: PoolClient) => {
     const result = await client.query(
       `
       UPDATE jobs
       SET
-        md = $1,
-        draft_id = $2,
+        md = COALESCE($1, md),
+        md_storage_uri = COALESCE($2, md_storage_uri),
+        draft_id = $3,
         updated_at = now()
-      WHERE id = $3
-        AND state = $4
+      WHERE id = $4
+        AND state = $5
       RETURNING
         id,
         state,
         md,
+        md_storage_uri,
         recording_id,
         transcript_id,
         prompt_package_id,
@@ -510,7 +521,7 @@ export async function updateJobDraftLink(args: {
         manifest_path,
         user_id
       `,
-      [md, draftId, id, expectedState],
+      [md, mdStorageUri, draftId, id, expectedState],
     );
     return result.rows[0];
   });
@@ -600,6 +611,7 @@ export async function updateJobMetadata(
         id,
         state,
         md,
+        md_storage_uri,
         recording_id,
         transcript_id,
         prompt_package_id,
@@ -645,9 +657,10 @@ export async function updateJobMetadata(
 export async function approveJob(args: {
   id: string;
   expectedState: JobState;
-  md: string;
+  md?: string | null;
+  mdStorageUri?: string | null;
 }): Promise<JobRecord | null> {
-  const { id, expectedState, md } = args;
+  const { id, expectedState, md = null, mdStorageUri = null } = args;
 
   assertTransition(expectedState, 'queued');
 
@@ -657,7 +670,8 @@ export async function approveJob(args: {
       UPDATE jobs
       SET
         state = 'queued',
-        md = $1,
+        md = COALESCE($1, md),
+        md_storage_uri = COALESCE($2, md_storage_uri),
         error = NULL,
         started_at = NULL,
         finished_at = NULL,
@@ -665,12 +679,14 @@ export async function approveJob(args: {
         notion_url = NULL,
         anytype_url = NULL,
         updated_at = now()
-      WHERE id = $2
-        AND state = $3
+      WHERE id = $3
+        AND state = $4
+        AND (COALESCE($1, md) IS NOT NULL OR COALESCE($2, md_storage_uri) IS NOT NULL)
       RETURNING
         id,
         state,
         md,
+        md_storage_uri,
         recording_id,
         transcript_id,
         prompt_package_id,
@@ -695,7 +711,7 @@ export async function approveJob(args: {
         manifest_path,
         user_id
       `,
-      [md, id, expectedState],
+      [md, mdStorageUri, id, expectedState],
     );
     return result.rows[0];
   });
@@ -749,6 +765,7 @@ function mapRowToJob(row: JobRow): JobRecord {
     id: row.id,
     state: row.state as JobState,
     md: row.md,
+    mdStorageUri: row.md_storage_uri ?? null,
     recordingId: row.recording_id ?? null,
     transcriptId: row.transcript_id ?? null,
     promptPackageId: row.prompt_package_id ?? null,

@@ -12,6 +12,7 @@ export interface JobRecord {
   id: string;
   state: JobState;
   md: string | null;
+  mdStorageUri?: string | null;
   recordingId?: string | null;
   transcriptId?: string | null;
   promptPackageId?: string | null;

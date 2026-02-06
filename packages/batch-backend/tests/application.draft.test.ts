@@ -113,6 +113,7 @@ describe('application/draft', () => {
       { draftId: draft.id, jobId: 'job-1' },
       {
         uploadDir,
+        localExport: true,
         storage: createStorageStub({
           getText: async () => 'DRAFT TEXT',
         }),
@@ -129,6 +130,7 @@ describe('application/draft', () => {
       draftId: 'draft-1',
       jobId: 'job-1',
       mdPath: path.resolve(uploadDir, 'drafts', 'draft-1.md'),
+      mdStorageUri: 'local://drafts/draft-1.md',
     });
 
     const stored = await fs.readFile(path.resolve(uploadDir, 'drafts', 'draft-1.md'), 'utf8');
@@ -137,6 +139,7 @@ describe('application/draft', () => {
       id: 'job-1',
       expectedState: 'awaiting_approval',
       md: path.resolve(uploadDir, 'drafts', 'draft-1.md'),
+      mdStorageUri: 'local://drafts/draft-1.md',
       draftId: 'draft-1',
     });
   });
@@ -184,6 +187,7 @@ describe('application/draft', () => {
       { draftId: draft.id },
       {
         uploadDir,
+        localExport: true,
         storage: createStorageStub({
           getText: async () => 'DRAFT TEXT',
         }),
@@ -204,12 +208,14 @@ describe('application/draft', () => {
       draftId: 'draft-2',
       jobId: 'job-2',
       mdPath: path.resolve(uploadDir, 'drafts', 'draft-2.md'),
+      mdStorageUri: 'local://drafts/draft-2.md',
     });
     expect(createApprovalJob).toHaveBeenCalledWith({ draft, promptPackage });
     expect(updateDraftLink).toHaveBeenCalledWith({
       id: 'job-2',
       expectedState: 'awaiting_approval',
       md: path.resolve(uploadDir, 'drafts', 'draft-2.md'),
+      mdStorageUri: 'local://drafts/draft-2.md',
       draftId: 'draft-2',
     });
   });
@@ -219,6 +225,7 @@ describe('application/draft', () => {
       { draftId: 'missing', jobId: 'job-1' },
       {
         uploadDir: '/tmp',
+        localExport: true,
         storage: createStorageStub(),
         drafts: {
           getById: async () => null,
@@ -256,13 +263,14 @@ describe('application/draft', () => {
     await materializeDraft(
       { draftId: 'draft-1', jobId: 'job-1', jobOverrides: { autoPublish: true } },
       // @ts-expect-error - partial mocks
-      { drafts, promptPackages, createApprovalJob, jobs, uploadDir, storage },
+      { drafts, promptPackages, createApprovalJob, jobs, uploadDir, storage, localExport: true },
     );
 
     expect(jobs.approveJob).toHaveBeenCalledWith({
       id: 'job-1',
       expectedState: 'awaiting_approval',
       md: path.resolve(uploadDir, 'drafts', 'draft-1.md'),
+      mdStorageUri: 'file:///tmp/draft.json',
     });
   });
 });

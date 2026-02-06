@@ -48,7 +48,11 @@ services:
       CI: 'true'
     volumes:
       - ./:/app
-      - ./.pnpm-store:/pnpm/store
+      - type: bind
+        source: ./.pnpm-store
+        target: /pnpm/store
+        bind:
+          create_host_path: false
     command: >
       sh -lc "
         pnpm install &&
@@ -74,7 +78,11 @@ services:
       PIPELINE_CWD: /app
       FILESYSTEM_UPLOAD_DIR: /app/uploads
     volumes:
-      - ./uploads:/app/uploads
+      - type: bind
+        source: ./uploads
+        target: /app/uploads
+        bind:
+          create_host_path: false
       - ./:/app
     command: >
       sh -lc "
@@ -102,7 +110,11 @@ services:
       PIPELINE_CWD: /app
       FILESYSTEM_UPLOAD_DIR: /app/uploads
     volumes:
-      - ./uploads:/app/uploads
+      - type: bind
+        source: ./uploads
+        target: /app/uploads
+        bind:
+          create_host_path: false
       - ./:/app
     command: >
       sh -lc "
@@ -128,7 +140,11 @@ services:
       PIPELINE_CWD: /app
       FILESYSTEM_UPLOAD_DIR: /app/uploads
     volumes:
-      - ./uploads:/app/uploads
+      - type: bind
+        source: ./uploads
+        target: /app/uploads
+        bind:
+          create_host_path: false
       - ./:/app
     command: >
       sh -lc "
@@ -151,7 +167,11 @@ services:
       BATCH_BACKEND_URL: http://batch-backend:8080
     volumes:
       - ./:/app
-      - ./.pnpm-store:/pnpm/store
+      - type: bind
+        source: ./.pnpm-store
+        target: /pnpm/store
+        bind:
+          create_host_path: false
     command: >
       sh -lc "
         pnpm --filter @esl-pipeline/batch-frontend dev --host 0.0.0.0

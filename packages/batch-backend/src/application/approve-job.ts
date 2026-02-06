@@ -4,11 +4,12 @@ import { publishJobEvent } from '../domain/job-events.js';
 import { approveJob } from '../domain/job-repository.js';
 import { createJobQueue } from '../infrastructure/queue-bullmq.js';
 
-export async function approveJobForPipeline(jobId: string, md: string) {
+export async function approveJobForPipeline(jobId: string, source?: { md?: string; mdStorageUri?: string }) {
   const approved = await approveJob({
     id: jobId,
     expectedState: 'awaiting_approval',
-    md,
+    md: source?.md ?? null,
+    mdStorageUri: source?.mdStorageUri ?? null,
   });
 
   if (!approved) {

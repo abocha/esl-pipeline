@@ -1,3 +1,4 @@
+import fs from 'node:fs/promises';
 import path from 'node:path';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -7,6 +8,7 @@ import * as jobRepository from '../src/domain/job-repository.js';
 import * as settingsRepository from '../src/domain/settings-repository.js';
 import * as loggerModule from '../src/infrastructure/logger.js';
 import * as orchestratorService from '../src/infrastructure/orchestrator-service.js';
+import * as transcriptionStorage from '../src/infrastructure/transcription-storage.js';
 
 vi.mock('../src/infrastructure/logger', async () => {
   const actual = await vi.importActual<typeof loggerModule>('../src/infrastructure/logger');
@@ -39,6 +41,10 @@ describe('application/process-queue-job', () => {
   const getSettingsByUserIdSpy = vi.spyOn(settingsRepository, 'getSettingsByUserId');
   const getDecryptedElevenLabsKeySpy = vi.spyOn(settingsRepository, 'getDecryptedElevenLabsKey');
   const getDecryptedNotionTokenSpy = vi.spyOn(settingsRepository, 'getDecryptedNotionToken');
+  const createTranscriptionStorageForUriSpy = vi.spyOn(
+    transcriptionStorage,
+    'createTranscriptionStorageForUri',
+  );
 
   beforeEach(() => {
     vi.clearAllMocks();
@@ -56,6 +62,7 @@ describe('application/process-queue-job', () => {
       id: 'job-1',
       state: 'queued',
       md: path.resolve(import.meta.dirname, '../../../fixtures/ok.md'),
+      mdStorageUri: null,
       preset: 'b1-default',
       withTts: true,
       upload: 's3',
@@ -345,6 +352,49 @@ describe('application/process-queue-job', () => {
       }),
       expect.any(String),
     );
+  });
+
+  it('materializes markdown from storage URI when md path is missing', async () => {
+    const initial = makeJob({
+      state: 'queued',
+      md: null,
+      mdStorageUri: 's3://esl-notion-tts/drafts/draft-1.md',
+    });
+    getJobByIdSpy.mockResolvedValue(initial);
+
+    const running = makeJob({
+      state: 'running',
+      md: null,
+      mdStorageUri: 's3://esl-notion-tts/drafts/draft-1.md',
+    });
+    const succeeded = {
+      ...running,
+      state: 'succeeded',
+      manifestPath: '/manifests/job-1.json',
+      finishedAt: new Date('2024-01-01T10:02:00Z'),
+      notionUrl: 'https://notion.so/job-1',
+      anytypeUrl: null,
+    };
+    updateJobStateAndResultSpy.mockResolvedValueOnce(running as any).mockResolvedValueOnce(
+      succeeded as any,
+    );
+
+    createTranscriptionStorageForUriSpy.mockReturnValue({
+      getText: vi.fn().mockResolvedValue('# Draft from S3'),
+    } as unknown as ReturnType<typeof transcriptionStorage.createTranscriptionStorageForUri>);
+
+    runAssignmentJobSpy.mockResolvedValue({
+      manifestPath: '/manifests/job-1.json',
+      notionUrl: 'https://notion.so/job-1',
+    });
+
+    await processQueueJob({ jobId: 'job-1' });
+
+    expect(runAssignmentJobSpy).toHaveBeenCalledTimes(1);
+    const [payload] = runAssignmentJobSpy.mock.calls[0]!;
+    expect(path.isAbsolute(payload.md)).toBe(true);
+
+    await expect(fs.access(payload.md)).rejects.toThrow();
   });
 
   it('injects user settings when job is linked to a user', async () => {
