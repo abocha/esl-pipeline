@@ -1,85 +1,59 @@
-# Quick Start Guide
+# Quick Start (Agent Ops)
 
-Get the ESL Pipeline running in 5 minutes.
+## Meta
+- Audience: AI agents, maintainers.
+- Read Time: 4 minutes.
+- Authority Level: Operational quickstart.
+- Last Verified Against: 2026-02-06 repo state.
 
----
+## Purpose
+- Provide minimal command path to install, validate, and run core workflows.
 
-## Prerequisites
+## When To Read
+- First local run.
+- Before smoke-checking a docs/code change.
 
-- **Node.js 24.11.1+** (use `nvm use 24` or check `.nvmrc`)
-- **pnpm 8+** (`corepack enable`)
-- **ffmpeg** on PATH (install via brew/apt/choco)
+## Canonical Sources
+1. `AGENTS.md`
+2. `docs/reference/agents-ssot.md`
+3. `docs/reference/env.md`
 
----
+## Current State
+- Node `24.11.1+`, pnpm, and system ffmpeg are required.
+- Root test command runs package tests recursively.
 
-## 1. Install & Configure
-
+## Setup
 ```bash
-# Clone and install
-git clone <repo-url> esl-pipeline
-cd esl-pipeline
+corepack enable
 pnpm install
-
-# Copy and edit environment
-cp .env.example .env
-# Fill in: NOTION_TOKEN, ELEVENLABS_API_KEY, AWS_* credentials
 ```
 
----
+## Repo Checks
+```bash
+pnpm -r build
+pnpm lint
+pnpm test
+```
 
-## 2. Run the CLI (Interactive Mode)
-
+## Orchestrator CLI
 ```bash
 pnpm esl --interactive
+pnpm esl --md ./lessons/mission.md --preset b1-default --with-tts --upload s3
+pnpm esl status --md ./lessons/mission.md
 ```
 
-This wizard walks you through:
-1. Selecting a student
-2. Choosing a Markdown file
-3. Configuring TTS and Notion settings
-4. Running the full pipeline
-
----
-
-## 3. Run Non-Interactively
-
+## Batch System (Optional)
 ```bash
-pnpm esl --md ./lessons/mission.md \
-  --preset b1-default \
-  --with-tts \
-  --upload s3
-```
-
-Other commands:
-```bash
-pnpm esl status --md ./lessons/mission.md   # Check status
-pnpm esl rerun --md ./lessons/mission.md    # Rerun steps
-pnpm esl --version                           # Version info
-```
-
----
-
-## 4. Run the Batch System (Optional)
-
-For the web-based batch processing interface:
-
-```bash
-# Start the stack (includes API, workers, Redis, Postgres)
 docker compose up -d
 ```
+Then open `http://localhost:5173`.
 
-Open http://localhost:5173 to access the batch interface.
+## Do / Don't
+- Do load required env values before running backend/pipeline flows.
+- Do use package-filtered commands for targeted validation.
+- Don't assume optional services (Deepgram, S3, Notion) are available in local tests.
 
-Notes:
-- Configure `.env.batch-backend` for backend services.
-- Phase 2+ transcription requires the transcribe worker and a recordings mount.
-
----
-
-## Next Steps
-
-- **Reference docs**: [`docs/reference/`](reference/)
-- **Environment variables**: [`docs/reference/env.md`](reference/env.md)
-- **Notion features**: [`docs/reference/NOTION_FEATURES.md`](reference/NOTION_FEATURES.md)
-- **Batch system**: [`docs/backend-frontend/BATCH_SYSTEM.md`](backend-frontend/BATCH_SYSTEM.md)
-- **Full architecture**: [`docs/reference/agents-ssot.md`](reference/agents-ssot.md)
+## Related
+- `docs/reference/env.md`
+- `docs/backend-frontend/BATCH_SYSTEM.md`
+- `docs/backend-frontend/backend-frontend-alignment.md`

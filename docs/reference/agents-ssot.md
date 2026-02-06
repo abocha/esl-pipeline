@@ -6,6 +6,17 @@ This document is the machine-consumable Single Source of Truth (SSOT) for how to
 
 If any statement here conflicts with guidance in [`AGENTS.md`](AGENTS.md) or [`README.md`](README.md), this document wins for automation.
 
+## SSOT Quick Index (Read Selectively)
+
+Start with `AGENTS.md` and `docs/README.md`; then read only the sections needed for the current task.
+
+- Runtime/tooling/env requirements: section `3`.
+- Package ownership and extension points: section `4`.
+- Configuration and adapter rules: section `5`.
+- Manifest and pipeline behavior contracts: sections `6` and `7`.
+- CLI/programmatic API constraints: sections `8` and `9`.
+- CI/release/workflow constraints: sections `10`, `11`, and `12`.
+
 ---
 
 ## 1. Document Meta: Purpose, Scope, and Usage

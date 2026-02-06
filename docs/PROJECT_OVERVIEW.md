@@ -1,41 +1,47 @@
-# ESL Pipeline Project Overview
+# Project Overview (Agent Baseline)
 
-ESL Pipeline automates the flow from lesson recording to published homework.
-Core system path: record -> transcribe -> assemble -> review -> publish.
+## Meta
+- Audience: AI agents, maintainers.
+- Read Time: 3 minutes.
+- Authority Level: Context baseline.
+- Last Verified Against: 2026-02-06 repo state.
 
-## Maintainer Reading Order
+## Purpose
+- Provide baseline understanding of the repository and major components.
+- Define where implementation authority lives before coding starts.
 
-1. `docs/README.md`
-2. `docs/reference/agents-ssot.md`
-3. `docs/backend-frontend/BATCH_SYSTEM.md`
-4. `docs/backend-frontend/backend-frontend-alignment.md`
-5. `packages/batch-frontend/README.md` and `packages/batch-backend/README.md`
+## When To Read
+- Before first task in this repo.
+- When switching between pipeline, backend, and frontend tasks.
 
-## What The System Does
+## Canonical Sources
+1. `AGENTS.md` (core rules).
+2. `docs/reference/agents-ssot.md` (contracts/invariants).
+3. `docs/backend-frontend/BATCH_SYSTEM.md` (active integration map).
+4. `docs/backend-frontend/backend-frontend-alignment.md` (live status).
 
-- Accepts lesson inputs (markdown and recording artifacts)
-- Produces transcript and prompt-package artifacts
-- Supports tutor review/edit before publishing
-- Runs orchestrator pipeline (validation, import, optional TTS, upload, manifest)
+## Current State
+- Monorepo with orchestrator-centric pipeline architecture.
+- Batch system has active minimal frontend workflow and queue-backed backend.
+- Documentation is archive-first for stale material and active-playbook for current guidance.
 
-## Primary User
+## Component Map
+- `packages/orchestrator`: pipeline assembly and CLI/API entrypoints.
+- `packages/md-validator`: markdown validation.
+- `packages/pmd`: PMD parsing and study-text extraction.
+- `packages/notion-adapter`: Notion import + formatting + audio attach.
+- `packages/tts-elevenlabs`: TTS generation.
+- `packages/storage-uploader`: upload adapter support.
+- `packages/batch-backend`: authenticated API + workers + queue processing.
+- `packages/batch-frontend`: minimal assignment console.
 
-Private ESL tutors who need personalized homework built from real lesson context.
+## Do / Don't
+- Do use docs for orientation and status before code edits.
+- Do confirm task-specific contracts in SSOT before implementation.
+- Don't infer status from archived design docs.
 
-## Current Product Shape
-
-- Frontend: minimal authenticated assignment console (`@esl-pipeline/batch-frontend`)
-- Backend: extended API + queue-backed processing (`@esl-pipeline/batch-backend`)
-- Pipeline runtime: orchestrator + adapters (`@esl-pipeline/orchestrator` and related packages)
-
-## Operational References
-
-- System guide: `docs/backend-frontend/BATCH_SYSTEM.md`
-- API/status tracker: `docs/backend-frontend/backend-frontend-alignment.md`
-- Transcription spec: `docs/design/TRANSCRIPTION_PIPELINE_SPEC.md`
-- Integration manual: `docs/PIPELINE_INTEGRATION_VISION.md`
-
-## Historical Material
-
-Earlier frontend vision and phased implementation docs are intentionally archived.
-Use `docs/archive/` when researching prior direction, not for current implementation rules.
+## Related
+- `docs/README.md`
+- `docs/QUICK_START.md`
+- `docs/backend-frontend/BATCH_SYSTEM.md`
+- `docs/backend-frontend/backend-frontend-alignment.md`

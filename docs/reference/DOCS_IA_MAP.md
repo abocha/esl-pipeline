@@ -1,63 +1,43 @@
-# Documentation IA Map
+# Documentation IA Map (Agent Task Router)
 
-This map lists active documentation by audience and task.
+## Meta
+- Audience: AI agents and maintainers.
+- Read Time: 3 minutes.
+- Authority Level: Active routing map.
+- Last Verified Against: 2026-02-06 repo state.
 
-## Core Entry Points
+## Purpose
+- Map common coding tasks to the minimum doc set needed for baseline context.
 
-- Docs home: `docs/README.md`
-- SSOT contracts: `docs/reference/agents-ssot.md`
-- Quick start: `docs/QUICK_START.md`
+## When To Read
+- Right after `docs/README.md`.
+- Before opening code for a new task area.
 
-## By Audience
+## Canonical Sources
+1. `AGENTS.md`
+2. `docs/reference/agents-ssot.md`
+3. `docs/backend-frontend/backend-frontend-alignment.md`
 
-### New Maintainer
+## Agent Task -> Doc
+| Task | Read First | Then Read |
+| --- | --- | --- |
+| Repo orientation | `docs/PROJECT_OVERVIEW.md` | `docs/reference/agents-ssot.md` |
+| Setup/run commands | `docs/QUICK_START.md` | `docs/reference/env.md` |
+| Pipeline contract behavior | `docs/reference/agents-ssot.md` | `docs/reference/pipeline-manifest.md` |
+| Backend/frontend capability readiness | `docs/backend-frontend/backend-frontend-alignment.md` | `docs/backend-frontend/BATCH_SYSTEM.md` |
+| Transcription flow changes | `docs/design/TRANSCRIPTION_PIPELINE_SPEC.md` | `docs/PIPELINE_INTEGRATION_VISION.md` |
+| Frontend behavior context | `packages/batch-frontend/README.md` | `docs/backend-frontend/BATCH_SYSTEM.md` |
+| Backend behavior context | `packages/batch-backend/README.md` | `docs/backend-frontend/backend-frontend-alignment.md` |
 
+## Current State
+- Active docs are concise and status-driven.
+- Historical rationale is archive-only.
+
+## Do / Don't
+- Do prefer the smallest relevant active doc set.
+- Don't jump to archive docs unless current docs are insufficient.
+
+## Related
 - `docs/README.md`
-- `docs/PROJECT_OVERVIEW.md`
-- `docs/reference/agents-ssot.md`
-
-### Backend/Frontend Integrator
-
-- `docs/backend-frontend/BATCH_SYSTEM.md`
-- `docs/backend-frontend/backend-frontend-alignment.md`
-- `docs/design/TRANSCRIPTION_PIPELINE_SPEC.md`
-
-### Frontend Engineer
-
-- `packages/batch-frontend/README.md`
-- `docs/backend-frontend/BATCH_SYSTEM.md`
-- `docs/backend-frontend/backend-frontend-alignment.md`
-
-### Backend Engineer
-
-- `packages/batch-backend/README.md`
-- `docs/backend-frontend/batch-backend-ssot.md`
-- `docs/backend-frontend/backend-frontend-alignment.md`
-
-### Orchestrator/Pipeline Engineer
-
-- `packages/orchestrator/README.md`
-- `docs/reference/agents-ssot.md`
-- `docs/reference/pipeline-manifest.md`
-
-## Task-Oriented Map
-
-- Update API status or feature readiness:
-  `docs/backend-frontend/backend-frontend-alignment.md`
-- Understand full batch flow:
-  `docs/backend-frontend/BATCH_SYSTEM.md`
-- Understand transcription artifacts and lifecycle:
-  `docs/design/TRANSCRIPTION_PIPELINE_SPEC.md`
-- Check env/config contracts:
-  `docs/reference/env.md`
-- Check manifest schema:
-  `docs/reference/pipeline-manifest.md`
-
-## Historical Lookup
-
-Use archive indexes when you need prior plans or superseded design rationale:
-
+- `docs/reference/DOCS_GOVERNANCE.md`
 - `docs/archive/README.md`
-- `docs/archive/frontend/README.md`
-- `docs/archive/pipeline/README.md`
-- `docs/archive/notes/README.md`
