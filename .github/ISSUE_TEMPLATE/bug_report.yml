@@ -1,0 +1,40 @@
+name: Bug report
+description: Report a reproducible bug or regression.
+title: '[Bug] '
+labels: ['bug']
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for the report. Please include a minimal repro so maintainers can act quickly.
+  - type: textarea
+    id: summary
+    attributes:
+      label: Summary
+      description: What happened vs what you expected?
+      placeholder: Describe the bug and expected behavior.
+    validations:
+      required: true
+  - type: textarea
+    id: repro
+    attributes:
+      label: Reproduction Steps
+      description: Exact commands or UI steps to reproduce.
+      placeholder: |
+        1. Run ...
+        2. Execute ...
+        3. Observe ...
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs / Error Output
+      description: Paste relevant logs, stack traces, or CI links.
+      render: shell
+  - type: input
+    id: environment
+    attributes:
+      label: Environment
+      description: Node, pnpm, OS, and package/version if relevant.
+      placeholder: Node 24.11.1, pnpm 10.28.2, Ubuntu 24.04

@@ -7,3 +7,5 @@ Run via root scripts:
 
 - `pnpm deps:pin`
 - `pnpm deps:upgrade:safe`
+- `pnpm deps:audit` (report only)
+- `pnpm deps:audit:strict` (non-zero exit on issues)

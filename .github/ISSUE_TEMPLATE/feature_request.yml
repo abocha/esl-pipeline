@@ -1,0 +1,34 @@
+name: Feature request
+description: Propose an enhancement with clear use-case and constraints.
+title: '[Feature] '
+labels: ['enhancement']
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem Statement
+      description: What problem are you trying to solve?
+      placeholder: Describe the pain point.
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed Solution
+      description: Describe the preferred approach.
+      placeholder: Outline the expected behavior/API/UI.
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives Considered
+      description: What alternatives did you evaluate?
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: Acceptance Criteria
+      description: What would make this complete?
+      placeholder: |
+        - [ ] ...
+        - [ ] ...

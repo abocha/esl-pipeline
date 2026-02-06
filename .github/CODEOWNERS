@@ -1,0 +1,12 @@
+* @abocha
+
+# Backend batch system
+/packages/batch-backend/ @abocha
+/packages/shared-infrastructure/ @abocha
+
+# Frontend batch UI
+/packages/batch-frontend/ @abocha
+
+# CLI/pipeline core
+/packages/orchestrator/ @abocha
+/packages/*-adapter/ @abocha
