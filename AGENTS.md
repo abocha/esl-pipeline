@@ -6,6 +6,16 @@ For authoritative, machine-consumable guidance (contracts, invariants, and workf
 
 Everything below assumes **Node.js 24.11.1+**, pnpm, and system ffmpeg.
 
+## Agent Fast Path (AI-First)
+
+If you need baseline context quickly, read in this order:
+1. `docs/README.md` (router)
+2. `docs/PROJECT_OVERVIEW.md` (component baseline)
+3. `docs/backend-frontend/backend-frontend-alignment.md` (live status)
+4. `docs/reference/agents-ssot.md` (contracts and invariants)
+
+For historical rationale, use `docs/archive/` only after checking active docs.
+
 ---
 
 ## 1. Architecture Snapshot (High-Level)

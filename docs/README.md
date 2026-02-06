@@ -1,49 +1,44 @@
-# Documentation Index
+# Documentation Router (Agent-First)
 
-This page is the primary entry point for repository documentation.
-It separates active guidance from historical artifacts to reduce drift.
+## Meta
+- Audience: AI agents, maintainers.
+- Read Time: 2 minutes.
+- Authority Level: Router.
+- Last Verified Against: 2026-02-06 repo state.
 
-## Start Here
+## Purpose
+- Route coding tasks to the smallest authoritative doc set.
+- Preserve baseline repo understanding without reading code first.
+- Keep active guidance short; keep history in archive.
 
-- Project overview: `docs/PROJECT_OVERVIEW.md`
-- Quick start: `docs/QUICK_START.md`
-- Authoritative automation contracts (SSOT): `docs/reference/agents-ssot.md`
+## When To Read
+- Immediately after `AGENTS.md`.
+- Any time task scope is unclear.
 
-## Active System Docs
+## Canonical Sources
+1. `AGENTS.md` (core bootstrap loaded on agent init).
+2. `docs/reference/agents-ssot.md` (authoritative annex, read selectively).
+3. `docs/backend-frontend/backend-frontend-alignment.md` (live backend/frontend status).
+4. `docs/backend-frontend/BATCH_SYSTEM.md` (active system map).
 
-- Batch system guide (frontend + backend integration):
-  `docs/backend-frontend/BATCH_SYSTEM.md`
-- Backend/frontend API status tracker:
-  `docs/backend-frontend/backend-frontend-alignment.md`
-- Pipeline integration operating manual:
-  `docs/PIPELINE_INTEGRATION_VISION.md`
-- Transcription pipeline spec:
-  `docs/design/TRANSCRIPTION_PIPELINE_SPEC.md`
+## Current State
+- Active docs are concise playbooks with explicit ownership.
+- Detailed historical design and phased manuals are archived.
+- Package-level details live in package READMEs.
 
-## Reference Docs
+## Do / Don't
+- Do start with this order: `AGENTS.md` -> `docs/README.md` -> task-specific doc.
+- Do prefer active docs over archive docs for implementation decisions.
+- Don't treat archived docs as current source of truth.
+- Don't duplicate status tables across active docs.
 
-- Documentation governance policy: `docs/reference/DOCS_GOVERNANCE.md`
-- Documentation information architecture map: `docs/reference/DOCS_IA_MAP.md`
-- Environment variables: `docs/reference/env.md`
-- Pipeline manifest schema: `docs/reference/pipeline-manifest.md`
-- Notion features reference: `docs/reference/NOTION_FEATURES.md`
+## Agent Start Path
+- Need overall repo orientation: `docs/PROJECT_OVERVIEW.md`.
+- Need run commands/setup: `docs/QUICK_START.md`.
+- Need contracts/invariants: `docs/reference/agents-ssot.md`.
+- Need backend/frontend readiness: `docs/backend-frontend/backend-frontend-alignment.md`.
 
-## Package-Level Docs
-
-- Frontend implementation reference: `packages/batch-frontend/README.md`
-- Backend implementation reference: `packages/batch-backend/README.md`
-- Orchestrator usage and API: `packages/orchestrator/README.md`
-
-## Working Drafts and Templates
-
-- Drafts and incubating work: `docs/drafts/`
-- Prompt/profile templates: `docs/templates/`
-
-## Archive
-
-Historical docs are archived by domain and date.
-
-- Archive index: `docs/archive/README.md`
-- Frontend archive: `docs/archive/frontend/README.md`
-- Pipeline archive: `docs/archive/pipeline/README.md`
-- Notes archive: `docs/archive/notes/README.md`
+## Related
+- `docs/reference/DOCS_IA_MAP.md`
+- `docs/reference/DOCS_GOVERNANCE.md`
+- `docs/archive/README.md`

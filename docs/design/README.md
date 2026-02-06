@@ -1,21 +1,31 @@
-# Design Docs Index
+# Design Docs Router (Active)
 
-This directory contains active design/spec docs only.
+## Meta
+- Audience: AI agents and maintainers.
+- Read Time: 1 minute.
+- Authority Level: Design router.
+- Last Verified Against: 2026-02-06 repo state.
 
-## Active
+## Purpose
+- Route readers to active design/spec docs.
+- Keep historical design generations out of active guidance.
 
-- Transcription pipeline spec: `docs/design/TRANSCRIPTION_PIPELINE_SPEC.md`
+## When To Read
+- Before tasks involving transcription pipeline design assumptions.
 
-## Historical Frontend Vision Docs
+## Canonical Sources
+1. `docs/design/TRANSCRIPTION_PIPELINE_SPEC.md`
+2. `docs/backend-frontend/backend-frontend-alignment.md`
+3. `docs/reference/agents-ssot.md`
 
-Frontend vision and implementation-manual generations were archived during the
-2026-02 documentation reorganization.
+## Current State
+- Active design spec: transcription pipeline only.
+- Historical frontend vision docs are archived under `docs/archive/frontend/2026-02/`.
 
-- Frontend archive index: `docs/archive/frontend/README.md`
-- Archived files: `docs/archive/frontend/2026-02/`
+## Do / Don't
+- Do use this file as a pointer doc.
+- Don't treat archived frontend vision docs as active implementation guidance.
 
-## Canonical Status Tracking
-
-- Runtime and automation contracts: `docs/reference/agents-ssot.md`
-- Backend/frontend API status: `docs/backend-frontend/backend-frontend-alignment.md`
-- Batch system integration guide: `docs/backend-frontend/BATCH_SYSTEM.md`
+## Related
+- `docs/archive/frontend/README.md`
+- `docs/PIPELINE_INTEGRATION_VISION.md`
