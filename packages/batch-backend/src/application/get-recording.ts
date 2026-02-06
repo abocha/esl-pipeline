@@ -1,6 +1,6 @@
 import { getRecordingById } from '../domain/recording-repository.js';
 import { getTranscriptByRecordingId } from '../domain/transcript-repository.js';
-import { recordingToDto, type RecordingDto } from './recording-dto.js';
+import { type RecordingDto, recordingToDto } from './recording-dto.js';
 
 export interface GetRecordingDependencies {
   recordings: {

@@ -7,6 +7,7 @@ This is the active operational manual for the end-to-end transcription and assig
 Phase 2+ native transcription is the active path and is implemented end-to-end.
 
 Implemented capabilities:
+
 - Recording upload ingestion (`POST /recordings/upload`)
 - Queue-backed transcription with Deepgram
 - Transcript read/edit APIs and frontend workflow
@@ -15,6 +16,7 @@ Implemented capabilities:
 - Approval handoff into orchestrator pipeline
 
 Historical phased manuals are archived under:
+
 - `docs/archive/pipeline/2026-02/`
 
 ## 2. End-to-End Flow
@@ -41,6 +43,7 @@ Historical phased manuals are archived under:
 - Profile creation prompt: `docs/templates/NEW PROFILE.txt`
 
 Canonical prompt assembly order:
+
 1. Template base
 2. Replace `INSERT PROFILE HERE` with profile text
 3. Append `[NOTES]`
@@ -49,11 +52,13 @@ Canonical prompt assembly order:
 ## 5. Runbook
 
 Prerequisites:
+
 - Backend services are up
 - `DEEPGRAM_API_KEY` configured
 - Extended API enabled on backend
 
 Operational steps:
+
 1. Upload audio in frontend.
 2. Wait for transcript readiness.
 3. Review/edit transcript.
@@ -65,9 +70,11 @@ Operational steps:
 ## 6. Configuration Notes
 
 Primary env references:
+
 - `docs/reference/env.md`
 
 Common settings for this flow:
+
 - Deepgram model/language settings
 - transcription queue settings
 - prompt template/profile path settings

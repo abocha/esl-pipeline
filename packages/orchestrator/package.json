@@ -65,8 +65,8 @@
   },
   "devDependencies": {
     "@esl-pipeline/contracts": "workspace:*",
-    "@esl-pipeline/pmd": "workspace:*",
     "@esl-pipeline/md-validator": "workspace:*",
+    "@esl-pipeline/pmd": "workspace:*",
     "@esl-pipeline/storage-uploader": "workspace:*",
     "@esl-pipeline/tts-elevenlabs": "workspace:*",
     "@types/node": "^25.2.0",

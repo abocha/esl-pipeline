@@ -2,18 +2,18 @@ import type {
   CreatePageParameters,
   CreatePageResponse,
 } from '@notionhq/client/build/src/api-endpoints.js';
+import matter from 'gray-matter';
 import { readFile } from 'node:fs/promises';
 import { basename } from 'node:path';
-import matter from 'gray-matter';
 
 import { ValidationError, noopLogger } from '@esl-pipeline/contracts';
 import { validateMarkdownFile } from '@esl-pipeline/md-validator';
 import { normalizeMarkdownSource } from '@esl-pipeline/pmd';
 
+import { mdToBlocks } from './blocks/mdToBlocks.js';
 import { chunk } from './chunk.js';
 import { createNotionClient } from './client.js';
 import { resolveDataSourceId, resolveStudentId } from './data-source.js';
-import { mdToBlocks } from './blocks/mdToBlocks.js';
 import {
   applyTopicProperty,
   buildBaseProperties,

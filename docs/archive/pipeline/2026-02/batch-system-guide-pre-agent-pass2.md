@@ -15,6 +15,7 @@ Batch Frontend (React + Vite)
 ```
 
 Current frontend shape is intentionally minimal:
+
 - Authenticated assignment console
 - Upload recording
 - Review/edit transcript
@@ -36,9 +37,11 @@ Current frontend shape is intentionally minimal:
 ## 3. Frontend Surface
 
 Canonical frontend reference:
+
 - `packages/batch-frontend/README.md`
 
 Primary frontend modules:
+
 - `packages/batch-frontend/src/ui/App.tsx`
 - `packages/batch-frontend/src/ui/minimal/MinimalShell.tsx`
 - `packages/batch-frontend/src/ui/minimal/MinimalAssignment.tsx`
@@ -100,6 +103,7 @@ Common endpoints used by the minimal flow:
 ## 7. Current Status and Gaps
 
 Use the alignment tracker for live status:
+
 - `docs/backend-frontend/backend-frontend-alignment.md`
 
 This guide intentionally avoids phase-by-phase roadmap detail to prevent drift.
@@ -113,4 +117,5 @@ This guide intentionally avoids phase-by-phase roadmap detail to prevent drift.
 ## 9. Historical Docs
 
 Earlier frontend vision and implementation-manual generations were archived:
+
 - `docs/archive/frontend/README.md`

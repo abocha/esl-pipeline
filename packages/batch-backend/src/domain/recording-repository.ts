@@ -6,8 +6,8 @@ import { logger } from '../infrastructure/logger.js';
 import {
   type RecordingRecord,
   type RecordingSource,
-  type RecordingStatus,
   RecordingSourceSchema,
+  type RecordingStatus,
   RecordingStatusSchema,
 } from './recording-model.js';
 

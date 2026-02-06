@@ -179,7 +179,9 @@ export async function runAssignmentJob(
 
       if (message.type === 'success') {
         resolved = true;
-        resolve(message.result as { manifestPath?: string; notionUrl?: string; anytypeUrl?: string });
+        resolve(
+          message.result as { manifestPath?: string; notionUrl?: string; anytypeUrl?: string },
+        );
       } else if (message.type === 'error') {
         resolved = true;
         const err = new Error(message.error?.message || String(message.error));

@@ -182,5 +182,4 @@ describe('application/submit-job', () => {
     expect(enqueue).not.toHaveBeenCalled();
     expect(publishJobEventSpy).not.toHaveBeenCalled();
   });
-
 });

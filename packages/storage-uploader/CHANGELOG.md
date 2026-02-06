@@ -6,7 +6,6 @@
 
 - Ensure HTML uploads are served with correct content type for static exports.
 
-
 ## 2.0.8
 
 ### Patch Changes

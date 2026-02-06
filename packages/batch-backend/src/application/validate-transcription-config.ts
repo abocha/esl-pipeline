@@ -5,8 +5,11 @@ import { ConfigurationError } from '@esl-pipeline/contracts';
 
 import type { BatchBackendConfig } from '../config/env.js';
 import { loadConfig } from '../config/env.js';
-import { createStorageConfigService, StorageConfigurationService } from '../infrastructure/storage-config.js';
-import { getPromptOptions, PromptOptionError } from './prompt-options.js';
+import {
+  StorageConfigurationService,
+  createStorageConfigService,
+} from '../infrastructure/storage-config.js';
+import { PromptOptionError, getPromptOptions } from './prompt-options.js';
 
 export async function validateTranscriptionConfig(
   overrides?: Partial<{
@@ -32,10 +35,9 @@ async function validateStorageConfig(storageConfig: StorageConfigurationService)
   try {
     await fs.mkdir(uploadDir, { recursive: true });
   } catch (error) {
-    throw new ConfigurationError(
-      `Unable to create filesystem upload directory: ${uploadDir}`,
-      { cause: error },
-    );
+    throw new ConfigurationError(`Unable to create filesystem upload directory: ${uploadDir}`, {
+      cause: error,
+    });
   }
 
   let stats;

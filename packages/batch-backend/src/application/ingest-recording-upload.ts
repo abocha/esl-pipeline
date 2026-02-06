@@ -8,11 +8,11 @@ import {
   insertRecording,
   updateRecordingStatus,
 } from '../domain/recording-repository.js';
+import { createTranscribeQueue } from '../infrastructure/transcribe-queue.js';
 import {
   type TranscriptionStorage,
   createTranscriptionStorage,
 } from '../infrastructure/transcription-storage.js';
-import { createTranscribeQueue } from '../infrastructure/transcribe-queue.js';
 
 export interface UploadRecordingOptions {
   filename: string;

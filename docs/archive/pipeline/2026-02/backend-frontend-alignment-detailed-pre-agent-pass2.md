@@ -288,6 +288,7 @@ The staged implementation manual is archived at
 - Approval jobs apply user defaults for preset + TTS strategy and set `upload=auto`; TTS runs when an ElevenLabs key is configured.
 
 ### Known Gaps (MVP polish)
+
 None (Stages 4-5 closed student association + prompt allowlists).
 
 ---

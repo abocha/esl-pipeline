@@ -5,8 +5,8 @@ import { Readable } from 'node:stream';
 import { describe, expect, it } from 'vitest';
 
 import { createPromptPackage } from '../src/application/create-prompt-package.js';
-import { ProfilePathError } from '../src/application/profile-path.js';
 import { getPromptPackage } from '../src/application/get-prompt-package.js';
+import { ProfilePathError } from '../src/application/profile-path.js';
 import type { BatchBackendConfig } from '../src/config/env.js';
 import type { PromptPackageRecord } from '../src/domain/prompt-package-model.js';
 import type { TranscriptRecord } from '../src/domain/transcript-model.js';
@@ -268,9 +268,7 @@ function createTranscriptRecord(): TranscriptRecord {
   };
 }
 
-function createStorageStub(
-  overrides: Partial<TranscriptionStorage> = {},
-): TranscriptionStorage {
+function createStorageStub(overrides: Partial<TranscriptionStorage> = {}): TranscriptionStorage {
   return {
     putAudio: async () => ({ uri: 'local://recordings/recording.opus', bytes: 1 }),
     putTranscript: async () => ({ uri: 'local://transcripts/transcript-1.txt', bytes: 1 }),

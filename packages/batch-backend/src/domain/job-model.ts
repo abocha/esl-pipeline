@@ -1,7 +1,12 @@
 // packages/batch-backend/src/domain/job-model.ts
 // Minimal job domain model for the batch-backend.
 // Keeps semantics simple and mirrors the `jobs` table schema used in db.ts.
-import type { JobState, JobUploadOption, PublishTarget, TtsStrategy } from '@esl-pipeline/contracts';
+import type {
+  JobState,
+  JobUploadOption,
+  PublishTarget,
+  TtsStrategy,
+} from '@esl-pipeline/contracts';
 
 export interface JobRecord {
   id: string;

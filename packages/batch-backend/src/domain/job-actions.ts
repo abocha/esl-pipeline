@@ -3,9 +3,9 @@
 // Domain model for job actions (rerun, cancel, metadata edit)
 // Defines action types, payloads, and result interfaces
 import {
-  JobActionType,
   type JobActionRequest,
   type JobActionResponse,
+  JobActionType,
   type JobConfigOverrides,
 } from '@esl-pipeline/contracts';
 

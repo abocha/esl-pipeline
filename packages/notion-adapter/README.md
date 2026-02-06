@@ -24,4 +24,3 @@ Notion adapter used by the ESL pipeline to create/update lesson pages and attach
 
 - Uses `@esl-pipeline/md-validator` for pre-import validation.
 - Uses `@esl-pipeline/pmd` for canonical markdown source normalization.
-

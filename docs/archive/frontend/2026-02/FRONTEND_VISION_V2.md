@@ -17,6 +17,7 @@ Last updated: 2025-03-10
 homework assignment in minutes with total confidence in quality and delivery.
 
 **What “next level” feels like:**
+
 - You can start from any entry point (upload, job, student, or transcript) and never lose context.
 - The system tells you what’s ready, what needs attention, and what’s safe to skip.
 - Errors are recoverable, and nothing important gets lost (notification log + audit trail).
@@ -69,6 +70,7 @@ flowchart LR
 ```
 
 **Happy path:**
+
 1. Open dashboard → see “Ready to review” items.
 2. Select a recording (or upload new).
 3. Review transcript; quick edits if needed.
@@ -81,9 +83,11 @@ flowchart LR
 ## 4. Core Views (v2)
 
 ### 4.1 Dashboard (Command Center)
+
 **Goal:** One screen to start work, resolve issues, and confirm outcomes.
 
 **Key sections:**
+
 - **Action Dock:** New assignment, Review drafts, Recover failed jobs.
 - **Activity Stream:** Real-time events with quick filters (success/failure/needs action).
 - **Pending Approvals:** Drafts ready for review, sorted by urgency.
@@ -91,14 +95,17 @@ flowchart LR
 - **Weekly Summary:** Workload and usage trends.
 
 **Next-level additions:**
+
 - Global search (students, jobs, recordings).
 - Inline “Resume flow” buttons for in‑progress items.
 - “Last 24 hours” summary in a single glance.
 
 ### 4.2 Wizard (Guided Flow)
+
 **Goal:** A reliable, frictionless workflow with context preserved across steps.
 
 **Phases:**
+
 1. **Select Student + Recording**
 2. **Transcript Review**
 3. **Notes + Prompt Settings**
@@ -107,6 +114,7 @@ flowchart LR
 6. **Completion Panel**
 
 **v2 enhancements:**
+
 - **Step header** shows “what’s done / what’s pending.”
 - **Auto‑retry transcript** with clear “processing vs missing.”
 - **Wizard summary sidebar** (student, recording, prompt, draft status).
@@ -114,34 +122,42 @@ flowchart LR
 - **Guided “What’s next?” microcopy** per step.
 
 ### 4.3 Job Monitoring (Ops View)
+
 **Goal:** Diagnose, recover, and scale batch work confidently.
 
 **v2 additions:**
+
 - Pipeline stage visualization (validate → extract → notion → tts → upload → attach).
 - Queue position + ETA (when backend exposes it).
 - One‑click retry/cancel for supported actions.
 - Expandable error details with recommended fix.
 
 ### 4.4 Student Hub
+
 **Goal:** Organize work by student, not by file or job.
 
 **v2 additions:**
+
 - Dedicated student profile view (goals, focus, history, vocab log).
 - Student‑level status banners (pending review, last lesson, next due).
 - Student “homework history” timeline with filters.
 
 ### 4.5 Settings & Integrations
+
 **Goal:** Default settings are always respected; integrations are visible and stable.
 
 **v2 additions:**
+
 - Integration health checks (Notion, ElevenLabs, Deepgram, S3).
 - Notification preferences (toast log, browser notifications, email).
 - Preset management shortcuts and import/export.
 
 ### 4.6 Notification Center
+
 **Goal:** You never lose important feedback.
 
 **v2 additions:**
+
 - Global notification center (persistent history).
 - Filters (errors, warnings, successes).
 - Click‑through to relevant entity (job, student, recording).
@@ -162,6 +178,7 @@ These upgrades drastically reduce time‑to‑publish without sacrificing contro
 ## 6. Reliability & Recovery
 
 **Requirements:**
+
 - “Processing” vs “Missing” transcript states must be distinct.
 - Clear retry paths for transcript, draft save, publish.
 - If SSE fails, fallback to polling and show status banner.
@@ -189,6 +206,7 @@ These upgrades drastically reduce time‑to‑publish without sacrificing contro
 ## 9. Dependencies & Back‑End Needs
 
 **Required for full v2 delivery:**
+
 - LLM draft generation endpoint(s).
 - Transcript status that distinguishes processing vs missing.
 - Job stage progress + ETA metadata.
@@ -200,17 +218,20 @@ These upgrades drastically reduce time‑to‑publish without sacrificing contro
 ## 10. Phased Delivery (Recommended)
 
 **Phase A – High‑ROI UX polish**
+
 - Completion panel after publish.
 - Transcript processing indicator with capped retries.
 - Wizard summary sidebar + microcopy tips.
 - Persistent notification center (history + filters).
 
 **Phase B – Power‑user workflows**
+
 - Job stage visualization + ETA.
 - Student hub deep profiles + homework history.
 - Global search and quick actions.
 
 **Phase C – Automation**
+
 - LLM draft generation + regeneration controls.
 - Auto‑publish and notification delivery.
 

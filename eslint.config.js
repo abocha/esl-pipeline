@@ -1,3 +1,4 @@
+import { fixupPluginRules } from '@eslint/compat';
 import js from '@eslint/js';
 import queryPlugin from '@tanstack/eslint-plugin-query';
 import vitestPlugin from '@vitest/eslint-plugin';
@@ -6,13 +7,12 @@ import importPlugin from 'eslint-plugin-import-x';
 import nodePlugin from 'eslint-plugin-n';
 import promisePlugin from 'eslint-plugin-promise';
 import reactPlugin from 'eslint-plugin-react';
-import reactRefreshPlugin from 'eslint-plugin-react-refresh';
 import reactHooksPlugin from 'eslint-plugin-react-hooks';
+import reactRefreshPlugin from 'eslint-plugin-react-refresh';
 import unicornPlugin from 'eslint-plugin-unicorn';
+import { defineConfig } from 'eslint/config';
 import globals from 'globals';
 import tseslint from 'typescript-eslint';
-import { fixupPluginRules } from '@eslint/compat';
-import { defineConfig } from 'eslint/config';
 
 export default defineConfig(
   {
@@ -69,7 +69,7 @@ export default defineConfig(
       'unicorn/import-style': 'off',
       'unicorn/no-array-sort': 'off',
       'unicorn/consistent-function-scoping': 'off',
-      "unicorn/numeric-separators-style": "off",
+      'unicorn/numeric-separators-style': 'off',
     },
   },
   // TypeScript rules

@@ -57,7 +57,8 @@ export function subscribeRecordingEvents(
   options?: RecordingSubscriptionOptions,
 ): () => void {
   const trackRemote = options?.trackRemote !== false;
-  const isAll = options?.allRecordings === true || !options?.recordingIds || options.recordingIds.length === 0;
+  const isAll =
+    options?.allRecordings === true || !options?.recordingIds || options.recordingIds.length === 0;
   const recordingIds = isAll ? null : [...new Set(options?.recordingIds)];
 
   const handler = (evt: Event) => {

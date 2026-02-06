@@ -6,7 +6,6 @@
 
 - Release alignment for 2.1.0.
 
-
 ## 3.1.7
 
 ### Patch Changes

@@ -70,24 +70,24 @@ Status: draft implementation plan
 
 ## Implementation Plan (Stageable)
 
-1) Backend: refresh-cookie auth
+1. Backend: refresh-cookie auth
    - Add refresh cookie set/clear helpers.
    - Update `/auth/login` to set refresh cookie, return access token + user.
    - Update `/auth/refresh` to read refresh cookie, rotate, return access token + user.
    - Add `/auth/logout` to clear refresh cookie.
    - Keep Bearer auth for existing endpoints.
 
-2) Frontend: auth bootstrap
+2. Frontend: auth bootstrap
    - Remove refresh token storage from localStorage.
    - Call `/auth/refresh` on app load; set access token in memory.
    - Ensure axios uses `withCredentials: true` (already set).
 
-3) Wizard: state persistence
+3. Wizard: state persistence
    - Persist wizard state to `localStorage` keyed by `userId`.
    - Include `version` + `updatedAt`.
    - Restore on mount; URL `step`/`jobId` win.
    - Clear on logout or wizard reset.
 
-4) Tests + docs
+4. Tests + docs
    - Update batch system auth docs.
    - Add unit test(s) for wizard persistence + auth refresh flow.

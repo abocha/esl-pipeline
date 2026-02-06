@@ -31,15 +31,12 @@ vi.mock('@esl-pipeline/storage-uploader', () => ({
     .mockResolvedValue({ url: 'https://s3.amazonaws.com/audio/file.mp3', key: 'audio/file.mp3' }),
 }));
 
-
 describe('orchestrator smoke', () => {
   afterEach(() => {
     vi.clearAllMocks();
   });
 
-  it(
-    'runs full pipeline and produces manifest',
-    async () => {
+  it('runs full pipeline and produces manifest', async () => {
     const dir = await mkdtemp(join(tmpdir(), 'orchestrator-smoke-'));
     const mdPath = join(dir, 'assignment.md');
     const audioPath = join(dir, 'lesson.mp3');
@@ -102,13 +99,9 @@ describe('orchestrator smoke', () => {
     expect(initialTimestamp).toBeDefined();
     expect(statusAfter.manifest?.timestamp).toBeDefined();
     expect(statusAfter.manifest!.timestamp >= initialTimestamp!).toBe(true);
-    },
-    15000,
-  );
+  }, 15000);
 
-  it(
-    'preserves TTS metadata when rerun without passing TTS flags',
-    async () => {
+  it('preserves TTS metadata when rerun without passing TTS flags', async () => {
     const dir = await mkdtemp(join(tmpdir(), 'orchestrator-tts-metadata-'));
     const mdPath = join(dir, 'assignment.md');
     const audioPath = join(dir, 'lesson.mp3');
@@ -159,7 +152,5 @@ describe('orchestrator smoke', () => {
     expect(manifestSecond.dialogueLanguage).toBe('es');
     expect(manifestSecond.dialogueStability).toBe(0.55);
     expect(manifestSecond.dialogueSeed).toBe(999);
-    },
-    15000,
-  );
+  }, 15000);
 });

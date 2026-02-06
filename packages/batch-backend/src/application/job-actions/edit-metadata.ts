@@ -33,7 +33,10 @@ const editMetadataSchema = z.object({
  * 4. Emit job_state_changed event
  * 5. Return success with updated job data
  */
-export async function editMetadata(jobId: string, action: EditMetadataAction): Promise<JobActionResult> {
+export async function editMetadata(
+  jobId: string,
+  action: EditMetadataAction,
+): Promise<JobActionResult> {
   // Verify job exists
   const job = await getJobById(jobId);
   if (!job) {

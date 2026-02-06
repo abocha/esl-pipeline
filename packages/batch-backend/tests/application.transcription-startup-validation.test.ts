@@ -1,6 +1,6 @@
 import fs from 'node:fs/promises';
-import path from 'node:path';
 import { tmpdir } from 'node:os';
+import path from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { validateTranscriptionConfig } from '../src/application/validate-transcription-config.js';
@@ -51,9 +51,7 @@ describe('validateTranscriptionConfig', () => {
       },
     };
 
-    await expect(
-      validateTranscriptionConfig({ config, storageConfig }),
-    ).resolves.toBeUndefined();
+    await expect(validateTranscriptionConfig({ config, storageConfig })).resolves.toBeUndefined();
   });
 
   it('throws when filesystem upload dir cannot be created', async () => {
@@ -88,8 +86,8 @@ describe('validateTranscriptionConfig', () => {
       },
     };
 
-    await expect(
-      validateTranscriptionConfig({ config, storageConfig }),
-    ).rejects.toThrow('Unable to create filesystem upload directory');
+    await expect(validateTranscriptionConfig({ config, storageConfig })).rejects.toThrow(
+      'Unable to create filesystem upload directory',
+    );
   });
 });

@@ -4,8 +4,8 @@ import path from 'node:path';
 
 import type { BatchBackendConfig } from '../config/env.js';
 import { loadConfig } from '../config/env.js';
-import { resolveRepoPath } from './prompt-assembly.js';
 import { resolveProfileRoot, resolveUserProfilePath } from './profile-path.js';
+import { resolveRepoPath } from './prompt-assembly.js';
 
 const PROMPT_EXTENSIONS = new Set(['.md', '.txt']);
 
@@ -66,7 +66,11 @@ export async function resolveAllowlistedProfilePath(
 
 export async function listPromptProfilesWithPath(
   overrides?: Partial<{ config: BatchBackendConfig }>,
-): Promise<{ profiles: PromptOptionWithPath[]; profileRoot: string; defaultProfileId: string | null }> {
+): Promise<{
+  profiles: PromptOptionWithPath[];
+  profileRoot: string;
+  defaultProfileId: string | null;
+}> {
   const config = overrides?.config ?? loadConfig();
   const { profiles, profileRoot, defaultProfileId } = await loadProfileOptionList(config);
   return { profiles, profileRoot, defaultProfileId };
@@ -248,10 +252,7 @@ async function resolveDefaultId(
   type: 'template' | 'profile',
 ): Promise<string | null> {
   if (!inputPath) {
-    throw new PromptOptionError(
-      `Prompt ${type} path is not configured`,
-      `${type}_path_missing`,
-    );
+    throw new PromptOptionError(`Prompt ${type} path is not configured`, `${type}_path_missing`);
   }
 
   const resolvedPath = await resolvePromptPath(inputPath);

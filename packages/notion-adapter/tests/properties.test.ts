@@ -9,10 +9,7 @@ describe('mapFrontmatterProperties', () => {
       Flag: { type: 'checkbox' },
     };
 
-    const mapped = mapFrontmatterProperties(
-      { Status: 'Ready', Flag: true },
-      databaseProperties,
-    );
+    const mapped = mapFrontmatterProperties({ Status: 'Ready', Flag: true }, databaseProperties);
 
     expect(mapped).toEqual({
       Status: { status: { name: 'Ready' } },

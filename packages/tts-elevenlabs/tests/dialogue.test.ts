@@ -570,11 +570,7 @@ describe('Dialogue API Integration', () => {
           languageCode: 'en',
         };
 
-        const result = await synthesizeDialogue(
-          options,
-          process.env.ELEVENLABS_API_KEY!,
-          tempDir,
-        );
+        const result = await synthesizeDialogue(options, process.env.ELEVENLABS_API_KEY!, tempDir);
 
         expect(result.audioPath).toContain('.mp3');
         expect(result.hash).toHaveLength(64);

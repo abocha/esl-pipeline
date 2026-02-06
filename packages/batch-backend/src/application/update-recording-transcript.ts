@@ -1,9 +1,12 @@
-import { getTranscriptByRecordingId, updateTranscriptStorage } from '../domain/transcript-repository.js';
+import {
+  getTranscriptByRecordingId,
+  updateTranscriptStorage,
+} from '../domain/transcript-repository.js';
 import type { TranscriptionStorage } from '../infrastructure/transcription-storage.js';
 import { createTranscriptionStorage } from '../infrastructure/transcription-storage.js';
 import {
-  buildRecordingTranscriptResponse,
   type RecordingTranscriptResponse,
+  buildRecordingTranscriptResponse,
 } from './get-recording-transcript.js';
 
 export interface UpdateRecordingTranscriptParams {

@@ -5,17 +5,21 @@ All notable changes to this project will be documented here. Dates use `YYYY-MM-
 ## [2.0.0-alpha] - 2025-12-31
 
 ### Highlights
+
 - Drafted the pipeline-native transcription spec and Phase-2+ integration framing.
 - Wired batch backend + frontend to index recordings and expose job linkage fields end-to-end.
 
 ### Added
+
 - Recording discovery endpoint plus UI affordances for selecting and filtering workdirs.
 - Nullable job linkage IDs (recording/transcript/prompt package/draft) in DTOs and persistence.
 
 ### Changed
+
 - Docker dev setup for batch services now mounts recordings and standardizes UID/GID handling.
 
 ### Docs
+
 - Added `docs/design/TRANSCRIPTION_PIPELINE_SPEC.md` and updated integration vision + backend SSOT notes.
 
 ## [1.7.0] - 2025-11-01

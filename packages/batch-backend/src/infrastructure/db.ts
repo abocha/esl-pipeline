@@ -411,10 +411,13 @@ async function ensureJobsSchema(client: PoolClient): Promise<void> {
       await client.query(statement);
     }
 
-    logger.info('Ensured database schema (jobs, recordings, transcripts, prompt_packages, drafts, users)', {
-      component: 'pg',
-      event: 'schema_ready',
-    });
+    logger.info(
+      'Ensured database schema (jobs, recordings, transcripts, prompt_packages, drafts, users)',
+      {
+        component: 'pg',
+        event: 'schema_ready',
+      },
+    );
   })().catch((error) => {
     schemaReadyPromise = null;
     throw error;

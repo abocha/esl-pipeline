@@ -1,8 +1,4 @@
-export type {
-  PipelineLogEvent,
-  PipelineLogLevel,
-  PipelineLogger,
-} from '@esl-pipeline/contracts';
+export type { PipelineLogEvent, PipelineLogLevel, PipelineLogger } from '@esl-pipeline/contracts';
 export { noopLogger } from '@esl-pipeline/contracts';
 
 export interface PipelineMetrics {

@@ -108,15 +108,15 @@ function createTranscriptRecord(): TranscriptRecord {
   };
 }
 
-function createStorageStub(
-  overrides: Partial<TranscriptionStorage> = {},
-): TranscriptionStorage {
+function createStorageStub(overrides: Partial<TranscriptionStorage> = {}): TranscriptionStorage {
   return {
     putAudio: vi.fn().mockResolvedValue({ uri: 'local://recordings/recording.opus', bytes: 1 }),
     putTranscript: vi
       .fn()
       .mockResolvedValue({ uri: 'local://transcripts/transcript-1.txt', bytes: 1 }),
-    putRawResponse: vi.fn().mockResolvedValue({ uri: 'local://transcripts/transcript-1.json', bytes: 1 }),
+    putRawResponse: vi
+      .fn()
+      .mockResolvedValue({ uri: 'local://transcripts/transcript-1.json', bytes: 1 }),
     putPromptPackage: vi
       .fn()
       .mockResolvedValue({ uri: 'local://prompt-packages/prompt-1.txt', bytes: 1 }),

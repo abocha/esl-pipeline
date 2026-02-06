@@ -50,4 +50,3 @@ export function normalizeMarkdownSource(markdown: string): NormalizedMarkdownSou
   }
   throw new Error('Expected YAML frontmatter at byte 0 or a legacy fenced block.');
 }
-

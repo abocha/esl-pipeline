@@ -6,12 +6,12 @@ This document covers production deployment of the batch backend system.
 
 ## Infrastructure Requirements
 
-| Component | Purpose | Minimum Spec |
-|-----------|---------|--------------|
-| **PostgreSQL** | Job metadata storage | 13+, 1GB RAM |
-| **Redis** | BullMQ queue, SSE pub/sub | 6+, 512MB RAM |
-| **Node.js** | Runtime | 24.10+ |
-| **ffmpeg** | Audio processing | Latest stable |
+| Component      | Purpose                   | Minimum Spec  |
+| -------------- | ------------------------- | ------------- |
+| **PostgreSQL** | Job metadata storage      | 13+, 1GB RAM  |
+| **Redis**      | BullMQ queue, SSE pub/sub | 6+, 512MB RAM |
+| **Node.js**    | Runtime                   | 24.10+        |
+| **ffmpeg**     | Audio processing          | Latest stable |
 
 ---
 
@@ -24,6 +24,7 @@ docker-compose up -d
 ```
 
 This starts:
+
 - `postgres` - database
 - `redis` - queue/cache
 - `batch-backend` - API + worker
@@ -36,6 +37,7 @@ docker-compose -f docker-compose.prod.yml up -d
 ```
 
 Production differences:
+
 - No hot-reload
 - Production log levels
 - Healthchecks enabled
@@ -45,6 +47,7 @@ Production differences:
 ## Environment Configuration
 
 Copy and configure:
+
 ```bash
 cp .env.batch-backend.example .env.batch-backend
 ```
@@ -134,6 +137,7 @@ MAX_CONCURRENT_FFMPEG=3
 ### Logs
 
 Structured JSON logs via Pino:
+
 ```bash
 LOG_LEVEL=info  # trace|debug|info|warn|error|fatal
 ```
@@ -148,6 +152,7 @@ curl http://localhost:8080/health
 ### Metrics
 
 The backend exposes a metrics interface for:
+
 - Job processing times
 - Queue depths
 - SSE connection counts
@@ -163,6 +168,7 @@ The backend exposes a metrics interface for:
 ```
 Error: connect ECONNREFUSED 127.0.0.1:6379
 ```
+
 **Fix**: Ensure Redis is running and `REDIS_HOST` is correct.
 
 ### PostgreSQL Connection Failed
@@ -170,6 +176,7 @@ Error: connect ECONNREFUSED 127.0.0.1:6379
 ```
 Error: FATAL: password authentication failed
 ```
+
 **Fix**: Verify `PG_*` credentials match your database.
 
 ### FFmpeg Not Found
@@ -177,6 +184,7 @@ Error: FATAL: password authentication failed
 ```
 FfmpegNotFoundError: ffmpeg not found
 ```
+
 **Fix**: Install ffmpeg and ensure it's on PATH or set `FFMPEG_PATH`.
 
 ### ElevenLabs Rate Limit
@@ -184,6 +192,7 @@ FfmpegNotFoundError: ffmpeg not found
 ```
 Error: 429 Too Many Requests
 ```
+
 **Fix**: Reduce `MAX_CONCURRENT_FFMPEG` or upgrade your ElevenLabs tier.
 
 ---

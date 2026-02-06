@@ -7,13 +7,11 @@
 - Relax validation rules: controlled practice counts now warn instead of failing.
 - Loosen expected heading matching to allow LLM phrasing variations.
 
-
 ## 2.1.1
 
 ### Patch Changes
 
 - chore: 2.1.0 release version bump.
-
 
 ## 2.1.0
 

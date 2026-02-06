@@ -239,7 +239,11 @@ th {
 type MarkdownItInstance = InstanceType<typeof MarkdownIt>;
 type ContainerPlugin = (md: MarkdownItInstance, name: string, options: unknown) => void;
 
-export async function renderToHtml(markdown: string, title: string, options: RenderOptions = {}): Promise<string> {
+export async function renderToHtml(
+  markdown: string,
+  title: string,
+  options: RenderOptions = {},
+): Promise<string> {
   const md = createRenderer();
   const frontmatter = extractFrontmatter(markdown);
   const resolvedTitle = resolveTitle(markdown, title, frontmatter);
@@ -266,7 +270,11 @@ export async function renderToHtml(markdown: string, title: string, options: Ren
 </html>`;
 }
 
-export async function createStaticPageHtml(markdown: string, title: string, options: RenderOptions = {}): Promise<string> {
+export async function createStaticPageHtml(
+  markdown: string,
+  title: string,
+  options: RenderOptions = {},
+): Promise<string> {
   return renderToHtml(markdown, title, options);
 }
 
@@ -509,7 +517,9 @@ function normalizeFrontmatterValue(value: string): string {
 }
 
 function renderHeader(title: string, frontmatter?: Frontmatter): string {
-  const icon = frontmatter?.icon ? `<div class="page-icon">${escapeHtml(frontmatter.icon)}</div>` : '';
+  const icon = frontmatter?.icon
+    ? `<div class="page-icon">${escapeHtml(frontmatter.icon)}</div>`
+    : '';
   const tags = [formatCurrentDate()];
   if (frontmatter?.student) tags.push(frontmatter.student);
   if (frontmatter?.topic) tags.push(frontmatter.topic);
@@ -555,9 +565,12 @@ function extractVimeoId(url: string): string | null {
 }
 
 function replaceAudioLinks(html: string): string {
-  return html.replaceAll(/<a\s+href="([^"]+\.(?:mp3|wav|m4a|aac|ogg|opus))"[^>]*>.*?<\/a>/gi, (_match, url) => {
-    return `<audio controls src="${url}"></audio>`;
-  });
+  return html.replaceAll(
+    /<a\s+href="([^"]+\.(?:mp3|wav|m4a|aac|ogg|opus))"[^>]*>.*?<\/a>/gi,
+    (_match, url) => {
+      return `<audio controls src="${url}"></audio>`;
+    },
+  );
 }
 
 function replaceColumnMarkers(html: string): string {

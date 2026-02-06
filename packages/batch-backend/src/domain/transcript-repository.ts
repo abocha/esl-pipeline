@@ -3,7 +3,11 @@ import { PoolClient } from 'pg';
 
 import { withPgClient } from '../infrastructure/db.js';
 import { logger } from '../infrastructure/logger.js';
-import { TranscriptModeSchema, type TranscriptRecord, type TranscriptMode } from './transcript-model.js';
+import {
+  type TranscriptMode,
+  TranscriptModeSchema,
+  type TranscriptRecord,
+} from './transcript-model.js';
 
 interface TranscriptRow {
   id: string;

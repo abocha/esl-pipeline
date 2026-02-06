@@ -8,9 +8,9 @@ import { afterEach, describe, expect, it } from 'vitest';
 import { StorageConfigurationService } from '@esl-pipeline/shared-infrastructure';
 
 import {
-  createTranscriptionStorageForUri,
   FilesystemTranscriptionStorage,
   S3TranscriptionStorage,
+  createTranscriptionStorageForUri,
 } from '../src/infrastructure/transcription-storage.js';
 
 async function createTempDir(): Promise<string> {

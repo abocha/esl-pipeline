@@ -21,7 +21,11 @@ export interface SharePageOptions {
   };
 }
 
-export async function sharePageToS3(spaceId: string, pageId: string, options: SharePageOptions = {}) {
+export async function sharePageToS3(
+  spaceId: string,
+  pageId: string,
+  options: SharePageOptions = {},
+) {
   const client = createAnytypeClient();
   let title = options.title;
   let body = options.markdown;

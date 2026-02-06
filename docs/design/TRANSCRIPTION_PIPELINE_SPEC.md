@@ -1,29 +1,35 @@
 # Transcription Pipeline Spec (Active)
 
 ## Meta
+
 - Audience: AI agents touching recording/transcript/prompt/draft flow.
 - Read Time: 8 minutes.
 - Authority Level: Active design spec.
 - Last Verified Against: 2026-02-06 repo state.
 
 ## Purpose
+
 - Define active artifact model, flow invariants, and integration boundaries for transcription.
 - Support implementation decisions without requiring immediate code deep-dive.
 
 ## When To Read
+
 - Before editing transcription ingest, transcript handling, prompt assembly, or draft materialization.
 
 ## Canonical Sources
+
 1. `docs/reference/agents-ssot.md`
 2. `docs/backend-frontend/backend-frontend-alignment.md`
 3. `docs/PIPELINE_INTEGRATION_VISION.md`
 
 ## Current State
+
 - Upload-based ingestion and queue-backed transcription are active.
 - Transcript review/edit, prompt package generation, draft save, and materialize+approve are active.
 - Historical staged manual is archived.
 
 ## Artifact Model
+
 - `recording`: uploaded audio artifact + status metadata.
 - `transcript`: text artifact + optional raw model response metadata.
 - `prompt package`: template/profile/notes/transcript assembly output.
@@ -31,6 +37,7 @@
 - `job`: orchestrator handoff and publish lifecycle.
 
 ## Core Invariants
+
 - Users interact with artifact IDs, not file paths.
 - Re-transcription is explicit, not implicit.
 - Draft materialization is the handoff boundary to approval/publish flow.
@@ -41,6 +48,7 @@
   4. transcript block
 
 ## Active Endpoint Surface
+
 - Recording ingest/status/transcript:
   - `/recordings/upload`
   - `/recordings/:id`
@@ -57,21 +65,26 @@
   - `/jobs/events`
 
 ## Failure Modes To Watch
+
 - storage adapter/config mismatch
 - large recording limits
 - provider outages (Deepgram, Notion, TTS, S3)
 - SSE interruptions requiring polling fallback
 
 ## Do / Don't
+
 - Do keep this doc focused on invariants and active interfaces.
 - Do move detailed implementation narratives to archive.
 - Don't duplicate endpoint status tables from alignment doc.
 
 ## Historical Detail
+
 Archived detailed version:
+
 - `docs/archive/pipeline/2026-02/transcription-pipeline-spec-pre-agent-pass2.md`
 
 ## Related
+
 - `docs/PIPELINE_INTEGRATION_VISION.md`
 - `docs/backend-frontend/BATCH_SYSTEM.md`
 - `docs/backend-frontend/backend-frontend-alignment.md`

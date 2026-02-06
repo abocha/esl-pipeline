@@ -8,6 +8,7 @@ This vision is the **end-goal experience**. To keep delivery practical, the scop
 must-haves (core workflow) and nice-to-haves (enhancements once the core is solid).
 
 ### Must-have (core workflow)
+
 - Dashboard with quick actions, activity stream, and pending approvals.
 - Wizard flow: select student → upload → transcript review → notes → draft review → publish.
 - Draft editor with split preview + validation feedback.
@@ -16,6 +17,7 @@ must-haves (core workflow) and nice-to-haves (enhancements once the core is soli
 - Settings for job defaults and integration keys.
 
 ### Nice-to-have (post-core)
+
 - Rich transcript UI (timestamps, speaker labels, inline metadata).
 - Job stage visualization, queue position, and ETA.
 - Student notification delivery and delivery status.
@@ -23,6 +25,7 @@ must-haves (core workflow) and nice-to-haves (enhancements once the core is soli
 - Collaboration features and template libraries.
 
 ### Backend assumptions (must exist for the full vision)
+
 - LLM draft generation endpoint(s) and prompt package storage.
 - Transcript status signals that distinguish “processing” vs “missing.”
 - Job progress detail (per-stage status/ETA) and queue metadata.
@@ -38,19 +41,19 @@ flowchart LR
     subgraph Recording["📹 Recording Phase"]
         A[Record Lesson] --> B[Audio Files per Student]
     end
-    
+
     subgraph Transcription["🎙️ Transcription Phase"]
         B --> C[Upload Audio]
         C --> D[Auto-Transcribe with Deepgram]
         D --> E[Review Transcript]
     end
-    
+
     subgraph Generation["🤖 Generation Phase"]
         E --> F[Auto-Assemble Prompt Package]
         F --> G[Generate Homework via LLM]
         G --> H[Review & Edit Draft]
     end
-    
+
     subgraph Publication["📤 Publication Phase"]
         H --> I[Approve Homework]
         I --> J[Generate TTS Audio]
@@ -122,6 +125,7 @@ The landing page after login. A command center for the tutor's workflow.
 ```
 
 **Key Features:**
+
 - **Quick Actions** for the most common workflows
 - **Activity Stream** showing real-time updates via SSE
 - **Pending Approvals** highlighting items needing attention
@@ -210,6 +214,7 @@ A guided, wizard-style multi-step process for creating homework.
 ```
 
 **End-goal expectations**
+
 - Timestamped, speaker-labeled transcript with basic metadata (duration, model, status).
 - Inline edits with quick-save.
 - Clear indicator when transcript is still processing vs truly missing.
@@ -255,12 +260,13 @@ A guided, wizard-style multi-step process for creating homework.
 ```
 
 **End-goal expectations**
+
 - Quick-add chips for common notes.
 - Read-only student snapshot (goal, focus areas, recent activity).
 
 #### Step 4: Review & Edit Generated Homework
 
-```
+````
 ┌─────────────────────────────────────────────────────────────────────────────┐
 │ 📤 New Assignment                                     Step 4 of 5 ━━━━━○   │
 ├─────────────────────────────────────────────────────────────────────────────┤
@@ -297,9 +303,10 @@ A guided, wizard-style multi-step process for creating homework.
 │                                                                             │
 │  [← Regenerate]  [Edit in Full Editor]         [← Back]   [Approve →]      │
 └─────────────────────────────────────────────────────────────────────────────┘
-```
+````
 
 **End-goal expectations**
+
 - Regenerate action available once LLM generation is live.
 - Validation warnings link to specific editor lines.
 
@@ -344,6 +351,7 @@ A guided, wizard-style multi-step process for creating homework.
 ```
 
 **End-goal expectations**
+
 - Estimated TTS cost (based on backend usage data).
 - Toggles for heading colorization and audio attachment.
 
@@ -395,6 +403,7 @@ Real-time tracking of all pipeline jobs.
 ```
 
 **Key Features:**
+
 - **Real-time progress** via SSE streaming
 - **Pipeline stage visualization** showing which step is active
 - **Queue position** for jobs waiting for TTS capacity
@@ -598,14 +607,14 @@ Real-time tracking of all pipeline jobs.
 
 ### 4.1 Color Palette
 
-| Token | Usage | Value |
-|-------|-------|-------|
-| `--primary` | Buttons, links, active states | `#6366f1` (Indigo) |
-| `--success` | Completed states, confirmations | `#22c55e` (Green) |
-| `--warning` | Pending states, cautions | `#f59e0b` (Amber) |
-| `--error` | Failed states, errors | `#ef4444` (Red) |
-| `--surface` | Cards, panels | `#1e1e2e` (Dark slate) |
-| `--background` | Page background | `#0f0f17` (Near black) |
+| Token          | Usage                           | Value                  |
+| -------------- | ------------------------------- | ---------------------- |
+| `--primary`    | Buttons, links, active states   | `#6366f1` (Indigo)     |
+| `--success`    | Completed states, confirmations | `#22c55e` (Green)      |
+| `--warning`    | Pending states, cautions        | `#f59e0b` (Amber)      |
+| `--error`      | Failed states, errors           | `#ef4444` (Red)        |
+| `--surface`    | Cards, panels                   | `#1e1e2e` (Dark slate) |
+| `--background` | Page background                 | `#0f0f17` (Near black) |
 
 ### 4.2 Status Pills
 
@@ -627,26 +636,31 @@ Real-time tracking of all pipeline jobs.
 ## 5. Future Enhancements (Post-MVP)
 
 ### 5.1 LLM Integration
+
 - Direct API integration (bypass manual copy-paste)
 - Multiple LLM provider options (GPT-4, Claude, Gemini)
 - Prompt version management and A/B testing
 
 ### 5.2 Analytics Dashboard
+
 - TTS usage tracking and cost projections
 - Student progress visualizations
 - Error pattern analysis
 
 ### 5.3 Collaboration Features
+
 - Multi-tutor support with shared student pools
 - Assignment templates library
 - Peer review workflows
 
 ### 5.4 Mobile App
+
 - Native iOS/Android for on-the-go lesson notes
 - Push notifications for job completion
 - Quick voice memos that auto-transcribe
 
 ### 5.5 AppFlowy Migration
+
 - Alternative to Notion for self-hosted deployments
 - Offline-first homework viewing for students
 - Custom homework app for students
@@ -662,14 +676,14 @@ flowchart TB
         State[React Query + Context]
         SSE[SSE Client]
     end
-    
+
     subgraph Backend["Backend (Fastify + BullMQ)"]
         API[REST API]
         Queue[Job Queue]
         Worker[Pipeline Worker]
         Events[Event Bus + Redis]
     end
-    
+
     subgraph External["External Services"]
         Deepgram[Deepgram ASR]
         LLM[LLM Provider]
@@ -677,7 +691,7 @@ flowchart TB
         ElevenLabs[ElevenLabs TTS]
         S3[AWS S3]
     end
-    
+
     UI --> API
     SSE --> Events
     API --> Queue

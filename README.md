@@ -98,19 +98,19 @@ For full contracts and behavior rules: `docs/reference/agents-ssot.md`.
 
 ## Repository Map
 
-| Package | Purpose | Read Next |
-| --- | --- | --- |
-| `packages/orchestrator` | CLI + pipeline API | `packages/orchestrator/README.md` |
-| `packages/md-validator` | Markdown validation | `packages/md-validator/README.md` |
-| `packages/pmd` | PMD parsing + study-text extraction | `packages/pmd/README.md` |
-| `packages/notion-adapter` | Notion publishing adapter | `packages/notion-adapter/README.md` |
-| `packages/tts-elevenlabs` | ElevenLabs integration | `packages/tts-elevenlabs/README.md` |
-| `packages/storage-uploader` | Upload/storage adapter | `packages/storage-uploader/README.md` |
-| `packages/batch-backend` | Batch API + workers | `packages/batch-backend/README.md` |
-| `packages/batch-frontend` | Batch web UI | `packages/batch-frontend/README.md` |
-| `packages/contracts` | Shared backend/frontend contracts | `packages/contracts/README.md` |
-| `packages/shared-infrastructure` | Shared infra utilities | `packages/shared-infrastructure/README.md` |
-| `packages/anytype-adapter` | Anytype adapter support | `packages/anytype-adapter/README.md` |
+| Package                          | Purpose                             | Read Next                                  |
+| -------------------------------- | ----------------------------------- | ------------------------------------------ |
+| `packages/orchestrator`          | CLI + pipeline API                  | `packages/orchestrator/README.md`          |
+| `packages/md-validator`          | Markdown validation                 | `packages/md-validator/README.md`          |
+| `packages/pmd`                   | PMD parsing + study-text extraction | `packages/pmd/README.md`                   |
+| `packages/notion-adapter`        | Notion publishing adapter           | `packages/notion-adapter/README.md`        |
+| `packages/tts-elevenlabs`        | ElevenLabs integration              | `packages/tts-elevenlabs/README.md`        |
+| `packages/storage-uploader`      | Upload/storage adapter              | `packages/storage-uploader/README.md`      |
+| `packages/batch-backend`         | Batch API + workers                 | `packages/batch-backend/README.md`         |
+| `packages/batch-frontend`        | Batch web UI                        | `packages/batch-frontend/README.md`        |
+| `packages/contracts`             | Shared backend/frontend contracts   | `packages/contracts/README.md`             |
+| `packages/shared-infrastructure` | Shared infra utilities              | `packages/shared-infrastructure/README.md` |
+| `packages/anytype-adapter`       | Anytype adapter support             | `packages/anytype-adapter/README.md`       |
 
 ## Documentation Map (By Reader)
 

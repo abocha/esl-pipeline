@@ -82,10 +82,7 @@ interface AuthenticatedAppProps {
   onLogout: () => void;
 }
 
-const AuthenticatedApp: React.FC<AuthenticatedAppProps> = ({
-  user,
-  onLogout,
-}) => {
+const AuthenticatedApp: React.FC<AuthenticatedAppProps> = ({ user, onLogout }) => {
   if (!user) return null;
   return (
     <Routes>

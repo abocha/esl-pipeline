@@ -113,9 +113,7 @@ function normalizeOptionalString(value?: string | null): string | null {
   return trimmed.length > 0 ? trimmed : null;
 }
 
-function sanitizeProfileInput(
-  input: Partial<StudentProfileInput>,
-): Partial<StudentProfileInput> {
+function sanitizeProfileInput(input: Partial<StudentProfileInput>): Partial<StudentProfileInput> {
   const sanitized: Partial<StudentProfileInput> = {};
   if ('student' in input && typeof input.student === 'string') {
     sanitized.student = normalizeStudentName(input.student);
@@ -126,7 +124,8 @@ function sanitizeProfileInput(
   if ('accentPreference' in input) {
     sanitized.accentPreference = normalizeOptionalString(input.accentPreference);
   }
-  if ('manifestPreset' in input) sanitized.manifestPreset = normalizeOptionalString(input.manifestPreset);
+  if ('manifestPreset' in input)
+    sanitized.manifestPreset = normalizeOptionalString(input.manifestPreset);
   if ('profileId' in input) sanitized.profileId = normalizeOptionalString(input.profileId);
   if ('voices' in input) {
     sanitized.voices = input.voices ? { ...input.voices } : {};
@@ -144,9 +143,7 @@ function isAscii(value: string): boolean {
 }
 
 function ensureSafeFileBase(base: string): string {
-  const cleaned = base
-    .replaceAll(/[/\\]/g, '-')
-    .replaceAll(/[^a-zA-Z0-9._-]+/g, '-');
+  const cleaned = base.replaceAll(/[/\\]/g, '-').replaceAll(/[^a-zA-Z0-9._-]+/g, '-');
   const trimmed = cleaned.replaceAll(/^-+/g, '').replaceAll(/-+$/g, '');
   if (!trimmed || !isAscii(trimmed)) {
     throw new StudentProfileStoreError(
@@ -230,7 +227,8 @@ async function loadProfiles(options: {
     const profiles = await getStudentProfilesFromOrchestrator();
     return profiles
       .map((profile): StudentProfileEntry | null => {
-        const student = typeof profile.student === 'string' ? normalizeStudentName(profile.student) : '';
+        const student =
+          typeof profile.student === 'string' ? normalizeStudentName(profile.student) : '';
         if (!student) return null;
         return {
           id: deriveStudentId(student),
@@ -265,8 +263,7 @@ export async function listStudentProfiles(
   const filtered = query
     ? profiles.filter(
         (profile) =>
-          profile.student.toLowerCase().includes(query) ||
-          profile.id.toLowerCase().includes(query),
+          profile.student.toLowerCase().includes(query) || profile.id.toLowerCase().includes(query),
       )
     : profiles;
 
@@ -332,7 +329,9 @@ export async function createStudentProfile(
   }
 
   const fileNames = new Set(
-    existing.map((profile) => (profile.filePath ? path.basename(profile.filePath) : '')).filter(Boolean),
+    existing
+      .map((profile) => (profile.filePath ? path.basename(profile.filePath) : ''))
+      .filter(Boolean),
   );
   const filename = buildStudentFilename(student, fileNames);
   const filePath = path.join(studentsDir, filename);

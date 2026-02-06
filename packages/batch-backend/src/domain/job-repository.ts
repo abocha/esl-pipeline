@@ -132,10 +132,7 @@ export async function insertApprovalJob(params: InsertJobParams): Promise<JobRec
   return insertJobWithState(params, 'awaiting_approval');
 }
 
-async function insertJobWithState(
-  params: InsertJobParams,
-  state: JobState,
-): Promise<JobRecord> {
+async function insertJobWithState(params: InsertJobParams, state: JobState): Promise<JobRecord> {
   const id = randomUUID();
   const now = new Date();
 
@@ -443,7 +440,17 @@ export async function updateJobStateAndResult(args: {
         manifest_path,
         user_id
       `,
-      [nextState, error, manifestPath, notionUrl, anytypeUrl, startedAt, finishedAt, id, expectedState],
+      [
+        nextState,
+        error,
+        manifestPath,
+        notionUrl,
+        anytypeUrl,
+        startedAt,
+        finishedAt,
+        id,
+        expectedState,
+      ],
     );
     return result.rows[0];
   });

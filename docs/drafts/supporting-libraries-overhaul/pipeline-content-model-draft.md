@@ -17,14 +17,15 @@ Preferred input is plain Markdown with YAML frontmatter at byte 0.
 Custom blocks use container directives (remark-directive style).
 
 Example (frontmatter-first, no fences):
+
 ```markdown
 ---
-title: "Homework Assignment: ..."
-student: "Tolik"
-level: "A1+"
-topic: "Grammar, Speaking"
-input_type: "generate"
-icon: "target"
+title: 'Homework Assignment: ...'
+student: 'Tolik'
+level: 'A1+'
+topic: 'Grammar, Speaking'
+input_type: 'generate'
+icon: 'target'
 speaker_labels: [Teacher]
 speaker_profiles:
   - id: Teacher
@@ -32,6 +33,7 @@ speaker_profiles:
 ---
 
 ## 1. Mission Briefing
+
 :::callout target
 Goal text...
 :::
@@ -43,6 +45,7 @@ this path remains supported but deprecated (warn immediately).
 ## Directive Vocabulary (PMD v1)
 
 Block-level directives (containers):
+
 - `:::study-text <label?>`
 - `:::toggle <title>`
 - `:::callout <icon?>`
@@ -51,11 +54,13 @@ Block-level directives (containers):
 - `:::synced-block`
 
 Leaf directives:
+
 - `:::toc`
 - `:::audio <url>`
 - `:::video <url>`
 
 Notes:
+
 - Directives can be nested where it makes sense (e.g., toggle contains headings).
 - Parsing must be nesting-aware (no regex-only parsing).
 - `:::toggle-h2` / `:::toggle-h3` remain accepted as legacy aliases.
@@ -63,11 +68,13 @@ Notes:
 ## Pipeline Content Model (AST)
 
 Top-level:
+
 - `Document`
   - `frontmatter` (parsed YAML)
   - `body` (array of `Block`)
 
 Blocks (subset):
+
 - `Section` (h2/h3 headings)
 - `Paragraph`
 - `List` / `ListItem`
@@ -83,31 +90,35 @@ Blocks (subset):
   - `attrs`: e.g. `{ url: "..." }`
 
 Directive mapping examples:
+
 - `:::callout target` -> `DirectiveBlock(type="callout", attrs={ icon: "target" })`
 - `:::toggle Answer Key` -> `DirectiveBlock(type="toggle", attrs={ title: "Answer Key" })`
 - `:::column-list` -> `DirectiveBlock(type="columns")` with child `DirectiveBlock(type="column")`
 
 ## Parser Responsibilities
 
-1) Parse YAML frontmatter (must start at byte 0).
-2) Parse Markdown into an AST (remark-parse + remark-frontmatter + remark-directive).
-3) Convert remark AST into PMD AST.
-4) Apply validation rules using the PMD AST (required sections, required directives).
-5) Emit warnings for legacy fenced input.
+1. Parse YAML frontmatter (must start at byte 0).
+2. Parse Markdown into an AST (remark-parse + remark-frontmatter + remark-directive).
+3. Convert remark AST into PMD AST.
+4. Apply validation rules using the PMD AST (required sections, required directives).
+5. Emit warnings for legacy fenced input.
 
 ## Adapter Responsibilities
 
 Notion adapter:
+
 - Map PMD blocks to Notion blocks (toggle, callout, columns, headings, tables).
 - Enforce Notion API limits (block chunking, max blocks per request).
 - Apply rendering preferences (see "Notion Rendering Preferences" below).
 - Centralize Notion client creation and retry/backoff policy to avoid drift.
 
 Frontend preview:
+
 - Render PMD blocks into React components.
 - Provide visual styling for `callout`, `toggle`, `columns`, and `study_text`.
 
 Future adapters (AppFlowy/self-hosted):
+
 - Implement a PMD -> target mapping layer only.
 - No changes to PMD authoring format required.
 
@@ -123,11 +134,13 @@ Future adapters (AppFlowy/self-hosted):
 ## Notion Rendering Preferences
 
 Answer Key + Teacher Follow-up Plan:
+
 - Render as plain toggle blocks (not heading toggles).
 - Do not apply heading colorization to these toggles.
 - Match titles case-insensitively and accept any apostrophe variant in "Teacher's".
 
 Pronunciation callout:
+
 - Treat the first `Target: ...` line as the callout's title line (not a list item).
 - Render `**Focus:**`, `**Action:**`, and `**Deliverable:**` as plain paragraphs.
 - Preserve ordered lists for example lines.

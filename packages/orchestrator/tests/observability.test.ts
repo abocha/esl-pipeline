@@ -33,7 +33,6 @@ vi.mock('@esl-pipeline/storage-uploader', () => ({
     .mockResolvedValue({ url: 'https://s3.amazonaws.com/audio/file.mp3', key: 'audio/file.mp3' }),
 }));
 
-
 describe('orchestrator observability', () => {
   afterEach(() => {
     vi.clearAllMocks();

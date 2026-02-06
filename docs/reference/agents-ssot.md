@@ -121,9 +121,9 @@ Canonical pipeline stages (implemented via orchestrator and subpackages):
    - Uses [`packages/notion-adapter`](packages/notion-adapter).
 4. Text-to-speech (TTS) generation
    - Uses [`packages/tts-elevenlabs`](packages/tts-elevenlabs) with system `ffmpeg`.
-6. Upload/storage
+5. Upload/storage
    - Uses [`packages/storage-uploader`](packages/storage-uploader) (e.g., S3).
-7. Manifest persistence
+6. Manifest persistence
    - Uses `ManifestStore` interface from [`packages/orchestrator/src/manifest.ts`](packages/orchestrator/src/manifest.ts).
 
 Stage order and semantics:
@@ -486,6 +486,7 @@ Local defaults live under [`configs`](configs):
 ### 5.2. Environment-Based Configuration
 
 Key environment variables controlling adapters and behavior (see [`README.md`](README.md) and the backend docs bundle, in order):
+
 - [`docs/backend-frontend/BATCH_SYSTEM.md`](docs/backend-frontend/BATCH_SYSTEM.md) - unified reference for the batch frontend and backend system.
 - [`docs/backend-frontend/batch-backend-ssot.md`](docs/backend-frontend/batch-backend-ssot.md) - detailed backend internals and invariants.
 - [`docs/backend-frontend/backend-frontend-alignment.md`](docs/backend-frontend/backend-frontend-alignment.md) - API contract status and gap tracking.
@@ -975,6 +976,7 @@ If specific event naming patterns exist (e.g., `pipeline.newAssignment.*`, `stag
 ### 11.2. Future Extensions (To Be Confirmed)
 
 Planned (see the backend docs bundle, in order):
+
 - [`docs/backend-frontend/BATCH_SYSTEM.md`](docs/backend-frontend/BATCH_SYSTEM.md) - unified reference for the batch frontend and backend system.
 - [`docs/backend-frontend/batch-backend-ssot.md`](docs/backend-frontend/batch-backend-ssot.md) - detailed backend internals and invariants.
 - [`docs/backend-frontend/backend-frontend-alignment.md`](docs/backend-frontend/backend-frontend-alignment.md) - API contract status and gap tracking.

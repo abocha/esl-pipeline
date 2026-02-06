@@ -61,8 +61,6 @@ function resolveDateRange(
 ): { from: Date; to: Date } {
   const now = nowFactory();
   const to = params.to ?? now;
-  const from =
-    params.from ??
-    new Date(to.getTime() - DEFAULT_RANGE_DAYS * 24 * 60 * 60 * 1000);
+  const from = params.from ?? new Date(to.getTime() - DEFAULT_RANGE_DAYS * 24 * 60 * 60 * 1000);
   return { from, to };
 }

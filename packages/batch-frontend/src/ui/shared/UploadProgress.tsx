@@ -6,11 +6,7 @@ interface UploadProgressProps {
   onCancel?: () => void;
 }
 
-export const UploadProgress: React.FC<UploadProgressProps> = ({
-  fileName,
-  progress,
-  onCancel,
-}) => {
+export const UploadProgress: React.FC<UploadProgressProps> = ({ fileName, progress, onCancel }) => {
   const normalized = Math.max(0, Math.min(100, Math.round(progress)));
 
   return (

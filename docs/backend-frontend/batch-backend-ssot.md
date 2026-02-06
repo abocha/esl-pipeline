@@ -181,6 +181,7 @@ Experimental/extended HTTP routes exist in the codebase but are guarded by `BATC
 They are considered non-canonical until explicitly documented here.
 
 Extended API routes (require auth when the extended API is enabled):
+
 - POST /recordings/upload (optional `studentId` or `student` query param)
 - GET /recordings (supports `status`, `studentId`/`student`, `q`, `limit`, `offset`, `order`)
 - GET /recordings/:recordingId

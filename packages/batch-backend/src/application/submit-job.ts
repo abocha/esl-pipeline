@@ -126,7 +126,6 @@ function validateSubmitJobRequest(req: SubmitJobRequest): void {
       'invalid_tts_strategy',
     );
   }
-
 }
 
 // submitJob.declaration()

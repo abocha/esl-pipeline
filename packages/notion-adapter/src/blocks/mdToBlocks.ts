@@ -565,7 +565,9 @@ export function mdToBlocks(md: string): BlockObjectRequest[] {
       const trimmed = line.trim();
 
       // Check for start of new block
-      if (/^:::(column|callout|toggle(?:-|\b)|study-text|synced-block|column-list)/i.test(trimmed)) {
+      if (
+        /^:::(column|callout|toggle(?:-|\b)|study-text|synced-block|column-list)/i.test(trimmed)
+      ) {
         depth++;
       }
       // Check for end of block

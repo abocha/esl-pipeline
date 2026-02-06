@@ -117,10 +117,7 @@ class RedisRecordingEventBridge {
 
     const message = JSON.stringify(payload);
 
-    const channels = [
-      `${RECORDING_CHANNEL_PREFIX}${event.recording.id}`,
-      CHANNEL_BASE,
-    ];
+    const channels = [`${RECORDING_CHANNEL_PREFIX}${event.recording.id}`, CHANNEL_BASE];
 
     void Promise.all(
       channels.map((channel) =>

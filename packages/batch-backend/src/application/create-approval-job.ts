@@ -7,11 +7,8 @@ import { publishJobEvent } from '../domain/job-events.js';
 import type { JobRecord } from '../domain/job-model.js';
 import { insertApprovalJob } from '../domain/job-repository.js';
 import type { PromptPackageRecord } from '../domain/prompt-package-model.js';
-import {
-  createDefaultSettings,
-  getSettingsByUserId,
-} from '../domain/settings-repository.js';
 import { getDefaultSettings } from '../domain/settings-model.js';
+import { createDefaultSettings, getSettingsByUserId } from '../domain/settings-repository.js';
 
 export interface CreateApprovalJobParams {
   draft: DraftRecord;

@@ -30,7 +30,11 @@ describe('anytype client', () => {
 
   it('sends auth headers', async () => {
     const fetchMock = vi.fn().mockResolvedValue(buildResponse([{ id: 'space-1', name: 'Main' }]));
-    const client = new AnytypeClient({ auth: 'token-123', baseUrl: 'http://localhost:31009/v1', fetchImpl: fetchMock as unknown as typeof fetch });
+    const client = new AnytypeClient({
+      auth: 'token-123',
+      baseUrl: 'http://localhost:31009/v1',
+      fetchImpl: fetchMock as unknown as typeof fetch,
+    });
 
     await client.listSpaces();
 
@@ -48,7 +52,11 @@ describe('anytype client', () => {
 
   it('throws on non-ok response', async () => {
     const fetchMock = vi.fn().mockResolvedValue(buildErrorResponse());
-    const client = new AnytypeClient({ auth: 'token-123', baseUrl: 'http://localhost:31009/v1', fetchImpl: fetchMock as unknown as typeof fetch });
+    const client = new AnytypeClient({
+      auth: 'token-123',
+      baseUrl: 'http://localhost:31009/v1',
+      fetchImpl: fetchMock as unknown as typeof fetch,
+    });
 
     await expect(client.listSpaces()).rejects.toThrow(/Anytype API Error/);
   });
