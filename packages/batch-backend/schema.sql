@@ -145,6 +145,39 @@ CREATE TABLE IF NOT EXISTS template_revisions (
   restored_from_revision_id UUID NULL REFERENCES template_revisions(id) ON DELETE SET NULL
 );
 
+CREATE TABLE IF NOT EXISTS students (
+  id UUID PRIMARY KEY,
+  student TEXT NOT NULL,
+  db_id TEXT NULL,
+  page_parent_id TEXT NULL,
+  color_preset TEXT NULL,
+  voices JSONB NOT NULL DEFAULT '{}'::jsonb,
+  manifest_preset TEXT NULL,
+  accent_preference TEXT NULL,
+  profile_id TEXT NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS profiles (
+  id TEXT PRIMARY KEY,
+  label TEXT NOT NULL,
+  active_revision_id UUID NULL REFERENCES profile_revisions(id) ON DELETE SET NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS student_profile_bindings (
+  id UUID PRIMARY KEY,
+  student_id UUID NOT NULL REFERENCES students(id) ON DELETE CASCADE,
+  profile_id TEXT NOT NULL REFERENCES profiles(id) ON DELETE RESTRICT,
+  effective_from TIMESTAMPTZ NOT NULL,
+  effective_to TIMESTAMPTZ NULL,
+  reason TEXT NULL,
+  changed_by UUID NULL REFERENCES users(id) ON DELETE SET NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
 -- Ensure user_id is present on upgrades and has the correct FK
 ALTER TABLE jobs ADD COLUMN IF NOT EXISTS user_id UUID NULL;
 ALTER TABLE jobs ADD COLUMN IF NOT EXISTS transcribe_workdir TEXT NULL;
@@ -191,6 +224,30 @@ ALTER TABLE template_revisions ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ N
 ALTER TABLE template_revisions ADD COLUMN IF NOT EXISTS created_by UUID NULL;
 ALTER TABLE template_revisions ADD COLUMN IF NOT EXISTS restored_from_revision_id UUID NULL;
 
+ALTER TABLE students ADD COLUMN IF NOT EXISTS student TEXT NULL;
+ALTER TABLE students ADD COLUMN IF NOT EXISTS db_id TEXT NULL;
+ALTER TABLE students ADD COLUMN IF NOT EXISTS page_parent_id TEXT NULL;
+ALTER TABLE students ADD COLUMN IF NOT EXISTS color_preset TEXT NULL;
+ALTER TABLE students ADD COLUMN IF NOT EXISTS voices JSONB NOT NULL DEFAULT '{}'::jsonb;
+ALTER TABLE students ADD COLUMN IF NOT EXISTS manifest_preset TEXT NULL;
+ALTER TABLE students ADD COLUMN IF NOT EXISTS accent_preference TEXT NULL;
+ALTER TABLE students ADD COLUMN IF NOT EXISTS profile_id TEXT NULL;
+ALTER TABLE students ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ NULL;
+ALTER TABLE students ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ NULL;
+
+ALTER TABLE profiles ADD COLUMN IF NOT EXISTS label TEXT NULL;
+ALTER TABLE profiles ADD COLUMN IF NOT EXISTS active_revision_id UUID NULL;
+ALTER TABLE profiles ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ NULL;
+ALTER TABLE profiles ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ NULL;
+
+ALTER TABLE student_profile_bindings ADD COLUMN IF NOT EXISTS student_id UUID NULL;
+ALTER TABLE student_profile_bindings ADD COLUMN IF NOT EXISTS profile_id TEXT NULL;
+ALTER TABLE student_profile_bindings ADD COLUMN IF NOT EXISTS effective_from TIMESTAMPTZ NULL;
+ALTER TABLE student_profile_bindings ADD COLUMN IF NOT EXISTS effective_to TIMESTAMPTZ NULL;
+ALTER TABLE student_profile_bindings ADD COLUMN IF NOT EXISTS reason TEXT NULL;
+ALTER TABLE student_profile_bindings ADD COLUMN IF NOT EXISTS changed_by UUID NULL;
+ALTER TABLE student_profile_bindings ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ NULL;
+
 CREATE INDEX IF NOT EXISTS idx_jobs_user_id ON jobs(user_id);
 CREATE INDEX IF NOT EXISTS idx_jobs_recording_id ON jobs(recording_id);
 CREATE INDEX IF NOT EXISTS idx_jobs_transcript_id ON jobs(transcript_id);
@@ -211,6 +268,16 @@ CREATE INDEX IF NOT EXISTS idx_profile_revisions_profile_id_created_at ON profil
 CREATE INDEX IF NOT EXISTS idx_profile_revisions_profile_id_hash ON profile_revisions(profile_id, content_hash);
 CREATE INDEX IF NOT EXISTS idx_template_revisions_template_id_created_at ON template_revisions(template_id, created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_template_revisions_template_id_hash ON template_revisions(template_id, content_hash);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_students_student_lower_unique ON students((LOWER(student)));
+CREATE INDEX IF NOT EXISTS idx_students_profile_id ON students(profile_id);
+CREATE INDEX IF NOT EXISTS idx_students_created_at ON students(created_at);
+CREATE INDEX IF NOT EXISTS idx_profiles_label ON profiles(label);
+CREATE INDEX IF NOT EXISTS idx_profiles_active_revision_id ON profiles(active_revision_id);
+CREATE INDEX IF NOT EXISTS idx_student_profile_bindings_student_id ON student_profile_bindings(student_id);
+CREATE INDEX IF NOT EXISTS idx_student_profile_bindings_profile_id ON student_profile_bindings(profile_id);
+CREATE INDEX IF NOT EXISTS idx_student_profile_bindings_effective_from ON student_profile_bindings(effective_from DESC);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_student_profile_bindings_single_active
+  ON student_profile_bindings(student_id) WHERE effective_to IS NULL;
 
 -- Trigger function to keep updated_at in sync on any UPDATE.
 CREATE OR REPLACE FUNCTION set_jobs_updated_at()
@@ -250,6 +317,24 @@ $$ LANGUAGE plpgsql;
 
 -- Trigger function to keep updated_at in sync for drafts on any UPDATE.
 CREATE OR REPLACE FUNCTION set_drafts_updated_at()
+RETURNS TRIGGER AS $$
+BEGIN
+  NEW.updated_at = NOW();
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+-- Trigger function to keep updated_at in sync for students on any UPDATE.
+CREATE OR REPLACE FUNCTION set_students_updated_at()
+RETURNS TRIGGER AS $$
+BEGIN
+  NEW.updated_at = NOW();
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+-- Trigger function to keep updated_at in sync for profiles on any UPDATE.
+CREATE OR REPLACE FUNCTION set_profiles_updated_at()
 RETURNS TRIGGER AS $$
 BEGIN
   NEW.updated_at = NOW();
@@ -306,6 +391,22 @@ BEFORE UPDATE ON drafts
 FOR EACH ROW
 EXECUTE FUNCTION set_drafts_updated_at();
 
+-- Ensure a single trigger with the expected name is present for students.
+DROP TRIGGER IF EXISTS set_students_updated_at ON students;
+
+CREATE TRIGGER set_students_updated_at
+BEFORE UPDATE ON students
+FOR EACH ROW
+EXECUTE FUNCTION set_students_updated_at();
+
+-- Ensure a single trigger with the expected name is present for profiles.
+DROP TRIGGER IF EXISTS set_profiles_updated_at ON profiles;
+
+CREATE TRIGGER set_profiles_updated_at
+BEFORE UPDATE ON profiles
+FOR EACH ROW
+EXECUTE FUNCTION set_profiles_updated_at();
+
 -- Ensure a single trigger with the expected name is present for users.
 DROP TRIGGER IF EXISTS set_users_updated_at ON users;
 
@@ -343,6 +444,26 @@ ALTER TABLE recordings ADD CONSTRAINT recordings_status_check
 -- Transcript mode validation
 ALTER TABLE transcripts ADD CONSTRAINT transcripts_mode_check
   CHECK (mode IN ('timeline', 'stack'));
+
+DO $$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'students_profile_id_fkey') THEN
+    ALTER TABLE students
+      ADD CONSTRAINT students_profile_id_fkey
+      FOREIGN KEY (profile_id) REFERENCES profiles(id) ON DELETE SET NULL;
+  END IF;
+END $$;
+
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_constraint WHERE conname = 'student_profile_bindings_effective_window_check'
+  ) THEN
+    ALTER TABLE student_profile_bindings
+      ADD CONSTRAINT student_profile_bindings_effective_window_check
+      CHECK (effective_to IS NULL OR effective_to > effective_from);
+  END IF;
+END $$;
 
 -- Email format validation (basic)
 ALTER TABLE users ADD CONSTRAINT users_email_check

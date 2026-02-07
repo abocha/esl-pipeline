@@ -272,6 +272,94 @@ const TEMPLATE_REVISIONS_INDEX_PATCHES: string[] = [
   'CREATE INDEX IF NOT EXISTS idx_template_revisions_template_id_hash ON template_revisions (template_id, content_hash)',
 ];
 
+const STUDENTS_TABLE_SQL = `
+CREATE TABLE IF NOT EXISTS students (
+  id UUID PRIMARY KEY,
+  student TEXT NOT NULL,
+  db_id TEXT NULL,
+  page_parent_id TEXT NULL,
+  color_preset TEXT NULL,
+  voices JSONB NOT NULL DEFAULT '{}'::jsonb,
+  manifest_preset TEXT NULL,
+  accent_preference TEXT NULL,
+  profile_id TEXT NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+`;
+
+const STUDENTS_SCHEMA_PATCHES: string[] = [
+  'ALTER TABLE students ADD COLUMN IF NOT EXISTS student TEXT NULL',
+  'ALTER TABLE students ADD COLUMN IF NOT EXISTS db_id TEXT NULL',
+  'ALTER TABLE students ADD COLUMN IF NOT EXISTS page_parent_id TEXT NULL',
+  'ALTER TABLE students ADD COLUMN IF NOT EXISTS color_preset TEXT NULL',
+  "ALTER TABLE students ADD COLUMN IF NOT EXISTS voices JSONB NOT NULL DEFAULT '{}'::jsonb",
+  'ALTER TABLE students ADD COLUMN IF NOT EXISTS manifest_preset TEXT NULL',
+  'ALTER TABLE students ADD COLUMN IF NOT EXISTS accent_preference TEXT NULL',
+  'ALTER TABLE students ADD COLUMN IF NOT EXISTS profile_id TEXT NULL',
+  'ALTER TABLE students ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ NULL',
+  'ALTER TABLE students ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ NULL',
+];
+
+const STUDENTS_INDEX_PATCHES: string[] = [
+  'CREATE UNIQUE INDEX IF NOT EXISTS idx_students_student_lower_unique ON students ((LOWER(student)))',
+  'CREATE INDEX IF NOT EXISTS idx_students_profile_id ON students (profile_id)',
+  'CREATE INDEX IF NOT EXISTS idx_students_created_at ON students (created_at)',
+];
+
+const PROFILES_TABLE_SQL = `
+CREATE TABLE IF NOT EXISTS profiles (
+  id TEXT PRIMARY KEY,
+  label TEXT NOT NULL,
+  active_revision_id UUID NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+`;
+
+const PROFILES_SCHEMA_PATCHES: string[] = [
+  'ALTER TABLE profiles ADD COLUMN IF NOT EXISTS id TEXT NULL',
+  'ALTER TABLE profiles ADD COLUMN IF NOT EXISTS label TEXT NULL',
+  'ALTER TABLE profiles ADD COLUMN IF NOT EXISTS active_revision_id UUID NULL',
+  'ALTER TABLE profiles ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ NULL',
+  'ALTER TABLE profiles ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ NULL',
+];
+
+const PROFILES_INDEX_PATCHES: string[] = [
+  'CREATE INDEX IF NOT EXISTS idx_profiles_label ON profiles (label)',
+  'CREATE INDEX IF NOT EXISTS idx_profiles_active_revision_id ON profiles (active_revision_id)',
+];
+
+const STUDENT_PROFILE_BINDINGS_TABLE_SQL = `
+CREATE TABLE IF NOT EXISTS student_profile_bindings (
+  id UUID PRIMARY KEY,
+  student_id UUID NOT NULL,
+  profile_id TEXT NOT NULL,
+  effective_from TIMESTAMPTZ NOT NULL,
+  effective_to TIMESTAMPTZ NULL,
+  reason TEXT NULL,
+  changed_by UUID NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+`;
+
+const STUDENT_PROFILE_BINDINGS_SCHEMA_PATCHES: string[] = [
+  'ALTER TABLE student_profile_bindings ADD COLUMN IF NOT EXISTS student_id UUID NULL',
+  'ALTER TABLE student_profile_bindings ADD COLUMN IF NOT EXISTS profile_id TEXT NULL',
+  'ALTER TABLE student_profile_bindings ADD COLUMN IF NOT EXISTS effective_from TIMESTAMPTZ NULL',
+  'ALTER TABLE student_profile_bindings ADD COLUMN IF NOT EXISTS effective_to TIMESTAMPTZ NULL',
+  'ALTER TABLE student_profile_bindings ADD COLUMN IF NOT EXISTS reason TEXT NULL',
+  'ALTER TABLE student_profile_bindings ADD COLUMN IF NOT EXISTS changed_by UUID NULL',
+  'ALTER TABLE student_profile_bindings ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ NULL',
+];
+
+const STUDENT_PROFILE_BINDINGS_INDEX_PATCHES: string[] = [
+  'CREATE INDEX IF NOT EXISTS idx_student_profile_bindings_student_id ON student_profile_bindings (student_id)',
+  'CREATE INDEX IF NOT EXISTS idx_student_profile_bindings_profile_id ON student_profile_bindings (profile_id)',
+  'CREATE INDEX IF NOT EXISTS idx_student_profile_bindings_effective_from ON student_profile_bindings (effective_from DESC)',
+  'CREATE UNIQUE INDEX IF NOT EXISTS idx_student_profile_bindings_single_active ON student_profile_bindings (student_id) WHERE effective_to IS NULL',
+];
+
 const DRAFTS_TABLE_SQL = `
 CREATE TABLE IF NOT EXISTS drafts (
   id UUID PRIMARY KEY,
@@ -411,6 +499,62 @@ BEGIN
       ADD CONSTRAINT template_revisions_source_check CHECK (source IN ('create', 'update', 'restore'));
   END IF;
 END $$;`,
+  `DO $$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'profiles_active_revision_id_fkey') THEN
+    ALTER TABLE profiles
+      ADD CONSTRAINT profiles_active_revision_id_fkey
+      FOREIGN KEY (active_revision_id) REFERENCES profile_revisions(id) ON DELETE SET NULL;
+  END IF;
+END $$;`,
+  `DO $$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'students_profile_id_fkey') THEN
+    ALTER TABLE students
+      ADD CONSTRAINT students_profile_id_fkey
+      FOREIGN KEY (profile_id) REFERENCES profiles(id) ON DELETE SET NULL;
+  END IF;
+END $$;`,
+  `DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_constraint WHERE conname = 'student_profile_bindings_student_id_fkey'
+  ) THEN
+    ALTER TABLE student_profile_bindings
+      ADD CONSTRAINT student_profile_bindings_student_id_fkey
+      FOREIGN KEY (student_id) REFERENCES students(id) ON DELETE CASCADE;
+  END IF;
+END $$;`,
+  `DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_constraint WHERE conname = 'student_profile_bindings_profile_id_fkey'
+  ) THEN
+    ALTER TABLE student_profile_bindings
+      ADD CONSTRAINT student_profile_bindings_profile_id_fkey
+      FOREIGN KEY (profile_id) REFERENCES profiles(id) ON DELETE RESTRICT;
+  END IF;
+END $$;`,
+  `DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_constraint WHERE conname = 'student_profile_bindings_changed_by_fkey'
+  ) THEN
+    ALTER TABLE student_profile_bindings
+      ADD CONSTRAINT student_profile_bindings_changed_by_fkey
+      FOREIGN KEY (changed_by) REFERENCES users(id) ON DELETE SET NULL;
+  END IF;
+END $$;`,
+  `DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_constraint WHERE conname = 'student_profile_bindings_effective_window_check'
+  ) THEN
+    ALTER TABLE student_profile_bindings
+      ADD CONSTRAINT student_profile_bindings_effective_window_check
+      CHECK (effective_to IS NULL OR effective_to > effective_from);
+  END IF;
+END $$;`,
 ];
 
 const TRANSCRIPTION_TRIGGER_PATCHES: string[] = [
@@ -462,6 +606,30 @@ $$ LANGUAGE plpgsql;`,
 BEFORE UPDATE ON drafts
 FOR EACH ROW
 EXECUTE FUNCTION set_drafts_updated_at()`,
+  `CREATE OR REPLACE FUNCTION set_students_updated_at()
+RETURNS TRIGGER AS $$
+BEGIN
+  NEW.updated_at = NOW();
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;`,
+  'DROP TRIGGER IF EXISTS set_students_updated_at ON students',
+  `CREATE TRIGGER set_students_updated_at
+BEFORE UPDATE ON students
+FOR EACH ROW
+EXECUTE FUNCTION set_students_updated_at()`,
+  `CREATE OR REPLACE FUNCTION set_profiles_updated_at()
+RETURNS TRIGGER AS $$
+BEGIN
+  NEW.updated_at = NOW();
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;`,
+  'DROP TRIGGER IF EXISTS set_profiles_updated_at ON profiles',
+  `CREATE TRIGGER set_profiles_updated_at
+BEFORE UPDATE ON profiles
+FOR EACH ROW
+EXECUTE FUNCTION set_profiles_updated_at()`,
 ];
 
 const USERS_TABLE_SQL = `
@@ -541,6 +709,30 @@ async function ensureJobsSchema(client: PoolClient): Promise<void> {
       await client.query(indexSql);
     }
 
+    await client.query(STUDENTS_TABLE_SQL);
+    for (const statement of STUDENTS_SCHEMA_PATCHES) {
+      await client.query(statement);
+    }
+    for (const indexSql of STUDENTS_INDEX_PATCHES) {
+      await client.query(indexSql);
+    }
+
+    await client.query(PROFILES_TABLE_SQL);
+    for (const statement of PROFILES_SCHEMA_PATCHES) {
+      await client.query(statement);
+    }
+    for (const indexSql of PROFILES_INDEX_PATCHES) {
+      await client.query(indexSql);
+    }
+
+    await client.query(STUDENT_PROFILE_BINDINGS_TABLE_SQL);
+    for (const statement of STUDENT_PROFILE_BINDINGS_SCHEMA_PATCHES) {
+      await client.query(statement);
+    }
+    for (const indexSql of STUDENT_PROFILE_BINDINGS_INDEX_PATCHES) {
+      await client.query(indexSql);
+    }
+
     // Users table
     await client.query(USERS_TABLE_SQL);
 
@@ -552,7 +744,7 @@ async function ensureJobsSchema(client: PoolClient): Promise<void> {
     }
 
     logger.info(
-      'Ensured database schema (jobs, recordings, transcripts, prompt_packages, drafts, profile_revisions, template_revisions, users)',
+      'Ensured database schema (jobs, recordings, transcripts, prompt_packages, drafts, profile_revisions, template_revisions, students, profiles, student_profile_bindings, users)',
       {
         component: 'pg',
         event: 'schema_ready',
