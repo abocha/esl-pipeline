@@ -11,12 +11,14 @@ import type {
   RecordingListItem,
   RecordingStatus,
   RecordingTranscriptResponse,
+  StudentOption,
 } from '../../utils/api';
 import {
   approveJob,
   cancelJob,
   createDraft,
   createPromptPackage,
+  fetchStudentOptions,
   fetchJobOptions,
   fetchPromptOptions,
   fetchRecordingTranscript,
@@ -77,6 +79,9 @@ export const MinimalAssignment: React.FC = () => {
   const [publishTarget, setPublishTarget] = useState<'notion' | 'anytype'>('notion');
   const [jobOptions, setJobOptions] = useState<JobOptionsResponse | null>(null);
   const [jobOptionsError, setJobOptionsError] = useState<string | null>(null);
+  const [studentOptions, setStudentOptions] = useState<StudentOption[]>([]);
+  const [studentOptionsError, setStudentOptionsError] = useState<string | null>(null);
+  const [selectedStudentId, setSelectedStudentId] = useState('');
 
   const [actionBusy, setActionBusy] = useState<'rerun' | 'cancel' | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
@@ -145,10 +150,26 @@ export const MinimalAssignment: React.FC = () => {
     }
   }, []);
 
+  const loadStudentOptions = useCallback(async () => {
+    try {
+      const response = await fetchStudentOptions();
+      setStudentOptions(response.students ?? []);
+      setSelectedStudentId((current) => {
+        if (current) return current;
+        return response.students.find((student) => student.name === 'Default')?.id ?? '';
+      });
+      setStudentOptionsError(null);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Unable to load students.';
+      setStudentOptionsError(message);
+    }
+  }, []);
+
   useEffect(() => {
     void loadPromptOptions();
     void loadJobOptions();
-  }, [loadJobOptions, loadPromptOptions]);
+    void loadStudentOptions();
+  }, [loadJobOptions, loadPromptOptions, loadStudentOptions]);
 
   const handleUpload = useCallback(
     async (file: File) => {
@@ -163,6 +184,7 @@ export const MinimalAssignment: React.FC = () => {
       uploadAbortRef.current = controller;
       try {
         const response = await uploadRecording(file, {
+          studentId: selectedStudentId || undefined,
           signal: controller.signal,
           onProgress: (progress) => setUploadProgress(progress),
         });
@@ -182,7 +204,7 @@ export const MinimalAssignment: React.FC = () => {
         uploadAbortRef.current = null;
       }
     },
-    [resetFlow, uploading],
+    [resetFlow, selectedStudentId, uploading],
   );
 
   const handleFiles = (files: File[]) => {
@@ -313,18 +335,18 @@ export const MinimalAssignment: React.FC = () => {
     return promptOptions.defaults.templateId ?? promptOptions.templates?.[0]?.id ?? '';
   }, [promptOptions]);
 
-  const selectedProfileId = useMemo(() => {
-    if (!promptOptions) return '';
-    return promptOptions.defaults.profileId ?? promptOptions.profiles?.[0]?.id ?? '';
-  }, [promptOptions]);
+  const selectedStudent = useMemo(
+    () => studentOptions.find((student) => student.id === selectedStudentId) ?? null,
+    [studentOptions, selectedStudentId],
+  );
 
   const handleGeneratePrompt = async () => {
     if (!recording?.recordingId) {
       setPromptError('Upload a recording first.');
       return;
     }
-    if (!selectedTemplateId || !selectedProfileId) {
-      setPromptError('Prompt defaults are missing. Check prompt templates in settings.');
+    if (!selectedTemplateId) {
+      setPromptError('Prompt template defaults are missing. Check prompt templates in settings.');
       return;
     }
     if (transcriptStatus !== 'ready') {
@@ -337,7 +359,6 @@ export const MinimalAssignment: React.FC = () => {
     try {
       const response = await createPromptPackage(recording.recordingId, {
         templateId: selectedTemplateId,
-        profileId: selectedProfileId,
       });
       setPromptPackage(response);
       setPromptText(response.text ?? '');
@@ -577,11 +598,41 @@ export const MinimalAssignment: React.FC = () => {
       <section className="minimal-section">
         <div className="minimal-section-header">
           <h2>1. Upload recording</h2>
-          <button type="button" className="minimal-secondary" onClick={resetFlow}>
-            Start new
-          </button>
+          <div className="minimal-inline">
+            <button
+              type="button"
+              className="minimal-secondary"
+              onClick={() => void loadStudentOptions()}
+            >
+              Refresh students
+            </button>
+            <button type="button" className="minimal-secondary" onClick={resetFlow}>
+              Start new
+            </button>
+          </div>
         </div>
         <p className="minimal-help">Upload an audio recording to start the assignment pipeline.</p>
+        <label className="minimal-select">
+          Student (optional)
+          <select
+            value={selectedStudentId}
+            onChange={(event) => setSelectedStudentId(event.target.value)}
+          >
+            <option value="">No explicit student (fallback to Default profile)</option>
+            {studentOptions.map((student) => (
+              <option key={student.id} value={student.id}>
+                {student.name}
+              </option>
+            ))}
+          </select>
+        </label>
+        {selectedStudent ? (
+          <p className="minimal-muted">
+            Selected: {selectedStudent.name}
+            {selectedStudent.profileId ? ` (profile: ${selectedStudent.profileId})` : ''}
+          </p>
+        ) : null}
+        {studentOptionsError ? <p className="minimal-error">{studentOptionsError}</p> : null}
         <DropZone
           title={uploading ? 'Uploading...' : 'Drop audio file'}
           description="Drag a recording here or click to browse"
@@ -603,6 +654,7 @@ export const MinimalAssignment: React.FC = () => {
           <div className="minimal-meta">
             <span>Recording ID: {recording.recordingId}</span>
             <span>Status: {recordingStatus ?? 'unknown'}</span>
+            {selectedStudent ? <span>Student: {selectedStudent.name}</span> : null}
           </div>
         ) : null}
         {recordingError ? <p className="minimal-error">{recordingError}</p> : null}
@@ -704,7 +756,7 @@ export const MinimalAssignment: React.FC = () => {
           </div>
         </div>
         <p className="minimal-help">
-          Uses the default template and profile. Prompt options load once on page start.
+          Uses the default template and infers profile from selected student when available.
         </p>
         {promptError ? <p className="minimal-error">{promptError}</p> : null}
         {promptText ? (

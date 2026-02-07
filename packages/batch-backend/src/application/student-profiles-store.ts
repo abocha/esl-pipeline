@@ -53,6 +53,7 @@ export class StudentProfileStoreError extends Error {
 const DEFAULT_STUDENT_NAME = 'Default';
 const DEFAULT_COLOR_PRESET = 'b1-default';
 const MAX_PAGE_LIMIT = 500;
+const PROFILE_EXTENSIONS = new Set(['.md', '.txt']);
 
 interface StudentProfileEntry extends StudentProfileData {
   filePath?: string | null;
@@ -113,6 +114,34 @@ function normalizeOptionalString(value?: string | null): string | null {
   return trimmed.length > 0 ? trimmed : null;
 }
 
+function normalizeProfileId(value: string): string {
+  return value.replaceAll('\\', '/').replace(/^\/+/, '');
+}
+
+function validateProfileId(value: string): string {
+  const normalized = normalizeProfileId(value.trim());
+  if (!normalized) {
+    throw new StudentProfileStoreError('profileId is required', 'profile_id_missing', 400);
+  }
+  const ext = path.extname(normalized).toLowerCase();
+  if (!PROFILE_EXTENSIONS.has(ext)) {
+    throw new StudentProfileStoreError(
+      'profileId must end with .md or .txt',
+      'profile_id_invalid',
+      400,
+    );
+  }
+  const segments = normalized.split('/').filter(Boolean);
+  if (segments.includes('..')) {
+    throw new StudentProfileStoreError(
+      'profileId must not include parent traversal segments',
+      'profile_id_outside_root',
+      400,
+    );
+  }
+  return normalized;
+}
+
 function sanitizeProfileInput(input: Partial<StudentProfileInput>): Partial<StudentProfileInput> {
   const sanitized: Partial<StudentProfileInput> = {};
   if ('student' in input && typeof input.student === 'string') {
@@ -126,7 +155,12 @@ function sanitizeProfileInput(input: Partial<StudentProfileInput>): Partial<Stud
   }
   if ('manifestPreset' in input)
     sanitized.manifestPreset = normalizeOptionalString(input.manifestPreset);
-  if ('profileId' in input) sanitized.profileId = normalizeOptionalString(input.profileId);
+  if ('profileId' in input) {
+    sanitized.profileId =
+      input.profileId === null || input.profileId === undefined
+        ? null
+        : validateProfileId(input.profileId);
+  }
   if ('voices' in input) {
     sanitized.voices = input.voices ? { ...input.voices } : {};
   }

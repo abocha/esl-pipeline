@@ -12,6 +12,7 @@ vi.mock('../../utils/api', () => ({
   createPromptPackage: vi.fn(),
   fetchJobOptions: vi.fn(),
   fetchPromptOptions: vi.fn(),
+  fetchStudentOptions: vi.fn(),
   fetchRecordingTranscript: vi.fn(),
   getJobStatus: vi.fn(),
   getRecording: vi.fn(),
@@ -147,6 +148,12 @@ describe('MinimalAssignment', () => {
         },
       ],
     });
+    vi.mocked(api.fetchStudentOptions).mockResolvedValue({
+      students: [
+        { id: 'student-default', name: 'Default', profileId: 'profiles/default.md' },
+        { id: 'student-alex', name: 'Alex', profileId: 'profiles/alex.md' },
+      ],
+    });
 
     vi.mocked(api.uploadRecording).mockResolvedValue(makeRecording());
     vi.mocked(api.getRecording).mockResolvedValue(
@@ -244,6 +251,7 @@ describe('MinimalAssignment', () => {
       expect(api.fetchPromptOptions).toHaveBeenCalledTimes(1);
     });
     expect(api.fetchJobOptions).toHaveBeenCalledTimes(1);
+    expect(api.fetchStudentOptions).toHaveBeenCalledTimes(1);
 
     expect(screen.getByRole('heading', { name: /1\. Upload recording/i })).toBeTruthy();
     expect(screen.getByRole('heading', { name: /5\. Publish/i })).toBeTruthy();
@@ -258,11 +266,32 @@ describe('MinimalAssignment', () => {
     await waitFor(() => {
       expect(api.uploadRecording).toHaveBeenCalledTimes(1);
     });
+    expect(api.uploadRecording).toHaveBeenCalledWith(
+      expect.any(File),
+      expect.objectContaining({ studentId: 'student-default' }),
+    );
 
     await waitFor(() => {
       expect(screen.getByText(/Recording ID: rec-1/i)).toBeTruthy();
     });
     expect(screen.getByText(/Status: transcribed/i)).toBeTruthy();
+  });
+
+  it('allows clearing explicit student selection before upload', async () => {
+    const user = userEvent.setup();
+    render(<MinimalAssignment />);
+
+    const studentSelect = await screen.findByRole('combobox', { name: /Student \(optional\)/i });
+    await user.selectOptions(studentSelect, '');
+    await user.click(screen.getByRole('button', { name: /Drop audio file/i }));
+
+    await waitFor(() => {
+      expect(api.uploadRecording).toHaveBeenCalledTimes(1);
+    });
+    expect(api.uploadRecording).toHaveBeenCalledWith(
+      expect.any(File),
+      expect.objectContaining({ studentId: undefined }),
+    );
   });
 
   it('generates a prompt after transcript is ready', async () => {
@@ -280,7 +309,6 @@ describe('MinimalAssignment', () => {
     await waitFor(() => {
       expect(api.createPromptPackage).toHaveBeenCalledWith('rec-1', {
         templateId: 'tpl-default',
-        profileId: 'profile-default',
       });
     });
     expect(screen.getByDisplayValue('Prompt package output')).toBeTruthy();

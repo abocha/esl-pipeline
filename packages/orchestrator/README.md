@@ -96,6 +96,7 @@ Place student-specific configurations in `packages/orchestrator/configs/students
 ```
 
 When you select a student in the wizard, their settings are automatically applied.
+If no student is selected, the orchestrator falls back to the `Default` profile when present.
 
 ### TTS Configuration
 

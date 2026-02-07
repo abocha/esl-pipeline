@@ -100,4 +100,37 @@ describe('student-profiles-store', () => {
       createStudentProfile({ student: 'Read Only' }, { studentsDir, config: readOnlyConfig }),
     ).rejects.toThrow(StudentProfileStoreError);
   });
+
+  it('rejects malformed profileId values on create and update', async () => {
+    const studentsDir = await createStudentsDir();
+
+    await expect(
+      createStudentProfile(
+        {
+          student: 'Invalid Profile',
+          profileId: '../outside.md',
+        },
+        { studentsDir },
+      ),
+    ).rejects.toThrow(StudentProfileStoreError);
+
+    const created = await createStudentProfile(
+      {
+        student: 'Valid Profile',
+        profileId: 'profiles/default.md',
+      },
+      { studentsDir },
+    );
+    expect(created.profileId).toBe('profiles/default.md');
+
+    await expect(
+      updateStudentProfile(
+        created.id,
+        {
+          profileId: 'profile-without-extension',
+        },
+        { studentsDir },
+      ),
+    ).rejects.toThrow(StudentProfileStoreError);
+  });
 });
