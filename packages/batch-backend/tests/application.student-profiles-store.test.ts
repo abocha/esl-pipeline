@@ -133,4 +133,189 @@ describe('student-profiles-store', () => {
       ),
     ).rejects.toThrow(StudentProfileStoreError);
   });
+
+  it('threads binding actor and reason metadata on DB-backed create', async () => {
+    const dbConfig = {
+      ...loadConfig(),
+      studentSystem: {
+        source: 'db' as const,
+        fsFallback: false,
+      },
+    };
+    const changedBy = 'user-123';
+    const reason = 'student_create_manual';
+    const setActiveCalls: { changedBy?: string | null; reason?: string | null }[] = [];
+
+    const created = await createStudentProfile(
+      {
+        student: 'Audit Student',
+        profileId: 'profiles/audit.md',
+      },
+      {
+        config: dbConfig,
+        bindingAudit: {
+          changedBy,
+          reason,
+        },
+        deps: {
+          students: {
+            list: async () => ({ items: [], total: 0, limit: 50, offset: 0, order: 'asc' }),
+            getById: async () => null,
+            insert: async (params) => ({
+              id: params.id ?? deriveStudentId(params.student),
+              student: params.student,
+              dbId: params.dbId ?? null,
+              pageParentId: params.pageParentId ?? null,
+              colorPreset: params.colorPreset ?? null,
+              voices: params.voices ?? {},
+              manifestPreset: params.manifestPreset ?? null,
+              accentPreference: params.accentPreference ?? null,
+              profileId: params.profileId ?? null,
+              createdAt: new Date('2026-01-01T00:00:00.000Z'),
+              updatedAt: new Date('2026-01-01T00:00:00.000Z'),
+            }),
+            upsert: async () => {
+              throw new Error('upsert should not be called for create');
+            },
+            remove: async () => false,
+          },
+          profiles: {
+            upsert: async () => ({
+              id: 'profiles/audit.md',
+              label: 'audit',
+              activeRevisionId: null,
+              createdAt: new Date('2026-01-01T00:00:00.000Z'),
+              updatedAt: new Date('2026-01-01T00:00:00.000Z'),
+            }),
+          },
+          bindings: {
+            setActive: async (params) => {
+              setActiveCalls.push({ changedBy: params.changedBy, reason: params.reason });
+              return {
+                id: 'binding-1',
+                studentId: params.studentId,
+                profileId: params.profileId,
+                effectiveFrom: params.effectiveFrom ?? new Date('2026-01-01T00:00:00.000Z'),
+                effectiveTo: null,
+                reason: params.reason ?? null,
+                changedBy: params.changedBy ?? null,
+                createdAt: new Date('2026-01-01T00:00:00.000Z'),
+              };
+            },
+            clearActive: async () => {},
+          },
+        },
+      },
+    );
+
+    expect(created.id).toBe(deriveStudentId('Audit Student'));
+    expect(setActiveCalls).toEqual([{ changedBy, reason }]);
+  });
+
+  it('threads binding actor and reason metadata on DB-backed unbind', async () => {
+    const dbConfig = {
+      ...loadConfig(),
+      studentSystem: {
+        source: 'db' as const,
+        fsFallback: false,
+      },
+    };
+    const studentId = deriveStudentId('Unbind Student');
+    const changedBy = 'user-999';
+    const reason = 'student_unbind_manual';
+    const clearActiveCalls: {
+      studentId: string;
+      options: {
+        reason?: string | null;
+        changedBy?: string | null;
+      };
+    }[] = [];
+
+    const updated = await updateStudentProfile(
+      studentId,
+      {
+        profileId: null,
+      },
+      {
+        config: dbConfig,
+        bindingAudit: {
+          changedBy,
+          reason,
+        },
+        deps: {
+          students: {
+            list: async () => ({ items: [], total: 0, limit: 50, offset: 0, order: 'asc' }),
+            getById: async () => ({
+              id: studentId,
+              student: 'Unbind Student',
+              dbId: null,
+              pageParentId: null,
+              colorPreset: null,
+              voices: {},
+              manifestPreset: null,
+              accentPreference: null,
+              profileId: 'profiles/original.md',
+              createdAt: new Date('2026-01-01T00:00:00.000Z'),
+              updatedAt: new Date('2026-01-01T00:00:00.000Z'),
+            }),
+            insert: async () => {
+              throw new Error('insert should not be called for update');
+            },
+            upsert: async (params) => ({
+              id: params.id ?? studentId,
+              student: params.student ?? 'Unbind Student',
+              dbId: params.dbId ?? null,
+              pageParentId: params.pageParentId ?? null,
+              colorPreset: params.colorPreset ?? null,
+              voices: params.voices ?? {},
+              manifestPreset: params.manifestPreset ?? null,
+              accentPreference: params.accentPreference ?? null,
+              profileId: params.profileId ?? null,
+              createdAt: new Date('2026-01-01T00:00:00.000Z'),
+              updatedAt: new Date('2026-01-01T00:00:00.000Z'),
+            }),
+            remove: async () => false,
+          },
+          profiles: {
+            upsert: async () => ({
+              id: 'profiles/original.md',
+              label: 'original',
+              activeRevisionId: null,
+              createdAt: new Date('2026-01-01T00:00:00.000Z'),
+              updatedAt: new Date('2026-01-01T00:00:00.000Z'),
+            }),
+          },
+          bindings: {
+            setActive: async () => {
+              throw new Error('setActive should not be called on unbind');
+            },
+            clearActive: async (inputStudentId, options) => {
+              const normalized =
+                options instanceof Date
+                  ? { reason: null, changedBy: null }
+                  : {
+                      reason: options?.reason ?? null,
+                      changedBy: options?.changedBy ?? null,
+                    };
+              clearActiveCalls.push({
+                studentId: inputStudentId,
+                options: normalized,
+              });
+            },
+          },
+        },
+      },
+    );
+
+    expect(updated?.profileId ?? null).toBeNull();
+    expect(clearActiveCalls).toEqual([
+      {
+        studentId,
+        options: {
+          reason,
+          changedBy,
+        },
+      },
+    ]);
+  });
 });

@@ -189,8 +189,9 @@ Extended API routes (require auth when the extended API is enabled):
 - GET /recordings/:recordingId/transcript
 - PUT /recordings/:recordingId/transcript
 - POST /recordings/:recordingId/transcribe
-- POST /recordings/:recordingId/prompt-package (optional `templateId`, `profileId`)
+- POST /recordings/:recordingId/prompt-package (optional `templateId`, `profileId`, `bindingEffectiveAt`)
 - GET /prompt-packages/:promptPackageId
+- GET /prompt-packages/:promptPackageId/lineage
 - POST /prompt-packages/:promptPackageId/draft
 - GET /drafts/:draftId
 - POST /drafts/:draftId/materialize (optional body: `{ jobId?, jobOverrides? }`)
@@ -203,6 +204,8 @@ Extended API routes (require auth when the extended API is enabled):
 - POST /students
 - PUT /students/:id
 - DELETE /students/:id
+- GET /students/:id/bindings
+- GET /students/:id/bindings/active (optional `at` query param as ISO timestamp)
 - GET /students/:id/timeline
 - GET /profiles
 - GET /profiles/:id
@@ -216,7 +219,7 @@ Extended API routes (require auth when the extended API is enabled):
   `type`, `studentId`, `recordingId`, `transcriptId`, `promptPackageId`, `draftId`, `jobId`, `status`,
   `createdAt`, `displayName`, and optional `details`.
   - `type` values: `recording_ingested`, `transcript_ready`, `prompt_package_created`,
-    `draft_saved`, `job_awaiting_approval`, `job_completed`.
+    `draft_saved`, `job_awaiting_approval`, `job_completed`, `student_profile_binding_changed`.
   - `type`/`status` filters accept comma-delimited lists; `job_approved` is accepted as an alias for
     `job_awaiting_approval` for backward compatibility.
 

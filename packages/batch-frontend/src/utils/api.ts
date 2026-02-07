@@ -15,10 +15,12 @@
  * - GET /config/students for student profiles
  * - GET /config/prompts for prompt templates and profiles
  * - GET /students, /students/:id, /students/:id/timeline
+ * - GET /students/:id/bindings, /students/:id/bindings/active
  * - POST /students, PUT /students/:id, DELETE /students/:id
  * - GET /profiles, /profiles/:id, PUT /profiles/:id, DELETE /profiles/:id
  * - GET /profiles/:id/revisions, GET /profiles/:id/revisions/:revisionId
  * - POST /profiles/:id/revisions/:revisionId/restore
+ * - GET /prompt-packages/:id/lineage
  * - GET /drafts/:id
  * - GET /jobs/events (SSE) for live updates
  * - GET /user/profile, /user/files (authenticated)
@@ -183,7 +185,8 @@ export type StudentTimelineType =
   | 'prompt_package_created'
   | 'draft_saved'
   | 'job_awaiting_approval'
-  | 'job_completed';
+  | 'job_completed'
+  | 'student_profile_binding_changed';
 
 export interface StudentTimelineItem {
   type: StudentTimelineType;
@@ -1172,7 +1175,13 @@ export async function updateRecordingTranscript(
 
 export async function createPromptPackage(
   recordingId: string,
-  params: { notes?: string; profileId?: string; templateId?: string; profilePath?: string },
+  params: {
+    notes?: string;
+    profileId?: string;
+    templateId?: string;
+    profilePath?: string;
+    bindingEffectiveAt?: string;
+  },
 ): Promise<PromptPackageResponse> {
   // Backend precedence:
   // profileId > profilePath > student-linked profileId > configured default profile.

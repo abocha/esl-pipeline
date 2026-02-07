@@ -58,6 +58,7 @@ import {
 import {
   getActiveStudentProfileBindingForStudent,
   listStudentProfileBindingsForStudent,
+  resolveStudentProfileBindingAt,
 } from '../application/student-profile-bindings.js';
 import { getStudentSummaryWithDefaults } from '../application/student-summary.js';
 import { type StudentTimelineType, getStudentTimeline } from '../application/student-timeline.js';
@@ -506,7 +507,13 @@ export function registerExtendedRoutes(app: FastifyInstance, options: ExtendedRo
 
       try {
         const body = schema.parse(request.body ?? {});
-        const created = await createStudentProfile(body);
+        const authenticatedUser = getAuthenticatedUser(request);
+        const created = await createStudentProfile(body, {
+          bindingAudit: {
+            reason: 'student_create',
+            changedBy: authenticatedUser?.id ?? null,
+          },
+        });
 
         logger.info('HTTP request handled', {
           event: 'http_request',
@@ -570,7 +577,13 @@ export function registerExtendedRoutes(app: FastifyInstance, options: ExtendedRo
       try {
         const params = paramsSchema.parse(request.params ?? {});
         const body = schema.parse(request.body ?? {});
-        const updated = await updateStudentProfile(params.id, body);
+        const authenticatedUser = getAuthenticatedUser(request);
+        const updated = await updateStudentProfile(params.id, body, {
+          bindingAudit: {
+            reason: 'student_update',
+            changedBy: authenticatedUser?.id ?? null,
+          },
+        });
 
         if (!updated) {
           return errorResponse(reply, 'not_found');
@@ -727,10 +740,16 @@ export function registerExtendedRoutes(app: FastifyInstance, options: ExtendedRo
       const paramsSchema = z.object({
         id: z.string().min(1),
       });
+      const querySchema = z.object({
+        at: z.string().datetime({ offset: true }).optional(),
+      });
 
       try {
         const params = paramsSchema.parse(request.params ?? {});
-        const binding = await getActiveStudentProfileBindingForStudent(params.id);
+        const query = querySchema.parse(request.query ?? {});
+        const binding = query.at
+          ? await resolveStudentProfileBindingAt(params.id, new Date(query.at))
+          : await getActiveStudentProfileBindingForStudent(params.id);
         if (!binding) {
           return errorResponse(reply, 'not_found');
         }
@@ -740,6 +759,7 @@ export function registerExtendedRoutes(app: FastifyInstance, options: ExtendedRo
           route: routePath,
           statusCode: 200,
           studentId: params.id,
+          ...(query.at ? { effectiveAt: query.at } : {}),
         });
 
         return reply.send(binding);
@@ -747,7 +767,7 @@ export function registerExtendedRoutes(app: FastifyInstance, options: ExtendedRo
         if (error instanceof z.ZodError) {
           return reply.code(400).send({
             error: 'validation_failed',
-            message: 'Invalid student id',
+            message: 'Invalid request parameters',
             details: error.issues,
           });
         }
@@ -1991,6 +2011,7 @@ export function registerExtendedRoutes(app: FastifyInstance, options: ExtendedRo
         profilePath: z.string().min(1).optional(),
         profileId: z.string().min(1).optional(),
         templateId: z.string().min(1).optional(),
+        bindingEffectiveAt: z.string().datetime({ offset: true }).optional(),
       });
 
       try {
@@ -2001,6 +2022,9 @@ export function registerExtendedRoutes(app: FastifyInstance, options: ExtendedRo
           profilePath: body.profilePath,
           profileId: body.profileId,
           templateId: body.templateId,
+          bindingEffectiveAt: body.bindingEffectiveAt
+            ? new Date(body.bindingEffectiveAt)
+            : undefined,
         });
 
         if (!promptPackage) {

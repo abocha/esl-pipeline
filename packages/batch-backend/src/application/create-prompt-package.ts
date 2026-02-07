@@ -40,6 +40,7 @@ export interface CreatePromptPackageParams {
   profilePath?: string | null;
   profileId?: string | null;
   templateId?: string | null;
+  bindingEffectiveAt?: Date;
 }
 
 export interface PromptPackageResponse {
@@ -190,13 +191,17 @@ export async function createPromptPackage(
   const transcript = await transcripts.getByRecordingId(params.recordingId);
   if (!transcript) return null;
   const recording = await recordings.getById(transcript.recordingId);
+  const bindingLookupAt =
+    params.bindingEffectiveAt && !Number.isNaN(params.bindingEffectiveAt.getTime())
+      ? params.bindingEffectiveAt
+      : recording?.createdAt ?? new Date();
 
   let studentProfileId: string | null = null;
   if (recording?.studentId) {
     const studentProfile = await students.getById(recording.studentId, { config });
     studentProfileId = studentProfile?.profileId ?? null;
     if (!studentProfileId) {
-      const binding = await bindings.resolveAt(recording.studentId, new Date()).catch(() => null);
+      const binding = await bindings.resolveAt(recording.studentId, bindingLookupAt).catch(() => null);
       studentProfileId = binding?.profileId ?? null;
     }
   }
