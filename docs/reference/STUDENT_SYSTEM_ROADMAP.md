@@ -86,6 +86,12 @@
 
 - Move from hash-only snapshotting to explicit template/profile version lifecycle.
 
+### Status
+
+- Implemented (2026-02-07), with one intentional transition note:
+  - prompt **content** resolution is DB-canonical (active revisions first),
+  - template/profile **selection** still uses allowlisted IDs from configured prompt paths.
+
 ### Deliverables
 
 1. Versioned entities for templates (and template revisions) with statuses:
@@ -109,11 +115,26 @@
    - profile revision restore
    - rerun against a newer profile/template revision.
 
+### Completed Outputs
+
+1. Prompt package creation prefers active DB revisions; filesystem read is fallback-only via `PROMPT_WRITE_ALLOW_FS_FALLBACK`.
+2. Prompt package snapshots now store revision lineage metadata (IDs, hashes, status, version labels).
+3. New lineage read API exists: `GET /prompt-packages/:promptPackageId/lineage`.
+4. Revision lifecycle activation endpoints are in place for profiles and templates.
+5. Integration/unit coverage includes:
+   - active revision preference over filesystem content
+   - rerun-style lineage pinning to newer active revisions
+   - lineage API transport coverage.
+
 ## Phase C: Historical Student Binding + Governance
 
 ### Goal
 
 - Model profile linkage as time-aware history rather than only current state.
+
+### Status
+
+- Started (C0 foundation implemented, 2026-02-07).
 
 ### Deliverables
 
@@ -128,6 +149,23 @@
 
 - Reconstructable answer to: "Which profile binding was active for this assignment?"
 - Restores and binding changes appear in audit trail.
+
+### C0 Completed Outputs
+
+1. Binding history query primitives added:
+   - list bindings
+   - get active binding
+   - resolve binding effective at timestamp.
+2. New APIs added:
+   - `GET /students/:id/bindings`
+   - `GET /students/:id/bindings/active`
+3. Prompt package write path now uses effective binding resolver path (current-time lookup with safe fallback).
+
+### Next Up (Phase C Proper)
+
+1. Thread actor/reason metadata through all binding writes from authenticated user context.
+2. Add explicit "effective-at" request support where needed for diagnostics/replay.
+3. Extend timeline/provenance surfaces to include binding change events.
 
 ## Phase D: End-to-End Lineage + Timeline 2.0
 

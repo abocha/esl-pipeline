@@ -20,6 +20,7 @@ import * as profileContentModule from '../src/application/profile-content.js';
 import { ProfilePathError } from '../src/application/profile-path.js';
 import * as retryRecordingModule from '../src/application/retry-recording-transcription.js';
 import * as studentStoreModule from '../src/application/student-profiles-store.js';
+import * as studentBindingsModule from '../src/application/student-profile-bindings.js';
 import * as studentSummaryModule from '../src/application/student-summary.js';
 import * as studentTimelineModule from '../src/application/student-timeline.js';
 import * as submitJobModule from '../src/application/submit-job.js';
@@ -169,6 +170,14 @@ vi.mock('../src/application/student-timeline', () => {
   };
 });
 
+vi.mock('../src/application/student-profile-bindings', () => {
+  return {
+    listStudentProfileBindingsForStudent: vi.fn(),
+    getActiveStudentProfileBindingForStudent: vi.fn(),
+    resolveStudentProfileBindingAt: vi.fn(),
+  };
+});
+
 vi.mock('../src/application/get-prompt-options.js', () => {
   return {
     getPromptOptions: vi.fn().mockResolvedValue({
@@ -209,6 +218,12 @@ describe('transport/http-server - integration (in-process)', () => {
     templateContentModule.activateTemplateRevisionForTemplate,
   );
   const mockGetStudentTimeline = vi.mocked(studentTimelineModule.getStudentTimeline);
+  const mockListStudentProfileBindingsForStudent = vi.mocked(
+    studentBindingsModule.listStudentProfileBindingsForStudent,
+  );
+  const mockGetActiveStudentProfileBindingForStudent = vi.mocked(
+    studentBindingsModule.getActiveStudentProfileBindingForStudent,
+  );
 
   beforeAll(async () => {
     vi.clearAllMocks();
@@ -416,6 +431,34 @@ describe('transport/http-server - integration (in-process)', () => {
       limit: 20,
       offset: 0,
       order: 'desc',
+    });
+    mockListStudentProfileBindingsForStudent.mockResolvedValue({
+      items: [
+        {
+          id: 'binding-1',
+          studentId: deriveStudentId('Anna'),
+          profileId: 'profile.md',
+          effectiveFrom: '2024-01-01T00:00:00.000Z',
+          effectiveTo: null,
+          reason: 'sync_student_profile',
+          changedBy: null,
+          createdAt: '2024-01-01T00:00:00.000Z',
+        },
+      ],
+      total: 1,
+      limit: 50,
+      offset: 0,
+      order: 'desc',
+    });
+    mockGetActiveStudentProfileBindingForStudent.mockResolvedValue({
+      id: 'binding-1',
+      studentId: deriveStudentId('Anna'),
+      profileId: 'profile.md',
+      effectiveFrom: '2024-01-01T00:00:00.000Z',
+      effectiveTo: null,
+      reason: 'sync_student_profile',
+      changedBy: null,
+      createdAt: '2024-01-01T00:00:00.000Z',
     });
 
     // Use real route implementation via createHttpServer; no network listen.
@@ -978,6 +1021,52 @@ describe('transport/http-server - integration (in-process)', () => {
       limit: 20,
       offset: 0,
       order: 'desc',
+    });
+  });
+
+  it('GET /students/:id/bindings returns binding history', async () => {
+    const response = await app.inject({
+      method: 'GET',
+      url: `/students/${deriveStudentId('Anna')}/bindings?limit=10&offset=0&order=desc`,
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toEqual({
+      items: [
+        {
+          id: 'binding-1',
+          studentId: deriveStudentId('Anna'),
+          profileId: 'profile.md',
+          effectiveFrom: '2024-01-01T00:00:00.000Z',
+          effectiveTo: null,
+          reason: 'sync_student_profile',
+          changedBy: null,
+          createdAt: '2024-01-01T00:00:00.000Z',
+        },
+      ],
+      total: 1,
+      limit: 50,
+      offset: 0,
+      order: 'desc',
+    });
+  });
+
+  it('GET /students/:id/bindings/active returns active binding', async () => {
+    const response = await app.inject({
+      method: 'GET',
+      url: `/students/${deriveStudentId('Anna')}/bindings/active`,
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toEqual({
+      id: 'binding-1',
+      studentId: deriveStudentId('Anna'),
+      profileId: 'profile.md',
+      effectiveFrom: '2024-01-01T00:00:00.000Z',
+      effectiveTo: null,
+      reason: 'sync_student_profile',
+      changedBy: null,
+      createdAt: '2024-01-01T00:00:00.000Z',
     });
   });
 
@@ -1598,6 +1687,85 @@ describe('transport/http-server - integration (in-process)', () => {
 
     expect(response.statusCode).toBe(404);
     expect(response.json()).toEqual({ error: 'not_found' });
+  });
+
+  it('GET /prompt-packages/:id/lineage returns lineage payload', async () => {
+    const getPromptPackageLineage = vi.spyOn(getPromptPackageModule, 'getPromptPackageLineage');
+    getPromptPackageLineage.mockClear();
+    getPromptPackageLineage.mockResolvedValue({
+      promptPackageId: 'prompt-1',
+      recordingId: 'recording-1',
+      transcriptId: 'transcript-1',
+      studentId: 'student-1',
+      createdAt: '2024-01-01T00:00:00.000Z',
+      updatedAt: '2024-01-01T00:10:00.000Z',
+      profile: {
+        snapshot: {
+          profileId: 'profile.md',
+          revisionId: 'revision-1',
+          hash: 'hash-1',
+          versionLabel: 'v1',
+          status: 'active',
+          updatedAt: '2024-01-01T00:00:00.000Z',
+        },
+        current: {
+          profileId: 'profile.md',
+          revisionId: 'revision-2',
+          hash: 'hash-2',
+          versionLabel: 'v2',
+          status: 'active',
+          updatedAt: '2024-01-02T00:00:00.000Z',
+        },
+        drift: {
+          detected: true,
+          reason: 'profile_content_changed',
+          currentProfileHash: 'hash-2',
+          currentProfileRevisionId: 'revision-2',
+          currentProfileUpdatedAt: '2024-01-02T00:00:00.000Z',
+        },
+      },
+      template: {
+        snapshot: {
+          templateId: 'template.md',
+          revisionId: 'template-revision-1',
+          hash: 'template-hash-1',
+          versionLabel: 'v1',
+          status: 'active',
+          updatedAt: '2024-01-01T00:00:00.000Z',
+        },
+        current: {
+          templateId: 'template.md',
+          revisionId: 'template-revision-1',
+          hash: 'template-hash-1',
+          versionLabel: 'v1',
+          status: 'active',
+          updatedAt: '2024-01-01T00:00:00.000Z',
+        },
+        drift: null,
+      },
+    });
+
+    const response = await app.inject({
+      method: 'GET',
+      url: '/prompt-packages/prompt-1/lineage',
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toMatchObject({
+      promptPackageId: 'prompt-1',
+      profile: {
+        snapshot: {
+          profileId: 'profile.md',
+          revisionId: 'revision-1',
+        },
+      },
+      template: {
+        snapshot: {
+          templateId: 'template.md',
+          revisionId: 'template-revision-1',
+        },
+      },
+    });
   });
 
   it('POST /prompt-packages/:id/draft returns draft payload', async () => {

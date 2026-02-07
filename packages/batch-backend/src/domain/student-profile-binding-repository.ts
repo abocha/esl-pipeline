@@ -23,6 +23,23 @@ export interface SetActiveStudentProfileBindingParams {
   effectiveFrom?: Date;
 }
 
+export interface ListStudentProfileBindingsParams {
+  studentId: string;
+  limit?: number;
+  offset?: number;
+  order?: 'asc' | 'desc';
+}
+
+export interface StudentProfileBindingListResult {
+  items: StudentProfileBindingRecord[];
+  total: number;
+  limit: number;
+  offset: number;
+  order: 'asc' | 'desc';
+}
+
+const MAX_PAGE_LIMIT = 500;
+
 export async function getActiveStudentProfileBinding(
   studentId: string,
 ): Promise<StudentProfileBindingRecord | null> {
@@ -152,6 +169,83 @@ export async function setActiveStudentProfileBinding(
       throw error;
     }
   });
+}
+
+export async function getStudentProfileBindingAt(
+  studentId: string,
+  at: Date,
+): Promise<StudentProfileBindingRecord | null> {
+  const row = await withPgClient(async (client: PoolClient) => {
+    const result = await client.query(
+      `
+      SELECT
+        id,
+        student_id,
+        profile_id,
+        effective_from,
+        effective_to,
+        reason,
+        changed_by,
+        created_at
+      FROM student_profile_bindings
+      WHERE student_id = $1
+        AND effective_from <= $2
+        AND (effective_to IS NULL OR effective_to > $2)
+      ORDER BY effective_from DESC, created_at DESC
+      LIMIT 1
+      `,
+      [studentId, at],
+    );
+    return result.rows[0] as StudentProfileBindingRow | undefined;
+  });
+
+  return row ? mapRow(row) : null;
+}
+
+export async function listStudentProfileBindings(
+  params: ListStudentProfileBindingsParams,
+): Promise<StudentProfileBindingListResult> {
+  const limit = Math.min(Math.max(params.limit ?? 50, 1), MAX_PAGE_LIMIT);
+  const offset = Math.max(params.offset ?? 0, 0);
+  const order = params.order === 'asc' ? 'asc' : 'desc';
+  const orderDirection = order === 'asc' ? 'ASC' : 'DESC';
+
+  const { rows, total } = await withPgClient(async (client: PoolClient) => {
+    const countResult = await client.query(
+      'SELECT COUNT(*)::int AS total FROM student_profile_bindings WHERE student_id = $1',
+      [params.studentId],
+    );
+    const dataResult = await client.query(
+      `
+      SELECT
+        id,
+        student_id,
+        profile_id,
+        effective_from,
+        effective_to,
+        reason,
+        changed_by,
+        created_at
+      FROM student_profile_bindings
+      WHERE student_id = $1
+      ORDER BY effective_from ${orderDirection}, created_at ${orderDirection}
+      LIMIT $2 OFFSET $3
+      `,
+      [params.studentId, limit, offset],
+    );
+    return {
+      rows: dataResult.rows as StudentProfileBindingRow[],
+      total: countResult.rows[0]?.total ?? 0,
+    };
+  });
+
+  return {
+    items: rows.map((row) => mapRow(row)),
+    total,
+    limit,
+    offset,
+    order,
+  };
 }
 
 function mapRow(row: StudentProfileBindingRow): StudentProfileBindingRecord {

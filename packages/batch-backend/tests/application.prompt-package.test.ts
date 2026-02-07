@@ -6,7 +6,7 @@ import { Readable } from 'node:stream';
 import { describe, expect, it } from 'vitest';
 
 import { createPromptPackage } from '../src/application/create-prompt-package.js';
-import { getPromptPackage } from '../src/application/get-prompt-package.js';
+import { getPromptPackage, getPromptPackageLineage } from '../src/application/get-prompt-package.js';
 import { ProfilePathError } from '../src/application/profile-path.js';
 import type { ProfileRevisionRecord } from '../src/domain/profile-revision-model.js';
 import type { ProfileRecord } from '../src/domain/profile-model.js';
@@ -122,6 +122,7 @@ describe('application/prompt-package', () => {
         templateRevisions: createTemplateRevisionRepositoryStub(),
         profiles: createProfileRepositoryStub(),
         templates: createTemplateRepositoryStub(),
+        bindings: createBindingResolverStub(),
       },
     );
 
@@ -298,6 +299,336 @@ describe('application/prompt-package', () => {
     });
   });
 
+  it('returns prompt lineage with snapshot and current revision metadata', async () => {
+    const snapshotProfileHash = createHash('sha256').update('SNAPSHOT PROFILE', 'utf8').digest('hex');
+    const currentProfileHash = createHash('sha256').update('CURRENT PROFILE', 'utf8').digest('hex');
+    const snapshotTemplateHash = createHash('sha256').update('SNAPSHOT TEMPLATE', 'utf8').digest('hex');
+
+    const lineage = await getPromptPackageLineage('prompt-1', {
+      promptPackages: {
+        getById: async () => ({
+          id: 'prompt-1',
+          recordingId: 'recording-1',
+          transcriptId: 'transcript-1',
+          studentId: 'student-1',
+          profilePath: '/profiles/p1.md',
+          resolvedProfileId: 'profile.md',
+          resolvedProfileHash: snapshotProfileHash,
+          resolvedProfileRevisionId: 'profile-revision-v1',
+          resolvedProfileUpdatedAt: new Date('2024-01-01T00:00:00Z'),
+          resolvedProfileVersionLabel: 'v1',
+          resolvedProfileStatus: 'active',
+          resolvedTemplateId: 'template.md',
+          resolvedTemplateHash: snapshotTemplateHash,
+          resolvedTemplateRevisionId: 'template-revision-v1',
+          resolvedTemplateUpdatedAt: new Date('2024-01-01T00:00:00Z'),
+          resolvedTemplateVersionLabel: 'v1',
+          resolvedTemplateStatus: 'active',
+          templateVersion: 'template.md',
+          notes: null,
+          storageUri: 'local://prompt-packages/prompt-1.txt',
+          createdAt: new Date('2024-01-01T00:00:00Z'),
+          updatedAt: new Date('2024-01-01T00:05:00Z'),
+        }),
+      },
+      profileRevisions: createProfileRevisionRepositoryStub({
+        getActive: async () => ({
+          id: 'profile-revision-v2',
+          profileId: 'profile.md',
+          content: 'CURRENT PROFILE',
+          contentHash: currentProfileHash,
+          source: 'update',
+          status: 'active',
+          versionNumber: 2,
+          versionLabel: 'v2',
+          activatedAt: new Date('2024-01-02T00:00:00Z'),
+          deprecatedAt: null,
+          createdAt: new Date('2024-01-02T00:00:00Z'),
+          createdBy: null,
+          restoredFromRevisionId: null,
+        }),
+      }),
+      templateRevisions: createTemplateRevisionRepositoryStub({
+        getActive: async () => ({
+          id: 'template-revision-v1',
+          templateId: 'template.md',
+          content: 'SNAPSHOT TEMPLATE',
+          contentHash: snapshotTemplateHash,
+          source: 'update',
+          status: 'active',
+          versionNumber: 1,
+          versionLabel: 'v1',
+          activatedAt: new Date('2024-01-01T00:00:00Z'),
+          deprecatedAt: null,
+          createdAt: new Date('2024-01-01T00:00:00Z'),
+          createdBy: null,
+          restoredFromRevisionId: null,
+        }),
+      }),
+      storage: createStorageStub(),
+    });
+
+    expect(lineage?.promptPackageId).toBe('prompt-1');
+    expect(lineage?.profile.snapshot.revisionId).toBe('profile-revision-v1');
+    expect(lineage?.profile.current.revisionId).toBe('profile-revision-v2');
+    expect(lineage?.profile.drift?.reason).toBe('profile_content_changed');
+    expect(lineage?.template.snapshot.revisionId).toBe('template-revision-v1');
+    expect(lineage?.template.current.revisionId).toBe('template-revision-v1');
+    expect(lineage?.template.drift).toBeNull();
+  });
+
+  it('prefers active profile/template revisions over filesystem files when available', async () => {
+    const allowedDir = await fs.mkdtemp(path.join(os.tmpdir(), 'esl-prompt-allowed-'));
+    const templatePath = path.join(allowedDir, 'template.md');
+    const profilePath = path.join(allowedDir, 'profile.md');
+    await fs.writeFile(templatePath, 'FS TEMPLATE\nINSERT PROFILE HERE\nEND\n', 'utf8');
+    await fs.writeFile(profilePath, 'FS PROFILE\n', 'utf8');
+
+    const transcript = createTranscriptRecord();
+    const activeTemplateContent = 'DB TEMPLATE\nINSERT PROFILE HERE\nEND\n';
+    const activeProfileContent = 'DB PROFILE\n';
+    const activeTemplateHash = createHash('sha256').update(activeTemplateContent, 'utf8').digest('hex');
+    const activeProfileHash = createHash('sha256').update(activeProfileContent, 'utf8').digest('hex');
+    const storage = createStorageStub({
+      getText: async () => 'TRANSCRIPT BODY',
+      putPromptPackage: async ({ promptPackageId, text }) => {
+        expect(text).toContain('DB TEMPLATE');
+        expect(text).toContain('DB PROFILE');
+        expect(text).not.toContain('FS TEMPLATE');
+        expect(text).not.toContain('FS PROFILE');
+        return { uri: `local://prompt-packages/${promptPackageId}.txt`, bytes: text.length };
+      },
+    });
+
+    const result = await createPromptPackage(
+      {
+        recordingId: transcript.recordingId,
+        templateId: 'template.md',
+        profileId: 'profile.md',
+      },
+      {
+        config: createConfig(templatePath, profilePath),
+        storage,
+        transcripts: {
+          getByRecordingId: async () => transcript,
+        },
+        recordings: {
+          getById: async () => null,
+        },
+        students: {
+          getById: async () => null,
+        },
+        promptPackages: createPromptPackageRepositoryStub(),
+        profileRevisions: createProfileRevisionRepositoryStub({
+          getActive: async () => ({
+            id: 'profile-revision-active',
+            profileId: 'profile.md',
+            content: activeProfileContent,
+            contentHash: activeProfileHash,
+            source: 'update',
+            status: 'active',
+            versionNumber: 2,
+            versionLabel: 'v2',
+            activatedAt: new Date('2024-01-02T00:00:00Z'),
+            deprecatedAt: null,
+            createdAt: new Date('2024-01-02T00:00:00Z'),
+            createdBy: null,
+            restoredFromRevisionId: null,
+          }),
+        }),
+        templateRevisions: createTemplateRevisionRepositoryStub({
+          getActive: async () => ({
+            id: 'template-revision-active',
+            templateId: 'template.md',
+            content: activeTemplateContent,
+            contentHash: activeTemplateHash,
+            source: 'update',
+            status: 'active',
+            versionNumber: 3,
+            versionLabel: 'v3',
+            activatedAt: new Date('2024-01-03T00:00:00Z'),
+            deprecatedAt: null,
+            createdAt: new Date('2024-01-03T00:00:00Z'),
+            createdBy: null,
+            restoredFromRevisionId: null,
+          }),
+        }),
+        profiles: createProfileRepositoryStub(),
+        templates: createTemplateRepositoryStub(),
+        bindings: createBindingResolverStub(),
+      },
+    );
+
+    expect(result?.profileSnapshot?.resolvedProfileHash).toBe(activeProfileHash);
+    expect(result?.templateSnapshot?.resolvedTemplateHash).toBe(activeTemplateHash);
+    expect(result?.profileSnapshot?.resolvedProfileRevisionId).toBe('profile-revision-active');
+    expect(result?.templateSnapshot?.resolvedTemplateRevisionId).toBe('template-revision-active');
+  });
+
+  it('pins newer active revisions on rerun while preserving previous package lineage', async () => {
+    const allowedDir = await fs.mkdtemp(path.join(os.tmpdir(), 'esl-prompt-allowed-'));
+    const templatePath = path.join(allowedDir, 'template.md');
+    const profilePath = path.join(allowedDir, 'profile.md');
+    await fs.writeFile(templatePath, 'TEMPLATE FS\nINSERT PROFILE HERE\nEND\n', 'utf8');
+    await fs.writeFile(profilePath, 'PROFILE FS\n', 'utf8');
+
+    const transcript = createTranscriptRecord();
+    const storage = createStorageStub({
+      getText: async () => 'TRANSCRIPT BODY',
+    });
+
+    const profileV1 = {
+      id: 'profile-revision-v1',
+      profileId: 'profile.md',
+      content: 'PROFILE V1',
+      contentHash: createHash('sha256').update('PROFILE V1', 'utf8').digest('hex'),
+      source: 'update' as const,
+      status: 'active' as const,
+      versionNumber: 1,
+      versionLabel: 'v1',
+      activatedAt: new Date('2024-01-01T00:00:00Z'),
+      deprecatedAt: null,
+      createdAt: new Date('2024-01-01T00:00:00Z'),
+      createdBy: null,
+      restoredFromRevisionId: null,
+    };
+    const profileV2 = {
+      ...profileV1,
+      id: 'profile-revision-v2',
+      content: 'PROFILE V2',
+      contentHash: createHash('sha256').update('PROFILE V2', 'utf8').digest('hex'),
+      versionNumber: 2,
+      versionLabel: 'v2',
+      activatedAt: new Date('2024-01-02T00:00:00Z'),
+      createdAt: new Date('2024-01-02T00:00:00Z'),
+    };
+    const templateV1 = {
+      id: 'template-revision-v1',
+      templateId: 'template.md',
+      content: 'TEMPLATE V1\nINSERT PROFILE HERE\nEND\n',
+      contentHash: createHash('sha256')
+        .update('TEMPLATE V1\nINSERT PROFILE HERE\nEND\n', 'utf8')
+        .digest('hex'),
+      source: 'update' as const,
+      status: 'active' as const,
+      versionNumber: 1,
+      versionLabel: 'v1',
+      activatedAt: new Date('2024-01-01T00:00:00Z'),
+      deprecatedAt: null,
+      createdAt: new Date('2024-01-01T00:00:00Z'),
+      createdBy: null,
+      restoredFromRevisionId: null,
+    };
+
+    const insertedParams: Record<string, unknown>[] = [];
+    const promptPackages = {
+      insert: async (params: {
+        id?: string;
+        recordingId: string;
+        transcriptId: string;
+        studentId?: string | null;
+        profilePath?: string | null;
+        resolvedProfileId?: string | null;
+        resolvedProfileHash?: string | null;
+        resolvedProfileRevisionId?: string | null;
+        resolvedProfileUpdatedAt?: Date | null;
+        resolvedProfileVersionLabel?: string | null;
+        resolvedProfileStatus?: 'draft' | 'active' | 'deprecated' | null;
+        resolvedTemplateId?: string | null;
+        resolvedTemplateHash?: string | null;
+        resolvedTemplateRevisionId?: string | null;
+        resolvedTemplateUpdatedAt?: Date | null;
+        resolvedTemplateVersionLabel?: string | null;
+        resolvedTemplateStatus?: 'draft' | 'active' | 'deprecated' | null;
+        templateVersion: string;
+        notes?: string | null;
+        storageUri: string;
+      }): Promise<PromptPackageRecord> => {
+        insertedParams.push({ ...params });
+        return {
+          id: params.id ?? `prompt-${insertedParams.length}`,
+          recordingId: params.recordingId,
+          transcriptId: params.transcriptId,
+          studentId: params.studentId ?? null,
+          profilePath: params.profilePath ?? null,
+          resolvedProfileId: params.resolvedProfileId ?? null,
+          resolvedProfileHash: params.resolvedProfileHash ?? null,
+          resolvedProfileRevisionId: params.resolvedProfileRevisionId ?? null,
+          resolvedProfileUpdatedAt: params.resolvedProfileUpdatedAt ?? null,
+          resolvedProfileVersionLabel: params.resolvedProfileVersionLabel ?? null,
+          resolvedProfileStatus: params.resolvedProfileStatus ?? null,
+          resolvedTemplateId: params.resolvedTemplateId ?? null,
+          resolvedTemplateHash: params.resolvedTemplateHash ?? null,
+          resolvedTemplateRevisionId: params.resolvedTemplateRevisionId ?? null,
+          resolvedTemplateUpdatedAt: params.resolvedTemplateUpdatedAt ?? null,
+          resolvedTemplateVersionLabel: params.resolvedTemplateVersionLabel ?? null,
+          resolvedTemplateStatus: params.resolvedTemplateStatus ?? null,
+          templateVersion: params.templateVersion,
+          notes: params.notes ?? null,
+          storageUri: params.storageUri,
+          createdAt: new Date('2024-01-01T00:00:00Z'),
+          updatedAt: new Date('2024-01-01T00:00:00Z'),
+        };
+      },
+    };
+
+    let run = 1;
+    const profileRevisions = createProfileRevisionRepositoryStub({
+      getActive: async () => (run === 1 ? profileV1 : profileV2),
+    });
+    const templateRevisions = createTemplateRevisionRepositoryStub({
+      getActive: async () => templateV1,
+    });
+
+    await createPromptPackage(
+      {
+        recordingId: transcript.recordingId,
+        templateId: 'template.md',
+        profileId: 'profile.md',
+      },
+      {
+        config: createConfig(templatePath, profilePath),
+        storage,
+        transcripts: { getByRecordingId: async () => transcript },
+        recordings: { getById: async () => null },
+        students: { getById: async () => null },
+        promptPackages,
+        profileRevisions,
+        templateRevisions,
+        profiles: createProfileRepositoryStub(),
+        templates: createTemplateRepositoryStub(),
+        bindings: createBindingResolverStub(),
+      },
+    );
+    run = 2;
+    await createPromptPackage(
+      {
+        recordingId: transcript.recordingId,
+        templateId: 'template.md',
+        profileId: 'profile.md',
+      },
+      {
+        config: createConfig(templatePath, profilePath),
+        storage,
+        transcripts: { getByRecordingId: async () => transcript },
+        recordings: { getById: async () => null },
+        students: { getById: async () => null },
+        promptPackages,
+        profileRevisions,
+        templateRevisions,
+        profiles: createProfileRepositoryStub(),
+        templates: createTemplateRepositoryStub(),
+        bindings: createBindingResolverStub(),
+      },
+    );
+
+    expect(insertedParams).toHaveLength(2);
+    expect(insertedParams[0]?.resolvedProfileRevisionId).toBe('profile-revision-v1');
+    expect(insertedParams[1]?.resolvedProfileRevisionId).toBe('profile-revision-v2');
+    expect(insertedParams[0]?.resolvedTemplateRevisionId).toBe('template-revision-v1');
+    expect(insertedParams[1]?.resolvedTemplateRevisionId).toBe('template-revision-v1');
+  });
+
   it('rejects unknown profileId selections', async () => {
     const allowedDir = await fs.mkdtemp(path.join(os.tmpdir(), 'esl-prompt-allowed-'));
     const templatePath = path.join(allowedDir, 'template.md');
@@ -357,6 +688,7 @@ describe('application/prompt-package', () => {
           templateRevisions: createTemplateRevisionRepositoryStub(),
           profiles: createProfileRepositoryStub(),
           templates: createTemplateRepositoryStub(),
+          bindings: createBindingResolverStub(),
         },
       ),
     ).rejects.toThrow('profileId is not allowlisted');
@@ -405,6 +737,7 @@ describe('application/prompt-package', () => {
           templateRevisions: createTemplateRevisionRepositoryStub(),
           profiles: createProfileRepositoryStub(),
           templates: createTemplateRepositoryStub(),
+          bindings: createBindingResolverStub(),
         },
       ),
     ).rejects.toBeInstanceOf(ProfilePathError);
@@ -468,6 +801,7 @@ describe('application/prompt-package', () => {
         templateRevisions: createTemplateRevisionRepositoryStub(),
         profiles: createProfileRepositoryStub(),
         templates: createTemplateRepositoryStub(),
+        bindings: createBindingResolverStub(),
       },
     );
 
@@ -537,6 +871,7 @@ describe('application/prompt-package', () => {
         templateRevisions: createTemplateRevisionRepositoryStub(),
         profiles: createProfileRepositoryStub(),
         templates: createTemplateRepositoryStub(),
+        bindings: createBindingResolverStub(),
       },
     );
     expect(explicitIdResult?.profilePath).toBe(explicitProfilePath);
@@ -560,6 +895,7 @@ describe('application/prompt-package', () => {
         templateRevisions: createTemplateRevisionRepositoryStub(),
         profiles: createProfileRepositoryStub(),
         templates: createTemplateRepositoryStub(),
+        bindings: createBindingResolverStub(),
       },
     );
     expect(explicitPathResult?.profilePath).toBe(explicitProfilePath);
@@ -783,6 +1119,12 @@ function createTemplateRepositoryStub() {
       updatedAt: new Date('2024-01-01T00:00:00Z'),
     }),
     setActive: async (): Promise<TemplateRecord | null> => null,
+  };
+}
+
+function createBindingResolverStub() {
+  return {
+    resolveAt: async () => null,
   };
 }
 

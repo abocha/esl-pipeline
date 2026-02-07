@@ -42,6 +42,53 @@ export interface GetPromptPackageDependencies {
   };
 }
 
+export interface PromptPackageLineageResponse {
+  promptPackageId: string;
+  recordingId: string;
+  transcriptId: string;
+  studentId: string | null;
+  createdAt: string;
+  updatedAt: string;
+  profile: {
+    snapshot: {
+      profileId: string | null;
+      revisionId: string | null;
+      hash: string | null;
+      versionLabel: string | null;
+      status: 'draft' | 'active' | 'deprecated' | null;
+      updatedAt: string | null;
+    };
+    current: {
+      profileId: string | null;
+      revisionId: string | null;
+      hash: string | null;
+      versionLabel: string | null;
+      status: 'draft' | 'active' | 'deprecated' | null;
+      updatedAt: string | null;
+    };
+    drift: PromptPackageProfileDrift | null;
+  };
+  template: {
+    snapshot: {
+      templateId: string | null;
+      revisionId: string | null;
+      hash: string | null;
+      versionLabel: string | null;
+      status: 'draft' | 'active' | 'deprecated' | null;
+      updatedAt: string | null;
+    };
+    current: {
+      templateId: string | null;
+      revisionId: string | null;
+      hash: string | null;
+      versionLabel: string | null;
+      status: 'draft' | 'active' | 'deprecated' | null;
+      updatedAt: string | null;
+    };
+    drift: PromptPackageTemplateDrift | null;
+  };
+}
+
 export async function getPromptPackage(
   promptPackageId: string,
   overrides?: Partial<GetPromptPackageDependencies>,
@@ -76,6 +123,92 @@ export async function getPromptPackage(
     ...response,
     ...(profileDrift ? { profileDrift } : {}),
     ...(templateDrift ? { templateDrift } : {}),
+  };
+}
+
+export async function getPromptPackageLineage(
+  promptPackageId: string,
+  overrides?: Partial<GetPromptPackageDependencies>,
+): Promise<PromptPackageLineageResponse | null> {
+  if (!promptPackageId) return null;
+
+  const promptPackages = overrides?.promptPackages ?? {
+    getById: getPromptPackageById,
+  };
+  const profileRevisions = overrides?.profileRevisions ?? {
+    getActive: getActiveProfileRevision,
+  };
+  const templateRevisions = overrides?.templateRevisions ?? {
+    getActive: getActiveTemplateRevision,
+  };
+
+  const promptPackage = await promptPackages.getById(promptPackageId);
+  if (!promptPackage) return null;
+
+  const [currentProfile, currentTemplate] = await Promise.all([
+    promptPackage.resolvedProfileId
+      ? profileRevisions.getActive(promptPackage.resolvedProfileId)
+      : Promise.resolve(null),
+    promptPackage.resolvedTemplateId
+      ? templateRevisions.getActive(promptPackage.resolvedTemplateId)
+      : Promise.resolve(null),
+  ]);
+
+  const profileDrift = await detectPromptPackageProfileDrift(promptPackage, profileRevisions.getActive);
+  const templateDrift = await detectPromptPackageTemplateDrift(
+    promptPackage,
+    templateRevisions.getActive,
+  );
+
+  return {
+    promptPackageId: promptPackage.id,
+    recordingId: promptPackage.recordingId,
+    transcriptId: promptPackage.transcriptId,
+    studentId: promptPackage.studentId ?? null,
+    createdAt: promptPackage.createdAt.toISOString(),
+    updatedAt: promptPackage.updatedAt.toISOString(),
+    profile: {
+      snapshot: {
+        profileId: promptPackage.resolvedProfileId ?? null,
+        revisionId: promptPackage.resolvedProfileRevisionId ?? null,
+        hash: promptPackage.resolvedProfileHash ?? null,
+        versionLabel: promptPackage.resolvedProfileVersionLabel ?? null,
+        status: promptPackage.resolvedProfileStatus ?? null,
+        updatedAt: promptPackage.resolvedProfileUpdatedAt
+          ? promptPackage.resolvedProfileUpdatedAt.toISOString()
+          : null,
+      },
+      current: {
+        profileId: promptPackage.resolvedProfileId ?? null,
+        revisionId: currentProfile?.id ?? null,
+        hash: currentProfile?.contentHash ?? null,
+        versionLabel: currentProfile?.versionLabel ?? null,
+        status: currentProfile?.status ?? null,
+        updatedAt: currentProfile?.createdAt ? currentProfile.createdAt.toISOString() : null,
+      },
+      drift: profileDrift,
+    },
+    template: {
+      snapshot: {
+        templateId: promptPackage.resolvedTemplateId ?? null,
+        revisionId: promptPackage.resolvedTemplateRevisionId ?? null,
+        hash: promptPackage.resolvedTemplateHash ?? null,
+        versionLabel: promptPackage.resolvedTemplateVersionLabel ?? null,
+        status: promptPackage.resolvedTemplateStatus ?? null,
+        updatedAt: promptPackage.resolvedTemplateUpdatedAt
+          ? promptPackage.resolvedTemplateUpdatedAt.toISOString()
+          : null,
+      },
+      current: {
+        templateId: promptPackage.resolvedTemplateId ?? null,
+        revisionId: currentTemplate?.id ?? null,
+        hash: currentTemplate?.contentHash ?? null,
+        versionLabel: currentTemplate?.versionLabel ?? null,
+        status: currentTemplate?.status ?? null,
+        updatedAt: currentTemplate?.createdAt ? currentTemplate.createdAt.toISOString() : null,
+      },
+      drift: templateDrift,
+    },
   };
 }
 
