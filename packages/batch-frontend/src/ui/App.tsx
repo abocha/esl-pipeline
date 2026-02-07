@@ -6,6 +6,7 @@ import { useAuth } from '../context/AuthContext';
 import { AuthDialog, AuthMode } from './auth/AuthDialog';
 import { MinimalAssignment } from './minimal/MinimalAssignment';
 import { MinimalShell } from './minimal/MinimalShell';
+import { StudentWorkspace } from './students/StudentWorkspace';
 
 export const App: React.FC = () => {
   const { user, isAuthenticated, isLoading, logout } = useAuth();
@@ -88,6 +89,7 @@ const AuthenticatedApp: React.FC<AuthenticatedAppProps> = ({ user, onLogout }) =
     <Routes>
       <Route element={<MinimalShell user={user} onLogout={onLogout} />}>
         <Route path="/" element={<MinimalAssignment />} />
+        <Route path="/students/workspace" element={<StudentWorkspace />} />
       </Route>
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>

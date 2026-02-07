@@ -163,6 +163,11 @@ export interface ProfileRevisionSummaryResponse {
   profileId: string;
   contentHash: string;
   source: 'create' | 'update' | 'restore';
+  status?: 'draft' | 'active' | 'deprecated';
+  versionNumber?: number;
+  versionLabel?: string;
+  activatedAt?: string | null;
+  deprecatedAt?: string | null;
   createdAt: string;
   createdBy: string | null;
   restoredFromRevisionId: string | null;
@@ -214,6 +219,25 @@ export interface StudentTimelineItem {
 
 export interface StudentTimelineResponse {
   items: StudentTimelineItem[];
+  total: number;
+  limit: number;
+  offset: number;
+  order: 'asc' | 'desc';
+}
+
+export interface StudentProfileBindingResponse {
+  id: string;
+  studentId: string;
+  profileId: string;
+  effectiveFrom: string;
+  effectiveTo: string | null;
+  reason: string | null;
+  changedBy: string | null;
+  createdAt: string;
+}
+
+export interface StudentProfileBindingListResponse {
+  items: StudentProfileBindingResponse[];
   total: number;
   limit: number;
   offset: number;
@@ -1187,6 +1211,70 @@ export async function restoreProfileRevision(
     const axiosError = toAxiosError(error);
     if (axiosError && isAuthError(axiosError)) {
       throw new Error('Authentication required. Please login to restore profile revisions.');
+    }
+    throw new Error(axiosError ? handleApiError(axiosError) : formatUnknownError(error));
+  }
+}
+
+export async function activateProfileRevision(
+  profileId: string,
+  revisionId: string,
+): Promise<ProfileContentResponse> {
+  try {
+    const response = await apiClient.post(
+      buildApiProxyPath(
+        `/profiles/${encodeURIComponent(profileId)}/revisions/${encodeURIComponent(revisionId)}/activate`,
+      ),
+    );
+    return response.data;
+  } catch (error: unknown) {
+    const axiosError = toAxiosError(error);
+    if (axiosError && isAuthError(axiosError)) {
+      throw new Error('Authentication required. Please login to activate profile revisions.');
+    }
+    throw new Error(axiosError ? handleApiError(axiosError) : formatUnknownError(error));
+  }
+}
+
+export async function listStudentProfileBindings(
+  studentId: string,
+  params: {
+    limit?: number;
+    offset?: number;
+    order?: 'asc' | 'desc';
+  } = {},
+): Promise<StudentProfileBindingListResponse> {
+  try {
+    const response = await apiClient.get(
+      buildApiProxyPath(`/students/${encodeURIComponent(studentId)}/bindings`),
+      { params },
+    );
+    return response.data;
+  } catch (error: unknown) {
+    const axiosError = toAxiosError(error);
+    if (axiosError && isAuthError(axiosError)) {
+      throw new Error('Authentication required. Please login to view profile bindings.');
+    }
+    throw new Error(axiosError ? handleApiError(axiosError) : formatUnknownError(error));
+  }
+}
+
+export async function getActiveStudentProfileBinding(
+  studentId: string,
+  at?: string,
+): Promise<StudentProfileBindingResponse> {
+  try {
+    const response = await apiClient.get(
+      buildApiProxyPath(`/students/${encodeURIComponent(studentId)}/bindings/active`),
+      {
+        params: at ? { at } : undefined,
+      },
+    );
+    return response.data;
+  } catch (error: unknown) {
+    const axiosError = toAxiosError(error);
+    if (axiosError && isAuthError(axiosError)) {
+      throw new Error('Authentication required. Please login to view active profile bindings.');
     }
     throw new Error(axiosError ? handleApiError(axiosError) : formatUnknownError(error));
   }
