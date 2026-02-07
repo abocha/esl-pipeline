@@ -20,6 +20,10 @@ vi.mock('./minimal/MinimalAssignment', () => ({
   MinimalAssignment: () => <div>Minimal assignment content</div>,
 }));
 
+vi.mock('./students/StudentWorkspace', () => ({
+  StudentWorkspace: () => <div>Student workspace content</div>,
+}));
+
 vi.mock('react-hot-toast', () => ({
   toast: toastMock,
   default: toastMock,
@@ -90,6 +94,27 @@ describe('App', () => {
 
     expect(screen.getByText('teacher@example.com')).toBeTruthy();
     expect(screen.getByText('Minimal assignment content')).toBeTruthy();
+  });
+
+  it('navigates to the student workspace route from shell navigation', async () => {
+    const user = userEvent.setup();
+    useAuthMock.mockReturnValue(
+      createAuthState({
+        user: {
+          id: 'user-1',
+          email: 'teacher@example.com',
+          role: 'user',
+          isActive: true,
+        },
+        isAuthenticated: true,
+      }),
+    );
+
+    renderApp();
+
+    await user.click(screen.getByRole('link', { name: /Student Workspace/i }));
+
+    expect(screen.getByText('Student workspace content')).toBeTruthy();
   });
 
   it('logs out and shows a success toast', async () => {

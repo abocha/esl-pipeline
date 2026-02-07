@@ -48,20 +48,20 @@
 | Job status (`GET /jobs/:jobId`)                                                            | Done    | Done     | Job DTO in contracts                          | Ensure DTO fields stay contract-first.              |
 | Jobs SSE (`GET /jobs/events`)                                                              | Done    | Partial  | SSE route + frontend consumers                | Keep polling fallback explicit in UI.               |
 | Markdown validation (`POST /validation/markdown`)                                          | Done    | Done     | Validation route + frontend draft step        | None.                                               |
-| Student summary/list/profile routes                                                        | Done    | Partial  | Student routes                                | Backend is DB-canonical with FS fallback (`STUDENT_SYSTEM_SOURCE`); full student workspace remains deferred. |
-| Profile content routes                                                                     | Done    | Partial  | Profile routes                                | Same as above.                                      |
+| Student summary/list/profile routes                                                        | Done    | Partial  | Student routes                                | Core student workspace delivered; phase E hardening remains. |
+| Profile content routes                                                                     | Done    | Partial  | Profile routes                                | Restore/activate/edit supported in workspace; continue UX hardening. |
 | Job actions: `edit_metadata`                                                               | Done    | Partial  | Job action route and handler                  | Expose only where workflow needs it.                |
 | Job actions: `rerun_audio`                                                                 | Done    | Done     | Job action contract                           | Maintain payload parity as backend adds rerun knobs. |
 | Job actions: `cancel`                                                                      | Done    | Done     | Job action contract                           | Keep cooperative-cancel UX explicit for running jobs.      |
-| Student timeline + explainability (`/students/:id/timeline`, `/jobs/:id/provenance`)      | Done    | Done     | Timeline/provenance app services + UI panel   | Expand in Phase E into full student workspace views. |
+| Student timeline + explainability (`/students/:id/timeline`, `/jobs/:id/provenance`)      | Done    | Done     | Timeline/provenance app services + UI panel   | Continue filtering and ergonomics pass in phase E follow-ups. |
 
 ## Open Blockers
 
 1. SSE resilience remains partly dependent on polling fallback behavior in UI.
 2. Frontend currently keeps `edit_metadata` as a partial/operator path (not broad UX exposure).
 3. Cancellation is cooperative for running jobs; already-issued external side effects remain best-effort.
-4. Student profile CRUD/profile-content editing remain backend-complete but UI-light by design (minimal UI is selection-first, not full student management).
-5. Phase E (full student workspace UX) is still pending.
+4. Student workspace is now available, but advanced guardrails and end-to-end tutor ergonomics still need completion.
+5. Phase E is in progress; keep parity between workspace interactions and backend governance rules.
 
 ## Do / Don't
 
