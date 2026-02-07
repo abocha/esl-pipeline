@@ -223,6 +223,10 @@
 
 - Deliver a full student-first workspace beyond the minimal assignment UI.
 
+### Status
+
+- In progress (2026-02-07).
+
 ### Deliverables
 
 1. Dedicated student workspace:
@@ -237,6 +241,18 @@
 
 - Tutor can complete student-focused operations from one workspace without context-switching.
 - Minimal UI remains functional and aligned with backend contracts.
+
+### Completed Outputs (This Iteration)
+
+1. New student workspace route is live by default at `/students/workspace` (no feature flag).
+2. Minimal shell now includes direct navigation links between minimal flow and student workspace.
+3. Workspace currently includes:
+   - student context and profile binding management
+   - profile editor with revision restore and activate actions
+   - student assignment history with state/time filters
+   - lineage/provenance inspector for selected jobs
+   - timeline panel with event/time filters.
+4. Basic frontend test coverage was added for workspace route navigation and core workspace flows.
 
 ## Cross-Phase Non-Negotiables
 
