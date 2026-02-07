@@ -8,6 +8,7 @@ import { StudentWorkspace } from './StudentWorkspace';
 
 vi.mock('../../utils/api', () => ({
   activateProfileRevision: vi.fn(),
+  createStudentProfile: vi.fn(),
   fetchJobProvenance: vi.fn(),
   fetchPromptPackageLineage: vi.fn(),
   getProfileContent: vi.fn(),
@@ -310,6 +311,12 @@ describe('StudentWorkspace', () => {
       currentRevisionId: 'revision-1',
       updatedAt: now,
     });
+
+    vi.mocked(api.createStudentProfile).mockResolvedValue({
+      id: 'student-created',
+      student: 'Created Student',
+      profileId: null,
+    });
   });
 
   it('loads and renders student workspace data', async () => {
@@ -364,5 +371,87 @@ describe('StudentWorkspace', () => {
         profileId: 'profile-alt.md',
       });
     });
+  });
+
+  it('validates student creation name before submit', async () => {
+    const user = userEvent.setup();
+    renderWorkspace();
+
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: /Create Student/i })).toBeTruthy();
+    });
+
+    await user.click(screen.getByRole('button', { name: /Create Student/i }));
+    await user.click(screen.getByRole('button', { name: /^Create Student$/i }));
+
+    expect(screen.getByText(/Student name is required/i)).toBeTruthy();
+    expect(api.createStudentProfile).not.toHaveBeenCalled();
+  });
+
+  it('creates a student and keeps workspace context updated', async () => {
+    const user = userEvent.setup();
+    vi.mocked(api.createStudentProfile).mockResolvedValue({
+      id: 'student-alex',
+      student: 'Alex',
+      profileId: 'profile-alt.md',
+    });
+    vi.mocked(api.getStudentProfile).mockImplementation(async (id: string) => {
+      if (id === 'student-alex') {
+        return {
+          id: 'student-alex',
+          student: 'Alex',
+          profileId: 'profile-alt.md',
+        };
+      }
+      return {
+        id: 'student-default',
+        student: 'Default',
+        profileId: 'profile-default.md',
+      };
+    });
+
+    renderWorkspace();
+
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: /Create Student/i })).toBeTruthy();
+    });
+
+    await user.click(screen.getByRole('button', { name: /Create Student/i }));
+    await user.type(screen.getByLabelText(/Student Name/i), 'Alex');
+    await user.selectOptions(screen.getByLabelText(/Initial Profile/i), 'profile-alt.md');
+    await user.click(screen.getByRole('button', { name: /^Create Student$/i }));
+
+    await waitFor(() => {
+      expect(api.createStudentProfile).toHaveBeenCalledWith({
+        student: 'Alex',
+        profileId: 'profile-alt.md',
+      });
+    });
+
+    expect(screen.getByText(/Created student Alex/i)).toBeTruthy();
+  });
+
+  it('keeps create form values on create failure', async () => {
+    const user = userEvent.setup();
+    vi.mocked(api.createStudentProfile).mockRejectedValue(new Error('Student already exists'));
+
+    renderWorkspace();
+
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: /Create Student/i })).toBeTruthy();
+    });
+
+    await user.click(screen.getByRole('button', { name: /Create Student/i }));
+    await user.type(screen.getByLabelText(/Student Name/i), 'Existing');
+    await user.click(screen.getByText(/Advanced fields/i));
+    await user.type(screen.getByLabelText(/Color Preset/i), 'amber');
+    await user.click(screen.getByRole('button', { name: /^Create Student$/i }));
+
+    await waitFor(() => {
+      expect(screen.getByText(/Student already exists/i)).toBeTruthy();
+    });
+
+    expect((screen.getByLabelText(/Student Name/i) as HTMLInputElement).value).toBe('Existing');
+    expect((screen.getByLabelText(/Color Preset/i) as HTMLInputElement).value).toBe('amber');
   });
 });

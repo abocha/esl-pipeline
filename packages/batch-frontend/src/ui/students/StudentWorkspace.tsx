@@ -14,6 +14,7 @@ import type {
 } from '../../utils/api';
 import {
   activateProfileRevision,
+  createStudentProfile,
   fetchJobProvenance,
   fetchPromptPackageLineage,
   getProfileContent,
@@ -57,6 +58,26 @@ function toIsoOrUndefined(value: string): string | undefined {
   return date.toISOString();
 }
 
+interface CreateStudentFormState {
+  student: string;
+  profileId: string;
+  dbId: string;
+  pageParentId: string;
+  colorPreset: string;
+  accentPreference: string;
+  manifestPreset: string;
+}
+
+const INITIAL_CREATE_STUDENT_FORM: CreateStudentFormState = {
+  student: '',
+  profileId: '',
+  dbId: '',
+  pageParentId: '',
+  colorPreset: '',
+  accentPreference: '',
+  manifestPreset: '',
+};
+
 export const StudentWorkspace: React.FC = () => {
   const [students, setStudents] = useState<StudentProfile[]>([]);
   const [studentsLoading, setStudentsLoading] = useState(false);
@@ -66,6 +87,12 @@ export const StudentWorkspace: React.FC = () => {
   const [selectedStudent, setSelectedStudent] = useState<StudentProfile | null>(null);
   const [profileBindingSaving, setProfileBindingSaving] = useState(false);
   const [bindingSuccess, setBindingSuccess] = useState<string | null>(null);
+  const [isCreateStudentOpen, setIsCreateStudentOpen] = useState(false);
+  const [createStudentBusy, setCreateStudentBusy] = useState(false);
+  const [createStudentError, setCreateStudentError] = useState<string | null>(null);
+  const [createStudentSuccess, setCreateStudentSuccess] = useState<string | null>(null);
+  const [createStudentForm, setCreateStudentForm] =
+    useState<CreateStudentFormState>(INITIAL_CREATE_STUDENT_FORM);
 
   const [profileOptions, setProfileOptions] = useState<{ id: string; label: string }[]>([]);
   const [profileOptionsError, setProfileOptionsError] = useState<string | null>(null);
@@ -286,6 +313,50 @@ export const StudentWorkspace: React.FC = () => {
     await Promise.all([loadStudents(), loadProfileOptions()]);
   }, [loadProfileOptions, loadStudents]);
 
+  const resetCreateStudentForm = useCallback(() => {
+    setCreateStudentForm(INITIAL_CREATE_STUDENT_FORM);
+    setCreateStudentError(null);
+  }, []);
+
+  const handleCreateStudent = async () => {
+    const student = createStudentForm.student.trim();
+    if (!student) {
+      setCreateStudentError('Student name is required.');
+      return;
+    }
+
+    setCreateStudentBusy(true);
+    setCreateStudentError(null);
+    setCreateStudentSuccess(null);
+
+    try {
+      const created = await createStudentProfile({
+        student,
+        ...(createStudentForm.profileId ? { profileId: createStudentForm.profileId } : {}),
+        ...(createStudentForm.dbId ? { dbId: createStudentForm.dbId } : {}),
+        ...(createStudentForm.pageParentId ? { pageParentId: createStudentForm.pageParentId } : {}),
+        ...(createStudentForm.colorPreset ? { colorPreset: createStudentForm.colorPreset } : {}),
+        ...(createStudentForm.accentPreference
+          ? { accentPreference: createStudentForm.accentPreference }
+          : {}),
+        ...(createStudentForm.manifestPreset ? { manifestPreset: createStudentForm.manifestPreset } : {}),
+      });
+
+      await Promise.all([loadStudents(), loadProfileOptions()]);
+      setSelectedStudentId(created.id);
+      setSelectedProfileId(created.profileId ?? '');
+      setSelectedStudent(created);
+      setCreateStudentSuccess(`Created student ${created.student}.`);
+      resetCreateStudentForm();
+      setIsCreateStudentOpen(false);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Unable to create student.';
+      setCreateStudentError(message);
+    } finally {
+      setCreateStudentBusy(false);
+    }
+  };
+
   const handleSaveBinding = async () => {
     if (!selectedStudentId) return;
     setProfileBindingSaving(true);
@@ -481,9 +552,165 @@ export const StudentWorkspace: React.FC = () => {
       <section className="workspace-grid">
         <article className="workspace-card card">
           <header>
-            <h2>Student Context</h2>
+            <div className="workspace-inline workspace-header-row">
+              <h2>Student Context</h2>
+              <button
+                type="button"
+                className="workspace-secondary-btn"
+                onClick={() => {
+                  setCreateStudentSuccess(null);
+                  setIsCreateStudentOpen((current) => !current);
+                  if (isCreateStudentOpen) {
+                    resetCreateStudentForm();
+                  }
+                }}
+              >
+                {isCreateStudentOpen ? 'Close Create Form' : 'Create Student'}
+              </button>
+            </div>
             <p>Choose the student context for all workspace panels.</p>
           </header>
+
+          {createStudentSuccess ? <p className="workspace-success">{createStudentSuccess}</p> : null}
+
+          {isCreateStudentOpen ? (
+            <div className="workspace-create-panel">
+              <label className="workspace-field">
+                Student Name
+                <input
+                  aria-label="Student Name"
+                  value={createStudentForm.student}
+                  onChange={(event) =>
+                    setCreateStudentForm((current) => ({
+                      ...current,
+                      student: event.target.value,
+                    }))
+                  }
+                  placeholder="e.g. Alex"
+                />
+              </label>
+
+              <label className="workspace-field">
+                Initial Profile (optional)
+                <select
+                  aria-label="Initial Profile"
+                  value={createStudentForm.profileId}
+                  onChange={(event) =>
+                    setCreateStudentForm((current) => ({
+                      ...current,
+                      profileId: event.target.value,
+                    }))
+                  }
+                >
+                  <option value="">No profile binding</option>
+                  {profileOptions.map((profile) => (
+                    <option key={profile.id} value={profile.id}>
+                      {profile.label} ({profile.id})
+                    </option>
+                  ))}
+                </select>
+              </label>
+
+              <details className="workspace-advanced">
+                <summary>Advanced fields</summary>
+                <div className="workspace-grid">
+                  <label className="workspace-field">
+                    Notion DB ID
+                    <input
+                      aria-label="Notion DB ID"
+                      value={createStudentForm.dbId}
+                      onChange={(event) =>
+                        setCreateStudentForm((current) => ({
+                          ...current,
+                          dbId: event.target.value,
+                        }))
+                      }
+                    />
+                  </label>
+
+                  <label className="workspace-field">
+                    Notion Parent ID
+                    <input
+                      aria-label="Notion Parent ID"
+                      value={createStudentForm.pageParentId}
+                      onChange={(event) =>
+                        setCreateStudentForm((current) => ({
+                          ...current,
+                          pageParentId: event.target.value,
+                        }))
+                      }
+                    />
+                  </label>
+
+                  <label className="workspace-field">
+                    Color Preset
+                    <input
+                      aria-label="Color Preset"
+                      value={createStudentForm.colorPreset}
+                      onChange={(event) =>
+                        setCreateStudentForm((current) => ({
+                          ...current,
+                          colorPreset: event.target.value,
+                        }))
+                      }
+                    />
+                  </label>
+
+                  <label className="workspace-field">
+                    Accent Preference
+                    <input
+                      aria-label="Accent Preference"
+                      value={createStudentForm.accentPreference}
+                      onChange={(event) =>
+                        setCreateStudentForm((current) => ({
+                          ...current,
+                          accentPreference: event.target.value,
+                        }))
+                      }
+                    />
+                  </label>
+
+                  <label className="workspace-field">
+                    Manifest Preset
+                    <input
+                      aria-label="Manifest Preset"
+                      value={createStudentForm.manifestPreset}
+                      onChange={(event) =>
+                        setCreateStudentForm((current) => ({
+                          ...current,
+                          manifestPreset: event.target.value,
+                        }))
+                      }
+                    />
+                  </label>
+                </div>
+              </details>
+
+              <div className="workspace-inline">
+                <button
+                  type="button"
+                  className="workspace-primary-btn"
+                  onClick={() => void handleCreateStudent()}
+                  disabled={createStudentBusy}
+                >
+                  {createStudentBusy ? 'Creating...' : 'Create Student'}
+                </button>
+                <button
+                  type="button"
+                  className="workspace-secondary-btn"
+                  onClick={() => {
+                    resetCreateStudentForm();
+                    setIsCreateStudentOpen(false);
+                  }}
+                  disabled={createStudentBusy}
+                >
+                  Cancel
+                </button>
+              </div>
+
+              {createStudentError ? <p className="workspace-error">{createStudentError}</p> : null}
+            </div>
+          ) : null}
 
           <label className="workspace-field">
             Student
@@ -995,6 +1222,30 @@ export const StudentWorkspace: React.FC = () => {
           align-items: center;
           gap: var(--space-2);
           flex-wrap: wrap;
+        }
+
+        .workspace-header-row {
+          justify-content: space-between;
+        }
+
+        .workspace-create-panel {
+          border: 1px solid var(--border-light);
+          border-radius: var(--radius-lg);
+          background: var(--bg-secondary);
+          padding: var(--space-3);
+          display: grid;
+          gap: var(--space-3);
+        }
+
+        .workspace-advanced {
+          display: grid;
+          gap: var(--space-2);
+        }
+
+        .workspace-advanced summary {
+          cursor: pointer;
+          font-size: var(--text-sm);
+          color: var(--text-tertiary);
         }
 
         .workspace-filter-row {
