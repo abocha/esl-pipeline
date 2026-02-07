@@ -27,11 +27,36 @@ const loadEnvFilesWithSummary = vi
   .fn()
   .mockReturnValue({ loadedFiles: [], missingFiles: [], assignedKeys: [], overriddenKeys: [] });
 const summarizeVoiceSelections = vi.fn().mockReturnValue('voice-summary');
+const computeRerunPlan = vi
+  .fn()
+  .mockImplementation((request: { steps?: string[]; audio?: boolean; from?: string; to?: string }) => {
+    const order = ['tts', 'upload', 'add-audio'];
+    let requested: string[];
+    if (request.steps && request.steps.length > 0) {
+      requested = request.steps;
+    } else if (request.audio) {
+      requested = [...order];
+    } else if (request.from || request.to) {
+      const start = order.indexOf(request.from ?? 'tts');
+      const end = order.indexOf(request.to ?? 'add-audio');
+      requested = start !== -1 && end >= start ? order.slice(start, end + 1) : [];
+    } else {
+      requested = ['upload', 'add-audio'];
+    }
+  return {
+    requested,
+    executable: requested,
+    skipped: [],
+    requires: { missingManifestFields: [] },
+    errors: [],
+  };
+  });
 const runInteractiveWizard = vi.fn();
 
 vi.mock('../src/config.js', () => ({ DEFAULT_STUDENT_NAME: 'Default Student' }));
 vi.mock('../src/index.js', () => ({
   createPipeline: vi.fn(() => pipelineMock),
+  computeRerunPlan,
   loadEnvFilesWithSummary,
   summarizeVoiceSelections,
 }));
@@ -51,6 +76,7 @@ const resetPipelineMocks = () => {
   pipelineMock.getAssignmentStatus.mockReset();
   summarizeVoiceSelections.mockClear();
   runInteractiveWizard.mockReset();
+  computeRerunPlan.mockClear();
 };
 
 describe('cli (commander parsing)', () => {
@@ -263,6 +289,57 @@ describe('cli (commander parsing)', () => {
         upload: 's3',
       }),
     );
+  });
+
+  it('supports --from/--to rerun planning range', async () => {
+    const mdPath = resolve('lesson.md');
+    process.argv = ['node', 'cli', 'rerun', '--md', mdPath, '--from', 'upload', '--to', 'add-audio', '--json'];
+
+    pipelineMock.rerunAssignment.mockResolvedValue({
+      steps: ['upload', 'add-audio'],
+      manifestPath: '/tmp/manifest.json',
+    });
+    pipelineMock.getAssignmentStatus.mockResolvedValue({
+      manifestPath: '/tmp/manifest.json',
+      manifest: { pageId: 'page-1', mdHash: 'hash', timestamp: '2026-01-01T00:00:00.000Z' },
+      mdHashMatches: true,
+      audioFileExists: true,
+    });
+
+    await importCli();
+
+    expect(computeRerunPlan).toHaveBeenCalledWith(
+      expect.objectContaining({
+        md: mdPath,
+        from: 'upload',
+        to: 'add-audio',
+      }),
+    );
+    expect(pipelineMock.rerunAssignment).toHaveBeenCalledWith(
+      expect.objectContaining({
+        md: mdPath,
+        steps: ['upload', 'add-audio'],
+        upload: 's3',
+      }),
+    );
+  });
+
+  it('supports --plan and skips rerun execution', async () => {
+    const mdPath = resolve('lesson.md');
+    process.argv = ['node', 'cli', 'rerun', '--md', mdPath, '--plan', '--json'];
+
+    pipelineMock.getAssignmentStatus.mockResolvedValue({
+      manifestPath: '/tmp/manifest.json',
+      manifest: { pageId: 'page-1', mdHash: 'hash', timestamp: '2026-01-01T00:00:00.000Z' },
+      mdHashMatches: true,
+      audioFileExists: true,
+    });
+
+    await importCli();
+
+    expect(computeRerunPlan).toHaveBeenCalledTimes(1);
+    expect(pipelineMock.rerunAssignment).not.toHaveBeenCalled();
+    expect(pipelineMock.getAssignmentStatus).toHaveBeenCalledTimes(1);
   });
 
   it('runs interactive wizard and applies defaults', async () => {

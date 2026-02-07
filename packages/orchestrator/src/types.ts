@@ -94,3 +94,28 @@ export interface RerunFlags {
   dialogueStability?: number;
   dialogueSeed?: number;
 }
+
+export type RerunTargetStage = NonNullable<RerunFlags['steps']>[number];
+
+export interface RerunPlanSkip {
+  stage: RerunTargetStage;
+  reason: string;
+}
+
+export interface RerunPlanRequest {
+  md: string;
+  steps?: RerunTargetStage[];
+  audio?: boolean;
+  from?: RerunTargetStage;
+  to?: RerunTargetStage;
+}
+
+export interface RerunPlanResult {
+  requested: RerunTargetStage[];
+  executable: RerunTargetStage[];
+  skipped: RerunPlanSkip[];
+  requires: {
+    missingManifestFields: string[];
+  };
+  errors: string[];
+}

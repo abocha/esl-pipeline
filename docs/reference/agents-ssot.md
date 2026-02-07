@@ -599,6 +599,7 @@ Manifest behavior:
   - `newAssignment` writes manifests via `ManifestStore`.
 - Updates:
   - `rerunAssignment` reads and updates manifest.
+  - `planRerunAssignment` reads manifest and computes executable rerun stages + prerequisites.
 - Reads:
   - `getAssignmentStatus` reads manifest and summarizes status.
 
@@ -653,7 +654,8 @@ Canonical commands (names/flags verified from CLI implementation):
 - `esl status ...`:
   - Inspect manifest/pipeline status.
 - `esl rerun ...`:
-  - Rerun with updated options based on existing manifest.
+  - Planner-backed rerun with updated options based on existing manifest.
+  - Supports `--steps`, `--audio`, `--from/--to`, and `--plan` (dry planning only).
 - `esl select ...`:
   - Select runs or presets (per CLI implementation).
 - `esl --version`:
@@ -663,6 +665,7 @@ Rules:
 
 - CLI is a thin adapter over orchestrator API.
 - Any CLI feature MUST delegate to orchestrator exports, NOT duplicate logic.
+- Rerun planning precedence MUST remain: `--steps` > `--audio` > `--from/--to` > default.
 - `--with-tts` is an explicit opt-in. When omitted, the orchestrator treats `withTts` as “no override” so that saved defaults from [`wizard.defaults.json`](configs/wizard.defaults.json) or other configuration can apply.
 
 ### 7.2. Programmatic API as Source of Truth

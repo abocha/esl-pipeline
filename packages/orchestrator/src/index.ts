@@ -32,6 +32,9 @@ import {
 import { type PipelineLogger, noopLogger, noopMetrics } from './observability.js';
 import type {
   AssignmentProgressCallbacks,
+  RerunPlanRequest,
+  RerunPlanResult,
+  RerunTargetStage,
   AssignmentStage,
   AssignmentStageStatus,
   AssignmentStatus,
@@ -39,12 +42,16 @@ import type {
   OrchestratorDependencies,
   RerunFlags,
 } from './types.js';
+import { computeRerunPlan } from './rerun-planner.js';
 
 export type {
   AssignmentStage,
   AssignmentStageStatus,
   AssignmentProgressEvent,
   AssignmentProgressCallbacks,
+  RerunPlanRequest,
+  RerunPlanResult,
+  RerunTargetStage,
   OrchestratorDependencies,
   NewAssignmentFlags,
   AssignmentStatus,
@@ -321,6 +328,7 @@ export {
   type VoiceOption as JobVoiceOption,
   type NotionDatabaseOption as JobNotionDatabaseOption,
 } from './metadata/job-options.js';
+export { computeRerunPlan } from './rerun-planner.js';
 
 export function summarizeVoiceSelections(
   voices?: BuildStudyTextResult['voices'],
@@ -362,6 +370,18 @@ export function summarizeVoiceSelections(
       return `${voice.speaker}→${name}${tagString}`;
     })
     .join(', ');
+}
+
+export async function planRerunAssignment(
+  request: RerunPlanRequest,
+  dependencies: OrchestratorDependencies = {},
+): Promise<RerunPlanResult> {
+  const manifestStore = dependencies.manifestStore ?? fallbackManifestStore;
+  const manifest = await manifestStore.readManifest(request.md);
+  return computeRerunPlan({
+    ...request,
+    manifest,
+  });
 }
 
 export async function newAssignment(
@@ -1078,20 +1098,31 @@ export async function rerunAssignment(
     message: 'pipeline.rerunAssignment.start',
     runId,
     stage: 'pipeline',
-    detail: { md: flags.md, steps: flags.steps },
+    detail: { md: flags.md, requestedSteps: flags.steps },
   });
 
   try {
     throwIfCancelled(signal, 'tts');
     const manifest = await manifestStore.readManifest(flags.md);
-    if (!manifest) {
-      throw new Error(`No manifest found for ${flags.md}. Run the pipeline first.`);
+    const rerunPlan = computeRerunPlan({
+      md: flags.md,
+      steps: flags.steps,
+      manifest,
+    });
+    if (rerunPlan.errors.length > 0) {
+      throw new ValidationError(rerunPlan.errors.join('\n'));
     }
 
-    const stepsToRun = new Set(
-      flags.steps && flags.steps.length > 0 ? flags.steps : ['upload', 'add-audio'],
+    const stepsToRun = new Set(rerunPlan.executable);
+    const skipReasonByStage = new Map<RerunTargetStage, string>(
+      rerunPlan.skipped.map((item) => [item.stage, item.reason]),
     );
     const executed: string[] = [];
+
+    // Planner guarantees manifest presence when no errors are reported.
+    if (!manifest) {
+      throw new ValidationError(`No manifest found for ${flags.md}. Run the pipeline first.`);
+    }
 
     const mdContents = await readMarkdownCached(flags.md);
     let audioPath = manifest.audio?.path;
@@ -1168,7 +1199,7 @@ export async function rerunAssignment(
       });
       executed.push('tts');
     } else {
-      emitStage('tts', 'skipped', { reason: 'not requested' });
+      emitStage('tts', 'skipped', { reason: skipReasonByStage.get('tts') ?? 'not requested' });
     }
 
     if (stepsToRun.has('upload')) {
@@ -1212,7 +1243,9 @@ export async function rerunAssignment(
       });
       executed.push('upload');
     } else {
-      emitStage('upload', 'skipped', { reason: 'not requested' });
+      emitStage('upload', 'skipped', {
+        reason: skipReasonByStage.get('upload') ?? 'not requested',
+      });
     }
 
     if (stepsToRun.has('add-audio')) {
@@ -1288,7 +1321,9 @@ export async function rerunAssignment(
 
       executed.push('add-audio');
     } else {
-      emitStage('add-audio', 'skipped', { reason: 'not requested' });
+      emitStage('add-audio', 'skipped', {
+        reason: skipReasonByStage.get('add-audio') ?? 'not requested',
+      });
     }
 
     const updatedManifest: AssignmentManifest = {
