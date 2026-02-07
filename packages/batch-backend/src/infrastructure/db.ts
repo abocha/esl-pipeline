@@ -172,6 +172,14 @@ CREATE TABLE IF NOT EXISTS prompt_packages (
   transcript_id UUID NOT NULL,
   student_id UUID NULL,
   profile_path TEXT NULL,
+  resolved_profile_id TEXT NULL,
+  resolved_profile_hash TEXT NULL,
+  resolved_profile_revision_id UUID NULL,
+  resolved_profile_updated_at TIMESTAMPTZ NULL,
+  resolved_template_id TEXT NULL,
+  resolved_template_hash TEXT NULL,
+  resolved_template_revision_id UUID NULL,
+  resolved_template_updated_at TIMESTAMPTZ NULL,
   template_version TEXT NOT NULL,
   notes TEXT NULL,
   storage_uri TEXT NOT NULL,
@@ -185,6 +193,14 @@ const PROMPT_PACKAGES_SCHEMA_PATCHES: string[] = [
   'ALTER TABLE prompt_packages ADD COLUMN IF NOT EXISTS transcript_id UUID NULL',
   'ALTER TABLE prompt_packages ADD COLUMN IF NOT EXISTS student_id UUID NULL',
   'ALTER TABLE prompt_packages ADD COLUMN IF NOT EXISTS profile_path TEXT NULL',
+  'ALTER TABLE prompt_packages ADD COLUMN IF NOT EXISTS resolved_profile_id TEXT NULL',
+  'ALTER TABLE prompt_packages ADD COLUMN IF NOT EXISTS resolved_profile_hash TEXT NULL',
+  'ALTER TABLE prompt_packages ADD COLUMN IF NOT EXISTS resolved_profile_revision_id UUID NULL',
+  'ALTER TABLE prompt_packages ADD COLUMN IF NOT EXISTS resolved_profile_updated_at TIMESTAMPTZ NULL',
+  'ALTER TABLE prompt_packages ADD COLUMN IF NOT EXISTS resolved_template_id TEXT NULL',
+  'ALTER TABLE prompt_packages ADD COLUMN IF NOT EXISTS resolved_template_hash TEXT NULL',
+  'ALTER TABLE prompt_packages ADD COLUMN IF NOT EXISTS resolved_template_revision_id UUID NULL',
+  'ALTER TABLE prompt_packages ADD COLUMN IF NOT EXISTS resolved_template_updated_at TIMESTAMPTZ NULL',
   'ALTER TABLE prompt_packages ADD COLUMN IF NOT EXISTS template_version TEXT NULL',
   'ALTER TABLE prompt_packages ADD COLUMN IF NOT EXISTS notes TEXT NULL',
   'ALTER TABLE prompt_packages ADD COLUMN IF NOT EXISTS storage_uri TEXT NULL',
@@ -196,6 +212,64 @@ const PROMPT_PACKAGES_INDEX_PATCHES: string[] = [
   'CREATE INDEX IF NOT EXISTS idx_prompt_packages_recording_id ON prompt_packages (recording_id)',
   'CREATE INDEX IF NOT EXISTS idx_prompt_packages_transcript_id ON prompt_packages (transcript_id)',
   'CREATE INDEX IF NOT EXISTS idx_prompt_packages_student_id ON prompt_packages (student_id)',
+  'CREATE INDEX IF NOT EXISTS idx_prompt_packages_resolved_profile_id ON prompt_packages (resolved_profile_id)',
+  'CREATE INDEX IF NOT EXISTS idx_prompt_packages_resolved_template_id ON prompt_packages (resolved_template_id)',
+];
+
+const PROFILE_REVISIONS_TABLE_SQL = `
+CREATE TABLE IF NOT EXISTS profile_revisions (
+  id UUID PRIMARY KEY,
+  profile_id TEXT NOT NULL,
+  content TEXT NOT NULL,
+  content_hash TEXT NOT NULL,
+  source TEXT NOT NULL DEFAULT 'update',
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  created_by UUID NULL,
+  restored_from_revision_id UUID NULL
+);
+`;
+
+const PROFILE_REVISIONS_SCHEMA_PATCHES: string[] = [
+  'ALTER TABLE profile_revisions ADD COLUMN IF NOT EXISTS profile_id TEXT NULL',
+  'ALTER TABLE profile_revisions ADD COLUMN IF NOT EXISTS content TEXT NULL',
+  'ALTER TABLE profile_revisions ADD COLUMN IF NOT EXISTS content_hash TEXT NULL',
+  'ALTER TABLE profile_revisions ADD COLUMN IF NOT EXISTS source TEXT NULL',
+  'ALTER TABLE profile_revisions ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ NULL',
+  'ALTER TABLE profile_revisions ADD COLUMN IF NOT EXISTS created_by UUID NULL',
+  'ALTER TABLE profile_revisions ADD COLUMN IF NOT EXISTS restored_from_revision_id UUID NULL',
+];
+
+const PROFILE_REVISIONS_INDEX_PATCHES: string[] = [
+  'CREATE INDEX IF NOT EXISTS idx_profile_revisions_profile_id_created_at ON profile_revisions (profile_id, created_at DESC)',
+  'CREATE INDEX IF NOT EXISTS idx_profile_revisions_profile_id_hash ON profile_revisions (profile_id, content_hash)',
+];
+
+const TEMPLATE_REVISIONS_TABLE_SQL = `
+CREATE TABLE IF NOT EXISTS template_revisions (
+  id UUID PRIMARY KEY,
+  template_id TEXT NOT NULL,
+  content TEXT NOT NULL,
+  content_hash TEXT NOT NULL,
+  source TEXT NOT NULL DEFAULT 'update',
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  created_by UUID NULL,
+  restored_from_revision_id UUID NULL
+);
+`;
+
+const TEMPLATE_REVISIONS_SCHEMA_PATCHES: string[] = [
+  'ALTER TABLE template_revisions ADD COLUMN IF NOT EXISTS template_id TEXT NULL',
+  'ALTER TABLE template_revisions ADD COLUMN IF NOT EXISTS content TEXT NULL',
+  'ALTER TABLE template_revisions ADD COLUMN IF NOT EXISTS content_hash TEXT NULL',
+  'ALTER TABLE template_revisions ADD COLUMN IF NOT EXISTS source TEXT NULL',
+  'ALTER TABLE template_revisions ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ NULL',
+  'ALTER TABLE template_revisions ADD COLUMN IF NOT EXISTS created_by UUID NULL',
+  'ALTER TABLE template_revisions ADD COLUMN IF NOT EXISTS restored_from_revision_id UUID NULL',
+];
+
+const TEMPLATE_REVISIONS_INDEX_PATCHES: string[] = [
+  'CREATE INDEX IF NOT EXISTS idx_template_revisions_template_id_created_at ON template_revisions (template_id, created_at DESC)',
+  'CREATE INDEX IF NOT EXISTS idx_template_revisions_template_id_hash ON template_revisions (template_id, content_hash)',
 ];
 
 const DRAFTS_TABLE_SQL = `
@@ -287,6 +361,54 @@ BEGIN
     ALTER TABLE drafts
       ADD CONSTRAINT drafts_created_by_fkey
       FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE SET NULL;
+  END IF;
+END $$;`,
+  `DO $$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'profile_revisions_created_by_fkey') THEN
+    ALTER TABLE profile_revisions
+      ADD CONSTRAINT profile_revisions_created_by_fkey
+      FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE SET NULL;
+  END IF;
+END $$;`,
+  `DO $$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'profile_revisions_restored_from_revision_id_fkey') THEN
+    ALTER TABLE profile_revisions
+      ADD CONSTRAINT profile_revisions_restored_from_revision_id_fkey
+      FOREIGN KEY (restored_from_revision_id) REFERENCES profile_revisions(id) ON DELETE SET NULL;
+  END IF;
+END $$;`,
+  `DO $$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'profile_revisions_source_check') THEN
+    ALTER TABLE profile_revisions
+      ADD CONSTRAINT profile_revisions_source_check CHECK (source IN ('create', 'update', 'restore'));
+  END IF;
+END $$;`,
+  `DO $$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'template_revisions_created_by_fkey') THEN
+    ALTER TABLE template_revisions
+      ADD CONSTRAINT template_revisions_created_by_fkey
+      FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE SET NULL;
+  END IF;
+END $$;`,
+  `DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_constraint WHERE conname = 'template_revisions_restored_from_revision_id_fkey'
+  ) THEN
+    ALTER TABLE template_revisions
+      ADD CONSTRAINT template_revisions_restored_from_revision_id_fkey
+      FOREIGN KEY (restored_from_revision_id) REFERENCES template_revisions(id) ON DELETE SET NULL;
+  END IF;
+END $$;`,
+  `DO $$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'template_revisions_source_check') THEN
+    ALTER TABLE template_revisions
+      ADD CONSTRAINT template_revisions_source_check CHECK (source IN ('create', 'update', 'restore'));
   END IF;
 END $$;`,
 ];
@@ -403,6 +525,22 @@ async function ensureJobsSchema(client: PoolClient): Promise<void> {
       await client.query(indexSql);
     }
 
+    await client.query(PROFILE_REVISIONS_TABLE_SQL);
+    for (const statement of PROFILE_REVISIONS_SCHEMA_PATCHES) {
+      await client.query(statement);
+    }
+    for (const indexSql of PROFILE_REVISIONS_INDEX_PATCHES) {
+      await client.query(indexSql);
+    }
+
+    await client.query(TEMPLATE_REVISIONS_TABLE_SQL);
+    for (const statement of TEMPLATE_REVISIONS_SCHEMA_PATCHES) {
+      await client.query(statement);
+    }
+    for (const indexSql of TEMPLATE_REVISIONS_INDEX_PATCHES) {
+      await client.query(indexSql);
+    }
+
     // Users table
     await client.query(USERS_TABLE_SQL);
 
@@ -414,7 +552,7 @@ async function ensureJobsSchema(client: PoolClient): Promise<void> {
     }
 
     logger.info(
-      'Ensured database schema (jobs, recordings, transcripts, prompt_packages, drafts, users)',
+      'Ensured database schema (jobs, recordings, transcripts, prompt_packages, drafts, profile_revisions, template_revisions, users)',
       {
         component: 'pg',
         event: 'schema_ready',

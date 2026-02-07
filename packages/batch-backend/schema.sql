@@ -97,7 +97,16 @@ CREATE TABLE IF NOT EXISTS prompt_packages (
   id UUID PRIMARY KEY,
   recording_id UUID NOT NULL REFERENCES recordings(id) ON DELETE CASCADE,
   transcript_id UUID NOT NULL REFERENCES transcripts(id) ON DELETE CASCADE,
+  student_id UUID NULL,
   profile_path TEXT NULL,
+  resolved_profile_id TEXT NULL,
+  resolved_profile_hash TEXT NULL,
+  resolved_profile_revision_id UUID NULL,
+  resolved_profile_updated_at TIMESTAMPTZ NULL,
+  resolved_template_id TEXT NULL,
+  resolved_template_hash TEXT NULL,
+  resolved_template_revision_id UUID NULL,
+  resolved_template_updated_at TIMESTAMPTZ NULL,
   template_version TEXT NOT NULL,
   notes TEXT NULL,
   storage_uri TEXT NOT NULL,
@@ -112,6 +121,28 @@ CREATE TABLE IF NOT EXISTS drafts (
   created_by UUID NULL REFERENCES users(id) ON DELETE SET NULL,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS profile_revisions (
+  id UUID PRIMARY KEY,
+  profile_id TEXT NOT NULL,
+  content TEXT NOT NULL,
+  content_hash TEXT NOT NULL,
+  source TEXT NOT NULL DEFAULT 'update',
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  created_by UUID NULL REFERENCES users(id) ON DELETE SET NULL,
+  restored_from_revision_id UUID NULL REFERENCES profile_revisions(id) ON DELETE SET NULL
+);
+
+CREATE TABLE IF NOT EXISTS template_revisions (
+  id UUID PRIMARY KEY,
+  template_id TEXT NOT NULL,
+  content TEXT NOT NULL,
+  content_hash TEXT NOT NULL,
+  source TEXT NOT NULL DEFAULT 'update',
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  created_by UUID NULL REFERENCES users(id) ON DELETE SET NULL,
+  restored_from_revision_id UUID NULL REFERENCES template_revisions(id) ON DELETE SET NULL
 );
 
 -- Ensure user_id is present on upgrades and has the correct FK
@@ -134,6 +165,32 @@ ALTER TABLE jobs DROP CONSTRAINT IF EXISTS jobs_user_id_fkey;
 ALTER TABLE jobs
   ADD CONSTRAINT jobs_user_id_fkey FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE SET NULL;
 
+ALTER TABLE prompt_packages ADD COLUMN IF NOT EXISTS student_id UUID NULL;
+ALTER TABLE prompt_packages ADD COLUMN IF NOT EXISTS resolved_profile_id TEXT NULL;
+ALTER TABLE prompt_packages ADD COLUMN IF NOT EXISTS resolved_profile_hash TEXT NULL;
+ALTER TABLE prompt_packages ADD COLUMN IF NOT EXISTS resolved_profile_revision_id UUID NULL;
+ALTER TABLE prompt_packages ADD COLUMN IF NOT EXISTS resolved_profile_updated_at TIMESTAMPTZ NULL;
+ALTER TABLE prompt_packages ADD COLUMN IF NOT EXISTS resolved_template_id TEXT NULL;
+ALTER TABLE prompt_packages ADD COLUMN IF NOT EXISTS resolved_template_hash TEXT NULL;
+ALTER TABLE prompt_packages ADD COLUMN IF NOT EXISTS resolved_template_revision_id UUID NULL;
+ALTER TABLE prompt_packages ADD COLUMN IF NOT EXISTS resolved_template_updated_at TIMESTAMPTZ NULL;
+
+ALTER TABLE profile_revisions ADD COLUMN IF NOT EXISTS profile_id TEXT NULL;
+ALTER TABLE profile_revisions ADD COLUMN IF NOT EXISTS content TEXT NULL;
+ALTER TABLE profile_revisions ADD COLUMN IF NOT EXISTS content_hash TEXT NULL;
+ALTER TABLE profile_revisions ADD COLUMN IF NOT EXISTS source TEXT NULL;
+ALTER TABLE profile_revisions ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ NULL;
+ALTER TABLE profile_revisions ADD COLUMN IF NOT EXISTS created_by UUID NULL;
+ALTER TABLE profile_revisions ADD COLUMN IF NOT EXISTS restored_from_revision_id UUID NULL;
+
+ALTER TABLE template_revisions ADD COLUMN IF NOT EXISTS template_id TEXT NULL;
+ALTER TABLE template_revisions ADD COLUMN IF NOT EXISTS content TEXT NULL;
+ALTER TABLE template_revisions ADD COLUMN IF NOT EXISTS content_hash TEXT NULL;
+ALTER TABLE template_revisions ADD COLUMN IF NOT EXISTS source TEXT NULL;
+ALTER TABLE template_revisions ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ NULL;
+ALTER TABLE template_revisions ADD COLUMN IF NOT EXISTS created_by UUID NULL;
+ALTER TABLE template_revisions ADD COLUMN IF NOT EXISTS restored_from_revision_id UUID NULL;
+
 CREATE INDEX IF NOT EXISTS idx_jobs_user_id ON jobs(user_id);
 CREATE INDEX IF NOT EXISTS idx_jobs_recording_id ON jobs(recording_id);
 CREATE INDEX IF NOT EXISTS idx_jobs_transcript_id ON jobs(transcript_id);
@@ -145,8 +202,15 @@ CREATE INDEX IF NOT EXISTS idx_recordings_created_at ON recordings(created_at);
 CREATE INDEX IF NOT EXISTS idx_transcripts_recording_id ON transcripts(recording_id);
 CREATE INDEX IF NOT EXISTS idx_prompt_packages_recording_id ON prompt_packages(recording_id);
 CREATE INDEX IF NOT EXISTS idx_prompt_packages_transcript_id ON prompt_packages(transcript_id);
+CREATE INDEX IF NOT EXISTS idx_prompt_packages_student_id ON prompt_packages(student_id);
+CREATE INDEX IF NOT EXISTS idx_prompt_packages_resolved_profile_id ON prompt_packages(resolved_profile_id);
+CREATE INDEX IF NOT EXISTS idx_prompt_packages_resolved_template_id ON prompt_packages(resolved_template_id);
 CREATE INDEX IF NOT EXISTS idx_drafts_prompt_package_id ON drafts(prompt_package_id);
 CREATE INDEX IF NOT EXISTS idx_drafts_created_by ON drafts(created_by);
+CREATE INDEX IF NOT EXISTS idx_profile_revisions_profile_id_created_at ON profile_revisions(profile_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_profile_revisions_profile_id_hash ON profile_revisions(profile_id, content_hash);
+CREATE INDEX IF NOT EXISTS idx_template_revisions_template_id_created_at ON template_revisions(template_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_template_revisions_template_id_hash ON template_revisions(template_id, content_hash);
 
 -- Trigger function to keep updated_at in sync on any UPDATE.
 CREATE OR REPLACE FUNCTION set_jobs_updated_at()
