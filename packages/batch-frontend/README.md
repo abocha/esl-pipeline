@@ -6,7 +6,10 @@ operator-facing UI that focuses on the core workflow only.
 ## Features
 
 - Authenticated minimal assignment console.
+- Optional student selection in step 1 (defaults to `Default` when available).
 - Upload recording → review transcript → generate prompt → paste draft → validate → publish.
+- Prompt generation defers profile choice to backend precedence (`profileId` override, then student-linked
+  profile, then configured default).
 - Optional Anytype/Notion publish target selection in the publish step.
 - Job action controls for `rerun_audio` and `cancel` (capability-gated from backend metadata).
 - Typed API client backed by `@esl-pipeline/contracts`.

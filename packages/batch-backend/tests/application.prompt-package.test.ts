@@ -9,6 +9,7 @@ import { getPromptPackage } from '../src/application/get-prompt-package.js';
 import { ProfilePathError } from '../src/application/profile-path.js';
 import type { BatchBackendConfig } from '../src/config/env.js';
 import type { PromptPackageRecord } from '../src/domain/prompt-package-model.js';
+import type { RecordingRecord } from '../src/domain/recording-model.js';
 import type { TranscriptRecord } from '../src/domain/transcript-model.js';
 import type { TranscriptionStorage } from '../src/infrastructure/transcription-storage.js';
 
@@ -250,6 +251,147 @@ describe('application/prompt-package', () => {
       ),
     ).rejects.toBeInstanceOf(ProfilePathError);
   });
+
+  it('uses student-linked profileId when request does not specify profile selection', async () => {
+    const allowedDir = await fs.mkdtemp(path.join(os.tmpdir(), 'esl-prompt-allowed-'));
+    const templatePath = path.join(allowedDir, 'template.md');
+    const defaultProfilePath = path.join(allowedDir, 'default-profile.md');
+    const studentProfilePath = path.join(allowedDir, 'profiles', 'student-a.md');
+
+    await fs.mkdir(path.dirname(studentProfilePath), { recursive: true });
+    await fs.writeFile(templatePath, 'Hello\nINSERT PROFILE HERE\nFooter\n', 'utf8');
+    await fs.writeFile(defaultProfilePath, 'DEFAULT PROFILE\n', 'utf8');
+    await fs.writeFile(studentProfilePath, 'STUDENT PROFILE CONTENT\n', 'utf8');
+
+    const transcript = createTranscriptRecord();
+    const storage = createStorageStub({
+      getText: async () => 'TRANSCRIPT BODY',
+    });
+    const promptPackages = createPromptPackageRepositoryStub();
+
+    const result = await createPromptPackage(
+      {
+        recordingId: transcript.recordingId,
+        templateId: 'template.md',
+      },
+      {
+        config: createConfig(templatePath, defaultProfilePath),
+        storage,
+        transcripts: {
+          getByRecordingId: async () => transcript,
+        },
+        recordings: {
+          getById: async () => ({
+            id: transcript.recordingId,
+            source: 'upload',
+            studentId: 'student-1',
+            sourcePath: null,
+            storageUri: 'local://recordings/recording-1.opus',
+            sha256: null,
+            bytes: 1,
+            durationSec: null,
+            channels: null,
+            status: 'transcribed',
+            error: null,
+            createdAt: new Date('2024-01-01T00:00:00Z'),
+            updatedAt: new Date('2024-01-01T00:00:00Z'),
+          }),
+        },
+        students: {
+          getById: async () => ({
+            id: 'student-1',
+            student: 'Student One',
+            profileId: 'profiles/student-a.md',
+          }),
+        },
+        promptPackages,
+      },
+    );
+
+    expect(result?.profilePath).toBe(studentProfilePath);
+  });
+
+  it('keeps explicit profileId and profilePath overrides ahead of student-linked defaults', async () => {
+    const allowedDir = await fs.mkdtemp(path.join(os.tmpdir(), 'esl-prompt-allowed-'));
+    const templatePath = path.join(allowedDir, 'template.md');
+    const defaultProfilePath = path.join(allowedDir, 'default-profile.md');
+    const studentProfilePath = path.join(allowedDir, 'profiles', 'student-a.md');
+    const explicitProfilePath = path.join(allowedDir, 'profiles', 'explicit.md');
+
+    await fs.mkdir(path.dirname(studentProfilePath), { recursive: true });
+    await fs.writeFile(templatePath, 'Hello\nINSERT PROFILE HERE\nFooter\n', 'utf8');
+    await fs.writeFile(defaultProfilePath, 'DEFAULT PROFILE\n', 'utf8');
+    await fs.writeFile(studentProfilePath, 'STUDENT PROFILE CONTENT\n', 'utf8');
+    await fs.writeFile(explicitProfilePath, 'EXPLICIT PROFILE CONTENT\n', 'utf8');
+
+    const transcript = createTranscriptRecord();
+    const storage = createStorageStub({
+      getText: async () => 'TRANSCRIPT BODY',
+    });
+    const promptPackages = createPromptPackageRepositoryStub();
+    const recordingLookup = {
+      getById: async (): Promise<RecordingRecord> => ({
+        id: transcript.recordingId,
+        source: 'upload',
+        studentId: 'student-1',
+        sourcePath: null,
+        storageUri: 'local://recordings/recording-1.opus',
+        sha256: null,
+        bytes: 1,
+        durationSec: null,
+        channels: null,
+        status: 'transcribed',
+        error: null,
+        createdAt: new Date('2024-01-01T00:00:00Z'),
+        updatedAt: new Date('2024-01-01T00:00:00Z'),
+      }),
+    };
+    const studentLookup = {
+      getById: async () => ({
+        id: 'student-1',
+        student: 'Student One',
+        profileId: 'profiles/student-a.md',
+      }),
+    };
+
+    const explicitIdResult = await createPromptPackage(
+      {
+        recordingId: transcript.recordingId,
+        templateId: 'template.md',
+        profileId: 'profiles/explicit.md',
+      },
+      {
+        config: createConfig(templatePath, defaultProfilePath),
+        storage,
+        transcripts: {
+          getByRecordingId: async () => transcript,
+        },
+        recordings: recordingLookup,
+        students: studentLookup,
+        promptPackages,
+      },
+    );
+    expect(explicitIdResult?.profilePath).toBe(explicitProfilePath);
+
+    const explicitPathResult = await createPromptPackage(
+      {
+        recordingId: transcript.recordingId,
+        templateId: 'template.md',
+        profilePath: explicitProfilePath,
+      },
+      {
+        config: createConfig(templatePath, defaultProfilePath),
+        storage,
+        transcripts: {
+          getByRecordingId: async () => transcript,
+        },
+        recordings: recordingLookup,
+        students: studentLookup,
+        promptPackages,
+      },
+    );
+    expect(explicitPathResult?.profilePath).toBe(explicitProfilePath);
+  });
 });
 
 function createTranscriptRecord(): TranscriptRecord {
@@ -279,6 +421,32 @@ function createStorageStub(overrides: Partial<TranscriptionStorage> = {}): Trans
     getStream: async () => Readable.from(['']),
     delete: async () => {},
     ...overrides,
+  };
+}
+
+function createPromptPackageRepositoryStub() {
+  return {
+    insert: async (params: {
+      id?: string;
+      recordingId: string;
+      transcriptId: string;
+      studentId?: string | null;
+      profilePath?: string | null;
+      templateVersion: string;
+      notes?: string | null;
+      storageUri: string;
+    }): Promise<PromptPackageRecord> => ({
+      id: params.id ?? 'prompt-1',
+      recordingId: params.recordingId,
+      transcriptId: params.transcriptId,
+      studentId: params.studentId ?? null,
+      profilePath: params.profilePath ?? null,
+      templateVersion: params.templateVersion,
+      notes: params.notes ?? null,
+      storageUri: params.storageUri,
+      createdAt: new Date('2024-01-01T00:00:00Z'),
+      updatedAt: new Date('2024-01-01T00:00:00Z'),
+    }),
   };
 }
 

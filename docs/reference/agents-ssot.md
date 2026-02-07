@@ -807,6 +807,14 @@ Steps:
 Constraints:
 
 - Profiles MUST remain parseable and non-breaking to existing usage.
+- Runtime student profiles are configuration objects (not pedagogical history blobs).
+- `profileId` (when set) MUST be a normalized relative ID under the prompt profile root and use
+  `.md` or `.txt`.
+- Prompt package profile resolution precedence MUST remain:
+  1. explicit `profileId`
+  2. explicit `profilePath`
+  3. student-linked `profileId`
+  4. configured default profile
 
 ### 9.4. Add a New Manifest Backend
 

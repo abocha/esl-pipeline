@@ -1055,6 +1055,8 @@ export async function createPromptPackage(
   recordingId: string,
   params: { notes?: string; profileId?: string; templateId?: string; profilePath?: string },
 ): Promise<PromptPackageResponse> {
+  // Backend precedence:
+  // profileId > profilePath > student-linked profileId > configured default profile.
   try {
     const response = await apiClient.post(
       buildApiProxyPath(`/recordings/${encodeURIComponent(recordingId)}/prompt-package`),
