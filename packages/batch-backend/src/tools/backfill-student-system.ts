@@ -31,6 +31,10 @@ function parseArgs(argv: string[]): CliOptions {
     const arg = argv[index];
     if (!arg) continue;
 
+    if (arg === '--') {
+      continue;
+    }
+
     if (arg === '--dry-run') {
       options.dryRun = true;
       continue;
