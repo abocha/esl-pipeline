@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
@@ -7,6 +8,8 @@ import { describe, expect, it } from 'vitest';
 import { createPromptPackage } from '../src/application/create-prompt-package.js';
 import { getPromptPackage } from '../src/application/get-prompt-package.js';
 import { ProfilePathError } from '../src/application/profile-path.js';
+import type { ProfileRevisionRecord } from '../src/domain/profile-revision-model.js';
+import type { TemplateRevisionRecord } from '../src/domain/template-revision-model.js';
 import type { BatchBackendConfig } from '../src/config/env.js';
 import type { PromptPackageRecord } from '../src/domain/prompt-package-model.js';
 import type { RecordingRecord } from '../src/domain/recording-model.js';
@@ -43,6 +46,14 @@ describe('application/prompt-package', () => {
         transcriptId: string;
         studentId?: string | null;
         profilePath?: string | null;
+        resolvedProfileId?: string | null;
+        resolvedProfileHash?: string | null;
+        resolvedProfileRevisionId?: string | null;
+        resolvedProfileUpdatedAt?: Date | null;
+        resolvedTemplateId?: string | null;
+        resolvedTemplateHash?: string | null;
+        resolvedTemplateRevisionId?: string | null;
+        resolvedTemplateUpdatedAt?: Date | null;
         templateVersion: string;
         notes?: string | null;
         storageUri: string;
@@ -53,6 +64,14 @@ describe('application/prompt-package', () => {
           transcriptId: params.transcriptId,
           studentId: params.studentId ?? null,
           profilePath: params.profilePath ?? null,
+          resolvedProfileId: params.resolvedProfileId ?? null,
+          resolvedProfileHash: params.resolvedProfileHash ?? null,
+          resolvedProfileRevisionId: params.resolvedProfileRevisionId ?? null,
+          resolvedProfileUpdatedAt: params.resolvedProfileUpdatedAt ?? null,
+          resolvedTemplateId: params.resolvedTemplateId ?? null,
+          resolvedTemplateHash: params.resolvedTemplateHash ?? null,
+          resolvedTemplateRevisionId: params.resolvedTemplateRevisionId ?? null,
+          resolvedTemplateUpdatedAt: params.resolvedTemplateUpdatedAt ?? null,
           templateVersion: params.templateVersion,
           notes: params.notes ?? null,
           storageUri: params.storageUri,
@@ -61,6 +80,7 @@ describe('application/prompt-package', () => {
         };
       },
     };
+    const profileRevisions = createProfileRevisionRepositoryStub();
 
     const result = await createPromptPackage(
       {
@@ -96,6 +116,8 @@ describe('application/prompt-package', () => {
           getById: async () => null,
         },
         promptPackages,
+        profileRevisions,
+        templateRevisions: createTemplateRevisionRepositoryStub(),
       },
     );
 
@@ -106,6 +128,8 @@ describe('application/prompt-package', () => {
     expect(result?.notes).toBe('Some notes');
     expect(result?.templateVersion).toBe('template.md');
     expect(result?.profilePath).toBe(profilePath);
+    expect(result?.profileSnapshot?.resolvedProfileId).toBe('profile.md');
+    expect(result?.profileSnapshot?.resolvedProfileRevisionId).toBe('revision-1');
   });
 
   it('loads prompt package text from storage', async () => {
@@ -131,6 +155,8 @@ describe('application/prompt-package', () => {
     const result = await getPromptPackage('prompt-1', {
       storage,
       promptPackages,
+      profileRevisions: createProfileRevisionRepositoryStub(),
+      templateRevisions: createTemplateRevisionRepositoryStub(),
     });
 
     expect(result).toEqual({
@@ -145,6 +171,116 @@ describe('application/prompt-package', () => {
       text: 'Prompt package text',
       createdAt: '2024-01-01T00:00:00.000Z',
       updatedAt: '2024-01-01T00:10:00.000Z',
+    });
+  });
+
+  it('adds profile drift metadata when profile content changed after snapshot', async () => {
+    const snapshotHash = createHash('sha256').update('SNAPSHOT PROFILE', 'utf8').digest('hex');
+    const currentHash = createHash('sha256').update('CURRENT PROFILE', 'utf8').digest('hex');
+
+    const storage = createStorageStub({
+      getText: async () => 'Prompt package text',
+    });
+
+    const promptPackages = {
+      getById: async (): Promise<PromptPackageRecord | null> => ({
+        id: 'prompt-1',
+        recordingId: 'recording-1',
+        transcriptId: 'transcript-1',
+        studentId: 'student-1',
+        profilePath: '/profiles/p1.md',
+        resolvedProfileId: 'profile.md',
+        resolvedProfileHash: snapshotHash,
+        resolvedProfileRevisionId: 'revision-snapshot',
+        resolvedProfileUpdatedAt: new Date('2024-01-01T00:00:00Z'),
+        templateVersion: 't1.md',
+        notes: 'Notes',
+        storageUri: 'local://prompt-packages/prompt-1.txt',
+        createdAt: new Date('2024-01-01T00:00:00Z'),
+        updatedAt: new Date('2024-01-01T00:10:00Z'),
+      }),
+    };
+
+    const result = await getPromptPackage('prompt-1', {
+      storage,
+      promptPackages,
+      profileRevisions: createProfileRevisionRepositoryStub({
+        getLatest: async (_profileId) => {
+          return {
+            id: 'revision-current',
+            profileId: 'profile.md',
+            content: 'CURRENT PROFILE',
+            contentHash: currentHash,
+            source: 'update',
+            createdAt: new Date('2024-01-02T00:00:00Z'),
+            createdBy: null,
+            restoredFromRevisionId: null,
+          };
+        },
+      }),
+      templateRevisions: createTemplateRevisionRepositoryStub(),
+    });
+
+    expect(result?.profileDrift).toEqual({
+      detected: true,
+      reason: 'profile_content_changed',
+      currentProfileHash: currentHash,
+      currentProfileRevisionId: 'revision-current',
+      currentProfileUpdatedAt: '2024-01-02T00:00:00.000Z',
+    });
+  });
+
+  it('adds template drift metadata when template content changed after snapshot', async () => {
+    const snapshotHash = createHash('sha256').update('TEMPLATE SNAPSHOT', 'utf8').digest('hex');
+    const currentHash = createHash('sha256').update('TEMPLATE CURRENT', 'utf8').digest('hex');
+
+    const storage = createStorageStub({
+      getText: async () => 'Prompt package text',
+    });
+
+    const promptPackages = {
+      getById: async (): Promise<PromptPackageRecord | null> => ({
+        id: 'prompt-1',
+        recordingId: 'recording-1',
+        transcriptId: 'transcript-1',
+        studentId: 'student-1',
+        profilePath: '/profiles/p1.md',
+        resolvedTemplateId: 'template.md',
+        resolvedTemplateHash: snapshotHash,
+        resolvedTemplateRevisionId: 'template-revision-snapshot',
+        resolvedTemplateUpdatedAt: new Date('2024-01-01T00:00:00Z'),
+        templateVersion: 'template.md',
+        notes: 'Notes',
+        storageUri: 'local://prompt-packages/prompt-1.txt',
+        createdAt: new Date('2024-01-01T00:00:00Z'),
+        updatedAt: new Date('2024-01-01T00:10:00Z'),
+      }),
+    };
+
+    const result = await getPromptPackage('prompt-1', {
+      storage,
+      promptPackages,
+      profileRevisions: createProfileRevisionRepositoryStub(),
+      templateRevisions: createTemplateRevisionRepositoryStub({
+        getLatest: async (_templateId) => ({
+          id: 'template-revision-current',
+          templateId: 'template.md',
+          content: 'TEMPLATE CURRENT',
+          contentHash: currentHash,
+          source: 'update',
+          createdAt: new Date('2024-01-02T00:00:00Z'),
+          createdBy: null,
+          restoredFromRevisionId: null,
+        }),
+      }),
+    });
+
+    expect(result?.templateDrift).toEqual({
+      detected: true,
+      reason: 'template_content_changed',
+      currentTemplateHash: currentHash,
+      currentTemplateRevisionId: 'template-revision-current',
+      currentTemplateUpdatedAt: '2024-01-02T00:00:00.000Z',
     });
   });
 
@@ -203,6 +339,8 @@ describe('application/prompt-package', () => {
               throw new Error('insert should not be called');
             },
           },
+          profileRevisions: createProfileRevisionRepositoryStub(),
+          templateRevisions: createTemplateRevisionRepositoryStub(),
         },
       ),
     ).rejects.toThrow('profileId is not allowlisted');
@@ -247,6 +385,8 @@ describe('application/prompt-package', () => {
               throw new Error('unexpected insert');
             },
           },
+          profileRevisions: createProfileRevisionRepositoryStub(),
+          templateRevisions: createTemplateRevisionRepositoryStub(),
         },
       ),
     ).rejects.toBeInstanceOf(ProfilePathError);
@@ -268,6 +408,7 @@ describe('application/prompt-package', () => {
       getText: async () => 'TRANSCRIPT BODY',
     });
     const promptPackages = createPromptPackageRepositoryStub();
+    const profileRevisions = createProfileRevisionRepositoryStub();
 
     const result = await createPromptPackage(
       {
@@ -305,6 +446,8 @@ describe('application/prompt-package', () => {
           }),
         },
         promptPackages,
+        profileRevisions,
+        templateRevisions: createTemplateRevisionRepositoryStub(),
       },
     );
 
@@ -329,6 +472,7 @@ describe('application/prompt-package', () => {
       getText: async () => 'TRANSCRIPT BODY',
     });
     const promptPackages = createPromptPackageRepositoryStub();
+    const profileRevisions = createProfileRevisionRepositoryStub();
     const recordingLookup = {
       getById: async (): Promise<RecordingRecord> => ({
         id: transcript.recordingId,
@@ -369,6 +513,8 @@ describe('application/prompt-package', () => {
         recordings: recordingLookup,
         students: studentLookup,
         promptPackages,
+        profileRevisions,
+        templateRevisions: createTemplateRevisionRepositoryStub(),
       },
     );
     expect(explicitIdResult?.profilePath).toBe(explicitProfilePath);
@@ -388,6 +534,8 @@ describe('application/prompt-package', () => {
         recordings: recordingLookup,
         students: studentLookup,
         promptPackages,
+        profileRevisions,
+        templateRevisions: createTemplateRevisionRepositoryStub(),
       },
     );
     expect(explicitPathResult?.profilePath).toBe(explicitProfilePath);
@@ -432,6 +580,14 @@ function createPromptPackageRepositoryStub() {
       transcriptId: string;
       studentId?: string | null;
       profilePath?: string | null;
+      resolvedProfileId?: string | null;
+      resolvedProfileHash?: string | null;
+      resolvedProfileRevisionId?: string | null;
+      resolvedProfileUpdatedAt?: Date | null;
+      resolvedTemplateId?: string | null;
+      resolvedTemplateHash?: string | null;
+      resolvedTemplateRevisionId?: string | null;
+      resolvedTemplateUpdatedAt?: Date | null;
       templateVersion: string;
       notes?: string | null;
       storageUri: string;
@@ -441,11 +597,101 @@ function createPromptPackageRepositoryStub() {
       transcriptId: params.transcriptId,
       studentId: params.studentId ?? null,
       profilePath: params.profilePath ?? null,
+      resolvedProfileId: params.resolvedProfileId ?? null,
+      resolvedProfileHash: params.resolvedProfileHash ?? null,
+      resolvedProfileRevisionId: params.resolvedProfileRevisionId ?? null,
+      resolvedProfileUpdatedAt: params.resolvedProfileUpdatedAt ?? null,
+      resolvedTemplateId: params.resolvedTemplateId ?? null,
+      resolvedTemplateHash: params.resolvedTemplateHash ?? null,
+      resolvedTemplateRevisionId: params.resolvedTemplateRevisionId ?? null,
+      resolvedTemplateUpdatedAt: params.resolvedTemplateUpdatedAt ?? null,
       templateVersion: params.templateVersion,
       notes: params.notes ?? null,
       storageUri: params.storageUri,
       createdAt: new Date('2024-01-01T00:00:00Z'),
       updatedAt: new Date('2024-01-01T00:00:00Z'),
+    }),
+  };
+}
+
+function createProfileRevisionRepositoryStub(overrides: {
+  getLatest?: (profileId: string) => Promise<ProfileRevisionRecord | null>;
+  getLatestByHash?: (
+    profileId: string,
+    contentHash: string,
+  ) => Promise<ProfileRevisionRecord | null>;
+} = {}) {
+  return {
+    getLatest:
+      overrides.getLatest ??
+      (async () => null),
+    getLatestByHash:
+      overrides.getLatestByHash ??
+      (async () => null),
+    insert: async ({
+      profileId,
+      content,
+      contentHash,
+      source,
+      createdBy,
+      restoredFromRevisionId,
+    }: {
+      profileId: string;
+      content: string;
+      contentHash: string;
+      source?: 'create' | 'update' | 'restore';
+      createdBy?: string | null;
+      restoredFromRevisionId?: string | null;
+    }) => ({
+      id: 'revision-1',
+      profileId,
+      content,
+      contentHash,
+      source: source ?? 'update',
+      createdAt: new Date('2024-01-01T00:00:00Z'),
+      createdBy: createdBy ?? null,
+      restoredFromRevisionId: restoredFromRevisionId ?? null,
+    }),
+  };
+}
+
+function createTemplateRevisionRepositoryStub(overrides: {
+  getLatest?: (templateId: string) => Promise<TemplateRevisionRecord | null>;
+  getLatestByHash?: (
+    templateId: string,
+    contentHash: string,
+  ) => Promise<TemplateRevisionRecord | null>;
+} = {}) {
+  return {
+    getLatest:
+      overrides.getLatest ??
+      (async () => null),
+    getLatestByHash:
+      overrides.getLatestByHash ??
+      (async () => null),
+    insert: async ({
+      templateId,
+      content,
+      contentHash,
+      source,
+      createdBy,
+      restoredFromRevisionId,
+    }: {
+      templateId: string;
+      content: string;
+      contentHash: string;
+      source?: 'create' | 'update' | 'restore';
+      createdBy?: string | null;
+      restoredFromRevisionId?: string | null;
+    }) => ({
+      id: 'template-revision-1',
+      templateId,
+      content,
+      contentHash,
+      source: source ?? 'update',
+      createdAt: new Date('2024-01-01T00:00:00Z'),
+      createdBy: createdBy ?? null,
+      restoredFromRevisionId: restoredFromRevisionId ?? null,
     }),
   };
 }

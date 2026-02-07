@@ -100,6 +100,18 @@ describe('application/draft', () => {
       createdAt: new Date('2024-01-01T00:00:00Z'),
       updatedAt: new Date('2024-01-01T00:00:00Z'),
     };
+    const promptPackage: PromptPackageRecord = {
+      id: 'prompt-1',
+      recordingId: 'recording-1',
+      transcriptId: 'transcript-1',
+      studentId: 'student-1',
+      profilePath: '/profiles/p1.md',
+      templateVersion: '/templates/t1.md',
+      notes: null,
+      storageUri: 'local://prompt-packages/prompt-1.txt',
+      createdAt: new Date('2024-01-01T00:00:00Z'),
+      updatedAt: new Date('2024-01-01T00:00:00Z'),
+    };
 
     const updateDraftLink = vi.fn().mockResolvedValue({
       id: 'job-1',
@@ -120,6 +132,9 @@ describe('application/draft', () => {
         drafts: {
           getById: async () => draft,
         },
+        promptPackages: {
+          getById: async () => promptPackage,
+        },
         jobs: {
           updateDraftLink,
         },
@@ -134,7 +149,9 @@ describe('application/draft', () => {
     });
 
     const stored = await fs.readFile(path.resolve(uploadDir, 'drafts', 'draft-1.md'), 'utf8');
-    expect(stored).toBe('DRAFT TEXT');
+    expect(stored).toContain('x_esl_student_id: student-1');
+    expect(stored).toContain('x_esl_prompt_package_id: prompt-1');
+    expect(stored).toContain('DRAFT TEXT');
     expect(updateDraftLink).toHaveBeenCalledWith({
       id: 'job-1',
       expectedState: 'awaiting_approval',
