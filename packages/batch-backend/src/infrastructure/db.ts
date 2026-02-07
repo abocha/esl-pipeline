@@ -58,6 +58,7 @@ CREATE TABLE IF NOT EXISTS jobs (
   notion_url TEXT NULL,
   anytype_url TEXT NULL,
   manifest_path TEXT NULL,
+  source_job_id UUID NULL,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   started_at TIMESTAMPTZ NULL,
@@ -86,11 +87,13 @@ const JOBS_SCHEMA_PATCHES: string[] = [
   'ALTER TABLE jobs ADD COLUMN IF NOT EXISTS notion_url TEXT NULL',
   'ALTER TABLE jobs ADD COLUMN IF NOT EXISTS anytype_url TEXT NULL',
   'ALTER TABLE jobs ADD COLUMN IF NOT EXISTS manifest_path TEXT NULL',
+  'ALTER TABLE jobs ADD COLUMN IF NOT EXISTS source_job_id UUID NULL',
   'ALTER TABLE jobs ADD COLUMN IF NOT EXISTS user_id UUID NULL',
 ];
 
 const JOBS_INDEX_PATCHES: string[] = [
   'CREATE INDEX IF NOT EXISTS idx_jobs_state_created_at ON jobs (state, created_at)',
+  'CREATE INDEX IF NOT EXISTS idx_jobs_source_job_id ON jobs (source_job_id)',
 ];
 
 const RECORDINGS_TABLE_SQL = `
@@ -440,6 +443,41 @@ const STUDENT_PROFILE_BINDINGS_INDEX_PATCHES: string[] = [
   'CREATE UNIQUE INDEX IF NOT EXISTS idx_student_profile_bindings_single_active ON student_profile_bindings (student_id) WHERE effective_to IS NULL',
 ];
 
+const JOB_ACTION_HISTORY_TABLE_SQL = `
+CREATE TABLE IF NOT EXISTS job_action_history (
+  id UUID PRIMARY KEY,
+  job_id UUID NOT NULL,
+  action_type TEXT NOT NULL,
+  payload_json JSONB NULL,
+  requested_at TIMESTAMPTZ NOT NULL,
+  requested_by UUID NULL,
+  outcome TEXT NOT NULL,
+  message TEXT NOT NULL,
+  error_code TEXT NULL,
+  created_job_id UUID NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+`;
+
+const JOB_ACTION_HISTORY_SCHEMA_PATCHES: string[] = [
+  'ALTER TABLE job_action_history ADD COLUMN IF NOT EXISTS job_id UUID NULL',
+  'ALTER TABLE job_action_history ADD COLUMN IF NOT EXISTS action_type TEXT NULL',
+  'ALTER TABLE job_action_history ADD COLUMN IF NOT EXISTS payload_json JSONB NULL',
+  'ALTER TABLE job_action_history ADD COLUMN IF NOT EXISTS requested_at TIMESTAMPTZ NULL',
+  'ALTER TABLE job_action_history ADD COLUMN IF NOT EXISTS requested_by UUID NULL',
+  "ALTER TABLE job_action_history ADD COLUMN IF NOT EXISTS outcome TEXT NOT NULL DEFAULT 'succeeded'",
+  "ALTER TABLE job_action_history ADD COLUMN IF NOT EXISTS message TEXT NOT NULL DEFAULT ''",
+  'ALTER TABLE job_action_history ADD COLUMN IF NOT EXISTS error_code TEXT NULL',
+  'ALTER TABLE job_action_history ADD COLUMN IF NOT EXISTS created_job_id UUID NULL',
+  'ALTER TABLE job_action_history ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ NULL',
+];
+
+const JOB_ACTION_HISTORY_INDEX_PATCHES: string[] = [
+  'CREATE INDEX IF NOT EXISTS idx_job_action_history_job_id_requested_at ON job_action_history (job_id, requested_at DESC)',
+  'CREATE INDEX IF NOT EXISTS idx_job_action_history_created_job_id ON job_action_history (created_job_id)',
+  'CREATE INDEX IF NOT EXISTS idx_job_action_history_action_type ON job_action_history (action_type)',
+];
+
 const DRAFTS_TABLE_SQL = `
 CREATE TABLE IF NOT EXISTS drafts (
   id UUID PRIMARY KEY,
@@ -778,6 +816,62 @@ BEGIN
       CHECK (effective_to IS NULL OR effective_to > effective_from);
   END IF;
 END $$;`,
+  `DO $$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'jobs_source_job_id_fkey') THEN
+    ALTER TABLE jobs
+      ADD CONSTRAINT jobs_source_job_id_fkey
+      FOREIGN KEY (source_job_id) REFERENCES jobs(id) ON DELETE SET NULL;
+  END IF;
+END $$;`,
+  `DO $$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'job_action_history_job_id_fkey') THEN
+    ALTER TABLE job_action_history
+      ADD CONSTRAINT job_action_history_job_id_fkey
+      FOREIGN KEY (job_id) REFERENCES jobs(id) ON DELETE CASCADE;
+  END IF;
+END $$;`,
+  `DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_constraint WHERE conname = 'job_action_history_created_job_id_fkey'
+  ) THEN
+    ALTER TABLE job_action_history
+      ADD CONSTRAINT job_action_history_created_job_id_fkey
+      FOREIGN KEY (created_job_id) REFERENCES jobs(id) ON DELETE SET NULL;
+  END IF;
+END $$;`,
+  `DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_constraint WHERE conname = 'job_action_history_requested_by_fkey'
+  ) THEN
+    ALTER TABLE job_action_history
+      ADD CONSTRAINT job_action_history_requested_by_fkey
+      FOREIGN KEY (requested_by) REFERENCES users(id) ON DELETE SET NULL;
+  END IF;
+END $$;`,
+  `DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_constraint WHERE conname = 'job_action_history_action_type_check'
+  ) THEN
+    ALTER TABLE job_action_history
+      ADD CONSTRAINT job_action_history_action_type_check
+      CHECK (action_type IN ('rerun_audio', 'cancel', 'edit_metadata'));
+  END IF;
+END $$;`,
+  `DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_constraint WHERE conname = 'job_action_history_outcome_check'
+  ) THEN
+    ALTER TABLE job_action_history
+      ADD CONSTRAINT job_action_history_outcome_check
+      CHECK (outcome IN ('succeeded', 'failed'));
+  END IF;
+END $$;`,
 ];
 
 const TRANSCRIPTION_TRIGGER_PATCHES: string[] = [
@@ -964,6 +1058,14 @@ async function ensureJobsSchema(client: PoolClient): Promise<void> {
       await client.query(indexSql);
     }
 
+    await client.query(JOB_ACTION_HISTORY_TABLE_SQL);
+    for (const statement of JOB_ACTION_HISTORY_SCHEMA_PATCHES) {
+      await client.query(statement);
+    }
+    for (const indexSql of JOB_ACTION_HISTORY_INDEX_PATCHES) {
+      await client.query(indexSql);
+    }
+
     // Users table
     await client.query(USERS_TABLE_SQL);
 
@@ -979,7 +1081,7 @@ async function ensureJobsSchema(client: PoolClient): Promise<void> {
     }
 
     logger.info(
-      'Ensured database schema (jobs, recordings, transcripts, prompt_packages, drafts, profile_revisions, template_revisions, students, profiles, templates, student_profile_bindings, users)',
+      'Ensured database schema (jobs, recordings, transcripts, prompt_packages, drafts, profile_revisions, template_revisions, students, profiles, templates, student_profile_bindings, job_action_history, users)',
       {
         component: 'pg',
         event: 'schema_ready',

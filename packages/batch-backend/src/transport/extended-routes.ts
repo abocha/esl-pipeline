@@ -797,6 +797,8 @@ export function registerExtendedRoutes(app: FastifyInstance, options: ExtendedRo
       const querySchema = z.object({
         type: z.string().optional(),
         status: z.string().optional(),
+        from: z.string().datetime({ offset: true }).optional(),
+        to: z.string().datetime({ offset: true }).optional(),
         limit: z.coerce.number().int().min(1).max(500).optional(),
         offset: z.coerce.number().int().min(0).optional(),
         order: z.enum(['asc', 'desc']).optional(),
@@ -821,6 +823,8 @@ export function registerExtendedRoutes(app: FastifyInstance, options: ExtendedRo
         const timeline = await getStudentTimeline(params.id, {
           types,
           statuses,
+          from: query.from ? new Date(query.from) : undefined,
+          to: query.to ? new Date(query.to) : undefined,
           limit: query.limit,
           offset: query.offset,
           order: query.order,
@@ -3380,10 +3384,13 @@ export function registerExtendedRoutes(app: FastifyInstance, options: ExtendedRo
       // Dynamically import to avoid circular dependencies
       const { executeJobAction } = await import('../application/job-actions/action-handler.js');
 
+      const authenticatedUser = getAuthenticatedUser(request);
+
       // Construct action object
-      const action: { type: string; requestedAt: Date; payload: unknown } = {
+      const action: { type: string; requestedAt: Date; requestedBy?: string; payload: unknown } = {
         type: body.type,
         requestedAt: new Date(),
+        requestedBy: authenticatedUser?.id,
         payload: body.payload || {},
       };
 
@@ -3424,13 +3431,13 @@ export function registerExtendedRoutes(app: FastifyInstance, options: ExtendedRo
         });
       }
 
-      logger.info('Job action executed', {
-        event: 'job_action_executed',
-        userId: getAuthenticatedUser(request)?.id,
-        jobId,
-        actionType: result.actionType,
-        success: result.success,
-      });
+        logger.info('Job action executed', {
+          event: 'job_action_executed',
+          userId: authenticatedUser?.id,
+          jobId,
+          actionType: result.actionType,
+          success: result.success,
+        });
 
       return reply.send({
         success: result.success,

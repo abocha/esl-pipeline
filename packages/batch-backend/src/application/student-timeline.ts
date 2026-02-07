@@ -9,7 +9,16 @@ export type StudentTimelineType =
   | 'draft_saved'
   | 'job_awaiting_approval'
   | 'job_completed'
-  | 'student_profile_binding_changed';
+  | 'student_profile_binding_changed'
+  | 'profile_revision_saved'
+  | 'profile_revision_restored'
+  | 'profile_revision_activated'
+  | 'template_revision_saved'
+  | 'template_revision_restored'
+  | 'template_revision_activated'
+  | 'job_action_rerun_audio'
+  | 'job_action_cancel'
+  | 'job_action_edit_metadata';
 
 export interface StudentTimelineItem {
   type: StudentTimelineType;
@@ -36,6 +45,8 @@ export interface StudentTimelineResponse {
 export interface StudentTimelineParams {
   types?: StudentTimelineType[];
   statuses?: string[];
+  from?: Date;
+  to?: Date;
   limit?: number;
   offset?: number;
   order?: 'asc' | 'desc';
@@ -59,6 +70,22 @@ interface TimelineRow {
   binding_profile_id: string | null;
   binding_reason: string | null;
   binding_changed_by: string | null;
+  profile_revision_id: string | null;
+  profile_id: string | null;
+  profile_source: string | null;
+  profile_version_label: string | null;
+  template_revision_id: string | null;
+  template_id: string | null;
+  template_source: string | null;
+  template_version_label: string | null;
+  action_id: string | null;
+  action_type: string | null;
+  action_message: string | null;
+  action_error_code: string | null;
+  action_requested_by: string | null;
+  action_created_job_id: string | null;
+  notion_url: string | null;
+  anytype_url: string | null;
 }
 
 function deriveDisplayName(params: {
@@ -110,7 +137,23 @@ const timelineQuery = `
            NULL::uuid AS binding_id,
            NULL::text AS binding_profile_id,
            NULL::text AS binding_reason,
-           NULL::uuid AS binding_changed_by
+           NULL::uuid AS binding_changed_by,
+           NULL::uuid AS profile_revision_id,
+           NULL::text AS profile_id,
+           NULL::text AS profile_source,
+           NULL::text AS profile_version_label,
+           NULL::uuid AS template_revision_id,
+           NULL::text AS template_id,
+           NULL::text AS template_source,
+           NULL::text AS template_version_label,
+           NULL::uuid AS action_id,
+           NULL::text AS action_type,
+           NULL::text AS action_message,
+           NULL::text AS action_error_code,
+           NULL::uuid AS action_requested_by,
+           NULL::uuid AS action_created_job_id,
+           NULL::text AS notion_url,
+           NULL::text AS anytype_url
     FROM recordings r
     WHERE r.student_id = $1
 
@@ -130,7 +173,23 @@ const timelineQuery = `
            NULL::uuid AS binding_id,
            NULL::text AS binding_profile_id,
            NULL::text AS binding_reason,
-           NULL::uuid AS binding_changed_by
+           NULL::uuid AS binding_changed_by,
+           NULL::uuid AS profile_revision_id,
+           NULL::text AS profile_id,
+           NULL::text AS profile_source,
+           NULL::text AS profile_version_label,
+           NULL::uuid AS template_revision_id,
+           NULL::text AS template_id,
+           NULL::text AS template_source,
+           NULL::text AS template_version_label,
+           NULL::uuid AS action_id,
+           NULL::text AS action_type,
+           NULL::text AS action_message,
+           NULL::text AS action_error_code,
+           NULL::uuid AS action_requested_by,
+           NULL::uuid AS action_created_job_id,
+           NULL::text AS notion_url,
+           NULL::text AS anytype_url
     FROM transcripts t
     JOIN recordings r ON r.id = t.recording_id
     WHERE r.student_id = $1
@@ -151,7 +210,23 @@ const timelineQuery = `
            NULL::uuid AS binding_id,
            NULL::text AS binding_profile_id,
            NULL::text AS binding_reason,
-           NULL::uuid AS binding_changed_by
+           NULL::uuid AS binding_changed_by,
+           NULL::uuid AS profile_revision_id,
+           NULL::text AS profile_id,
+           NULL::text AS profile_source,
+           NULL::text AS profile_version_label,
+           NULL::uuid AS template_revision_id,
+           NULL::text AS template_id,
+           NULL::text AS template_source,
+           NULL::text AS template_version_label,
+           NULL::uuid AS action_id,
+           NULL::text AS action_type,
+           NULL::text AS action_message,
+           NULL::text AS action_error_code,
+           NULL::uuid AS action_requested_by,
+           NULL::uuid AS action_created_job_id,
+           NULL::text AS notion_url,
+           NULL::text AS anytype_url
     FROM prompt_packages p
     LEFT JOIN recordings r ON r.id = p.recording_id
     WHERE p.student_id = $1
@@ -172,7 +247,23 @@ const timelineQuery = `
            NULL::uuid AS binding_id,
            NULL::text AS binding_profile_id,
            NULL::text AS binding_reason,
-           NULL::uuid AS binding_changed_by
+           NULL::uuid AS binding_changed_by,
+           NULL::uuid AS profile_revision_id,
+           NULL::text AS profile_id,
+           NULL::text AS profile_source,
+           NULL::text AS profile_version_label,
+           NULL::uuid AS template_revision_id,
+           NULL::text AS template_id,
+           NULL::text AS template_source,
+           NULL::text AS template_version_label,
+           NULL::uuid AS action_id,
+           NULL::text AS action_type,
+           NULL::text AS action_message,
+           NULL::text AS action_error_code,
+           NULL::uuid AS action_requested_by,
+           NULL::uuid AS action_created_job_id,
+           NULL::text AS notion_url,
+           NULL::text AS anytype_url
     FROM drafts d
     LEFT JOIN prompt_packages p ON p.id = d.prompt_package_id
     LEFT JOIN recordings r ON r.id = p.recording_id
@@ -198,7 +289,23 @@ const timelineQuery = `
       NULL::uuid AS binding_id,
       NULL::text AS binding_profile_id,
       NULL::text AS binding_reason,
-      NULL::uuid AS binding_changed_by
+      NULL::uuid AS binding_changed_by,
+      NULL::uuid AS profile_revision_id,
+      NULL::text AS profile_id,
+      NULL::text AS profile_source,
+      NULL::text AS profile_version_label,
+      NULL::uuid AS template_revision_id,
+      NULL::text AS template_id,
+      NULL::text AS template_source,
+      NULL::text AS template_version_label,
+      NULL::uuid AS action_id,
+      NULL::text AS action_type,
+      NULL::text AS action_message,
+      NULL::text AS action_error_code,
+      NULL::uuid AS action_requested_by,
+      NULL::uuid AS action_created_job_id,
+      j.notion_url,
+      j.anytype_url
     FROM jobs j
     LEFT JOIN recordings r ON r.id = j.recording_id
     LEFT JOIN prompt_packages p ON p.id = j.prompt_package_id
@@ -225,9 +332,259 @@ const timelineQuery = `
            spb.id AS binding_id,
            spb.profile_id AS binding_profile_id,
            spb.reason AS binding_reason,
-           spb.changed_by AS binding_changed_by
+           spb.changed_by AS binding_changed_by,
+           NULL::uuid AS profile_revision_id,
+           NULL::text AS profile_id,
+           NULL::text AS profile_source,
+           NULL::text AS profile_version_label,
+           NULL::uuid AS template_revision_id,
+           NULL::text AS template_id,
+           NULL::text AS template_source,
+           NULL::text AS template_version_label,
+           NULL::uuid AS action_id,
+           NULL::text AS action_type,
+           NULL::text AS action_message,
+           NULL::text AS action_error_code,
+           NULL::uuid AS action_requested_by,
+           NULL::uuid AS action_created_job_id,
+           NULL::text AS notion_url,
+           NULL::text AS anytype_url
     FROM student_profile_bindings spb
     WHERE spb.student_id = $1
+
+    UNION ALL
+
+    SELECT
+      CASE
+        WHEN pr.source = 'restore' THEN 'profile_revision_restored'
+        ELSE 'profile_revision_saved'
+      END::text AS type,
+      pr.status::text AS status,
+      pr.created_at,
+      NULL::uuid AS recording_id,
+      NULL::uuid AS transcript_id,
+      NULL::uuid AS prompt_package_id,
+      NULL::uuid AS draft_id,
+      NULL::uuid AS job_id,
+      pr.profile_id AS source_path,
+      NULL::text AS storage_uri,
+      NULL::text AS error,
+      NULL::uuid AS binding_id,
+      NULL::text AS binding_profile_id,
+      NULL::text AS binding_reason,
+      NULL::uuid AS binding_changed_by,
+      pr.id AS profile_revision_id,
+      pr.profile_id,
+      pr.source AS profile_source,
+      pr.version_label AS profile_version_label,
+      NULL::uuid AS template_revision_id,
+      NULL::text AS template_id,
+      NULL::text AS template_source,
+      NULL::text AS template_version_label,
+      NULL::uuid AS action_id,
+      NULL::text AS action_type,
+      NULL::text AS action_message,
+      NULL::text AS action_error_code,
+      NULL::uuid AS action_requested_by,
+      NULL::uuid AS action_created_job_id,
+      NULL::text AS notion_url,
+      NULL::text AS anytype_url
+    FROM profile_revisions pr
+    WHERE EXISTS (
+      SELECT 1
+      FROM student_profile_bindings spb
+      WHERE spb.student_id = $1 AND spb.profile_id = pr.profile_id
+    )
+      OR EXISTS (
+        SELECT 1
+        FROM students s
+        WHERE s.id = $1 AND s.profile_id = pr.profile_id
+      )
+
+    UNION ALL
+
+    SELECT
+      'profile_revision_activated'::text AS type,
+      'active'::text AS status,
+      COALESCE(pr.activated_at, pr.created_at) AS created_at,
+      NULL::uuid AS recording_id,
+      NULL::uuid AS transcript_id,
+      NULL::uuid AS prompt_package_id,
+      NULL::uuid AS draft_id,
+      NULL::uuid AS job_id,
+      pr.profile_id AS source_path,
+      NULL::text AS storage_uri,
+      NULL::text AS error,
+      NULL::uuid AS binding_id,
+      NULL::text AS binding_profile_id,
+      NULL::text AS binding_reason,
+      NULL::uuid AS binding_changed_by,
+      pr.id AS profile_revision_id,
+      pr.profile_id,
+      pr.source AS profile_source,
+      pr.version_label AS profile_version_label,
+      NULL::uuid AS template_revision_id,
+      NULL::text AS template_id,
+      NULL::text AS template_source,
+      NULL::text AS template_version_label,
+      NULL::uuid AS action_id,
+      NULL::text AS action_type,
+      NULL::text AS action_message,
+      NULL::text AS action_error_code,
+      NULL::uuid AS action_requested_by,
+      NULL::uuid AS action_created_job_id,
+      NULL::text AS notion_url,
+      NULL::text AS anytype_url
+    FROM profile_revisions pr
+    WHERE pr.status = 'active'
+      AND pr.activated_at IS NOT NULL
+      AND (
+        EXISTS (
+          SELECT 1
+          FROM student_profile_bindings spb
+          WHERE spb.student_id = $1 AND spb.profile_id = pr.profile_id
+        )
+        OR EXISTS (
+          SELECT 1
+          FROM students s
+          WHERE s.id = $1 AND s.profile_id = pr.profile_id
+        )
+      )
+
+    UNION ALL
+
+    SELECT
+      CASE
+        WHEN tr.source = 'restore' THEN 'template_revision_restored'
+        ELSE 'template_revision_saved'
+      END::text AS type,
+      tr.status::text AS status,
+      tr.created_at,
+      NULL::uuid AS recording_id,
+      NULL::uuid AS transcript_id,
+      NULL::uuid AS prompt_package_id,
+      NULL::uuid AS draft_id,
+      NULL::uuid AS job_id,
+      tr.template_id AS source_path,
+      NULL::text AS storage_uri,
+      NULL::text AS error,
+      NULL::uuid AS binding_id,
+      NULL::text AS binding_profile_id,
+      NULL::text AS binding_reason,
+      NULL::uuid AS binding_changed_by,
+      NULL::uuid AS profile_revision_id,
+      NULL::text AS profile_id,
+      NULL::text AS profile_source,
+      NULL::text AS profile_version_label,
+      tr.id AS template_revision_id,
+      tr.template_id,
+      tr.source AS template_source,
+      tr.version_label AS template_version_label,
+      NULL::uuid AS action_id,
+      NULL::text AS action_type,
+      NULL::text AS action_message,
+      NULL::text AS action_error_code,
+      NULL::uuid AS action_requested_by,
+      NULL::uuid AS action_created_job_id,
+      NULL::text AS notion_url,
+      NULL::text AS anytype_url
+    FROM template_revisions tr
+    WHERE EXISTS (
+      SELECT 1
+      FROM prompt_packages p
+      WHERE p.student_id = $1 AND p.resolved_template_id = tr.template_id
+    )
+
+    UNION ALL
+
+    SELECT
+      'template_revision_activated'::text AS type,
+      'active'::text AS status,
+      COALESCE(tr.activated_at, tr.created_at) AS created_at,
+      NULL::uuid AS recording_id,
+      NULL::uuid AS transcript_id,
+      NULL::uuid AS prompt_package_id,
+      NULL::uuid AS draft_id,
+      NULL::uuid AS job_id,
+      tr.template_id AS source_path,
+      NULL::text AS storage_uri,
+      NULL::text AS error,
+      NULL::uuid AS binding_id,
+      NULL::text AS binding_profile_id,
+      NULL::text AS binding_reason,
+      NULL::uuid AS binding_changed_by,
+      NULL::uuid AS profile_revision_id,
+      NULL::text AS profile_id,
+      NULL::text AS profile_source,
+      NULL::text AS profile_version_label,
+      tr.id AS template_revision_id,
+      tr.template_id,
+      tr.source AS template_source,
+      tr.version_label AS template_version_label,
+      NULL::uuid AS action_id,
+      NULL::text AS action_type,
+      NULL::text AS action_message,
+      NULL::text AS action_error_code,
+      NULL::uuid AS action_requested_by,
+      NULL::uuid AS action_created_job_id,
+      NULL::text AS notion_url,
+      NULL::text AS anytype_url
+    FROM template_revisions tr
+    WHERE tr.status = 'active'
+      AND tr.activated_at IS NOT NULL
+      AND EXISTS (
+        SELECT 1
+        FROM prompt_packages p
+        WHERE p.student_id = $1 AND p.resolved_template_id = tr.template_id
+      )
+
+    UNION ALL
+
+    SELECT
+      CASE
+        WHEN jah.action_type = 'rerun_audio' THEN 'job_action_rerun_audio'
+        WHEN jah.action_type = 'cancel' THEN 'job_action_cancel'
+        ELSE 'job_action_edit_metadata'
+      END::text AS type,
+      jah.outcome::text AS status,
+      jah.requested_at AS created_at,
+      j.recording_id,
+      j.transcript_id,
+      j.prompt_package_id,
+      j.draft_id,
+      jah.job_id,
+      COALESCE(r.source_path, rp.source_path, rd.source_path) AS source_path,
+      COALESCE(r.storage_uri, rp.storage_uri, rd.storage_uri) AS storage_uri,
+      NULL::text AS error,
+      NULL::uuid AS binding_id,
+      NULL::text AS binding_profile_id,
+      NULL::text AS binding_reason,
+      NULL::uuid AS binding_changed_by,
+      NULL::uuid AS profile_revision_id,
+      NULL::text AS profile_id,
+      NULL::text AS profile_source,
+      NULL::text AS profile_version_label,
+      NULL::uuid AS template_revision_id,
+      NULL::text AS template_id,
+      NULL::text AS template_source,
+      NULL::text AS template_version_label,
+      jah.id AS action_id,
+      jah.action_type,
+      jah.message AS action_message,
+      jah.error_code AS action_error_code,
+      jah.requested_by AS action_requested_by,
+      jah.created_job_id AS action_created_job_id,
+      j.notion_url,
+      j.anytype_url
+    FROM job_action_history jah
+    JOIN jobs j ON j.id = jah.job_id
+    LEFT JOIN recordings r ON r.id = j.recording_id
+    LEFT JOIN prompt_packages p ON p.id = j.prompt_package_id
+    LEFT JOIN recordings rp ON rp.id = p.recording_id
+    LEFT JOIN drafts d ON d.id = j.draft_id
+    LEFT JOIN prompt_packages pd ON pd.id = d.prompt_package_id
+    LEFT JOIN recordings rd ON rd.id = pd.recording_id
+    WHERE COALESCE(r.student_id, p.student_id, d.student_id, pd.student_id, rp.student_id, rd.student_id) = $1
   )
 `;
 
@@ -242,7 +599,7 @@ export async function getStudentTimeline(
   const order = params.order ?? 'desc';
 
   const { rows, total } = await withPgClient(async (client) => {
-    const values: (string | string[])[] = [studentId];
+    const values: (string | string[] | Date)[] = [studentId];
     const filters: string[] = [];
     let paramIndex = 2;
 
@@ -255,6 +612,18 @@ export async function getStudentTimeline(
     if (statusFilter && statusFilter.size > 0) {
       values.push([...statusFilter]);
       filters.push(`status = ANY($${paramIndex}::text[])`);
+      paramIndex += 1;
+    }
+
+    if (params.from) {
+      values.push(params.from);
+      filters.push(`created_at >= $${paramIndex}`);
+      paramIndex += 1;
+    }
+
+    if (params.to) {
+      values.push(params.to);
+      filters.push(`created_at <= $${paramIndex}`);
       paramIndex += 1;
     }
 
@@ -278,10 +647,40 @@ export async function getStudentTimeline(
              binding_id,
              binding_profile_id,
              binding_reason,
-             binding_changed_by
+             binding_changed_by,
+             profile_revision_id,
+             profile_id,
+             profile_source,
+             profile_version_label,
+             template_revision_id,
+             template_id,
+             template_source,
+             template_version_label,
+             action_id,
+             action_type,
+             action_message,
+             action_error_code,
+             action_requested_by,
+             action_created_job_id,
+             notion_url,
+             anytype_url
       FROM timeline
       ${whereClause}
-      ORDER BY created_at ${orderClause}
+      ORDER BY
+        created_at ${orderClause},
+        type ${orderClause},
+        COALESCE(
+          job_id::text,
+          draft_id::text,
+          prompt_package_id::text,
+          transcript_id::text,
+          recording_id::text,
+          binding_id::text,
+          profile_revision_id::text,
+          template_revision_id::text,
+          action_id::text,
+          ''
+        ) ${orderClause}
       LIMIT $${paramIndex} OFFSET $${paramIndex + 1}
     `;
     const dataValues = [...values, limit, offset];
@@ -298,11 +697,49 @@ export async function getStudentTimeline(
     if (row.error) {
       details.error = row.error;
     }
+    if (row.notion_url) {
+      details.notionUrl = row.notion_url;
+    }
+    if (row.anytype_url) {
+      details.anytypeUrl = row.anytype_url;
+    }
     if (row.type === 'student_profile_binding_changed') {
       details.bindingId = row.binding_id;
       details.profileId = row.binding_profile_id;
       details.reason = row.binding_reason;
       details.changedBy = row.binding_changed_by;
+    }
+    if (
+      row.type === 'profile_revision_saved' ||
+      row.type === 'profile_revision_restored' ||
+      row.type === 'profile_revision_activated'
+    ) {
+      details.profileRevisionId = row.profile_revision_id;
+      details.profileId = row.profile_id;
+      details.source = row.profile_source;
+      details.versionLabel = row.profile_version_label;
+    }
+    if (
+      row.type === 'template_revision_saved' ||
+      row.type === 'template_revision_restored' ||
+      row.type === 'template_revision_activated'
+    ) {
+      details.templateRevisionId = row.template_revision_id;
+      details.templateId = row.template_id;
+      details.source = row.template_source;
+      details.versionLabel = row.template_version_label;
+    }
+    if (
+      row.type === 'job_action_rerun_audio' ||
+      row.type === 'job_action_cancel' ||
+      row.type === 'job_action_edit_metadata'
+    ) {
+      details.actionId = row.action_id;
+      details.actionType = row.action_type;
+      details.message = row.action_message;
+      details.errorCode = row.action_error_code;
+      details.requestedBy = row.action_requested_by;
+      details.createdJobId = row.action_created_job_id;
     }
 
     return {

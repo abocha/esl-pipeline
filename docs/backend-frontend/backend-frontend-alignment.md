@@ -41,6 +41,7 @@
 | Manual transcription retry (`POST /recordings/:id/transcribe`)                             | Done    | Done     | Recording transcribe route                    | None.                                               |
 | Prompt options (`GET /config/prompts`)                                                     | Done    | Done     | Config routes + frontend prompt step          | Keep allowlists synchronized with storage roots.    |
 | Prompt package create/read                                                                 | Done    | Done     | Prompt-package routes                         | None.                                               |
+| Prompt/template/profile lineage (`GET /prompt-packages/:id/lineage`)                      | Done    | Done     | Prompt-package lineage API + frontend client  | None.                                               |
 | Draft save/read                                                                            | Done    | Done     | Draft routes                                  | None.                                               |
 | Draft materialize (`POST /drafts/:id/materialize`)                                         | Done    | Done     | Draft materialization service                 | Maintain job override validation coverage.          |
 | Job approve (`POST /jobs/:jobId/approve`)                                                  | Done    | Done     | Core job routes                               | None.                                               |
@@ -52,6 +53,7 @@
 | Job actions: `edit_metadata`                                                               | Done    | Partial  | Job action route and handler                  | Expose only where workflow needs it.                |
 | Job actions: `rerun_audio`                                                                 | Done    | Done     | Job action contract                           | Maintain payload parity as backend adds rerun knobs. |
 | Job actions: `cancel`                                                                      | Done    | Done     | Job action contract                           | Keep cooperative-cancel UX explicit for running jobs.      |
+| Student timeline + explainability (`/students/:id/timeline`, `/jobs/:id/provenance`)      | Done    | Done     | Timeline/provenance app services + UI panel   | Expand in Phase E into full student workspace views. |
 
 ## Open Blockers
 
@@ -59,6 +61,7 @@
 2. Frontend currently keeps `edit_metadata` as a partial/operator path (not broad UX exposure).
 3. Cancellation is cooperative for running jobs; already-issued external side effects remain best-effort.
 4. Student profile CRUD/profile-content editing remain backend-complete but UI-light by design (minimal UI is selection-first, not full student management).
+5. Phase E (full student workspace UX) is still pending.
 
 ## Do / Don't
 

@@ -36,6 +36,7 @@ export interface JobRecord {
   error?: string | null;
   manifestPath?: string | null;
   userId?: string | null;
+  sourceJobId?: string | null;
 }
 // JobRecord.declaration()
 

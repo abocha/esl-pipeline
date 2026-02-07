@@ -53,6 +53,7 @@ interface JobRow {
   finished_at: Date | null;
   error: string | null;
   manifest_path: string | null;
+  source_job_id?: string | null;
 }
 
 // insertJob.declaration()
@@ -74,6 +75,7 @@ export interface InsertJobParams {
   ttsStrategy?: TtsStrategy;
   userId?: string;
   autoPublish?: boolean;
+  sourceJobId?: string | null;
 }
 
 export interface JobListOptions {
@@ -160,11 +162,15 @@ async function insertJobWithState(params: InsertJobParams, state: JobState): Pro
         publish_target,
         mode,
         auto_publish,
+        source_job_id,
         created_at,
         updated_at,
         user_id
       )
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21)
+      VALUES (
+        $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16,
+        $17, $18, $19, $20, $21, $22
+      )
       RETURNING
         id,
         state,
@@ -192,6 +198,7 @@ async function insertJobWithState(params: InsertJobParams, state: JobState): Pro
         finished_at,
         error,
         manifest_path,
+        source_job_id,
         user_id
       `,
       [
@@ -213,6 +220,7 @@ async function insertJobWithState(params: InsertJobParams, state: JobState): Pro
         params.publishTarget ?? null,
         params.ttsStrategy ?? null,
         params.autoPublish ?? false,
+        params.sourceJobId ?? null,
         now,
         now,
         params.userId ?? null,
@@ -236,7 +244,7 @@ export async function getJobById(id: string): Promise<JobRecord | null> {
              recording_id, transcript_id, prompt_package_id, draft_id,
              preset, with_tts, upload,
              voice_id, voice_accent, force_tts, notion_database, publish_target, mode, notion_url, anytype_url, auto_publish,
-             created_at, updated_at, started_at, finished_at, error, manifest_path, user_id
+             created_at, updated_at, started_at, finished_at, error, manifest_path, source_job_id, user_id
       FROM jobs
       WHERE id = $1
       `,
@@ -289,6 +297,7 @@ export async function listJobs(options: JobListOptions): Promise<JobRecord[]> {
         j.finished_at,
         j.error,
         j.manifest_path,
+        j.source_job_id,
         j.user_id
       FROM jobs j
       LEFT JOIN recordings r ON r.id = j.recording_id
@@ -446,6 +455,7 @@ export async function updateJobStateAndResult(args: {
         finished_at,
         error,
         manifest_path,
+        source_job_id,
         user_id
       `,
       [
@@ -519,6 +529,7 @@ export async function updateJobDraftLink(args: {
         finished_at,
         error,
         manifest_path,
+        source_job_id,
         user_id
       `,
       [md, mdStorageUri, draftId, id, expectedState],
@@ -634,6 +645,7 @@ export async function updateJobMetadata(
         finished_at,
         error,
         manifest_path,
+        source_job_id,
         user_id
       `,
       values,
@@ -709,6 +721,7 @@ export async function approveJob(args: {
         finished_at,
         error,
         manifest_path,
+        source_job_id,
         user_id
       `,
       [md, mdStorageUri, id, expectedState],
@@ -789,6 +802,7 @@ function mapRowToJob(row: JobRow): JobRecord {
     error: row.error,
     manifestPath: row.manifest_path,
     userId: row.user_id,
+    sourceJobId: row.source_job_id ?? null,
   };
 }
 

@@ -8,6 +8,7 @@ import * as approveJobModule from '../src/application/approve-job.js';
 import * as createDraftModule from '../src/application/create-draft.js';
 import * as createPromptPackageModule from '../src/application/create-prompt-package.js';
 import { getJobOptions } from '../src/application/get-job-options.js';
+import * as getJobProvenanceModule from '../src/application/get-job-provenance.js';
 import * as getJobStatusModule from '../src/application/get-job-status.js';
 import * as getPromptPackageModule from '../src/application/get-prompt-package.js';
 import * as getRecordingTranscriptModule from '../src/application/get-recording-transcript.js';
@@ -178,6 +179,12 @@ vi.mock('../src/application/student-profile-bindings', () => {
   };
 });
 
+vi.mock('../src/application/get-job-provenance.js', () => {
+  return {
+    getJobProvenance: vi.fn(),
+  };
+});
+
 vi.mock('../src/application/get-prompt-options.js', () => {
   return {
     getPromptOptions: vi.fn().mockResolvedValue({
@@ -224,6 +231,7 @@ describe('transport/http-server - integration (in-process)', () => {
   const mockGetActiveStudentProfileBindingForStudent = vi.mocked(
     studentBindingsModule.getActiveStudentProfileBindingForStudent,
   );
+  const mockGetJobProvenance = vi.mocked(getJobProvenanceModule.getJobProvenance);
 
   beforeAll(async () => {
     vi.clearAllMocks();
@@ -431,6 +439,28 @@ describe('transport/http-server - integration (in-process)', () => {
       limit: 20,
       offset: 0,
       order: 'desc',
+    });
+    mockGetJobProvenance.mockResolvedValue({
+      job: {
+        id: 'test-job-1',
+        state: 'succeeded',
+        createdAt: '2024-01-01T00:00:00.000Z',
+        updatedAt: '2024-01-01T00:01:00.000Z',
+        startedAt: '2024-01-01T00:00:10.000Z',
+        finishedAt: '2024-01-01T00:01:00.000Z',
+        sourceJobId: null,
+        manifestPath: '/tmp/manifest.json',
+        notionUrl: null,
+        anytypeUrl: null,
+        error: null,
+      },
+      sourceJob: null,
+      recording: null,
+      transcript: null,
+      promptPackage: null,
+      draft: null,
+      lineage: null,
+      actions: [],
     });
     mockListStudentProfileBindingsForStudent.mockResolvedValue({
       items: [
@@ -784,6 +814,65 @@ describe('transport/http-server - integration (in-process)', () => {
 
     expect(response.statusCode).toBe(200);
     expect(getJobStatus).toHaveBeenCalledWith('job-2');
+  });
+
+  it('GET /jobs/:jobId/provenance returns provenance payload', async () => {
+    mockGetJobProvenance.mockResolvedValue({
+      job: {
+        id: 'job-3',
+        state: 'succeeded',
+        createdAt: '2024-01-01T00:00:00.000Z',
+        updatedAt: '2024-01-01T00:01:00.000Z',
+        startedAt: '2024-01-01T00:00:10.000Z',
+        finishedAt: '2024-01-01T00:01:00.000Z',
+        sourceJobId: 'job-2',
+        manifestPath: '/tmp/manifest.json',
+        notionUrl: 'https://notion.so/published',
+        anytypeUrl: null,
+        error: null,
+      },
+      sourceJob: {
+        id: 'job-2',
+        state: 'succeeded',
+        createdAt: '2024-01-01T00:00:00.000Z',
+        finishedAt: '2024-01-01T00:00:55.000Z',
+      },
+      recording: null,
+      transcript: null,
+      promptPackage: null,
+      draft: null,
+      lineage: null,
+      actions: [],
+    });
+
+    const response = await app.inject({
+      method: 'GET',
+      url: '/jobs/job-3/provenance',
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toMatchObject({
+      job: {
+        id: 'job-3',
+        sourceJobId: 'job-2',
+      },
+      sourceJob: {
+        id: 'job-2',
+      },
+    });
+    expect(mockGetJobProvenance).toHaveBeenCalledWith('job-3');
+  });
+
+  it('GET /jobs/:jobId/provenance returns 404 when missing', async () => {
+    mockGetJobProvenance.mockResolvedValueOnce(null);
+
+    const response = await app.inject({
+      method: 'GET',
+      url: '/jobs/missing/provenance',
+    });
+
+    expect(response.statusCode).toBe(404);
+    expect(response.json()).toEqual({ error: 'not_found' });
   });
 
   it('GET /jobs/:jobId returns 404 with canonical schema when job not found', async () => {

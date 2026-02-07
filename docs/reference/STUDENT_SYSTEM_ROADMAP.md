@@ -172,6 +172,10 @@
 
 - Expose complete student learning/work lifecycle history with actionable diagnostics.
 
+### Status
+
+- Implemented (2026-02-07).
+
 ### Deliverables
 
 1. Expanded timeline events:
@@ -186,6 +190,32 @@
 
 - Timeline answers "what happened and why" without cross-referencing multiple endpoints manually.
 - Operators can debug student-specific issues from timeline + lineage alone.
+
+### Completed Outputs
+
+1. Timeline event model now includes:
+   - profile revision lifecycle (`saved`, `restored`, `activated`)
+   - template revision lifecycle (`saved`, `restored`, `activated`)
+   - job action outcomes (`rerun_audio`, `cancel`, `edit_metadata`)
+   - publish outcome context on job terminal events (`notionUrl`, `anytypeUrl` in details when present).
+2. Timeline filtering supports:
+   - type/status filters
+   - time-window filters (`from`, `to`)
+   - deterministic ordering (`created_at`, then stable tie-break keys).
+3. Durable action audit storage is in place:
+   - `job_action_history` table
+   - action execution persistence in `executeJobAction`.
+4. Rerun lineage persistence is in place:
+   - `jobs.source_job_id`
+   - rerun-created jobs link back to source job.
+5. Explainability API is in place:
+   - `GET /jobs/:jobId/provenance`
+   - aggregates job/source job, recording/transcript/prompt/draft context, lineage snapshot, and action audit trail.
+6. Minimal UI now exposes provenance details in the job actions section:
+   - source job linkage
+   - pinned profile/template revision snapshot
+   - binding-at-creation snapshot (when present)
+   - recent action audit events.
 
 ## Phase E: Student Workspace UX
 
