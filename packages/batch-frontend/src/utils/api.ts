@@ -236,12 +236,16 @@ export interface PromptPackageResponse {
     resolvedProfileHash: string;
     resolvedProfileRevisionId: string | null;
     resolvedProfileUpdatedAt: string | null;
+    resolvedProfileVersionLabel?: string | null;
+    resolvedProfileStatus?: 'draft' | 'active' | 'deprecated' | null;
   };
   templateSnapshot?: {
     resolvedTemplateId: string;
     resolvedTemplateHash: string;
     resolvedTemplateRevisionId: string | null;
     resolvedTemplateUpdatedAt: string | null;
+    resolvedTemplateVersionLabel?: string | null;
+    resolvedTemplateStatus?: 'draft' | 'active' | 'deprecated' | null;
   };
   profileDrift?: {
     detected: true;

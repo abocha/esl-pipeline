@@ -23,6 +23,7 @@ import * as studentStoreModule from '../src/application/student-profiles-store.j
 import * as studentSummaryModule from '../src/application/student-summary.js';
 import * as studentTimelineModule from '../src/application/student-timeline.js';
 import * as submitJobModule from '../src/application/submit-job.js';
+import * as templateContentModule from '../src/application/template-content.js';
 import * as updateRecordingTranscriptModule from '../src/application/update-recording-transcript.js';
 import { publishJobEvent } from '../src/domain/job-events.js';
 import type { JobRecord } from '../src/domain/job-model.js';
@@ -149,6 +150,16 @@ vi.mock('../src/application/profile-content', () => {
     listProfileRevisionsForProfile: vi.fn(),
     getProfileRevisionForProfile: vi.fn(),
     restoreProfileRevision: vi.fn(),
+    activateProfileRevisionForProfile: vi.fn(),
+  };
+});
+
+vi.mock('../src/application/template-content', () => {
+  return {
+    listTemplateRevisionsForTemplate: vi.fn(),
+    getTemplateRevisionForTemplate: vi.fn(),
+    restoreTemplateRevision: vi.fn(),
+    activateTemplateRevisionForTemplate: vi.fn(),
   };
 });
 
@@ -184,6 +195,19 @@ describe('transport/http-server - integration (in-process)', () => {
   );
   const mockGetProfileRevisionForProfile = vi.mocked(profileContentModule.getProfileRevisionForProfile);
   const mockRestoreProfileRevision = vi.mocked(profileContentModule.restoreProfileRevision);
+  const mockActivateProfileRevisionForProfile = vi.mocked(
+    profileContentModule.activateProfileRevisionForProfile,
+  );
+  const mockListTemplateRevisionsForTemplate = vi.mocked(
+    templateContentModule.listTemplateRevisionsForTemplate,
+  );
+  const mockGetTemplateRevisionForTemplate = vi.mocked(
+    templateContentModule.getTemplateRevisionForTemplate,
+  );
+  const mockRestoreTemplateRevision = vi.mocked(templateContentModule.restoreTemplateRevision);
+  const mockActivateTemplateRevisionForTemplate = vi.mocked(
+    templateContentModule.activateTemplateRevisionForTemplate,
+  );
   const mockGetStudentTimeline = vi.mocked(studentTimelineModule.getStudentTimeline);
 
   beforeAll(async () => {
@@ -277,6 +301,11 @@ describe('transport/http-server - integration (in-process)', () => {
           profileId: 'profile.md',
           contentHash: 'hash-1',
           source: 'create',
+          status: 'active',
+          versionNumber: 1,
+          versionLabel: 'v1',
+          activatedAt: '2024-01-01T00:00:00.000Z',
+          deprecatedAt: null,
           createdAt: '2024-01-01T00:00:00.000Z',
           createdBy: null,
           restoredFromRevisionId: null,
@@ -292,6 +321,11 @@ describe('transport/http-server - integration (in-process)', () => {
       profileId: 'profile.md',
       contentHash: 'hash-1',
       source: 'create',
+      status: 'active',
+      versionNumber: 1,
+      versionLabel: 'v1',
+      activatedAt: '2024-01-01T00:00:00.000Z',
+      deprecatedAt: null,
       createdAt: '2024-01-01T00:00:00.000Z',
       createdBy: null,
       restoredFromRevisionId: null,
@@ -303,6 +337,65 @@ describe('transport/http-server - integration (in-process)', () => {
       content: 'Restored content',
       currentRevisionId: 'revision-2',
       updatedAt: '2024-01-02T00:00:00.000Z',
+    });
+    mockListTemplateRevisionsForTemplate.mockResolvedValue({
+      items: [
+        {
+          id: 'template-revision-1',
+          templateId: 'template.md',
+          contentHash: 'template-hash-1',
+          source: 'create',
+          status: 'active',
+          versionNumber: 1,
+          versionLabel: 'v1',
+          activatedAt: '2024-01-01T00:00:00.000Z',
+          deprecatedAt: null,
+          createdAt: '2024-01-01T00:00:00.000Z',
+          createdBy: null,
+          restoredFromRevisionId: null,
+        },
+      ],
+      total: 1,
+      limit: 50,
+      offset: 0,
+      order: 'desc',
+    });
+    mockGetTemplateRevisionForTemplate.mockResolvedValue({
+      id: 'template-revision-1',
+      templateId: 'template.md',
+      contentHash: 'template-hash-1',
+      source: 'create',
+      status: 'active',
+      versionNumber: 1,
+      versionLabel: 'v1',
+      activatedAt: '2024-01-01T00:00:00.000Z',
+      deprecatedAt: null,
+      createdAt: '2024-01-01T00:00:00.000Z',
+      createdBy: null,
+      restoredFromRevisionId: null,
+      content: 'Template content',
+    });
+    mockRestoreTemplateRevision.mockResolvedValue({
+      id: 'template.md',
+      label: 'Template',
+      content: 'Restored template',
+      currentRevisionId: 'template-revision-2',
+      updatedAt: '2024-01-02T00:00:00.000Z',
+    });
+    mockActivateTemplateRevisionForTemplate.mockResolvedValue({
+      id: 'template-revision-1',
+      templateId: 'template.md',
+      contentHash: 'template-hash-1',
+      source: 'create',
+      status: 'active',
+      versionNumber: 1,
+      versionLabel: 'v1',
+      activatedAt: '2024-01-01T00:00:00.000Z',
+      deprecatedAt: null,
+      createdAt: '2024-01-01T00:00:00.000Z',
+      createdBy: null,
+      restoredFromRevisionId: null,
+      content: 'Template content',
     });
     mockGetStudentTimeline.mockResolvedValue({
       items: [
@@ -930,6 +1023,11 @@ describe('transport/http-server - integration (in-process)', () => {
           profileId: 'profile.md',
           contentHash: 'hash-1',
           source: 'create',
+          status: 'active',
+          versionNumber: 1,
+          versionLabel: 'v1',
+          activatedAt: '2024-01-01T00:00:00.000Z',
+          deprecatedAt: null,
           createdAt: '2024-01-01T00:00:00.000Z',
           createdBy: null,
           restoredFromRevisionId: null,
@@ -954,6 +1052,11 @@ describe('transport/http-server - integration (in-process)', () => {
       profileId: 'profile.md',
       contentHash: 'hash-1',
       source: 'create',
+      status: 'active',
+      versionNumber: 1,
+      versionLabel: 'v1',
+      activatedAt: '2024-01-01T00:00:00.000Z',
+      deprecatedAt: null,
       createdAt: '2024-01-01T00:00:00.000Z',
       createdBy: null,
       restoredFromRevisionId: null,
@@ -974,6 +1077,68 @@ describe('transport/http-server - integration (in-process)', () => {
       content: 'Restored content',
       currentRevisionId: 'revision-2',
       updatedAt: '2024-01-02T00:00:00.000Z',
+    });
+  });
+
+  it('POST /profiles/:id/revisions/:revisionId/activate returns activated revision', async () => {
+    mockActivateProfileRevisionForProfile.mockResolvedValueOnce({
+      id: 'revision-1',
+      profileId: 'profile.md',
+      contentHash: 'hash-1',
+      source: 'create',
+      status: 'active',
+      versionNumber: 1,
+      versionLabel: 'v1',
+      activatedAt: '2024-01-01T00:00:00.000Z',
+      deprecatedAt: null,
+      createdAt: '2024-01-01T00:00:00.000Z',
+      createdBy: null,
+      restoredFromRevisionId: null,
+      content: 'Profile content',
+    });
+
+    const response = await app.inject({
+      method: 'POST',
+      url: '/profiles/profile.md/revisions/11111111-1111-4111-8111-111111111111/activate',
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toMatchObject({
+      id: 'revision-1',
+      profileId: 'profile.md',
+      status: 'active',
+      versionLabel: 'v1',
+    });
+  });
+
+  it('GET /templates/:id/revisions returns template revision list', async () => {
+    const response = await app.inject({
+      method: 'GET',
+      url: '/templates/template.md/revisions?limit=10&offset=0&order=desc',
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toEqual({
+      items: [
+        {
+          id: 'template-revision-1',
+          templateId: 'template.md',
+          contentHash: 'template-hash-1',
+          source: 'create',
+          status: 'active',
+          versionNumber: 1,
+          versionLabel: 'v1',
+          activatedAt: '2024-01-01T00:00:00.000Z',
+          deprecatedAt: null,
+          createdAt: '2024-01-01T00:00:00.000Z',
+          createdBy: null,
+          restoredFromRevisionId: null,
+        },
+      ],
+      total: 1,
+      limit: 50,
+      offset: 0,
+      order: 'desc',
     });
   });
 

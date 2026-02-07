@@ -9,11 +9,13 @@ import type {
   ProfileRevisionSource,
 } from '../domain/profile-revision-model.js';
 import {
+  activateProfileRevision,
   getLatestProfileRevisionByHash,
   getProfileRevisionById,
   insertProfileRevision,
   listProfileRevisions,
 } from '../domain/profile-revision-repository.js';
+import { setProfileActiveRevision, upsertProfile } from '../domain/profile-repository.js';
 import {
   type PromptOption,
   type PromptOptionWithPath,
@@ -39,6 +41,11 @@ export interface ProfileRevisionSummaryResponse {
   profileId: string;
   contentHash: string;
   source: ProfileRevisionSource;
+  status: 'draft' | 'active' | 'deprecated';
+  versionNumber: number;
+  versionLabel: string;
+  activatedAt: string | null;
+  deprecatedAt: string | null;
   createdAt: string;
   createdBy: string | null;
   restoredFromRevisionId: string | null;
@@ -58,6 +65,7 @@ export interface ProfileRevisionListResponse {
 
 interface ProfileRevisionDependencies {
   insert: typeof insertProfileRevision;
+  activate: typeof activateProfileRevision;
   list: typeof listProfileRevisions;
   getById: typeof getProfileRevisionById;
   getLatestByHash: typeof getLatestProfileRevisionByHash;
@@ -66,6 +74,10 @@ interface ProfileRevisionDependencies {
 interface ProfileContentDependencies {
   config: BatchBackendConfig;
   revisions: ProfileRevisionDependencies;
+  profiles: {
+    upsert: typeof upsertProfile;
+    setActive: typeof setProfileActiveRevision;
+  };
 }
 
 interface UpsertProfileContentOptions {
@@ -129,9 +141,14 @@ function getDependencies(
     config: overrides?.config ?? loadConfig(),
     revisions: overrides?.revisions ?? {
       insert: insertProfileRevision,
+      activate: activateProfileRevision,
       list: listProfileRevisions,
       getById: getProfileRevisionById,
       getLatestByHash: getLatestProfileRevisionByHash,
+    },
+    profiles: overrides?.profiles ?? {
+      upsert: upsertProfile,
+      setActive: setProfileActiveRevision,
     },
   };
 }
@@ -156,6 +173,11 @@ function toProfileRevisionSummary(
     profileId: revision.profileId,
     contentHash: revision.contentHash,
     source: revision.source,
+    status: revision.status,
+    versionNumber: revision.versionNumber,
+    versionLabel: revision.versionLabel,
+    activatedAt: revision.activatedAt ? revision.activatedAt.toISOString() : null,
+    deprecatedAt: revision.deprecatedAt ? revision.deprecatedAt.toISOString() : null,
     createdAt: revision.createdAt.toISOString(),
     createdBy: revision.createdBy ?? null,
     restoredFromRevisionId: revision.restoredFromRevisionId ?? null,
@@ -203,6 +225,14 @@ async function upsertProfileContentWithRevision(
   let updatedAt: string | null = null;
 
   try {
+    await dependencies.profiles
+      .upsert({
+        id: profileId,
+        label: entry?.label ?? formatProfileLabel(profileId),
+        activeRevisionId: null,
+      })
+      .catch(() => null);
+
     const existingRevision =
       source === 'restore' ? null : await dependencies.revisions.getLatestByHash(profileId, hash);
     const revision =
@@ -215,6 +245,18 @@ async function upsertProfileContentWithRevision(
         createdBy: options.createdBy ?? null,
         restoredFromRevisionId: options.restoredFromRevisionId ?? null,
       }));
+
+    await Promise.all([
+      dependencies.profiles
+        .upsert({
+          id: profileId,
+          label: entry?.label ?? formatProfileLabel(profileId),
+          activeRevisionId: revision.id,
+        })
+        .catch(() => null),
+      dependencies.revisions.activate(profileId, revision.id).catch(() => null),
+      dependencies.profiles.setActive(profileId, revision.id).catch(() => null),
+    ]);
 
     currentRevisionId = revision.id;
     updatedAt = revision.createdAt.toISOString();
@@ -346,4 +388,34 @@ export async function restoreProfileRevision(
     createdBy: overrides?.createdBy ?? null,
     restoredFromRevisionId: revision.id,
   });
+}
+
+export async function activateProfileRevisionForProfile(
+  profileId: string,
+  revisionId: string,
+  overrides?: Partial<ProfileContentDependencies>,
+): Promise<ProfileRevisionDetailResponse | null> {
+  const dependencies = getDependencies(overrides);
+  const { profiles } = await loadProfileOptions(dependencies);
+  const entry = profiles.find((profile) => profile.id === profileId);
+  if (!entry) return null;
+
+  const activated = await dependencies.revisions.activate(profileId, revisionId);
+  if (!activated) return null;
+
+  await Promise.all([
+    dependencies.profiles
+      .upsert({
+        id: profileId,
+        label: entry.label,
+        activeRevisionId: activated.id,
+      })
+      .catch(() => null),
+    dependencies.profiles.setActive(profileId, activated.id).catch(() => null),
+  ]);
+
+  return {
+    ...toProfileRevisionSummary(activated),
+    content: activated.content,
+  };
 }

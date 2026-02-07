@@ -201,10 +201,14 @@ CREATE TABLE IF NOT EXISTS prompt_packages (
   resolved_profile_hash TEXT NULL,
   resolved_profile_revision_id UUID NULL,
   resolved_profile_updated_at TIMESTAMPTZ NULL,
+  resolved_profile_version_label TEXT NULL,
+  resolved_profile_status TEXT NULL,
   resolved_template_id TEXT NULL,
   resolved_template_hash TEXT NULL,
   resolved_template_revision_id UUID NULL,
   resolved_template_updated_at TIMESTAMPTZ NULL,
+  resolved_template_version_label TEXT NULL,
+  resolved_template_status TEXT NULL,
   template_version TEXT NOT NULL,
   notes TEXT NULL,
   storage_uri TEXT NOT NULL,
@@ -222,10 +226,14 @@ const PROMPT_PACKAGES_SCHEMA_PATCHES: string[] = [
   'ALTER TABLE prompt_packages ADD COLUMN IF NOT EXISTS resolved_profile_hash TEXT NULL',
   'ALTER TABLE prompt_packages ADD COLUMN IF NOT EXISTS resolved_profile_revision_id UUID NULL',
   'ALTER TABLE prompt_packages ADD COLUMN IF NOT EXISTS resolved_profile_updated_at TIMESTAMPTZ NULL',
+  'ALTER TABLE prompt_packages ADD COLUMN IF NOT EXISTS resolved_profile_version_label TEXT NULL',
+  'ALTER TABLE prompt_packages ADD COLUMN IF NOT EXISTS resolved_profile_status TEXT NULL',
   'ALTER TABLE prompt_packages ADD COLUMN IF NOT EXISTS resolved_template_id TEXT NULL',
   'ALTER TABLE prompt_packages ADD COLUMN IF NOT EXISTS resolved_template_hash TEXT NULL',
   'ALTER TABLE prompt_packages ADD COLUMN IF NOT EXISTS resolved_template_revision_id UUID NULL',
   'ALTER TABLE prompt_packages ADD COLUMN IF NOT EXISTS resolved_template_updated_at TIMESTAMPTZ NULL',
+  'ALTER TABLE prompt_packages ADD COLUMN IF NOT EXISTS resolved_template_version_label TEXT NULL',
+  'ALTER TABLE prompt_packages ADD COLUMN IF NOT EXISTS resolved_template_status TEXT NULL',
   'ALTER TABLE prompt_packages ADD COLUMN IF NOT EXISTS template_version TEXT NULL',
   'ALTER TABLE prompt_packages ADD COLUMN IF NOT EXISTS notes TEXT NULL',
   'ALTER TABLE prompt_packages ADD COLUMN IF NOT EXISTS storage_uri TEXT NULL',
@@ -248,6 +256,11 @@ CREATE TABLE IF NOT EXISTS profile_revisions (
   content TEXT NOT NULL,
   content_hash TEXT NOT NULL,
   source TEXT NOT NULL DEFAULT 'update',
+  status TEXT NOT NULL DEFAULT 'active',
+  version_number INTEGER NOT NULL DEFAULT 1,
+  version_label TEXT NOT NULL DEFAULT 'v1',
+  activated_at TIMESTAMPTZ NULL,
+  deprecated_at TIMESTAMPTZ NULL,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   created_by UUID NULL,
   restored_from_revision_id UUID NULL
@@ -259,6 +272,11 @@ const PROFILE_REVISIONS_SCHEMA_PATCHES: string[] = [
   'ALTER TABLE profile_revisions ADD COLUMN IF NOT EXISTS content TEXT NULL',
   'ALTER TABLE profile_revisions ADD COLUMN IF NOT EXISTS content_hash TEXT NULL',
   'ALTER TABLE profile_revisions ADD COLUMN IF NOT EXISTS source TEXT NULL',
+  "ALTER TABLE profile_revisions ADD COLUMN IF NOT EXISTS status TEXT NOT NULL DEFAULT 'active'",
+  'ALTER TABLE profile_revisions ADD COLUMN IF NOT EXISTS version_number INTEGER NULL',
+  'ALTER TABLE profile_revisions ADD COLUMN IF NOT EXISTS version_label TEXT NULL',
+  'ALTER TABLE profile_revisions ADD COLUMN IF NOT EXISTS activated_at TIMESTAMPTZ NULL',
+  'ALTER TABLE profile_revisions ADD COLUMN IF NOT EXISTS deprecated_at TIMESTAMPTZ NULL',
   'ALTER TABLE profile_revisions ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ NULL',
   'ALTER TABLE profile_revisions ADD COLUMN IF NOT EXISTS created_by UUID NULL',
   'ALTER TABLE profile_revisions ADD COLUMN IF NOT EXISTS restored_from_revision_id UUID NULL',
@@ -267,6 +285,8 @@ const PROFILE_REVISIONS_SCHEMA_PATCHES: string[] = [
 const PROFILE_REVISIONS_INDEX_PATCHES: string[] = [
   'CREATE INDEX IF NOT EXISTS idx_profile_revisions_profile_id_created_at ON profile_revisions (profile_id, created_at DESC)',
   'CREATE INDEX IF NOT EXISTS idx_profile_revisions_profile_id_hash ON profile_revisions (profile_id, content_hash)',
+  'CREATE UNIQUE INDEX IF NOT EXISTS idx_profile_revisions_profile_version ON profile_revisions (profile_id, version_number)',
+  "CREATE UNIQUE INDEX IF NOT EXISTS idx_profile_revisions_single_active ON profile_revisions (profile_id) WHERE status = 'active'",
 ];
 
 const TEMPLATE_REVISIONS_TABLE_SQL = `
@@ -276,6 +296,11 @@ CREATE TABLE IF NOT EXISTS template_revisions (
   content TEXT NOT NULL,
   content_hash TEXT NOT NULL,
   source TEXT NOT NULL DEFAULT 'update',
+  status TEXT NOT NULL DEFAULT 'active',
+  version_number INTEGER NOT NULL DEFAULT 1,
+  version_label TEXT NOT NULL DEFAULT 'v1',
+  activated_at TIMESTAMPTZ NULL,
+  deprecated_at TIMESTAMPTZ NULL,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   created_by UUID NULL,
   restored_from_revision_id UUID NULL
@@ -287,6 +312,11 @@ const TEMPLATE_REVISIONS_SCHEMA_PATCHES: string[] = [
   'ALTER TABLE template_revisions ADD COLUMN IF NOT EXISTS content TEXT NULL',
   'ALTER TABLE template_revisions ADD COLUMN IF NOT EXISTS content_hash TEXT NULL',
   'ALTER TABLE template_revisions ADD COLUMN IF NOT EXISTS source TEXT NULL',
+  "ALTER TABLE template_revisions ADD COLUMN IF NOT EXISTS status TEXT NOT NULL DEFAULT 'active'",
+  'ALTER TABLE template_revisions ADD COLUMN IF NOT EXISTS version_number INTEGER NULL',
+  'ALTER TABLE template_revisions ADD COLUMN IF NOT EXISTS version_label TEXT NULL',
+  'ALTER TABLE template_revisions ADD COLUMN IF NOT EXISTS activated_at TIMESTAMPTZ NULL',
+  'ALTER TABLE template_revisions ADD COLUMN IF NOT EXISTS deprecated_at TIMESTAMPTZ NULL',
   'ALTER TABLE template_revisions ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ NULL',
   'ALTER TABLE template_revisions ADD COLUMN IF NOT EXISTS created_by UUID NULL',
   'ALTER TABLE template_revisions ADD COLUMN IF NOT EXISTS restored_from_revision_id UUID NULL',
@@ -295,6 +325,8 @@ const TEMPLATE_REVISIONS_SCHEMA_PATCHES: string[] = [
 const TEMPLATE_REVISIONS_INDEX_PATCHES: string[] = [
   'CREATE INDEX IF NOT EXISTS idx_template_revisions_template_id_created_at ON template_revisions (template_id, created_at DESC)',
   'CREATE INDEX IF NOT EXISTS idx_template_revisions_template_id_hash ON template_revisions (template_id, content_hash)',
+  'CREATE UNIQUE INDEX IF NOT EXISTS idx_template_revisions_template_version ON template_revisions (template_id, version_number)',
+  "CREATE UNIQUE INDEX IF NOT EXISTS idx_template_revisions_single_active ON template_revisions (template_id) WHERE status = 'active'",
 ];
 
 const STUDENTS_TABLE_SQL = `
@@ -342,6 +374,16 @@ CREATE TABLE IF NOT EXISTS profiles (
 );
 `;
 
+const TEMPLATES_TABLE_SQL = `
+CREATE TABLE IF NOT EXISTS templates (
+  id TEXT PRIMARY KEY,
+  label TEXT NOT NULL,
+  active_revision_id UUID NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+`;
+
 const PROFILES_SCHEMA_PATCHES: string[] = [
   'ALTER TABLE profiles ADD COLUMN IF NOT EXISTS id TEXT NULL',
   'ALTER TABLE profiles ADD COLUMN IF NOT EXISTS label TEXT NULL',
@@ -350,9 +392,22 @@ const PROFILES_SCHEMA_PATCHES: string[] = [
   'ALTER TABLE profiles ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ NULL',
 ];
 
+const TEMPLATES_SCHEMA_PATCHES: string[] = [
+  'ALTER TABLE templates ADD COLUMN IF NOT EXISTS id TEXT NULL',
+  'ALTER TABLE templates ADD COLUMN IF NOT EXISTS label TEXT NULL',
+  'ALTER TABLE templates ADD COLUMN IF NOT EXISTS active_revision_id UUID NULL',
+  'ALTER TABLE templates ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ NULL',
+  'ALTER TABLE templates ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ NULL',
+];
+
 const PROFILES_INDEX_PATCHES: string[] = [
   'CREATE INDEX IF NOT EXISTS idx_profiles_label ON profiles (label)',
   'CREATE INDEX IF NOT EXISTS idx_profiles_active_revision_id ON profiles (active_revision_id)',
+];
+
+const TEMPLATES_INDEX_PATCHES: string[] = [
+  'CREATE INDEX IF NOT EXISTS idx_templates_label ON templates (label)',
+  'CREATE INDEX IF NOT EXISTS idx_templates_active_revision_id ON templates (active_revision_id)',
 ];
 
 const STUDENT_PROFILE_BINDINGS_TABLE_SQL = `
@@ -410,6 +465,97 @@ const DRAFTS_INDEX_PATCHES: string[] = [
   'CREATE INDEX IF NOT EXISTS idx_drafts_prompt_package_id ON drafts (prompt_package_id)',
   'CREATE INDEX IF NOT EXISTS idx_drafts_student_id ON drafts (student_id)',
   'CREATE INDEX IF NOT EXISTS idx_drafts_created_by ON drafts (created_by)',
+];
+
+const REVISION_VERSIONING_DATA_PATCHES: string[] = [
+  `WITH ranked AS (
+     SELECT
+       id,
+       row_number() OVER (PARTITION BY profile_id ORDER BY created_at ASC, id ASC) AS rn,
+       row_number() OVER (PARTITION BY profile_id ORDER BY created_at DESC, id DESC) AS rn_desc
+     FROM profile_revisions
+   )
+   UPDATE profile_revisions pr
+   SET
+     version_number = COALESCE(pr.version_number, ranked.rn),
+     version_label = COALESCE(NULLIF(pr.version_label, ''), CONCAT('v', COALESCE(pr.version_number, ranked.rn)::text)),
+     status = COALESCE(pr.status, CASE WHEN ranked.rn_desc = 1 THEN 'active' ELSE 'deprecated' END),
+     activated_at = CASE
+       WHEN COALESCE(pr.status, CASE WHEN ranked.rn_desc = 1 THEN 'active' ELSE 'deprecated' END) = 'active'
+         THEN COALESCE(pr.activated_at, pr.created_at, NOW())
+       ELSE NULL
+     END,
+     deprecated_at = CASE
+       WHEN COALESCE(pr.status, CASE WHEN ranked.rn_desc = 1 THEN 'active' ELSE 'deprecated' END) = 'deprecated'
+         THEN COALESCE(pr.deprecated_at, pr.created_at, NOW())
+       ELSE NULL
+     END
+   FROM ranked
+   WHERE pr.id = ranked.id;`,
+  `WITH ranked AS (
+     SELECT
+       id,
+       row_number() OVER (PARTITION BY template_id ORDER BY created_at ASC, id ASC) AS rn,
+       row_number() OVER (PARTITION BY template_id ORDER BY created_at DESC, id DESC) AS rn_desc
+     FROM template_revisions
+   )
+   UPDATE template_revisions tr
+   SET
+     version_number = COALESCE(tr.version_number, ranked.rn),
+     version_label = COALESCE(NULLIF(tr.version_label, ''), CONCAT('v', COALESCE(tr.version_number, ranked.rn)::text)),
+     status = COALESCE(tr.status, CASE WHEN ranked.rn_desc = 1 THEN 'active' ELSE 'deprecated' END),
+     activated_at = CASE
+       WHEN COALESCE(tr.status, CASE WHEN ranked.rn_desc = 1 THEN 'active' ELSE 'deprecated' END) = 'active'
+         THEN COALESCE(tr.activated_at, tr.created_at, NOW())
+       ELSE NULL
+     END,
+     deprecated_at = CASE
+       WHEN COALESCE(tr.status, CASE WHEN ranked.rn_desc = 1 THEN 'active' ELSE 'deprecated' END) = 'deprecated'
+         THEN COALESCE(tr.deprecated_at, tr.created_at, NOW())
+       ELSE NULL
+     END
+   FROM ranked
+   WHERE tr.id = ranked.id;`,
+  `INSERT INTO profiles (id, label, active_revision_id)
+   SELECT
+     source.profile_id,
+     source.profile_id,
+     source.active_revision_id
+   FROM (
+     SELECT
+       pr.profile_id,
+       (
+         SELECT pr2.id
+         FROM profile_revisions pr2
+         WHERE pr2.profile_id = pr.profile_id AND pr2.status = 'active'
+         ORDER BY pr2.activated_at DESC NULLS LAST, pr2.created_at DESC
+         LIMIT 1
+       ) AS active_revision_id
+     FROM profile_revisions pr
+     GROUP BY pr.profile_id
+   ) AS source
+   ON CONFLICT (id) DO UPDATE
+   SET active_revision_id = COALESCE(EXCLUDED.active_revision_id, profiles.active_revision_id);`,
+  `INSERT INTO templates (id, label, active_revision_id)
+   SELECT
+     source.template_id,
+     source.template_id,
+     source.active_revision_id
+   FROM (
+     SELECT
+       tr.template_id,
+       (
+         SELECT tr2.id
+         FROM template_revisions tr2
+         WHERE tr2.template_id = tr.template_id AND tr2.status = 'active'
+         ORDER BY tr2.activated_at DESC NULLS LAST, tr2.created_at DESC
+         LIMIT 1
+       ) AS active_revision_id
+     FROM template_revisions tr
+     GROUP BY tr.template_id
+   ) AS source
+   ON CONFLICT (id) DO UPDATE
+   SET active_revision_id = COALESCE(EXCLUDED.active_revision_id, templates.active_revision_id);`,
 ];
 
 const TRANSCRIPTION_CONSTRAINT_PATCHES: string[] = [
@@ -501,6 +647,20 @@ BEGIN
 END $$;`,
   `DO $$
 BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'profile_revisions_status_check') THEN
+    ALTER TABLE profile_revisions
+      ADD CONSTRAINT profile_revisions_status_check CHECK (status IN ('draft', 'active', 'deprecated'));
+  END IF;
+END $$;`,
+  `DO $$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'profile_revisions_version_number_check') THEN
+    ALTER TABLE profile_revisions
+      ADD CONSTRAINT profile_revisions_version_number_check CHECK (version_number IS NULL OR version_number > 0);
+  END IF;
+END $$;`,
+  `DO $$
+BEGIN
   IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'template_revisions_created_by_fkey') THEN
     ALTER TABLE template_revisions
       ADD CONSTRAINT template_revisions_created_by_fkey
@@ -526,10 +686,48 @@ BEGIN
 END $$;`,
   `DO $$
 BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'template_revisions_status_check') THEN
+    ALTER TABLE template_revisions
+      ADD CONSTRAINT template_revisions_status_check CHECK (status IN ('draft', 'active', 'deprecated'));
+  END IF;
+END $$;`,
+  `DO $$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'template_revisions_version_number_check') THEN
+    ALTER TABLE template_revisions
+      ADD CONSTRAINT template_revisions_version_number_check CHECK (version_number IS NULL OR version_number > 0);
+  END IF;
+END $$;`,
+  `DO $$
+BEGIN
   IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'profiles_active_revision_id_fkey') THEN
     ALTER TABLE profiles
       ADD CONSTRAINT profiles_active_revision_id_fkey
       FOREIGN KEY (active_revision_id) REFERENCES profile_revisions(id) ON DELETE SET NULL;
+  END IF;
+END $$;`,
+  `DO $$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'templates_active_revision_id_fkey') THEN
+    ALTER TABLE templates
+      ADD CONSTRAINT templates_active_revision_id_fkey
+      FOREIGN KEY (active_revision_id) REFERENCES template_revisions(id) ON DELETE SET NULL;
+  END IF;
+END $$;`,
+  `DO $$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'template_revisions_template_id_fkey') THEN
+    ALTER TABLE template_revisions
+      ADD CONSTRAINT template_revisions_template_id_fkey
+      FOREIGN KEY (template_id) REFERENCES templates(id) ON DELETE CASCADE;
+  END IF;
+END $$;`,
+  `DO $$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'profile_revisions_profile_id_fkey') THEN
+    ALTER TABLE profile_revisions
+      ADD CONSTRAINT profile_revisions_profile_id_fkey
+      FOREIGN KEY (profile_id) REFERENCES profiles(id) ON DELETE CASCADE;
   END IF;
 END $$;`,
   `DO $$
@@ -750,6 +948,14 @@ async function ensureJobsSchema(client: PoolClient): Promise<void> {
       await client.query(indexSql);
     }
 
+    await client.query(TEMPLATES_TABLE_SQL);
+    for (const statement of TEMPLATES_SCHEMA_PATCHES) {
+      await client.query(statement);
+    }
+    for (const indexSql of TEMPLATES_INDEX_PATCHES) {
+      await client.query(indexSql);
+    }
+
     await client.query(STUDENT_PROFILE_BINDINGS_TABLE_SQL);
     for (const statement of STUDENT_PROFILE_BINDINGS_SCHEMA_PATCHES) {
       await client.query(statement);
@@ -761,6 +967,10 @@ async function ensureJobsSchema(client: PoolClient): Promise<void> {
     // Users table
     await client.query(USERS_TABLE_SQL);
 
+    for (const statement of REVISION_VERSIONING_DATA_PATCHES) {
+      await client.query(statement);
+    }
+
     for (const statement of TRANSCRIPTION_CONSTRAINT_PATCHES) {
       await client.query(statement);
     }
@@ -769,7 +979,7 @@ async function ensureJobsSchema(client: PoolClient): Promise<void> {
     }
 
     logger.info(
-      'Ensured database schema (jobs, recordings, transcripts, prompt_packages, drafts, profile_revisions, template_revisions, students, profiles, student_profile_bindings, users)',
+      'Ensured database schema (jobs, recordings, transcripts, prompt_packages, drafts, profile_revisions, template_revisions, students, profiles, templates, student_profile_bindings, users)',
       {
         component: 'pg',
         event: 'schema_ready',

@@ -14,6 +14,7 @@ import {
 } from '../src/application/profile-content.js';
 import { loadConfig } from '../src/config/env.js';
 import type { ProfileRevisionRecord } from '../src/domain/profile-revision-model.js';
+import type { ProfileRecord } from '../src/domain/profile-model.js';
 
 const tempDirs: string[] = [];
 
@@ -63,12 +64,36 @@ function createRevisionStore() {
           content,
           contentHash,
           source: source ?? 'update',
+          status: 'active',
+          versionNumber: revisions.length + 1,
+          versionLabel: `v${revisions.length + 1}`,
+          activatedAt: new Date(Date.UTC(2024, 0, 1, 0, 0, revisions.length)),
+          deprecatedAt: null,
           createdAt: new Date(Date.UTC(2024, 0, 1, 0, 0, revisions.length)),
           createdBy: createdBy ?? null,
           restoredFromRevisionId: restoredFromRevisionId ?? null,
         };
         revisions.push(revision);
         return revision;
+      },
+      activate: async (profileId: string, revisionId: string) => {
+        const target = revisions.find(
+          (revision) => revision.profileId === profileId && revision.id === revisionId,
+        );
+        if (!target) return null;
+        for (const revision of revisions) {
+          if (revision.profileId !== profileId) continue;
+          if (revision.id === revisionId) {
+            revision.status = 'active';
+            revision.activatedAt = new Date();
+            revision.deprecatedAt = null;
+          } else if (revision.status === 'active') {
+            revision.status = 'deprecated';
+            revision.deprecatedAt = new Date();
+            revision.activatedAt = null;
+          }
+        }
+        return target;
       },
       list: async ({
         profileId,
@@ -103,6 +128,29 @@ function createRevisionStore() {
   };
 }
 
+function createProfileStore() {
+  return {
+    deps: {
+      upsert: async ({
+        id,
+        label,
+        activeRevisionId,
+      }: {
+        id: string;
+        label: string;
+        activeRevisionId?: string | null;
+      }): Promise<ProfileRecord> => ({
+        id,
+        label,
+        activeRevisionId: activeRevisionId ?? null,
+        createdAt: new Date('2024-01-01T00:00:00Z'),
+        updatedAt: new Date('2024-01-01T00:00:00Z'),
+      }),
+      setActive: async (): Promise<ProfileRecord | null> => null,
+    },
+  };
+}
+
 describe('profile-content', () => {
   it('lists and reads allowlisted profile content', async () => {
     const { defaultPath } = await createProfileRoot();
@@ -127,10 +175,12 @@ describe('profile-content', () => {
     const config = loadConfig();
     const override = { ...config, prompt: { ...config.prompt, defaultProfilePath: defaultPath } };
     const revisionStore = createRevisionStore();
+    const profileStore = createProfileStore();
 
     const created = await upsertProfileContent('custom.md', 'Custom profile', {
       config: override,
       revisions: revisionStore.deps,
+      profiles: profileStore.deps,
     });
     expect(created.id).toBe('custom.md');
     expect(created.currentRevisionId).toBe('revision-1');
@@ -147,15 +197,18 @@ describe('profile-content', () => {
     const config = loadConfig();
     const override = { ...config, prompt: { ...config.prompt, defaultProfilePath: defaultPath } };
     const revisionStore = createRevisionStore();
+    const profileStore = createProfileStore();
 
     await upsertProfileContent('default.md', 'Version 1', {
       config: override,
       revisions: revisionStore.deps,
+      profiles: profileStore.deps,
       createdBy: 'user-1',
     });
     await upsertProfileContent('default.md', 'Version 2', {
       config: override,
       revisions: revisionStore.deps,
+      profiles: profileStore.deps,
       createdBy: 'user-2',
     });
 
@@ -185,6 +238,7 @@ describe('profile-content', () => {
     const restored = await restoreProfileRevision('default.md', firstRevisionId, {
       config: override,
       revisions: revisionStore.deps,
+      profiles: profileStore.deps,
       createdBy: 'user-3',
     });
     expect(restored?.content).toBe('Version 1');

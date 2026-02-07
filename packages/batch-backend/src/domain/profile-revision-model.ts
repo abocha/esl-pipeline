@@ -1,4 +1,5 @@
 export type ProfileRevisionSource = 'create' | 'update' | 'restore';
+export type RevisionStatus = 'draft' | 'active' | 'deprecated';
 
 export interface ProfileRevisionRecord {
   id: string;
@@ -6,6 +7,11 @@ export interface ProfileRevisionRecord {
   content: string;
   contentHash: string;
   source: ProfileRevisionSource;
+  status: RevisionStatus;
+  versionNumber: number;
+  versionLabel: string;
+  activatedAt: Date | null;
+  deprecatedAt: Date | null;
   createdAt: Date;
   createdBy: string | null;
   restoredFromRevisionId: string | null;

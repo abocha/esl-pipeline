@@ -9,7 +9,9 @@ import { createPromptPackage } from '../src/application/create-prompt-package.js
 import { getPromptPackage } from '../src/application/get-prompt-package.js';
 import { ProfilePathError } from '../src/application/profile-path.js';
 import type { ProfileRevisionRecord } from '../src/domain/profile-revision-model.js';
+import type { ProfileRecord } from '../src/domain/profile-model.js';
 import type { TemplateRevisionRecord } from '../src/domain/template-revision-model.js';
+import type { TemplateRecord } from '../src/domain/template-model.js';
 import type { BatchBackendConfig } from '../src/config/env.js';
 import type { PromptPackageRecord } from '../src/domain/prompt-package-model.js';
 import type { RecordingRecord } from '../src/domain/recording-model.js';
@@ -118,6 +120,8 @@ describe('application/prompt-package', () => {
         promptPackages,
         profileRevisions,
         templateRevisions: createTemplateRevisionRepositoryStub(),
+        profiles: createProfileRepositoryStub(),
+        templates: createTemplateRepositoryStub(),
       },
     );
 
@@ -205,13 +209,18 @@ describe('application/prompt-package', () => {
       storage,
       promptPackages,
       profileRevisions: createProfileRevisionRepositoryStub({
-        getLatest: async (_profileId) => {
+        getActive: async (_profileId) => {
           return {
             id: 'revision-current',
             profileId: 'profile.md',
             content: 'CURRENT PROFILE',
             contentHash: currentHash,
             source: 'update',
+            status: 'active',
+            versionNumber: 2,
+            versionLabel: 'v2',
+            activatedAt: new Date('2024-01-02T00:00:00Z'),
+            deprecatedAt: null,
             createdAt: new Date('2024-01-02T00:00:00Z'),
             createdBy: null,
             restoredFromRevisionId: null,
@@ -262,12 +271,17 @@ describe('application/prompt-package', () => {
       promptPackages,
       profileRevisions: createProfileRevisionRepositoryStub(),
       templateRevisions: createTemplateRevisionRepositoryStub({
-        getLatest: async (_templateId) => ({
+        getActive: async (_templateId) => ({
           id: 'template-revision-current',
           templateId: 'template.md',
           content: 'TEMPLATE CURRENT',
           contentHash: currentHash,
           source: 'update',
+          status: 'active',
+          versionNumber: 2,
+          versionLabel: 'v2',
+          activatedAt: new Date('2024-01-02T00:00:00Z'),
+          deprecatedAt: null,
           createdAt: new Date('2024-01-02T00:00:00Z'),
           createdBy: null,
           restoredFromRevisionId: null,
@@ -341,6 +355,8 @@ describe('application/prompt-package', () => {
           },
           profileRevisions: createProfileRevisionRepositoryStub(),
           templateRevisions: createTemplateRevisionRepositoryStub(),
+          profiles: createProfileRepositoryStub(),
+          templates: createTemplateRepositoryStub(),
         },
       ),
     ).rejects.toThrow('profileId is not allowlisted');
@@ -387,6 +403,8 @@ describe('application/prompt-package', () => {
           },
           profileRevisions: createProfileRevisionRepositoryStub(),
           templateRevisions: createTemplateRevisionRepositoryStub(),
+          profiles: createProfileRepositoryStub(),
+          templates: createTemplateRepositoryStub(),
         },
       ),
     ).rejects.toBeInstanceOf(ProfilePathError);
@@ -448,6 +466,8 @@ describe('application/prompt-package', () => {
         promptPackages,
         profileRevisions,
         templateRevisions: createTemplateRevisionRepositoryStub(),
+        profiles: createProfileRepositoryStub(),
+        templates: createTemplateRepositoryStub(),
       },
     );
 
@@ -515,6 +535,8 @@ describe('application/prompt-package', () => {
         promptPackages,
         profileRevisions,
         templateRevisions: createTemplateRevisionRepositoryStub(),
+        profiles: createProfileRepositoryStub(),
+        templates: createTemplateRepositoryStub(),
       },
     );
     expect(explicitIdResult?.profilePath).toBe(explicitProfilePath);
@@ -536,6 +558,8 @@ describe('application/prompt-package', () => {
         promptPackages,
         profileRevisions,
         templateRevisions: createTemplateRevisionRepositoryStub(),
+        profiles: createProfileRepositoryStub(),
+        templates: createTemplateRepositoryStub(),
       },
     );
     expect(explicitPathResult?.profilePath).toBe(explicitProfilePath);
@@ -615,19 +639,23 @@ function createPromptPackageRepositoryStub() {
 }
 
 function createProfileRevisionRepositoryStub(overrides: {
-  getLatest?: (profileId: string) => Promise<ProfileRevisionRecord | null>;
+  getActive?: (profileId: string) => Promise<ProfileRevisionRecord | null>;
   getLatestByHash?: (
     profileId: string,
     contentHash: string,
   ) => Promise<ProfileRevisionRecord | null>;
 } = {}) {
   return {
-    getLatest:
-      overrides.getLatest ??
+    getActive:
+      overrides.getActive ??
       (async () => null),
     getLatestByHash:
       overrides.getLatestByHash ??
       (async () => null),
+    activate: async (
+      _profileId: string,
+      _revisionId: string,
+    ): Promise<ProfileRevisionRecord | null> => null,
     insert: async ({
       profileId,
       content,
@@ -642,33 +670,45 @@ function createProfileRevisionRepositoryStub(overrides: {
       source?: 'create' | 'update' | 'restore';
       createdBy?: string | null;
       restoredFromRevisionId?: string | null;
-    }) => ({
-      id: 'revision-1',
-      profileId,
-      content,
-      contentHash,
-      source: source ?? 'update',
-      createdAt: new Date('2024-01-01T00:00:00Z'),
-      createdBy: createdBy ?? null,
-      restoredFromRevisionId: restoredFromRevisionId ?? null,
-    }),
+    }) => {
+      const revision: ProfileRevisionRecord = {
+        id: 'revision-1',
+        profileId,
+        content,
+        contentHash,
+        source: source ?? 'update',
+        status: 'active',
+        versionNumber: 1,
+        versionLabel: 'v1',
+        activatedAt: new Date('2024-01-01T00:00:00Z'),
+        deprecatedAt: null,
+        createdAt: new Date('2024-01-01T00:00:00Z'),
+        createdBy: createdBy ?? null,
+        restoredFromRevisionId: restoredFromRevisionId ?? null,
+      };
+      return revision;
+    },
   };
 }
 
 function createTemplateRevisionRepositoryStub(overrides: {
-  getLatest?: (templateId: string) => Promise<TemplateRevisionRecord | null>;
+  getActive?: (templateId: string) => Promise<TemplateRevisionRecord | null>;
   getLatestByHash?: (
     templateId: string,
     contentHash: string,
   ) => Promise<TemplateRevisionRecord | null>;
 } = {}) {
   return {
-    getLatest:
-      overrides.getLatest ??
+    getActive:
+      overrides.getActive ??
       (async () => null),
     getLatestByHash:
       overrides.getLatestByHash ??
       (async () => null),
+    activate: async (
+      _templateId: string,
+      _revisionId: string,
+    ): Promise<TemplateRevisionRecord | null> => null,
     insert: async ({
       templateId,
       content,
@@ -683,16 +723,66 @@ function createTemplateRevisionRepositoryStub(overrides: {
       source?: 'create' | 'update' | 'restore';
       createdBy?: string | null;
       restoredFromRevisionId?: string | null;
-    }) => ({
-      id: 'template-revision-1',
-      templateId,
-      content,
-      contentHash,
-      source: source ?? 'update',
+    }) => {
+      const revision: TemplateRevisionRecord = {
+        id: 'template-revision-1',
+        templateId,
+        content,
+        contentHash,
+        source: source ?? 'update',
+        status: 'active',
+        versionNumber: 1,
+        versionLabel: 'v1',
+        activatedAt: new Date('2024-01-01T00:00:00Z'),
+        deprecatedAt: null,
+        createdAt: new Date('2024-01-01T00:00:00Z'),
+        createdBy: createdBy ?? null,
+        restoredFromRevisionId: restoredFromRevisionId ?? null,
+      };
+      return revision;
+    },
+  };
+}
+
+function createProfileRepositoryStub() {
+  return {
+    upsert: async ({
+      id,
+      label,
+      activeRevisionId,
+    }: {
+      id: string;
+      label: string;
+      activeRevisionId?: string | null;
+    }): Promise<ProfileRecord> => ({
+      id,
+      label,
+      activeRevisionId: activeRevisionId ?? null,
       createdAt: new Date('2024-01-01T00:00:00Z'),
-      createdBy: createdBy ?? null,
-      restoredFromRevisionId: restoredFromRevisionId ?? null,
+      updatedAt: new Date('2024-01-01T00:00:00Z'),
     }),
+    setActive: async (): Promise<ProfileRecord | null> => null,
+  };
+}
+
+function createTemplateRepositoryStub() {
+  return {
+    upsert: async ({
+      id,
+      label,
+      activeRevisionId,
+    }: {
+      id: string;
+      label: string;
+      activeRevisionId?: string | null;
+    }): Promise<TemplateRecord> => ({
+      id,
+      label,
+      activeRevisionId: activeRevisionId ?? null,
+      createdAt: new Date('2024-01-01T00:00:00Z'),
+      updatedAt: new Date('2024-01-01T00:00:00Z'),
+    }),
+    setActive: async (): Promise<TemplateRecord | null> => null,
   };
 }
 
