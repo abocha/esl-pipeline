@@ -1,5 +1,5 @@
 import React from 'react';
-import { Outlet } from 'react-router-dom';
+import { NavLink, Outlet } from 'react-router-dom';
 
 import type { User } from '../../context/AuthContext';
 
@@ -20,6 +20,21 @@ export const MinimalShell: React.FC<MinimalShellProps> = ({ user, onLogout, chil
             <div className="minimal-subtitle">Minimal Assignment Console</div>
           </div>
         </div>
+        <nav className="minimal-nav" aria-label="Primary">
+          <NavLink
+            to="/"
+            end
+            className={({ isActive }) => (isActive ? 'minimal-nav-link active' : 'minimal-nav-link')}
+          >
+            Minimal Flow
+          </NavLink>
+          <NavLink
+            to="/students/workspace"
+            className={({ isActive }) => (isActive ? 'minimal-nav-link active' : 'minimal-nav-link')}
+          >
+            Student Workspace
+          </NavLink>
+        </nav>
         <div className="minimal-actions">
           <span className="minimal-user">{user.email}</span>
           <button type="button" className="minimal-button" onClick={onLogout}>
@@ -85,6 +100,29 @@ export const MinimalShell: React.FC<MinimalShellProps> = ({ user, onLogout, chil
           gap: var(--space-3);
           flex-wrap: wrap;
           font-size: var(--text-sm);
+        }
+
+        .minimal-nav {
+          display: flex;
+          align-items: center;
+          gap: var(--space-2);
+          flex-wrap: wrap;
+        }
+
+        .minimal-nav-link {
+          border-radius: 999px;
+          border: 1px solid var(--border-light);
+          background: var(--bg-secondary);
+          color: var(--text-primary);
+          padding: var(--space-2) var(--space-3);
+          font-size: var(--text-sm);
+          text-decoration: none;
+        }
+
+        .minimal-nav-link.active {
+          border-color: transparent;
+          background: var(--color-primary-600);
+          color: white;
         }
 
         .minimal-user {
