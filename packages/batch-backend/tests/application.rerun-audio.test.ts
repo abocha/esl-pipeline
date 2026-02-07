@@ -16,7 +16,7 @@ describe('application/job-actions/rerun-audio', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     enqueueSpy.mockReset();
-    enqueueSpy.mockResolvedValue(undefined);
+    enqueueSpy.mockResolvedValue();
     createJobQueueSpy.mockReturnValue({
       queue: {} as never,
       queueEvents: {} as never,
