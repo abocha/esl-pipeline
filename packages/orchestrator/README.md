@@ -147,13 +147,16 @@ pnpm esl rerun \
 | --------------------------------------- | ---------------------------------------------- |
 | `esl [options]`                         | Run the pipeline (default: interactive wizard) |
 | `esl status --md <file>`                | Show manifest status for an assignment         |
-| `esl rerun --md <file> --steps <steps>` | Rerun specific pipeline steps                  |
+| `esl rerun --md <file> [options]`       | Plan and rerun specific pipeline steps         |
 | `esl select [path] [options]`           | Interactive file/directory picker              |
 
 Rerun defaults:
 
 - `esl rerun --md <file>` defaults to `upload,add-audio` and auto-applies `--upload s3`.
 - Use `--audio` to run `tts,upload,add-audio` in one command.
+- Use `--from <stage> --to <stage>` to run a contiguous range (for example: `--from upload --to add-audio`).
+- Use `--plan` to preview the computed rerun plan and validation requirements without executing stages.
+- Planner precedence: `--steps` > `--audio` > `--from/--to` > default.
 
 ### Common Options
 
@@ -166,6 +169,9 @@ Rerun defaults:
 | `--accent <name>`  | Voice accent preference (american, british, etc.) |
 | `--with-tts`       | Generate ElevenLabs audio                         |
 | `--audio`          | Rerun full audio steps (`tts,upload,add-audio`)  |
+| `--from <stage>`   | Rerun range start (`tts`, `upload`, `add-audio`) |
+| `--to <stage>`     | Rerun range end (`tts`, `upload`, `add-audio`)   |
+| `--plan`           | Print rerun plan without executing                |
 | `--upload s3`      | Upload audio to S3                                |
 | `--dry-run`        | Preview actions without executing                 |
 | `--force`          | Force regeneration even if cached                 |

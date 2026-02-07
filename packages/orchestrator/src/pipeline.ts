@@ -16,6 +16,8 @@ import type {
   AssignmentProgressCallbacks,
   NewAssignmentFlags,
   OrchestratorDependencies,
+  RerunPlanRequest,
+  RerunPlanResult,
   RerunFlags,
 } from './index.js';
 import { createFilesystemManifestStore, manifestPathFor } from './manifest.js';
@@ -233,6 +235,10 @@ export interface OrchestratorPipeline {
     flags: PipelineRerunOptions,
     dependencies?: Pick<OrchestratorDependencies, 'runId' | 'signal'>,
   ): Promise<Awaited<ReturnType<OrchestratorModule['rerunAssignment']>>>;
+  planRerunAssignment(
+    request: RerunPlanRequest,
+    dependencies?: Pick<OrchestratorDependencies, 'runId'>,
+  ): Promise<RerunPlanResult>;
   getAssignmentStatus(
     mdPath: string,
     dependencies?: Pick<OrchestratorDependencies, 'runId'>,
@@ -308,6 +314,16 @@ export function createPipeline(options: CreatePipelineOptions = {}): Orchestrato
         metrics,
         runId: dependencies?.runId,
         signal: dependencies?.signal,
+      });
+    },
+    async planRerunAssignment(request, dependencies) {
+      const { planRerunAssignment } = await orchestratorModuleLoader();
+      return planRerunAssignment(request, {
+        manifestStore,
+        configProvider,
+        logger,
+        metrics,
+        runId: dependencies?.runId,
       });
     },
     async getAssignmentStatus(mdPath: string, dependencies) {

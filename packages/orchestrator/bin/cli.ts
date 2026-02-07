@@ -8,6 +8,7 @@ import process from 'node:process';
 import { fileURLToPath } from 'node:url';
 import ora from 'ora';
 import pc from 'picocolors';
+import { ValidationError } from '@esl-pipeline/contracts';
 
 import { DEFAULT_STUDENT_NAME, type StudentProfile } from '../src/config.js';
 import {
@@ -15,6 +16,9 @@ import {
   type AssignmentStage,
   type OrchestratorPipeline,
   type PipelineLogger,
+  type RerunPlanResult,
+  type RerunTargetStage,
+  computeRerunPlan,
   createPipeline,
   loadEnvFilesWithSummary,
   summarizeVoiceSelections,
@@ -55,7 +59,7 @@ const envSummary = loadEnvFilesWithSummary({
   memoizeKey: 'cli',
 });
 
-type RerunStep = NonNullable<RerunFlags['steps']>[number];
+type RerunStep = RerunTargetStage;
 
 const rawArgs = process.argv.slice(2);
 const require = createRequire(import.meta.url);
@@ -111,7 +115,8 @@ const usage = (): never => {
       --json                    Emit structured JSON log output
 
   esl status --md <file.md> [--json]                  
-  esl rerun --md <file.md> [--steps tts,upload,add-audio|--audio] [options]
+  esl rerun --md <file.md> [--steps tts,upload,add-audio|--audio|--from <stage> --to <stage>] [options]
+      --plan                    Show rerun plan without executing
 
   esl select [path] [--dir|--file] [picker options]
       --suffix <.d>             (dir) Require directory name to end with suffix
@@ -320,6 +325,24 @@ const parseRerunSteps = (value: string): RerunStep[] => {
   }
   return parsed;
 };
+
+const parseRerunStage = (value: string): RerunStep => {
+  const parsed = value.trim() as RerunStep;
+  const allowed: RerunStep[] = ['tts', 'upload', 'add-audio'];
+  if (!allowed.includes(parsed)) {
+    throw new InvalidOptionArgumentError(
+      `Unknown stage "${value}". Use one of: ${allowed.join(', ')}`,
+    );
+  }
+  return parsed;
+};
+
+interface ParsedRerunFlags extends RerunFlags {
+  planOnly: boolean;
+  audio: boolean;
+  from?: RerunStep;
+  to?: RerunStep;
+}
 
 const stripGlobalFlags = (args: string[]): string[] => args.filter((arg) => arg !== '--json');
 
@@ -683,6 +706,28 @@ const outputStatusSummary = (
   if (status.manifest?.audio?.url) console.log(`  Audio URL: ${status.manifest.audio.url}`);
 };
 
+const outputRerunPlanSummary = (plan: RerunPlanResult, md: string): void => {
+  if (jsonOutput) return;
+  console.log(`Rerun plan for ${md}`);
+  console.log(`  Requested : ${plan.requested.length > 0 ? plan.requested.join(', ') : '(none)'}`);
+  console.log(`  Executable: ${plan.executable.length > 0 ? plan.executable.join(', ') : '(none)'}`);
+  if (plan.skipped.length > 0) {
+    console.log('  Skipped   :');
+    for (const item of plan.skipped) {
+      console.log(`    - ${item.stage}: ${item.reason}`);
+    }
+  }
+  if (plan.requires.missingManifestFields.length > 0) {
+    console.log(`  Requires  : ${plan.requires.missingManifestFields.join(', ')}`);
+  }
+  if (plan.errors.length > 0) {
+    console.log('  Errors    :');
+    for (const error of plan.errors) {
+      console.log(`    - ${error}`);
+    }
+  }
+};
+
 const parseStatusFlags = async (args: string[]): Promise<{ md: string }> => {
   const program = new Command('status')
     .usage('--md <file.md>')
@@ -694,13 +739,16 @@ const parseStatusFlags = async (args: string[]): Promise<{ md: string }> => {
   return { md: opts.md };
 };
 
-const parseRerunFlags = async (args: string[]): Promise<RerunFlags> => {
+const parseRerunFlags = async (args: string[]): Promise<ParsedRerunFlags> => {
   const program = new Command('rerun')
-    .usage('--md <file.md> [--steps tts,upload,add-audio|--audio] [options]')
+    .usage('--md <file.md> [--steps tts,upload,add-audio|--audio|--from <stage> --to <stage>] [options]')
     .allowExcessArguments(false)
     .requiredOption('--md <file>', 'Markdown assignment file')
     .option('--steps <steps>', 'Comma-separated steps (tts,upload,add-audio)', parseRerunSteps)
     .option('--audio', 'Rerun the full audio pipeline (tts,upload,add-audio)')
+    .option('--from <stage>', 'Start stage for range planning (tts,upload,add-audio)', parseRerunStage)
+    .option('--to <stage>', 'End stage for range planning (tts,upload,add-audio)', parseRerunStage)
+    .option('--plan', 'Show rerun execution plan without running stages')
     .option('--voices <file>', 'Voice map file (YAML/JSON)')
     .option('--voice-id <id>', 'Preferred voice ID override')
     .option('--out <dir>', 'Output directory for artifacts')
@@ -738,6 +786,9 @@ const parseRerunFlags = async (args: string[]): Promise<RerunFlags> => {
     RerunFlags & {
       steps?: RerunStep[];
       audio?: boolean;
+      from?: RerunStep;
+      to?: RerunStep;
+      plan?: boolean;
       voiceId?: string;
       accent?: string;
       ttsStrategy?: RerunFlags['ttsStrategy'];
@@ -747,16 +798,13 @@ const parseRerunFlags = async (args: string[]): Promise<RerunFlags> => {
     }
   >();
 
-  const resolvedSteps =
-    opts.steps && opts.steps.length > 0
-      ? opts.steps
-      : opts.audio
-        ? (['tts', 'upload', 'add-audio'] as RerunStep[])
-        : undefined;
-
   return {
     md: opts.md,
-    steps: resolvedSteps,
+    steps: opts.steps,
+    audio: Boolean(opts.audio),
+    from: opts.from,
+    to: opts.to,
+    planOnly: Boolean(opts.plan),
     voices: opts.voices,
     voiceId: opts.voiceId,
     out: opts.out,
@@ -788,19 +836,66 @@ async function handleRerun(args: string[]): Promise<void> {
   const rerunFlags = await parseRerunFlags(args);
   const { md } = rerunFlags;
   const pipeline = ensurePipeline();
+  const status = await pipeline.getAssignmentStatus(md);
+  const rerunPlan = computeRerunPlan({
+    md,
+    steps: rerunFlags.steps,
+    audio: rerunFlags.audio,
+    from: rerunFlags.from,
+    to: rerunFlags.to,
+    manifest: status.manifest,
+  });
 
   const appliedFlags: RerunFlags = {
-    ...rerunFlags,
+    md: rerunFlags.md,
+    steps: rerunFlags.steps,
+    upload: rerunFlags.upload,
+    force: rerunFlags.force,
+    dryRun: rerunFlags.dryRun,
+    prefix: rerunFlags.prefix,
+    publicRead: rerunFlags.publicRead,
+    presign: rerunFlags.presign,
+    accentPreference: rerunFlags.accentPreference,
+    voiceId: rerunFlags.voiceId,
+    ttsStrategy: rerunFlags.ttsStrategy,
+    dialogueLanguage: rerunFlags.dialogueLanguage,
+    dialogueStability: rerunFlags.dialogueStability,
+    dialogueSeed: rerunFlags.dialogueSeed,
     voices: rerunFlags.voices ?? pipeline.defaults.voicesPath,
     out: rerunFlags.out ?? pipeline.defaults.outDir,
   };
-  const resolvedSteps =
-    appliedFlags.steps && appliedFlags.steps.length > 0
-      ? appliedFlags.steps
-      : (['upload', 'add-audio'] as RerunStep[]);
+  const resolvedSteps = rerunPlan.executable;
   appliedFlags.steps = resolvedSteps;
   if (resolvedSteps.includes('upload') && !appliedFlags.upload) {
     appliedFlags.upload = 's3';
+  }
+
+  logger.info('Computed rerun plan', {
+    md,
+    requestedSteps: rerunPlan.requested,
+    executableSteps: resolvedSteps,
+    errors: rerunPlan.errors,
+  });
+
+  if (rerunFlags.planOnly) {
+    outputRerunPlanSummary(rerunPlan, md);
+    logger.flush({
+      command: 'rerun',
+      planOnly: true,
+      plan: rerunPlan,
+      flags: rerunFlags,
+      status,
+    });
+    if (rerunPlan.errors.length > 0) {
+      throw new ValidationError(rerunPlan.errors.join('\n'));
+    }
+    return;
+  }
+
+  if (rerunPlan.errors.length > 0) {
+    outputRerunPlanSummary(rerunPlan, md);
+    logger.flush({ command: 'rerun', plan: rerunPlan, flags: rerunFlags, status });
+    throw new ValidationError(rerunPlan.errors.join('\n'));
   }
 
   logger.info('Rerunning pipeline steps', {
@@ -812,6 +907,7 @@ async function handleRerun(args: string[]): Promise<void> {
   logger.success('Rerun completed', { steps: result.steps });
 
   if (!jsonOutput) {
+    outputRerunPlanSummary(rerunPlan, md);
     console.log('\nRerun Summary');
     console.log(`  Markdown : ${md}`);
     console.log(`  Steps    : ${result.steps.join(', ')}`);
@@ -819,10 +915,10 @@ async function handleRerun(args: string[]): Promise<void> {
     if (result.audio?.url) console.log(`  Audio URL: ${result.audio.url}`);
   }
 
-  const status = await pipeline.getAssignmentStatus(md);
-  logger.flush({ command: 'rerun', result, flags: appliedFlags, status });
+  const nextStatus = await pipeline.getAssignmentStatus(md);
+  logger.flush({ command: 'rerun', result, plan: rerunPlan, flags: appliedFlags, status: nextStatus });
   if (!jsonOutput) {
-    outputStatusSummary(status, md);
+    outputStatusSummary(nextStatus, md);
   }
 }
 
