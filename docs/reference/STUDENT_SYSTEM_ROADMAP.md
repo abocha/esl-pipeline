@@ -20,6 +20,23 @@
 - Student timeline endpoint exists (`/students/:id/timeline`) with core entities.
 - Minimal UI supports student selection, profile editing, revision restore, and prompt drift warnings.
 
+## Return-To-Track Checklist
+
+1. Confirm environment mode for migration completion:
+   - `STUDENT_SYSTEM_SOURCE=hybrid`
+   - `STUDENT_SYSTEM_FS_FALLBACK=true`
+2. Run migration verification:
+   - `pnpm --filter @esl-pipeline/batch-backend run student-system:backfill:dry`
+   - `pnpm --filter @esl-pipeline/batch-backend run student-system:backfill`
+   - `pnpm --filter @esl-pipeline/batch-backend run student-system:verify:oneoff`
+3. Cut over to DB-canonical reads in target environment:
+   - `STUDENT_SYSTEM_SOURCE=db`
+   - `STUDENT_SYSTEM_FS_FALLBACK=false`
+4. Validate application health after cutover:
+   - `pnpm check:fast`
+   - perform one assignment flow through draft -> publish -> rerun audio.
+5. Start Phase B implementation only after steps 1-4 are complete and green.
+
 ## Design Decisions (Locked)
 
 1. Keep phased delivery (`A` through `E`) with each phase independently mergeable.
@@ -33,6 +50,10 @@
 ### Goal
 
 - Remove split-brain storage (JSON/MD files vs DB revisions) for student system core data.
+
+### Status
+
+- Complete (2026-02-07).
 
 ### Deliverables
 
@@ -52,11 +73,18 @@
 - No data loss during import.
 - System can run with filesystem fallback disabled in staging.
 
+### Completed Outputs
+
+1. Canonical tables are in place: `students`, `profiles`, `student_profile_bindings`.
+2. Backfill tooling exists and has been executed in Docker for the current environment.
+3. DB-first + hybrid fallback behavior is wired via `STUDENT_SYSTEM_SOURCE` and `STUDENT_SYSTEM_FS_FALLBACK`.
+4. Operational guidance is documented in `docs/reference/STUDENT_SYSTEM_PHASE_A_RUNBOOK.md`.
+
 ## Phase B: First-Class Prompt Versioning
 
 ### Goal
 
-- Move from hash-only snapshoting to explicit template/profile version lifecycle.
+- Move from hash-only snapshotting to explicit template/profile version lifecycle.
 
 ### Deliverables
 
@@ -70,6 +98,16 @@
 
 - Any prompt package can be traced to exact template/profile revisions without filesystem lookups.
 - Drift detection works against canonical revision lineage.
+
+### Phase B Ready Gate
+
+1. Prompt package write path stores immutable revision references without filesystem resolution.
+2. Read APIs expose revision lineage in a stable shape suitable for UI rendering.
+3. Profile/template revision lifecycle includes explicit status transitions (`draft` -> `active` -> `deprecated`).
+4. Integration tests prove lineage reconstruction for at least:
+   - initial draft publish
+   - profile revision restore
+   - rerun against a newer profile/template revision.
 
 ## Phase C: Historical Student Binding + Governance
 

@@ -47,7 +47,7 @@
 | Job status (`GET /jobs/:jobId`)                                                            | Done    | Done     | Job DTO in contracts                          | Ensure DTO fields stay contract-first.              |
 | Jobs SSE (`GET /jobs/events`)                                                              | Done    | Partial  | SSE route + frontend consumers                | Keep polling fallback explicit in UI.               |
 | Markdown validation (`POST /validation/markdown`)                                          | Done    | Done     | Validation route + frontend draft step        | None.                                               |
-| Student summary/list/profile routes                                                        | Done    | Partial  | Student routes                                | Minimal UI now supports optional student selection; keep full workspace deferred. |
+| Student summary/list/profile routes                                                        | Done    | Partial  | Student routes                                | Backend is DB-canonical with FS fallback (`STUDENT_SYSTEM_SOURCE`); full student workspace remains deferred. |
 | Profile content routes                                                                     | Done    | Partial  | Profile routes                                | Same as above.                                      |
 | Job actions: `edit_metadata`                                                               | Done    | Partial  | Job action route and handler                  | Expose only where workflow needs it.                |
 | Job actions: `rerun_audio`                                                                 | Done    | Done     | Job action contract                           | Maintain payload parity as backend adds rerun knobs. |
@@ -58,7 +58,7 @@
 1. SSE resilience remains partly dependent on polling fallback behavior in UI.
 2. Frontend currently keeps `edit_metadata` as a partial/operator path (not broad UX exposure).
 3. Cancellation is cooperative for running jobs; already-issued external side effects remain best-effort.
-4. Student profile CRUD/profile-content editing remain backend-complete but UI-light by design.
+4. Student profile CRUD/profile-content editing remain backend-complete but UI-light by design (minimal UI is selection-first, not full student management).
 
 ## Do / Don't
 
