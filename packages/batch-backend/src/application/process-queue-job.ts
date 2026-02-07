@@ -24,6 +24,10 @@ import {
   runAssignmentJob,
   runRerunAssignmentJob,
 } from '../infrastructure/orchestrator-service.js';
+import {
+  registerRunningJob,
+  unregisterRunningJob,
+} from '../infrastructure/job-cancellation.js';
 import type { QueueJobPayload } from '../infrastructure/queue-bullmq.js';
 import { createTranscriptionStorageForUri } from '../infrastructure/transcription-storage.js';
 
@@ -65,6 +69,8 @@ export async function processQueueJob(payload: QueueJobPayload): Promise<void> {
   publishJobEvent({ type: 'job_state_changed', job: running });
 
   const runId = jobId;
+  const cancellationController = new AbortController();
+  registerRunningJob(jobId, cancellationController);
 
   try {
     const config = loadConfig();
@@ -119,6 +125,7 @@ export async function processQueueJob(payload: QueueJobPayload): Promise<void> {
                 settings: userSettings,
               },
               runId,
+              { signal: cancellationController.signal },
             )
           : await runAssignmentJob(
               {
@@ -137,6 +144,7 @@ export async function processQueueJob(payload: QueueJobPayload): Promise<void> {
                 settings: userSettings,
               },
               runId,
+              { signal: cancellationController.signal },
             );
     } finally {
       try {
@@ -213,6 +221,8 @@ export async function processQueueJob(payload: QueueJobPayload): Promise<void> {
 
     // Propagate so BullMQ can apply retry/backoff policy.
     throw error;
+  } finally {
+    unregisterRunningJob(jobId);
   }
 }
 

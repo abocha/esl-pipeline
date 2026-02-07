@@ -2,6 +2,7 @@ import type { CancelJobAction, JobActionResult } from '../../domain/job-actions.
 import { JobActionType } from '../../domain/job-actions.js';
 import { publishJobEvent } from '../../domain/job-events.js';
 import { getJobById, updateJobStateAndResult } from '../../domain/job-repository.js';
+import { abortRunningJob } from '../../infrastructure/job-cancellation.js';
 import { createJobLogger } from '../../infrastructure/logger.js';
 import { createJobQueue } from '../../infrastructure/queue-bullmq.js';
 
@@ -97,6 +98,14 @@ export async function cancelJob(jobId: string, action: CancelJobAction): Promise
         error: error instanceof Error ? error.message : String(error),
       });
     }
+  }
+
+  if (job.state === 'running') {
+    const aborted = abortRunningJob(jobId, reason);
+    log.info('Running-job cancellation signal dispatched', {
+      event: 'job_cancel_running_signal',
+      aborted,
+    });
   }
 
   return {

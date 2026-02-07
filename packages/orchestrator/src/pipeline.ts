@@ -12,7 +12,12 @@ import {
 import { S3ManifestStore, type S3ManifestStoreOptions } from './adapters/manifest/s3.js';
 import { createFilesystemConfigProvider } from './config.js';
 import type { ConfigProvider } from './config.js';
-import type { AssignmentProgressCallbacks, NewAssignmentFlags, RerunFlags } from './index.js';
+import type {
+  AssignmentProgressCallbacks,
+  NewAssignmentFlags,
+  OrchestratorDependencies,
+  RerunFlags,
+} from './index.js';
 import { createFilesystemManifestStore, manifestPathFor } from './manifest.js';
 import type { ManifestStore } from './manifest.js';
 import {
@@ -222,12 +227,15 @@ export interface OrchestratorPipeline {
   newAssignment(
     flags: PipelineNewAssignmentOptions,
     callbacks?: AssignmentProgressCallbacks,
+    dependencies?: Pick<OrchestratorDependencies, 'runId' | 'signal'>,
   ): Promise<Awaited<ReturnType<OrchestratorModule['newAssignment']>>>;
   rerunAssignment(
     flags: PipelineRerunOptions,
+    dependencies?: Pick<OrchestratorDependencies, 'runId' | 'signal'>,
   ): Promise<Awaited<ReturnType<OrchestratorModule['rerunAssignment']>>>;
   getAssignmentStatus(
     mdPath: string,
+    dependencies?: Pick<OrchestratorDependencies, 'runId'>,
   ): Promise<Awaited<ReturnType<OrchestratorModule['getAssignmentStatus']>>>;
 }
 
@@ -265,7 +273,7 @@ export function createPipeline(options: CreatePipelineOptions = {}): Orchestrato
     configProvider,
     logger,
     metrics,
-    async newAssignment(flags, callbacks) {
+    async newAssignment(flags, callbacks, dependencies) {
       const { newAssignment } = await orchestratorModuleLoader();
       const merged: NewAssignmentFlags = {
         ...flags,
@@ -275,9 +283,16 @@ export function createPipeline(options: CreatePipelineOptions = {}): Orchestrato
       if (!merged.out && defaults.outDir) {
         merged.out = defaults.outDir;
       }
-      return newAssignment(merged, callbacks, { manifestStore, configProvider, logger, metrics });
+      return newAssignment(merged, callbacks, {
+        manifestStore,
+        configProvider,
+        logger,
+        metrics,
+        runId: dependencies?.runId,
+        signal: dependencies?.signal,
+      });
     },
-    async rerunAssignment(flags) {
+    async rerunAssignment(flags, dependencies) {
       const { rerunAssignment } = await orchestratorModuleLoader();
       const merged: RerunFlags = {
         ...flags,
@@ -286,11 +301,24 @@ export function createPipeline(options: CreatePipelineOptions = {}): Orchestrato
       if (!merged.out && defaults.outDir) {
         merged.out = defaults.outDir;
       }
-      return rerunAssignment(merged, { manifestStore, configProvider, logger, metrics });
+      return rerunAssignment(merged, {
+        manifestStore,
+        configProvider,
+        logger,
+        metrics,
+        runId: dependencies?.runId,
+        signal: dependencies?.signal,
+      });
     },
-    async getAssignmentStatus(mdPath: string) {
+    async getAssignmentStatus(mdPath: string, dependencies) {
       const { getAssignmentStatus } = await orchestratorModuleLoader();
-      return getAssignmentStatus(mdPath, { manifestStore, configProvider, logger, metrics });
+      return getAssignmentStatus(mdPath, {
+        manifestStore,
+        configProvider,
+        logger,
+        metrics,
+        runId: dependencies?.runId,
+      });
     },
   };
 }

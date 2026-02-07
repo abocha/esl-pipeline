@@ -4,6 +4,7 @@ import { cancelJob } from '../src/application/job-actions/cancel-job.js';
 import * as jobEvents from '../src/domain/job-events.js';
 import { JobActionType } from '../src/domain/job-actions.js';
 import * as jobRepository from '../src/domain/job-repository.js';
+import * as jobCancellation from '../src/infrastructure/job-cancellation.js';
 import * as queueModule from '../src/infrastructure/queue-bullmq.js';
 
 describe('application/job-actions/cancel-job', () => {
@@ -11,12 +12,15 @@ describe('application/job-actions/cancel-job', () => {
   const updateJobStateAndResultSpy = vi.spyOn(jobRepository, 'updateJobStateAndResult');
   const publishJobEventSpy = vi.spyOn(jobEvents, 'publishJobEvent');
   const createJobQueueSpy = vi.spyOn(queueModule, 'createJobQueue');
+  const abortRunningJobSpy = vi.spyOn(jobCancellation, 'abortRunningJob');
   const cancelQueuedJobSpy = vi.fn();
 
   beforeEach(() => {
     vi.clearAllMocks();
     cancelQueuedJobSpy.mockReset();
     cancelQueuedJobSpy.mockResolvedValue('removed');
+    abortRunningJobSpy.mockReset();
+    abortRunningJobSpy.mockReturnValue(true);
     createJobQueueSpy.mockReturnValue({
       queue: {} as never,
       queueEvents: {} as never,
@@ -104,6 +108,7 @@ describe('application/job-actions/cancel-job', () => {
       job: cancelledJob,
     });
     expect(cancelQueuedJobSpy).toHaveBeenCalledWith('job-1');
+    expect(abortRunningJobSpy).not.toHaveBeenCalled();
     expect(result).toMatchObject({
       success: true,
       actionType: JobActionType.CANCEL,
@@ -133,6 +138,7 @@ describe('application/job-actions/cancel-job', () => {
       finishedAt: expect.any(Date),
     });
     expect(cancelQueuedJobSpy).not.toHaveBeenCalled();
+    expect(abortRunningJobSpy).toHaveBeenCalledWith('job-1', undefined);
     expect(result).toMatchObject({
       success: true,
       actionType: JobActionType.CANCEL,

@@ -351,6 +351,9 @@ describe('application/process-queue-job', () => {
         dialogueSeed: 7,
       }),
       expect.any(String),
+      expect.objectContaining({
+        signal: expect.any(AbortSignal),
+      }),
     );
   });
 

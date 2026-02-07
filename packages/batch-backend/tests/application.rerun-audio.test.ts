@@ -16,12 +16,12 @@ describe('application/job-actions/rerun-audio', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     enqueueSpy.mockReset();
-    enqueueSpy.mockResolvedValue();
+    enqueueSpy.mockImplementation(async () => {});
     createJobQueueSpy.mockReturnValue({
       queue: {} as never,
       queueEvents: {} as never,
       enqueue: enqueueSpy,
-      cancelQueuedJob: vi.fn(),
+      cancelQueuedJob: vi.fn(async (_jobId: string) => 'not_found' as const),
     });
   });
 

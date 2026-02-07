@@ -55,6 +55,46 @@ const fallbackManifestStore = createFilesystemManifestStore();
 const fallbackLogger = noopLogger;
 const fallbackMetrics = noopMetrics;
 
+function normalizeCancellationReason(reason: unknown): string | undefined {
+  if (typeof reason === 'string') {
+    const trimmed = reason.trim();
+    return trimmed.length > 0 ? trimmed : undefined;
+  }
+
+  if (reason instanceof Error) {
+    const trimmed = reason.message.trim();
+    return trimmed.length > 0 ? trimmed : undefined;
+  }
+
+  return undefined;
+}
+
+export class PipelineCancelledError extends Error {
+  readonly stage: AssignmentStage;
+  readonly code = 'PIPELINE_CANCELLED';
+
+  constructor(stage: AssignmentStage, reason?: unknown) {
+    const normalizedReason = normalizeCancellationReason(reason);
+    super(normalizedReason ? `cancelled: ${normalizedReason}` : 'cancelled');
+    this.name = 'PipelineCancelledError';
+    this.stage = stage;
+  }
+}
+
+export function isPipelineCancelledError(error: unknown): error is PipelineCancelledError {
+  return (
+    error instanceof PipelineCancelledError ||
+    (error instanceof Error &&
+      (error.name === 'PipelineCancelledError' ||
+        (error as { code?: string }).code === 'PIPELINE_CANCELLED'))
+  );
+}
+
+function throwIfCancelled(signal: AbortSignal | undefined, stage: AssignmentStage): void {
+  if (!signal?.aborted) return;
+  throw new PipelineCancelledError(stage, signal.reason);
+}
+
 interface CachedMarkdown {
   content: string;
   mtimeMs: number;
@@ -342,9 +382,12 @@ export async function newAssignment(
   const logger = dependencies.logger ?? fallbackLogger;
   const metrics = dependencies.metrics ?? fallbackMetrics;
   const runId = dependencies.runId ?? randomUUID();
+  const signal = dependencies.signal;
   const stageStartTimes = new Map<AssignmentStage, number>();
   const pipelineStartedAt = Date.now();
+  throwIfCancelled(signal, 'validate');
   await applyVoicePreferences(flags);
+  throwIfCancelled(signal, 'validate');
 
   const emitStage = (
     stage: AssignmentStage,
@@ -433,9 +476,11 @@ export async function newAssignment(
 
   try {
     // Validation stage always runs, even when skipping import
+    throwIfCancelled(signal, 'validate');
     emitStage('validate', 'start');
     steps.push('validate');
     const validation = await validateMarkdownFile(flags.md, { strict: false, content: mdContents });
+    throwIfCancelled(signal, 'validate');
     if (!validation.ok) {
       const msg = ['Validation failed:', ...validation.errors.map((e) => `- ${e}`)].join('\n');
       throw new ValidationError(msg);
@@ -468,6 +513,7 @@ export async function newAssignment(
       emitStage('import', 'start');
       steps.push('import');
       if (publishTarget === 'notion') {
+        throwIfCancelled(signal, 'import');
         const importResult = await runImport({
           mdPath: flags.md,
           dbId: flags.dbId,
@@ -480,6 +526,7 @@ export async function newAssignment(
           strictValidation: false,
           logger,
         });
+        throwIfCancelled(signal, 'import');
         pageId = importResult.page_id;
         pageUrl = importResult.url;
         emitStage('import', 'success', {
@@ -487,8 +534,10 @@ export async function newAssignment(
           studentLinked: importResult.studentLinked ?? undefined,
         });
       } else {
+        throwIfCancelled(signal, 'import');
         const client = createAnytypeClient();
         const spaceId = await resolveAnytypeSpaceId(client, anytypeSpaceId);
+        throwIfCancelled(signal, 'import');
         anytypeSpaceId = spaceId;
 
         const title = resolveMarkdownTitle(
@@ -519,6 +568,7 @@ export async function newAssignment(
         if (anytypePageId) {
           await addAnytypePageToCollection(client, spaceId, anytypePageId, logger, runId);
         }
+        throwIfCancelled(signal, 'import');
 
         emitStage('import', 'success', {
           pageId: anytypePageId,
@@ -547,11 +597,13 @@ export async function newAssignment(
         }
         emitStage('colorize', 'start');
         steps.push('colorize');
+        throwIfCancelled(signal, 'colorize');
         const color = await applyHeadingPreset(
           pageId,
           flags.preset,
           flags.presetsPath ?? DEFAULT_PRESETS_PATH,
         );
+        throwIfCancelled(signal, 'colorize');
         steps.push(
           `colorize:${flags.preset}:${color.counts.h2}/${color.counts.h3}/${color.counts.toggles}`,
         );
@@ -578,6 +630,7 @@ export async function newAssignment(
       } else {
         emitStage('tts', 'start');
         steps.push('tts');
+        throwIfCancelled(signal, 'tts');
 
         // TTS strategy debug logging
         if (flags.ttsStrategy) {
@@ -610,6 +663,7 @@ export async function newAssignment(
             dialogueSeed: flags.dialogueSeed,
             logger,
           });
+          throwIfCancelled(signal, 'tts');
         } catch (error: unknown) {
           if (error instanceof FfmpegNotFoundError) {
             throw new Error(`TTS requires FFmpeg.\n\n${error.message}`, { cause: error });
@@ -643,6 +697,7 @@ export async function newAssignment(
 
         if (!flags.dryRun && audio?.path) {
           const audioPath = audio.path;
+          throwIfCancelled(signal, 'tts');
           await access(audioPath, FS.F_OK).catch(() => {
             throw new InfrastructureError(
               `No audio file produced at ${audioPath}. ` +
@@ -668,6 +723,7 @@ export async function newAssignment(
       } else {
         emitStage('upload', 'start');
         steps.push('upload');
+        throwIfCancelled(signal, 'upload');
         if (flags.dryRun) {
           const bucket = process.env.S3_BUCKET ?? 'stub-bucket';
           const prefix = flags.prefix ?? process.env.S3_PREFIX ?? 'audio/assignments';
@@ -688,6 +744,7 @@ export async function newAssignment(
           });
           audio.url = upload.url;
         }
+        throwIfCancelled(signal, 'upload');
         emitStage('upload', 'success', {
           url: audio.url,
           dryRun: flags.dryRun,
@@ -709,7 +766,9 @@ export async function newAssignment(
         } else {
           emitStage('add-audio', 'start');
           steps.push('add-audio');
+          throwIfCancelled(signal, 'add-audio');
           await addOrReplaceAudioUnderStudyText(pageId, audio.url, { replace: flags.force });
+          throwIfCancelled(signal, 'add-audio');
           emitStage('add-audio', 'success', { pageId, url: audio.url });
         }
       } else {
@@ -726,15 +785,18 @@ export async function newAssignment(
       } else {
         emitStage('add-audio', 'start');
         steps.push('add-audio');
+        throwIfCancelled(signal, 'add-audio');
 
         const client = createAnytypeClient();
         const page = await client.getObject(anytypeSpaceId, anytypePageId);
+        throwIfCancelled(signal, 'add-audio');
         if (audio?.url) {
           const updatedBody = insertAudioBeforeStudyText(page.body ?? '', audio.url);
           if (updatedBody !== page.body) {
             await client.updateObject(anytypeSpaceId, anytypePageId, {
               body: updatedBody,
             });
+            throwIfCancelled(signal, 'add-audio');
           }
         }
 
@@ -756,6 +818,7 @@ export async function newAssignment(
           title: publishTitle,
           markdown: publishMarkdown,
         });
+        throwIfCancelled(signal, 'add-audio');
         anytypeUrl = publishResult.url;
 
         emitStage('add-audio', 'success', {
@@ -790,8 +853,10 @@ export async function newAssignment(
     };
 
     emitStage('manifest', 'start');
+    throwIfCancelled(signal, 'manifest');
     const manifestPath = await manifestStore.writeManifest(flags.md, manifest);
     steps.push('manifest');
+    throwIfCancelled(signal, 'manifest');
     emitStage('manifest', 'success', { manifestPath });
 
     const durationMs = Math.max(Date.now() - pipelineStartedAt, 0);
@@ -817,6 +882,25 @@ export async function newAssignment(
     };
   } catch (error) {
     const durationMs = Math.max(Date.now() - pipelineStartedAt, 0);
+    if (isPipelineCancelledError(error)) {
+      logger.log({
+        level: 'warn',
+        message: 'pipeline.newAssignment.cancelled',
+        runId,
+        stage: 'pipeline',
+        detail: {
+          durationMs,
+          error: error.message,
+          cancelledStage: error.stage,
+        },
+      });
+      metrics.timing('esl.pipeline.new_assignment.duration_ms', durationMs, {
+        result: 'cancelled',
+      });
+      metrics.increment('esl.pipeline.new_assignment.cancelled', 1, {});
+      throw error;
+    }
+
     logger.log({
       level: 'error',
       message: 'pipeline.newAssignment.failure',
@@ -931,9 +1015,12 @@ export async function rerunAssignment(
   const logger = dependencies.logger ?? fallbackLogger;
   const metrics = dependencies.metrics ?? fallbackMetrics;
   const runId = dependencies.runId ?? randomUUID();
+  const signal = dependencies.signal;
   const pipelineStartedAt = Date.now();
   const stageStartTimes = new Map<AssignmentStage, number>();
+  throwIfCancelled(signal, 'tts');
   await applyVoicePreferences(flags);
+  throwIfCancelled(signal, 'tts');
 
   const emitStage = (
     stage: AssignmentStage,
@@ -995,6 +1082,7 @@ export async function rerunAssignment(
   });
 
   try {
+    throwIfCancelled(signal, 'tts');
     const manifest = await manifestStore.readManifest(flags.md);
     if (!manifest) {
       throw new Error(`No manifest found for ${flags.md}. Run the pipeline first.`);
@@ -1015,6 +1103,7 @@ export async function rerunAssignment(
 
     if (stepsToRun.has('tts')) {
       emitStage('tts', 'start');
+      throwIfCancelled(signal, 'tts');
 
       // TTS mode debug logging for rerun
       if (flags.ttsStrategy) {
@@ -1047,6 +1136,7 @@ export async function rerunAssignment(
           dialogueSeed: flags.dialogueSeed,
           logger,
         });
+        throwIfCancelled(signal, 'tts');
       } catch (error: unknown) {
         if (error instanceof FfmpegNotFoundError) {
           throw new Error(`TTS requires FFmpeg.\n\n${error.message}`, { cause: error });
@@ -1083,6 +1173,7 @@ export async function rerunAssignment(
 
     if (stepsToRun.has('upload')) {
       emitStage('upload', 'start');
+      throwIfCancelled(signal, 'upload');
       if (!audioPath) {
         throw new Error(
           'Cannot upload audio: no audio path found. Re-run TTS or provide a manifest with audio.path.',
@@ -1113,6 +1204,7 @@ export async function rerunAssignment(
         });
         audioUrl = upload.url;
       }
+      throwIfCancelled(signal, 'upload');
 
       emitStage('upload', 'success', {
         url: audioUrl,
@@ -1125,6 +1217,7 @@ export async function rerunAssignment(
 
     if (stepsToRun.has('add-audio')) {
       emitStage('add-audio', 'start');
+      throwIfCancelled(signal, 'add-audio');
       if (publishTarget === 'notion') {
         const targetPageId = manifest.pageId;
         if (!targetPageId) {
@@ -1138,6 +1231,7 @@ export async function rerunAssignment(
 
         if (!flags.dryRun) {
           await addOrReplaceAudioUnderStudyText(targetPageId, audioUrl, { replace: flags.force });
+          throwIfCancelled(signal, 'add-audio');
         }
 
         emitStage('add-audio', 'success', { pageId: targetPageId, url: audioUrl });
@@ -1156,9 +1250,11 @@ export async function rerunAssignment(
         if (!flags.dryRun) {
           const client = createAnytypeClient();
           const page = await client.getObject(targetSpaceId, targetPageId);
+          throwIfCancelled(signal, 'add-audio');
           const updatedBody = insertAudioBeforeStudyText(page.body ?? '', audioUrl);
           if (updatedBody !== page.body) {
             await client.updateObject(targetSpaceId, targetPageId, { body: updatedBody });
+            throwIfCancelled(signal, 'add-audio');
           }
 
           let headingTheme: { h2?: string; h3?: string } | undefined;
@@ -1179,6 +1275,7 @@ export async function rerunAssignment(
             title: publishTitle,
             markdown: publishMarkdown,
           });
+          throwIfCancelled(signal, 'add-audio');
           anytypeUrl = publishResult.url;
         }
 
@@ -1217,7 +1314,9 @@ export async function rerunAssignment(
     };
 
     emitStage('manifest', 'start');
+    throwIfCancelled(signal, 'manifest');
     const manifestPath = await manifestStore.writeManifest(flags.md, updatedManifest);
+    throwIfCancelled(signal, 'manifest');
     emitStage('manifest', 'success', { manifestPath });
 
     const durationMs = Math.max(Date.now() - pipelineStartedAt, 0);
@@ -1242,6 +1341,25 @@ export async function rerunAssignment(
     };
   } catch (error) {
     const durationMs = Math.max(Date.now() - pipelineStartedAt, 0);
+    if (isPipelineCancelledError(error)) {
+      logger.log({
+        level: 'warn',
+        message: 'pipeline.rerunAssignment.cancelled',
+        runId,
+        stage: 'pipeline',
+        detail: {
+          durationMs,
+          error: error.message,
+          cancelledStage: error.stage,
+        },
+      });
+      metrics.timing('esl.pipeline.rerun_assignment.duration_ms', durationMs, {
+        result: 'cancelled',
+      });
+      metrics.increment('esl.pipeline.rerun_assignment.cancelled', 1, {});
+      throw error;
+    }
+
     logger.log({
       level: 'error',
       message: 'pipeline.rerunAssignment.failure',

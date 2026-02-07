@@ -177,39 +177,119 @@ export interface RunRerunAssignmentPayload {
 
 type WorkerExecutionMode = 'new_assignment' | 'rerun_assignment';
 
-interface WorkerMessagePayload {
+interface WorkerRunMessagePayload {
+  type: 'run';
   executionMode: WorkerExecutionMode;
   payload: RunAssignmentPayload | RunRerunAssignmentPayload;
   runId: string;
+}
+
+interface WorkerAbortMessagePayload {
+  type: 'abort';
+  reason?: string;
+}
+
+type WorkerMessagePayload = WorkerRunMessagePayload | WorkerAbortMessagePayload;
+
+interface RunPipelineOptions {
+  signal?: AbortSignal;
+}
+
+function makeCancellationError(reason?: string): Error {
+  const message = reason && reason.trim().length > 0 ? `cancelled: ${reason.trim()}` : 'cancelled';
+  const error = new Error(message);
+  error.name = 'PipelineCancelledError';
+  return error;
 }
 
 // runAssignmentJob.declaration()
 export async function runAssignmentJob(
   payload: RunAssignmentPayload,
   runId: string,
+  options: RunPipelineOptions = {},
 ): Promise<{ manifestPath?: string; notionUrl?: string; anytypeUrl?: string }> {
-  return runPipelineWorker('new_assignment', payload, runId);
+  return runPipelineWorker('new_assignment', payload, runId, options);
 }
 
 export async function runRerunAssignmentJob(
   payload: RunRerunAssignmentPayload,
   runId: string,
+  options: RunPipelineOptions = {},
 ): Promise<{ manifestPath?: string; notionUrl?: string; anytypeUrl?: string }> {
-  return runPipelineWorker('rerun_assignment', payload, runId);
+  return runPipelineWorker('rerun_assignment', payload, runId, options);
 }
 
 async function runPipelineWorker(
   executionMode: WorkerExecutionMode,
   payload: RunAssignmentPayload | RunRerunAssignmentPayload,
   runId: string,
+  options: RunPipelineOptions = {},
 ): Promise<{ manifestPath?: string; notionUrl?: string; anytypeUrl?: string }> {
   const log = rootLogger.child({ jobId: payload.jobId, runId });
+  const { signal } = options;
+  if (signal?.aborted) {
+    throw makeCancellationError(
+      typeof signal.reason === 'string' ? signal.reason : undefined,
+    );
+  }
 
   return new Promise((resolve, reject) => {
     const workerPath = path.join(import.meta.dirname, 'pipeline-worker-entry');
     const child = fork(workerPath);
 
     let resolved = false;
+    let abortFallbackTimer: NodeJS.Timeout | null = null;
+
+    const clearAbortFallbackTimer = () => {
+      if (!abortFallbackTimer) return;
+      clearTimeout(abortFallbackTimer);
+      abortFallbackTimer = null;
+    };
+
+    const abortReasonFromSignal = (): string | undefined => {
+      if (!signal) return undefined;
+      if (typeof signal.reason === 'string') return signal.reason;
+      if (signal.reason instanceof Error) return signal.reason.message;
+      return undefined;
+    };
+
+    const abortHandler = () => {
+      if (resolved) return;
+      const reason = abortReasonFromSignal();
+      resolved = true;
+      clearAbortFallbackTimer();
+      const cancellationError = makeCancellationError(reason);
+      reject(cancellationError);
+
+      try {
+        const abortMessage: WorkerAbortMessagePayload = {
+          type: 'abort',
+          reason,
+        };
+        child.send(abortMessage);
+      } catch {
+        // Ignore send failures and rely on process termination below.
+      }
+
+      abortFallbackTimer = setTimeout(() => {
+        try {
+          child.kill('SIGTERM');
+        } catch {
+          // Ignore kill failures during best-effort cancellation cleanup.
+        }
+      }, 1000);
+    };
+
+    if (signal) {
+      signal.addEventListener('abort', abortHandler, { once: true });
+    }
+
+    const finalize = () => {
+      clearAbortFallbackTimer();
+      if (signal) {
+        signal.removeEventListener('abort', abortHandler);
+      }
+    };
 
     child.on('message', (msg: unknown) => {
       // Type guard for worker message
@@ -222,12 +302,16 @@ async function runPipelineWorker(
       };
 
       if (message.type === 'success') {
+        if (resolved) return;
         resolved = true;
+        finalize();
         resolve(
           message.result as { manifestPath?: string; notionUrl?: string; anytypeUrl?: string },
         );
       } else if (message.type === 'error') {
+        if (resolved) return;
         resolved = true;
+        finalize();
         const err = new Error(message.error?.message || String(message.error));
         if (message.error?.stack) {
           err.stack = message.error.stack;
@@ -243,11 +327,13 @@ async function runPipelineWorker(
       log.error(err, { message: 'Pipeline worker process error' });
       if (!resolved) {
         resolved = true;
+        finalize();
         reject(err);
       }
     });
 
     child.on('exit', (code) => {
+      finalize();
       if (code !== 0 && !resolved) {
         const err = new Error(`Pipeline worker exited with code ${code}`);
         log.error(err, { message: 'Pipeline worker exited abnormally' });
@@ -256,6 +342,7 @@ async function runPipelineWorker(
     });
 
     const message: WorkerMessagePayload = {
+      type: 'run',
       executionMode,
       payload,
       runId,
