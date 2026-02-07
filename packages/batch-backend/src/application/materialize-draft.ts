@@ -68,12 +68,12 @@ export async function materializeDraft(
 
   const draft = await drafts.getById(params.draftId);
   if (!draft) return null;
+  const promptPackage = await promptPackages.getById(draft.promptPackageId);
+  if (!promptPackage) return null;
 
   const storage = overrides?.storage ?? createTranscriptionStorageForUri(draft.storageUri);
 
   if (!resolvedJobId) {
-    const promptPackage = await promptPackages.getById(draft.promptPackageId);
-    if (!promptPackage) return null;
     const approvalJob = await createApprovalJob({
       draft,
       promptPackage,
@@ -83,11 +83,18 @@ export async function materializeDraft(
   }
 
   const text = await storage.getText(draft.storageUri);
+  const context = {
+    studentId: promptPackage.studentId ?? null,
+    promptPackageId: promptPackage.id,
+    profileRevisionId: promptPackage.resolvedProfileRevisionId ?? null,
+    templateRevisionId: promptPackage.resolvedTemplateRevisionId ?? null,
+  };
+  const materializedText = injectMaterializationContext(text, context);
   let mdPath: string | null = null;
   if (localExport) {
     mdPath = resolveDraftMaterializePath(uploadDir, draft.id);
     await fs.mkdir(path.dirname(mdPath), { recursive: true });
-    await fs.writeFile(mdPath, text, 'utf8');
+    await fs.writeFile(mdPath, materializedText, 'utf8');
   }
 
   const updated = await jobs.updateDraftLink({
@@ -116,6 +123,41 @@ export async function materializeDraft(
     mdPath,
     mdStorageUri: draft.storageUri,
   };
+}
+
+function injectMaterializationContext(
+  markdown: string,
+  context: {
+    studentId: string | null;
+    promptPackageId: string;
+    profileRevisionId: string | null;
+    templateRevisionId: string | null;
+  },
+): string {
+  const keys = [
+    ['x_esl_student_id', context.studentId],
+    ['x_esl_prompt_package_id', context.promptPackageId],
+    ['x_esl_profile_revision_id', context.profileRevisionId],
+    ['x_esl_template_revision_id', context.templateRevisionId],
+  ] as const;
+
+  const lines = keys
+    .filter(([, value]) => value && value.trim().length > 0)
+    .map(([key, value]) => `${key}: ${value}`);
+  if (lines.length === 0) {
+    return markdown;
+  }
+
+  if (markdown.startsWith('---\n') || markdown.startsWith('---\r\n')) {
+    const closingIndex = markdown.indexOf('\n---', 4);
+    if (closingIndex !== -1) {
+      const head = markdown.slice(0, closingIndex);
+      const tail = markdown.slice(closingIndex);
+      return `${head}\n${lines.join('\n')}${tail}`;
+    }
+  }
+
+  return `---\n${lines.join('\n')}\n---\n\n${markdown}`;
 }
 
 function resolveDraftMaterializePath(uploadDir: string, draftId: string): string {
