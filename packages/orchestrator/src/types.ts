@@ -29,6 +29,7 @@ export interface OrchestratorDependencies {
   logger?: PipelineLogger;
   metrics?: PipelineMetrics;
   runId?: string;
+  signal?: AbortSignal;
 }
 
 export interface NewAssignmentFlags {

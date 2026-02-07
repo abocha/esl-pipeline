@@ -193,6 +193,57 @@ describe('infrastructure/orchestrator-service', () => {
     await expect(resultPromise).rejects.toMatchObject({ message: 'pipeline failed' });
   });
 
+  it('runAssignmentJob rejects immediately when signal is already aborted', async () => {
+    const { runAssignmentJob } = await import('../src/infrastructure/orchestrator-service.js');
+
+    const controller = new AbortController();
+    controller.abort('user requested stop');
+
+    await expect(
+      runAssignmentJob(
+        {
+          jobId: 'job-1',
+          md: 'fixtures/ok.md',
+        },
+        'run-aborted',
+        { signal: controller.signal },
+      ),
+    ).rejects.toMatchObject({
+      name: 'PipelineCancelledError',
+      message: 'cancelled: user requested stop',
+    });
+  });
+
+  it('runAssignmentJob forwards abort signal to worker and rejects as cancelled', async () => {
+    const { runAssignmentJob } = await import('../src/infrastructure/orchestrator-service.js');
+    const controller = new AbortController();
+
+    const resultPromise = runAssignmentJob(
+      {
+        jobId: 'job-1',
+        md: 'fixtures/ok.md',
+      },
+      'run-cancel',
+      { signal: controller.signal },
+    );
+
+    controller.abort('cancelled by action');
+
+    await expect(resultPromise).rejects.toMatchObject({
+      name: 'PipelineCancelledError',
+      message: 'cancelled: cancelled by action',
+    });
+
+    expect(mockChildProcess.send).toHaveBeenNthCalledWith(
+      1,
+      expect.objectContaining({ type: 'run' }),
+    );
+    expect(mockChildProcess.send).toHaveBeenNthCalledWith(2, {
+      type: 'abort',
+      reason: 'cancelled by action',
+    });
+  });
+
   // SKIPPED: This test validates fallback logic that occurs INSIDE the worker process.
   // Since runAssignmentJob() only spawns and communicates with a worker, and we're mocking
   // fork() to prevent real process spawning, we cannot test this fallback behavior at the unit level.

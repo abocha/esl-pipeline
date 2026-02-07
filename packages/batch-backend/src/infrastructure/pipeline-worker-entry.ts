@@ -1,5 +1,5 @@
 import { PipelineError } from '@esl-pipeline/contracts';
-import type { NewAssignmentFlags, RerunFlags } from '@esl-pipeline/orchestrator';
+import { type NewAssignmentFlags, type RerunFlags } from '@esl-pipeline/orchestrator';
 
 import { type BatchBackendConfig, loadConfig } from '../config/env.js';
 import { getFfmpegSemaphore } from './ffmpeg-semaphore.js';
@@ -13,10 +13,35 @@ import {
 
 type WorkerExecutionMode = 'new_assignment' | 'rerun_assignment';
 
-interface WorkerMessage {
+interface WorkerRunMessage {
+  type: 'run';
   executionMode?: WorkerExecutionMode;
   payload: RunAssignmentPayload | RunRerunAssignmentPayload;
   runId: string;
+}
+
+interface WorkerAbortMessage {
+  type: 'abort';
+  reason?: string;
+}
+
+type WorkerMessage = WorkerRunMessage | WorkerAbortMessage;
+
+let currentAbortController: AbortController | null = null;
+
+interface PipelineRunResult {
+  manifestPath?: string;
+  pageUrl?: string;
+  anytypeUrl?: string;
+}
+
+function isPipelineCancelledErrorLike(error: unknown): boolean {
+  if (!(error instanceof Error)) return false;
+  return (
+    error.name === 'PipelineCancelledError' ||
+    error.message.toLowerCase() === 'cancelled' ||
+    error.message.toLowerCase().startsWith('cancelled:')
+  );
 }
 
 function applyUserSettingsToEnv(settings?: {
@@ -39,6 +64,7 @@ async function executePipeline(
   executionMode: WorkerExecutionMode,
   runId: string,
   config: BatchBackendConfig,
+  signal?: AbortSignal,
 ) {
   const log = rootLogger.child({ jobId: payload.jobId, runId, component: 'pipeline-worker' });
   const pipeline = getPipeline(config);
@@ -71,11 +97,13 @@ async function executePipeline(
             pipeline,
             payload as RunRerunAssignmentPayload,
             config.orchestrator.notionDatabaseId,
+            signal,
           )
         : await runAssignmentPipeline(
             pipeline,
             payload as RunAssignmentPayload,
             config.orchestrator.notionDatabaseId,
+            signal,
           );
     const duration = Date.now() - started;
 
@@ -102,7 +130,8 @@ async function runAssignmentPipeline(
   pipeline: ReturnType<typeof getPipeline>,
   payload: RunAssignmentPayload,
   defaultNotionDatabaseId?: string,
-) {
+  signal?: AbortSignal,
+): Promise<PipelineRunResult> {
   const flags: NewAssignmentFlags = {
     md: payload.md,
     preset: payload.preset,
@@ -125,14 +154,21 @@ async function runAssignmentPipeline(
     flags.ttsStrategy = payload.ttsStrategy;
   }
 
-  return pipeline.newAssignment(flags);
+  return (pipeline as { newAssignment: (...args: unknown[]) => Promise<PipelineRunResult> }).newAssignment(
+    flags,
+    undefined,
+    {
+      signal,
+    },
+  );
 }
 
 async function runRerunPipeline(
   pipeline: ReturnType<typeof getPipeline>,
   payload: RunRerunAssignmentPayload,
   _defaultNotionDatabaseId?: string,
-) {
+  signal?: AbortSignal,
+): Promise<PipelineRunResult> {
   const flags: RerunFlags = {
     md: payload.md,
     steps:
@@ -152,7 +188,10 @@ async function runRerunPipeline(
     dialogueSeed: payload.dialogueSeed ?? undefined,
   };
 
-  return pipeline.rerunAssignment(flags);
+  return (pipeline as { rerunAssignment: (...args: unknown[]) => Promise<PipelineRunResult> }).rerunAssignment(
+    flags,
+    { signal },
+  );
 }
 
 async function main() {
@@ -167,11 +206,21 @@ async function main() {
   });
 
   process.on('message', async (msg: WorkerMessage) => {
+    if (msg.type === 'abort') {
+      currentAbortController?.abort(msg.reason);
+      return;
+    }
+    if (msg.type !== 'run') {
+      return;
+    }
+
     const { payload, runId } = msg;
     const executionMode: WorkerExecutionMode =
       msg.executionMode === 'rerun_assignment' ? 'rerun_assignment' : 'new_assignment';
     const log = rootLogger.child({ jobId: payload.jobId, runId, component: 'pipeline-worker' });
     const config = loadConfig();
+    const abortController = new AbortController();
+    currentAbortController = abortController;
 
     // Apply user settings overrides
     if (payload.settings?.elevenLabsApiKey) {
@@ -184,7 +233,13 @@ async function main() {
     applyUserSettingsToEnv(payload.settings);
 
     try {
-      const result = await executePipeline(payload, executionMode, runId, config);
+      const result = await executePipeline(
+        payload,
+        executionMode,
+        runId,
+        config,
+        abortController.signal,
+      );
       process.send!({ type: 'success', result });
       process.exit(0);
     } catch (error) {
@@ -214,7 +269,13 @@ async function main() {
           const { resetPipelineCache } = await import('./orchestrator-service.js');
           resetPipelineCache();
 
-          const result = await executePipeline(payload, executionMode, runId, fallbackConfig);
+          const result = await executePipeline(
+            payload,
+            executionMode,
+            runId,
+            fallbackConfig,
+            abortController.signal,
+          );
           process.send!({ type: 'success', result });
           process.exit(0);
         } catch (error_) {
@@ -246,6 +307,11 @@ async function main() {
             name: errorName,
             stack: errorStack,
           });
+        } else if (isPipelineCancelledErrorLike(error)) {
+          log.warn('[Worker] Pipeline cancelled', {
+            name: errorName,
+            message: errorMessage,
+          });
         } else {
           log.error(`[Worker] Unhandled error: ${errorMessage}`, { error: error });
         }
@@ -260,6 +326,8 @@ async function main() {
         });
         process.exit(1);
       }
+    } finally {
+      currentAbortController = null;
     }
   });
 }

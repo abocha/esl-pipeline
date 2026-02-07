@@ -211,7 +211,7 @@ describe('infrastructure/queue-bullmq', () => {
   it('cancelQueuedJob removes queue job when it exists and is removable', async () => {
     const { cancelQueuedJob } = createJobQueue();
     const mocks = getMockStorage();
-    const remove = vi.fn().mockResolvedValue();
+    const remove = vi.fn(async () => {});
     mocks.queueGetJob.mockResolvedValue({ remove });
 
     await expect(cancelQueuedJob('job-2')).resolves.toBe('removed');

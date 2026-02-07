@@ -5,7 +5,7 @@
 - Audience: AI agents and maintainers coordinating backend/frontend delivery.
 - Read Time: 8 minutes.
 - Authority Level: Canonical status tracker (human-readable).
-- Last Verified Against: 2026-02-06 repo state.
+- Last Verified Against: 2026-02-07 repo state.
 
 ## Purpose
 
@@ -51,13 +51,13 @@
 | Profile content routes                                                                     | Done    | Partial  | Profile routes                                | Same as above.                                      |
 | Job actions: `edit_metadata`                                                               | Done    | Partial  | Job action route and handler                  | Expose only where workflow needs it.                |
 | Job actions: `rerun_audio`                                                                 | Done    | Done     | Job action contract                           | Maintain payload parity as backend adds rerun knobs. |
-| Job actions: `cancel`                                                                      | Done    | Done     | Job action contract                           | Keep terminal-state UX and best-effort semantics explicit. |
+| Job actions: `cancel`                                                                      | Done    | Done     | Job action contract                           | Keep cooperative-cancel UX explicit for running jobs.      |
 
 ## Open Blockers
 
 1. SSE resilience remains partly dependent on polling fallback behavior in UI.
 2. Frontend currently keeps `edit_metadata` as a partial/operator path (not broad UX exposure).
-3. No hard-stop cancellation exists; running cancel remains best-effort by design.
+3. Cancellation is cooperative for running jobs; already-issued external side effects remain best-effort.
 
 ## Do / Don't
 

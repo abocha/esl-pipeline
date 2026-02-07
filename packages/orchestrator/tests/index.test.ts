@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, expect, it, vi } from 'vitest';
 
-import { newAssignment } from '../src/index.js';
+import { newAssignment, rerunAssignment } from '../src/index.js';
 
 vi.mock('@esl-pipeline/tts-elevenlabs', async () => {
   const actual = await vi.importActual<typeof import('@esl-pipeline/tts-elevenlabs')>(
@@ -125,5 +125,84 @@ default: voice_id_default
     expect(manifestJsonUpdated.dialogueLanguage).toBe('es');
     expect(manifestJsonUpdated.dialogueStability).toBe(0.65);
     expect(manifestJsonUpdated.dialogueSeed).toBe(321);
+  });
+
+  it('throws a cancellation error and skips manifest write when signal is aborted', async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'orchestrator-cancel-'));
+    const mdPath = join(dir, 'lesson.md');
+    const okDoc = await readFile(okFixturePath, 'utf8');
+    await writeFile(mdPath, okDoc);
+
+    const controller = new AbortController();
+    controller.abort('test cancellation');
+
+    await expect(
+      newAssignment(
+        {
+          md: mdPath,
+          withTts: false,
+          dryRun: true,
+        },
+        {},
+        { signal: controller.signal },
+      ),
+    ).rejects.toMatchObject({
+      name: 'PipelineCancelledError',
+      message: 'cancelled: test cancellation',
+    });
+
+    await expect(readFile(join(dir, 'lesson.manifest.json'), 'utf8')).rejects.toBeDefined();
+  });
+
+  it('supports cancellation on rerun before stage execution', async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'orchestrator-rerun-cancel-'));
+    const mdPath = join(dir, 'lesson.md');
+    const voiceMapPath = join(dir, 'voices.yml');
+    const okDoc = await readFile(okFixturePath, 'utf8');
+    await writeFile(mdPath, okDoc);
+    await writeFile(
+      voiceMapPath,
+      `
+default: voice_id_default
+    `.trim(),
+    );
+    process.env.S3_BUCKET = 'test-bucket';
+    process.env.AWS_REGION = 'us-east-1';
+
+    const { buildStudyTextMp3 } = await import('@esl-pipeline/tts-elevenlabs');
+    const audioPath = join(dir, 'lesson.mp3');
+    await writeFile(audioPath, 'dummy');
+    vi.mocked(buildStudyTextMp3).mockResolvedValue({
+      path: audioPath,
+      hash: 'abc123',
+      voices: [{ speaker: 'Narrator', voiceId: 'voice_id_default', source: 'default' }],
+    });
+
+    await newAssignment({
+      md: mdPath,
+      withTts: true,
+      upload: 's3',
+      dryRun: true,
+      voices: voiceMapPath,
+    });
+
+    const controller = new AbortController();
+    controller.abort('rerun stopped');
+
+    await expect(
+      rerunAssignment(
+        {
+          md: mdPath,
+          steps: ['tts', 'upload', 'add-audio'],
+          upload: 's3',
+          dryRun: true,
+          voices: voiceMapPath,
+        },
+        { signal: controller.signal },
+      ),
+    ).rejects.toMatchObject({
+      name: 'PipelineCancelledError',
+      message: 'cancelled: rerun stopped',
+    });
   });
 });
