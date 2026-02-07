@@ -48,6 +48,8 @@ describe('config/env - core defaults', () => {
         expect(cfg.deepgram.model).toBe('nova-3');
         expect(cfg.deepgram.language).toBe('multi');
         expect(cfg.deepgram.storeRawResponse).toBe(true);
+        expect(cfg.studentSystem?.source).toBe('fs');
+        expect(cfg.studentSystem?.fsFallback).toBe(true);
 
         // Orchestrator core defaults
         expect(cfg.orchestrator.manifestStore).toBeDefined();
@@ -55,6 +57,41 @@ describe('config/env - core defaults', () => {
         expect(['local', 'http']).toContain(cfg.orchestrator.configProvider);
       },
     );
+  });
+});
+
+describe('config/env - student system source mapping', () => {
+  beforeEach(() => {
+    vi.resetModules();
+  });
+
+  it('maps STUDENT_SYSTEM_SOURCE/STUDENT_SYSTEM_FS_FALLBACK into config', async () => {
+    await withEnv(
+      {
+        NODE_ENV: 'production',
+        STUDENT_SYSTEM_SOURCE: 'db',
+        STUDENT_SYSTEM_FS_FALLBACK: 'false',
+      },
+      async () => {
+        const cfg = await loadConfigFresh();
+        expect(cfg.studentSystem?.source).toBe('db');
+        expect(cfg.studentSystem?.fsFallback).toBe(false);
+      },
+    );
+  });
+
+  it('throws on invalid STUDENT_SYSTEM_SOURCE', async () => {
+    await expect(
+      withEnv(
+        {
+          NODE_ENV: 'test',
+          STUDENT_SYSTEM_SOURCE: 'legacy',
+        },
+        async () => {
+          await loadConfigFresh();
+        },
+      ),
+    ).rejects.toThrow('STUDENT_SYSTEM_SOURCE must be one of: fs, hybrid, db');
   });
 });
 

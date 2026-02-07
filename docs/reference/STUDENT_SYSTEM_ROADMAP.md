@@ -44,6 +44,7 @@
 4. Operational docs:
    - migration runbook
    - rollback strategy.
+   - see `docs/reference/STUDENT_SYSTEM_PHASE_A_RUNBOOK.md`.
 
 ### Acceptance Criteria
 
