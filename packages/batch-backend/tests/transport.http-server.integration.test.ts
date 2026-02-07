@@ -146,6 +146,9 @@ vi.mock('../src/application/profile-content', () => {
     getProfileContent: vi.fn(),
     upsertProfileContent: vi.fn(),
     deleteProfileContent: vi.fn(),
+    listProfileRevisionsForProfile: vi.fn(),
+    getProfileRevisionForProfile: vi.fn(),
+    restoreProfileRevision: vi.fn(),
   };
 });
 
@@ -176,6 +179,11 @@ describe('transport/http-server - integration (in-process)', () => {
   const mockGetProfileContent = vi.mocked(profileContentModule.getProfileContent);
   const mockUpsertProfileContent = vi.mocked(profileContentModule.upsertProfileContent);
   const mockDeleteProfileContent = vi.mocked(profileContentModule.deleteProfileContent);
+  const mockListProfileRevisionsForProfile = vi.mocked(
+    profileContentModule.listProfileRevisionsForProfile,
+  );
+  const mockGetProfileRevisionForProfile = vi.mocked(profileContentModule.getProfileRevisionForProfile);
+  const mockRestoreProfileRevision = vi.mocked(profileContentModule.restoreProfileRevision);
   const mockGetStudentTimeline = vi.mocked(studentTimelineModule.getStudentTimeline);
 
   beforeAll(async () => {
@@ -251,13 +259,51 @@ describe('transport/http-server - integration (in-process)', () => {
       id: 'profile.md',
       label: 'Profile',
       content: 'Profile content',
+      currentRevisionId: 'revision-1',
+      updatedAt: '2024-01-01T00:00:00.000Z',
     });
     mockUpsertProfileContent.mockResolvedValue({
       id: 'profile.md',
       label: 'Profile',
       content: 'Updated content',
+      currentRevisionId: 'revision-latest',
+      updatedAt: '2024-01-01T00:00:00.000Z',
     });
     mockDeleteProfileContent.mockResolvedValue(true);
+    mockListProfileRevisionsForProfile.mockResolvedValue({
+      items: [
+        {
+          id: 'revision-1',
+          profileId: 'profile.md',
+          contentHash: 'hash-1',
+          source: 'create',
+          createdAt: '2024-01-01T00:00:00.000Z',
+          createdBy: null,
+          restoredFromRevisionId: null,
+        },
+      ],
+      total: 1,
+      limit: 50,
+      offset: 0,
+      order: 'desc',
+    });
+    mockGetProfileRevisionForProfile.mockResolvedValue({
+      id: 'revision-1',
+      profileId: 'profile.md',
+      contentHash: 'hash-1',
+      source: 'create',
+      createdAt: '2024-01-01T00:00:00.000Z',
+      createdBy: null,
+      restoredFromRevisionId: null,
+      content: 'Profile content',
+    });
+    mockRestoreProfileRevision.mockResolvedValue({
+      id: 'profile.md',
+      label: 'Profile',
+      content: 'Restored content',
+      currentRevisionId: 'revision-2',
+      updatedAt: '2024-01-02T00:00:00.000Z',
+    });
     mockGetStudentTimeline.mockResolvedValue({
       items: [
         {
@@ -865,6 +911,69 @@ describe('transport/http-server - integration (in-process)', () => {
       id: 'profile.md',
       label: 'Profile',
       content: 'Profile content',
+      currentRevisionId: 'revision-1',
+      updatedAt: '2024-01-01T00:00:00.000Z',
+    });
+  });
+
+  it('GET /profiles/:id/revisions returns profile revision list', async () => {
+    const response = await app.inject({
+      method: 'GET',
+      url: '/profiles/profile.md/revisions?limit=10&offset=0&order=desc',
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toEqual({
+      items: [
+        {
+          id: 'revision-1',
+          profileId: 'profile.md',
+          contentHash: 'hash-1',
+          source: 'create',
+          createdAt: '2024-01-01T00:00:00.000Z',
+          createdBy: null,
+          restoredFromRevisionId: null,
+        },
+      ],
+      total: 1,
+      limit: 50,
+      offset: 0,
+      order: 'desc',
+    });
+  });
+
+  it('GET /profiles/:id/revisions/:revisionId returns revision detail', async () => {
+    const response = await app.inject({
+      method: 'GET',
+      url: '/profiles/profile.md/revisions/11111111-1111-4111-8111-111111111111',
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toEqual({
+      id: 'revision-1',
+      profileId: 'profile.md',
+      contentHash: 'hash-1',
+      source: 'create',
+      createdAt: '2024-01-01T00:00:00.000Z',
+      createdBy: null,
+      restoredFromRevisionId: null,
+      content: 'Profile content',
+    });
+  });
+
+  it('POST /profiles/:id/revisions/:revisionId/restore restores profile content', async () => {
+    const response = await app.inject({
+      method: 'POST',
+      url: '/profiles/profile.md/revisions/11111111-1111-4111-8111-111111111111/restore',
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toEqual({
+      id: 'profile.md',
+      label: 'Profile',
+      content: 'Restored content',
+      currentRevisionId: 'revision-2',
+      updatedAt: '2024-01-02T00:00:00.000Z',
     });
   });
 
