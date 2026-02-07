@@ -17,6 +17,8 @@
  * - GET /students, /students/:id, /students/:id/timeline
  * - POST /students, PUT /students/:id, DELETE /students/:id
  * - GET /profiles, /profiles/:id, PUT /profiles/:id, DELETE /profiles/:id
+ * - GET /profiles/:id/revisions, GET /profiles/:id/revisions/:revisionId
+ * - POST /profiles/:id/revisions/:revisionId/restore
  * - GET /drafts/:id
  * - GET /jobs/events (SSE) for live updates
  * - GET /user/profile, /user/files (authenticated)
@@ -149,6 +151,30 @@ export interface ProfileContentResponse {
   id: string;
   label: string;
   content: string;
+  currentRevisionId: string | null;
+  updatedAt: string | null;
+}
+
+export interface ProfileRevisionSummaryResponse {
+  id: string;
+  profileId: string;
+  contentHash: string;
+  source: 'create' | 'update' | 'restore';
+  createdAt: string;
+  createdBy: string | null;
+  restoredFromRevisionId: string | null;
+}
+
+export interface ProfileRevisionDetailResponse extends ProfileRevisionSummaryResponse {
+  content: string;
+}
+
+export interface ProfileRevisionListResponse {
+  items: ProfileRevisionSummaryResponse[];
+  total: number;
+  limit: number;
+  offset: number;
+  order: 'asc' | 'desc';
 }
 
 export type StudentTimelineType =
@@ -205,6 +231,32 @@ export interface PromptPackageResponse {
   notes: string | null;
   storageUri: string;
   text: string;
+  profileSnapshot?: {
+    resolvedProfileId: string;
+    resolvedProfileHash: string;
+    resolvedProfileRevisionId: string | null;
+    resolvedProfileUpdatedAt: string | null;
+  };
+  templateSnapshot?: {
+    resolvedTemplateId: string;
+    resolvedTemplateHash: string;
+    resolvedTemplateRevisionId: string | null;
+    resolvedTemplateUpdatedAt: string | null;
+  };
+  profileDrift?: {
+    detected: true;
+    reason: 'profile_missing' | 'profile_content_changed';
+    currentProfileHash: string | null;
+    currentProfileRevisionId: string | null;
+    currentProfileUpdatedAt: string | null;
+  };
+  templateDrift?: {
+    detected: true;
+    reason: 'template_missing' | 'template_content_changed';
+    currentTemplateHash: string | null;
+    currentTemplateRevisionId: string | null;
+    currentTemplateUpdatedAt: string | null;
+  };
   createdAt: string;
   updatedAt: string;
 }
@@ -937,6 +989,69 @@ export async function deleteProfileContent(profileId: string): Promise<void> {
     const axiosError = toAxiosError(error);
     if (axiosError && isAuthError(axiosError)) {
       throw new Error('Authentication required. Please login to delete profiles.');
+    }
+    throw new Error(axiosError ? handleApiError(axiosError) : formatUnknownError(error));
+  }
+}
+
+export async function listProfileRevisions(
+  profileId: string,
+  params: {
+    limit?: number;
+    offset?: number;
+    order?: 'asc' | 'desc';
+  } = {},
+): Promise<ProfileRevisionListResponse> {
+  try {
+    const response = await apiClient.get(
+      buildApiProxyPath(`/profiles/${encodeURIComponent(profileId)}/revisions`),
+      { params },
+    );
+    return response.data;
+  } catch (error: unknown) {
+    const axiosError = toAxiosError(error);
+    if (axiosError && isAuthError(axiosError)) {
+      throw new Error('Authentication required. Please login to view profile revisions.');
+    }
+    throw new Error(axiosError ? handleApiError(axiosError) : formatUnknownError(error));
+  }
+}
+
+export async function getProfileRevision(
+  profileId: string,
+  revisionId: string,
+): Promise<ProfileRevisionDetailResponse> {
+  try {
+    const response = await apiClient.get(
+      buildApiProxyPath(
+        `/profiles/${encodeURIComponent(profileId)}/revisions/${encodeURIComponent(revisionId)}`,
+      ),
+    );
+    return response.data;
+  } catch (error: unknown) {
+    const axiosError = toAxiosError(error);
+    if (axiosError && isAuthError(axiosError)) {
+      throw new Error('Authentication required. Please login to view profile revisions.');
+    }
+    throw new Error(axiosError ? handleApiError(axiosError) : formatUnknownError(error));
+  }
+}
+
+export async function restoreProfileRevision(
+  profileId: string,
+  revisionId: string,
+): Promise<ProfileContentResponse> {
+  try {
+    const response = await apiClient.post(
+      buildApiProxyPath(
+        `/profiles/${encodeURIComponent(profileId)}/revisions/${encodeURIComponent(revisionId)}/restore`,
+      ),
+    );
+    return response.data;
+  } catch (error: unknown) {
+    const axiosError = toAxiosError(error);
+    if (axiosError && isAuthError(axiosError)) {
+      throw new Error('Authentication required. Please login to restore profile revisions.');
     }
     throw new Error(axiosError ? handleApiError(axiosError) : formatUnknownError(error));
   }
