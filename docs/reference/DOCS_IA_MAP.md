@@ -31,6 +31,7 @@
 | Pipeline contract behavior            | `docs/reference/agents-ssot.md`                       | `docs/reference/pipeline-manifest.md`                 |
 | Backend/frontend capability readiness | `docs/backend-frontend/backend-frontend-alignment.md` | `docs/backend-frontend/BATCH_SYSTEM.md`               |
 | Transcription flow changes            | `docs/design/TRANSCRIPTION_PIPELINE_SPEC.md`          | `docs/PIPELINE_INTEGRATION_VISION.md`                 |
+| Student system architecture roadmap   | `docs/reference/STUDENT_SYSTEM_ROADMAP.md`            | `docs/backend-frontend/backend-frontend-alignment.md` |
 | Frontend behavior context             | `packages/batch-frontend/README.md`                   | `docs/backend-frontend/BATCH_SYSTEM.md`               |
 | Backend behavior context              | `packages/batch-backend/README.md`                    | `docs/backend-frontend/backend-frontend-alignment.md` |
 
@@ -48,4 +49,5 @@
 
 - `docs/README.md`
 - `docs/reference/DOCS_GOVERNANCE.md`
+- `docs/reference/STUDENT_SYSTEM_ROADMAP.md`
 - `docs/archive/README.md`
