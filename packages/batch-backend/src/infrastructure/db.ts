@@ -505,6 +505,150 @@ const DRAFTS_INDEX_PATCHES: string[] = [
   'CREATE INDEX IF NOT EXISTS idx_drafts_created_by ON drafts (created_by)',
 ];
 
+/**
+ * Normalize revision rows before creating unique revision indexes.
+ *
+ * Legacy environments can contain:
+ * - duplicate "active" revisions per profile/template
+ * - duplicate or missing version_number values
+ *
+ * These statements make the data index-safe so schema bootstrap cannot fail.
+ */
+const REVISION_PREINDEX_DATA_PATCHES: string[] = [
+  `UPDATE profile_revisions
+   SET status = 'deprecated'
+   WHERE status IS NULL OR status NOT IN ('draft', 'active', 'deprecated');`,
+  `WITH ranked AS (
+     SELECT
+       id,
+       row_number() OVER (
+         PARTITION BY profile_id
+         ORDER BY COALESCE(created_at, NOW()) ASC, id ASC
+       ) AS rn
+     FROM profile_revisions
+   )
+   UPDATE profile_revisions pr
+   SET
+     version_number = ranked.rn,
+     version_label = COALESCE(NULLIF(pr.version_label, ''), CONCAT('v', ranked.rn::text))
+   FROM ranked
+   WHERE pr.id = ranked.id;`,
+  `WITH ranked_active AS (
+     SELECT
+       id,
+       row_number() OVER (
+         PARTITION BY profile_id
+         ORDER BY COALESCE(activated_at, created_at, NOW()) DESC, id DESC
+       ) AS rn
+     FROM profile_revisions
+     WHERE status = 'active'
+   )
+   UPDATE profile_revisions pr
+   SET
+     status = 'deprecated',
+     activated_at = NULL,
+     deprecated_at = COALESCE(pr.deprecated_at, pr.created_at, NOW())
+   FROM ranked_active
+   WHERE pr.id = ranked_active.id
+     AND ranked_active.rn > 1;`,
+  `WITH no_active AS (
+     SELECT profile_id
+     FROM profile_revisions
+     GROUP BY profile_id
+     HAVING SUM(CASE WHEN status = 'active' THEN 1 ELSE 0 END) = 0
+   ),
+   ranked AS (
+     SELECT
+       pr.id,
+       pr.profile_id,
+       row_number() OVER (
+         PARTITION BY pr.profile_id
+         ORDER BY COALESCE(pr.created_at, NOW()) DESC, pr.id DESC
+       ) AS rn
+     FROM profile_revisions pr
+     JOIN no_active na ON na.profile_id = pr.profile_id
+   )
+   UPDATE profile_revisions pr
+   SET
+     status = 'active',
+     activated_at = COALESCE(pr.activated_at, pr.created_at, NOW()),
+     deprecated_at = NULL
+   FROM ranked
+   WHERE pr.id = ranked.id
+     AND ranked.rn = 1;`,
+  `UPDATE profile_revisions
+   SET
+     activated_at = COALESCE(activated_at, created_at, NOW()),
+     deprecated_at = NULL
+   WHERE status = 'active';`,
+  `UPDATE template_revisions
+   SET status = 'deprecated'
+   WHERE status IS NULL OR status NOT IN ('draft', 'active', 'deprecated');`,
+  `WITH ranked AS (
+     SELECT
+       id,
+       row_number() OVER (
+         PARTITION BY template_id
+         ORDER BY COALESCE(created_at, NOW()) ASC, id ASC
+       ) AS rn
+     FROM template_revisions
+   )
+   UPDATE template_revisions tr
+   SET
+     version_number = ranked.rn,
+     version_label = COALESCE(NULLIF(tr.version_label, ''), CONCAT('v', ranked.rn::text))
+   FROM ranked
+   WHERE tr.id = ranked.id;`,
+  `WITH ranked_active AS (
+     SELECT
+       id,
+       row_number() OVER (
+         PARTITION BY template_id
+         ORDER BY COALESCE(activated_at, created_at, NOW()) DESC, id DESC
+       ) AS rn
+     FROM template_revisions
+     WHERE status = 'active'
+   )
+   UPDATE template_revisions tr
+   SET
+     status = 'deprecated',
+     activated_at = NULL,
+     deprecated_at = COALESCE(tr.deprecated_at, tr.created_at, NOW())
+   FROM ranked_active
+   WHERE tr.id = ranked_active.id
+     AND ranked_active.rn > 1;`,
+  `WITH no_active AS (
+     SELECT template_id
+     FROM template_revisions
+     GROUP BY template_id
+     HAVING SUM(CASE WHEN status = 'active' THEN 1 ELSE 0 END) = 0
+   ),
+   ranked AS (
+     SELECT
+       tr.id,
+       tr.template_id,
+       row_number() OVER (
+         PARTITION BY tr.template_id
+         ORDER BY COALESCE(tr.created_at, NOW()) DESC, tr.id DESC
+       ) AS rn
+     FROM template_revisions tr
+     JOIN no_active na ON na.template_id = tr.template_id
+   )
+   UPDATE template_revisions tr
+   SET
+     status = 'active',
+     activated_at = COALESCE(tr.activated_at, tr.created_at, NOW()),
+     deprecated_at = NULL
+   FROM ranked
+   WHERE tr.id = ranked.id
+     AND ranked.rn = 1;`,
+  `UPDATE template_revisions
+   SET
+     activated_at = COALESCE(activated_at, created_at, NOW()),
+     deprecated_at = NULL
+   WHERE status = 'active';`,
+];
+
 const REVISION_VERSIONING_DATA_PATCHES: string[] = [
   `WITH ranked AS (
      SELECT
@@ -1014,13 +1158,19 @@ async function ensureJobsSchema(client: PoolClient): Promise<void> {
     for (const statement of PROFILE_REVISIONS_SCHEMA_PATCHES) {
       await client.query(statement);
     }
-    for (const indexSql of PROFILE_REVISIONS_INDEX_PATCHES) {
-      await client.query(indexSql);
-    }
 
     await client.query(TEMPLATE_REVISIONS_TABLE_SQL);
     for (const statement of TEMPLATE_REVISIONS_SCHEMA_PATCHES) {
       await client.query(statement);
+    }
+
+    // Normalize legacy revision data before creating unique revision indexes.
+    for (const statement of REVISION_PREINDEX_DATA_PATCHES) {
+      await client.query(statement);
+    }
+
+    for (const indexSql of PROFILE_REVISIONS_INDEX_PATCHES) {
+      await client.query(indexSql);
     }
     for (const indexSql of TEMPLATE_REVISIONS_INDEX_PATCHES) {
       await client.query(indexSql);

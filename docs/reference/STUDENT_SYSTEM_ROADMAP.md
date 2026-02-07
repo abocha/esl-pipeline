@@ -248,6 +248,7 @@
 2. Minimal shell now includes direct navigation links between minimal flow and student workspace.
 3. Workspace currently includes:
    - student context and profile binding management
+   - create-student flow (required name + optional advanced metadata)
    - profile editor with revision restore and activate actions
    - student assignment history with state/time filters
    - lineage/provenance inspector for selected jobs
