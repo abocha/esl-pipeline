@@ -14,11 +14,16 @@ vi.mock('../../utils/api', () => ({
   fetchPromptOptions: vi.fn(),
   fetchStudentOptions: vi.fn(),
   fetchRecordingTranscript: vi.fn(),
+  getProfileContent: vi.fn(),
   getJobStatus: vi.fn(),
   getRecording: vi.fn(),
+  listProfileContents: vi.fn(),
+  listProfileRevisions: vi.fn(),
   materializeDraft: vi.fn(),
+  restoreProfileRevision: vi.fn(),
   retryRecordingTranscription: vi.fn(),
   rerunAudioJob: vi.fn(),
+  upsertProfileContent: vi.fn(),
   updateDraft: vi.fn(),
   updateRecordingTranscript: vi.fn(),
   uploadRecording: vi.fn(),
@@ -101,7 +106,7 @@ async function publishAssignmentFlow(user: ReturnType<typeof userEvent.setup>) {
     expect(screen.getByDisplayValue('Prompt package output')).toBeTruthy();
   });
 
-  const draftTextarea = screen.getAllByRole('textbox').at(-1);
+  const draftTextarea = screen.getByRole('textbox', { name: /Draft markdown/i });
   expect(draftTextarea).toBeTruthy();
   if (!draftTextarea) {
     throw new Error('Expected draft textarea to be rendered');
@@ -153,6 +158,47 @@ describe('MinimalAssignment', () => {
         { id: 'student-default', name: 'Default', profileId: 'profiles/default.md' },
         { id: 'student-alex', name: 'Alex', profileId: 'profiles/alex.md' },
       ],
+    });
+    vi.mocked(api.listProfileContents).mockResolvedValue({
+      profiles: [{ id: 'profile-default.md', label: 'Default Profile' }],
+    });
+    vi.mocked(api.getProfileContent).mockResolvedValue({
+      id: 'profile-default.md',
+      label: 'Default Profile',
+      content: 'PROFILE CONTENT',
+      currentRevisionId: 'revision-1',
+      updatedAt: now,
+    });
+    vi.mocked(api.listProfileRevisions).mockResolvedValue({
+      items: [
+        {
+          id: 'revision-1',
+          profileId: 'profile-default.md',
+          contentHash: 'hash-1',
+          source: 'create',
+          createdAt: now,
+          createdBy: null,
+          restoredFromRevisionId: null,
+        },
+      ],
+      total: 1,
+      limit: 20,
+      offset: 0,
+      order: 'desc',
+    });
+    vi.mocked(api.upsertProfileContent).mockResolvedValue({
+      id: 'profile-default.md',
+      label: 'Default Profile',
+      content: 'PROFILE CONTENT',
+      currentRevisionId: 'revision-1',
+      updatedAt: now,
+    });
+    vi.mocked(api.restoreProfileRevision).mockResolvedValue({
+      id: 'profile-default.md',
+      label: 'Default Profile',
+      content: 'PROFILE CONTENT',
+      currentRevisionId: 'revision-1',
+      updatedAt: now,
     });
 
     vi.mocked(api.uploadRecording).mockResolvedValue(makeRecording());
@@ -252,9 +298,10 @@ describe('MinimalAssignment', () => {
     });
     expect(api.fetchJobOptions).toHaveBeenCalledTimes(1);
     expect(api.fetchStudentOptions).toHaveBeenCalledTimes(1);
+    expect(api.listProfileContents).toHaveBeenCalledTimes(1);
 
     expect(screen.getByRole('heading', { name: /1\. Upload recording/i })).toBeTruthy();
-    expect(screen.getByRole('heading', { name: /5\. Publish/i })).toBeTruthy();
+    expect(screen.getByRole('heading', { name: /6\. Publish/i })).toBeTruthy();
   });
 
   it('uploads a recording and shows recording metadata', async () => {
@@ -275,6 +322,28 @@ describe('MinimalAssignment', () => {
       expect(screen.getByText(/Recording ID: rec-1/i)).toBeTruthy();
     });
     expect(screen.getByText(/Status: transcribed/i)).toBeTruthy();
+  });
+
+  it('saves profile edits and refreshes revisions', async () => {
+    const user = userEvent.setup();
+    render(<MinimalAssignment />);
+
+    const profileEditor = await screen.findByRole('textbox', { name: /Profile content/i });
+    await user.clear(profileEditor);
+    await user.type(profileEditor, 'Updated profile content');
+    await user.click(screen.getByRole('button', { name: /Save profile/i }));
+
+    await waitFor(() => {
+      expect(api.upsertProfileContent).toHaveBeenCalledWith(
+        'profile-default.md',
+        'PROFILE CONTENTUpdated profile content',
+      );
+    });
+    expect(api.listProfileRevisions).toHaveBeenCalledWith('profile-default.md', {
+      limit: 20,
+      offset: 0,
+      order: 'desc',
+    });
   });
 
   it('allows clearing explicit student selection before upload', async () => {
@@ -309,6 +378,7 @@ describe('MinimalAssignment', () => {
     await waitFor(() => {
       expect(api.createPromptPackage).toHaveBeenCalledWith('rec-1', {
         templateId: 'tpl-default',
+        profileId: 'profile-default.md',
       });
     });
     expect(screen.getByDisplayValue('Prompt package output')).toBeTruthy();
@@ -349,7 +419,7 @@ describe('MinimalAssignment', () => {
       expect(screen.getByDisplayValue('Prompt package output')).toBeTruthy();
     });
 
-    const draftTextarea = screen.getAllByRole('textbox').at(-1);
+    const draftTextarea = screen.getByRole('textbox', { name: /Draft markdown/i });
     expect(draftTextarea).toBeTruthy();
     if (!draftTextarea) {
       throw new Error('Expected draft textarea to be rendered');
@@ -380,7 +450,7 @@ describe('MinimalAssignment', () => {
       expect(screen.getByDisplayValue('Prompt package output')).toBeTruthy();
     });
 
-    const draftTextarea = screen.getAllByRole('textbox').at(-1);
+    const draftTextarea = screen.getByRole('textbox', { name: /Draft markdown/i });
     expect(draftTextarea).toBeTruthy();
     if (!draftTextarea) {
       throw new Error('Expected draft textarea to be rendered');

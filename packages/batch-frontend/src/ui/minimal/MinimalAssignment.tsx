@@ -6,6 +6,7 @@ import type {
   JobOptionsResponse,
   JobStatus,
   MarkdownValidationResponse,
+  ProfileRevisionSummaryResponse,
   PromptOptionsResponse,
   PromptPackageResponse,
   RecordingListItem,
@@ -23,10 +24,15 @@ import {
   fetchPromptOptions,
   fetchRecordingTranscript,
   getJobStatus,
+  getProfileContent,
   getRecording,
+  listProfileContents,
+  listProfileRevisions,
   materializeDraft,
+  restoreProfileRevision,
   retryRecordingTranscription,
   rerunAudioJob,
+  upsertProfileContent,
   updateDraft,
   updateRecordingTranscript,
   uploadRecording,
@@ -82,6 +88,19 @@ export const MinimalAssignment: React.FC = () => {
   const [studentOptions, setStudentOptions] = useState<StudentOption[]>([]);
   const [studentOptionsError, setStudentOptionsError] = useState<string | null>(null);
   const [selectedStudentId, setSelectedStudentId] = useState('');
+
+  const [profileOptions, setProfileOptions] = useState<{ id: string; label: string }[]>([]);
+  const [profileOptionsError, setProfileOptionsError] = useState<string | null>(null);
+  const [selectedProfileId, setSelectedProfileId] = useState('');
+  const [newProfileId, setNewProfileId] = useState('');
+  const [profileEditorText, setProfileEditorText] = useState('');
+  const [loadedProfileContent, setLoadedProfileContent] = useState('');
+  const [profileRevisions, setProfileRevisions] = useState<ProfileRevisionSummaryResponse[]>([]);
+  const [profileRevisionError, setProfileRevisionError] = useState<string | null>(null);
+  const [profileBusy, setProfileBusy] = useState<'loading' | 'saving' | 'creating' | 'restoring' | null>(
+    null,
+  );
+  const [profileSuccess, setProfileSuccess] = useState<string | null>(null);
 
   const [actionBusy, setActionBusy] = useState<'rerun' | 'cancel' | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
@@ -165,11 +184,59 @@ export const MinimalAssignment: React.FC = () => {
     }
   }, []);
 
+  const loadProfileOptions = useCallback(async () => {
+    try {
+      const response = await listProfileContents();
+      const options = response.profiles ?? [];
+      setProfileOptions(options);
+      setSelectedProfileId((current) => {
+        if (current && options.some((option) => option.id === current)) return current;
+        return options[0]?.id ?? '';
+      });
+      setProfileOptionsError(null);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Unable to load profiles.';
+      setProfileOptionsError(message);
+    }
+  }, []);
+
   useEffect(() => {
     void loadPromptOptions();
     void loadJobOptions();
     void loadStudentOptions();
-  }, [loadJobOptions, loadPromptOptions, loadStudentOptions]);
+    void loadProfileOptions();
+  }, [loadJobOptions, loadProfileOptions, loadPromptOptions, loadStudentOptions]);
+
+  const loadSelectedProfile = useCallback(async () => {
+    if (!selectedProfileId) {
+      setProfileEditorText('');
+      setLoadedProfileContent('');
+      setProfileRevisions([]);
+      setProfileRevisionError(null);
+      return;
+    }
+
+    setProfileBusy('loading');
+    setProfileRevisionError(null);
+    try {
+      const [profile, revisions] = await Promise.all([
+        getProfileContent(selectedProfileId),
+        listProfileRevisions(selectedProfileId, { limit: 20, offset: 0, order: 'desc' }),
+      ]);
+      setProfileEditorText(profile.content ?? '');
+      setLoadedProfileContent(profile.content ?? '');
+      setProfileRevisions(revisions.items ?? []);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Unable to load selected profile.';
+      setProfileRevisionError(message);
+    } finally {
+      setProfileBusy(null);
+    }
+  }, [selectedProfileId]);
+
+  useEffect(() => {
+    void loadSelectedProfile();
+  }, [loadSelectedProfile]);
 
   const handleUpload = useCallback(
     async (file: File) => {
@@ -340,6 +407,79 @@ export const MinimalAssignment: React.FC = () => {
     [studentOptions, selectedStudentId],
   );
 
+  const profileDirty = useMemo(
+    () => profileEditorText.trim() !== loadedProfileContent.trim(),
+    [loadedProfileContent, profileEditorText],
+  );
+
+  const handleCreateProfile = async () => {
+    const candidate = newProfileId.trim();
+    if (!candidate) {
+      setProfileRevisionError('Profile ID is required (for example: profiles/new-student.md).');
+      return;
+    }
+
+    setProfileBusy('creating');
+    setProfileRevisionError(null);
+    setProfileSuccess(null);
+    try {
+      const created = await upsertProfileContent(candidate, profileEditorText);
+      await loadProfileOptions();
+      setSelectedProfileId(created.id);
+      setNewProfileId('');
+      setProfileSuccess(`Created profile ${created.id}.`);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Unable to create profile.';
+      setProfileRevisionError(message);
+    } finally {
+      setProfileBusy(null);
+    }
+  };
+
+  const handleSaveProfile = async () => {
+    if (!selectedProfileId) {
+      setProfileRevisionError('Select a profile to save.');
+      return;
+    }
+
+    setProfileBusy('saving');
+    setProfileRevisionError(null);
+    setProfileSuccess(null);
+    try {
+      const saved = await upsertProfileContent(selectedProfileId, profileEditorText);
+      setLoadedProfileContent(saved.content);
+      const revisions = await listProfileRevisions(saved.id, { limit: 20, offset: 0, order: 'desc' });
+      setProfileRevisions(revisions.items ?? []);
+      setProfileSuccess(`Saved ${saved.id}.`);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Unable to save profile.';
+      setProfileRevisionError(message);
+    } finally {
+      setProfileBusy(null);
+    }
+  };
+
+  const handleRestoreRevision = async (revisionId: string) => {
+    if (!selectedProfileId || !revisionId) return;
+
+    setProfileBusy('restoring');
+    setProfileRevisionError(null);
+    setProfileSuccess(null);
+    try {
+      const restored = await restoreProfileRevision(selectedProfileId, revisionId);
+      setProfileEditorText(restored.content);
+      setLoadedProfileContent(restored.content);
+      const revisions = await listProfileRevisions(restored.id, { limit: 20, offset: 0, order: 'desc' });
+      setProfileRevisions(revisions.items ?? []);
+      setProfileSuccess('Profile restored from revision.');
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Unable to restore profile revision.';
+      setProfileRevisionError(message);
+    } finally {
+      setProfileBusy(null);
+    }
+  };
+
   const handleGeneratePrompt = async () => {
     if (!recording?.recordingId) {
       setPromptError('Upload a recording first.');
@@ -359,6 +499,7 @@ export const MinimalAssignment: React.FC = () => {
     try {
       const response = await createPromptPackage(recording.recordingId, {
         templateId: selectedTemplateId,
+        profileId: selectedProfileId || undefined,
       });
       setPromptPackage(response);
       setPromptText(response.text ?? '');
@@ -700,6 +841,7 @@ export const MinimalAssignment: React.FC = () => {
         {transcriptReady ? (
           <div className="minimal-block">
             <textarea
+              aria-label="Transcript text"
               value={transcriptText}
               onChange={(event) => setTranscriptText(event.target.value)}
               rows={10}
@@ -722,7 +864,105 @@ export const MinimalAssignment: React.FC = () => {
 
       <section className="minimal-section">
         <div className="minimal-section-header">
-          <h2>3. Prompt</h2>
+          <h2>3. Profiles</h2>
+          <div className="minimal-inline">
+            <button
+              type="button"
+              className="minimal-secondary"
+              onClick={() => void loadProfileOptions()}
+              disabled={profileBusy !== null}
+            >
+              Refresh profiles
+            </button>
+            <button
+              type="button"
+              className="minimal-primary"
+              onClick={() => void handleSaveProfile()}
+              disabled={!selectedProfileId || profileBusy !== null || !profileDirty}
+            >
+              {profileBusy === 'saving' ? 'Saving...' : 'Save profile'}
+            </button>
+          </div>
+        </div>
+        <p className="minimal-help">
+          Edit profile text used for prompt generation. Every save creates an append-only revision
+          snapshot.
+        </p>
+        <label className="minimal-select">
+          Profile
+          <select
+            value={selectedProfileId}
+            onChange={(event) => setSelectedProfileId(event.target.value)}
+          >
+            <option value="">Select profile</option>
+            {profileOptions.map((profile) => (
+              <option key={profile.id} value={profile.id}>
+                {profile.label} ({profile.id})
+              </option>
+            ))}
+          </select>
+        </label>
+        <div className="minimal-inline">
+          <label className="minimal-field grow">
+            <span>Create profile ID</span>
+            <input
+              value={newProfileId}
+              onChange={(event) => setNewProfileId(event.target.value)}
+              placeholder="profiles/new-student.md"
+            />
+          </label>
+          <button
+            type="button"
+            className="minimal-secondary"
+            onClick={() => void handleCreateProfile()}
+            disabled={profileBusy !== null}
+          >
+            {profileBusy === 'creating' ? 'Creating...' : 'Create profile'}
+          </button>
+        </div>
+        <textarea
+          aria-label="Profile content"
+          value={profileEditorText}
+          onChange={(event) => setProfileEditorText(event.target.value)}
+          rows={10}
+          placeholder="Profile content..."
+          disabled={!selectedProfileId && !newProfileId.trim()}
+        />
+        {profileDirty ? <p className="minimal-muted">Unsaved profile edits</p> : null}
+        {profileOptionsError ? <p className="minimal-error">{profileOptionsError}</p> : null}
+        {profileRevisionError ? <p className="minimal-error">{profileRevisionError}</p> : null}
+        {profileSuccess ? <p className="minimal-success">{profileSuccess}</p> : null}
+        {selectedProfileId ? (
+          <div className="minimal-block">
+            <p className="minimal-muted">Recent revisions</p>
+            {profileRevisions.length > 0 ? (
+              <div className="minimal-list">
+                {profileRevisions.map((revision) => (
+                  <div key={revision.id} className="minimal-list-item">
+                    <span>
+                      {revision.source} • {new Date(revision.createdAt).toLocaleString()}
+                    </span>
+                    <button
+                      type="button"
+                      className="minimal-secondary"
+                      onClick={() => void handleRestoreRevision(revision.id)}
+                      disabled={profileBusy !== null}
+                    >
+                      {profileBusy === 'restoring' ? 'Restoring...' : 'Restore'}
+                    </button>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <p className="minimal-muted">No revisions yet.</p>
+            )}
+          </div>
+        ) : null}
+      </section>
+
+      <section className="minimal-section">
+        <div className="minimal-section-header">
+          <h2>4. Prompt</h2>
           <div className="minimal-inline">
             <button
               type="button"
@@ -756,11 +996,21 @@ export const MinimalAssignment: React.FC = () => {
           </div>
         </div>
         <p className="minimal-help">
-          Uses the default template and infers profile from selected student when available.
+          Uses the default template and applies the selected profile when provided.
         </p>
         {promptError ? <p className="minimal-error">{promptError}</p> : null}
+        {promptPackage?.profileDrift?.detected ? (
+          <div className="minimal-alert warning">
+            <strong>Profile drift detected</strong>
+            <p className="minimal-help">
+              The profile changed after this prompt package was created ({promptPackage.profileDrift.reason}
+              ). Regenerate the prompt to use the latest profile.
+            </p>
+          </div>
+        ) : null}
         {promptText ? (
           <textarea
+            aria-label="Prompt text"
             value={promptText}
             onChange={(event) => setPromptText(event.target.value)}
             rows={12}
@@ -772,7 +1022,7 @@ export const MinimalAssignment: React.FC = () => {
 
       <section className="minimal-section">
         <div className="minimal-section-header">
-          <h2>4. Draft</h2>
+          <h2>5. Draft</h2>
           <div className="minimal-inline">
             <button
               type="button"
@@ -787,6 +1037,7 @@ export const MinimalAssignment: React.FC = () => {
         </div>
         <p className="minimal-help">Paste the assignment markdown from your LLM.</p>
         <textarea
+          aria-label="Draft markdown"
           value={draftText}
           onChange={(event) => setDraftText(event.target.value)}
           rows={14}
@@ -817,7 +1068,7 @@ export const MinimalAssignment: React.FC = () => {
 
       <section className="minimal-section">
         <div className="minimal-section-header">
-          <h2>5. Publish</h2>
+          <h2>6. Publish</h2>
           <button
             type="button"
             className="minimal-primary"
@@ -856,7 +1107,7 @@ export const MinimalAssignment: React.FC = () => {
 
       <section className="minimal-section">
         <div className="minimal-section-header">
-          <h2>6. Job actions</h2>
+          <h2>7. Job actions</h2>
           <button type="button" className="minimal-secondary" onClick={() => void loadJobOptions()}>
             Refresh actions
           </button>
@@ -1087,6 +1338,24 @@ export const MinimalAssignment: React.FC = () => {
           display: flex;
           flex-direction: column;
           gap: var(--space-3);
+        }
+
+        .minimal-list {
+          display: flex;
+          flex-direction: column;
+          gap: var(--space-2);
+        }
+
+        .minimal-list-item {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          gap: var(--space-3);
+          padding: var(--space-2) var(--space-3);
+          border: 1px solid var(--border-light);
+          border-radius: var(--radius-lg);
+          background: var(--bg-secondary);
+          font-size: var(--text-sm);
         }
 
         .minimal-grid {
