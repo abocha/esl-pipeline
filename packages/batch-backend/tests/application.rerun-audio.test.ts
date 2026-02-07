@@ -146,6 +146,7 @@ describe('application/job-actions/rerun-audio', () => {
         voiceAccent: 'british',
         ttsStrategy: 'dialogue',
         userId: 'user-1',
+        sourceJobId: 'job-source',
       }),
     );
     expect(publishJobEventSpy).toHaveBeenCalledWith({

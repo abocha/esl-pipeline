@@ -26,12 +26,6 @@ const rerunAudioSchema = z.object({
  * @param action - Rerun audio action with payload
  * @returns Action result indicating success/failure
  *
- * TODO: Implement actual audio rerun logic:
- * 1. Validate job state (must be completed successfully)
- * 2. Call orchestrator with rerunAssignment
- * 3. Update job state or create new job reference
- * 4. Emit job_state_changed event
- * 5. Return success with updated job data
  */
 export async function rerunAudio(jobId: string, action: RerunAudioAction): Promise<JobActionResult> {
   const job = await getJobById(jobId);
@@ -95,6 +89,7 @@ export async function rerunAudio(jobId: string, action: RerunAudioAction): Promi
     ttsStrategy: payload.ttsStrategy ?? job.ttsStrategy ?? undefined,
     userId: job.userId ?? undefined,
     autoPublish: job.autoPublish ?? undefined,
+    sourceJobId: jobId,
   });
 
   publishJobEvent({ type: 'job_created', job: rerunJob });

@@ -4,6 +4,7 @@ import { z } from 'zod';
 import type { JobEventMessage, RecordingEventMessage } from '@esl-pipeline/contracts';
 
 import { approveJobForPipeline } from '../application/approve-job.js';
+import { getJobProvenance } from '../application/get-job-provenance.js';
 import { getJobStatus } from '../application/get-job-status.js';
 import { jobRecordToDto } from '../application/job-dto.js';
 import { deriveRecordingDisplayName } from '../application/recording-dto.js';
@@ -165,6 +166,42 @@ export function registerCoreRoutes(app: FastifyInstance, options: CoreRouteOptio
         jobId,
       });
 
+      return errorResponse(reply, 'internal_error');
+    }
+  }
+
+  async function handleJobProvenanceRequest(request: FastifyRequest, reply: FastifyReply) {
+    const { jobId } = request.params as { jobId: string };
+    const routePath = resolveRoutePath(request, 'GET /jobs/:jobId/provenance');
+
+    try {
+      const provenance = await getJobProvenance(jobId);
+      if (!provenance) {
+        logger.info('HTTP request handled', {
+          event: 'http_request',
+          route: routePath,
+          statusCode: 404,
+          jobId,
+        });
+        return errorResponse(reply, 'not_found');
+      }
+
+      logger.info('HTTP request handled', {
+        event: 'http_request',
+        route: routePath,
+        statusCode: 200,
+        jobId,
+      });
+
+      return reply.send(provenance);
+    } catch (error: unknown) {
+      logger.error(error instanceof Error ? error : String(error), {
+        event: 'http_request',
+        route: routePath,
+        statusCode: 500,
+        error: 'internal_error',
+        jobId,
+      });
       return errorResponse(reply, 'internal_error');
     }
   }
@@ -395,4 +432,9 @@ export function registerCoreRoutes(app: FastifyInstance, options: CoreRouteOptio
 
   app.get('/jobs/:jobId', handleJobStatusRequest);
   app.get('/jobs/:jobId/status', handleJobStatusRequest);
+  if (authenticate) {
+    app.get('/jobs/:jobId/provenance', { preHandler: [authenticate] }, handleJobProvenanceRequest);
+  } else {
+    app.get('/jobs/:jobId/provenance', handleJobProvenanceRequest);
+  }
 }

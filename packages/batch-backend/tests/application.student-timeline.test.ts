@@ -12,11 +12,15 @@ async function truncateTimelineTables() {
   await withPgClient(async (client) => {
     await client.query(`
       TRUNCATE TABLE
+        job_action_history,
         jobs,
         drafts,
         prompt_packages,
         transcripts,
         recordings,
+        template_revisions,
+        templates,
+        profile_revisions,
         student_profile_bindings,
         students,
         profiles
@@ -163,6 +167,216 @@ describeIfDb('student-timeline', () => {
       profileId,
       reason: 'student_update',
       changedBy,
+    });
+  });
+
+  it('includes revision lifecycle and job action events with deterministic filtering', async () => {
+    const studentId = deriveStudentId('Mila');
+    const profileId = 'profiles/mila.md';
+    const templateId = 'templates/default.md';
+    const recordingId = randomUUID();
+    const transcriptId = randomUUID();
+    const promptPackageId = randomUUID();
+    const jobId = randomUUID();
+    const actionId = randomUUID();
+    const profileRevisionId = randomUUID();
+    const templateRevisionId = randomUUID();
+    const eventAt = new Date('2024-02-01T10:00:00.000Z');
+
+    await withPgClient(async (client) => {
+      await client.query(
+        `
+        INSERT INTO profiles (id, label, active_revision_id)
+        VALUES ($1, 'Mila profile', NULL)
+        `,
+        [profileId],
+      );
+      await client.query(
+        `
+        INSERT INTO templates (id, label, active_revision_id)
+        VALUES ($1, 'Default template', NULL)
+        `,
+        [templateId],
+      );
+      await client.query(
+        `
+        INSERT INTO students (id, student, profile_id)
+        VALUES ($1, 'Mila', $2)
+        `,
+        [studentId, profileId],
+      );
+      await client.query(
+        `
+        INSERT INTO student_profile_bindings (
+          id,
+          student_id,
+          profile_id,
+          effective_from,
+          effective_to,
+          reason,
+          changed_by,
+          created_at
+        )
+        VALUES ($1, $2, $3, $4, NULL, 'seed', NULL, $4)
+        `,
+        [randomUUID(), studentId, profileId, eventAt],
+      );
+      await client.query(
+        `
+        INSERT INTO recordings (
+          id,
+          source,
+          student_id,
+          source_path,
+          storage_uri,
+          bytes,
+          status,
+          created_at,
+          updated_at
+        )
+        VALUES ($1, 'upload', $2, 'mila/audio.opus', 's3://bucket/mila/audio.opus', 1024, 'transcribed', $3, $3)
+        `,
+        [recordingId, studentId, eventAt],
+      );
+      await client.query(
+        `
+        INSERT INTO transcripts (
+          id,
+          recording_id,
+          storage_uri,
+          mode,
+          model,
+          language,
+          fallback_used,
+          created_at,
+          updated_at
+        )
+        VALUES ($1, $2, 's3://bucket/mila/transcript.txt', 'timeline', 'nova-3', 'multi', false, $3, $3)
+        `,
+        [transcriptId, recordingId, eventAt],
+      );
+      await client.query(
+        `
+        INSERT INTO prompt_packages (
+          id,
+          recording_id,
+          transcript_id,
+          student_id,
+          resolved_template_id,
+          template_version,
+          storage_uri,
+          created_at,
+          updated_at
+        )
+        VALUES ($1, $2, $3, $4, $5, 'template.md', 's3://bucket/mila/prompt.txt', $6, $6)
+        `,
+        [promptPackageId, recordingId, transcriptId, studentId, templateId, eventAt],
+      );
+      await client.query(
+        `
+        INSERT INTO jobs (
+          id,
+          state,
+          recording_id,
+          transcript_id,
+          prompt_package_id,
+          created_at,
+          updated_at,
+          finished_at
+        )
+        VALUES ($1, 'succeeded', $2, $3, $4, $5, $5, $5)
+        `,
+        [jobId, recordingId, transcriptId, promptPackageId, eventAt],
+      );
+      await client.query(
+        `
+        INSERT INTO profile_revisions (
+          id,
+          profile_id,
+          content,
+          content_hash,
+          source,
+          status,
+          version_number,
+          version_label,
+          activated_at,
+          deprecated_at,
+          created_at,
+          created_by,
+          restored_from_revision_id
+        )
+        VALUES ($1, $2, 'content', 'hash', 'restore', 'active', 1, 'v1', $3, NULL, $3, NULL, NULL)
+        `,
+        [profileRevisionId, profileId, eventAt],
+      );
+      await client.query(
+        `
+        INSERT INTO template_revisions (
+          id,
+          template_id,
+          content,
+          content_hash,
+          source,
+          status,
+          version_number,
+          version_label,
+          activated_at,
+          deprecated_at,
+          created_at,
+          created_by,
+          restored_from_revision_id
+        )
+        VALUES ($1, $2, 'template', 'template-hash', 'restore', 'active', 1, 'v1', $3, NULL, $3, NULL, NULL)
+        `,
+        [templateRevisionId, templateId, eventAt],
+      );
+      await client.query(
+        `
+        INSERT INTO job_action_history (
+          id,
+          job_id,
+          action_type,
+          payload_json,
+          requested_at,
+          requested_by,
+          outcome,
+          message,
+          error_code,
+          created_job_id,
+          created_at
+        )
+        VALUES (
+          $1,
+          $2,
+          'rerun_audio',
+          '{}'::jsonb,
+          $3,
+          NULL,
+          'succeeded',
+          'Audio rerun queued',
+          NULL,
+          NULL,
+          $3
+        )
+        `,
+        [actionId, jobId, eventAt],
+      );
+    });
+
+    const timeline = await getStudentTimeline(studentId, {
+      from: new Date('2024-02-01T09:59:00.000Z'),
+      to: new Date('2024-02-01T10:01:00.000Z'),
+    });
+
+    expect(timeline.items.some((item) => item.type === 'profile_revision_restored')).toBe(true);
+    expect(timeline.items.some((item) => item.type === 'profile_revision_activated')).toBe(true);
+    expect(timeline.items.some((item) => item.type === 'template_revision_restored')).toBe(true);
+    expect(timeline.items.some((item) => item.type === 'template_revision_activated')).toBe(true);
+    const actionEvent = timeline.items.find((item) => item.type === 'job_action_rerun_audio');
+    expect(actionEvent?.status).toBe('succeeded');
+    expect(actionEvent?.details).toMatchObject({
+      actionType: 'rerun_audio',
+      message: 'Audio rerun queued',
     });
   });
 });

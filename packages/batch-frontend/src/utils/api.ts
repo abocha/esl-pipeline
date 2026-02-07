@@ -5,6 +5,7 @@
  * - POST /auth/login, /auth/register, /auth/refresh
  * - POST /jobs (authenticated)
  * - GET /jobs/:jobId (authenticated)
+ * - GET /jobs/:jobId/provenance (authenticated)
  * - GET /user/jobs, /user/jobs/summary (authenticated)
  * - GET /students/summary (authenticated)
  * - POST /validation/markdown (authenticated)
@@ -186,7 +187,16 @@ export type StudentTimelineType =
   | 'draft_saved'
   | 'job_awaiting_approval'
   | 'job_completed'
-  | 'student_profile_binding_changed';
+  | 'student_profile_binding_changed'
+  | 'profile_revision_saved'
+  | 'profile_revision_restored'
+  | 'profile_revision_activated'
+  | 'template_revision_saved'
+  | 'template_revision_restored'
+  | 'template_revision_activated'
+  | 'job_action_rerun_audio'
+  | 'job_action_cancel'
+  | 'job_action_edit_metadata';
 
 export interface StudentTimelineItem {
   type: StudentTimelineType;
@@ -266,6 +276,124 @@ export interface PromptPackageResponse {
   };
   createdAt: string;
   updatedAt: string;
+}
+
+export interface PromptPackageLineageResponse {
+  promptPackageId: string;
+  recordingId: string;
+  transcriptId: string;
+  studentId: string | null;
+  createdAt: string;
+  updatedAt: string;
+  profile: {
+    snapshot: {
+      profileId: string | null;
+      revisionId: string | null;
+      hash: string | null;
+      versionLabel: string | null;
+      status: 'draft' | 'active' | 'deprecated' | null;
+      updatedAt: string | null;
+    };
+    current: {
+      profileId: string | null;
+      revisionId: string | null;
+      hash: string | null;
+      versionLabel: string | null;
+      status: 'draft' | 'active' | 'deprecated' | null;
+      updatedAt: string | null;
+    };
+    drift: PromptPackageResponse['profileDrift'] | null;
+  };
+  template: {
+    snapshot: {
+      templateId: string | null;
+      revisionId: string | null;
+      hash: string | null;
+      versionLabel: string | null;
+      status: 'draft' | 'active' | 'deprecated' | null;
+      updatedAt: string | null;
+    };
+    current: {
+      templateId: string | null;
+      revisionId: string | null;
+      hash: string | null;
+      versionLabel: string | null;
+      status: 'draft' | 'active' | 'deprecated' | null;
+      updatedAt: string | null;
+    };
+    drift: PromptPackageResponse['templateDrift'] | null;
+  };
+  bindingAtCreation?: {
+    bindingId: string;
+    studentId: string;
+    profileId: string;
+    effectiveFrom: string;
+    effectiveTo: string | null;
+    reason: string | null;
+    changedBy: string | null;
+    createdAt: string;
+  } | null;
+}
+
+export interface JobProvenanceResponse {
+  job: {
+    id: string;
+    state: string;
+    createdAt: string;
+    updatedAt: string;
+    startedAt: string | null;
+    finishedAt: string | null;
+    sourceJobId: string | null;
+    manifestPath: string | null;
+    notionUrl: string | null;
+    anytypeUrl: string | null;
+    error: string | null;
+  };
+  sourceJob: {
+    id: string;
+    state: string;
+    createdAt: string;
+    finishedAt: string | null;
+  } | null;
+  recording: {
+    id: string;
+    studentId: string | null;
+    sourcePath: string | null;
+    storageUri: string | null;
+    status: string | null;
+    createdAt: string | null;
+  } | null;
+  transcript: {
+    id: string;
+    mode: string | null;
+    model: string | null;
+    language: string | null;
+    createdAt: string | null;
+  } | null;
+  promptPackage: {
+    id: string;
+    studentId: string | null;
+    createdAt: string | null;
+    updatedAt: string | null;
+  } | null;
+  draft: {
+    id: string;
+    studentId: string | null;
+    storageUri: string | null;
+    createdAt: string | null;
+    updatedAt: string | null;
+  } | null;
+  lineage: PromptPackageLineageResponse | null;
+  actions: {
+    id: string;
+    actionType: string;
+    outcome: 'succeeded' | 'failed';
+    requestedAt: string;
+    requestedBy: string | null;
+    message: string;
+    errorCode: string | null;
+    createdJobId: string | null;
+  }[];
 }
 
 export interface DraftResponse {
@@ -1069,6 +1197,8 @@ export async function getStudentTimeline(
   params: {
     type?: StudentTimelineType | StudentTimelineType[];
     status?: string | string[];
+    from?: string;
+    to?: string;
     limit?: number;
     offset?: number;
     order?: 'asc' | 'desc';
@@ -1083,6 +1213,12 @@ export async function getStudentTimeline(
     if (params.status) {
       const values = Array.isArray(params.status) ? params.status : [params.status];
       search.set('status', values.join(','));
+    }
+    if (params.from) {
+      search.set('from', params.from);
+    }
+    if (params.to) {
+      search.set('to', params.to);
     }
     if (typeof params.limit === 'number') {
       search.set('limit', String(params.limit));
@@ -1210,6 +1346,38 @@ export async function fetchPromptPackage(promptPackageId: string): Promise<Promp
     const axiosError = toAxiosError(error);
     if (axiosError && isAuthError(axiosError)) {
       throw new Error('Authentication required. Please login to view prompt packages.');
+    }
+    throw new Error(axiosError ? handleApiError(axiosError) : formatUnknownError(error));
+  }
+}
+
+export async function fetchPromptPackageLineage(
+  promptPackageId: string,
+): Promise<PromptPackageLineageResponse> {
+  try {
+    const response = await apiClient.get(
+      buildApiProxyPath(`/prompt-packages/${encodeURIComponent(promptPackageId)}/lineage`),
+    );
+    return response.data;
+  } catch (error: unknown) {
+    const axiosError = toAxiosError(error);
+    if (axiosError && isAuthError(axiosError)) {
+      throw new Error('Authentication required. Please login to view prompt lineage.');
+    }
+    throw new Error(axiosError ? handleApiError(axiosError) : formatUnknownError(error));
+  }
+}
+
+export async function fetchJobProvenance(jobId: string): Promise<JobProvenanceResponse> {
+  try {
+    const response = await apiClient.get(
+      buildApiProxyPath(`/jobs/${encodeURIComponent(jobId)}/provenance`),
+    );
+    return response.data;
+  } catch (error: unknown) {
+    const axiosError = toAxiosError(error);
+    if (axiosError && isAuthError(axiosError)) {
+      throw new Error('Authentication required. Please login to view job provenance.');
     }
     throw new Error(axiosError ? handleApiError(axiosError) : formatUnknownError(error));
   }

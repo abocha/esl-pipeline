@@ -4,6 +4,7 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type {
   DraftResponse,
   JobOptionsResponse,
+  JobProvenanceResponse,
   JobStatus,
   MarkdownValidationResponse,
   ProfileRevisionSummaryResponse,
@@ -19,6 +20,7 @@ import {
   cancelJob,
   createDraft,
   createPromptPackage,
+  fetchJobProvenance,
   fetchStudentOptions,
   fetchJobOptions,
   fetchPromptOptions,
@@ -105,6 +107,9 @@ export const MinimalAssignment: React.FC = () => {
   const [actionBusy, setActionBusy] = useState<'rerun' | 'cancel' | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
   const [actionSuccess, setActionSuccess] = useState<string | null>(null);
+  const [jobProvenance, setJobProvenance] = useState<JobProvenanceResponse | null>(null);
+  const [jobProvenanceLoading, setJobProvenanceLoading] = useState(false);
+  const [jobProvenanceError, setJobProvenanceError] = useState<string | null>(null);
 
   const [showRerunAdvanced, setShowRerunAdvanced] = useState(false);
   const [rerunForceTts, setRerunForceTts] = useState(true);
@@ -115,6 +120,21 @@ export const MinimalAssignment: React.FC = () => {
   const [rerunDialogueStability, setRerunDialogueStability] = useState('');
   const [rerunDialogueSeed, setRerunDialogueSeed] = useState('');
   const [cancelReason, setCancelReason] = useState('');
+
+  const loadJobProvenance = useCallback(async (jobId: string) => {
+    setJobProvenanceLoading(true);
+    setJobProvenanceError(null);
+    try {
+      const provenance = await fetchJobProvenance(jobId);
+      setJobProvenance(provenance);
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message : 'Unable to load job provenance details.';
+      setJobProvenanceError(message);
+    } finally {
+      setJobProvenanceLoading(false);
+    }
+  }, []);
 
   const resetFlow = useCallback(() => {
     uploadAbortRef.current?.abort();
@@ -141,6 +161,9 @@ export const MinimalAssignment: React.FC = () => {
     setPublishing(false);
     setPublishError(null);
     setJobStatusState(null);
+    setJobProvenance(null);
+    setJobProvenanceError(null);
+    setJobProvenanceLoading(false);
     setSelectedFileName(null);
     setUploadError(null);
     setUploadProgress(0);
@@ -639,6 +662,16 @@ export const MinimalAssignment: React.FC = () => {
     setCancelReason('');
   }, [jobStatus?.jobId]);
 
+  useEffect(() => {
+    if (!jobStatus?.jobId) {
+      setJobProvenance(null);
+      setJobProvenanceError(null);
+      setJobProvenanceLoading(false);
+      return;
+    }
+    void loadJobProvenance(jobStatus.jobId);
+  }, [jobStatus?.jobId, loadJobProvenance]);
+
   const handleRerunAudio = async () => {
     if (!jobStatus?.jobId) return;
 
@@ -683,6 +716,7 @@ export const MinimalAssignment: React.FC = () => {
       setActionSuccess(result.message ?? 'Audio rerun queued.');
       const refreshed = await getJobStatus(jobStatus.jobId);
       setJobStatusState(refreshed);
+      await loadJobProvenance(jobStatus.jobId);
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Unable to rerun audio.';
       setActionError(message);
@@ -706,6 +740,7 @@ export const MinimalAssignment: React.FC = () => {
       setActionSuccess(result.message ?? 'Job cancellation requested.');
       const refreshed = await getJobStatus(jobStatus.jobId);
       setJobStatusState(refreshed);
+      await loadJobProvenance(jobStatus.jobId);
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Unable to cancel job.';
       setActionError(message);
@@ -1246,6 +1281,71 @@ export const MinimalAssignment: React.FC = () => {
             ) : null}
             {actionError ? <p className="minimal-error">{actionError}</p> : null}
             {actionSuccess ? <p className="minimal-success">{actionSuccess}</p> : null}
+            <div className="minimal-block">
+              <div className="minimal-section-header">
+                <p className="minimal-help">Assignment provenance and lineage</p>
+                <button
+                  type="button"
+                  className="minimal-secondary"
+                  onClick={() => jobStatus?.jobId && void loadJobProvenance(jobStatus.jobId)}
+                  disabled={jobProvenanceLoading}
+                >
+                  {jobProvenanceLoading ? 'Refreshing...' : 'Refresh provenance'}
+                </button>
+              </div>
+              {jobProvenanceError ? <p className="minimal-error">{jobProvenanceError}</p> : null}
+              {jobProvenance ? (
+                <>
+                  <div className="minimal-meta">
+                    <span>Source job: {jobProvenance.job.sourceJobId ?? 'none'}</span>
+                    <span>Prompt package: {jobProvenance.promptPackage?.id ?? 'none'}</span>
+                    <span>Draft: {jobProvenance.draft?.id ?? 'none'}</span>
+                  </div>
+                  {jobProvenance.lineage?.profile?.snapshot?.revisionId ||
+                  jobProvenance.lineage?.template?.snapshot?.revisionId ? (
+                    <div className="minimal-meta">
+                      <span>
+                        Profile revision:{' '}
+                        {jobProvenance.lineage?.profile?.snapshot?.revisionId ?? 'unknown'}
+                      </span>
+                      <span>
+                        Template revision:{' '}
+                        {jobProvenance.lineage?.template?.snapshot?.revisionId ?? 'unknown'}
+                      </span>
+                    </div>
+                  ) : null}
+                  {jobProvenance.lineage?.bindingAtCreation ? (
+                    <div className="minimal-meta">
+                      <span>
+                        Bound profile at creation:{' '}
+                        {jobProvenance.lineage.bindingAtCreation.profileId}
+                      </span>
+                      <span>
+                        Bound from:{' '}
+                        {new Date(jobProvenance.lineage.bindingAtCreation.effectiveFrom).toLocaleString()}
+                      </span>
+                    </div>
+                  ) : null}
+                  {jobProvenance.actions.length > 0 ? (
+                    <div className="minimal-list">
+                      {jobProvenance.actions.slice(0, 6).map((event) => (
+                        <div key={event.id} className="minimal-list-item">
+                          <span>
+                            {event.actionType} • {event.outcome} •{' '}
+                            {new Date(event.requestedAt).toLocaleString()}
+                          </span>
+                          <span className="minimal-muted">{event.message}</span>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="minimal-muted">No action audit events yet.</p>
+                  )}
+                </>
+              ) : (
+                <p className="minimal-muted">Provenance details will appear once loaded.</p>
+              )}
+            </div>
           </>
         ) : (
           <p className="minimal-help">Publish once to create a job, then actions become available.</p>
