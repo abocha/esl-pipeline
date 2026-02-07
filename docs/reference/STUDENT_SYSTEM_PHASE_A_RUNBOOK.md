@@ -21,6 +21,8 @@ Operational guide for moving student/profile metadata from filesystem JSON into 
 4. Verify canonical data.
    - `GET /students` should match expected roster.
    - Spot-check profile bindings through API behavior (`profileId` on student records).
+   - Optional one-off lifecycle verification:
+     - `pnpm --filter @esl-pipeline/batch-backend run student-system:verify:oneoff`
 5. Enable DB-backed reads.
    - Set `STUDENT_SYSTEM_SOURCE=hybrid` for transition.
    - After confidence, set `STUDENT_SYSTEM_SOURCE=db` and `STUDENT_SYSTEM_FS_FALLBACK=false`.

@@ -18,6 +18,7 @@
     "student-system:backfill:dry": "tsx src/tools/backfill-student-system.ts --dry-run",
     "student-system:backfill:dist": "node dist/tools/backfill-student-system.js",
     "student-system:backfill:dist:dry": "node dist/tools/backfill-student-system.js --dry-run",
+    "student-system:verify:oneoff": "tsx src/tools/verify-student-system-oneoff.ts",
     "test": "vitest run --config ../../vitest.config.ts --dir ../../packages/batch-backend/tests --reporter=dot",
     "test:verbose": "BATCH_BACKEND_TEST_LOG_LEVEL=debug vitest run --config ../../vitest.config.ts --dir ../../packages/batch-backend/tests --reporter=verbose",
     "test:watch": "vitest watch --config ../../vitest.config.ts --dir ../../packages/batch-backend/tests",

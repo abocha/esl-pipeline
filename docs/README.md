@@ -5,7 +5,7 @@
 - Audience: AI agents, maintainers.
 - Read Time: 2 minutes.
 - Authority Level: Router.
-- Last Verified Against: 2026-02-06 repo state.
+- Last Verified Against: 2026-02-07 repo state.
 
 ## Purpose
 
@@ -44,7 +44,7 @@
 - Need run commands/setup: `docs/QUICK_START.md`.
 - Need contracts/invariants: `docs/reference/agents-ssot.md`.
 - Need backend/frontend readiness: `docs/backend-frontend/backend-frontend-alignment.md`.
-- Need student-system completion plan: `docs/reference/STUDENT_SYSTEM_ROADMAP.md`.
+- Need student-system implementation roadmap and execution checklist: `docs/reference/STUDENT_SYSTEM_ROADMAP.md`.
 - Need Docker mount/permissions troubleshooting: `docs/operations/docker-host-paths.md`.
 
 ## Related

@@ -11,6 +11,31 @@ import { logger } from './logger.js';
 let pool: Pool | null = null;
 let schemaReadyPromise: Promise<void> | null = null;
 
+const RETRYABLE_PG_ERROR_CODES = new Set([
+  '40001', // serialization_failure
+  '40P01', // deadlock_detected
+]);
+
+const RETRYABLE_PG_CODE_PREFIXES = ['08']; // connection exceptions
+
+const NON_RETRYABLE_MESSAGE_PATTERNS = [
+  'violates foreign key constraint',
+  'violates unique constraint',
+  'violates check constraint',
+  'invalid input syntax',
+  'syntax error',
+];
+
+const RETRYABLE_MESSAGE_PATTERNS = [
+  'connection terminated',
+  'could not connect',
+  'timeout',
+  'econnrefused',
+  'econnreset',
+  'etimedout',
+  'server closed the connection unexpectedly',
+];
+
 const JOBS_TABLE_SQL = `
 CREATE TABLE IF NOT EXISTS jobs (
   id UUID PRIMARY KEY,
@@ -807,9 +832,9 @@ export async function withPgClient<T>(
       client.release();
     }
   } catch (error) {
-    if (attempt < 5) {
+    if (attempt < 5 && isRetryablePgError(error)) {
       const delay = 500 * attempt;
-      logger.warn('Postgres connection failed; retrying', {
+      logger.warn('Postgres operation failed with transient error; retrying', {
         component: 'pg',
         attempt,
         delay,
@@ -825,6 +850,36 @@ export async function withPgClient<T>(
     });
     throw error;
   }
+}
+
+export function isRetryablePgError(error: unknown): boolean {
+  if (!error) return false;
+
+  const maybePgError = error as { code?: unknown; message?: unknown };
+  const code = typeof maybePgError.code === 'string' ? maybePgError.code : null;
+  const message = (
+    typeof maybePgError.message === 'string' ? maybePgError.message : String(error)
+  ).toLowerCase();
+
+  if (NON_RETRYABLE_MESSAGE_PATTERNS.some((pattern) => message.includes(pattern))) {
+    return false;
+  }
+
+  if (code) {
+    if (RETRYABLE_PG_ERROR_CODES.has(code)) {
+      return true;
+    }
+
+    if (RETRYABLE_PG_CODE_PREFIXES.some((prefix) => code.startsWith(prefix))) {
+      return true;
+    }
+  }
+
+  if (RETRYABLE_MESSAGE_PATTERNS.some((pattern) => message.includes(pattern))) {
+    return true;
+  }
+
+  return false;
 }
 
 /*
