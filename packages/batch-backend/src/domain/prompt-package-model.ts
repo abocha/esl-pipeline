@@ -8,10 +8,14 @@ export interface PromptPackageRecord {
   resolvedProfileHash?: string | null;
   resolvedProfileRevisionId?: string | null;
   resolvedProfileUpdatedAt?: Date | null;
+  resolvedProfileVersionLabel?: string | null;
+  resolvedProfileStatus?: 'draft' | 'active' | 'deprecated' | null;
   resolvedTemplateId?: string | null;
   resolvedTemplateHash?: string | null;
   resolvedTemplateRevisionId?: string | null;
   resolvedTemplateUpdatedAt?: Date | null;
+  resolvedTemplateVersionLabel?: string | null;
+  resolvedTemplateStatus?: 'draft' | 'active' | 'deprecated' | null;
   templateVersion: string;
   notes?: string | null;
   storageUri: string;

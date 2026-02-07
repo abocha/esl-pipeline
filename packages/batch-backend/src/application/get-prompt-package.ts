@@ -1,10 +1,10 @@
 import {
-  getLatestProfileRevision,
+  getActiveProfileRevision,
 } from '../domain/profile-revision-repository.js';
 import type { PromptPackageRecord } from '../domain/prompt-package-model.js';
 import type { ProfileRevisionRecord } from '../domain/profile-revision-model.js';
 import type { TemplateRevisionRecord } from '../domain/template-revision-model.js';
-import { getLatestTemplateRevision } from '../domain/template-revision-repository.js';
+import { getActiveTemplateRevision } from '../domain/template-revision-repository.js';
 import { getPromptPackageById } from '../domain/prompt-package-repository.js';
 import type { TranscriptionStorage } from '../infrastructure/transcription-storage.js';
 import { createTranscriptionStorageForUri } from '../infrastructure/transcription-storage.js';
@@ -35,10 +35,10 @@ export interface GetPromptPackageDependencies {
     getById: typeof getPromptPackageById;
   };
   profileRevisions: {
-    getLatest: typeof getLatestProfileRevision;
+    getActive: typeof getActiveProfileRevision;
   };
   templateRevisions: {
-    getLatest: typeof getLatestTemplateRevision;
+    getActive: typeof getActiveTemplateRevision;
   };
 }
 
@@ -52,10 +52,10 @@ export async function getPromptPackage(
     getById: getPromptPackageById,
   };
   const profileRevisions = overrides?.profileRevisions ?? {
-    getLatest: getLatestProfileRevision,
+    getActive: getActiveProfileRevision,
   };
   const templateRevisions = overrides?.templateRevisions ?? {
-    getLatest: getLatestTemplateRevision,
+    getActive: getActiveTemplateRevision,
   };
 
   const promptPackage = await promptPackages.getById(promptPackageId);
@@ -64,10 +64,13 @@ export async function getPromptPackage(
   const storage = overrides?.storage ?? createTranscriptionStorageForUri(promptPackage.storageUri);
   const text = await storage.getText(promptPackage.storageUri);
   const response = toPromptPackageResponse(promptPackage, text);
-  const profileDrift = await detectPromptPackageProfileDrift(promptPackage, profileRevisions.getLatest);
+  const profileDrift = await detectPromptPackageProfileDrift(
+    promptPackage,
+    profileRevisions.getActive,
+  );
   const templateDrift = await detectPromptPackageTemplateDrift(
     promptPackage,
-    templateRevisions.getLatest,
+    templateRevisions.getActive,
   );
   return {
     ...response,

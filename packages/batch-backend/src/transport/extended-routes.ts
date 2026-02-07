@@ -23,6 +23,7 @@ import { listJobsWithDefaults } from '../application/list-jobs.js';
 import { listRecordingsWithDefaults } from '../application/list-recordings.js';
 import { materializeDraft } from '../application/materialize-draft.js';
 import {
+  activateProfileRevisionForProfile,
   ProfileContentError,
   deleteProfileContent,
   getProfileContent,
@@ -39,6 +40,13 @@ import {
   RecordingRetryError,
   retryRecordingTranscription,
 } from '../application/retry-recording-transcription.js';
+import {
+  TemplateContentError,
+  activateTemplateRevisionForTemplate,
+  getTemplateRevisionForTemplate,
+  listTemplateRevisionsForTemplate,
+  restoreTemplateRevision,
+} from '../application/template-content.js';
 import {
   StudentProfileStoreError,
   createStudentProfile,
@@ -1086,6 +1094,292 @@ export function registerExtendedRoutes(app: FastifyInstance, options: ExtendedRo
           });
         }
         if (error instanceof ProfileContentError) {
+          return reply.code(error.status).send({
+            error: error.code,
+            message: error.message,
+            code: error.code,
+          });
+        }
+
+        logger.error(error instanceof Error ? error : String(error), {
+          event: 'http_request',
+          route: routePath,
+          statusCode: 500,
+          error: 'internal_error',
+        });
+
+        return errorResponse(reply, 'internal_error');
+      }
+    },
+  );
+
+  app.post(
+    '/profiles/:id/revisions/:revisionId/activate',
+    {
+      preHandler: [authenticate],
+    },
+    async (request, reply) => {
+      const routePath = resolveRoutePath(request, 'POST /profiles/:id/revisions/:revisionId/activate');
+      const paramsSchema = z.object({
+        id: z.string().min(1),
+        revisionId: z.string().uuid(),
+      });
+
+      try {
+        const params = paramsSchema.parse(request.params ?? {});
+        const activated = await activateProfileRevisionForProfile(params.id, params.revisionId);
+        if (!activated) {
+          return errorResponse(reply, 'not_found');
+        }
+
+        logger.info('HTTP request handled', {
+          event: 'http_request',
+          route: routePath,
+          statusCode: 200,
+          profileId: params.id,
+          revisionId: params.revisionId,
+        });
+
+        return reply.send(activated);
+      } catch (error: unknown) {
+        if (error instanceof z.ZodError) {
+          return reply.code(400).send({
+            error: 'validation_failed',
+            message: 'Invalid request parameters',
+            details: error.issues,
+          });
+        }
+        if (error instanceof ProfileContentError) {
+          return reply.code(error.status).send({
+            error: error.code,
+            message: error.message,
+            code: error.code,
+          });
+        }
+
+        logger.error(error instanceof Error ? error : String(error), {
+          event: 'http_request',
+          route: routePath,
+          statusCode: 500,
+          error: 'internal_error',
+        });
+
+        return errorResponse(reply, 'internal_error');
+      }
+    },
+  );
+
+  app.get(
+    '/templates/:id/revisions',
+    {
+      preHandler: [authenticate],
+    },
+    async (request, reply) => {
+      const routePath = resolveRoutePath(request, 'GET /templates/:id/revisions');
+      const paramsSchema = z.object({
+        id: z.string().min(1),
+      });
+      const querySchema = z.object({
+        limit: z.coerce.number().int().min(1).max(500).optional(),
+        offset: z.coerce.number().int().min(0).optional(),
+        order: z.enum(['asc', 'desc']).optional(),
+      });
+
+      try {
+        const params = paramsSchema.parse(request.params ?? {});
+        const query = querySchema.parse(request.query ?? {});
+        const revisions = await listTemplateRevisionsForTemplate(params.id, query);
+        if (!revisions) {
+          return errorResponse(reply, 'not_found');
+        }
+
+        logger.info('HTTP request handled', {
+          event: 'http_request',
+          route: routePath,
+          statusCode: 200,
+          templateId: params.id,
+        });
+
+        return reply.send(revisions);
+      } catch (error: unknown) {
+        if (error instanceof z.ZodError) {
+          return reply.code(400).send({
+            error: 'validation_failed',
+            message: 'Invalid request parameters',
+            details: error.issues,
+          });
+        }
+        if (error instanceof TemplateContentError) {
+          return reply.code(error.status).send({
+            error: error.code,
+            message: error.message,
+            code: error.code,
+          });
+        }
+
+        logger.error(error instanceof Error ? error : String(error), {
+          event: 'http_request',
+          route: routePath,
+          statusCode: 500,
+          error: 'internal_error',
+        });
+
+        return errorResponse(reply, 'internal_error');
+      }
+    },
+  );
+
+  app.get(
+    '/templates/:id/revisions/:revisionId',
+    {
+      preHandler: [authenticate],
+    },
+    async (request, reply) => {
+      const routePath = resolveRoutePath(request, 'GET /templates/:id/revisions/:revisionId');
+      const paramsSchema = z.object({
+        id: z.string().min(1),
+        revisionId: z.string().uuid(),
+      });
+
+      try {
+        const params = paramsSchema.parse(request.params ?? {});
+        const revision = await getTemplateRevisionForTemplate(params.id, params.revisionId);
+        if (!revision) {
+          return errorResponse(reply, 'not_found');
+        }
+
+        logger.info('HTTP request handled', {
+          event: 'http_request',
+          route: routePath,
+          statusCode: 200,
+          templateId: params.id,
+          revisionId: params.revisionId,
+        });
+
+        return reply.send(revision);
+      } catch (error: unknown) {
+        if (error instanceof z.ZodError) {
+          return reply.code(400).send({
+            error: 'validation_failed',
+            message: 'Invalid request parameters',
+            details: error.issues,
+          });
+        }
+        if (error instanceof TemplateContentError) {
+          return reply.code(error.status).send({
+            error: error.code,
+            message: error.message,
+            code: error.code,
+          });
+        }
+
+        logger.error(error instanceof Error ? error : String(error), {
+          event: 'http_request',
+          route: routePath,
+          statusCode: 500,
+          error: 'internal_error',
+        });
+
+        return errorResponse(reply, 'internal_error');
+      }
+    },
+  );
+
+  app.post(
+    '/templates/:id/revisions/:revisionId/restore',
+    {
+      preHandler: [authenticate],
+    },
+    async (request, reply) => {
+      const routePath = resolveRoutePath(request, 'POST /templates/:id/revisions/:revisionId/restore');
+      const paramsSchema = z.object({
+        id: z.string().min(1),
+        revisionId: z.string().uuid(),
+      });
+
+      try {
+        const params = paramsSchema.parse(request.params ?? {});
+        const restored = await restoreTemplateRevision(params.id, params.revisionId, {
+          createdBy: getAuthenticatedUser(request)?.id ?? null,
+        });
+        if (!restored) {
+          return errorResponse(reply, 'not_found');
+        }
+
+        logger.info('HTTP request handled', {
+          event: 'http_request',
+          route: routePath,
+          statusCode: 200,
+          templateId: params.id,
+          revisionId: params.revisionId,
+        });
+
+        return reply.send(restored);
+      } catch (error: unknown) {
+        if (error instanceof z.ZodError) {
+          return reply.code(400).send({
+            error: 'validation_failed',
+            message: 'Invalid request parameters',
+            details: error.issues,
+          });
+        }
+        if (error instanceof TemplateContentError) {
+          return reply.code(error.status).send({
+            error: error.code,
+            message: error.message,
+            code: error.code,
+          });
+        }
+
+        logger.error(error instanceof Error ? error : String(error), {
+          event: 'http_request',
+          route: routePath,
+          statusCode: 500,
+          error: 'internal_error',
+        });
+
+        return errorResponse(reply, 'internal_error');
+      }
+    },
+  );
+
+  app.post(
+    '/templates/:id/revisions/:revisionId/activate',
+    {
+      preHandler: [authenticate],
+    },
+    async (request, reply) => {
+      const routePath = resolveRoutePath(request, 'POST /templates/:id/revisions/:revisionId/activate');
+      const paramsSchema = z.object({
+        id: z.string().min(1),
+        revisionId: z.string().uuid(),
+      });
+
+      try {
+        const params = paramsSchema.parse(request.params ?? {});
+        const activated = await activateTemplateRevisionForTemplate(params.id, params.revisionId);
+        if (!activated) {
+          return errorResponse(reply, 'not_found');
+        }
+
+        logger.info('HTTP request handled', {
+          event: 'http_request',
+          route: routePath,
+          statusCode: 200,
+          templateId: params.id,
+          revisionId: params.revisionId,
+        });
+
+        return reply.send(activated);
+      } catch (error: unknown) {
+        if (error instanceof z.ZodError) {
+          return reply.code(400).send({
+            error: 'validation_failed',
+            message: 'Invalid request parameters',
+            details: error.issues,
+          });
+        }
+        if (error instanceof TemplateContentError) {
           return reply.code(error.status).send({
             error: error.code,
             message: error.message,

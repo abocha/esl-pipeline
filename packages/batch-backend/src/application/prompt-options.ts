@@ -76,6 +76,18 @@ export async function listPromptProfilesWithPath(
   return { profiles, profileRoot, defaultProfileId };
 }
 
+export async function listPromptTemplatesWithPath(
+  overrides?: Partial<{ config: BatchBackendConfig }>,
+): Promise<{
+  templates: PromptOptionWithPath[];
+  templateRoot: string;
+  defaultTemplateId: string | null;
+}> {
+  const config = overrides?.config ?? loadConfig();
+  const { templates, templateRoot, defaultTemplateId } = await loadTemplateOptionList(config);
+  return { templates, templateRoot, defaultTemplateId };
+}
+
 export async function getPromptOptions(
   overrides?: Partial<{ config: BatchBackendConfig }>,
 ): Promise<PromptOptionsResponse> {
