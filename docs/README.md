@@ -44,10 +44,12 @@
 - Need run commands/setup: `docs/QUICK_START.md`.
 - Need contracts/invariants: `docs/reference/agents-ssot.md`.
 - Need backend/frontend readiness: `docs/backend-frontend/backend-frontend-alignment.md`.
+- Need student-system completion plan: `docs/reference/STUDENT_SYSTEM_ROADMAP.md`.
 - Need Docker mount/permissions troubleshooting: `docs/operations/docker-host-paths.md`.
 
 ## Related
 
 - `docs/reference/DOCS_IA_MAP.md`
 - `docs/reference/DOCS_GOVERNANCE.md`
+- `docs/reference/STUDENT_SYSTEM_ROADMAP.md`
 - `docs/archive/README.md`
