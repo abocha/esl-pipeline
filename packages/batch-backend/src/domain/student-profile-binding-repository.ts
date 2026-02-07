@@ -23,6 +23,12 @@ export interface SetActiveStudentProfileBindingParams {
   effectiveFrom?: Date;
 }
 
+export interface ClearActiveStudentProfileBindingParams {
+  effectiveTo?: Date;
+  reason?: string | null;
+  changedBy?: string | null;
+}
+
 export interface ListStudentProfileBindingsParams {
   studentId: string;
   limit?: number;
@@ -71,17 +77,29 @@ export async function getActiveStudentProfileBinding(
 
 export async function clearActiveStudentProfileBinding(
   studentId: string,
-  effectiveTo: Date = new Date(),
+  params: Date | ClearActiveStudentProfileBindingParams = new Date(),
 ): Promise<void> {
+  const normalized =
+    params instanceof Date
+      ? { effectiveTo: params, reason: null, changedBy: null }
+      : {
+          effectiveTo: params.effectiveTo ?? new Date(),
+          reason: params.reason ?? null,
+          changedBy: params.changedBy ?? null,
+        };
+
   await withPgClient(async (client: PoolClient) => {
     await client.query(
       `
       UPDATE student_profile_bindings
-      SET effective_to = $2
+      SET
+        effective_to = $2,
+        reason = COALESCE($3, reason),
+        changed_by = COALESCE($4, changed_by)
       WHERE student_id = $1
         AND effective_to IS NULL
       `,
-      [studentId, effectiveTo],
+      [studentId, normalized.effectiveTo, normalized.reason, normalized.changedBy],
     );
   });
 }
@@ -121,11 +139,19 @@ export async function setActiveStudentProfileBinding(
       await client.query(
         `
         UPDATE student_profile_bindings
-        SET effective_to = $2
+        SET
+          effective_to = $2,
+          reason = COALESCE($3, reason),
+          changed_by = COALESCE($4, changed_by)
         WHERE student_id = $1
           AND effective_to IS NULL
         `,
-        [params.studentId, effectiveFrom],
+        [
+          params.studentId,
+          effectiveFrom,
+          params.reason ?? null,
+          params.changedBy ?? null,
+        ],
       );
 
       const id = randomUUID();

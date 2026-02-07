@@ -8,7 +8,8 @@ export type StudentTimelineType =
   | 'prompt_package_created'
   | 'draft_saved'
   | 'job_awaiting_approval'
-  | 'job_completed';
+  | 'job_completed'
+  | 'student_profile_binding_changed';
 
 export interface StudentTimelineItem {
   type: StudentTimelineType;
@@ -54,6 +55,10 @@ interface TimelineRow {
   source_path: string | null;
   storage_uri: string | null;
   error: string | null;
+  binding_id: string | null;
+  binding_profile_id: string | null;
+  binding_reason: string | null;
+  binding_changed_by: string | null;
 }
 
 function deriveDisplayName(params: {
@@ -101,7 +106,11 @@ const timelineQuery = `
            NULL::uuid AS job_id,
            r.source_path,
            r.storage_uri,
-           r.error
+           r.error,
+           NULL::uuid AS binding_id,
+           NULL::text AS binding_profile_id,
+           NULL::text AS binding_reason,
+           NULL::uuid AS binding_changed_by
     FROM recordings r
     WHERE r.student_id = $1
 
@@ -117,7 +126,11 @@ const timelineQuery = `
            NULL::uuid AS job_id,
            r.source_path,
            r.storage_uri,
-           NULL::text AS error
+           NULL::text AS error,
+           NULL::uuid AS binding_id,
+           NULL::text AS binding_profile_id,
+           NULL::text AS binding_reason,
+           NULL::uuid AS binding_changed_by
     FROM transcripts t
     JOIN recordings r ON r.id = t.recording_id
     WHERE r.student_id = $1
@@ -134,7 +147,11 @@ const timelineQuery = `
            NULL::uuid AS job_id,
            r.source_path,
            r.storage_uri,
-           NULL::text AS error
+           NULL::text AS error,
+           NULL::uuid AS binding_id,
+           NULL::text AS binding_profile_id,
+           NULL::text AS binding_reason,
+           NULL::uuid AS binding_changed_by
     FROM prompt_packages p
     LEFT JOIN recordings r ON r.id = p.recording_id
     WHERE p.student_id = $1
@@ -151,7 +168,11 @@ const timelineQuery = `
            NULL::uuid AS job_id,
            r.source_path,
            r.storage_uri,
-           NULL::text AS error
+           NULL::text AS error,
+           NULL::uuid AS binding_id,
+           NULL::text AS binding_profile_id,
+           NULL::text AS binding_reason,
+           NULL::uuid AS binding_changed_by
     FROM drafts d
     LEFT JOIN prompt_packages p ON p.id = d.prompt_package_id
     LEFT JOIN recordings r ON r.id = p.recording_id
@@ -173,7 +194,11 @@ const timelineQuery = `
       j.id AS job_id,
       COALESCE(r.source_path, rp.source_path, rd.source_path) AS source_path,
       COALESCE(r.storage_uri, rp.storage_uri, rd.storage_uri) AS storage_uri,
-      j.error
+      j.error,
+      NULL::uuid AS binding_id,
+      NULL::text AS binding_profile_id,
+      NULL::text AS binding_reason,
+      NULL::uuid AS binding_changed_by
     FROM jobs j
     LEFT JOIN recordings r ON r.id = j.recording_id
     LEFT JOIN prompt_packages p ON p.id = j.prompt_package_id
@@ -183,6 +208,26 @@ const timelineQuery = `
     LEFT JOIN recordings rd ON rd.id = pd.recording_id
     WHERE COALESCE(r.student_id, p.student_id, d.student_id, pd.student_id) = $1
       AND j.state IN ('awaiting_approval', 'succeeded', 'failed')
+
+    UNION ALL
+
+    SELECT 'student_profile_binding_changed'::text AS type,
+           'binding_changed'::text AS status,
+           spb.created_at,
+           NULL::uuid AS recording_id,
+           NULL::uuid AS transcript_id,
+           NULL::uuid AS prompt_package_id,
+           NULL::uuid AS draft_id,
+           NULL::uuid AS job_id,
+           spb.profile_id AS source_path,
+           NULL::text AS storage_uri,
+           NULL::text AS error,
+           spb.id AS binding_id,
+           spb.profile_id AS binding_profile_id,
+           spb.reason AS binding_reason,
+           spb.changed_by AS binding_changed_by
+    FROM student_profile_bindings spb
+    WHERE spb.student_id = $1
   )
 `;
 
@@ -229,7 +274,11 @@ export async function getStudentTimeline(
              job_id,
              source_path,
              storage_uri,
-             error
+             error,
+             binding_id,
+             binding_profile_id,
+             binding_reason,
+             binding_changed_by
       FROM timeline
       ${whereClause}
       ORDER BY created_at ${orderClause}
@@ -244,29 +293,43 @@ export async function getStudentTimeline(
     };
   });
 
-  const items = rows.map((row) => ({
-    type: row.type,
-    studentId,
-    recordingId: row.recording_id,
-    transcriptId: row.transcript_id,
-    promptPackageId: row.prompt_package_id,
-    draftId: row.draft_id,
-    jobId: row.job_id,
-    status: row.status,
-    createdAt: row.created_at.toISOString(),
-    displayName: deriveDisplayName({
-      fallbackId:
-        row.job_id ??
-        row.draft_id ??
-        row.prompt_package_id ??
-        row.transcript_id ??
-        row.recording_id ??
-        studentId,
-      sourcePath: row.source_path,
-      storageUri: row.storage_uri,
-    }),
-    details: row.error ? { error: row.error } : undefined,
-  }));
+  const items = rows.map((row) => {
+    const details: Record<string, unknown> = {};
+    if (row.error) {
+      details.error = row.error;
+    }
+    if (row.type === 'student_profile_binding_changed') {
+      details.bindingId = row.binding_id;
+      details.profileId = row.binding_profile_id;
+      details.reason = row.binding_reason;
+      details.changedBy = row.binding_changed_by;
+    }
+
+    return {
+      type: row.type,
+      studentId,
+      recordingId: row.recording_id,
+      transcriptId: row.transcript_id,
+      promptPackageId: row.prompt_package_id,
+      draftId: row.draft_id,
+      jobId: row.job_id,
+      status: row.status,
+      createdAt: row.created_at.toISOString(),
+      displayName: deriveDisplayName({
+        fallbackId:
+          row.job_id ??
+          row.draft_id ??
+          row.prompt_package_id ??
+          row.transcript_id ??
+          row.recording_id ??
+          row.binding_id ??
+          studentId,
+        sourcePath: row.source_path,
+        storageUri: row.storage_uri,
+      }),
+      details: Object.keys(details).length > 0 ? details : undefined,
+    };
+  });
 
   return {
     items,

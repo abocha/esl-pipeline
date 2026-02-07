@@ -71,6 +71,10 @@ interface StudentStoreDependencies {
 interface StudentStoreOverrides {
   config?: BatchBackendConfig;
   studentsDir?: string;
+  bindingAudit?: {
+    reason?: string | null;
+    changedBy?: string | null;
+  };
   deps?: Partial<StudentStoreDependencies>;
 }
 
@@ -362,9 +366,10 @@ async function syncBindingForStudent(
   profileId: string | null,
   dependencies: StudentStoreDependencies,
   reason: string,
+  changedBy: string | null,
 ): Promise<void> {
   if (!profileId) {
-    await dependencies.bindings.clearActive(studentId);
+    await dependencies.bindings.clearActive(studentId, { reason, changedBy });
     return;
   }
 
@@ -378,7 +383,7 @@ async function syncBindingForStudent(
     studentId,
     profileId,
     reason,
-    changedBy: null,
+    changedBy,
   });
 }
 
@@ -586,6 +591,12 @@ async function deleteStudentProfileLocal(id: string, studentsDir: string): Promi
 async function createStudentProfileDb(
   input: StudentProfileInput,
   dependencies: StudentStoreDependencies,
+  options?: {
+    bindingAudit?: {
+      reason?: string | null;
+      changedBy?: string | null;
+    };
+  },
 ): Promise<StudentProfileData> {
   const sanitized = sanitizeProfileInput(input);
   const student = sanitized.student?.trim();
@@ -628,7 +639,13 @@ async function createStudentProfileDb(
     throw error;
   }
 
-  await syncBindingForStudent(inserted.id, inserted.profileId ?? null, dependencies, 'student_create');
+  await syncBindingForStudent(
+    inserted.id,
+    inserted.profileId ?? null,
+    dependencies,
+    options?.bindingAudit?.reason ?? 'student_create',
+    options?.bindingAudit?.changedBy ?? null,
+  );
 
   return toStudentProfileData(mapStudentRecordToEntry(inserted));
 }
@@ -640,6 +657,10 @@ async function updateStudentProfileDb(
     studentsDir?: string;
     allowFsFallbackRead: boolean;
     dependencies: StudentStoreDependencies;
+    bindingAudit?: {
+      reason?: string | null;
+      changedBy?: string | null;
+    };
   },
 ): Promise<StudentProfileData | null> {
   if (!id) return null;
@@ -717,7 +738,8 @@ async function updateStudentProfileDb(
     persisted.id,
     persisted.profileId ?? null,
     options.dependencies,
-    'student_update',
+    options.bindingAudit?.reason ?? 'student_update',
+    options.bindingAudit?.changedBy ?? null,
   );
 
   return toStudentProfileData(mapStudentRecordToEntry(persisted));
@@ -811,7 +833,9 @@ export async function createStudentProfile(
   }
 
   if (isDbBackedSource(config)) {
-    return createStudentProfileDb(input, getDependencies(overrides));
+    return createStudentProfileDb(input, getDependencies(overrides), {
+      bindingAudit: overrides?.bindingAudit,
+    });
   }
 
   const studentsDir = await resolveStudentsDir({ config, studentsDir: overrides?.studentsDir });
@@ -841,6 +865,7 @@ export async function updateStudentProfile(
       studentsDir,
       allowFsFallbackRead: shouldReadFsFallback(config),
       dependencies: getDependencies(overrides),
+      bindingAudit: overrides?.bindingAudit,
     });
   }
 

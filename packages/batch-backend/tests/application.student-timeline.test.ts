@@ -10,7 +10,18 @@ const describeIfDb = hasTestDb ? describe : describe.skip;
 
 async function truncateTimelineTables() {
   await withPgClient(async (client) => {
-    await client.query('TRUNCATE TABLE transcripts, drafts, prompt_packages, recordings, jobs');
+    await client.query(`
+      TRUNCATE TABLE
+        jobs,
+        drafts,
+        prompt_packages,
+        transcripts,
+        recordings,
+        student_profile_bindings,
+        students,
+        profiles
+      RESTART IDENTITY CASCADE
+    `);
   });
 }
 
@@ -98,5 +109,60 @@ describeIfDb('student-timeline', () => {
     const failedOnly = await getStudentTimeline(studentId, { statuses: ['failed'] });
     expect(failedOnly.items).toHaveLength(1);
     expect(failedOnly.items[0]?.status).toBe('failed');
+  });
+
+  it('includes student profile binding changes with governance details', async () => {
+    const studentId = deriveStudentId('Nina');
+    const profileId = 'profiles/nina.md';
+    const bindingId = randomUUID();
+    const changedBy = randomUUID();
+    const createdAt = new Date('2024-01-06T00:00:00.000Z');
+
+    await withPgClient(async (client) => {
+      await client.query(
+        `
+        INSERT INTO profiles (id, label, active_revision_id)
+        VALUES ($1, 'Nina profile', NULL)
+        `,
+        [profileId],
+      );
+      await client.query(
+        `
+        INSERT INTO students (id, student, profile_id)
+        VALUES ($1, 'Nina', $2)
+        `,
+        [studentId, profileId],
+      );
+      await client.query(
+        `
+        INSERT INTO student_profile_bindings (
+          id,
+          student_id,
+          profile_id,
+          effective_from,
+          effective_to,
+          reason,
+          changed_by,
+          created_at
+        )
+        VALUES ($1, $2, $3, $4, NULL, 'student_update', $5, $4)
+        `,
+        [bindingId, studentId, profileId, createdAt, changedBy],
+      );
+    });
+
+    const timeline = await getStudentTimeline(studentId, {
+      types: ['student_profile_binding_changed'],
+    });
+
+    expect(timeline.items).toHaveLength(1);
+    expect(timeline.items[0]?.type).toBe('student_profile_binding_changed');
+    expect(timeline.items[0]?.status).toBe('binding_changed');
+    expect(timeline.items[0]?.details).toMatchObject({
+      bindingId,
+      profileId,
+      reason: 'student_update',
+      changedBy,
+    });
   });
 });

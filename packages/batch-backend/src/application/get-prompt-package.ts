@@ -1,11 +1,11 @@
-import {
-  getActiveProfileRevision,
-} from '../domain/profile-revision-repository.js';
+import { getActiveProfileRevision } from '../domain/profile-revision-repository.js';
 import type { PromptPackageRecord } from '../domain/prompt-package-model.js';
 import type { ProfileRevisionRecord } from '../domain/profile-revision-model.js';
+import type { StudentProfileBindingRecord } from '../domain/student-profile-binding-model.js';
 import type { TemplateRevisionRecord } from '../domain/template-revision-model.js';
 import { getActiveTemplateRevision } from '../domain/template-revision-repository.js';
 import { getPromptPackageById } from '../domain/prompt-package-repository.js';
+import { getStudentProfileBindingAt } from '../domain/student-profile-binding-repository.js';
 import type { TranscriptionStorage } from '../infrastructure/transcription-storage.js';
 import { createTranscriptionStorageForUri } from '../infrastructure/transcription-storage.js';
 import { type PromptPackageResponse, toPromptPackageResponse } from './create-prompt-package.js';
@@ -39,6 +39,9 @@ export interface GetPromptPackageDependencies {
   };
   templateRevisions: {
     getActive: typeof getActiveTemplateRevision;
+  };
+  bindings: {
+    getAt: typeof getStudentProfileBindingAt;
   };
 }
 
@@ -87,6 +90,16 @@ export interface PromptPackageLineageResponse {
     };
     drift: PromptPackageTemplateDrift | null;
   };
+  bindingAtCreation?: {
+    bindingId: string;
+    studentId: string;
+    profileId: string;
+    effectiveFrom: string;
+    effectiveTo: string | null;
+    reason: string | null;
+    changedBy: string | null;
+    createdAt: string;
+  } | null;
 }
 
 export async function getPromptPackage(
@@ -141,16 +154,22 @@ export async function getPromptPackageLineage(
   const templateRevisions = overrides?.templateRevisions ?? {
     getActive: getActiveTemplateRevision,
   };
+  const bindings = overrides?.bindings ?? {
+    getAt: getStudentProfileBindingAt,
+  };
 
   const promptPackage = await promptPackages.getById(promptPackageId);
   if (!promptPackage) return null;
 
-  const [currentProfile, currentTemplate] = await Promise.all([
+  const [currentProfile, currentTemplate, bindingAtCreation] = await Promise.all([
     promptPackage.resolvedProfileId
       ? profileRevisions.getActive(promptPackage.resolvedProfileId)
       : Promise.resolve(null),
     promptPackage.resolvedTemplateId
       ? templateRevisions.getActive(promptPackage.resolvedTemplateId)
+      : Promise.resolve(null),
+    promptPackage.studentId
+      ? bindings.getAt(promptPackage.studentId, promptPackage.createdAt)
       : Promise.resolve(null),
   ]);
 
@@ -209,6 +228,29 @@ export async function getPromptPackageLineage(
       },
       drift: templateDrift,
     },
+    bindingAtCreation: bindingAtCreation ? toBindingSnapshot(bindingAtCreation) : null,
+  };
+}
+
+function toBindingSnapshot(binding: StudentProfileBindingRecord): {
+  bindingId: string;
+  studentId: string;
+  profileId: string;
+  effectiveFrom: string;
+  effectiveTo: string | null;
+  reason: string | null;
+  changedBy: string | null;
+  createdAt: string;
+} {
+  return {
+    bindingId: binding.id,
+    studentId: binding.studentId,
+    profileId: binding.profileId,
+    effectiveFrom: binding.effectiveFrom.toISOString(),
+    effectiveTo: binding.effectiveTo ? binding.effectiveTo.toISOString() : null,
+    reason: binding.reason ?? null,
+    changedBy: binding.changedBy ?? null,
+    createdAt: binding.createdAt.toISOString(),
   };
 }
 

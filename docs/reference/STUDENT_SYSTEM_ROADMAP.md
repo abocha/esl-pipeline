@@ -134,7 +134,7 @@
 
 ### Status
 
-- Started (C0 foundation implemented, 2026-02-07).
+- Implemented (2026-02-07).
 
 ### Deliverables
 
@@ -150,22 +150,21 @@
 - Reconstructable answer to: "Which profile binding was active for this assignment?"
 - Restores and binding changes appear in audit trail.
 
-### C0 Completed Outputs
+### Completed Outputs
 
-1. Binding history query primitives added:
+1. Binding history query primitives are in place:
    - list bindings
    - get active binding
    - resolve binding effective at timestamp.
-2. New APIs added:
+2. Binding APIs are in place and support diagnostics time-travel:
    - `GET /students/:id/bindings`
    - `GET /students/:id/bindings/active`
-3. Prompt package write path now uses effective binding resolver path (current-time lookup with safe fallback).
-
-### Next Up (Phase C Proper)
-
-1. Thread actor/reason metadata through all binding writes from authenticated user context.
-2. Add explicit "effective-at" request support where needed for diagnostics/replay.
-3. Extend timeline/provenance surfaces to include binding change events.
+   - `GET /students/:id/bindings/active?at=<ISO_TIMESTAMP>`
+3. Binding actor/reason metadata is threaded through student profile create/update binding writes from authenticated request context.
+4. Prompt package binding resolution supports explicit replay time (`bindingEffectiveAt`) and defaults to recording event time when available.
+5. Timeline and provenance surfaces include binding governance data:
+   - timeline type: `student_profile_binding_changed`
+   - lineage includes `bindingAtCreation` snapshot.
 
 ## Phase D: End-to-End Lineage + Timeline 2.0
 
