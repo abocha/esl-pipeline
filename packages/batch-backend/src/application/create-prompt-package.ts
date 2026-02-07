@@ -8,15 +8,19 @@ import type { PromptPackageRecord } from '../domain/prompt-package-model.js';
 import { insertPromptPackage } from '../domain/prompt-package-repository.js';
 import {
   activateProfileRevision,
+  getActiveProfileRevision,
   getLatestProfileRevisionByHash,
   insertProfileRevision,
 } from '../domain/profile-revision-repository.js';
+import type { ProfileRevisionRecord } from '../domain/profile-revision-model.js';
 import { setProfileActiveRevision, upsertProfile } from '../domain/profile-repository.js';
 import {
   activateTemplateRevision,
+  getActiveTemplateRevision,
   getLatestTemplateRevisionByHash,
   insertTemplateRevision,
 } from '../domain/template-revision-repository.js';
+import type { TemplateRevisionRecord } from '../domain/template-revision-model.js';
 import { setTemplateActiveRevision, upsertTemplate } from '../domain/template-repository.js';
 import { getRecordingById } from '../domain/recording-repository.js';
 import { getTranscriptByRecordingId } from '../domain/transcript-repository.js';
@@ -26,7 +30,8 @@ import {
   createTranscriptionStorageForUri,
 } from '../infrastructure/transcription-storage.js';
 import { stitchPromptPayload } from './prompt-assembly.js';
-import { resolvePromptSelection } from './prompt-options.js';
+import { PromptOptionError, resolvePromptSelection } from './prompt-options.js';
+import { resolveStudentProfileBindingAt } from './student-profile-bindings.js';
 import { getStudentProfileById } from './student-profiles-store.js';
 
 export interface CreatePromptPackageParams {
@@ -93,16 +98,21 @@ export interface CreatePromptPackageDependencies {
   students: {
     getById: typeof getStudentProfileById;
   };
+  bindings: {
+    resolveAt: typeof resolveStudentProfileBindingAt;
+  };
   promptPackages: {
     insert: typeof insertPromptPackage;
   };
   profileRevisions: {
     activate: typeof activateProfileRevision;
+    getActive: typeof getActiveProfileRevision;
     getLatestByHash: typeof getLatestProfileRevisionByHash;
     insert: typeof insertProfileRevision;
   };
   templateRevisions: {
     activate: typeof activateTemplateRevision;
+    getActive: typeof getActiveTemplateRevision;
     getLatestByHash: typeof getLatestTemplateRevisionByHash;
     insert: typeof insertTemplateRevision;
   };
@@ -113,6 +123,20 @@ export interface CreatePromptPackageDependencies {
   templates: {
     upsert: typeof upsertTemplate;
     setActive: typeof setTemplateActiveRevision;
+  };
+  promptWriteAllowFsFallback: boolean;
+}
+
+interface PromptArtifactResolution {
+  profile: {
+    content: string;
+    hash: string;
+    revision: ProfileRevisionRecord;
+  };
+  template: {
+    content: string;
+    hash: string;
+    revision: TemplateRevisionRecord;
   };
 }
 
@@ -133,16 +157,21 @@ export async function createPromptPackage(
   const students = overrides?.students ?? {
     getById: getStudentProfileById,
   };
+  const bindings = overrides?.bindings ?? {
+    resolveAt: resolveStudentProfileBindingAt,
+  };
   const promptPackages = overrides?.promptPackages ?? {
     insert: insertPromptPackage,
   };
   const profileRevisions = overrides?.profileRevisions ?? {
     activate: activateProfileRevision,
+    getActive: getActiveProfileRevision,
     getLatestByHash: getLatestProfileRevisionByHash,
     insert: insertProfileRevision,
   };
   const templateRevisions = overrides?.templateRevisions ?? {
     activate: activateTemplateRevision,
+    getActive: getActiveTemplateRevision,
     getLatestByHash: getLatestTemplateRevisionByHash,
     insert: insertTemplateRevision,
   };
@@ -154,6 +183,9 @@ export async function createPromptPackage(
     upsert: upsertTemplate,
     setActive: setTemplateActiveRevision,
   };
+  const promptWriteAllowFsFallback =
+    overrides?.promptWriteAllowFsFallback ??
+    process.env.PROMPT_WRITE_ALLOW_FS_FALLBACK !== 'false';
 
   const transcript = await transcripts.getByRecordingId(params.recordingId);
   if (!transcript) return null;
@@ -163,6 +195,10 @@ export async function createPromptPackage(
   if (recording?.studentId) {
     const studentProfile = await students.getById(recording.studentId, { config });
     studentProfileId = studentProfile?.profileId ?? null;
+    if (!studentProfileId) {
+      const binding = await bindings.resolveAt(recording.studentId, new Date()).catch(() => null);
+      studentProfileId = binding?.profileId ?? null;
+    }
   }
 
   const fallbackProfileId =
@@ -193,70 +229,25 @@ export async function createPromptPackage(
       .catch(() => null),
   ]);
 
-  const templatePath = selection.templatePath;
-  const profilePath = selection.profilePath;
   const readStorage = overrides?.storage ?? createTranscriptionStorageForUri(transcript.storageUri);
-  const [template, profile, transcriptText] = await Promise.all([
-    fs.readFile(templatePath, 'utf8'),
-    fs.readFile(profilePath, 'utf8'),
+  const [artifacts, transcriptText] = await Promise.all([
+    resolvePromptArtifactsForWrite({
+      selection,
+      allowFsFallback: promptWriteAllowFsFallback,
+      profileRevisions,
+      templateRevisions,
+      profiles,
+      templates,
+    }),
     readStorage.getText(transcript.storageUri),
   ]);
 
   const payload = stitchPromptPayload({
-    template,
-    profile,
+    template: artifacts.template.content,
+    profile: artifacts.profile.content,
     transcript: transcriptText,
     notes: params.notes,
   });
-  const templateHash = hashContent(template);
-  const profileHash = hashProfileContent(profile);
-  const existingTemplateRevision = await templateRevisions.getLatestByHash(
-    selection.templateId,
-    templateHash,
-  );
-  const templateRevision =
-    existingTemplateRevision ??
-    (await templateRevisions.insert({
-      templateId: selection.templateId,
-      content: template,
-      contentHash: templateHash,
-      source: 'update',
-      createdBy: null,
-      restoredFromRevisionId: null,
-    }));
-  await Promise.all([
-    templates
-      .upsert({
-        id: selection.templateId,
-        label: formatPromptLabel(selection.templateId),
-        activeRevisionId: templateRevision.id,
-      })
-      .catch(() => null),
-    templateRevisions.activate(selection.templateId, templateRevision.id).catch(() => null),
-    templates.setActive(selection.templateId, templateRevision.id).catch(() => null),
-  ]);
-  const existingRevision = await profileRevisions.getLatestByHash(selection.profileId, profileHash);
-  const profileRevision =
-    existingRevision ??
-    (await profileRevisions.insert({
-      profileId: selection.profileId,
-      content: profile,
-      contentHash: profileHash,
-      source: 'update',
-      createdBy: null,
-      restoredFromRevisionId: null,
-    }));
-  await Promise.all([
-    profiles
-      .upsert({
-        id: selection.profileId,
-        label: formatPromptLabel(selection.profileId),
-        activeRevisionId: profileRevision.id,
-      })
-      .catch(() => null),
-    profileRevisions.activate(selection.profileId, profileRevision.id).catch(() => null),
-    profiles.setActive(selection.profileId, profileRevision.id).catch(() => null),
-  ]);
 
   const promptPackageId = randomUUID();
   const stored = await storage.putPromptPackage({
@@ -269,19 +260,19 @@ export async function createPromptPackage(
     recordingId: transcript.recordingId,
     transcriptId: transcript.id,
     studentId: recording?.studentId ?? null,
-    profilePath,
+    profilePath: selection.profilePath,
     resolvedProfileId: selection.profileId,
-    resolvedProfileHash: profileHash,
-    resolvedProfileRevisionId: profileRevision.id,
-    resolvedProfileUpdatedAt: profileRevision.createdAt,
-    resolvedProfileVersionLabel: profileRevision.versionLabel,
-    resolvedProfileStatus: profileRevision.status,
+    resolvedProfileHash: artifacts.profile.hash,
+    resolvedProfileRevisionId: artifacts.profile.revision.id,
+    resolvedProfileUpdatedAt: artifacts.profile.revision.createdAt,
+    resolvedProfileVersionLabel: artifacts.profile.revision.versionLabel,
+    resolvedProfileStatus: artifacts.profile.revision.status,
     resolvedTemplateId: selection.templateId,
-    resolvedTemplateHash: templateHash,
-    resolvedTemplateRevisionId: templateRevision.id,
-    resolvedTemplateUpdatedAt: templateRevision.createdAt,
-    resolvedTemplateVersionLabel: templateRevision.versionLabel,
-    resolvedTemplateStatus: templateRevision.status,
+    resolvedTemplateHash: artifacts.template.hash,
+    resolvedTemplateRevisionId: artifacts.template.revision.id,
+    resolvedTemplateUpdatedAt: artifacts.template.revision.createdAt,
+    resolvedTemplateVersionLabel: artifacts.template.revision.versionLabel,
+    resolvedTemplateStatus: artifacts.template.revision.status,
     templateVersion: selection.templateId,
     notes: params.notes ?? null,
     storageUri: stored.uri,
@@ -361,4 +352,159 @@ function formatPromptLabel(id: string): string {
   const name = filename.replace(/\.[^.]+$/, '');
   const normalized = name.replaceAll(/[_-]+/g, ' ').trim();
   return normalized.length > 0 ? normalized : id;
+}
+
+async function resolvePromptArtifactsForWrite(params: {
+  selection: {
+    templateId: string;
+    templatePath: string;
+    profileId: string;
+    profilePath: string;
+  };
+  allowFsFallback: boolean;
+  profileRevisions: CreatePromptPackageDependencies['profileRevisions'];
+  templateRevisions: CreatePromptPackageDependencies['templateRevisions'];
+  profiles: CreatePromptPackageDependencies['profiles'];
+  templates: CreatePromptPackageDependencies['templates'];
+}): Promise<PromptArtifactResolution> {
+  const { selection, allowFsFallback, profileRevisions, templateRevisions, profiles, templates } = params;
+
+  const [activeProfileRevision, activeTemplateRevision] = await Promise.all([
+    profileRevisions.getActive(selection.profileId).catch(() => null),
+    templateRevisions.getActive(selection.templateId).catch(() => null),
+  ]);
+
+  const profileResolution = await resolveProfileArtifact({
+    selection,
+    activeProfileRevision,
+    allowFsFallback,
+    profileRevisions,
+    profiles,
+  });
+  const templateResolution = await resolveTemplateArtifact({
+    selection,
+    activeTemplateRevision,
+    allowFsFallback,
+    templateRevisions,
+    templates,
+  });
+
+  return {
+    profile: profileResolution,
+    template: templateResolution,
+  };
+}
+
+async function resolveProfileArtifact(params: {
+  selection: { profileId: string; profilePath: string };
+  activeProfileRevision: ProfileRevisionRecord | null;
+  allowFsFallback: boolean;
+  profileRevisions: CreatePromptPackageDependencies['profileRevisions'];
+  profiles: CreatePromptPackageDependencies['profiles'];
+}): Promise<PromptArtifactResolution['profile']> {
+  const { selection, activeProfileRevision, allowFsFallback, profileRevisions, profiles } = params;
+
+  if (activeProfileRevision) {
+    return {
+      content: activeProfileRevision.content,
+      hash: activeProfileRevision.contentHash,
+      revision: activeProfileRevision,
+    };
+  }
+
+  if (!allowFsFallback) {
+    throw new PromptOptionError(
+      `No active profile revision for "${selection.profileId}" and filesystem fallback is disabled.`,
+      'profile_revision_missing',
+    );
+  }
+
+  const content = await fs.readFile(selection.profilePath, 'utf8');
+  const hash = hashProfileContent(content);
+  const existing = await profileRevisions.getLatestByHash(selection.profileId, hash);
+  const revision =
+    existing ??
+    (await profileRevisions.insert({
+      profileId: selection.profileId,
+      content,
+      contentHash: hash,
+      source: 'update',
+      createdBy: null,
+      restoredFromRevisionId: null,
+    }));
+
+  await Promise.all([
+    profiles
+      .upsert({
+        id: selection.profileId,
+        label: formatPromptLabel(selection.profileId),
+        activeRevisionId: revision.id,
+      })
+      .catch(() => null),
+    profileRevisions.activate(selection.profileId, revision.id).catch(() => null),
+    profiles.setActive(selection.profileId, revision.id).catch(() => null),
+  ]);
+
+  return {
+    content,
+    hash,
+    revision,
+  };
+}
+
+async function resolveTemplateArtifact(params: {
+  selection: { templateId: string; templatePath: string };
+  activeTemplateRevision: TemplateRevisionRecord | null;
+  allowFsFallback: boolean;
+  templateRevisions: CreatePromptPackageDependencies['templateRevisions'];
+  templates: CreatePromptPackageDependencies['templates'];
+}): Promise<PromptArtifactResolution['template']> {
+  const { selection, activeTemplateRevision, allowFsFallback, templateRevisions, templates } = params;
+
+  if (activeTemplateRevision) {
+    return {
+      content: activeTemplateRevision.content,
+      hash: activeTemplateRevision.contentHash,
+      revision: activeTemplateRevision,
+    };
+  }
+
+  if (!allowFsFallback) {
+    throw new PromptOptionError(
+      `No active template revision for "${selection.templateId}" and filesystem fallback is disabled.`,
+      'template_revision_missing',
+    );
+  }
+
+  const content = await fs.readFile(selection.templatePath, 'utf8');
+  const hash = hashContent(content);
+  const existing = await templateRevisions.getLatestByHash(selection.templateId, hash);
+  const revision =
+    existing ??
+    (await templateRevisions.insert({
+      templateId: selection.templateId,
+      content,
+      contentHash: hash,
+      source: 'update',
+      createdBy: null,
+      restoredFromRevisionId: null,
+    }));
+
+  await Promise.all([
+    templates
+      .upsert({
+        id: selection.templateId,
+        label: formatPromptLabel(selection.templateId),
+        activeRevisionId: revision.id,
+      })
+      .catch(() => null),
+    templateRevisions.activate(selection.templateId, revision.id).catch(() => null),
+    templates.setActive(selection.templateId, revision.id).catch(() => null),
+  ]);
+
+  return {
+    content,
+    hash,
+    revision,
+  };
 }

@@ -13,7 +13,7 @@ import { createPromptPackage } from '../application/create-prompt-package.js';
 import { getDraft } from '../application/get-draft.js';
 import { getJobOptions } from '../application/get-job-options.js';
 import { getPromptOptions } from '../application/get-prompt-options.js';
-import { getPromptPackage } from '../application/get-prompt-package.js';
+import { getPromptPackage, getPromptPackageLineage } from '../application/get-prompt-package.js';
 import { getRecordingTranscript } from '../application/get-recording-transcript.js';
 import { getRecording } from '../application/get-recording.js';
 import { getStudentProfiles } from '../application/get-student-profiles.js';
@@ -55,6 +55,10 @@ import {
   listStudentProfiles,
   updateStudentProfile,
 } from '../application/student-profiles-store.js';
+import {
+  getActiveStudentProfileBindingForStudent,
+  listStudentProfileBindingsForStudent,
+} from '../application/student-profile-bindings.js';
 import { getStudentSummaryWithDefaults } from '../application/student-summary.js';
 import { type StudentTimelineType, getStudentTimeline } from '../application/student-timeline.js';
 import { SubmitJobRequest, ValidationError, submitJob } from '../application/submit-job.js';
@@ -648,6 +652,103 @@ export function registerExtendedRoutes(app: FastifyInstance, options: ExtendedRo
             error: error.code,
             message: error.message,
             code: error.code,
+          });
+        }
+
+        logger.error(error instanceof Error ? error : String(error), {
+          event: 'http_request',
+          route: routePath,
+          statusCode: 500,
+          error: 'internal_error',
+        });
+
+        return errorResponse(reply, 'internal_error');
+      }
+    },
+  );
+
+  app.get(
+    '/students/:id/bindings',
+    {
+      preHandler: [authenticate],
+    },
+    async (request, reply) => {
+      const routePath = resolveRoutePath(request, 'GET /students/:id/bindings');
+      const paramsSchema = z.object({
+        id: z.string().min(1),
+      });
+      const querySchema = z.object({
+        limit: z.coerce.number().int().min(1).max(500).optional(),
+        offset: z.coerce.number().int().min(0).optional(),
+        order: z.enum(['asc', 'desc']).optional(),
+      });
+
+      try {
+        const params = paramsSchema.parse(request.params ?? {});
+        const query = querySchema.parse(request.query ?? {});
+        const bindings = await listStudentProfileBindingsForStudent(params.id, query);
+
+        logger.info('HTTP request handled', {
+          event: 'http_request',
+          route: routePath,
+          statusCode: 200,
+          studentId: params.id,
+        });
+
+        return reply.send(bindings);
+      } catch (error: unknown) {
+        if (error instanceof z.ZodError) {
+          return reply.code(400).send({
+            error: 'validation_failed',
+            message: 'Invalid request parameters',
+            details: error.issues,
+          });
+        }
+
+        logger.error(error instanceof Error ? error : String(error), {
+          event: 'http_request',
+          route: routePath,
+          statusCode: 500,
+          error: 'internal_error',
+        });
+
+        return errorResponse(reply, 'internal_error');
+      }
+    },
+  );
+
+  app.get(
+    '/students/:id/bindings/active',
+    {
+      preHandler: [authenticate],
+    },
+    async (request, reply) => {
+      const routePath = resolveRoutePath(request, 'GET /students/:id/bindings/active');
+      const paramsSchema = z.object({
+        id: z.string().min(1),
+      });
+
+      try {
+        const params = paramsSchema.parse(request.params ?? {});
+        const binding = await getActiveStudentProfileBindingForStudent(params.id);
+        if (!binding) {
+          return errorResponse(reply, 'not_found');
+        }
+
+        logger.info('HTTP request handled', {
+          event: 'http_request',
+          route: routePath,
+          statusCode: 200,
+          studentId: params.id,
+        });
+
+        return reply.send(binding);
+      } catch (error: unknown) {
+        if (error instanceof z.ZodError) {
+          return reply.code(400).send({
+            error: 'validation_failed',
+            message: 'Invalid student id',
+            details: error.issues,
           });
         }
 
@@ -1976,6 +2077,48 @@ export function registerExtendedRoutes(app: FastifyInstance, options: ExtendedRo
         });
 
         return reply.send(promptPackage);
+      } catch (error: unknown) {
+        logger.error(error instanceof Error ? error : String(error), {
+          event: 'http_request',
+          route: routePath,
+          statusCode: 500,
+          error: 'internal_error',
+          promptPackageId,
+        });
+
+        return errorResponse(reply, 'internal_error');
+      }
+    },
+  );
+
+  app.get(
+    '/prompt-packages/:promptPackageId/lineage',
+    {
+      preHandler: [authenticate],
+    },
+    async (request, reply) => {
+      const { promptPackageId } = request.params as { promptPackageId: string };
+      const routePath = resolveRoutePath(request, 'GET /prompt-packages/:promptPackageId/lineage');
+
+      try {
+        const lineage = await getPromptPackageLineage(promptPackageId);
+        if (!lineage) {
+          logger.info('Prompt package lineage not found', {
+            event: 'prompt_package_lineage_not_found',
+            route: routePath,
+            promptPackageId,
+          });
+          return errorResponse(reply, 'not_found');
+        }
+
+        logger.info('HTTP request handled', {
+          event: 'http_request',
+          route: routePath,
+          statusCode: 200,
+          promptPackageId,
+        });
+
+        return reply.send(lineage);
       } catch (error: unknown) {
         logger.error(error instanceof Error ? error : String(error), {
           event: 'http_request',
