@@ -599,6 +599,14 @@ async function createStudentProfileDb(
     throw new StudentProfileStoreError('Student profile already exists', 'student_exists', 409);
   }
 
+  if (sanitized.profileId) {
+    await dependencies.profiles.upsert({
+      id: sanitized.profileId,
+      label: profileLabelFromId(sanitized.profileId),
+      activeRevisionId: null,
+    });
+  }
+
   let inserted: StudentRecord;
   try {
     inserted = await dependencies.students.insert({
@@ -684,6 +692,14 @@ async function updateStudentProfileDb(
     profileId: has('profileId') ? (sanitized.profileId ?? null) : existing.profileId,
     voices: has('voices') ? (sanitized.voices ?? {}) : existing.voices,
   };
+
+  if (merged.profileId) {
+    await options.dependencies.profiles.upsert({
+      id: merged.profileId,
+      label: profileLabelFromId(merged.profileId),
+      activeRevisionId: null,
+    });
+  }
 
   const persisted = await options.dependencies.students.upsert({
     id: merged.id,
