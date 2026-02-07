@@ -2,11 +2,13 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 
 import type {
+  JobState,
   JobListResponse,
   JobProvenanceResponse,
   ProfileRevisionSummaryResponse,
   PromptPackageLineageResponse,
   StudentProfile,
+  StudentTimelineType,
   StudentProfileBindingListResponse,
   StudentTimelineResponse,
 } from '../../utils/api';
@@ -29,6 +31,31 @@ import {
 
 const HISTORY_LIMIT = 25;
 const BINDING_LIMIT = 20;
+const TIMELINE_TYPES: StudentTimelineType[] = [
+  'recording_ingested',
+  'transcript_ready',
+  'prompt_package_created',
+  'draft_saved',
+  'job_awaiting_approval',
+  'job_completed',
+  'student_profile_binding_changed',
+  'profile_revision_saved',
+  'profile_revision_restored',
+  'profile_revision_activated',
+  'template_revision_saved',
+  'template_revision_restored',
+  'template_revision_activated',
+  'job_action_rerun_audio',
+  'job_action_cancel',
+  'job_action_edit_metadata',
+];
+
+function toIsoOrUndefined(value: string): string | undefined {
+  if (!value) return undefined;
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return undefined;
+  return date.toISOString();
+}
 
 export const StudentWorkspace: React.FC = () => {
   const [students, setStudents] = useState<StudentProfile[]>([]);
@@ -56,10 +83,16 @@ export const StudentWorkspace: React.FC = () => {
   const [jobHistory, setJobHistory] = useState<JobListResponse['jobs']>([]);
   const [jobsLoading, setJobsLoading] = useState(false);
   const [jobsError, setJobsError] = useState<string | null>(null);
+  const [historyStateFilter, setHistoryStateFilter] = useState<'all' | JobState>('all');
+  const [historyFrom, setHistoryFrom] = useState('');
+  const [historyTo, setHistoryTo] = useState('');
 
   const [timeline, setTimeline] = useState<StudentTimelineResponse['items']>([]);
   const [timelineLoading, setTimelineLoading] = useState(false);
   const [timelineError, setTimelineError] = useState<string | null>(null);
+  const [timelineTypeFilter, setTimelineTypeFilter] = useState<'all' | StudentTimelineType>('all');
+  const [timelineFrom, setTimelineFrom] = useState('');
+  const [timelineTo, setTimelineTo] = useState('');
 
   const [bindingHistory, setBindingHistory] = useState<StudentProfileBindingListResponse['items']>([]);
   const [bindingHistoryLoading, setBindingHistoryLoading] = useState(false);
@@ -159,6 +192,9 @@ export const StudentWorkspace: React.FC = () => {
     try {
       const response = await listUserJobs({
         studentId,
+        state: historyStateFilter === 'all' ? undefined : historyStateFilter,
+        from: toIsoOrUndefined(historyFrom),
+        to: toIsoOrUndefined(historyTo),
         limit: HISTORY_LIMIT,
         offset: 0,
         order: 'desc',
@@ -171,7 +207,7 @@ export const StudentWorkspace: React.FC = () => {
     } finally {
       setJobsLoading(false);
     }
-  }, []);
+  }, [historyFrom, historyStateFilter, historyTo]);
 
   const loadTimeline = useCallback(async (studentId: string) => {
     if (!studentId) {
@@ -182,6 +218,9 @@ export const StudentWorkspace: React.FC = () => {
     setTimelineError(null);
     try {
       const response = await getStudentTimeline(studentId, {
+        type: timelineTypeFilter === 'all' ? undefined : timelineTypeFilter,
+        from: toIsoOrUndefined(timelineFrom),
+        to: toIsoOrUndefined(timelineTo),
         limit: HISTORY_LIMIT,
         offset: 0,
         order: 'desc',
@@ -194,7 +233,7 @@ export const StudentWorkspace: React.FC = () => {
     } finally {
       setTimelineLoading(false);
     }
-  }, []);
+  }, [timelineFrom, timelineTo, timelineTypeFilter]);
 
   const loadBindings = useCallback(async (studentId: string) => {
     if (!studentId) {
@@ -605,6 +644,50 @@ export const StudentWorkspace: React.FC = () => {
             <p>Recent assignments for this student with outcome visibility.</p>
           </header>
 
+          <div className="workspace-inline workspace-filter-row">
+            <label className="workspace-field">
+              State
+              <select
+                value={historyStateFilter}
+                onChange={(event) => setHistoryStateFilter(event.target.value as 'all' | JobState)}
+              >
+                <option value="all">All states</option>
+                <option value="queued">queued</option>
+                <option value="running">running</option>
+                <option value="awaiting_approval">awaiting_approval</option>
+                <option value="succeeded">succeeded</option>
+                <option value="failed">failed</option>
+              </select>
+            </label>
+
+            <label className="workspace-field">
+              From
+              <input
+                type="datetime-local"
+                value={historyFrom}
+                onChange={(event) => setHistoryFrom(event.target.value)}
+              />
+            </label>
+
+            <label className="workspace-field">
+              To
+              <input
+                type="datetime-local"
+                value={historyTo}
+                onChange={(event) => setHistoryTo(event.target.value)}
+              />
+            </label>
+
+            <button
+              type="button"
+              className="workspace-secondary-btn"
+              onClick={() => void loadJobHistory(selectedStudentId)}
+              disabled={!selectedStudentId || jobsLoading}
+            >
+              Apply
+            </button>
+          </div>
+
           {jobsError ? <p className="workspace-error">{jobsError}</p> : null}
 
           {jobsLoading ? (
@@ -623,7 +706,7 @@ export const StudentWorkspace: React.FC = () => {
                 </thead>
                 <tbody>
                   {jobHistory.map((job) => (
-                    <tr key={job.jobId}>
+                    <tr key={job.jobId} className={selectedJobId === job.jobId ? 'workspace-selected-row' : ''}>
                       <td>
                         <code>{job.jobId.slice(0, 8)}</code>
                         <div className="workspace-muted">prompt {job.promptPackageId ?? 'n/a'}</div>
@@ -689,6 +772,22 @@ export const StudentWorkspace: React.FC = () => {
             </div>
           ) : null}
 
+          {jobProvenance?.actions.length ? (
+            <div className="workspace-list">
+              {jobProvenance.actions.slice(0, 8).map((action) => (
+                <div key={action.id} className="workspace-list-item">
+                  <div>
+                    <strong>{action.actionType}</strong>
+                    <div className="workspace-muted">
+                      {new Date(action.requestedAt).toLocaleString()} by {action.requestedBy ?? 'unknown'}
+                    </div>
+                  </div>
+                  <span>{action.outcome}</span>
+                </div>
+              ))}
+            </div>
+          ) : null}
+
           {lineageLoading ? <p className="workspace-muted">Loading prompt lineage...</p> : null}
           {lineageError ? <p className="workspace-error">{lineageError}</p> : null}
 
@@ -718,6 +817,50 @@ export const StudentWorkspace: React.FC = () => {
             <h2>Student Timeline</h2>
             <p>Chronological student events for governance and diagnostics.</p>
           </header>
+
+          <div className="workspace-inline workspace-filter-row">
+            <label className="workspace-field">
+              Event type
+              <select
+                value={timelineTypeFilter}
+                onChange={(event) => setTimelineTypeFilter(event.target.value as 'all' | StudentTimelineType)}
+              >
+                <option value="all">All events</option>
+                {TIMELINE_TYPES.map((type) => (
+                  <option key={type} value={type}>
+                    {type}
+                  </option>
+                ))}
+              </select>
+            </label>
+
+            <label className="workspace-field">
+              From
+              <input
+                type="datetime-local"
+                value={timelineFrom}
+                onChange={(event) => setTimelineFrom(event.target.value)}
+              />
+            </label>
+
+            <label className="workspace-field">
+              To
+              <input
+                type="datetime-local"
+                value={timelineTo}
+                onChange={(event) => setTimelineTo(event.target.value)}
+              />
+            </label>
+
+            <button
+              type="button"
+              className="workspace-secondary-btn"
+              onClick={() => void loadTimeline(selectedStudentId)}
+              disabled={!selectedStudentId || timelineLoading}
+            >
+              Apply
+            </button>
+          </div>
 
           {timelineError ? <p className="workspace-error">{timelineError}</p> : null}
 
@@ -798,6 +941,7 @@ export const StudentWorkspace: React.FC = () => {
         }
 
         .workspace-field select,
+        .workspace-field input,
         .workspace-card textarea {
           border: 1px solid var(--border-light);
           background: var(--bg-primary);
@@ -853,6 +997,10 @@ export const StudentWorkspace: React.FC = () => {
           flex-wrap: wrap;
         }
 
+        .workspace-filter-row {
+          align-items: end;
+        }
+
         .workspace-meta {
           display: grid;
           gap: var(--space-1);
@@ -894,6 +1042,10 @@ export const StudentWorkspace: React.FC = () => {
           padding: var(--space-2);
           border-bottom: 1px solid var(--border-light);
           vertical-align: top;
+        }
+
+        .workspace-selected-row {
+          background: var(--color-primary-50);
         }
 
         .workspace-muted {
