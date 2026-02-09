@@ -352,6 +352,13 @@ describe('StudentWorkspace', () => {
     expect(screen.getByText(/Action audit:/i)).toBeTruthy();
   });
 
+  it('renders a resume link to minimal workflow for each job', async () => {
+    renderWorkspace();
+
+    const resumeLink = await screen.findByRole('link', { name: /Resume/i });
+    expect(resumeLink.getAttribute('href')).toBe('/?jobId=job-1');
+  });
+
   it('updates student profile binding', async () => {
     const user = userEvent.setup();
     renderWorkspace();

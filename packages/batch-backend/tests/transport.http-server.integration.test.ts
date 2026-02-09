@@ -33,6 +33,7 @@ import { publishRecordingEvent } from '../src/domain/recording-events.js';
 import type { RecordingRecord } from '../src/domain/recording-model.js';
 import * as recordingRepositoryModule from '../src/domain/recording-repository.js';
 import { deriveStudentId } from '../src/domain/student-utils.js';
+import * as transcriptRepositoryModule from '../src/domain/transcript-repository.js';
 import * as loggerModule from '../src/infrastructure/logger.js';
 import * as transcriptionStorageModule from '../src/infrastructure/transcription-storage.js';
 import { createHttpServer } from '../src/transport/http-server.js';
@@ -1318,6 +1319,75 @@ describe('transport/http-server - integration (in-process)', () => {
       offset: 0,
       order: 'desc',
     });
+  });
+
+  it('POST /recordings/upload reuses existing transcript when hash already exists', async () => {
+    const getRecordingBySha256 = vi.spyOn(recordingRepositoryModule, 'getRecordingBySha256');
+    const getTranscriptByRecordingId = vi.spyOn(
+      transcriptRepositoryModule,
+      'getTranscriptByRecordingId',
+    );
+    const insertRecording = vi.spyOn(recordingRepositoryModule, 'insertRecording');
+
+    getRecordingBySha256.mockResolvedValueOnce({
+      id: 'recording-cached',
+      source: 'upload',
+      studentId: deriveStudentId('Anna'),
+      sourcePath: 'lesson.mp3',
+      storageUri: 'memory://recordings/recording-cached.mp3',
+      sha256: 'abc123',
+      bytes: 1024,
+      durationSec: 90,
+      channels: 1,
+      status: 'transcribed',
+      error: null,
+      createdAt: new Date('2024-01-01T00:00:00.000Z'),
+      updatedAt: new Date('2024-01-01T00:05:00.000Z'),
+    });
+    getTranscriptByRecordingId.mockResolvedValueOnce({
+      id: 'transcript-cached',
+      recordingId: 'recording-cached',
+      storageUri: 'memory://transcripts/transcript-cached.txt',
+      rawResponseUri: null,
+      mode: 'timeline',
+      model: 'nova-3',
+      language: 'en',
+      fallbackUsed: false,
+      summaryJson: null,
+      createdAt: new Date('2024-01-01T00:05:00.000Z'),
+      updatedAt: new Date('2024-01-01T00:05:00.000Z'),
+    });
+    insertRecording.mockClear();
+
+    const boundary = '----esl-test-boundary';
+    const payload = Buffer.concat([
+      Buffer.from(
+        `--${boundary}\r\n` +
+          'Content-Disposition: form-data; name="file"; filename="lesson.mp3"\r\n' +
+          'Content-Type: audio/mpeg\r\n\r\n',
+      ),
+      Buffer.from('mock-audio-content'),
+      Buffer.from(`\r\n--${boundary}--\r\n`),
+    ]);
+
+    const response = await app.inject({
+      method: 'POST',
+      url: '/recordings/upload',
+      headers: {
+        'content-type': `multipart/form-data; boundary=${boundary}`,
+      },
+      payload,
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toMatchObject({
+      recordingId: 'recording-cached',
+      transcriptId: 'transcript-cached',
+      cacheHit: true,
+      cacheReason: 'transcript_reused',
+      cacheRecordingId: 'recording-cached',
+    });
+    expect(insertRecording).not.toHaveBeenCalled();
   });
 
   it('GET /recordings returns paginated recording list', async () => {

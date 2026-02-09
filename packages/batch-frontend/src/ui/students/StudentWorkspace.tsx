@@ -942,13 +942,21 @@ export const StudentWorkspace: React.FC = () => {
                       <td>{new Date(job.createdAt).toLocaleString()}</td>
                       <td>{job.notionUrl ? 'Notion' : job.anytypeUrl ? 'Anytype' : 'Pending'}</td>
                       <td>
-                        <button
-                          type="button"
-                          className="workspace-secondary-btn"
-                          onClick={() => handleInspectJob(job.jobId, job.promptPackageId)}
-                        >
-                          Inspect
-                        </button>
+                        <div className="workspace-inline">
+                          <Link
+                            className="workspace-secondary-btn"
+                            to={`/?jobId=${encodeURIComponent(job.jobId)}`}
+                          >
+                            Resume
+                          </Link>
+                          <button
+                            type="button"
+                            className="workspace-secondary-btn"
+                            onClick={() => handleInspectJob(job.jobId, job.promptPackageId)}
+                          >
+                            Inspect
+                          </button>
+                        </div>
                       </td>
                     </tr>
                   ))}

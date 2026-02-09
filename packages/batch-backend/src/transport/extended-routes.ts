@@ -1,6 +1,6 @@
 import multipart from '@fastify/multipart';
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
-import { randomUUID } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 import path from 'node:path';
 import { Readable, Transform } from 'node:stream';
 import { z } from 'zod';
@@ -67,10 +67,12 @@ import { updateRecordingTranscript } from '../application/update-recording-trans
 import type { BatchBackendConfig } from '../config/env.js';
 import { RecordingSourceSchema, RecordingStatusSchema } from '../domain/recording-model.js';
 import {
+  getRecordingBySha256,
   getRecordingById,
   insertRecording,
   updateRecordingStatus,
 } from '../domain/recording-repository.js';
+import { getTranscriptByRecordingId } from '../domain/transcript-repository.js';
 import {
   UserSettingsInput,
   isValidTtsProvider,
@@ -1611,6 +1613,33 @@ export function registerExtendedRoutes(app: FastifyInstance, options: ExtendedRo
         const sanitizedFilename = sanitizeRecordingFilename(filename);
         const storageFilename = sanitizedFilename.replaceAll(/[^\w.-]/g, '_');
         const sourcePath = storageFilename || sanitizedFilename || filename;
+        const fileSha256 = createContentSha256(fileBuffer);
+
+        const cachedRecording = await getRecordingBySha256(fileSha256);
+        if (cachedRecording) {
+          const cachedTranscript = await getTranscriptByRecordingId(cachedRecording.id);
+          if (cachedTranscript) {
+            logger.info('Recording upload cache hit', {
+              event: 'recording_upload_cache_hit',
+              route: routePath,
+              userId: authenticatedUser.id,
+              recordingId: cachedRecording.id,
+              transcriptId: cachedTranscript.id,
+              filename,
+              sha256: fileSha256,
+            });
+
+            return reply.code(200).send({
+              ...recordingToDto({
+                ...cachedRecording,
+                transcriptId: cachedTranscript.id,
+              }),
+              cacheHit: true,
+              cacheReason: 'transcript_reused',
+              cacheRecordingId: cachedRecording.id,
+            });
+          }
+        }
 
         const record = await ingestRecordingUpload({
           filename: storageFilename || sanitizedFilename || filename,
@@ -3550,6 +3579,10 @@ function sanitizeRecordingFilename(filename: string): string {
   const candidate = sanitized || fallback;
   const ext = path.extname(candidate);
   return ext ? candidate : `${candidate}.bin`;
+}
+
+function createContentSha256(content: Buffer): string {
+  return createHash('sha256').update(content).digest('hex');
 }
 
 function buildFilesystemMdReference(uploadDir: string, storageKey: string): string {
