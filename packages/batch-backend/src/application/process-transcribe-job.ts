@@ -46,6 +46,10 @@ interface DeepgramResponseLike {
   error?: unknown;
 }
 
+interface RetryableStatusError {
+  status?: unknown;
+}
+
 export interface TranscribeDependencies {
   config: BatchBackendConfig;
   storage: TranscriptionStorage;
@@ -264,8 +268,72 @@ async function transcribeAttempt(
   },
   options: Record<string, unknown>,
 ): Promise<DeepgramResponseLike> {
-  const stream = await args.storage.getStream(args.storageUri);
-  return args.client.listen.prerecorded.transcribeFile(stream, options);
+  let lastError: unknown = null;
+
+  for (let attempt = 1; attempt <= TRANSCRIBE_ATTEMPT_MAX_RETRIES; attempt += 1) {
+    const stream = await args.storage.getStream(args.storageUri);
+    try {
+      const response = await args.client.listen.prerecorded.transcribeFile(stream, options);
+      if (!response.error || !isRetryableTranscriptionError(response.error)) {
+        return response;
+      }
+
+      lastError = response.error;
+    } catch (error) {
+      if (!isRetryableTranscriptionError(error)) {
+        return { result: undefined, error };
+      }
+      lastError = error;
+    } finally {
+      // Close stream descriptors promptly before retrying.
+      stream.destroy();
+    }
+
+    if (attempt < TRANSCRIBE_ATTEMPT_MAX_RETRIES) {
+      await wait(getRetryDelayMs(attempt));
+    }
+  }
+
+  return {
+    result: undefined,
+    error: lastError ?? new Error('Deepgram transcription failed after retries'),
+  };
+}
+
+function isRetryableTranscriptionError(error: unknown): boolean {
+  const status = getRetryableStatus(error);
+  if (typeof status === 'number' && RETRYABLE_DEEPGRAM_STATUS_CODES.has(status)) {
+    return true;
+  }
+
+  const message = extractErrorMessage(error).toLowerCase();
+  if (!message) return false;
+  return RETRYABLE_DEEPGRAM_MESSAGE_PATTERNS.some((pattern) => message.includes(pattern));
+}
+
+function getRetryableStatus(error: unknown): number | null {
+  if (!error || typeof error !== 'object') return null;
+  const candidate = (error as RetryableStatusError).status;
+  return typeof candidate === 'number' ? candidate : null;
+}
+
+function extractErrorMessage(error: unknown): string {
+  if (!error) return '';
+  if (typeof error === 'string') return error;
+  if (error instanceof Error) return error.message;
+  if (typeof error === 'object' && 'message' in error) {
+    const message = (error as { message?: unknown }).message;
+    return typeof message === 'string' ? message : '';
+  }
+  return String(error);
+}
+
+function getRetryDelayMs(attempt: number): number {
+  return Math.min(TRANSCRIBE_ATTEMPT_BASE_DELAY_MS * 2 ** (attempt - 1), 2_000);
+}
+
+async function wait(ms: number): Promise<void> {
+  await new Promise((resolve) => setTimeout(resolve, ms));
 }
 
 function formatTranscript(result: DeepgramResult, mode: TranscriptMode): string {
@@ -486,3 +554,19 @@ function getGapSeconds(previousEnd?: number, nextStart?: number): number {
 }
 
 const UTTERANCE_GAP_SEC = 1.5;
+const TRANSCRIBE_ATTEMPT_MAX_RETRIES = 3;
+const TRANSCRIBE_ATTEMPT_BASE_DELAY_MS = process.env.NODE_ENV === 'test' ? 0 : 250;
+const RETRYABLE_DEEPGRAM_STATUS_CODES = new Set([408, 409, 425, 429, 500, 502, 503, 504]);
+const RETRYABLE_DEEPGRAM_MESSAGE_PATTERNS = [
+  'terminated',
+  'fetch failed',
+  'network',
+  'socket',
+  'timeout',
+  'timed out',
+  'etimedout',
+  'econnreset',
+  'econnrefused',
+  'aborted',
+  'connection reset',
+];
