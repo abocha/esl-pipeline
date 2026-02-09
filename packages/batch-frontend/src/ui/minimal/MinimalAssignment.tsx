@@ -430,6 +430,19 @@ export const MinimalAssignment: React.FC = () => {
     [studentOptions, selectedStudentId],
   );
 
+  const handleStudentSelectionChange = useCallback(
+    (nextStudentId: string) => {
+      setSelectedStudentId(nextStudentId);
+      if (!nextStudentId) {
+        return;
+      }
+      const boundProfileId =
+        studentOptions.find((student) => student.id === nextStudentId)?.profileId ?? '';
+      setSelectedProfileId(boundProfileId || '');
+    },
+    [studentOptions],
+  );
+
   const profileDirty = useMemo(
     () => profileEditorText.trim() !== loadedProfileContent.trim(),
     [loadedProfileContent, profileEditorText],
@@ -792,7 +805,7 @@ export const MinimalAssignment: React.FC = () => {
           Student (optional)
           <select
             value={selectedStudentId}
-            onChange={(event) => setSelectedStudentId(event.target.value)}
+            onChange={(event) => handleStudentSelectionChange(event.target.value)}
           >
             <option value="">No explicit student (fallback to Default profile)</option>
             {studentOptions.map((student) => (
