@@ -5,7 +5,7 @@
 - Audience: AI agents, maintainers.
 - Read Time: 3 minutes.
 - Authority Level: Context baseline.
-- Last Verified Against: 2026-02-06 repo state.
+- Last Verified Against: 2026-02-09 repo state.
 
 ## Purpose
 
@@ -23,6 +23,10 @@
 2. `docs/reference/agents-ssot.md` (contracts/invariants).
 3. `docs/backend-frontend/BATCH_SYSTEM.md` (active integration map).
 4. `docs/backend-frontend/backend-frontend-alignment.md` (live status).
+5. `docs/reference/PRODUCT_NORTH_STAR_AND_READINESS.md` (product direction and launch readiness gates).
+6. `docs/reference/V1_IMPLEMENTATION_TRACKER.md` (execution checklist and stage-gate mapping).
+7. `docs/playbooks/WEEKLY_PRODUCT_REVIEW_TEMPLATE.md` (weekly scorecard and reality check cadence).
+8. `docs/playbooks/RESTART_TOMORROW.md` (low-friction re-entry when context is overloaded).
 
 ## Current State
 
@@ -53,3 +57,7 @@
 - `docs/QUICK_START.md`
 - `docs/backend-frontend/BATCH_SYSTEM.md`
 - `docs/backend-frontend/backend-frontend-alignment.md`
+- `docs/reference/PRODUCT_NORTH_STAR_AND_READINESS.md`
+- `docs/reference/V1_IMPLEMENTATION_TRACKER.md`
+- `docs/playbooks/WEEKLY_PRODUCT_REVIEW_TEMPLATE.md`
+- `docs/playbooks/RESTART_TOMORROW.md`
