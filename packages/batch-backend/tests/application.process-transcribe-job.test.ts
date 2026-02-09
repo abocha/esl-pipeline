@@ -138,6 +138,83 @@ describe('application/process-transcribe-job', () => {
     expect(inserted[0]?.fallbackUsed).toBe(true);
   });
 
+  it('retries transient terminated transport errors and succeeds', async () => {
+    const recording = createRecording('recording-retry-terminated');
+    let attemptCount = 0;
+
+    const deepgramClient = {
+      listen: {
+        prerecorded: {
+          async transcribeFile() {
+            attemptCount += 1;
+            if (attemptCount === 1) {
+              throw new TypeError('terminated');
+            }
+            return {
+              result: {
+                metadata: { channels: 2 },
+                results: {
+                  utterances: [{ transcript: 'Recovered transcript', speaker: 0, start: 0.1 }],
+                  channels: [
+                    { alternatives: [{ transcript: 'Recovered transcript' }] },
+                    { alternatives: [{ transcript: '' }] },
+                  ],
+                },
+              },
+              error: undefined,
+            };
+          },
+        },
+      },
+    };
+
+    const result = await processTranscribeJob(
+      { recordingId: recording.id },
+      {
+        config: createConfig(),
+        storage: createStorageStub(),
+        deepgramClient,
+        recordings: {
+          async getById() {
+            return recording;
+          },
+          async updateStatus({ status, error }) {
+            recording.status = status;
+            recording.error = error ?? null;
+            return recording;
+          },
+        },
+        transcripts: {
+          async getByRecordingId() {
+            return null;
+          },
+          async insert(params) {
+            return {
+              id: params.id ?? 'transcript-retry-terminated',
+              recordingId: params.recordingId,
+              storageUri: params.storageUri,
+              rawResponseUri: params.rawResponseUri ?? null,
+              mode: params.mode,
+              model: params.model,
+              language: params.language,
+              fallbackUsed: params.fallbackUsed,
+              summaryJson: params.summaryJson ?? null,
+              createdAt: new Date(),
+              updatedAt: new Date(),
+            };
+          },
+        },
+        publishEvent: vi.fn(),
+      },
+    );
+
+    expect(result).not.toBeNull();
+    expect(result?.fallbackUsed).toBe(false);
+    expect(attemptCount).toBe(2);
+    expect(recording.status).toBe('transcribed');
+    expect(recording.error).toBeNull();
+  });
+
   it('formats transcript with speaker labels and merges adjacent utterances', async () => {
     const recording = createRecording('recording-3');
     const stored: { text?: string } = {};
