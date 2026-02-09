@@ -3,6 +3,10 @@
 ESL Pipeline automates the workflow from lesson input to published ESL homework.
 It supports both CLI usage and service-style programmatic integration.
 
+## Fast Re-Entry
+
+- If you are resuming after context overload, start at `START_HERE.md`.
+
 ## What This Repo Is (Current State)
 
 This monorepo currently provides:
@@ -116,6 +120,7 @@ For full contracts and behavior rules: `docs/reference/agents-ssot.md`.
 
 Newcomers:
 
+- `START_HERE.md`
 - `docs/README.md`
 - `docs/PROJECT_OVERVIEW.md`
 - `docs/QUICK_START.md`
