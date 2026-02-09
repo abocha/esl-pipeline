@@ -384,6 +384,28 @@ describe('MinimalAssignment', () => {
     expect(screen.getByDisplayValue('Prompt package output')).toBeTruthy();
   });
 
+  it('syncs profile to selected student binding before prompt generation', async () => {
+    const user = userEvent.setup();
+    render(<MinimalAssignment />);
+
+    const studentSelect = await screen.findByRole('combobox', { name: /Student \(optional\)/i });
+    await user.selectOptions(studentSelect, 'student-alex');
+    await user.click(screen.getByRole('button', { name: /Drop audio file/i }));
+
+    await waitFor(() => {
+      expect(screen.getByDisplayValue('Student transcript text')).toBeTruthy();
+    });
+
+    await user.click(screen.getByRole('button', { name: /Generate prompt/i }));
+
+    await waitFor(() => {
+      expect(api.createPromptPackage).toHaveBeenCalledWith('rec-1', {
+        templateId: 'tpl-default',
+        profileId: 'profiles/alex.md',
+      });
+    });
+  });
+
   it('shows upload errors when upload fails', async () => {
     const user = userEvent.setup();
     vi.mocked(api.uploadRecording).mockRejectedValueOnce(new Error('Upload failed at gateway'));
