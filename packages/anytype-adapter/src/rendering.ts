@@ -79,6 +79,54 @@ const DEFAULT_CSS = `
   --callout-border: ${DEFAULT_THEME.calloutBorder};
   --toc-bg: ${DEFAULT_THEME.tocBg};
   --toc-border: ${DEFAULT_THEME.tocBorder};
+  --tag-bg: #f0e8da;
+  --audio-accent: #8b6f47;
+  --inline-code-bg: #ece8e1;
+  --inline-code-text: #2a2a2a;
+  --toc-link: #36475d;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --theme-h1: #3d3529;
+    --theme-h2: #2a3340;
+    --theme-h3: #352d38;
+    --page-bg: #1a1714;
+    --page-card: #252220;
+    --page-text: #e8e4dc;
+    --page-muted: #a8a098;
+    --page-line: #3a342c;
+    --callout-bg: #2a2622;
+    --callout-border: #5c4a32;
+    --toc-bg: #242018;
+    --toc-border: #3a3228;
+    --tag-bg: #3a3228;
+    --audio-accent: #c9a86c;
+    --inline-code-bg: #2e2a26;
+    --inline-code-text: #d8d4cc;
+    --toc-link: #9aa8b8;
+  }
+}
+[data-theme="dark"] {
+  --theme-h1: #3d3529;
+  --theme-h2: #2a3340;
+  --theme-h3: #352d38;
+  --page-bg: #1a1714;
+  --page-card: #252220;
+  --page-text: #e8e4dc;
+  --page-muted: #a8a098;
+  --page-line: #3a342c;
+  --callout-bg: #2a2622;
+  --callout-border: #5c4a32;
+  --toc-bg: #242018;
+  --toc-border: #3a3228;
+  --tag-bg: #3a3228;
+  --audio-accent: #c9a86c;
+  --inline-code-bg: #2e2a26;
+  --inline-code-text: #d8d4cc;
+  --toc-link: #9aa8b8;
+}
+html {
+  scroll-behavior: smooth;
 }
 * {
   box-sizing: border-box;
@@ -86,10 +134,11 @@ const DEFAULT_CSS = `
 body {
   margin: 0;
   padding: 0;
-  font-family: 'Avenir Next', 'Segoe UI', 'Helvetica Neue', Arial, sans-serif;
+  font-family: 'Inter', 'Avenir Next', 'Segoe UI', 'Helvetica Neue', Arial, sans-serif;
   line-height: 1.65;
   color: var(--page-text);
-  background: radial-gradient(circle at top right, #efe8d8 0%, transparent 40%), var(--page-bg);
+  background: radial-gradient(circle at top right, color-mix(in srgb, var(--page-bg) 85%, #d8d0c0 15%) 0%, transparent 40%), var(--page-bg);
+  transition: background-color 0.3s ease, color 0.3s ease;
 }
 .page {
   max-width: 940px;
@@ -97,8 +146,9 @@ body {
   background: var(--page-card);
   border-radius: 18px;
   padding: 28px 34px 44px;
-  border: 1px solid color-mix(in srgb, var(--page-line) 70%, #ffffff 30%);
+  border: 1px solid color-mix(in srgb, var(--page-line) 70%, var(--page-card) 30%);
   box-shadow: 0 12px 34px rgba(56, 44, 24, 0.08);
+  transition: background-color 0.3s ease, border-color 0.3s ease;
 }
 .page-header {
   margin-bottom: 18px;
@@ -106,15 +156,15 @@ body {
 .hero {
   position: relative;
   display: flex;
-  align-items: flex-end;
-  gap: 18px;
-  min-height: 170px;
-  padding: 20px 22px;
+  align-items: center;
+  gap: 20px;
+  min-height: 140px;
+  padding: 24px 26px;
   border-radius: 16px;
-  border: 1px solid color-mix(in srgb, var(--page-line) 72%, #ffffff 28%);
+  border: 1px solid color-mix(in srgb, var(--page-line) 72%, var(--page-card) 28%);
   background:
-    radial-gradient(circle at 22% 24%, rgba(255, 255, 255, 0.7), transparent 55%),
-    linear-gradient(135deg, #efe4d1 0%, #dbe8f5 45%, #e8dced 100%);
+    radial-gradient(circle at 22% 24%, color-mix(in srgb, var(--page-card) 70%, transparent 30%), transparent 55%),
+    linear-gradient(135deg, var(--theme-h1) 0%, var(--theme-h2) 45%, var(--theme-h3) 100%);
   overflow: hidden;
 }
 .hero::after {
@@ -129,17 +179,18 @@ body {
 .hero-emoji {
   position: relative;
   z-index: 1;
-  align-self: center;
-  font-size: clamp(84px, 11vw, 136px);
-  line-height: 0.9;
-  filter: drop-shadow(0 7px 16px rgba(36, 30, 18, 0.2));
+  font-size: clamp(72px, 10vw, 110px);
+  line-height: 1;
+  filter: drop-shadow(0 6px 14px rgba(36, 30, 18, 0.18));
+  flex-shrink: 0;
 }
 .hero-content {
   position: relative;
   z-index: 1;
   display: grid;
-  gap: 10px;
-  max-width: min(100%, 680px);
+  gap: 8px;
+  flex: 1;
+  min-width: 0;
 }
 .hero-title {
   margin: 0;
@@ -160,12 +211,13 @@ body {
   align-items: center;
   padding: 4px 10px;
   border-radius: 999px;
-  background: #f0e8da;
+  background: var(--tag-bg);
   color: var(--page-text);
   font-size: 12px;
   font-weight: 650;
   letter-spacing: 0.03em;
   text-transform: uppercase;
+  transition: background-color 0.3s ease, color 0.3s ease;
 }
 .markdown-body h1,
 .markdown-body h2,
@@ -238,11 +290,17 @@ body {
   padding: 12px 14px;
   border: 1px solid var(--page-line);
   border-radius: 12px;
-  background: #fbf8f1;
+  background: color-mix(in srgb, var(--page-card) 94%, var(--page-bg) 6%);
+  transition: border-color 0.2s ease;
+}
+.audio-figure:hover,
+.audio-figure:focus-within {
+  border-color: var(--callout-border);
 }
 .audio-figure audio {
   width: 100%;
   margin: 0;
+  accent-color: var(--audio-accent);
 }
 .audio-figure figcaption {
   margin-top: 8px;
@@ -271,11 +329,12 @@ body {
   margin-bottom: 0;
 }
 .study-text {
-  background: #f8f5ed;
+  background: color-mix(in srgb, var(--page-card) 94%, var(--page-bg) 6%);
   padding: 16px 18px;
   border-radius: 12px;
   border: 1px solid var(--page-line);
   margin: 16px 0;
+  transition: background-color 0.3s ease, border-color 0.3s ease;
 }
 .study-text summary {
   font-size: 13px;
@@ -342,7 +401,8 @@ body {
   text-transform: uppercase;
   color: var(--page-muted);
   padding: 12px 14px;
-  background: color-mix(in srgb, var(--toc-bg) 82%, #ffffff 18%);
+  background: color-mix(in srgb, var(--toc-bg) 82%, var(--page-card) 18%);
+  transition: background-color 0.3s ease, color 0.3s ease;
 }
 .toc-shell summary:hover {
   color: var(--page-text);
@@ -366,8 +426,9 @@ body {
   margin: 6px 0;
 }
 .table-of-contents a {
-  color: #36475d;
+  color: var(--toc-link);
   text-decoration: none;
+  transition: color 0.2s ease;
 }
 .table-of-contents a:hover {
   color: var(--page-text);
@@ -378,7 +439,8 @@ details:not(.study-text) {
   padding: 10px 14px;
   border-radius: 10px;
   border: 1px solid var(--page-line);
-  background: #fbf8f1;
+  background: color-mix(in srgb, var(--page-card) 94%, var(--page-bg) 6%);
+  transition: background-color 0.3s ease, border-color 0.3s ease;
 }
 details:not(.study-text) summary {
   cursor: pointer;
@@ -389,9 +451,10 @@ pre {
   margin: 14px 0;
   border-radius: 12px;
   border: 1px solid var(--page-line);
-  background: #f7f4ee;
+  background: var(--callout-bg);
   padding: 14px 16px;
   overflow-x: auto;
+  transition: background-color 0.3s ease, border-color 0.3s ease;
 }
 pre code {
   font-family: 'SFMono-Regular', Menlo, Monaco, Consolas, 'Liberation Mono', monospace;
@@ -406,8 +469,8 @@ pre code {
 .markdown-body h1 code,
 .markdown-body h2 code,
 .markdown-body h3 code {
-  background: #ece8e1;
-  color: #2a2a2a;
+  background: var(--inline-code-bg);
+  color: var(--inline-code-text);
   border-radius: 7px;
   padding: 0.14em 0.46em;
   font-family: 'SFMono-Regular', Menlo, Monaco, Consolas, 'Liberation Mono', monospace;
@@ -415,6 +478,7 @@ pre code {
   line-height: 1.2;
   box-decoration-break: clone;
   -webkit-box-decoration-break: clone;
+  transition: background-color 0.3s ease, color 0.3s ease;
 }
 .copy-code-button {
   position: absolute;
@@ -476,6 +540,94 @@ th {
     grid-template-columns: 1fr;
   }
 }
+.theme-toggle {
+  position: fixed;
+  top: 20px;
+  right: 24px;
+  z-index: 100;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  border: 1px solid var(--page-line);
+  border-radius: 50%;
+  background: var(--page-card);
+  color: var(--page-muted);
+  font-size: 18px;
+  cursor: pointer;
+  transition: border-color 0.2s ease, color 0.2s ease, transform 0.2s ease;
+  box-shadow: 0 3px 12px rgba(36, 30, 18, 0.1);
+}
+.theme-toggle:hover {
+  border-color: var(--callout-border);
+  color: var(--page-text);
+  transform: scale(1.05);
+}
+.theme-toggle .icon-sun,
+.theme-toggle .icon-moon {
+  position: absolute;
+  transition: opacity 0.25s ease, transform 0.25s ease;
+}
+.theme-toggle .icon-moon {
+  opacity: 0;
+  transform: rotate(-90deg) scale(0.8);
+}
+[data-theme="dark"] .theme-toggle .icon-sun {
+  opacity: 0;
+  transform: rotate(90deg) scale(0.8);
+}
+[data-theme="dark"] .theme-toggle .icon-moon {
+  opacity: 1;
+  transform: rotate(0) scale(1);
+}
+details {
+  overflow: hidden;
+}
+details > .content {
+  display: grid;
+  grid-template-rows: 0fr;
+  transition: grid-template-rows 0.3s ease-out, opacity 0.3s ease-out, padding 0.3s ease;
+  opacity: 0;
+}
+details.is-open > .content {
+  grid-template-rows: 1fr;
+  opacity: 1;
+}
+.content-inner {
+  overflow: hidden;
+}
+.back-to-top {
+  position: fixed;
+  bottom: 24px;
+  right: 24px;
+  z-index: 100;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  border: 1px solid var(--page-line);
+  border-radius: 50%;
+  background: var(--page-card);
+  color: var(--page-muted);
+  font-size: 20px;
+  cursor: pointer;
+  opacity: 0;
+  visibility: hidden;
+  transform: translateY(12px);
+  transition: opacity 0.25s ease, visibility 0.25s ease, transform 0.25s ease, border-color 0.2s ease, color 0.2s ease;
+  box-shadow: 0 4px 16px rgba(36, 30, 18, 0.12);
+}
+.back-to-top:hover {
+  border-color: var(--callout-border);
+  color: var(--page-text);
+}
+.back-to-top.visible {
+  opacity: 1;
+  visibility: visible;
+  transform: translateY(0);
+}
 @media print {
   body {
     background: #fff;
@@ -487,7 +639,9 @@ th {
     max-width: none;
     padding: 0;
   }
-  .copy-code-button {
+  .copy-code-button,
+  .back-to-top,
+  .theme-toggle {
     display: none !important;
   }
 }
@@ -523,7 +677,10 @@ export async function renderToHtml(
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <meta name="color-scheme" content="light">
+  <meta name="color-scheme" content="light dark">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
   <title>${escapeHtml(resolvedTitle)}</title>
   <style>${css}</style>
 </head>
@@ -532,6 +689,8 @@ export async function renderToHtml(
     ${header}
     ${safeBody}
   </main>
+  <button type="button" class="theme-toggle" aria-label="Toggle dark mode"><span class="icon-sun">☀️</span><span class="icon-moon">🌙</span></button>
+  <button type="button" class="back-to-top" aria-label="Back to top">↑</button>
   ${behaviorScript}
 </body>
 </html>`;
@@ -564,9 +723,9 @@ function createRenderer(): MarkdownIt {
       const match = /^toggle\s+(.*)$/.exec(info);
       const label = match?.[1] ?? 'Details';
       if (tokens[idx]?.nesting === 1) {
-        return `<details><summary>${escapeHtml(label)}</summary>`;
+        return `<details><summary>${escapeHtml(label)}</summary><div class="content"><div class="content-inner">`;
       }
-      return '</details>';
+      return '</div></div></details>';
     },
   });
 
@@ -591,9 +750,9 @@ function createRenderer(): MarkdownIt {
       const label = match?.[1]?.trim();
       const summaryTitle = label ? `Study Text: ${label}` : 'Study Text';
       if (tokens[idx]?.nesting === 1) {
-        return `<details class="study-text"><summary>${escapeHtml(summaryTitle)}</summary><div class="content">`;
+        return `<details class="study-text"><summary>${escapeHtml(summaryTitle)}</summary><div class="content"><div class="content-inner">`;
       }
-      return '</div></details>';
+      return '</div></div></details>';
     },
   });
 
@@ -1037,7 +1196,7 @@ function replaceColumnMarkers(html: string): string {
 function wrapTableOfContents(html: string): string {
   return html.replaceAll(
     /<(nav|div)\s+class="table-of-contents"[\s\S]*?<\/\1>/gi,
-    (tocHtml) => `<details class="toc-shell"><summary>Contents</summary>${tocHtml}</details>`,
+    (tocHtml) => `<details class="toc-shell"><summary>Contents</summary><div class="content"><div class="content-inner">${tocHtml}</div></div></details>`,
   );
 }
 
@@ -1063,10 +1222,6 @@ function buildCss(options: ResolvedRenderOptions): string {
 }
 
 function buildBehaviorScript(features: ResolvedFeatures): string {
-  if (!features.copyCode) {
-    return '';
-  }
-
   const copyCode = features.copyCode ? 'true' : 'false';
 
   return `<script>
@@ -1122,6 +1277,82 @@ function buildBehaviorScript(features: ResolvedFeatures): string {
       });
 
       pre.appendChild(button);
+    });
+  }
+
+  const backToTop = document.querySelector('.back-to-top');
+  if (backToTop instanceof HTMLElement) {
+    const showThreshold = 300;
+    let ticking = false;
+
+    const updateVisibility = () => {
+      if (window.scrollY > showThreshold) {
+        backToTop.classList.add('visible');
+      } else {
+        backToTop.classList.remove('visible');
+      }
+      ticking = false;
+    };
+
+    window.addEventListener('scroll', () => {
+      if (!ticking) {
+        window.requestAnimationFrame(updateVisibility);
+        ticking = true;
+      }
+    }, { passive: true });
+
+    backToTop.addEventListener('click', () => {
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    });
+  }
+
+  const themeToggle = document.querySelector('.theme-toggle');
+  if (themeToggle instanceof HTMLElement) {
+    const html = document.documentElement;
+    const storageKey = 'theme-preference';
+
+    const getPreference = () => {
+      const stored = localStorage.getItem(storageKey);
+      if (stored === 'dark' || stored === 'light') {
+        return stored;
+      }
+      return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+    };
+
+    const setTheme = (theme) => {
+      html.setAttribute('data-theme', theme);
+      localStorage.setItem(storageKey, theme);
+    };
+
+    setTheme(getPreference());
+
+    themeToggle.addEventListener('click', () => {
+      const current = html.getAttribute('data-theme') || getPreference();
+      setTheme(current === 'dark' ? 'light' : 'dark');
+    });
+
+    window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', (e) => {
+      if (!localStorage.getItem(storageKey)) {
+        setTheme(e.matches ? 'dark' : 'light');
+      }
+    });
+
+    // Force animation replay on details toggle
+    document.querySelectorAll('details').forEach((details) => {
+      if (details.open) {
+        details.classList.add('is-open');
+      }
+      details.addEventListener('toggle', () => {
+        if (details.open) {
+          requestAnimationFrame(() => {
+            requestAnimationFrame(() => {
+              details.classList.add('is-open');
+            });
+          });
+        } else {
+          details.classList.remove('is-open');
+        }
+      });
     });
   }
 })();

@@ -78,7 +78,7 @@ describe('rendering', () => {
     const html = await renderToHtml(markdown, 'Inline Code');
     expect(html).toContain('Line with <code>Target_Time = 5:00 PM</code> inside.');
     expect(html).toContain('.markdown-body p code');
-    expect(html).toContain('background: #ece8e1;');
+    expect(html).toContain('background: var(--inline-code-bg);');
     expect(html).toContain('border-radius: 7px;');
   });
 
