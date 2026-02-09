@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -10,13 +10,17 @@ vi.mock('../../utils/api', () => ({
   cancelJob: vi.fn(),
   createDraft: vi.fn(),
   createPromptPackage: vi.fn(),
+  fetchDraft: vi.fn(),
+  fetchJobProvenance: vi.fn(),
   fetchJobOptions: vi.fn(),
+  fetchPromptPackage: vi.fn(),
   fetchPromptOptions: vi.fn(),
   fetchStudentOptions: vi.fn(),
   fetchRecordingTranscript: vi.fn(),
   getProfileContent: vi.fn(),
   getJobStatus: vi.fn(),
   getRecording: vi.fn(),
+  listUserJobs: vi.fn(),
   listProfileContents: vi.fn(),
   listProfileRevisions: vi.fn(),
   materializeDraft: vi.fn(),
@@ -123,6 +127,7 @@ async function publishAssignmentFlow(user: ReturnType<typeof userEvent.setup>) {
 describe('MinimalAssignment', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    window.history.replaceState(null, '', '/');
 
     vi.mocked(api.fetchPromptOptions).mockResolvedValue({
       templates: [{ id: 'tpl-default', label: 'Default Template' }],
@@ -158,6 +163,12 @@ describe('MinimalAssignment', () => {
         { id: 'student-default', name: 'Default', profileId: 'profiles/default.md' },
         { id: 'student-alex', name: 'Alex', profileId: 'profiles/alex.md' },
       ],
+    });
+    vi.mocked(api.listUserJobs).mockResolvedValue({
+      jobs: [],
+      total: 0,
+      limit: 20,
+      offset: 0,
     });
     vi.mocked(api.listProfileContents).mockResolvedValue({
       profiles: [{ id: 'profile-default.md', label: 'Default Profile' }],
@@ -223,6 +234,19 @@ describe('MinimalAssignment', () => {
       createdAt: now,
       updatedAt: now,
     });
+    vi.mocked(api.fetchPromptPackage).mockResolvedValue({
+      id: 'pkg-1',
+      recordingId: 'rec-1',
+      transcriptId: 'tx-1',
+      studentId: null,
+      profilePath: null,
+      templateVersion: 'v1',
+      notes: null,
+      storageUri: 'memory://prompt/pkg-1',
+      text: 'Prompt package output',
+      createdAt: now,
+      updatedAt: now,
+    });
 
     vi.mocked(api.validateMarkdown).mockResolvedValue({
       ok: true,
@@ -231,6 +255,16 @@ describe('MinimalAssignment', () => {
     });
 
     vi.mocked(api.createDraft).mockResolvedValue({
+      id: 'draft-1',
+      promptPackageId: 'pkg-1',
+      studentId: null,
+      storageUri: 'memory://drafts/draft-1',
+      createdBy: 'user-1',
+      text: '# Draft markdown',
+      createdAt: now,
+      updatedAt: now,
+    });
+    vi.mocked(api.fetchDraft).mockResolvedValue({
       id: 'draft-1',
       promptPackageId: 'pkg-1',
       studentId: null,
@@ -266,6 +300,28 @@ describe('MinimalAssignment', () => {
       publishTarget: 'notion',
       notionUrl: 'https://www.notion.so/published-assignment',
     } as never);
+    vi.mocked(api.fetchJobProvenance).mockResolvedValue({
+      job: {
+        id: 'job-1',
+        state: 'succeeded',
+        createdAt: now,
+        updatedAt: now,
+        startedAt: now,
+        finishedAt: now,
+        sourceJobId: null,
+        manifestPath: null,
+        notionUrl: 'https://www.notion.so/published-assignment',
+        anytypeUrl: null,
+        error: null,
+      },
+      sourceJob: null,
+      recording: null,
+      transcript: null,
+      promptPackage: null,
+      draft: null,
+      lineage: null,
+      actions: [],
+    });
     vi.mocked(api.rerunAudioJob).mockResolvedValue({
       success: true,
       message: 'Audio rerun queued',
@@ -304,6 +360,126 @@ describe('MinimalAssignment', () => {
     expect(screen.getByRole('heading', { name: /6\. Publish/i })).toBeTruthy();
   });
 
+  it('rehydrates workflow state from server job context in query params', async () => {
+    vi.mocked(api.listUserJobs).mockResolvedValueOnce({
+      jobs: [
+        {
+          jobId: 'job-resume',
+          md: '/tmp/resume.md',
+          mdStorageUri: 's3://bucket/resume.md',
+          recordingId: 'rec-resume',
+          transcriptId: 'tx-resume',
+          promptPackageId: 'pkg-resume',
+          draftId: 'draft-resume',
+          preset: 'b1-default',
+          withTts: true,
+          voiceId: null,
+          upload: 's3',
+          voiceAccent: null,
+          forceTts: false,
+          notionDatabase: null,
+          publishTarget: 'anytype',
+          ttsStrategy: 'auto',
+          autoPublish: false,
+          notionUrl: null,
+          anytypeUrl: null,
+          state: 'failed',
+          createdAt: now,
+          updatedAt: now,
+          startedAt: now,
+          finishedAt: now,
+          error: 'fetch failed',
+          manifestPath: null,
+        },
+      ],
+      total: 1,
+      limit: 20,
+      offset: 0,
+    });
+
+    vi.mocked(api.getJobStatus).mockResolvedValueOnce({
+      jobId: 'job-resume',
+      md: '/tmp/resume.md',
+      mdStorageUri: 's3://bucket/resume.md',
+      recordingId: 'rec-resume',
+      transcriptId: 'tx-resume',
+      promptPackageId: 'pkg-resume',
+      draftId: 'draft-resume',
+      preset: 'b1-default',
+      withTts: true,
+      voiceId: null,
+      upload: 's3',
+      voiceAccent: null,
+      forceTts: false,
+      notionDatabase: null,
+      publishTarget: 'anytype',
+      ttsStrategy: 'auto',
+      autoPublish: false,
+      notionUrl: null,
+      anytypeUrl: null,
+      state: 'failed',
+      createdAt: now,
+      updatedAt: now,
+      startedAt: now,
+      finishedAt: now,
+      error: 'fetch failed',
+      manifestPath: null,
+    });
+    vi.mocked(api.getRecording).mockResolvedValueOnce(
+      makeRecording({
+        recordingId: 'rec-resume',
+        status: 'transcribed',
+        transcriptId: 'tx-resume',
+        studentId: 'student-alex',
+        displayName: 'resume.mp3',
+      }),
+    );
+    vi.mocked(api.fetchRecordingTranscript).mockResolvedValueOnce(
+      makeTranscript({
+        recordingId: 'rec-resume',
+        transcriptId: 'tx-resume',
+        text: 'Recovered transcript',
+      }),
+    );
+    vi.mocked(api.fetchPromptPackage).mockResolvedValueOnce({
+      id: 'pkg-resume',
+      recordingId: 'rec-resume',
+      transcriptId: 'tx-resume',
+      studentId: 'student-alex',
+      profilePath: null,
+      templateVersion: 'v1',
+      notes: null,
+      storageUri: 'memory://prompt/pkg-resume',
+      text: 'Recovered prompt',
+      createdAt: now,
+      updatedAt: now,
+    });
+    vi.mocked(api.fetchDraft).mockResolvedValueOnce({
+      id: 'draft-resume',
+      promptPackageId: 'pkg-resume',
+      studentId: 'student-alex',
+      storageUri: 'memory://drafts/draft-resume',
+      createdBy: 'user-1',
+      text: '# Recovered draft',
+      createdAt: now,
+      updatedAt: now,
+    });
+
+    window.history.replaceState(null, '', '/?jobId=job-resume');
+    render(<MinimalAssignment />);
+
+    await waitFor(() => {
+      expect(api.getJobStatus).toHaveBeenCalledWith('job-resume');
+    });
+
+    expect(await screen.findByDisplayValue('Recovered transcript')).toBeTruthy();
+    expect(await screen.findByDisplayValue('Recovered prompt')).toBeTruthy();
+    expect(await screen.findByDisplayValue('# Recovered draft')).toBeTruthy();
+    expect(screen.getAllByText(/Anytype server unreachable/i).length).toBeGreaterThan(0);
+
+    window.history.replaceState(null, '', '/');
+  });
+
   it('uploads a recording and shows recording metadata', async () => {
     const user = userEvent.setup();
     render(<MinimalAssignment />);
@@ -322,6 +498,23 @@ describe('MinimalAssignment', () => {
       expect(screen.getByText(/Recording ID: rec-1/i)).toBeTruthy();
     });
     expect(screen.getByText(/Status: transcribed/i)).toBeTruthy();
+  });
+
+  it('shows a cache-hit notice when transcript reuse is available', async () => {
+    const user = userEvent.setup();
+    vi.mocked(api.uploadRecording).mockResolvedValueOnce(
+      makeRecording({
+        cacheHit: true,
+        cacheReason: 'transcript_reused',
+      }),
+    );
+    render(<MinimalAssignment />);
+
+    await user.click(screen.getByRole('button', { name: /Drop audio file/i }));
+
+    await waitFor(() => {
+      expect(screen.getByText(/Reused an existing transcript/i)).toBeTruthy();
+    });
   });
 
   it('saves profile edits and refreshes revisions', async () => {
@@ -572,7 +765,12 @@ describe('MinimalAssignment', () => {
 
     const reasonInput = screen.getByPlaceholderText('reason for cancellation');
     await user.type(reasonInput, 'duplicate run');
-    await user.click(screen.getByRole('button', { name: /Cancel job/i }));
+    const actionsHeading = screen.getByRole('heading', { name: /7\. Job actions/i });
+    const actionsSection = actionsHeading.closest('section');
+    if (!actionsSection) {
+      throw new Error('Expected job actions section to be rendered');
+    }
+    await user.click(within(actionsSection).getByRole('button', { name: /Cancel job/i }));
 
     await waitFor(() => {
       expect(api.cancelJob).toHaveBeenCalledWith('job-1', { reason: 'duplicate run' });

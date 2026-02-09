@@ -98,6 +98,9 @@ export interface RecordingListItem {
   bytes: number;
   createdAt: string;
   updatedAt: string;
+  cacheHit?: boolean;
+  cacheReason?: 'transcript_reused' | null;
+  cacheRecordingId?: string | null;
 }
 
 export interface RecordingsListResponse {

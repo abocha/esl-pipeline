@@ -20,14 +20,17 @@ import {
   cancelJob,
   createDraft,
   createPromptPackage,
+  fetchDraft,
   fetchJobProvenance,
   fetchStudentOptions,
   fetchJobOptions,
+  fetchPromptPackage,
   fetchPromptOptions,
   fetchRecordingTranscript,
   getJobStatus,
   getProfileContent,
   getRecording,
+  listUserJobs,
   listProfileContents,
   listProfileRevisions,
   materializeDraft,
@@ -45,6 +48,42 @@ import { UploadProgress } from '../shared/UploadProgress';
 
 const AUDIO_EXTENSIONS = ['.wav', '.mp3', '.m4a', '.aac', '.ogg', '.opus'];
 const POLL_INTERVAL_MS = 3000;
+const TERMINAL_JOB_STATES = new Set<JobStatus['state']>(['succeeded', 'failed']);
+
+function isTerminalJobState(state: JobStatus['state'] | null | undefined): boolean {
+  return state ? TERMINAL_JOB_STATES.has(state) : false;
+}
+
+function readJobIdFromQuery(): string | null {
+  if (typeof window === 'undefined') return null;
+  const params = new URLSearchParams(window.location.search);
+  const value = params.get('jobId')?.trim();
+  return value || null;
+}
+
+function writeJobIdToQuery(jobId: string | null): void {
+  if (typeof window === 'undefined') return;
+  const nextUrl = new URL(window.location.href);
+  if (jobId) {
+    nextUrl.searchParams.set('jobId', jobId);
+  } else {
+    nextUrl.searchParams.delete('jobId');
+  }
+  const suffix = `${nextUrl.pathname}${nextUrl.search}${nextUrl.hash}`;
+  window.history.replaceState(null, '', suffix);
+}
+
+function describeJobFailureReason(job: Pick<JobStatus, 'publishTarget' | 'error'>): string {
+  const reason = job.error?.trim();
+  if (!reason) {
+    return 'Publishing failed. Check service availability and retry.';
+  }
+  const normalized = reason.toLowerCase();
+  if (job.publishTarget === 'anytype' && normalized.includes('fetch failed')) {
+    return 'Anytype server unreachable. Start Anytype Desktop app and retry publish.';
+  }
+  return reason;
+}
 
 export const MinimalAssignment: React.FC = () => {
   const [recording, setRecording] = useState<RecordingListItem | null>(null);
@@ -90,6 +129,13 @@ export const MinimalAssignment: React.FC = () => {
   const [studentOptions, setStudentOptions] = useState<StudentOption[]>([]);
   const [studentOptionsError, setStudentOptionsError] = useState<string | null>(null);
   const [selectedStudentId, setSelectedStudentId] = useState('');
+  const [resumeJobs, setResumeJobs] = useState<JobStatus[]>([]);
+  const [selectedResumeJobId, setSelectedResumeJobId] = useState('');
+  const [resumeLoading, setResumeLoading] = useState(false);
+  const [resumeError, setResumeError] = useState<string | null>(null);
+  const [pinnedJobExpanded, setPinnedJobExpanded] = useState(true);
+  const [uploadCacheNotice, setUploadCacheNotice] = useState<string | null>(null);
+  const resumeInitializedRef = useRef(false);
 
   const [profileOptions, setProfileOptions] = useState<{ id: string; label: string }[]>([]);
   const [profileOptionsError, setProfileOptionsError] = useState<string | null>(null);
@@ -136,9 +182,34 @@ export const MinimalAssignment: React.FC = () => {
     }
   }, []);
 
+  const loadResumeJobs = useCallback(async (): Promise<JobStatus[]> => {
+    try {
+      const response = await listUserJobs({
+        limit: 20,
+        offset: 0,
+        order: 'desc',
+      });
+      const jobs = response.jobs ?? [];
+      setResumeJobs(jobs);
+      setSelectedResumeJobId((current) => {
+        if (current && jobs.some((job) => job.jobId === current)) return current;
+        return jobs[0]?.jobId ?? '';
+      });
+      setResumeError(null);
+      return jobs;
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Unable to load recent jobs.';
+      setResumeError(message);
+      setResumeJobs([]);
+      setSelectedResumeJobId('');
+      return [];
+    }
+  }, []);
+
   const resetFlow = useCallback(() => {
     uploadAbortRef.current?.abort();
     uploadAbortRef.current = null;
+    writeJobIdToQuery(null);
     setRecording(null);
     setRecordingStatus(null);
     setRecordingError(null);
@@ -168,6 +239,9 @@ export const MinimalAssignment: React.FC = () => {
     setUploadError(null);
     setUploadProgress(0);
     setUploading(false);
+    setUploadCacheNotice(null);
+    setResumeError(null);
+    setPinnedJobExpanded(true);
   }, []);
 
   const loadPromptOptions = useCallback(async () => {
@@ -261,6 +335,17 @@ export const MinimalAssignment: React.FC = () => {
     void loadSelectedProfile();
   }, [loadSelectedProfile]);
 
+  useEffect(() => {
+    if (!selectedStudentId || selectedProfileId) {
+      return;
+    }
+    const boundProfileId =
+      studentOptions.find((student) => student.id === selectedStudentId)?.profileId ?? '';
+    if (boundProfileId) {
+      setSelectedProfileId(boundProfileId);
+    }
+  }, [selectedProfileId, selectedStudentId, studentOptions]);
+
   const handleUpload = useCallback(
     async (file: File) => {
       if (uploading) return;
@@ -282,6 +367,11 @@ export const MinimalAssignment: React.FC = () => {
         setRecordingStatus(response.status);
         setRecordingError(response.error ?? null);
         setSelectedFileName(response.displayName || file.name);
+        setUploadCacheNotice(
+          response.cacheHit
+            ? 'Reused an existing transcript for this exact audio file.'
+            : null,
+        );
       } catch (error) {
         if (controller.signal.aborted) {
           setUploadError('Upload canceled.');
@@ -296,6 +386,171 @@ export const MinimalAssignment: React.FC = () => {
     },
     [resetFlow, selectedStudentId, uploading],
   );
+
+  const hydrateFromJob = useCallback(
+    async (jobId: string) => {
+      if (!jobId) return;
+
+      setResumeLoading(true);
+      setResumeError(null);
+      setPublishError(null);
+      setActionError(null);
+      setActionSuccess(null);
+      setUploadError(null);
+      setUploadCacheNotice(null);
+
+      try {
+        const status = await getJobStatus(jobId);
+        setJobStatusState(status);
+        setSelectedResumeJobId(status.jobId);
+        setPinnedJobExpanded(!isTerminalJobState(status.state));
+        writeJobIdToQuery(status.jobId);
+
+        if (status.publishTarget) {
+          setPublishTarget(status.publishTarget);
+        }
+
+        if (status.recordingId) {
+          try {
+            const resumedRecording = await getRecording(status.recordingId);
+            setRecording(resumedRecording);
+            setRecordingStatus(resumedRecording.status);
+            setRecordingError(resumedRecording.error ?? null);
+            setSelectedFileName(resumedRecording.displayName || null);
+            if (resumedRecording.studentId) {
+              setSelectedStudentId(resumedRecording.studentId);
+            }
+
+            if (status.transcriptId || resumedRecording.transcriptId || resumedRecording.status === 'transcribed') {
+              try {
+                const resumedTranscript = await fetchRecordingTranscript(resumedRecording.recordingId);
+                setTranscript(resumedTranscript);
+                setTranscriptText(resumedTranscript.text ?? '');
+                setTranscriptStatus('ready');
+                setTranscriptError(null);
+              } catch (error) {
+                const message =
+                  error instanceof Error ? error.message : 'Unable to load transcript.';
+                if (resumedRecording.status === 'transcribing' || resumedRecording.status === 'queued') {
+                  setTranscriptStatus('processing');
+                  setTranscriptError(null);
+                } else {
+                  setTranscriptStatus('failed');
+                  setTranscriptError(message);
+                }
+              }
+            } else if (resumedRecording.status === 'failed') {
+              setTranscriptStatus('failed');
+              setTranscriptError(resumedRecording.error ?? 'Transcription failed.');
+            } else {
+              setTranscript(null);
+              setTranscriptText('');
+              setTranscriptStatus('processing');
+              setTranscriptError(null);
+            }
+          } catch (error) {
+            const message = error instanceof Error ? error.message : 'Unable to load recording.';
+            setRecording(null);
+            setRecordingStatus(null);
+            setRecordingError(message);
+            setTranscript(null);
+            setTranscriptText('');
+            setTranscriptStatus('failed');
+            setTranscriptError(message);
+          }
+        } else {
+          setRecording(null);
+          setRecordingStatus(null);
+          setRecordingError(null);
+          setTranscript(null);
+          setTranscriptText('');
+          setTranscriptStatus('idle');
+          setTranscriptError(null);
+        }
+
+        if (status.promptPackageId) {
+          try {
+            const resumedPromptPackage = await fetchPromptPackage(status.promptPackageId);
+            setPromptPackage(resumedPromptPackage);
+            setPromptText(resumedPromptPackage.text ?? '');
+            setPromptError(null);
+          } catch (error) {
+            const message = error instanceof Error ? error.message : 'Unable to load prompt package.';
+            setPromptPackage(null);
+            setPromptText('');
+            setPromptError(message);
+          }
+        } else {
+          setPromptPackage(null);
+          setPromptText('');
+          setPromptError(null);
+        }
+
+        if (status.draftId) {
+          try {
+            const resumedDraft = await fetchDraft(status.draftId);
+            setDraft(resumedDraft);
+            setDraftText(resumedDraft.text ?? '');
+            setDraftError(null);
+          } catch (error) {
+            const message = error instanceof Error ? error.message : 'Unable to load saved draft.';
+            setDraft(null);
+            setDraftText('');
+            setDraftError(message);
+          }
+        } else {
+          setDraft(null);
+          setDraftText('');
+          setDraftError(null);
+        }
+
+        setValidation(null);
+        setValidationError(null);
+        if (status.state === 'failed' && status.error) {
+          setPublishError(describeJobFailureReason(status));
+        }
+        void loadJobProvenance(status.jobId);
+      } catch (error) {
+        const message =
+          error instanceof Error ? error.message : 'Unable to resume the selected assignment.';
+        setResumeError(message);
+      } finally {
+        setResumeLoading(false);
+      }
+    },
+    [loadJobProvenance],
+  );
+
+  const handleResumeSelectedJob = useCallback(async () => {
+    if (!selectedResumeJobId) return;
+    await hydrateFromJob(selectedResumeJobId);
+    await loadResumeJobs();
+  }, [hydrateFromJob, loadResumeJobs, selectedResumeJobId]);
+
+  useEffect(() => {
+    if (resumeInitializedRef.current) return;
+    resumeInitializedRef.current = true;
+
+    const initializeResume = async () => {
+      setResumeLoading(true);
+      const jobs = await loadResumeJobs();
+      const queryJobId = readJobIdFromQuery();
+      if (queryJobId) {
+        setSelectedResumeJobId(queryJobId);
+        await hydrateFromJob(queryJobId);
+        return;
+      }
+
+      const candidate = jobs.find((job) => !isTerminalJobState(job.state)) ?? jobs[0] ?? null;
+      if (candidate) {
+        await hydrateFromJob(candidate.jobId);
+      } else {
+        setResumeLoading(false);
+      }
+    };
+
+    void initializeResume();
+  }, [hydrateFromJob, loadResumeJobs]);
 
   const handleFiles = (files: File[]) => {
     const file = files[0];
@@ -625,6 +880,7 @@ export const MinimalAssignment: React.FC = () => {
       }
 
       const materialized = await materializeDraft(savedDraft.id, {
+        ...(jobStatus?.jobId ? { jobId: jobStatus.jobId } : {}),
         jobOverrides: {
           publishTarget,
         },
@@ -635,6 +891,10 @@ export const MinimalAssignment: React.FC = () => {
       });
       const refreshed = await getJobStatus(materialized.jobId);
       setJobStatusState(refreshed);
+      setSelectedResumeJobId(refreshed.jobId);
+      setPinnedJobExpanded(!isTerminalJobState(refreshed.state));
+      writeJobIdToQuery(refreshed.jobId);
+      await loadResumeJobs();
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Unable to publish assignment.';
       setPublishError(message);
@@ -644,7 +904,7 @@ export const MinimalAssignment: React.FC = () => {
   };
 
   useEffect(() => {
-    if (!jobStatus?.jobId) return;
+    if (!jobStatus?.jobId || isTerminalJobState(jobStatus.state)) return;
     let active = true;
     const interval = setInterval(async () => {
       try {
@@ -653,6 +913,7 @@ export const MinimalAssignment: React.FC = () => {
         setJobStatusState(refreshed);
         if (refreshed.state === 'succeeded' || refreshed.state === 'failed') {
           clearInterval(interval);
+          void loadResumeJobs();
         }
       } catch (error) {
         if (!active) return;
@@ -665,7 +926,7 @@ export const MinimalAssignment: React.FC = () => {
       active = false;
       clearInterval(interval);
     };
-  }, [jobStatus?.jobId]);
+  }, [jobStatus?.jobId, jobStatus?.state, loadResumeJobs]);
 
   useEffect(() => {
     setActionBusy(null);
@@ -674,6 +935,17 @@ export const MinimalAssignment: React.FC = () => {
     setShowRerunAdvanced(false);
     setCancelReason('');
   }, [jobStatus?.jobId]);
+
+  useEffect(() => {
+    if (!jobStatus) return;
+    setSelectedResumeJobId(jobStatus.jobId);
+    if (isTerminalJobState(jobStatus.state)) {
+      setPinnedJobExpanded(false);
+      if (jobStatus.state === 'failed' && jobStatus.error) {
+        setPublishError(describeJobFailureReason(jobStatus));
+      }
+    }
+  }, [jobStatus]);
 
   useEffect(() => {
     if (!jobStatus?.jobId) {
@@ -727,9 +999,14 @@ export const MinimalAssignment: React.FC = () => {
     try {
       const result = await rerunAudioJob(jobStatus.jobId, payload);
       setActionSuccess(result.message ?? 'Audio rerun queued.');
-      const refreshed = await getJobStatus(jobStatus.jobId);
+      const nextJobId = result.jobId || jobStatus.jobId;
+      const refreshed = await getJobStatus(nextJobId);
       setJobStatusState(refreshed);
-      await loadJobProvenance(jobStatus.jobId);
+      setSelectedResumeJobId(refreshed.jobId);
+      setPinnedJobExpanded(!isTerminalJobState(refreshed.state));
+      writeJobIdToQuery(refreshed.jobId);
+      await loadJobProvenance(refreshed.jobId);
+      await loadResumeJobs();
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Unable to rerun audio.';
       setActionError(message);
@@ -754,6 +1031,7 @@ export const MinimalAssignment: React.FC = () => {
       const refreshed = await getJobStatus(jobStatus.jobId);
       setJobStatusState(refreshed);
       await loadJobProvenance(jobStatus.jobId);
+      await loadResumeJobs();
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Unable to cancel job.';
       setActionError(message);
@@ -765,6 +1043,10 @@ export const MinimalAssignment: React.FC = () => {
   const transcriptReady = transcriptStatus === 'ready' && transcriptText.trim().length > 0;
   const promptReady = promptPackage?.id && promptText.trim().length > 0;
   const jobReady = jobStatus?.jobId;
+  const selectedResumeJob = useMemo(
+    () => resumeJobs.find((job) => job.jobId === selectedResumeJobId) ?? null,
+    [resumeJobs, selectedResumeJobId],
+  );
   const canPublish = promptReady && draftText.trim().length > 0 && !publishing;
   const jobPublishTarget = jobStatus?.publishTarget ?? publishTarget;
   const publishUrl = jobPublishTarget === 'anytype' ? jobStatus?.anytypeUrl : jobStatus?.notionUrl;
@@ -784,6 +1066,93 @@ export const MinimalAssignment: React.FC = () => {
 
   return (
     <div className="minimal-assignment">
+      <section className="minimal-section minimal-section-compact">
+        <div className="minimal-section-header">
+          <h2>0. Resume workflow</h2>
+          <div className="minimal-inline">
+            <button
+              type="button"
+              className="minimal-secondary"
+              onClick={() => void loadResumeJobs()}
+              disabled={resumeLoading}
+            >
+              {resumeLoading ? 'Refreshing...' : 'Refresh jobs'}
+            </button>
+            <button
+              type="button"
+              className="minimal-primary"
+              onClick={() => void handleResumeSelectedJob()}
+              disabled={!selectedResumeJobId || resumeLoading}
+            >
+              Resume selected
+            </button>
+          </div>
+        </div>
+        <label className="minimal-select">
+          Recent jobs
+          <select
+            value={selectedResumeJobId}
+            onChange={(event) => setSelectedResumeJobId(event.target.value)}
+            disabled={resumeJobs.length === 0 || resumeLoading}
+          >
+            <option value="">No saved jobs yet</option>
+            {resumeJobs.map((job) => (
+              <option key={job.jobId} value={job.jobId}>
+                {job.jobId.slice(0, 8)} • {job.state} • {new Date(job.createdAt).toLocaleString()}
+              </option>
+            ))}
+          </select>
+        </label>
+        {resumeError ? <p className="minimal-error">{resumeError}</p> : null}
+        {selectedResumeJob ? (
+          <p className="minimal-muted">
+            Selected job target: {selectedResumeJob.jobId} ({selectedResumeJob.state})
+          </p>
+        ) : null}
+        {jobStatus?.jobId ? (
+          <div className="minimal-pinned-job">
+            <div className="minimal-section-header">
+              <div className="minimal-meta">
+                <span>Pinned job: {jobStatus.jobId}</span>
+                <span>State: {jobStatus.state}</span>
+              </div>
+              <button
+                type="button"
+                className="minimal-secondary"
+                onClick={() => setPinnedJobExpanded((current) => !current)}
+              >
+                {pinnedJobExpanded ? 'Collapse details' : 'Expand details'}
+              </button>
+            </div>
+            {pinnedJobExpanded ? (
+              <div className="minimal-inline">
+                {publishUrl ? (
+                  <a href={publishUrl} target="_blank" rel="noreferrer">
+                    {publishLabel}
+                  </a>
+                ) : null}
+                <button
+                  type="button"
+                  className="minimal-secondary"
+                  onClick={() => void handleRerunAudio()}
+                  disabled={!rerunEnabled}
+                >
+                  {actionBusy === 'rerun' ? 'Queuing rerun...' : 'Rerun audio'}
+                </button>
+                <button
+                  type="button"
+                  className="minimal-secondary"
+                  onClick={() => void handleCancelJob()}
+                  disabled={!cancelEnabled}
+                >
+                  {actionBusy === 'cancel' ? 'Cancelling...' : 'Cancel job'}
+                </button>
+              </div>
+            ) : null}
+          </div>
+        ) : null}
+      </section>
+
       <section className="minimal-section">
         <div className="minimal-section-header">
           <h2>1. Upload recording</h2>
@@ -839,6 +1208,7 @@ export const MinimalAssignment: React.FC = () => {
           />
         ) : null}
         {uploadError ? <p className="minimal-error">{uploadError}</p> : null}
+        {uploadCacheNotice ? <p className="minimal-success">{uploadCacheNotice}</p> : null}
         {recording ? (
           <div className="minimal-meta">
             <span>Recording ID: {recording.recordingId}</span>
@@ -1138,6 +1508,9 @@ export const MinimalAssignment: React.FC = () => {
         </label>
         <p className="minimal-help">Publishes the markdown as a job and approves it.</p>
         {publishError ? <p className="minimal-error">{publishError}</p> : null}
+        {jobStatus?.state === 'failed' && jobStatus.error ? (
+          <p className="minimal-error">{describeJobFailureReason(jobStatus)}</p>
+        ) : null}
         {jobReady ? (
           <div className="minimal-meta">
             <span>Job ID: {jobStatus?.jobId}</span>
@@ -1382,6 +1755,20 @@ export const MinimalAssignment: React.FC = () => {
           display: flex;
           flex-direction: column;
           gap: var(--space-3);
+        }
+
+        .minimal-section-compact {
+          gap: var(--space-2);
+        }
+
+        .minimal-pinned-job {
+          border: 1px solid var(--border-medium);
+          border-radius: var(--radius-lg);
+          background: var(--bg-secondary);
+          padding: var(--space-3);
+          display: flex;
+          flex-direction: column;
+          gap: var(--space-2);
         }
 
         .minimal-section-header {

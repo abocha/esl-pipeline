@@ -129,6 +129,7 @@ body {
 .hero-emoji {
   position: relative;
   z-index: 1;
+  align-self: center;
   font-size: clamp(84px, 11vw, 136px);
   line-height: 0.9;
   filter: drop-shadow(0 7px 16px rgba(36, 30, 18, 0.2));
