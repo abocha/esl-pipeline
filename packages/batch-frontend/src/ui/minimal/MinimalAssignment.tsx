@@ -91,6 +91,26 @@ function describeJobFailureReason(job: Pick<JobStatus, 'publishTarget' | 'error'
   return reason;
 }
 
+function normalizePresetSelection(
+  availablePresets: string[] | undefined,
+  requestedPreset: string | null | undefined,
+  currentPreset: string,
+): string {
+  if (availablePresets === undefined) {
+    return requestedPreset ?? currentPreset;
+  }
+  if (availablePresets.length === 0) {
+    return '';
+  }
+  if (requestedPreset && availablePresets.includes(requestedPreset)) {
+    return requestedPreset;
+  }
+  if (currentPreset && availablePresets.includes(currentPreset)) {
+    return currentPreset;
+  }
+  return availablePresets[0] ?? '';
+}
+
 export const MinimalAssignment: React.FC = () => {
   const [recording, setRecording] = useState<RecordingListItem | null>(null);
   const [recordingStatus, setRecordingStatus] = useState<RecordingStatus | null>(null);
@@ -267,12 +287,9 @@ export const MinimalAssignment: React.FC = () => {
     try {
       const response = await fetchJobOptions();
       setJobOptions(response);
-      setSelectedPreset((current) => {
-        if (current && response.presets.includes(current)) {
-          return current;
-        }
-        return response.presets[0] ?? '';
-      });
+      setSelectedPreset((current) =>
+        normalizePresetSelection(response.presets, undefined, current),
+      );
       setJobOptionsError(null);
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Unable to load job options.';
@@ -431,7 +448,9 @@ export const MinimalAssignment: React.FC = () => {
           setPublishTarget(status.publishTarget);
         }
         if (status.preset) {
-          setSelectedPreset(status.preset);
+          setSelectedPreset((current) =>
+            normalizePresetSelection(jobOptions?.presets, status.preset, current),
+          );
         }
 
         if (status.recordingId) {
@@ -553,7 +572,7 @@ export const MinimalAssignment: React.FC = () => {
         setResumeLoading(false);
       }
     },
-    [loadJobProvenance, resolveBoundProfileId, resumeJobs],
+    [jobOptions?.presets, loadJobProvenance, resolveBoundProfileId, resumeJobs],
   );
 
   const handleResumeSelectedJob = useCallback(async () => {
@@ -915,11 +934,13 @@ export const MinimalAssignment: React.FC = () => {
         return;
       }
 
+      const validPreset =
+        selectedPreset && jobOptions?.presets?.includes(selectedPreset) ? selectedPreset : '';
       const materialized = await materializeDraft(savedDraft.id, {
         ...(jobStatus?.jobId ? { jobId: jobStatus.jobId } : {}),
         jobOverrides: {
           publishTarget,
-          ...(selectedPreset ? { preset: selectedPreset } : {}),
+          ...(validPreset ? { preset: validPreset } : {}),
         },
       });
       await approveJob(materialized.jobId, {
