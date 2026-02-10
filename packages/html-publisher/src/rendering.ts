@@ -84,6 +84,7 @@ const DEFAULT_CSS = `
   --inline-code-bg: #ece8e1;
   --inline-code-text: #2a2a2a;
   --toc-link: #36475d;
+  --table-head-bg: color-mix(in srgb, var(--page-card) 82%, var(--page-bg) 18%);
 }
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
@@ -510,7 +511,7 @@ td {
   white-space: nowrap;
 }
 th {
-  background: #f4efe6;
+  background: var(--table-head-bg);
   font-weight: 700;
 }
 @media (max-width: 840px) {
