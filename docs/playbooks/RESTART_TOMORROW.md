@@ -5,21 +5,23 @@
 Use this when your brain feels scattered and you want to restart without re-reading everything.
 This is the "no-thinking required" re-entry path.
 
-## The Only 3 Files You Need
+## The Only 4 Files You Need
 
 1. `docs/playbooks/RESTART_TOMORROW.md` (this file)
-2. `docs/reference/V1_IMPLEMENTATION_TRACKER.md` (what to do)
-3. `docs/playbooks/WEEKLY_PRODUCT_REVIEW_TEMPLATE.md` (how to stay grounded)
+2. `docs/reference/PRESET_V2_SPEC.md` (preset model truth)
+3. `docs/reference/V1_IMPLEMENTATION_TRACKER.md` (what to do)
+4. `docs/playbooks/WEEKLY_PRODUCT_REVIEW_TEMPLATE.md` (how to stay grounded)
 
-If you open only these 3 files, you are back on track.
+If you open only these 4 files, you are back on track.
 
 ## 10-Minute Reboot (Do in Order)
 
 1. Run `git status --short` and do not fix everything. Just observe.
-2. Open `docs/reference/V1_IMPLEMENTATION_TRACKER.md`.
-3. Find the first workstream with `Status: planned` and the earliest `Start week`.
-4. Pick exactly one micro-task that can fit in 30-90 minutes.
-5. Write this sentence in your notes:
+2. Open `docs/reference/PRESET_V2_SPEC.md`.
+3. Open `docs/reference/V1_IMPLEMENTATION_TRACKER.md`.
+4. Find the active workstream and its `Now` task.
+5. Pick exactly one micro-task that can fit in 30-90 minutes.
+6. Write this sentence in your notes:
    - "Today I only need to finish: ____."
 
 ## Session Modes (Choose One, No Guilt)
@@ -56,15 +58,18 @@ Success condition: one meaningful roadmap step is closed.
 
 When in doubt, always use this order:
 
-1. WS1 CEFR baseline presets
-2. WS6 readiness instrumentation (minimal)
-3. WS2 direct LLM generation
-4. WS3 TTS fallback
-5. WS5 quota/cost policy
-6. WS4 CRM-lite lesson ledger
-7. Stabilization
+1. WS2A preset plumbing MVP
+2. WS2B direct LLM generation (only after WS2A done)
+3. WS3 TTS fallback
+4. WS5 quota/cost policy
+5. WS4 CRM-lite lesson ledger
+6. Stabilization
 
 This order protects architecture and avoids rewrites later.
+
+Scope lock reminder:
+
+- In this phase, ship `general-english` preset content only.
 
 ## Anti-Spiral Rules
 
