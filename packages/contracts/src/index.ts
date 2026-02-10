@@ -114,6 +114,42 @@ export interface JobSummaryResponse {
   };
 }
 
+export type ReadinessMetricName =
+  | 'publishSuccessRate'
+  | 'medianPublishLatencyMs'
+  | 'firstSessionSuccessProxy';
+
+export interface ReadinessMetricSource {
+  source: string;
+  window: string;
+  calculation: string;
+}
+
+export type ReadinessMetricSourceMap = Record<ReadinessMetricName, ReadinessMetricSource>;
+
+export interface ReadinessMetricsResponse {
+  window: {
+    from: string;
+    to: string;
+  };
+  publishSuccess: {
+    succeeded: number;
+    failed: number;
+    total: number;
+    rate: number | null;
+  };
+  publishLatencyMs: {
+    median: number | null;
+    sampleSize: number;
+  };
+  firstSessionSuccessProxy: {
+    successfulUsers: number;
+    totalUsers: number;
+    rate: number | null;
+  };
+  sources: ReadinessMetricSourceMap;
+}
+
 export interface StudentSummaryResponse {
   items: {
     id: string;

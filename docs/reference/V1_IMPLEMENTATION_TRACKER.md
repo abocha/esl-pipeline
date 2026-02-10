@@ -23,10 +23,10 @@
 
 ## Current Sprint Focus
 
-- Active workstream: `WS1 CEFR baseline presets`
-- This week objective: wire CEFR-aware options through existing `/config/job-options` path and use selected preset in minimal assignment publish flow.
-- Today `Now` task (30-90 min): complete `WS1-S5` validation and evidence updates.
-- Success for today: WS1 checklist closed with `pnpm check:fast` green.
+- Active workstream: `WS6 Readiness instrumentation (minimal first)`
+- This week objective: expose source-grounded readiness metrics for weekly review via a minimal backend endpoint.
+- Today `Now` task (30-90 min): complete `WS6-S2` endpoint + integration test.
+- Success for today: WS6 S1/S2 merged with backend tests green.
 
 ## Delivery Model (Locked)
 
@@ -44,8 +44,8 @@ Rules:
 
 | Workstream | Status | Start | End | Dependency Gate |
 | --- | --- | --- | --- | --- |
-| WS1 CEFR baseline presets | `active` | W1 (2026-02-09) | W3 (2026-03-01) | none |
-| WS6 Readiness instrumentation (minimal first) | `queued` | W1 (2026-02-09) | W4 (2026-03-08) | WS1 metric hooks merged |
+| WS1 CEFR baseline presets | `complete` | W1 (2026-02-09) | W3 (2026-03-01) | none |
+| WS6 Readiness instrumentation (minimal first) | `active` | W1 (2026-02-09) | W4 (2026-03-08) | WS1 metric hooks merged |
 | WS2 Direct LLM generation | `queued` | W4 (2026-03-02) | W6 (2026-03-22) | WS1 complete |
 | WS3 TTS abstraction + fallback | `parked` | W7 (2026-03-23) | W9 (2026-04-12) | WS2 seam pattern stable |
 | WS5 Cost and quota policy | `parked` | W8 (2026-03-30) | W10 (2026-04-19) | WS2 + WS3 usage telemetry available |
@@ -172,8 +172,8 @@ Expose minimal readiness metrics source so weekly review is evidence-based.
 
 ### Definition of Ready
 
-- [ ] WS1 merged.
-- [ ] At least one reliable source for assignment success and publish latency is identified.
+- [x] WS1 merged.
+- [x] At least one reliable source for assignment success and publish latency is identified.
 
 ### WS6-S1 Metrics Shape and Source Map (30-90 min)
 
@@ -183,6 +183,8 @@ Expose minimal readiness metrics source so weekly review is evidence-based.
   - `packages/batch-backend/src/application/*` sources that already emit relevant events
 - Output:
   - explicit mapping table: metric -> source -> calculation window.
+- Status:
+  - complete via `READINESS_METRIC_SOURCE_MAP` in `packages/batch-backend/src/infrastructure/metrics.ts`.
 
 ### WS6-S2 Minimal Endpoint + Test (30-90 min)
 
@@ -193,6 +195,8 @@ Expose minimal readiness metrics source so weekly review is evidence-based.
   - `GET /metrics/readiness` (minimal payload: publish success, median publish latency, first-session success proxy)
 - Command:
   - `pnpm --filter @esl-pipeline/batch-backend test`
+- Status:
+  - complete via `GET /metrics/readiness` in `packages/batch-backend/src/transport/extended-routes.ts` and integration coverage in `packages/batch-backend/tests/transport.http-server.integration.test.ts`.
 
 ---
 
@@ -273,6 +277,8 @@ Recent evidence:
 - 2026-02-10 | WS1-S3 | frontend job-options API surface now types optional CEFR metadata | `pnpm --filter @esl-pipeline/batch-frontend typecheck` | pass | local branch
 - 2026-02-10 | WS1-S4 | minimal assignment publish flow wired with preset selector and `jobOverrides.preset` | `pnpm --filter @esl-pipeline/batch-frontend test` | pass | local branch
 - 2026-02-10 | WS1-S5 | end-to-end validation for WS1 completed and tracker updated | `pnpm check:fast` | pass | local branch
+- 2026-02-10 | WS6-S1 | defined readiness metric source map (metric -> source -> window -> calculation) | `pnpm --filter @esl-pipeline/batch-backend test` | pass | local branch
+- 2026-02-10 | WS6-S2 | added `GET /metrics/readiness` + application/repository plumbing + route integration test | `pnpm --filter @esl-pipeline/batch-backend test` | pass | local branch
 
 ## Weekly Closeout Checklist
 

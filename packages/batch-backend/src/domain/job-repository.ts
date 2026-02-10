@@ -110,6 +110,22 @@ export interface JobSummaryCounts {
   ttsSucceeded: number;
 }
 
+export interface ReadinessMetricsFilters {
+  from: Date;
+  to: Date;
+  userId?: string | null;
+}
+
+export interface ReadinessMetricsSnapshot {
+  publishSucceeded: number;
+  publishFailed: number;
+  publishTotal: number;
+  latencySampleSize: number;
+  medianPublishLatencyMs: number | null;
+  firstSessionTotalUsers: number;
+  firstSessionSucceededUsers: number;
+}
+
 export interface StudentJobSummaryRow {
   studentId: string;
   lastLessonAt: Date | null;
@@ -420,6 +436,81 @@ export async function getJobSummary(filters: JobListFilters = {}): Promise<JobSu
     failed: row?.failed ?? 0,
     ttsEnabled: row?.tts_enabled ?? 0,
     ttsSucceeded: row?.tts_succeeded ?? 0,
+  };
+}
+
+export async function getReadinessMetrics(
+  filters: ReadinessMetricsFilters,
+): Promise<ReadinessMetricsSnapshot> {
+  const row = await withPgClient(async (client: PoolClient) => {
+    const result = await client.query(
+      `
+      WITH window_jobs AS (
+        SELECT
+          j.id,
+          j.user_id,
+          j.state,
+          j.publish_target,
+          j.created_at,
+          j.finished_at
+        FROM jobs j
+        WHERE j.created_at >= $1
+          AND j.created_at <= $2
+          AND ($3::uuid IS NULL OR j.user_id = $3::uuid)
+      ),
+      publish_jobs AS (
+        SELECT *
+        FROM window_jobs
+        WHERE publish_target IN ('notion', 'anytype', 'html')
+      ),
+      terminal_publish_jobs AS (
+        SELECT *
+        FROM publish_jobs
+        WHERE state IN ('succeeded', 'failed')
+      ),
+      first_session_candidates AS (
+        SELECT
+          user_id,
+          state,
+          ROW_NUMBER() OVER (PARTITION BY user_id ORDER BY created_at ASC, id ASC) AS rank_in_window
+        FROM publish_jobs
+        WHERE user_id IS NOT NULL
+      ),
+      first_session AS (
+        SELECT
+          COUNT(*)::int AS total_users,
+          COUNT(*) FILTER (WHERE state = 'succeeded')::int AS succeeded_users
+        FROM first_session_candidates
+        WHERE rank_in_window = 1
+      )
+      SELECT
+        COUNT(*) FILTER (WHERE tpj.state = 'succeeded')::int AS publish_succeeded,
+        COUNT(*) FILTER (WHERE tpj.state = 'failed')::int AS publish_failed,
+        COUNT(*)::int AS publish_total,
+        COUNT(*) FILTER (WHERE tpj.state = 'succeeded' AND tpj.finished_at IS NOT NULL)::int AS latency_sample_size,
+        PERCENTILE_CONT(0.5) WITHIN GROUP (
+          ORDER BY EXTRACT(EPOCH FROM (tpj.finished_at - tpj.created_at)) * 1000
+        ) FILTER (WHERE tpj.state = 'succeeded' AND tpj.finished_at IS NOT NULL)
+          AS median_publish_latency_ms,
+        fs.total_users::int AS first_session_total_users,
+        fs.succeeded_users::int AS first_session_succeeded_users
+      FROM terminal_publish_jobs tpj
+      CROSS JOIN first_session fs
+      `,
+      [filters.from, filters.to, filters.userId ?? null],
+    );
+    return result.rows[0];
+  });
+
+  return {
+    publishSucceeded: Number(row?.publish_succeeded ?? 0),
+    publishFailed: Number(row?.publish_failed ?? 0),
+    publishTotal: Number(row?.publish_total ?? 0),
+    latencySampleSize: Number(row?.latency_sample_size ?? 0),
+    medianPublishLatencyMs:
+      row?.median_publish_latency_ms == null ? null : Number(row.median_publish_latency_ms),
+    firstSessionTotalUsers: Number(row?.first_session_total_users ?? 0),
+    firstSessionSucceededUsers: Number(row?.first_session_succeeded_users ?? 0),
   };
 }
 
