@@ -8,6 +8,7 @@ import type { JobRecord } from '../domain/job-model.js';
 export function jobRecordToDto(job: JobRecord): JobStatusDto {
   return {
     jobId: job.id,
+    ...(job.studentId ? { studentId: job.studentId } : {}),
     md: job.md,
     ...(job.mdStorageUri ? { mdStorageUri: job.mdStorageUri } : {}),
     recordingId: job.recordingId ?? null,
@@ -25,6 +26,7 @@ export function jobRecordToDto(job: JobRecord): JobStatusDto {
     ttsStrategy: job.ttsStrategy ?? null,
     notionUrl: job.notionUrl ?? null,
     anytypeUrl: job.anytypeUrl ?? null,
+    ...(job.htmlUrl ? { htmlUrl: job.htmlUrl } : {}),
     autoPublish: job.autoPublish ?? null,
     state: job.state,
     createdAt: job.createdAt.toISOString(),

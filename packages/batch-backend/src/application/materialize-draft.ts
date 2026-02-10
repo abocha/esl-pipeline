@@ -5,7 +5,7 @@ import type { JobConfigOverrides } from '@esl-pipeline/contracts';
 import { readBool } from '@esl-pipeline/shared-infrastructure';
 
 import { getDraftById } from '../domain/draft-repository.js';
-import { approveJob, updateJobDraftLink } from '../domain/job-repository.js';
+import { approveJob, getJobById, updateJobDraftLink } from '../domain/job-repository.js';
 import { getPromptPackageById } from '../domain/prompt-package-repository.js';
 import { createStorageConfigService } from '../infrastructure/storage-config.js';
 import type { TranscriptionStorage } from '../infrastructure/transcription-storage.js';
@@ -35,6 +35,7 @@ export interface MaterializeDraftDependencies {
   };
   createApprovalJob: typeof createApprovalJobFromDraft;
   jobs: {
+    getById?: typeof getJobById;
     updateDraftLink: typeof updateJobDraftLink;
     approveJob?: typeof approveJob;
   };
@@ -56,6 +57,7 @@ export async function materializeDraft(
   };
   const createApprovalJob = overrides?.createApprovalJob ?? createApprovalJobFromDraft;
   const jobs = overrides?.jobs ?? {
+    getById: getJobById,
     updateDraftLink: updateJobDraftLink,
   };
   const uploadDir =
@@ -70,6 +72,13 @@ export async function materializeDraft(
   if (!draft) return null;
   const promptPackage = await promptPackages.getById(draft.promptPackageId);
   if (!promptPackage) return null;
+
+  if (resolvedJobId && jobs.getById) {
+    const targetJob = await jobs.getById(resolvedJobId);
+    if (!targetJob || targetJob.state !== 'awaiting_approval') {
+      resolvedJobId = '';
+    }
+  }
 
   const storage = overrides?.storage ?? createTranscriptionStorageForUri(draft.storageUri);
 
@@ -97,13 +106,29 @@ export async function materializeDraft(
     await fs.writeFile(mdPath, materializedText, 'utf8');
   }
 
-  const updated = await jobs.updateDraftLink({
+  let updated = await jobs.updateDraftLink({
     id: resolvedJobId,
     expectedState: 'awaiting_approval',
     md: mdPath,
     mdStorageUri: draft.storageUri,
     draftId: draft.id,
   });
+
+  if (!updated && params.jobId) {
+    const approvalJob = await createApprovalJob({
+      draft,
+      promptPackage,
+      jobOverrides: params.jobOverrides,
+    });
+    resolvedJobId = approvalJob.id;
+    updated = await jobs.updateDraftLink({
+      id: resolvedJobId,
+      expectedState: 'awaiting_approval',
+      md: mdPath,
+      mdStorageUri: draft.storageUri,
+      draftId: draft.id,
+    });
+  }
 
   if (!updated) return null;
 

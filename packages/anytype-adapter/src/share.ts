@@ -1,11 +1,6 @@
-import { writeFile } from 'node:fs/promises';
-import { tmpdir } from 'node:os';
-import { join } from 'node:path';
-
-import { uploadToS3 } from '@esl-pipeline/storage-uploader';
+import { renderAndPublishMarkdownToS3 } from '@esl-pipeline/html-publisher';
 
 import { createAnytypeClient } from './client.js';
-import { renderToHtml } from './rendering.js';
 
 export interface SharePageOptions {
   keyPrefix?: string;
@@ -58,22 +53,18 @@ export async function sharePageToS3(
 
   const resolvedTitle = title ?? 'Anytype Page';
   const resolvedBody = body ?? '';
-  const html = await renderToHtml(resolvedBody, resolvedTitle, {
+  const upload = await renderAndPublishMarkdownToS3({
+    title: resolvedTitle,
+    markdown: resolvedBody,
+    filename: options.filename ?? `${pageId}.html`,
+    keyPrefix: options.keyPrefix ?? 'materials/anytype-exports',
+    publicRead: options.publicRead ?? true,
     css: options.css,
     allowRawHtml: options.allowRawHtml,
     showGeneratedDate: options.showGeneratedDate,
     features: options.features,
     theme: options.theme,
     headingTheme: options.headingTheme,
-  });
-
-  const filename = options.filename ?? `${pageId}.html`;
-  const localPath = join(tmpdir(), filename);
-  await writeFile(localPath, html, 'utf8');
-
-  const upload = await uploadToS3(localPath, {
-    keyPrefix: options.keyPrefix ?? 'materials/anytype-exports',
-    publicRead: options.publicRead ?? true,
   });
 
   return {

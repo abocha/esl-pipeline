@@ -10,6 +10,7 @@ import type {
 
 export interface JobRecord {
   id: string;
+  studentId?: string | null;
   state: JobState;
   md: string | null;
   mdStorageUri?: string | null;
@@ -28,6 +29,7 @@ export interface JobRecord {
   ttsStrategy?: TtsStrategy | null;
   notionUrl?: string | null;
   anytypeUrl?: string | null;
+  htmlUrl?: string | null;
   autoPublish?: boolean | null;
   createdAt: Date;
   updatedAt: Date;

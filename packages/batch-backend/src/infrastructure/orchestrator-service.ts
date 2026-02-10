@@ -147,7 +147,7 @@ export interface RunAssignmentPayload {
   upload?: 's3';
   forceTts?: boolean | null;
   notionDatabase?: string | null;
-  publishTarget?: 'notion' | 'anytype';
+  publishTarget?: 'notion' | 'anytype' | 'html';
   ttsStrategy?: TtsStrategy | null;
   settings?: RunJobSettings;
 }
@@ -207,7 +207,7 @@ export async function runAssignmentJob(
   payload: RunAssignmentPayload,
   runId: string,
   options: RunPipelineOptions = {},
-): Promise<{ manifestPath?: string; notionUrl?: string; anytypeUrl?: string }> {
+): Promise<{ manifestPath?: string; notionUrl?: string; anytypeUrl?: string; htmlUrl?: string }> {
   return runPipelineWorker('new_assignment', payload, runId, options);
 }
 
@@ -215,7 +215,7 @@ export async function runRerunAssignmentJob(
   payload: RunRerunAssignmentPayload,
   runId: string,
   options: RunPipelineOptions = {},
-): Promise<{ manifestPath?: string; notionUrl?: string; anytypeUrl?: string }> {
+): Promise<{ manifestPath?: string; notionUrl?: string; anytypeUrl?: string; htmlUrl?: string }> {
   return runPipelineWorker('rerun_assignment', payload, runId, options);
 }
 
@@ -224,7 +224,7 @@ async function runPipelineWorker(
   payload: RunAssignmentPayload | RunRerunAssignmentPayload,
   runId: string,
   options: RunPipelineOptions = {},
-): Promise<{ manifestPath?: string; notionUrl?: string; anytypeUrl?: string }> {
+): Promise<{ manifestPath?: string; notionUrl?: string; anytypeUrl?: string; htmlUrl?: string }> {
   const log = rootLogger.child({ jobId: payload.jobId, runId });
   const { signal } = options;
   if (signal?.aborted) {
@@ -306,7 +306,7 @@ async function runPipelineWorker(
         resolved = true;
         finalize();
         resolve(
-          message.result as { manifestPath?: string; notionUrl?: string; anytypeUrl?: string },
+          message.result as { manifestPath?: string; notionUrl?: string; anytypeUrl?: string; htmlUrl?: string },
         );
       } else if (message.type === 'error') {
         if (resolved) return;

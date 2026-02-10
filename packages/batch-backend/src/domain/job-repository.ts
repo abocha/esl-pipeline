@@ -22,6 +22,7 @@ import {
  */
 interface JobRow {
   id: string;
+  student_id?: string | null;
   state: string;
   md: string | null;
   md_storage_uri: string | null;
@@ -48,6 +49,7 @@ interface JobRow {
   mode: string | null;
   notion_url: string | null;
   anytype_url: string | null;
+  html_url: string | null;
   auto_publish: boolean | null;
   started_at: Date | null;
   finished_at: Date | null;
@@ -191,6 +193,7 @@ async function insertJobWithState(params: InsertJobParams, state: JobState): Pro
         mode,
         notion_url,
         anytype_url,
+        html_url,
         auto_publish,
         created_at,
         updated_at,
@@ -243,7 +246,7 @@ export async function getJobById(id: string): Promise<JobRecord | null> {
              md_storage_uri,
              recording_id, transcript_id, prompt_package_id, draft_id,
              preset, with_tts, upload,
-             voice_id, voice_accent, force_tts, notion_database, publish_target, mode, notion_url, anytype_url, auto_publish,
+             voice_id, voice_accent, force_tts, notion_database, publish_target, mode, notion_url, anytype_url, html_url, auto_publish,
              created_at, updated_at, started_at, finished_at, error, manifest_path, source_job_id, user_id
       FROM jobs
       WHERE id = $1
@@ -272,6 +275,7 @@ export async function listJobs(options: JobListOptions): Promise<JobRecord[]> {
       `
       SELECT
         j.id,
+        COALESCE(r.student_id, p.student_id, rp.student_id, d.student_id, pd.student_id, rd.student_id) AS student_id,
         j.state,
         j.md,
         j.md_storage_uri,
@@ -290,6 +294,7 @@ export async function listJobs(options: JobListOptions): Promise<JobRecord[]> {
         j.mode,
         j.notion_url,
         j.anytype_url,
+        j.html_url,
         j.auto_publish,
         j.created_at,
         j.updated_at,
@@ -396,6 +401,7 @@ export async function updateJobStateAndResult(args: {
   manifestPath?: string | null;
   notionUrl?: string | null;
   anytypeUrl?: string | null;
+  htmlUrl?: string | null;
   startedAt?: Date | null;
   finishedAt?: Date | null;
 }): Promise<JobRecord | null> {
@@ -409,6 +415,7 @@ export async function updateJobStateAndResult(args: {
     finishedAt = null,
     notionUrl = null,
     anytypeUrl = null,
+    htmlUrl = null,
   } = args;
 
   assertTransition(expectedState, nextState);
@@ -423,11 +430,12 @@ export async function updateJobStateAndResult(args: {
         manifest_path = COALESCE($3, manifest_path),
         notion_url = COALESCE($4, notion_url),
         anytype_url = COALESCE($5, anytype_url),
-        started_at = COALESCE($6, started_at),
-        finished_at = COALESCE($7, finished_at),
+        html_url = COALESCE($6, html_url),
+        started_at = COALESCE($7, started_at),
+        finished_at = COALESCE($8, finished_at),
         updated_at = now()
-      WHERE id = $8
-        AND state = $9
+      WHERE id = $9
+        AND state = $10
       RETURNING
         id,
         state,
@@ -448,6 +456,7 @@ export async function updateJobStateAndResult(args: {
         mode,
         notion_url,
         anytype_url,
+        html_url,
         auto_publish,
         created_at,
         updated_at,
@@ -464,6 +473,7 @@ export async function updateJobStateAndResult(args: {
         manifestPath,
         notionUrl,
         anytypeUrl,
+        htmlUrl,
         startedAt,
         finishedAt,
         id,
@@ -522,6 +532,7 @@ export async function updateJobDraftLink(args: {
         mode,
         notion_url,
         anytype_url,
+        html_url,
         auto_publish,
         created_at,
         updated_at,
@@ -638,6 +649,7 @@ export async function updateJobMetadata(
         mode,
         notion_url,
         anytype_url,
+        html_url,
         auto_publish,
         created_at,
         updated_at,
@@ -690,6 +702,7 @@ export async function approveJob(args: {
         manifest_path = NULL,
         notion_url = NULL,
         anytype_url = NULL,
+        html_url = NULL,
         updated_at = now()
       WHERE id = $3
         AND state = $4
@@ -714,6 +727,7 @@ export async function approveJob(args: {
         mode,
         notion_url,
         anytype_url,
+        html_url,
         auto_publish,
         created_at,
         updated_at,
@@ -776,6 +790,7 @@ export async function getStudentJobSummaries(
 function mapRowToJob(row: JobRow): JobRecord {
   return {
     id: row.id,
+    studentId: row.student_id ?? null,
     state: row.state as JobState,
     md: row.md,
     mdStorageUri: row.md_storage_uri ?? null,
@@ -794,6 +809,7 @@ function mapRowToJob(row: JobRow): JobRecord {
     ttsStrategy: normalizeTtsStrategy(row.mode, { jobId: row.id }),
     notionUrl: row.notion_url ?? null,
     anytypeUrl: row.anytype_url ?? null,
+    htmlUrl: row.html_url ?? null,
     autoPublish: row.auto_publish ?? false,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
@@ -843,7 +859,7 @@ function buildJobFilterClauses(
 }
 
 function normalizePublishTarget(value: string | null | undefined): PublishTarget | null {
-  if (value === 'notion' || value === 'anytype') {
+  if (value === 'notion' || value === 'anytype' || value === 'html') {
     return value;
   }
   return null;

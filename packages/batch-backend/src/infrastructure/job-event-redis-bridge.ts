@@ -38,6 +38,7 @@ interface SerializedJobRecord {
   ttsStrategy: string | null;
   notionUrl: string | null;
   anytypeUrl: string | null;
+  htmlUrl: string | null;
   autoPublish: boolean | null;
   createdAt: string;
   updatedAt: string;
@@ -297,6 +298,7 @@ function serializeJobRecord(job: JobRecord): SerializedJobRecord {
     ttsStrategy: job.ttsStrategy ?? null,
     notionUrl: job.notionUrl ?? null,
     anytypeUrl: job.anytypeUrl ?? null,
+    htmlUrl: job.htmlUrl ?? null,
     autoPublish: job.autoPublish ?? null,
     createdAt: job.createdAt.toISOString(),
     updatedAt: job.updatedAt.toISOString(),
@@ -325,6 +327,7 @@ function deserializeJobRecord(serialized: SerializedJobRecord): JobRecord {
     ttsStrategy: normalizeTtsStrategy(serialized.ttsStrategy),
     notionUrl: serialized.notionUrl ?? null,
     anytypeUrl: serialized.anytypeUrl ?? null,
+    htmlUrl: serialized.htmlUrl ?? null,
     autoPublish: serialized.autoPublish ?? null,
     createdAt: new Date(serialized.createdAt),
     updatedAt: new Date(serialized.updatedAt),
@@ -336,7 +339,7 @@ function deserializeJobRecord(serialized: SerializedJobRecord): JobRecord {
 }
 
 function normalizePublishTarget(value: string | null | undefined): JobRecord['publishTarget'] {
-  if (value === 'notion' || value === 'anytype') return value;
+  if (value === 'notion' || value === 'anytype' || value === 'html') return value;
   return null;
 }
 

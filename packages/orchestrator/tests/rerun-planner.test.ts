@@ -121,4 +121,21 @@ describe('rerun planner', () => {
 
     expect(plan.requires.missingManifestFields).toContain('anytypeSpaceId');
   });
+
+  it('allows html add-audio rerun without audio or page prerequisites', () => {
+    const plan = computeRerunPlan({
+      md: '/tmp/lesson.md',
+      steps: ['add-audio'],
+      manifest: {
+        mdHash: 'hash',
+        publishTarget: 'html',
+        timestamp: '2026-01-01T00:00:00.000Z',
+      },
+    });
+
+    expect(plan.requested).toEqual(['add-audio']);
+    expect(plan.executable).toEqual(['add-audio']);
+    expect(plan.requires.missingManifestFields).toEqual([]);
+    expect(plan.errors).toEqual([]);
+  });
 });

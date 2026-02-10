@@ -163,6 +163,7 @@ describe('application/process-queue-job', () => {
       manifestPath: '/manifests/job-1.json',
       notionUrl: 'https://notion.so/job-1',
       anytypeUrl: null,
+      htmlUrl: null,
       finishedAt: expect.any(Date),
     });
 
@@ -263,6 +264,7 @@ describe('application/process-queue-job', () => {
       manifestPath: '/manifests/job-1.json',
       notionUrl: 'https://notion.so/job-1',
       anytypeUrl: null,
+      htmlUrl: null,
       finishedAt: expect.any(Date),
     });
     expect(publishJobEventSpy).toHaveBeenCalledTimes(1);

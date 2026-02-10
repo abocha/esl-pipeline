@@ -33,6 +33,7 @@ interface PipelineRunResult {
   manifestPath?: string;
   pageUrl?: string;
   anytypeUrl?: string;
+  htmlUrl?: string;
 }
 
 function isPipelineCancelledErrorLike(error: unknown): boolean {
@@ -116,6 +117,7 @@ async function executePipeline(
       manifestPath: result.manifestPath,
       notionUrl: result.pageUrl,
       anytypeUrl: result.anytypeUrl,
+      htmlUrl: result.htmlUrl,
     };
   } finally {
     // Release semaphore after TTS operations complete
