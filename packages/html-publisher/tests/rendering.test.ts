@@ -82,6 +82,14 @@ describe('rendering', () => {
     expect(html).toContain('border-radius: 7px;');
   });
 
+  it('styles table headers with theme variables for dark mode compatibility', async () => {
+    const markdown = `| H1 | H2 |\n| --- | --- |\n| A | B |`;
+    const html = await renderToHtml(markdown, 'Table');
+    expect(html).toContain('--table-head-bg: color-mix');
+    expect(html).toContain('th {\n  background: var(--table-head-bg);');
+    expect(html).not.toContain('background: #f4efe6;');
+  });
+
   it('escapes raw html by default but allows it when opted in', async () => {
     const markdown = `<script>alert(\"x\")</script>\n<div>Unsafe block</div>`;
     const safeHtml = await renderToHtml(markdown, 'Safe');

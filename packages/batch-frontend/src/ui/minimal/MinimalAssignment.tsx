@@ -294,7 +294,7 @@ export const MinimalAssignment: React.FC = () => {
       const options = response.profiles ?? [];
       setProfileOptions(options);
       setSelectedProfileId((current) => {
-        if (current && options.some((option) => option.id === current)) return current;
+        if (current) return current;
         return options[0]?.id ?? '';
       });
       setProfileOptionsError(null);

@@ -375,6 +375,14 @@ describe('MinimalAssignment', () => {
 
   it('rehydrates workflow state from server job context in query params', async () => {
     const user = userEvent.setup();
+    let resolveProfileOptions: ((value: { profiles: { id: string; label: string }[] }) => void) | null =
+      null;
+    vi.mocked(api.listProfileContents).mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          resolveProfileOptions = resolve;
+        }),
+    );
     vi.mocked(api.listUserJobs).mockResolvedValueOnce({
       jobs: [
         {
@@ -495,6 +503,7 @@ describe('MinimalAssignment', () => {
     expect(await screen.findByDisplayValue('Recovered transcript')).toBeTruthy();
     expect(await screen.findByDisplayValue('Recovered prompt')).toBeTruthy();
     expect(await screen.findByDisplayValue('# Recovered draft')).toBeTruthy();
+    resolveProfileOptions?.({ profiles: [{ id: 'profile-default.md', label: 'Default Profile' }] });
     expect(screen.getAllByText(/Anytype server unreachable/i).length).toBeGreaterThan(0);
     await user.click(screen.getByRole('button', { name: /Generate prompt/i }));
     await waitFor(() => {
