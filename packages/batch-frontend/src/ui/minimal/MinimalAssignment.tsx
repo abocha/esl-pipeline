@@ -130,6 +130,7 @@ export const MinimalAssignment: React.FC = () => {
   const [publishError, setPublishError] = useState<string | null>(null);
   const [jobStatus, setJobStatusState] = useState<JobStatus | null>(null);
   const [publishTarget, setPublishTarget] = useState<'notion' | 'anytype' | 'html'>('notion');
+  const [selectedPreset, setSelectedPreset] = useState('');
   const [jobOptions, setJobOptions] = useState<JobOptionsResponse | null>(null);
   const [jobOptionsError, setJobOptionsError] = useState<string | null>(null);
   const [studentOptions, setStudentOptions] = useState<StudentOption[]>([]);
@@ -266,6 +267,12 @@ export const MinimalAssignment: React.FC = () => {
     try {
       const response = await fetchJobOptions();
       setJobOptions(response);
+      setSelectedPreset((current) => {
+        if (current && response.presets.includes(current)) {
+          return current;
+        }
+        return response.presets[0] ?? '';
+      });
       setJobOptionsError(null);
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Unable to load job options.';
@@ -422,6 +429,9 @@ export const MinimalAssignment: React.FC = () => {
 
         if (status.publishTarget) {
           setPublishTarget(status.publishTarget);
+        }
+        if (status.preset) {
+          setSelectedPreset(status.preset);
         }
 
         if (status.recordingId) {
@@ -909,6 +919,7 @@ export const MinimalAssignment: React.FC = () => {
         ...(jobStatus?.jobId ? { jobId: jobStatus.jobId } : {}),
         jobOverrides: {
           publishTarget,
+          ...(selectedPreset ? { preset: selectedPreset } : {}),
         },
       });
       await approveJob(materialized.jobId, {
@@ -1606,6 +1617,23 @@ export const MinimalAssignment: React.FC = () => {
             {publishing ? 'Publishing...' : 'Publish assignment'}
           </button>
         </div>
+        <label className="minimal-select">
+          Preset
+          <select
+            value={selectedPreset}
+            onChange={(event) => setSelectedPreset(event.target.value)}
+            disabled={!jobOptions || jobOptions.presets.length === 0}
+          >
+            {jobOptions?.presets && jobOptions.presets.length > 0 ? null : (
+              <option value="">No presets available</option>
+            )}
+            {jobOptions?.presets?.map((preset) => (
+              <option key={preset} value={preset}>
+                {preset}
+              </option>
+            ))}
+          </select>
+        </label>
         <label className="minimal-select">
           Publish to
           <select

@@ -111,6 +111,8 @@ vi.mock('../src/infrastructure/logger', async () => {
 vi.mock('../src/infrastructure/orchestrator-service', () => {
   const orchestratorJobOptionsMock = {
     presets: ['b1-default'],
+    cefrLevels: ['A1', 'A2', 'B1', 'B2', 'C1', 'C2'] as const,
+    cefrDefault: 'B1' as const,
     voiceAccents: ['american_female'],
     voices: [{ id: 'voice-1', name: 'Voice One', accent: 'american_female', gender: 'female' }],
     notionDatabases: [{ id: 'db-1', name: 'DB One' }],
@@ -915,6 +917,12 @@ describe('transport/http-server - integration (in-process)', () => {
 
     expect(response.statusCode).toBe(200);
     expect(response.headers['cache-control']).toBe('private, max-age=60');
+    expect(response.json()).toEqual(
+      expect.objectContaining({
+        cefrLevels: ['A1', 'A2', 'B1', 'B2', 'C1', 'C2'],
+        cefrDefault: 'B1',
+      }),
+    );
     const expected = await getJobOptions();
     expect(response.json()).toEqual(expected);
   });

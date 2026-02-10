@@ -665,6 +665,8 @@ export interface ErrorEnvelope {
 
 export interface JobOptionsResponse {
   presets: ContractJobOptionsPayload['presets'];
+  cefrLevels?: ContractJobOptionsPayload['cefrLevels'];
+  cefrDefault?: ContractJobOptionsPayload['cefrDefault'];
   voiceAccents: ContractJobOptionsPayload['voiceAccents'];
   voices: ContractJobOptionsPayload['voices'];
   notionDatabases: ContractJobOptionsPayload['notionDatabases'];
