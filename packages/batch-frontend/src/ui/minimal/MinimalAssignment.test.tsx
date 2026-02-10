@@ -127,7 +127,7 @@ async function publishAssignmentFlow(user: ReturnType<typeof userEvent.setup>) {
 describe('MinimalAssignment', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    window.history.replaceState(null, '', '/');
+    globalThis.history.replaceState(null, '', '/');
 
     vi.mocked(api.fetchPromptOptions).mockResolvedValue({
       templates: [{ id: 'tpl-default', label: 'Default Template' }],
@@ -465,7 +465,7 @@ describe('MinimalAssignment', () => {
       updatedAt: now,
     });
 
-    window.history.replaceState(null, '', '/?jobId=job-resume');
+    globalThis.history.replaceState(null, '', '/?jobId=job-resume');
     render(<MinimalAssignment />);
 
     await waitFor(() => {
@@ -477,7 +477,7 @@ describe('MinimalAssignment', () => {
     expect(await screen.findByDisplayValue('# Recovered draft')).toBeTruthy();
     expect(screen.getAllByText(/Anytype server unreachable/i).length).toBeGreaterThan(0);
 
-    window.history.replaceState(null, '', '/');
+    globalThis.history.replaceState(null, '', '/');
   });
 
   it('uploads a recording and shows recording metadata', async () => {
