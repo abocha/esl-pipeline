@@ -277,6 +277,7 @@ Recent evidence:
 - 2026-02-10 | WS1-S3 | frontend job-options API surface now types optional CEFR metadata | `pnpm --filter @esl-pipeline/batch-frontend typecheck` | pass | local branch
 - 2026-02-10 | WS1-S4 | minimal assignment publish flow wired with preset selector and `jobOverrides.preset` | `pnpm --filter @esl-pipeline/batch-frontend test` | pass | local branch
 - 2026-02-10 | WS1-S5 | end-to-end validation for WS1 completed and tracker updated | `pnpm check:fast` | pass | local branch
+- 2026-02-10 | WS1-S4 hardening | normalized resume preset selection, enforced publish-time preset validity guard, added empty-catalog + pre-options-load race regression tests | `pnpm --filter @esl-pipeline/batch-frontend exec vitest run src/ui/minimal/MinimalAssignment.test.tsx`; `pnpm --filter @esl-pipeline/batch-frontend test` | pass | local branch
 - 2026-02-10 | WS6-S1 | defined readiness metric source map (metric -> source -> window -> calculation) | `pnpm --filter @esl-pipeline/batch-backend test` | pass | local branch
 - 2026-02-10 | WS6-S2 | added `GET /metrics/readiness` + application/repository plumbing + route integration test | `pnpm --filter @esl-pipeline/batch-backend test` | pass | local branch
 

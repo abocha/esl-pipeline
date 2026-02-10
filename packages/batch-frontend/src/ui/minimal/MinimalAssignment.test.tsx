@@ -523,6 +523,301 @@ describe('MinimalAssignment', () => {
     globalThis.history.replaceState(null, '', '/');
   });
 
+  it('normalizes resumed preset when stored preset is no longer in current options', async () => {
+    vi.mocked(api.listUserJobs).mockResolvedValueOnce({
+      jobs: [
+        {
+          jobId: 'job-stale-preset',
+          studentId: 'student-alex',
+          md: '/tmp/stale.md',
+          mdStorageUri: 's3://bucket/stale.md',
+          recordingId: null,
+          transcriptId: null,
+          promptPackageId: null,
+          draftId: null,
+          preset: 'legacy-removed-preset',
+          withTts: true,
+          voiceId: null,
+          upload: 's3',
+          voiceAccent: null,
+          forceTts: false,
+          notionDatabase: null,
+          publishTarget: 'html',
+          ttsStrategy: 'auto',
+          autoPublish: false,
+          notionUrl: null,
+          anytypeUrl: null,
+          state: 'succeeded',
+          createdAt: now,
+          updatedAt: now,
+          startedAt: now,
+          finishedAt: now,
+          error: null,
+          manifestPath: null,
+        },
+      ],
+      total: 1,
+      limit: 20,
+      offset: 0,
+    });
+
+    vi.mocked(api.getJobStatus).mockResolvedValueOnce({
+      jobId: 'job-stale-preset',
+      md: '/tmp/stale.md',
+      mdStorageUri: 's3://bucket/stale.md',
+      recordingId: null,
+      transcriptId: null,
+      promptPackageId: null,
+      draftId: null,
+      preset: 'legacy-removed-preset',
+      withTts: true,
+      voiceId: null,
+      upload: 's3',
+      voiceAccent: null,
+      forceTts: false,
+      notionDatabase: null,
+      publishTarget: 'html',
+      ttsStrategy: 'auto',
+      autoPublish: false,
+      notionUrl: null,
+      anytypeUrl: null,
+      state: 'succeeded',
+      createdAt: now,
+      updatedAt: now,
+      startedAt: now,
+      finishedAt: now,
+      error: null,
+      manifestPath: null,
+    });
+
+    globalThis.history.replaceState(null, '', '/?jobId=job-stale-preset');
+    render(<MinimalAssignment />);
+
+    await waitFor(() => {
+      expect(api.getJobStatus).toHaveBeenCalledWith('job-stale-preset');
+    });
+
+    const presetSelect = await screen.findByRole('combobox', { name: /Preset/i });
+    expect((presetSelect as HTMLSelectElement).value).toBe('b1-default');
+  });
+
+  it('clears resumed stale preset when preset catalog is empty and omits preset on publish', async () => {
+    const user = userEvent.setup();
+    vi.mocked(api.fetchJobOptions).mockResolvedValueOnce({
+      presets: [],
+      cefrLevels: ['A1', 'A2', 'B1', 'B2', 'C1', 'C2'],
+      cefrDefault: 'B1',
+      voiceAccents: ['american'],
+      voices: [{ id: 'voice-a', name: 'Voice A', accent: 'american' }],
+      notionDatabases: [{ id: 'db-1', name: 'DB One' }],
+      ttsStrategies: ['auto', 'dialogue', 'tts'],
+      supportedActions: [],
+    });
+    vi.mocked(api.listUserJobs).mockResolvedValueOnce({
+      jobs: [
+        {
+          jobId: 'job-empty-presets',
+          studentId: 'student-alex',
+          md: '/tmp/stale.md',
+          mdStorageUri: 's3://bucket/stale.md',
+          recordingId: null,
+          transcriptId: null,
+          promptPackageId: 'pkg-1',
+          draftId: 'draft-1',
+          preset: 'legacy-removed-preset',
+          withTts: true,
+          voiceId: null,
+          upload: 's3',
+          voiceAccent: null,
+          forceTts: false,
+          notionDatabase: null,
+          publishTarget: 'html',
+          ttsStrategy: 'auto',
+          autoPublish: false,
+          notionUrl: null,
+          anytypeUrl: null,
+          state: 'succeeded',
+          createdAt: now,
+          updatedAt: now,
+          startedAt: now,
+          finishedAt: now,
+          error: null,
+          manifestPath: null,
+        },
+      ],
+      total: 1,
+      limit: 20,
+      offset: 0,
+    });
+
+    vi.mocked(api.getJobStatus).mockResolvedValueOnce({
+      jobId: 'job-empty-presets',
+      md: '/tmp/stale.md',
+      mdStorageUri: 's3://bucket/stale.md',
+      recordingId: null,
+      transcriptId: null,
+      promptPackageId: 'pkg-1',
+      draftId: 'draft-1',
+      preset: 'legacy-removed-preset',
+      withTts: true,
+      voiceId: null,
+      upload: 's3',
+      voiceAccent: null,
+      forceTts: false,
+      notionDatabase: null,
+      publishTarget: 'html',
+      ttsStrategy: 'auto',
+      autoPublish: false,
+      notionUrl: null,
+      anytypeUrl: null,
+      state: 'succeeded',
+      createdAt: now,
+      updatedAt: now,
+      startedAt: now,
+      finishedAt: now,
+      error: null,
+      manifestPath: null,
+    });
+
+    globalThis.history.replaceState(null, '', '/?jobId=job-empty-presets');
+    render(<MinimalAssignment />);
+
+    await waitFor(() => {
+      expect(api.getJobStatus).toHaveBeenCalledWith('job-empty-presets');
+    });
+
+    const presetSelect = await screen.findByRole('combobox', { name: /Preset/i });
+    expect((presetSelect as HTMLSelectElement).value).toBe('');
+
+    await user.click(screen.getByRole('button', { name: /Publish assignment/i }));
+
+    await waitFor(() => {
+      expect(api.materializeDraft).toHaveBeenCalled();
+    });
+    const publishCall = vi.mocked(api.materializeDraft).mock.calls.at(-1)?.[1];
+    expect(publishCall?.jobOverrides?.publishTarget).toBe('html');
+    expect(publishCall?.jobOverrides).not.toHaveProperty('preset');
+  });
+
+  it('omits stale preset when resumed before options load, then restores valid preset after options resolve', async () => {
+    const user = userEvent.setup();
+    let resolveJobOptions: (value: api.JobOptionsResponse) => void = () => {};
+    vi.mocked(api.fetchJobOptions).mockImplementationOnce(
+      () =>
+        new Promise<api.JobOptionsResponse>((resolve) => {
+          resolveJobOptions = (value) => resolve(value);
+        }),
+    );
+    vi.mocked(api.listUserJobs).mockResolvedValueOnce({
+      jobs: [
+        {
+          jobId: 'job-race-preset',
+          studentId: 'student-alex',
+          md: '/tmp/stale.md',
+          mdStorageUri: 's3://bucket/stale.md',
+          recordingId: null,
+          transcriptId: null,
+          promptPackageId: 'pkg-1',
+          draftId: 'draft-1',
+          preset: 'legacy-removed-preset',
+          withTts: true,
+          voiceId: null,
+          upload: 's3',
+          voiceAccent: null,
+          forceTts: false,
+          notionDatabase: null,
+          publishTarget: 'html',
+          ttsStrategy: 'auto',
+          autoPublish: false,
+          notionUrl: null,
+          anytypeUrl: null,
+          state: 'succeeded',
+          createdAt: now,
+          updatedAt: now,
+          startedAt: now,
+          finishedAt: now,
+          error: null,
+          manifestPath: null,
+        },
+      ],
+      total: 1,
+      limit: 20,
+      offset: 0,
+    });
+    vi.mocked(api.getJobStatus).mockResolvedValueOnce({
+      jobId: 'job-race-preset',
+      md: '/tmp/stale.md',
+      mdStorageUri: 's3://bucket/stale.md',
+      recordingId: null,
+      transcriptId: null,
+      promptPackageId: 'pkg-1',
+      draftId: 'draft-1',
+      preset: 'legacy-removed-preset',
+      withTts: true,
+      voiceId: null,
+      upload: 's3',
+      voiceAccent: null,
+      forceTts: false,
+      notionDatabase: null,
+      publishTarget: 'html',
+      ttsStrategy: 'auto',
+      autoPublish: false,
+      notionUrl: null,
+      anytypeUrl: null,
+      state: 'succeeded',
+      createdAt: now,
+      updatedAt: now,
+      startedAt: now,
+      finishedAt: now,
+      error: null,
+      manifestPath: null,
+    });
+
+    globalThis.history.replaceState(null, '', '/?jobId=job-race-preset');
+    render(<MinimalAssignment />);
+
+    await waitFor(() => {
+      expect(api.getJobStatus).toHaveBeenCalledWith('job-race-preset');
+    });
+    expect(await screen.findByDisplayValue('# Draft markdown')).toBeTruthy();
+    expect(await screen.findByDisplayValue('Prompt package output')).toBeTruthy();
+
+    await user.click(screen.getByRole('button', { name: /Publish assignment/i }));
+
+    await waitFor(() => {
+      expect(api.materializeDraft).toHaveBeenCalledTimes(1);
+    });
+    const firstPublishCall = vi.mocked(api.materializeDraft).mock.calls[0]?.[1];
+    expect(firstPublishCall?.jobOverrides?.publishTarget).toBe('html');
+    expect(firstPublishCall?.jobOverrides).not.toHaveProperty('preset');
+
+    resolveJobOptions({
+      presets: ['b2-default'],
+      cefrLevels: ['A1', 'A2', 'B1', 'B2', 'C1', 'C2'],
+      cefrDefault: 'B1',
+      voiceAccents: ['american'],
+      voices: [{ id: 'voice-a', name: 'Voice A', accent: 'american' }],
+      notionDatabases: [{ id: 'db-1', name: 'DB One' }],
+      ttsStrategies: ['auto', 'dialogue', 'tts'],
+      supportedActions: [],
+    });
+
+    const presetSelect = await screen.findByRole('combobox', { name: /Preset/i });
+    await waitFor(() => {
+      expect((presetSelect as HTMLSelectElement).value).toBe('b2-default');
+    });
+
+    await user.click(screen.getByRole('button', { name: /Publish assignment/i }));
+    await waitFor(() => {
+      expect(api.materializeDraft).toHaveBeenCalledTimes(2);
+    });
+    const secondPublishCall = vi.mocked(api.materializeDraft).mock.calls[1]?.[1];
+    expect(secondPublishCall?.jobOverrides).toEqual({
+      publishTarget: 'html',
+      preset: 'b2-default',
+    });
+  });
+
   it('uploads a recording and shows recording metadata', async () => {
     const user = userEvent.setup();
     render(<MinimalAssignment />);
