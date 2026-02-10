@@ -55,22 +55,22 @@ function isTerminalJobState(state: JobStatus['state'] | null | undefined): boole
 }
 
 function readJobIdFromQuery(): string | null {
-  if (typeof window === 'undefined') return null;
-  const params = new URLSearchParams(window.location.search);
+  if (globalThis.window === undefined) return null;
+  const params = new URLSearchParams(globalThis.location.search);
   const value = params.get('jobId')?.trim();
   return value || null;
 }
 
 function writeJobIdToQuery(jobId: string | null): void {
-  if (typeof window === 'undefined') return;
-  const nextUrl = new URL(window.location.href);
+  if (globalThis.window === undefined) return;
+  const nextUrl = new URL(globalThis.location.href);
   if (jobId) {
     nextUrl.searchParams.set('jobId', jobId);
   } else {
     nextUrl.searchParams.delete('jobId');
   }
   const suffix = `${nextUrl.pathname}${nextUrl.search}${nextUrl.hash}`;
-  window.history.replaceState(null, '', suffix);
+  globalThis.history.replaceState(null, '', suffix);
 }
 
 function describeJobFailureReason(job: Pick<JobStatus, 'publishTarget' | 'error'>): string {
