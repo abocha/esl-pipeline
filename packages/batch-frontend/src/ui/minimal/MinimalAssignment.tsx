@@ -142,11 +142,11 @@ export const MinimalAssignment: React.FC = () => {
   const [pinnedJobExpanded, setPinnedJobExpanded] = useState(true);
   const [uploadCacheNotice, setUploadCacheNotice] = useState<string | null>(null);
   const resumeInitializedRef = useRef(false);
-  const pendingResumeProfileSyncStudentIdRef = useRef<string | null>(null);
 
   const [profileOptions, setProfileOptions] = useState<{ id: string; label: string }[]>([]);
   const [profileOptionsError, setProfileOptionsError] = useState<string | null>(null);
   const [selectedProfileId, setSelectedProfileId] = useState('');
+  const [profileSelectionMode, setProfileSelectionMode] = useState<'auto' | 'manual'>('auto');
   const [newProfileId, setNewProfileId] = useState('');
   const [profileEditorText, setProfileEditorText] = useState('');
   const [loadedProfileContent, setLoadedProfileContent] = useState('');
@@ -288,15 +288,16 @@ export const MinimalAssignment: React.FC = () => {
     }
   }, []);
 
+  const resolveBoundProfileId = useCallback(
+    (studentId: string): string =>
+      studentOptions.find((student) => student.id === studentId)?.profileId ?? '',
+    [studentOptions],
+  );
+
   const loadProfileOptions = useCallback(async () => {
     try {
       const response = await listProfileContents();
-      const options = response.profiles ?? [];
-      setProfileOptions(options);
-      setSelectedProfileId((current) => {
-        if (current) return current;
-        return options[0]?.id ?? '';
-      });
+      setProfileOptions(response.profiles ?? []);
       setProfileOptionsError(null);
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Unable to load profiles.';
@@ -343,28 +344,16 @@ export const MinimalAssignment: React.FC = () => {
   }, [loadSelectedProfile]);
 
   useEffect(() => {
-    if (!selectedStudentId || selectedProfileId) {
+    if (profileSelectionMode !== 'auto') {
       return;
     }
-    const boundProfileId =
-      studentOptions.find((student) => student.id === selectedStudentId)?.profileId ?? '';
-    if (boundProfileId) {
-      setSelectedProfileId(boundProfileId);
-    }
-  }, [selectedProfileId, selectedStudentId, studentOptions]);
-
-  useEffect(() => {
-    const pendingStudentId = pendingResumeProfileSyncStudentIdRef.current;
-    if (!pendingStudentId) {
+    if (!selectedStudentId) {
+      setSelectedProfileId('');
       return;
     }
-    const matchedStudent = studentOptions.find((student) => student.id === pendingStudentId);
-    if (!matchedStudent) {
-      return;
-    }
-    setSelectedProfileId(matchedStudent.profileId ?? '');
-    pendingResumeProfileSyncStudentIdRef.current = null;
-  }, [studentOptions]);
+    const boundProfileId = resolveBoundProfileId(selectedStudentId);
+    setSelectedProfileId((current) => (current === boundProfileId ? current : boundProfileId));
+  }, [profileSelectionMode, resolveBoundProfileId, selectedStudentId]);
 
   const handleUpload = useCallback(
     async (file: File) => {
@@ -408,7 +397,7 @@ export const MinimalAssignment: React.FC = () => {
   );
 
   const hydrateFromJob = useCallback(
-    async (jobId: string) => {
+    async (jobId: string, knownJobs?: JobStatus[]) => {
       if (!jobId) return;
 
       setResumeLoading(true);
@@ -425,6 +414,11 @@ export const MinimalAssignment: React.FC = () => {
         setSelectedResumeJobId(status.jobId);
         setPinnedJobExpanded(!isTerminalJobState(status.state));
         writeJobIdToQuery(status.jobId);
+        const candidateJobs = knownJobs ?? resumeJobs;
+        let resolvedStudentId =
+          candidateJobs.find((job) => job.jobId === status.jobId)?.studentId ??
+          status.studentId ??
+          null;
 
         if (status.publishTarget) {
           setPublishTarget(status.publishTarget);
@@ -438,15 +432,7 @@ export const MinimalAssignment: React.FC = () => {
             setRecordingError(resumedRecording.error ?? null);
             setSelectedFileName(resumedRecording.displayName || null);
             if (resumedRecording.studentId) {
-              setSelectedStudentId(resumedRecording.studentId);
-              pendingResumeProfileSyncStudentIdRef.current = resumedRecording.studentId;
-              const matchedStudent = studentOptions.find(
-                (student) => student.id === resumedRecording.studentId,
-              );
-              if (matchedStudent) {
-                setSelectedProfileId(matchedStudent.profileId ?? '');
-                pendingResumeProfileSyncStudentIdRef.current = null;
-              }
+              resolvedStudentId = resumedRecording.studentId;
             }
 
             if (status.transcriptId || resumedRecording.transcriptId || resumedRecording.status === 'transcribed') {
@@ -502,6 +488,9 @@ export const MinimalAssignment: React.FC = () => {
             setPromptPackage(resumedPromptPackage);
             setPromptText(resumedPromptPackage.text ?? '');
             setPromptError(null);
+            if (!resolvedStudentId && resumedPromptPackage.studentId) {
+              resolvedStudentId = resumedPromptPackage.studentId;
+            }
           } catch (error) {
             const message = error instanceof Error ? error.message : 'Unable to load prompt package.';
             setPromptPackage(null);
@@ -520,6 +509,9 @@ export const MinimalAssignment: React.FC = () => {
             setDraft(resumedDraft);
             setDraftText(resumedDraft.text ?? '');
             setDraftError(null);
+            if (!resolvedStudentId && resumedDraft.studentId) {
+              resolvedStudentId = resumedDraft.studentId;
+            }
           } catch (error) {
             const message = error instanceof Error ? error.message : 'Unable to load saved draft.';
             setDraft(null);
@@ -537,6 +529,11 @@ export const MinimalAssignment: React.FC = () => {
         if (status.state === 'failed' && status.error) {
           setPublishError(describeJobFailureReason(status));
         }
+        if (resolvedStudentId) {
+          setProfileSelectionMode('auto');
+          setSelectedStudentId(resolvedStudentId);
+          setSelectedProfileId(resolveBoundProfileId(resolvedStudentId));
+        }
         void loadJobProvenance(status.jobId);
       } catch (error) {
         const message =
@@ -546,14 +543,14 @@ export const MinimalAssignment: React.FC = () => {
         setResumeLoading(false);
       }
     },
-    [loadJobProvenance, studentOptions],
+    [loadJobProvenance, resolveBoundProfileId, resumeJobs],
   );
 
   const handleResumeSelectedJob = useCallback(async () => {
     if (!selectedResumeJobId) return;
-    await hydrateFromJob(selectedResumeJobId);
+    await hydrateFromJob(selectedResumeJobId, resumeJobs);
     await loadResumeJobs();
-  }, [hydrateFromJob, loadResumeJobs, selectedResumeJobId]);
+  }, [hydrateFromJob, loadResumeJobs, resumeJobs, selectedResumeJobId]);
 
   useEffect(() => {
     if (resumeInitializedRef.current) return;
@@ -565,13 +562,13 @@ export const MinimalAssignment: React.FC = () => {
       const queryJobId = readJobIdFromQuery();
       if (queryJobId) {
         setSelectedResumeJobId(queryJobId);
-        await hydrateFromJob(queryJobId);
+        await hydrateFromJob(queryJobId, jobs);
         return;
       }
 
       const candidate = jobs.find((job) => !isTerminalJobState(job.state)) ?? jobs[0] ?? null;
       if (candidate) {
-        await hydrateFromJob(candidate.jobId);
+        await hydrateFromJob(candidate.jobId, jobs);
       } else {
         setResumeLoading(false);
       }
@@ -715,16 +712,15 @@ export const MinimalAssignment: React.FC = () => {
 
   const handleStudentSelectionChange = useCallback(
     (nextStudentId: string) => {
-      pendingResumeProfileSyncStudentIdRef.current = null;
+      setProfileSelectionMode('auto');
       setSelectedStudentId(nextStudentId);
       if (!nextStudentId) {
+        setSelectedProfileId('');
         return;
       }
-      const boundProfileId =
-        studentOptions.find((student) => student.id === nextStudentId)?.profileId ?? '';
-      setSelectedProfileId(boundProfileId || '');
+      setSelectedProfileId(resolveBoundProfileId(nextStudentId));
     },
-    [studentOptions],
+    [resolveBoundProfileId],
   );
 
   const profileDirty = useMemo(
@@ -745,6 +741,7 @@ export const MinimalAssignment: React.FC = () => {
     try {
       const created = await upsertProfileContent(candidate, profileEditorText);
       await loadProfileOptions();
+      setProfileSelectionMode('manual');
       setSelectedProfileId(created.id);
       setNewProfileId('');
       setProfileSuccess(`Created profile ${created.id}.`);
@@ -1412,7 +1409,18 @@ export const MinimalAssignment: React.FC = () => {
           Profile
           <select
             value={selectedProfileId}
-            onChange={(event) => setSelectedProfileId(event.target.value)}
+            onChange={(event) => {
+              const nextProfileId = event.target.value;
+              if (!nextProfileId) {
+                setProfileSelectionMode('auto');
+                setSelectedProfileId(
+                  selectedStudentId ? resolveBoundProfileId(selectedStudentId) : '',
+                );
+                return;
+              }
+              setProfileSelectionMode('manual');
+              setSelectedProfileId(nextProfileId);
+            }}
           >
             <option value="">Select profile</option>
             {profileOptions.map((profile) => (
