@@ -7,6 +7,7 @@ import { resolve } from 'node:path';
 
 import type {
   ActionCapability,
+  CefrLevel,
   JobOptionsPayload,
   NotionDatabaseOption,
   VoiceOption,
@@ -24,12 +25,17 @@ export interface JobOptionsResponse extends JobOptionsPayload {
   supportedActions: ActionCapability[];
 }
 
+const DEFAULT_CEFR_LEVELS: CefrLevel[] = ['A1', 'A2', 'B1', 'B2', 'C1', 'C2'];
+const DEFAULT_CEFR_DEFAULT: CefrLevel = 'B1';
+
 // TODO: Replace these with data pulled from the orchestrator config provider or
 // dedicated metadata service once available (tracked in backend/frontend Phase 5).
 const STATIC_OPTIONS: Omit<JobOptionsResponse, 'supportedActions'> = {
   presets: ['b1-default'],
   voiceAccents: ['american_female', 'british_male'],
   voices: [],
+  cefrLevels: DEFAULT_CEFR_LEVELS,
+  cefrDefault: DEFAULT_CEFR_DEFAULT,
   notionDatabases: [
     { id: 'notion-db-b1', name: 'B1 Lessons' },
     { id: 'notion-db-b2', name: 'B2 Lessons' },
@@ -53,6 +59,8 @@ export async function getJobOptions(): Promise<JobOptionsResponse> {
     );
     return {
       ...result,
+      cefrLevels: result.cefrLevels ?? [...DEFAULT_CEFR_LEVELS],
+      cefrDefault: result.cefrDefault ?? DEFAULT_CEFR_DEFAULT,
       notionDatabases,
       supportedActions,
     };
@@ -89,6 +97,8 @@ async function loadStaticJobOptions(): Promise<JobOptionsResponse> {
     presets: [...STATIC_OPTIONS.presets],
     voiceAccents,
     voices,
+    cefrLevels: [...DEFAULT_CEFR_LEVELS],
+    cefrDefault: DEFAULT_CEFR_DEFAULT,
     notionDatabases,
     uploadOptions: [...STATIC_OPTIONS.uploadOptions],
     ttsStrategies: [...STATIC_OPTIONS.ttsStrategies],

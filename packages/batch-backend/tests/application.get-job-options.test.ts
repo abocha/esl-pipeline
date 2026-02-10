@@ -31,6 +31,8 @@ describe('application/get-job-options', () => {
 
     vi.mocked(getJobOptionsFromOrchestrator).mockResolvedValue({
       presets: ['alpha'],
+      cefrLevels: ['A2', 'B1', 'B2'],
+      cefrDefault: 'B1',
       voiceAccents: ['accent_one'],
       voices: [{ id: 'voice-1', name: 'Voice One', accent: 'accent_one', gender: 'female' }],
       notionDatabases: [{ id: 'db-1', name: 'DB One' }],
@@ -42,6 +44,8 @@ describe('application/get-job-options', () => {
 
     expect(result).toEqual({
       presets: ['alpha'],
+      cefrLevels: ['A2', 'B1', 'B2'],
+      cefrDefault: 'B1',
       voiceAccents: ['accent_one'],
       voices: [{ id: 'voice-1', name: 'Voice One', accent: 'accent_one', gender: 'female' }],
       notionDatabases: [{ id: 'db-1', name: 'DB One' }],
@@ -92,6 +96,8 @@ describe('application/get-job-options', () => {
     const result = await getJobOptions();
 
     expect(result.presets).toEqual(['b1-default']);
+    expect(result.cefrLevels).toEqual(['A1', 'A2', 'B1', 'B2', 'C1', 'C2']);
+    expect(result.cefrDefault).toEqual('B1');
     expect(result.uploadOptions).toEqual(['auto', 's3', 'none']);
     expect(result.ttsStrategies).toEqual(['auto']);
     expect(result.notionDatabases).toEqual([
