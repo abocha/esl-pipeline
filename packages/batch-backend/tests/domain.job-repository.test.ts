@@ -1,7 +1,12 @@
 import { randomUUID } from 'node:crypto';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 
-import { getJobById, insertJob, updateJobStateAndResult } from '../src/domain/job-repository.js';
+import {
+  getJobById,
+  getReadinessMetrics,
+  insertJob,
+  updateJobStateAndResult,
+} from '../src/domain/job-repository.js';
 import { withPgClient } from '../src/infrastructure/db.js';
 
 /**
@@ -200,6 +205,56 @@ describeIfDb('domain/job-repository', () => {
           nextState: 'running',
         } as any),
       ).rejects.toThrow();
+    });
+  });
+
+  describe('getReadinessMetrics', () => {
+    it('returns publish outcomes, latency median, and first-session success counts', async () => {
+      const userA = randomUUID();
+      const userB = randomUUID();
+      const base = new Date('2024-04-01T00:00:00.000Z');
+
+      await withPgClient(async (client) => {
+        await client.query(
+          `
+          INSERT INTO jobs (id, state, publish_target, user_id, created_at, updated_at, finished_at)
+          VALUES
+            ($1, 'succeeded', 'html', $5, $7, $7, $8),
+            ($2, 'failed', 'html', $5, $9, $9, $10),
+            ($3, 'succeeded', 'notion', $6, $11, $11, $12),
+            ($4, 'queued', 'anytype', $6, $13, $13, NULL)
+          `,
+          [
+            randomUUID(),
+            randomUUID(),
+            randomUUID(),
+            randomUUID(),
+            userA,
+            userB,
+            new Date(base.getTime() + 10_000),
+            new Date(base.getTime() + 40_000), // 30s latency
+            new Date(base.getTime() + 50_000),
+            new Date(base.getTime() + 85_000), // failed row ignored for latency
+            new Date(base.getTime() + 90_000),
+            new Date(base.getTime() + 150_000), // 60s latency
+            new Date(base.getTime() + 160_000),
+          ],
+        );
+      });
+
+      const result = await getReadinessMetrics({
+        from: new Date('2024-03-31T00:00:00.000Z'),
+        to: new Date('2024-04-02T00:00:00.000Z'),
+        userId: null,
+      });
+
+      expect(result.publishSucceeded).toBe(2);
+      expect(result.publishFailed).toBe(1);
+      expect(result.publishTotal).toBe(3);
+      expect(result.latencySampleSize).toBe(2);
+      expect(result.medianPublishLatencyMs).toBe(45000); // median of 30s and 60s
+      expect(result.firstSessionTotalUsers).toBe(2);
+      expect(result.firstSessionSucceededUsers).toBe(2);
     });
   });
 });

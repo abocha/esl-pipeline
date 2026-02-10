@@ -482,19 +482,28 @@ export async function getReadinessMetrics(
           COUNT(*) FILTER (WHERE state = 'succeeded')::int AS succeeded_users
         FROM first_session_candidates
         WHERE rank_in_window = 1
+      ),
+      terminal_aggregates AS (
+        SELECT
+          COUNT(*) FILTER (WHERE state = 'succeeded')::int AS publish_succeeded,
+          COUNT(*) FILTER (WHERE state = 'failed')::int AS publish_failed,
+          COUNT(*)::int AS publish_total,
+          COUNT(*) FILTER (WHERE state = 'succeeded' AND finished_at IS NOT NULL)::int AS latency_sample_size,
+          PERCENTILE_CONT(0.5) WITHIN GROUP (
+            ORDER BY EXTRACT(EPOCH FROM (finished_at - created_at)) * 1000
+          ) FILTER (WHERE state = 'succeeded' AND finished_at IS NOT NULL)
+            AS median_publish_latency_ms
+        FROM terminal_publish_jobs
       )
       SELECT
-        COUNT(*) FILTER (WHERE tpj.state = 'succeeded')::int AS publish_succeeded,
-        COUNT(*) FILTER (WHERE tpj.state = 'failed')::int AS publish_failed,
-        COUNT(*)::int AS publish_total,
-        COUNT(*) FILTER (WHERE tpj.state = 'succeeded' AND tpj.finished_at IS NOT NULL)::int AS latency_sample_size,
-        PERCENTILE_CONT(0.5) WITHIN GROUP (
-          ORDER BY EXTRACT(EPOCH FROM (tpj.finished_at - tpj.created_at)) * 1000
-        ) FILTER (WHERE tpj.state = 'succeeded' AND tpj.finished_at IS NOT NULL)
-          AS median_publish_latency_ms,
+        ta.publish_succeeded,
+        ta.publish_failed,
+        ta.publish_total,
+        ta.latency_sample_size,
+        ta.median_publish_latency_ms,
         fs.total_users::int AS first_session_total_users,
         fs.succeeded_users::int AS first_session_succeeded_users
-      FROM terminal_publish_jobs tpj
+      FROM terminal_aggregates ta
       CROSS JOIN first_session fs
       `,
       [filters.from, filters.to, filters.userId ?? null],
