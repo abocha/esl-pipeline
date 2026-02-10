@@ -2,6 +2,7 @@ export type JobState = 'queued' | 'running' | 'awaiting_approval' | 'succeeded' 
 
 export type TtsStrategy = 'auto' | 'dialogue' | 'tts';
 export type TtsStrategyOption = TtsStrategy;
+export type CefrLevel = 'A1' | 'A2' | 'B1' | 'B2' | 'C1' | 'C2';
 
 export type JobUploadOption = 'auto' | 's3' | 'none';
 export type UploadOption = JobUploadOption;
@@ -29,6 +30,8 @@ export interface JobOptionsPayload {
   notionDatabases: NotionDatabaseOption[];
   uploadOptions: UploadOption[];
   ttsStrategies: TtsStrategyOption[];
+  cefrLevels?: CefrLevel[];
+  cefrDefault?: CefrLevel;
 }
 
 export interface SubmitJobRequest {
