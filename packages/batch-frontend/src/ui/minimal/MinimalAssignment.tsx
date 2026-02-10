@@ -37,6 +37,7 @@ import {
   restoreProfileRevision,
   retryRecordingTranscription,
   rerunAudioJob,
+  rerunPublishJob,
   upsertProfileContent,
   updateDraft,
   updateRecordingTranscript,
@@ -150,7 +151,7 @@ export const MinimalAssignment: React.FC = () => {
   );
   const [profileSuccess, setProfileSuccess] = useState<string | null>(null);
 
-  const [actionBusy, setActionBusy] = useState<'rerun' | 'cancel' | null>(null);
+  const [actionBusy, setActionBusy] = useState<'rerun' | 'rerun_publish' | 'cancel' | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
   const [actionSuccess, setActionSuccess] = useState<string | null>(null);
   const [jobProvenance, setJobProvenance] = useState<JobProvenanceResponse | null>(null);
@@ -1015,6 +1016,31 @@ export const MinimalAssignment: React.FC = () => {
     }
   };
 
+  const handleRerunPublish = async () => {
+    if (!jobStatus?.jobId) return;
+
+    setActionBusy('rerun_publish');
+    setActionError(null);
+    setActionSuccess(null);
+    try {
+      const result = await rerunPublishJob(jobStatus.jobId);
+      setActionSuccess(result.message ?? 'Publish rerun queued.');
+      const nextJobId = result.jobId || jobStatus.jobId;
+      const refreshed = await getJobStatus(nextJobId);
+      setJobStatusState(refreshed);
+      setSelectedResumeJobId(refreshed.jobId);
+      setPinnedJobExpanded(!isTerminalJobState(refreshed.state));
+      writeJobIdToQuery(refreshed.jobId);
+      await loadJobProvenance(refreshed.jobId);
+      await loadResumeJobs();
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Unable to rerun publish.';
+      setActionError(message);
+    } finally {
+      setActionBusy(null);
+    }
+  };
+
   const handleCancelJob = async () => {
     if (!jobStatus?.jobId) return;
 
@@ -1057,10 +1083,15 @@ export const MinimalAssignment: React.FC = () => {
   const rerunImplemented =
     actionCapabilities.find((capability) => capability.type === 'rerun_audio')?.implemented ??
     false;
+  const rerunPublishImplemented =
+    actionCapabilities.find((capability) => capability.type === 'rerun_publish')?.implemented ??
+    false;
   const cancelImplemented =
     actionCapabilities.find((capability) => capability.type === 'cancel')?.implemented ?? false;
   const cancelAllowedState = jobStatus?.state === 'queued' || jobStatus?.state === 'running';
   const rerunEnabled = Boolean(jobStatus?.jobId) && rerunImplemented && actionBusy === null;
+  const rerunPublishEnabled =
+    Boolean(jobStatus?.jobId) && rerunPublishImplemented && actionBusy === null;
   const cancelEnabled =
     Boolean(jobStatus?.jobId) && cancelImplemented && cancelAllowedState && actionBusy === null;
 
@@ -1138,6 +1169,14 @@ export const MinimalAssignment: React.FC = () => {
                   disabled={!rerunEnabled}
                 >
                   {actionBusy === 'rerun' ? 'Queuing rerun...' : 'Rerun audio'}
+                </button>
+                <button
+                  type="button"
+                  className="minimal-secondary"
+                  onClick={() => void handleRerunPublish()}
+                  disabled={!rerunPublishEnabled}
+                >
+                  {actionBusy === 'rerun_publish' ? 'Queuing publish...' : 'Rerun publish'}
                 </button>
                 <button
                   type="button"
@@ -1536,12 +1575,29 @@ export const MinimalAssignment: React.FC = () => {
         {jobReady ? (
           <>
             <p className="minimal-help">
-              Rerun audio generation or cancel active jobs. Availability is driven by backend
-              capabilities.
+              Rerun audio generation, rerun publish only, or cancel active jobs. Availability is
+              driven by backend capabilities.
             </p>
             <div className="minimal-meta">
               <span>Job ID: {jobStatus?.jobId}</span>
               <span>State: {jobStatus?.state}</span>
+            </div>
+            <div className="minimal-action-row">
+              <div className="minimal-action-card">
+                <div className="minimal-inline">
+                  <button
+                    type="button"
+                    className="minimal-primary"
+                    onClick={() => void handleRerunPublish()}
+                    disabled={!rerunPublishEnabled}
+                  >
+                    {actionBusy === 'rerun_publish' ? 'Queuing publish...' : 'Rerun publish'}
+                  </button>
+                </div>
+                <p className="minimal-help">
+                  Re-run publish stage and reuse existing audio artifacts when available.
+                </p>
+              </div>
             </div>
             <div className="minimal-block">
               <div className="minimal-inline">
@@ -1659,7 +1715,7 @@ export const MinimalAssignment: React.FC = () => {
               ) : null}
             </div>
             {jobOptionsError ? <p className="minimal-error">{jobOptionsError}</p> : null}
-            {!rerunImplemented || !cancelImplemented ? (
+            {!rerunImplemented || !rerunPublishImplemented || !cancelImplemented ? (
               <p className="minimal-muted">
                 Some actions are unavailable because backend capability metadata does not mark them as
                 implemented.
@@ -1838,6 +1894,21 @@ export const MinimalAssignment: React.FC = () => {
           display: flex;
           flex-direction: column;
           gap: var(--space-3);
+        }
+
+        .minimal-action-row {
+          display: grid;
+          gap: var(--space-3);
+        }
+
+        .minimal-action-card {
+          border: 1px solid var(--border-light);
+          border-radius: var(--radius-lg);
+          background: var(--bg-secondary);
+          padding: var(--space-3);
+          display: flex;
+          flex-direction: column;
+          gap: var(--space-2);
         }
 
         .minimal-list {

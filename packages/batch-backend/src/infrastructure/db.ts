@@ -997,13 +997,25 @@ BEGIN
   END IF;
 END $$;`,
   `DO $$
+DECLARE
+  current_definition TEXT;
 BEGIN
-  IF NOT EXISTS (
-    SELECT 1 FROM pg_constraint WHERE conname = 'job_action_history_action_type_check'
-  ) THEN
+  SELECT pg_get_constraintdef(oid)
+  INTO current_definition
+  FROM pg_constraint
+  WHERE conname = 'job_action_history_action_type_check'
+  LIMIT 1;
+
+  IF current_definition IS NULL THEN
     ALTER TABLE job_action_history
       ADD CONSTRAINT job_action_history_action_type_check
-      CHECK (action_type IN ('rerun_audio', 'cancel', 'edit_metadata'));
+      CHECK (action_type IN ('rerun_audio', 'rerun_publish', 'cancel', 'edit_metadata'));
+  ELSIF position('rerun_publish' in current_definition) = 0 THEN
+    ALTER TABLE job_action_history
+      DROP CONSTRAINT job_action_history_action_type_check;
+    ALTER TABLE job_action_history
+      ADD CONSTRAINT job_action_history_action_type_check
+      CHECK (action_type IN ('rerun_audio', 'rerun_publish', 'cancel', 'edit_metadata'));
   END IF;
 END $$;`,
   `DO $$

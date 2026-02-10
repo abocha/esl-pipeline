@@ -27,6 +27,7 @@ vi.mock('../../utils/api', () => ({
   restoreProfileRevision: vi.fn(),
   retryRecordingTranscription: vi.fn(),
   rerunAudioJob: vi.fn(),
+  rerunPublishJob: vi.fn(),
   upsertProfileContent: vi.fn(),
   updateDraft: vi.fn(),
   updateRecordingTranscript: vi.fn(),
@@ -154,6 +155,12 @@ describe('MinimalAssignment', () => {
           type: 'cancel',
           label: 'Cancel',
           description: 'Cancel active job',
+          implemented: true,
+        },
+        {
+          type: 'rerun_publish',
+          label: 'Rerun publish',
+          description: 'Rerun publish stage',
           implemented: true,
         },
       ],
@@ -326,6 +333,12 @@ describe('MinimalAssignment', () => {
       success: true,
       message: 'Audio rerun queued',
       actionType: 'rerun_audio',
+      jobId: 'job-1',
+    });
+    vi.mocked(api.rerunPublishJob).mockResolvedValue({
+      success: true,
+      message: 'Publish rerun queued',
+      actionType: 'rerun_publish',
       jobId: 'job-1',
     });
     vi.mocked(api.cancelJob).mockResolvedValue({
@@ -741,6 +754,20 @@ describe('MinimalAssignment', () => {
         }),
       );
     });
+  });
+
+  it('queues a publish-only rerun action for the current job', async () => {
+    const user = userEvent.setup();
+    render(<MinimalAssignment />);
+
+    await publishAssignmentFlow(user);
+
+    await user.click(screen.getAllByRole('button', { name: /Rerun publish/i })[0]!);
+
+    await waitFor(() => {
+      expect(api.rerunPublishJob).toHaveBeenCalledWith('job-1');
+    });
+    expect(screen.getByText('Publish rerun queued')).toBeTruthy();
   });
 
   it('submits cancel action with an optional reason when job is running', async () => {

@@ -362,7 +362,7 @@ See [`docs/backend-frontend/batch-backend-ssot.md`](docs/backend-frontend/batch-
 - `POST /validation/markdown` (returns warnings/errors/meta)
 - `GET /students/summary` (dashboard aggregation)
 - `GET /user/jobs` and `GET /user/jobs/summary`
-- `POST /jobs/:jobId/actions` (`edit_metadata`, `rerun_audio`, and best-effort `cancel` implemented)
+- `POST /jobs/:jobId/actions` (`edit_metadata`, `rerun_audio`, `rerun_publish`, and best-effort `cancel` implemented)
 - `POST /drafts/:id/materialize` (optional `jobOverrides`)
 
 ---

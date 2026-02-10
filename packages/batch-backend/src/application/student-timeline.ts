@@ -17,6 +17,7 @@ export type StudentTimelineType =
   | 'template_revision_restored'
   | 'template_revision_activated'
   | 'job_action_rerun_audio'
+  | 'job_action_rerun_publish'
   | 'job_action_cancel'
   | 'job_action_edit_metadata';
 
@@ -543,6 +544,7 @@ const timelineQuery = `
     SELECT
       CASE
         WHEN jah.action_type = 'rerun_audio' THEN 'job_action_rerun_audio'
+        WHEN jah.action_type = 'rerun_publish' THEN 'job_action_rerun_publish'
         WHEN jah.action_type = 'cancel' THEN 'job_action_cancel'
         ELSE 'job_action_edit_metadata'
       END::text AS type,
@@ -731,6 +733,7 @@ export async function getStudentTimeline(
     }
     if (
       row.type === 'job_action_rerun_audio' ||
+      row.type === 'job_action_rerun_publish' ||
       row.type === 'job_action_cancel' ||
       row.type === 'job_action_edit_metadata'
     ) {

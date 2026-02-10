@@ -12,7 +12,7 @@ import { createRedisClient } from './redis.js';
 
 export interface QueueJobPayload {
   jobId: string;
-  executionMode?: 'new_assignment' | 'rerun_audio';
+  executionMode?: 'new_assignment' | 'rerun_audio' | 'rerun_publish';
   sourceJobId?: string;
   rerun?: {
     steps?: ('tts' | 'upload' | 'add-audio')[];

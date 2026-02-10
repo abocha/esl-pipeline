@@ -56,6 +56,14 @@ describe('application/get-job-options', () => {
           implemented: true,
         },
         {
+          type: 'rerun_publish',
+          label: 'Rerun Publish',
+          description:
+            'Rerun publish/attach stage while reusing existing audio artifacts when possible',
+          requiresFields: [],
+          implemented: true,
+        },
+        {
           type: 'cancel',
           label: 'Cancel Job',
           description: 'Cancel a queued or running job',
@@ -92,7 +100,7 @@ describe('application/get-job-options', () => {
     ]);
     expect(result.voiceAccents.length).toBeGreaterThan(0);
     expect(result.voices.length).toBeGreaterThan(0);
-    expect(result.supportedActions).toHaveLength(3);
+    expect(result.supportedActions).toHaveLength(4);
 
     expect(logger.warn).toHaveBeenCalledWith(
       'Failed to load job options from orchestrator. Falling back to static config.',

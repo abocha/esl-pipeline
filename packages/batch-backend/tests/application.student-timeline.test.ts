@@ -348,12 +348,12 @@ describeIfDb('student-timeline', () => {
         VALUES (
           $1,
           $2,
-          'rerun_audio',
+          'rerun_publish',
           '{}'::jsonb,
           $3,
           NULL,
           'succeeded',
-          'Audio rerun queued',
+          'Publish rerun queued',
           NULL,
           NULL,
           $3
@@ -372,11 +372,11 @@ describeIfDb('student-timeline', () => {
     expect(timeline.items.some((item) => item.type === 'profile_revision_activated')).toBe(true);
     expect(timeline.items.some((item) => item.type === 'template_revision_restored')).toBe(true);
     expect(timeline.items.some((item) => item.type === 'template_revision_activated')).toBe(true);
-    const actionEvent = timeline.items.find((item) => item.type === 'job_action_rerun_audio');
+    const actionEvent = timeline.items.find((item) => item.type === 'job_action_rerun_publish');
     expect(actionEvent?.status).toBe('succeeded');
     expect(actionEvent?.details).toMatchObject({
-      actionType: 'rerun_audio',
-      message: 'Audio rerun queued',
+      actionType: 'rerun_publish',
+      message: 'Publish rerun queued',
     });
   });
 });
