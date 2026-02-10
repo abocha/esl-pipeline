@@ -352,6 +352,36 @@ describe('StudentWorkspace', () => {
     expect(screen.getByText(/Action audit:/i)).toBeTruthy();
   });
 
+  it('re-fetches lineage when inspecting the same job repeatedly', async () => {
+    const user = userEvent.setup();
+    renderWorkspace();
+
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: /Inspect/i })).toBeTruthy();
+    });
+
+    const inspectButton = screen.getByRole('button', { name: /Inspect/i });
+    await user.click(inspectButton);
+
+    await waitFor(() => {
+      expect(api.fetchJobProvenance).toHaveBeenCalledTimes(1);
+    });
+    await waitFor(() => {
+      expect(api.fetchPromptPackageLineage).toHaveBeenCalledTimes(1);
+    });
+    expect(screen.getByText(/Binding at creation:/i)).toBeTruthy();
+
+    await user.click(inspectButton);
+
+    await waitFor(() => {
+      expect(api.fetchJobProvenance).toHaveBeenCalledTimes(2);
+    });
+    await waitFor(() => {
+      expect(api.fetchPromptPackageLineage).toHaveBeenCalledTimes(2);
+    });
+    expect(screen.getByText(/Binding at creation:/i)).toBeTruthy();
+  });
+
   it('renders a resume link to minimal workflow for each job', async () => {
     renderWorkspace();
 

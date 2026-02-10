@@ -128,6 +128,7 @@ export const StudentWorkspace: React.FC = () => {
 
   const [selectedJobId, setSelectedJobId] = useState('');
   const [selectedPromptPackageId, setSelectedPromptPackageId] = useState('');
+  const [inspectRequestId, setInspectRequestId] = useState(0);
 
   const [jobProvenance, setJobProvenance] = useState<JobProvenanceResponse | null>(null);
   const [jobProvenanceLoading, setJobProvenanceLoading] = useState(false);
@@ -444,6 +445,7 @@ export const StudentWorkspace: React.FC = () => {
   const handleInspectJob = (jobId: string, promptPackageId: string | null) => {
     setSelectedJobId(jobId);
     setSelectedPromptPackageId(promptPackageId ?? '');
+    setInspectRequestId((current) => current + 1);
     setJobProvenance(null);
     setLineage(null);
   };
@@ -475,8 +477,8 @@ export const StudentWorkspace: React.FC = () => {
         const provenance = await fetchJobProvenance(selectedJobId);
         if (cancelled) return;
         setJobProvenance(provenance);
-        if (!selectedPromptPackageId && provenance.promptPackage?.id) {
-          setSelectedPromptPackageId(provenance.promptPackage.id);
+        if (provenance.promptPackage?.id) {
+          setSelectedPromptPackageId((current) => current || provenance.promptPackage?.id || '');
         }
       } catch (error) {
         if (cancelled) return;
@@ -492,7 +494,7 @@ export const StudentWorkspace: React.FC = () => {
     return () => {
       cancelled = true;
     };
-  }, [selectedJobId, selectedPromptPackageId]);
+  }, [inspectRequestId, selectedJobId]);
 
   useEffect(() => {
     if (!selectedPromptPackageId) {
@@ -523,7 +525,7 @@ export const StudentWorkspace: React.FC = () => {
     return () => {
       cancelled = true;
     };
-  }, [selectedPromptPackageId]);
+  }, [inspectRequestId, selectedPromptPackageId]);
 
   return (
     <div className="workspace-root">
