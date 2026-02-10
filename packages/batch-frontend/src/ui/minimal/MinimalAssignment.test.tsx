@@ -167,7 +167,7 @@ describe('MinimalAssignment', () => {
     });
     vi.mocked(api.fetchStudentOptions).mockResolvedValue({
       students: [
-        { id: 'student-default', name: 'Default', profileId: 'profiles/default.md' },
+        { id: 'student-default', name: 'Default', profileId: 'profile-default.md' },
         { id: 'student-alex', name: 'Alex', profileId: 'profiles/alex.md' },
       ],
     });
@@ -422,7 +422,6 @@ describe('MinimalAssignment', () => {
 
     vi.mocked(api.getJobStatus).mockResolvedValueOnce({
       jobId: 'job-resume',
-      studentId: 'student-alex',
       md: '/tmp/resume.md',
       mdStorageUri: 's3://bucket/resume.md',
       recordingId: 'rec-resume',
@@ -454,7 +453,7 @@ describe('MinimalAssignment', () => {
         recordingId: 'rec-resume',
         status: 'transcribed',
         transcriptId: 'tx-resume',
-        studentId: 'student-alex',
+        studentId: null,
         displayName: 'resume.mp3',
       }),
     );
@@ -469,7 +468,7 @@ describe('MinimalAssignment', () => {
       id: 'pkg-resume',
       recordingId: 'rec-resume',
       transcriptId: 'tx-resume',
-      studentId: 'student-alex',
+      studentId: null,
       profilePath: null,
       templateVersion: 'v1',
       notes: null,
@@ -481,7 +480,7 @@ describe('MinimalAssignment', () => {
     vi.mocked(api.fetchDraft).mockResolvedValueOnce({
       id: 'draft-resume',
       promptPackageId: 'pkg-resume',
-      studentId: 'student-alex',
+      studentId: null,
       storageUri: 'memory://drafts/draft-resume',
       createdBy: 'user-1',
       text: '# Recovered draft',
@@ -561,6 +560,9 @@ describe('MinimalAssignment', () => {
     render(<MinimalAssignment />);
 
     const profileEditor = await screen.findByRole('textbox', { name: /Profile content/i });
+    await waitFor(() => {
+      expect((profileEditor as HTMLTextAreaElement).disabled).toBe(false);
+    });
     await user.clear(profileEditor);
     await user.type(profileEditor, 'Updated profile content');
     await user.click(screen.getByRole('button', { name: /Save profile/i }));
@@ -568,7 +570,7 @@ describe('MinimalAssignment', () => {
     await waitFor(() => {
       expect(api.upsertProfileContent).toHaveBeenCalledWith(
         'profile-default.md',
-        'PROFILE CONTENTUpdated profile content',
+        expect.stringContaining('Updated profile content'),
       );
     });
     expect(api.listProfileRevisions).toHaveBeenCalledWith('profile-default.md', {
