@@ -14,6 +14,9 @@ export { JobActionType } from '@esl-pipeline/contracts';
 type RerunAudioPayload = NonNullable<
   Extract<JobActionRequest, { type: JobActionType.RERUN_AUDIO }>['payload']
 >;
+type RerunPublishPayload = NonNullable<
+  Extract<JobActionRequest, { type: JobActionType.RERUN_PUBLISH }>['payload']
+>;
 type CancelPayload = NonNullable<
   Extract<JobActionRequest, { type: JobActionType.CANCEL }>['payload']
 >;
@@ -36,6 +39,14 @@ export interface RerunAudioAction extends JobAction {
 }
 
 /**
+ * Rerun publish stage (best effort to reuse existing audio artifacts)
+ */
+export interface RerunPublishAction extends JobAction {
+  type: JobActionType.RERUN_PUBLISH;
+  payload: RerunPublishPayload;
+}
+
+/**
  * Cancel a queued or running job
  */
 export interface CancelJobAction extends JobAction {
@@ -54,7 +65,11 @@ export interface EditMetadataAction extends JobAction {
 /**
  * Union type of all possible actions
  */
-export type AnyJobAction = RerunAudioAction | CancelJobAction | EditMetadataAction;
+export type AnyJobAction =
+  | RerunAudioAction
+  | RerunPublishAction
+  | CancelJobAction
+  | EditMetadataAction;
 
 /**
  * Result of executing a job action

@@ -8,6 +8,7 @@ import type { JobConfigOverrides } from './index.js';
  */
 export enum JobActionType {
   RERUN_AUDIO = 'rerun_audio',
+  RERUN_PUBLISH = 'rerun_publish',
   CANCEL = 'cancel',
   EDIT_METADATA = 'edit_metadata',
 }
@@ -26,6 +27,12 @@ export type JobActionRequest =
         dialogueLanguage?: string;
         dialogueStability?: number;
         dialogueSeed?: number;
+      };
+    }
+  | {
+      type: JobActionType.RERUN_PUBLISH;
+      payload?: {
+        upload?: 's3';
       };
     }
   | {

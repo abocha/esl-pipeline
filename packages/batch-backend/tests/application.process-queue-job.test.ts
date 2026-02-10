@@ -357,6 +357,54 @@ describe('application/process-queue-job', () => {
     );
   });
 
+  it('processes rerun_publish jobs via rerunAssignment execution path', async () => {
+    const initial = makeJob({ state: 'queued' });
+    getJobByIdSpy.mockResolvedValue(initial);
+
+    const running = makeJob({ state: 'running', startedAt: new Date('2024-01-01T10:01:00Z') });
+    const succeeded = {
+      ...running,
+      state: 'succeeded',
+      manifestPath: '/manifests/job-rerun-publish.json',
+      finishedAt: new Date('2024-01-01T10:02:00Z'),
+      notionUrl: null,
+      anytypeUrl: 'https://anytype.io/page',
+    };
+    updateJobStateAndResultSpy
+      .mockResolvedValueOnce(running as any)
+      .mockResolvedValueOnce(succeeded as any);
+
+    runRerunAssignmentJobSpy.mockResolvedValue({
+      manifestPath: '/manifests/job-rerun-publish.json',
+      anytypeUrl: 'https://anytype.io/page',
+    });
+
+    await processQueueJob({
+      jobId: 'job-1',
+      executionMode: 'rerun_publish',
+      sourceJobId: 'job-source',
+      rerun: {
+        steps: ['add-audio'],
+        upload: 's3',
+        force: false,
+      },
+    });
+
+    expect(runAssignmentJobSpy).not.toHaveBeenCalled();
+    expect(runRerunAssignmentJobSpy).toHaveBeenCalledWith(
+      expect.objectContaining({
+        jobId: 'job-1',
+        steps: ['add-audio'],
+        upload: 's3',
+        force: false,
+      }),
+      expect.any(String),
+      expect.objectContaining({
+        signal: expect.any(AbortSignal),
+      }),
+    );
+  });
+
   it('materializes markdown from storage URI when md path is missing', async () => {
     const initial = makeJob({
       state: 'queued',

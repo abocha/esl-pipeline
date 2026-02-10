@@ -103,8 +103,10 @@ export async function processQueueJob(payload: QueueJobPayload): Promise<void> {
 
     let result: { manifestPath?: string; notionUrl?: string; anytypeUrl?: string };
     try {
+      const isRerunExecution =
+        payload.executionMode === 'rerun_audio' || payload.executionMode === 'rerun_publish';
       result =
-        payload.executionMode === 'rerun_audio'
+        isRerunExecution
           ? await runRerunAssignmentJob(
               {
                 jobId,

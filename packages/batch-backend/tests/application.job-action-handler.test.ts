@@ -6,9 +6,11 @@ import * as historyRepository from '../src/domain/job-action-history-repository.
 import * as cancelModule from '../src/application/job-actions/cancel-job.js';
 import * as editModule from '../src/application/job-actions/edit-metadata.js';
 import * as rerunModule from '../src/application/job-actions/rerun-audio.js';
+import * as rerunPublishModule from '../src/application/job-actions/rerun-publish.js';
 
 describe('application/job-actions/action-handler', () => {
   const rerunSpy = vi.spyOn(rerunModule, 'rerunAudio');
+  const rerunPublishSpy = vi.spyOn(rerunPublishModule, 'rerunPublish');
   const cancelSpy = vi.spyOn(cancelModule, 'cancelJob');
   const editSpy = vi.spyOn(editModule, 'editMetadata');
   const insertHistorySpy = vi.spyOn(historyRepository, 'insertJobActionHistory');
@@ -83,6 +85,34 @@ describe('application/job-actions/action-handler', () => {
         outcome: 'failed',
         errorCode: 'invalid_state',
         createdJobId: null,
+      }),
+    );
+  });
+
+  it('persists createdJobId for successful rerun_publish actions', async () => {
+    rerunPublishSpy.mockResolvedValue({
+      success: true,
+      message: 'Publish rerun queued',
+      jobId: 'job-publish-rerun',
+      actionType: JobActionType.RERUN_PUBLISH,
+      timestamp: new Date('2026-02-07T00:00:00.000Z'),
+    });
+
+    const requestedAt = new Date('2026-02-07T00:00:00.000Z');
+    await executeJobAction('job-source', {
+      type: JobActionType.RERUN_PUBLISH,
+      requestedAt,
+      requestedBy: 'user-1',
+      payload: {},
+    });
+
+    expect(insertHistorySpy).toHaveBeenCalledWith(
+      expect.objectContaining({
+        jobId: 'job-source',
+        actionType: JobActionType.RERUN_PUBLISH,
+        outcome: 'succeeded',
+        errorCode: null,
+        createdJobId: 'job-publish-rerun',
       }),
     );
   });

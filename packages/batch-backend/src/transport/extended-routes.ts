@@ -3401,7 +3401,7 @@ export function registerExtendedRoutes(app: FastifyInstance, options: ExtendedRo
 
     try {
       // Validate action type
-      const validActionTypes = ['rerun_audio', 'cancel', 'edit_metadata'];
+      const validActionTypes = ['rerun_audio', 'rerun_publish', 'cancel', 'edit_metadata'];
       if (!body || !body.type || !validActionTypes.includes(body.type)) {
         return reply.code(400).send({
           error: 'validation_failed',

@@ -11,6 +11,7 @@ import { logger } from '../../infrastructure/logger.js';
 import { cancelJob } from './cancel-job.js';
 import { editMetadata } from './edit-metadata.js';
 import { rerunAudio } from './rerun-audio.js';
+import { rerunPublish } from './rerun-publish.js';
 
 /**
  * Execute a job action by routing to the appropriate handler
@@ -27,6 +28,11 @@ export async function executeJobAction(
   switch (action.type) {
     case JobActionType.RERUN_AUDIO: {
       result = await rerunAudio(jobId, action);
+      break;
+    }
+
+    case JobActionType.RERUN_PUBLISH: {
+      result = await rerunPublish(jobId, action);
       break;
     }
 
@@ -48,7 +54,10 @@ export async function executeJobAction(
   // Missing jobs are not persisted due to strict FK constraints on job_action_history.job_id.
   if (result.error !== 'not_found') {
     const createdJobId =
-      action.type === JobActionType.RERUN_AUDIO && result.success ? result.jobId : null;
+      (action.type === JobActionType.RERUN_AUDIO || action.type === JobActionType.RERUN_PUBLISH) &&
+      result.success
+        ? result.jobId
+        : null;
     const payload =
       action.payload && typeof action.payload === 'object'
         ? (action.payload as Record<string, unknown>)
@@ -99,6 +108,12 @@ export function getActionMetadata(): Record<JobActionType, ActionMetadata> {
     [JobActionType.RERUN_AUDIO]: {
       label: 'Rerun Audio Generation',
       description: 'Regenerate TTS audio for this job with optional voice/TTS overrides',
+      requiresFields: [],
+      implemented: true,
+    },
+    [JobActionType.RERUN_PUBLISH]: {
+      label: 'Rerun Publish',
+      description: 'Rerun publish/attach stage while reusing existing audio artifacts when possible',
       requiresFields: [],
       implemented: true,
     },

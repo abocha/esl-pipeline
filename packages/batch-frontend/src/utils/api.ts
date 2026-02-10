@@ -203,6 +203,7 @@ export type StudentTimelineType =
   | 'template_revision_restored'
   | 'template_revision_activated'
   | 'job_action_rerun_audio'
+  | 'job_action_rerun_publish'
   | 'job_action_cancel'
   | 'job_action_edit_metadata';
 
@@ -472,6 +473,10 @@ export interface RerunAudioPayload {
 
 export interface CancelJobPayload {
   reason?: string;
+}
+
+export interface RerunPublishPayload {
+  upload?: 's3';
 }
 
 export async function listRecordings(
@@ -1560,6 +1565,16 @@ export async function rerunAudioJob(
 ): Promise<JobActionResponse> {
   return submitJobAction(jobId, {
     type: JobActionType.RERUN_AUDIO,
+    payload,
+  });
+}
+
+export async function rerunPublishJob(
+  jobId: string,
+  payload?: RerunPublishPayload,
+): Promise<JobActionResponse> {
+  return submitJobAction(jobId, {
+    type: JobActionType.RERUN_PUBLISH,
     payload,
   });
 }
