@@ -17,6 +17,7 @@ import * as jobSummaryModule from '../src/application/job-summary.js';
 import * as listJobsModule from '../src/application/list-jobs.js';
 import * as listRecordingsModule from '../src/application/list-recordings.js';
 import * as materializeDraftModule from '../src/application/materialize-draft.js';
+import * as readinessMetricsModule from '../src/application/readiness-metrics.js';
 import * as profileContentModule from '../src/application/profile-content.js';
 import { ProfilePathError } from '../src/application/profile-path.js';
 import * as retryRecordingModule from '../src/application/retry-recording-transcription.js';
@@ -2291,6 +2292,100 @@ describe('transport/http-server - integration (in-process)', () => {
     expect(call?.userId).toBe('test-user-id');
     expect(call?.from?.toISOString()).toBe('2024-03-01T00:00:00.000Z');
     expect(call?.to?.toISOString()).toBe('2024-03-07T00:00:00.000Z');
+  });
+
+  it('GET /metrics/readiness returns readiness metrics response', async () => {
+    const getReadiness = vi.spyOn(readinessMetricsModule, 'getReadinessMetricsWithDefaults');
+    getReadiness.mockResolvedValue({
+      window: {
+        from: '2024-03-01T00:00:00.000Z',
+        to: '2024-03-07T00:00:00.000Z',
+      },
+      publishSuccess: {
+        succeeded: 7,
+        failed: 1,
+        total: 8,
+        rate: 0.875,
+      },
+      publishLatencyMs: {
+        median: 10234.5,
+        sampleSize: 7,
+      },
+      firstSessionSuccessProxy: {
+        successfulUsers: 4,
+        totalUsers: 5,
+        rate: 0.8,
+      },
+      sources: {
+        publishSuccessRate: {
+          source: 'jobs table',
+          window: 'last 7 days',
+          calculation: 'succeeded / total',
+        },
+        medianPublishLatencyMs: {
+          source: 'jobs table',
+          window: 'last 7 days',
+          calculation: 'median finished_at - created_at',
+        },
+        firstSessionSuccessProxy: {
+          source: 'jobs table',
+          window: 'last 7 days',
+          calculation: 'first in-window publish success ratio',
+        },
+      },
+    });
+
+    const response = await app.inject({
+      method: 'GET',
+      url:
+        '/metrics/readiness?from=2024-03-01T00:00:00.000Z&to=2024-03-07T00:00:00.000Z' +
+        '&userId=8f8d9e53-bc3a-4658-8960-fbf4ff8cb84f',
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toEqual({
+      window: {
+        from: '2024-03-01T00:00:00.000Z',
+        to: '2024-03-07T00:00:00.000Z',
+      },
+      publishSuccess: {
+        succeeded: 7,
+        failed: 1,
+        total: 8,
+        rate: 0.875,
+      },
+      publishLatencyMs: {
+        median: 10234.5,
+        sampleSize: 7,
+      },
+      firstSessionSuccessProxy: {
+        successfulUsers: 4,
+        totalUsers: 5,
+        rate: 0.8,
+      },
+      sources: {
+        publishSuccessRate: {
+          source: 'jobs table',
+          window: 'last 7 days',
+          calculation: 'succeeded / total',
+        },
+        medianPublishLatencyMs: {
+          source: 'jobs table',
+          window: 'last 7 days',
+          calculation: 'median finished_at - created_at',
+        },
+        firstSessionSuccessProxy: {
+          source: 'jobs table',
+          window: 'last 7 days',
+          calculation: 'first in-window publish success ratio',
+        },
+      },
+    });
+
+    const call = getReadiness.mock.calls[0]?.[0];
+    expect(call?.from?.toISOString()).toBe('2024-03-01T00:00:00.000Z');
+    expect(call?.to?.toISOString()).toBe('2024-03-07T00:00:00.000Z');
+    expect(call?.userId).toBe('8f8d9e53-bc3a-4658-8960-fbf4ff8cb84f');
   });
 
   it('GET /students/summary returns student summary response', async () => {

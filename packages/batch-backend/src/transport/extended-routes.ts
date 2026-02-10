@@ -22,6 +22,7 @@ import { getJobSummaryWithDefaults } from '../application/job-summary.js';
 import { listJobsWithDefaults } from '../application/list-jobs.js';
 import { listRecordingsWithDefaults } from '../application/list-recordings.js';
 import { materializeDraft } from '../application/materialize-draft.js';
+import { getReadinessMetricsWithDefaults } from '../application/readiness-metrics.js';
 import {
   activateProfileRevisionForProfile,
   ProfileContentError,
@@ -3249,6 +3250,54 @@ export function registerExtendedRoutes(app: FastifyInstance, options: ExtendedRo
       });
     }
   });
+
+  app.get(
+    '/metrics/readiness',
+    { preHandler: [authenticate, requireRole(['admin'])] },
+    async (request, reply) => {
+      const routePath = resolveRoutePath(request, 'GET /metrics/readiness');
+      const querySchema = z.object({
+        from: z.coerce.date().optional(),
+        to: z.coerce.date().optional(),
+        userId: z.string().uuid().optional(),
+      });
+
+      try {
+        const query = querySchema.parse(request.query ?? {});
+        const readiness = await getReadinessMetricsWithDefaults({
+          from: query.from ?? null,
+          to: query.to ?? null,
+          userId: query.userId ?? null,
+        });
+
+        logger.info('HTTP request handled', {
+          event: 'http_request',
+          route: routePath,
+          statusCode: 200,
+          userId: getAuthenticatedUser(request)?.id,
+        });
+
+        return reply.code(200).send(readiness);
+      } catch (error: unknown) {
+        if (error instanceof z.ZodError) {
+          return reply.code(400).send({
+            error: 'validation_failed',
+            message: 'Invalid query parameters',
+            details: error.issues,
+          });
+        }
+
+        logger.error(error instanceof Error ? error : String(error), {
+          event: 'get_readiness_metrics_failed',
+          userId: getAuthenticatedUser(request)?.id,
+        });
+
+        return reply.code(500).send({
+          error: 'internal_error',
+        });
+      }
+    },
+  );
 
   app.post('/user/jobs', { preHandler: authenticate }, async (request, reply) => {
     const authenticatedUser = getAuthenticatedUser(request);
