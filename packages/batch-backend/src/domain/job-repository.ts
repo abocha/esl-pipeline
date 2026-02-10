@@ -242,14 +242,45 @@ export async function getJobById(id: string): Promise<JobRecord | null> {
   const row = await withPgClient(async (client: PoolClient) => {
     const result = await client.query(
       `
-      SELECT id, state, md,
-             md_storage_uri,
-             recording_id, transcript_id, prompt_package_id, draft_id,
-             preset, with_tts, upload,
-             voice_id, voice_accent, force_tts, notion_database, publish_target, mode, notion_url, anytype_url, html_url, auto_publish,
-             created_at, updated_at, started_at, finished_at, error, manifest_path, source_job_id, user_id
-      FROM jobs
-      WHERE id = $1
+      SELECT
+        j.id,
+        COALESCE(r.student_id, p.student_id, rp.student_id, d.student_id, pd.student_id, rd.student_id) AS student_id,
+        j.state,
+        j.md,
+        j.md_storage_uri,
+        j.recording_id,
+        j.transcript_id,
+        j.prompt_package_id,
+        j.draft_id,
+        j.preset,
+        j.with_tts,
+        j.upload,
+        j.voice_id,
+        j.voice_accent,
+        j.force_tts,
+        j.notion_database,
+        j.publish_target,
+        j.mode,
+        j.notion_url,
+        j.anytype_url,
+        j.html_url,
+        j.auto_publish,
+        j.created_at,
+        j.updated_at,
+        j.started_at,
+        j.finished_at,
+        j.error,
+        j.manifest_path,
+        j.source_job_id,
+        j.user_id
+      FROM jobs j
+      LEFT JOIN recordings r ON r.id = j.recording_id
+      LEFT JOIN prompt_packages p ON p.id = j.prompt_package_id
+      LEFT JOIN recordings rp ON rp.id = p.recording_id
+      LEFT JOIN drafts d ON d.id = j.draft_id
+      LEFT JOIN prompt_packages pd ON pd.id = d.prompt_package_id
+      LEFT JOIN recordings rd ON rd.id = pd.recording_id
+      WHERE j.id = $1
       `,
       [id],
     );
