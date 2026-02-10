@@ -139,7 +139,9 @@ describe('MinimalAssignment', () => {
       },
     });
     vi.mocked(api.fetchJobOptions).mockResolvedValue({
-      presets: ['b1-default'],
+      presets: ['b1-default', 'b2-default'],
+      cefrLevels: ['A1', 'A2', 'B1', 'B2', 'C1', 'C2'],
+      cefrDefault: 'B1',
       voiceAccents: ['american'],
       voices: [{ id: 'voice-a', name: 'Voice A', accent: 'american' }],
       notionDatabases: [{ id: 'db-1', name: 'DB One' }],
@@ -375,12 +377,12 @@ describe('MinimalAssignment', () => {
 
   it('rehydrates workflow state from server job context in query params', async () => {
     const user = userEvent.setup();
-    let resolveProfileOptions: ((value: { profiles: { id: string; label: string }[] }) => void) | null =
-      null;
+    let resolveProfileOptions: (value: { profiles: { id: string; label: string }[] }) => void =
+      () => {};
     vi.mocked(api.listProfileContents).mockImplementationOnce(
       () =>
-        new Promise((resolve) => {
-          resolveProfileOptions = resolve;
+        new Promise<{ profiles: { id: string; label: string }[] }>((resolve) => {
+          resolveProfileOptions = (value) => resolve(value);
         }),
     );
     vi.mocked(api.listUserJobs).mockResolvedValueOnce({
@@ -394,7 +396,7 @@ describe('MinimalAssignment', () => {
           transcriptId: 'tx-resume',
           promptPackageId: 'pkg-resume',
           draftId: 'draft-resume',
-          preset: 'b1-default',
+          preset: 'b2-default',
           withTts: true,
           voiceId: null,
           upload: 's3',
@@ -428,7 +430,7 @@ describe('MinimalAssignment', () => {
       transcriptId: 'tx-resume',
       promptPackageId: 'pkg-resume',
       draftId: 'draft-resume',
-      preset: 'b1-default',
+      preset: 'b2-default',
       withTts: true,
       voiceId: null,
       upload: 's3',
@@ -502,7 +504,10 @@ describe('MinimalAssignment', () => {
     expect(await screen.findByDisplayValue('Recovered transcript')).toBeTruthy();
     expect(await screen.findByDisplayValue('Recovered prompt')).toBeTruthy();
     expect(await screen.findByDisplayValue('# Recovered draft')).toBeTruthy();
-    resolveProfileOptions?.({ profiles: [{ id: 'profile-default.md', label: 'Default Profile' }] });
+    expect((await screen.findByRole('combobox', { name: /Preset/i }) as HTMLSelectElement).value).toBe(
+      'b2-default',
+    );
+    resolveProfileOptions({ profiles: [{ id: 'profile-default.md', label: 'Default Profile' }] });
     expect(screen.getAllByText(/Anytype server unreachable/i).length).toBeGreaterThan(0);
     await user.click(screen.getByRole('button', { name: /Generate prompt/i }));
     await waitFor(() => {
@@ -712,6 +717,7 @@ describe('MinimalAssignment', () => {
       throw new Error('Expected draft textarea to be rendered');
     }
     await user.type(draftTextarea, '# Final draft');
+    await user.selectOptions(screen.getByRole('combobox', { name: /Preset/i }), 'b2-default');
 
     await user.click(screen.getByRole('button', { name: /Publish assignment/i }));
 
@@ -720,6 +726,7 @@ describe('MinimalAssignment', () => {
     });
     expect(api.materializeDraft).toHaveBeenCalledWith('draft-1', {
       jobOverrides: {
+        preset: 'b2-default',
         publishTarget: 'notion',
       },
     });

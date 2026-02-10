@@ -5,7 +5,7 @@
 - Audience: founder-maintainer and AI pair.
 - Read Time: 10 minutes.
 - Authority Level: V1 execution source of truth.
-- Last Updated: 2026-02-09.
+- Last Updated: 2026-02-10.
 
 ## Purpose
 
@@ -25,8 +25,8 @@
 
 - Active workstream: `WS1 CEFR baseline presets`
 - This week objective: wire CEFR-aware options through existing `/config/job-options` path and use selected preset in minimal assignment publish flow.
-- Today `Now` task (30-90 min): complete `WS1-S1` only.
-- Success for today: contracts + backend options payload support CEFR metadata without breaking existing consumers.
+- Today `Now` task (30-90 min): complete `WS1-S5` validation and evidence updates.
+- Success for today: WS1 checklist closed with `pnpm check:fast` green.
 
 ## Delivery Model (Locked)
 
@@ -152,11 +152,11 @@ Implement CEFR-aware preset metadata through existing job-options APIs and allow
 
 ### WS1 Definition of Done
 
-- [ ] CEFR contract fields added as optional (no breaking changes).
-- [ ] `/config/job-options` emits CEFR metadata.
-- [ ] Minimal assignment UI allows preset selection.
-- [ ] Publish/materialize sends chosen preset via `jobOverrides.preset`.
-- [ ] Backend + frontend tests pass.
+- [x] CEFR contract fields added as optional (no breaking changes).
+- [x] `/config/job-options` emits CEFR metadata.
+- [x] Minimal assignment UI allows preset selection.
+- [x] Publish/materialize sends chosen preset via `jobOverrides.preset`.
+- [x] Backend + frontend tests pass.
 
 ### Rollback Toggle
 
@@ -204,7 +204,7 @@ Remove manual copy/paste dependency with backend generation endpoint + frontend 
 
 ### Definition of Ready
 
-- [ ] WS1 complete.
+- [x] WS1 complete.
 - [ ] Chosen low-cost model/provider path documented.
 
 ### WS2-S1 Contracts Finalization (30-90 min)
@@ -266,9 +266,13 @@ Do not jump to another workstream in the same session.
 
 - YYYY-MM-DD | WSx-Sy | what changed | command(s) run | result | link/reference
 
-Example:
+Recent evidence:
 
-- 2026-02-10 | WS1-S1 | added optional CEFR fields to contracts and job-options payload | `pnpm --filter @esl-pipeline/contracts typecheck`; `pnpm --filter @esl-pipeline/batch-backend typecheck` | pass | local branch
+- 2026-02-10 | WS1-S1 | added optional CEFR fields to contracts and job-options payload | `pnpm --filter @esl-pipeline/contracts typecheck`; `pnpm --filter @esl-pipeline/batch-backend typecheck` | pass | commit `725b2c7`
+- 2026-02-10 | WS1-S2 | backend tests now assert CEFR metadata in job-options app + HTTP paths | `pnpm --filter @esl-pipeline/batch-backend test` | pass | local branch
+- 2026-02-10 | WS1-S3 | frontend job-options API surface now types optional CEFR metadata | `pnpm --filter @esl-pipeline/batch-frontend typecheck` | pass | local branch
+- 2026-02-10 | WS1-S4 | minimal assignment publish flow wired with preset selector and `jobOverrides.preset` | `pnpm --filter @esl-pipeline/batch-frontend test` | pass | local branch
+- 2026-02-10 | WS1-S5 | end-to-end validation for WS1 completed and tracker updated | `pnpm check:fast` | pass | local branch
 
 ## Weekly Closeout Checklist
 
