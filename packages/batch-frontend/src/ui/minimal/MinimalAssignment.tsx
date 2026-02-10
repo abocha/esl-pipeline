@@ -50,9 +50,14 @@ import { UploadProgress } from '../shared/UploadProgress';
 const AUDIO_EXTENSIONS = ['.wav', '.mp3', '.m4a', '.aac', '.ogg', '.opus'];
 const POLL_INTERVAL_MS = 3000;
 const TERMINAL_JOB_STATES = new Set<JobStatus['state']>(['succeeded', 'failed']);
+const ACTIVE_JOB_STATES = new Set<JobStatus['state']>(['queued', 'running']);
 
 function isTerminalJobState(state: JobStatus['state'] | null | undefined): boolean {
   return state ? TERMINAL_JOB_STATES.has(state) : false;
+}
+
+function isActivelyProcessingJobState(state: JobStatus['state'] | null | undefined): boolean {
+  return state ? ACTIVE_JOB_STATES.has(state) : false;
 }
 
 function readJobIdFromQuery(): string | null {
@@ -124,7 +129,7 @@ export const MinimalAssignment: React.FC = () => {
   const [publishing, setPublishing] = useState(false);
   const [publishError, setPublishError] = useState<string | null>(null);
   const [jobStatus, setJobStatusState] = useState<JobStatus | null>(null);
-  const [publishTarget, setPublishTarget] = useState<'notion' | 'anytype'>('notion');
+  const [publishTarget, setPublishTarget] = useState<'notion' | 'anytype' | 'html'>('notion');
   const [jobOptions, setJobOptions] = useState<JobOptionsResponse | null>(null);
   const [jobOptionsError, setJobOptionsError] = useState<string | null>(null);
   const [studentOptions, setStudentOptions] = useState<StudentOption[]>([]);
@@ -137,6 +142,7 @@ export const MinimalAssignment: React.FC = () => {
   const [pinnedJobExpanded, setPinnedJobExpanded] = useState(true);
   const [uploadCacheNotice, setUploadCacheNotice] = useState<string | null>(null);
   const resumeInitializedRef = useRef(false);
+  const pendingResumeProfileSyncStudentIdRef = useRef<string | null>(null);
 
   const [profileOptions, setProfileOptions] = useState<{ id: string; label: string }[]>([]);
   const [profileOptionsError, setProfileOptionsError] = useState<string | null>(null);
@@ -347,6 +353,19 @@ export const MinimalAssignment: React.FC = () => {
     }
   }, [selectedProfileId, selectedStudentId, studentOptions]);
 
+  useEffect(() => {
+    const pendingStudentId = pendingResumeProfileSyncStudentIdRef.current;
+    if (!pendingStudentId) {
+      return;
+    }
+    const matchedStudent = studentOptions.find((student) => student.id === pendingStudentId);
+    if (!matchedStudent) {
+      return;
+    }
+    setSelectedProfileId(matchedStudent.profileId ?? '');
+    pendingResumeProfileSyncStudentIdRef.current = null;
+  }, [studentOptions]);
+
   const handleUpload = useCallback(
     async (file: File) => {
       if (uploading) return;
@@ -420,6 +439,14 @@ export const MinimalAssignment: React.FC = () => {
             setSelectedFileName(resumedRecording.displayName || null);
             if (resumedRecording.studentId) {
               setSelectedStudentId(resumedRecording.studentId);
+              pendingResumeProfileSyncStudentIdRef.current = resumedRecording.studentId;
+              const matchedStudent = studentOptions.find(
+                (student) => student.id === resumedRecording.studentId,
+              );
+              if (matchedStudent) {
+                setSelectedProfileId(matchedStudent.profileId ?? '');
+                pendingResumeProfileSyncStudentIdRef.current = null;
+              }
             }
 
             if (status.transcriptId || resumedRecording.transcriptId || resumedRecording.status === 'transcribed') {
@@ -519,7 +546,7 @@ export const MinimalAssignment: React.FC = () => {
         setResumeLoading(false);
       }
     },
-    [loadJobProvenance],
+    [loadJobProvenance, studentOptions],
   );
 
   const handleResumeSelectedJob = useCallback(async () => {
@@ -688,6 +715,7 @@ export const MinimalAssignment: React.FC = () => {
 
   const handleStudentSelectionChange = useCallback(
     (nextStudentId: string) => {
+      pendingResumeProfileSyncStudentIdRef.current = null;
       setSelectedStudentId(nextStudentId);
       if (!nextStudentId) {
         return;
@@ -905,14 +933,14 @@ export const MinimalAssignment: React.FC = () => {
   };
 
   useEffect(() => {
-    if (!jobStatus?.jobId || isTerminalJobState(jobStatus.state)) return;
+    if (!jobStatus?.jobId || !isActivelyProcessingJobState(jobStatus.state)) return;
     let active = true;
     const interval = setInterval(async () => {
       try {
         const refreshed = await getJobStatus(jobStatus.jobId);
         if (!active) return;
         setJobStatusState(refreshed);
-        if (refreshed.state === 'succeeded' || refreshed.state === 'failed') {
+        if (!isActivelyProcessingJobState(refreshed.state)) {
           clearInterval(interval);
           void loadResumeJobs();
         }
@@ -939,7 +967,7 @@ export const MinimalAssignment: React.FC = () => {
 
   useEffect(() => {
     if (!jobStatus) return;
-    setSelectedResumeJobId(jobStatus.jobId);
+    setSelectedResumeJobId((current) => current || jobStatus.jobId);
     if (isTerminalJobState(jobStatus.state)) {
       setPinnedJobExpanded(false);
       if (jobStatus.state === 'failed' && jobStatus.error) {
@@ -1073,12 +1101,46 @@ export const MinimalAssignment: React.FC = () => {
     () => resumeJobs.find((job) => job.jobId === selectedResumeJobId) ?? null,
     [resumeJobs, selectedResumeJobId],
   );
+  const studentNameById = useMemo(
+    () => new Map(studentOptions.map((student) => [student.id, student.name])),
+    [studentOptions],
+  );
+  const describeResumeJobStudent = useCallback(
+    (job: JobStatus): string => {
+      if (!job.studentId) {
+        return 'No student';
+      }
+      return studentNameById.get(job.studentId) ?? `Student ${job.studentId.slice(0, 8)}`;
+    },
+    [studentNameById],
+  );
+  const formatResumeJobLabel = useCallback(
+    (job: JobStatus): string =>
+      `${job.jobId.slice(0, 8)} • ${job.state} • ${describeResumeJobStudent(job)} • ${new Date(
+        job.createdAt,
+      ).toLocaleString()}`,
+    [describeResumeJobStudent],
+  );
   const canPublish = promptReady && draftText.trim().length > 0 && !publishing;
   const jobPublishTarget = jobStatus?.publishTarget ?? publishTarget;
-  const publishUrl = jobPublishTarget === 'anytype' ? jobStatus?.anytypeUrl : jobStatus?.notionUrl;
-  const publishLabel = jobPublishTarget === 'anytype' ? 'Open published page' : 'Open in Notion';
+  const publishUrl =
+    jobPublishTarget === 'anytype'
+      ? jobStatus?.anytypeUrl ?? jobStatus?.htmlUrl
+      : jobPublishTarget === 'html'
+        ? jobStatus?.htmlUrl
+        : jobStatus?.notionUrl;
+  const publishLabel =
+    jobPublishTarget === 'anytype'
+      ? 'Open published page'
+      : jobPublishTarget === 'html'
+        ? 'Open published HTML'
+        : 'Open in Notion';
   const publishPending =
-    jobPublishTarget === 'anytype' ? 'Publish link pending...' : 'Notion link pending...';
+    jobPublishTarget === 'anytype'
+      ? 'Publish link pending...'
+      : jobPublishTarget === 'html'
+        ? 'HTML link pending...'
+        : 'Notion link pending...';
   const actionCapabilities = jobOptions?.supportedActions ?? [];
   const rerunImplemented =
     actionCapabilities.find((capability) => capability.type === 'rerun_audio')?.implemented ??
@@ -1126,10 +1188,10 @@ export const MinimalAssignment: React.FC = () => {
             onChange={(event) => setSelectedResumeJobId(event.target.value)}
             disabled={resumeJobs.length === 0 || resumeLoading}
           >
-            <option value="">No saved jobs yet</option>
+            {resumeJobs.length === 0 ? <option value="">No saved jobs yet</option> : null}
             {resumeJobs.map((job) => (
               <option key={job.jobId} value={job.jobId}>
-                {job.jobId.slice(0, 8)} • {job.state} • {new Date(job.createdAt).toLocaleString()}
+                {formatResumeJobLabel(job)}
               </option>
             ))}
           </select>
@@ -1137,7 +1199,8 @@ export const MinimalAssignment: React.FC = () => {
         {resumeError ? <p className="minimal-error">{resumeError}</p> : null}
         {selectedResumeJob ? (
           <p className="minimal-muted">
-            Selected job target: {selectedResumeJob.jobId} ({selectedResumeJob.state})
+            Selected job target: {selectedResumeJob.jobId} ({selectedResumeJob.state} •{' '}
+            {describeResumeJobStudent(selectedResumeJob)})
           </p>
         ) : null}
         {jobStatus?.jobId ? (
@@ -1539,10 +1602,13 @@ export const MinimalAssignment: React.FC = () => {
           Publish to
           <select
             value={publishTarget}
-            onChange={(event) => setPublishTarget(event.target.value as 'notion' | 'anytype')}
+            onChange={(event) =>
+              setPublishTarget(event.target.value as 'notion' | 'anytype' | 'html')
+            }
           >
             <option value="notion">Notion</option>
             <option value="anytype">Anytype</option>
+            <option value="html">HTML page</option>
           </select>
         </label>
         <p className="minimal-help">Publishes the markdown as a job and approves it.</p>

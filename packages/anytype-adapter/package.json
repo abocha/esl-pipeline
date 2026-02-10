@@ -35,15 +35,9 @@
   },
   "dependencies": {
     "@esl-pipeline/contracts": "workspace:*",
-    "@esl-pipeline/storage-uploader": "workspace:*",
-    "markdown-it": "^14.1.0",
-    "markdown-it-anchor": "^9.2.0",
-    "markdown-it-container": "^4.0.0",
-    "markdown-it-toc-done-right": "^4.2.0"
+    "@esl-pipeline/html-publisher": "workspace:*"
   },
   "devDependencies": {
-    "@types/markdown-it": "^14.1.2",
-    "@types/markdown-it-container": "^4.0.0",
     "@types/node": "^25.2.0",
     "tsx": "^4.21.0",
     "typescript": "^5.9.3",

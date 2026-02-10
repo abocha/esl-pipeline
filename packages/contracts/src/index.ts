@@ -5,7 +5,7 @@ export type TtsStrategyOption = TtsStrategy;
 
 export type JobUploadOption = 'auto' | 's3' | 'none';
 export type UploadOption = JobUploadOption;
-export type PublishTarget = 'notion' | 'anytype';
+export type PublishTarget = 'notion' | 'anytype' | 'html';
 
 export type RecordingStatus = 'ingested' | 'queued' | 'transcribing' | 'transcribed' | 'failed';
 
@@ -60,6 +60,7 @@ export interface JobConfigOverrides {
 
 export interface JobStatusDto {
   jobId: string;
+  studentId?: string | null;
   md: string | null;
   mdStorageUri?: string | null;
   recordingId: string | null;
@@ -78,6 +79,7 @@ export interface JobStatusDto {
   autoPublish: boolean | null;
   notionUrl: string | null;
   anytypeUrl: string | null;
+  htmlUrl?: string | null;
   state: JobState;
   createdAt: string;
   updatedAt: string;
@@ -146,6 +148,7 @@ export interface JobEventPayload {
   mdStorageUri?: string | null;
   notionUrl?: string | null;
   anytypeUrl?: string | null;
+  htmlUrl?: string | null;
   publishTarget?: PublishTarget | null;
   recordingId?: string | null;
   transcriptId?: string | null;

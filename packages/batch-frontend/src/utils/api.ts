@@ -375,6 +375,7 @@ export interface JobProvenanceResponse {
     manifestPath: string | null;
     notionUrl: string | null;
     anytypeUrl: string | null;
+    htmlUrl?: string | null;
     error: string | null;
   };
   sourceJob: {

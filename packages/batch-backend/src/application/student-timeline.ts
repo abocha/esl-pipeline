@@ -87,6 +87,7 @@ interface TimelineRow {
   action_created_job_id: string | null;
   notion_url: string | null;
   anytype_url: string | null;
+  html_url: string | null;
 }
 
 function deriveDisplayName(params: {
@@ -154,7 +155,8 @@ const timelineQuery = `
            NULL::uuid AS action_requested_by,
            NULL::uuid AS action_created_job_id,
            NULL::text AS notion_url,
-           NULL::text AS anytype_url
+           NULL::text AS anytype_url,
+           NULL::text AS html_url
     FROM recordings r
     WHERE r.student_id = $1
 
@@ -190,7 +192,8 @@ const timelineQuery = `
            NULL::uuid AS action_requested_by,
            NULL::uuid AS action_created_job_id,
            NULL::text AS notion_url,
-           NULL::text AS anytype_url
+           NULL::text AS anytype_url,
+           NULL::text AS html_url
     FROM transcripts t
     JOIN recordings r ON r.id = t.recording_id
     WHERE r.student_id = $1
@@ -227,7 +230,8 @@ const timelineQuery = `
            NULL::uuid AS action_requested_by,
            NULL::uuid AS action_created_job_id,
            NULL::text AS notion_url,
-           NULL::text AS anytype_url
+           NULL::text AS anytype_url,
+           NULL::text AS html_url
     FROM prompt_packages p
     LEFT JOIN recordings r ON r.id = p.recording_id
     WHERE p.student_id = $1
@@ -264,7 +268,8 @@ const timelineQuery = `
            NULL::uuid AS action_requested_by,
            NULL::uuid AS action_created_job_id,
            NULL::text AS notion_url,
-           NULL::text AS anytype_url
+           NULL::text AS anytype_url,
+           NULL::text AS html_url
     FROM drafts d
     LEFT JOIN prompt_packages p ON p.id = d.prompt_package_id
     LEFT JOIN recordings r ON r.id = p.recording_id
@@ -306,7 +311,8 @@ const timelineQuery = `
       NULL::uuid AS action_requested_by,
       NULL::uuid AS action_created_job_id,
       j.notion_url,
-      j.anytype_url
+      j.anytype_url,
+      j.html_url
     FROM jobs j
     LEFT JOIN recordings r ON r.id = j.recording_id
     LEFT JOIN prompt_packages p ON p.id = j.prompt_package_id
@@ -349,7 +355,8 @@ const timelineQuery = `
            NULL::uuid AS action_requested_by,
            NULL::uuid AS action_created_job_id,
            NULL::text AS notion_url,
-           NULL::text AS anytype_url
+           NULL::text AS anytype_url,
+           NULL::text AS html_url
     FROM student_profile_bindings spb
     WHERE spb.student_id = $1
 
@@ -389,7 +396,8 @@ const timelineQuery = `
       NULL::uuid AS action_requested_by,
       NULL::uuid AS action_created_job_id,
       NULL::text AS notion_url,
-      NULL::text AS anytype_url
+      NULL::text AS anytype_url,
+           NULL::text AS html_url
     FROM profile_revisions pr
     WHERE EXISTS (
       SELECT 1
@@ -435,7 +443,8 @@ const timelineQuery = `
       NULL::uuid AS action_requested_by,
       NULL::uuid AS action_created_job_id,
       NULL::text AS notion_url,
-      NULL::text AS anytype_url
+      NULL::text AS anytype_url,
+           NULL::text AS html_url
     FROM profile_revisions pr
     WHERE pr.status = 'active'
       AND pr.activated_at IS NOT NULL
@@ -488,7 +497,8 @@ const timelineQuery = `
       NULL::uuid AS action_requested_by,
       NULL::uuid AS action_created_job_id,
       NULL::text AS notion_url,
-      NULL::text AS anytype_url
+      NULL::text AS anytype_url,
+           NULL::text AS html_url
     FROM template_revisions tr
     WHERE EXISTS (
       SELECT 1
@@ -529,7 +539,8 @@ const timelineQuery = `
       NULL::uuid AS action_requested_by,
       NULL::uuid AS action_created_job_id,
       NULL::text AS notion_url,
-      NULL::text AS anytype_url
+      NULL::text AS anytype_url,
+           NULL::text AS html_url
     FROM template_revisions tr
     WHERE tr.status = 'active'
       AND tr.activated_at IS NOT NULL
@@ -577,7 +588,8 @@ const timelineQuery = `
       jah.requested_by AS action_requested_by,
       jah.created_job_id AS action_created_job_id,
       j.notion_url,
-      j.anytype_url
+      j.anytype_url,
+      j.html_url
     FROM job_action_history jah
     JOIN jobs j ON j.id = jah.job_id
     LEFT JOIN recordings r ON r.id = j.recording_id
@@ -665,7 +677,8 @@ export async function getStudentTimeline(
              action_requested_by,
              action_created_job_id,
              notion_url,
-             anytype_url
+             anytype_url,
+             html_url
       FROM timeline
       ${whereClause}
       ORDER BY
@@ -704,6 +717,9 @@ export async function getStudentTimeline(
     }
     if (row.anytype_url) {
       details.anytypeUrl = row.anytype_url;
+    }
+    if (row.html_url) {
+      details.htmlUrl = row.html_url;
     }
     if (row.type === 'student_profile_binding_changed') {
       details.bindingId = row.binding_id;

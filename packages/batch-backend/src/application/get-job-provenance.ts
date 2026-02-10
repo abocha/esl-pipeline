@@ -40,6 +40,7 @@ export interface JobProvenanceResponse {
     manifestPath: string | null;
     notionUrl: string | null;
     anytypeUrl: string | null;
+    htmlUrl?: string | null;
     error: string | null;
   };
   sourceJob: {
@@ -152,6 +153,7 @@ export async function getJobProvenance(jobId: string): Promise<JobProvenanceResp
       manifestPath: job.manifestPath ?? null,
       notionUrl: job.notionUrl ?? null,
       anytypeUrl: job.anytypeUrl ?? null,
+      ...(job.htmlUrl ? { htmlUrl: job.htmlUrl } : {}),
       error: job.error ?? null,
     },
     sourceJob: sourceJob

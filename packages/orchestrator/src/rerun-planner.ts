@@ -77,8 +77,15 @@ export function computeRerunPlan(input: PlannerInput): RerunPlanResult {
   }
 
   const planned = new Set<RerunTargetStage>(requested);
+  const publishTarget = input.manifest.publishTarget ?? 'notion';
+  const requiresAudioForPublish = publishTarget === 'notion' || publishTarget === 'anytype';
 
-  if (planned.has('add-audio') && !planned.has('upload') && !input.manifest.audio?.url) {
+  if (
+    planned.has('add-audio') &&
+    !planned.has('upload') &&
+    requiresAudioForPublish &&
+    !input.manifest.audio?.url
+  ) {
     planned.add('upload');
   }
 
@@ -93,13 +100,17 @@ export function computeRerunPlan(input: PlannerInput): RerunPlanResult {
     errors.push('Upload requires audio.path in manifest or including tts in requested steps.');
   }
 
-  if (planned.has('add-audio') && !planned.has('upload') && !input.manifest.audio?.url) {
+  if (
+    planned.has('add-audio') &&
+    !planned.has('upload') &&
+    requiresAudioForPublish &&
+    !input.manifest.audio?.url
+  ) {
     missingManifestFields.add('audio.url');
     errors.push('Add-audio requires audio.url in manifest or including upload in requested steps.');
   }
 
   if (planned.has('add-audio')) {
-    const publishTarget = input.manifest.publishTarget ?? 'notion';
     if (publishTarget === 'anytype') {
       if (!input.manifest.anytypePageId) {
         missingManifestFields.add('anytypePageId');
@@ -107,7 +118,7 @@ export function computeRerunPlan(input: PlannerInput): RerunPlanResult {
       if (!input.manifest.anytypeSpaceId) {
         missingManifestFields.add('anytypeSpaceId');
       }
-    } else if (!input.manifest.pageId) {
+    } else if (publishTarget === 'notion' && !input.manifest.pageId) {
       missingManifestFields.add('pageId');
     }
   }

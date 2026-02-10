@@ -22,7 +22,7 @@ export interface SubmitJobRequest {
   voiceAccent?: string;
   forceTts?: boolean;
   notionDatabase?: string;
-  publishTarget?: 'notion' | 'anytype';
+  publishTarget?: 'notion' | 'anytype' | 'html';
   ttsStrategy?: TtsStrategy;
   userId?: string;
   autoPublish?: boolean;
@@ -112,10 +112,11 @@ function validateSubmitJobRequest(req: SubmitJobRequest): void {
   if (
     req.publishTarget !== undefined &&
     req.publishTarget !== 'notion' &&
-    req.publishTarget !== 'anytype'
+    req.publishTarget !== 'anytype' &&
+    req.publishTarget !== 'html'
   ) {
     throw new ValidationError(
-      'publishTarget must be "notion" or "anytype" when provided',
+      'publishTarget must be "notion", "anytype", or "html" when provided',
       'invalid_publish_target',
     );
   }

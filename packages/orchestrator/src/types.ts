@@ -40,7 +40,7 @@ export interface NewAssignmentFlags {
   accentPreference?: string;
   voiceId?: string;
   withTts?: boolean;
-  publishTarget?: 'notion' | 'anytype';
+  publishTarget?: 'notion' | 'anytype' | 'html';
   anytypeSpaceId?: string;
 
   // TTS strategy fields

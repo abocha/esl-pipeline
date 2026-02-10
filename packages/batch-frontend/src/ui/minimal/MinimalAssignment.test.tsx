@@ -374,10 +374,12 @@ describe('MinimalAssignment', () => {
   });
 
   it('rehydrates workflow state from server job context in query params', async () => {
+    const user = userEvent.setup();
     vi.mocked(api.listUserJobs).mockResolvedValueOnce({
       jobs: [
         {
           jobId: 'job-resume',
+          studentId: 'student-alex',
           md: '/tmp/resume.md',
           mdStorageUri: 's3://bucket/resume.md',
           recordingId: 'rec-resume',
@@ -412,6 +414,7 @@ describe('MinimalAssignment', () => {
 
     vi.mocked(api.getJobStatus).mockResolvedValueOnce({
       jobId: 'job-resume',
+      studentId: 'student-alex',
       md: '/tmp/resume.md',
       mdStorageUri: 's3://bucket/resume.md',
       recordingId: 'rec-resume',
@@ -485,10 +488,24 @@ describe('MinimalAssignment', () => {
       expect(api.getJobStatus).toHaveBeenCalledWith('job-resume');
     });
 
+    const resumeSelect = screen.getByRole('combobox', { name: /Recent jobs/i });
+    expect(within(resumeSelect).getByRole('option', { name: /Alex/i })).toBeTruthy();
+    expect(within(resumeSelect).queryByRole('option', { name: /No saved jobs yet/i })).toBeNull();
+
     expect(await screen.findByDisplayValue('Recovered transcript')).toBeTruthy();
     expect(await screen.findByDisplayValue('Recovered prompt')).toBeTruthy();
     expect(await screen.findByDisplayValue('# Recovered draft')).toBeTruthy();
     expect(screen.getAllByText(/Anytype server unreachable/i).length).toBeGreaterThan(0);
+    await user.click(screen.getByRole('button', { name: /Generate prompt/i }));
+    await waitFor(() => {
+      expect(api.createPromptPackage).toHaveBeenCalledWith(
+        expect.any(String),
+        expect.objectContaining({
+          templateId: 'tpl-default',
+          profileId: 'profiles/alex.md',
+        }),
+      );
+    });
 
     globalThis.history.replaceState(null, '', '/');
   });

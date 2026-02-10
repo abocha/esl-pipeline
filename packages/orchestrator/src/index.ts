@@ -5,6 +5,7 @@ import { basename, dirname } from 'node:path';
 
 import { createAnytypeClient, sharePageToS3 } from '@esl-pipeline/anytype-adapter';
 import { InfrastructureError, ManifestError, ValidationError } from '@esl-pipeline/contracts';
+import { renderAndPublishMarkdownToS3 } from '@esl-pipeline/html-publisher';
 import { validateMarkdownFile } from '@esl-pipeline/md-validator';
 import {
   type ColorPreset,
@@ -392,7 +393,8 @@ export async function newAssignment(
   pageId?: string;
   pageUrl?: string;
   anytypeUrl?: string;
-  publishTarget?: 'notion' | 'anytype';
+  htmlUrl?: string;
+  publishTarget?: 'notion' | 'anytype' | 'html';
   audio?: { path?: string; url?: string; hash?: string; voices?: BuildStudyTextResult['voices'] };
   colorized?: boolean;
   manifestPath?: string;
@@ -474,13 +476,21 @@ export async function newAssignment(
   let anytypePageId = previousManifest?.anytypePageId;
   let anytypeSpaceId = flags.anytypeSpaceId ?? previousManifest?.anytypeSpaceId;
   let anytypeUrl = previousManifest?.anytypeUrl;
+  let htmlUrl = previousManifest?.htmlUrl;
 
   let colorized = false;
 
   if (publishTarget === 'anytype') {
     pageId = undefined;
     pageUrl = undefined;
+  } else if (publishTarget === 'notion') {
+    anytypePageId = undefined;
+    anytypeSpaceId = undefined;
+    anytypeUrl = undefined;
+    htmlUrl = undefined;
   } else {
+    pageId = undefined;
+    pageUrl = undefined;
     anytypePageId = undefined;
     anytypeSpaceId = undefined;
     anytypeUrl = undefined;
@@ -553,7 +563,7 @@ export async function newAssignment(
           pageUrl,
           studentLinked: importResult.studentLinked ?? undefined,
         });
-      } else {
+      } else if (publishTarget === 'anytype') {
         throwIfCancelled(signal, 'import');
         const client = createAnytypeClient();
         const spaceId = await resolveAnytypeSpaceId(client, anytypeSpaceId);
@@ -594,12 +604,14 @@ export async function newAssignment(
           pageId: anytypePageId,
           spaceId: anytypeSpaceId,
         });
+      } else {
+        emitStage('import', 'success', { publishTarget: 'html', remoteImport: false });
       }
     }
 
     if (flags.preset) {
-      if (publishTarget === 'anytype') {
-        recordSkip('colorize', 'anytype uses static HTML theming');
+      if (publishTarget !== 'notion') {
+        recordSkip('colorize', `${publishTarget} uses static HTML theming`);
       } else if (flags.dryRun) {
         emitStage('colorize', 'start');
         steps.push(`colorize:${flags.preset}:0/0/0`);
@@ -794,7 +806,7 @@ export async function newAssignment(
       } else {
         recordSkip('add-audio', audio?.url ? 'missing pageId' : 'no audio url available');
       }
-    } else if (anytypePageId && anytypeSpaceId) {
+    } else if (publishTarget === 'anytype' && anytypePageId && anytypeSpaceId) {
       if (flags.skipUpload) {
         recordSkip('add-audio', 'skip-upload flag set');
         steps.push('skip:add-audio');
@@ -840,6 +852,7 @@ export async function newAssignment(
         });
         throwIfCancelled(signal, 'add-audio');
         anytypeUrl = publishResult.url;
+        htmlUrl = publishResult.url;
 
         emitStage('add-audio', 'success', {
           pageId: anytypePageId,
@@ -847,6 +860,36 @@ export async function newAssignment(
           publishUrl: anytypeUrl,
         });
       }
+    } else if (publishTarget === 'html') {
+      emitStage('add-audio', 'start');
+      steps.push('add-audio');
+      throwIfCancelled(signal, 'add-audio');
+      if (!flags.dryRun) {
+        let headingTheme: { h2?: string; h3?: string } | undefined;
+        if (flags.preset) {
+          const preset = await loadPreset(flags.preset, flags.presetsPath ?? DEFAULT_PRESETS_PATH);
+          headingTheme = resolveHeadingTheme(preset);
+        }
+
+        const publishMarkdown = insertAudioBeforeStudyText(mdContents, audio?.url ?? '');
+        const publishTitle = resolveMarkdownTitle(
+          mdContents,
+          basename(flags.md).replace(/\.[^.]+$/, ''),
+          validation.meta?.title ?? null,
+        );
+        const publishResult = await renderAndPublishMarkdownToS3({
+          headingTheme,
+          title: publishTitle,
+          markdown: publishMarkdown,
+        });
+        throwIfCancelled(signal, 'add-audio');
+        htmlUrl = publishResult.url;
+      }
+      emitStage('add-audio', 'success', {
+        url: audio?.url,
+        publishUrl: htmlUrl,
+        dryRun: flags.dryRun,
+      });
     } else {
       recordSkip('add-audio', 'missing Anytype pageId/spaceId');
     }
@@ -860,6 +903,7 @@ export async function newAssignment(
       anytypePageId,
       anytypeSpaceId,
       anytypeUrl,
+      htmlUrl,
       audio,
       preset: flags.preset,
 
@@ -894,6 +938,7 @@ export async function newAssignment(
       pageId,
       pageUrl,
       anytypeUrl,
+      htmlUrl,
       publishTarget,
       audio,
       colorized,
@@ -1028,7 +1073,8 @@ export async function rerunAssignment(
   pageId?: string;
   pageUrl?: string;
   anytypeUrl?: string;
-  publishTarget?: 'notion' | 'anytype';
+  htmlUrl?: string;
+  publishTarget?: 'notion' | 'anytype' | 'html';
   manifestPath: string;
 }> {
   const manifestStore = dependencies.manifestStore ?? fallbackManifestStore;
@@ -1131,6 +1177,12 @@ export async function rerunAssignment(
     let audioVoices = manifest.audio?.voices;
     const publishTarget = manifest.publishTarget ?? 'notion';
     let anytypeUrl = manifest.anytypeUrl;
+    let htmlUrl = manifest.htmlUrl;
+    if (publishTarget === 'notion') {
+      htmlUrl = undefined;
+    } else if (publishTarget === 'html') {
+      anytypeUrl = undefined;
+    }
 
     if (stepsToRun.has('tts')) {
       emitStage('tts', 'start');
@@ -1268,7 +1320,7 @@ export async function rerunAssignment(
         }
 
         emitStage('add-audio', 'success', { pageId: targetPageId, url: audioUrl });
-      } else {
+      } else if (publishTarget === 'anytype') {
         const targetPageId = manifest.anytypePageId;
         const targetSpaceId = manifest.anytypeSpaceId;
         if (!targetPageId || !targetSpaceId) {
@@ -1310,12 +1362,40 @@ export async function rerunAssignment(
           });
           throwIfCancelled(signal, 'add-audio');
           anytypeUrl = publishResult.url;
+          htmlUrl = publishResult.url;
         }
 
         emitStage('add-audio', 'success', {
           pageId: targetPageId,
           url: audioUrl,
           publishUrl: anytypeUrl,
+        });
+      } else {
+        if (!flags.dryRun) {
+          let headingTheme: { h2?: string; h3?: string } | undefined;
+          if (manifest.preset) {
+            const preset = await loadPreset(manifest.preset, DEFAULT_PRESETS_PATH);
+            headingTheme = resolveHeadingTheme(preset);
+          }
+
+          const publishMarkdown = insertAudioBeforeStudyText(mdContents, audioUrl ?? '');
+          const publishTitle = resolveMarkdownTitle(
+            mdContents,
+            basename(flags.md).replace(/\.[^.]+$/, ''),
+            null,
+          );
+          const publishResult = await renderAndPublishMarkdownToS3({
+            headingTheme,
+            title: publishTitle,
+            markdown: publishMarkdown,
+          });
+          throwIfCancelled(signal, 'add-audio');
+          htmlUrl = publishResult.url;
+        }
+        emitStage('add-audio', 'success', {
+          url: audioUrl,
+          publishUrl: htmlUrl,
+          dryRun: flags.dryRun,
         });
       }
 
@@ -1332,6 +1412,7 @@ export async function rerunAssignment(
       mdHash: hashStudyText(mdContents),
       publishTarget,
       anytypeUrl,
+      htmlUrl,
       audio: {
         path: audioPath,
         url: audioUrl,
@@ -1371,6 +1452,7 @@ export async function rerunAssignment(
       pageId: updatedManifest.pageId,
       pageUrl: updatedManifest.pageUrl,
       anytypeUrl: updatedManifest.anytypeUrl,
+      htmlUrl: updatedManifest.htmlUrl,
       publishTarget: updatedManifest.publishTarget,
       manifestPath,
     };

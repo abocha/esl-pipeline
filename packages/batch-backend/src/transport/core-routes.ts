@@ -38,7 +38,7 @@ export function registerCoreRoutes(app: FastifyInstance, options: CoreRouteOptio
       voiceId: z.string().min(1).optional(),
       forceTts: z.boolean().optional(),
       notionDatabase: z.string().min(1).optional(),
-      publishTarget: z.enum(['notion', 'anytype']).optional(),
+      publishTarget: z.enum(['notion', 'anytype', 'html']).optional(),
       ttsStrategy: z.enum(['auto', 'dialogue', 'tts']).optional(),
     });
 
@@ -395,6 +395,7 @@ export function registerCoreRoutes(app: FastifyInstance, options: CoreRouteOptio
               mdStorageUri: dto.mdStorageUri,
               notionUrl: dto.notionUrl,
               anytypeUrl: dto.anytypeUrl,
+              htmlUrl: dto.htmlUrl,
               publishTarget: dto.publishTarget,
               recordingId: dto.recordingId,
               transcriptId: dto.transcriptId,

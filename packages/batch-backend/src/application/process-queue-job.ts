@@ -101,7 +101,7 @@ export async function processQueueJob(payload: QueueJobPayload): Promise<void> {
       }
     }
 
-    let result: { manifestPath?: string; notionUrl?: string; anytypeUrl?: string };
+    let result: { manifestPath?: string; notionUrl?: string; anytypeUrl?: string; htmlUrl?: string };
     try {
       const isRerunExecution =
         payload.executionMode === 'rerun_audio' || payload.executionMode === 'rerun_publish';
@@ -165,6 +165,7 @@ export async function processQueueJob(payload: QueueJobPayload): Promise<void> {
       manifestPath: result.manifestPath ?? null,
       notionUrl: result.notionUrl ?? null,
       anytypeUrl: result.anytypeUrl ?? null,
+      htmlUrl: result.htmlUrl ?? null,
       finishedAt: new Date(),
     });
 
