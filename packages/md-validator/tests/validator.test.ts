@@ -320,6 +320,22 @@ content
     expect(res.errors.join('\n')).toMatch(/unknown speaker "Sam"/);
   });
 
+  it('accepts video directive URL when separated by a space', async () => {
+    const tempDir = await mkdtemp(path.join(tmpdir(), 'validator-'));
+    const file = path.join(tempDir, 'video-directive-space.md');
+    await writeFile(
+      file,
+      buildBaseDoc(`
+:::video https://example.com/demo.mp4
+      `.trim()),
+    );
+
+    const res = await validateMarkdownFile(file);
+    expect(res.errors).not.toContain(
+      expect.stringContaining('video directive requires a URL after ":::video".'),
+    );
+  });
+
   it('allows inline descriptor after study-text marker', async () => {
     const tempDir = await mkdtemp(path.join(tmpdir(), 'validator-'));
     const file = path.join(tempDir, 'inline-study-text.md');

@@ -199,6 +199,32 @@ function directiveLabel(block: PmdDirectiveBlock, markerLine: string): string {
   return match?.[1]?.trim() ?? '';
 }
 
+function escapeRegExp(value: string): string {
+  return value.replaceAll(/[.*+?^${}()|[\]\\]/g, String.raw`\$&`);
+}
+
+function directiveLeafLabel(leaf: PmdDirectiveLeaf, contentLines: string[]): string {
+  if (leaf.label && leaf.label.trim().length > 0) {
+    return leaf.label.trim();
+  }
+
+  const startLine = leaf.position?.start.line ?? 0;
+  if (!startLine) return '';
+  const markerLine = (contentLines[startLine - 1] ?? '').trim();
+  if (!markerLine) return '';
+
+  const escapedName = escapeRegExp(leaf.name);
+  const bracketPattern = new RegExp(String.raw`^:{2,3}${escapedName}\[(.+)\]\s*$`, 'i');
+  const bracketMatch = bracketPattern.exec(markerLine);
+  if (bracketMatch?.[1]) {
+    return bracketMatch[1].trim();
+  }
+
+  const spacedPattern = new RegExp(String.raw`^:{2,3}${escapedName}\s+(.+)$`, 'i');
+  const spacedMatch = spacedPattern.exec(markerLine);
+  return spacedMatch?.[1]?.trim() ?? '';
+}
+
 function getDirectiveBounds(
   block: PmdDirectiveBlock,
   contentLines: string[],
@@ -594,7 +620,7 @@ export async function validateMarkdownFile(
   collectDirectiveLeaves(doc.body, leafs);
   for (const leaf of leafs) {
     if (leaf.name !== 'audio' && leaf.name !== 'video') continue;
-    const label = leaf.label?.trim() ?? '';
+    const label = directiveLeafLabel(leaf, contentLines);
     if (!label) {
       const line = applyLineOffset(leaf.position?.start.line ?? 0, lineOffset);
       if (leaf.name === 'audio') {
