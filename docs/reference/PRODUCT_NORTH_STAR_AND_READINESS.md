@@ -5,7 +5,7 @@
 - Audience: Founder, maintainers, product and engineering collaborators.
 - Read Time: 10 minutes.
 - Authority Level: Product direction and readiness scaffold.
-- Last Verified Against: 2026-02-09 repo strategy.
+- Last Verified Against: 2026-02-10 repo strategy.
 
 ## Purpose
 
@@ -39,8 +39,11 @@ The product is successful when it consistently does all three:
 
 - End-to-end assignment flow in one guided UX:
   - upload/recording -> transcript -> draft -> validate -> publish.
-- CEFR baseline presets (A1-C2).
-- Direct LLM generation through backend API (no manual copy-paste requirement).
+- Preset plumbing MVP:
+  - learning preset model (`prompt + metadata + output contract`),
+  - Prompt Workspace foundations,
+  - one trusted shipped preset content track: `general-english`.
+- Direct LLM generation through backend API (deferred until preset plumbing MVP passes acceptance criteria).
 - At least one low-cost TTS fallback in addition to premium providers.
 - Basic CRM-lite ledger:
   - student package purchase tracking,
@@ -75,16 +78,30 @@ Suggested package ownership:
 
 ### Weeks 1-2: CEFR Foundation + Provider Seams
 
-- Implement CEFR preset set (A1-C2) with normalized assignment schema.
-- Add provider interfaces and routing config for LLM/TTS.
+- Implement Preset V2 plumbing:
+  - learning preset model,
+  - Prompt Workspace baseline,
+  - normalized assignment output schema contract.
+- Ship one trusted content track: `general-english`.
 - Keep existing flow stable; no broad UX expansion yet.
 
 Exit criteria:
 
-- CEFR presets are selectable end-to-end.
-- LLM and TTS are not hard-coupled to single vendors.
+- `general-english` preset works end-to-end with schema-aware flow.
+- System can add more presets/tracks without rewrites.
 
-### Weeks 3-4: Direct LLM Generation
+### Weeks 3-4: Preset Plumbing Completion + Preview
+
+- Add Prompt Workspace editing/versioning workflow for learning presets.
+- Add draft preview requirement in assignment workflow using internal HTML preview renderer path.
+- Validate preset output against schema contract before publish.
+
+Exit criteria:
+
+- Tutor can reliably run preset-driven assignment flow with preview and validation.
+- Preset version provenance is captured in assignment flow.
+
+### Weeks 5-6: Direct LLM Generation (Post-Plumbing)
 
 - Add backend generation endpoint and service path.
 - Connect frontend flow to generated drafts directly.
@@ -93,9 +110,9 @@ Exit criteria:
 Exit criteria:
 
 - Tutor can generate draft from UI without copy-paste.
-- Prompt templates can reference CEFR level reliably.
+- Generation uses Preset V2 contracts and versioned preset context.
 
-### Weeks 5-6: Low-Cost TTS Path + Spend Controls
+### Weeks 7-8: Low-Cost TTS Path + Spend Controls
 
 - Integrate at least one low-cost/free-viable TTS provider path.
 - Add monthly and per-request limits with visible UX feedback.
@@ -106,7 +123,7 @@ Exit criteria:
 - Audio generation works without premium-only dependency.
 - Budget controls prevent unexpected provider spend spikes.
 
-### Weeks 7-8: CRM-lite Ledger and Tutor Dashboard
+### Weeks 9-10: CRM-lite Ledger and Tutor Dashboard
 
 - Add lesson package purchase records.
 - Add lesson consumption events tied to delivered lessons.
@@ -206,6 +223,7 @@ Every week:
 ## Related
 
 - `docs/backend-frontend/backend-frontend-alignment.md`
+- `docs/reference/PRESET_V2_SPEC.md`
 - `docs/reference/STUDENT_SYSTEM_ROADMAP.md`
 - `packages/orchestrator/README.md`
 - `packages/batch-backend/README.md`

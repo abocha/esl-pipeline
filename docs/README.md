@@ -5,7 +5,7 @@
 - Audience: AI agents, maintainers.
 - Read Time: 2 minutes.
 - Authority Level: Router.
-- Last Verified Against: 2026-02-09 repo state.
+- Last Verified Against: 2026-02-10 repo state.
 
 ## Purpose
 
@@ -42,6 +42,7 @@
 
 - Need one-click restart from repo root: `START_HERE.md`.
 - Need a low-friction "restart tomorrow" entrypoint: `docs/playbooks/RESTART_TOMORROW.md`.
+- Need canonical Preset V2 architecture/spec: `docs/reference/PRESET_V2_SPEC.md`.
 - Need overall repo orientation: `docs/PROJECT_OVERVIEW.md`.
 - Need run commands/setup: `docs/QUICK_START.md`.
 - Need contracts/invariants: `docs/reference/agents-ssot.md`.
@@ -57,6 +58,7 @@
 - `docs/reference/DOCS_IA_MAP.md`
 - `docs/reference/DOCS_GOVERNANCE.md`
 - `docs/reference/PRODUCT_NORTH_STAR_AND_READINESS.md`
+- `docs/reference/PRESET_V2_SPEC.md`
 - `docs/reference/V1_IMPLEMENTATION_TRACKER.md`
 - `docs/playbooks/WEEKLY_PRODUCT_REVIEW_TEMPLATE.md`
 - `docs/playbooks/RESTART_TOMORROW.md`

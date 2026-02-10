@@ -5,7 +5,7 @@
 - Audience: AI agents and maintainers.
 - Read Time: 3 minutes.
 - Authority Level: Active routing map.
-- Last Verified Against: 2026-02-09 repo state.
+- Last Verified Against: 2026-02-10 repo state.
 
 ## Purpose
 
@@ -29,6 +29,7 @@
 | Quick reboot from repo root           | `START_HERE.md`                                       | `docs/playbooks/RESTART_TOMORROW.md`                 |
 | Repo orientation                      | `docs/PROJECT_OVERVIEW.md`                            | `docs/reference/agents-ssot.md`                       |
 | Restarting after context loss         | `docs/playbooks/RESTART_TOMORROW.md`                  | `docs/reference/V1_IMPLEMENTATION_TRACKER.md`         |
+| Preset architecture and product model | `docs/reference/PRESET_V2_SPEC.md`                    | `docs/reference/V1_IMPLEMENTATION_TRACKER.md`         |
 | Product direction / launch readiness  | `docs/reference/PRODUCT_NORTH_STAR_AND_READINESS.md` | `docs/backend-frontend/backend-frontend-alignment.md` |
 | V1 implementation execution           | `docs/reference/V1_IMPLEMENTATION_TRACKER.md`         | `docs/reference/PRODUCT_NORTH_STAR_AND_READINESS.md`  |
 | Weekly product grounding review       | `docs/playbooks/WEEKLY_PRODUCT_REVIEW_TEMPLATE.md`    | `docs/reference/V1_IMPLEMENTATION_TRACKER.md`         |
@@ -55,6 +56,7 @@
 - `docs/README.md`
 - `docs/reference/DOCS_GOVERNANCE.md`
 - `docs/reference/PRODUCT_NORTH_STAR_AND_READINESS.md`
+- `docs/reference/PRESET_V2_SPEC.md`
 - `docs/reference/V1_IMPLEMENTATION_TRACKER.md`
 - `docs/playbooks/WEEKLY_PRODUCT_REVIEW_TEMPLATE.md`
 - `docs/playbooks/RESTART_TOMORROW.md`
