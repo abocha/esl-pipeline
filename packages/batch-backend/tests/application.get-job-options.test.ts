@@ -38,7 +38,18 @@ describe('application/get-job-options', () => {
       notionDatabases: [{ id: 'db-1', name: 'DB One' }],
       uploadOptions: ['auto', 's3', 'none'],
       ttsStrategies: ['auto', 'dialogue', 'tts'],
-    });
+      learningPresets: [
+        {
+          id: 'general-english',
+          version: 'v1',
+          alias: 'current',
+          title: 'General English',
+          track: 'general-english',
+          status: 'active',
+          promptSnapshotVersion: 'hw_prompt_v4-2_clean',
+        },
+      ],
+    } as any);
 
     const result = await getJobOptions();
 
@@ -51,6 +62,17 @@ describe('application/get-job-options', () => {
       notionDatabases: [{ id: 'db-1', name: 'DB One' }],
       uploadOptions: ['auto', 's3', 'none'],
       ttsStrategies: ['auto', 'dialogue', 'tts'],
+      learningPresets: [
+        {
+          id: 'general-english',
+          version: 'v1',
+          alias: 'current',
+          title: 'General English',
+          track: 'general-english',
+          status: 'active',
+          promptSnapshotVersion: 'hw_prompt_v4-2_clean',
+        },
+      ],
       supportedActions: [
         {
           type: 'rerun_audio',
@@ -100,6 +122,17 @@ describe('application/get-job-options', () => {
     expect(result.cefrDefault).toEqual('B1');
     expect(result.uploadOptions).toEqual(['auto', 's3', 'none']);
     expect(result.ttsStrategies).toEqual(['auto']);
+    expect(result.learningPresets).toEqual([
+      {
+        id: 'general-english',
+        version: 'v1',
+        alias: 'current',
+        title: 'General English',
+        track: 'general-english',
+        status: 'active',
+        promptSnapshotVersion: 'hw_prompt_v4-2_clean',
+      },
+    ]);
     expect(result.notionDatabases).toEqual([
       { id: 'notion-db-b1', name: 'B1 Lessons' },
       { id: 'notion-db-b2', name: 'B2 Lessons' },

@@ -20,9 +20,11 @@ import {
 import { logger } from '../infrastructure/logger.js';
 import { getJobOptionsFromOrchestrator } from '../infrastructure/orchestrator-service.js';
 import { getActionMetadata } from './job-actions/action-handler.js';
+import { DEFAULT_LEARNING_PRESET, type LearningPresetOption } from './learning-preset.js';
 
 export interface JobOptionsResponse extends JobOptionsPayload {
   supportedActions: ActionCapability[];
+  learningPresets: LearningPresetOption[];
 }
 
 const DEFAULT_CEFR_LEVELS: CefrLevel[] = ['A1', 'A2', 'B1', 'B2', 'C1', 'C2'];
@@ -32,6 +34,7 @@ const DEFAULT_CEFR_DEFAULT: CefrLevel = 'B1';
 // dedicated metadata service once available (tracked in backend/frontend Phase 5).
 const STATIC_OPTIONS: Omit<JobOptionsResponse, 'supportedActions'> = {
   presets: ['b1-default'],
+  learningPresets: [DEFAULT_LEARNING_PRESET],
   voiceAccents: ['american_female', 'british_male'],
   voices: [],
   cefrLevels: DEFAULT_CEFR_LEVELS,
@@ -57,11 +60,20 @@ export async function getJobOptions(): Promise<JobOptionsResponse> {
     const supportedActions: ActionCapability[] = Object.entries(actionMetadata).map(
       ([type, meta]) => ({ type, ...(meta as object) }) as ActionCapability,
     );
+    const orchestratorLearningPresets = (
+      result as JobOptionsPayload & { learningPresets?: LearningPresetOption[] }
+    ).learningPresets;
+    const learningPresets =
+      orchestratorLearningPresets && orchestratorLearningPresets.length > 0
+        ? orchestratorLearningPresets
+        : [DEFAULT_LEARNING_PRESET];
+
     return {
       ...result,
       cefrLevels: result.cefrLevels ?? [...DEFAULT_CEFR_LEVELS],
       cefrDefault: result.cefrDefault ?? DEFAULT_CEFR_DEFAULT,
       notionDatabases,
+      learningPresets,
       supportedActions,
     };
   } catch (error) {
@@ -100,6 +112,7 @@ async function loadStaticJobOptions(): Promise<JobOptionsResponse> {
     cefrLevels: [...DEFAULT_CEFR_LEVELS],
     cefrDefault: DEFAULT_CEFR_DEFAULT,
     notionDatabases,
+    learningPresets: [...STATIC_OPTIONS.learningPresets],
     uploadOptions: [...STATIC_OPTIONS.uploadOptions],
     ttsStrategies: [...STATIC_OPTIONS.ttsStrategies],
     supportedActions,

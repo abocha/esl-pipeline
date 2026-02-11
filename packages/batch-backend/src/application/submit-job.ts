@@ -9,6 +9,7 @@ import type { TtsStrategy as DomainTtsStrategy } from '../domain/job-model.js';
 import { insertJob } from '../domain/job-repository.js';
 import { logger } from '../infrastructure/logger.js';
 import { createJobQueue } from '../infrastructure/queue-bullmq.js';
+import { buildLearningPresetProvenance, normalizeLearningPresetId } from './learning-preset.js';
 
 export type UploadTarget = 'auto' | 's3' | 'none';
 export type TtsStrategy = DomainTtsStrategy;
@@ -16,6 +17,7 @@ export type TtsStrategy = DomainTtsStrategy;
 export interface SubmitJobRequest {
   md: string;
   preset?: string;
+  learningPresetId?: string;
   withTts?: boolean;
   upload?: UploadTarget;
   voiceId?: string;
@@ -57,6 +59,16 @@ function validateSubmitJobRequest(req: SubmitJobRequest): void {
     (typeof req.preset !== 'string' || req.preset.trim().length === 0)
   ) {
     throw new ValidationError('preset must be a non-empty string when provided', 'invalid_preset');
+  }
+
+  if (
+    req.learningPresetId !== undefined &&
+    (typeof req.learningPresetId !== 'string' || req.learningPresetId.trim().length === 0)
+  ) {
+    throw new ValidationError(
+      'learningPresetId must be a non-empty string when provided',
+      'invalid_learning_preset',
+    );
   }
 
   if (req.withTts !== undefined && typeof req.withTts !== 'boolean') {
@@ -133,10 +145,19 @@ function validateSubmitJobRequest(req: SubmitJobRequest): void {
 // Throws ValidationError for invalid input; other errors are operational.
 export async function submitJob(req: SubmitJobRequest): Promise<SubmitJobResponse> {
   validateSubmitJobRequest(req);
+  const learningPresetId = normalizeLearningPresetId({
+    learningPresetId: req.learningPresetId,
+    preset: req.preset,
+  });
+  const provenance = buildLearningPresetProvenance(learningPresetId);
 
   const job = await insertJob({
     md: req.md,
     preset: req.preset,
+    learningPresetId: provenance.learningPresetId,
+    learningPresetVersion: provenance.learningPresetVersion,
+    promptSnapshotVersion: provenance.promptSnapshotVersion,
+    promptAlias: provenance.promptAlias,
     withTts: req.withTts,
     // Persist explicit upload choice for observability; downstream decides how to interpret.
     upload: req.upload,
