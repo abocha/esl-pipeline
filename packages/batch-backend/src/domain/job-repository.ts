@@ -31,6 +31,10 @@ interface JobRow {
   prompt_package_id: string | null;
   draft_id: string | null;
   preset: string | null;
+  learning_preset_id: string | null;
+  learning_preset_version: string | null;
+  prompt_snapshot_version: string | null;
+  prompt_alias: string | null;
   with_tts: boolean | null;
   upload: string | null;
   voice_id: string | null;
@@ -67,6 +71,10 @@ export interface InsertJobParams {
   promptPackageId?: string | null;
   draftId?: string | null;
   preset?: string;
+  learningPresetId?: string | null;
+  learningPresetVersion?: string | null;
+  promptSnapshotVersion?: string | null;
+  promptAlias?: string | null;
   withTts?: boolean;
   upload?: JobUploadOption | null;
   voiceId?: string;
@@ -171,6 +179,10 @@ async function insertJobWithState(params: InsertJobParams, state: JobState): Pro
         prompt_package_id,
         draft_id,
         preset,
+        learning_preset_id,
+        learning_preset_version,
+        prompt_snapshot_version,
+        prompt_alias,
         with_tts,
         upload,
         voice_id,
@@ -187,7 +199,7 @@ async function insertJobWithState(params: InsertJobParams, state: JobState): Pro
       )
       VALUES (
         $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16,
-        $17, $18, $19, $20, $21, $22
+        $17, $18, $19, $20, $21, $22, $23, $24, $25, $26
       )
       RETURNING
         id,
@@ -199,6 +211,10 @@ async function insertJobWithState(params: InsertJobParams, state: JobState): Pro
         prompt_package_id,
         draft_id,
         preset,
+        learning_preset_id,
+        learning_preset_version,
+        prompt_snapshot_version,
+        prompt_alias,
         with_tts,
         upload,
         voice_id,
@@ -230,6 +246,10 @@ async function insertJobWithState(params: InsertJobParams, state: JobState): Pro
         params.promptPackageId ?? null,
         params.draftId ?? null,
         params.preset ?? null,
+        params.learningPresetId ?? null,
+        params.learningPresetVersion ?? null,
+        params.promptSnapshotVersion ?? null,
+        params.promptAlias ?? null,
         params.withTts ?? false,
         params.upload ?? null,
         params.voiceId ?? null,
@@ -269,6 +289,10 @@ export async function getJobById(id: string): Promise<JobRecord | null> {
         j.prompt_package_id,
         j.draft_id,
         j.preset,
+        j.learning_preset_id,
+        j.learning_preset_version,
+        j.prompt_snapshot_version,
+        j.prompt_alias,
         j.with_tts,
         j.upload,
         j.voice_id,
@@ -331,6 +355,10 @@ export async function listJobs(options: JobListOptions): Promise<JobRecord[]> {
         j.prompt_package_id,
         j.draft_id,
         j.preset,
+        j.learning_preset_id,
+        j.learning_preset_version,
+        j.prompt_snapshot_version,
+        j.prompt_alias,
         j.with_tts,
         j.upload,
         j.voice_id,
@@ -577,6 +605,10 @@ export async function updateJobStateAndResult(args: {
         prompt_package_id,
         draft_id,
         preset,
+        learning_preset_id,
+        learning_preset_version,
+        prompt_snapshot_version,
+        prompt_alias,
         with_tts,
         upload,
         voice_id,
@@ -653,6 +685,10 @@ export async function updateJobDraftLink(args: {
         prompt_package_id,
         draft_id,
         preset,
+        learning_preset_id,
+        learning_preset_version,
+        prompt_snapshot_version,
+        prompt_alias,
         with_tts,
         upload,
         voice_id,
@@ -770,6 +806,10 @@ export async function updateJobMetadata(
         prompt_package_id,
         draft_id,
         preset,
+        learning_preset_id,
+        learning_preset_version,
+        prompt_snapshot_version,
+        prompt_alias,
         with_tts,
         upload,
         voice_id,
@@ -848,6 +888,10 @@ export async function approveJob(args: {
         prompt_package_id,
         draft_id,
         preset,
+        learning_preset_id,
+        learning_preset_version,
+        prompt_snapshot_version,
+        prompt_alias,
         with_tts,
         upload,
         voice_id,
@@ -930,6 +974,10 @@ function mapRowToJob(row: JobRow): JobRecord {
     promptPackageId: row.prompt_package_id ?? null,
     draftId: row.draft_id ?? null,
     preset: row.preset ?? null,
+    learningPresetId: row.learning_preset_id ?? null,
+    learningPresetVersion: row.learning_preset_version ?? null,
+    promptSnapshotVersion: row.prompt_snapshot_version ?? null,
+    promptAlias: row.prompt_alias ?? null,
     withTts: row.with_tts ?? null,
     upload: normalizeUploadOption(row.upload),
     voiceId: row.voice_id ?? null,
