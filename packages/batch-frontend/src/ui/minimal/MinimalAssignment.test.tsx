@@ -98,6 +98,21 @@ function makeTranscript(
   };
 }
 
+function makeLearningPreset(
+  overrides: Partial<api.LearningPresetOption> = {},
+): api.LearningPresetOption {
+  return {
+    id: 'general-english',
+    version: 'v1',
+    alias: 'current',
+    title: 'General English',
+    track: 'general-english',
+    status: 'active',
+    promptSnapshotVersion: 'hw_prompt_v4-2_clean',
+    ...overrides,
+  };
+}
+
 async function publishAssignmentFlow(user: ReturnType<typeof userEvent.setup>) {
   await user.click(screen.getByRole('button', { name: /Drop audio file/i }));
 
@@ -818,6 +833,120 @@ describe('MinimalAssignment', () => {
     });
   });
 
+  it('re-normalizes resumed legacy preset against loaded learning preset catalog before publish', async () => {
+    const user = userEvent.setup();
+    let resolveJobStatus: (value: api.JobStatus) => void = () => {};
+
+    vi.mocked(api.fetchJobOptions).mockResolvedValueOnce({
+      presets: ['b1-default', 'b2-default'],
+      learningPresets: [makeLearningPreset()],
+      cefrLevels: ['A1', 'A2', 'B1', 'B2', 'C1', 'C2'],
+      cefrDefault: 'B1',
+      voiceAccents: ['american'],
+      voices: [{ id: 'voice-a', name: 'Voice A', accent: 'american' }],
+      notionDatabases: [{ id: 'db-1', name: 'DB One' }],
+      ttsStrategies: ['auto', 'dialogue', 'tts'],
+      supportedActions: [],
+    });
+    vi.mocked(api.listUserJobs).mockResolvedValueOnce({
+      jobs: [
+        {
+          jobId: 'job-learning-race',
+          studentId: 'student-alex',
+          md: '/tmp/stale.md',
+          mdStorageUri: 's3://bucket/stale.md',
+          recordingId: null,
+          transcriptId: null,
+          promptPackageId: 'pkg-1',
+          draftId: 'draft-1',
+          preset: 'b2-default',
+          withTts: true,
+          voiceId: null,
+          upload: 's3',
+          voiceAccent: null,
+          forceTts: false,
+          notionDatabase: null,
+          publishTarget: 'html',
+          ttsStrategy: 'auto',
+          autoPublish: false,
+          notionUrl: null,
+          anytypeUrl: null,
+          state: 'succeeded',
+          createdAt: now,
+          updatedAt: now,
+          startedAt: now,
+          finishedAt: now,
+          error: null,
+          manifestPath: null,
+        },
+      ],
+      total: 1,
+      limit: 20,
+      offset: 0,
+    });
+    vi.mocked(api.getJobStatus).mockImplementationOnce(
+      () =>
+        new Promise<api.JobStatus>((resolve) => {
+          resolveJobStatus = resolve;
+        }),
+    );
+
+    globalThis.history.replaceState(null, '', '/?jobId=job-learning-race');
+    render(<MinimalAssignment />);
+
+    await waitFor(() => {
+      expect(api.fetchJobOptions).toHaveBeenCalledTimes(1);
+    });
+    resolveJobStatus({
+      jobId: 'job-learning-race',
+      md: '/tmp/stale.md',
+      mdStorageUri: 's3://bucket/stale.md',
+      recordingId: null,
+      transcriptId: null,
+      promptPackageId: 'pkg-1',
+      draftId: 'draft-1',
+      preset: 'b2-default',
+      withTts: true,
+      voiceId: null,
+      upload: 's3',
+      voiceAccent: null,
+      forceTts: false,
+      notionDatabase: null,
+      publishTarget: 'html',
+      ttsStrategy: 'auto',
+      autoPublish: false,
+      notionUrl: null,
+      anytypeUrl: null,
+      state: 'succeeded',
+      createdAt: now,
+      updatedAt: now,
+      startedAt: now,
+      finishedAt: now,
+      error: null,
+      manifestPath: null,
+    });
+
+    await waitFor(() => {
+      expect(api.getJobStatus).toHaveBeenCalledWith('job-learning-race');
+    });
+    const presetSelect = await screen.findByRole('combobox', { name: /Preset/i });
+    await waitFor(() => {
+      expect((presetSelect as HTMLSelectElement).value).toBe('general-english');
+    });
+
+    await user.click(screen.getByRole('button', { name: /Publish assignment/i }));
+
+    await waitFor(() => {
+      expect(api.materializeDraft).toHaveBeenCalled();
+    });
+    const publishCall = vi.mocked(api.materializeDraft).mock.calls.at(-1)?.[1];
+    expect(publishCall?.jobOverrides).toEqual({
+      publishTarget: 'html',
+      learningPresetId: 'general-english',
+    });
+    expect(publishCall?.jobOverrides).not.toHaveProperty('preset');
+  });
+
   it('uploads a recording and shows recording metadata', async () => {
     const user = userEvent.setup();
     render(<MinimalAssignment />);
@@ -1035,6 +1164,65 @@ describe('MinimalAssignment', () => {
     });
     const link = screen.getByRole('link', { name: /Open in Notion/i });
     expect(link.getAttribute('href')).toBe('https://www.notion.so/published-assignment');
+  });
+
+  it('publishes canonical learningPresetId when learning preset metadata is available', async () => {
+    const user = userEvent.setup();
+    vi.mocked(api.fetchJobOptions).mockResolvedValueOnce({
+      presets: ['b1-default', 'b2-default'],
+      learningPresets: [
+        makeLearningPreset(),
+        makeLearningPreset({
+          id: 'general-english-intensive',
+          title: 'General English Intensive',
+        }),
+      ],
+      cefrLevels: ['A1', 'A2', 'B1', 'B2', 'C1', 'C2'],
+      cefrDefault: 'B1',
+      voiceAccents: ['american'],
+      voices: [{ id: 'voice-a', name: 'Voice A', accent: 'american' }],
+      notionDatabases: [{ id: 'db-1', name: 'DB One' }],
+      ttsStrategies: ['auto', 'dialogue', 'tts'],
+      supportedActions: [],
+    });
+    render(<MinimalAssignment />);
+
+    await user.click(screen.getByRole('button', { name: /Drop audio file/i }));
+
+    await waitFor(() => {
+      expect(screen.getByDisplayValue('Student transcript text')).toBeTruthy();
+    });
+
+    await user.click(screen.getByRole('button', { name: /Generate prompt/i }));
+
+    await waitFor(() => {
+      expect(screen.getByDisplayValue('Prompt package output')).toBeTruthy();
+    });
+
+    const draftTextarea = screen.getByRole('textbox', { name: /Draft markdown/i });
+    expect(draftTextarea).toBeTruthy();
+    if (!draftTextarea) {
+      throw new Error('Expected draft textarea to be rendered');
+    }
+    await user.type(draftTextarea, '# Final draft');
+    await user.selectOptions(
+      screen.getByRole('combobox', { name: /Preset/i }),
+      'general-english-intensive',
+    );
+
+    await user.click(screen.getByRole('button', { name: /Publish assignment/i }));
+
+    await waitFor(() => {
+      expect(api.createDraft).toHaveBeenCalledWith('pkg-1', '# Final draft');
+    });
+    expect(api.materializeDraft).toHaveBeenCalledWith('draft-1', {
+      jobOverrides: {
+        learningPresetId: 'general-english-intensive',
+        publishTarget: 'notion',
+      },
+    });
+    const call = vi.mocked(api.materializeDraft).mock.calls.at(-1)?.[1];
+    expect(call?.jobOverrides).not.toHaveProperty('preset');
   });
 
   it('queues a default rerun audio action for the current job', async () => {

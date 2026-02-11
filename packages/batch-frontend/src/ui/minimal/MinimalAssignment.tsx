@@ -111,6 +111,31 @@ function normalizePresetSelection(
   return availablePresets[0] ?? '';
 }
 
+interface SelectablePresetOption {
+  id: string;
+  label: string;
+  source: 'learning' | 'legacy';
+}
+
+function buildSelectablePresetOptions(
+  options: Pick<JobOptionsResponse, 'learningPresets' | 'presets'> | null | undefined,
+): SelectablePresetOption[] {
+  const learningPresets = options?.learningPresets;
+  if (learningPresets && learningPresets.length > 0) {
+    return learningPresets.map((preset) => ({
+      id: preset.id,
+      label: preset.title ? `${preset.title} (${preset.id})` : preset.id,
+      source: 'learning',
+    }));
+  }
+
+  return (options?.presets ?? []).map((preset) => ({
+    id: preset,
+    label: preset,
+    source: 'legacy',
+  }));
+}
+
 export const MinimalAssignment: React.FC = () => {
   const [recording, setRecording] = useState<RecordingListItem | null>(null);
   const [recordingStatus, setRecordingStatus] = useState<RecordingStatus | null>(null);
@@ -194,6 +219,10 @@ export const MinimalAssignment: React.FC = () => {
   const [rerunDialogueStability, setRerunDialogueStability] = useState('');
   const [rerunDialogueSeed, setRerunDialogueSeed] = useState('');
   const [cancelReason, setCancelReason] = useState('');
+
+  const presetOptions = useMemo(() => buildSelectablePresetOptions(jobOptions), [jobOptions]);
+  const presetOptionIds = useMemo(() => presetOptions.map((preset) => preset.id), [presetOptions]);
+  const learningPresetCatalogEnabled = (jobOptions?.learningPresets?.length ?? 0) > 0;
 
   const loadJobProvenance = useCallback(async (jobId: string) => {
     setJobProvenanceLoading(true);
@@ -286,9 +315,10 @@ export const MinimalAssignment: React.FC = () => {
   const loadJobOptions = useCallback(async () => {
     try {
       const response = await fetchJobOptions();
+      const nextPresetOptionIds = buildSelectablePresetOptions(response).map((preset) => preset.id);
       setJobOptions(response);
       setSelectedPreset((current) =>
-        normalizePresetSelection(response.presets, undefined, current),
+        normalizePresetSelection(nextPresetOptionIds, undefined, current),
       );
       setJobOptionsError(null);
     } catch (error) {
@@ -366,6 +396,15 @@ export const MinimalAssignment: React.FC = () => {
   useEffect(() => {
     void loadSelectedProfile();
   }, [loadSelectedProfile]);
+
+  useEffect(() => {
+    if (!jobOptions) {
+      return;
+    }
+    setSelectedPreset((current) =>
+      normalizePresetSelection(presetOptionIds, undefined, current),
+    );
+  }, [jobOptions, presetOptionIds, selectedPreset]);
 
   useEffect(() => {
     if (profileSelectionMode !== 'auto') {
@@ -447,9 +486,10 @@ export const MinimalAssignment: React.FC = () => {
         if (status.publishTarget) {
           setPublishTarget(status.publishTarget);
         }
-        if (status.preset) {
+        const resumedPresetId = status.learningPresetId ?? status.preset;
+        if (resumedPresetId) {
           setSelectedPreset((current) =>
-            normalizePresetSelection(jobOptions?.presets, status.preset, current),
+            normalizePresetSelection(jobOptions ? presetOptionIds : undefined, resumedPresetId, current),
           );
         }
 
@@ -572,7 +612,7 @@ export const MinimalAssignment: React.FC = () => {
         setResumeLoading(false);
       }
     },
-    [jobOptions?.presets, loadJobProvenance, resolveBoundProfileId, resumeJobs],
+    [jobOptions, loadJobProvenance, presetOptionIds, resolveBoundProfileId, resumeJobs],
   );
 
   const handleResumeSelectedJob = useCallback(async () => {
@@ -935,12 +975,16 @@ export const MinimalAssignment: React.FC = () => {
       }
 
       const validPreset =
-        selectedPreset && jobOptions?.presets?.includes(selectedPreset) ? selectedPreset : '';
+        selectedPreset && presetOptionIds.includes(selectedPreset) ? selectedPreset : '';
       const materialized = await materializeDraft(savedDraft.id, {
         ...(jobStatus?.jobId ? { jobId: jobStatus.jobId } : {}),
         jobOverrides: {
           publishTarget,
-          ...(validPreset ? { preset: validPreset } : {}),
+          ...(validPreset
+            ? learningPresetCatalogEnabled
+              ? { learningPresetId: validPreset }
+              : { preset: validPreset }
+            : {}),
         },
       });
       await approveJob(materialized.jobId, {
@@ -1643,14 +1687,14 @@ export const MinimalAssignment: React.FC = () => {
           <select
             value={selectedPreset}
             onChange={(event) => setSelectedPreset(event.target.value)}
-            disabled={!jobOptions || jobOptions.presets.length === 0}
+            disabled={!jobOptions || presetOptions.length === 0}
           >
-            {jobOptions?.presets && jobOptions.presets.length > 0 ? null : (
+            {presetOptions.length > 0 ? null : (
               <option value="">No presets available</option>
             )}
-            {jobOptions?.presets?.map((preset) => (
-              <option key={preset} value={preset}>
-                {preset}
+            {presetOptions.map((preset) => (
+              <option key={preset.id} value={preset.id}>
+                {preset.label}
               </option>
             ))}
           </select>
