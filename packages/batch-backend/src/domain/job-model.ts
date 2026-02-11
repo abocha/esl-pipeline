@@ -19,6 +19,10 @@ export interface JobRecord {
   promptPackageId?: string | null;
   draftId?: string | null;
   preset?: string | null;
+  learningPresetId?: string | null;
+  learningPresetVersion?: string | null;
+  promptSnapshotVersion?: string | null;
+  promptAlias?: string | null;
   withTts?: boolean | null;
   upload?: JobUploadOption | null;
   voiceId?: string | null;

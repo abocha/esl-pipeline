@@ -32,6 +32,10 @@ CREATE TABLE IF NOT EXISTS jobs (
   md TEXT NULL,
   md_storage_uri TEXT NULL,
   preset TEXT NULL,
+  learning_preset_id TEXT NULL,
+  learning_preset_version TEXT NULL,
+  prompt_snapshot_version TEXT NULL,
+  prompt_alias TEXT NULL,
   with_tts BOOLEAN NULL,
   upload TEXT NULL,
   voice_id TEXT NULL,
@@ -194,6 +198,10 @@ ALTER TABLE jobs ADD COLUMN IF NOT EXISTS transcript_id UUID NULL;
 ALTER TABLE jobs ADD COLUMN IF NOT EXISTS prompt_package_id UUID NULL;
 ALTER TABLE jobs ADD COLUMN IF NOT EXISTS draft_id UUID NULL;
 ALTER TABLE jobs ADD COLUMN IF NOT EXISTS md_storage_uri TEXT NULL;
+ALTER TABLE jobs ADD COLUMN IF NOT EXISTS learning_preset_id TEXT NULL;
+ALTER TABLE jobs ADD COLUMN IF NOT EXISTS learning_preset_version TEXT NULL;
+ALTER TABLE jobs ADD COLUMN IF NOT EXISTS prompt_snapshot_version TEXT NULL;
+ALTER TABLE jobs ADD COLUMN IF NOT EXISTS prompt_alias TEXT NULL;
 ALTER TABLE jobs ADD COLUMN IF NOT EXISTS auto_publish BOOLEAN DEFAULT FALSE;
 ALTER TABLE jobs ALTER COLUMN md DROP NOT NULL;
 ALTER TABLE jobs DROP CONSTRAINT IF EXISTS jobs_user_id_fkey;

@@ -179,7 +179,7 @@ Implement Preset V2 core structure so one trusted `general-english` preset can s
   - DB-first persistence.
   - minimal frontend wiring (no full Preset Workspace UI yet).
   - dual-accept compatibility for legacy preset ids + Learning Preset ids.
-- [ ] Preset V2 contract surfaces mapped to implementation files.
+- [x] Preset V2 contract surfaces mapped to implementation files.
 
 ### File Map (Primary)
 
@@ -392,6 +392,7 @@ Recent evidence:
 - 2026-02-10 | WS0-C | added Anytype unreachable retry with actionable errors | n/a | merged | commit `6387fa7`
 - 2026-02-10 | WS0-C | md-validator accepts spaced media directive URLs | n/a | merged | commit `38d349c`
 - 2026-02-10 | WS0-D | improved Anytype published HTML visuals | n/a | merged | commit `1156b73`
+- 2026-02-11 | WS2A-S1 | WS2A-S1 done: contracts + DB schema plumbing for Learning Preset provenance landed with compatibility preserved. | `rg -n "learningPreset|promptSnapshot|promptAlias|preset" packages/contracts packages/batch-backend/src`; `pnpm --filter @esl-pipeline/contracts typecheck`; `pnpm --filter @esl-pipeline/batch-backend test -- application.job-dto.test.ts` | pass | local workspace
 
 ## Weekly Closeout Checklist
 

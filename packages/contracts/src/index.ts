@@ -34,9 +34,17 @@ export interface JobOptionsPayload {
   cefrDefault?: CefrLevel;
 }
 
+export interface LearningPresetProvenance {
+  learningPresetId?: string | null;
+  learningPresetVersion?: string | null;
+  promptSnapshotVersion?: string | null;
+  promptAlias?: string | null;
+}
+
 export interface SubmitJobRequest {
   md: string;
   preset?: string;
+  learningPresetId?: string;
   withTts?: boolean;
   forceTts?: boolean;
   notionDatabase?: string;
@@ -50,6 +58,7 @@ export interface SubmitJobRequest {
 
 export interface JobConfigOverrides {
   preset?: string;
+  learningPresetId?: string;
   notionDatabase?: string;
   publishTarget?: PublishTarget;
   withTts?: boolean;
@@ -71,6 +80,10 @@ export interface JobStatusDto {
   promptPackageId: string | null;
   draftId: string | null;
   preset: string | null;
+  learningPresetId?: string | null;
+  learningPresetVersion?: string | null;
+  promptSnapshotVersion?: string | null;
+  promptAlias?: string | null;
   withTts: boolean | null;
   voiceId: string | null;
   upload: JobUploadOption | null;
@@ -183,6 +196,7 @@ export interface JobEventPayload {
   error?: string | null;
   finishedAt?: string | null;
   ttsStrategy?: TtsStrategy | null;
+  learningPresetId?: string | null;
   md?: string | null;
   mdStorageUri?: string | null;
   notionUrl?: string | null;
