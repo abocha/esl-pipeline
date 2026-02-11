@@ -33,10 +33,10 @@
 
 ## Current Sprint Focus
 
-- Active workstream: `WS2A Preset plumbing MVP`.
-- This week objective: land Preset V2 plumbing in contracts/backend/frontend with compatibility.
-- Today `Now` task (30-90 min): complete `WS2A-S4` only.
-- Success for today: preview gate stays enforced in the existing HTML renderer publish path.
+- Active workstream: `WS2A Preset plumbing MVP closeout`.
+- This week objective: close WS2A with passing evidence and keep WS2B explicitly deferred.
+- Today `Now` task (30-90 min): complete `WS2A-S5` only.
+- Success for today: WS2A done criteria are fully checked with command evidence logged.
 
 ## Delivery Model (Locked)
 
@@ -57,7 +57,7 @@ Rules:
 | WS0 Delivered foundation lane | `complete` | historical | historical | none |
 | WS1 CEFR baseline presets | `complete` | W1 (2026-02-09) | W3 (2026-03-01) | none |
 | WS6 Readiness instrumentation (minimal first) | `complete` | W1 (2026-02-09) | W4 (2026-03-08) | WS1 metric hooks merged |
-| WS2A Preset plumbing MVP | `active` | W4 (2026-03-02) | W7 (2026-03-29) | WS1 + WS6 complete |
+| WS2A Preset plumbing MVP | `complete` | W4 (2026-03-02) | W7 (2026-03-29) | WS1 + WS6 complete |
 | WS2B Direct LLM generation | `deferred` | W8 (2026-03-30) | W9 (2026-04-12) | WS2A complete |
 | WS3 TTS abstraction + fallback | `parked` | W10 (2026-04-13) | W12 (2026-05-03) | WS2B seam pattern stable |
 | WS5 Cost and quota policy | `parked` | W11 (2026-04-20) | W13 (2026-05-10) | WS2B + WS3 usage telemetry available |
@@ -159,7 +159,7 @@ Expose source-grounded readiness metrics for weekly product review.
 
 ---
 
-## WS2A Execution Card: Preset Plumbing MVP (Active)
+## WS2A Execution Card: Preset Plumbing MVP (Complete)
 
 ### Objective
 
@@ -276,17 +276,17 @@ Implement Preset V2 core structure so one trusted `general-english` preset can s
 
 ### WS2A Done Criteria
 
-- [ ] Preset V2 model is canonical and routed.
-- [ ] Baseline prompt is explicitly locked to `docs/templates/hw_prompt_v4-2_clean.md`.
-- [ ] Immutable snapshot + alias policy is documented.
-- [ ] DB-first Learning Preset persistence is implemented for WS2A surfaces.
-- [ ] Dual-accept compatibility works for legacy preset ids and Learning Preset ids.
+- [x] Preset V2 model is canonical and routed.
+- [x] Baseline prompt is explicitly locked to `docs/templates/hw_prompt_v4-2_clean.md`.
+- [x] Immutable snapshot + alias policy is documented.
+- [x] DB-first Learning Preset persistence is implemented for WS2A surfaces.
+- [x] Dual-accept compatibility works for legacy preset ids and Learning Preset ids.
 - [x] Backend routes/services return Learning Preset provenance fields.
 - [x] Frontend minimal flow consumes Learning Preset metadata without regression.
 - [x] Preview requirement is enforced through HTML renderer path before publish.
-- [ ] General English-only scope lock remains explicit.
-- [ ] Targeted contracts/backend/frontend tests pass.
-- [ ] WS2B defer gate is explicit and enforced in tracker.
+- [x] General English-only scope lock remains explicit.
+- [x] Targeted contracts/backend/frontend tests pass.
+- [x] WS2B defer gate is explicit and enforced in tracker.
 
 ---
 
@@ -298,11 +298,11 @@ Remove manual copy-paste dependency with backend generation endpoint + frontend 
 
 ### Status
 
-- `deferred` until WS2A is complete.
+- `deferred` until remaining WS2B start-gate items are checked.
 
 ### Start Gate (Mandatory)
 
-- [ ] WS2A done criteria all checked.
+- [x] WS2A done criteria all checked.
 - [ ] Preset V2 surfaces stabilized.
 - [ ] Chosen low-cost model/provider path documented.
 
@@ -396,6 +396,7 @@ Recent evidence:
 - 2026-02-11 | WS2A-S2 | WS2A-S2 done: backend accepts Learning Preset ids, preserves legacy preset compatibility, and returns provenance fields. | `rg -n "learningPresetId|presets|job-options|materialize|jobOverrides" packages/batch-backend/src`; `pnpm --filter @esl-pipeline/batch-backend test -- application.get-job-options.test.ts`; `pnpm --filter @esl-pipeline/batch-backend test -- application.submit-job.test.ts application.draft.test.ts`; `pnpm --filter @esl-pipeline/batch-backend test -- transport.http-server.integration.test.ts` | pass | local workspace
 - 2026-02-11 | WS2A-S3 | WS2A-S3 done: minimal frontend wiring uses Learning Preset metadata and submits canonical ids when available. | `rg -n "learningPreset|preset|materializeDraft|getJobOptions" packages/batch-frontend/src`; `pnpm --filter @esl-pipeline/batch-frontend test -- MinimalAssignment.test.tsx` | pass | local workspace
 - 2026-02-11 | WS2A-S4 | WS2A-S4 done: preview gate is enforced through existing HTML rendering path before publish. | `rg -n "preview|html|render|publish" packages/anytype-adapter packages/batch-frontend/src`; `pnpm --filter @esl-pipeline/anytype-adapter test`; `pnpm --filter @esl-pipeline/batch-frontend test -- MinimalAssignment.test.tsx` | pass | local workspace
+- 2026-02-11 | WS2A-S5 | WS2A complete: Learning Preset plumbing shipped across contracts/backend/frontend with passing tests and WS2B still deferred. | `pnpm --filter @esl-pipeline/contracts typecheck`; `pnpm --filter @esl-pipeline/batch-backend test`; `pnpm --filter @esl-pipeline/batch-frontend test`; `rg -n "WS2A|general-english|deferred|WS2B|learning preset" docs/reference` | pass | local workspace
 
 ## Weekly Closeout Checklist
 

@@ -22,6 +22,12 @@
 5. Architecture must support adding more tracks later without rewrites.
 6. Direct LLM generation is deferred until preset plumbing MVP is complete.
 
+## Execution Status (Current)
+
+1. WS2A Preset plumbing MVP is complete across contracts/backend/frontend.
+2. WS2B Direct LLM generation remains explicitly deferred.
+3. MVP scope lock remains unchanged: `general-english` only in this phase.
+
 ## WS2A-S1 Locked Decisions
 
 1. Canonical term: `Learning Preset`.
@@ -192,12 +198,12 @@ Required release metadata per promotion:
 
 ## WS2 Split Decision (Locked)
 
-1. `WS2A`: Preset plumbing MVP (active now).
-2. `WS2B`: Direct LLM generation (deferred until WS2A complete).
+1. `WS2A`: Preset plumbing MVP (complete).
+2. `WS2B`: Direct LLM generation (deferred).
 
 Gate:
 
-- WS2B cannot start until WS2A acceptance criteria are met.
+- WS2B cannot start until WS2A acceptance criteria are met and WS2B start-gate items in the tracker are checked.
 
 ## Acceptance Criteria (Preset Plumbing MVP)
 
