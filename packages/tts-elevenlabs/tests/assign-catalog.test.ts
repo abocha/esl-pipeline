@@ -1,0 +1,47 @@
+import { chmod, mkdtemp, writeFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+
+import { describe, expect, it, vi } from 'vitest';
+
+describe('loadVoicesCatalog error policy', () => {
+  it('returns empty voices when catalog file is missing', async () => {
+    vi.resetModules();
+    const { loadVoicesCatalog } = await import('../src/assign.js');
+    const missingPath = join(tmpdir(), `missing-voices-${Date.now()}.json`);
+    const result = await loadVoicesCatalog(missingPath);
+    expect(result).toEqual({ voices: [] });
+  });
+
+  it('fails fast when catalog JSON is invalid', async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'tts-assign-'));
+    const invalidPath = join(dir, 'voices.json');
+    await writeFile(invalidPath, '{ invalid-json', 'utf8');
+
+    vi.resetModules();
+    const { loadVoicesCatalog } = await import('../src/assign.js');
+    await expect(loadVoicesCatalog(invalidPath)).rejects.toThrow(
+      /Invalid ElevenLabs voices catalog JSON/,
+    );
+  });
+
+  it.skipIf(process.platform === 'win32')(
+    'throws on unreadable catalog file instead of silently falling back',
+    async () => {
+      const dir = await mkdtemp(join(tmpdir(), 'tts-assign-'));
+      const unreadablePath = join(dir, 'voices.json');
+      await writeFile(unreadablePath, JSON.stringify({ voices: [] }), 'utf8');
+      await chmod(unreadablePath, 0o000);
+
+      try {
+        vi.resetModules();
+        const { loadVoicesCatalog } = await import('../src/assign.js');
+        await expect(loadVoicesCatalog(unreadablePath)).rejects.toThrow(
+          /Failed to read ElevenLabs voices catalog/,
+        );
+      } finally {
+        await chmod(unreadablePath, 0o600);
+      }
+    },
+  );
+});

@@ -2,6 +2,8 @@ import { readFile } from 'node:fs/promises';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
+import { ConfigurationError, InfrastructureError } from '@esl-pipeline/contracts';
+
 export interface VoiceCatalog {
   voices: Voice[];
 }
@@ -39,14 +41,27 @@ export async function loadVoicesCatalog(
     if (!candidate) continue;
     try {
       const raw = await readFile(candidate, 'utf8');
-      cachedCatalog = JSON.parse(raw) as VoiceCatalog;
+      try {
+        cachedCatalog = JSON.parse(raw) as VoiceCatalog;
+      } catch (error: unknown) {
+        const message = error instanceof Error ? error.message : String(error);
+        throw new ConfigurationError(
+          `Invalid ElevenLabs voices catalog JSON at "${candidate}": ${message}`,
+        );
+      }
       return cachedCatalog;
     } catch (error: unknown) {
       const code = (error as NodeJS.ErrnoException | undefined)?.code;
-      if (code === 'ENOENT' || code === 'EISDIR') {
+      if (code === 'ENOENT' || code === 'EISDIR' || code === 'ENOTDIR') {
         continue;
       }
-      continue;
+      if (error instanceof ConfigurationError) {
+        throw error;
+      }
+      const message = error instanceof Error ? error.message : String(error);
+      throw new InfrastructureError(
+        `Failed to read ElevenLabs voices catalog at "${candidate}": ${message}`,
+      );
     }
   }
 

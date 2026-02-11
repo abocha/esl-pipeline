@@ -15,7 +15,8 @@ import {
 } from '@esl-pipeline/contracts';
 import { type Frontmatter, extractFrontmatter, extractStudyText } from '@esl-pipeline/pmd';
 
-import { type VoiceCatalog, loadVoicesCatalog } from './assign.js';
+import { loadVoicesCatalog } from './assign.js';
+import { estimateDurationFromFileSize } from './audioDuration.js';
 import { buildDialogueHash, synthesizeDialogue } from './dialogue.js';
 import { getElevenClient } from './eleven.js';
 import {
@@ -257,7 +258,8 @@ function toDialogueInputs(
 }
 
 async function buildDialogueMp3(
-  segments: StudyTextSegment[],
+  inputs: DialogueInput[],
+  hash: string,
   voiceAssignments: Map<string, string>,
   voiceSummaries: BuildStudyTextResult['voices'],
   options: BuildStudyTextOptions,
@@ -266,8 +268,6 @@ async function buildDialogueMp3(
   frontmatter: Frontmatter,
 ): Promise<BuildStudyTextResult> {
   const { dialogueLanguage, dialogueStability, dialogueSeed } = options;
-  const inputs = toDialogueInputs(segments, voiceAssignments);
-
   // Synthesize dialogue
   const result = await synthesizeDialogue(
     {
@@ -284,7 +284,7 @@ async function buildDialogueMp3(
   );
 
   // Rename file to include student name prefix
-  const fileName = buildOutputFileName(result.hash, frontmatter);
+  const fileName = buildOutputFileName(hash, frontmatter);
   const targetPath = resolve(outputDir, fileName);
 
   // If the target path is different from the generated path, rename it
@@ -309,7 +309,7 @@ async function buildDialogueMp3(
   return {
     path: targetPath,
     duration: result.duration,
-    hash: result.hash,
+    hash,
     voices: voiceSummaries,
     voiceAssignments: Object.fromEntries(voiceAssignments),
   };
@@ -340,7 +340,7 @@ export async function buildStudyTextMp3(
   if (opts.defaultVoiceId) {
     voiceMap.default = opts.defaultVoiceId;
   }
-  const catalog = await loadVoicesCatalog().catch<VoiceCatalog>(() => ({ voices: [] }));
+  const catalog = await loadVoicesCatalog();
   const speakers = collectSpeakers(segments, frontmatter);
   const assignments = await resolveSpeakerVoices({
     speakers,
@@ -394,17 +394,17 @@ export async function buildStudyTextMp3(
   if (selectedStrategy === 'dialogue') {
     const apiKey = process.env.ELEVENLABS_API_KEY || process.env.ELEVENLABS_API_TOKEN || '';
     const outputDir = resolve(opts.outPath || dirname(mdPath));
+    const inputs = toDialogueInputs(segments, speakerVoiceMap);
+    const hash = buildDialogueHash(inputs, {
+      modelId: 'eleven_v3',
+      languageCode: opts.dialogueLanguage,
+      stability: opts.dialogueStability,
+      seed: opts.dialogueSeed,
+    });
+    const fileName = buildOutputFileName(hash, frontmatter);
+    const targetPath = resolve(outputDir, fileName);
 
     if (opts.preview) {
-      const inputs = toDialogueInputs(segments, speakerVoiceMap);
-      const hash = buildDialogueHash(inputs, {
-        modelId: 'eleven_v3',
-        languageCode: opts.dialogueLanguage,
-        stability: opts.dialogueStability,
-        seed: opts.dialogueSeed,
-      });
-      const fileName = buildOutputFileName(hash, frontmatter);
-      const targetPath = resolve(outputDir, fileName);
       return {
         path: targetPath,
         duration: undefined,
@@ -416,8 +416,29 @@ export async function buildStudyTextMp3(
 
     await mkdir(outputDir, { recursive: true });
 
+    if (!opts.force) {
+      try {
+        const cachedStats = await stat(targetPath);
+        if (cachedStats.size > 0) {
+          return {
+            path: targetPath,
+            duration: await approximateDurationFromFile(
+              targetPath,
+              resolveOutputFormat(opts.outputFormat),
+            ),
+            hash,
+            voices: voiceSummaries,
+            voiceAssignments: Object.fromEntries(speakerVoiceMap),
+          };
+        }
+      } catch {
+        // File doesn't exist, proceed with generation
+      }
+    }
+
     return buildDialogueMp3(
-      segments,
+      inputs,
+      hash,
       speakerVoiceMap,
       voiceSummaries,
       opts,
@@ -456,7 +477,7 @@ export async function buildStudyTextMp3(
         return {
           path: targetPath,
           hash,
-          duration: calculateApproxDuration(cachedStats.size),
+          duration: calculateApproxDuration(cachedStats.size, resolveOutputFormat(opts.outputFormat)),
           voices: voiceSummaries,
         };
       }
@@ -620,7 +641,7 @@ export async function buildStudyTextMp3(
 
   return {
     path: targetPath,
-    duration: await approximateDurationFromFile(targetPath),
+    duration: await approximateDurationFromFile(targetPath, resolveOutputFormat(opts.outputFormat)),
     hash,
     voices: voiceSummaries,
   };
@@ -817,23 +838,24 @@ async function fileExistsNonEmpty(path: string): Promise<boolean> {
   }
 }
 
-async function approximateDurationFromFile(filePath: string): Promise<number | undefined> {
+async function approximateDurationFromFile(
+  filePath: string,
+  outputFormat: TtsOutputFormat = DEFAULT_OUTPUT_FORMAT,
+): Promise<number | undefined> {
   try {
     const info = await stat(filePath);
     if (info.size === 0) return undefined;
-    return calculateApproxDuration(info.size);
+    return calculateApproxDuration(info.size, outputFormat);
   } catch {
     return undefined;
   }
 }
 
-function calculateApproxDuration(bytes: number): number | undefined {
-  const match = DEFAULT_OUTPUT_FORMAT.match(/mp3_\d+_(\d+)/);
-  if (!match) return undefined;
-  const kbps = Number.parseInt(match[1] ?? '', 10);
-  if (!kbps) return undefined;
-  const seconds = (bytes * 8) / (kbps * 1000);
-  return Math.round(seconds * 100) / 100;
+function calculateApproxDuration(
+  bytes: number,
+  outputFormat: TtsOutputFormat = DEFAULT_OUTPUT_FORMAT,
+): number | undefined {
+  return estimateDurationFromFileSize(bytes, outputFormat);
 }
 
 function wrapSynthesisError(error: unknown, voiceId: string, text: string): Error {
@@ -850,6 +872,7 @@ function wait(ms: number): Promise<void> {
 export { resolveFfmpegPath, FfmpegNotFoundError } from './ffmpeg.js';
 export { loadVoicesCatalog } from './assign.js';
 export type { VoiceCatalog } from './assign.js';
+export { DEFAULT_VOICES_OUT, syncVoices } from './syncVoices.js';
 
 // Export types for orchestrator integration
 export type {

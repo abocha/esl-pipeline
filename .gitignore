@@ -8,6 +8,7 @@ coverage/
 .DS_Store
 
 packages/orchestrator/configs/wizard.defaults.json
+packages/orchestrator/configs/elevenlabs.voices.json
 packages/orchestrator/configs/students/*.json
 !packages/orchestrator/configs/students/default.json
 docs/templates

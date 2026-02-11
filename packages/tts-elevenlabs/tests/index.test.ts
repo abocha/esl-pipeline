@@ -4,6 +4,7 @@ import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import * as assign from '../src/assign.js';
+import * as dialogue from '../src/dialogue.js';
 import * as eleven from '../src/eleven.js';
 import * as ffm from '../src/ffmpeg.js';
 import { buildStudyTextMp3, hashStudyText } from '../src/index.js';
@@ -102,6 +103,19 @@ const mockConcat = () =>
   vi.spyOn(ffm, 'concatMp3Segments').mockImplementation(async (_segments, outFile) => {
     await writeFile(outFile, 'mock-audio');
   });
+
+const mockDialogue = () =>
+  vi
+    .spyOn(dialogue, 'synthesizeDialogue')
+    .mockImplementation(async (_options, _apiKey, outputDir) => {
+      const audioPath = join(outputDir, 'mock-dialogue.mp3');
+      await writeFile(audioPath, 'mock-audio');
+      return {
+        audioPath,
+        duration: 5.2,
+        hash: 'a1b2c3d4e5f6789012345678901234567890abcdef1234567890abcdef123456',
+      };
+    });
 
 afterEach(() => {
   vi.restoreAllMocks();
@@ -665,5 +679,101 @@ default: voice_id_default
     expect(result.hash).toHaveLength(64);
     expect(convertMock).not.toHaveBeenCalled();
     expect(concatSpy).toHaveBeenCalled();
+  });
+
+  it('reuses generated dialogue audio when file already exists and force=false', async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'tts-'));
+    const tempMdPath = join(dir, 'dialogue-cache.md');
+    const tempVoiceMapPath = join(dir, 'voices.yml');
+    await writeFixture(
+      tempMdPath,
+      `
+---
+title: Dialogue Cache
+student: Anna
+input_type: dialogue
+
+---
+
+:::study-text
+Alex: Hi there.
+Mara: Hello.
+:::
+    `,
+    );
+    await writeFixture(
+      tempVoiceMapPath,
+      `
+Alex: voice_id_1
+Mara: voice_id_2
+default: voice_id_default
+    `,
+    );
+
+    const dialogueSpy = mockDialogue();
+    const first = await buildStudyTextMp3(tempMdPath, {
+      voiceMapPath: tempVoiceMapPath,
+      outPath: dir,
+      ttsStrategy: 'dialogue',
+    });
+    expect(first.hash).toHaveLength(64);
+    expect(dialogueSpy).toHaveBeenCalledTimes(1);
+
+    dialogueSpy.mockClear();
+    const second = await buildStudyTextMp3(tempMdPath, {
+      voiceMapPath: tempVoiceMapPath,
+      outPath: dir,
+      ttsStrategy: 'dialogue',
+      force: false,
+    });
+    expect(second.path).toBe(first.path);
+    expect(dialogueSpy).not.toHaveBeenCalled();
+  });
+
+  it('regenerates dialogue audio when force=true', async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'tts-'));
+    const tempMdPath = join(dir, 'dialogue-force.md');
+    const tempVoiceMapPath = join(dir, 'voices.yml');
+    await writeFixture(
+      tempMdPath,
+      `
+---
+title: Dialogue Force
+student: Anna
+input_type: dialogue
+
+---
+
+:::study-text
+Alex: Hi there.
+Mara: Hello.
+:::
+    `,
+    );
+    await writeFixture(
+      tempVoiceMapPath,
+      `
+Alex: voice_id_1
+Mara: voice_id_2
+default: voice_id_default
+    `,
+    );
+
+    const dialogueSpy = mockDialogue();
+    await buildStudyTextMp3(tempMdPath, {
+      voiceMapPath: tempVoiceMapPath,
+      outPath: dir,
+      ttsStrategy: 'dialogue',
+    });
+    expect(dialogueSpy).toHaveBeenCalledTimes(1);
+
+    dialogueSpy.mockClear();
+    await buildStudyTextMp3(tempMdPath, {
+      voiceMapPath: tempVoiceMapPath,
+      outPath: dir,
+      ttsStrategy: 'dialogue',
+      force: true,
+    });
+    expect(dialogueSpy).toHaveBeenCalledTimes(1);
   });
 });
