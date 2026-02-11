@@ -1,5 +1,6 @@
 import copy from 'copy-to-clipboard';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { createStaticPageHtml } from '@esl-pipeline/html-publisher/rendering';
 
 import type {
   DraftResponse,
@@ -111,6 +112,19 @@ function normalizePresetSelection(
   return availablePresets[0] ?? '';
 }
 
+function hashDraftText(value: string): string {
+  let hash = 2166136261;
+  for (const char of value) {
+    const codePoint = char.codePointAt(0);
+    if (codePoint === undefined) {
+      continue;
+    }
+    hash ^= codePoint;
+    hash = Math.imul(hash, 16777619);
+  }
+  return (hash >>> 0).toString(16);
+}
+
 interface SelectablePresetOption {
   id: string;
   label: string;
@@ -219,6 +233,10 @@ export const MinimalAssignment: React.FC = () => {
   const [rerunDialogueStability, setRerunDialogueStability] = useState('');
   const [rerunDialogueSeed, setRerunDialogueSeed] = useState('');
   const [cancelReason, setCancelReason] = useState('');
+  const [previewHtml, setPreviewHtml] = useState<string | null>(null);
+  const [previewError, setPreviewError] = useState<string | null>(null);
+  const [previewing, setPreviewing] = useState(false);
+  const [lastPreviewedDraftHash, setLastPreviewedDraftHash] = useState<string | null>(null);
 
   const presetOptions = useMemo(() => buildSelectablePresetOptions(jobOptions), [jobOptions]);
   const presetOptionIds = useMemo(() => presetOptions.map((preset) => preset.id), [presetOptions]);
@@ -299,6 +317,10 @@ export const MinimalAssignment: React.FC = () => {
     setUploadCacheNotice(null);
     setResumeError(null);
     setPinnedJobExpanded(true);
+    setPreviewHtml(null);
+    setPreviewError(null);
+    setPreviewing(false);
+    setLastPreviewedDraftHash(null);
   }, []);
 
   const loadPromptOptions = useCallback(async () => {
@@ -470,6 +492,9 @@ export const MinimalAssignment: React.FC = () => {
       setActionSuccess(null);
       setUploadError(null);
       setUploadCacheNotice(null);
+      setPreviewHtml(null);
+      setPreviewError(null);
+      setLastPreviewedDraftHash(null);
 
       try {
         const status = await getJobStatus(jobId);
@@ -962,6 +987,12 @@ export const MinimalAssignment: React.FC = () => {
 
   const handlePublish = async () => {
     setPublishError(null);
+    const normalizedDraft = draftText.trim();
+    const draftHash = hashDraftText(normalizedDraft);
+    if (lastPreviewedDraftHash !== draftHash) {
+      setPublishError('Preview current draft before publishing.');
+      return;
+    }
     setPublishing(true);
 
     try {
@@ -1002,6 +1033,35 @@ export const MinimalAssignment: React.FC = () => {
       setPublishError(message);
     } finally {
       setPublishing(false);
+    }
+  };
+
+  const handlePreviewDraft = async () => {
+    const normalizedDraft = draftText.trim();
+    if (!normalizedDraft) {
+      setPreviewError('Paste the assignment markdown first.');
+      return;
+    }
+    setPreviewing(true);
+    setPreviewError(null);
+    try {
+      const validationResult = await runValidation();
+      if (validationResult.errors && validationResult.errors.length > 0) {
+        setPreviewHtml(null);
+        setLastPreviewedDraftHash(null);
+        setPreviewError('Fix validation errors before preview.');
+        return;
+      }
+      const html = await createStaticPageHtml(normalizedDraft, 'Assignment Preview');
+      setPreviewHtml(html);
+      setLastPreviewedDraftHash(hashDraftText(normalizedDraft));
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Unable to render preview.';
+      setPreviewError(message);
+      setPreviewHtml(null);
+      setLastPreviewedDraftHash(null);
+    } finally {
+      setPreviewing(false);
     }
   };
 
@@ -1195,6 +1255,12 @@ export const MinimalAssignment: React.FC = () => {
     [describeResumeJobStudent],
   );
   const canPublish = promptReady && draftText.trim().length > 0 && !publishing;
+  const draftPreviewHash = useMemo(() => hashDraftText(draftText.trim()), [draftText]);
+  const previewReadyForCurrentDraft =
+    draftText.trim().length > 0 &&
+    Boolean(previewHtml) &&
+    lastPreviewedDraftHash === draftPreviewHash;
+  const canPublishWithPreview = canPublish && previewReadyForCurrentDraft;
   const jobPublishTarget = jobStatus?.publishTarget ?? publishTarget;
   const publishUrl =
     jobPublishTarget === 'anytype'
@@ -1677,10 +1743,25 @@ export const MinimalAssignment: React.FC = () => {
             type="button"
             className="minimal-primary"
             onClick={() => void handlePublish()}
-            disabled={!canPublish}
+            disabled={!canPublishWithPreview}
           >
             {publishing ? 'Publishing...' : 'Publish assignment'}
           </button>
+        </div>
+        <div className="minimal-inline">
+          <button
+            type="button"
+            className="minimal-secondary"
+            onClick={() => void handlePreviewDraft()}
+            disabled={previewing || draftText.trim().length === 0}
+          >
+            {previewing ? 'Rendering preview...' : 'Preview current draft'}
+          </button>
+          <span className={previewReadyForCurrentDraft ? 'minimal-success' : 'minimal-muted'}>
+            {previewReadyForCurrentDraft
+              ? 'Preview ready for current draft.'
+              : 'Preview required before publish.'}
+          </span>
         </div>
         <label className="minimal-select">
           Preset
@@ -1712,7 +1793,16 @@ export const MinimalAssignment: React.FC = () => {
             <option value="html">HTML page</option>
           </select>
         </label>
-        <p className="minimal-help">Publishes the markdown as a job and approves it.</p>
+        <p className="minimal-help">
+          Preview then publish. Publish is enabled only for the currently previewed draft revision.
+        </p>
+        {previewError ? <p className="minimal-error">{previewError}</p> : null}
+        {previewHtml ? (
+          <details className="minimal-preview" open>
+            <summary>Preview panel</summary>
+            <iframe className="minimal-preview-frame" srcDoc={previewHtml} title="Draft preview" />
+          </details>
+        ) : null}
         {publishError ? <p className="minimal-error">{publishError}</p> : null}
         {jobStatus?.state === 'failed' && jobStatus.error ? (
           <p className="minimal-error">{describeJobFailureReason(jobStatus)}</p>
@@ -2188,6 +2278,31 @@ export const MinimalAssignment: React.FC = () => {
           padding-left: var(--space-4);
           display: grid;
           gap: var(--space-1);
+        }
+
+        .minimal-preview {
+          border: 1px solid var(--border-light);
+          border-radius: var(--radius-lg);
+          background: var(--bg-secondary);
+          padding: var(--space-2) var(--space-3);
+          display: flex;
+          flex-direction: column;
+          gap: var(--space-2);
+        }
+
+        .minimal-preview summary {
+          cursor: pointer;
+          font-size: var(--text-sm);
+          color: var(--text-secondary);
+          font-weight: 600;
+        }
+
+        .minimal-preview-frame {
+          width: 100%;
+          min-height: 480px;
+          border: 1px solid var(--border-medium);
+          border-radius: var(--radius-md);
+          background: white;
         }
 
         a {

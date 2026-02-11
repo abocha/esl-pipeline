@@ -17,6 +17,11 @@
       "import": "./dist/src/index.js",
       "default": "./dist/src/index.js"
     },
+    "./rendering": {
+      "types": "./dist/src/rendering.d.ts",
+      "import": "./dist/src/rendering.js",
+      "default": "./dist/src/rendering.js"
+    },
     "./package.json": "./package.json"
   },
   "main": "./dist/src/index.js",

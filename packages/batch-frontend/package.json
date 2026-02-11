@@ -14,6 +14,7 @@
   },
   "dependencies": {
     "@esl-pipeline/contracts": "workspace:*",
+    "@esl-pipeline/html-publisher": "workspace:*",
     "axios": "^1.13.2",
     "copy-to-clipboard": "^3.3.3",
     "react": "^19.2.0",

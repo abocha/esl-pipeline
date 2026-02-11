@@ -1,6 +1,7 @@
 import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { createStaticPageHtml } from '@esl-pipeline/html-publisher/rendering';
 
 import * as api from '../../utils/api';
 import { MinimalAssignment } from './MinimalAssignment';
@@ -59,6 +60,10 @@ vi.mock('../shared/DropZone', () => ({
 
 vi.mock('../shared/UploadProgress', () => ({
   UploadProgress: ({ progress }: { progress: number }) => <div>Upload progress: {progress}%</div>,
+}));
+
+vi.mock('@esl-pipeline/html-publisher/rendering', () => ({
+  createStaticPageHtml: vi.fn().mockResolvedValue('<html><body><h1>Preview</h1></body></html>'),
 }));
 
 const now = '2026-02-05T00:00:00.000Z';
@@ -132,11 +137,19 @@ async function publishAssignmentFlow(user: ReturnType<typeof userEvent.setup>) {
     throw new Error('Expected draft textarea to be rendered');
   }
   await user.type(draftTextarea, '# Final draft');
+  await previewCurrentDraft(user);
 
   await user.click(screen.getByRole('button', { name: /Publish assignment/i }));
 
   await waitFor(() => {
     expect(screen.getAllByText(/Job ID: job-1/i).length).toBeGreaterThan(0);
+  });
+}
+
+async function previewCurrentDraft(user: ReturnType<typeof userEvent.setup>) {
+  await user.click(screen.getByRole('button', { name: /Preview current draft/i }));
+  await waitFor(() => {
+    expect(screen.getByText('Preview ready for current draft.')).toBeTruthy();
   });
 }
 
@@ -373,6 +386,9 @@ describe('MinimalAssignment', () => {
       makeTranscript({
         text: 'Saved transcript text',
       }),
+    );
+    vi.mocked(createStaticPageHtml).mockResolvedValue(
+      '<html><body><h1>Preview</h1></body></html>',
     );
   });
 
@@ -704,6 +720,7 @@ describe('MinimalAssignment', () => {
     const presetSelect = await screen.findByRole('combobox', { name: /Preset/i });
     expect((presetSelect as HTMLSelectElement).value).toBe('');
 
+    await previewCurrentDraft(user);
     await user.click(screen.getByRole('button', { name: /Publish assignment/i }));
 
     await waitFor(() => {
@@ -797,6 +814,7 @@ describe('MinimalAssignment', () => {
     expect(await screen.findByDisplayValue('# Draft markdown')).toBeTruthy();
     expect(await screen.findByDisplayValue('Prompt package output')).toBeTruthy();
 
+    await previewCurrentDraft(user);
     await user.click(screen.getByRole('button', { name: /Publish assignment/i }));
 
     await waitFor(() => {
@@ -822,6 +840,7 @@ describe('MinimalAssignment', () => {
       expect((presetSelect as HTMLSelectElement).value).toBe('b2-default');
     });
 
+    await previewCurrentDraft(user);
     await user.click(screen.getByRole('button', { name: /Publish assignment/i }));
     await waitFor(() => {
       expect(api.materializeDraft).toHaveBeenCalledTimes(2);
@@ -934,6 +953,7 @@ describe('MinimalAssignment', () => {
       expect((presetSelect as HTMLSelectElement).value).toBe('general-english');
     });
 
+    await previewCurrentDraft(user);
     await user.click(screen.getByRole('button', { name: /Publish assignment/i }));
 
     await waitFor(() => {
@@ -1143,6 +1163,7 @@ describe('MinimalAssignment', () => {
     await user.type(draftTextarea, '# Final draft');
     await user.selectOptions(screen.getByRole('combobox', { name: /Preset/i }), 'b2-default');
 
+    await previewCurrentDraft(user);
     await user.click(screen.getByRole('button', { name: /Publish assignment/i }));
 
     await waitFor(() => {
@@ -1210,6 +1231,7 @@ describe('MinimalAssignment', () => {
       'general-english-intensive',
     );
 
+    await previewCurrentDraft(user);
     await user.click(screen.getByRole('button', { name: /Publish assignment/i }));
 
     await waitFor(() => {
@@ -1223,6 +1245,40 @@ describe('MinimalAssignment', () => {
     });
     const call = vi.mocked(api.materializeDraft).mock.calls.at(-1)?.[1];
     expect(call?.jobOverrides).not.toHaveProperty('preset');
+  });
+
+  it('requires preview before publish and requires re-preview after draft edits', async () => {
+    const user = userEvent.setup();
+    render(<MinimalAssignment />);
+
+    await user.click(screen.getByRole('button', { name: /Drop audio file/i }));
+
+    await waitFor(() => {
+      expect(screen.getByDisplayValue('Student transcript text')).toBeTruthy();
+    });
+
+    await user.click(screen.getByRole('button', { name: /Generate prompt/i }));
+
+    await waitFor(() => {
+      expect(screen.getByDisplayValue('Prompt package output')).toBeTruthy();
+    });
+
+    const draftTextarea = screen.getByRole('textbox', { name: /Draft markdown/i });
+    await user.type(draftTextarea, '# Preview gated draft');
+
+    const publishButton = screen.getByRole('button', { name: /Publish assignment/i });
+    expect((publishButton as HTMLButtonElement).disabled).toBe(true);
+    expect(screen.getByText('Preview required before publish.')).toBeTruthy();
+    expect(api.materializeDraft).not.toHaveBeenCalled();
+
+    await previewCurrentDraft(user);
+    expect((publishButton as HTMLButtonElement).disabled).toBe(false);
+
+    await user.type(draftTextarea, '\nOne more line');
+    await waitFor(() => {
+      expect((publishButton as HTMLButtonElement).disabled).toBe(true);
+    });
+    expect(screen.getByText('Preview required before publish.')).toBeTruthy();
   });
 
   it('queues a default rerun audio action for the current job', async () => {
