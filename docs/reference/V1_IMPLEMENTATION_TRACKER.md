@@ -34,9 +34,9 @@
 ## Current Sprint Focus
 
 - Active workstream: `WS2A Preset plumbing MVP`.
-- This week objective: finalize Preset V2 architecture contract and execution surfaces.
+- This week objective: land Preset V2 plumbing in contracts/backend/frontend with compatibility.
 - Today `Now` task (30-90 min): complete `WS2A-S1` only.
-- Success for today: baseline prompt + versioning + model strategy are locked and documented as canonical.
+- Success for today: Learning Preset contracts + DB schema plumbing are merged with passing targeted tests.
 
 ## Delivery Model (Locked)
 
@@ -174,96 +174,118 @@ Implement Preset V2 core structure so one trusted `general-english` preset can s
 - [x] WS1 complete.
 - [x] WS6 complete.
 - [x] MVP scope lock accepted: `general-english` content only.
+- [x] Baseline prompt/versioning/model strategy decisions are explicitly documented.
+- [x] WS2A implementation direction is locked:
+  - DB-first persistence.
+  - minimal frontend wiring (no full Preset Workspace UI yet).
+  - dual-accept compatibility for legacy preset ids + Learning Preset ids.
 - [ ] Preset V2 contract surfaces mapped to implementation files.
-- [ ] Baseline prompt/versioning/model strategy decisions are explicitly documented.
 
 ### File Map (Primary)
 
-- `docs/reference/PRESET_V2_SPEC.md`
-- `docs/reference/PRODUCT_NORTH_STAR_AND_READINESS.md`
-- `docs/reference/V1_IMPLEMENTATION_TRACKER.md`
-- `docs/templates/hw_prompt_v4-2_clean.md`
 - `packages/contracts/src/index.ts`
+- `packages/batch-backend/schema.sql`
+- `packages/batch-backend/src/infrastructure/db.ts`
+- `packages/batch-backend/src/domain/job-repository.ts`
+- `packages/batch-backend/src/domain/job-model.ts`
 - `packages/batch-backend/src/application/get-job-options.ts`
+- `packages/batch-backend/src/application/submit-job.ts`
+- `packages/batch-backend/src/application/materialize-draft.ts`
+- `packages/batch-backend/src/application/job-dto.ts`
 - `packages/batch-backend/src/transport/extended-routes.ts`
 - `packages/batch-frontend/src/utils/api.ts`
 - `packages/batch-frontend/src/ui/minimal/MinimalAssignment.tsx`
+- `packages/batch-frontend/src/ui/minimal/MinimalAssignment.test.tsx`
 - `packages/anytype-adapter/src/rendering.ts`
 
 ### Session Slices (Do In Order)
 
-#### WS2A-S1 Terminology + Model Lock (30-90 min)
+#### WS2A-S1 Contracts + DB Schema Plumbing (60-120 min)
 
-- Goal: lock Preset V2 definition (`preset = prompt + metadata + output schema contract`).
-- Required WS2A-S1 decisions:
-  - `Learning Preset` terminology is canonical.
-  - baseline prompt is `docs/templates/hw_prompt_v4-2_clean.md`.
-  - governance is immutable snapshots + stable alias.
-  - strategy is universal prompt core + runtime scaffolding.
+- Goal: introduce Learning Preset and provenance types/columns without breaking current flows.
+- Edit:
+  - `packages/contracts/src/index.ts`
+  - `packages/batch-backend/schema.sql`
+  - `packages/batch-backend/src/infrastructure/db.ts`
+  - `packages/batch-backend/src/domain/job-model.ts`
+  - `packages/batch-backend/src/domain/job-repository.ts`
+- Command:
+  - `rg -n "learningPreset|promptSnapshot|promptAlias|preset" packages/contracts packages/batch-backend/src`
+  - `pnpm --filter @esl-pipeline/contracts typecheck`
+  - `pnpm --filter @esl-pipeline/batch-backend test -- application.job-dto.test.ts`
+- Evidence line template:
+  - `WS2A-S1 done: contracts + DB schema plumbing for Learning Preset provenance landed with compatibility preserved.`
+
+#### WS2A-S2 Backend Wiring (60-120 min)
+
+- Goal: wire Learning Preset id/provenance through options, submit, materialize, and status DTOs.
+- Edit:
+  - `packages/batch-backend/src/application/get-job-options.ts`
+  - `packages/batch-backend/src/application/submit-job.ts`
+  - `packages/batch-backend/src/application/materialize-draft.ts`
+  - `packages/batch-backend/src/application/job-dto.ts`
+  - `packages/batch-backend/src/transport/extended-routes.ts`
+- Command:
+  - `rg -n "learningPresetId|presets|job-options|materialize|jobOverrides" packages/batch-backend/src`
+  - `pnpm --filter @esl-pipeline/batch-backend test -- application.get-job-options.test.ts`
+  - `pnpm --filter @esl-pipeline/batch-backend test -- application.submit-job.test.ts application.draft.test.ts`
+  - `pnpm --filter @esl-pipeline/batch-backend test -- transport.http-server.integration.test.ts`
+- Evidence line template:
+  - `WS2A-S2 done: backend accepts Learning Preset ids, preserves legacy preset compatibility, and returns provenance fields.`
+
+#### WS2A-S3 Frontend Minimal Wiring (60-120 min)
+
+- Goal: consume Learning Preset metadata in existing minimal workflow without introducing a new workspace UI.
+- Edit:
+  - `packages/batch-frontend/src/utils/api.ts`
+  - `packages/batch-frontend/src/ui/minimal/MinimalAssignment.tsx`
+  - `packages/batch-frontend/src/ui/minimal/MinimalAssignment.test.tsx`
+- Command:
+  - `rg -n "learningPreset|preset|materializeDraft|getJobOptions" packages/batch-frontend/src`
+  - `pnpm --filter @esl-pipeline/batch-frontend test -- MinimalAssignment.test.tsx`
+- Evidence line template:
+  - `WS2A-S3 done: minimal frontend wiring uses Learning Preset metadata and submits canonical ids when available.`
+
+#### WS2A-S4 Preview Gate Enforcement (45-90 min)
+
+- Goal: ensure publish flow keeps preview requirement through internal HTML renderer path.
+- Edit:
+  - `packages/anytype-adapter/src/rendering.ts` (if API changes are required)
+  - `packages/batch-frontend/src/ui/minimal/MinimalAssignment.tsx`
+  - `packages/batch-frontend/src/ui/minimal/MinimalAssignment.test.tsx`
+- Command:
+  - `rg -n "preview|html|render|publish" packages/anytype-adapter packages/batch-frontend/src`
+  - `pnpm --filter @esl-pipeline/anytype-adapter test`
+  - `pnpm --filter @esl-pipeline/batch-frontend test -- MinimalAssignment.test.tsx`
+- Evidence line template:
+  - `WS2A-S4 done: preview gate is enforced through existing HTML rendering path before publish.`
+
+#### WS2A-S5 WS2A Closeout + Tracker Sync (30-60 min)
+
+- Goal: close WS2A with code+tests evidence and keep WS2B explicitly deferred.
 - Edit:
   - `docs/reference/PRESET_V2_SPEC.md`
-  - `docs/reference/PRODUCT_NORTH_STAR_AND_READINESS.md`
-  - `docs/reference/V1_IMPLEMENTATION_TRACKER.md`
-  - `START_HERE.md`
-  - `docs/playbooks/RESTART_TOMORROW.md`
-- Command:
-  - `rg -n "hw_prompt_v4-2_clean|immutable snapshots|stable alias|universal prompt|runtime scaffolding|WS2A|WS2B" docs/reference START_HERE.md docs/playbooks/RESTART_TOMORROW.md`
-- Evidence line template:
-  - `WS2A-S1 done: Learning Preset term, baseline prompt, versioning policy, and universal scaffolding strategy documented and routed.`
-
-#### WS2A-S2 Preset Surface Mapping (30-90 min)
-
-- Goal: document exactly where Preset V2 will be surfaced in contracts/backend/frontend.
-- Edit:
-  - `docs/reference/PRESET_V2_SPEC.md`
   - `docs/reference/V1_IMPLEMENTATION_TRACKER.md`
 - Command:
-  - `rg -n "presets|cefr|job-options|materialize" packages/contracts packages/batch-backend packages/batch-frontend`
+  - `pnpm --filter @esl-pipeline/contracts typecheck`
+  - `pnpm --filter @esl-pipeline/batch-backend test`
+  - `pnpm --filter @esl-pipeline/batch-frontend test`
+  - `rg -n "WS2A|general-english|deferred|WS2B|learning preset" docs/reference`
 - Evidence line template:
-  - `WS2A-S2 done: implementation surface map locked with file-level references.`
-
-#### WS2A-S3 Prompt Workspace MVP Contract (30-90 min)
-
-- Goal: define prompt/preset management workflow for MVP (without full catalog build).
-- Research note:
-  - capture Schema-Guided Reasoning investigation path for weaker-model reliability (planning artifact only in this phase).
-- Edit:
-  - `docs/reference/PRESET_V2_SPEC.md`
-  - `docs/reference/V1_IMPLEMENTATION_TRACKER.md`
-- Command:
-  - `rg -n "Prompt Workspace|output schema|version" docs/reference`
-- Evidence line template:
-  - `WS2A-S3 done: Prompt Workspace MVP lifecycle and versioning contract documented.`
-
-#### WS2A-S4 Preview Contract (30-90 min)
-
-- Goal: lock requirement that draft preview uses internal HTML renderer path before publish.
-- Edit:
-  - `docs/reference/PRESET_V2_SPEC.md`
-  - `docs/reference/V1_IMPLEMENTATION_TRACKER.md`
-- Command:
-  - `rg -n "preview|html|render" docs/reference packages/anytype-adapter`
-- Evidence line template:
-  - `WS2A-S4 done: preview contract locked to internal HTML renderer path.`
-
-#### WS2A-S5 MVP Exit Check (30-60 min)
-
-- Goal: confirm docs are decision-complete enough for implementation without re-planning.
-- Edit:
-  - `docs/reference/V1_IMPLEMENTATION_TRACKER.md`
-- Command:
-  - `rg -n "WS2A|general-english|deferred|WS2B" docs/reference/V1_IMPLEMENTATION_TRACKER.md`
-- Evidence line template:
-  - `WS2A complete: preset plumbing MVP scope and implementation contracts are decision-complete.`
+  - `WS2A complete: Learning Preset plumbing shipped across contracts/backend/frontend with passing tests and WS2B still deferred.`
 
 ### WS2A Done Criteria
 
 - [ ] Preset V2 model is canonical and routed.
 - [ ] Baseline prompt is explicitly locked to `docs/templates/hw_prompt_v4-2_clean.md`.
 - [ ] Immutable snapshot + alias policy is documented.
-- [ ] Prompt Workspace MVP contract is documented.
-- [ ] Preview requirement is documented and tied to HTML renderer path.
-- [ ] General English-only scope lock is explicit across docs.
+- [ ] DB-first Learning Preset persistence is implemented for WS2A surfaces.
+- [ ] Dual-accept compatibility works for legacy preset ids and Learning Preset ids.
+- [ ] Backend routes/services return Learning Preset provenance fields.
+- [ ] Frontend minimal flow consumes Learning Preset metadata without regression.
+- [ ] Preview requirement is enforced through HTML renderer path before publish.
+- [ ] General English-only scope lock remains explicit.
+- [ ] Targeted contracts/backend/frontend tests pass.
 - [ ] WS2B defer gate is explicit and enforced in tracker.
 
 ---
