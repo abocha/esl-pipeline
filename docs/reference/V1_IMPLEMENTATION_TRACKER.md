@@ -5,7 +5,7 @@
 - Audience: founder-maintainer and AI pair.
 - Read Time: 12 minutes.
 - Authority Level: V1 execution source of truth.
-- Last Updated: 2026-02-10.
+- Last Updated: 2026-02-11.
 - Reconciled commit window: `91cfb55..HEAD`.
 
 ## Purpose
@@ -27,13 +27,16 @@
 1. MVP ships one trusted preset content track only: `general-english`.
 2. Current goal is preset plumbing and architecture, not broad preset catalog authoring.
 3. Pedagogic preset authoring can proceed in parallel with tutors, but must not block core structure delivery.
+4. Canonical baseline prompt in this phase: `docs/templates/hw_prompt_v4-2_clean.md`.
+5. Prompt governance is immutable snapshots + stable alias.
+6. Model strategy is one universal prompt core + runtime scaffolding.
 
 ## Current Sprint Focus
 
 - Active workstream: `WS2A Preset plumbing MVP`.
 - This week objective: finalize Preset V2 architecture contract and execution surfaces.
 - Today `Now` task (30-90 min): complete `WS2A-S1` only.
-- Success for today: Preset V2 terminology/model/scope lock are documented and routed as canonical.
+- Success for today: baseline prompt + versioning + model strategy are locked and documented as canonical.
 
 ## Delivery Model (Locked)
 
@@ -172,12 +175,14 @@ Implement Preset V2 core structure so one trusted `general-english` preset can s
 - [x] WS6 complete.
 - [x] MVP scope lock accepted: `general-english` content only.
 - [ ] Preset V2 contract surfaces mapped to implementation files.
+- [ ] Baseline prompt/versioning/model strategy decisions are explicitly documented.
 
 ### File Map (Primary)
 
 - `docs/reference/PRESET_V2_SPEC.md`
 - `docs/reference/PRODUCT_NORTH_STAR_AND_READINESS.md`
 - `docs/reference/V1_IMPLEMENTATION_TRACKER.md`
+- `docs/templates/hw_prompt_v4-2_clean.md`
 - `packages/contracts/src/index.ts`
 - `packages/batch-backend/src/application/get-job-options.ts`
 - `packages/batch-backend/src/transport/extended-routes.ts`
@@ -190,14 +195,21 @@ Implement Preset V2 core structure so one trusted `general-english` preset can s
 #### WS2A-S1 Terminology + Model Lock (30-90 min)
 
 - Goal: lock Preset V2 definition (`preset = prompt + metadata + output schema contract`).
+- Required WS2A-S1 decisions:
+  - `Learning Preset` terminology is canonical.
+  - baseline prompt is `docs/templates/hw_prompt_v4-2_clean.md`.
+  - governance is immutable snapshots + stable alias.
+  - strategy is universal prompt core + runtime scaffolding.
 - Edit:
   - `docs/reference/PRESET_V2_SPEC.md`
   - `docs/reference/PRODUCT_NORTH_STAR_AND_READINESS.md`
   - `docs/reference/V1_IMPLEMENTATION_TRACKER.md`
+  - `START_HERE.md`
+  - `docs/playbooks/RESTART_TOMORROW.md`
 - Command:
-  - `rg -n "Preset V2|general-english|WS2A|WS2B" docs/reference`
+  - `rg -n "hw_prompt_v4-2_clean|immutable snapshots|stable alias|universal prompt|runtime scaffolding|WS2A|WS2B" docs/reference START_HERE.md docs/playbooks/RESTART_TOMORROW.md`
 - Evidence line template:
-  - `WS2A-S1 done: Preset V2 terminology and MVP scope lock documented and routed.`
+  - `WS2A-S1 done: Learning Preset term, baseline prompt, versioning policy, and universal scaffolding strategy documented and routed.`
 
 #### WS2A-S2 Preset Surface Mapping (30-90 min)
 
@@ -213,6 +225,8 @@ Implement Preset V2 core structure so one trusted `general-english` preset can s
 #### WS2A-S3 Prompt Workspace MVP Contract (30-90 min)
 
 - Goal: define prompt/preset management workflow for MVP (without full catalog build).
+- Research note:
+  - capture Schema-Guided Reasoning investigation path for weaker-model reliability (planning artifact only in this phase).
 - Edit:
   - `docs/reference/PRESET_V2_SPEC.md`
   - `docs/reference/V1_IMPLEMENTATION_TRACKER.md`
@@ -245,6 +259,8 @@ Implement Preset V2 core structure so one trusted `general-english` preset can s
 ### WS2A Done Criteria
 
 - [ ] Preset V2 model is canonical and routed.
+- [ ] Baseline prompt is explicitly locked to `docs/templates/hw_prompt_v4-2_clean.md`.
+- [ ] Immutable snapshot + alias policy is documented.
 - [ ] Prompt Workspace MVP contract is documented.
 - [ ] Preview requirement is documented and tied to HTML renderer path.
 - [ ] General English-only scope lock is explicit across docs.
@@ -363,6 +379,7 @@ Recent evidence:
 - [ ] Tracker updated with evidence line(s).
 - [ ] If non-roadmap capability shipped, append it to WS0 with commit hash.
 - [ ] `general-english` scope lock still holds for current phase.
+- [ ] Baseline prompt lock still points to `docs/templates/hw_prompt_v4-2_clean.md`.
 - [ ] `docs/playbooks/WEEKLY_PRODUCT_REVIEW_TEMPLATE.md` completed.
 
 ## Related

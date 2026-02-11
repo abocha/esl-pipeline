@@ -42,7 +42,8 @@ The product is successful when it consistently does all three:
 - Preset plumbing MVP:
   - learning preset model (`prompt + metadata + output contract`),
   - Prompt Workspace foundations,
-  - one trusted shipped preset content track: `general-english`.
+  - one trusted shipped preset content track: `general-english`,
+  - canonical baseline prompt: `docs/templates/hw_prompt_v4-2_clean.md`.
 - Direct LLM generation through backend API (deferred until preset plumbing MVP passes acceptance criteria).
 - At least one low-cost TTS fallback in addition to premium providers.
 - Basic CRM-lite ledger:
@@ -65,7 +66,7 @@ These seams must exist before aggressive feature expansion:
 2. Speech provider abstraction (`SpeechProvider`).
 3. Cost policy layer (quotas, per-tutor limits, budget hard stops).
 4. Billing/lesson ledger domain (packages, consumption events, payment records).
-5. Preset model versioning (so CEFR defaults can evolve safely).
+5. Preset model versioning and prompt governance (so learning presets can evolve safely).
 
 Suggested package ownership:
 
@@ -76,12 +77,13 @@ Suggested package ownership:
 
 ## 8-Week Execution Roadmap
 
-### Weeks 1-2: CEFR Foundation + Provider Seams
+### Weeks 1-2: Preset Foundation + Provider Seams
 
 - Implement Preset V2 plumbing:
   - learning preset model,
   - Prompt Workspace baseline,
-  - normalized assignment output schema contract.
+  - normalized assignment output schema contract,
+  - immutable prompt snapshot + stable alias governance.
 - Ship one trusted content track: `general-english`.
 - Keep existing flow stable; no broad UX expansion yet.
 
@@ -95,11 +97,13 @@ Exit criteria:
 - Add Prompt Workspace editing/versioning workflow for learning presets.
 - Add draft preview requirement in assignment workflow using internal HTML preview renderer path.
 - Validate preset output against schema contract before publish.
+- Lock universal prompt + runtime scaffolding strategy for weaker-model resilience.
 
 Exit criteria:
 
 - Tutor can reliably run preset-driven assignment flow with preview and validation.
 - Preset version provenance is captured in assignment flow.
+- Baseline prompt governance (snapshot + alias) is operationally documented.
 
 ### Weeks 5-6: Direct LLM Generation (Post-Plumbing)
 
