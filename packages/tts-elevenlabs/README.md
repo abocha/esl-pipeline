@@ -52,6 +52,11 @@ pnpm --filter @esl-pipeline/tts-elevenlabs exec node dist/bin/voices.js \
   --out /absolute/path/to/packages/orchestrator/configs/elevenlabs.voices.json
 ```
 
+The generated catalog now includes:
+- `generatedAt`
+- `capabilities` (provider-backed normalized role/gender/age/accent/style sets)
+- `voices`
+
 ## Programmatic API
 
 ```ts
@@ -85,5 +90,5 @@ const result = await buildStudyTextMp3('/abs/path/lesson.md', {
 - `path: string`
 - `duration?: number`
 - `hash: string`
-- `voices: Array<{ speaker; voiceId; source; score?; voiceName?; gender?; accent?; useCase? }>`
+- `voices: Array<{ speaker; voiceId; source; score?; voiceName?; gender?; accent?; useCase?; selectionReason?; capabilityMatches?; capabilityMismatches? }>`
 - `voiceAssignments?: Record<string, string>`

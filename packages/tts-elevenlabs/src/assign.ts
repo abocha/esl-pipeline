@@ -3,8 +3,12 @@ import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { ConfigurationError, InfrastructureError } from '@esl-pipeline/contracts';
+import type { VoiceCapabilitiesSnapshot } from '@esl-pipeline/contracts';
+import { getVoiceCapabilities } from './voiceCapabilities.js';
 
 export interface VoiceCatalog {
+  generatedAt?: string;
+  capabilities?: VoiceCapabilitiesSnapshot;
   voices: Voice[];
 }
 
@@ -13,6 +17,9 @@ export interface Voice {
   name: string;
   category?: string | null;
   labels?: Record<string, unknown>;
+  useCase?: string;
+  verifiedLanguages?: { language?: string; locale?: string }[];
+  previewUrl?: string | null;
   preview_url?: string | null;
 }
 
@@ -42,7 +49,18 @@ export async function loadVoicesCatalog(
     try {
       const raw = await readFile(candidate, 'utf8');
       try {
-        cachedCatalog = JSON.parse(raw) as VoiceCatalog;
+        const parsed = JSON.parse(raw) as VoiceCatalog;
+        const voices = Array.isArray(parsed?.voices) ? parsed.voices : undefined;
+        if (!voices) {
+          throw new ConfigurationError(
+            `Invalid ElevenLabs voices catalog JSON at "${candidate}": missing "voices" array`,
+          );
+        }
+        cachedCatalog = {
+          generatedAt: parsed.generatedAt,
+          capabilities: parsed.capabilities,
+          voices,
+        };
       } catch (error: unknown) {
         const message = error instanceof Error ? error.message : String(error);
         throw new ConfigurationError(
@@ -52,7 +70,7 @@ export async function loadVoicesCatalog(
       return cachedCatalog;
     } catch (error: unknown) {
       const code = (error as NodeJS.ErrnoException | undefined)?.code;
-      if (code === 'ENOENT' || code === 'EISDIR' || code === 'ENOTDIR') {
+      if (code === 'ENOENT') {
         continue;
       }
       if (error instanceof ConfigurationError) {
@@ -66,6 +84,13 @@ export async function loadVoicesCatalog(
   }
 
   return { voices: [] };
+}
+
+export async function loadVoiceCapabilities(
+  file = 'packages/orchestrator/configs/elevenlabs.voices.json',
+): Promise<VoiceCapabilitiesSnapshot> {
+  const catalog = await loadVoicesCatalog(file);
+  return getVoiceCapabilities(catalog);
 }
 
 function getVoiceCatalogCandidates(file: string): (string | null)[] {
@@ -109,8 +134,27 @@ function guessGenderFromName(name: string): SpeakerMeta['gender'] {
 }
 
 function getLabel(voice: Voice, key: string): string {
-  const v = voice?.labels?.[key];
-  return typeof v === 'string' ? v.toLowerCase() : '';
+  const candidates = [key];
+  if (key === 'use_case') candidates.push('useCase');
+  if (key === 'preview_url') candidates.push('previewUrl');
+
+  for (const candidate of candidates) {
+    const direct = voice?.labels?.[candidate];
+    if (typeof direct === 'string') return direct.toLowerCase();
+  }
+
+  if (key === 'use_case' && typeof voice.useCase === 'string') {
+    return voice.useCase.toLowerCase();
+  }
+
+  if (key === 'language' && Array.isArray(voice.verifiedLanguages)) {
+    const language = voice.verifiedLanguages
+      .map((entry) => (entry.language ?? entry.locale ?? '').trim().toLowerCase())
+      .find((entry) => entry.length > 0);
+    if (language) return language;
+  }
+
+  return '';
 }
 
 const ROLE_USE_CASE_HINTS: Record<NonNullable<SpeakerMeta['role']>, string[]> = {

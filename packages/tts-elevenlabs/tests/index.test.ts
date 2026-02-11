@@ -776,4 +776,53 @@ default: voice_id_default
     });
     expect(dialogueSpy).toHaveBeenCalledTimes(1);
   });
+
+  it('does not reuse dialogue cache when outputFormat changes', async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'tts-'));
+    const tempMdPath = join(dir, 'dialogue-format-cache.md');
+    const tempVoiceMapPath = join(dir, 'voices.yml');
+    await writeFixture(
+      tempMdPath,
+      `
+---
+title: Dialogue Format Cache
+student: Anna
+input_type: dialogue
+
+---
+
+:::study-text
+Alex: Hi there.
+Mara: Hello.
+:::
+    `,
+    );
+    await writeFixture(
+      tempVoiceMapPath,
+      `
+Alex: voice_id_1
+Mara: voice_id_2
+default: voice_id_default
+    `,
+    );
+
+    const dialogueSpy = mockDialogue();
+    await buildStudyTextMp3(tempMdPath, {
+      voiceMapPath: tempVoiceMapPath,
+      outPath: dir,
+      ttsStrategy: 'dialogue',
+      outputFormat: 'mp3_22050_32',
+    });
+    expect(dialogueSpy).toHaveBeenCalledTimes(1);
+
+    dialogueSpy.mockClear();
+    await buildStudyTextMp3(tempMdPath, {
+      voiceMapPath: tempVoiceMapPath,
+      outPath: dir,
+      ttsStrategy: 'dialogue',
+      force: false,
+      outputFormat: 'mp3_44100_128',
+    });
+    expect(dialogueSpy).toHaveBeenCalledTimes(1);
+  });
 });

@@ -2,6 +2,8 @@ import { randomUUID } from 'node:crypto';
 import { createHash } from 'node:crypto';
 import fs from 'node:fs/promises';
 
+import type { VoiceCapabilitiesSnapshot } from '@esl-pipeline/contracts';
+
 import type { BatchBackendConfig } from '../config/env.js';
 import { loadConfig } from '../config/env.js';
 import type { PromptPackageRecord } from '../domain/prompt-package-model.js';
@@ -31,6 +33,7 @@ import {
 } from '../infrastructure/transcription-storage.js';
 import { stitchPromptPayload } from './prompt-assembly.js';
 import { PromptOptionError, resolvePromptSelection } from './prompt-options.js';
+import { materializePromptTemplateWithCapabilities } from './prompt-voice-capabilities.js';
 import { resolveStudentProfileBindingAt } from './student-profile-bindings.js';
 import { getStudentProfileById } from './student-profiles-store.js';
 
@@ -82,6 +85,11 @@ export interface PromptPackageResponse {
     currentTemplateHash: string | null;
     currentTemplateRevisionId: string | null;
     currentTemplateUpdatedAt: string | null;
+  };
+  voiceCapabilitiesSnapshot?: {
+    generatedAt: string;
+    hash: string;
+    capabilities: VoiceCapabilitiesSnapshot;
   };
   createdAt: string;
   updatedAt: string;
@@ -246,9 +254,13 @@ export async function createPromptPackage(
     }),
     readStorage.getText(transcript.storageUri),
   ]);
+  const templateMaterialization = await materializePromptTemplateWithCapabilities({
+    templateId: selection.templateId,
+    templateContent: artifacts.template.content,
+  });
 
   const payload = stitchPromptPayload({
-    template: artifacts.template.content,
+    template: templateMaterialization.materializedTemplate,
     profile: artifacts.profile.content,
     transcript: transcriptText,
     notes: params.notes,
@@ -278,6 +290,9 @@ export async function createPromptPackage(
     resolvedTemplateUpdatedAt: artifacts.template.revision.createdAt,
     resolvedTemplateVersionLabel: artifacts.template.revision.versionLabel,
     resolvedTemplateStatus: artifacts.template.revision.status,
+    resolvedVoiceCapabilitiesHash: templateMaterialization.capabilitiesHash,
+    resolvedVoiceCapabilitiesGeneratedAt: templateMaterialization.capabilitiesGeneratedAt,
+    resolvedVoiceCapabilitiesSnapshot: templateMaterialization.capabilitiesSnapshot,
     templateVersion: selection.templateId,
     notes: params.notes ?? null,
     storageUri: stored.uri,
@@ -300,6 +315,11 @@ export function toPromptPackageResponse(
     promptPackage.resolvedTemplateId.length > 0 &&
     typeof promptPackage.resolvedTemplateHash === 'string' &&
     promptPackage.resolvedTemplateHash.length > 0;
+  const hasVoiceCapabilitiesSnapshot =
+    typeof promptPackage.resolvedVoiceCapabilitiesHash === 'string' &&
+    promptPackage.resolvedVoiceCapabilitiesHash.length > 0 &&
+    promptPackage.resolvedVoiceCapabilitiesGeneratedAt instanceof Date &&
+    !Number.isNaN(promptPackage.resolvedVoiceCapabilitiesGeneratedAt.getTime());
 
   return {
     id: promptPackage.id,
@@ -336,6 +356,24 @@ export function toPromptPackageResponse(
               : null,
             resolvedTemplateVersionLabel: promptPackage.resolvedTemplateVersionLabel ?? null,
             resolvedTemplateStatus: promptPackage.resolvedTemplateStatus ?? null,
+          },
+        }
+      : {}),
+    ...(hasVoiceCapabilitiesSnapshot
+      ? {
+          voiceCapabilitiesSnapshot: {
+            generatedAt: (promptPackage.resolvedVoiceCapabilitiesGeneratedAt as Date).toISOString(),
+            hash: promptPackage.resolvedVoiceCapabilitiesHash as string,
+            capabilities:
+              promptPackage.resolvedVoiceCapabilitiesSnapshot ??
+              ({
+                generatedAt: (promptPackage.resolvedVoiceCapabilitiesGeneratedAt as Date).toISOString(),
+                role: ['narrator', 'teacher', 'student', 'system'],
+                gender: ['male', 'female', 'neutral', 'child'],
+                age: ['child', 'teen', 'young', 'adult', 'middle_aged', 'senior', 'universal'],
+                accent: [],
+                style: [],
+              } as VoiceCapabilitiesSnapshot),
           },
         }
       : {}),

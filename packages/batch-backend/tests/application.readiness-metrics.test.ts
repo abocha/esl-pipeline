@@ -12,6 +12,14 @@ describe('application/readiness-metrics', () => {
       medianPublishLatencyMs: 15432.5,
       firstSessionTotalUsers: 5,
       firstSessionSucceededUsers: 4,
+      voiceValidationFailures: 2,
+      voiceStrictMismatches: 1,
+      voiceProviderErrors: 1,
+      voiceProviderErrorBreakdown: {
+        provider_rate_limit: 1,
+      },
+      voiceFallbackSelections: null,
+      voiceReuseSelections: null,
     });
 
     const from = new Date('2024-03-01T00:00:00.000Z');
@@ -43,9 +51,20 @@ describe('application/readiness-metrics', () => {
       totalUsers: 5,
       rate: 0.8,
     });
+    expect(result.voiceAlignment).toEqual({
+      validationFailures: 2,
+      strictMismatches: 1,
+      providerErrors: 1,
+      providerErrorBreakdown: {
+        provider_rate_limit: 1,
+      },
+      fallbackSelections: null,
+      reuseSelections: null,
+    });
     expect(result.sources.publishSuccessRate.source).toContain('jobs table');
     expect(result.sources.medianPublishLatencyMs.calculation).toContain('median');
     expect(result.sources.firstSessionSuccessProxy.window).toContain('request window');
+    expect(result.sources.voiceProviderErrorRate.calculation).toContain('provider tagged failures');
 
     const call = readiness.mock.calls[0]?.[0];
     expect(call?.userId).toBe('8f8d9e53-bc3a-4658-8960-fbf4ff8cb84f');
@@ -62,6 +81,12 @@ describe('application/readiness-metrics', () => {
       medianPublishLatencyMs: null,
       firstSessionTotalUsers: 0,
       firstSessionSucceededUsers: 0,
+      voiceValidationFailures: 0,
+      voiceStrictMismatches: 0,
+      voiceProviderErrors: 0,
+      voiceProviderErrorBreakdown: {},
+      voiceFallbackSelections: null,
+      voiceReuseSelections: null,
     });
 
     const now = new Date('2024-06-15T12:00:00.000Z');
@@ -80,6 +105,6 @@ describe('application/readiness-metrics', () => {
     expect(result.publishSuccess.rate).toBeNull();
     expect(result.firstSessionSuccessProxy.rate).toBeNull();
     expect(result.publishLatencyMs.median).toBeNull();
+    expect(result.voiceAlignment?.providerErrors).toBe(0);
   });
 });
-

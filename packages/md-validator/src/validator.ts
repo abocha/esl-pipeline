@@ -1,7 +1,15 @@
 import matter from 'gray-matter';
 import { readFile } from 'node:fs/promises';
+import { dirname, resolve } from 'node:path';
 import { z } from 'zod';
 
+import type {
+  ContentSource,
+  MarkdownValidationResponse,
+  SpeakerProfile,
+  StudyTextType,
+  VoiceCapabilitiesSnapshot,
+} from '@esl-pipeline/contracts';
 import type {
   PmdBlock,
   PmdDirectiveBlock,
@@ -19,19 +27,23 @@ export interface ValidateOptions {
   content?: string;
 }
 
-export interface ValidateResult {
-  ok: boolean;
-  errors: string[];
-  warnings: string[];
-  meta?: {
-    title: string;
-    student: string;
-    level: string;
-    topic: string | string[];
-    input_type: string;
-    speaker_labels?: string[];
-  };
-}
+export type ValidateResult = MarkdownValidationResponse;
+
+const SpeakerProfileSchema = z
+  .object({
+    id: z.string().trim().min(1),
+    display_name: z.string().trim().min(1).optional(),
+    role: z.enum(['narrator', 'teacher', 'student', 'system']).optional(),
+    gender: z.enum(['male', 'female', 'neutral', 'child']).optional(),
+    age: z.enum(['child', 'teen', 'young', 'adult', 'middle_aged', 'senior', 'universal']).optional(),
+    accent: z.string().trim().min(1).optional(),
+    style: z.string().trim().min(1).optional(),
+    voice: z.string().trim().min(1).optional(),
+  })
+  .catchall(z.unknown());
+
+const FrontInputTypeSchema = z.enum(['generate', 'authentic', 'dialogue', 'monologue']);
+const StudyTextTypeSchema = z.enum(['monologue', 'dialogue']);
 
 const FrontSchema = z.object({
   title: z.string().min(1),
@@ -39,14 +51,39 @@ const FrontSchema = z.object({
   level: z.string().min(1),
   // Topic is always a single string (preprocess arrays to join with commas)
   topic: z.string().min(1),
-  input_type: z.string().min(1),
-  speaker_labels: z.array(z.string().min(1)).optional(),
+  input_type: FrontInputTypeSchema,
+  study_text_type: StudyTextTypeSchema.optional(),
+  speaker_labels: z.array(z.string().trim().min(1)).optional(),
   // New fields for advanced Notion features
   icon: z.emoji().optional(),
   cover: z.url().optional(),
   properties: z.record(z.string(), z.unknown()).optional(),
-  speaker_profiles: z.array(z.record(z.string(), z.unknown())).optional(), // Already in fixtures, add for completeness
+  speaker_profiles: z.array(SpeakerProfileSchema).optional(),
 });
+
+type LegacyInputType = 'dialogue' | 'monologue';
+type FrontInputType = ContentSource | LegacyInputType;
+type ValidationMeta = NonNullable<ValidateResult['meta']>;
+type RawMeta = z.infer<typeof FrontSchema>;
+
+interface VoiceCatalogLike {
+  voices: { id?: string; name?: string; labels?: Record<string, unknown> }[];
+  capabilities?: VoiceCapabilitiesSnapshot;
+}
+
+const DEFAULT_VOICES_PATH = 'packages/orchestrator/configs/elevenlabs.voices.json';
+const WORKSPACE_MARKER = 'pnpm-workspace.yaml';
+const CANONICAL_ROLES = ['narrator', 'teacher', 'student', 'system'] as const;
+const CANONICAL_GENDERS = ['male', 'female', 'neutral', 'child'] as const;
+const CANONICAL_AGES = [
+  'child',
+  'teen',
+  'young',
+  'adult',
+  'middle_aged',
+  'senior',
+  'universal',
+] as const;
 
 interface HeadingRule {
   label: string;
@@ -306,13 +343,474 @@ function isNonBlockingWarning(message: string): boolean {
   return NON_BLOCKING_WARNING_PREFIXES.some((prefix) => message.startsWith(prefix));
 }
 
+function isTruthyFlag(value: string | undefined): boolean {
+  if (!value) return false;
+  const normalized = value.trim().toLowerCase();
+  return normalized === '1' || normalized === 'true' || normalized === 'yes' || normalized === 'on';
+}
+
+function isVoiceAlignmentStrictValidationEnabled(): boolean {
+  return (
+    isTruthyFlag(process.env.VOICE_ALIGNMENT_V2_ENABLED) &&
+    isTruthyFlag(process.env.VOICE_ALIGNMENT_V2_STRICT_VALIDATION)
+  );
+}
+
+function isVoiceAlignmentEnabled(): boolean {
+  return isTruthyFlag(process.env.VOICE_ALIGNMENT_V2_ENABLED);
+}
+
+function classifyShadowMismatch(message: string): string | null {
+  const normalized = message.toLowerCase();
+  if (normalized.includes('input_type') && normalized.includes('legacy')) return 'legacy_input_type';
+  if (normalized.includes('study_text_type is required')) return 'missing_study_text_type';
+  if (normalized.includes('study_text_type') && normalized.includes('conflicts with legacy')) {
+    return 'study_text_type_conflict';
+  }
+  if (normalized.includes('study_text_type') && normalized.includes('does not match study-text')) {
+    return 'study_text_content_mismatch';
+  }
+  if (normalized.includes('speaker_labels are set but speaker_profiles are missing')) {
+    return 'missing_speaker_profiles';
+  }
+  if (normalized.includes('speaker_profiles are set but speaker_labels are missing')) {
+    return 'missing_speaker_labels';
+  }
+  if (normalized.includes('has no matching speaker_profile')) return 'missing_speaker_profile_for_label';
+  if (normalized.includes('speaker_profiles id') && normalized.includes('not present in speaker_labels')) {
+    return 'unmatched_speaker_profile';
+  }
+  if (normalized.includes('does not exist in the current voice catalog')) return 'invalid_speaker_voice';
+  if (normalized.includes('unsupported accent')) return 'unsupported_accent';
+  if (normalized.includes('unsupported style')) return 'unsupported_style';
+  if (normalized.includes('voice catalog') && normalized.includes('unavailable')) return 'catalog_unavailable';
+  return null;
+}
+
+function buildShadowModeDiagnostics(messages: string[]): {
+  enabled: boolean;
+  mismatchClasses: Record<string, number>;
+  mismatchTotal: number;
+} {
+  const mismatchClasses: Record<string, number> = {};
+  for (const message of messages) {
+    const mismatchClass = classifyShadowMismatch(message);
+    if (!mismatchClass) continue;
+    mismatchClasses[mismatchClass] = (mismatchClasses[mismatchClass] ?? 0) + 1;
+  }
+  const mismatchTotal = Object.values(mismatchClasses).reduce((sum, count) => sum + count, 0);
+  return {
+    enabled: true,
+    mismatchClasses,
+    mismatchTotal,
+  };
+}
+
+function normalizeCapabilityToken(value: string): string {
+  return value.trim().toLowerCase().replaceAll(/[\s-]+/g, '_');
+}
+
+function splitCapabilityValues(value: unknown): string[] {
+  if (typeof value !== 'string') return [];
+  return value
+    .split(/[;,/|]/g)
+    .map((item) => item.trim())
+    .filter((item) => item.length > 0);
+}
+
+function normalizeAccent(value: string): string {
+  const normalized = normalizeCapabilityToken(value);
+  if (!normalized) return '';
+  if (normalized.includes('american')) return 'american';
+  if (normalized.includes('british')) return 'british';
+  if (normalized.includes('australian')) return 'australian';
+  if (normalized.includes('canadian')) return 'canadian';
+  if (normalized.includes('irish')) return 'irish';
+  if (normalized.includes('scottish')) return 'scottish';
+  if (normalized.includes('indian')) return 'indian';
+  if (normalized.includes('south_african')) return 'south_african';
+  return normalized;
+}
+
+function normalizeStyle(value: string): string {
+  const normalized = normalizeCapabilityToken(value);
+  if (!normalized) return '';
+  if (normalized.includes('conversation')) return 'conversational';
+  if (normalized.includes('narrat')) return 'narration';
+  if (normalized.includes('character')) return 'characters';
+  return normalized;
+}
+
+function normalizeVoiceCapabilities(
+  capabilities: VoiceCapabilitiesSnapshot,
+): VoiceCapabilitiesSnapshot {
+  return {
+    generatedAt: capabilities.generatedAt,
+    role: [...new Set(capabilities.role.map((value) => normalizeCapabilityToken(value)))].sort() as VoiceCapabilitiesSnapshot['role'],
+    gender: [...new Set(capabilities.gender.map((value) => normalizeCapabilityToken(value)))].sort() as VoiceCapabilitiesSnapshot['gender'],
+    age: [...new Set(capabilities.age.map((value) => normalizeCapabilityToken(value)))].sort() as VoiceCapabilitiesSnapshot['age'],
+    accent: [
+      ...new Set(capabilities.accent.map((value) => normalizeAccent(value)).filter((value) => value.length > 0)),
+    ].sort(),
+    style: [
+      ...new Set(capabilities.style.map((value) => normalizeStyle(value)).filter((value) => value.length > 0)),
+    ].sort(),
+  };
+}
+
+function deriveVoiceCapabilities(catalog: VoiceCatalogLike): VoiceCapabilitiesSnapshot {
+  if (catalog.capabilities) {
+    return normalizeVoiceCapabilities(catalog.capabilities);
+  }
+
+  const accents = new Set<string>();
+  const styles = new Set<string>();
+  const ages = new Set<string>();
+  const genders = new Set<string>();
+
+  for (const voice of catalog.voices) {
+    const labels = voice.labels ?? {};
+    for (const rawAccent of splitCapabilityValues(labels.accent)) {
+      const accent = normalizeAccent(rawAccent);
+      if (accent) accents.add(accent);
+    }
+    for (const rawStyle of [
+      ...splitCapabilityValues(labels.descriptive),
+      ...splitCapabilityValues(labels.style),
+      ...splitCapabilityValues(labels.use_case),
+      ...splitCapabilityValues(labels.useCase),
+    ]) {
+      const style = normalizeStyle(rawStyle);
+      if (style) styles.add(style);
+    }
+    for (const rawAge of splitCapabilityValues(labels.age)) {
+      const age = normalizeCapabilityToken(rawAge);
+      if (CANONICAL_AGES.includes(age as (typeof CANONICAL_AGES)[number])) {
+        ages.add(age);
+      }
+    }
+    for (const rawGender of splitCapabilityValues(labels.gender)) {
+      const gender = normalizeCapabilityToken(rawGender);
+      if (CANONICAL_GENDERS.includes(gender as (typeof CANONICAL_GENDERS)[number])) {
+        genders.add(gender);
+      }
+    }
+  }
+
+  return {
+    generatedAt: new Date().toISOString(),
+    role: [...CANONICAL_ROLES],
+    gender: [...(genders.size > 0 ? genders : CANONICAL_GENDERS)].sort() as VoiceCapabilitiesSnapshot['gender'],
+    age: [...(ages.size > 0 ? ages : CANONICAL_AGES)].sort() as VoiceCapabilitiesSnapshot['age'],
+    accent: [...accents].sort(),
+    style: [...styles].sort(),
+  };
+}
+
+async function fileExists(path: string): Promise<boolean> {
+  try {
+    await readFile(path);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+async function findWorkspaceRoot(startDir: string): Promise<string | null> {
+  let current = resolve(startDir);
+  while (true) {
+    const markerPath = resolve(current, WORKSPACE_MARKER);
+    if (await fileExists(markerPath)) {
+      return current;
+    }
+    const parent = dirname(current);
+    if (parent === current) return null;
+    current = parent;
+  }
+}
+
+async function resolveVoiceCatalogCandidates(rawFile: string): Promise<string[]> {
+  const overridePath = process.env.ELEVENLABS_VOICES_PATH?.trim();
+  const absoluteRawFile = resolve(rawFile);
+  const workspaceRoot = await findWorkspaceRoot(dirname(absoluteRawFile));
+
+  return [
+    ...new Set(
+      [
+        overridePath ? resolve(overridePath) : null,
+        workspaceRoot ? resolve(workspaceRoot, DEFAULT_VOICES_PATH) : null,
+        resolve(process.cwd(), DEFAULT_VOICES_PATH),
+        resolve(dirname(absoluteRawFile), DEFAULT_VOICES_PATH),
+      ].filter(Boolean) as string[],
+    ),
+  ];
+}
+
+async function loadVoiceCatalog(rawFile: string): Promise<{
+  catalog?: VoiceCatalogLike;
+  diagnosticsWarnings: string[];
+}> {
+  const diagnosticsWarnings: string[] = [];
+  const candidates = await resolveVoiceCatalogCandidates(rawFile);
+
+  for (const candidate of candidates) {
+    try {
+      const raw = await readFile(candidate, 'utf8');
+      const parsed = JSON.parse(raw) as VoiceCatalogLike;
+      if (!parsed || typeof parsed !== 'object' || !Array.isArray(parsed.voices)) {
+        diagnosticsWarnings.push(
+          `Voice catalog at "${candidate}" is invalid (missing "voices" array); voice override checks skipped.`,
+        );
+        continue;
+      }
+      return { catalog: parsed, diagnosticsWarnings };
+    } catch (error: unknown) {
+      const err = error as NodeJS.ErrnoException;
+      if (err?.code === 'ENOENT') continue;
+      const message = error instanceof Error ? error.message : String(error);
+      diagnosticsWarnings.push(
+        `Unable to load voice catalog from "${candidate}" (${message}); voice override checks may be incomplete.`,
+      );
+    }
+  }
+
+  diagnosticsWarnings.push('Voice catalog not found; voice override and capability checks were skipped.');
+  return { diagnosticsWarnings };
+}
+
+function normalizeSpeakerToken(value: string): string {
+  return value.trim().toLowerCase();
+}
+
+function pushVoiceValidationMessage(
+  message: string,
+  strictValidation: boolean,
+  errors: string[],
+  warnings: string[],
+  diagnosticsErrors: string[],
+  diagnosticsWarnings: string[],
+): void {
+  if (strictValidation) {
+    errors.push(message);
+    diagnosticsErrors.push(message);
+  } else {
+    warnings.push(message);
+    diagnosticsWarnings.push(message);
+  }
+}
+
+function normalizeMeta(
+  rawMeta: RawMeta,
+  strictValidation: boolean,
+  errors: string[],
+  warnings: string[],
+  diagnosticsErrors: string[],
+  diagnosticsWarnings: string[],
+): ValidationMeta {
+  const rawInputType = rawMeta.input_type as FrontInputType;
+  const isLegacyType = rawInputType === 'dialogue' || rawInputType === 'monologue';
+
+  const inputType: ContentSource =
+    rawInputType === 'generate' || rawInputType === 'authentic' ? rawInputType : 'generate';
+  let studyTextType: StudyTextType | undefined = rawMeta.study_text_type;
+
+  if (isLegacyType) {
+    const message =
+      `Front matter: input_type "${rawInputType}" is legacy. ` +
+      'Use input_type "generate"|"authentic" and study_text_type "monologue"|"dialogue".';
+    pushVoiceValidationMessage(
+      message,
+      strictValidation,
+      errors,
+      warnings,
+      diagnosticsErrors,
+      diagnosticsWarnings,
+    );
+    if (!studyTextType) {
+      studyTextType = rawInputType;
+    }
+  }
+
+  if (!studyTextType) {
+    pushVoiceValidationMessage(
+      'Front matter: study_text_type is required ("monologue"|"dialogue").',
+      strictValidation,
+      errors,
+      warnings,
+      diagnosticsErrors,
+      diagnosticsWarnings,
+    );
+  }
+
+  if (isLegacyType && rawMeta.study_text_type && rawMeta.study_text_type !== rawInputType) {
+    pushVoiceValidationMessage(
+      `Front matter: study_text_type "${rawMeta.study_text_type}" conflicts with legacy input_type "${rawInputType}".`,
+      strictValidation,
+      errors,
+      warnings,
+      diagnosticsErrors,
+      diagnosticsWarnings,
+    );
+  }
+
+  return {
+    title: rawMeta.title,
+    student: rawMeta.student,
+    level: rawMeta.level,
+    topic: rawMeta.topic,
+    input_type: inputType,
+    study_text_type: studyTextType,
+    speaker_labels: rawMeta.speaker_labels,
+    speaker_profiles: rawMeta.speaker_profiles as SpeakerProfile[] | undefined,
+  };
+}
+
+function classifyStudyTextType(rawLines: string[]): StudyTextType {
+  let dialogueLines = 0;
+  for (const raw of rawLines) {
+    const line = raw.trim();
+    if (!line) continue;
+    const match = line.match(
+      /^\s*(?:\[([^\]]+)\]|(?:\*\*)?([A-Za-zА-Яа-яЁё0-9 _.\-]{1,32})(?:\*\*)?)\s*:(?:\*\*)?\s+.+$/,
+    );
+    if (match) dialogueLines += 1;
+  }
+  return dialogueLines >= 2 ? 'dialogue' : 'monologue';
+}
+
+function validateSpeakerMetadataAlignment(
+  meta: ValidationMeta,
+  strictValidation: boolean,
+  capabilities: VoiceCapabilitiesSnapshot | undefined,
+  knownVoices: Set<string> | undefined,
+  errors: string[],
+  warnings: string[],
+  diagnosticsErrors: string[],
+  diagnosticsWarnings: string[],
+): void {
+  const labels = Array.isArray(meta.speaker_labels) ? meta.speaker_labels : [];
+  const profiles = Array.isArray(meta.speaker_profiles) ? meta.speaker_profiles : [];
+  if (labels.length === 0 && profiles.length === 0) return;
+
+  const normalizedLabels = labels.map((label) => normalizeSpeakerToken(label));
+  const duplicateLabels = normalizedLabels.filter(
+    (label, idx) => normalizedLabels.indexOf(label) !== idx,
+  );
+  if (duplicateLabels.length > 0) {
+    errors.push(`Front matter: speaker_labels contains duplicates: [${[...new Set(duplicateLabels)].join(', ')}].`);
+  }
+
+  const normalizedIds = profiles.map((profile) => normalizeSpeakerToken(profile.id));
+  const duplicateIds = normalizedIds.filter((id, idx) => normalizedIds.indexOf(id) !== idx);
+  if (duplicateIds.length > 0) {
+    errors.push(`Front matter: speaker_profiles contains duplicate ids: [${[...new Set(duplicateIds)].join(', ')}].`);
+  }
+
+  if (labels.length > 0 && profiles.length === 0) {
+    pushVoiceValidationMessage(
+      'Front matter: speaker_labels are set but speaker_profiles are missing.',
+      strictValidation,
+      errors,
+      warnings,
+      diagnosticsErrors,
+      diagnosticsWarnings,
+    );
+    return;
+  }
+
+  if (labels.length === 0 && profiles.length > 0) {
+    pushVoiceValidationMessage(
+      'Front matter: speaker_profiles are set but speaker_labels are missing.',
+      strictValidation,
+      errors,
+      warnings,
+      diagnosticsErrors,
+      diagnosticsWarnings,
+    );
+    return;
+  }
+
+  const labelSet = new Set(normalizedLabels);
+  const profileSet = new Set(normalizedIds);
+
+  for (const profile of profiles) {
+    if (!labelSet.has(normalizeSpeakerToken(profile.id))) {
+      errors.push(`Front matter: speaker_profiles id "${profile.id}" is not present in speaker_labels.`);
+    }
+  }
+
+  for (const label of labels) {
+    if (!profileSet.has(normalizeSpeakerToken(label))) {
+      pushVoiceValidationMessage(
+        `Front matter: speaker label "${label}" has no matching speaker_profile.`,
+        strictValidation,
+        errors,
+        warnings,
+        diagnosticsErrors,
+        diagnosticsWarnings,
+      );
+    }
+  }
+
+  for (const profile of profiles) {
+    if (profile.voice && profile.voice.trim().length > 0) {
+      if (!knownVoices) {
+        diagnosticsWarnings.push(
+          `Front matter: unable to verify speaker_profiles.voice "${profile.voice}" because voice catalog is unavailable.`,
+        );
+      } else if (!knownVoices.has(normalizeSpeakerToken(profile.voice))) {
+        pushVoiceValidationMessage(
+          `Front matter: speaker_profiles voice "${profile.voice}" for "${profile.id}" does not exist in the current voice catalog.`,
+          strictValidation,
+          errors,
+          warnings,
+          diagnosticsErrors,
+          diagnosticsWarnings,
+        );
+      }
+    }
+
+    if (!capabilities) continue;
+    if (profile.accent && profile.accent.trim().length > 0) {
+      const accent = normalizeAccent(profile.accent);
+      if (!capabilities.accent.includes(accent)) {
+        pushVoiceValidationMessage(
+          `Front matter: unsupported accent "${profile.accent}" for "${profile.id}". Allowed accents: [${capabilities.accent.join(', ')}].`,
+          strictValidation,
+          errors,
+          warnings,
+          diagnosticsErrors,
+          diagnosticsWarnings,
+        );
+      }
+    }
+    if (profile.style && profile.style.trim().length > 0) {
+      const style = normalizeStyle(profile.style);
+      if (!capabilities.style.includes(style)) {
+        pushVoiceValidationMessage(
+          `Front matter: unsupported style "${profile.style}" for "${profile.id}". Allowed styles: [${capabilities.style.join(', ')}].`,
+          strictValidation,
+          errors,
+          warnings,
+          diagnosticsErrors,
+          diagnosticsWarnings,
+        );
+      }
+    }
+  }
+}
+
 export async function validateMarkdownFile(
   rawFile: string,
   opts: ValidateOptions = {},
 ): Promise<ValidateResult> {
   const errors: string[] = [];
   const warnings: string[] = [];
+  const voiceDiagnosticsErrors: string[] = [];
+  const voiceDiagnosticsWarnings: string[] = [];
   const strict = opts?.strict ?? false;
+  const voiceAlignmentEnabled = isVoiceAlignmentEnabled();
+  const strictVoiceAlignment = isVoiceAlignmentStrictValidationEnabled();
 
   const content = opts.content ?? (await readFile(rawFile, 'utf8'));
 
@@ -338,13 +836,54 @@ export async function validateMarkdownFile(
   if (frontmatter.topic && Array.isArray(frontmatter.topic)) {
     frontmatter.topic = frontmatter.topic.join(', ');
   }
+
+  const canReadCatalog = opts.content === undefined;
+  const voiceCatalogLoad = canReadCatalog
+    ? await loadVoiceCatalog(rawFile)
+    : { diagnosticsWarnings: ['Voice catalog checks skipped (content provided directly).'] };
+  voiceDiagnosticsWarnings.push(...voiceCatalogLoad.diagnosticsWarnings);
+  const capabilities = voiceCatalogLoad.catalog
+    ? deriveVoiceCapabilities(voiceCatalogLoad.catalog)
+    : undefined;
+  const knownVoices = voiceCatalogLoad.catalog
+    ? new Set(
+        voiceCatalogLoad.catalog.voices.flatMap((voice) => {
+          const names = [voice.id, voice.name]
+            .filter((value): value is string => typeof value === 'string' && value.trim().length > 0)
+            .map((value) => normalizeSpeakerToken(value));
+          return names;
+        }),
+      )
+    : undefined;
+
   const metaParse = FrontSchema.safeParse(frontmatter);
   if (!metaParse.success) {
     for (const issue of metaParse.error.issues) {
       errors.push(`Front matter: ${issue.path.join('.')} - ${issue.message}`);
     }
   }
-  const meta = metaParse.success ? metaParse.data : undefined;
+  const meta = metaParse.success
+    ? normalizeMeta(
+        metaParse.data as RawMeta,
+        strictVoiceAlignment,
+        errors,
+        warnings,
+        voiceDiagnosticsErrors,
+        voiceDiagnosticsWarnings,
+      )
+    : undefined;
+  if (meta) {
+    validateSpeakerMetadataAlignment(
+      meta,
+      strictVoiceAlignment,
+      capabilities,
+      knownVoices,
+      errors,
+      warnings,
+      voiceDiagnosticsErrors,
+      voiceDiagnosticsWarnings,
+    );
+  }
 
   // a) H2 order check
   const h2 = collectHeadings(doc.body, 2);
@@ -444,11 +983,23 @@ export async function validateMarkdownFile(
       if (studyOk) {
         const rawLines = innerLines.map((line) => line.trim());
         const lines = rawLines.filter(Boolean);
+        const observedStudyTextType = classifyStudyTextType(rawLines);
+
+        if (meta?.study_text_type && meta.study_text_type !== observedStudyTextType) {
+          pushVoiceValidationMessage(
+            `Front matter: study_text_type "${meta.study_text_type}" does not match study-text content (detected "${observedStudyTextType}").`,
+            strictVoiceAlignment,
+            errors,
+            warnings,
+            voiceDiagnosticsErrors,
+            voiceDiagnosticsWarnings,
+          );
+        }
 
         const hasSpeakerLabels = Boolean(meta?.speaker_labels && meta.speaker_labels.length > 0);
         let enforceExplicitSpeakers = false;
         if (hasSpeakerLabels) {
-          const labelSet = new Set(meta!.speaker_labels!.map((s) => s.trim().toLowerCase()));
+          const labelSet = new Set(meta!.speaker_labels!.map((s: string) => s.trim().toLowerCase()));
           const onlyNarrator = labelSet.size === 1 && labelSet.has('narrator');
           if (!onlyNarrator) {
             enforceExplicitSpeakers = true;
@@ -660,10 +1211,6 @@ export async function validateMarkdownFile(
     }
   }
 
-  if (meta?.input_type && !['generate', 'authentic'].includes(meta.input_type)) {
-    warnings.push(`input_type "${meta.input_type}" is not one of "generate"|"authentic".`);
-  }
-
   const blockingWarnings = warnings.filter((warning) => !isNonBlockingWarning(warning));
 
   // In strict mode, only blocking warnings should surface to callers that expect actionable feedback.
@@ -672,6 +1219,24 @@ export async function validateMarkdownFile(
   }
 
   const ok = errors.length === 0 && (!strict || blockingWarnings.length === 0);
+  const shadowMode =
+    voiceAlignmentEnabled && !strictVoiceAlignment
+      ? buildShadowModeDiagnostics([...voiceDiagnosticsErrors, ...voiceDiagnosticsWarnings])
+      : undefined;
+  const voiceDiagnostics: ValidateResult['voiceDiagnostics'] = {
+    capabilities,
+    errors: voiceDiagnosticsErrors.length > 0 ? voiceDiagnosticsErrors : undefined,
+    warnings: voiceDiagnosticsWarnings.length > 0 ? voiceDiagnosticsWarnings : undefined,
+    compatibilityMode: strictVoiceAlignment
+      ? { enabled: false }
+      : {
+          enabled: true,
+          reason: voiceAlignmentEnabled
+            ? 'VOICE_ALIGNMENT_V2_ENABLED is set but strict validation is disabled.'
+            : 'VOICE_ALIGNMENT_V2_ENABLED and VOICE_ALIGNMENT_V2_STRICT_VALIDATION are not both enabled.',
+        },
+    shadowMode,
+  };
 
-  return { ok, errors, warnings, meta };
+  return { ok, errors, warnings, meta, voiceDiagnostics };
 }

@@ -1,7 +1,9 @@
 import { getJobById } from '../domain/job-repository.js';
 import { listJobActionHistoryForJob } from '../domain/job-action-history-repository.js';
 import { withPgClient } from '../infrastructure/db.js';
+import type { VoiceProviderErrorDetails } from '@esl-pipeline/contracts';
 import { getPromptPackageLineage, type PromptPackageLineageResponse } from './get-prompt-package.js';
+import { parseVoiceProviderError } from './voice-provider-error.js';
 
 interface JobProvenanceRow {
   draft_id: string | null;
@@ -42,6 +44,7 @@ export interface JobProvenanceResponse {
     anytypeUrl: string | null;
     htmlUrl?: string | null;
     error: string | null;
+    providerError?: VoiceProviderErrorDetails | null;
   };
   sourceJob: {
     id: string;
@@ -155,6 +158,7 @@ export async function getJobProvenance(jobId: string): Promise<JobProvenanceResp
       anytypeUrl: job.anytypeUrl ?? null,
       ...(job.htmlUrl ? { htmlUrl: job.htmlUrl } : {}),
       error: job.error ?? null,
+      providerError: parseVoiceProviderError(job.error),
     },
     sourceJob: sourceJob
       ? {

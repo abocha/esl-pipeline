@@ -53,6 +53,7 @@ student: string (non-empty)
 level: string (non-empty)
 topic: string (non-empty)
 input_type: string (non-empty)
+study_text_type: "monologue" | "dialogue"
 ```
 
 ### Optional Frontmatter Fields
@@ -62,7 +63,7 @@ speaker_labels: string[]
 icon: emoji (single character)
 cover: URL
 properties: object
-speaker_profiles: any[]
+speaker_profiles: SpeakerProfile[]
 ```
 
 ### Required Structure
@@ -75,6 +76,8 @@ speaker_profiles: any[]
 ### Content Rules
 
 - **Dialogue mode**: If `speaker_labels` contains multiple speakers (not just "Narrator"), all lines in `study-text` must follow `Speaker: text` format
+- **Voice alignment checks**: validates `speaker_profiles` mapping coverage and, when catalog metadata is available, validates `speaker_profiles[].voice`, `accent`, and `style`.
+- **Legacy compatibility**: legacy `input_type: dialogue|monologue` is accepted only in compatibility mode; strict voice-alignment mode requires split `input_type` + `study_text_type`.
 - **Monologue mode**: At least 3 paragraphs or 10 lines in `study-text`
 - **Controlled Practice**: 8-10 items recommended
 - **Comprehension Check**: 2-3 items recommended

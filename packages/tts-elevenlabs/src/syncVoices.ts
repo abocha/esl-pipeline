@@ -4,6 +4,7 @@ import { fileURLToPath } from 'node:url';
 
 import { ConfigurationError } from '@esl-pipeline/contracts';
 import { getElevenClient } from './eleven.js';
+import { buildVoiceCapabilitiesSnapshot } from './voiceCapabilities.js';
 
 interface VoiceRow {
   id: string;
@@ -70,15 +71,41 @@ export async function syncVoices(outPath = DEFAULT_VOICES_OUT) {
   const client = getElevenClient();
   // SDK: voices.getAll() returns list of voices the key can use
   const list = (await client.voices.getAll()) as unknown;
+
   interface RawVoice {
     voiceId?: string;
     voice_id?: string;
     id?: string;
-    name: string;
+    name?: string;
     category?: string | null;
-    labels?: Record<string, string | boolean | number>;
+    labels?: Record<string, unknown>;
+    useCase?: string;
+    verifiedLanguages?: { language?: string; locale?: string }[];
+    previewUrl?: string | null;
     preview_url?: string | null;
   }
+
+  const normalizeLabels = (voice: RawVoice): Record<string, string | boolean | number> => {
+    const labels: Record<string, string | boolean | number> = {};
+    for (const [key, value] of Object.entries(voice.labels ?? {})) {
+      if (typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean') {
+        labels[key] = value;
+      }
+    }
+
+    if (!labels.use_case && typeof voice.useCase === 'string' && voice.useCase.trim().length > 0) {
+      labels.use_case = voice.useCase.trim().toLowerCase();
+    }
+
+    if (!labels.language && Array.isArray(voice.verifiedLanguages)) {
+      const lang = voice.verifiedLanguages
+        .map((entry) => (entry.language ?? entry.locale ?? '').trim().toLowerCase())
+        .find((entry) => entry.length > 0);
+      if (lang) labels.language = lang;
+    }
+
+    return labels;
+  };
 
   const rawVoices = (() => {
     if (!list || typeof list !== 'object') return [];
@@ -86,13 +113,31 @@ export async function syncVoices(outPath = DEFAULT_VOICES_OUT) {
     return Array.isArray(maybeVoices) ? (maybeVoices as RawVoice[]) : [];
   })();
 
-  const rows: VoiceRow[] = rawVoices.map((v) => ({
-    id: v.voiceId ?? v.voice_id ?? v.id ?? '',
-    name: v.name,
-    category: v.category ?? null,
-    labels: v.labels ?? {},
-    preview_url: v.preview_url ?? null,
-  }));
+  const rows: VoiceRow[] = [];
+  for (const voice of rawVoices) {
+    const id = (voice.voiceId ?? voice.voice_id ?? voice.id ?? '').trim();
+    const name = (voice.name ?? '').trim();
+    if (!id || !name) continue;
+    rows.push({
+      id,
+      name,
+      category: voice.category ?? null,
+      labels: normalizeLabels(voice),
+      preview_url: voice.previewUrl ?? voice.preview_url ?? null,
+    });
+  }
+  rows.sort(
+    (a, b) =>
+      a.name.localeCompare(b.name, undefined, { sensitivity: 'base' }) || a.id.localeCompare(b.id),
+  );
+  const generatedAt = new Date().toISOString();
+  const capabilities = buildVoiceCapabilitiesSnapshot(
+    rows.map((row) => ({
+      labels: row.labels,
+      useCase: typeof row.labels?.use_case === 'string' ? row.labels.use_case : undefined,
+    })),
+    generatedAt,
+  );
 
   const requestedOut = outPath.trim();
   if (!requestedOut) {
@@ -101,6 +146,6 @@ export async function syncVoices(outPath = DEFAULT_VOICES_OUT) {
   const usesDefault = normalize(requestedOut) === normalize(DEFAULT_VOICES_OUT);
   const abs = usesDefault ? await resolveDefaultOutPath() : resolve(requestedOut);
   await mkdir(dirname(abs), { recursive: true });
-  await writeFile(abs, JSON.stringify({ voices: rows }, null, 2), 'utf8');
+  await writeFile(abs, JSON.stringify({ generatedAt, capabilities, voices: rows }, null, 2), 'utf8');
   return { count: rows.length, outPath: abs };
 }

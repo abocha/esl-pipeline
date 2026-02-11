@@ -52,6 +52,14 @@ export async function getReadinessMetricsWithDefaults(
       totalUsers: snapshot.firstSessionTotalUsers,
       rate: computeRate(snapshot.firstSessionSucceededUsers, snapshot.firstSessionTotalUsers),
     },
+    voiceAlignment: {
+      validationFailures: snapshot.voiceValidationFailures ?? 0,
+      strictMismatches: snapshot.voiceStrictMismatches ?? 0,
+      providerErrors: snapshot.voiceProviderErrors ?? 0,
+      providerErrorBreakdown: snapshot.voiceProviderErrorBreakdown ?? {},
+      fallbackSelections: snapshot.voiceFallbackSelections ?? null,
+      reuseSelections: snapshot.voiceReuseSelections ?? null,
+    },
     sources: READINESS_METRIC_SOURCE_MAP,
   };
 }
@@ -70,4 +78,3 @@ function computeRate(successes: number, total: number): number | null {
   if (total <= 0) return null;
   return Number((successes / total).toFixed(4));
 }
-

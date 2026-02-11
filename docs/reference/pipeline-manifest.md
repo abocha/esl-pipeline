@@ -37,6 +37,9 @@ This document captures the canonical schema so remote stores and services can va
         "gender": "male",
         "accent": "american",
         "score": 0.92,
+        "selectionReason": "Matched explicit speaker_profiles.voice override",
+        "capabilityMatches": ["gender:male", "accent:american"],
+        "capabilityMismatches": [],
       },
     ],
   },
@@ -54,6 +57,8 @@ This document captures the canonical schema so remote stores and services can va
 - `timestamp` reflects the last pipeline write and is updated on reruns.
 - `audio.voices` mirrors the response from `@esl-pipeline/tts-elevenlabs`; the structure is defined
   in that package.
+- `audio.voices[*].selectionReason`, `capabilityMatches`, and `capabilityMismatches` are additive
+  explainability fields for voice-alignment v2. Consumers SHOULD treat them as optional.
 - `ttsStrategy` and related dialogue fields capture the TTS strategy used for reproducibility. These fields
   are optional and additive under schema version `1`.
 
