@@ -665,6 +665,7 @@ export interface ErrorEnvelope {
 
 export interface JobOptionsResponse {
   presets: ContractJobOptionsPayload['presets'];
+  learningPresets?: LearningPresetOption[];
   cefrLevels?: ContractJobOptionsPayload['cefrLevels'];
   cefrDefault?: ContractJobOptionsPayload['cefrDefault'];
   voiceAccents: ContractJobOptionsPayload['voiceAccents'];
@@ -672,6 +673,16 @@ export interface JobOptionsResponse {
   notionDatabases: ContractJobOptionsPayload['notionDatabases'];
   ttsStrategies: ContractJobOptionsPayload['ttsStrategies'];
   supportedActions?: ActionCapability[];
+}
+
+export interface LearningPresetOption {
+  id: string;
+  version: string;
+  alias: string;
+  title: string;
+  track: string;
+  status: string;
+  promptSnapshotVersion: string;
 }
 
 export type VoiceOption = ContractVoiceOption;
