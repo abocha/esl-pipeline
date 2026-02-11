@@ -40,3 +40,7 @@ That is enough to be back on track.
 
 Build a reliable tool that saves solo tutors time each week.
 Consistency beats intensity.
+
+Current phase lock:
+
+- Baseline prompt is `docs/templates/hw_prompt_v4-2_clean.md`.

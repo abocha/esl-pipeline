@@ -5,7 +5,7 @@
 - Audience: founder, maintainers, AI agents.
 - Read Time: 12 minutes.
 - Authority Level: canonical preset architecture spec.
-- Last Updated: 2026-02-10.
+- Last Updated: 2026-02-11.
 
 ## Purpose
 
@@ -17,9 +17,18 @@
 
 1. Legacy color presets are presentation config, not learning logic.
 2. Preset V2 means: prompt + pedagogical metadata + output schema contract.
-3. MVP ships one trusted preset content track: `general-english`.
-4. Architecture must support adding more tracks later without rewrites.
-5. Direct LLM generation is deferred until preset plumbing MVP is complete.
+3. `docs/templates/hw_prompt_v4-2_clean.md` is the canonical baseline prompt for MVP.
+4. MVP ships one trusted preset content track: `general-english`.
+5. Architecture must support adding more tracks later without rewrites.
+6. Direct LLM generation is deferred until preset plumbing MVP is complete.
+
+## WS2A-S1 Locked Decisions
+
+1. Canonical term: `Learning Preset`.
+2. Initial storage direction: DB-first entities.
+3. Prompt governance policy: immutable snapshots + stable alias.
+4. Model strategy: one universal prompt core + runtime scaffolding.
+5. Baseline prompt for MVP: `docs/templates/hw_prompt_v4-2_clean.md`.
 
 ## Non-Negotiable Constraints
 
@@ -54,6 +63,15 @@
 - Learner context and operations.
 - Consumes preset outputs but does not define preset content.
 
+## Canonical Baseline Prompt (MVP)
+
+- Baseline prompt file: `docs/templates/hw_prompt_v4-2_clean.md`
+- Scope in this phase: `general-english` assignments.
+- Rationale:
+  - validated over long-term real student usage,
+  - known reliable behavior with current frontier model workflows,
+  - best available starting point before weaker-model hardening.
+
 ## Preset V2 Model (Conceptual Contract)
 
 MVP must treat this as the source model:
@@ -65,6 +83,7 @@ type CefrLevel = 'A1' | 'A2' | 'B1' | 'B2' | 'C1' | 'C2';
 interface LearningPresetV2 {
   id: string;                  // stable key
   version: string;             // semantic or date-based version
+  alias?: string;              // stable pointer label, e.g. "current"
   track: PresetTrack;          // MVP content: general-english only
   title: string;               // human-friendly label
   status: 'draft' | 'active' | 'deprecated';
@@ -85,6 +104,33 @@ interface AssignmentOutputSchemaV2 {
 }
 ```
 
+## Persistence Direction (Locked for WS2A-S1)
+
+- Initial persistence direction is DB-first entities.
+- File templates remain reference assets and baseline artifacts.
+- Implementation details (tables/repos/migrations) are handled in WS2A-S2+.
+
+## Prompt Versioning and Alias Policy (Locked)
+
+Use both:
+
+1. Immutable snapshots
+   - examples:
+     - `hw_prompt_v4-2_clean.md`
+     - `hw_prompt_v4-3_clean.md`
+   - snapshots are never overwritten once activated.
+2. Stable alias
+   - one active pointer concept (e.g., `current`) maps to a snapshot version.
+   - promotion means switching alias target, not mutating historical snapshot files.
+
+Required release metadata per promotion:
+
+1. prompt version id,
+2. change summary,
+3. expected effect,
+4. rollback condition,
+5. activation date.
+
 ## MVP Scope Lock (Current Phase)
 
 1. Ship one preset content track only: `general-english`.
@@ -94,6 +140,16 @@ interface AssignmentOutputSchemaV2 {
    - future track extensibility,
    - CEFR-compatible metadata fields.
 3. Do not block architecture on building full CEFR/IELTS/teens preset catalogs.
+
+## Universal Prompt + Runtime Scaffolding Strategy (Locked)
+
+- WS2A/WS2B strategy is a single universal prompt core, not model-tier prompt forks.
+- Reliability for weaker models should be improved through runtime scaffolding layers:
+  - schema-aware validation,
+  - structural post-checks,
+  - retry/repair loops,
+  - explicit context packaging.
+- Prompt forking by model tier is deferred unless runtime evidence proves universal strategy is insufficient.
 
 ## Explicitly Out of Scope for This MVP Slice
 
@@ -112,7 +168,10 @@ interface AssignmentOutputSchemaV2 {
 
 ## Assignment Output Contract Requirements
 
-1. Every generated draft declares which preset version was used.
+1. Every generated draft declares:
+   - learning preset id,
+   - learning preset version,
+   - prompt snapshot version (and alias if applicable).
 2. Generated draft can be validated against preset output schema.
 3. Validation failures are surfaced before publish.
 4. Preview step is available before publish approval.
@@ -156,6 +215,16 @@ Gate:
    Mitigation: single trusted MVP preset content + extensible plumbing first.
 3. Risk: future expansion causes rewrites.
    Mitigation: versioned preset model and output schema contract now.
+
+## Research Backlog (Post-WS2A-S1)
+
+1. Schema-Guided Reasoning for weaker models:
+   - define what it means in this pipeline,
+   - test whether schema-conditioned planning improves structure adherence.
+2. Scaffolding effectiveness benchmarks:
+   - compare universal prompt + scaffolding vs prompt forks by model tier.
+3. Failure taxonomy:
+   - classify weak-model errors by section/schema violation type.
 
 ## Related
 
