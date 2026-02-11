@@ -283,7 +283,7 @@ Implement Preset V2 core structure so one trusted `general-english` preset can s
 - [ ] Dual-accept compatibility works for legacy preset ids and Learning Preset ids.
 - [x] Backend routes/services return Learning Preset provenance fields.
 - [x] Frontend minimal flow consumes Learning Preset metadata without regression.
-- [ ] Preview requirement is enforced through HTML renderer path before publish.
+- [x] Preview requirement is enforced through HTML renderer path before publish.
 - [ ] General English-only scope lock remains explicit.
 - [ ] Targeted contracts/backend/frontend tests pass.
 - [ ] WS2B defer gate is explicit and enforced in tracker.
@@ -395,6 +395,7 @@ Recent evidence:
 - 2026-02-11 | WS2A-S1 | WS2A-S1 done: contracts + DB schema plumbing for Learning Preset provenance landed with compatibility preserved. | `rg -n "learningPreset|promptSnapshot|promptAlias|preset" packages/contracts packages/batch-backend/src`; `pnpm --filter @esl-pipeline/contracts typecheck`; `pnpm --filter @esl-pipeline/batch-backend test -- application.job-dto.test.ts` | pass | local workspace
 - 2026-02-11 | WS2A-S2 | WS2A-S2 done: backend accepts Learning Preset ids, preserves legacy preset compatibility, and returns provenance fields. | `rg -n "learningPresetId|presets|job-options|materialize|jobOverrides" packages/batch-backend/src`; `pnpm --filter @esl-pipeline/batch-backend test -- application.get-job-options.test.ts`; `pnpm --filter @esl-pipeline/batch-backend test -- application.submit-job.test.ts application.draft.test.ts`; `pnpm --filter @esl-pipeline/batch-backend test -- transport.http-server.integration.test.ts` | pass | local workspace
 - 2026-02-11 | WS2A-S3 | WS2A-S3 done: minimal frontend wiring uses Learning Preset metadata and submits canonical ids when available. | `rg -n "learningPreset|preset|materializeDraft|getJobOptions" packages/batch-frontend/src`; `pnpm --filter @esl-pipeline/batch-frontend test -- MinimalAssignment.test.tsx` | pass | local workspace
+- 2026-02-11 | WS2A-S4 | WS2A-S4 done: preview gate is enforced through existing HTML rendering path before publish. | `rg -n "preview|html|render|publish" packages/anytype-adapter packages/batch-frontend/src`; `pnpm --filter @esl-pipeline/anytype-adapter test`; `pnpm --filter @esl-pipeline/batch-frontend test -- MinimalAssignment.test.tsx` | pass | local workspace
 
 ## Weekly Closeout Checklist
 
