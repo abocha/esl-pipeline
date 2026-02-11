@@ -115,9 +115,10 @@ export interface Frontmatter {
   student: string;
   level: string;
   topic: string | string[];
-  input_type: string;
+  input_type: import('@esl-pipeline/contracts').ContentSource;
+  study_text_type?: import('@esl-pipeline/contracts').StudyTextType;
   speaker_labels?: string[];
-  speaker_profiles?: SpeakerProfile[];
+  speaker_profiles?: import('@esl-pipeline/contracts').SpeakerProfile[];
   // allow arbitrary extras without breaking
   [k: string]: unknown;
 }
@@ -132,14 +133,4 @@ export interface Section {
   content: string;
 }
 
-export interface SpeakerProfile {
-  id: string;
-  display_name?: string;
-  role?: 'narrator' | 'teacher' | 'student' | 'system';
-  gender?: 'male' | 'female' | 'neutral' | 'child';
-  age?: 'child' | 'teen' | 'young' | 'adult' | 'middle_aged' | 'senior' | 'universal';
-  accent?: string;
-  style?: string;
-  voice?: string;
-  [k: string]: unknown;
-}
+export type { ContentSource, SpeakerProfile, StudyTextType } from '@esl-pipeline/contracts';

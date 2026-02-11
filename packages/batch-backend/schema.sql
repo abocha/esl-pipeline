@@ -112,6 +112,9 @@ CREATE TABLE IF NOT EXISTS prompt_packages (
   resolved_template_hash TEXT NULL,
   resolved_template_revision_id UUID NULL,
   resolved_template_updated_at TIMESTAMPTZ NULL,
+  resolved_voice_capabilities_hash TEXT NULL,
+  resolved_voice_capabilities_generated_at TIMESTAMPTZ NULL,
+  resolved_voice_capabilities_snapshot JSONB NULL,
   template_version TEXT NOT NULL,
   notes TEXT NULL,
   storage_uri TEXT NOT NULL,
@@ -217,6 +220,9 @@ ALTER TABLE prompt_packages ADD COLUMN IF NOT EXISTS resolved_template_id TEXT N
 ALTER TABLE prompt_packages ADD COLUMN IF NOT EXISTS resolved_template_hash TEXT NULL;
 ALTER TABLE prompt_packages ADD COLUMN IF NOT EXISTS resolved_template_revision_id UUID NULL;
 ALTER TABLE prompt_packages ADD COLUMN IF NOT EXISTS resolved_template_updated_at TIMESTAMPTZ NULL;
+ALTER TABLE prompt_packages ADD COLUMN IF NOT EXISTS resolved_voice_capabilities_hash TEXT NULL;
+ALTER TABLE prompt_packages ADD COLUMN IF NOT EXISTS resolved_voice_capabilities_generated_at TIMESTAMPTZ NULL;
+ALTER TABLE prompt_packages ADD COLUMN IF NOT EXISTS resolved_voice_capabilities_snapshot JSONB NULL;
 
 ALTER TABLE profile_revisions ADD COLUMN IF NOT EXISTS profile_id TEXT NULL;
 ALTER TABLE profile_revisions ADD COLUMN IF NOT EXISTS content TEXT NULL;

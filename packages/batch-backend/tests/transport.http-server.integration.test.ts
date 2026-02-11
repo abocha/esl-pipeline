@@ -667,6 +667,7 @@ describe('transport/http-server - integration (in-process)', () => {
       startedAt: null,
       finishedAt: null,
       error: null,
+      providerError: null,
       manifestPath: '/manifests/job-approve-1.json',
     });
 
@@ -703,6 +704,7 @@ describe('transport/http-server - integration (in-process)', () => {
       startedAt: null,
       finishedAt: null,
       error: null,
+      providerError: null,
       manifestPath: '/manifests/job-approve-1.json',
     });
     expect(approveJobForPipeline).toHaveBeenCalledWith(
@@ -2144,7 +2146,8 @@ describe('transport/http-server - integration (in-process)', () => {
         student: 'Anna',
         level: 'B1',
         topic: 'Grammar',
-        input_type: 'dialogue',
+        input_type: 'generate',
+        study_text_type: 'dialogue',
         speaker_labels: ['A', 'B'],
       },
     });
@@ -2165,7 +2168,8 @@ describe('transport/http-server - integration (in-process)', () => {
         student: 'Anna',
         level: 'B1',
         topic: 'Grammar',
-        input_type: 'dialogue',
+        input_type: 'generate',
+        study_text_type: 'dialogue',
         speaker_labels: ['A', 'B'],
       },
     });
@@ -2348,6 +2352,16 @@ describe('transport/http-server - integration (in-process)', () => {
         totalUsers: 5,
         rate: 0.8,
       },
+      voiceAlignment: {
+        validationFailures: 2,
+        strictMismatches: 1,
+        providerErrors: 1,
+        providerErrorBreakdown: {
+          provider_rate_limit: 1,
+        },
+        fallbackSelections: null,
+        reuseSelections: null,
+      },
       sources: {
         publishSuccessRate: {
           source: 'jobs table',
@@ -2363,6 +2377,26 @@ describe('transport/http-server - integration (in-process)', () => {
           source: 'jobs table',
           window: 'last 7 days',
           calculation: 'first in-window publish success ratio',
+        },
+        voiceValidationFailureRate: {
+          source: 'jobs table',
+          window: 'last 7 days',
+          calculation: 'voice validation failures / failed jobs',
+        },
+        voiceStrictMismatchRate: {
+          source: 'jobs table',
+          window: 'last 7 days',
+          calculation: 'strict mismatches / validation failures',
+        },
+        voiceFallbackRate: {
+          source: 'jobs table',
+          window: 'last 7 days',
+          calculation: 'fallback selections / total selections',
+        },
+        voiceProviderErrorRate: {
+          source: 'jobs table',
+          window: 'last 7 days',
+          calculation: 'provider tagged failures / failed jobs',
         },
       },
     });
@@ -2395,6 +2429,16 @@ describe('transport/http-server - integration (in-process)', () => {
         totalUsers: 5,
         rate: 0.8,
       },
+      voiceAlignment: {
+        validationFailures: 2,
+        strictMismatches: 1,
+        providerErrors: 1,
+        providerErrorBreakdown: {
+          provider_rate_limit: 1,
+        },
+        fallbackSelections: null,
+        reuseSelections: null,
+      },
       sources: {
         publishSuccessRate: {
           source: 'jobs table',
@@ -2410,6 +2454,26 @@ describe('transport/http-server - integration (in-process)', () => {
           source: 'jobs table',
           window: 'last 7 days',
           calculation: 'first in-window publish success ratio',
+        },
+        voiceValidationFailureRate: {
+          source: 'jobs table',
+          window: 'last 7 days',
+          calculation: 'voice validation failures / failed jobs',
+        },
+        voiceStrictMismatchRate: {
+          source: 'jobs table',
+          window: 'last 7 days',
+          calculation: 'strict mismatches / validation failures',
+        },
+        voiceFallbackRate: {
+          source: 'jobs table',
+          window: 'last 7 days',
+          calculation: 'fallback selections / total selections',
+        },
+        voiceProviderErrorRate: {
+          source: 'jobs table',
+          window: 'last 7 days',
+          calculation: 'provider tagged failures / failed jobs',
         },
       },
     });

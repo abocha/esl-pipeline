@@ -33,6 +33,9 @@ const program = new Command()
         console.log(pc.gray(`student: ${result.meta.student}`));
         console.log(pc.gray(`topic: ${topicValue}`));
         console.log(pc.gray(`input_type: ${result.meta.input_type}`));
+        if (result.meta.study_text_type) {
+          console.log(pc.gray(`study_text_type: ${result.meta.study_text_type}`));
+        }
       }
       return;
     }

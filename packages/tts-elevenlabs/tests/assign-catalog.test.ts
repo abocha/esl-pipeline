@@ -20,9 +20,16 @@ describe('loadVoicesCatalog error policy', () => {
 
     vi.resetModules();
     const { loadVoicesCatalog } = await import('../src/assign.js');
-    await expect(loadVoicesCatalog(invalidPath)).rejects.toThrow(
-      /Invalid ElevenLabs voices catalog JSON/,
-    );
+    await expect(loadVoicesCatalog(invalidPath)).rejects.toThrow(/Invalid ElevenLabs voices catalog JSON/);
+    await expect(loadVoicesCatalog(invalidPath)).rejects.toThrow(invalidPath);
+  });
+
+  it('throws when catalog path points to a directory', async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'tts-assign-'));
+
+    vi.resetModules();
+    const { loadVoicesCatalog } = await import('../src/assign.js');
+    await expect(loadVoicesCatalog(dir)).rejects.toThrow(/Failed to read ElevenLabs voices catalog/);
   });
 
   it.skipIf(process.platform === 'win32')(

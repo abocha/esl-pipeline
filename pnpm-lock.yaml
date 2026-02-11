@@ -306,6 +306,9 @@ importers:
 
   packages/md-validator:
     dependencies:
+      '@esl-pipeline/contracts':
+        specifier: workspace:*
+        version: link:../contracts
       '@esl-pipeline/pmd':
         specifier: workspace:*
         version: link:../pmd

@@ -3,7 +3,12 @@ import { createWriteStream } from 'node:fs';
 import { stat } from 'node:fs/promises';
 import { resolve } from 'node:path';
 
+import { ElevenLabsClient, ElevenLabsError, ElevenLabsTimeoutError } from '@elevenlabs/elevenlabs-js';
+import { InfrastructureError } from '@esl-pipeline/contracts';
+import type { VoiceProviderErrorCategory } from '@esl-pipeline/contracts';
+
 import { estimateDurationFromFileSize } from './audioDuration.js';
+import { getElevenClient } from './eleven.js';
 import { concatMp3Segments } from './ffmpeg.js';
 import type {
   DialogueChunk,
@@ -16,7 +21,30 @@ const DEFAULT_DIALOGUE_MODEL_ID = 'eleven_v3';
 const DEFAULT_OUTPUT_FORMAT = process.env.ELEVENLABS_OUTPUT_FORMAT ?? 'mp3_22050_32';
 const MAX_DIALOGUE_INPUTS = 100;
 const MAX_TOTAL_CHARS = 5000;
-const DIALOGUE_TIMEOUT_MS = 60_000;
+const DIALOGUE_TIMEOUT_SECONDS = 60;
+const DIALOGUE_MAX_RETRIES = 2;
+type DialogueConvertBody = Parameters<ReturnType<typeof getElevenClient>['textToDialogue']['convert']>[0];
+type DialogueOutputFormat = NonNullable<DialogueConvertBody['outputFormat']>;
+
+interface NormalizedDialogueInput {
+  text: string;
+  voiceId: string;
+}
+
+function normalizeDialogueInput(input: DialogueInput): NormalizedDialogueInput {
+  const text = typeof input.text === 'string' ? input.text : '';
+  const voiceId = typeof input.voiceId === 'string' ? input.voiceId : input.voice_id;
+
+  if (!voiceId || !voiceId.trim()) {
+    throw new Error(`Dialogue input is missing voiceId for text: "${text.slice(0, 64)}"`);
+  }
+
+  return { text, voiceId };
+}
+
+function normalizeDialogueInputs(inputs: DialogueInput[]): NormalizedDialogueInput[] {
+  return inputs.map((input) => normalizeDialogueInput(input));
+}
 
 /**
  * Splits large dialogue arrays into manageable chunks
@@ -30,7 +58,8 @@ export function chunkDialogueInputs(
   maxInputs = MAX_DIALOGUE_INPUTS,
   maxChars = MAX_TOTAL_CHARS,
 ): DialogueChunk[] {
-  if (inputs.length === 0) {
+  const normalizedInputs = normalizeDialogueInputs(inputs);
+  if (normalizedInputs.length === 0) {
     return [];
   }
 
@@ -38,7 +67,7 @@ export function chunkDialogueInputs(
   let currentChunk: DialogueInput[] = [];
   let currentChars = 0;
 
-  for (const input of inputs) {
+  for (const input of normalizedInputs) {
     const inputChars = input.text.length;
 
     // Start new chunk if limits exceeded
@@ -79,7 +108,7 @@ export function chunkDialogueInputs(
 
 /**
  * Creates deterministic hash for caching dialogue synthesis
- * @param inputs - Dialogue inputs (text + voice_id)
+ * @param inputs - Dialogue inputs (text + voiceId)
  * @param options - Synthesis options affecting output
  * @returns SHA-256 hash string
  */
@@ -87,19 +116,94 @@ export function buildDialogueHash(
   inputs: DialogueInput[],
   options: Partial<DialogueSynthesisOptions>,
 ): string {
+  const normalizedInputs = normalizeDialogueInputs(inputs);
   const hashInput = {
-    inputs: inputs.map((i) => ({ text: i.text, voice_id: i.voice_id })),
+    inputs: normalizedInputs.map((i) => ({ text: i.text, voiceId: i.voiceId })),
     modelId: options.modelId ?? DEFAULT_DIALOGUE_MODEL_ID,
+    outputFormat: options.outputFormat ?? DEFAULT_OUTPUT_FORMAT,
     languageCode: options.languageCode,
     stability: options.stability,
     seed: options.seed,
+    applyTextNormalization: options.applyTextNormalization ?? 'auto',
   };
 
   return createHash('sha256').update(JSON.stringify(hashInput)).digest('hex');
 }
 
+function resolveDialogueClient(apiKey: string): ElevenLabsClient {
+  const key = apiKey.trim();
+  if (key) {
+    return new ElevenLabsClient({ apiKey: key });
+  }
+  return getElevenClient();
+}
+
+async function readStreamToBuffer(stream: ReadableStream<Uint8Array>): Promise<Buffer> {
+  const chunks: Uint8Array[] = [];
+  const reader = stream.getReader();
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      chunks.push(value);
+    }
+  } finally {
+    reader.releaseLock();
+  }
+  return Buffer.concat(chunks);
+}
+
+function formatDialogueError(error: unknown): string {
+  if (error instanceof ElevenLabsTimeoutError) {
+    return error.message;
+  }
+  if (error instanceof ElevenLabsError) {
+    const status = typeof error.statusCode === 'number' ? `HTTP ${error.statusCode}: ` : '';
+    let body = '';
+    if (typeof error.body === 'string') {
+      body = error.body;
+    } else if (error.body === undefined) {
+      body = '';
+    } else {
+      body = JSON.stringify(error.body);
+    }
+    return `${status}${error.message}${body ? ` | ${body}` : ''}`;
+  }
+  return error instanceof Error ? error.message : String(error);
+}
+
+function extractDialogueStatusCode(error: unknown): number | undefined {
+  if (error instanceof ElevenLabsError && typeof error.statusCode === 'number') {
+    return error.statusCode;
+  }
+  if (typeof error !== 'object' || error === null) return undefined;
+  const maybeStatus = (error as { status?: unknown; statusCode?: unknown }).status;
+  if (typeof maybeStatus === 'number') return maybeStatus;
+  const maybeStatusCode = (error as { status?: unknown; statusCode?: unknown }).statusCode;
+  if (typeof maybeStatusCode === 'number') return maybeStatusCode;
+  return undefined;
+}
+
+function categorizeDialogueError(error: unknown): VoiceProviderErrorCategory {
+  if (error instanceof ElevenLabsTimeoutError) return 'provider_timeout';
+  const status = extractDialogueStatusCode(error);
+  if (status === 429) return 'provider_rate_limit';
+  if (status === 408 || status === 504) return 'provider_timeout';
+
+  const message = formatDialogueError(error).toLowerCase();
+  if (status === 404 && message.includes('voice')) return 'invalid_voice_id';
+  if (status === 422 && message.includes('voice')) {
+    return message.includes('invalid') ? 'invalid_voice_id' : 'unsupported_voice_capability';
+  }
+  if (message.includes('invalid voice')) return 'invalid_voice_id';
+  if (message.includes('unsupported') && (message.includes('accent') || message.includes('style'))) {
+    return 'unsupported_voice_capability';
+  }
+  return 'provider_contract_error';
+}
+
 /**
- * Calls ElevenLabs Text-to-Dialogue API for a single chunk
+ * Calls ElevenLabs Text-to-Dialogue API for a single chunk using the official SDK.
  * @param chunk - Array of dialogue inputs
  * @param options - Synthesis options
  * @param apiKey - ElevenLabs API key
@@ -111,89 +215,48 @@ export async function synthesizeDialogueChunk(
   options: DialogueSynthesisOptions,
   apiKey: string,
 ): Promise<Buffer> {
-  if (!apiKey) {
-    throw new Error('Missing ELEVENLABS_API_KEY');
-  }
-
   if (chunk.length === 0) {
     throw new Error('Cannot synthesize empty dialogue chunk');
   }
 
-  const outputFormat = options.outputFormat ?? DEFAULT_OUTPUT_FORMAT;
-  const modelId = options.modelId ?? DEFAULT_DIALOGUE_MODEL_ID;
+  if (!apiKey && !process.env.ELEVENLABS_API_KEY && !process.env.ELEVENLABS_API_TOKEN) {
+    throw new Error('Missing ELEVENLABS_API_KEY');
+  }
 
-  const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), DIALOGUE_TIMEOUT_MS);
+  const normalizedChunk = normalizeDialogueInputs(chunk);
+  const outputFormat = (options.outputFormat ?? DEFAULT_OUTPUT_FORMAT) as DialogueOutputFormat;
+  const modelId = options.modelId ?? DEFAULT_DIALOGUE_MODEL_ID;
+  const client = resolveDialogueClient(apiKey);
 
   try {
-    const url = new URL('https://api.elevenlabs.io/v1/text-to-dialogue');
-    url.searchParams.set('output_format', outputFormat);
-
-    const body: Record<string, unknown> = {
-      inputs: chunk,
-      model_id: modelId,
-    };
-
-    if (options.languageCode) {
-      body.language_code = options.languageCode;
-    }
-
-    if (options.stability !== undefined) {
-      body.settings = { stability: options.stability };
-    }
-
-    if (options.seed !== undefined) {
-      body.seed = options.seed;
-    }
-
-    if (options.applyTextNormalization) {
-      body.apply_text_normalization = options.applyTextNormalization;
-    }
-
-    const response = await fetch(url.toString(), {
-      method: 'POST',
-      headers: {
-        'xi-api-key': apiKey,
-        'Content-Type': 'application/json',
+    const stream = await client.textToDialogue.convert(
+      {
+        inputs: normalizedChunk,
+        modelId,
+        outputFormat,
+        languageCode: options.languageCode,
+        settings: options.stability === undefined ? undefined : { stability: options.stability },
+        seed: options.seed,
+        applyTextNormalization: options.applyTextNormalization,
       },
-      body: JSON.stringify(body),
-      signal: controller.signal,
-    });
-
-    if (!response.ok) {
-      const errorText = await response.text().catch(() => 'Unknown error');
-      throw new Error(
-        `Text-to-Dialogue API failed (${response.status} ${response.statusText}): ${errorText}`,
-      );
-    }
-
-    if (!response.body) {
-      throw new Error('Text-to-Dialogue API returned no body');
-    }
-
-    // Convert web ReadableStream to Buffer
-    const chunks: Uint8Array[] = [];
-    const reader = response.body.getReader();
-
-    try {
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-        chunks.push(value);
-      }
-    } finally {
-      reader.releaseLock();
-    }
-
-    return Buffer.concat(chunks);
+      {
+        timeoutInSeconds: options.timeoutInSeconds ?? DIALOGUE_TIMEOUT_SECONDS,
+        maxRetries: options.maxRetries ?? DIALOGUE_MAX_RETRIES,
+      },
+    );
+    return await readStreamToBuffer(stream);
   } catch (error: unknown) {
-    if (error instanceof Error && error.name === 'AbortError') {
-      throw new Error(`Text-to-Dialogue API request timed out after ${DIALOGUE_TIMEOUT_MS}ms`);
-    }
-    throw error;
-  } finally {
-    clearTimeout(timeoutId);
+    const category = categorizeDialogueError(error);
+    throw new InfrastructureError(
+      `Text-to-Dialogue synthesis failed [${category}]: ${formatDialogueError(error)}`,
+    );
   }
+}
+
+function ensureApiKey(apiKey: string): void {
+  if (apiKey.trim().length > 0) return;
+  if (process.env.ELEVENLABS_API_KEY || process.env.ELEVENLABS_API_TOKEN) return;
+  throw new Error('Missing ELEVENLABS_API_KEY');
 }
 
 /**
@@ -209,16 +272,23 @@ export async function synthesizeDialogue(
   apiKey: string,
   outputDir: string,
 ): Promise<DialogueSynthesisResult> {
-  if (!options.inputs || options.inputs.length === 0) {
+  const normalizedInputs = normalizeDialogueInputs(options.inputs ?? []);
+  if (normalizedInputs.length === 0) {
     throw new Error('Dialogue synthesis requires at least one input');
   }
+  ensureApiKey(apiKey);
+
+  const normalizedOptions: DialogueSynthesisOptions = {
+    ...options,
+    inputs: normalizedInputs,
+  };
 
   // Generate hash for caching
-  const hash = buildDialogueHash(options.inputs, options);
-  const outputFormat = options.outputFormat ?? DEFAULT_OUTPUT_FORMAT;
+  const hash = buildDialogueHash(normalizedInputs, normalizedOptions);
+  const outputFormat = normalizedOptions.outputFormat ?? DEFAULT_OUTPUT_FORMAT;
 
   // Chunk inputs if necessary
-  const chunks = chunkDialogueInputs(options.inputs);
+  const chunks = chunkDialogueInputs(normalizedInputs);
 
   if (chunks.length === 0) {
     throw new Error('Failed to chunk dialogue inputs');
@@ -235,7 +305,7 @@ export async function synthesizeDialogue(
       const chunkFilePath = resolve(outputDir, chunkFileName);
 
       // Synthesize chunk
-      const audioBuffer = await synthesizeDialogueChunk(chunk.inputs, options, apiKey);
+      const audioBuffer = await synthesizeDialogueChunk(chunk.inputs, normalizedOptions, apiKey);
 
       // Write to file
       await new Promise<void>((resolve, reject) => {

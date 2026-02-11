@@ -21,6 +21,8 @@
 4. MVP ships one trusted preset content track: `general-english`.
 5. Architecture must support adding more tracks later without rewrites.
 6. Direct LLM generation is deferred until preset plumbing MVP is complete.
+7. `hw_prompt_v4-3_voice-aligned` is flag-gated (`VOICE_ALIGNMENT_V2_PROMPT`) and must be
+   materialized with a runtime voice-capability snapshot.
 
 ## Execution Status (Current)
 
@@ -77,6 +79,19 @@
   - validated over long-term real student usage,
   - known reliable behavior with current frontier model workflows,
   - best available starting point before weaker-model hardening.
+
+## Voice-Alignment Prompt Snapshot Policy (v4.3)
+
+- Default prompt snapshot remains `docs/templates/hw_prompt_v4-2_clean.md`.
+- Voice-aligned snapshot is `docs/templates/hw_prompt_v4-3_voice-aligned.md` and is enabled only
+  when `VOICE_ALIGNMENT_V2_PROMPT=true`.
+- When v4.3 is selected, prompt packaging must inject provider-backed capability enums
+  (`role/gender/age/accent/style`) from the current voice catalog snapshot.
+- Prompt package lineage must persist capability provenance metadata:
+  - `voiceCapabilitiesGeneratedAt`
+  - `voiceCapabilitiesHash`
+- If the capability snapshot cannot be resolved for v4.3, packaging must fail fast rather than
+  silently emitting placeholder capability values.
 
 ## Preset V2 Model (Conceptual Contract)
 

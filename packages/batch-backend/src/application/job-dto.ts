@@ -4,8 +4,10 @@
 import type { JobStatusDto } from '@esl-pipeline/contracts';
 
 import type { JobRecord } from '../domain/job-model.js';
+import { parseVoiceProviderError } from './voice-provider-error.js';
 
 export function jobRecordToDto(job: JobRecord): JobStatusDto {
+  const providerError = parseVoiceProviderError(job.error);
   return {
     jobId: job.id,
     ...(job.studentId ? { studentId: job.studentId } : {}),
@@ -38,6 +40,7 @@ export function jobRecordToDto(job: JobRecord): JobStatusDto {
     startedAt: job.startedAt ? job.startedAt.toISOString() : null,
     finishedAt: job.finishedAt ? job.finishedAt.toISOString() : null,
     error: job.error ?? null,
+    providerError,
     manifestPath: job.manifestPath ?? null,
   };
 }

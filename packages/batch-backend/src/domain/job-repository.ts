@@ -8,6 +8,7 @@ import { PoolClient } from 'pg';
 
 import { withPgClient } from '../infrastructure/db.js';
 import { logger } from '../infrastructure/logger.js';
+import type { VoiceProviderErrorCategory } from '@esl-pipeline/contracts';
 import {
   JobRecord,
   JobState,
@@ -132,6 +133,12 @@ export interface ReadinessMetricsSnapshot {
   medianPublishLatencyMs: number | null;
   firstSessionTotalUsers: number;
   firstSessionSucceededUsers: number;
+  voiceValidationFailures: number;
+  voiceStrictMismatches: number;
+  voiceProviderErrors: number;
+  voiceProviderErrorBreakdown: Partial<Record<VoiceProviderErrorCategory, number>>;
+  voiceFallbackSelections: number | null;
+  voiceReuseSelections: number | null;
 }
 
 export interface StudentJobSummaryRow {
@@ -168,7 +175,7 @@ async function insertJobWithState(params: InsertJobParams, state: JobState): Pro
 
   const row = await withPgClient(async (client: PoolClient) => {
     const result = await client.query(
-      `
+      String.raw`
       INSERT INTO jobs (
         id,
         state,
@@ -277,7 +284,7 @@ async function insertJobWithState(params: InsertJobParams, state: JobState): Pro
 export async function getJobById(id: string): Promise<JobRecord | null> {
   const row = await withPgClient(async (client: PoolClient) => {
     const result = await client.query(
-      `
+      String.raw`
       SELECT
         j.id,
         COALESCE(r.student_id, p.student_id, rp.student_id, d.student_id, pd.student_id, rd.student_id) AS student_id,
@@ -472,7 +479,7 @@ export async function getReadinessMetrics(
 ): Promise<ReadinessMetricsSnapshot> {
   const row = await withPgClient(async (client: PoolClient) => {
     const result = await client.query(
-      `
+      String.raw`
       WITH window_jobs AS (
         SELECT
           j.id,
@@ -480,7 +487,8 @@ export async function getReadinessMetrics(
           j.state,
           j.publish_target,
           j.created_at,
-          j.finished_at
+          j.finished_at,
+          j.error
         FROM jobs j
         WHERE j.created_at >= $1
           AND j.created_at <= $2
@@ -522,6 +530,53 @@ export async function getReadinessMetrics(
           ) FILTER (WHERE state = 'succeeded' AND finished_at IS NOT NULL)
             AS median_publish_latency_ms
         FROM terminal_publish_jobs
+      ),
+      voice_alignment_aggregates AS (
+        SELECT
+          COUNT(*) FILTER (
+            WHERE state = 'failed'
+              AND error IS NOT NULL
+              AND (
+                error ILIKE '%Front matter:%'
+                OR error ILIKE '%study_text_type%'
+                OR error ILIKE '%speaker_profiles%'
+                OR error ILIKE '%speaker_labels%'
+              )
+          )::int AS voice_validation_failures,
+          COUNT(*) FILTER (
+            WHERE state = 'failed'
+              AND error IS NOT NULL
+              AND (
+                error ILIKE '%does not match study-text content%'
+                OR error ILIKE '%unsupported accent%'
+                OR error ILIKE '%unsupported style%'
+                OR error ILIKE '%does not exist in the current voice catalog%'
+                OR error ILIKE '%has no matching speaker_profile%'
+              )
+          )::int AS voice_strict_mismatches,
+          COUNT(*) FILTER (
+            WHERE state = 'failed'
+              AND error IS NOT NULL
+              AND error ~* '\\[(invalid_voice_id|unsupported_voice_capability|provider_rate_limit|provider_timeout|provider_contract_error)\\]'
+          )::int AS voice_provider_errors,
+          COUNT(*) FILTER (
+            WHERE state = 'failed' AND error IS NOT NULL AND error ~* '\\[invalid_voice_id\\]'
+          )::int AS provider_invalid_voice_id,
+          COUNT(*) FILTER (
+            WHERE state = 'failed' AND error IS NOT NULL AND error ~* '\\[unsupported_voice_capability\\]'
+          )::int AS provider_unsupported_voice_capability,
+          COUNT(*) FILTER (
+            WHERE state = 'failed' AND error IS NOT NULL AND error ~* '\\[provider_rate_limit\\]'
+          )::int AS provider_rate_limit,
+          COUNT(*) FILTER (
+            WHERE state = 'failed' AND error IS NOT NULL AND error ~* '\\[provider_timeout\\]'
+          )::int AS provider_timeout,
+          COUNT(*) FILTER (
+            WHERE state = 'failed' AND error IS NOT NULL AND error ~* '\\[provider_contract_error\\]'
+          )::int AS provider_contract_error,
+          NULL::int AS voice_fallback_selections,
+          NULL::int AS voice_reuse_selections
+        FROM window_jobs
       )
       SELECT
         ta.publish_succeeded,
@@ -530,9 +585,20 @@ export async function getReadinessMetrics(
         ta.latency_sample_size,
         ta.median_publish_latency_ms,
         fs.total_users::int AS first_session_total_users,
-        fs.succeeded_users::int AS first_session_succeeded_users
+        fs.succeeded_users::int AS first_session_succeeded_users,
+        va.voice_validation_failures,
+        va.voice_strict_mismatches,
+        va.voice_provider_errors,
+        va.provider_invalid_voice_id,
+        va.provider_unsupported_voice_capability,
+        va.provider_rate_limit,
+        va.provider_timeout,
+        va.provider_contract_error,
+        va.voice_fallback_selections,
+        va.voice_reuse_selections
       FROM terminal_aggregates ta
       CROSS JOIN first_session fs
+      CROSS JOIN voice_alignment_aggregates va
       `,
       [filters.from, filters.to, filters.userId ?? null],
     );
@@ -548,6 +614,20 @@ export async function getReadinessMetrics(
       row?.median_publish_latency_ms == null ? null : Number(row.median_publish_latency_ms),
     firstSessionTotalUsers: Number(row?.first_session_total_users ?? 0),
     firstSessionSucceededUsers: Number(row?.first_session_succeeded_users ?? 0),
+    voiceValidationFailures: Number(row?.voice_validation_failures ?? 0),
+    voiceStrictMismatches: Number(row?.voice_strict_mismatches ?? 0),
+    voiceProviderErrors: Number(row?.voice_provider_errors ?? 0),
+    voiceProviderErrorBreakdown: {
+      invalid_voice_id: Number(row?.provider_invalid_voice_id ?? 0),
+      unsupported_voice_capability: Number(row?.provider_unsupported_voice_capability ?? 0),
+      provider_rate_limit: Number(row?.provider_rate_limit ?? 0),
+      provider_timeout: Number(row?.provider_timeout ?? 0),
+      provider_contract_error: Number(row?.provider_contract_error ?? 0),
+    },
+    voiceFallbackSelections:
+      row?.voice_fallback_selections == null ? null : Number(row.voice_fallback_selections),
+    voiceReuseSelections:
+      row?.voice_reuse_selections == null ? null : Number(row.voice_reuse_selections),
   };
 }
 

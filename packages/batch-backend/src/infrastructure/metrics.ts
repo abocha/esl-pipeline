@@ -40,4 +40,24 @@ export const READINESS_METRIC_SOURCE_MAP: ReadinessMetricSourceMap = {
     window: 'request window, default last 7 days by jobs.created_at',
     calculation: 'users whose first in-window publish job succeeded / users with an in-window publish job',
   },
+  voiceValidationFailureRate: {
+    source: 'jobs table failed rows with voice/frontmatter validation signatures in error text',
+    window: 'request window, default last 7 days by jobs.created_at',
+    calculation: 'voice validation failure count / failed jobs in window',
+  },
+  voiceStrictMismatchRate: {
+    source: 'jobs table failed rows with strict mismatch signatures in error text',
+    window: 'request window, default last 7 days by jobs.created_at',
+    calculation: 'strict mismatch count / voice validation failures',
+  },
+  voiceFallbackRate: {
+    source: 'tts voice selection telemetry (not yet persisted in jobs table)',
+    window: 'request window, default last 7 days by jobs.created_at',
+    calculation: 'fallback selections / total speaker selections (null until persisted)',
+  },
+  voiceProviderErrorRate: {
+    source: 'jobs table failed rows tagged with provider error category',
+    window: 'request window, default last 7 days by jobs.created_at',
+    calculation: 'provider tagged failures / failed jobs in window',
+  },
 };

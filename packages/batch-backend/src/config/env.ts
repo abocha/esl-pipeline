@@ -225,9 +225,12 @@ export function loadConfig(): BatchBackendConfig {
 
   const configDir = readString('ESL_PIPELINE_CONFIG_DIR');
 
+  const voiceAlignmentPromptV2 = readBool('VOICE_ALIGNMENT_V2_PROMPT', false);
   const promptTemplatePath = readString(
     'PROMPT_TEMPLATE_PATH',
-    'docs/templates/hw_prompt_v4-1_clean.md',
+    voiceAlignmentPromptV2
+      ? 'docs/templates/hw_prompt_v4-3_voice-aligned.md'
+      : 'docs/templates/hw_prompt_v4-2_clean.md',
   )!;
   const promptProfilePath = readString(
     'PROMPT_PROFILE_PATH',

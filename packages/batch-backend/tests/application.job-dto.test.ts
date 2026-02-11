@@ -63,6 +63,7 @@ describe('application/job-dto', () => {
       startedAt: '2024-01-01T10:01:00.000Z',
       finishedAt: '2024-01-01T10:04:00.000Z',
       error: null,
+      providerError: null,
       manifestPath: '/manifests/job-1.json',
     });
   });
@@ -118,7 +119,34 @@ describe('application/job-dto', () => {
       startedAt: null,
       finishedAt: null,
       error: null,
+      providerError: null,
       manifestPath: null,
+    });
+  });
+
+  it('parses structured provider errors from tagged job failures', () => {
+    const job: JobRecord = {
+      id: 'job-3',
+      state: 'failed',
+      md: 'fixtures/ok.md',
+      recordingId: null,
+      transcriptId: null,
+      promptPackageId: null,
+      draftId: null,
+      createdAt: new Date('2024-02-03T00:00:00Z'),
+      updatedAt: new Date('2024-02-03T00:00:00Z'),
+      startedAt: new Date('2024-02-03T00:01:00Z'),
+      finishedAt: new Date('2024-02-03T00:02:00Z'),
+      error: 'Text-to-Dialogue synthesis failed [provider_rate_limit]: HTTP 429: too many requests',
+      manifestPath: null,
+    };
+
+    const dto = jobRecordToDto(job);
+    expect(dto.providerError).toEqual({
+      category: 'provider_rate_limit',
+      message: 'Text-to-Dialogue synthesis failed [provider_rate_limit]: HTTP 429: too many requests',
+      providerStatus: 429,
+      actionableHint: 'Retry later or reduce request concurrency/chunk size.',
     });
   });
 });

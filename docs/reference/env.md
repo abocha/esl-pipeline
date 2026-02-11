@@ -22,6 +22,12 @@ Set these in `.env` (or your shell) when running `esl` or programmatic API calls
 - `ELEVENLABS_DIALOGUE_LANGUAGE` (optional) — Language code for dialogue strategy.
 - `ELEVENLABS_DIALOGUE_STABILITY` (optional) — Stability for dialogue strategy (0–1).
 - `ELEVENLABS_DIALOGUE_SEED` (optional) — Seed for dialogue strategy.
+- `VOICE_ALIGNMENT_V2_ENABLED` (optional, default `false`) — Enables v2 voice-alignment pipeline behavior.
+- `VOICE_ALIGNMENT_V2_STRICT_VALIDATION` (optional, default `false`) — Promotes voice metadata compatibility checks to hard validation errors.
+- `VOICE_ALIGNMENT_V2_MIN_SCORE` (optional, default `20`) — Minimum heuristic score accepted for strict auto voice assignment.
+- `VOICE_ALIGNMENT_V2_PROMPT` (optional, default `false`) — Enables prompt snapshot `hw_prompt_v4-3_voice-aligned`.
+- `ELEVENLABS_VOICES_PATH` (optional) — Absolute/relative path to synced voice catalog JSON used for
+  validator checks and v4.3 capability injection during prompt packaging.
 - `AWS_REGION`, `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY` — AWS creds for uploads.
 - `S3_BUCKET` — Bucket for audio uploads.
 - `S3_PREFIX` (optional) — Key prefix for uploads (e.g., `audio/assignments`).
@@ -58,6 +64,13 @@ Use `.env.batch-backend` for the service stack. It includes all core keys above 
 - Prompt templates/profiles: `PROMPT_TEMPLATE_PATH`, `PROMPT_PROFILE_PATH`.
   - Defaults live under `docs/templates` unless overridden.
   - Template/profile allowlists are derived from the directories containing these paths.
+- Voice-alignment rollout:
+  - `VOICE_ALIGNMENT_V2_ENABLED`
+  - `VOICE_ALIGNMENT_V2_STRICT_VALIDATION`
+  - `VOICE_ALIGNMENT_V2_MIN_SCORE`
+  - `VOICE_ALIGNMENT_V2_PROMPT`
+  - Shadow mode behavior: when `VOICE_ALIGNMENT_V2_ENABLED=true` and strict validation is off,
+    markdown validation remains non-blocking but emits `voiceDiagnostics.shadowMode` mismatch classes.
 - Auth (extended API):
   - `JWT_SECRET`, `JWT_EXPIRES_IN`, `REFRESH_TOKEN_EXPIRES_IN`, `BCRYPT_ROUNDS`
   - `REFRESH_COOKIE_NAME`, `REFRESH_COOKIE_SAMESITE`, `REFRESH_COOKIE_SECURE`
@@ -95,3 +108,4 @@ Notes:
 - TTS strategy defaults can be provided via `ELEVENLABS_TTS_STRATEGY` and related dialogue options; manifests now persist these for reruns.
 - Batch backend startup validates `FILESYSTEM_UPLOAD_DIR` and `PROMPT_*` allowlists; misconfigured paths fail fast.
 - Use `RECORDINGS_MAX_FILE_SIZE` to raise audio upload limits without affecting general markdown uploads.
+- For voice-alignment operations and rollout, see `docs/operations/voice-alignment-v2-runbook.md`.

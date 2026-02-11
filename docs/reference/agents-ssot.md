@@ -1002,6 +1002,40 @@ Rules:
   - Implemented in code, and
   - Documented in this SSOT as implemented (without “to be confirmed”).
 
+### 11.3. Voice Alignment V2 Contracts (Implemented)
+
+This section is normative for current voice-alignment behavior.
+
+1. Canonical frontmatter split:
+   - `input_type`: source (`generate` | `authentic`)
+   - `study_text_type`: structure (`monologue` | `dialogue`)
+2. Validation diagnostics:
+   - `MarkdownValidationResponse.voiceDiagnostics` is additive and optional.
+   - In compatibility mode (strict off), voice-alignment mismatches are warnings.
+   - When `VOICE_ALIGNMENT_V2_ENABLED=true` and strict is off, `voiceDiagnostics.shadowMode`
+     emits non-blocking mismatch classes and counts.
+3. Strict behavior:
+   - Strict validation is active only when both flags are on:
+     - `VOICE_ALIGNMENT_V2_ENABLED=true`
+     - `VOICE_ALIGNMENT_V2_STRICT_VALIDATION=true`
+   - Strict mode promotes voice metadata mismatches to hard validation errors.
+4. Prompt snapshot policy:
+   - Default prompt remains `hw_prompt_v4-2_clean`.
+   - `hw_prompt_v4-3_voice-aligned` is flag-gated (`VOICE_ALIGNMENT_V2_PROMPT=true`) and MUST be
+     materialized with provider-backed capability enums from the current voice catalog snapshot.
+   - Prompt package lineage MUST persist capability provenance metadata (`generatedAt` + hash).
+5. Provider error normalization:
+   - Provider-tagged errors (`[invalid_voice_id]`, `[unsupported_voice_capability]`,
+     `[provider_rate_limit]`, `[provider_timeout]`, `[provider_contract_error]`) must map to
+     structured job DTO/provider diagnostics where available.
+6. Readiness metrics:
+   - `/metrics/readiness` includes additive `voiceAlignment` counters.
+   - Source-map metric keys include:
+     - `voiceValidationFailureRate`
+     - `voiceStrictMismatchRate`
+     - `voiceFallbackRate`
+     - `voiceProviderErrorRate`
+
 ---
 
 ## 12. Design Notes for Downstream Implementers (Human Maintainers)

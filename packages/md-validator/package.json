@@ -1,6 +1,6 @@
 {
   "name": "@esl-pipeline/md-validator",
-  "version": "2.2.0",
+  "version": "3.0.0",
   "private": true,
   "description": "Validate ESL homework markdown structure and frontmatter.",
   "keywords": [
@@ -37,6 +37,7 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "@esl-pipeline/contracts": "workspace:*",
     "@esl-pipeline/pmd": "workspace:*",
     "commander": "^14.0.2",
     "gray-matter": "^4.0.3",

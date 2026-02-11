@@ -112,6 +112,7 @@ import {
   type FileValidationService,
 } from '../infrastructure/file-validation-service.js';
 import { logger } from '../infrastructure/logger.js';
+import { metrics } from '../infrastructure/metrics.js';
 import { StorageConfigurationService } from '../infrastructure/storage-config.js';
 import { createTranscribeQueue } from '../infrastructure/transcribe-queue.js';
 import {
@@ -300,6 +301,35 @@ export function registerExtendedRoutes(app: FastifyInstance, options: ExtendedRo
           content: body.text,
           strict: body.strict,
         });
+        const diagnostics = result.voiceDiagnostics;
+        if (diagnostics?.errors && diagnostics.errors.length > 0) {
+          metrics.increment('esl.voice_alignment.validation_failures', diagnostics.errors.length, {
+            route: 'validation_markdown',
+          });
+        }
+        const shadowMismatches = diagnostics?.shadowMode?.mismatchClasses;
+        if (diagnostics?.shadowMode?.enabled && shadowMismatches) {
+          for (const [mismatchClass, count] of Object.entries(shadowMismatches)) {
+            metrics.increment('esl.voice_alignment.shadow_mismatch', count, {
+              route: 'validation_markdown',
+              mismatchClass,
+            });
+          }
+          const total =
+            diagnostics.shadowMode.mismatchTotal ??
+            Object.values(shadowMismatches).reduce((sum, value) => sum + value, 0);
+          if (total > 0) {
+            metrics.increment('esl.voice_alignment.shadow_mismatch_total', total, {
+              route: 'validation_markdown',
+            });
+            logger.info('Voice alignment shadow mismatches observed', {
+              event: 'voice_alignment_shadow_mismatch',
+              route: routePath,
+              mismatchClasses: shadowMismatches,
+              mismatchTotal: total,
+            });
+          }
+        }
 
         logger.info('HTTP request handled', {
           event: 'http_request',

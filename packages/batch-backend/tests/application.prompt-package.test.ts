@@ -56,6 +56,9 @@ describe('application/prompt-package', () => {
         resolvedTemplateHash?: string | null;
         resolvedTemplateRevisionId?: string | null;
         resolvedTemplateUpdatedAt?: Date | null;
+        resolvedVoiceCapabilitiesHash?: string | null;
+        resolvedVoiceCapabilitiesGeneratedAt?: Date | null;
+        resolvedVoiceCapabilitiesSnapshot?: Record<string, unknown> | null;
         templateVersion: string;
         notes?: string | null;
         storageUri: string;
@@ -135,6 +138,99 @@ describe('application/prompt-package', () => {
     expect(result?.profilePath).toBe(profilePath);
     expect(result?.profileSnapshot?.resolvedProfileId).toBe('profile.md');
     expect(result?.profileSnapshot?.resolvedProfileRevisionId).toBe('revision-1');
+  });
+
+  it('injects capabilities into v4.3 prompt templates and persists provenance', async () => {
+    const allowedDir = await fs.mkdtemp(path.join(os.tmpdir(), 'esl-prompt-v43-'));
+    const templatePath = path.join(allowedDir, 'hw_prompt_v4-3_voice-aligned.md');
+    const profilePath = path.join(allowedDir, 'profile.md');
+    const voicesPath = path.join(allowedDir, 'voices.json');
+
+    await fs.writeFile(
+      templatePath,
+      [
+        'Header',
+        'INSERT PROFILE HERE',
+        '```yaml',
+        '# CAPABILITY SNAPSHOT (injected dynamically per voice catalog refresh)',
+        'role: [narrator, teacher, student, system]',
+        'gender: [male, female, neutral, child]',
+        'age: [child, teen, young, adult, middle_aged, senior, universal]',
+        'accent: [<provider-backed values>]',
+        'style: [<provider-backed values>]',
+        '```',
+      ].join('\n'),
+      'utf8',
+    );
+    await fs.writeFile(profilePath, 'PROFILE CONTENT', 'utf8');
+    await fs.writeFile(
+      voicesPath,
+      JSON.stringify({
+        generatedAt: '2026-01-05T00:00:00.000Z',
+        capabilities: {
+          generatedAt: '2026-01-05T00:00:00.000Z',
+          role: ['narrator', 'teacher', 'student', 'system'],
+          gender: ['male', 'female', 'neutral', 'child'],
+          age: ['child', 'teen', 'young', 'adult', 'middle_aged', 'senior', 'universal'],
+          accent: ['american', 'british'],
+          style: ['conversational', 'professional'],
+        },
+        voices: [],
+      }),
+      'utf8',
+    );
+
+    const previousVoicesPath = process.env.ELEVENLABS_VOICES_PATH;
+    process.env.ELEVENLABS_VOICES_PATH = voicesPath;
+    try {
+      const transcript = createTranscriptRecord();
+      const storage = createStorageStub({
+        getText: async () => 'TRANSCRIPT BODY',
+        putPromptPackage: async ({ promptPackageId, text }) => {
+          expect(text).toContain('accent: [american, british]');
+          expect(text).toContain('style: [conversational, professional]');
+          expect(text).not.toContain('<provider-backed values>');
+          return { uri: `local://prompt-packages/${promptPackageId}.txt`, bytes: text.length };
+        },
+      });
+
+      const result = await createPromptPackage(
+        {
+          recordingId: transcript.recordingId,
+          templateId: 'hw_prompt_v4-3_voice-aligned.md',
+          profileId: 'profile.md',
+        },
+        {
+          config: createConfig(templatePath, profilePath),
+          storage,
+          transcripts: {
+            getByRecordingId: async () => transcript,
+          },
+          recordings: {
+            getById: async () => null,
+          },
+          students: {
+            getById: async () => null,
+          },
+          promptPackages: createPromptPackageRepositoryStub(),
+          profileRevisions: createProfileRevisionRepositoryStub(),
+          templateRevisions: createTemplateRevisionRepositoryStub(),
+          profiles: createProfileRepositoryStub(),
+          templates: createTemplateRepositoryStub(),
+          bindings: createBindingResolverStub(),
+        },
+      );
+
+      expect(result?.voiceCapabilitiesSnapshot?.generatedAt).toBe('2026-01-05T00:00:00.000Z');
+      expect(result?.voiceCapabilitiesSnapshot?.hash).toMatch(/^[a-f0-9]{64}$/);
+      expect(result?.voiceCapabilitiesSnapshot?.capabilities.accent).toEqual(['american', 'british']);
+    } finally {
+      if (previousVoicesPath === undefined) {
+        delete process.env.ELEVENLABS_VOICES_PATH;
+      } else {
+        process.env.ELEVENLABS_VOICES_PATH = previousVoicesPath;
+      }
+    }
   });
 
   it('loads prompt package text from storage', async () => {
@@ -544,6 +640,9 @@ describe('application/prompt-package', () => {
         resolvedTemplateUpdatedAt?: Date | null;
         resolvedTemplateVersionLabel?: string | null;
         resolvedTemplateStatus?: 'draft' | 'active' | 'deprecated' | null;
+        resolvedVoiceCapabilitiesHash?: string | null;
+        resolvedVoiceCapabilitiesGeneratedAt?: Date | null;
+        resolvedVoiceCapabilitiesSnapshot?: Record<string, unknown> | null;
         templateVersion: string;
         notes?: string | null;
         storageUri: string;
@@ -1113,6 +1212,9 @@ function createPromptPackageRepositoryStub() {
       resolvedTemplateHash?: string | null;
       resolvedTemplateRevisionId?: string | null;
       resolvedTemplateUpdatedAt?: Date | null;
+      resolvedVoiceCapabilitiesHash?: string | null;
+      resolvedVoiceCapabilitiesGeneratedAt?: Date | null;
+      resolvedVoiceCapabilitiesSnapshot?: Record<string, unknown> | null;
       templateVersion: string;
       notes?: string | null;
       storageUri: string;
@@ -1130,6 +1232,9 @@ function createPromptPackageRepositoryStub() {
       resolvedTemplateHash: params.resolvedTemplateHash ?? null,
       resolvedTemplateRevisionId: params.resolvedTemplateRevisionId ?? null,
       resolvedTemplateUpdatedAt: params.resolvedTemplateUpdatedAt ?? null,
+      resolvedVoiceCapabilitiesHash: params.resolvedVoiceCapabilitiesHash ?? null,
+      resolvedVoiceCapabilitiesGeneratedAt: params.resolvedVoiceCapabilitiesGeneratedAt ?? null,
+      resolvedVoiceCapabilitiesSnapshot: params.resolvedVoiceCapabilitiesSnapshot ?? null,
       templateVersion: params.templateVersion,
       notes: params.notes ?? null,
       storageUri: params.storageUri,

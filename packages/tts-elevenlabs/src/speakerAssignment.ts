@@ -1,4 +1,5 @@
 import { ConfigurationError } from '@esl-pipeline/contracts';
+import type { VoiceSelectionDiagnostics } from '@esl-pipeline/contracts';
 import type { SpeakerProfile } from '@esl-pipeline/pmd';
 
 import {
@@ -123,6 +124,65 @@ export interface SpeakerVoiceAssignment {
   score?: number;
   profile?: SpeakerProfile;
   catalogEntry?: VoiceCatalog['voices'][number];
+  selectionReason: VoiceSelectionDiagnostics['selectionReason'];
+  capabilityMatches?: VoiceSelectionDiagnostics['capabilityMatches'];
+  capabilityMismatches?: VoiceSelectionDiagnostics['capabilityMismatches'];
+}
+
+function isTruthyFlag(value: string | undefined): boolean {
+  if (!value) return false;
+  const normalized = value.trim().toLowerCase();
+  return normalized === '1' || normalized === 'true' || normalized === 'yes' || normalized === 'on';
+}
+
+function getVoiceLabel(voice: VoiceCatalog['voices'][number] | undefined, key: string): string {
+  const raw = voice?.labels?.[key];
+  return typeof raw === 'string' ? raw.trim().toLowerCase() : '';
+}
+
+function buildDiagnostics(
+  source: SpeakerVoiceAssignment['source'],
+  profile: SpeakerProfile | undefined,
+  catalogEntry: VoiceCatalog['voices'][number] | undefined,
+): Pick<SpeakerVoiceAssignment, 'selectionReason' | 'capabilityMatches' | 'capabilityMismatches'> {
+  const selectionReasonBySource: Record<SpeakerVoiceAssignment['source'], string> = {
+    profile: 'Selected from speaker_profiles.voice override.',
+    voiceMap: 'Selected from voices.yml explicit speaker mapping.',
+    default: 'Selected from voices.yml default mapping.',
+    auto: 'Selected by capability-aware heuristic scoring.',
+    fallback: 'Selected by generic fallback pool (no strong heuristic match).',
+    reuse: 'Selected by controlled reuse fallback.',
+  };
+
+  const matches: string[] = [];
+  const mismatches: string[] = [];
+  if (profile && catalogEntry) {
+    const checks: [label: string, expected: unknown, actual: string][] = [
+      ['role', profile.role, getVoiceLabel(catalogEntry, 'use_case')],
+      ['gender', profile.gender, getVoiceLabel(catalogEntry, 'gender')],
+      ['age', profile.age, getVoiceLabel(catalogEntry, 'age')],
+      ['accent', profile.accent, getVoiceLabel(catalogEntry, 'accent')],
+      ['style', profile.style, getVoiceLabel(catalogEntry, 'descriptive')],
+    ];
+
+    for (const [label, expected, actual] of checks) {
+      if (typeof expected !== 'string' || expected.trim().length === 0) continue;
+      const normalizedExpected = expected.trim().toLowerCase();
+      if (!actual) {
+        mismatches.push(`${label}: expected "${normalizedExpected}" but voice metadata is missing`);
+      } else if (actual.includes(normalizedExpected)) {
+        matches.push(`${label}: ${normalizedExpected}`);
+      } else {
+        mismatches.push(`${label}: expected "${normalizedExpected}" got "${actual}"`);
+      }
+    }
+  }
+
+  return {
+    selectionReason: selectionReasonBySource[source],
+    capabilityMatches: matches.length > 0 ? matches : undefined,
+    capabilityMismatches: mismatches.length > 0 ? mismatches : undefined,
+  };
 }
 
 export async function resolveSpeakerVoices(opts: {
@@ -143,6 +203,12 @@ export async function resolveSpeakerVoices(opts: {
     typeof opts.defaultAccent === 'string'
       ? opts.defaultAccent.trim().toLowerCase() || undefined
       : undefined;
+
+  const strictValidationEnabled =
+    isTruthyFlag(process.env.VOICE_ALIGNMENT_V2_ENABLED) &&
+    isTruthyFlag(process.env.VOICE_ALIGNMENT_V2_STRICT_VALIDATION);
+  const strictMinScoreRaw = Number.parseFloat(process.env.VOICE_ALIGNMENT_V2_MIN_SCORE ?? '20');
+  const strictMinScore = Number.isFinite(strictMinScoreRaw) ? strictMinScoreRaw : 20;
 
   for (const speaker of opts.speakers) {
     const profile = findProfile(opts.profiles, speaker);
@@ -263,6 +329,19 @@ export async function resolveSpeakerVoices(opts: {
 
     usedVoices.add(assigned);
     const catalogEntry = catalog.voices.find((v) => v.id === assigned);
+    if (
+      strictValidationEnabled &&
+      profile &&
+      assignmentSource === 'auto' &&
+      typeof heuristicPick?.score === 'number' &&
+      heuristicPick.score < strictMinScore
+    ) {
+      throw new ConfigurationError(
+        `No acceptable voice quality match for speaker "${speaker}" (score ${heuristicPick.score} < ${strictMinScore}). ` +
+          'Provide speaker_profiles.voice or adjust profile metadata/capabilities.',
+      );
+    }
+    const diagnostics = buildDiagnostics(assignmentSource ?? 'auto', profile, catalogEntry);
     assignments.push({
       speaker,
       voiceId: assigned,
@@ -270,6 +349,9 @@ export async function resolveSpeakerVoices(opts: {
       score: assignmentSource === 'auto' ? heuristicPick?.score : undefined,
       profile,
       catalogEntry,
+      selectionReason: diagnostics.selectionReason,
+      capabilityMatches: diagnostics.capabilityMatches,
+      capabilityMismatches: diagnostics.capabilityMismatches,
     });
   }
 

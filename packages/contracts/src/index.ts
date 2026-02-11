@@ -102,6 +102,7 @@ export interface JobStatusDto {
   startedAt: string | null;
   finishedAt: string | null;
   error: string | null;
+  providerError?: VoiceProviderErrorDetails | null;
   manifestPath: string | null;
 }
 
@@ -130,7 +131,11 @@ export interface JobSummaryResponse {
 export type ReadinessMetricName =
   | 'publishSuccessRate'
   | 'medianPublishLatencyMs'
-  | 'firstSessionSuccessProxy';
+  | 'firstSessionSuccessProxy'
+  | 'voiceValidationFailureRate'
+  | 'voiceStrictMismatchRate'
+  | 'voiceFallbackRate'
+  | 'voiceProviderErrorRate';
 
 export interface ReadinessMetricSource {
   source: string;
@@ -160,6 +165,14 @@ export interface ReadinessMetricsResponse {
     totalUsers: number;
     rate: number | null;
   };
+  voiceAlignment?: {
+    validationFailures: number;
+    strictMismatches: number;
+    providerErrors: number;
+    providerErrorBreakdown: Partial<Record<VoiceProviderErrorCategory, number>>;
+    fallbackSelections: number | null;
+    reuseSelections: number | null;
+  };
   sources: ReadinessMetricSourceMap;
 }
 
@@ -175,17 +188,82 @@ export interface StudentSummaryResponse {
   offset: number;
 }
 
+export type ContentSource = 'generate' | 'authentic';
+export type StudyTextType = 'monologue' | 'dialogue';
+export type SpeakerRole = 'narrator' | 'teacher' | 'student' | 'system';
+export type SpeakerGender = 'male' | 'female' | 'neutral' | 'child';
+export type SpeakerAge = 'child' | 'teen' | 'young' | 'adult' | 'middle_aged' | 'senior' | 'universal';
+
+export interface SpeakerProfile {
+  id: string;
+  display_name?: string;
+  role?: SpeakerRole;
+  gender?: SpeakerGender;
+  age?: SpeakerAge;
+  accent?: string;
+  style?: string;
+  voice?: string;
+  [k: string]: unknown;
+}
+
+export interface VoiceCapabilitiesSnapshot {
+  generatedAt: string;
+  role: SpeakerRole[];
+  gender: SpeakerGender[];
+  age: SpeakerAge[];
+  accent: string[];
+  style: string[];
+}
+
+export interface VoiceSelectionDiagnostics {
+  selectionReason: string;
+  capabilityMatches?: string[];
+  capabilityMismatches?: string[];
+}
+
+export type VoiceProviderErrorCategory =
+  | 'invalid_voice_id'
+  | 'unsupported_voice_capability'
+  | 'provider_rate_limit'
+  | 'provider_timeout'
+  | 'provider_contract_error';
+
+export interface VoiceProviderErrorDetails {
+  category: VoiceProviderErrorCategory;
+  message: string;
+  providerStatus?: number;
+  actionableHint?: string;
+}
+
+export interface MarkdownValidationVoiceDiagnostics {
+  capabilities?: VoiceCapabilitiesSnapshot;
+  errors?: string[];
+  warnings?: string[];
+  compatibilityMode?: {
+    enabled: boolean;
+    reason?: string;
+  };
+  shadowMode?: {
+    enabled: boolean;
+    mismatchClasses?: Record<string, number>;
+    mismatchTotal?: number;
+  };
+}
+
 export interface MarkdownValidationResponse {
   ok: boolean;
   errors: string[];
   warnings: string[];
+  voiceDiagnostics?: MarkdownValidationVoiceDiagnostics;
   meta?: {
     title: string;
     student: string;
     level: string;
     topic: string | string[];
-    input_type: string;
+    input_type: ContentSource;
+    study_text_type?: StudyTextType;
     speaker_labels?: string[];
+    speaker_profiles?: SpeakerProfile[];
   };
 }
 

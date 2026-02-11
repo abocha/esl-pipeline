@@ -90,6 +90,10 @@ export interface PromptPackageLineageResponse {
     };
     drift: PromptPackageTemplateDrift | null;
   };
+  voiceCapabilitiesSnapshot?: {
+    generatedAt: string | null;
+    hash: string | null;
+  } | null;
   bindingAtCreation?: {
     bindingId: string;
     studentId: string;
@@ -228,6 +232,15 @@ export async function getPromptPackageLineage(
       },
       drift: templateDrift,
     },
+    voiceCapabilitiesSnapshot:
+      promptPackage.resolvedVoiceCapabilitiesHash || promptPackage.resolvedVoiceCapabilitiesGeneratedAt
+        ? {
+            generatedAt: promptPackage.resolvedVoiceCapabilitiesGeneratedAt
+              ? promptPackage.resolvedVoiceCapabilitiesGeneratedAt.toISOString()
+              : null,
+            hash: promptPackage.resolvedVoiceCapabilitiesHash ?? null,
+          }
+        : null,
     bindingAtCreation: bindingAtCreation ? toBindingSnapshot(bindingAtCreation) : null,
   };
 }

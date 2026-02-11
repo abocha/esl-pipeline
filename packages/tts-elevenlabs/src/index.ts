@@ -11,6 +11,7 @@ import {
   ConfigurationError,
   InfrastructureError,
   ValidationError,
+  type VoiceProviderErrorCategory,
   noopLogger,
 } from '@esl-pipeline/contracts';
 import { type Frontmatter, extractFrontmatter, extractStudyText } from '@esl-pipeline/pmd';
@@ -252,7 +253,7 @@ function toDialogueInputs(
     }
     const sanitizedText = cleanSpeechText(seg.text);
     if (!sanitizedText) continue;
-    inputs.push({ text: sanitizedText, voice_id: voiceId });
+    inputs.push({ text: sanitizedText, voiceId });
   }
   return inputs;
 }
@@ -377,6 +378,9 @@ export async function buildStudyTextMp3(
       typeof a.catalogEntry?.labels?.use_case === 'string'
         ? (a.catalogEntry.labels.use_case as string)
         : undefined,
+    selectionReason: a.selectionReason,
+    capabilityMatches: a.capabilityMatches,
+    capabilityMismatches: a.capabilityMismatches,
   }));
 
   // Determine TTS strategy
@@ -397,9 +401,11 @@ export async function buildStudyTextMp3(
     const inputs = toDialogueInputs(segments, speakerVoiceMap);
     const hash = buildDialogueHash(inputs, {
       modelId: 'eleven_v3',
+      outputFormat: resolveOutputFormat(opts.outputFormat),
       languageCode: opts.dialogueLanguage,
       stability: opts.dialogueStability,
       seed: opts.dialogueSeed,
+      applyTextNormalization: 'auto',
     });
     const fileName = buildOutputFileName(hash, frontmatter);
     const targetPath = resolve(outputDir, fileName);
@@ -860,8 +866,28 @@ function calculateApproxDuration(
 
 function wrapSynthesisError(error: unknown, voiceId: string, text: string): Error {
   const message = error instanceof Error ? error.message : String(error);
+  const status =
+    typeof error === 'object' && error
+      ? ((error as { status?: number; statusCode?: number; response?: { status?: number } }).status ??
+        (error as { status?: number; statusCode?: number; response?: { status?: number } })
+          .statusCode ??
+        (error as { status?: number; statusCode?: number; response?: { status?: number } }).response
+          ?.status)
+      : undefined;
+  const normalized = message.toLowerCase();
+  const category: VoiceProviderErrorCategory =
+    status === 429
+      ? 'provider_rate_limit'
+      : status === 408 || status === 504
+        ? 'provider_timeout'
+        : (status === 404 && normalized.includes('voice')) || normalized.includes('invalid voice')
+          ? 'invalid_voice_id'
+          : normalized.includes('unsupported') &&
+              (normalized.includes('accent') || normalized.includes('style'))
+            ? 'unsupported_voice_capability'
+            : 'provider_contract_error';
   return new InfrastructureError(
-    `Failed to synthesize line with voice "${voiceId}": ${message}\nLine: ${text}`,
+    `Failed to synthesize line with voice "${voiceId}" [${category}]: ${message}\nLine: ${text}`,
   );
 }
 
@@ -870,9 +896,14 @@ function wait(ms: number): Promise<void> {
 }
 
 export { resolveFfmpegPath, FfmpegNotFoundError } from './ffmpeg.js';
-export { loadVoicesCatalog } from './assign.js';
+export { loadVoiceCapabilities, loadVoicesCatalog } from './assign.js';
 export type { VoiceCatalog } from './assign.js';
 export { DEFAULT_VOICES_OUT, syncVoices } from './syncVoices.js';
+export {
+  buildVoiceCapabilitiesSnapshot,
+  getVoiceCapabilities,
+  validateCapabilityValue,
+} from './voiceCapabilities.js';
 
 // Export types for orchestrator integration
 export type {

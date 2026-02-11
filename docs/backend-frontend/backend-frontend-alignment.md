@@ -5,7 +5,7 @@
 - Audience: AI agents and maintainers coordinating backend/frontend delivery.
 - Read Time: 8 minutes.
 - Authority Level: Canonical status tracker (human-readable).
-- Last Verified Against: 2026-02-07 repo state.
+- Last Verified Against: 2026-02-11 repo state.
 
 ## Purpose
 
@@ -41,6 +41,7 @@
 | Manual transcription retry (`POST /recordings/:id/transcribe`)                             | Done    | Done     | Recording transcribe route                    | None.                                               |
 | Prompt options (`GET /config/prompts`)                                                     | Done    | Done     | Config routes + frontend prompt step          | Keep allowlists synchronized with storage roots.    |
 | Prompt package create/read                                                                 | Done    | Done     | Prompt-package routes                         | None.                                               |
+| Prompt capability provenance (`voiceCapabilitiesGeneratedAt/hash`)                         | Done    | Partial  | Prompt-package response + lineage payload     | Frontend can surface provenance metadata in inspector views. |
 | Prompt/template/profile lineage (`GET /prompt-packages/:id/lineage`)                      | Done    | Done     | Prompt-package lineage API + frontend client  | None.                                               |
 | Draft save/read                                                                            | Done    | Done     | Draft routes                                  | None.                                               |
 | Draft materialize (`POST /drafts/:id/materialize`)                                         | Done    | Done     | Draft materialization service                 | Maintain job override validation coverage.          |
@@ -48,12 +49,14 @@
 | Job status (`GET /jobs/:jobId`)                                                            | Done    | Done     | Job DTO in contracts                          | Ensure DTO fields stay contract-first.              |
 | Jobs SSE (`GET /jobs/events`)                                                              | Done    | Partial  | SSE route + frontend consumers                | Keep polling fallback explicit in UI.               |
 | Markdown validation (`POST /validation/markdown`)                                          | Done    | Done     | Validation route + frontend draft step        | None.                                               |
+| Voice diagnostics + shadow mismatch payload (`voiceDiagnostics.shadowMode`)                | Done    | Partial  | Markdown validation contract                  | Frontend may optionally visualize mismatch classes during rollout. |
 | Student summary/list/profile routes                                                        | Done    | Partial  | Student routes                                | Workspace now supports student creation; phase E hardening remains. |
 | Profile content routes                                                                     | Done    | Partial  | Profile routes                                | Restore/activate/edit supported in workspace; continue UX hardening. |
 | Job actions: `edit_metadata`                                                               | Done    | Partial  | Job action route and handler                  | Expose only where workflow needs it.                |
 | Job actions: `rerun_audio`                                                                 | Done    | Done     | Job action contract                           | Maintain payload parity as backend adds rerun knobs. |
 | Job actions: `cancel`                                                                      | Done    | Done     | Job action contract                           | Keep cooperative-cancel UX explicit for running jobs.      |
 | Student timeline + explainability (`/students/:id/timeline`, `/jobs/:id/provenance`)      | Done    | Done     | Timeline/provenance app services + UI panel   | Continue filtering and ergonomics pass in phase E follow-ups. |
+| Readiness voice-alignment counters (`/metrics/readiness.voiceAlignment`)                   | Done    | Partial  | Readiness metrics contract                    | Dashboard thresholds/visualizations still pending in frontend. |
 
 ## Open Blockers
 
@@ -62,6 +65,7 @@
 3. Cancellation is cooperative for running jobs; already-issued external side effects remain best-effort.
 4. Student workspace is now available, but advanced guardrails and end-to-end tutor ergonomics still need completion.
 5. Phase E is in progress; keep parity between workspace interactions and backend governance rules.
+6. Readiness dashboard still needs UI treatment for new voice-alignment counters and thresholds.
 
 ## Do / Don't
 

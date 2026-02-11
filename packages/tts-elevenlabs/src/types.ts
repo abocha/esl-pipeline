@@ -2,14 +2,26 @@
  * TTS strategy selection
  */
 import type { PipelineLogger } from '@esl-pipeline/contracts';
+import type { VoiceSelectionDiagnostics } from '@esl-pipeline/contracts';
 
 export type TtsStrategy = 'auto' | 'tts' | 'dialogue';
 
 /**
  * Dialogue input for ElevenLabs Text-to-Dialogue API
  */
-export interface DialogueInput {
+export type DialogueInput = DialogueInputCanonical | DialogueInputLegacy;
+
+export interface DialogueInputCanonical {
   text: string;
+  voiceId: string;
+  /** @deprecated Use `voiceId`. */
+  voice_id?: string;
+}
+
+export interface DialogueInputLegacy {
+  text: string;
+  voiceId?: string;
+  /** @deprecated Kept for backwards compatibility. */
   voice_id: string;
 }
 
@@ -24,6 +36,8 @@ export interface DialogueSynthesisOptions {
   seed?: number;
   outputFormat?: string;
   applyTextNormalization?: 'auto' | 'on' | 'off';
+  timeoutInSeconds?: number;
+  maxRetries?: number;
 }
 
 /**
@@ -75,6 +89,9 @@ export interface BuildStudyTextResult {
     gender?: string;
     accent?: string;
     useCase?: string;
+    selectionReason?: VoiceSelectionDiagnostics['selectionReason'];
+    capabilityMatches?: VoiceSelectionDiagnostics['capabilityMatches'];
+    capabilityMismatches?: VoiceSelectionDiagnostics['capabilityMismatches'];
   }[];
   voiceAssignments?: Record<string, string>;
 }

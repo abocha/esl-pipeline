@@ -373,6 +373,32 @@ export function summarizeVoiceSelections(
     .join(', ');
 }
 
+function categorizeProviderErrorFromMessage(error: unknown): string | null {
+  const message = error instanceof Error ? error.message : String(error);
+  const match =
+    /\[(invalid_voice_id|unsupported_voice_capability|provider_rate_limit|provider_timeout|provider_contract_error)\]/i.exec(
+      message,
+    );
+  if (!match?.[1]) return null;
+  return match[1].toLowerCase();
+}
+
+function emitVoiceSelectionMetrics(
+  metrics: OrchestratorDependencies['metrics'],
+  voices?: BuildStudyTextResult['voices'],
+): void {
+  if (!metrics || !voices || voices.length === 0) return;
+  const fallbackSelections = voices.filter((voice) => voice.source === 'fallback').length;
+  const reuseSelections = voices.filter((voice) => voice.source === 'reuse').length;
+  metrics.increment('esl.voice_alignment.selection_total', voices.length, {});
+  if (fallbackSelections > 0) {
+    metrics.increment('esl.voice_alignment.fallback_selections', fallbackSelections, {});
+  }
+  if (reuseSelections > 0) {
+    metrics.increment('esl.voice_alignment.reuse_selections', reuseSelections, {});
+  }
+}
+
 export async function planRerunAssignment(
   request: RerunPlanRequest,
   dependencies: OrchestratorDependencies = {},
@@ -697,6 +723,10 @@ export async function newAssignment(
           });
           throwIfCancelled(signal, 'tts');
         } catch (error: unknown) {
+          const category = categorizeProviderErrorFromMessage(error);
+          if (category) {
+            metrics.increment('esl.voice_alignment.provider_error', 1, { category });
+          }
           if (error instanceof FfmpegNotFoundError) {
             throw new Error(`TTS requires FFmpeg.\n\n${error.message}`, { cause: error });
           }
@@ -719,6 +749,7 @@ export async function newAssignment(
           throw error;
         }
         audio = { path: ttsResult.path, hash: ttsResult.hash, voices: ttsResult.voices };
+        emitVoiceSelectionMetrics(metrics, ttsResult.voices);
         const voiceSummary = summarizeVoiceSelections(ttsResult.voices);
         emitStage('tts', 'success', {
           path: ttsResult.path,
@@ -1221,6 +1252,10 @@ export async function rerunAssignment(
         });
         throwIfCancelled(signal, 'tts');
       } catch (error: unknown) {
+        const category = categorizeProviderErrorFromMessage(error);
+        if (category) {
+          metrics.increment('esl.voice_alignment.provider_error', 1, { category });
+        }
         if (error instanceof FfmpegNotFoundError) {
           throw new Error(`TTS requires FFmpeg.\n\n${error.message}`, { cause: error });
         }
@@ -1245,6 +1280,7 @@ export async function rerunAssignment(
       audioPath = ttsResult.path;
       audioHash = ttsResult.hash;
       audioVoices = ttsResult.voices;
+      emitVoiceSelectionMetrics(metrics, ttsResult.voices);
       emitStage('tts', 'success', {
         preview: flags.dryRun,
         voices: ttsResult.voices,

@@ -1,11 +1,13 @@
 import { mkdtemp, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
-import { describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { validateMarkdownFile } from '../src/validator.js';
 
 const fixturesPath = path.join(import.meta.dirname, '..', 'fixtures');
+
+const ORIGINAL_ENV = { ...process.env };
 
 function buildBaseDoc(firstSectionContent: string): string {
   return `
@@ -96,6 +98,14 @@ notes
 }
 
 describe('md-validator', () => {
+  beforeEach(() => {
+    process.env = { ...ORIGINAL_ENV };
+  });
+
+  afterEach(() => {
+    process.env = { ...ORIGINAL_ENV };
+  });
+
   it('passes ok fixture', async () => {
     const res = await validateMarkdownFile(path.join(fixturesPath, 'ok.md'));
     expect(res.ok).toBe(true);
@@ -318,6 +328,161 @@ content
     const res = await validateMarkdownFile(file);
     expect(res.ok).toBe(false);
     expect(res.errors.join('\n')).toMatch(/unknown speaker "Sam"/);
+  });
+
+  it('flags speaker_profiles ids that are not listed in speaker_labels', async () => {
+    const tempDir = await mkdtemp(path.join(tmpdir(), 'validator-'));
+    const file = path.join(tempDir, 'speaker-profile-mismatch.md');
+    await writeFile(
+      file,
+      `
+\`\`\`markdown
+---
+title: "Dialogue Test"
+student: Alex
+level: B1
+topic: "travel"
+input_type: generate
+speaker_labels: ["Alex", "Mara"]
+speaker_profiles:
+  - id: Alex
+    role: student
+    gender: male
+  - id: Sam
+    role: student
+    gender: female
+---
+
+## 1. This Week's Mission Briefing
+text
+
+## 2. Your Homework Roadmap
+text
+
+## 3. Input Material: The Source
+### B. Generated Material
+- **Text:**
+:::study-text
+Alex: Hello!
+Mara: Hi there.
+:::
+
+## 4. Language Toolkit: Useful Language
+text
+
+## 5. Practice & Pronunciation
+### A. Controlled Practice
+1) item
+2) item
+3) item
+4) item
+5) item
+6) item
+7) item
+8) item
+### B. Comprehension Check
+1) question
+2) question
+
+## 6. Your Turn: Complete the Mission!
+text
+
+## 7. Why This Mission Helps You
+text
+
+## 8. Answer Key & Sample Mission
+:::toggle-heading Answer Key
+content
+:::
+
+## 9. Teacher's Follow-up Plan
+:::toggle-heading Teacher's Follow-up Plan
+content
+:::
+\`\`\`
+    `.trim(),
+    );
+
+    const res = await validateMarkdownFile(file);
+    expect(res.ok).toBe(false);
+    expect(res.errors.join('\n')).toMatch(/speaker_profiles id "Sam" is not present in speaker_labels/i);
+  });
+
+  it('warns when speaker labels are missing speaker profiles', async () => {
+    const tempDir = await mkdtemp(path.join(tmpdir(), 'validator-'));
+    const file = path.join(tempDir, 'speaker-profile-missing.md');
+    await writeFile(
+      file,
+      `
+\`\`\`markdown
+---
+title: "Dialogue Test"
+student: Alex
+level: B1
+topic: "travel"
+input_type: generate
+speaker_labels: ["Alex", "Mara"]
+speaker_profiles:
+  - id: Alex
+    role: student
+    gender: male
+---
+
+## 1. This Week's Mission Briefing
+text
+
+## 2. Your Homework Roadmap
+text
+
+## 3. Input Material: The Source
+### B. Generated Material
+- **Text:**
+:::study-text
+Alex: Hello!
+Mara: Hi there.
+:::
+
+## 4. Language Toolkit: Useful Language
+text
+
+## 5. Practice & Pronunciation
+### A. Controlled Practice
+1) item
+2) item
+3) item
+4) item
+5) item
+6) item
+7) item
+8) item
+### B. Comprehension Check
+1) question
+2) question
+
+## 6. Your Turn: Complete the Mission!
+text
+
+## 7. Why This Mission Helps You
+text
+
+## 8. Answer Key & Sample Mission
+:::toggle-heading Answer Key
+content
+:::
+
+## 9. Teacher's Follow-up Plan
+:::toggle-heading Teacher's Follow-up Plan
+content
+:::
+\`\`\`
+    `.trim(),
+    );
+
+    const res = await validateMarkdownFile(file);
+    expect(res.ok).toBe(true);
+    expect(res.warnings.join('\n')).toMatch(
+      /speaker label "Mara" has no matching speaker_profile/i,
+    );
   });
 
   it('accepts video directive URL when separated by a space', async () => {
@@ -741,5 +906,88 @@ content
     const res = await validateMarkdownFile(file);
     expect(res.ok).toBe(false);
     expect(res.errors.join('\n')).toMatch(/Table .* inconsistent column counts/i);
+  });
+
+  it('warns about missing study_text_type in compatibility mode', async () => {
+    const tempDir = await mkdtemp(path.join(tmpdir(), 'validator-'));
+    const file = path.join(tempDir, 'missing-study-text-type.md');
+    await writeFile(file, buildBaseDoc('text'));
+
+    const res = await validateMarkdownFile(file);
+    expect(res.ok).toBe(true);
+    expect(res.warnings.join('\n')).toMatch(/study_text_type is required/i);
+    expect(res.voiceDiagnostics?.compatibilityMode?.enabled).toBe(true);
+  });
+
+  it('emits shadow mismatch diagnostics when v2 is enabled without strict mode', async () => {
+    process.env.VOICE_ALIGNMENT_V2_ENABLED = 'true';
+    process.env.VOICE_ALIGNMENT_V2_STRICT_VALIDATION = 'false';
+
+    const tempDir = await mkdtemp(path.join(tmpdir(), 'validator-'));
+    const file = path.join(tempDir, 'shadow-mode-mismatch.md');
+    await writeFile(file, buildBaseDoc('text'));
+
+    const res = await validateMarkdownFile(file);
+    expect(res.ok).toBe(true);
+    expect(res.voiceDiagnostics?.shadowMode?.enabled).toBe(true);
+    expect(res.voiceDiagnostics?.shadowMode?.mismatchClasses?.missing_study_text_type).toBe(1);
+    expect(res.voiceDiagnostics?.shadowMode?.mismatchTotal).toBeGreaterThanOrEqual(1);
+  });
+
+  it('hard-fails missing study_text_type when strict voice alignment flags are enabled', async () => {
+    process.env.VOICE_ALIGNMENT_V2_ENABLED = 'true';
+    process.env.VOICE_ALIGNMENT_V2_STRICT_VALIDATION = 'true';
+
+    const tempDir = await mkdtemp(path.join(tmpdir(), 'validator-'));
+    const file = path.join(tempDir, 'missing-study-text-type-strict.md');
+    await writeFile(file, buildBaseDoc('text'));
+
+    const res = await validateMarkdownFile(file);
+    expect(res.ok).toBe(false);
+    expect(res.errors.join('\n')).toMatch(/study_text_type is required/i);
+    expect(res.voiceDiagnostics?.compatibilityMode?.enabled).toBe(false);
+  });
+
+  it('hard-fails invalid speaker_profiles.voice when strict alignment and catalog are available', async () => {
+    process.env.VOICE_ALIGNMENT_V2_ENABLED = 'true';
+    process.env.VOICE_ALIGNMENT_V2_STRICT_VALIDATION = 'true';
+
+    const tempDir = await mkdtemp(path.join(tmpdir(), 'validator-'));
+    const voicesPath = path.join(tempDir, 'voices.json');
+    process.env.ELEVENLABS_VOICES_PATH = voicesPath;
+    await writeFile(
+      voicesPath,
+      JSON.stringify({
+        voices: [{ id: 'voice_1', name: 'Friendly Voice', labels: { accent: 'american' } }],
+      }),
+    );
+
+    const file = path.join(tempDir, 'bad-voice-override.md');
+    const md = buildBaseDoc('text')
+      .replace(
+        'input_type: generate',
+        ['input_type: generate', 'study_text_type: dialogue'].join('\n'),
+      )
+      .replace(
+        'speaker_labels: [Alex, Mara]\n---',
+        [
+          'speaker_labels: [Alex, Mara]',
+          'speaker_profiles:',
+          '  - id: Alex',
+          '    role: student',
+          '    gender: male',
+          '    voice: missing-voice-id',
+          '  - id: Mara',
+          '    role: student',
+          '    gender: female',
+          '    voice: Friendly Voice',
+          '---',
+        ].join('\n'),
+      );
+    await writeFile(file, md);
+
+    const res = await validateMarkdownFile(file);
+    expect(res.ok).toBe(false);
+    expect(res.errors.join('\n')).toMatch(/does not exist in the current voice catalog/i);
   });
 });
