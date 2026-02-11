@@ -84,6 +84,10 @@ describe('application/submit-job', () => {
     expect(insertJobSpy).toHaveBeenCalledWith({
       md: request.md,
       preset: request.preset,
+      learningPresetId: null,
+      learningPresetVersion: null,
+      promptSnapshotVersion: null,
+      promptAlias: null,
       withTts: request.withTts,
       upload: request.upload,
       voiceId: request.voiceId,
@@ -152,6 +156,10 @@ describe('application/submit-job', () => {
     expect(insertJobSpy).toHaveBeenCalledWith({
       md: fakeJob.md,
       preset: fakeJob.preset,
+      learningPresetId: 'general-english',
+      learningPresetVersion: 'v1',
+      promptSnapshotVersion: 'hw_prompt_v4-2_clean',
+      promptAlias: 'current',
       withTts: fakeJob.withTts,
       upload: fakeJob.upload,
       voiceId: fakeJob.voiceId,
@@ -164,6 +172,59 @@ describe('application/submit-job', () => {
       userId: undefined,
     });
     expect(enqueue).toHaveBeenCalledWith({ jobId: fakeJob.id });
+  });
+
+  it('accepts learningPresetId directly and persists provenance', async () => {
+    const fakeJob = {
+      id: 'job-789',
+      state: 'queued',
+      md: 'fixtures/ok.md',
+      preset: undefined,
+      withTts: false,
+      upload: null,
+      voiceId: null,
+      voiceAccent: null,
+      forceTts: null,
+      notionDatabase: null,
+      ttsStrategy: null,
+      notionUrl: null,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    };
+
+    insertJobSpy.mockResolvedValue(fakeJob as any);
+
+    const enqueue = vi.fn().mockResolvedValue(void 0);
+    createJobQueueSpy.mockReturnValue({
+      queue: {} as any,
+      queueEvents: {} as any,
+      enqueue,
+      cancelQueuedJob: vi.fn(),
+    });
+
+    await submitJob({
+      md: fakeJob.md,
+      learningPresetId: 'general-english',
+    });
+
+    expect(insertJobSpy).toHaveBeenCalledWith({
+      md: fakeJob.md,
+      preset: undefined,
+      learningPresetId: 'general-english',
+      learningPresetVersion: 'v1',
+      promptSnapshotVersion: 'hw_prompt_v4-2_clean',
+      promptAlias: 'current',
+      withTts: undefined,
+      upload: undefined,
+      voiceId: undefined,
+      voiceAccent: undefined,
+      forceTts: undefined,
+      notionDatabase: undefined,
+      publishTarget: 'notion',
+      ttsStrategy: undefined,
+      autoPublish: undefined,
+      userId: undefined,
+    });
   });
 
   it('rejects when md is missing or not a string', async () => {

@@ -2305,6 +2305,7 @@ export function registerExtendedRoutes(app: FastifyInstance, options: ExtendedRo
 
       const jobOverridesSchema = z.object({
         preset: z.string().min(1).optional(),
+        learningPresetId: z.string().min(1).optional(),
         notionDatabase: z.string().min(1).optional(),
         publishTarget: z.enum(['notion', 'anytype', 'html']).optional(),
         withTts: z.boolean().optional(),
@@ -3313,6 +3314,7 @@ export function registerExtendedRoutes(app: FastifyInstance, options: ExtendedRo
     const jobSchema = z.object({
       md: z.string().min(1),
       preset: z.string().optional(),
+      learningPresetId: z.string().optional(),
       withTts: z.boolean().optional(),
       upload: z.enum(['auto', 's3', 'none']).optional(),
       voiceAccent: z.string().min(1).optional(),
@@ -3328,6 +3330,7 @@ export function registerExtendedRoutes(app: FastifyInstance, options: ExtendedRo
       const result = await submitJob({
         md: validatedData.md,
         preset: validatedData.preset,
+        learningPresetId: validatedData.learningPresetId,
         withTts: validatedData.withTts,
         upload: validatedData.upload,
         voiceId: validatedData.voiceId,

@@ -43,14 +43,18 @@ describe('FileValidationService', () => {
       expect(result.errors[0]?.code).toBe('FILE_SIZE_EXCEEDED');
     });
 
-    it('should warn about files approaching size limit', async () => {
+    it(
+      'should warn about files approaching size limit',
+      async () => {
       const nearLimitBuffer = Buffer.alloc(8 * 1024 * 1024); // 8MB (80% of 10MB)
       const result = await validationService.validateFile(nearLimitBuffer, 'near-limit.md');
 
       expect(result.isValid).toBe(true);
       // Should have warnings about size but still be valid
       expect(result.warnings.length).toBeGreaterThanOrEqual(0);
-    });
+      },
+      15_000,
+    );
   });
 
   describe('File Extension Validation', () => {

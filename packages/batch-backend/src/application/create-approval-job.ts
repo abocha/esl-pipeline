@@ -9,6 +9,7 @@ import { insertApprovalJob } from '../domain/job-repository.js';
 import type { PromptPackageRecord } from '../domain/prompt-package-model.js';
 import { getDefaultSettings } from '../domain/settings-model.js';
 import { createDefaultSettings, getSettingsByUserId } from '../domain/settings-repository.js';
+import { buildLearningPresetProvenance, normalizeLearningPresetId } from './learning-preset.js';
 
 export interface CreateApprovalJobParams {
   draft: DraftRecord;
@@ -60,6 +61,12 @@ export async function createApprovalJobFromDraft(
 
   const jobOverrides = params.jobOverrides ?? {};
   const withTts = jobOverrides.withTts ?? hasTtsKey;
+  const selectedPreset = jobOverrides.preset ?? preset;
+  const learningPresetId = normalizeLearningPresetId({
+    learningPresetId: jobOverrides.learningPresetId,
+    preset: selectedPreset,
+  });
+  const provenance = buildLearningPresetProvenance(learningPresetId);
 
   const job = await jobs.insertApprovalJob({
     recordingId: params.promptPackage.recordingId,
@@ -67,7 +74,11 @@ export async function createApprovalJobFromDraft(
     promptPackageId: params.promptPackage.id,
     draftId: params.draft.id,
     userId: params.draft.createdBy ?? undefined,
-    preset: jobOverrides.preset ?? preset,
+    preset: selectedPreset,
+    learningPresetId: provenance.learningPresetId,
+    learningPresetVersion: provenance.learningPresetVersion,
+    promptSnapshotVersion: provenance.promptSnapshotVersion,
+    promptAlias: provenance.promptAlias,
     withTts,
     ttsStrategy: jobOverrides.ttsStrategy ?? ttsStrategy,
     voiceAccent: jobOverrides.voiceAccent ?? voiceAccent,

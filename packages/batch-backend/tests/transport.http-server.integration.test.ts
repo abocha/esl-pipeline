@@ -521,6 +521,7 @@ describe('transport/http-server - integration (in-process)', () => {
     expect(submitJob).toHaveBeenCalledWith({
       md: 'fixtures/ok.md',
       preset: undefined,
+      learningPresetId: undefined,
       withTts: undefined,
       upload: undefined,
       voiceId: undefined,
@@ -555,6 +556,7 @@ describe('transport/http-server - integration (in-process)', () => {
     expect(submitJob).toHaveBeenCalledWith({
       md: 'fixtures/ok.md',
       preset: 'b1-default',
+      learningPresetId: undefined,
       withTts: true,
       upload: 'auto',
       voiceId: 'voice_amanda',
@@ -562,6 +564,35 @@ describe('transport/http-server - integration (in-process)', () => {
       forceTts: true,
       notionDatabase: 'db-123',
       ttsStrategy: 'dialogue',
+    });
+  });
+
+  it('POST /jobs accepts learningPresetId and forwards it', async () => {
+    const submitJob = vi.spyOn(submitJobModule, 'submitJob');
+    submitJob.mockResolvedValue({ jobId: 'job-345' });
+
+    const response = await app.inject({
+      method: 'POST',
+      url: '/jobs',
+      payload: {
+        md: 'fixtures/ok.md',
+        learningPresetId: 'general-english',
+      },
+    });
+
+    expect(response.statusCode).toBe(202);
+    expect(submitJob).toHaveBeenCalledWith({
+      md: 'fixtures/ok.md',
+      preset: undefined,
+      learningPresetId: 'general-english',
+      withTts: undefined,
+      upload: undefined,
+      voiceId: undefined,
+      voiceAccent: undefined,
+      forceTts: undefined,
+      notionDatabase: undefined,
+      publishTarget: undefined,
+      ttsStrategy: undefined,
     });
   });
 
@@ -2062,6 +2093,7 @@ describe('transport/http-server - integration (in-process)', () => {
     const payload = {
       jobOverrides: {
         preset: 'b1-default',
+        learningPresetId: 'general-english',
         notionDatabase: 'notion-db',
         withTts: true,
         forceTts: true,
@@ -2484,6 +2516,7 @@ describe('transport/http-server - integration (in-process)', () => {
       state: 'running',
       md: 'fixtures/ok.md',
       preset: 'b1-default',
+      learningPresetId: 'general-english',
       withTts: true,
       upload: 's3',
       voiceAccent: 'american_female',
@@ -2571,6 +2604,7 @@ describe('transport/http-server - integration (in-process)', () => {
     expect(eventPayload.jobId).toBe(job.id);
     expect(eventPayload.state).toBe('running');
     expect(eventPayload.payload?.ttsStrategy).toBeNull();
+    expect(eventPayload.payload?.learningPresetId).toBe('general-english');
     expect(eventPayload.payload?.md).toBe(job.md);
     expect(getJobStatus).toHaveBeenCalledTimes(1);
   });

@@ -35,8 +35,8 @@
 
 - Active workstream: `WS2A Preset plumbing MVP`.
 - This week objective: land Preset V2 plumbing in contracts/backend/frontend with compatibility.
-- Today `Now` task (30-90 min): complete `WS2A-S1` only.
-- Success for today: Learning Preset contracts + DB schema plumbing are merged with passing targeted tests.
+- Today `Now` task (30-90 min): complete `WS2A-S3` only.
+- Success for today: minimal frontend wiring consumes Learning Preset metadata and submits canonical ids.
 
 ## Delivery Model (Locked)
 
@@ -281,7 +281,7 @@ Implement Preset V2 core structure so one trusted `general-english` preset can s
 - [ ] Immutable snapshot + alias policy is documented.
 - [ ] DB-first Learning Preset persistence is implemented for WS2A surfaces.
 - [ ] Dual-accept compatibility works for legacy preset ids and Learning Preset ids.
-- [ ] Backend routes/services return Learning Preset provenance fields.
+- [x] Backend routes/services return Learning Preset provenance fields.
 - [ ] Frontend minimal flow consumes Learning Preset metadata without regression.
 - [ ] Preview requirement is enforced through HTML renderer path before publish.
 - [ ] General English-only scope lock remains explicit.
@@ -393,6 +393,7 @@ Recent evidence:
 - 2026-02-10 | WS0-C | md-validator accepts spaced media directive URLs | n/a | merged | commit `38d349c`
 - 2026-02-10 | WS0-D | improved Anytype published HTML visuals | n/a | merged | commit `1156b73`
 - 2026-02-11 | WS2A-S1 | WS2A-S1 done: contracts + DB schema plumbing for Learning Preset provenance landed with compatibility preserved. | `rg -n "learningPreset|promptSnapshot|promptAlias|preset" packages/contracts packages/batch-backend/src`; `pnpm --filter @esl-pipeline/contracts typecheck`; `pnpm --filter @esl-pipeline/batch-backend test -- application.job-dto.test.ts` | pass | local workspace
+- 2026-02-11 | WS2A-S2 | WS2A-S2 done: backend accepts Learning Preset ids, preserves legacy preset compatibility, and returns provenance fields. | `rg -n "learningPresetId|presets|job-options|materialize|jobOverrides" packages/batch-backend/src`; `pnpm --filter @esl-pipeline/batch-backend test -- application.get-job-options.test.ts`; `pnpm --filter @esl-pipeline/batch-backend test -- application.submit-job.test.ts application.draft.test.ts`; `pnpm --filter @esl-pipeline/batch-backend test -- transport.http-server.integration.test.ts` | pass | local workspace
 
 ## Weekly Closeout Checklist
 
