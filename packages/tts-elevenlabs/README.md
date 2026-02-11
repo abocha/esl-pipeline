@@ -1,263 +1,89 @@
 # @esl-pipeline/tts-elevenlabs
 
-High-performance Text-to-Speech and Text-to-Dialogue synthesis using ElevenLabs API. Converts `:::study-text` content from Markdown files into high-quality MP3 assets with speaker voice assignment.
+ElevenLabs integration for ESL Pipeline audio generation.
 
-## Features
+## What It Does
 
-- **Real ElevenLabs API Integration**: Full API support with proper authentication
-- **Voice Sync**: Automatic voice synchronization with ElevenLabs account
-- **Speaker Assignment**: Flexible speaker-to-voice mapping
-- **Multiple Output Formats**: MP3, Opus, and other audio formats
-- **Chunking & Concurrency**: Handles large content with intelligent chunking
-- **Caching**: SHA-256 based caching for optimal performance
+- Reads `:::study-text` content from lesson markdown.
+- Resolves speaker-to-voice assignments from `voices.yml` + optional speaker profiles.
+- Generates MP3 output via ElevenLabs Text-to-Speech or Text-to-Dialogue.
+- Uses ffmpeg for stitching/metadata.
 
-## Strategy Selection (TTS vs Dialogue)
+## Requirements
 
-This package now supports both **Text-to-Speech** and **Text-to-Dialogue** APIs for enhanced audio generation:
-
-### Supported Strategies
-
-- **Auto** (default): Automatically detects content type and selects appropriate mode
-- **Dialogue**: Forces use of ElevenLabs Text-to-Dialogue API for multi-speaker content
-- **TTS**: Uses traditional Text-to-Speech API
-
-### API Models
-
-- **Dialogue Mode**: ElevenLabs v3 (`model_id: "eleven_v3"`) - Optimized for multi-speaker conversations
-- **TTS**: Defaults to ElevenLabs v2 (`model_id: "eleven_multilingual_v2"`) unless overridden via `ELEVENLABS_MODEL_ID`
-
-### Environment Variables
-
-Use these environment variables to control strategy:
-
-```bash
-# TTS strategy selection: auto, dialogue, or tts
-ELEVENLABS_TTS_STRATEGY=auto
-
-# Dialogue strategy settings (optional)
-ELEVENLABS_DIALOGUE_LANGUAGE=en
-ELEVENLABS_DIALOGUE_STABILITY=0.5
-ELEVENLABS_DIALOGUE_SEED=42
-```
-
-### CLI Usage Examples
-
-```bash
-# Auto-detect mode (default behavior)
-tts-elevenlabs --md lesson.md --voice-map voices.yml
-
-# Force dialogue strategy
-tts-elevenlabs --md lesson.md --voice-map voices.yml --tts-strategy dialogue
-
-# Force TTS strategy
-tts-elevenlabs --md lesson.md --voice-map voices.yml --tts-strategy tts
-
-# Dialogue strategy with custom settings
-tts-elevenlabs --md lesson.md \
-  --voice-map voices.yml \
-  --tts-strategy dialogue \
-  --dialogue-language en \
-  --dialogue-stability 0.7 \
-  --dialogue-seed 42
-```
-
-### Voice Mapping
-
-Dialogue mode requires speaker-to-voice mappings in your voice configuration:
-
-```yaml
-# packages/orchestrator/configs/voices.yml (example)
-speakers:
-  Alex:
-    voice_id: '21m00Tcm4TlvDq8ikWAM' # Rachel voice
-  Sarah:
-    voice_id: 'AZnzlk1XvdvUeBnXmlld' # Bella voice
-
-# Or use profiles
-speaker_profiles:
-  - id: 'teacher'
-    gender: 'female'
-    accent: 'american'
-  - id: 'student'
-    gender: 'male'
-    accent: 'british'
-```
-
-### Programmatic Usage
-
-```typescript
-import { buildStudyTextMp3 } from '@esl-pipeline/tts-elevenlabs';
-
-// Auto mode (recommended)
-const result1 = await buildStudyTextMp3({
-  md: 'lesson.md',
-  voicesYml: 'voices.yml',
-  ttsStrategy: 'auto', // Best-effort based on content heuristics
-});
-
-// Force dialogue strategy
-const result2 = await buildStudyTextMp3({
-  md: 'lesson.md',
-  voicesYml: 'voices.yml',
-  ttsStrategy: 'dialogue',
-  dialogueLanguage: 'en',
-  dialogueStability: 0.7,
-  dialogueSeed: 42,
-});
-```
-
-### Performance Benefits
-
-Dialogue mode provides:
-
-- **Fewer API calls**: 1 request vs. N requests (where N = dialogue lines)
-- **Better speaker continuity**: Natural voice transitions between speakers
-- **Reduced latency**: Parallel processing within ElevenLabs
-- **Improved caching**: Single cache file vs. many small files
-
-### Error Handling
-
-Dialogue mode validates all speakers have voice mappings:
-
-```
-Error: No voice mapping found for speaker "Alex".
-Available speakers: Sarah, Bob, Teacher
-```
-
-To fix: Add the missing speaker to your voice configuration.
-
-### See Also
-
-- [NOTES-elevenlabs.md](NOTES-elevenlabs.md) - Detailed API documentation
-- [DESIGN-dual-mode.md](DESIGN-dual-mode.md) - Technical design document
-- Tests: [tests/dialogue.test.ts](tests/dialogue.test.ts), [tests/strategy-selection.test.ts](tests/strategy-selection.test.ts)
+- Node.js `24.11.1+`
+- `ELEVENLABS_API_KEY` set in environment
+- `ffmpeg` on `PATH` (or `FFMPEG_PATH`)
 
 ## CLI
 
-```
-tts-elevenlabs --md lesson.md --voice-map ./packages/orchestrator/configs/voices.yml --out ./out [--tts-strategy auto|dialogue|tts] [--preview]
-```
+### `tts-elevenlabs`
 
-Outputs JSON containing the destination path and hash with speaker metadata.
-
-## API Reference
-
-### buildStudyTextMp3()
-
-Main function for converting study text to MP3 audio files.
-
-#### Parameters
-
-##### BuildStudyTextOptions
-
-```typescript
-interface BuildStudyTextOptions {
-  md: string;
-  voicesYml: string;
-  outputDir?: string;
-  cacheDir?: string;
-  voiceMap?: Record<string, string>;
-  voiceSettings?: VoiceSettings;
-  outputFormat?: string;
-
-  // Strategy selection (auto chooses based on content heuristics)
-  ttsStrategy?: 'auto' | 'dialogue' | 'tts';
-  dialogueLanguage?: string;
-  dialogueStability?: number;
-  dialogueSeed?: number;
-}
+```bash
+tts-elevenlabs \
+  --md lesson.md \
+  --voice-map ./packages/orchestrator/configs/voices.yml \
+  --out ./out \
+  --tts-strategy auto
 ```
 
-#### Returns
+Options:
 
-```typescript
-interface BuildStudyTextResult {
-  outputPath: string;
-  audioDuration: number;
-  speakers?: string[];
-  dialogueUsed: boolean;
-  hash: string;
-}
+- `--preview`
+- `--force`
+- `--tts-strategy auto|dialogue|tts`
+- `--dialogue-language <code>`
+- `--dialogue-stability <0..1>`
+- `--dialogue-seed <int>`
+
+### `tts-voices`
+
+Syncs allowed voices from ElevenLabs into the catalog used by orchestrator/batch-backend:
+
+```bash
+pnpm --filter @esl-pipeline/tts-elevenlabs build
+pnpm --filter @esl-pipeline/tts-elevenlabs run voices:sync
 ```
 
-### syncVoices()
+Explicit destination:
 
-Synchronize available voices from ElevenLabs account.
+```bash
+pnpm --filter @esl-pipeline/tts-elevenlabs exec node dist/bin/voices.js \
+  --out /absolute/path/to/packages/orchestrator/configs/elevenlabs.voices.json
+```
 
-```typescript
-import { syncVoices } from '@esl-pipeline/tts-elevenlabs';
+## Programmatic API
 
-await syncVoices({
-  output: './packages/orchestrator/configs/elevenlabs.voices.json',
+```ts
+import { buildStudyTextMp3 } from '@esl-pipeline/tts-elevenlabs';
+
+const result = await buildStudyTextMp3('/abs/path/lesson.md', {
+  voiceMapPath: '/abs/path/packages/orchestrator/configs/voices.yml',
+  outPath: '/abs/path/out',
+  ttsStrategy: 'auto',
+  force: false,
 });
 ```
 
-## Installation
+### `BuildStudyTextOptions`
 
-```bash
-npm install @esl-pipeline/tts-elevenlabs
-# or
-pnpm add @esl-pipeline/tts-elevenlabs
-# or
-yarn add @esl-pipeline/tts-elevenlabs
-```
+- `voiceMapPath: string`
+- `outPath: string`
+- `preview?: boolean`
+- `force?: boolean`
+- `defaultAccent?: string`
+- `defaultVoiceId?: string`
+- `ffmpegPath?: string`
+- `outputFormat?: string`
+- `ttsStrategy?: 'auto' | 'tts' | 'dialogue'`
+- `dialogueLanguage?: string`
+- `dialogueStability?: number`
+- `dialogueSeed?: number`
 
-## Setup
+### `BuildStudyTextResult`
 
-1. **Set Environment Variables**:
-
-   ```bash
-   export ELEVENLABS_API_KEY=your_api_key_here
-   export ELEVENLABS_TTS_STRATEGY=auto  # Optional: defaults to auto
-   ```
-
-2. **Configure Voices** (see `bin/voices.ts` for interactive setup):
-
-   ```bash
-   tts-elevenlabs voices --sync  # Sync from your ElevenLabs account
-   tts-elevenlabs voices --interactive  # Interactive voice mapping setup
-   ```
-
-3. **Create Voice Configuration**:
-   ```yaml
-   # packages/orchestrator/configs/voices.yml
-   speakers:
-     Teacher:
-       voice_id: '21m00Tcm4TlvDq8ikWAM'
-     Student:
-       voice_id: 'AZnzlk1XvdvUeBnXmlld'
-   ```
-
-## Changelog
-
-### v2.0.0 - 2025-11-12
-
-#### Added
-
-- **Dual TTS Mode Support**: Automatic content-type detection with mode selection
-- **Text-to-Dialogue API**: Support for multi-speaker conversations using ElevenLabs v3
-- **CLI Flags**: `--tts-strategy`, `--dialogue-language`, `--dialogue-stability`, `--dialogue-seed`
-- **Environment Variables**: `ELEVENLABS_TTS_STRATEGY`, `ELEVENLABS_DIALOGUE_LANGUAGE`, etc.
-- **Comprehensive Tests**: 48 tests covering all new functionality
-- **Documentation**: API notes and updated README
-
-#### Changed
-
-- Enhanced `buildStudyTextMp3()` to support mode selection
-- Extended `BuildStudyTextOptions` with new optional fields
-- Improved speaker continuity in dialogue mode
-
-#### Fixed
-
-- Better error messages for missing voice mappings
-- Proper cleanup of temporary files in all scenarios
-
-#### Breaking Changes
-
-- **None** - Fully backward compatible
-
-### v1.0.0 - 2024-XX-XX
-
-- Initial release with basic Text-to-Speech support
-- Speaker assignment functionality
-- Basic ElevenLabs API integration
+- `path: string`
+- `duration?: number`
+- `hash: string`
+- `voices: Array<{ speaker; voiceId; source; score?; voiceName?; gender?; accent?; useCase? }>`
+- `voiceAssignments?: Record<string, string>`

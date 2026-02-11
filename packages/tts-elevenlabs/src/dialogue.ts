@@ -3,6 +3,7 @@ import { createWriteStream } from 'node:fs';
 import { stat } from 'node:fs/promises';
 import { resolve } from 'node:path';
 
+import { estimateDurationFromFileSize } from './audioDuration.js';
 import { concatMp3Segments } from './ffmpeg.js';
 import type {
   DialogueChunk,
@@ -214,6 +215,7 @@ export async function synthesizeDialogue(
 
   // Generate hash for caching
   const hash = buildDialogueHash(options.inputs, options);
+  const outputFormat = options.outputFormat ?? DEFAULT_OUTPUT_FORMAT;
 
   // Chunk inputs if necessary
   const chunks = chunkDialogueInputs(options.inputs);
@@ -273,15 +275,7 @@ export async function synthesizeDialogue(
     try {
       const stats = await stat(finalPath);
       if (stats.size > 0) {
-        // Approximate duration based on file size and bitrate
-        const match = DEFAULT_OUTPUT_FORMAT.match(/mp3_\d+_(\d+)/);
-        if (match) {
-          const kbps = Number.parseInt(match[1]!, 10);
-          if (kbps) {
-            const seconds = (stats.size * 8) / (kbps * 1000);
-            duration = Math.round(seconds * 100) / 100;
-          }
-        }
+        duration = estimateDurationFromFileSize(stats.size, outputFormat);
       }
     } catch {
       // Duration calculation is optional
