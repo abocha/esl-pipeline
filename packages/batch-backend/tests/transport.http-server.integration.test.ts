@@ -667,7 +667,6 @@ describe('transport/http-server - integration (in-process)', () => {
       startedAt: null,
       finishedAt: null,
       error: null,
-      providerError: null,
       manifestPath: '/manifests/job-approve-1.json',
     });
 
