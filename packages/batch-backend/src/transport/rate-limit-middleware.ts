@@ -527,10 +527,7 @@ function getRequestIdentifier(request: FastifyRequest): string {
     return `user:${user.id}`;
   }
 
-  // Fall back to IP address
-  const forwarded = request.headers['x-forwarded-for'] as string;
-  const realIp = request.headers['x-real-ip'] as string;
-  const clientIp = forwarded?.split(',')[0]?.trim() || realIp || request.ip;
-
-  return `ip:${clientIp}`;
+  // Fall back to Fastify-resolved remote IP.
+  // Do not trust raw forwarded headers here because they are user-controlled.
+  return `ip:${request.ip || 'unknown'}`;
 }
