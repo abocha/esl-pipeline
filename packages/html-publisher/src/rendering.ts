@@ -1029,9 +1029,13 @@ function parseHttpUrl(url: string): URL | null {
   }
 }
 
+function isHostOrSubdomain(hostname: string, domain: string): boolean {
+  return hostname === domain || hostname.endsWith(`.${domain}`);
+}
+
 function extractYouTubeId(url: URL): string | null {
   const host = url.hostname.toLowerCase();
-  if (host.endsWith('youtube.com')) {
+  if (isHostOrSubdomain(host, 'youtube.com')) {
     const idFromQuery = url.searchParams.get('v');
     if (idFromQuery && /^[\w-]{6,}$/.test(idFromQuery)) {
       return idFromQuery;
@@ -1051,7 +1055,7 @@ function extractYouTubeId(url: URL): string | null {
 }
 
 function extractVimeoId(url: URL): string | null {
-  if (!url.hostname.toLowerCase().endsWith('vimeo.com')) {
+  if (!isHostOrSubdomain(url.hostname.toLowerCase(), 'vimeo.com')) {
     return null;
   }
   const id = url.pathname.replace(/^\//, '').split('/')[0] ?? '';

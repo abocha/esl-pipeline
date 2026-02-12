@@ -582,14 +582,17 @@ export class FileValidationService {
       const urlMatch = linkMatch.match(/\]\(([^)]*)\)/);
       if (urlMatch && urlMatch[1]) {
         const url = urlMatch[1];
+        const normalizedUrl = url.trim().toLowerCase();
+        const compactUrl = normalizedUrl.replaceAll(/\s+/g, '');
 
         // Check for clearly malicious protocols
         if (
-          url.startsWith('javascript:') ||
-          url.startsWith('data:text/html') ||
-          url.startsWith('file:') ||
-          url.includes(String.raw`\x00`) ||
-          url.includes('%00')
+          compactUrl.startsWith('javascript:') ||
+          compactUrl.startsWith('data:') ||
+          compactUrl.startsWith('file:') ||
+          compactUrl.startsWith('vbscript:') ||
+          normalizedUrl.includes('\0') ||
+          normalizedUrl.includes('%00')
         ) {
           errors.push({
             code: 'MALICIOUS_LINK_PATTERN',

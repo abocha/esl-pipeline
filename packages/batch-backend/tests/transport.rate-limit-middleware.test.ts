@@ -5,7 +5,10 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { createRedisClient } from '../src/infrastructure/redis.js';
-import { RateLimiterService } from '../src/transport/rate-limit-middleware.js';
+import {
+  RateLimiterService,
+  createUploadRateLimitMiddleware,
+} from '../src/transport/rate-limit-middleware.js';
 
 // Mock Redis client
 vi.mock('../src/infrastructure/redis', () => ({
@@ -235,44 +238,60 @@ describe('Rate Limit Middleware', () => {
     );
   });
 
-  it('should integrate with Fastify middleware pattern', async () => {
+  it('should use request.ip for anonymous requests even when forwarded headers are spoofed', async () => {
+    const checkRateLimit = vi.fn().mockResolvedValue({
+      allowed: true,
+      remainingRequests: 9,
+      resetTime: Date.now() + 60_000,
+      limit: 10,
+      count: 1,
+    });
+    const middleware = createUploadRateLimitMiddleware({
+      checkRateLimit,
+    } as unknown as RateLimiterService);
+
     const mockRequest = {
-      headers: { 'x-forwarded-for': '192.168.1.1' },
+      headers: {
+        'x-forwarded-for': '203.0.113.9',
+        'x-real-ip': '198.51.100.8',
+      },
+      ip: '10.0.0.5',
       user: null,
     };
     const mockReply = {
-      code: vi.fn().mockReturnThis(),
-      send: vi.fn(),
+      header: vi.fn().mockReturnThis(),
     };
-    const mockNext = vi.fn();
 
-    rateLimiter = new RateLimiterService(mockRedis, {
-      windowSize: 60 * 1000,
-      maxRequests: 10,
-      burstLimit: 20,
-      burstWindow: 10 * 1000,
-      keyPrefix: 'test:rate_limit',
+    await middleware(mockRequest as any, mockReply as any);
+
+    expect(checkRateLimit).toHaveBeenCalledWith('ip:10.0.0.5');
+  });
+
+  it('should prefer authenticated user identifier over IP address', async () => {
+    const checkRateLimit = vi.fn().mockResolvedValue({
+      allowed: true,
+      remainingRequests: 9,
+      resetTime: Date.now() + 60_000,
+      limit: 10,
+      count: 1,
     });
+    const middleware = createUploadRateLimitMiddleware({
+      checkRateLimit,
+    } as unknown as RateLimiterService);
 
-    mockRedis.zremrangebyscore.mockResolvedValue(0);
-    mockRedis.zcard.mockResolvedValue(5);
-    mockRedis.zadd.mockResolvedValue(1);
-
-    const middleware = async (request: any, reply: any, next: any) => {
-      const identifier = request.headers['x-forwarded-for'] || 'unknown';
-      const result = await rateLimiter.checkRateLimit(identifier);
-
-      if (!result.allowed) {
-        reply.code(429).send({ error: 'Rate limit exceeded' });
-        return;
-      }
-
-      next();
+    const mockRequest = {
+      headers: {
+        'x-forwarded-for': '203.0.113.9',
+      },
+      ip: '10.0.0.5',
+      user: { id: 'user-42' },
+    };
+    const mockReply = {
+      header: vi.fn().mockReturnThis(),
     };
 
-    await middleware(mockRequest, mockReply, mockNext);
+    await middleware(mockRequest as any, mockReply as any);
 
-    expect(mockReply.code).not.toHaveBeenCalledWith(429);
-    expect(mockNext).toHaveBeenCalled();
+    expect(checkRateLimit).toHaveBeenCalledWith('user:user-42');
   });
 });

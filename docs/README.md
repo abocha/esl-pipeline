@@ -52,6 +52,7 @@
 - Need weekly grounding review cadence: `docs/playbooks/WEEKLY_PRODUCT_REVIEW_TEMPLATE.md`.
 - Need student-system implementation roadmap and execution checklist: `docs/reference/STUDENT_SYSTEM_ROADMAP.md`.
 - Need Docker mount/permissions troubleshooting: `docs/operations/docker-host-paths.md`.
+- Need latest security scan triage and fix log: `docs/reference/SECURITY_SCANS_2026-02-12.md`.
 
 ## Related
 
@@ -63,4 +64,5 @@
 - `docs/playbooks/WEEKLY_PRODUCT_REVIEW_TEMPLATE.md`
 - `docs/playbooks/RESTART_TOMORROW.md`
 - `docs/reference/STUDENT_SYSTEM_ROADMAP.md`
+- `docs/reference/SECURITY_SCANS_2026-02-12.md`
 - `docs/archive/README.md`

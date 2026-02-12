@@ -33,7 +33,9 @@ export class EncryptionService {
    */
   encrypt(plaintext: string): string {
     const iv = randomBytes(IV_LENGTH);
-    const cipher = createCipheriv(ALGORITHM, this.key, iv);
+    const cipher = createCipheriv(ALGORITHM, this.key, iv, {
+      authTagLength: AUTH_TAG_LENGTH,
+    });
 
     const encrypted = Buffer.concat([cipher.update(plaintext, 'utf8'), cipher.final()]);
     const authTag = cipher.getAuthTag();
@@ -55,7 +57,9 @@ export class EncryptionService {
     const authTag = combined.subarray(combined.length - AUTH_TAG_LENGTH);
     const ciphertext = combined.subarray(IV_LENGTH, combined.length - AUTH_TAG_LENGTH);
 
-    const decipher = createDecipheriv(ALGORITHM, this.key, iv);
+    const decipher = createDecipheriv(ALGORITHM, this.key, iv, {
+      authTagLength: AUTH_TAG_LENGTH,
+    });
     decipher.setAuthTag(authTag);
 
     const decrypted = Buffer.concat([decipher.update(ciphertext), decipher.final()]);

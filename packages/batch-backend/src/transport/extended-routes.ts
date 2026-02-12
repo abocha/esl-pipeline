@@ -2617,93 +2617,97 @@ export function registerExtendedRoutes(app: FastifyInstance, options: ExtendedRo
     },
   );
 
-  app.post('/auth/register', async (request, reply) => {
-    const body = request.body as UserRegistration | undefined;
+  app.post(
+    '/auth/register',
+    { preHandler: [uploadRateLimitMiddleware] },
+    async (request, reply) => {
+      const body = request.body as UserRegistration | undefined;
 
-    try {
-      if (!body || !body.email || !body.password) {
-        return reply.code(400).send({
-          error: 'validation_failed',
-          message: 'Email and password are required',
-          code: 'missing_fields',
-        });
-      }
-
-      const authService = createAuthService();
-      if (!authService.validateEmail(body.email)) {
-        return reply.code(400).send({
-          error: 'validation_failed',
-          message: 'Invalid email format',
-          code: 'invalid_email',
-        });
-      }
-
-      const passwordValidation = authService.validatePassword(body.password);
-      if (!passwordValidation.valid) {
-        return reply.code(400).send({
-          error: 'validation_failed',
-          message: 'Password does not meet requirements',
-          code: 'weak_password',
-          details: passwordValidation.errors,
-        });
-      }
-
-      let role: UserRole = 'user';
-      if (body.role) {
-        if (!isValidRole(body.role)) {
+      try {
+        if (!body || !body.email || !body.password) {
           return reply.code(400).send({
             error: 'validation_failed',
-            message: 'Invalid role specified',
-            code: 'invalid_role',
+            message: 'Email and password are required',
+            code: 'missing_fields',
           });
         }
-        role = body.role;
-      }
 
-      const existingUser = await getUserByEmail(body.email);
-      if (existingUser) {
-        return reply.code(409).send({
-          error: 'conflict',
-          message: 'User with this email already exists',
-          code: 'email_exists',
+        const authService = createAuthService();
+        if (!authService.validateEmail(body.email)) {
+          return reply.code(400).send({
+            error: 'validation_failed',
+            message: 'Invalid email format',
+            code: 'invalid_email',
+          });
+        }
+
+        const passwordValidation = authService.validatePassword(body.password);
+        if (!passwordValidation.valid) {
+          return reply.code(400).send({
+            error: 'validation_failed',
+            message: 'Password does not meet requirements',
+            code: 'weak_password',
+            details: passwordValidation.errors,
+          });
+        }
+
+        let role: UserRole = 'user';
+        if (body.role) {
+          if (!isValidRole(body.role)) {
+            return reply.code(400).send({
+              error: 'validation_failed',
+              message: 'Invalid role specified',
+              code: 'invalid_role',
+            });
+          }
+          role = body.role;
+        }
+
+        const existingUser = await getUserByEmail(body.email);
+        if (existingUser) {
+          return reply.code(409).send({
+            error: 'conflict',
+            message: 'User with this email already exists',
+            code: 'email_exists',
+          });
+        }
+
+        const passwordHash = await authService.hashPassword(body.password);
+        const user = await createUser({
+          email: body.email.toLowerCase(),
+          passwordHash,
+          role,
+          isActive: true,
+        });
+
+        logger.info('User registered successfully', {
+          userId: user.id,
+          email: user.email,
+          role: user.role,
+        });
+
+        const sanitizedUser = sanitizeUser(user);
+
+        return reply.code(201).send({
+          message: 'User registered successfully',
+          user: sanitizedUser,
+        });
+      } catch (error: unknown) {
+        logger.error(error instanceof Error ? error : String(error), {
+          event: 'http_request',
+          route: 'POST /auth/register',
+          statusCode: 500,
+          error: 'internal_error',
+        });
+
+        return reply.code(500).send({
+          error: 'internal_error',
         });
       }
+    },
+  );
 
-      const passwordHash = await authService.hashPassword(body.password);
-      const user = await createUser({
-        email: body.email.toLowerCase(),
-        passwordHash,
-        role,
-        isActive: true,
-      });
-
-      logger.info('User registered successfully', {
-        userId: user.id,
-        email: user.email,
-        role: user.role,
-      });
-
-      const sanitizedUser = sanitizeUser(user);
-
-      return reply.code(201).send({
-        message: 'User registered successfully',
-        user: sanitizedUser,
-      });
-    } catch (error: unknown) {
-      logger.error(error instanceof Error ? error : String(error), {
-        event: 'http_request',
-        route: 'POST /auth/register',
-        statusCode: 500,
-        error: 'internal_error',
-      });
-
-      return reply.code(500).send({
-        error: 'internal_error',
-      });
-    }
-  });
-
-  app.post('/auth/login', async (request, reply) => {
+  app.post('/auth/login', { preHandler: [uploadRateLimitMiddleware] }, async (request, reply) => {
     const body = request.body as UserLogin | undefined;
 
     try {
@@ -2770,80 +2774,84 @@ export function registerExtendedRoutes(app: FastifyInstance, options: ExtendedRo
     }
   });
 
-  app.post('/auth/refresh', async (request, reply) => {
-    const body = request.body as { refreshToken?: string } | undefined;
-    const cookies = request.cookies as Record<string, string> | undefined;
-    const refreshToken = cookies?.[config.auth.refreshCookieName] ?? body?.refreshToken ?? null;
+  app.post(
+    '/auth/refresh',
+    { preHandler: [uploadRateLimitMiddleware] },
+    async (request, reply) => {
+      const body = request.body as { refreshToken?: string } | undefined;
+      const cookies = request.cookies as Record<string, string> | undefined;
+      const refreshToken = cookies?.[config.auth.refreshCookieName] ?? body?.refreshToken ?? null;
 
-    try {
-      if (!refreshToken) {
-        return reply.code(400).send({
-          error: 'validation_failed',
-          message: 'Refresh token is required',
-          code: 'missing_refresh_token',
-        });
-      }
-
-      const authService = createAuthService();
-      let refreshPayload;
       try {
-        refreshPayload = authService.verifyRefreshToken(refreshToken);
-      } catch (error) {
-        logger.warn('Invalid refresh token presented', {
-          error: error instanceof Error ? error.message : String(error),
+        if (!refreshToken) {
+          return reply.code(400).send({
+            error: 'validation_failed',
+            message: 'Refresh token is required',
+            code: 'missing_refresh_token',
+          });
+        }
+
+        const authService = createAuthService();
+        let refreshPayload;
+        try {
+          refreshPayload = authService.verifyRefreshToken(refreshToken);
+        } catch (error) {
+          logger.warn('Invalid refresh token presented', {
+            error: error instanceof Error ? error.message : String(error),
+          });
+          return reply.code(401).send({
+            error: 'unauthorized',
+            message: 'Invalid refresh token',
+            code: 'invalid_refresh_token',
+          });
+        }
+
+        const tokens = authService.refreshTokens(refreshToken);
+        const user = await getUserById(refreshPayload.sub);
+        if (!user || !user.isActive) {
+          return reply.code(401).send({
+            error: 'unauthorized',
+            message: 'User account is inactive or no longer exists',
+            code: 'user_inactive',
+          });
+        }
+
+        logger.info('Token refresh successful', {
+          userId: refreshPayload.sub,
+          userEmail: refreshPayload.email,
         });
+
+        setRefreshCookie(reply, config, tokens.refreshToken, tokens.refreshExpiresIn);
+
+        return reply.code(200).send({
+          message: 'Token refresh successful',
+          user: {
+            id: user.id,
+            email: user.email,
+            role: user.role,
+            isActive: user.isActive,
+          },
+          accessToken: tokens.accessToken,
+          expiresIn: tokens.expiresIn,
+        });
+      } catch (error: unknown) {
+        logger.error(error instanceof Error ? error : String(error), {
+          event: 'http_request',
+          route: 'POST /auth/refresh',
+          statusCode: 500,
+          error: 'internal_error',
+        });
+
         return reply.code(401).send({
           error: 'unauthorized',
-          message: 'Invalid refresh token',
-          code: 'invalid_refresh_token',
+          message: 'Token refresh failed',
+          code: 'refresh_failed',
         });
       }
+    },
+  );
 
-      const tokens = authService.refreshTokens(refreshToken);
-      const user = await getUserById(refreshPayload.sub);
-      if (!user || !user.isActive) {
-        return reply.code(401).send({
-          error: 'unauthorized',
-          message: 'User account is inactive or no longer exists',
-          code: 'user_inactive',
-        });
-      }
-
-      logger.info('Token refresh successful', {
-        userId: refreshPayload.sub,
-        userEmail: refreshPayload.email,
-      });
-
-      setRefreshCookie(reply, config, tokens.refreshToken, tokens.refreshExpiresIn);
-
-      return reply.code(200).send({
-        message: 'Token refresh successful',
-        user: {
-          id: user.id,
-          email: user.email,
-          role: user.role,
-          isActive: user.isActive,
-        },
-        accessToken: tokens.accessToken,
-        expiresIn: tokens.expiresIn,
-      });
-    } catch (error: unknown) {
-      logger.error(error instanceof Error ? error : String(error), {
-        event: 'http_request',
-        route: 'POST /auth/refresh',
-        statusCode: 500,
-        error: 'internal_error',
-      });
-
-      return reply.code(401).send({
-        error: 'unauthorized',
-        message: 'Token refresh failed',
-        code: 'refresh_failed',
-      });
-    }
-  });
-
-  app.post('/auth/logout', async (_request, reply) => {
+  app.post('/auth/logout', { preHandler: [uploadRateLimitMiddleware] }, async (_request, reply) => {
     clearRefreshCookie(reply, config);
     return reply.code(200).send({ message: 'Logout successful' });
   });
