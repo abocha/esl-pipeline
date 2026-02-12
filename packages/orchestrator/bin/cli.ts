@@ -1,11 +1,9 @@
 #!/usr/bin/env node
 import { Command, CommanderError, InvalidOptionArgumentError } from 'commander';
-import { existsSync } from 'node:fs';
 import { stat } from 'node:fs/promises';
 import { createRequire } from 'node:module';
-import { dirname, relative, resolve } from 'node:path';
+import { relative, resolve } from 'node:path';
 import process from 'node:process';
-import { fileURLToPath } from 'node:url';
 import ora from 'ora';
 import pc from 'picocolors';
 import { ValidationError } from '@esl-pipeline/contracts';
@@ -20,7 +18,7 @@ import {
   type RerunTargetStage,
   computeRerunPlan,
   createPipeline,
-  loadEnvFilesWithSummary,
+  loadCliEnv,
   summarizeVoiceSelections,
 } from '../src/index.js';
 import type { NewAssignmentFlags, RerunFlags } from '../src/index.js';
@@ -42,20 +40,8 @@ import {
   runInteractiveWizard,
 } from '../src/wizard.js';
 
-const moduleDir = dirname(fileURLToPath(import.meta.url));
-const repoEnvPath = resolve(moduleDir, '../../../.env');
-const envFiles = ['.env'];
-if (existsSync(repoEnvPath)) {
-  envFiles.push(repoEnvPath);
-}
-const memoizeEnv = (process.env.ESL_PIPELINE_CACHE_ENV ?? '').toLowerCase();
-const envCacheEnabled = memoizeEnv === '1' || memoizeEnv === 'true' || memoizeEnv === 'yes';
-const envSummary = loadEnvFilesWithSummary({
-  files: envFiles,
-  cwd: process.cwd(),
-  assignToProcess: true,
-  override: false,
-  memoize: envCacheEnabled,
+const envSummary = loadCliEnv({
+  moduleUrl: import.meta.url,
   memoizeKey: 'cli',
 });
 

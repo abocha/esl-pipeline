@@ -13,6 +13,7 @@ Outputs JSON containing the derived key and URL.
 
 ## Environment
 
+- CLI auto-loads `.env` from the current working directory and repo root.
 - `S3_BUCKET`
 - `S3_PREFIX`
 

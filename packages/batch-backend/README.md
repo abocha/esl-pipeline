@@ -131,6 +131,8 @@ For local development, use the root `docker-compose.yml` to start:
 
 All configuration is centralized in [`loadConfig.declaration()`](packages/batch-backend/src/config/env.ts:81). The following environment variables are recognized.
 
+Batch-backend executable entrypoints (API server, workers, and one-off tools) auto-load env files using the shared CLI env loader. By default they read `.env.batch-backend` and `.env` from the current working directory, plus repo-root `.env` when available.
+
 HTTP:
 
 - `BATCH_BACKEND_HTTP_PORT`

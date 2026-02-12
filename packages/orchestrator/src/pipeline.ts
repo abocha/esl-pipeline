@@ -411,8 +411,10 @@ export function resolveManifestPath(mdPath: string): string {
 }
 
 export {
+  type LoadCliEnvOptions,
   type LoadEnvOptions,
   type LoadEnvSummary,
+  loadCliEnv,
   loadEnvFiles,
   loadEnvFilesWithSummary,
 } from '@esl-pipeline/shared-infrastructure';

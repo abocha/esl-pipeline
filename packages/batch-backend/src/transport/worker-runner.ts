@@ -10,12 +10,19 @@
 import { fileURLToPath } from 'node:url';
 
 import { processQueueJob } from '../application/process-queue-job.js';
+import { loadBatchBackendEnv } from '../bootstrap/env.js';
 import { enableRedisJobEventBridge } from '../infrastructure/job-event-redis-bridge.js';
-import { logger } from '../infrastructure/logger.js';
 import { createJobWorker } from '../infrastructure/queue-bullmq.js';
+
+async function getLogger() {
+  const { logger } = await import('../infrastructure/logger.js');
+  return logger;
+}
 
 // startWorker.declaration()
 export async function startWorker(): Promise<void> {
+  loadBatchBackendEnv(import.meta.url, 'batch-backend-worker-runner');
+  const logger = await getLogger();
   await enableRedisJobEventBridge();
   const worker = createJobWorker(async (bullJob) => {
     const { jobId } = bullJob.data;
@@ -53,10 +60,17 @@ export async function startWorker(): Promise<void> {
 // Allow running directly: node dist/transport/worker-runner.js
 if (process.argv[1] === fileURLToPath(import.meta.url)) {
   void startWorker().catch((error) => {
-    logger.error(error as Error, {
-      component: 'worker',
-      message: 'Failed to start worker',
-    });
-    process.exit(1);
+    void (async () => {
+      try {
+        const logger = await getLogger();
+        logger.error(error as Error, {
+          component: 'worker',
+          message: 'Failed to start worker',
+        });
+      } catch {
+        console.error(error instanceof Error ? error.message : String(error));
+      }
+      process.exit(1);
+    })();
   });
 }

@@ -29,7 +29,7 @@
     "dist"
   ],
   "scripts": {
-    "build": "tsc -p tsconfig.json",
+    "build": "pnpm --filter @esl-pipeline/shared-infrastructure build && tsc -p tsconfig.json",
     "clean": "node -e \"fs.rmSync('dist', {recursive:true, force:true})\"",
     "dev": "tsx watch bin/cli.ts",
     "test": "vitest run",
@@ -41,6 +41,7 @@
     "@elevenlabs/elevenlabs-js": "^2.25.0",
     "@esl-pipeline/contracts": "workspace:*",
     "@esl-pipeline/pmd": "workspace:*",
+    "@esl-pipeline/shared-infrastructure": "workspace:*",
     "commander": "^14.0.2",
     "js-yaml": "^4.1.1"
   },

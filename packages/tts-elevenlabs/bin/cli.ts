@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 import { Command, InvalidOptionArgumentError } from 'commander';
+import { loadCliEnv } from '@esl-pipeline/shared-infrastructure';
 
-import { buildStudyTextMp3 } from '../src/index.js';
 import type { BuildStudyTextOptions } from '../src/types.js';
 
 type TtsStrategy = NonNullable<BuildStudyTextOptions['ttsStrategy']>;
@@ -46,6 +46,11 @@ interface CliOptions {
   dialogueSeed?: number;
 }
 
+loadCliEnv({
+  moduleUrl: import.meta.url,
+  memoizeKey: 'tts-elevenlabs-cli',
+});
+
 const program = new Command()
   .name('tts-elevenlabs')
   .description('Generate study-text audio using ElevenLabs')
@@ -59,6 +64,7 @@ const program = new Command()
   .option('--dialogue-stability <value>', 'Dialogue stability (0.0-1.0)', parseDialogueStability)
   .option('--dialogue-seed <value>', 'Dialogue seed', parseDialogueSeed)
   .action(async (options: CliOptions) => {
+    const { buildStudyTextMp3 } = await import('../src/index.js');
     const result = await buildStudyTextMp3(options.md, {
       voiceMapPath: options.voiceMap,
       outPath: options.out,

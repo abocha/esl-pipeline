@@ -53,7 +53,7 @@ AWS_ACCESS_KEY_ID=...
 AWS_SECRET_ACCESS_KEY=...
 ```
 
-The orchestrator will load `.env` from the workspace root and the current directory automatically.
+The orchestrator will load `.env` from the workspace root and the current directory automatically via the shared CLI env loader.
 
 ## Interactive Workflow
 

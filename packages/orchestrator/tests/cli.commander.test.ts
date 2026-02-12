@@ -23,7 +23,7 @@ const pipelineMock = {
   getAssignmentStatus: vi.fn(),
 };
 
-const loadEnvFilesWithSummary = vi
+const loadCliEnv = vi
   .fn()
   .mockReturnValue({ loadedFiles: [], missingFiles: [], assignedKeys: [], overriddenKeys: [] });
 const summarizeVoiceSelections = vi.fn().mockReturnValue('voice-summary');
@@ -57,7 +57,7 @@ vi.mock('../src/config.js', () => ({ DEFAULT_STUDENT_NAME: 'Default Student' }))
 vi.mock('../src/index.js', () => ({
   createPipeline: vi.fn(() => pipelineMock),
   computeRerunPlan,
-  loadEnvFilesWithSummary,
+  loadCliEnv,
   summarizeVoiceSelections,
 }));
 vi.mock('../src/wizard.js', () => ({
@@ -86,7 +86,7 @@ describe('cli (commander parsing)', () => {
   beforeEach(() => {
     vi.resetModules();
     resetPipelineMocks();
-    loadEnvFilesWithSummary.mockClear();
+    loadCliEnv.mockClear();
     summarizeVoiceSelections.mockReturnValue('voice-summary');
     process.chdir(originalCwd);
     process.argv = [...originalArgv];

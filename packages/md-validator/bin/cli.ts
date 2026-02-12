@@ -1,10 +1,16 @@
 #!/usr/bin/env node
 import { Command } from 'commander';
+import { loadCliEnv } from '@esl-pipeline/shared-infrastructure';
 import fs from 'node:fs';
 import path from 'node:path';
 import pc from 'picocolors';
 
 import { validateMarkdownFile } from '../src/validator.js';
+
+loadCliEnv({
+  moduleUrl: import.meta.url,
+  memoizeKey: 'md-validator-cli',
+});
 
 const program = new Command()
   .name('md-validate')

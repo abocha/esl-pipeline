@@ -1,11 +1,17 @@
 #!/usr/bin/env node
 import { Command } from 'commander';
+import { loadCliEnv } from '@esl-pipeline/shared-infrastructure';
 
 import { DEFAULT_VOICES_OUT, syncVoices } from '../src/syncVoices.js';
 
 interface VoicesCliOptions {
   out: string;
 }
+
+loadCliEnv({
+  moduleUrl: import.meta.url,
+  memoizeKey: 'tts-voices-cli',
+});
 
 const program = new Command()
   .name('tts-voices')

@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 import { Command } from 'commander';
+import { loadCliEnv } from '@esl-pipeline/shared-infrastructure';
 
 import { uploadFile } from '../src/index.js';
 
@@ -9,6 +10,12 @@ interface StorageUploaderCliOptions {
   publicRead?: boolean;
   presign?: number;
 }
+
+loadCliEnv({
+  moduleUrl: import.meta.url,
+  memoizeKey: 'storage-uploader-cli',
+});
+
 const program = new Command()
   .name('storage-uploader')
   .description('Upload files to storage backends')
