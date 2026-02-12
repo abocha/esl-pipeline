@@ -16,7 +16,7 @@ validation, and TTS execution.
 ## 1) Refresh Voice Catalog + Capability Snapshot
 
 1. Sync voices from provider:
-   - `pnpm --filter @esl-pipeline/tts-elevenlabs sync:voices`
+   - `pnpm --filter @esl-pipeline/tts-elevenlabs voices:sync`
 2. Confirm catalog was written:
    - Check `generatedAt` and `capabilities` in `packages/orchestrator/configs/elevenlabs.voices.json`
 3. Commit updated catalog when intentional:
