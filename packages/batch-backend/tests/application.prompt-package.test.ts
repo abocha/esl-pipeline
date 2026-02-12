@@ -14,6 +14,7 @@ import type { TemplateRevisionRecord } from '../src/domain/template-revision-mod
 import type { TemplateRecord } from '../src/domain/template-model.js';
 import type { BatchBackendConfig } from '../src/config/env.js';
 import type { PromptPackageRecord } from '../src/domain/prompt-package-model.js';
+import type { InsertPromptPackageParams } from '../src/domain/prompt-package-repository.js';
 import type { RecordingRecord } from '../src/domain/recording-model.js';
 import type { TranscriptRecord } from '../src/domain/transcript-model.js';
 import type { TranscriptionStorage } from '../src/infrastructure/transcription-storage.js';
@@ -42,27 +43,7 @@ describe('application/prompt-package', () => {
     });
 
     const promptPackages = {
-      insert: async (params: {
-        id?: string;
-        recordingId: string;
-        transcriptId: string;
-        studentId?: string | null;
-        profilePath?: string | null;
-        resolvedProfileId?: string | null;
-        resolvedProfileHash?: string | null;
-        resolvedProfileRevisionId?: string | null;
-        resolvedProfileUpdatedAt?: Date | null;
-        resolvedTemplateId?: string | null;
-        resolvedTemplateHash?: string | null;
-        resolvedTemplateRevisionId?: string | null;
-        resolvedTemplateUpdatedAt?: Date | null;
-        resolvedVoiceCapabilitiesHash?: string | null;
-        resolvedVoiceCapabilitiesGeneratedAt?: Date | null;
-        resolvedVoiceCapabilitiesSnapshot?: Record<string, unknown> | null;
-        templateVersion: string;
-        notes?: string | null;
-        storageUri: string;
-      }): Promise<PromptPackageRecord> => {
+      insert: async (params: InsertPromptPackageParams): Promise<PromptPackageRecord> => {
         return {
           id: params.id ?? 'prompt-1',
           recordingId: params.recordingId,
@@ -620,33 +601,9 @@ describe('application/prompt-package', () => {
       restoredFromRevisionId: null,
     };
 
-    const insertedParams: Record<string, unknown>[] = [];
+    const insertedParams: InsertPromptPackageParams[] = [];
     const promptPackages = {
-      insert: async (params: {
-        id?: string;
-        recordingId: string;
-        transcriptId: string;
-        studentId?: string | null;
-        profilePath?: string | null;
-        resolvedProfileId?: string | null;
-        resolvedProfileHash?: string | null;
-        resolvedProfileRevisionId?: string | null;
-        resolvedProfileUpdatedAt?: Date | null;
-        resolvedProfileVersionLabel?: string | null;
-        resolvedProfileStatus?: 'draft' | 'active' | 'deprecated' | null;
-        resolvedTemplateId?: string | null;
-        resolvedTemplateHash?: string | null;
-        resolvedTemplateRevisionId?: string | null;
-        resolvedTemplateUpdatedAt?: Date | null;
-        resolvedTemplateVersionLabel?: string | null;
-        resolvedTemplateStatus?: 'draft' | 'active' | 'deprecated' | null;
-        resolvedVoiceCapabilitiesHash?: string | null;
-        resolvedVoiceCapabilitiesGeneratedAt?: Date | null;
-        resolvedVoiceCapabilitiesSnapshot?: Record<string, unknown> | null;
-        templateVersion: string;
-        notes?: string | null;
-        storageUri: string;
-      }): Promise<PromptPackageRecord> => {
+      insert: async (params: InsertPromptPackageParams): Promise<PromptPackageRecord> => {
         insertedParams.push({ ...params });
         return {
           id: params.id ?? `prompt-${insertedParams.length}`,
@@ -1198,27 +1155,7 @@ function createStorageStub(overrides: Partial<TranscriptionStorage> = {}): Trans
 
 function createPromptPackageRepositoryStub() {
   return {
-    insert: async (params: {
-      id?: string;
-      recordingId: string;
-      transcriptId: string;
-      studentId?: string | null;
-      profilePath?: string | null;
-      resolvedProfileId?: string | null;
-      resolvedProfileHash?: string | null;
-      resolvedProfileRevisionId?: string | null;
-      resolvedProfileUpdatedAt?: Date | null;
-      resolvedTemplateId?: string | null;
-      resolvedTemplateHash?: string | null;
-      resolvedTemplateRevisionId?: string | null;
-      resolvedTemplateUpdatedAt?: Date | null;
-      resolvedVoiceCapabilitiesHash?: string | null;
-      resolvedVoiceCapabilitiesGeneratedAt?: Date | null;
-      resolvedVoiceCapabilitiesSnapshot?: Record<string, unknown> | null;
-      templateVersion: string;
-      notes?: string | null;
-      storageUri: string;
-    }): Promise<PromptPackageRecord> => ({
+    insert: async (params: InsertPromptPackageParams): Promise<PromptPackageRecord> => ({
       id: params.id ?? 'prompt-1',
       recordingId: params.recordingId,
       transcriptId: params.transcriptId,
