@@ -1,6 +1,7 @@
 import path from 'node:path';
 
 import type { BatchBackendConfig } from '../config/env.js';
+import { loadBatchBackendEnv } from '../bootstrap/env.js';
 import { loadConfig } from '../config/env.js';
 import { upsertProfile } from '../domain/profile-repository.js';
 import { upsertStudent } from '../domain/student-repository.js';
@@ -73,6 +74,7 @@ function profileLabelFromId(profileId: string): string {
 }
 
 async function run(): Promise<void> {
+  loadBatchBackendEnv(import.meta.url, 'batch-backend-tool-backfill-student-system');
   const options = parseArgs(process.argv.slice(2));
   const config = loadConfig();
 

@@ -4,11 +4,18 @@ import { fileURLToPath } from 'node:url';
 
 import { processTranscribeJob } from '../application/process-transcribe-job.js';
 import { validateTranscriptionConfig } from '../application/validate-transcription-config.js';
-import { logger } from '../infrastructure/logger.js';
+import { loadBatchBackendEnv } from '../bootstrap/env.js';
 import { enableRedisRecordingEventBridge } from '../infrastructure/recording-event-redis-bridge.js';
 import { createTranscribeWorker } from '../infrastructure/transcribe-queue.js';
 
+async function getLogger() {
+  const { logger } = await import('../infrastructure/logger.js');
+  return logger;
+}
+
 export async function startTranscribeWorker(): Promise<void> {
+  loadBatchBackendEnv(import.meta.url, 'batch-backend-transcribe-worker');
+  const logger = await getLogger();
   await validateTranscriptionConfig();
   await enableRedisRecordingEventBridge();
   const worker = createTranscribeWorker(async (bullJob) => {
@@ -48,10 +55,17 @@ export async function startTranscribeWorker(): Promise<void> {
 
 if (process.argv[1] === fileURLToPath(import.meta.url)) {
   void startTranscribeWorker().catch((error) => {
-    logger.error(error as Error, {
-      component: 'transcribe-worker',
-      message: 'Failed to start transcribe worker',
-    });
-    process.exit(1);
+    void (async () => {
+      try {
+        const logger = await getLogger();
+        logger.error(error as Error, {
+          component: 'transcribe-worker',
+          message: 'Failed to start transcribe worker',
+        });
+      } catch {
+        console.error(error instanceof Error ? error.message : String(error));
+      }
+      process.exit(1);
+    })();
   });
 }

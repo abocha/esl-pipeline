@@ -1,3 +1,4 @@
+export { loadCliEnv, type LoadCliEnvOptions } from './cli.js';
 export {
   loadEnvFiles,
   loadEnvFilesWithSummary,

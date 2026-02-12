@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto';
 
 import { deleteStudentProfile, getStudentProfileById, listStudentProfiles, updateStudentProfile, createStudentProfile } from '../application/student-profiles-store.js';
+import { loadBatchBackendEnv } from '../bootstrap/env.js';
 import type { BatchBackendConfig } from '../config/env.js';
 import { loadConfig } from '../config/env.js';
 import { getProfileById } from '../domain/profile-repository.js';
@@ -42,6 +43,7 @@ function assertOrThrow(condition: unknown, message: string): asserts condition {
 }
 
 async function run(): Promise<void> {
+  loadBatchBackendEnv(import.meta.url, 'batch-backend-tool-verify-student-system-oneoff');
   const options = parseArgs(process.argv.slice(2));
   const config = loadConfig();
 

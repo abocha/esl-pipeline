@@ -9,6 +9,7 @@ import Fastify, { type FastifyInstance } from 'fastify';
 import { fileURLToPath } from 'node:url';
 
 import { validateTranscriptionConfig } from '../application/validate-transcription-config.js';
+import { loadBatchBackendEnv } from '../bootstrap/env.js';
 import { loadConfig } from '../config/env.js';
 import {
   type FileSanitizationService,
@@ -21,7 +22,6 @@ import {
   createRecordingUploadValidationService,
 } from '../infrastructure/file-validation-service.js';
 import { enableRedisJobEventBridge } from '../infrastructure/job-event-redis-bridge.js';
-import { logger } from '../infrastructure/logger.js';
 import { enableRedisRecordingEventBridge } from '../infrastructure/recording-event-redis-bridge.js';
 import { createRedisClient } from '../infrastructure/redis.js';
 import {
@@ -39,6 +39,11 @@ import {
   createUploadRateLimitMiddleware,
 } from './rate-limit-middleware.js';
 import { registerSecurityHeaders } from './security-headers.js';
+
+async function getLogger() {
+  const { logger } = await import('../infrastructure/logger.js');
+  return logger;
+}
 
 function createJobSubmissionRateLimiter(config: ReturnType<typeof loadConfig>) {
   if (!config.security.enableRateLimiting || config.security.jobSubmissionRateLimit <= 0) {
@@ -135,6 +140,7 @@ export async function createHttpServer(): Promise<FastifyInstance> {
       fileStorageService,
     });
   } else {
+    const logger = await getLogger();
     logger.info('Extended API disabled; skipping uploads/auth/admin routes');
   }
 
@@ -144,7 +150,9 @@ export async function createHttpServer(): Promise<FastifyInstance> {
 // startHttpServer.declaration()
 // Public entrypoint used in production; behavior MUST remain unchanged.
 export async function startHttpServer(): Promise<void> {
+  loadBatchBackendEnv(import.meta.url, 'batch-backend-http-server');
   const config = loadConfig();
+  const logger = await getLogger();
   try {
     await validateTranscriptionConfig({ config });
     await enableRedisJobEventBridge();

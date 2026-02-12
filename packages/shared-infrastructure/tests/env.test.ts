@@ -1,8 +1,10 @@
 import { mkdirSync, rmSync, utimesSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { pathToFileURL } from 'node:url';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
+import { loadCliEnv } from '../src/env/cli.js';
 import {
   loadEnvFiles,
   loadEnvFilesWithSummary,
@@ -197,6 +199,65 @@ describe('env utilities', () => {
       expect(first.assignedKeys).toContain('CACHED_VAR');
 
       const second = loadEnvFilesWithSummary({ cwd: testDir, memoize: true });
+      expect(second.assignedKeys).toEqual([]);
+      expect(second.overriddenKeys).toEqual([]);
+    });
+  });
+
+  describe('loadCliEnv', () => {
+    let testRoot: string;
+    let repoRoot: string;
+    let cwdDir: string;
+    let moduleUrl: string;
+    const originalEnv = process.env;
+
+    beforeEach(() => {
+      testRoot = join(tmpdir(), `test-cli-env-${Date.now()}-${Math.random().toString(16).slice(2)}`);
+      repoRoot = join(testRoot, 'repo');
+      cwdDir = join(repoRoot, 'workspace');
+      const modulePath = join(repoRoot, 'packages', 'orchestrator', 'dist', 'cli.js');
+      mkdirSync(cwdDir, { recursive: true });
+      mkdirSync(join(repoRoot, 'packages', 'orchestrator', 'dist'), { recursive: true });
+      writeFileSync(modulePath, '');
+      writeFileSync(join(repoRoot, 'pnpm-workspace.yaml'), 'packages:\n  - packages/*\n');
+      moduleUrl = pathToFileURL(modulePath).href;
+      process.env = { ...originalEnv };
+      delete process.env.ESL_PIPELINE_CACHE_ENV;
+    });
+
+    afterEach(() => {
+      rmSync(testRoot, { recursive: true, force: true });
+      process.env = originalEnv;
+    });
+
+    it('loads cwd and repo env files with non-overriding merge', () => {
+      writeFileSync(join(cwdDir, '.env'), 'FROM_CWD=yes\nSHARED=cwd');
+      writeFileSync(join(repoRoot, '.env'), 'FROM_REPO=yes\nSHARED=repo');
+
+      loadCliEnv({ moduleUrl, cwd: cwdDir, memoize: false, memoizeKey: 'test-cli-env-load' });
+
+      expect(process.env.FROM_CWD).toBe('yes');
+      expect(process.env.FROM_REPO).toBe('yes');
+      expect(process.env.SHARED).toBe('cwd');
+    });
+
+    it('does not override existing process.env values by default', () => {
+      process.env.KEEP_ME = 'original';
+      writeFileSync(join(cwdDir, '.env'), 'KEEP_ME=replaced');
+
+      loadCliEnv({ moduleUrl, cwd: cwdDir, memoize: false, memoizeKey: 'test-cli-env-keep' });
+
+      expect(process.env.KEEP_ME).toBe('original');
+    });
+
+    it('uses ESL_PIPELINE_CACHE_ENV when memoize is omitted', () => {
+      process.env.ESL_PIPELINE_CACHE_ENV = '1';
+      writeFileSync(join(cwdDir, '.env'), 'CACHED_KEY=first');
+
+      const first = loadCliEnv({ moduleUrl, cwd: cwdDir, memoizeKey: 'test-cli-env-cache' });
+      const second = loadCliEnv({ moduleUrl, cwd: cwdDir, memoizeKey: 'test-cli-env-cache' });
+
+      expect(first.loadedFiles).toEqual(second.loadedFiles);
       expect(second.assignedKeys).toEqual([]);
       expect(second.overriddenKeys).toEqual([]);
     });

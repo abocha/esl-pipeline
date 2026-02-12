@@ -1,6 +1,6 @@
 {
   "name": "@esl-pipeline/md-validator",
-  "version": "3.0.0",
+  "version": "3.0.1",
   "private": true,
   "description": "Validate ESL homework markdown structure and frontmatter.",
   "keywords": [
@@ -29,7 +29,7 @@
     "src"
   ],
   "scripts": {
-    "build": "tsc -p tsconfig.build.json",
+    "build": "pnpm --filter @esl-pipeline/shared-infrastructure build && tsc -p tsconfig.build.json",
     "clean": "node -e \"fs.rmSync('dist', {recursive:true, force:true})\"",
     "dev": "tsx watch src/index.ts",
     "test": "vitest run",
@@ -39,6 +39,7 @@
   "dependencies": {
     "@esl-pipeline/contracts": "workspace:*",
     "@esl-pipeline/pmd": "workspace:*",
+    "@esl-pipeline/shared-infrastructure": "workspace:*",
     "commander": "^14.0.2",
     "gray-matter": "^4.0.3",
     "picocolors": "^1.1.1",

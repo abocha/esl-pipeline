@@ -59,6 +59,7 @@ For historical rationale, use `docs/archive/` only after checking active docs.
 - **ffmpeg**: must be present on PATH or provided via `FFMPEG_PATH`.
 - **Env variables**:
   - CLI auto-loads `.env` from repo root + CWD.
+  - New executable entrypoints (CLI/worker/tool) should use shared `loadCliEnv()` from `@esl-pipeline/shared-infrastructure` (or a package wrapper that delegates to it) instead of ad-hoc `.env` parsing.
   - Programmatic use should call [`loadEnvFiles.declaration()`](packages/orchestrator/src/index.ts) or inject env directly.
 - For exhaustive requirements and env contracts, see [`docs/reference/agents-ssot.md`](docs/reference/agents-ssot.md) §§3 and 5.
 

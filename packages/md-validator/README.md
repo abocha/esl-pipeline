@@ -29,6 +29,8 @@ npx md-validator path/to/lesson.md
 npx md-validator --strict lesson.md
 ```
 
+The CLI auto-loads `.env` from the current working directory and repo root.
+
 ### API
 
 ```typescript

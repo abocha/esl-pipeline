@@ -210,13 +210,10 @@ CI workflows under [`.github/workflows`](.github/workflows) encode required chec
 
 Environment handling:
 
-- CLI:
-  - Auto-loads `.env` files from:
-    - Repo root.
-    - Current working directory (CWD).
-  - Behavior documented in [`README.md`](README.md) and implemented via helpers in:
-    - [`packages/orchestrator/src/index.ts`](packages/orchestrator/src/index.ts)
-    - [`loadEnvFiles.declaration()`](packages/orchestrator/src/index.ts)
+- Executable entrypoints (CLI, workers, one-off tools):
+  - MUST use shared env bootstrap helpers from [`@esl-pipeline/shared-infrastructure`](packages/shared-infrastructure):
+    - `loadCliEnv(options)` for standard `.env` loading from CWD + repo root.
+    - Package-local wrappers MAY be used when package-specific files are required (for example `.env.batch-backend`), but wrappers MUST delegate to `loadCliEnv` instead of reimplementing parsing.
 - Programmatic API:
   - `loadEnvFiles` mirrors CLI behavior for consumers.
   - Agents SHOULD use `loadEnvFiles` rather than reimplementing env loading.

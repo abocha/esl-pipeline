@@ -36,6 +36,10 @@ Options:
 - `--dialogue-stability <0..1>`
 - `--dialogue-seed <int>`
 
+`tts-elevenlabs` auto-loads `.env` from:
+- current working directory
+- repository root (when available)
+
 ### `tts-voices`
 
 Syncs allowed voices from ElevenLabs into the catalog used by orchestrator/batch-backend:
@@ -51,6 +55,8 @@ Explicit destination:
 pnpm --filter @esl-pipeline/tts-elevenlabs exec node dist/bin/voices.js \
   --out /absolute/path/to/packages/orchestrator/configs/elevenlabs.voices.json
 ```
+
+`tts-voices` also auto-loads `.env` from the current working directory and repository root.
 
 The generated catalog now includes:
 - `generatedAt`
