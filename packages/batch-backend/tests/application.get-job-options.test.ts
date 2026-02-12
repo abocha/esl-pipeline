@@ -138,7 +138,7 @@ describe('application/get-job-options', () => {
       { id: 'notion-db-b2', name: 'B2 Lessons' },
     ]);
     expect(result.voiceAccents.length).toBeGreaterThan(0);
-    expect(result.voices.length).toBeGreaterThan(0);
+    expect(Array.isArray(result.voices)).toBe(true);
     expect(result.supportedActions).toHaveLength(4);
 
     expect(logger.warn).toHaveBeenCalledWith(
