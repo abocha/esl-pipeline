@@ -1,6 +1,11 @@
 export { createNotionClient } from './client.js';
 export { withRetry } from './retry.js';
-export { resolveDataSourceId, resolveStudentId, findStudentPageId } from './data-source.js';
+export {
+  resolveDataSourceId,
+  resolveNotionTarget,
+  resolveStudentId,
+  findStudentPageId,
+} from './data-source.js';
 export { mdToBlocks } from './blocks/mdToBlocks.js';
 export { addOrReplaceAudioUnderStudyText, getClient } from './audio.js';
 export { applyHeadingPreset, loadPreset, PresetSchema } from './colorizer.js';
@@ -20,6 +25,7 @@ export type { ColorPreset, PresetsFile } from './colorizer.js';
 export type {
   FrontmatterShape,
   ImportOptions,
+  ResolvedNotionTarget,
   ResolveDataSourceInput,
   ResolveDataSourceResult,
 } from './types.js';

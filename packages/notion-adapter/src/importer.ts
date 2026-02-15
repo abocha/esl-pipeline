@@ -13,7 +13,7 @@ import { normalizeMarkdownSource } from '@esl-pipeline/pmd';
 import { mdToBlocks } from './blocks/mdToBlocks.js';
 import { chunk } from './chunk.js';
 import { createNotionClient } from './client.js';
-import { resolveDataSourceId, resolveStudentId } from './data-source.js';
+import { resolveNotionTarget, resolveStudentId } from './data-source.js';
 import {
   applyTopicProperty,
   buildBaseProperties,
@@ -92,19 +92,12 @@ export async function runImport(opts: ImportOptions) {
 
   // --- Step 6: Notion client / targets (only for real runs) ---
   const client = createNotionClient();
-  const { dataSourceId, databaseId } = await resolveDataSourceId(client, {
+  const { dataSourceId, database } = await resolveNotionTarget(client, {
     dataSourceId: opts.dataSourceId,
     dataSourceName: opts.dataSourceName,
     dbId: opts.dbId,
     dbName: opts.dbName,
   });
-  const database = await withRetry(
-    () =>
-      client.databases.retrieve({
-        database_id: databaseId,
-      }),
-    'databases.retrieve',
-  );
   const rawDatabaseProperties = (() => {
     if (!database || typeof database !== 'object') return null;
     if (!('properties' in database)) return null;
