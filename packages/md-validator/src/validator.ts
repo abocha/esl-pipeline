@@ -10,6 +10,7 @@ import type {
   StudyTextType,
   VoiceCapabilitiesSnapshot,
 } from '@esl-pipeline/contracts';
+import { normalizeSpeakerRole } from '@esl-pipeline/contracts';
 import type {
   PmdBlock,
   PmdDirectiveBlock,
@@ -33,7 +34,7 @@ const SpeakerProfileSchema = z
   .object({
     id: z.string().trim().min(1),
     display_name: z.string().trim().min(1).optional(),
-    role: z.enum(['narrator', 'teacher', 'student', 'system']).optional(),
+    role: z.string().trim().min(1).optional(),
     gender: z.enum(['male', 'female', 'neutral', 'child']).optional(),
     age: z.enum(['child', 'teen', 'young', 'adult', 'middle_aged', 'senior', 'universal']).optional(),
     accent: z.string().trim().min(1).optional(),
@@ -131,7 +132,10 @@ const H2_RULES: HeadingRule[] = [
   },
 ];
 
-const NON_BLOCKING_WARNING_PREFIXES = ['Controlled Practice has '];
+const NON_BLOCKING_WARNING_PREFIXES = [
+  'Controlled Practice has ',
+  'Front matter: speaker_profiles role "',
+];
 
 function normalizeNewlines(input: string): string {
   return input.replaceAll('\r\n', '\n');
@@ -653,6 +657,24 @@ function normalizeMeta(
     );
   }
 
+  const speakerProfiles = Array.isArray(rawMeta.speaker_profiles)
+    ? rawMeta.speaker_profiles.map((profile) => {
+        const rawRole = typeof profile.role === 'string' ? profile.role.trim() : '';
+        const normalizedRole = normalizeSpeakerRole(rawRole);
+        if (rawRole && !normalizedRole) {
+          const message =
+            `Front matter: speaker_profiles role "${rawRole}" for "${profile.id}" is unknown. ` +
+            `Allowed canonical roles: [${CANONICAL_ROLES.join(', ')}]. Role score will be 0.`;
+          warnings.push(message);
+          diagnosticsWarnings.push(message);
+        }
+        return {
+          ...profile,
+          role: normalizedRole,
+        };
+      })
+    : undefined;
+
   return {
     title: rawMeta.title,
     student: rawMeta.student,
@@ -661,7 +683,7 @@ function normalizeMeta(
     input_type: inputType,
     study_text_type: studyTextType,
     speaker_labels: rawMeta.speaker_labels,
-    speaker_profiles: rawMeta.speaker_profiles as SpeakerProfile[] | undefined,
+    speaker_profiles: speakerProfiles as SpeakerProfile[] | undefined,
   };
 }
 
