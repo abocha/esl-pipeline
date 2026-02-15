@@ -14,10 +14,12 @@ vi.mock('../src/infrastructure/orchestrator-service', () => ({
 
 describe('application/get-job-options', () => {
   beforeEach(() => {
+    vi.resetModules();
     vi.clearAllMocks();
   });
 
   afterEach(() => {
+    vi.useRealTimers();
     delete process.env.NOTION_DB_ID;
     delete process.env.NOTION_DB_NAME;
     delete process.env.NOTION_DB_LABEL;
@@ -145,5 +147,44 @@ describe('application/get-job-options', () => {
       'Failed to load job options from orchestrator. Falling back to static config.',
       expect.objectContaining({ error: 'boom' }),
     );
+  });
+
+  it('caches resolved options for 60 seconds', async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-02-01T00:00:00.000Z'));
+
+    const { getJobOptions } = await import('../src/application/get-job-options.js');
+    const { getJobOptionsFromOrchestrator } =
+      await import('../src/infrastructure/orchestrator-service.js');
+
+    vi.mocked(getJobOptionsFromOrchestrator).mockResolvedValue({
+      presets: ['alpha'],
+      cefrLevels: ['A2', 'B1'],
+      cefrDefault: 'B1',
+      voiceAccents: ['accent_one'],
+      voices: [{ id: 'voice-1', name: 'Voice One', accent: 'accent_one', gender: 'female' }],
+      notionDatabases: [{ id: 'db-1', name: 'DB One' }],
+      uploadOptions: ['auto', 's3', 'none'],
+      ttsStrategies: ['auto', 'dialogue', 'tts'],
+      learningPresets: [
+        {
+          id: 'general-english',
+          version: 'v1',
+          alias: 'current',
+          title: 'General English',
+          track: 'general-english',
+          status: 'active',
+          promptSnapshotVersion: 'hw_prompt_v4-2_clean',
+        },
+      ],
+    } as any);
+
+    await getJobOptions();
+    await getJobOptions();
+    expect(getJobOptionsFromOrchestrator).toHaveBeenCalledTimes(1);
+
+    vi.setSystemTime(new Date('2026-02-01T00:01:01.000Z'));
+    await getJobOptions();
+    expect(getJobOptionsFromOrchestrator).toHaveBeenCalledTimes(2);
   });
 });
