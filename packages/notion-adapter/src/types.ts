@@ -1,4 +1,5 @@
 import type { PipelineLogger } from '@esl-pipeline/contracts';
+import type { DatabaseObjectResponse } from '@notionhq/client/build/src/api-endpoints.js';
 
 export interface ImportOptions {
   mdPath: string;
@@ -44,4 +45,10 @@ export interface ResolveDataSourceInput {
 export interface ResolveDataSourceResult {
   dataSourceId: string;
   databaseId: string;
+}
+
+export interface ResolvedNotionTarget {
+  dataSourceId: string;
+  databaseId: string;
+  database: DatabaseObjectResponse;
 }

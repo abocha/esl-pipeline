@@ -68,6 +68,7 @@ type ToggleRichText = NonNullable<ToggleBlock['toggle']>['rich_text'];
 type ToggleTextItem = ToggleRichText extends (infer T)[] ? T : never;
 
 type ToggleText = ToggleTextItem extends { plain_text?: string } ? string : string;
+type ColorValue = z.infer<typeof ColorName>;
 
 interface CachedPresetFile {
   mtimeMs: number;
@@ -86,6 +87,30 @@ function toggleTitle(block: ToggleBlock): string {
   const first = richText[0];
   if (!first || typeof first !== 'object') return '';
   return 'plain_text' in first ? ((first.plain_text as ToggleText) ?? '') : '';
+}
+
+function currentColor(value: unknown): string {
+  return typeof value === 'string' ? value : 'default';
+}
+
+function shouldUpdateHeading2Color(
+  block: Extract<BlockObjectResponse, { type: 'heading_2' }>,
+  targetColor: ColorValue,
+): boolean {
+  return currentColor(block.heading_2.color) !== targetColor;
+}
+
+function shouldUpdateHeading3Color(
+  block: Extract<BlockObjectResponse, { type: 'heading_3' }>,
+  targetColor: ColorValue,
+): boolean {
+  return currentColor(block.heading_3.color) !== targetColor;
+}
+
+function shouldUpdateToggleColor(block: ToggleBlock, targetColor: ColorValue): boolean {
+  const richText = Array.isArray(block.toggle?.rich_text) ? block.toggle.rich_text : [];
+  if (richText.length === 0) return false;
+  return richText.some((item) => currentColor(item.annotations?.color) !== targetColor);
 }
 
 export async function loadPreset(presetName: string, presetsPath: string): Promise<ColorPreset> {
@@ -148,7 +173,7 @@ export async function applyHeadingPreset(
       )) as ListBlockChildrenResponse;
       await maybeThrottle();
       for (const child of childResp.results) {
-        if (isHeading3(child)) {
+        if (isHeading3(child) && shouldUpdateHeading3Color(child, preset.h3)) {
           await withRetry(
             () =>
               client.blocks.update({
@@ -184,37 +209,41 @@ export async function applyHeadingPreset(
 
     for (const block of resp.results) {
       if (isHeading2(block) && preset.h2) {
-        await withRetry(
-          () =>
-            client.blocks.update({
-              block_id: block.id,
-              heading_2: {
-                rich_text: toRequestRichText(block.heading_2.rich_text),
-                color: preset.h2,
-              },
-            }),
-          'blocks.update.heading_2',
-        );
-        await maybeThrottle();
-        counts.h2++;
+        if (shouldUpdateHeading2Color(block, preset.h2)) {
+          await withRetry(
+            () =>
+              client.blocks.update({
+                block_id: block.id,
+                heading_2: {
+                  rich_text: toRequestRichText(block.heading_2.rich_text),
+                  color: preset.h2,
+                },
+              }),
+            'blocks.update.heading_2',
+          );
+          await maybeThrottle();
+          counts.h2++;
+        }
         prevWasH2 = true;
         continue;
       }
 
       if (isHeading3(block) && preset.h3) {
-        await withRetry(
-          () =>
-            client.blocks.update({
-              block_id: block.id,
-              heading_3: {
-                rich_text: toRequestRichText(block.heading_3.rich_text),
-                color: preset.h3,
-              },
-            }),
-          'blocks.update.heading_3',
-        );
-        await maybeThrottle();
-        counts.h3++;
+        if (shouldUpdateHeading3Color(block, preset.h3)) {
+          await withRetry(
+            () =>
+              client.blocks.update({
+                block_id: block.id,
+                heading_3: {
+                  rich_text: toRequestRichText(block.heading_3.rich_text),
+                  color: preset.h3,
+                },
+              }),
+            'blocks.update.heading_3',
+          );
+          await maybeThrottle();
+          counts.h3++;
+        }
         prevWasH2 = false;
         continue;
       }
@@ -222,14 +251,20 @@ export async function applyHeadingPreset(
       // TOGGLES right after an H2 (optional)
       if (isToggle(block)) {
         const title = toggleTitle(block);
-        if (prevWasH2 && preset.toggleMap?.h2 && !isProtectedToggleTitle(title)) {
+        const desiredToggleColor = preset.toggleMap?.h2;
+        if (
+          prevWasH2 &&
+          desiredToggleColor &&
+          !isProtectedToggleTitle(title) &&
+          shouldUpdateToggleColor(block, desiredToggleColor)
+        ) {
           const toggle = block.toggle;
           const richText = Array.isArray(toggle.rich_text) ? toggle.rich_text : [];
           const annotated = richText.map((item) => ({
             ...item,
             annotations: {
               ...item.annotations,
-              color: preset.toggleMap!.h2,
+              color: desiredToggleColor,
             },
           }));
           await withRetry(

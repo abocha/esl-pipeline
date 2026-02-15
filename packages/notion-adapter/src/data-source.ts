@@ -10,7 +10,11 @@ import type { SearchParameters } from '@notionhq/client/build/src/api-endpoints.
 import { createHash } from 'node:crypto';
 
 import { withRetry } from './retry.js';
-import type { ResolveDataSourceInput, ResolveDataSourceResult } from './types.js';
+import type {
+  ResolvedNotionTarget,
+  ResolveDataSourceInput,
+  ResolveDataSourceResult,
+} from './types.js';
 
 type SearchResult = SearchResponse['results'][number];
 type PageLike = PageObjectResponse | PartialPageObjectResponse;
@@ -20,9 +24,11 @@ interface DataSourceSummary {
   name?: string | null;
 }
 
+type DatabaseWithSources = DatabaseObjectResponse & { data_sources?: DataSourceSummary[] };
+
 interface CachedDatabase {
   expiresAt: number;
-  payload: { databaseId: string; dataSources: DataSourceSummary[] };
+  payload: { database: DatabaseObjectResponse; dataSources: DataSourceSummary[] };
 }
 
 const databaseCache = new Map<string, CachedDatabase>();
@@ -69,7 +75,7 @@ function pickDataSource(
 async function fetchDatabaseWithSources(
   client: Client,
   databaseId: string,
-): Promise<{ databaseId: string; dataSources: DataSourceSummary[] }> {
+): Promise<{ database: DatabaseObjectResponse; dataSources: DataSourceSummary[] }> {
   const cacheKey = cacheKeyForDatabase(databaseId);
   if (cacheKey) {
     const cached = databaseCache.get(cacheKey);
@@ -84,10 +90,10 @@ async function fetchDatabaseWithSources(
         database_id: databaseId,
       }),
     'databases.retrieve',
-  )) as DatabaseObjectResponse & { data_sources?: DataSourceSummary[] };
+  )) as DatabaseWithSources;
   const dataSources = Array.isArray(response.data_sources) ? response.data_sources : [];
   const payload = {
-    databaseId: response.id,
+    database: response as DatabaseObjectResponse,
     dataSources: dataSources.map((ds) => ({ id: ds.id, name: ds.name })),
   };
   if (cacheKey) {
@@ -123,6 +129,17 @@ export async function resolveDataSourceId(
   client: Client,
   opts: ResolveDataSourceInput,
 ): Promise<ResolveDataSourceResult> {
+  const resolved = await resolveNotionTarget(client, opts);
+  return {
+    dataSourceId: resolved.dataSourceId,
+    databaseId: resolved.databaseId,
+  };
+}
+
+export async function resolveNotionTarget(
+  client: Client,
+  opts: ResolveDataSourceInput,
+): Promise<ResolvedNotionTarget> {
   if (opts.dataSourceId) {
     try {
       const ds = (await withRetry(
@@ -141,7 +158,8 @@ export async function resolveDataSourceId(
             : opts.dbId;
       if (!databaseId)
         throw new Error('Unable to determine parent database for provided data source ID');
-      return { dataSourceId: opts.dataSourceId, databaseId };
+      const { database } = await fetchDatabaseWithSources(client, databaseId);
+      return { dataSourceId: opts.dataSourceId, databaseId, database };
     } catch (error) {
       throw new Error(
         `Unable to retrieve data source ${opts.dataSourceId}: ${(error as Error).message}`,
@@ -155,11 +173,11 @@ export async function resolveDataSourceId(
   }
 
   const databaseId = dbId ?? (await findDatabaseByName(client, dbName!));
-  const { dataSources } = await fetchDatabaseWithSources(client, databaseId);
+  const { database, dataSources } = await fetchDatabaseWithSources(client, databaseId);
 
   const chosen = pickDataSource(dataSources, opts);
   if (chosen) {
-    return { dataSourceId: chosen.id, databaseId };
+    return { dataSourceId: chosen.id, databaseId, database };
   }
 
   if (opts.dataSourceName) {
