@@ -1,5 +1,6 @@
 import { ConfigurationError } from '@esl-pipeline/contracts';
 import type { VoiceSelectionDiagnostics } from '@esl-pipeline/contracts';
+import { normalizeSpeakerRole } from '@esl-pipeline/contracts';
 import type { SpeakerProfile } from '@esl-pipeline/pmd';
 
 import {
@@ -157,8 +158,9 @@ function buildDiagnostics(
   const matches: string[] = [];
   const mismatches: string[] = [];
   if (profile && catalogEntry) {
+    const normalizedRole = normalizeSpeakerRole(profile.role) ?? profile.role;
     const checks: [label: string, expected: unknown, actual: string][] = [
-      ['role', profile.role, getVoiceLabel(catalogEntry, 'use_case')],
+      ['role', normalizedRole, getVoiceLabel(catalogEntry, 'use_case')],
       ['gender', profile.gender, getVoiceLabel(catalogEntry, 'gender')],
       ['age', profile.age, getVoiceLabel(catalogEntry, 'age')],
       ['accent', profile.accent, getVoiceLabel(catalogEntry, 'accent')],
@@ -248,13 +250,18 @@ export async function resolveSpeakerVoices(opts: {
     }
 
     if (!assigned) {
+      const hasExplicitRoleToken =
+        typeof profile?.role === 'string' && profile.role.trim().length > 0;
+      const normalizedProfileRole = normalizeSpeakerRole(profile?.role);
       const inferredRole =
-        profile?.role ??
-        (normalizedSpeaker === 'narrator'
-          ? 'narrator'
-          : normalizedSpeaker.includes('teacher')
-            ? 'teacher'
-            : ROLE_FALLBACK_BY_MODE[opts.mode]);
+        normalizedProfileRole ??
+        (hasExplicitRoleToken
+          ? undefined
+          : normalizedSpeaker === 'narrator'
+            ? 'narrator'
+            : normalizedSpeaker.includes('teacher')
+              ? 'teacher'
+              : ROLE_FALLBACK_BY_MODE[opts.mode]);
       const profileAccent =
         typeof profile?.accent === 'string' && profile.accent.trim().length > 0
           ? profile.accent.trim().toLowerCase()

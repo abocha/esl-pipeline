@@ -2,7 +2,11 @@ import { readFile } from 'node:fs/promises';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-import { ConfigurationError, InfrastructureError } from '@esl-pipeline/contracts';
+import {
+  ConfigurationError,
+  InfrastructureError,
+  normalizeSpeakerRole,
+} from '@esl-pipeline/contracts';
 import type { VoiceCapabilitiesSnapshot } from '@esl-pipeline/contracts';
 import { getVoiceCapabilities } from './voiceCapabilities.js';
 
@@ -179,7 +183,7 @@ function score(voice: Voice, need: SpeakerMeta): number {
   let s = 0;
 
   const gender = (need.gender || '').toLowerCase();
-  const role = (need.role || '').toLowerCase();
+  const role = normalizeSpeakerRole(need.role) ?? '';
   const desiredAge = (need.age || '').toLowerCase();
   const accent = (need.accent || '').toLowerCase();
   const style = (need.style || '').toLowerCase();
@@ -278,7 +282,9 @@ export async function pickVoiceForSpeaker(
   const guessedGender = explicitGender || guessGenderFromName(speakerName);
   const guessed: SpeakerMeta = {
     gender: guessedGender || undefined,
-    role: meta.role ?? (speakerName.toLowerCase() === 'narrator' ? 'narrator' : undefined),
+    role:
+      normalizeSpeakerRole(meta.role) ??
+      (speakerName.toLowerCase() === 'narrator' ? 'narrator' : undefined),
     age: meta.age,
     accent: meta.accent,
     style: meta.style,

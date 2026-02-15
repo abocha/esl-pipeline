@@ -6,6 +6,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { pickVoiceForSpeaker } from '../src/assign.js';
 import * as assign from '../src/assign.js';
 import { buildStudyTextMp3 } from '../src/index.js';
+import { resolveSpeakerVoices } from '../src/speakerAssignment.js';
 
 describe('tts elevenlabs gender-aware voice selection', () => {
   it('male -> prefers male even when neutral would score higher', async () => {
@@ -67,6 +68,52 @@ describe('tts elevenlabs gender-aware voice selection', () => {
       { catalog: catalogWithoutNeutral as any },
     );
     expect(pickedAny?.id).toBe('male_1');
+  });
+
+  it('maps dialogue-role aliases to canonical scoring hints', async () => {
+    const catalog = {
+      voices: [
+        { id: 'voice_social', name: 'Social', labels: { gender: 'female', use_case: 'social' } },
+        { id: 'voice_formal', name: 'Formal', labels: { gender: 'female', use_case: 'news' } },
+      ],
+    };
+
+    const picked = await pickVoiceForSpeaker(
+      'Front Desk',
+      { gender: 'female', role: 'receptionist' as any },
+      { catalog: catalog as any },
+    );
+
+    expect(picked?.id).toBe('voice_formal');
+  });
+
+  it('treats unknown explicit role as zero role score (no mode fallback role bias)', async () => {
+    const assignments = await resolveSpeakerVoices({
+      speakers: ['Ava'],
+      profiles: [
+        {
+          id: 'Ava',
+          role: 'alien ambassador' as any,
+          style: 'professional',
+        },
+      ],
+      voiceMap: { auto: true },
+      catalog: {
+        voices: [
+          { id: 'voice_social', name: 'Social', labels: { use_case: 'social', descriptive: 'casual' } },
+          {
+            id: 'voice_formal',
+            name: 'Formal',
+            labels: { use_case: 'news', descriptive: 'professional' },
+          },
+        ],
+      } as any,
+      mode: 'dialogue',
+    });
+
+    expect(assignments).toHaveLength(1);
+    expect(assignments[0]?.voiceId).toBe('voice_formal');
+    expect(assignments[0]?.source).toBe('auto');
   });
 
   it('cleans markdown speaker formatting so profile gender applies (e.g. \"**Mark:**\")', async () => {
