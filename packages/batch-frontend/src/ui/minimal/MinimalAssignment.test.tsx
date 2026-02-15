@@ -527,6 +527,10 @@ describe('MinimalAssignment', () => {
     await waitFor(() => {
       expect(api.getJobStatus).toHaveBeenCalledWith('job-resume');
     });
+    await waitFor(() => {
+      expect(api.fetchJobProvenance).toHaveBeenCalledTimes(1);
+    });
+    expect(api.fetchJobProvenance).toHaveBeenLastCalledWith('job-resume');
 
     const resumeSelect = screen.getByRole('combobox', { name: /Recent jobs/i });
     expect(within(resumeSelect).getByRole('option', { name: /Alex/i })).toBeTruthy();

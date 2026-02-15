@@ -27,8 +27,14 @@ export interface JobOptionsResponse extends JobOptionsPayload {
   learningPresets: LearningPresetOption[];
 }
 
+interface JobOptionsCacheEntry {
+  expiresAt: number;
+  value: JobOptionsResponse;
+}
+
 const DEFAULT_CEFR_LEVELS: CefrLevel[] = ['A1', 'A2', 'B1', 'B2', 'C1', 'C2'];
 const DEFAULT_CEFR_DEFAULT: CefrLevel = 'B1';
+const JOB_OPTIONS_CACHE_TTL_MS = 60_000;
 
 // TODO: Replace these with data pulled from the orchestrator config provider or
 // dedicated metadata service once available (tracked in backend/frontend Phase 5).
@@ -47,40 +53,66 @@ const STATIC_OPTIONS: Omit<JobOptionsResponse, 'supportedActions'> = {
   ttsStrategies: ['auto'],
 };
 
+let jobOptionsCache: JobOptionsCacheEntry | null = null;
+let inflightJobOptions: Promise<JobOptionsResponse> | null = null;
+
 export async function getJobOptions(): Promise<JobOptionsResponse> {
+  const now = Date.now();
+  if (jobOptionsCache && jobOptionsCache.expiresAt > now) {
+    return cloneJobOptions(jobOptionsCache.value);
+  }
+
+  if (inflightJobOptions) {
+    const value = await inflightJobOptions;
+    return cloneJobOptions(value);
+  }
+
+  inflightJobOptions = (async () => {
+    try {
+      const result = await getJobOptionsFromOrchestrator();
+      const notionDatabases =
+        result.notionDatabases && result.notionDatabases.length > 0
+          ? result.notionDatabases
+          : resolveNotionDatabases();
+
+      // Add supported actions to orchestrator response
+      const actionMetadata = getActionMetadata();
+      const supportedActions: ActionCapability[] = Object.entries(actionMetadata).map(
+        ([type, meta]) => ({ type, ...(meta as object) }) as ActionCapability,
+      );
+      const orchestratorLearningPresets = (
+        result as JobOptionsPayload & { learningPresets?: LearningPresetOption[] }
+      ).learningPresets;
+      const learningPresets =
+        orchestratorLearningPresets && orchestratorLearningPresets.length > 0
+          ? orchestratorLearningPresets
+          : [DEFAULT_LEARNING_PRESET];
+
+      return {
+        ...result,
+        cefrLevels: result.cefrLevels ?? [...DEFAULT_CEFR_LEVELS],
+        cefrDefault: result.cefrDefault ?? DEFAULT_CEFR_DEFAULT,
+        notionDatabases,
+        learningPresets,
+        supportedActions,
+      };
+    } catch (error) {
+      logger.warn('Failed to load job options from orchestrator. Falling back to static config.', {
+        error: error instanceof Error ? error.message : String(error),
+      });
+      return loadStaticJobOptions();
+    }
+  })();
+
   try {
-    const result = await getJobOptionsFromOrchestrator();
-    const notionDatabases =
-      result.notionDatabases && result.notionDatabases.length > 0
-        ? result.notionDatabases
-        : resolveNotionDatabases();
-
-    // Add supported actions to orchestrator response
-    const actionMetadata = getActionMetadata();
-    const supportedActions: ActionCapability[] = Object.entries(actionMetadata).map(
-      ([type, meta]) => ({ type, ...(meta as object) }) as ActionCapability,
-    );
-    const orchestratorLearningPresets = (
-      result as JobOptionsPayload & { learningPresets?: LearningPresetOption[] }
-    ).learningPresets;
-    const learningPresets =
-      orchestratorLearningPresets && orchestratorLearningPresets.length > 0
-        ? orchestratorLearningPresets
-        : [DEFAULT_LEARNING_PRESET];
-
-    return {
-      ...result,
-      cefrLevels: result.cefrLevels ?? [...DEFAULT_CEFR_LEVELS],
-      cefrDefault: result.cefrDefault ?? DEFAULT_CEFR_DEFAULT,
-      notionDatabases,
-      learningPresets,
-      supportedActions,
+    const resolved = await inflightJobOptions;
+    jobOptionsCache = {
+      expiresAt: Date.now() + JOB_OPTIONS_CACHE_TTL_MS,
+      value: resolved,
     };
-  } catch (error) {
-    logger.warn('Failed to load job options from orchestrator. Falling back to static config.', {
-      error: error instanceof Error ? error.message : String(error),
-    });
-    return loadStaticJobOptions();
+    return cloneJobOptions(resolved);
+  } finally {
+    inflightJobOptions = null;
   }
 }
 
@@ -171,4 +203,19 @@ function getVoiceCatalogCandidates(): string[] {
   ].filter(Boolean);
 
   return [...new Set(paths)] as string[];
+}
+
+function cloneJobOptions(value: JobOptionsResponse): JobOptionsResponse {
+  return {
+    ...value,
+    presets: [...value.presets],
+    voiceAccents: [...value.voiceAccents],
+    voices: value.voices.map((voice) => ({ ...voice })),
+    cefrLevels: [...value.cefrLevels],
+    notionDatabases: value.notionDatabases.map((option) => ({ ...option })),
+    uploadOptions: [...value.uploadOptions],
+    ttsStrategies: [...value.ttsStrategies],
+    supportedActions: value.supportedActions.map((action) => ({ ...action })),
+    learningPresets: value.learningPresets.map((preset) => ({ ...preset })),
+  };
 }

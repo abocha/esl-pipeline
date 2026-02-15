@@ -628,7 +628,6 @@ export const MinimalAssignment: React.FC = () => {
           setSelectedStudentId(resolvedStudentId);
           setSelectedProfileId(resolveBoundProfileId(resolvedStudentId));
         }
-        void loadJobProvenance(status.jobId);
       } catch (error) {
         const message =
           error instanceof Error ? error.message : 'Unable to resume the selected assignment.';

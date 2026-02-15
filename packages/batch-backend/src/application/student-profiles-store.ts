@@ -94,11 +94,20 @@ const DEFAULT_STUDENT_NAME = 'Default';
 const DEFAULT_COLOR_PRESET = 'b1-default';
 const MAX_PAGE_LIMIT = 500;
 const PROFILE_EXTENSIONS = new Set(['.md', '.txt']);
+const REMOTE_PROFILES_CACHE_TTL_MS = 60_000;
 
 interface StudentProfileEntry extends StudentProfileData {
   filePath?: string | null;
   isSynthetic?: boolean;
 }
+
+interface RemoteProfilesCacheEntry {
+  expiresAt: number;
+  items: StudentProfileEntry[];
+}
+
+let remoteProfilesCache: RemoteProfilesCacheEntry | null = null;
+let remoteProfilesInflight: Promise<StudentProfileEntry[]> | null = null;
 
 interface ResolveStudentsDirOptions {
   config?: BatchBackendConfig;
@@ -422,26 +431,58 @@ async function loadLocalProfiles(studentsDir: string): Promise<StudentProfileEnt
 }
 
 async function loadRemoteProfiles(): Promise<StudentProfileEntry[]> {
-  const profiles = await getStudentProfilesFromOrchestrator();
-  return profiles
-    .map((profile): StudentProfileEntry | null => {
-      const student = typeof profile.student === 'string' ? normalizeStudentName(profile.student) : '';
-      if (!student) return null;
-      return {
-        id: deriveStudentId(student),
-        student,
-        dbId: normalizeOptionalString(profile.dbId),
-        pageParentId: normalizeOptionalString(profile.pageParentId),
-        colorPreset: normalizeOptionalString(profile.colorPreset),
-        accentPreference: normalizeOptionalString(profile.accentPreference),
-        manifestPreset: normalizeOptionalString(profile.manifestPreset),
-        profileId: normalizeOptionalString(profile.profileId),
-        voices: profile.voices ? { ...profile.voices } : {},
-        filePath: null,
-      };
-    })
-    .filter((profile): profile is StudentProfileEntry => profile !== null)
-    .sort((a, b) => a.student.localeCompare(b.student));
+  const now = Date.now();
+  if (remoteProfilesCache && remoteProfilesCache.expiresAt > now) {
+    return remoteProfilesCache.items.map((profile) => ({
+      ...profile,
+      voices: profile.voices ? { ...profile.voices } : {},
+    }));
+  }
+
+  if (remoteProfilesInflight) {
+    const items = await remoteProfilesInflight;
+    return items.map((profile) => ({
+      ...profile,
+      voices: profile.voices ? { ...profile.voices } : {},
+    }));
+  }
+
+  remoteProfilesInflight = (async () => {
+    const profiles = await getStudentProfilesFromOrchestrator();
+    return profiles
+      .map((profile): StudentProfileEntry | null => {
+        const student = typeof profile.student === 'string' ? normalizeStudentName(profile.student) : '';
+        if (!student) return null;
+        return {
+          id: deriveStudentId(student),
+          student,
+          dbId: normalizeOptionalString(profile.dbId),
+          pageParentId: normalizeOptionalString(profile.pageParentId),
+          colorPreset: normalizeOptionalString(profile.colorPreset),
+          accentPreference: normalizeOptionalString(profile.accentPreference),
+          manifestPreset: normalizeOptionalString(profile.manifestPreset),
+          profileId: normalizeOptionalString(profile.profileId),
+          voices: profile.voices ? { ...profile.voices } : {},
+          filePath: null,
+        };
+      })
+      .filter((profile): profile is StudentProfileEntry => profile !== null)
+      .sort((a, b) => a.student.localeCompare(b.student));
+  })();
+
+  try {
+    const profiles = await remoteProfilesInflight;
+    remoteProfilesCache = {
+      expiresAt: Date.now() + REMOTE_PROFILES_CACHE_TTL_MS,
+      items: profiles,
+    };
+    return profiles.map((profile) => ({
+      ...profile,
+      voices: profile.voices ? { ...profile.voices } : {},
+    }));
+  } finally {
+    remoteProfilesInflight = null;
+  }
 }
 
 async function getLocalProfileById(

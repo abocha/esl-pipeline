@@ -8,6 +8,7 @@ import { resolveProfileRoot, resolveUserProfilePath } from './profile-path.js';
 import { resolveRepoPath } from './prompt-assembly.js';
 
 const PROMPT_EXTENSIONS = new Set(['.md', '.txt']);
+const PROMPT_OPTIONS_CACHE_TTL_MS = 60_000;
 
 export interface PromptOption {
   id: string;
@@ -179,22 +180,47 @@ interface PromptOptionLists {
   profileRoot: string;
 }
 
+interface PromptOptionsCacheEntry {
+  expiresAt: number;
+  value: PromptOptionLists;
+}
+
+const promptOptionsCache = new Map<string, PromptOptionsCacheEntry>();
+
 async function loadPromptOptionLists(config: BatchBackendConfig): Promise<PromptOptionLists> {
-  const [templateOptions, profileOptions] = await Promise.all([
-    loadTemplateOptionList(config),
-    loadProfileOptionList(config),
+  const templateRoot = await resolveTemplateRoot(config.prompt.templatePath);
+  const profileRoot = await resolveProfileRoot(config.prompt.defaultProfilePath);
+  const cacheKey = `${templateRoot}::${profileRoot}`;
+  const now = Date.now();
+  const cached = promptOptionsCache.get(cacheKey);
+  if (cached && cached.expiresAt > now) {
+    return clonePromptOptionLists(cached.value);
+  }
+
+  const [templates, profiles] = await Promise.all([
+    listPromptFiles(templateRoot),
+    listPromptFiles(profileRoot),
+  ]);
+  const [defaultTemplateId, defaultProfileId] = await Promise.all([
+    resolveDefaultId(config.prompt.templatePath, templateRoot, templates, 'template'),
+    resolveDefaultId(config.prompt.defaultProfilePath, profileRoot, profiles, 'profile'),
   ]);
 
-  return {
-    templates: templateOptions.templates,
-    profiles: profileOptions.profiles,
+  const value: PromptOptionLists = {
+    templates,
+    profiles,
     defaults: {
-      templateId: templateOptions.defaultTemplateId,
-      profileId: profileOptions.defaultProfileId,
+      templateId: defaultTemplateId,
+      profileId: defaultProfileId,
     },
-    templateRoot: templateOptions.templateRoot,
-    profileRoot: profileOptions.profileRoot,
+    templateRoot,
+    profileRoot,
   };
+  promptOptionsCache.set(cacheKey, {
+    expiresAt: now + PROMPT_OPTIONS_CACHE_TTL_MS,
+    value,
+  });
+  return clonePromptOptionLists(value);
 }
 
 async function loadTemplateOptionList(config: BatchBackendConfig): Promise<{
@@ -356,4 +382,14 @@ function isWithinRoot(root: string, target: string): boolean {
   const relative = path.relative(root, target);
   if (!relative) return true;
   return !relative.startsWith('..') && !path.isAbsolute(relative);
+}
+
+function clonePromptOptionLists(value: PromptOptionLists): PromptOptionLists {
+  return {
+    templates: value.templates.map((item) => ({ ...item })),
+    profiles: value.profiles.map((item) => ({ ...item })),
+    defaults: { ...value.defaults },
+    templateRoot: value.templateRoot,
+    profileRoot: value.profileRoot,
+  };
 }

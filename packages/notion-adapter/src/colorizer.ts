@@ -4,7 +4,7 @@ import type {
   PartialBlockObjectResponse,
   UpdateBlockParameters,
 } from '@notionhq/client/build/src/api-endpoints.js';
-import { readFile } from 'node:fs/promises';
+import { readFile, stat } from 'node:fs/promises';
 import { z } from 'zod';
 
 import { ConfigurationError } from '@esl-pipeline/contracts';
@@ -69,6 +69,14 @@ type ToggleTextItem = ToggleRichText extends (infer T)[] ? T : never;
 
 type ToggleText = ToggleTextItem extends { plain_text?: string } ? string : string;
 
+interface CachedPresetFile {
+  mtimeMs: number;
+  size: number;
+  parsed: PresetsFile;
+}
+
+const presetsFileCache = new Map<string, CachedPresetFile>();
+
 function toRequestRichText(value: unknown): NotionRequestRichText {
   return Array.isArray(value) ? (value as unknown as NotionRequestRichText) : [];
 }
@@ -81,8 +89,20 @@ function toggleTitle(block: ToggleBlock): string {
 }
 
 export async function loadPreset(presetName: string, presetsPath: string): Promise<ColorPreset> {
-  const raw = await readFile(presetsPath, 'utf8');
-  const parsed: PresetsFile = JSON.parse(raw);
+  const fileStats = await stat(presetsPath);
+  const cached = presetsFileCache.get(presetsPath);
+  let parsed: PresetsFile;
+  if (cached && cached.mtimeMs === fileStats.mtimeMs && cached.size === fileStats.size) {
+    parsed = cached.parsed;
+  } else {
+    const raw = await readFile(presetsPath, 'utf8');
+    parsed = JSON.parse(raw) as PresetsFile;
+    presetsFileCache.set(presetsPath, {
+      mtimeMs: fileStats.mtimeMs,
+      size: fileStats.size,
+      parsed,
+    });
+  }
   const preset = parsed[presetName];
   if (!preset) throw new ConfigurationError(`Preset not found: ${presetName}`);
   const res = PresetSchema.safeParse(preset);
