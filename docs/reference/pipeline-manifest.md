@@ -27,6 +27,10 @@ This document captures the canonical schema so remote stores and services can va
     "path": "./lessons/audio.mp3", // local file path to generated audio
     "url": "https://...", // remote URL after upload
     "hash": "<sha256 audio hash>",
+    "key": "audio/final/<sha256>.mp3", // optional remote object key
+    "etag": "\"abc123...\"", // optional remote ETag from storage backend
+    "sizeBytes": 123456, // optional uploaded object size
+    "reused": true, // optional reuse signal for idempotent uploads
     "voices": [
       // details returned by tts-elevenlabs
       {
@@ -48,6 +52,11 @@ This document captures the canonical schema so remote stores and services can va
   "dialogueLanguage": "en",
   "dialogueStability": 0.7,
   "dialogueSeed": 42,
+  // HTML publish artifact metadata (optional, additive)
+  "htmlHash": "<sha256 html artifact hash>",
+  "htmlKey": "materials/html/artifacts/<sha256>.html",
+  "htmlEtag": "\"etag-from-store\"",
+  "htmlReused": true,
 }
 ```
 
@@ -57,6 +66,9 @@ This document captures the canonical schema so remote stores and services can va
 - `timestamp` reflects the last pipeline write and is updated on reruns.
 - `audio.voices` mirrors the response from `@esl-pipeline/tts-elevenlabs`; the structure is defined
   in that package.
+- `audio.key`/`audio.hash` provide deterministic artifact identity for reruns and upload dedupe.
+- `audio.reused` and `htmlReused` are operational hints showing whether remote upload/publish reused
+  an existing content-addressed object.
 - `audio.voices[*].selectionReason`, `capabilityMatches`, and `capabilityMismatches` are additive
   explainability fields for voice-alignment v2. Consumers SHOULD treat them as optional.
 - `ttsStrategy` and related dialogue fields capture the TTS strategy used for reproducibility. These fields

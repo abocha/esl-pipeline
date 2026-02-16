@@ -15,10 +15,18 @@ export interface AssignmentManifest {
   anytypeSpaceId?: string;
   anytypeUrl?: string;
   htmlUrl?: string;
+  htmlHash?: string;
+  htmlKey?: string;
+  htmlEtag?: string;
+  htmlReused?: boolean;
   audio?: {
     path?: string;
     url?: string;
     hash?: string;
+    key?: string;
+    etag?: string;
+    sizeBytes?: number;
+    reused?: boolean;
     voices?: BuildStudyTextResult['voices'];
   };
   preset?: string;

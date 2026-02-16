@@ -56,7 +56,7 @@ export async function sharePageToS3(
   const upload = await renderAndPublishMarkdownToS3({
     title: resolvedTitle,
     markdown: resolvedBody,
-    filename: options.filename ?? `${pageId}.html`,
+    filename: options.filename,
     keyPrefix: options.keyPrefix ?? 'materials/anytype-exports',
     publicRead: options.publicRead ?? true,
     css: options.css,
@@ -70,6 +70,9 @@ export async function sharePageToS3(
   return {
     url: upload.url,
     key: upload.key,
+    etag: upload.etag,
+    reused: upload.reused,
+    renderHash: upload.renderHash,
     pageId,
   };
 }

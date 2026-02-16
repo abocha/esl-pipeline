@@ -1,4 +1,4 @@
-import { mkdtemp, writeFile } from 'node:fs/promises';
+import { mkdtemp, unlink, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -679,6 +679,51 @@ default: voice_id_default
     expect(result.hash).toHaveLength(64);
     expect(convertMock).not.toHaveBeenCalled();
     expect(concatSpy).toHaveBeenCalled();
+  });
+
+  it('reuses monologue chunk cache when final file is missing', async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'tts-'));
+    const tempMdPath = join(dir, 'lesson-chunk-cache.md');
+    const tempVoiceMapPath = join(dir, 'voices.yml');
+    await writeFixture(
+      tempMdPath,
+      `
+---
+title: Chunk Cache
+student: Anna
+input_type: monologue
+---
+
+:::study-text
+This is a monologue line that should be chunk-cached and reused across runs.
+:::
+    `,
+    );
+    await writeFixture(
+      tempVoiceMapPath,
+      `
+default: voice_id_default
+    `,
+    );
+
+    const convertMock = setupClientMock();
+    mockConcat();
+    const first = await buildStudyTextMp3(tempMdPath, {
+      voiceMapPath: tempVoiceMapPath,
+      outPath: dir,
+      ttsStrategy: 'tts',
+    });
+    expect(convertMock).toHaveBeenCalledTimes(1);
+
+    await unlink(first.path);
+    convertMock.mockClear();
+
+    await buildStudyTextMp3(tempMdPath, {
+      voiceMapPath: tempVoiceMapPath,
+      outPath: dir,
+      ttsStrategy: 'tts',
+    });
+    expect(convertMock).not.toHaveBeenCalled();
   });
 
   it('reuses generated dialogue audio when file already exists and force=false', async () => {

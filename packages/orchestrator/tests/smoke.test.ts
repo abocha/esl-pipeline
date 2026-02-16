@@ -21,15 +21,26 @@ vi.mock('@esl-pipeline/tts-elevenlabs', async () => {
   };
 });
 
-vi.mock('@esl-pipeline/storage-uploader', () => ({
-  deriveS3UploadAddress: vi.fn().mockReturnValue({
-    key: 'audio/file.mp3',
-    url: 'https://s3.amazonaws.com/audio/file.mp3',
-  }),
-  uploadFile: vi
-    .fn()
-    .mockResolvedValue({ url: 'https://s3.amazonaws.com/audio/file.mp3', key: 'audio/file.mp3' }),
-}));
+vi.mock('@esl-pipeline/storage-uploader', async () => {
+  const actual = await vi.importActual<typeof import('@esl-pipeline/storage-uploader')>(
+    '@esl-pipeline/storage-uploader',
+  );
+  return {
+    ...actual,
+    deriveS3UploadAddress: vi.fn().mockReturnValue({
+      key: 'audio/file.mp3',
+      url: 'https://s3.amazonaws.com/audio/file.mp3',
+    }),
+    uploadFile: vi.fn().mockResolvedValue({
+      url: 'https://s3.amazonaws.com/audio/file.mp3',
+      key: 'audio/file.mp3',
+      reused: false,
+      etag: '"etag"',
+      sizeBytes: 11,
+      sha256: 'abc123',
+    }),
+  };
+});
 
 describe('orchestrator smoke', () => {
   afterEach(() => {
@@ -152,5 +163,53 @@ describe('orchestrator smoke', () => {
     expect(manifestSecond.dialogueLanguage).toBe('es');
     expect(manifestSecond.dialogueStability).toBe(0.55);
     expect(manifestSecond.dialogueSeed).toBe(999);
+  }, 15000);
+
+  it('preserves explicit upload prefix for legacy manifests without audio.hash', async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'orchestrator-legacy-prefix-'));
+    const mdPath = join(dir, 'assignment.md');
+    const audioPath = join(dir, 'lesson.mp3');
+
+    const okFixturePath = join(import.meta.dirname, '../../md-validator/fixtures/ok.md');
+    const okDoc = await readFile(okFixturePath, 'utf8');
+    await writeFile(mdPath, okDoc);
+    await writeFile(audioPath, 'dummy audio');
+
+    const { buildStudyTextMp3 } = await import('@esl-pipeline/tts-elevenlabs');
+    vi.mocked(buildStudyTextMp3).mockResolvedValue({
+      path: audioPath,
+      hash: 'abc123',
+      voices: [{ speaker: 'Anna', voiceId: 'voice_id_default', source: 'default' }],
+    });
+
+    const { newAssignment, rerunAssignment } = await import('../src/index.js');
+    const firstRun = await newAssignment({
+      md: mdPath,
+      preset: 'default',
+      withTts: true,
+      upload: 's3',
+      voices: 'packages/orchestrator/configs/voices.yml',
+      dryRun: false,
+    });
+
+    const manifest = JSON.parse(await readFile(firstRun.manifestPath!, 'utf8'));
+    manifest.audio.hash = undefined;
+    await writeFile(firstRun.manifestPath!, JSON.stringify(manifest, null, 2));
+
+    const { uploadFile } = await import('@esl-pipeline/storage-uploader');
+    vi.mocked(uploadFile).mockClear();
+
+    await rerunAssignment({
+      md: mdPath,
+      steps: ['upload'],
+      upload: 's3',
+      dryRun: false,
+      prefix: 'legacy-prefix',
+    });
+
+    expect(uploadFile).toHaveBeenCalledTimes(1);
+    const uploadOpts = vi.mocked(uploadFile).mock.calls[0]?.[1];
+    expect(uploadOpts?.prefix).toBe('legacy-prefix');
+    expect(uploadOpts?.key).toBeUndefined();
   }, 15000);
 });

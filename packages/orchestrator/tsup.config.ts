@@ -20,12 +20,4 @@ export default defineConfig(() => ({
   dts: false,
   noExternal: INTERNAL_BUNDLE,
   tsconfig: 'tsconfig.json',
-  esbuildOptions(options) {
-    // Preserve CLI shebangs by disabling banner stripping.
-    const existingJsBanner = options.banner?.js ?? '';
-    options.banner = {
-      ...options.banner,
-      js: `${existingJsBanner}\nimport pathTsup from "path";\nvoid pathTsup;`,
-    };
-  },
 }));

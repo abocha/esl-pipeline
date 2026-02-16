@@ -579,6 +579,9 @@ Manifest schema:
     - Filesystem-based `ManifestStore`.
     - Optional TTS metadata fields persisted alongside audio:
       - `ttsStrategy`, `dialogueLanguage`, `dialogueStability`, `dialogueSeed`.
+    - Additive artifact identity/reuse metadata:
+      - `audio.key`, `audio.etag`, `audio.sizeBytes`, `audio.reused`
+      - `htmlHash`, `htmlKey`, `htmlEtag`, `htmlReused`
 
 Agents MUST:
 

@@ -7,6 +7,22 @@ import { uploadFile } from '../src/index.js';
 
 const sendMock = vi.fn();
 
+interface DrainableBody {
+  on(event: 'error' | 'end', listener: (...args: unknown[]) => void): DrainableBody;
+  resume(): DrainableBody;
+}
+
+async function drainPutBody(command: { __type?: string; Body?: unknown }) {
+  if (command.__type !== 'put') return;
+  const body = command.Body as DrainableBody | undefined;
+  if (!body || typeof body.on !== 'function' || typeof body.resume !== 'function') return;
+  await new Promise<void>((resolve, reject) => {
+    body.on('error', reject);
+    body.on('end', resolve);
+    body.resume();
+  });
+}
+
 vi.mock('@aws-sdk/client-s3', () => ({
   S3Client: class {
     constructor() {}
@@ -14,7 +30,14 @@ vi.mock('@aws-sdk/client-s3', () => ({
       return sendMock(command);
     }
   },
+  HeadObjectCommand: class {
+    __type = 'head';
+    constructor(params: any) {
+      Object.assign(this, params);
+    }
+  },
   PutObjectCommand: class {
+    __type = 'put';
     constructor(params: any) {
       Object.assign(this, params);
     }
@@ -26,7 +49,13 @@ describe('uploadFile', () => {
 
   beforeEach(async () => {
     sendMock.mockReset();
-    sendMock.mockResolvedValue({ ETag: '"mock-etag"' });
+    sendMock.mockImplementation(async (command: { __type?: string; Body?: unknown }) => {
+      if (command.__type === 'head') {
+        throw { name: 'NotFound', $metadata: { httpStatusCode: 404 } };
+      }
+      await drainPutBody(command);
+      return { ETag: '"mock-etag"' };
+    });
     const tempDir = tmpdir();
     tempFile = join(tempDir, `test-audio-${Date.now()}.mp3`);
     await writeFile(tempFile, 'mock audio content');
@@ -50,7 +79,8 @@ describe('uploadFile', () => {
     );
     expect(result.key).toBe(`audio/tests/${fileName}`);
     expect(result.etag).toBe('"mock-etag"');
-    const command = sendMock.mock.calls[0]?.[0];
+    expect(result.reused).toBe(false);
+    const command = sendMock.mock.calls.find((call) => call[0]?.__type === 'put')?.[0];
     expect(command?.Key).toBe(`audio/tests/${fileName}`);
     expect(command?.ACL).toBe('public-read');
   });
@@ -64,9 +94,21 @@ describe('uploadFile', () => {
     });
     const fileName = basename(tempFile);
     expect(result.key).toBe(`audio/tests/${fileName}`);
-    const command = sendMock.mock.calls[0]?.[0];
+    const command = sendMock.mock.calls.find((call) => call[0]?.__type === 'put')?.[0];
     expect(command?.Key).toBe(`audio/tests/${fileName}`);
     expect(command?.ACL).toBeUndefined();
+  });
+
+  it('supports explicit deterministic object key', async () => {
+    const result = await uploadFile(tempFile, {
+      backend: 's3',
+      bucket: 'test-bucket',
+      region: 'us-east-1',
+      key: 'audio/final/content-hash.mp3',
+    });
+    expect(result.key).toBe('audio/final/content-hash.mp3');
+    const command = sendMock.mock.calls.find((call) => call[0]?.__type === 'put')?.[0];
+    expect(command?.Key).toBe('audio/final/content-hash.mp3');
   });
 
   it('throws error for unsupported backend', async () => {

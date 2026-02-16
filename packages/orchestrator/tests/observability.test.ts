@@ -23,15 +23,26 @@ vi.mock('@esl-pipeline/tts-elevenlabs', async () => {
   };
 });
 
-vi.mock('@esl-pipeline/storage-uploader', () => ({
-  deriveS3UploadAddress: vi.fn().mockReturnValue({
-    key: 'audio/file.mp3',
-    url: 'https://s3.amazonaws.com/audio/file.mp3',
-  }),
-  uploadFile: vi
-    .fn()
-    .mockResolvedValue({ url: 'https://s3.amazonaws.com/audio/file.mp3', key: 'audio/file.mp3' }),
-}));
+vi.mock('@esl-pipeline/storage-uploader', async () => {
+  const actual = await vi.importActual<typeof import('@esl-pipeline/storage-uploader')>(
+    '@esl-pipeline/storage-uploader',
+  );
+  return {
+    ...actual,
+    deriveS3UploadAddress: vi.fn().mockReturnValue({
+      key: 'audio/file.mp3',
+      url: 'https://s3.amazonaws.com/audio/file.mp3',
+    }),
+    uploadFile: vi.fn().mockResolvedValue({
+      url: 'https://s3.amazonaws.com/audio/file.mp3',
+      key: 'audio/file.mp3',
+      reused: false,
+      etag: '"etag"',
+      sizeBytes: 11,
+      sha256: 'abc123',
+    }),
+  };
+});
 
 describe('orchestrator observability', () => {
   afterEach(() => {

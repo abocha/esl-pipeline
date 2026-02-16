@@ -636,7 +636,7 @@ export const MinimalAssignment: React.FC = () => {
         setResumeLoading(false);
       }
     },
-    [jobOptions, loadJobProvenance, presetOptionIds, resolveBoundProfileId, resumeJobs],
+    [jobOptions, presetOptionIds, resolveBoundProfileId, resumeJobs],
   );
 
   const handleResumeSelectedJob = useCallback(async () => {
