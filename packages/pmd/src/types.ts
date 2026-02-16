@@ -133,4 +133,14 @@ export interface Section {
   content: string;
 }
 
+export interface ParsedMarkdownContext {
+  rawMarkdown: string;
+  normalized: import('./source.js').NormalizedMarkdownSource;
+  document: PmdDocument;
+  content: string;
+  contentLines: string[];
+  rawLines: string[];
+  contentLineOffset: number;
+}
+
 export type { ContentSource, SpeakerProfile, StudyTextType } from '@esl-pipeline/contracts';

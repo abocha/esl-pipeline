@@ -6,7 +6,7 @@ import { Readable, Transform } from 'node:stream';
 import { z } from 'zod';
 
 import type { JobState } from '@esl-pipeline/contracts';
-import { validateMarkdownFile } from '@esl-pipeline/md-validator';
+import { validateMarkdown } from '@esl-pipeline/md-validator';
 
 import { createDraft } from '../application/create-draft.js';
 import { createPromptPackage } from '../application/create-prompt-package.js';
@@ -297,10 +297,7 @@ export function registerExtendedRoutes(app: FastifyInstance, options: ExtendedRo
 
       try {
         const body = schema.parse(request.body ?? {});
-        const result = await validateMarkdownFile('inline.md', {
-          content: body.text,
-          strict: body.strict,
-        });
+        const result = await validateMarkdown({ markdown: body.text, strict: body.strict });
         const diagnostics = result.voiceDiagnostics;
         if (diagnostics?.errors && diagnostics.errors.length > 0) {
           metrics.increment('esl.voice_alignment.validation_failures', diagnostics.errors.length, {

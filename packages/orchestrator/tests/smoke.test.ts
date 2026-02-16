@@ -165,6 +165,46 @@ describe('orchestrator smoke', () => {
     expect(manifestSecond.dialogueSeed).toBe(999);
   }, 15000);
 
+  it('rerun upload/add-audio does not require parseable markdown when tts is not requested', async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'orchestrator-rerun-no-tts-parse-'));
+    const mdPath = join(dir, 'assignment.md');
+    const audioPath = join(dir, 'lesson.mp3');
+
+    const okFixturePath = join(import.meta.dirname, '../../md-validator/fixtures/ok.md');
+    const okDoc = await readFile(okFixturePath, 'utf8');
+    await writeFile(mdPath, okDoc);
+    await writeFile(audioPath, 'dummy audio');
+
+    const { buildStudyTextMp3 } = await import('@esl-pipeline/tts-elevenlabs');
+    vi.mocked(buildStudyTextMp3).mockResolvedValue({
+      path: audioPath,
+      hash: 'abc123',
+      voices: [{ speaker: 'Anna', voiceId: 'voice_id_default', source: 'default' }],
+    });
+
+    const { newAssignment, rerunAssignment } = await import('../src/index.js');
+    await newAssignment({
+      md: mdPath,
+      preset: 'default',
+      withTts: true,
+      upload: 's3',
+      voices: 'packages/orchestrator/configs/voices.yml',
+      dryRun: false,
+    });
+
+    // Intentionally malformed for PMD parse. Non-TTS rerun should still proceed.
+    await writeFile(mdPath, '# broken markdown without frontmatter\n');
+
+    const rerun = await rerunAssignment({
+      md: mdPath,
+      steps: ['upload', 'add-audio'],
+      upload: 's3',
+      dryRun: false,
+    });
+
+    expect(rerun.steps).toEqual(['upload', 'add-audio']);
+  }, 15000);
+
   it('preserves explicit upload prefix for legacy manifests without audio.hash', async () => {
     const dir = await mkdtemp(join(tmpdir(), 'orchestrator-legacy-prefix-'));
     const mdPath = join(dir, 'assignment.md');

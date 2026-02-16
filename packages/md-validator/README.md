@@ -34,9 +34,9 @@ The CLI auto-loads `.env` from the current working directory and repo root.
 ### API
 
 ```typescript
-import { validateMarkdownFile } from '@esl-pipeline/md-validator';
+import { validateMarkdown } from '@esl-pipeline/md-validator';
 
-const result = await validateMarkdownFile('./lesson.md', { strict: true });
+const result = await validateMarkdown({ path: './lesson.md', strict: true });
 
 if (!result.ok) {
   console.error('Validation failed:');

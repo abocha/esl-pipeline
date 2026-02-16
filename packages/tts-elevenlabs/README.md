@@ -67,8 +67,13 @@ The generated catalog now includes:
 
 ```ts
 import { buildStudyTextMp3 } from '@esl-pipeline/tts-elevenlabs';
+import { parseMarkdownContext } from '@esl-pipeline/pmd';
+import { readFile } from 'node:fs/promises';
 
-const result = await buildStudyTextMp3('/abs/path/lesson.md', {
+const markdown = await readFile('/abs/path/lesson.md', 'utf8');
+const context = parseMarkdownContext(markdown);
+
+const result = await buildStudyTextMp3({ context, mdPath: '/abs/path/lesson.md' }, {
   voiceMapPath: '/abs/path/packages/orchestrator/configs/voices.yml',
   outPath: '/abs/path/out',
   ttsStrategy: 'auto',

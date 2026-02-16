@@ -1,8 +1,10 @@
 import type { PipelineLogger } from '@esl-pipeline/contracts';
+import type { ParsedMarkdownContext } from '@esl-pipeline/pmd';
 import type { DatabaseObjectResponse } from '@notionhq/client/build/src/api-endpoints.js';
 
 export interface ImportOptions {
-  mdPath: string;
+  context: ParsedMarkdownContext;
+  mdPath?: string;
   dbId?: string;
   dbName?: string;
   dataSourceId?: string;

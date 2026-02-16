@@ -5,7 +5,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import pc from 'picocolors';
 
-import { validateMarkdownFile } from '../src/validator.js';
+import { validateMarkdown } from '../src/validator.js';
 
 loadCliEnv({
   moduleUrl: import.meta.url,
@@ -23,7 +23,7 @@ const program = new Command()
       console.error(pc.red(`File not found: ${p}`));
       process.exit(1);
     }
-    const result = await validateMarkdownFile(p, { strict: !!opts.strict });
+    const result = await validateMarkdown({ path: p, strict: !!opts.strict });
 
     if (result.ok && (!opts.strict || result.warnings.length === 0)) {
       console.log(pc.green('✔ Validation passed'));

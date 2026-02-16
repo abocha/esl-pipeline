@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import {
   extractAnswerKey,
   extractFrontmatter,
+  parseMarkdownContext,
   extractSections,
   extractStudyText,
   extractTeacherNotes,
@@ -43,31 +44,33 @@ A: I'm fine.
 `;
 
 describe('pmd extractor', () => {
+  const context = parseMarkdownContext(sample);
+
   it('frontmatter', () => {
-    const fm = extractFrontmatter(sample);
+    const fm = extractFrontmatter(context);
     expect(fm.title).toBe('Homework Assignment: Weather');
     expect(fm.student).toBe('Anna');
     expect(fm.level).toBe('A2');
   });
 
   it('study-text', () => {
-    const st = extractStudyText(sample);
+    const st = extractStudyText(context);
     expect(st.type).toBe('dialogue');
     expect(st.lines.length).toBeGreaterThan(0);
   });
 
   it('answer key', () => {
-    const ak = extractAnswerKey(sample);
+    const ak = extractAnswerKey(context);
     expect(ak).toContain('She is fine');
   });
 
   it("teacher's notes", () => {
-    const tn = extractTeacherNotes(sample);
+    const tn = extractTeacherNotes(context);
     expect(tn).toContain('intonation');
   });
 
   it('sections h2/h3 slice', () => {
-    const sections = extractSections(sample);
+    const sections = extractSections(context);
     const titles = sections.map((s) => s.title.toLowerCase());
     expect(titles.join('|')).toContain('study text');
   });

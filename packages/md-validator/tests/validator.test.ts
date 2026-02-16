@@ -3,11 +3,15 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
-import { validateMarkdownFile } from '../src/validator.js';
+import { validateMarkdown } from '../src/validator.js';
 
 const fixturesPath = path.join(import.meta.dirname, '..', 'fixtures');
 
 const ORIGINAL_ENV = { ...process.env };
+
+async function validateMarkdownFile(pathValue: string, opts?: { strict?: boolean }) {
+  return validateMarkdown({ path: pathValue, strict: opts?.strict });
+}
 
 function buildBaseDoc(firstSectionContent: string): string {
   return `

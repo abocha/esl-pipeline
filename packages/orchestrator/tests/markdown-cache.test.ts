@@ -3,14 +3,14 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, expect, it, vi } from 'vitest';
 
-const validateMarkdownFile = vi.fn().mockResolvedValue({
+const validateMarkdown = vi.fn().mockResolvedValue({
   ok: true,
   errors: [],
   warnings: [],
 });
 
 vi.mock('@esl-pipeline/md-validator', () => ({
-  validateMarkdownFile,
+  validateMarkdown,
 }));
 
 vi.mock('@esl-pipeline/notion-adapter', () => ({
@@ -56,7 +56,18 @@ describe('markdown caching', () => {
   it('passes cached markdown content to validator when provided', async () => {
     const dir = await mkdtemp(join(tmpdir(), 'md-cache-'));
     const mdPath = join(dir, 'lesson.md');
-    const mdContent = '# Test\n';
+    const mdContent = [
+      '---',
+      'title: Test',
+      'student: Test Student',
+      'level: A1',
+      'topic: test',
+      'input_type: generate',
+      '---',
+      '',
+      '# Test',
+      '',
+    ].join('\n');
     await writeFile(mdPath, mdContent);
 
     const { newAssignment } = await import('../src/index.js');
@@ -70,9 +81,10 @@ describe('markdown caching', () => {
       dryRun: true,
     });
 
-    expect(validateMarkdownFile).toHaveBeenCalledTimes(1);
-    const call = validateMarkdownFile.mock.calls[0];
-    expect(call?.[0]).toBe(mdPath);
-    expect(call?.[1]?.content).toBe(mdContent);
+    expect(validateMarkdown).toHaveBeenCalledTimes(1);
+    const call = validateMarkdown.mock.calls[0];
+    expect(call?.[0]?.path).toBe(mdPath);
+    expect(call?.[0]?.strict).toBe(false);
+    expect(call?.[0]?.context?.rawMarkdown).toBe(mdContent);
   }, 15000);
 });

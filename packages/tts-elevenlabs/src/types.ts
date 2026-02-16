@@ -3,6 +3,7 @@
  */
 import type { PipelineLogger } from '@esl-pipeline/contracts';
 import type { VoiceSelectionDiagnostics } from '@esl-pipeline/contracts';
+import type { ParsedMarkdownContext } from '@esl-pipeline/pmd';
 
 export type TtsStrategy = 'auto' | 'tts' | 'dialogue';
 
@@ -74,6 +75,11 @@ export interface BuildStudyTextOptions {
   dialogueLanguage?: string;
   dialogueStability?: number;
   dialogueSeed?: number;
+}
+
+export interface BuildStudyTextInput {
+  context: ParsedMarkdownContext;
+  mdPath?: string;
 }
 
 export interface BuildStudyTextResult {

@@ -28,7 +28,7 @@ import {
 } from './ffmpeg.js';
 import { type VoiceMapConfig, resolveSpeakerVoices } from './speakerAssignment.js';
 import type { DialogueInput, TtsStrategy } from './types.js';
-import type { BuildStudyTextOptions, BuildStudyTextResult } from './types.js';
+import type { BuildStudyTextInput, BuildStudyTextOptions, BuildStudyTextResult } from './types.js';
 
 const DEFAULT_MODEL_ID = process.env.ELEVENLABS_MODEL_ID ?? 'eleven_multilingual_v2';
 type TextToSpeechConvertBody = Parameters<
@@ -317,14 +317,12 @@ async function buildDialogueMp3(
 }
 
 export async function buildStudyTextMp3(
-  mdPath: string,
+  input: BuildStudyTextInput,
   opts: BuildStudyTextOptions,
 ): Promise<BuildStudyTextResult> {
   const logger = opts.logger ?? noopLogger;
-  // Read and extract study text
-  const mdContent = await readFile(mdPath, 'utf8');
-  const frontmatter = loadFrontmatter(mdContent);
-  const studyText = extractStudyText(mdContent);
+  const frontmatter = extractFrontmatter(input.context);
+  const studyText = extractStudyText(input.context);
   const segments = resolveStudyTextSegments(studyText.lines, frontmatter);
   const sanitizedSegments = segments
     .map((segment) => cleanSpeechText(segment.text))
@@ -397,7 +395,7 @@ export async function buildStudyTextMp3(
   // Route to appropriate synthesis path
   if (selectedStrategy === 'dialogue') {
     const apiKey = process.env.ELEVENLABS_API_KEY || process.env.ELEVENLABS_API_TOKEN || '';
-    const outputDir = resolve(opts.outPath || dirname(mdPath));
+    const outputDir = resolve(opts.outPath || (input.mdPath ? dirname(input.mdPath) : process.cwd()));
     const inputs = toDialogueInputs(segments, speakerVoiceMap);
     const hash = buildDialogueHash(inputs, {
       modelId: 'eleven_v3',
@@ -460,7 +458,7 @@ export async function buildStudyTextMp3(
   const hashInput = JSON.stringify({ text: normalizedText, voices: resolvedVoiceDescriptor });
   const hash = hashStudyText(hashInput);
   const fileName = buildOutputFileName(hash, frontmatter);
-  const outputDir = resolve(opts.outPath || dirname(mdPath));
+  const outputDir = resolve(opts.outPath || (input.mdPath ? dirname(input.mdPath) : process.cwd()));
   const targetPath = resolve(outputDir, fileName);
 
   if (opts.preview) {
@@ -767,20 +765,6 @@ function resolveStudyTextSegments(lines: string[], frontmatter: Frontmatter): St
   return segments;
 }
 
-function loadFrontmatter(source: string): Frontmatter {
-  const fm = extractFrontmatter(source);
-  if (fm && Object.keys(fm).length > 0) return fm;
-  const normalized = source.replaceAll('\r\n', '\n');
-  const fenceMatch = normalized.match(/```[^\n]*\n([\s\S]*?)```/);
-  if (fenceMatch && fenceMatch[1]) {
-    const innerFm = extractFrontmatter(fenceMatch[1]);
-    if (innerFm && Object.keys(innerFm).length > 0) {
-      return innerFm;
-    }
-  }
-  return {} as Frontmatter;
-}
-
 async function synthesizeLineWithRetry(
   client: ReturnType<typeof getElevenClient>,
   voiceId: string,
@@ -910,6 +894,7 @@ export type {
   DialogueSynthesisOptions,
   DialogueSynthesisResult,
   DialogueChunk,
+  BuildStudyTextInput,
   BuildStudyTextOptions,
   BuildStudyTextResult,
 } from './types.js';

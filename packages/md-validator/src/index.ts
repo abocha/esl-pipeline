@@ -1,6 +1,6 @@
-import { validateMarkdownFile as validateMarkdownFileImpl } from './validator.js';
+import { validateMarkdown as validateMarkdownImpl } from './validator.js';
 
-export async function validateMarkdownFile(...args: Parameters<typeof validateMarkdownFileImpl>) {
-  return validateMarkdownFileImpl(...args);
+export async function validateMarkdown(...args: Parameters<typeof validateMarkdownImpl>) {
+  return validateMarkdownImpl(...args);
 }
-export type { ValidateOptions, ValidateResult } from './validator.js';
+export type { ValidateMarkdownInput, ValidateOptions, ValidateResult } from './validator.js';

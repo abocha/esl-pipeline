@@ -2,6 +2,7 @@ import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { parseMarkdownContext } from '@esl-pipeline/pmd';
 
 const { createNotionClientMock } = vi.hoisted(() => ({
   createNotionClientMock: vi.fn(),
@@ -69,6 +70,7 @@ describe('runImport data source resolution', () => {
 
     const { runImport } = await import('../src/importer.js');
     const result = await runImport({
+      context: parseMarkdownContext(await fs.readFile(mdPath, 'utf8')),
       mdPath,
       dbId: 'db-1',
       validationResult: {
