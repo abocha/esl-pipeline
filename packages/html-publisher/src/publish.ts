@@ -1,9 +1,9 @@
-import { randomUUID } from 'node:crypto';
-import { writeFile } from 'node:fs/promises';
+import { createHash } from 'node:crypto';
+import { writeFile, unlink } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { basename, extname, join } from 'node:path';
 
-import { uploadToS3 } from '@esl-pipeline/storage-uploader';
+import { uploadFile } from '@esl-pipeline/storage-uploader';
 
 import { type RenderOptions, renderToHtml } from './rendering.js';
 
@@ -11,6 +11,8 @@ export interface PublishHtmlOptions {
   keyPrefix?: string;
   publicRead?: boolean;
   filename?: string;
+  key?: string;
+  renderHash?: string;
 }
 
 export interface RenderAndPublishOptions extends RenderOptions, PublishHtmlOptions {
@@ -21,26 +23,44 @@ export interface RenderAndPublishOptions extends RenderOptions, PublishHtmlOptio
 export interface HtmlPublishResult {
   url: string;
   key: string;
+  etag?: string;
+  reused?: boolean;
+  renderHash: string;
   html: string;
 }
+
+const HTML_ARTIFACT_IDENTITY_VERSION = 1;
 
 export async function publishHtmlToS3(
   html: string,
   options: PublishHtmlOptions = {},
 ): Promise<Omit<HtmlPublishResult, 'html'>> {
-  const fileName = resolveFilename(options.filename);
-  const localPath = join(tmpdir(), fileName);
+  const renderHash =
+    options.renderHash ??
+    hashHtmlArtifact(`html-v${HTML_ARTIFACT_IDENTITY_VERSION}:${html}`);
+  const localPath = join(tmpdir(), `esl-html-${renderHash}.html`);
+  const key = resolveHtmlObjectKey(renderHash, options);
+
   await writeFile(localPath, html, 'utf8');
+  try {
+    const upload = await uploadFile(localPath, {
+      backend: 's3',
+      key,
+      sha256: renderHash,
+      skipIfExists: true,
+      public: options.publicRead ?? true,
+    });
 
-  const upload = await uploadToS3(localPath, {
-    keyPrefix: options.keyPrefix ?? 'materials/html-exports',
-    publicRead: options.publicRead ?? true,
-  });
-
-  return {
-    url: upload.url,
-    key: upload.key,
-  };
+    return {
+      url: upload.url,
+      key: upload.key,
+      etag: upload.etag,
+      reused: upload.reused,
+      renderHash,
+    };
+  } finally {
+    await unlink(localPath).catch(() => {});
+  }
 }
 
 export async function renderAndPublishMarkdownToS3(
@@ -59,6 +79,8 @@ export async function renderAndPublishMarkdownToS3(
     keyPrefix: options.keyPrefix,
     publicRead: options.publicRead,
     filename: options.filename,
+    key: options.key,
+    renderHash: options.renderHash,
   });
 
   return {
@@ -70,7 +92,7 @@ export async function renderAndPublishMarkdownToS3(
 function resolveFilename(filename?: string): string {
   const trimmed = filename?.trim();
   if (!trimmed) {
-    return `assignment-${randomUUID()}.html`;
+    return '';
   }
 
   const base = basename(trimmed);
@@ -80,4 +102,28 @@ function resolveFilename(filename?: string): string {
   }
 
   return `${base}.html`;
+}
+
+function resolveHtmlObjectKey(renderHash: string, options: PublishHtmlOptions): string {
+  if (options.key?.trim()) {
+    return options.key.trim();
+  }
+
+  const fileName = resolveFilename(options.filename);
+  if (fileName) {
+    const keyPrefix = options.keyPrefix?.trim();
+    return keyPrefix ? `${keyPrefix}/${fileName}` : fileName;
+  }
+
+  return buildHtmlArtifactKey(renderHash, options.keyPrefix);
+}
+
+function hashHtmlArtifact(content: string): string {
+  return createHash('sha256').update(content).digest('hex');
+}
+
+function buildHtmlArtifactKey(hash: string, keyPrefix?: string): string {
+  const normalizedPrefix = keyPrefix?.replace(/^[\/\\]+/, '').replace(/[\/\\]+$/, '') ?? '';
+  const baseKey = `materials/html/artifacts/${hash}.html`;
+  return normalizedPrefix ? `${normalizedPrefix}/${baseKey}` : baseKey;
 }

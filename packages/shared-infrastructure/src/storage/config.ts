@@ -2,7 +2,7 @@
  * Storage configuration service.
  * Consolidated from batch-backend/src/infrastructure/storage-config.ts
  */
-import path from 'node:path';
+import { isAbsolute, resolve } from 'node:path';
 
 import { ConfigurationError } from '@esl-pipeline/contracts';
 
@@ -56,9 +56,9 @@ export class StorageConfigurationService {
     };
 
     const fsUploadDir = this.config.filesystem?.uploadDir || './uploads';
-    this.config.filesystem.uploadDir = path.isAbsolute(fsUploadDir)
+    this.config.filesystem.uploadDir = isAbsolute(fsUploadDir)
       ? fsUploadDir
-      : path.resolve(process.cwd(), fsUploadDir);
+      : resolve(process.cwd(), fsUploadDir);
 
     this.validateConfig();
   }
@@ -110,9 +110,9 @@ export function createStorageConfigService(
   config?: Partial<StorageConfig>,
 ): StorageConfigurationService {
   const uploadDirEnv = readString('FILESYSTEM_UPLOAD_DIR') || './uploads';
-  const resolvedUploadDir = path.isAbsolute(uploadDirEnv)
+  const resolvedUploadDir = isAbsolute(uploadDirEnv)
     ? uploadDirEnv
-    : path.resolve(process.cwd(), uploadDirEnv);
+    : resolve(process.cwd(), uploadDirEnv);
 
   const awsRegion = readString('S3_REGION') || readString('AWS_REGION') || 'us-east-1';
   const awsBucket =

@@ -14,7 +14,10 @@ import {
   loadPreset,
   runImport,
 } from '@esl-pipeline/notion-adapter';
-import { deriveS3UploadAddress, uploadFile } from '@esl-pipeline/storage-uploader';
+import {
+  deriveS3UploadAddress,
+  uploadFile,
+} from '@esl-pipeline/storage-uploader';
 import {
   type BuildStudyTextResult,
   FfmpegNotFoundError,
@@ -401,6 +404,25 @@ function emitVoiceSelectionMetrics(
   }
 }
 
+function resolveAudioArtifactKey(audioHash: string, prefix?: string): string {
+  const normalizedPrefix = prefix?.replace(/^[\/\\]+/, '').replace(/[\/\\]+$/, '') ?? '';
+  const key = `audio/final/${audioHash}.mp3`;
+  return normalizedPrefix ? `${normalizedPrefix}/${key}` : key;
+}
+
+function deriveS3GlobalUrl(bucket: string, key: string): string {
+  return `https://${bucket}.s3.amazonaws.com/${key}`;
+}
+
+function emitArtifactReuseMetric(
+  metrics: OrchestratorDependencies['metrics'],
+  kind: 'audio' | 'html',
+  reused?: boolean,
+): void {
+  if (!metrics || reused === undefined) return;
+  metrics.increment(reused ? 'esl.artifact.reuse_hit' : 'esl.artifact.reuse_miss', 1, { kind });
+}
+
 export async function planRerunAssignment(
   request: RerunPlanRequest,
   dependencies: OrchestratorDependencies = {},
@@ -423,7 +445,7 @@ export async function newAssignment(
   anytypeUrl?: string;
   htmlUrl?: string;
   publishTarget?: 'notion' | 'anytype' | 'html';
-  audio?: { path?: string; url?: string; hash?: string; voices?: BuildStudyTextResult['voices'] };
+  audio?: AssignmentManifest['audio'];
   colorized?: boolean;
   manifestPath?: string;
   steps: string[];
@@ -505,6 +527,10 @@ export async function newAssignment(
   let anytypeSpaceId = flags.anytypeSpaceId ?? previousManifest?.anytypeSpaceId;
   let anytypeUrl = previousManifest?.anytypeUrl;
   let htmlUrl = previousManifest?.htmlUrl;
+  let htmlHash = previousManifest?.htmlHash;
+  let htmlKey = previousManifest?.htmlKey;
+  let htmlEtag = previousManifest?.htmlEtag;
+  let htmlReused = previousManifest?.htmlReused;
 
   let colorized = false;
 
@@ -516,6 +542,10 @@ export async function newAssignment(
     anytypeSpaceId = undefined;
     anytypeUrl = undefined;
     htmlUrl = undefined;
+    htmlHash = undefined;
+    htmlKey = undefined;
+    htmlEtag = undefined;
+    htmlReused = undefined;
   } else {
     pageId = undefined;
     pageUrl = undefined;
@@ -789,29 +819,47 @@ export async function newAssignment(
         emitStage('upload', 'start');
         steps.push('upload');
         throwIfCancelled(signal, 'upload');
+        const bucket = process.env.S3_BUCKET ?? 'stub-bucket';
+        const keyPrefix = flags.prefix ?? process.env.S3_PREFIX ?? '';
+        const audioKey = audio.hash ? resolveAudioArtifactKey(audio.hash, keyPrefix) : undefined;
         if (flags.dryRun) {
-          const bucket = process.env.S3_BUCKET ?? 'stub-bucket';
-          const prefix = flags.prefix ?? process.env.S3_PREFIX ?? 'audio/assignments';
-          const { url } = deriveS3UploadAddress({
-            bucket,
-            keyPrefix: prefix,
-            filePath: audio.path,
-            urlStyle: 'global',
-          });
-          audio.url = url;
+          if (audioKey) {
+            audio.url = deriveS3GlobalUrl(bucket, audioKey);
+            audio.key = audioKey;
+          } else {
+            const { url, key } = deriveS3UploadAddress({
+              bucket,
+              keyPrefix,
+              filePath: audio.path,
+              urlStyle: 'global',
+            });
+            audio.url = url;
+            audio.key = key;
+          }
+          audio.reused = false;
         } else {
           const upload = await uploadFile(audio.path, {
             backend: 's3',
+            key: audioKey,
+            sha256: audio.hash,
+            skipIfExists: true,
+            prefix: flags.prefix,
             public: flags.publicRead,
             presignExpiresIn: flags.presign,
-            prefix: flags.prefix,
             logger,
           });
           audio.url = upload.url;
+          audio.key = upload.key;
+          audio.etag = upload.etag;
+          audio.sizeBytes = upload.sizeBytes;
+          audio.reused = upload.reused;
+          emitArtifactReuseMetric(metrics, 'audio', upload.reused);
         }
         throwIfCancelled(signal, 'upload');
         emitStage('upload', 'success', {
           url: audio.url,
+          key: audio.key,
+          reused: audio.reused,
           dryRun: flags.dryRun,
         });
       }
@@ -886,11 +934,19 @@ export async function newAssignment(
         throwIfCancelled(signal, 'add-audio');
         anytypeUrl = publishResult.url;
         htmlUrl = publishResult.url;
+        htmlHash = publishResult.renderHash;
+        htmlKey = publishResult.key;
+        htmlEtag = publishResult.etag;
+        htmlReused = publishResult.reused;
+        emitArtifactReuseMetric(metrics, 'html', publishResult.reused);
 
         emitStage('add-audio', 'success', {
           pageId: anytypePageId,
           url: audio?.url,
           publishUrl: anytypeUrl,
+          publishKey: htmlKey,
+          publishHash: htmlHash,
+          publishReused: htmlReused,
         });
       }
     } else if (publishTarget === 'html') {
@@ -917,10 +973,18 @@ export async function newAssignment(
         });
         throwIfCancelled(signal, 'add-audio');
         htmlUrl = publishResult.url;
+        htmlHash = publishResult.renderHash;
+        htmlKey = publishResult.key;
+        htmlEtag = publishResult.etag;
+        htmlReused = publishResult.reused;
+        emitArtifactReuseMetric(metrics, 'html', publishResult.reused);
       }
       emitStage('add-audio', 'success', {
         url: audio?.url,
         publishUrl: htmlUrl,
+        publishKey: htmlKey,
+        publishHash: htmlHash,
+        publishReused: htmlReused,
         dryRun: flags.dryRun,
       });
     } else {
@@ -937,6 +1001,10 @@ export async function newAssignment(
       anytypeSpaceId,
       anytypeUrl,
       htmlUrl,
+      htmlHash,
+      htmlKey,
+      htmlEtag,
+      htmlReused,
       audio,
       preset: flags.preset,
 
@@ -1102,7 +1170,7 @@ export async function rerunAssignment(
   dependencies: OrchestratorDependencies = {},
 ): Promise<{
   steps: string[];
-  audio?: { path?: string; url?: string; hash?: string; voices?: BuildStudyTextResult['voices'] };
+  audio?: AssignmentManifest['audio'];
   pageId?: string;
   pageUrl?: string;
   anytypeUrl?: string;
@@ -1207,12 +1275,24 @@ export async function rerunAssignment(
     let audioPath = manifest.audio?.path;
     let audioUrl = manifest.audio?.url;
     let audioHash = manifest.audio?.hash;
+    let audioKey = manifest.audio?.key;
+    let audioEtag = manifest.audio?.etag;
+    let audioSizeBytes = manifest.audio?.sizeBytes;
+    let audioReused = manifest.audio?.reused;
     let audioVoices = manifest.audio?.voices;
     const publishTarget = manifest.publishTarget ?? 'notion';
     let anytypeUrl = manifest.anytypeUrl;
     let htmlUrl = manifest.htmlUrl;
+    let htmlHash = manifest.htmlHash;
+    let htmlKey = manifest.htmlKey;
+    let htmlEtag = manifest.htmlEtag;
+    let htmlReused = manifest.htmlReused;
     if (publishTarget === 'notion') {
       htmlUrl = undefined;
+      htmlHash = undefined;
+      htmlKey = undefined;
+      htmlEtag = undefined;
+      htmlReused = undefined;
     } else if (publishTarget === 'html') {
       anytypeUrl = undefined;
     }
@@ -1281,6 +1361,11 @@ export async function rerunAssignment(
       }
       audioPath = ttsResult.path;
       audioHash = ttsResult.hash;
+      audioUrl = undefined;
+      audioKey = undefined;
+      audioEtag = undefined;
+      audioSizeBytes = undefined;
+      audioReused = undefined;
       audioVoices = ttsResult.voices;
       emitVoiceSelectionMetrics(metrics, ttsResult.voices);
       emitStage('tts', 'success', {
@@ -1305,30 +1390,48 @@ export async function rerunAssignment(
         throw new Error('Only S3 uploads are supported in rerun mode. Pass --upload s3.');
       }
 
+      const bucket = process.env.S3_BUCKET ?? 'stub-bucket';
+      const keyPrefix = flags.prefix ?? process.env.S3_PREFIX ?? '';
+      const deterministicAudioKey = audioHash ? resolveAudioArtifactKey(audioHash, keyPrefix) : undefined;
       if (flags.dryRun) {
-        const bucket = process.env.S3_BUCKET ?? 'stub-bucket';
-        const prefix = flags.prefix ?? process.env.S3_PREFIX ?? 'audio/assignments';
-        const { url } = deriveS3UploadAddress({
-          bucket,
-          keyPrefix: prefix,
-          filePath: audioPath,
-          urlStyle: 'global',
-        });
-        audioUrl = url;
+        if (deterministicAudioKey) {
+          audioUrl = deriveS3GlobalUrl(bucket, deterministicAudioKey);
+          audioKey = deterministicAudioKey;
+        } else {
+          const preview = deriveS3UploadAddress({
+            bucket,
+            keyPrefix,
+            filePath: audioPath,
+            urlStyle: 'global',
+          });
+          audioUrl = preview.url;
+          audioKey = preview.key;
+        }
+        audioReused = false;
       } else {
         const upload = await uploadFile(audioPath, {
           backend: 's3',
+          key: deterministicAudioKey,
+          sha256: audioHash,
+          skipIfExists: true,
+          prefix: flags.prefix,
           public: flags.publicRead,
           presignExpiresIn: flags.presign,
-          prefix: flags.prefix,
           logger,
         });
         audioUrl = upload.url;
+        audioKey = upload.key;
+        audioEtag = upload.etag;
+        audioSizeBytes = upload.sizeBytes;
+        audioReused = upload.reused;
+        emitArtifactReuseMetric(metrics, 'audio', upload.reused);
       }
       throwIfCancelled(signal, 'upload');
 
       emitStage('upload', 'success', {
         url: audioUrl,
+        key: audioKey,
+        reused: audioReused,
         dryRun: flags.dryRun,
       });
       executed.push('upload');
@@ -1401,12 +1504,20 @@ export async function rerunAssignment(
           throwIfCancelled(signal, 'add-audio');
           anytypeUrl = publishResult.url;
           htmlUrl = publishResult.url;
+          htmlHash = publishResult.renderHash;
+          htmlKey = publishResult.key;
+          htmlEtag = publishResult.etag;
+          htmlReused = publishResult.reused;
+          emitArtifactReuseMetric(metrics, 'html', publishResult.reused);
         }
 
         emitStage('add-audio', 'success', {
           pageId: targetPageId,
           url: audioUrl,
           publishUrl: anytypeUrl,
+          publishKey: htmlKey,
+          publishHash: htmlHash,
+          publishReused: htmlReused,
         });
       } else {
         if (!flags.dryRun) {
@@ -1429,10 +1540,18 @@ export async function rerunAssignment(
           });
           throwIfCancelled(signal, 'add-audio');
           htmlUrl = publishResult.url;
+          htmlHash = publishResult.renderHash;
+          htmlKey = publishResult.key;
+          htmlEtag = publishResult.etag;
+          htmlReused = publishResult.reused;
+          emitArtifactReuseMetric(metrics, 'html', publishResult.reused);
         }
         emitStage('add-audio', 'success', {
           url: audioUrl,
           publishUrl: htmlUrl,
+          publishKey: htmlKey,
+          publishHash: htmlHash,
+          publishReused: htmlReused,
           dryRun: flags.dryRun,
         });
       }
@@ -1451,10 +1570,18 @@ export async function rerunAssignment(
       publishTarget,
       anytypeUrl,
       htmlUrl,
+      htmlHash,
+      htmlKey,
+      htmlEtag,
+      htmlReused,
       audio: {
         path: audioPath,
         url: audioUrl,
         hash: audioHash,
+        key: audioKey,
+        etag: audioEtag,
+        sizeBytes: audioSizeBytes,
+        reused: audioReused,
         voices: audioVoices,
       },
 

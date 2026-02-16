@@ -1,5 +1,5 @@
 import { access, mkdir, writeFile } from 'node:fs/promises';
-import { dirname, join, normalize, resolve } from 'node:path';
+import * as path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { ConfigurationError } from '@esl-pipeline/contracts';
@@ -27,25 +27,25 @@ async function pathExists(path: string): Promise<boolean> {
 }
 
 async function findWorkspaceRoot(startDir: string): Promise<string | null> {
-  let current = resolve(startDir);
+  let current = path.resolve(startDir);
   while (true) {
-    if (await pathExists(join(current, WORKSPACE_MARKER))) {
+    if (await pathExists(path.join(current, WORKSPACE_MARKER))) {
       return current;
     }
-    const parent = dirname(current);
+    const parent = path.dirname(current);
     if (parent === current) return null;
     current = parent;
   }
 }
 
 async function resolveDefaultOutPath(): Promise<string> {
-  const moduleDir = dirname(fileURLToPath(import.meta.url));
+  const moduleDir = path.dirname(fileURLToPath(import.meta.url));
   const workspaceRoot = [
     await findWorkspaceRoot(process.cwd()),
     await findWorkspaceRoot(moduleDir),
-    await findWorkspaceRoot(resolve(moduleDir, '..', '..')),
-    await findWorkspaceRoot(resolve(moduleDir, '..', '..', '..')),
-    await findWorkspaceRoot(resolve(moduleDir, '..', '..', '..', '..')),
+    await findWorkspaceRoot(path.resolve(moduleDir, '..', '..')),
+    await findWorkspaceRoot(path.resolve(moduleDir, '..', '..', '..')),
+    await findWorkspaceRoot(path.resolve(moduleDir, '..', '..', '..', '..')),
   ].find((root): root is string => typeof root === 'string' && root.length > 0);
   if (!workspaceRoot) {
     throw new ConfigurationError(
@@ -54,9 +54,9 @@ async function resolveDefaultOutPath(): Promise<string> {
     );
   }
 
-  const abs = resolve(workspaceRoot, DEFAULT_VOICES_OUT);
-  const normalizedAbs = normalize(abs);
-  const normalizedRoot = normalize(resolve(workspaceRoot));
+  const abs = path.resolve(workspaceRoot, DEFAULT_VOICES_OUT);
+  const normalizedAbs = path.normalize(abs);
+  const normalizedRoot = path.normalize(path.resolve(workspaceRoot));
   const normalizedPrefix = `${normalizedRoot}${process.platform === 'win32' ? '\\' : '/'}`;
   if (!(normalizedAbs === normalizedRoot || normalizedAbs.startsWith(normalizedPrefix))) {
     throw new ConfigurationError(
@@ -143,9 +143,9 @@ export async function syncVoices(outPath = DEFAULT_VOICES_OUT) {
   if (!requestedOut) {
     throw new ConfigurationError('Voice catalog output path cannot be empty.');
   }
-  const usesDefault = normalize(requestedOut) === normalize(DEFAULT_VOICES_OUT);
-  const abs = usesDefault ? await resolveDefaultOutPath() : resolve(requestedOut);
-  await mkdir(dirname(abs), { recursive: true });
+  const usesDefault = path.normalize(requestedOut) === path.normalize(DEFAULT_VOICES_OUT);
+  const abs = usesDefault ? await resolveDefaultOutPath() : path.resolve(requestedOut);
+  await mkdir(path.dirname(abs), { recursive: true });
   await writeFile(abs, JSON.stringify({ generatedAt, capabilities, voices: rows }, null, 2), 'utf8');
   return { count: rows.length, outPath: abs };
 }

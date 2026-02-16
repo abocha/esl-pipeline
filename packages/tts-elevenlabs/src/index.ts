@@ -494,7 +494,7 @@ export async function buildStudyTextMp3(
 
   // Generate TTS in larger chunks to preserve prosody (avoid per-line resets).
   const segmentFiles: string[] = [];
-  const cleanupTargets: string[] = [];
+  const transientFiles: string[] = [];
   const eleven = getElevenClient();
   const fallbackVoiceId = assignments[0]?.voiceId;
   const maxChars = resolveTtsMaxChars();
@@ -582,7 +582,6 @@ export async function buildStudyTextMp3(
 
       if (!opts.force && (await fileExistsNonEmpty(chunkFilePath))) {
         segmentFiles.push(chunkFilePath);
-        cleanupTargets.push(chunkFilePath);
         continue;
       }
 
@@ -591,7 +590,6 @@ export async function buildStudyTextMp3(
         outputFormat: resolveOutputFormat(opts.outputFormat),
       });
       segmentFiles.push(chunkFilePath);
-      cleanupTargets.push(chunkFilePath);
     }
   }
   if (segmentFiles.length === 0) {
@@ -623,7 +621,7 @@ export async function buildStudyTextMp3(
     silencePath = resolve(outputDir, silenceFileName);
     await synthSilenceMp3(silencePath, tailSeconds, resolvedFfmpeg);
     concatFiles.push(silencePath);
-    cleanupTargets.push(silencePath);
+    transientFiles.push(silencePath);
   }
 
   try {
@@ -633,8 +631,8 @@ export async function buildStudyTextMp3(
       await concatMp3Segments(concatFiles, targetPath, true, resolvedFfmpeg);
     }
   } finally {
-    // best-effort cleanup; ignore errors
-    await Promise.allSettled(cleanupTargets.map((p) => unlink(p)));
+    // Keep segment chunks as a durable cache; only clean transient helper files.
+    await Promise.allSettled(transientFiles.map((p) => unlink(p)));
   }
 
   const titleMeta =
