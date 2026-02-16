@@ -20,8 +20,12 @@ async function drainPutBody(command: { __type?: string; Body?: unknown }) {
   const body = command.Body as DrainableBody | undefined;
   if (!body || typeof body.on !== 'function' || typeof body.resume !== 'function') return;
   await new Promise<void>((resolve, reject) => {
-    body.on('error', reject);
-    body.on('end', resolve);
+    body.on('error', (...args: unknown[]) => {
+      reject(args[0]);
+    });
+    body.on('end', () => {
+      resolve();
+    });
     body.resume();
   });
 }
