@@ -221,6 +221,12 @@ Orchestrator / pipeline integration:
   - Required when provider is `http`.
 - `ESL_PIPELINE_CONFIG_TOKEN`
   - Optional; forwarded to remote config provider.
+- `ESL_PIPELINE_CONFIG_CACHE_TTL_MS`
+  - Optional; in-process remote config cache TTL in milliseconds (default `60000`).
+- `ESL_PIPELINE_CONFIG_CACHE_STALE_IF_ERROR_MS`
+  - Optional; stale-if-error window in milliseconds for remote config fetch failures (default `300000`).
+- `ESL_PIPELINE_CONFIG_CONDITIONAL_REQUESTS`
+  - Optional; enables conditional revalidation (`If-None-Match` / `If-Modified-Since`) for remote config requests (default `true`).
 - `PIPELINE_CWD`
   - Optional; overrides `cwd` used when constructing the orchestrator pipeline.
 

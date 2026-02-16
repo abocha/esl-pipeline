@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 
 import type {
@@ -79,6 +79,30 @@ const INITIAL_CREATE_STUDENT_FORM: CreateStudentFormState = {
   manifestPreset: '',
 };
 
+interface HistoryFilters {
+  state: 'all' | JobState;
+  from: string;
+  to: string;
+}
+
+interface TimelineFilters {
+  type: 'all' | StudentTimelineType;
+  from: string;
+  to: string;
+}
+
+const INITIAL_HISTORY_FILTERS: HistoryFilters = {
+  state: 'all',
+  from: '',
+  to: '',
+};
+
+const INITIAL_TIMELINE_FILTERS: TimelineFilters = {
+  type: 'all',
+  from: '',
+  to: '',
+};
+
 export const StudentWorkspace: React.FC = () => {
   const [students, setStudents] = useState<StudentProfile[]>([]);
   const [studentsLoading, setStudentsLoading] = useState(false);
@@ -111,16 +135,22 @@ export const StudentWorkspace: React.FC = () => {
   const [jobHistory, setJobHistory] = useState<JobListResponse['jobs']>([]);
   const [jobsLoading, setJobsLoading] = useState(false);
   const [jobsError, setJobsError] = useState<string | null>(null);
-  const [historyStateFilter, setHistoryStateFilter] = useState<'all' | JobState>('all');
-  const [historyFrom, setHistoryFrom] = useState('');
-  const [historyTo, setHistoryTo] = useState('');
+  const [historyFiltersDraft, setHistoryFiltersDraft] = useState<HistoryFilters>(
+    INITIAL_HISTORY_FILTERS,
+  );
+  const [historyFiltersApplied, setHistoryFiltersApplied] = useState<HistoryFilters>(
+    INITIAL_HISTORY_FILTERS,
+  );
 
   const [timeline, setTimeline] = useState<StudentTimelineResponse['items']>([]);
   const [timelineLoading, setTimelineLoading] = useState(false);
   const [timelineError, setTimelineError] = useState<string | null>(null);
-  const [timelineTypeFilter, setTimelineTypeFilter] = useState<'all' | StudentTimelineType>('all');
-  const [timelineFrom, setTimelineFrom] = useState('');
-  const [timelineTo, setTimelineTo] = useState('');
+  const [timelineFiltersDraft, setTimelineFiltersDraft] = useState<TimelineFilters>(
+    INITIAL_TIMELINE_FILTERS,
+  );
+  const [timelineFiltersApplied, setTimelineFiltersApplied] = useState<TimelineFilters>(
+    INITIAL_TIMELINE_FILTERS,
+  );
 
   const [bindingHistory, setBindingHistory] = useState<StudentProfileBindingListResponse['items']>([]);
   const [bindingHistoryLoading, setBindingHistoryLoading] = useState(false);
@@ -138,6 +168,14 @@ export const StudentWorkspace: React.FC = () => {
   const [lineageLoading, setLineageLoading] = useState(false);
   const [lineageError, setLineageError] = useState<string | null>(null);
 
+  const selectedStudentRequestId = useRef(0);
+  const historyRequestId = useRef(0);
+  const timelineRequestId = useRef(0);
+  const bindingsRequestId = useRef(0);
+
+  const historyFiltersAppliedRef = useRef(historyFiltersApplied);
+  const timelineFiltersAppliedRef = useRef(timelineFiltersApplied);
+
   const selectedJob = useMemo(
     () => jobHistory.find((job) => job.jobId === selectedJobId) ?? null,
     [jobHistory, selectedJobId],
@@ -147,6 +185,14 @@ export const StudentWorkspace: React.FC = () => {
     () => profileEditorText.trim() !== loadedProfileContent.trim(),
     [loadedProfileContent, profileEditorText],
   );
+
+  useEffect(() => {
+    historyFiltersAppliedRef.current = historyFiltersApplied;
+  }, [historyFiltersApplied]);
+
+  useEffect(() => {
+    timelineFiltersAppliedRef.current = timelineFiltersApplied;
+  }, [timelineFiltersApplied]);
 
   const loadStudents = useCallback(async () => {
     setStudentsLoading(true);
@@ -211,7 +257,8 @@ export const StudentWorkspace: React.FC = () => {
     }
   }, []);
 
-  const loadJobHistory = useCallback(async (studentId: string) => {
+  const loadJobHistory = useCallback(async (studentId: string, filters: HistoryFilters) => {
+    const requestId = ++historyRequestId.current;
     if (!studentId) {
       setJobHistory([]);
       return;
@@ -221,24 +268,29 @@ export const StudentWorkspace: React.FC = () => {
     try {
       const response = await listUserJobs({
         studentId,
-        state: historyStateFilter === 'all' ? undefined : historyStateFilter,
-        from: toIsoOrUndefined(historyFrom),
-        to: toIsoOrUndefined(historyTo),
+        state: filters.state === 'all' ? undefined : filters.state,
+        from: toIsoOrUndefined(filters.from),
+        to: toIsoOrUndefined(filters.to),
         limit: HISTORY_LIMIT,
         offset: 0,
         order: 'desc',
       });
+      if (requestId !== historyRequestId.current) return;
       setJobHistory(response.jobs ?? []);
     } catch (error) {
+      if (requestId !== historyRequestId.current) return;
       const message = error instanceof Error ? error.message : 'Unable to load assignment history.';
       setJobsError(message);
       setJobHistory([]);
     } finally {
-      setJobsLoading(false);
+      if (requestId === historyRequestId.current) {
+        setJobsLoading(false);
+      }
     }
-  }, [historyFrom, historyStateFilter, historyTo]);
+  }, []);
 
-  const loadTimeline = useCallback(async (studentId: string) => {
+  const loadTimeline = useCallback(async (studentId: string, filters: TimelineFilters) => {
+    const requestId = ++timelineRequestId.current;
     if (!studentId) {
       setTimeline([]);
       return;
@@ -247,24 +299,29 @@ export const StudentWorkspace: React.FC = () => {
     setTimelineError(null);
     try {
       const response = await getStudentTimeline(studentId, {
-        type: timelineTypeFilter === 'all' ? undefined : timelineTypeFilter,
-        from: toIsoOrUndefined(timelineFrom),
-        to: toIsoOrUndefined(timelineTo),
+        type: filters.type === 'all' ? undefined : filters.type,
+        from: toIsoOrUndefined(filters.from),
+        to: toIsoOrUndefined(filters.to),
         limit: HISTORY_LIMIT,
         offset: 0,
         order: 'desc',
       });
+      if (requestId !== timelineRequestId.current) return;
       setTimeline(response.items ?? []);
     } catch (error) {
+      if (requestId !== timelineRequestId.current) return;
       const message = error instanceof Error ? error.message : 'Unable to load student timeline.';
       setTimelineError(message);
       setTimeline([]);
     } finally {
-      setTimelineLoading(false);
+      if (requestId === timelineRequestId.current) {
+        setTimelineLoading(false);
+      }
     }
-  }, [timelineFrom, timelineTo, timelineTypeFilter]);
+  }, []);
 
   const loadBindings = useCallback(async (studentId: string) => {
+    const requestId = ++bindingsRequestId.current;
     if (!studentId) {
       setBindingHistory([]);
       return;
@@ -277,39 +334,56 @@ export const StudentWorkspace: React.FC = () => {
         offset: 0,
         order: 'desc',
       });
+      if (requestId !== bindingsRequestId.current) return;
       setBindingHistory(response.items ?? []);
     } catch (error) {
+      if (requestId !== bindingsRequestId.current) return;
       const message = error instanceof Error ? error.message : 'Unable to load profile binding history.';
       setBindingHistoryError(message);
       setBindingHistory([]);
     } finally {
-      setBindingHistoryLoading(false);
+      if (requestId === bindingsRequestId.current) {
+        setBindingHistoryLoading(false);
+      }
     }
   }, []);
 
-  const loadSelectedStudent = useCallback(async (studentId: string) => {
-    if (!studentId) {
-      setSelectedStudent(null);
-      setSelectedProfileId('');
-      setJobHistory([]);
-      setTimeline([]);
-      setBindingHistory([]);
-      return;
-    }
+  const loadSelectedStudent = useCallback(
+    async (studentId: string) => {
+      const requestId = ++selectedStudentRequestId.current;
+      if (!studentId) {
+        historyRequestId.current += 1;
+        timelineRequestId.current += 1;
+        bindingsRequestId.current += 1;
+        setSelectedStudent(null);
+        setSelectedProfileId('');
+        setJobHistory([]);
+        setTimeline([]);
+        setBindingHistory([]);
+        return;
+      }
 
-    setBindingSuccess(null);
-    try {
-      const profile = await getStudentProfile(studentId);
-      setSelectedStudent(profile);
-      setSelectedProfileId(profile.profileId ?? '');
-    } catch (error) {
-      const message = error instanceof Error ? error.message : 'Unable to load selected student.';
-      setSelectedStudent(null);
-      setProfileError(message);
-    }
+      setBindingSuccess(null);
+      try {
+        const profile = await getStudentProfile(studentId);
+        if (requestId !== selectedStudentRequestId.current) return;
+        setSelectedStudent(profile);
+        setSelectedProfileId(profile.profileId ?? '');
+      } catch (error) {
+        if (requestId !== selectedStudentRequestId.current) return;
+        const message = error instanceof Error ? error.message : 'Unable to load selected student.';
+        setSelectedStudent(null);
+        setProfileError(message);
+      }
 
-    await Promise.all([loadJobHistory(studentId), loadTimeline(studentId), loadBindings(studentId)]);
-  }, [loadBindings, loadJobHistory, loadTimeline]);
+      await Promise.all([
+        loadJobHistory(studentId, historyFiltersAppliedRef.current),
+        loadTimeline(studentId, timelineFiltersAppliedRef.current),
+        loadBindings(studentId),
+      ]);
+    },
+    [loadBindings, loadJobHistory, loadTimeline],
+  );
 
   const handleRefreshAll = useCallback(async () => {
     await Promise.all([loadStudents(), loadProfileOptions()]);
@@ -370,7 +444,11 @@ export const StudentWorkspace: React.FC = () => {
       });
       setSelectedStudent(updated);
       setBindingSuccess('Student profile binding updated.');
-      await Promise.all([loadStudents(), loadBindings(selectedStudentId), loadTimeline(selectedStudentId)]);
+      await Promise.all([
+        loadStudents(),
+        loadBindings(selectedStudentId),
+        loadTimeline(selectedStudentId, timelineFiltersAppliedRef.current),
+      ]);
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Unable to update student profile binding.';
       setProfileError(message);
@@ -394,7 +472,7 @@ export const StudentWorkspace: React.FC = () => {
       const revisions = await listProfileRevisions(saved.id, { limit: 25, offset: 0, order: 'desc' });
       setProfileRevisions(revisions.items ?? []);
       setProfileSuccess('Profile content saved.');
-      await loadTimeline(selectedStudentId);
+      await loadTimeline(selectedStudentId, timelineFiltersAppliedRef.current);
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Unable to save profile content.';
       setProfileError(message);
@@ -415,7 +493,7 @@ export const StudentWorkspace: React.FC = () => {
       const revisions = await listProfileRevisions(restored.id, { limit: 25, offset: 0, order: 'desc' });
       setProfileRevisions(revisions.items ?? []);
       setProfileSuccess('Profile revision restored.');
-      await loadTimeline(selectedStudentId);
+      await loadTimeline(selectedStudentId, timelineFiltersAppliedRef.current);
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Unable to restore profile revision.';
       setProfileError(message);
@@ -433,7 +511,7 @@ export const StudentWorkspace: React.FC = () => {
       await activateProfileRevision(selectedProfileId, revisionId);
       await loadSelectedProfile(selectedProfileId);
       setProfileSuccess('Profile revision activated.');
-      await loadTimeline(selectedStudentId);
+      await loadTimeline(selectedStudentId, timelineFiltersAppliedRef.current);
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Unable to activate profile revision.';
       setProfileError(message);
@@ -878,8 +956,13 @@ export const StudentWorkspace: React.FC = () => {
             <label className="workspace-field">
               State
               <select
-                value={historyStateFilter}
-                onChange={(event) => setHistoryStateFilter(event.target.value as 'all' | JobState)}
+                value={historyFiltersDraft.state}
+                onChange={(event) =>
+                  setHistoryFiltersDraft((current) => ({
+                    ...current,
+                    state: event.target.value as 'all' | JobState,
+                  }))
+                }
               >
                 <option value="all">All states</option>
                 <option value="queued">queued</option>
@@ -894,8 +977,10 @@ export const StudentWorkspace: React.FC = () => {
               From
               <input
                 type="datetime-local"
-                value={historyFrom}
-                onChange={(event) => setHistoryFrom(event.target.value)}
+                value={historyFiltersDraft.from}
+                onChange={(event) =>
+                  setHistoryFiltersDraft((current) => ({ ...current, from: event.target.value }))
+                }
               />
             </label>
 
@@ -903,15 +988,22 @@ export const StudentWorkspace: React.FC = () => {
               To
               <input
                 type="datetime-local"
-                value={historyTo}
-                onChange={(event) => setHistoryTo(event.target.value)}
+                value={historyFiltersDraft.to}
+                onChange={(event) =>
+                  setHistoryFiltersDraft((current) => ({ ...current, to: event.target.value }))
+                }
               />
             </label>
 
             <button
               type="button"
               className="workspace-secondary-btn"
-              onClick={() => void loadJobHistory(selectedStudentId)}
+              onClick={() => {
+                const nextFilters = { ...historyFiltersDraft };
+                historyFiltersAppliedRef.current = nextFilters;
+                setHistoryFiltersApplied(nextFilters);
+                void loadJobHistory(selectedStudentId, nextFilters);
+              }}
               disabled={!selectedStudentId || jobsLoading}
             >
               Apply
@@ -1068,8 +1160,13 @@ export const StudentWorkspace: React.FC = () => {
             <label className="workspace-field">
               Event type
               <select
-                value={timelineTypeFilter}
-                onChange={(event) => setTimelineTypeFilter(event.target.value as 'all' | StudentTimelineType)}
+                value={timelineFiltersDraft.type}
+                onChange={(event) =>
+                  setTimelineFiltersDraft((current) => ({
+                    ...current,
+                    type: event.target.value as 'all' | StudentTimelineType,
+                  }))
+                }
               >
                 <option value="all">All events</option>
                 {TIMELINE_TYPES.map((type) => (
@@ -1084,8 +1181,10 @@ export const StudentWorkspace: React.FC = () => {
               From
               <input
                 type="datetime-local"
-                value={timelineFrom}
-                onChange={(event) => setTimelineFrom(event.target.value)}
+                value={timelineFiltersDraft.from}
+                onChange={(event) =>
+                  setTimelineFiltersDraft((current) => ({ ...current, from: event.target.value }))
+                }
               />
             </label>
 
@@ -1093,15 +1192,22 @@ export const StudentWorkspace: React.FC = () => {
               To
               <input
                 type="datetime-local"
-                value={timelineTo}
-                onChange={(event) => setTimelineTo(event.target.value)}
+                value={timelineFiltersDraft.to}
+                onChange={(event) =>
+                  setTimelineFiltersDraft((current) => ({ ...current, to: event.target.value }))
+                }
               />
             </label>
 
             <button
               type="button"
               className="workspace-secondary-btn"
-              onClick={() => void loadTimeline(selectedStudentId)}
+              onClick={() => {
+                const nextFilters = { ...timelineFiltersDraft };
+                timelineFiltersAppliedRef.current = nextFilters;
+                setTimelineFiltersApplied(nextFilters);
+                void loadTimeline(selectedStudentId, nextFilters);
+              }}
               disabled={!selectedStudentId || timelineLoading}
             >
               Apply

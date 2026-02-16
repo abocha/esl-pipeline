@@ -115,6 +115,9 @@ export function getPipeline(configOverride?: ReturnType<typeof loadConfig>) {
     configProvider = new RemoteConfigProvider({
       baseUrl: config.orchestrator.configEndpoint!,
       token: config.orchestrator.configToken,
+      cacheTtlMs: config.orchestrator.configCacheTtlMs,
+      staleIfErrorMs: config.orchestrator.configCacheStaleIfErrorMs,
+      conditionalRequests: config.orchestrator.configConditionalRequests,
     });
   }
 

@@ -132,14 +132,34 @@ describe('config/env - orchestrator remote config provider mapping', () => {
         ESL_PIPELINE_CONFIG_PROVIDER: 'http',
         ESL_PIPELINE_CONFIG_ENDPOINT: 'https://config.example.com',
         ESL_PIPELINE_CONFIG_TOKEN: 'secret-token',
+        ESL_PIPELINE_CONFIG_CACHE_TTL_MS: '15000',
+        ESL_PIPELINE_CONFIG_CACHE_STALE_IF_ERROR_MS: '45000',
+        ESL_PIPELINE_CONFIG_CONDITIONAL_REQUESTS: 'false',
       },
       async () => {
         const cfg = await loadConfigFresh();
         expect(cfg.orchestrator.configProvider).toBe('http');
         expect(cfg.orchestrator.configEndpoint).toBe('https://config.example.com');
         expect(cfg.orchestrator.configToken).toBe('secret-token');
+        expect(cfg.orchestrator.configCacheTtlMs).toBe(15000);
+        expect(cfg.orchestrator.configCacheStaleIfErrorMs).toBe(45000);
+        expect(cfg.orchestrator.configConditionalRequests).toBe(false);
       },
     );
+  });
+
+  it('rejects negative cache durations for remote config provider', async () => {
+    await expect(
+      withEnv(
+        {
+          NODE_ENV: 'test',
+          ESL_PIPELINE_CONFIG_CACHE_TTL_MS: '-1',
+        },
+        async () => {
+          await loadConfigFresh();
+        },
+      ),
+    ).rejects.toThrow('ESL_PIPELINE_CONFIG_CACHE_TTL_MS must be a non-negative integer');
   });
 });
 

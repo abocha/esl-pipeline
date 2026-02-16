@@ -502,6 +502,9 @@ Config provider selection:
   - e.g., `http` for remote config.
 - `ESL_PIPELINE_CONFIG_ENDPOINT`
 - `ESL_PIPELINE_CONFIG_TOKEN`
+- `ESL_PIPELINE_CONFIG_CACHE_TTL_MS` (optional; default `60000`)
+- `ESL_PIPELINE_CONFIG_CACHE_STALE_IF_ERROR_MS` (optional; default `300000`)
+- `ESL_PIPELINE_CONFIG_CONDITIONAL_REQUESTS` (optional; default `true`)
 - Optional: paths for presets/students/voices endpoints.
 
 Upload (S3) selection:

@@ -68,6 +68,9 @@ export interface BatchBackendConfig {
     configProvider: 'local' | 'http';
     configEndpoint?: string;
     configToken?: string;
+    configCacheTtlMs?: number;
+    configCacheStaleIfErrorMs?: number;
+    configConditionalRequests?: boolean;
     configDir?: string;
   };
   auth: {
@@ -219,8 +222,17 @@ export function loadConfig(): BatchBackendConfig {
     (readString('ESL_PIPELINE_CONFIG_PROVIDER') as 'local' | 'http' | undefined) || 'local';
   const configEndpoint = readString('ESL_PIPELINE_CONFIG_ENDPOINT');
   const configToken = readString('ESL_PIPELINE_CONFIG_TOKEN');
+  const configCacheTtlMs = readInt('ESL_PIPELINE_CONFIG_CACHE_TTL_MS', 60_000);
+  const configCacheStaleIfErrorMs = readInt('ESL_PIPELINE_CONFIG_CACHE_STALE_IF_ERROR_MS', 300_000);
+  const configConditionalRequests = readBool('ESL_PIPELINE_CONFIG_CONDITIONAL_REQUESTS', true);
   if (configProviderEnv === 'http' && !configEndpoint) {
     throw new Error('ESL_PIPELINE_CONFIG_PROVIDER=http requires ESL_PIPELINE_CONFIG_ENDPOINT');
+  }
+  if (configCacheTtlMs < 0) {
+    throw new Error('ESL_PIPELINE_CONFIG_CACHE_TTL_MS must be a non-negative integer');
+  }
+  if (configCacheStaleIfErrorMs < 0) {
+    throw new Error('ESL_PIPELINE_CONFIG_CACHE_STALE_IF_ERROR_MS must be a non-negative integer');
   }
 
   const configDir = readString('ESL_PIPELINE_CONFIG_DIR');
@@ -366,6 +378,9 @@ export function loadConfig(): BatchBackendConfig {
       configProvider: configProviderEnv,
       configEndpoint,
       configToken,
+      configCacheTtlMs,
+      configCacheStaleIfErrorMs,
+      configConditionalRequests,
       configDir,
     },
     auth: {
