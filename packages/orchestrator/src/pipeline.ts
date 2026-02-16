@@ -383,6 +383,9 @@ function resolveConfigProvider(
       presetsPath: process.env.ESL_PIPELINE_CONFIG_PRESETS_PATH,
       studentsPath: process.env.ESL_PIPELINE_CONFIG_STUDENTS_PATH,
       voicesPath: process.env.ESL_PIPELINE_CONFIG_VOICES_PATH,
+      cacheTtlMs: parseNonNegativeIntEnv('ESL_PIPELINE_CONFIG_CACHE_TTL_MS'),
+      staleIfErrorMs: parseNonNegativeIntEnv('ESL_PIPELINE_CONFIG_CACHE_STALE_IF_ERROR_MS'),
+      conditionalRequests: parseBoolEnv('ESL_PIPELINE_CONFIG_CONDITIONAL_REQUESTS'),
     });
   }
 
@@ -391,6 +394,27 @@ function resolveConfigProvider(
     voicesPath: configPaths.voicesPath,
     studentsDir: configPaths.studentsDir,
   });
+}
+
+function parseNonNegativeIntEnv(key: string): number | undefined {
+  const raw = process.env[key];
+  if (!raw) return undefined;
+  const parsed = Number.parseInt(raw, 10);
+  if (!Number.isFinite(parsed) || parsed < 0) {
+    throw new ConfigurationError(`${key} must be a non-negative integer when set.`);
+  }
+  return parsed;
+}
+
+function parseBoolEnv(key: string): boolean | undefined {
+  const raw = process.env[key];
+  if (!raw) return undefined;
+  const normalized = raw.trim().toLowerCase();
+  if (['1', 'true', 'yes', 'on'].includes(normalized)) return true;
+  if (['0', 'false', 'no', 'off'].includes(normalized)) return false;
+  throw new ConfigurationError(
+    `${key} must be one of: 1, 0, true, false, yes, no, on, off when set.`,
+  );
 }
 
 function findFirstExistingPath(paths: string[]): string | undefined {

@@ -332,6 +332,50 @@ describe('StudentWorkspace', () => {
     expect(screen.getByRole('heading', { name: /Student Timeline/i })).toBeTruthy();
   });
 
+  it('does not refetch assignment history until apply is clicked', async () => {
+    const user = userEvent.setup();
+    renderWorkspace();
+
+    await waitFor(() => {
+      expect(api.listUserJobs).toHaveBeenCalledTimes(1);
+    });
+
+    await user.selectOptions(screen.getByRole('combobox', { name: /State/i }), 'failed');
+    expect(api.listUserJobs).toHaveBeenCalledTimes(1);
+
+    const applyButtons = screen.getAllByRole('button', { name: /Apply/i });
+    await user.click(applyButtons[0]!);
+
+    await waitFor(() => {
+      expect(api.listUserJobs).toHaveBeenCalledTimes(2);
+    });
+    expect(vi.mocked(api.listUserJobs).mock.calls[1]?.[0]).toEqual(
+      expect.objectContaining({ state: 'failed' }),
+    );
+  });
+
+  it('does not refetch timeline until apply is clicked', async () => {
+    const user = userEvent.setup();
+    renderWorkspace();
+
+    await waitFor(() => {
+      expect(api.getStudentTimeline).toHaveBeenCalledTimes(1);
+    });
+
+    await user.selectOptions(screen.getByRole('combobox', { name: /Event type/i }), 'job_completed');
+    expect(api.getStudentTimeline).toHaveBeenCalledTimes(1);
+
+    const applyButtons = screen.getAllByRole('button', { name: /Apply/i });
+    await user.click(applyButtons[1]!);
+
+    await waitFor(() => {
+      expect(api.getStudentTimeline).toHaveBeenCalledTimes(2);
+    });
+    expect(vi.mocked(api.getStudentTimeline).mock.calls[1]?.[1]).toEqual(
+      expect.objectContaining({ type: 'job_completed' }),
+    );
+  });
+
   it('inspects a job and loads provenance and lineage', async () => {
     const user = userEvent.setup();
     renderWorkspace();

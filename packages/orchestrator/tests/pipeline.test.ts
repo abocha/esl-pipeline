@@ -27,6 +27,9 @@ afterEach(() => {
   delete process.env.ESL_PIPELINE_CONFIG_PROVIDER;
   delete process.env.ESL_PIPELINE_CONFIG_ENDPOINT;
   delete process.env.ESL_PIPELINE_CONFIG_TOKEN;
+  delete process.env.ESL_PIPELINE_CONFIG_CACHE_TTL_MS;
+  delete process.env.ESL_PIPELINE_CONFIG_CACHE_STALE_IF_ERROR_MS;
+  delete process.env.ESL_PIPELINE_CONFIG_CONDITIONAL_REQUESTS;
   delete process.env.ESL_PIPELINE_MANIFEST_STORE;
   delete process.env.ESL_PIPELINE_MANIFEST_BUCKET;
   delete process.env.ESL_PIPELINE_MANIFEST_PREFIX;
@@ -54,6 +57,15 @@ describe('pipeline helpers', () => {
     process.env.ESL_PIPELINE_CONFIG_ENDPOINT = 'https://config.test/';
     const pipeline = createPipeline();
     expect(pipeline.configProvider).toBeInstanceOf(RemoteConfigProvider);
+  });
+
+  it('validates remote config cache env values', () => {
+    process.env.ESL_PIPELINE_CONFIG_PROVIDER = 'http';
+    process.env.ESL_PIPELINE_CONFIG_ENDPOINT = 'https://config.test/';
+    process.env.ESL_PIPELINE_CONFIG_CACHE_TTL_MS = '-1';
+    expect(() => createPipeline()).toThrow(
+      'ESL_PIPELINE_CONFIG_CACHE_TTL_MS must be a non-negative integer when set.',
+    );
   });
 
   it('selects S3 manifest store via environment variables', () => {
