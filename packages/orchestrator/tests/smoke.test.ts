@@ -5,9 +5,11 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('@esl-pipeline/notion-adapter', () => ({
   runImport: vi.fn().mockResolvedValue({ page_id: 'page-123', url: 'https://notion.so/page-123' }),
+  loadPreset: vi.fn().mockResolvedValue({ h2: 'blue', h3: 'green', toggleMap: { h2: 'yellow' } }),
   applyHeadingPreset: vi
     .fn()
     .mockResolvedValue({ applied: true, counts: { h2: 1, h3: 1, toggles: 0 } }),
+  hashColorPreset: vi.fn().mockReturnValue('preset-hash-default'),
   addOrReplaceAudioUnderStudyText: vi.fn().mockResolvedValue({ replaced: false, appended: true }),
 }));
 
@@ -110,6 +112,47 @@ describe('orchestrator smoke', () => {
     expect(initialTimestamp).toBeDefined();
     expect(statusAfter.manifest?.timestamp).toBeDefined();
     expect(statusAfter.manifest!.timestamp >= initialTimestamp!).toBe(true);
+  }, 15000);
+
+  it('skips notion colorize when preset hash, page, and markdown hash are unchanged', async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'orchestrator-colorize-skip-'));
+    const mdPath = join(dir, 'assignment.md');
+    const okFixturePath = join(import.meta.dirname, '../../md-validator/fixtures/ok.md');
+    const okDoc = await readFile(okFixturePath, 'utf8');
+    await writeFile(mdPath, okDoc);
+
+    const { newAssignment } = await import('../src/index.js');
+    const { applyHeadingPreset, hashColorPreset } = await import('@esl-pipeline/notion-adapter');
+
+    vi.mocked(applyHeadingPreset).mockClear();
+    vi.mocked(hashColorPreset).mockClear();
+
+    const first = await newAssignment({
+      md: mdPath,
+      preset: 'default',
+      withTts: false,
+      dryRun: false,
+    });
+    expect(first.steps).toContain('colorize');
+
+    const second = await newAssignment({
+      md: mdPath,
+      preset: 'default',
+      withTts: false,
+      dryRun: false,
+    });
+
+    expect(second.steps).not.toContain('colorize');
+    expect(vi.mocked(applyHeadingPreset)).toHaveBeenCalledTimes(1);
+    expect(vi.mocked(hashColorPreset)).toHaveBeenCalledTimes(2);
+    const secondManifest = JSON.parse(await readFile(second.manifestPath!, 'utf8'));
+    expect(secondManifest.notionColorization).toEqual(
+      expect.objectContaining({
+        preset: 'default',
+        presetHash: 'preset-hash-default',
+        pageId: 'page-123',
+      }),
+    );
   }, 15000);
 
   it('preserves TTS metadata when rerun without passing TTS flags', async () => {

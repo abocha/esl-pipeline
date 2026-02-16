@@ -69,3 +69,42 @@ describe('colorizer/loadPreset cache', () => {
     expect(second.h2).toBe('green');
   });
 });
+
+describe('colorizer/hashColorPreset', () => {
+  beforeEach(() => {
+    vi.resetModules();
+    vi.clearAllMocks();
+  });
+
+  it('produces a stable hash for equivalent preset objects with different key order', async () => {
+    const { hashColorPreset } = await import('../src/colorizer.js');
+    const first = hashColorPreset({
+      h2: 'blue',
+      h3: 'green',
+      toggleMap: { h2: 'yellow' },
+    });
+    const second = hashColorPreset({
+      toggleMap: { h2: 'yellow' },
+      h3: 'green',
+      h2: 'blue',
+    });
+
+    expect(first).toBe(second);
+  });
+
+  it('changes hash when preset values differ', async () => {
+    const { hashColorPreset } = await import('../src/colorizer.js');
+    const first = hashColorPreset({
+      h2: 'blue',
+      h3: 'green',
+      toggleMap: { h2: 'yellow' },
+    });
+    const second = hashColorPreset({
+      h2: 'blue',
+      h3: 'green',
+      toggleMap: { h2: 'orange' },
+    });
+
+    expect(first).not.toBe(second);
+  });
+});

@@ -11,6 +11,7 @@ import {
   type ColorPreset,
   addOrReplaceAudioUnderStudyText,
   applyHeadingPreset,
+  hashColorPreset,
   loadPreset,
   runImport,
 } from '@esl-pipeline/notion-adapter';
@@ -519,7 +520,9 @@ export async function newAssignment(
 
   const steps: string[] = [];
   const mdContents = await readMarkdownCached(flags.md);
+  const markdownHash = hashStudyText(mdContents);
   const previousManifest = await manifestStore.readManifest(flags.md);
+  let notionColorization = previousManifest?.notionColorization;
 
   const publishTarget = flags.publishTarget ?? previousManifest?.publishTarget ?? 'notion';
   let pageId = previousManifest?.pageId;
@@ -692,23 +695,44 @@ export async function newAssignment(
             'Cannot apply color preset because no Notion pageId is available. Run import first.',
           );
         }
-        emitStage('colorize', 'start');
-        steps.push('colorize');
-        throwIfCancelled(signal, 'colorize');
-        const color = await applyHeadingPreset(
-          pageId,
-          flags.preset,
-          flags.presetsPath ?? DEFAULT_PRESETS_PATH,
+        const presetHash = hashColorPreset(
+          await loadPreset(flags.preset, flags.presetsPath ?? DEFAULT_PRESETS_PATH),
         );
-        throwIfCancelled(signal, 'colorize');
-        steps.push(
-          `colorize:${flags.preset}:${color.counts.h2}/${color.counts.h3}/${color.counts.toggles}`,
-        );
-        emitStage('colorize', 'success', {
-          preset: flags.preset,
-          counts: color.counts,
-        });
-        colorized = true;
+        const canSkipColorize =
+          !flags.force &&
+          notionColorization?.preset === flags.preset &&
+          notionColorization.presetHash === presetHash &&
+          notionColorization.pageId === pageId &&
+          notionColorization.mdHash === markdownHash;
+
+        if (canSkipColorize) {
+          recordSkip('colorize', 'preset hash unchanged for current page/content');
+        } else {
+          emitStage('colorize', 'start');
+          steps.push('colorize');
+          throwIfCancelled(signal, 'colorize');
+          const color = await applyHeadingPreset(
+            pageId,
+            flags.preset,
+            flags.presetsPath ?? DEFAULT_PRESETS_PATH,
+          );
+          throwIfCancelled(signal, 'colorize');
+          steps.push(
+            `colorize:${flags.preset}:${color.counts.h2}/${color.counts.h3}/${color.counts.toggles}`,
+          );
+          emitStage('colorize', 'success', {
+            preset: flags.preset,
+            counts: color.counts,
+          });
+          colorized = true;
+          notionColorization = {
+            preset: flags.preset,
+            presetHash,
+            pageId,
+            mdHash: markdownHash,
+            appliedAt: new Date().toISOString(),
+          };
+        }
       }
     } else {
       recordSkip('colorize', 'no preset selected');
@@ -1006,7 +1030,7 @@ export async function newAssignment(
 
     const manifest: AssignmentManifest = {
       schemaVersion: CURRENT_MANIFEST_SCHEMA_VERSION,
-      mdHash: hashStudyText(mdContents),
+      mdHash: markdownHash,
       pageId,
       pageUrl,
       publishTarget,
@@ -1020,6 +1044,7 @@ export async function newAssignment(
       htmlReused,
       audio,
       preset: flags.preset,
+      notionColorization,
 
       // Preserve TTS metadata from previous runs when flags are omitted
       ttsStrategy: flags.ttsStrategy ?? previousManifest?.ttsStrategy,

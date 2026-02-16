@@ -7,9 +7,11 @@ import type { PipelineLogEvent, PipelineLogger, PipelineMetrics } from '../src/o
 
 vi.mock('@esl-pipeline/notion-adapter', () => ({
   runImport: vi.fn().mockResolvedValue({ page_id: 'page-123', url: 'https://notion.so/page-123' }),
+  loadPreset: vi.fn().mockResolvedValue({ h2: 'blue', h3: 'green', toggleMap: { h2: 'yellow' } }),
   applyHeadingPreset: vi
     .fn()
     .mockResolvedValue({ applied: true, counts: { h2: 1, h3: 1, toggles: 0 } }),
+  hashColorPreset: vi.fn().mockReturnValue('preset-hash-default'),
   addOrReplaceAudioUnderStudyText: vi.fn().mockResolvedValue({ replaced: false, appended: true }),
 }));
 

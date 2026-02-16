@@ -30,6 +30,13 @@ export interface AssignmentManifest {
     voices?: BuildStudyTextResult['voices'];
   };
   preset?: string;
+  notionColorization?: {
+    preset: string;
+    presetHash: string;
+    pageId: string;
+    mdHash: string;
+    appliedAt: string;
+  };
 
   // TTS strategy information for reproducibility
   ttsStrategy?: 'auto' | 'dialogue' | 'tts';

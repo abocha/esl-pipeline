@@ -20,6 +20,14 @@ This document captures the canonical schema so remote stores and services can va
   "mdHash": "<sha256 hash of the Markdown study text>",
   "timestamp": "2024-07-19T12:34:56.789Z",
   "preset": "b1-default", // optional, last applied heading preset
+  "notionColorization": {
+    // optional, persisted when Notion preset colorization is applied
+    "preset": "b1-default",
+    "presetHash": "<sha256 hash of normalized preset payload>",
+    "pageId": "<notion-page-id>",
+    "mdHash": "<sha256 hash of markdown used for colorization>",
+    "appliedAt": "2024-07-19T12:30:00.000Z"
+  },
   "pageId": "<notion-page-id>", // optional, populated after Notion import
   "pageUrl": "https://www.notion.so/...", // optional, populated after Notion import
   "audio": {
@@ -69,6 +77,8 @@ This document captures the canonical schema so remote stores and services can va
 - `audio.key`/`audio.hash` provide deterministic artifact identity for reruns and upload dedupe.
 - `audio.reused` and `htmlReused` are operational hints showing whether remote upload/publish reused
   an existing content-addressed object.
+- `notionColorization` captures the Notion preset fingerprint used for idempotent colorization skip
+  decisions. Consumers SHOULD treat the object as optional and additive.
 - `audio.voices[*].selectionReason`, `capabilityMatches`, and `capabilityMismatches` are additive
   explainability fields for voice-alignment v2. Consumers SHOULD treat them as optional.
 - `ttsStrategy` and related dialogue fields capture the TTS strategy used for reproducibility. These fields

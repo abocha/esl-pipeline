@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import type {
   BlockObjectResponse,
   ListBlockChildrenResponse,
@@ -111,6 +112,26 @@ function shouldUpdateToggleColor(block: ToggleBlock, targetColor: ColorValue): b
   const richText = Array.isArray(block.toggle?.rich_text) ? block.toggle.rich_text : [];
   if (richText.length === 0) return false;
   return richText.some((item) => currentColor(item.annotations?.color) !== targetColor);
+}
+
+function stableSerialize(value: unknown): string {
+  if (Array.isArray(value)) {
+    return `[${value.map((entry) => stableSerialize(entry)).join(',')}]`;
+  }
+  if (value && typeof value === 'object') {
+    const record = value as Record<string, unknown>;
+    const entries = Object.entries(record)
+      .filter(([, entryValue]) => entryValue !== undefined)
+      .sort(([a], [b]) => a.localeCompare(b));
+    return `{${entries
+      .map(([key, entryValue]) => `${JSON.stringify(key)}:${stableSerialize(entryValue)}`)
+      .join(',')}}`;
+  }
+  return JSON.stringify(value);
+}
+
+export function hashColorPreset(preset: ColorPreset): string {
+  return createHash('sha256').update(stableSerialize(preset)).digest('hex');
 }
 
 export async function loadPreset(presetName: string, presetsPath: string): Promise<ColorPreset> {
