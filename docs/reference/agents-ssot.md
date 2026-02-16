@@ -585,6 +585,7 @@ Manifest schema:
     - Additive artifact identity/reuse metadata:
       - `audio.key`, `audio.etag`, `audio.sizeBytes`, `audio.reused`
       - `htmlHash`, `htmlKey`, `htmlEtag`, `htmlReused`
+      - `notionColorization.preset`, `notionColorization.presetHash`, `notionColorization.pageId`, `notionColorization.mdHash`, `notionColorization.appliedAt`
 
 Agents MUST:
 

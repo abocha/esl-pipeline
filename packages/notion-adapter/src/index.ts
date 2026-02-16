@@ -8,7 +8,7 @@ export {
 } from './data-source.js';
 export { mdToBlocks } from './blocks/mdToBlocks.js';
 export { addOrReplaceAudioUnderStudyText, getClient } from './audio.js';
-export { applyHeadingPreset, loadPreset, PresetSchema } from './colorizer.js';
+export { applyHeadingPreset, hashColorPreset, loadPreset, PresetSchema } from './colorizer.js';
 export { runImport } from './importer.js';
 export {
   applyTopicProperty,
