@@ -2,7 +2,7 @@ import { access, readFile, readdir, stat } from 'node:fs/promises';
 import { dirname, join, relative, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-import { extractFrontmatter } from '@esl-pipeline/pmd';
+import { extractFrontmatter, parseMarkdownContext } from '@esl-pipeline/pmd';
 
 export interface StudentProfile {
   student: string;
@@ -159,7 +159,7 @@ export async function summarizeMarkdown(mdPath: string): Promise<MarkdownSummary
   const summary: MarkdownSummary = { path: mdPath };
   try {
     const content = await readFile(mdPath, 'utf8');
-    const frontmatter = extractFrontmatter(content);
+    const frontmatter = extractFrontmatter(parseMarkdownContext(content));
     if (frontmatter && typeof frontmatter === 'object') {
       const { title: maybeTitle, student: maybeStudent } = frontmatter as Record<string, unknown>;
       if (typeof maybeTitle === 'string') summary.title = maybeTitle;

@@ -1,7 +1,8 @@
-import { mkdtemp, writeFile } from 'node:fs/promises';
+import { mkdtemp, readFile, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { parseMarkdownContext } from '@esl-pipeline/pmd';
 
 import type { PipelineLogEvent, PipelineLogger } from '@esl-pipeline/contracts';
 
@@ -10,6 +11,15 @@ import * as dialogue from '../src/dialogue.js';
 import * as eleven from '../src/eleven.js';
 import * as ffm from '../src/ffmpeg.js';
 import { buildStudyTextMp3 } from '../src/index.js';
+
+const buildStudyTextMp3FromPath = async (
+  mdPath: string,
+  ...args: Parameters<typeof buildStudyTextMp3> extends [any, ...infer Rest] ? Rest : never
+) => {
+  const markdown = await readFile(mdPath, 'utf8');
+  const context = parseMarkdownContext(markdown);
+  return buildStudyTextMp3({ context, mdPath }, ...args);
+};
 
 const encoder = new TextEncoder();
 
@@ -99,7 +109,7 @@ Mara: Hello!
     const logs: PipelineLogEvent[] = [];
     const logger: PipelineLogger = { log: (event) => logs.push(event) };
 
-    await buildStudyTextMp3(md, { voiceMapPath: voiceMap, outPath: dir, logger });
+    await buildStudyTextMp3FromPath(md, { voiceMapPath: voiceMap, outPath: dir, logger });
 
     expect(dialogueSpy).toHaveBeenCalled();
     expect(convertMock).not.toHaveBeenCalled();
@@ -147,7 +157,7 @@ At work, I did many tasks. I met my colleagues. We said hello.
     const logs: PipelineLogEvent[] = [];
     const logger: PipelineLogger = { log: (event) => logs.push(event) };
 
-    await buildStudyTextMp3(md, { voiceMapPath: voiceMap, outPath: dir, logger });
+    await buildStudyTextMp3FromPath(md, { voiceMapPath: voiceMap, outPath: dir, logger });
 
     expect(dialogueSpy).toHaveBeenCalled();
     expect(convertMock).not.toHaveBeenCalled();
@@ -189,7 +199,7 @@ Last month, I tried to organize a petition to collect signatures from the neighb
     const logs: PipelineLogEvent[] = [];
     const logger: PipelineLogger = { log: (event) => logs.push(event) };
 
-    await buildStudyTextMp3(md, { voiceMapPath: voiceMap, outPath: dir, logger });
+    await buildStudyTextMp3FromPath(md, { voiceMapPath: voiceMap, outPath: dir, logger });
 
     expect(dialogueSpy).not.toHaveBeenCalled();
     expect(convertMock).toHaveBeenCalled();
@@ -228,7 +238,7 @@ Mara: Hello!
 
     process.env.ELEVENLABS_TTS_STRATEGY = 'dialogue';
 
-    await buildStudyTextMp3(md, { voiceMapPath: voiceMap, outPath: dir, ttsStrategy: 'tts' });
+    await buildStudyTextMp3FromPath(md, { voiceMapPath: voiceMap, outPath: dir, ttsStrategy: 'tts' });
 
     expect(dialogueSpy).not.toHaveBeenCalled();
     expect(convertMock).toHaveBeenCalled();

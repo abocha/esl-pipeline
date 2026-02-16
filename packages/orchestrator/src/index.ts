@@ -6,7 +6,7 @@ import { basename, dirname } from 'node:path';
 import { createAnytypeClient, sharePageToS3 } from '@esl-pipeline/anytype-adapter';
 import { InfrastructureError, ManifestError, ValidationError } from '@esl-pipeline/contracts';
 import { renderAndPublishMarkdownToS3 } from '@esl-pipeline/html-publisher';
-import { validateMarkdownFile } from '@esl-pipeline/md-validator';
+import { validateMarkdown } from '@esl-pipeline/md-validator';
 import {
   type ColorPreset,
   addOrReplaceAudioUnderStudyText,
@@ -14,6 +14,7 @@ import {
   loadPreset,
   runImport,
 } from '@esl-pipeline/notion-adapter';
+import { parseMarkdownContext } from '@esl-pipeline/pmd';
 import {
   deriveS3UploadAddress,
   uploadFile,
@@ -567,7 +568,12 @@ export async function newAssignment(
     throwIfCancelled(signal, 'validate');
     emitStage('validate', 'start');
     steps.push('validate');
-    const validation = await validateMarkdownFile(flags.md, { strict: false, content: mdContents });
+    const markdownContext = parseMarkdownContext(mdContents);
+    const validation = await validateMarkdown({
+      context: markdownContext,
+      path: flags.md,
+      strict: false,
+    });
     throwIfCancelled(signal, 'validate');
     if (!validation.ok) {
       const msg = ['Validation failed:', ...validation.errors.map((e) => `- ${e}`)].join('\n');
@@ -603,6 +609,7 @@ export async function newAssignment(
       if (publishTarget === 'notion') {
         throwIfCancelled(signal, 'import');
         const importResult = await runImport({
+          context: markdownContext,
           mdPath: flags.md,
           dbId: flags.dbId,
           dbName: flags.db,
@@ -738,7 +745,12 @@ export async function newAssignment(
 
         let ttsResult: Awaited<ReturnType<typeof buildStudyTextMp3>>;
         try {
-          ttsResult = await buildStudyTextMp3(flags.md, {
+          ttsResult = await buildStudyTextMp3(
+            {
+              context: markdownContext,
+              mdPath: flags.md,
+            },
+            {
             voiceMapPath: flags.voices ?? DEFAULT_VOICES_PATH,
             outPath: flags.out ?? dirname(flags.md),
             preview: flags.dryRun,
@@ -752,7 +764,8 @@ export async function newAssignment(
             dialogueStability: flags.dialogueStability,
             dialogueSeed: flags.dialogueSeed,
             logger,
-          });
+            },
+          );
           throwIfCancelled(signal, 'tts');
         } catch (error: unknown) {
           const category = categorizeProviderErrorFromMessage(error);
@@ -1300,6 +1313,7 @@ export async function rerunAssignment(
     if (stepsToRun.has('tts')) {
       emitStage('tts', 'start');
       throwIfCancelled(signal, 'tts');
+      const markdownContext = parseMarkdownContext(mdContents);
 
       // TTS mode debug logging for rerun
       if (flags.ttsStrategy) {
@@ -1317,7 +1331,12 @@ export async function rerunAssignment(
 
       let ttsResult: Awaited<ReturnType<typeof buildStudyTextMp3>>;
       try {
-        ttsResult = await buildStudyTextMp3(flags.md, {
+        ttsResult = await buildStudyTextMp3(
+          {
+            context: markdownContext,
+            mdPath: flags.md,
+          },
+          {
           voiceMapPath: flags.voices ?? DEFAULT_VOICES_PATH,
           outPath: flags.out ?? dirname(flags.md),
           preview: flags.dryRun,
@@ -1331,7 +1350,8 @@ export async function rerunAssignment(
           dialogueStability: flags.dialogueStability,
           dialogueSeed: flags.dialogueSeed,
           logger,
-        });
+          },
+        );
         throwIfCancelled(signal, 'tts');
       } catch (error: unknown) {
         const category = categorizeProviderErrorFromMessage(error);

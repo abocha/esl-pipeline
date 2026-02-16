@@ -1,7 +1,8 @@
-import { mkdtemp, unlink, writeFile } from 'node:fs/promises';
+import { mkdtemp, readFile, unlink, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { parseMarkdownContext } from '@esl-pipeline/pmd';
 
 import * as assign from '../src/assign.js';
 import * as dialogue from '../src/dialogue.js';
@@ -22,6 +23,15 @@ const makeMockStream = (payload: string) =>
 
 const writeFixture = async (filePath: string, contents: string) => {
   await writeFile(filePath, contents.trim());
+};
+
+const buildStudyTextMp3FromPath = async (
+  mdPath: string,
+  ...args: Parameters<typeof buildStudyTextMp3> extends [any, ...infer Rest] ? Rest : never
+) => {
+  const markdown = await readFile(mdPath, 'utf8');
+  const context = parseMarkdownContext(markdown);
+  return buildStudyTextMp3({ context, mdPath }, ...args);
 };
 
 const catalogMock = {
@@ -174,7 +184,7 @@ default: voice_id_default
 
     const convertMock = setupClientMock();
     const spy = mockConcat();
-    const result = await buildStudyTextMp3(tempMdPath, {
+    const result = await buildStudyTextMp3FromPath(tempMdPath, {
       voiceMapPath: tempVoiceMapPath,
       outPath: dir,
       preview: true,
@@ -234,7 +244,7 @@ auto: true
     });
 
     const accentSpy = vi.spyOn(speakers, 'resolveSpeakerVoices');
-    await buildStudyTextMp3(tempMdPath, {
+    await buildStudyTextMp3FromPath(tempMdPath, {
       voiceMapPath: tempVoiceMapPath,
       outPath: dir,
       preview: true,
@@ -293,7 +303,7 @@ default: voice_id_default
 
     const convertMock = setupClientMock();
     const spy = mockConcat();
-    const result = await buildStudyTextMp3(tempMdPath, {
+    const result = await buildStudyTextMp3FromPath(tempMdPath, {
       voiceMapPath: tempVoiceMapPath,
       outPath: dir,
       ttsStrategy: 'tts', // Force TTS strategy for this test
@@ -353,7 +363,7 @@ default: voice_id_default
 
     const convertMock = setupClientMock();
     const spy = mockConcat();
-    const result = await buildStudyTextMp3(tempMdPath, {
+    const result = await buildStudyTextMp3FromPath(tempMdPath, {
       voiceMapPath: tempVoiceMapPath,
       outPath: dir,
       ttsStrategy: 'tts',
@@ -416,7 +426,7 @@ default: voice_id_default
 
     const convertMock = setupClientMock();
     const spy = mockConcat();
-    const result = await buildStudyTextMp3(tempMdPath, {
+    const result = await buildStudyTextMp3FromPath(tempMdPath, {
       voiceMapPath: tempVoiceMapPath,
       outPath: dir,
       ttsStrategy: 'tts', // Force TTS strategy for this test
@@ -493,7 +503,7 @@ default: voice_id_default
     `,
     );
 
-    const result = await buildStudyTextMp3(tempMdPath, {
+    const result = await buildStudyTextMp3FromPath(tempMdPath, {
       voiceMapPath: tempVoiceMapPath,
       outPath: dir,
       preview: true,
@@ -558,7 +568,7 @@ auto: true
 
     const convertMock = setupClientMock();
     mockConcat();
-    const result = await buildStudyTextMp3(tempMdPath, {
+    const result = await buildStudyTextMp3FromPath(tempMdPath, {
       voiceMapPath: tempVoiceMapPath,
       outPath: dir,
       ttsStrategy: 'tts', // Force TTS strategy for this test
@@ -620,7 +630,7 @@ default: voice_id_default
 
     const convertMock = setupClientMock();
     mockConcat();
-    await buildStudyTextMp3(tempMdPath, {
+    await buildStudyTextMp3FromPath(tempMdPath, {
       voiceMapPath: tempVoiceMapPath,
       outPath: dir,
       ttsStrategy: 'tts',
@@ -663,7 +673,7 @@ default: voice_id_default
 
     const convertMock = setupClientMock();
     const concatSpy = mockConcat();
-    await buildStudyTextMp3(tempMdPath, {
+    await buildStudyTextMp3FromPath(tempMdPath, {
       voiceMapPath: tempVoiceMapPath,
       outPath: dir,
       ttsStrategy: 'tts',
@@ -671,7 +681,7 @@ default: voice_id_default
     expect(convertMock).toHaveBeenCalledTimes(1);
 
     convertMock.mockClear();
-    const result = await buildStudyTextMp3(tempMdPath, {
+    const result = await buildStudyTextMp3FromPath(tempMdPath, {
       voiceMapPath: tempVoiceMapPath,
       outPath: dir,
       ttsStrategy: 'tts',
@@ -708,7 +718,7 @@ default: voice_id_default
 
     const convertMock = setupClientMock();
     mockConcat();
-    const first = await buildStudyTextMp3(tempMdPath, {
+    const first = await buildStudyTextMp3FromPath(tempMdPath, {
       voiceMapPath: tempVoiceMapPath,
       outPath: dir,
       ttsStrategy: 'tts',
@@ -718,7 +728,7 @@ default: voice_id_default
     await unlink(first.path);
     convertMock.mockClear();
 
-    await buildStudyTextMp3(tempMdPath, {
+    await buildStudyTextMp3FromPath(tempMdPath, {
       voiceMapPath: tempVoiceMapPath,
       outPath: dir,
       ttsStrategy: 'tts',
@@ -756,7 +766,7 @@ default: voice_id_default
     );
 
     const dialogueSpy = mockDialogue();
-    const first = await buildStudyTextMp3(tempMdPath, {
+    const first = await buildStudyTextMp3FromPath(tempMdPath, {
       voiceMapPath: tempVoiceMapPath,
       outPath: dir,
       ttsStrategy: 'dialogue',
@@ -765,7 +775,7 @@ default: voice_id_default
     expect(dialogueSpy).toHaveBeenCalledTimes(1);
 
     dialogueSpy.mockClear();
-    const second = await buildStudyTextMp3(tempMdPath, {
+    const second = await buildStudyTextMp3FromPath(tempMdPath, {
       voiceMapPath: tempVoiceMapPath,
       outPath: dir,
       ttsStrategy: 'dialogue',
@@ -805,7 +815,7 @@ default: voice_id_default
     );
 
     const dialogueSpy = mockDialogue();
-    await buildStudyTextMp3(tempMdPath, {
+    await buildStudyTextMp3FromPath(tempMdPath, {
       voiceMapPath: tempVoiceMapPath,
       outPath: dir,
       ttsStrategy: 'dialogue',
@@ -813,7 +823,7 @@ default: voice_id_default
     expect(dialogueSpy).toHaveBeenCalledTimes(1);
 
     dialogueSpy.mockClear();
-    await buildStudyTextMp3(tempMdPath, {
+    await buildStudyTextMp3FromPath(tempMdPath, {
       voiceMapPath: tempVoiceMapPath,
       outPath: dir,
       ttsStrategy: 'dialogue',
@@ -852,7 +862,7 @@ default: voice_id_default
     );
 
     const dialogueSpy = mockDialogue();
-    await buildStudyTextMp3(tempMdPath, {
+    await buildStudyTextMp3FromPath(tempMdPath, {
       voiceMapPath: tempVoiceMapPath,
       outPath: dir,
       ttsStrategy: 'dialogue',
@@ -861,7 +871,7 @@ default: voice_id_default
     expect(dialogueSpy).toHaveBeenCalledTimes(1);
 
     dialogueSpy.mockClear();
-    await buildStudyTextMp3(tempMdPath, {
+    await buildStudyTextMp3FromPath(tempMdPath, {
       voiceMapPath: tempVoiceMapPath,
       outPath: dir,
       ttsStrategy: 'dialogue',

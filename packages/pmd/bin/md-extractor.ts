@@ -4,6 +4,7 @@ import { readFile } from 'node:fs/promises';
 import {
   extractAnswerKey,
   extractFrontmatter,
+  parseMarkdownContext,
   extractSections,
   extractStudyText,
   extractTeacherNotes,
@@ -31,26 +32,27 @@ async function main() {
     | 'sections';
 
   const md = await readFile(file, 'utf8');
+  const context = parseMarkdownContext(md);
 
   switch (what) {
     case 'frontmatter': {
-      console.log(JSON.stringify(extractFrontmatter(md), null, 2));
+      console.log(JSON.stringify(extractFrontmatter(context), null, 2));
       break;
     }
     case 'study': {
-      console.log(JSON.stringify(extractStudyText(md), null, 2));
+      console.log(JSON.stringify(extractStudyText(context), null, 2));
       break;
     }
     case 'answer': {
-      console.log(extractAnswerKey(md));
+      console.log(extractAnswerKey(context));
       break;
     }
     case 'notes': {
-      console.log(extractTeacherNotes(md));
+      console.log(extractTeacherNotes(context));
       break;
     }
     case 'sections': {
-      console.log(JSON.stringify(extractSections(md), null, 2));
+      console.log(JSON.stringify(extractSections(context), null, 2));
       break;
     }
   }

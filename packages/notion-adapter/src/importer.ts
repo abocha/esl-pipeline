@@ -2,13 +2,10 @@ import type {
   CreatePageParameters,
   CreatePageResponse,
 } from '@notionhq/client/build/src/api-endpoints.js';
-import matter from 'gray-matter';
-import { readFile } from 'node:fs/promises';
 import { basename } from 'node:path';
 
 import { ValidationError, noopLogger } from '@esl-pipeline/contracts';
-import { validateMarkdownFile } from '@esl-pipeline/md-validator';
-import { normalizeMarkdownSource } from '@esl-pipeline/pmd';
+import { validateMarkdown } from '@esl-pipeline/md-validator';
 
 import { mdToBlocks } from './blocks/mdToBlocks.js';
 import { chunk } from './chunk.js';
@@ -34,15 +31,15 @@ interface ValidationSnapshot {
 const MAX_BLOCKS_PER_REQUEST = 50;
 
 export async function runImport(opts: ImportOptions) {
-  const rawMd = await readFile(opts.mdPath, 'utf8');
   const logger = opts.logger ?? noopLogger;
 
   // --- Step 1: validate programmatically (fail fast) ---
   const validation: ValidationSnapshot =
     opts.validationResult ??
-    (await validateMarkdownFile(opts.mdPath, {
+    (await validateMarkdown({
+      context: opts.context,
       strict: opts.strictValidation ?? false,
-      content: rawMd,
+      path: opts.mdPath,
     }));
   const v = validation;
   if (!v.ok) {
@@ -50,13 +47,11 @@ export async function runImport(opts: ImportOptions) {
     throw new ValidationError(msg);
   }
 
-  const source = resolveSource(rawMd);
-  const parsed = matter(source);
-  const blockContent = parsed.content.trim();
+  const blockContent = opts.context.content.trim();
 
   // --- Step 2: get front matter from content ---
-  const fm = (parsed.data ?? {}) as FrontmatterShape;
-  const title = fm.title ?? basename(opts.mdPath);
+  const fm = (opts.context.document.frontmatter ?? {}) as FrontmatterShape;
+  const title = fm.title ?? basename(opts.mdPath ?? 'lesson.md');
   // Normalize topic: if array, join with commas; always treat as single string
   const topic = Array.isArray(fm.topic) ? fm.topic.join(', ') : fm.topic;
   const studentName = (opts.student ?? fm.student ?? '').trim();
@@ -180,13 +175,4 @@ export async function runImport(opts: ImportOptions) {
     url: 'url' in page && typeof page.url === 'string' ? page.url : undefined,
     studentLinked: Boolean(studentPageId),
   };
-}
-
-function resolveSource(input: string): string {
-  try {
-    return normalizeMarkdownSource(input).source;
-  } catch (error: unknown) {
-    const message = error instanceof Error ? error.message : String(error);
-    throw new ValidationError(message);
-  }
 }

@@ -6,8 +6,8 @@ import { describe, expect, it, vi } from 'vitest';
 
 const okMarkdown = readFileSync(new URL('../fixtures/ok.md', import.meta.url), 'utf8');
 
-describe('validateMarkdownFile with content option', () => {
-  it('validates using provided content without reading from disk', async () => {
+describe('validateMarkdown with markdown input', () => {
+  it('validates using provided markdown without reading from disk', async () => {
     const dir = await mkdtemp(join(tmpdir(), 'md-val-content-'));
     const mdPath = join(dir, 'lesson.md');
     await writeFile(mdPath, 'UNUSED');
@@ -23,9 +23,9 @@ describe('validateMarkdownFile with content option', () => {
       };
     });
 
-    // Re-import validateMarkdownFile to pick up mocked fs/promises
-    const { validateMarkdownFile: mockedValidate } = await import('../src/validator.js');
-    const result = await mockedValidate(mdPath, { content: okMarkdown });
+    // Re-import validateMarkdown to pick up mocked fs/promises
+    const { validateMarkdown: mockedValidate } = await import('../src/validator.js');
+    const result = await mockedValidate({ markdown: okMarkdown });
     expect(result.ok).toBe(true);
     expect(readFileMock).not.toHaveBeenCalled();
 

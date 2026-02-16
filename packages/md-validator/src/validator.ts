@@ -1,4 +1,3 @@
-import matter from 'gray-matter';
 import { readFile } from 'node:fs/promises';
 import { dirname, resolve } from 'node:path';
 import { z } from 'zod';
@@ -12,18 +11,40 @@ import type {
 } from '@esl-pipeline/contracts';
 import { normalizeSpeakerRole } from '@esl-pipeline/contracts';
 import type {
+  ParsedMarkdownContext,
   PmdBlock,
   PmdDirectiveBlock,
   PmdDirectiveLeaf,
-  PmdDocument,
   PmdHeading,
 } from '@esl-pipeline/pmd';
-import { findDirectiveBlocks, normalizeMarkdownSource, parsePmdDocument } from '@esl-pipeline/pmd';
+import { findDirectiveBlocks, parseMarkdownContext } from '@esl-pipeline/pmd';
+
+export type ValidateMarkdownInput =
+  | {
+      path: string;
+      strict?: boolean;
+    }
+  | {
+      markdown: string;
+      strict?: boolean;
+      path?: string;
+    }
+  | {
+      context: ParsedMarkdownContext;
+      strict?: boolean;
+      path?: string;
+    };
+
+export interface ResolvedValidateInput {
+  context: ParsedMarkdownContext;
+  strict: boolean;
+  path?: string;
+}
 
 export interface ValidateOptions {
   strict?: boolean;
   /**
-   * Optional preloaded markdown content to avoid fs reads.
+   * @deprecated Use validateMarkdown with `{ markdown: ... }` or `{ context: ... }`.
    */
   content?: string;
 }
@@ -136,10 +157,6 @@ const NON_BLOCKING_WARNING_PREFIXES = [
   'Controlled Practice has ',
   'Front matter: speaker_profiles role "',
 ];
-
-function normalizeNewlines(input: string): string {
-  return input.replaceAll('\r\n', '\n');
-}
 
 function normalizeHeadingText(s: string): string {
   // strip emoji
@@ -287,23 +304,6 @@ function getDirectiveBounds(
 
 function hasNonEmptyLine(lines: string[]): boolean {
   return lines.some((line) => line.trim().length > 0);
-}
-
-function findContentLineOffset(rawLines: string[], contentLines: string[]): number {
-  if (contentLines.length === 0) return 0;
-  const maxStart = rawLines.length - contentLines.length;
-  for (let start = 0; start <= maxStart; start += 1) {
-    if (rawLines[start] !== contentLines[0]) continue;
-    let matches = true;
-    for (let i = 1; i < contentLines.length; i += 1) {
-      if (rawLines[start + i] !== contentLines[i]) {
-        matches = false;
-        break;
-      }
-    }
-    if (matches) return start;
-  }
-  return 0;
 }
 
 function applyLineOffset(line: number, lineOffset: number): number {
@@ -822,33 +822,53 @@ function validateSpeakerMetadataAlignment(
   }
 }
 
-export async function validateMarkdownFile(
-  rawFile: string,
-  opts: ValidateOptions = {},
-): Promise<ValidateResult> {
+async function resolveValidateInput(input: ValidateMarkdownInput): Promise<ResolvedValidateInput> {
+  const strict = input.strict ?? false;
+  if ('context' in input) {
+    return {
+      context: input.context,
+      strict,
+      path: input.path,
+    };
+  }
+
+  if ('markdown' in input) {
+    return {
+      context: parseMarkdownContext(input.markdown),
+      strict,
+      path: input.path,
+    };
+  }
+
+  const markdown = await readFile(input.path, 'utf8');
+  return {
+    context: parseMarkdownContext(markdown),
+    strict,
+    path: input.path,
+  };
+}
+
+export async function validateMarkdown(input: ValidateMarkdownInput): Promise<ValidateResult> {
   const errors: string[] = [];
   const warnings: string[] = [];
   const voiceDiagnosticsErrors: string[] = [];
   const voiceDiagnosticsWarnings: string[] = [];
-  const strict = opts?.strict ?? false;
+  let strict = false;
+  let markdownPath: string | undefined;
   const voiceAlignmentEnabled = isVoiceAlignmentEnabled();
   const strictVoiceAlignment = isVoiceAlignmentStrictValidationEnabled();
 
-  const content = opts.content ?? (await readFile(rawFile, 'utf8'));
-
-  let doc: PmdDocument;
+  let doc: ParsedMarkdownContext['document'];
   let contentLines: string[] = [];
-  let rawLines: string[] = [];
   let lineOffset = 0;
   try {
-    const normalized = normalizeNewlines(content);
-    rawLines = normalized.split('\n');
-    doc = parsePmdDocument(content);
+    const resolved = await resolveValidateInput(input);
+    strict = resolved.strict;
+    markdownPath = resolved.path;
+    doc = resolved.context.document;
+    contentLines = resolved.context.contentLines;
+    lineOffset = resolved.context.contentLineOffset;
     warnings.push(...doc.warnings.map((warning) => warning.message));
-    const resolved = normalizeMarkdownSource(content);
-    const parsed = matter(resolved.source);
-    contentLines = normalizeNewlines(parsed.content).split('\n');
-    lineOffset = findContentLineOffset(rawLines, contentLines);
   } catch (error: unknown) {
     const msg = error instanceof Error ? error.message : String(error);
     return { ok: false, errors: [msg], warnings };
@@ -859,10 +879,10 @@ export async function validateMarkdownFile(
     frontmatter.topic = frontmatter.topic.join(', ');
   }
 
-  const canReadCatalog = opts.content === undefined;
-  const voiceCatalogLoad = canReadCatalog
-    ? await loadVoiceCatalog(rawFile)
-    : { diagnosticsWarnings: ['Voice catalog checks skipped (content provided directly).'] };
+  const voiceCatalogLoad =
+    typeof markdownPath === 'string' && markdownPath.length > 0
+      ? await loadVoiceCatalog(markdownPath)
+      : { diagnosticsWarnings: ['Voice catalog checks skipped (no markdown path provided).'] };
   voiceDiagnosticsWarnings.push(...voiceCatalogLoad.diagnosticsWarnings);
   const capabilities = voiceCatalogLoad.catalog
     ? deriveVoiceCapabilities(voiceCatalogLoad.catalog)

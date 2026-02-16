@@ -1,12 +1,22 @@
-import { mkdtemp, writeFile } from 'node:fs/promises';
+import { mkdtemp, readFile, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, expect, it, vi } from 'vitest';
+import { parseMarkdownContext } from '@esl-pipeline/pmd';
 
 import { pickVoiceForSpeaker } from '../src/assign.js';
 import * as assign from '../src/assign.js';
 import { buildStudyTextMp3 } from '../src/index.js';
 import { resolveSpeakerVoices } from '../src/speakerAssignment.js';
+
+const buildStudyTextMp3FromPath = async (
+  mdPath: string,
+  ...args: Parameters<typeof buildStudyTextMp3> extends [any, ...infer Rest] ? Rest : never
+) => {
+  const markdown = await readFile(mdPath, 'utf8');
+  const context = parseMarkdownContext(markdown);
+  return buildStudyTextMp3({ context, mdPath }, ...args);
+};
 
 describe('tts elevenlabs gender-aware voice selection', () => {
   it('male -> prefers male even when neutral would score higher', async () => {
@@ -160,7 +170,7 @@ auto: true
     vi.spyOn(assign, 'loadVoicesCatalog').mockResolvedValue(catalogMock as any);
     vi.spyOn(console, 'log').mockImplementation(() => {});
 
-    const result = await buildStudyTextMp3(tempMdPath, {
+    const result = await buildStudyTextMp3FromPath(tempMdPath, {
       voiceMapPath: tempVoiceMapPath,
       outPath: dir,
       preview: true,
@@ -223,7 +233,7 @@ auto: true
     vi.spyOn(assign, 'loadVoicesCatalog').mockResolvedValue(catalogMock as any);
     vi.spyOn(console, 'log').mockImplementation(() => {});
 
-    const result = await buildStudyTextMp3(tempMdPath, {
+    const result = await buildStudyTextMp3FromPath(tempMdPath, {
       voiceMapPath: tempVoiceMapPath,
       outPath: dir,
       preview: true,

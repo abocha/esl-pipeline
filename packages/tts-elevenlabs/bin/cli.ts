@@ -1,6 +1,8 @@
 #!/usr/bin/env node
 import { Command, InvalidOptionArgumentError } from 'commander';
+import { readFile } from 'node:fs/promises';
 import { loadCliEnv } from '@esl-pipeline/shared-infrastructure';
+import { parseMarkdownContext } from '@esl-pipeline/pmd';
 
 import type { BuildStudyTextOptions } from '../src/types.js';
 
@@ -65,7 +67,9 @@ const program = new Command()
   .option('--dialogue-seed <value>', 'Dialogue seed', parseDialogueSeed)
   .action(async (options: CliOptions) => {
     const { buildStudyTextMp3 } = await import('../src/index.js');
-    const result = await buildStudyTextMp3(options.md, {
+    const markdown = await readFile(options.md, 'utf8');
+    const context = parseMarkdownContext(markdown);
+    const result = await buildStudyTextMp3({ context, mdPath: options.md }, {
       voiceMapPath: options.voiceMap,
       outPath: options.out,
       preview: Boolean(options.preview),

@@ -1,8 +1,7 @@
 import { request as httpRequest } from 'node:http';
 import { Readable } from 'node:stream';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
-
-import { validateMarkdownFile } from '@esl-pipeline/md-validator';
+import { validateMarkdown } from '@esl-pipeline/md-validator';
 
 import * as approveJobModule from '../src/application/approve-job.js';
 import * as createDraftModule from '../src/application/create-draft.js';
@@ -133,7 +132,7 @@ vi.mock('../src/infrastructure/orchestrator-service', () => {
 
 vi.mock('@esl-pipeline/md-validator', () => {
   return {
-    validateMarkdownFile: vi.fn(),
+    validateMarkdown: vi.fn(),
   };
 });
 
@@ -2135,8 +2134,8 @@ describe('transport/http-server - integration (in-process)', () => {
   });
 
   it('POST /validation/markdown returns validation payload', async () => {
-    const mockValidateMarkdownFile = vi.mocked(validateMarkdownFile);
-    mockValidateMarkdownFile.mockResolvedValue({
+    const mockValidateMarkdown = vi.mocked(validateMarkdown);
+    mockValidateMarkdown.mockResolvedValue({
       ok: false,
       errors: ['Missing header'],
       warnings: ['Minor issue'],
@@ -2172,10 +2171,7 @@ describe('transport/http-server - integration (in-process)', () => {
         speaker_labels: ['A', 'B'],
       },
     });
-    expect(mockValidateMarkdownFile).toHaveBeenCalledWith('inline.md', {
-      content: 'raw markdown',
-      strict: true,
-    });
+    expect(mockValidateMarkdown).toHaveBeenCalledWith({ markdown: 'raw markdown', strict: true });
   });
 
   it('GET /user/jobs applies filters and pagination', async () => {

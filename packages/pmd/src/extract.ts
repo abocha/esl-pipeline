@@ -1,15 +1,11 @@
-import matter from 'gray-matter';
-
 import { ValidationError } from '@esl-pipeline/contracts';
 
-import { parsePmdDocument } from './parser.js';
 import { findDirectiveBlocks } from './query.js';
-import { normalizeMarkdownSource } from './source.js';
 import type {
   Frontmatter,
+  ParsedMarkdownContext,
   PmdBlock,
   PmdDirectiveBlock,
-  PmdDocument,
   PmdHeading,
   Section,
   StudyText,
@@ -21,33 +17,6 @@ const BOM = /^\uFEFF/;
 
 function cleanLine(input: string): string {
   return input.replace(BOM, '').replaceAll(NBSP, ' ').replaceAll(ZWSP, '');
-}
-
-function getContentLines(markdown: string): string[] {
-  const { source } = normalizeOrThrow(markdown);
-  const parsed = matter(source);
-  return parsed.content.replaceAll('\r\n', '\n').split('\n');
-}
-
-function parseDocument(markdown: string): PmdDocument {
-  try {
-    return parsePmdDocument(markdown) as PmdDocument;
-  } catch (error: unknown) {
-    const msg = error instanceof Error ? error.message : String(error);
-    throw new ValidationError(msg);
-  }
-}
-
-function normalizeOrThrow(markdown: string): {
-  source: string;
-  format: 'canonical' | 'legacy-fenced';
-} {
-  try {
-    return normalizeMarkdownSource(markdown);
-  } catch (error: unknown) {
-    const msg = error instanceof Error ? error.message : String(error);
-    throw new ValidationError(msg);
-  }
 }
 
 function getDirectiveBounds(
@@ -115,9 +84,8 @@ function collectHeadings(body: PmdBlock[], depth: 2 | 3): PmdHeading[] {
   return body.filter((block) => block.type === 'heading' && block.depth === depth) as PmdHeading[];
 }
 
-export function extractFrontmatter(md: string): Frontmatter {
-  const doc = parseDocument(md);
-  return doc.frontmatter as Frontmatter;
+export function extractFrontmatter(md: ParsedMarkdownContext): Frontmatter {
+  return md.document.frontmatter as Frontmatter;
 }
 
 function isDialogueLine(line: string): boolean {
@@ -127,9 +95,9 @@ function isDialogueLine(line: string): boolean {
   );
 }
 
-export function extractStudyText(md: string): StudyText {
-  const doc = parseDocument(md);
-  const contentLines = getContentLines(md);
+export function extractStudyText(md: ParsedMarkdownContext): StudyText {
+  const contentLines = md.contentLines;
+  const doc = md.document;
   const block = findFirstDirective(findDirectiveBlocks(doc, 'study-text'));
   if (!block) throw new ValidationError('study-text block not found');
 
@@ -141,9 +109,9 @@ export function extractStudyText(md: string): StudyText {
   return { type, lines };
 }
 
-export function extractAnswerKey(md: string): string {
-  const doc = parseDocument(md);
-  const contentLines = getContentLines(md);
+export function extractAnswerKey(md: ParsedMarkdownContext): string {
+  const doc = md.document;
+  const contentLines = md.contentLines;
   const toggles = [
     ...findDirectiveBlocks(doc, 'toggle'),
     ...findDirectiveBlocks(doc, 'toggle-heading'),
@@ -162,9 +130,9 @@ export function extractAnswerKey(md: string): string {
   return bounds.innerLines.join('\n').trim();
 }
 
-export function extractTeacherNotes(md: string): string {
-  const doc = parseDocument(md);
-  const contentLines = getContentLines(md);
+export function extractTeacherNotes(md: ParsedMarkdownContext): string {
+  const doc = md.document;
+  const contentLines = md.contentLines;
   const toggles = [
     ...findDirectiveBlocks(doc, 'toggle'),
     ...findDirectiveBlocks(doc, 'toggle-heading'),
@@ -184,9 +152,9 @@ export function extractTeacherNotes(md: string): string {
   return bounds.innerLines.join('\n').trim();
 }
 
-export function extractSections(md: string): Section[] {
-  const doc = parseDocument(md);
-  const contentLines = getContentLines(md);
+export function extractSections(md: ParsedMarkdownContext): Section[] {
+  const doc = md.document;
+  const contentLines = md.contentLines;
   const headings = [...collectHeadings(doc.body, 2), ...collectHeadings(doc.body, 3)].sort(
     (a, b) => {
       return (a.position?.start.line ?? 0) - (b.position?.start.line ?? 0);

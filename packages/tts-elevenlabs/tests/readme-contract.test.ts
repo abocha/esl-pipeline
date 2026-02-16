@@ -22,6 +22,6 @@ describe('README contract smoke', () => {
     expect(readme).toContain('pnpm --filter @esl-pipeline/tts-elevenlabs run voices:sync');
     expect(readme).toContain('node dist/bin/voices.js');
     expect(readme).toContain('buildStudyTextMp3(');
-    expect(readme).toContain("buildStudyTextMp3('/abs/path/lesson.md', {");
+    expect(readme).toContain("buildStudyTextMp3({ context, mdPath: '/abs/path/lesson.md' }, {");
   });
 });
