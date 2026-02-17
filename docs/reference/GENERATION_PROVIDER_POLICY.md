@@ -5,7 +5,7 @@
 - Audience: founder-maintainer and implementing agents.
 - Read Time: 8 minutes.
 - Authority Level: canonical WS2B provider/model/quota policy.
-- Last Updated: 2026-02-17.
+- Last Updated: 2026-02-18.
 
 ## Purpose
 
@@ -102,6 +102,10 @@ References:
 2. No free-tier assumptions are locked in this doc.
 3. Activate only with explicit provider/model entry in config plus budget guardrail.
 
+Reference:
+
+- https://openrouter.ai/docs/models
+
 ## Runtime Policy Requirements
 
 1. Retry, timeout, and budget must be configured per provider.
@@ -113,6 +117,27 @@ References:
    - rate-limit/quota: attempt next model/provider ladder step.
    - timeout: retry then fallback.
    - contract/schema failure: fail fast with actionable error (no blind fallback).
+
+### OpenAI API Reference Contract (WS2B)
+
+OpenAI-specific request/response/error semantics for implementation are defined in:
+
+- `docs/reference/OPENAI_RESPONSES_WS2B_PROFILE.md`
+
+### Google API Reference Contract (WS2B)
+
+Google-specific request/response/error semantics for implementation are defined in:
+
+- `docs/reference/GOOGLE_GENAI_WS2B_PROFILE.md`
+
+### OpenRouter API Reference Contract (WS2B)
+
+OpenRouter-specific request/response/error semantics for implementation are defined in:
+
+- `docs/reference/OPENROUTER_WS2B_PROFILE.md`
+
+This policy doc stays provider-strategy oriented; do not duplicate low-level provider payload
+details here.
 
 ## WS2B Contract/Route Expectations
 
@@ -134,5 +159,8 @@ References:
 
 - `docs/reference/V1_IMPLEMENTATION_TRACKER.md`
 - `docs/reference/PRESET_V2_SPEC.md`
+- `docs/reference/OPENAI_RESPONSES_WS2B_PROFILE.md`
+- `docs/reference/GOOGLE_GENAI_WS2B_PROFILE.md`
+- `docs/reference/OPENROUTER_WS2B_PROFILE.md`
 - `docs/reference/env.md`
 - `docs/backend-frontend/backend-frontend-alignment.md`
