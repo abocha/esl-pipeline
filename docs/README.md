@@ -5,7 +5,7 @@
 - Audience: AI agents, maintainers.
 - Read Time: 2 minutes.
 - Authority Level: Router.
-- Last Verified Against: 2026-02-17 repo state.
+- Last Verified Against: 2026-02-18 repo state.
 
 ## Purpose
 
@@ -50,6 +50,9 @@
 - Need product direction and objective launch gates: `docs/reference/PRODUCT_NORTH_STAR_AND_READINESS.md`.
 - Need package-mapped V1 execution checklist: `docs/reference/V1_IMPLEMENTATION_TRACKER.md`.
 - Need WS2B provider/model/quota lock details: `docs/reference/GENERATION_PROVIDER_POLICY.md`.
+- Need OpenAI Responses API implementation contract for WS2B: `docs/reference/OPENAI_RESPONSES_WS2B_PROFILE.md`.
+- Need Google GenAI API implementation contract for WS2B: `docs/reference/GOOGLE_GENAI_WS2B_PROFILE.md`.
+- Need OpenRouter API implementation contract for WS2B: `docs/reference/OPENROUTER_WS2B_PROFILE.md`.
 - Need weekly grounding review cadence: `docs/playbooks/WEEKLY_PRODUCT_REVIEW_TEMPLATE.md`.
 - Need student-system implementation roadmap and execution checklist: `docs/reference/STUDENT_SYSTEM_ROADMAP.md`.
 - Need Docker mount/permissions troubleshooting: `docs/operations/docker-host-paths.md`.
@@ -62,6 +65,9 @@
 - `docs/reference/PRODUCT_NORTH_STAR_AND_READINESS.md`
 - `docs/reference/PRESET_V2_SPEC.md`
 - `docs/reference/GENERATION_PROVIDER_POLICY.md`
+- `docs/reference/OPENAI_RESPONSES_WS2B_PROFILE.md`
+- `docs/reference/GOOGLE_GENAI_WS2B_PROFILE.md`
+- `docs/reference/OPENROUTER_WS2B_PROFILE.md`
 - `docs/reference/V1_IMPLEMENTATION_TRACKER.md`
 - `docs/playbooks/WEEKLY_PRODUCT_REVIEW_TEMPLATE.md`
 - `docs/playbooks/RESTART_TOMORROW.md`

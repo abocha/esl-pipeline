@@ -5,7 +5,7 @@
 - Audience: AI agents and maintainers coordinating backend/frontend delivery.
 - Read Time: 8 minutes.
 - Authority Level: Canonical status tracker (human-readable).
-- Last Verified Against: 2026-02-17 repo state.
+- Last Verified Against: 2026-02-18 repo state.
 
 ## Purpose
 
@@ -22,6 +22,9 @@
 1. `docs/reference/agents-ssot.md` (contracts/invariants).
 2. `docs/backend-frontend/BATCH_SYSTEM.md` (system map).
 3. `packages/batch-frontend/README.md` and `packages/batch-backend/README.md` (implementation references).
+4. `docs/reference/OPENAI_RESPONSES_WS2B_PROFILE.md` (OpenAI generation request/response mapping for WS2B).
+5. `docs/reference/GOOGLE_GENAI_WS2B_PROFILE.md` (Google generation request/response mapping for WS2B).
+6. `docs/reference/OPENROUTER_WS2B_PROFILE.md` (OpenRouter generation request/response mapping for WS2B).
 
 ## Status Legend
 

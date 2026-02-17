@@ -83,7 +83,18 @@ Provider runtime policy (planned, provider-specific values):
 - `GEN_GOOGLE_DAILY_REQUEST_BUDGET`
 - `GEN_OPENROUTER_DAILY_TOKEN_BUDGET`
 
+Provider auth/runtime identity vars (planned):
+
+- `OPENAI_API_KEY`
+- `GEMINI_API_KEY` (Google AI Studio API key for `@google/genai`)
+- `OPENROUTER_API_KEY`
+- `OPENROUTER_HTTP_REFERER` (optional telemetry/ranking header)
+- `OPENROUTER_X_TITLE` (optional telemetry/ranking header)
+
 See `docs/reference/GENERATION_PROVIDER_POLICY.md` for canonical provider/model/quota decisions.
+See `docs/reference/OPENAI_RESPONSES_WS2B_PROFILE.md` for OpenAI request/response/error contract details.
+See `docs/reference/GOOGLE_GENAI_WS2B_PROFILE.md` for Google request/response/error contract details.
+See `docs/reference/OPENROUTER_WS2B_PROFILE.md` for OpenRouter request/response/error contract details.
 
 ## Batch Backend (docker-compose)
 

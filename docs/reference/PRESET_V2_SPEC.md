@@ -257,6 +257,9 @@ Quota visibility policy:
 Canonical runtime policy document:
 
 - `docs/reference/GENERATION_PROVIDER_POLICY.md`
+- `docs/reference/OPENAI_RESPONSES_WS2B_PROFILE.md` (OpenAI request/response/error implementation profile).
+- `docs/reference/GOOGLE_GENAI_WS2B_PROFILE.md` (Google GenAI request/response/error implementation profile).
+- `docs/reference/OPENROUTER_WS2B_PROFILE.md` (OpenRouter request/response/error implementation profile).
 
 Note:
 
@@ -304,5 +307,8 @@ Gate:
 - `docs/reference/PRODUCT_NORTH_STAR_AND_READINESS.md`
 - `docs/reference/V1_IMPLEMENTATION_TRACKER.md`
 - `docs/reference/GENERATION_PROVIDER_POLICY.md`
+- `docs/reference/OPENAI_RESPONSES_WS2B_PROFILE.md`
+- `docs/reference/GOOGLE_GENAI_WS2B_PROFILE.md`
+- `docs/reference/OPENROUTER_WS2B_PROFILE.md`
 - `docs/playbooks/RESTART_TOMORROW.md`
 - `START_HERE.md`

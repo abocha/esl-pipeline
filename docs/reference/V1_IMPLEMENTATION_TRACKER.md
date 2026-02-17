@@ -5,7 +5,7 @@
 - Audience: founder-maintainer and AI pair.
 - Read Time: 12 minutes.
 - Authority Level: V1 execution source of truth.
-- Last Updated: 2026-02-17.
+- Last Updated: 2026-02-18.
 - Reconciled commit window: `02d4eab..HEAD`.
 
 ## Purpose
@@ -372,6 +372,10 @@ Remove manual copy-paste dependency with backend generation endpoint + frontend 
   - `GenerationOptionsPayload`
 - Extend:
   - `JobOptionsPayload` with optional `generation` section (provider/model/quota metadata).
+- Doc prerequisite:
+  - `docs/reference/OPENAI_RESPONSES_WS2B_PROFILE.md` (OpenAI request/response/error mapping contract).
+  - `docs/reference/GOOGLE_GENAI_WS2B_PROFILE.md` (Google request/response/error mapping contract).
+  - `docs/reference/OPENROUTER_WS2B_PROFILE.md` (OpenRouter request/response/error mapping contract).
 - Edit:
   - `packages/contracts/src/index.ts`
 
@@ -472,6 +476,10 @@ Recent evidence:
 - 2026-02-16 | WS0-I | broadened speaker role contract tolerance with warnings for unknown values | n/a | merged | commit `cfc3f50`
 - 2026-02-16 | WS0-H | efficiency/caching/idempotence/artifact-identity improvements across backend/frontend/orchestrator/adapters | n/a | merged | commits `be8c9f5`, `0179111`, `640e59c`, `7781ae6`, `f5bb249`, `e49ec41`, `e3ccb8c`
 - 2026-02-17 | WS2B-S0 | provider/model/quota decision lock documented for WS2B start gate (`openai -> google_ai_studio -> openrouter`; hybrid quota UX). | `rg -n "WS2B|provider|quota|generation" docs/reference docs/backend-frontend`; `git status --short` | pass | local workspace
+- 2026-02-18 | WS2B docs | published OpenAI Responses WS2B implementation profile and linked it from policy/tracker/router docs. | `rg -n "OPENAI_RESPONSES_WS2B_PROFILE|Responses|WS2B-S1" docs/reference docs`; `git status --short` | pass | local workspace
+- 2026-02-18 | WS2B docs | published Google GenAI WS2B implementation profile and linked it from policy/tracker/router/env docs. | `rg -n "GOOGLE_GENAI_WS2B_PROFILE|google_ai_studio|WS2B-S1" docs/reference docs`; `git status --short` | pass | local workspace
+- 2026-02-18 | WS2B docs | published OpenRouter WS2B implementation profile from Context7 (`/websites/openrouter_ai`) and linked it from policy/tracker/router/env docs. | `rg -n "OPENROUTER_WS2B_PROFILE|openrouter|WS2B-S1" docs/reference docs`; `git status --short` | pass | local workspace
+- 2026-02-18 | WS2B docs audit | completed implementation-readiness pass across OpenAI/Google/OpenRouter docs: official-source priority lock (OpenAI), baseline scope trim, error mapping consistency, and planned provider auth var coverage in env docs. | `rg -n "OPENAI_RESPONSES_WS2B_PROFILE|GOOGLE_GENAI_WS2B_PROFILE|OPENROUTER_WS2B_PROFILE|provider_contract_error|OPENAI_API_KEY|GEMINI_API_KEY|OPENROUTER_API_KEY" docs/reference docs`; `git status --short` | pass | local workspace
 
 ## Weekly Closeout Checklist
 
@@ -488,6 +496,9 @@ Recent evidence:
 
 - `docs/reference/PRESET_V2_SPEC.md`
 - `docs/reference/GENERATION_PROVIDER_POLICY.md`
+- `docs/reference/OPENAI_RESPONSES_WS2B_PROFILE.md`
+- `docs/reference/GOOGLE_GENAI_WS2B_PROFILE.md`
+- `docs/reference/OPENROUTER_WS2B_PROFILE.md`
 - `START_HERE.md`
 - `docs/playbooks/RESTART_TOMORROW.md`
 - `docs/playbooks/WEEKLY_PRODUCT_REVIEW_TEMPLATE.md`
