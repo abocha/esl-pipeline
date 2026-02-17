@@ -5,7 +5,7 @@
 - Audience: AI agents and maintainers coordinating backend/frontend delivery.
 - Read Time: 8 minutes.
 - Authority Level: Canonical status tracker (human-readable).
-- Last Verified Against: 2026-02-11 repo state.
+- Last Verified Against: 2026-02-17 repo state.
 
 ## Purpose
 
@@ -29,6 +29,19 @@
 - `Partial`: available with limitations.
 - `Pending`: not implemented or blocked.
 
+## Recent Shipped Highlights (Post-WS2A)
+
+1. Voice-alignment v2 rollout completed with prompt snapshot gating, capability provenance, and
+   operational runbook coverage.
+2. Executable env bootstrap is standardized through shared `loadCliEnv()` wrappers across CLI,
+   workers, and tools.
+3. Efficiency track landed parse-once behavior and multiple caching/dedupe improvements across
+   backend/frontend/orchestrator path.
+4. Artifact identity reuse now spans publish/uploader surfaces, reducing duplicate remote writes.
+5. Notion colorization now skips redundant API calls when preset hash is unchanged.
+6. WS2B-S0 provider/model/quota decision lock is documented in
+   `docs/reference/GENERATION_PROVIDER_POLICY.md`.
+
 ## Capability Matrix
 
 | Capability                                                                                 | Backend | Frontend | Contract Source                               | Next Action                                         |
@@ -42,6 +55,10 @@
 | Prompt options (`GET /config/prompts`)                                                     | Done    | Done     | Config routes + frontend prompt step          | Keep allowlists synchronized with storage roots.    |
 | Prompt package create/read                                                                 | Done    | Done     | Prompt-package routes                         | None.                                               |
 | Prompt capability provenance (`voiceCapabilitiesGeneratedAt/hash`)                         | Done    | Partial  | Prompt-package response + lineage payload     | Frontend can surface provenance metadata in inspector views. |
+| Remote config conditional revalidation + stale-if-error cache                              | Done    | Partial  | Config provider + workspace fetch wiring      | Frontend now benefits from reduced churn; keep stale-state UX explicit. |
+| Artifact identity reuse (`audio.key/hash`, `htmlKey/hash`)                                 | Done    | Partial  | Manifest + publisher/uploader behavior         | Continue exposing artifact reuse diagnostics in operator views. |
+| Notion preset hash idempotence skip                                                         | Done    | Done     | Orchestrator + notion adapter colorizer        | Monitor skip-rate and fallback behavior in publish telemetry. |
+| Draft generation provider/model preselection + quota panel                                  | Pending | Pending  | WS2B generation contracts + `/config/job-options` extension | Implement in WS2B-S1/S2/S3 with hybrid quota source labels. |
 | Prompt/template/profile lineage (`GET /prompt-packages/:id/lineage`)                      | Done    | Done     | Prompt-package lineage API + frontend client  | None.                                               |
 | Draft save/read                                                                            | Done    | Done     | Draft routes                                  | None.                                               |
 | Draft materialize (`POST /drafts/:id/materialize`)                                         | Done    | Done     | Draft materialization service                 | Maintain job override validation coverage.          |
@@ -66,6 +83,7 @@
 4. Student workspace is now available, but advanced guardrails and end-to-end tutor ergonomics still need completion.
 5. Phase E is in progress; keep parity between workspace interactions and backend governance rules.
 6. Readiness dashboard still needs UI treatment for new voice-alignment counters and thresholds.
+7. WS2B generation endpoint and UI picker are still pending implementation; decision lock is complete.
 
 ## Do / Don't
 

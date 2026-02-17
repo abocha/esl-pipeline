@@ -5,8 +5,8 @@
 - Audience: founder-maintainer and AI pair.
 - Read Time: 12 minutes.
 - Authority Level: V1 execution source of truth.
-- Last Updated: 2026-02-11.
-- Reconciled commit window: `91cfb55..HEAD`.
+- Last Updated: 2026-02-17.
+- Reconciled commit window: `02d4eab..HEAD`.
 
 ## Purpose
 
@@ -33,10 +33,10 @@
 
 ## Current Sprint Focus
 
-- Active workstream: `WS2A Preset plumbing MVP closeout`.
-- This week objective: close WS2A with passing evidence and keep WS2B explicitly deferred.
-- Today `Now` task (30-90 min): complete `WS2A-S5` only.
-- Success for today: WS2A done criteria are fully checked with command evidence logged.
+- Active workstream: `WS2B Direct LLM generation`.
+- This week objective: execute WS2B-S1 contracts after provider decision lock.
+- Today `Now` task (30-90 min): finalize generation request/response contracts and keep WS2B error categories deterministic.
+- Success for today: contracts merge cleanly and backend/frontend can consume generation metadata without breaking existing job-options flows.
 
 ## Delivery Model (Locked)
 
@@ -58,7 +58,7 @@ Rules:
 | WS1 CEFR baseline presets | `complete` | W1 (2026-02-09) | W3 (2026-03-01) | none |
 | WS6 Readiness instrumentation (minimal first) | `complete` | W1 (2026-02-09) | W4 (2026-03-08) | WS1 metric hooks merged |
 | WS2A Preset plumbing MVP | `complete` | W4 (2026-03-02) | W7 (2026-03-29) | WS1 + WS6 complete |
-| WS2B Direct LLM generation | `deferred` | W8 (2026-03-30) | W9 (2026-04-12) | WS2A complete |
+| WS2B Direct LLM generation | `queued (gate open)` | W8 (2026-03-30) | W9 (2026-04-12) | WS2A complete |
 | WS3 TTS abstraction + fallback | `parked` | W10 (2026-04-13) | W12 (2026-05-03) | WS2B seam pattern stable |
 | WS5 Cost and quota policy | `parked` | W11 (2026-04-20) | W13 (2026-05-10) | WS2B + WS3 usage telemetry available |
 | WS4 CRM-lite lesson ledger | `parked` | W13 (2026-05-04) | W15 (2026-05-24) | WS2A assignment flow stable |
@@ -95,6 +95,39 @@ This lane tracks meaningful shipped capability that supports V1 but does not map
 
 - Updated Anytype published HTML visuals (dark mode/animation/scroll affordances) (`1156b73`).
 - Why it matters: improves output quality without changing core roadmap dependencies.
+
+### WS0-E Voice Alignment v2 and Catalog Hardening
+
+- Hardened ElevenLabs voice sync and catalog behavior (`17f6a73`).
+- Finalized voice-alignment v2 rollout, runbook, and prompt snapshot v4.3 gating (`0771e19`).
+- Stabilized backend test expectations around job-options and prompt-package domain typing (`c78875f`, `3c3353b`).
+- Why it matters: raises reliability of voice assignment/provenance before WS2B generation rollout.
+
+### WS0-F Executable Env Bootstrap Standardization
+
+- Standardized executable env bootstrap via shared `loadCliEnv()` and package wrappers (`a70083d`).
+- Why it matters: removes ad-hoc env parsing drift and keeps entrypoint behavior consistent.
+
+### WS0-G Security Hardening and Scan Triage
+
+- Addressed security scan findings in backend/file validation/rate-limit surfaces and documented triage (`88f5588`).
+- Why it matters: improves fail-safe defaults and keeps risk posture visible in-repo.
+
+### WS0-H Efficiency and Churn Reduction
+
+- Added quick-win caching and dedupe in backend prompt/job-option/profile reads (`be8c9f5`).
+- Reduced Notion API churn and improved idempotence behavior (`0179111`).
+- Reused artifact identity across pipeline + publisher/uploader surfaces (`640e59c`).
+- Added remote config fetch caching + workspace dedupe (`7781ae6`).
+- Completed parse-once efficiency refactor across validator/PMD/orchestrator/adapter path (`e49ec41`).
+- Skipped Notion colorization when preset hash is unchanged (`e3ccb8c`).
+- Fixed storage-uploader test typing drift to keep CI typecheck stable (`f5bb249`).
+- Why it matters: lowers latency/cost/churn and improves determinism for WS2B and later scale.
+
+### WS0-I Speaker Role Contract Tolerance
+
+- Relaxed speaker role contract handling with unknown-role invalidation + warnings (`cfc3f50`).
+- Why it matters: handles real-world transcripts more robustly without hiding quality signals.
 
 ---
 
@@ -286,11 +319,11 @@ Implement Preset V2 core structure so one trusted `general-english` preset can s
 - [x] Preview requirement is enforced through HTML renderer path before publish.
 - [x] General English-only scope lock remains explicit.
 - [x] Targeted contracts/backend/frontend tests pass.
-- [x] WS2B defer gate is explicit and enforced in tracker.
+- [x] WS2B gate state is explicit and enforced in tracker.
 
 ---
 
-## WS2B Execution Card: Direct LLM Generation (Deferred)
+## WS2B Execution Card: Direct LLM Generation (Gate Open)
 
 ### Objective
 
@@ -298,13 +331,33 @@ Remove manual copy-paste dependency with backend generation endpoint + frontend 
 
 ### Status
 
-- `deferred` until remaining WS2B start-gate items are checked.
+- `queued` with start gate open at WS2B-S1.
 
 ### Start Gate (Mandatory)
 
 - [x] WS2A done criteria all checked.
-- [ ] Preset V2 surfaces stabilized.
-- [ ] Chosen low-cost model/provider path documented.
+- [x] Preset V2 surfaces stabilized.
+- [x] Chosen low-cost model/provider path documented.
+
+### WS2B-S0 Provider Decision Lock (Completed)
+
+- Canonical policy doc: `docs/reference/GENERATION_PROVIDER_POLICY.md`.
+- Locked provider priority:
+  1. `openai` (primary)
+  2. `google_ai_studio` (secondary)
+  3. `openrouter` (tertiary)
+- Locked default model ladders:
+  - OpenAI: `gpt-5.2` -> `gpt-5-mini`.
+  - Google AI Studio (free-tier-first): `gemini-3-flash-preview` -> `gemini-2.5-flash-lite` -> `gemini-2.5-pro`.
+  - OpenRouter: documented as tertiary provider with explicit model lock deferred until provider activation.
+- Google dashboard limits captured (2026-02-17):
+  - `gemini-3-flash-preview`: `RPM 5`, `TPM 250K`, `RPD 20`
+  - `gemini-2.5-flash-lite`: `RPM 10`, `TPM 250K`, `RPD 20`
+  - `gemini-2.5-pro`: `RPM 15`, `TPM Unlimited`, `RPD 1.5K`
+- Quota UX policy lock: `hybrid` mode (configured limits + local counters + provider dashboard link).
+- Provider policy lock:
+  - retry/timeout/budget rules are provider-specific,
+  - no consumer-facing pricing scope in this phase.
 
 ### Future Session Slices (After Gate Opens)
 
@@ -313,6 +366,12 @@ Remove manual copy-paste dependency with backend generation endpoint + frontend 
 - Add:
   - `GenerateDraftRequest`
   - `GenerateDraftResponse`
+  - `GenerationProvider`
+  - `GenerationModelOption`
+  - `GenerationQuotaView`
+  - `GenerationOptionsPayload`
+- Extend:
+  - `JobOptionsPayload` with optional `generation` section (provider/model/quota metadata).
 - Edit:
   - `packages/contracts/src/index.ts`
 
@@ -323,18 +382,28 @@ Remove manual copy-paste dependency with backend generation endpoint + frontend 
 - Edit:
   - `packages/batch-backend/src/transport/extended-routes.ts`
   - `packages/batch-backend/tests/transport.http-server.integration.test.ts`
+- Minimum behavior:
+  - accepts optional provider/model override,
+  - resolves fallback ladder deterministically,
+  - emits provider/model/quota snapshot in response,
+  - maps provider failures to normalized categories (`provider_rate_limit`, `provider_timeout`, `provider_contract_error`).
 
 #### WS2B-S3 Frontend Trigger Wiring
 
 - Edit:
   - `packages/batch-frontend/src/utils/api.ts`
   - `packages/batch-frontend/src/ui/minimal/MinimalAssignment.tsx`
+- Minimum behavior:
+  - provider/model picker before draft generation,
+  - quota panel with source label (`configured`, `provider`, `hybrid`) and last-updated timestamp,
+  - actionable fallback/error messaging in draft generation flow.
 
 ### WS2B Done Criteria
 
 - [ ] Contracts merged for generation request/response.
 - [ ] Backend endpoint functional and tested.
-- [ ] Minimal UI wired with fallback behavior retained.
+- [ ] Minimal UI wired with provider/model pre-draft selector and fallback behavior retained.
+- [ ] Quota panel is visible in minimal UI with source labels (`configured`/`provider`/`hybrid`) and freshness timestamp.
 - [ ] Error states are visible and actionable.
 
 ---
@@ -397,6 +466,12 @@ Recent evidence:
 - 2026-02-11 | WS2A-S3 | WS2A-S3 done: minimal frontend wiring uses Learning Preset metadata and submits canonical ids when available. | `rg -n "learningPreset|preset|materializeDraft|getJobOptions" packages/batch-frontend/src`; `pnpm --filter @esl-pipeline/batch-frontend test -- MinimalAssignment.test.tsx` | pass | local workspace
 - 2026-02-11 | WS2A-S4 | WS2A-S4 done: preview gate is enforced through existing HTML rendering path before publish. | `rg -n "preview|html|render|publish" packages/anytype-adapter packages/batch-frontend/src`; `pnpm --filter @esl-pipeline/anytype-adapter test`; `pnpm --filter @esl-pipeline/batch-frontend test -- MinimalAssignment.test.tsx` | pass | local workspace
 - 2026-02-11 | WS2A-S5 | WS2A complete: Learning Preset plumbing shipped across contracts/backend/frontend with passing tests and WS2B still deferred. | `pnpm --filter @esl-pipeline/contracts typecheck`; `pnpm --filter @esl-pipeline/batch-backend test`; `pnpm --filter @esl-pipeline/batch-frontend test`; `rg -n "WS2A|general-english|deferred|WS2B|learning preset" docs/reference` | pass | local workspace
+- 2026-02-12 | WS0-E | hardened voice catalog sync + completed voice-alignment v2 rollout artifacts | n/a | merged | commits `17f6a73`, `0771e19`, `20067e2`
+- 2026-02-12 | WS0-F | standardized executable env bootstrap via shared infrastructure | n/a | merged | commit `a70083d`
+- 2026-02-12 | WS0-G | hardening fixes from security scans plus triage docs | n/a | merged | commit `88f5588`
+- 2026-02-16 | WS0-I | broadened speaker role contract tolerance with warnings for unknown values | n/a | merged | commit `cfc3f50`
+- 2026-02-16 | WS0-H | efficiency/caching/idempotence/artifact-identity improvements across backend/frontend/orchestrator/adapters | n/a | merged | commits `be8c9f5`, `0179111`, `640e59c`, `7781ae6`, `f5bb249`, `e49ec41`, `e3ccb8c`
+- 2026-02-17 | WS2B-S0 | provider/model/quota decision lock documented for WS2B start gate (`openai -> google_ai_studio -> openrouter`; hybrid quota UX). | `rg -n "WS2B|provider|quota|generation" docs/reference docs/backend-frontend`; `git status --short` | pass | local workspace
 
 ## Weekly Closeout Checklist
 
@@ -412,6 +487,7 @@ Recent evidence:
 ## Related
 
 - `docs/reference/PRESET_V2_SPEC.md`
+- `docs/reference/GENERATION_PROVIDER_POLICY.md`
 - `START_HERE.md`
 - `docs/playbooks/RESTART_TOMORROW.md`
 - `docs/playbooks/WEEKLY_PRODUCT_REVIEW_TEMPLATE.md`

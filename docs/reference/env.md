@@ -7,6 +7,14 @@ This repo uses a few env files for different runtimes:
 
 Node: 24.11.1+ (see `.nvmrc` / `package.json`).
 
+## Bootstrap Policy for Executables
+
+- New executable entrypoints (CLI, workers, one-off tools) should bootstrap environment through
+  shared `loadCliEnv()` from `@esl-pipeline/shared-infrastructure` (or a thin package wrapper that
+  delegates to it), not ad-hoc dotenv parsing.
+- `loadCliEnv()` resolves workspace/root `.env` files consistently and supports optional memoized
+  loading behavior.
+
 ## Core (CLI / Orchestrator)
 
 Set these in `.env` (or your shell) when running `esl` or programmatic API calls:
@@ -46,8 +54,36 @@ Set these in `.env` (or your shell) when running `esl` or programmatic API calls
 - `ESL_PIPELINE_CONFIG_CACHE_TTL_MS` (optional, default `60000`) — In-process cache TTL for remote config responses.
 - `ESL_PIPELINE_CONFIG_CACHE_STALE_IF_ERROR_MS` (optional, default `300000`) — How long stale remote config may be served when upstream fetches fail.
 - `ESL_PIPELINE_CONFIG_CONDITIONAL_REQUESTS` (optional, default `true`) — Enables conditional requests (`If-None-Match` / `If-Modified-Since`) for remote config revalidation.
+- `ESL_PIPELINE_CACHE_ENV` (optional, default `false`) — Enables memoized env loading in
+  `loadCliEnv()` for executable entrypoints.
 - `LOG_LEVEL` (optional) — Verbosity for CLI logs.
   - Backend logger supports: `trace` | `debug` | `info` | `warn` | `error` | `fatal` | `silent`.
+
+## Generation Provider Policy Vars (WS2B Planned)
+
+These keys are reserved for WS2B direct generation plumbing. They are policy references until
+WS2B runtime code lands.
+
+- `GEN_PROVIDER_DEFAULT` (planned) — Default provider key (`openai`, `google_ai_studio`, `openrouter`).
+- `GEN_PROVIDER_FALLBACKS` (planned) — Comma-separated provider fallback order after default.
+- `GEN_QUOTA_SOURCE_MODE` (planned, default `hybrid`) — Quota display mode (`configured`|`provider`|`hybrid`).
+
+Model defaults (planned):
+
+- `GEN_OPENAI_MODEL_PRIMARY` / `GEN_OPENAI_MODEL_FALLBACK`
+- `GEN_GOOGLE_MODEL_PRIMARY` / `GEN_GOOGLE_MODEL_FALLBACK` / `GEN_GOOGLE_MODEL_TERTIARY`
+- `GEN_OPENROUTER_MODEL_PRIMARY` / `GEN_OPENROUTER_MODEL_FALLBACK`
+
+Provider runtime policy (planned, provider-specific values):
+
+- `GEN_OPENAI_REQUEST_TIMEOUT_MS`, `GEN_OPENAI_RETRY_MAX`, `GEN_OPENAI_RETRY_BACKOFF_MS`
+- `GEN_GOOGLE_REQUEST_TIMEOUT_MS`, `GEN_GOOGLE_RETRY_MAX`, `GEN_GOOGLE_RETRY_BACKOFF_MS`
+- `GEN_OPENROUTER_REQUEST_TIMEOUT_MS`, `GEN_OPENROUTER_RETRY_MAX`, `GEN_OPENROUTER_RETRY_BACKOFF_MS`
+- `GEN_OPENAI_DAILY_TOKEN_BUDGET`
+- `GEN_GOOGLE_DAILY_REQUEST_BUDGET`
+- `GEN_OPENROUTER_DAILY_TOKEN_BUDGET`
+
+See `docs/reference/GENERATION_PROVIDER_POLICY.md` for canonical provider/model/quota decisions.
 
 ## Batch Backend (docker-compose)
 

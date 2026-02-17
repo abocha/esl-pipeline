@@ -5,7 +5,7 @@
 - Audience: founder, maintainers, AI agents.
 - Read Time: 12 minutes.
 - Authority Level: canonical preset architecture spec.
-- Last Updated: 2026-02-11.
+- Last Updated: 2026-02-17.
 
 ## Purpose
 
@@ -20,15 +20,17 @@
 3. `docs/templates/hw_prompt_v4-2_clean.md` is the canonical baseline prompt for MVP.
 4. MVP ships one trusted preset content track: `general-english`.
 5. Architecture must support adding more tracks later without rewrites.
-6. Direct LLM generation is deferred until preset plumbing MVP is complete.
+6. Direct LLM generation is queued for WS2B-S1 now that preset plumbing and provider policy lock are complete.
 7. `hw_prompt_v4-3_voice-aligned` is flag-gated (`VOICE_ALIGNMENT_V2_PROMPT`) and must be
    materialized with a runtime voice-capability snapshot.
 
 ## Execution Status (Current)
 
 1. WS2A Preset plumbing MVP is complete across contracts/backend/frontend.
-2. WS2B Direct LLM generation remains explicitly deferred.
+2. WS2B-S0 provider/model/quota decision lock is complete and WS2B-S1 is ready.
 3. MVP scope lock remains unchanged: `general-english` only in this phase.
+4. Post-WS2A stabilization tracks (voice alignment, env bootstrap, caching/idempotence) are
+   shipped and should be treated as the baseline before WS2B execution.
 
 ## WS2A-S1 Locked Decisions
 
@@ -85,6 +87,11 @@
 - Default prompt snapshot remains `docs/templates/hw_prompt_v4-2_clean.md`.
 - Voice-aligned snapshot is `docs/templates/hw_prompt_v4-3_voice-aligned.md` and is enabled only
   when `VOICE_ALIGNMENT_V2_PROMPT=true`.
+- Runtime default provenance values in backend currently resolve to:
+  - learning preset id: `general-english`,
+  - learning preset version: `v1`,
+  - prompt alias: `current`,
+  - prompt snapshot version: `hw_prompt_v4-2_clean` unless `VOICE_ALIGNMENT_V2_PROMPT=true`.
 - When v4.3 is selected, prompt packaging must inject provider-backed capability enums
   (`role/gender/age/accent/style`) from the current voice catalog snapshot.
 - Prompt package lineage must persist capability provenance metadata:
@@ -138,7 +145,7 @@ Use both:
 1. Immutable snapshots
    - examples:
      - `hw_prompt_v4-2_clean.md`
-     - `hw_prompt_v4-3_clean.md`
+     - `hw_prompt_v4-3_voice-aligned.md`
    - snapshots are never overwritten once activated.
 2. Stable alias
    - one active pointer concept (e.g., `current`) maps to a snapshot version.
@@ -206,15 +213,60 @@ Required release metadata per promotion:
 
 1. Tutor chooses student context.
 2. Tutor chooses learning preset version (MVP default: general-english active).
-3. Draft is generated/assembled with preset template + metadata.
-4. Draft is validated against preset output schema.
-5. Draft is previewed in HTML renderer.
-6. Draft is published.
+3. Tutor chooses generation provider/model before draft generation.
+4. Draft is generated/assembled with preset template + metadata.
+5. Provider/model quota context is visible before and after generation.
+6. Draft is validated against preset output schema.
+7. Draft is previewed in HTML renderer.
+8. Draft is published.
+
+## Generation Runtime Selection Policy (WS2B-S0 Locked)
+
+Learning preset and generation runtime are separate concerns:
+
+1. Learning preset controls pedagogic behavior and output schema contract.
+2. Provider/model controls runtime generation execution and cost/latency tradeoffs.
+
+Locked provider priority for MVP:
+
+1. `openai` (primary)
+2. `google_ai_studio` (secondary)
+3. `openrouter` (tertiary)
+
+Locked model defaults:
+
+1. OpenAI:
+   - primary: `gpt-5.2`
+   - fallback: `gpt-5-mini`
+2. Google AI Studio (free-tier-first in this phase):
+   - primary: `gemini-3-flash-preview`
+   - fallback: `gemini-2.5-flash-lite`
+   - tertiary fallback: `gemini-2.5-pro`
+3. OpenRouter:
+   - tertiary provider path is documented; concrete model lock is deferred until OpenRouter path is activated.
+
+Quota visibility policy:
+
+1. Hybrid mode is required:
+   - configured limits from service policy,
+   - local usage counters from pipeline telemetry,
+   - provider dashboard link as operator truth source.
+2. Provider-specific budget/retry/timeout policy is required.
+3. Consumer-facing pricing policy is explicitly out of scope in this phase.
+
+Canonical runtime policy document:
+
+- `docs/reference/GENERATION_PROVIDER_POLICY.md`
+
+Note:
+
+- Google model identifiers are sourced from active dashboard/account configuration in this phase.
+- Public docs can lag preview naming; dashboard IDs are authoritative for runtime config.
 
 ## WS2 Split Decision (Locked)
 
 1. `WS2A`: Preset plumbing MVP (complete).
-2. `WS2B`: Direct LLM generation (deferred).
+2. `WS2B`: Direct LLM generation (start gate open, execution queued at WS2B-S1).
 
 Gate:
 
@@ -226,7 +278,7 @@ Gate:
 2. Tracker workflow is aligned to WS2A-first execution.
 3. MVP scope lock is explicit: general-english content only.
 4. Prompt Workspace and preview requirements are defined enough to implement without re-deciding architecture.
-5. WS2B defer gate is explicit in tracker and restart docs.
+5. WS2B gate state is explicit in tracker and restart docs.
 
 ## Risks and Mitigations
 
@@ -251,5 +303,6 @@ Gate:
 
 - `docs/reference/PRODUCT_NORTH_STAR_AND_READINESS.md`
 - `docs/reference/V1_IMPLEMENTATION_TRACKER.md`
+- `docs/reference/GENERATION_PROVIDER_POLICY.md`
 - `docs/playbooks/RESTART_TOMORROW.md`
 - `START_HERE.md`
