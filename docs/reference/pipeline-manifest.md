@@ -79,6 +79,8 @@ This document captures the canonical schema so remote stores and services can va
   an existing content-addressed object.
 - `notionColorization` captures the Notion preset fingerprint used for idempotent colorization skip
   decisions. Consumers SHOULD treat the object as optional and additive.
+- When `notionColorization.presetHash`/`mdHash` still match the current run context, orchestrator may
+  skip colorization calls to avoid redundant Notion API churn while preserving manifest provenance.
 - `audio.voices[*].selectionReason`, `capabilityMatches`, and `capabilityMismatches` are additive
   explainability fields for voice-alignment v2. Consumers SHOULD treat them as optional.
 - `ttsStrategy` and related dialogue fields capture the TTS strategy used for reproducibility. These fields
