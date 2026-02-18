@@ -18,6 +18,33 @@ vi.mock('../../utils/api', () => ({
   fetchPromptOptions: vi.fn(),
   fetchStudentOptions: vi.fn(),
   fetchRecordingTranscript: vi.fn(),
+  generateDraft: vi.fn(),
+  GenerationDraftApiError: class GenerationDraftApiError extends Error {
+    code?: string;
+    provider?: string;
+    model?: string;
+    requestId?: string;
+    timestamp?: string;
+
+    constructor(
+      message: string,
+      details: {
+        code?: string;
+        provider?: string;
+        model?: string;
+        requestId?: string;
+        timestamp?: string;
+      } = {},
+    ) {
+      super(message);
+      this.name = 'GenerationDraftApiError';
+      this.code = details.code;
+      this.provider = details.provider;
+      this.model = details.model;
+      this.requestId = details.requestId;
+      this.timestamp = details.timestamp;
+    }
+  },
   getProfileContent: vi.fn(),
   getJobStatus: vi.fn(),
   getRecording: vi.fn(),
@@ -150,6 +177,20 @@ async function previewCurrentDraft(user: ReturnType<typeof userEvent.setup>) {
   await user.click(screen.getByRole('button', { name: /Preview current draft/i }));
   await waitFor(() => {
     expect(screen.getByText('Preview ready for current draft.')).toBeTruthy();
+  });
+}
+
+async function preparePromptReady(user: ReturnType<typeof userEvent.setup>) {
+  await user.click(screen.getByRole('button', { name: /Drop audio file/i }));
+
+  await waitFor(() => {
+    expect(screen.getByDisplayValue('Student transcript text')).toBeTruthy();
+  });
+
+  await user.click(screen.getByRole('button', { name: /Generate prompt/i }));
+
+  await waitFor(() => {
+    expect(screen.getByDisplayValue('Prompt package output')).toBeTruthy();
   });
 }
 
@@ -307,6 +348,15 @@ describe('MinimalAssignment', () => {
       text: 'Prompt package output',
       createdAt: now,
       updatedAt: now,
+    });
+    vi.mocked(api.generateDraft).mockResolvedValue({
+      text: '# Generated assignment draft',
+      provider: 'openai',
+      model: 'gpt-5.2',
+      quota: {
+        source: 'hybrid',
+        lastUpdatedAt: now,
+      },
     });
 
     vi.mocked(api.validateMarkdown).mockResolvedValue({
@@ -1115,6 +1165,175 @@ describe('MinimalAssignment', () => {
         profileId: 'profiles/alex.md',
       });
     });
+  });
+
+  it('initializes generation provider/model from job options defaults', async () => {
+    render(<MinimalAssignment />);
+
+    const providerSelect = await screen.findByRole('combobox', { name: /Generation provider/i });
+    const modelSelect = await screen.findByRole('combobox', { name: /Generation model/i });
+
+    await waitFor(() => {
+      expect((providerSelect as HTMLSelectElement).value).toBe('openai');
+      expect((modelSelect as HTMLSelectElement).value).toBe('gpt-5.2');
+    });
+  });
+
+  it('enables generate draft only after prompt is ready', async () => {
+    const user = userEvent.setup();
+    render(<MinimalAssignment />);
+
+    const generateDraftButton = screen.getByRole('button', { name: /Generate draft from prompt/i });
+    expect((generateDraftButton as HTMLButtonElement).disabled).toBe(true);
+
+    await preparePromptReady(user);
+    await user.selectOptions(screen.getByRole('combobox', { name: /Generation provider/i }), 'openai');
+    await user.selectOptions(screen.getByRole('combobox', { name: /Generation model/i }), 'gpt-5.2');
+
+    await waitFor(() => {
+      expect((generateDraftButton as HTMLButtonElement).disabled).toBe(false);
+    });
+  });
+
+  it('generates draft markdown with selected provider/model', async () => {
+    const user = userEvent.setup();
+    render(<MinimalAssignment />);
+
+    await preparePromptReady(user);
+
+    await user.selectOptions(screen.getByRole('combobox', { name: /Generation provider/i }), 'openai');
+    await user.selectOptions(screen.getByRole('combobox', { name: /Generation model/i }), 'gpt-5.2');
+
+    await user.click(screen.getByRole('button', { name: /Generate draft from prompt/i }));
+
+    await waitFor(() => {
+      expect(api.generateDraft).toHaveBeenCalledWith({
+        promptPackageId: 'pkg-1',
+        provider: 'openai',
+        model: 'gpt-5.2',
+      });
+    });
+    expect(await screen.findByDisplayValue('# Generated assignment draft')).toBeTruthy();
+    expect(screen.getByText(/Generated with openai\/gpt-5.2/i)).toBeTruthy();
+  });
+
+  it('shows mapped timeout generation errors with request id', async () => {
+    const user = userEvent.setup();
+    vi.mocked(api.generateDraft).mockRejectedValueOnce(
+      new api.GenerationDraftApiError('Provider timed out', {
+        code: 'provider_timeout',
+        provider: 'openai',
+        model: 'gpt-5.2',
+        requestId: 'req-timeout-1',
+      }),
+    );
+
+    render(<MinimalAssignment />);
+    await preparePromptReady(user);
+
+    await user.selectOptions(screen.getByRole('combobox', { name: /Generation provider/i }), 'openai');
+    await user.selectOptions(screen.getByRole('combobox', { name: /Generation model/i }), 'gpt-5.2');
+    await user.click(screen.getByRole('button', { name: /Generate draft from prompt/i }));
+
+    await waitFor(() => {
+      expect(api.generateDraft).toHaveBeenCalledWith({
+        promptPackageId: 'pkg-1',
+        provider: 'openai',
+        model: 'gpt-5.2',
+      });
+    });
+
+    await waitFor(() => {
+      expect(
+        screen.getByText(
+          /Provider timed out\. Retry or choose a faster model\/provider\. Request ID: req-timeout-1/i,
+        ),
+      ).toBeTruthy();
+    });
+  });
+
+  it('clears preview readiness and re-gates publish after generated draft replacement', async () => {
+    const user = userEvent.setup();
+    vi.mocked(api.generateDraft).mockResolvedValueOnce({
+      text: '# Generated assignment draft',
+      provider: 'openai',
+      model: 'gpt-5.2',
+      quota: {
+        source: 'hybrid',
+        lastUpdatedAt: now,
+      },
+    });
+    render(<MinimalAssignment />);
+
+    await preparePromptReady(user);
+    await user.selectOptions(screen.getByRole('combobox', { name: /Generation provider/i }), 'openai');
+    await user.selectOptions(screen.getByRole('combobox', { name: /Generation model/i }), 'gpt-5.2');
+
+    const draftTextarea = screen.getByRole('textbox', { name: /Draft markdown/i });
+    await user.type(draftTextarea, '# Existing draft');
+    await previewCurrentDraft(user);
+
+    const publishButton = screen.getByRole('button', { name: /Publish assignment/i });
+    expect((publishButton as HTMLButtonElement).disabled).toBe(false);
+
+    const generateDraftButton = screen.getByRole('button', { name: /Generate draft from prompt/i });
+    await waitFor(() => {
+      expect((generateDraftButton as HTMLButtonElement).disabled).toBe(false);
+    });
+    await user.click(generateDraftButton);
+
+    await waitFor(() => {
+      expect(api.generateDraft).toHaveBeenCalledWith({
+        promptPackageId: 'pkg-1',
+        provider: 'openai',
+        model: 'gpt-5.2',
+      });
+      expect(screen.getByDisplayValue('# Generated assignment draft')).toBeTruthy();
+    });
+    expect((publishButton as HTMLButtonElement).disabled).toBe(true);
+    expect(screen.getByText('Preview required before publish.')).toBeTruthy();
+  });
+
+  it('ignores stale generation responses after flow reset', async () => {
+    const user = userEvent.setup();
+    let resolveGeneration: (value: api.GenerateDraftResponse) => void = () => {};
+    vi.mocked(api.generateDraft).mockImplementationOnce(
+      () =>
+        new Promise<api.GenerateDraftResponse>((resolve) => {
+          resolveGeneration = resolve;
+        }),
+    );
+
+    render(<MinimalAssignment />);
+    await preparePromptReady(user);
+    await user.selectOptions(screen.getByRole('combobox', { name: /Generation provider/i }), 'openai');
+    await user.selectOptions(screen.getByRole('combobox', { name: /Generation model/i }), 'gpt-5.2');
+
+    await user.click(screen.getByRole('button', { name: /Generate draft from prompt/i }));
+    await waitFor(() => {
+      expect(api.generateDraft).toHaveBeenCalledWith({
+        promptPackageId: 'pkg-1',
+        provider: 'openai',
+        model: 'gpt-5.2',
+      });
+    });
+
+    await user.click(screen.getByRole('button', { name: /Start new/i }));
+
+    resolveGeneration({
+      text: '# Stale generated draft',
+      provider: 'openai',
+      model: 'gpt-5.2',
+      quota: {
+        source: 'hybrid',
+        lastUpdatedAt: now,
+      },
+    });
+
+    await waitFor(() => {
+      expect(screen.queryByDisplayValue('# Stale generated draft')).toBeNull();
+    });
+    expect(screen.queryByText(/Generated with openai\/gpt-5.2/i)).toBeNull();
   });
 
   it('shows upload errors when upload fails', async () => {

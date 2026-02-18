@@ -4,6 +4,8 @@ import { createStaticPageHtml } from '@esl-pipeline/html-publisher/rendering';
 
 import type {
   DraftResponse,
+  GenerateDraftRequest,
+  GenerateDraftResponse,
   JobOptionsResponse,
   JobProvenanceResponse,
   JobStatus,
@@ -28,6 +30,8 @@ import {
   fetchPromptPackage,
   fetchPromptOptions,
   fetchRecordingTranscript,
+  generateDraft,
+  GenerationDraftApiError,
   getJobStatus,
   getProfileContent,
   getRecording,
@@ -160,6 +164,7 @@ export const MinimalAssignment: React.FC = () => {
   const [uploadError, setUploadError] = useState<string | null>(null);
   const [selectedFileName, setSelectedFileName] = useState<string | null>(null);
   const uploadAbortRef = useRef<AbortController | null>(null);
+  const generationRequestVersionRef = useRef(0);
 
   const [transcript, setTranscript] = useState<RecordingTranscriptResponse | null>(null);
   const [transcriptText, setTranscriptText] = useState('');
@@ -180,6 +185,11 @@ export const MinimalAssignment: React.FC = () => {
   const [draftText, setDraftText] = useState('');
   const [draft, setDraft] = useState<DraftResponse | null>(null);
   const [draftError, setDraftError] = useState<string | null>(null);
+  const [generatingDraft, setGeneratingDraft] = useState(false);
+  const [generationError, setGenerationError] = useState<string | null>(null);
+  const [generationSuccess, setGenerationSuccess] = useState<string | null>(null);
+  const [selectedGenerationProvider, setSelectedGenerationProvider] = useState('');
+  const [selectedGenerationModel, setSelectedGenerationModel] = useState('');
 
   const [validation, setValidation] = useState<MarkdownValidationResponse | null>(null);
   const [validationError, setValidationError] = useState<string | null>(null);
@@ -238,6 +248,21 @@ export const MinimalAssignment: React.FC = () => {
   const [previewing, setPreviewing] = useState(false);
   const [lastPreviewedDraftHash, setLastPreviewedDraftHash] = useState<string | null>(null);
 
+  const generationOptions = jobOptions?.generation ?? null;
+  const generationProviders = useMemo(
+    () => generationOptions?.providers ?? [],
+    [generationOptions],
+  );
+  const generationModelOptions = useMemo(
+    () => generationOptions?.modelOptions ?? [],
+    [generationOptions],
+  );
+  const generationModelsForProvider = useMemo(
+    () =>
+      generationModelOptions.filter((option) => option.provider === selectedGenerationProvider),
+    [generationModelOptions, selectedGenerationProvider],
+  );
+
   const presetOptions = useMemo(() => buildSelectablePresetOptions(jobOptions), [jobOptions]);
   const presetOptionIds = useMemo(() => presetOptions.map((preset) => preset.id), [presetOptions]);
   const learningPresetCatalogEnabled = (jobOptions?.learningPresets?.length ?? 0) > 0;
@@ -281,7 +306,13 @@ export const MinimalAssignment: React.FC = () => {
     }
   }, []);
 
+  const invalidateDraftGenerationRequests = useCallback(() => {
+    generationRequestVersionRef.current += 1;
+    setGeneratingDraft(false);
+  }, []);
+
   const resetFlow = useCallback(() => {
+    invalidateDraftGenerationRequests();
     uploadAbortRef.current?.abort();
     uploadAbortRef.current = null;
     writeJobIdToQuery(null);
@@ -301,6 +332,11 @@ export const MinimalAssignment: React.FC = () => {
     setDraft(null);
     setDraftText('');
     setDraftError(null);
+    setGeneratingDraft(false);
+    setGenerationError(null);
+    setGenerationSuccess(null);
+    setSelectedGenerationProvider('');
+    setSelectedGenerationModel('');
     setValidation(null);
     setValidationError(null);
     setValidating(false);
@@ -321,7 +357,7 @@ export const MinimalAssignment: React.FC = () => {
     setPreviewError(null);
     setPreviewing(false);
     setLastPreviewedDraftHash(null);
-  }, []);
+  }, [invalidateDraftGenerationRequests]);
 
   const loadPromptOptions = useCallback(async () => {
     try {
@@ -429,6 +465,64 @@ export const MinimalAssignment: React.FC = () => {
   }, [jobOptions, presetOptionIds, selectedPreset]);
 
   useEffect(() => {
+    if (generationProviders.length === 0) {
+      if (selectedGenerationProvider) {
+        setSelectedGenerationProvider('');
+      }
+      return;
+    }
+    const configuredDefault = generationOptions?.defaultProvider;
+    const fallbackProvider =
+      (configuredDefault && generationProviders.includes(configuredDefault)
+        ? configuredDefault
+        : generationProviders[0]) ?? '';
+    const hasSelectedProvider = generationProviders.includes(
+      selectedGenerationProvider as (typeof generationProviders)[number],
+    );
+    if (!selectedGenerationProvider || !hasSelectedProvider) {
+      setSelectedGenerationProvider(fallbackProvider);
+    }
+  }, [
+    generationOptions?.defaultProvider,
+    generationProviders,
+    selectedGenerationProvider,
+  ]);
+
+  useEffect(() => {
+    if (!selectedGenerationProvider || generationModelsForProvider.length === 0) {
+      if (selectedGenerationModel) {
+        setSelectedGenerationModel('');
+      }
+      return;
+    }
+    const modelIds = generationModelsForProvider.map((option) => option.id);
+    const configuredDefaultModel =
+      generationOptions?.defaultModelByProvider?.[
+        selectedGenerationProvider as keyof NonNullable<
+          typeof generationOptions
+        >['defaultModelByProvider']
+      ];
+    const defaultSelectedModel = generationModelsForProvider.find(
+      (option) => option.defaultSelected,
+    )?.id;
+    const fallbackModel =
+      (configuredDefaultModel && modelIds.includes(configuredDefaultModel)
+        ? configuredDefaultModel
+        : defaultSelectedModel && modelIds.includes(defaultSelectedModel)
+          ? defaultSelectedModel
+          : modelIds[0]) ?? '';
+
+    if (!selectedGenerationModel || !modelIds.includes(selectedGenerationModel)) {
+      setSelectedGenerationModel(fallbackModel);
+    }
+  }, [
+    generationModelsForProvider,
+    generationOptions?.defaultModelByProvider,
+    selectedGenerationModel,
+    selectedGenerationProvider,
+  ]);
+
+  useEffect(() => {
     if (profileSelectionMode !== 'auto') {
       return;
     }
@@ -485,6 +579,7 @@ export const MinimalAssignment: React.FC = () => {
     async (jobId: string, knownJobs?: JobStatus[]) => {
       if (!jobId) return;
 
+      invalidateDraftGenerationRequests();
       setResumeLoading(true);
       setResumeError(null);
       setPublishError(null);
@@ -636,7 +731,13 @@ export const MinimalAssignment: React.FC = () => {
         setResumeLoading(false);
       }
     },
-    [jobOptions, presetOptionIds, resolveBoundProfileId, resumeJobs],
+    [
+      invalidateDraftGenerationRequests,
+      jobOptions,
+      presetOptionIds,
+      resolveBoundProfileId,
+      resumeJobs,
+    ],
   );
 
   const handleResumeSelectedJob = useCallback(async () => {
@@ -904,8 +1005,11 @@ export const MinimalAssignment: React.FC = () => {
       return;
     }
 
+    invalidateDraftGenerationRequests();
     setPromptLoading(true);
     setPromptError(null);
+    setGenerationError(null);
+    setGenerationSuccess(null);
     try {
       const response = await createPromptPackage(recording.recordingId, {
         templateId: selectedTemplateId,
@@ -926,6 +1030,87 @@ export const MinimalAssignment: React.FC = () => {
     const success = copy(promptText);
     setPromptCopyState(success ? 'copied' : 'error');
     setTimeout(() => setPromptCopyState('idle'), 2000);
+  };
+
+  const mapGenerationError = (error: unknown): string => {
+    const candidate = error as { code?: unknown; requestId?: unknown; message?: unknown };
+    const code = typeof candidate?.code === 'string' ? candidate.code : undefined;
+    const requestId = typeof candidate?.requestId === 'string' ? candidate.requestId : undefined;
+    const isMappedCategory =
+      code === 'provider_rate_limit' ||
+      code === 'provider_timeout' ||
+      code === 'provider_contract_error';
+
+    if (error instanceof GenerationDraftApiError || isMappedCategory) {
+      const baseMessage =
+        code === 'provider_rate_limit'
+          ? 'Provider rate limit reached. Try again shortly or choose another model/provider.'
+          : code === 'provider_timeout'
+            ? 'Provider timed out. Retry or choose a faster model/provider.'
+            : code === 'provider_contract_error'
+              ? 'Provider request failed due to compatibility/contract error. Try another model/provider.'
+              : error instanceof Error
+                ? error.message
+                : 'Unable to generate draft.';
+      return requestId ? `${baseMessage} Request ID: ${requestId}` : baseMessage;
+    }
+    return error instanceof Error ? error.message : 'Unable to generate draft.';
+  };
+
+  const handleGenerateDraft = async (): Promise<GenerateDraftResponse | null> => {
+    if (!promptPackage?.id) {
+      setGenerationError('Generate a prompt package first.');
+      setGenerationSuccess(null);
+      return null;
+    }
+    if (generationOptions && !selectedGenerationProvider) {
+      setGenerationError('Select a generation provider.');
+      setGenerationSuccess(null);
+      return null;
+    }
+    if (generationOptions && !selectedGenerationModel) {
+      setGenerationError('Select a generation model.');
+      setGenerationSuccess(null);
+      return null;
+    }
+
+    setGeneratingDraft(true);
+    setGenerationError(null);
+    setGenerationSuccess(null);
+    const requestVersion = generationRequestVersionRef.current + 1;
+    generationRequestVersionRef.current = requestVersion;
+    try {
+      const generated = await generateDraft({
+        promptPackageId: promptPackage.id,
+        provider: (selectedGenerationProvider || undefined) as GenerateDraftRequest['provider'],
+        model: selectedGenerationModel || undefined,
+      });
+      if (generationRequestVersionRef.current !== requestVersion) {
+        return null;
+      }
+      setDraftText(generated.text ?? '');
+      setDraft(null);
+      setDraftError(null);
+      setValidation(null);
+      setValidationError(null);
+      setPreviewHtml(null);
+      setPreviewError(null);
+      setLastPreviewedDraftHash(null);
+      setGenerationSuccess(
+        `Generated with ${generated.provider}/${generated.model}. Review and save draft.`,
+      );
+      return generated;
+    } catch (error) {
+      if (generationRequestVersionRef.current !== requestVersion) {
+        return null;
+      }
+      setGenerationError(mapGenerationError(error));
+      return null;
+    } finally {
+      if (generationRequestVersionRef.current === requestVersion) {
+        setGeneratingDraft(false);
+      }
+    }
   };
 
   const draftDirty = useMemo(() => {
@@ -1704,7 +1889,67 @@ export const MinimalAssignment: React.FC = () => {
             {draftDirty ? <span className="minimal-muted">Unsaved changes</span> : null}
           </div>
         </div>
+        <div className="minimal-inline">
+          <label className="minimal-select">
+            Generation provider
+            <select
+              value={selectedGenerationProvider}
+              onChange={(event) => setSelectedGenerationProvider(event.target.value)}
+              disabled={!generationOptions || generatingDraft || generationProviders.length === 0}
+            >
+              {generationProviders.length === 0 ? (
+                <option value="">No providers available</option>
+              ) : null}
+              {generationProviders.map((provider) => (
+                <option key={provider} value={provider}>
+                  {provider}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className="minimal-select">
+            Generation model
+            <select
+              value={selectedGenerationModel}
+              onChange={(event) => setSelectedGenerationModel(event.target.value)}
+              disabled={
+                !generationOptions ||
+                generatingDraft ||
+                !selectedGenerationProvider ||
+                generationModelsForProvider.length === 0
+              }
+            >
+              {generationModelsForProvider.length === 0 ? (
+                <option value="">No models available</option>
+              ) : null}
+              {generationModelsForProvider.map((modelOption) => (
+                <option key={`${modelOption.provider}:${modelOption.id}`} value={modelOption.id}>
+                  {modelOption.id}
+                </option>
+              ))}
+            </select>
+          </label>
+          <button
+            type="button"
+            className="minimal-secondary"
+            onClick={() => void handleGenerateDraft()}
+            disabled={
+              !promptReady ||
+              generatingDraft ||
+              !generationOptions ||
+              !selectedGenerationProvider ||
+              !selectedGenerationModel
+            }
+          >
+            {generatingDraft ? 'Generating draft...' : 'Generate draft from prompt'}
+          </button>
+        </div>
         <p className="minimal-help">Paste the assignment markdown from your LLM.</p>
+        {generationOptions ? null : (
+          <p className="minimal-muted">Generation options unavailable. Reload job options.</p>
+        )}
+        {generationError ? <p className="minimal-error">{generationError}</p> : null}
+        {generationSuccess ? <p className="minimal-success">{generationSuccess}</p> : null}
         <textarea
           aria-label="Draft markdown"
           value={draftText}
