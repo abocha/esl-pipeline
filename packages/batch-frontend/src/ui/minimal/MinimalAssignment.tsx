@@ -129,6 +129,38 @@ function hashDraftText(value: string): string {
   return (hash >>> 0).toString(16);
 }
 
+function toGenerationQuotaSourceLabel(source: GenerateDraftResponse['quota']['source']): string {
+  if (source === 'configured') return 'Configured';
+  if (source === 'provider') return 'Provider';
+  return 'Hybrid';
+}
+
+function formatRelativeTimestamp(timestamp: string, nowMs: number = Date.now()): string {
+  const parsedMs = Date.parse(timestamp);
+  if (Number.isNaN(parsedMs)) {
+    return 'unknown';
+  }
+  const deltaMs = nowMs - parsedMs;
+  if (deltaMs <= 60_000) {
+    return 'just now';
+  }
+  if (deltaMs < 3_600_000) {
+    return `${Math.floor(deltaMs / 60_000)}m ago`;
+  }
+  if (deltaMs < 86_400_000) {
+    return `${Math.floor(deltaMs / 3_600_000)}h ago`;
+  }
+  return `${Math.floor(deltaMs / 86_400_000)}d ago`;
+}
+
+function formatAbsoluteTimestamp(timestamp: string): string {
+  const parsed = new Date(timestamp);
+  if (Number.isNaN(parsed.getTime())) {
+    return timestamp;
+  }
+  return parsed.toLocaleString();
+}
+
 interface SelectablePresetOption {
   id: string;
   label: string;
@@ -190,6 +222,8 @@ export const MinimalAssignment: React.FC = () => {
   const [generationSuccess, setGenerationSuccess] = useState<string | null>(null);
   const [selectedGenerationProvider, setSelectedGenerationProvider] = useState('');
   const [selectedGenerationModel, setSelectedGenerationModel] = useState('');
+  const [generationRuntimeQuotaSnapshot, setGenerationRuntimeQuotaSnapshot] =
+    useState<GenerateDraftResponse['quota'] | null>(null);
 
   const [validation, setValidation] = useState<MarkdownValidationResponse | null>(null);
   const [validationError, setValidationError] = useState<string | null>(null);
@@ -337,6 +371,7 @@ export const MinimalAssignment: React.FC = () => {
     setGenerationSuccess(null);
     setSelectedGenerationProvider('');
     setSelectedGenerationModel('');
+    setGenerationRuntimeQuotaSnapshot(null);
     setValidation(null);
     setValidationError(null);
     setValidating(false);
@@ -1096,6 +1131,7 @@ export const MinimalAssignment: React.FC = () => {
       setPreviewHtml(null);
       setPreviewError(null);
       setLastPreviewedDraftHash(null);
+      setGenerationRuntimeQuotaSnapshot(generated.quota);
       setGenerationSuccess(
         `Generated with ${generated.provider}/${generated.model}. Review and save draft.`,
       );
@@ -1465,6 +1501,27 @@ export const MinimalAssignment: React.FC = () => {
         ? 'HTML link pending...'
         : 'Notion link pending...';
   const actionCapabilities = jobOptions?.supportedActions ?? [];
+  const activeGenerationQuota = generationRuntimeQuotaSnapshot ?? generationOptions?.quota ?? null;
+  const generationQuotaSourceLabel = activeGenerationQuota
+    ? toGenerationQuotaSourceLabel(activeGenerationQuota.source)
+    : null;
+  const generationQuotaUpdatedRelative = activeGenerationQuota
+    ? formatRelativeTimestamp(activeGenerationQuota.lastUpdatedAt)
+    : null;
+  const generationQuotaUpdatedAbsolute = activeGenerationQuota
+    ? formatAbsoluteTimestamp(activeGenerationQuota.lastUpdatedAt)
+    : null;
+  const generationQuotaHasNumericValues = Boolean(
+    activeGenerationQuota &&
+      [
+        activeGenerationQuota.requestsPerMinute,
+        activeGenerationQuota.tokensPerMinute,
+        activeGenerationQuota.requestsPerDay,
+        activeGenerationQuota.dailyTokenBudget,
+        activeGenerationQuota.usedRequestsToday,
+        activeGenerationQuota.usedTokensToday,
+      ].some((value) => value !== undefined && value !== null),
+  );
   const rerunImplemented =
     actionCapabilities.find((capability) => capability.type === 'rerun_audio')?.implemented ??
     false;
@@ -1889,67 +1946,134 @@ export const MinimalAssignment: React.FC = () => {
             {draftDirty ? <span className="minimal-muted">Unsaved changes</span> : null}
           </div>
         </div>
-        <div className="minimal-inline">
-          <label className="minimal-select">
-            Generation provider
-            <select
-              value={selectedGenerationProvider}
-              onChange={(event) => setSelectedGenerationProvider(event.target.value)}
-              disabled={!generationOptions || generatingDraft || generationProviders.length === 0}
-            >
-              {generationProviders.length === 0 ? (
-                <option value="">No providers available</option>
-              ) : null}
-              {generationProviders.map((provider) => (
-                <option key={provider} value={provider}>
-                  {provider}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label className="minimal-select">
-            Generation model
-            <select
-              value={selectedGenerationModel}
-              onChange={(event) => setSelectedGenerationModel(event.target.value)}
+        <div className="minimal-generation-block">
+          <div className="minimal-inline">
+            <label className="minimal-select">
+              Generation provider
+              <select
+                value={selectedGenerationProvider}
+                onChange={(event) => setSelectedGenerationProvider(event.target.value)}
+                disabled={!generationOptions || generatingDraft || generationProviders.length === 0}
+              >
+                {generationProviders.length === 0 ? (
+                  <option value="">No providers available</option>
+                ) : null}
+                {generationProviders.map((provider) => (
+                  <option key={provider} value={provider}>
+                    {provider}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="minimal-select">
+              Generation model
+              <select
+                value={selectedGenerationModel}
+                onChange={(event) => setSelectedGenerationModel(event.target.value)}
+                disabled={
+                  !generationOptions ||
+                  generatingDraft ||
+                  !selectedGenerationProvider ||
+                  generationModelsForProvider.length === 0
+                }
+              >
+                {generationModelsForProvider.length === 0 ? (
+                  <option value="">No models available</option>
+                ) : null}
+                {generationModelsForProvider.map((modelOption) => (
+                  <option key={`${modelOption.provider}:${modelOption.id}`} value={modelOption.id}>
+                    {modelOption.id}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <button
+              type="button"
+              className="minimal-secondary"
+              onClick={() => void handleGenerateDraft()}
               disabled={
-                !generationOptions ||
+                !promptReady ||
                 generatingDraft ||
+                !generationOptions ||
                 !selectedGenerationProvider ||
-                generationModelsForProvider.length === 0
+                !selectedGenerationModel
               }
             >
-              {generationModelsForProvider.length === 0 ? (
-                <option value="">No models available</option>
-              ) : null}
-              {generationModelsForProvider.map((modelOption) => (
-                <option key={`${modelOption.provider}:${modelOption.id}`} value={modelOption.id}>
-                  {modelOption.id}
-                </option>
-              ))}
-            </select>
-          </label>
-          <button
-            type="button"
-            className="minimal-secondary"
-            onClick={() => void handleGenerateDraft()}
-            disabled={
-              !promptReady ||
-              generatingDraft ||
-              !generationOptions ||
-              !selectedGenerationProvider ||
-              !selectedGenerationModel
-            }
-          >
-            {generatingDraft ? 'Generating draft...' : 'Generate draft from prompt'}
-          </button>
+              {generatingDraft ? 'Generating draft...' : 'Generate draft from prompt'}
+            </button>
+          </div>
+          {generationOptions ? (
+            <div className="minimal-quota-panel">
+              <p className="minimal-help">
+                <strong>Generation quota</strong>
+              </p>
+              {activeGenerationQuota ? (
+                <>
+                  <div className="minimal-meta">
+                    <span>Source: {generationQuotaSourceLabel}</span>
+                    <span>
+                      Updated: {generationQuotaUpdatedRelative} ({generationQuotaUpdatedAbsolute})
+                    </span>
+                  </div>
+                  {generationQuotaHasNumericValues ? (
+                    <div className="minimal-quota-grid">
+                      {activeGenerationQuota.requestsPerMinute === undefined ||
+                      activeGenerationQuota.requestsPerMinute === null ? null : (
+                        <div className="minimal-quota-item">
+                          RPM: {activeGenerationQuota.requestsPerMinute}
+                        </div>
+                      )}
+                      {activeGenerationQuota.tokensPerMinute === undefined ||
+                      activeGenerationQuota.tokensPerMinute === null ? null : (
+                        <div className="minimal-quota-item">
+                          TPM: {activeGenerationQuota.tokensPerMinute}
+                        </div>
+                      )}
+                      {activeGenerationQuota.requestsPerDay === undefined ||
+                      activeGenerationQuota.requestsPerDay === null ? null : (
+                        <div className="minimal-quota-item">
+                          RPD: {activeGenerationQuota.requestsPerDay}
+                        </div>
+                      )}
+                      {activeGenerationQuota.dailyTokenBudget === undefined ||
+                      activeGenerationQuota.dailyTokenBudget === null ? null : (
+                        <div className="minimal-quota-item">
+                          Daily token budget: {activeGenerationQuota.dailyTokenBudget}
+                        </div>
+                      )}
+                      {activeGenerationQuota.usedRequestsToday === undefined ||
+                      activeGenerationQuota.usedRequestsToday === null ? null : (
+                        <div className="minimal-quota-item">
+                          Used requests today: {activeGenerationQuota.usedRequestsToday}
+                        </div>
+                      )}
+                      {activeGenerationQuota.usedTokensToday === undefined ||
+                      activeGenerationQuota.usedTokensToday === null ? null : (
+                        <div className="minimal-quota-item">
+                          Used tokens today: {activeGenerationQuota.usedTokensToday}
+                        </div>
+                      )}
+                    </div>
+                  ) : (
+                    <p className="minimal-muted">No numeric limits available for this model.</p>
+                  )}
+                  {activeGenerationQuota.dashboardUrl ? (
+                    <a href={activeGenerationQuota.dashboardUrl} target="_blank" rel="noreferrer">
+                      View provider limits
+                    </a>
+                  ) : null}
+                </>
+              ) : (
+                <p className="minimal-muted">Quota snapshot unavailable.</p>
+              )}
+            </div>
+          ) : (
+            <p className="minimal-muted">Generation options unavailable. Reload job options.</p>
+          )}
+          {generationError ? <p className="minimal-error">{generationError}</p> : null}
+          {generationSuccess ? <p className="minimal-success">{generationSuccess}</p> : null}
         </div>
         <p className="minimal-help">Paste the assignment markdown from your LLM.</p>
-        {generationOptions ? null : (
-          <p className="minimal-muted">Generation options unavailable. Reload job options.</p>
-        )}
-        {generationError ? <p className="minimal-error">{generationError}</p> : null}
-        {generationSuccess ? <p className="minimal-success">{generationSuccess}</p> : null}
         <textarea
           aria-label="Draft markdown"
           value={draftText}
@@ -2410,6 +2534,41 @@ export const MinimalAssignment: React.FC = () => {
           display: flex;
           flex-direction: column;
           gap: var(--space-2);
+        }
+
+        .minimal-generation-block {
+          border: 1px solid var(--border-light);
+          border-radius: var(--radius-lg);
+          background: var(--bg-secondary);
+          padding: var(--space-3);
+          display: flex;
+          flex-direction: column;
+          gap: var(--space-3);
+        }
+
+        .minimal-quota-panel {
+          border: 1px solid var(--border-light);
+          border-radius: var(--radius-md);
+          background: var(--bg-primary);
+          padding: var(--space-3);
+          display: flex;
+          flex-direction: column;
+          gap: var(--space-2);
+        }
+
+        .minimal-quota-grid {
+          display: grid;
+          grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+          gap: var(--space-2);
+        }
+
+        .minimal-quota-item {
+          border: 1px solid var(--border-light);
+          border-radius: var(--radius-md);
+          padding: var(--space-2);
+          background: var(--bg-secondary);
+          font-size: var(--text-sm);
+          color: var(--text-secondary);
         }
 
         .minimal-list {
