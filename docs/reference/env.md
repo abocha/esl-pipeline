@@ -84,16 +84,32 @@ Safety mode and hard caps:
 - `GEN_SAFETY_MODE` (`off`|`warn`|`hard_stop`, default `hard_stop`)
 - `GEN_STRICT_NO_PAID` (default `true`)
 - `GEN_MAX_OUTPUT_TOKENS_HARD` (default `1200`)
-- `GEN_BUDGET_EMERGENCY_OVERRIDE` (default `false`)
+- `GEN_ALLOW_PAID_SPEND` (default `false`; floodgates switch that bypasses strict allowlists + hard budget checks)
+- `GEN_BUDGET_EMERGENCY_OVERRIDE` (default `false`; legacy alias for `GEN_ALLOW_PAID_SPEND`)
+
+Fail-safe testing defaults (recommended local baseline):
+
+- `GEN_SAFETY_MODE=hard_stop`
+- `GEN_STRICT_NO_PAID=true`
+- `GEN_MAX_OUTPUT_TOKENS_HARD=1200`
 
 Provider runtime policy (provider-specific values):
 
 - `GEN_OPENAI_REQUEST_TIMEOUT_MS`, `GEN_OPENAI_RETRY_MAX`, `GEN_OPENAI_RETRY_BACKOFF_MS`
 - `GEN_GOOGLE_REQUEST_TIMEOUT_MS`, `GEN_GOOGLE_RETRY_MAX`, `GEN_GOOGLE_RETRY_BACKOFF_MS`
 - `GEN_OPENROUTER_REQUEST_TIMEOUT_MS`, `GEN_OPENROUTER_RETRY_MAX`, `GEN_OPENROUTER_RETRY_BACKOFF_MS`
-- `GEN_OPENAI_DAILY_TOKEN_BUDGET`, `GEN_OPENAI_DAILY_REQUEST_BUDGET`, `GEN_OPENAI_RPM_BUDGET`
-- `GEN_GOOGLE_DAILY_REQUEST_BUDGET`, `GEN_GOOGLE_RPM_BUDGET`
-- `GEN_OPENROUTER_DAILY_TOKEN_BUDGET`, `GEN_OPENROUTER_DAILY_REQUEST_BUDGET`, `GEN_OPENROUTER_RPM_BUDGET`
+- `GEN_OPENAI_DAILY_TOKEN_BUDGET` (max OpenAI tokens/day under local safety policy)
+- `GEN_OPENAI_DAILY_REQUEST_BUDGET` (max OpenAI requests/day under local safety policy)
+- `GEN_OPENAI_RPM_BUDGET` (max OpenAI requests/minute under local safety policy)
+- `GEN_GOOGLE_DAILY_REQUEST_BUDGET` (max Google requests/day under local safety policy)
+- `GEN_GOOGLE_RPM_BUDGET` (max Google requests/minute under local safety policy)
+- `GEN_OPENROUTER_DAILY_TOKEN_BUDGET` (max OpenRouter tokens/day under local safety policy)
+- `GEN_OPENROUTER_DAILY_REQUEST_BUDGET` (max OpenRouter requests/day under local safety policy)
+- `GEN_OPENROUTER_RPM_BUDGET` (max OpenRouter requests/minute under local safety policy)
+
+Budget behavior note:
+
+- Setting a budget to `0` intentionally hard-blocks that dimension until configuration is changed.
 
 Provider auth/runtime identity vars:
 

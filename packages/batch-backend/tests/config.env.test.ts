@@ -255,6 +255,7 @@ describe('config/env - generation provider mapping', () => {
         expect(cfg.generation.safetyMode).toBe('hard_stop');
         expect(cfg.generation.strictNoPaid).toBe(true);
         expect(cfg.generation.maxOutputTokensHard).toBe(1200);
+        expect(cfg.generation.budgetEmergencyOverride).toBe(false);
         expect(cfg.generation.models.openai.primary).toBe('gpt-5.2');
         expect(cfg.generation.providers.openai.dailyTokenBudget).toBe(120000);
         expect(cfg.generation.providers.openrouter.dailyTokenBudget).toBe(0);
@@ -321,5 +322,18 @@ describe('config/env - generation provider mapping', () => {
         },
       ),
     ).rejects.toThrow('GEN_SAFETY_MODE must be one of: off, warn, hard_stop');
+  });
+
+  it('enables emergency override via GEN_ALLOW_PAID_SPEND alias', async () => {
+    await withEnv(
+      {
+        NODE_ENV: 'test',
+        GEN_ALLOW_PAID_SPEND: 'true',
+      },
+      async () => {
+        const cfg = await loadConfigFresh();
+        expect(cfg.generation.budgetEmergencyOverride).toBe(true);
+      },
+    );
   });
 });

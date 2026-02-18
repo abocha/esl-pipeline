@@ -47,6 +47,8 @@
 7. WS3-S3 backend telemetry hardening is complete: parser-based provider-error classification now
    includes status-driven inference for untagged failures, drift warnings now cover totals +
    breakdown mismatches, and boundary exclusions remain regression-covered.
+8. WS3.5 generation safety guardrails are complete end-to-end: hard-stop budget policy,
+   `budget_exceeded` transport/UI surfacing, and quota-window rollover-safe generation gating.
 
 ## Capability Matrix
 
@@ -64,7 +66,7 @@
 | Remote config conditional revalidation + stale-if-error cache                              | Done    | Partial  | Config provider + workspace fetch wiring      | Frontend now benefits from reduced churn; keep stale-state UX explicit. |
 | Artifact identity reuse (`audio.key/hash`, `htmlKey/hash`)                                 | Done    | Partial  | Manifest + publisher/uploader behavior         | Continue exposing artifact reuse diagnostics in operator views. |
 | Notion preset hash idempotence skip                                                         | Done    | Done     | Orchestrator + notion adapter colorizer        | Monitor skip-rate and fallback behavior in publish telemetry. |
-| Draft generation provider/model preselection + quota panel                                  | Done    | Done     | WS2B generation contracts + `/config/job-options` extension | WS3.5 adds hard-stop budget guardrails (`budget_exceeded`) and remaining-quota surfacing; keep regression coverage on disable/error UX. |
+| Draft generation provider/model preselection + quota panel                                  | Done    | Done     | WS2B generation contracts + `/config/job-options` extension | WS3.5 guardrails are shipped; continue battle-testing long-session quota rollover behavior and operator telemetry visibility. |
 | WS3 provider runtime seam extraction (shared package)                                       | Done    | Partial  | `@esl-pipeline/provider-runtime` + generation/TTS runtime wiring | WS3-S3 backend follow-through is complete; keep parser-vs-legacy drift monitoring active until dedicated cutover slice. |
 | Prompt/template/profile lineage (`GET /prompt-packages/:id/lineage`)                      | Done    | Done     | Prompt-package lineage API + frontend client  | None.                                               |
 | Draft save/read                                                                            | Done    | Done     | Draft routes                                  | None.                                               |

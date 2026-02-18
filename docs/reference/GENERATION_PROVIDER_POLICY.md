@@ -126,12 +126,25 @@ Reference:
    - `GEN_SAFETY_MODE=hard_stop`
    - `GEN_STRICT_NO_PAID=true`
    - `GEN_MAX_OUTPUT_TOKENS_HARD=1200`
+   - `GEN_ALLOW_PAID_SPEND=false`
 2. Provider/model allowlists are enforced before provider calls when strict mode is enabled.
 3. Budget counters are persisted by provider/model/time bucket and surfaced in quota metadata:
    - daily request usage/remaining
    - daily token usage/remaining
    - per-minute request usage/remaining
 4. OpenRouter is blocked by default through zero-budget defaults unless explicitly enabled.
+5. Intentional paid-mode override is available via `GEN_ALLOW_PAID_SPEND=true`
+   (legacy alias: `GEN_BUDGET_EMERGENCY_OVERRIDE=true`).
+
+### WS3.5 Operational Semantics
+
+1. `budget_exceeded` is a local safety-policy result, not a raw provider-originated error.
+2. Budget-block windows are evaluated in UTC:
+   - `rpmRemaining <= 0` blocks only while still in the same UTC minute window.
+   - `daily*Remaining <= 0` blocks only while still in the same UTC day window.
+3. Explicit zero-budget configs are treated as hard-stop policy:
+   - when budget is `0` and remaining is exhausted, generation stays blocked until config changes.
+4. UI/runtime quota snapshots must not indefinitely block generation after window rollover.
 
 ### OpenAI API Reference Contract (WS2B)
 

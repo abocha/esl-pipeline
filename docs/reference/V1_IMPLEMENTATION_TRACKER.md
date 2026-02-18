@@ -6,7 +6,7 @@
 - Read Time: 12 minutes.
 - Authority Level: V1 execution source of truth.
 - Last Updated: 2026-02-18.
-- Reconciled commit window: `02d4eab..HEAD`.
+- Reconciled commit window: `02d4eab..65c04e4`.
 
 ## Purpose
 
@@ -34,9 +34,9 @@
 ## Current Sprint Focus
 
 - Active workstream: `Stabilization and gate review`.
-- This week objective: verify WS2B+WS3 readiness telemetry stability and lock a clear WS5 go/no-go signal.
-- Today `Now` task (30-90 min): run stabilization checks (readiness drift, provider-error sampling boundaries, parity counters) and log evidence.
-- Success for today: tracker status is fully normalized to shipped WS3-S3 state, and WS5 remains explicitly parked until telemetry stability is proven.
+- This week objective: verify WS2B+WS3/WS3.5 telemetry stability and lock a clear WS5 go/no-go signal.
+- Today `Now` task (30-90 min): run stabilization checks (readiness drift, provider-error sampling boundaries, quota-window behavior) and log evidence.
+- Success for today: tracker status is fully normalized to shipped WS3-S3 + WS3.5 state, and WS5 remains explicitly parked until telemetry stability is proven.
 
 ## Delivery Model (Locked)
 
@@ -60,7 +60,7 @@ Rules:
 | WS2A Preset plumbing MVP | `complete` | W4 (2026-03-02) | W7 (2026-03-29) | WS1 + WS6 complete |
 | WS2B Direct LLM generation | `complete` | W8 (2026-03-30) | W9 (2026-04-12) | WS2A complete |
 | WS3 TTS abstraction + fallback | `complete` | W10 (2026-04-13) | W12 (2026-05-03) | WS2B seam pattern stable |
-| WS5 Cost and quota policy | `parked` | W11 (2026-04-20) | W13 (2026-05-10) | WS2B + WS3 usage telemetry available |
+| WS5 Cost and quota policy | `parked` | W11 (2026-04-20) | W13 (2026-05-10) | WS2B + WS3/WS3.5 usage telemetry available |
 | WS4 CRM-lite lesson ledger | `parked` | W13 (2026-05-04) | W15 (2026-05-24) | WS2A assignment flow stable |
 | Stabilization and gate review | `in_progress` | W16 (2026-05-25) | W17 (2026-06-07) | WS2A-WS6 MVP complete |
 
@@ -546,7 +546,64 @@ reuse it in generation flow before extending the same seam into TTS runtime path
 - [x] Boundary handling remains regression-covered.
 - [x] Targeted tests + typecheck + deps hygiene + `check:fast` pass.
 
-### WS3 Slice Review (S0-S3) and Closeout Checklist
+### WS3.5 Safety Guardrails + Quota UX Hardening (Completed)
+
+- Goal: add hard-stop generation budget protections that prevent accidental spend, surface explicit
+  budget-limit failures, and keep generation UX unblocked after quota-window resets.
+- Strict scope:
+  - contracts/backend/frontend/docs sync for generation safety budgets and quota UX,
+  - keep WS5 consumer-facing pricing/billing work out of scope,
+  - preserve WS2B provider/model selection contract.
+- Edit:
+  - `packages/contracts/src/index.ts`
+  - `packages/batch-backend/src/config/env.ts`
+  - `packages/batch-backend/src/application/generation-policy.ts`
+  - `packages/batch-backend/src/application/generation-budget-guard.ts`
+  - `packages/batch-backend/src/domain/generation-budget-repository.ts`
+  - `packages/batch-backend/src/application/generate-draft.ts`
+  - `packages/batch-backend/src/application/get-job-options.ts`
+  - `packages/batch-backend/src/infrastructure/db.ts`
+  - `packages/batch-backend/src/transport/extended-routes.ts`
+  - `packages/batch-frontend/src/utils/api.ts`
+  - `packages/batch-frontend/src/ui/minimal/MinimalAssignment.tsx`
+  - `packages/batch-frontend/src/ui/minimal/MinimalAssignment.test.tsx`
+  - `docs/reference/env.md`
+  - `docs/reference/GENERATION_PROVIDER_POLICY.md`
+  - `docs/backend-frontend/backend-frontend-alignment.md`
+  - `docs/reference/V1_IMPLEMENTATION_TRACKER.md`
+- Public interface additions:
+  - `GenerationErrorCategory` now includes `budget_exceeded`.
+  - `GenerationQuotaView` includes used/remaining fields:
+    - `dailyRequestBudget`, `dailyRequestUsed`, `dailyRequestRemaining`
+    - `dailyTokenUsed`, `dailyTokenRemaining`
+    - `rpmBudget`, `rpmUsed`, `rpmRemaining`
+  - `POST /generation/drafts` error payload can include:
+    - `limitType`, `limit`, `used`, `window`
+  - frontend `GenerationDraftApiError` now carries the same optional budget-limit details.
+- Minimum behavior:
+  - strict no-paid allowlists and max-output hard cap enforced before provider calls,
+  - persistent provider/model/day/minute counters drive budget decisions,
+  - `budget_exceeded` is surfaced end-to-end as a local policy failure class,
+  - job-options quota view includes remaining budget telemetry,
+  - minimal UI quota guard disables generate only for active windows and auto-releases after minute/day rollover.
+
+### WS3.5 Done Criteria
+
+- [x] Guard checks run before provider invocation.
+- [x] Budget counters persist in DB (with in-memory test fallback behavior).
+- [x] `budget_exceeded` is mapped across contracts/backend transport/frontend API.
+- [x] Quota used/remaining fields are hydrated in `/config/job-options`.
+- [x] Minimal UI shows quota remaining and surfaces actionable budget errors.
+- [x] Stale runtime quota snapshots no longer block generate after window rollover.
+- [x] Targeted tests + typecheck + `check:fast` pass.
+
+### WS3.5 Follow-Up Watchpoints
+
+- Monitor long-lived browser sessions to confirm quota-window unlock behavior remains reliable.
+- Watch for false-positive disable states when provider and local counters diverge.
+- Keep WS5 parked until telemetry stability is confirmed in weekly review.
+
+### WS3 Slice Review (S0-S3.5) and Closeout Checklist
 
 - Slice completion review:
   - [x] WS3-S0 provider-runtime seam extraction completed and regression-covered.
@@ -554,12 +611,14 @@ reuse it in generation flow before extending the same seam into TTS runtime path
   - [x] WS3-S2 backend surfacing/telemetry normalization completed without contract churn.
   - [x] WS3-S2 follow-up boundary fix landed: readiness failed-error window now matches snapshot upper bound semantics.
   - [x] WS3-S3 backend telemetry hardening completed with parser/status inference and drift diagnostics improvements.
-- WS3-S3 closeout checklist:
+  - [x] WS3.5 safety guardrails completed with end-to-end budget policy enforcement and rollover-safe quota UX.
+- WS3-S3/WS3.5 closeout checklist:
   - [x] define WS3-S3 objective and strict scope (no cross-workstream bleed),
   - [x] enumerate exact files/tests and acceptance criteria before code changes,
   - [x] lock validation command set (targeted + full fast checks),
   - [x] capture risk checks for telemetry drift, boundary handling, and backward compatibility,
-  - [x] append evidence line after WS3-S3 implementation.
+  - [x] append evidence line after WS3-S3 implementation,
+  - [x] append WS3.5 closeout evidence tied to integrated implementation commit.
 
 ## Parked Workstreams (Do Not Start Yet)
 
@@ -567,7 +626,7 @@ reuse it in generation flow before extending the same seam into TTS runtime path
 
 Start only when:
 
-- [ ] WS2B and WS3 telemetry remains stable across a full review cycle (totals, breakdown, and drift-warning behavior show no unexplained variance).
+- [ ] WS2B and WS3/WS3.5 telemetry remains stable across a full review cycle (totals, breakdown, and drift-warning behavior show no unexplained variance).
 - [ ] Weekly product review records a `go` decision for WS5 in `docs/playbooks/WEEKLY_PRODUCT_REVIEW_TEMPLATE.md`.
 
 ### WS4 CRM-Lite Lesson Ledger
@@ -633,7 +692,8 @@ Recent evidence:
 - 2026-02-18 | WS3-S2 follow-up | aligned failed-error sampling window boundary with readiness snapshot semantics (`created_at <= to`) and added boundary regression coverage. | `pnpm --filter @esl-pipeline/batch-backend exec vitest run --config ../../vitest.config.ts tests/application.readiness-metrics.test.ts tests/domain.job-repository.test.ts tests/transport.http-server.integration.test.ts`; `pnpm --filter @esl-pipeline/batch-backend typecheck` | pass | local workspace
 - 2026-02-18 | WS3-S3 | completed backend-only telemetry hardening: parser status-based inference for untagged provider failures, drift warning expansion (totals + breakdown), and boundary exclusion coverage with no contract/API churn. | `pnpm --filter @esl-pipeline/batch-backend exec vitest run --config ../../vitest.config.ts tests/application.readiness-metrics.test.ts tests/application.voice-provider-error.test.ts tests/domain.job-repository.test.ts tests/transport.http-server.integration.test.ts`; `pnpm --filter @esl-pipeline/batch-backend typecheck`; `pnpm deps:pin`; `pnpm deps:audit:strict`; `pnpm check:fast` | pass | local workspace
 - 2026-02-18 | Tracker normalization | updated sprint focus to stabilization, marked WS3 complete across all tracker sections, tightened WS5/WS4 start gates, and made weekly closeout criteria stabilization-aware. | `rg -n "Current Sprint Focus|WS3 TTS abstraction|Stabilization and gate review|WS5 Cost and Quota Policy" docs/reference/V1_IMPLEMENTATION_TRACKER.md`; `git diff -- docs/reference/V1_IMPLEMENTATION_TRACKER.md` | pass | local workspace
-- 2026-02-18 | WS3.5 safety guardrails | implemented hard-stop generation budget protections (strict no-paid allowlists, max output cap, provider/model/day/minute counter checks, `budget_exceeded` contract/route/UI surfacing, and quota remaining visibility) with backend/frontend/docs sync. | `pnpm --filter @esl-pipeline/contracts typecheck`; `pnpm --filter @esl-pipeline/batch-backend typecheck`; `pnpm --filter @esl-pipeline/batch-backend exec vitest run --config ../../vitest.config.ts tests/application.generate-draft.test.ts tests/application.generation-policy.test.ts tests/application.get-job-options.test.ts tests/config.env.test.ts tests/transport.http-server.integration.test.ts tests/application.process-transcribe-job.test.ts`; `pnpm --filter @esl-pipeline/batch-frontend test -- src/utils/api.generation.test.ts src/ui/minimal/MinimalAssignment.test.tsx`; `pnpm check:fast` | pass | local workspace
+- 2026-02-18 | WS3.5 safety guardrails | implemented hard-stop generation budget protections (strict no-paid allowlists, max output cap, provider/model/day/minute counter checks, `budget_exceeded` contract/route/UI surfacing, and quota remaining visibility) with backend/frontend/docs sync. | `pnpm --filter @esl-pipeline/contracts typecheck`; `pnpm --filter @esl-pipeline/batch-backend typecheck`; `pnpm --filter @esl-pipeline/batch-backend exec vitest run --config ../../vitest.config.ts tests/application.generate-draft.test.ts tests/application.generation-policy.test.ts tests/application.get-job-options.test.ts tests/config.env.test.ts tests/transport.http-server.integration.test.ts tests/application.process-transcribe-job.test.ts`; `pnpm --filter @esl-pipeline/batch-frontend test -- src/utils/api.generation.test.ts src/ui/minimal/MinimalAssignment.test.tsx`; `pnpm check:fast` | pass | commit `65c04e4`
+- 2026-02-18 | WS3.5 closeout | resolved stale runtime quota snapshot gating (minute/day rollover-safe disable semantics) and finalized integrated implementation baseline. | `pnpm --filter @esl-pipeline/batch-frontend test -- src/ui/minimal/MinimalAssignment.test.tsx`; `pnpm --filter @esl-pipeline/batch-frontend typecheck`; `git show --stat --name-only 65c04e4` | pass | commit `65c04e4`
 
 ## Weekly Closeout Checklist
 
