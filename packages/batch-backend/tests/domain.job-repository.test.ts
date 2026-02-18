@@ -5,6 +5,7 @@ import {
   getJobById,
   getReadinessMetrics,
   insertJob,
+  listFailedJobErrorsForReadiness,
   updateJobStateAndResult,
 } from '../src/domain/job-repository.js';
 import { withPgClient } from '../src/infrastructure/db.js';
@@ -255,6 +256,106 @@ describeIfDb('domain/job-repository', () => {
       expect(result.medianPublishLatencyMs).toBe(45000); // median of 30s and 60s
       expect(result.firstSessionTotalUsers).toBe(2);
       expect(result.firstSessionSucceededUsers).toBe(2);
+    });
+  });
+
+  describe('listFailedJobErrorsForReadiness', () => {
+    it('returns only failed publish-job errors for the requested window and user scope', async () => {
+      const userA = randomUUID();
+      const userB = randomUUID();
+      const base = new Date('2024-04-01T00:00:00.000Z');
+
+      await withPgClient(async (client) => {
+        await client.query(
+          `
+          INSERT INTO jobs (id, state, publish_target, user_id, created_at, updated_at, error)
+          VALUES
+            ($1, 'failed', 'html', $7, $10, $10, $13),
+            ($2, 'failed', 'html', $7, $11, $11, $14),
+            ($3, 'failed', 'html', $7, $12, $12, ''),
+            ($4, 'failed', NULL, $7, $10, $10, $15),
+            ($5, 'succeeded', 'html', $7, $10, $10, $16),
+            ($6, 'failed', 'notion', $8, $10, $10, $17),
+            ($9, 'failed', 'html', $7, $18, $18, $19),
+            ($20, 'failed', 'html', $7, $21, $21, $22)
+          `,
+          [
+            randomUUID(),
+            randomUUID(),
+            randomUUID(),
+            randomUUID(),
+            randomUUID(),
+            randomUUID(),
+            userA,
+            userB,
+            randomUUID(),
+            new Date(base.getTime() + 1_000),
+            new Date(base.getTime() + 2_000),
+            new Date(base.getTime() + 3_000),
+            'Text-to-Dialogue synthesis failed [provider_rate_limit]: HTTP 429',
+            'Provider timed out while generating dialogue',
+            'failed without publish target',
+            'not failed',
+            'User B provider failure',
+            new Date(base.getTime() - 20_000),
+            'Outside window failure',
+            randomUUID(),
+            new Date('2024-04-02T00:00:00.000Z'),
+            'Boundary provider failure',
+          ],
+        );
+      });
+
+      const result = await listFailedJobErrorsForReadiness({
+        from: new Date('2024-04-01T00:00:00.000Z'),
+        to: new Date('2024-04-02T00:00:00.000Z'),
+        userId: userA,
+      });
+
+      expect(result).toEqual(
+        expect.arrayContaining([
+          'Text-to-Dialogue synthesis failed [provider_rate_limit]: HTTP 429',
+          'Provider timed out while generating dialogue',
+          'Boundary provider failure',
+        ]),
+      );
+      expect(result).toHaveLength(3);
+    });
+
+    it('includes all users when userId is null', async () => {
+      const userA = randomUUID();
+      const userB = randomUUID();
+      const createdAt = new Date('2024-05-01T00:00:10.000Z');
+
+      await withPgClient(async (client) => {
+        await client.query(
+          `
+          INSERT INTO jobs (id, state, publish_target, user_id, created_at, updated_at, error)
+          VALUES
+            ($1, 'failed', 'html', $3, $5, $5, $7),
+            ($2, 'failed', 'notion', $4, $6, $6, $8)
+          `,
+          [
+            randomUUID(),
+            randomUUID(),
+            userA,
+            userB,
+            createdAt,
+            new Date(createdAt.getTime() + 1000),
+            'User A provider failure',
+            'User B provider failure',
+          ],
+        );
+      });
+
+      const result = await listFailedJobErrorsForReadiness({
+        from: new Date('2024-05-01T00:00:00.000Z'),
+        to: new Date('2024-05-02T00:00:00.000Z'),
+        userId: null,
+      });
+
+      expect(result).toEqual(expect.arrayContaining(['User A provider failure', 'User B provider failure']));
+      expect(result).toHaveLength(2);
     });
   });
 });

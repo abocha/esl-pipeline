@@ -35,8 +35,8 @@
 
 - Active workstream: `WS3 TTS abstraction + fallback`.
 - This week objective: extract and stabilize the shared provider runtime seam for generation/TTS convergence.
-- Today `Now` task (30-90 min): complete WS3-S1 by migrating ElevenLabs TTS/dialogue runtime error classification + retry handling to the shared provider-runtime seam.
-- Success for today: TTS runtime path uses shared seam utilities with parity-safe behavior, compatibility tags remain stable, and WS3-S1 evidence is logged.
+- Today `Now` task (30-90 min): review WS3 slice completion (S0-S2) and lock WS3-S3 execution steps.
+- Success for today: WS3-S0/S1/S2 completion is confirmed with evidence, and WS3-S3 has a concrete next-slice checklist.
 
 ## Delivery Model (Locked)
 
@@ -421,7 +421,7 @@ reuse it in generation flow before extending the same seam into TTS runtime path
 
 ### Status
 
-- `in_progress`; WS3-S0 and WS3-S1 are complete, and WS3-S2 is next.
+- `in_progress`; WS3-S0, WS3-S1, and WS3-S2 are complete, and WS3-S3 is next.
 
 ### Start Gate (Mandatory)
 
@@ -483,6 +483,50 @@ reuse it in generation flow before extending the same seam into TTS runtime path
 - [x] Retry behavior for retryable statuses remains parity-safe.
 - [x] Dialogue + TTS provider category mapping remains regression-covered.
 - [x] `pnpm check:fast` and dependency hygiene checks pass after dependency wiring.
+
+### WS3-S2 Backend Surfacing + Telemetry Alignment (Completed)
+
+- Goal: align backend provider-error surfacing and readiness telemetry around one canonical parser
+  path (`parseVoiceProviderError`) without contract churn.
+- Edit:
+  - `packages/batch-backend/src/application/voice-provider-error.ts`
+  - `packages/batch-backend/src/domain/job-repository.ts`
+  - `packages/batch-backend/src/application/readiness-metrics.ts`
+  - `packages/batch-backend/src/infrastructure/metrics.ts`
+  - `packages/batch-backend/tests/application.voice-provider-error.test.ts`
+  - `packages/batch-backend/tests/application.readiness-metrics.test.ts`
+  - `packages/batch-backend/tests/application.job-dto.test.ts`
+  - `packages/batch-backend/tests/application.get-job-provenance.test.ts`
+  - `packages/batch-backend/tests/domain.job-repository.test.ts`
+  - `packages/batch-backend/tests/transport.http-server.integration.test.ts`
+  - `docs/reference/V1_IMPLEMENTATION_TRACKER.md`
+  - `docs/backend-frontend/backend-frontend-alignment.md`
+- Minimum behavior:
+  - parser utility expansion supports shared normalization helpers for readiness aggregation,
+  - readiness provider counts/breakdown are derived from parser-classified failed-job errors,
+  - transition drift warning logs legacy SQL vs normalized parser totals,
+  - DTO/provenance contracts remain unchanged while inferable untagged provider errors still surface.
+
+### WS3-S2 Done Criteria
+
+- [x] Parser helper utilities are exported and regression-covered.
+- [x] Readiness provider-error totals/breakdown are parser-driven with drift warning visibility.
+- [x] No public contract or route payload shape changes.
+- [x] Backend + targeted integration tests/typecheck/dependency hygiene/check:fast pass.
+
+### WS3 Slice Review (S0-S2) and WS3-S3 Next Steps
+
+- Slice completion review:
+  - [x] WS3-S0 provider-runtime seam extraction completed and regression-covered.
+  - [x] WS3-S1 TTS/dialogue runtime seam adoption completed with parity-safe behavior.
+  - [x] WS3-S2 backend surfacing/telemetry normalization completed without contract churn.
+  - [x] WS3-S2 follow-up boundary fix landed: readiness failed-error window now matches snapshot upper bound semantics.
+- WS3-S3 next-slice checklist:
+  - [ ] define WS3-S3 objective and strict scope (no cross-workstream bleed),
+  - [ ] enumerate exact files/tests and acceptance criteria before code changes,
+  - [ ] lock validation command set (targeted + full fast checks),
+  - [ ] capture risk checks for telemetry drift, boundary handling, and backward compatibility,
+  - [ ] append evidence line after WS3-S3 implementation.
 
 ## Parked Workstreams (Do Not Start Yet)
 
@@ -550,6 +594,8 @@ Recent evidence:
 - 2026-02-18 | WS2B-S2 | implemented `POST /generation/drafts` backend endpoint with live provider adapters (OpenAI/Google/OpenRouter), deterministic fallback/retry ladder, normalized provider error categories, and `/config/job-options` generation metadata defaults. | `pnpm --filter @esl-pipeline/batch-backend typecheck`; `pnpm --filter @esl-pipeline/batch-backend exec vitest run --config ../../vitest.config.ts tests/application.generate-draft.test.ts tests/transport.http-server.integration.test.ts tests/application.get-job-options.test.ts tests/config.env.test.ts` | pass | local workspace
 - 2026-02-18 | WS2B-S3 | completed Draft-step generation UX with provider/model controls, quota panel (source + freshness + limits link), runtime snapshot precedence over baseline quota, and stale-flow-safe response handling. | `pnpm lint`; `pnpm --filter @esl-pipeline/batch-frontend test -- MinimalAssignment.test.tsx`; `pnpm --filter @esl-pipeline/batch-backend exec vitest run --config ../../vitest.config.ts tests/application.generate-draft.test.ts tests/transport.http-server.integration.test.ts`; `pnpm check:fast` | pass | local workspace
 - 2026-02-18 | WS3-S1 | migrated ElevenLabs TTS/dialogue runtime classification + retry behavior to shared provider-runtime seam with compatibility-preserving error tags and parity tests. | `pnpm --filter @esl-pipeline/tts-elevenlabs typecheck`; `pnpm --filter @esl-pipeline/tts-elevenlabs test -- tests/provider-runtime.test.ts tests/dialogue.test.ts tests/index.test.ts`; `pnpm deps:pin`; `pnpm deps:audit:strict`; `pnpm check:fast` | pass | local workspace
+- 2026-02-18 | WS3-S2 | aligned backend provider-error surfacing/readiness telemetry to parser-normalized failed-job classification with drift warning instrumentation and no contract churn. | `pnpm --filter @esl-pipeline/batch-backend exec vitest run --config ../../vitest.config.ts tests/application.voice-provider-error.test.ts tests/application.readiness-metrics.test.ts tests/application.job-dto.test.ts tests/application.get-job-provenance.test.ts tests/domain.job-repository.test.ts tests/transport.http-server.integration.test.ts`; `pnpm --filter @esl-pipeline/batch-backend typecheck`; `pnpm deps:pin`; `pnpm deps:audit:strict`; `pnpm check:fast` | pass | local workspace
+- 2026-02-18 | WS3-S2 follow-up | aligned failed-error sampling window boundary with readiness snapshot semantics (`created_at <= to`) and added boundary regression coverage. | `pnpm --filter @esl-pipeline/batch-backend exec vitest run --config ../../vitest.config.ts tests/application.readiness-metrics.test.ts tests/domain.job-repository.test.ts tests/transport.http-server.integration.test.ts`; `pnpm --filter @esl-pipeline/batch-backend typecheck` | pass | local workspace
 
 ## Weekly Closeout Checklist
 

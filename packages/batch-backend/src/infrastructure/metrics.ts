@@ -56,8 +56,8 @@ export const READINESS_METRIC_SOURCE_MAP: ReadinessMetricSourceMap = {
     calculation: 'fallback selections / total speaker selections (null until persisted)',
   },
   voiceProviderErrorRate: {
-    source: 'jobs table failed rows tagged with provider error category',
+    source: 'jobs table failed rows classified as provider errors by backend parser',
     window: 'request window, default last 7 days by jobs.created_at',
-    calculation: 'provider tagged failures / failed jobs in window',
+    calculation: 'provider-classified failed-job errors / failed jobs in window',
   },
 };

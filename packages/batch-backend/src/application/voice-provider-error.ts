@@ -49,6 +49,35 @@ export function parseVoiceProviderError(
   };
 }
 
+export function parseVoiceProviderErrors(
+  errors: readonly (string | null | undefined)[],
+): VoiceProviderErrorDetails[] {
+  const parsed: VoiceProviderErrorDetails[] = [];
+  for (const error of errors) {
+    const detail = parseVoiceProviderError(error);
+    if (detail) {
+      parsed.push(detail);
+    }
+  }
+  return parsed;
+}
+
+export function countVoiceProviderErrors(
+  details: readonly VoiceProviderErrorDetails[],
+): number {
+  return details.length;
+}
+
+export function buildVoiceProviderErrorBreakdown(
+  details: readonly VoiceProviderErrorDetails[],
+): Partial<Record<VoiceProviderErrorCategory, number>> {
+  const breakdown: Partial<Record<VoiceProviderErrorCategory, number>> = {};
+  for (const detail of details) {
+    breakdown[detail.category] = (breakdown[detail.category] ?? 0) + 1;
+  }
+  return breakdown;
+}
+
 function inferCategoryFromMessage(message: string): VoiceProviderErrorCategory | null {
   if (message.includes('invalid voice')) return 'invalid_voice_id';
   if (message.includes('unsupported') && (message.includes('accent') || message.includes('style'))) {
@@ -65,4 +94,3 @@ function inferCategoryFromMessage(message: string): VoiceProviderErrorCategory |
   }
   return null;
 }
-

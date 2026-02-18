@@ -141,6 +141,10 @@ export interface ReadinessMetricsSnapshot {
   voiceReuseSelections: number | null;
 }
 
+interface FailedJobErrorRow {
+  error: string | null;
+}
+
 export interface StudentJobSummaryRow {
   studentId: string;
   lastLessonAt: Date | null;
@@ -629,6 +633,31 @@ export async function getReadinessMetrics(
     voiceReuseSelections:
       row?.voice_reuse_selections == null ? null : Number(row.voice_reuse_selections),
   };
+}
+
+export async function listFailedJobErrorsForReadiness(
+  filters: ReadinessMetricsFilters,
+): Promise<string[]> {
+  const rows = await withPgClient(async (client: PoolClient) => {
+    const result = await client.query(
+      `
+      SELECT error
+      FROM jobs
+      WHERE created_at >= $1
+        AND created_at <= $2
+        AND ($3::uuid IS NULL OR user_id = $3::uuid)
+        AND publish_target IS NOT NULL
+        AND state = 'failed'
+        AND error IS NOT NULL
+      `,
+      [filters.from, filters.to, filters.userId ?? null],
+    );
+    return result.rows as FailedJobErrorRow[];
+  });
+
+  return rows
+    .map((row) => row.error)
+    .filter((error): error is string => typeof error === 'string' && error.length > 0);
 }
 
 // updateJobStateAndResult.declaration()

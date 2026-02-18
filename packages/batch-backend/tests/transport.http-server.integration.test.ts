@@ -2605,7 +2605,7 @@ describe('transport/http-server - integration (in-process)', () => {
         voiceProviderErrorRate: {
           source: 'jobs table',
           window: 'last 7 days',
-          calculation: 'provider tagged failures / failed jobs',
+          calculation: 'provider-classified failed-job errors / failed jobs',
         },
       },
     });
@@ -2682,7 +2682,7 @@ describe('transport/http-server - integration (in-process)', () => {
         voiceProviderErrorRate: {
           source: 'jobs table',
           window: 'last 7 days',
-          calculation: 'provider tagged failures / failed jobs',
+          calculation: 'provider-classified failed-job errors / failed jobs',
         },
       },
     });
