@@ -85,7 +85,7 @@ describe('application/generate-draft', () => {
           openrouter: vi.fn(),
         },
         now: () => new Date('2026-02-18T00:00:00.000Z'),
-        sleep: async () => undefined,
+        sleep: async () => {},
       },
     );
 
@@ -130,7 +130,7 @@ describe('application/generate-draft', () => {
           openrouter: vi.fn(),
         },
         now: () => new Date('2026-02-18T00:00:00.000Z'),
-        sleep: async () => undefined,
+        sleep: async () => {},
       },
     );
 
@@ -170,7 +170,7 @@ describe('application/generate-draft', () => {
           openrouter: vi.fn(),
         },
         now: () => new Date('2026-02-18T00:00:00.000Z'),
-        sleep: async () => undefined,
+        sleep: async () => {},
       },
     );
 
@@ -209,7 +209,7 @@ describe('application/generate-draft', () => {
             google_ai_studio: google,
             openrouter: vi.fn(),
           },
-          sleep: async () => undefined,
+          sleep: async () => {},
         },
       ),
     ).rejects.toMatchObject({
@@ -242,7 +242,7 @@ describe('application/generate-draft', () => {
           google_ai_studio: google,
           openrouter: vi.fn(),
         },
-        sleep: async () => undefined,
+        sleep: async () => {},
       },
     );
 
@@ -279,7 +279,7 @@ describe('application/generate-draft', () => {
         ...baseProviders,
         openai: {
           ...baseProviders.openai,
-          apiKey: undefined,
+          apiKey: '',
         },
       },
     });
