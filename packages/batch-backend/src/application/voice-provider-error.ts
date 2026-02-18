@@ -12,6 +12,7 @@ const ACTIONABLE_HINTS: Record<VoiceProviderErrorCategory, string> = {
   provider_timeout: 'Retry with smaller chunks or increased provider timeout settings.',
   provider_contract_error: 'Check request payload shape and provider SDK compatibility.',
 };
+const PROVIDER_CONTEXT_PATTERN = /\b(provider|tts|text-to-dialogue|dialogue|elevenlabs)\b/i;
 
 function normalizeCategory(value: string): VoiceProviderErrorCategory | null {
   const normalized = value.trim().toLowerCase();
@@ -32,14 +33,12 @@ export function parseVoiceProviderError(
 ): VoiceProviderErrorDetails | null {
   if (!error || error.trim().length === 0) return null;
 
+  const providerStatus = parseProviderStatus(error);
   const categoryMatch = CATEGORY_PATTERN.exec(error);
   const category =
     (categoryMatch?.[1] && normalizeCategory(categoryMatch[1])) ||
-    inferCategoryFromMessage(error.toLowerCase());
+    inferCategoryFromMessage(error.toLowerCase(), providerStatus);
   if (!category) return null;
-
-  const statusMatch = /\b(?:http\s*)?(\d{3})\b/i.exec(error);
-  const providerStatus = statusMatch ? Number.parseInt(statusMatch[1] ?? '', 10) : undefined;
 
   return {
     category,
@@ -78,16 +77,47 @@ export function buildVoiceProviderErrorBreakdown(
   return breakdown;
 }
 
-function inferCategoryFromMessage(message: string): VoiceProviderErrorCategory | null {
+function parseProviderStatus(error: string): number | undefined {
+  const statusMatch = /\b(?:http\s*)?(\d{3})\b/i.exec(error);
+  const providerStatus = statusMatch ? Number.parseInt(statusMatch[1] ?? '', 10) : undefined;
+  return Number.isFinite(providerStatus) ? providerStatus : undefined;
+}
+
+function inferCategoryFromMessage(
+  message: string,
+  providerStatus?: number,
+): VoiceProviderErrorCategory | null {
+  const hasProviderContext =
+    PROVIDER_CONTEXT_PATTERN.test(message) || message.includes('voice generation');
+
   if (message.includes('invalid voice')) return 'invalid_voice_id';
   if (message.includes('unsupported') && (message.includes('accent') || message.includes('style'))) {
     return 'unsupported_voice_capability';
   }
-  if (message.includes('rate limit') || message.includes('too many requests')) {
+  if (hasProviderContext && providerStatus === 429) return 'provider_rate_limit';
+  if (hasProviderContext && (message.includes('rate limit') || message.includes('too many requests'))) {
     return 'provider_rate_limit';
   }
-  if (message.includes('timeout') || message.includes('timed out')) {
+  if (
+    hasProviderContext &&
+    (providerStatus === 408 || providerStatus === 504 || (providerStatus !== undefined && providerStatus >= 500))
+  ) {
     return 'provider_timeout';
+  }
+  if (hasProviderContext && (message.includes('timeout') || message.includes('timed out'))) {
+    return 'provider_timeout';
+  }
+  if (
+    hasProviderContext &&
+    (providerStatus === 400 ||
+      providerStatus === 401 ||
+      providerStatus === 402 ||
+      providerStatus === 403 ||
+      providerStatus === 404 ||
+      providerStatus === 413 ||
+      providerStatus === 422)
+  ) {
+    return 'provider_contract_error';
   }
   if (message.includes('provider') || message.includes('text-to-dialogue') || message.includes('tts')) {
     return 'provider_contract_error';

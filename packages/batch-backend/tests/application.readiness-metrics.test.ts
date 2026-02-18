@@ -21,7 +21,8 @@ describe('application/readiness-metrics', () => {
       voiceStrictMismatches: 1,
       voiceProviderErrors: 2,
       voiceProviderErrorBreakdown: {
-        provider_rate_limit: 2,
+        provider_rate_limit: 1,
+        provider_timeout: 1,
       },
       voiceFallbackSelections: null,
       voiceReuseSelections: null,
@@ -168,6 +169,56 @@ describe('application/readiness-metrics', () => {
         event: 'readiness_provider_error_drift',
         legacyProviderErrors: 0,
         normalizedProviderErrors: 1,
+        hasTotalDrift: true,
+        userId: '8f8d9e53-bc3a-4658-8960-fbf4ff8cb84f',
+      }),
+    );
+  });
+
+  it('logs drift warning when totals match but category breakdown differs', async () => {
+    const readiness = vi.fn().mockResolvedValue({
+      publishSucceeded: 1,
+      publishFailed: 2,
+      publishTotal: 3,
+      latencySampleSize: 1,
+      medianPublishLatencyMs: 1200,
+      firstSessionTotalUsers: 1,
+      firstSessionSucceededUsers: 1,
+      voiceValidationFailures: 0,
+      voiceStrictMismatches: 0,
+      voiceProviderErrors: 2,
+      voiceProviderErrorBreakdown: {
+        provider_rate_limit: 2,
+      },
+      voiceFallbackSelections: null,
+      voiceReuseSelections: null,
+    });
+    const listFailedErrorsForReadiness = vi.fn().mockResolvedValue([
+      'Text-to-Dialogue synthesis failed [provider_rate_limit]: HTTP 429',
+      'Provider timed out while generating dialogue',
+    ]);
+    const warnSpy = vi.spyOn(logger, 'warn');
+
+    await getReadinessMetricsWithDefaults(
+      {
+        from: new Date('2024-05-01T00:00:00.000Z'),
+        to: new Date('2024-05-08T00:00:00.000Z'),
+        userId: '8f8d9e53-bc3a-4658-8960-fbf4ff8cb84f',
+      },
+      {
+        jobs: { readiness, listFailedErrorsForReadiness },
+      },
+    );
+
+    expect(warnSpy).toHaveBeenCalledTimes(1);
+    expect(warnSpy).toHaveBeenCalledWith(
+      'Readiness provider-error totals differ between legacy SQL and parser normalization',
+      expect.objectContaining({
+        event: 'readiness_provider_error_drift',
+        legacyProviderErrors: 2,
+        normalizedProviderErrors: 2,
+        hasTotalDrift: false,
+        hasBreakdownDrift: true,
         userId: '8f8d9e53-bc3a-4658-8960-fbf4ff8cb84f',
       }),
     );
