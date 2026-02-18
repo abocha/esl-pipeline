@@ -1179,6 +1179,183 @@ describe('MinimalAssignment', () => {
     });
   });
 
+  it('shows quota panel from job options before first draft generation', async () => {
+    render(<MinimalAssignment />);
+
+    await waitFor(() => {
+      expect(screen.getByText(/Generation quota/i)).toBeTruthy();
+      expect(screen.getByText(/Source: Hybrid/i)).toBeTruthy();
+    });
+    expect(screen.getByText(/RPM: 5/i)).toBeTruthy();
+    expect(screen.getByText(/TPM: 250000/i)).toBeTruthy();
+    expect(screen.getByText(/RPD: 20/i)).toBeTruthy();
+    expect(screen.getByText(/Updated: .*?\(.+?\)/i)).toBeTruthy();
+  });
+
+  it('refreshes baseline quota panel values when job options are reloaded', async () => {
+    const user = userEvent.setup();
+    render(<MinimalAssignment />);
+
+    await waitFor(() => {
+      expect(screen.getByText(/Source: Hybrid/i)).toBeTruthy();
+      expect(screen.getByText(/RPM: 5/i)).toBeTruthy();
+    });
+
+    vi.mocked(api.fetchJobOptions).mockResolvedValueOnce({
+      presets: ['b1-default', 'b2-default'],
+      cefrLevels: ['A1', 'A2', 'B1', 'B2', 'C1', 'C2'],
+      cefrDefault: 'B1',
+      generation: {
+        providers: ['openai', 'google_ai_studio', 'openrouter'],
+        defaultProvider: 'openai',
+        modelOptions: [
+          {
+            provider: 'openai',
+            id: 'gpt-5.2',
+            tier: 'primary',
+            fallbackRank: 0,
+            defaultSelected: true,
+            enabled: true,
+          },
+        ],
+        defaultModelByProvider: {
+          openai: 'gpt-5.2',
+        },
+        quota: {
+          source: 'configured',
+          lastUpdatedAt: '2026-02-18T00:20:00.000Z',
+          requestsPerMinute: 99,
+          requestsPerDay: 999,
+        },
+      },
+      voiceAccents: ['american'],
+      voices: [{ id: 'voice-a', name: 'Voice A', accent: 'american' }],
+      notionDatabases: [{ id: 'db-1', name: 'DB One' }],
+      ttsStrategies: ['auto', 'dialogue', 'tts'],
+      supportedActions: [],
+    });
+
+    await user.click(screen.getByRole('button', { name: /Refresh actions/i }));
+
+    await waitFor(() => {
+      expect(api.fetchJobOptions).toHaveBeenCalledTimes(2);
+      expect(screen.getByText(/Source: Configured/i)).toBeTruthy();
+      expect(screen.getByText(/RPM: 99/i)).toBeTruthy();
+      expect(screen.getByText(/RPD: 999/i)).toBeTruthy();
+    });
+    expect(screen.queryByText(/RPM: 5/i)).toBeNull();
+  });
+
+  it('updates quota panel with latest successful generation response', async () => {
+    const user = userEvent.setup();
+    vi.mocked(api.generateDraft).mockResolvedValueOnce({
+      text: '# Generated assignment draft',
+      provider: 'openai',
+      model: 'gpt-5.2',
+      quota: {
+        source: 'provider',
+        lastUpdatedAt: '2026-02-18T00:04:00.000Z',
+        requestsPerMinute: 42,
+        requestsPerDay: 1000,
+      },
+    });
+
+    render(<MinimalAssignment />);
+    await preparePromptReady(user);
+    await user.selectOptions(screen.getByRole('combobox', { name: /Generation provider/i }), 'openai');
+    await user.selectOptions(screen.getByRole('combobox', { name: /Generation model/i }), 'gpt-5.2');
+    await user.click(screen.getByRole('button', { name: /Generate draft from prompt/i }));
+
+    await waitFor(() => {
+      expect(screen.getByText(/Source: Provider/i)).toBeTruthy();
+      expect(screen.getByText(/RPM: 42/i)).toBeTruthy();
+      expect(screen.getByText(/RPD: 1000/i)).toBeTruthy();
+    });
+    expect(screen.queryByText(/RPM: 5/i)).toBeNull();
+  });
+
+  it('shows relative and absolute freshness in quota panel', async () => {
+    render(<MinimalAssignment />);
+
+    await waitFor(() => {
+      expect(screen.getByText(/Updated: (just now|\d+[mhd] ago) \(.+\)/i)).toBeTruthy();
+    });
+  });
+
+  it('keeps last successful quota snapshot when a later generation request fails', async () => {
+    const user = userEvent.setup();
+    vi.mocked(api.generateDraft)
+      .mockResolvedValueOnce({
+        text: '# Generated assignment draft',
+        provider: 'openai',
+        model: 'gpt-5.2',
+        quota: {
+          source: 'provider',
+          lastUpdatedAt: '2026-02-18T00:04:00.000Z',
+          requestsPerMinute: 42,
+        },
+      })
+      .mockRejectedValueOnce(
+        new api.GenerationDraftApiError('Provider timed out', {
+          code: 'provider_timeout',
+          provider: 'openai',
+          model: 'gpt-5.2',
+          requestId: 'req-timeout-2',
+        }),
+      );
+
+    render(<MinimalAssignment />);
+    await preparePromptReady(user);
+    await user.selectOptions(screen.getByRole('combobox', { name: /Generation provider/i }), 'openai');
+    await user.selectOptions(screen.getByRole('combobox', { name: /Generation model/i }), 'gpt-5.2');
+    await user.click(screen.getByRole('button', { name: /Generate draft from prompt/i }));
+
+    await waitFor(() => {
+      expect(screen.getByText(/Source: Provider/i)).toBeTruthy();
+      expect(screen.getByText(/RPM: 42/i)).toBeTruthy();
+    });
+
+    await user.click(screen.getByRole('button', { name: /Generate draft from prompt/i }));
+    await waitFor(() => {
+      expect(screen.getByText(/Provider timed out/i)).toBeTruthy();
+    });
+    expect(screen.getByText(/Source: Provider/i)).toBeTruthy();
+    expect(screen.getByText(/RPM: 42/i)).toBeTruthy();
+  });
+
+  it('resets runtime quota snapshot on Start new and falls back to baseline quota', async () => {
+    const user = userEvent.setup();
+    vi.mocked(api.generateDraft).mockResolvedValueOnce({
+      text: '# Generated assignment draft',
+      provider: 'openai',
+      model: 'gpt-5.2',
+      quota: {
+        source: 'provider',
+        lastUpdatedAt: '2026-02-18T00:04:00.000Z',
+        requestsPerMinute: 42,
+      },
+    });
+
+    render(<MinimalAssignment />);
+    await preparePromptReady(user);
+    await user.selectOptions(screen.getByRole('combobox', { name: /Generation provider/i }), 'openai');
+    await user.selectOptions(screen.getByRole('combobox', { name: /Generation model/i }), 'gpt-5.2');
+    await user.click(screen.getByRole('button', { name: /Generate draft from prompt/i }));
+
+    await waitFor(() => {
+      expect(screen.getByText(/Source: Provider/i)).toBeTruthy();
+      expect(screen.getByText(/RPM: 42/i)).toBeTruthy();
+    });
+
+    await user.click(screen.getByRole('button', { name: /Start new/i }));
+
+    await waitFor(() => {
+      expect(screen.getByText(/Source: Hybrid/i)).toBeTruthy();
+      expect(screen.getByText(/RPM: 5/i)).toBeTruthy();
+    });
+    expect(screen.queryByText(/RPM: 42/i)).toBeNull();
+  });
+
   it('enables generate draft only after prompt is ready', async () => {
     const user = userEvent.setup();
     render(<MinimalAssignment />);

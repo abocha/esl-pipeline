@@ -34,9 +34,9 @@
 ## Current Sprint Focus
 
 - Active workstream: `WS2B Direct LLM generation`.
-- This week objective: execute WS2B-S1 contracts after provider decision lock.
-- Today `Now` task (30-90 min): finalize generation request/response contracts and keep WS2B error categories deterministic.
-- Success for today: contracts merge cleanly and backend/frontend can consume generation metadata without breaking existing job-options flows.
+- This week objective: close WS2B-S3 quota UX and mark WS2B done criteria complete.
+- Today `Now` task (30-90 min): finalize Draft-step quota panel behavior (`job-options` baseline + latest generation snapshot), then lock tests/tracker evidence.
+- Success for today: quota panel renders source/freshness metadata, generation fallback messaging remains actionable, and WS2B done checklist is fully checked.
 
 ## Delivery Model (Locked)
 
@@ -58,7 +58,7 @@ Rules:
 | WS1 CEFR baseline presets | `complete` | W1 (2026-02-09) | W3 (2026-03-01) | none |
 | WS6 Readiness instrumentation (minimal first) | `complete` | W1 (2026-02-09) | W4 (2026-03-08) | WS1 metric hooks merged |
 | WS2A Preset plumbing MVP | `complete` | W4 (2026-03-02) | W7 (2026-03-29) | WS1 + WS6 complete |
-| WS2B Direct LLM generation | `queued (gate open)` | W8 (2026-03-30) | W9 (2026-04-12) | WS2A complete |
+| WS2B Direct LLM generation | `complete` | W8 (2026-03-30) | W9 (2026-04-12) | WS2A complete |
 | WS3 TTS abstraction + fallback | `parked` | W10 (2026-04-13) | W12 (2026-05-03) | WS2B seam pattern stable |
 | WS5 Cost and quota policy | `parked` | W11 (2026-04-20) | W13 (2026-05-10) | WS2B + WS3 usage telemetry available |
 | WS4 CRM-lite lesson ledger | `parked` | W13 (2026-05-04) | W15 (2026-05-24) | WS2A assignment flow stable |
@@ -331,7 +331,7 @@ Remove manual copy-paste dependency with backend generation endpoint + frontend 
 
 ### Status
 
-- `queued` with start gate open at WS2B-S1.
+- `complete`.
 
 ### Start Gate (Mandatory)
 
@@ -359,9 +359,9 @@ Remove manual copy-paste dependency with backend generation endpoint + frontend 
   - retry/timeout/budget rules are provider-specific,
   - no consumer-facing pricing scope in this phase.
 
-### Future Session Slices (After Gate Opens)
+### Session Slices (Delivered)
 
-#### WS2B-S1 Contracts Finalization
+#### WS2B-S1 Contracts Finalization (Completed)
 
 - Add:
   - `GenerateDraftRequest`
@@ -379,7 +379,7 @@ Remove manual copy-paste dependency with backend generation endpoint + frontend 
 - Edit:
   - `packages/contracts/src/index.ts`
 
-#### WS2B-S2 Backend Endpoint Skeleton + Error Contract Test
+#### WS2B-S2 Backend Endpoint Skeleton + Error Contract Test (Completed)
 
 - Endpoint target:
   - `POST /generation/drafts`
@@ -392,7 +392,7 @@ Remove manual copy-paste dependency with backend generation endpoint + frontend 
   - emits provider/model/quota snapshot in response,
   - maps provider failures to normalized categories (`provider_rate_limit`, `provider_timeout`, `provider_contract_error`).
 
-#### WS2B-S3 Frontend Trigger Wiring
+#### WS2B-S3 Frontend Trigger Wiring (Completed)
 
 - Edit:
   - `packages/batch-frontend/src/utils/api.ts`
@@ -404,11 +404,11 @@ Remove manual copy-paste dependency with backend generation endpoint + frontend 
 
 ### WS2B Done Criteria
 
-- [ ] Contracts merged for generation request/response.
-- [ ] Backend endpoint functional and tested.
-- [ ] Minimal UI wired with provider/model pre-draft selector and fallback behavior retained.
-- [ ] Quota panel is visible in minimal UI with source labels (`configured`/`provider`/`hybrid`) and freshness timestamp.
-- [ ] Error states are visible and actionable.
+- [x] Contracts merged for generation request/response.
+- [x] Backend endpoint functional and tested.
+- [x] Minimal UI wired with provider/model pre-draft selector and fallback behavior retained.
+- [x] Quota panel is visible in minimal UI with source labels (`configured`/`provider`/`hybrid`) and freshness timestamp.
+- [x] Error states are visible and actionable.
 
 ---
 
@@ -482,6 +482,7 @@ Recent evidence:
 - 2026-02-18 | WS2B docs audit | completed implementation-readiness pass across OpenAI/Google/OpenRouter docs: official-source priority lock (OpenAI), baseline scope trim, error mapping consistency, and planned provider auth var coverage in env docs. | `rg -n "OPENAI_RESPONSES_WS2B_PROFILE|GOOGLE_GENAI_WS2B_PROFILE|OPENROUTER_WS2B_PROFILE|provider_contract_error|OPENAI_API_KEY|GEMINI_API_KEY|OPENROUTER_API_KEY" docs/reference docs`; `git status --short` | pass | local workspace
 - 2026-02-18 | WS2B-S1 | finalized generation request/response contracts and optional `job-options.generation` metadata propagation across contracts/backend/frontend with safe clone semantics. | `pnpm --filter @esl-pipeline/contracts typecheck`; `pnpm --filter @esl-pipeline/orchestrator test -- metadata.job-options.test.ts`; `pnpm --filter @esl-pipeline/batch-backend exec vitest run --config ../../vitest.config.ts tests/application.get-job-options.test.ts tests/transport.http-server.integration.test.ts`; `pnpm --filter @esl-pipeline/batch-frontend test -- MinimalAssignment.test.tsx` | pass | local workspace
 - 2026-02-18 | WS2B-S2 | implemented `POST /generation/drafts` backend endpoint with live provider adapters (OpenAI/Google/OpenRouter), deterministic fallback/retry ladder, normalized provider error categories, and `/config/job-options` generation metadata defaults. | `pnpm --filter @esl-pipeline/batch-backend typecheck`; `pnpm --filter @esl-pipeline/batch-backend exec vitest run --config ../../vitest.config.ts tests/application.generate-draft.test.ts tests/transport.http-server.integration.test.ts tests/application.get-job-options.test.ts tests/config.env.test.ts` | pass | local workspace
+- 2026-02-18 | WS2B-S3 | completed Draft-step generation UX with provider/model controls, quota panel (source + freshness + limits link), runtime snapshot precedence over baseline quota, and stale-flow-safe response handling. | `pnpm lint`; `pnpm --filter @esl-pipeline/batch-frontend test -- MinimalAssignment.test.tsx`; `pnpm --filter @esl-pipeline/batch-backend exec vitest run --config ../../vitest.config.ts tests/application.generate-draft.test.ts tests/transport.http-server.integration.test.ts`; `pnpm check:fast` | pass | local workspace
 
 ## Weekly Closeout Checklist
 
