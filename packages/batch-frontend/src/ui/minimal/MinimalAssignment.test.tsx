@@ -170,6 +170,30 @@ describe('MinimalAssignment', () => {
       presets: ['b1-default', 'b2-default'],
       cefrLevels: ['A1', 'A2', 'B1', 'B2', 'C1', 'C2'],
       cefrDefault: 'B1',
+      generation: {
+        providers: ['openai', 'google_ai_studio', 'openrouter'],
+        defaultProvider: 'openai',
+        modelOptions: [
+          {
+            provider: 'openai',
+            id: 'gpt-5.2',
+            tier: 'primary',
+            fallbackRank: 0,
+            defaultSelected: true,
+            enabled: true,
+          },
+        ],
+        defaultModelByProvider: {
+          openai: 'gpt-5.2',
+        },
+        quota: {
+          source: 'hybrid',
+          lastUpdatedAt: '2026-02-18T00:00:00.000Z',
+          requestsPerMinute: 5,
+          tokensPerMinute: 250000,
+          requestsPerDay: 20,
+        },
+      },
       voiceAccents: ['american'],
       voices: [{ id: 'voice-a', name: 'Voice A', accent: 'american' }],
       notionDatabases: [{ id: 'db-1', name: 'DB One' }],

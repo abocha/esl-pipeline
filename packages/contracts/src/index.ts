@@ -23,6 +23,71 @@ export interface VoiceOption {
   category?: string | null;
 }
 
+export type GenerationProvider = 'openai' | 'google_ai_studio' | 'openrouter';
+
+export type GenerationErrorCategory =
+  | 'provider_rate_limit'
+  | 'provider_timeout'
+  | 'provider_contract_error';
+
+export type GenerationQuotaSource = 'configured' | 'provider' | 'hybrid';
+
+export interface GenerationModelOption {
+  provider: GenerationProvider;
+  id: string;
+  label?: string;
+  tier?: 'primary' | 'fallback' | 'tertiary' | 'custom';
+  fallbackRank?: number;
+  defaultSelected?: boolean;
+  enabled?: boolean;
+}
+
+export interface GenerationQuotaView {
+  source: GenerationQuotaSource;
+  lastUpdatedAt: string;
+  dashboardUrl?: string;
+  requestsPerMinute?: number | null;
+  tokensPerMinute?: number | null;
+  requestsPerDay?: number | null;
+  dailyTokenBudget?: number | null;
+  usedRequestsToday?: number | null;
+  usedTokensToday?: number | null;
+}
+
+export interface GenerationOptionsPayload {
+  providers: GenerationProvider[];
+  defaultProvider: GenerationProvider;
+  modelOptions: GenerationModelOption[];
+  defaultModelByProvider?: Partial<Record<GenerationProvider, string>>;
+  quota: GenerationQuotaView;
+}
+
+export interface GenerateDraftRequest {
+  promptPackageId: string;
+  provider?: GenerationProvider;
+  model?: string;
+  maxOutputTokens?: number;
+  stream?: boolean;
+}
+
+export interface GenerateDraftUsage {
+  inputTokens?: number;
+  outputTokens?: number;
+  totalTokens?: number;
+  cachedTokens?: number;
+  reasoningTokens?: number;
+}
+
+export interface GenerateDraftResponse {
+  text: string;
+  provider: GenerationProvider;
+  model: string;
+  quota: GenerationQuotaView;
+  usage?: GenerateDraftUsage;
+  providerRequestId?: string;
+  errorCategory?: GenerationErrorCategory;
+}
+
 export interface JobOptionsPayload {
   presets: string[];
   voiceAccents: string[];
@@ -32,6 +97,7 @@ export interface JobOptionsPayload {
   ttsStrategies: TtsStrategyOption[];
   cefrLevels?: CefrLevel[];
   cefrDefault?: CefrLevel;
+  generation?: GenerationOptionsPayload;
 }
 
 export interface LearningPresetProvenance {

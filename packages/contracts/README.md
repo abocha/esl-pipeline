@@ -8,6 +8,7 @@ Shared cross-package TypeScript contracts for the ESL monorepo.
 - Shared enums/unions (`JobState`, `TtsStrategy`, `JobUploadOption`, `PublishTarget`)
 - Job action types (`JobActionType`, `JobActionRequest`, `JobActionResponse`, `ActionCapability`)
 - Job options metadata payload types (`JobOptionsPayload`, `VoiceOption`, `NotionDatabaseOption`)
+- WS2B generation DTOs (`GenerateDraftRequest`, `GenerateDraftResponse`, provider/model/quota types)
 - Shared errors (`PipelineError`, `ConfigurationError`, etc.)
 - Shared observability shapes (`PipelineLogEvent`, `PipelineLogger`, `noopLogger`)
 

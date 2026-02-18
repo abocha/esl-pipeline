@@ -668,6 +668,7 @@ export interface JobOptionsResponse {
   learningPresets?: LearningPresetOption[];
   cefrLevels?: ContractJobOptionsPayload['cefrLevels'];
   cefrDefault?: ContractJobOptionsPayload['cefrDefault'];
+  generation?: ContractJobOptionsPayload['generation'];
   voiceAccents: ContractJobOptionsPayload['voiceAccents'];
   voices: ContractJobOptionsPayload['voices'];
   notionDatabases: ContractJobOptionsPayload['notionDatabases'];
