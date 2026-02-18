@@ -61,7 +61,8 @@
 | Remote config conditional revalidation + stale-if-error cache                              | Done    | Partial  | Config provider + workspace fetch wiring      | Frontend now benefits from reduced churn; keep stale-state UX explicit. |
 | Artifact identity reuse (`audio.key/hash`, `htmlKey/hash`)                                 | Done    | Partial  | Manifest + publisher/uploader behavior         | Continue exposing artifact reuse diagnostics in operator views. |
 | Notion preset hash idempotence skip                                                         | Done    | Done     | Orchestrator + notion adapter colorizer        | Monitor skip-rate and fallback behavior in publish telemetry. |
-| Draft generation provider/model preselection + quota panel                                  | Pending | Pending  | WS2B generation contracts + `/config/job-options` extension | Implement in WS2B-S1/S2/S3 with hybrid quota source labels. |
+| Draft generation provider/model preselection + quota panel                                  | Done    | Done     | WS2B generation contracts + `/config/job-options` extension | Keep baseline quota refresh and runtime snapshot precedence regression-covered. |
+| WS3 provider runtime seam extraction (shared package)                                       | Partial | Partial  | `@esl-pipeline/provider-runtime` + generation service wiring | Complete TTS runtime-path adoption in WS3-S1/S2 without changing public job contracts. |
 | Prompt/template/profile lineage (`GET /prompt-packages/:id/lineage`)                      | Done    | Done     | Prompt-package lineage API + frontend client  | None.                                               |
 | Draft save/read                                                                            | Done    | Done     | Draft routes                                  | None.                                               |
 | Draft materialize (`POST /drafts/:id/materialize`)                                         | Done    | Done     | Draft materialization service                 | Maintain job override validation coverage.          |
@@ -86,7 +87,7 @@
 4. Student workspace is now available, but advanced guardrails and end-to-end tutor ergonomics still need completion.
 5. Phase E is in progress; keep parity between workspace interactions and backend governance rules.
 6. Readiness dashboard still needs UI treatment for new voice-alignment counters and thresholds.
-7. WS2B generation endpoint and UI picker are still pending implementation; decision lock is complete.
+7. WS3 seam extraction is active; generation path uses shared provider runtime utilities, but TTS runtime-path adoption remains pending.
 
 ## Do / Don't
 

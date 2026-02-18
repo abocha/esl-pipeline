@@ -4,6 +4,11 @@ import type {
   GenerationErrorCategory,
   GenerationProvider,
 } from '@esl-pipeline/contracts';
+import {
+  classifyProviderRuntimeFailure,
+  runProviderFallbackLadder,
+  type ProviderRuntimeClassificationRules,
+} from '@esl-pipeline/provider-runtime';
 
 import type { BatchBackendConfig } from '../config/env.js';
 import { loadConfig } from '../config/env.js';
@@ -28,6 +33,22 @@ const DEFAULT_EXECUTORS: Record<GenerationProvider, ProviderExecutor> = {
   openai: executeOpenAiGeneration,
   google_ai_studio: executeGoogleGeneration,
   openrouter: executeOpenRouterGeneration,
+};
+
+const GENERATION_RUNTIME_CLASSIFICATION_RULES: ProviderRuntimeClassificationRules = {
+  byProvider: {
+    openai: {
+      rateLimitCodes: ['rate_limit_exceeded'],
+      timeoutStatusMin: 500,
+      timeoutCodes: ['server_error'],
+    },
+    google_ai_studio: {
+      timeoutStatusMin: 500,
+    },
+    openrouter: {
+      timeoutStatuses: [500, 502, 503],
+    },
+  },
 };
 
 export class GenerateDraftProviderError extends Error {
@@ -96,105 +117,94 @@ export async function generateDraft(
     });
   }
 
-  let lastFallbackError: GenerateDraftProviderError | null = null;
+  const execution = await runProviderFallbackLadder<
+    (typeof candidates)[number],
+    { candidate: (typeof candidates)[number]; result: ProviderExecutionResult },
+    GenerateDraftProviderError
+  >({
+    candidates,
+    runCandidate: async (candidate) => {
+      const executor = executors[candidate.provider];
+      if (!executor) {
+        throw new GenerateDraftProviderError({
+          category: 'provider_contract_error',
+          provider: candidate.provider,
+          model: candidate.model,
+          message: `No generation executor configured for provider: ${candidate.provider}`,
+        });
+      }
 
-  for (const candidate of candidates) {
-    const executor = executors[candidate.provider];
-    if (!executor) {
-      throw new GenerateDraftProviderError({
-        category: 'provider_contract_error',
+      const result = await executor({
+        config: config.generation,
+        request: {
+          model: candidate.model,
+          prompt: promptPackage.text,
+          maxOutputTokens: request.maxOutputTokens,
+          stream: false,
+        },
+      });
+
+      return { candidate, result };
+    },
+    mapError: (candidate, error) =>
+      mapProviderError({
         provider: candidate.provider,
         model: candidate.model,
-        message: `No generation executor configured for provider: ${candidate.provider}`,
+        error,
+      }),
+    isTimeoutError: (mappedError) => mappedError.category === 'provider_timeout',
+    isFailFastError: (mappedError) =>
+      mappedError.category === 'provider_contract_error',
+    getRetryMax: (candidate) =>
+      retryMaxForProvider(config.generation, candidate.provider),
+    getRetryBackoffMs: (candidate) =>
+      retryBackoffForProvider(config.generation, candidate.provider),
+    sleep,
+    onAttempt: ({ candidate, retriesRemaining }) => {
+      logger.info('Attempting draft generation candidate', {
+        event: 'generation_candidate_attempt',
+        provider: candidate.provider,
+        model: candidate.model,
+        fallbackRank: candidate.fallbackRank,
+        retriesRemaining,
       });
-    }
-
-    let retriesRemaining = retryMaxForProvider(config.generation, candidate.provider);
-
-    while (true) {
-      try {
-        logger.info('Attempting draft generation candidate', {
-          event: 'generation_candidate_attempt',
-          provider: candidate.provider,
-          model: candidate.model,
-          fallbackRank: candidate.fallbackRank,
-          retriesRemaining,
-        });
-
-        const result = await executor({
-          config: config.generation,
-          request: {
-            model: candidate.model,
-            prompt: promptPackage.text,
-            maxOutputTokens: request.maxOutputTokens,
-            stream: false,
-          },
-        });
-
-        return {
-          text: result.text,
-          provider: candidate.provider,
-          model: candidate.model,
-          quota: buildQuotaSnapshot({
-            config: config.generation,
-            provider: candidate.provider,
-            model: candidate.model,
-            now: now(),
-          }),
-          ...(result.usage ? { usage: result.usage } : {}),
-          ...(result.providerRequestId ? { providerRequestId: result.providerRequestId } : {}),
-        };
-      } catch (error) {
-        const mapped = mapProviderError({
-          provider: candidate.provider,
-          model: candidate.model,
-          error,
-        });
-
-        if (mapped.category === 'provider_timeout' && retriesRemaining > 0) {
-          retriesRemaining -= 1;
-          const backoffMs = retryBackoffForProvider(config.generation, candidate.provider);
-          logger.warn('Draft generation timed out; retrying candidate before fallback', {
-            event: 'generation_candidate_retry',
-            provider: candidate.provider,
-            model: candidate.model,
-            retriesRemaining,
-            backoffMs,
-            category: mapped.category,
-          });
-          if (backoffMs > 0) {
-            await sleep(backoffMs);
-          }
-          continue;
-        }
-
-        if (mapped.category === 'provider_contract_error') {
-          throw mapped;
-        }
-
-        lastFallbackError = mapped;
-        logger.warn('Draft generation candidate failed; falling back to next candidate', {
-          event: 'generation_candidate_fallback',
-          provider: candidate.provider,
-          model: candidate.model,
-          category: mapped.category,
-          statusCode: mapped.statusCode,
-        });
-        break;
-      }
-    }
-  }
-
-  if (lastFallbackError) {
-    throw lastFallbackError;
-  }
-
-  throw new GenerateDraftProviderError({
-    category: 'provider_contract_error',
-    provider: request.provider ?? config.generation.defaultProvider,
-    model: request.model ?? 'unspecified',
-    message: 'All generation candidates failed before a fallback decision could be applied.',
+    },
+    onRetry: ({ candidate, retriesRemaining, backoffMs, mappedError }) => {
+      logger.warn('Draft generation timed out; retrying candidate before fallback', {
+        event: 'generation_candidate_retry',
+        provider: candidate.provider,
+        model: candidate.model,
+        retriesRemaining,
+        backoffMs,
+        category: mappedError.category,
+      });
+    },
+    onFallback: ({ candidate, mappedError }) => {
+      logger.warn('Draft generation candidate failed; falling back to next candidate', {
+        event: 'generation_candidate_fallback',
+        provider: candidate.provider,
+        model: candidate.model,
+        category: mappedError.category,
+        statusCode: mappedError.statusCode,
+      });
+    },
   });
+
+  return {
+    text: execution.result.text,
+    provider: execution.candidate.provider,
+    model: execution.candidate.model,
+    quota: buildQuotaSnapshot({
+      config: config.generation,
+      provider: execution.candidate.provider,
+      model: execution.candidate.model,
+      now: now(),
+    }),
+    ...(execution.result.usage ? { usage: execution.result.usage } : {}),
+    ...(execution.result.providerRequestId
+      ? { providerRequestId: execution.result.providerRequestId }
+      : {}),
+  };
 }
 
 function retryMaxForProvider(
@@ -226,87 +236,26 @@ function mapProviderError(args: {
   model: string;
   error: unknown;
 }): GenerateDraftProviderError {
+  if (args.error instanceof GenerateDraftProviderError) {
+    return args.error;
+  }
+
   const details = getErrorDetails(args.error);
-
-  if (isRateLimitError(args.provider, details.status, details.code)) {
-    return new GenerateDraftProviderError({
-      category: 'provider_rate_limit',
-      provider: args.provider,
-      model: args.model,
-      message: details.message,
-    });
-  }
-
-  if (isTimeoutError(args.provider, details)) {
-    return new GenerateDraftProviderError({
-      category: 'provider_timeout',
-      provider: args.provider,
-      model: args.model,
-      message: details.message,
-    });
-  }
+  const category = classifyProviderRuntimeFailure({
+    provider: args.provider,
+    message: details.message,
+    status: details.status,
+    code: details.code,
+    name: details.name,
+    rules: GENERATION_RUNTIME_CLASSIFICATION_RULES,
+  });
 
   return new GenerateDraftProviderError({
-    category: 'provider_contract_error',
+    category,
     provider: args.provider,
     model: args.model,
     message: details.message,
   });
-}
-
-function isRateLimitError(
-  provider: GenerationProvider,
-  status: number | undefined,
-  code: string | undefined,
-): boolean {
-  if (status === 429) return true;
-  if (provider === 'openai' && code === 'rate_limit_exceeded') return true;
-  return false;
-}
-
-function isTimeoutError(
-  provider: GenerationProvider,
-  details: {
-    status?: number;
-    code?: string;
-    message: string;
-    name?: string;
-  },
-): boolean {
-  const message = details.message.toLowerCase();
-  const code = details.code?.toLowerCase();
-
-  if (
-    details.name === 'AbortError' ||
-    code === 'etimedout' ||
-    code === 'econnreset' ||
-    message.includes('timed out') ||
-    message.includes('timeout') ||
-    message.includes('econnreset') ||
-    message.includes('etimedout') ||
-    message.includes('fetch failed')
-  ) {
-    return true;
-  }
-
-  const status = details.status;
-  if (status === undefined) return false;
-
-  if (status === 408 || status === 504) {
-    return true;
-  }
-
-  if (provider === 'openai') {
-    if (status >= 500) return true;
-    if (code === 'server_error') return true;
-    return false;
-  }
-
-  if (provider === 'google_ai_studio') {
-    return status >= 500;
-  }
-
-  return status === 500 || status === 502 || status === 503;
 }
 
 function getErrorDetails(error: unknown): {
@@ -325,10 +274,12 @@ function getErrorDetails(error: unknown): {
   }
 
   if (error instanceof Error) {
-    const maybeStatus = error as Error & { status?: number; code?: string };
+    const maybeStatus = error as Error & { status?: number; code?: unknown };
+    const code =
+      typeof maybeStatus.code === 'string' ? maybeStatus.code : undefined;
     return {
       status: maybeStatus.status,
-      code: maybeStatus.code,
+      code,
       message: error.message,
       name: error.name,
     };

@@ -33,10 +33,10 @@
 
 ## Current Sprint Focus
 
-- Active workstream: `WS2B Direct LLM generation`.
-- This week objective: close WS2B-S3 quota UX and mark WS2B done criteria complete.
-- Today `Now` task (30-90 min): finalize Draft-step quota panel behavior (`job-options` baseline + latest generation snapshot), then lock tests/tracker evidence.
-- Success for today: quota panel renders source/freshness metadata, generation fallback messaging remains actionable, and WS2B done checklist is fully checked.
+- Active workstream: `WS3 TTS abstraction + fallback`.
+- This week objective: extract and stabilize the shared provider runtime seam for generation/TTS convergence.
+- Today `Now` task (30-90 min): ship WS3-S0 (`@esl-pipeline/provider-runtime`) and migrate generation ladder/error classification to the shared seam with parity tests.
+- Success for today: WS3 gate is open in tracker, generation behavior is parity-safe on the shared seam, and WS3-S0 evidence is logged.
 
 ## Delivery Model (Locked)
 
@@ -59,7 +59,7 @@ Rules:
 | WS6 Readiness instrumentation (minimal first) | `complete` | W1 (2026-02-09) | W4 (2026-03-08) | WS1 metric hooks merged |
 | WS2A Preset plumbing MVP | `complete` | W4 (2026-03-02) | W7 (2026-03-29) | WS1 + WS6 complete |
 | WS2B Direct LLM generation | `complete` | W8 (2026-03-30) | W9 (2026-04-12) | WS2A complete |
-| WS3 TTS abstraction + fallback | `parked` | W10 (2026-04-13) | W12 (2026-05-03) | WS2B seam pattern stable |
+| WS3 TTS abstraction + fallback | `in_progress` | W10 (2026-04-13) | W12 (2026-05-03) | WS2B seam pattern stable |
 | WS5 Cost and quota policy | `parked` | W11 (2026-04-20) | W13 (2026-05-10) | WS2B + WS3 usage telemetry available |
 | WS4 CRM-lite lesson ledger | `parked` | W13 (2026-05-04) | W15 (2026-05-24) | WS2A assignment flow stable |
 | Stabilization and gate review | `queued` | W16 (2026-05-25) | W17 (2026-06-07) | WS2A-WS6 MVP complete |
@@ -412,14 +412,52 @@ Remove manual copy-paste dependency with backend generation endpoint + frontend 
 
 ---
 
+## WS3 Execution Card: TTS Abstraction + Fallback (In Progress)
+
+### Objective
+
+Extract provider retry/fallback/error-classification seam into a shared runtime package, then
+reuse it in generation flow before extending the same seam into TTS runtime paths.
+
+### Status
+
+- `in_progress`; WS3-S0 is complete and WS3-S1 is next.
+
+### Start Gate (Mandatory)
+
+- [x] WS2B request/response shape is stable.
+- [x] Provider seam can be reused from generation service patterns.
+
+### WS3-S0 Provider Seam Extraction (Current Slice)
+
+- Goal: create a shared provider runtime package and migrate `generate-draft` to it without public
+  contract changes.
+- Add package:
+  - `packages/provider-runtime`
+- Edit:
+  - `packages/provider-runtime/src/index.ts`
+  - `packages/provider-runtime/src/classification.ts`
+  - `packages/provider-runtime/src/ladder.ts`
+  - `packages/provider-runtime/src/hints.ts`
+  - `packages/provider-runtime/tests/classification.test.ts`
+  - `packages/provider-runtime/tests/ladder.test.ts`
+  - `packages/batch-backend/src/application/generate-draft.ts`
+  - `packages/batch-backend/package.json`
+- Minimum behavior:
+  - shared classification supports normalized provider categories:
+    `provider_rate_limit`, `provider_timeout`, `provider_contract_error`,
+  - shared ladder supports deterministic retry/backoff/fallback and fail-fast decisions,
+  - generation endpoint preserves existing fallback/retry/error semantics,
+  - no public DTO/API shape changes in this slice.
+
+### WS3-S0 Done Criteria
+
+- [x] `@esl-pipeline/provider-runtime` package builds and tests pass.
+- [x] `generate-draft` is migrated to shared seam with no behavior regressions.
+- [x] backend generation tests/integration tests remain green.
+- [x] tracker/alignment docs reflect WS3 active state and WS2B completion status.
+
 ## Parked Workstreams (Do Not Start Yet)
-
-### WS3 TTS Abstraction + Fallback
-
-Start only when:
-
-- [ ] WS2B request/response shape is stable.
-- [ ] Provider seam can be reused from generation service patterns.
 
 ### WS5 Cost and Quota Policy
 
@@ -480,6 +518,7 @@ Recent evidence:
 - 2026-02-18 | WS2B docs | published Google GenAI WS2B implementation profile and linked it from policy/tracker/router/env docs. | `rg -n "GOOGLE_GENAI_WS2B_PROFILE|google_ai_studio|WS2B-S1" docs/reference docs`; `git status --short` | pass | local workspace
 - 2026-02-18 | WS2B docs | published OpenRouter WS2B implementation profile from Context7 (`/websites/openrouter_ai`) and linked it from policy/tracker/router/env docs. | `rg -n "OPENROUTER_WS2B_PROFILE|openrouter|WS2B-S1" docs/reference docs`; `git status --short` | pass | local workspace
 - 2026-02-18 | WS2B docs audit | completed implementation-readiness pass across OpenAI/Google/OpenRouter docs: official-source priority lock (OpenAI), baseline scope trim, error mapping consistency, and planned provider auth var coverage in env docs. | `rg -n "OPENAI_RESPONSES_WS2B_PROFILE|GOOGLE_GENAI_WS2B_PROFILE|OPENROUTER_WS2B_PROFILE|provider_contract_error|OPENAI_API_KEY|GEMINI_API_KEY|OPENROUTER_API_KEY" docs/reference docs`; `git status --short` | pass | local workspace
+- 2026-02-18 | WS3-S0 | extracted shared provider runtime package and migrated generation fallback/error classification seam with parity-preserving behavior. | `pnpm --filter @esl-pipeline/provider-runtime test`; `pnpm --filter @esl-pipeline/provider-runtime build`; `pnpm --filter @esl-pipeline/batch-backend test`; `pnpm lint`; `pnpm --filter @esl-pipeline/provider-runtime typecheck`; `pnpm --filter @esl-pipeline/batch-backend typecheck` | pass | local workspace
 - 2026-02-18 | WS2B-S1 | finalized generation request/response contracts and optional `job-options.generation` metadata propagation across contracts/backend/frontend with safe clone semantics. | `pnpm --filter @esl-pipeline/contracts typecheck`; `pnpm --filter @esl-pipeline/orchestrator test -- metadata.job-options.test.ts`; `pnpm --filter @esl-pipeline/batch-backend exec vitest run --config ../../vitest.config.ts tests/application.get-job-options.test.ts tests/transport.http-server.integration.test.ts`; `pnpm --filter @esl-pipeline/batch-frontend test -- MinimalAssignment.test.tsx` | pass | local workspace
 - 2026-02-18 | WS2B-S2 | implemented `POST /generation/drafts` backend endpoint with live provider adapters (OpenAI/Google/OpenRouter), deterministic fallback/retry ladder, normalized provider error categories, and `/config/job-options` generation metadata defaults. | `pnpm --filter @esl-pipeline/batch-backend typecheck`; `pnpm --filter @esl-pipeline/batch-backend exec vitest run --config ../../vitest.config.ts tests/application.generate-draft.test.ts tests/transport.http-server.integration.test.ts tests/application.get-job-options.test.ts tests/config.env.test.ts` | pass | local workspace
 - 2026-02-18 | WS2B-S3 | completed Draft-step generation UX with provider/model controls, quota panel (source + freshness + limits link), runtime snapshot precedence over baseline quota, and stale-flow-safe response handling. | `pnpm lint`; `pnpm --filter @esl-pipeline/batch-frontend test -- MinimalAssignment.test.tsx`; `pnpm --filter @esl-pipeline/batch-backend exec vitest run --config ../../vitest.config.ts tests/application.generate-draft.test.ts tests/transport.http-server.integration.test.ts`; `pnpm check:fast` | pass | local workspace

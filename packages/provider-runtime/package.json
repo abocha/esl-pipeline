@@ -1,0 +1,33 @@
+{
+  "name": "@esl-pipeline/provider-runtime",
+  "version": "1.0.0",
+  "private": true,
+  "license": "MIT",
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "default": "./dist/index.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsc -b tsconfig.build.json --force",
+    "clean": "node -e \"fs.rmSync('dist', {recursive:true, force:true})\"",
+    "test": "vitest run --config ../../vitest.config.ts --dir ../../packages/provider-runtime/tests --reporter=dot",
+    "test:verbose": "vitest run --config ../../vitest.config.ts --dir ../../packages/provider-runtime/tests --reporter=verbose",
+    "test:watch": "vitest watch --config ../../vitest.config.ts --dir ../../packages/provider-runtime/tests",
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "@types/node": "^25.2.0",
+    "typescript": "^5.9.3",
+    "vitest": "^4.0.18"
+  }
+}
