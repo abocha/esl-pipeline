@@ -1,4 +1,4 @@
-import type { ReadinessMetricsResponse } from '@esl-pipeline/contracts';
+import type { ReadinessMetricsResponse, VoiceProviderErrorCategory } from '@esl-pipeline/contracts';
 
 import {
   getReadinessMetrics,
@@ -58,11 +58,27 @@ export async function getReadinessMetricsWithDefaults(
   const normalizedProviderErrorBreakdown = buildVoiceProviderErrorBreakdown(providerErrorDetails);
 
   const legacyProviderErrors = snapshot.voiceProviderErrors ?? 0;
-  if (legacyProviderErrors !== normalizedProviderErrors) {
+  const legacyProviderErrorBreakdown = normalizeProviderErrorBreakdown(
+    snapshot.voiceProviderErrorBreakdown,
+  );
+  const normalizedProviderErrorBreakdownWithZeros = normalizeProviderErrorBreakdown(
+    normalizedProviderErrorBreakdown,
+  );
+  const hasTotalDrift = legacyProviderErrors !== normalizedProviderErrors;
+  const hasBreakdownDrift = hasProviderBreakdownDrift(
+    legacyProviderErrorBreakdown,
+    normalizedProviderErrorBreakdownWithZeros,
+  );
+
+  if (hasTotalDrift || hasBreakdownDrift) {
     logger.warn('Readiness provider-error totals differ between legacy SQL and parser normalization', {
       event: 'readiness_provider_error_drift',
       legacyProviderErrors,
       normalizedProviderErrors,
+      legacyProviderErrorBreakdown,
+      normalizedProviderErrorBreakdown: normalizedProviderErrorBreakdownWithZeros,
+      hasTotalDrift,
+      hasBreakdownDrift,
       from: resolved.from.toISOString(),
       to: resolved.to.toISOString(),
       userId: params.userId ?? null,
@@ -114,4 +130,36 @@ function resolveDateRange(
 function computeRate(successes: number, total: number): number | null {
   if (total <= 0) return null;
   return Number((successes / total).toFixed(4));
+}
+
+const PROVIDER_ERROR_CATEGORIES: readonly VoiceProviderErrorCategory[] = [
+  'invalid_voice_id',
+  'unsupported_voice_capability',
+  'provider_rate_limit',
+  'provider_timeout',
+  'provider_contract_error',
+];
+
+function normalizeProviderErrorBreakdown(
+  breakdown: Partial<Record<VoiceProviderErrorCategory, number>> | null | undefined,
+): Record<VoiceProviderErrorCategory, number> {
+  return {
+    invalid_voice_id: Number(breakdown?.invalid_voice_id ?? 0),
+    unsupported_voice_capability: Number(breakdown?.unsupported_voice_capability ?? 0),
+    provider_rate_limit: Number(breakdown?.provider_rate_limit ?? 0),
+    provider_timeout: Number(breakdown?.provider_timeout ?? 0),
+    provider_contract_error: Number(breakdown?.provider_contract_error ?? 0),
+  };
+}
+
+function hasProviderBreakdownDrift(
+  legacy: Record<VoiceProviderErrorCategory, number>,
+  normalized: Record<VoiceProviderErrorCategory, number>,
+): boolean {
+  for (const category of PROVIDER_ERROR_CATEGORIES) {
+    if ((legacy[category] ?? 0) !== (normalized[category] ?? 0)) {
+      return true;
+    }
+  }
+  return false;
 }

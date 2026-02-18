@@ -277,7 +277,8 @@ describeIfDb('domain/job-repository', () => {
             ($5, 'succeeded', 'html', $7, $10, $10, $16),
             ($6, 'failed', 'notion', $8, $10, $10, $17),
             ($9, 'failed', 'html', $7, $18, $18, $19),
-            ($20, 'failed', 'html', $7, $21, $21, $22)
+            ($20, 'failed', 'html', $7, $21, $21, $22),
+            ($23, 'failed', 'html', $7, $24, $24, $25)
           `,
           [
             randomUUID(),
@@ -302,6 +303,9 @@ describeIfDb('domain/job-repository', () => {
             randomUUID(),
             new Date('2024-04-02T00:00:00.000Z'),
             'Boundary provider failure',
+            randomUUID(),
+            new Date('2024-04-02T00:00:00.001Z'),
+            'After boundary provider failure',
           ],
         );
       });
@@ -319,6 +323,7 @@ describeIfDb('domain/job-repository', () => {
           'Boundary provider failure',
         ]),
       );
+      expect(result).not.toContain('After boundary provider failure');
       expect(result).toHaveLength(3);
     });
 

@@ -44,8 +44,9 @@
 5. Notion colorization now skips redundant API calls when preset hash is unchanged.
 6. WS2B-S0 provider/model/quota decision lock is documented in
    `docs/reference/GENERATION_PROVIDER_POLICY.md`.
-7. WS3-S2 backend surfacing/telemetry alignment is complete: readiness provider-error counters now
-   use parser-normalized failed-job classification with drift warning instrumentation.
+7. WS3-S3 backend telemetry hardening is complete: parser-based provider-error classification now
+   includes status-driven inference for untagged failures, drift warnings now cover totals +
+   breakdown mismatches, and boundary exclusions remain regression-covered.
 
 ## Capability Matrix
 
@@ -64,7 +65,7 @@
 | Artifact identity reuse (`audio.key/hash`, `htmlKey/hash`)                                 | Done    | Partial  | Manifest + publisher/uploader behavior         | Continue exposing artifact reuse diagnostics in operator views. |
 | Notion preset hash idempotence skip                                                         | Done    | Done     | Orchestrator + notion adapter colorizer        | Monitor skip-rate and fallback behavior in publish telemetry. |
 | Draft generation provider/model preselection + quota panel                                  | Done    | Done     | WS2B generation contracts + `/config/job-options` extension | Keep baseline quota refresh and runtime snapshot precedence regression-covered. |
-| WS3 provider runtime seam extraction (shared package)                                       | Done    | Partial  | `@esl-pipeline/provider-runtime` + generation/TTS runtime wiring | WS3-S2 backend surfacing/telemetry alignment is complete; proceed to WS3-S3 follow-through without public contract churn. |
+| WS3 provider runtime seam extraction (shared package)                                       | Done    | Partial  | `@esl-pipeline/provider-runtime` + generation/TTS runtime wiring | WS3-S3 backend follow-through is complete; keep parser-vs-legacy drift monitoring active until dedicated cutover slice. |
 | Prompt/template/profile lineage (`GET /prompt-packages/:id/lineage`)                      | Done    | Done     | Prompt-package lineage API + frontend client  | None.                                               |
 | Draft save/read                                                                            | Done    | Done     | Draft routes                                  | None.                                               |
 | Draft materialize (`POST /drafts/:id/materialize`)                                         | Done    | Done     | Draft materialization service                 | Maintain job override validation coverage.          |
@@ -89,7 +90,7 @@
 4. Student workspace is now available, but advanced guardrails and end-to-end tutor ergonomics still need completion.
 5. Phase E is in progress; keep parity between workspace interactions and backend governance rules.
 6. Readiness dashboard still needs UI treatment for new voice-alignment counters and thresholds.
-7. WS3 seam extraction remains active; generation/TTS/runtime/backend telemetry normalization are aligned, and WS3-S3 follow-through remains.
+7. Parser-only telemetry cutover is intentionally deferred; legacy SQL parity monitoring remains active until a dedicated cutover slice.
 
 ## Do / Don't
 

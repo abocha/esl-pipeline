@@ -38,6 +38,35 @@ describe('application/voice-provider-error', () => {
     );
   });
 
+  it('infers categories from provider HTTP status codes for untagged errors', () => {
+    expect(parseVoiceProviderError('Provider call failed with HTTP 429')).toEqual(
+      expect.objectContaining({
+        category: 'provider_rate_limit',
+        providerStatus: 429,
+      }),
+    );
+
+    expect(parseVoiceProviderError('Provider call failed with HTTP 503')).toEqual(
+      expect.objectContaining({
+        category: 'provider_timeout',
+        providerStatus: 503,
+      }),
+    );
+
+    expect(parseVoiceProviderError('Provider call failed with HTTP 422')).toEqual(
+      expect.objectContaining({
+        category: 'provider_contract_error',
+        providerStatus: 422,
+      }),
+    );
+  });
+
+  it('does not classify non-provider HTTP status failures as voice provider errors', () => {
+    expect(parseVoiceProviderError('Notion API failed with HTTP 429: too many requests')).toBeNull();
+    expect(parseVoiceProviderError('S3 upload failed with HTTP 503: service unavailable')).toBeNull();
+    expect(parseVoiceProviderError('Auth middleware rejected request with HTTP 422')).toBeNull();
+  });
+
   it('returns null for unknown or non-provider errors', () => {
     expect(parseVoiceProviderError('frontmatter validation failed: missing title')).toBeNull();
     expect(parseVoiceProviderError('')).toBeNull();
