@@ -24,7 +24,7 @@ const OPENAI_DASHBOARD_URL =
   'https://help.openai.com/en/articles/10306912-sharing-feedback-evaluation-and-fine-tuning-data-and-api-inputs-and-outputs-with-openai';
 const OPENROUTER_DASHBOARD_URL = 'https://openrouter.ai/docs/models';
 
-function uniqueNonEmpty(values: Array<string | undefined>): string[] {
+function uniqueNonEmpty(values: (string | undefined)[]): string[] {
   return [...new Set(values.map((value) => value?.trim()).filter(Boolean) as string[])];
 }
 
@@ -140,12 +140,16 @@ export function buildQuotaSnapshot(args: {
   if (args.provider === 'google_ai_studio') {
     const googleBaseline = getGoogleQuotaBaseline(args.model);
     const googleDailyRequestBudget = args.config.providers.googleAiStudio.dailyRequestBudget;
+    const requestsPerDay =
+      googleDailyRequestBudget === undefined
+        ? googleBaseline.requestsPerDay
+        : googleDailyRequestBudget;
     return {
       source: args.config.quotaSourceMode,
       lastUpdatedAt: nowIso,
       dashboardUrl: getProviderDashboardUrl(args.provider),
       ...googleBaseline,
-      ...(googleDailyRequestBudget !== undefined ? { requestsPerDay: googleDailyRequestBudget } : {}),
+      requestsPerDay,
     };
   }
 

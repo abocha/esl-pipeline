@@ -71,6 +71,17 @@ function parseErrorMessage(errorBody: unknown, fallback: string): string {
   return fallback;
 }
 
+function setUsageField<Key extends keyof GenerateDraftUsage>(
+  usage: GenerateDraftUsage,
+  key: Key,
+  value: GenerateDraftUsage[Key] | undefined,
+): void {
+  if (value === undefined) {
+    return;
+  }
+  usage[key] = value;
+}
+
 function parseOpenAiUsage(payload: Record<string, unknown>): GenerateDraftUsage | undefined {
   const usage = payload.usage;
   if (!usage || typeof usage !== 'object') return undefined;
@@ -100,13 +111,14 @@ function parseOpenAiUsage(payload: Record<string, unknown>): GenerateDraftUsage 
     return undefined;
   }
 
-  return {
-    ...(inputTokens !== undefined ? { inputTokens } : {}),
-    ...(outputTokens !== undefined ? { outputTokens } : {}),
-    ...(totalTokens !== undefined ? { totalTokens } : {}),
-    ...(cachedTokens !== undefined ? { cachedTokens } : {}),
-    ...(reasoningTokens !== undefined ? { reasoningTokens } : {}),
-  };
+  const parsed: GenerateDraftUsage = {};
+  setUsageField(parsed, 'inputTokens', inputTokens);
+  setUsageField(parsed, 'outputTokens', outputTokens);
+  setUsageField(parsed, 'totalTokens', totalTokens);
+  setUsageField(parsed, 'cachedTokens', cachedTokens);
+  setUsageField(parsed, 'reasoningTokens', reasoningTokens);
+
+  return parsed;
 }
 
 function extractOpenAiText(payload: Record<string, unknown>): string | null {
@@ -158,13 +170,14 @@ function parseGoogleUsage(payload: Record<string, unknown>): GenerateDraftUsage 
     return undefined;
   }
 
-  return {
-    ...(inputTokens !== undefined ? { inputTokens } : {}),
-    ...(outputTokens !== undefined ? { outputTokens } : {}),
-    ...(totalTokens !== undefined ? { totalTokens } : {}),
-    ...(cachedTokens !== undefined ? { cachedTokens } : {}),
-    ...(reasoningTokens !== undefined ? { reasoningTokens } : {}),
-  };
+  const parsed: GenerateDraftUsage = {};
+  setUsageField(parsed, 'inputTokens', inputTokens);
+  setUsageField(parsed, 'outputTokens', outputTokens);
+  setUsageField(parsed, 'totalTokens', totalTokens);
+  setUsageField(parsed, 'cachedTokens', cachedTokens);
+  setUsageField(parsed, 'reasoningTokens', reasoningTokens);
+
+  return parsed;
 }
 
 function extractGoogleText(payload: Record<string, unknown>): string | null {
@@ -225,13 +238,14 @@ function parseOpenRouterUsage(payload: Record<string, unknown>): GenerateDraftUs
     return undefined;
   }
 
-  return {
-    ...(inputTokens !== undefined ? { inputTokens } : {}),
-    ...(outputTokens !== undefined ? { outputTokens } : {}),
-    ...(totalTokens !== undefined ? { totalTokens } : {}),
-    ...(cachedTokens !== undefined ? { cachedTokens } : {}),
-    ...(reasoningTokens !== undefined ? { reasoningTokens } : {}),
-  };
+  const parsed: GenerateDraftUsage = {};
+  setUsageField(parsed, 'inputTokens', inputTokens);
+  setUsageField(parsed, 'outputTokens', outputTokens);
+  setUsageField(parsed, 'totalTokens', totalTokens);
+  setUsageField(parsed, 'cachedTokens', cachedTokens);
+  setUsageField(parsed, 'reasoningTokens', reasoningTokens);
+
+  return parsed;
 }
 
 function extractOpenRouterText(payload: Record<string, unknown>): string | null {

@@ -71,7 +71,7 @@ export async function generateDraft(
   };
   const executors = {
     ...DEFAULT_EXECUTORS,
-    ...(overrides?.executors ?? {}),
+    ...overrides?.executors,
   };
   const now = overrides?.now ?? (() => new Date());
   const sleep = overrides?.sleep ?? ((ms: number) => new Promise((resolve) => setTimeout(resolve, ms)));
