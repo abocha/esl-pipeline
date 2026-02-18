@@ -167,6 +167,37 @@ describe('utils/api generateDraft', () => {
     });
   });
 
+  it('throws a typed budget-exceeded error with limit details', async () => {
+    vi.mocked(apiClient.post).mockRejectedValueOnce(
+      makeAxiosError({
+        status: 429,
+        data: {
+          error: 'internal_error',
+          code: 'budget_exceeded',
+          message: 'Generation blocked by daily_tokens safety limit (120000/120000).',
+          provider: 'openai',
+          model: 'gpt-5.2',
+          limitType: 'daily_tokens',
+          limit: 120000,
+          used: 120000,
+          window: 'day',
+        },
+      }),
+    );
+
+    await expect(generateDraft({ promptPackageId: 'pkg-1' })).rejects.toMatchObject({
+      name: 'GenerationDraftApiError',
+      status: 429,
+      code: 'budget_exceeded',
+      provider: 'openai',
+      model: 'gpt-5.2',
+      limitType: 'daily_tokens',
+      limit: 120000,
+      used: 120000,
+      window: 'day',
+    });
+  });
+
   it('uses handleApiError as a fallback message for 404 envelopes without message', async () => {
     vi.mocked(handleApiError).mockReturnValueOnce('Prompt package not found');
     vi.mocked(apiClient.post).mockRejectedValueOnce(

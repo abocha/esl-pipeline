@@ -6,6 +6,7 @@ import type {
 } from '@esl-pipeline/contracts';
 
 import type { BatchBackendConfig } from '../config/env.js';
+import type { GenerationBudgetUsage } from '../domain/generation-budget-repository.js';
 
 export interface GenerationCandidate {
   provider: GenerationProvider;
@@ -133,40 +134,70 @@ export function buildQuotaSnapshot(args: {
   config: BatchBackendConfig['generation'];
   provider: GenerationProvider;
   model: string;
+  usage?: GenerationBudgetUsage;
   now?: Date;
 }): GenerationQuotaView {
   const nowIso = (args.now ?? new Date()).toISOString();
+  const usage = args.usage;
 
-  if (args.provider === 'google_ai_studio') {
-    const googleBaseline = getGoogleQuotaBaseline(args.model);
-    const googleDailyRequestBudget = args.config.providers.googleAiStudio.dailyRequestBudget;
-    const requestsPerDay =
-      googleDailyRequestBudget === undefined
-        ? googleBaseline.requestsPerDay
-        : googleDailyRequestBudget;
-    return {
-      source: args.config.quotaSourceMode,
-      lastUpdatedAt: nowIso,
-      dashboardUrl: getProviderDashboardUrl(args.provider),
-      ...googleBaseline,
-      requestsPerDay,
-    };
-  }
+  let requestsPerMinute: number | null | undefined;
+  let tokensPerMinute: number | null | undefined;
+  let requestsPerDay: number | null | undefined;
+  let dailyTokenBudget: number | null | undefined;
 
   if (args.provider === 'openai') {
-    return {
-      source: args.config.quotaSourceMode,
-      lastUpdatedAt: nowIso,
-      dashboardUrl: getProviderDashboardUrl(args.provider),
-      dailyTokenBudget: args.config.providers.openai.dailyTokenBudget ?? null,
-    };
+    requestsPerMinute = args.config.providers.openai.rpmBudget ?? null;
+    requestsPerDay = args.config.providers.openai.dailyRequestBudget ?? null;
+    dailyTokenBudget = args.config.providers.openai.dailyTokenBudget ?? null;
+  } else if (args.provider === 'google_ai_studio') {
+    const googleBaseline = getGoogleQuotaBaseline(args.model);
+    requestsPerMinute = args.config.providers.googleAiStudio.rpmBudget ?? googleBaseline.requestsPerMinute ?? null;
+    tokensPerMinute = googleBaseline.tokensPerMinute ?? null;
+    requestsPerDay =
+      args.config.providers.googleAiStudio.dailyRequestBudget ?? googleBaseline.requestsPerDay ?? null;
+  } else {
+    requestsPerMinute = args.config.providers.openrouter.rpmBudget ?? null;
+    requestsPerDay = args.config.providers.openrouter.dailyRequestBudget ?? null;
+    dailyTokenBudget = args.config.providers.openrouter.dailyTokenBudget ?? null;
   }
+
+  const usedRequestsToday = usage?.requestsToday ?? null;
+  const usedTokensToday = usage ? Math.max(usage.reservedTokensToday, usage.actualTokensToday) : null;
+  const rpmUsed = usage?.requestsPerMinuteUsed ?? null;
 
   return {
     source: args.config.quotaSourceMode,
     lastUpdatedAt: nowIso,
     dashboardUrl: getProviderDashboardUrl(args.provider),
-    dailyTokenBudget: args.config.providers.openrouter.dailyTokenBudget ?? null,
+    requestsPerMinute,
+    tokensPerMinute,
+    requestsPerDay,
+    dailyTokenBudget,
+    usedRequestsToday,
+    usedTokensToday,
+    dailyRequestBudget: requestsPerDay,
+    dailyRequestUsed: usedRequestsToday,
+    dailyRequestRemaining:
+      requestsPerDay === undefined ||
+      requestsPerDay === null ||
+      usedRequestsToday === null
+        ? null
+        : Math.max(0, requestsPerDay - usedRequestsToday),
+    dailyTokenUsed: usedTokensToday,
+    dailyTokenRemaining:
+      dailyTokenBudget === undefined ||
+      dailyTokenBudget === null ||
+      usedTokensToday === null
+        ? null
+        : Math.max(0, dailyTokenBudget - usedTokensToday),
+    rpmBudget: requestsPerMinute,
+    rpmUsed,
+    rpmRemaining:
+      requestsPerMinute === undefined ||
+      requestsPerMinute === null ||
+      rpmUsed === null
+        ? null
+        : Math.max(0, requestsPerMinute - rpmUsed),
   };
 }
 
@@ -179,6 +210,7 @@ function toTier(index: number): GenerationModelOption['tier'] {
 
 export function buildGenerationOptionsPayload(args: {
   config: BatchBackendConfig['generation'];
+  quotaUsage?: GenerationBudgetUsage;
   now?: Date;
 }): GenerationOptionsPayload {
   const providers = resolveGenerationProviderOrder(args.config);
@@ -229,6 +261,7 @@ export function buildGenerationOptionsPayload(args: {
       config: args.config,
       provider: args.config.defaultProvider,
       model: defaultModel,
+      usage: args.quotaUsage,
       now: args.now,
     }),
   };

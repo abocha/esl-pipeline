@@ -1,4 +1,4 @@
-import { render, screen, waitFor, within } from '@testing-library/react';
+import { act, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { createStaticPageHtml } from '@esl-pipeline/html-publisher/rendering';
@@ -1354,6 +1354,51 @@ describe('MinimalAssignment', () => {
       expect(screen.getByText(/RPM: 5/i)).toBeTruthy();
     });
     expect(screen.queryByText(/RPM: 42/i)).toBeNull();
+  });
+
+  it('releases runtime RPM quota lock after minute window rollover', async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    try {
+      vi.setSystemTime(new Date('2026-02-18T00:00:40.000Z'));
+      const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
+      vi.mocked(api.generateDraft).mockResolvedValueOnce({
+        text: '# Generated assignment draft',
+        provider: 'openai',
+        model: 'gpt-5.2',
+        quota: {
+          source: 'provider',
+          lastUpdatedAt: '2026-02-18T00:00:30.000Z',
+          rpmBudget: 5,
+          rpmUsed: 5,
+          rpmRemaining: 0,
+        },
+      });
+
+      render(<MinimalAssignment />);
+      await preparePromptReady(user);
+      await user.selectOptions(screen.getByRole('combobox', { name: /Generation provider/i }), 'openai');
+      await user.selectOptions(screen.getByRole('combobox', { name: /Generation model/i }), 'gpt-5.2');
+
+      const generateDraftButton = screen.getByRole('button', { name: /Generate draft from prompt/i });
+      await user.click(generateDraftButton);
+
+      await waitFor(() => {
+        expect(screen.getByText(/Per-minute request budget exhausted/i)).toBeTruthy();
+      });
+      expect((generateDraftButton as HTMLButtonElement).disabled).toBe(true);
+
+      vi.setSystemTime(new Date('2026-02-18T00:01:05.000Z'));
+      act(() => {
+        vi.advanceTimersByTime(15_000);
+      });
+
+      await waitFor(() => {
+        expect((generateDraftButton as HTMLButtonElement).disabled).toBe(false);
+      });
+      expect(screen.queryByText(/Per-minute request budget exhausted/i)).toBeNull();
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it('enables generate draft only after prompt is ready', async () => {

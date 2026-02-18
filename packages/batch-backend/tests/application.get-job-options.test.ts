@@ -93,11 +93,20 @@ describe('application/get-job-options', () => {
 
     const result = await getJobOptions();
 
-    expect(result).toEqual({
+    expect(result).toMatchObject({
       presets: ['alpha'],
       cefrLevels: ['A2', 'B1', 'B2'],
       cefrDefault: 'B1',
-      generation: buildGenerationOptions(),
+      generation: expect.objectContaining({
+        providers: buildGenerationOptions().providers,
+        defaultProvider: 'openai',
+        modelOptions: buildGenerationOptions().modelOptions,
+        quota: expect.objectContaining({
+          source: 'hybrid',
+          requestsPerMinute: 5,
+          requestsPerDay: 20,
+        }),
+      }),
       voiceAccents: ['accent_one'],
       voices: [{ id: 'voice-1', name: 'Voice One', accent: 'accent_one', gender: 'female' }],
       notionDatabases: [{ id: 'db-1', name: 'DB One' }],
@@ -146,6 +155,8 @@ describe('application/get-job-options', () => {
         },
       ],
     });
+    expect(result.generation?.quota.usedRequestsToday).toBe(0);
+    expect(result.generation?.quota.usedTokensToday).toBe(0);
   });
 
   it('falls back to static options when orchestrator helper fails', async () => {

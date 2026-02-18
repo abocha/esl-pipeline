@@ -14,19 +14,26 @@ function createConfig(overrides: Partial<BatchBackendConfig['generation']> = {})
       defaultProvider: 'openai',
       fallbackProviders: ['google_ai_studio', 'openrouter'],
       quotaSourceMode: 'hybrid',
+      safetyMode: 'hard_stop',
+      strictNoPaid: false,
+      maxOutputTokensHard: 1200,
+      budgetEmergencyOverride: false,
       models: {
         openai: {
           primary: 'gpt-5.2',
           fallback: 'gpt-5-mini',
+          allowed: ['gpt-5.2', 'gpt-5-mini'],
         },
         googleAiStudio: {
           primary: 'gemini-3-flash-preview',
           fallback: 'gemini-2.5-flash-lite',
           tertiary: 'gemini-2.5-pro',
+          allowed: ['gemini-3-flash-preview', 'gemini-2.5-flash-lite', 'gemini-2.5-pro', 'gemini-custom-001'],
         },
         openrouter: {
           primary: 'openrouter/test-primary',
           fallback: 'openrouter/test-fallback',
+          allowed: ['openrouter/test-primary', 'openrouter/test-fallback'],
         },
       },
       providers: {
@@ -36,6 +43,9 @@ function createConfig(overrides: Partial<BatchBackendConfig['generation']> = {})
           requestTimeoutMs: 5_000,
           retryMax: 1,
           retryBackoffMs: 0,
+          dailyTokenBudget: 1_000_000,
+          dailyRequestBudget: 1_000,
+          rpmBudget: 1_000,
         },
         googleAiStudio: {
           ...base.generation.providers.googleAiStudio,
@@ -43,6 +53,8 @@ function createConfig(overrides: Partial<BatchBackendConfig['generation']> = {})
           requestTimeoutMs: 5_000,
           retryMax: 1,
           retryBackoffMs: 0,
+          dailyRequestBudget: 1_000,
+          rpmBudget: 1_000,
         },
         openrouter: {
           ...base.generation.providers.openrouter,
@@ -50,6 +62,9 @@ function createConfig(overrides: Partial<BatchBackendConfig['generation']> = {})
           requestTimeoutMs: 5_000,
           retryMax: 1,
           retryBackoffMs: 0,
+          dailyTokenBudget: 1_000_000,
+          dailyRequestBudget: 1_000,
+          rpmBudget: 1_000,
         },
       },
       ...overrides,
@@ -270,6 +285,88 @@ describe('application/generate-draft', () => {
     );
 
     expect(result).toBeNull();
+  });
+
+  it('fails fast when maxOutputTokens exceeds hard safety cap', async () => {
+    const config = createConfig({
+      maxOutputTokensHard: 100,
+    });
+    const openAi = vi.fn();
+
+    await expect(
+      generateDraft(
+        {
+          promptPackageId: 'prompt-7',
+          maxOutputTokens: 101,
+        },
+        {
+          config,
+          promptPackages: {
+            getById: vi.fn().mockResolvedValue({ id: 'prompt-7', text: 'PROMPT' }),
+          },
+          executors: {
+            openai: openAi,
+          },
+        },
+      ),
+    ).rejects.toMatchObject({
+      name: 'GenerateDraftProviderError',
+      category: 'budget_exceeded',
+      statusCode: 429,
+      limitType: 'max_output_tokens',
+      limit: 100,
+    });
+    expect(openAi).not.toHaveBeenCalled();
+  });
+
+  it('fails fast when strict no-paid policy blocks model', async () => {
+    const config = createConfig({
+      strictNoPaid: true,
+      models: {
+        openai: {
+          primary: 'gpt-5.2',
+          fallback: 'gpt-5-mini',
+          allowed: ['gpt-5.2'],
+        },
+        googleAiStudio: {
+          primary: 'gemini-3-flash-preview',
+          fallback: 'gemini-2.5-flash-lite',
+          tertiary: 'gemini-2.5-pro',
+          allowed: ['gemini-3-flash-preview'],
+        },
+        openrouter: {
+          primary: 'openrouter/test-primary',
+          fallback: 'openrouter/test-fallback',
+          allowed: [],
+        },
+      },
+    });
+    const openAi = vi.fn();
+
+    await expect(
+      generateDraft(
+        {
+          promptPackageId: 'prompt-8',
+          provider: 'openai',
+          model: 'gpt-5-mini',
+        },
+        {
+          config,
+          promptPackages: {
+            getById: vi.fn().mockResolvedValue({ id: 'prompt-8', text: 'PROMPT' }),
+          },
+          executors: {
+            openai: openAi,
+          },
+        },
+      ),
+    ).rejects.toMatchObject({
+      name: 'GenerateDraftProviderError',
+      category: 'budget_exceeded',
+      statusCode: 429,
+      limitType: 'model_not_allowed',
+    });
+    expect(openAi).not.toHaveBeenCalled();
   });
 
   it('classifies missing provider credentials as contract error', async () => {

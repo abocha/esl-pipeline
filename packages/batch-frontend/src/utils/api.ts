@@ -675,6 +675,10 @@ interface GenerationDraftErrorEnvelope extends ErrorEnvelope {
   code?: GenerationErrorCategory | string;
   provider?: GenerationProvider;
   model?: string;
+  limitType?: 'rpm' | 'daily_requests' | 'daily_tokens' | 'max_output_tokens' | 'model_not_allowed';
+  limit?: number;
+  used?: number;
+  window?: 'minute' | 'day' | 'request';
   requestId?: string;
   timestamp?: string;
 }
@@ -684,6 +688,16 @@ export class GenerationDraftApiError extends Error {
   readonly code: GenerationErrorCategory | string | undefined;
   readonly provider: GenerationProvider | undefined;
   readonly model: string | undefined;
+  readonly limitType:
+    | 'rpm'
+    | 'daily_requests'
+    | 'daily_tokens'
+    | 'max_output_tokens'
+    | 'model_not_allowed'
+    | undefined;
+  readonly limit: number | undefined;
+  readonly used: number | undefined;
+  readonly window: 'minute' | 'day' | 'request' | undefined;
   readonly requestId: string | undefined;
   readonly timestamp: string | undefined;
 
@@ -694,6 +708,10 @@ export class GenerationDraftApiError extends Error {
       code?: GenerationErrorCategory | string;
       provider?: GenerationProvider;
       model?: string;
+      limitType?: 'rpm' | 'daily_requests' | 'daily_tokens' | 'max_output_tokens' | 'model_not_allowed';
+      limit?: number;
+      used?: number;
+      window?: 'minute' | 'day' | 'request';
       requestId?: string;
       timestamp?: string;
     } = {},
@@ -704,6 +722,10 @@ export class GenerationDraftApiError extends Error {
     this.code = details.code;
     this.provider = details.provider;
     this.model = details.model;
+    this.limitType = details.limitType;
+    this.limit = details.limit;
+    this.used = details.used;
+    this.window = details.window;
     this.requestId = details.requestId;
     this.timestamp = details.timestamp;
   }
@@ -874,6 +896,20 @@ const parseGenerationDraftError = (error: AxiosError): GenerationDraftApiError |
   const code = typeof envelope?.code === 'string' ? envelope.code : undefined;
   const provider = envelope?.provider;
   const model = typeof envelope?.model === 'string' ? envelope.model : undefined;
+  const limitType =
+    envelope?.limitType === 'rpm' ||
+    envelope?.limitType === 'daily_requests' ||
+    envelope?.limitType === 'daily_tokens' ||
+    envelope?.limitType === 'max_output_tokens' ||
+    envelope?.limitType === 'model_not_allowed'
+      ? envelope.limitType
+      : undefined;
+  const limit = typeof envelope?.limit === 'number' ? envelope.limit : undefined;
+  const used = typeof envelope?.used === 'number' ? envelope.used : undefined;
+  const window =
+    envelope?.window === 'minute' || envelope?.window === 'day' || envelope?.window === 'request'
+      ? envelope.window
+      : undefined;
   const requestId = typeof envelope?.requestId === 'string' ? envelope.requestId : undefined;
   const timestamp = typeof envelope?.timestamp === 'string' ? envelope.timestamp : undefined;
 
@@ -882,6 +918,10 @@ const parseGenerationDraftError = (error: AxiosError): GenerationDraftApiError |
     code,
     provider,
     model,
+    limitType,
+    limit,
+    used,
+    window,
     requestId,
     timestamp,
   });

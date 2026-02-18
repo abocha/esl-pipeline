@@ -59,31 +59,43 @@ Set these in `.env` (or your shell) when running `esl` or programmatic API calls
 - `LOG_LEVEL` (optional) — Verbosity for CLI logs.
   - Backend logger supports: `trace` | `debug` | `info` | `warn` | `error` | `fatal` | `silent`.
 
-## Generation Provider Policy Vars (WS2B Planned)
+## Generation Provider and Safety Vars (WS2B + WS3.5)
 
-These keys are reserved for WS2B direct generation plumbing. They are policy references until
-WS2B runtime code lands.
+These keys are active for direct draft generation and safety guardrails.
 
-- `GEN_PROVIDER_DEFAULT` (planned) — Default provider key (`openai`, `google_ai_studio`, `openrouter`).
-- `GEN_PROVIDER_FALLBACKS` (planned) — Comma-separated provider fallback order after default.
-- `GEN_QUOTA_SOURCE_MODE` (planned, default `hybrid`) — Quota display mode (`configured`|`provider`|`hybrid`).
+- `GEN_PROVIDER_DEFAULT` — Default provider key (`openai`, `google_ai_studio`, `openrouter`).
+- `GEN_PROVIDER_FALLBACKS` — Comma-separated provider fallback order after default.
+- `GEN_QUOTA_SOURCE_MODE` (default `hybrid`) — Quota display mode (`configured`|`provider`|`hybrid`).
 
-Model defaults (planned):
+Model defaults:
 
 - `GEN_OPENAI_MODEL_PRIMARY` / `GEN_OPENAI_MODEL_FALLBACK`
 - `GEN_GOOGLE_MODEL_PRIMARY` / `GEN_GOOGLE_MODEL_FALLBACK` / `GEN_GOOGLE_MODEL_TERTIARY`
 - `GEN_OPENROUTER_MODEL_PRIMARY` / `GEN_OPENROUTER_MODEL_FALLBACK`
 
-Provider runtime policy (planned, provider-specific values):
+Strict model allowlists (used when `GEN_STRICT_NO_PAID=true`):
+
+- `GEN_ALLOWED_MODELS_OPENAI`
+- `GEN_ALLOWED_MODELS_GOOGLE`
+- `GEN_ALLOWED_MODELS_OPENROUTER`
+
+Safety mode and hard caps:
+
+- `GEN_SAFETY_MODE` (`off`|`warn`|`hard_stop`, default `hard_stop`)
+- `GEN_STRICT_NO_PAID` (default `true`)
+- `GEN_MAX_OUTPUT_TOKENS_HARD` (default `1200`)
+- `GEN_BUDGET_EMERGENCY_OVERRIDE` (default `false`)
+
+Provider runtime policy (provider-specific values):
 
 - `GEN_OPENAI_REQUEST_TIMEOUT_MS`, `GEN_OPENAI_RETRY_MAX`, `GEN_OPENAI_RETRY_BACKOFF_MS`
 - `GEN_GOOGLE_REQUEST_TIMEOUT_MS`, `GEN_GOOGLE_RETRY_MAX`, `GEN_GOOGLE_RETRY_BACKOFF_MS`
 - `GEN_OPENROUTER_REQUEST_TIMEOUT_MS`, `GEN_OPENROUTER_RETRY_MAX`, `GEN_OPENROUTER_RETRY_BACKOFF_MS`
-- `GEN_OPENAI_DAILY_TOKEN_BUDGET`
-- `GEN_GOOGLE_DAILY_REQUEST_BUDGET`
-- `GEN_OPENROUTER_DAILY_TOKEN_BUDGET`
+- `GEN_OPENAI_DAILY_TOKEN_BUDGET`, `GEN_OPENAI_DAILY_REQUEST_BUDGET`, `GEN_OPENAI_RPM_BUDGET`
+- `GEN_GOOGLE_DAILY_REQUEST_BUDGET`, `GEN_GOOGLE_RPM_BUDGET`
+- `GEN_OPENROUTER_DAILY_TOKEN_BUDGET`, `GEN_OPENROUTER_DAILY_REQUEST_BUDGET`, `GEN_OPENROUTER_RPM_BUDGET`
 
-Provider auth/runtime identity vars (planned):
+Provider auth/runtime identity vars:
 
 - `OPENAI_API_KEY`
 - `GEMINI_API_KEY` (Google AI Studio API key for `@google/genai`)

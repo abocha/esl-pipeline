@@ -113,10 +113,25 @@ Reference:
    - `provider_rate_limit`
    - `provider_timeout`
    - `provider_contract_error`
+   - `budget_exceeded`
 3. Fallback behavior:
    - rate-limit/quota: attempt next model/provider ladder step.
    - timeout: retry then fallback.
    - contract/schema failure: fail fast with actionable error (no blind fallback).
+   - local safety-budget failure (`budget_exceeded`): hard stop with explicit limit details.
+
+### WS3.5 Safety Guardrails (Active)
+
+1. Safety defaults are fail-safe for local battle-testing:
+   - `GEN_SAFETY_MODE=hard_stop`
+   - `GEN_STRICT_NO_PAID=true`
+   - `GEN_MAX_OUTPUT_TOKENS_HARD=1200`
+2. Provider/model allowlists are enforced before provider calls when strict mode is enabled.
+3. Budget counters are persisted by provider/model/time bucket and surfaced in quota metadata:
+   - daily request usage/remaining
+   - daily token usage/remaining
+   - per-minute request usage/remaining
+4. OpenRouter is blocked by default through zero-budget defaults unless explicitly enabled.
 
 ### OpenAI API Reference Contract (WS2B)
 

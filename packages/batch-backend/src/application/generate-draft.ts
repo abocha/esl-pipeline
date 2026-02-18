@@ -12,7 +12,15 @@ import {
 
 import type { BatchBackendConfig } from '../config/env.js';
 import { loadConfig } from '../config/env.js';
+import type { GenerationBudgetUsage } from '../domain/generation-budget-repository.js';
 import { logger } from '../infrastructure/logger.js';
+import {
+  GenerationBudgetExceededError,
+  enforceGenerationBudgetBeforeAttempt,
+  recordGenerationBudgetUsageAfterSuccess,
+  resolveGenerationBudgetRepository,
+  type GenerationBudgetGuardDependencies,
+} from './generation-budget-guard.js';
 import { getPromptPackage } from './get-prompt-package.js';
 import {
   type ProviderExecutionRequest,
@@ -56,12 +64,20 @@ export class GenerateDraftProviderError extends Error {
   readonly provider: GenerationProvider;
   readonly model: string;
   readonly statusCode: number;
+  readonly limitType?: string;
+  readonly limit?: number;
+  readonly used?: number;
+  readonly window?: string;
 
   constructor(args: {
     category: GenerationErrorCategory;
     provider: GenerationProvider;
     model: string;
     message: string;
+    limitType?: string;
+    limit?: number;
+    used?: number;
+    window?: string;
   }) {
     super(args.message);
     this.name = 'GenerateDraftProviderError';
@@ -69,6 +85,10 @@ export class GenerateDraftProviderError extends Error {
     this.provider = args.provider;
     this.model = args.model;
     this.statusCode = statusCodeForCategory(args.category);
+    this.limitType = args.limitType;
+    this.limit = args.limit;
+    this.used = args.used;
+    this.window = args.window;
   }
 }
 
@@ -78,6 +98,7 @@ export interface GenerateDraftDependencies {
     getById: typeof getPromptPackage;
   };
   executors: Partial<Record<GenerationProvider, ProviderExecutor>>;
+  budget: GenerationBudgetGuardDependencies;
   now: () => Date;
   sleep: (ms: number) => Promise<void>;
 }
@@ -94,6 +115,10 @@ export async function generateDraft(
     ...DEFAULT_EXECUTORS,
     ...overrides?.executors,
   };
+  const budgetRepository = resolveGenerationBudgetRepository({
+    config,
+    overrides: overrides?.budget,
+  });
   const now = overrides?.now ?? (() => new Date());
   const sleep = overrides?.sleep ?? ((ms: number) => new Promise((resolve) => setTimeout(resolve, ms)));
 
@@ -119,11 +144,25 @@ export async function generateDraft(
 
   const execution = await runProviderFallbackLadder<
     (typeof candidates)[number],
-    { candidate: (typeof candidates)[number]; result: ProviderExecutionResult },
+    {
+      candidate: (typeof candidates)[number];
+      result: ProviderExecutionResult;
+      quotaUsage: GenerationBudgetUsage;
+    },
     GenerateDraftProviderError
   >({
     candidates,
     runCandidate: async (candidate) => {
+      await enforceGenerationBudgetBeforeAttempt({
+        config,
+        provider: candidate.provider,
+        model: candidate.model,
+        prompt: promptPackage.text,
+        maxOutputTokens: request.maxOutputTokens,
+        now: now(),
+        repository: budgetRepository,
+      });
+
       const executor = executors[candidate.provider];
       if (!executor) {
         throw new GenerateDraftProviderError({
@@ -144,7 +183,22 @@ export async function generateDraft(
         },
       });
 
-      return { candidate, result };
+      await recordGenerationBudgetUsageAfterSuccess({
+        config,
+        provider: candidate.provider,
+        model: candidate.model,
+        usageTotalTokens: result.usage?.totalTokens,
+        now: now(),
+        repository: budgetRepository,
+      });
+
+      const quotaUsage = await budgetRepository.getUsage({
+        provider: candidate.provider,
+        model: candidate.model,
+        now: now(),
+      });
+
+      return { candidate, result, quotaUsage };
     },
     mapError: (candidate, error) =>
       mapProviderError({
@@ -154,7 +208,8 @@ export async function generateDraft(
       }),
     isTimeoutError: (mappedError) => mappedError.category === 'provider_timeout',
     isFailFastError: (mappedError) =>
-      mappedError.category === 'provider_contract_error',
+      mappedError.category === 'provider_contract_error' ||
+      mappedError.category === 'budget_exceeded',
     getRetryMax: (candidate) =>
       retryMaxForProvider(config.generation, candidate.provider),
     getRetryBackoffMs: (candidate) =>
@@ -198,6 +253,7 @@ export async function generateDraft(
       config: config.generation,
       provider: execution.candidate.provider,
       model: execution.candidate.model,
+      usage: execution.quotaUsage,
       now: now(),
     }),
     ...(execution.result.usage ? { usage: execution.result.usage } : {}),
@@ -228,6 +284,7 @@ function retryBackoffForProvider(
 function statusCodeForCategory(category: GenerationErrorCategory): number {
   if (category === 'provider_rate_limit') return 429;
   if (category === 'provider_timeout') return 504;
+  if (category === 'budget_exceeded') return 429;
   return 502;
 }
 
@@ -238,6 +295,19 @@ function mapProviderError(args: {
 }): GenerateDraftProviderError {
   if (args.error instanceof GenerateDraftProviderError) {
     return args.error;
+  }
+
+  if (args.error instanceof GenerationBudgetExceededError) {
+    return new GenerateDraftProviderError({
+      category: 'budget_exceeded',
+      provider: args.provider,
+      model: args.model,
+      message: args.error.message,
+      limitType: args.error.limitType,
+      limit: args.error.limit,
+      used: args.error.used,
+      window: args.error.window,
+    });
   }
 
   const details = getErrorDetails(args.error);

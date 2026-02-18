@@ -28,7 +28,8 @@ export type GenerationProvider = 'openai' | 'google_ai_studio' | 'openrouter';
 export type GenerationErrorCategory =
   | 'provider_rate_limit'
   | 'provider_timeout'
-  | 'provider_contract_error';
+  | 'provider_contract_error'
+  | 'budget_exceeded';
 
 export type GenerationQuotaSource = 'configured' | 'provider' | 'hybrid';
 
@@ -52,6 +53,14 @@ export interface GenerationQuotaView {
   dailyTokenBudget?: number | null;
   usedRequestsToday?: number | null;
   usedTokensToday?: number | null;
+  dailyRequestBudget?: number | null;
+  dailyRequestUsed?: number | null;
+  dailyRequestRemaining?: number | null;
+  dailyTokenUsed?: number | null;
+  dailyTokenRemaining?: number | null;
+  rpmBudget?: number | null;
+  rpmUsed?: number | null;
+  rpmRemaining?: number | null;
 }
 
 export interface GenerationOptionsPayload {

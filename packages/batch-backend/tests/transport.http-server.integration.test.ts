@@ -2217,6 +2217,46 @@ describe('transport/http-server - integration (in-process)', () => {
     });
   });
 
+  it('POST /generation/drafts maps budget errors to 429 with limit details', async () => {
+    const generateDraft = vi.spyOn(generateDraftModule, 'generateDraft');
+    generateDraft.mockClear();
+    generateDraft.mockRejectedValue(
+      new generateDraftModule.GenerateDraftProviderError({
+        category: 'budget_exceeded',
+        provider: 'openai',
+        model: 'gpt-5.2',
+        message: 'Generation blocked by daily_tokens safety limit (120000/120000).',
+        limitType: 'daily_tokens',
+        limit: 120000,
+        used: 120000,
+        window: 'day',
+      }),
+    );
+
+    const response = await app.inject({
+      method: 'POST',
+      url: '/generation/drafts',
+      payload: {
+        promptPackageId: 'prompt-1',
+      },
+    });
+
+    expect(response.statusCode).toBe(429);
+    expect(response.json()).toEqual({
+      error: 'internal_error',
+      code: 'budget_exceeded',
+      message: 'Generation blocked by daily_tokens safety limit (120000/120000).',
+      provider: 'openai',
+      model: 'gpt-5.2',
+      limitType: 'daily_tokens',
+      limit: 120000,
+      used: 120000,
+      window: 'day',
+      requestId: expect.any(String),
+      timestamp: expect.any(String),
+    });
+  });
+
   it('POST /generation/drafts validates request body', async () => {
     const response = await app.inject({
       method: 'POST',
