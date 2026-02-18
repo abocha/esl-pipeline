@@ -32,6 +32,7 @@
     "@esl-pipeline/contracts": "workspace:*",
     "@esl-pipeline/md-validator": "workspace:*",
     "@esl-pipeline/orchestrator": "workspace:*",
+    "@esl-pipeline/provider-runtime": "workspace:*",
     "@esl-pipeline/shared-infrastructure": "workspace:*",
     "@fastify/cookie": "^11.0.2",
     "@fastify/multipart": "^9.4.0",
