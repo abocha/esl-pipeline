@@ -1,0 +1,312 @@
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+
+import type { BatchBackendConfig } from '../src/config/env.js';
+import { loadConfig } from '../src/config/env.js';
+import { generateDraft, GenerateDraftProviderError } from '../src/application/generate-draft.js';
+import { ProviderExecutionError } from '../src/application/generation-providers.js';
+
+function createConfig(overrides: Partial<BatchBackendConfig['generation']> = {}): BatchBackendConfig {
+  const base = loadConfig();
+  return {
+    ...base,
+    generation: {
+      ...base.generation,
+      defaultProvider: 'openai',
+      fallbackProviders: ['google_ai_studio', 'openrouter'],
+      quotaSourceMode: 'hybrid',
+      models: {
+        openai: {
+          primary: 'gpt-5.2',
+          fallback: 'gpt-5-mini',
+        },
+        googleAiStudio: {
+          primary: 'gemini-3-flash-preview',
+          fallback: 'gemini-2.5-flash-lite',
+          tertiary: 'gemini-2.5-pro',
+        },
+        openrouter: {
+          primary: 'openrouter/test-primary',
+          fallback: 'openrouter/test-fallback',
+        },
+      },
+      providers: {
+        openai: {
+          ...base.generation.providers.openai,
+          apiKey: 'openai-key',
+          requestTimeoutMs: 5_000,
+          retryMax: 1,
+          retryBackoffMs: 0,
+        },
+        googleAiStudio: {
+          ...base.generation.providers.googleAiStudio,
+          apiKey: 'google-key',
+          requestTimeoutMs: 5_000,
+          retryMax: 1,
+          retryBackoffMs: 0,
+        },
+        openrouter: {
+          ...base.generation.providers.openrouter,
+          apiKey: 'openrouter-key',
+          requestTimeoutMs: 5_000,
+          retryMax: 1,
+          retryBackoffMs: 0,
+        },
+      },
+      ...overrides,
+    },
+  };
+}
+
+describe('application/generate-draft', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it('returns generated text from first provider candidate', async () => {
+    const config = createConfig();
+    const openAi = vi.fn().mockResolvedValue({
+      text: '# Generated draft',
+      providerRequestId: 'resp-1',
+      usage: { inputTokens: 12, outputTokens: 24, totalTokens: 36 },
+    });
+
+    const result = await generateDraft(
+      {
+        promptPackageId: 'prompt-1',
+      },
+      {
+        config,
+        promptPackages: {
+          getById: vi.fn().mockResolvedValue({ id: 'prompt-1', text: 'PROMPT' }),
+        },
+        executors: {
+          openai: openAi,
+          google_ai_studio: vi.fn(),
+          openrouter: vi.fn(),
+        },
+        now: () => new Date('2026-02-18T00:00:00.000Z'),
+        sleep: async () => undefined,
+      },
+    );
+
+    expect(result).toMatchObject({
+      text: '# Generated draft',
+      provider: 'openai',
+      model: 'gpt-5.2',
+      providerRequestId: 'resp-1',
+      usage: { totalTokens: 36 },
+      quota: {
+        source: 'hybrid',
+        lastUpdatedAt: '2026-02-18T00:00:00.000Z',
+      },
+    });
+    expect(openAi).toHaveBeenCalledTimes(1);
+  });
+
+  it('retries timeout then falls back to next candidate', async () => {
+    const config = createConfig();
+    const openAi = vi.fn().mockRejectedValue(
+      new ProviderExecutionError({
+        provider: 'openai',
+        message: 'gateway timeout',
+        status: 504,
+        code: 'server_error',
+      }),
+    );
+    const google = vi.fn().mockResolvedValue({ text: '# Google draft', providerRequestId: 'g-1' });
+
+    const result = await generateDraft(
+      {
+        promptPackageId: 'prompt-2',
+      },
+      {
+        config,
+        promptPackages: {
+          getById: vi.fn().mockResolvedValue({ id: 'prompt-2', text: 'PROMPT' }),
+        },
+        executors: {
+          openai: openAi,
+          google_ai_studio: google,
+          openrouter: vi.fn(),
+        },
+        now: () => new Date('2026-02-18T00:00:00.000Z'),
+        sleep: async () => undefined,
+      },
+    );
+
+    if (!result) {
+      throw new Error('Expected generated draft response');
+    }
+    expect(openAi).toHaveBeenCalledTimes(4);
+    expect(google).toHaveBeenCalledTimes(1);
+    expect(result.provider).toBe('google_ai_studio');
+    expect(result.model).toBe('gemini-3-flash-preview');
+  });
+
+  it('falls back immediately on rate limit', async () => {
+    const config = createConfig();
+    const openAi = vi.fn().mockRejectedValue(
+      new ProviderExecutionError({
+        provider: 'openai',
+        message: 'rate limited',
+        status: 429,
+        code: 'rate_limit_exceeded',
+      }),
+    );
+    const google = vi.fn().mockResolvedValue({ text: '# Google draft' });
+
+    const result = await generateDraft(
+      {
+        promptPackageId: 'prompt-3',
+      },
+      {
+        config,
+        promptPackages: {
+          getById: vi.fn().mockResolvedValue({ id: 'prompt-3', text: 'PROMPT' }),
+        },
+        executors: {
+          openai: openAi,
+          google_ai_studio: google,
+          openrouter: vi.fn(),
+        },
+        now: () => new Date('2026-02-18T00:00:00.000Z'),
+        sleep: async () => undefined,
+      },
+    );
+
+    if (!result) {
+      throw new Error('Expected generated draft response');
+    }
+    expect(openAi).toHaveBeenCalledTimes(2);
+    expect(google).toHaveBeenCalledTimes(1);
+    expect(result.provider).toBe('google_ai_studio');
+  });
+
+  it('fails fast on provider contract error', async () => {
+    const config = createConfig();
+    const openAi = vi.fn().mockRejectedValue(
+      new ProviderExecutionError({
+        provider: 'openai',
+        message: 'invalid prompt payload',
+        status: 400,
+        code: 'invalid_prompt',
+      }),
+    );
+    const google = vi.fn();
+
+    await expect(
+      generateDraft(
+        {
+          promptPackageId: 'prompt-4',
+        },
+        {
+          config,
+          promptPackages: {
+            getById: vi.fn().mockResolvedValue({ id: 'prompt-4', text: 'PROMPT' }),
+          },
+          executors: {
+            openai: openAi,
+            google_ai_studio: google,
+            openrouter: vi.fn(),
+          },
+          sleep: async () => undefined,
+        },
+      ),
+    ).rejects.toMatchObject({
+      name: 'GenerateDraftProviderError',
+      category: 'provider_contract_error',
+      statusCode: 502,
+      provider: 'openai',
+      model: 'gpt-5.2',
+    });
+    expect(google).not.toHaveBeenCalled();
+  });
+
+  it('prioritizes explicit provider/model override candidate', async () => {
+    const config = createConfig();
+    const google = vi.fn().mockResolvedValue({ text: '# Override model draft' });
+
+    const result = await generateDraft(
+      {
+        promptPackageId: 'prompt-5',
+        provider: 'google_ai_studio',
+        model: 'gemini-custom-001',
+      },
+      {
+        config,
+        promptPackages: {
+          getById: vi.fn().mockResolvedValue({ id: 'prompt-5', text: 'PROMPT' }),
+        },
+        executors: {
+          openai: vi.fn(),
+          google_ai_studio: google,
+          openrouter: vi.fn(),
+        },
+        sleep: async () => undefined,
+      },
+    );
+
+    if (!result) {
+      throw new Error('Expected generated draft response');
+    }
+    const invocation = google.mock.calls[0]?.[0];
+    expect(invocation?.request.model).toBe('gemini-custom-001');
+    expect(result.provider).toBe('google_ai_studio');
+    expect(result.model).toBe('gemini-custom-001');
+  });
+
+  it('returns null when prompt package is missing', async () => {
+    const config = createConfig();
+    const result = await generateDraft(
+      {
+        promptPackageId: 'missing',
+      },
+      {
+        config,
+        promptPackages: {
+          getById: vi.fn().mockResolvedValue(null),
+        },
+      },
+    );
+
+    expect(result).toBeNull();
+  });
+
+  it('classifies missing provider credentials as contract error', async () => {
+    const baseProviders = createConfig().generation.providers;
+    const config = createConfig({
+      providers: {
+        ...baseProviders,
+        openai: {
+          ...baseProviders.openai,
+          apiKey: undefined,
+        },
+      },
+    });
+
+    await expect(
+      generateDraft(
+        {
+          promptPackageId: 'prompt-6',
+          provider: 'openai',
+        },
+        {
+          config,
+          promptPackages: {
+            getById: vi.fn().mockResolvedValue({ id: 'prompt-6', text: 'PROMPT' }),
+          },
+          executors: {
+            openai: async () => {
+              throw new ProviderExecutionError({
+                provider: 'openai',
+                message: 'OPENAI_API_KEY is not configured',
+                status: 401,
+                code: 'missing_api_key',
+              });
+            },
+          },
+        },
+      ),
+    ).rejects.toBeInstanceOf(GenerateDraftProviderError);
+  });
+});

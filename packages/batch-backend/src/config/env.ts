@@ -4,6 +4,7 @@
 // - Postgres/Redis are optional and enabled via env flags.
 // - Only throws when a feature is explicitly enabled but misconfigured.
 import { readBool, readInt, readString } from '@esl-pipeline/shared-infrastructure';
+import type { GenerationProvider, GenerationQuotaSource } from '@esl-pipeline/contracts';
 
 export type NodeEnv = 'development' | 'test' | 'production';
 
@@ -107,6 +108,51 @@ export interface BatchBackendConfig {
     pathPrefix?: string;
     presignedUrlExpiresIn: number;
   };
+  generation: {
+    defaultProvider: GenerationProvider;
+    fallbackProviders: GenerationProvider[];
+    quotaSourceMode: GenerationQuotaSource;
+    models: {
+      openai: {
+        primary: string;
+        fallback: string;
+      };
+      googleAiStudio: {
+        primary: string;
+        fallback: string;
+        tertiary: string;
+      };
+      openrouter: {
+        primary?: string;
+        fallback?: string;
+      };
+    };
+    providers: {
+      openai: {
+        apiKey?: string;
+        requestTimeoutMs: number;
+        retryMax: number;
+        retryBackoffMs: number;
+        dailyTokenBudget?: number;
+      };
+      googleAiStudio: {
+        apiKey?: string;
+        requestTimeoutMs: number;
+        retryMax: number;
+        retryBackoffMs: number;
+        dailyRequestBudget?: number;
+      };
+      openrouter: {
+        apiKey?: string;
+        httpReferer?: string;
+        xTitle?: string;
+        requestTimeoutMs: number;
+        retryMax: number;
+        retryBackoffMs: number;
+        dailyTokenBudget?: number;
+      };
+    };
+  };
   prompt: {
     templatePath: string;
     defaultProfilePath: string;
@@ -137,6 +183,42 @@ function normalizeStudentSystemSource(value: string): 'fs' | 'hybrid' | 'db' {
     return normalized;
   }
   throw new Error('STUDENT_SYSTEM_SOURCE must be one of: fs, hybrid, db');
+}
+
+function normalizeGenerationProvider(value: string): GenerationProvider {
+  const normalized = value.trim().toLowerCase();
+  if (normalized === 'openai' || normalized === 'google_ai_studio' || normalized === 'openrouter') {
+    return normalized;
+  }
+  throw new Error('Generation provider must be one of: openai, google_ai_studio, openrouter');
+}
+
+function normalizeGenerationQuotaSource(value: string): GenerationQuotaSource {
+  const normalized = value.trim().toLowerCase();
+  if (normalized === 'configured' || normalized === 'provider' || normalized === 'hybrid') {
+    return normalized;
+  }
+  throw new Error('GEN_QUOTA_SOURCE_MODE must be one of: configured, provider, hybrid');
+}
+
+function parseGenerationProviders(value: string): GenerationProvider[] {
+  const tokens = value
+    .split(',')
+    .map((token) => token.trim())
+    .filter(Boolean);
+  if (tokens.length === 0) return [];
+  return [...new Set(tokens.map((token) => normalizeGenerationProvider(token)))];
+}
+
+function readOptionalInt(name: string): number | undefined {
+  const raw = process.env[name];
+  if (raw === undefined || raw === null) return undefined;
+  const value = raw.trim();
+  if (!value) return undefined;
+  if (!/^-?\d+$/.test(value)) {
+    throw new Error(`${name} must be an integer`);
+  }
+  return Number.parseInt(value, 10);
 }
 
 // loadConfig.declaration()
@@ -315,6 +397,53 @@ export function loadConfig(): BatchBackendConfig {
   const storagePathPrefix = readString('S3_PATH_PREFIX') || readString('STORAGE_PATH_PREFIX');
   const presignedUrlExpiresIn = readInt('PRESIGNED_URL_EXPIRES_IN', 3600);
 
+  const generationDefaultProvider = normalizeGenerationProvider(
+    readString('GEN_PROVIDER_DEFAULT', 'openai')!,
+  );
+  const generationFallbackProviders = parseGenerationProviders(
+    readString('GEN_PROVIDER_FALLBACKS', 'google_ai_studio,openrouter')!,
+  ).filter((provider) => provider !== generationDefaultProvider);
+  const generationQuotaSourceMode = normalizeGenerationQuotaSource(
+    readString('GEN_QUOTA_SOURCE_MODE', 'hybrid')!,
+  );
+
+  const generationOpenAiModelPrimary = readString('GEN_OPENAI_MODEL_PRIMARY', 'gpt-5.2')!;
+  const generationOpenAiModelFallback = readString('GEN_OPENAI_MODEL_FALLBACK', 'gpt-5-mini')!;
+  const generationGoogleModelPrimary = readString(
+    'GEN_GOOGLE_MODEL_PRIMARY',
+    'gemini-3-flash-preview',
+  )!;
+  const generationGoogleModelFallback = readString(
+    'GEN_GOOGLE_MODEL_FALLBACK',
+    'gemini-2.5-flash-lite',
+  )!;
+  const generationGoogleModelTertiary = readString(
+    'GEN_GOOGLE_MODEL_TERTIARY',
+    'gemini-2.5-pro',
+  )!;
+  const generationOpenRouterModelPrimary = readString('GEN_OPENROUTER_MODEL_PRIMARY');
+  const generationOpenRouterModelFallback = readString('GEN_OPENROUTER_MODEL_FALLBACK');
+
+  const generationOpenAiTimeoutMs = readInt('GEN_OPENAI_REQUEST_TIMEOUT_MS', 30_000);
+  const generationOpenAiRetryMax = readInt('GEN_OPENAI_RETRY_MAX', 1);
+  const generationOpenAiRetryBackoffMs = readInt('GEN_OPENAI_RETRY_BACKOFF_MS', 250);
+  const generationGoogleTimeoutMs = readInt('GEN_GOOGLE_REQUEST_TIMEOUT_MS', 30_000);
+  const generationGoogleRetryMax = readInt('GEN_GOOGLE_RETRY_MAX', 1);
+  const generationGoogleRetryBackoffMs = readInt('GEN_GOOGLE_RETRY_BACKOFF_MS', 250);
+  const generationOpenRouterTimeoutMs = readInt('GEN_OPENROUTER_REQUEST_TIMEOUT_MS', 30_000);
+  const generationOpenRouterRetryMax = readInt('GEN_OPENROUTER_RETRY_MAX', 1);
+  const generationOpenRouterRetryBackoffMs = readInt('GEN_OPENROUTER_RETRY_BACKOFF_MS', 250);
+
+  const openAiApiKey = readString('OPENAI_API_KEY');
+  const geminiApiKey = readString('GEMINI_API_KEY');
+  const openRouterApiKey = readString('OPENROUTER_API_KEY');
+  const openRouterHttpReferer = readString('OPENROUTER_HTTP_REFERER');
+  const openRouterXTitle = readString('OPENROUTER_X_TITLE');
+
+  const generationOpenAiDailyTokenBudget = readOptionalInt('GEN_OPENAI_DAILY_TOKEN_BUDGET');
+  const generationGoogleDailyRequestBudget = readOptionalInt('GEN_GOOGLE_DAILY_REQUEST_BUDGET');
+  const generationOpenRouterDailyTokenBudget = readOptionalInt('GEN_OPENROUTER_DAILY_TOKEN_BUDGET');
+
   const extendedApiEnabled = readBool('BATCH_BACKEND_ENABLE_EXTENDED_API', true);
 
   return {
@@ -416,6 +545,55 @@ export function loadConfig(): BatchBackendConfig {
       bucketName: storageBucketName,
       pathPrefix: storagePathPrefix,
       presignedUrlExpiresIn,
+    },
+    generation: {
+      defaultProvider: generationDefaultProvider,
+      fallbackProviders: generationFallbackProviders,
+      quotaSourceMode: generationQuotaSourceMode,
+      models: {
+        openai: {
+          primary: generationOpenAiModelPrimary,
+          fallback: generationOpenAiModelFallback,
+        },
+        googleAiStudio: {
+          primary: generationGoogleModelPrimary,
+          fallback: generationGoogleModelFallback,
+          tertiary: generationGoogleModelTertiary,
+        },
+        openrouter: {
+          ...(generationOpenRouterModelPrimary
+            ? { primary: generationOpenRouterModelPrimary }
+            : {}),
+          ...(generationOpenRouterModelFallback
+            ? { fallback: generationOpenRouterModelFallback }
+            : {}),
+        },
+      },
+      providers: {
+        openai: {
+          apiKey: openAiApiKey,
+          requestTimeoutMs: generationOpenAiTimeoutMs,
+          retryMax: generationOpenAiRetryMax,
+          retryBackoffMs: generationOpenAiRetryBackoffMs,
+          dailyTokenBudget: generationOpenAiDailyTokenBudget,
+        },
+        googleAiStudio: {
+          apiKey: geminiApiKey,
+          requestTimeoutMs: generationGoogleTimeoutMs,
+          retryMax: generationGoogleRetryMax,
+          retryBackoffMs: generationGoogleRetryBackoffMs,
+          dailyRequestBudget: generationGoogleDailyRequestBudget,
+        },
+        openrouter: {
+          apiKey: openRouterApiKey,
+          httpReferer: openRouterHttpReferer,
+          xTitle: openRouterXTitle,
+          requestTimeoutMs: generationOpenRouterTimeoutMs,
+          retryMax: generationOpenRouterRetryMax,
+          retryBackoffMs: generationOpenRouterRetryBackoffMs,
+          dailyTokenBudget: generationOpenRouterDailyTokenBudget,
+        },
+      },
     },
     prompt: {
       templatePath: promptTemplatePath,

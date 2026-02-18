@@ -9,6 +9,7 @@ import type { JobState } from '@esl-pipeline/contracts';
 import { validateMarkdown } from '@esl-pipeline/md-validator';
 
 import { createDraft } from '../application/create-draft.js';
+import { GenerateDraftProviderError, generateDraft } from '../application/generate-draft.js';
 import { createPromptPackage } from '../application/create-prompt-package.js';
 import { getDraft } from '../application/get-draft.js';
 import { getJobOptions } from '../application/get-job-options.js';
@@ -271,6 +272,77 @@ export function registerExtendedRoutes(app: FastifyInstance, options: ExtendedRo
 
         return reply.send(prompts);
       } catch (error: unknown) {
+        logger.error(error instanceof Error ? error : String(error), {
+          event: 'http_request',
+          route: routePath,
+          statusCode: 500,
+          error: 'internal_error',
+        });
+
+        return errorResponse(reply, 'internal_error');
+      }
+    },
+  );
+
+  app.post(
+    '/generation/drafts',
+    {
+      preHandler: [authenticate],
+    },
+    async (request, reply) => {
+      const routePath = resolveRoutePath(request, 'POST /generation/drafts');
+
+      const schema = z.object({
+        promptPackageId: z.string().min(1),
+        provider: z.enum(['openai', 'google_ai_studio', 'openrouter']).optional(),
+        model: z.string().min(1).optional(),
+        maxOutputTokens: z.number().int().positive().optional(),
+        stream: z.boolean().optional(),
+      });
+
+      try {
+        const body = schema.parse(request.body ?? {});
+        const generated = await generateDraft(body, { config });
+
+        if (!generated) {
+          logger.info('Draft generation skipped; prompt package missing', {
+            event: 'generation_draft_not_found',
+            route: routePath,
+            promptPackageId: body.promptPackageId,
+          });
+          return errorResponse(reply, 'not_found');
+        }
+
+        logger.info('HTTP request handled', {
+          event: 'http_request',
+          route: routePath,
+          statusCode: 200,
+          provider: generated.provider,
+          model: generated.model,
+        });
+
+        return reply.send(generated);
+      } catch (error: unknown) {
+        if (error instanceof z.ZodError) {
+          return reply.code(400).send({
+            error: 'validation_failed',
+            message: 'Invalid request body',
+            details: error.issues,
+          });
+        }
+
+        if (error instanceof GenerateDraftProviderError) {
+          return reply.code(error.statusCode).send({
+            error: 'internal_error',
+            code: error.category,
+            message: error.message,
+            provider: error.provider,
+            model: error.model,
+            requestId: String(request.id),
+            timestamp: new Date().toISOString(),
+          });
+        }
+
         logger.error(error instanceof Error ? error : String(error), {
           event: 'http_request',
           route: routePath,

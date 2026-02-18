@@ -1,0 +1,96 @@
+import { describe, expect, it } from 'vitest';
+
+import type { BatchBackendConfig } from '../src/config/env.js';
+import {
+  buildGenerationOptionsPayload,
+  resolveGenerationCandidates,
+} from '../src/application/generation-policy.js';
+
+function buildConfig(overrides: Partial<BatchBackendConfig['generation']> = {}): BatchBackendConfig['generation'] {
+  return {
+    defaultProvider: 'openai',
+    fallbackProviders: ['google_ai_studio', 'openrouter'],
+    quotaSourceMode: 'hybrid',
+    models: {
+      openai: {
+        primary: 'gpt-5.2',
+        fallback: 'gpt-5-mini',
+      },
+      googleAiStudio: {
+        primary: 'gemini-3-flash-preview',
+        fallback: 'gemini-2.5-flash-lite',
+        tertiary: 'gemini-2.5-pro',
+      },
+      openrouter: {
+        primary: 'anthropic/claude-sonnet-4',
+        fallback: 'openai/gpt-5-mini',
+      },
+    },
+    providers: {
+      openai: {
+        requestTimeoutMs: 30_000,
+        retryMax: 1,
+        retryBackoffMs: 250,
+      },
+      googleAiStudio: {
+        requestTimeoutMs: 30_000,
+        retryMax: 1,
+        retryBackoffMs: 250,
+      },
+      openrouter: {
+        requestTimeoutMs: 30_000,
+        retryMax: 1,
+        retryBackoffMs: 250,
+      },
+    },
+    ...overrides,
+  };
+}
+
+describe('application/generation-policy', () => {
+  it('uses global fallback ranks that match execution candidate order', () => {
+    const config = buildConfig();
+
+    const options = buildGenerationOptionsPayload({ config });
+    const candidates = resolveGenerationCandidates({ config });
+
+    expect(options.modelOptions.map((option) => option.fallbackRank)).toEqual(
+      [...options.modelOptions.keys()],
+    );
+    expect(options.modelOptions.map(({ provider, id, fallbackRank }) => ({ provider, id, fallbackRank }))).toEqual(
+      candidates.map(({ provider, model, fallbackRank }) => ({
+        provider,
+        id: model,
+        fallbackRank,
+      })),
+    );
+  });
+
+  it('preserves explicit zero Google daily budget in quota payload', () => {
+    const config = buildConfig({
+      defaultProvider: 'google_ai_studio',
+      fallbackProviders: ['openai', 'openrouter'],
+      providers: {
+        openai: {
+          requestTimeoutMs: 30_000,
+          retryMax: 1,
+          retryBackoffMs: 250,
+        },
+        googleAiStudio: {
+          requestTimeoutMs: 30_000,
+          retryMax: 1,
+          retryBackoffMs: 250,
+          dailyRequestBudget: 0,
+        },
+        openrouter: {
+          requestTimeoutMs: 30_000,
+          retryMax: 1,
+          retryBackoffMs: 250,
+        },
+      },
+    });
+
+    const options = buildGenerationOptionsPayload({ config });
+    expect(options.quota.requestsPerDay).toBe(0);
+  });
+});
