@@ -8,6 +8,7 @@ import { resolve } from 'node:path';
 import type {
   ActionCapability,
   CefrLevel,
+  GenerationOptionsPayload,
   JobOptionsPayload,
   NotionDatabaseOption,
   VoiceOption,
@@ -216,7 +217,25 @@ function cloneJobOptions(value: JobOptionsResponse): JobOptionsResponse {
     notionDatabases: value.notionDatabases.map((option) => ({ ...option })),
     uploadOptions: [...value.uploadOptions],
     ttsStrategies: [...value.ttsStrategies],
+    generation: cloneGenerationOptions(value.generation),
     supportedActions: value.supportedActions.map((action) => ({ ...action })),
     learningPresets: value.learningPresets.map((preset) => ({ ...preset })),
+  };
+}
+
+function cloneGenerationOptions(
+  value: GenerationOptionsPayload | undefined,
+): GenerationOptionsPayload | undefined {
+  if (!value) return undefined;
+  return {
+    ...value,
+    providers: [...value.providers],
+    modelOptions: value.modelOptions.map((option) => ({ ...option })),
+    defaultModelByProvider: value.defaultModelByProvider
+      ? { ...value.defaultModelByProvider }
+      : undefined,
+    quota: {
+      ...value.quota,
+    },
   };
 }

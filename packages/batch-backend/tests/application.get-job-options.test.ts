@@ -12,6 +12,43 @@ vi.mock('../src/infrastructure/orchestrator-service', () => ({
   getJobOptionsFromOrchestrator: vi.fn(),
 }));
 
+function buildGenerationOptions() {
+  return {
+    providers: ['openai', 'google_ai_studio', 'openrouter'] as const,
+    defaultProvider: 'openai' as const,
+    modelOptions: [
+      {
+        provider: 'openai' as const,
+        id: 'gpt-5.2',
+        tier: 'primary' as const,
+        fallbackRank: 0,
+        defaultSelected: true,
+        enabled: true,
+      },
+      {
+        provider: 'openai' as const,
+        id: 'gpt-5-mini',
+        tier: 'fallback' as const,
+        fallbackRank: 1,
+        enabled: true,
+      },
+    ],
+    defaultModelByProvider: {
+      openai: 'gpt-5.2',
+      google_ai_studio: 'gemini-3-flash-preview',
+    },
+    quota: {
+      source: 'hybrid' as const,
+      lastUpdatedAt: '2026-02-18T00:00:00.000Z',
+      requestsPerMinute: 5,
+      tokensPerMinute: 250000,
+      requestsPerDay: 20,
+      usedRequestsToday: 1,
+      usedTokensToday: 1800,
+    },
+  };
+}
+
 describe('application/get-job-options', () => {
   beforeEach(() => {
     vi.resetModules();
@@ -35,6 +72,7 @@ describe('application/get-job-options', () => {
       presets: ['alpha'],
       cefrLevels: ['A2', 'B1', 'B2'],
       cefrDefault: 'B1',
+      generation: buildGenerationOptions(),
       voiceAccents: ['accent_one'],
       voices: [{ id: 'voice-1', name: 'Voice One', accent: 'accent_one', gender: 'female' }],
       notionDatabases: [{ id: 'db-1', name: 'DB One' }],
@@ -59,6 +97,7 @@ describe('application/get-job-options', () => {
       presets: ['alpha'],
       cefrLevels: ['A2', 'B1', 'B2'],
       cefrDefault: 'B1',
+      generation: buildGenerationOptions(),
       voiceAccents: ['accent_one'],
       voices: [{ id: 'voice-1', name: 'Voice One', accent: 'accent_one', gender: 'female' }],
       notionDatabases: [{ id: 'db-1', name: 'DB One' }],
@@ -161,6 +200,7 @@ describe('application/get-job-options', () => {
       presets: ['alpha'],
       cefrLevels: ['A2', 'B1'],
       cefrDefault: 'B1',
+      generation: buildGenerationOptions(),
       voiceAccents: ['accent_one'],
       voices: [{ id: 'voice-1', name: 'Voice One', accent: 'accent_one', gender: 'female' }],
       notionDatabases: [{ id: 'db-1', name: 'DB One' }],
@@ -186,5 +226,50 @@ describe('application/get-job-options', () => {
     vi.setSystemTime(new Date('2026-02-01T00:01:01.000Z'));
     await getJobOptions();
     expect(getJobOptionsFromOrchestrator).toHaveBeenCalledTimes(2);
+  });
+
+  it('returns deep-cloned generation metadata from cache', async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-02-01T00:00:00.000Z'));
+
+    const { getJobOptions } = await import('../src/application/get-job-options.js');
+    const { getJobOptionsFromOrchestrator } =
+      await import('../src/infrastructure/orchestrator-service.js');
+
+    vi.mocked(getJobOptionsFromOrchestrator).mockResolvedValue({
+      presets: ['alpha'],
+      cefrLevels: ['A2', 'B1'],
+      cefrDefault: 'B1',
+      generation: buildGenerationOptions(),
+      voiceAccents: ['accent_one'],
+      voices: [{ id: 'voice-1', name: 'Voice One', accent: 'accent_one', gender: 'female' }],
+      notionDatabases: [{ id: 'db-1', name: 'DB One' }],
+      uploadOptions: ['auto', 's3', 'none'],
+      ttsStrategies: ['auto', 'dialogue', 'tts'],
+      learningPresets: [
+        {
+          id: 'general-english',
+          version: 'v1',
+          alias: 'current',
+          title: 'General English',
+          track: 'general-english',
+          status: 'active',
+          promptSnapshotVersion: 'hw_prompt_v4-2_clean',
+        },
+      ],
+    } as any);
+
+    const first = await getJobOptions();
+    expect(first.generation?.modelOptions[0]?.id).toBe('gpt-5.2');
+    expect(first.generation?.quota.source).toBe('hybrid');
+
+    if (first.generation) {
+      first.generation.modelOptions[0]!.id = 'mutated-model-id';
+      first.generation.quota.source = 'configured';
+    }
+
+    const second = await getJobOptions();
+    expect(second.generation?.modelOptions[0]?.id).toBe('gpt-5.2');
+    expect(second.generation?.quota.source).toBe('hybrid');
   });
 });

@@ -113,6 +113,30 @@ vi.mock('../src/infrastructure/orchestrator-service', () => {
     presets: ['b1-default'],
     cefrLevels: ['A1', 'A2', 'B1', 'B2', 'C1', 'C2'] as const,
     cefrDefault: 'B1' as const,
+    generation: {
+      providers: ['openai', 'google_ai_studio', 'openrouter'] as const,
+      defaultProvider: 'openai' as const,
+      modelOptions: [
+        {
+          provider: 'openai' as const,
+          id: 'gpt-5.2',
+          tier: 'primary' as const,
+          fallbackRank: 0,
+          defaultSelected: true,
+          enabled: true,
+        },
+      ],
+      defaultModelByProvider: {
+        openai: 'gpt-5.2',
+      },
+      quota: {
+        source: 'hybrid' as const,
+        lastUpdatedAt: '2026-02-18T00:00:00.000Z',
+        requestsPerMinute: 5,
+        tokensPerMinute: 250000,
+        requestsPerDay: 20,
+      },
+    },
     voiceAccents: ['american_female'],
     voices: [{ id: 'voice-1', name: 'Voice One', accent: 'american_female', gender: 'female' }],
     notionDatabases: [{ id: 'db-1', name: 'DB One' }],
@@ -953,6 +977,12 @@ describe('transport/http-server - integration (in-process)', () => {
       expect.objectContaining({
         cefrLevels: ['A1', 'A2', 'B1', 'B2', 'C1', 'C2'],
         cefrDefault: 'B1',
+        generation: expect.objectContaining({
+          defaultProvider: 'openai',
+          quota: expect.objectContaining({
+            source: 'hybrid',
+          }),
+        }),
       }),
     );
     const expected = await getJobOptions();
