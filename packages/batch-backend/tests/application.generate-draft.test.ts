@@ -369,6 +369,56 @@ describe('application/generate-draft', () => {
     expect(openAi).not.toHaveBeenCalled();
   });
 
+  it('bypasses strict no-paid checks when emergency override is enabled', async () => {
+    const config = createConfig({
+      budgetEmergencyOverride: true,
+      strictNoPaid: true,
+      models: {
+        openai: {
+          primary: 'gpt-5.2',
+          fallback: 'gpt-5-mini',
+          allowed: ['gpt-5.2'],
+        },
+        googleAiStudio: {
+          primary: 'gemini-3-flash-preview',
+          fallback: 'gemini-2.5-flash-lite',
+          tertiary: 'gemini-2.5-pro',
+          allowed: ['gemini-3-flash-preview'],
+        },
+        openrouter: {
+          primary: 'openrouter/test-primary',
+          fallback: 'openrouter/test-fallback',
+          allowed: [],
+        },
+      },
+    });
+    const openAi = vi.fn().mockResolvedValue({
+      text: '# Override path draft',
+      usage: { totalTokens: 42 },
+    });
+
+    const result = await generateDraft(
+      {
+        promptPackageId: 'prompt-override',
+        provider: 'openai',
+        model: 'gpt-5-mini',
+      },
+      {
+        config,
+        promptPackages: {
+          getById: vi.fn().mockResolvedValue({ id: 'prompt-override', text: 'PROMPT' }),
+        },
+        executors: {
+          openai: openAi,
+        },
+      },
+    );
+
+    expect(openAi).toHaveBeenCalledTimes(1);
+    expect(result?.provider).toBe('openai');
+    expect(result?.model).toBe('gpt-5-mini');
+  });
+
   it('classifies missing provider credentials as contract error', async () => {
     const baseProviders = createConfig().generation.providers;
     const config = createConfig({
