@@ -149,4 +149,30 @@ describe('application/job-dto', () => {
       actionableHint: 'Retry later or reduce request concurrency/chunk size.',
     });
   });
+
+  it('parses structured provider errors from untagged inferable failures', () => {
+    const job: JobRecord = {
+      id: 'job-4',
+      state: 'failed',
+      md: 'fixtures/ok.md',
+      recordingId: null,
+      transcriptId: null,
+      promptPackageId: null,
+      draftId: null,
+      createdAt: new Date('2024-02-04T00:00:00Z'),
+      updatedAt: new Date('2024-02-04T00:00:00Z'),
+      startedAt: new Date('2024-02-04T00:01:00Z'),
+      finishedAt: new Date('2024-02-04T00:02:00Z'),
+      error: 'Voice generation timed out while calling provider for this lesson',
+      manifestPath: null,
+    };
+
+    const dto = jobRecordToDto(job);
+    expect(dto.providerError).toEqual({
+      category: 'provider_timeout',
+      message: 'Voice generation timed out while calling provider for this lesson',
+      providerStatus: undefined,
+      actionableHint: 'Retry with smaller chunks or increased provider timeout settings.',
+    });
+  });
 });

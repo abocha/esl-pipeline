@@ -1,7 +1,16 @@
 import type { ReadinessMetricsResponse } from '@esl-pipeline/contracts';
 
-import { getReadinessMetrics } from '../domain/job-repository.js';
+import {
+  getReadinessMetrics,
+  listFailedJobErrorsForReadiness,
+} from '../domain/job-repository.js';
+import { logger } from '../infrastructure/logger.js';
 import { READINESS_METRIC_SOURCE_MAP } from '../infrastructure/metrics.js';
+import {
+  buildVoiceProviderErrorBreakdown,
+  countVoiceProviderErrors,
+  parseVoiceProviderErrors,
+} from './voice-provider-error.js';
 
 export interface ReadinessMetricsParams {
   from?: Date | null;
@@ -12,6 +21,7 @@ export interface ReadinessMetricsParams {
 export interface ReadinessMetricsDependencies {
   jobs: {
     readiness: typeof getReadinessMetrics;
+    listFailedErrorsForReadiness: typeof listFailedJobErrorsForReadiness;
   };
   now: () => Date;
 }
@@ -22,15 +32,42 @@ export async function getReadinessMetricsWithDefaults(
   params: ReadinessMetricsParams = {},
   overrides?: Partial<ReadinessMetricsDependencies>,
 ): Promise<ReadinessMetricsResponse> {
-  const jobs = overrides?.jobs ?? { readiness: getReadinessMetrics };
+  const jobs = {
+    readiness: overrides?.jobs?.readiness ?? getReadinessMetrics,
+    listFailedErrorsForReadiness:
+      overrides?.jobs?.listFailedErrorsForReadiness ?? listFailedJobErrorsForReadiness,
+  };
   const now = overrides?.now ?? (() => new Date());
   const resolved = resolveDateRange(params, now);
 
-  const snapshot = await jobs.readiness({
-    from: resolved.from,
-    to: resolved.to,
-    userId: params.userId ?? null,
-  });
+  const [snapshot, failedErrors] = await Promise.all([
+    jobs.readiness({
+      from: resolved.from,
+      to: resolved.to,
+      userId: params.userId ?? null,
+    }),
+    jobs.listFailedErrorsForReadiness({
+      from: resolved.from,
+      to: resolved.to,
+      userId: params.userId ?? null,
+    }),
+  ]);
+
+  const providerErrorDetails = parseVoiceProviderErrors(failedErrors);
+  const normalizedProviderErrors = countVoiceProviderErrors(providerErrorDetails);
+  const normalizedProviderErrorBreakdown = buildVoiceProviderErrorBreakdown(providerErrorDetails);
+
+  const legacyProviderErrors = snapshot.voiceProviderErrors ?? 0;
+  if (legacyProviderErrors !== normalizedProviderErrors) {
+    logger.warn('Readiness provider-error totals differ between legacy SQL and parser normalization', {
+      event: 'readiness_provider_error_drift',
+      legacyProviderErrors,
+      normalizedProviderErrors,
+      from: resolved.from.toISOString(),
+      to: resolved.to.toISOString(),
+      userId: params.userId ?? null,
+    });
+  }
 
   return {
     window: {
@@ -55,8 +92,8 @@ export async function getReadinessMetricsWithDefaults(
     voiceAlignment: {
       validationFailures: snapshot.voiceValidationFailures ?? 0,
       strictMismatches: snapshot.voiceStrictMismatches ?? 0,
-      providerErrors: snapshot.voiceProviderErrors ?? 0,
-      providerErrorBreakdown: snapshot.voiceProviderErrorBreakdown ?? {},
+      providerErrors: normalizedProviderErrors,
+      providerErrorBreakdown: normalizedProviderErrorBreakdown,
       fallbackSelections: snapshot.voiceFallbackSelections ?? null,
       reuseSelections: snapshot.voiceReuseSelections ?? null,
     },

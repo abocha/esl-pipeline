@@ -1,9 +1,14 @@
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { getReadinessMetricsWithDefaults } from '../src/application/readiness-metrics.js';
+import { logger } from '../src/infrastructure/logger.js';
 
 describe('application/readiness-metrics', () => {
-  it('maps repository snapshot into readiness response shape', async () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it('maps snapshot shape and normalizes provider errors from failed-job messages', async () => {
     const readiness = vi.fn().mockResolvedValue({
       publishSucceeded: 9,
       publishFailed: 3,
@@ -14,20 +19,26 @@ describe('application/readiness-metrics', () => {
       firstSessionSucceededUsers: 4,
       voiceValidationFailures: 2,
       voiceStrictMismatches: 1,
-      voiceProviderErrors: 1,
+      voiceProviderErrors: 2,
       voiceProviderErrorBreakdown: {
-        provider_rate_limit: 1,
+        provider_rate_limit: 2,
       },
       voiceFallbackSelections: null,
       voiceReuseSelections: null,
     });
+    const listFailedErrorsForReadiness = vi.fn().mockResolvedValue([
+      'Text-to-Dialogue synthesis failed [provider_rate_limit]: HTTP 429: too many requests',
+      'Voice generation timed out while calling provider for this lesson',
+      'frontmatter validation failed: missing title',
+    ]);
+    const warnSpy = vi.spyOn(logger, 'warn');
 
     const from = new Date('2024-03-01T00:00:00.000Z');
     const to = new Date('2024-03-08T00:00:00.000Z');
     const result = await getReadinessMetricsWithDefaults(
       { from, to, userId: '8f8d9e53-bc3a-4658-8960-fbf4ff8cb84f' },
       {
-        jobs: { readiness },
+        jobs: { readiness, listFailedErrorsForReadiness },
         now: () => new Date('2024-04-01T00:00:00.000Z'),
       },
     );
@@ -54,9 +65,10 @@ describe('application/readiness-metrics', () => {
     expect(result.voiceAlignment).toEqual({
       validationFailures: 2,
       strictMismatches: 1,
-      providerErrors: 1,
+      providerErrors: 2,
       providerErrorBreakdown: {
         provider_rate_limit: 1,
+        provider_timeout: 1,
       },
       fallbackSelections: null,
       reuseSelections: null,
@@ -64,12 +76,20 @@ describe('application/readiness-metrics', () => {
     expect(result.sources.publishSuccessRate.source).toContain('jobs table');
     expect(result.sources.medianPublishLatencyMs.calculation).toContain('median');
     expect(result.sources.firstSessionSuccessProxy.window).toContain('request window');
-    expect(result.sources.voiceProviderErrorRate.calculation).toContain('provider tagged failures');
+    expect(result.sources.voiceProviderErrorRate.calculation).toContain(
+      'provider-classified failed-job errors',
+    );
+    expect(warnSpy).not.toHaveBeenCalled();
 
-    const call = readiness.mock.calls[0]?.[0];
-    expect(call?.userId).toBe('8f8d9e53-bc3a-4658-8960-fbf4ff8cb84f');
-    expect(call?.from?.toISOString()).toBe('2024-03-01T00:00:00.000Z');
-    expect(call?.to?.toISOString()).toBe('2024-03-08T00:00:00.000Z');
+    const readinessCall = readiness.mock.calls[0]?.[0];
+    expect(readinessCall?.userId).toBe('8f8d9e53-bc3a-4658-8960-fbf4ff8cb84f');
+    expect(readinessCall?.from?.toISOString()).toBe('2024-03-01T00:00:00.000Z');
+    expect(readinessCall?.to?.toISOString()).toBe('2024-03-08T00:00:00.000Z');
+
+    const errorsCall = listFailedErrorsForReadiness.mock.calls[0]?.[0];
+    expect(errorsCall?.userId).toBe('8f8d9e53-bc3a-4658-8960-fbf4ff8cb84f');
+    expect(errorsCall?.from?.toISOString()).toBe('2024-03-01T00:00:00.000Z');
+    expect(errorsCall?.to?.toISOString()).toBe('2024-03-08T00:00:00.000Z');
   });
 
   it('uses a default 7-day window and null rates when sample sizes are empty', async () => {
@@ -88,12 +108,13 @@ describe('application/readiness-metrics', () => {
       voiceFallbackSelections: null,
       voiceReuseSelections: null,
     });
+    const listFailedErrorsForReadiness = vi.fn().mockResolvedValue([]);
 
     const now = new Date('2024-06-15T12:00:00.000Z');
     const result = await getReadinessMetricsWithDefaults(
       {},
       {
-        jobs: { readiness },
+        jobs: { readiness, listFailedErrorsForReadiness },
         now: () => now,
       },
     );
@@ -106,5 +127,49 @@ describe('application/readiness-metrics', () => {
     expect(result.firstSessionSuccessProxy.rate).toBeNull();
     expect(result.publishLatencyMs.median).toBeNull();
     expect(result.voiceAlignment?.providerErrors).toBe(0);
+  });
+
+  it('logs drift warning when normalized provider counts differ from legacy SQL counts', async () => {
+    const readiness = vi.fn().mockResolvedValue({
+      publishSucceeded: 1,
+      publishFailed: 2,
+      publishTotal: 3,
+      latencySampleSize: 1,
+      medianPublishLatencyMs: 1200,
+      firstSessionTotalUsers: 1,
+      firstSessionSucceededUsers: 1,
+      voiceValidationFailures: 0,
+      voiceStrictMismatches: 0,
+      voiceProviderErrors: 0,
+      voiceProviderErrorBreakdown: {},
+      voiceFallbackSelections: null,
+      voiceReuseSelections: null,
+    });
+    const listFailedErrorsForReadiness = vi
+      .fn()
+      .mockResolvedValue(['Provider timed out while generating dialogue']);
+    const warnSpy = vi.spyOn(logger, 'warn');
+
+    await getReadinessMetricsWithDefaults(
+      {
+        from: new Date('2024-05-01T00:00:00.000Z'),
+        to: new Date('2024-05-08T00:00:00.000Z'),
+        userId: '8f8d9e53-bc3a-4658-8960-fbf4ff8cb84f',
+      },
+      {
+        jobs: { readiness, listFailedErrorsForReadiness },
+      },
+    );
+
+    expect(warnSpy).toHaveBeenCalledTimes(1);
+    expect(warnSpy).toHaveBeenCalledWith(
+      'Readiness provider-error totals differ between legacy SQL and parser normalization',
+      expect.objectContaining({
+        event: 'readiness_provider_error_drift',
+        legacyProviderErrors: 0,
+        normalizedProviderErrors: 1,
+        userId: '8f8d9e53-bc3a-4658-8960-fbf4ff8cb84f',
+      }),
+    );
   });
 });
