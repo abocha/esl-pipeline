@@ -15,6 +15,7 @@ import {
   noopLogger,
 } from '@esl-pipeline/contracts';
 import { type Frontmatter, extractFrontmatter, extractStudyText } from '@esl-pipeline/pmd';
+import { runProviderFallbackLadder } from '@esl-pipeline/provider-runtime';
 
 import { loadVoicesCatalog } from './assign.js';
 import { estimateDurationFromFileSize } from './audioDuration.js';
@@ -26,6 +27,11 @@ import {
   setMp3TitleMetadata,
   synthSilenceMp3,
 } from './ffmpeg.js';
+import {
+  classifyElevenLabsVoiceProviderError,
+  extractElevenLabsRuntimeErrorDetails,
+  isElevenLabsTtsRetryableStatus,
+} from './provider-runtime.js';
 import { type VoiceMapConfig, resolveSpeakerVoices } from './speakerAssignment.js';
 import type { DialogueInput, TtsStrategy } from './types.js';
 import type { BuildStudyTextInput, BuildStudyTextOptions, BuildStudyTextResult } from './types.js';
@@ -40,7 +46,6 @@ type TtsOutputFormat = NonNullable<TextToSpeechConvertBody['outputFormat']>;
 const DEFAULT_OUTPUT_FORMAT = (process.env.ELEVENLABS_OUTPUT_FORMAT ??
   'mp3_22050_32') as unknown as TtsOutputFormat;
 const DEFAULT_TTS_MAX_CHARS = 4500;
-const RETRYABLE_STATUS = new Set([408, 409, 425, 429, 500, 502, 503, 504]);
 
 function isTtsDebugEnabled(): boolean {
   const raw = process.env.ELEVENLABS_TTS_DEBUG ?? process.env.ESL_TTS_DEBUG;
@@ -773,32 +778,26 @@ async function synthesizeLineWithRetry(
   request: TtsConvertRequest,
   maxAttempts = 3,
 ): Promise<void> {
-  let attempt = 0;
-  let lastError: unknown;
-  while (attempt < maxAttempts) {
-    try {
-      await synthesizeLine(client, voiceId, text, outFile, request);
-      return;
-    } catch (error: unknown) {
-      lastError = error;
-      const status =
-        typeof error === 'object' && error
-          ? ((error as { status?: number; statusCode?: number; response?: { status?: number } })
-              .status ??
-            (error as { status?: number; statusCode?: number; response?: { status?: number } })
-              .statusCode ??
-            (error as { status?: number; statusCode?: number; response?: { status?: number } })
-              .response?.status)
-          : undefined;
-      const statusNum = status ?? -1;
-      if (!RETRYABLE_STATUS.has(statusNum) || attempt === maxAttempts - 1) {
-        throw wrapSynthesisError(error, voiceId, text);
-      }
-      await wait(400 * Math.pow(2, attempt));
-      attempt++;
-    }
-  }
-  throw wrapSynthesisError(lastError, voiceId, text);
+  const retryBudget = Math.max(0, maxAttempts - 1);
+  let backoffAttempt = 0;
+  const candidate = { voiceId, text, outFile };
+
+  await runProviderFallbackLadder<typeof candidate, void, SynthesisRuntimeError>({
+    candidates: [candidate],
+    runCandidate: async (current) => {
+      await synthesizeLine(client, current.voiceId, current.text, current.outFile, request);
+    },
+    mapError: (current, error) => mapSynthesisRuntimeError(error, current),
+    isTimeoutError: (mappedError) => mappedError.retryable,
+    isFailFastError: (mappedError) => !mappedError.retryable,
+    getRetryMax: () => retryBudget,
+    getRetryBackoffMs: () => {
+      const backoffMs = 400 * Math.pow(2, backoffAttempt);
+      backoffAttempt += 1;
+      return backoffMs;
+    },
+    sleep: wait,
+  });
 }
 
 async function synthesizeLine(
@@ -846,31 +845,43 @@ function calculateApproxDuration(
   return estimateDurationFromFileSize(bytes, outputFormat);
 }
 
-function wrapSynthesisError(error: unknown, voiceId: string, text: string): Error {
-  const message = error instanceof Error ? error.message : String(error);
-  const status =
-    typeof error === 'object' && error
-      ? ((error as { status?: number; statusCode?: number; response?: { status?: number } }).status ??
-        (error as { status?: number; statusCode?: number; response?: { status?: number } })
-          .statusCode ??
-        (error as { status?: number; statusCode?: number; response?: { status?: number } }).response
-          ?.status)
-      : undefined;
-  const normalized = message.toLowerCase();
-  const category: VoiceProviderErrorCategory =
-    status === 429
-      ? 'provider_rate_limit'
-      : status === 408 || status === 504
-        ? 'provider_timeout'
-        : (status === 404 && normalized.includes('voice')) || normalized.includes('invalid voice')
-          ? 'invalid_voice_id'
-          : normalized.includes('unsupported') &&
-              (normalized.includes('accent') || normalized.includes('style'))
-            ? 'unsupported_voice_capability'
-            : 'provider_contract_error';
-  return new InfrastructureError(
-    `Failed to synthesize line with voice "${voiceId}" [${category}]: ${message}\nLine: ${text}`,
-  );
+class SynthesisRuntimeError extends InfrastructureError {
+  readonly category: VoiceProviderErrorCategory;
+  readonly retryable: boolean;
+
+  constructor(args: {
+    message: string;
+    category: VoiceProviderErrorCategory;
+    retryable: boolean;
+  }) {
+    super(args.message);
+    this.name = 'SynthesisRuntimeError';
+    this.category = args.category;
+    this.retryable = args.retryable;
+  }
+}
+
+function mapSynthesisRuntimeError(
+  error: unknown,
+  context: { voiceId: string; text: string },
+): SynthesisRuntimeError {
+  if (error instanceof SynthesisRuntimeError) {
+    return error;
+  }
+
+  const details = extractElevenLabsRuntimeErrorDetails(error);
+  const category = classifyElevenLabsVoiceProviderError({
+    error,
+    messageForClassification: details.message,
+  });
+  const retryable = isElevenLabsTtsRetryableStatus(details.status);
+  return new SynthesisRuntimeError({
+    category,
+    retryable,
+    message:
+      `Failed to synthesize line with voice "${context.voiceId}" ` +
+      `[${category}]: ${details.message}\nLine: ${context.text}`,
+  });
 }
 
 function wait(ms: number): Promise<void> {

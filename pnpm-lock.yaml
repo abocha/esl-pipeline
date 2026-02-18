@@ -576,6 +576,9 @@ importers:
       '@esl-pipeline/pmd':
         specifier: workspace:*
         version: link:../pmd
+      '@esl-pipeline/provider-runtime':
+        specifier: workspace:*
+        version: link:../provider-runtime
       '@esl-pipeline/shared-infrastructure':
         specifier: workspace:*
         version: link:../shared-infrastructure

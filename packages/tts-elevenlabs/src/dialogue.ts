@@ -3,13 +3,16 @@ import { createWriteStream } from 'node:fs';
 import { stat } from 'node:fs/promises';
 import { resolve } from 'node:path';
 
-import { ElevenLabsClient, ElevenLabsError, ElevenLabsTimeoutError } from '@elevenlabs/elevenlabs-js';
+import { ElevenLabsClient } from '@elevenlabs/elevenlabs-js';
 import { InfrastructureError } from '@esl-pipeline/contracts';
-import type { VoiceProviderErrorCategory } from '@esl-pipeline/contracts';
 
 import { estimateDurationFromFileSize } from './audioDuration.js';
 import { getElevenClient } from './eleven.js';
 import { concatMp3Segments } from './ffmpeg.js';
+import {
+  classifyElevenLabsVoiceProviderError,
+  formatElevenLabsProviderError,
+} from './provider-runtime.js';
 import type {
   DialogueChunk,
   DialogueInput,
@@ -153,55 +156,6 @@ async function readStreamToBuffer(stream: ReadableStream<Uint8Array>): Promise<B
   return Buffer.concat(chunks);
 }
 
-function formatDialogueError(error: unknown): string {
-  if (error instanceof ElevenLabsTimeoutError) {
-    return error.message;
-  }
-  if (error instanceof ElevenLabsError) {
-    const status = typeof error.statusCode === 'number' ? `HTTP ${error.statusCode}: ` : '';
-    let body = '';
-    if (typeof error.body === 'string') {
-      body = error.body;
-    } else if (error.body === undefined) {
-      body = '';
-    } else {
-      body = JSON.stringify(error.body);
-    }
-    return `${status}${error.message}${body ? ` | ${body}` : ''}`;
-  }
-  return error instanceof Error ? error.message : String(error);
-}
-
-function extractDialogueStatusCode(error: unknown): number | undefined {
-  if (error instanceof ElevenLabsError && typeof error.statusCode === 'number') {
-    return error.statusCode;
-  }
-  if (typeof error !== 'object' || error === null) return undefined;
-  const maybeStatus = (error as { status?: unknown; statusCode?: unknown }).status;
-  if (typeof maybeStatus === 'number') return maybeStatus;
-  const maybeStatusCode = (error as { status?: unknown; statusCode?: unknown }).statusCode;
-  if (typeof maybeStatusCode === 'number') return maybeStatusCode;
-  return undefined;
-}
-
-function categorizeDialogueError(error: unknown): VoiceProviderErrorCategory {
-  if (error instanceof ElevenLabsTimeoutError) return 'provider_timeout';
-  const status = extractDialogueStatusCode(error);
-  if (status === 429) return 'provider_rate_limit';
-  if (status === 408 || status === 504) return 'provider_timeout';
-
-  const message = formatDialogueError(error).toLowerCase();
-  if (status === 404 && message.includes('voice')) return 'invalid_voice_id';
-  if (status === 422 && message.includes('voice')) {
-    return message.includes('invalid') ? 'invalid_voice_id' : 'unsupported_voice_capability';
-  }
-  if (message.includes('invalid voice')) return 'invalid_voice_id';
-  if (message.includes('unsupported') && (message.includes('accent') || message.includes('style'))) {
-    return 'unsupported_voice_capability';
-  }
-  return 'provider_contract_error';
-}
-
 /**
  * Calls ElevenLabs Text-to-Dialogue API for a single chunk using the official SDK.
  * @param chunk - Array of dialogue inputs
@@ -246,9 +200,13 @@ export async function synthesizeDialogueChunk(
     );
     return await readStreamToBuffer(stream);
   } catch (error: unknown) {
-    const category = categorizeDialogueError(error);
+    const formatted = formatElevenLabsProviderError(error);
+    const category = classifyElevenLabsVoiceProviderError({
+      error,
+      messageForClassification: formatted,
+    });
     throw new InfrastructureError(
-      `Text-to-Dialogue synthesis failed [${category}]: ${formatDialogueError(error)}`,
+      `Text-to-Dialogue synthesis failed [${category}]: ${formatted}`,
     );
   }
 }

@@ -34,6 +34,32 @@ const buildStudyTextMp3FromPath = async (
   return buildStudyTextMp3({ context, mdPath }, ...args);
 };
 
+const writeBasicMonologueFixture = async (dir: string) => {
+  const tempMdPath = join(dir, 'lesson-basic.md');
+  const tempVoiceMapPath = join(dir, 'voices.yml');
+  await writeFixture(
+    tempMdPath,
+    `
+---
+title: Retry Test
+student: Anna
+input_type: monologue
+---
+
+:::study-text
+This is a short line for retry behavior checks.
+:::
+    `,
+  );
+  await writeFixture(
+    tempVoiceMapPath,
+    `
+default: voice_id_default
+    `,
+  );
+  return { tempMdPath, tempVoiceMapPath };
+};
+
 const catalogMock = {
   voices: [
     {
@@ -639,6 +665,46 @@ default: voice_id_default
       expect.any(String),
       expect.objectContaining({ text: 'I really love code!' }),
     );
+  });
+
+  it('retries retryable provider statuses before failing with provider_rate_limit', async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'tts-'));
+    const { tempMdPath, tempVoiceMapPath } = await writeBasicMonologueFixture(dir);
+    const rateLimitError = Object.assign(new Error('too many requests'), { status: 429 });
+    const convertMock = vi.fn().mockRejectedValue(rateLimitError);
+    vi.spyOn(eleven, 'getElevenClient').mockReturnValue({
+      textToSpeech: { convert: convertMock },
+    } as any);
+    mockConcat();
+
+    await expect(
+      buildStudyTextMp3FromPath(tempMdPath, {
+        voiceMapPath: tempVoiceMapPath,
+        outPath: dir,
+        ttsStrategy: 'tts',
+      }),
+    ).rejects.toThrow(/Failed to synthesize line with voice "voice_id_default" \[provider_rate_limit\]/);
+    expect(convertMock).toHaveBeenCalledTimes(3);
+  });
+
+  it('keeps provider_contract_error category for 5xx while preserving retry ladder behavior', async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'tts-'));
+    const { tempMdPath, tempVoiceMapPath } = await writeBasicMonologueFixture(dir);
+    const serverError = Object.assign(new Error('upstream server issue'), { status: 500 });
+    const convertMock = vi.fn().mockRejectedValue(serverError);
+    vi.spyOn(eleven, 'getElevenClient').mockReturnValue({
+      textToSpeech: { convert: convertMock },
+    } as any);
+    mockConcat();
+
+    await expect(
+      buildStudyTextMp3FromPath(tempMdPath, {
+        voiceMapPath: tempVoiceMapPath,
+        outPath: dir,
+        ttsStrategy: 'tts',
+      }),
+    ).rejects.toThrow(/Failed to synthesize line with voice "voice_id_default" \[provider_contract_error\]/);
+    expect(convertMock).toHaveBeenCalledTimes(3);
   });
 
   it('reuses generated audio when file already exists', async () => {

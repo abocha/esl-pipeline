@@ -180,6 +180,17 @@ describe('synthesizeDialogueChunk', () => {
       /Text-to-Dialogue synthesis failed \[invalid_voice_id\]: HTTP 422:/,
     );
   });
+
+  it('maps timeout errors to provider_timeout', async () => {
+    const chunk: DialogueInput[] = [{ text: 'Hello', voiceId: 'voice1' }];
+    mocks.convertMock.mockRejectedValueOnce(
+      new mocks.HoistedElevenLabsTimeoutError('Request timed out'),
+    );
+
+    await expect(synthesizeDialogueChunk(chunk, { inputs: chunk }, 'test-key')).rejects.toThrow(
+      /Text-to-Dialogue synthesis failed \[provider_timeout\]: Request timed out/,
+    );
+  });
 });
 
 describe('synthesizeDialogue', () => {
