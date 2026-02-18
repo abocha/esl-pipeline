@@ -6,6 +6,7 @@ import { validateMarkdown } from '@esl-pipeline/md-validator';
 import * as approveJobModule from '../src/application/approve-job.js';
 import * as createDraftModule from '../src/application/create-draft.js';
 import * as createPromptPackageModule from '../src/application/create-prompt-package.js';
+import * as generateDraftModule from '../src/application/generate-draft.js';
 import { getJobOptions } from '../src/application/get-job-options.js';
 import * as getJobProvenanceModule from '../src/application/get-job-provenance.js';
 import * as getJobStatusModule from '../src/application/get-job-status.js';
@@ -2048,6 +2049,189 @@ describe('transport/http-server - integration (in-process)', () => {
 
     expect(response.statusCode).toBe(404);
     expect(response.json()).toEqual({ error: 'not_found' });
+  });
+
+  it('POST /generation/drafts returns generated payload', async () => {
+    const generateDraft = vi.spyOn(generateDraftModule, 'generateDraft');
+    generateDraft.mockClear();
+    generateDraft.mockResolvedValue({
+      text: '# Generated draft',
+      provider: 'openai',
+      model: 'gpt-5.2',
+      quota: {
+        source: 'hybrid',
+        lastUpdatedAt: '2026-02-18T00:00:00.000Z',
+      },
+      usage: {
+        inputTokens: 123,
+        outputTokens: 456,
+        totalTokens: 579,
+      },
+      providerRequestId: 'resp-1',
+    });
+
+    const response = await app.inject({
+      method: 'POST',
+      url: '/generation/drafts',
+      payload: {
+        promptPackageId: 'prompt-1',
+        provider: 'openai',
+        model: 'gpt-5.2',
+        maxOutputTokens: 800,
+      },
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toMatchObject({
+      text: '# Generated draft',
+      provider: 'openai',
+      model: 'gpt-5.2',
+      quota: {
+        source: 'hybrid',
+      },
+      usage: {
+        totalTokens: 579,
+      },
+    });
+    expect(generateDraft).toHaveBeenCalledWith(
+      {
+        promptPackageId: 'prompt-1',
+        provider: 'openai',
+        model: 'gpt-5.2',
+        maxOutputTokens: 800,
+      },
+      expect.any(Object),
+    );
+  });
+
+  it('POST /generation/drafts returns 404 when prompt package is missing', async () => {
+    const generateDraft = vi.spyOn(generateDraftModule, 'generateDraft');
+    generateDraft.mockClear();
+    generateDraft.mockResolvedValue(null);
+
+    const response = await app.inject({
+      method: 'POST',
+      url: '/generation/drafts',
+      payload: {
+        promptPackageId: 'missing',
+      },
+    });
+
+    expect(response.statusCode).toBe(404);
+    expect(response.json()).toEqual({ error: 'not_found' });
+  });
+
+  it('POST /generation/drafts maps provider errors to category-specific status and payload', async () => {
+    const generateDraft = vi.spyOn(generateDraftModule, 'generateDraft');
+    generateDraft.mockClear();
+    generateDraft.mockRejectedValue(
+      new generateDraftModule.GenerateDraftProviderError({
+        category: 'provider_timeout',
+        provider: 'google_ai_studio',
+        model: 'gemini-3-flash-preview',
+        message: 'Provider request timed out',
+      }),
+    );
+
+    const response = await app.inject({
+      method: 'POST',
+      url: '/generation/drafts',
+      payload: {
+        promptPackageId: 'prompt-1',
+      },
+    });
+
+    expect(response.statusCode).toBe(504);
+    expect(response.json()).toEqual({
+      error: 'internal_error',
+      code: 'provider_timeout',
+      message: 'Provider request timed out',
+      provider: 'google_ai_studio',
+      model: 'gemini-3-flash-preview',
+      requestId: expect.any(String),
+      timestamp: expect.any(String),
+    });
+  });
+
+  it('POST /generation/drafts maps rate-limit provider errors to 429', async () => {
+    const generateDraft = vi.spyOn(generateDraftModule, 'generateDraft');
+    generateDraft.mockClear();
+    generateDraft.mockRejectedValue(
+      new generateDraftModule.GenerateDraftProviderError({
+        category: 'provider_rate_limit',
+        provider: 'openai',
+        model: 'gpt-5.2',
+        message: 'Rate limit exceeded',
+      }),
+    );
+
+    const response = await app.inject({
+      method: 'POST',
+      url: '/generation/drafts',
+      payload: {
+        promptPackageId: 'prompt-1',
+      },
+    });
+
+    expect(response.statusCode).toBe(429);
+    expect(response.json()).toEqual({
+      error: 'internal_error',
+      code: 'provider_rate_limit',
+      message: 'Rate limit exceeded',
+      provider: 'openai',
+      model: 'gpt-5.2',
+      requestId: expect.any(String),
+      timestamp: expect.any(String),
+    });
+  });
+
+  it('POST /generation/drafts maps contract provider errors to 502', async () => {
+    const generateDraft = vi.spyOn(generateDraftModule, 'generateDraft');
+    generateDraft.mockClear();
+    generateDraft.mockRejectedValue(
+      new generateDraftModule.GenerateDraftProviderError({
+        category: 'provider_contract_error',
+        provider: 'openrouter',
+        model: 'openrouter/test-primary',
+        message: 'Invalid provider payload',
+      }),
+    );
+
+    const response = await app.inject({
+      method: 'POST',
+      url: '/generation/drafts',
+      payload: {
+        promptPackageId: 'prompt-1',
+      },
+    });
+
+    expect(response.statusCode).toBe(502);
+    expect(response.json()).toEqual({
+      error: 'internal_error',
+      code: 'provider_contract_error',
+      message: 'Invalid provider payload',
+      provider: 'openrouter',
+      model: 'openrouter/test-primary',
+      requestId: expect.any(String),
+      timestamp: expect.any(String),
+    });
+  });
+
+  it('POST /generation/drafts validates request body', async () => {
+    const response = await app.inject({
+      method: 'POST',
+      url: '/generation/drafts',
+      payload: {
+        promptPackageId: '',
+      },
+    });
+
+    expect(response.statusCode).toBe(400);
+    expect(response.json()).toEqual({
+      error: 'validation_failed',
+      message: 'Invalid request body',
+      details: expect.any(Array),
+    });
   });
 
   it('POST /drafts/:id/materialize returns md path', async () => {

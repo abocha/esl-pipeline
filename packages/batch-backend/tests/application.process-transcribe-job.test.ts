@@ -377,6 +377,48 @@ function createConfig(): BatchBackendConfig {
       provider: 'filesystem',
       presignedUrlExpiresIn: 0,
     },
+    generation: {
+      defaultProvider: 'openai',
+      fallbackProviders: ['google_ai_studio', 'openrouter'],
+      quotaSourceMode: 'hybrid',
+      models: {
+        openai: {
+          primary: 'gpt-5.2',
+          fallback: 'gpt-5-mini',
+        },
+        googleAiStudio: {
+          primary: 'gemini-3-flash-preview',
+          fallback: 'gemini-2.5-flash-lite',
+          tertiary: 'gemini-2.5-pro',
+        },
+        openrouter: {},
+      },
+      providers: {
+        openai: {
+          apiKey: undefined,
+          requestTimeoutMs: 30_000,
+          retryMax: 1,
+          retryBackoffMs: 250,
+          dailyTokenBudget: undefined,
+        },
+        googleAiStudio: {
+          apiKey: undefined,
+          requestTimeoutMs: 30_000,
+          retryMax: 1,
+          retryBackoffMs: 250,
+          dailyRequestBudget: undefined,
+        },
+        openrouter: {
+          apiKey: undefined,
+          httpReferer: undefined,
+          xTitle: undefined,
+          requestTimeoutMs: 30_000,
+          retryMax: 1,
+          retryBackoffMs: 250,
+          dailyTokenBudget: undefined,
+        },
+      },
+    },
     prompt: {
       templatePath: '',
       defaultProfilePath: '',

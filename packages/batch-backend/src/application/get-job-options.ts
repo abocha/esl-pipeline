@@ -18,8 +18,10 @@ import {
   resolveNotionDatabasesFromEnv,
 } from '@esl-pipeline/shared-infrastructure';
 
+import { loadConfig } from '../config/env.js';
 import { logger } from '../infrastructure/logger.js';
 import { getJobOptionsFromOrchestrator } from '../infrastructure/orchestrator-service.js';
+import { buildGenerationOptionsPayload } from './generation-policy.js';
 import { getActionMetadata } from './job-actions/action-handler.js';
 import { DEFAULT_LEARNING_PRESET, type LearningPresetOption } from './learning-preset.js';
 
@@ -88,11 +90,14 @@ export async function getJobOptions(): Promise<JobOptionsResponse> {
         orchestratorLearningPresets && orchestratorLearningPresets.length > 0
           ? orchestratorLearningPresets
           : [DEFAULT_LEARNING_PRESET];
+      const generation =
+        result.generation ?? buildGenerationOptionsPayload({ config: loadConfig().generation });
 
       return {
         ...result,
         cefrLevels: result.cefrLevels ?? [...DEFAULT_CEFR_LEVELS],
         cefrDefault: result.cefrDefault ?? DEFAULT_CEFR_DEFAULT,
+        generation,
         notionDatabases,
         learningPresets,
         supportedActions,
@@ -144,6 +149,7 @@ async function loadStaticJobOptions(): Promise<JobOptionsResponse> {
     voices,
     cefrLevels: [...DEFAULT_CEFR_LEVELS],
     cefrDefault: DEFAULT_CEFR_DEFAULT,
+    generation: buildGenerationOptionsPayload({ config: loadConfig().generation }),
     notionDatabases,
     learningPresets: [...STATIC_OPTIONS.learningPresets],
     uploadOptions: [...STATIC_OPTIONS.uploadOptions],

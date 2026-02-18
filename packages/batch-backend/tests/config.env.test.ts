@@ -236,3 +236,63 @@ describe('config/env - storage provider defaults', () => {
     );
   });
 });
+
+describe('config/env - generation provider mapping', () => {
+  beforeEach(() => {
+    vi.resetModules();
+  });
+
+  it('loads generation defaults and provider order', async () => {
+    await withEnv(
+      {
+        NODE_ENV: 'test',
+      },
+      async () => {
+        const cfg = await loadConfigFresh();
+        expect(cfg.generation.defaultProvider).toBe('openai');
+        expect(cfg.generation.fallbackProviders).toEqual(['google_ai_studio', 'openrouter']);
+        expect(cfg.generation.quotaSourceMode).toBe('hybrid');
+        expect(cfg.generation.models.openai.primary).toBe('gpt-5.2');
+      },
+    );
+  });
+
+  it('maps generation env overrides', async () => {
+    await withEnv(
+      {
+        NODE_ENV: 'test',
+        GEN_PROVIDER_DEFAULT: 'google_ai_studio',
+        GEN_PROVIDER_FALLBACKS: 'openai,openrouter',
+        GEN_QUOTA_SOURCE_MODE: 'provider',
+        GEN_OPENAI_MODEL_PRIMARY: 'gpt-test',
+        OPENAI_API_KEY: 'openai-key',
+        GEMINI_API_KEY: 'google-key',
+        OPENROUTER_API_KEY: 'router-key',
+      },
+      async () => {
+        const cfg = await loadConfigFresh();
+        expect(cfg.generation.defaultProvider).toBe('google_ai_studio');
+        expect(cfg.generation.fallbackProviders).toEqual(['openai', 'openrouter']);
+        expect(cfg.generation.quotaSourceMode).toBe('provider');
+        expect(cfg.generation.models.openai.primary).toBe('gpt-test');
+        expect(cfg.generation.providers.openai.apiKey).toBe('openai-key');
+        expect(cfg.generation.providers.googleAiStudio.apiKey).toBe('google-key');
+        expect(cfg.generation.providers.openrouter.apiKey).toBe('router-key');
+      },
+    );
+  });
+
+  it('throws on invalid generation provider', async () => {
+    await expect(
+      withEnv(
+        {
+          NODE_ENV: 'test',
+          GEN_PROVIDER_DEFAULT: 'invalid-provider',
+        },
+        async () => {
+          await loadConfigFresh();
+        },
+      ),
+    ).rejects.toThrow('Generation provider must be one of: openai, google_ai_studio, openrouter');
+  });
+});
