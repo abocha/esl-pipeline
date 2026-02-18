@@ -35,8 +35,8 @@
 
 - Active workstream: `WS3 TTS abstraction + fallback`.
 - This week objective: extract and stabilize the shared provider runtime seam for generation/TTS convergence.
-- Today `Now` task (30-90 min): ship WS3-S0 (`@esl-pipeline/provider-runtime`) and migrate generation ladder/error classification to the shared seam with parity tests.
-- Success for today: WS3 gate is open in tracker, generation behavior is parity-safe on the shared seam, and WS3-S0 evidence is logged.
+- Today `Now` task (30-90 min): complete WS3-S1 by migrating ElevenLabs TTS/dialogue runtime error classification + retry handling to the shared provider-runtime seam.
+- Success for today: TTS runtime path uses shared seam utilities with parity-safe behavior, compatibility tags remain stable, and WS3-S1 evidence is logged.
 
 ## Delivery Model (Locked)
 
@@ -421,7 +421,7 @@ reuse it in generation flow before extending the same seam into TTS runtime path
 
 ### Status
 
-- `in_progress`; WS3-S0 is complete and WS3-S1 is next.
+- `in_progress`; WS3-S0 and WS3-S1 are complete, and WS3-S2 is next.
 
 ### Start Gate (Mandatory)
 
@@ -456,6 +456,33 @@ reuse it in generation flow before extending the same seam into TTS runtime path
 - [x] `generate-draft` is migrated to shared seam with no behavior regressions.
 - [x] backend generation tests/integration tests remain green.
 - [x] tracker/alignment docs reflect WS3 active state and WS2B completion status.
+
+### WS3-S1 TTS Runtime Seam Adoption (Completed)
+
+- Goal: migrate ElevenLabs TTS runtime classification/retry handling to the shared seam while
+  preserving existing error tags and downstream parser compatibility.
+- Add:
+  - `packages/tts-elevenlabs/src/provider-runtime.ts`
+  - `packages/tts-elevenlabs/tests/provider-runtime.test.ts`
+- Edit:
+  - `packages/tts-elevenlabs/src/index.ts`
+  - `packages/tts-elevenlabs/src/dialogue.ts`
+  - `packages/tts-elevenlabs/tests/index.test.ts`
+  - `packages/tts-elevenlabs/tests/dialogue.test.ts`
+  - `packages/tts-elevenlabs/package.json`
+- Minimum behavior:
+  - TTS line synthesis retry loop uses shared ladder semantics with parity retry/backoff behavior,
+  - dialogue + standard TTS map provider categories through shared runtime classification,
+  - voice-specific categories (`invalid_voice_id`, `unsupported_voice_capability`) remain
+    precedence-safe,
+  - orchestrator/backend compatibility remains intact because bracketed error tags are unchanged.
+
+### WS3-S1 Done Criteria
+
+- [x] TTS runtime paths use shared provider runtime seam without contract changes.
+- [x] Retry behavior for retryable statuses remains parity-safe.
+- [x] Dialogue + TTS provider category mapping remains regression-covered.
+- [x] `pnpm check:fast` and dependency hygiene checks pass after dependency wiring.
 
 ## Parked Workstreams (Do Not Start Yet)
 
@@ -522,6 +549,7 @@ Recent evidence:
 - 2026-02-18 | WS2B-S1 | finalized generation request/response contracts and optional `job-options.generation` metadata propagation across contracts/backend/frontend with safe clone semantics. | `pnpm --filter @esl-pipeline/contracts typecheck`; `pnpm --filter @esl-pipeline/orchestrator test -- metadata.job-options.test.ts`; `pnpm --filter @esl-pipeline/batch-backend exec vitest run --config ../../vitest.config.ts tests/application.get-job-options.test.ts tests/transport.http-server.integration.test.ts`; `pnpm --filter @esl-pipeline/batch-frontend test -- MinimalAssignment.test.tsx` | pass | local workspace
 - 2026-02-18 | WS2B-S2 | implemented `POST /generation/drafts` backend endpoint with live provider adapters (OpenAI/Google/OpenRouter), deterministic fallback/retry ladder, normalized provider error categories, and `/config/job-options` generation metadata defaults. | `pnpm --filter @esl-pipeline/batch-backend typecheck`; `pnpm --filter @esl-pipeline/batch-backend exec vitest run --config ../../vitest.config.ts tests/application.generate-draft.test.ts tests/transport.http-server.integration.test.ts tests/application.get-job-options.test.ts tests/config.env.test.ts` | pass | local workspace
 - 2026-02-18 | WS2B-S3 | completed Draft-step generation UX with provider/model controls, quota panel (source + freshness + limits link), runtime snapshot precedence over baseline quota, and stale-flow-safe response handling. | `pnpm lint`; `pnpm --filter @esl-pipeline/batch-frontend test -- MinimalAssignment.test.tsx`; `pnpm --filter @esl-pipeline/batch-backend exec vitest run --config ../../vitest.config.ts tests/application.generate-draft.test.ts tests/transport.http-server.integration.test.ts`; `pnpm check:fast` | pass | local workspace
+- 2026-02-18 | WS3-S1 | migrated ElevenLabs TTS/dialogue runtime classification + retry behavior to shared provider-runtime seam with compatibility-preserving error tags and parity tests. | `pnpm --filter @esl-pipeline/tts-elevenlabs typecheck`; `pnpm --filter @esl-pipeline/tts-elevenlabs test -- tests/provider-runtime.test.ts tests/dialogue.test.ts tests/index.test.ts`; `pnpm deps:pin`; `pnpm deps:audit:strict`; `pnpm check:fast` | pass | local workspace
 
 ## Weekly Closeout Checklist
 
