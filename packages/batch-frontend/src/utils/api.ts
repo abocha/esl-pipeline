@@ -22,6 +22,7 @@
  * - GET /profiles/:id/revisions, GET /profiles/:id/revisions/:revisionId
  * - POST /profiles/:id/revisions/:revisionId/restore
  * - GET /prompt-packages/:id/lineage
+ * - POST /generation/drafts
  * - GET /drafts/:id
  * - GET /jobs/events (SSE) for live updates
  * - GET /user/profile, /user/files (authenticated)
@@ -31,6 +32,10 @@ import { JobActionType } from '@esl-pipeline/contracts';
 
 import type {
   ActionCapability,
+  GenerateDraftRequest as ContractGenerateDraftRequest,
+  GenerateDraftResponse as ContractGenerateDraftResponse,
+  GenerationErrorCategory,
+  GenerationProvider,
   JobConfigOverrides as ContractJobConfigOverrides,
   JobEventPayload as ContractJobEventPayload,
   JobEventType as ContractJobEventType,
@@ -72,6 +77,9 @@ export type JobSummaryResponse = ContractJobSummaryResponse;
 export type StudentSummaryResponse = ContractStudentSummaryResponse;
 export type JobConfigOverrides = ContractJobConfigOverrides;
 export type MarkdownValidationResponse = ContractMarkdownValidationResponse;
+export type GenerateDraftRequest = ContractGenerateDraftRequest;
+export type GenerateDraftResponse = ContractGenerateDraftResponse;
+export type GenerationDraftErrorCode = GenerationErrorCategory;
 
 export interface RecordingTranscriptResponse {
   recordingId: string;
@@ -663,6 +671,44 @@ export interface ErrorEnvelope {
   code?: string;
 }
 
+interface GenerationDraftErrorEnvelope extends ErrorEnvelope {
+  code?: GenerationErrorCategory | string;
+  provider?: GenerationProvider;
+  model?: string;
+  requestId?: string;
+  timestamp?: string;
+}
+
+export class GenerationDraftApiError extends Error {
+  readonly status: number | undefined;
+  readonly code: GenerationErrorCategory | string | undefined;
+  readonly provider: GenerationProvider | undefined;
+  readonly model: string | undefined;
+  readonly requestId: string | undefined;
+  readonly timestamp: string | undefined;
+
+  constructor(
+    message: string,
+    details: {
+      status?: number;
+      code?: GenerationErrorCategory | string;
+      provider?: GenerationProvider;
+      model?: string;
+      requestId?: string;
+      timestamp?: string;
+    } = {},
+  ) {
+    super(message);
+    this.name = 'GenerationDraftApiError';
+    this.status = details.status;
+    this.code = details.code;
+    this.provider = details.provider;
+    this.model = details.model;
+    this.requestId = details.requestId;
+    this.timestamp = details.timestamp;
+  }
+}
+
 export interface JobOptionsResponse {
   presets: ContractJobOptionsPayload['presets'];
   learningPresets?: LearningPresetOption[];
@@ -804,6 +850,41 @@ const formatUnknownError = (error: unknown): string => {
   if (error instanceof Error) return error.message;
   if (typeof error === 'string') return error;
   return 'An unexpected error occurred';
+};
+
+const parseGenerationDraftError = (error: AxiosError): GenerationDraftApiError | null => {
+  const status = error.response?.status;
+  if (status === undefined) {
+    return null;
+  }
+
+  const knownStatus = new Set([400, 404, 429, 500, 502, 504]);
+  if (!knownStatus.has(status)) {
+    return null;
+  }
+
+  const data = error.response?.data;
+  const envelope =
+    data && typeof data === 'object' ? (data as Partial<GenerationDraftErrorEnvelope>) : null;
+
+  const message =
+    envelope?.message && envelope.message.trim().length > 0
+      ? envelope.message
+      : handleApiError(error);
+  const code = typeof envelope?.code === 'string' ? envelope.code : undefined;
+  const provider = envelope?.provider;
+  const model = typeof envelope?.model === 'string' ? envelope.model : undefined;
+  const requestId = typeof envelope?.requestId === 'string' ? envelope.requestId : undefined;
+  const timestamp = typeof envelope?.timestamp === 'string' ? envelope.timestamp : undefined;
+
+  return new GenerationDraftApiError(message, {
+    status,
+    code,
+    provider,
+    model,
+    requestId,
+    timestamp,
+  });
 };
 
 /**
@@ -1489,6 +1570,27 @@ export async function fetchJobProvenance(jobId: string): Promise<JobProvenanceRe
     const axiosError = toAxiosError(error);
     if (axiosError && isAuthError(axiosError)) {
       throw new Error('Authentication required. Please login to view job provenance.');
+    }
+    throw new Error(axiosError ? handleApiError(axiosError) : formatUnknownError(error));
+  }
+}
+
+export async function generateDraft(
+  request: GenerateDraftRequest,
+): Promise<GenerateDraftResponse> {
+  try {
+    const response = await apiClient.post(buildApiProxyPath('/generation/drafts'), request);
+    return response.data;
+  } catch (error: unknown) {
+    const axiosError = toAxiosError(error);
+    if (axiosError && isAuthError(axiosError)) {
+      throw new Error('Authentication required. Please login to generate drafts.');
+    }
+    if (axiosError) {
+      const parsed = parseGenerationDraftError(axiosError);
+      if (parsed) {
+        throw parsed;
+      }
     }
     throw new Error(axiosError ? handleApiError(axiosError) : formatUnknownError(error));
   }
