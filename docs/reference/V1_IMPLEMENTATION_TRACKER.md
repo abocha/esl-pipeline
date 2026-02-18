@@ -33,10 +33,10 @@
 
 ## Current Sprint Focus
 
-- Active workstream: `WS3 TTS abstraction + fallback`.
-- This week objective: extract and stabilize the shared provider runtime seam for generation/TTS convergence.
-- Today `Now` task (30-90 min): review WS3 slice completion (S0-S2) and lock WS3-S3 execution steps.
-- Success for today: WS3-S0/S1/S2 completion is confirmed with evidence, and WS3-S3 has a concrete next-slice checklist.
+- Active workstream: `Stabilization and gate review`.
+- This week objective: verify WS2B+WS3 readiness telemetry stability and lock a clear WS5 go/no-go signal.
+- Today `Now` task (30-90 min): run stabilization checks (readiness drift, provider-error sampling boundaries, parity counters) and log evidence.
+- Success for today: tracker status is fully normalized to shipped WS3-S3 state, and WS5 remains explicitly parked until telemetry stability is proven.
 
 ## Delivery Model (Locked)
 
@@ -59,10 +59,10 @@ Rules:
 | WS6 Readiness instrumentation (minimal first) | `complete` | W1 (2026-02-09) | W4 (2026-03-08) | WS1 metric hooks merged |
 | WS2A Preset plumbing MVP | `complete` | W4 (2026-03-02) | W7 (2026-03-29) | WS1 + WS6 complete |
 | WS2B Direct LLM generation | `complete` | W8 (2026-03-30) | W9 (2026-04-12) | WS2A complete |
-| WS3 TTS abstraction + fallback | `in_progress` | W10 (2026-04-13) | W12 (2026-05-03) | WS2B seam pattern stable |
+| WS3 TTS abstraction + fallback | `complete` | W10 (2026-04-13) | W12 (2026-05-03) | WS2B seam pattern stable |
 | WS5 Cost and quota policy | `parked` | W11 (2026-04-20) | W13 (2026-05-10) | WS2B + WS3 usage telemetry available |
 | WS4 CRM-lite lesson ledger | `parked` | W13 (2026-05-04) | W15 (2026-05-24) | WS2A assignment flow stable |
-| Stabilization and gate review | `queued` | W16 (2026-05-25) | W17 (2026-06-07) | WS2A-WS6 MVP complete |
+| Stabilization and gate review | `in_progress` | W16 (2026-05-25) | W17 (2026-06-07) | WS2A-WS6 MVP complete |
 
 ---
 
@@ -412,7 +412,7 @@ Remove manual copy-paste dependency with backend generation endpoint + frontend 
 
 ---
 
-## WS3 Execution Card: TTS Abstraction + Fallback (In Progress)
+## WS3 Execution Card: TTS Abstraction + Fallback (Complete)
 
 ### Objective
 
@@ -421,14 +421,14 @@ reuse it in generation flow before extending the same seam into TTS runtime path
 
 ### Status
 
-- `in_progress`; WS3-S0, WS3-S1, and WS3-S2 are complete, and WS3-S3 is next.
+- `complete`; WS3-S0 through WS3-S3 are delivered and evidence-backed.
 
 ### Start Gate (Mandatory)
 
 - [x] WS2B request/response shape is stable.
 - [x] Provider seam can be reused from generation service patterns.
 
-### WS3-S0 Provider Seam Extraction (Current Slice)
+### WS3-S0 Provider Seam Extraction (Completed)
 
 - Goal: create a shared provider runtime package and migrate `generate-draft` to it without public
   contract changes.
@@ -546,7 +546,7 @@ reuse it in generation flow before extending the same seam into TTS runtime path
 - [x] Boundary handling remains regression-covered.
 - [x] Targeted tests + typecheck + deps hygiene + `check:fast` pass.
 
-### WS3 Slice Review (S0-S3) and WS3-S3 Next Steps
+### WS3 Slice Review (S0-S3) and Closeout Checklist
 
 - Slice completion review:
   - [x] WS3-S0 provider-runtime seam extraction completed and regression-covered.
@@ -554,7 +554,7 @@ reuse it in generation flow before extending the same seam into TTS runtime path
   - [x] WS3-S2 backend surfacing/telemetry normalization completed without contract churn.
   - [x] WS3-S2 follow-up boundary fix landed: readiness failed-error window now matches snapshot upper bound semantics.
   - [x] WS3-S3 backend telemetry hardening completed with parser/status inference and drift diagnostics improvements.
-- WS3-S3 next-slice checklist:
+- WS3-S3 closeout checklist:
   - [x] define WS3-S3 objective and strict scope (no cross-workstream bleed),
   - [x] enumerate exact files/tests and acceptance criteria before code changes,
   - [x] lock validation command set (targeted + full fast checks),
@@ -567,13 +567,15 @@ reuse it in generation flow before extending the same seam into TTS runtime path
 
 Start only when:
 
-- [ ] WS2B and WS3 produce stable usage telemetry.
+- [ ] WS2B and WS3 telemetry remains stable across a full review cycle (totals, breakdown, and drift-warning behavior show no unexplained variance).
+- [ ] Weekly product review records a `go` decision for WS5 in `docs/playbooks/WEEKLY_PRODUCT_REVIEW_TEMPLATE.md`.
 
 ### WS4 CRM-Lite Lesson Ledger
 
 Start only when:
 
-- [ ] WS2A assignment flow is stable and no longer changing core preset model shape.
+- [ ] WS2A assignment flow is stable for a full review cycle with no core Learning Preset model churn.
+- [ ] Preset plumbing and generation flow changes are no longer introducing contract-surface edits needed by CRM entities.
 
 ---
 
@@ -630,16 +632,18 @@ Recent evidence:
 - 2026-02-18 | WS3-S2 | aligned backend provider-error surfacing/readiness telemetry to parser-normalized failed-job classification with drift warning instrumentation and no contract churn. | `pnpm --filter @esl-pipeline/batch-backend exec vitest run --config ../../vitest.config.ts tests/application.voice-provider-error.test.ts tests/application.readiness-metrics.test.ts tests/application.job-dto.test.ts tests/application.get-job-provenance.test.ts tests/domain.job-repository.test.ts tests/transport.http-server.integration.test.ts`; `pnpm --filter @esl-pipeline/batch-backend typecheck`; `pnpm deps:pin`; `pnpm deps:audit:strict`; `pnpm check:fast` | pass | local workspace
 - 2026-02-18 | WS3-S2 follow-up | aligned failed-error sampling window boundary with readiness snapshot semantics (`created_at <= to`) and added boundary regression coverage. | `pnpm --filter @esl-pipeline/batch-backend exec vitest run --config ../../vitest.config.ts tests/application.readiness-metrics.test.ts tests/domain.job-repository.test.ts tests/transport.http-server.integration.test.ts`; `pnpm --filter @esl-pipeline/batch-backend typecheck` | pass | local workspace
 - 2026-02-18 | WS3-S3 | completed backend-only telemetry hardening: parser status-based inference for untagged provider failures, drift warning expansion (totals + breakdown), and boundary exclusion coverage with no contract/API churn. | `pnpm --filter @esl-pipeline/batch-backend exec vitest run --config ../../vitest.config.ts tests/application.readiness-metrics.test.ts tests/application.voice-provider-error.test.ts tests/domain.job-repository.test.ts tests/transport.http-server.integration.test.ts`; `pnpm --filter @esl-pipeline/batch-backend typecheck`; `pnpm deps:pin`; `pnpm deps:audit:strict`; `pnpm check:fast` | pass | local workspace
+- 2026-02-18 | Tracker normalization | updated sprint focus to stabilization, marked WS3 complete across all tracker sections, tightened WS5/WS4 start gates, and made weekly closeout criteria stabilization-aware. | `rg -n "Current Sprint Focus|WS3 TTS abstraction|Stabilization and gate review|WS5 Cost and Quota Policy" docs/reference/V1_IMPLEMENTATION_TRACKER.md`; `git diff -- docs/reference/V1_IMPLEMENTATION_TRACKER.md` | pass | local workspace
 
 ## Weekly Closeout Checklist
 
-- [ ] One reliability improvement shipped.
-- [ ] One usability improvement shipped.
-- [ ] One value improvement shipped.
+- [ ] One reliability or stabilization improvement shipped.
+- [ ] One usability improvement shipped (or explicitly deferred with reason).
+- [ ] One value improvement shipped (or explicitly deferred with reason).
 - [ ] Tracker updated with evidence line(s).
 - [ ] If non-roadmap capability shipped, append it to WS0 with commit hash.
 - [ ] `general-english` scope lock still holds for current phase.
 - [ ] Baseline prompt lock still points to `docs/templates/hw_prompt_v4-2_clean.md`.
+- [ ] WS5 go/no-go decision recorded based on telemetry stability evidence.
 - [ ] `docs/playbooks/WEEKLY_PRODUCT_REVIEW_TEMPLATE.md` completed.
 
 ## Related
