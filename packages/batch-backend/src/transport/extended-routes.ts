@@ -338,6 +338,14 @@ export function registerExtendedRoutes(app: FastifyInstance, options: ExtendedRo
             message: error.message,
             provider: error.provider,
             model: error.model,
+            ...(error.limitType
+              ? {
+                  limitType: error.limitType,
+                  limit: error.limit ?? null,
+                  used: error.used ?? null,
+                  window: error.window ?? null,
+                }
+              : {}),
             requestId: String(request.id),
             timestamp: new Date().toISOString(),
           });

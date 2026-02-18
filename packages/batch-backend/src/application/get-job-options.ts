@@ -21,7 +21,8 @@ import {
 import { loadConfig } from '../config/env.js';
 import { logger } from '../infrastructure/logger.js';
 import { getJobOptionsFromOrchestrator } from '../infrastructure/orchestrator-service.js';
-import { buildGenerationOptionsPayload } from './generation-policy.js';
+import { resolveGenerationBudgetRepository } from './generation-budget-guard.js';
+import { buildGenerationOptionsPayload, buildQuotaSnapshot } from './generation-policy.js';
 import { getActionMetadata } from './job-actions/action-handler.js';
 import { DEFAULT_LEARNING_PRESET, type LearningPresetOption } from './learning-preset.js';
 
@@ -71,6 +72,7 @@ export async function getJobOptions(): Promise<JobOptionsResponse> {
   }
 
   inflightJobOptions = (async () => {
+    const runtimeConfig = loadConfig();
     try {
       const result = await getJobOptionsFromOrchestrator();
       const notionDatabases =
@@ -90,8 +92,10 @@ export async function getJobOptions(): Promise<JobOptionsResponse> {
         orchestratorLearningPresets && orchestratorLearningPresets.length > 0
           ? orchestratorLearningPresets
           : [DEFAULT_LEARNING_PRESET];
-      const generation =
-        result.generation ?? buildGenerationOptionsPayload({ config: loadConfig().generation });
+      const generation = await withQuotaUsage(
+        result.generation ?? buildGenerationOptionsPayload({ config: runtimeConfig.generation }),
+        runtimeConfig,
+      );
 
       return {
         ...result,
@@ -106,7 +110,7 @@ export async function getJobOptions(): Promise<JobOptionsResponse> {
       logger.warn('Failed to load job options from orchestrator. Falling back to static config.', {
         error: error instanceof Error ? error.message : String(error),
       });
-      return loadStaticJobOptions();
+      return loadStaticJobOptions(runtimeConfig);
     }
   })();
 
@@ -122,7 +126,7 @@ export async function getJobOptions(): Promise<JobOptionsResponse> {
   }
 }
 
-async function loadStaticJobOptions(): Promise<JobOptionsResponse> {
+async function loadStaticJobOptions(runtimeConfig: ReturnType<typeof loadConfig>): Promise<JobOptionsResponse> {
   const notionDatabases = resolveNotionDatabases();
   const voices = await loadVoiceOptions();
   const voiceAccents =
@@ -149,13 +153,94 @@ async function loadStaticJobOptions(): Promise<JobOptionsResponse> {
     voices,
     cefrLevels: [...DEFAULT_CEFR_LEVELS],
     cefrDefault: DEFAULT_CEFR_DEFAULT,
-    generation: buildGenerationOptionsPayload({ config: loadConfig().generation }),
+    generation: await withQuotaUsage(
+      buildGenerationOptionsPayload({ config: runtimeConfig.generation }),
+      runtimeConfig,
+    ),
     notionDatabases,
     learningPresets: [...STATIC_OPTIONS.learningPresets],
     uploadOptions: [...STATIC_OPTIONS.uploadOptions],
     ttsStrategies: [...STATIC_OPTIONS.ttsStrategies],
     supportedActions,
   };
+}
+
+async function withQuotaUsage(
+  generation: GenerationOptionsPayload,
+  runtimeConfig: ReturnType<typeof loadConfig>,
+): Promise<GenerationOptionsPayload> {
+  const provider = generation.defaultProvider;
+  const model =
+    generation.defaultModelByProvider?.[provider] ??
+    generation.modelOptions.find((option) => option.provider === provider)?.id;
+
+  if (!provider || !model) {
+    return generation;
+  }
+
+  try {
+    const repository = resolveGenerationBudgetRepository({ config: runtimeConfig });
+    const usage = await repository.getUsage({
+      provider,
+      model,
+      now: new Date(),
+    });
+    return {
+      ...generation,
+      quota: {
+        ...buildQuotaSnapshot({
+          config: runtimeConfig.generation,
+          provider,
+          model,
+          usage,
+          now: new Date(),
+        }),
+        ...generation.quota,
+        usedRequestsToday: usage.requestsToday,
+        usedTokensToday: Math.max(usage.reservedTokensToday, usage.actualTokensToday),
+        dailyRequestUsed: usage.requestsToday,
+        dailyRequestRemaining:
+          (generation.quota.dailyRequestBudget ??
+            generation.quota.requestsPerDay ??
+            null) === null
+            ? null
+            : Math.max(
+                0,
+                (generation.quota.dailyRequestBudget ??
+                  generation.quota.requestsPerDay ??
+                  0) - usage.requestsToday,
+              ),
+        dailyTokenUsed: Math.max(usage.reservedTokensToday, usage.actualTokensToday),
+        dailyTokenRemaining:
+          generation.quota.dailyTokenBudget === undefined ||
+          generation.quota.dailyTokenBudget === null
+            ? null
+            : Math.max(
+                0,
+                generation.quota.dailyTokenBudget -
+                  Math.max(usage.reservedTokensToday, usage.actualTokensToday),
+              ),
+        rpmUsed: usage.requestsPerMinuteUsed,
+        rpmRemaining:
+          (generation.quota.rpmBudget ??
+            generation.quota.requestsPerMinute ??
+            null) === null
+            ? null
+            : Math.max(
+                0,
+                (generation.quota.rpmBudget ?? generation.quota.requestsPerMinute ?? 0) -
+                  usage.requestsPerMinuteUsed,
+              ),
+      },
+    };
+  } catch (error) {
+    logger.warn('Failed to resolve generation quota usage snapshot; using baseline quota metadata.', {
+      error: error instanceof Error ? error.message : String(error),
+      provider,
+      model,
+    });
+    return generation;
+  }
 }
 
 function resolveNotionDatabases(): NotionDatabaseOption[] {

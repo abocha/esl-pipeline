@@ -252,7 +252,12 @@ describe('config/env - generation provider mapping', () => {
         expect(cfg.generation.defaultProvider).toBe('openai');
         expect(cfg.generation.fallbackProviders).toEqual(['google_ai_studio', 'openrouter']);
         expect(cfg.generation.quotaSourceMode).toBe('hybrid');
+        expect(cfg.generation.safetyMode).toBe('hard_stop');
+        expect(cfg.generation.strictNoPaid).toBe(true);
+        expect(cfg.generation.maxOutputTokensHard).toBe(1200);
         expect(cfg.generation.models.openai.primary).toBe('gpt-5.2');
+        expect(cfg.generation.providers.openai.dailyTokenBudget).toBe(120000);
+        expect(cfg.generation.providers.openrouter.dailyTokenBudget).toBe(0);
       },
     );
   });
@@ -264,7 +269,11 @@ describe('config/env - generation provider mapping', () => {
         GEN_PROVIDER_DEFAULT: 'google_ai_studio',
         GEN_PROVIDER_FALLBACKS: 'openai,openrouter',
         GEN_QUOTA_SOURCE_MODE: 'provider',
+        GEN_SAFETY_MODE: 'warn',
+        GEN_STRICT_NO_PAID: 'false',
+        GEN_MAX_OUTPUT_TOKENS_HARD: '900',
         GEN_OPENAI_MODEL_PRIMARY: 'gpt-test',
+        GEN_ALLOWED_MODELS_OPENAI: 'gpt-test,gpt-mini',
         OPENAI_API_KEY: 'openai-key',
         GEMINI_API_KEY: 'google-key',
         OPENROUTER_API_KEY: 'router-key',
@@ -274,7 +283,11 @@ describe('config/env - generation provider mapping', () => {
         expect(cfg.generation.defaultProvider).toBe('google_ai_studio');
         expect(cfg.generation.fallbackProviders).toEqual(['openai', 'openrouter']);
         expect(cfg.generation.quotaSourceMode).toBe('provider');
+        expect(cfg.generation.safetyMode).toBe('warn');
+        expect(cfg.generation.strictNoPaid).toBe(false);
+        expect(cfg.generation.maxOutputTokensHard).toBe(900);
         expect(cfg.generation.models.openai.primary).toBe('gpt-test');
+        expect(cfg.generation.models.openai.allowed).toEqual(['gpt-test', 'gpt-mini']);
         expect(cfg.generation.providers.openai.apiKey).toBe('openai-key');
         expect(cfg.generation.providers.googleAiStudio.apiKey).toBe('google-key');
         expect(cfg.generation.providers.openrouter.apiKey).toBe('router-key');
@@ -294,5 +307,19 @@ describe('config/env - generation provider mapping', () => {
         },
       ),
     ).rejects.toThrow('Generation provider must be one of: openai, google_ai_studio, openrouter');
+  });
+
+  it('throws on invalid generation safety mode', async () => {
+    await expect(
+      withEnv(
+        {
+          NODE_ENV: 'test',
+          GEN_SAFETY_MODE: 'strictest',
+        },
+        async () => {
+          await loadConfigFresh();
+        },
+      ),
+    ).rejects.toThrow('GEN_SAFETY_MODE must be one of: off, warn, hard_stop');
   });
 });

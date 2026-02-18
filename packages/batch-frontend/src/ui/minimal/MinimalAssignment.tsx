@@ -161,6 +161,28 @@ function formatAbsoluteTimestamp(timestamp: string): string {
   return parsed.toLocaleString();
 }
 
+function isSameUtcDay(leftMs: number, rightMs: number): boolean {
+  const left = new Date(leftMs);
+  const right = new Date(rightMs);
+  return (
+    left.getUTCFullYear() === right.getUTCFullYear() &&
+    left.getUTCMonth() === right.getUTCMonth() &&
+    left.getUTCDate() === right.getUTCDate()
+  );
+}
+
+function isSameUtcMinute(leftMs: number, rightMs: number): boolean {
+  const left = new Date(leftMs);
+  const right = new Date(rightMs);
+  return (
+    left.getUTCFullYear() === right.getUTCFullYear() &&
+    left.getUTCMonth() === right.getUTCMonth() &&
+    left.getUTCDate() === right.getUTCDate() &&
+    left.getUTCHours() === right.getUTCHours() &&
+    left.getUTCMinutes() === right.getUTCMinutes()
+  );
+}
+
 interface SelectablePresetOption {
   id: string;
   label: string;
@@ -224,6 +246,11 @@ export const MinimalAssignment: React.FC = () => {
   const [selectedGenerationModel, setSelectedGenerationModel] = useState('');
   const [generationRuntimeQuotaSnapshot, setGenerationRuntimeQuotaSnapshot] =
     useState<GenerateDraftResponse['quota'] | null>(null);
+  const [generationRuntimeSelection, setGenerationRuntimeSelection] = useState<{
+    provider: string;
+    model: string;
+  } | null>(null);
+  const [quotaWindowTickMs, setQuotaWindowTickMs] = useState(() => Date.now());
 
   const [validation, setValidation] = useState<MarkdownValidationResponse | null>(null);
   const [validationError, setValidationError] = useState<string | null>(null);
@@ -372,6 +399,8 @@ export const MinimalAssignment: React.FC = () => {
     setSelectedGenerationProvider('');
     setSelectedGenerationModel('');
     setGenerationRuntimeQuotaSnapshot(null);
+    setGenerationRuntimeSelection(null);
+    setQuotaWindowTickMs(Date.now());
     setValidation(null);
     setValidationError(null);
     setValidating(false);
@@ -1074,9 +1103,15 @@ export const MinimalAssignment: React.FC = () => {
     const isMappedCategory =
       code === 'provider_rate_limit' ||
       code === 'provider_timeout' ||
-      code === 'provider_contract_error';
+      code === 'provider_contract_error' ||
+      code === 'budget_exceeded';
 
     if (error instanceof GenerationDraftApiError || isMappedCategory) {
+      const limitDetails =
+        error instanceof GenerationDraftApiError && error.limitType
+          ? ` Limit: ${error.used ?? '?'} / ${error.limit ?? '?'}` +
+            (error.window ? ` (${error.window} window).` : '.')
+          : '';
       const baseMessage =
         code === 'provider_rate_limit'
           ? 'Provider rate limit reached. Try again shortly or choose another model/provider.'
@@ -1084,6 +1119,8 @@ export const MinimalAssignment: React.FC = () => {
             ? 'Provider timed out. Retry or choose a faster model/provider.'
             : code === 'provider_contract_error'
               ? 'Provider request failed due to compatibility/contract error. Try another model/provider.'
+              : code === 'budget_exceeded'
+                ? `Generation blocked by safety budget policy.${limitDetails} Switch model/provider or wait for reset.`
               : error instanceof Error
                 ? error.message
                 : 'Unable to generate draft.';
@@ -1132,6 +1169,11 @@ export const MinimalAssignment: React.FC = () => {
       setPreviewError(null);
       setLastPreviewedDraftHash(null);
       setGenerationRuntimeQuotaSnapshot(generated.quota);
+      setGenerationRuntimeSelection({
+        provider: generated.provider,
+        model: generated.model,
+      });
+      setQuotaWindowTickMs(Date.now());
       setGenerationSuccess(
         `Generated with ${generated.provider}/${generated.model}. Review and save draft.`,
       );
@@ -1518,6 +1560,14 @@ export const MinimalAssignment: React.FC = () => {
         activeGenerationQuota.tokensPerMinute,
         activeGenerationQuota.requestsPerDay,
         activeGenerationQuota.dailyTokenBudget,
+        activeGenerationQuota.dailyRequestBudget,
+        activeGenerationQuota.dailyRequestUsed,
+        activeGenerationQuota.dailyRequestRemaining,
+        activeGenerationQuota.dailyTokenUsed,
+        activeGenerationQuota.dailyTokenRemaining,
+        activeGenerationQuota.rpmBudget,
+        activeGenerationQuota.rpmUsed,
+        activeGenerationQuota.rpmRemaining,
         activeGenerationQuota.usedRequestsToday,
         activeGenerationQuota.usedTokensToday,
       ].some((value) => value !== undefined && value !== null),
@@ -1536,6 +1586,88 @@ export const MinimalAssignment: React.FC = () => {
     Boolean(jobStatus?.jobId) && rerunPublishImplemented && actionBusy === null;
   const cancelEnabled =
     Boolean(jobStatus?.jobId) && cancelImplemented && cancelAllowedState && actionBusy === null;
+  const generationDefaultModelForSelection =
+    generationOptions?.defaultModelByProvider?.[
+      selectedGenerationProvider as keyof NonNullable<
+        typeof generationOptions
+      >['defaultModelByProvider']
+    ] ?? generationModelsForProvider[0]?.id;
+  const activeQuotaAppliesToCurrentSelection = generationRuntimeQuotaSnapshot
+    ? generationRuntimeSelection?.provider === selectedGenerationProvider &&
+      generationRuntimeSelection?.model === selectedGenerationModel
+    : Boolean(
+        generationOptions &&
+          selectedGenerationProvider === generationOptions.defaultProvider &&
+          selectedGenerationModel === generationDefaultModelForSelection,
+      );
+  const activeGenerationQuotaLastUpdatedMs = activeGenerationQuota
+    ? Date.parse(activeGenerationQuota.lastUpdatedAt)
+    : Number.NaN;
+  const activeGenerationQuotaWindowKnown = Number.isFinite(activeGenerationQuotaLastUpdatedMs);
+  const activeGenerationQuotaDayWindowCurrent =
+    activeGenerationQuotaWindowKnown &&
+    isSameUtcDay(activeGenerationQuotaLastUpdatedMs, quotaWindowTickMs);
+  const activeGenerationQuotaMinuteWindowCurrent =
+    activeGenerationQuotaWindowKnown &&
+    isSameUtcMinute(activeGenerationQuotaLastUpdatedMs, quotaWindowTickMs);
+  const dailyTokenHardBlocked =
+    activeGenerationQuota?.dailyTokenBudget === 0 &&
+    activeGenerationQuota?.dailyTokenRemaining !== undefined &&
+    activeGenerationQuota?.dailyTokenRemaining !== null &&
+    activeGenerationQuota.dailyTokenRemaining <= 0;
+  const dailyRequestHardBlocked =
+    activeGenerationQuota?.dailyRequestBudget === 0 &&
+    activeGenerationQuota?.dailyRequestRemaining !== undefined &&
+    activeGenerationQuota?.dailyRequestRemaining !== null &&
+    activeGenerationQuota.dailyRequestRemaining <= 0;
+  const rpmHardBlocked =
+    activeGenerationQuota?.rpmBudget === 0 &&
+    activeGenerationQuota?.rpmRemaining !== undefined &&
+    activeGenerationQuota?.rpmRemaining !== null &&
+    activeGenerationQuota.rpmRemaining <= 0;
+  const dailyTokenWindowBlocked =
+    !dailyTokenHardBlocked &&
+    activeGenerationQuota?.dailyTokenRemaining !== undefined &&
+    activeGenerationQuota?.dailyTokenRemaining !== null &&
+    activeGenerationQuota.dailyTokenRemaining <= 0 &&
+    activeGenerationQuotaDayWindowCurrent;
+  const dailyRequestWindowBlocked =
+    !dailyRequestHardBlocked &&
+    activeGenerationQuota?.dailyRequestRemaining !== undefined &&
+    activeGenerationQuota?.dailyRequestRemaining !== null &&
+    activeGenerationQuota.dailyRequestRemaining <= 0 &&
+    activeGenerationQuotaDayWindowCurrent;
+  const rpmWindowBlocked =
+    !rpmHardBlocked &&
+    activeGenerationQuota?.rpmRemaining !== undefined &&
+    activeGenerationQuota?.rpmRemaining !== null &&
+    activeGenerationQuota.rpmRemaining <= 0 &&
+    activeGenerationQuotaMinuteWindowCurrent;
+  const generationQuotaBlockedReason = activeQuotaAppliesToCurrentSelection
+    ? dailyTokenHardBlocked || dailyTokenWindowBlocked
+      ? 'Daily token budget exhausted for selected model/provider.'
+      : dailyRequestHardBlocked || dailyRequestWindowBlocked
+        ? 'Daily request budget exhausted for selected model/provider.'
+        : rpmHardBlocked || rpmWindowBlocked
+          ? 'Per-minute request budget exhausted. Wait for minute window reset.'
+          : null
+    : null;
+  const generationBlockedByQuota = Boolean(generationQuotaBlockedReason);
+  const shouldTrackQuotaWindow =
+    activeQuotaAppliesToCurrentSelection &&
+    (dailyTokenWindowBlocked || dailyRequestWindowBlocked || rpmWindowBlocked);
+
+  useEffect(() => {
+    if (!shouldTrackQuotaWindow) {
+      return;
+    }
+    const interval = globalThis.setInterval(() => {
+      setQuotaWindowTickMs(Date.now());
+    }, 15_000);
+    return () => {
+      globalThis.clearInterval(interval);
+    };
+  }, [shouldTrackQuotaWindow]);
 
   return (
     <div className="minimal-assignment">
@@ -1996,7 +2128,8 @@ export const MinimalAssignment: React.FC = () => {
                 generatingDraft ||
                 !generationOptions ||
                 !selectedGenerationProvider ||
-                !selectedGenerationModel
+                !selectedGenerationModel ||
+                generationBlockedByQuota
               }
             >
               {generatingDraft ? 'Generating draft...' : 'Generate draft from prompt'}
@@ -2041,6 +2174,36 @@ export const MinimalAssignment: React.FC = () => {
                           Daily token budget: {activeGenerationQuota.dailyTokenBudget}
                         </div>
                       )}
+                      {activeGenerationQuota.dailyTokenRemaining === undefined ||
+                      activeGenerationQuota.dailyTokenRemaining === null ? null : (
+                        <div className="minimal-quota-item">
+                          Daily token remaining: {activeGenerationQuota.dailyTokenRemaining}
+                        </div>
+                      )}
+                      {activeGenerationQuota.dailyRequestBudget === undefined ||
+                      activeGenerationQuota.dailyRequestBudget === null ? null : (
+                        <div className="minimal-quota-item">
+                          Daily request budget: {activeGenerationQuota.dailyRequestBudget}
+                        </div>
+                      )}
+                      {activeGenerationQuota.dailyRequestRemaining === undefined ||
+                      activeGenerationQuota.dailyRequestRemaining === null ? null : (
+                        <div className="minimal-quota-item">
+                          Daily request remaining: {activeGenerationQuota.dailyRequestRemaining}
+                        </div>
+                      )}
+                      {activeGenerationQuota.rpmBudget === undefined ||
+                      activeGenerationQuota.rpmBudget === null ? null : (
+                        <div className="minimal-quota-item">
+                          RPM budget: {activeGenerationQuota.rpmBudget}
+                        </div>
+                      )}
+                      {activeGenerationQuota.rpmRemaining === undefined ||
+                      activeGenerationQuota.rpmRemaining === null ? null : (
+                        <div className="minimal-quota-item">
+                          RPM remaining: {activeGenerationQuota.rpmRemaining}
+                        </div>
+                      )}
                       {activeGenerationQuota.usedRequestsToday === undefined ||
                       activeGenerationQuota.usedRequestsToday === null ? null : (
                         <div className="minimal-quota-item">
@@ -2061,6 +2224,9 @@ export const MinimalAssignment: React.FC = () => {
                     <a href={activeGenerationQuota.dashboardUrl} target="_blank" rel="noreferrer">
                       View provider limits
                     </a>
+                  ) : null}
+                  {generationQuotaBlockedReason ? (
+                    <p className="minimal-error">{generationQuotaBlockedReason}</p>
                   ) : null}
                 </>
               ) : (

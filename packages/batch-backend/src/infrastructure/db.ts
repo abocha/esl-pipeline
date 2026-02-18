@@ -1134,6 +1134,43 @@ CREATE TABLE IF NOT EXISTS users (
 );
 `;
 
+const GENERATION_BUDGET_COUNTERS_TABLE_SQL = `
+CREATE TABLE IF NOT EXISTS generation_budget_counters (
+  bucket_type TEXT NOT NULL,
+  bucket_start TIMESTAMPTZ NOT NULL,
+  provider TEXT NOT NULL,
+  model TEXT NOT NULL,
+  request_count INTEGER NOT NULL DEFAULT 0,
+  reserved_tokens BIGINT NOT NULL DEFAULT 0,
+  actual_tokens BIGINT NOT NULL DEFAULT 0,
+  PRIMARY KEY (bucket_type, bucket_start, provider, model)
+);
+`;
+
+const GENERATION_BUDGET_COUNTERS_SCHEMA_PATCHES: string[] = [
+  'ALTER TABLE generation_budget_counters ADD COLUMN IF NOT EXISTS bucket_type TEXT',
+  'ALTER TABLE generation_budget_counters ADD COLUMN IF NOT EXISTS bucket_start TIMESTAMPTZ',
+  'ALTER TABLE generation_budget_counters ADD COLUMN IF NOT EXISTS provider TEXT',
+  'ALTER TABLE generation_budget_counters ADD COLUMN IF NOT EXISTS model TEXT',
+  'ALTER TABLE generation_budget_counters ADD COLUMN IF NOT EXISTS request_count INTEGER',
+  'ALTER TABLE generation_budget_counters ADD COLUMN IF NOT EXISTS reserved_tokens BIGINT',
+  'ALTER TABLE generation_budget_counters ADD COLUMN IF NOT EXISTS actual_tokens BIGINT',
+  'ALTER TABLE generation_budget_counters ALTER COLUMN request_count SET DEFAULT 0',
+  'ALTER TABLE generation_budget_counters ALTER COLUMN reserved_tokens SET DEFAULT 0',
+  'ALTER TABLE generation_budget_counters ALTER COLUMN actual_tokens SET DEFAULT 0',
+  'UPDATE generation_budget_counters SET request_count = 0 WHERE request_count IS NULL',
+  'UPDATE generation_budget_counters SET reserved_tokens = 0 WHERE reserved_tokens IS NULL',
+  'UPDATE generation_budget_counters SET actual_tokens = 0 WHERE actual_tokens IS NULL',
+  'ALTER TABLE generation_budget_counters ALTER COLUMN request_count SET NOT NULL',
+  'ALTER TABLE generation_budget_counters ALTER COLUMN reserved_tokens SET NOT NULL',
+  'ALTER TABLE generation_budget_counters ALTER COLUMN actual_tokens SET NOT NULL',
+];
+
+const GENERATION_BUDGET_COUNTERS_INDEX_PATCHES: string[] = [
+  'CREATE INDEX IF NOT EXISTS idx_generation_budget_counters_provider_model ON generation_budget_counters (provider, model)',
+  'CREATE INDEX IF NOT EXISTS idx_generation_budget_counters_bucket_start ON generation_budget_counters (bucket_start)',
+];
+
 async function ensureJobsSchema(client: PoolClient): Promise<void> {
   if (schemaReadyPromise) {
     await schemaReadyPromise;
@@ -1244,6 +1281,14 @@ async function ensureJobsSchema(client: PoolClient): Promise<void> {
       await client.query(indexSql);
     }
 
+    await client.query(GENERATION_BUDGET_COUNTERS_TABLE_SQL);
+    for (const statement of GENERATION_BUDGET_COUNTERS_SCHEMA_PATCHES) {
+      await client.query(statement);
+    }
+    for (const indexSql of GENERATION_BUDGET_COUNTERS_INDEX_PATCHES) {
+      await client.query(indexSql);
+    }
+
     // Users table
     await client.query(USERS_TABLE_SQL);
 
@@ -1259,7 +1304,7 @@ async function ensureJobsSchema(client: PoolClient): Promise<void> {
     }
 
     logger.info(
-      'Ensured database schema (jobs, recordings, transcripts, prompt_packages, drafts, profile_revisions, template_revisions, students, profiles, templates, student_profile_bindings, job_action_history, users)',
+      'Ensured database schema (jobs, recordings, transcripts, prompt_packages, drafts, profile_revisions, template_revisions, students, profiles, templates, student_profile_bindings, job_action_history, generation_budget_counters, users)',
       {
         component: 'pg',
         event: 'schema_ready',
