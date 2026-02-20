@@ -1,6 +1,6 @@
 services:
   postgres:
-    image: postgres:17-alpine
+    image: postgres:18-alpine
     container_name: esl-backend-postgres
     environment:
       POSTGRES_USER: esl
@@ -11,7 +11,7 @@ services:
       - '5432:5432'
     # Persistent DB (named volume).
     volumes:
-      - postgres_data:/var/lib/postgresql/data
+      - postgres18_data:/var/lib/postgresql/data
       - ./packages/batch-backend/schema.sql:/schema/batch-backend/schema.sql:ro
       - ./packages/batch-backend/docker-entrypoint-initdb.d:/docker-entrypoint-initdb.d:ro
     healthcheck:
@@ -98,4 +98,5 @@ services:
 
 volumes:
   postgres_data:
+  postgres18_data:
   redis_data:
