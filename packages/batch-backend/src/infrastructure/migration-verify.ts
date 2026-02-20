@@ -91,7 +91,7 @@ const OPTIONAL_PG_TRGM_INDEXES = [
   'idx_recordings_storage_uri_trgm',
   'idx_recordings_id_trgm',
 ];
-const REQUIRED_COLUMNS: Array<{ table: string; column: string }> = [
+const REQUIRED_COLUMNS: { table: string; column: string }[] = [
   { table: 'jobs', column: 'student_id' },
 ];
 
@@ -125,6 +125,7 @@ async function verifyConstraints(client: PoolClient, errors: string[]): Promise<
 }
 
 async function verifyIndexes(client: PoolClient, errors: string[]): Promise<void> {
+  const indexesToLookup = [...REQUIRED_INDEXES, ...OPTIONAL_PG_TRGM_INDEXES];
   const result = await client.query<{ indexname: string }>(
     `
     SELECT indexname
@@ -132,7 +133,7 @@ async function verifyIndexes(client: PoolClient, errors: string[]): Promise<void
     WHERE schemaname = 'public'
       AND indexname = ANY($1::text[])
     `,
-    [REQUIRED_INDEXES],
+    [indexesToLookup],
   );
   const existing = new Set(result.rows.map((row) => row.indexname));
   for (const indexName of REQUIRED_INDEXES) {

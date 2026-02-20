@@ -5,6 +5,7 @@ import { fileURLToPath } from 'node:url';
 import { processTranscribeJob } from '../application/process-transcribe-job.js';
 import { validateTranscriptionConfig } from '../application/validate-transcription-config.js';
 import { loadBatchBackendEnv } from '../bootstrap/env.js';
+import { loadConfig } from '../config/env.js';
 import { runMigrationsIfConfigured } from '../infrastructure/migrations.js';
 import { enableRedisRecordingEventBridge } from '../infrastructure/recording-event-redis-bridge.js';
 import { createTranscribeWorker } from '../infrastructure/transcribe-queue.js';
@@ -16,7 +17,17 @@ async function getLogger() {
 
 export async function startTranscribeWorker(): Promise<void> {
   loadBatchBackendEnv(import.meta.url, 'batch-backend-transcribe-worker');
+  const config = loadConfig();
   const logger = await getLogger();
+  logger.info('Startup configuration resolved', {
+    event: 'startup_configuration',
+    service: 'transcribe-worker',
+    pgEnabled: config.pg.enabled,
+    autoMigrateOnBoot: config.pg.autoMigrateOnBoot,
+    poolMax: config.pg.poolMax,
+    idleTimeoutMs: config.pg.idleTimeoutMs,
+    connectionTimeoutMs: config.pg.connectionTimeoutMs,
+  });
   await runMigrationsIfConfigured();
   await validateTranscriptionConfig();
   await enableRedisRecordingEventBridge();

@@ -1,6 +1,7 @@
 import { createHash } from 'node:crypto';
 import { promises as fs } from 'node:fs';
 import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 
 import { PoolClient } from 'pg';
 
@@ -27,21 +28,29 @@ export interface MigrationStatus {
   discovered: MigrationFile[];
   applied: AppliedMigration[];
   pending: MigrationFile[];
-  checksumMismatches: Array<{
+  checksumMismatches: {
     id: string;
     expected: string;
     actual: string;
-  }>;
+  }[];
   missingFilesForApplied: string[];
 }
 
 const MIGRATION_FILE_PATTERN = /^\d{4}_[a-z0-9_]+\.sql$/;
 const MIGRATION_TOOL_VERSION = 'batch-backend-migrator-v1';
-const DEFAULT_MIGRATIONS_DIR = path.join('packages', 'batch-backend', 'migrations');
+const DEFAULT_MIGRATIONS_DIR = path.resolve(
+  path.dirname(fileURLToPath(import.meta.url)),
+  '..',
+  '..',
+  'migrations',
+);
 
 function resolveMigrationsDir(): string {
   const config = loadConfig();
-  return path.resolve(process.cwd(), config.pg.migrationsDir ?? DEFAULT_MIGRATIONS_DIR);
+  if (config.pg.migrationsDir) {
+    return path.resolve(process.cwd(), config.pg.migrationsDir);
+  }
+  return DEFAULT_MIGRATIONS_DIR;
 }
 
 function getMigrationLockKey(): string {
@@ -229,6 +238,10 @@ export async function runMigrations(): Promise<void> {
 export async function runMigrationsIfConfigured(): Promise<void> {
   const config = loadConfig();
   if (!config.pg.enabled) {
+    logger.info('Postgres disabled; skipping migration checks', {
+      component: 'pg-migrations',
+      event: 'pg_migration_mode_disabled',
+    });
     return;
   }
   const status = await getMigrationStatus();
@@ -240,6 +253,11 @@ export async function runMigrationsIfConfigured(): Promise<void> {
   }
 
   if (!config.pg.autoMigrateOnBoot) {
+    logger.info('Startup migration mode resolved to manual', {
+      component: 'pg-migrations',
+      event: 'pg_migration_mode_manual',
+      pendingCount: status.pending.length,
+    });
     if (status.pending.length > 0) {
       logger.warn('Pending migrations detected and PG_AUTO_MIGRATE_ON_BOOT=false', {
         component: 'pg-migrations',
@@ -250,6 +268,11 @@ export async function runMigrationsIfConfigured(): Promise<void> {
     return;
   }
 
+  logger.info('Startup migration mode resolved to auto-apply', {
+    component: 'pg-migrations',
+    event: 'pg_migration_mode_auto',
+    pendingCount: status.pending.length,
+  });
   await runMigrations();
 }
 

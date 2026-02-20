@@ -151,6 +151,9 @@ Postgres (job store):
 - `PG_USER` (default: `esl`)
 - `PG_PASSWORD` (default: `esl`)
 - `PG_DATABASE` (default: `esl_batch`)
+- `PG_POOL_MAX` (default: `10`, valid range: `1..100`)
+- `PG_IDLE_TIMEOUT_MS` (default: `30000`, valid range: `1000..600000`)
+- `PG_CONNECTION_TIMEOUT_MS` (default: `5000`, valid range: `100..120000`)
 - `PG_AUTO_MIGRATE_ON_BOOT` (default: `false` in production, `true` otherwise)
 - `PG_MIGRATION_LOCK_KEY` (default: `910001`)
 - `PG_MIGRATIONS_DIR` (optional; default: `packages/batch-backend/migrations`)
@@ -171,6 +174,7 @@ If Postgres is enabled but required values are missing, startup fails fast.
 - Startup behavior:
   - When `PG_AUTO_MIGRATE_ON_BOOT=true`, API/worker entrypoints run pending migrations before serving traffic.
   - When `PG_AUTO_MIGRATE_ON_BOOT=false`, startup logs a warning if migrations are pending.
+  - API/worker startup logs include `startup_configuration` with effective PG pool/migration mode settings.
 - `packages/batch-backend/schema.sql` remains a bootstrap/reference file for local/container workflows.
 - `jobs.mode` persists the job’s TTS strategy and must be `auto`, `dialogue`, `tts`, or `NULL`.
 - Older databases that contain legacy values (for example `mode='monologue'`) must be migrated (or those rows removed) before running newer versions:

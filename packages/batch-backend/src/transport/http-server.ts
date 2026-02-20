@@ -155,6 +155,15 @@ export async function startHttpServer(): Promise<void> {
   const config = loadConfig();
   const logger = await getLogger();
   try {
+    logger.info('Startup configuration resolved', {
+      event: 'startup_configuration',
+      service: 'http-server',
+      pgEnabled: config.pg.enabled,
+      autoMigrateOnBoot: config.pg.autoMigrateOnBoot,
+      poolMax: config.pg.poolMax,
+      idleTimeoutMs: config.pg.idleTimeoutMs,
+      connectionTimeoutMs: config.pg.connectionTimeoutMs,
+    });
     await runMigrationsIfConfigured();
     await validateTranscriptionConfig({ config });
     await enableRedisJobEventBridge();

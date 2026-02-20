@@ -75,18 +75,22 @@ async function main(): Promise<void> {
   }
 
   switch (command) {
-    case 'migrate':
+    case 'migrate': {
       await handleMigrate();
       break;
-    case 'status':
+    }
+    case 'status': {
       await handleStatus();
       break;
-    case 'verify':
+    }
+    case 'verify': {
       await handleVerify();
       break;
-    default:
+    }
+    default: {
       printUsage();
       process.exitCode = 1;
+    }
   }
 }
 
@@ -101,4 +105,3 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
       await closePgPool();
     });
 }
-

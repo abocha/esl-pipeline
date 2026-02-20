@@ -21,6 +21,9 @@ export interface BatchBackendConfig {
     password: string;
     database: string;
     connectionString?: string;
+    poolMax: number;
+    idleTimeoutMs: number;
+    connectionTimeoutMs: number;
     autoMigrateOnBoot: boolean;
     migrationLockKey: string;
     migrationsDir?: string;
@@ -257,6 +260,9 @@ export function loadConfig(): BatchBackendConfig {
   const pgPassword = readString('PG_PASSWORD', 'esl')!;
   const pgDatabase = readString('PG_DATABASE', 'esl_batch')!;
   const pgConnectionString = readString('PG_CONNECTION_STRING');
+  const pgPoolMax = readInt('PG_POOL_MAX', 10);
+  const pgIdleTimeoutMs = readInt('PG_IDLE_TIMEOUT_MS', 30_000);
+  const pgConnectionTimeoutMs = readInt('PG_CONNECTION_TIMEOUT_MS', 5_000);
   const pgAutoMigrateOnBoot = readBool(
     'PG_AUTO_MIGRATE_ON_BOOT',
     nodeEnv === 'production' ? false : true,
@@ -265,6 +271,15 @@ export function loadConfig(): BatchBackendConfig {
   const pgMigrationsDir = readString('PG_MIGRATIONS_DIR');
   if (!/^-?\d+$/.test(pgMigrationLockKey)) {
     throw new Error('PG_MIGRATION_LOCK_KEY must be an integer value representable as bigint');
+  }
+  if (pgPoolMax < 1 || pgPoolMax > 100) {
+    throw new Error('PG_POOL_MAX must be between 1 and 100');
+  }
+  if (pgIdleTimeoutMs < 1000 || pgIdleTimeoutMs > 600_000) {
+    throw new Error('PG_IDLE_TIMEOUT_MS must be between 1000 and 600000');
+  }
+  if (pgConnectionTimeoutMs < 100 || pgConnectionTimeoutMs > 120_000) {
+    throw new Error('PG_CONNECTION_TIMEOUT_MS must be between 100 and 120000');
   }
   if (pgEnabled && !pgConnectionString && (!pgUser || !pgPassword || !pgDatabase || !pgHost)) {
     throw new Error('PG_ENABLED=true but Postgres configuration is incomplete');
@@ -513,6 +528,9 @@ export function loadConfig(): BatchBackendConfig {
       password: pgPassword,
       database: pgDatabase,
       connectionString: pgConnectionString,
+      poolMax: pgPoolMax,
+      idleTimeoutMs: pgIdleTimeoutMs,
+      connectionTimeoutMs: pgConnectionTimeoutMs,
       autoMigrateOnBoot: pgAutoMigrateOnBoot,
       migrationLockKey: pgMigrationLockKey,
       migrationsDir: pgMigrationsDir ?? undefined,
