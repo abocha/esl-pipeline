@@ -52,6 +52,9 @@ Proceed to live migration only when all of the following are true:
 3. Run backend validation/smoke flows.
 4. Capture execution timings, failures, and recovery notes.
 5. Run restore drill from pre-migration backup and confirm service health.
+6. If running on a dev laptop with existing workers attached to Redis, isolate worker-integration test queue names to avoid contention:
+   - `BATCH_JOBS_QUEUE_NAME='esl-jobs-test-isolated'`
+   - `TRANSCRIBE_QUEUE_NAME='transcribe-queue-test-isolated'`
 
 ### T-0 day: Live cutover
 
@@ -203,3 +206,7 @@ Rehearsal/live command order:
 3. `pnpm --filter @esl-pipeline/batch-backend db:status`
 4. `pnpm --filter @esl-pipeline/batch-backend db:verify`
 5. `pnpm --filter @esl-pipeline/batch-backend db:rls-audit`
+
+Local worker integration test (only if local workers are already running):
+
+1. `BATCH_JOBS_QUEUE_NAME='esl-jobs-test-isolated' TRANSCRIBE_QUEUE_NAME='transcribe-queue-test-isolated' pnpm --filter @esl-pipeline/batch-backend test:integration:worker`
