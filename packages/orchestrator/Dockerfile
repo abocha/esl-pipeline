@@ -11,7 +11,7 @@ RUN corepack enable && corepack prepare pnpm@10 --activate \
  && apt-get update \
  && apt-get install -y --no-install-recommends \
     ca-certificates=20210119 \
-    ffmpeg=7:4.3.9-0+deb11u1 \
+    ffmpeg=7:4.3.9-0+deb11u2 \
  && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
