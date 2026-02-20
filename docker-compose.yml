@@ -11,7 +11,7 @@ services:
       - '5432:5432'
     # Persistent DB (named volume).
     volumes:
-      - postgres18_data:/var/lib/postgresql/data
+      - postgres18_data:/var/lib/postgresql
       - ./packages/batch-backend/schema.sql:/schema/batch-backend/schema.sql:ro
       - ./packages/batch-backend/docker-entrypoint-initdb.d:/docker-entrypoint-initdb.d:ro
     healthcheck:
