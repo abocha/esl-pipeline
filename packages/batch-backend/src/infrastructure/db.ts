@@ -1338,9 +1338,21 @@ export function createPgPool(): Pool {
 
   pool = new Pool({
     connectionString,
-    max: 10,
-    idleTimeoutMillis: 30_000,
-    connectionTimeoutMillis: 5000,
+    max: config.pg.poolMax,
+    idleTimeoutMillis: config.pg.idleTimeoutMs,
+    connectionTimeoutMillis: config.pg.connectionTimeoutMs,
+  });
+
+  logger.info('Postgres pool initialized', {
+    component: 'pg',
+    event: 'pg_pool_initialized',
+    poolMax: config.pg.poolMax,
+    idleTimeoutMs: config.pg.idleTimeoutMs,
+    connectionTimeoutMs: config.pg.connectionTimeoutMs,
+    pgHost: config.pg.host,
+    pgPort: config.pg.port,
+    pgDatabase: config.pg.database,
+    usingConnectionString: Boolean(config.pg.connectionString),
   });
 
   pool.on('error', (err: Error) => {

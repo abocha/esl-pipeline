@@ -337,3 +337,82 @@ describe('config/env - generation provider mapping', () => {
     );
   });
 });
+
+describe('config/env - postgres pool tuning', () => {
+  beforeEach(() => {
+    vi.resetModules();
+  });
+
+  it('provides defaults for postgres pool tuning env vars', async () => {
+    await withEnv(
+      {
+        NODE_ENV: 'test',
+      },
+      async () => {
+        const cfg = await loadConfigFresh();
+        expect(cfg.pg.poolMax).toBe(10);
+        expect(cfg.pg.idleTimeoutMs).toBe(30_000);
+        expect(cfg.pg.connectionTimeoutMs).toBe(5_000);
+      },
+    );
+  });
+
+  it('maps postgres pool tuning env overrides', async () => {
+    await withEnv(
+      {
+        NODE_ENV: 'test',
+        PG_POOL_MAX: '25',
+        PG_IDLE_TIMEOUT_MS: '45000',
+        PG_CONNECTION_TIMEOUT_MS: '8000',
+      },
+      async () => {
+        const cfg = await loadConfigFresh();
+        expect(cfg.pg.poolMax).toBe(25);
+        expect(cfg.pg.idleTimeoutMs).toBe(45_000);
+        expect(cfg.pg.connectionTimeoutMs).toBe(8_000);
+      },
+    );
+  });
+
+  it('throws when PG_POOL_MAX is out of range', async () => {
+    await expect(
+      withEnv(
+        {
+          NODE_ENV: 'test',
+          PG_POOL_MAX: '0',
+        },
+        async () => {
+          await loadConfigFresh();
+        },
+      ),
+    ).rejects.toThrow('PG_POOL_MAX must be between 1 and 100');
+  });
+
+  it('throws when PG_IDLE_TIMEOUT_MS is out of range', async () => {
+    await expect(
+      withEnv(
+        {
+          NODE_ENV: 'test',
+          PG_IDLE_TIMEOUT_MS: '999',
+        },
+        async () => {
+          await loadConfigFresh();
+        },
+      ),
+    ).rejects.toThrow('PG_IDLE_TIMEOUT_MS must be between 1000 and 600000');
+  });
+
+  it('throws when PG_CONNECTION_TIMEOUT_MS is out of range', async () => {
+    await expect(
+      withEnv(
+        {
+          NODE_ENV: 'test',
+          PG_CONNECTION_TIMEOUT_MS: '99',
+        },
+        async () => {
+          await loadConfigFresh();
+        },
+      ),
+    ).rejects.toThrow('PG_CONNECTION_TIMEOUT_MS must be between 100 and 120000');
+  });
+});

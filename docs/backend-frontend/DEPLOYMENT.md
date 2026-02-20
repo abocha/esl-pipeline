@@ -95,6 +95,11 @@ ESL_PIPELINE_MANIFEST_BUCKET=<bucket>
 # Migration behavior
 PG_AUTO_MIGRATE_ON_BOOT=false
 PG_MIGRATION_LOCK_KEY=910001
+
+# PostgreSQL pool tuning
+PG_POOL_MAX=10
+PG_IDLE_TIMEOUT_MS=30000
+PG_CONNECTION_TIMEOUT_MS=5000
 ```
 
 See [`docs/reference/env.md`](../reference/env.md) for complete list.

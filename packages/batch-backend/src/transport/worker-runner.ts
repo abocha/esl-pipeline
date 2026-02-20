@@ -11,6 +11,7 @@ import { fileURLToPath } from 'node:url';
 
 import { processQueueJob } from '../application/process-queue-job.js';
 import { loadBatchBackendEnv } from '../bootstrap/env.js';
+import { loadConfig } from '../config/env.js';
 import { enableRedisJobEventBridge } from '../infrastructure/job-event-redis-bridge.js';
 import { runMigrationsIfConfigured } from '../infrastructure/migrations.js';
 import { createJobWorker } from '../infrastructure/queue-bullmq.js';
@@ -23,7 +24,17 @@ async function getLogger() {
 // startWorker.declaration()
 export async function startWorker(): Promise<void> {
   loadBatchBackendEnv(import.meta.url, 'batch-backend-worker-runner');
+  const config = loadConfig();
   const logger = await getLogger();
+  logger.info('Startup configuration resolved', {
+    event: 'startup_configuration',
+    service: 'worker-runner',
+    pgEnabled: config.pg.enabled,
+    autoMigrateOnBoot: config.pg.autoMigrateOnBoot,
+    poolMax: config.pg.poolMax,
+    idleTimeoutMs: config.pg.idleTimeoutMs,
+    connectionTimeoutMs: config.pg.connectionTimeoutMs,
+  });
   await runMigrationsIfConfigured();
   await enableRedisJobEventBridge();
   const worker = createJobWorker(async (bullJob) => {
