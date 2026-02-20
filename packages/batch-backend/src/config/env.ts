@@ -21,6 +21,9 @@ export interface BatchBackendConfig {
     password: string;
     database: string;
     connectionString?: string;
+    autoMigrateOnBoot: boolean;
+    migrationLockKey: string;
+    migrationsDir?: string;
   };
   redis: {
     enabled: boolean;
@@ -254,6 +257,15 @@ export function loadConfig(): BatchBackendConfig {
   const pgPassword = readString('PG_PASSWORD', 'esl')!;
   const pgDatabase = readString('PG_DATABASE', 'esl_batch')!;
   const pgConnectionString = readString('PG_CONNECTION_STRING');
+  const pgAutoMigrateOnBoot = readBool(
+    'PG_AUTO_MIGRATE_ON_BOOT',
+    nodeEnv === 'production' ? false : true,
+  );
+  const pgMigrationLockKey = readString('PG_MIGRATION_LOCK_KEY', '910001')!;
+  const pgMigrationsDir = readString('PG_MIGRATIONS_DIR');
+  if (!/^-?\d+$/.test(pgMigrationLockKey)) {
+    throw new Error('PG_MIGRATION_LOCK_KEY must be an integer value representable as bigint');
+  }
   if (pgEnabled && !pgConnectionString && (!pgUser || !pgPassword || !pgDatabase || !pgHost)) {
     throw new Error('PG_ENABLED=true but Postgres configuration is incomplete');
   }
@@ -501,6 +513,9 @@ export function loadConfig(): BatchBackendConfig {
       password: pgPassword,
       database: pgDatabase,
       connectionString: pgConnectionString,
+      autoMigrateOnBoot: pgAutoMigrateOnBoot,
+      migrationLockKey: pgMigrationLockKey,
+      migrationsDir: pgMigrationsDir ?? undefined,
     },
     redis: {
       enabled: redisEnabled,

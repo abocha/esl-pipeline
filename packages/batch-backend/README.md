@@ -151,12 +151,27 @@ Postgres (job store):
 - `PG_USER` (default: `esl`)
 - `PG_PASSWORD` (default: `esl`)
 - `PG_DATABASE` (default: `esl_batch`)
+- `PG_AUTO_MIGRATE_ON_BOOT` (default: `false` in production, `true` otherwise)
+- `PG_MIGRATION_LOCK_KEY` (default: `910001`)
+- `PG_MIGRATIONS_DIR` (optional; default: `packages/batch-backend/migrations`)
 
 If Postgres is enabled but required values are missing, startup fails fast.
 
 ### Postgres schema and migrations
 
-- Initialize the DB schema with `packages/batch-backend/schema.sql` (the root `docker-compose.yml` mounts and applies it for local dev).
+- Schema changes are managed by versioned SQL migrations in `packages/batch-backend/migrations`.
+- Run migrations explicitly:
+
+  ```bash
+  pnpm --filter @esl-pipeline/batch-backend db:migrate
+  pnpm --filter @esl-pipeline/batch-backend db:status
+  pnpm --filter @esl-pipeline/batch-backend db:verify
+  ```
+
+- Startup behavior:
+  - When `PG_AUTO_MIGRATE_ON_BOOT=true`, API/worker entrypoints run pending migrations before serving traffic.
+  - When `PG_AUTO_MIGRATE_ON_BOOT=false`, startup logs a warning if migrations are pending.
+- `packages/batch-backend/schema.sql` remains a bootstrap/reference file for local/container workflows.
 - `jobs.mode` persists the job’s TTS strategy and must be `auto`, `dialogue`, `tts`, or `NULL`.
 - Older databases that contain legacy values (for example `mode='monologue'`) must be migrated (or those rows removed) before running newer versions:
 

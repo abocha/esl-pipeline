@@ -91,6 +91,10 @@ MAX_CONCURRENT_FFMPEG=3
 # Manifest Storage (S3 instead of filesystem)
 ESL_PIPELINE_MANIFEST_STORE=s3
 ESL_PIPELINE_MANIFEST_BUCKET=<bucket>
+
+# Migration behavior
+PG_AUTO_MIGRATE_ON_BOOT=false
+PG_MIGRATION_LOCK_KEY=910001
 ```
 
 See [`docs/reference/env.md`](../reference/env.md) for complete list.
@@ -99,15 +103,22 @@ See [`docs/reference/env.md`](../reference/env.md) for complete list.
 
 ## Database Setup
 
-The backend auto-creates tables on startup. To manually initialize:
+Use versioned migrations before starting API/worker:
+
+```bash
+pnpm --filter @esl-pipeline/batch-backend db:status
+pnpm --filter @esl-pipeline/batch-backend db:migrate
+pnpm --filter @esl-pipeline/batch-backend db:verify
+```
+
+Recommended production/offline rollout:
 
 ```sql
 -- Run in PostgreSQL
 CREATE DATABASE esl_batch;
-
--- Tables are created automatically by batch-backend
--- Schema defined in packages/batch-backend/src/infrastructure/db.ts
 ```
+
+Then run the migration commands above against that database.
 
 ---
 

@@ -320,7 +320,13 @@ const timelineQuery = `
     LEFT JOIN drafts d ON d.id = j.draft_id
     LEFT JOIN prompt_packages pd ON pd.id = d.prompt_package_id
     LEFT JOIN recordings rd ON rd.id = pd.recording_id
-    WHERE COALESCE(r.student_id, p.student_id, d.student_id, pd.student_id) = $1
+    WHERE (
+      j.student_id = $1
+      OR (
+        j.student_id IS NULL
+        AND COALESCE(r.student_id, p.student_id, d.student_id, pd.student_id) = $1
+      )
+    )
       AND j.state IN ('awaiting_approval', 'succeeded', 'failed')
 
     UNION ALL
@@ -598,7 +604,13 @@ const timelineQuery = `
     LEFT JOIN drafts d ON d.id = j.draft_id
     LEFT JOIN prompt_packages pd ON pd.id = d.prompt_package_id
     LEFT JOIN recordings rd ON rd.id = pd.recording_id
-    WHERE COALESCE(r.student_id, p.student_id, d.student_id, pd.student_id, rp.student_id, rd.student_id) = $1
+    WHERE (
+      j.student_id = $1
+      OR (
+        j.student_id IS NULL
+        AND COALESCE(r.student_id, p.student_id, d.student_id, pd.student_id, rp.student_id, rd.student_id) = $1
+      )
+    )
   )
 `;
 

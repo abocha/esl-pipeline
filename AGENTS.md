@@ -17,6 +17,10 @@ If you need baseline context quickly, read in this order:
 
 For historical rationale, use `docs/archive/` only after checking active docs.
 
+### Plan Continuity Rule (Mandatory)
+
+When executing an active implementation plan, re-read the exact plan file(s) you are working from **after every context compaction** before making further changes. Treat this as a required checkpoint to restore full plan intent, constraints, and phase scope.
+
 ---
 
 ## 1. Architecture Snapshot (High-Level)

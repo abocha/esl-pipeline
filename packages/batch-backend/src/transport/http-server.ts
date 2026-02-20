@@ -22,6 +22,7 @@ import {
   createRecordingUploadValidationService,
 } from '../infrastructure/file-validation-service.js';
 import { enableRedisJobEventBridge } from '../infrastructure/job-event-redis-bridge.js';
+import { runMigrationsIfConfigured } from '../infrastructure/migrations.js';
 import { enableRedisRecordingEventBridge } from '../infrastructure/recording-event-redis-bridge.js';
 import { createRedisClient } from '../infrastructure/redis.js';
 import {
@@ -154,6 +155,7 @@ export async function startHttpServer(): Promise<void> {
   const config = loadConfig();
   const logger = await getLogger();
   try {
+    await runMigrationsIfConfigured();
     await validateTranscriptionConfig({ config });
     await enableRedisJobEventBridge();
     await enableRedisRecordingEventBridge();

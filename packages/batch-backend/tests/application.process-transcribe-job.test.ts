@@ -316,6 +316,8 @@ function createConfig(): BatchBackendConfig {
       user: '',
       password: '',
       database: '',
+      autoMigrateOnBoot: false,
+      migrationLockKey: '910001',
     },
     redis: {
       enabled: false,

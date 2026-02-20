@@ -165,6 +165,21 @@ export interface UpdateJobMetadataParams {
   voiceAccent?: string;
 }
 
+const LEGACY_STUDENT_COALESCE = `COALESCE(r.student_id, p.student_id, rp.student_id, d.student_id, pd.student_id, rd.student_id)`;
+const LEGACY_STUDENT_JOINS = `
+      LEFT JOIN recordings r ON r.id = j.recording_id
+      LEFT JOIN prompt_packages p ON p.id = j.prompt_package_id
+      LEFT JOIN recordings rp ON rp.id = p.recording_id
+      LEFT JOIN drafts d ON d.id = j.draft_id
+      LEFT JOIN prompt_packages pd ON pd.id = d.prompt_package_id
+      LEFT JOIN recordings rd ON rd.id = pd.recording_id
+`;
+
+interface JobFilterBuildResult {
+  clauses: string[];
+  needsLegacyStudentJoin: boolean;
+}
+
 export async function insertJob(params: InsertJobParams): Promise<JobRecord> {
   return insertJobWithState(params, 'queued');
 }
@@ -214,6 +229,7 @@ async function insertJobWithState(params: InsertJobParams, state: JobState): Pro
       )
       RETURNING
         id,
+        student_id,
         state,
         md,
         md_storage_uri,
@@ -291,7 +307,7 @@ export async function getJobById(id: string): Promise<JobRecord | null> {
       String.raw`
       SELECT
         j.id,
-        COALESCE(r.student_id, p.student_id, rp.student_id, d.student_id, pd.student_id, rd.student_id) AS student_id,
+        COALESCE(j.student_id, r.student_id, p.student_id, rp.student_id, d.student_id, pd.student_id, rd.student_id) AS student_id,
         j.state,
         j.md,
         j.md_storage_uri,
@@ -343,8 +359,12 @@ export async function getJobById(id: string): Promise<JobRecord | null> {
 
 export async function listJobs(options: JobListOptions): Promise<JobRecord[]> {
   const values: (string | string[] | number | Date)[] = [];
-  const clauses = buildJobFilterClauses(options, values);
-  const whereClause = clauses.length > 0 ? `WHERE ${clauses.join(' AND ')}` : '';
+  const filter = buildJobFilterClauses(options, values);
+  const whereClause = filter.clauses.length > 0 ? `WHERE ${filter.clauses.join(' AND ')}` : '';
+  const studentProjection = filter.needsLegacyStudentJoin
+    ? `COALESCE(j.student_id, ${LEGACY_STUDENT_COALESCE}) AS student_id`
+    : 'j.student_id';
+  const legacyJoinClause = filter.needsLegacyStudentJoin ? LEGACY_STUDENT_JOINS : '';
   const orderDirection = options.order === 'asc' ? 'ASC' : 'DESC';
 
   values.push(options.limit);
@@ -357,7 +377,7 @@ export async function listJobs(options: JobListOptions): Promise<JobRecord[]> {
       `
       SELECT
         j.id,
-        COALESCE(r.student_id, p.student_id, rp.student_id, d.student_id, pd.student_id, rd.student_id) AS student_id,
+        ${studentProjection},
         j.state,
         j.md,
         j.md_storage_uri,
@@ -391,12 +411,7 @@ export async function listJobs(options: JobListOptions): Promise<JobRecord[]> {
         j.source_job_id,
         j.user_id
       FROM jobs j
-      LEFT JOIN recordings r ON r.id = j.recording_id
-      LEFT JOIN prompt_packages p ON p.id = j.prompt_package_id
-      LEFT JOIN recordings rp ON rp.id = p.recording_id
-      LEFT JOIN drafts d ON d.id = j.draft_id
-      LEFT JOIN prompt_packages pd ON pd.id = d.prompt_package_id
-      LEFT JOIN recordings rd ON rd.id = pd.recording_id
+      ${legacyJoinClause}
       ${whereClause}
       ORDER BY j.created_at ${orderDirection}, j.id ${orderDirection}
       LIMIT $${limitParam} OFFSET $${offsetParam}
@@ -411,20 +426,16 @@ export async function listJobs(options: JobListOptions): Promise<JobRecord[]> {
 
 export async function countJobs(filters: JobListFilters = {}): Promise<number> {
   const values: (string | string[] | Date)[] = [];
-  const clauses = buildJobFilterClauses(filters, values);
-  const whereClause = clauses.length > 0 ? `WHERE ${clauses.join(' AND ')}` : '';
+  const filter = buildJobFilterClauses(filters, values);
+  const whereClause = filter.clauses.length > 0 ? `WHERE ${filter.clauses.join(' AND ')}` : '';
+  const legacyJoinClause = filter.needsLegacyStudentJoin ? LEGACY_STUDENT_JOINS : '';
 
   const result = await withPgClient(async (client: PoolClient) => {
     const queryResult = await client.query(
       `
       SELECT COUNT(*) as count
       FROM jobs j
-      LEFT JOIN recordings r ON r.id = j.recording_id
-      LEFT JOIN prompt_packages p ON p.id = j.prompt_package_id
-      LEFT JOIN recordings rp ON rp.id = p.recording_id
-      LEFT JOIN drafts d ON d.id = j.draft_id
-      LEFT JOIN prompt_packages pd ON pd.id = d.prompt_package_id
-      LEFT JOIN recordings rd ON rd.id = pd.recording_id
+      ${legacyJoinClause}
       ${whereClause}
       `,
       values,
@@ -437,8 +448,9 @@ export async function countJobs(filters: JobListFilters = {}): Promise<number> {
 
 export async function getJobSummary(filters: JobListFilters = {}): Promise<JobSummaryCounts> {
   const values: (string | string[] | Date)[] = [];
-  const clauses = buildJobFilterClauses(filters, values);
-  const whereClause = clauses.length > 0 ? `WHERE ${clauses.join(' AND ')}` : '';
+  const filter = buildJobFilterClauses(filters, values);
+  const whereClause = filter.clauses.length > 0 ? `WHERE ${filter.clauses.join(' AND ')}` : '';
+  const legacyJoinClause = filter.needsLegacyStudentJoin ? LEGACY_STUDENT_JOINS : '';
 
   const row = await withPgClient(async (client: PoolClient) => {
     const result = await client.query(
@@ -453,12 +465,7 @@ export async function getJobSummary(filters: JobListFilters = {}): Promise<JobSu
         COUNT(*) FILTER (WHERE j.with_tts IS TRUE)::int as tts_enabled,
         COUNT(*) FILTER (WHERE j.with_tts IS TRUE AND j.state = 'succeeded')::int as tts_succeeded
       FROM jobs j
-      LEFT JOIN recordings r ON r.id = j.recording_id
-      LEFT JOIN prompt_packages p ON p.id = j.prompt_package_id
-      LEFT JOIN recordings rp ON rp.id = p.recording_id
-      LEFT JOIN drafts d ON d.id = j.draft_id
-      LEFT JOIN prompt_packages pd ON pd.id = d.prompt_package_id
-      LEFT JOIN recordings rd ON rd.id = pd.recording_id
+      ${legacyJoinClause}
       ${whereClause}
       `,
       values,
@@ -706,6 +713,7 @@ export async function updateJobStateAndResult(args: {
         AND state = $10
       RETURNING
         id,
+        student_id,
         state,
         md,
         md_storage_uri,
@@ -786,6 +794,7 @@ export async function updateJobDraftLink(args: {
         AND state = $5
       RETURNING
         id,
+        student_id,
         state,
         md,
         md_storage_uri,
@@ -907,6 +916,7 @@ export async function updateJobMetadata(
       ${whereClause}
       RETURNING
         id,
+        student_id,
         state,
         md,
         md_storage_uri,
@@ -989,6 +999,7 @@ export async function approveJob(args: {
         AND (COALESCE($1, md) IS NOT NULL OR COALESCE($2, md_storage_uri) IS NOT NULL)
       RETURNING
         id,
+        student_id,
         state,
         md,
         md_storage_uri,
@@ -1044,20 +1055,34 @@ export async function getStudentJobSummaries(
   const rows = await withPgClient(async (client: PoolClient) => {
     const result = await client.query(
       `
+      WITH normalized_jobs AS (
+        SELECT
+          COALESCE(j.student_id, ${LEGACY_STUDENT_COALESCE}) AS student_id,
+          j.state,
+          j.finished_at,
+          j.updated_at,
+          j.created_at
+        FROM jobs j
+        LEFT JOIN recordings r ON j.student_id IS NULL AND r.id = j.recording_id
+        LEFT JOIN prompt_packages p ON j.student_id IS NULL AND p.id = j.prompt_package_id
+        LEFT JOIN recordings rp ON j.student_id IS NULL AND rp.id = p.recording_id
+        LEFT JOIN drafts d ON j.student_id IS NULL AND d.id = j.draft_id
+        LEFT JOIN prompt_packages pd ON j.student_id IS NULL AND pd.id = d.prompt_package_id
+        LEFT JOIN recordings rd ON j.student_id IS NULL AND rd.id = pd.recording_id
+        WHERE (
+          j.student_id = ANY($1::uuid[])
+          OR (
+            j.student_id IS NULL
+            AND ${LEGACY_STUDENT_COALESCE} = ANY($1::uuid[])
+          )
+        )
+      )
       SELECT
-        COALESCE(r.student_id, p.student_id, rp.student_id, d.student_id, pd.student_id, rd.student_id) AS student_id,
-        MAX(COALESCE(j.finished_at, j.updated_at, j.created_at)) AS last_lesson_at,
-        COUNT(*) FILTER (WHERE j.state = 'awaiting_approval')::int AS pending_drafts
-      FROM jobs j
-      LEFT JOIN recordings r ON r.id = j.recording_id
-      LEFT JOIN prompt_packages p ON p.id = j.prompt_package_id
-      LEFT JOIN recordings rp ON rp.id = p.recording_id
-      LEFT JOIN drafts d ON d.id = j.draft_id
-      LEFT JOIN prompt_packages pd ON pd.id = d.prompt_package_id
-      LEFT JOIN recordings rd ON rd.id = pd.recording_id
-      WHERE COALESCE(r.student_id, p.student_id, rp.student_id, d.student_id, pd.student_id, rd.student_id)
-        = ANY($1::uuid[])
-      GROUP BY COALESCE(r.student_id, p.student_id, rp.student_id, d.student_id, pd.student_id, rd.student_id)
+        student_id,
+        MAX(COALESCE(finished_at, updated_at, created_at)) AS last_lesson_at,
+        COUNT(*) FILTER (WHERE state = 'awaiting_approval')::int AS pending_drafts
+      FROM normalized_jobs
+      GROUP BY student_id
       `,
       [studentIds],
     );
@@ -1113,8 +1138,9 @@ function mapRowToJob(row: JobRow): JobRecord {
 function buildJobFilterClauses(
   filters: JobListFilters,
   values: (string | string[] | number | Date)[],
-): string[] {
+): JobFilterBuildResult {
   const clauses: string[] = [];
+  let needsLegacyStudentJoin = false;
 
   if (filters.userId) {
     values.push(filters.userId);
@@ -1138,12 +1164,17 @@ function buildJobFilterClauses(
 
   if (filters.studentId) {
     values.push(filters.studentId);
-    clauses.push(
-      `COALESCE(r.student_id, p.student_id, rp.student_id, d.student_id, pd.student_id, rd.student_id) = $${values.length}`,
-    );
+    clauses.push(`(
+      j.student_id = $${values.length}
+      OR (
+        j.student_id IS NULL
+        AND ${LEGACY_STUDENT_COALESCE} = $${values.length}
+      )
+    )`);
+    needsLegacyStudentJoin = true;
   }
 
-  return clauses;
+  return { clauses, needsLegacyStudentJoin };
 }
 
 function normalizePublishTarget(value: string | null | undefined): PublishTarget | null {
