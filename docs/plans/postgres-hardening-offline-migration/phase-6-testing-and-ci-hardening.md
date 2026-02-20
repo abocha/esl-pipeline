@@ -121,9 +121,9 @@ after this phase passes on main.
   - worker-integration (PG + Redis services; worker suite)
 2. Make both DB jobs required for merge.
 3. Service config defaults:
-  - Postgres 15/16 stable image, health checks, deterministic
+  - Postgres 18 image, health checks, deterministic
 	db/user/pass.
-  - Redis 7 with health checks.
+  - Redis 8 with health checks.
 4. CI step order in DB jobs:
   - install deps
   - wait-for-service health
