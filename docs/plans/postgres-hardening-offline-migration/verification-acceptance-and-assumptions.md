@@ -51,3 +51,24 @@
 
 1. Full RLS enforcement (`ALTER TABLE ... ENABLE ROW LEVEL SECURITY`) after session-context plumbing is validated end-to-end.
 2. Removal of temporary fallback query paths once denormalized data path has passed one stable release cycle.
+
+## Maturity Snapshot (2026-02-20)
+
+1. Overall posture: strong pre-migration hardening, not yet post-migration excellent.
+2. Strength highlights:
+   - migration governance and verification commands are in place.
+   - CI now includes blocking Postgres + worker integration gates.
+   - RLS readiness artifacts and audit command are implemented.
+3. Remaining gaps:
+   - live migration still pending.
+   - RLS enforcement is intentionally deferred.
+   - newly hardened CI gates still need stability history on `main`.
+4. Detailed assessment and roadmap:
+   - `docs/plans/postgres-hardening-offline-migration/current-state-strengths-weaknesses-roadmap.md`
+
+## Next Gate to Excellent
+
+1. Demonstrate sustained green DB CI gates on `main`.
+2. Execute offline migration rehearsal and production migration window.
+3. Stage RLS enforcement with explicit deny-path tests.
+4. Retire legacy runtime schema patching paths after stable migration validation.

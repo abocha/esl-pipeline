@@ -284,3 +284,20 @@ after this phase passes on main.
 3. If query plan regression fails, inspect `query-plan-*.json` artifacts for scan/index node changes.
 4. If worker integration fails, inspect worker test logs and verify Redis/Postgres readiness in CI job output.
 5. Use schema snapshot artifact (`schema.sql`) to compare actual CI schema to expected migration output.
+
+## Post-Implementation Assessment (2026-02-20)
+
+1. Phase 6 goals are implemented in code and CI wiring.
+2. Current standing:
+   - stronger than "so-so"; operationally "alright/trending strong".
+   - still short of "excellent" until live migration and RLS enforcement milestones are complete.
+3. Main strengths after this phase:
+   - DB/integration gates are no longer silently skippable.
+   - migration and query-path regressions are explicitly tested.
+   - artifact capture materially improves incident triage speed.
+4. Main weaknesses after this phase:
+   - no production migration execution evidence yet.
+   - no longitudinal CI stability history yet.
+   - RLS remains readiness-only by design.
+5. Follow-on roadmap to excellent:
+   - `docs/plans/postgres-hardening-offline-migration/current-state-strengths-weaknesses-roadmap.md`

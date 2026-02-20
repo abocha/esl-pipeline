@@ -56,6 +56,7 @@ The strategy is:
 
 1. `docs/plans/postgres-hardening-offline-migration/offline-data-migration-runbook.md`
 2. `docs/plans/postgres-hardening-offline-migration/verification-acceptance-and-assumptions.md`
+3. `docs/plans/postgres-hardening-offline-migration/current-state-strengths-weaknesses-roadmap.md`
 
 ## Phase 1 Artifacts
 
