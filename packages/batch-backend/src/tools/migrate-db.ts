@@ -4,9 +4,10 @@ import { loadBatchBackendEnv } from '../bootstrap/env.js';
 import { closePgPool } from '../infrastructure/db.js';
 import { verifyMigrations } from '../infrastructure/migration-verify.js';
 import { getMigrationStatus, runMigrations } from '../infrastructure/migrations.js';
+import { runRlsReadinessAudit } from '../infrastructure/rls-readiness-audit.js';
 
 function printUsage(): void {
-  console.log('Usage: tsx src/tools/migrate-db.ts <migrate|status|verify>');
+  console.log('Usage: tsx src/tools/migrate-db.ts <migrate|status|verify|rls-audit>');
 }
 
 async function handleStatus(): Promise<void> {
@@ -64,6 +65,26 @@ async function handleVerify(): Promise<void> {
   process.exitCode = 1;
 }
 
+async function handleRlsAudit(): Promise<void> {
+  const result = await runRlsReadinessAudit();
+  if (result.ok) {
+    console.log('RLS readiness audit passed.');
+  } else {
+    console.log('RLS readiness audit failed:');
+    for (const error of result.errors) {
+      console.log(`  - ${error}`);
+    }
+    process.exitCode = 1;
+  }
+
+  if (result.warnings.length > 0) {
+    console.log('RLS readiness warnings:');
+    for (const warning of result.warnings) {
+      console.log(`  - ${warning}`);
+    }
+  }
+}
+
 async function main(): Promise<void> {
   loadBatchBackendEnv(import.meta.url, 'batch-backend-migrate-db-tool');
 
@@ -85,6 +106,10 @@ async function main(): Promise<void> {
     }
     case 'verify': {
       await handleVerify();
+      break;
+    }
+    case 'rls-audit': {
+      await handleRlsAudit();
       break;
     }
     default: {

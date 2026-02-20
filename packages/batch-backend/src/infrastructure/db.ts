@@ -1372,6 +1372,70 @@ export async function closePgPool(): Promise<void> {
   await toClose.end();
 }
 
+export interface PgSessionContext {
+  userId?: string | null;
+  userRole?: string | null;
+  rlsBypass?: boolean;
+}
+
+function normalizeSessionSetting(value: string | null | undefined): string {
+  if (typeof value !== 'string') {
+    return '';
+  }
+
+  const normalized = value.trim();
+  return normalized.length > 0 ? normalized : '';
+}
+
+/**
+ * Set request-scoped session context that future RLS policies can consume.
+ *
+ * Values are always set with local scope (transaction-bound) and normalized to
+ * empty strings when absent so policy helper functions can treat them as NULL.
+ */
+export async function setPgSessionContext(
+  client: PoolClient,
+  context: PgSessionContext,
+): Promise<void> {
+  const userId = normalizeSessionSetting(context.userId);
+  const userRole = normalizeSessionSetting(context.userRole);
+  const rlsBypass = context.rlsBypass === true ? 'on' : 'off';
+
+  await client.query("SELECT set_config('app.user_id', $1, true)", [userId]);
+  await client.query("SELECT set_config('app.user_role', $1, true)", [userRole]);
+  await client.query("SELECT set_config('app.rls_bypass', $1, true)", [rlsBypass]);
+}
+
+/**
+ * Transaction wrapper that applies local session context before running work.
+ *
+ * Intended for request/user-scoped query paths that should be RLS-ready.
+ */
+export async function withPgClientSessionContext<T>(
+  context: PgSessionContext,
+  fn: (client: PoolClient) => Promise<T>,
+): Promise<T> {
+  return withPgClient(async (client) => {
+    await client.query('BEGIN');
+    try {
+      await setPgSessionContext(client, context);
+      const result = await fn(client);
+      await client.query('COMMIT');
+      return result;
+    } catch (error) {
+      try {
+        await client.query('ROLLBACK');
+      } catch (rollbackError) {
+        logger.warn('Failed to rollback transaction after session-context error', {
+          component: 'pg',
+          error: rollbackError instanceof Error ? rollbackError.message : String(rollbackError),
+        });
+      }
+      throw error;
+    }
+  });
+}
+
 // withPgClient.declaration()
 export async function withPgClient<T>(
   fn: (client: PoolClient) => Promise<T>,
