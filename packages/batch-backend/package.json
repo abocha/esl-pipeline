@@ -14,6 +14,7 @@
     "db:migrate": "tsx src/tools/migrate-db.ts migrate",
     "db:status": "tsx src/tools/migrate-db.ts status",
     "db:verify": "tsx src/tools/migrate-db.ts verify",
+    "db:rls-audit": "tsx src/tools/migrate-db.ts rls-audit",
     "lint": "eslint .",
     "start:api": "node dist/transport/http-server.js",
     "start:worker": "node dist/transport/worker-runner.js",
