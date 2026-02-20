@@ -4,14 +4,15 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { getStudentTimeline } from '../src/application/student-timeline.js';
 import { deriveStudentId } from '../src/domain/student-utils.js';
 import { withPgClient } from '../src/infrastructure/db.js';
+import { requirePgTestEnv } from './support/test-env.js';
 
-const hasTestDb = !!process.env.BATCH_BACKEND_TEST_PG;
-const describeIfDb = hasTestDb ? describe : describe.skip;
+requirePgTestEnv();
 
 async function truncateTimelineTables() {
   await withPgClient(async (client) => {
     await client.query(`
       TRUNCATE TABLE
+        users,
         job_action_history,
         jobs,
         drafts,
@@ -29,7 +30,7 @@ async function truncateTimelineTables() {
   });
 }
 
-describeIfDb('student-timeline', () => {
+describe('student-timeline', () => {
   beforeAll(async () => {
     await truncateTimelineTables();
   });
@@ -136,6 +137,13 @@ describeIfDb('student-timeline', () => {
         VALUES ($1, 'Nina', $2)
         `,
         [studentId, profileId],
+      );
+      await client.query(
+        `
+        INSERT INTO users (id, email, password_hash, role, is_active, created_at, updated_at)
+        VALUES ($1, $2, 'hash', 'user', true, $3, $3)
+        `,
+        [changedBy, `${changedBy.replaceAll('-', '').slice(0, 16)}@example.com`, createdAt],
       );
       await client.query(
         `

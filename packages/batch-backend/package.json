@@ -23,7 +23,12 @@
     "student-system:backfill:dist": "node dist/tools/backfill-student-system.js",
     "student-system:backfill:dist:dry": "node dist/tools/backfill-student-system.js --dry-run",
     "student-system:verify:oneoff": "tsx src/tools/verify-student-system-oneoff.ts",
-    "test": "vitest run --config ../../vitest.config.ts --dir ../../packages/batch-backend/tests --reporter=dot",
+    "test": "pnpm run test:unit",
+    "test:unit": "vitest run --config ../../vitest.config.ts --dir ../../packages/batch-backend/tests --reporter=dot --exclude \"**/domain.job-repository.test.ts\" --exclude \"**/application.student-timeline.test.ts\" --exclude \"**/transport.worker-runner.integration.test.ts\" --exclude \"**/integration.migrations.test.ts\" --exclude \"**/integration.query-plan-regression.test.ts\"",
+    "test:db:migrations": "vitest run --config ../../vitest.config.ts --reporter=dot --maxWorkers=1 ../../packages/batch-backend/tests/integration.migrations.test.ts",
+    "test:db:postgres": "vitest run --config ../../vitest.config.ts --reporter=dot --maxWorkers=1 ../../packages/batch-backend/tests/domain.job-repository.test.ts ../../packages/batch-backend/tests/application.student-timeline.test.ts ../../packages/batch-backend/tests/integration.query-plan-regression.test.ts",
+    "test:integration:worker": "vitest run --config ../../vitest.config.ts --reporter=dot --maxWorkers=1 ../../packages/batch-backend/tests/transport.worker-runner.integration.test.ts",
+    "test:ci": "pnpm run test:unit && pnpm run test:db:migrations && pnpm run test:db:postgres && pnpm run test:integration:worker",
     "test:verbose": "BATCH_BACKEND_TEST_LOG_LEVEL=debug vitest run --config ../../vitest.config.ts --dir ../../packages/batch-backend/tests --reporter=verbose",
     "test:watch": "vitest watch --config ../../vitest.config.ts --dir ../../packages/batch-backend/tests",
     "typecheck": "tsc --noEmit"

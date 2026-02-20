@@ -14,8 +14,8 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  build:
-    name: build (node 24.x)
+  static-checks:
+    name: static checks (node 24.x)
     runs-on: ubuntu-24.04
     timeout-minutes: 45
     env:
@@ -54,5 +54,205 @@ jobs:
       - name: Lint
         run: pnpm lint
 
-      - name: Unit & integration tests
+      - name: Unit tests
         run: pnpm test
+
+  postgres-tests:
+    name: postgres tests (blocking)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    env:
+      NODE_OPTIONS: --max_old_space_size=4096
+      PG_ENABLED: 'true'
+      PG_CONNECTION_STRING: postgresql://postgres:postgres@127.0.0.1:5432/esl_batch_test
+      PG_AUTO_MIGRATE_ON_BOOT: 'false'
+      PG_HOST: 127.0.0.1
+      PG_PORT: '5432'
+      PG_USER: postgres
+      PG_PASSWORD: postgres
+      PG_DATABASE: esl_batch_test
+      BATCH_BACKEND_TEST_PG: postgresql://postgres:postgres@127.0.0.1:5432/esl_batch_test
+      BATCH_BACKEND_TEST_TIMEOUT_MS: '120000'
+      BATCH_BACKEND_TEST_ARTIFACTS_DIR: ${{ github.workspace }}/.artifacts/postgres-tests
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: esl_batch_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d esl_batch_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@41ff72655975bd51cab0327fa583b6e92b6d3061
+        with:
+          run_install: false
+
+      - name: Setup Node
+        uses: actions/setup-node@6044e13b5dc448c55e2357c09f80417699197238
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+          cache-dependency-path: pnpm-lock.yaml
+
+      - name: Install PostgreSQL client
+        run: sudo apt-get update && sudo apt-get install -y postgresql-client
+
+      - name: Install deps
+        run: pnpm install --frozen-lockfile
+
+      - name: Wait for Postgres
+        run: |
+          until pg_isready -h 127.0.0.1 -p 5432 -U postgres -d esl_batch_test; do
+            sleep 2
+          done
+
+      - name: Migration preflight
+        run: |
+          mkdir -p "$BATCH_BACKEND_TEST_ARTIFACTS_DIR"
+          pnpm --filter @esl-pipeline/batch-backend db:migrate 2>&1 | tee "$BATCH_BACKEND_TEST_ARTIFACTS_DIR/db-migrate.log"
+          pnpm --filter @esl-pipeline/batch-backend db:status 2>&1 | tee "$BATCH_BACKEND_TEST_ARTIFACTS_DIR/db-status.log"
+          pnpm --filter @esl-pipeline/batch-backend db:verify 2>&1 | tee "$BATCH_BACKEND_TEST_ARTIFACTS_DIR/db-verify.log"
+
+      - name: Migration matrix tests
+        run: |
+          pnpm --filter @esl-pipeline/batch-backend test:db:migrations 2>&1 | tee "$BATCH_BACKEND_TEST_ARTIFACTS_DIR/test-db-migrations.log"
+
+      - name: Postgres integration and query plan tests
+        run: |
+          pnpm --filter @esl-pipeline/batch-backend test:db:postgres 2>&1 | tee "$BATCH_BACKEND_TEST_ARTIFACTS_DIR/test-db-postgres.log"
+
+      - name: Capture schema snapshot on failure
+        if: failure()
+        run: |
+          mkdir -p "$BATCH_BACKEND_TEST_ARTIFACTS_DIR"
+          PGPASSWORD=postgres pg_dump \
+            --host 127.0.0.1 \
+            --port 5432 \
+            --username postgres \
+            --schema-only \
+            --dbname esl_batch_test \
+            > "$BATCH_BACKEND_TEST_ARTIFACTS_DIR/schema.sql" || true
+
+      - name: Upload Postgres artifacts
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: postgres-test-artifacts
+          path: ${{ github.workspace }}/.artifacts/postgres-tests
+          if-no-files-found: warn
+
+  worker-integration:
+    name: worker integration (blocking)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    env:
+      NODE_OPTIONS: --max_old_space_size=4096
+      PG_ENABLED: 'true'
+      PG_CONNECTION_STRING: postgresql://postgres:postgres@127.0.0.1:5432/esl_batch_test
+      PG_AUTO_MIGRATE_ON_BOOT: 'false'
+      PG_HOST: 127.0.0.1
+      PG_PORT: '5432'
+      PG_USER: postgres
+      PG_PASSWORD: postgres
+      PG_DATABASE: esl_batch_test
+      REDIS_ENABLED: 'true'
+      REDIS_HOST: 127.0.0.1
+      REDIS_PORT: '6379'
+      BATCH_BACKEND_TEST_PG: postgresql://postgres:postgres@127.0.0.1:5432/esl_batch_test
+      BATCH_BACKEND_TEST_REDIS: redis://127.0.0.1:6379
+      BATCH_BACKEND_TEST_TIMEOUT_MS: '120000'
+      BATCH_BACKEND_TEST_ARTIFACTS_DIR: ${{ github.workspace }}/.artifacts/worker-integration
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: esl_batch_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d esl_batch_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+      redis:
+        image: redis:7
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@41ff72655975bd51cab0327fa583b6e92b6d3061
+        with:
+          run_install: false
+
+      - name: Setup Node
+        uses: actions/setup-node@6044e13b5dc448c55e2357c09f80417699197238
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+          cache-dependency-path: pnpm-lock.yaml
+
+      - name: Install PostgreSQL client
+        run: sudo apt-get update && sudo apt-get install -y postgresql-client
+
+      - name: Install deps
+        run: pnpm install --frozen-lockfile
+
+      - name: Wait for Postgres and Redis
+        run: |
+          until pg_isready -h 127.0.0.1 -p 5432 -U postgres -d esl_batch_test; do
+            sleep 2
+          done
+          until timeout 1 bash -c '</dev/tcp/127.0.0.1/6379'; do
+            sleep 2
+          done
+
+      - name: Migration preflight
+        run: |
+          mkdir -p "$BATCH_BACKEND_TEST_ARTIFACTS_DIR"
+          pnpm --filter @esl-pipeline/batch-backend db:migrate 2>&1 | tee "$BATCH_BACKEND_TEST_ARTIFACTS_DIR/db-migrate.log"
+          pnpm --filter @esl-pipeline/batch-backend db:status 2>&1 | tee "$BATCH_BACKEND_TEST_ARTIFACTS_DIR/db-status.log"
+          pnpm --filter @esl-pipeline/batch-backend db:verify 2>&1 | tee "$BATCH_BACKEND_TEST_ARTIFACTS_DIR/db-verify.log"
+
+      - name: Worker integration tests
+        run: |
+          pnpm --filter @esl-pipeline/batch-backend test:integration:worker 2>&1 | tee "$BATCH_BACKEND_TEST_ARTIFACTS_DIR/test-worker-integration.log"
+
+      - name: Capture schema snapshot on failure
+        if: failure()
+        run: |
+          mkdir -p "$BATCH_BACKEND_TEST_ARTIFACTS_DIR"
+          PGPASSWORD=postgres pg_dump \
+            --host 127.0.0.1 \
+            --port 5432 \
+            --username postgres \
+            --schema-only \
+            --dbname esl_batch_test \
+            > "$BATCH_BACKEND_TEST_ARTIFACTS_DIR/schema.sql" || true
+
+      - name: Upload worker artifacts
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: worker-integration-artifacts
+          path: ${{ github.workspace }}/.artifacts/worker-integration
+          if-no-files-found: warn

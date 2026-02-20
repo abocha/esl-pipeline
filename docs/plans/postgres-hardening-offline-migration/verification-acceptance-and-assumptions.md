@@ -27,6 +27,8 @@
 6. Startup with migration disabled vs enabled behavior.
 7. Controlled failure of migration command with clear operator signal.
 8. RLS readiness audit check pass/fail paths.
+9. Phase 6 CI gate pass:
+   - `postgres-tests` and `worker-integration` jobs both green.
 
 ## Required Verification Artifacts
 
@@ -43,9 +45,9 @@
 3. RLS is a near-future requirement, but enforcement may be staged.
 4. SQL migrations become canonical schema authority.
 5. Any ambiguous data conflict should fail migration and trigger rollback, not silent lossy transformation.
+6. Live DB migration starts only after Phase 6 CI gates pass on `main`.
 
 ## Deferred but Explicitly Planned
 
 1. Full RLS enforcement (`ALTER TABLE ... ENABLE ROW LEVEL SECURITY`) after session-context plumbing is validated end-to-end.
 2. Removal of temporary fallback query paths once denormalized data path has passed one stable release cycle.
-

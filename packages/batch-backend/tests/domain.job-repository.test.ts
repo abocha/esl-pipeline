@@ -9,6 +9,7 @@ import {
   updateJobStateAndResult,
 } from '../src/domain/job-repository.js';
 import { withPgClient } from '../src/infrastructure/db.js';
+import { requirePgTestEnv } from './support/test-env.js';
 
 /**
  * Intent:
@@ -21,16 +22,30 @@ import { withPgClient } from '../src/infrastructure/db.js';
  * - Uses truncation between tests to keep them deterministic.
  */
 
-const hasTestDb = !!process.env.BATCH_BACKEND_TEST_PG;
-const describeIfDb = hasTestDb ? describe : describe.skip;
+requirePgTestEnv();
 
 async function truncateJobs() {
   await withPgClient(async (client) => {
-    await client.query('TRUNCATE TABLE jobs');
+    await client.query('TRUNCATE TABLE users, job_action_history, jobs RESTART IDENTITY CASCADE');
   });
 }
 
-describeIfDb('domain/job-repository', () => {
+async function ensureUsers(userIds: string[]) {
+  await withPgClient(async (client) => {
+    for (const userId of userIds) {
+      await client.query(
+        `
+        INSERT INTO users (id, email, password_hash, role, is_active, created_at, updated_at)
+        VALUES ($1, $2, 'hash', 'user', TRUE, NOW(), NOW())
+        ON CONFLICT (id) DO NOTHING
+        `,
+        [userId, `${userId.replaceAll('-', '').slice(0, 16)}@example.com`],
+      );
+    }
+  });
+}
+
+describe('domain/job-repository', () => {
   beforeAll(async () => {
     await truncateJobs();
   });
@@ -116,19 +131,19 @@ describeIfDb('domain/job-repository', () => {
       expect(loaded).toBeNull();
     });
 
-    it('fails fast when loading a row with an unsupported mode', async () => {
+    it('rejects unsupported mode values at insert time', async () => {
       const id = randomUUID();
 
-      await withPgClient(async (client) => {
-        await client.query('INSERT INTO jobs (id, md, state, mode) VALUES ($1, $2, $3, $4)', [
-          id,
-          'fixtures/ok.md',
-          'queued',
-          'monologue',
-        ]);
-      });
-
-      await expect(getJobById(id)).rejects.toThrow(/Unsupported jobs\.mode value "monologue"/);
+      await expect(
+        withPgClient(async (client) => {
+          await client.query('INSERT INTO jobs (id, md, state, mode) VALUES ($1, $2, $3, $4)', [
+            id,
+            'fixtures/ok.md',
+            'queued',
+            'monologue',
+          ]);
+        }),
+      ).rejects.toThrow(/jobs_mode_check/);
     });
   });
 
@@ -214,6 +229,7 @@ describeIfDb('domain/job-repository', () => {
       const userA = randomUUID();
       const userB = randomUUID();
       const base = new Date('2024-04-01T00:00:00.000Z');
+      await ensureUsers([userA, userB]);
 
       await withPgClient(async (client) => {
         await client.query(
@@ -264,6 +280,7 @@ describeIfDb('domain/job-repository', () => {
       const userA = randomUUID();
       const userB = randomUUID();
       const base = new Date('2024-04-01T00:00:00.000Z');
+      await ensureUsers([userA, userB]);
 
       await withPgClient(async (client) => {
         await client.query(
@@ -331,6 +348,7 @@ describeIfDb('domain/job-repository', () => {
       const userA = randomUUID();
       const userB = randomUUID();
       const createdAt = new Date('2024-05-01T00:00:10.000Z');
+      await ensureUsers([userA, userB]);
 
       await withPgClient(async (client) => {
         await client.query(

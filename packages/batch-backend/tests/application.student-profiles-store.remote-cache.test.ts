@@ -59,5 +59,5 @@ describe('student-profiles-store remote cache', () => {
     vi.setSystemTime(new Date('2026-02-01T00:01:01.000Z'));
     await listStudentProfiles({}, { config });
     expect(getStudentProfilesFromOrchestrator).toHaveBeenCalledTimes(2);
-  });
+  }, 15_000);
 });

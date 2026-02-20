@@ -1,13 +1,15 @@
 import Fastify from 'fastify';
-import net from 'node:net';
+import fs from 'node:fs/promises';
+import os from 'node:os';
+import path from 'node:path';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 
 import * as getJobStatusModule from '../src/application/get-job-status.js';
 import * as submitJobModule from '../src/application/submit-job.js';
-import { loadConfig } from '../src/config/env.js';
 import { withPgClient } from '../src/infrastructure/db.js';
 import * as orchestratorService from '../src/infrastructure/orchestrator-service.js';
 import { startWorker } from '../src/transport/worker-runner.js';
+import { requirePgTestEnv, requireRedisTestEnv, resolveTestTimeout } from './support/test-env.js';
 
 /**
  * Intent:
@@ -43,56 +45,26 @@ const runAssignmentJobMock = vi.spyOn(orchestratorService, 'runAssignmentJob');
 
 let app: ReturnType<typeof Fastify>;
 let workerStop: (() => Promise<void>) | null = null;
+let markdownFixtureDir: string | null = null;
+let markdownFixturePath = '';
 
 async function truncateJobs() {
   await withPgClient(async (client) => {
-    await client.query('TRUNCATE TABLE jobs');
+    await client.query('TRUNCATE TABLE job_action_history, jobs RESTART IDENTITY CASCADE');
   });
 }
 
-async function canConnect(host: string, port: number, timeoutMs = 500): Promise<boolean> {
-  return await new Promise((resolve) => {
-    const socket = net.connect({ host, port, timeout: timeoutMs });
-    socket.once('connect', () => {
-      socket.end();
-      resolve(true);
-    });
-    socket.once('error', () => resolve(false));
-    socket.once('timeout', () => {
-      socket.destroy();
-      resolve(false);
-    });
-  });
-}
+requirePgTestEnv();
+requireRedisTestEnv();
+const integrationTimeout = resolveTestTimeout(60_000);
 
-async function shouldRunIntegration(): Promise<boolean> {
-  try {
-    const config = loadConfig();
-    if (!config.pg.enabled || !config.redis.enabled) {
-      return false;
-    }
-    const [pgOk, redisOk] = await Promise.all([
-      canConnect(config.pg.host, config.pg.port),
-      canConnect(config.redis.host, config.redis.port),
-    ]);
-    return pgOk && redisOk;
-  } catch {
-    return false;
-  }
-}
-
-const integrationEnabled = await shouldRunIntegration();
-const describeIntegration = integrationEnabled ? describe : describe.skip;
-
-describeIntegration('transport/worker-runner - full pipeline (requires Postgres + Redis)', () => {
-  /**
-   * NOTE:
-   * - Auto-skips locally if Postgres/Redis are unavailable (e.g., Docker not running).
-   */
-
+describe('transport/worker-runner - full pipeline (requires Postgres + Redis)', () => {
   beforeAll(async () => {
     // Ensure clean DB state.
     await truncateJobs();
+    markdownFixtureDir = await fs.mkdtemp(path.join(os.tmpdir(), 'worker-runner-integration-'));
+    markdownFixturePath = path.join(markdownFixtureDir, 'ok.md');
+    await fs.writeFile(markdownFixturePath, '# Integration test fixture\n', 'utf8');
 
     // Start HTTP server on ephemeral port.
     // http-server.ts currently binds directly; for tests we simulate by creating Fastify
@@ -142,7 +114,7 @@ describeIntegration('transport/worker-runner - full pipeline (requires Postgres 
         // In CI, test runner will exit the process.
       };
     })();
-  }, 60_000);
+  }, integrationTimeout);
 
   afterAll(async () => {
     if (workerStop) {
@@ -151,8 +123,13 @@ describeIntegration('transport/worker-runner - full pipeline (requires Postgres 
     if (app) {
       await app.close();
     }
+    if (markdownFixtureDir) {
+      await fs.rm(markdownFixtureDir, { recursive: true, force: true });
+      markdownFixtureDir = null;
+      markdownFixturePath = '';
+    }
     await truncateJobs();
-  }, 60_000);
+  }, integrationTimeout);
 
   it('runs job to succeeded when orchestrator succeeds', async () => {
     runAssignmentJobMock.mockResolvedValue({
@@ -162,7 +139,7 @@ describeIntegration('transport/worker-runner - full pipeline (requires Postgres 
     const submitRes = await app.inject({
       method: 'POST',
       url: '/jobs',
-      payload: { md: 'fixtures/ok.md' },
+      payload: { md: markdownFixturePath },
     });
 
     expect(submitRes.statusCode).toBe(202);
@@ -193,7 +170,7 @@ describeIntegration('transport/worker-runner - full pipeline (requires Postgres 
     expect(finalStatus).not.toBeNull();
     expect(finalStatus.state).toBe('succeeded');
     expect(finalStatus.manifestPath).toBe('/manifests/integration.json');
-  }, 30_000);
+  }, integrationTimeout);
 
   it('eventually marks job failed when orchestrator consistently fails', async () => {
     runAssignmentJobMock.mockRejectedValue(new Error('orchestrator down'));
@@ -201,7 +178,7 @@ describeIntegration('transport/worker-runner - full pipeline (requires Postgres 
     const submitRes = await app.inject({
       method: 'POST',
       url: '/jobs',
-      payload: { md: 'fixtures/ok.md' },
+      payload: { md: markdownFixturePath },
     });
 
     expect(submitRes.statusCode).toBe(202);
@@ -231,5 +208,5 @@ describeIntegration('transport/worker-runner - full pipeline (requires Postgres 
     expect(finalStatus).not.toBeNull();
     expect(finalStatus.state).toBe('failed');
     expect(finalStatus.error).toContain('orchestrator down');
-  }, 40_000);
+  }, integrationTimeout);
 });
