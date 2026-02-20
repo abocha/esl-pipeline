@@ -146,6 +146,14 @@ LEFT JOIN drafts d ON d.id = j.draft_id
 LEFT JOIN prompt_packages pd ON pd.id = d.prompt_package_id
 LEFT JOIN recordings rd ON rd.id = pd.recording_id
 WHERE j.student_id IS NOT NULL
+  AND COALESCE(
+    r.student_id,
+    p.student_id,
+    rp.student_id,
+    d.student_id,
+    pd.student_id,
+    rd.student_id
+  ) IS NOT NULL
   AND j.student_id IS DISTINCT FROM COALESCE(
     r.student_id,
     p.student_id,
