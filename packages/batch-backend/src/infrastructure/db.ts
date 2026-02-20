@@ -1171,7 +1171,9 @@ const GENERATION_BUDGET_COUNTERS_INDEX_PATCHES: string[] = [
   'CREATE INDEX IF NOT EXISTS idx_generation_budget_counters_bucket_start ON generation_budget_counters (bucket_start)',
 ];
 
-async function ensureJobsSchema(client: PoolClient): Promise<void> {
+// Deprecated in favor of migration runner tooling.
+// Kept exported temporarily for operator-assisted legacy recoveries.
+export async function ensureJobsSchema(client: PoolClient): Promise<void> {
   if (schemaReadyPromise) {
     await schemaReadyPromise;
     return;
@@ -1351,6 +1353,13 @@ export function createPgPool(): Pool {
   return pool;
 }
 
+export async function closePgPool(): Promise<void> {
+  if (!pool) return;
+  const toClose = pool;
+  pool = null;
+  await toClose.end();
+}
+
 // withPgClient.declaration()
 export async function withPgClient<T>(
   fn: (client: PoolClient) => Promise<T>,
@@ -1361,7 +1370,6 @@ export async function withPgClient<T>(
   try {
     const client = await p.connect();
     try {
-      await ensureJobsSchema(client);
       return await fn(client);
     } finally {
       client.release();

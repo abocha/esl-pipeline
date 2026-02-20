@@ -12,6 +12,7 @@ import { fileURLToPath } from 'node:url';
 import { processQueueJob } from '../application/process-queue-job.js';
 import { loadBatchBackendEnv } from '../bootstrap/env.js';
 import { enableRedisJobEventBridge } from '../infrastructure/job-event-redis-bridge.js';
+import { runMigrationsIfConfigured } from '../infrastructure/migrations.js';
 import { createJobWorker } from '../infrastructure/queue-bullmq.js';
 
 async function getLogger() {
@@ -23,6 +24,7 @@ async function getLogger() {
 export async function startWorker(): Promise<void> {
   loadBatchBackendEnv(import.meta.url, 'batch-backend-worker-runner');
   const logger = await getLogger();
+  await runMigrationsIfConfigured();
   await enableRedisJobEventBridge();
   const worker = createJobWorker(async (bullJob) => {
     const { jobId } = bullJob.data;
