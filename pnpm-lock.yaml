@@ -123,12 +123,21 @@ importers:
       '@deepgram/sdk':
         specifier: ^4.11.3
         version: 4.11.3
+      '@elevenlabs/elevenlabs-js':
+        specifier: ^2.25.0
+        version: 2.34.0
       '@esl-pipeline/contracts':
         specifier: workspace:*
         version: link:../contracts
+      '@esl-pipeline/html-publisher':
+        specifier: workspace:*
+        version: link:../html-publisher
       '@esl-pipeline/md-validator':
         specifier: workspace:*
         version: link:../md-validator
+      '@esl-pipeline/notion-adapter':
+        specifier: workspace:*
+        version: link:../notion-adapter
       '@esl-pipeline/orchestrator':
         specifier: workspace:*
         version: link:../orchestrator

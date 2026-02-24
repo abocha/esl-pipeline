@@ -308,6 +308,23 @@ body {
   color: var(--page-muted);
   font-size: 13px;
 }
+.audio-placeholder {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 14px 0 20px;
+  padding: 16px 20px;
+  border: 1px dashed var(--page-line);
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--page-card) 60%, var(--page-bg) 40%);
+  color: var(--page-muted);
+  font-size: 14px;
+}
+.audio-placeholder svg {
+  width: 20px;
+  height: 20px;
+  opacity: 0.6;
+}
 .callout {
   background: var(--callout-bg);
   padding: 16px 18px;
@@ -802,13 +819,13 @@ function preprocessMarkdown(markdown: string, allowRawHtml: boolean): string {
       continue;
     }
 
-    if (/^:::\s*audio\s+/.test(trimmed)) {
-      const rawUrl = trimmed.replace(/^:::\s*audio\s+/, '').trim();
+    if (/^:::\s*audio(\s+|$)/.test(trimmed)) {
+      const rawUrl = trimmed.replace(/^:::\s*audio(\s+|$)/, '').trim();
       const safeUrl = sanitizeMediaUrl(rawUrl);
       if (safeUrl) {
         out.push(`<audio controls preload="metadata" src="${escapeHtmlAttribute(safeUrl)}"></audio>`);
       } else {
-        out.push(`Audio: ${rawUrl}`);
+        out.push(renderAudioPlaceholder());
       }
       continue;
     }
@@ -1083,10 +1100,17 @@ function replaceAudioLinks(html: string): string {
   );
 }
 
+function renderAudioPlaceholder(): string {
+  return `<div class="audio-placeholder">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" x2="12" y1="19" y2="22"/></svg>
+<span>Audio track generating...</span>
+</div>`;
+}
+
 function renderAudioFigure(url: string, fallbackLabel = 'Open audio in a new tab'): string {
   const safeUrl = sanitizeMediaUrl(url);
   if (!safeUrl) {
-    return `<p>Audio link is invalid.</p>`;
+    return renderAudioPlaceholder();
   }
 
   const escapedUrl = escapeHtmlAttribute(safeUrl);

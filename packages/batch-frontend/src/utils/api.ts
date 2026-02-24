@@ -64,6 +64,7 @@ import apiClient, {
 export type JobState = ContractJobState;
 export type TtsStrategy = ContractTtsStrategy;
 export type RecordingStatus = ContractRecordingStatus;
+export type SttProvider = 'deepgram' | 'elevenlabs';
 export type UserRole = 'admin' | 'user' | 'viewer';
 export type RegisterRole = Exclude<UserRole, 'admin'>;
 
@@ -420,6 +421,15 @@ export interface JobProvenanceResponse {
     createdAt: string | null;
     updatedAt: string | null;
   } | null;
+  tts: {
+    provider: string | null;
+    generatedCharacters: number | null;
+    cachedCharacters: number | null;
+    totalCharacters: number | null;
+    cacheHitRatio: number | null;
+    costPer1kCharsUsd: number | null;
+    estimatedSpendUsd: number | null;
+  } | null;
   lineage: PromptPackageLineageResponse | null;
   actions: {
     id: string;
@@ -552,21 +562,6 @@ export async function getRecording(recordingId: string): Promise<RecordingListIt
     const axiosError = toAxiosError(error);
     if (axiosError && isAuthError(axiosError)) {
       throw new Error('Authentication required. Please login to view recordings.');
-    }
-    throw new Error(axiosError ? handleApiError(axiosError) : formatUnknownError(error));
-  }
-}
-
-export async function retryRecordingTranscription(recordingId: string): Promise<RecordingListItem> {
-  try {
-    const response = await apiClient.post(
-      buildApiProxyPath(`/recordings/${encodeURIComponent(recordingId)}/transcribe`),
-    );
-    return response.data;
-  } catch (error: unknown) {
-    const axiosError = toAxiosError(error);
-    if (axiosError && isAuthError(axiosError)) {
-      throw new Error('Authentication required. Please login to retry transcriptions.');
     }
     throw new Error(axiosError ? handleApiError(axiosError) : formatUnknownError(error));
   }
@@ -860,6 +855,29 @@ export async function validateMarkdown(
   }
 }
 
+export async function renderHtmlPreview(params: {
+  text: string;
+  title?: string;
+  preset?: string | null;
+  audioUrl?: string | null;
+}): Promise<{ html: string }> {
+  try {
+    const response = await apiClient.post(buildApiProxyPath('/preview/html'), {
+      text: params.text,
+      title: params.title,
+      preset: params.preset,
+      audioUrl: params.audioUrl,
+    });
+    return response.data;
+  } catch (error: unknown) {
+    const axiosError = toAxiosError(error);
+    if (axiosError && isAuthError(axiosError)) {
+      throw new Error('Authentication required. Please login to render preview.');
+    }
+    throw new Error(axiosError ? handleApiError(axiosError) : formatUnknownError(error));
+  }
+}
+
 export interface JobEventsOptions {
   signal?: AbortSignal;
   onError?: (event: Event) => void;
@@ -1092,14 +1110,27 @@ export async function uploadMarkdown(
  */
 export async function uploadRecording(
   file: File,
-  options?: { studentId?: string; onProgress?: UploadProgressCallback; signal?: AbortSignal },
+  options?: {
+    studentId?: string;
+    sttProvider?: SttProvider;
+    onProgress?: UploadProgressCallback;
+    signal?: AbortSignal;
+  },
 ): Promise<RecordingListItem> {
   try {
     const formData = new FormData();
     formData.append('file', file);
 
+    const params: Record<string, string> = {};
+    if (options?.studentId) {
+      params.studentId = options.studentId;
+    }
+    if (options?.sttProvider) {
+      params.sttProvider = options.sttProvider;
+    }
+
     const response = await apiClient.post(buildApiProxyPath('/recordings/upload'), formData, {
-      params: options?.studentId ? { studentId: options.studentId } : undefined,
+      params: Object.keys(params).length > 0 ? params : undefined,
       headers: {
         'Content-Type': 'multipart/form-data',
       },
@@ -1112,6 +1143,25 @@ export async function uploadRecording(
     const axiosError = toAxiosError(error);
     if (axiosError && isAuthError(axiosError)) {
       throw new Error('Authentication required. Please login to upload recordings.');
+    }
+    throw new Error(axiosError ? handleApiError(axiosError) : formatUnknownError(error));
+  }
+}
+
+export async function retryRecordingTranscription(
+  recordingId: string,
+  options?: { sttProvider?: SttProvider },
+): Promise<RecordingListItem> {
+  try {
+    const response = await apiClient.post(
+      buildApiProxyPath(`/recordings/${encodeURIComponent(recordingId)}/transcribe`),
+      options?.sttProvider ? { sttProvider: options.sttProvider } : undefined,
+    );
+    return response.data;
+  } catch (error: unknown) {
+    const axiosError = toAxiosError(error);
+    if (axiosError && isAuthError(axiosError)) {
+      throw new Error('Authentication required. Please login to retry transcriptions.');
     }
     throw new Error(axiosError ? handleApiError(axiosError) : formatUnknownError(error));
   }

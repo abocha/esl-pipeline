@@ -32,11 +32,15 @@ describe('retryRecordingTranscription', () => {
     const enqueue = vi.fn().mockImplementation(async () => {});
     const publishEvent = vi.fn();
 
-    const result = await retryRecordingTranscription('recording-1', {
-      recordings: { getById, updateStatus },
-      enqueue,
-      publishEvent,
-    });
+    const result = await retryRecordingTranscription(
+      'recording-1',
+      undefined,
+      {
+        recordings: { getById, updateStatus },
+        enqueue,
+        publishEvent,
+      },
+    );
 
     expect(result).toEqual({
       recordingId: 'recording-1',
@@ -66,6 +70,31 @@ describe('retryRecordingTranscription', () => {
     );
   });
 
+  it('forwards explicit STT provider override into transcribe queue payload', async () => {
+    const getById = vi.fn().mockResolvedValue(baseRecording);
+    const updateStatus = vi.fn().mockResolvedValue({
+      ...baseRecording,
+      status: 'queued',
+      error: null,
+    });
+    const enqueue = vi.fn().mockImplementation(async () => {});
+
+    await retryRecordingTranscription(
+      'recording-1',
+      { sttProvider: 'elevenlabs' },
+      {
+        recordings: { getById, updateStatus },
+        enqueue,
+        publishEvent: vi.fn(),
+      },
+    );
+
+    expect(enqueue).toHaveBeenCalledWith({
+      recordingId: 'recording-1',
+      sttProvider: 'elevenlabs',
+    });
+  });
+
   it('rejects retries when recording is not failed', async () => {
     const getById = vi.fn().mockResolvedValue({
       ...baseRecording,
@@ -75,11 +104,15 @@ describe('retryRecordingTranscription', () => {
     const updateStatus = vi.fn();
 
     await expect(
-      retryRecordingTranscription('recording-1', {
-        recordings: { getById, updateStatus },
-        enqueue: vi.fn(),
-        publishEvent: vi.fn(),
-      }),
+      retryRecordingTranscription(
+        'recording-1',
+        undefined,
+        {
+          recordings: { getById, updateStatus },
+          enqueue: vi.fn(),
+          publishEvent: vi.fn(),
+        },
+      ),
     ).rejects.toBeInstanceOf(RecordingRetryError);
     expect(updateStatus).not.toHaveBeenCalled();
   });
@@ -102,11 +135,15 @@ describe('retryRecordingTranscription', () => {
     const publishEvent = vi.fn();
 
     await expect(
-      retryRecordingTranscription('recording-1', {
-        recordings: { getById, updateStatus },
-        enqueue,
-        publishEvent,
-      }),
+      retryRecordingTranscription(
+        'recording-1',
+        undefined,
+        {
+          recordings: { getById, updateStatus },
+          enqueue,
+          publishEvent,
+        },
+      ),
     ).rejects.toThrow('queue-down');
     expect(updateStatus).toHaveBeenCalledTimes(2);
     expect(publishEvent).toHaveBeenCalledTimes(2);

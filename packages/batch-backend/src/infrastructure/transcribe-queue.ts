@@ -6,6 +6,7 @@ import { createRedisClient } from './redis.js';
 
 export interface TranscribeQueuePayload {
   recordingId: string;
+  sttProvider?: 'deepgram' | 'elevenlabs';
 }
 
 let queueSingleton: Queue<TranscribeQueuePayload> | null = null;

@@ -6,13 +6,17 @@ export interface PromptStitchOptions {
   profile: string;
   transcript: string;
   notes?: string | null;
+  history?: string | null;
 }
 
 export function stitchPromptPayload(options: PromptStitchOptions): string {
   const { merged } = replaceProfileBlock(options.template, options.profile);
   const notesBlock = `[NOTES]\n${(options.notes ?? '').trim()}`;
+  const historyBlock = options.history?.trim()
+    ? `[LESSON_HISTORY]\n${options.history.trimEnd()}`
+    : '[LESSON_HISTORY]\nNo prior lesson history available.';
   const transcriptBlock = `[TRANSCRIPT]\n${options.transcript.trimEnd()}`;
-  return [merged.trimEnd(), notesBlock, transcriptBlock, ''].join('\n\n');
+  return [merged.trimEnd(), notesBlock, historyBlock, transcriptBlock, ''].join('\n\n');
 }
 
 function replaceProfileBlock(template: string, profile: string): { merged: string } {

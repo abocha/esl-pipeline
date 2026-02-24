@@ -34,6 +34,7 @@ import {
 import { stitchPromptPayload } from './prompt-assembly.js';
 import { PromptOptionError, resolvePromptSelection } from './prompt-options.js';
 import { materializePromptTemplateWithCapabilities } from './prompt-voice-capabilities.js';
+import { buildStudentLessonHistoryContext } from './student-lesson-history.js';
 import { resolveStudentProfileBindingAt } from './student-profile-bindings.js';
 import { getStudentProfileById } from './student-profiles-store.js';
 
@@ -254,6 +255,11 @@ export async function createPromptPackage(
     }),
     readStorage.getText(transcript.storageUri),
   ]);
+  const historyContext = await buildStudentLessonHistoryContext({
+    studentId: recording?.studentId ?? null,
+    currentTranscriptId: transcript.id,
+    config,
+  });
   const templateMaterialization = await materializePromptTemplateWithCapabilities({
     templateId: selection.templateId,
     templateContent: artifacts.template.content,
@@ -264,6 +270,7 @@ export async function createPromptPackage(
     profile: artifacts.profile.content,
     transcript: transcriptText,
     notes: params.notes,
+    history: historyContext,
   });
 
   const promptPackageId = randomUUID();

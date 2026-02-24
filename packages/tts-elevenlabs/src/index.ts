@@ -46,6 +46,7 @@ type TtsOutputFormat = NonNullable<TextToSpeechConvertBody['outputFormat']>;
 const DEFAULT_OUTPUT_FORMAT = (process.env.ELEVENLABS_OUTPUT_FORMAT ??
   'mp3_22050_32') as unknown as TtsOutputFormat;
 const DEFAULT_TTS_MAX_CHARS = 4500;
+const DEFAULT_TTS_PROVIDER = 'elevenlabs';
 
 function isTtsDebugEnabled(): boolean {
   const raw = process.env.ELEVENLABS_TTS_DEBUG ?? process.env.ESL_TTS_DEBUG;
@@ -69,7 +70,7 @@ async function ensureFileExists(path: string): Promise<void> {
   }
   throw new InfrastructureError(
     `Expected output file to exist but it was missing: ${path}. ` +
-      `This likely indicates a failed TTS synthesis or an unexpected output path.`,
+    `This likely indicates a failed TTS synthesis or an unexpected output path.`,
   );
 }
 
@@ -253,7 +254,7 @@ function toDialogueInputs(
     if (!voiceId) {
       throw new ConfigurationError(
         `No voice mapping found for speaker "${speaker}". ` +
-          `Available speakers: ${[...voiceAssignments.keys()].join(', ') || '(none)'}`,
+        `Available speakers: ${[...voiceAssignments.keys()].join(', ') || '(none)'}`,
       );
     }
     const sanitizedText = cleanSpeechText(seg.text);
@@ -284,6 +285,7 @@ async function buildDialogueMp3(
       seed: dialogueSeed,
       outputFormat: options.outputFormat ?? DEFAULT_OUTPUT_FORMAT,
       applyTextNormalization: 'auto',
+      force: options.force,
     },
     apiKey,
     outputDir,
@@ -316,8 +318,11 @@ async function buildDialogueMp3(
     path: targetPath,
     duration: result.duration,
     hash,
+    provider: DEFAULT_TTS_PROVIDER,
     voices: voiceSummaries,
     voiceAssignments: Object.fromEntries(voiceAssignments),
+    generatedCharacters: result.generatedCharacters,
+    cachedCharacters: result.cachedCharacters,
   };
 }
 
@@ -418,6 +423,7 @@ export async function buildStudyTextMp3(
         path: targetPath,
         duration: undefined,
         hash,
+        provider: DEFAULT_TTS_PROVIDER,
         voices: voiceSummaries,
         voiceAssignments: Object.fromEntries(speakerVoiceMap),
       };
@@ -436,6 +442,7 @@ export async function buildStudyTextMp3(
               resolveOutputFormat(opts.outputFormat),
             ),
             hash,
+            provider: DEFAULT_TTS_PROVIDER,
             voices: voiceSummaries,
             voiceAssignments: Object.fromEntries(speakerVoiceMap),
           };
@@ -471,7 +478,10 @@ export async function buildStudyTextMp3(
       path: targetPath,
       hash,
       duration: undefined,
+      provider: DEFAULT_TTS_PROVIDER,
       voices: voiceSummaries,
+      cachedCharacters: normalizedText.length,
+      generatedCharacters: 0,
     };
   }
 
@@ -487,7 +497,10 @@ export async function buildStudyTextMp3(
           path: targetPath,
           hash,
           duration: calculateApproxDuration(cachedStats.size, resolveOutputFormat(opts.outputFormat)),
+          provider: DEFAULT_TTS_PROVIDER,
           voices: voiceSummaries,
+          cachedCharacters: normalizedText.length,
+          generatedCharacters: 0,
         };
       }
     } catch {
@@ -501,6 +514,9 @@ export async function buildStudyTextMp3(
   const eleven = getElevenClient();
   const fallbackVoiceId = assignments[0]?.voiceId;
   const maxChars = resolveTtsMaxChars();
+
+  let generatedCharacters = 0;
+  let cachedCharacters = 0;
 
   interface TtsRun {
     voiceId: string;
@@ -548,7 +564,7 @@ export async function buildStudyTextMp3(
     if (!voiceId) {
       throw new ConfigurationError(
         `No ElevenLabs voice could be resolved for line "${segment.raw}". ` +
-          `Ensure frontmatter speaker profiles or voices.yml provide enough information.`,
+        `Ensure frontmatter speaker profiles or voices.yml provide enough information.`,
       );
     }
 
@@ -585,6 +601,7 @@ export async function buildStudyTextMp3(
 
       if (!opts.force && (await fileExistsNonEmpty(chunkFilePath))) {
         segmentFiles.push(chunkFilePath);
+        cachedCharacters += chunkText.length;
         continue;
       }
 
@@ -592,6 +609,7 @@ export async function buildStudyTextMp3(
         modelId: DEFAULT_MODEL_ID,
         outputFormat: resolveOutputFormat(opts.outputFormat),
       });
+      generatedCharacters += chunkText.length;
       segmentFiles.push(chunkFilePath);
     }
   }
@@ -650,7 +668,10 @@ export async function buildStudyTextMp3(
     path: targetPath,
     duration: await approximateDurationFromFile(targetPath, resolveOutputFormat(opts.outputFormat)),
     hash,
+    provider: DEFAULT_TTS_PROVIDER,
     voices: voiceSummaries,
+    generatedCharacters,
+    cachedCharacters,
   };
 }
 
@@ -746,8 +767,8 @@ function resolveStudyTextSegments(lines: string[], frontmatter: Frontmatter): St
   const segments: StudyTextSegment[] = [];
   const labelOrder = Array.isArray(frontmatter.speaker_labels)
     ? frontmatter.speaker_labels
-        .map((label) => (typeof label === 'string' ? cleanSpeakerName(label) : ''))
-        .filter(Boolean)
+      .map((label) => (typeof label === 'string' ? cleanSpeakerName(label) : ''))
+      .filter(Boolean)
     : [];
   const nonNarratorFallback = labelOrder.find((label) => label.toLowerCase() !== 'narrator');
   const singleFallback = labelOrder.length === 1 ? labelOrder[0] : undefined;

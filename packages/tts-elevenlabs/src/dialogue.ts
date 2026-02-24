@@ -8,7 +8,7 @@ import { InfrastructureError } from '@esl-pipeline/contracts';
 
 import { estimateDurationFromFileSize } from './audioDuration.js';
 import { getElevenClient } from './eleven.js';
-import { concatMp3Segments } from './ffmpeg.js';
+import { concatMp3Segments, resolveFfmpegPath, synthSilenceMp3 } from './ffmpeg.js';
 import {
   classifyElevenLabsVoiceProviderError,
   formatElevenLabsProviderError,
@@ -244,6 +244,37 @@ export async function synthesizeDialogue(
   // Generate hash for caching
   const hash = buildDialogueHash(normalizedInputs, normalizedOptions);
   const outputFormat = normalizedOptions.outputFormat ?? DEFAULT_OUTPUT_FORMAT;
+  const finalPath = resolve(outputDir, `${hash}.mp3`);
+  const totalCharacters = normalizedInputs.reduce((sum, input) => sum + input.text.length, 0);
+
+  if (!normalizedOptions.force && (await fileExistsNonEmpty(finalPath))) {
+    let duration: number | undefined;
+    try {
+      const cachedStats = await stat(finalPath);
+      if (cachedStats.size > 0) {
+        duration = estimateDurationFromFileSize(cachedStats.size, outputFormat);
+      }
+    } catch {
+      // Duration calculation is optional for cache hits.
+    }
+    return {
+      audioPath: finalPath,
+      duration,
+      hash,
+      generatedCharacters: 0,
+      cachedCharacters: totalCharacters,
+    };
+  }
+
+  let tailSeconds = 0.4;
+  const tailEnv = process.env.ELEVENLABS_SILENCE_TAIL_SECONDS;
+  if (tailEnv && tailEnv.trim().length > 0) {
+    const parsed = Number(tailEnv);
+    if (Number.isFinite(parsed) && parsed >= 0 && parsed <= 5) {
+      tailSeconds = parsed;
+    }
+  }
+  const needsSilence = tailSeconds > 0.01;
 
   // Chunk inputs if necessary
   const chunks = chunkDialogueInputs(normalizedInputs);
@@ -254,49 +285,55 @@ export async function synthesizeDialogue(
 
   // Synthesize each chunk
   const chunkFiles: string[] = [];
-  const tempFiles: string[] = [];
+  const transientFiles: string[] = [];
+  let generatedCharacters = 0;
+  let cachedCharacters = 0;
 
   try {
     for (const chunk of chunks) {
-      const chunkHash = chunks.length > 1 ? `${hash}-chunk${chunk.chunkIndex}` : hash;
+      const chunkHash =
+        chunks.length > 1 || needsSilence ? `${hash}-chunk${chunk.chunkIndex}` : hash;
       const chunkFileName = `${chunkHash}.mp3`;
       const chunkFilePath = resolve(outputDir, chunkFileName);
 
-      // Synthesize chunk
-      const audioBuffer = await synthesizeDialogueChunk(chunk.inputs, normalizedOptions, apiKey);
+      if (!normalizedOptions.force && (await fileExistsNonEmpty(chunkFilePath))) {
+        cachedCharacters += chunk.inputs.reduce((sum, item) => sum + item.text.length, 0);
+        chunkFiles.push(chunkFilePath);
+        continue;
+      }
 
-      // Write to file
-      await new Promise<void>((resolve, reject) => {
+      const audioBuffer = await synthesizeDialogueChunk(chunk.inputs, normalizedOptions, apiKey);
+      await new Promise<void>((resolveWrite, rejectWrite) => {
         const writeStream = createWriteStream(chunkFilePath);
-        writeStream.on('error', reject);
-        writeStream.on('finish', resolve);
+        writeStream.on('error', rejectWrite);
+        writeStream.on('finish', resolveWrite);
         writeStream.write(audioBuffer);
         writeStream.end();
       });
+      generatedCharacters += chunk.inputs.reduce((sum, item) => sum + item.text.length, 0);
 
       chunkFiles.push(chunkFilePath);
-      if (chunks.length > 1) {
-        tempFiles.push(chunkFilePath);
-      }
     }
 
     // Determine final output path
-    let finalPath: string;
     let duration: number | undefined;
+    const concatInputs = [...chunkFiles];
+    let resolvedFfmpeg: string | undefined;
 
-    if (chunkFiles.length === 1) {
-      // Single chunk - use directly
-      finalPath = chunkFiles[0]!;
+    if (needsSilence) {
+      resolvedFfmpeg = await resolveFfmpegPath(normalizedOptions.ffmpegPath);
+      const silencePath = resolve(outputDir, `${hash}-silence.mp3`);
+      await synthSilenceMp3(silencePath, tailSeconds, resolvedFfmpeg);
+      concatInputs.push(silencePath);
+      transientFiles.push(silencePath);
+    }
+
+    if (concatInputs.length === 1 && concatInputs[0]) {
+      if (concatInputs[0] !== finalPath) {
+        await concatMp3Segments(concatInputs, finalPath, true, resolvedFfmpeg ?? normalizedOptions.ffmpegPath);
+      }
     } else {
-      // Multiple chunks - concatenate
-      const finalFileName = `${hash}.mp3`;
-      finalPath = resolve(outputDir, finalFileName);
-
-      await concatMp3Segments(chunkFiles, finalPath, true);
-
-      // Clean up temp chunk files
-      const { unlink } = await import('node:fs/promises');
-      await Promise.allSettled(tempFiles.map((f) => unlink(f)));
+      await concatMp3Segments(concatInputs, finalPath, true, resolvedFfmpeg ?? normalizedOptions.ffmpegPath);
     }
 
     // Calculate approximate duration
@@ -313,11 +350,25 @@ export async function synthesizeDialogue(
       audioPath: finalPath,
       duration,
       hash,
+      generatedCharacters,
+      cachedCharacters,
     };
   } catch (error) {
-    // Clean up any created files on error
+    // Clean up only transient helper files on error.
     const { unlink } = await import('node:fs/promises');
-    await Promise.allSettled([...chunkFiles, ...tempFiles].map((f) => unlink(f)));
+    await Promise.allSettled(transientFiles.map((f) => unlink(f)));
     throw error;
+  } finally {
+    const { unlink } = await import('node:fs/promises');
+    await Promise.allSettled(transientFiles.map((f) => unlink(f)));
+  }
+}
+
+async function fileExistsNonEmpty(filePath: string): Promise<boolean> {
+  try {
+    const file = await stat(filePath);
+    return file.isFile() && file.size > 0;
+  } catch {
+    return false;
   }
 }

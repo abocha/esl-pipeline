@@ -210,6 +210,7 @@ describe('StudentWorkspace', () => {
         createdAt: now,
         updatedAt: now,
       },
+      tts: null,
       lineage: null,
       actions: [
         {

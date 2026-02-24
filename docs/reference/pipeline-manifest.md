@@ -54,6 +54,14 @@ This document captures the canonical schema so remote stores and services can va
         "capabilityMismatches": [],
       },
     ],
+    "tts": {
+      // optional provider-usage telemetry for spend/reuse diagnostics
+      "provider": "elevenlabs",
+      "generatedCharacters": 1320,
+      "cachedCharacters": 480,
+      "costPer1kCharsUsd": 0.3,
+      "estimatedSpendUsd": 0.396,
+    },
   },
   // TTS metadata (additive, optional)
   "ttsStrategy": "dialogue",
@@ -74,6 +82,8 @@ This document captures the canonical schema so remote stores and services can va
 - `timestamp` reflects the last pipeline write and is updated on reruns.
 - `audio.voices` mirrors the response from `@esl-pipeline/tts-elevenlabs`; the structure is defined
   in that package.
+- `audio.tts` is optional usage telemetry: generated vs cached provider characters plus optional
+  cost estimate fields when pricing env vars are configured.
 - `audio.key`/`audio.hash` provide deterministic artifact identity for reruns and upload dedupe.
 - `audio.reused` and `htmlReused` are operational hints showing whether remote upload/publish reused
   an existing content-addressed object.

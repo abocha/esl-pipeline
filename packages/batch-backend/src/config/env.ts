@@ -41,6 +41,7 @@ export interface BatchBackendConfig {
     queueName: string;
     mode: 'timeline' | 'stack';
     maxConcurrency: number;
+    sttProvider: 'deepgram' | 'elevenlabs';
   };
   recordings: {
     maxFileSize: number;
@@ -304,6 +305,11 @@ export function loadConfig(): BatchBackendConfig {
     throw new Error('TRANSCRIBE_MODE must be "timeline" or "stack"');
   }
   const transcribeMaxConcurrency = readInt('TRANSCRIBE_MAX_CONCURRENCY', 2);
+  const sttProviderRaw = readString('STT_PROVIDER', 'deepgram')!.toLowerCase();
+  if (sttProviderRaw !== 'deepgram' && sttProviderRaw !== 'elevenlabs') {
+    throw new Error('STT_PROVIDER must be one of: deepgram, elevenlabs');
+  }
+  const sttProvider = sttProviderRaw as 'deepgram' | 'elevenlabs';
 
   const deepgramApiKey = readString('DEEPGRAM_API_KEY');
   const deepgramAccessToken = readString('DEEPGRAM_ACCESS_TOKEN');
@@ -548,6 +554,7 @@ export function loadConfig(): BatchBackendConfig {
       queueName: transcribeQueueName,
       mode: transcribeMode,
       maxConcurrency: transcribeMaxConcurrency,
+      sttProvider,
     },
     recordings: {
       maxFileSize: recordingsMaxFileSize,

@@ -212,6 +212,73 @@ function resolveHeadingTheme(preset?: ColorPreset): { h2?: string; h3?: string }
   return { h2, h3 };
 }
 
+function readUsdNumberFromEnv(name: string): number | undefined {
+  const raw = process.env[name];
+  if (!raw || raw.trim().length === 0) return undefined;
+  const parsed = Number(raw);
+  if (!Number.isFinite(parsed) || parsed < 0) return undefined;
+  return parsed;
+}
+
+function toProviderEnvToken(provider: string): string {
+  return provider
+    .trim()
+    .toUpperCase()
+    .replaceAll(/[^A-Z0-9]+/g, '_')
+    .replaceAll(/^_+|_+$/g, '');
+}
+
+function resolveTtsCostPer1kCharsUsd(provider: string): number | undefined {
+  const normalized = provider.trim().toLowerCase();
+  const providerToken = toProviderEnvToken(normalized);
+  const providerScoped = providerToken
+    ? readUsdNumberFromEnv(`ESL_TTS_COST_PER_1K_CHARS_USD_${providerToken}`)
+    : undefined;
+
+  const legacyProviderSpecific =
+    normalized === 'elevenlabs'
+      ? readUsdNumberFromEnv('ELEVENLABS_TTS_COST_PER_1K_CHARS_USD')
+      : normalized === 'openai'
+        ? readUsdNumberFromEnv('OPENAI_TTS_COST_PER_1K_CHARS_USD')
+        : normalized === 'google'
+          ? readUsdNumberFromEnv('GOOGLE_TTS_COST_PER_1K_CHARS_USD')
+          : normalized === 'azure'
+            ? readUsdNumberFromEnv('AZURE_TTS_COST_PER_1K_CHARS_USD')
+            : undefined;
+
+  return providerScoped ?? legacyProviderSpecific ?? readUsdNumberFromEnv('ESL_TTS_COST_PER_1K_CHARS_USD');
+}
+
+function buildTtsSpendSummary(
+  ttsResult: Pick<BuildStudyTextResult, 'generatedCharacters' | 'cachedCharacters'> & {
+    provider?: string;
+  },
+): {
+  provider: string;
+  generatedCharacters: number;
+  cachedCharacters: number;
+  costPer1kCharsUsd?: number;
+  estimatedSpendUsd?: number;
+} {
+  const provider =
+    typeof ttsResult.provider === 'string' && ttsResult.provider.trim().length > 0
+      ? ttsResult.provider.trim()
+      : 'elevenlabs';
+  const generatedCharacters = Math.max(0, ttsResult.generatedCharacters ?? 0);
+  const cachedCharacters = Math.max(0, ttsResult.cachedCharacters ?? 0);
+  const costPer1kCharsUsd = resolveTtsCostPer1kCharsUsd(provider);
+  const estimatedSpendUsd =
+    costPer1kCharsUsd !== undefined ? (generatedCharacters / 1000) * costPer1kCharsUsd : undefined;
+
+  return {
+    provider,
+    generatedCharacters,
+    cachedCharacters,
+    ...(costPer1kCharsUsd !== undefined ? { costPer1kCharsUsd } : {}),
+    ...(estimatedSpendUsd !== undefined ? { estimatedSpendUsd } : {}),
+  };
+}
+
 function resolveAnytypeObjectId(payload: unknown): string | undefined {
   if (!payload || typeof payload !== 'object') return undefined;
   const record = payload as Record<string, unknown>;
@@ -775,19 +842,19 @@ export async function newAssignment(
               mdPath: flags.md,
             },
             {
-            voiceMapPath: flags.voices ?? DEFAULT_VOICES_PATH,
-            outPath: flags.out ?? dirname(flags.md),
-            preview: flags.dryRun,
-            force: flags.force || flags.redoTts,
-            defaultAccent: flags.accentPreference,
-            defaultVoiceId: flags.voiceId,
+              voiceMapPath: flags.voices ?? DEFAULT_VOICES_PATH,
+              outPath: flags.out ?? dirname(flags.md),
+              preview: flags.dryRun,
+              force: flags.force || flags.redoTts,
+              defaultAccent: flags.accentPreference,
+              defaultVoiceId: flags.voiceId,
 
-            // Pass TTS strategy options to TTS package
-            ttsStrategy: flags.ttsStrategy,
-            dialogueLanguage: flags.dialogueLanguage,
-            dialogueStability: flags.dialogueStability,
-            dialogueSeed: flags.dialogueSeed,
-            logger,
+              // Pass TTS strategy options to TTS package
+              ttsStrategy: flags.ttsStrategy,
+              dialogueLanguage: flags.dialogueLanguage,
+              dialogueStability: flags.dialogueStability,
+              dialogueSeed: flags.dialogueSeed,
+              logger,
             },
           );
           throwIfCancelled(signal, 'tts');
@@ -805,26 +872,44 @@ export async function newAssignment(
             if (error.message.includes('voice mapping') && flags.ttsStrategy === 'dialogue') {
               throw new Error(
                 `Dialogue mode requires voice mappings for all speakers. ` +
-                  `Check your voices.yml file. ${error.message}`,
+                `Check your voices.yml file. ${error.message}`,
               );
             }
             if (error.message.includes('text-to-dialogue') && flags.ttsStrategy === 'dialogue') {
               throw new Error(
                 `Dialogue mode failed: ${error.message}\n` +
-                  'Try switching to TTS strategy with --tts-strategy tts',
+                'Try switching to TTS strategy with --tts-strategy tts',
               );
             }
           }
           throw error;
         }
-        audio = { path: ttsResult.path, hash: ttsResult.hash, voices: ttsResult.voices };
+        const ttsSummary = buildTtsSpendSummary(ttsResult);
+        audio = {
+          path: ttsResult.path,
+          hash: ttsResult.hash,
+          voices: ttsResult.voices,
+          tts: ttsSummary,
+        };
         emitVoiceSelectionMetrics(metrics, ttsResult.voices);
         const voiceSummary = summarizeVoiceSelections(ttsResult.voices);
+
+        if (ttsResult.generatedCharacters !== undefined && ttsResult.generatedCharacters > 0) {
+          metrics.increment('esl.tts.provider_characters', ttsResult.generatedCharacters, { type: 'generated' });
+        }
+        if (ttsResult.cachedCharacters !== undefined && ttsResult.cachedCharacters > 0) {
+          metrics.increment('esl.tts.provider_characters', ttsResult.cachedCharacters, { type: 'cached' });
+        }
+
         emitStage('tts', 'success', {
           path: ttsResult.path,
           preview: flags.dryRun,
           voices: ttsResult.voices,
           voiceSummary,
+          generatedCharacters: ttsResult.generatedCharacters,
+          cachedCharacters: ttsResult.cachedCharacters,
+          ttsProvider: ttsSummary.provider,
+          estimatedSpendUsd: ttsSummary.estimatedSpendUsd,
         });
 
         if (!flags.dryRun && audio?.path) {
@@ -833,7 +918,7 @@ export async function newAssignment(
           await access(audioPath, FS.F_OK).catch(() => {
             throw new InfrastructureError(
               `No audio file produced at ${audioPath}. ` +
-                `Check that :::study-text has lines and voices.yml has 'default' or 'auto: true'.`,
+              `Check that :::study-text has lines and voices.yml has 'default' or 'auto: true'.`,
             );
           });
         }
@@ -1318,6 +1403,7 @@ export async function rerunAssignment(
     let audioSizeBytes = manifest.audio?.sizeBytes;
     let audioReused = manifest.audio?.reused;
     let audioVoices = manifest.audio?.voices;
+    let audioTts = manifest.audio?.tts;
     const publishTarget = manifest.publishTarget ?? 'notion';
     let anytypeUrl = manifest.anytypeUrl;
     let htmlUrl = manifest.htmlUrl;
@@ -1362,19 +1448,19 @@ export async function rerunAssignment(
             mdPath: flags.md,
           },
           {
-          voiceMapPath: flags.voices ?? DEFAULT_VOICES_PATH,
-          outPath: flags.out ?? dirname(flags.md),
-          preview: flags.dryRun,
-          force: flags.force,
-          defaultAccent: flags.accentPreference,
-          defaultVoiceId: flags.voiceId,
+            voiceMapPath: flags.voices ?? DEFAULT_VOICES_PATH,
+            outPath: flags.out ?? dirname(flags.md),
+            preview: flags.dryRun,
+            force: flags.force,
+            defaultAccent: flags.accentPreference,
+            defaultVoiceId: flags.voiceId,
 
-          // Pass TTS strategy options to TTS package
-          ttsStrategy: flags.ttsStrategy,
-          dialogueLanguage: flags.dialogueLanguage,
-          dialogueStability: flags.dialogueStability,
-          dialogueSeed: flags.dialogueSeed,
-          logger,
+            // Pass TTS strategy options to TTS package
+            ttsStrategy: flags.ttsStrategy,
+            dialogueLanguage: flags.dialogueLanguage,
+            dialogueStability: flags.dialogueStability,
+            dialogueSeed: flags.dialogueSeed,
+            logger,
           },
         );
         throwIfCancelled(signal, 'tts');
@@ -1392,13 +1478,13 @@ export async function rerunAssignment(
           if (error.message.includes('voice mapping') && flags.ttsStrategy === 'dialogue') {
             throw new Error(
               `Dialogue mode requires voice mappings for all speakers. ` +
-                `Check your voices.yml file. ${error.message}`,
+              `Check your voices.yml file. ${error.message}`,
             );
           }
           if (error.message.includes('text-to-dialogue') && flags.ttsStrategy === 'dialogue') {
             throw new Error(
               `Dialogue mode failed: ${error.message}\n` +
-                'Try switching to TTS strategy with --tts-strategy tts',
+              'Try switching to TTS strategy with --tts-strategy tts',
             );
           }
         }
@@ -1412,10 +1498,23 @@ export async function rerunAssignment(
       audioSizeBytes = undefined;
       audioReused = undefined;
       audioVoices = ttsResult.voices;
+      audioTts = buildTtsSpendSummary(ttsResult);
       emitVoiceSelectionMetrics(metrics, ttsResult.voices);
+
+      if (ttsResult.generatedCharacters !== undefined && ttsResult.generatedCharacters > 0) {
+        metrics.increment('esl.tts.provider_characters', ttsResult.generatedCharacters, { type: 'generated' });
+      }
+      if (ttsResult.cachedCharacters !== undefined && ttsResult.cachedCharacters > 0) {
+        metrics.increment('esl.tts.provider_characters', ttsResult.cachedCharacters, { type: 'cached' });
+      }
+
       emitStage('tts', 'success', {
         preview: flags.dryRun,
         voices: ttsResult.voices,
+        generatedCharacters: ttsResult.generatedCharacters,
+        cachedCharacters: ttsResult.cachedCharacters,
+        ttsProvider: audioTts.provider,
+        estimatedSpendUsd: audioTts.estimatedSpendUsd,
       });
       executed.push('tts');
     } else {
@@ -1628,6 +1727,7 @@ export async function rerunAssignment(
         sizeBytes: audioSizeBytes,
         reused: audioReused,
         voices: audioVoices,
+        tts: audioTts,
       },
 
       // Preserve prior TTS metadata unless explicitly overridden

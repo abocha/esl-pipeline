@@ -1,6 +1,5 @@
 import copy from 'copy-to-clipboard';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { createStaticPageHtml } from '@esl-pipeline/html-publisher/rendering';
 
 import type {
   DraftResponse,
@@ -16,6 +15,7 @@ import type {
   RecordingListItem,
   RecordingStatus,
   RecordingTranscriptResponse,
+  SttProvider,
   StudentOption,
 } from '../../utils/api';
 import {
@@ -43,6 +43,7 @@ import {
   retryRecordingTranscription,
   rerunAudioJob,
   rerunPublishJob,
+  renderHtmlPreview,
   upsertProfileContent,
   updateDraft,
   updateRecordingTranscript,
@@ -217,6 +218,7 @@ export const MinimalAssignment: React.FC = () => {
   const [uploadProgress, setUploadProgress] = useState(0);
   const [uploadError, setUploadError] = useState<string | null>(null);
   const [selectedFileName, setSelectedFileName] = useState<string | null>(null);
+  const [selectedSttProvider, setSelectedSttProvider] = useState<SttProvider>('deepgram');
   const uploadAbortRef = useRef<AbortController | null>(null);
   const generationRequestVersionRef = useRef(0);
 
@@ -562,9 +564,9 @@ export const MinimalAssignment: React.FC = () => {
     const modelIds = generationModelsForProvider.map((option) => option.id);
     const configuredDefaultModel =
       generationOptions?.defaultModelByProvider?.[
-        selectedGenerationProvider as keyof NonNullable<
-          typeof generationOptions
-        >['defaultModelByProvider']
+      selectedGenerationProvider as keyof NonNullable<
+        typeof generationOptions
+      >['defaultModelByProvider']
       ];
     const defaultSelectedModel = generationModelsForProvider.find(
       (option) => option.defaultSelected,
@@ -612,6 +614,7 @@ export const MinimalAssignment: React.FC = () => {
       try {
         const response = await uploadRecording(file, {
           studentId: selectedStudentId || undefined,
+          sttProvider: selectedSttProvider,
           signal: controller.signal,
           onProgress: (progress) => setUploadProgress(progress),
         });
@@ -636,7 +639,7 @@ export const MinimalAssignment: React.FC = () => {
         uploadAbortRef.current = null;
       }
     },
-    [resetFlow, selectedStudentId, uploading],
+    [resetFlow, selectedStudentId, selectedSttProvider, uploading],
   );
 
   const hydrateFromJob = useCallback(
@@ -945,7 +948,9 @@ export const MinimalAssignment: React.FC = () => {
     setRetryingTranscript(true);
     setTranscriptError(null);
     try {
-      const updated = await retryRecordingTranscription(recording.recordingId);
+      const updated = await retryRecordingTranscription(recording.recordingId, {
+        sttProvider: selectedSttProvider,
+      });
       setRecording(updated);
       setRecordingStatus(updated.status);
       setRecordingError(updated.error ?? null);
@@ -1110,7 +1115,7 @@ export const MinimalAssignment: React.FC = () => {
       const limitDetails =
         error instanceof GenerationDraftApiError && error.limitType
           ? ` Limit: ${error.used ?? '?'} / ${error.limit ?? '?'}` +
-            (error.window ? ` (${error.window} window).` : '.')
+          (error.window ? ` (${error.window} window).` : '.')
           : '';
       const baseMessage =
         code === 'provider_rate_limit'
@@ -1121,9 +1126,9 @@ export const MinimalAssignment: React.FC = () => {
               ? 'Provider request failed due to compatibility/contract error. Try another model/provider.'
               : code === 'budget_exceeded'
                 ? `Generation blocked by safety budget policy.${limitDetails} Switch model/provider or wait for reset.`
-              : error instanceof Error
-                ? error.message
-                : 'Unable to generate draft.';
+                : error instanceof Error
+                  ? error.message
+                  : 'Unable to generate draft.';
       return requestId ? `${baseMessage} Request ID: ${requestId}` : baseMessage;
     }
     return error instanceof Error ? error.message : 'Unable to generate draft.';
@@ -1314,7 +1319,14 @@ export const MinimalAssignment: React.FC = () => {
         setPreviewError('Fix validation errors before preview.');
         return;
       }
-      const html = await createStaticPageHtml(normalizedDraft, 'Assignment Preview');
+      const validPreset =
+        selectedPreset && presetOptionIds.includes(selectedPreset) ? selectedPreset : null;
+      const htmlResponse = await renderHtmlPreview({
+        text: normalizedDraft,
+        title: 'Assignment Preview',
+        preset: validPreset,
+      });
+      const html = htmlResponse.html;
       setPreviewHtml(html);
       setLastPreviewedDraftHash(hashDraftText(normalizedDraft));
     } catch (error) {
@@ -1422,7 +1434,10 @@ export const MinimalAssignment: React.FC = () => {
     setActionSuccess(null);
     try {
       const result = await rerunAudioJob(jobStatus.jobId, payload);
-      setActionSuccess(result.message ?? 'Audio rerun queued.');
+      const modeHint = rerunForceTts
+        ? 'Forced regeneration enabled (no cache reuse).'
+        : 'Cache reuse is allowed for unchanged chunks.';
+      setActionSuccess(`${result.message ?? 'Audio rerun queued.'} ${modeHint}`);
       const nextJobId = result.jobId || jobStatus.jobId;
       const refreshed = await getJobStatus(nextJobId);
       setJobStatusState(refreshed);
@@ -1502,10 +1517,18 @@ export const MinimalAssignment: React.FC = () => {
   );
   const describeResumeJobStudent = useCallback(
     (job: JobStatus): string => {
-      if (!job.studentId) {
-        return 'No student';
+      const isAudioRerun = Boolean(job.sourceJobId && job.withTts);
+      const baseName = job.studentId
+        ? studentNameById.get(job.studentId) ?? `Student ${job.studentId.slice(0, 8)}`
+        : 'No student';
+      if (isAudioRerun) {
+        const rerunMode = job.forceTts === false ? 'cache allowed' : 'forced';
+        if (!job.studentId) {
+          return `Audio rerun (${rerunMode})`;
+        }
+        return `${baseName} (Audio rerun, ${rerunMode})`;
       }
-      return studentNameById.get(job.studentId) ?? `Student ${job.studentId.slice(0, 8)}`;
+      return baseName;
     },
     [studentNameById],
   );
@@ -1555,22 +1578,22 @@ export const MinimalAssignment: React.FC = () => {
     : null;
   const generationQuotaHasNumericValues = Boolean(
     activeGenerationQuota &&
-      [
-        activeGenerationQuota.requestsPerMinute,
-        activeGenerationQuota.tokensPerMinute,
-        activeGenerationQuota.requestsPerDay,
-        activeGenerationQuota.dailyTokenBudget,
-        activeGenerationQuota.dailyRequestBudget,
-        activeGenerationQuota.dailyRequestUsed,
-        activeGenerationQuota.dailyRequestRemaining,
-        activeGenerationQuota.dailyTokenUsed,
-        activeGenerationQuota.dailyTokenRemaining,
-        activeGenerationQuota.rpmBudget,
-        activeGenerationQuota.rpmUsed,
-        activeGenerationQuota.rpmRemaining,
-        activeGenerationQuota.usedRequestsToday,
-        activeGenerationQuota.usedTokensToday,
-      ].some((value) => value !== undefined && value !== null),
+    [
+      activeGenerationQuota.requestsPerMinute,
+      activeGenerationQuota.tokensPerMinute,
+      activeGenerationQuota.requestsPerDay,
+      activeGenerationQuota.dailyTokenBudget,
+      activeGenerationQuota.dailyRequestBudget,
+      activeGenerationQuota.dailyRequestUsed,
+      activeGenerationQuota.dailyRequestRemaining,
+      activeGenerationQuota.dailyTokenUsed,
+      activeGenerationQuota.dailyTokenRemaining,
+      activeGenerationQuota.rpmBudget,
+      activeGenerationQuota.rpmUsed,
+      activeGenerationQuota.rpmRemaining,
+      activeGenerationQuota.usedRequestsToday,
+      activeGenerationQuota.usedTokensToday,
+    ].some((value) => value !== undefined && value !== null),
   );
   const rerunImplemented =
     actionCapabilities.find((capability) => capability.type === 'rerun_audio')?.implemented ??
@@ -1588,18 +1611,18 @@ export const MinimalAssignment: React.FC = () => {
     Boolean(jobStatus?.jobId) && cancelImplemented && cancelAllowedState && actionBusy === null;
   const generationDefaultModelForSelection =
     generationOptions?.defaultModelByProvider?.[
-      selectedGenerationProvider as keyof NonNullable<
-        typeof generationOptions
-      >['defaultModelByProvider']
+    selectedGenerationProvider as keyof NonNullable<
+      typeof generationOptions
+    >['defaultModelByProvider']
     ] ?? generationModelsForProvider[0]?.id;
   const activeQuotaAppliesToCurrentSelection = generationRuntimeQuotaSnapshot
     ? generationRuntimeSelection?.provider === selectedGenerationProvider &&
-      generationRuntimeSelection?.model === selectedGenerationModel
+    generationRuntimeSelection?.model === selectedGenerationModel
     : Boolean(
-        generationOptions &&
-          selectedGenerationProvider === generationOptions.defaultProvider &&
-          selectedGenerationModel === generationDefaultModelForSelection,
-      );
+      generationOptions &&
+      selectedGenerationProvider === generationOptions.defaultProvider &&
+      selectedGenerationModel === generationDefaultModelForSelection,
+    );
   const activeGenerationQuotaLastUpdatedMs = activeGenerationQuota
     ? Date.parse(activeGenerationQuota.lastUpdatedAt)
     : Number.NaN;
@@ -1798,6 +1821,16 @@ export const MinimalAssignment: React.FC = () => {
             ))}
           </select>
         </label>
+        <label className="minimal-select">
+          STT provider
+          <select
+            value={selectedSttProvider}
+            onChange={(event) => setSelectedSttProvider(event.target.value as SttProvider)}
+          >
+            <option value="deepgram">Deepgram</option>
+            <option value="elevenlabs">ElevenLabs</option>
+          </select>
+        </label>
         {selectedStudent ? (
           <p className="minimal-muted">
             Selected: {selectedStudent.name}
@@ -1827,6 +1860,7 @@ export const MinimalAssignment: React.FC = () => {
           <div className="minimal-meta">
             <span>Recording ID: {recording.recordingId}</span>
             <span>Status: {recordingStatus ?? 'unknown'}</span>
+            <span>STT provider: {selectedSttProvider}</span>
             {selectedStudent ? <span>Student: {selectedStudent.name}</span> : null}
           </div>
         ) : null}
@@ -2151,67 +2185,67 @@ export const MinimalAssignment: React.FC = () => {
                   {generationQuotaHasNumericValues ? (
                     <div className="minimal-quota-grid">
                       {activeGenerationQuota.requestsPerMinute === undefined ||
-                      activeGenerationQuota.requestsPerMinute === null ? null : (
+                        activeGenerationQuota.requestsPerMinute === null ? null : (
                         <div className="minimal-quota-item">
                           RPM: {activeGenerationQuota.requestsPerMinute}
                         </div>
                       )}
                       {activeGenerationQuota.tokensPerMinute === undefined ||
-                      activeGenerationQuota.tokensPerMinute === null ? null : (
+                        activeGenerationQuota.tokensPerMinute === null ? null : (
                         <div className="minimal-quota-item">
                           TPM: {activeGenerationQuota.tokensPerMinute}
                         </div>
                       )}
                       {activeGenerationQuota.requestsPerDay === undefined ||
-                      activeGenerationQuota.requestsPerDay === null ? null : (
+                        activeGenerationQuota.requestsPerDay === null ? null : (
                         <div className="minimal-quota-item">
                           RPD: {activeGenerationQuota.requestsPerDay}
                         </div>
                       )}
                       {activeGenerationQuota.dailyTokenBudget === undefined ||
-                      activeGenerationQuota.dailyTokenBudget === null ? null : (
+                        activeGenerationQuota.dailyTokenBudget === null ? null : (
                         <div className="minimal-quota-item">
                           Daily token budget: {activeGenerationQuota.dailyTokenBudget}
                         </div>
                       )}
                       {activeGenerationQuota.dailyTokenRemaining === undefined ||
-                      activeGenerationQuota.dailyTokenRemaining === null ? null : (
+                        activeGenerationQuota.dailyTokenRemaining === null ? null : (
                         <div className="minimal-quota-item">
                           Daily token remaining: {activeGenerationQuota.dailyTokenRemaining}
                         </div>
                       )}
                       {activeGenerationQuota.dailyRequestBudget === undefined ||
-                      activeGenerationQuota.dailyRequestBudget === null ? null : (
+                        activeGenerationQuota.dailyRequestBudget === null ? null : (
                         <div className="minimal-quota-item">
                           Daily request budget: {activeGenerationQuota.dailyRequestBudget}
                         </div>
                       )}
                       {activeGenerationQuota.dailyRequestRemaining === undefined ||
-                      activeGenerationQuota.dailyRequestRemaining === null ? null : (
+                        activeGenerationQuota.dailyRequestRemaining === null ? null : (
                         <div className="minimal-quota-item">
                           Daily request remaining: {activeGenerationQuota.dailyRequestRemaining}
                         </div>
                       )}
                       {activeGenerationQuota.rpmBudget === undefined ||
-                      activeGenerationQuota.rpmBudget === null ? null : (
+                        activeGenerationQuota.rpmBudget === null ? null : (
                         <div className="minimal-quota-item">
                           RPM budget: {activeGenerationQuota.rpmBudget}
                         </div>
                       )}
                       {activeGenerationQuota.rpmRemaining === undefined ||
-                      activeGenerationQuota.rpmRemaining === null ? null : (
+                        activeGenerationQuota.rpmRemaining === null ? null : (
                         <div className="minimal-quota-item">
                           RPM remaining: {activeGenerationQuota.rpmRemaining}
                         </div>
                       )}
                       {activeGenerationQuota.usedRequestsToday === undefined ||
-                      activeGenerationQuota.usedRequestsToday === null ? null : (
+                        activeGenerationQuota.usedRequestsToday === null ? null : (
                         <div className="minimal-quota-item">
                           Used requests today: {activeGenerationQuota.usedRequestsToday}
                         </div>
                       )}
                       {activeGenerationQuota.usedTokensToday === undefined ||
-                      activeGenerationQuota.usedTokensToday === null ? null : (
+                        activeGenerationQuota.usedTokensToday === null ? null : (
                         <div className="minimal-quota-item">
                           Used tokens today: {activeGenerationQuota.usedTokensToday}
                         </div>
@@ -2436,15 +2470,15 @@ export const MinimalAssignment: React.FC = () => {
                     >
                       {jobOptions?.ttsStrategies?.length
                         ? jobOptions.ttsStrategies.map((strategy) => (
-                            <option key={strategy} value={strategy}>
-                              {strategy}
-                            </option>
-                          ))
+                          <option key={strategy} value={strategy}>
+                            {strategy}
+                          </option>
+                        ))
                         : ['auto', 'dialogue', 'tts'].map((strategy) => (
-                            <option key={strategy} value={strategy}>
-                              {strategy}
-                            </option>
-                          ))}
+                          <option key={strategy} value={strategy}>
+                            {strategy}
+                          </option>
+                        ))}
                     </select>
                   </label>
                   <label className="minimal-field">
@@ -2534,8 +2568,23 @@ export const MinimalAssignment: React.FC = () => {
                     <span>Prompt package: {jobProvenance.promptPackage?.id ?? 'none'}</span>
                     <span>Draft: {jobProvenance.draft?.id ?? 'none'}</span>
                   </div>
+                  {jobProvenance.tts ? (
+                    <div className="minimal-meta">
+                      <span>TTS provider: {jobProvenance.tts.provider ?? 'unknown'}</span>
+                      <span>
+                        Generated chars: {jobProvenance.tts.generatedCharacters ?? 0} (cached:{' '}
+                        {jobProvenance.tts.cachedCharacters ?? 0})
+                      </span>
+                      <span>
+                        Estimated spend:{' '}
+                        {typeof jobProvenance.tts.estimatedSpendUsd === 'number'
+                          ? `$${jobProvenance.tts.estimatedSpendUsd.toFixed(4)}`
+                          : 'n/a'}
+                      </span>
+                    </div>
+                  ) : null}
                   {jobProvenance.lineage?.profile?.snapshot?.revisionId ||
-                  jobProvenance.lineage?.template?.snapshot?.revisionId ? (
+                    jobProvenance.lineage?.template?.snapshot?.revisionId ? (
                     <div className="minimal-meta">
                       <span>
                         Profile revision:{' '}

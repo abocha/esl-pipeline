@@ -39,6 +39,8 @@ export interface DialogueSynthesisOptions {
   applyTextNormalization?: 'auto' | 'on' | 'off';
   timeoutInSeconds?: number;
   maxRetries?: number;
+  force?: boolean;
+  ffmpegPath?: string;
 }
 
 /**
@@ -48,6 +50,8 @@ export interface DialogueSynthesisResult {
   audioPath: string;
   duration?: number;
   hash: string;
+  generatedCharacters?: number;
+  cachedCharacters?: number;
 }
 
 /**
@@ -86,6 +90,7 @@ export interface BuildStudyTextResult {
   path: string;
   duration?: number;
   hash: string;
+  provider?: string;
   voices: {
     speaker: string;
     voiceId: string;
@@ -100,4 +105,6 @@ export interface BuildStudyTextResult {
     capabilityMismatches?: VoiceSelectionDiagnostics['capabilityMismatches'];
   }[];
   voiceAssignments?: Record<string, string>;
+  generatedCharacters?: number;
+  cachedCharacters?: number;
 }

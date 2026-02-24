@@ -32,8 +32,7 @@ export async function startTranscribeWorker(): Promise<void> {
   await validateTranscriptionConfig();
   await enableRedisRecordingEventBridge();
   const worker = createTranscribeWorker(async (bullJob) => {
-    const { recordingId } = bullJob.data;
-    await processTranscribeJob({ recordingId });
+    await processTranscribeJob(bullJob.data);
   });
 
   worker.on('error', (err: Error) => {

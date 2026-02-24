@@ -6,7 +6,10 @@ import { Readable, Transform } from 'node:stream';
 import { z } from 'zod';
 
 import type { JobState } from '@esl-pipeline/contracts';
+import { createStaticPageHtml } from '@esl-pipeline/html-publisher';
 import { validateMarkdown } from '@esl-pipeline/md-validator';
+import { loadPreset } from '@esl-pipeline/notion-adapter';
+import { resolveConfigPaths } from '@esl-pipeline/orchestrator';
 
 import { createDraft } from '../application/create-draft.js';
 import { GenerateDraftProviderError, generateDraft } from '../application/generate-draft.js';
@@ -69,11 +72,12 @@ import { updateRecordingTranscript } from '../application/update-recording-trans
 import type { BatchBackendConfig } from '../config/env.js';
 import { RecordingSourceSchema, RecordingStatusSchema } from '../domain/recording-model.js';
 import {
-  getRecordingBySha256,
   getRecordingById,
+  listRecordingsBySha256,
   insertRecording,
   updateRecordingStatus,
 } from '../domain/recording-repository.js';
+import type { TranscriptRecord } from '../domain/transcript-model.js';
 import { getTranscriptByRecordingId } from '../domain/transcript-repository.js';
 import {
   UserSettingsInput,
@@ -175,6 +179,108 @@ function clearRefreshCookie(reply: FastifyReply, config: BatchBackendConfig): vo
     path: config.auth.refreshCookiePath,
     domain: config.auth.refreshCookieDomain,
   });
+}
+
+const NOTION_COLOR_TO_HEX: Record<string, string> = {
+  default: '#1b1b1d',
+  gray: '#6b6f76',
+  brown: '#8d6e63',
+  orange: '#f2994a',
+  yellow: '#f2c94c',
+  green: '#27ae60',
+  blue: '#2d9cdb',
+  purple: '#9b51e0',
+  pink: '#d16ba5',
+  red: '#eb5757',
+  default_background: '#1b1b1d',
+  gray_background: '#6b6f76',
+  brown_background: '#8d6e63',
+  orange_background: '#f2994a',
+  yellow_background: '#f2c94c',
+  green_background: '#27ae60',
+  blue_background: '#2d9cdb',
+  purple_background: '#9b51e0',
+  pink_background: '#d16ba5',
+  red_background: '#eb5757',
+};
+
+const STUDY_TEXT_MARKER = ':::study-text Transcript';
+const STUDY_TEXT_REGEX = /^:::study-text\b/i;
+const TRANSCRIPT_REGEX = /transcript/i;
+const AUDIO_LINK_REGEX = /^\[Audio recording\]\([^)]+\)\s*$/i;
+const AUDIO_DIRECTIVE_REGEX = /^:::\s*audio(\s+.*)?$/i;
+
+function normalizeSttProvider(
+  value: unknown,
+): 'deepgram' | 'elevenlabs' | null {
+  if (typeof value !== 'string') return null;
+  const normalized = value.trim().toLowerCase();
+  if (normalized === 'deepgram' || normalized === 'elevenlabs') return normalized;
+  return null;
+}
+
+export function inferTranscriptSttProvider(
+  transcript: Pick<TranscriptRecord, 'model' | 'summaryJson'>,
+): 'deepgram' | 'elevenlabs' | null {
+  const summaryJson = transcript.summaryJson;
+  const summaryProvider = normalizeSttProvider(
+    summaryJson && typeof summaryJson === 'object'
+      ? (summaryJson as { provider?: unknown }).provider
+      : null,
+  );
+  if (summaryProvider) return summaryProvider;
+
+  const normalizedModel = transcript.model.trim().toLowerCase();
+  if (!normalizedModel) return null;
+  if (normalizedModel.includes('scribe') || normalizedModel.includes('eleven')) {
+    return 'elevenlabs';
+  }
+  return 'deepgram';
+}
+
+function shouldReuseCachedTranscriptForProvider(
+  effectiveProvider: 'deepgram' | 'elevenlabs',
+  transcript: Pick<TranscriptRecord, 'model' | 'summaryJson'>,
+): boolean {
+  const inferredProvider = inferTranscriptSttProvider(transcript);
+  return inferredProvider !== null && inferredProvider === effectiveProvider;
+}
+
+function resolveHeadingThemeFromPreset(
+  preset: { h2?: string; h3?: string } | null | undefined,
+): { h2?: string; h3?: string } | undefined {
+  if (!preset) return undefined;
+  const h2 = preset.h2 ? (NOTION_COLOR_TO_HEX[preset.h2] ?? undefined) : undefined;
+  const h3 = preset.h3 ? (NOTION_COLOR_TO_HEX[preset.h3] ?? undefined) : undefined;
+  if (!h2 && !h3) return undefined;
+  return { h2, h3 };
+}
+
+function insertAudioDirectiveBeforeStudyText(markdown: string, audioUrl?: string | null): string {
+  const lines = markdown.split('\n');
+  const cleaned: string[] = [];
+  let markerIndex = -1;
+  let fallbackIndex = -1;
+
+  for (const line of lines) {
+    const trimmed = line.trim();
+    if (trimmed === STUDY_TEXT_MARKER) markerIndex = cleaned.length;
+    if (STUDY_TEXT_REGEX.test(trimmed)) {
+      if (fallbackIndex === -1) fallbackIndex = cleaned.length;
+      if (TRANSCRIPT_REGEX.test(trimmed)) markerIndex = cleaned.length;
+    }
+    if (AUDIO_LINK_REGEX.test(trimmed) || AUDIO_DIRECTIVE_REGEX.test(trimmed)) {
+      continue;
+    }
+    cleaned.push(line);
+  }
+
+  const trimmedAudioUrl = audioUrl?.trim() ?? '';
+  const audioLine = trimmedAudioUrl ? `:::audio ${trimmedAudioUrl}` : ':::audio';
+  const insertAt = markerIndex >= 0 ? markerIndex : fallbackIndex >= 0 ? fallbackIndex : cleaned.length;
+  const next = [...cleaned];
+  next.splice(insertAt, 0, audioLine, '');
+  return next.join('\n');
 }
 
 export function registerExtendedRoutes(app: FastifyInstance, options: ExtendedRouteOptions): void {
@@ -415,6 +521,75 @@ export function registerExtendedRoutes(app: FastifyInstance, options: ExtendedRo
         });
 
         return reply.send(result);
+      } catch (error: unknown) {
+        if (error instanceof z.ZodError) {
+          return reply.code(400).send({
+            error: 'validation_failed',
+            message: 'Invalid request body',
+            details: error.issues,
+          });
+        }
+
+        logger.error(error instanceof Error ? error : String(error), {
+          event: 'http_request',
+          route: routePath,
+          statusCode: 500,
+          error: 'internal_error',
+        });
+
+        return errorResponse(reply, 'internal_error');
+      }
+    },
+  );
+
+  app.post(
+    '/preview/html',
+    {
+      preHandler: [authenticate],
+    },
+    async (request, reply) => {
+      const routePath = resolveRoutePath(request, 'POST /preview/html');
+      const schema = z.object({
+        text: z.string().min(1),
+        title: z.string().trim().min(1).optional(),
+        preset: z.string().trim().min(1).nullable().optional(),
+        audioUrl: z.string().trim().nullable().optional(),
+      });
+
+      try {
+        const body = schema.parse(request.body ?? {});
+        let headingTheme: { h2?: string; h3?: string } | undefined;
+        const presetName = body.preset?.trim();
+        if (presetName) {
+          const configPaths = resolveConfigPaths({
+            configDir: config.orchestrator.configDir,
+            cwd: process.env.PIPELINE_CWD || process.cwd(),
+          });
+          try {
+            const preset = await loadPreset(presetName, configPaths.presetsPath);
+            headingTheme = resolveHeadingThemeFromPreset(preset);
+          } catch (error) {
+            logger.warn('Failed to resolve preset for HTML preview. Falling back to default theme.', {
+              event: 'preview_preset_fallback',
+              route: routePath,
+              preset: presetName,
+              error: error instanceof Error ? error.message : String(error),
+            });
+          }
+        }
+
+        const markdown = insertAudioDirectiveBeforeStudyText(body.text, body.audioUrl);
+        const html = await createStaticPageHtml(markdown, body.title ?? 'Assignment Preview', {
+          headingTheme,
+        });
+
+        logger.info('HTTP request handled', {
+          event: 'http_request',
+          route: routePath,
+          statusCode: 200,
+        });
+
+        return reply.send({ html });
       } catch (error: unknown) {
         if (error instanceof z.ZodError) {
           return reply.code(400).send({
@@ -1644,6 +1819,7 @@ export function registerExtendedRoutes(app: FastifyInstance, options: ExtendedRo
       const querySchema = z.object({
         studentId: z.string().uuid().optional(),
         student: z.string().min(1).optional(),
+        sttProvider: z.enum(['deepgram', 'elevenlabs']).optional(),
       });
       let authenticatedUser;
 
@@ -1680,6 +1856,8 @@ export function registerExtendedRoutes(app: FastifyInstance, options: ExtendedRo
         const query = querySchema.parse(request.query ?? {});
         const studentName = query.student ? normalizeStudentName(query.student) : null;
         const studentId = query.studentId ?? (studentName ? deriveStudentId(studentName) : null);
+        const requestedSttProvider = query.sttProvider;
+        const effectiveSttProvider = requestedSttProvider ?? config.transcription.sttProvider;
 
         const filename = file.filename || '';
         const fileBuffer = await readFileBuffer(file.file);
@@ -1723,10 +1901,30 @@ export function registerExtendedRoutes(app: FastifyInstance, options: ExtendedRo
         const sourcePath = storageFilename || sanitizedFilename || filename;
         const fileSha256 = createContentSha256(fileBuffer);
 
-        const cachedRecording = await getRecordingBySha256(fileSha256);
-        if (cachedRecording) {
-          const cachedTranscript = await getTranscriptByRecordingId(cachedRecording.id);
-          if (cachedTranscript) {
+        const cachedRecordings = await listRecordingsBySha256(fileSha256);
+        if (cachedRecordings.length > 0) {
+          let transcriptCandidates = 0;
+          let providerMatches = 0;
+          let providerUnknown = 0;
+
+          for (const cachedRecording of cachedRecordings) {
+            const cachedTranscript = await getTranscriptByRecordingId(cachedRecording.id);
+            if (!cachedTranscript) {
+              continue;
+            }
+
+            transcriptCandidates += 1;
+            const cachedProvider = inferTranscriptSttProvider(cachedTranscript);
+            if (cachedProvider === null) {
+              providerUnknown += 1;
+              continue;
+            }
+
+            if (!shouldReuseCachedTranscriptForProvider(effectiveSttProvider, cachedTranscript)) {
+              continue;
+            }
+
+            providerMatches += 1;
             logger.info('Recording upload cache hit', {
               event: 'recording_upload_cache_hit',
               route: routePath,
@@ -1735,6 +1933,12 @@ export function registerExtendedRoutes(app: FastifyInstance, options: ExtendedRo
               transcriptId: cachedTranscript.id,
               filename,
               sha256: fileSha256,
+              requestedProvider: requestedSttProvider ?? null,
+              effectiveProvider: effectiveSttProvider,
+              cachedProvider,
+              candidateRecordings: cachedRecordings.length,
+              candidateTranscripts: transcriptCandidates,
+              providerMatches,
             });
 
             return reply.code(200).send({
@@ -1747,6 +1951,20 @@ export function registerExtendedRoutes(app: FastifyInstance, options: ExtendedRo
               cacheRecordingId: cachedRecording.id,
             });
           }
+
+          logger.info('Recording upload cache bypassed', {
+            event: 'recording_upload_cache_bypassed',
+            route: routePath,
+            userId: authenticatedUser.id,
+            filename,
+            sha256: fileSha256,
+            requestedProvider: requestedSttProvider ?? null,
+            effectiveProvider: effectiveSttProvider,
+            candidateRecordings: cachedRecordings.length,
+            candidateTranscripts: transcriptCandidates,
+            providerMatches,
+            providerUnknown,
+          });
         }
 
         const record = await ingestRecordingUpload({
@@ -1754,6 +1972,7 @@ export function registerExtendedRoutes(app: FastifyInstance, options: ExtendedRo
           stream: Readable.from(fileBuffer),
           sourcePath,
           studentId,
+          sttProvider: effectiveSttProvider,
           storage: transcriptionStorage,
           repository: {
             insertRecording,
@@ -1994,11 +2213,23 @@ export function registerExtendedRoutes(app: FastifyInstance, options: ExtendedRo
     async (request, reply) => {
       const { recordingId } = request.params as { recordingId: string };
       const routePath = resolveRoutePath(request, 'POST /recordings/:recordingId/transcribe');
+      const bodySchema = z
+        .object({
+          sttProvider: z.enum(['deepgram', 'elevenlabs']).optional(),
+        })
+        .optional();
 
       try {
-        const result = await retryRecordingTranscription(recordingId, {
-          enqueue: transcribeQueue.enqueue,
-        });
+        const body = bodySchema.parse(request.body ?? undefined);
+        const result = await retryRecordingTranscription(
+          recordingId,
+          {
+            sttProvider: body?.sttProvider,
+          },
+          {
+            enqueue: transcribeQueue.enqueue,
+          },
+        );
 
         if (!result) {
           logger.info('Recording not found for retry', {
@@ -2017,6 +2248,13 @@ export function registerExtendedRoutes(app: FastifyInstance, options: ExtendedRo
 
         return reply.send(result);
       } catch (error: unknown) {
+        if (error instanceof z.ZodError) {
+          return reply.code(400).send({
+            error: 'validation_failed',
+            message: 'Invalid request body',
+            details: error.issues,
+          });
+        }
         if (error instanceof RecordingRetryError) {
           return errorResponse(reply, 'validation_failed', {
             message: error.message,
