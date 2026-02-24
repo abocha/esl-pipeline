@@ -1,6 +1,6 @@
 # syntax=docker/dockerfile:1.6
 
-FROM node:24-bullseye-slim AS base
+FROM node:24-alpine AS build
 
 ENV PNPM_HOME=/root/.local/share/pnpm
 ENV PATH="${PNPM_HOME}:${PATH}" \
@@ -8,11 +8,11 @@ ENV PATH="${PNPM_HOME}:${PATH}" \
     CI=true
 
 RUN corepack enable && corepack prepare pnpm@10 --activate \
- && apt-get update \
- && apt-get install -y --no-install-recommends \
-    ca-certificates=20210119 \
-    ffmpeg=7:4.3.9-0+deb11u2 \
- && rm -rf /var/lib/apt/lists/*
+ && apk add --no-cache \
+    ca-certificates \
+    python3 \
+    make \
+    g++
 
 WORKDIR /app
 
@@ -25,12 +25,19 @@ RUN pnpm install --frozen-lockfile
 RUN pnpm -r --filter "./packages/*" build \
  && pnpm --filter @esl-pipeline/orchestrator build
 
-FROM base AS runtime
+FROM node:24-alpine AS runtime
+
+ENV NODE_ENV=production \
+    CI=true
+
+RUN apk add --no-cache \
+    ca-certificates \
+    ffmpeg
 
 # Keep the full monorepo workspace so batch-backend and others can run.
 WORKDIR /app
 
-COPY --from=base /app /app
+COPY --from=build /app /app
 
 # Default command is the orchestrator CLI, but allow docker-compose/docker run
 # to override it (e.g. to run batch-backend HTTP server or worker).
