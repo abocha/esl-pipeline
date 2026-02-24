@@ -214,9 +214,6 @@ importers:
       '@esl-pipeline/contracts':
         specifier: workspace:*
         version: link:../contracts
-      '@esl-pipeline/html-publisher':
-        specifier: workspace:*
-        version: link:../html-publisher
       axios:
         specifier: ^1.13.2
         version: 1.13.4
