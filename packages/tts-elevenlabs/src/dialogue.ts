@@ -303,10 +303,10 @@ export async function synthesizeDialogue(
       }
 
       const audioBuffer = await synthesizeDialogueChunk(chunk.inputs, normalizedOptions, apiKey);
-      await new Promise<void>((resolveWrite, rejectWrite) => {
+      await new Promise<void>((resolve, reject) => {
         const writeStream = createWriteStream(chunkFilePath);
-        writeStream.on('error', rejectWrite);
-        writeStream.on('finish', resolveWrite);
+        writeStream.on('error', reject);
+        writeStream.on('finish', resolve);
         writeStream.write(audioBuffer);
         writeStream.end();
       });

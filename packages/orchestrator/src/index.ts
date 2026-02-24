@@ -268,15 +268,28 @@ function buildTtsSpendSummary(
   const cachedCharacters = Math.max(0, ttsResult.cachedCharacters ?? 0);
   const costPer1kCharsUsd = resolveTtsCostPer1kCharsUsd(provider);
   const estimatedSpendUsd =
-    costPer1kCharsUsd !== undefined ? (generatedCharacters / 1000) * costPer1kCharsUsd : undefined;
-
-  return {
+    costPer1kCharsUsd === undefined ? undefined : (generatedCharacters / 1000) * costPer1kCharsUsd;
+  const summary: {
+    provider: string;
+    generatedCharacters: number;
+    cachedCharacters: number;
+    costPer1kCharsUsd?: number;
+    estimatedSpendUsd?: number;
+  } = {
     provider,
     generatedCharacters,
     cachedCharacters,
-    ...(costPer1kCharsUsd !== undefined ? { costPer1kCharsUsd } : {}),
-    ...(estimatedSpendUsd !== undefined ? { estimatedSpendUsd } : {}),
   };
+  if (costPer1kCharsUsd === undefined) {
+    // Keep spend fields absent when pricing is unknown for a provider.
+  } else {
+    summary.costPer1kCharsUsd = costPer1kCharsUsd;
+  }
+  if (estimatedSpendUsd === undefined) {
+    return summary;
+  }
+  summary.estimatedSpendUsd = estimatedSpendUsd;
+  return summary;
 }
 
 function resolveAnytypeObjectId(payload: unknown): string | undefined {
