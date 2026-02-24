@@ -190,7 +190,7 @@ export async function processTranscribeJob(
       rawResponse = result;
       const deepgramSummary = buildSummary(result);
       summaryJson = {
-        ...(deepgramSummary ?? {}),
+        ...deepgramSummary,
         provider: 'deepgram',
         segmentCount: segments.length,
       };
