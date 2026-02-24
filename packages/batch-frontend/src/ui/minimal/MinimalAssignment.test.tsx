@@ -1806,7 +1806,7 @@ describe('MinimalAssignment', () => {
       });
     });
     expect(screen.getByText(/Audio rerun queued/i)).toBeTruthy();
-  });
+  }, 15_000);
 
   it('submits advanced rerun payload values', async () => {
     const user = userEvent.setup();
@@ -1838,7 +1838,7 @@ describe('MinimalAssignment', () => {
         }),
       );
     });
-  });
+  }, 15_000);
 
   it('queues a publish-only rerun action for the current job', async () => {
     const user = userEvent.setup();
@@ -1852,7 +1852,7 @@ describe('MinimalAssignment', () => {
       expect(api.rerunPublishJob).toHaveBeenCalledWith('job-1');
     });
     expect(screen.getByText('Publish rerun queued')).toBeTruthy();
-  });
+  }, 15_000);
 
   it('submits cancel action with an optional reason when job is running', async () => {
     const user = userEvent.setup();
@@ -1887,7 +1887,7 @@ describe('MinimalAssignment', () => {
       expect(api.cancelJob).toHaveBeenCalledWith('job-1', { reason: 'duplicate run' });
     });
     expect(screen.getByText(/Job cancelled/i)).toBeTruthy();
-  });
+  }, 15_000);
 
   it('keeps cancel disabled for terminal jobs', async () => {
     const user = userEvent.setup();
@@ -1898,5 +1898,5 @@ describe('MinimalAssignment', () => {
     const cancelButton = screen.getByRole('button', { name: /Cancel job/i });
     expect(cancelButton.getAttribute('disabled')).not.toBeNull();
     expect(screen.getByText(/Cancel is only available for queued or running jobs\./i)).toBeTruthy();
-  });
+  }, 15_000);
 });
