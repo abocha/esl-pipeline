@@ -1,13 +1,8 @@
-import { fixupPluginRules } from '@eslint/compat';
+import eslintReactPlugin from '@eslint-react/eslint-plugin';
 import js from '@eslint/js';
-import queryPlugin from '@tanstack/eslint-plugin-query';
 import vitestPlugin from '@vitest/eslint-plugin';
 import eslintConfigPrettier from 'eslint-config-prettier';
-import importPlugin from 'eslint-plugin-import-x';
 import nodePlugin from 'eslint-plugin-n';
-import promisePlugin from 'eslint-plugin-promise';
-import reactPlugin from 'eslint-plugin-react';
-import reactHooksPlugin from 'eslint-plugin-react-hooks';
 import reactRefreshPlugin from 'eslint-plugin-react-refresh';
 import unicornPlugin from 'eslint-plugin-unicorn';
 import { defineConfig } from 'eslint/config';
@@ -29,7 +24,7 @@ export default defineConfig(
   // Base JS rules
   {
     files: ['**/*.{js,mjs,cjs,ts,tsx}'],
-    extends: [js.configs.recommended, promisePlugin.configs['flat/recommended']],
+    extends: [js.configs.recommended],
     languageOptions: {
       globals: {
         ...globals.node,
@@ -41,23 +36,20 @@ export default defineConfig(
     },
     plugins: {
       n: nodePlugin,
-      'import-x': importPlugin,
       unicorn: unicornPlugin,
     },
     rules: {
       'no-console': 'off',
       'no-unused-vars': 'off', // Handled by TS
+      'no-useless-assignment': 'off',
+      'preserve-caught-error': 'off',
       'no-useless-escape': 'off',
       'no-misleading-character-class': 'off',
       'no-empty': 'off',
 
       // Node rules
       'n/no-unsupported-features/es-syntax': 'off',
-      'n/no-missing-import': 'off', // Handled by TS/Import
-
-      // Import rules
-      'import-x/no-unresolved': 'off', // Handled by TS
-      'import-x/order': 'off', // Handled by Prettier/other tools
+      'n/no-missing-import': 'off', // Handled by TS
 
       // Unicorn rules - selective enablement
       ...unicornPlugin.configs['recommended'].rules,
@@ -99,14 +91,9 @@ export default defineConfig(
   // React rules (batch-frontend)
   {
     files: ['packages/batch-frontend/**/*.{ts,tsx}'],
-    extends: [
-      reactPlugin.configs.flat.recommended,
-      reactPlugin.configs.flat['jsx-runtime'],
-      queryPlugin.configs['flat/recommended'],
-    ],
+    extends: [eslintReactPlugin.configs['recommended-typescript']],
     plugins: {
       'react-refresh': reactRefreshPlugin,
-      'react-hooks': fixupPluginRules(reactHooksPlugin),
     },
     languageOptions: {
       globals: {
@@ -119,7 +106,12 @@ export default defineConfig(
       },
     },
     rules: {
-      ...reactHooksPlugin.configs.recommended.rules,
+      '@eslint-react/hooks-extra/no-direct-set-state-in-use-effect': 'off',
+      '@eslint-react/naming-convention/ref-name': 'off',
+      '@eslint-react/naming-convention/use-state': 'off',
+      '@eslint-react/no-array-index-key': 'off',
+      '@eslint-react/no-context-provider': 'off',
+      '@eslint-react/no-use-context': 'off',
       'react-refresh/only-export-components': ['warn', { allowConstantExport: true }],
     },
   },
