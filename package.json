@@ -84,6 +84,14 @@
     "vitest": "^4.0.18"
   },
   "packageManager": "pnpm@10.29.3+sha512.498e1fb4cca5aa06c1dcf2611e6fafc50972ffe7189998c409e90de74566444298ffe43e6cd2acdc775ba1aa7cc5e092a8b7054c811ba8c5770f84693d33d2dc",
+  "pnpm": {
+    "overrides": {
+      "ajv@>=8.0.0 <8.18.0": "^8.18.0",
+      "@trivago/prettier-plugin-sort-imports>lodash-es": "^4.17.23",
+      "eslint-plugin-import-x>minimatch": "^10.2.2",
+      "minimatch": "^10.2.2"
+    }
+  },
   "engines": {
     "node": ">=24.11.1"
   }
