@@ -2,6 +2,24 @@
 
 This playbook outlines the steps for an AI agent to migrate a repository from ESLint v9 to v10, specifically tailored for a **pnpm monorepo**.
 
+## ESL Pipeline Status (Applied)
+
+As of 2026-02-24, this repository has completed the ESLint 10 migration.
+
+- Core upgrades:
+  - `eslint` -> `^10.0.2`
+  - `@eslint/js` -> `^10.0.1`
+  - `eslint-plugin-unicorn` -> `^63.0.0`
+- React lint stack migration:
+  - Removed `eslint-plugin-react` and `eslint-plugin-react-hooks`.
+  - Added `@eslint-react/eslint-plugin` and switched frontend React linting to its `recommended-typescript` config.
+- Temporary compatibility decisions:
+  - Removed `@tanstack/eslint-plugin-query` until upstream ESLint 10 support is available.
+  - Removed `eslint-plugin-import-x` and `eslint-plugin-promise` from the active stack.
+  - Disabled `no-useless-assignment` and `preserve-caught-error` in local config to avoid large unrelated churn during migration.
+
+Follow-up item: re-evaluate and re-enable TanStack Query lint rules once an ESLint 10-compatible release exists.
+
 ## Prerequisites
 
 -   **Node.js**: Ensure the environment is running Node.js `^20.19.0`, `^22.13.0`, or `>=24.0.0`.
