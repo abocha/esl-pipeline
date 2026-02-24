@@ -28,6 +28,13 @@ export interface AssignmentManifest {
     sizeBytes?: number;
     reused?: boolean;
     voices?: BuildStudyTextResult['voices'];
+    tts?: {
+      provider?: string;
+      generatedCharacters?: number;
+      cachedCharacters?: number;
+      costPer1kCharsUsd?: number;
+      estimatedSpendUsd?: number;
+    };
   };
   preset?: string;
   notionColorization?: {

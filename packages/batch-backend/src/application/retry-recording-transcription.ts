@@ -19,12 +19,16 @@ export interface RetryRecordingDependencies {
     getById: typeof getRecordingById;
     updateStatus: typeof updateRecordingStatus;
   };
-  enqueue: (payload: { recordingId: string }) => Promise<void>;
+  enqueue: (payload: {
+    recordingId: string;
+    sttProvider?: 'deepgram' | 'elevenlabs';
+  }) => Promise<void>;
   publishEvent: typeof publishRecordingEvent;
 }
 
 export async function retryRecordingTranscription(
   recordingId: string,
+  params?: { sttProvider?: 'deepgram' | 'elevenlabs' },
   overrides?: Partial<RetryRecordingDependencies>,
 ): Promise<RecordingDto | null> {
   if (!recordingId) return null;
@@ -59,7 +63,10 @@ export async function retryRecordingTranscription(
   });
 
   try {
-    await enqueue({ recordingId: recording.id });
+    await enqueue({
+      recordingId: recording.id,
+      sttProvider: params?.sttProvider,
+    });
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     const failed = await recordings.updateStatus({

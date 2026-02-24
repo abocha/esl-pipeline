@@ -114,7 +114,10 @@ export async function rerunAudio(jobId: string, action: RerunAudioAction): Promi
 
   return {
     success: true,
-    message: 'Audio rerun queued',
+    message:
+      payload.forceTts ?? true
+        ? 'Audio rerun queued (forced regeneration)'
+        : 'Audio rerun queued (cache reuse allowed)',
     jobId: rerunJob.id,
     actionType: JobActionType.RERUN_AUDIO,
     timestamp: new Date(),

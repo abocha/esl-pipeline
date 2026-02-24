@@ -198,6 +198,7 @@ describe('synthesizeDialogue', () => {
 
   beforeEach(async () => {
     vi.clearAllMocks();
+    process.env.ELEVENLABS_SILENCE_TAIL_SECONDS = '0';
     tempDir = await mkdtemp(join(tmpdir(), 'dialogue-test-'));
     vi.spyOn(ffmpeg, 'concatMp3Segments').mockImplementation(async (_segments, outFile) => {
       await writeFile(outFile, 'concatenated-audio');
@@ -206,6 +207,7 @@ describe('synthesizeDialogue', () => {
 
   afterEach(async () => {
     vi.restoreAllMocks();
+    delete process.env.ELEVENLABS_SILENCE_TAIL_SECONDS;
     await rm(tempDir, { recursive: true, force: true });
   });
 
@@ -221,7 +223,7 @@ describe('synthesizeDialogue', () => {
     expect(ffmpeg.concatMp3Segments).not.toHaveBeenCalled();
   });
 
-  it('chunks, concatenates, and removes temporary files', async () => {
+  it('chunks, concatenates, and keeps chunk cache files for reuse', async () => {
     const inputs: DialogueInput[] = Array.from({ length: 150 }, (_, idx) => ({
       text: `Line ${idx}`,
       voiceId: idx % 2 === 0 ? 'voice1' : 'voice2',
@@ -233,7 +235,7 @@ describe('synthesizeDialogue', () => {
 
     expect(ffmpeg.concatMp3Segments).toHaveBeenCalledTimes(1);
     expect(result.audioPath.endsWith('.mp3')).toBe(true);
-    expect(files.some((name) => name.includes('-chunk'))).toBe(false);
+    expect(files.some((name) => name.includes('-chunk'))).toBe(true);
   });
 
   it('cleans up files when synthesis fails', async () => {

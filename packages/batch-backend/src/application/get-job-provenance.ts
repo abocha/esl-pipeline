@@ -1,3 +1,5 @@
+import { readFile } from 'node:fs/promises';
+
 import { getJobById } from '../domain/job-repository.js';
 import { listJobActionHistoryForJob } from '../domain/job-action-history-repository.js';
 import { withPgClient } from '../infrastructure/db.js';
@@ -80,6 +82,15 @@ export interface JobProvenanceResponse {
     createdAt: string | null;
     updatedAt: string | null;
   } | null;
+  tts: {
+    provider: string | null;
+    generatedCharacters: number | null;
+    cachedCharacters: number | null;
+    totalCharacters: number | null;
+    cacheHitRatio: number | null;
+    costPer1kCharsUsd: number | null;
+    estimatedSpendUsd: number | null;
+  } | null;
   lineage: PromptPackageLineageResponse | null;
   actions: {
     id: string;
@@ -143,6 +154,7 @@ export async function getJobProvenance(jobId: string): Promise<JobProvenanceResp
 
   const promptPackageId = row?.prompt_package_id ?? null;
   const lineage = promptPackageId ? await getPromptPackageLineage(promptPackageId) : null;
+  const tts = await readTtsMetadataFromManifest(job.manifestPath);
 
   return {
     job: {
@@ -204,6 +216,7 @@ export async function getJobProvenance(jobId: string): Promise<JobProvenanceResp
           updatedAt: row.draft_updated_at ? row.draft_updated_at.toISOString() : null,
         }
       : null,
+    tts,
     lineage,
     actions: actions.map((event) => ({
       id: event.id,
@@ -216,4 +229,59 @@ export async function getJobProvenance(jobId: string): Promise<JobProvenanceResp
       createdJobId: event.createdJobId ?? null,
     })),
   };
+}
+
+async function readTtsMetadataFromManifest(manifestPath: string | null | undefined): Promise<{
+  provider: string | null;
+  generatedCharacters: number | null;
+  cachedCharacters: number | null;
+  totalCharacters: number | null;
+  cacheHitRatio: number | null;
+  costPer1kCharsUsd: number | null;
+  estimatedSpendUsd: number | null;
+} | null> {
+  if (!manifestPath || manifestPath.startsWith('s3://')) {
+    return null;
+  }
+
+  try {
+    const raw = await readFile(manifestPath, 'utf8');
+    const parsed = JSON.parse(raw) as {
+      audio?: {
+        tts?: {
+          provider?: unknown;
+          generatedCharacters?: unknown;
+          cachedCharacters?: unknown;
+          costPer1kCharsUsd?: unknown;
+          estimatedSpendUsd?: unknown;
+        };
+      };
+    };
+    const tts = parsed.audio?.tts;
+    if (!tts || typeof tts !== 'object') return null;
+
+    const generatedCharacters =
+      typeof tts.generatedCharacters === 'number' ? tts.generatedCharacters : null;
+    const cachedCharacters = typeof tts.cachedCharacters === 'number' ? tts.cachedCharacters : null;
+    const totalCharacters =
+      generatedCharacters !== null || cachedCharacters !== null
+        ? (generatedCharacters ?? 0) + (cachedCharacters ?? 0)
+        : null;
+    const cacheHitRatio =
+      totalCharacters && totalCharacters > 0 && cachedCharacters !== null
+        ? cachedCharacters / totalCharacters
+        : null;
+
+    return {
+      provider: typeof tts.provider === 'string' ? tts.provider : null,
+      generatedCharacters,
+      cachedCharacters,
+      totalCharacters,
+      cacheHitRatio,
+      costPer1kCharsUsd: typeof tts.costPer1kCharsUsd === 'number' ? tts.costPer1kCharsUsd : null,
+      estimatedSpendUsd: typeof tts.estimatedSpendUsd === 'number' ? tts.estimatedSpendUsd : null,
+    };
+  } catch {
+    return null;
+  }
 }

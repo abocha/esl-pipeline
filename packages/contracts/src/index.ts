@@ -176,6 +176,7 @@ export interface JobStatusDto {
   updatedAt: string;
   startedAt: string | null;
   finishedAt: string | null;
+  sourceJobId?: string | null;
   error: string | null;
   providerError?: VoiceProviderErrorDetails | null;
   manifestPath: string | null;

@@ -1,7 +1,10 @@
 import { Readable } from 'node:stream';
 import { describe, expect, it, vi } from 'vitest';
 
-import { processTranscribeJob } from '../src/application/process-transcribe-job.js';
+import {
+  processTranscribeJob,
+  resolveElevenLabsSttApiKey,
+} from '../src/application/process-transcribe-job.js';
 import type { BatchBackendConfig } from '../src/config/env.js';
 import type { RecordingRecord } from '../src/domain/recording-model.js';
 import type { TranscriptRecord } from '../src/domain/transcript-model.js';
@@ -79,7 +82,32 @@ describe('application/process-transcribe-job', () => {
     expect(result?.mode).toBe('timeline');
     expect(result?.fallbackUsed).toBe(false);
     expect(result?.storageUri).toContain('local://transcripts/');
+    expect((result?.summaryJson as { provider?: unknown } | null)?.provider).toBe('deepgram');
     expect(updates).toEqual(['transcribing', 'transcribed']);
+  });
+
+  it('accepts ELEVENLABS_API_TOKEN fallback for ElevenLabs STT credentials', () => {
+    const config = createConfig();
+    config.orchestrator.elevenLabsApiKey = undefined;
+    const previousApiKey = process.env.ELEVENLABS_API_KEY;
+    const previousApiToken = process.env.ELEVENLABS_API_TOKEN;
+    delete process.env.ELEVENLABS_API_KEY;
+    process.env.ELEVENLABS_API_TOKEN = 'token-only-credential';
+
+    try {
+      expect(resolveElevenLabsSttApiKey(config)).toBe('token-only-credential');
+    } finally {
+      if (previousApiKey === undefined) {
+        delete process.env.ELEVENLABS_API_KEY;
+      } else {
+        process.env.ELEVENLABS_API_KEY = previousApiKey;
+      }
+      if (previousApiToken === undefined) {
+        delete process.env.ELEVENLABS_API_TOKEN;
+      } else {
+        process.env.ELEVENLABS_API_TOKEN = previousApiToken;
+      }
+    }
   });
 
   it('uses fallback diarized transcription when multichannel fails', async () => {
@@ -217,12 +245,12 @@ describe('application/process-transcribe-job', () => {
 
   it('formats transcript with speaker labels and merges adjacent utterances', async () => {
     const recording = createRecording('recording-3');
-    const stored: { text?: string } = {};
+    const storedTexts: string[] = [];
 
     const storage: TranscriptionStorage = {
       ...createStorageStub(),
       async putTranscript({ text }) {
-        stored.text = text;
+        storedTexts.push(text);
         return { uri: 'local://transcripts/transcript.txt', bytes: text.length };
       },
     };
@@ -281,9 +309,11 @@ describe('application/process-transcribe-job', () => {
       },
     );
 
-    expect(stored.text).toBe(
+    expect(storedTexts).toContain(
       '[Teacher 00:00.000-00:01.200] Hello there.\n[Student 00:02.000-00:02.400] Hi.',
     );
+    expect(storedTexts).toContain('Hello there.');
+    expect(storedTexts).toContain('Hi.');
   });
 });
 
@@ -328,7 +358,12 @@ function createConfig(): BatchBackendConfig {
       port: 0,
     },
     queue: { name: 'esl-jobs' },
-    transcription: { queueName: 'transcribe-queue', mode: 'timeline', maxConcurrency: 1 },
+    transcription: {
+      queueName: 'transcribe-queue',
+      mode: 'timeline',
+      maxConcurrency: 1,
+      sttProvider: 'deepgram',
+    },
     recordings: { maxFileSize: 0 },
     deepgram: {
       apiKey: 'dg-key',

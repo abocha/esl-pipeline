@@ -44,6 +44,7 @@ interface SerializedJobRecord {
   updatedAt: string;
   startedAt: string | null;
   finishedAt: string | null;
+  sourceJobId: string | null;
   error: string | null;
   manifestPath: string | null;
 }
@@ -304,6 +305,7 @@ function serializeJobRecord(job: JobRecord): SerializedJobRecord {
     updatedAt: job.updatedAt.toISOString(),
     startedAt: job.startedAt ? job.startedAt.toISOString() : null,
     finishedAt: job.finishedAt ? job.finishedAt.toISOString() : null,
+    sourceJobId: job.sourceJobId ?? null,
     error: job.error ?? null,
     manifestPath: job.manifestPath ?? null,
   };
@@ -333,6 +335,7 @@ function deserializeJobRecord(serialized: SerializedJobRecord): JobRecord {
     updatedAt: new Date(serialized.updatedAt),
     startedAt: serialized.startedAt ? new Date(serialized.startedAt) : null,
     finishedAt: serialized.finishedAt ? new Date(serialized.finishedAt) : null,
+    sourceJobId: serialized.sourceJobId ?? null,
     error: serialized.error ?? null,
     manifestPath: serialized.manifestPath ?? null,
   };

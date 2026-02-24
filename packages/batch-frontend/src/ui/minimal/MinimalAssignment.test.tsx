@@ -1,7 +1,6 @@
 import { act, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { createStaticPageHtml } from '@esl-pipeline/html-publisher/rendering';
 
 import * as api from '../../utils/api';
 import { MinimalAssignment } from './MinimalAssignment';
@@ -56,6 +55,7 @@ vi.mock('../../utils/api', () => ({
   retryRecordingTranscription: vi.fn(),
   rerunAudioJob: vi.fn(),
   rerunPublishJob: vi.fn(),
+  renderHtmlPreview: vi.fn().mockResolvedValue({ html: '<html><body><h1>Preview</h1></body></html>' }),
   upsertProfileContent: vi.fn(),
   updateDraft: vi.fn(),
   updateRecordingTranscript: vi.fn(),
@@ -87,10 +87,6 @@ vi.mock('../shared/DropZone', () => ({
 
 vi.mock('../shared/UploadProgress', () => ({
   UploadProgress: ({ progress }: { progress: number }) => <div>Upload progress: {progress}%</div>,
-}));
-
-vi.mock('@esl-pipeline/html-publisher/rendering', () => ({
-  createStaticPageHtml: vi.fn().mockResolvedValue('<html><body><h1>Preview</h1></body></html>'),
 }));
 
 const now = '2026-02-05T00:00:00.000Z';
@@ -430,6 +426,7 @@ describe('MinimalAssignment', () => {
       transcript: null,
       promptPackage: null,
       draft: null,
+      tts: null,
       lineage: null,
       actions: [],
     });
@@ -461,9 +458,9 @@ describe('MinimalAssignment', () => {
         text: 'Saved transcript text',
       }),
     );
-    vi.mocked(createStaticPageHtml).mockResolvedValue(
-      '<html><body><h1>Preview</h1></body></html>',
-    );
+    vi.mocked(api.renderHtmlPreview).mockResolvedValue({
+      html: '<html><body><h1>Preview</h1></body></html>',
+    });
   });
 
   it('loads prompt options on mount', async () => {
@@ -1056,7 +1053,7 @@ describe('MinimalAssignment', () => {
     });
     expect(api.uploadRecording).toHaveBeenCalledWith(
       expect.any(File),
-      expect.objectContaining({ studentId: 'student-default' }),
+      expect.objectContaining({ studentId: 'student-default', sttProvider: 'deepgram' }),
     );
 
     await waitFor(() => {
@@ -1120,8 +1117,52 @@ describe('MinimalAssignment', () => {
     });
     expect(api.uploadRecording).toHaveBeenCalledWith(
       expect.any(File),
-      expect.objectContaining({ studentId: undefined }),
+      expect.objectContaining({ studentId: undefined, sttProvider: 'deepgram' }),
     );
+  });
+
+  it('labels audio rerun jobs with explicit rerun mode in recent jobs', async () => {
+    vi.mocked(api.listUserJobs).mockResolvedValueOnce({
+      jobs: [
+        {
+          jobId: 'job-rerun-1',
+          md: '/tmp/rerun.md',
+          recordingId: null,
+          transcriptId: null,
+          promptPackageId: null,
+          draftId: null,
+          preset: null,
+          withTts: true,
+          voiceId: null,
+          upload: 's3',
+          voiceAccent: null,
+          forceTts: false,
+          notionDatabase: null,
+          publishTarget: 'notion',
+          ttsStrategy: 'auto',
+          autoPublish: false,
+          notionUrl: null,
+          anytypeUrl: null,
+          state: 'queued',
+          createdAt: now,
+          updatedAt: now,
+          startedAt: null,
+          finishedAt: null,
+          sourceJobId: 'job-source-1',
+          error: null,
+          manifestPath: null,
+        },
+      ],
+      total: 1,
+      limit: 20,
+      offset: 0,
+    });
+
+    render(<MinimalAssignment />);
+
+    await waitFor(() => {
+      expect(screen.getByRole('option', { name: /Audio rerun \(cache allowed\)/i })).toBeTruthy();
+    });
   });
 
   it('generates a prompt after transcript is ready', async () => {
@@ -1764,7 +1805,7 @@ describe('MinimalAssignment', () => {
         ttsStrategy: 'auto',
       });
     });
-    expect(screen.getByText('Audio rerun queued')).toBeTruthy();
+    expect(screen.getByText(/Audio rerun queued/i)).toBeTruthy();
   });
 
   it('submits advanced rerun payload values', async () => {

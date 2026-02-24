@@ -487,6 +487,7 @@ describe('transport/http-server - integration (in-process)', () => {
       transcript: null,
       promptPackage: null,
       draft: null,
+      tts: null,
       lineage: null,
       actions: [],
     });
@@ -726,6 +727,7 @@ describe('transport/http-server - integration (in-process)', () => {
       updatedAt: '2024-01-01T00:01:00.000Z',
       startedAt: null,
       finishedAt: null,
+      sourceJobId: null,
       error: null,
       providerError: null,
       manifestPath: '/manifests/job-approve-1.json',
@@ -901,6 +903,7 @@ describe('transport/http-server - integration (in-process)', () => {
       transcript: null,
       promptPackage: null,
       draft: null,
+      tts: null,
       lineage: null,
       actions: [],
     });
@@ -1393,28 +1396,30 @@ describe('transport/http-server - integration (in-process)', () => {
   });
 
   it('POST /recordings/upload reuses existing transcript when hash already exists', async () => {
-    const getRecordingBySha256 = vi.spyOn(recordingRepositoryModule, 'getRecordingBySha256');
+    const listRecordingsBySha256 = vi.spyOn(recordingRepositoryModule, 'listRecordingsBySha256');
     const getTranscriptByRecordingId = vi.spyOn(
       transcriptRepositoryModule,
       'getTranscriptByRecordingId',
     );
     const insertRecording = vi.spyOn(recordingRepositoryModule, 'insertRecording');
 
-    getRecordingBySha256.mockResolvedValueOnce({
-      id: 'recording-cached',
-      source: 'upload',
-      studentId: deriveStudentId('Anna'),
-      sourcePath: 'lesson.mp3',
-      storageUri: 'memory://recordings/recording-cached.mp3',
-      sha256: 'abc123',
-      bytes: 1024,
-      durationSec: 90,
-      channels: 1,
-      status: 'transcribed',
-      error: null,
-      createdAt: new Date('2024-01-01T00:00:00.000Z'),
-      updatedAt: new Date('2024-01-01T00:05:00.000Z'),
-    });
+    listRecordingsBySha256.mockResolvedValueOnce([
+      {
+        id: 'recording-cached',
+        source: 'upload',
+        studentId: deriveStudentId('Anna'),
+        sourcePath: 'lesson.mp3',
+        storageUri: 'memory://recordings/recording-cached.mp3',
+        sha256: 'abc123',
+        bytes: 1024,
+        durationSec: 90,
+        channels: 1,
+        status: 'transcribed',
+        error: null,
+        createdAt: new Date('2024-01-01T00:00:00.000Z'),
+        updatedAt: new Date('2024-01-01T00:05:00.000Z'),
+      },
+    ]);
     getTranscriptByRecordingId.mockResolvedValueOnce({
       id: 'transcript-cached',
       recordingId: 'recording-cached',
@@ -1457,6 +1462,207 @@ describe('transport/http-server - integration (in-process)', () => {
       cacheHit: true,
       cacheReason: 'transcript_reused',
       cacheRecordingId: 'recording-cached',
+    });
+    expect(insertRecording).not.toHaveBeenCalled();
+  });
+
+  it('POST /recordings/upload matches cached transcript by effective provider when query omits sttProvider', async () => {
+    const listRecordingsBySha256 = vi.spyOn(recordingRepositoryModule, 'listRecordingsBySha256');
+    const getTranscriptByRecordingId = vi.spyOn(
+      transcriptRepositoryModule,
+      'getTranscriptByRecordingId',
+    );
+    const insertRecording = vi.spyOn(recordingRepositoryModule, 'insertRecording');
+
+    listRecordingsBySha256.mockResolvedValueOnce([
+      {
+        id: 'recording-elevenlabs',
+        source: 'upload',
+        studentId: deriveStudentId('Anna'),
+        sourcePath: 'lesson.mp3',
+        storageUri: 'memory://recordings/recording-elevenlabs.mp3',
+        sha256: 'abc123',
+        bytes: 1024,
+        durationSec: 90,
+        channels: 1,
+        status: 'transcribed',
+        error: null,
+        createdAt: new Date('2024-01-02T00:00:00.000Z'),
+        updatedAt: new Date('2024-01-02T00:05:00.000Z'),
+      },
+      {
+        id: 'recording-deepgram',
+        source: 'upload',
+        studentId: deriveStudentId('Anna'),
+        sourcePath: 'lesson.mp3',
+        storageUri: 'memory://recordings/recording-deepgram.mp3',
+        sha256: 'abc123',
+        bytes: 1024,
+        durationSec: 90,
+        channels: 1,
+        status: 'transcribed',
+        error: null,
+        createdAt: new Date('2024-01-01T00:00:00.000Z'),
+        updatedAt: new Date('2024-01-01T00:05:00.000Z'),
+      },
+    ]);
+    getTranscriptByRecordingId
+      .mockResolvedValueOnce({
+        id: 'transcript-elevenlabs',
+        recordingId: 'recording-elevenlabs',
+        storageUri: 'memory://transcripts/transcript-elevenlabs.txt',
+        rawResponseUri: null,
+        mode: 'timeline',
+        model: 'scribe_v1',
+        language: 'en',
+        fallbackUsed: false,
+        summaryJson: { provider: 'elevenlabs' },
+        createdAt: new Date('2024-01-02T00:05:00.000Z'),
+        updatedAt: new Date('2024-01-02T00:05:00.000Z'),
+      })
+      .mockResolvedValueOnce({
+        id: 'transcript-deepgram',
+        recordingId: 'recording-deepgram',
+        storageUri: 'memory://transcripts/transcript-deepgram.txt',
+        rawResponseUri: null,
+        mode: 'timeline',
+        model: 'nova-3',
+        language: 'en',
+        fallbackUsed: false,
+        summaryJson: { provider: 'deepgram' },
+        createdAt: new Date('2024-01-01T00:05:00.000Z'),
+        updatedAt: new Date('2024-01-01T00:05:00.000Z'),
+      });
+    insertRecording.mockClear();
+
+    const boundary = '----esl-test-boundary-2';
+    const payload = Buffer.concat([
+      Buffer.from(
+        `--${boundary}\r\n` +
+          'Content-Disposition: form-data; name="file"; filename="lesson.mp3"\r\n' +
+          'Content-Type: audio/mpeg\r\n\r\n',
+      ),
+      Buffer.from('mock-audio-content'),
+      Buffer.from(`\r\n--${boundary}--\r\n`),
+    ]);
+
+    const response = await app.inject({
+      method: 'POST',
+      url: '/recordings/upload',
+      headers: {
+        'content-type': `multipart/form-data; boundary=${boundary}`,
+      },
+      payload,
+    });
+
+    expect(response.statusCode).toBe(200);
+    // Test env default STT provider is deepgram, so deepgram transcript should be selected.
+    expect(response.json()).toMatchObject({
+      recordingId: 'recording-deepgram',
+      transcriptId: 'transcript-deepgram',
+      cacheHit: true,
+      cacheReason: 'transcript_reused',
+      cacheRecordingId: 'recording-deepgram',
+    });
+    expect(insertRecording).not.toHaveBeenCalled();
+  });
+
+  it('POST /recordings/upload honors explicit sttProvider against mixed cached transcripts', async () => {
+    const listRecordingsBySha256 = vi.spyOn(recordingRepositoryModule, 'listRecordingsBySha256');
+    const getTranscriptByRecordingId = vi.spyOn(
+      transcriptRepositoryModule,
+      'getTranscriptByRecordingId',
+    );
+    const insertRecording = vi.spyOn(recordingRepositoryModule, 'insertRecording');
+
+    listRecordingsBySha256.mockResolvedValueOnce([
+      {
+        id: 'recording-deepgram',
+        source: 'upload',
+        studentId: deriveStudentId('Anna'),
+        sourcePath: 'lesson.mp3',
+        storageUri: 'memory://recordings/recording-deepgram.mp3',
+        sha256: 'abc123',
+        bytes: 1024,
+        durationSec: 90,
+        channels: 1,
+        status: 'transcribed',
+        error: null,
+        createdAt: new Date('2024-01-02T00:00:00.000Z'),
+        updatedAt: new Date('2024-01-02T00:05:00.000Z'),
+      },
+      {
+        id: 'recording-elevenlabs',
+        source: 'upload',
+        studentId: deriveStudentId('Anna'),
+        sourcePath: 'lesson.mp3',
+        storageUri: 'memory://recordings/recording-elevenlabs.mp3',
+        sha256: 'abc123',
+        bytes: 1024,
+        durationSec: 90,
+        channels: 1,
+        status: 'transcribed',
+        error: null,
+        createdAt: new Date('2024-01-01T00:00:00.000Z'),
+        updatedAt: new Date('2024-01-01T00:05:00.000Z'),
+      },
+    ]);
+    getTranscriptByRecordingId
+      .mockResolvedValueOnce({
+        id: 'transcript-deepgram',
+        recordingId: 'recording-deepgram',
+        storageUri: 'memory://transcripts/transcript-deepgram.txt',
+        rawResponseUri: null,
+        mode: 'timeline',
+        model: 'nova-3',
+        language: 'en',
+        fallbackUsed: false,
+        summaryJson: { provider: 'deepgram' },
+        createdAt: new Date('2024-01-02T00:05:00.000Z'),
+        updatedAt: new Date('2024-01-02T00:05:00.000Z'),
+      })
+      .mockResolvedValueOnce({
+        id: 'transcript-elevenlabs',
+        recordingId: 'recording-elevenlabs',
+        storageUri: 'memory://transcripts/transcript-elevenlabs.txt',
+        rawResponseUri: null,
+        mode: 'timeline',
+        model: 'scribe_v1',
+        language: 'en',
+        fallbackUsed: false,
+        summaryJson: { provider: 'elevenlabs' },
+        createdAt: new Date('2024-01-01T00:05:00.000Z'),
+        updatedAt: new Date('2024-01-01T00:05:00.000Z'),
+      });
+    insertRecording.mockClear();
+
+    const boundary = '----esl-test-boundary-3';
+    const payload = Buffer.concat([
+      Buffer.from(
+        `--${boundary}\r\n` +
+          'Content-Disposition: form-data; name="file"; filename="lesson.mp3"\r\n' +
+          'Content-Type: audio/mpeg\r\n\r\n',
+      ),
+      Buffer.from('mock-audio-content'),
+      Buffer.from(`\r\n--${boundary}--\r\n`),
+    ]);
+
+    const response = await app.inject({
+      method: 'POST',
+      url: '/recordings/upload?sttProvider=elevenlabs',
+      headers: {
+        'content-type': `multipart/form-data; boundary=${boundary}`,
+      },
+      payload,
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toMatchObject({
+      recordingId: 'recording-elevenlabs',
+      transcriptId: 'transcript-elevenlabs',
+      cacheHit: true,
+      cacheReason: 'transcript_reused',
+      cacheRecordingId: 'recording-elevenlabs',
     });
     expect(insertRecording).not.toHaveBeenCalled();
   });
@@ -1668,6 +1874,39 @@ describe('transport/http-server - integration (in-process)', () => {
     });
     expect(retryRecording).toHaveBeenCalledWith(
       'recording-1',
+      { sttProvider: undefined },
+      expect.objectContaining({ enqueue: expect.any(Function) }),
+    );
+  });
+
+  it('POST /recordings/:id/transcribe forwards explicit STT provider override', async () => {
+    const retryRecording = vi.spyOn(retryRecordingModule, 'retryRecordingTranscription');
+    retryRecording.mockClear();
+    retryRecording.mockResolvedValue({
+      recordingId: 'recording-1',
+      status: 'queued',
+      transcriptId: null,
+      error: null,
+      source: 'upload',
+      studentId: null,
+      displayName: 'recording-1.opus',
+      durationSec: null,
+      channels: null,
+      bytes: 1234,
+      createdAt: '2024-01-01T00:00:00.000Z',
+      updatedAt: '2024-01-01T00:05:00.000Z',
+    });
+
+    const response = await app.inject({
+      method: 'POST',
+      url: '/recordings/recording-1/transcribe',
+      payload: { sttProvider: 'elevenlabs' },
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(retryRecording).toHaveBeenCalledWith(
+      'recording-1',
+      { sttProvider: 'elevenlabs' },
       expect.objectContaining({ enqueue: expect.any(Function) }),
     );
   });
@@ -2426,6 +2665,34 @@ describe('transport/http-server - integration (in-process)', () => {
       },
     });
     expect(mockValidateMarkdown).toHaveBeenCalledWith({ markdown: 'raw markdown', strict: true });
+  });
+
+  it('POST /preview/html injects audio placeholder when no audio URL is provided', async () => {
+    const response = await app.inject({
+      method: 'POST',
+      url: '/preview/html',
+      payload: {
+        text: [
+          '## Warm up',
+          '',
+          ':::study-text Transcript',
+          'Teacher: Hello!',
+          'Student: Hi!',
+          ':::',
+        ].join('\n'),
+      },
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toEqual(
+      expect.objectContaining({
+        html: expect.any(String),
+      }),
+    );
+
+    const payload = response.json() as { html: string };
+    expect(payload.html).toContain('Audio track generating...');
+    expect(payload.html).toContain('audio-placeholder');
   });
 
   it('GET /user/jobs applies filters and pagination', async () => {

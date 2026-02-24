@@ -1,6 +1,8 @@
 import { randomUUID } from 'node:crypto';
 import type { Readable } from 'node:stream';
 
+import { ElevenLabsClient } from '@elevenlabs/elevenlabs-js';
+
 import type { BatchBackendConfig } from '../config/env.js';
 import { loadConfig } from '../config/env.js';
 import { publishRecordingEvent } from '../domain/recording-events.js';
@@ -50,6 +52,17 @@ interface RetryableStatusError {
   status?: unknown;
 }
 
+function resolveSttProvider(
+  requested: string | undefined,
+  fallback: 'deepgram' | 'elevenlabs',
+): 'deepgram' | 'elevenlabs' {
+  if (!requested) return fallback;
+  if (requested === 'deepgram' || requested === 'elevenlabs') {
+    return requested;
+  }
+  return fallback;
+}
+
 export interface TranscribeDependencies {
   config: BatchBackendConfig;
   storage: TranscriptionStorage;
@@ -72,6 +85,15 @@ export interface TranscribeDependencies {
     insert: typeof insertTranscript;
   };
   publishEvent: typeof publishRecordingEvent;
+}
+
+export function resolveElevenLabsSttApiKey(config: BatchBackendConfig): string {
+  return (
+    config.orchestrator.elevenLabsApiKey ??
+    process.env.ELEVENLABS_API_KEY ??
+    process.env.ELEVENLABS_API_TOKEN ??
+    ''
+  );
 }
 
 export async function processTranscribeJob(
@@ -130,27 +152,105 @@ export async function processTranscribeJob(
   try {
     const readStorage =
       overrides?.storage ?? createTranscriptionStorageForUri(recording.storageUri);
-    const { result, fallbackUsed } = await transcribeWithDeepgram({
-      client: deepgramClient,
-      storage: readStorage,
-      storageUri: recording.storageUri,
-      model: config.deepgram.model,
-      language: config.deepgram.language,
-    });
 
-    const transcriptText = formatTranscript(result, mode);
+    const sttProvider = resolveSttProvider(payload.sttProvider, config.transcription.sttProvider);
+    let transcriptText: string;
+    let rawResponse: unknown = null;
+    let summaryJson: Record<string, unknown> | null = null;
+    let transcriptSegments: TranscriptSegment[] = [];
+    let provider: string;
+    let usedFallback = false;
+
+    if (sttProvider === 'elevenlabs') {
+      const elevenApiKey = resolveElevenLabsSttApiKey(config);
+      const { text, segments, raw } = await transcribeWithElevenLabs({
+        storage: readStorage,
+        storageUri: recording.storageUri,
+        apiKey: elevenApiKey,
+      });
+      transcriptText = formatElevenLabsTranscript(text, segments, mode);
+      transcriptSegments = segments;
+      rawResponse = raw;
+      summaryJson = {
+        provider: 'elevenlabs',
+        segmentCount: segments.length,
+      };
+      provider = 'elevenlabs';
+    } else {
+      const { result, fallbackUsed } = await transcribeWithDeepgram({
+        client: deepgramClient,
+        storage: readStorage,
+        storageUri: recording.storageUri,
+        model: config.deepgram.model,
+        language: config.deepgram.language,
+      });
+      const segments = mergeSegments(getTranscriptSegments(result));
+      transcriptText = formatTranscriptFromSegments(getRawTranscript(result), segments, mode);
+      transcriptSegments = segments;
+      rawResponse = result;
+      const deepgramSummary = buildSummary(result);
+      summaryJson = {
+        ...(deepgramSummary ?? {}),
+        provider: 'deepgram',
+        segmentCount: segments.length,
+      };
+      provider = 'deepgram';
+      usedFallback = fallbackUsed;
+    }
+
     const transcriptStored = await storage.putTranscript({
       transcriptId,
       text: transcriptText,
     });
 
     let rawResponseUri: string | null = null;
-    if (config.deepgram.storeRawResponse) {
+    if (config.deepgram.storeRawResponse && rawResponse !== null) {
       const rawStored = await storage.putRawResponse({
         transcriptId,
-        json: result,
+        json: rawResponse,
       });
       rawResponseUri = rawStored.uri;
+    }
+
+    const speakerTracks = buildSpeakerTracks(transcriptSegments);
+    let speakerTracksUri: string | null = null;
+    if (speakerTracks.tracks.length > 0) {
+      const speakerTrackTranscripts: {
+        speaker: number;
+        label: string;
+        uri: string;
+      }[] = [];
+      for (const track of speakerTracks.tracks) {
+        const storedTrackText = await storage.putTranscript({
+          transcriptId: `${transcriptId}-speaker-${track.speaker}`,
+          text: track.text,
+        });
+        speakerTrackTranscripts.push({
+          speaker: track.speaker,
+          label: track.label,
+          uri: storedTrackText.uri,
+        });
+      }
+
+      const storedTracks = await storage.putRawResponse({
+        transcriptId: `${transcriptId}-speaker-tracks`,
+        json: speakerTracks,
+      });
+      speakerTracksUri = storedTracks.uri;
+      const summary = summaryJson ? { ...summaryJson } : {};
+      summaryJson = {
+        ...summary,
+        speakerTracks: {
+          uri: speakerTracksUri,
+          transcripts: speakerTrackTranscripts,
+          speakers: speakerTracks.tracks.map((track) => ({
+            speaker: track.speaker,
+            label: track.label,
+            turns: track.turns,
+            characters: track.characters,
+          })),
+        },
+      };
     }
 
     const transcriptRecord = await transcripts.insert({
@@ -159,10 +259,10 @@ export async function processTranscribeJob(
       storageUri: transcriptStored.uri,
       rawResponseUri,
       mode,
-      model: config.deepgram.model,
-      language: config.deepgram.language,
-      fallbackUsed,
-      summaryJson: buildSummary(result),
+      model: provider === 'elevenlabs' ? 'scribe_v1' : config.deepgram.model,
+      language: provider === 'elevenlabs' ? 'auto' : config.deepgram.language,
+      fallbackUsed: usedFallback,
+      summaryJson,
     });
 
     const updated = await recordings.updateStatus({
@@ -181,7 +281,8 @@ export async function processTranscribeJob(
 
     log.info('Recording transcribed', {
       transcriptId: transcriptRecord.id,
-      fallbackUsed,
+      fallbackUsed: usedFallback,
+      provider,
       mode,
     });
 
@@ -260,6 +361,120 @@ async function transcribeWithDeepgram(args: {
   return { result: asDeepgramResult(fallback.result), fallbackUsed: true };
 }
 
+interface ElevenLabsWord {
+  text?: string;
+  speaker_id?: string | null;
+  start?: number;
+  end?: number;
+  type?: string;
+}
+
+interface ElevenLabsTranscriptResult {
+  text: string;
+  segments: TranscriptSegment[];
+  raw: unknown;
+}
+
+interface TranscriptSegment {
+  text: string;
+  speaker?: number;
+  start?: number;
+  end?: number;
+}
+
+async function transcribeWithElevenLabs(args: {
+  storage: TranscriptionStorage;
+  storageUri: string;
+  apiKey: string;
+}): Promise<ElevenLabsTranscriptResult> {
+  if (!args.apiKey.trim()) {
+    throw new Error('ELEVENLABS_API_KEY is required when STT_PROVIDER=elevenlabs');
+  }
+
+  const client = new ElevenLabsClient({ apiKey: args.apiKey });
+  const stream = await args.storage.getStream(args.storageUri);
+
+  // Collect the stream into a Buffer
+  const chunks: Buffer[] = [];
+  await new Promise<void>((resolve, reject) => {
+    (stream as NodeJS.ReadableStream).on('data', (chunk: Buffer | string) => {
+      chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
+    });
+    (stream as NodeJS.ReadableStream).on('end', resolve);
+    (stream as NodeJS.ReadableStream).on('error', reject);
+  });
+  stream.destroy();
+
+  const audioBuffer = Buffer.concat(chunks);
+  const blob = new Blob([audioBuffer], { type: 'audio/mpeg' });
+
+  const response = await client.speechToText.convert({
+    file: blob,
+    modelId: 'scribe_v1',
+    diarize: true,
+    timestampsGranularity: 'word',
+  });
+
+  const words: ElevenLabsWord[] = (response as unknown as { words?: ElevenLabsWord[] }).words ?? [];
+  const fullText = (response as unknown as { text?: string }).text ?? '';
+
+  // Build segments by grouping consecutive same-speaker words
+  const segments: TranscriptSegment[] = [];
+  let currentSpeaker: number | undefined;
+  let currentText = '';
+  let currentStart: number | undefined;
+  let currentEnd: number | undefined;
+
+  for (const word of words) {
+    if (word.type === 'spacing') continue;
+    const wordText = word.text?.trim() ?? '';
+    if (!wordText) continue;
+
+    // Convert speaker_id like "speaker_0" => 0
+    let speakerIndex: number | undefined;
+    if (word.speaker_id !== null && word.speaker_id !== undefined) {
+      const match = /(\d+)$/.exec(word.speaker_id);
+      speakerIndex = match ? Number.parseInt(match[1] ?? '0', 10) : 0;
+    }
+
+    if (speakerIndex !== currentSpeaker && currentText) {
+      segments.push({
+        text: currentText.trim(),
+        speaker: currentSpeaker,
+        start: currentStart,
+        end: currentEnd,
+      });
+      currentText = '';
+      currentStart = undefined;
+      currentEnd = undefined;
+    }
+
+    currentSpeaker = speakerIndex;
+    currentText = currentText ? `${currentText} ${wordText}` : wordText;
+    if (currentStart === undefined && word.start !== undefined) currentStart = word.start;
+    if (word.end !== undefined) currentEnd = word.end;
+  }
+
+  if (currentText) {
+    segments.push({
+      text: currentText.trim(),
+      speaker: currentSpeaker,
+      start: currentStart,
+      end: currentEnd,
+    });
+  }
+
+  return { text: fullText, segments, raw: response };
+}
+
+function formatElevenLabsTranscript(
+  rawText: string,
+  segments: TranscriptSegment[],
+  mode: TranscriptMode,
+): string {
+  return formatTranscriptFromSegments(rawText, segments, mode);
+}
+
 async function transcribeAttempt(
   args: {
     client: TranscribeDependencies['deepgramClient'];
@@ -336,10 +551,11 @@ async function wait(ms: number): Promise<void> {
   await new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-function formatTranscript(result: DeepgramResult, mode: TranscriptMode): string {
-  const transcript = getRawTranscript(result);
-  const utterances = mergeSegments(getTranscriptSegments(result));
-
+function formatTranscriptFromSegments(
+  transcript: string,
+  utterances: TranscriptSegment[],
+  mode: TranscriptMode,
+): string {
   if (utterances.length === 0) {
     return transcript;
   }
@@ -435,6 +651,44 @@ function formatSpeakerLabel(index: number): string {
   if (index === 0) return 'Teacher';
   if (index === 1) return 'Student';
   return `Speaker ${index + 1}`;
+}
+
+function buildSpeakerTracks(segments: TranscriptSegment[]): {
+  tracks: {
+    speaker: number;
+    label: string;
+    text: string;
+    turns: number;
+    characters: number;
+  }[];
+} {
+  if (segments.length === 0) return { tracks: [] };
+
+  const bySpeaker = new Map<number, { lines: string[]; turns: number }>();
+  for (const segment of segments) {
+    const normalizedText = segment.text.trim();
+    if (!normalizedText) continue;
+    const speaker = segment.speaker ?? 0;
+    const existing = bySpeaker.get(speaker) ?? { lines: [], turns: 0 };
+    existing.lines.push(normalizedText);
+    existing.turns += 1;
+    bySpeaker.set(speaker, existing);
+  }
+
+  return {
+    tracks: [...bySpeaker.entries()]
+      .sort((left, right) => left[0] - right[0])
+      .map(([speaker, value]) => {
+        const text = value.lines.join('\n');
+        return {
+          speaker,
+          label: formatSpeakerLabel(speaker),
+          text,
+          turns: value.turns,
+          characters: text.length,
+        };
+      }),
+  };
 }
 
 function getChannelCount(result: DeepgramResult): number | null {

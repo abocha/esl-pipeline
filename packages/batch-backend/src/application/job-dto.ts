@@ -39,6 +39,7 @@ export function jobRecordToDto(job: JobRecord): JobStatusDto {
     updatedAt: job.updatedAt.toISOString(),
     startedAt: job.startedAt ? job.startedAt.toISOString() : null,
     finishedAt: job.finishedAt ? job.finishedAt.toISOString() : null,
+    sourceJobId: job.sourceJobId ?? null,
     error: job.error ?? null,
     providerError,
     manifestPath: job.manifestPath ?? null,

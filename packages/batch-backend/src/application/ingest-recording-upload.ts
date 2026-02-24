@@ -19,9 +19,13 @@ export interface UploadRecordingOptions {
   stream: Readable;
   sourcePath?: string | null;
   studentId?: string | null;
+  sttProvider?: 'deepgram' | 'elevenlabs';
   storage: TranscriptionStorage;
   repository: RecordingRepository;
-  enqueue: (payload: { recordingId: string }) => Promise<void>;
+  enqueue: (payload: {
+    recordingId: string;
+    sttProvider?: 'deepgram' | 'elevenlabs';
+  }) => Promise<void>;
 }
 
 export interface RecordingRepository {
@@ -56,7 +60,10 @@ export async function ingestRecordingUpload(
   });
 
   try {
-    await options.enqueue({ recordingId });
+    await options.enqueue({
+      recordingId,
+      sttProvider: options.sttProvider,
+    });
   } catch (error) {
     await options.repository.updateRecordingStatus({
       id: recordingId,
@@ -74,6 +81,7 @@ export async function ingestRecordingUploadWithDefaults(params: {
   stream: Readable;
   sourcePath?: string | null;
   studentId?: string | null;
+  sttProvider?: 'deepgram' | 'elevenlabs';
   storage?: TranscriptionStorage;
 }): Promise<RecordingRecord> {
   const storage = params.storage ?? createTranscriptionStorage();
@@ -88,6 +96,7 @@ export async function ingestRecordingUploadWithDefaults(params: {
     stream: params.stream,
     sourcePath: params.sourcePath,
     studentId: params.studentId,
+    sttProvider: params.sttProvider,
     storage,
     repository,
     enqueue: queue.enqueue,
