@@ -1029,7 +1029,7 @@ This section is normative for current voice-alignment behavior.
    - Strict mode promotes voice metadata mismatches to hard validation errors.
 4. Prompt snapshot policy:
    - Default prompt remains `hw_prompt_v4-2_clean`.
-   - `hw_prompt_v4-3_voice-aligned` is flag-gated (`VOICE_ALIGNMENT_V2_PROMPT=true`) and MUST be
+   - `hw_prompt_v4-4_voice-aligned` is flag-gated (`VOICE_ALIGNMENT_V2_PROMPT=true`) and MUST be
      materialized with provider-backed capability enums from the current voice catalog snapshot.
    - Prompt package lineage MUST persist capability provenance metadata (`generatedAt` + hash).
 5. Provider error normalization:

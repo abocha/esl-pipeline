@@ -5,7 +5,7 @@
 - Audience: founder, maintainers, AI agents.
 - Read Time: 12 minutes.
 - Authority Level: canonical preset architecture spec.
-- Last Updated: 2026-02-17.
+- Last Updated: 2026-02-28.
 
 ## Purpose
 
@@ -21,7 +21,7 @@
 4. MVP ships one trusted preset content track: `general-english`.
 5. Architecture must support adding more tracks later without rewrites.
 6. Direct LLM generation is queued for WS2B-S1 now that preset plumbing and provider policy lock are complete.
-7. `hw_prompt_v4-3_voice-aligned` is flag-gated (`VOICE_ALIGNMENT_V2_PROMPT`) and must be
+7. `hw_prompt_v4-4_voice-aligned` is flag-gated (`VOICE_ALIGNMENT_V2_PROMPT`) and must be
    materialized with a runtime voice-capability snapshot.
 
 ## Execution Status (Current)
@@ -82,22 +82,22 @@
   - known reliable behavior with current frontier model workflows,
   - best available starting point before weaker-model hardening.
 
-## Voice-Alignment Prompt Snapshot Policy (v4.3)
+## Voice-Alignment Prompt Snapshot Policy (v4.4)
 
 - Default prompt snapshot remains `docs/templates/hw_prompt_v4-2_clean.md`.
-- Voice-aligned snapshot is `docs/templates/hw_prompt_v4-3_voice-aligned.md` and is enabled only
+- Voice-aligned snapshot is `docs/templates/hw_prompt_v4-4_voice-aligned.md` and is enabled only
   when `VOICE_ALIGNMENT_V2_PROMPT=true`.
 - Runtime default provenance values in backend currently resolve to:
   - learning preset id: `general-english`,
   - learning preset version: `v1`,
   - prompt alias: `current`,
   - prompt snapshot version: `hw_prompt_v4-2_clean` unless `VOICE_ALIGNMENT_V2_PROMPT=true`.
-- When v4.3 is selected, prompt packaging must inject provider-backed capability enums
+- When v4.4 is selected, prompt packaging must inject provider-backed capability enums
   (`role/gender/age/accent/style`) from the current voice catalog snapshot.
 - Prompt package lineage must persist capability provenance metadata:
   - `voiceCapabilitiesGeneratedAt`
   - `voiceCapabilitiesHash`
-- If the capability snapshot cannot be resolved for v4.3, packaging must fail fast rather than
+- If the capability snapshot cannot be resolved for v4.4, packaging must fail fast rather than
   silently emitting placeholder capability values.
 
 ## Preset V2 Model (Conceptual Contract)
@@ -145,7 +145,8 @@ Use both:
 1. Immutable snapshots
    - examples:
      - `hw_prompt_v4-2_clean.md`
-     - `hw_prompt_v4-3_voice-aligned.md`
+     - `hw_prompt_v4-3_voice-aligned.md` (historical)
+     - `hw_prompt_v4-4_voice-aligned.md` (current voice-aligned snapshot)
    - snapshots are never overwritten once activated.
 2. Stable alias
    - one active pointer concept (e.g., `current`) maps to a snapshot version.
