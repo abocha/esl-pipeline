@@ -7,7 +7,19 @@ If host paths are missing, Docker may auto-create them with root ownership and c
 
 - `uploads/`
 - `uploads/drafts/`
-- `.pnpm-store/`
+- `.pnpm-store/v10/`
+
+## Shared PNPM Store Policy (Host + Docker)
+
+- Repo-local pnpm config (`.npmrc`) sets:
+
+```ini
+store-dir=.pnpm-store/v10
+```
+
+- Docker services set `NPM_CONFIG_STORE_DIR=/app/.pnpm-store/v10`.
+- Because the repo is bind-mounted at `/app`, host and containers share the same physical store.
+- Do not set host global pnpm `store-dir` to container-only paths like `/app/...`.
 
 ## Safe Startup Flow
 

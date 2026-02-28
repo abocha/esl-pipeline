@@ -46,13 +46,9 @@ services:
     working_dir: /app
     environment:
       CI: 'true'
+      NPM_CONFIG_STORE_DIR: /app/.pnpm-store/v10
     volumes:
       - ./:/app
-      - type: bind
-        source: ./.pnpm-store
-        target: /pnpm/store
-        bind:
-          create_host_path: false
     command: >
       sh -lc "
         pnpm install &&
@@ -77,6 +73,7 @@ services:
       NODE_ENV: development
       PIPELINE_CWD: /app
       FILESYSTEM_UPLOAD_DIR: /app/uploads
+      NPM_CONFIG_STORE_DIR: /app/.pnpm-store/v10
     volumes:
       - type: bind
         source: ./uploads
@@ -109,6 +106,7 @@ services:
       NODE_ENV: development
       PIPELINE_CWD: /app
       FILESYSTEM_UPLOAD_DIR: /app/uploads
+      NPM_CONFIG_STORE_DIR: /app/.pnpm-store/v10
     volumes:
       - type: bind
         source: ./uploads
@@ -139,6 +137,7 @@ services:
       NODE_ENV: development
       PIPELINE_CWD: /app
       FILESYSTEM_UPLOAD_DIR: /app/uploads
+      NPM_CONFIG_STORE_DIR: /app/.pnpm-store/v10
     volumes:
       - type: bind
         source: ./uploads
@@ -165,13 +164,9 @@ services:
     environment:
       NODE_ENV: development
       BATCH_BACKEND_URL: http://batch-backend:8080
+      NPM_CONFIG_STORE_DIR: /app/.pnpm-store/v10
     volumes:
       - ./:/app
-      - type: bind
-        source: ./.pnpm-store
-        target: /pnpm/store
-        bind:
-          create_host_path: false
     command: >
       sh -lc "
         pnpm --filter @esl-pipeline/batch-frontend dev --host 0.0.0.0

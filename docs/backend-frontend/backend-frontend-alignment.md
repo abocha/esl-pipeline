@@ -5,7 +5,7 @@
 - Audience: AI agents and maintainers coordinating backend/frontend delivery.
 - Read Time: 8 minutes.
 - Authority Level: Canonical status tracker (human-readable).
-- Last Verified Against: 2026-02-18 repo state.
+- Last Verified Against: 2026-02-28 repo state.
 
 ## Purpose
 
@@ -65,6 +65,8 @@
 | Prompt capability provenance (`voiceCapabilitiesGeneratedAt/hash`)                         | Done    | Partial  | Prompt-package response + lineage payload     | Frontend can surface provenance metadata in inspector views. |
 | Remote config conditional revalidation + stale-if-error cache                              | Done    | Partial  | Config provider + workspace fetch wiring      | Frontend now benefits from reduced churn; keep stale-state UX explicit. |
 | Artifact identity reuse (`audio.key/hash`, `htmlKey/hash`)                                 | Done    | Partial  | Manifest + publisher/uploader behavior         | Continue exposing artifact reuse diagnostics in operator views. |
+| Pronunciation shadow-sentence audio (`Mode: shadow_sentence`)                               | Done    | Done     | Orchestrator dual-audio flow + preview API      | Monitor adoption and rerun replacement telemetry. |
+| HTML pronunciation word drill browser TTS controls (`speechSynthesis`)                      | Done    | Done     | HTML renderer behavior script                    | Validate cross-browser voice fallback quality. |
 | Notion preset hash idempotence skip                                                         | Done    | Done     | Orchestrator + notion adapter colorizer        | Monitor skip-rate and fallback behavior in publish telemetry. |
 | Draft generation provider/model preselection + quota panel                                  | Done    | Done     | WS2B generation contracts + `/config/job-options` extension | WS3.5 guardrails are shipped; continue battle-testing long-session quota rollover behavior and operator telemetry visibility. |
 | WS3 provider runtime seam extraction (shared package)                                       | Done    | Partial  | `@esl-pipeline/provider-runtime` + generation/TTS runtime wiring | WS3-S3 backend follow-through is complete; keep parser-vs-legacy drift monitoring active until dedicated cutover slice. |

@@ -860,6 +860,7 @@ export async function renderHtmlPreview(params: {
   title?: string;
   preset?: string | null;
   audioUrl?: string | null;
+  pronunciationAudioUrl?: string | null;
 }): Promise<{ html: string }> {
   try {
     const response = await apiClient.post(buildApiProxyPath('/preview/html'), {
@@ -867,6 +868,7 @@ export async function renderHtmlPreview(params: {
       title: params.title,
       preset: params.preset,
       audioUrl: params.audioUrl,
+      pronunciationAudioUrl: params.pronunciationAudioUrl,
     });
     return response.data;
   } catch (error: unknown) {

@@ -121,9 +121,9 @@ describe('application/prompt-package', () => {
     expect(result?.profileSnapshot?.resolvedProfileRevisionId).toBe('revision-1');
   });
 
-  it('injects capabilities into v4.3 prompt templates and persists provenance', async () => {
-    const allowedDir = await fs.mkdtemp(path.join(os.tmpdir(), 'esl-prompt-v43-'));
-    const templatePath = path.join(allowedDir, 'hw_prompt_v4-3_voice-aligned.md');
+  it('injects capabilities into voice-aligned prompt templates and persists provenance', async () => {
+    const allowedDir = await fs.mkdtemp(path.join(os.tmpdir(), 'esl-prompt-v44-'));
+    const templatePath = path.join(allowedDir, 'hw_prompt_v4-4_voice-aligned.md');
     const profilePath = path.join(allowedDir, 'profile.md');
     const voicesPath = path.join(allowedDir, 'voices.json');
 
@@ -178,7 +178,7 @@ describe('application/prompt-package', () => {
       const result = await createPromptPackage(
         {
           recordingId: transcript.recordingId,
-          templateId: 'hw_prompt_v4-3_voice-aligned.md',
+          templateId: 'hw_prompt_v4-4_voice-aligned.md',
           profileId: 'profile.md',
         },
         {

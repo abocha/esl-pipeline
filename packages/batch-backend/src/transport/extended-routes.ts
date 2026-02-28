@@ -207,8 +207,49 @@ const NOTION_COLOR_TO_HEX: Record<string, string> = {
 const STUDY_TEXT_MARKER = ':::study-text Transcript';
 const STUDY_TEXT_REGEX = /^:::study-text\b/i;
 const TRANSCRIPT_REGEX = /transcript/i;
-const AUDIO_LINK_REGEX = /^\[Audio recording\]\([^)]+\)\s*$/i;
+const PRONUNCIATION_HEADING_REGEX = /^###\s+.*pronunciation.*micro.*focus/i;
 const AUDIO_DIRECTIVE_REGEX = /^:::\s*audio(\s+.*)?$/i;
+const STUDY_TEXT_AUDIO_LINK_LABEL = 'Audio recording: Study Text';
+const PRONUNCIATION_AUDIO_LINK_LABEL = 'Audio recording: Pronunciation Shadow Sentence';
+const GENERATED_STUDY_TEXT_AUDIO_LINK_REGEX = new RegExp(
+  String.raw`^\[${STUDY_TEXT_AUDIO_LINK_LABEL}\]\([^)]+\)\s*$`,
+  'i',
+);
+const GENERATED_PRONUNCIATION_AUDIO_LINK_REGEX = new RegExp(
+  String.raw`^\[${PRONUNCIATION_AUDIO_LINK_LABEL}\]\([^)]+\)\s*$`,
+  'i',
+);
+const GENERATED_STUDY_PLACEHOLDER_MARKER = '<!-- esl-generated-study-text-audio-placeholder -->';
+const GENERATED_PRONUNCIATION_PLACEHOLDER_MARKER =
+  '<!-- esl-generated-pronunciation-audio-placeholder -->';
+
+function hasPronunciationShadowMode(markdown: string): boolean {
+  const lines = markdown.split('\n');
+  let inPronunciationSection = false;
+
+  for (const line of lines) {
+    const trimmed = line.trim();
+    if (!trimmed) continue;
+    if (PRONUNCIATION_HEADING_REGEX.test(trimmed)) {
+      inPronunciationSection = true;
+      continue;
+    }
+    if (inPronunciationSection && /^#{2,3}\s+/.test(trimmed)) {
+      return false;
+    }
+    if (!inPronunciationSection) {
+      continue;
+    }
+    const modeMatch =
+      /^\s*(?:[-*]\s*)?(?:\*\*)?mode\s*:\s*(?:\*\*)?\s*(.+?)\s*$/i.exec(trimmed);
+    if (!modeMatch?.[1]) {
+      continue;
+    }
+    return modeMatch[1].trim().toLowerCase() === 'shadow_sentence';
+  }
+
+  return false;
+}
 
 function normalizeSttProvider(
   value: unknown,
@@ -256,30 +297,110 @@ function resolveHeadingThemeFromPreset(
   return { h2, h3 };
 }
 
-function insertAudioDirectiveBeforeStudyText(markdown: string, audioUrl?: string | null): string {
+function insertGeneratedPreviewAudio(
+  markdown: string,
+  options: {
+    studyTextAudioUrl?: string | null;
+    pronunciationAudioUrl?: string | null;
+    includePronunciation: boolean;
+  },
+): string {
   const lines = markdown.split('\n');
   const cleaned: string[] = [];
-  let markerIndex = -1;
-  let fallbackIndex = -1;
+  let studyMarkerIndex = -1;
+  let studyFallbackIndex = -1;
+  let pronunciationHeadingIndex = -1;
+
+  let skipGeneratedPlaceholderDirective = false;
 
   for (const line of lines) {
     const trimmed = line.trim();
-    if (trimmed === STUDY_TEXT_MARKER) markerIndex = cleaned.length;
-    if (STUDY_TEXT_REGEX.test(trimmed)) {
-      if (fallbackIndex === -1) fallbackIndex = cleaned.length;
-      if (TRANSCRIPT_REGEX.test(trimmed)) markerIndex = cleaned.length;
+    if (skipGeneratedPlaceholderDirective) {
+      if (!trimmed || AUDIO_DIRECTIVE_REGEX.test(trimmed)) {
+        skipGeneratedPlaceholderDirective = false;
+        continue;
+      }
+      skipGeneratedPlaceholderDirective = false;
     }
-    if (AUDIO_LINK_REGEX.test(trimmed) || AUDIO_DIRECTIVE_REGEX.test(trimmed)) {
+
+    if (
+      trimmed === GENERATED_STUDY_PLACEHOLDER_MARKER ||
+      trimmed === GENERATED_PRONUNCIATION_PLACEHOLDER_MARKER
+    ) {
+      skipGeneratedPlaceholderDirective = true;
+      continue;
+    }
+
+    if (trimmed === STUDY_TEXT_MARKER) studyMarkerIndex = cleaned.length;
+    if (STUDY_TEXT_REGEX.test(trimmed)) {
+      if (studyFallbackIndex === -1) studyFallbackIndex = cleaned.length;
+      if (TRANSCRIPT_REGEX.test(trimmed)) studyMarkerIndex = cleaned.length;
+    }
+    if (PRONUNCIATION_HEADING_REGEX.test(trimmed)) {
+      pronunciationHeadingIndex = cleaned.length;
+    }
+    if (
+      GENERATED_STUDY_TEXT_AUDIO_LINK_REGEX.test(trimmed) ||
+      GENERATED_PRONUNCIATION_AUDIO_LINK_REGEX.test(trimmed)
+    ) {
       continue;
     }
     cleaned.push(line);
   }
 
-  const trimmedAudioUrl = audioUrl?.trim() ?? '';
-  const audioLine = trimmedAudioUrl ? `:::audio ${trimmedAudioUrl}` : ':::audio';
-  const insertAt = markerIndex >= 0 ? markerIndex : fallbackIndex >= 0 ? fallbackIndex : cleaned.length;
   const next = [...cleaned];
-  next.splice(insertAt, 0, audioLine, '');
+  const insertStudyPlaceholder = () => {
+    const insertAt =
+      studyMarkerIndex >= 0
+        ? studyMarkerIndex
+        : studyFallbackIndex >= 0
+          ? studyFallbackIndex
+          : next.length;
+    next.splice(insertAt, 0, GENERATED_STUDY_PLACEHOLDER_MARKER, ':::audio', '');
+  };
+  const insertPronunciationPlaceholder = () => {
+    const headingIndex =
+      pronunciationHeadingIndex >= 0 ? pronunciationHeadingIndex + 1 : next.length;
+    next.splice(
+      headingIndex,
+      0,
+      '',
+      GENERATED_PRONUNCIATION_PLACEHOLDER_MARKER,
+      ':::audio',
+      '',
+    );
+  };
+
+  const studyTextAudioUrl = options.studyTextAudioUrl?.trim();
+  if (studyTextAudioUrl) {
+    const audioLine = `[${STUDY_TEXT_AUDIO_LINK_LABEL}](${studyTextAudioUrl})`;
+    if (!next.some((line) => line.trim() === audioLine)) {
+      const insertAt =
+        studyMarkerIndex >= 0
+          ? studyMarkerIndex
+          : studyFallbackIndex >= 0
+            ? studyFallbackIndex
+            : next.length;
+      next.splice(insertAt, 0, audioLine, '');
+    }
+  } else {
+    insertStudyPlaceholder();
+  }
+
+  if (options.includePronunciation) {
+    const pronunciationAudioUrl = options.pronunciationAudioUrl?.trim();
+    if (pronunciationAudioUrl) {
+      const audioLine = `[${PRONUNCIATION_AUDIO_LINK_LABEL}](${pronunciationAudioUrl})`;
+      if (!next.some((line) => line.trim() === audioLine)) {
+        const headingIndex =
+          pronunciationHeadingIndex >= 0 ? pronunciationHeadingIndex + 1 : next.length;
+        next.splice(headingIndex, 0, '', audioLine, '');
+      }
+    } else {
+      insertPronunciationPlaceholder();
+    }
+  }
+
   return next.join('\n');
 }
 
@@ -554,6 +675,7 @@ export function registerExtendedRoutes(app: FastifyInstance, options: ExtendedRo
         title: z.string().trim().min(1).optional(),
         preset: z.string().trim().min(1).nullable().optional(),
         audioUrl: z.string().trim().nullable().optional(),
+        pronunciationAudioUrl: z.string().trim().nullable().optional(),
       });
 
       try {
@@ -578,7 +700,11 @@ export function registerExtendedRoutes(app: FastifyInstance, options: ExtendedRo
           }
         }
 
-        const markdown = insertAudioDirectiveBeforeStudyText(body.text, body.audioUrl);
+        const markdown = insertGeneratedPreviewAudio(body.text, {
+          studyTextAudioUrl: body.audioUrl,
+          pronunciationAudioUrl: body.pronunciationAudioUrl,
+          includePronunciation: hasPronunciationShadowMode(body.text),
+        });
         const html = await createStaticPageHtml(markdown, body.title ?? 'Assignment Preview', {
           headingTheme,
         });

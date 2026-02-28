@@ -38,7 +38,7 @@ export async function materializePromptTemplateWithCapabilities(params: {
   templateId: string;
   templateContent: string;
 }): Promise<PromptVoiceCapabilitiesResolution> {
-  const isVoiceAlignedTemplate = params.templateId.includes('hw_prompt_v4-3_voice-aligned');
+  const isVoiceAlignedTemplate = params.templateId.includes('voice-aligned');
   if (!isVoiceAlignedTemplate) {
     return {
       materializedTemplate: params.templateContent,
@@ -51,7 +51,7 @@ export async function materializePromptTemplateWithCapabilities(params: {
   const snapshot = await loadVoiceCapabilitiesSnapshot();
   if (!snapshot) {
     throw new Error(
-      'Prompt template hw_prompt_v4-3_voice-aligned requires a voice capabilities snapshot. ' +
+      'Voice-aligned prompt templates require a voice capabilities snapshot. ' +
         'Sync voices first or set ELEVENLABS_VOICES_PATH.',
     );
   }
@@ -177,7 +177,7 @@ function normalizeSnapshot(snapshot: VoiceCapabilitiesSnapshot): VoiceCapabiliti
 function injectCapabilitiesBlock(templateContent: string, snapshot: VoiceCapabilitiesSnapshot): string {
   if (!templateContent.includes('# CAPABILITY SNAPSHOT')) {
     throw new Error(
-      'Prompt template hw_prompt_v4-3_voice-aligned is missing the capability snapshot marker.',
+      'Voice-aligned prompt template is missing the capability snapshot marker.',
     );
   }
 
@@ -197,7 +197,7 @@ function injectCapabilitiesBlock(templateContent: string, snapshot: VoiceCapabil
   }
 
   throw new Error(
-    'Prompt template hw_prompt_v4-3_voice-aligned capability snapshot block format is invalid.',
+    'Voice-aligned prompt template capability snapshot block format is invalid.',
   );
 }
 

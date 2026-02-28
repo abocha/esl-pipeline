@@ -63,6 +63,27 @@ This document captures the canonical schema so remote stores and services can va
       "estimatedSpendUsd": 0.396,
     },
   },
+  "audioArtifacts": {
+    // optional, additive multi-artifact map (schemaVersion remains 1)
+    "studyText": {
+      "path": "./lessons/audio.mp3",
+      "url": "https://...",
+      "hash": "<sha256 audio hash>",
+      "key": "audio/final/<sha256>.mp3",
+      "etag": "\"abc123...\"",
+      "sizeBytes": 123456,
+      "reused": true,
+      "notionBlockId": "<notion-block-id>",
+    },
+    "pronunciationShadowSentence": {
+      "path": "./lessons/audio-shadow.mp3",
+      "url": "https://...",
+      "hash": "<sha256 pronunciation sentence hash>",
+      "key": "audio/pronunciation-shadow/<sha256>.mp3",
+      "voiceId": "<elevenlabs-voice-id>",
+      "notionBlockId": "<notion-block-id>",
+    },
+  },
   // TTS metadata (additive, optional)
   "ttsStrategy": "dialogue",
   "dialogueLanguage": "en",
@@ -87,6 +108,14 @@ This document captures the canonical schema so remote stores and services can va
 - `audio.key`/`audio.hash` provide deterministic artifact identity for reruns and upload dedupe.
 - `audio.reused` and `htmlReused` are operational hints showing whether remote upload/publish reused
   an existing content-addressed object.
+- `audioArtifacts` is additive under schema version `1` and stores per-target audio artifacts:
+  - `audioArtifacts.studyText` mirrors the legacy `audio` payload.
+  - `audioArtifacts.pronunciationShadowSentence` stores optional reference audio for
+    `Mode: shadow_sentence` pronunciation tasks.
+- `audio` remains a compatibility alias for study-text audio (`audioArtifacts.studyText`) so older
+  readers continue to work unchanged.
+- `audioArtifacts.*.notionBlockId` is optional and lets reruns replace only previously inserted
+  generated audio blocks near semantic anchors.
 - `notionColorization` captures the Notion preset fingerprint used for idempotent colorization skip
   decisions. Consumers SHOULD treat the object as optional and additive.
 - When `notionColorization.presetHash`/`mdHash` still match the current run context, orchestrator may

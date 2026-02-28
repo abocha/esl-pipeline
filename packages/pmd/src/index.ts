@@ -17,6 +17,9 @@ export type {
   PmdThematicBreak,
   PmdUnknown,
   PmdWarning,
+  PronunciationShadowFocus,
+  PronunciationShadowIssue,
+  PronunciationShadowWord,
   Section,
   SpeakerProfile,
   StudyText,
@@ -31,6 +34,7 @@ export { findDirectiveBlocks } from './query.js';
 export {
   extractAnswerKey,
   extractFrontmatter,
+  extractPronunciationShadowFocus,
   extractSections,
   extractStudyText,
   extractTeacherNotes,

@@ -7,7 +7,7 @@ export {
   findStudentPageId,
 } from './data-source.js';
 export { mdToBlocks } from './blocks/mdToBlocks.js';
-export { addOrReplaceAudioUnderStudyText, getClient } from './audio.js';
+export { addOrReplaceAudio, addOrReplaceAudioUnderStudyText, getClient } from './audio.js';
 export { applyHeadingPreset, hashColorPreset, loadPreset, PresetSchema } from './colorizer.js';
 export { runImport } from './importer.js';
 export {
@@ -20,7 +20,7 @@ export {
   mapFrontmatterProperties,
 } from './properties.js';
 export { isProtectedToggleTitle, normalizeToggleLabel, shouldUsePlainToggle } from './rendering.js';
-export type { AddAudioOpts } from './audio.js';
+export type { AddAudioOpts, AddAudioResult } from './audio.js';
 export type { ColorPreset, PresetsFile } from './colorizer.js';
 export type {
   FrontmatterShape,

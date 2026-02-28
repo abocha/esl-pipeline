@@ -5,6 +5,8 @@ ElevenLabs integration for ESL Pipeline audio generation.
 ## What It Does
 
 - Reads `:::study-text` content from lesson markdown.
+- Optionally synthesizes pronunciation shadow-sentence reference audio when markdown includes
+  `**Mode:** shadow_sentence` in `### C. Pronunciation Micro-Focus`.
 - Resolves speaker-to-voice assignments from `voices.yml` + optional speaker profiles.
 - Generates MP3 output via ElevenLabs Text-to-Speech or Text-to-Dialogue.
 - Uses ffmpeg for stitching/metadata.
@@ -66,7 +68,7 @@ The generated catalog now includes:
 ## Programmatic API
 
 ```ts
-import { buildStudyTextMp3 } from '@esl-pipeline/tts-elevenlabs';
+import { buildPronunciationShadowSentenceMp3, buildStudyTextMp3 } from '@esl-pipeline/tts-elevenlabs';
 import { parseMarkdownContext } from '@esl-pipeline/pmd';
 import { readFile } from 'node:fs/promises';
 
@@ -79,6 +81,11 @@ const result = await buildStudyTextMp3({ context, mdPath: '/abs/path/lesson.md' 
   ttsStrategy: 'auto',
   force: false,
 });
+
+const shadowResult = await buildPronunciationShadowSentenceMp3(
+  { context, mdPath: '/abs/path/lesson.md', voiceId: 'voice-id' },
+  { outPath: '/abs/path/out', force: false },
+);
 ```
 
 ### `BuildStudyTextOptions`
@@ -103,3 +110,10 @@ const result = await buildStudyTextMp3({ context, mdPath: '/abs/path/lesson.md' 
 - `hash: string`
 - `voices: Array<{ speaker; voiceId; source; score?; voiceName?; gender?; accent?; useCase?; selectionReason?; capabilityMatches?; capabilityMismatches? }>`
 - `voiceAssignments?: Record<string, string>`
+
+### `buildPronunciationShadowSentenceMp3(...)`
+
+- Requires `voiceId`.
+- Reads `**Shadow sentence:** ...` from section C only when mode is `shadow_sentence`.
+- Uses deterministic hash inputs including artifact kind + sentence text + voice/model/output format.
+- Output filename pattern: `<student-slug>-<hash>-shadow-sentence.mp3`.

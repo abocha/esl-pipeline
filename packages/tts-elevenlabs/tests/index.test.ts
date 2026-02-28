@@ -8,7 +8,11 @@ import * as assign from '../src/assign.js';
 import * as dialogue from '../src/dialogue.js';
 import * as eleven from '../src/eleven.js';
 import * as ffm from '../src/ffmpeg.js';
-import { buildStudyTextMp3, hashStudyText } from '../src/index.js';
+import {
+  buildPronunciationShadowSentenceMp3,
+  buildStudyTextMp3,
+  hashStudyText,
+} from '../src/index.js';
 import * as speakers from '../src/speakerAssignment.js';
 
 const encoder = new TextEncoder();
@@ -32,6 +36,18 @@ const buildStudyTextMp3FromPath = async (
   const markdown = await readFile(mdPath, 'utf8');
   const context = parseMarkdownContext(markdown);
   return buildStudyTextMp3({ context, mdPath }, ...args);
+};
+
+const buildPronunciationShadowSentenceMp3FromPath = async (
+  mdPath: string,
+  voiceId: string,
+  ...args: Parameters<typeof buildPronunciationShadowSentenceMp3> extends [any, ...infer Rest]
+    ? Rest
+    : never
+) => {
+  const markdown = await readFile(mdPath, 'utf8');
+  const context = parseMarkdownContext(markdown);
+  return buildPronunciationShadowSentenceMp3({ context, mdPath, voiceId }, ...args);
 };
 
 const writeBasicMonologueFixture = async (dir: string) => {
@@ -171,6 +187,99 @@ beforeEach(() => {
 describe('tts elevenlabs integration', () => {
   it('hashes study text deterministically', () => {
     expect(hashStudyText('hello')).toEqual(hashStudyText('hello'));
+  });
+
+  it('buildPronunciationShadowSentenceMp3 preview mode', async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'tts-shadow-'));
+    const tempMdPath = join(dir, 'lesson-shadow.md');
+    await writeFixture(
+      tempMdPath,
+      `
+---
+title: Pronunciation Lesson
+student: Anna
+input_type: generate
+---
+
+:::study-text
+Narrator: Main text.
+:::
+
+### C. 🎙️ Pronunciation Micro-Focus (≈1 min)
+:::callout 🗣️
+**Mode:** shadow_sentence
+**Shadow sentence:** I was thinking about working this morning.
+1. thinking — /ˈθɪŋkɪŋ/
+2. working — /ˈwɜːrkɪŋ/
+3. morning — /ˈmɔːrnɪŋ/
+:::
+    `,
+    );
+
+    const convertMock = setupClientMock();
+    const result = await buildPronunciationShadowSentenceMp3FromPath(
+      tempMdPath,
+      'voice_narrator',
+      {
+        outPath: dir,
+        preview: true,
+      },
+    );
+    expect(result.path.endsWith('-shadow-sentence.mp3')).toBe(true);
+    expect(result.hash).toHaveLength(64);
+    expect(result.generatedCharacters).toBeGreaterThan(0);
+    expect(convertMock).not.toHaveBeenCalled();
+  });
+
+  it('buildPronunciationShadowSentenceMp3 generates and caches output', async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'tts-shadow-cache-'));
+    const tempMdPath = join(dir, 'lesson-shadow-cache.md');
+    await writeFixture(
+      tempMdPath,
+      `
+---
+title: Pronunciation Lesson
+student: Anna
+input_type: generate
+---
+
+:::study-text
+Narrator: Main text.
+:::
+
+### C. 🎙️ Pronunciation Micro-Focus (≈1 min)
+:::callout 🗣️
+**Mode:** shadow_sentence
+**Shadow sentence:** I was thinking about working this morning.
+1. thinking — /ˈθɪŋkɪŋ/
+2. working — /ˈwɜːrkɪŋ/
+3. morning — /ˈmɔːrnɪŋ/
+:::
+    `,
+    );
+    const convertMock = setupClientMock();
+
+    const first = await buildPronunciationShadowSentenceMp3FromPath(
+      tempMdPath,
+      'voice_narrator',
+      {
+        outPath: dir,
+      },
+    );
+    expect(first.generatedCharacters).toBeGreaterThan(0);
+    expect(first.cachedCharacters).toBe(0);
+    expect(convertMock).toHaveBeenCalledTimes(1);
+
+    const second = await buildPronunciationShadowSentenceMp3FromPath(
+      tempMdPath,
+      'voice_narrator',
+      {
+        outPath: dir,
+      },
+    );
+    expect(second.generatedCharacters).toBe(0);
+    expect(second.cachedCharacters).toBeGreaterThan(0);
+    expect(convertMock).toHaveBeenCalledTimes(1);
   });
 
   it('buildStudyTextMp3 preview mode', async () => {

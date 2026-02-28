@@ -239,6 +239,15 @@ Embed audio files from external URLs.
 - **Pre-existing audio**: Link to pronunciation guides, example recordings, etc.
 - **Not for generated TTS**: The pipeline handles main lesson audio via the Notion adapter
 
+### Generated Audio Attachment Behavior (Pipeline)
+
+- Study-text reference audio is attached near the `:::study-text` anchor.
+- When pronunciation section C declares `**Mode:** shadow_sentence`, the pipeline also generates
+  and attaches a second reference audio block for `**Shadow sentence:** ...` near
+  `### C. Pronunciation Micro-Focus`.
+- Replacement on reruns is targeted: generated blocks are tracked and replaced without deleting
+  unrelated top-level audio blocks on the page.
+
 **Example:**
 
 ```markdown

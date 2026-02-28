@@ -9,18 +9,19 @@ import { renderAndPublishMarkdownToS3 } from '@esl-pipeline/html-publisher';
 import { validateMarkdown } from '@esl-pipeline/md-validator';
 import {
   type ColorPreset,
-  addOrReplaceAudioUnderStudyText,
+  addOrReplaceAudio,
   applyHeadingPreset,
   hashColorPreset,
   loadPreset,
   runImport,
 } from '@esl-pipeline/notion-adapter';
-import { parseMarkdownContext } from '@esl-pipeline/pmd';
+import { extractPronunciationShadowFocus, parseMarkdownContext } from '@esl-pipeline/pmd';
 import {
   deriveS3UploadAddress,
   uploadFile,
 } from '@esl-pipeline/storage-uploader';
 import {
+  buildPronunciationShadowSentenceMp3,
   type BuildStudyTextResult,
   FfmpegNotFoundError,
   type VoiceCatalog,
@@ -133,40 +134,73 @@ async function readMarkdownCached(mdPath: string): Promise<string> {
 }
 
 const STUDY_TEXT_MARKER = ':::study-text Transcript';
-const AUDIO_LINK_REGEX = /^\[Audio recording\]\([^)]+\)\s*$/i;
+const STUDY_TEXT_AUDIO_LINK_LABEL = 'Audio recording: Study Text';
+const PRONUNCIATION_AUDIO_LINK_LABEL = 'Audio recording: Pronunciation Shadow Sentence';
+const GENERATED_STUDY_TEXT_AUDIO_LINK_REGEX = new RegExp(
+  String.raw`^\[${STUDY_TEXT_AUDIO_LINK_LABEL}\]\([^)]+\)\s*$`,
+  'i',
+);
+const GENERATED_PRONUNCIATION_AUDIO_LINK_REGEX = new RegExp(
+  String.raw`^\[${PRONUNCIATION_AUDIO_LINK_LABEL}\]\([^)]+\)\s*$`,
+  'i',
+);
 const STUDY_TEXT_REGEX = /^:::study-text\b/i;
 const TRANSCRIPT_REGEX = /transcript/i;
 
-function insertAudioBeforeStudyText(markdown: string, audioUrl: string): string {
-  if (!audioUrl) return markdown;
+function insertGeneratedAudioLinks(markdown: string, urls: {
+  studyTextUrl?: string;
+  pronunciationShadowSentenceUrl?: string;
+}): string {
   const lines = markdown.split('\n');
   const cleaned: string[] = [];
-  let markerIndex = -1;
-  let fallbackIndex = -1;
+  let studyMarkerIndex = -1;
+  let studyFallbackIndex = -1;
+  let pronunciationHeadingIndex = -1;
 
   for (const line of lines) {
     const trimmed = line.trim();
-    if (trimmed === STUDY_TEXT_MARKER) markerIndex = cleaned.length;
+    if (trimmed === STUDY_TEXT_MARKER) studyMarkerIndex = cleaned.length;
     if (STUDY_TEXT_REGEX.test(trimmed)) {
-      if (fallbackIndex === -1) fallbackIndex = cleaned.length;
-      if (TRANSCRIPT_REGEX.test(trimmed)) markerIndex = cleaned.length;
+      if (studyFallbackIndex === -1) studyFallbackIndex = cleaned.length;
+      if (TRANSCRIPT_REGEX.test(trimmed)) studyMarkerIndex = cleaned.length;
     }
-    if (AUDIO_LINK_REGEX.test(trimmed)) {
+    if (/^###\s+.*pronunciation.*micro.*focus/i.test(trimmed)) {
+      pronunciationHeadingIndex = cleaned.length;
+    }
+    if (
+      GENERATED_STUDY_TEXT_AUDIO_LINK_REGEX.test(trimmed) ||
+      GENERATED_PRONUNCIATION_AUDIO_LINK_REGEX.test(trimmed)
+    ) {
       continue;
     }
     cleaned.push(line);
   }
 
-  const audioLine = `[Audio recording](${audioUrl})`;
-  if (cleaned.some((line) => line.trim() === audioLine)) {
-    return cleaned.join('\n');
+  const nextLines = [...cleaned];
+  const studyTextUrl = urls.studyTextUrl?.trim();
+  if (studyTextUrl) {
+    const audioLine = `[${STUDY_TEXT_AUDIO_LINK_LABEL}](${studyTextUrl})`;
+    if (!nextLines.some((line) => line.trim() === audioLine)) {
+      const insertAt =
+        studyMarkerIndex >= 0
+          ? studyMarkerIndex
+          : studyFallbackIndex >= 0
+            ? studyFallbackIndex
+            : nextLines.length;
+      nextLines.splice(insertAt, 0, audioLine, '');
+    }
   }
 
-  const hasMarker = markerIndex >= 0;
-  const hasFallback = fallbackIndex >= 0;
-  const insertAt = hasMarker ? markerIndex : hasFallback ? fallbackIndex : cleaned.length;
-  const nextLines = [...cleaned];
-  nextLines.splice(insertAt, 0, audioLine, '');
+  const pronunciationUrl = urls.pronunciationShadowSentenceUrl?.trim();
+  if (pronunciationUrl) {
+    const audioLine = `[${PRONUNCIATION_AUDIO_LINK_LABEL}](${pronunciationUrl})`;
+    if (!nextLines.some((line) => line.trim() === audioLine)) {
+      const headingIndex =
+        pronunciationHeadingIndex >= 0 ? pronunciationHeadingIndex + 1 : nextLines.length;
+      nextLines.splice(headingIndex, 0, '', audioLine, '');
+    }
+  }
+
   return nextLines.join('\n');
 }
 
@@ -486,9 +520,35 @@ function emitVoiceSelectionMetrics(
   }
 }
 
-function resolveAudioArtifactKey(audioHash: string, prefix?: string): string {
+type AudioArtifactKind = 'study_text' | 'pronunciation_shadow_sentence';
+type AudioArtifact = NonNullable<AssignmentManifest['audio']>;
+interface AudioArtifacts {
+  studyText?: AudioArtifact;
+  pronunciationShadowSentence?: AudioArtifact;
+}
+
+function cloneAudioArtifact(artifact?: AudioArtifact): AudioArtifact | undefined {
+  return artifact ? { ...artifact } : undefined;
+}
+
+function resolveAudioArtifactsFromManifest(manifest?: AssignmentManifest | null): AudioArtifacts {
+  if (!manifest) return {};
+  return {
+    studyText: cloneAudioArtifact(manifest.audioArtifacts?.studyText ?? manifest.audio),
+    pronunciationShadowSentence: cloneAudioArtifact(manifest.audioArtifacts?.pronunciationShadowSentence),
+  };
+}
+
+function resolveAudioArtifactKey(
+  audioHash: string,
+  prefix: string | undefined,
+  kind: AudioArtifactKind = 'study_text',
+): string {
   const normalizedPrefix = prefix?.replace(/^[\/\\]+/, '').replace(/[\/\\]+$/, '') ?? '';
-  const key = `audio/final/${audioHash}.mp3`;
+  const key =
+    kind === 'study_text'
+      ? `audio/final/${audioHash}.mp3`
+      : `audio/pronunciation-shadow/${audioHash}.mp3`;
   return normalizedPrefix ? `${normalizedPrefix}/${key}` : key;
 }
 
@@ -499,10 +559,14 @@ function deriveS3GlobalUrl(bucket: string, key: string): string {
 function emitArtifactReuseMetric(
   metrics: OrchestratorDependencies['metrics'],
   kind: 'audio' | 'html',
+  audioKind?: AudioArtifactKind,
   reused?: boolean,
 ): void {
   if (!metrics || reused === undefined) return;
-  metrics.increment(reused ? 'esl.artifact.reuse_hit' : 'esl.artifact.reuse_miss', 1, { kind });
+  metrics.increment(reused ? 'esl.artifact.reuse_hit' : 'esl.artifact.reuse_miss', 1, {
+    kind,
+    ...(audioKind ? { audioKind } : {}),
+  });
 }
 
 export async function planRerunAssignment(
@@ -818,12 +882,13 @@ export async function newAssignment(
       recordSkip('colorize', 'no preset selected');
     }
 
-    let audio = previousManifest?.audio ? { ...previousManifest.audio } : undefined;
+    const shadowFocus = extractPronunciationShadowFocus(markdownContext);
+    let audioArtifacts = resolveAudioArtifactsFromManifest(previousManifest);
     if (flags.withTts) {
       if (flags.skipTts) {
         recordSkip('tts', 'skip-tts flag set');
         steps.push('skip:tts');
-        if (!audio?.path && !flags.dryRun) {
+        if (!audioArtifacts.studyText?.path && !flags.dryRun) {
           throw new ManifestError(
             'Cannot skip TTS because manifest has no audio.path. Run TTS at least once first.',
           );
@@ -898,7 +963,7 @@ export async function newAssignment(
           throw error;
         }
         const ttsSummary = buildTtsSpendSummary(ttsResult);
-        audio = {
+        audioArtifacts.studyText = {
           path: ttsResult.path,
           hash: ttsResult.hash,
           voices: ttsResult.voices,
@@ -925,8 +990,8 @@ export async function newAssignment(
           estimatedSpendUsd: ttsSummary.estimatedSpendUsd,
         });
 
-        if (!flags.dryRun && audio?.path) {
-          const audioPath = audio.path;
+        if (!flags.dryRun && audioArtifacts.studyText?.path) {
+          const audioPath = audioArtifacts.studyText.path;
           throwIfCancelled(signal, 'tts');
           await access(audioPath, FS.F_OK).catch(() => {
             throw new InfrastructureError(
@@ -935,19 +1000,73 @@ export async function newAssignment(
             );
           });
         }
+
+        if (shadowFocus?.shadowSentence?.trim()) {
+          const narratorVoiceId = ttsResult.voiceAssignments?.Narrator;
+          const fallbackVoiceId = narratorVoiceId ?? ttsResult.voices[0]?.voiceId;
+          if (fallbackVoiceId) {
+            const shadowResult = await buildPronunciationShadowSentenceMp3(
+              {
+                context: markdownContext,
+                mdPath: flags.md,
+                voiceId: fallbackVoiceId,
+              },
+              {
+                outPath: flags.out ?? dirname(flags.md),
+                preview: flags.dryRun,
+                force: flags.force || flags.redoTts,
+                logger,
+              },
+            );
+            const shadowTtsSummary = buildTtsSpendSummary(shadowResult);
+            audioArtifacts.pronunciationShadowSentence = {
+              path: shadowResult.path,
+              hash: shadowResult.hash,
+              voiceId: shadowResult.voiceId,
+              tts: shadowTtsSummary,
+            };
+            if (shadowResult.generatedCharacters !== undefined && shadowResult.generatedCharacters > 0) {
+              metrics.increment('esl.tts.provider_characters', shadowResult.generatedCharacters, {
+                type: 'generated',
+              });
+            }
+            if (shadowResult.cachedCharacters !== undefined && shadowResult.cachedCharacters > 0) {
+              metrics.increment('esl.tts.provider_characters', shadowResult.cachedCharacters, {
+                type: 'cached',
+              });
+            }
+          } else {
+            logger.log({
+              level: 'warn',
+              stage: 'tts',
+              message: 'Skipping pronunciation shadow sentence TTS: no resolved voice id.',
+            });
+            audioArtifacts.pronunciationShadowSentence = undefined;
+          }
+        } else {
+          audioArtifacts.pronunciationShadowSentence = undefined;
+        }
       }
     } else {
       recordSkip('tts', 'tts disabled');
-      audio = undefined;
+      audioArtifacts = {};
     }
 
-    if (flags.upload === 's3' && audio?.path) {
+    const artifactEntries: { kind: AudioArtifactKind; artifact: AudioArtifact | undefined }[] = [
+      { kind: 'study_text', artifact: audioArtifacts.studyText },
+      {
+        kind: 'pronunciation_shadow_sentence',
+        artifact: audioArtifacts.pronunciationShadowSentence,
+      },
+    ];
+    const uploadableArtifacts = artifactEntries.filter((entry) => entry.artifact?.path);
+    if (flags.upload === 's3' && uploadableArtifacts.length > 0) {
       if (flags.skipUpload) {
         recordSkip('upload', 'skip-upload flag set');
         steps.push('skip:upload');
-        if (!audio.url && !flags.dryRun) {
+        if (!flags.dryRun && uploadableArtifacts.some((entry) => !entry.artifact?.url)) {
           throw new ManifestError(
-            'Cannot skip upload because manifest has no existing audio.url. Upload once before skipping.',
+            'Cannot skip upload because manifest has no existing audio.url for one or more audio artifacts. Upload once before skipping.',
           );
         }
       } else {
@@ -956,45 +1075,50 @@ export async function newAssignment(
         throwIfCancelled(signal, 'upload');
         const bucket = process.env.S3_BUCKET ?? 'stub-bucket';
         const keyPrefix = flags.prefix ?? process.env.S3_PREFIX ?? '';
-        const audioKey = audio.hash ? resolveAudioArtifactKey(audio.hash, keyPrefix) : undefined;
-        if (flags.dryRun) {
-          if (audioKey) {
-            audio.url = deriveS3GlobalUrl(bucket, audioKey);
-            audio.key = audioKey;
+        for (const entry of uploadableArtifacts) {
+          const artifact = entry.artifact;
+          if (!artifact?.path) continue;
+          const audioKey = artifact.hash
+            ? resolveAudioArtifactKey(artifact.hash, keyPrefix, entry.kind)
+            : undefined;
+          if (flags.dryRun) {
+            if (audioKey) {
+              artifact.url = deriveS3GlobalUrl(bucket, audioKey);
+              artifact.key = audioKey;
+            } else {
+              const { url, key } = deriveS3UploadAddress({
+                bucket,
+                keyPrefix,
+                filePath: artifact.path,
+                urlStyle: 'global',
+              });
+              artifact.url = url;
+              artifact.key = key;
+            }
+            artifact.reused = false;
           } else {
-            const { url, key } = deriveS3UploadAddress({
-              bucket,
-              keyPrefix,
-              filePath: audio.path,
-              urlStyle: 'global',
+            const upload = await uploadFile(artifact.path, {
+              backend: 's3',
+              key: audioKey,
+              sha256: artifact.hash,
+              skipIfExists: true,
+              prefix: flags.prefix,
+              public: flags.publicRead,
+              presignExpiresIn: flags.presign,
+              logger,
             });
-            audio.url = url;
-            audio.key = key;
+            artifact.url = upload.url;
+            artifact.key = upload.key;
+            artifact.etag = upload.etag;
+            artifact.sizeBytes = upload.sizeBytes;
+            artifact.reused = upload.reused;
+            emitArtifactReuseMetric(metrics, 'audio', entry.kind, upload.reused);
           }
-          audio.reused = false;
-        } else {
-          const upload = await uploadFile(audio.path, {
-            backend: 's3',
-            key: audioKey,
-            sha256: audio.hash,
-            skipIfExists: true,
-            prefix: flags.prefix,
-            public: flags.publicRead,
-            presignExpiresIn: flags.presign,
-            logger,
-          });
-          audio.url = upload.url;
-          audio.key = upload.key;
-          audio.etag = upload.etag;
-          audio.sizeBytes = upload.sizeBytes;
-          audio.reused = upload.reused;
-          emitArtifactReuseMetric(metrics, 'audio', upload.reused);
         }
         throwIfCancelled(signal, 'upload');
         emitStage('upload', 'success', {
-          url: audio.url,
-          key: audio.key,
-          reused: audio.reused,
+          studyTextUrl: audioArtifacts.studyText?.url,
+          pronunciationUrl: audioArtifacts.pronunciationShadowSentence?.url,
           dryRun: flags.dryRun,
         });
       }
@@ -1002,8 +1126,11 @@ export async function newAssignment(
       recordSkip('upload', flags.upload === 's3' ? 'no audio path available' : 'upload disabled');
     }
 
+    const studyTextAudioUrl = audioArtifacts.studyText?.url;
+    const pronunciationAudioUrl = audioArtifacts.pronunciationShadowSentence?.url;
+
     if (publishTarget === 'notion') {
-      if (audio?.url && pageId) {
+      if ((studyTextAudioUrl || pronunciationAudioUrl) && pageId) {
         if (flags.skipUpload) {
           recordSkip('add-audio', 'skip-upload flag set');
           steps.push('skip:add-audio');
@@ -1015,12 +1142,44 @@ export async function newAssignment(
           emitStage('add-audio', 'start');
           steps.push('add-audio');
           throwIfCancelled(signal, 'add-audio');
-          await addOrReplaceAudioUnderStudyText(pageId, audio.url, { replace: flags.force });
+
+          if (studyTextAudioUrl) {
+            const result = await addOrReplaceAudio(pageId, studyTextAudioUrl, {
+              replace: flags.force,
+              target: 'study-text',
+              previousBlockId: audioArtifacts.studyText?.notionBlockId,
+            });
+            if (result.blockId) {
+              audioArtifacts.studyText = {
+                ...audioArtifacts.studyText,
+                notionBlockId: result.blockId,
+              };
+            }
+          }
+
+          if (pronunciationAudioUrl) {
+            const result = await addOrReplaceAudio(pageId, pronunciationAudioUrl, {
+              replace: flags.force,
+              target: 'pronunciation-shadow-sentence',
+              previousBlockId: audioArtifacts.pronunciationShadowSentence?.notionBlockId,
+            });
+            if (result.blockId) {
+              audioArtifacts.pronunciationShadowSentence = {
+                ...audioArtifacts.pronunciationShadowSentence,
+                notionBlockId: result.blockId,
+              };
+            }
+          }
+
           throwIfCancelled(signal, 'add-audio');
-          emitStage('add-audio', 'success', { pageId, url: audio.url });
+          emitStage('add-audio', 'success', {
+            pageId,
+            studyTextUrl: studyTextAudioUrl,
+            pronunciationUrl: pronunciationAudioUrl,
+          });
         }
       } else {
-        recordSkip('add-audio', audio?.url ? 'missing pageId' : 'no audio url available');
+        recordSkip('add-audio', studyTextAudioUrl || pronunciationAudioUrl ? 'missing pageId' : 'no audio url available');
       }
     } else if (publishTarget === 'anytype' && anytypePageId && anytypeSpaceId) {
       if (flags.skipUpload) {
@@ -1038,14 +1197,15 @@ export async function newAssignment(
         const client = createAnytypeClient();
         const page = await client.getObject(anytypeSpaceId, anytypePageId);
         throwIfCancelled(signal, 'add-audio');
-        if (audio?.url) {
-          const updatedBody = insertAudioBeforeStudyText(page.body ?? '', audio.url);
-          if (updatedBody !== page.body) {
-            await client.updateObject(anytypeSpaceId, anytypePageId, {
-              body: updatedBody,
-            });
-            throwIfCancelled(signal, 'add-audio');
-          }
+        const updatedBody = insertGeneratedAudioLinks(page.body ?? '', {
+          studyTextUrl: studyTextAudioUrl,
+          pronunciationShadowSentenceUrl: pronunciationAudioUrl,
+        });
+        if (updatedBody !== page.body) {
+          await client.updateObject(anytypeSpaceId, anytypePageId, {
+            body: updatedBody,
+          });
+          throwIfCancelled(signal, 'add-audio');
         }
 
         let headingTheme: { h2?: string; h3?: string } | undefined;
@@ -1054,7 +1214,10 @@ export async function newAssignment(
           headingTheme = resolveHeadingTheme(preset);
         }
 
-        const publishMarkdown = insertAudioBeforeStudyText(mdContents, audio?.url ?? '');
+        const publishMarkdown = insertGeneratedAudioLinks(mdContents, {
+          studyTextUrl: studyTextAudioUrl,
+          pronunciationShadowSentenceUrl: pronunciationAudioUrl,
+        });
         const publishTitle = resolveMarkdownTitle(
           mdContents,
           basename(flags.md).replace(/\.[^.]+$/, ''),
@@ -1073,11 +1236,12 @@ export async function newAssignment(
         htmlKey = publishResult.key;
         htmlEtag = publishResult.etag;
         htmlReused = publishResult.reused;
-        emitArtifactReuseMetric(metrics, 'html', publishResult.reused);
+        emitArtifactReuseMetric(metrics, 'html', undefined, publishResult.reused);
 
         emitStage('add-audio', 'success', {
           pageId: anytypePageId,
-          url: audio?.url,
+          studyTextUrl: studyTextAudioUrl,
+          pronunciationUrl: pronunciationAudioUrl,
           publishUrl: anytypeUrl,
           publishKey: htmlKey,
           publishHash: htmlHash,
@@ -1095,7 +1259,10 @@ export async function newAssignment(
           headingTheme = resolveHeadingTheme(preset);
         }
 
-        const publishMarkdown = insertAudioBeforeStudyText(mdContents, audio?.url ?? '');
+        const publishMarkdown = insertGeneratedAudioLinks(mdContents, {
+          studyTextUrl: studyTextAudioUrl,
+          pronunciationShadowSentenceUrl: pronunciationAudioUrl,
+        });
         const publishTitle = resolveMarkdownTitle(
           mdContents,
           basename(flags.md).replace(/\.[^.]+$/, ''),
@@ -1112,10 +1279,11 @@ export async function newAssignment(
         htmlKey = publishResult.key;
         htmlEtag = publishResult.etag;
         htmlReused = publishResult.reused;
-        emitArtifactReuseMetric(metrics, 'html', publishResult.reused);
+        emitArtifactReuseMetric(metrics, 'html', undefined, publishResult.reused);
       }
       emitStage('add-audio', 'success', {
-        url: audio?.url,
+        studyTextUrl: studyTextAudioUrl,
+        pronunciationUrl: pronunciationAudioUrl,
         publishUrl: htmlUrl,
         publishKey: htmlKey,
         publishHash: htmlHash,
@@ -1140,7 +1308,11 @@ export async function newAssignment(
       htmlKey,
       htmlEtag,
       htmlReused,
-      audio,
+      audio: audioArtifacts.studyText,
+      audioArtifacts: {
+        studyText: audioArtifacts.studyText,
+        pronunciationShadowSentence: audioArtifacts.pronunciationShadowSentence,
+      },
       preset: flags.preset,
       notionColorization,
 
@@ -1177,7 +1349,7 @@ export async function newAssignment(
       anytypeUrl,
       htmlUrl,
       publishTarget,
-      audio,
+      audio: audioArtifacts.studyText,
       colorized,
       manifestPath,
       steps,
@@ -1249,9 +1421,10 @@ export async function getAssignmentStatus(
     }
 
     let audioFileExists = false;
-    if (manifest?.audio?.path) {
+    const studyAudioPath = manifest?.audioArtifacts?.studyText?.path ?? manifest?.audio?.path;
+    if (studyAudioPath) {
       try {
-        await access(manifest.audio.path, FS.F_OK);
+        await access(studyAudioPath, FS.F_OK);
         audioFileExists = true;
       } catch {
         audioFileExists = false;
@@ -1408,15 +1581,16 @@ export async function rerunAssignment(
     }
 
     const mdContents = await readMarkdownCached(flags.md);
-    let audioPath = manifest.audio?.path;
-    let audioUrl = manifest.audio?.url;
-    let audioHash = manifest.audio?.hash;
-    let audioKey = manifest.audio?.key;
-    let audioEtag = manifest.audio?.etag;
-    let audioSizeBytes = manifest.audio?.sizeBytes;
-    let audioReused = manifest.audio?.reused;
-    let audioVoices = manifest.audio?.voices;
-    let audioTts = manifest.audio?.tts;
+    const audioArtifacts = resolveAudioArtifactsFromManifest(manifest);
+    let audioPath = audioArtifacts.studyText?.path;
+    let audioUrl = audioArtifacts.studyText?.url;
+    let audioHash = audioArtifacts.studyText?.hash;
+    let audioKey = audioArtifacts.studyText?.key;
+    let audioEtag = audioArtifacts.studyText?.etag;
+    let audioSizeBytes = audioArtifacts.studyText?.sizeBytes;
+    let audioReused = audioArtifacts.studyText?.reused;
+    let audioVoices = audioArtifacts.studyText?.voices;
+    let audioTts = audioArtifacts.studyText?.tts;
     const publishTarget = manifest.publishTarget ?? 'notion';
     let anytypeUrl = manifest.anytypeUrl;
     let htmlUrl = manifest.htmlUrl;
@@ -1438,6 +1612,7 @@ export async function rerunAssignment(
       emitStage('tts', 'start');
       throwIfCancelled(signal, 'tts');
       const markdownContext = parseMarkdownContext(mdContents);
+      const shadowFocus = extractPronunciationShadowFocus(markdownContext);
 
       // TTS mode debug logging for rerun
       if (flags.ttsStrategy) {
@@ -1512,6 +1687,18 @@ export async function rerunAssignment(
       audioReused = undefined;
       audioVoices = ttsResult.voices;
       audioTts = buildTtsSpendSummary(ttsResult);
+      audioArtifacts.studyText = {
+        path: audioPath,
+        url: audioUrl,
+        hash: audioHash,
+        key: audioKey,
+        etag: audioEtag,
+        sizeBytes: audioSizeBytes,
+        reused: audioReused,
+        voices: audioVoices,
+        tts: audioTts,
+        notionBlockId: audioArtifacts.studyText?.notionBlockId,
+      };
       emitVoiceSelectionMetrics(metrics, ttsResult.voices);
 
       if (ttsResult.generatedCharacters !== undefined && ttsResult.generatedCharacters > 0) {
@@ -1529,6 +1716,48 @@ export async function rerunAssignment(
         ttsProvider: audioTts.provider,
         estimatedSpendUsd: audioTts.estimatedSpendUsd,
       });
+
+      if (shadowFocus?.shadowSentence?.trim()) {
+        const narratorVoiceId = ttsResult.voiceAssignments?.Narrator;
+        const fallbackVoiceId = narratorVoiceId ?? ttsResult.voices[0]?.voiceId;
+        if (fallbackVoiceId) {
+          const shadowResult = await buildPronunciationShadowSentenceMp3(
+            {
+              context: markdownContext,
+              mdPath: flags.md,
+              voiceId: fallbackVoiceId,
+            },
+            {
+              outPath: flags.out ?? dirname(flags.md),
+              preview: flags.dryRun,
+              force: flags.force,
+              logger,
+            },
+          );
+          const shadowTts = buildTtsSpendSummary(shadowResult);
+          audioArtifacts.pronunciationShadowSentence = {
+            path: shadowResult.path,
+            hash: shadowResult.hash,
+            voiceId: shadowResult.voiceId,
+            tts: shadowTts,
+            notionBlockId: audioArtifacts.pronunciationShadowSentence?.notionBlockId,
+          };
+          if (shadowResult.generatedCharacters !== undefined && shadowResult.generatedCharacters > 0) {
+            metrics.increment('esl.tts.provider_characters', shadowResult.generatedCharacters, {
+              type: 'generated',
+            });
+          }
+          if (shadowResult.cachedCharacters !== undefined && shadowResult.cachedCharacters > 0) {
+            metrics.increment('esl.tts.provider_characters', shadowResult.cachedCharacters, {
+              type: 'cached',
+            });
+          }
+        } else {
+          audioArtifacts.pronunciationShadowSentence = undefined;
+        }
+      } else {
+        audioArtifacts.pronunciationShadowSentence = undefined;
+      }
       executed.push('tts');
     } else {
       emitStage('tts', 'skipped', { reason: skipReasonByStage.get('tts') ?? 'not requested' });
@@ -1537,7 +1766,15 @@ export async function rerunAssignment(
     if (stepsToRun.has('upload')) {
       emitStage('upload', 'start');
       throwIfCancelled(signal, 'upload');
-      if (!audioPath) {
+      const rerunArtifactEntries: { kind: AudioArtifactKind; artifact: AudioArtifact | undefined }[] = [
+        { kind: 'study_text', artifact: audioArtifacts.studyText },
+        {
+          kind: 'pronunciation_shadow_sentence',
+          artifact: audioArtifacts.pronunciationShadowSentence,
+        },
+      ];
+      const uploadable = rerunArtifactEntries.filter((entry) => entry.artifact?.path);
+      if (uploadable.length === 0) {
         throw new Error(
           'Cannot upload audio: no audio path found. Re-run TTS or provide a manifest with audio.path.',
         );
@@ -1549,46 +1786,60 @@ export async function rerunAssignment(
 
       const bucket = process.env.S3_BUCKET ?? 'stub-bucket';
       const keyPrefix = flags.prefix ?? process.env.S3_PREFIX ?? '';
-      const deterministicAudioKey = audioHash ? resolveAudioArtifactKey(audioHash, keyPrefix) : undefined;
-      if (flags.dryRun) {
-        if (deterministicAudioKey) {
-          audioUrl = deriveS3GlobalUrl(bucket, deterministicAudioKey);
-          audioKey = deterministicAudioKey;
+      for (const entry of uploadable) {
+        const artifact = entry.artifact;
+        if (!artifact?.path) continue;
+        const deterministicKey = artifact.hash
+          ? resolveAudioArtifactKey(artifact.hash, keyPrefix, entry.kind)
+          : undefined;
+        if (flags.dryRun) {
+          if (deterministicKey) {
+            artifact.url = deriveS3GlobalUrl(bucket, deterministicKey);
+            artifact.key = deterministicKey;
+          } else {
+            const preview = deriveS3UploadAddress({
+              bucket,
+              keyPrefix,
+              filePath: artifact.path,
+              urlStyle: 'global',
+            });
+            artifact.url = preview.url;
+            artifact.key = preview.key;
+          }
+          artifact.reused = false;
         } else {
-          const preview = deriveS3UploadAddress({
-            bucket,
-            keyPrefix,
-            filePath: audioPath,
-            urlStyle: 'global',
+          const upload = await uploadFile(artifact.path, {
+            backend: 's3',
+            key: deterministicKey,
+            sha256: artifact.hash,
+            skipIfExists: true,
+            prefix: flags.prefix,
+            public: flags.publicRead,
+            presignExpiresIn: flags.presign,
+            logger,
           });
-          audioUrl = preview.url;
-          audioKey = preview.key;
+          artifact.url = upload.url;
+          artifact.key = upload.key;
+          artifact.etag = upload.etag;
+          artifact.sizeBytes = upload.sizeBytes;
+          artifact.reused = upload.reused;
+          emitArtifactReuseMetric(metrics, 'audio', entry.kind, upload.reused);
         }
-        audioReused = false;
-      } else {
-        const upload = await uploadFile(audioPath, {
-          backend: 's3',
-          key: deterministicAudioKey,
-          sha256: audioHash,
-          skipIfExists: true,
-          prefix: flags.prefix,
-          public: flags.publicRead,
-          presignExpiresIn: flags.presign,
-          logger,
-        });
-        audioUrl = upload.url;
-        audioKey = upload.key;
-        audioEtag = upload.etag;
-        audioSizeBytes = upload.sizeBytes;
-        audioReused = upload.reused;
-        emitArtifactReuseMetric(metrics, 'audio', upload.reused);
       }
+      audioPath = audioArtifacts.studyText?.path;
+      audioUrl = audioArtifacts.studyText?.url;
+      audioHash = audioArtifacts.studyText?.hash;
+      audioKey = audioArtifacts.studyText?.key;
+      audioEtag = audioArtifacts.studyText?.etag;
+      audioSizeBytes = audioArtifacts.studyText?.sizeBytes;
+      audioReused = audioArtifacts.studyText?.reused;
+      audioVoices = audioArtifacts.studyText?.voices;
+      audioTts = audioArtifacts.studyText?.tts;
       throwIfCancelled(signal, 'upload');
 
       emitStage('upload', 'success', {
-        url: audioUrl,
-        key: audioKey,
-        reused: audioReused,
+        studyTextUrl: audioArtifacts.studyText?.url,
+        pronunciationUrl: audioArtifacts.pronunciationShadowSentence?.url,
         dryRun: flags.dryRun,
       });
       executed.push('upload');
@@ -1601,6 +1852,8 @@ export async function rerunAssignment(
     if (stepsToRun.has('add-audio')) {
       emitStage('add-audio', 'start');
       throwIfCancelled(signal, 'add-audio');
+      const studyTextAudioUrl = audioArtifacts.studyText?.url;
+      const pronunciationAudioUrl = audioArtifacts.pronunciationShadowSentence?.url;
       if (publishTarget === 'notion') {
         const targetPageId = manifest.pageId;
         if (!targetPageId) {
@@ -1608,16 +1861,45 @@ export async function rerunAssignment(
             'Cannot add audio: manifest does not have a pageId. Re-run the import step first.',
           );
         }
-        if (!audioUrl) {
+        if (!studyTextAudioUrl && !pronunciationAudioUrl) {
           throw new Error('Cannot add audio: no audio URL available. Rerun upload first.');
         }
 
         if (!flags.dryRun) {
-          await addOrReplaceAudioUnderStudyText(targetPageId, audioUrl, { replace: flags.force });
+          if (studyTextAudioUrl) {
+            const result = await addOrReplaceAudio(targetPageId, studyTextAudioUrl, {
+              replace: flags.force,
+              target: 'study-text',
+              previousBlockId: audioArtifacts.studyText?.notionBlockId,
+            });
+            if (result.blockId) {
+              audioArtifacts.studyText = {
+                ...audioArtifacts.studyText,
+                notionBlockId: result.blockId,
+              };
+            }
+          }
+          if (pronunciationAudioUrl) {
+            const result = await addOrReplaceAudio(targetPageId, pronunciationAudioUrl, {
+              replace: flags.force,
+              target: 'pronunciation-shadow-sentence',
+              previousBlockId: audioArtifacts.pronunciationShadowSentence?.notionBlockId,
+            });
+            if (result.blockId) {
+              audioArtifacts.pronunciationShadowSentence = {
+                ...audioArtifacts.pronunciationShadowSentence,
+                notionBlockId: result.blockId,
+              };
+            }
+          }
           throwIfCancelled(signal, 'add-audio');
         }
 
-        emitStage('add-audio', 'success', { pageId: targetPageId, url: audioUrl });
+        emitStage('add-audio', 'success', {
+          pageId: targetPageId,
+          studyTextUrl: studyTextAudioUrl,
+          pronunciationUrl: pronunciationAudioUrl,
+        });
       } else if (publishTarget === 'anytype') {
         const targetPageId = manifest.anytypePageId;
         const targetSpaceId = manifest.anytypeSpaceId;
@@ -1626,7 +1908,7 @@ export async function rerunAssignment(
             'Cannot add audio: manifest does not have an Anytype page/space id. Re-run import first.',
           );
         }
-        if (!audioUrl) {
+        if (!studyTextAudioUrl && !pronunciationAudioUrl) {
           throw new Error('Cannot add audio: no audio URL available. Rerun upload first.');
         }
 
@@ -1634,7 +1916,10 @@ export async function rerunAssignment(
           const client = createAnytypeClient();
           const page = await client.getObject(targetSpaceId, targetPageId);
           throwIfCancelled(signal, 'add-audio');
-          const updatedBody = insertAudioBeforeStudyText(page.body ?? '', audioUrl);
+          const updatedBody = insertGeneratedAudioLinks(page.body ?? '', {
+            studyTextUrl: studyTextAudioUrl,
+            pronunciationShadowSentenceUrl: pronunciationAudioUrl,
+          });
           if (updatedBody !== page.body) {
             await client.updateObject(targetSpaceId, targetPageId, { body: updatedBody });
             throwIfCancelled(signal, 'add-audio');
@@ -1646,7 +1931,10 @@ export async function rerunAssignment(
             headingTheme = resolveHeadingTheme(preset);
           }
 
-          const publishMarkdown = insertAudioBeforeStudyText(mdContents, audioUrl);
+          const publishMarkdown = insertGeneratedAudioLinks(mdContents, {
+            studyTextUrl: studyTextAudioUrl,
+            pronunciationShadowSentenceUrl: pronunciationAudioUrl,
+          });
           const publishTitle = resolveMarkdownTitle(
             mdContents,
             basename(flags.md).replace(/\.[^.]+$/, ''),
@@ -1665,12 +1953,13 @@ export async function rerunAssignment(
           htmlKey = publishResult.key;
           htmlEtag = publishResult.etag;
           htmlReused = publishResult.reused;
-          emitArtifactReuseMetric(metrics, 'html', publishResult.reused);
+          emitArtifactReuseMetric(metrics, 'html', undefined, publishResult.reused);
         }
 
         emitStage('add-audio', 'success', {
           pageId: targetPageId,
-          url: audioUrl,
+          studyTextUrl: studyTextAudioUrl,
+          pronunciationUrl: pronunciationAudioUrl,
           publishUrl: anytypeUrl,
           publishKey: htmlKey,
           publishHash: htmlHash,
@@ -1684,7 +1973,10 @@ export async function rerunAssignment(
             headingTheme = resolveHeadingTheme(preset);
           }
 
-          const publishMarkdown = insertAudioBeforeStudyText(mdContents, audioUrl ?? '');
+          const publishMarkdown = insertGeneratedAudioLinks(mdContents, {
+            studyTextUrl: studyTextAudioUrl,
+            pronunciationShadowSentenceUrl: pronunciationAudioUrl,
+          });
           const publishTitle = resolveMarkdownTitle(
             mdContents,
             basename(flags.md).replace(/\.[^.]+$/, ''),
@@ -1701,10 +1993,11 @@ export async function rerunAssignment(
           htmlKey = publishResult.key;
           htmlEtag = publishResult.etag;
           htmlReused = publishResult.reused;
-          emitArtifactReuseMetric(metrics, 'html', publishResult.reused);
+          emitArtifactReuseMetric(metrics, 'html', undefined, publishResult.reused);
         }
         emitStage('add-audio', 'success', {
-          url: audioUrl,
+          studyTextUrl: studyTextAudioUrl,
+          pronunciationUrl: pronunciationAudioUrl,
           publishUrl: htmlUrl,
           publishKey: htmlKey,
           publishHash: htmlHash,
@@ -1731,16 +2024,10 @@ export async function rerunAssignment(
       htmlKey,
       htmlEtag,
       htmlReused,
-      audio: {
-        path: audioPath,
-        url: audioUrl,
-        hash: audioHash,
-        key: audioKey,
-        etag: audioEtag,
-        sizeBytes: audioSizeBytes,
-        reused: audioReused,
-        voices: audioVoices,
-        tts: audioTts,
+      audio: audioArtifacts.studyText,
+      audioArtifacts: {
+        studyText: audioArtifacts.studyText,
+        pronunciationShadowSentence: audioArtifacts.pronunciationShadowSentence,
       },
 
       // Preserve prior TTS metadata unless explicitly overridden

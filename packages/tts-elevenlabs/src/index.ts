@@ -14,7 +14,12 @@ import {
   type VoiceProviderErrorCategory,
   noopLogger,
 } from '@esl-pipeline/contracts';
-import { type Frontmatter, extractFrontmatter, extractStudyText } from '@esl-pipeline/pmd';
+import {
+  type Frontmatter,
+  extractFrontmatter,
+  extractPronunciationShadowFocus,
+  extractStudyText,
+} from '@esl-pipeline/pmd';
 import { runProviderFallbackLadder } from '@esl-pipeline/provider-runtime';
 
 import { loadVoicesCatalog } from './assign.js';
@@ -34,7 +39,14 @@ import {
 } from './provider-runtime.js';
 import { type VoiceMapConfig, resolveSpeakerVoices } from './speakerAssignment.js';
 import type { DialogueInput, TtsStrategy } from './types.js';
-import type { BuildStudyTextInput, BuildStudyTextOptions, BuildStudyTextResult } from './types.js';
+import type {
+  BuildPronunciationShadowSentenceInput,
+  BuildPronunciationShadowSentenceOptions,
+  BuildPronunciationShadowSentenceResult,
+  BuildStudyTextInput,
+  BuildStudyTextOptions,
+  BuildStudyTextResult,
+} from './types.js';
 
 const DEFAULT_MODEL_ID = process.env.ELEVENLABS_MODEL_ID ?? 'eleven_multilingual_v2';
 type TextToSpeechConvertBody = Parameters<
@@ -89,6 +101,11 @@ function sanitizeStudentName(student?: unknown): string {
 function buildOutputFileName(hash: string, frontmatter: Frontmatter): string {
   const prefix = sanitizeStudentName(frontmatter.student);
   return prefix ? `${prefix}-${hash}.mp3` : `${hash}.mp3`;
+}
+
+function buildShadowSentenceOutputFileName(hash: string, frontmatter: Frontmatter): string {
+  const prefix = sanitizeStudentName(frontmatter.student);
+  return prefix ? `${prefix}-${hash}-shadow-sentence.mp3` : `${hash}-shadow-sentence.mp3`;
 }
 
 /**
@@ -675,6 +692,102 @@ export async function buildStudyTextMp3(
   };
 }
 
+export async function buildPronunciationShadowSentenceMp3(
+  input: BuildPronunciationShadowSentenceInput,
+  opts: BuildPronunciationShadowSentenceOptions,
+): Promise<BuildPronunciationShadowSentenceResult> {
+  if (!input.voiceId?.trim()) {
+    throw new ValidationError('voiceId is required for pronunciation shadow sentence synthesis.');
+  }
+  const logger = opts.logger ?? noopLogger;
+  const frontmatter = extractFrontmatter(input.context);
+  const shadowFocus = extractPronunciationShadowFocus(input.context);
+  if (!shadowFocus) {
+    throw new ValidationError(
+      'Pronunciation shadow sentence mode not found. Add "**Mode:** shadow_sentence" under section C.',
+    );
+  }
+  const sentence = cleanSpeechText(shadowFocus.shadowSentence ?? '');
+  if (!sentence) {
+    throw new ValidationError(
+      'Pronunciation shadow sentence is empty. Add "**Shadow sentence:** <sentence>" under section C.',
+    );
+  }
+
+  const outputDir = resolve(opts.outPath || (input.mdPath ? dirname(input.mdPath) : process.cwd()));
+  await mkdir(outputDir, { recursive: true });
+  const modelId = opts.modelId ?? DEFAULT_MODEL_ID;
+  const outputFormat = resolveOutputFormat(opts.outputFormat);
+  const hash = createHash('sha256')
+    .update(
+      JSON.stringify({
+        kind: 'pronunciation_shadow_sentence',
+        text: sentence,
+        voiceId: input.voiceId.trim(),
+        modelId,
+        outputFormat,
+      }),
+    )
+    .digest('hex');
+  const targetPath = resolve(outputDir, buildShadowSentenceOutputFileName(hash, frontmatter));
+  const generatedCharacters = sentence.length;
+
+  if (opts.preview) {
+    return {
+      path: targetPath,
+      duration: undefined,
+      hash,
+      provider: DEFAULT_TTS_PROVIDER,
+      voiceId: input.voiceId.trim(),
+      generatedCharacters,
+      cachedCharacters: 0,
+    };
+  }
+
+  if (!opts.force && (await fileExistsNonEmpty(targetPath))) {
+    return {
+      path: targetPath,
+      duration: await approximateDurationFromFile(targetPath, outputFormat),
+      hash,
+      provider: DEFAULT_TTS_PROVIDER,
+      voiceId: input.voiceId.trim(),
+      generatedCharacters: 0,
+      cachedCharacters: generatedCharacters,
+    };
+  }
+
+  const client = getElevenClient();
+  logger.log({
+    level: 'info',
+    stage: 'tts',
+    message: 'Generating pronunciation shadow sentence audio',
+    detail: { voiceId: input.voiceId.trim(), modelId, outputFormat },
+  });
+  await synthesizeLineWithRetry(client, input.voiceId.trim(), sentence, targetPath, {
+    modelId,
+    outputFormat,
+  });
+  await ensureFileExists(targetPath);
+
+  const titleMeta =
+    typeof frontmatter.title === 'string' && frontmatter.title.trim().length > 0
+      ? `${frontmatter.title.trim()} — Pronunciation Shadow Sentence`
+      : '';
+  if (titleMeta) {
+    await setMp3TitleMetadata(targetPath, titleMeta, await resolveFfmpegPath(opts.ffmpegPath));
+  }
+
+  return {
+    path: targetPath,
+    duration: await approximateDurationFromFile(targetPath, outputFormat),
+    hash,
+    provider: DEFAULT_TTS_PROVIDER,
+    voiceId: input.voiceId.trim(),
+    generatedCharacters,
+    cachedCharacters: 0,
+  };
+}
+
 export function parseSpeaker(line: string): { speaker?: string; text: string } {
   const idx = line.indexOf(':');
   if (idx > 0 && idx < 40) {
@@ -926,6 +1039,9 @@ export type {
   DialogueSynthesisOptions,
   DialogueSynthesisResult,
   DialogueChunk,
+  BuildPronunciationShadowSentenceInput,
+  BuildPronunciationShadowSentenceOptions,
+  BuildPronunciationShadowSentenceResult,
   BuildStudyTextInput,
   BuildStudyTextOptions,
   BuildStudyTextResult,
