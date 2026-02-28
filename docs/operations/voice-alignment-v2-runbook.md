@@ -30,7 +30,7 @@ validation, and TTS execution.
 2. Confirm snapshot recency:
    - Compare `capabilities.generatedAt` with expected refresh cadence.
 3. Validate prompt packaging behavior:
-   - Run a v4.3 prompt package generation and ensure capability placeholders are replaced.
+   - Run a v4.4 prompt package generation and ensure capability placeholders are replaced.
    - Confirm prompt package response includes capability provenance metadata (generatedAt + hash).
 
 ## 3) Flag Progression Playbook
@@ -51,7 +51,7 @@ Progress flags in this order:
    - `VOICE_ALIGNMENT_V2_ENABLED=true`
    - `VOICE_ALIGNMENT_V2_STRICT_VALIDATION=true`
    - `VOICE_ALIGNMENT_V2_PROMPT=true`
-   - Expected: v4.3 prompt selected and capability enums injected at package time.
+   - Expected: v4.4 prompt selected and capability enums injected at package time.
 
 Rollback:
 
@@ -108,6 +108,6 @@ Also watch metric streams/logs:
 2. Validate one canary assignment in each mode:
    - compatibility shadow
    - strict validation
-   - strict + v4.3 prompt
+   - strict + v4.4 prompt
 3. Confirm readiness endpoint and logs emit expected voice-alignment counters.
 4. Document rollout decision and rollback condition in deployment notes.

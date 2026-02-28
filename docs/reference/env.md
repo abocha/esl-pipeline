@@ -33,9 +33,9 @@ Set these in `.env` (or your shell) when running `esl` or programmatic API calls
 - `VOICE_ALIGNMENT_V2_ENABLED` (optional, default `false`) — Enables v2 voice-alignment pipeline behavior.
 - `VOICE_ALIGNMENT_V2_STRICT_VALIDATION` (optional, default `false`) — Promotes voice metadata compatibility checks to hard validation errors.
 - `VOICE_ALIGNMENT_V2_MIN_SCORE` (optional, default `20`) — Minimum heuristic score accepted for strict auto voice assignment.
-- `VOICE_ALIGNMENT_V2_PROMPT` (optional, default `false`) — Enables prompt snapshot `hw_prompt_v4-3_voice-aligned`.
+- `VOICE_ALIGNMENT_V2_PROMPT` (optional, default `false`) — Enables prompt snapshot `hw_prompt_v4-4_voice-aligned`.
 - `ELEVENLABS_VOICES_PATH` (optional) — Absolute/relative path to synced voice catalog JSON used for
-  validator checks and v4.3 capability injection during prompt packaging.
+  validator checks and voice-aligned capability injection during prompt packaging.
 - `AWS_REGION`, `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY` — AWS creds for uploads.
 - `S3_BUCKET` — Bucket for audio uploads.
 - `S3_PREFIX` (optional) — Key prefix for uploads (e.g., `audio/assignments`).

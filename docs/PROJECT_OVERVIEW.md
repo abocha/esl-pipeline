@@ -5,7 +5,7 @@
 - Audience: AI agents, maintainers.
 - Read Time: 3 minutes.
 - Authority Level: Context baseline.
-- Last Verified Against: 2026-02-10 repo state.
+- Last Verified Against: 2026-02-28 repo state.
 
 ## Purpose
 
