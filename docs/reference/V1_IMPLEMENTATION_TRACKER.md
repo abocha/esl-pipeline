@@ -5,8 +5,8 @@
 - Audience: founder-maintainer and AI pair.
 - Read Time: 12 minutes.
 - Authority Level: V1 execution source of truth.
-- Last Updated: 2026-02-18.
-- Reconciled commit window: `02d4eab..65c04e4`.
+- Last Updated: 2026-02-28.
+- Reconciled commit window: `65c04e4..c16fde8`.
 
 ## Purpose
 
@@ -35,8 +35,8 @@
 
 - Active workstream: `Stabilization and gate review`.
 - This week objective: verify WS2B+WS3/WS3.5 telemetry stability and lock a clear WS5 go/no-go signal.
-- Today `Now` task (30-90 min): run stabilization checks (readiness drift, provider-error sampling boundaries, quota-window behavior) and log evidence.
-- Success for today: tracker status is fully normalized to shipped WS3-S3 + WS3.5 state, and WS5 remains explicitly parked until telemetry stability is proven.
+- Today `Now` task (30-90 min): run stabilization checks (readiness drift, provider-error sampling boundaries, quota-window behavior), record the current-cycle WS5 go/no-go state, and log evidence.
+- Success for today: tracker status is fully normalized to shipped WS3-S3 + WS3.5 state, WS5 current-cycle decision is explicitly documented, and weekly review linkage is clear.
 
 ## Delivery Model (Locked)
 
@@ -101,6 +101,8 @@ This lane tracks meaningful shipped capability that supports V1 but does not map
 - Hardened ElevenLabs voice sync and catalog behavior (`17f6a73`).
 - Finalized voice-alignment v2 rollout, runbook, and prompt snapshot v4.3 gating (`0771e19`).
 - Stabilized backend test expectations around job-options and prompt-package domain typing (`c78875f`, `3c3353b`).
+- Added pronunciation `shadow_sentence` reference-audio generation and HTML word-level browser TTS,
+  with voice-aligned prompt snapshot promotion to v4.4 (`c16fde8`).
 - Why it matters: raises reliability of voice assignment/provenance before WS2B generation rollout.
 
 ### WS0-F Executable Env Bootstrap Standardization
@@ -624,6 +626,13 @@ reuse it in generation flow before extending the same seam into TTS runtime path
 
 ### WS5 Cost and Quota Policy
 
+Current cycle decision (2026-02-28): `no-go` (remain parked).
+
+Decision rationale:
+
+- Weekly review evidence artifact is not yet completed in `docs/playbooks/WEEKLY_PRODUCT_REVIEW_TEMPLATE.md`.
+- Start-gate criteria remain intentionally unmet until telemetry stability is reaffirmed in that review.
+
 Start only when:
 
 - [ ] WS2B and WS3/WS3.5 telemetry remains stable across a full review cycle (totals, breakdown, and drift-warning behavior show no unexplained variance).
@@ -694,18 +703,21 @@ Recent evidence:
 - 2026-02-18 | Tracker normalization | updated sprint focus to stabilization, marked WS3 complete across all tracker sections, tightened WS5/WS4 start gates, and made weekly closeout criteria stabilization-aware. | `rg -n "Current Sprint Focus|WS3 TTS abstraction|Stabilization and gate review|WS5 Cost and Quota Policy" docs/reference/V1_IMPLEMENTATION_TRACKER.md`; `git diff -- docs/reference/V1_IMPLEMENTATION_TRACKER.md` | pass | local workspace
 - 2026-02-18 | WS3.5 safety guardrails | implemented hard-stop generation budget protections (strict no-paid allowlists, max output cap, provider/model/day/minute counter checks, `budget_exceeded` contract/route/UI surfacing, and quota remaining visibility) with backend/frontend/docs sync. | `pnpm --filter @esl-pipeline/contracts typecheck`; `pnpm --filter @esl-pipeline/batch-backend typecheck`; `pnpm --filter @esl-pipeline/batch-backend exec vitest run --config ../../vitest.config.ts tests/application.generate-draft.test.ts tests/application.generation-policy.test.ts tests/application.get-job-options.test.ts tests/config.env.test.ts tests/transport.http-server.integration.test.ts tests/application.process-transcribe-job.test.ts`; `pnpm --filter @esl-pipeline/batch-frontend test -- src/utils/api.generation.test.ts src/ui/minimal/MinimalAssignment.test.tsx`; `pnpm check:fast` | pass | commit `65c04e4`
 - 2026-02-18 | WS3.5 closeout | resolved stale runtime quota snapshot gating (minute/day rollover-safe disable semantics) and finalized integrated implementation baseline. | `pnpm --filter @esl-pipeline/batch-frontend test -- src/ui/minimal/MinimalAssignment.test.tsx`; `pnpm --filter @esl-pipeline/batch-frontend typecheck`; `git show --stat --name-only 65c04e4` | pass | commit `65c04e4`
+- 2026-02-28 | WS0-E milestone | shipped pronunciation `shadow_sentence` reference-audio generation plus HTML word-level browser TTS controls, and promoted voice-aligned prompt snapshot to v4.4. | n/a | merged | commit `c16fde8`
+- 2026-02-28 | Stabilization gate/state update | recorded WS5 current-cycle `no-go` decision, annotated weekly checklist state, and synced tracker to current stabilization posture. | `rg -n "WS5 Cost and Quota Policy|Current cycle decision|Weekly Closeout Checklist|2026-02-28" docs/reference/V1_IMPLEMENTATION_TRACKER.md`; `git diff -- docs/reference/V1_IMPLEMENTATION_TRACKER.md` | pass | local workspace
 
 ## Weekly Closeout Checklist
 
-- [ ] One reliability or stabilization improvement shipped.
-- [ ] One usability improvement shipped (or explicitly deferred with reason).
-- [ ] One value improvement shipped (or explicitly deferred with reason).
-- [ ] Tracker updated with evidence line(s).
-- [ ] If non-roadmap capability shipped, append it to WS0 with commit hash.
-- [ ] `general-english` scope lock still holds for current phase.
-- [ ] Baseline prompt lock still points to `docs/templates/hw_prompt_v4-2_clean.md`.
-- [ ] WS5 go/no-go decision recorded based on telemetry stability evidence.
+- [x] One reliability or stabilization improvement shipped.
+- [x] One usability improvement shipped (or explicitly deferred with reason).
+- [x] One value improvement shipped (or explicitly deferred with reason).
+- [x] Tracker updated with evidence line(s).
+- [x] If non-roadmap capability shipped, append it to WS0 with commit hash.
+- [x] `general-english` scope lock still holds for current phase.
+- [x] Baseline prompt lock still points to `docs/templates/hw_prompt_v4-2_clean.md`.
+- [x] WS5 go/no-go decision recorded based on telemetry stability evidence.
 - [ ] `docs/playbooks/WEEKLY_PRODUCT_REVIEW_TEMPLATE.md` completed.
+Pending note: complete this artifact in the next weekly review cycle and link the decision evidence.
 
 ## Related
 
