@@ -1,7 +1,7 @@
 export const DEFAULT_LEARNING_PRESET_ID = 'general-english';
 export const DEFAULT_LEARNING_PRESET_VERSION = 'v1';
 export const LEGACY_PROMPT_SNAPSHOT_VERSION = 'hw_prompt_v4-2_clean';
-export const VOICE_ALIGNED_PROMPT_SNAPSHOT_VERSION = 'hw_prompt_v4-3_voice-aligned';
+export const VOICE_ALIGNED_PROMPT_SNAPSHOT_VERSION = 'hw_prompt_v4-4_voice-aligned';
 export const DEFAULT_PROMPT_ALIAS = 'current';
 
 function isTruthyFlag(value: string | undefined): boolean {

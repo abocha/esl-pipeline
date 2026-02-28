@@ -106,6 +106,22 @@ describe('rendering', () => {
     expect(html).toContain('<span class="tag">Nika</span>');
     expect(html).not.toContain(formatCurrentDateForAssertion());
   });
+
+  it('ships browser word-level pronunciation controls for shadow_sentence mode', async () => {
+    const markdown = `### C. Pronunciation Micro-Focus
+
+**Mode:** shadow_sentence
+**Shadow sentence:** The weather was unexpectedly warm.
+
+1. weather — /ˈweð.ər/
+2. unexpectedly — /ˌʌn.ɪkˈspek.tɪd.li/
+3. warm — /wɔːrm/`;
+    const html = await renderToHtml(markdown, 'Pronunciation');
+    expect(html).toContain('.word-tts-button');
+    expect(html).toContain('.pronunciation-word-tts');
+    expect(html).toContain('shadow_sentence');
+    expect(html).toContain('speechSynthesis');
+  });
 });
 
 function formatCurrentDateForAssertion(): string {

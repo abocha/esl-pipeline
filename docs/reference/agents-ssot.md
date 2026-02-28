@@ -413,6 +413,8 @@ For all subsections:
 - Contracts:
   - Requires valid ElevenLabs credentials and ffmpeg.
   - Produces file paths/metadata used by uploader and manifest.
+  - Supports study-text synthesis and optional pronunciation shadow-sentence synthesis
+    (activated by `**Mode:** shadow_sentence` content contract).
 - Safe extensions:
   - Additional voices/options; MUST NOT break default voice behavior.
 
@@ -584,6 +586,8 @@ Manifest schema:
       - `ttsStrategy`, `dialogueLanguage`, `dialogueStability`, `dialogueSeed`.
     - Additive artifact identity/reuse metadata:
       - `audio.key`, `audio.etag`, `audio.sizeBytes`, `audio.reused`
+      - `audioArtifacts.studyText.*` (multi-artifact map; compatibility alias to `audio`)
+      - `audioArtifacts.pronunciationShadowSentence.*` (optional shadow-sentence reference audio)
       - `htmlHash`, `htmlKey`, `htmlEtag`, `htmlReused`
       - `notionColorization.preset`, `notionColorization.presetHash`, `notionColorization.pageId`, `notionColorization.mdHash`, `notionColorization.appliedAt`
 

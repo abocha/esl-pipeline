@@ -108,3 +108,29 @@ export interface BuildStudyTextResult {
   generatedCharacters?: number;
   cachedCharacters?: number;
 }
+
+export interface BuildPronunciationShadowSentenceInput {
+  context: ParsedMarkdownContext;
+  voiceId: string;
+  mdPath?: string;
+}
+
+export interface BuildPronunciationShadowSentenceOptions {
+  outPath: string;
+  preview?: boolean;
+  force?: boolean;
+  ffmpegPath?: string;
+  outputFormat?: string;
+  modelId?: string;
+  logger?: PipelineLogger;
+}
+
+export interface BuildPronunciationShadowSentenceResult {
+  path: string;
+  duration?: number;
+  hash: string;
+  provider?: string;
+  voiceId: string;
+  generatedCharacters?: number;
+  cachedCharacters?: number;
+}

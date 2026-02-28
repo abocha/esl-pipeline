@@ -2695,6 +2695,58 @@ describe('transport/http-server - integration (in-process)', () => {
     expect(payload.html).toContain('audio-placeholder');
   });
 
+  it('POST /preview/html injects pronunciation placeholder in shadow_sentence mode', async () => {
+    const response = await app.inject({
+      method: 'POST',
+      url: '/preview/html',
+      payload: {
+        text: [
+          '### C. Pronunciation Micro-Focus',
+          '',
+          '**Mode:** shadow_sentence',
+          '**Shadow sentence:** We should review this carefully.',
+          '',
+          '1. review — /rɪˈvjuː/',
+          '2. carefully — /ˈkeə.fəl.i/',
+          '3. should — /ʃʊd/',
+          '',
+          ':::study-text Transcript',
+          'Teacher: Hello!',
+          ':::',
+        ].join('\n'),
+      },
+    });
+
+    expect(response.statusCode).toBe(200);
+    const payload = response.json() as { html: string };
+    const placeholderCount = (payload.html.match(/Audio track generating\.\.\./g) ?? []).length;
+    expect(placeholderCount).toBeGreaterThanOrEqual(2);
+  });
+
+  it('POST /preview/html preserves user-authored audio directives', async () => {
+    const response = await app.inject({
+      method: 'POST',
+      url: '/preview/html',
+      payload: {
+        text: [
+          '## Warm up',
+          '',
+          ':::audio https://example.com/custom.mp3',
+          '',
+          ':::study-text Transcript',
+          'Teacher: Hello!',
+          ':::',
+        ].join('\n'),
+        audioUrl: 'https://example.com/generated.mp3',
+      },
+    });
+
+    expect(response.statusCode).toBe(200);
+    const payload = response.json() as { html: string };
+    expect(payload.html).toContain('https://example.com/custom.mp3');
+    expect(payload.html).toContain('https://example.com/generated.mp3');
+  });
+
   it('GET /user/jobs applies filters and pagination', async () => {
     const listJobs = vi.spyOn(listJobsModule, 'listJobsWithDefaults');
     listJobs.mockResolvedValue({

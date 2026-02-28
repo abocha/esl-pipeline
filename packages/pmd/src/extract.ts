@@ -7,6 +7,9 @@ import type {
   PmdBlock,
   PmdDirectiveBlock,
   PmdHeading,
+  PronunciationShadowFocus,
+  PronunciationShadowIssue,
+  PronunciationShadowWord,
   Section,
   StudyText,
 } from './types.js';
@@ -50,7 +53,15 @@ function normalizeLabel(value: string): string {
   return value
     .replaceAll(/[\u2018\u2019]/g, "'")
     .trim()
-    .toLowerCase();
+      .toLowerCase();
+}
+
+function normalizeHeadingText(value: string): string {
+  return value
+    .toLowerCase()
+    .replaceAll(/[^\w\s]/g, ' ')
+    .replaceAll(/\s+/g, ' ')
+    .trim();
 }
 
 function findFirstDirective(blocks: PmdDirectiveBlock[]): PmdDirectiveBlock | null {
@@ -172,4 +183,141 @@ export function extractSections(md: ParsedMarkdownContext): Section[] {
       content: slice.join('\n').trim(),
     };
   });
+}
+
+function findFirstPronunciationHeading(body: PmdBlock[]): PmdHeading | null {
+  const headings = collectHeadings(body, 3).sort((a, b) => {
+    const aLine = a.position?.start.line ?? 0;
+    const bLine = b.position?.start.line ?? 0;
+    return aLine - bLine;
+  });
+  for (const heading of headings) {
+    const normalized = normalizeHeadingText(heading.text);
+    if (
+      normalized.includes('pronunciation') &&
+      normalized.includes('micro') &&
+      normalized.includes('focus')
+    ) {
+      return heading;
+    }
+  }
+  return null;
+}
+
+function parseMarkedField(
+  line: string,
+  marker: 'mode' | 'shadow sentence',
+): string | null {
+  const regex = new RegExp(
+    String.raw`^\s*(?:[-*]\s*)?(?:\*\*)?${marker}\s*:\s*(?:\*\*)?\s*(.+?)\s*$`,
+    'i',
+  );
+  const match = regex.exec(line);
+  if (!match?.[1]) return null;
+  return match[1].trim();
+}
+
+function parsePronunciationWordLine(
+  line: string,
+  lineNumber: number,
+): { word?: PronunciationShadowWord; issue?: PronunciationShadowIssue } | null {
+  const numberedItem = /^\s*\d+\.\s+/.test(line);
+  if (!numberedItem) return null;
+  const parsed = /^\s*\d+\.\s*(.+?)\s*[—-]\s*(.+?)\s*$/.exec(line);
+  if (!parsed?.[1] || !parsed[2]) {
+    return {
+      issue: {
+        code: 'invalid_word_item_format',
+        message:
+          'Word drill line must use "1. word — /transcription/" format.',
+        line: lineNumber,
+      },
+    };
+  }
+  const text = parsed[1].replaceAll('**', '').trim();
+  const transcription = parsed[2].trim();
+  if (!/^\/.+\/$/.test(transcription)) {
+    return {
+      issue: {
+        code: 'invalid_word_transcription',
+        message:
+          'Word transcription must be wrapped in forward slashes, e.g. /wɜːd/.',
+        line: lineNumber,
+      },
+    };
+  }
+  return {
+    word: {
+      text,
+      transcription,
+      line: lineNumber,
+    },
+  };
+}
+
+export function extractPronunciationShadowFocus(
+  md: ParsedMarkdownContext,
+): PronunciationShadowFocus | null {
+  const heading = findFirstPronunciationHeading(md.document.body);
+  if (!heading) return null;
+  const sectionStartLine = heading.position?.start.line ?? 0;
+  if (sectionStartLine <= 0) return null;
+
+  const sortedHeadings = [
+    ...collectHeadings(md.document.body, 2),
+    ...collectHeadings(md.document.body, 3),
+  ]
+    .sort((a, b) => {
+      const aLine = a.position?.start.line ?? 0;
+      const bLine = b.position?.start.line ?? 0;
+      return aLine - bLine;
+    });
+  const nextHeading = sortedHeadings.find((candidate) => {
+    const line = candidate.position?.start.line ?? 0;
+    if (line <= sectionStartLine) return false;
+    return candidate.depth <= 3;
+  });
+  const endLineExclusive = nextHeading?.position?.start.line ?? md.contentLines.length + 1;
+  const sectionLines = md.contentLines.slice(sectionStartLine, Math.max(sectionStartLine, endLineExclusive - 1));
+
+  let modeValue: string | null = null;
+  let shadowSentence: string | undefined;
+  const words: PronunciationShadowWord[] = [];
+  const issues: PronunciationShadowIssue[] = [];
+
+  for (const [index, rawLine] of sectionLines.entries()) {
+    const trimmed = rawLine.trim();
+    if (!trimmed || trimmed === ':::') continue;
+
+    const mode = parseMarkedField(trimmed, 'mode');
+    if (mode) {
+      modeValue = mode.toLowerCase();
+      continue;
+    }
+
+    const sentence = parseMarkedField(trimmed, 'shadow sentence');
+    if (sentence) {
+      shadowSentence = sentence;
+      continue;
+    }
+
+    const parsedWord = parsePronunciationWordLine(trimmed, sectionStartLine + index + 1);
+    if (parsedWord?.word) {
+      words.push(parsedWord.word);
+      continue;
+    }
+    if (parsedWord?.issue) {
+      issues.push(parsedWord.issue);
+    }
+  }
+
+  if (modeValue !== 'shadow_sentence') return null;
+
+  return {
+    mode: 'shadow_sentence',
+    shadowSentence,
+    words,
+    sectionStartLine,
+    issues,
+  };
 }

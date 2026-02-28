@@ -101,6 +101,21 @@ notes
   `.trim();
 }
 
+function withPronunciationSection(doc: string, sectionContent: string): string {
+  return doc.replace(
+    ['### C. 🎙️ Pronunciation Micro-Focus (≈1 min)', '', 'text', '', '## 6. ✅ Your Turn: Complete the Mission!'].join(
+      '\n',
+    ),
+    [
+      '### C. 🎙️ Pronunciation Micro-Focus (≈1 min)',
+      '',
+      sectionContent,
+      '',
+      '## 6. ✅ Your Turn: Complete the Mission!',
+    ].join('\n'),
+  );
+}
+
 describe('md-validator', () => {
   beforeEach(() => {
     process.env = { ...ORIGINAL_ENV };
@@ -1168,5 +1183,75 @@ content
     const res = await validateMarkdownFile(file);
     expect(res.ok).toBe(false);
     expect(res.errors.join('\n')).toMatch(/does not exist in the current voice catalog/i);
+  });
+
+  it('accepts valid shadow_sentence pronunciation structure', async () => {
+    const tempDir = await mkdtemp(path.join(tmpdir(), 'validator-'));
+    const file = path.join(tempDir, 'shadow-pronunciation-ok.md');
+    const section = [
+      ':::callout 🗣️',
+      '**Mode:** shadow_sentence',
+      '**Shadow sentence:** I was thinking about working this morning.',
+      '1. thinking — /ˈθɪŋkɪŋ/',
+      '2. working — /ˈwɜːrkɪŋ/',
+      '3. morning — /ˈmɔːrnɪŋ/',
+      ':::',
+    ].join('\n');
+    await writeFile(file, withPronunciationSection(buildBaseDoc('text'), section));
+    const res = await validateMarkdownFile(file);
+    expect(res.ok).toBe(true);
+    expect(res.errors).toHaveLength(0);
+  });
+
+  it('fails shadow_sentence mode when shadow sentence is missing', async () => {
+    const tempDir = await mkdtemp(path.join(tmpdir(), 'validator-'));
+    const file = path.join(tempDir, 'shadow-pronunciation-missing-sentence.md');
+    const section = [
+      ':::callout 🗣️',
+      '**Mode:** shadow_sentence',
+      '1. thinking — /ˈθɪŋkɪŋ/',
+      '2. working — /ˈwɜːrkɪŋ/',
+      '3. morning — /ˈmɔːrnɪŋ/',
+      ':::',
+    ].join('\n');
+    await writeFile(file, withPronunciationSection(buildBaseDoc('text'), section));
+    const res = await validateMarkdownFile(file);
+    expect(res.ok).toBe(false);
+    expect(res.errors.join('\n')).toMatch(/missing "\*\*Shadow sentence:\*\* <sentence>"/i);
+  });
+
+  it('fails shadow_sentence mode when word drill count is outside 3-5', async () => {
+    const tempDir = await mkdtemp(path.join(tmpdir(), 'validator-'));
+    const file = path.join(tempDir, 'shadow-pronunciation-word-count.md');
+    const section = [
+      ':::callout 🗣️',
+      '**Mode:** shadow_sentence',
+      '**Shadow sentence:** I was thinking about working this morning.',
+      '1. thinking — /ˈθɪŋkɪŋ/',
+      '2. working — /ˈwɜːrkɪŋ/',
+      ':::',
+    ].join('\n');
+    await writeFile(file, withPronunciationSection(buildBaseDoc('text'), section));
+    const res = await validateMarkdownFile(file);
+    expect(res.ok).toBe(false);
+    expect(res.errors.join('\n')).toMatch(/requires 3-5 word drill lines/i);
+  });
+
+  it('fails shadow_sentence mode when transcription delimiters are missing', async () => {
+    const tempDir = await mkdtemp(path.join(tmpdir(), 'validator-'));
+    const file = path.join(tempDir, 'shadow-pronunciation-transcription.md');
+    const section = [
+      ':::callout 🗣️',
+      '**Mode:** shadow_sentence',
+      '**Shadow sentence:** I was thinking about working this morning.',
+      '1. thinking — ˈθɪŋkɪŋ',
+      '2. working — /ˈwɜːrkɪŋ/',
+      '3. morning — /ˈmɔːrnɪŋ/',
+      ':::',
+    ].join('\n');
+    await writeFile(file, withPronunciationSection(buildBaseDoc('text'), section));
+    const res = await validateMarkdownFile(file);
+    expect(res.ok).toBe(false);
+    expect(res.errors.join('\n')).toMatch(/must be wrapped in forward slashes/i);
   });
 });

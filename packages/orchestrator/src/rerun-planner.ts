@@ -79,23 +79,27 @@ export function computeRerunPlan(input: PlannerInput): RerunPlanResult {
   const planned = new Set<RerunTargetStage>(requested);
   const publishTarget = input.manifest.publishTarget ?? 'notion';
   const requiresAudioForPublish = publishTarget === 'notion' || publishTarget === 'anytype';
+  const studyAudio = input.manifest.audioArtifacts?.studyText ?? input.manifest.audio;
+  const pronunciationAudio = input.manifest.audioArtifacts?.pronunciationShadowSentence;
+  const hasAnyAudioPath = Boolean(studyAudio?.path || pronunciationAudio?.path);
+  const hasAnyAudioUrl = Boolean(studyAudio?.url || pronunciationAudio?.url);
 
   if (
     planned.has('add-audio') &&
     !planned.has('upload') &&
     requiresAudioForPublish &&
-    !input.manifest.audio?.url
+    !hasAnyAudioUrl
   ) {
     planned.add('upload');
   }
 
-  if (planned.has('upload') && !planned.has('tts') && !input.manifest.audio?.path) {
+  if (planned.has('upload') && !planned.has('tts') && !hasAnyAudioPath) {
     planned.add('tts');
   }
 
   const executable = RERUN_STAGE_ORDER.filter((stage) => planned.has(stage));
 
-  if (planned.has('upload') && !planned.has('tts') && !input.manifest.audio?.path) {
+  if (planned.has('upload') && !planned.has('tts') && !hasAnyAudioPath) {
     missingManifestFields.add('audio.path');
     errors.push('Upload requires audio.path in manifest or including tts in requested steps.');
   }
@@ -104,7 +108,7 @@ export function computeRerunPlan(input: PlannerInput): RerunPlanResult {
     planned.has('add-audio') &&
     !planned.has('upload') &&
     requiresAudioForPublish &&
-    !input.manifest.audio?.url
+    !hasAnyAudioUrl
   ) {
     missingManifestFields.add('audio.url');
     errors.push('Add-audio requires audio.url in manifest or including upload in requested steps.');

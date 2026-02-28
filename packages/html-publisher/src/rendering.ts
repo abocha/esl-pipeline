@@ -325,6 +325,37 @@ body {
   height: 20px;
   opacity: 0.6;
 }
+.pronunciation-word-tts {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin-left: 10px;
+}
+.word-tts-button {
+  border: 1px solid var(--page-line);
+  background: var(--page-card);
+  color: var(--page-text);
+  border-radius: 999px;
+  padding: 2px 10px;
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1.5;
+  cursor: pointer;
+  transition: border-color 0.2s ease, transform 0.2s ease;
+}
+.word-tts-button:hover {
+  border-color: var(--callout-border);
+  transform: translateY(-1px);
+}
+.word-tts-button:focus-visible {
+  outline: 3px solid #2b6cb0;
+  outline-offset: 2px;
+}
+.word-tts-transcription {
+  color: var(--page-muted);
+  font-size: 12px;
+  font-family: 'SFMono-Regular', Menlo, Monaco, Consolas, 'Liberation Mono', monospace;
+}
 .callout {
   background: var(--callout-bg);
   padding: 16px 18px;
@@ -1253,6 +1284,7 @@ function buildCss(options: ResolvedRenderOptions): string {
 function buildBehaviorScript(features: ResolvedFeatures): string {
   const copyCode = features.copyCode ? 'true' : 'false';
 
+  // eslint-disable-next-line unicorn/prefer-string-raw
   return `<script>
 (() => {
   const copyCode = ${copyCode};
@@ -1383,6 +1415,112 @@ function buildBehaviorScript(features: ResolvedFeatures): string {
         }
       });
     });
+  }
+
+  const supportsSpeechSynthesis =
+    'speechSynthesis' in window && typeof window.SpeechSynthesisUtterance === 'function';
+
+  if (supportsSpeechSynthesis) {
+    const normalizeText = (value) =>
+      String(value || '')
+        .toLowerCase()
+        .replace(/[^a-z0-9\\s]/g, ' ')
+        .replace(/\\s+/g, ' ')
+        .trim();
+
+    const headingCandidates = Array.from(document.querySelectorAll('.markdown-body h3'));
+    const pronunciationHeading = headingCandidates.find((heading) => {
+      const normalized = normalizeText(heading.textContent || '');
+      return (
+        normalized.includes('pronunciation') &&
+        normalized.includes('micro') &&
+        normalized.includes('focus')
+      );
+    });
+
+    if (pronunciationHeading instanceof HTMLElement) {
+      const sectionElements = [];
+      let cursor = pronunciationHeading.nextElementSibling;
+      while (cursor) {
+        if (cursor.matches('h2, h3')) {
+          break;
+        }
+        sectionElements.push(cursor);
+        cursor = cursor.nextElementSibling;
+      }
+
+      const shadowModeEnabled = sectionElements.some((element) =>
+        /\\bmode\\s*:\\s*shadow_sentence\\b/i.test(element.textContent || ''),
+      );
+
+      if (shadowModeEnabled) {
+        const resolvePreferredVoice = () => {
+          const voices = window.speechSynthesis.getVoices();
+          if (!voices || voices.length === 0) {
+            return null;
+          }
+          const enUs =
+            voices.find((voice) => /^en[-_]us$/i.test(voice.lang || '')) ||
+            voices.find((voice) => /^en[-_]us\\b/i.test(voice.lang || ''));
+          if (enUs) return enUs;
+          const enAny = voices.find((voice) => /^en[-_]/i.test(voice.lang || ''));
+          return enAny || voices[0] || null;
+        };
+
+        const speakWord = (word) => {
+          const text = String(word || '').trim();
+          if (!text) return;
+          const utterance = new window.SpeechSynthesisUtterance(text);
+          const voice = resolvePreferredVoice();
+          if (voice) {
+            utterance.voice = voice;
+            utterance.lang = voice.lang || utterance.lang;
+          } else {
+            utterance.lang = 'en-US';
+          }
+          utterance.rate = 0.95;
+          window.speechSynthesis.cancel();
+          window.speechSynthesis.speak(utterance);
+        };
+
+        const listItems = sectionElements.flatMap((element) =>
+          Array.from(element.querySelectorAll('li')),
+        );
+
+        listItems.forEach((item) => {
+          if (!(item instanceof HTMLElement)) return;
+          if (item.querySelector('.word-tts-button')) return;
+          const raw = (item.textContent || '').replace(/\\s+/g, ' ').trim();
+          const parsed = /^(.+?)\\s*[—-]\\s*(\\/.+\\/)\\s*$/.exec(raw);
+          if (!parsed || !parsed[1] || !parsed[2]) return;
+          const word = parsed[1].replace(/^\\d+\\.\\s*/, '').trim();
+          const transcription = parsed[2].trim();
+          if (!word) return;
+
+          const controls = document.createElement('span');
+          controls.className = 'pronunciation-word-tts';
+
+          const button = document.createElement('button');
+          button.type = 'button';
+          button.className = 'word-tts-button';
+          button.textContent = 'Play';
+          button.setAttribute(
+            'aria-label',
+            'Play pronunciation for ' + word + ' ' + transcription,
+          );
+          button.addEventListener('click', () => speakWord(word));
+
+          const transcriptionBadge = document.createElement('span');
+          transcriptionBadge.className = 'word-tts-transcription';
+          transcriptionBadge.textContent = transcription;
+          transcriptionBadge.setAttribute('aria-hidden', 'true');
+
+          controls.appendChild(button);
+          controls.appendChild(transcriptionBadge);
+          item.appendChild(controls);
+        });
+      }
+    }
   }
 })();
 </script>`;

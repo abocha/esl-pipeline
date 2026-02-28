@@ -12,6 +12,7 @@ vi.mock('@esl-pipeline/notion-adapter', () => ({
     .fn()
     .mockResolvedValue({ applied: true, counts: { h2: 1, h3: 1, toggles: 0 } }),
   hashColorPreset: vi.fn().mockReturnValue('preset-hash-default'),
+  addOrReplaceAudio: vi.fn().mockResolvedValue({ replaced: false, appended: true }),
   addOrReplaceAudioUnderStudyText: vi.fn().mockResolvedValue({ replaced: false, appended: true }),
 }));
 

@@ -133,6 +133,26 @@ export interface Section {
   content: string;
 }
 
+export interface PronunciationShadowWord {
+  text: string;
+  transcription: string;
+  line: number;
+}
+
+export interface PronunciationShadowIssue {
+  code: string;
+  message: string;
+  line: number;
+}
+
+export interface PronunciationShadowFocus {
+  mode: 'shadow_sentence';
+  shadowSentence?: string;
+  words: PronunciationShadowWord[];
+  sectionStartLine: number;
+  issues: PronunciationShadowIssue[];
+}
+
 export interface ParsedMarkdownContext {
   rawMarkdown: string;
   normalized: import('./source.js').NormalizedMarkdownSource;

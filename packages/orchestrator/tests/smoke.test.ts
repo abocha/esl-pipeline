@@ -10,6 +10,7 @@ vi.mock('@esl-pipeline/notion-adapter', () => ({
     .fn()
     .mockResolvedValue({ applied: true, counts: { h2: 1, h3: 1, toggles: 0 } }),
   hashColorPreset: vi.fn().mockReturnValue('preset-hash-default'),
+  addOrReplaceAudio: vi.fn().mockResolvedValue({ replaced: false, appended: true }),
   addOrReplaceAudioUnderStudyText: vi.fn().mockResolvedValue({ replaced: false, appended: true }),
 }));
 
@@ -277,6 +278,7 @@ describe('orchestrator smoke', () => {
 
     const manifest = JSON.parse(await readFile(firstRun.manifestPath!, 'utf8'));
     manifest.audio.hash = undefined;
+    manifest.audioArtifacts = undefined;
     await writeFile(firstRun.manifestPath!, JSON.stringify(manifest, null, 2));
 
     const { uploadFile } = await import('@esl-pipeline/storage-uploader');

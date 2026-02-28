@@ -5,6 +5,26 @@ import type { BuildStudyTextResult } from '@esl-pipeline/tts-elevenlabs';
 
 export const CURRENT_MANIFEST_SCHEMA_VERSION = 1;
 
+export interface AudioArtifactManifest {
+  path?: string;
+  url?: string;
+  hash?: string;
+  key?: string;
+  etag?: string;
+  sizeBytes?: number;
+  reused?: boolean;
+  voices?: BuildStudyTextResult['voices'];
+  voiceId?: string;
+  notionBlockId?: string;
+  tts?: {
+    provider?: string;
+    generatedCharacters?: number;
+    cachedCharacters?: number;
+    costPer1kCharsUsd?: number;
+    estimatedSpendUsd?: number;
+  };
+}
+
 export interface AssignmentManifest {
   schemaVersion?: number;
   mdHash: string;
@@ -19,22 +39,10 @@ export interface AssignmentManifest {
   htmlKey?: string;
   htmlEtag?: string;
   htmlReused?: boolean;
-  audio?: {
-    path?: string;
-    url?: string;
-    hash?: string;
-    key?: string;
-    etag?: string;
-    sizeBytes?: number;
-    reused?: boolean;
-    voices?: BuildStudyTextResult['voices'];
-    tts?: {
-      provider?: string;
-      generatedCharacters?: number;
-      cachedCharacters?: number;
-      costPer1kCharsUsd?: number;
-      estimatedSpendUsd?: number;
-    };
+  audio?: AudioArtifactManifest;
+  audioArtifacts?: {
+    studyText?: AudioArtifactManifest;
+    pronunciationShadowSentence?: AudioArtifactManifest;
   };
   preset?: string;
   notionColorization?: {

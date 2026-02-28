@@ -17,7 +17,11 @@ import type {
   PmdDirectiveLeaf,
   PmdHeading,
 } from '@esl-pipeline/pmd';
-import { findDirectiveBlocks, parseMarkdownContext } from '@esl-pipeline/pmd';
+import {
+  extractPronunciationShadowFocus,
+  findDirectiveBlocks,
+  parseMarkdownContext,
+} from '@esl-pipeline/pmd';
 
 export type ValidateMarkdownInput =
   | {
@@ -858,6 +862,7 @@ export async function validateMarkdown(input: ValidateMarkdownInput): Promise<Va
   const voiceAlignmentEnabled = isVoiceAlignmentEnabled();
   const strictVoiceAlignment = isVoiceAlignmentStrictValidationEnabled();
 
+  let parsedContext: ParsedMarkdownContext | null = null;
   let doc: ParsedMarkdownContext['document'];
   let contentLines: string[] = [];
   let lineOffset = 0;
@@ -865,9 +870,10 @@ export async function validateMarkdown(input: ValidateMarkdownInput): Promise<Va
     const resolved = await resolveValidateInput(input);
     strict = resolved.strict;
     markdownPath = resolved.path;
-    doc = resolved.context.document;
-    contentLines = resolved.context.contentLines;
-    lineOffset = resolved.context.contentLineOffset;
+    parsedContext = resolved.context;
+    doc = parsedContext.document;
+    contentLines = parsedContext.contentLines;
+    lineOffset = parsedContext.contentLineOffset;
     warnings.push(...doc.warnings.map((warning) => warning.message));
   } catch (error: unknown) {
     const msg = error instanceof Error ? error.message : String(error);
@@ -1122,6 +1128,23 @@ export async function validateMarkdown(input: ValidateMarkdownInput): Promise<Va
     const count = countListItems(nodes);
     if (count && count < 2) {
       warnings.push(`Comprehension Check has ${count} item(s) (recommended 2–3).`);
+    }
+  }
+
+  const pronunciationShadow = parsedContext ? extractPronunciationShadowFocus(parsedContext) : null;
+  if (pronunciationShadow) {
+    if (!pronunciationShadow.shadowSentence?.trim()) {
+      errors.push(
+        `Pronunciation Micro-Focus (line ${applyLineOffset(pronunciationShadow.sectionStartLine, lineOffset)}): missing "**Shadow sentence:** <sentence>" for shadow_sentence mode.`,
+      );
+    }
+    if (pronunciationShadow.words.length < 3 || pronunciationShadow.words.length > 5) {
+      errors.push(
+        `Pronunciation Micro-Focus (line ${applyLineOffset(pronunciationShadow.sectionStartLine, lineOffset)}): shadow_sentence mode requires 3-5 word drill lines in "1. word — /transcription/" format.`,
+      );
+    }
+    for (const issue of pronunciationShadow.issues) {
+      errors.push(`Line ${applyLineOffset(issue.line, lineOffset)}: ${issue.message}`);
     }
   }
 
