@@ -1,25 +1,22 @@
 # Docker Host Paths
 
-This repo uses bind mounts for runtime data and PNPM cache.  
+This repo uses bind mounts for source/runtime data and Docker named volumes for dependency caches.
 If host paths are missing, Docker may auto-create them with root ownership and cause `EACCES`.
 
 ## Required Local Paths
 
 - `uploads/`
 - `uploads/drafts/`
-- `.pnpm-store/v10/`
 
-## Shared PNPM Store Policy (Host + Docker)
+## Dependency Volume Policy (Host vs Docker)
 
-- Repo-local pnpm config (`.npmrc`) sets:
-
-```ini
-store-dir=.pnpm-store/v10
-```
-
-- Docker services set `NPM_CONFIG_STORE_DIR=/app/.pnpm-store/v10`.
-- Because the repo is bind-mounted at `/app`, host and containers share the same physical store.
-- Do not set host global pnpm `store-dir` to container-only paths like `/app/...`.
+- Host and Docker are intentionally decoupled for dependencies:
+  - Host local pnpm commands use repo-local `.npmrc` (`store-dir=.pnpm-store/v10`).
+  - Docker dev services use named volumes:
+    - `workspace_node_modules` mounted at `/app/node_modules`
+    - `workspace_pnpm_store` mounted at `/pnpm/store`
+- Source code is still bind-mounted at `/app` for live reload.
+- This avoids host/container dependency churn while preserving fast Docker restarts.
 
 ## Safe Startup Flow
 
@@ -41,7 +38,19 @@ EACCES: permission denied, mkdir '/app/uploads/drafts'
 Fix ownership on host, then restart:
 
 ```bash
-sudo chown -R "$(id -un):$(id -gn)" uploads .pnpm-store
+sudo chown -R "$(id -un):$(id -gn)" uploads
 docker compose down
 pnpm docker:up
 ```
+
+## Reset Docker Dependency Volumes (When Needed)
+
+If Docker dependency state gets corrupted:
+
+```bash
+docker compose down --remove-orphans
+docker volume rm esl-pipeline_workspace_node_modules esl-pipeline_workspace_pnpm_store
+pnpm docker:up
+```
+
+Adjust volume names if your compose project name differs.

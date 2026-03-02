@@ -73,14 +73,13 @@ describe('rendering', () => {
     expect(html).toContain('class="table-of-contents"');
   });
 
-  it('renders single-backtick snippets as regular markdown text', async () => {
+  it('renders single-backtick snippets as code while allowing inner rich formatting', async () => {
     const markdown = `Line with \`Target_Time = 5:00 PM\` inside.
 
 \`**Bold cue:** *slowly*\``;
     const html = await renderToHtml(markdown, 'Inline Code');
-    expect(html).toContain('Line with Target_Time = 5:00 PM inside.');
-    expect(html).toContain('<strong>Bold cue:</strong> <em>slowly</em>');
-    expect(html).not.toContain('<code>Target_Time = 5:00 PM</code>');
+    expect(html).toContain('Line with <code>Target_Time = 5:00 PM</code> inside.');
+    expect(html).toContain('<code><strong>Bold cue:</strong> <em>slowly</em></code>');
   });
 
   it('preserves multi-backtick inline code spans', async () => {
@@ -142,6 +141,15 @@ describe('rendering', () => {
     const html = await renderToHtml(markdown, 'Connected Speech');
     expect(html).toContain('connected_speech');
     expect(html).toContain('Play connected speech line');
+  });
+
+  it('emits a parseable behavior script', async () => {
+    const html = await renderToHtml('### C. Pronunciation Micro-Focus', 'Script Parse');
+    const scriptMatch = html.match(/<script>\n([\s\S]*?)<\/script>/);
+    expect(scriptMatch?.[1]).toBeTruthy();
+    expect(scriptMatch?.[1]).toContain('theme-preference');
+    expect(scriptMatch?.[1]).toContain('speechSynthesis');
+    expect(() => new Function(scriptMatch?.[1] ?? '')).not.toThrow();
   });
 
   it('normalizes LLM-variant pronunciation markup for clean rendering', async () => {

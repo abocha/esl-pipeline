@@ -2750,9 +2750,35 @@ describe('transport/http-server - integration (in-process)', () => {
     expect(response.statusCode).toBe(200);
     const payload = response.json() as { html: string };
     expect(payload.html).toContain('https://example.com/pronunciation.mp3');
-    expect(payload.html.indexOf('Audio recording: Pronunciation Shadow Sentence')).toBeGreaterThan(
-      payload.html.indexOf('Shadow sentence'),
-    );
+    const audioIndex = payload.html.indexOf('Audio recording: Pronunciation Shadow Sentence');
+    expect(audioIndex).toBeGreaterThan(payload.html.indexOf('Shadow sentence'));
+    expect(audioIndex).toBeLessThan(payload.html.indexOf('review —'));
+  });
+
+  it('POST /preview/html places pronunciation audio below multiline shadow sentence labels', async () => {
+    const response = await app.inject({
+      method: 'POST',
+      url: '/preview/html',
+      payload: {
+        text: [
+          '### C. Pronunciation Micro-Focus',
+          '',
+          '**Mode:** shadow_sentence',
+          '**Shadow sentence:**',
+          'There was a flood, so the vehicle stopped working.',
+          '',
+          '1. flood — /flʌd/',
+          '2. vehicle — /ˈviː.ɪ.kəl/',
+        ].join('\n'),
+        pronunciationAudioUrl: 'https://example.com/pronunciation-multiline.mp3',
+      },
+    });
+
+    expect(response.statusCode).toBe(200);
+    const payload = response.json() as { html: string };
+    const audioIndex = payload.html.indexOf('Audio recording: Pronunciation Shadow Sentence');
+    expect(audioIndex).toBeGreaterThan(payload.html.indexOf('There was a flood, so the vehicle stopped working.'));
+    expect(audioIndex).toBeLessThan(payload.html.indexOf('flood —'));
   });
 
   it('POST /preview/html injects pronunciation placeholder in connected_speech mode', async () => {

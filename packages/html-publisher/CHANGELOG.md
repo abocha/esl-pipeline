@@ -10,7 +10,7 @@
   - keep generated audio placeholder markers out of visible HTML.
   - improve pronunciation audio anchor placement below the shadow sentence context.
 - Updated inline backtick preprocessing:
-  - unwrap single-backtick snippets as regular Markdown text.
+  - render single-backtick snippets as `<code>` while allowing rich inner Markdown formatting.
   - preserve valid multi-backtick inline code spans.
 
 ## 0.1.0
