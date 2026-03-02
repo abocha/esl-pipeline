@@ -223,7 +223,7 @@ const GENERATED_STUDY_PLACEHOLDER_MARKER = '<!-- esl-generated-study-text-audio-
 const GENERATED_PRONUNCIATION_PLACEHOLDER_MARKER =
   '<!-- esl-generated-pronunciation-audio-placeholder -->';
 
-function hasPronunciationShadowMode(markdown: string): boolean {
+function parsePronunciationMode(markdown: string): string | null {
   const lines = markdown.split('\n');
   let inPronunciationSection = false;
 
@@ -235,20 +235,32 @@ function hasPronunciationShadowMode(markdown: string): boolean {
       continue;
     }
     if (inPronunciationSection && /^#{2,3}\s+/.test(trimmed)) {
-      return false;
+      return null;
     }
     if (!inPronunciationSection) {
       continue;
     }
+    const withoutBullet = trimmed.replace(/^\s*(?:[-*]\s+)?/, '').trim();
+    const normalizedLine = /^`[^`]+`$/.test(withoutBullet)
+      ? withoutBullet.slice(1, -1).trim()
+      : withoutBullet;
     const modeMatch =
-      /^\s*(?:[-*]\s*)?(?:\*\*)?mode\s*:\s*(?:\*\*)?\s*(.+?)\s*$/i.exec(trimmed);
+      /^(?:\*\*)?mode\s*:\s*(?:\*\*)?\s*(.+?)\s*$/i.exec(normalizedLine);
     if (!modeMatch?.[1]) {
       continue;
     }
-    return modeMatch[1].trim().toLowerCase() === 'shadow_sentence';
+    const rawMode = modeMatch[1].trim();
+    const unwrappedMode = /^`[^`]+`$/.test(rawMode) ? rawMode.slice(1, -1).trim() : rawMode;
+    return unwrappedMode.toLowerCase();
   }
 
-  return false;
+  return null;
+}
+
+function hasPronunciationReferenceMode(markdown: string): boolean {
+  const mode = parsePronunciationMode(markdown);
+  if (!mode) return false;
+  return mode === 'shadow_sentence' || mode === 'connected_speech';
 }
 
 function normalizeSttProvider(
@@ -703,7 +715,7 @@ export function registerExtendedRoutes(app: FastifyInstance, options: ExtendedRo
         const markdown = insertGeneratedPreviewAudio(body.text, {
           studyTextAudioUrl: body.audioUrl,
           pronunciationAudioUrl: body.pronunciationAudioUrl,
-          includePronunciation: hasPronunciationShadowMode(body.text),
+          includePronunciation: hasPronunciationReferenceMode(body.text),
         });
         const html = await createStaticPageHtml(markdown, body.title ?? 'Assignment Preview', {
           headingTheme,
