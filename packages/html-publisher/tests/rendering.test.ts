@@ -73,13 +73,21 @@ describe('rendering', () => {
     expect(html).toContain('class="table-of-contents"');
   });
 
-  it('styles inline code as soft pills without borders', async () => {
-    const markdown = `Line with \`Target_Time = 5:00 PM\` inside.`;
+  it('renders single-backtick snippets as regular markdown text', async () => {
+    const markdown = `Line with \`Target_Time = 5:00 PM\` inside.
+
+\`**Bold cue:** *slowly*\``;
     const html = await renderToHtml(markdown, 'Inline Code');
-    expect(html).toContain('Line with <code>Target_Time = 5:00 PM</code> inside.');
-    expect(html).toContain('.markdown-body p code');
-    expect(html).toContain('background: var(--inline-code-bg);');
-    expect(html).toContain('border-radius: 7px;');
+    expect(html).toContain('Line with Target_Time = 5:00 PM inside.');
+    expect(html).toContain('<strong>Bold cue:</strong> <em>slowly</em>');
+    expect(html).not.toContain('<code>Target_Time = 5:00 PM</code>');
+  });
+
+  it('preserves multi-backtick inline code spans', async () => {
+    const markdown = 'Inline ``a`` and nested ``a `b` c`` stay as code.';
+    const html = await renderToHtml(markdown, 'Inline Multi Tick');
+    expect(html).toContain('<code>a</code>');
+    expect(html).toContain('<code>a `b` c</code>');
   });
 
   it('styles table headers with theme variables for dark mode compatibility', async () => {
@@ -134,6 +142,22 @@ describe('rendering', () => {
     const html = await renderToHtml(markdown, 'Connected Speech');
     expect(html).toContain('connected_speech');
     expect(html).toContain('Play connected speech line');
+  });
+
+  it('normalizes LLM-variant pronunciation markup for clean rendering', async () => {
+    const markdown = `### C. Pronunciation Micro-Focus
+
+:::callout 🗣️
+- \`**Mode:** shadow_sentence\`
+- \`**Shadow sentence:** There was a flood, so the vehicle stopped working.\`
+- 1. \`Flood\` — /flʌd/
+- 2. \`Vehicle\` — /viːɪkl/
+- 3. \`Stopped\` — /stɒpt/ (End with T sound)
+:::`;
+    const html = await renderToHtml(markdown, 'Pronunciation Variant');
+    expect(html).toContain('<strong>Shadow sentence:</strong>');
+    expect(html).not.toContain('<code>**Shadow sentence:**');
+    expect(html).not.toContain('?.[');
   });
 });
 
