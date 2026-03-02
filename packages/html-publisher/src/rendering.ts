@@ -819,7 +819,9 @@ function createRenderer(): MarkdownIt {
 }
 
 function preprocessMarkdown(markdown: string, allowRawHtml: boolean): string {
-  const withoutFrontmatter = stripFrontmatter(markdown);
+  const normalizedPronunciation = normalizePronunciationSectionMarkdown(markdown);
+  const normalizedInlineBackticks = normalizeInlineBacktickSnippets(normalizedPronunciation);
+  const withoutFrontmatter = stripFrontmatter(normalizedInlineBackticks);
   const lines = withoutFrontmatter.split('\n');
   const out: string[] = [];
   const stack: string[] = [];
@@ -915,6 +917,160 @@ function preprocessMarkdown(markdown: string, allowRawHtml: boolean): string {
   }
 
   return out.join('\n');
+}
+
+function normalizeInlineBacktickSnippets(markdown: string): string {
+  const lines = markdown.split('\n');
+  const out: string[] = [];
+  let fencedBy: '```' | '~~~' | null = null;
+
+  for (const line of lines) {
+    const trimmed = line.trim();
+    if (isFenceLine(trimmed)) {
+      const fence = trimmed.startsWith('```') ? '```' : '~~~';
+      if (fencedBy && fence === fencedBy) {
+        fencedBy = null;
+      } else if (!fencedBy) {
+        fencedBy = fence;
+      }
+      out.push(line);
+      continue;
+    }
+
+    if (fencedBy) {
+      out.push(line);
+      continue;
+    }
+
+    out.push(removeSingleInlineBackticks(line));
+  }
+
+  return out.join('\n');
+}
+
+function removeSingleInlineBackticks(line: string): string {
+  let out = '';
+  let index = 0;
+
+  while (index < line.length) {
+    const char = line.charAt(index);
+    if (char !== '`') {
+      out += char;
+      index += 1;
+      continue;
+    }
+    if (index > 0 && line.charAt(index - 1) === '\\') {
+      out += char;
+      index += 1;
+      continue;
+    }
+
+    const openingTicks = countConsecutiveBackticks(line, index);
+    if (openingTicks !== 1) {
+      const multiSpanClosing = findClosingBacktickRun(line, index + openingTicks, openingTicks);
+      if (multiSpanClosing >= 0) {
+        out += line.slice(index, multiSpanClosing + openingTicks);
+        index = multiSpanClosing + openingTicks;
+        continue;
+      }
+      out += '`'.repeat(openingTicks);
+      index += openingTicks;
+      continue;
+    }
+
+    const closing = findClosingBacktickRun(line, index + 1, 1);
+
+    if (closing < 0) {
+      out += char;
+      index += 1;
+      continue;
+    }
+
+    out += line.slice(index + 1, closing);
+    index = closing + 1;
+  }
+
+  return out;
+}
+
+function countConsecutiveBackticks(line: string, start: number): number {
+  let count = 0;
+  while (start + count < line.length && line.charAt(start + count) === '`') {
+    count += 1;
+  }
+  return count;
+}
+
+function findClosingBacktickRun(line: string, start: number, runLength: number): number {
+  let cursor = start;
+  while (cursor < line.length) {
+    if (line.charAt(cursor) !== '`') {
+      cursor += 1;
+      continue;
+    }
+    if (cursor > 0 && line.charAt(cursor - 1) === '\\') {
+      cursor += 1;
+      continue;
+    }
+    const ticks = countConsecutiveBackticks(line, cursor);
+    if (ticks === runLength) {
+      return cursor;
+    }
+    cursor += ticks;
+  }
+  return -1;
+}
+
+function normalizePronunciationSectionMarkdown(markdown: string): string {
+  const lines = markdown.split('\n');
+  const normalized: string[] = [];
+  let inPronunciationSection = false;
+
+  for (const line of lines) {
+    const trimmed = line.trim();
+    if (/^###\s+.*pronunciation.*micro.*focus/i.test(trimmed)) {
+      inPronunciationSection = true;
+      normalized.push(line);
+      continue;
+    }
+    if (inPronunciationSection && /^#{2,3}\s+/.test(trimmed)) {
+      inPronunciationSection = false;
+      normalized.push(line);
+      continue;
+    }
+    if (!inPronunciationSection) {
+      normalized.push(line);
+      continue;
+    }
+
+    let next = trimmed;
+
+    const codeWrappedField =
+      /^(?:[-*]\s+)?`(\*\*(?:mode|shadow sentence):\*\*.+)`$/i.exec(next);
+    if (codeWrappedField?.[1]) {
+      normalized.push(codeWrappedField[1]);
+      continue;
+    }
+
+    const plainBulletField =
+      /^(?:[-*]\s+)(\*\*(?:mode|shadow sentence):\*\*.+)$/i.exec(next);
+    if (plainBulletField?.[1]) {
+      normalized.push(plainBulletField[1]);
+      continue;
+    }
+
+    const bulletedNumbered = /^(?:[-*]\s+)(\d+\.\s+.+)$/.exec(next);
+    if (bulletedNumbered?.[1]) {
+      next = bulletedNumbered[1];
+    }
+    if (/^\d+\.\s+/.test(next)) {
+      next = next.replace(/`([^`]+)`/g, '$1');
+    }
+
+    normalized.push(line.replace(trimmed, next));
+  }
+
+  return normalized.join('\n');
 }
 
 function escapeRawHtmlLine(line: string, allowRawHtml: boolean): string {
@@ -1453,7 +1609,10 @@ function buildBehaviorScript(features: ResolvedFeatures): string {
         .map((element) => element.textContent || '')
         .join('\n');
       const modeMatch = /\\bmode\\s*:\\s*([a-z_]+)\\b/i.exec(sectionText);
-      const pronunciationMode = modeMatch?.[1]?.trim().toLowerCase() || '';
+      let pronunciationMode = '';
+      if (modeMatch && modeMatch[1]) {
+        pronunciationMode = String(modeMatch[1]).trim().toLowerCase();
+      }
       const wordDrillEnabled = pronunciationMode === 'shadow_sentence';
       const connectedSpeechEnabled = pronunciationMode === 'connected_speech';
 
@@ -1510,7 +1669,8 @@ function buildBehaviorScript(features: ResolvedFeatures): string {
             if (!parsed || !parsed[1] || !parsed[2]) return;
             const word = parsed[1]
               .replace(/^\\d+\\.\\s*/, '')
-              .replace(/\`/g, '')
+              .split(String.fromCharCode(96))
+              .join('')
               .trim();
             const transcription = parsed[2].trim();
             if (!word) return;
@@ -1543,10 +1703,21 @@ function buildBehaviorScript(features: ResolvedFeatures): string {
             const source = raw.replace(/^\\d+\\.\\s*/, '').trim();
             if (!source) return;
             const arrowParts = source.split(/\\s*(?:→|->)\\s*/);
-            const speakTarget = (arrowParts[0] || source)
-              .replace(/^["“”'\`]+/, '')
-              .replace(/["“”'\`]+$/, '')
-              .trim();
+            let speakTarget = (arrowParts[0] || source).trim();
+            const quoteChars = ['"', "'", String.fromCharCode(96), '“', '”'];
+            while (
+              speakTarget.length > 0 &&
+              quoteChars.includes(speakTarget.charAt(0))
+            ) {
+              speakTarget = speakTarget.slice(1);
+            }
+            while (
+              speakTarget.length > 0 &&
+              quoteChars.includes(speakTarget.charAt(speakTarget.length - 1))
+            ) {
+              speakTarget = speakTarget.slice(0, -1);
+            }
+            speakTarget = speakTarget.trim();
             if (!speakTarget) return;
 
             const controls = document.createElement('span');

@@ -263,6 +263,15 @@ function hasPronunciationReferenceMode(markdown: string): boolean {
   return mode === 'shadow_sentence' || mode === 'connected_speech';
 }
 
+function isShadowSentenceLineInPronunciationSection(line: string): boolean {
+  const trimmed = line.trim();
+  const withoutBullet = trimmed.replace(/^\s*(?:[-*]\s+)?/, '').trim();
+  const normalizedLine = /^`[^`]+`$/.test(withoutBullet)
+    ? withoutBullet.slice(1, -1).trim()
+    : withoutBullet;
+  return /^(?:\*\*)?shadow sentence\s*:\s*(?:\*\*)?\s*.+$/i.test(normalizedLine);
+}
+
 function normalizeSttProvider(
   value: unknown,
 ): 'deepgram' | 'elevenlabs' | null {
@@ -322,6 +331,8 @@ function insertGeneratedPreviewAudio(
   let studyMarkerIndex = -1;
   let studyFallbackIndex = -1;
   let pronunciationHeadingIndex = -1;
+  let pronunciationAnchorIndex = -1;
+  let inPronunciationSection = false;
 
   let skipGeneratedPlaceholderDirective = false;
 
@@ -350,12 +361,19 @@ function insertGeneratedPreviewAudio(
     }
     if (PRONUNCIATION_HEADING_REGEX.test(trimmed)) {
       pronunciationHeadingIndex = cleaned.length;
+      inPronunciationSection = true;
+    } else if (inPronunciationSection && /^#{2,3}\s+/.test(trimmed)) {
+      inPronunciationSection = false;
     }
+
     if (
       GENERATED_STUDY_TEXT_AUDIO_LINK_REGEX.test(trimmed) ||
       GENERATED_PRONUNCIATION_AUDIO_LINK_REGEX.test(trimmed)
     ) {
       continue;
+    }
+    if (inPronunciationSection && isShadowSentenceLineInPronunciationSection(trimmed)) {
+      pronunciationAnchorIndex = cleaned.length;
     }
     cleaned.push(line);
   }
@@ -368,16 +386,19 @@ function insertGeneratedPreviewAudio(
         : studyFallbackIndex >= 0
           ? studyFallbackIndex
           : next.length;
-    next.splice(insertAt, 0, GENERATED_STUDY_PLACEHOLDER_MARKER, ':::audio', '');
+    next.splice(insertAt, 0, ':::audio', '');
   };
   const insertPronunciationPlaceholder = () => {
     const headingIndex =
-      pronunciationHeadingIndex >= 0 ? pronunciationHeadingIndex + 1 : next.length;
+      pronunciationAnchorIndex >= 0
+        ? pronunciationAnchorIndex + 1
+        : pronunciationHeadingIndex >= 0
+          ? pronunciationHeadingIndex + 1
+          : next.length;
     next.splice(
       headingIndex,
       0,
       '',
-      GENERATED_PRONUNCIATION_PLACEHOLDER_MARKER,
       ':::audio',
       '',
     );
@@ -405,7 +426,11 @@ function insertGeneratedPreviewAudio(
       const audioLine = `[${PRONUNCIATION_AUDIO_LINK_LABEL}](${pronunciationAudioUrl})`;
       if (!next.some((line) => line.trim() === audioLine)) {
         const headingIndex =
-          pronunciationHeadingIndex >= 0 ? pronunciationHeadingIndex + 1 : next.length;
+          pronunciationAnchorIndex >= 0
+            ? pronunciationAnchorIndex + 1
+            : pronunciationHeadingIndex >= 0
+              ? pronunciationHeadingIndex + 1
+              : next.length;
         next.splice(headingIndex, 0, '', audioLine, '');
       }
     } else {

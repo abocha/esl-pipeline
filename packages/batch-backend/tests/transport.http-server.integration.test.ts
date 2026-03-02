@@ -2693,6 +2693,7 @@ describe('transport/http-server - integration (in-process)', () => {
     const payload = response.json() as { html: string };
     expect(payload.html).toContain('Audio track generating...');
     expect(payload.html).toContain('audio-placeholder');
+    expect(payload.html).not.toContain('esl-generated-study-text-audio-placeholder');
   });
 
   it('POST /preview/html injects pronunciation placeholder in shadow_sentence mode', async () => {
@@ -2721,6 +2722,37 @@ describe('transport/http-server - integration (in-process)', () => {
     const payload = response.json() as { html: string };
     const placeholderCount = (payload.html.match(/Audio track generating\.\.\./g) ?? []).length;
     expect(placeholderCount).toBeGreaterThanOrEqual(2);
+    expect(payload.html).not.toContain('esl-generated-pronunciation-audio-placeholder');
+    expect(payload.html.lastIndexOf('Audio track generating...')).toBeGreaterThan(
+      payload.html.indexOf('Shadow sentence'),
+    );
+  });
+
+  it('POST /preview/html places pronunciation audio URL below shadow sentence content', async () => {
+    const response = await app.inject({
+      method: 'POST',
+      url: '/preview/html',
+      payload: {
+        text: [
+          '### C. Pronunciation Micro-Focus',
+          '',
+          '**Mode:** shadow_sentence',
+          '**Shadow sentence:** We should review this carefully.',
+          '',
+          '1. review — /rɪˈvjuː/',
+          '2. carefully — /ˈkeə.fəl.i/',
+          '3. should — /ʃʊd/',
+        ].join('\n'),
+        pronunciationAudioUrl: 'https://example.com/pronunciation.mp3',
+      },
+    });
+
+    expect(response.statusCode).toBe(200);
+    const payload = response.json() as { html: string };
+    expect(payload.html).toContain('https://example.com/pronunciation.mp3');
+    expect(payload.html.indexOf('Audio recording: Pronunciation Shadow Sentence')).toBeGreaterThan(
+      payload.html.indexOf('Shadow sentence'),
+    );
   });
 
   it('POST /preview/html injects pronunciation placeholder in connected_speech mode', async () => {

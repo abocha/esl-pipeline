@@ -146,6 +146,16 @@ const GENERATED_PRONUNCIATION_AUDIO_LINK_REGEX = new RegExp(
 );
 const STUDY_TEXT_REGEX = /^:::study-text\b/i;
 const TRANSCRIPT_REGEX = /transcript/i;
+const PRONUNCIATION_HEADING_REGEX = /^###\s+.*pronunciation.*micro.*focus/i;
+
+function isShadowSentenceLineInPronunciationSection(line: string): boolean {
+  const trimmed = line.trim();
+  const withoutBullet = trimmed.replace(/^\s*(?:[-*]\s+)?/, '').trim();
+  const normalizedLine = /^`[^`]+`$/.test(withoutBullet)
+    ? withoutBullet.slice(1, -1).trim()
+    : withoutBullet;
+  return /^(?:\*\*)?shadow sentence\s*:\s*(?:\*\*)?\s*.+$/i.test(normalizedLine);
+}
 
 function insertGeneratedAudioLinks(markdown: string, urls: {
   studyTextUrl?: string;
@@ -156,6 +166,8 @@ function insertGeneratedAudioLinks(markdown: string, urls: {
   let studyMarkerIndex = -1;
   let studyFallbackIndex = -1;
   let pronunciationHeadingIndex = -1;
+  let pronunciationAnchorIndex = -1;
+  let inPronunciationSection = false;
 
   for (const line of lines) {
     const trimmed = line.trim();
@@ -164,14 +176,20 @@ function insertGeneratedAudioLinks(markdown: string, urls: {
       if (studyFallbackIndex === -1) studyFallbackIndex = cleaned.length;
       if (TRANSCRIPT_REGEX.test(trimmed)) studyMarkerIndex = cleaned.length;
     }
-    if (/^###\s+.*pronunciation.*micro.*focus/i.test(trimmed)) {
+    if (PRONUNCIATION_HEADING_REGEX.test(trimmed)) {
       pronunciationHeadingIndex = cleaned.length;
+      inPronunciationSection = true;
+    } else if (inPronunciationSection && /^#{2,3}\s+/.test(trimmed)) {
+      inPronunciationSection = false;
     }
     if (
       GENERATED_STUDY_TEXT_AUDIO_LINK_REGEX.test(trimmed) ||
       GENERATED_PRONUNCIATION_AUDIO_LINK_REGEX.test(trimmed)
     ) {
       continue;
+    }
+    if (inPronunciationSection && isShadowSentenceLineInPronunciationSection(trimmed)) {
+      pronunciationAnchorIndex = cleaned.length;
     }
     cleaned.push(line);
   }
@@ -196,7 +214,11 @@ function insertGeneratedAudioLinks(markdown: string, urls: {
     const audioLine = `[${PRONUNCIATION_AUDIO_LINK_LABEL}](${pronunciationUrl})`;
     if (!nextLines.some((line) => line.trim() === audioLine)) {
       const headingIndex =
-        pronunciationHeadingIndex >= 0 ? pronunciationHeadingIndex + 1 : nextLines.length;
+        pronunciationAnchorIndex >= 0
+          ? pronunciationAnchorIndex + 1
+          : pronunciationHeadingIndex >= 0
+            ? pronunciationHeadingIndex + 1
+            : nextLines.length;
       nextLines.splice(headingIndex, 0, '', audioLine, '');
     }
   }
