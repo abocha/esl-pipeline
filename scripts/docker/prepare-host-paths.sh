@@ -6,7 +6,6 @@ EXPECTED_OWNER="$(id -u):$(id -g)"
 REQUIRED_DIRS=(
   "uploads"
   "uploads/drafts"
-  ".pnpm-store"
 )
 
 stat_owner() {

@@ -148,13 +148,20 @@ const STUDY_TEXT_REGEX = /^:::study-text\b/i;
 const TRANSCRIPT_REGEX = /transcript/i;
 const PRONUNCIATION_HEADING_REGEX = /^###\s+.*pronunciation.*micro.*focus/i;
 
-function isShadowSentenceLineInPronunciationSection(line: string): boolean {
+function normalizePronunciationSectionLine(line: string): string {
   const trimmed = line.trim();
   const withoutBullet = trimmed.replace(/^\s*(?:[-*]\s+)?/, '').trim();
-  const normalizedLine = /^`[^`]+`$/.test(withoutBullet)
+  return /^`[^`]+`$/.test(withoutBullet)
     ? withoutBullet.slice(1, -1).trim()
     : withoutBullet;
-  return /^(?:\*\*)?shadow sentence\s*:\s*(?:\*\*)?\s*.+$/i.test(normalizedLine);
+}
+
+function parseShadowSentenceLine(line: string): { matches: boolean; hasValue: boolean } {
+  const normalizedLine = normalizePronunciationSectionLine(line);
+  const match = /^(?:\*\*)?shadow sentence\s*:\s*(?:\*\*)?\s*(.*)$/i.exec(normalizedLine);
+  if (!match) return { matches: false, hasValue: false };
+  const value = (match[1] ?? '').trim();
+  return { matches: true, hasValue: value.length > 0 };
 }
 
 function insertGeneratedAudioLinks(markdown: string, urls: {
@@ -168,6 +175,7 @@ function insertGeneratedAudioLinks(markdown: string, urls: {
   let pronunciationHeadingIndex = -1;
   let pronunciationAnchorIndex = -1;
   let inPronunciationSection = false;
+  let pendingShadowSentenceValue = false;
 
   for (const line of lines) {
     const trimmed = line.trim();
@@ -181,6 +189,7 @@ function insertGeneratedAudioLinks(markdown: string, urls: {
       inPronunciationSection = true;
     } else if (inPronunciationSection && /^#{2,3}\s+/.test(trimmed)) {
       inPronunciationSection = false;
+      pendingShadowSentenceValue = false;
     }
     if (
       GENERATED_STUDY_TEXT_AUDIO_LINK_REGEX.test(trimmed) ||
@@ -188,8 +197,15 @@ function insertGeneratedAudioLinks(markdown: string, urls: {
     ) {
       continue;
     }
-    if (inPronunciationSection && isShadowSentenceLineInPronunciationSection(trimmed)) {
-      pronunciationAnchorIndex = cleaned.length;
+    if (inPronunciationSection) {
+      const shadowSentence = parseShadowSentenceLine(trimmed);
+      if (shadowSentence.matches) {
+        pronunciationAnchorIndex = cleaned.length;
+        pendingShadowSentenceValue = !shadowSentence.hasValue;
+      } else if (pendingShadowSentenceValue && trimmed.length > 0) {
+        pronunciationAnchorIndex = cleaned.length;
+        pendingShadowSentenceValue = false;
+      }
     }
     cleaned.push(line);
   }

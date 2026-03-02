@@ -263,13 +263,20 @@ function hasPronunciationReferenceMode(markdown: string): boolean {
   return mode === 'shadow_sentence' || mode === 'connected_speech';
 }
 
-function isShadowSentenceLineInPronunciationSection(line: string): boolean {
+function normalizePronunciationSectionLine(line: string): string {
   const trimmed = line.trim();
   const withoutBullet = trimmed.replace(/^\s*(?:[-*]\s+)?/, '').trim();
-  const normalizedLine = /^`[^`]+`$/.test(withoutBullet)
+  return /^`[^`]+`$/.test(withoutBullet)
     ? withoutBullet.slice(1, -1).trim()
     : withoutBullet;
-  return /^(?:\*\*)?shadow sentence\s*:\s*(?:\*\*)?\s*.+$/i.test(normalizedLine);
+}
+
+function parseShadowSentenceLine(line: string): { matches: boolean; hasValue: boolean } {
+  const normalizedLine = normalizePronunciationSectionLine(line);
+  const match = /^(?:\*\*)?shadow sentence\s*:\s*(?:\*\*)?\s*(.*)$/i.exec(normalizedLine);
+  if (!match) return { matches: false, hasValue: false };
+  const value = (match[1] ?? '').trim();
+  return { matches: true, hasValue: value.length > 0 };
 }
 
 function normalizeSttProvider(
@@ -333,6 +340,7 @@ function insertGeneratedPreviewAudio(
   let pronunciationHeadingIndex = -1;
   let pronunciationAnchorIndex = -1;
   let inPronunciationSection = false;
+  let pendingShadowSentenceValue = false;
 
   let skipGeneratedPlaceholderDirective = false;
 
@@ -364,6 +372,7 @@ function insertGeneratedPreviewAudio(
       inPronunciationSection = true;
     } else if (inPronunciationSection && /^#{2,3}\s+/.test(trimmed)) {
       inPronunciationSection = false;
+      pendingShadowSentenceValue = false;
     }
 
     if (
@@ -372,8 +381,15 @@ function insertGeneratedPreviewAudio(
     ) {
       continue;
     }
-    if (inPronunciationSection && isShadowSentenceLineInPronunciationSection(trimmed)) {
-      pronunciationAnchorIndex = cleaned.length;
+    if (inPronunciationSection) {
+      const shadowSentence = parseShadowSentenceLine(trimmed);
+      if (shadowSentence.matches) {
+        pronunciationAnchorIndex = cleaned.length;
+        pendingShadowSentenceValue = !shadowSentence.hasValue;
+      } else if (pendingShadowSentenceValue && trimmed.length > 0) {
+        pronunciationAnchorIndex = cleaned.length;
+        pendingShadowSentenceValue = false;
+      }
     }
     cleaned.push(line);
   }

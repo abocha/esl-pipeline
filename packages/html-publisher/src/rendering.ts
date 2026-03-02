@@ -815,13 +815,31 @@ function createRenderer(): MarkdownIt {
     return `</span>${rendered}`;
   };
 
+  const defaultCodeInlineRule = md.renderer.rules.code_inline;
+  const richInlineMarkdown = new MarkdownIt({
+    html: false,
+    linkify: false,
+    breaks: false,
+  });
+  md.renderer.rules.code_inline = (tokens, idx, renderOptions, env, self) => {
+    const token = tokens[idx];
+    if (!token) return '';
+    if ((token.markup || '').length !== 1) {
+      if (defaultCodeInlineRule) {
+        return defaultCodeInlineRule(tokens, idx, renderOptions, env, self);
+      }
+      return `<code>${md.utils.escapeHtml(token.content ?? '')}</code>`;
+    }
+    const richContent = richInlineMarkdown.renderInline(token.content ?? '');
+    return `<code>${richContent}</code>`;
+  };
+
   return md;
 }
 
 function preprocessMarkdown(markdown: string, allowRawHtml: boolean): string {
   const normalizedPronunciation = normalizePronunciationSectionMarkdown(markdown);
-  const normalizedInlineBackticks = normalizeInlineBacktickSnippets(normalizedPronunciation);
-  const withoutFrontmatter = stripFrontmatter(normalizedInlineBackticks);
+  const withoutFrontmatter = stripFrontmatter(normalizedPronunciation);
   const lines = withoutFrontmatter.split('\n');
   const out: string[] = [];
   const stack: string[] = [];
@@ -919,108 +937,6 @@ function preprocessMarkdown(markdown: string, allowRawHtml: boolean): string {
   return out.join('\n');
 }
 
-function normalizeInlineBacktickSnippets(markdown: string): string {
-  const lines = markdown.split('\n');
-  const out: string[] = [];
-  let fencedBy: '```' | '~~~' | null = null;
-
-  for (const line of lines) {
-    const trimmed = line.trim();
-    if (isFenceLine(trimmed)) {
-      const fence = trimmed.startsWith('```') ? '```' : '~~~';
-      if (fencedBy && fence === fencedBy) {
-        fencedBy = null;
-      } else if (!fencedBy) {
-        fencedBy = fence;
-      }
-      out.push(line);
-      continue;
-    }
-
-    if (fencedBy) {
-      out.push(line);
-      continue;
-    }
-
-    out.push(removeSingleInlineBackticks(line));
-  }
-
-  return out.join('\n');
-}
-
-function removeSingleInlineBackticks(line: string): string {
-  let out = '';
-  let index = 0;
-
-  while (index < line.length) {
-    const char = line.charAt(index);
-    if (char !== '`') {
-      out += char;
-      index += 1;
-      continue;
-    }
-    if (index > 0 && line.charAt(index - 1) === '\\') {
-      out += char;
-      index += 1;
-      continue;
-    }
-
-    const openingTicks = countConsecutiveBackticks(line, index);
-    if (openingTicks !== 1) {
-      const multiSpanClosing = findClosingBacktickRun(line, index + openingTicks, openingTicks);
-      if (multiSpanClosing >= 0) {
-        out += line.slice(index, multiSpanClosing + openingTicks);
-        index = multiSpanClosing + openingTicks;
-        continue;
-      }
-      out += '`'.repeat(openingTicks);
-      index += openingTicks;
-      continue;
-    }
-
-    const closing = findClosingBacktickRun(line, index + 1, 1);
-
-    if (closing < 0) {
-      out += char;
-      index += 1;
-      continue;
-    }
-
-    out += line.slice(index + 1, closing);
-    index = closing + 1;
-  }
-
-  return out;
-}
-
-function countConsecutiveBackticks(line: string, start: number): number {
-  let count = 0;
-  while (start + count < line.length && line.charAt(start + count) === '`') {
-    count += 1;
-  }
-  return count;
-}
-
-function findClosingBacktickRun(line: string, start: number, runLength: number): number {
-  let cursor = start;
-  while (cursor < line.length) {
-    if (line.charAt(cursor) !== '`') {
-      cursor += 1;
-      continue;
-    }
-    if (cursor > 0 && line.charAt(cursor - 1) === '\\') {
-      cursor += 1;
-      continue;
-    }
-    const ticks = countConsecutiveBackticks(line, cursor);
-    if (ticks === runLength) {
-      return cursor;
-    }
-    cursor += ticks;
-  }
-  return -1;
-}
-
 function normalizePronunciationSectionMarkdown(markdown: string): string {
   const lines = markdown.split('\n');
   const normalized: string[] = [];
@@ -1062,9 +978,6 @@ function normalizePronunciationSectionMarkdown(markdown: string): string {
     const bulletedNumbered = /^(?:[-*]\s+)(\d+\.\s+.+)$/.exec(next);
     if (bulletedNumbered?.[1]) {
       next = bulletedNumbered[1];
-    }
-    if (/^\d+\.\s+/.test(next)) {
-      next = next.replace(/`([^`]+)`/g, '$1');
     }
 
     normalized.push(line.replace(trimmed, next));
@@ -1523,60 +1436,88 @@ function buildBehaviorScript(features: ResolvedFeatures): string {
     });
   }
 
-  const themeToggle = document.querySelector('.theme-toggle');
-  if (themeToggle instanceof HTMLElement) {
-    const html = document.documentElement;
-    const storageKey = 'theme-preference';
-
-    const getPreference = () => {
-      const stored = localStorage.getItem(storageKey);
-      if (stored === 'dark' || stored === 'light') {
-        return stored;
-      }
-      return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
-    };
-
-    const setTheme = (theme) => {
-      html.setAttribute('data-theme', theme);
-      localStorage.setItem(storageKey, theme);
-    };
-
-    setTheme(getPreference());
-
-    themeToggle.addEventListener('click', () => {
-      const current = html.getAttribute('data-theme') || getPreference();
-      setTheme(current === 'dark' ? 'light' : 'dark');
-    });
-
-    window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', (e) => {
-      if (!localStorage.getItem(storageKey)) {
-        setTheme(e.matches ? 'dark' : 'light');
-      }
-    });
-
-    // Force animation replay on details toggle
-    document.querySelectorAll('details').forEach((details) => {
+  // Force animation replay on details toggle
+  document.querySelectorAll('details').forEach((details) => {
+    if (details.open) {
+      details.classList.add('is-open');
+    }
+    details.addEventListener('toggle', () => {
       if (details.open) {
-        details.classList.add('is-open');
-      }
-      details.addEventListener('toggle', () => {
-        if (details.open) {
+        requestAnimationFrame(() => {
           requestAnimationFrame(() => {
-            requestAnimationFrame(() => {
-              details.classList.add('is-open');
-            });
+            details.classList.add('is-open');
           });
-        } else {
-          details.classList.remove('is-open');
-        }
-      });
+        });
+      } else {
+        details.classList.remove('is-open');
+      }
     });
-  }
+  });
 
-  const supportsSpeechSynthesis =
-    'speechSynthesis' in window && typeof window.SpeechSynthesisUtterance === 'function';
+  const readStoredTheme = (key) => {
+    try {
+      return window.localStorage.getItem(key);
+    } catch {
+      return null;
+    }
+  };
+  const persistTheme = (key, value) => {
+    try {
+      window.localStorage.setItem(key, value);
+    } catch {}
+  };
 
-  if (supportsSpeechSynthesis) {
+  try {
+    const themeToggle = document.querySelector('.theme-toggle');
+    if (themeToggle instanceof HTMLElement) {
+      const html = document.documentElement;
+      const storageKey = 'theme-preference';
+      const mediaQuery =
+        typeof window.matchMedia === 'function'
+          ? window.matchMedia('(prefers-color-scheme: dark)')
+          : null;
+
+      const getPreference = () => {
+        const stored = readStoredTheme(storageKey);
+        if (stored === 'dark' || stored === 'light') {
+          return stored;
+        }
+        return mediaQuery && mediaQuery.matches ? 'dark' : 'light';
+      };
+
+      const setTheme = (theme) => {
+        html.setAttribute('data-theme', theme);
+        persistTheme(storageKey, theme);
+      };
+
+      setTheme(getPreference());
+
+      themeToggle.addEventListener('click', () => {
+        const current = html.getAttribute('data-theme') || getPreference();
+        setTheme(current === 'dark' ? 'light' : 'dark');
+      });
+
+      if (mediaQuery) {
+        const handlePreferenceChange = (event) => {
+          if (readStoredTheme(storageKey) === null) {
+            setTheme(event.matches ? 'dark' : 'light');
+          }
+        };
+        if (typeof mediaQuery.addEventListener === 'function') {
+          mediaQuery.addEventListener('change', handlePreferenceChange);
+        } else if (typeof mediaQuery.addListener === 'function') {
+          mediaQuery.addListener(handlePreferenceChange);
+        }
+      }
+    }
+  } catch {}
+
+  try {
+    const supportsSpeechSynthesis =
+      'speechSynthesis' in window && typeof window.SpeechSynthesisUtterance === 'function';
+    if (!supportsSpeechSynthesis) {
+      return;
+    }
     const normalizeText = (value) =>
       String(value || '')
         .toLowerCase()
@@ -1607,7 +1548,7 @@ function buildBehaviorScript(features: ResolvedFeatures): string {
 
       const sectionText = sectionElements
         .map((element) => element.textContent || '')
-        .join('\n');
+        .join('\\n');
       const modeMatch = /\\bmode\\s*:\\s*([a-z_]+)\\b/i.exec(sectionText);
       let pronunciationMode = '';
       if (modeMatch && modeMatch[1]) {
@@ -1736,7 +1677,7 @@ function buildBehaviorScript(features: ResolvedFeatures): string {
         });
       }
     }
-  }
+  } catch {}
 })();
 </script>`;
 }
