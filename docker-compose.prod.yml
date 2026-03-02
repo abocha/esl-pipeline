@@ -102,4 +102,5 @@ services:
 volumes:
   postgres_data:
   postgres18_data:
+    name: esl-pipeline_postgres18_data
   redis_data:
