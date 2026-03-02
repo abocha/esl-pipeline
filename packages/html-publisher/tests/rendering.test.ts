@@ -122,6 +122,19 @@ describe('rendering', () => {
     expect(html).toContain('shadow_sentence');
     expect(html).toContain('speechSynthesis');
   });
+
+  it('ships browser connected-speech playback controls', async () => {
+    const markdown = `### C. Pronunciation Micro-Focus
+
+**Mode:** connected_speech
+
+1. "Change helps us." -> Change help-sus.
+2. "It gives us food." -> It give-sus food.
+3. "Light feels stronger." -> Light feel-stronger.`;
+    const html = await renderToHtml(markdown, 'Connected Speech');
+    expect(html).toContain('connected_speech');
+    expect(html).toContain('Play connected speech line');
+  });
 });
 
 function formatCurrentDateForAssertion(): string {

@@ -208,22 +208,30 @@ function parseMarkedField(
   line: string,
   marker: 'mode' | 'shadow sentence',
 ): string | null {
+  const withoutBullet = line.replace(/^\s*(?:[-*]\s+)?/, '').trim();
+  const normalizedLine = /^`[^`]+`$/.test(withoutBullet)
+    ? withoutBullet.slice(1, -1).trim()
+    : withoutBullet;
   const regex = new RegExp(
-    String.raw`^\s*(?:[-*]\s*)?(?:\*\*)?${marker}\s*:\s*(?:\*\*)?\s*(.+?)\s*$`,
+    String.raw`^(?:\*\*)?${marker}\s*:\s*(?:\*\*)?\s*(.+?)\s*$`,
     'i',
   );
-  const match = regex.exec(line);
+  const match = regex.exec(normalizedLine);
   if (!match?.[1]) return null;
-  return match[1].trim();
+  const value = match[1].trim();
+  if (/^`[^`]+`$/.test(value)) {
+    return value.slice(1, -1).trim();
+  }
+  return value;
 }
 
 function parsePronunciationWordLine(
   line: string,
   lineNumber: number,
 ): { word?: PronunciationShadowWord; issue?: PronunciationShadowIssue } | null {
-  const numberedItem = /^\s*\d+\.\s+/.test(line);
+  const numberedItem = /^\s*(?:[-*]\s+)?\d+\.\s+/.test(line);
   if (!numberedItem) return null;
-  const parsed = /^\s*\d+\.\s*(.+?)\s*[—-]\s*(.+?)\s*$/.exec(line);
+  const parsed = /^\s*(?:[-*]\s+)?\d+\.\s*(.+?)\s*[—-]\s*(.+?)\s*$/.exec(line);
   if (!parsed?.[1] || !parsed[2]) {
     return {
       issue: {
@@ -234,9 +242,10 @@ function parsePronunciationWordLine(
       },
     };
   }
-  const text = parsed[1].replaceAll('**', '').trim();
-  const transcription = parsed[2].trim();
-  if (!/^\/.+\/$/.test(transcription)) {
+  const text = parsed[1].replaceAll('**', '').replaceAll('`', '').trim();
+  const pronunciationPart = parsed[2].trim();
+  const transcriptionMatch = /\/.+?\//.exec(pronunciationPart);
+  if (!transcriptionMatch?.[0]) {
     return {
       issue: {
         code: 'invalid_word_transcription',
@@ -246,6 +255,7 @@ function parsePronunciationWordLine(
       },
     };
   }
+  const transcription = transcriptionMatch[0].trim();
   return {
     word: {
       text,

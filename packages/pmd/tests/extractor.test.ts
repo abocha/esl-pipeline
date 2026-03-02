@@ -109,4 +109,27 @@ describe('pmd extractor', () => {
     const pronunciation = extractPronunciationShadowFocus(bulletMode);
     expect(pronunciation?.mode).toBe('shadow_sentence');
   });
+
+  it('parses LLM-variant shadow sentence fields and word drill notes', () => {
+    const llmVariant = parseMarkdownContext(
+      sample
+        .replace('**Mode:** shadow_sentence', '- `**Mode:** shadow_sentence`')
+        .replace(
+          '**Shadow sentence:** I was thinking about working this morning.',
+          '- `**Shadow sentence:** I was thinking about working this morning.`',
+        )
+        .replace('1. **thinking** — /ˈθɪŋkɪŋ/', '- 1. `thinking` — /ˈθɪŋkɪŋ/')
+        .replace('2. **working** — /ˈwɜːrkɪŋ/', '- 2. `working` — /ˈwɜːrkɪŋ/')
+        .replace(
+          '3. **morning** — /ˈmɔːrnɪŋ/',
+          '- 3. `morning` — /ˈmɔːrnɪŋ/ (keep final NG sound)',
+        ),
+    );
+    const pronunciation = extractPronunciationShadowFocus(llmVariant);
+    expect(pronunciation?.mode).toBe('shadow_sentence');
+    expect(pronunciation?.shadowSentence).toContain('thinking about working');
+    expect(pronunciation?.words).toHaveLength(3);
+    expect(pronunciation?.words[2]?.transcription).toBe('/ˈmɔːrnɪŋ/');
+    expect(pronunciation?.issues).toHaveLength(0);
+  });
 });

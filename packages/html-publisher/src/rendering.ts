@@ -1449,11 +1449,15 @@ function buildBehaviorScript(features: ResolvedFeatures): string {
         cursor = cursor.nextElementSibling;
       }
 
-      const shadowModeEnabled = sectionElements.some((element) =>
-        /\\bmode\\s*:\\s*shadow_sentence\\b/i.test(element.textContent || ''),
-      );
+      const sectionText = sectionElements
+        .map((element) => element.textContent || '')
+        .join('\n');
+      const modeMatch = /\\bmode\\s*:\\s*([a-z_]+)\\b/i.exec(sectionText);
+      const pronunciationMode = modeMatch?.[1]?.trim().toLowerCase() || '';
+      const wordDrillEnabled = pronunciationMode === 'shadow_sentence';
+      const connectedSpeechEnabled = pronunciationMode === 'connected_speech';
 
-      if (shadowModeEnabled) {
+      if (wordDrillEnabled || connectedSpeechEnabled) {
         const resolvePreferredVoice = () => {
           const voices = window.speechSynthesis.getVoices();
           if (!voices || voices.length === 0) {
@@ -1483,41 +1487,81 @@ function buildBehaviorScript(features: ResolvedFeatures): string {
           window.speechSynthesis.speak(utterance);
         };
 
-        const listItems = sectionElements.flatMap((element) =>
-          Array.from(element.querySelectorAll('li')),
-        );
+        const listItems = [];
+        const seen = new Set();
+        sectionElements.forEach((element) => {
+          element.querySelectorAll('li').forEach((item) => {
+            if (!(item instanceof HTMLElement)) return;
+            if (item.querySelector('li')) return;
+            if (seen.has(item)) return;
+            seen.add(item);
+            listItems.push(item);
+          });
+        });
 
         listItems.forEach((item) => {
           if (!(item instanceof HTMLElement)) return;
           if (item.querySelector('.word-tts-button')) return;
           const raw = (item.textContent || '').replace(/\\s+/g, ' ').trim();
-          const parsed = /^(.+?)\\s*[—-]\\s*(\\/.+\\/)\\s*$/.exec(raw);
-          if (!parsed || !parsed[1] || !parsed[2]) return;
-          const word = parsed[1].replace(/^\\d+\\.\\s*/, '').trim();
-          const transcription = parsed[2].trim();
-          if (!word) return;
 
-          const controls = document.createElement('span');
-          controls.className = 'pronunciation-word-tts';
+          if (wordDrillEnabled) {
+            const parsed =
+              /^(.+?)\\s*[—-]\\s*(\\/.+?\\/)(?:\\s+.*)?$/.exec(raw);
+            if (!parsed || !parsed[1] || !parsed[2]) return;
+            const word = parsed[1]
+              .replace(/^\\d+\\.\\s*/, '')
+              .replace(/\`/g, '')
+              .trim();
+            const transcription = parsed[2].trim();
+            if (!word) return;
 
-          const button = document.createElement('button');
-          button.type = 'button';
-          button.className = 'word-tts-button';
-          button.textContent = 'Play';
-          button.setAttribute(
-            'aria-label',
-            'Play pronunciation for ' + word + ' ' + transcription,
-          );
-          button.addEventListener('click', () => speakWord(word));
+            const controls = document.createElement('span');
+            controls.className = 'pronunciation-word-tts';
 
-          const transcriptionBadge = document.createElement('span');
-          transcriptionBadge.className = 'word-tts-transcription';
-          transcriptionBadge.textContent = transcription;
-          transcriptionBadge.setAttribute('aria-hidden', 'true');
+            const button = document.createElement('button');
+            button.type = 'button';
+            button.className = 'word-tts-button';
+            button.textContent = 'Play';
+            button.setAttribute(
+              'aria-label',
+              'Play pronunciation for ' + word + ' ' + transcription,
+            );
+            button.addEventListener('click', () => speakWord(word));
 
-          controls.appendChild(button);
-          controls.appendChild(transcriptionBadge);
-          item.appendChild(controls);
+            const transcriptionBadge = document.createElement('span');
+            transcriptionBadge.className = 'word-tts-transcription';
+            transcriptionBadge.textContent = transcription;
+            transcriptionBadge.setAttribute('aria-hidden', 'true');
+
+            controls.appendChild(button);
+            controls.appendChild(transcriptionBadge);
+            item.appendChild(controls);
+            return;
+          }
+
+          if (connectedSpeechEnabled) {
+            const source = raw.replace(/^\\d+\\.\\s*/, '').trim();
+            if (!source) return;
+            const arrowParts = source.split(/\\s*(?:→|->)\\s*/);
+            const speakTarget = (arrowParts[0] || source)
+              .replace(/^["“”'\`]+/, '')
+              .replace(/["“”'\`]+$/, '')
+              .trim();
+            if (!speakTarget) return;
+
+            const controls = document.createElement('span');
+            controls.className = 'pronunciation-word-tts';
+
+            const button = document.createElement('button');
+            button.type = 'button';
+            button.className = 'word-tts-button';
+            button.textContent = 'Play';
+            button.setAttribute('aria-label', 'Play connected speech line');
+            button.addEventListener('click', () => speakWord(speakTarget));
+
+            controls.appendChild(button);
+            item.appendChild(controls);
+          }
         });
       }
     }

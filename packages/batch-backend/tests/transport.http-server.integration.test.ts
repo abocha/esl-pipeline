@@ -2723,6 +2723,33 @@ describe('transport/http-server - integration (in-process)', () => {
     expect(placeholderCount).toBeGreaterThanOrEqual(2);
   });
 
+  it('POST /preview/html injects pronunciation placeholder in connected_speech mode', async () => {
+    const response = await app.inject({
+      method: 'POST',
+      url: '/preview/html',
+      payload: {
+        text: [
+          '### C. Pronunciation Micro-Focus',
+          '',
+          '**Mode:** connected_speech',
+          '',
+          '- 1. "Change helps us." -> Change help-sus.',
+          '- 2. "It gives us food." -> It give-sus food.',
+          '- 3. "Light feels stronger." -> Light feel-stronger.',
+          '',
+          ':::study-text Transcript',
+          'Teacher: Hello!',
+          ':::',
+        ].join('\n'),
+      },
+    });
+
+    expect(response.statusCode).toBe(200);
+    const payload = response.json() as { html: string };
+    const placeholderCount = (payload.html.match(/Audio track generating\.\.\./g) ?? []).length;
+    expect(placeholderCount).toBeGreaterThanOrEqual(2);
+  });
+
   it('POST /preview/html preserves user-authored audio directives', async () => {
     const response = await app.inject({
       method: 'POST',
