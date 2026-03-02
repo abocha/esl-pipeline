@@ -175,6 +175,7 @@ Notes:
 - For dependency audits, `knip` config lives in `knip.json`; update ignores only when false positives are proven.
 - For `@esl-pipeline/orchestrator`, treat internal `@esl-pipeline/*` packages as build-time (dev) deps unless emitted `dist` imports require runtime resolution. See `docs/reference/ORCHESTRATOR_DEPENDENCY_AUDIT.md`.
 - Docker host path prep and `EACCES` recovery are documented in `docs/operations/docker-host-paths.md`.
+- Vitest/Rollup optional binary recovery is documented in `docs/operations/rollup-optional-binary-troubleshooting.md`.
 
 ## 8. Repo Admin Workflow (GitHub)
 
