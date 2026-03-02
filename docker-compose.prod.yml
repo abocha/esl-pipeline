@@ -1,64 +1,45 @@
+name: esl-pipeline-prod
+
 services:
-  postgres:
-    image: postgres:18-alpine
-    container_name: esl-backend-postgres
-    environment:
-      POSTGRES_USER: esl
-      POSTGRES_PASSWORD: esl
-      POSTGRES_DB: esl_batch
-    command: ['postgres', '-c', 'fsync=off', '-c', 'listen_addresses=*']
-    ports:
-      - '5432:5432'
-    # Persistent DB (named volume).
-    volumes:
-      - postgres18_data:/var/lib/postgresql
-      - ./packages/batch-backend/schema.sql:/schema/batch-backend/schema.sql:ro
-      - ./packages/batch-backend/docker-entrypoint-initdb.d:/docker-entrypoint-initdb.d:ro
-    healthcheck:
-      test: ['CMD-SHELL', 'pg_isready -U esl -d esl_batch']
-      interval: 5s
-      timeout: 3s
-      retries: 10
-
-  redis:
-    image: redis:alpine
-    container_name: esl-backend-redis
-    command: ['redis-server', '--save', '', '--appendonly', 'no']
-    ports:
-      - '6379:6379'
-    volumes:
-      - redis_data:/data
-    healthcheck:
-      test: ['CMD', 'redis-cli', 'ping']
-      interval: 5s
-      timeout: 3s
-      retries: 10
-
   batch-backend:
     build:
       context: .
       dockerfile: packages/batch-backend/Dockerfile
-    image: esl-pipeline/batch-backend:local
+      tags:
+        - esl-pipeline/batch-backend:local
     container_name: esl-batch-backend
     depends_on:
       postgres:
         condition: service_healthy
       redis:
         condition: service_started
-    env_file:
-      - .env.batch-backend
-    environment:
-      NODE_ENV: production
-      PIPELINE_CWD: /app
-      FILESYSTEM_UPLOAD_DIR: /app/uploads
     volumes:
       - type: bind
         source: ./uploads
         target: /app/uploads
         bind:
           create_host_path: false
+    environment:
+      NODE_ENV: production
+      PIPELINE_CWD: /app
+      FILESYSTEM_UPLOAD_DIR: /app/uploads
+    env_file:
+      - .env.batch-backend
     ports:
-      - '8080:8080'
+      - '127.0.0.1:8080:8080'
+    restart: unless-stopped
+
+  batch-frontend:
+    build:
+      context: .
+      dockerfile: packages/batch-frontend/Dockerfile
+      tags:
+        - esl-pipeline/batch-frontend:local
+    container_name: esl-batch-frontend
+    depends_on:
+      - batch-backend
+    ports:
+      - '0.0.0.0:5173:80'
     restart: unless-stopped
 
   batch-worker:
@@ -69,32 +50,54 @@ services:
         condition: service_healthy
       redis:
         condition: service_started
-    env_file:
-      - .env.batch-backend
-    environment:
-      NODE_ENV: production
-      PIPELINE_CWD: /app
-      FILESYSTEM_UPLOAD_DIR: /app/uploads
     volumes:
       - type: bind
         source: ./uploads
         target: /app/uploads
         bind:
           create_host_path: false
-    command: ['node', 'dist/transport/worker-runner.js']
+    environment:
+      NODE_ENV: production
+      PIPELINE_CWD: /app
+      FILESYSTEM_UPLOAD_DIR: /app/uploads
+    env_file:
+      - .env.batch-backend
+    command: [ 'node', 'dist/transport/worker-runner.js' ]
     restart: unless-stopped
-
-  batch-frontend:
-    build:
-      context: .
-      dockerfile: packages/batch-frontend/Dockerfile
-    image: esl-pipeline/batch-frontend:local
-    container_name: esl-batch-frontend
-    depends_on:
-      - batch-backend
+  postgres:
+    image: postgres:18-alpine
+    container_name: esl-backend-postgres
+    # Persistent DB (named volume).
+    volumes:
+      - postgres18_data:/var/lib/postgresql
+      - ./packages/batch-backend/schema.sql:/schema/batch-backend/schema.sql:ro
+      - ./packages/batch-backend/docker-entrypoint-initdb.d:/docker-entrypoint-initdb.d:ro
+    environment:
+      POSTGRES_USER: esl
+      POSTGRES_PASSWORD: esl
+      POSTGRES_DB: esl_batch
     ports:
-      - '5173:80'
-    restart: unless-stopped
+      - '127.0.0.1:5432:5432'
+    command: [ 'postgres', '-c', 'fsync=off', '-c', 'listen_addresses=*' ]
+    healthcheck:
+      test: [ 'CMD-SHELL', 'pg_isready -U esl -d esl_batch' ]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  redis:
+    image: redis:alpine
+    container_name: esl-backend-redis
+    volumes:
+      - redis_data:/data
+    ports:
+      - '127.0.0.1:6379:6379'
+    command: [ 'redis-server', '--save', '', '--appendonly', 'no' ]
+    healthcheck:
+      test: [ 'CMD', 'redis-cli', 'ping' ]
+      interval: 5s
+      timeout: 3s
+      retries: 10
 
 volumes:
   postgres_data:
