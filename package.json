@@ -66,6 +66,7 @@
     "format:write": "pnpm exec prettier --write \"**/*.{ts,tsx,js,json,md,yml,yaml}\"",
     "hadolint": "rg --files -g 'Dockerfile*' | xargs -r hadolint",
     "lint": "pnpm exec eslint packages",
+    "notes:pr-style": "bash scripts/git/pr-style-summary.sh",
     "smoke": "pnpm --filter @esl-pipeline/orchestrator test",
     "test": "pnpm -r --filter './packages/*' run test",
     "test:watch": "pnpm -r --filter './packages/*' --if-present run test:watch",

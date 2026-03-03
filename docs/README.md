@@ -58,6 +58,7 @@
 - Need Docker mount/permissions troubleshooting: `docs/operations/docker-host-paths.md`.
 - Need Docker Postgres backup/restore routine: `docs/operations/postgres-backup-restore.md`.
 - Need Docker Postgres backup archival to S3 + scheduler workflow: `docs/operations/postgres-backup-s3.md`.
+- Need PR-style release-note output for direct pushes: `docs/operations/pr-style-release-notes.md`.
 - Need Vitest/Rollup optional binary troubleshooting: `docs/operations/rollup-optional-binary-troubleshooting.md`.
 - Need latest security scan triage and fix log: `docs/reference/SECURITY_SCANS_2026-02-12.md`.
 - Need implementation plans and phased execution docs: `docs/plans/README.md`.
