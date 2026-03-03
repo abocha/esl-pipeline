@@ -518,7 +518,7 @@ Integrations should treat the HTTP and queue contracts above as the supported pu
 Using Docker Compose (dev):
 
 ```bash
-docker compose up -d
+pnpm docker:up
 ```
 
 This should start:
@@ -528,6 +528,10 @@ This should start:
 - MinIO (optional)
 - `batch-backend` HTTP API on `http://localhost:8080`
 - `batch-backend` worker
+
+If `8080` is unavailable on your host, set `BATCH_BACKEND_HOST_PORT` when starting
+the stack (for example `BATCH_BACKEND_HOST_PORT=8081 pnpm docker:up`) and use that
+port for direct backend requests.
 
 Ensure environment variables match `.env.batch-backend.example` and SSOT.
 
