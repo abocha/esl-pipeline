@@ -65,6 +65,16 @@ function createInMemoryDependencies(seed?: {
     }
   }
 
+  const getLatestRevisionByHash = (profileId: string, contentHash: string): ProfileRevisionRecord | null => {
+    for (let index = revisions.length - 1; index >= 0; index -= 1) {
+      const revision = revisions[index];
+      if (revision && revision.profileId === profileId && revision.contentHash === contentHash) {
+        return revision;
+      }
+    }
+    return null;
+  };
+
   return {
     profiles: {
       list: async (params: { search?: string; limit?: number; offset?: number; order?: 'asc' | 'desc' } = {}) => {
@@ -115,9 +125,7 @@ function createInMemoryDependencies(seed?: {
     },
     revisions: {
       getLatestByHash: async (profileId: string, contentHash: string) =>
-        revisions.findLast(
-          (revision) => revision.profileId === profileId && revision.contentHash === contentHash,
-        ) ?? null,
+        getLatestRevisionByHash(profileId, contentHash),
       insert: async ({
         profileId,
         content,
