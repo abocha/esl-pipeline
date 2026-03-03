@@ -184,6 +184,42 @@ Notes:
 - Issues are structured via `.github/ISSUE_TEMPLATE/*`.
 - Security disclosures must go through `SECURITY.md` (private advisory flow, no public vuln issues).
 
+### PR Operations Quick Guide (Solo-Friendly)
+
+- Default rule: avoid direct pushes to `main`; use short-lived feature branches.
+- Start from an up-to-date base:
+  - `git fetch origin`
+  - `git switch main`
+  - `git pull --ff-only`
+  - `git switch -c <branch-name>`
+- Push and open PR:
+  - `git push -u origin <branch-name>`
+  - `gh pr create --base main --head <branch-name> --title \"<title>\" --body-file .github/pull_request_template.md`
+- Track checks and review:
+  - `gh pr checks <pr-number>`
+  - `gh pr view <pr-number> --comments`
+- Merge after required checks pass:
+  - `gh pr merge <pr-number> --merge --delete-branch`
+
+### Release Notes from Commits (Direct-Push Compatible)
+
+- Generate PR-style notes/changelog from commit history:
+  - `pnpm notes:pr-style`
+- Common variants:
+  - `pnpm notes:pr-style -- --limit 5`
+  - `pnpm notes:pr-style -- --base <base-ref> --head <head-ref>`
+  - `pnpm notes:pr-style -- --base <base-ref> --head <head-ref> --include-merges`
+- Full runbook: `docs/operations/pr-style-release-notes.md`.
+
+### If You Accidentally Pushed to `main`
+
+- Preserve safety first:
+  - create a backup branch at current tip (`git branch backup/<label>`).
+- Recover mainline history without force-push:
+  - revert accidental commits on `main`, push revert commit.
+- Reapply intended commits on a feature branch:
+  - cherry-pick onto new branch, push, and open a normal PR.
+
 For exact rules (manifest schema, adapter selection, validation invariants), see [`docs/reference/agents-ssot.md`](docs/reference/agents-ssot.md).
 
 ---
