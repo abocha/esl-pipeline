@@ -1,68 +1,263 @@
-import fs from 'node:fs/promises';
-import os from 'node:os';
-import path from 'node:path';
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { describe, expect, it } from 'vitest';
 
-const tempDirs: string[] = [];
+import { getPromptOptions, resolvePromptSelection } from '../src/application/prompt-options.js';
+import type { BatchBackendConfig } from '../src/config/env.js';
 
-async function createFixtureRoots() {
-  const root = await fs.mkdtemp(path.join(os.tmpdir(), 'esl-prompt-options-'));
-  const templatesDir = path.join(root, 'templates');
-  const profilesDir = path.join(root, 'profiles');
-  await fs.mkdir(templatesDir, { recursive: true });
-  await fs.mkdir(profilesDir, { recursive: true });
-  const templatePath = path.join(templatesDir, 'lesson-template.md');
-  const profilePath = path.join(profilesDir, 'default-profile.md');
-  await fs.writeFile(templatePath, '# Template', 'utf8');
-  await fs.writeFile(profilePath, '# Profile', 'utf8');
-  tempDirs.push(root);
-  return { templatePath, profilePath };
+function createConfig(templatePath: string, profilePath: string): BatchBackendConfig {
+  return {
+    prompt: {
+      templatePath,
+      defaultProfilePath: profilePath,
+    },
+  } as BatchBackendConfig;
 }
 
-describe('application/prompt-options cache', () => {
-  beforeEach(() => {
-    vi.resetModules();
-    vi.clearAllMocks();
-    vi.useFakeTimers();
-    vi.setSystemTime(new Date('2026-02-01T00:00:00.000Z'));
-  });
+describe('application/prompt-options', () => {
+  it('returns active-only prompt catalog and DB-backed defaults', async () => {
+    const config = createConfig(
+      'docs/templates/default-template.md',
+      'docs/templates/profiles/default-profile.md',
+    );
 
-  afterEach(async () => {
-    vi.useRealTimers();
-    vi.restoreAllMocks();
-    await Promise.all(tempDirs.map((dir) => fs.rm(dir, { recursive: true, force: true })));
-    tempDirs.length = 0;
-  });
-
-  it('reuses prompt option scans for 60 seconds and refreshes after TTL', async () => {
-    const { templatePath, profilePath } = await createFixtureRoots();
-    const { getPromptOptions } = await import('../src/application/prompt-options.js');
-    const { loadConfig } = await import('../src/config/env.js');
-
-    const baseConfig = loadConfig();
-    const config = {
-      ...baseConfig,
-      prompt: {
-        ...baseConfig.prompt,
-        templatePath,
-        defaultProfilePath: profilePath,
+    const options = await getPromptOptions({
+      config,
+      templates: {
+        list: async () => ({
+          items: [
+            {
+              id: 'default-template.md',
+              label: 'Default Template',
+              activeRevisionId: 'template-revision-1',
+              createdAt: new Date('2026-01-01T00:00:00.000Z'),
+              updatedAt: new Date('2026-01-01T00:00:00.000Z'),
+            },
+            {
+              id: 'archived-template.md',
+              label: 'Archived Template',
+              activeRevisionId: null,
+              createdAt: new Date('2026-01-01T00:00:00.000Z'),
+              updatedAt: new Date('2026-01-01T00:00:00.000Z'),
+            },
+          ],
+          total: 2,
+          limit: 500,
+          offset: 0,
+          order: 'asc',
+        }),
+        getById: async () => null,
       },
-    };
+      profiles: {
+        list: async () => ({
+          items: [
+            {
+              id: 'default-profile.md',
+              label: 'Default Profile',
+              activeRevisionId: 'profile-revision-1',
+              createdAt: new Date('2026-01-01T00:00:00.000Z'),
+              updatedAt: new Date('2026-01-01T00:00:00.000Z'),
+            },
+            {
+              id: 'archived-profile.md',
+              label: 'Archived Profile',
+              activeRevisionId: null,
+              createdAt: new Date('2026-01-01T00:00:00.000Z'),
+              updatedAt: new Date('2026-01-01T00:00:00.000Z'),
+            },
+          ],
+          total: 2,
+          limit: 500,
+          offset: 0,
+          order: 'asc',
+        }),
+        getById: async () => null,
+      },
+    });
 
-    const readdirSpy = vi.spyOn(fs, 'readdir');
+    expect(options).toEqual({
+      templates: [{ id: 'default-template.md', label: 'Default Template' }],
+      profiles: [{ id: 'default-profile.md', label: 'Default Profile' }],
+      defaults: {
+        templateId: 'default-template.md',
+        profileId: 'default-profile.md',
+      },
+    });
+  });
 
-    const first = await getPromptOptions({ config });
-    expect(first.templates).toHaveLength(1);
-    expect(first.profiles).toHaveLength(1);
-    const firstCallCount = readdirSpy.mock.calls.length;
+  it('returns null defaults when configured IDs are not active in DB', async () => {
+    const config = createConfig('docs/templates/missing-template.md', 'docs/profiles/missing-profile.md');
 
-    const second = await getPromptOptions({ config });
-    expect(second.templates).toHaveLength(1);
-    expect(second.profiles).toHaveLength(1);
-    expect(readdirSpy.mock.calls.length).toBe(firstCallCount);
+    const options = await getPromptOptions({
+      config,
+      templates: {
+        list: async () => ({
+          items: [
+            {
+              id: 'other-template.md',
+              label: 'Other Template',
+              activeRevisionId: 'template-revision-1',
+              createdAt: new Date('2026-01-01T00:00:00.000Z'),
+              updatedAt: new Date('2026-01-01T00:00:00.000Z'),
+            },
+          ],
+          total: 1,
+          limit: 500,
+          offset: 0,
+          order: 'asc',
+        }),
+        getById: async () => null,
+      },
+      profiles: {
+        list: async () => ({
+          items: [
+            {
+              id: 'other-profile.md',
+              label: 'Other Profile',
+              activeRevisionId: 'profile-revision-1',
+              createdAt: new Date('2026-01-01T00:00:00.000Z'),
+              updatedAt: new Date('2026-01-01T00:00:00.000Z'),
+            },
+          ],
+          total: 1,
+          limit: 500,
+          offset: 0,
+          order: 'asc',
+        }),
+        getById: async () => null,
+      },
+    });
 
-    vi.setSystemTime(new Date('2026-02-01T00:01:01.000Z'));
-    await getPromptOptions({ config });
-    expect(readdirSpy.mock.calls.length).toBeGreaterThan(firstCallCount);
+    expect(options.defaults).toEqual({
+      templateId: null,
+      profileId: null,
+    });
+  });
+
+  it('maps legacy profilePath to canonical profile ID in selection', async () => {
+    const config = createConfig(
+      'docs/templates/default-template.md',
+      'docs/templates/profiles/default-profile.md',
+    );
+
+    const selection = await resolvePromptSelection(
+      {
+        templateId: 'default-template.md',
+        profilePath: 'nested/custom-profile.md',
+      },
+      {
+        config,
+        templates: {
+          list: async () => ({
+            items: [
+              {
+                id: 'default-template.md',
+                label: 'Default Template',
+                activeRevisionId: 'template-revision-1',
+                createdAt: new Date('2026-01-01T00:00:00.000Z'),
+                updatedAt: new Date('2026-01-01T00:00:00.000Z'),
+              },
+            ],
+            total: 1,
+            limit: 500,
+            offset: 0,
+            order: 'asc',
+          }),
+          getById: async () => null,
+        },
+        profiles: {
+          list: async () => ({
+            items: [
+              {
+                id: 'default-profile.md',
+                label: 'Default Profile',
+                activeRevisionId: 'profile-revision-1',
+                createdAt: new Date('2026-01-01T00:00:00.000Z'),
+                updatedAt: new Date('2026-01-01T00:00:00.000Z'),
+              },
+              {
+                id: 'nested/custom-profile.md',
+                label: 'Custom Profile',
+                activeRevisionId: 'profile-revision-2',
+                createdAt: new Date('2026-01-01T00:00:00.000Z'),
+                updatedAt: new Date('2026-01-01T00:00:00.000Z'),
+              },
+            ],
+            total: 2,
+            limit: 500,
+            offset: 0,
+            order: 'asc',
+          }),
+          getById: async () => null,
+        },
+      },
+    );
+
+    expect(selection).toEqual({
+      templateId: 'default-template.md',
+      profileId: 'nested/custom-profile.md',
+      profilePath: 'nested/custom-profile.md',
+    });
+  });
+
+  it('paginates beyond 500 records and resolves defaults outside first page', async () => {
+    const config = createConfig('docs/templates/template-549.md', 'docs/profiles/profile-549.md');
+
+    const templateItems = Array.from({ length: 550 }, (_, index) => ({
+      id: `template-${index}.md`,
+      label: `Template ${index}`,
+      activeRevisionId: `template-revision-${index}`,
+      createdAt: new Date('2026-01-01T00:00:00.000Z'),
+      updatedAt: new Date('2026-01-01T00:00:00.000Z'),
+    }));
+    const profileItems = Array.from({ length: 550 }, (_, index) => ({
+      id: `profile-${index}.md`,
+      label: `Profile ${index}`,
+      activeRevisionId: `profile-revision-${index}`,
+      createdAt: new Date('2026-01-01T00:00:00.000Z'),
+      updatedAt: new Date('2026-01-01T00:00:00.000Z'),
+    }));
+
+    const templateListCalls: { limit?: number; offset?: number; order?: 'asc' | 'desc' }[] = [];
+    const profileListCalls: { limit?: number; offset?: number; order?: 'asc' | 'desc' }[] = [];
+
+    const options = await getPromptOptions({
+      config,
+      templates: {
+        list: async (params = {}) => {
+          const { limit = 500, offset = 0, order = 'asc' } = params;
+          templateListCalls.push({ limit, offset, order });
+          return {
+            items: templateItems.slice(offset, offset + limit),
+            total: templateItems.length,
+            limit,
+            offset,
+            order,
+          };
+        },
+        getById: async () => null,
+      },
+      profiles: {
+        list: async (params = {}) => {
+          const { limit = 500, offset = 0, order = 'asc' } = params;
+          profileListCalls.push({ limit, offset, order });
+          return {
+            items: profileItems.slice(offset, offset + limit),
+            total: profileItems.length,
+            limit,
+            offset,
+            order,
+          };
+        },
+        getById: async () => null,
+      },
+    });
+
+    expect(options.defaults).toEqual({
+      templateId: 'template-549.md',
+      profileId: 'profile-549.md',
+    });
+    expect(options.templates.some((template) => template.id === 'template-549.md')).toBe(true);
+    expect(options.profiles.some((profile) => profile.id === 'profile-549.md')).toBe(true);
+    expect(templateListCalls.length).toBeGreaterThan(1);
+    expect(profileListCalls.length).toBeGreaterThan(1);
   });
 });

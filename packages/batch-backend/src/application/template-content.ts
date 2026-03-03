@@ -1,5 +1,4 @@
 import { createHash } from 'node:crypto';
-import fs from 'node:fs/promises';
 import path from 'node:path';
 
 import type { BatchBackendConfig } from '../config/env.js';
@@ -11,19 +10,23 @@ import type {
 } from '../domain/template-revision-model.js';
 import {
   activateTemplateRevision,
+  deprecateActiveTemplateRevision,
   getLatestTemplateRevisionByHash,
   getTemplateRevisionById,
   insertTemplateRevision,
   listTemplateRevisions,
 } from '../domain/template-revision-repository.js';
-import { setTemplateActiveRevision, upsertTemplate } from '../domain/template-repository.js';
 import {
-  type PromptOption,
-  type PromptOptionWithPath,
-  listPromptTemplatesWithPath,
-} from './prompt-options.js';
+  getTemplateById,
+  listTemplates,
+  setTemplateActiveRevision,
+  upsertTemplate,
+} from '../domain/template-repository.js';
+import type { PromptOption } from './prompt-options.js';
 
 const TEMPLATE_EXTENSIONS = new Set(['.md', '.txt']);
+const TEMPLATE_PROFILE_MARKER = 'INSERT PROFILE HERE';
+const MAX_OPTION_PAGE_LIMIT = 500;
 
 export interface TemplateContentListResponse {
   templates: PromptOption[];
@@ -67,6 +70,7 @@ export interface TemplateRevisionListResponse {
 interface TemplateRevisionDependencies {
   insert: typeof insertTemplateRevision;
   activate: typeof activateTemplateRevision;
+  deprecateActive: typeof deprecateActiveTemplateRevision;
   list: typeof listTemplateRevisions;
   getById: typeof getTemplateRevisionById;
   getLatestByHash: typeof getLatestTemplateRevisionByHash;
@@ -76,6 +80,8 @@ interface TemplateContentDependencies {
   config: BatchBackendConfig;
   revisions: TemplateRevisionDependencies;
   templates: {
+    list: typeof listTemplates;
+    getById: typeof getTemplateById;
     upsert: typeof upsertTemplate;
     setActive: typeof setTemplateActiveRevision;
   };
@@ -100,20 +106,17 @@ export class TemplateContentError extends Error {
 }
 
 function normalizeTemplateId(id: string): string {
-  return id.replaceAll('\\', '/').replace(/^\/+/, '');
-}
+  const normalized = path.posix
+    .normalize(id.replaceAll('\\', '/').replace(/^\/+/, '').trim())
+    .trim();
 
-function isWithinRoot(root: string, target: string): boolean {
-  const relative = path.relative(root, target);
-  if (!relative) return true;
-  return !relative.startsWith('..') && !path.isAbsolute(relative);
-}
-
-function resolveTemplatePathForId(templateId: string, templateRoot: string): string {
-  const normalized = normalizeTemplateId(templateId);
-  if (!normalized) {
+  if (!normalized || normalized === '.' || normalized === '..') {
     throw new TemplateContentError('templateId is required', 'template_id_missing', 400);
   }
+  if (normalized.startsWith('../') || path.posix.isAbsolute(normalized)) {
+    throw new TemplateContentError('templateId is invalid', 'template_id_invalid', 400);
+  }
+
   const ext = path.extname(normalized).toLowerCase();
   if (!TEMPLATE_EXTENSIONS.has(ext)) {
     throw new TemplateContentError(
@@ -122,21 +125,28 @@ function resolveTemplatePathForId(templateId: string, templateRoot: string): str
       400,
     );
   }
-  const candidate = path.resolve(templateRoot, normalized);
-  if (!isWithinRoot(templateRoot, candidate)) {
-    throw new TemplateContentError(
-      'templateId must resolve within the configured template root',
-      'template_id_outside_root',
-      400,
-    );
-  }
-  return candidate;
+
+  return normalized;
 }
 
 function formatTemplateLabel(templateId: string): string {
   const base = path.basename(templateId, path.extname(templateId));
   const normalized = base.replaceAll(/[_-]+/g, ' ').trim();
   return normalized.length > 0 ? normalized : templateId;
+}
+
+function validateTemplateMarker(content: string): void {
+  const hasMarker = content
+    .split(/\r?\n/)
+    .some((line) => line.trim() === TEMPLATE_PROFILE_MARKER);
+
+  if (!hasMarker) {
+    throw new TemplateContentError(
+      'Template content must include INSERT PROFILE HERE marker',
+      'template_marker_missing',
+      400,
+    );
+  }
 }
 
 function getDependencies(
@@ -147,23 +157,18 @@ function getDependencies(
     revisions: overrides?.revisions ?? {
       insert: insertTemplateRevision,
       activate: activateTemplateRevision,
+      deprecateActive: deprecateActiveTemplateRevision,
       list: listTemplateRevisions,
       getById: getTemplateRevisionById,
       getLatestByHash: getLatestTemplateRevisionByHash,
     },
     templates: overrides?.templates ?? {
+      list: listTemplates,
+      getById: getTemplateById,
       upsert: upsertTemplate,
       setActive: setTemplateActiveRevision,
     },
   };
-}
-
-async function loadTemplateOptions(
-  overrides?: Partial<TemplateContentDependencies>,
-): Promise<{ templates: PromptOptionWithPath[]; templateRoot: string }> {
-  const { config } = getDependencies(overrides);
-  const { templates, templateRoot } = await listPromptTemplatesWithPath({ config });
-  return { templates, templateRoot };
 }
 
 function hashTemplateContent(content: string): string {
@@ -189,24 +194,32 @@ function toTemplateRevisionSummary(
   };
 }
 
-async function resolveCurrentRevisionMetadata(
-  templateId: string,
-  content: string,
-  revisions: TemplateRevisionDependencies,
-): Promise<{ currentRevisionId: string | null; updatedAt: string | null }> {
-  try {
-    const currentHash = hashTemplateContent(content);
-    const currentRevision = await revisions.getLatestByHash(templateId, currentHash);
-    return {
-      currentRevisionId: currentRevision?.id ?? null,
-      updatedAt: currentRevision?.createdAt ? currentRevision.createdAt.toISOString() : null,
-    };
-  } catch {
-    return {
-      currentRevisionId: null,
-      updatedAt: null,
-    };
+async function listActiveTemplateOptions(
+  dependencies: TemplateContentDependencies,
+): Promise<PromptOption[]> {
+  const options: PromptOption[] = [];
+  let offset = 0;
+
+  while (true) {
+    const listed = await dependencies.templates.list({
+      limit: MAX_OPTION_PAGE_LIMIT,
+      offset,
+      order: 'asc',
+    });
+
+    options.push(
+      ...listed.items
+        .filter((template) => Boolean(template.activeRevisionId))
+        .map((template) => ({ id: template.id, label: template.label })),
+    );
+
+    offset += listed.items.length;
+    if (offset >= listed.total || listed.items.length === 0) {
+      break;
+    }
   }
+
+  return options;
 }
 
 async function upsertTemplateContentWithRevision(
@@ -216,76 +229,59 @@ async function upsertTemplateContentWithRevision(
   options: UpsertTemplateContentOptions,
 ): Promise<TemplateContentResponse> {
   const dependencies = getDependencies(overrides);
-  const { templates, templateRoot } = await loadTemplateOptions(dependencies);
-  const entry = templates.find((template) => template.id === templateId);
-  const targetPath = entry ? entry.path : resolveTemplatePathForId(templateId, templateRoot);
+  const normalizedTemplateId = normalizeTemplateId(templateId);
   const normalizedContent = content ?? '';
 
-  await fs.mkdir(path.dirname(targetPath), { recursive: true });
-  await fs.writeFile(targetPath, normalizedContent, 'utf8');
+  validateTemplateMarker(normalizedContent);
+
+  const existingTemplate = await dependencies.templates.getById(normalizedTemplateId);
+  const label = existingTemplate?.label ?? formatTemplateLabel(normalizedTemplateId);
+
+  await dependencies.templates.upsert({
+    id: normalizedTemplateId,
+    label,
+    activeRevisionId: existingTemplate?.activeRevisionId ?? null,
+  });
 
   const hash = hashTemplateContent(normalizedContent);
-  const source = options.source ?? (entry ? 'update' : 'create');
-  let currentRevisionId: string | null = null;
-  let updatedAt: string | null = null;
+  const source = options.source ?? (existingTemplate ? 'update' : 'create');
 
-  try {
-    await dependencies.templates
-      .upsert({
-        id: templateId,
-        label: entry?.label ?? formatTemplateLabel(templateId),
-        activeRevisionId: null,
-      })
-      .catch(() => null);
+  const existingRevision =
+    source === 'restore'
+      ? null
+      : await dependencies.revisions.getLatestByHash(normalizedTemplateId, hash);
 
-    const existingRevision =
-      source === 'restore' ? null : await dependencies.revisions.getLatestByHash(templateId, hash);
-    const revision =
-      existingRevision ??
-      (await dependencies.revisions.insert({
-        templateId,
-        content: normalizedContent,
-        contentHash: hash,
-        source,
-        createdBy: options.createdBy ?? null,
-        restoredFromRevisionId: options.restoredFromRevisionId ?? null,
-      }));
+  const revision =
+    existingRevision ??
+    (await dependencies.revisions.insert({
+      templateId: normalizedTemplateId,
+      content: normalizedContent,
+      contentHash: hash,
+      source,
+      createdBy: options.createdBy ?? null,
+      restoredFromRevisionId: options.restoredFromRevisionId ?? null,
+    }));
 
-    await Promise.all([
-      dependencies.templates
-        .upsert({
-          id: templateId,
-          label: entry?.label ?? formatTemplateLabel(templateId),
-          activeRevisionId: revision.id,
-        })
-        .catch(() => null),
-      dependencies.revisions.activate(templateId, revision.id).catch(() => null),
-      dependencies.templates.setActive(templateId, revision.id).catch(() => null),
-    ]);
-
-    currentRevisionId = revision.id;
-    updatedAt = revision.createdAt.toISOString();
-  } catch {
-    currentRevisionId = null;
-    updatedAt = null;
-  }
+  await Promise.all([
+    dependencies.revisions.activate(normalizedTemplateId, revision.id),
+    dependencies.templates.setActive(normalizedTemplateId, revision.id),
+  ]);
 
   return {
-    id: entry?.id ?? templateId,
-    label: entry?.label ?? formatTemplateLabel(templateId),
-    content: normalizedContent,
-    currentRevisionId,
-    updatedAt,
+    id: normalizedTemplateId,
+    label,
+    content: revision.content,
+    currentRevisionId: revision.id,
+    updatedAt: revision.createdAt.toISOString(),
   };
 }
 
 export async function listTemplateContents(
   overrides?: Partial<TemplateContentDependencies>,
 ): Promise<TemplateContentListResponse> {
-  const { templates } = await loadTemplateOptions(overrides);
-  return {
-    templates: templates.map(({ id, label }) => ({ id, label })),
-  };
+  const dependencies = getDependencies(overrides);
+  const templates = await listActiveTemplateOptions(dependencies);
+  return { templates };
 }
 
 export async function getTemplateContent(
@@ -293,18 +289,49 @@ export async function getTemplateContent(
   overrides?: Partial<TemplateContentDependencies>,
 ): Promise<TemplateContentResponse | null> {
   const dependencies = getDependencies(overrides);
-  const { templates } = await loadTemplateOptions(dependencies);
-  const entry = templates.find((template) => template.id === templateId);
-  if (!entry) return null;
+  const normalizedTemplateId = normalizeTemplateId(templateId);
+  const template = await dependencies.templates.getById(normalizedTemplateId);
+  if (!template?.activeRevisionId) return null;
 
-  const content = await fs.readFile(entry.path, 'utf8');
-  const metadata = await resolveCurrentRevisionMetadata(templateId, content, dependencies.revisions);
+  const revision = await dependencies.revisions.getById(normalizedTemplateId, template.activeRevisionId);
+  if (!revision) return null;
+
   return {
-    id: entry.id,
-    label: entry.label,
-    content,
-    ...metadata,
+    id: template.id,
+    label: template.label,
+    content: revision.content,
+    currentRevisionId: revision.id,
+    updatedAt: revision.createdAt.toISOString(),
   };
+}
+
+export async function upsertTemplateContent(
+  templateId: string,
+  content: string,
+  overrides?: Partial<TemplateContentDependencies & { createdBy: string | null }>,
+): Promise<TemplateContentResponse> {
+  return upsertTemplateContentWithRevision(templateId, content, overrides, {
+    source: undefined,
+    createdBy: overrides?.createdBy ?? null,
+    restoredFromRevisionId: null,
+  });
+}
+
+export async function deleteTemplateContent(
+  templateId: string,
+  overrides?: Partial<TemplateContentDependencies>,
+): Promise<boolean> {
+  const dependencies = getDependencies(overrides);
+  const normalizedTemplateId = normalizeTemplateId(templateId);
+  const template = await dependencies.templates.getById(normalizedTemplateId);
+  if (!template?.activeRevisionId) return false;
+
+  await Promise.all([
+    dependencies.revisions.deprecateActive(normalizedTemplateId),
+    dependencies.templates.setActive(normalizedTemplateId, null),
+  ]);
+
+  return true;
 }
 
 export async function listTemplateRevisionsForTemplate(
@@ -317,12 +344,12 @@ export async function listTemplateRevisionsForTemplate(
   overrides?: Partial<TemplateContentDependencies>,
 ): Promise<TemplateRevisionListResponse | null> {
   const dependencies = getDependencies(overrides);
-  const { templates } = await loadTemplateOptions(dependencies);
-  const entry = templates.find((template) => template.id === templateId);
-  if (!entry) return null;
+  const normalizedTemplateId = normalizeTemplateId(templateId);
+  const template = await dependencies.templates.getById(normalizedTemplateId);
+  if (!template) return null;
 
   const result = await dependencies.revisions.list({
-    templateId,
+    templateId: normalizedTemplateId,
     limit: params.limit,
     offset: params.offset,
     order: params.order,
@@ -343,11 +370,11 @@ export async function getTemplateRevisionForTemplate(
   overrides?: Partial<TemplateContentDependencies>,
 ): Promise<TemplateRevisionDetailResponse | null> {
   const dependencies = getDependencies(overrides);
-  const { templates } = await loadTemplateOptions(dependencies);
-  const entry = templates.find((template) => template.id === templateId);
-  if (!entry) return null;
+  const normalizedTemplateId = normalizeTemplateId(templateId);
+  const template = await dependencies.templates.getById(normalizedTemplateId);
+  if (!template) return null;
 
-  const revision = await dependencies.revisions.getById(templateId, revisionId);
+  const revision = await dependencies.revisions.getById(normalizedTemplateId, revisionId);
   if (!revision) return null;
 
   return {
@@ -362,10 +389,14 @@ export async function restoreTemplateRevision(
   overrides?: Partial<TemplateContentDependencies & { createdBy: string | null }>,
 ): Promise<TemplateContentResponse | null> {
   const dependencies = getDependencies(overrides);
-  const revision = await dependencies.revisions.getById(templateId, revisionId);
+  const normalizedTemplateId = normalizeTemplateId(templateId);
+  const template = await dependencies.templates.getById(normalizedTemplateId);
+  if (!template) return null;
+
+  const revision = await dependencies.revisions.getById(normalizedTemplateId, revisionId);
   if (!revision) return null;
 
-  return upsertTemplateContentWithRevision(templateId, revision.content, overrides, {
+  return upsertTemplateContentWithRevision(normalizedTemplateId, revision.content, overrides, {
     source: 'restore',
     createdBy: overrides?.createdBy ?? null,
     restoredFromRevisionId: revision.id,
@@ -378,23 +409,14 @@ export async function activateTemplateRevisionForTemplate(
   overrides?: Partial<TemplateContentDependencies>,
 ): Promise<TemplateRevisionDetailResponse | null> {
   const dependencies = getDependencies(overrides);
-  const { templates } = await loadTemplateOptions(dependencies);
-  const entry = templates.find((template) => template.id === templateId);
-  if (!entry) return null;
+  const normalizedTemplateId = normalizeTemplateId(templateId);
+  const template = await dependencies.templates.getById(normalizedTemplateId);
+  if (!template) return null;
 
-  const activated = await dependencies.revisions.activate(templateId, revisionId);
+  const activated = await dependencies.revisions.activate(normalizedTemplateId, revisionId);
   if (!activated) return null;
 
-  await Promise.all([
-    dependencies.templates
-      .upsert({
-        id: templateId,
-        label: entry.label,
-        activeRevisionId: activated.id,
-      })
-      .catch(() => null),
-    dependencies.templates.setActive(templateId, activated.id).catch(() => null),
-  ]);
+  await dependencies.templates.setActive(normalizedTemplateId, activated.id);
 
   return {
     ...toTemplateRevisionSummary(activated),

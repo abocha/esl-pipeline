@@ -1,14 +1,15 @@
-import type { Dirent } from 'node:fs';
-import fs from 'node:fs/promises';
 import path from 'node:path';
 
 import type { BatchBackendConfig } from '../config/env.js';
 import { loadConfig } from '../config/env.js';
-import { resolveProfileRoot, resolveUserProfilePath } from './profile-path.js';
+import type { ProfileRecord } from '../domain/profile-model.js';
+import { getProfileById, listProfiles } from '../domain/profile-repository.js';
+import type { TemplateRecord } from '../domain/template-model.js';
+import { getTemplateById, listTemplates } from '../domain/template-repository.js';
 import { resolveRepoPath } from './prompt-assembly.js';
 
 const PROMPT_EXTENSIONS = new Set(['.md', '.txt']);
-const PROMPT_OPTIONS_CACHE_TTL_MS = 60_000;
+const MAX_PROMPT_PAGE_LIMIT = 500;
 
 export interface PromptOption {
   id: string;
@@ -40,60 +41,98 @@ export class PromptOptionError extends Error {
 
 export interface PromptSelectionResult {
   templateId: string;
-  templatePath: string;
   profileId: string;
   profilePath: string;
 }
 
+interface PromptOptionsDependencies {
+  config: BatchBackendConfig;
+  profiles: {
+    list: typeof listProfiles;
+    getById: typeof getProfileById;
+  };
+  templates: {
+    list: typeof listTemplates;
+    getById: typeof getTemplateById;
+  };
+}
+
+interface PromptOptionLists {
+  templates: PromptOptionWithPath[];
+  profiles: PromptOptionWithPath[];
+  defaults: {
+    templateId: string | null;
+    profileId: string | null;
+  };
+  templateRoot: string;
+  profileRoot: string;
+}
+
+function getDependencies(
+  overrides?: Partial<PromptOptionsDependencies>,
+): PromptOptionsDependencies {
+  return {
+    config: overrides?.config ?? loadConfig(),
+    profiles: overrides?.profiles ?? {
+      list: listProfiles,
+      getById: getProfileById,
+    },
+    templates: overrides?.templates ?? {
+      list: listTemplates,
+      getById: getTemplateById,
+    },
+  };
+}
+
 export async function resolveAllowlistedProfilePath(
   profilePath: string,
-  overrides?: Partial<{ config: BatchBackendConfig }>,
+  overrides?: Partial<PromptOptionsDependencies>,
 ): Promise<string> {
   if (!profilePath) {
     throw new PromptOptionError('profilePath is required', 'profile_path_missing');
   }
-  const config = overrides?.config ?? loadConfig();
-  const { profiles, profileRoot } = await loadProfileOptionList(config);
-  const resolvedPath = await resolveUserProfilePath(profilePath, profileRoot);
-  const profile = profiles.find((option) => option.path === resolvedPath);
+  const dependencies = getDependencies(overrides);
+  const { profiles, profileRoot } = await loadProfileOptionList(dependencies);
+  const profileId = resolveProfileIdFromPathInput(profilePath, profileRoot);
+  const profile = profiles.find((option) => option.id === profileId);
   if (!profile) {
     throw new PromptOptionError(
       'profilePath must reference an allowlisted profile',
       'profile_path_not_allowed',
     );
   }
-  return resolvedPath;
+  return profile.id;
 }
 
 export async function listPromptProfilesWithPath(
-  overrides?: Partial<{ config: BatchBackendConfig }>,
+  overrides?: Partial<PromptOptionsDependencies>,
 ): Promise<{
   profiles: PromptOptionWithPath[];
   profileRoot: string;
   defaultProfileId: string | null;
 }> {
-  const config = overrides?.config ?? loadConfig();
-  const { profiles, profileRoot, defaultProfileId } = await loadProfileOptionList(config);
+  const dependencies = getDependencies(overrides);
+  const { profiles, profileRoot, defaultProfileId } = await loadProfileOptionList(dependencies);
   return { profiles, profileRoot, defaultProfileId };
 }
 
 export async function listPromptTemplatesWithPath(
-  overrides?: Partial<{ config: BatchBackendConfig }>,
+  overrides?: Partial<PromptOptionsDependencies>,
 ): Promise<{
   templates: PromptOptionWithPath[];
   templateRoot: string;
   defaultTemplateId: string | null;
 }> {
-  const config = overrides?.config ?? loadConfig();
-  const { templates, templateRoot, defaultTemplateId } = await loadTemplateOptionList(config);
+  const dependencies = getDependencies(overrides);
+  const { templates, templateRoot, defaultTemplateId } = await loadTemplateOptionList(dependencies);
   return { templates, templateRoot, defaultTemplateId };
 }
 
 export async function getPromptOptions(
-  overrides?: Partial<{ config: BatchBackendConfig }>,
+  overrides?: Partial<PromptOptionsDependencies>,
 ): Promise<PromptOptionsResponse> {
-  const config = overrides?.config ?? loadConfig();
-  const { templates, profiles, defaults } = await loadPromptOptionLists(config);
+  const dependencies = getDependencies(overrides);
+  const { templates, profiles, defaults } = await loadPromptOptionLists(dependencies);
 
   return {
     templates: templates.map(({ id, label }) => ({ id, label })),
@@ -108,10 +147,10 @@ export async function resolvePromptSelection(
     profileId?: string | null;
     profilePath?: string | null;
   },
-  overrides?: Partial<{ config: BatchBackendConfig }>,
+  overrides?: Partial<PromptOptionsDependencies>,
 ): Promise<PromptSelectionResult> {
-  const config = overrides?.config ?? loadConfig();
-  const { templates, profiles, defaults, profileRoot } = await loadPromptOptionLists(config);
+  const dependencies = getDependencies(overrides);
+  const { templates, profiles, defaults, profileRoot } = await loadPromptOptionLists(dependencies);
 
   const templateId = params.templateId ?? defaults.templateId;
   if (!templateId) {
@@ -129,15 +168,14 @@ export async function resolvePromptSelection(
     }
     return {
       templateId: template.id,
-      templatePath: template.path,
       profileId: profile.id,
-      profilePath: profile.path,
+      profilePath: profile.id,
     };
   }
 
   if (params.profilePath) {
-    const resolvedPath = await resolveUserProfilePath(params.profilePath, profileRoot);
-    const profile = profiles.find((option) => option.path === resolvedPath);
+    const profileId = resolveProfileIdFromPathInput(params.profilePath, profileRoot);
+    const profile = profiles.find((option) => option.id === profileId);
     if (!profile) {
       throw new PromptOptionError(
         'profilePath must reference an allowlisted profile',
@@ -146,9 +184,8 @@ export async function resolvePromptSelection(
     }
     return {
       templateId: template.id,
-      templatePath: template.path,
       profileId: profile.id,
-      profilePath: resolvedPath,
+      profilePath: profile.id,
     };
   }
 
@@ -163,50 +200,40 @@ export async function resolvePromptSelection(
 
   return {
     templateId: template.id,
-    templatePath: template.path,
     profileId: profile.id,
-    profilePath: profile.path,
+    profilePath: profile.id,
   };
 }
 
-interface PromptOptionLists {
-  templates: PromptOptionWithPath[];
-  profiles: PromptOptionWithPath[];
-  defaults: {
-    templateId: string | null;
-    profileId: string | null;
-  };
-  templateRoot: string;
-  profileRoot: string;
-}
+async function loadPromptOptionLists(
+  dependencies: PromptOptionsDependencies,
+): Promise<PromptOptionLists> {
+  const templateRoot = resolveConfiguredPromptRoot(dependencies.config.prompt.templatePath, 'template');
+  const profileRoot = resolveConfiguredPromptRoot(
+    dependencies.config.prompt.defaultProfilePath,
+    'profile',
+  );
 
-interface PromptOptionsCacheEntry {
-  expiresAt: number;
-  value: PromptOptionLists;
-}
-
-const promptOptionsCache = new Map<string, PromptOptionsCacheEntry>();
-
-async function loadPromptOptionLists(config: BatchBackendConfig): Promise<PromptOptionLists> {
-  const templateRoot = await resolveTemplateRoot(config.prompt.templatePath);
-  const profileRoot = await resolveProfileRoot(config.prompt.defaultProfilePath);
-  const cacheKey = `${templateRoot}::${profileRoot}`;
-  const now = Date.now();
-  const cached = promptOptionsCache.get(cacheKey);
-  if (cached && cached.expiresAt > now) {
-    return clonePromptOptionLists(cached.value);
-  }
-
-  const [templates, profiles] = await Promise.all([
-    listPromptFiles(templateRoot),
-    listPromptFiles(profileRoot),
-  ]);
-  const [defaultTemplateId, defaultProfileId] = await Promise.all([
-    resolveDefaultId(config.prompt.templatePath, templateRoot, templates, 'template'),
-    resolveDefaultId(config.prompt.defaultProfilePath, profileRoot, profiles, 'profile'),
+  const [templateRecords, profileRecords] = await Promise.all([
+    listAllTemplateRecords(dependencies),
+    listAllProfileRecords(dependencies),
   ]);
 
-  const value: PromptOptionLists = {
+  const templates = toActivePromptOptions(templateRecords);
+  const profiles = toActivePromptOptions(profileRecords);
+
+  const defaultTemplateId = resolveDefaultId(
+    dependencies.config.prompt.templatePath,
+    templates,
+    'template',
+  );
+  const defaultProfileId = resolveDefaultId(
+    dependencies.config.prompt.defaultProfilePath,
+    profiles,
+    'profile',
+  );
+
+  return {
     templates,
     profiles,
     defaults: {
@@ -216,180 +243,156 @@ async function loadPromptOptionLists(config: BatchBackendConfig): Promise<Prompt
     templateRoot,
     profileRoot,
   };
-  promptOptionsCache.set(cacheKey, {
-    expiresAt: now + PROMPT_OPTIONS_CACHE_TTL_MS,
-    value,
-  });
-  return clonePromptOptionLists(value);
 }
 
-async function loadTemplateOptionList(config: BatchBackendConfig): Promise<{
+async function listAllTemplateRecords(
+  dependencies: PromptOptionsDependencies,
+): Promise<TemplateRecord[]> {
+  const items: TemplateRecord[] = [];
+  let offset = 0;
+  while (true) {
+    const page = await dependencies.templates.list({
+      limit: MAX_PROMPT_PAGE_LIMIT,
+      offset,
+      order: 'asc',
+    });
+    items.push(...page.items);
+    offset += page.items.length;
+    if (offset >= page.total || page.items.length === 0) break;
+  }
+  return items;
+}
+
+async function listAllProfileRecords(
+  dependencies: PromptOptionsDependencies,
+): Promise<ProfileRecord[]> {
+  const items: ProfileRecord[] = [];
+  let offset = 0;
+  while (true) {
+    const page = await dependencies.profiles.list({
+      limit: MAX_PROMPT_PAGE_LIMIT,
+      offset,
+      order: 'asc',
+    });
+    items.push(...page.items);
+    offset += page.items.length;
+    if (offset >= page.total || page.items.length === 0) break;
+  }
+  return items;
+}
+
+async function loadTemplateOptionList(
+  dependencies: PromptOptionsDependencies,
+): Promise<{
   templates: PromptOptionWithPath[];
   templateRoot: string;
   defaultTemplateId: string | null;
 }> {
-  const templateRoot = await resolveTemplateRoot(config.prompt.templatePath);
-  const templates = await listPromptFiles(templateRoot);
-  const defaultTemplateId = await resolveDefaultId(
-    config.prompt.templatePath,
-    templateRoot,
-    templates,
-    'template',
-  );
-
+  const lists = await loadPromptOptionLists(dependencies);
   return {
-    templates,
-    templateRoot,
-    defaultTemplateId,
+    templates: lists.templates,
+    templateRoot: lists.templateRoot,
+    defaultTemplateId: lists.defaults.templateId,
   };
 }
 
-async function loadProfileOptionList(config: BatchBackendConfig): Promise<{
+async function loadProfileOptionList(
+  dependencies: PromptOptionsDependencies,
+): Promise<{
   profiles: PromptOptionWithPath[];
   profileRoot: string;
   defaultProfileId: string | null;
 }> {
-  const profileRoot = await resolveProfileRoot(config.prompt.defaultProfilePath);
-  const profiles = await listPromptFiles(profileRoot);
-  const defaultProfileId = await resolveDefaultId(
-    config.prompt.defaultProfilePath,
-    profileRoot,
-    profiles,
-    'profile',
-  );
-
+  const lists = await loadPromptOptionLists(dependencies);
   return {
-    profiles,
-    profileRoot,
-    defaultProfileId,
+    profiles: lists.profiles,
+    profileRoot: lists.profileRoot,
+    defaultProfileId: lists.defaults.profileId,
   };
 }
 
-async function resolveTemplateRoot(templatePath: string): Promise<string> {
-  if (!templatePath) {
-    throw new PromptOptionError('Prompt template root is not configured', 'template_root_missing');
-  }
-
-  const repoRoot = await fs.realpath(resolveRepoPath());
-  const candidate = path.isAbsolute(templatePath)
-    ? templatePath
-    : path.resolve(repoRoot, templatePath);
-  const rootDir = path.dirname(candidate);
-
-  try {
-    return await fs.realpath(rootDir);
-  } catch {
-    throw new PromptOptionError('Prompt template root does not exist', 'template_root_missing');
-  }
-}
-
-async function resolveDefaultId(
-  inputPath: string,
-  rootDir: string,
-  options: PromptOptionWithPath[],
-  type: 'template' | 'profile',
-): Promise<string | null> {
-  if (!inputPath) {
+function resolveConfiguredPromptRoot(configuredPath: string, type: 'template' | 'profile'): string {
+  if (!configuredPath || configuredPath.trim().length === 0) {
     throw new PromptOptionError(`Prompt ${type} path is not configured`, `${type}_path_missing`);
   }
 
-  const resolvedPath = await resolvePromptPath(inputPath);
-  if (!isWithinRoot(rootDir, resolvedPath)) {
-    throw new PromptOptionError(
-      `Prompt ${type} path must resolve within the configured root`,
-      `${type}_path_outside_root`,
-    );
-  }
+  const repoRoot = resolveRepoPath();
+  const candidate = path.isAbsolute(configuredPath)
+    ? path.resolve(configuredPath)
+    : path.resolve(repoRoot, configuredPath);
+  return path.dirname(candidate);
+}
 
-  const match = options.find((option) => option.path === resolvedPath);
+function resolveDefaultId(
+  configuredPath: string,
+  options: PromptOptionWithPath[],
+  type: 'template' | 'profile',
+): string | null {
+  const configuredId = resolveConfiguredPromptId(configuredPath, type);
+  const match = options.find((option) => option.id === configuredId);
   return match?.id ?? null;
 }
 
-async function resolvePromptPath(inputPath: string): Promise<string> {
-  const repoRoot = await fs.realpath(resolveRepoPath());
+function resolveConfiguredPromptId(configuredPath: string, type: 'template' | 'profile'): string {
+  if (!configuredPath || configuredPath.trim().length === 0) {
+    throw new PromptOptionError(`Prompt ${type} path is not configured`, `${type}_path_missing`);
+  }
+
+  const normalized = configuredPath.replaceAll('\\', '/').trim();
+  const defaultId = path.posix.basename(normalized);
+  return normalizePromptId(defaultId, type);
+}
+
+function resolveProfileIdFromPathInput(inputPath: string, profileRoot: string): string {
+  if (!inputPath || inputPath.trim().length === 0) {
+    throw new PromptOptionError('profilePath is required', 'profile_path_missing');
+  }
+
   const candidate = path.isAbsolute(inputPath)
     ? path.resolve(inputPath)
-    : path.resolve(repoRoot, inputPath);
+    : path.resolve(profileRoot, inputPath);
 
-  try {
-    return await fs.realpath(candidate);
-  } catch {
-    throw new PromptOptionError('Prompt path does not exist', 'prompt_path_not_found');
+  if (!isWithinRoot(profileRoot, candidate)) {
+    throw new PromptOptionError(
+      'profilePath must resolve within the configured profile root',
+      'profile_path_outside_root',
+    );
   }
+
+  const relative = path.relative(profileRoot, candidate).split(path.sep).join('/');
+  return normalizePromptId(relative, 'profile');
 }
 
-async function listPromptFiles(rootDir: string): Promise<PromptOptionWithPath[]> {
-  const options: PromptOptionWithPath[] = [];
-
-  const visit = async (currentDir: string) => {
-    let entries: Dirent[];
-    try {
-      entries = (await fs.readdir(currentDir, {
-        withFileTypes: true,
-        encoding: 'utf8',
-      })) as Dirent[];
-    } catch {
-      throw new PromptOptionError('Prompt root does not exist', 'prompt_root_missing');
-    }
-
-    for (const entry of entries) {
-      const entryPath = path.join(currentDir, entry.name);
-      if (entry.isDirectory()) {
-        let resolvedDir;
-        try {
-          resolvedDir = await fs.realpath(entryPath);
-        } catch {
-          continue;
-        }
-        if (!isWithinRoot(rootDir, resolvedDir)) continue;
-        await visit(resolvedDir);
-        continue;
-      }
-
-      if (!entry.isFile()) continue;
-      const ext = path.extname(entry.name).toLowerCase();
-      if (!PROMPT_EXTENSIONS.has(ext)) continue;
-      let resolvedPath;
-      try {
-        resolvedPath = await fs.realpath(entryPath);
-      } catch {
-        continue;
-      }
-      if (!isWithinRoot(rootDir, resolvedPath)) continue;
-      const id = normalizeOptionId(rootDir, resolvedPath);
-      const label = formatOptionLabel(entry.name);
-      options.push({ id, label, path: resolvedPath });
-    }
-  };
-
-  await visit(rootDir);
-
-  return options.sort((a, b) => a.label.localeCompare(b.label));
+function toActivePromptOptions(records: (ProfileRecord | TemplateRecord)[]): PromptOptionWithPath[] {
+  return records
+    .filter((record) => Boolean(record.activeRevisionId))
+    .map((record) => ({
+      id: record.id,
+      label: record.label,
+      path: record.id,
+    }))
+    .sort((a, b) => a.label.localeCompare(b.label) || a.id.localeCompare(b.id));
 }
 
-function normalizeOptionId(rootDir: string, filePath: string): string {
-  const relative = path.relative(rootDir, filePath);
-  return relative.split(path.sep).join('/');
-}
+function normalizePromptId(id: string, type: 'template' | 'profile'): string {
+  const normalized = path.posix.normalize(id.replaceAll('\\', '/').replace(/^\/+/, '').trim());
+  if (!normalized || normalized === '.' || normalized === '..') {
+    throw new PromptOptionError(`${type} id is invalid`, `${type}_id_invalid`);
+  }
+  if (normalized.startsWith('../') || path.posix.isAbsolute(normalized)) {
+    throw new PromptOptionError(`${type} id is invalid`, `${type}_id_invalid`);
+  }
 
-function formatOptionLabel(filename: string): string {
-  const base = path.basename(filename, path.extname(filename));
-  const normalized = base.replaceAll(/[_-]+/g, ' ').trim();
-  return normalized.length > 0 ? normalized : filename;
+  const ext = path.extname(normalized).toLowerCase();
+  if (!PROMPT_EXTENSIONS.has(ext)) {
+    throw new PromptOptionError(`${type} id must end with .md or .txt`, `${type}_id_invalid`);
+  }
+
+  return normalized;
 }
 
 function isWithinRoot(root: string, target: string): boolean {
   const relative = path.relative(root, target);
   if (!relative) return true;
   return !relative.startsWith('..') && !path.isAbsolute(relative);
-}
-
-function clonePromptOptionLists(value: PromptOptionLists): PromptOptionLists {
-  return {
-    templates: value.templates.map((item) => ({ ...item })),
-    profiles: value.profiles.map((item) => ({ ...item })),
-    defaults: { ...value.defaults },
-    templateRoot: value.templateRoot,
-    profileRoot: value.profileRoot,
-  };
 }

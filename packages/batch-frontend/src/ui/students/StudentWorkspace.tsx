@@ -7,6 +7,7 @@ import type {
   JobProvenanceResponse,
   ProfileRevisionSummaryResponse,
   PromptPackageLineageResponse,
+  TemplateRevisionSummaryResponse,
   StudentProfile,
   StudentTimelineType,
   StudentProfileBindingListResponse,
@@ -14,20 +15,27 @@ import type {
 } from '../../utils/api';
 import {
   activateProfileRevision,
+  activateTemplateRevision,
   createStudentProfile,
+  deleteTemplateContent,
   fetchJobProvenance,
   fetchPromptPackageLineage,
   getProfileContent,
   getStudentProfile,
   getStudentTimeline,
+  getTemplateContent,
   listProfileContents,
   listProfileRevisions,
   listStudentProfileBindings,
   listStudents,
+  listTemplateContents,
+  listTemplateRevisions,
   listUserJobs,
   restoreProfileRevision,
+  restoreTemplateRevision,
   updateStudentProfile,
   upsertProfileContent,
+  upsertTemplateContent,
 } from '../../utils/api';
 
 const HISTORY_LIMIT = 25;
@@ -132,6 +140,19 @@ export const StudentWorkspace: React.FC = () => {
   const [profileSuccess, setProfileSuccess] = useState<string | null>(null);
   const [profileRevisions, setProfileRevisions] = useState<ProfileRevisionSummaryResponse[]>([]);
 
+  const [templateOptions, setTemplateOptions] = useState<{ id: string; label: string }[]>([]);
+  const [templateOptionsError, setTemplateOptionsError] = useState<string | null>(null);
+  const [selectedTemplateId, setSelectedTemplateId] = useState('');
+  const [newTemplateId, setNewTemplateId] = useState('');
+  const [templateEditorText, setTemplateEditorText] = useState('');
+  const [loadedTemplateContent, setLoadedTemplateContent] = useState('');
+  const [templateBusy, setTemplateBusy] = useState<
+    'loading' | 'saving' | 'restoring' | 'activating' | 'archiving' | null
+  >(null);
+  const [templateError, setTemplateError] = useState<string | null>(null);
+  const [templateSuccess, setTemplateSuccess] = useState<string | null>(null);
+  const [templateRevisions, setTemplateRevisions] = useState<TemplateRevisionSummaryResponse[]>([]);
+
   const [jobHistory, setJobHistory] = useState<JobListResponse['jobs']>([]);
   const [jobsLoading, setJobsLoading] = useState(false);
   const [jobsError, setJobsError] = useState<string | null>(null);
@@ -186,6 +207,11 @@ export const StudentWorkspace: React.FC = () => {
     [loadedProfileContent, profileEditorText],
   );
 
+  const templateDirty = useMemo(
+    () => templateEditorText.trim() !== loadedTemplateContent.trim(),
+    [loadedTemplateContent, templateEditorText],
+  );
+
   useEffect(() => {
     historyFiltersAppliedRef.current = historyFiltersApplied;
   }, [historyFiltersApplied]);
@@ -227,6 +253,24 @@ export const StudentWorkspace: React.FC = () => {
     }
   }, []);
 
+  const loadTemplateOptions = useCallback(async () => {
+    setTemplateOptionsError(null);
+    try {
+      const response = await listTemplateContents();
+      const templates = response.templates ?? [];
+      setTemplateOptions(templates);
+      setSelectedTemplateId((current) => {
+        if (current && templates.some((template) => template.id === current)) return current;
+        return templates[0]?.id ?? '';
+      });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Unable to load template options.';
+      setTemplateOptionsError(message);
+      setTemplateOptions([]);
+      setSelectedTemplateId('');
+    }
+  }, []);
+
   const loadSelectedProfile = useCallback(async (profileId: string) => {
     if (!profileId) {
       setProfileEditorText('');
@@ -254,6 +298,36 @@ export const StudentWorkspace: React.FC = () => {
       setProfileRevisions([]);
     } finally {
       setProfileBusy(null);
+    }
+  }, []);
+
+  const loadSelectedTemplate = useCallback(async (templateId: string) => {
+    if (!templateId) {
+      setTemplateEditorText('');
+      setLoadedTemplateContent('');
+      setTemplateRevisions([]);
+      setTemplateError(null);
+      return;
+    }
+
+    setTemplateBusy('loading');
+    setTemplateError(null);
+    try {
+      const [template, revisions] = await Promise.all([
+        getTemplateContent(templateId),
+        listTemplateRevisions(templateId, { limit: 25, offset: 0, order: 'desc' }),
+      ]);
+      setTemplateEditorText(template.content ?? '');
+      setLoadedTemplateContent(template.content ?? '');
+      setTemplateRevisions(revisions.items ?? []);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Unable to load selected template.';
+      setTemplateError(message);
+      setTemplateEditorText('');
+      setLoadedTemplateContent('');
+      setTemplateRevisions([]);
+    } finally {
+      setTemplateBusy(null);
     }
   }, []);
 
@@ -386,8 +460,8 @@ export const StudentWorkspace: React.FC = () => {
   );
 
   const handleRefreshAll = useCallback(async () => {
-    await Promise.all([loadStudents(), loadProfileOptions()]);
-  }, [loadProfileOptions, loadStudents]);
+    await Promise.all([loadStudents(), loadProfileOptions(), loadTemplateOptions()]);
+  }, [loadProfileOptions, loadStudents, loadTemplateOptions]);
 
   const resetCreateStudentForm = useCallback(() => {
     setCreateStudentForm(INITIAL_CREATE_STUDENT_FORM);
@@ -520,6 +594,129 @@ export const StudentWorkspace: React.FC = () => {
     }
   };
 
+  const handleCreateTemplate = async () => {
+    const templateId = newTemplateId.trim();
+    if (!templateId) {
+      setTemplateError('Template ID is required.');
+      return;
+    }
+
+    setTemplateBusy('saving');
+    setTemplateError(null);
+    setTemplateSuccess(null);
+    try {
+      const created = await upsertTemplateContent(
+        templateId,
+        `## Prompt
+
+INSERT PROFILE HERE
+
+## Transcript
+`,
+      );
+      setTemplateSuccess(`Template ${created.id} created.`);
+      setSelectedTemplateId(created.id);
+      setNewTemplateId('');
+      await loadTemplateOptions();
+      await loadTimeline(selectedStudentId, timelineFiltersAppliedRef.current);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Unable to create template.';
+      setTemplateError(message);
+    } finally {
+      setTemplateBusy(null);
+    }
+  };
+
+  const handleSaveTemplate = async () => {
+    if (!selectedTemplateId) {
+      setTemplateError('Select a template before saving content.');
+      return;
+    }
+
+    setTemplateBusy('saving');
+    setTemplateError(null);
+    setTemplateSuccess(null);
+    try {
+      const saved = await upsertTemplateContent(selectedTemplateId, templateEditorText);
+      setTemplateEditorText(saved.content ?? '');
+      setLoadedTemplateContent(saved.content ?? '');
+      const revisions = await listTemplateRevisions(saved.id, { limit: 25, offset: 0, order: 'desc' });
+      setTemplateRevisions(revisions.items ?? []);
+      setTemplateSuccess('Template content saved.');
+      await loadTemplateOptions();
+      await loadTimeline(selectedStudentId, timelineFiltersAppliedRef.current);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Unable to save template content.';
+      setTemplateError(message);
+    } finally {
+      setTemplateBusy(null);
+    }
+  };
+
+  const handleRestoreTemplateRevision = async (revisionId: string) => {
+    if (!selectedTemplateId) return;
+    setTemplateBusy('restoring');
+    setTemplateError(null);
+    setTemplateSuccess(null);
+    try {
+      const restored = await restoreTemplateRevision(selectedTemplateId, revisionId);
+      setTemplateEditorText(restored.content ?? '');
+      setLoadedTemplateContent(restored.content ?? '');
+      const revisions = await listTemplateRevisions(restored.id, { limit: 25, offset: 0, order: 'desc' });
+      setTemplateRevisions(revisions.items ?? []);
+      setTemplateSuccess('Template revision restored.');
+      await loadTemplateOptions();
+      await loadTimeline(selectedStudentId, timelineFiltersAppliedRef.current);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Unable to restore template revision.';
+      setTemplateError(message);
+    } finally {
+      setTemplateBusy(null);
+    }
+  };
+
+  const handleActivateTemplateRevision = async (revisionId: string) => {
+    if (!selectedTemplateId) return;
+    setTemplateBusy('activating');
+    setTemplateError(null);
+    setTemplateSuccess(null);
+    try {
+      await activateTemplateRevision(selectedTemplateId, revisionId);
+      await loadSelectedTemplate(selectedTemplateId);
+      setTemplateSuccess('Template revision activated.');
+      await loadTemplateOptions();
+      await loadTimeline(selectedStudentId, timelineFiltersAppliedRef.current);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Unable to activate template revision.';
+      setTemplateError(message);
+    } finally {
+      setTemplateBusy(null);
+    }
+  };
+
+  const handleArchiveTemplate = async () => {
+    if (!selectedTemplateId) return;
+    setTemplateBusy('archiving');
+    setTemplateError(null);
+    setTemplateSuccess(null);
+    try {
+      await deleteTemplateContent(selectedTemplateId);
+      const archivedId = selectedTemplateId;
+      await loadTemplateOptions();
+      setSelectedTemplateId((current) => (current === archivedId ? '' : current));
+      setTemplateEditorText('');
+      setLoadedTemplateContent('');
+      setTemplateRevisions([]);
+      setTemplateSuccess(`Template ${archivedId} archived.`);
+      await loadTimeline(selectedStudentId, timelineFiltersAppliedRef.current);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Unable to archive template.';
+      setTemplateError(message);
+    } finally {
+      setTemplateBusy(null);
+    }
+  };
+
   const handleInspectJob = (jobId: string, promptPackageId: string | null) => {
     setSelectedJobId(jobId);
     setSelectedPromptPackageId(promptPackageId ?? '');
@@ -539,6 +736,10 @@ export const StudentWorkspace: React.FC = () => {
   useEffect(() => {
     void loadSelectedProfile(selectedProfileId);
   }, [loadSelectedProfile, selectedProfileId]);
+
+  useEffect(() => {
+    void loadSelectedTemplate(selectedTemplateId);
+  }, [loadSelectedTemplate, selectedTemplateId]);
 
   useEffect(() => {
     if (!selectedJobId) {
@@ -943,6 +1144,120 @@ export const StudentWorkspace: React.FC = () => {
             </div>
           ) : (
             <p className="workspace-muted">No profile revisions to show.</p>
+          )}
+        </article>
+
+        <article className="workspace-card card">
+          <header>
+            <h2>Template Gallery & Revisions</h2>
+            <p>Edit templates, restore prior revisions, and archive deprecated entries.</p>
+          </header>
+
+          <div className="workspace-grid">
+            <label className="workspace-field">
+              Template
+              <select
+                value={selectedTemplateId}
+                onChange={(event) => setSelectedTemplateId(event.target.value)}
+                disabled={templateOptions.length === 0 || templateBusy !== null}
+              >
+                <option value="">Select template</option>
+                {templateOptions.map((template) => (
+                  <option key={template.id} value={template.id}>
+                    {template.label} ({template.id})
+                  </option>
+                ))}
+              </select>
+            </label>
+
+            <label className="workspace-field">
+              New template ID
+              <input
+                value={newTemplateId}
+                onChange={(event) => setNewTemplateId(event.target.value)}
+                placeholder="e.g. hw/custom-template.md"
+                disabled={templateBusy !== null}
+              />
+            </label>
+          </div>
+
+          <div className="workspace-inline">
+            <button
+              type="button"
+              className="workspace-secondary-btn"
+              onClick={() => void handleCreateTemplate()}
+              disabled={templateBusy !== null || !newTemplateId.trim()}
+            >
+              {templateBusy === 'saving' ? 'Creating...' : 'Create Template'}
+            </button>
+          </div>
+
+          <textarea
+            value={templateEditorText}
+            onChange={(event) => setTemplateEditorText(event.target.value)}
+            rows={14}
+            placeholder="Select a template to edit..."
+            disabled={!selectedTemplateId}
+          />
+
+          <div className="workspace-inline">
+            <button
+              type="button"
+              className="workspace-primary-btn"
+              onClick={() => void handleSaveTemplate()}
+              disabled={!selectedTemplateId || templateBusy !== null || !templateDirty}
+            >
+              {templateBusy === 'saving' ? 'Saving...' : 'Save Template Content'}
+            </button>
+            <button
+              type="button"
+              className="workspace-secondary-btn"
+              onClick={() => void handleArchiveTemplate()}
+              disabled={!selectedTemplateId || templateBusy !== null}
+            >
+              {templateBusy === 'archiving' ? 'Archiving...' : 'Archive Template'}
+            </button>
+            {templateDirty ? <span className="workspace-muted">Unsaved changes</span> : null}
+          </div>
+
+          {templateOptionsError ? <p className="workspace-error">{templateOptionsError}</p> : null}
+          {templateError ? <p className="workspace-error">{templateError}</p> : null}
+          {templateSuccess ? <p className="workspace-success">{templateSuccess}</p> : null}
+
+          {templateRevisions.length > 0 ? (
+            <div className="workspace-list">
+              {templateRevisions.map((revision) => (
+                <div key={revision.id} className="workspace-list-item">
+                  <div>
+                    <div>
+                      <strong>{revision.versionLabel ?? revision.id}</strong>
+                      <span className="workspace-muted"> {revision.status ?? 'unknown'}</span>
+                    </div>
+                    <div className="workspace-muted">{new Date(revision.createdAt).toLocaleString()}</div>
+                  </div>
+                  <div className="workspace-inline">
+                    <button
+                      type="button"
+                      className="workspace-secondary-btn"
+                      onClick={() => void handleRestoreTemplateRevision(revision.id)}
+                      disabled={templateBusy !== null}
+                    >
+                      Restore
+                    </button>
+                    <button
+                      type="button"
+                      className="workspace-secondary-btn"
+                      onClick={() => void handleActivateTemplateRevision(revision.id)}
+                      disabled={templateBusy !== null}
+                    >
+                      Activate
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <p className="workspace-muted">No template revisions to show.</p>
           )}
         </article>
 

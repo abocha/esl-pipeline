@@ -47,10 +47,14 @@ import {
 } from '../application/retry-recording-transcription.js';
 import {
   TemplateContentError,
+  deleteTemplateContent,
   activateTemplateRevisionForTemplate,
+  getTemplateContent,
   getTemplateRevisionForTemplate,
+  listTemplateContents,
   listTemplateRevisionsForTemplate,
   restoreTemplateRevision,
+  upsertTemplateContent,
 } from '../application/template-content.js';
 import {
   StudentProfileStoreError,
@@ -490,6 +494,14 @@ export function registerExtendedRoutes(app: FastifyInstance, options: ExtendedRo
 
         return reply.send(options);
       } catch (error: unknown) {
+        if (error instanceof PromptOptionError) {
+          return reply.code(400).send({
+            error: error.code,
+            message: error.message,
+            code: error.code,
+          });
+        }
+
         logger.error(error instanceof Error ? error : String(error), {
           event: 'http_request',
           route: routePath,
@@ -1739,6 +1751,210 @@ export function registerExtendedRoutes(app: FastifyInstance, options: ExtendedRo
           });
         }
         if (error instanceof ProfileContentError) {
+          return reply.code(error.status).send({
+            error: error.code,
+            message: error.message,
+            code: error.code,
+          });
+        }
+
+        logger.error(error instanceof Error ? error : String(error), {
+          event: 'http_request',
+          route: routePath,
+          statusCode: 500,
+          error: 'internal_error',
+        });
+
+        return errorResponse(reply, 'internal_error');
+      }
+    },
+  );
+
+  app.get(
+    '/templates',
+    {
+      preHandler: [authenticate],
+    },
+    async (request, reply) => {
+      const routePath = resolveRoutePath(request, 'GET /templates');
+      try {
+        const templates = await listTemplateContents();
+
+        logger.info('HTTP request handled', {
+          event: 'http_request',
+          route: routePath,
+          statusCode: 200,
+        });
+
+        return reply.send(templates);
+      } catch (error: unknown) {
+        if (error instanceof TemplateContentError) {
+          return reply.code(error.status).send({
+            error: error.code,
+            message: error.message,
+            code: error.code,
+          });
+        }
+
+        logger.error(error instanceof Error ? error : String(error), {
+          event: 'http_request',
+          route: routePath,
+          statusCode: 500,
+          error: 'internal_error',
+        });
+
+        return errorResponse(reply, 'internal_error');
+      }
+    },
+  );
+
+  app.get(
+    '/templates/:id',
+    {
+      preHandler: [authenticate],
+    },
+    async (request, reply) => {
+      const routePath = resolveRoutePath(request, 'GET /templates/:id');
+      const paramsSchema = z.object({
+        id: z.string().min(1),
+      });
+
+      try {
+        const params = paramsSchema.parse(request.params ?? {});
+        const template = await getTemplateContent(params.id);
+        if (!template) {
+          return errorResponse(reply, 'not_found');
+        }
+
+        logger.info('HTTP request handled', {
+          event: 'http_request',
+          route: routePath,
+          statusCode: 200,
+          templateId: params.id,
+        });
+
+        return reply.send(template);
+      } catch (error: unknown) {
+        if (error instanceof z.ZodError) {
+          return reply.code(400).send({
+            error: 'validation_failed',
+            message: 'Invalid template id',
+            details: error.issues,
+          });
+        }
+        if (error instanceof TemplateContentError) {
+          return reply.code(error.status).send({
+            error: error.code,
+            message: error.message,
+            code: error.code,
+          });
+        }
+
+        logger.error(error instanceof Error ? error : String(error), {
+          event: 'http_request',
+          route: routePath,
+          statusCode: 500,
+          error: 'internal_error',
+        });
+
+        return errorResponse(reply, 'internal_error');
+      }
+    },
+  );
+
+  app.put(
+    '/templates/:id',
+    {
+      preHandler: [authenticate],
+    },
+    async (request, reply) => {
+      const routePath = resolveRoutePath(request, 'PUT /templates/:id');
+      const paramsSchema = z.object({
+        id: z.string().min(1),
+      });
+      const schema = z.object({
+        content: z.string(),
+      });
+
+      try {
+        const params = paramsSchema.parse(request.params ?? {});
+        const body = schema.parse(request.body ?? {});
+        const updated = await upsertTemplateContent(params.id, body.content, {
+          createdBy: getAuthenticatedUser(request)?.id ?? null,
+        });
+
+        logger.info('HTTP request handled', {
+          event: 'http_request',
+          route: routePath,
+          statusCode: 200,
+          templateId: params.id,
+        });
+
+        return reply.send(updated);
+      } catch (error: unknown) {
+        if (error instanceof z.ZodError) {
+          return reply.code(400).send({
+            error: 'validation_failed',
+            message: 'Invalid request body',
+            details: error.issues,
+          });
+        }
+        if (error instanceof TemplateContentError) {
+          return reply.code(error.status).send({
+            error: error.code,
+            message: error.message,
+            code: error.code,
+          });
+        }
+
+        logger.error(error instanceof Error ? error : String(error), {
+          event: 'http_request',
+          route: routePath,
+          statusCode: 500,
+          error: 'internal_error',
+        });
+
+        return errorResponse(reply, 'internal_error');
+      }
+    },
+  );
+
+  app.delete(
+    '/templates/:id',
+    {
+      preHandler: [authenticate],
+    },
+    async (request, reply) => {
+      const routePath = resolveRoutePath(request, 'DELETE /templates/:id');
+      const paramsSchema = z.object({
+        id: z.string().min(1),
+      });
+
+      try {
+        const params = paramsSchema.parse(request.params ?? {});
+        const removed = await deleteTemplateContent(params.id);
+
+        if (!removed) {
+          return errorResponse(reply, 'not_found');
+        }
+
+        logger.info('HTTP request handled', {
+          event: 'http_request',
+          route: routePath,
+          statusCode: 204,
+          templateId: params.id,
+        });
+
+        return reply.code(204).send();
+      } catch (error: unknown) {
+        if (error instanceof z.ZodError) {
+          return reply.code(400).send({
+            error: 'validation_failed',
+            message: 'Invalid template id',
+            details: error.issues,
+          });
+        }
+        if (error instanceof TemplateContentError) {
           return reply.code(error.status).send({
             error: error.code,
             message: error.message,

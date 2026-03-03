@@ -302,6 +302,25 @@ export async function activateProfileRevision(
   return row ? mapRow(row) : null;
 }
 
+export async function deprecateActiveProfileRevision(profileId: string): Promise<number> {
+  const updated = await withPgClient(async (client: PoolClient) => {
+    const result = await client.query(
+      `
+      UPDATE profile_revisions
+      SET
+        status = 'deprecated',
+        deprecated_at = COALESCE(deprecated_at, NOW()),
+        activated_at = NULL
+      WHERE profile_id = $1 AND status = 'active'
+      `,
+      [profileId],
+    );
+    return result.rowCount ?? 0;
+  });
+
+  return updated;
+}
+
 export async function getLatestProfileRevisionByHash(
   profileId: string,
   contentHash: string,

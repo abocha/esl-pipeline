@@ -186,6 +186,10 @@ vi.mock('../src/application/profile-content', () => {
 
 vi.mock('../src/application/template-content', () => {
   return {
+    listTemplateContents: vi.fn(),
+    getTemplateContent: vi.fn(),
+    upsertTemplateContent: vi.fn(),
+    deleteTemplateContent: vi.fn(),
     listTemplateRevisionsForTemplate: vi.fn(),
     getTemplateRevisionForTemplate: vi.fn(),
     restoreTemplateRevision: vi.fn(),
@@ -242,6 +246,10 @@ describe('transport/http-server - integration (in-process)', () => {
   const mockActivateProfileRevisionForProfile = vi.mocked(
     profileContentModule.activateProfileRevisionForProfile,
   );
+  const mockListTemplateContents = vi.mocked(templateContentModule.listTemplateContents);
+  const mockGetTemplateContent = vi.mocked(templateContentModule.getTemplateContent);
+  const mockUpsertTemplateContent = vi.mocked(templateContentModule.upsertTemplateContent);
+  const mockDeleteTemplateContent = vi.mocked(templateContentModule.deleteTemplateContent);
   const mockListTemplateRevisionsForTemplate = vi.mocked(
     templateContentModule.listTemplateRevisionsForTemplate,
   );
@@ -389,6 +397,24 @@ describe('transport/http-server - integration (in-process)', () => {
       currentRevisionId: 'revision-2',
       updatedAt: '2024-01-02T00:00:00.000Z',
     });
+    mockListTemplateContents.mockResolvedValue({
+      templates: [{ id: 'template.md', label: 'Template' }],
+    });
+    mockGetTemplateContent.mockResolvedValue({
+      id: 'template.md',
+      label: 'Template',
+      content: String.raw`Template content\nINSERT PROFILE HERE`,
+      currentRevisionId: 'template-revision-1',
+      updatedAt: '2024-01-01T00:00:00.000Z',
+    });
+    mockUpsertTemplateContent.mockResolvedValue({
+      id: 'template.md',
+      label: 'Template',
+      content: String.raw`Updated template content\nINSERT PROFILE HERE`,
+      currentRevisionId: 'template-revision-2',
+      updatedAt: '2024-01-02T00:00:00.000Z',
+    });
+    mockDeleteTemplateContent.mockResolvedValue(true);
     mockListTemplateRevisionsForTemplate.mockResolvedValue({
       items: [
         {
@@ -1262,6 +1288,16 @@ describe('transport/http-server - integration (in-process)', () => {
     });
   });
 
+  it('DELETE /profiles/:id archives profile content', async () => {
+    const response = await app.inject({
+      method: 'DELETE',
+      url: '/profiles/profile.md',
+    });
+
+    expect(response.statusCode).toBe(204);
+    expect(mockDeleteProfileContent).toHaveBeenCalledWith('profile.md');
+  });
+
   it('GET /profiles/:id/revisions returns profile revision list', async () => {
     const response = await app.inject({
       method: 'GET',
@@ -1362,6 +1398,63 @@ describe('transport/http-server - integration (in-process)', () => {
       status: 'active',
       versionLabel: 'v1',
     });
+  });
+
+  it('GET /templates returns template list', async () => {
+    const response = await app.inject({
+      method: 'GET',
+      url: '/templates',
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toEqual({
+      templates: [{ id: 'template.md', label: 'Template' }],
+    });
+  });
+
+  it('GET /templates/:id returns template content', async () => {
+    const response = await app.inject({
+      method: 'GET',
+      url: '/templates/template.md',
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toEqual({
+      id: 'template.md',
+      label: 'Template',
+      content: String.raw`Template content\nINSERT PROFILE HERE`,
+      currentRevisionId: 'template-revision-1',
+      updatedAt: '2024-01-01T00:00:00.000Z',
+    });
+  });
+
+  it('PUT /templates/:id saves template content', async () => {
+    const response = await app.inject({
+      method: 'PUT',
+      url: '/templates/template.md',
+      payload: {
+        content: String.raw`Updated template content\nINSERT PROFILE HERE`,
+      },
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toEqual({
+      id: 'template.md',
+      label: 'Template',
+      content: String.raw`Updated template content\nINSERT PROFILE HERE`,
+      currentRevisionId: 'template-revision-2',
+      updatedAt: '2024-01-02T00:00:00.000Z',
+    });
+  });
+
+  it('DELETE /templates/:id archives template content', async () => {
+    const response = await app.inject({
+      method: 'DELETE',
+      url: '/templates/template.md',
+    });
+
+    expect(response.statusCode).toBe(204);
+    expect(mockDeleteTemplateContent).toHaveBeenCalledWith('template.md');
   });
 
   it('GET /templates/:id/revisions returns template revision list', async () => {

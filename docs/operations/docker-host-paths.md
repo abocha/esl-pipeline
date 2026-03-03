@@ -56,6 +56,10 @@ BATCH_BACKEND_HOST_PORT=8081 pnpm docker:up
 Frontend still runs on `http://localhost:5173`, and backend becomes
 `http://127.0.0.1:8081`.
 
+Nota bene: local desktop apps can silently occupy `8080` (for example,
+qBittorrent Web UI). If you see `ports are not available` for `127.0.0.1:8080`,
+close that app or move either app to a different host port.
+
 ## Recover a Drifted Dev Stack
 
 If a service was started as a one-off container and appears outside the Compose group:

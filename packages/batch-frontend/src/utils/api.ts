@@ -82,6 +82,8 @@ export type GenerateDraftRequest = ContractGenerateDraftRequest;
 export type GenerateDraftResponse = ContractGenerateDraftResponse;
 export type GenerationDraftErrorCode = GenerationErrorCategory;
 
+const GENERATE_DRAFT_REQUEST_TIMEOUT_MS = 240_000;
+
 export interface RecordingTranscriptResponse {
   recordingId: string;
   transcriptId: string;
@@ -191,6 +193,50 @@ export interface ProfileRevisionDetailResponse extends ProfileRevisionSummaryRes
 
 export interface ProfileRevisionListResponse {
   items: ProfileRevisionSummaryResponse[];
+  total: number;
+  limit: number;
+  offset: number;
+  order: 'asc' | 'desc';
+}
+
+export interface TemplateContentOption {
+  id: string;
+  label: string;
+}
+
+export interface TemplateContentListResponse {
+  templates: TemplateContentOption[];
+}
+
+export interface TemplateContentResponse {
+  id: string;
+  label: string;
+  content: string;
+  currentRevisionId: string | null;
+  updatedAt: string | null;
+}
+
+export interface TemplateRevisionSummaryResponse {
+  id: string;
+  templateId: string;
+  contentHash: string;
+  source: 'create' | 'update' | 'restore';
+  status?: 'draft' | 'active' | 'deprecated';
+  versionNumber?: number;
+  versionLabel?: string;
+  activatedAt?: string | null;
+  deprecatedAt?: string | null;
+  createdAt: string;
+  createdBy: string | null;
+  restoredFromRevisionId: string | null;
+}
+
+export interface TemplateRevisionDetailResponse extends TemplateRevisionSummaryResponse {
+  content: string;
+}
+
+export interface TemplateRevisionListResponse {
+  items: TemplateRevisionSummaryResponse[];
   total: number;
   limit: number;
   offset: number;
@@ -1432,6 +1478,145 @@ export async function activateProfileRevision(
   }
 }
 
+export async function listTemplateContents(): Promise<TemplateContentListResponse> {
+  try {
+    const response = await apiClient.get(buildApiProxyPath('/templates'));
+    return response.data;
+  } catch (error: unknown) {
+    const axiosError = toAxiosError(error);
+    throw new Error(axiosError ? handleApiError(axiosError) : formatUnknownError(error));
+  }
+}
+
+export async function getTemplateContent(templateId: string): Promise<TemplateContentResponse> {
+  try {
+    const response = await apiClient.get(
+      buildApiProxyPath(`/templates/${encodeURIComponent(templateId)}`),
+    );
+    return response.data;
+  } catch (error: unknown) {
+    const axiosError = toAxiosError(error);
+    if (axiosError && isAuthError(axiosError)) {
+      throw new Error('Authentication required. Please login to view templates.');
+    }
+    throw new Error(axiosError ? handleApiError(axiosError) : formatUnknownError(error));
+  }
+}
+
+export async function upsertTemplateContent(
+  templateId: string,
+  content: string,
+): Promise<TemplateContentResponse> {
+  try {
+    const response = await apiClient.put(
+      buildApiProxyPath(`/templates/${encodeURIComponent(templateId)}`),
+      { content },
+    );
+    return response.data;
+  } catch (error: unknown) {
+    const axiosError = toAxiosError(error);
+    if (axiosError && isAuthError(axiosError)) {
+      throw new Error('Authentication required. Please login to edit templates.');
+    }
+    throw new Error(axiosError ? handleApiError(axiosError) : formatUnknownError(error));
+  }
+}
+
+export async function deleteTemplateContent(templateId: string): Promise<void> {
+  try {
+    await apiClient.delete(buildApiProxyPath(`/templates/${encodeURIComponent(templateId)}`));
+  } catch (error: unknown) {
+    const axiosError = toAxiosError(error);
+    if (axiosError && isAuthError(axiosError)) {
+      throw new Error('Authentication required. Please login to archive templates.');
+    }
+    throw new Error(axiosError ? handleApiError(axiosError) : formatUnknownError(error));
+  }
+}
+
+export async function listTemplateRevisions(
+  templateId: string,
+  params: {
+    limit?: number;
+    offset?: number;
+    order?: 'asc' | 'desc';
+  } = {},
+): Promise<TemplateRevisionListResponse> {
+  try {
+    const response = await apiClient.get(
+      buildApiProxyPath(`/templates/${encodeURIComponent(templateId)}/revisions`),
+      { params },
+    );
+    return response.data;
+  } catch (error: unknown) {
+    const axiosError = toAxiosError(error);
+    if (axiosError && isAuthError(axiosError)) {
+      throw new Error('Authentication required. Please login to view template revisions.');
+    }
+    throw new Error(axiosError ? handleApiError(axiosError) : formatUnknownError(error));
+  }
+}
+
+export async function getTemplateRevision(
+  templateId: string,
+  revisionId: string,
+): Promise<TemplateRevisionDetailResponse> {
+  try {
+    const response = await apiClient.get(
+      buildApiProxyPath(
+        `/templates/${encodeURIComponent(templateId)}/revisions/${encodeURIComponent(revisionId)}`,
+      ),
+    );
+    return response.data;
+  } catch (error: unknown) {
+    const axiosError = toAxiosError(error);
+    if (axiosError && isAuthError(axiosError)) {
+      throw new Error('Authentication required. Please login to view template revisions.');
+    }
+    throw new Error(axiosError ? handleApiError(axiosError) : formatUnknownError(error));
+  }
+}
+
+export async function restoreTemplateRevision(
+  templateId: string,
+  revisionId: string,
+): Promise<TemplateContentResponse> {
+  try {
+    const response = await apiClient.post(
+      buildApiProxyPath(
+        `/templates/${encodeURIComponent(templateId)}/revisions/${encodeURIComponent(revisionId)}/restore`,
+      ),
+    );
+    return response.data;
+  } catch (error: unknown) {
+    const axiosError = toAxiosError(error);
+    if (axiosError && isAuthError(axiosError)) {
+      throw new Error('Authentication required. Please login to restore template revisions.');
+    }
+    throw new Error(axiosError ? handleApiError(axiosError) : formatUnknownError(error));
+  }
+}
+
+export async function activateTemplateRevision(
+  templateId: string,
+  revisionId: string,
+): Promise<TemplateRevisionDetailResponse> {
+  try {
+    const response = await apiClient.post(
+      buildApiProxyPath(
+        `/templates/${encodeURIComponent(templateId)}/revisions/${encodeURIComponent(revisionId)}/activate`,
+      ),
+    );
+    return response.data;
+  } catch (error: unknown) {
+    const axiosError = toAxiosError(error);
+    if (axiosError && isAuthError(axiosError)) {
+      throw new Error('Authentication required. Please login to activate template revisions.');
+    }
+    throw new Error(axiosError ? handleApiError(axiosError) : formatUnknownError(error));
+  }
+}
+
 export async function listStudentProfileBindings(
   studentId: string,
   params: {
@@ -1671,7 +1856,9 @@ export async function generateDraft(
   request: GenerateDraftRequest,
 ): Promise<GenerateDraftResponse> {
   try {
-    const response = await apiClient.post(buildApiProxyPath('/generation/drafts'), request);
+    const response = await apiClient.post(buildApiProxyPath('/generation/drafts'), request, {
+      timeout: GENERATE_DRAFT_REQUEST_TIMEOUT_MS,
+    });
     return response.data;
   } catch (error: unknown) {
     const axiosError = toAxiosError(error);
