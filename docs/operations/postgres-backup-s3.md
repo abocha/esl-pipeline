@@ -2,6 +2,9 @@
 
 This runbook adds remote backup archival on top of the local Docker backup routine.
 
+For alerting/status/key-rotation operational checks, see:
+`docs/operations/postgres-ops-health.md`.
+
 ## TL;DR (Copy/Paste)
 
 Local one-off sanity checks:
@@ -46,6 +49,9 @@ Monthly reminder/drill task:
 - S3 wrapper: `scripts/docker/postgres-backup-s3.sh`
 - Scheduler wrapper: `scripts/docker/run-postgres-backup-s3.sh`
 - Monthly drill reminder wrapper: `scripts/docker/run-postgres-restore-drill-reminder.sh`
+- Ops status helper: `scripts/docker/postgres-ops-status.sh`
+- Ops alert wrapper: `scripts/docker/run-postgres-ops-alert.sh`
+- Key-rotation reminder wrapper: `scripts/docker/run-aws-key-rotation-reminder.sh`
 
 Wrapper commands:
 
@@ -56,6 +62,9 @@ Wrapper commands:
 - `pnpm docker:db:restore:s3 -- <s3://bucket/key.dump|key.dump> [--clean]`
 - `pnpm docker:db:restore-drill:reminder` (monthly reminder with latest remote key)
 - `pnpm docker:db:restore-drill:auto` (monthly reminder + auto `--download-only` drill)
+- `pnpm ops:status` (table) / `pnpm ops:status:json` (machine-readable)
+- `pnpm ops:alert:check` (Telegram failure/recovery alerts + cooldown state)
+- `pnpm ops:key-rotation:check` (weekly IAM access key-age reminder)
 
 ## Required Environment
 
