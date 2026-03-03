@@ -2,6 +2,44 @@
 
 This runbook adds remote backup archival on top of the local Docker backup routine.
 
+## TL;DR (Copy/Paste)
+
+Local one-off sanity checks:
+
+```bash
+pnpm docker:db:backup:s3 -- manual_checkpoint
+pnpm docker:db:list:s3
+pnpm docker:db:restore:s3 -- <key-or-s3-uri-to-.dump> --download-only
+```
+
+Daily scheduled task (WSL/Windows Task Scheduler):
+
+- Program/script:
+
+```text
+C:\Windows\System32\wsl.exe
+```
+
+- Add arguments:
+
+```text
+-d Ubuntu-24.04 -- /bin/bash -lc "/home/abocha/code/esl-pipeline/scripts/docker/run-postgres-backup-s3.sh"
+```
+
+Monthly reminder/drill task:
+
+- Reminder only:
+
+```text
+-d Ubuntu-24.04 -- /bin/bash -lc "/home/abocha/code/esl-pipeline/scripts/docker/run-postgres-restore-drill-reminder.sh"
+```
+
+- Auto drill (`--download-only`):
+
+```text
+-d Ubuntu-24.04 -- /bin/bash -lc "PG_BACKUP_RESTORE_DRILL_AUTO=true /home/abocha/code/esl-pipeline/scripts/docker/run-postgres-restore-drill-reminder.sh"
+```
+
 ## Scripts and Commands
 
 - Local backup source of truth: `scripts/docker/postgres-backup-restore.sh`
@@ -48,6 +86,28 @@ Defaults:
   - `PG_BACKUP_REMOTE_RESTORE_RETENTION_DAYS=14`
   - `PG_BACKUP_LOG_RETENTION_DAYS=30`
   - `PG_BACKUP_RESTORE_DRILL_AUTO=false`
+
+### Environment Checklist
+
+Make sure these are present in `.env.batch-backend`:
+
+```bash
+PG_BACKUP_S3_BUCKET=...
+PG_BACKUP_S3_PREFIX=backups/postgres
+PG_BACKUP_S3_REGION=ap-southeast-1
+PG_BACKUP_S3_SSE=aws:kms
+PG_BACKUP_S3_KMS_KEY_ID=arn:aws:kms:...
+PG_BACKUP_S3_ENV=dev
+```
+
+Optional maintenance knobs:
+
+```bash
+PG_BACKUP_LOCAL_RETENTION_DAYS=30
+PG_BACKUP_REMOTE_RESTORE_RETENTION_DAYS=14
+PG_BACKUP_LOG_RETENTION_DAYS=30
+PG_BACKUP_RESTORE_DRILL_AUTO=false
+```
 
 ## Upload Workflow
 
@@ -148,6 +208,14 @@ sudo systemctl enable --now esl-postgres-backup.timer
 systemctl list-timers --all | rg esl-postgres-backup
 ```
 
+If you are on WSL and see:
+
+```text
+System has not been booted with systemd as init system (PID 1)
+```
+
+use Windows Task Scheduler instead (see TL;DR above).
+
 Logs:
 
 - `tmp/logs/backup/postgres-backup-s3-*.log`
@@ -191,6 +259,29 @@ C:\Windows\System32\wsl.exe
 ```text
 -d Ubuntu-24.04 -- /bin/bash -lc "PG_BACKUP_RESTORE_DRILL_AUTO=true /home/abocha/code/esl-pipeline/scripts/docker/run-postgres-restore-drill-reminder.sh"
 ```
+
+## Logs and Where to Look
+
+Primary logs:
+
+- `tmp/logs/backup/postgres-backup-s3-*.log`
+- `tmp/logs/backup/restore-drill-reminder-*.log`
+
+In WSL shell:
+
+```bash
+ls -lt /home/abocha/code/esl-pipeline/tmp/logs/backup
+tail -n 80 /home/abocha/code/esl-pipeline/tmp/logs/backup/<latest-log-file>
+```
+
+In Windows Explorer:
+
+```text
+\\wsl$\Ubuntu-24.04\home\abocha\code\esl-pipeline\tmp\logs\backup
+```
+
+If Task Scheduler flashes a black window and no log is created, the usual cause is
+wrong Program path. Use `C:\\Windows\\System32\\wsl.exe` exactly.
 
 ## One-Time AWS Bootstrap (Admin Principal)
 
@@ -257,11 +348,12 @@ Likewise, if object tagging permissions are not granted, uploads still succeed a
 
 ## Suggested Routine
 
-1. Daily timer runs `run-postgres-backup-s3.sh`.
-2. Before risky DB changes, run manual checkpoint:
+1. Daily scheduler runs `run-postgres-backup-s3.sh`.
+2. Monthly scheduler runs `run-postgres-restore-drill-reminder.sh` (or `AUTO=true` variant).
+3. Before risky DB changes, run manual checkpoint:
 
 ```bash
 pnpm docker:db:backup:s3 -- pre_change
 ```
 
-3. Keep periodic restore drills in non-prod to verify end-to-end recovery.
+4. Keep periodic restore drills in non-prod to verify end-to-end recovery.
