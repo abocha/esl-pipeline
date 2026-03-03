@@ -12,6 +12,11 @@
 - Updated inline backtick preprocessing:
   - render single-backtick snippets as `<code>` while allowing rich inner Markdown formatting.
   - preserve valid multi-backtick inline code spans.
+- Hardened URL/media rendering behavior:
+  - preserve safe relative `href`/`src` paths instead of degrading them to `#`.
+  - continue blocking unsafe URL schemes in generated HTML.
+  - normalize known YouTube/Vimeo directive variants to canonical embed URLs.
+  - recognize audio links with fragment timestamps (for example `#t=10`) as audio players.
 
 ## 0.1.0
 
