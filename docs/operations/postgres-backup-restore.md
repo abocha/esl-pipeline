@@ -1,6 +1,8 @@
 # Postgres Backup & Restore (Docker Routine)
 
 This runbook standardizes safe Postgres backups/restores for the local Docker stack.
+For S3 archival + automated scheduling, see
+`docs/operations/postgres-backup-s3.md`.
 
 ## Script
 
@@ -10,10 +12,17 @@ This runbook standardizes safe Postgres backups/restores for the local Docker st
   - `pnpm docker:db:backups`
   - `pnpm docker:db:verify-backup -- <backup-file>`
   - `pnpm docker:db:restore -- <backup-file> [--clean]`
+  - Optional remote archive wrappers:
+    - `pnpm docker:db:backup:s3`
+    - `pnpm docker:db:upload:s3`
+    - `pnpm docker:db:list:s3`
+    - `pnpm docker:db:restore:s3 -- <s3://bucket/key.dump|key.dump> [--clean]`
 
 ## Defaults
 
-- Container: `esl-backend-postgres`
+- Compose project: `esl-pipeline`
+- Compose file: `docker-compose.yml`
+- Service: `postgres`
 - Database: `esl_batch`
 - User: `esl`
 - Backup directory: `tmp/backups/postgres`
@@ -21,7 +30,11 @@ This runbook standardizes safe Postgres backups/restores for the local Docker st
 Override any default with env vars:
 
 ```bash
-PG_CONTAINER_NAME=esl-backend-postgres \
+PG_COMPOSE_PROJECT=esl-pipeline \
+PG_COMPOSE_FILE=docker-compose.yml \
+PG_SERVICE_NAME=postgres \
+# Optional explicit fallback:
+PG_CONTAINER_NAME=esl-pipeline-postgres-1 \
 PG_DATABASE=esl_batch \
 PG_USER=esl \
 PG_BACKUP_DIR=tmp/backups/postgres \
