@@ -73,6 +73,8 @@ describe('utils/api generateDraft', () => {
     expect(buildApiProxyPath).toHaveBeenCalledWith('/generation/drafts');
     expect(apiClient.post).toHaveBeenCalledWith('/api/generation/drafts', {
       promptPackageId: 'pkg-1',
+    }, {
+      timeout: 240000,
     });
     expect(result).toEqual(response);
   });

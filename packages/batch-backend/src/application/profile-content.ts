@@ -1,5 +1,4 @@
 import { createHash } from 'node:crypto';
-import fs from 'node:fs/promises';
 import path from 'node:path';
 
 import type { BatchBackendConfig } from '../config/env.js';
@@ -10,19 +9,22 @@ import type {
 } from '../domain/profile-revision-model.js';
 import {
   activateProfileRevision,
+  deprecateActiveProfileRevision,
   getLatestProfileRevisionByHash,
   getProfileRevisionById,
   insertProfileRevision,
   listProfileRevisions,
 } from '../domain/profile-revision-repository.js';
-import { setProfileActiveRevision, upsertProfile } from '../domain/profile-repository.js';
 import {
-  type PromptOption,
-  type PromptOptionWithPath,
-  listPromptProfilesWithPath,
-} from './prompt-options.js';
+  getProfileById,
+  listProfiles,
+  setProfileActiveRevision,
+  upsertProfile,
+} from '../domain/profile-repository.js';
+import type { PromptOption } from './prompt-options.js';
 
 const PROFILE_EXTENSIONS = new Set(['.md', '.txt']);
+const MAX_OPTION_PAGE_LIMIT = 500;
 
 export interface ProfileContentListResponse {
   profiles: PromptOption[];
@@ -66,6 +68,7 @@ export interface ProfileRevisionListResponse {
 interface ProfileRevisionDependencies {
   insert: typeof insertProfileRevision;
   activate: typeof activateProfileRevision;
+  deprecateActive: typeof deprecateActiveProfileRevision;
   list: typeof listProfileRevisions;
   getById: typeof getProfileRevisionById;
   getLatestByHash: typeof getLatestProfileRevisionByHash;
@@ -75,6 +78,8 @@ interface ProfileContentDependencies {
   config: BatchBackendConfig;
   revisions: ProfileRevisionDependencies;
   profiles: {
+    list: typeof listProfiles;
+    getById: typeof getProfileById;
     upsert: typeof upsertProfile;
     setActive: typeof setProfileActiveRevision;
   };
@@ -99,33 +104,23 @@ export class ProfileContentError extends Error {
 }
 
 function normalizeProfileId(id: string): string {
-  return id.replaceAll('\\', '/').replace(/^\/+/, '');
-}
+  const normalized = path.posix
+    .normalize(id.replaceAll('\\', '/').replace(/^\/+/, '').trim())
+    .trim();
 
-function isWithinRoot(root: string, target: string): boolean {
-  const relative = path.relative(root, target);
-  if (!relative) return true;
-  return !relative.startsWith('..') && !path.isAbsolute(relative);
-}
-
-function resolveProfilePathForId(profileId: string, profileRoot: string): string {
-  const normalized = normalizeProfileId(profileId);
-  if (!normalized) {
+  if (!normalized || normalized === '.' || normalized === '..') {
     throw new ProfileContentError('profileId is required', 'profile_id_missing', 400);
   }
+  if (normalized.startsWith('../') || path.posix.isAbsolute(normalized)) {
+    throw new ProfileContentError('profileId is invalid', 'profile_id_invalid', 400);
+  }
+
   const ext = path.extname(normalized).toLowerCase();
   if (!PROFILE_EXTENSIONS.has(ext)) {
     throw new ProfileContentError('profileId must end with .md or .txt', 'profile_id_invalid', 400);
   }
-  const candidate = path.resolve(profileRoot, normalized);
-  if (!isWithinRoot(profileRoot, candidate)) {
-    throw new ProfileContentError(
-      'profileId must resolve within the configured profile root',
-      'profile_id_outside_root',
-      400,
-    );
-  }
-  return candidate;
+
+  return normalized;
 }
 
 function formatProfileLabel(profileId: string): string {
@@ -142,23 +137,18 @@ function getDependencies(
     revisions: overrides?.revisions ?? {
       insert: insertProfileRevision,
       activate: activateProfileRevision,
+      deprecateActive: deprecateActiveProfileRevision,
       list: listProfileRevisions,
       getById: getProfileRevisionById,
       getLatestByHash: getLatestProfileRevisionByHash,
     },
     profiles: overrides?.profiles ?? {
+      list: listProfiles,
+      getById: getProfileById,
       upsert: upsertProfile,
       setActive: setProfileActiveRevision,
     },
   };
-}
-
-async function loadProfileOptions(
-  overrides?: Partial<ProfileContentDependencies>,
-): Promise<{ profiles: PromptOptionWithPath[]; profileRoot: string }> {
-  const { config } = getDependencies(overrides);
-  const { profiles, profileRoot } = await listPromptProfilesWithPath({ config });
-  return { profiles, profileRoot };
 }
 
 function hashProfileContent(content: string): string {
@@ -184,24 +174,32 @@ function toProfileRevisionSummary(
   };
 }
 
-async function resolveCurrentRevisionMetadata(
-  profileId: string,
-  content: string,
-  revisions: ProfileRevisionDependencies,
-): Promise<{ currentRevisionId: string | null; updatedAt: string | null }> {
-  try {
-    const currentHash = hashProfileContent(content);
-    const currentRevision = await revisions.getLatestByHash(profileId, currentHash);
-    return {
-      currentRevisionId: currentRevision?.id ?? null,
-      updatedAt: currentRevision?.createdAt ? currentRevision.createdAt.toISOString() : null,
-    };
-  } catch {
-    return {
-      currentRevisionId: null,
-      updatedAt: null,
-    };
+async function listActiveProfileOptions(
+  dependencies: ProfileContentDependencies,
+): Promise<PromptOption[]> {
+  const options: PromptOption[] = [];
+  let offset = 0;
+
+  while (true) {
+    const listed = await dependencies.profiles.list({
+      limit: MAX_OPTION_PAGE_LIMIT,
+      offset,
+      order: 'asc',
+    });
+
+    options.push(
+      ...listed.items
+        .filter((profile) => Boolean(profile.activeRevisionId))
+        .map((profile) => ({ id: profile.id, label: profile.label })),
+    );
+
+    offset += listed.items.length;
+    if (offset >= listed.total || listed.items.length === 0) {
+      break;
+    }
   }
+
+  return options;
 }
 
 async function upsertProfileContentWithRevision(
@@ -211,76 +209,56 @@ async function upsertProfileContentWithRevision(
   options: UpsertProfileContentOptions,
 ): Promise<ProfileContentResponse> {
   const dependencies = getDependencies(overrides);
-  const { profiles, profileRoot } = await loadProfileOptions(dependencies);
-  const entry = profiles.find((profile) => profile.id === profileId);
-  const targetPath = entry ? entry.path : resolveProfilePathForId(profileId, profileRoot);
+  const normalizedProfileId = normalizeProfileId(profileId);
   const normalizedContent = content ?? '';
+  const existingProfile = await dependencies.profiles.getById(normalizedProfileId);
+  const label = existingProfile?.label ?? formatProfileLabel(normalizedProfileId);
 
-  await fs.mkdir(path.dirname(targetPath), { recursive: true });
-  await fs.writeFile(targetPath, normalizedContent, 'utf8');
+  await dependencies.profiles.upsert({
+    id: normalizedProfileId,
+    label,
+    activeRevisionId: existingProfile?.activeRevisionId ?? null,
+  });
 
   const hash = hashProfileContent(normalizedContent);
-  const source = options.source ?? (entry ? 'update' : 'create');
-  let currentRevisionId: string | null = null;
-  let updatedAt: string | null = null;
+  const source = options.source ?? (existingProfile ? 'update' : 'create');
 
-  try {
-    await dependencies.profiles
-      .upsert({
-        id: profileId,
-        label: entry?.label ?? formatProfileLabel(profileId),
-        activeRevisionId: null,
-      })
-      .catch(() => null);
+  const existingRevision =
+    source === 'restore'
+      ? null
+      : await dependencies.revisions.getLatestByHash(normalizedProfileId, hash);
 
-    const existingRevision =
-      source === 'restore' ? null : await dependencies.revisions.getLatestByHash(profileId, hash);
-    const revision =
-      existingRevision ??
-      (await dependencies.revisions.insert({
-        profileId,
-        content: normalizedContent,
-        contentHash: hash,
-        source,
-        createdBy: options.createdBy ?? null,
-        restoredFromRevisionId: options.restoredFromRevisionId ?? null,
-      }));
+  const revision =
+    existingRevision ??
+    (await dependencies.revisions.insert({
+      profileId: normalizedProfileId,
+      content: normalizedContent,
+      contentHash: hash,
+      source,
+      createdBy: options.createdBy ?? null,
+      restoredFromRevisionId: options.restoredFromRevisionId ?? null,
+    }));
 
-    await Promise.all([
-      dependencies.profiles
-        .upsert({
-          id: profileId,
-          label: entry?.label ?? formatProfileLabel(profileId),
-          activeRevisionId: revision.id,
-        })
-        .catch(() => null),
-      dependencies.revisions.activate(profileId, revision.id).catch(() => null),
-      dependencies.profiles.setActive(profileId, revision.id).catch(() => null),
-    ]);
-
-    currentRevisionId = revision.id;
-    updatedAt = revision.createdAt.toISOString();
-  } catch {
-    currentRevisionId = null;
-    updatedAt = null;
-  }
+  await Promise.all([
+    dependencies.revisions.activate(normalizedProfileId, revision.id),
+    dependencies.profiles.setActive(normalizedProfileId, revision.id),
+  ]);
 
   return {
-    id: entry?.id ?? profileId,
-    label: entry?.label ?? formatProfileLabel(profileId),
-    content: normalizedContent,
-    currentRevisionId,
-    updatedAt,
+    id: normalizedProfileId,
+    label,
+    content: revision.content,
+    currentRevisionId: revision.id,
+    updatedAt: revision.createdAt.toISOString(),
   };
 }
 
 export async function listProfileContents(
   overrides?: Partial<ProfileContentDependencies>,
 ): Promise<ProfileContentListResponse> {
-  const { profiles } = await loadProfileOptions(overrides);
-  return {
-    profiles: profiles.map(({ id, label }) => ({ id, label })),
-  };
+  const dependencies = getDependencies(overrides);
+  const profiles = await listActiveProfileOptions(dependencies);
+  return { profiles };
 }
 
 export async function getProfileContent(
@@ -288,17 +266,19 @@ export async function getProfileContent(
   overrides?: Partial<ProfileContentDependencies>,
 ): Promise<ProfileContentResponse | null> {
   const dependencies = getDependencies(overrides);
-  const { profiles } = await loadProfileOptions(dependencies);
-  const entry = profiles.find((profile) => profile.id === profileId);
-  if (!entry) return null;
+  const normalizedProfileId = normalizeProfileId(profileId);
+  const profile = await dependencies.profiles.getById(normalizedProfileId);
+  if (!profile?.activeRevisionId) return null;
 
-  const content = await fs.readFile(entry.path, 'utf8');
-  const metadata = await resolveCurrentRevisionMetadata(profileId, content, dependencies.revisions);
+  const revision = await dependencies.revisions.getById(normalizedProfileId, profile.activeRevisionId);
+  if (!revision) return null;
+
   return {
-    id: entry.id,
-    label: entry.label,
-    content,
-    ...metadata,
+    id: profile.id,
+    label: profile.label,
+    content: revision.content,
+    currentRevisionId: revision.id,
+    updatedAt: revision.createdAt.toISOString(),
   };
 }
 
@@ -318,10 +298,16 @@ export async function deleteProfileContent(
   profileId: string,
   overrides?: Partial<ProfileContentDependencies>,
 ): Promise<boolean> {
-  const { profiles } = await loadProfileOptions(overrides);
-  const entry = profiles.find((profile) => profile.id === profileId);
-  if (!entry) return false;
-  await fs.unlink(entry.path);
+  const dependencies = getDependencies(overrides);
+  const normalizedProfileId = normalizeProfileId(profileId);
+  const profile = await dependencies.profiles.getById(normalizedProfileId);
+  if (!profile?.activeRevisionId) return false;
+
+  await Promise.all([
+    dependencies.revisions.deprecateActive(normalizedProfileId),
+    dependencies.profiles.setActive(normalizedProfileId, null),
+  ]);
+
   return true;
 }
 
@@ -335,12 +321,12 @@ export async function listProfileRevisionsForProfile(
   overrides?: Partial<ProfileContentDependencies>,
 ): Promise<ProfileRevisionListResponse | null> {
   const dependencies = getDependencies(overrides);
-  const { profiles } = await loadProfileOptions(dependencies);
-  const entry = profiles.find((profile) => profile.id === profileId);
-  if (!entry) return null;
+  const normalizedProfileId = normalizeProfileId(profileId);
+  const profile = await dependencies.profiles.getById(normalizedProfileId);
+  if (!profile) return null;
 
   const result = await dependencies.revisions.list({
-    profileId,
+    profileId: normalizedProfileId,
     limit: params.limit,
     offset: params.offset,
     order: params.order,
@@ -361,11 +347,11 @@ export async function getProfileRevisionForProfile(
   overrides?: Partial<ProfileContentDependencies>,
 ): Promise<ProfileRevisionDetailResponse | null> {
   const dependencies = getDependencies(overrides);
-  const { profiles } = await loadProfileOptions(dependencies);
-  const entry = profiles.find((profile) => profile.id === profileId);
-  if (!entry) return null;
+  const normalizedProfileId = normalizeProfileId(profileId);
+  const profile = await dependencies.profiles.getById(normalizedProfileId);
+  if (!profile) return null;
 
-  const revision = await dependencies.revisions.getById(profileId, revisionId);
+  const revision = await dependencies.revisions.getById(normalizedProfileId, revisionId);
   if (!revision) return null;
 
   return {
@@ -380,10 +366,14 @@ export async function restoreProfileRevision(
   overrides?: Partial<ProfileContentDependencies & { createdBy: string | null }>,
 ): Promise<ProfileContentResponse | null> {
   const dependencies = getDependencies(overrides);
-  const revision = await dependencies.revisions.getById(profileId, revisionId);
+  const normalizedProfileId = normalizeProfileId(profileId);
+  const profile = await dependencies.profiles.getById(normalizedProfileId);
+  if (!profile) return null;
+
+  const revision = await dependencies.revisions.getById(normalizedProfileId, revisionId);
   if (!revision) return null;
 
-  return upsertProfileContentWithRevision(profileId, revision.content, overrides, {
+  return upsertProfileContentWithRevision(normalizedProfileId, revision.content, overrides, {
     source: 'restore',
     createdBy: overrides?.createdBy ?? null,
     restoredFromRevisionId: revision.id,
@@ -396,23 +386,14 @@ export async function activateProfileRevisionForProfile(
   overrides?: Partial<ProfileContentDependencies>,
 ): Promise<ProfileRevisionDetailResponse | null> {
   const dependencies = getDependencies(overrides);
-  const { profiles } = await loadProfileOptions(dependencies);
-  const entry = profiles.find((profile) => profile.id === profileId);
-  if (!entry) return null;
+  const normalizedProfileId = normalizeProfileId(profileId);
+  const profile = await dependencies.profiles.getById(normalizedProfileId);
+  if (!profile) return null;
 
-  const activated = await dependencies.revisions.activate(profileId, revisionId);
+  const activated = await dependencies.revisions.activate(normalizedProfileId, revisionId);
   if (!activated) return null;
 
-  await Promise.all([
-    dependencies.profiles
-      .upsert({
-        id: profileId,
-        label: entry.label,
-        activeRevisionId: activated.id,
-      })
-      .catch(() => null),
-    dependencies.profiles.setActive(profileId, activated.id).catch(() => null),
-  ]);
+  await dependencies.profiles.setActive(normalizedProfileId, activated.id);
 
   return {
     ...toProfileRevisionSummary(activated),

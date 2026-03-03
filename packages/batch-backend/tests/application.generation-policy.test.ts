@@ -115,4 +115,51 @@ describe('application/generation-policy', () => {
     const options = buildGenerationOptionsPayload({ config });
     expect(options.quota.requestsPerDay).toBe(0);
   });
+
+  it('includes additional allowed models after primary/fallback ladder', () => {
+    const config = buildConfig({
+      models: {
+        openai: {
+          primary: 'gpt-5.2',
+          fallback: 'gpt-5-mini',
+          allowed: ['gpt-5.2', 'gpt-5-mini'],
+        },
+        googleAiStudio: {
+          primary: 'gemini-2.5-flash-lite',
+          fallback: 'gemini-2.5-flash',
+          tertiary: 'gemini-2.5-pro',
+          allowed: [
+            'gemini-2.5-flash-lite',
+            'gemini-2.5-flash',
+            'gemini-2.5-pro',
+            'gemini-3-pro-preview',
+          ],
+        },
+        openrouter: {
+          primary: 'anthropic/claude-sonnet-4',
+          fallback: 'openai/gpt-5-mini',
+          allowed: [],
+        },
+      },
+    });
+
+    const candidates = resolveGenerationCandidates({ config });
+    const googleModels = candidates
+      .filter((candidate) => candidate.provider === 'google_ai_studio')
+      .map((candidate) => candidate.model);
+
+    expect(googleModels).toEqual([
+      'gemini-2.5-flash-lite',
+      'gemini-2.5-flash',
+      'gemini-2.5-pro',
+      'gemini-3-pro-preview',
+    ]);
+
+    const options = buildGenerationOptionsPayload({ config });
+    const extraModel = options.modelOptions.find(
+      (option) => option.provider === 'google_ai_studio' && option.id === 'gemini-3-pro-preview',
+    );
+    expect(extraModel?.tier).toBe('custom');
+    expect(extraModel?.defaultSelected).toBe(false);
+  });
 });

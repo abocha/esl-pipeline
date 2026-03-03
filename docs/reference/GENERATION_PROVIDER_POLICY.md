@@ -5,7 +5,7 @@
 - Audience: founder-maintainer and implementing agents.
 - Read Time: 8 minutes.
 - Authority Level: canonical WS2B provider/model/quota policy.
-- Last Updated: 2026-02-18.
+- Last Updated: 2026-03-03.
 
 ## Purpose
 
@@ -95,6 +95,42 @@ References:
 
 - https://ai.google.dev/gemini-api/docs/rate-limits
 - https://ai.google.dev/gemini-api/docs/pricing
+
+### Operator Availability Note (2026-03-03, Free-Tier Key Probe)
+
+Direct `generateContent` ping probe (`Reply with exactly PONG.`) observed:
+
+1. `gemini-3.1-pro-preview` -> `429` (quota/billing)
+2. `gemini-3-pro-preview` -> `429` (quota/billing)
+3. `gemini-3-flash-preview` -> `503` under high demand (transient capacity)
+4. `gemini-2.5-pro` -> `429` (quota/billing)
+5. `gemini-flash-lite-latest` -> `200`
+6. `gemini-2.5-flash` -> `200`
+7. `gemini-2.5-flash-lite` -> `200`
+
+Policy interpretation for local operations:
+
+1. Keep `gemini-3-flash-preview` in the allowed set and fallback ladder.
+2. Prefer flash-tier defaults for stability under free-tier constraints.
+3. Re-run the same probe after API-key tier changes before concluding model regressions.
+
+### Operator Availability Note (2026-03-03, Tier-1 Key Probe)
+
+Direct `generateContent` ping probe (`Reply with exactly PONG.`) observed:
+
+1. `gemini-3.1-pro-preview` -> timed out at client max-time (`70s`) in probe run (treat as demand/capacity-sensitive, not removed from docs support matrix).
+2. `gemini-3-pro-preview` -> `200` (`PONG`).
+3. `gemini-3-flash-preview` -> `200` (`PONG`).
+4. `gemini-2.5-pro` -> `200` (one probe returned `MAX_TOKENS` with empty visible text; follow-up probes returned `PONG`).
+5. `gemini-flash-lite-latest` -> `200` (`PONG`).
+6. `gemini-2.5-flash` -> `200` (`PONG`).
+7. `gemini-2.5-flash-lite` -> `200` (`PONG`).
+
+Operator implications:
+
+1. Tier-1 key materially improves model availability versus free-tier for `3-pro`, `3-flash`, and `2.5-pro`.
+2. Keep `gemini-3-flash-preview` active in allowlist/fallback ladder.
+3. For `gemini-2.5-pro`, avoid overly tight output caps in smoke probes, since high thought-token usage can produce `MAX_TOKENS` before visible output.
 
 ### OpenRouter
 
