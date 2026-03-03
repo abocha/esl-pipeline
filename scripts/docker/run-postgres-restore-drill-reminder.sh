@@ -7,8 +7,6 @@ DEFAULT_LOG_DIR="${ROOT_DIR}/tmp/logs/backup"
 BACKUP_S3_SCRIPT="${ROOT_DIR}/scripts/docker/postgres-backup-s3.sh"
 
 ENV_FILE="${PG_BACKUP_ENV_FILE:-$DEFAULT_ENV_FILE}"
-LOG_DIR="${PG_BACKUP_LOG_DIR:-$DEFAULT_LOG_DIR}"
-AUTO_RUN="${PG_BACKUP_RESTORE_DRILL_AUTO:-false}"
 
 if [[ -f "$ENV_FILE" ]]; then
   # shellcheck source=/dev/null
@@ -16,6 +14,9 @@ if [[ -f "$ENV_FILE" ]]; then
   . "$ENV_FILE"
   set +a
 fi
+
+LOG_DIR="${PG_BACKUP_LOG_DIR:-$DEFAULT_LOG_DIR}"
+AUTO_RUN="${PG_BACKUP_RESTORE_DRILL_AUTO:-false}"
 
 S3_BUCKET="${PG_BACKUP_S3_BUCKET:-${S3_BUCKET:-}}"
 S3_PREFIX_BASE="${PG_BACKUP_S3_PREFIX:-backups/postgres}"
