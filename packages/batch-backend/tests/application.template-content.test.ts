@@ -67,6 +67,19 @@ function createInMemoryDependencies(seed?: {
     }
   }
 
+  const getLatestRevisionByHash = (
+    templateId: string,
+    contentHash: string,
+  ): TemplateRevisionRecord | null => {
+    for (let index = revisions.length - 1; index >= 0; index -= 1) {
+      const revision = revisions[index];
+      if (revision && revision.templateId === templateId && revision.contentHash === contentHash) {
+        return revision;
+      }
+    }
+    return null;
+  };
+
   return {
     templates: {
       list: async (params: { search?: string; limit?: number; offset?: number; order?: 'asc' | 'desc' } = {}) => {
@@ -117,9 +130,7 @@ function createInMemoryDependencies(seed?: {
     },
     revisions: {
       getLatestByHash: async (templateId: string, contentHash: string) =>
-        revisions.findLast(
-          (revision) => revision.templateId === templateId && revision.contentHash === contentHash,
-        ) ?? null,
+        getLatestRevisionByHash(templateId, contentHash),
       insert: async ({
         templateId,
         content,
