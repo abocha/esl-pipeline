@@ -1,4 +1,4 @@
-name: ${COMPOSE_PROJECT_NAME:-esl-pipeline-prod}
+name: esl-pipeline-prod
 
 services:
   batch-backend:
@@ -7,6 +7,7 @@ services:
       dockerfile: packages/batch-backend/Dockerfile
       tags:
         - esl-pipeline/batch-backend:local
+    container_name: esl-batch-backend
     depends_on:
       postgres:
         condition: service_healthy
@@ -25,7 +26,7 @@ services:
     env_file:
       - .env.batch-backend
     ports:
-      - '127.0.0.1:${BATCH_BACKEND_HOST_PORT:-8080}:8080'
+      - '127.0.0.1:8080:8080'
     restart: unless-stopped
 
   batch-frontend:
@@ -34,14 +35,16 @@ services:
       dockerfile: packages/batch-frontend/Dockerfile
       tags:
         - esl-pipeline/batch-frontend:local
+    container_name: esl-batch-frontend
     depends_on:
       - batch-backend
     ports:
-      - '0.0.0.0:${BATCH_FRONTEND_HOST_PORT:-5173}:80'
+      - '0.0.0.0:5173:80'
     restart: unless-stopped
 
   batch-worker:
     image: esl-pipeline/batch-backend:local
+    container_name: esl-batch-worker
     depends_on:
       postgres:
         condition: service_healthy
@@ -63,6 +66,7 @@ services:
     restart: unless-stopped
   postgres:
     image: postgres:18-alpine
+    container_name: esl-backend-postgres
     # Persistent DB (named volume).
     volumes:
       - postgres18_data:/var/lib/postgresql
@@ -83,6 +87,7 @@ services:
 
   redis:
     image: redis:alpine
+    container_name: esl-backend-redis
     volumes:
       - redis_data:/data
     ports:
@@ -97,4 +102,5 @@ services:
 volumes:
   postgres_data:
   postgres18_data:
+    name: esl-pipeline_postgres18_data
   redis_data:

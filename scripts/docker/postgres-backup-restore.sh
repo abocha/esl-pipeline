@@ -3,16 +3,11 @@ set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 DEFAULT_BACKUP_DIR="${ROOT_DIR}/tmp/backups/postgres"
-DEFAULT_COMPOSE_FILE="${ROOT_DIR}/docker-compose.yml"
 
-COMPOSE_PROJECT="${PG_COMPOSE_PROJECT:-esl-pipeline}"
-COMPOSE_FILE="${PG_COMPOSE_FILE:-$DEFAULT_COMPOSE_FILE}"
-SERVICE_NAME="${PG_SERVICE_NAME:-postgres}"
-CONTAINER_NAME_OVERRIDE="${PG_CONTAINER_NAME:-}"
+CONTAINER_NAME="${PG_CONTAINER_NAME:-esl-backend-postgres}"
 DB_NAME="${PG_DATABASE:-esl_batch}"
 DB_USER="${PG_USER:-esl}"
 BACKUP_DIR="${PG_BACKUP_DIR:-$DEFAULT_BACKUP_DIR}"
-RESOLVED_CONTAINER_REF=""
 
 print_usage() {
   cat <<'USAGE'
@@ -23,10 +18,7 @@ Usage:
   postgres-backup-restore.sh restore <backup-file> [--clean]
 
 Environment overrides:
-  PG_COMPOSE_PROJECT (default: esl-pipeline)
-  PG_COMPOSE_FILE    (default: <repo>/docker-compose.yml)
-  PG_SERVICE_NAME    (default: postgres)
-  PG_CONTAINER_NAME  (override compose discovery)
+  PG_CONTAINER_NAME  (default: esl-backend-postgres)
   PG_DATABASE        (default: esl_batch)
   PG_USER            (default: esl)
   PG_BACKUP_DIR      (default: <repo>/tmp/backups/postgres)
@@ -52,56 +44,10 @@ require_commands() {
   done
 }
 
-compose() {
-  docker compose -p "$COMPOSE_PROJECT" -f "$COMPOSE_FILE" "$@"
-}
-
-resolve_container_ref() {
-  if [[ -n "$RESOLVED_CONTAINER_REF" ]]; then
-    echo "$RESOLVED_CONTAINER_REF"
-    return
-  fi
-
-  if [[ -n "$CONTAINER_NAME_OVERRIDE" ]]; then
-    RESOLVED_CONTAINER_REF="$CONTAINER_NAME_OVERRIDE"
-    echo "$RESOLVED_CONTAINER_REF"
-    return
-  fi
-
-  local container_id
-  container_id="$(compose ps -q "$SERVICE_NAME" | head -n 1)"
-  if [[ -z "$container_id" ]]; then
-    echo "ERROR: failed to resolve postgres container from compose service '${SERVICE_NAME}'." >&2
-    echo "Tip: run 'pnpm docker:up' or set PG_CONTAINER_NAME to a running container." >&2
-    exit 1
-  fi
-
-  RESOLVED_CONTAINER_REF="$container_id"
-  echo "$RESOLVED_CONTAINER_REF"
-}
-
-resolve_container_label() {
-  local container_ref
-  container_ref="$(resolve_container_ref)"
-  local display_name
-  display_name="$(docker inspect -f '{{.Name}}' "$container_ref" 2>/dev/null || true)"
-  if [[ -n "$display_name" ]]; then
-    echo "${display_name#/}"
-  else
-    echo "$container_ref"
-  fi
-}
-
 ensure_container_running() {
-  local container_ref
-  container_ref="$(resolve_container_ref)"
-  local running
-  running="$(docker inspect -f '{{.State.Running}}' "$container_ref" 2>/dev/null || echo false)"
-  if [[ "$running" != "true" ]]; then
-    local container_label
-    container_label="$(resolve_container_label)"
-    echo "ERROR: container is not running: ${container_label}" >&2
-    echo "Tip: run 'pnpm docker:up' or 'compose up -d ${SERVICE_NAME}' for project '${COMPOSE_PROJECT}'." >&2
+  if ! docker ps --format '{{.Names}}' | grep -Fxq "$CONTAINER_NAME"; then
+    echo "ERROR: container is not running: $CONTAINER_NAME" >&2
+    echo "Tip: run 'docker ps -a --filter name=${CONTAINER_NAME}'" >&2
     exit 1
   fi
 }
@@ -120,9 +66,6 @@ safe_label() {
 do_backup() {
   local label="${1:-}"
   local stamp prefix plain_gz custom_dump schema_sql checksum_file tmp_dump_in_container
-  local container_ref container_label
-  container_ref="$(resolve_container_ref)"
-  container_label="$(resolve_container_label)"
 
   mkdir -p "$BACKUP_DIR"
   stamp="$(date +%Y%m%d_%H%M%S)"
@@ -137,24 +80,24 @@ do_backup() {
   schema_sql="${BACKUP_DIR}/${prefix}_schema.sql"
   checksum_file="${BACKUP_DIR}/${prefix}.sha256"
 
-  echo "Creating backups for database '${DB_NAME}' from container '${container_label}'..."
+  echo "Creating backups for database '${DB_NAME}' from container '${CONTAINER_NAME}'..."
 
-  docker exec "$container_ref" env PGUSER="$DB_USER" PGDATABASE="$DB_NAME" sh -lc \
+  docker exec "$CONTAINER_NAME" env PGUSER="$DB_USER" PGDATABASE="$DB_NAME" sh -lc \
     'pg_dump --no-owner --no-privileges -U "$PGUSER" -d "$PGDATABASE"' | gzip -9 > "$plain_gz"
 
-  docker exec "$container_ref" env PGUSER="$DB_USER" PGDATABASE="$DB_NAME" sh -lc \
+  docker exec "$CONTAINER_NAME" env PGUSER="$DB_USER" PGDATABASE="$DB_NAME" sh -lc \
     'pg_dump -Fc --no-owner --no-privileges -U "$PGUSER" -d "$PGDATABASE"' > "$custom_dump"
 
-  docker exec "$container_ref" env PGUSER="$DB_USER" PGDATABASE="$DB_NAME" sh -lc \
+  docker exec "$CONTAINER_NAME" env PGUSER="$DB_USER" PGDATABASE="$DB_NAME" sh -lc \
     'pg_dump --schema-only --no-owner --no-privileges -U "$PGUSER" -d "$PGDATABASE"' > "$schema_sql"
 
   sha256sum "$plain_gz" "$custom_dump" "$schema_sql" > "$checksum_file"
 
   # Sanity check custom-format header by reading TOC in container.
   tmp_dump_in_container="/tmp/${prefix}.dump"
-  docker cp "$custom_dump" "${container_ref}:${tmp_dump_in_container}"
-  docker exec "$container_ref" sh -lc "pg_restore -l '${tmp_dump_in_container}' >/dev/null"
-  docker exec "$container_ref" sh -lc "rm -f '${tmp_dump_in_container}'"
+  docker cp "$custom_dump" "${CONTAINER_NAME}:${tmp_dump_in_container}"
+  docker exec "$CONTAINER_NAME" sh -lc "pg_restore -l '${tmp_dump_in_container}' >/dev/null"
+  docker exec "$CONTAINER_NAME" sh -lc "rm -f '${tmp_dump_in_container}'"
 
   echo "Backup complete."
   echo "  plain:     $plain_gz"
@@ -205,12 +148,10 @@ do_verify() {
 
   if [[ "$backup_file" == *.dump ]]; then
     ensure_container_running
-    local container_ref
-    container_ref="$(resolve_container_ref)"
     tmp_dump_in_container="/tmp/verify_$(date +%s)_$(basename "$backup_file")"
-    docker cp "$backup_file" "${container_ref}:${tmp_dump_in_container}"
-    docker exec "$container_ref" sh -lc "pg_restore -l '${tmp_dump_in_container}' | head -n 20"
-    docker exec "$container_ref" sh -lc "rm -f '${tmp_dump_in_container}'"
+    docker cp "$backup_file" "${CONTAINER_NAME}:${tmp_dump_in_container}"
+    docker exec "$CONTAINER_NAME" sh -lc "pg_restore -l '${tmp_dump_in_container}' | head -n 20"
+    docker exec "$CONTAINER_NAME" sh -lc "rm -f '${tmp_dump_in_container}'"
   fi
 }
 
@@ -218,7 +159,6 @@ do_restore() {
   local backup_file="$1"
   local clean_mode="${2:-false}"
   local tmp_dump_in_container
-  local container_ref container_label
 
   if [[ ! -f "$backup_file" ]]; then
     echo "ERROR: file not found: $backup_file" >&2
@@ -226,29 +166,27 @@ do_restore() {
   fi
 
   ensure_container_running
-  container_ref="$(resolve_container_ref)"
-  container_label="$(resolve_container_label)"
-  echo "Restoring into database '${DB_NAME}' on container '${container_label}'..."
+  echo "Restoring into database '${DB_NAME}' on container '${CONTAINER_NAME}'..."
 
   case "$backup_file" in
     *.dump)
       tmp_dump_in_container="/tmp/restore_$(date +%s)_$(basename "$backup_file")"
-      docker cp "$backup_file" "${container_ref}:${tmp_dump_in_container}"
+      docker cp "$backup_file" "${CONTAINER_NAME}:${tmp_dump_in_container}"
       if [[ "$clean_mode" == "true" ]]; then
-        docker exec "$container_ref" env PGUSER="$DB_USER" PGDATABASE="$DB_NAME" sh -lc \
+        docker exec "$CONTAINER_NAME" env PGUSER="$DB_USER" PGDATABASE="$DB_NAME" sh -lc \
           'pg_restore --clean --if-exists --no-owner --no-privileges -U "$PGUSER" -d "$PGDATABASE" "'"${tmp_dump_in_container}"'"'
       else
-        docker exec "$container_ref" env PGUSER="$DB_USER" PGDATABASE="$DB_NAME" sh -lc \
+        docker exec "$CONTAINER_NAME" env PGUSER="$DB_USER" PGDATABASE="$DB_NAME" sh -lc \
           'pg_restore --no-owner --no-privileges -U "$PGUSER" -d "$PGDATABASE" "'"${tmp_dump_in_container}"'"'
       fi
-      docker exec "$container_ref" sh -lc "rm -f '${tmp_dump_in_container}'"
+      docker exec "$CONTAINER_NAME" sh -lc "rm -f '${tmp_dump_in_container}'"
       ;;
     *.sql.gz)
       if [[ "$clean_mode" == "true" ]]; then
         echo "ERROR: --clean is supported only for .dump restores." >&2
         exit 1
       fi
-      gunzip -c "$backup_file" | docker exec -i "$container_ref" env PGUSER="$DB_USER" PGDATABASE="$DB_NAME" sh -lc \
+      gunzip -c "$backup_file" | docker exec -i "$CONTAINER_NAME" env PGUSER="$DB_USER" PGDATABASE="$DB_NAME" sh -lc \
         'psql -v ON_ERROR_STOP=1 -U "$PGUSER" -d "$PGDATABASE"'
       ;;
     *.sql)
@@ -256,7 +194,7 @@ do_restore() {
         echo "ERROR: --clean is supported only for .dump restores." >&2
         exit 1
       fi
-      cat "$backup_file" | docker exec -i "$container_ref" env PGUSER="$DB_USER" PGDATABASE="$DB_NAME" sh -lc \
+      cat "$backup_file" | docker exec -i "$CONTAINER_NAME" env PGUSER="$DB_USER" PGDATABASE="$DB_NAME" sh -lc \
         'psql -v ON_ERROR_STOP=1 -U "$PGUSER" -d "$PGDATABASE"'
       ;;
     *)

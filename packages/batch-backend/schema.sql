@@ -9,7 +9,7 @@
 --
 -- This file is intended to be mounted into the Postgres container in
 -- docker-compose.yml / docker-compose.prod.yml and applied manually or via CI with:
---   docker exec -i "$(docker compose -p esl-pipeline -f docker-compose.yml ps -q postgres)" \
+--   docker exec -i esl-backend-postgres \
 --     psql -U esl -d esl_batch -f /schema/batch-backend/schema.sql
 
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
