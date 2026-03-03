@@ -7,11 +7,8 @@ import { describe, expect, it } from 'vitest';
 
 import { createPromptPackage } from '../src/application/create-prompt-package.js';
 import { getPromptPackage, getPromptPackageLineage } from '../src/application/get-prompt-package.js';
-import { ProfilePathError } from '../src/application/profile-path.js';
 import type { ProfileRevisionRecord } from '../src/domain/profile-revision-model.js';
-import type { ProfileRecord } from '../src/domain/profile-model.js';
 import type { TemplateRevisionRecord } from '../src/domain/template-revision-model.js';
-import type { TemplateRecord } from '../src/domain/template-model.js';
 import type { BatchBackendConfig } from '../src/config/env.js';
 import type { PromptPackageRecord } from '../src/domain/prompt-package-model.js';
 import type { InsertPromptPackageParams } from '../src/domain/prompt-package-repository.js';
@@ -104,9 +101,8 @@ describe('application/prompt-package', () => {
         promptPackages,
         profileRevisions,
         templateRevisions: createTemplateRevisionRepositoryStub(),
-        profiles: createProfileRepositoryStub(),
-        templates: createTemplateRepositoryStub(),
         bindings: createBindingResolverStub(),
+        promptOptions: createPromptOptionsStub(),
       },
     );
 
@@ -116,9 +112,9 @@ describe('application/prompt-package', () => {
     expect(result?.studentId).toBe('student-1');
     expect(result?.notes).toBe('Some notes');
     expect(result?.templateVersion).toBe('template.md');
-    expect(result?.profilePath).toBe(profilePath);
+    expect(result?.profilePath).toBe('profile.md');
     expect(result?.profileSnapshot?.resolvedProfileId).toBe('profile.md');
-    expect(result?.profileSnapshot?.resolvedProfileRevisionId).toBe('revision-1');
+    expect(result?.profileSnapshot?.resolvedProfileRevisionId).toBe('active-profile.md');
   });
 
   it('injects capabilities into voice-aligned prompt templates and persists provenance', async () => {
@@ -196,9 +192,8 @@ describe('application/prompt-package', () => {
           promptPackages: createPromptPackageRepositoryStub(),
           profileRevisions: createProfileRevisionRepositoryStub(),
           templateRevisions: createTemplateRevisionRepositoryStub(),
-          profiles: createProfileRepositoryStub(),
-          templates: createTemplateRepositoryStub(),
           bindings: createBindingResolverStub(),
+        promptOptions: createPromptOptionsStub(),
         },
       );
 
@@ -534,9 +529,8 @@ describe('application/prompt-package', () => {
             restoredFromRevisionId: null,
           }),
         }),
-        profiles: createProfileRepositoryStub(),
-        templates: createTemplateRepositoryStub(),
         bindings: createBindingResolverStub(),
+        promptOptions: createPromptOptionsStub(),
       },
     );
 
@@ -655,9 +649,8 @@ describe('application/prompt-package', () => {
         promptPackages,
         profileRevisions,
         templateRevisions,
-        profiles: createProfileRepositoryStub(),
-        templates: createTemplateRepositoryStub(),
         bindings: createBindingResolverStub(),
+        promptOptions: createPromptOptionsStub(),
       },
     );
     run = 2;
@@ -676,9 +669,8 @@ describe('application/prompt-package', () => {
         promptPackages,
         profileRevisions,
         templateRevisions,
-        profiles: createProfileRepositoryStub(),
-        templates: createTemplateRepositoryStub(),
         bindings: createBindingResolverStub(),
+        promptOptions: createPromptOptionsStub(),
       },
     );
 
@@ -746,9 +738,8 @@ describe('application/prompt-package', () => {
           },
           profileRevisions: createProfileRevisionRepositoryStub(),
           templateRevisions: createTemplateRevisionRepositoryStub(),
-          profiles: createProfileRepositoryStub(),
-          templates: createTemplateRepositoryStub(),
           bindings: createBindingResolverStub(),
+          promptOptions: createPromptOptionsStub({ strictAllowlist: true }),
         },
       ),
     ).rejects.toThrow('profileId is not allowlisted');
@@ -795,12 +786,11 @@ describe('application/prompt-package', () => {
           },
           profileRevisions: createProfileRevisionRepositoryStub(),
           templateRevisions: createTemplateRevisionRepositoryStub(),
-          profiles: createProfileRepositoryStub(),
-          templates: createTemplateRepositoryStub(),
           bindings: createBindingResolverStub(),
+          promptOptions: createPromptOptionsStub(),
         },
       ),
-    ).rejects.toBeInstanceOf(ProfilePathError);
+    ).rejects.toThrow('profilePath must resolve within the configured profile root');
   });
 
   it('uses student-linked profileId when request does not specify profile selection', async () => {
@@ -859,13 +849,12 @@ describe('application/prompt-package', () => {
         promptPackages,
         profileRevisions,
         templateRevisions: createTemplateRevisionRepositoryStub(),
-        profiles: createProfileRepositoryStub(),
-        templates: createTemplateRepositoryStub(),
         bindings: createBindingResolverStub(),
+        promptOptions: createPromptOptionsStub(),
       },
     );
 
-    expect(result?.profilePath).toBe(studentProfilePath);
+    expect(result?.profilePath).toBe('profiles/student-a.md');
   });
 
   it('keeps explicit profileId and profilePath overrides ahead of student-linked defaults', async () => {
@@ -929,12 +918,11 @@ describe('application/prompt-package', () => {
         promptPackages,
         profileRevisions,
         templateRevisions: createTemplateRevisionRepositoryStub(),
-        profiles: createProfileRepositoryStub(),
-        templates: createTemplateRepositoryStub(),
         bindings: createBindingResolverStub(),
+        promptOptions: createPromptOptionsStub(),
       },
     );
-    expect(explicitIdResult?.profilePath).toBe(explicitProfilePath);
+    expect(explicitIdResult?.profilePath).toBe('profiles/explicit.md');
 
     const explicitPathResult = await createPromptPackage(
       {
@@ -953,12 +941,11 @@ describe('application/prompt-package', () => {
         promptPackages,
         profileRevisions,
         templateRevisions: createTemplateRevisionRepositoryStub(),
-        profiles: createProfileRepositoryStub(),
-        templates: createTemplateRepositoryStub(),
         bindings: createBindingResolverStub(),
+        promptOptions: createPromptOptionsStub(),
       },
     );
-    expect(explicitPathResult?.profilePath).toBe(explicitProfilePath);
+    expect(explicitPathResult?.profilePath).toBe('profiles/explicit.md');
   });
 
   it('resolves binding using recording creation time by default', async () => {
@@ -1031,14 +1018,13 @@ describe('application/prompt-package', () => {
         promptPackages: createPromptPackageRepositoryStub(),
         profileRevisions: createProfileRevisionRepositoryStub(),
         templateRevisions: createTemplateRevisionRepositoryStub(),
-        profiles: createProfileRepositoryStub(),
-        templates: createTemplateRepositoryStub(),
+        promptOptions: createPromptOptionsStub(),
       },
     );
 
     expect(resolvedAt).toHaveLength(1);
     expect(resolvedAt[0]?.toISOString()).toBe(recordingCreatedAt.toISOString());
-    expect(result?.profilePath).toBe(boundProfilePath);
+    expect(result?.profilePath).toBe('profiles/bound.md');
   });
 
   it('supports explicit bindingEffectiveAt override for replay diagnostics', async () => {
@@ -1113,8 +1099,7 @@ describe('application/prompt-package', () => {
         promptPackages: createPromptPackageRepositoryStub(),
         profileRevisions: createProfileRevisionRepositoryStub(),
         templateRevisions: createTemplateRevisionRepositoryStub(),
-        profiles: createProfileRepositoryStub(),
-        templates: createTemplateRepositoryStub(),
+        promptOptions: createPromptOptionsStub(),
       },
     );
 
@@ -1191,7 +1176,31 @@ function createProfileRevisionRepositoryStub(overrides: {
   return {
     getActive:
       overrides.getActive ??
-      (async () => null),
+      (async (profileId: string) => {
+        const contentByProfileId: Record<string, string> = {
+          'profile.md': 'PROFILE CONTENT\n',
+          'profiles/student-a.md': 'STUDENT PROFILE CONTENT\n',
+          'profiles/explicit.md': 'EXPLICIT PROFILE CONTENT\n',
+          'profiles/bound.md': 'BOUND PROFILE CONTENT\n',
+          'default-profile.md': 'DEFAULT PROFILE\n',
+        };
+        const content = contentByProfileId[profileId] ?? 'PROFILE CONTENT\n';
+        return {
+          id: `active-${profileId}`,
+          profileId,
+          content,
+          contentHash: createHash('sha256').update(content, 'utf8').digest('hex'),
+          source: 'update',
+          status: 'active',
+          versionNumber: 1,
+          versionLabel: 'v1',
+          activatedAt: new Date('2024-01-01T00:00:00Z'),
+          deprecatedAt: null,
+          createdAt: new Date('2024-01-01T00:00:00Z'),
+          createdBy: null,
+          restoredFromRevisionId: null,
+        } satisfies ProfileRevisionRecord;
+      }),
     getLatestByHash:
       overrides.getLatestByHash ??
       (async () => null),
@@ -1244,7 +1253,39 @@ function createTemplateRevisionRepositoryStub(overrides: {
   return {
     getActive:
       overrides.getActive ??
-      (async () => null),
+      (async (templateId: string) => {
+        const contentByTemplateId: Record<string, string> = {
+          'template.md': 'Hello\nINSERT PROFILE HERE\nFooter\n',
+          'hw_prompt_v4-4_voice-aligned.md': [
+            'Header',
+            'INSERT PROFILE HERE',
+            '```yaml',
+            '# CAPABILITY SNAPSHOT (injected dynamically per voice catalog refresh)',
+            'role: [narrator, teacher, student, system]',
+            'gender: [male, female, neutral, child]',
+            'age: [child, teen, young, adult, middle_aged, senior, universal]',
+            'accent: [<provider-backed values>]',
+            'style: [<provider-backed values>]',
+            '```',
+          ].join('\n'),
+        };
+        const content = contentByTemplateId[templateId] ?? 'Hello\nINSERT PROFILE HERE\nFooter\n';
+        return {
+          id: `active-${templateId}`,
+          templateId,
+          content,
+          contentHash: createHash('sha256').update(content, 'utf8').digest('hex'),
+          source: 'update',
+          status: 'active',
+          versionNumber: 1,
+          versionLabel: 'v1',
+          activatedAt: new Date('2024-01-01T00:00:00Z'),
+          deprecatedAt: null,
+          createdAt: new Date('2024-01-01T00:00:00Z'),
+          createdBy: null,
+          restoredFromRevisionId: null,
+        } satisfies TemplateRevisionRecord;
+      }),
     getLatestByHash:
       overrides.getLatestByHash ??
       (async () => null),
@@ -1287,52 +1328,78 @@ function createTemplateRevisionRepositoryStub(overrides: {
   };
 }
 
-function createProfileRepositoryStub() {
-  return {
-    upsert: async ({
-      id,
-      label,
-      activeRevisionId,
-    }: {
-      id: string;
-      label: string;
-      activeRevisionId?: string | null;
-    }): Promise<ProfileRecord> => ({
-      id,
-      label,
-      activeRevisionId: activeRevisionId ?? null,
-      createdAt: new Date('2024-01-01T00:00:00Z'),
-      updatedAt: new Date('2024-01-01T00:00:00Z'),
-    }),
-    setActive: async (): Promise<ProfileRecord | null> => null,
-  };
-}
-
-function createTemplateRepositoryStub() {
-  return {
-    upsert: async ({
-      id,
-      label,
-      activeRevisionId,
-    }: {
-      id: string;
-      label: string;
-      activeRevisionId?: string | null;
-    }): Promise<TemplateRecord> => ({
-      id,
-      label,
-      activeRevisionId: activeRevisionId ?? null,
-      createdAt: new Date('2024-01-01T00:00:00Z'),
-      updatedAt: new Date('2024-01-01T00:00:00Z'),
-    }),
-    setActive: async (): Promise<TemplateRecord | null> => null,
-  };
-}
-
 function createBindingResolverStub() {
   return {
     resolveAt: async () => null,
   };
+}
+
+function createPromptOptionsStub(options: {
+  strictAllowlist?: boolean;
+  allowedTemplateIds?: string[];
+  allowedProfileIds?: string[];
+} = {}) {
+  return {
+    resolveSelection: async (
+      params: {
+        templateId?: string | null;
+        profileId?: string | null;
+        profilePath?: string | null;
+      },
+      overrides?: Partial<{ config: BatchBackendConfig }>,
+    ) => {
+      const config = overrides?.config;
+      if (!config) throw new Error('config is required');
+
+      const defaultTemplateId = path.basename(config.prompt.templatePath).replaceAll('\\', '/');
+      const defaultProfileId = path.basename(config.prompt.defaultProfilePath).replaceAll('\\', '/');
+
+      const allowedTemplateIds = new Set([
+        defaultTemplateId,
+        ...(options.allowedTemplateIds ?? []),
+      ]);
+      const allowedProfileIds = new Set([
+        defaultProfileId,
+        ...(options.allowedProfileIds ?? []),
+      ]);
+
+      const templateId = params.templateId ?? defaultTemplateId;
+      if (options.strictAllowlist && !allowedTemplateIds.has(templateId)) {
+        throw new Error('templateId is not allowlisted');
+      }
+
+      let profileId = params.profileId ?? null;
+      if (!profileId && params.profilePath) {
+        const profileRoot = path.dirname(path.resolve(config.prompt.defaultProfilePath));
+        const candidate = path.isAbsolute(params.profilePath)
+          ? path.resolve(params.profilePath)
+          : path.resolve(profileRoot, params.profilePath);
+
+        if (!isWithinRoot(profileRoot, candidate)) {
+          throw new Error('profilePath must resolve within the configured profile root');
+        }
+
+        profileId = path.relative(profileRoot, candidate).split(path.sep).join('/');
+      }
+
+      const resolvedProfileId = profileId ?? defaultProfileId;
+      if (options.strictAllowlist && !allowedProfileIds.has(resolvedProfileId)) {
+        throw new Error('profileId is not allowlisted');
+      }
+
+      return {
+        templateId,
+        profileId: resolvedProfileId,
+        profilePath: resolvedProfileId,
+      };
+    },
+  };
+}
+
+function isWithinRoot(root: string, target: string): boolean {
+  const relative = path.relative(root, target);
+  if (!relative) return true;
+  return !relative.startsWith('..') && !path.isAbsolute(relative);
 }
 
 function createConfig(templatePath: string, profilePath: string): BatchBackendConfig {

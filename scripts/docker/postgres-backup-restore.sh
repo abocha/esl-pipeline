@@ -119,7 +119,7 @@ safe_label() {
 
 do_backup() {
   local label="${1:-}"
-  local stamp prefix plain_gz custom_dump schema_sql checksum_file tmp_dump_in_container
+  local stamp prefix plain_gz custom_dump schema_sql checksum_file
   local container_ref container_label
   container_ref="$(resolve_container_ref)"
   container_label="$(resolve_container_label)"
@@ -150,11 +150,8 @@ do_backup() {
 
   sha256sum "$plain_gz" "$custom_dump" "$schema_sql" > "$checksum_file"
 
-  # Sanity check custom-format header by reading TOC in container.
-  tmp_dump_in_container="/tmp/${prefix}.dump"
-  docker cp "$custom_dump" "${container_ref}:${tmp_dump_in_container}"
-  docker exec "$container_ref" sh -lc "pg_restore -l '${tmp_dump_in_container}' >/dev/null"
-  docker exec "$container_ref" sh -lc "rm -f '${tmp_dump_in_container}'"
+  # Sanity check custom-format backup by reading TOC through stdin in container.
+  cat "$custom_dump" | docker exec -i "$container_ref" sh -lc 'pg_restore -l >/dev/null'
 
   echo "Backup complete."
   echo "  plain:     $plain_gz"
@@ -177,7 +174,7 @@ do_list() {
 
 do_verify() {
   local backup_file="$1"
-  local checksum_file tmp_dump_in_container
+  local checksum_file
 
   if [[ ! -f "$backup_file" ]]; then
     echo "ERROR: file not found: $backup_file" >&2
@@ -207,10 +204,7 @@ do_verify() {
     ensure_container_running
     local container_ref
     container_ref="$(resolve_container_ref)"
-    tmp_dump_in_container="/tmp/verify_$(date +%s)_$(basename "$backup_file")"
-    docker cp "$backup_file" "${container_ref}:${tmp_dump_in_container}"
-    docker exec "$container_ref" sh -lc "pg_restore -l '${tmp_dump_in_container}' | head -n 20"
-    docker exec "$container_ref" sh -lc "rm -f '${tmp_dump_in_container}'"
+    cat "$backup_file" | docker exec -i "$container_ref" sh -lc "pg_restore -l | sed -n '1,20p'"
   fi
 }
 
@@ -232,16 +226,13 @@ do_restore() {
 
   case "$backup_file" in
     *.dump)
-      tmp_dump_in_container="/tmp/restore_$(date +%s)_$(basename "$backup_file")"
-      docker cp "$backup_file" "${container_ref}:${tmp_dump_in_container}"
       if [[ "$clean_mode" == "true" ]]; then
-        docker exec "$container_ref" env PGUSER="$DB_USER" PGDATABASE="$DB_NAME" sh -lc \
-          'pg_restore --clean --if-exists --no-owner --no-privileges -U "$PGUSER" -d "$PGDATABASE" "'"${tmp_dump_in_container}"'"'
+        cat "$backup_file" | docker exec -i "$container_ref" env PGUSER="$DB_USER" PGDATABASE="$DB_NAME" sh -lc \
+          'pg_restore --clean --if-exists --no-owner --no-privileges -U "$PGUSER" -d "$PGDATABASE"'
       else
-        docker exec "$container_ref" env PGUSER="$DB_USER" PGDATABASE="$DB_NAME" sh -lc \
-          'pg_restore --no-owner --no-privileges -U "$PGUSER" -d "$PGDATABASE" "'"${tmp_dump_in_container}"'"'
+        cat "$backup_file" | docker exec -i "$container_ref" env PGUSER="$DB_USER" PGDATABASE="$DB_NAME" sh -lc \
+          'pg_restore --no-owner --no-privileges -U "$PGUSER" -d "$PGDATABASE"'
       fi
-      docker exec "$container_ref" sh -lc "rm -f '${tmp_dump_in_container}'"
       ;;
     *.sql.gz)
       if [[ "$clean_mode" == "true" ]]; then

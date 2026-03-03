@@ -45,16 +45,25 @@ export function getModelLadderForProvider(
   provider: GenerationProvider,
 ): string[] {
   if (provider === 'openai') {
-    return uniqueNonEmpty([config.models.openai.primary, config.models.openai.fallback]);
+    return uniqueNonEmpty([
+      config.models.openai.primary,
+      config.models.openai.fallback,
+      ...config.models.openai.allowed,
+    ]);
   }
   if (provider === 'google_ai_studio') {
     return uniqueNonEmpty([
       config.models.googleAiStudio.primary,
       config.models.googleAiStudio.fallback,
       config.models.googleAiStudio.tertiary,
+      ...config.models.googleAiStudio.allowed,
     ]);
   }
-  return uniqueNonEmpty([config.models.openrouter.primary, config.models.openrouter.fallback]);
+  return uniqueNonEmpty([
+    config.models.openrouter.primary,
+    config.models.openrouter.fallback,
+    ...config.models.openrouter.allowed,
+  ]);
 }
 
 export function resolveGenerationCandidates(args: {

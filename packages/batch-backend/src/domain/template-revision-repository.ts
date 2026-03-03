@@ -250,6 +250,26 @@ export async function getActiveTemplateRevision(
   return row ? mapRow(row) : null;
 }
 
+export async function listTemplateIdsWithActiveRevision(
+  templateIds: readonly string[],
+): Promise<Set<string>> {
+  if (templateIds.length === 0) return new Set<string>();
+
+  const rows = await withPgClient(async (client: PoolClient) => {
+    const result = await client.query<{ template_id: string }>(
+      `
+      SELECT DISTINCT template_id
+      FROM template_revisions
+      WHERE template_id = ANY($1::text[]) AND status = 'active'
+      `,
+      [templateIds],
+    );
+    return result.rows;
+  });
+
+  return new Set(rows.map((row) => row.template_id));
+}
+
 export async function activateTemplateRevision(
   templateId: string,
   revisionId: string,
@@ -300,6 +320,25 @@ export async function activateTemplateRevision(
   });
 
   return row ? mapRow(row) : null;
+}
+
+export async function deprecateActiveTemplateRevision(templateId: string): Promise<number> {
+  const updated = await withPgClient(async (client: PoolClient) => {
+    const result = await client.query(
+      `
+      UPDATE template_revisions
+      SET
+        status = 'deprecated',
+        deprecated_at = COALESCE(deprecated_at, NOW()),
+        activated_at = NULL
+      WHERE template_id = $1 AND status = 'active'
+      `,
+      [templateId],
+    );
+    return result.rowCount ?? 0;
+  });
+
+  return updated;
 }
 
 export async function getLatestTemplateRevisionByHash(

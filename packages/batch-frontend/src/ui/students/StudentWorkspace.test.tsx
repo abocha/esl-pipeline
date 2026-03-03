@@ -8,20 +8,27 @@ import { StudentWorkspace } from './StudentWorkspace';
 
 vi.mock('../../utils/api', () => ({
   activateProfileRevision: vi.fn(),
+  activateTemplateRevision: vi.fn(),
   createStudentProfile: vi.fn(),
+  deleteTemplateContent: vi.fn(),
   fetchJobProvenance: vi.fn(),
   fetchPromptPackageLineage: vi.fn(),
   getProfileContent: vi.fn(),
   getStudentProfile: vi.fn(),
   getStudentTimeline: vi.fn(),
+  getTemplateContent: vi.fn(),
   listProfileContents: vi.fn(),
   listProfileRevisions: vi.fn(),
   listStudentProfileBindings: vi.fn(),
   listStudents: vi.fn(),
+  listTemplateContents: vi.fn(),
+  listTemplateRevisions: vi.fn(),
   listUserJobs: vi.fn(),
   restoreProfileRevision: vi.fn(),
+  restoreTemplateRevision: vi.fn(),
   updateStudentProfile: vi.fn(),
   upsertProfileContent: vi.fn(),
+  upsertTemplateContent: vi.fn(),
 }));
 
 const now = '2026-02-07T12:00:00.000Z';
@@ -79,6 +86,41 @@ describe('StudentWorkspace', () => {
           id: 'revision-1',
           profileId: 'profile-default.md',
           contentHash: 'hash-1',
+          source: 'create',
+          status: 'active',
+          versionNumber: 1,
+          versionLabel: 'v1',
+          activatedAt: now,
+          deprecatedAt: null,
+          createdAt: now,
+          createdBy: 'user-1',
+          restoredFromRevisionId: null,
+        },
+      ],
+      total: 1,
+      limit: 25,
+      offset: 0,
+      order: 'desc',
+    });
+
+    vi.mocked(api.listTemplateContents).mockResolvedValue({
+      templates: [{ id: 'template-default.md', label: 'Default Template' }],
+    });
+
+    vi.mocked(api.getTemplateContent).mockResolvedValue({
+      id: 'template-default.md',
+      label: 'Default Template',
+      content: String.raw`HEADER\nINSERT PROFILE HERE\nFOOTER`,
+      currentRevisionId: 'template-revision-1',
+      updatedAt: now,
+    });
+
+    vi.mocked(api.listTemplateRevisions).mockResolvedValue({
+      items: [
+        {
+          id: 'template-revision-1',
+          templateId: 'template-default.md',
+          contentHash: 'template-hash-1',
           source: 'create',
           status: 'active',
           versionNumber: 1,
@@ -313,6 +355,40 @@ describe('StudentWorkspace', () => {
       updatedAt: now,
     });
 
+    vi.mocked(api.upsertTemplateContent).mockResolvedValue({
+      id: 'template-default.md',
+      label: 'Default Template',
+      content: String.raw`HEADER\nINSERT PROFILE HERE\nFOOTER`,
+      currentRevisionId: 'template-revision-2',
+      updatedAt: now,
+    });
+
+    vi.mocked(api.restoreTemplateRevision).mockResolvedValue({
+      id: 'template-default.md',
+      label: 'Default Template',
+      content: String.raw`HEADER\nINSERT PROFILE HERE\nFOOTER`,
+      currentRevisionId: 'template-revision-1',
+      updatedAt: now,
+    });
+
+    vi.mocked(api.activateTemplateRevision).mockResolvedValue({
+      id: 'template-revision-1',
+      templateId: 'template-default.md',
+      contentHash: 'template-hash-1',
+      source: 'create',
+      status: 'active',
+      versionNumber: 1,
+      versionLabel: 'v1',
+      activatedAt: now,
+      deprecatedAt: null,
+      createdAt: now,
+      createdBy: 'user-1',
+      restoredFromRevisionId: null,
+      content: String.raw`HEADER\nINSERT PROFILE HERE\nFOOTER`,
+    });
+
+    vi.mocked(api.deleteTemplateContent).mockResolvedValue();
+
     vi.mocked(api.createStudentProfile).mockResolvedValue({
       id: 'student-created',
       student: 'Created Student',
@@ -452,6 +528,56 @@ describe('StudentWorkspace', () => {
       expect(api.updateStudentProfile).toHaveBeenCalledWith('student-default', {
         profileId: 'profile-alt.md',
       });
+    });
+  });
+
+  it('saves template content from template gallery panel', async () => {
+    const user = userEvent.setup();
+    renderWorkspace();
+
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: /Save Template Content/i })).toBeTruthy();
+    });
+
+    const templateEditor = screen.getByPlaceholderText(
+      /Select a template to edit/i,
+    ) as HTMLTextAreaElement;
+    await user.clear(templateEditor);
+    await user.type(templateEditor, String.raw`HEADER\nINSERT PROFILE HERE\nUPDATED`);
+    await user.click(screen.getByRole('button', { name: /Save Template Content/i }));
+
+    await waitFor(() => {
+      expect(api.upsertTemplateContent).toHaveBeenCalledWith(
+        'template-default.md',
+        expect.stringContaining('INSERT PROFILE HERE'),
+      );
+    });
+  });
+
+  it('creates template with scaffold marker on its own line', async () => {
+    const user = userEvent.setup();
+    vi.mocked(api.upsertTemplateContent).mockResolvedValue({
+      id: 'hw/custom-template.md',
+      label: 'Custom Template',
+      content: '## Prompt\n\nINSERT PROFILE HERE\n\n## Transcript\n',
+      currentRevisionId: 'template-revision-3',
+      updatedAt: now,
+    });
+
+    renderWorkspace();
+
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: /Create Template/i })).toBeTruthy();
+    });
+
+    await user.type(screen.getByLabelText(/New template ID/i), 'hw/custom-template.md');
+    await user.click(screen.getByRole('button', { name: /Create Template/i }));
+
+    await waitFor(() => {
+      expect(api.upsertTemplateContent).toHaveBeenCalledWith(
+        'hw/custom-template.md',
+        '## Prompt\n\nINSERT PROFILE HERE\n\n## Transcript\n',
+      );
     });
   });
 
