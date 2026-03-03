@@ -143,6 +143,12 @@ Provider auth/runtime identity vars:
 - `OPENAI_API_KEY`
 - `GEMINI_API_KEY` (Google AI Studio API key for `@google/genai`)
 - `OPENROUTER_API_KEY`
+
+Operator note for key rotation:
+
+- To switch Google AI Studio accounts/tiers, update only `GEMINI_API_KEY` in `.env.batch-backend`,
+  then recreate `batch-backend` and `batch-worker` so runtime config reloads:
+  `docker compose -f docker-compose.yml up -d --force-recreate batch-backend batch-worker`.
 - `OPENROUTER_HTTP_REFERER` (optional telemetry/ranking header)
 - `OPENROUTER_X_TITLE` (optional telemetry/ranking header)
 

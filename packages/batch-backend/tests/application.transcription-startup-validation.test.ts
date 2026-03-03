@@ -1,7 +1,7 @@
 import fs from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it } from 'vitest';
 
 import { validateTranscriptionConfig } from '../src/application/validate-transcription-config.js';
 import { loadConfig } from '../src/config/env.js';
@@ -17,23 +17,12 @@ afterEach(async () => {
   const cleanup = tempDirs.map((dir) => fs.rm(dir, { recursive: true, force: true }));
   tempDirs = [];
   await Promise.all(cleanup);
-  vi.restoreAllMocks();
 });
 
 describe('validateTranscriptionConfig', () => {
-  it('passes when storage and prompt paths are valid', async () => {
+  it('passes when storage is writable and prompt catalog defaults are active', async () => {
     const root = await makeTempDir('esl-transcription-');
     tempDirs.push(root);
-
-    const promptRoot = path.join(root, 'prompts');
-    await fs.mkdir(promptRoot, { recursive: true });
-    const templatePath = path.join(promptRoot, 'template.md');
-    await fs.writeFile(templatePath, '# Template');
-
-    const profileRoot = path.join(root, 'profiles');
-    await fs.mkdir(profileRoot, { recursive: true });
-    const profilePath = path.join(profileRoot, 'profile.md');
-    await fs.writeFile(profilePath, '# Profile');
 
     const uploadDir = path.join(root, 'uploads');
     const storageConfig = createStorageConfigService({
@@ -41,32 +30,55 @@ describe('validateTranscriptionConfig', () => {
       filesystem: { uploadDir },
     });
 
-    const baseConfig = loadConfig();
-    const config = {
-      ...baseConfig,
-      prompt: {
-        ...baseConfig.prompt,
-        templatePath,
-        defaultProfilePath: profilePath,
-      },
-    };
+    const config = loadConfig();
 
-    await expect(validateTranscriptionConfig({ config, storageConfig })).resolves.toBeUndefined();
+    await expect(
+      validateTranscriptionConfig({
+        config,
+        storageConfig,
+        promptOptionsLoader: async () => ({
+          templates: [{ id: 'template.md', label: 'Template' }],
+          profiles: [{ id: 'profile.md', label: 'Profile' }],
+          defaults: {
+            templateId: 'template.md',
+            profileId: 'profile.md',
+          },
+        }),
+      }),
+    ).resolves.toBeUndefined();
+  });
+
+  it('fails when prompt defaults are not active in DB catalog', async () => {
+    const root = await makeTempDir('esl-transcription-');
+    tempDirs.push(root);
+
+    const uploadDir = path.join(root, 'uploads');
+    const storageConfig = createStorageConfigService({
+      provider: 'filesystem',
+      filesystem: { uploadDir },
+    });
+
+    const config = loadConfig();
+
+    await expect(
+      validateTranscriptionConfig({
+        config,
+        storageConfig,
+        promptOptionsLoader: async () => ({
+          templates: [{ id: 'template.md', label: 'Template' }],
+          profiles: [{ id: 'profile.md', label: 'Profile' }],
+          defaults: {
+            templateId: null,
+            profileId: null,
+          },
+        }),
+      }),
+    ).rejects.toThrow('Prompt defaults are not active in the DB catalog');
   });
 
   it('throws when filesystem upload dir cannot be created', async () => {
     const root = await makeTempDir('esl-transcription-');
     tempDirs.push(root);
-
-    const promptRoot = path.join(root, 'prompts');
-    await fs.mkdir(promptRoot, { recursive: true });
-    const templatePath = path.join(promptRoot, 'template.md');
-    await fs.writeFile(templatePath, '# Template');
-
-    const profileRoot = path.join(root, 'profiles');
-    await fs.mkdir(profileRoot, { recursive: true });
-    const profilePath = path.join(profileRoot, 'profile.md');
-    await fs.writeFile(profilePath, '# Profile');
 
     const uploadDir = path.join(root, 'uploads');
     await fs.writeFile(uploadDir, 'not-a-dir');
@@ -76,18 +88,21 @@ describe('validateTranscriptionConfig', () => {
       filesystem: { uploadDir },
     });
 
-    const baseConfig = loadConfig();
-    const config = {
-      ...baseConfig,
-      prompt: {
-        ...baseConfig.prompt,
-        templatePath,
-        defaultProfilePath: profilePath,
-      },
-    };
+    const config = loadConfig();
 
-    await expect(validateTranscriptionConfig({ config, storageConfig })).rejects.toThrow(
-      'Unable to create filesystem upload directory',
-    );
+    await expect(
+      validateTranscriptionConfig({
+        config,
+        storageConfig,
+        promptOptionsLoader: async () => ({
+          templates: [{ id: 'template.md', label: 'Template' }],
+          profiles: [{ id: 'profile.md', label: 'Profile' }],
+          defaults: {
+            templateId: 'template.md',
+            profileId: 'profile.md',
+          },
+        }),
+      }),
+    ).rejects.toThrow('Unable to create filesystem upload directory');
   });
 });

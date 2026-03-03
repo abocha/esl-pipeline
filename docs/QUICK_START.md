@@ -64,6 +64,9 @@ If host port `8080` is unavailable in Docker Desktop:
 BATCH_BACKEND_HOST_PORT=8081 pnpm docker:up
 ```
 
+Common cause: another app (for example qBittorrent Web UI) is already using `8080`.
+Close that app or keep using the backend host-port override.
+
 Optional: create and archive a Postgres backup set to S3:
 
 ```bash

@@ -302,6 +302,25 @@ export async function activateTemplateRevision(
   return row ? mapRow(row) : null;
 }
 
+export async function deprecateActiveTemplateRevision(templateId: string): Promise<number> {
+  const updated = await withPgClient(async (client: PoolClient) => {
+    const result = await client.query(
+      `
+      UPDATE template_revisions
+      SET
+        status = 'deprecated',
+        deprecated_at = COALESCE(deprecated_at, NOW()),
+        activated_at = NULL
+      WHERE template_id = $1 AND status = 'active'
+      `,
+      [templateId],
+    );
+    return result.rowCount ?? 0;
+  });
+
+  return updated;
+}
+
 export async function getLatestTemplateRevisionByHash(
   templateId: string,
   contentHash: string,
