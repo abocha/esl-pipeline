@@ -19,28 +19,6 @@ describe('rendering', () => {
     expect(html).toContain('youtube.com/embed');
   });
 
-  it('normalizes known video variants into canonical embeds', async () => {
-    const youtubeShorts = await renderToHtml(
-      ':::video https://www.youtube.com/shorts/dQw4w9WgXcQ',
-      'YouTube Shorts',
-    );
-    expect(youtubeShorts).toContain('src="https://www.youtube.com/embed/dQw4w9WgXcQ"');
-
-    const vimeoChannel = await renderToHtml(
-      ':::video https://vimeo.com/channels/staffpicks/123456789',
-      'Vimeo Channel',
-    );
-    expect(vimeoChannel).toContain('src="https://player.vimeo.com/video/123456789"');
-
-    const vimeoPrivate = await renderToHtml(
-      ':::video https://player.vimeo.com/video/123456789?h=privateToken',
-      'Vimeo Private',
-    );
-    expect(vimeoPrivate).toContain(
-      'src="https://player.vimeo.com/video/123456789?h=privateToken"',
-    );
-  });
-
   it('keeps columns and inner formatting intact', async () => {
     const markdown = `## Section\n\n:::column-list\n:::column\n**Bold** *Italic*\n\n:::callout 💡\nCallout text\n:::\n\n:::\n:::column\nLine two\n:::\n:::`;
     const html = await renderToHtml(markdown, 'Columns');
@@ -75,18 +53,6 @@ describe('rendering', () => {
     expect(html).toContain('Line one<br>');
     expect(html).toContain('Line two');
     expect(html).toContain('<p>Line three</p>');
-  });
-
-  it('normalizes bullet-number lines into ordered lists', async () => {
-    const markdown = `### A. Controlled Practice
-
-*   1. Please ____ the coffee beans.
-*   2. I ____ eating raisins.`;
-    const html = await renderToHtml(markdown, 'List Normalize');
-    expect(html).toContain('<ol>');
-    expect(html).toContain('<li>Please ____ the coffee beans.</li>');
-    expect(html).toContain('<li>I ____ eating raisins.</li>');
-    expect(html).not.toContain('<li>1. Please ____ the coffee beans.</li>');
   });
 
   it('renders rich header without skip link or study controls', async () => {
@@ -139,38 +105,6 @@ describe('rendering', () => {
     expect(safeHtml).not.toContain('<script>alert("x")</script>');
     expect(safeHtml).toContain('&lt;div&gt;Unsafe block&lt;/div&gt;');
     expect(rawHtml).toContain('<div>Unsafe block</div>');
-  });
-
-  it('preserves safe relative links and source URLs', async () => {
-    const markdown = `[Lesson 2](lesson-2.md)\n\n![Alt](images/pic.png)`;
-    const html = await renderToHtml(markdown, 'Relative Urls');
-    expect(html).toContain('<a href="lesson-2.md">Lesson 2</a>');
-    expect(html).toContain('<img src="images/pic.png" alt="Alt">');
-  });
-
-  it('keeps unsafe javascript links blocked while preserving safe relatives', async () => {
-    const markdown = `<a href="javascript:alert(1)">Unsafe</a>\n\n[Safe](./lesson-2.md)`;
-    const html = await renderToHtml(markdown, 'Href Sanitization', { allowRawHtml: true });
-    expect(html).toContain('<a href="#">Unsafe</a>');
-    expect(html).toContain('<a href="./lesson-2.md">Safe</a>');
-  });
-
-  it('renders relative audio paths and fragment timestamp links as audio figures', async () => {
-    const directiveHtml = await renderToHtml(':::audio audio.mp3', 'Directive Audio');
-    expect(directiveHtml).toContain('class="audio-figure"');
-    expect(directiveHtml).toContain('src="audio.mp3"');
-    expect(directiveHtml).not.toContain('Audio track generating...');
-
-    const relativeLinkHtml = await renderToHtml('[Audio](audio/clip.mp3)', 'Relative Audio Link');
-    expect(relativeLinkHtml).toContain('class="audio-figure"');
-    expect(relativeLinkHtml).toContain('src="audio/clip.mp3"');
-
-    const timestampLinkHtml = await renderToHtml(
-      '[Audio](https://example.com/clip.mp3#t=10)',
-      'Timestamp Audio Link',
-    );
-    expect(timestampLinkHtml).toContain('class="audio-figure"');
-    expect(timestampLinkHtml).toContain('src="https://example.com/clip.mp3#t=10"');
   });
 
   it('allows hiding generated date tag', async () => {

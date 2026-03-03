@@ -53,26 +53,10 @@ pnpm esl status --md ./lessons/mission.md
 ## Batch System (Optional)
 
 ```bash
-pnpm docker:up
+docker compose up -d
 ```
 
 Then open `http://localhost:5173`.
-
-If host port `8080` is unavailable in Docker Desktop:
-
-```bash
-BATCH_BACKEND_HOST_PORT=8081 pnpm docker:up
-```
-
-Optional: create and archive a Postgres backup set to S3:
-
-```bash
-pnpm docker:db:backup:s3 -- quickstart_checkpoint
-```
-
-Requires backup env vars (`PG_BACKUP_S3_BUCKET`, `PG_BACKUP_S3_REGION`, and
-`PG_BACKUP_S3_KMS_KEY_ID` when using `PG_BACKUP_S3_SSE=aws:kms`).
-Full ops guide: `docs/operations/postgres-backup-s3.md`.
 
 ## Do / Don't
 
