@@ -1,9 +1,8 @@
-name: esl-pipeline-dev
+name: ${COMPOSE_PROJECT_NAME:-esl-pipeline}
 
 services:
   batch-backend:
     image: esl-pipeline/dev-node:local
-    container_name: esl-batch-backend
     depends_on:
       deps:
         condition: service_completed_successfully
@@ -29,7 +28,7 @@ services:
     env_file:
       - .env.batch-backend
     ports:
-      - '127.0.0.1:8080:8080'
+      - '127.0.0.1:${BATCH_BACKEND_HOST_PORT:-8080}:8080'
     command: >
       sh -lc "
         pnpm --filter @esl-pipeline/batch-backend dev:api
@@ -42,7 +41,6 @@ services:
     build:
       context: .
       dockerfile: packages/batch-frontend/Dockerfile.dev
-    container_name: esl-batch-frontend
     depends_on:
       deps:
         condition: service_completed_successfully
@@ -56,7 +54,7 @@ services:
       PNPM_STORE_DIR: /pnpm/store
       NPM_CONFIG_STORE_DIR: /pnpm/store
     ports:
-      - '0.0.0.0:5173:5173'
+      - '0.0.0.0:${BATCH_FRONTEND_HOST_PORT:-5173}:5173'
     command: >
       sh -lc "
         pnpm --filter @esl-pipeline/batch-frontend dev --host 0.0.0.0
@@ -66,7 +64,6 @@ services:
 
   batch-worker:
     image: esl-pipeline/dev-node:local
-    container_name: esl-batch-worker
     depends_on:
       deps:
         condition: service_completed_successfully
@@ -103,7 +100,6 @@ services:
     build:
       context: .
       dockerfile: packages/batch-backend/Dockerfile.dev
-    container_name: esl-dev-deps
     volumes:
       - ./:/app
       - workspace_node_modules:/app/node_modules
@@ -126,7 +122,6 @@ services:
     pull_policy: never
   postgres:
     image: postgres:18-alpine
-    container_name: esl-backend-postgres
     # Persistent DB (named volume).
     volumes:
       - postgres18_data:/var/lib/postgresql
@@ -147,7 +142,6 @@ services:
 
   redis:
     image: redis:alpine
-    container_name: esl-backend-redis
     # Persistent data (named volume).
     volumes:
       - redis_data:/data
@@ -162,7 +156,6 @@ services:
 
   transcribe-worker:
     image: esl-pipeline/dev-node:local
-    container_name: esl-transcribe-worker
     depends_on:
       deps:
         condition: service_completed_successfully
@@ -197,7 +190,6 @@ services:
 volumes:
   postgres_data:
   postgres18_data:
-    name: esl-pipeline_postgres18_data
   redis_data:
   workspace_node_modules:
   workspace_pnpm_store:
