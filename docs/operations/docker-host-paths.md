@@ -14,7 +14,8 @@ If host paths are missing, Docker may auto-create them with root ownership and c
   - Host local pnpm commands use repo-local `.npmrc` (`store-dir=.pnpm-store/v10`).
   - Docker dev services use named volumes:
     - `workspace_node_modules` mounted at `/app/node_modules`
-    - `workspace_pnpm_store` mounted at `/pnpm/store`
+    - `workspace_pnpm_store` mounted at `/pnpm` (with `PNPM_STORE_DIR=/pnpm/store`)
+  - `deps` bootstraps dependency volume permissions, then hands ownership back to `${UID}:${GID}`.
 - Source code is still bind-mounted at `/app` for live reload.
 - This avoids host/container dependency churn while preserving fast Docker restarts.
 
@@ -39,18 +40,39 @@ Fix ownership on host, then restart:
 
 ```bash
 sudo chown -R "$(id -un):$(id -gn)" uploads
-docker compose down
+pnpm docker:dev:down
 pnpm docker:up
 ```
+
+## Backend Host Port Override
+
+If Docker Desktop reports a port-forward error for `127.0.0.1:8080`, keep the stack
+managed by Compose and change only the host-side backend port:
+
+```bash
+BATCH_BACKEND_HOST_PORT=8081 pnpm docker:up
+```
+
+Frontend still runs on `http://localhost:5173`, and backend becomes
+`http://127.0.0.1:8081`.
+
+## Recover a Drifted Dev Stack
+
+If a service was started as a one-off container and appears outside the Compose group:
+
+```bash
+pnpm docker:dev:recover
+```
+
+This command removes stale one-off `batch-backend` containers and restarts the stack
+under the canonical project name.
 
 ## Reset Docker Dependency Volumes (When Needed)
 
 If Docker dependency state gets corrupted:
 
 ```bash
-docker compose down --remove-orphans
+pnpm docker:dev:down
 docker volume rm esl-pipeline_workspace_node_modules esl-pipeline_workspace_pnpm_store
 pnpm docker:up
 ```
-
-Adjust volume names if your compose project name differs.
