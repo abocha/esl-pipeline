@@ -14,6 +14,10 @@ This is the "no-thinking required" re-entry path.
 
 If you open only these 4 files, you are back on track.
 
+If you are touching backup operations, also open:
+
+- `docs/operations/postgres-backup-s3.md` (daily/monthly scheduler + restore drill commands)
+
 ## 10-Minute Reboot (Do in Order)
 
 1. Run `git status --short` and do not fix everything. Just observe.
