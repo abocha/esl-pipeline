@@ -12,6 +12,25 @@ function createConfig(templatePath: string, profilePath: string): BatchBackendCo
   } as BatchBackendConfig;
 }
 
+function createActiveRevisionDependencies(
+  activeTemplateIds: readonly string[],
+  activeProfileIds: readonly string[],
+) {
+  const activeTemplateSet = new Set(activeTemplateIds);
+  const activeProfileSet = new Set(activeProfileIds);
+
+  return {
+    templateRevisions: {
+      listIdsWithActiveRevision: async (templateIds: readonly string[]) =>
+        new Set(templateIds.filter((id) => activeTemplateSet.has(id))),
+    },
+    profileRevisions: {
+      listIdsWithActiveRevision: async (profileIds: readonly string[]) =>
+        new Set(profileIds.filter((id) => activeProfileSet.has(id))),
+    },
+  };
+}
+
 describe('application/prompt-options', () => {
   it('returns active-only prompt catalog and DB-backed defaults', async () => {
     const config = createConfig(
@@ -21,6 +40,7 @@ describe('application/prompt-options', () => {
 
     const options = await getPromptOptions({
       config,
+      ...createActiveRevisionDependencies(['default-template.md'], ['default-profile.md']),
       templates: {
         list: async () => ({
           items: [
@@ -88,6 +108,7 @@ describe('application/prompt-options', () => {
 
     const options = await getPromptOptions({
       config,
+      ...createActiveRevisionDependencies(['other-template.md'], ['other-profile.md']),
       templates: {
         list: async () => ({
           items: [
@@ -145,6 +166,10 @@ describe('application/prompt-options', () => {
       },
       {
         config,
+        ...createActiveRevisionDependencies(
+          ['default-template.md'],
+          ['default-profile.md', 'nested/custom-profile.md'],
+        ),
         templates: {
           list: async () => ({
             items: [
@@ -221,6 +246,10 @@ describe('application/prompt-options', () => {
 
     const options = await getPromptOptions({
       config,
+      ...createActiveRevisionDependencies(
+        templateItems.map((template) => template.id),
+        profileItems.map((profile) => profile.id),
+      ),
       templates: {
         list: async (params = {}) => {
           const { limit = 500, offset = 0, order = 'asc' } = params;
@@ -259,5 +288,59 @@ describe('application/prompt-options', () => {
     expect(options.profiles.some((profile) => profile.id === 'profile-549.md')).toBe(true);
     expect(templateListCalls.length).toBeGreaterThan(1);
     expect(profileListCalls.length).toBeGreaterThan(1);
+  });
+
+  it('excludes prompts when pointer exists but no active revision is confirmed', async () => {
+    const config = createConfig('docs/templates/default-template.md', 'docs/profiles/default-profile.md');
+
+    const options = await getPromptOptions({
+      config,
+      ...createActiveRevisionDependencies([], []),
+      templates: {
+        list: async () => ({
+          items: [
+            {
+              id: 'default-template.md',
+              label: 'Default Template',
+              activeRevisionId: 'stale-template-pointer',
+              createdAt: new Date('2026-01-01T00:00:00.000Z'),
+              updatedAt: new Date('2026-01-01T00:00:00.000Z'),
+            },
+          ],
+          total: 1,
+          limit: 500,
+          offset: 0,
+          order: 'asc',
+        }),
+        getById: async () => null,
+      },
+      profiles: {
+        list: async () => ({
+          items: [
+            {
+              id: 'default-profile.md',
+              label: 'Default Profile',
+              activeRevisionId: 'stale-profile-pointer',
+              createdAt: new Date('2026-01-01T00:00:00.000Z'),
+              updatedAt: new Date('2026-01-01T00:00:00.000Z'),
+            },
+          ],
+          total: 1,
+          limit: 500,
+          offset: 0,
+          order: 'asc',
+        }),
+        getById: async () => null,
+      },
+    });
+
+    expect(options).toEqual({
+      templates: [],
+      profiles: [],
+      defaults: {
+        templateId: null,
+        profileId: null,
+      },
+    });
   });
 });

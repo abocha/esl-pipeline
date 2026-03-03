@@ -3,8 +3,10 @@ import path from 'node:path';
 import type { BatchBackendConfig } from '../config/env.js';
 import { loadConfig } from '../config/env.js';
 import type { ProfileRecord } from '../domain/profile-model.js';
+import { listProfileIdsWithActiveRevision } from '../domain/profile-revision-repository.js';
 import { getProfileById, listProfiles } from '../domain/profile-repository.js';
 import type { TemplateRecord } from '../domain/template-model.js';
+import { listTemplateIdsWithActiveRevision } from '../domain/template-revision-repository.js';
 import { getTemplateById, listTemplates } from '../domain/template-repository.js';
 import { resolveRepoPath } from './prompt-assembly.js';
 
@@ -47,9 +49,15 @@ export interface PromptSelectionResult {
 
 interface PromptOptionsDependencies {
   config: BatchBackendConfig;
+  profileRevisions: {
+    listIdsWithActiveRevision: typeof listProfileIdsWithActiveRevision;
+  };
   profiles: {
     list: typeof listProfiles;
     getById: typeof getProfileById;
+  };
+  templateRevisions: {
+    listIdsWithActiveRevision: typeof listTemplateIdsWithActiveRevision;
   };
   templates: {
     list: typeof listTemplates;
@@ -73,9 +81,15 @@ function getDependencies(
 ): PromptOptionsDependencies {
   return {
     config: overrides?.config ?? loadConfig(),
+    profileRevisions: overrides?.profileRevisions ?? {
+      listIdsWithActiveRevision: listProfileIdsWithActiveRevision,
+    },
     profiles: overrides?.profiles ?? {
       list: listProfiles,
       getById: getProfileById,
+    },
+    templateRevisions: overrides?.templateRevisions ?? {
+      listIdsWithActiveRevision: listTemplateIdsWithActiveRevision,
     },
     templates: overrides?.templates ?? {
       list: listTemplates,
@@ -219,8 +233,17 @@ async function loadPromptOptionLists(
     listAllProfileRecords(dependencies),
   ]);
 
-  const templates = toActivePromptOptions(templateRecords);
-  const profiles = toActivePromptOptions(profileRecords);
+  const [activeTemplateIds, activeProfileIds] = await Promise.all([
+    dependencies.templateRevisions.listIdsWithActiveRevision(
+      templateRecords.map((template) => template.id),
+    ),
+    dependencies.profileRevisions.listIdsWithActiveRevision(
+      profileRecords.map((profile) => profile.id),
+    ),
+  ]);
+
+  const templates = toActivePromptOptions(templateRecords, activeTemplateIds);
+  const profiles = toActivePromptOptions(profileRecords, activeProfileIds);
 
   const defaultTemplateId = resolveDefaultId(
     dependencies.config.prompt.templatePath,
@@ -363,9 +386,12 @@ function resolveProfileIdFromPathInput(inputPath: string, profileRoot: string): 
   return normalizePromptId(relative, 'profile');
 }
 
-function toActivePromptOptions(records: (ProfileRecord | TemplateRecord)[]): PromptOptionWithPath[] {
+function toActivePromptOptions(
+  records: (ProfileRecord | TemplateRecord)[],
+  confirmedActiveIds: ReadonlySet<string>,
+): PromptOptionWithPath[] {
   return records
-    .filter((record) => Boolean(record.activeRevisionId))
+    .filter((record) => Boolean(record.activeRevisionId) && confirmedActiveIds.has(record.id))
     .map((record) => ({
       id: record.id,
       label: record.label,
