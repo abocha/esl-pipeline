@@ -144,13 +144,10 @@ if [[ "$auto_run_enabled" == "true" ]]; then
     exit 1
   fi
 
+  echo "[$(date -Iseconds)] Auto-running download-only restore drill..." | tee -a "$log_file"
   set +e
-  {
-    echo "[$(date -Iseconds)] Auto-running download-only restore drill..."
-    "$BACKUP_S3_SCRIPT" restore-remote "$latest_key" --download-only
-    echo "[$(date -Iseconds)] Auto drill completed successfully."
-  } | tee -a "$log_file"
-  auto_drill_rc=$?
+  "$BACKUP_S3_SCRIPT" restore-remote "$latest_key" --download-only 2>&1 | tee -a "$log_file"
+  auto_drill_rc=${PIPESTATUS[0]}
   set -e
 
   if [[ "$auto_drill_rc" -ne 0 ]]; then
@@ -159,6 +156,7 @@ if [[ "$auto_run_enabled" == "true" ]]; then
     write_report
     exit "$auto_drill_rc"
   fi
+  echo "[$(date -Iseconds)] Auto drill completed successfully." | tee -a "$log_file"
   drill_result="auto_download_only_ok"
 fi
 
