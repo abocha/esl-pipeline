@@ -846,24 +846,27 @@ function preprocessMarkdown(markdown: string, allowRawHtml: boolean): string {
   let fencedBy: '```' | '~~~' | null = null;
 
   for (const line of lines) {
-    const normalizedLine = normalizeDirectiveLine(line);
-    const trimmed = normalizedLine.trim();
+    const directiveNormalizedLine = normalizeDirectiveLine(line);
+    const directiveTrimmed = directiveNormalizedLine.trim();
 
-    if (isFenceLine(trimmed)) {
-      const fence = trimmed.startsWith('```') ? '```' : '~~~';
+    if (isFenceLine(directiveTrimmed)) {
+      const fence = directiveTrimmed.startsWith('```') ? '```' : '~~~';
       if (fencedBy && fence === fencedBy) {
         fencedBy = null;
       } else if (!fencedBy) {
         fencedBy = fence;
       }
-      out.push(normalizedLine);
+      out.push(directiveNormalizedLine);
       continue;
     }
 
     if (fencedBy) {
-      out.push(normalizedLine);
+      out.push(directiveNormalizedLine);
       continue;
     }
+
+    const normalizedLine = normalizeBulletedNumberedListLine(directiveNormalizedLine);
+    const trimmed = normalizedLine.trim();
 
     if (/^:::\s*toc$/.test(trimmed)) {
       out.push('[[toc]]');
@@ -1019,6 +1022,18 @@ function normalizeDirectiveLine(line: string): string {
   return line;
 }
 
+function normalizeBulletedNumberedListLine(line: string): string {
+  const match = /^(\s*)[*-]\s+(\d+)\.\s+(.+)$/.exec(line);
+  if (!match) return line;
+  const indent = match[1] ?? '';
+  const number = match[2] ?? '';
+  const rest = match[3] ?? '';
+  if (indent.length > 3) {
+    return line;
+  }
+  return `${indent}${number}. ${rest}`;
+}
+
 function resolveTitle(markdown: string, explicitTitle?: string, frontmatter?: Frontmatter): string {
   if (explicitTitle && explicitTitle.trim().length > 0) {
     return explicitTitle.trim();
@@ -1122,12 +1137,8 @@ function buildVideoEmbed(url: string): string {
 
   const vimeoId = extractVimeoId(parsed);
   if (vimeoId) {
-    const src = `https://player.vimeo.com/video/${vimeoId}`;
+    const src = `https://player.vimeo.com/video/${vimeoId}${parsed.search || ''}`;
     return `<div class="video-embed"><iframe src="${src}" allowfullscreen loading="lazy" referrerpolicy="strict-origin-when-cross-origin"></iframe></div>`;
-  }
-
-  if (isAllowedEmbedUrl(parsed.href)) {
-    return `<div class="video-embed"><iframe src="${escapeHtmlAttribute(parsed.href)}" allowfullscreen loading="lazy" referrerpolicy="strict-origin-when-cross-origin"></iframe></div>`;
   }
 
   const safeHref = sanitizeLinkHref(parsed.href);
@@ -1161,6 +1172,10 @@ function extractYouTubeId(url: URL): string | null {
       const id = url.pathname.replace('/embed/', '').split('/')[0] ?? '';
       return /^[\w-]{6,}$/.test(id) ? id : null;
     }
+    if (url.pathname.startsWith('/shorts/')) {
+      const id = url.pathname.replace('/shorts/', '').split('/')[0] ?? '';
+      return /^[\w-]{6,}$/.test(id) ? id : null;
+    }
   }
 
   if (host === 'youtu.be') {
@@ -1175,8 +1190,34 @@ function extractVimeoId(url: URL): string | null {
   if (!isHostOrSubdomain(url.hostname.toLowerCase(), 'vimeo.com')) {
     return null;
   }
-  const id = url.pathname.replace(/^\//, '').split('/')[0] ?? '';
-  return /^\d+$/.test(id) ? id : null;
+  const normalizedPath = url.pathname.replaceAll(/^\/+/g, '').replaceAll(/\/+$/g, '');
+  const segments = normalizedPath.split('/').filter(Boolean);
+  if (segments.length === 0) {
+    return null;
+  }
+
+  const direct = segments[0] ?? '';
+  if (/^\d+$/.test(direct)) {
+    return direct;
+  }
+
+  if (segments[0] === 'video' && /^\d+$/.test(segments[1] ?? '')) {
+    return segments[1] ?? null;
+  }
+
+  if (segments[0] === 'channels' && /^\d+$/.test(segments[2] ?? '')) {
+    return segments[2] ?? null;
+  }
+
+  if (segments[0] === 'groups' && segments[2] === 'videos' && /^\d+$/.test(segments[3] ?? '')) {
+    return segments[3] ?? null;
+  }
+
+  if (segments[0] === 'album' && segments[2] === 'video' && /^\d+$/.test(segments[3] ?? '')) {
+    return segments[3] ?? null;
+  }
+
+  return null;
 }
 
 function decorateAudioPlayers(html: string): string {
@@ -1188,7 +1229,7 @@ function decorateAudioPlayers(html: string): string {
 
 function replaceAudioLinks(html: string): string {
   return html.replaceAll(
-    /<a\b([^>]*)href=("|')([^"']+\.(?:mp3|wav|m4a|aac|ogg|opus)(?:\?[^"']*)?)\2([^>]*)>([\s\S]*?)<\/a>/gi,
+    /<a\b([^>]*)href=("|')([^"']+\.(?:mp3|wav|m4a|aac|ogg|opus)(?:\?[^"']*)?(?:#[^"']*)?)\2([^>]*)>([\s\S]*?)<\/a>/gi,
     (fullMatch, before, _quote, url, after, labelHtml) => {
       const attrs = `${before ?? ''}${after ?? ''}`;
       if (attrs.toLowerCase().includes('data-audio-fallback')) {
@@ -1250,23 +1291,16 @@ function sanitizeMediaUrl(url: string): string | null {
     return null;
   }
 
-  if (trimmed.startsWith('/')) {
+  if (hasBlockedUrlChars(trimmed)) {
+    return null;
+  }
+
+  if (isSafeRelativePath(trimmed)) {
     return trimmed;
   }
 
-  if (trimmed.startsWith('./') || trimmed.startsWith('../')) {
-    return trimmed;
-  }
-
-  try {
-    const parsed = new URL(trimmed);
-    if (parsed.protocol === 'https:' || parsed.protocol === 'http:') {
-      return parsed.href;
-    }
-    return null;
-  } catch {
-    return null;
-  }
+  const parsed = parseHttpUrl(trimmed);
+  return parsed?.href ?? null;
 }
 
 function sanitizeLinkHref(url: string): string {
@@ -1275,27 +1309,54 @@ function sanitizeLinkHref(url: string): string {
     return '#';
   }
 
-  if (trimmed.startsWith('#') || trimmed.startsWith('/')) {
+  if (hasBlockedUrlChars(trimmed)) {
+    return '#';
+  }
+
+  if (trimmed.startsWith('#') || isSafeRelativePath(trimmed)) {
     return trimmed;
   }
 
-  if (trimmed.startsWith('./') || trimmed.startsWith('../')) {
+  const lower = trimmed.toLowerCase();
+  if (lower.startsWith('mailto:') || lower.startsWith('tel:')) {
     return trimmed;
   }
 
-  if (trimmed.startsWith('mailto:') || trimmed.startsWith('tel:')) {
-    return trimmed;
-  }
+  const parsed = parseHttpUrl(trimmed);
+  return parsed?.href ?? '#';
+}
 
-  try {
-    const parsed = new URL(trimmed);
-    if (parsed.protocol === 'https:' || parsed.protocol === 'http:') {
-      return parsed.href;
+function hasBlockedUrlChars(value: string): boolean {
+  if (/\s/u.test(value)) {
+    return true;
+  }
+  for (let index = 0; index < value.length; index += 1) {
+    const code = value.codePointAt(index) ?? -1;
+    if (code <= 0x1f || code === 0x7f) {
+      return true;
     }
-    return '#';
-  } catch {
-    return '#';
   }
+  return false;
+}
+
+function hasExplicitScheme(value: string): boolean {
+  return /^[a-zA-Z][a-zA-Z0-9+.-]*:/.test(value);
+}
+
+function isSafeRelativePath(value: string): boolean {
+  if (!value) {
+    return false;
+  }
+  if (value.startsWith('//') || value.startsWith('#')) {
+    return false;
+  }
+  if (value.startsWith('/') || value.startsWith('./') || value.startsWith('../') || value.startsWith('?')) {
+    return true;
+  }
+  if (hasExplicitScheme(value)) {
+    return false;
+  }
+  return true;
 }
 
 function isAllowedEmbedUrl(url: string): boolean {
