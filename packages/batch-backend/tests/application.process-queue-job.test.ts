@@ -51,6 +51,10 @@ describe('application/process-queue-job', () => {
     ttsCacheMaintenanceCoordinator,
     'maybeRunTtsCacheMaintenanceWithPgLock',
   );
+  const withTtsCacheActivitySharedLockSpy = vi.spyOn(
+    ttsCacheMaintenanceCoordinator,
+    'withTtsCacheActivitySharedLock',
+  );
 
   beforeEach(() => {
     vi.clearAllMocks();
@@ -62,6 +66,7 @@ describe('application/process-queue-job', () => {
       reclaimedBytes: 0,
       remainingBytes: 0,
     });
+    withTtsCacheActivitySharedLockSpy.mockImplementation(async (_options, callback) => callback());
   });
 
   function makeJob(
@@ -169,6 +174,11 @@ describe('application/process-queue-job', () => {
     expect(payload.md.replaceAll('\\', '/').endsWith(initial.md)).toBe(true);
     expect(typeof runId).toBe('string');
     expect(runId.length).toBeGreaterThan(0);
+    expect(withTtsCacheActivitySharedLockSpy).toHaveBeenCalledTimes(1);
+    expect(withTtsCacheActivitySharedLockSpy).toHaveBeenCalledWith(
+      expect.objectContaining({ lockKey: expect.any(String) }),
+      expect.any(Function),
+    );
 
     expect(updateJobStateAndResultSpy).toHaveBeenNthCalledWith(2, {
       id: 'job-1',
@@ -462,6 +472,7 @@ describe('application/process-queue-job', () => {
     });
 
     expect(runAssignmentJobSpy).not.toHaveBeenCalled();
+    expect(withTtsCacheActivitySharedLockSpy).not.toHaveBeenCalled();
     expect(runRerunAssignmentJobSpy).toHaveBeenCalledWith(
       expect.objectContaining({
         jobId: 'job-1',
@@ -475,6 +486,38 @@ describe('application/process-queue-job', () => {
         signal: expect.any(AbortSignal),
       }),
     );
+  });
+
+  it('skips shared cache-activity lock when queued job does not request TTS', async () => {
+    const initial = makeJob({ state: 'queued', withTts: false });
+    getJobByIdSpy.mockResolvedValue(initial);
+
+    const running = makeJob({
+      state: 'running',
+      withTts: false,
+      startedAt: new Date('2024-01-01T10:01:00Z'),
+    });
+    const succeeded = {
+      ...running,
+      state: 'succeeded',
+      manifestPath: '/manifests/job-no-tts.json',
+      finishedAt: new Date('2024-01-01T10:02:00Z'),
+      notionUrl: 'https://notion.so/job-no-tts',
+      anytypeUrl: null,
+    };
+    updateJobStateAndResultSpy
+      .mockResolvedValueOnce(running as any)
+      .mockResolvedValueOnce(succeeded as any);
+
+    runAssignmentJobSpy.mockResolvedValue({
+      manifestPath: '/manifests/job-no-tts.json',
+      notionUrl: 'https://notion.so/job-no-tts',
+    });
+
+    await processQueueJob({ jobId: 'job-1' });
+
+    expect(runAssignmentJobSpy).toHaveBeenCalledTimes(1);
+    expect(withTtsCacheActivitySharedLockSpy).not.toHaveBeenCalled();
   });
 
   it('uses manifestMd from rerun payload when markdown is materialized from storage', async () => {

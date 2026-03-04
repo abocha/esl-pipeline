@@ -350,12 +350,13 @@ function resolvePreviewTitle(markdown: string, explicitTitle?: string): string {
 }
 
 function extractFrontmatterTitle(markdown: string): string | null {
-  const frontmatterMatch = markdown.match(/^---\n[\s\S]*?\n---\n/);
+  const frontmatterMatch = markdown.match(/^---\r?\n([\s\S]*?)\r?\n---(?:\r?\n|$)/);
   if (!frontmatterMatch) {
     return null;
   }
 
-  const titleMatch = frontmatterMatch[0].match(/^\s*title:\s*(.+)\s*$/im);
+  const normalizedFrontmatterBody = (frontmatterMatch[1] ?? '').replaceAll('\r\n', '\n');
+  const titleMatch = normalizedFrontmatterBody.match(/^\s*title:\s*(.+)\s*$/im);
   const titleValue = titleMatch?.[1]?.trim();
   if (!titleValue) {
     return null;

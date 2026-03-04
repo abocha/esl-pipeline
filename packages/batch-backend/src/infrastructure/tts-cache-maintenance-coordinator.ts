@@ -12,6 +12,28 @@ export interface TtsCacheMaintenanceWithPgLockOptions extends TtsCacheMaintenanc
   lockKey: string;
 }
 
+export async function withTtsCacheActivitySharedLock<T>(
+  options: { lockKey: string },
+  callback: () => Promise<T>,
+): Promise<T> {
+  return withPgClient(async (client) => {
+    await acquireSharedAdvisoryLock(client, options.lockKey);
+    try {
+      return await callback();
+    } finally {
+      try {
+        await releaseSharedAdvisoryLock(client, options.lockKey);
+      } catch (error) {
+        logger.warn('Failed to release TTS cache activity shared advisory lock', {
+          component: 'tts-cache-maintenance',
+          lockKey: options.lockKey,
+          error: error instanceof Error ? error.message : String(error),
+        });
+      }
+    }
+  });
+}
+
 export async function maybeRunTtsCacheMaintenanceWithPgLock(
   options: TtsCacheMaintenanceWithPgLockOptions,
 ): Promise<TtsCacheMaintenanceResult> {
@@ -66,4 +88,12 @@ async function tryAcquireAdvisoryLock(client: PoolClient, lockKey: string): Prom
 
 async function releaseAdvisoryLock(client: PoolClient, lockKey: string): Promise<void> {
   await client.query('SELECT pg_advisory_unlock($1::bigint)', [lockKey]);
+}
+
+async function acquireSharedAdvisoryLock(client: PoolClient, lockKey: string): Promise<void> {
+  await client.query('SELECT pg_advisory_lock_shared($1::bigint)', [lockKey]);
+}
+
+async function releaseSharedAdvisoryLock(client: PoolClient, lockKey: string): Promise<void> {
+  await client.query('SELECT pg_advisory_unlock_shared($1::bigint)', [lockKey]);
 }
