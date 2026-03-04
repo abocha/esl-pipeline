@@ -1235,7 +1235,15 @@ export const MinimalAssignment: React.FC = () => {
     setValidating(true);
     setValidationError(null);
     try {
-      const response = await validateMarkdown(draftText.trim(), true);
+      const selectedValidationPreset =
+        selectedPreset && presetOptionIds.includes(selectedPreset) ? selectedPreset : null;
+      const response = await validateMarkdown(
+        draftText.trim(),
+        true,
+        learningPresetCatalogEnabled
+          ? { learningPresetId: selectedValidationPreset }
+          : { preset: selectedValidationPreset },
+      );
       setValidation(response);
       return response;
     } catch (error) {

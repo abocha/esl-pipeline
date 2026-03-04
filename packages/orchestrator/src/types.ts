@@ -36,6 +36,7 @@ export interface NewAssignmentFlags {
   md: string;
   student?: string;
   preset?: string;
+  learningPresetId?: string;
   presetsPath?: string;
   accentPreference?: string;
   voiceId?: string;

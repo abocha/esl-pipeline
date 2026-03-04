@@ -1,103 +1,85 @@
 # @esl-pipeline/md-validator
 
-Validate ESL homework markdown files for correct structure and formatting before import.
+Markdown validator for ESL pipeline assignments.
 
-## Features
+## What it does
 
-- **Frontmatter Validation**: Ensures required fields are present and valid
-- **Structure Validation**: Checks for all 9 required H2 sections
-- **Marker Validation**: Validates `study-text`, Answer Key, and Teacher's Plan blocks
-- **Dialogue Validation**: Enforces speaker label rules for dialogue mode
-- **Advanced Field Support**: Validates icons (emoji), cover URLs, and custom properties
-- **Topic Normalization**: Auto-fixes comma-separated topics (joins arrays)
+- Validates frontmatter and section structure.
+- Enforces runtime-safe contracts (for parser/publisher stages).
+- Emits backward-compatible `errors` / `warnings`.
+- Emits additive structured `issues` and resolved `ruleset` metadata.
 
-## Installation
+## Architecture
 
-```bash
-pnpm install
-```
+The validator now uses a ruleset engine layout:
 
-## Usage
+- `src/validator.ts`: compatibility facade (`validateMarkdown`)
+- `src/core/*`: input normalization + issue/result shaping
+- `src/rules/*`: execution contracts + base rule group placeholders
+- `src/rulesets/registry.ts`: ruleset resolution (`learningPresetId` / legacy `preset`)
+- `src/rulesets/general-english/v1.ts`: current implemented ruleset logic
 
-### CLI
+Current effective ruleset:
 
-```bash
-# Validate a file
-npx md-validator path/to/lesson.md
+- `general-english@v1` (default fallback)
 
-# Strict mode (warnings become errors)
-npx md-validator --strict lesson.md
-```
+## API
 
-The CLI auto-loads `.env` from the current working directory and repo root.
-
-### API
-
-```typescript
+```ts
 import { validateMarkdown } from '@esl-pipeline/md-validator';
 
-const result = await validateMarkdown({ path: './lesson.md', strict: true });
-
-if (!result.ok) {
-  console.error('Validation failed:');
-  result.errors.forEach((err) => console.error(`  - ${err}`));
-  result.warnings.forEach((warn) => console.warn(`  - ${warn}`));
-}
+const result = await validateMarkdown({
+  markdown: '# ...',
+  strict: true,
+  learningPresetId: 'general-english', // optional
+  learningPresetVersion: 'v1', // optional
+  preset: 'b1-default', // optional legacy passthrough
+});
 ```
 
-## Validation Rules
+Input sources:
 
-### Required Frontmatter Fields
+- `{ path: string }`
+- `{ markdown: string }`
+- `{ context: ParsedMarkdownContext }`
 
-```yaml
-title: string (non-empty)
-student: string (non-empty)
-level: string (non-empty)
-topic: string (non-empty)
-input_type: string (non-empty)
-study_text_type: "monologue" | "dialogue"
-```
+## Ruleset resolution
 
-### Optional Frontmatter Fields
+Resolution order:
 
-```yaml
-speaker_labels: string[]
-icon: emoji (single character)
-cover: URL
-properties: object
-speaker_profiles: SpeakerProfile[]
-```
+1. Known `learningPresetId` -> mapped ruleset.
+2. Unknown `learningPresetId` -> fallback to `general-english@v1` + warning issue.
+3. Legacy `preset` present -> mapped to `general-english@v1` (legacy mapping metadata).
+4. No preset context -> `general-english@v1`.
 
-### Required Structure
+## Response model
 
-- 9 H2 sections in specific order
-- `:::study-text ... :::` block
-- `:::toggle Answer Key` (preferred) or `:::toggle-heading` / `:::toggle-h2` Answer Key
-- `:::toggle Teacher's Follow-up Plan` (preferred) or `:::toggle-heading` / `:::toggle-h2/h3` Teacher's Follow-up Plan
+Backward-compatible fields remain:
 
-### Content Rules
+- `ok`
+- `errors: string[]`
+- `warnings: string[]`
+- `meta?`
+- `voiceDiagnostics?`
 
-- **Dialogue mode**: If `speaker_labels` contains multiple speakers (not just "Narrator"), all lines in `study-text` must follow `Speaker: text` format
-- **Voice alignment checks**: validates `speaker_profiles` mapping coverage and, when catalog metadata is available, validates `speaker_profiles[].voice`, `accent`, and `style`.
-- **Legacy compatibility**: legacy `input_type: dialogue|monologue` is accepted only in compatibility mode; strict voice-alignment mode requires split `input_type` + `study_text_type`.
-- **Monologue mode**: At least 3 paragraphs or 10 lines in `study-text`
-- **Controlled Practice**: 8-10 items recommended
-- **Comprehension Check**: 2-3 items recommended
+Additive fields:
 
-## Version 2.0 Changes
+- `issues?: MarkdownValidationIssue[]`
+- `ruleset?: MarkdownValidationRuleSetInfo`
 
-- Added validation for `icon` (emoji), `cover` (URL), and `properties` fields
-- Added toggle-heading syntax support (`:::toggle-h2`, `:::toggle-h3`)
-- Added support for `:::toggle` as the preferred toggle marker
-- Fixed apostrophe matching in "Teacher's Follow-up Plan" (supports `'`, `'`, `'`)
-- Added topic normalization (arrays auto-converted to comma-separated strings)
+`MarkdownValidationIssue`:
 
-## Testing
+- `code`, `ruleId`, `severity`, `message`, `line?`, `category`, `blockingInStrict`
+
+## Strict behavior
+
+- `error` issues always block.
+- Contract warnings block when `strict: true`.
+- Advisory warnings never block.
+
+## Tests
 
 ```bash
-pnpm test
+pnpm --filter @esl-pipeline/md-validator test
 ```
 
-## License
-
-UNLICENSED

@@ -477,10 +477,34 @@ export interface MarkdownValidationVoiceDiagnostics {
   };
 }
 
+export type MarkdownValidationIssueSeverity = 'error' | 'warning' | 'advisory';
+export type MarkdownValidationIssueCategory = 'runtime' | 'contract' | 'quality' | 'voice';
+
+export interface MarkdownValidationIssue {
+  code: string;
+  ruleId: string;
+  severity: MarkdownValidationIssueSeverity;
+  message: string;
+  line?: number;
+  category: MarkdownValidationIssueCategory;
+  blockingInStrict: boolean;
+}
+
+export interface MarkdownValidationRuleSetInfo {
+  id: string;
+  version: string;
+  requestedId?: string | null;
+  requestedVersion?: string | null;
+  fallbackApplied?: boolean;
+  fallbackReason?: string;
+}
+
 export interface MarkdownValidationResponse {
   ok: boolean;
   errors: string[];
   warnings: string[];
+  issues?: MarkdownValidationIssue[];
+  ruleset?: MarkdownValidationRuleSetInfo;
   voiceDiagnostics?: MarkdownValidationVoiceDiagnostics;
   meta?: {
     title: string;

@@ -885,11 +885,19 @@ export async function getStudentSummary(
 export async function validateMarkdown(
   text: string,
   strict?: boolean,
+  context?: {
+    learningPresetId?: string | null;
+    learningPresetVersion?: string | null;
+    preset?: string | null;
+  },
 ): Promise<MarkdownValidationResponse> {
   try {
     const response = await apiClient.post(buildApiProxyPath('/validation/markdown'), {
       text,
       strict,
+      learningPresetId: context?.learningPresetId ?? undefined,
+      learningPresetVersion: context?.learningPresetVersion ?? undefined,
+      preset: context?.preset ?? undefined,
     });
     return response.data;
   } catch (error: unknown) {

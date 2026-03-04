@@ -140,6 +140,7 @@ async function runAssignmentPipeline(
   const flags: NewAssignmentFlags = {
     md: payload.md,
     preset: payload.preset,
+    learningPresetId: payload.learningPresetId,
     withTts: payload.withTts,
     upload: payload.upload,
     publishTarget: payload.publishTarget,

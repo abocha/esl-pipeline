@@ -2741,7 +2741,13 @@ describe('transport/http-server - integration (in-process)', () => {
     const response = await app.inject({
       method: 'POST',
       url: '/validation/markdown',
-      payload: { text: 'raw markdown', strict: true },
+      payload: {
+        text: 'raw markdown',
+        strict: true,
+        learningPresetId: 'general-english',
+        learningPresetVersion: 'v1',
+        preset: 'b1-default',
+      },
     });
 
     expect(response.statusCode).toBe(200);
@@ -2759,7 +2765,82 @@ describe('transport/http-server - integration (in-process)', () => {
         speaker_labels: ['A', 'B'],
       },
     });
-    expect(mockValidateMarkdown).toHaveBeenCalledWith({ markdown: 'raw markdown', strict: true });
+    expect(mockValidateMarkdown).toHaveBeenCalledWith({
+      markdown: 'raw markdown',
+      strict: true,
+      learningPresetId: 'general-english',
+      learningPresetVersion: 'v1',
+      preset: 'b1-default',
+    });
+  });
+
+  it('POST /validation/markdown preserves additive ruleset fallback metadata', async () => {
+    const mockValidateMarkdown = vi.mocked(validateMarkdown);
+    mockValidateMarkdown.mockResolvedValue({
+      ok: true,
+      errors: [],
+      warnings: ['Unknown learning preset "ielts-academic". Falling back to general-english@v1.'],
+      issues: [
+        {
+          code: 'ruleset.unknown_preset_fallback',
+          ruleId: 'ruleset-resolution',
+          severity: 'warning',
+          message: 'Unknown learning preset "ielts-academic". Falling back to general-english@v1.',
+          category: 'contract',
+          blockingInStrict: false,
+        },
+      ],
+      ruleset: {
+        id: 'general-english',
+        version: 'v1',
+        requestedId: 'ielts-academic',
+        requestedVersion: null,
+        fallbackApplied: true,
+        fallbackReason: 'unknown_preset',
+      },
+    });
+
+    const response = await app.inject({
+      method: 'POST',
+      url: '/validation/markdown',
+      payload: {
+        text: 'raw markdown',
+        strict: true,
+        learningPresetId: 'ielts-academic',
+      },
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toEqual({
+      ok: true,
+      errors: [],
+      warnings: ['Unknown learning preset "ielts-academic". Falling back to general-english@v1.'],
+      issues: [
+        {
+          code: 'ruleset.unknown_preset_fallback',
+          ruleId: 'ruleset-resolution',
+          severity: 'warning',
+          message: 'Unknown learning preset "ielts-academic". Falling back to general-english@v1.',
+          category: 'contract',
+          blockingInStrict: false,
+        },
+      ],
+      ruleset: {
+        id: 'general-english',
+        version: 'v1',
+        requestedId: 'ielts-academic',
+        requestedVersion: null,
+        fallbackApplied: true,
+        fallbackReason: 'unknown_preset',
+      },
+    });
+    expect(mockValidateMarkdown).toHaveBeenCalledWith({
+      markdown: 'raw markdown',
+      strict: true,
+      learningPresetId: 'ielts-academic',
+      learningPresetVersion: undefined,
+      preset: undefined,
+    });
   });
 
   it('POST /preview/html injects audio placeholder when no audio URL is provided', async () => {
