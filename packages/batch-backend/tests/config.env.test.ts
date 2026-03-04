@@ -48,6 +48,11 @@ describe('config/env - core defaults', () => {
         expect(cfg.deepgram.model).toBe('nova-3');
         expect(cfg.deepgram.language).toBe('multi');
         expect(cfg.deepgram.storeRawResponse).toBe(true);
+        expect(cfg.worker.ttsCacheDir.replaceAll('\\', '/')).toMatch(/\/tmp\/tts-cache$/);
+        expect(cfg.worker.ttsCacheMaxAgeDays).toBe(30);
+        expect(cfg.worker.ttsCacheMaxBytes).toBe(10 * 1024 * 1024 * 1024);
+        expect(cfg.worker.ttsCacheMaintenanceIntervalMinutes).toBe(60);
+        expect(cfg.worker.ttsCacheMaintenanceLockKey).toBe('910021');
         expect(cfg.studentSystem?.source).toBe('fs');
         expect(cfg.studentSystem?.fsFallback).toBe(true);
 
@@ -160,6 +165,58 @@ describe('config/env - orchestrator remote config provider mapping', () => {
         },
       ),
     ).rejects.toThrow('ESL_PIPELINE_CONFIG_CACHE_TTL_MS must be a non-negative integer');
+  });
+});
+
+describe('config/env - TTS cache retention validation', () => {
+  beforeEach(() => {
+    vi.resetModules();
+  });
+
+  it('rejects negative TTS cache retention values', async () => {
+    await expect(
+      withEnv(
+        {
+          NODE_ENV: 'test',
+          BATCH_TTS_CACHE_MAX_AGE_DAYS: '-1',
+        },
+        async () => {
+          await loadConfigFresh();
+        },
+      ),
+    ).rejects.toThrow('BATCH_TTS_CACHE_MAX_AGE_DAYS must be a non-negative integer');
+  });
+
+  it('rejects non-integer cache maintenance lock key', async () => {
+    await expect(
+      withEnv(
+        {
+          NODE_ENV: 'test',
+          BATCH_TTS_CACHE_MAINTENANCE_LOCK_KEY: 'invalid',
+        },
+        async () => {
+          await loadConfigFresh();
+        },
+      ),
+    ).rejects.toThrow(
+      'BATCH_TTS_CACHE_MAINTENANCE_LOCK_KEY must be an integer value representable as bigint',
+    );
+  });
+
+  it('rejects out-of-range cache maintenance lock key', async () => {
+    await expect(
+      withEnv(
+        {
+          NODE_ENV: 'test',
+          BATCH_TTS_CACHE_MAINTENANCE_LOCK_KEY: '9223372036854775808',
+        },
+        async () => {
+          await loadConfigFresh();
+        },
+      ),
+    ).rejects.toThrow(
+      'BATCH_TTS_CACHE_MAINTENANCE_LOCK_KEY must be an integer value representable as bigint',
+    );
   });
 });
 

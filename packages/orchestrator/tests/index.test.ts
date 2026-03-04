@@ -205,4 +205,52 @@ default: voice_id_default
       message: 'cancelled: rerun stopped',
     });
   });
+
+  it('supports rerun using manifestMd when markdown is materialized to a temp path', async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'orchestrator-rerun-manifest-md-'));
+    const mdPath = join(dir, 'lesson.md');
+    const tempMdPath = join(dir, 'temp-assignment.md');
+    const voiceMapPath = join(dir, 'voices.yml');
+    const okDoc = await readFile(okFixturePath, 'utf8');
+    await writeFile(mdPath, okDoc);
+    await writeFile(tempMdPath, okDoc);
+    await writeFile(
+      voiceMapPath,
+      `
+default: voice_id_default
+    `.trim(),
+    );
+    process.env.S3_BUCKET = 'test-bucket';
+    process.env.AWS_REGION = 'us-east-1';
+
+    const { buildStudyTextMp3 } = await import('@esl-pipeline/tts-elevenlabs');
+    const audioPath = join(dir, 'lesson.mp3');
+    await writeFile(audioPath, 'dummy');
+    vi.mocked(buildStudyTextMp3).mockResolvedValue({
+      path: audioPath,
+      hash: 'abc123',
+      voices: [{ speaker: 'Narrator', voiceId: 'voice_id_default', source: 'default' }],
+    });
+
+    const initial = await newAssignment({
+      md: mdPath,
+      withTts: true,
+      upload: 's3',
+      publishTarget: 'html',
+      dryRun: true,
+      voices: voiceMapPath,
+    });
+
+    const rerun = await rerunAssignment({
+      md: tempMdPath,
+      manifestMd: mdPath,
+      steps: ['add-audio'],
+      upload: 's3',
+      dryRun: true,
+      voices: voiceMapPath,
+    });
+
+    expect(rerun.steps).toEqual(['add-audio']);
+    expect(rerun.manifestPath).toBe(initial.manifestPath);
+  });
 });

@@ -97,12 +97,14 @@ async function executePipeline(
         ? await runRerunPipeline(
             pipeline,
             payload as RunRerunAssignmentPayload,
+            config.worker.ttsCacheDir,
             config.orchestrator.notionDatabaseId,
             signal,
           )
         : await runAssignmentPipeline(
             pipeline,
             payload as RunAssignmentPayload,
+            config.worker.ttsCacheDir,
             config.orchestrator.notionDatabaseId,
             signal,
           );
@@ -131,6 +133,7 @@ async function executePipeline(
 async function runAssignmentPipeline(
   pipeline: ReturnType<typeof getPipeline>,
   payload: RunAssignmentPayload,
+  ttsOutDir: string,
   defaultNotionDatabaseId?: string,
   signal?: AbortSignal,
 ): Promise<PipelineRunResult> {
@@ -140,6 +143,7 @@ async function runAssignmentPipeline(
     withTts: payload.withTts,
     upload: payload.upload,
     publishTarget: payload.publishTarget,
+    out: ttsOutDir,
   };
 
   if (payload.notionDatabase) {
@@ -168,6 +172,7 @@ async function runAssignmentPipeline(
 async function runRerunPipeline(
   pipeline: ReturnType<typeof getPipeline>,
   payload: RunRerunAssignmentPayload,
+  ttsOutDir: string,
   _defaultNotionDatabaseId?: string,
   signal?: AbortSignal,
 ): Promise<PipelineRunResult> {
@@ -178,7 +183,8 @@ async function runRerunPipeline(
         ? payload.steps
         : (['tts', 'upload', 'add-audio'] as NonNullable<RerunFlags['steps']>),
     upload: payload.upload ?? 's3',
-    force: payload.force ?? true,
+    force: payload.force ?? false,
+    out: ttsOutDir,
     prefix: payload.prefix,
     publicRead: payload.publicRead,
     presign: payload.presign,
@@ -189,6 +195,9 @@ async function runRerunPipeline(
     dialogueStability: payload.dialogueStability ?? undefined,
     dialogueSeed: payload.dialogueSeed ?? undefined,
   };
+  if (payload.manifestMd) {
+    (flags as RerunFlags & { manifestMd?: string }).manifestMd = payload.manifestMd;
+  }
 
   return (pipeline as { rerunAssignment: (...args: unknown[]) => Promise<PipelineRunResult> }).rerunAssignment(
     flags,

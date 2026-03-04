@@ -30,6 +30,10 @@ import {
 } from '../infrastructure/job-cancellation.js';
 import type { QueueJobPayload } from '../infrastructure/queue-bullmq.js';
 import { createTranscriptionStorageForUri } from '../infrastructure/transcription-storage.js';
+import {
+  maybeRunTtsCacheMaintenanceWithPgLock,
+  withTtsCacheActivitySharedLock,
+} from '../infrastructure/tts-cache-maintenance-coordinator.js';
 
 // processQueueJob.declaration()
 export async function processQueueJob(payload: QueueJobPayload): Promise<void> {
@@ -75,6 +79,27 @@ export async function processQueueJob(payload: QueueJobPayload): Promise<void> {
   try {
     const config = loadConfig();
 
+    try {
+      const maintenance = await maybeRunTtsCacheMaintenanceWithPgLock({
+        cacheDir: config.worker.ttsCacheDir,
+        maxAgeDays: config.worker.ttsCacheMaxAgeDays,
+        maxBytes: config.worker.ttsCacheMaxBytes,
+        intervalMinutes: config.worker.ttsCacheMaintenanceIntervalMinutes,
+        lockKey: config.worker.ttsCacheMaintenanceLockKey,
+      });
+      if (maintenance.ran && maintenance.deletedFiles > 0) {
+        log.info('TTS cache maintenance pruned stale artifacts', {
+          deletedFiles: maintenance.deletedFiles,
+          reclaimedBytes: maintenance.reclaimedBytes,
+          remainingBytes: maintenance.remainingBytes,
+        });
+      }
+    } catch (error) {
+      log.warn('TTS cache maintenance failed; continuing job execution', {
+        error: error instanceof Error ? error.message : String(error),
+      });
+    }
+
     const markdownInput = await resolveMarkdownInput(running);
 
     const uploadFlag = resolveUploadTarget(running.upload, config.storage.provider);
@@ -101,19 +126,27 @@ export async function processQueueJob(payload: QueueJobPayload): Promise<void> {
       }
     }
 
-    let result: { manifestPath?: string; notionUrl?: string; anytypeUrl?: string; htmlUrl?: string };
-    try {
-      const isRerunExecution =
-        payload.executionMode === 'rerun_audio' || payload.executionMode === 'rerun_publish';
-      result =
-        isRerunExecution
+    const isRerunExecution =
+      payload.executionMode === 'rerun_audio' || payload.executionMode === 'rerun_publish';
+    const rerunSteps = payload.rerun?.steps ?? ['tts', 'upload', 'add-audio'];
+    const shouldHoldTtsCacheActivityLock =
+      config.worker.ttsCacheMaintenanceIntervalMinutes > 0 &&
+      (isRerunExecution ? rerunSteps.includes('tts') : running.withTts === true);
+
+    const executePipeline = async () => {
+      try {
+        const manifestMd = isRerunExecution
+          ? await resolveManifestMdPath(payload.rerun?.manifestMd, markdownInput.mdPath)
+          : undefined;
+        return isRerunExecution
           ? await runRerunAssignmentJob(
               {
                 jobId,
                 md: markdownInput.mdPath,
-                steps: payload.rerun?.steps ?? ['tts', 'upload', 'add-audio'],
+                manifestMd,
+                steps: rerunSteps,
                 upload: payload.rerun?.upload ?? 's3',
-                force: payload.rerun?.force ?? running.forceTts ?? true,
+                force: payload.rerun?.force ?? running.forceTts ?? false,
                 prefix: payload.rerun?.prefix,
                 publicRead: payload.rerun?.publicRead,
                 presign: payload.rerun?.presign,
@@ -148,15 +181,23 @@ export async function processQueueJob(payload: QueueJobPayload): Promise<void> {
               runId,
               { signal: cancellationController.signal },
             );
-    } finally {
-      try {
-        await markdownInput.cleanup();
-      } catch (cleanupError) {
-        log.warn('Failed to clean up temporary markdown input', {
-          error: cleanupError instanceof Error ? cleanupError.message : String(cleanupError),
-        });
+      } finally {
+        try {
+          await markdownInput.cleanup();
+        } catch (cleanupError) {
+          log.warn('Failed to clean up temporary markdown input', {
+            error: cleanupError instanceof Error ? cleanupError.message : String(cleanupError),
+          });
+        }
       }
-    }
+    };
+
+    const result = shouldHoldTtsCacheActivityLock
+      ? await withTtsCacheActivitySharedLock(
+          { lockKey: config.worker.ttsCacheMaintenanceLockKey },
+          executePipeline,
+        )
+      : await executePipeline();
 
     const succeeded = await updateJobStateAndResult({
       id: jobId,
@@ -233,7 +274,7 @@ function isCancellationError(error: string | null | undefined): boolean {
   return typeof error === 'string' && error.toLowerCase().startsWith('cancelled');
 }
 
-async function resolveMarkdownPath(mdPath: string): Promise<string> {
+function buildMarkdownPathCandidates(mdPath: string): string[] {
   const sanitized = mdPath?.trim();
   if (!sanitized) {
     throw new Error('Markdown path is empty');
@@ -260,13 +301,37 @@ async function resolveMarkdownPath(mdPath: string): Promise<string> {
     }
   }
 
+  return [...candidates];
+}
+
+async function resolveMarkdownPath(mdPath: string): Promise<string> {
+  const candidates = buildMarkdownPathCandidates(mdPath);
   for (const candidate of candidates) {
     if (await fileExists(candidate)) {
       return candidate;
     }
   }
 
-  throw new Error(`Markdown file not found: ${sanitized}`);
+  throw new Error(`Markdown file not found: ${mdPath.trim()}`);
+}
+
+async function resolveManifestMdPath(
+  rawManifestMd: string | null | undefined,
+  fallbackMdPath: string,
+): Promise<string> {
+  const sanitized = rawManifestMd?.trim();
+  if (!sanitized) {
+    return fallbackMdPath;
+  }
+
+  const candidates = buildMarkdownPathCandidates(sanitized);
+  for (const candidate of candidates) {
+    if (await fileExists(candidate)) {
+      return candidate;
+    }
+  }
+
+  return candidates[0] ?? fallbackMdPath;
 }
 
 interface ResolvedMarkdownInput {

@@ -3,6 +3,8 @@
 // - Safe Docker/Docker Compose defaults.
 // - Postgres/Redis are optional and enabled via env flags.
 // - Only throws when a feature is explicitly enabled but misconfigured.
+import { join, resolve as resolvePath } from 'node:path';
+
 import { readBool, readInt, readString } from '@esl-pipeline/shared-infrastructure';
 import type { GenerationProvider, GenerationQuotaSource } from '@esl-pipeline/contracts';
 
@@ -56,6 +58,11 @@ export interface BatchBackendConfig {
   worker: {
     concurrency: number;
     maxConcurrentFfmpeg: number;
+    ttsCacheDir: string;
+    ttsCacheMaxAgeDays: number;
+    ttsCacheMaxBytes: number;
+    ttsCacheMaintenanceIntervalMinutes: number;
+    ttsCacheMaintenanceLockKey: string;
   };
 
   mail: {
@@ -239,6 +246,9 @@ function parseGenerationProviders(value: string): GenerationProvider[] {
   return [...new Set(tokens.map((token) => normalizeGenerationProvider(token)))];
 }
 
+const PG_BIGINT_MIN = -9_223_372_036_854_775_808n;
+const PG_BIGINT_MAX = 9_223_372_036_854_775_807n;
+
 function readStringList(name: string, fallback: string): string[] {
   const raw = readString(name, fallback) ?? fallback;
   return raw
@@ -323,6 +333,44 @@ export function loadConfig(): BatchBackendConfig {
   if (maxConcurrentFfmpeg > workerConcurrency) {
     throw new Error(
       `MAX_CONCURRENT_FFMPEG (${maxConcurrentFfmpeg}) cannot exceed WORKER_CONCURRENCY (${workerConcurrency})`,
+    );
+  }
+  const ttsCacheDir = resolvePath(
+    readString('BATCH_TTS_CACHE_DIR', join(process.cwd(), 'tmp', 'tts-cache'))!,
+  );
+  const ttsCacheMaxAgeDays = readInt('BATCH_TTS_CACHE_MAX_AGE_DAYS', 30);
+  const ttsCacheMaxBytes = readInt('BATCH_TTS_CACHE_MAX_BYTES', 10 * 1024 * 1024 * 1024);
+  const ttsCacheMaintenanceIntervalMinutes = readInt(
+    'BATCH_TTS_CACHE_MAINTENANCE_INTERVAL_MINUTES',
+    60,
+  );
+  const ttsCacheMaintenanceLockKey = readString(
+    'BATCH_TTS_CACHE_MAINTENANCE_LOCK_KEY',
+    '910021',
+  )!;
+  if (ttsCacheMaxAgeDays < 0) {
+    throw new Error('BATCH_TTS_CACHE_MAX_AGE_DAYS must be a non-negative integer');
+  }
+  if (ttsCacheMaxBytes < 0) {
+    throw new Error('BATCH_TTS_CACHE_MAX_BYTES must be a non-negative integer');
+  }
+  if (ttsCacheMaintenanceIntervalMinutes < 0) {
+    throw new Error(
+      'BATCH_TTS_CACHE_MAINTENANCE_INTERVAL_MINUTES must be a non-negative integer',
+    );
+  }
+  if (!/^-?\d+$/.test(ttsCacheMaintenanceLockKey)) {
+    throw new Error(
+      'BATCH_TTS_CACHE_MAINTENANCE_LOCK_KEY must be an integer value representable as bigint',
+    );
+  }
+  const ttsCacheMaintenanceLockKeyBigInt = BigInt(ttsCacheMaintenanceLockKey);
+  if (
+    ttsCacheMaintenanceLockKeyBigInt < PG_BIGINT_MIN ||
+    ttsCacheMaintenanceLockKeyBigInt > PG_BIGINT_MAX
+  ) {
+    throw new Error(
+      'BATCH_TTS_CACHE_MAINTENANCE_LOCK_KEY must be an integer value representable as bigint',
     );
   }
 
@@ -569,6 +617,11 @@ export function loadConfig(): BatchBackendConfig {
     worker: {
       concurrency: workerConcurrency,
       maxConcurrentFfmpeg,
+      ttsCacheDir,
+      ttsCacheMaxAgeDays,
+      ttsCacheMaxBytes,
+      ttsCacheMaintenanceIntervalMinutes,
+      ttsCacheMaintenanceLockKey,
     },
 
     mail: {

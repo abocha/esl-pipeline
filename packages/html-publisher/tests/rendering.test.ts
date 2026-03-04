@@ -131,6 +131,64 @@ describe('rendering', () => {
     expect(html).not.toContain('background: #f4efe6;');
   });
 
+  it('applies grammar matrix styling only to Notice the Grammar column-list blocks', async () => {
+    const markdown = `### A. 👀 Notice the Grammar
+
+:::column-list
+:::column
+One
+:::
+:::column
+Two
+:::
+:::`;
+    const html = await renderToHtml(markdown, 'Grammar');
+    expect(html).toContain('<div class="column-list grammar-matrix-grid">');
+  });
+
+  it('leaves other column-list blocks unscoped', async () => {
+    const markdown = `### A. Different Section
+
+:::column-list
+:::column
+One
+:::
+:::column
+Two
+:::
+:::`;
+    const html = await renderToHtml(markdown, 'General Columns');
+    expect(html).toContain('<div class="column-list">');
+    expect(html).not.toContain('<div class="column-list grammar-matrix-grid">');
+  });
+
+  it('promotes the first useful chunks table row to a header when needed', async () => {
+    const markdown = `### B. 🗣️ Useful Chunks & Vocabulary
+
+<table>
+<tr><td>Term</td><td>Meaning &amp; Context</td></tr>
+<tr><td>freeze</td><td>when the app stops moving</td></tr>
+</table>`;
+    const html = await renderToHtml(markdown, 'Useful Chunks', { allowRawHtml: true });
+
+    expect(html).toContain('<th scope="col">Term</th>');
+    expect(html).toContain('<th scope="col">Meaning &amp; Context</th>');
+    expect(html).toContain('<td>freeze</td>');
+  });
+
+  it('keeps non-useful-chunks raw tables unchanged', async () => {
+    const markdown = `### A. 👀 Notice the Grammar
+
+<table>
+<tr><td>Example</td><td>Value</td></tr>
+<tr><td>one</td><td>two</td></tr>
+</table>`;
+    const html = await renderToHtml(markdown, 'Grammar Table', { allowRawHtml: true });
+
+    expect(html).toContain('<td>Example</td>');
+    expect(html).not.toContain('<th scope="col">Example</th>');
+  });
+
   it('escapes raw html by default but allows it when opted in', async () => {
     const markdown = `<script>alert(\"x\")</script>\n<div>Unsafe block</div>`;
     const safeHtml = await renderToHtml(markdown, 'Safe');

@@ -1,4 +1,5 @@
 import fs from 'node:fs/promises';
+import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -9,6 +10,7 @@ import * as settingsRepository from '../src/domain/settings-repository.js';
 import * as loggerModule from '../src/infrastructure/logger.js';
 import * as orchestratorService from '../src/infrastructure/orchestrator-service.js';
 import * as transcriptionStorage from '../src/infrastructure/transcription-storage.js';
+import * as ttsCacheMaintenanceCoordinator from '../src/infrastructure/tts-cache-maintenance-coordinator.js';
 
 vi.mock('../src/infrastructure/logger', async () => {
   const actual = await vi.importActual<typeof loggerModule>('../src/infrastructure/logger');
@@ -45,9 +47,26 @@ describe('application/process-queue-job', () => {
     transcriptionStorage,
     'createTranscriptionStorageForUri',
   );
+  const maybeRunTtsCacheMaintenanceWithPgLockSpy = vi.spyOn(
+    ttsCacheMaintenanceCoordinator,
+    'maybeRunTtsCacheMaintenanceWithPgLock',
+  );
+  const withTtsCacheActivitySharedLockSpy = vi.spyOn(
+    ttsCacheMaintenanceCoordinator,
+    'withTtsCacheActivitySharedLock',
+  );
 
   beforeEach(() => {
     vi.clearAllMocks();
+    maybeRunTtsCacheMaintenanceWithPgLockSpy.mockResolvedValue({
+      ran: false,
+      reason: 'interval',
+      scannedFiles: 0,
+      deletedFiles: 0,
+      reclaimedBytes: 0,
+      remainingBytes: 0,
+    });
+    withTtsCacheActivitySharedLockSpy.mockImplementation(async (_options, callback) => callback());
   });
 
   function makeJob(
@@ -155,6 +174,11 @@ describe('application/process-queue-job', () => {
     expect(payload.md.replaceAll('\\', '/').endsWith(initial.md)).toBe(true);
     expect(typeof runId).toBe('string');
     expect(runId.length).toBeGreaterThan(0);
+    expect(withTtsCacheActivitySharedLockSpy).toHaveBeenCalledTimes(1);
+    expect(withTtsCacheActivitySharedLockSpy).toHaveBeenCalledWith(
+      expect.objectContaining({ lockKey: expect.any(String) }),
+      expect.any(Function),
+    );
 
     expect(updateJobStateAndResultSpy).toHaveBeenNthCalledWith(2, {
       id: 'job-1',
@@ -327,6 +351,7 @@ describe('application/process-queue-job', () => {
       sourceJobId: 'job-source',
       rerun: {
         steps: ['tts', 'upload', 'add-audio'],
+        manifestMd: '/tmp/source-assignment.md',
         upload: 's3',
         force: true,
         voiceId: 'voice-new',
@@ -342,6 +367,7 @@ describe('application/process-queue-job', () => {
     expect(runRerunAssignmentJobSpy).toHaveBeenCalledWith(
       expect.objectContaining({
         jobId: 'job-1',
+        manifestMd: '/tmp/source-assignment.md',
         steps: ['tts', 'upload', 'add-audio'],
         upload: 's3',
         force: true,
@@ -351,6 +377,58 @@ describe('application/process-queue-job', () => {
         dialogueLanguage: 'es',
         dialogueStability: 0.42,
         dialogueSeed: 7,
+      }),
+      expect.any(String),
+      expect.objectContaining({
+        signal: expect.any(AbortSignal),
+      }),
+    );
+  });
+
+  it('defaults rerun force=false when payload and job force settings are omitted', async () => {
+    const initial = makeJob({ state: 'queued', forceTts: null });
+    getJobByIdSpy.mockResolvedValue(initial);
+
+    const running = makeJob({
+      state: 'running',
+      forceTts: null,
+      startedAt: new Date('2024-01-01T10:01:00Z'),
+    });
+    const succeeded = {
+      ...running,
+      state: 'succeeded',
+      manifestPath: '/manifests/job-rerun-default-force.json',
+      finishedAt: new Date('2024-01-01T10:02:00Z'),
+      notionUrl: 'https://notion.so/job-rerun-default-force',
+      anytypeUrl: null,
+    };
+    updateJobStateAndResultSpy
+      .mockResolvedValueOnce(running as any)
+      .mockResolvedValueOnce(succeeded as any);
+
+    runRerunAssignmentJobSpy.mockResolvedValue({
+      manifestPath: '/manifests/job-rerun-default-force.json',
+      notionUrl: 'https://notion.so/job-rerun-default-force',
+    });
+
+    await processQueueJob({
+      jobId: 'job-1',
+      executionMode: 'rerun_audio',
+      sourceJobId: 'job-source',
+      rerun: {
+        steps: ['tts', 'upload', 'add-audio'],
+        manifestMd: '/tmp/source-assignment.md',
+        upload: 's3',
+      },
+    });
+
+    expect(runRerunAssignmentJobSpy).toHaveBeenCalledWith(
+      expect.objectContaining({
+        jobId: 'job-1',
+        manifestMd: '/tmp/source-assignment.md',
+        steps: ['tts', 'upload', 'add-audio'],
+        upload: 's3',
+        force: false,
       }),
       expect.any(String),
       expect.objectContaining({
@@ -387,15 +465,18 @@ describe('application/process-queue-job', () => {
       sourceJobId: 'job-source',
       rerun: {
         steps: ['add-audio'],
+        manifestMd: '/tmp/source-assignment.md',
         upload: 's3',
         force: false,
       },
     });
 
     expect(runAssignmentJobSpy).not.toHaveBeenCalled();
+    expect(withTtsCacheActivitySharedLockSpy).not.toHaveBeenCalled();
     expect(runRerunAssignmentJobSpy).toHaveBeenCalledWith(
       expect.objectContaining({
         jobId: 'job-1',
+        manifestMd: '/tmp/source-assignment.md',
         steps: ['add-audio'],
         upload: 's3',
         force: false,
@@ -405,6 +486,208 @@ describe('application/process-queue-job', () => {
         signal: expect.any(AbortSignal),
       }),
     );
+  });
+
+  it('skips shared cache-activity lock when queued job does not request TTS', async () => {
+    const initial = makeJob({ state: 'queued', withTts: false });
+    getJobByIdSpy.mockResolvedValue(initial);
+
+    const running = makeJob({
+      state: 'running',
+      withTts: false,
+      startedAt: new Date('2024-01-01T10:01:00Z'),
+    });
+    const succeeded = {
+      ...running,
+      state: 'succeeded',
+      manifestPath: '/manifests/job-no-tts.json',
+      finishedAt: new Date('2024-01-01T10:02:00Z'),
+      notionUrl: 'https://notion.so/job-no-tts',
+      anytypeUrl: null,
+    };
+    updateJobStateAndResultSpy
+      .mockResolvedValueOnce(running as any)
+      .mockResolvedValueOnce(succeeded as any);
+
+    runAssignmentJobSpy.mockResolvedValue({
+      manifestPath: '/manifests/job-no-tts.json',
+      notionUrl: 'https://notion.so/job-no-tts',
+    });
+
+    await processQueueJob({ jobId: 'job-1' });
+
+    expect(runAssignmentJobSpy).toHaveBeenCalledTimes(1);
+    expect(withTtsCacheActivitySharedLockSpy).not.toHaveBeenCalled();
+  });
+
+  it('uses manifestMd from rerun payload when markdown is materialized from storage', async () => {
+    const initial = makeJob({
+      state: 'queued',
+      md: null,
+      mdStorageUri: 's3://esl-notion-tts/drafts/draft-1.md',
+    });
+    getJobByIdSpy.mockResolvedValue(initial);
+
+    const running = makeJob({
+      state: 'running',
+      md: null,
+      mdStorageUri: 's3://esl-notion-tts/drafts/draft-1.md',
+      startedAt: new Date('2024-01-01T10:01:00Z'),
+    });
+    const succeeded = {
+      ...running,
+      state: 'succeeded',
+      manifestPath: '/manifests/job-rerun-publish-storage.json',
+      finishedAt: new Date('2024-01-01T10:02:00Z'),
+      anytypeUrl: 'https://anytype.io/page',
+      notionUrl: null,
+    };
+    updateJobStateAndResultSpy
+      .mockResolvedValueOnce(running as any)
+      .mockResolvedValueOnce(succeeded as any);
+
+    createTranscriptionStorageForUriSpy.mockReturnValue({
+      getText: vi.fn().mockResolvedValue('# Draft from S3'),
+    } as unknown as ReturnType<typeof transcriptionStorage.createTranscriptionStorageForUri>);
+
+    runRerunAssignmentJobSpy.mockResolvedValue({
+      manifestPath: '/manifests/job-rerun-publish-storage.json',
+      anytypeUrl: 'https://anytype.io/page',
+    });
+
+    await processQueueJob({
+      jobId: 'job-1',
+      executionMode: 'rerun_publish',
+      sourceJobId: 'job-source',
+      rerun: {
+        manifestMd: '/tmp/source-assignment.md',
+        steps: ['add-audio'],
+        upload: 's3',
+        force: false,
+      },
+    });
+
+    expect(runRerunAssignmentJobSpy).toHaveBeenCalledTimes(1);
+    const [payload] = runRerunAssignmentJobSpy.mock.calls[0]!;
+    expect(path.isAbsolute(payload.md)).toBe(true);
+    expect(payload.manifestMd).toBe('/tmp/source-assignment.md');
+  });
+
+  it('normalizes relative manifestMd to the canonical resolved markdown path', async () => {
+    const uploadDir = await fs.mkdtemp(path.join(tmpdir(), 'esl-process-queue-manifest-'));
+    const lessonPath = path.join(uploadDir, 'lesson.md');
+    await fs.writeFile(lessonPath, '# Lesson', 'utf8');
+    const prevUploadDir = process.env.FILESYSTEM_UPLOAD_DIR;
+    process.env.FILESYSTEM_UPLOAD_DIR = uploadDir;
+
+    const initial = makeJob({ state: 'queued', md: 'lesson.md' });
+    getJobByIdSpy.mockResolvedValue(initial);
+
+    const running = makeJob({
+      state: 'running',
+      md: 'lesson.md',
+      startedAt: new Date('2024-01-01T10:01:00Z'),
+    });
+    const succeeded = {
+      ...running,
+      state: 'succeeded',
+      manifestPath: '/manifests/job-rerun-manifest-normalized.json',
+      finishedAt: new Date('2024-01-01T10:02:00Z'),
+      notionUrl: 'https://notion.so/job-rerun-manifest-normalized',
+      anytypeUrl: null,
+    };
+    updateJobStateAndResultSpy
+      .mockResolvedValueOnce(running as any)
+      .mockResolvedValueOnce(succeeded as any);
+
+    runRerunAssignmentJobSpy.mockResolvedValue({
+      manifestPath: '/manifests/job-rerun-manifest-normalized.json',
+      notionUrl: 'https://notion.so/job-rerun-manifest-normalized',
+    });
+
+    try {
+      await processQueueJob({
+        jobId: 'job-1',
+        executionMode: 'rerun_audio',
+        sourceJobId: 'job-source',
+        rerun: {
+          steps: ['tts', 'upload', 'add-audio'],
+          manifestMd: 'lesson.md',
+          upload: 's3',
+          force: false,
+        },
+      });
+
+      expect(runRerunAssignmentJobSpy).toHaveBeenCalledTimes(1);
+      const [payload] = runRerunAssignmentJobSpy.mock.calls[0]!;
+      expect(payload.md).toBe(lessonPath);
+      expect(payload.manifestMd).toBe(lessonPath);
+    } finally {
+      if (prevUploadDir == null) {
+        delete process.env.FILESYSTEM_UPLOAD_DIR;
+      } else {
+        process.env.FILESYSTEM_UPLOAD_DIR = prevUploadDir;
+      }
+      await fs.rm(uploadDir, { recursive: true, force: true });
+    }
+  });
+
+  it('falls back manifestMd to resolved markdown path when rerun manifest is omitted', async () => {
+    const uploadDir = await fs.mkdtemp(path.join(tmpdir(), 'esl-process-queue-manifest-'));
+    const lessonPath = path.join(uploadDir, 'lesson-fallback.md');
+    await fs.writeFile(lessonPath, '# Lesson fallback', 'utf8');
+    const prevUploadDir = process.env.FILESYSTEM_UPLOAD_DIR;
+    process.env.FILESYSTEM_UPLOAD_DIR = uploadDir;
+
+    const initial = makeJob({ state: 'queued', md: 'lesson-fallback.md' });
+    getJobByIdSpy.mockResolvedValue(initial);
+
+    const running = makeJob({
+      state: 'running',
+      md: 'lesson-fallback.md',
+      startedAt: new Date('2024-01-01T10:01:00Z'),
+    });
+    const succeeded = {
+      ...running,
+      state: 'succeeded',
+      manifestPath: '/manifests/job-rerun-manifest-fallback.json',
+      finishedAt: new Date('2024-01-01T10:02:00Z'),
+      notionUrl: 'https://notion.so/job-rerun-manifest-fallback',
+      anytypeUrl: null,
+    };
+    updateJobStateAndResultSpy
+      .mockResolvedValueOnce(running as any)
+      .mockResolvedValueOnce(succeeded as any);
+
+    runRerunAssignmentJobSpy.mockResolvedValue({
+      manifestPath: '/manifests/job-rerun-manifest-fallback.json',
+      notionUrl: 'https://notion.so/job-rerun-manifest-fallback',
+    });
+
+    try {
+      await processQueueJob({
+        jobId: 'job-1',
+        executionMode: 'rerun_audio',
+        sourceJobId: 'job-source',
+        rerun: {
+          steps: ['tts', 'upload', 'add-audio'],
+          upload: 's3',
+          force: false,
+        },
+      });
+
+      expect(runRerunAssignmentJobSpy).toHaveBeenCalledTimes(1);
+      const [payload] = runRerunAssignmentJobSpy.mock.calls[0]!;
+      expect(payload.md).toBe(lessonPath);
+      expect(payload.manifestMd).toBe(lessonPath);
+    } finally {
+      if (prevUploadDir == null) {
+        delete process.env.FILESYSTEM_UPLOAD_DIR;
+      } else {
+        process.env.FILESYSTEM_UPLOAD_DIR = prevUploadDir;
+      }
+      await fs.rm(uploadDir, { recursive: true, force: true });
+    }
   });
 
   it('materializes markdown from storage URI when md path is missing', async () => {
@@ -448,6 +731,33 @@ describe('application/process-queue-job', () => {
     expect(path.isAbsolute(payload.md)).toBe(true);
 
     await expect(fs.access(payload.md)).rejects.toThrow();
+  });
+
+  it('continues job processing when cache maintenance fails', async () => {
+    const initial = makeJob({ state: 'queued' });
+    getJobByIdSpy.mockResolvedValue(initial);
+
+    const running = makeJob({ state: 'running', startedAt: new Date('2024-01-01T10:01:00Z') });
+    const succeeded = {
+      ...running,
+      state: 'succeeded',
+      manifestPath: '/manifests/job-maintenance-failure.json',
+      finishedAt: new Date('2024-01-01T10:02:00Z'),
+      notionUrl: 'https://notion.so/job-maintenance-failure',
+      anytypeUrl: null,
+    };
+    updateJobStateAndResultSpy
+      .mockResolvedValueOnce(running as any)
+      .mockResolvedValueOnce(succeeded as any);
+
+    maybeRunTtsCacheMaintenanceWithPgLockSpy.mockRejectedValueOnce(new Error('maintenance failed'));
+    runAssignmentJobSpy.mockResolvedValue({
+      manifestPath: '/manifests/job-maintenance-failure.json',
+      notionUrl: 'https://notion.so/job-maintenance-failure',
+    });
+
+    await expect(processQueueJob({ jobId: 'job-1' })).resolves.toBeUndefined();
+    expect(runAssignmentJobSpy).toHaveBeenCalledTimes(1);
   });
 
   it('injects user settings when job is linked to a user', async () => {
