@@ -111,6 +111,26 @@ const INITIAL_TIMELINE_FILTERS: TimelineFilters = {
   to: '',
 };
 
+function isDefaultStudentName(name: string): boolean {
+  return name.trim().toLowerCase() === 'default';
+}
+
+function sortStudentsForPicker(items: StudentProfile[]): StudentProfile[] {
+  return [...items].sort((left, right) => {
+    const leftIsDefault = isDefaultStudentName(left.student);
+    const rightIsDefault = isDefaultStudentName(right.student);
+
+    if (leftIsDefault !== rightIsDefault) {
+      return leftIsDefault ? -1 : 1;
+    }
+
+    const byName = left.student.localeCompare(right.student, undefined, { sensitivity: 'base' });
+    if (byName !== 0) return byName;
+
+    return left.id.localeCompare(right.id);
+  });
+}
+
 export const StudentWorkspace: React.FC = () => {
   const [students, setStudents] = useState<StudentProfile[]>([]);
   const [studentsLoading, setStudentsLoading] = useState(false);
@@ -225,11 +245,11 @@ export const StudentWorkspace: React.FC = () => {
     setStudentsError(null);
     try {
       const response = await listStudents({ limit: 200, offset: 0, order: 'asc' });
-      const items = response.items ?? [];
+      const items = sortStudentsForPicker(response.items ?? []);
       setStudents(items);
       setSelectedStudentId((current) => {
         if (current && items.some((item) => item.id === current)) return current;
-        return items.find((item) => item.student === 'Default')?.id ?? items[0]?.id ?? '';
+        return items.find((item) => isDefaultStudentName(item.student))?.id ?? items[0]?.id ?? '';
       });
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Unable to load students.';
