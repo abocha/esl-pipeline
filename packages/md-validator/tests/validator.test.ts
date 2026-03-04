@@ -224,6 +224,22 @@ describe('md-validator', () => {
     });
   });
 
+  it('resolves known learning preset aliases without fallback warnings', async () => {
+    const res = await validateMarkdownFile(path.join(fixturesPath, 'ok.md'), {
+      learningPresetId: 'general-english-intensive',
+    });
+    expect(res.ok).toBe(true);
+    expect(res.ruleset).toMatchObject({
+      id: 'general-english',
+      requestedId: 'general-english-intensive',
+      fallbackApplied: false,
+    });
+    expect(res.warnings.join('\n')).not.toMatch(/unknown learning preset/i);
+    expect(
+      (res.issues ?? []).some((issue) => issue.code === 'ruleset.unknown_preset_fallback'),
+    ).toBe(false);
+  });
+
   it('allows flexible H2 wording', async () => {
     const tempDir = await mkdtemp(path.join(tmpdir(), 'validator-'));
     const file = path.join(tempDir, 'flex-h2.md');
