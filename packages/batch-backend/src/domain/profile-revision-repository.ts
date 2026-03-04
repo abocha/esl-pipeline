@@ -70,6 +70,23 @@ export async function insertProfileRevision(
   const row = await withPgClient(async (client: PoolClient) => {
     await client.query('BEGIN');
     try {
+      // Serialize revision versioning/activation per profile to avoid write races.
+      await client.query('SELECT id FROM profiles WHERE id = $1 FOR UPDATE', [params.profileId]);
+
+      if (status === 'active') {
+        await client.query(
+          `
+          UPDATE profile_revisions
+          SET
+            status = 'deprecated',
+            deprecated_at = COALESCE(deprecated_at, NOW()),
+            activated_at = NULL
+          WHERE profile_id = $1 AND status = 'active'
+          `,
+          [params.profileId],
+        );
+      }
+
       const result = await client.query(
         `
         WITH next_version AS (
@@ -121,24 +138,8 @@ export async function insertProfileRevision(
         ],
       );
 
-      const inserted = result.rows[0] as ProfileRevisionRow;
-
-      if (status === 'active') {
-        await client.query(
-          `
-          UPDATE profile_revisions
-          SET
-            status = 'deprecated',
-            deprecated_at = COALESCE(deprecated_at, NOW()),
-            activated_at = NULL
-          WHERE profile_id = $1 AND id <> $2 AND status = 'active'
-          `,
-          [params.profileId, inserted.id],
-        );
-      }
-
       await client.query('COMMIT');
-      return inserted;
+      return result.rows[0] as ProfileRevisionRow;
     } catch (error) {
       await client.query('ROLLBACK');
       throw error;

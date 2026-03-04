@@ -70,6 +70,23 @@ export async function insertTemplateRevision(
   const row = await withPgClient(async (client: PoolClient) => {
     await client.query('BEGIN');
     try {
+      // Serialize revision versioning/activation per template to avoid write races.
+      await client.query('SELECT id FROM templates WHERE id = $1 FOR UPDATE', [params.templateId]);
+
+      if (status === 'active') {
+        await client.query(
+          `
+          UPDATE template_revisions
+          SET
+            status = 'deprecated',
+            deprecated_at = COALESCE(deprecated_at, NOW()),
+            activated_at = NULL
+          WHERE template_id = $1 AND status = 'active'
+          `,
+          [params.templateId],
+        );
+      }
+
       const result = await client.query(
         `
         WITH next_version AS (
@@ -121,24 +138,8 @@ export async function insertTemplateRevision(
         ],
       );
 
-      const inserted = result.rows[0] as TemplateRevisionRow;
-
-      if (status === 'active') {
-        await client.query(
-          `
-          UPDATE template_revisions
-          SET
-            status = 'deprecated',
-            deprecated_at = COALESCE(deprecated_at, NOW()),
-            activated_at = NULL
-          WHERE template_id = $1 AND id <> $2 AND status = 'active'
-          `,
-          [params.templateId, inserted.id],
-        );
-      }
-
       await client.query('COMMIT');
-      return inserted;
+      return result.rows[0] as TemplateRevisionRow;
     } catch (error) {
       await client.query('ROLLBACK');
       throw error;
