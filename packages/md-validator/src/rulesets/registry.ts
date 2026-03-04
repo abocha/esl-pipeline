@@ -27,6 +27,28 @@ const RULESET_REGISTRY = new Map<string, ValidationRulesetDefinition>([
   [GENERAL_ENGLISH_RULESET.id, GENERAL_ENGLISH_RULESET],
 ]);
 
+const RULESET_ALIAS_REGISTRY = new Map<string, string>([
+  ['general-english-intensive', GENERAL_ENGLISH_RULESET.id],
+]);
+
+function resolveRulesetByLearningPresetId(
+  requestedId: string,
+): ValidationRulesetDefinition | undefined {
+  const direct = RULESET_REGISTRY.get(requestedId);
+  if (direct) return direct;
+
+  const aliasTarget = RULESET_ALIAS_REGISTRY.get(requestedId);
+  if (aliasTarget) return RULESET_REGISTRY.get(aliasTarget);
+
+  // Current learning-preset catalog variants for the General English track
+  // are prefixed by the base track id (for example "general-english-*").
+  if (requestedId.startsWith(`${GENERAL_ENGLISH_RULESET.id}-`)) {
+    return GENERAL_ENGLISH_RULESET;
+  }
+
+  return undefined;
+}
+
 function issueForUnknownPreset(
   requestedId: string,
   fallbackRuleset: ValidationRulesetDefinition,
@@ -72,7 +94,7 @@ export function resolveValidationRuleset(input: RulesetResolutionInput): Ruleset
   }
 
   if (requestedId) {
-    const found = RULESET_REGISTRY.get(requestedId);
+    const found = resolveRulesetByLearningPresetId(requestedId);
     if (!found) {
       return {
         ruleset: fallbackRuleset,
