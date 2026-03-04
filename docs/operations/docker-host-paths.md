@@ -1,5 +1,14 @@
 # Docker Host Paths
 
+## Meta
+
+- Audience: maintainers and AI agents operating local Docker workflows.
+- Authority Level: operations runbook.
+- Last Verified Against: 2026-03-04 repo state.
+- Owner: ops maintainer + automation agents.
+- Review Cadence: monthly or after Docker workflow changes.
+- Status: `runbook`.
+
 This repo uses bind mounts for source/runtime data and Docker named volumes for dependency caches.
 If host paths are missing, Docker may auto-create them with root ownership and cause `EACCES`.
 

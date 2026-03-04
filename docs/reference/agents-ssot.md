@@ -1,5 +1,14 @@
 # ESL Pipeline Agent Handbook (SSOT)
 
+## Meta
+
+- Audience: maintainers and AI agents implementing or reviewing repo behavior.
+- Authority Level: authoritative contracts and invariants.
+- Last Verified Against: 2026-03-04 repo state.
+- Owner: founder-maintainer + automation agents.
+- Review Cadence: monthly and after contract-level changes.
+- Status: `reference`.
+
 Authoritative instructions for AI agents and maintainers operating in this repo.
 
 This document is the machine-consumable Single Source of Truth (SSOT) for how to reason about, modify, and extend the ESL Pipeline monorepo. It encodes contracts, invariants, extension points, and workflows. Automated agents MUST treat this file as higher priority than general-purpose documentation when instructions conflict.
@@ -98,8 +107,12 @@ The ESL Pipeline is a pnpm-based monorepo. Core directories:
   - ElevenLabs TTS integration (uses system `ffmpeg`).
 - [`packages/storage-uploader`](packages/storage-uploader)
   - File upload (e.g. S3); used by orchestrator.
-- [`configs`](configs)
-  - Default presets, voices, student configs.
+- [`packages/html-publisher`](packages/html-publisher)
+  - HTML rendering and publishing helpers for batch/orchestrator surfaces.
+- [`packages/provider-runtime`](packages/provider-runtime)
+  - Shared provider runtime policy/classification helpers.
+- [`packages/orchestrator/configs`](packages/orchestrator/configs)
+  - Default presets, voices, student configs, and wizard defaults.
 - [`docs`](docs)
   - Architecture, manifest schema, backend groundwork.
 - [`fixtures`](fixtures)
@@ -464,17 +477,17 @@ For all subsections:
 
 ### 5.1. Local Config Files
 
-Local defaults live under [`configs`](configs):
+Local defaults live under [`packages/orchestrator/configs`](packages/orchestrator/configs):
 
-- [`configs/presets.json`](configs/presets.json)
+- [`packages/orchestrator/configs/presets.json`](packages/orchestrator/configs/presets.json)
   - Defines pipeline presets (e.g., levels, behaviors).
-- [`configs/voices.yml`](configs/voices.yml)
+- [`packages/orchestrator/configs/voices.yml`](packages/orchestrator/configs/voices.yml)
   - Maps voices to ElevenLabs or other TTS configuration.
-- [`configs/students/*.json`](configs/students)
+- [`packages/orchestrator/configs/students/*.json`](packages/orchestrator/configs/students)
   - Per-student or profile configs.
-- [`configs/wizard.defaults.json`](configs/wizard.defaults.json)
+- `packages/orchestrator/configs/wizard.defaults.json` (runtime-generated when wizard defaults are saved)
   - Stores interactive wizard preferences (e.g., `withTts`, upload target).
-  - Resolved via `wizardDefaultsPath` from [`resolveConfigPaths.declaration()`](packages/orchestrator/src/pipeline.ts:34), which binds it to the same `configRoot` as presets.
+  - Resolved via `wizardDefaultsPath` from `resolveConfigPaths`, which binds it to the same `configRoot` as presets.
 
 `createPipeline` and `ConfigProvider` determine how these are loaded. Agents:
 
@@ -674,7 +687,7 @@ Rules:
 - CLI is a thin adapter over orchestrator API.
 - Any CLI feature MUST delegate to orchestrator exports, NOT duplicate logic.
 - Rerun planning precedence MUST remain: `--steps` > `--audio` > `--from/--to` > default.
-- `--with-tts` is an explicit opt-in. When omitted, the orchestrator treats `withTts` as “no override” so that saved defaults from [`wizard.defaults.json`](configs/wizard.defaults.json) or other configuration can apply.
+- `--with-tts` is an explicit opt-in. When omitted, the orchestrator treats `withTts` as “no override” so that saved defaults from `packages/orchestrator/configs/wizard.defaults.json` or other configuration can apply.
 
 ### 7.2. Programmatic API as Source of Truth
 
@@ -777,7 +790,7 @@ Each subsection is a deterministic recipe to be followed exactly.
 
 Steps:
 
-1. Edit [`configs/presets.json`](configs/presets.json).
+1. Edit [`packages/orchestrator/configs/presets.json`](packages/orchestrator/configs/presets.json).
 2. Ensure schema matches expectations in `ConfigProvider` and orchestrator.
 3. Update tests/fixtures that depend on presets.
 4. Verify via:
@@ -792,7 +805,7 @@ Constraints:
 
 Steps:
 
-1. Edit [`configs/voices.yml`](configs/voices.yml).
+1. Edit [`packages/orchestrator/configs/voices.yml`](packages/orchestrator/configs/voices.yml).
 2. Ensure compatibility with:
    - `tts-elevenlabs` voice resolution.
    - Any orchestrator logic that reads voices.
@@ -806,7 +819,7 @@ Constraints:
 
 Steps:
 
-1. Add/modify JSON under [`configs/students`](configs/students).
+1. Add/modify JSON under [`packages/orchestrator/configs/students`](packages/orchestrator/configs/students).
 2. Follow existing schema patterns.
 3. If new shape is introduced, ensure:
    - ConfigProvider handles it.

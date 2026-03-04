@@ -1,5 +1,14 @@
 # Postgres Ops Health Alerts (Status + Telegram)
 
+## Meta
+
+- Audience: maintainers and AI agents operating backup health automation.
+- Authority Level: operations runbook.
+- Last Verified Against: 2026-03-04 repo state.
+- Owner: ops maintainer + automation agents.
+- Review Cadence: monthly or after alerting logic changes.
+- Status: `runbook`.
+
 This runbook covers operational health checks layered on top of the backup + restore-drill flow.
 
 ## Commands
