@@ -1,114 +1,76 @@
-# Batch Backend Deployment Guide
+# Batch Backend Deployment Guide (Current)
 
-This document covers production deployment of the batch backend system.
+## Meta
 
----
+- Audience: maintainers/operators deploying batch services.
+- Read Time: 6 minutes.
+- Authority Level: Deployment runbook.
+- Last Verified Against: 2026-03-04 repo state.
 
-## Infrastructure Requirements
+## Purpose
 
-| Component      | Purpose                   | Minimum Spec  |
-| -------------- | ------------------------- | ------------- |
-| **PostgreSQL** | Job metadata storage      | 13+, 1GB RAM  |
-| **Redis**      | BullMQ queue, SSE pub/sub | 6+, 512MB RAM |
-| **Node.js**    | Runtime                   | 24.10+        |
-| **ffmpeg**     | Audio processing          | Latest stable |
+- Provide a practical deployment path for the batch stack.
+- Route operators to canonical operations runbooks.
 
----
+## Canonical Sources
 
-## Docker Deployment (Recommended)
+1. [`docs/reference/env.md`](../reference/env.md)
+2. [`docs/backend-frontend/batch-backend-ssot.md`](batch-backend-ssot.md)
+3. [`docs/operations/docker-host-paths.md`](../operations/docker-host-paths.md)
+4. [`docs/operations/postgres-backup-s3.md`](../operations/postgres-backup-s3.md)
 
-### Development
+## Baseline Requirements
+
+- Node `24.11.1+`
+- Docker + Docker Compose
+- Postgres 18+
+- Redis 8+
+- ffmpeg available in backend runtime
+
+## Local/Single-Host Deployment (Compose)
+
+Prepare and start:
 
 ```bash
-docker-compose up -d
+pnpm docker:prepare
+pnpm docker:up
 ```
 
-This starts:
-
-- `postgres` - database
-- `redis` - queue/cache
-- `batch-backend` - API + worker
-- `batch-frontend` - web UI
-
-### Production
+Build + start:
 
 ```bash
-docker-compose -f docker-compose.prod.yml up -d
+pnpm docker:up:build
 ```
 
-Production differences:
+Stop:
 
-- No hot-reload
-- Production log levels
-- Healthchecks enabled
+```bash
+pnpm docker:dev:down
+```
 
----
+If backend host port `8080` is occupied:
 
-## Environment Configuration
+```bash
+BATCH_BACKEND_HOST_PORT=8081 pnpm docker:up
+```
 
-Copy and configure:
+Troubleshooting guide:
+[`docs/operations/docker-host-paths.md`](../operations/docker-host-paths.md)
+
+## Environment Files
+
+Create/update:
 
 ```bash
 cp .env.batch-backend.example .env.batch-backend
 ```
 
-### Required Variables
+Populate required credentials/keys referenced in:
+[`docs/reference/env.md`](../reference/env.md)
 
-```bash
-# Database
-PG_HOST=postgres
-PG_PORT=5432
-PG_USER=esl
-PG_PASSWORD=<strong-password>
-PG_DATABASE=esl_batch
+## Database Migration Flow
 
-# Redis
-REDIS_HOST=redis
-REDIS_PORT=6379
-
-# External Services
-NOTION_TOKEN=<your-token>
-ELEVENLABS_API_KEY=<your-key>
-
-# AWS (for S3 uploads)
-AWS_REGION=us-east-1
-AWS_ACCESS_KEY_ID=<key>
-AWS_SECRET_ACCESS_KEY=<secret>
-S3_BUCKET=<bucket-name>
-```
-
-### Optional Variables
-
-```bash
-# API Configuration
-BATCH_BACKEND_HTTP_PORT=8080
-BATCH_BACKEND_ENABLE_EXTENDED_API=true
-
-# Worker Tuning
-WORKER_CONCURRENCY=5
-MAX_CONCURRENT_FFMPEG=3
-
-# Manifest Storage (S3 instead of filesystem)
-ESL_PIPELINE_MANIFEST_STORE=s3
-ESL_PIPELINE_MANIFEST_BUCKET=<bucket>
-
-# Migration behavior
-PG_AUTO_MIGRATE_ON_BOOT=false
-PG_MIGRATION_LOCK_KEY=910001
-
-# PostgreSQL pool tuning
-PG_POOL_MAX=10
-PG_IDLE_TIMEOUT_MS=30000
-PG_CONNECTION_TIMEOUT_MS=5000
-```
-
-See [`docs/reference/env.md`](../reference/env.md) for complete list.
-
----
-
-## Database Setup
-
-Use versioned migrations before starting API/worker:
+Run before serving production traffic:
 
 ```bash
 pnpm --filter @esl-pipeline/batch-backend db:status
@@ -116,115 +78,37 @@ pnpm --filter @esl-pipeline/batch-backend db:migrate
 pnpm --filter @esl-pipeline/batch-backend db:verify
 ```
 
-Recommended production/offline rollout:
-
-```sql
--- Run in PostgreSQL
-CREATE DATABASE esl_batch;
-```
-
-Then run the migration commands above against that database.
-
----
-
-## Scaling
-
-### Horizontal Scaling
-
-- **API instances**: Run multiple behind a load balancer
-- **Workers**: Run multiple worker processes
-- **Redis**: Shared across all instances for queue coordination
-- **PostgreSQL**: Single instance sufficient for most workloads
-
-### Worker Configuration
+## Prompt Catalog Bootstrap (Required for Fresh Envs)
 
 ```bash
-# Limit concurrent jobs per worker
-WORKER_CONCURRENCY=5
-
-# Limit FFmpeg processes (ElevenLabs tier dependent)
-MAX_CONCURRENT_FFMPEG=3
+pnpm --filter @esl-pipeline/batch-backend run prompt-assets:bootstrap:dry
+pnpm --filter @esl-pipeline/batch-backend run prompt-assets:bootstrap
 ```
 
----
+Details: [`docs/operations/prompt-gallery-bootstrap.md`](../operations/prompt-gallery-bootstrap.md)
 
-## Monitoring
+## Backup and Ops Safety (Recommended)
 
-### Logs
+- Daily backup archival to S3:
+  - `pnpm docker:db:backup:s3:scheduled`
+- Ops health status:
+  - `pnpm ops:status`
+- Alert check (Telegram + cooldown/recovery):
+  - `pnpm ops:alert:check`
 
-Structured JSON logs via Pino:
+Runbooks:
 
-```bash
-LOG_LEVEL=info  # trace|debug|info|warn|error|fatal
-```
+- [`docs/operations/postgres-backup-restore.md`](../operations/postgres-backup-restore.md)
+- [`docs/operations/postgres-backup-s3.md`](../operations/postgres-backup-s3.md)
+- [`docs/operations/postgres-ops-health.md`](../operations/postgres-ops-health.md)
 
-### Health Checks
+## CI Expectations
 
-```bash
-curl http://localhost:8080/health
-# Returns: { "status": "ok" }
-```
+Deployment changes should preserve green CI for:
 
-### Metrics
+- `static checks (node 24.x)`
+- `postgres tests (blocking)`
+- `worker integration (blocking)`
 
-The backend exposes a metrics interface for:
-
-- Job processing times
-- Queue depths
-- SSE connection counts
-
-(Prometheus/statsd integration is optional)
-
----
-
-## Troubleshooting
-
-### Redis Connection Failed
-
-```
-Error: connect ECONNREFUSED 127.0.0.1:6379
-```
-
-**Fix**: Ensure Redis is running and `REDIS_HOST` is correct.
-
-### PostgreSQL Connection Failed
-
-```
-Error: FATAL: password authentication failed
-```
-
-**Fix**: Verify `PG_*` credentials match your database.
-
-### FFmpeg Not Found
-
-```
-FfmpegNotFoundError: ffmpeg not found
-```
-
-**Fix**: Install ffmpeg and ensure it's on PATH or set `FFMPEG_PATH`.
-
-### ElevenLabs Rate Limit
-
-```
-Error: 429 Too Many Requests
-```
-
-**Fix**: Reduce `MAX_CONCURRENT_FFMPEG` or upgrade your ElevenLabs tier.
-
----
-
-## Security Considerations
-
-- Run containers as non-root user
-- Use strong passwords for PostgreSQL
-- Enable Redis authentication in production
-- Deploy behind an authenticated gateway
-- Never expose the backend directly to the internet
-
----
-
-## Related Documentation
-
-- **Architecture**: [`batch-backend-ssot.md`](batch-backend-ssot.md)
-- **Environment**: [`../reference/env.md`](../reference/env.md)
-- **Frontend Guide**: [`BATCH_SYSTEM.md`](BATCH_SYSTEM.md)
+Workflow source:
+[`/.github/workflows/ci.yml`](../../.github/workflows/ci.yml)

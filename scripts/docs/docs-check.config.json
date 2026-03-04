@@ -1,0 +1,95 @@
+{
+  "core_docs": [
+    "AGENTS.md",
+    "docs/README.md",
+    "docs/PROJECT_OVERVIEW.md",
+    "docs/QUICK_START.md",
+    "docs/reference/DOCS_IA_MAP.md",
+    "docs/reference/DOCS_GOVERNANCE.md",
+    "docs/reference/agents-ssot.md",
+    "docs/backend-frontend/BATCH_SYSTEM.md",
+    "docs/backend-frontend/backend-frontend-alignment.md"
+  ],
+  "active_ops_docs": [
+    "docs/operations/docker-host-paths.md",
+    "docs/operations/postgres-backup-restore.md",
+    "docs/operations/postgres-backup-s3.md",
+    "docs/operations/postgres-ops-health.md",
+    "docs/operations/prompt-gallery-bootstrap.md",
+    "docs/operations/pr-style-release-notes.md",
+    "docs/operations/rollup-optional-binary-troubleshooting.md"
+  ],
+  "exclude_docs": [],
+  "exclude_prefixes": [
+    "docs/archive/"
+  ],
+  "meta_required_docs": [
+    "AGENTS.md",
+    "docs/README.md",
+    "docs/PROJECT_OVERVIEW.md",
+    "docs/QUICK_START.md",
+    "docs/reference/DOCS_IA_MAP.md",
+    "docs/reference/DOCS_GOVERNANCE.md",
+    "docs/reference/agents-ssot.md",
+    "docs/backend-frontend/BATCH_SYSTEM.md",
+    "docs/backend-frontend/backend-frontend-alignment.md",
+    "docs/operations/docker-host-paths.md",
+    "docs/operations/postgres-backup-restore.md",
+    "docs/operations/postgres-backup-s3.md",
+    "docs/operations/postgres-ops-health.md",
+    "docs/operations/prompt-gallery-bootstrap.md",
+    "docs/operations/pr-style-release-notes.md",
+    "docs/operations/rollup-optional-binary-troubleshooting.md"
+  ],
+  "meta_required_fields": [
+    "Audience",
+    "Authority Level",
+    "Last Verified Against",
+    "Owner",
+    "Review Cadence",
+    "Status"
+  ],
+  "freshness_days": {
+    "core": 30,
+    "ops": 45,
+    "ssot_warning": 60
+  },
+  "required_route_hints": [
+    {
+      "file": "AGENTS.md",
+      "hints": [
+        "docs/README.md",
+        "docs/reference/DOCS_IA_MAP.md",
+        "docs/reference/agents-ssot.md"
+      ]
+    },
+    {
+      "file": "docs/README.md",
+      "hints": [
+        "reference/DOCS_IA_MAP.md",
+        "reference/agents-ssot.md"
+      ]
+    },
+    {
+      "file": "docs/reference/DOCS_IA_MAP.md",
+      "hints": [
+        "docs/operations/postgres-ops-health.md",
+        "docs/operations/prompt-gallery-bootstrap.md"
+      ]
+    }
+  ],
+  "banned_literals": [
+    "](configs/presets.json)",
+    "](configs/voices.yml)",
+    "](configs/students)",
+    "](configs/wizard.defaults.json)",
+    "`configs/presets.json`",
+    "`configs/voices.yml`",
+    "`configs/students`",
+    "`configs/wizard.defaults.json`",
+    "file://"
+  ],
+  "allowed_missing_targets": [
+    "packages/orchestrator/configs/wizard.defaults.json"
+  ]
+}

@@ -1,5 +1,14 @@
 # PR-Style Release Notes (Direct Push Workflow)
 
+## Meta
+
+- Audience: maintainers and AI agents preparing release notes.
+- Authority Level: operations runbook.
+- Last Verified Against: 2026-03-04 repo state.
+- Owner: maintainer + automation agents.
+- Review Cadence: quarterly or after git tooling changes.
+- Status: `runbook`.
+
 Use this when we are shipping via direct commits/pushes but still want PR-quality release-note text.
 
 ## Command

@@ -5,7 +5,10 @@
 - Audience: AI agents and maintainers coordinating backend/frontend delivery.
 - Read Time: 8 minutes.
 - Authority Level: Canonical status tracker (human-readable).
-- Last Verified Against: 2026-02-28 repo state.
+- Last Verified Against: 2026-03-04 repo state.
+- Owner: backend/frontend maintainers + automation agents.
+- Review Cadence: weekly while active roadmap work continues.
+- Status: `active`.
 
 ## Purpose
 
@@ -49,6 +52,8 @@
    breakdown mismatches, and boundary exclusions remain regression-covered.
 8. WS3.5 generation safety guardrails are complete end-to-end: hard-stop budget policy,
    `budget_exceeded` transport/UI surfacing, and quota-window rollover-safe generation gating.
+9. Prompt gallery runtime is DB-canonical: prompt options/defaults resolve from active DB revisions
+   with startup bootstrap/readiness checks.
 
 ## Capability Matrix
 

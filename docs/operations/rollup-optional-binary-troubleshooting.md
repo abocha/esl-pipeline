@@ -1,5 +1,14 @@
 # Rollup Optional Binary Troubleshooting
 
+## Meta
+
+- Audience: maintainers and AI agents debugging local build/test runtime issues.
+- Authority Level: operations troubleshooting runbook.
+- Last Verified Against: 2026-03-04 repo state.
+- Owner: maintainer + automation agents.
+- Review Cadence: quarterly or after tooling upgrades.
+- Status: `runbook`.
+
 ## Symptom
 
 Running tests or Vitest-based commands fails with:
