@@ -84,6 +84,7 @@ import {
 import type { TranscriptRecord } from '../domain/transcript-model.js';
 import { getTranscriptByRecordingId } from '../domain/transcript-repository.js';
 import {
+  getDefaultSettings,
   UserSettingsInput,
   isValidTtsProvider,
   isValidTtsStrategy,
@@ -327,6 +328,40 @@ function resolveHeadingThemeFromPreset(
   const h3 = preset.h3 ? (NOTION_COLOR_TO_HEX[preset.h3] ?? undefined) : undefined;
   if (!h2 && !h3) return undefined;
   return { h2, h3 };
+}
+
+function resolvePreviewTitle(markdown: string, explicitTitle?: string): string {
+  const trimmedExplicit = explicitTitle?.trim();
+  if (trimmedExplicit) {
+    return trimmedExplicit;
+  }
+
+  const frontmatterTitle = extractFrontmatterTitle(markdown);
+  if (frontmatterTitle) {
+    return frontmatterTitle;
+  }
+
+  const headingMatch = markdown.match(/^#\s+(.+)$/m);
+  if (headingMatch?.[1]?.trim()) {
+    return headingMatch[1].trim();
+  }
+
+  return 'Assignment Preview';
+}
+
+function extractFrontmatterTitle(markdown: string): string | null {
+  const frontmatterMatch = markdown.match(/^---\n[\s\S]*?\n---\n/);
+  if (!frontmatterMatch) {
+    return null;
+  }
+
+  const titleMatch = frontmatterMatch[0].match(/^\s*title:\s*(.+)\s*$/im);
+  const titleValue = titleMatch?.[1]?.trim();
+  if (!titleValue) {
+    return null;
+  }
+
+  return titleValue.replaceAll(/^['"]|['"]$/g, '');
 }
 
 function insertGeneratedPreviewAudio(
@@ -739,6 +774,7 @@ export function registerExtendedRoutes(app: FastifyInstance, options: ExtendedRo
         text: z.string().min(1),
         title: z.string().trim().min(1).optional(),
         preset: z.string().trim().min(1).nullable().optional(),
+        learningPresetId: z.string().trim().min(1).nullable().optional(),
         audioUrl: z.string().trim().nullable().optional(),
         pronunciationAudioUrl: z.string().trim().nullable().optional(),
       });
@@ -746,7 +782,19 @@ export function registerExtendedRoutes(app: FastifyInstance, options: ExtendedRo
       try {
         const body = schema.parse(request.body ?? {});
         let headingTheme: { h2?: string; h3?: string } | undefined;
-        const presetName = body.preset?.trim();
+        let presetName = body.preset?.trim();
+        if (!presetName && body.learningPresetId?.trim()) {
+          const defaults = getDefaultSettings();
+          presetName = defaults.defaultPreset;
+          const authenticatedUser = getAuthenticatedUser(request);
+          if (authenticatedUser?.id) {
+            let settings = await getSettingsByUserId(authenticatedUser.id);
+            if (!settings) {
+              settings = await createDefaultSettings(authenticatedUser.id);
+            }
+            presetName = settings.defaultPreset || presetName;
+          }
+        }
         if (presetName) {
           const configPaths = resolveConfigPaths({
             configDir: config.orchestrator.configDir,
@@ -770,7 +818,7 @@ export function registerExtendedRoutes(app: FastifyInstance, options: ExtendedRo
           pronunciationAudioUrl: body.pronunciationAudioUrl,
           includePronunciation: hasPronunciationReferenceMode(body.text),
         });
-        const html = await createStaticPageHtml(markdown, body.title ?? 'Assignment Preview', {
+        const html = await createStaticPageHtml(markdown, resolvePreviewTitle(body.text, body.title), {
           headingTheme,
         });
 

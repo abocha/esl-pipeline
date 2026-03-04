@@ -94,6 +94,7 @@ export async function rerunPublish(
     sourceJobId: jobId,
     rerun: {
       steps: ['add-audio'],
+      manifestMd: job.md,
       upload: payload.upload ?? 's3',
       force: false,
       voiceId: job.voiceId ?? undefined,
