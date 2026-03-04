@@ -318,7 +318,7 @@ export const MinimalAssignment: React.FC = () => {
   const [jobProvenanceError, setJobProvenanceError] = useState<string | null>(null);
 
   const [showRerunAdvanced, setShowRerunAdvanced] = useState(false);
-  const [rerunForceTts, setRerunForceTts] = useState(true);
+  const [rerunForceTts, setRerunForceTts] = useState(false);
   const [rerunVoiceId, setRerunVoiceId] = useState('');
   const [rerunVoiceAccent, setRerunVoiceAccent] = useState('');
   const [rerunTtsStrategy, setRerunTtsStrategy] = useState<'auto' | 'dialogue' | 'tts'>('auto');
@@ -1348,8 +1348,9 @@ export const MinimalAssignment: React.FC = () => {
         selectedPreset && presetOptionIds.includes(selectedPreset) ? selectedPreset : null;
       const htmlResponse = await renderHtmlPreview({
         text: normalizedDraft,
-        title: 'Assignment Preview',
-        preset: validPreset,
+        title: validationResult.meta?.title?.trim() || undefined,
+        preset: learningPresetCatalogEnabled ? null : validPreset,
+        learningPresetId: learningPresetCatalogEnabled ? validPreset : null,
       });
       const html = htmlResponse.html;
       setPreviewHtml(html);
@@ -1547,7 +1548,7 @@ export const MinimalAssignment: React.FC = () => {
         ? studentNameById.get(job.studentId) ?? `Student ${job.studentId.slice(0, 8)}`
         : 'No student';
       if (isAudioRerun) {
-        const rerunMode = job.forceTts === false ? 'cache allowed' : 'forced';
+        const rerunMode = job.forceTts === true ? 'forced' : 'cache allowed';
         if (!job.studentId) {
           return `Audio rerun (${rerunMode})`;
         }

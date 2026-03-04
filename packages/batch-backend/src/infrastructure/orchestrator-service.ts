@@ -163,6 +163,7 @@ interface RunJobSettings {
 export interface RunRerunAssignmentPayload {
   jobId: string;
   md: string;
+  manifestMd?: string;
   steps?: NonNullable<RerunFlags['steps']>;
   upload?: 's3';
   force?: boolean;

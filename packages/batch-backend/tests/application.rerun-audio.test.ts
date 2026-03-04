@@ -104,6 +104,53 @@ describe('application/job-actions/rerun-audio', () => {
     expect(enqueueSpy).not.toHaveBeenCalled();
   });
 
+  it('defaults rerun audio to cache reuse when forceTts is omitted', async () => {
+    getJobByIdSpy.mockResolvedValue({
+      id: 'job-source',
+      state: 'succeeded',
+      md: '/tmp/lesson.md',
+      preset: 'b1-default',
+      voiceId: 'voice-old',
+      voiceAccent: 'american',
+      notionDatabase: 'db-1',
+      publishTarget: 'notion',
+      ttsStrategy: 'auto',
+      userId: 'user-1',
+      autoPublish: false,
+    } as never);
+    insertJobSpy.mockResolvedValue({
+      id: 'job-rerun',
+      state: 'queued',
+    } as never);
+
+    const result = await rerunAudio('job-source', makeAction());
+
+    expect(insertJobSpy).toHaveBeenCalledWith(
+      expect.objectContaining({
+        md: '/tmp/lesson.md',
+        withTts: true,
+        upload: 's3',
+        forceTts: false,
+      }),
+    );
+    expect(enqueueSpy).toHaveBeenCalledWith(
+      expect.objectContaining({
+        jobId: 'job-rerun',
+        executionMode: 'rerun_audio',
+        rerun: expect.objectContaining({
+          manifestMd: '/tmp/lesson.md',
+          force: false,
+        }),
+      }),
+    );
+    expect(result).toMatchObject({
+      success: true,
+      message: 'Audio rerun queued (cache reuse allowed)',
+      jobId: 'job-rerun',
+      actionType: JobActionType.RERUN_AUDIO,
+    });
+  });
+
   it('creates and enqueues a rerun job for succeeded source jobs', async () => {
     getJobByIdSpy.mockResolvedValue({
       id: 'job-source',
@@ -159,6 +206,7 @@ describe('application/job-actions/rerun-audio', () => {
       sourceJobId: 'job-source',
       rerun: {
         steps: ['tts', 'upload', 'add-audio'],
+        manifestMd: '/tmp/lesson.md',
         upload: 's3',
         force: true,
         voiceId: 'voice-new',

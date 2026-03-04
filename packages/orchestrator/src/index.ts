@@ -1530,6 +1530,7 @@ export async function rerunAssignment(
   const metrics = dependencies.metrics ?? fallbackMetrics;
   const runId = dependencies.runId ?? randomUUID();
   const signal = dependencies.signal;
+  const manifestMd = flags.manifestMd?.trim() || flags.md;
   const pipelineStartedAt = Date.now();
   const stageStartTimes = new Map<AssignmentStage, number>();
   throwIfCancelled(signal, 'tts');
@@ -1592,14 +1593,14 @@ export async function rerunAssignment(
     message: 'pipeline.rerunAssignment.start',
     runId,
     stage: 'pipeline',
-    detail: { md: flags.md, requestedSteps: flags.steps },
+    detail: { md: flags.md, manifestMd, requestedSteps: flags.steps },
   });
 
   try {
     throwIfCancelled(signal, 'tts');
-    const manifest = await manifestStore.readManifest(flags.md);
+    const manifest = await manifestStore.readManifest(manifestMd);
     const rerunPlan = computeRerunPlan({
-      md: flags.md,
+      md: manifestMd,
       steps: flags.steps,
       manifest,
     });
@@ -1615,7 +1616,7 @@ export async function rerunAssignment(
 
     // Planner guarantees manifest presence when no errors are reported.
     if (!manifest) {
-      throw new ValidationError(`No manifest found for ${flags.md}. Run the pipeline first.`);
+      throw new ValidationError(`No manifest found for ${manifestMd}. Run the pipeline first.`);
     }
 
     const mdContents = await readMarkdownCached(flags.md);
@@ -2079,7 +2080,7 @@ export async function rerunAssignment(
 
     emitStage('manifest', 'start');
     throwIfCancelled(signal, 'manifest');
-    const manifestPath = await manifestStore.writeManifest(flags.md, updatedManifest);
+    const manifestPath = await manifestStore.writeManifest(manifestMd, updatedManifest);
     throwIfCancelled(signal, 'manifest');
     emitStage('manifest', 'success', { manifestPath });
 

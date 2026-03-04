@@ -76,6 +76,7 @@ export interface AssignmentStatus {
 
 export interface RerunFlags {
   md: string;
+  manifestMd?: string;
   steps?: ('tts' | 'upload' | 'add-audio')[];
   voices?: string;
   out?: string;

@@ -149,6 +149,7 @@ describe('application/job-actions/rerun-publish', () => {
       sourceJobId: 'job-source',
       rerun: {
         steps: ['add-audio'],
+        manifestMd: '/tmp/lesson.md',
         upload: 's3',
         force: false,
         voiceId: 'voice-old',
