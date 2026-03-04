@@ -84,7 +84,7 @@ const DEFAULT_CSS = `
   --inline-code-bg: #ece8e1;
   --inline-code-text: #2a2a2a;
   --toc-link: #36475d;
-  --table-head-bg: color-mix(in srgb, var(--page-card) 82%, var(--page-bg) 18%);
+  --table-head-bg: color-mix(in srgb, var(--theme-h2) 14%, var(--page-card) 86%);
 }
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
@@ -105,6 +105,7 @@ const DEFAULT_CSS = `
     --inline-code-bg: #2e2a26;
     --inline-code-text: #d8d4cc;
     --toc-link: #9aa8b8;
+    --table-head-bg: color-mix(in srgb, var(--theme-h2) 28%, var(--page-card) 72%);
   }
 }
 [data-theme="dark"] {
@@ -125,6 +126,7 @@ const DEFAULT_CSS = `
   --inline-code-bg: #2e2a26;
   --inline-code-text: #d8d4cc;
   --toc-link: #9aa8b8;
+  --table-head-bg: color-mix(in srgb, var(--theme-h2) 28%, var(--page-card) 72%);
 }
 html {
   scroll-behavior: smooth;
@@ -410,6 +412,39 @@ body {
 .column {
   min-width: 240px;
 }
+.column-list.grammar-matrix-grid {
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 16px;
+  margin: 16px 0 20px;
+  padding: clamp(14px, 2vw, 22px);
+  border-radius: 18px;
+  border: 1px solid color-mix(in srgb, var(--callout-border) 55%, var(--page-line) 45%);
+  background:
+    linear-gradient(
+      140deg,
+      color-mix(in srgb, var(--callout-bg) 68%, transparent 32%) 0%,
+      color-mix(in srgb, var(--page-card) 92%, transparent 8%) 100%
+    );
+}
+.column-list.grammar-matrix-grid .column {
+  min-width: 0;
+  padding: 14px 16px 15px;
+  border-radius: 14px;
+  border: 1px solid color-mix(in srgb, var(--page-line) 74%, var(--callout-border) 26%);
+  background: color-mix(in srgb, var(--page-card) 90%, #ffffff 10%);
+  box-shadow: 0 10px 22px color-mix(in srgb, var(--page-line) 42%, transparent 58%);
+}
+.column-list.grammar-matrix-grid .column > :first-child {
+  margin-top: 0;
+}
+.column-list.grammar-matrix-grid .column > :last-child {
+  margin-bottom: 0;
+}
+.column-list.grammar-matrix-grid .column p:first-child strong {
+  display: inline-block;
+  padding: 2px 0 8px;
+  border-bottom: 1px dashed color-mix(in srgb, var(--page-line) 65%, transparent 35%);
+}
 .video-embed {
   position: relative;
   padding-top: 56.25%;
@@ -588,6 +623,10 @@ th {
   .column-list {
     grid-template-columns: 1fr;
   }
+  .column-list.grammar-matrix-grid {
+    padding: 12px;
+    gap: 12px;
+  }
 }
 .theme-toggle {
   position: fixed;
@@ -712,7 +751,9 @@ export async function renderToHtml(
   const bodyHtml = replaceColumnMarkers(md.render(prepared));
   const withEmbeddedAudio = replaceAudioLinks(decorateAudioPlayers(bodyHtml));
   const withCollapsibleToc = wrapTableOfContents(withEmbeddedAudio);
-  const safeBody = sanitizeRenderedHtml(withCollapsibleToc, resolved.allowRawHtml);
+  const withVocabularyHeaders = promoteUsefulChunksTableHeader(withCollapsibleToc);
+  const withGrammarMatrix = decorateNoticeGrammarColumns(withVocabularyHeaders);
+  const safeBody = sanitizeRenderedHtml(withGrammarMatrix, resolved.allowRawHtml);
   const css = buildCss(resolved);
   const header = renderHeader(resolvedTitle, frontmatter, resolved);
   const behaviorScript = buildBehaviorScript(resolved.features);
@@ -1388,6 +1429,67 @@ function wrapTableOfContents(html: string): string {
     /<(nav|div)\s+class="table-of-contents"[\s\S]*?<\/\1>/gi,
     (tocHtml) => `<details class="toc-shell"><summary>Contents</summary><div class="content"><div class="content-inner">${tocHtml}</div></div></details>`,
   );
+}
+
+function promoteUsefulChunksTableHeader(html: string): string {
+  return html.replaceAll(
+    /(<h([1-6])\b[^>]*>[\s\S]*?<\/h\2>)([\s\S]*?)(?=<h[1-6]\b[^>]*>|$)/gi,
+    (fullSection, headingHtml, _headingLevel, sectionHtml) => {
+      const normalizedHeading = normalizeHeadingText(headingHtml);
+      if (!normalizedHeading.includes('useful chunks & vocabulary')) {
+        return fullSection;
+      }
+      return `${headingHtml}${promoteFirstTableRowToHeaderCells(sectionHtml)}`;
+    },
+  );
+}
+
+function decorateNoticeGrammarColumns(html: string): string {
+  return html.replaceAll(
+    /(<h([1-6])\b[^>]*>[\s\S]*?<\/h\2>)([\s\S]*?)(?=<h[1-6]\b[^>]*>|$)/gi,
+    (fullSection, headingHtml, _headingLevel, sectionHtml) => {
+      const normalizedHeading = normalizeHeadingText(headingHtml);
+      if (!normalizedHeading.includes('notice the grammar')) {
+        return fullSection;
+      }
+
+      const decoratedSection = sectionHtml.replace(
+        /<div class="column-list">/,
+        '<div class="column-list grammar-matrix-grid">',
+      );
+      return `${headingHtml}${decoratedSection}`;
+    },
+  );
+}
+
+function promoteFirstTableRowToHeaderCells(sectionHtml: string): string {
+  return sectionHtml.replace(/<table\b[^>]*>[\s\S]*?<\/table>/i, (tableHtml) => {
+    if (/<th\b/i.test(tableHtml)) {
+      return tableHtml;
+    }
+
+    return tableHtml.replace(/<tr\b[^>]*>[\s\S]*?<\/tr>/i, (rowHtml) => {
+      if (!/<td\b/i.test(rowHtml)) {
+        return rowHtml;
+      }
+      return rowHtml
+        .replaceAll(/<td(\s[^>]*)?>/gi, (_fullCell, attrs = '') => {
+          if (/\bscope\s*=/.test(attrs)) {
+            return `<th${attrs}>`;
+          }
+          return `<th${attrs} scope="col">`;
+        })
+        .replaceAll(/<\/td>/gi, '</th>');
+    });
+  });
+}
+
+function normalizeHeadingText(headingHtml: string): string {
+  return stripHtml(headingHtml)
+    .replaceAll(/&(?:amp|#38|#x26);/gi, '&')
+    .replaceAll(/\s+/g, ' ')
+    .trim()
+    .toLowerCase();
 }
 
 function buildCss(options: ResolvedRenderOptions): string {

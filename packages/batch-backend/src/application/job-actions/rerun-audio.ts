@@ -83,7 +83,7 @@ export async function rerunAudio(jobId: string, action: RerunAudioAction): Promi
     upload: 's3',
     voiceId: payload.voiceId ?? job.voiceId ?? undefined,
     voiceAccent: payload.voiceAccent ?? job.voiceAccent ?? undefined,
-    forceTts: payload.forceTts ?? true,
+    forceTts: payload.forceTts ?? false,
     notionDatabase: job.notionDatabase ?? undefined,
     publishTarget: job.publishTarget ?? undefined,
     ttsStrategy: payload.ttsStrategy ?? job.ttsStrategy ?? undefined,
@@ -101,8 +101,9 @@ export async function rerunAudio(jobId: string, action: RerunAudioAction): Promi
     sourceJobId: jobId,
     rerun: {
       steps: ['tts', 'upload', 'add-audio'],
+      manifestMd: job.md,
       upload: 's3',
-      force: payload.forceTts ?? true,
+      force: payload.forceTts ?? false,
       voiceId: payload.voiceId ?? job.voiceId ?? undefined,
       accentPreference: payload.voiceAccent ?? job.voiceAccent ?? undefined,
       ttsStrategy: payload.ttsStrategy ?? job.ttsStrategy ?? undefined,
@@ -115,7 +116,7 @@ export async function rerunAudio(jobId: string, action: RerunAudioAction): Promi
   return {
     success: true,
     message:
-      payload.forceTts ?? true
+      payload.forceTts ?? false
         ? 'Audio rerun queued (forced regeneration)'
         : 'Audio rerun queued (cache reuse allowed)',
     jobId: rerunJob.id,

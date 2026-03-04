@@ -2,6 +2,7 @@ import { request as httpRequest } from 'node:http';
 import { Readable } from 'node:stream';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { validateMarkdown } from '@esl-pipeline/md-validator';
+import * as notionAdapterModule from '@esl-pipeline/notion-adapter';
 
 import * as approveJobModule from '../src/application/approve-job.js';
 import * as createDraftModule from '../src/application/create-draft.js';
@@ -35,6 +36,7 @@ import type { RecordingRecord } from '../src/domain/recording-model.js';
 import * as recordingRepositoryModule from '../src/domain/recording-repository.js';
 import { deriveStudentId } from '../src/domain/student-utils.js';
 import * as transcriptRepositoryModule from '../src/domain/transcript-repository.js';
+import * as settingsRepositoryModule from '../src/domain/settings-repository.js';
 import * as loggerModule from '../src/infrastructure/logger.js';
 import * as transcriptionStorageModule from '../src/infrastructure/transcription-storage.js';
 import { createHttpServer } from '../src/transport/http-server.js';
@@ -2787,6 +2789,99 @@ describe('transport/http-server - integration (in-process)', () => {
     expect(payload.html).toContain('Audio track generating...');
     expect(payload.html).toContain('audio-placeholder');
     expect(payload.html).not.toContain('esl-generated-study-text-audio-placeholder');
+  });
+
+  it('POST /preview/html derives title from markdown heading when title is omitted', async () => {
+    const response = await app.inject({
+      method: 'POST',
+      url: '/preview/html',
+      payload: {
+        text: ['# Lesson heading from markdown', '', 'Body text.'].join('\n'),
+      },
+    });
+
+    expect(response.statusCode).toBe(200);
+    const payload = response.json() as { html: string };
+    expect(payload.html).toContain('<h1 class="hero-title">Lesson heading from markdown</h1>');
+  });
+
+  it('POST /preview/html derives title from frontmatter when heading title is omitted', async () => {
+    const response = await app.inject({
+      method: 'POST',
+      url: '/preview/html',
+      payload: {
+        text: ['---', 'title: "Frontmatter Lesson"', '---', '', 'Body text.'].join('\n'),
+      },
+    });
+
+    expect(response.statusCode).toBe(200);
+    const payload = response.json() as { html: string };
+    expect(payload.html).toContain('<h1 class="hero-title">Frontmatter Lesson</h1>');
+  });
+
+  it('POST /preview/html derives title from CRLF frontmatter when heading title is omitted', async () => {
+    const response = await app.inject({
+      method: 'POST',
+      url: '/preview/html',
+      payload: {
+        text: ['---', 'title: "CRLF Frontmatter Lesson"', '---', '', 'Body text.'].join('\r\n'),
+      },
+    });
+
+    expect(response.statusCode).toBe(200);
+    const payload = response.json() as { html: string };
+    expect(payload.html).toContain('<h1 class="hero-title">CRLF Frontmatter Lesson</h1>');
+  });
+
+  it('POST /preview/html derives title from frontmatter at EOF without trailing newline', async () => {
+    const response = await app.inject({
+      method: 'POST',
+      url: '/preview/html',
+      payload: {
+        text: ['---', 'title: "EOF Frontmatter Lesson"', '---'].join('\n'),
+      },
+    });
+
+    expect(response.statusCode).toBe(200);
+    const payload = response.json() as { html: string };
+    expect(payload.html).toContain('<h1 class="hero-title">EOF Frontmatter Lesson</h1>');
+  });
+
+  it('POST /preview/html resolves heading colors from user default preset when learning preset is selected', async () => {
+    const getSettingsSpy = vi
+      .spyOn(settingsRepositoryModule, 'getSettingsByUserId')
+      .mockResolvedValue({
+        defaultPreset: 'b1-default',
+      } as Awaited<ReturnType<typeof settingsRepositoryModule.getSettingsByUserId>>);
+    const createDefaultSpy = vi.spyOn(settingsRepositoryModule, 'createDefaultSettings');
+    const loadPresetSpy = vi.spyOn(notionAdapterModule, 'loadPreset').mockResolvedValue({
+      h2: 'blue',
+      h3: 'green',
+    });
+
+    try {
+      const response = await app.inject({
+        method: 'POST',
+        url: '/preview/html',
+        payload: {
+          text: '# Theme parity',
+          learningPresetId: 'general-english',
+        },
+      });
+
+      expect(response.statusCode).toBe(200);
+      expect(getSettingsSpy).toHaveBeenCalledWith('test-user-id');
+      expect(createDefaultSpy).not.toHaveBeenCalled();
+      expect(loadPresetSpy).toHaveBeenCalledWith('b1-default', expect.any(String));
+
+      const payload = response.json() as { html: string };
+      expect(payload.html).toContain('--theme-h2: #2d9cdb;');
+      expect(payload.html).toContain('--theme-h3: #27ae60;');
+    } finally {
+      getSettingsSpy.mockRestore();
+      createDefaultSpy.mockRestore();
+      loadPresetSpy.mockRestore();
+    }
   });
 
   it('POST /preview/html injects pronunciation placeholder in shadow_sentence mode', async () => {

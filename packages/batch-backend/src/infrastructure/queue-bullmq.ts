@@ -16,6 +16,7 @@ export interface QueueJobPayload {
   sourceJobId?: string;
   rerun?: {
     steps?: ('tts' | 'upload' | 'add-audio')[];
+    manifestMd?: string;
     upload?: 's3';
     force?: boolean;
     prefix?: string;

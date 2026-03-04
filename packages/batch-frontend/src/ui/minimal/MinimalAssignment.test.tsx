@@ -1907,7 +1907,7 @@ describe('MinimalAssignment', () => {
 
     await waitFor(() => {
       expect(api.rerunAudioJob).toHaveBeenCalledWith('job-1', {
-        forceTts: true,
+        forceTts: false,
         ttsStrategy: 'auto',
       });
     });
@@ -1934,7 +1934,7 @@ describe('MinimalAssignment', () => {
       expect(api.rerunAudioJob).toHaveBeenCalledWith(
         'job-1',
         expect.objectContaining({
-          forceTts: true,
+          forceTts: false,
           voiceId: 'voice-new',
           voiceAccent: 'british',
           ttsStrategy: 'dialogue',

@@ -375,6 +375,11 @@ function createConfig(): BatchBackendConfig {
     worker: {
       concurrency: 1,
       maxConcurrentFfmpeg: 1,
+      ttsCacheDir: '/tmp/tts-cache',
+      ttsCacheMaxAgeDays: 30,
+      ttsCacheMaxBytes: 10 * 1024 * 1024 * 1024,
+      ttsCacheMaintenanceIntervalMinutes: 60,
+      ttsCacheMaintenanceLockKey: '910021',
     },
     mail: {
       enabled: false,

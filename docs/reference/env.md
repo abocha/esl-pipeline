@@ -196,6 +196,12 @@ Use `.env.batch-backend` for the service stack. It includes all core keys above 
   - `DEEPGRAM_API_KEY`, `DEEPGRAM_ACCESS_TOKEN` (optional), `DEEPGRAM_MODEL`, `DEEPGRAM_LANGUAGE`,
     `DEEPGRAM_STORE_RAW_RESPONSE`
   - `WORKER_CONCURRENCY`, `MAX_CONCURRENT_FFMPEG`
+  - ElevenLabs TTS cache controls:
+    - `BATCH_TTS_CACHE_DIR` (default `./tmp/tts-cache`) — persistent audio cache directory used by worker pipeline runs.
+    - `BATCH_TTS_CACHE_MAX_AGE_DAYS` (default `30`) — age-based pruning threshold for cached artifacts.
+    - `BATCH_TTS_CACHE_MAX_BYTES` (default `10737418240`) — size cap (10 GB) for cache pruning.
+    - `BATCH_TTS_CACHE_MAINTENANCE_INTERVAL_MINUTES` (default `60`) — minimum interval between cache cleanup passes.
+    - `BATCH_TTS_CACHE_MAINTENANCE_LOCK_KEY` (default `910021`) — Postgres advisory lock key used to coordinate cache cleanup across worker processes.
 - Storage (recordings, transcripts, drafts):
   - `STORAGE_PROVIDER` (`filesystem`|`s3`, auto-selects when unset)
   - `S3_REGION` or `AWS_REGION`

@@ -905,6 +905,7 @@ export async function renderHtmlPreview(params: {
   text: string;
   title?: string;
   preset?: string | null;
+  learningPresetId?: string | null;
   audioUrl?: string | null;
   pronunciationAudioUrl?: string | null;
 }): Promise<{ html: string }> {
@@ -913,6 +914,7 @@ export async function renderHtmlPreview(params: {
       text: params.text,
       title: params.title,
       preset: params.preset,
+      learningPresetId: params.learningPresetId,
       audioUrl: params.audioUrl,
       pronunciationAudioUrl: params.pronunciationAudioUrl,
     });

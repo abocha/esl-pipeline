@@ -198,6 +198,27 @@ Queue:
 - `BATCH_JOBS_QUEUE_NAME`
   - BullMQ queue name used by both API and worker.
   - Default: `esl-jobs`.
+- `WORKER_CONCURRENCY`
+  - Max concurrent jobs handled by the worker process.
+  - Default: `5`.
+- `MAX_CONCURRENT_FFMPEG`
+  - Caps concurrent FFmpeg operations (must be `<= WORKER_CONCURRENCY`).
+  - Default: `3`.
+- `BATCH_TTS_CACHE_DIR`
+  - Persistent cache directory for ElevenLabs TTS output artifacts.
+  - Default: `./tmp/tts-cache` (resolved from process working directory).
+- `BATCH_TTS_CACHE_MAX_AGE_DAYS`
+  - Age threshold for cache cleanup.
+  - Default: `30`.
+- `BATCH_TTS_CACHE_MAX_BYTES`
+  - Total size cap (bytes) for cache cleanup.
+  - Default: `10737418240` (10 GB).
+- `BATCH_TTS_CACHE_MAINTENANCE_INTERVAL_MINUTES`
+  - Minimum interval between cache cleanup passes in each worker process.
+  - Default: `60`.
+- `BATCH_TTS_CACHE_MAINTENANCE_LOCK_KEY`
+  - Postgres advisory lock key used to coordinate cache cleanup across worker processes.
+  - Default: `910021`.
 
 MinIO / S3-compatible manifest storage:
 
