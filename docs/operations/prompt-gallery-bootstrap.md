@@ -1,5 +1,14 @@
 # Prompt Gallery Bootstrap (DB-Canonical Runtime)
 
+## Meta
+
+- Audience: maintainers and AI agents deploying batch-backend environments.
+- Authority Level: operations runbook.
+- Last Verified Against: 2026-03-04 repo state.
+- Owner: backend maintainer + automation agents.
+- Review Cadence: monthly or after prompt/runtime model changes.
+- Status: `runbook`.
+
 Prompt templates and profiles are now runtime-managed from PostgreSQL revision tables.
 Backend startup validates DB prompt catalog readiness and fails if defaults are not active.
 

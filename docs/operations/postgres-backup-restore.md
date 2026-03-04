@@ -1,5 +1,14 @@
 # Postgres Backup & Restore (Docker Routine)
 
+## Meta
+
+- Audience: maintainers and AI agents operating backup/restore locally.
+- Authority Level: operations runbook.
+- Last Verified Against: 2026-03-04 repo state.
+- Owner: ops maintainer + automation agents.
+- Review Cadence: monthly or after backup script changes.
+- Status: `runbook`.
+
 This runbook standardizes safe Postgres backups/restores for the local Docker stack.
 For S3 archival + automated scheduling, see
 `docs/operations/postgres-backup-s3.md`.

@@ -1,5 +1,14 @@
 # Postgres Backup to S3 (Automated + Restorable)
 
+## Meta
+
+- Audience: maintainers and AI agents operating backup archival.
+- Authority Level: operations runbook.
+- Last Verified Against: 2026-03-04 repo state.
+- Owner: ops maintainer + automation agents.
+- Review Cadence: monthly or after scheduler/env changes.
+- Status: `runbook`.
+
 This runbook adds remote backup archival on top of the local Docker backup routine.
 
 For alerting/status/key-rotation operational checks, see:

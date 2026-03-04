@@ -2,7 +2,7 @@
 
 Internal batch execution backend for the ESL Pipeline monorepo.
 
-`@esl-pipeline/batch-backend` exposes a small, stable HTTP and queue surface for running ESL pipeline assignments asynchronously. It wraps the canonical pipeline engine from [`@esl-pipeline/orchestrator`](packages/orchestrator/README.md) behind a durable job model backed by Postgres, Redis/BullMQ, and optional S3/MinIO-based manifest storage. Callers submit Markdown-based jobs and track their lifecycle via this service, while all domain behavior (validation, extraction, Notion, TTS, uploads) remains owned by the orchestrator.
+`@esl-pipeline/batch-backend` exposes a small, stable HTTP and queue surface for running ESL pipeline assignments asynchronously. It wraps the canonical pipeline engine from [`@esl-pipeline/orchestrator`](../orchestrator/README.md) behind a durable job model backed by Postgres, Redis/BullMQ, and optional S3/MinIO-based manifest storage. Callers submit Markdown-based jobs and track their lifecycle via this service, while all domain behavior (validation, extraction, Notion, TTS, uploads) remains owned by the orchestrator.
 
 Within the monorepo, `batch-backend` is the standardized “batch execution surface”: external systems talk only to this service (HTTP/queue). The service is responsible for persistence, queuing, retries, and observability; actual lesson-processing semantics are delegated to the orchestrator and its adapters as defined in the SSOT.
 
@@ -52,25 +52,25 @@ High-level view:
 
 Key modules (indicative):
 
-- Config: [`loadConfig.declaration()`](packages/batch-backend/src/config/env.ts:81)
-- Job model and transitions: [`JobState` and helpers](packages/batch-backend/src/domain/job-model.ts:26)
-- Repository: [`job-repository.declaration()`](packages/batch-backend/src/domain/job-repository.ts:14)
-- Queue adapter: [`queue-bullmq.declaration()`](packages/batch-backend/src/infrastructure/queue-bullmq.ts:24)
-- Orchestrator bridge: [`orchestrator-service.declaration()`](packages/batch-backend/src/infrastructure/orchestrator-service.ts:23)
-- HTTP server: [`createHttpServer.declaration()`](packages/batch-backend/src/transport/http-server.ts:53)
-- Worker runner: [`startWorker.declaration()`](packages/batch-backend/src/transport/worker-runner.ts:17)
+- Config: [`loadConfig.declaration()`](src/config/env.ts:81)
+- Job model and transitions: [`JobState` and helpers](src/domain/job-model.ts:26)
+- Repository: [`job-repository.declaration()`](src/domain/job-repository.ts:14)
+- Queue adapter: [`queue-bullmq.declaration()`](src/infrastructure/queue-bullmq.ts:24)
+- Orchestrator bridge: [`orchestrator-service.declaration()`](src/infrastructure/orchestrator-service.ts:23)
+- HTTP server: [`createHttpServer.declaration()`](src/transport/http-server.ts:53)
+- Worker runner: [`startWorker.declaration()`](src/transport/worker-runner.ts:17)
 
-For authoritative contracts, see [`docs/batch-backend-ssot.md`](docs/batch-backend-ssot.md).
+For authoritative contracts, see [`docs/batch-backend-ssot.md`](../../docs/backend-frontend/batch-backend-ssot.md).
 
 ---
 
 ## Installation and Prerequisites
 
-This package is designed to run inside the ESL Pipeline monorepo or as a built container image. It is marked `private` in [`package.json`](packages/batch-backend/package.json) and is not intended for standalone npm consumption.
+This package is designed to run inside the ESL Pipeline monorepo or as a built container image. It is marked `private` in [`package.json`](package.json) and is not intended for standalone npm consumption.
 
 Prerequisites:
 
-- Node.js 24.10.0+ (aligned with repo toolchain)
+- Node.js 24.11.1+ (aligned with repo toolchain)
 - pnpm 8+ (`corepack enable`)
 - Postgres (for job persistence)
 - Redis (for BullMQ queue)
@@ -106,14 +106,14 @@ Install and build inside the monorepo:
     ```bash
     pnpm --filter @esl-pipeline/batch-backend start:api
     ```
-  - Entrypoint: [`startHttpServer.declaration()`](packages/batch-backend/src/transport/http-server.ts:145)
+  - Entrypoint: [`startHttpServer.declaration()`](src/transport/http-server.ts:145)
 
 - Worker:
   - Script:
     ```bash
     pnpm --filter @esl-pipeline/batch-backend start:worker
     ```
-  - Entrypoint: [`startWorker.declaration()`](packages/batch-backend/src/transport/worker-runner.ts:17)
+  - Entrypoint: [`startWorker.declaration()`](src/transport/worker-runner.ts:17)
 
 Both require consistent `PG_*`, `REDIS_*`, and orchestrator-related env configuration.
 
@@ -129,7 +129,7 @@ For local development, use the root `docker-compose.yml` to start:
 
 ## Configuration
 
-All configuration is centralized in [`loadConfig.declaration()`](packages/batch-backend/src/config/env.ts:81). The following environment variables are recognized.
+All configuration is centralized in [`loadConfig.declaration()`](src/config/env.ts:81). The following environment variables are recognized.
 
 Batch-backend executable entrypoints (API server, workers, and one-off tools) auto-load env files using the shared CLI env loader. By default they read `.env.batch-backend` and `.env` from the current working directory, plus repo-root `.env` when available.
 
@@ -261,14 +261,14 @@ Experimental extended API:
 
 ## Public HTTP API
 
-HTTP behavior is implemented in [`createHttpServer.declaration()`](packages/batch-backend/src/transport/http-server.ts:53) and exposed via [`startHttpServer.declaration()`](packages/batch-backend/src/transport/http-server.ts:145).
+HTTP behavior is implemented in [`createHttpServer.declaration()`](src/transport/http-server.ts:53) and exposed via [`startHttpServer.declaration()`](src/transport/http-server.ts:145).
 
 Security/auth:
 
 - Core job endpoints do not implement authentication or authorization. Deploy behind trusted ingress (API gateway, service mesh, etc.) and enforce auth there.
-- Experimental uploads/admin/user endpoints (when `BATCH_BACKEND_ENABLE_EXTENDED_API=true`) reuse the shared auth middleware documented in `docs/batch-backend-ssot.md`, but those routes are off by default.
+- Experimental uploads/admin/user endpoints (when `BATCH_BACKEND_ENABLE_EXTENDED_API=true`) reuse the shared auth middleware documented in `docs/backend-frontend/batch-backend-ssot.md`, but those routes are off by default.
 
-Error envelope (via [`errorResponse.declaration()`](packages/batch-backend/src/transport/http-server.ts:14)):
+Error envelope (via [`errorResponse.declaration()`](src/transport/http-server.ts:14)):
 
 - Validation error (`400`):
   - `{"error":"validation_failed","message":string,"code":string}`
@@ -279,7 +279,7 @@ Error envelope (via [`errorResponse.declaration()`](packages/batch-backend/src/t
 
 ### POST /jobs
 
-[`POST /jobs`](packages/batch-backend/src/transport/http-server.ts:58)
+[`POST /jobs`](src/transport/http-server.ts:58)
 
 Submit a new asynchronous ESL pipeline job.
 
@@ -329,7 +329,7 @@ Side effects:
 
 ### GET /jobs/:jobId
 
-[`GET /jobs/:jobId`](packages/batch-backend/src/transport/http-server.ts:103)
+[`GET /jobs/:jobId`](src/transport/http-server.ts:103)
 
 Retrieve the current status and metadata for a previously submitted job.
 
@@ -383,7 +383,7 @@ Side effects:
 ## Extended API (experimental)
 
 When `BATCH_BACKEND_ENABLE_EXTENDED_API=true`, authenticated endpoints are enabled in `transport/extended-routes.ts`.
-See [`docs/backend-frontend/batch-backend-ssot.md`](docs/backend-frontend/batch-backend-ssot.md) for the canonical list. Key additions used by the batch UI:
+See [`docs/backend-frontend/batch-backend-ssot.md`](../../docs/backend-frontend/batch-backend-ssot.md) for the canonical list. Key additions used by the batch UI:
 
 - `GET /recordings/:id/audio` (Range support for playback)
 - `POST /validation/markdown` (returns warnings/errors/meta)
@@ -398,15 +398,15 @@ See [`docs/backend-frontend/batch-backend-ssot.md`](docs/backend-frontend/batch-
 
 Worker behavior combines:
 
-- [`startWorker.declaration()`](packages/batch-backend/src/transport/worker-runner.ts:17)
-- [`createJobWorker.declaration()`](packages/batch-backend/src/infrastructure/queue-bullmq.ts:77)
-- [`processQueueJob.declaration()`](packages/batch-backend/src/application/process-queue-job.ts:18)
-- [`runAssignmentJob.declaration()`](packages/batch-backend/src/infrastructure/orchestrator-service.ts:62)
+- [`startWorker.declaration()`](src/transport/worker-runner.ts:17)
+- [`createJobWorker.declaration()`](src/infrastructure/queue-bullmq.ts:77)
+- [`processQueueJob.declaration()`](src/application/process-queue-job.ts:18)
+- [`runAssignmentJob.declaration()`](src/infrastructure/orchestrator-service.ts:62)
 
 End-to-end flow:
 
 1. Queueing
-   - `POST /jobs` enqueues `{ jobId }` via [`createJobQueue`](packages/batch-backend/src/infrastructure/queue-bullmq.ts:24).
+   - `POST /jobs` enqueues `{ jobId }` via [`createJobQueue`](src/infrastructure/queue-bullmq.ts:24).
    - Queue configuration:
      - Name: from `BATCH_JOBS_QUEUE_NAME`.
      - Attempts: `5`.
@@ -426,14 +426,14 @@ End-to-end flow:
        - Attempts graceful `worker.close()`, logs, and exits.
 
 3. Processing (`processQueueJob`)
-   - Loads the job via [`getJobById`](packages/batch-backend/src/domain/job-repository.ts:39).
+   - Loads the job via [`getJobById`](src/domain/job-repository.ts:39).
    - If job is missing or already `succeeded` / `failed`:
      - No-op (avoids double-processing).
    - Attempts transition `queued` → `running`:
      - Uses `expectedState='queued'` to enforce optimistic concurrency.
      - If transition fails (null), another worker has claimed it → abort.
    - On successful transition to `running`:
-     - Calls [`runAssignmentJob`](packages/batch-backend/src/infrastructure/orchestrator-service.ts:62) with:
+     - Calls [`runAssignmentJob`](src/infrastructure/orchestrator-service.ts:62) with:
        - `jobId`
        - `md`
        - `preset?`
@@ -442,11 +442,11 @@ End-to-end flow:
        - `runId = jobId` for correlation.
 
 4. Orchestrator execution (`runAssignmentJob`)
-   - [`getPipeline`](packages/batch-backend/src/infrastructure/orchestrator-service.ts:23):
+   - [`getPipeline`](src/infrastructure/orchestrator-service.ts:23):
      - Lazily constructs a pipeline using `createPipeline` from orchestrator with:
        - `cwd`: `PIPELINE_CWD` or `process.cwd()`.
        - Logger: wired to batch-backend logger.
-       - Metrics: from [`metrics`](packages/batch-backend/src/infrastructure/metrics.ts:15).
+       - Metrics: from [`metrics`](src/infrastructure/metrics.ts:15).
        - Manifest/config adapters derived from environment configuration.
    - Invokes `pipeline.newAssignment(flags, { runId })`.
    - On success:
@@ -496,16 +496,16 @@ Job record shape (Postgres and `GET /jobs/:jobId`):
 
 Key internal functions (stability expectations for service behavior):
 
-- [`submitJob.declaration()`](packages/batch-backend/src/application/submit-job.ts:62)
+- [`submitJob.declaration()`](src/application/submit-job.ts:62)
   - Validates and persists job.
   - Enqueues queue message.
-- [`getJobStatus.declaration()`](packages/batch-backend/src/application/get-job-status.ts:18)
+- [`getJobStatus.declaration()`](src/application/get-job-status.ts:18)
   - Reads and returns job status DTO.
-- [`processQueueJob.declaration()`](packages/batch-backend/src/application/process-queue-job.ts:18)
+- [`processQueueJob.declaration()`](src/application/process-queue-job.ts:18)
   - Orchestrates job lifecycle and pipeline calls.
-- [`createHttpServer.declaration()`](packages/batch-backend/src/transport/http-server.ts:53)
-- [`startHttpServer.declaration()`](packages/batch-backend/src/transport/http-server.ts:145)
-- [`startWorker.declaration()`](packages/batch-backend/src/transport/worker-runner.ts:17)
+- [`createHttpServer.declaration()`](src/transport/http-server.ts:53)
+- [`startHttpServer.declaration()`](src/transport/http-server.ts:145)
+- [`startWorker.declaration()`](src/transport/worker-runner.ts:17)
 
 Integrations should treat the HTTP and queue contracts above as the supported public surface.
 
@@ -661,8 +661,8 @@ Your code never calls `@esl-pipeline/orchestrator` directly; `batch-backend` is 
 Logging:
 
 - Implemented via Pino:
-  - [`logger.declaration()`](packages/batch-backend/src/infrastructure/logger.ts:18)
-  - [`createJobLogger.declaration()`](packages/batch-backend/src/infrastructure/logger.ts:63)
+  - [`logger.declaration()`](src/infrastructure/logger.ts:18)
+  - [`createJobLogger.declaration()`](src/infrastructure/logger.ts:63)
 - Characteristics:
   - Structured JSON logs suitable for aggregation.
   - Per-job child loggers with `jobId`/`runId` context.
@@ -680,7 +680,7 @@ Logging:
 
 Metrics:
 
-- Interface defined in [`metrics.declaration()`](packages/batch-backend/src/infrastructure/metrics.ts:15).
+- Interface defined in [`metrics.declaration()`](src/infrastructure/metrics.ts:15).
 - Default implementation is a no-op.
 - Mirrors the orchestrator’s metrics surface so it can be wired to Prometheus/StatsD/etc. without changing calling code.
 
@@ -701,7 +701,7 @@ Patterns:
   - Missing jobs → `404` with `not_found`.
   - Unexpected exceptions → `500` with `internal_error`.
 - Job state integrity:
-  - Transitions enforced by [`canTransition`](packages/batch-backend/src/domain/job-model.ts:26) and [`assertTransition`](packages/batch-backend/src/domain/job-model.ts:44).
+  - Transitions enforced by [`canTransition`](src/domain/job-model.ts:26) and [`assertTransition`](src/domain/job-model.ts:44).
   - Repository methods require `expectedState` to match current DB value.
   - Terminal states `succeeded` and `failed` are final.
 - Queue/worker:
@@ -744,7 +744,7 @@ Failures surface clearly through job status; there are no hidden side effects.
 
 ## Testing and Development
 
-Package scripts (see [`package.json`](packages/batch-backend/package.json)):
+Package scripts (see [`package.json`](package.json)):
 
 - Build:
 
@@ -770,7 +770,7 @@ Package scripts (see [`package.json`](packages/batch-backend/package.json)):
   pnpm --filter @esl-pipeline/batch-backend test:watch
   ```
 
-Tests live under [`packages/batch-backend/tests`](packages/batch-backend/tests) and cover:
+Tests live under [`packages/batch-backend/tests`](tests) and cover:
 
 - Env/config parsing
 - Job model transitions
@@ -782,11 +782,11 @@ Tests live under [`packages/batch-backend/tests`](packages/batch-backend/tests) 
 For local development:
 
 - Use `docker-compose.yml` (dev) or `docker-compose.prod.yml` (prod-like) to run dependencies and the service.
-- Edit sources in [`packages/batch-backend/src`](packages/batch-backend/src) and rebuild or use Node with TS output.
+- Edit sources in [`packages/batch-backend/src`](src) and rebuild or use Node with TS output.
 - Follow repo-wide guidelines:
-  - [`AGENTS.md`](AGENTS.md)
+  - [`AGENTS.md`](../../AGENTS.md)
   - [`docs/reference/agents-ssot.md`](../../docs/reference/agents-ssot.md)
-  - [`CONTRIBUTING.md`](CONTRIBUTING.md)
+  - [`CONTRIBUTING.md`](../../CONTRIBUTING.md)
 
 ---
 
@@ -800,10 +800,10 @@ For local development:
   - Job state model,
   - Orchestrator integration
     must:
-  - Align with [`docs/batch-backend-ssot.md`](docs/batch-backend-ssot.md).
+  - Align with [`docs/batch-backend-ssot.md`](../../docs/backend-frontend/batch-backend-ssot.md).
   - Maintain compatibility with `@esl-pipeline/orchestrator` or be treated as a breaking change.
 - Contributions:
-  - Follow [`CONTRIBUTING.md`](CONTRIBUTING.md).
+  - Follow [`CONTRIBUTING.md`](../../CONTRIBUTING.md).
   - Update tests and documentation in lockstep with behavior changes.
   - Treat divergence from SSOT as a bug.
 

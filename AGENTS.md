@@ -1,245 +1,151 @@
-# Agent Handbook (v2)
+# Agent Handbook (v3)
 
-This document is a concise, human-readable overview for maintainers and “agents” working in this repo.
-For authoritative, machine-consumable guidance (contracts, invariants, and workflows), always defer to
-[`docs/reference/agents-ssot.md`](docs/reference/agents-ssot.md). If anything here conflicts with that SSOT, the SSOT wins.
+## Meta
+
+- Audience: AI agents and maintainers.
+- Authority Level: router + operating contract.
+- Last Verified Against: 2026-03-04 repo state.
+- Owner: founder-maintainer + automation agents.
+- Review Cadence: biweekly or after major workflow/tooling changes.
+- Status: `router`.
+
+This file is the primary entrypoint for AI agents and maintainers working in this repo.
+It is both:
+
+- A fast router into the right docs.
+- A compact operating contract for safe, consistent changes.
+
+If anything here conflicts with [`docs/reference/agents-ssot.md`](docs/reference/agents-ssot.md), the SSOT wins.
 
 Everything below assumes **Node.js 24.11.1+**, pnpm, and system ffmpeg.
 
-## Agent Fast Path (AI-First)
+## Agent Fast Path (Read In Order)
 
-If you need baseline context quickly, read in this order:
+1. [`docs/README.md`](docs/README.md) - docs router.
+2. [`docs/reference/DOCS_IA_MAP.md`](docs/reference/DOCS_IA_MAP.md) - task-to-doc map.
+3. [`docs/backend-frontend/backend-frontend-alignment.md`](docs/backend-frontend/backend-frontend-alignment.md) - live capability status.
+4. [`docs/reference/agents-ssot.md`](docs/reference/agents-ssot.md) - contracts/invariants.
 
-1. `docs/README.md` (router)
-2. `docs/PROJECT_OVERVIEW.md` (component baseline)
-3. `docs/backend-frontend/backend-frontend-alignment.md` (live status)
-4. `docs/reference/agents-ssot.md` (contracts and invariants)
+If you are resuming after context loss: start at [`START_HERE.md`](START_HERE.md).
 
-For historical rationale, use `docs/archive/` only after checking active docs.
+## Plan Continuity Rule (Mandatory)
 
-### Plan Continuity Rule (Mandatory)
+When implementing from a plan file, re-read that exact plan file after every context compaction before making further edits.
 
-When executing an active implementation plan, re-read the exact plan file(s) you are working from **after every context compaction** before making further changes. Treat this as a required checkpoint to restore full plan intent, constraints, and phase scope.
+## How To Use Docs (Progressive Disclosure)
 
----
+- Read only what your task needs.
+- Prefer active docs over archive docs.
+- Use archive docs only for historical rationale.
+- Keep changes in sync across router docs and SSOT when behavior changes.
 
-## 1. Architecture Snapshot (High-Level)
+## Task Router (Common Paths)
 
-- **CLI (`packages/orchestrator`)**
-  - Primary user-facing entry point (`esl` binary).
-  - Commands include:
-    - `esl --md <file>` — run the full pipeline.
-    - `esl status`, `esl rerun`, `esl select`, `esl --version`.
-  - Implemented in [`packages/orchestrator/bin/cli.ts`](packages/orchestrator/bin/cli.ts) as a thin adapter over orchestrator APIs.
-- **Programmatic API**
-  - Exposed from `@esl-pipeline/orchestrator`:
-    - [`createPipeline.declaration()`](packages/orchestrator/src/pipeline.ts:129)
-    - [`resolveConfigPaths.declaration()`](packages/orchestrator/src/pipeline.ts:34)
-    - [`loadEnvFiles.declaration()`](packages/orchestrator/src/index.ts)
-    - [`resolveManifestPath.declaration()`](packages/orchestrator/src/pipeline.ts)
-  - CLI behavior MUST mirror these core APIs (see SSOT for exact contracts).
-- **Core packages**
-  - `@esl-pipeline/md-validator` — Markdown validation.
-  - `@esl-pipeline/pmd` — PMD parsing + study-text extraction.
-  - `@esl-pipeline/notion-adapter` — Notion import + color + audio attach.
-  - `@esl-pipeline/tts-elevenlabs` — ElevenLabs integration (requires system `ffmpeg`).
-  - `@esl-pipeline/storage-uploader` — S3 uploads.
-- **Pipeline flow (summary)**
-  1. Validate Markdown.
-  2. Extract study text.
-  3. Create/update Notion page.
-  4. Apply heading presets.
-  5. Generate TTS (optional, controlled via flags/config).
-  6. Upload audio.
-  7. Attach audio in Notion.
-  8. Persist manifest for reruns.
+- Repo orientation:
+  - [`docs/PROJECT_OVERVIEW.md`](docs/PROJECT_OVERVIEW.md)
+- Setup/run commands:
+  - [`docs/QUICK_START.md`](docs/QUICK_START.md)
+  - [`docs/reference/env.md`](docs/reference/env.md)
+- Backend/frontend integration work:
+  - [`docs/backend-frontend/BATCH_SYSTEM.md`](docs/backend-frontend/BATCH_SYSTEM.md)
+  - [`docs/backend-frontend/backend-frontend-alignment.md`](docs/backend-frontend/backend-frontend-alignment.md)
+- Prompt gallery (DB-canonical runtime):
+  - [`docs/operations/prompt-gallery-bootstrap.md`](docs/operations/prompt-gallery-bootstrap.md)
+- Docker dev stack troubleshooting:
+  - [`docs/operations/docker-host-paths.md`](docs/operations/docker-host-paths.md)
+- Postgres backup + restore + S3 archival:
+  - [`docs/operations/postgres-backup-restore.md`](docs/operations/postgres-backup-restore.md)
+  - [`docs/operations/postgres-backup-s3.md`](docs/operations/postgres-backup-s3.md)
+  - [`docs/operations/postgres-ops-health.md`](docs/operations/postgres-ops-health.md)
+- Release notes from direct commits:
+  - [`docs/operations/pr-style-release-notes.md`](docs/operations/pr-style-release-notes.md)
 
----
+## Architecture Snapshot (High-Level)
 
-## 2. Runtime & Dependencies (Summary)
+- `@esl-pipeline/orchestrator` is the canonical pipeline engine and CLI/API surface.
+- `@esl-pipeline/batch-backend` and `@esl-pipeline/batch-frontend` are the operational batch system.
+- Supporting core packages:
+  - `@esl-pipeline/md-validator`
+  - `@esl-pipeline/pmd`
+  - `@esl-pipeline/notion-adapter`
+  - `@esl-pipeline/tts-elevenlabs`
+  - `@esl-pipeline/storage-uploader`
+  - `@esl-pipeline/html-publisher`
+  - `@esl-pipeline/provider-runtime`
+  - `@esl-pipeline/contracts`
+  - `@esl-pipeline/shared-infrastructure`
 
-- **Node**: 24.11.1 or newer (see repo `.nvmrc` / `package.json`).
-- **pnpm**: 8+ (`corepack enable`).
-- **ffmpeg**: must be present on PATH or provided via `FFMPEG_PATH`.
-- **Env variables**:
-  - CLI auto-loads `.env` from repo root + CWD.
-  - New executable entrypoints (CLI/worker/tool) should use shared `loadCliEnv()` from `@esl-pipeline/shared-infrastructure` (or a package wrapper that delegates to it) instead of ad-hoc `.env` parsing.
-  - Programmatic use should call [`loadEnvFiles.declaration()`](packages/orchestrator/src/index.ts) or inject env directly.
-- For exhaustive requirements and env contracts, see [`docs/reference/agents-ssot.md`](docs/reference/agents-ssot.md) §§3 and 5.
+## Non-Negotiable Invariants
 
----
+- Do not bypass orchestrator contracts for pipeline behavior changes.
+- Do not hardcode secrets.
+- Do not silently change manifest/config contracts.
+- Do not treat historical docs as current truth.
+- Keep docs and code aligned when behavior changes.
 
-## 3. Key Packages (Pointer Only)
+For exact invariants and forbidden changes: [`docs/reference/agents-ssot.md`](docs/reference/agents-ssot.md).
 
-Use this as a quick map; detailed contracts live in the SSOT.
-
-| Package                          | Purpose (high level)                  |
-| -------------------------------- | ------------------------------------- |
-| `@esl-pipeline/orchestrator`     | CLI and pipeline factory              |
-| `@esl-pipeline/md-validator`     | Markdown validation                   |
-| `@esl-pipeline/pmd`              | PMD parse + study text extraction     |
-| `@esl-pipeline/notion-adapter`   | Notion adapter (import, color, audio) |
-| `@esl-pipeline/tts-elevenlabs`   | ElevenLabs integration                |
-| `@esl-pipeline/storage-uploader` | S3 uploads                            |
-| `@esl-pipeline/contracts`        | Shared DTO + SSE event types          |
-
-For per-package responsibilities, extension points, and invariants:
-see [`docs/reference/agents-ssot.md`](docs/reference/agents-ssot.md) §4.
-
-The orchestrator package now exports type definitions (e.g. `PipelineNewAssignmentOptions`, `AssignmentManifest`) alongside the runtime API.
-
----
-
-## 4. Pipeline API Basics (Quick Reference)
-
-```ts
-import { createPipeline, loadEnvFiles } from '@esl-pipeline/orchestrator';
-
-loadEnvFiles(); // convenience helper; see SSOT for exact behavior
-
-const pipeline = createPipeline({ cwd: process.cwd() });
-
-const result = await pipeline.newAssignment({
-  md: './lessons/mission.md',
-  preset: 'b1-default',
-  withTts: true,
-  upload: 's3',
-});
-```
-
-Key points:
-
-- `createPipeline` builds the orchestrator pipeline; CLI uses the same core.
-- `pipeline.defaults` / `pipeline.configPaths` expose resolved config locations.
-- `pipeline.rerunAssignment` and `pipeline.getAssignmentStatus` mirror CLI subcommands.
-
-For full type signatures, merging rules, and flag semantics (e.g., `withTts` precedence, `wizardDefaultsPath`):
-see [`docs/reference/agents-ssot.md`](docs/reference/agents-ssot.md) §§4, 5, and 7.
-
----
-
-## 5. Backend & Adapters (Pointer)
-
-- Roadmap and backend scaffolding are documented in:
-  - [`docs/backend-frontend/backend-frontend-alignment.md`](docs/backend-frontend/backend-frontend-alignment.md) — canonical status for backend ↔ frontend APIs and milestone tracking.
-  - [`docs/backend-frontend/BATCH_SYSTEM.md`](docs/backend-frontend/BATCH_SYSTEM.md) — unified batch system guide.
-  - [`docs/reference/agents-ssot.md`](docs/reference/agents-ssot.md) (adapters, manifest store, config provider rules)
-
-Treat the alignment doc as the only human-readable status tracker; the SSOT and code remain the ultimate source of truth.
-
----
-
-## 6. Working with the Repo (Essentials)
+## Runtime and Command Baseline
 
 - Install: `pnpm install`
 - Fast checks: `pnpm check:fast`
 - Full checks: `pnpm check`
-- Build: `pnpm -r build`
+- Build: `pnpm build`
 - Lint: `pnpm lint`
-- Test: `pnpm test` or `pnpm --filter @esl-pipeline/orchestrator test`
-- Smoke: `pnpm smoke` (orchestrator-focused)
-- Batch local dev (API + worker + frontend): `pnpm dev:batch`
-- Dependencies: `pnpm deps:pin` to normalize shared versions; `pnpm deps:upgrade:safe` to bump allowlisted SDKs (Notion/ElevenLabs/AWS S3 + stable utils) then reapply pins.
-- Dependency audit (report): `pnpm deps:audit`
-- Dependency audit (strict, CI-style): `pnpm deps:audit:strict`
-- Drift check: `pnpm deps:check` runs `deps:pin` and fails on manifest drift (CI uses this).
-- Zero-install: `npx @esl-pipeline/orchestrator esl --help`
+- Test: `pnpm test`
+- Smoke: `pnpm smoke`
+- Batch local dev: `pnpm dev:batch`
 
-For CI, release, and workflow invariants, follow [`docs/reference/agents-ssot.md`](docs/reference/agents-ssot.md) §§10–12.
-
-### Dependency Hygiene Procedure (Agent Checklist)
-
-When touching dependencies, use this order:
+Dependency hygiene when touching deps:
 
 1. `pnpm install`
 2. `pnpm deps:pin`
 3. `pnpm deps:audit:strict`
 4. `pnpm check:fast`
 
-Notes:
+## Docs Change Rules
 
-- Treat audit output as advisory unless confirmed by code usage.
-- Prefer conservative removals (remove only clearly unused deps).
-- Keep `pnpm-lock.yaml` tracked in git.
+When editing docs:
 
----
+- Update the smallest authoritative doc set.
+- Keep router docs concise; avoid duplicating long specs.
+- Archive stale long-form docs rather than patching forever.
+- Keep metadata and links current.
 
-## 7. Gotchas & Notes (Brief)
+Before merge for docs-heavy work:
 
-- Manifests: by default live next to the Markdown; adapters (e.g. S3) are configured via orchestrator (`createPipeline`) and env vars.
-- External deps (Notion, ElevenLabs, AWS/S3) are real; tests use mocks.
-- Markdown: validator enforces stricter rules (e.g. flush-left `:::study-text`).
-- Notion importer: frontmatter `properties` must exist in the target DB (unknown keys fail fast); `Topic` type is inferred from the DB schema (multi-select if missing/defined that way, otherwise rich_text). Advanced blocks (callout/columns/toggle headings/synced/table) are serialized exactly per Notion API.
-- Binary: `esl` is the canonical CLI; legacy aliases are removed.
-- We do not bundle ffmpeg; users must install it.
-- For dependency audits, `knip` config lives in `knip.json`; update ignores only when false positives are proven.
-- For `@esl-pipeline/orchestrator`, treat internal `@esl-pipeline/*` packages as build-time (dev) deps unless emitted `dist` imports require runtime resolution. See `docs/reference/ORCHESTRATOR_DEPENDENCY_AUDIT.md`.
-- Docker host path prep and `EACCES` recovery are documented in `docs/operations/docker-host-paths.md`.
-- Vitest/Rollup optional binary recovery is documented in `docs/operations/rollup-optional-binary-troubleshooting.md`.
+- Run `pnpm docs:check`.
 
-## 8. Repo Admin Workflow (GitHub)
+Docs governance and IA:
 
-- Ownership routing is defined in `.github/CODEOWNERS`.
-- PRs should follow `.github/pull_request_template.md`.
-- Issues are structured via `.github/ISSUE_TEMPLATE/*`.
-- Security disclosures must go through `SECURITY.md` (private advisory flow, no public vuln issues).
+- [`docs/reference/DOCS_GOVERNANCE.md`](docs/reference/DOCS_GOVERNANCE.md)
+- [`docs/reference/DOCS_IA_MAP.md`](docs/reference/DOCS_IA_MAP.md)
+- [`docs/reference/HARNESS_AGENTIC_DOCS_MODEL.md`](docs/reference/HARNESS_AGENTIC_DOCS_MODEL.md)
+- [`docs/reference/DOCS_QUALITY_SCORE.md`](docs/reference/DOCS_QUALITY_SCORE.md)
 
-### PR Operations Quick Guide (Solo-Friendly)
+## Repo Admin Workflow (GitHub)
 
-- Default rule: avoid direct pushes to `main`; use short-lived feature branches.
-- Start from an up-to-date base:
-  - `git fetch origin`
-  - `git switch main`
-  - `git pull --ff-only`
-  - `git switch -c <branch-name>`
-- Push and open PR:
-  - `git push -u origin <branch-name>`
-  - `gh pr create --base main --head <branch-name> --title \"<title>\" --body-file .github/pull_request_template.md`
-- Track checks and review:
+- Use short-lived feature branches; avoid direct pushes to `main`.
+- Standard PR flow:
+  1. `git fetch origin`
+  2. `git switch main`
+  3. `git pull --ff-only`
+  4. `git switch -c <branch>`
+  5. `git push -u origin <branch>`
+  6. `gh pr create --base main --head <branch> --title "<title>" --body-file .github/pull_request_template.md`
+- Monitor checks and comments:
   - `gh pr checks <pr-number>`
   - `gh pr view <pr-number> --comments`
-- Merge after required checks pass:
+- Merge:
   - `gh pr merge <pr-number> --merge --delete-branch`
 
-### Release Notes from Commits (Direct-Push Compatible)
+If you accidentally push to `main`:
 
-- Generate PR-style notes/changelog from commit history:
-  - `pnpm notes:pr-style`
-- Common variants:
-  - `pnpm notes:pr-style -- --limit 5`
-  - `pnpm notes:pr-style -- --base <base-ref> --head <head-ref>`
-  - `pnpm notes:pr-style -- --base <base-ref> --head <head-ref> --include-merges`
-- Full runbook: `docs/operations/pr-style-release-notes.md`.
+1. Create a backup branch at current tip.
+2. Revert accidental commits on `main` (no force-push).
+3. Cherry-pick intended commits onto a feature branch and open a normal PR.
 
-### If You Accidentally Pushed to `main`
+## Final Reminder
 
-- Preserve safety first:
-  - create a backup branch at current tip (`git branch backup/<label>`).
-- Recover mainline history without force-push:
-  - revert accidental commits on `main`, push revert commit.
-- Reapply intended commits on a feature branch:
-  - cherry-pick onto new branch, push, and open a normal PR.
-
-For exact rules (manifest schema, adapter selection, validation invariants), see [`docs/reference/agents-ssot.md`](docs/reference/agents-ssot.md).
-
----
-
-## 9. FAQ (Forward-Looking, Defer to SSOT)
-
-- Programmatic usage? See `createPipeline` example above, and details in [`docs/reference/agents-ssot.md`](docs/reference/agents-ssot.md) §7.2.
-- Custom configs/adapters? Follow extension rules in [`docs/reference/agents-ssot.md`](docs/reference/agents-ssot.md) §§4–5.
-- New CLI flags? Add behavior in orchestrator first, then wire CLI; see [`docs/reference/agents-ssot.md`](docs/reference/agents-ssot.md) §9.6.
-- Node version? Node **24.11.1+** (enforced).
-- Remote manifests/config? Use documented adapters/env vars; SSOT describes the contract.
-
----
-
-This handbook is intentionally high-level. For any non-trivial change or automation:
-
-- Start here for orientation.
-- Then consult [`docs/reference/agents-ssot.md`](docs/reference/agents-ssot.md) as the single source of truth for:
-  - Contracts and invariants.
-  - Allowed operations and extension points.
-  - Cross-file consistency requirements.
-
-Treat deviations from the SSOT as bugs to be fixed. Happy shipping! 🎯
+Start here for orientation, then rely on the SSOT for decision-making:
+[`docs/reference/agents-ssot.md`](docs/reference/agents-ssot.md).

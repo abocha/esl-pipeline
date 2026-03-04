@@ -1,11 +1,11 @@
 # ESL Pipeline
 
-ESL Pipeline automates the workflow from lesson input to published ESL homework.
+ESL Pipeline automates the flow from lesson input to published ESL homework.
 It supports both CLI usage and service-style programmatic integration.
 
 ## Fast Re-Entry
 
-- If you are resuming after context overload, start at `START_HERE.md`.
+- If you are resuming after context overload, start at [`START_HERE.md`](START_HERE.md).
 
 ## What This Repo Is (Current State)
 
@@ -14,13 +14,14 @@ This monorepo currently provides:
 - A pipeline orchestrator (`@esl-pipeline/orchestrator`) for validation, publishing, optional TTS, upload, and manifest tracking.
 - A CLI (`esl`) for interactive and non-interactive assignment runs.
 - A batch backend/frontend system for upload -> transcript -> prompt -> draft -> publish workflows.
-- Shared packages for markdown validation, parsing, adapters, contracts, and infrastructure.
+- Shared packages for markdown validation, parsing, rendering, provider runtime, adapters, contracts, and infrastructure.
 
 Primary integrations:
 
 - Notion (publishing)
 - ElevenLabs (TTS)
 - AWS/S3 (upload/storage)
+- Google GenAI and OpenRouter (generation providers in batch flow)
 
 ## Quick Start (From Source Checkout)
 
@@ -36,9 +37,10 @@ Primary integrations:
 corepack enable
 pnpm install
 cp .env.example .env
+cp .env.batch-backend.example .env.batch-backend
 ```
 
-Fill required credentials as needed (Notion/ElevenLabs/AWS). See `docs/reference/env.md`.
+Fill required credentials as needed. See [`docs/reference/env.md`](docs/reference/env.md).
 
 ### 2) Build CLI Package
 
@@ -59,12 +61,6 @@ Non-interactive:
 ```bash
 pnpm esl --md ./lessons/mission.md --preset b1-default --with-tts --upload s3
 ```
-
-Expected outcome:
-
-- pipeline stages execute
-- manifest is written
-- status/publish metadata is available for reruns and checks
 
 ### Zero-Install Option
 
@@ -98,8 +94,6 @@ Key exports:
 - `loadEnvFiles`
 - `resolveManifestPath`
 
-For full contracts and behavior rules: `docs/reference/agents-ssot.md`.
-
 ## Repository Map
 
 | Package                          | Purpose                             | Read Next                                  |
@@ -110,37 +104,37 @@ For full contracts and behavior rules: `docs/reference/agents-ssot.md`.
 | `packages/notion-adapter`        | Notion publishing adapter           | `packages/notion-adapter/README.md`        |
 | `packages/tts-elevenlabs`        | ElevenLabs integration              | `packages/tts-elevenlabs/README.md`        |
 | `packages/storage-uploader`      | Upload/storage adapter              | `packages/storage-uploader/README.md`      |
+| `packages/html-publisher`        | Markdown/HTML rendering and publish | `packages/html-publisher/README.md`        |
+| `packages/provider-runtime`      | Provider runtime policy utilities   | `packages/provider-runtime/README.md`      |
 | `packages/batch-backend`         | Batch API + workers                 | `packages/batch-backend/README.md`         |
 | `packages/batch-frontend`        | Batch web UI                        | `packages/batch-frontend/README.md`        |
 | `packages/contracts`             | Shared backend/frontend contracts   | `packages/contracts/README.md`             |
 | `packages/shared-infrastructure` | Shared infra utilities              | `packages/shared-infrastructure/README.md` |
 | `packages/anytype-adapter`       | Anytype adapter support             | `packages/anytype-adapter/README.md`       |
 
-## Documentation Map (By Reader)
+## Documentation Path (Agents + Maintainers)
 
-Newcomers:
+Start here for docs routing:
 
-- `START_HERE.md`
-- `docs/README.md`
-- `docs/PROJECT_OVERVIEW.md`
-- `docs/QUICK_START.md`
+1. [`AGENTS.md`](AGENTS.md)
+2. [`docs/README.md`](docs/README.md)
+3. [`docs/reference/DOCS_IA_MAP.md`](docs/reference/DOCS_IA_MAP.md)
+4. [`docs/reference/agents-ssot.md`](docs/reference/agents-ssot.md)
 
-Maintainers / Agents:
+Operational runbooks:
 
-- `AGENTS.md` (core bootstrap)
-- `docs/reference/agents-ssot.md` (authoritative annex)
-
-Backend/frontend integration work:
-
-- `docs/backend-frontend/BATCH_SYSTEM.md`
-- `docs/backend-frontend/backend-frontend-alignment.md`
-- `docs/design/TRANSCRIPTION_PIPELINE_SPEC.md`
+- [`docs/operations/docker-host-paths.md`](docs/operations/docker-host-paths.md)
+- [`docs/operations/postgres-backup-restore.md`](docs/operations/postgres-backup-restore.md)
+- [`docs/operations/postgres-backup-s3.md`](docs/operations/postgres-backup-s3.md)
+- [`docs/operations/postgres-ops-health.md`](docs/operations/postgres-ops-health.md)
+- [`docs/operations/prompt-gallery-bootstrap.md`](docs/operations/prompt-gallery-bootstrap.md)
 
 ## Development Commands (Minimal)
 
 ```bash
 pnpm check:fast
 pnpm check
+pnpm docs:check
 ```
 
 Core equivalents:
@@ -161,25 +155,6 @@ pnpm --filter @esl-pipeline/batch-frontend test
 pnpm --filter @esl-pipeline/batch-backend test
 pnpm dev:batch
 ```
-
-## Troubleshooting
-
-- ffmpeg not found:
-  install ffmpeg and ensure it is on `PATH`, or set `FFMPEG_PATH`.
-- Env/credentials issues:
-  verify variables in `.env` and `docs/reference/env.md`.
-- Node version mismatch:
-  run Node `>=24.11.1`.
-- Command works in docs but fails locally:
-  run package-local build/test commands first, then retry root command.
-
-## Contributing
-
-Before opening a PR:
-
-1. Run `pnpm check` (or `pnpm check:fast` during active iteration).
-2. Update docs affected by behavior/status changes.
-3. Keep `docs/reference/agents-ssot.md` consistent with code-level contracts.
 
 ## Historical Material
 

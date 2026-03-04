@@ -15,4 +15,5 @@
 
 1. `docs/plans/postgres-hardening-offline-migration/README.md`  
    PostgreSQL hardening, schema governance, and offline data-preserving migration plan.
-
+2. `docs/plans/harness-agentic-docs-upgrade/README.md`  
+   Next phases for harness-aligned docs governance rollout (enforcement expansion + gardening calibration).
