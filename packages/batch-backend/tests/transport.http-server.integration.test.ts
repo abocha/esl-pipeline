@@ -2819,6 +2819,34 @@ describe('transport/http-server - integration (in-process)', () => {
     expect(payload.html).toContain('<h1 class="hero-title">Frontmatter Lesson</h1>');
   });
 
+  it('POST /preview/html derives title from CRLF frontmatter when heading title is omitted', async () => {
+    const response = await app.inject({
+      method: 'POST',
+      url: '/preview/html',
+      payload: {
+        text: ['---', 'title: "CRLF Frontmatter Lesson"', '---', '', 'Body text.'].join('\r\n'),
+      },
+    });
+
+    expect(response.statusCode).toBe(200);
+    const payload = response.json() as { html: string };
+    expect(payload.html).toContain('<h1 class="hero-title">CRLF Frontmatter Lesson</h1>');
+  });
+
+  it('POST /preview/html derives title from frontmatter at EOF without trailing newline', async () => {
+    const response = await app.inject({
+      method: 'POST',
+      url: '/preview/html',
+      payload: {
+        text: ['---', 'title: "EOF Frontmatter Lesson"', '---'].join('\n'),
+      },
+    });
+
+    expect(response.statusCode).toBe(200);
+    const payload = response.json() as { html: string };
+    expect(payload.html).toContain('<h1 class="hero-title">EOF Frontmatter Lesson</h1>');
+  });
+
   it('POST /preview/html resolves heading colors from user default preset when learning preset is selected', async () => {
     const getSettingsSpy = vi
       .spyOn(settingsRepositoryModule, 'getSettingsByUserId')

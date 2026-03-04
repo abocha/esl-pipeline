@@ -1473,13 +1473,13 @@ function promoteFirstTableRowToHeaderCells(sectionHtml: string): string {
         return rowHtml;
       }
       return rowHtml
-        .replace(/<td(\s[^>]*)?>/gi, (_fullCell, attrs = '') => {
+        .replaceAll(/<td(\s[^>]*)?>/gi, (_fullCell, attrs = '') => {
           if (/\bscope\s*=/.test(attrs)) {
             return `<th${attrs}>`;
           }
           return `<th${attrs} scope="col">`;
         })
-        .replace(/<\/td>/gi, '</th>');
+        .replaceAll(/<\/td>/gi, '</th>');
     });
   });
 }

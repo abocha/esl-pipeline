@@ -30,7 +30,10 @@ import {
 } from '../infrastructure/job-cancellation.js';
 import type { QueueJobPayload } from '../infrastructure/queue-bullmq.js';
 import { createTranscriptionStorageForUri } from '../infrastructure/transcription-storage.js';
-import { maybeRunTtsCacheMaintenanceWithPgLock } from '../infrastructure/tts-cache-maintenance-coordinator.js';
+import {
+  maybeRunTtsCacheMaintenanceWithPgLock,
+  withTtsCacheActivitySharedLock,
+} from '../infrastructure/tts-cache-maintenance-coordinator.js';
 
 // processQueueJob.declaration()
 export async function processQueueJob(payload: QueueJobPayload): Promise<void> {
@@ -123,21 +126,25 @@ export async function processQueueJob(payload: QueueJobPayload): Promise<void> {
       }
     }
 
-    let result: { manifestPath?: string; notionUrl?: string; anytypeUrl?: string; htmlUrl?: string };
-    try {
-      const isRerunExecution =
-        payload.executionMode === 'rerun_audio' || payload.executionMode === 'rerun_publish';
-      const manifestMd = isRerunExecution
-        ? await resolveManifestMdPath(payload.rerun?.manifestMd, markdownInput.mdPath)
-        : undefined;
-      result =
-        isRerunExecution
+    const isRerunExecution =
+      payload.executionMode === 'rerun_audio' || payload.executionMode === 'rerun_publish';
+    const rerunSteps = payload.rerun?.steps ?? ['tts', 'upload', 'add-audio'];
+    const shouldHoldTtsCacheActivityLock =
+      config.worker.ttsCacheMaintenanceIntervalMinutes > 0 &&
+      (isRerunExecution ? rerunSteps.includes('tts') : running.withTts === true);
+
+    const executePipeline = async () => {
+      try {
+        const manifestMd = isRerunExecution
+          ? await resolveManifestMdPath(payload.rerun?.manifestMd, markdownInput.mdPath)
+          : undefined;
+        return isRerunExecution
           ? await runRerunAssignmentJob(
               {
                 jobId,
                 md: markdownInput.mdPath,
                 manifestMd,
-                steps: payload.rerun?.steps ?? ['tts', 'upload', 'add-audio'],
+                steps: rerunSteps,
                 upload: payload.rerun?.upload ?? 's3',
                 force: payload.rerun?.force ?? running.forceTts ?? false,
                 prefix: payload.rerun?.prefix,
@@ -174,15 +181,23 @@ export async function processQueueJob(payload: QueueJobPayload): Promise<void> {
               runId,
               { signal: cancellationController.signal },
             );
-    } finally {
-      try {
-        await markdownInput.cleanup();
-      } catch (cleanupError) {
-        log.warn('Failed to clean up temporary markdown input', {
-          error: cleanupError instanceof Error ? cleanupError.message : String(cleanupError),
-        });
+      } finally {
+        try {
+          await markdownInput.cleanup();
+        } catch (cleanupError) {
+          log.warn('Failed to clean up temporary markdown input', {
+            error: cleanupError instanceof Error ? cleanupError.message : String(cleanupError),
+          });
+        }
       }
-    }
+    };
+
+    const result = shouldHoldTtsCacheActivityLock
+      ? await withTtsCacheActivitySharedLock(
+          { lockKey: config.worker.ttsCacheMaintenanceLockKey },
+          executePipeline,
+        )
+      : await executePipeline();
 
     const succeeded = await updateJobStateAndResult({
       id: jobId,
