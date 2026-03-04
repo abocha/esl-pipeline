@@ -5,7 +5,7 @@
 - Audience: AI agents touching recording/transcript/prompt/draft flow.
 - Read Time: 8 minutes.
 - Authority Level: Active design spec.
-- Last Verified Against: 2026-02-06 repo state.
+- Last Verified Against: 2026-03-04 repo state.
 
 ## Purpose
 
@@ -26,6 +26,7 @@
 
 - Upload-based ingestion and queue-backed transcription are active.
 - Transcript review/edit, prompt package generation, draft save, and materialize+approve are active.
+- Prompt template/profile selection is DB-canonical (active revisions in Postgres).
 - Historical staged manual is archived.
 
 ## Artifact Model

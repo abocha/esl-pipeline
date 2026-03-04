@@ -48,6 +48,31 @@ jobs:
       - name: Dependency audit
         run: pnpm deps:audit:strict
 
+      - name: Docs sanity checks
+        id: docs_sanity
+        continue-on-error: true
+        run: pnpm docs:check
+
+      - name: Generate docs health report
+        if: always()
+        run: pnpm docs:health:report
+
+      - name: Upload docs health artifact on failure
+        if: steps.docs_sanity.outcome == 'failure'
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: docs-health-report
+          path: |
+            tmp/docs-health-report.json
+            tmp/docs-health-report.md
+          if-no-files-found: warn
+
+      - name: Fail if docs checks failed
+        if: steps.docs_sanity.outcome == 'failure'
+        run: |
+          echo "Docs sanity checks failed. See docs-health-report artifact for details."
+          exit 1
+
       - name: Build
         run: pnpm build
 

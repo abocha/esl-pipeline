@@ -5,41 +5,35 @@
 - Audience: AI agents, maintainers.
 - Read Time: 4 minutes.
 - Authority Level: Operational quickstart.
-- Last Verified Against: 2026-02-06 repo state.
+- Last Verified Against: 2026-03-04 repo state.
+- Owner: founder-maintainer + automation agents.
+- Review Cadence: biweekly.
+- Status: `active`.
 
 ## Purpose
 
-- Provide minimal command path to install, validate, and run core workflows.
-
-## When To Read
-
-- First local run.
-- Before smoke-checking a docs/code change.
+- Provide a minimal command path to install, validate, and run core workflows.
 
 ## Canonical Sources
 
-1. `AGENTS.md`
-2. `docs/reference/agents-ssot.md`
-3. `docs/reference/env.md`
-
-## Current State
-
-- Node `24.11.1+`, pnpm, and system ffmpeg are required.
-- Root test command runs package tests recursively.
+1. [`AGENTS.md`](../AGENTS.md)
+2. [`docs/reference/agents-ssot.md`](reference/agents-ssot.md)
+3. [`docs/reference/env.md`](reference/env.md)
 
 ## Setup
 
 ```bash
 corepack enable
 pnpm install
+cp .env.example .env
+cp .env.batch-backend.example .env.batch-backend
 ```
 
 ## Repo Checks
 
 ```bash
-pnpm -r build
-pnpm lint
-pnpm test
+pnpm check:fast
+pnpm docs:check
 ```
 
 ## Orchestrator CLI
@@ -56,35 +50,41 @@ pnpm esl status --md ./lessons/mission.md
 pnpm docker:up
 ```
 
-Then open `http://localhost:5173`.
+Open `http://localhost:5173`.
 
-If host port `8080` is unavailable in Docker Desktop:
+If host port `8080` is unavailable:
 
 ```bash
 BATCH_BACKEND_HOST_PORT=8081 pnpm docker:up
 ```
 
-Common cause: another app (for example qBittorrent Web UI) is already using `8080`.
-Close that app or keep using the backend host-port override.
+Common cause: another app (for example qBittorrent Web UI) uses `8080`.
 
-Optional: create and archive a Postgres backup set to S3:
+## Prompt Gallery Bootstrap (DB-Canonical)
+
+After deploying backend code to a fresh environment:
 
 ```bash
-pnpm docker:db:backup:s3 -- quickstart_checkpoint
+pnpm --filter @esl-pipeline/batch-backend run prompt-assets:bootstrap:dry
+pnpm --filter @esl-pipeline/batch-backend run prompt-assets:bootstrap
 ```
 
-Requires backup env vars (`PG_BACKUP_S3_BUCKET`, `PG_BACKUP_S3_REGION`, and
-`PG_BACKUP_S3_KMS_KEY_ID` when using `PG_BACKUP_S3_SSE=aws:kms`).
-Full ops guide: `docs/operations/postgres-backup-s3.md`.
+## Backup/Ops Commands
 
-## Do / Don't
+```bash
+pnpm docker:db:backup
+pnpm docker:db:backup:s3 -- quickstart_checkpoint
+pnpm ops:status
+pnpm ops:alert:check
+```
 
-- Do load required env values before running backend/pipeline flows.
-- Do use package-filtered commands for targeted validation.
-- Don't assume optional services (Deepgram, S3, Notion) are available in local tests.
+Full runbooks:
+
+- [`docs/operations/postgres-backup-s3.md`](operations/postgres-backup-s3.md)
+- [`docs/operations/postgres-ops-health.md`](operations/postgres-ops-health.md)
 
 ## Related
 
-- `docs/reference/env.md`
-- `docs/backend-frontend/BATCH_SYSTEM.md`
-- `docs/backend-frontend/backend-frontend-alignment.md`
+- [`docs/backend-frontend/BATCH_SYSTEM.md`](backend-frontend/BATCH_SYSTEM.md)
+- [`docs/backend-frontend/backend-frontend-alignment.md`](backend-frontend/backend-frontend-alignment.md)
+- [`docs/operations/docker-host-paths.md`](operations/docker-host-paths.md)

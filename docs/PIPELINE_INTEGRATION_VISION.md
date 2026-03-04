@@ -5,7 +5,7 @@
 - Audience: AI agents working on transcription/publish flow.
 - Read Time: 5 minutes.
 - Authority Level: Operational runbook.
-- Last Verified Against: 2026-02-06 repo state.
+- Last Verified Against: 2026-03-04 repo state.
 
 ## Purpose
 
@@ -26,6 +26,7 @@
 
 - Active path is Phase 2+ native transcription flow.
 - Draft materialization feeds approval jobs; approval triggers orchestrator pipeline.
+- Prompt options/defaults are resolved from DB-canonical prompt assets.
 - Historical phased manuals are archived under `docs/archive/pipeline/2026-02/`.
 
 ## Active Flow

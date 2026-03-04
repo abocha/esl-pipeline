@@ -5,79 +5,55 @@
 - Audience: AI agents, maintainers.
 - Read Time: 2 minutes.
 - Authority Level: Router.
-- Last Verified Against: 2026-02-28 repo state.
+- Last Verified Against: 2026-03-04 repo state.
+- Owner: founder-maintainer + automation agents.
+- Review Cadence: biweekly.
+- Status: `router`.
 
 ## Purpose
 
-- Route coding tasks to the smallest authoritative doc set.
-- Preserve baseline repo understanding without reading code first.
-- Keep active guidance short; keep history in archive.
+- Route tasks to the minimum authoritative doc set.
+- Keep active guidance concise and discoverable.
+- Keep historical rationale in archive docs.
 
-## When To Read
+## Canonical Read Order
 
-- Immediately after `AGENTS.md`.
-- Any time task scope is unclear.
+1. [`AGENTS.md`](../AGENTS.md)
+2. [`docs/README.md`](README.md)
+3. [`docs/reference/DOCS_IA_MAP.md`](reference/DOCS_IA_MAP.md)
+4. Task-specific docs
+5. [`docs/reference/agents-ssot.md`](reference/agents-ssot.md) for contracts/invariants
 
-## Canonical Sources
+## Agent Start Paths
 
-1. `AGENTS.md` (core bootstrap loaded on agent init).
-2. `docs/reference/agents-ssot.md` (authoritative annex, read selectively).
-3. `docs/backend-frontend/backend-frontend-alignment.md` (live backend/frontend status).
-4. `docs/backend-frontend/BATCH_SYSTEM.md` (active system map).
+- Repo orientation: [`docs/PROJECT_OVERVIEW.md`](PROJECT_OVERVIEW.md)
+- Setup/run commands: [`docs/QUICK_START.md`](QUICK_START.md)
+- Backend/frontend status: [`docs/backend-frontend/backend-frontend-alignment.md`](backend-frontend/backend-frontend-alignment.md)
+- Batch system map: [`docs/backend-frontend/BATCH_SYSTEM.md`](backend-frontend/BATCH_SYSTEM.md)
+- Env contracts: [`docs/reference/env.md`](reference/env.md)
 
-## Current State
+## Operations Paths
 
-- Active docs are concise playbooks with explicit ownership.
-- Detailed historical design and phased manuals are archived.
-- Package-level details live in package READMEs.
+- Docker host paths and port collisions:
+  - [`docs/operations/docker-host-paths.md`](operations/docker-host-paths.md)
+- Postgres backup/restore:
+  - [`docs/operations/postgres-backup-restore.md`](operations/postgres-backup-restore.md)
+- S3 archival + scheduling:
+  - [`docs/operations/postgres-backup-s3.md`](operations/postgres-backup-s3.md)
+- Ops health alerts/status/key rotation:
+  - [`docs/operations/postgres-ops-health.md`](operations/postgres-ops-health.md)
+- Prompt gallery DB bootstrap:
+  - [`docs/operations/prompt-gallery-bootstrap.md`](operations/prompt-gallery-bootstrap.md)
 
-## Do / Don't
+## Rules of Thumb
 
-- Do start with this order: `AGENTS.md` -> `docs/README.md` -> task-specific doc.
-- Do prefer active docs over archive docs for implementation decisions.
-- Don't treat archived docs as current source of truth.
-- Don't duplicate status tables across active docs.
-
-## Agent Start Path
-
-- Need one-click restart from repo root: `START_HERE.md`.
-- Need a low-friction "restart tomorrow" entrypoint: `docs/playbooks/RESTART_TOMORROW.md`.
-- Need canonical Preset V2 architecture/spec: `docs/reference/PRESET_V2_SPEC.md`.
-- Need overall repo orientation: `docs/PROJECT_OVERVIEW.md`.
-- Need run commands/setup: `docs/QUICK_START.md`.
-- Need contracts/invariants: `docs/reference/agents-ssot.md`.
-- Need backend/frontend readiness: `docs/backend-frontend/backend-frontend-alignment.md`.
-- Need product direction and objective launch gates: `docs/reference/PRODUCT_NORTH_STAR_AND_READINESS.md`.
-- Need package-mapped V1 execution checklist: `docs/reference/V1_IMPLEMENTATION_TRACKER.md`.
-- Need WS2B provider/model/quota lock details: `docs/reference/GENERATION_PROVIDER_POLICY.md`.
-- Need OpenAI Responses API implementation contract for WS2B: `docs/reference/OPENAI_RESPONSES_WS2B_PROFILE.md`.
-- Need Google GenAI API implementation contract for WS2B: `docs/reference/GOOGLE_GENAI_WS2B_PROFILE.md`.
-- Need OpenRouter API implementation contract for WS2B: `docs/reference/OPENROUTER_WS2B_PROFILE.md`.
-- Need weekly grounding review cadence: `docs/playbooks/WEEKLY_PRODUCT_REVIEW_TEMPLATE.md`.
-- Need student-system implementation roadmap and execution checklist: `docs/reference/STUDENT_SYSTEM_ROADMAP.md`.
-- Need Docker mount/permissions troubleshooting: `docs/operations/docker-host-paths.md`.
-- Need Docker Postgres backup/restore routine: `docs/operations/postgres-backup-restore.md`.
-- Need Docker Postgres backup archival to S3 + scheduler workflow: `docs/operations/postgres-backup-s3.md`.
-- Need Docker Postgres ops health alerts/status/key-rotation checks: `docs/operations/postgres-ops-health.md`.
-- Need PR-style release-note output for direct pushes: `docs/operations/pr-style-release-notes.md`.
-- Need Vitest/Rollup optional binary troubleshooting: `docs/operations/rollup-optional-binary-troubleshooting.md`.
-- Need latest security scan triage and fix log: `docs/reference/SECURITY_SCANS_2026-02-12.md`.
-- Need implementation plans and phased execution docs: `docs/plans/README.md`.
+- Prefer active docs over archive docs.
+- Read only the docs needed for the current task.
+- If docs conflict, SSOT and code win.
 
 ## Related
 
-- `docs/reference/DOCS_IA_MAP.md`
-- `docs/reference/DOCS_GOVERNANCE.md`
-- `docs/reference/PRODUCT_NORTH_STAR_AND_READINESS.md`
-- `docs/reference/PRESET_V2_SPEC.md`
-- `docs/reference/GENERATION_PROVIDER_POLICY.md`
-- `docs/reference/OPENAI_RESPONSES_WS2B_PROFILE.md`
-- `docs/reference/GOOGLE_GENAI_WS2B_PROFILE.md`
-- `docs/reference/OPENROUTER_WS2B_PROFILE.md`
-- `docs/reference/V1_IMPLEMENTATION_TRACKER.md`
-- `docs/playbooks/WEEKLY_PRODUCT_REVIEW_TEMPLATE.md`
-- `docs/playbooks/RESTART_TOMORROW.md`
-- `docs/reference/STUDENT_SYSTEM_ROADMAP.md`
-- `docs/reference/SECURITY_SCANS_2026-02-12.md`
-- `docs/plans/README.md`
-- `docs/archive/README.md`
+- [`docs/reference/DOCS_GOVERNANCE.md`](reference/DOCS_GOVERNANCE.md)
+- [`docs/reference/HARNESS_AGENTIC_DOCS_MODEL.md`](reference/HARNESS_AGENTIC_DOCS_MODEL.md)
+- [`docs/reference/DOCS_QUALITY_SCORE.md`](reference/DOCS_QUALITY_SCORE.md)
+- [`docs/archive/README.md`](archive/README.md)
