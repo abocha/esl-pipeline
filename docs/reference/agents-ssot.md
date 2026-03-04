@@ -384,6 +384,16 @@ For all subsections:
 - Contracts:
   - MUST produce deterministic validation results for orchestrator.
   - Output shapes relied upon by orchestrator MUST remain stable.
+  - `validateMarkdown` input is backward-compatible and additive:
+    - existing input forms (`path`, `markdown`, `context`) remain valid.
+    - optional preset context is supported: `learningPresetId`, `learningPresetVersion`, and legacy `preset`.
+  - Ruleset resolution is deterministic:
+    - known `learningPresetId` resolves to mapped ruleset.
+    - unknown `learningPresetId` falls back to `general-english@v1` with warning issue.
+    - legacy `preset` maps to `general-english@v1`.
+  - Response contract is additive:
+    - legacy fields (`ok`, `errors`, `warnings`, `meta`, `voiceDiagnostics`) remain.
+    - additive fields are optional: `issues`, `ruleset`.
 - Safe extensions:
   - Adding new validation options is allowed if defaults remain backward compatible.
 
@@ -1032,6 +1042,7 @@ This section is normative for current voice-alignment behavior.
    - `study_text_type`: structure (`monologue` | `dialogue`)
 2. Validation diagnostics:
    - `MarkdownValidationResponse.voiceDiagnostics` is additive and optional.
+   - `MarkdownValidationResponse.issues` and `MarkdownValidationResponse.ruleset` are additive and optional.
    - In compatibility mode (strict off), voice-alignment mismatches are warnings.
    - When `VOICE_ALIGNMENT_V2_ENABLED=true` and strict is off, `voiceDiagnostics.shadowMode`
      emits non-blocking mismatch classes and counts.
