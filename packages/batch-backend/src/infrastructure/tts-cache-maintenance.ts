@@ -1,4 +1,5 @@
 import fs from 'node:fs/promises';
+import type { Dirent } from 'node:fs';
 import path from 'node:path';
 
 interface TtsCacheFileEntry {
@@ -111,6 +112,7 @@ async function runTtsCacheMaintenance(
 
   for (let idx = remaining.length - 1; idx >= 0; idx -= 1) {
     const file = remaining[idx];
+    if (!file) continue;
     const agedOut = maxAgeMs > 0 && nowMs - file.mtimeMs > maxAgeMs;
     if (agedOut) {
       remaining.splice(idx, 1);
@@ -156,7 +158,7 @@ async function collectCacheFiles(cacheDir: string): Promise<TtsCacheFileEntry[]>
     const current = stack.pop();
     if (!current) continue;
 
-    let children: fs.Dirent[];
+    let children: Dirent[];
     try {
       children = await fs.readdir(current, { withFileTypes: true });
     } catch (error: unknown) {
