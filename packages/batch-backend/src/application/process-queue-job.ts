@@ -167,6 +167,7 @@ export async function processQueueJob(payload: QueueJobPayload): Promise<void> {
                 jobId,
                 md: markdownInput.mdPath,
                 preset: running.preset ?? undefined,
+                learningPresetId: running.learningPresetId ?? undefined,
                 withTts: running.withTts ?? undefined,
                 // Only forward upload flag values supported by orchestrator.
                 // Any other persisted value (e.g. 'none' or null) is treated as "no override".
