@@ -758,6 +758,8 @@ export async function newAssignment(
       context: markdownContext,
       path: flags.md,
       strict: false,
+      learningPresetId: flags.learningPresetId,
+      preset: flags.preset,
     });
     throwIfCancelled(signal, 'validate');
     if (!validation.ok) {

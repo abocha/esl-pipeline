@@ -45,6 +45,9 @@ text
 1) question
 2) question
 
+### C. Pronunciation Micro-Focus
+Practice the target sounds from the study text.
+
 ## 6. Your Turn: Complete the Mission!
 text
 

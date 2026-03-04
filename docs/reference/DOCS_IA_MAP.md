@@ -27,6 +27,7 @@
 | Repo orientation | `docs/PROJECT_OVERVIEW.md` | `docs/reference/agents-ssot.md` |
 | Setup/run commands | `docs/QUICK_START.md` | `docs/reference/env.md` |
 | Contracts/invariants | `docs/reference/agents-ssot.md` | `docs/backend-frontend/backend-frontend-alignment.md` |
+| Markdown validator rules/rulesets | `docs/reference/MD_VALIDATOR_RULESET_CONVENTIONS.md` | `docs/reference/agents-ssot.md` |
 | Backend/frontend capability status | `docs/backend-frontend/backend-frontend-alignment.md` | `docs/backend-frontend/BATCH_SYSTEM.md` |
 | Prompt gallery DB runtime | `docs/operations/prompt-gallery-bootstrap.md` | `docs/reference/env.md` |
 | Docker dev stack recovery | `docs/operations/docker-host-paths.md` | `docs/QUICK_START.md` |

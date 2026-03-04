@@ -9,8 +9,22 @@ const fixturesPath = path.join(import.meta.dirname, '..', 'fixtures');
 
 const ORIGINAL_ENV = { ...process.env };
 
-async function validateMarkdownFile(pathValue: string, opts?: { strict?: boolean }) {
-  return validateMarkdown({ path: pathValue, strict: opts?.strict });
+async function validateMarkdownFile(
+  pathValue: string,
+  opts?: {
+    strict?: boolean;
+    learningPresetId?: string;
+    learningPresetVersion?: string;
+    preset?: string;
+  },
+) {
+  return validateMarkdown({
+    path: pathValue,
+    strict: opts?.strict,
+    learningPresetId: opts?.learningPresetId,
+    learningPresetVersion: opts?.learningPresetVersion,
+    preset: opts?.preset,
+  });
 }
 
 function buildBaseDoc(firstSectionContent: string): string {
@@ -116,6 +130,28 @@ function withPronunciationSection(doc: string, sectionContent: string): string {
   );
 }
 
+function withoutLegacyFence(doc: string): string {
+  return doc.replace(/^```markdown\n/, '').replace(/\n```$/, '');
+}
+
+function withStrictReadyFrontmatter(doc: string): string {
+  return doc.replace(
+    'speaker_labels: [Alex, Mara]\n---',
+    [
+      'speaker_labels: [Alex, Mara]',
+      'study_text_type: dialogue',
+      'speaker_profiles:',
+      '  - id: Alex',
+      '    role: student',
+      '    gender: male',
+      '  - id: Mara',
+      '    role: teacher',
+      '    gender: female',
+      '---',
+    ].join('\n'),
+  );
+}
+
 describe('md-validator', () => {
   beforeEach(() => {
     process.env = { ...ORIGINAL_ENV };
@@ -136,6 +172,72 @@ describe('md-validator', () => {
     const res = await validateMarkdownFile(path.join(fixturesPath, 'bad.md'));
     expect(res.ok).toBe(false);
     expect(res.errors.length).toBeGreaterThan(0);
+  });
+
+  it('returns structured issues and ruleset metadata for default resolution', async () => {
+    const res = await validateMarkdownFile(path.join(fixturesPath, 'ok.md'));
+    expect(res.ruleset).toMatchObject({
+      id: 'general-english',
+      version: 'v1',
+      fallbackApplied: false,
+    });
+    expect(Array.isArray(res.issues)).toBe(true);
+    expect(res.issues?.length).toBeGreaterThan(0);
+  });
+
+  it('falls back to general-english ruleset for unknown learningPresetId and warns', async () => {
+    const res = await validateMarkdownFile(path.join(fixturesPath, 'ok.md'), {
+      learningPresetId: 'ielts-academic',
+    });
+    expect(res.ok).toBe(true);
+    expect(res.ruleset).toMatchObject({
+      id: 'general-english',
+      fallbackApplied: true,
+      fallbackReason: 'unknown_preset',
+      requestedId: 'ielts-academic',
+    });
+    expect(res.warnings.join('\n')).toMatch(/unknown learning preset/i);
+    expect(res.issues?.some((issue) => issue.code === 'ruleset.unknown_preset_fallback')).toBe(
+      true,
+    );
+    const fallbackIssues = (res.issues ?? []).filter((issue) =>
+      /unknown learning preset/i.test(issue.message),
+    );
+    expect(fallbackIssues).toHaveLength(1);
+    expect(fallbackIssues[0]).toMatchObject({
+      ruleId: 'ruleset-resolution',
+      blockingInStrict: false,
+      severity: 'warning',
+    });
+  });
+
+  it('maps legacy preset input to general-english ruleset', async () => {
+    const res = await validateMarkdownFile(path.join(fixturesPath, 'ok.md'), {
+      preset: 'b1-default',
+    });
+    expect(res.ok).toBe(true);
+    expect(res.ruleset).toMatchObject({
+      id: 'general-english',
+      fallbackApplied: true,
+      fallbackReason: 'legacy_preset_mapping',
+      requestedId: 'b1-default',
+    });
+  });
+
+  it('resolves known learning preset aliases without fallback warnings', async () => {
+    const res = await validateMarkdownFile(path.join(fixturesPath, 'ok.md'), {
+      learningPresetId: 'general-english-intensive',
+    });
+    expect(res.ok).toBe(true);
+    expect(res.ruleset).toMatchObject({
+      id: 'general-english',
+      requestedId: 'general-english-intensive',
+      fallbackApplied: false,
+    });
+    expect(res.warnings.join('\n')).not.toMatch(/unknown learning preset/i);
+    expect(
+      (res.issues ?? []).some((issue) => issue.code === 'ruleset.unknown_preset_fallback'),
+    ).toBe(false);
   });
 
   it('allows flexible H2 wording', async () => {
@@ -182,6 +284,9 @@ text
 1) q1
 2) q2
 
+### C. Pronunciation Micro-Focus
+text
+
 ## 6. Your Task: Tell your story!
 text
 
@@ -204,6 +309,71 @@ plan
     const res = await validateMarkdownFile(file);
     expect(res.ok).toBe(true);
     expect(res.errors).toHaveLength(0);
+  });
+
+  it('allows extra H2 sections appended after section 9', async () => {
+    const tempDir = await mkdtemp(path.join(tmpdir(), 'validator-'));
+    const file = path.join(tempDir, 'extra-h2-after-core.md');
+    const md = buildBaseDoc('text').replace(
+      '\n```',
+      '\n\n## 10. Appendix Notes\ntext\n```',
+    );
+    await writeFile(file, md);
+
+    const res = await validateMarkdownFile(file);
+    expect(res.ok).toBe(true);
+    expect(res.warnings).toContain(
+      'Additional H2 sections after section 9 are ignored by structure validation.',
+    );
+  });
+
+  it('warns when an extra H2 is inserted before the core section sequence completes', async () => {
+    const tempDir = await mkdtemp(path.join(tmpdir(), 'validator-'));
+    const file = path.join(tempDir, 'extra-h2-mid-sequence.md');
+    const md = buildBaseDoc('text').replace(
+      "## 9. 👨‍🏫 Teacher's Follow-up Plan",
+      "## 8.5. Appendix Notes\ntext\n\n## 9. 👨‍🏫 Teacher's Follow-up Plan",
+    );
+    await writeFile(file, md);
+
+    const res = await validateMarkdownFile(file);
+    expect(res.ok).toBe(true);
+    expect(res.warnings.join('\n')).toMatch(/H2 #9 mismatch/i);
+  });
+
+  it('warns when fewer than 9 core H2 sections are present', async () => {
+    const tempDir = await mkdtemp(path.join(tmpdir(), 'validator-'));
+    const file = path.join(tempDir, 'missing-core-h2.md');
+    const md = `${buildBaseDoc('text').split("\n## 9. 👨‍🏫 Teacher's Follow-up Plan")[0]}\n\`\`\``;
+    await writeFile(file, md);
+
+    const res = await validateMarkdownFile(file);
+    expect(res.ok).toBe(true);
+    expect(res.warnings.join('\n')).toMatch(/Expected at least 9 H2 sections, found 8\./i);
+  });
+
+  it('warns on overly-generic section 5 headings that are semantically underspecified', async () => {
+    const tempDir = await mkdtemp(path.join(tmpdir(), 'validator-'));
+    const file = path.join(tempDir, 'generic-practice-heading.md');
+    const md = buildBaseDoc('text').replace('## 5. ✍️ Practice & Pronunciation', '## 5. Practice');
+    await writeFile(file, md);
+
+    const res = await validateMarkdownFile(file);
+    expect(res.ok).toBe(true);
+    expect(res.warnings.join('\n')).toMatch(/H2 #5 mismatch/i);
+  });
+
+  it('accepts semantically-rich synonym headings for section 4', async () => {
+    const tempDir = await mkdtemp(path.join(tmpdir(), 'validator-'));
+    const file = path.join(tempDir, 'synonym-heading-section-4.md');
+    const md = buildBaseDoc('text').replace(
+      '## 4. 🛠️ Language Toolkit: Useful Language',
+      '## 4. Useful Vocabulary Toolbox',
+    );
+    await writeFile(file, md);
+
+    const res = await validateMarkdownFile(file);
+    expect(res.ok).toBe(true);
   });
 
   it('accepts dialogue lines without brackets', async () => {
@@ -253,6 +423,9 @@ text
 1) item
 2) item
 
+### C. Pronunciation Micro-Focus
+text
+
 ## 6. Your Turn: Complete the Mission!
 text
 
@@ -278,7 +451,7 @@ content
     expect(res.warnings).not.toContain(expect.stringMatching(/Speaker/));
   });
 
-  it('flags unknown speaker labels with helpful message', async () => {
+  it('warns on unknown speaker labels with helpful message', async () => {
     const tempDir = await mkdtemp(path.join(tmpdir(), 'validator-'));
     const file = path.join(tempDir, 'dialogue-bad.md');
     await writeFile(
@@ -325,6 +498,9 @@ text
 1) question
 2) question
 
+### C. Pronunciation Micro-Focus
+text
+
 ## 6. Your Turn: Complete the Mission!
 text
 
@@ -345,11 +521,11 @@ content
     );
 
     const res = await validateMarkdownFile(file);
-    expect(res.ok).toBe(false);
-    expect(res.errors.join('\n')).toMatch(/unknown speaker "Sam"/);
+    expect(res.ok).toBe(true);
+    expect(res.warnings.join('\n')).toMatch(/unknown speaker "Sam"/);
   });
 
-  it('flags speaker_profiles ids that are not listed in speaker_labels', async () => {
+  it('warns when speaker_profiles ids are not listed in speaker_labels', async () => {
     const tempDir = await mkdtemp(path.join(tmpdir(), 'validator-'));
     const file = path.join(tempDir, 'speaker-profile-mismatch.md');
     await writeFile(
@@ -403,6 +579,9 @@ text
 1) question
 2) question
 
+### C. Pronunciation Micro-Focus
+text
+
 ## 6. Your Turn: Complete the Mission!
 text
 
@@ -423,8 +602,10 @@ content
     );
 
     const res = await validateMarkdownFile(file);
-    expect(res.ok).toBe(false);
-    expect(res.errors.join('\n')).toMatch(/speaker_profiles id "Sam" is not present in speaker_labels/i);
+    expect(res.ok).toBe(true);
+    expect(res.warnings.join('\n')).toMatch(
+      /speaker_profiles id "Sam" is not present in speaker_labels/i,
+    );
   });
 
   it('accepts expanded ESL dialogue role aliases from pasted LLM drafts', async () => {
@@ -488,6 +669,9 @@ text
 ### B. Comprehension Check
 1) question
 2) question
+
+### C. Pronunciation Micro-Focus
+text
 
 ## 6. Your Turn: Complete the Mission!
 text
@@ -572,6 +756,9 @@ text
 1) question
 2) question
 
+### C. Pronunciation Micro-Focus
+text
+
 ## 6. Your Turn: Complete the Mission!
 text
 
@@ -652,6 +839,9 @@ text
 ### B. Comprehension Check
 1) question
 2) question
+
+### C. Pronunciation Micro-Focus
+text
 
 ## 6. Your Turn: Complete the Mission!
 text
@@ -739,6 +929,9 @@ text
 1) question
 2) question
 
+### C. Pronunciation Micro-Focus
+text
+
 ## 6. Your Turn: Complete the Mission!
 text
 
@@ -816,6 +1009,9 @@ text
 1) question
 2) question
 
+### C. Pronunciation Micro-Focus
+text
+
 ## 6. Your Turn: Complete the Mission!
 text
 
@@ -885,6 +1081,9 @@ text
 ### B. Comprehension Check
 1) question
 2) question
+
+### C. Pronunciation Micro-Focus
+text
 
 ## 6. Your Turn: Complete the Mission!
 text
@@ -978,7 +1177,7 @@ content
     expect(res.errors.join('\n')).toMatch(/must start at column 1/i);
   });
 
-  it('fails when study-text closing marker is missing or indented', async () => {
+  it('warns when study-text closing marker is indented', async () => {
     const tempDir = await mkdtemp(path.join(tmpdir(), 'validator-'));
     const file = path.join(tempDir, 'missing-closing-study-text.md');
     await writeFile(
@@ -1022,6 +1221,9 @@ text
 1) question
 2) question
 
+### C. Pronunciation Micro-Focus
+text
+
 ## 6. Your Turn: Complete the Mission!
 text
 
@@ -1042,11 +1244,11 @@ content
     );
 
     const res = await validateMarkdownFile(file);
-    expect(res.ok).toBe(false);
-    expect(res.errors.join('\n')).toMatch(/closing marker must be ":::"/i);
+    expect(res.ok).toBe(true);
+    expect(res.warnings.join('\n')).toMatch(/closing marker must be ":::"/i);
   });
 
-  it('fails when column-list has no columns', async () => {
+  it('warns when column-list has no columns', async () => {
     const tempDir = await mkdtemp(path.join(tmpdir(), 'validator-'));
     const file = path.join(tempDir, 'column-list-empty.md');
     const md = buildBaseDoc(
@@ -1054,8 +1256,8 @@ content
     );
     await writeFile(file, md);
     const res = await validateMarkdownFile(file);
-    expect(res.ok).toBe(false);
-    expect(res.errors.join('\n')).toMatch(/column-list.*at least one ":::column"/i);
+    expect(res.ok).toBe(true);
+    expect(res.warnings.join('\n')).toMatch(/column-list.*at least one ":::column"/i);
   });
 
   it('accepts column-list with columns', async () => {
@@ -1080,17 +1282,17 @@ content
     expect(res.errors).toHaveLength(0);
   });
 
-  it('fails when synced-block has no content and no source id', async () => {
+  it('warns when synced-block has no content and no source id', async () => {
     const tempDir = await mkdtemp(path.join(tmpdir(), 'validator-'));
     const file = path.join(tempDir, 'synced-empty.md');
     const md = buildBaseDoc(['Text', ':::synced-block', ':::'].join('\n'));
     await writeFile(file, md);
     const res = await validateMarkdownFile(file);
-    expect(res.ok).toBe(false);
-    expect(res.errors.join('\n')).toMatch(/synced-block.*must include content/i);
+    expect(res.ok).toBe(true);
+    expect(res.warnings.join('\n')).toMatch(/synced-block.*must include content/i);
   });
 
-  it('fails when table rows are ragged', async () => {
+  it('warns when table rows are ragged', async () => {
     const tempDir = await mkdtemp(path.join(tmpdir(), 'validator-'));
     const file = path.join(tempDir, 'table-ragged.md');
     const md = buildBaseDoc(
@@ -1098,8 +1300,156 @@ content
     );
     await writeFile(file, md);
     const res = await validateMarkdownFile(file);
+    expect(res.ok).toBe(true);
+    expect(res.warnings.join('\n')).toMatch(/Table .* inconsistent column counts/i);
+  });
+
+  it('accepts controlled practice heading with trailing qualifier text', async () => {
+    const tempDir = await mkdtemp(path.join(tmpdir(), 'validator-'));
+    const file = path.join(tempDir, 'controlled-practice-qualifier.md');
+    const md = buildBaseDoc('text').replace(
+      '### A. 🔩 Controlled Practice',
+      '### A. 🔩 Controlled Practice (Fossil Hunter)',
+    );
+    await writeFile(file, md);
+
+    const res = await validateMarkdownFile(file);
+    expect(res.ok).toBe(true);
+    expect(res.warnings).not.toContain('No "### A. Controlled Practice" section found under H2 #5.');
+  });
+
+  it('warns when Comprehension Check is missing under H2 #5 even if a similarly named heading exists elsewhere', async () => {
+    const tempDir = await mkdtemp(path.join(tmpdir(), 'validator-'));
+    const file = path.join(tempDir, 'comprehension-offscope.md');
+    const md = buildBaseDoc('text')
+      .replace('### B. 🤔 Comprehension Check', '### B. Reflection')
+      .replace(
+        "## 9. 👨‍🏫 Teacher's Follow-up Plan",
+        [
+          '### B. Comprehension Check',
+          '1) offscope',
+          '2) offscope',
+          '',
+          "## 9. 👨‍🏫 Teacher's Follow-up Plan",
+        ].join('\n'),
+      );
+    await writeFile(file, md);
+
+    const res = await validateMarkdownFile(file);
+    expect(res.ok).toBe(true);
+    expect(res.warnings).toContain('No "### B. Comprehension Check" section found under H2 #5.');
+  });
+
+  it('accepts comprehension check heading with trailing qualifier text under H2 #5', async () => {
+    const tempDir = await mkdtemp(path.join(tmpdir(), 'validator-'));
+    const file = path.join(tempDir, 'comprehension-qualifier.md');
+    const md = buildBaseDoc('text').replace(
+      '### B. 🤔 Comprehension Check',
+      '### B. 🤔 Comprehension Check (Fossil Hunter)',
+    );
+    await writeFile(file, md);
+
+    const res = await validateMarkdownFile(file);
+    expect(res.ok).toBe(true);
+    expect(res.warnings).not.toContain('No "### B. Comprehension Check" section found under H2 #5.');
+  });
+
+  it('treats missing H2 #5 comprehension check as blocking in strict mode', async () => {
+    const tempDir = await mkdtemp(path.join(tmpdir(), 'validator-'));
+    const file = path.join(tempDir, 'missing-comprehension-strict.md');
+    const md = buildBaseDoc('text').replace('### B. 🤔 Comprehension Check', '### B. Reflection');
+    await writeFile(file, md);
+
+    const res = await validateMarkdownFile(file, { strict: true });
     expect(res.ok).toBe(false);
-    expect(res.errors.join('\n')).toMatch(/Table .* inconsistent column counts/i);
+    expect(res.errors).toContain('No "### B. Comprehension Check" section found under H2 #5.');
+  });
+
+  it('keeps comprehension-count recommendation non-blocking in strict mode', async () => {
+    const tempDir = await mkdtemp(path.join(tmpdir(), 'validator-'));
+    const file = path.join(tempDir, 'strict-comprehension-count.md');
+    const md = withStrictReadyFrontmatter(withoutLegacyFence(buildBaseDoc('text'))).replace(
+      '1. x\n2. y',
+      '1. x',
+    );
+    await writeFile(file, md);
+
+    const res = await validateMarkdownFile(file, { strict: true });
+    expect(res.ok).toBe(true);
+    expect(res.warnings.join('\n')).toMatch(/Comprehension Check has 1 item\(s\)/i);
+  });
+
+  it('treats H2 contract mismatches as blocking in strict mode', async () => {
+    const tempDir = await mkdtemp(path.join(tmpdir(), 'validator-'));
+    const file = path.join(tempDir, 'strict-h2-mismatch.md');
+    const md = withStrictReadyFrontmatter(withoutLegacyFence(buildBaseDoc('text'))).replace(
+      '## 5. ✍️ Practice & Pronunciation',
+      '## 5. Practice',
+    );
+    await writeFile(file, md);
+
+    const res = await validateMarkdownFile(file, { strict: true });
+    expect(res.ok).toBe(false);
+    expect(res.errors.join('\n')).toMatch(/H2 #5 mismatch/i);
+  });
+
+  it('treats speaker alignment warnings as blocking in strict mode', async () => {
+    const tempDir = await mkdtemp(path.join(tmpdir(), 'validator-'));
+    const file = path.join(tempDir, 'strict-speaker-mismatch.md');
+    const md = withStrictReadyFrontmatter(withoutLegacyFence(buildBaseDoc('text'))).replace(
+      '[Mara]: Hello!',
+      'Sam: Hello!',
+    );
+    await writeFile(file, md);
+
+    const res = await validateMarkdownFile(file, { strict: true });
+    expect(res.ok).toBe(false);
+    expect(res.errors.join('\n')).toMatch(/unknown speaker "Sam"/i);
+  });
+
+  it('accepts pronunciation micro-focus heading under H2 #5 with non-C letter prefix', async () => {
+    const tempDir = await mkdtemp(path.join(tmpdir(), 'validator-'));
+    const file = path.join(tempDir, 'pronunciation-non-c-prefix.md');
+    const md = buildBaseDoc('text').replace(
+      '### C. 🎙️ Pronunciation Micro-Focus (≈1 min)',
+      '### F. 🎙️ Pronunciation Micro-Focus (Fossil Hunter)',
+    );
+    await writeFile(file, md);
+
+    const res = await validateMarkdownFile(file);
+    expect(res.ok).toBe(true);
+    expect(res.errors).not.toContain(
+      'Missing "### <letter>. Pronunciation Micro-Focus" section under H2 #5.',
+    );
+  });
+
+  it('fails when pronunciation micro-focus heading is missing under H2 #5', async () => {
+    const tempDir = await mkdtemp(path.join(tmpdir(), 'validator-'));
+    const file = path.join(tempDir, 'pronunciation-missing-under-h2-5.md');
+    const md = buildBaseDoc('text').replace(
+      '### C. 🎙️ Pronunciation Micro-Focus (≈1 min)',
+      '### C. 🎙️ Accent Drill (≈1 min)',
+    );
+    await writeFile(file, md);
+
+    const res = await validateMarkdownFile(file);
+    expect(res.ok).toBe(false);
+    expect(res.errors).toContain(
+      'Missing "### <letter>. Pronunciation Micro-Focus" section under H2 #5.',
+    );
+  });
+
+  it('keeps extra-after-core H2 warning non-blocking in strict mode', async () => {
+    const tempDir = await mkdtemp(path.join(tmpdir(), 'validator-'));
+    const file = path.join(tempDir, 'strict-extra-h2-after-core.md');
+    const md = `${withStrictReadyFrontmatter(withoutLegacyFence(buildBaseDoc('text')))}\n\n## 10. Appendix Notes\ntext`;
+    await writeFile(file, md);
+
+    const res = await validateMarkdownFile(file, { strict: true });
+    expect(res.ok).toBe(true);
+    expect(res.warnings).toContain(
+      'Additional H2 sections after section 9 are ignored by structure validation.',
+    );
   });
 
   it('warns about missing study_text_type in compatibility mode', async () => {

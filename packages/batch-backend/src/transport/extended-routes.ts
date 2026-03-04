@@ -701,11 +701,20 @@ export function registerExtendedRoutes(app: FastifyInstance, options: ExtendedRo
       const schema = z.object({
         text: z.string().min(1),
         strict: z.boolean().optional(),
+        learningPresetId: z.string().trim().min(1).optional(),
+        learningPresetVersion: z.string().trim().min(1).optional(),
+        preset: z.string().trim().min(1).optional(),
       });
 
       try {
         const body = schema.parse(request.body ?? {});
-        const result = await validateMarkdown({ markdown: body.text, strict: body.strict });
+        const result = await validateMarkdown({
+          markdown: body.text,
+          strict: body.strict,
+          learningPresetId: body.learningPresetId,
+          learningPresetVersion: body.learningPresetVersion,
+          preset: body.preset,
+        });
         const diagnostics = result.voiceDiagnostics;
         if (diagnostics?.errors && diagnostics.errors.length > 0) {
           metrics.increment('esl.voice_alignment.validation_failures', diagnostics.errors.length, {

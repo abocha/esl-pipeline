@@ -1785,6 +1785,9 @@ describe('MinimalAssignment', () => {
     await waitFor(() => {
       expect(api.createDraft).toHaveBeenCalledWith('pkg-1', '# Final draft');
     });
+    expect(vi.mocked(api.validateMarkdown)).toHaveBeenLastCalledWith('# Final draft', true, {
+      preset: 'b2-default',
+    });
     expect(api.materializeDraft).toHaveBeenCalledWith('draft-1', {
       jobOverrides: {
         preset: 'b2-default',
@@ -1852,6 +1855,9 @@ describe('MinimalAssignment', () => {
 
     await waitFor(() => {
       expect(api.createDraft).toHaveBeenCalledWith('pkg-1', '# Final draft');
+    });
+    expect(vi.mocked(api.validateMarkdown)).toHaveBeenLastCalledWith('# Final draft', true, {
+      learningPresetId: 'general-english-intensive',
     });
     expect(api.materializeDraft).toHaveBeenCalledWith('draft-1', {
       jobOverrides: {
