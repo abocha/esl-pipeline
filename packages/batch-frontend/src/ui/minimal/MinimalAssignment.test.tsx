@@ -91,6 +91,40 @@ vi.mock('../shared/UploadProgress', () => ({
 
 const now = '2026-02-05T00:00:00.000Z';
 
+function makeJobStatus(overrides: Partial<api.JobStatus> = {}): api.JobStatus {
+  return {
+    jobId: 'job-1',
+    studentId: null,
+    md: '/tmp/assignment.md',
+    mdStorageUri: null,
+    recordingId: null,
+    transcriptId: null,
+    promptPackageId: null,
+    draftId: null,
+    preset: 'b1-default',
+    learningPresetId: null,
+    withTts: true,
+    voiceId: null,
+    upload: 's3',
+    voiceAccent: null,
+    forceTts: false,
+    notionDatabase: null,
+    publishTarget: 'html',
+    ttsStrategy: 'auto',
+    autoPublish: false,
+    notionUrl: null,
+    anytypeUrl: null,
+    state: 'queued',
+    createdAt: now,
+    updatedAt: now,
+    startedAt: null,
+    finishedAt: null,
+    error: null,
+    manifestPath: null,
+    ...overrides,
+  };
+}
+
 function makeRecording(overrides: Partial<api.RecordingListItem> = {}): api.RecordingListItem {
   return {
     recordingId: 'rec-1',
@@ -475,6 +509,79 @@ describe('MinimalAssignment', () => {
 
     expect(screen.getByRole('heading', { name: /1\. Upload recording/i })).toBeTruthy();
     expect(screen.getByRole('heading', { name: /6\. Publish/i })).toBeTruthy();
+    expect((screen.getByRole('combobox', { name: /Publish to/i }) as HTMLSelectElement).value).toBe(
+      'html',
+    );
+  });
+
+  it('auto-resumes queued/running jobs and skips terminal jobs on initial load', async () => {
+    vi.mocked(api.listUserJobs).mockResolvedValueOnce({
+      jobs: [
+        makeJobStatus({
+          jobId: 'job-finished',
+          state: 'succeeded',
+          startedAt: now,
+          finishedAt: now,
+        }),
+        makeJobStatus({
+          jobId: 'job-running',
+          state: 'running',
+          startedAt: now,
+          finishedAt: null,
+        }),
+      ],
+      total: 2,
+      limit: 20,
+      offset: 0,
+    });
+    vi.mocked(api.getJobStatus).mockResolvedValueOnce(
+      makeJobStatus({
+        jobId: 'job-running',
+        state: 'running',
+        startedAt: now,
+        finishedAt: null,
+      }),
+    );
+
+    render(<MinimalAssignment />);
+
+    await waitFor(() => {
+      expect(api.getJobStatus).toHaveBeenCalledWith('job-running');
+    });
+    expect(api.getJobStatus).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not auto-resume terminal jobs when no queued/running job exists', async () => {
+    vi.mocked(api.listUserJobs).mockResolvedValueOnce({
+      jobs: [
+        makeJobStatus({
+          jobId: 'job-succeeded',
+          state: 'succeeded',
+          startedAt: now,
+          finishedAt: now,
+        }),
+        makeJobStatus({
+          jobId: 'job-failed',
+          state: 'failed',
+          startedAt: now,
+          finishedAt: now,
+          error: 'failed for test',
+        }),
+      ],
+      total: 2,
+      limit: 20,
+      offset: 0,
+    });
+
+    render(<MinimalAssignment />);
+
+    await waitFor(() => {
+      expect(api.listUserJobs).toHaveBeenCalledTimes(1);
+    });
+    await waitFor(() => {
+      expect(api.getJobStatus).not.toHaveBeenCalled();
+    });
+    expect(screen.queryByText(/Pinned job:/i)).toBeNull();
   });
 
   it('rehydrates workflow state from server job context in query params', async () => {
@@ -1104,12 +1211,11 @@ describe('MinimalAssignment', () => {
     });
   });
 
-  it('allows clearing explicit student selection before upload', async () => {
+  it('uses Default student selection for upload on fresh load', async () => {
     const user = userEvent.setup();
     render(<MinimalAssignment />);
 
-    const studentSelect = await screen.findByRole('combobox', { name: /Student \(optional\)/i });
-    await user.selectOptions(studentSelect, '');
+    await screen.findByRole('combobox', { name: /Student \(optional\)/i });
     await user.click(screen.getByRole('button', { name: /Drop audio file/i }));
 
     await waitFor(() => {
@@ -1117,7 +1223,7 @@ describe('MinimalAssignment', () => {
     });
     expect(api.uploadRecording).toHaveBeenCalledWith(
       expect.any(File),
-      expect.objectContaining({ studentId: undefined, sttProvider: 'deepgram' }),
+      expect.objectContaining({ studentId: 'student-default', sttProvider: 'deepgram' }),
     );
   });
 
@@ -1682,7 +1788,7 @@ describe('MinimalAssignment', () => {
     expect(api.materializeDraft).toHaveBeenCalledWith('draft-1', {
       jobOverrides: {
         preset: 'b2-default',
-        publishTarget: 'notion',
+        publishTarget: 'html',
       },
     });
     expect(api.approveJob).toHaveBeenCalledWith('job-1', {
@@ -1750,7 +1856,7 @@ describe('MinimalAssignment', () => {
     expect(api.materializeDraft).toHaveBeenCalledWith('draft-1', {
       jobOverrides: {
         learningPresetId: 'general-english-intensive',
-        publishTarget: 'notion',
+        publishTarget: 'html',
       },
     });
     const call = vi.mocked(api.materializeDraft).mock.calls.at(-1)?.[1];

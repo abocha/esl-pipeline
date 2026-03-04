@@ -66,6 +66,26 @@ function isActivelyProcessingJobState(state: JobStatus['state'] | null | undefin
   return state ? ACTIVE_JOB_STATES.has(state) : false;
 }
 
+function isDefaultStudentName(name: string): boolean {
+  return name.trim().toLowerCase() === 'default';
+}
+
+function sortStudentsForPicker(students: StudentOption[]): StudentOption[] {
+  return [...students].sort((left, right) => {
+    const leftIsDefault = isDefaultStudentName(left.name);
+    const rightIsDefault = isDefaultStudentName(right.name);
+
+    if (leftIsDefault !== rightIsDefault) {
+      return leftIsDefault ? -1 : 1;
+    }
+
+    const byName = left.name.localeCompare(right.name, undefined, { sensitivity: 'base' });
+    if (byName !== 0) return byName;
+
+    return left.id.localeCompare(right.id);
+  });
+}
+
 function readJobIdFromQuery(): string | null {
   if (globalThis.window === undefined) return null;
   const params = new URLSearchParams(globalThis.location.search);
@@ -261,7 +281,7 @@ export const MinimalAssignment: React.FC = () => {
   const [publishing, setPublishing] = useState(false);
   const [publishError, setPublishError] = useState<string | null>(null);
   const [jobStatus, setJobStatusState] = useState<JobStatus | null>(null);
-  const [publishTarget, setPublishTarget] = useState<'notion' | 'anytype' | 'html'>('notion');
+  const [publishTarget, setPublishTarget] = useState<'notion' | 'anytype' | 'html'>('html');
   const [selectedPreset, setSelectedPreset] = useState('');
   const [jobOptions, setJobOptions] = useState<JobOptionsResponse | null>(null);
   const [jobOptionsError, setJobOptionsError] = useState<string | null>(null);
@@ -356,7 +376,11 @@ export const MinimalAssignment: React.FC = () => {
       setResumeJobs(jobs);
       setSelectedResumeJobId((current) => {
         if (current && jobs.some((job) => job.jobId === current)) return current;
-        return jobs[0]?.jobId ?? '';
+        return (
+          jobs.find((job) => isActivelyProcessingJobState(job.state))?.jobId ??
+          jobs[0]?.jobId ??
+          ''
+        );
       });
       setResumeError(null);
       return jobs;
@@ -454,10 +478,11 @@ export const MinimalAssignment: React.FC = () => {
   const loadStudentOptions = useCallback(async () => {
     try {
       const response = await fetchStudentOptions();
-      setStudentOptions(response.students ?? []);
+      const sortedStudents = sortStudentsForPicker(response.students ?? []);
+      setStudentOptions(sortedStudents);
       setSelectedStudentId((current) => {
         if (current) return current;
-        return response.students.find((student) => student.name === 'Default')?.id ?? '';
+        return sortedStudents.find((student) => isDefaultStudentName(student.name))?.id ?? '';
       });
       setStudentOptionsError(null);
     } catch (error) {
@@ -827,7 +852,7 @@ export const MinimalAssignment: React.FC = () => {
         return;
       }
 
-      const candidate = jobs.find((job) => !isTerminalJobState(job.state)) ?? jobs[0] ?? null;
+      const candidate = jobs.find((job) => isActivelyProcessingJobState(job.state)) ?? null;
       if (candidate) {
         await hydrateFromJob(candidate.jobId, jobs);
       } else {
@@ -1813,7 +1838,6 @@ export const MinimalAssignment: React.FC = () => {
             value={selectedStudentId}
             onChange={(event) => handleStudentSelectionChange(event.target.value)}
           >
-            <option value="">No explicit student (fallback to Default profile)</option>
             {studentOptions.map((student) => (
               <option key={student.id} value={student.id}>
                 {student.name}
