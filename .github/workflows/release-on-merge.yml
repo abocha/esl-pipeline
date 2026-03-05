@@ -1,0 +1,89 @@
+name: Release On Merge
+
+on:
+  pull_request_target:
+    types: [closed]
+    branches: [main]
+
+permissions:
+  contents: write
+  pull-requests: read
+
+concurrency:
+  group: release-main
+  cancel-in-progress: false
+
+jobs:
+  release:
+    name: release + tag
+    if: github.event.pull_request.merged == true
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Checkout main
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with:
+          ref: main
+          fetch-depth: 0
+
+      - name: Setup Node
+        uses: actions/setup-node@6044e13b5dc448c55e2357c09f80417699197238
+        with:
+          node-version-file: .nvmrc
+
+      - name: Resolve release bump
+        id: bump
+        run: |
+          BUMP="$(node scripts/release/resolve-release-bump-from-pr.mjs --event "${GITHUB_EVENT_PATH}")"
+          echo "bump=${BUMP}" >> "$GITHUB_OUTPUT"
+
+      - name: Compute next version
+        id: next
+        run: |
+          CURRENT="$(node -p "require('./package.json').version")"
+          NEXT="$(node scripts/release/compute-next-version.mjs --current "$CURRENT" --bump "${{ steps.bump.outputs.bump }}")"
+          echo "current=${CURRENT}" >> "$GITHUB_OUTPUT"
+          echo "next=${NEXT}" >> "$GITHUB_OUTPUT"
+
+      - name: Ensure release tag is new
+        run: |
+          if git ls-remote --exit-code --tags origin "refs/tags/v${{ steps.next.outputs.next }}" >/dev/null 2>&1; then
+            echo "Tag v${{ steps.next.outputs.next }} already exists"
+            exit 1
+          fi
+
+      - name: Update package.json and CHANGELOG
+        run: |
+          node scripts/release/write-release-files.mjs \
+            --event "${GITHUB_EVENT_PATH}" \
+            --version "${{ steps.next.outputs.next }}"
+
+      - name: Commit release files
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add package.json CHANGELOG.md
+          if git diff --cached --quiet; then
+            echo "No release file changes detected"
+            exit 1
+          fi
+          git commit -m "chore(release): v${{ steps.next.outputs.next }}"
+
+      - name: Rebase on latest main and push release commit
+        run: |
+          for attempt in 1 2 3; do
+            echo "Push attempt ${attempt}/3"
+            git fetch origin main
+            git rebase origin/main
+            if git push origin HEAD:main; then
+              exit 0
+            fi
+            sleep $((attempt * 2))
+          done
+          echo "Failed to push release commit to main after retries"
+          exit 1
+
+      - name: Create and push release tag
+        run: |
+          git tag -a "v${{ steps.next.outputs.next }}" -m "Release v${{ steps.next.outputs.next }}"
+          git push origin "v${{ steps.next.outputs.next }}"

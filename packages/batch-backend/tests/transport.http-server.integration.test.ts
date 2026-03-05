@@ -3,6 +3,7 @@ import { Readable } from 'node:stream';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { validateMarkdown } from '@esl-pipeline/md-validator';
 import * as notionAdapterModule from '@esl-pipeline/notion-adapter';
+import { CONTRACT_VERSIONS, DB_MIGRATION_HEAD } from '@esl-pipeline/contracts';
 
 import * as approveJobModule from '../src/application/approve-job.js';
 import * as createDraftModule from '../src/application/create-draft.js';
@@ -19,6 +20,7 @@ import * as listJobsModule from '../src/application/list-jobs.js';
 import * as listRecordingsModule from '../src/application/list-recordings.js';
 import * as materializeDraftModule from '../src/application/materialize-draft.js';
 import * as readinessMetricsModule from '../src/application/readiness-metrics.js';
+import { getVersionMeta } from '../src/application/version-meta.js';
 import * as profileContentModule from '../src/application/profile-content.js';
 import { ProfilePathError } from '../src/application/profile-path.js';
 import * as retryRecordingModule from '../src/application/retry-recording-transcription.js';
@@ -995,6 +997,53 @@ describe('transport/http-server - integration (in-process)', () => {
 
     expect(response.statusCode).toBe(500);
     expect(response.json()).toEqual({ error: 'internal_error' });
+  });
+
+  it('GET /meta/version returns repo + contract versions', async () => {
+    const response = await app.inject({
+      method: 'GET',
+      url: '/meta/version',
+    });
+
+    expect(response.statusCode).toBe(200);
+    const expectedVersionMeta = getVersionMeta();
+    expect(response.json()).toEqual({
+      repoVersion: expectedVersionMeta.repoVersion,
+      contracts: {
+        ...CONTRACT_VERSIONS,
+        dbMigrationHead: DB_MIGRATION_HEAD,
+      },
+    });
+  });
+
+  it('GET /meta/version remains available when extended API is disabled', async () => {
+    const originalFlag = process.env.BATCH_BACKEND_ENABLE_EXTENDED_API;
+    process.env.BATCH_BACKEND_ENABLE_EXTENDED_API = 'false';
+    const disabledApp = await createHttpServer();
+
+    try {
+      const response = await disabledApp.inject({
+        method: 'GET',
+        url: '/meta/version',
+      });
+
+      expect(response.statusCode).toBe(200);
+      const expectedVersionMeta = getVersionMeta();
+      expect(response.json()).toEqual({
+        repoVersion: expectedVersionMeta.repoVersion,
+        contracts: {
+          ...CONTRACT_VERSIONS,
+          dbMigrationHead: DB_MIGRATION_HEAD,
+        },
+      });
+    } finally {
+      await disabledApp.close();
+      if (originalFlag === undefined) {
+        delete process.env.BATCH_BACKEND_ENABLE_EXTENDED_API;
+      } else {
+        process.env.BATCH_BACKEND_ENABLE_EXTENDED_API = originalFlag;
+      }
+    }
   });
 
   it('GET /config/job-options returns metadata payload when extended API enabled', async () => {

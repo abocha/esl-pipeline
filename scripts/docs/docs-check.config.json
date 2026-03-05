@@ -6,6 +6,7 @@
     "docs/QUICK_START.md",
     "docs/reference/DOCS_IA_MAP.md",
     "docs/reference/DOCS_GOVERNANCE.md",
+    "docs/reference/VERSIONING_MODEL.md",
     "docs/reference/agents-ssot.md",
     "docs/backend-frontend/BATCH_SYSTEM.md",
     "docs/backend-frontend/backend-frontend-alignment.md"
@@ -17,6 +18,7 @@
     "docs/operations/postgres-ops-health.md",
     "docs/operations/prompt-gallery-bootstrap.md",
     "docs/operations/pr-style-release-notes.md",
+    "docs/operations/versioning-tag-reset-runbook.md",
     "docs/operations/rollup-optional-binary-troubleshooting.md"
   ],
   "exclude_docs": [],
@@ -30,6 +32,7 @@
     "docs/QUICK_START.md",
     "docs/reference/DOCS_IA_MAP.md",
     "docs/reference/DOCS_GOVERNANCE.md",
+    "docs/reference/VERSIONING_MODEL.md",
     "docs/reference/agents-ssot.md",
     "docs/backend-frontend/BATCH_SYSTEM.md",
     "docs/backend-frontend/backend-frontend-alignment.md",
@@ -39,6 +42,7 @@
     "docs/operations/postgres-ops-health.md",
     "docs/operations/prompt-gallery-bootstrap.md",
     "docs/operations/pr-style-release-notes.md",
+    "docs/operations/versioning-tag-reset-runbook.md",
     "docs/operations/rollup-optional-binary-troubleshooting.md"
   ],
   "meta_required_fields": [

@@ -5,7 +5,7 @@
 - Audience: maintainers and AI agents editing docs.
 - Read Time: 3 minutes.
 - Authority Level: Governance policy.
-- Last Verified Against: 2026-03-04 repo state.
+- Last Verified Against: 2026-03-05 repo state.
 - Owner: founder-maintainer + automation agents.
 - Review Cadence: biweekly.
 - Status: `reference`.
@@ -39,6 +39,7 @@
 - `docs/QUICK_START.md`
 - `docs/reference/DOCS_IA_MAP.md`
 - `docs/reference/DOCS_GOVERNANCE.md`
+- `docs/reference/VERSIONING_MODEL.md`
 - `docs/reference/agents-ssot.md`
 - `docs/backend-frontend/BATCH_SYSTEM.md`
 - `docs/backend-frontend/backend-frontend-alignment.md`
@@ -51,6 +52,7 @@
 - `docs/operations/postgres-ops-health.md`
 - `docs/operations/prompt-gallery-bootstrap.md`
 - `docs/operations/pr-style-release-notes.md`
+- `docs/operations/versioning-tag-reset-runbook.md`
 - `docs/operations/rollup-optional-binary-troubleshooting.md`
 
 ## Rules

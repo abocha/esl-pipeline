@@ -1,3 +1,5 @@
+import type { ContractVersionRegistry } from './contract-versions.js';
+
 export type JobState = 'queued' | 'running' | 'awaiting_approval' | 'succeeded' | 'failed';
 
 export type TtsStrategy = 'auto' | 'dialogue' | 'tts';
@@ -563,7 +565,15 @@ export interface RecordingEventMessage {
 
 export type StreamEventMessage = JobEventMessage | RecordingEventMessage;
 
+export interface VersionMetaResponse {
+  repoVersion: string;
+  contracts: ContractVersionRegistry & {
+    dbMigrationHead: string;
+  };
+}
+
 // Job actions exports
 export * from './job-actions.js';
+export * from './contract-versions.js';
 export * from './errors.js';
 export * from './observability.js';

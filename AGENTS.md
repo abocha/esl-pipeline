@@ -4,7 +4,7 @@
 
 - Audience: AI agents and maintainers.
 - Authority Level: router + operating contract.
-- Last Verified Against: 2026-03-04 repo state.
+- Last Verified Against: 2026-03-05 repo state.
 - Owner: founder-maintainer + automation agents.
 - Review Cadence: biweekly or after major workflow/tooling changes.
 - Status: `router`.
@@ -59,6 +59,9 @@ When implementing from a plan file, re-read that exact plan file after every con
   - [`docs/operations/postgres-ops-health.md`](docs/operations/postgres-ops-health.md)
 - Release notes from direct commits:
   - [`docs/operations/pr-style-release-notes.md`](docs/operations/pr-style-release-notes.md)
+- Release/versioning model and automation:
+  - [`docs/reference/VERSIONING_MODEL.md`](docs/reference/VERSIONING_MODEL.md)
+  - [`docs/operations/versioning-tag-reset-runbook.md`](docs/operations/versioning-tag-reset-runbook.md)
 
 ## Architecture Snapshot (High-Level)
 

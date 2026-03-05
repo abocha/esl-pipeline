@@ -24,8 +24,6 @@
   "main": "index.js",
   "scripts": {
     "build": "pnpm -r --filter './packages/*' run build",
-    "changeset": "changeset",
-    "changeset:version": "changeset version",
     "check": "pnpm build && pnpm typecheck && pnpm lint && pnpm test",
     "check:fast": "pnpm build && pnpm lint && pnpm --filter @esl-pipeline/orchestrator test && pnpm --filter @esl-pipeline/batch-backend test && pnpm --filter @esl-pipeline/batch-frontend test",
     "clean": "pnpm -r --filter './packages/*' --if-present run clean",
@@ -72,6 +70,9 @@
     "hadolint": "rg --files -g 'Dockerfile*' | xargs -r hadolint",
     "lint": "pnpm exec eslint packages",
     "notes:pr-style": "bash scripts/git/pr-style-summary.sh",
+    "release:compute-next-version": "node scripts/release/compute-next-version.mjs",
+    "release:resolve-pr-bump": "node scripts/release/resolve-release-bump-from-pr.mjs",
+    "release:verify:contracts": "node scripts/release/verify-contract-version-consistency.mjs",
     "ops:alert:check": "bash scripts/docker/run-postgres-ops-alert.sh",
     "ops:key-rotation:check": "bash scripts/docker/run-aws-key-rotation-reminder.sh",
     "ops:status": "bash scripts/docker/postgres-ops-status.sh",
@@ -82,7 +83,6 @@
     "typecheck": "pnpm -r --filter './packages/*' --if-present run typecheck"
   },
   "devDependencies": {
-    "@changesets/cli": "^2.29.8",
     "@eslint-react/eslint-plugin": "^2.13.0",
     "@eslint/js": "^10.0.1",
     "@trivago/prettier-plugin-sort-imports": "^6.0.2",
