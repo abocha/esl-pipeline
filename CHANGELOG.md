@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented here. Dates use `YYYY-MM-DD`.
 
+## [1.0.1] - 2026-03-05
+
+### Changed
+
+- Automated release from PR #12: docs(maintenance): archive stale docs and tighten archive routing (https://github.com/abocha/esl-pipeline/pull/12)
+
 ## [1.0.0] - 2026-03-05
 
 ### Changed
