@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented here. Dates use `YYYY-MM-DD`.
 
+## [2.4.0] - 2026-03-05
+
+### Changed
+
+- Automated release from PR #10: feat(release): private-only versioning automation + contract registry (https://github.com/abocha/esl-pipeline/pull/10)
+
 ## [2.0.0-alpha] - 2025-12-31
 
 ### Highlights
