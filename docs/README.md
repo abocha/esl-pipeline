@@ -47,7 +47,8 @@
   - [`docs/operations/prompt-gallery-bootstrap.md`](operations/prompt-gallery-bootstrap.md)
 - Versioning and release automation:
   - [`docs/reference/VERSIONING_MODEL.md`](reference/VERSIONING_MODEL.md)
-  - [`docs/operations/versioning-tag-reset-runbook.md`](operations/versioning-tag-reset-runbook.md)
+- Historical pre-v1 tag reset record:
+  - [`docs/archive/release/versioning-tag-reset-runbook.md`](archive/release/versioning-tag-reset-runbook.md)
 
 ## Rules of Thumb
 

@@ -3,17 +3,27 @@
 ## Meta
 
 - Audience: maintainers and release operators.
-- Authority Level: operations runbook.
+- Authority Level: archive.
 - Last Verified Against: 2026-03-05 repo state.
 - Owner: founder-maintainer + automation agents.
-- Review Cadence: yearly or after release model changes.
-- Status: `runbook`.
+- Review Cadence: never (historical record).
+- Status: `archive`.
 
 ## Purpose
 
-One-time clean-slate release reset for historical tags.
+Historical record of the one-time clean-slate release reset for legacy tags.
 
-This runbook archives existing tags, deletes local/remote release tags, and restarts release history from a fresh baseline tag.
+This procedure archived existing tags, deleted local/remote legacy release tags, and restarted release history from a fresh baseline tag.
+
+## Execution Status
+
+Completed on 2026-03-05.
+
+Outcome:
+
+1. Legacy tags deleted (local + remote).
+2. Baseline release established at `v1.0.0`.
+3. Root `package.json` synchronized to `1.0.0`.
 
 ## Preconditions
 
@@ -32,7 +42,7 @@ git tag --sort=creatordate > tmp/pre-v1-tag-history.txt
 
 Copy/paste the tag snapshot into:
 
-- [`docs/archive/release/tag-history-pre-v1-reset.md`](../archive/release/tag-history-pre-v1-reset.md)
+- [`docs/archive/release/tag-history-pre-v1-reset.md`](tag-history-pre-v1-reset.md)
 
 Commit the archive before deletion.
 

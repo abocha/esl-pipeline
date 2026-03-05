@@ -52,7 +52,6 @@
 - `docs/operations/postgres-ops-health.md`
 - `docs/operations/prompt-gallery-bootstrap.md`
 - `docs/operations/pr-style-release-notes.md`
-- `docs/operations/versioning-tag-reset-runbook.md`
 - `docs/operations/rollup-optional-binary-troubleshooting.md`
 
 ## Rules
