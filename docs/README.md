@@ -5,7 +5,7 @@
 - Audience: AI agents, maintainers.
 - Read Time: 2 minutes.
 - Authority Level: Router.
-- Last Verified Against: 2026-03-04 repo state.
+- Last Verified Against: 2026-03-05 repo state.
 - Owner: founder-maintainer + automation agents.
 - Review Cadence: biweekly.
 - Status: `router`.
@@ -45,6 +45,9 @@
   - [`docs/operations/postgres-ops-health.md`](operations/postgres-ops-health.md)
 - Prompt gallery DB bootstrap:
   - [`docs/operations/prompt-gallery-bootstrap.md`](operations/prompt-gallery-bootstrap.md)
+- Versioning and release automation:
+  - [`docs/reference/VERSIONING_MODEL.md`](reference/VERSIONING_MODEL.md)
+  - [`docs/operations/versioning-tag-reset-runbook.md`](operations/versioning-tag-reset-runbook.md)
 
 ## Rules of Thumb
 
