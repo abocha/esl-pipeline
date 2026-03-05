@@ -283,6 +283,20 @@ body {
 .markdown-body li {
   margin: 6px 0;
 }
+.markdown-body li.task-list-item {
+  list-style: none;
+}
+.markdown-body li.task-list-item > p {
+  margin: 0;
+}
+.markdown-body .task-list-item-checkbox {
+  width: 1em;
+  height: 1em;
+  margin: 0 0.55em 0 0;
+  vertical-align: text-top;
+  accent-color: var(--audio-accent);
+  cursor: pointer;
+}
 .markdown-body hr {
   border: none;
   border-top: 1px solid var(--page-line);
@@ -737,6 +751,7 @@ details.is-open > .content {
 
 type MarkdownItInstance = InstanceType<typeof MarkdownIt>;
 type ContainerPlugin = (md: MarkdownItInstance, name: string, options: unknown) => void;
+const TASK_LIST_ITEM_MARKER_REGEX = /^\[( |x|X)\]\s+/;
 
 export async function renderToHtml(
   markdown: string,
@@ -875,7 +890,112 @@ function createRenderer(): MarkdownIt {
     return `<code>${richContent}</code>`;
   };
 
+  applyTaskListRule(md);
+
   return md;
+}
+
+function applyTaskListRule(md: MarkdownIt): void {
+  md.core.ruler.after('inline', 'task_list_checkboxes', (state) => {
+    const listStack: number[] = [];
+    const listItemStack: { tokenIndex: number; firstInlineSeen: boolean }[] = [];
+
+    for (let index = 0; index < state.tokens.length; index += 1) {
+      const token = state.tokens[index];
+      if (!token) continue;
+
+      if (token.type === 'bullet_list_open' || token.type === 'ordered_list_open') {
+        listStack.push(index);
+        continue;
+      }
+      if (token.type === 'bullet_list_close' || token.type === 'ordered_list_close') {
+        listStack.pop();
+        continue;
+      }
+      if (token.type === 'list_item_open') {
+        listItemStack.push({ tokenIndex: index, firstInlineSeen: false });
+        continue;
+      }
+      if (token.type === 'list_item_close') {
+        listItemStack.pop();
+        continue;
+      }
+      if (token.type !== 'inline') {
+        continue;
+      }
+      if (listStack.length === 0 || listItemStack.length === 0) {
+        continue;
+      }
+
+      const currentListItemContext = listItemStack.at(-1);
+      if (!currentListItemContext || currentListItemContext.firstInlineSeen) {
+        continue;
+      }
+      currentListItemContext.firstInlineSeen = true;
+
+      const currentListIndex = listStack.at(-1);
+      const currentListItemIndex = currentListItemContext.tokenIndex;
+      if (currentListIndex === undefined || currentListItemIndex === undefined) {
+        continue;
+      }
+
+      const listToken = state.tokens[currentListIndex];
+      const listItemToken = state.tokens[currentListItemIndex];
+      const previousToken = state.tokens[index - 1];
+      if (!listToken || !listItemToken || typeof listItemToken.level !== 'number') {
+        continue;
+      }
+
+      const isLeadParagraphInline =
+        previousToken?.type === 'paragraph_open' && previousToken.level === listItemToken.level + 1;
+      if (!isLeadParagraphInline) {
+        continue;
+      }
+
+      const marker = TASK_LIST_ITEM_MARKER_REGEX.exec(token.content ?? '');
+      if (!marker) {
+        continue;
+      }
+
+      appendTokenClass(listToken, 'task-list');
+      appendTokenClass(listItemToken, 'task-list-item');
+
+      const checked = (marker[1] ?? '').toLowerCase() === 'x';
+      token.content = token.content.replace(TASK_LIST_ITEM_MARKER_REGEX, '');
+
+      const children = token.children ? [...token.children] : [];
+      const firstChild = children[0];
+      if (firstChild?.type === 'text') {
+        firstChild.content = firstChild.content.replace(TASK_LIST_ITEM_MARKER_REGEX, '');
+        if (firstChild.content.length === 0) {
+          children.shift();
+        }
+      } else if (token.content.length > 0) {
+        const textToken = new state.Token('text', '', 0);
+        textToken.content = token.content;
+        children.unshift(textToken);
+      }
+
+      const checkboxToken = new state.Token('html_inline', '', 0);
+      checkboxToken.content = `<input type="checkbox" class="task-list-item-checkbox"${checked ? ' checked' : ''}> `;
+      token.children = [checkboxToken, ...children];
+    }
+  });
+}
+
+function appendTokenClass(
+  token: { attrGet: (name: string) => string | null; attrSet: (name: string, value: string) => void },
+  className: string,
+): void {
+  const current = token.attrGet('class');
+  if (!current) {
+    token.attrSet('class', className);
+    return;
+  }
+
+  const classes = new Set(current.split(/\s+/).filter(Boolean));
+  classes.add(className);
+  token.attrSet('class', [...classes].join(' '));
 }
 
 function preprocessMarkdown(markdown: string, allowRawHtml: boolean): string {
