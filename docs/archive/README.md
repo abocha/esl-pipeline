@@ -9,6 +9,9 @@ Use active docs in `docs/README.md` for current implementation guidance.
 - Frontend archive: `docs/archive/frontend/README.md`
 - Pipeline archive: `docs/archive/pipeline/README.md`
 - Notes archive: `docs/archive/notes/README.md`
+- Reference archive: `docs/archive/reference/README.md`
+- Playbooks archive: `docs/archive/playbooks/README.md`
+- Release archive: `docs/archive/release/README.md`
 
 ## Layout Convention
 

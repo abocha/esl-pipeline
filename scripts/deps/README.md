@@ -12,4 +12,4 @@ Run via root scripts:
 
 Reference:
 
-- Orchestrator runtime dependency evidence: `docs/reference/ORCHESTRATOR_DEPENDENCY_AUDIT.md`
+- Orchestrator runtime dependency evidence: `docs/archive/reference/2026-03/ORCHESTRATOR_DEPENDENCY_AUDIT.md`

@@ -61,7 +61,8 @@ When implementing from a plan file, re-read that exact plan file after every con
   - [`docs/operations/pr-style-release-notes.md`](docs/operations/pr-style-release-notes.md)
 - Release/versioning model and automation:
   - [`docs/reference/VERSIONING_MODEL.md`](docs/reference/VERSIONING_MODEL.md)
-  - [`docs/operations/versioning-tag-reset-runbook.md`](docs/operations/versioning-tag-reset-runbook.md)
+- Historical pre-v1 tag reset record:
+  - [`docs/archive/release/versioning-tag-reset-runbook.md`](docs/archive/release/versioning-tag-reset-runbook.md)
 
 ## Architecture Snapshot (High-Level)
 
