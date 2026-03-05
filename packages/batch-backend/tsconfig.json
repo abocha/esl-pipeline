@@ -6,6 +6,16 @@
     "moduleResolution": "Bundler",
     "target": "ES2022",
     "lib": ["ES2022"],
+    "baseUrl": ".",
+    "paths": {
+      "@esl-pipeline/contracts": ["../contracts/src/index.ts"],
+      "@esl-pipeline/html-publisher": ["../html-publisher/src/index.ts"],
+      "@esl-pipeline/md-validator": ["../md-validator/src/index.ts"],
+      "@esl-pipeline/notion-adapter": ["../notion-adapter/src/index.ts"],
+      "@esl-pipeline/orchestrator": ["../orchestrator/src/index.ts"],
+      "@esl-pipeline/provider-runtime": ["../provider-runtime/src/index.ts"],
+      "@esl-pipeline/shared-infrastructure": ["../shared-infrastructure/src/index.ts"]
+    },
     "resolveJsonModule": true,
     "esModuleInterop": true,
     "strict": true,

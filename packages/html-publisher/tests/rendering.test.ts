@@ -89,6 +89,64 @@ describe('rendering', () => {
     expect(html).not.toContain('<li>1. Please ____ the coffee beans.</li>');
   });
 
+  it('renders task-list markers as interactive checklist inputs', async () => {
+    const markdown = `- **Checklist:**
+  - [ ] Introduce the institution with "**the**" (e.g., *the bank*).
+  - [x] Use the phrase "**had problems [doing something]**".`;
+    const html = await renderToHtml(markdown, 'Checklist');
+
+    expect(html).toContain('class="task-list"');
+    expect(html).toContain('class="task-list-item"');
+    expect(html).toContain('<input type="checkbox" class="task-list-item-checkbox">');
+    expect(html).toContain('<input type="checkbox" class="task-list-item-checkbox" checked>');
+    expect(html).not.toContain('disabled');
+    expect(html).not.toContain('[ ] Introduce the institution');
+    expect(html).not.toContain('[x] Use the phrase');
+    expect(html).toContain('<strong>the</strong>');
+  });
+
+  it('preserves non-task sibling list items in mixed lists', async () => {
+    const markdown = `- [ ] task item
+- plain item`;
+    const html = await renderToHtml(markdown, 'Mixed Checklist');
+    const checkboxCount = (html.match(/<input type="checkbox"/g) ?? []).length;
+
+    expect(checkboxCount).toBe(1);
+    expect(html).toContain('<ul class="task-list">');
+    expect(html).toContain('<li>plain item</li>');
+    expect(html).not.toContain('.markdown-body ul.task-list,\n.markdown-body ol.task-list');
+  });
+
+  it('only converts task markers in a list item lead paragraph', async () => {
+    const markdown = `- [ ] Task lead paragraph.
+
+  [x] Continuation paragraph should remain literal.
+
+- [x] Separate task item.`;
+    const html = await renderToHtml(markdown, 'Lead Paragraph Checklist');
+    const checkboxCount = (html.match(/<input type="checkbox"/g) ?? []).length;
+
+    expect(checkboxCount).toBe(2);
+    expect(html).toContain('[x] Continuation paragraph should remain literal.');
+    expect(html).not.toContain(
+      '<input type="checkbox" class="task-list-item-checkbox"> Continuation paragraph should remain literal.',
+    );
+  });
+
+  it('does not convert task markers inside fenced code blocks', async () => {
+    const markdown = `\`\`\`markdown
+- [ ] keep this literal
+\`\`\`
+
+- [ ] convert this`;
+    const html = await renderToHtml(markdown, 'Checklist Fence');
+    const checkboxCount = (html.match(/<input type="checkbox"/g) ?? []).length;
+
+    expect(checkboxCount).toBe(1);
+    expect(html).toContain('- [ ] keep this literal');
+    expect(html).toContain('<input type="checkbox" class="task-list-item-checkbox">');
+  });
+
   it('renders rich header without skip link or study controls', async () => {
     const markdown = `---\nicon: \"🎯\"\n---\n\n# Demo\n\n:::study-text\nHello\n:::\n\n\`\`\`ts\nconst x = 1;\n\`\`\``;
     const html = await renderToHtml(markdown, 'Accessibility');
