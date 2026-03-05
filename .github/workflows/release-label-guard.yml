@@ -1,0 +1,30 @@
+name: Release Label Guard
+
+on:
+  pull_request:
+    branches: [main]
+    types: [labeled, unlabeled]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-label-guard-pr-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  validate-release-label:
+    name: validate release bump label
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+
+      - name: Setup Node
+        uses: actions/setup-node@6044e13b5dc448c55e2357c09f80417699197238
+        with:
+          node-version-file: .nvmrc
+
+      - name: Validate release bump label
+        run: node scripts/release/resolve-release-bump-from-pr.mjs --event "${GITHUB_EVENT_PATH}"
