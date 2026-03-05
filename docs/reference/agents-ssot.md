@@ -4,7 +4,7 @@
 
 - Audience: maintainers and AI agents implementing or reviewing repo behavior.
 - Authority Level: authoritative contracts and invariants.
-- Last Verified Against: 2026-03-04 repo state.
+- Last Verified Against: 2026-03-05 repo state.
 - Owner: founder-maintainer + automation agents.
 - Review Cadence: monthly and after contract-level changes.
 - Status: `reference`.
@@ -976,24 +976,36 @@ Agents MUST:
 
 Release model:
 
-- Uses Changesets (see:
-  - [`CHANGELOG.md`](CHANGELOG.md)
-  - [`CONTRIBUTING.md`](CONTRIBUTING.md)
-- Publicly published package:
-  - `@esl-pipeline/orchestrator`
-- Other packages:
-  - Treated as internal unless explicitly declared public.
+- Private monorepo; npm publishing is out of scope.
+- Repo release version is merge-driven and tracked by:
+  - Git tag `vX.Y.Z`.
+  - Root [`package.json`](package.json) `version` (must match tag without `v`).
+- Contract versions are centralized in:
+  - [`packages/contracts/src/contract-versions.ts`](packages/contracts/src/contract-versions.ts)
+- PRs targeting `main` MUST include exactly one release label:
+  - `release:major`
+  - `release:minor`
+  - `release:patch`
+- Release automation is implemented in:
+  - [`.github/workflows/release-on-merge.yml`](.github/workflows/release-on-merge.yml)
 
 Semver:
 
+- Contract-first bump policy:
+  - `major`: breaking contract compatibility.
+  - `minor`: additive backward-compatible features.
+  - `patch`: fixes/docs/ops/refactors without compatibility break.
 - Breaking changes to:
   - Orchestrator API,
   - CLI behavior,
-  - Manifest schema,
+  - Manifest schema semantics,
   - Adapter selection semantics,
-    REQUIRE:
-  - Appropriate version bump.
-  - Documentation of changes here and in relevant docs.
+  REQUIRE:
+  - appropriate release label selection and semver bump,
+  - contract version updates where applicable,
+  - documentation updates in:
+    - [`docs/reference/VERSIONING_MODEL.md`](docs/reference/VERSIONING_MODEL.md)
+    - this SSOT.
 
 ---
 

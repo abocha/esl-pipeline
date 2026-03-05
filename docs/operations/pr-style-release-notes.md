@@ -4,12 +4,16 @@
 
 - Audience: maintainers and AI agents preparing release notes.
 - Authority Level: operations runbook.
-- Last Verified Against: 2026-03-04 repo state.
+- Last Verified Against: 2026-03-05 repo state.
 - Owner: maintainer + automation agents.
 - Review Cadence: quarterly or after git tooling changes.
 - Status: `runbook`.
 
-Use this when we are shipping via direct commits/pushes but still want PR-quality release-note text.
+Use this to draft human-readable release notes from commits.
+
+This runbook does not control version numbers or tags; release automation is defined in:
+
+- `docs/reference/VERSIONING_MODEL.md`
 
 ## Command
 

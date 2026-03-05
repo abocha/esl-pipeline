@@ -9,6 +9,7 @@ import { getJobStatus } from '../application/get-job-status.js';
 import { jobRecordToDto } from '../application/job-dto.js';
 import { deriveRecordingDisplayName } from '../application/recording-dto.js';
 import { type SubmitJobRequest, submitJob } from '../application/submit-job.js';
+import { getVersionMeta } from '../application/version-meta.js';
 import type { BatchBackendConfig } from '../config/env.js';
 import { subscribeJobEvents } from '../domain/job-events.js';
 import { subscribeRecordingEvents } from '../domain/recording-events.js';
@@ -25,6 +26,20 @@ export interface CoreRouteOptions {
 
 export function registerCoreRoutes(app: FastifyInstance, options: CoreRouteOptions): void {
   const { jobRateLimitMiddleware, authenticate, config } = options;
+
+  app.get('/meta/version', async (request, reply) => {
+    const routePath = resolveRoutePath(request, 'GET /meta/version');
+    const payload = getVersionMeta();
+
+    logger.info('HTTP request handled', {
+      event: 'http_request',
+      route: routePath,
+      statusCode: 200,
+      repoVersion: payload.repoVersion,
+    });
+
+    return reply.send(payload);
+  });
 
   const handleSubmitJob: RouteHandlerMethod = async (request, reply) => {
     const body = request.body as SubmitJobRequest | undefined;
