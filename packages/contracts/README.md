@@ -11,6 +11,7 @@ Shared cross-package TypeScript contracts for the ESL monorepo.
 - WS2B generation DTOs (`GenerateDraftRequest`, `GenerateDraftResponse`, provider/model/quota types)
 - Shared errors (`PipelineError`, `ConfigurationError`, etc.)
 - Shared observability shapes (`PipelineLogEvent`, `PipelineLogger`, `noopLogger`)
+- Contract version registry (`CONTRACT_VERSIONS`, `DB_MIGRATION_HEAD`)
 
 ## Notes
 

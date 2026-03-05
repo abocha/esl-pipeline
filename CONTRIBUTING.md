@@ -19,9 +19,26 @@ Thanks for helping improve the ESL pipeline! The notes below keep local developm
 
 ## Release Process Overview
 
-1. Capture changes with Changesets: `pnpm changeset` (one per logical change).
-2. When cutting a release, run `pnpm changeset version` to update package versions + changelogs.
-3. Review and polish `CHANGELOG.md` (see the template in `CHANGELOG.md`).
-4. Run `pnpm -r build`, `pnpm typecheck`, `pnpm lint`, and `pnpm test`.
-5. Commit the version update, then tag and push: `git tag vX.Y.Z && git push origin vX.Y.Z`.
-6. Publish the orchestrator package if needed: `pnpm --filter @esl-pipeline/orchestrator publish --access public`.
+Release model is private-repo and merge-driven.
+
+1. Ensure the PR has exactly one release label:
+   - `release:major`
+   - `release:minor`
+   - `release:patch`
+2. Run checks locally:
+   - `pnpm release:verify:contracts`
+   - `pnpm -r build`
+   - `pnpm typecheck`
+   - `pnpm lint`
+   - `pnpm test`
+3. Merge the PR into `main`.
+4. GitHub Actions runs the release workflow and will:
+   - compute the next version from PR label,
+   - update root `package.json` and `CHANGELOG.md`,
+   - create bot commit `chore(release): vX.Y.Z`,
+   - create and push `vX.Y.Z` tag.
+
+See:
+
+- `docs/reference/VERSIONING_MODEL.md`
+- `.github/workflows/release-on-merge.yml`
