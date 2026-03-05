@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented here. Dates use `YYYY-MM-DD`.
 
+## [1.1.0] - 2026-03-05
+
+### Changed
+
+- Automated release from PR #13: feat: interactive checklist rendering + dev environment setup helpers (https://github.com/abocha/esl-pipeline/pull/13)
+
 ## [1.0.1] - 2026-03-05
 
 ### Changed
