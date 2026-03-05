@@ -2921,6 +2921,26 @@ describe('transport/http-server - integration (in-process)', () => {
     expect(payload.html).not.toContain('esl-generated-study-text-audio-placeholder');
   });
 
+  it('POST /preview/html renders interactive checklist inputs from task-list markers', async () => {
+    const response = await app.inject({
+      method: 'POST',
+      url: '/preview/html',
+      payload: {
+        text: [
+          '- **Checklist:**',
+          '  - [ ] Introduce the institution with "**the**".',
+          '  - [x] Use the phrase "**had problems [doing something]**".',
+        ].join('\n'),
+      },
+    });
+
+    expect(response.statusCode).toBe(200);
+    const payload = response.json() as { html: string };
+    expect(payload.html).toContain('task-list-item-checkbox');
+    expect(payload.html).toContain('<input type="checkbox" class="task-list-item-checkbox" checked>');
+    expect(payload.html).not.toContain('[ ] Introduce the institution');
+  });
+
   it('POST /preview/html derives title from markdown heading when title is omitted', async () => {
     const response = await app.inject({
       method: 'POST',
