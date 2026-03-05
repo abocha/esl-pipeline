@@ -99,7 +99,7 @@ Response shape:
 - `docs/reference/DOCS_IA_MAP.md`
 - `docs/operations/pr-style-release-notes.md`
 - `docs/reference/VERSIONING_MODEL.md` (new)
-- `docs/operations/versioning-tag-reset-runbook.md` (new)
+- `docs/archive/release/versioning-tag-reset-runbook.md` (new; one-time reset record)
 - `docs/archive/release/tag-history-pre-v1-reset.md` (new)
 
 ## Version Bump Matrix
