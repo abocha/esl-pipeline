@@ -182,7 +182,7 @@ services:
       - .env.batch-backend
     command: >
       sh -lc "
-        pnpm --filter @esl-pipeline/batch-backend exec tsx watch src/transport/transcribe-worker.ts
+        pnpm --filter @esl-pipeline/batch-backend dev:transcribe-worker
       "
     user: '${UID:-1000}:${GID:-1000}'
     pull_policy: never
