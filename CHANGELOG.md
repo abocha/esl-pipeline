@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented here. Dates use `YYYY-MM-DD`.
 
+## [1.0.0] - 2026-03-05
+
+### Changed
+
+- Automated release from PR #11: chore(release): seed v1 baseline after tag reset (https://github.com/abocha/esl-pipeline/pull/11)
+
 ## [2.4.0] - 2026-03-05
 
 ### Changed
