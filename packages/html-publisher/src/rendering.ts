@@ -290,12 +290,21 @@ body {
   margin: 0;
 }
 .markdown-body .task-list-item-checkbox {
-  width: 1em;
-  height: 1em;
+  width: 1.02em;
+  height: 1.02em;
   margin: 0 0.55em 0 0;
-  vertical-align: text-top;
+  vertical-align: middle;
   accent-color: var(--audio-accent);
   cursor: pointer;
+  color-scheme: light;
+  background-color: var(--page-card);
+  border: 1px solid var(--page-line);
+  border-radius: 3px;
+  position: relative;
+  top: -0.02em;
+}
+[data-theme="dark"] .markdown-body .task-list-item-checkbox {
+  color-scheme: dark;
 }
 .markdown-body hr {
   border: none;
@@ -368,9 +377,45 @@ body {
   outline-offset: 2px;
 }
 .word-tts-transcription {
+  color: color-mix(in srgb, var(--page-text) 90%, var(--theme-h2) 10%);
+  font-size: 13px;
+  font-weight: 650;
+  letter-spacing: 0.01em;
+  font-family: 'Noto Sans', 'Segoe UI', 'Helvetica Neue', Arial, sans-serif;
+  text-shadow: 0 0 0.4px color-mix(in srgb, var(--page-card) 70%, transparent 30%);
+}
+.pronunciation-word-item {
+  margin-bottom: 8px;
+}
+.pronunciation-word-main {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.pronunciation-word-label {
+  color: var(--page-text);
+  font-weight: 600;
+}
+.pronunciation-word-note {
+  margin-left: 8px;
   color: var(--page-muted);
   font-size: 12px;
-  font-family: 'SFMono-Regular', Menlo, Monaco, Consolas, 'Liberation Mono', monospace;
+}
+.pronunciation-shadow-sentence {
+  margin: 14px 0 16px;
+  padding: 12px 14px;
+  border-radius: 12px;
+  border: 1px solid color-mix(in srgb, var(--theme-h2) 24%, var(--page-line) 76%);
+  border-left: 5px solid var(--audio-accent);
+  background: color-mix(in srgb, var(--theme-h2) 14%, var(--page-card) 86%);
+  color: var(--page-text);
+  font-size: 1.05em;
+  line-height: 1.55;
+}
+.pronunciation-shadow-sentence strong {
+  color: color-mix(in srgb, var(--page-text) 88%, var(--theme-h2) 12%);
+  letter-spacing: 0.01em;
 }
 .callout {
   background: var(--callout-bg);
@@ -596,8 +641,10 @@ table {
   border-collapse: collapse;
   margin: 12px 0 18px;
   font-size: 14px;
-  display: block;
-  overflow-x: auto;
+  table-layout: auto;
+}
+.markdown-body table[data-balanced-columns="true"] {
+  table-layout: fixed;
 }
 th,
 td {
@@ -605,7 +652,28 @@ td {
   padding: 8px 10px;
   text-align: left;
   vertical-align: top;
-  white-space: nowrap;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  word-break: normal;
+  line-height: 1.5;
+  min-width: 0;
+}
+.markdown-body td[data-col-role="meaning"],
+.markdown-body td[data-col-role="example"] {
+  text-wrap: pretty;
+}
+.markdown-body table[data-table-archetype="glossary_2col"] td[data-col-role="meaning"][data-cell-prose="true"],
+.markdown-body table[data-table-archetype="long_meaning_3col"] td[data-col-role="meaning"][data-cell-prose="true"] {
+  text-align: justify;
+  text-justify: inter-word;
+}
+.markdown-body table[data-table-archetype="instructional_4col"] td[data-col-role="formula"],
+.markdown-body table[data-table-archetype="emoji_split_4col"] td[data-col-role="emoji"],
+.markdown-body td[data-col-role="expression"] {
+  text-align: left;
+}
+.markdown-body td[data-col-role="formula"] {
+  text-wrap: pretty;
 }
 th {
   background: var(--table-head-bg);
@@ -640,6 +708,18 @@ th {
   .column-list.grammar-matrix-grid {
     padding: 12px;
     gap: 12px;
+  }
+  .markdown-body table {
+    display: block;
+    max-width: 100%;
+    width: max-content;
+    min-width: 100%;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+  .markdown-body table td[data-cell-prose="true"] {
+    text-align: left;
+    text-justify: auto;
   }
 }
 .theme-toggle {
@@ -1157,7 +1237,14 @@ function escapeRawHtmlLine(line: string, allowRawHtml: boolean): string {
   if (!line.includes('<') && !line.includes('>')) {
     return line;
   }
-  return line.replaceAll('<', '&lt;').replaceAll('>', '&gt;');
+
+  // Preserve explicit markdown line-break intent while escaping all other raw HTML.
+  const breakPlaceholder = '__ESL_HTML_BR_PLACEHOLDER__';
+  const withPreservedBreaks = line.replaceAll(/<br\s*\/?>/gi, breakPlaceholder);
+  return withPreservedBreaks
+    .replaceAll('<', '&lt;')
+    .replaceAll('>', '&gt;')
+    .replaceAll(breakPlaceholder, '<br>');
 }
 
 function isFenceLine(trimmed: string): boolean {
@@ -1796,6 +1883,521 @@ function buildBehaviorScript(features: ResolvedFeatures): string {
   } catch {}
 
   try {
+    const TABLE_SAMPLE_ROW_LIMIT = 24;
+    let tableBalanceTimer = 0;
+    let tableBalanceFrame = 0;
+
+    const isDesktopViewport = () => {
+      if (typeof window.matchMedia === 'function') {
+        return window.matchMedia('(min-width: 841px)').matches;
+      }
+      return window.innerWidth >= 841;
+    };
+
+    const getDirectColgroup = (table) =>
+      Array.from(table.children).find((child) => child.tagName === 'COLGROUP') ?? null;
+
+    const removeGeneratedColgroup = (table) => {
+      const existingColgroup = getDirectColgroup(table);
+      if (
+        existingColgroup instanceof HTMLElement &&
+        existingColgroup.getAttribute('data-generated-colgroup') === 'true'
+      ) {
+        existingColgroup.remove();
+      }
+      table.removeAttribute('data-balanced-columns');
+    };
+
+    const normalizeCellText = (cell) => (cell.textContent || '').replace(/\\s+/g, ' ').trim();
+    const normalizeLabel = (value) =>
+      String(value || '')
+        .toLowerCase()
+        .replace(/[^a-z0-9\\s]/g, ' ')
+        .replace(/\\s+/g, ' ')
+        .trim();
+
+    const quantile = (values, q) => {
+      if (!values.length) {
+        return 0;
+      }
+      const sorted = [...values].sort((left, right) => left - right);
+      const rawIndex = (sorted.length - 1) * q;
+      const lower = Math.floor(rawIndex);
+      const upper = Math.ceil(rawIndex);
+      if (lower === upper) {
+        return sorted[lower] ?? 0;
+      }
+      const lowerValue = sorted[lower] ?? 0;
+      const upperValue = sorted[upper] ?? 0;
+      return lowerValue + (upperValue - lowerValue) * (rawIndex - lower);
+    };
+
+    const isSparseLikeCell = (text) => {
+      if (!text) {
+        return true;
+      }
+      const compact = text.replace(/\\s+/g, '');
+      if (!compact) {
+        return true;
+      }
+      if (compact.length <= 2) {
+        return true;
+      }
+      const hasAlphaNumeric = /[a-z0-9]/i.test(compact);
+      if (!hasAlphaNumeric && compact.length <= 6) {
+        return true;
+      }
+      const tokens = text.split(/\\s+/).filter(Boolean);
+      return tokens.length <= 1 && compact.length <= 4;
+    };
+
+    const getHeaderRole = (headerText) => {
+      const normalized = normalizeLabel(headerText);
+      if (
+        normalized.includes('structural formula') ||
+        normalized.includes('formula') ||
+        normalized.includes('pattern') ||
+        normalized.includes('structure')
+      ) {
+        return 'formula';
+      }
+      if (normalized.includes('emoji') || normalized.includes('icon') || normalized.includes('status')) {
+        return 'emoji';
+      }
+      if (
+        normalized.includes('meaning') ||
+        normalized.includes('gloss') ||
+        normalized.includes('definition') ||
+        normalized.includes('real english meaning') ||
+        normalized.includes('context')
+      ) {
+        return 'meaning';
+      }
+      if (normalized.includes('example') || normalized.includes('sample') || normalized.includes('from text')) {
+        return 'example';
+      }
+      if (
+        normalized.includes('expression') ||
+        normalized.includes('term') ||
+        normalized.includes('phrase') ||
+        normalized.includes('word') ||
+        normalized.includes('chunk') ||
+        normalized.includes('vocabulary')
+      ) {
+        return 'expression';
+      }
+      return 'unknown';
+    };
+
+    const roleBounds = (role) => {
+      if (role === 'meaning') return { min: 30, max: 62, base: 42 };
+      if (role === 'example') return { min: 18, max: 40, base: 28 };
+      if (role === 'formula') return { min: 14, max: 26, base: 18 };
+      if (role === 'emoji') return { min: 6, max: 12, base: 8 };
+      if (role === 'expression') return { min: 18, max: 38, base: 24 };
+      return { min: 12, max: 42, base: 22 };
+    };
+
+    const detectFallbackRole = (column) => {
+      const sparseRatio = column.nonEmpty > 0 ? column.emojiLikeCount / column.nonEmpty : 0;
+      if (sparseRatio >= 0.75 && column.p75 <= 8) {
+        return 'emoji';
+      }
+      if (column.breakCount >= 2 || column.p75 >= 68) {
+        return 'meaning';
+      }
+      if (column.symbolicRatio >= 0.35 && column.averageWords <= 5 && column.p75 <= 28) {
+        return 'formula';
+      }
+      if (column.averageWords >= 6 || column.p75 >= 40) {
+        return 'example';
+      }
+      if (column.p75 <= 24) {
+        return 'expression';
+      }
+      return 'unknown';
+    };
+
+    const classifyArchetype = (columns) => {
+      const roles = columns.map((column) => column.role);
+      const meaningColumn = columns.find((column) => column.role === 'meaning');
+      if (columns.length === 2 && roles.includes('expression') && roles.includes('meaning')) {
+        return 'glossary_2col';
+      }
+      if (columns.length === 3 && roles.includes('expression') && roles.includes('meaning') && roles.includes('example')) {
+        if ((meaningColumn?.breakCount ?? 0) > 0 || (meaningColumn?.p75 ?? 0) >= 70) {
+          return 'long_meaning_3col';
+        }
+        return 'vocab_3col';
+      }
+      if (
+        columns.length === 4 &&
+        roles.includes('expression') &&
+        roles.includes('meaning') &&
+        roles.includes('formula') &&
+        roles.includes('example')
+      ) {
+        return 'instructional_4col';
+      }
+      if (columns.length === 4 && roles.includes('emoji')) {
+        return 'emoji_split_4col';
+      }
+      return 'mixed_fallback';
+    };
+
+    const computeBoundedPercentages = (weights, minBounds, maxBounds) => {
+      const totalColumns = weights.length;
+      if (totalColumns === 0) {
+        return [];
+      }
+
+      const mins = [...minBounds];
+      const maxes = [...maxBounds];
+      const sum = (values) => values.reduce((acc, value) => acc + value, 0);
+      const minTotal = sum(mins);
+      if (minTotal > 100) {
+        const shrink = 100 / minTotal;
+        for (let index = 0; index < mins.length; index += 1) {
+          mins[index] *= shrink;
+        }
+      }
+
+      const maxTotal = sum(maxes);
+      if (maxTotal < 100) {
+        const growth = 100 / maxTotal;
+        for (let index = 0; index < maxes.length; index += 1) {
+          maxes[index] *= growth;
+        }
+      }
+
+      const result = new Array(totalColumns).fill(0);
+      const active = new Set(Array.from({ length: totalColumns }, (_, index) => index));
+      let remainingPercent = 100;
+      let remainingWeight = weights.reduce((acc, value) => acc + value, 0);
+      let guard = 0;
+
+      while (active.size > 0 && guard < totalColumns * 2) {
+        guard += 1;
+        let changed = false;
+        for (const index of [...active]) {
+          const share =
+            remainingWeight > 0
+              ? (remainingPercent * weights[index]) / remainingWeight
+              : remainingPercent / active.size;
+          if (share < mins[index]) {
+            result[index] = mins[index];
+            remainingPercent -= result[index];
+            remainingWeight -= weights[index];
+            active.delete(index);
+            changed = true;
+            continue;
+          }
+          if (share > maxes[index]) {
+            result[index] = maxes[index];
+            remainingPercent -= result[index];
+            remainingWeight -= weights[index];
+            active.delete(index);
+            changed = true;
+          }
+        }
+        if (!changed) {
+          break;
+        }
+      }
+
+      if (active.size > 0) {
+        const activeIndices = [...active];
+        const activeWeight = activeIndices.reduce((acc, index) => acc + weights[index], 0);
+        for (const index of activeIndices) {
+          result[index] =
+            activeWeight > 0
+              ? (remainingPercent * weights[index]) / activeWeight
+              : remainingPercent / activeIndices.length;
+        }
+      }
+
+      const rounded = result.map((value) => Number(value.toFixed(2)));
+      const roundedTotal = rounded.reduce((acc, value) => acc + value, 0);
+      const delta = Number((100 - roundedTotal).toFixed(2));
+      if (delta !== 0 && rounded.length > 0) {
+        let targetIndex = 0;
+        for (let index = 1; index < rounded.length; index += 1) {
+          if (rounded[index] > rounded[targetIndex]) {
+            targetIndex = index;
+          }
+        }
+        rounded[targetIndex] = Number((rounded[targetIndex] + delta).toFixed(2));
+      }
+      return rounded;
+    };
+
+    const analyzeTableColumns = (table) => {
+      const rows = Array.from(table.querySelectorAll('tr')).slice(0, TABLE_SAMPLE_ROW_LIMIT);
+      if (rows.length === 0) {
+        return null;
+      }
+
+      const columnCount = rows.reduce((maxColumns, row) => {
+        const cells = row.querySelectorAll('th, td');
+        return Math.max(maxColumns, cells.length);
+      }, 0);
+      if (columnCount <= 1) {
+        return null;
+      }
+
+      const columns = Array.from({ length: columnCount }, () => ({
+        header: '',
+        nonEmpty: 0,
+        emojiLikeCount: 0,
+        lengths: [],
+        breakCount: 0,
+        maxChars: 0,
+        longestToken: 0,
+        totalWords: 0,
+        symbolicSamples: 0,
+        role: 'unknown',
+        p75: 0,
+        averageWords: 0,
+        symbolicRatio: 0,
+      }));
+
+      rows.forEach((row, rowIndex) => {
+        const cells = Array.from(row.querySelectorAll('th, td'));
+        cells.forEach((cell, cellIndex) => {
+          const column = columns[cellIndex];
+          if (!column) {
+            return;
+          }
+          const text = normalizeCellText(cell);
+          const chars = text.length;
+          const words = text ? text.split(/\\s+/).filter(Boolean).length : 0;
+          const breakCount = cell.querySelectorAll('br').length;
+          const compact = text.replace(/\\s+/g, '');
+          const symbolMatches = compact.match(/[=+\\/→:()\\[\\]-]/g) ?? [];
+          if (rowIndex === 0 && (cell.tagName === 'TH' || !column.header)) {
+            column.header = text;
+          }
+          if (chars > 0) {
+            column.nonEmpty += 1;
+            column.lengths.push(chars);
+            column.totalWords += words;
+          }
+          column.breakCount += breakCount;
+          column.maxChars = Math.max(column.maxChars, chars);
+          column.longestToken = Math.max(
+            column.longestToken,
+            ...text.split(/\\s+/).filter(Boolean).map((token) => token.length),
+            0,
+          );
+          if (isSparseLikeCell(text)) {
+            column.emojiLikeCount += 1;
+          }
+          if (compact && symbolMatches.length / Math.max(compact.length, 1) >= 0.12) {
+            column.symbolicSamples += 1;
+          }
+        });
+      });
+
+      columns.forEach((column) => {
+        column.p75 = quantile(column.lengths, 0.75);
+        column.averageWords = column.nonEmpty > 0 ? column.totalWords / column.nonEmpty : 0;
+        column.symbolicRatio = column.nonEmpty > 0 ? column.symbolicSamples / column.nonEmpty : 0;
+        column.role = getHeaderRole(column.header);
+      });
+      columns.forEach((column) => {
+        if (column.role === 'unknown') {
+          column.role = detectFallbackRole(column);
+        }
+      });
+
+      return {
+        columnCount,
+        columns,
+        archetype: classifyArchetype(columns),
+      };
+    };
+
+    const getArchetypeTargets = (analysis) => {
+      const { columns, archetype } = analysis;
+      if (archetype === 'glossary_2col') {
+        return columns.map((column) => {
+          if (column.role === 'expression') return 28 + Math.min(4, Math.max(0, (column.p75 - 18) * 0.16));
+          if (column.role === 'meaning') return 72 + Math.min(6, Math.max(0, (column.p75 - 56) * 0.08));
+          return roleBounds(column.role).base;
+        });
+      }
+      if (archetype === 'vocab_3col') {
+        return columns.map((column) => {
+          if (column.role === 'expression') return 26 + Math.min(4, Math.max(0, (column.p75 - 20) * 0.1));
+          if (column.role === 'meaning') return 44 + Math.min(8, Math.max(0, (column.p75 - 42) * 0.14)) + column.breakCount * 1.4;
+          if (column.role === 'example') return 30 + Math.min(5, Math.max(0, (column.p75 - 34) * 0.09));
+          return roleBounds(column.role).base;
+        });
+      }
+      if (archetype === 'long_meaning_3col') {
+        return columns.map((column) => {
+          if (column.role === 'expression') return 24 + Math.min(4, Math.max(0, (column.p75 - 18) * 0.08));
+          if (column.role === 'meaning') return 49 + Math.min(10, Math.max(0, (column.p75 - 48) * 0.16)) + column.breakCount * 2.2;
+          if (column.role === 'example') return 27 + Math.min(4, Math.max(0, (column.p75 - 30) * 0.08));
+          return roleBounds(column.role).base;
+        });
+      }
+      if (archetype === 'instructional_4col') {
+        return columns.map((column) => {
+          if (column.role === 'expression') return 20 + Math.min(4, Math.max(0, (column.p75 - 18) * 0.08));
+          if (column.role === 'meaning') return 35 + Math.min(8, Math.max(0, (column.p75 - 42) * 0.12)) + column.breakCount * 1.4;
+          if (column.role === 'formula') return 17 + Math.min(4, Math.max(0, (column.p75 - 18) * 0.12));
+          if (column.role === 'example') return 28 + Math.min(7, Math.max(0, (column.p75 - 32) * 0.12));
+          return roleBounds(column.role).base;
+        });
+      }
+      if (archetype === 'emoji_split_4col') {
+        return columns.map((column) => {
+          if (column.role === 'expression') return 22 + Math.min(3, Math.max(0, (column.p75 - 18) * 0.08));
+          if (column.role === 'meaning') return 40 + Math.min(9, Math.max(0, (column.p75 - 40) * 0.14));
+          if (column.role === 'example') return 30 + Math.min(6, Math.max(0, (column.p75 - 30) * 0.1));
+          if (column.role === 'emoji') return 8;
+          return roleBounds(column.role).base;
+        });
+      }
+
+      return columns.map((column) => {
+        let contribution = Math.min(column.p75, 140) + Math.min(column.averageWords * 6, 24);
+        if (column.breakCount > 0) {
+          contribution += 10;
+        }
+        if (column.role === 'meaning') {
+          contribution += 12;
+        }
+        if (column.role === 'formula') {
+          contribution -= 6;
+        }
+        return Math.max(contribution, 1);
+      });
+    };
+
+    const computeColumnWidths = (table) => {
+      const analysis = analyzeTableColumns(table);
+      if (!analysis) {
+        return null;
+      }
+
+      const mins = analysis.columns.map((column) => roleBounds(column.role).min);
+      const maxes = analysis.columns.map((column) => roleBounds(column.role).max);
+      const targets = getArchetypeTargets(analysis);
+
+      analysis.columns.forEach((column, index) => {
+        const sparseRatio = column.nonEmpty > 0 ? column.emojiLikeCount / column.nonEmpty : 0;
+        if (analysis.archetype === 'emoji_split_4col' && column.role === 'emoji') {
+          maxes[index] = Math.min(maxes[index], 10);
+        }
+        if (analysis.archetype === 'instructional_4col' && column.role === 'formula') {
+          maxes[index] = Math.min(maxes[index], 22);
+        }
+        if (analysis.archetype === 'glossary_2col' && column.role === 'meaning') {
+          mins[index] = Math.max(mins[index], 58);
+        }
+        if (sparseRatio >= 0.75 && column.maxChars <= 8) {
+          maxes[index] = Math.min(maxes[index], Math.max(mins[index] + 2, 12));
+        }
+      });
+
+      return {
+        archetype: analysis.archetype,
+        columns: analysis.columns,
+        widths: computeBoundedPercentages(targets, mins, maxes),
+      };
+    };
+
+    const annotateTable = (table, columns, archetype) => {
+      table.setAttribute('data-table-archetype', archetype);
+      const rows = Array.from(table.querySelectorAll('tr'));
+      rows.forEach((row, rowIndex) => {
+        const cells = Array.from(row.querySelectorAll('th, td'));
+        cells.forEach((cell, cellIndex) => {
+          const column = columns[cellIndex];
+          if (!column) {
+            return;
+          }
+          cell.setAttribute('data-col-role', column.role);
+          const text = normalizeCellText(cell);
+          const words = text ? text.split(/\\s+/).filter(Boolean).length : 0;
+          const proseLike =
+            (column.role === 'meaning' || column.role === 'example') &&
+            !isSparseLikeCell(text) &&
+            (text.length >= 42 || words >= 6 || cell.querySelector('br') !== null);
+          cell.setAttribute('data-cell-prose', proseLike ? 'true' : 'false');
+          if (rowIndex === 0 && cell.tagName === 'TH') {
+            cell.setAttribute('scope', 'col');
+          }
+        });
+      });
+    };
+
+    const balanceTableColumns = () => {
+      const tables = document.querySelectorAll('.markdown-body table');
+      tables.forEach((table) => {
+        if (!(table instanceof HTMLTableElement)) {
+          return;
+        }
+
+        const existingColgroup = getDirectColgroup(table);
+        const result = computeColumnWidths(table);
+        if (!result) {
+          removeGeneratedColgroup(table);
+          table.removeAttribute('data-table-archetype');
+          return;
+        }
+        annotateTable(table, result.columns, result.archetype);
+
+        if (
+          existingColgroup instanceof HTMLElement &&
+          existingColgroup.getAttribute('data-generated-colgroup') !== 'true'
+        ) {
+          table.removeAttribute('data-balanced-columns');
+          return;
+        }
+
+        if (!isDesktopViewport()) {
+          removeGeneratedColgroup(table);
+          return;
+        }
+
+        removeGeneratedColgroup(table);
+
+        const generatedColgroup = document.createElement('colgroup');
+        generatedColgroup.setAttribute('data-generated-colgroup', 'true');
+        result.widths.forEach((width) => {
+          const col = document.createElement('col');
+          col.style.width = width + '%';
+          generatedColgroup.appendChild(col);
+        });
+
+        table.insertBefore(generatedColgroup, table.firstChild);
+        table.setAttribute('data-balanced-columns', 'true');
+      });
+    };
+
+    const scheduleTableBalancing = () => {
+      if (tableBalanceTimer) {
+        window.clearTimeout(tableBalanceTimer);
+      }
+      if (tableBalanceFrame) {
+        window.cancelAnimationFrame(tableBalanceFrame);
+      }
+      tableBalanceTimer = window.setTimeout(() => {
+        tableBalanceFrame = window.requestAnimationFrame(() => {
+          balanceTableColumns();
+          tableBalanceFrame = 0;
+        });
+      }, 140);
+    };
+
+    balanceTableColumns();
+    window.addEventListener('resize', scheduleTableBalancing, { passive: true });
+  } catch {}
+
+  try {
     const supportsSpeechSynthesis =
       'speechSynthesis' in window && typeof window.SpeechSynthesisUtterance === 'function';
     if (!supportsSpeechSynthesis) {
@@ -1841,6 +2443,52 @@ function buildBehaviorScript(features: ResolvedFeatures): string {
       const connectedSpeechEnabled = pronunciationMode === 'connected_speech';
 
       if (wordDrillEnabled || connectedSpeechEnabled) {
+        const containsShadowSentenceLabel = (element) => {
+          if (!(element instanceof HTMLElement)) return false;
+          const normalized = normalizeText(element.textContent || '');
+          return normalized.includes('shadow sentence');
+        };
+
+        const findFirstMatchingDescendant = (root, selector) => {
+          if (!(root instanceof HTMLElement)) return null;
+          const candidates = Array.from(root.querySelectorAll(selector));
+          return (
+            candidates.find((candidate) => containsShadowSentenceLabel(candidate)) || null
+          );
+        };
+
+        const findShadowSentenceElement = () => {
+          const directBlockMatch = sectionElements.find((element) => {
+            if (!(element instanceof HTMLElement)) return false;
+            if (element.classList.contains('callout')) return false;
+            if (!element.matches('li, p, blockquote')) return false;
+            return containsShadowSentenceLabel(element);
+          });
+          if (directBlockMatch instanceof HTMLElement) {
+            return directBlockMatch;
+          }
+
+          const descendantSelectors = ['li', 'p', '.content > *', 'blockquote > *', 'div > *'];
+          for (const element of sectionElements) {
+            if (!(element instanceof HTMLElement)) continue;
+            for (const selector of descendantSelectors) {
+              const match = findFirstMatchingDescendant(element, selector);
+              if (match instanceof HTMLElement) {
+                return match;
+              }
+            }
+          }
+
+          return null;
+        };
+
+        if (wordDrillEnabled) {
+          const shadowSentenceElement = findShadowSentenceElement();
+          if (shadowSentenceElement instanceof HTMLElement) {
+            shadowSentenceElement.classList.add('pronunciation-shadow-sentence');
+          }
+        }
+
         const resolvePreferredVoice = () => {
           const voices = window.speechSynthesis.getVoices();
           if (!voices || voices.length === 0) {
@@ -1889,7 +2537,7 @@ function buildBehaviorScript(features: ResolvedFeatures): string {
 
           if (wordDrillEnabled) {
             const parsed =
-              /^(.+?)\\s*[—-]\\s*(\\/.+?\\/)(?:\\s+.*)?$/.exec(raw);
+              /^(.+?)\\s*[—-]\\s*(\\/.+?\\/)(?:\\s+(.+))?$/.exec(raw);
             if (!parsed || !parsed[1] || !parsed[2]) return;
             const word = parsed[1]
               .replace(/^\\d+\\.\\s*/, '')
@@ -1917,9 +2565,18 @@ function buildBehaviorScript(features: ResolvedFeatures): string {
             transcriptionBadge.textContent = transcription;
             transcriptionBadge.setAttribute('aria-hidden', 'true');
 
+            const wordMain = document.createElement('span');
+            wordMain.className = 'pronunciation-word-main';
+            const existingNodes = Array.from(item.childNodes);
+            existingNodes.forEach((node) => {
+              wordMain.appendChild(node);
+            });
             controls.appendChild(button);
             controls.appendChild(transcriptionBadge);
-            item.appendChild(controls);
+            wordMain.appendChild(controls);
+
+            item.classList.add('pronunciation-word-item');
+            item.appendChild(wordMain);
             return;
           }
 
