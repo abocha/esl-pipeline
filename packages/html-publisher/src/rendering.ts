@@ -354,7 +354,8 @@ body {
   display: inline-flex;
   align-items: center;
   gap: 8px;
-  margin-left: 10px;
+  margin-left: 0;
+  flex-wrap: wrap;
 }
 .word-tts-button {
   border: 1px solid var(--page-line);
@@ -381,24 +382,33 @@ body {
   font-size: 13px;
   font-weight: 650;
   letter-spacing: 0.01em;
-  font-family: 'Noto Sans', 'Segoe UI', 'Helvetica Neue', Arial, sans-serif;
+  font-family: 'Charis SIL', 'Noto Serif', 'Times New Roman', serif;
   text-shadow: 0 0 0.4px color-mix(in srgb, var(--page-card) 70%, transparent 30%);
 }
 .pronunciation-word-item {
   margin-bottom: 8px;
 }
 .pronunciation-word-main {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
   flex-wrap: wrap;
+  width: 100%;
+}
+.pronunciation-word-content {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 0;
+  flex-wrap: wrap;
+  min-width: 0;
 }
 .pronunciation-word-label {
   color: var(--page-text);
   font-weight: 600;
 }
 .pronunciation-word-note {
-  margin-left: 8px;
+  margin-left: 2px;
   color: var(--page-muted);
   font-size: 12px;
 }
@@ -865,7 +875,7 @@ export async function renderToHtml(
   <meta name="color-scheme" content="light dark">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Charis+SIL:ital,wght@0,400;0,700;1,400;1,700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
   <title>${escapeHtml(resolvedTitle)}</title>
   <style>${css}</style>
 </head>
@@ -2443,18 +2453,18 @@ function buildBehaviorScript(features: ResolvedFeatures): string {
       const connectedSpeechEnabled = pronunciationMode === 'connected_speech';
 
       if (wordDrillEnabled || connectedSpeechEnabled) {
-        const containsShadowSentenceLabel = (element) => {
+        const hasShadowSentenceLabel = (element) => {
           if (!(element instanceof HTMLElement)) return false;
-          const normalized = normalizeText(element.textContent || '');
-          return normalized.includes('shadow sentence');
+          const rawText = String(element.textContent || '')
+            .replace(/\\s+/g, ' ')
+            .trim();
+          return /(^|\\b)shadow sentence\\s*:/i.test(rawText);
         };
 
         const findFirstMatchingDescendant = (root, selector) => {
           if (!(root instanceof HTMLElement)) return null;
           const candidates = Array.from(root.querySelectorAll(selector));
-          return (
-            candidates.find((candidate) => containsShadowSentenceLabel(candidate)) || null
-          );
+          return candidates.find((candidate) => hasShadowSentenceLabel(candidate)) || null;
         };
 
         const findShadowSentenceElement = () => {
@@ -2462,7 +2472,7 @@ function buildBehaviorScript(features: ResolvedFeatures): string {
             if (!(element instanceof HTMLElement)) return false;
             if (element.classList.contains('callout')) return false;
             if (!element.matches('li, p, blockquote')) return false;
-            return containsShadowSentenceLabel(element);
+            return hasShadowSentenceLabel(element);
           });
           if (directBlockMatch instanceof HTMLElement) {
             return directBlockMatch;
@@ -2518,6 +2528,57 @@ function buildBehaviorScript(features: ResolvedFeatures): string {
           window.speechSynthesis.speak(utterance);
         };
 
+        const buildWordContentNodes = (item, word, transcription) => {
+          if (!(item instanceof HTMLElement)) return null;
+          const clonedNodes = Array.from(item.childNodes).map((node) => node.cloneNode(true));
+          let foundBoundary = false;
+
+          for (let index = clonedNodes.length - 1; index >= 0; index -= 1) {
+            const node = clonedNodes[index];
+            if (foundBoundary) continue;
+
+            if (node.nodeType === Node.TEXT_NODE) {
+              const textValue = node.textContent || '';
+              const transcriptionIndex = textValue.indexOf(transcription);
+              if (transcriptionIndex >= 0) {
+                node.textContent = textValue.slice(0, transcriptionIndex).replace(/\\s+$/, '');
+                foundBoundary = true;
+                if (!(node.textContent || '').trim()) {
+                  clonedNodes.splice(index, 1);
+                }
+                continue;
+              }
+
+              clonedNodes.splice(index, 1);
+              continue;
+            }
+
+            if ((node.textContent || '').includes(transcription)) {
+              return null;
+            }
+
+            clonedNodes.splice(index, 1);
+          }
+
+          const content = document.createElement('span');
+          content.className = 'pronunciation-word-content';
+
+          if (!foundBoundary || clonedNodes.length === 0) {
+            const fallbackLabel = document.createElement('span');
+            fallbackLabel.className = 'pronunciation-word-label';
+            fallbackLabel.textContent = word + ' —';
+            content.appendChild(fallbackLabel);
+            return content;
+          }
+
+          clonedNodes.forEach((node) => {
+            content.appendChild(node);
+          });
+          content.appendChild(document.createTextNode(' '));
+          content.appendChild(document.createTextNode('—'));
+          return content;
+        };
+
         const listItems = [];
         const seen = new Set();
         sectionElements.forEach((element) => {
@@ -2545,6 +2606,7 @@ function buildBehaviorScript(features: ResolvedFeatures): string {
               .join('')
               .trim();
             const transcription = parsed[2].trim();
+            const note = (parsed[3] || '').trim();
             if (!word) return;
 
             const controls = document.createElement('span');
@@ -2565,17 +2627,28 @@ function buildBehaviorScript(features: ResolvedFeatures): string {
             transcriptionBadge.textContent = transcription;
             transcriptionBadge.setAttribute('aria-hidden', 'true');
 
+            const noteText = document.createElement('span');
+            noteText.className = 'pronunciation-word-note';
+            noteText.textContent = note;
+
             const wordMain = document.createElement('span');
             wordMain.className = 'pronunciation-word-main';
-            const existingNodes = Array.from(item.childNodes);
-            existingNodes.forEach((node) => {
-              wordMain.appendChild(node);
-            });
+            const wordContent = buildWordContentNodes(item, word, transcription);
             controls.appendChild(button);
             controls.appendChild(transcriptionBadge);
+            if (note) {
+              controls.appendChild(noteText);
+            }
+
+            if (wordContent instanceof HTMLElement) {
+              wordMain.appendChild(wordContent);
+            }
             wordMain.appendChild(controls);
 
             item.classList.add('pronunciation-word-item');
+            while (item.firstChild) {
+              item.removeChild(item.firstChild);
+            }
             item.appendChild(wordMain);
             return;
           }
