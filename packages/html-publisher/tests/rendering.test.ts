@@ -356,6 +356,9 @@ Two
     expect(html).toContain('.pronunciation-word-tts');
     expect(html).toContain('.pronunciation-shadow-sentence');
     expect(html).toContain('.pronunciation-word-main');
+    expect(html).toContain('.pronunciation-word-content');
+    expect(html).toContain('Charis+SIL');
+    expect(html).toContain("font-family: 'Charis SIL'");
     expect(html).toContain('shadow_sentence');
     expect(html).not.toContain('item.replaceChildren(wordMain);');
     expect(html).toContain('speechSynthesis');
@@ -372,6 +375,39 @@ Two
     const html = await renderToHtml(markdown, 'Connected Speech');
     expect(html).toContain('connected_speech');
     expect(html).toContain('Play connected speech line');
+  });
+
+  it('ships word-level pronunciation controls for non-shadow pronunciation modes', async () => {
+    const markdown = `### C. Pronunciation Micro-Focus
+
+**Mode:** intonation
+
+1. rise-fall — /ˈraɪz.fɔːl/
+2. contrastive stress — /kənˈtræs.tɪv stres/`;
+    const html = await renderToHtml(markdown, 'Intonation Pronunciation');
+    const renderedDocument = createRenderedDocument(html);
+
+    const listItems = [...renderedDocument.querySelectorAll('.markdown-body li')];
+    const firstItem = listItems.find((item) => item.textContent?.includes('rise-fall'));
+
+    expect(firstItem?.querySelector('.word-tts-button')?.textContent).toBe('Play');
+    expect(firstItem?.querySelector('.word-tts-transcription')?.textContent).toBe('/ˈraɪz.fɔːl/');
+    expect(firstItem?.textContent?.match(/\/ˈraɪz.fɔːl\//g)?.length ?? 0).toBe(1);
+  });
+
+  it('does not require numbered word drills in other pronunciation modes', async () => {
+    const markdown = `### C. Pronunciation Micro-Focus
+
+**Mode:** minimal_pair
+
+**Target:** Distinguish ship and sheep.
+
+**Action:** Listen and repeat carefully.`;
+    const html = await renderToHtml(markdown, 'Minimal Pair Without Drill List');
+    const renderedDocument = createRenderedDocument(html);
+
+    expect(renderedDocument.body.textContent).toContain('Target:');
+    expect(renderedDocument.querySelector('.word-tts-button')).toBeNull();
   });
 
   it('emits a parseable behavior script', async () => {
@@ -402,9 +438,10 @@ Two
 - 3. \`Stopped\` — /stɒpt/ (End with T sound)
 :::`;
     const html = await renderToHtml(markdown, 'Pronunciation Variant');
+    const renderedDocument = createRenderedDocument(html);
     expect(html).toContain('<strong>Shadow sentence:</strong>');
     expect(html).not.toContain('<code>**Shadow sentence:**');
-    expect(html).not.toContain('?.[');
+    expect(renderedDocument.querySelector('#content')?.textContent).not.toContain('?.[');
   });
 
   it('targets only the shadow sentence line inside pronunciation callouts', async () => {
@@ -425,6 +462,32 @@ Two
     const callout = renderedDocument.querySelector('.callout');
     expect(callout).toBeTruthy();
     expect(callout?.classList.contains('pronunciation-shadow-sentence')).toBe(false);
+  });
+
+  it('does not mistake the mode line for the shadow sentence in paragraph callouts', async () => {
+    const markdown = `### C. Pronunciation Micro-Focus
+
+:::callout 🗣️
+**Mode:** shadow_sentence
+**Target:** The weak /ə/ in appointment and the smooth flow of negative contractions.
+**Focus:** You have a tendency to add an intrusive "O" sound in contractions.
+**Action:** Listen to the audio and shadow the sentence.
+
+**Shadow sentence:** I wouldn't have made an appointment if I had known the price.
+
+1. wouldn't — /ˈwʊd.ənt/
+:::`;
+    const html = await renderToHtml(markdown, 'Pronunciation Paragraph Callout');
+    const renderedDocument = createRenderedDocument(html);
+
+    const highlighted = renderedDocument.querySelector('.pronunciation-shadow-sentence');
+    expect(highlighted).toBeTruthy();
+    expect(highlighted?.textContent).toContain('Shadow sentence:');
+    expect(highlighted?.textContent).not.toContain('Mode: shadow_sentence');
+
+    const paragraphs = [...renderedDocument.querySelectorAll('.callout .content p')];
+    expect(paragraphs[0]?.classList.contains('pronunciation-shadow-sentence')).toBe(false);
+    expect(paragraphs[1]?.classList.contains('pronunciation-shadow-sentence')).toBe(true);
   });
 
   it('preserves inline markup in word-drill items after behavior script runs', async () => {
@@ -449,6 +512,39 @@ Two
     expect(stoppedItem?.querySelector('strong')?.textContent).toContain('Stopped');
     expect(floodItem?.querySelector('.word-tts-button')?.textContent).toBe('Play');
     expect(vehicleItem?.querySelector('.pronunciation-word-main')).toBeTruthy();
+    expect(floodItem?.querySelector('.pronunciation-word-content')?.textContent).not.toContain(
+      '/flʌd/',
+    );
+    expect(floodItem?.textContent?.match(/\/flʌd\//g)?.length ?? 0).toBe(1);
+  });
+
+  it('renders optional pronunciation notes on the right without duplicating transcription', async () => {
+    const markdown = `### C. Pronunciation Micro-Focus
+
+**Mode:** shadow_sentence
+**Shadow sentence:** I wouldn't have made an appointment if I had known the price.
+
+1. wouldn't — /ˈwʊd.ənt/ (wu-DNT, NOT wud-not!)
+2. appointment — /əˈpɔɪnt.mənt/`;
+    const html = await renderToHtml(markdown, 'Pronunciation Notes');
+    const renderedDocument = createRenderedDocument(html);
+
+    const listItems = [...renderedDocument.querySelectorAll('.markdown-body li')];
+    const wouldntItem = listItems.find((item) => item.textContent?.includes("wouldn't"));
+
+    expect(wouldntItem?.querySelector('.pronunciation-word-content')?.textContent).toContain(
+      "wouldn't",
+    );
+    expect(wouldntItem?.querySelector('.pronunciation-word-content')?.textContent).not.toContain(
+      '/ˈwʊd.ənt/',
+    );
+    expect(
+      wouldntItem?.querySelector('.word-tts-transcription')?.textContent,
+    ).toBe('/ˈwʊd.ənt/');
+    expect(wouldntItem?.textContent?.match(/\/ˈwʊd.ənt\//g)?.length ?? 0).toBe(1);
+    expect(wouldntItem?.querySelector('.pronunciation-word-note')?.textContent).toBe(
+      '(wu-DNT, NOT wud-not!)',
+    );
   });
 });
 
