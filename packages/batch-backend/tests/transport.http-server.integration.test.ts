@@ -2941,6 +2941,31 @@ describe('transport/http-server - integration (in-process)', () => {
     expect(payload.html).not.toContain('[ ] Introduce the institution');
   });
 
+  it('POST /preview/html includes hybrid table balancing hooks', async () => {
+    const response = await app.inject({
+      method: 'POST',
+      url: '/preview/html',
+      payload: {
+        text: [
+          '| Word | Real English Meaning | Structural Formula | Example from Text |',
+          '| --- | --- | --- | --- |',
+          '| A way | A method to solve a problem. | Problem + Brain = Way | "I found a way." |',
+        ].join('\n'),
+      },
+    });
+
+    expect(response.statusCode).toBe(200);
+    const payload = response.json() as { html: string };
+    expect(payload.html).toContain('<table>');
+    expect(payload.html).toContain('data-generated-colgroup');
+    expect(payload.html).toContain('data-balanced-columns');
+    expect(payload.html).toContain('instructional_4col');
+    expect(payload.html).toContain('data-col-role');
+    expect(payload.html).toContain('data-cell-prose');
+    expect(payload.html).toContain('if (!isDesktopViewport())');
+    expect(payload.html).toContain('structural formula');
+  });
+
   it('POST /preview/html derives title from markdown heading when title is omitted', async () => {
     const response = await app.inject({
       method: 'POST',

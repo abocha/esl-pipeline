@@ -105,6 +105,15 @@ describe('rendering', () => {
     expect(html).toContain('<strong>the</strong>');
   });
 
+  it('styles checklist checkboxes for centered alignment and theme-aware contrast', async () => {
+    const html = await renderToHtml('- [ ] checklist item', 'Checklist Styles');
+    expect(html).toContain('.task-list-item-checkbox');
+    expect(html).toContain('vertical-align: middle;');
+    expect(html).toContain('color-scheme: light;');
+    expect(html).toContain('[data-theme="dark"] .markdown-body .task-list-item-checkbox');
+    expect(html).toContain('color-scheme: dark;');
+  });
+
   it('preserves non-task sibling list items in mixed lists', async () => {
     const markdown = `- [ ] task item
 - plain item`;
@@ -186,7 +195,43 @@ describe('rendering', () => {
     const html = await renderToHtml(markdown, 'Table');
     expect(html).toContain('--table-head-bg: color-mix');
     expect(html).toContain('th {\n  background: var(--table-head-bg);');
+    expect(html).toContain('table-layout: auto;');
+    expect(html).toContain('.markdown-body table[data-balanced-columns="true"]');
+    expect(html).toContain('table-layout: fixed;');
+    expect(html).toContain('white-space: normal;');
+    expect(html).toContain('overflow-wrap: anywhere;');
+    expect(html).toContain('width: max-content;');
+    expect(html).toContain('data-table-archetype="glossary_2col"');
+    expect(html).toContain('data-col-role="meaning"');
+    expect(html).toContain('text-wrap: pretty;');
+    expect(html).not.toContain('th:first-child');
     expect(html).not.toContain('background: #f4efe6;');
+  });
+
+  it('renders literal <br> markers inside markdown table cells as line breaks', async () => {
+    const markdown = `| Phrase | Meaning |
+| --- | --- |
+| Do vs. Make | Do = execute.<br>Make = create. |`;
+    const html = await renderToHtml(markdown, 'Table Breaks');
+    expect(html).toContain('<td>Do = execute.<br>Make = create.</td>');
+    expect(html).not.toContain('&lt;br&gt;');
+  });
+
+  it('ships hybrid archetype-aware table balancing hooks', async () => {
+    const markdown = `| Word | Real English Meaning | Structural Formula | Example from Text |
+| :--- | :--- | :--- | :--- |
+| **A way / An option** 🛠️ | A method or path to solve a problem. | **Problem + Brain = Way** | "I couldn't find **a way** to solve the problem." |`;
+    const html = await renderToHtml(markdown, 'Instructional Table');
+    const scriptMatch = html.match(/<script>\n([\s\S]*?)<\/script>/);
+
+    expect(scriptMatch?.[1]).toContain('glossary_2col');
+    expect(scriptMatch?.[1]).toContain('vocab_3col');
+    expect(scriptMatch?.[1]).toContain('long_meaning_3col');
+    expect(scriptMatch?.[1]).toContain('instructional_4col');
+    expect(scriptMatch?.[1]).toContain('emoji_split_4col');
+    expect(scriptMatch?.[1]).toContain("cell.setAttribute('data-col-role', column.role)");
+    expect(scriptMatch?.[1]).toContain("table.setAttribute('data-table-archetype', archetype)");
+    expect(scriptMatch?.[1]).toContain('normalized.includes(\'structural formula\')');
   });
 
   it('applies grammar matrix styling only to Notice the Grammar column-list blocks', async () => {
@@ -308,7 +353,12 @@ Two
     const html = await renderToHtml(markdown, 'Pronunciation');
     expect(html).toContain('.word-tts-button');
     expect(html).toContain('.pronunciation-word-tts');
+    expect(html).toContain('.pronunciation-shadow-sentence');
+    expect(html).toContain('.pronunciation-word-main');
+    expect(html).toContain('.pronunciation-word-label');
+    expect(html).toContain('.pronunciation-word-note');
     expect(html).toContain('shadow_sentence');
+    expect(html).toContain("item.replaceChildren(wordMain);");
     expect(html).toContain('speechSynthesis');
   });
 
@@ -330,6 +380,14 @@ Two
     const scriptMatch = html.match(/<script>\n([\s\S]*?)<\/script>/);
     expect(scriptMatch?.[1]).toBeTruthy();
     expect(scriptMatch?.[1]).toContain('theme-preference');
+    expect(scriptMatch?.[1]).toContain('data-generated-colgroup');
+    expect(scriptMatch?.[1]).toContain('data-balanced-columns');
+    expect(scriptMatch?.[1]).toContain('data-table-archetype');
+    expect(scriptMatch?.[1]).toContain('data-cell-prose');
+    expect(scriptMatch?.[1]).toContain('if (!isDesktopViewport())');
+    expect(scriptMatch?.[1]).toContain(
+      "existingColgroup.getAttribute('data-generated-colgroup') !== 'true'",
+    );
     expect(scriptMatch?.[1]).toContain('speechSynthesis');
     expect(() => new Function(scriptMatch?.[1] ?? '')).not.toThrow();
   });
