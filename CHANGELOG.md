@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented here. Dates use `YYYY-MM-DD`.
 
+## [1.1.2] - 2026-03-06
+
+### Changed
+
+- Automated release from PR #15: fix(html-publisher): patch pronunciation follow-up regressions (https://github.com/abocha/esl-pipeline/pull/15)
+
 ## [1.1.1] - 2026-03-06
 
 ### Changed
