@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented here. Dates use `YYYY-MM-DD`.
 
+## [1.1.1] - 2026-03-06
+
+### Changed
+
+- Automated release from PR #14: feat(html-publisher): ship hybrid table renderer (https://github.com/abocha/esl-pipeline/pull/14)
+
 ## [1.1.0] - 2026-03-05
 
 ### Changed
