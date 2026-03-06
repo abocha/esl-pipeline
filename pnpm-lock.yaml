@@ -290,6 +290,9 @@ importers:
       '@types/node':
         specifier: ^25.3.0
         version: 25.3.0
+      jsdom:
+        specifier: ^28.1.0
+        version: 28.1.0
       typescript:
         specifier: ^5.9.3
         version: 5.9.3
