@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented here. Dates use `YYYY-MM-DD`.
 
+## [1.1.3] - 2026-03-06
+
+### Changed
+
+- Automated release from PR #16: ci(workflows): separate release label guard from ci (https://github.com/abocha/esl-pipeline/pull/16)
+
 ## [1.1.2] - 2026-03-06
 
 ### Changed
