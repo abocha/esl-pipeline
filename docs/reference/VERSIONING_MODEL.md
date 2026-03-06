@@ -21,10 +21,12 @@ This repository is private-only. npm publishing is not part of the release proce
 ## Sources Of Truth
 
 1. Repo release version:
+
 - Git tag `vX.Y.Z`.
 - Root [`package.json`](../../package.json) `version` (must match tag without `v`).
 
 2. Contract versions:
+
 - [`packages/contracts/src/contract-versions.ts`](../../packages/contracts/src/contract-versions.ts).
 
 ## Contract Version Registry
@@ -44,12 +46,15 @@ Additional DB release context:
 ## Bump Policy (Contract-First SemVer)
 
 1. Major bump:
+
 - Breaking compatibility in any versioned contract.
 
 2. Minor bump:
+
 - Backward-compatible feature additions that extend contract or product surface.
 
 3. Patch bump:
+
 - Bug fixes, docs, ops, refactors, and internal hardening without contract breaks.
 
 ## Pull Request Release Labels
@@ -60,7 +65,7 @@ Each PR targeting `main` must have exactly one label:
 2. `release:minor`
 3. `release:patch`
 
-CI fails if none or multiple are present.
+The dedicated `Release Label Guard` workflow fails if none or multiple are present.
 
 ## Release Workflow
 
