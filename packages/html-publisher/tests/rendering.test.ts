@@ -377,6 +377,39 @@ Two
     expect(html).toContain('Play connected speech line');
   });
 
+  it('ships word-level pronunciation controls for non-shadow pronunciation modes', async () => {
+    const markdown = `### C. Pronunciation Micro-Focus
+
+**Mode:** intonation
+
+1. rise-fall — /ˈraɪz.fɔːl/
+2. contrastive stress — /kənˈtræs.tɪv stres/`;
+    const html = await renderToHtml(markdown, 'Intonation Pronunciation');
+    const renderedDocument = createRenderedDocument(html);
+
+    const listItems = [...renderedDocument.querySelectorAll('.markdown-body li')];
+    const firstItem = listItems.find((item) => item.textContent?.includes('rise-fall'));
+
+    expect(firstItem?.querySelector('.word-tts-button')?.textContent).toBe('Play');
+    expect(firstItem?.querySelector('.word-tts-transcription')?.textContent).toBe('/ˈraɪz.fɔːl/');
+    expect(firstItem?.textContent?.match(/\/ˈraɪz.fɔːl\//g)?.length ?? 0).toBe(1);
+  });
+
+  it('does not require numbered word drills in other pronunciation modes', async () => {
+    const markdown = `### C. Pronunciation Micro-Focus
+
+**Mode:** minimal_pair
+
+**Target:** Distinguish ship and sheep.
+
+**Action:** Listen and repeat carefully.`;
+    const html = await renderToHtml(markdown, 'Minimal Pair Without Drill List');
+    const renderedDocument = createRenderedDocument(html);
+
+    expect(renderedDocument.body.textContent).toContain('Target:');
+    expect(renderedDocument.querySelector('.word-tts-button')).toBeNull();
+  });
+
   it('emits a parseable behavior script', async () => {
     const html = await renderToHtml('### C. Pronunciation Micro-Focus', 'Script Parse');
     const scriptMatch = html.match(/<script>\n([\s\S]*?)<\/script>/);
@@ -405,9 +438,10 @@ Two
 - 3. \`Stopped\` — /stɒpt/ (End with T sound)
 :::`;
     const html = await renderToHtml(markdown, 'Pronunciation Variant');
+    const renderedDocument = createRenderedDocument(html);
     expect(html).toContain('<strong>Shadow sentence:</strong>');
     expect(html).not.toContain('<code>**Shadow sentence:**');
-    expect(html).not.toContain('?.[');
+    expect(renderedDocument.querySelector('#content')?.textContent).not.toContain('?.[');
   });
 
   it('targets only the shadow sentence line inside pronunciation callouts', async () => {

@@ -2449,7 +2449,15 @@ function buildBehaviorScript(features: ResolvedFeatures): string {
       if (modeMatch && modeMatch[1]) {
         pronunciationMode = String(modeMatch[1]).trim().toLowerCase();
       }
-      const wordDrillEnabled = pronunciationMode === 'shadow_sentence';
+      const wordDrillModes = new Set([
+        'shadow_sentence',
+        'intonation',
+        'rhythm_chunking',
+        'sentence_stress',
+        'connected_speech',
+        'minimal_pair',
+      ]);
+      const wordDrillEnabled = wordDrillModes.has(pronunciationMode);
       const connectedSpeechEnabled = pronunciationMode === 'connected_speech';
 
       if (wordDrillEnabled || connectedSpeechEnabled) {
@@ -2599,58 +2607,59 @@ function buildBehaviorScript(features: ResolvedFeatures): string {
           if (wordDrillEnabled) {
             const parsed =
               /^(.+?)\\s*[—-]\\s*(\\/.+?\\/)(?:\\s+(.+))?$/.exec(raw);
-            if (!parsed || !parsed[1] || !parsed[2]) return;
-            const word = parsed[1]
-              .replace(/^\\d+\\.\\s*/, '')
-              .split(String.fromCharCode(96))
-              .join('')
-              .trim();
-            const transcription = parsed[2].trim();
-            const note = (parsed[3] || '').trim();
-            if (!word) return;
+            if (parsed?.[1] && parsed[2]) {
+              const word = parsed[1]
+                .replace(/^\\d+\\.\\s*/, '')
+                .split(String.fromCharCode(96))
+                .join('')
+                .trim();
+              const transcription = parsed[2].trim();
+              const note = (parsed[3] || '').trim();
+              if (!word) return;
 
-            const controls = document.createElement('span');
-            controls.className = 'pronunciation-word-tts';
+              const controls = document.createElement('span');
+              controls.className = 'pronunciation-word-tts';
 
-            const button = document.createElement('button');
-            button.type = 'button';
-            button.className = 'word-tts-button';
-            button.textContent = 'Play';
-            button.setAttribute(
-              'aria-label',
-              'Play pronunciation for ' + word + ' ' + transcription,
-            );
-            button.addEventListener('click', () => speakWord(word));
+              const button = document.createElement('button');
+              button.type = 'button';
+              button.className = 'word-tts-button';
+              button.textContent = 'Play';
+              button.setAttribute(
+                'aria-label',
+                'Play pronunciation for ' + word + ' ' + transcription,
+              );
+              button.addEventListener('click', () => speakWord(word));
 
-            const transcriptionBadge = document.createElement('span');
-            transcriptionBadge.className = 'word-tts-transcription';
-            transcriptionBadge.textContent = transcription;
-            transcriptionBadge.setAttribute('aria-hidden', 'true');
+              const transcriptionBadge = document.createElement('span');
+              transcriptionBadge.className = 'word-tts-transcription';
+              transcriptionBadge.textContent = transcription;
+              transcriptionBadge.setAttribute('aria-hidden', 'true');
 
-            const noteText = document.createElement('span');
-            noteText.className = 'pronunciation-word-note';
-            noteText.textContent = note;
+              const noteText = document.createElement('span');
+              noteText.className = 'pronunciation-word-note';
+              noteText.textContent = note;
 
-            const wordMain = document.createElement('span');
-            wordMain.className = 'pronunciation-word-main';
-            const wordContent = buildWordContentNodes(item, word, transcription);
-            controls.appendChild(button);
-            controls.appendChild(transcriptionBadge);
-            if (note) {
-              controls.appendChild(noteText);
+              const wordMain = document.createElement('span');
+              wordMain.className = 'pronunciation-word-main';
+              const wordContent = buildWordContentNodes(item, word, transcription);
+              controls.appendChild(button);
+              controls.appendChild(transcriptionBadge);
+              if (note) {
+                controls.appendChild(noteText);
+              }
+
+              if (wordContent instanceof HTMLElement) {
+                wordMain.appendChild(wordContent);
+              }
+              wordMain.appendChild(controls);
+
+              item.classList.add('pronunciation-word-item');
+              while (item.firstChild) {
+                item.removeChild(item.firstChild);
+              }
+              item.appendChild(wordMain);
+              return;
             }
-
-            if (wordContent instanceof HTMLElement) {
-              wordMain.appendChild(wordContent);
-            }
-            wordMain.appendChild(controls);
-
-            item.classList.add('pronunciation-word-item');
-            while (item.firstChild) {
-              item.removeChild(item.firstChild);
-            }
-            item.appendChild(wordMain);
-            return;
           }
 
           if (connectedSpeechEnabled) {
