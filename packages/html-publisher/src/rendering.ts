@@ -2443,19 +2443,47 @@ function buildBehaviorScript(features: ResolvedFeatures): string {
       const connectedSpeechEnabled = pronunciationMode === 'connected_speech';
 
       if (wordDrillEnabled || connectedSpeechEnabled) {
+        const containsShadowSentenceLabel = (element) => {
+          if (!(element instanceof HTMLElement)) return false;
+          const normalized = normalizeText(element.textContent || '');
+          return normalized.includes('shadow sentence');
+        };
+
+        const findFirstMatchingDescendant = (root, selector) => {
+          if (!(root instanceof HTMLElement)) return null;
+          const candidates = Array.from(root.querySelectorAll(selector));
+          return (
+            candidates.find((candidate) => containsShadowSentenceLabel(candidate)) || null
+          );
+        };
+
+        const findShadowSentenceElement = () => {
+          const directBlockMatch = sectionElements.find((element) => {
+            if (!(element instanceof HTMLElement)) return false;
+            if (element.classList.contains('callout')) return false;
+            if (!element.matches('li, p, blockquote')) return false;
+            return containsShadowSentenceLabel(element);
+          });
+          if (directBlockMatch instanceof HTMLElement) {
+            return directBlockMatch;
+          }
+
+          const descendantSelectors = ['li', 'p', '.content > *', 'blockquote > *', 'div > *'];
+          for (const element of sectionElements) {
+            if (!(element instanceof HTMLElement)) continue;
+            for (const selector of descendantSelectors) {
+              const match = findFirstMatchingDescendant(element, selector);
+              if (match instanceof HTMLElement) {
+                return match;
+              }
+            }
+          }
+
+          return null;
+        };
+
         if (wordDrillEnabled) {
-          const shadowSentenceElement =
-            sectionElements.find((element) => {
-              if (!(element instanceof HTMLElement)) return false;
-              if (!element.matches('p, div, blockquote')) return false;
-              const normalized = normalizeText(element.textContent || '');
-              return normalized.includes('shadow sentence');
-            }) ||
-            sectionElements.find((element) => {
-              if (!(element instanceof HTMLElement)) return false;
-              const normalized = normalizeText(element.textContent || '');
-              return normalized.includes('shadow sentence');
-            });
+          const shadowSentenceElement = findShadowSentenceElement();
           if (shadowSentenceElement instanceof HTMLElement) {
             shadowSentenceElement.classList.add('pronunciation-shadow-sentence');
           }
@@ -2517,7 +2545,6 @@ function buildBehaviorScript(features: ResolvedFeatures): string {
               .join('')
               .trim();
             const transcription = parsed[2].trim();
-            const note = (parsed[3] || '').trim();
             if (!word) return;
 
             const controls = document.createElement('span');
@@ -2538,25 +2565,18 @@ function buildBehaviorScript(features: ResolvedFeatures): string {
             transcriptionBadge.textContent = transcription;
             transcriptionBadge.setAttribute('aria-hidden', 'true');
 
-            const wordLabel = document.createElement('span');
-            wordLabel.className = 'pronunciation-word-label';
-            wordLabel.textContent = word + ' —';
-
             const wordMain = document.createElement('span');
             wordMain.className = 'pronunciation-word-main';
-            wordMain.appendChild(wordLabel);
+            const existingNodes = Array.from(item.childNodes);
+            existingNodes.forEach((node) => {
+              wordMain.appendChild(node);
+            });
             controls.appendChild(button);
             controls.appendChild(transcriptionBadge);
             wordMain.appendChild(controls);
 
             item.classList.add('pronunciation-word-item');
-            item.replaceChildren(wordMain);
-            if (note) {
-              const noteText = document.createElement('span');
-              noteText.className = 'pronunciation-word-note';
-              noteText.textContent = note;
-              item.appendChild(noteText);
-            }
+            item.appendChild(wordMain);
             return;
           }
 
