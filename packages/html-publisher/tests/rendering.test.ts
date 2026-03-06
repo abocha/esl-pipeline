@@ -1,3 +1,4 @@
+// @vitest-environment jsdom
 import { describe, expect, it } from 'vitest';
 
 import { createStaticPageHtml, renderToHtml } from '../src/rendering.js';
@@ -355,10 +356,8 @@ Two
     expect(html).toContain('.pronunciation-word-tts');
     expect(html).toContain('.pronunciation-shadow-sentence');
     expect(html).toContain('.pronunciation-word-main');
-    expect(html).toContain('.pronunciation-word-label');
-    expect(html).toContain('.pronunciation-word-note');
     expect(html).toContain('shadow_sentence');
-    expect(html).toContain("item.replaceChildren(wordMain);");
+    expect(html).not.toContain('item.replaceChildren(wordMain);');
     expect(html).toContain('speechSynthesis');
   });
 
@@ -407,6 +406,50 @@ Two
     expect(html).not.toContain('<code>**Shadow sentence:**');
     expect(html).not.toContain('?.[');
   });
+
+  it('targets only the shadow sentence line inside pronunciation callouts', async () => {
+    const markdown = `### C. Pronunciation Micro-Focus
+
+:::callout 🗣️
+- \`**Mode:** shadow_sentence\`
+- \`**Shadow sentence:** There was a flood, so the vehicle stopped working.\`
+- 1. \`Flood\` — /flʌd/
+:::`;
+    const html = await renderToHtml(markdown, 'Pronunciation Shadow Target');
+    const renderedDocument = createRenderedDocument(html);
+
+    const shadowSentence = renderedDocument.querySelector('.pronunciation-shadow-sentence');
+    expect(shadowSentence).toBeTruthy();
+    expect(shadowSentence?.textContent).toContain('Shadow sentence');
+
+    const callout = renderedDocument.querySelector('.callout');
+    expect(callout).toBeTruthy();
+    expect(callout?.classList.contains('pronunciation-shadow-sentence')).toBe(false);
+  });
+
+  it('preserves inline markup in word-drill items after behavior script runs', async () => {
+    const markdown = `### C. Pronunciation Micro-Focus
+
+**Mode:** shadow_sentence
+**Shadow sentence:** There was a flood, so the vehicle stopped working.
+
+1. \`Flood\` — /flʌd/
+2. *Vehicle* — /viːɪkl/
+3. **Stopped** — /stɒpt/`;
+    const html = await renderToHtml(markdown, 'Pronunciation Inline Markup');
+    const renderedDocument = createRenderedDocument(html);
+
+    const listItems = [...renderedDocument.querySelectorAll('.markdown-body li')];
+    const floodItem = listItems.find((item) => item.textContent?.includes('Flood'));
+    const vehicleItem = listItems.find((item) => item.textContent?.includes('Vehicle'));
+    const stoppedItem = listItems.find((item) => item.textContent?.includes('Stopped'));
+
+    expect(floodItem?.querySelector('code')?.textContent).toContain('Flood');
+    expect(vehicleItem?.querySelector('em')?.textContent).toContain('Vehicle');
+    expect(stoppedItem?.querySelector('strong')?.textContent).toContain('Stopped');
+    expect(floodItem?.querySelector('.word-tts-button')?.textContent).toBe('Play');
+    expect(vehicleItem?.querySelector('.pronunciation-word-main')).toBeTruthy();
+  });
 });
 
 function formatCurrentDateForAssertion(): string {
@@ -415,4 +458,53 @@ function formatCurrentDateForAssertion(): string {
     day: 'numeric',
     year: 'numeric',
   }).format(new Date());
+}
+
+function createRenderedDocument(html: string): Document {
+  const scriptMatch = html.match(/<script>\n([\s\S]*?)<\/script>/);
+  if (!scriptMatch?.[1]) {
+    throw new Error('Expected embedded behavior script');
+  }
+
+  document.open();
+  document.write(html);
+  document.close();
+
+  const browserWindow = globalThis as Window & typeof globalThis;
+
+  Object.defineProperty(browserWindow, 'speechSynthesis', {
+    configurable: true,
+    value: {
+      getVoices: () => [],
+      cancel: () => {},
+      speak: () => {},
+    },
+  });
+  Object.defineProperty(browserWindow, 'SpeechSynthesisUtterance', {
+    configurable: true,
+    value: function SpeechSynthesisUtterance(this: { text: string; lang: string }, text: string) {
+      this.text = text;
+      this.lang = 'en-US';
+    },
+  });
+  Object.defineProperty(browserWindow, 'matchMedia', {
+    configurable: true,
+    value: () => ({
+      matches: false,
+      media: '',
+      addEventListener: () => {},
+      removeEventListener: () => {},
+    }),
+  });
+  Object.defineProperty(browserWindow, 'requestAnimationFrame', {
+    configurable: true,
+    value: (callback: FrameRequestCallback) => callback(0),
+  });
+  Object.defineProperty(browserWindow, 'cancelAnimationFrame', {
+    configurable: true,
+    value: () => {},
+  });
+
+  browserWindow.eval(scriptMatch[1]);
+  return document;
 }
