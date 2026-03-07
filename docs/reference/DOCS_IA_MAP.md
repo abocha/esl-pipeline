@@ -26,6 +26,7 @@
 | --- | --- | --- |
 | Repo orientation | `docs/PROJECT_OVERVIEW.md` | `docs/reference/agents-ssot.md` |
 | Setup/run commands | `docs/QUICK_START.md` | `docs/reference/env.md` |
+| Write/update tests | `docs/reference/TESTING_GUIDELINES.md` | `docs/reference/agents-ssot.md` |
 | Contracts/invariants | `docs/reference/agents-ssot.md` | `docs/backend-frontend/backend-frontend-alignment.md` |
 | Markdown validator rules/rulesets | `docs/reference/MD_VALIDATOR_RULESET_CONVENTIONS.md` | `docs/reference/agents-ssot.md` |
 | Backend/frontend capability status | `docs/backend-frontend/backend-frontend-alignment.md` | `docs/backend-frontend/BATCH_SYSTEM.md` |

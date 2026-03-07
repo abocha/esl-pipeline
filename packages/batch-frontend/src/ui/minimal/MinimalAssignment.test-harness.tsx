@@ -1,0 +1,534 @@
+/* eslint-disable react-refresh/only-export-components, unicorn/prefer-export-from */
+import { act, configure, render, screen, waitFor, within } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
+import { expect, vi } from 'vitest';
+
+import * as api from '../../utils/api';
+import { MinimalAssignment } from './MinimalAssignment';
+
+vi.mock('../../utils/api', () => ({
+  approveJob: vi.fn(),
+  cancelJob: vi.fn(),
+  createDraft: vi.fn(),
+  createPromptPackage: vi.fn(),
+  fetchDraft: vi.fn(),
+  fetchJobProvenance: vi.fn(),
+  fetchJobOptions: vi.fn(),
+  fetchPromptPackage: vi.fn(),
+  fetchPromptOptions: vi.fn(),
+  fetchStudentOptions: vi.fn(),
+  fetchRecordingTranscript: vi.fn(),
+  generateDraft: vi.fn(),
+  GenerationDraftApiError: class GenerationDraftApiError extends Error {
+    code?: string;
+    provider?: string;
+    model?: string;
+    requestId?: string;
+    timestamp?: string;
+
+    constructor(
+      message: string,
+      details: {
+        code?: string;
+        provider?: string;
+        model?: string;
+        requestId?: string;
+        timestamp?: string;
+      } = {},
+    ) {
+      super(message);
+      this.name = 'GenerationDraftApiError';
+      this.code = details.code;
+      this.provider = details.provider;
+      this.model = details.model;
+      this.requestId = details.requestId;
+      this.timestamp = details.timestamp;
+    }
+  },
+  getProfileContent: vi.fn(),
+  getJobStatus: vi.fn(),
+  getRecording: vi.fn(),
+  listUserJobs: vi.fn(),
+  listProfileContents: vi.fn(),
+  listProfileRevisions: vi.fn(),
+  materializeDraft: vi.fn(),
+  restoreProfileRevision: vi.fn(),
+  retryRecordingTranscription: vi.fn(),
+  rerunAudioJob: vi.fn(),
+  rerunPublishJob: vi.fn(),
+  renderHtmlPreview: vi
+    .fn()
+    .mockResolvedValue({ html: '<html><body><h1>Preview</h1></body></html>' }),
+  upsertProfileContent: vi.fn(),
+  updateDraft: vi.fn(),
+  updateRecordingTranscript: vi.fn(),
+  uploadRecording: vi.fn(),
+  validateMarkdown: vi.fn(),
+}));
+
+vi.mock('../shared/DropZone', () => ({
+  DropZone: ({
+    title,
+    disabled,
+    onFiles,
+  }: {
+    title: string;
+    disabled?: boolean;
+    onFiles: (files: File[]) => void;
+  }) => (
+    <button
+      type="button"
+      disabled={disabled}
+      onClick={() => {
+        onFiles([new File(['audio'], 'lesson.mp3', { type: 'audio/mpeg' })]);
+      }}
+    >
+      {title}
+    </button>
+  ),
+}));
+
+vi.mock('../shared/UploadProgress', () => ({
+  UploadProgress: ({ progress }: { progress: number }) => <div>Upload progress: {progress}%</div>,
+}));
+
+const now = '2026-02-05T00:00:00.000Z';
+const UI_WAIT_TIMEOUT_MS = 5_000;
+const INTEGRATION_TEST_TIMEOUT_MS = 20_000;
+configure({ asyncUtilTimeout: UI_WAIT_TIMEOUT_MS });
+
+export function makeJobStatus(overrides: Partial<api.JobStatus> = {}): api.JobStatus {
+  return {
+    jobId: 'job-1',
+    studentId: null,
+    md: '/tmp/assignment.md',
+    mdStorageUri: null,
+    recordingId: null,
+    transcriptId: null,
+    promptPackageId: null,
+    draftId: null,
+    preset: 'b1-default',
+    learningPresetId: null,
+    withTts: true,
+    voiceId: null,
+    upload: 's3',
+    voiceAccent: null,
+    forceTts: false,
+    notionDatabase: null,
+    publishTarget: 'html',
+    ttsStrategy: 'auto',
+    autoPublish: false,
+    notionUrl: null,
+    anytypeUrl: null,
+    state: 'queued',
+    createdAt: now,
+    updatedAt: now,
+    startedAt: null,
+    finishedAt: null,
+    error: null,
+    manifestPath: null,
+    ...overrides,
+  };
+}
+
+export function makeRecording(overrides: Partial<api.RecordingListItem> = {}): api.RecordingListItem {
+  return {
+    recordingId: 'rec-1',
+    status: 'ingested',
+    transcriptId: null,
+    error: null,
+    source: 'upload',
+    studentId: null,
+    displayName: 'lesson.mp3',
+    durationSec: null,
+    channels: null,
+    bytes: 1024,
+    createdAt: now,
+    updatedAt: now,
+    ...overrides,
+  };
+}
+
+export function makeTranscript(
+  overrides: Partial<api.RecordingTranscriptResponse> = {},
+): api.RecordingTranscriptResponse {
+  return {
+    recordingId: 'rec-1',
+    transcriptId: 'tx-1',
+    text: 'Student transcript text',
+    summaryJson: null,
+    model: 'mock-model',
+    language: 'en',
+    mode: 'timeline',
+    createdAt: now,
+    updatedAt: now,
+    ...overrides,
+  };
+}
+
+export function makeLearningPreset(
+  overrides: Partial<api.LearningPresetOption> = {},
+): api.LearningPresetOption {
+  return {
+    id: 'general-english',
+    version: 'v1',
+    alias: 'current',
+    title: 'General English',
+    track: 'general-english',
+    status: 'active',
+    promptSnapshotVersion: 'hw_prompt_v4-2_clean',
+    ...overrides,
+  };
+}
+
+export async function publishAssignmentFlow(user: ReturnType<typeof userEvent.setup>) {
+  await user.click(screen.getByRole('button', { name: /Drop audio file/i }));
+
+  await waitFor(
+    () => {
+      expect(screen.getByDisplayValue('Student transcript text')).toBeTruthy();
+    },
+    { timeout: UI_WAIT_TIMEOUT_MS },
+  );
+
+  await user.click(screen.getByRole('button', { name: /Generate prompt/i }));
+
+  await waitFor(
+    () => {
+      expect(screen.getByDisplayValue('Prompt package output')).toBeTruthy();
+    },
+    { timeout: UI_WAIT_TIMEOUT_MS },
+  );
+
+  const draftTextarea = screen.getByRole('textbox', { name: /Draft markdown/i });
+  expect(draftTextarea).toBeTruthy();
+  if (!draftTextarea) {
+    throw new Error('Expected draft textarea to be rendered');
+  }
+  await user.type(draftTextarea, '# Final draft');
+  await previewCurrentDraft(user);
+
+  await user.click(screen.getByRole('button', { name: /Publish assignment/i }));
+
+  await waitFor(
+    () => {
+      expect(screen.getAllByText(/Job ID: job-1/i).length).toBeGreaterThan(0);
+    },
+    { timeout: UI_WAIT_TIMEOUT_MS },
+  );
+}
+
+export async function previewCurrentDraft(user: ReturnType<typeof userEvent.setup>) {
+  await user.click(screen.getByRole('button', { name: /Preview current draft/i }));
+  await waitFor(
+    () => {
+      expect(screen.getByText('Preview ready for current draft.')).toBeTruthy();
+    },
+    { timeout: UI_WAIT_TIMEOUT_MS },
+  );
+}
+
+export async function preparePromptReady(user: ReturnType<typeof userEvent.setup>) {
+  await user.click(screen.getByRole('button', { name: /Drop audio file/i }));
+
+  await waitFor(
+    () => {
+      expect(screen.getByDisplayValue('Student transcript text')).toBeTruthy();
+    },
+    { timeout: UI_WAIT_TIMEOUT_MS },
+  );
+
+  await user.click(screen.getByRole('button', { name: /Generate prompt/i }));
+
+  await waitFor(
+    () => {
+      expect(screen.getByDisplayValue('Prompt package output')).toBeTruthy();
+    },
+    { timeout: UI_WAIT_TIMEOUT_MS },
+  );
+}
+
+export function setupMinimalAssignmentTest() {
+  vi.useRealTimers();
+      vi.clearAllMocks();
+      globalThis.history.replaceState(null, '', '/');
+  
+      vi.mocked(api.fetchPromptOptions).mockResolvedValue({
+        templates: [{ id: 'tpl-default', label: 'Default Template' }],
+        profiles: [{ id: 'profile-default', label: 'Default Profile' }],
+        defaults: {
+          templateId: 'tpl-default',
+          profileId: 'profile-default',
+        },
+      });
+      vi.mocked(api.fetchJobOptions).mockResolvedValue({
+        presets: ['b1-default', 'b2-default'],
+        cefrLevels: ['A1', 'A2', 'B1', 'B2', 'C1', 'C2'],
+        cefrDefault: 'B1',
+        generation: {
+          providers: ['openai', 'google_ai_studio', 'openrouter'],
+          defaultProvider: 'openai',
+          modelOptions: [
+            {
+              provider: 'openai',
+              id: 'gpt-5.2',
+              tier: 'primary',
+              fallbackRank: 0,
+              defaultSelected: true,
+              enabled: true,
+            },
+          ],
+          defaultModelByProvider: {
+            openai: 'gpt-5.2',
+          },
+          quota: {
+            source: 'hybrid',
+            lastUpdatedAt: '2026-02-18T00:00:00.000Z',
+            requestsPerMinute: 5,
+            tokensPerMinute: 250000,
+            requestsPerDay: 20,
+          },
+        },
+        voiceAccents: ['american'],
+        voices: [{ id: 'voice-a', name: 'Voice A', accent: 'american' }],
+        notionDatabases: [{ id: 'db-1', name: 'DB One' }],
+        ttsStrategies: ['auto', 'dialogue', 'tts'],
+        supportedActions: [
+          {
+            type: 'rerun_audio',
+            label: 'Rerun audio',
+            description: 'Regenerate audio',
+            implemented: true,
+          },
+          {
+            type: 'cancel',
+            label: 'Cancel',
+            description: 'Cancel active job',
+            implemented: true,
+          },
+          {
+            type: 'rerun_publish',
+            label: 'Rerun publish',
+            description: 'Rerun publish stage',
+            implemented: true,
+          },
+        ],
+      });
+      vi.mocked(api.fetchStudentOptions).mockResolvedValue({
+        students: [
+          { id: 'student-default', name: 'Default', profileId: 'profile-default.md' },
+          { id: 'student-alex', name: 'Alex', profileId: 'profiles/alex.md' },
+        ],
+      });
+      vi.mocked(api.listUserJobs).mockResolvedValue({
+        jobs: [],
+        total: 0,
+        limit: 20,
+        offset: 0,
+      });
+      vi.mocked(api.listProfileContents).mockResolvedValue({
+        profiles: [{ id: 'profile-default.md', label: 'Default Profile' }],
+      });
+      vi.mocked(api.getProfileContent).mockResolvedValue({
+        id: 'profile-default.md',
+        label: 'Default Profile',
+        content: 'PROFILE CONTENT',
+        currentRevisionId: 'revision-1',
+        updatedAt: now,
+      });
+      vi.mocked(api.listProfileRevisions).mockResolvedValue({
+        items: [
+          {
+            id: 'revision-1',
+            profileId: 'profile-default.md',
+            contentHash: 'hash-1',
+            source: 'create',
+            createdAt: now,
+            createdBy: null,
+            restoredFromRevisionId: null,
+          },
+        ],
+        total: 1,
+        limit: 20,
+        offset: 0,
+        order: 'desc',
+      });
+      vi.mocked(api.upsertProfileContent).mockResolvedValue({
+        id: 'profile-default.md',
+        label: 'Default Profile',
+        content: 'PROFILE CONTENT',
+        currentRevisionId: 'revision-1',
+        updatedAt: now,
+      });
+      vi.mocked(api.restoreProfileRevision).mockResolvedValue({
+        id: 'profile-default.md',
+        label: 'Default Profile',
+        content: 'PROFILE CONTENT',
+        currentRevisionId: 'revision-1',
+        updatedAt: now,
+      });
+  
+      vi.mocked(api.uploadRecording).mockResolvedValue(makeRecording());
+      vi.mocked(api.getRecording).mockResolvedValue(
+        makeRecording({
+          status: 'transcribed',
+          transcriptId: 'tx-1',
+        }),
+      );
+      vi.mocked(api.fetchRecordingTranscript).mockResolvedValue(makeTranscript());
+  
+      vi.mocked(api.createPromptPackage).mockResolvedValue({
+        id: 'pkg-1',
+        recordingId: 'rec-1',
+        transcriptId: 'tx-1',
+        studentId: null,
+        profilePath: null,
+        templateVersion: 'v1',
+        notes: null,
+        storageUri: 'memory://prompt/pkg-1',
+        text: 'Prompt package output',
+        createdAt: now,
+        updatedAt: now,
+      });
+      vi.mocked(api.fetchPromptPackage).mockResolvedValue({
+        id: 'pkg-1',
+        recordingId: 'rec-1',
+        transcriptId: 'tx-1',
+        studentId: null,
+        profilePath: null,
+        templateVersion: 'v1',
+        notes: null,
+        storageUri: 'memory://prompt/pkg-1',
+        text: 'Prompt package output',
+        createdAt: now,
+        updatedAt: now,
+      });
+      vi.mocked(api.generateDraft).mockResolvedValue({
+        text: '# Generated assignment draft',
+        provider: 'openai',
+        model: 'gpt-5.2',
+        quota: {
+          source: 'hybrid',
+          lastUpdatedAt: now,
+        },
+      });
+  
+      vi.mocked(api.validateMarkdown).mockResolvedValue({
+        ok: true,
+        errors: [],
+        warnings: [],
+      });
+  
+      vi.mocked(api.createDraft).mockResolvedValue({
+        id: 'draft-1',
+        promptPackageId: 'pkg-1',
+        studentId: null,
+        storageUri: 'memory://drafts/draft-1',
+        createdBy: 'user-1',
+        text: '# Draft markdown',
+        createdAt: now,
+        updatedAt: now,
+      });
+      vi.mocked(api.fetchDraft).mockResolvedValue({
+        id: 'draft-1',
+        promptPackageId: 'pkg-1',
+        studentId: null,
+        storageUri: 'memory://drafts/draft-1',
+        createdBy: 'user-1',
+        text: '# Draft markdown',
+        createdAt: now,
+        updatedAt: now,
+      });
+  
+      vi.mocked(api.updateDraft).mockResolvedValue({
+        id: 'draft-1',
+        promptPackageId: 'pkg-1',
+        studentId: null,
+        storageUri: 'memory://drafts/draft-1',
+        createdBy: 'user-1',
+        text: '# Draft markdown',
+        createdAt: now,
+        updatedAt: now,
+      });
+  
+      vi.mocked(api.materializeDraft).mockResolvedValue({
+        draftId: 'draft-1',
+        jobId: 'job-1',
+        mdPath: '/tmp/assignment.md',
+        mdStorageUri: 's3://esl/drafts/draft-1.md',
+      });
+  
+      vi.mocked(api.approveJob).mockResolvedValue({ jobId: 'job-1' } as never);
+      vi.mocked(api.getJobStatus).mockResolvedValue({
+        jobId: 'job-1',
+        state: 'succeeded',
+        publishTarget: 'notion',
+        notionUrl: 'https://www.notion.so/published-assignment',
+      } as never);
+      vi.mocked(api.fetchJobProvenance).mockResolvedValue({
+        job: {
+          id: 'job-1',
+          state: 'succeeded',
+          createdAt: now,
+          updatedAt: now,
+          startedAt: now,
+          finishedAt: now,
+          sourceJobId: null,
+          manifestPath: null,
+          notionUrl: 'https://www.notion.so/published-assignment',
+          anytypeUrl: null,
+          error: null,
+        },
+        sourceJob: null,
+        recording: null,
+        transcript: null,
+        promptPackage: null,
+        draft: null,
+        tts: null,
+        lineage: null,
+        actions: [],
+      });
+      vi.mocked(api.rerunAudioJob).mockResolvedValue({
+        success: true,
+        message: 'Audio rerun queued',
+        actionType: 'rerun_audio',
+        jobId: 'job-1',
+      });
+      vi.mocked(api.rerunPublishJob).mockResolvedValue({
+        success: true,
+        message: 'Publish rerun queued',
+        actionType: 'rerun_publish',
+        jobId: 'job-1',
+      });
+      vi.mocked(api.cancelJob).mockResolvedValue({
+        success: true,
+        message: 'Job cancelled',
+        actionType: 'cancel',
+        jobId: 'job-1',
+      });
+      vi.mocked(api.retryRecordingTranscription).mockResolvedValue(
+        makeRecording({
+          status: 'transcribing',
+        }),
+      );
+      vi.mocked(api.updateRecordingTranscript).mockResolvedValue(
+        makeTranscript({
+          text: 'Saved transcript text',
+        }),
+      );
+      vi.mocked(api.renderHtmlPreview).mockResolvedValue({
+        html: '<html><body><h1>Preview</h1></body></html>',
+      });
+}
+
+export const testAct = act;
+export const testRender = render;
+export const testScreen: typeof screen = screen;
+export const testWaitFor = waitFor;
+export const testWithin = within;
+export const testUserEvent = userEvent;
+export const testExpect = expect;
+export const testVi = vi;
+export const testApi = api;
+export const testMinimalAssignment = MinimalAssignment;
+export { now, UI_WAIT_TIMEOUT_MS, INTEGRATION_TEST_TIMEOUT_MS };
