@@ -44,6 +44,7 @@
     "docker:up": "pnpm docker:prepare && docker compose -p esl-pipeline -f docker-compose.yml up -d",
     "docker:up:build": "pnpm docker:prepare && docker compose -p esl-pipeline -f docker-compose.yml up -d --build",
     "docker:dev": "pnpm docker:up",
+    "docker:restart": "pnpm docker:dev:down && pnpm docker:up",
     "docker:dev:build": "pnpm docker:up:build",
     "docker:dev:down": "docker compose -p esl-pipeline -f docker-compose.yml down --remove-orphans",
     "docker:dev:ps": "docker compose -p esl-pipeline -f docker-compose.yml ps",
