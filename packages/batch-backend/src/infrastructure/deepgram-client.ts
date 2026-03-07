@@ -1,4 +1,4 @@
-import { createClient } from '@deepgram/sdk';
+import { DeepgramClient } from '@deepgram/sdk';
 
 export interface DeepgramClientConfig {
   apiKey?: string | null;
@@ -7,10 +7,10 @@ export interface DeepgramClientConfig {
 
 export function createDeepgramClient(config: DeepgramClientConfig) {
   if (config.accessToken) {
-    return createClient({ accessToken: config.accessToken });
+    return new DeepgramClient({ accessToken: config.accessToken });
   }
   if (config.apiKey) {
-    return createClient(config.apiKey);
+    return new DeepgramClient({ apiKey: config.apiKey });
   }
-  return createClient();
+  return new DeepgramClient();
 }
