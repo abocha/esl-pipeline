@@ -1,5 +1,10 @@
 import { describeMdValidatorSuite } from './validator.test-harness.js';
 
+interface ValidationIssueLike {
+  code?: string;
+  message: string;
+}
+
 describeMdValidatorSuite(
   'md-validator [ruleset-and-section-contracts]',
   ({ buildBaseDoc, expect, fixturesPath, it, mkdtemp, path, tmpdir, validateMarkdownFile, writeFile }) => {
@@ -39,11 +44,13 @@ describeMdValidatorSuite(
       requestedId: 'ielts-academic',
     });
     expect(res.warnings.join('\n')).toMatch(/unknown learning preset/i);
-    expect(res.issues?.some((issue) => issue.code === 'ruleset.unknown_preset_fallback')).toBe(
-      true,
-    );
-    const fallbackIssues = (res.issues ?? []).filter((issue) =>
-      /unknown learning preset/i.test(issue.message),
+    expect(
+      res.issues?.some(
+        (issue: ValidationIssueLike) => issue.code === 'ruleset.unknown_preset_fallback',
+      ),
+    ).toBe(true);
+    const fallbackIssues = (res.issues ?? []).filter(
+      (issue: ValidationIssueLike) => /unknown learning preset/i.test(issue.message),
     );
     expect(fallbackIssues).toHaveLength(1);
     expect(fallbackIssues[0]).toMatchObject({
@@ -78,7 +85,9 @@ describeMdValidatorSuite(
     });
     expect(res.warnings.join('\n')).not.toMatch(/unknown learning preset/i);
     expect(
-      (res.issues ?? []).some((issue) => issue.code === 'ruleset.unknown_preset_fallback'),
+      (res.issues ?? []).some(
+        (issue: ValidationIssueLike) => issue.code === 'ruleset.unknown_preset_fallback',
+      ),
     ).toBe(false);
   });
 
