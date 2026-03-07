@@ -107,8 +107,8 @@ Runbooks:
 Deployment changes should preserve green CI for:
 
 - `static checks (node 24.x)`
-- `postgres tests (blocking)`
-- `worker integration (blocking)`
+- `integration lane (blocking)`
+- `backend db + worker integration (blocking)`
 
 Workflow source:
 [`/.github/workflows/ci.yml`](../../.github/workflows/ci.yml)

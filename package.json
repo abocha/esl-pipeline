@@ -79,7 +79,9 @@
     "ops:status": "bash scripts/docker/postgres-ops-status.sh",
     "ops:status:json": "bash scripts/docker/postgres-ops-status.sh --json",
     "smoke": "pnpm --filter @esl-pipeline/orchestrator test",
-    "test": "pnpm -r --filter './packages/*' run test",
+    "test": "pnpm -r --parallel --workspace-concurrency=4 --filter './packages/*' run test",
+    "test:integration": "pnpm build && pnpm -r --parallel --workspace-concurrency=4 --filter './packages/*' --if-present run test:integration",
+    "test:topo": "pnpm -r --filter './packages/*' run test",
     "test:watch": "pnpm -r --filter './packages/*' --if-present run test:watch",
     "typecheck": "pnpm -r --filter './packages/*' --if-present run typecheck"
   },
