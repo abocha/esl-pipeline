@@ -1,3 +1,4 @@
+import type * as ApiTypes from '../../utils/api';
 import { beforeEach, describe, it } from 'vitest';
 
 import {
@@ -9,6 +10,7 @@ import {
   now,
   previewCurrentDraft,
   setupMinimalAssignmentTest,
+  testExpect as expect,
   testApi as api,
   testMinimalAssignment as MinimalAssignment,
   testRender as render,
@@ -444,10 +446,10 @@ describe('MinimalAssignment - resume and rehydration', () => {
     'omits stale preset when resumed before options load, then restores valid preset after options resolve',
     async () => {
       const user = userEvent.setup();
-      let resolveJobOptions: (value: api.JobOptionsResponse) => void = () => {};
+      let resolveJobOptions: (value: ApiTypes.JobOptionsResponse) => void = () => {};
       vi.mocked(api.fetchJobOptions).mockImplementationOnce(
         () =>
-          new Promise<api.JobOptionsResponse>((resolve) => {
+          new Promise<ApiTypes.JobOptionsResponse>((resolve) => {
             resolveJobOptions = (value) => resolve(value);
           }),
       );
@@ -567,7 +569,7 @@ describe('MinimalAssignment - resume and rehydration', () => {
 
   it('re-normalizes resumed legacy preset against loaded learning preset catalog before publish', async () => {
     const user = userEvent.setup();
-    let resolveJobStatus: (value: api.JobStatus) => void = () => {};
+    let resolveJobStatus: (value: ApiTypes.JobStatus) => void = () => {};
 
     vi.mocked(api.fetchJobOptions).mockResolvedValueOnce({
       presets: ['b1-default', 'b2-default'],
@@ -618,7 +620,7 @@ describe('MinimalAssignment - resume and rehydration', () => {
     });
     vi.mocked(api.getJobStatus).mockImplementationOnce(
       () =>
-        new Promise<api.JobStatus>((resolve) => {
+        new Promise<ApiTypes.JobStatus>((resolve) => {
           resolveJobStatus = resolve;
         }),
     );

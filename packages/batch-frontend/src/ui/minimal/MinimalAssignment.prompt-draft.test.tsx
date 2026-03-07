@@ -4,6 +4,7 @@ import {
   makeRecording,
   now,
   setupMinimalAssignmentTest,
+  testExpect as expect,
   testApi as api,
   testMinimalAssignment as MinimalAssignment,
   testRender as render,

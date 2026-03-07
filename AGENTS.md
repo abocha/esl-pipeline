@@ -96,7 +96,8 @@ For exact invariants and forbidden changes: [`docs/reference/agents-ssot.md`](do
 - Full checks: `pnpm check`
 - Build: `pnpm build`
 - Lint: `pnpm lint`
-- Test: `pnpm test`
+- Test (unit lane): `pnpm test`
+- Test (integration lane): `pnpm test:integration`
 - Smoke: `pnpm smoke`
 - Batch local dev: `pnpm dev:batch`
 
