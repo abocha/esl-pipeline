@@ -43,13 +43,13 @@ interface DeepgramResult {
   };
 }
 
-interface DeepgramResponseLike {
-  result?: unknown;
-  error?: unknown;
-}
-
 interface RetryableStatusError {
   status?: unknown;
+  statusCode?: unknown;
+}
+
+interface DeepgramAcceptedResponseLike {
+  request_id?: unknown;
 }
 
 function resolveSttProvider(
@@ -63,16 +63,46 @@ function resolveSttProvider(
   return fallback;
 }
 
+function isDeepgramAcceptedResponse(value: unknown): value is DeepgramAcceptedResponseLike {
+  if (!value || typeof value !== 'object') return false;
+  return typeof (value as DeepgramAcceptedResponseLike).request_id === 'string';
+}
+
+function asError(error: unknown, fallbackMessage: string): Error {
+  if (error instanceof Error) return error;
+  if (typeof error === 'string') return new Error(error);
+  if (error && typeof error === 'object' && 'message' in error) {
+    const message = (error as { message?: unknown }).message;
+    if (typeof message === 'string' && message.trim()) {
+      return new Error(message);
+    }
+  }
+  return new Error(fallbackMessage);
+}
+
+function resolveDeepgramResponse(value: unknown): DeepgramResult {
+  if (isDeepgramAcceptedResponse(value)) {
+    const requestId = String(value.request_id);
+    throw new Error(
+      `Deepgram returned async accepted response (request_id=${requestId}); synchronous transcription response is required.`,
+    );
+  }
+
+  return asDeepgramResult(value);
+}
+
 export interface TranscribeDependencies {
   config: BatchBackendConfig;
   storage: TranscriptionStorage;
   deepgramClient: {
     listen: {
-      prerecorded: {
-        transcribeFile: (
-          stream: Readable,
-          options: Record<string, unknown>,
-        ) => Promise<DeepgramResponseLike>;
+      v1: {
+        media: {
+          transcribeFile: (
+            stream: Readable,
+            options: Record<string, unknown>,
+          ) => Promise<unknown>;
+        };
       };
     };
   };
@@ -314,51 +344,44 @@ async function transcribeWithDeepgram(args: {
   model: string;
   language: string;
 }): Promise<{ result: DeepgramResult; fallbackUsed: boolean }> {
-  const primary = await transcribeAttempt(args, {
+  const primaryOptions = {
     model: args.model,
     language: args.language,
     multichannel: true,
     punctuate: true,
     smart_format: true,
     utterances: true,
-  });
-
-  if (primary.result && !primary.error) {
-    const primaryResult = asDeepgramResult(primary.result);
-    const channelCount = getChannelCount(primaryResult);
-    if (channelCount === 1) {
-      const fallback = await transcribeAttempt(args, {
-        model: args.model,
-        language: args.language,
-        diarize: true,
-        utterances: true,
-        punctuate: true,
-        smart_format: true,
-      });
-
-      if (fallback.result && !fallback.error) {
-        return { result: asDeepgramResult(fallback.result), fallbackUsed: true };
-      }
-    }
-
-    return { result: primaryResult, fallbackUsed: false };
-  }
-
-  const fallback = await transcribeAttempt(args, {
+  };
+  const fallbackOptions = {
     model: args.model,
     language: args.language,
     diarize: true,
     utterances: true,
     punctuate: true,
     smart_format: true,
-  });
+  };
 
-  if (fallback.error || !fallback.result) {
-    const error = fallback.error ?? primary.error ?? new Error('Deepgram transcription failed');
-    throw error instanceof Error ? error : new Error(String(error));
+  try {
+    const primaryResult = await transcribeAttempt(args, primaryOptions);
+    const channelCount = getChannelCount(primaryResult);
+    if (channelCount === 1) {
+      try {
+        const fallbackResult = await transcribeAttempt(args, fallbackOptions);
+        return { result: fallbackResult, fallbackUsed: true };
+      } catch {
+        return { result: primaryResult, fallbackUsed: false };
+      }
+    }
+
+    return { result: primaryResult, fallbackUsed: false };
+  } catch (primaryError) {
+    try {
+      const fallbackResult = await transcribeAttempt(args, fallbackOptions);
+      return { result: fallbackResult, fallbackUsed: true };
+    } catch (fallbackError) {
+      throw asError(fallbackError ?? primaryError, 'Deepgram transcription failed');
+    }
   }
-
-  return { result: asDeepgramResult(fallback.result), fallbackUsed: true };
 }
 
 interface ElevenLabsWord {
@@ -482,21 +505,17 @@ async function transcribeAttempt(
     storageUri: string;
   },
   options: Record<string, unknown>,
-): Promise<DeepgramResponseLike> {
+): Promise<DeepgramResult> {
   let lastError: unknown = null;
 
   for (let attempt = 1; attempt <= TRANSCRIBE_ATTEMPT_MAX_RETRIES; attempt += 1) {
     const stream = await args.storage.getStream(args.storageUri);
     try {
-      const response = await args.client.listen.prerecorded.transcribeFile(stream, options);
-      if (!response.error || !isRetryableTranscriptionError(response.error)) {
-        return response;
-      }
-
-      lastError = response.error;
+      const response = await args.client.listen.v1.media.transcribeFile(stream, options);
+      return resolveDeepgramResponse(response);
     } catch (error) {
       if (!isRetryableTranscriptionError(error)) {
-        return { result: undefined, error };
+        throw asError(error, 'Deepgram transcription failed');
       }
       lastError = error;
     } finally {
@@ -509,10 +528,7 @@ async function transcribeAttempt(
     }
   }
 
-  return {
-    result: undefined,
-    error: lastError ?? new Error('Deepgram transcription failed after retries'),
-  };
+  throw asError(lastError, 'Deepgram transcription failed after retries');
 }
 
 function isRetryableTranscriptionError(error: unknown): boolean {
@@ -528,8 +544,10 @@ function isRetryableTranscriptionError(error: unknown): boolean {
 
 function getRetryableStatus(error: unknown): number | null {
   if (!error || typeof error !== 'object') return null;
-  const candidate = (error as RetryableStatusError).status;
-  return typeof candidate === 'number' ? candidate : null;
+  const status = (error as RetryableStatusError).status;
+  if (typeof status === 'number') return status;
+  const statusCode = (error as RetryableStatusError).statusCode;
+  return typeof statusCode === 'number' ? statusCode : null;
 }
 
 function extractErrorMessage(error: unknown): string {
