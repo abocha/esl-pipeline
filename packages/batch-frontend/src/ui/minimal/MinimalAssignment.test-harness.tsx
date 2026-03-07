@@ -1,7 +1,7 @@
 /* eslint-disable react-refresh/only-export-components, unicorn/prefer-export-from */
 import { act, configure, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { vi } from 'vitest';
+import { expect, vi } from 'vitest';
 
 import * as api from '../../utils/api';
 import { MinimalAssignment } from './MinimalAssignment';
@@ -523,10 +523,11 @@ export function setupMinimalAssignmentTest() {
 
 export const testAct = act;
 export const testRender = render;
-export const testScreen = screen;
+export const testScreen: typeof screen = screen;
 export const testWaitFor = waitFor;
 export const testWithin = within;
 export const testUserEvent = userEvent;
+export const testExpect = expect;
 export const testVi = vi;
 export const testApi = api;
 export const testMinimalAssignment = MinimalAssignment;

@@ -210,7 +210,8 @@ Verification commands (MUST pass before merging behavior changes):
 - `pnpm install`
 - `pnpm -r build`
 - `pnpm lint`
-- `pnpm test`
+- `pnpm test` (unit lane)
+- `pnpm test:integration` (integration lane)
 - `pnpm smoke` (or equivalent orchestrator smoke/integration suite)
 - Dependency alignment:
   - `pnpm deps:pin` — normalize shared versions (AWS SDK, Notion, ElevenLabs, React/Vite, Fastify/pg/Redis/bullmq, etc.).
@@ -950,7 +951,8 @@ Agents MUST treat new stages as high-risk changes requiring explicit approval.
 Essential commands:
 
 - `pnpm lint`
-- `pnpm test`
+- `pnpm test` (unit lane)
+- `pnpm test:integration` (integration lane)
 - `pnpm -r build`
 - `pnpm --filter @esl-pipeline/orchestrator test`
 - `pnpm smoke` or orchestrator smoke/integration tests

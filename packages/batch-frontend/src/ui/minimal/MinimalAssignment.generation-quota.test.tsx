@@ -1,3 +1,4 @@
+import type * as ApiTypes from '../../utils/api';
 import { beforeEach, describe, it } from 'vitest';
 
 import {
@@ -7,6 +8,7 @@ import {
   previewCurrentDraft,
   preparePromptReady,
   setupMinimalAssignmentTest,
+  testExpect as expect,
   testAct as act,
   testApi as api,
   testMinimalAssignment as MinimalAssignment,
@@ -460,10 +462,10 @@ describe('MinimalAssignment - generation and quota', () => {
     'ignores stale generation responses after flow reset',
     async () => {
       const user = userEvent.setup();
-      let resolveGeneration: (value: api.GenerateDraftResponse) => void = () => {};
+      let resolveGeneration: (value: ApiTypes.GenerateDraftResponse) => void = () => {};
       vi.mocked(api.generateDraft).mockImplementationOnce(
         () =>
-          new Promise<api.GenerateDraftResponse>((resolve) => {
+          new Promise<ApiTypes.GenerateDraftResponse>((resolve) => {
             resolveGeneration = resolve;
           }),
       );
