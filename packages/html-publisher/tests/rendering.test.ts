@@ -248,6 +248,114 @@ Two
 :::`;
     const html = await renderToHtml(markdown, 'Grammar');
     expect(html).toContain('<div class="column-list grammar-matrix-grid">');
+    expect(html).toContain('.column-list.grammar-matrix-grid .column p,');
+    expect(html).toContain('.column-list.grammar-matrix-grid .column li {');
+    expect(html).toContain('.column-list.grammar-matrix-grid .column > .grammar-card-heading {');
+    expect(html).toContain('.column-list.grammar-matrix-grid .column > p > em:only-child {');
+    expect(html).toContain('text-align: justify;');
+    expect(html).toContain('border-bottom: 1px dashed');
+    expect(html).toContain('class="grammar-card-heading"');
+  });
+
+  it('normalizes rule line breaks and marks long grammar prose paragraphs', async () => {
+    const markdown = `### A. 👀 Notice the Grammar
+
+:::column-list
+:::column
+**1. Is it GENERAL?**
+
+*(Am I talking about this whole category or idea?)*
+
+**Rule:**
+Use **Zero Article (Ø)**
+for plurals and uncountables.
+:::
+:::`;
+    const html = await renderToHtml(markdown, 'Grammar Rule Normalize');
+    const renderedDocument = createRenderedDocument(html);
+    const heading = renderedDocument.querySelector('.column-list.grammar-matrix-grid .column > .grammar-card-heading');
+    expect(heading?.textContent?.trim()).toBe('1. Is it GENERAL?');
+
+    const ruleParagraph = [...renderedDocument.querySelectorAll('.column-list.grammar-matrix-grid .column > p')]
+      .find((paragraph) => paragraph.textContent?.includes('Rule:'));
+    expect(ruleParagraph).toBeTruthy();
+    expect(ruleParagraph?.classList.contains('grammar-card-heading')).toBe(false);
+    expect(ruleParagraph?.textContent?.replaceAll(/\s+/g, ' ').trim()).toBe(
+      'Rule: Use Zero Article (Ø) for plurals and uncountables.',
+    );
+    expect(ruleParagraph?.innerHTML.includes('<br')).toBe(false);
+  });
+
+  it('splits stacked grammar card lines so rule text is not styled as a heading', async () => {
+    const markdown = `### A. 👀 Notice the Grammar
+
+:::column-list
+:::column
+**1. Is it GENERAL?**
+*(Am I talking about this whole category or idea?)*
+**Rule:** Use **Zero Article (Ø)** for plurals and uncountables.
+- "I love Ø music."
+- "Ø Cars are expensive."
+:::
+:::column
+**2. Is it EXACT & IDENTIFIABLE?**
+*(Can my listener identify exactly which one I mean without me explaining?)*
+**Rule:** Use **The**.
+- "**The** music at the party was loud." *(The specific music there).*
+:::
+:::`;
+    const html = await renderToHtml(markdown, 'Stacked Grammar Card');
+    const renderedDocument = createRenderedDocument(html);
+    const firstColumn = renderedDocument.querySelector('.column-list.grammar-matrix-grid .column');
+    expect(firstColumn).toBeTruthy();
+
+    const directParagraphs = firstColumn
+      ? [...firstColumn.querySelectorAll(':scope > p')]
+      : [];
+    expect(directParagraphs.length).toBeGreaterThanOrEqual(3);
+    expect(firstColumn?.querySelectorAll(':scope > .grammar-card-heading').length).toBe(1);
+
+    const ruleParagraph = directParagraphs.find((paragraph) =>
+      paragraph.textContent?.includes('Rule:'),
+    );
+    expect(ruleParagraph).toBeTruthy();
+    expect(ruleParagraph?.classList.contains('grammar-card-heading')).toBe(false);
+    expect(ruleParagraph?.textContent?.replaceAll(/\s+/g, ' ').trim()).toBe(
+      'Rule: Use Zero Article (Ø) for plurals and uncountables.',
+    );
+    expect(ruleParagraph?.innerHTML.includes('<br')).toBe(false);
+  });
+
+  it('applies targeted widow lock to grammar card italics and inline parenthetical notes', async () => {
+    const markdown = `### A. 👀 Notice the Grammar
+
+:::column-list
+:::column
+**1. Is it GENERAL?**
+*(Am I talking about this whole category or idea?)*
+**Rule:** Use **Zero Article (Ø)** for plurals and uncountables.
+- "I love Ø music."
+:::
+:::column
+**2. Is it EXACT & IDENTIFIABLE?**
+*(Can my listener identify exactly which one I mean without me explaining?)*
+**Rule:** Use **The**.
+- "**The** music at the party was loud." *(The specific music there).*
+:::
+:::`;
+    const html = await renderToHtml(markdown, 'Grammar Widows');
+    const renderedDocument = createRenderedDocument(html);
+
+    const firstCardQuestion = renderedDocument.querySelector(
+      '.column-list.grammar-matrix-grid .column:first-child > p > em',
+    );
+    expect(firstCardQuestion?.textContent).toContain('or\u00A0idea?)');
+
+    const firstInlineNote = renderedDocument.querySelector(
+      '.column-list.grammar-matrix-grid .column li > em',
+    );
+    expect(firstInlineNote?.textContent).toContain('(The\u00A0specific');
+    expect(firstInlineNote?.textContent).toContain('music\u00A0there).');
   });
 
   it('leaves other column-list blocks unscoped', async () => {
@@ -359,6 +467,8 @@ Two
     expect(html).toContain('.pronunciation-word-content');
     expect(html).toContain('Charis+SIL');
     expect(html).toContain("font-family: 'Charis SIL'");
+    expect(html).toContain('justify-content: flex-start;');
+    expect(html).not.toContain('justify-content: space-between;');
     expect(html).toContain('shadow_sentence');
     expect(html).not.toContain('item.replaceChildren(wordMain);');
     expect(html).toContain('speechSynthesis');
@@ -536,6 +646,9 @@ Two
       "wouldn't",
     );
     expect(wouldntItem?.querySelector('.pronunciation-word-content')?.textContent).not.toContain(
+      '—',
+    );
+    expect(wouldntItem?.querySelector('.pronunciation-word-content')?.textContent).not.toContain(
       '/ˈwʊd.ənt/',
     );
     expect(
@@ -545,6 +658,59 @@ Two
     expect(wouldntItem?.querySelector('.pronunciation-word-note')?.textContent).toBe(
       '(wu-DNT, NOT wud-not!)',
     );
+  });
+
+  it('supports word drill lines without dash delimiters', async () => {
+    const markdown = `### C. Pronunciation Micro-Focus
+
+**Mode:** shadow_sentence
+**Shadow sentence:** I wouldn't have made an appointment if I had known the price.
+
+1. wouldn't /ˈwʊd.ənt/
+2. have /əv/
+3. appointment /əˈpɔɪnt.mənt/`;
+    const html = await renderToHtml(markdown, 'Pronunciation No Dash');
+    const renderedDocument = createRenderedDocument(html);
+
+    const listItems = [...renderedDocument.querySelectorAll('.markdown-body li')];
+    const wouldntItem = listItems.find((item) => item.textContent?.includes("wouldn't"));
+
+    expect(wouldntItem?.querySelector('.word-tts-button')?.textContent).toBe('Play');
+    expect(wouldntItem?.querySelector('.word-tts-transcription')?.textContent).toBe('/ˈwʊd.ənt/');
+    expect(wouldntItem?.querySelector('.pronunciation-word-content')?.textContent).toContain(
+      "wouldn't",
+    );
+    expect(wouldntItem?.querySelector('.pronunciation-word-content')?.textContent).not.toContain(
+      '—',
+    );
+    expect(wouldntItem?.textContent?.match(/\/ˈwʊd.ənt\//g)?.length ?? 0).toBe(1);
+  });
+
+  it('preserves slash-bearing words for dashed and no-dash pronunciation lines', async () => {
+    const markdown = `### C. Pronunciation Micro-Focus
+
+**Mode:** shadow_sentence
+**Shadow sentence:** Please practice and/or quickly.
+
+1. and/or — /ˈændɔːr/
+2. either/or /ˈaɪðərɔːr/
+3. quickly /ˈkwɪkli/`;
+    const html = await renderToHtml(markdown, 'Pronunciation Slash Word');
+    const renderedDocument = createRenderedDocument(html);
+
+    const listItems = [...renderedDocument.querySelectorAll('.markdown-body li')];
+    const andOrItem = listItems.find((item) => item.textContent?.includes('and/or'));
+    const eitherOrItem = listItems.find((item) => item.textContent?.includes('either/or'));
+
+    expect(andOrItem?.querySelector('.pronunciation-word-content')?.textContent).toContain('and/or');
+    expect(andOrItem?.querySelector('.word-tts-transcription')?.textContent).toBe('/ˈændɔːr/');
+    expect(andOrItem?.textContent?.match(/\/ˈændɔːr\//g)?.length ?? 0).toBe(1);
+
+    expect(eitherOrItem?.querySelector('.pronunciation-word-content')?.textContent).toContain(
+      'either/or',
+    );
+    expect(eitherOrItem?.querySelector('.word-tts-transcription')?.textContent).toBe('/ˈaɪðərɔːr/');
+    expect(eitherOrItem?.textContent?.match(/\/ˈaɪðərɔːr\//g)?.length ?? 0).toBe(1);
   });
 });
 
