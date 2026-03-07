@@ -1,5 +1,9 @@
 import { describeMdValidatorSuite } from './validator.test-harness.js';
 
+interface SpeakerProfileLike {
+  role?: string;
+}
+
 describeMdValidatorSuite(
   'md-validator [speaker-and-study-text]',
   ({ buildBaseDoc, expect, it, mkdtemp, path, tmpdir, validateMarkdownFile, writeFile }) => {
@@ -321,7 +325,7 @@ content
 
     const res = await validateMarkdownFile(file);
     expect(res.errors.join('\n')).not.toMatch(/speaker_profiles\.\d+\.role/i);
-    expect(res.meta?.speaker_profiles?.map((profile) => profile.role)).toEqual([
+    expect(res.meta?.speaker_profiles?.map((profile: SpeakerProfileLike) => profile.role)).toEqual([
       'teacher',
       'student',
       'teacher',
@@ -410,7 +414,7 @@ content
     expect(res.errors.join('\n')).not.toMatch(/speaker_profiles role/i);
     expect(res.warnings.join('\n')).toMatch(/speaker_profiles role "alien ambassador"/i);
     expect(res.warnings.join('\n')).toMatch(/Role score will be 0/i);
-    expect(res.meta?.speaker_profiles?.map((profile) => profile.role)).toEqual([
+    expect(res.meta?.speaker_profiles?.map((profile: SpeakerProfileLike) => profile.role)).toEqual([
       undefined,
       'student',
     ]);
