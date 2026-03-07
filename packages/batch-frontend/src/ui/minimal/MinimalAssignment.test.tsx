@@ -1,4 +1,4 @@
-import { act, render, screen, waitFor, within } from '@testing-library/react';
+import { act, configure, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -55,7 +55,9 @@ vi.mock('../../utils/api', () => ({
   retryRecordingTranscription: vi.fn(),
   rerunAudioJob: vi.fn(),
   rerunPublishJob: vi.fn(),
-  renderHtmlPreview: vi.fn().mockResolvedValue({ html: '<html><body><h1>Preview</h1></body></html>' }),
+  renderHtmlPreview: vi
+    .fn()
+    .mockResolvedValue({ html: '<html><body><h1>Preview</h1></body></html>' }),
   upsertProfileContent: vi.fn(),
   updateDraft: vi.fn(),
   updateRecordingTranscript: vi.fn(),
@@ -90,6 +92,9 @@ vi.mock('../shared/UploadProgress', () => ({
 }));
 
 const now = '2026-02-05T00:00:00.000Z';
+const UI_WAIT_TIMEOUT_MS = 5_000;
+const INTEGRATION_TEST_TIMEOUT_MS = 20_000;
+configure({ asyncUtilTimeout: UI_WAIT_TIMEOUT_MS });
 
 function makeJobStatus(overrides: Partial<api.JobStatus> = {}): api.JobStatus {
   return {
@@ -178,15 +183,21 @@ function makeLearningPreset(
 async function publishAssignmentFlow(user: ReturnType<typeof userEvent.setup>) {
   await user.click(screen.getByRole('button', { name: /Drop audio file/i }));
 
-  await waitFor(() => {
-    expect(screen.getByDisplayValue('Student transcript text')).toBeTruthy();
-  });
+  await waitFor(
+    () => {
+      expect(screen.getByDisplayValue('Student transcript text')).toBeTruthy();
+    },
+    { timeout: UI_WAIT_TIMEOUT_MS },
+  );
 
   await user.click(screen.getByRole('button', { name: /Generate prompt/i }));
 
-  await waitFor(() => {
-    expect(screen.getByDisplayValue('Prompt package output')).toBeTruthy();
-  });
+  await waitFor(
+    () => {
+      expect(screen.getByDisplayValue('Prompt package output')).toBeTruthy();
+    },
+    { timeout: UI_WAIT_TIMEOUT_MS },
+  );
 
   const draftTextarea = screen.getByRole('textbox', { name: /Draft markdown/i });
   expect(draftTextarea).toBeTruthy();
@@ -198,30 +209,42 @@ async function publishAssignmentFlow(user: ReturnType<typeof userEvent.setup>) {
 
   await user.click(screen.getByRole('button', { name: /Publish assignment/i }));
 
-  await waitFor(() => {
-    expect(screen.getAllByText(/Job ID: job-1/i).length).toBeGreaterThan(0);
-  });
+  await waitFor(
+    () => {
+      expect(screen.getAllByText(/Job ID: job-1/i).length).toBeGreaterThan(0);
+    },
+    { timeout: UI_WAIT_TIMEOUT_MS },
+  );
 }
 
 async function previewCurrentDraft(user: ReturnType<typeof userEvent.setup>) {
   await user.click(screen.getByRole('button', { name: /Preview current draft/i }));
-  await waitFor(() => {
-    expect(screen.getByText('Preview ready for current draft.')).toBeTruthy();
-  });
+  await waitFor(
+    () => {
+      expect(screen.getByText('Preview ready for current draft.')).toBeTruthy();
+    },
+    { timeout: UI_WAIT_TIMEOUT_MS },
+  );
 }
 
 async function preparePromptReady(user: ReturnType<typeof userEvent.setup>) {
   await user.click(screen.getByRole('button', { name: /Drop audio file/i }));
 
-  await waitFor(() => {
-    expect(screen.getByDisplayValue('Student transcript text')).toBeTruthy();
-  });
+  await waitFor(
+    () => {
+      expect(screen.getByDisplayValue('Student transcript text')).toBeTruthy();
+    },
+    { timeout: UI_WAIT_TIMEOUT_MS },
+  );
 
   await user.click(screen.getByRole('button', { name: /Generate prompt/i }));
 
-  await waitFor(() => {
-    expect(screen.getByDisplayValue('Prompt package output')).toBeTruthy();
-  });
+  await waitFor(
+    () => {
+      expect(screen.getByDisplayValue('Prompt package output')).toBeTruthy();
+    },
+    { timeout: UI_WAIT_TIMEOUT_MS },
+  );
 }
 
 describe('MinimalAssignment', () => {
@@ -586,8 +609,9 @@ describe('MinimalAssignment', () => {
 
   it('rehydrates workflow state from server job context in query params', async () => {
     const user = userEvent.setup();
-    let resolveProfileOptions: (value: { profiles: { id: string; label: string }[] }) => void =
-      () => {};
+    let resolveProfileOptions: (value: {
+      profiles: { id: string; label: string }[];
+    }) => void = () => {};
     vi.mocked(api.listProfileContents).mockImplementationOnce(
       () =>
         new Promise<{ profiles: { id: string; label: string }[] }>((resolve) => {
@@ -717,9 +741,9 @@ describe('MinimalAssignment', () => {
     expect(await screen.findByDisplayValue('Recovered transcript')).toBeTruthy();
     expect(await screen.findByDisplayValue('Recovered prompt')).toBeTruthy();
     expect(await screen.findByDisplayValue('# Recovered draft')).toBeTruthy();
-    expect((await screen.findByRole('combobox', { name: /Preset/i }) as HTMLSelectElement).value).toBe(
-      'b2-default',
-    );
+    expect(
+      ((await screen.findByRole('combobox', { name: /Preset/i })) as HTMLSelectElement).value,
+    ).toBe('b2-default');
     resolveProfileOptions({ profiles: [{ id: 'profile-default.md', label: 'Default Profile' }] });
     expect(screen.getAllByText(/Anytype server unreachable/i).length).toBeGreaterThan(0);
     await user.click(screen.getByRole('button', { name: /Generate prompt/i }));
@@ -1393,33 +1417,43 @@ describe('MinimalAssignment', () => {
     expect(screen.queryByText(/RPM: 5/i)).toBeNull();
   });
 
-  it('updates quota panel with latest successful generation response', async () => {
-    const user = userEvent.setup();
-    vi.mocked(api.generateDraft).mockResolvedValueOnce({
-      text: '# Generated assignment draft',
-      provider: 'openai',
-      model: 'gpt-5.2',
-      quota: {
-        source: 'provider',
-        lastUpdatedAt: '2026-02-18T00:04:00.000Z',
-        requestsPerMinute: 42,
-        requestsPerDay: 1000,
-      },
-    });
+  it(
+    'updates quota panel with latest successful generation response',
+    async () => {
+      const user = userEvent.setup();
+      vi.mocked(api.generateDraft).mockResolvedValueOnce({
+        text: '# Generated assignment draft',
+        provider: 'openai',
+        model: 'gpt-5.2',
+        quota: {
+          source: 'provider',
+          lastUpdatedAt: '2026-02-18T00:04:00.000Z',
+          requestsPerMinute: 42,
+          requestsPerDay: 1000,
+        },
+      });
 
-    render(<MinimalAssignment />);
-    await preparePromptReady(user);
-    await user.selectOptions(screen.getByRole('combobox', { name: /Generation provider/i }), 'openai');
-    await user.selectOptions(screen.getByRole('combobox', { name: /Generation model/i }), 'gpt-5.2');
-    await user.click(screen.getByRole('button', { name: /Generate draft from prompt/i }));
+      render(<MinimalAssignment />);
+      await preparePromptReady(user);
+      await user.selectOptions(
+        screen.getByRole('combobox', { name: /Generation provider/i }),
+        'openai',
+      );
+      await user.selectOptions(
+        screen.getByRole('combobox', { name: /Generation model/i }),
+        'gpt-5.2',
+      );
+      await user.click(screen.getByRole('button', { name: /Generate draft from prompt/i }));
 
-    await waitFor(() => {
-      expect(screen.getByText(/Source: Provider/i)).toBeTruthy();
-      expect(screen.getByText(/RPM: 42/i)).toBeTruthy();
-      expect(screen.getByText(/RPD: 1000/i)).toBeTruthy();
-    });
-    expect(screen.queryByText(/RPM: 5/i)).toBeNull();
-  });
+      await waitFor(() => {
+        expect(screen.getByText(/Source: Provider/i)).toBeTruthy();
+        expect(screen.getByText(/RPM: 42/i)).toBeTruthy();
+        expect(screen.getByText(/RPD: 1000/i)).toBeTruthy();
+      });
+      expect(screen.queryByText(/RPM: 5/i)).toBeNull();
+    },
+    INTEGRATION_TEST_TIMEOUT_MS,
+  );
 
   it('shows relative and absolute freshness in quota panel', async () => {
     render(<MinimalAssignment />);
@@ -1429,10 +1463,62 @@ describe('MinimalAssignment', () => {
     });
   });
 
-  it('keeps last successful quota snapshot when a later generation request fails', async () => {
-    const user = userEvent.setup();
-    vi.mocked(api.generateDraft)
-      .mockResolvedValueOnce({
+  it(
+    'keeps last successful quota snapshot when a later generation request fails',
+    async () => {
+      const user = userEvent.setup();
+      vi.mocked(api.generateDraft)
+        .mockResolvedValueOnce({
+          text: '# Generated assignment draft',
+          provider: 'openai',
+          model: 'gpt-5.2',
+          quota: {
+            source: 'provider',
+            lastUpdatedAt: '2026-02-18T00:04:00.000Z',
+            requestsPerMinute: 42,
+          },
+        })
+        .mockRejectedValueOnce(
+          new api.GenerationDraftApiError('Provider timed out', {
+            code: 'provider_timeout',
+            provider: 'openai',
+            model: 'gpt-5.2',
+            requestId: 'req-timeout-2',
+          }),
+        );
+
+      render(<MinimalAssignment />);
+      await preparePromptReady(user);
+      await user.selectOptions(
+        screen.getByRole('combobox', { name: /Generation provider/i }),
+        'openai',
+      );
+      await user.selectOptions(
+        screen.getByRole('combobox', { name: /Generation model/i }),
+        'gpt-5.2',
+      );
+      await user.click(screen.getByRole('button', { name: /Generate draft from prompt/i }));
+
+      await waitFor(() => {
+        expect(screen.getByText(/Source: Provider/i)).toBeTruthy();
+        expect(screen.getByText(/RPM: 42/i)).toBeTruthy();
+      });
+
+      await user.click(screen.getByRole('button', { name: /Generate draft from prompt/i }));
+      await waitFor(() => {
+        expect(screen.getByText(/Provider timed out/i)).toBeTruthy();
+      });
+      expect(screen.getByText(/Source: Provider/i)).toBeTruthy();
+      expect(screen.getByText(/RPM: 42/i)).toBeTruthy();
+    },
+    INTEGRATION_TEST_TIMEOUT_MS,
+  );
+
+  it(
+    'resets runtime quota snapshot on Start new and falls back to baseline quota',
+    async () => {
+      const user = userEvent.setup();
+      vi.mocked(api.generateDraft).mockResolvedValueOnce({
         text: '# Generated assignment draft',
         provider: 'openai',
         model: 'gpt-5.2',
@@ -1441,269 +1527,309 @@ describe('MinimalAssignment', () => {
           lastUpdatedAt: '2026-02-18T00:04:00.000Z',
           requestsPerMinute: 42,
         },
-      })
-      .mockRejectedValueOnce(
+      });
+
+      render(<MinimalAssignment />);
+      await preparePromptReady(user);
+      await user.selectOptions(
+        screen.getByRole('combobox', { name: /Generation provider/i }),
+        'openai',
+      );
+      await user.selectOptions(
+        screen.getByRole('combobox', { name: /Generation model/i }),
+        'gpt-5.2',
+      );
+      await user.click(screen.getByRole('button', { name: /Generate draft from prompt/i }));
+
+      await waitFor(() => {
+        expect(screen.getByText(/Source: Provider/i)).toBeTruthy();
+        expect(screen.getByText(/RPM: 42/i)).toBeTruthy();
+      });
+
+      await user.click(screen.getByRole('button', { name: /Start new/i }));
+
+      await waitFor(() => {
+        expect(screen.getByText(/Source: Hybrid/i)).toBeTruthy();
+        expect(screen.getByText(/RPM: 5/i)).toBeTruthy();
+      });
+      expect(screen.queryByText(/RPM: 42/i)).toBeNull();
+    },
+    INTEGRATION_TEST_TIMEOUT_MS,
+  );
+
+  it(
+    'releases runtime RPM quota lock after minute window rollover',
+    async () => {
+      vi.useFakeTimers({ shouldAdvanceTime: true });
+      try {
+        vi.setSystemTime(new Date('2026-02-18T00:00:40.000Z'));
+        const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
+        vi.mocked(api.generateDraft).mockResolvedValueOnce({
+          text: '# Generated assignment draft',
+          provider: 'openai',
+          model: 'gpt-5.2',
+          quota: {
+            source: 'provider',
+            lastUpdatedAt: '2026-02-18T00:00:30.000Z',
+            rpmBudget: 5,
+            rpmUsed: 5,
+            rpmRemaining: 0,
+          },
+        });
+
+        render(<MinimalAssignment />);
+        await preparePromptReady(user);
+        await user.selectOptions(
+          screen.getByRole('combobox', { name: /Generation provider/i }),
+          'openai',
+        );
+        await user.selectOptions(
+          screen.getByRole('combobox', { name: /Generation model/i }),
+          'gpt-5.2',
+        );
+
+        const generateDraftButton = screen.getByRole('button', {
+          name: /Generate draft from prompt/i,
+        });
+        await user.click(generateDraftButton);
+
+        await waitFor(() => {
+          expect(screen.getByText(/Per-minute request budget exhausted/i)).toBeTruthy();
+        });
+        expect((generateDraftButton as HTMLButtonElement).disabled).toBe(true);
+
+        vi.setSystemTime(new Date('2026-02-18T00:01:05.000Z'));
+        act(() => {
+          vi.advanceTimersByTime(15_000);
+        });
+
+        await waitFor(() => {
+          expect((generateDraftButton as HTMLButtonElement).disabled).toBe(false);
+        });
+        expect(screen.queryByText(/Per-minute request budget exhausted/i)).toBeNull();
+      } finally {
+        vi.useRealTimers();
+      }
+    },
+    INTEGRATION_TEST_TIMEOUT_MS,
+  );
+
+  it(
+    'enables generate draft only after prompt is ready',
+    async () => {
+      const user = userEvent.setup();
+      render(<MinimalAssignment />);
+
+      const generateDraftButton = screen.getByRole('button', {
+        name: /Generate draft from prompt/i,
+      });
+      expect((generateDraftButton as HTMLButtonElement).disabled).toBe(true);
+
+      await preparePromptReady(user);
+      await user.selectOptions(
+        screen.getByRole('combobox', { name: /Generation provider/i }),
+        'openai',
+      );
+      await user.selectOptions(
+        screen.getByRole('combobox', { name: /Generation model/i }),
+        'gpt-5.2',
+      );
+
+      await waitFor(() => {
+        expect((generateDraftButton as HTMLButtonElement).disabled).toBe(false);
+      });
+    },
+    INTEGRATION_TEST_TIMEOUT_MS,
+  );
+
+  it(
+    'generates draft markdown with selected provider/model',
+    async () => {
+      const user = userEvent.setup();
+      render(<MinimalAssignment />);
+
+      await preparePromptReady(user);
+
+      await user.selectOptions(
+        screen.getByRole('combobox', { name: /Generation provider/i }),
+        'openai',
+      );
+      await user.selectOptions(
+        screen.getByRole('combobox', { name: /Generation model/i }),
+        'gpt-5.2',
+      );
+
+      await user.click(screen.getByRole('button', { name: /Generate draft from prompt/i }));
+
+      await waitFor(() => {
+        expect(api.generateDraft).toHaveBeenCalledWith({
+          promptPackageId: 'pkg-1',
+          provider: 'openai',
+          model: 'gpt-5.2',
+        });
+      });
+      expect(await screen.findByDisplayValue('# Generated assignment draft')).toBeTruthy();
+      expect(screen.getByText(/Generated with openai\/gpt-5.2/i)).toBeTruthy();
+    },
+    INTEGRATION_TEST_TIMEOUT_MS,
+  );
+
+  it(
+    'shows mapped timeout generation errors with request id',
+    async () => {
+      const user = userEvent.setup();
+      vi.mocked(api.generateDraft).mockRejectedValueOnce(
         new api.GenerationDraftApiError('Provider timed out', {
           code: 'provider_timeout',
           provider: 'openai',
           model: 'gpt-5.2',
-          requestId: 'req-timeout-2',
+          requestId: 'req-timeout-1',
         }),
       );
 
-    render(<MinimalAssignment />);
-    await preparePromptReady(user);
-    await user.selectOptions(screen.getByRole('combobox', { name: /Generation provider/i }), 'openai');
-    await user.selectOptions(screen.getByRole('combobox', { name: /Generation model/i }), 'gpt-5.2');
-    await user.click(screen.getByRole('button', { name: /Generate draft from prompt/i }));
+      render(<MinimalAssignment />);
+      await preparePromptReady(user);
 
-    await waitFor(() => {
-      expect(screen.getByText(/Source: Provider/i)).toBeTruthy();
-      expect(screen.getByText(/RPM: 42/i)).toBeTruthy();
-    });
+      await user.selectOptions(
+        screen.getByRole('combobox', { name: /Generation provider/i }),
+        'openai',
+      );
+      await user.selectOptions(
+        screen.getByRole('combobox', { name: /Generation model/i }),
+        'gpt-5.2',
+      );
+      await user.click(screen.getByRole('button', { name: /Generate draft from prompt/i }));
 
-    await user.click(screen.getByRole('button', { name: /Generate draft from prompt/i }));
-    await waitFor(() => {
-      expect(screen.getByText(/Provider timed out/i)).toBeTruthy();
-    });
-    expect(screen.getByText(/Source: Provider/i)).toBeTruthy();
-    expect(screen.getByText(/RPM: 42/i)).toBeTruthy();
-  });
+      await waitFor(() => {
+        expect(api.generateDraft).toHaveBeenCalledWith({
+          promptPackageId: 'pkg-1',
+          provider: 'openai',
+          model: 'gpt-5.2',
+        });
+      });
 
-  it('resets runtime quota snapshot on Start new and falls back to baseline quota', async () => {
-    const user = userEvent.setup();
-    vi.mocked(api.generateDraft).mockResolvedValueOnce({
-      text: '# Generated assignment draft',
-      provider: 'openai',
-      model: 'gpt-5.2',
-      quota: {
-        source: 'provider',
-        lastUpdatedAt: '2026-02-18T00:04:00.000Z',
-        requestsPerMinute: 42,
-      },
-    });
+      await waitFor(() => {
+        expect(
+          screen.getByText(
+            /Provider timed out\. Retry or choose a faster model\/provider\. Request ID: req-timeout-1/i,
+          ),
+        ).toBeTruthy();
+      });
+    },
+    INTEGRATION_TEST_TIMEOUT_MS,
+  );
 
-    render(<MinimalAssignment />);
-    await preparePromptReady(user);
-    await user.selectOptions(screen.getByRole('combobox', { name: /Generation provider/i }), 'openai');
-    await user.selectOptions(screen.getByRole('combobox', { name: /Generation model/i }), 'gpt-5.2');
-    await user.click(screen.getByRole('button', { name: /Generate draft from prompt/i }));
-
-    await waitFor(() => {
-      expect(screen.getByText(/Source: Provider/i)).toBeTruthy();
-      expect(screen.getByText(/RPM: 42/i)).toBeTruthy();
-    });
-
-    await user.click(screen.getByRole('button', { name: /Start new/i }));
-
-    await waitFor(() => {
-      expect(screen.getByText(/Source: Hybrid/i)).toBeTruthy();
-      expect(screen.getByText(/RPM: 5/i)).toBeTruthy();
-    });
-    expect(screen.queryByText(/RPM: 42/i)).toBeNull();
-  });
-
-  it('releases runtime RPM quota lock after minute window rollover', async () => {
-    vi.useFakeTimers({ shouldAdvanceTime: true });
-    try {
-      vi.setSystemTime(new Date('2026-02-18T00:00:40.000Z'));
-      const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
+  it(
+    'clears preview readiness and re-gates publish after generated draft replacement',
+    async () => {
+      const user = userEvent.setup();
       vi.mocked(api.generateDraft).mockResolvedValueOnce({
         text: '# Generated assignment draft',
         provider: 'openai',
         model: 'gpt-5.2',
         quota: {
-          source: 'provider',
-          lastUpdatedAt: '2026-02-18T00:00:30.000Z',
-          rpmBudget: 5,
-          rpmUsed: 5,
-          rpmRemaining: 0,
+          source: 'hybrid',
+          lastUpdatedAt: now,
         },
       });
-
       render(<MinimalAssignment />);
+
       await preparePromptReady(user);
-      await user.selectOptions(screen.getByRole('combobox', { name: /Generation provider/i }), 'openai');
-      await user.selectOptions(screen.getByRole('combobox', { name: /Generation model/i }), 'gpt-5.2');
+      await user.selectOptions(
+        screen.getByRole('combobox', { name: /Generation provider/i }),
+        'openai',
+      );
+      await user.selectOptions(
+        screen.getByRole('combobox', { name: /Generation model/i }),
+        'gpt-5.2',
+      );
 
-      const generateDraftButton = screen.getByRole('button', { name: /Generate draft from prompt/i });
-      await user.click(generateDraftButton);
+      const draftTextarea = screen.getByRole('textbox', { name: /Draft markdown/i });
+      await user.type(draftTextarea, '# Existing draft');
+      await previewCurrentDraft(user);
 
-      await waitFor(() => {
-        expect(screen.getByText(/Per-minute request budget exhausted/i)).toBeTruthy();
+      const publishButton = screen.getByRole('button', { name: /Publish assignment/i });
+      expect((publishButton as HTMLButtonElement).disabled).toBe(false);
+
+      const generateDraftButton = screen.getByRole('button', {
+        name: /Generate draft from prompt/i,
       });
-      expect((generateDraftButton as HTMLButtonElement).disabled).toBe(true);
-
-      vi.setSystemTime(new Date('2026-02-18T00:01:05.000Z'));
-      act(() => {
-        vi.advanceTimersByTime(15_000);
-      });
-
       await waitFor(() => {
         expect((generateDraftButton as HTMLButtonElement).disabled).toBe(false);
       });
-      expect(screen.queryByText(/Per-minute request budget exhausted/i)).toBeNull();
-    } finally {
-      vi.useRealTimers();
-    }
-  });
+      await user.click(generateDraftButton);
 
-  it('enables generate draft only after prompt is ready', async () => {
-    const user = userEvent.setup();
-    render(<MinimalAssignment />);
-
-    const generateDraftButton = screen.getByRole('button', { name: /Generate draft from prompt/i });
-    expect((generateDraftButton as HTMLButtonElement).disabled).toBe(true);
-
-    await preparePromptReady(user);
-    await user.selectOptions(screen.getByRole('combobox', { name: /Generation provider/i }), 'openai');
-    await user.selectOptions(screen.getByRole('combobox', { name: /Generation model/i }), 'gpt-5.2');
-
-    await waitFor(() => {
-      expect((generateDraftButton as HTMLButtonElement).disabled).toBe(false);
-    });
-  });
-
-  it('generates draft markdown with selected provider/model', async () => {
-    const user = userEvent.setup();
-    render(<MinimalAssignment />);
-
-    await preparePromptReady(user);
-
-    await user.selectOptions(screen.getByRole('combobox', { name: /Generation provider/i }), 'openai');
-    await user.selectOptions(screen.getByRole('combobox', { name: /Generation model/i }), 'gpt-5.2');
-
-    await user.click(screen.getByRole('button', { name: /Generate draft from prompt/i }));
-
-    await waitFor(() => {
-      expect(api.generateDraft).toHaveBeenCalledWith({
-        promptPackageId: 'pkg-1',
-        provider: 'openai',
-        model: 'gpt-5.2',
+      await waitFor(() => {
+        expect(api.generateDraft).toHaveBeenCalledWith({
+          promptPackageId: 'pkg-1',
+          provider: 'openai',
+          model: 'gpt-5.2',
+        });
+        expect(screen.getByDisplayValue('# Generated assignment draft')).toBeTruthy();
       });
-    });
-    expect(await screen.findByDisplayValue('# Generated assignment draft')).toBeTruthy();
-    expect(screen.getByText(/Generated with openai\/gpt-5.2/i)).toBeTruthy();
-  });
+      expect((publishButton as HTMLButtonElement).disabled).toBe(true);
+      expect(screen.getByText('Preview required before publish.')).toBeTruthy();
+    },
+    INTEGRATION_TEST_TIMEOUT_MS,
+  );
 
-  it('shows mapped timeout generation errors with request id', async () => {
-    const user = userEvent.setup();
-    vi.mocked(api.generateDraft).mockRejectedValueOnce(
-      new api.GenerationDraftApiError('Provider timed out', {
-        code: 'provider_timeout',
-        provider: 'openai',
-        model: 'gpt-5.2',
-        requestId: 'req-timeout-1',
-      }),
-    );
+  it(
+    'ignores stale generation responses after flow reset',
+    async () => {
+      const user = userEvent.setup();
+      let resolveGeneration: (value: api.GenerateDraftResponse) => void = () => {};
+      vi.mocked(api.generateDraft).mockImplementationOnce(
+        () =>
+          new Promise<api.GenerateDraftResponse>((resolve) => {
+            resolveGeneration = resolve;
+          }),
+      );
 
-    render(<MinimalAssignment />);
-    await preparePromptReady(user);
+      render(<MinimalAssignment />);
+      await preparePromptReady(user);
+      await user.selectOptions(
+        screen.getByRole('combobox', { name: /Generation provider/i }),
+        'openai',
+      );
+      await user.selectOptions(
+        screen.getByRole('combobox', { name: /Generation model/i }),
+        'gpt-5.2',
+      );
 
-    await user.selectOptions(screen.getByRole('combobox', { name: /Generation provider/i }), 'openai');
-    await user.selectOptions(screen.getByRole('combobox', { name: /Generation model/i }), 'gpt-5.2');
-    await user.click(screen.getByRole('button', { name: /Generate draft from prompt/i }));
-
-    await waitFor(() => {
-      expect(api.generateDraft).toHaveBeenCalledWith({
-        promptPackageId: 'pkg-1',
-        provider: 'openai',
-        model: 'gpt-5.2',
+      await user.click(screen.getByRole('button', { name: /Generate draft from prompt/i }));
+      await waitFor(() => {
+        expect(api.generateDraft).toHaveBeenCalledWith({
+          promptPackageId: 'pkg-1',
+          provider: 'openai',
+          model: 'gpt-5.2',
+        });
       });
-    });
 
-    await waitFor(() => {
-      expect(
-        screen.getByText(
-          /Provider timed out\. Retry or choose a faster model\/provider\. Request ID: req-timeout-1/i,
-        ),
-      ).toBeTruthy();
-    });
-  });
+      await user.click(screen.getByRole('button', { name: /Start new/i }));
 
-  it('clears preview readiness and re-gates publish after generated draft replacement', async () => {
-    const user = userEvent.setup();
-    vi.mocked(api.generateDraft).mockResolvedValueOnce({
-      text: '# Generated assignment draft',
-      provider: 'openai',
-      model: 'gpt-5.2',
-      quota: {
-        source: 'hybrid',
-        lastUpdatedAt: now,
-      },
-    });
-    render(<MinimalAssignment />);
-
-    await preparePromptReady(user);
-    await user.selectOptions(screen.getByRole('combobox', { name: /Generation provider/i }), 'openai');
-    await user.selectOptions(screen.getByRole('combobox', { name: /Generation model/i }), 'gpt-5.2');
-
-    const draftTextarea = screen.getByRole('textbox', { name: /Draft markdown/i });
-    await user.type(draftTextarea, '# Existing draft');
-    await previewCurrentDraft(user);
-
-    const publishButton = screen.getByRole('button', { name: /Publish assignment/i });
-    expect((publishButton as HTMLButtonElement).disabled).toBe(false);
-
-    const generateDraftButton = screen.getByRole('button', { name: /Generate draft from prompt/i });
-    await waitFor(() => {
-      expect((generateDraftButton as HTMLButtonElement).disabled).toBe(false);
-    });
-    await user.click(generateDraftButton);
-
-    await waitFor(() => {
-      expect(api.generateDraft).toHaveBeenCalledWith({
-        promptPackageId: 'pkg-1',
-        provider: 'openai',
-        model: 'gpt-5.2',
+      await act(async () => {
+        resolveGeneration({
+          text: '# Stale generated draft',
+          provider: 'openai',
+          model: 'gpt-5.2',
+          quota: {
+            source: 'hybrid',
+            lastUpdatedAt: now,
+          },
+        });
+        await Promise.resolve();
       });
-      expect(screen.getByDisplayValue('# Generated assignment draft')).toBeTruthy();
-    });
-    expect((publishButton as HTMLButtonElement).disabled).toBe(true);
-    expect(screen.getByText('Preview required before publish.')).toBeTruthy();
-  });
 
-  it('ignores stale generation responses after flow reset', async () => {
-    const user = userEvent.setup();
-    let resolveGeneration: (value: api.GenerateDraftResponse) => void = () => {};
-    vi.mocked(api.generateDraft).mockImplementationOnce(
-      () =>
-        new Promise<api.GenerateDraftResponse>((resolve) => {
-          resolveGeneration = resolve;
-        }),
-    );
-
-    render(<MinimalAssignment />);
-    await preparePromptReady(user);
-    await user.selectOptions(screen.getByRole('combobox', { name: /Generation provider/i }), 'openai');
-    await user.selectOptions(screen.getByRole('combobox', { name: /Generation model/i }), 'gpt-5.2');
-
-    await user.click(screen.getByRole('button', { name: /Generate draft from prompt/i }));
-    await waitFor(() => {
-      expect(api.generateDraft).toHaveBeenCalledWith({
-        promptPackageId: 'pkg-1',
-        provider: 'openai',
-        model: 'gpt-5.2',
-      });
-    });
-
-    await user.click(screen.getByRole('button', { name: /Start new/i }));
-
-    resolveGeneration({
-      text: '# Stale generated draft',
-      provider: 'openai',
-      model: 'gpt-5.2',
-      quota: {
-        source: 'hybrid',
-        lastUpdatedAt: now,
-      },
-    });
-
-    await waitFor(() => {
-      expect(screen.queryByDisplayValue('# Stale generated draft')).toBeNull();
-    });
-    expect(screen.queryByText(/Generated with openai\/gpt-5.2/i)).toBeNull();
-  });
+      await waitFor(
+        () => {
+          expect(screen.queryByDisplayValue('# Stale generated draft')).toBeNull();
+        },
+        { timeout: UI_WAIT_TIMEOUT_MS },
+      );
+      expect(screen.queryByText(/Generated with openai\/gpt-5.2/i)).toBeNull();
+    },
+    INTEGRATION_TEST_TIMEOUT_MS,
+  );
 
   it('shows upload errors when upload fails', async () => {
     const user = userEvent.setup();
@@ -1718,297 +1844,335 @@ describe('MinimalAssignment', () => {
     });
   });
 
-  it('prevents draft save when markdown validation fails', async () => {
-    const user = userEvent.setup();
-    vi.mocked(api.validateMarkdown).mockResolvedValueOnce({
-      ok: false,
-      errors: ['Missing study text block'],
-      warnings: [],
-    });
-
-    render(<MinimalAssignment />);
-
-    await user.click(screen.getByRole('button', { name: /Drop audio file/i }));
-
-    await waitFor(() => {
-      expect(screen.getByDisplayValue('Student transcript text')).toBeTruthy();
-    });
-
-    await user.click(screen.getByRole('button', { name: /Generate prompt/i }));
-
-    await waitFor(() => {
-      expect(screen.getByDisplayValue('Prompt package output')).toBeTruthy();
-    });
-
-    const draftTextarea = screen.getByRole('textbox', { name: /Draft markdown/i });
-    expect(draftTextarea).toBeTruthy();
-    if (!draftTextarea) {
-      throw new Error('Expected draft textarea to be rendered');
-    }
-    await user.type(draftTextarea, '# Broken draft');
-
-    await user.click(screen.getByRole('button', { name: /Save draft/i }));
-
-    await waitFor(() => {
-      expect(screen.getByText('Fix validation errors before saving.')).toBeTruthy();
-    });
-    expect(api.createDraft).not.toHaveBeenCalled();
-  });
-
-  it('publishes a valid draft and displays the resulting job link', async () => {
-    const user = userEvent.setup();
-    render(<MinimalAssignment />);
-
-    await user.click(screen.getByRole('button', { name: /Drop audio file/i }));
-
-    await waitFor(() => {
-      expect(screen.getByDisplayValue('Student transcript text')).toBeTruthy();
-    });
-
-    await user.click(screen.getByRole('button', { name: /Generate prompt/i }));
-
-    await waitFor(() => {
-      expect(screen.getByDisplayValue('Prompt package output')).toBeTruthy();
-    });
-
-    const draftTextarea = screen.getByRole('textbox', { name: /Draft markdown/i });
-    expect(draftTextarea).toBeTruthy();
-    if (!draftTextarea) {
-      throw new Error('Expected draft textarea to be rendered');
-    }
-    await user.type(draftTextarea, '# Final draft');
-    await user.selectOptions(screen.getByRole('combobox', { name: /Preset/i }), 'b2-default');
-
-    await previewCurrentDraft(user);
-    await user.click(screen.getByRole('button', { name: /Publish assignment/i }));
-
-    await waitFor(() => {
-      expect(api.createDraft).toHaveBeenCalledWith('pkg-1', '# Final draft');
-    });
-    expect(vi.mocked(api.validateMarkdown)).toHaveBeenLastCalledWith('# Final draft', true, {
-      preset: 'b2-default',
-    });
-    expect(api.materializeDraft).toHaveBeenCalledWith('draft-1', {
-      jobOverrides: {
-        preset: 'b2-default',
-        publishTarget: 'html',
-      },
-    });
-    expect(api.approveJob).toHaveBeenCalledWith('job-1', {
-      md: '/tmp/assignment.md',
-      mdStorageUri: 's3://esl/drafts/draft-1.md',
-    });
-
-    await waitFor(() => {
-      expect(screen.getAllByText(/Job ID: job-1/i).length).toBeGreaterThan(0);
-    });
-    const link = screen.getByRole('link', { name: /Open in Notion/i });
-    expect(link.getAttribute('href')).toBe('https://www.notion.so/published-assignment');
-  });
-
-  it('publishes canonical learningPresetId when learning preset metadata is available', async () => {
-    const user = userEvent.setup();
-    vi.mocked(api.fetchJobOptions).mockResolvedValueOnce({
-      presets: ['b1-default', 'b2-default'],
-      learningPresets: [
-        makeLearningPreset(),
-        makeLearningPreset({
-          id: 'general-english-intensive',
-          title: 'General English Intensive',
-        }),
-      ],
-      cefrLevels: ['A1', 'A2', 'B1', 'B2', 'C1', 'C2'],
-      cefrDefault: 'B1',
-      voiceAccents: ['american'],
-      voices: [{ id: 'voice-a', name: 'Voice A', accent: 'american' }],
-      notionDatabases: [{ id: 'db-1', name: 'DB One' }],
-      ttsStrategies: ['auto', 'dialogue', 'tts'],
-      supportedActions: [],
-    });
-    render(<MinimalAssignment />);
-
-    await user.click(screen.getByRole('button', { name: /Drop audio file/i }));
-
-    await waitFor(() => {
-      expect(screen.getByDisplayValue('Student transcript text')).toBeTruthy();
-    });
-
-    await user.click(screen.getByRole('button', { name: /Generate prompt/i }));
-
-    await waitFor(() => {
-      expect(screen.getByDisplayValue('Prompt package output')).toBeTruthy();
-    });
-
-    const draftTextarea = screen.getByRole('textbox', { name: /Draft markdown/i });
-    expect(draftTextarea).toBeTruthy();
-    if (!draftTextarea) {
-      throw new Error('Expected draft textarea to be rendered');
-    }
-    await user.type(draftTextarea, '# Final draft');
-    await user.selectOptions(
-      screen.getByRole('combobox', { name: /Preset/i }),
-      'general-english-intensive',
-    );
-
-    await previewCurrentDraft(user);
-    await user.click(screen.getByRole('button', { name: /Publish assignment/i }));
-
-    await waitFor(() => {
-      expect(api.createDraft).toHaveBeenCalledWith('pkg-1', '# Final draft');
-    });
-    expect(vi.mocked(api.validateMarkdown)).toHaveBeenLastCalledWith('# Final draft', true, {
-      learningPresetId: 'general-english-intensive',
-    });
-    expect(api.materializeDraft).toHaveBeenCalledWith('draft-1', {
-      jobOverrides: {
-        learningPresetId: 'general-english-intensive',
-        publishTarget: 'html',
-      },
-    });
-    const call = vi.mocked(api.materializeDraft).mock.calls.at(-1)?.[1];
-    expect(call?.jobOverrides).not.toHaveProperty('preset');
-  });
-
-  it('requires preview before publish and requires re-preview after draft edits', async () => {
-    const user = userEvent.setup();
-    render(<MinimalAssignment />);
-
-    await user.click(screen.getByRole('button', { name: /Drop audio file/i }));
-
-    await waitFor(() => {
-      expect(screen.getByDisplayValue('Student transcript text')).toBeTruthy();
-    });
-
-    await user.click(screen.getByRole('button', { name: /Generate prompt/i }));
-
-    await waitFor(() => {
-      expect(screen.getByDisplayValue('Prompt package output')).toBeTruthy();
-    });
-
-    const draftTextarea = screen.getByRole('textbox', { name: /Draft markdown/i });
-    await user.type(draftTextarea, '# Preview gated draft');
-
-    const publishButton = screen.getByRole('button', { name: /Publish assignment/i });
-    expect((publishButton as HTMLButtonElement).disabled).toBe(true);
-    expect(screen.getByText('Preview required before publish.')).toBeTruthy();
-    expect(api.materializeDraft).not.toHaveBeenCalled();
-
-    await previewCurrentDraft(user);
-    expect((publishButton as HTMLButtonElement).disabled).toBe(false);
-
-    await user.type(draftTextarea, '\nOne more line');
-    await waitFor(() => {
-      expect((publishButton as HTMLButtonElement).disabled).toBe(true);
-    });
-    expect(screen.getByText('Preview required before publish.')).toBeTruthy();
-  });
-
-  it('queues a default rerun audio action for the current job', async () => {
-    const user = userEvent.setup();
-    render(<MinimalAssignment />);
-
-    await publishAssignmentFlow(user);
-
-    await user.click(screen.getByRole('button', { name: /Rerun audio/i }));
-
-    await waitFor(() => {
-      expect(api.rerunAudioJob).toHaveBeenCalledWith('job-1', {
-        forceTts: false,
-        ttsStrategy: 'auto',
+  it(
+    'prevents draft save when markdown validation fails',
+    async () => {
+      const user = userEvent.setup();
+      vi.mocked(api.validateMarkdown).mockResolvedValueOnce({
+        ok: false,
+        errors: ['Missing study text block'],
+        warnings: [],
       });
-    });
-    expect(screen.getByText(/Audio rerun queued/i)).toBeTruthy();
-  }, 15_000);
 
-  it('submits advanced rerun payload values', async () => {
-    const user = userEvent.setup();
-    render(<MinimalAssignment />);
+      render(<MinimalAssignment />);
 
-    await publishAssignmentFlow(user);
+      await user.click(screen.getByRole('button', { name: /Drop audio file/i }));
 
-    await user.click(screen.getByRole('button', { name: /Show advanced rerun/i }));
-    await user.type(screen.getByPlaceholderText('voice id override'), 'voice-new');
-    await user.type(screen.getByPlaceholderText('accent override'), 'british');
-    await user.selectOptions(screen.getByRole('combobox', { name: /TTS strategy/i }), 'dialogue');
-    await user.type(screen.getByPlaceholderText('e.g. es'), 'es');
-    await user.type(screen.getByPlaceholderText('0.42'), '0.42');
-    await user.type(screen.getByPlaceholderText('7'), '7');
+      await waitFor(() => {
+        expect(screen.getByDisplayValue('Student transcript text')).toBeTruthy();
+      });
 
-    await user.click(screen.getByRole('button', { name: /Rerun audio/i }));
+      await user.click(screen.getByRole('button', { name: /Generate prompt/i }));
 
-    await waitFor(() => {
-      expect(api.rerunAudioJob).toHaveBeenCalledWith(
-        'job-1',
-        expect.objectContaining({
-          forceTts: false,
-          voiceId: 'voice-new',
-          voiceAccent: 'british',
-          ttsStrategy: 'dialogue',
-          dialogueLanguage: 'es',
-          dialogueStability: 0.42,
-          dialogueSeed: 7,
-        }),
+      await waitFor(() => {
+        expect(screen.getByDisplayValue('Prompt package output')).toBeTruthy();
+      });
+
+      const draftTextarea = screen.getByRole('textbox', { name: /Draft markdown/i });
+      expect(draftTextarea).toBeTruthy();
+      if (!draftTextarea) {
+        throw new Error('Expected draft textarea to be rendered');
+      }
+      await user.type(draftTextarea, '# Broken draft');
+
+      await user.click(screen.getByRole('button', { name: /Save draft/i }));
+
+      await waitFor(() => {
+        expect(screen.getByText('Fix validation errors before saving.')).toBeTruthy();
+      });
+      expect(api.createDraft).not.toHaveBeenCalled();
+    },
+    INTEGRATION_TEST_TIMEOUT_MS,
+  );
+
+  it(
+    'publishes a valid draft and displays the resulting job link',
+    async () => {
+      const user = userEvent.setup();
+      render(<MinimalAssignment />);
+
+      await user.click(screen.getByRole('button', { name: /Drop audio file/i }));
+
+      await waitFor(() => {
+        expect(screen.getByDisplayValue('Student transcript text')).toBeTruthy();
+      });
+
+      await user.click(screen.getByRole('button', { name: /Generate prompt/i }));
+
+      await waitFor(() => {
+        expect(screen.getByDisplayValue('Prompt package output')).toBeTruthy();
+      });
+
+      const draftTextarea = screen.getByRole('textbox', { name: /Draft markdown/i });
+      expect(draftTextarea).toBeTruthy();
+      if (!draftTextarea) {
+        throw new Error('Expected draft textarea to be rendered');
+      }
+      await user.type(draftTextarea, '# Final draft');
+      await user.selectOptions(screen.getByRole('combobox', { name: /Preset/i }), 'b2-default');
+
+      await previewCurrentDraft(user);
+      await user.click(screen.getByRole('button', { name: /Publish assignment/i }));
+
+      await waitFor(() => {
+        expect(api.createDraft).toHaveBeenCalledWith('pkg-1', '# Final draft');
+      });
+      expect(vi.mocked(api.validateMarkdown)).toHaveBeenLastCalledWith('# Final draft', true, {
+        preset: 'b2-default',
+      });
+      expect(api.materializeDraft).toHaveBeenCalledWith('draft-1', {
+        jobOverrides: {
+          preset: 'b2-default',
+          publishTarget: 'html',
+        },
+      });
+      expect(api.approveJob).toHaveBeenCalledWith('job-1', {
+        md: '/tmp/assignment.md',
+        mdStorageUri: 's3://esl/drafts/draft-1.md',
+      });
+
+      await waitFor(() => {
+        expect(screen.getAllByText(/Job ID: job-1/i).length).toBeGreaterThan(0);
+      });
+      const link = screen.getByRole('link', { name: /Open in Notion/i });
+      expect(link.getAttribute('href')).toBe('https://www.notion.so/published-assignment');
+    },
+    INTEGRATION_TEST_TIMEOUT_MS,
+  );
+
+  it(
+    'publishes canonical learningPresetId when learning preset metadata is available',
+    async () => {
+      const user = userEvent.setup();
+      vi.mocked(api.fetchJobOptions).mockResolvedValueOnce({
+        presets: ['b1-default', 'b2-default'],
+        learningPresets: [
+          makeLearningPreset(),
+          makeLearningPreset({
+            id: 'general-english-intensive',
+            title: 'General English Intensive',
+          }),
+        ],
+        cefrLevels: ['A1', 'A2', 'B1', 'B2', 'C1', 'C2'],
+        cefrDefault: 'B1',
+        voiceAccents: ['american'],
+        voices: [{ id: 'voice-a', name: 'Voice A', accent: 'american' }],
+        notionDatabases: [{ id: 'db-1', name: 'DB One' }],
+        ttsStrategies: ['auto', 'dialogue', 'tts'],
+        supportedActions: [],
+      });
+      render(<MinimalAssignment />);
+
+      await user.click(screen.getByRole('button', { name: /Drop audio file/i }));
+
+      await waitFor(() => {
+        expect(screen.getByDisplayValue('Student transcript text')).toBeTruthy();
+      });
+
+      await user.click(screen.getByRole('button', { name: /Generate prompt/i }));
+
+      await waitFor(() => {
+        expect(screen.getByDisplayValue('Prompt package output')).toBeTruthy();
+      });
+
+      const draftTextarea = screen.getByRole('textbox', { name: /Draft markdown/i });
+      expect(draftTextarea).toBeTruthy();
+      if (!draftTextarea) {
+        throw new Error('Expected draft textarea to be rendered');
+      }
+      await user.type(draftTextarea, '# Final draft');
+      await user.selectOptions(
+        screen.getByRole('combobox', { name: /Preset/i }),
+        'general-english-intensive',
       );
-    });
-  }, 15_000);
 
-  it('queues a publish-only rerun action for the current job', async () => {
-    const user = userEvent.setup();
-    render(<MinimalAssignment />);
+      await previewCurrentDraft(user);
+      await user.click(screen.getByRole('button', { name: /Publish assignment/i }));
 
-    await publishAssignmentFlow(user);
+      await waitFor(() => {
+        expect(api.createDraft).toHaveBeenCalledWith('pkg-1', '# Final draft');
+      });
+      expect(vi.mocked(api.validateMarkdown)).toHaveBeenLastCalledWith('# Final draft', true, {
+        learningPresetId: 'general-english-intensive',
+      });
+      expect(api.materializeDraft).toHaveBeenCalledWith('draft-1', {
+        jobOverrides: {
+          learningPresetId: 'general-english-intensive',
+          publishTarget: 'html',
+        },
+      });
+      const call = vi.mocked(api.materializeDraft).mock.calls.at(-1)?.[1];
+      expect(call?.jobOverrides).not.toHaveProperty('preset');
+    },
+    INTEGRATION_TEST_TIMEOUT_MS,
+  );
 
-    await user.click(screen.getAllByRole('button', { name: /Rerun publish/i })[0]!);
+  it(
+    'requires preview before publish and requires re-preview after draft edits',
+    async () => {
+      const user = userEvent.setup();
+      render(<MinimalAssignment />);
 
-    await waitFor(() => {
-      expect(api.rerunPublishJob).toHaveBeenCalledWith('job-1');
-    });
-    expect(screen.getByText('Publish rerun queued')).toBeTruthy();
-  }, 15_000);
+      await user.click(screen.getByRole('button', { name: /Drop audio file/i }));
 
-  it('submits cancel action with an optional reason when job is running', async () => {
-    const user = userEvent.setup();
-    vi.mocked(api.getJobStatus)
-      .mockResolvedValueOnce({
-        jobId: 'job-1',
-        state: 'running',
-        publishTarget: 'notion',
-        notionUrl: null,
-      } as never)
-      .mockResolvedValueOnce({
-        jobId: 'job-1',
-        state: 'failed',
-        publishTarget: 'notion',
-        notionUrl: null,
-        error: 'cancelled: duplicate run',
-      } as never);
+      await waitFor(() => {
+        expect(screen.getByDisplayValue('Student transcript text')).toBeTruthy();
+      });
 
-    render(<MinimalAssignment />);
-    await publishAssignmentFlow(user);
+      await user.click(screen.getByRole('button', { name: /Generate prompt/i }));
 
-    const reasonInput = screen.getByPlaceholderText('reason for cancellation');
-    await user.type(reasonInput, 'duplicate run');
-    const actionsHeading = screen.getByRole('heading', { name: /7\. Job actions/i });
-    const actionsSection = actionsHeading.closest('section');
-    if (!actionsSection) {
-      throw new Error('Expected job actions section to be rendered');
-    }
-    await user.click(within(actionsSection).getByRole('button', { name: /Cancel job/i }));
+      await waitFor(() => {
+        expect(screen.getByDisplayValue('Prompt package output')).toBeTruthy();
+      });
 
-    await waitFor(() => {
-      expect(api.cancelJob).toHaveBeenCalledWith('job-1', { reason: 'duplicate run' });
-    });
-    expect(screen.getByText(/Job cancelled/i)).toBeTruthy();
-  }, 15_000);
+      const draftTextarea = screen.getByRole('textbox', { name: /Draft markdown/i });
+      await user.type(draftTextarea, '# Preview gated draft');
 
-  it('keeps cancel disabled for terminal jobs', async () => {
-    const user = userEvent.setup();
-    render(<MinimalAssignment />);
+      const publishButton = screen.getByRole('button', { name: /Publish assignment/i });
+      expect((publishButton as HTMLButtonElement).disabled).toBe(true);
+      expect(screen.getByText('Preview required before publish.')).toBeTruthy();
+      expect(api.materializeDraft).not.toHaveBeenCalled();
 
-    await publishAssignmentFlow(user);
+      await previewCurrentDraft(user);
+      expect((publishButton as HTMLButtonElement).disabled).toBe(false);
 
-    const cancelButton = screen.getByRole('button', { name: /Cancel job/i });
-    expect(cancelButton.getAttribute('disabled')).not.toBeNull();
-    expect(screen.getByText(/Cancel is only available for queued or running jobs\./i)).toBeTruthy();
-  }, 15_000);
+      await user.type(draftTextarea, '\nOne more line');
+      await waitFor(() => {
+        expect((publishButton as HTMLButtonElement).disabled).toBe(true);
+      });
+      expect(screen.getByText('Preview required before publish.')).toBeTruthy();
+    },
+    INTEGRATION_TEST_TIMEOUT_MS,
+  );
+
+  it(
+    'queues a default rerun audio action for the current job',
+    async () => {
+      const user = userEvent.setup();
+      render(<MinimalAssignment />);
+
+      await publishAssignmentFlow(user);
+
+      await user.click(screen.getByRole('button', { name: /Rerun audio/i }));
+
+      await waitFor(() => {
+        expect(api.rerunAudioJob).toHaveBeenCalledWith('job-1', {
+          forceTts: false,
+          ttsStrategy: 'auto',
+        });
+      });
+      expect(screen.getByText(/Audio rerun queued/i)).toBeTruthy();
+    },
+    INTEGRATION_TEST_TIMEOUT_MS,
+  );
+
+  it(
+    'submits advanced rerun payload values',
+    async () => {
+      const user = userEvent.setup();
+      render(<MinimalAssignment />);
+
+      await publishAssignmentFlow(user);
+
+      await user.click(screen.getByRole('button', { name: /Show advanced rerun/i }));
+      await user.type(screen.getByPlaceholderText('voice id override'), 'voice-new');
+      await user.type(screen.getByPlaceholderText('accent override'), 'british');
+      await user.selectOptions(screen.getByRole('combobox', { name: /TTS strategy/i }), 'dialogue');
+      await user.type(screen.getByPlaceholderText('e.g. es'), 'es');
+      await user.type(screen.getByPlaceholderText('0.42'), '0.42');
+      await user.type(screen.getByPlaceholderText('7'), '7');
+
+      await user.click(screen.getByRole('button', { name: /Rerun audio/i }));
+
+      await waitFor(() => {
+        expect(api.rerunAudioJob).toHaveBeenCalledWith(
+          'job-1',
+          expect.objectContaining({
+            forceTts: false,
+            voiceId: 'voice-new',
+            voiceAccent: 'british',
+            ttsStrategy: 'dialogue',
+            dialogueLanguage: 'es',
+            dialogueStability: 0.42,
+            dialogueSeed: 7,
+          }),
+        );
+      });
+    },
+    INTEGRATION_TEST_TIMEOUT_MS,
+  );
+
+  it(
+    'queues a publish-only rerun action for the current job',
+    async () => {
+      const user = userEvent.setup();
+      render(<MinimalAssignment />);
+
+      await publishAssignmentFlow(user);
+
+      await user.click(screen.getAllByRole('button', { name: /Rerun publish/i })[0]!);
+
+      await waitFor(() => {
+        expect(api.rerunPublishJob).toHaveBeenCalledWith('job-1');
+      });
+      expect(screen.getByText('Publish rerun queued')).toBeTruthy();
+    },
+    INTEGRATION_TEST_TIMEOUT_MS,
+  );
+
+  it(
+    'submits cancel action with an optional reason when job is running',
+    async () => {
+      const user = userEvent.setup();
+      vi.mocked(api.getJobStatus)
+        .mockResolvedValueOnce({
+          jobId: 'job-1',
+          state: 'running',
+          publishTarget: 'notion',
+          notionUrl: null,
+        } as never)
+        .mockResolvedValueOnce({
+          jobId: 'job-1',
+          state: 'failed',
+          publishTarget: 'notion',
+          notionUrl: null,
+          error: 'cancelled: duplicate run',
+        } as never);
+
+      render(<MinimalAssignment />);
+      await publishAssignmentFlow(user);
+
+      const reasonInput = screen.getByPlaceholderText('reason for cancellation');
+      await user.type(reasonInput, 'duplicate run');
+      const actionsHeading = screen.getByRole('heading', { name: /7\. Job actions/i });
+      const actionsSection = actionsHeading.closest('section');
+      if (!actionsSection) {
+        throw new Error('Expected job actions section to be rendered');
+      }
+      await user.click(within(actionsSection).getByRole('button', { name: /Cancel job/i }));
+
+      await waitFor(() => {
+        expect(api.cancelJob).toHaveBeenCalledWith('job-1', { reason: 'duplicate run' });
+      });
+      expect(screen.getByText(/Job cancelled/i)).toBeTruthy();
+    },
+    INTEGRATION_TEST_TIMEOUT_MS,
+  );
+
+  it(
+    'keeps cancel disabled for terminal jobs',
+    async () => {
+      const user = userEvent.setup();
+      render(<MinimalAssignment />);
+
+      await publishAssignmentFlow(user);
+
+      const cancelButton = screen.getByRole('button', { name: /Cancel job/i });
+      expect(cancelButton.getAttribute('disabled')).not.toBeNull();
+      expect(
+        screen.getByText(/Cancel is only available for queued or running jobs\./i),
+      ).toBeTruthy();
+    },
+    INTEGRATION_TEST_TIMEOUT_MS,
+  );
 });
