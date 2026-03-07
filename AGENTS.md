@@ -46,6 +46,8 @@ When implementing from a plan file, re-read that exact plan file after every con
 - Setup/run commands:
   - [`docs/QUICK_START.md`](docs/QUICK_START.md)
   - [`docs/reference/env.md`](docs/reference/env.md)
+- Test writing + lane methodology:
+  - [`docs/reference/TESTING_GUIDELINES.md`](docs/reference/TESTING_GUIDELINES.md)
 - Backend/frontend integration work:
   - [`docs/backend-frontend/BATCH_SYSTEM.md`](docs/backend-frontend/BATCH_SYSTEM.md)
   - [`docs/backend-frontend/backend-frontend-alignment.md`](docs/backend-frontend/backend-frontend-alignment.md)
@@ -100,6 +102,9 @@ For exact invariants and forbidden changes: [`docs/reference/agents-ssot.md`](do
 - Test (integration lane): `pnpm test:integration`
 - Smoke: `pnpm smoke`
 - Batch local dev: `pnpm dev:batch`
+
+For lane semantics and test-authoring methodology, see
+[`docs/reference/TESTING_GUIDELINES.md`](docs/reference/TESTING_GUIDELINES.md).
 
 Dependency hygiene when touching deps:
 
