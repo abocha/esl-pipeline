@@ -37,7 +37,7 @@
     "test:integration:http": "vitest run --config ../../vitest.config.ts --reporter=dot --maxWorkers=1 ../../packages/batch-backend/tests/transport.http-server.integration.*.test.ts",
     "test:integration:worker": "vitest run --config ../../vitest.config.ts --reporter=dot --maxWorkers=1 ../../packages/batch-backend/tests/transport.worker-runner.integration.test.ts",
     "test:integration": "pnpm run test:integration:http",
-    "test:ci": "pnpm run test:unit && pnpm run test:db:migrations && pnpm run test:db:postgres && pnpm run test:integration:worker",
+    "test:ci": "pnpm run test:unit && pnpm run test:integration && pnpm run test:db:migrations && pnpm run test:db:postgres && pnpm run test:integration:worker",
     "test:verbose": "BATCH_BACKEND_TEST_LOG_LEVEL=debug vitest run --config ../../vitest.config.ts --dir ../../packages/batch-backend/tests --reporter=verbose",
     "test:watch": "vitest watch --config ../../vitest.config.ts --dir ../../packages/batch-backend/tests",
     "typecheck": "tsc --noEmit"
