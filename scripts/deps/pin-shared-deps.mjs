@@ -5,28 +5,27 @@ import { existsSync, readFileSync, readdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 
 const SHARED = {
-  '@aws-sdk/client-s3': '^3.940.0',
-  '@aws-sdk/s3-request-presigner': '^3.940.0',
-  '@aws-sdk/lib-storage': '^3.940.0',
-  '@elevenlabs/elevenlabs-js': '^2.25.0',
-  '@notionhq/client': '^5.4.0',
+  '@aws-sdk/client-s3': '^3.1004.0',
+  '@aws-sdk/s3-request-presigner': '^3.1004.0',
+  '@aws-sdk/lib-storage': '^3.1004.0',
+  '@elevenlabs/elevenlabs-js': '^2.38.1',
+  '@notionhq/client': '^5.11.1',
   commander: '^14.0.2',
   zod: '^4.1.13',
   // Frontend
   react: '^19.2.0',
   'react-dom': '^19.2.0',
-  axios: '^1.13.2',
+  axios: '^1.13.6',
   '@tanstack/react-query': '^5.90.11',
   vite: '^7.2.4',
   '@vitejs/plugin-react-swc': '^4.2.2',
   // Backend
-  fastify: '^5.6.2',
-  pg: '^8.16.3',
-  ioredis: '^5.8.2',
-  bullmq: '^5.65.0',
+  fastify: '^5.8.2',
+  pg: '^8.20.0',
+  ioredis: '^5.10.0',
+  bullmq: '^5.70.4',
   bcrypt: '^6.0.0',
   jsonwebtoken: '^9.0.2',
-
 };
 
 const fields = ['dependencies', 'devDependencies'];
