@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented here. Dates use `YYYY-MM-DD`.
 
+## [1.2.3] - 2026-03-07
+
+### Changed
+
+- Automated release from PR #21: test(monorepo): consolidate test optimization rollout (https://github.com/abocha/esl-pipeline/pull/21)
+
 ## [1.2.2] - 2026-03-07
 
 ### Changed
