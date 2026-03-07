@@ -231,31 +231,60 @@ function parsePronunciationWordLine(
 ): { word?: PronunciationShadowWord; issue?: PronunciationShadowIssue } | null {
   const numberedItem = /^\s*(?:[-*]\s+)?\d+\.\s+/.test(line);
   if (!numberedItem) return null;
-  const parsed = /^\s*(?:[-*]\s+)?\d+\.\s*(.+?)\s*[—-]\s*(.+?)\s*$/.exec(line);
-  if (!parsed?.[1] || !parsed[2]) {
+
+  const itemContent = line.replace(/^\s*(?:[-*]\s+)?\d+\.\s*/, '').trim();
+  if (!itemContent) {
     return {
       issue: {
         code: 'invalid_word_item_format',
         message:
-          'Word drill line must use "1. word — /transcription/" format.',
+          'Word drill line must use "1. word — /transcription/" or "1. word /transcription/" format.',
         line: lineNumber,
       },
     };
   }
-  const text = parsed[1].replaceAll('**', '').replaceAll('`', '').trim();
-  const pronunciationPart = parsed[2].trim();
-  const transcriptionMatch = /\/.+?\//.exec(pronunciationPart);
-  if (!transcriptionMatch?.[0]) {
+
+  const transcriptionTailMatch = /(\/[^/\n]+\/)(?:\s+(.+))?$/.exec(itemContent);
+  if (!transcriptionTailMatch?.[1]) {
+    const dashedSplit = /^(.+?)\s*[—-]\s*(.+?)\s*$/.exec(itemContent);
+    if (dashedSplit?.[2]) {
+      return {
+        issue: {
+          code: 'invalid_word_transcription',
+          message:
+            'Word transcription must be wrapped in forward slashes, e.g. /wɜːd/.',
+          line: lineNumber,
+        },
+      };
+    }
+
     return {
       issue: {
-        code: 'invalid_word_transcription',
+        code: 'invalid_word_item_format',
         message:
-          'Word transcription must be wrapped in forward slashes, e.g. /wɜːd/.',
+          'Word drill line must use "1. word — /transcription/" or "1. word /transcription/" format.',
         line: lineNumber,
       },
     };
   }
-  const transcription = transcriptionMatch[0].trim();
+
+  const rawTextPart = itemContent.slice(0, transcriptionTailMatch.index).trimEnd();
+  const text = rawTextPart
+    .replace(/[—-]\s*$/, '')
+    .replaceAll('**', '')
+    .replaceAll('`', '')
+    .trim();
+  if (!text) {
+    return {
+      issue: {
+        code: 'invalid_word_item_format',
+        message:
+          'Word drill line must use "1. word — /transcription/" or "1. word /transcription/" format.',
+        line: lineNumber,
+      },
+    };
+  }
+  const transcription = transcriptionTailMatch[1].trim();
   return {
     word: {
       text,

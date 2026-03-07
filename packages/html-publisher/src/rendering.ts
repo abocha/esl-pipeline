@@ -389,12 +389,13 @@ body {
   margin-bottom: 8px;
 }
 .pronunciation-word-main {
-  display: flex;
+  display: inline-flex;
   align-items: baseline;
-  justify-content: space-between;
+  justify-content: flex-start;
   gap: 12px;
   flex-wrap: wrap;
-  width: 100%;
+  width: auto;
+  max-width: 100%;
 }
 .pronunciation-word-content {
   display: inline-flex;
@@ -509,10 +510,35 @@ body {
 .column-list.grammar-matrix-grid .column > :last-child {
   margin-bottom: 0;
 }
-.column-list.grammar-matrix-grid .column p:first-child strong {
-  display: inline-block;
-  padding: 2px 0 8px;
+.column-list.grammar-matrix-grid .column > .grammar-card-heading {
+  margin-top: 0;
+  margin-bottom: 12px;
+  padding: 2px 0 10px;
   border-bottom: 1px dashed color-mix(in srgb, var(--page-line) 65%, transparent 35%);
+  text-wrap: balance;
+}
+.column-list.grammar-matrix-grid .column > .grammar-card-heading strong {
+  display: block;
+}
+.column-list.grammar-matrix-grid .column > .grammar-card-heading .heading-text {
+  background: transparent;
+  padding: 0;
+  border-radius: 0;
+}
+.column-list.grammar-matrix-grid .column p,
+.column-list.grammar-matrix-grid .column li {
+  text-wrap: pretty;
+}
+.column-list.grammar-matrix-grid .column p[data-grammar-prose="true"] {
+  text-align: justify;
+  text-justify: inter-word;
+  hyphens: auto;
+}
+.column-list.grammar-matrix-grid .column > p > em:only-child {
+  display: block;
+  text-align: justify;
+  text-justify: inter-word;
+  text-align-last: left;
 }
 .video-embed {
   position: relative;
@@ -718,6 +744,15 @@ th {
   .column-list.grammar-matrix-grid {
     padding: 12px;
     gap: 12px;
+  }
+  .column-list.grammar-matrix-grid .column p[data-grammar-prose="true"] {
+    text-align: left;
+    text-justify: auto;
+  }
+  .column-list.grammar-matrix-grid .column > p > em:only-child {
+    text-align: left;
+    text-justify: auto;
+    text-align-last: auto;
   }
   .markdown-body table {
     display: block;
@@ -1670,13 +1705,160 @@ function decorateNoticeGrammarColumns(html: string): string {
         return fullSection;
       }
 
-      const decoratedSection = sectionHtml.replace(
+      const withScopedGrid = sectionHtml.replace(
         /<div class="column-list">/,
         '<div class="column-list grammar-matrix-grid">',
       );
+      const decoratedSection = normalizeGrammarMatrixColumnMarkup(withScopedGrid);
       return `${headingHtml}${decoratedSection}`;
     },
   );
+}
+
+function normalizeGrammarMatrixColumnMarkup(sectionHtml: string): string {
+  return sectionHtml.replaceAll(
+    /<div class="column">([\s\S]*?)<\/div>/gi,
+    (_columnHtml, columnInner) => {
+      let normalizedInner = String(columnInner || '')
+        .replaceAll(/<hr\s*\/?>/gi, '')
+        .trim();
+      normalizedInner = splitStackedGrammarParagraphs(normalizedInner);
+      normalizedInner = mergeFragmentedRuleParagraphs(normalizedInner);
+      normalizedInner = normalizedInner.replaceAll(
+        /<p\b([^>]*)>([\s\S]*?)<\/p>/gi,
+        (_paragraphHtml, rawAttrs: string, rawContent: string) => {
+          const attrs = rawAttrs || '';
+          const normalizedContent = normalizeInlineHtmlSpacing(String(rawContent || ''));
+          const plainText = normalizedContent.replaceAll(/<[^>]+>/g, ' ').replaceAll(/\s+/g, ' ').trim();
+          const wordCount = plainText.length > 0 ? plainText.split(' ').filter(Boolean).length : 0;
+          const isRuleParagraph = /^rule:/i.test(plainText);
+          const useProseAlignment = !isRuleParagraph && wordCount >= 12;
+          const proseAttribute = useProseAlignment ? ' data-grammar-prose="true"' : '';
+          return `<p${attrs}${proseAttribute}>${normalizedContent}</p>`;
+        },
+      );
+      normalizedInner = markFirstGrammarHeading(normalizedInner);
+      return `<div class="column">${normalizedInner}</div>`;
+    },
+  );
+}
+
+function normalizeInlineHtmlSpacing(content: string): string {
+  return String(content || '')
+    .replaceAll(/<br\s*\/?>/gi, ' ')
+    .replaceAll(/\s{2,}/g, ' ')
+    .trim();
+}
+
+function splitStackedGrammarParagraphs(columnInner: string): string {
+  return columnInner.replaceAll(
+    /<p\b([^>]*)>([\s\S]*?)<\/p>/gi,
+    (fullMatch, rawAttrs: string, rawContent: string) => {
+      const content = String(rawContent || '');
+      if (!/<br\s*\/?>/i.test(content)) {
+        return fullMatch;
+      }
+
+      const attrs = rawAttrs || '';
+      const segments = content
+        .split(/<br\s*\/?>/gi)
+        .map((segment) => normalizeInlineHtmlSpacing(segment))
+        .filter((segment) => segment.length > 0);
+
+      if (segments.length < 2) {
+        return fullMatch;
+      }
+
+      return segments.map((segment) => `<p${attrs}>${segment}</p>`).join('');
+    },
+  );
+}
+
+function mergeFragmentedRuleParagraphs(columnInner: string): string {
+  return columnInner.replaceAll(
+    /<p\b([^>]*)>\s*<strong>\s*Rule:\s*<\/strong>\s*<\/p>\s*((?:<p\b[^>]*>[\s\S]*?<\/p>\s*){1,6})/gi,
+    (_fullMatch, ruleAttrs: string, followingParagraphs: string) => {
+      const paragraphRegex = /<p\b[^>]*>([\s\S]*?)<\/p>\s*/gi;
+      const ruleSegments: string[] = [];
+      let boundary = 0;
+      let paragraphMatch = paragraphRegex.exec(followingParagraphs);
+
+      while (paragraphMatch) {
+        const normalizedSegment = normalizeInlineHtmlSpacing(String(paragraphMatch[1] || ''));
+        const plainText = stripHtml(normalizedSegment).replaceAll(/\s+/g, ' ').trim();
+        boundary = paragraphRegex.lastIndex;
+        if (!plainText) {
+          paragraphMatch = paragraphRegex.exec(followingParagraphs);
+          continue;
+        }
+
+        ruleSegments.push(normalizedSegment);
+        if (/[.!?](?:["')\]]+)?$/.test(plainText) || ruleSegments.length >= 4) {
+          break;
+        }
+        paragraphMatch = paragraphRegex.exec(followingParagraphs);
+      }
+
+      if (ruleSegments.length === 0) {
+        return `<p${ruleAttrs}><strong>Rule:</strong></p>${followingParagraphs}`;
+      }
+
+      const mergedRuleHtml = normalizeInlineHtmlSpacing(
+        `<strong>Rule:</strong> ${ruleSegments.join(' ')}`,
+      ).replaceAll(/\s+([,.;!?])/g, '$1');
+      const remainder = followingParagraphs.slice(boundary);
+      return `<p${ruleAttrs}>${mergedRuleHtml}</p>${remainder}`;
+    },
+  );
+}
+
+function markFirstGrammarHeading(columnInner: string): string {
+  const headingMatch = /<h([1-6])\b([^>]*)>([\s\S]*?)<\/h\1>/i.exec(columnInner);
+  const paragraphMatch = /<p\b([^>]*)>([\s\S]*?)<\/p>/i.exec(columnInner);
+
+  const headingIndex = headingMatch ? (headingMatch.index ?? Number.POSITIVE_INFINITY) : Number.POSITIVE_INFINITY;
+  const paragraphIndex = paragraphMatch
+    ? (paragraphMatch.index ?? Number.POSITIVE_INFINITY)
+    : Number.POSITIVE_INFINITY;
+
+  if (!Number.isFinite(headingIndex) && !Number.isFinite(paragraphIndex)) {
+    return columnInner;
+  }
+
+  if (headingIndex <= paragraphIndex && headingMatch?.[0]) {
+    const fullMatch = headingMatch[0];
+    const level = headingMatch[1];
+    const attrs = headingMatch[2] || '';
+    const content = headingMatch[3] || '';
+    const replacement = `<h${level}${appendClassToHtmlAttributes(attrs, 'grammar-card-heading')}>${content}</h${level}>`;
+    return `${columnInner.slice(0, headingIndex)}${replacement}${columnInner.slice(headingIndex + fullMatch.length)}`;
+  }
+
+  if (!paragraphMatch?.[0]) {
+    return columnInner;
+  }
+
+  const fullMatch = paragraphMatch[0];
+  const attrs = paragraphMatch[1] || '';
+  const content = paragraphMatch[2] || '';
+  const replacement = `<p${appendClassToHtmlAttributes(attrs, 'grammar-card-heading')}>${content}</p>`;
+  return `${columnInner.slice(0, paragraphIndex)}${replacement}${columnInner.slice(paragraphIndex + fullMatch.length)}`;
+}
+
+function appendClassToHtmlAttributes(attributes: string, className: string): string {
+  if (!attributes || attributes.trim().length === 0) {
+    return ` class="${className}"`;
+  }
+  const classAttrRegex = /\bclass\s*=\s*("([^"]*)"|'([^']*)')/i;
+  const classAttrMatch = classAttrRegex.exec(attributes);
+  if (!classAttrMatch) {
+    return `${attributes} class="${className}"`;
+  }
+  const existingClassValue = classAttrMatch[2] ?? classAttrMatch[3] ?? '';
+  const classes = new Set(existingClassValue.split(/\s+/).filter(Boolean));
+  classes.add(className);
+  const updatedClassAttr = `class="${[...classes].join(' ')}"`;
+  return attributes.replace(classAttrRegex, updatedClassAttr);
 }
 
 function promoteFirstTableRowToHeaderCells(sectionHtml: string): string {
@@ -1833,6 +2015,55 @@ function buildBehaviorScript(features: ResolvedFeatures): string {
       }
     });
   });
+
+  try {
+    const lockTrailingWords = (value, wordsToLock = 2) => {
+      let next = String(value || '')
+        .replace(/[ \\t\\r\\n\\f]+/g, ' ')
+        .trim();
+      if (!next) {
+        return '';
+      }
+      for (let index = 1; index < wordsToLock; index += 1) {
+        const match = /(\\S+)\\s+(\\S+)(\\s*)$/.exec(next);
+        if (!match?.[1] || !match[2]) {
+          break;
+        }
+        const prefix = next.slice(0, match.index).trimEnd();
+        const suffix = match[3] || '';
+        next = [prefix, match[1] + '\\u00A0' + match[2] + suffix].filter(Boolean).join(' ');
+      }
+      return next;
+    };
+
+    const lockLeadingParentheticalPair = (value) =>
+      String(value || '').replace(/^(\\(\\s*\\S+)\\s+(\\S+)/, '$1\\u00A0$2');
+
+    const applyGrammarWidowLock = (node, lockLeadingPair) => {
+      if (!(node instanceof HTMLElement)) return;
+      if (node.children.length > 0) return;
+      const original = String(node.textContent || '');
+      if (!original.trim()) return;
+      let next = original.replace(/[ \\t\\r\\n\\f]+/g, ' ').trim();
+      if (lockLeadingPair) {
+        next = lockLeadingParentheticalPair(next);
+      }
+      next = lockTrailingWords(next, 2);
+      if (next && next !== original) {
+        node.textContent = next;
+      }
+    };
+
+    const grammarQuestionEmphasis = document.querySelectorAll(
+      '.column-list.grammar-matrix-grid .column > p > em:only-child',
+    );
+    grammarQuestionEmphasis.forEach((element) => applyGrammarWidowLock(element, true));
+
+    const grammarInlineNotes = document.querySelectorAll(
+      '.column-list.grammar-matrix-grid .column li > em',
+    );
+    grammarInlineNotes.forEach((element) => applyGrammarWidowLock(element, true));
+  } catch {}
 
   const readStoredTheme = (key) => {
     try {
@@ -2536,6 +2767,40 @@ function buildBehaviorScript(features: ResolvedFeatures): string {
           window.speechSynthesis.speak(utterance);
         };
 
+        const trimTrailingDelimiterInContainer = (container) => {
+          if (!(container instanceof HTMLElement)) return;
+          let current = container.lastChild;
+          while (current) {
+            if (current.nodeType === Node.TEXT_NODE) {
+              const textValue = current.textContent || '';
+              const withoutTrailingDelimiter = textValue.replace(/\\s*[—-]+\\s*$/, '');
+              if (withoutTrailingDelimiter !== textValue) {
+                current.textContent = withoutTrailingDelimiter;
+              }
+              if (!(current.textContent || '').trim()) {
+                const previous = current.previousSibling;
+                container.removeChild(current);
+                current = previous;
+                continue;
+              }
+              break;
+            }
+
+            if (current instanceof HTMLElement) {
+              trimTrailingDelimiterInContainer(current);
+              if (!(current.textContent || '').trim()) {
+                const previous = current.previousSibling;
+                container.removeChild(current);
+                current = previous;
+                continue;
+              }
+              break;
+            }
+
+            break;
+          }
+        };
+
         const buildWordContentNodes = (item, word, transcription) => {
           if (!(item instanceof HTMLElement)) return null;
           const clonedNodes = Array.from(item.childNodes).map((node) => node.cloneNode(true));
@@ -2574,7 +2839,7 @@ function buildBehaviorScript(features: ResolvedFeatures): string {
           if (!foundBoundary || clonedNodes.length === 0) {
             const fallbackLabel = document.createElement('span');
             fallbackLabel.className = 'pronunciation-word-label';
-            fallbackLabel.textContent = word + ' —';
+            fallbackLabel.textContent = word;
             content.appendChild(fallbackLabel);
             return content;
           }
@@ -2582,9 +2847,39 @@ function buildBehaviorScript(features: ResolvedFeatures): string {
           clonedNodes.forEach((node) => {
             content.appendChild(node);
           });
-          content.appendChild(document.createTextNode(' '));
-          content.appendChild(document.createTextNode('—'));
+          trimTrailingDelimiterInContainer(content);
+          if (!(content.textContent || '').trim()) {
+            const fallbackLabel = document.createElement('span');
+            fallbackLabel.className = 'pronunciation-word-label';
+            fallbackLabel.textContent = word;
+            content.appendChild(fallbackLabel);
+          }
           return content;
+        };
+
+        const parseWordDrillLine = (rawLine) => {
+          const normalized = String(rawLine || '').trim();
+          if (!normalized) return null;
+
+          const transcriptionTailMatch = /(\\/[^/\\n]+\\/)(?:\\s+(.+))?$/.exec(normalized);
+          if (!transcriptionTailMatch?.[1]) return null;
+
+          const transcription = transcriptionTailMatch[1].trim();
+          const note = (transcriptionTailMatch[2] || '').trim();
+          const rawWord = normalized
+            .slice(0, transcriptionTailMatch.index)
+            .replace(/^\\d+\\.\\s*/, '')
+            .replace(/[—-]\\s*$/, '')
+            .split(String.fromCharCode(96))
+            .join('')
+            .trim();
+          if (!rawWord) return null;
+
+          return {
+            word: rawWord,
+            transcription,
+            note,
+          };
         };
 
         const listItems = [];
@@ -2605,16 +2900,11 @@ function buildBehaviorScript(features: ResolvedFeatures): string {
           const raw = (item.textContent || '').replace(/\\s+/g, ' ').trim();
 
           if (wordDrillEnabled) {
-            const parsed =
-              /^(.+?)\\s*[—-]\\s*(\\/.+?\\/)(?:\\s+(.+))?$/.exec(raw);
-            if (parsed?.[1] && parsed[2]) {
-              const word = parsed[1]
-                .replace(/^\\d+\\.\\s*/, '')
-                .split(String.fromCharCode(96))
-                .join('')
-                .trim();
-              const transcription = parsed[2].trim();
-              const note = (parsed[3] || '').trim();
+            const parsed = parseWordDrillLine(raw);
+            if (parsed) {
+              const word = parsed.word;
+              const transcription = parsed.transcription;
+              const note = parsed.note;
               if (!word) return;
 
               const controls = document.createElement('span');

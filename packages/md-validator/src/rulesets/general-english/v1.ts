@@ -1199,7 +1199,7 @@ export async function validateGeneralEnglishRuleset(
     }
     if (pronunciationShadow.words.length < 3 || pronunciationShadow.words.length > 5) {
       errors.push(
-        `Pronunciation Micro-Focus (line ${applyLineOffset(pronunciationShadow.sectionStartLine, lineOffset)}): shadow_sentence mode requires 3-5 word drill lines in "1. word — /transcription/" format.`,
+        `Pronunciation Micro-Focus (line ${applyLineOffset(pronunciationShadow.sectionStartLine, lineOffset)}): shadow_sentence mode requires 3-5 word drill lines in "1. word — /transcription/" or "1. word /transcription/" format.`,
       );
     }
     for (const issue of pronunciationShadow.issues) {

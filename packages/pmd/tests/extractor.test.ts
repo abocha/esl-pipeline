@@ -132,4 +132,40 @@ describe('pmd extractor', () => {
     expect(pronunciation?.words[2]?.transcription).toBe('/ˈmɔːrnɪŋ/');
     expect(pronunciation?.issues).toHaveLength(0);
   });
+
+  it('accepts word drill lines without a dash delimiter', () => {
+    const noDashVariant = parseMarkdownContext(
+      sample
+        .replace('1. **thinking** — /ˈθɪŋkɪŋ/', '1. **thinking** /ˈθɪŋkɪŋ/')
+        .replace('2. **working** — /ˈwɜːrkɪŋ/', '2. **working** /ˈwɜːrkɪŋ/')
+        .replace('3. **morning** — /ˈmɔːrnɪŋ/', '3. **morning** /ˈmɔːrnɪŋ/'),
+    );
+    const pronunciation = extractPronunciationShadowFocus(noDashVariant);
+    expect(pronunciation?.mode).toBe('shadow_sentence');
+    expect(pronunciation?.words).toHaveLength(3);
+    expect(pronunciation?.words[0]?.text).toBe('thinking');
+    expect(pronunciation?.words[0]?.transcription).toBe('/ˈθɪŋkɪŋ/');
+    expect(pronunciation?.issues).toHaveLength(0);
+  });
+
+  it('preserves slash-bearing words in dashed and no-dash drill lines', () => {
+    const withSlashWord = parseMarkdownContext(
+      sample
+        .replace(
+          '**Shadow sentence:** I was thinking about working this morning.',
+          '**Shadow sentence:** Please practice and/or quickly this morning.',
+        )
+        .replace('1. **thinking** — /ˈθɪŋkɪŋ/', '1. **and/or** — /ˈændɔːr/')
+        .replace('2. **working** — /ˈwɜːrkɪŋ/', '2. **working** /ˈwɜːrkɪŋ/')
+        .replace('3. **morning** — /ˈmɔːrnɪŋ/', '3. **morning** /ˈmɔːrnɪŋ/'),
+    );
+    const pronunciation = extractPronunciationShadowFocus(withSlashWord);
+    expect(pronunciation?.mode).toBe('shadow_sentence');
+    expect(pronunciation?.words).toHaveLength(3);
+    expect(pronunciation?.words[0]?.text).toBe('and/or');
+    expect(pronunciation?.words[0]?.transcription).toBe('/ˈændɔːr/');
+    expect(pronunciation?.words[1]?.text).toBe('working');
+    expect(pronunciation?.words[1]?.transcription).toBe('/ˈwɜːrkɪŋ/');
+    expect(pronunciation?.issues).toHaveLength(0);
+  });
 });
