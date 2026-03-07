@@ -31,6 +31,7 @@
 - Backend/frontend status: [`docs/backend-frontend/backend-frontend-alignment.md`](backend-frontend/backend-frontend-alignment.md)
 - Batch system map: [`docs/backend-frontend/BATCH_SYSTEM.md`](backend-frontend/BATCH_SYSTEM.md)
 - Env contracts: [`docs/reference/env.md`](reference/env.md)
+- Test methodology + lane model: [`docs/reference/TESTING_GUIDELINES.md`](reference/TESTING_GUIDELINES.md)
 - Validator ruleset conventions: [`docs/reference/MD_VALIDATOR_RULESET_CONVENTIONS.md`](reference/MD_VALIDATOR_RULESET_CONVENTIONS.md)
 
 ## Operations Paths
