@@ -36,12 +36,12 @@
     "@esl-pipeline/contracts": "workspace:*",
     "@esl-pipeline/md-validator": "workspace:*",
     "@esl-pipeline/pmd": "workspace:*",
-    "@notionhq/client": "^5.4.0",
+    "@notionhq/client": "^5.11.1",
     "gray-matter": "^4.0.3",
     "zod": "^4.1.13"
   },
   "devDependencies": {
-    "@types/node": "^25.3.0",
+    "@types/node": "^25.3.5",
     "tsx": "^4.21.0",
     "typescript": "^5.9.3",
     "vitest": "^4.0.18"

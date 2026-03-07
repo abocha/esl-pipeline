@@ -172,26 +172,25 @@ describe('application/process-transcribe-job', () => {
 
     const deepgramClient = {
       listen: {
-        prerecorded: {
+        v1: {
+          media: {
           async transcribeFile() {
             attemptCount += 1;
             if (attemptCount === 1) {
               throw new TypeError('terminated');
             }
             return {
-              result: {
-                metadata: { channels: 2 },
-                results: {
-                  utterances: [{ transcript: 'Recovered transcript', speaker: 0, start: 0.1 }],
-                  channels: [
-                    { alternatives: [{ transcript: 'Recovered transcript' }] },
-                    { alternatives: [{ transcript: '' }] },
-                  ],
-                },
+              metadata: { channels: 2 },
+              results: {
+                utterances: [{ transcript: 'Recovered transcript', speaker: 0, start: 0.1 }],
+                channels: [
+                  { alternatives: [{ transcript: 'Recovered transcript' }] },
+                  { alternatives: [{ transcript: '' }] },
+                ],
               },
-              error: undefined,
             };
           },
+        },
         },
       },
     };
@@ -241,6 +240,128 @@ describe('application/process-transcribe-job', () => {
     expect(attemptCount).toBe(2);
     expect(recording.status).toBe('transcribed');
     expect(recording.error).toBeNull();
+  });
+
+  it('retries transient statusCode failures and succeeds', async () => {
+    const recording = createRecording('recording-retry-status-code');
+    let attemptCount = 0;
+
+    const deepgramClient = {
+      listen: {
+        v1: {
+          media: {
+            async transcribeFile() {
+              attemptCount += 1;
+              if (attemptCount === 1) {
+                throw { statusCode: 503, message: 'service unavailable' };
+              }
+              return {
+                metadata: { channels: 2 },
+                results: {
+                  utterances: [{ transcript: 'Recovered transcript', speaker: 0, start: 0.1 }],
+                  channels: [
+                    { alternatives: [{ transcript: 'Recovered transcript' }] },
+                    { alternatives: [{ transcript: '' }] },
+                  ],
+                },
+              };
+            },
+          },
+        },
+      },
+    };
+
+    const result = await processTranscribeJob(
+      { recordingId: recording.id },
+      {
+        config: createConfig(),
+        storage: createStorageStub(),
+        deepgramClient,
+        recordings: {
+          async getById() {
+            return recording;
+          },
+          async updateStatus({ status, error }) {
+            recording.status = status;
+            recording.error = error ?? null;
+            return recording;
+          },
+        },
+        transcripts: {
+          async getByRecordingId() {
+            return null;
+          },
+          async insert(params) {
+            return {
+              id: params.id ?? 'transcript-retry-status-code',
+              recordingId: params.recordingId,
+              storageUri: params.storageUri,
+              rawResponseUri: params.rawResponseUri ?? null,
+              mode: params.mode,
+              model: params.model,
+              language: params.language,
+              fallbackUsed: params.fallbackUsed,
+              summaryJson: params.summaryJson ?? null,
+              createdAt: new Date(),
+              updatedAt: new Date(),
+            };
+          },
+        },
+        publishEvent: vi.fn(),
+      },
+    );
+
+    expect(result).not.toBeNull();
+    expect(attemptCount).toBe(2);
+    expect(recording.status).toBe('transcribed');
+    expect(recording.error).toBeNull();
+  });
+
+  it('fails loudly when Deepgram returns async accepted response', async () => {
+    const recording = createRecording('recording-accepted-response');
+
+    const deepgramClient = {
+      listen: {
+        v1: {
+          media: {
+            async transcribeFile() {
+              return { request_id: 'req-123' };
+            },
+          },
+        },
+      },
+    };
+
+    await expect(
+      processTranscribeJob(
+        { recordingId: recording.id },
+        {
+          config: createConfig(),
+          storage: createStorageStub(),
+          deepgramClient,
+          recordings: {
+            async getById() {
+              return recording;
+            },
+            async updateStatus({ status, error }) {
+              recording.status = status;
+              recording.error = error ?? null;
+              return recording;
+            },
+          },
+          transcripts: {
+            async getByRecordingId() {
+              return null;
+            },
+            async insert() {
+              throw new Error('insert should not be called for async accepted responses');
+            },
+          },
+          publishEvent: vi.fn(),
+        },
+      ),
+    ).rejects.toThrow(/async accepted response/i);
+    expect(recording.status).toBe('failed');
   });
 
   it('formats transcript with speaker labels and merges adjacent utterances', async () => {
@@ -521,16 +642,21 @@ function createDeepgramStub(primaryResult?: unknown, fallbackResult?: unknown) {
   const calls: unknown[] = [];
   return {
     listen: {
-      prerecorded: {
-        async transcribeFile(_stream: Readable, options: Record<string, unknown>) {
-          calls.push(options);
-          if (calls.length === 1 && primaryResult === null) {
-            return { result: undefined, error: new Error('primary failed') };
-          }
-          if (calls.length === 1 && primaryResult !== undefined) {
-            return { result: primaryResult, error: undefined };
-          }
-          return { result: fallbackResult, error: undefined };
+      v1: {
+        media: {
+          async transcribeFile(_stream: Readable, options: Record<string, unknown>) {
+            calls.push(options);
+            if (calls.length === 1 && primaryResult === null) {
+              throw new Error('primary failed');
+            }
+            if (calls.length === 1 && primaryResult !== undefined) {
+              return primaryResult;
+            }
+            if (fallbackResult === undefined) {
+              throw new Error('fallback failed');
+            }
+            return fallbackResult;
+          },
         },
       },
     },
