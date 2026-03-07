@@ -1571,6 +1571,24 @@ content
     expect(res.errors).toHaveLength(0);
   });
 
+  it('accepts shadow_sentence word drill lines without dash delimiters', async () => {
+    const tempDir = await mkdtemp(path.join(tmpdir(), 'validator-'));
+    const file = path.join(tempDir, 'shadow-pronunciation-no-dash.md');
+    const section = [
+      ':::callout 🗣️',
+      '**Mode:** shadow_sentence',
+      '**Shadow sentence:** I was thinking about working this morning.',
+      '1. thinking /ˈθɪŋkɪŋ/',
+      '2. working /ˈwɜːrkɪŋ/',
+      '3. morning /ˈmɔːrnɪŋ/',
+      ':::',
+    ].join('\n');
+    await writeFile(file, withPronunciationSection(buildBaseDoc('text'), section));
+    const res = await validateMarkdownFile(file);
+    expect(res.ok).toBe(true);
+    expect(res.errors).toHaveLength(0);
+  });
+
   it('fails shadow_sentence mode when shadow sentence is missing', async () => {
     const tempDir = await mkdtemp(path.join(tmpdir(), 'validator-'));
     const file = path.join(tempDir, 'shadow-pronunciation-missing-sentence.md');
