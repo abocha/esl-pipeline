@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented here. Dates use `YYYY-MM-DD`.
 
+## [1.2.0] - 2026-03-07
+
+### Changed
+
+- Automated release from PR #17: fix: pronunciation drill parsing and grammar preview rendering (https://github.com/abocha/esl-pipeline/pull/17)
+
 ## [1.1.3] - 2026-03-06
 
 ### Changed
