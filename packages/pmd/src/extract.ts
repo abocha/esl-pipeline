@@ -246,6 +246,18 @@ function parsePronunciationWordLine(
 
   const transcriptionTailMatch = /(\/[^/\n]+\/)(?:\s+(.+))?$/.exec(itemContent);
   if (!transcriptionTailMatch?.[1]) {
+    const dashedSplit = /^(.+?)\s*[—-]\s*(.+?)\s*$/.exec(itemContent);
+    if (dashedSplit?.[2]) {
+      return {
+        issue: {
+          code: 'invalid_word_transcription',
+          message:
+            'Word transcription must be wrapped in forward slashes, e.g. /wɜːd/.',
+          line: lineNumber,
+        },
+      };
+    }
+
     return {
       issue: {
         code: 'invalid_word_item_format',
