@@ -1,6 +1,6 @@
 {
   "name": "esl-pipeline",
-  "version": "1.2.1",
+  "version": "1.2.2",
   "private": true,
   "description": "ESL assignment pipeline tooling (validation, Notion import, TTS, S3 upload).",
   "keywords": [

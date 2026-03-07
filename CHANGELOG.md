@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented here. Dates use `YYYY-MM-DD`.
 
+## [1.2.2] - 2026-03-07
+
+### Changed
+
+- Automated release from PR #19: fix(deps): remediate dependency audit findings and stabilize flaky frontend tests (https://github.com/abocha/esl-pipeline/pull/19)
+
 ## [1.2.1] - 2026-03-07
 
 ### Changed
