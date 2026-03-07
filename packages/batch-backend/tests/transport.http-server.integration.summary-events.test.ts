@@ -4,6 +4,9 @@ import {
   type RecordingRecord,
 } from './transport.http-server.integration.harness.js';
 
+type IncomingMessage = import('node:http').IncomingMessage;
+type ClientRequest = import('node:http').ClientRequest;
+
 describeHttpServerIntegrationSuite(
   'transport/http-server - integration (in-process) [summary-readiness-streams]',
   ({
@@ -444,11 +447,11 @@ describeHttpServerIntegrationSuite(
     };
 
     const eventPayload = await new Promise<any>((resolve, reject) => {
-      let resRef: import('node:http').IncomingMessage | null = null;
+      let resRef: IncomingMessage | null = null;
       let settled = false;
       let buffer = '';
       let published = false;
-      let requestRef: import('node:http').ClientRequest | null = null;
+      let requestRef: ClientRequest | null = null;
       let timeout: ReturnType<typeof setTimeout> | null = null;
       let publishTimer: ReturnType<typeof setTimeout> | null = null;
 
@@ -471,11 +474,11 @@ describeHttpServerIntegrationSuite(
         }
       };
 
-      const req = httpRequest(url, (res) => {
+      const req = httpRequest(url, (res: IncomingMessage) => {
         resRef = res;
         res.setEncoding('utf8');
 
-        res.on('data', (chunk) => {
+        res.on('data', (chunk: string) => {
           buffer += chunk;
 
           if (!published && buffer.includes(': connected')) {
@@ -492,15 +495,15 @@ describeHttpServerIntegrationSuite(
           }
         });
 
-        res.on('error', (err) => {
-          cleanup(err as Error);
+        res.on('error', (err: Error) => {
+          cleanup(err);
         });
       });
 
       requestRef = req;
 
-      req.on('error', (err) => {
-        cleanup(err as Error);
+      req.on('error', (err: Error) => {
+        cleanup(err);
       });
 
       req.end();
@@ -575,11 +578,11 @@ describeHttpServerIntegrationSuite(
       };
 
       const eventPayload = await new Promise<any>((resolve, reject) => {
-        let resRef: import('node:http').IncomingMessage | null = null;
+        let resRef: IncomingMessage | null = null;
         let settled = false;
         let buffer = '';
         let published = false;
-        let requestRef: import('node:http').ClientRequest | null = null;
+        let requestRef: ClientRequest | null = null;
         let timeout: ReturnType<typeof setTimeout> | null = null;
         let publishTimer: ReturnType<typeof setTimeout> | null = null;
 
@@ -602,11 +605,11 @@ describeHttpServerIntegrationSuite(
           }
         };
 
-        const req = httpRequest(url, (res) => {
+        const req = httpRequest(url, (res: IncomingMessage) => {
           resRef = res;
           res.setEncoding('utf8');
 
-          res.on('data', (chunk) => {
+          res.on('data', (chunk: string) => {
             buffer += chunk;
 
             if (!published && buffer.includes(': connected')) {
@@ -627,15 +630,15 @@ describeHttpServerIntegrationSuite(
             }
           });
 
-          res.on('error', (err) => {
-            cleanup(err as Error);
+          res.on('error', (err: Error) => {
+            cleanup(err);
           });
         });
 
         requestRef = req;
 
-        req.on('error', (err) => {
-          cleanup(err as Error);
+        req.on('error', (err: Error) => {
+          cleanup(err);
         });
 
         req.end();
