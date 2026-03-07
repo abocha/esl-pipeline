@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented here. Dates use `YYYY-MM-DD`.
 
+## [1.2.1] - 2026-03-07
+
+### Changed
+
+- Automated release from PR #18: chore(deps): safe workspace upgrade and Deepgram v5 migration (https://github.com/abocha/esl-pipeline/pull/18)
+
 ## [1.2.0] - 2026-03-07
 
 ### Changed
