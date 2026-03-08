@@ -81,6 +81,8 @@ export async function createApprovalJobFromDraft(
     promptAlias: provenance.promptAlias,
     withTts,
     ttsStrategy: jobOverrides.ttsStrategy ?? ttsStrategy,
+    ttsProvider: jobOverrides.ttsProvider,
+    googleTtsModel: jobOverrides.googleTtsModel,
     voiceAccent: jobOverrides.voiceAccent ?? voiceAccent,
     voiceId: jobOverrides.voiceId,
     forceTts: jobOverrides.forceTts,

@@ -24,9 +24,9 @@ vi.mock('@esl-pipeline/notion-adapter', () => ({
   addOrReplaceAudioUnderStudyText: vi.fn().mockResolvedValue({ replaced: false, appended: true }),
 }));
 
-vi.mock('@esl-pipeline/tts-elevenlabs', async () => {
-  const actual = await vi.importActual<typeof import('@esl-pipeline/tts-elevenlabs')>(
-    '@esl-pipeline/tts-elevenlabs',
+vi.mock('@esl-pipeline/tts-core', async () => {
+  const actual = await vi.importActual<typeof import('@esl-pipeline/tts-core')>(
+    '@esl-pipeline/tts-core',
   );
   return {
     ...actual,

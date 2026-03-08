@@ -695,7 +695,7 @@ auto: true
 
       // Set environment variables like CLI would
       const originalEnv = { ...process.env };
-      process.env.ELEVENLABS_TTS_STRATEGY = 'tts';
+      process.env.ESL_TTS_PROVIDER_ELEVENLABS_STRATEGY = 'tts';
 
       try {
         // Call without specifying strategy - should use env var

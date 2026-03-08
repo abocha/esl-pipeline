@@ -43,8 +43,9 @@ NOTION_TOKEN=secret_...
 NOTION_DB_ID=...
 # Optional: DATA_SOURCE_ID for Notion search integration
 
-# ElevenLabs
-ELEVENLABS_API_KEY=...
+# TTS providers
+ESL_TTS_DEFAULT_PROVIDER=elevenlabs
+ESL_TTS_PROVIDER_ELEVENLABS_API_KEY=...
 
 # AWS S3
 AWS_REGION=us-east-1
@@ -110,10 +111,10 @@ The wizard guides you through TTS options:
 You can also set environment variables to skip TTS prompts:
 
 ```bash
-ELEVENLABS_TTS_STRATEGY=dialogue
-ELEVENLABS_DIALOGUE_LANGUAGE=en
-ELEVENLABS_DIALOGUE_STABILITY=0.75
-ELEVENLABS_DIALOGUE_SEED=42
+ESL_TTS_PROVIDER_ELEVENLABS_STRATEGY=dialogue
+ESL_TTS_PROVIDER_ELEVENLABS_DIALOGUE_LANGUAGE=en
+ESL_TTS_PROVIDER_ELEVENLABS_DIALOGUE_STABILITY=0.75
+ESL_TTS_PROVIDER_ELEVENLABS_DIALOGUE_SEED=42
 ```
 
 ## Command-Line Usage
@@ -284,7 +285,8 @@ console.log('MD Hash:', manifest.mdHash);
 | Variable                | Required           | Description              |
 | ----------------------- | ------------------ | ------------------------ |
 | `NOTION_TOKEN`          | Yes                | Notion integration token |
-| `ELEVENLABS_API_KEY`    | Yes (if using TTS) | ElevenLabs API key       |
+| `ESL_TTS_DEFAULT_PROVIDER` | No             | Default TTS provider (`elevenlabs`/`google`) |
+| `ESL_TTS_PROVIDER_ELEVENLABS_API_KEY` | Yes (if provider=`elevenlabs`) | ElevenLabs API key |
 | `AWS_ACCESS_KEY_ID`     | Yes (if using S3)  | AWS access key           |
 | `AWS_SECRET_ACCESS_KEY` | Yes (if using S3)  | AWS secret key           |
 | `AWS_REGION`            | Yes (if using S3)  | AWS region               |
@@ -301,10 +303,10 @@ console.log('MD Hash:', manifest.mdHash);
 
 | Variable                        | Default | Description                        |
 | ------------------------------- | ------- | ---------------------------------- |
-| `ELEVENLABS_TTS_STRATEGY`       | `auto`  | TTS strategy (auto, dialogue, tts) |
-| `ELEVENLABS_DIALOGUE_LANGUAGE`  | -       | ISO 639-1 language code            |
-| `ELEVENLABS_DIALOGUE_STABILITY` | -       | Voice stability (0.0-1.0)          |
-| `ELEVENLABS_DIALOGUE_SEED`      | -       | Seed for reproducible generation   |
+| `ESL_TTS_PROVIDER_ELEVENLABS_STRATEGY`       | `auto`  | TTS strategy (auto, dialogue, tts) |
+| `ESL_TTS_PROVIDER_ELEVENLABS_DIALOGUE_LANGUAGE`  | -       | ISO 639-1 language code            |
+| `ESL_TTS_PROVIDER_ELEVENLABS_DIALOGUE_STABILITY` | -       | Voice stability (0.0-1.0)          |
+| `ESL_TTS_PROVIDER_ELEVENLABS_DIALOGUE_SEED`      | -       | Seed for reproducible generation   |
 
 ### Upload Configuration
 

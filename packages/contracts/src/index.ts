@@ -4,6 +4,8 @@ export type JobState = 'queued' | 'running' | 'awaiting_approval' | 'succeeded' 
 
 export type TtsStrategy = 'auto' | 'dialogue' | 'tts';
 export type TtsStrategyOption = TtsStrategy;
+export type TtsProviderId = 'elevenlabs' | 'google';
+export type GoogleTtsModel = 'chirp3_hd' | 'studio' | 'neural2' | 'wavenet';
 export type CefrLevel = 'A1' | 'A2' | 'B1' | 'B2' | 'C1' | 'C2';
 
 export type JobUploadOption = 'auto' | 's3' | 'none';
@@ -106,6 +108,10 @@ export interface JobOptionsPayload {
   notionDatabases: NotionDatabaseOption[];
   uploadOptions: UploadOption[];
   ttsStrategies: TtsStrategyOption[];
+  ttsProviders?: TtsProviderId[];
+  ttsModelOptionsByProvider?: Partial<Record<TtsProviderId, string[]>>;
+  defaultTtsProvider?: TtsProviderId;
+  defaultTtsModelByProvider?: Partial<Record<TtsProviderId, string>>;
   cefrLevels?: CefrLevel[];
   cefrDefault?: CefrLevel;
   generation?: GenerationOptionsPayload;
@@ -128,6 +134,8 @@ export interface SubmitJobRequest {
   publishTarget?: PublishTarget;
   upload?: JobUploadOption;
   ttsStrategy?: TtsStrategy;
+  ttsProvider?: TtsProviderId;
+  googleTtsModel?: GoogleTtsModel;
   voiceId?: string;
   voiceAccent?: string;
   autoPublish?: boolean;
@@ -141,6 +149,8 @@ export interface JobConfigOverrides {
   withTts?: boolean;
   forceTts?: boolean;
   ttsStrategy?: TtsStrategy;
+  ttsProvider?: TtsProviderId;
+  googleTtsModel?: GoogleTtsModel;
   upload?: JobUploadOption;
   voiceId?: string;
   voiceAccent?: string;
@@ -169,6 +179,8 @@ export interface JobStatusDto {
   notionDatabase: string | null;
   publishTarget: PublishTarget | null;
   ttsStrategy: TtsStrategy | null;
+  ttsProvider?: TtsProviderId | null;
+  googleTtsModel?: GoogleTtsModel | null;
   autoPublish: boolean | null;
   notionUrl: string | null;
   anytypeUrl: string | null;

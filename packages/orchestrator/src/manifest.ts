@@ -1,7 +1,7 @@
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { basename, dirname, join } from 'node:path';
 
-import type { BuildStudyTextResult } from '@esl-pipeline/tts-elevenlabs';
+import type { BuildStudyTextResult } from '@esl-pipeline/tts-core';
 
 export const CURRENT_MANIFEST_SCHEMA_VERSION = 1;
 

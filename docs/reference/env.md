@@ -22,20 +22,31 @@ Set these in `.env` (or your shell) when running `esl` or programmatic API calls
 - `NOTION_TOKEN` — Notion integration token.
 - `NOTION_CLIENT_TIMEOUT` (optional) — Notion client timeout (ms).
 - `NOTION_COLORIZER_THROTTLE_MS`, `NOTION_COLORIZER_MAX_RETRIES`, `NOTION_COLORIZER_RETRY_DELAY_MS` (optional) — Notion colorizer pacing.
-- `ELEVENLABS_API_KEY` — ElevenLabs API key for TTS.
-- `ELEVENLABS_MODEL_ID` (optional, default `eleven_multilingual_v2`) — ElevenLabs model.
-- `ELEVENLABS_OUTPUT_FORMAT` (optional, default `mp3_22050_32`) — Audio format.
-- `ELEVENLABS_TTS_STRATEGY` (optional, `auto`|`dialogue`|`tts`, default `auto`) — TTS strategy.
-- `ELEVENLABS_TTS_MAX_CHARS` (optional, default `4500`) — Max chars per Text-to-Speech request (chunking).
-- `ELEVENLABS_DIALOGUE_LANGUAGE` (optional) — Language code for dialogue strategy.
-- `ELEVENLABS_DIALOGUE_STABILITY` (optional) — Stability for dialogue strategy (0–1).
-- `ELEVENLABS_DIALOGUE_SEED` (optional) — Seed for dialogue strategy.
+- `ESL_TTS_DEFAULT_PROVIDER` (optional, `elevenlabs`|`google`, default `elevenlabs`) — primary TTS provider.
+- `ESL_TTS_PROVIDER_ORDER` (optional, comma-separated) — fallback provider order.
+- `ESL_TTS_PROVIDER_ELEVENLABS_API_KEY` — ElevenLabs API key when ElevenLabs is enabled.
+- `ESL_TTS_PROVIDER_ELEVENLABS_MODEL_ID` (optional, default `eleven_multilingual_v2`) — ElevenLabs model.
+- `ESL_TTS_PROVIDER_ELEVENLABS_OUTPUT_FORMAT` (optional, default `mp3_22050_32`) — ElevenLabs audio format.
+- `ESL_TTS_PROVIDER_ELEVENLABS_STRATEGY` (optional, `auto`|`dialogue`|`tts`, default `auto`) — ElevenLabs strategy.
+- `ESL_TTS_PROVIDER_ELEVENLABS_MAX_CHARS` (optional, default `4500`) — ElevenLabs max chars per request.
+- `ESL_TTS_PROVIDER_ELEVENLABS_DIALOGUE_LANGUAGE` (optional) — ElevenLabs dialogue language code.
+- `ESL_TTS_PROVIDER_ELEVENLABS_DIALOGUE_STABILITY` (optional) — ElevenLabs dialogue stability (0–1).
+- `ESL_TTS_PROVIDER_ELEVENLABS_DIALOGUE_SEED` (optional) — ElevenLabs dialogue seed.
+- `ESL_TTS_PROVIDER_ELEVENLABS_VOICES_PATH` (optional) — path to ElevenLabs voices catalog JSON.
+- `ESL_TTS_PROVIDER_GOOGLE_MODEL` (optional, default `chirp3_hd`) — Google model family (`chirp3_hd|studio|neural2|wavenet`).
+- `ESL_TTS_PROVIDER_GOOGLE_LANGUAGE_CODE` (optional) — Google language code.
+- `ESL_TTS_PROVIDER_GOOGLE_API_ENDPOINT` (optional) — Google endpoint override.
+- `ESL_TTS_PROVIDER_GOOGLE_LOCATION` (optional, `us|eu`) — Google regional endpoint shortcut.
+- `ESL_TTS_PROVIDER_GOOGLE_MODEL_NAME` (optional) — Google model name override sent to API.
+- `ESL_TTS_PROVIDER_GOOGLE_MAX_BYTES` (optional, default `5000`) — Google chunk byte limit.
+- `ESL_TTS_PROVIDER_GOOGLE_VOICE_CHIRP3_HD` (optional) — default `chirp3_hd` voice.
+- `ESL_TTS_PROVIDER_GOOGLE_VOICE_STUDIO` (optional) — default `studio` voice.
+- `ESL_TTS_PROVIDER_GOOGLE_VOICE_NEURAL2` (optional) — default `neural2` voice.
+- `ESL_TTS_PROVIDER_GOOGLE_VOICE_WAVENET` (optional) — default `wavenet` voice.
 - `VOICE_ALIGNMENT_V2_ENABLED` (optional, default `false`) — Enables v2 voice-alignment pipeline behavior.
 - `VOICE_ALIGNMENT_V2_STRICT_VALIDATION` (optional, default `false`) — Promotes voice metadata compatibility checks to hard validation errors.
 - `VOICE_ALIGNMENT_V2_MIN_SCORE` (optional, default `20`) — Minimum heuristic score accepted for strict auto voice assignment.
 - `VOICE_ALIGNMENT_V2_PROMPT` (optional, default `false`) — Enables prompt snapshot `hw_prompt_v4-4_voice-aligned`.
-- `ELEVENLABS_VOICES_PATH` (optional) — Absolute/relative path to synced voice catalog JSON used for
-  validator checks and voice-aligned capability injection during prompt packaging.
 - `AWS_REGION`, `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY` — AWS creds for uploads.
 - `S3_BUCKET` — Bucket for audio uploads.
 - `S3_PREFIX` (optional) — Key prefix for uploads (e.g., `audio/assignments`).
@@ -190,7 +201,7 @@ Use `.env.batch-backend` for the service stack. It includes all core keys above 
   - Optional: `REFRESH_COOKIE_DOMAIN`, `REFRESH_COOKIE_PATH`
 - Prompt/job metadata fallbacks:
   - `NOTION_DB_OPTIONS`, `NOTION_DB_ID`, `NOTION_DB_NAME`, `NOTION_DB_LABEL`
-  - `ELEVENLABS_VOICES_PATH`, `REPO_ROOT`, `APP_ROOT`, `PROJECT_ROOT`
+  - `ESL_TTS_PROVIDER_ELEVENLABS_VOICES_PATH`, `REPO_ROOT`, `APP_ROOT`, `PROJECT_ROOT`
 - Transcription pipeline:
   - `TRANSCRIBE_MODE` (`timeline`|`stack`), `TRANSCRIBE_MAX_CONCURRENCY`
   - `DEEPGRAM_API_KEY`, `DEEPGRAM_ACCESS_TOKEN` (optional), `DEEPGRAM_MODEL`, `DEEPGRAM_LANGUAGE`,
@@ -222,9 +233,10 @@ Use `.env.batch-backend` for the service stack. It includes all core keys above 
 Notes:
 
 - Keep `.env` focused on CLI usage; `.env.batch-backend` adds DB/Redis/storage/SMTP for the service.
-- Both orchestrator and batch-backend need `NOTION_TOKEN` and `ELEVENLABS_API_KEY`.
+- Both orchestrator and batch-backend need `NOTION_TOKEN` and the provider-specific TTS credentials
+  for whichever provider is selected.
 - For S3 manifests or uploads, set the `ESL_PIPELINE_MANIFEST_*` vars and `S3_*`/AWS creds together.
-- TTS strategy defaults can be provided via `ELEVENLABS_TTS_STRATEGY` and related dialogue options; manifests now persist these for reruns.
+- TTS strategy defaults can be provided via `ESL_TTS_PROVIDER_ELEVENLABS_STRATEGY` and related provider-scoped options; manifests now persist these for reruns.
 - Batch backend startup validates `FILESYSTEM_UPLOAD_DIR` and `PROMPT_*` allowlists; misconfigured paths fail fast.
 - Use `RECORDINGS_MAX_FILE_SIZE` to raise audio upload limits without affecting general markdown uploads.
 - Postgres backup archival scripts read `PG_BACKUP_S3_*` variables; keep backup bucket/prefix separate from runtime `S3_BUCKET` upload paths.

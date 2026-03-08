@@ -10,10 +10,12 @@ import { withPgClient } from '../infrastructure/db.js';
 import { logger } from '../infrastructure/logger.js';
 import type { VoiceProviderErrorCategory } from '@esl-pipeline/contracts';
 import {
+  GoogleTtsModel,
   JobRecord,
   JobState,
   JobUploadOption,
   PublishTarget,
+  TtsProviderId,
   TtsStrategy,
   assertTransition,
 } from './job-model.js';
@@ -52,6 +54,8 @@ interface JobRow {
   notion_database: string | null;
   publish_target: string | null;
   mode: string | null;
+  tts_provider: string | null;
+  google_tts_model: string | null;
   notion_url: string | null;
   anytype_url: string | null;
   html_url: string | null;
@@ -84,6 +88,8 @@ export interface InsertJobParams {
   notionDatabase?: string;
   publishTarget?: PublishTarget;
   ttsStrategy?: TtsStrategy;
+  ttsProvider?: TtsProviderId;
+  googleTtsModel?: GoogleTtsModel;
   userId?: string;
   autoPublish?: boolean;
   sourceJobId?: string | null;
@@ -160,6 +166,8 @@ export interface UpdateJobMetadataParams {
   withTts?: boolean;
   forceTts?: boolean;
   ttsStrategy?: TtsStrategy;
+  ttsProvider?: TtsProviderId;
+  googleTtsModel?: GoogleTtsModel;
   upload?: JobUploadOption | null;
   voiceId?: string;
   voiceAccent?: string;
@@ -217,6 +225,8 @@ async function insertJobWithState(params: InsertJobParams, state: JobState): Pro
         notion_database,
         publish_target,
         mode,
+        tts_provider,
+        google_tts_model,
         auto_publish,
         source_job_id,
         created_at,
@@ -225,7 +235,7 @@ async function insertJobWithState(params: InsertJobParams, state: JobState): Pro
       )
       VALUES (
         $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16,
-        $17, $18, $19, $20, $21, $22, $23, $24, $25, $26
+        $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27, $28
       )
       RETURNING
         id,
@@ -250,6 +260,8 @@ async function insertJobWithState(params: InsertJobParams, state: JobState): Pro
         notion_database,
         publish_target,
         mode,
+        tts_provider,
+        google_tts_model,
         notion_url,
         anytype_url,
         html_url,
@@ -285,6 +297,8 @@ async function insertJobWithState(params: InsertJobParams, state: JobState): Pro
         params.notionDatabase ?? null,
         params.publishTarget ?? null,
         params.ttsStrategy ?? null,
+        params.ttsProvider ?? null,
+        params.googleTtsModel ?? null,
         params.autoPublish ?? false,
         params.sourceJobId ?? null,
         now,
@@ -328,6 +342,8 @@ export async function getJobById(id: string): Promise<JobRecord | null> {
         j.notion_database,
         j.publish_target,
         j.mode,
+        j.tts_provider,
+        j.google_tts_model,
         j.notion_url,
         j.anytype_url,
         j.html_url,
@@ -398,6 +414,8 @@ export async function listJobs(options: JobListOptions): Promise<JobRecord[]> {
         j.notion_database,
         j.publish_target,
         j.mode,
+        j.tts_provider,
+        j.google_tts_model,
         j.notion_url,
         j.anytype_url,
         j.html_url,
@@ -734,6 +752,8 @@ export async function updateJobStateAndResult(args: {
         notion_database,
         publish_target,
         mode,
+        tts_provider,
+        google_tts_model,
         notion_url,
         anytype_url,
         html_url,
@@ -815,6 +835,8 @@ export async function updateJobDraftLink(args: {
         notion_database,
         publish_target,
         mode,
+        tts_provider,
+        google_tts_model,
         notion_url,
         anytype_url,
         html_url,
@@ -878,6 +900,16 @@ export async function updateJobMetadata(
     updates.push(`mode = $${values.length}`);
   }
 
+  if (params.ttsProvider !== undefined) {
+    values.push(params.ttsProvider);
+    updates.push(`tts_provider = $${values.length}`);
+  }
+
+  if (params.googleTtsModel !== undefined) {
+    values.push(params.googleTtsModel);
+    updates.push(`google_tts_model = $${values.length}`);
+  }
+
   if (params.upload !== undefined) {
     values.push(params.upload);
     updates.push(`upload = $${values.length}`);
@@ -937,6 +969,8 @@ export async function updateJobMetadata(
         notion_database,
         publish_target,
         mode,
+        tts_provider,
+        google_tts_model,
         notion_url,
         anytype_url,
         html_url,
@@ -1020,6 +1054,8 @@ export async function approveJob(args: {
         notion_database,
         publish_target,
         mode,
+        tts_provider,
+        google_tts_model,
         notion_url,
         anytype_url,
         html_url,
@@ -1120,6 +1156,8 @@ function mapRowToJob(row: JobRow): JobRecord {
     notionDatabase: row.notion_database ?? null,
     publishTarget: normalizePublishTarget(row.publish_target),
     ttsStrategy: normalizeTtsStrategy(row.mode, { jobId: row.id }),
+    ttsProvider: normalizeTtsProvider(row.tts_provider, { jobId: row.id }),
+    googleTtsModel: normalizeGoogleTtsModel(row.google_tts_model, { jobId: row.id }),
     notionUrl: row.notion_url ?? null,
     anytypeUrl: row.anytype_url ?? null,
     htmlUrl: row.html_url ?? null,
@@ -1194,6 +1232,34 @@ function normalizeTtsStrategy(value: unknown, ctx: { jobId: string }): TtsStrate
   }
   throw new Error(
     `Unsupported jobs.mode value type "${typeof value}" for job ${ctx.jobId}; expected null or a TtsStrategy string`,
+  );
+}
+
+function normalizeTtsProvider(value: unknown, ctx: { jobId: string }): TtsProviderId | null {
+  if (value == null) return null;
+  if (value === 'elevenlabs' || value === 'google') return value;
+  if (typeof value === 'string') {
+    throw new TypeError(
+      `Unsupported jobs.tts_provider value "${value}" for job ${ctx.jobId}; migrate legacy rows before running this version`,
+    );
+  }
+  throw new Error(
+    `Unsupported jobs.tts_provider value type "${typeof value}" for job ${ctx.jobId}; expected null or a TtsProviderId string`,
+  );
+}
+
+function normalizeGoogleTtsModel(value: unknown, ctx: { jobId: string }): GoogleTtsModel | null {
+  if (value == null) return null;
+  if (value === 'chirp3_hd' || value === 'studio' || value === 'neural2' || value === 'wavenet') {
+    return value;
+  }
+  if (typeof value === 'string') {
+    throw new TypeError(
+      `Unsupported jobs.google_tts_model value "${value}" for job ${ctx.jobId}; migrate legacy rows before running this version`,
+    );
+  }
+  throw new Error(
+    `Unsupported jobs.google_tts_model value type "${typeof value}" for job ${ctx.jobId}; expected null or a GoogleTtsModel string`,
   );
 }
 

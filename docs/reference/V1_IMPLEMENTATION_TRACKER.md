@@ -464,14 +464,14 @@ reuse it in generation flow before extending the same seam into TTS runtime path
 - Goal: migrate ElevenLabs TTS runtime classification/retry handling to the shared seam while
   preserving existing error tags and downstream parser compatibility.
 - Add:
-  - `packages/tts-elevenlabs/src/provider-runtime.ts`
-  - `packages/tts-elevenlabs/tests/provider-runtime.test.ts`
+  - `packages/tts-provider-elevenlabs/src/provider-runtime.ts`
+  - `packages/tts-provider-elevenlabs/tests/provider-runtime.test.ts`
 - Edit:
-  - `packages/tts-elevenlabs/src/index.ts`
-  - `packages/tts-elevenlabs/src/dialogue.ts`
-  - `packages/tts-elevenlabs/tests/index.test.ts`
-  - `packages/tts-elevenlabs/tests/dialogue.test.ts`
-  - `packages/tts-elevenlabs/package.json`
+  - `packages/tts-provider-elevenlabs/src/index.ts`
+  - `packages/tts-provider-elevenlabs/src/dialogue.ts`
+  - `packages/tts-provider-elevenlabs/tests/index.test.ts`
+  - `packages/tts-provider-elevenlabs/tests/dialogue.test.ts`
+  - `packages/tts-provider-elevenlabs/package.json`
 - Minimum behavior:
   - TTS line synthesis retry loop uses shared ladder semantics with parity retry/backoff behavior,
   - dialogue + standard TTS map provider categories through shared runtime classification,
@@ -696,7 +696,7 @@ Recent evidence:
 - 2026-02-18 | WS2B-S1 | finalized generation request/response contracts and optional `job-options.generation` metadata propagation across contracts/backend/frontend with safe clone semantics. | `pnpm --filter @esl-pipeline/contracts typecheck`; `pnpm --filter @esl-pipeline/orchestrator test -- metadata.job-options.test.ts`; `pnpm --filter @esl-pipeline/batch-backend exec vitest run --config ../../vitest.config.ts tests/application.get-job-options.test.ts tests/transport.http-server.integration.test.ts`; `pnpm --filter @esl-pipeline/batch-frontend test -- MinimalAssignment.test.tsx` | pass | local workspace
 - 2026-02-18 | WS2B-S2 | implemented `POST /generation/drafts` backend endpoint with live provider adapters (OpenAI/Google/OpenRouter), deterministic fallback/retry ladder, normalized provider error categories, and `/config/job-options` generation metadata defaults. | `pnpm --filter @esl-pipeline/batch-backend typecheck`; `pnpm --filter @esl-pipeline/batch-backend exec vitest run --config ../../vitest.config.ts tests/application.generate-draft.test.ts tests/transport.http-server.integration.test.ts tests/application.get-job-options.test.ts tests/config.env.test.ts` | pass | local workspace
 - 2026-02-18 | WS2B-S3 | completed Draft-step generation UX with provider/model controls, quota panel (source + freshness + limits link), runtime snapshot precedence over baseline quota, and stale-flow-safe response handling. | `pnpm lint`; `pnpm --filter @esl-pipeline/batch-frontend test -- MinimalAssignment.test.tsx`; `pnpm --filter @esl-pipeline/batch-backend exec vitest run --config ../../vitest.config.ts tests/application.generate-draft.test.ts tests/transport.http-server.integration.test.ts`; `pnpm check:fast` | pass | local workspace
-- 2026-02-18 | WS3-S1 | migrated ElevenLabs TTS/dialogue runtime classification + retry behavior to shared provider-runtime seam with compatibility-preserving error tags and parity tests. | `pnpm --filter @esl-pipeline/tts-elevenlabs typecheck`; `pnpm --filter @esl-pipeline/tts-elevenlabs test -- tests/provider-runtime.test.ts tests/dialogue.test.ts tests/index.test.ts`; `pnpm deps:pin`; `pnpm deps:audit:strict`; `pnpm check:fast` | pass | local workspace
+- 2026-02-18 | WS3-S1 | migrated ElevenLabs TTS/dialogue runtime classification + retry behavior to shared provider-runtime seam with compatibility-preserving error tags and parity tests. | `pnpm --filter @esl-pipeline/tts-provider-elevenlabs typecheck`; `pnpm --filter @esl-pipeline/tts-provider-elevenlabs test -- tests/provider-runtime.test.ts tests/dialogue.test.ts tests/index.test.ts`; `pnpm deps:pin`; `pnpm deps:audit:strict`; `pnpm check:fast` | pass | local workspace
 - 2026-02-18 | WS3-S2 | aligned backend provider-error surfacing/readiness telemetry to parser-normalized failed-job classification with drift warning instrumentation and no contract churn. | `pnpm --filter @esl-pipeline/batch-backend exec vitest run --config ../../vitest.config.ts tests/application.voice-provider-error.test.ts tests/application.readiness-metrics.test.ts tests/application.job-dto.test.ts tests/application.get-job-provenance.test.ts tests/domain.job-repository.test.ts tests/transport.http-server.integration.test.ts`; `pnpm --filter @esl-pipeline/batch-backend typecheck`; `pnpm deps:pin`; `pnpm deps:audit:strict`; `pnpm check:fast` | pass | local workspace
 - 2026-02-18 | WS3-S2 follow-up | aligned failed-error sampling window boundary with readiness snapshot semantics (`created_at <= to`) and added boundary regression coverage. | `pnpm --filter @esl-pipeline/batch-backend exec vitest run --config ../../vitest.config.ts tests/application.readiness-metrics.test.ts tests/domain.job-repository.test.ts tests/transport.http-server.integration.test.ts`; `pnpm --filter @esl-pipeline/batch-backend typecheck` | pass | local workspace
 - 2026-02-18 | WS3-S3 | completed backend-only telemetry hardening: parser status-based inference for untagged provider failures, drift warning expansion (totals + breakdown), and boundary exclusion coverage with no contract/API churn. | `pnpm --filter @esl-pipeline/batch-backend exec vitest run --config ../../vitest.config.ts tests/application.readiness-metrics.test.ts tests/application.voice-provider-error.test.ts tests/domain.job-repository.test.ts tests/transport.http-server.integration.test.ts`; `pnpm --filter @esl-pipeline/batch-backend typecheck`; `pnpm deps:pin`; `pnpm deps:audit:strict`; `pnpm check:fast` | pass | local workspace

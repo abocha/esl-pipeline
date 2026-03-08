@@ -117,6 +117,8 @@ export function makeJobStatus(overrides: Partial<api.JobStatus> = {}): api.JobSt
     notionDatabase: null,
     publishTarget: 'html',
     ttsStrategy: 'auto',
+    ttsProvider: 'elevenlabs',
+    googleTtsModel: null,
     autoPublish: false,
     notionUrl: null,
     anytypeUrl: null,
@@ -293,6 +295,16 @@ export function setupMinimalAssignmentTest() {
         voices: [{ id: 'voice-a', name: 'Voice A', accent: 'american' }],
         notionDatabases: [{ id: 'db-1', name: 'DB One' }],
         ttsStrategies: ['auto', 'dialogue', 'tts'],
+        ttsProviders: ['elevenlabs', 'google'],
+        ttsModelOptionsByProvider: {
+          elevenlabs: ['eleven_multilingual_v2'],
+          google: ['chirp3_hd', 'studio', 'neural2', 'wavenet'],
+        },
+        defaultTtsProvider: 'elevenlabs',
+        defaultTtsModelByProvider: {
+          elevenlabs: 'eleven_multilingual_v2',
+          google: 'chirp3_hd',
+        },
         supportedActions: [
           {
             type: 'rerun_audio',

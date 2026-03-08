@@ -72,7 +72,7 @@ Suggested package ownership:
 
 - Contracts and DTOs: `packages/contracts`
 - Provider orchestration and policy: `packages/batch-backend`
-- Pipeline integration points: `packages/orchestrator`, `packages/tts-elevenlabs`
+- Pipeline integration points: `packages/orchestrator`, `packages/tts-core`, `packages/tts-provider-*`
 - Tutor UX and dashboard: `packages/batch-frontend`
 
 ## 8-Week Execution Roadmap

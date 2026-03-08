@@ -74,7 +74,9 @@ When implementing from a plan file, re-read that exact plan file after every con
   - `@esl-pipeline/md-validator`
   - `@esl-pipeline/pmd`
   - `@esl-pipeline/notion-adapter`
-  - `@esl-pipeline/tts-elevenlabs`
+  - `@esl-pipeline/tts-core`
+  - `@esl-pipeline/tts-provider-elevenlabs`
+  - `@esl-pipeline/tts-provider-google`
   - `@esl-pipeline/storage-uploader`
   - `@esl-pipeline/html-publisher`
   - `@esl-pipeline/provider-runtime`

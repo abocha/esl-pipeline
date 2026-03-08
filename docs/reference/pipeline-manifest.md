@@ -40,7 +40,7 @@ This document captures the canonical schema so remote stores and services can va
     "sizeBytes": 123456, // optional uploaded object size
     "reused": true, // optional reuse signal for idempotent uploads
     "voices": [
-      // details returned by tts-elevenlabs
+      // details returned by tts-core provider adapters
       {
         "speaker": "Narrator",
         "voiceId": "voice-id",
@@ -101,8 +101,8 @@ This document captures the canonical schema so remote stores and services can va
 
 - `mdHash` is produced by `hashStudyText` and enables idempotence/skip logic.
 - `timestamp` reflects the last pipeline write and is updated on reruns.
-- `audio.voices` mirrors the response from `@esl-pipeline/tts-elevenlabs`; the structure is defined
-  in that package.
+- `audio.voices` mirrors the response from `@esl-pipeline/tts-core` provider contracts; provider
+  adapters compute values in that shared shape.
 - `audio.tts` is optional usage telemetry: generated vs cached provider characters plus optional
   cost estimate fields when pricing env vars are configured.
 - `audio.key`/`audio.hash` provide deterministic artifact identity for reruns and upload dedupe.

@@ -52,14 +52,14 @@ beforeEach(() => {
   vi.spyOn(ffm, 'concatMp3Segments').mockImplementation(async (_segments, outFile) => {
     await writeFile(outFile, 'mock-audio');
   });
-  process.env.ELEVENLABS_API_KEY = 'test-api-key';
+  process.env.ESL_TTS_PROVIDER_ELEVENLABS_API_KEY = 'test-api-key';
 });
 
 afterEach(() => {
   vi.restoreAllMocks();
-  delete process.env.ELEVENLABS_TTS_STRATEGY;
-  delete process.env.ELEVENLABS_TTS_DEBUG;
-  delete process.env.ELEVENLABS_API_KEY;
+  delete process.env.ESL_TTS_PROVIDER_ELEVENLABS_STRATEGY;
+  delete process.env.ESL_TTS_DEBUG;
+  delete process.env.ESL_TTS_PROVIDER_ELEVENLABS_API_KEY;
 });
 
 describe('TTS strategy selection', () => {
@@ -105,7 +105,7 @@ Mara: Hello!
     });
     await writeFile(join(dir, 'dialogue.mp3'), 'mock-audio');
 
-    process.env.ELEVENLABS_TTS_DEBUG = '1';
+    process.env.ESL_TTS_DEBUG = '1';
     const logs: PipelineLogEvent[] = [];
     const logger: PipelineLogger = { log: (event) => logs.push(event) };
 
@@ -153,7 +153,7 @@ At work, I did many tasks. I met my colleagues. We said hello.
     });
     await writeFile(join(dir, 'dialogue.mp3'), 'mock-audio');
 
-    process.env.ELEVENLABS_TTS_DEBUG = '1';
+    process.env.ESL_TTS_DEBUG = '1';
     const logs: PipelineLogEvent[] = [];
     const logger: PipelineLogger = { log: (event) => logs.push(event) };
 
@@ -195,7 +195,7 @@ Last month, I tried to organize a petition to collect signatures from the neighb
 
     const dialogueSpy = vi.spyOn(dialogue, 'synthesizeDialogue');
 
-    process.env.ELEVENLABS_TTS_DEBUG = '1';
+    process.env.ESL_TTS_DEBUG = '1';
     const logs: PipelineLogEvent[] = [];
     const logger: PipelineLogger = { log: (event) => logs.push(event) };
 
@@ -236,7 +236,7 @@ Mara: Hello!
     } as any);
     const dialogueSpy = vi.spyOn(dialogue, 'synthesizeDialogue');
 
-    process.env.ELEVENLABS_TTS_STRATEGY = 'dialogue';
+    process.env.ESL_TTS_PROVIDER_ELEVENLABS_STRATEGY = 'dialogue';
 
     await buildStudyTextMp3FromPath(md, { voiceMapPath: voiceMap, outPath: dir, ttsStrategy: 'tts' });
 

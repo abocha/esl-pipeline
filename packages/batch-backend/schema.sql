@@ -44,6 +44,8 @@ CREATE TABLE IF NOT EXISTS jobs (
   notion_database TEXT NULL,
   publish_target TEXT NULL,
   mode TEXT NULL,
+  tts_provider TEXT NULL,
+  google_tts_model TEXT NULL,
   notion_url TEXT NULL,
   anytype_url TEXT NULL,
   html_url TEXT NULL,
@@ -206,6 +208,8 @@ ALTER TABLE jobs ADD COLUMN IF NOT EXISTS learning_preset_version TEXT NULL;
 ALTER TABLE jobs ADD COLUMN IF NOT EXISTS prompt_snapshot_version TEXT NULL;
 ALTER TABLE jobs ADD COLUMN IF NOT EXISTS prompt_alias TEXT NULL;
 ALTER TABLE jobs ADD COLUMN IF NOT EXISTS auto_publish BOOLEAN DEFAULT FALSE;
+ALTER TABLE jobs ADD COLUMN IF NOT EXISTS tts_provider TEXT NULL;
+ALTER TABLE jobs ADD COLUMN IF NOT EXISTS google_tts_model TEXT NULL;
 ALTER TABLE jobs ALTER COLUMN md DROP NOT NULL;
 ALTER TABLE jobs DROP CONSTRAINT IF EXISTS jobs_user_id_fkey;
 ALTER TABLE jobs
@@ -448,6 +452,14 @@ ALTER TABLE jobs ADD CONSTRAINT jobs_state_check
 -- Jobs mode validation (TTS strategy)
 ALTER TABLE jobs ADD CONSTRAINT jobs_mode_check
   CHECK (mode IS NULL OR mode IN ('auto', 'dialogue', 'tts'));
+
+ALTER TABLE jobs ADD CONSTRAINT jobs_tts_provider_check
+  CHECK (tts_provider IS NULL OR tts_provider IN ('elevenlabs', 'google'));
+
+ALTER TABLE jobs ADD CONSTRAINT jobs_google_tts_model_check
+  CHECK (
+    google_tts_model IS NULL OR google_tts_model IN ('chirp3_hd', 'studio', 'neural2', 'wavenet')
+  );
 
 -- Recordings source validation
 ALTER TABLE recordings ADD CONSTRAINT recordings_source_check

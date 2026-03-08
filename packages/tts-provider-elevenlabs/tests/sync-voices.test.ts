@@ -20,9 +20,9 @@ describe.sequential('syncVoices path resolution', () => {
     const workspace = await mkdtemp(join(tmpdir(), 'tts-sync-'));
     await writeFile(join(workspace, 'pnpm-workspace.yaml'), 'packages:\n  - "packages/*"\n', 'utf8');
     await writeFile(join(workspace, 'package.json'), '{"name":"workspace","private":true}', 'utf8');
-    await mkdir(join(workspace, 'packages', 'tts-elevenlabs'), { recursive: true });
-    await writeFile(join(workspace, 'packages', 'tts-elevenlabs', '.gitkeep'), '', 'utf8');
-    process.chdir(join(workspace, 'packages', 'tts-elevenlabs'));
+    await mkdir(join(workspace, 'packages', 'tts-provider-elevenlabs'), { recursive: true });
+    await writeFile(join(workspace, 'packages', 'tts-provider-elevenlabs', '.gitkeep'), '', 'utf8');
+    process.chdir(join(workspace, 'packages', 'tts-provider-elevenlabs'));
 
     const eleven = await import('../src/eleven.js');
     vi.spyOn(eleven, 'getElevenClient').mockReturnValue({
@@ -48,9 +48,9 @@ describe.sequential('syncVoices path resolution', () => {
     const workspace = await mkdtemp(join(tmpdir(), 'tts-sync-'));
     await writeFile(join(workspace, 'pnpm-workspace.yaml'), 'packages:\n  - "packages/*"\n', 'utf8');
     await writeFile(join(workspace, 'package.json'), '{"name":"workspace","private":true}', 'utf8');
-    await mkdir(join(workspace, 'packages', 'tts-elevenlabs'), { recursive: true });
-    await writeFile(join(workspace, 'packages', 'tts-elevenlabs', '.gitkeep'), '', 'utf8');
-    process.chdir(join(workspace, 'packages', 'tts-elevenlabs'));
+    await mkdir(join(workspace, 'packages', 'tts-provider-elevenlabs'), { recursive: true });
+    await writeFile(join(workspace, 'packages', 'tts-provider-elevenlabs', '.gitkeep'), '', 'utf8');
+    process.chdir(join(workspace, 'packages', 'tts-provider-elevenlabs'));
 
     const eleven = await import('../src/eleven.js');
     vi.spyOn(eleven, 'getElevenClient').mockReturnValue({

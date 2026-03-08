@@ -23,6 +23,7 @@ import {
 
 import { loadConfig } from '../config/env.js';
 import type { TtsStrategy } from '../domain/job-model.js';
+import type { TtsProvider } from '../domain/settings-model.js';
 import { Logger, logger as rootLogger } from './logger.js';
 import { metrics } from './metrics.js';
 
@@ -153,12 +154,15 @@ export interface RunAssignmentPayload {
   notionDatabase?: string | null;
   publishTarget?: 'notion' | 'anytype' | 'html';
   ttsStrategy?: TtsStrategy | null;
+  ttsProvider?: 'elevenlabs' | 'google' | null;
+  googleTtsModel?: 'chirp3_hd' | 'studio' | 'neural2' | 'wavenet' | null;
   settings?: RunJobSettings;
 }
 
 interface RunJobSettings {
   elevenLabsApiKey?: string | null;
   notionToken?: string | null;
+  ttsProvider?: TtsProvider | null;
 }
 
 export interface RunRerunAssignmentPayload {
@@ -174,6 +178,8 @@ export interface RunRerunAssignmentPayload {
   accentPreference?: string | null;
   voiceId?: string | null;
   ttsStrategy?: TtsStrategy | null;
+  ttsProvider?: 'elevenlabs' | 'google' | null;
+  googleTtsModel?: 'chirp3_hd' | 'studio' | 'neural2' | 'wavenet' | null;
   dialogueLanguage?: string | null;
   dialogueStability?: number | null;
   dialogueSeed?: number | null;
