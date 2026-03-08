@@ -35,7 +35,9 @@
 - `packages/md-validator`: markdown validation.
 - `packages/pmd`: PMD parsing and study-text extraction.
 - `packages/notion-adapter`: Notion import + formatting + audio attach.
-- `packages/tts-elevenlabs`: TTS generation.
+- `packages/tts-core`: TTS provider registry + shared contracts.
+- `packages/tts-provider-elevenlabs`: ElevenLabs TTS provider adapter.
+- `packages/tts-provider-google`: Google Cloud TTS provider adapter.
 - `packages/storage-uploader`: upload adapter support.
 - `packages/html-publisher`: HTML rendering/publishing helpers.
 - `packages/provider-runtime`: provider policy/runtime helpers.

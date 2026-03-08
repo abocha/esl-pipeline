@@ -9,6 +9,7 @@ import * as assign from '../src/assign.js';
 import * as dialogue from '../src/dialogue.js';
 import * as eleven from '../src/eleven.js';
 import * as ffm from '../src/ffmpeg.js';
+import * as google from '../src/google.js';
 import {
   buildPronunciationShadowSentenceMp3,
   buildStudyTextMp3,
@@ -148,6 +149,12 @@ export const setupClientMock = () => {
     textToSpeech: { convert: convertMock },
   } as any);
   return convertMock;
+};
+
+export const setupGoogleSynthesizeMock = () => {
+  const synthMock = vi.fn(async () => Buffer.from('mock-google-audio'));
+  vi.spyOn(google, 'synthesizeGoogleSpeech').mockImplementation(synthMock);
+  return synthMock;
 };
 
 export const mockConcat = () =>

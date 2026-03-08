@@ -1,6 +1,8 @@
 import type {
+  GoogleTtsModel,
   JobOptionsPayload,
   NotionDatabaseOption,
+  TtsProviderId,
   TtsStrategyOption,
   UploadOption,
 } from '@esl-pipeline/contracts';
@@ -8,10 +10,11 @@ import {
   normalizeVoiceCatalogToOptions,
   resolveNotionDatabasesFromEnv as resolveNotionDatabasesFromEnvShared,
 } from '@esl-pipeline/shared-infrastructure';
-import { loadVoicesCatalog } from '@esl-pipeline/tts-elevenlabs';
+import { getRegisteredTtsProvider, loadVoicesCatalog } from '@esl-pipeline/tts-core';
 
 import type { ConfigProvider, StudentProfile } from '../config.js';
 import type { OrchestratorPipeline, ResolvedConfigPaths } from '../pipeline.js';
+import { ensureTtsProvidersRegistered } from '../tts-provider-registry.js';
 
 export type {
   JobOptionsPayload,
@@ -30,10 +33,12 @@ type ResolveJobOptionsSource =
 
 const DEFAULT_UPLOAD_OPTIONS: UploadOption[] = ['auto', 's3', 'none'];
 const DEFAULT_TTS_STRATEGIES: TtsStrategyOption[] = ['auto', 'dialogue', 'tts'];
+const GOOGLE_TTS_MODELS: GoogleTtsModel[] = ['chirp3_hd', 'studio', 'neural2', 'wavenet'];
 
 export async function resolveJobOptions(
   source: ResolveJobOptionsSource,
 ): Promise<JobOptionsPayload> {
+  ensureTtsProvidersRegistered();
   const { configProvider, configPaths } = source;
 
   const [presetsMap, studentProfiles, voiceCatalog] = await Promise.all([
@@ -51,6 +56,9 @@ export async function resolveJobOptions(
           singleDbId: process.env.NOTION_DATABASE_ID?.trim() || process.env.NOTION_DB_ID?.trim(),
         });
   const { voices, voiceAccents } = normalizeVoiceCatalogToOptions(voiceCatalog);
+  const ttsProviders = resolveRegisteredTtsProviders();
+  const defaultTtsProvider = resolveDefaultTtsProvider(ttsProviders);
+  const { ttsModelOptionsByProvider, defaultTtsModelByProvider } = buildTtsModelMetadata(ttsProviders);
 
   return {
     presets,
@@ -59,7 +67,59 @@ export async function resolveJobOptions(
     notionDatabases,
     uploadOptions: [...DEFAULT_UPLOAD_OPTIONS],
     ttsStrategies: [...DEFAULT_TTS_STRATEGIES],
+    ttsProviders,
+    ttsModelOptionsByProvider,
+    defaultTtsProvider,
+    defaultTtsModelByProvider,
   };
+}
+
+function resolveRegisteredTtsProviders(): TtsProviderId[] {
+  const ordered: TtsProviderId[] = ['elevenlabs', 'google'];
+  return ordered.filter((providerId) => Boolean(getRegisteredTtsProvider(providerId)));
+}
+
+function resolveDefaultTtsProvider(availableProviders: TtsProviderId[]): TtsProviderId | undefined {
+  if (availableProviders.length === 0) return undefined;
+  const envProvider = process.env.ESL_TTS_DEFAULT_PROVIDER?.trim().toLowerCase();
+  if (
+    (envProvider === 'elevenlabs' || envProvider === 'google') &&
+    availableProviders.includes(envProvider)
+  ) {
+    return envProvider;
+  }
+  return availableProviders[0];
+}
+
+function buildTtsModelMetadata(
+  availableProviders: TtsProviderId[],
+): {
+  ttsModelOptionsByProvider: Partial<Record<TtsProviderId, string[]>>;
+  defaultTtsModelByProvider: Partial<Record<TtsProviderId, string>>;
+} {
+  const ttsModelOptionsByProvider: Partial<Record<TtsProviderId, string[]>> = {};
+  const defaultTtsModelByProvider: Partial<Record<TtsProviderId, string>> = {};
+
+  for (const providerId of availableProviders) {
+    if (providerId === 'google') {
+      ttsModelOptionsByProvider.google = [...GOOGLE_TTS_MODELS];
+      const metadataModel = getRegisteredTtsProvider('google')?.providerMetadata({}).modelFamily?.trim();
+      const defaultModel =
+        metadataModel && GOOGLE_TTS_MODELS.includes(metadataModel as GoogleTtsModel)
+          ? metadataModel
+          : 'chirp3_hd';
+      defaultTtsModelByProvider.google = defaultModel;
+      continue;
+    }
+
+    const modelFamily =
+      getRegisteredTtsProvider('elevenlabs')?.providerMetadata({}).modelFamily?.trim() ||
+      'eleven_multilingual_v2';
+    ttsModelOptionsByProvider.elevenlabs = [modelFamily];
+    defaultTtsModelByProvider.elevenlabs = modelFamily;
+  }
+
+  return { ttsModelOptionsByProvider, defaultTtsModelByProvider };
 }
 
 function extractNotionDatabases(profiles: StudentProfile[]): NotionDatabaseOption[] {

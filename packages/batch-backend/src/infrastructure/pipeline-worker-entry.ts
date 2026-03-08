@@ -48,15 +48,22 @@ function isPipelineCancelledErrorLike(error: unknown): boolean {
 function applyUserSettingsToEnv(settings?: {
   elevenLabsApiKey?: string | null;
   notionToken?: string | null;
+  ttsProvider?: 'elevenlabs' | 'openai' | 'azure' | 'google' | null;
 }) {
   if (!settings) return;
 
   if (settings.elevenLabsApiKey) {
-    process.env.ELEVENLABS_API_KEY = settings.elevenLabsApiKey;
+    process.env.ESL_TTS_PROVIDER_ELEVENLABS_API_KEY = settings.elevenLabsApiKey;
   }
 
   if (settings.notionToken) {
     process.env.NOTION_TOKEN = settings.notionToken;
+  }
+
+  if (settings.ttsProvider === 'google') {
+    process.env.ESL_TTS_DEFAULT_PROVIDER = 'google';
+  } else if (settings.ttsProvider === 'elevenlabs') {
+    process.env.ESL_TTS_DEFAULT_PROVIDER = 'elevenlabs';
   }
 }
 
@@ -161,6 +168,14 @@ async function runAssignmentPipeline(
     flags.ttsStrategy = payload.ttsStrategy;
   }
 
+  if (payload.ttsProvider) {
+    flags.ttsProvider = payload.ttsProvider;
+  }
+
+  if (payload.googleTtsModel) {
+    flags.googleTtsModel = payload.googleTtsModel;
+  }
+
   return (pipeline as { newAssignment: (...args: unknown[]) => Promise<PipelineRunResult> }).newAssignment(
     flags,
     undefined,
@@ -192,6 +207,8 @@ async function runRerunPipeline(
     accentPreference: payload.accentPreference ?? undefined,
     voiceId: payload.voiceId ?? undefined,
     ttsStrategy: payload.ttsStrategy ?? undefined,
+    ttsProvider: payload.ttsProvider ?? undefined,
+    googleTtsModel: payload.googleTtsModel ?? undefined,
     dialogueLanguage: payload.dialogueLanguage ?? undefined,
     dialogueStability: payload.dialogueStability ?? undefined,
     dialogueSeed: payload.dialogueSeed ?? undefined,

@@ -4,7 +4,12 @@ import { access, readFile, stat } from 'node:fs/promises';
 import { basename, dirname } from 'node:path';
 
 import { createAnytypeClient, sharePageToS3 } from '@esl-pipeline/anytype-adapter';
-import { InfrastructureError, ManifestError, ValidationError } from '@esl-pipeline/contracts';
+import {
+  FfmpegNotFoundError,
+  InfrastructureError,
+  ManifestError,
+  ValidationError,
+} from '@esl-pipeline/contracts';
 import { renderAndPublishMarkdownToS3 } from '@esl-pipeline/html-publisher';
 import { validateMarkdown } from '@esl-pipeline/md-validator';
 import {
@@ -23,12 +28,11 @@ import {
 import {
   buildPronunciationShadowSentenceMp3,
   type BuildStudyTextResult,
-  FfmpegNotFoundError,
-  type VoiceCatalog,
   buildStudyTextMp3,
   hashStudyText,
   loadVoicesCatalog,
-} from '@esl-pipeline/tts-elevenlabs';
+  type VoiceCatalog,
+} from '@esl-pipeline/tts-core';
 
 import { DEFAULT_PRESETS_PATH, DEFAULT_VOICES_PATH } from './config.js';
 import {
@@ -50,6 +54,7 @@ import type {
   RerunFlags,
 } from './types.js';
 import { computeRerunPlan } from './rerun-planner.js';
+import { ensureTtsProvidersRegistered } from './tts-provider-registry.js';
 
 export type {
   AssignmentStage,
@@ -68,6 +73,8 @@ export type {
 const fallbackManifestStore = createFilesystemManifestStore();
 const fallbackLogger = noopLogger;
 const fallbackMetrics = noopMetrics;
+
+ensureTtsProvidersRegistered();
 
 function normalizeCancellationReason(reason: unknown): string | undefined {
   if (typeof reason === 'string') {
@@ -303,7 +310,10 @@ function toProviderEnvToken(provider: string): string {
 function resolveTtsCostPer1kCharsUsd(provider: string): number | undefined {
   const normalized = provider.trim().toLowerCase();
   const providerToken = toProviderEnvToken(normalized);
-  const providerScoped = providerToken
+  const canonicalProviderScoped = providerToken
+    ? readUsdNumberFromEnv(`ESL_TTS_PROVIDER_${providerToken}_COST_PER_1K_CHARS_USD`)
+    : undefined;
+  const legacyProviderScoped = providerToken
     ? readUsdNumberFromEnv(`ESL_TTS_COST_PER_1K_CHARS_USD_${providerToken}`)
     : undefined;
 
@@ -318,7 +328,12 @@ function resolveTtsCostPer1kCharsUsd(provider: string): number | undefined {
             ? readUsdNumberFromEnv('AZURE_TTS_COST_PER_1K_CHARS_USD')
             : undefined;
 
-  return providerScoped ?? legacyProviderSpecific ?? readUsdNumberFromEnv('ESL_TTS_COST_PER_1K_CHARS_USD');
+  return (
+    canonicalProviderScoped ??
+    legacyProviderScoped ??
+    legacyProviderSpecific ??
+    readUsdNumberFromEnv('ESL_TTS_COST_PER_1K_CHARS_USD')
+  );
 }
 
 function buildTtsSpendSummary(
@@ -966,6 +981,8 @@ export async function newAssignment(
               force: flags.force || flags.redoTts,
               defaultAccent: flags.accentPreference,
               defaultVoiceId: flags.voiceId,
+              ttsProvider: flags.ttsProvider,
+              googleTtsModel: flags.googleTtsModel,
 
               // Pass TTS strategy options to TTS package
               ttsStrategy: flags.ttsStrategy,
@@ -1055,6 +1072,8 @@ export async function newAssignment(
                 outPath: flags.out ?? dirname(flags.md),
                 preview: flags.dryRun,
                 force: flags.force || flags.redoTts,
+                ttsProvider: flags.ttsProvider,
+                googleTtsModel: flags.googleTtsModel,
                 logger,
               },
             );
@@ -1683,6 +1702,8 @@ export async function rerunAssignment(
             force: flags.force,
             defaultAccent: flags.accentPreference,
             defaultVoiceId: flags.voiceId,
+            ttsProvider: flags.ttsProvider,
+            googleTtsModel: flags.googleTtsModel,
 
             // Pass TTS strategy options to TTS package
             ttsStrategy: flags.ttsStrategy,
@@ -1772,6 +1793,8 @@ export async function rerunAssignment(
               outPath: flags.out ?? dirname(flags.md),
               preview: flags.dryRun,
               force: flags.force,
+              ttsProvider: flags.ttsProvider,
+              googleTtsModel: flags.googleTtsModel,
               logger,
             },
           );

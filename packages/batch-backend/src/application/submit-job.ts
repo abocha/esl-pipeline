@@ -13,6 +13,8 @@ import { buildLearningPresetProvenance, normalizeLearningPresetId } from './lear
 
 export type UploadTarget = 'auto' | 's3' | 'none';
 export type TtsStrategy = DomainTtsStrategy;
+export type TtsProvider = 'elevenlabs' | 'google';
+export type GoogleTtsModel = 'chirp3_hd' | 'studio' | 'neural2' | 'wavenet';
 
 export interface SubmitJobRequest {
   md: string;
@@ -26,6 +28,8 @@ export interface SubmitJobRequest {
   notionDatabase?: string;
   publishTarget?: 'notion' | 'anytype' | 'html';
   ttsStrategy?: TtsStrategy;
+  ttsProvider?: TtsProvider;
+  googleTtsModel?: GoogleTtsModel;
   userId?: string;
   autoPublish?: boolean;
 }
@@ -139,6 +143,23 @@ function validateSubmitJobRequest(req: SubmitJobRequest): void {
       'invalid_tts_strategy',
     );
   }
+
+  if (req.ttsProvider && !['elevenlabs', 'google'].includes(req.ttsProvider)) {
+    throw new ValidationError(
+      'ttsProvider must be elevenlabs or google when provided',
+      'invalid_tts_provider',
+    );
+  }
+
+  if (
+    req.googleTtsModel &&
+    !['chirp3_hd', 'studio', 'neural2', 'wavenet'].includes(req.googleTtsModel)
+  ) {
+    throw new ValidationError(
+      'googleTtsModel must be chirp3_hd, studio, neural2, or wavenet when provided',
+      'invalid_google_tts_model',
+    );
+  }
 }
 
 // submitJob.declaration()
@@ -167,6 +188,8 @@ export async function submitJob(req: SubmitJobRequest): Promise<SubmitJobRespons
     notionDatabase: req.notionDatabase,
     publishTarget: req.publishTarget ?? 'notion',
     ttsStrategy: req.ttsStrategy,
+    ttsProvider: req.ttsProvider,
+    googleTtsModel: req.googleTtsModel,
     userId: req.userId,
     autoPublish: req.autoPublish,
   });

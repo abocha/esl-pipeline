@@ -30,6 +30,8 @@ export function jobRecordToDto(job: JobRecord): JobStatusDto {
     notionDatabase: job.notionDatabase ?? null,
     publishTarget: job.publishTarget ?? null,
     ttsStrategy: job.ttsStrategy ?? null,
+    ttsProvider: job.ttsProvider ?? null,
+    googleTtsModel: job.googleTtsModel ?? null,
     notionUrl: job.notionUrl ?? null,
     anytypeUrl: job.anytypeUrl ?? null,
     ...(job.htmlUrl ? { htmlUrl: job.htmlUrl } : {}),

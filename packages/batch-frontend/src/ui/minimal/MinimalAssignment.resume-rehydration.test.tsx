@@ -562,6 +562,7 @@ describe('MinimalAssignment - resume and rehydration', { timeout: INTEGRATION_TE
       expect(secondPublishCall?.jobOverrides).toEqual({
         publishTarget: 'html',
         preset: 'b2-default',
+        ttsProvider: 'elevenlabs',
       });
     },
     INTEGRATION_TEST_TIMEOUT_MS,
@@ -678,6 +679,7 @@ describe('MinimalAssignment - resume and rehydration', { timeout: INTEGRATION_TE
     expect(publishCall?.jobOverrides).toEqual({
       publishTarget: 'html',
       learningPresetId: 'general-english',
+      ttsProvider: 'elevenlabs',
     });
     expect(publishCall?.jobOverrides).not.toHaveProperty('preset');
   });

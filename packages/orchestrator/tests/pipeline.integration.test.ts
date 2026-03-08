@@ -38,9 +38,9 @@ vi.mock('@aws-sdk/client-s3', () => {
   };
 });
 
-vi.mock('@esl-pipeline/tts-elevenlabs', async () => {
-  const actual = await vi.importActual<typeof import('@esl-pipeline/tts-elevenlabs')>(
-    '@esl-pipeline/tts-elevenlabs',
+vi.mock('@esl-pipeline/tts-core', async () => {
+  const actual = await vi.importActual<typeof import('@esl-pipeline/tts-core')>(
+    '@esl-pipeline/tts-core',
   );
   return {
     ...actual,
@@ -94,7 +94,7 @@ describe('pipeline integration', () => {
     const pipeline = createPipeline({ cwd: process.cwd() });
 
     const events: AssignmentProgressEvent[] = [];
-    const { buildStudyTextMp3 } = await import('@esl-pipeline/tts-elevenlabs');
+    const { buildStudyTextMp3 } = await import('@esl-pipeline/tts-core');
     vi.mocked(buildStudyTextMp3).mockResolvedValueOnce({
       path: join(dir, 'lesson.mp3'),
       hash: 'hash-filesystem',
@@ -162,7 +162,7 @@ describe('pipeline integration', () => {
     expect(fetchMock.mock.calls[1]?.[0]).toBe('https://config.test/students.json');
     expect(fetchMock.mock.calls[2]?.[0]).toBe('https://config.test/voices.yml');
 
-    const { buildStudyTextMp3 } = await import('@esl-pipeline/tts-elevenlabs');
+    const { buildStudyTextMp3 } = await import('@esl-pipeline/tts-core');
     vi.mocked(buildStudyTextMp3).mockResolvedValueOnce({
       path: join(dir, 'lesson.mp3'),
       hash: 'hash-remote',
@@ -225,7 +225,7 @@ describe('pipeline integration', () => {
     const manifestUri = pipeline.manifestStore.manifestPathFor(mdPath);
     expect(manifestUri).toBe('s3://pipeline-test/manifests/int-tests/lesson.manifest.json');
 
-    const { buildStudyTextMp3 } = await import('@esl-pipeline/tts-elevenlabs');
+    const { buildStudyTextMp3 } = await import('@esl-pipeline/tts-core');
     vi.mocked(buildStudyTextMp3).mockResolvedValueOnce({
       path: join(dir, 'lesson.mp3'),
       hash: 'hash-s3',

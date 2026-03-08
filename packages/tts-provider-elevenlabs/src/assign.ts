@@ -98,7 +98,7 @@ export async function loadVoiceCapabilities(
 }
 
 function getVoiceCatalogCandidates(file: string): (string | null)[] {
-  const override = process.env.ELEVENLABS_VOICES_PATH;
+  const override = process.env.ESL_TTS_PROVIDER_ELEVENLABS_VOICES_PATH;
   const cwd = process.cwd();
   const moduleDir = dirname(fileURLToPath(import.meta.url));
   const pipelineCwd = process.env.PIPELINE_CWD;

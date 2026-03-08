@@ -1,4 +1,4 @@
-# @esl-pipeline/tts-elevenlabs
+# @esl-pipeline/tts-provider-elevenlabs
 
 ## 3.1.8
 

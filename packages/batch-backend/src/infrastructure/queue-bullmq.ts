@@ -25,6 +25,8 @@ export interface QueueJobPayload {
     accentPreference?: string;
     voiceId?: string;
     ttsStrategy?: 'auto' | 'dialogue' | 'tts';
+    ttsProvider?: 'elevenlabs' | 'google';
+    googleTtsModel?: 'chirp3_hd' | 'studio' | 'neural2' | 'wavenet';
     dialogueLanguage?: string;
     dialogueStability?: number;
     dialogueSeed?: number;

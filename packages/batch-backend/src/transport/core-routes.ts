@@ -56,6 +56,8 @@ export function registerCoreRoutes(app: FastifyInstance, options: CoreRouteOptio
       notionDatabase: z.string().min(1).optional(),
       publishTarget: z.enum(['notion', 'anytype', 'html']).optional(),
       ttsStrategy: z.enum(['auto', 'dialogue', 'tts']).optional(),
+      ttsProvider: z.enum(['elevenlabs', 'google']).optional(),
+      googleTtsModel: z.enum(['chirp3_hd', 'studio', 'neural2', 'wavenet']).optional(),
     });
 
     const validatedData = jobSchema.parse(body);
@@ -72,6 +74,8 @@ export function registerCoreRoutes(app: FastifyInstance, options: CoreRouteOptio
       notionDatabase: validatedData.notionDatabase,
       publishTarget: validatedData.publishTarget,
       ttsStrategy: validatedData.ttsStrategy,
+      ttsProvider: validatedData.ttsProvider,
+      googleTtsModel: validatedData.googleTtsModel,
     });
 
     logger.info('HTTP request handled', {

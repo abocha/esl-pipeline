@@ -8,9 +8,11 @@ import { resolve } from 'node:path';
 import type {
   ActionCapability,
   CefrLevel,
+  GoogleTtsModel,
   GenerationOptionsPayload,
   JobOptionsPayload,
   NotionDatabaseOption,
+  TtsProviderId,
   VoiceOption,
 } from '@esl-pipeline/contracts';
 import {
@@ -39,6 +41,8 @@ interface JobOptionsCacheEntry {
 const DEFAULT_CEFR_LEVELS: CefrLevel[] = ['A1', 'A2', 'B1', 'B2', 'C1', 'C2'];
 const DEFAULT_CEFR_DEFAULT: CefrLevel = 'B1';
 const JOB_OPTIONS_CACHE_TTL_MS = 60_000;
+const DEFAULT_TTS_PROVIDERS: TtsProviderId[] = ['elevenlabs', 'google'];
+const DEFAULT_GOOGLE_TTS_MODELS: GoogleTtsModel[] = ['chirp3_hd', 'studio', 'neural2', 'wavenet'];
 
 // TODO: Replace these with data pulled from the orchestrator config provider or
 // dedicated metadata service once available (tracked in backend/frontend Phase 5).
@@ -96,6 +100,12 @@ export async function getJobOptions(): Promise<JobOptionsResponse> {
         result.generation ?? buildGenerationOptionsPayload({ config: runtimeConfig.generation }),
         runtimeConfig,
       );
+      const ttsMetadata = resolveTtsMetadata({
+        ttsProviders: result.ttsProviders,
+        ttsModelOptionsByProvider: result.ttsModelOptionsByProvider,
+        defaultTtsProvider: result.defaultTtsProvider,
+        defaultTtsModelByProvider: result.defaultTtsModelByProvider,
+      });
 
       return {
         ...result,
@@ -104,6 +114,7 @@ export async function getJobOptions(): Promise<JobOptionsResponse> {
         generation,
         notionDatabases,
         learningPresets,
+        ...ttsMetadata,
         supportedActions,
       };
     } catch (error) {
@@ -161,7 +172,68 @@ async function loadStaticJobOptions(runtimeConfig: ReturnType<typeof loadConfig>
     learningPresets: [...STATIC_OPTIONS.learningPresets],
     uploadOptions: [...STATIC_OPTIONS.uploadOptions],
     ttsStrategies: [...STATIC_OPTIONS.ttsStrategies],
+    ...resolveTtsMetadata(),
     supportedActions,
+  };
+}
+
+function resolveTtsMetadata(
+  input: {
+    ttsProviders?: TtsProviderId[];
+    ttsModelOptionsByProvider?: Partial<Record<TtsProviderId, string[]>>;
+    defaultTtsProvider?: TtsProviderId;
+    defaultTtsModelByProvider?: Partial<Record<TtsProviderId, string>>;
+  } = {},
+): {
+  ttsProviders: TtsProviderId[];
+  ttsModelOptionsByProvider: Partial<Record<TtsProviderId, string[]>>;
+  defaultTtsProvider: TtsProviderId;
+  defaultTtsModelByProvider: Partial<Record<TtsProviderId, string>>;
+} {
+  const ttsProviders = (input.ttsProviders?.length ? input.ttsProviders : DEFAULT_TTS_PROVIDERS).filter(
+    (provider): provider is TtsProviderId => provider === 'elevenlabs' || provider === 'google',
+  );
+  const uniqueProviders = [...new Set(ttsProviders)];
+  const modelOptionsByProvider: Partial<Record<TtsProviderId, string[]>> = {
+    ...input.ttsModelOptionsByProvider,
+  };
+  const defaultModelByProvider: Partial<Record<TtsProviderId, string>> = {
+    ...input.defaultTtsModelByProvider,
+  };
+
+  if (!modelOptionsByProvider.elevenlabs || modelOptionsByProvider.elevenlabs.length === 0) {
+    modelOptionsByProvider.elevenlabs = [
+      process.env.ESL_TTS_PROVIDER_ELEVENLABS_MODEL_ID?.trim() || 'eleven_multilingual_v2',
+    ];
+  }
+  if (!defaultModelByProvider.elevenlabs) {
+    defaultModelByProvider.elevenlabs = modelOptionsByProvider.elevenlabs[0];
+  }
+
+  if (!modelOptionsByProvider.google || modelOptionsByProvider.google.length === 0) {
+    modelOptionsByProvider.google = [...DEFAULT_GOOGLE_TTS_MODELS];
+  }
+  if (
+    !defaultModelByProvider.google ||
+    !modelOptionsByProvider.google.includes(defaultModelByProvider.google)
+  ) {
+    defaultModelByProvider.google =
+      process.env.ESL_TTS_PROVIDER_GOOGLE_MODEL?.trim() || modelOptionsByProvider.google[0] || 'chirp3_hd';
+  }
+
+  const defaultProviderRaw = input.defaultTtsProvider ?? process.env.ESL_TTS_DEFAULT_PROVIDER;
+  const normalizedDefaultProvider =
+    defaultProviderRaw === 'elevenlabs' || defaultProviderRaw === 'google' ? defaultProviderRaw : undefined;
+  const defaultProvider =
+    normalizedDefaultProvider && uniqueProviders.includes(normalizedDefaultProvider)
+      ? normalizedDefaultProvider
+      : (uniqueProviders[0] ?? 'elevenlabs');
+
+  return {
+    ttsProviders: uniqueProviders,
+    ttsModelOptionsByProvider: modelOptionsByProvider,
+    defaultTtsProvider: defaultProvider,
+    defaultTtsModelByProvider: defaultModelByProvider,
   };
 }
 
@@ -308,6 +380,23 @@ function cloneJobOptions(value: JobOptionsResponse): JobOptionsResponse {
     notionDatabases: value.notionDatabases.map((option) => ({ ...option })),
     uploadOptions: [...value.uploadOptions],
     ttsStrategies: [...value.ttsStrategies],
+    ...(value.ttsProviders ? { ttsProviders: [...value.ttsProviders] } : {}),
+    ...(value.ttsModelOptionsByProvider
+      ? {
+          ttsModelOptionsByProvider: Object.fromEntries(
+            Object.entries(value.ttsModelOptionsByProvider).map(([provider, models]) => [
+              provider,
+              [...(models ?? [])],
+            ]),
+          ) as Partial<Record<TtsProviderId, string[]>>,
+        }
+      : {}),
+    ...(value.defaultTtsProvider ? { defaultTtsProvider: value.defaultTtsProvider } : {}),
+    ...(value.defaultTtsModelByProvider
+      ? {
+          defaultTtsModelByProvider: { ...value.defaultTtsModelByProvider },
+        }
+      : {}),
     generation: cloneGenerationOptions(value.generation),
     supportedActions: value.supportedActions.map((action) => ({ ...action })),
     learningPresets: value.learningPresets.map((preset) => ({ ...preset })),

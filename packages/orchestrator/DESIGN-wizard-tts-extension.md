@@ -34,16 +34,16 @@ The old “TTS mode” naming is removed; `monologue` is not a strategy value.
 
 ### Environment variables
 
-- `ELEVENLABS_TTS_STRATEGY=auto|dialogue|tts`
-- `ELEVENLABS_DIALOGUE_LANGUAGE=xx`
-- `ELEVENLABS_DIALOGUE_STABILITY=0.0..1.0`
-- `ELEVENLABS_DIALOGUE_SEED=int`
+- `ESL_TTS_PROVIDER_ELEVENLABS_STRATEGY=auto|dialogue|tts`
+- `ESL_TTS_PROVIDER_ELEVENLABS_DIALOGUE_LANGUAGE=xx`
+- `ESL_TTS_PROVIDER_ELEVENLABS_DIALOGUE_STABILITY=0.0..1.0`
+- `ESL_TTS_PROVIDER_ELEVENLABS_DIALOGUE_SEED=int`
 
 ## Selection Rules
 
 1. **Explicit override wins**:
    - CLI / wizard option `ttsStrategy` overrides environment defaults.
-2. **`auto`** uses heuristics in `@esl-pipeline/tts-elevenlabs`:
+2. **`auto`** uses heuristics in `@esl-pipeline/tts-core`:
    - Multi-speaker content selects `dialogue`.
    - Single-speaker content selects `dialogue` when the text is “sentence-choppy / low-level”
      (many short sentences), otherwise selects `tts`.
