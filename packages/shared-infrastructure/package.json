@@ -20,7 +20,8 @@
   "scripts": {
     "build": "tsc -b tsconfig.build.json --force",
     "clean": "node -e \"fs.rmSync('dist', {recursive:true, force:true})\"",
-    "test": "vitest run --config ../../vitest.config.ts --dir ../../packages/shared-infrastructure/tests --reporter=dot",
+    "test": "pnpm run test:unit",
+    "test:unit": "vitest run --config ../../vitest.config.ts --dir ../../packages/shared-infrastructure/tests --reporter=dot --exclude \"**/*.integration.test.ts\" --exclude \"**/*.integration.test.tsx\"",
     "test:verbose": "vitest run --config ../../vitest.config.ts --dir ../../packages/shared-infrastructure/tests --reporter=verbose",
     "test:watch": "vitest watch --config ../../vitest.config.ts --dir ../../packages/shared-infrastructure/tests",
     "typecheck": "tsc --noEmit"
