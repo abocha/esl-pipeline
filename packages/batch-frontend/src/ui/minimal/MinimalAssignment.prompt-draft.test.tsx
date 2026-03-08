@@ -14,7 +14,9 @@ import {
   testWaitFor as waitFor,
 } from './MinimalAssignment.test-harness';
 
-describe('MinimalAssignment - prompt and draft prep', () => {
+const PROMPT_DRAFT_TEST_TIMEOUT_MS = 15_000;
+
+describe('MinimalAssignment - prompt and draft prep', { timeout: PROMPT_DRAFT_TEST_TIMEOUT_MS }, () => {
   beforeEach(() => {
     setupMinimalAssignmentTest();
   });

@@ -43,6 +43,12 @@ When adding integration coverage to a package:
 - Define `test:integration` with explicit integration targets.
 - Use deterministic file targeting for heavy integration suites.
 
+Script contract baseline for unit-only packages:
+
+- Still expose `test:unit` as the canonical unit lane entrypoint.
+- Keep `test` delegating to `test:unit`.
+- Include explicit integration excludes in `test:unit` (`*.integration.test.ts` and `*.integration.test.tsx`) so future integration files do not leak into unit lanes.
+
 For `@esl-pipeline/batch-backend`:
 
 - Keep `test:ci` as the ordered aggregator.
