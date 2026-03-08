@@ -93,8 +93,8 @@ vi.mock('../shared/UploadProgress', () => ({
 }));
 
 const now = '2026-02-05T00:00:00.000Z';
-const UI_WAIT_TIMEOUT_MS = 5_000;
-const INTEGRATION_TEST_TIMEOUT_MS = 20_000;
+const UI_WAIT_TIMEOUT_MS = 3_000;
+const INTEGRATION_TEST_TIMEOUT_MS = 15_000;
 configure({ asyncUtilTimeout: UI_WAIT_TIMEOUT_MS });
 
 export function makeJobStatus(overrides: Partial<api.JobStatus> = {}): api.JobStatus {
@@ -183,22 +183,10 @@ export function makeLearningPreset(
 
 export async function publishAssignmentFlow(user: ReturnType<typeof userEvent.setup>) {
   await user.click(screen.getByRole('button', { name: /Drop audio file/i }));
-
-  await waitFor(
-    () => {
-      expect(screen.getByDisplayValue('Student transcript text')).toBeTruthy();
-    },
-    { timeout: UI_WAIT_TIMEOUT_MS },
-  );
+  await screen.findByDisplayValue('Student transcript text', {}, { timeout: UI_WAIT_TIMEOUT_MS });
 
   await user.click(screen.getByRole('button', { name: /Generate prompt/i }));
-
-  await waitFor(
-    () => {
-      expect(screen.getByDisplayValue('Prompt package output')).toBeTruthy();
-    },
-    { timeout: UI_WAIT_TIMEOUT_MS },
-  );
+  await screen.findByDisplayValue('Prompt package output', {}, { timeout: UI_WAIT_TIMEOUT_MS });
 
   const draftTextarea = screen.getByRole('textbox', { name: /Draft markdown/i });
   expect(draftTextarea).toBeTruthy();
@@ -209,40 +197,72 @@ export async function publishAssignmentFlow(user: ReturnType<typeof userEvent.se
   await previewCurrentDraft(user);
 
   await user.click(screen.getByRole('button', { name: /Publish assignment/i }));
-
-  await waitFor(
-    () => {
-      expect(screen.getAllByText(/Job ID: job-1/i).length).toBeGreaterThan(0);
-    },
-    { timeout: UI_WAIT_TIMEOUT_MS },
-  );
+  await screen.findByText(/Job ID: job-1/i, {}, { timeout: UI_WAIT_TIMEOUT_MS });
 }
 
 export async function previewCurrentDraft(user: ReturnType<typeof userEvent.setup>) {
   await user.click(screen.getByRole('button', { name: /Preview current draft/i }));
-  await waitFor(
-    () => {
-      expect(screen.getByText('Preview ready for current draft.')).toBeTruthy();
-    },
-    { timeout: UI_WAIT_TIMEOUT_MS },
-  );
+  await screen.findByText('Preview ready for current draft.', {}, { timeout: UI_WAIT_TIMEOUT_MS });
 }
 
 export async function preparePromptReady(user: ReturnType<typeof userEvent.setup>) {
   await user.click(screen.getByRole('button', { name: /Drop audio file/i }));
-
-  await waitFor(
-    () => {
-      expect(screen.getByDisplayValue('Student transcript text')).toBeTruthy();
-    },
-    { timeout: UI_WAIT_TIMEOUT_MS },
-  );
+  await screen.findByDisplayValue('Student transcript text', {}, { timeout: UI_WAIT_TIMEOUT_MS });
 
   await user.click(screen.getByRole('button', { name: /Generate prompt/i }));
+  await screen.findByDisplayValue('Prompt package output', {}, { timeout: UI_WAIT_TIMEOUT_MS });
+}
 
+export function hydrateResumedAssignment(
+  overrides: {
+    status?: Partial<api.JobStatus>;
+    jobs?: api.JobStatus[];
+    promptText?: string;
+  } = {},
+) {
+  const status = makeJobStatus({
+    state: 'succeeded',
+    recordingId: 'rec-1',
+    transcriptId: 'tx-1',
+    promptPackageId: 'pkg-1',
+    ...overrides.status,
+  });
+  const jobs = overrides.jobs ?? [status];
+
+  vi.mocked(api.listUserJobs).mockResolvedValue({
+    jobs,
+    total: jobs.length,
+    limit: 20,
+    offset: 0,
+  });
+  vi.mocked(api.getJobStatus).mockResolvedValue(status as never);
+  vi.mocked(api.fetchPromptPackage).mockResolvedValue({
+    id: status.promptPackageId ?? 'pkg-1',
+    recordingId: status.recordingId ?? 'rec-1',
+    transcriptId: status.transcriptId ?? 'tx-1',
+    studentId: status.studentId,
+    profilePath: null,
+    templateVersion: 'v1',
+    notes: null,
+    storageUri: 'memory://prompt/pkg-1',
+    text: overrides.promptText ?? 'Prompt package output',
+    createdAt: now,
+    updatedAt: now,
+  });
+
+  globalThis.history.replaceState(null, '', `/?jobId=${status.jobId}`);
+  return status;
+}
+
+export async function waitForResumedPromptReady(text = 'Prompt package output') {
+  await screen.findByDisplayValue(text, {}, { timeout: UI_WAIT_TIMEOUT_MS });
+}
+
+export async function waitForJobActionsReady(jobId = 'job-1') {
+  await screen.findByRole('heading', { name: /7\. Job actions/i }, { timeout: UI_WAIT_TIMEOUT_MS });
   await waitFor(
     () => {
-      expect(screen.getByDisplayValue('Prompt package output')).toBeTruthy();
+      expect(screen.getAllByText(new RegExp(`Job ID: ${jobId}`, 'i')).length).toBeGreaterThan(0);
     },
     { timeout: UI_WAIT_TIMEOUT_MS },
   );
