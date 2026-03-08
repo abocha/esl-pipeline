@@ -1,10 +1,11 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import fs from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 
 import * as h from './application.process-queue-job.test-harness.js';
 import { processQueueJob } from '../src/application/process-queue-job.js';
+import * as transcriptionStorage from '../src/infrastructure/transcription-storage.js';
 
 const {
   makeJob,
