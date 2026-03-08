@@ -114,6 +114,7 @@ describe('MinimalAssignment - publish and job actions', () => {
         jobOverrides: {
           preset: 'b2-default',
           publishTarget: 'html',
+          withTts: true,
           ttsProvider: 'elevenlabs',
         },
       });
@@ -200,6 +201,7 @@ describe('MinimalAssignment - publish and job actions', () => {
         jobOverrides: {
           learningPresetId: 'general-english-intensive',
           publishTarget: 'html',
+          withTts: true,
           ttsProvider: 'elevenlabs',
         },
       });
@@ -301,6 +303,7 @@ describe('MinimalAssignment - publish and job actions', () => {
       expect(api.materializeDraft).toHaveBeenCalledWith('draft-1', {
         jobOverrides: expect.objectContaining({
           publishTarget: 'html',
+          withTts: true,
           ttsProvider: 'google',
           googleTtsModel: 'studio',
         }),

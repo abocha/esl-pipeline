@@ -1436,6 +1436,7 @@ export const MinimalAssignment: React.FC = () => {
         ...(jobStatus?.jobId ? { jobId: jobStatus.jobId } : {}),
         jobOverrides: {
           publishTarget,
+          withTts: true,
           ttsProvider: selectedTtsProvider,
           ...(selectedTtsProvider === 'google' && isGoogleTtsModel(selectedTtsModel)
             ? { googleTtsModel: selectedTtsModel }

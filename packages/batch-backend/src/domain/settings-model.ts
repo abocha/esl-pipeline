@@ -3,9 +3,9 @@
 import type { TtsStrategy } from '@esl-pipeline/contracts';
 
 /**
- * TTS provider type - extensible for future providers
+ * TTS provider type - aligned with currently supported runtime adapters.
  */
-export type TtsProvider = 'elevenlabs' | 'openai' | 'azure' | 'google';
+export type TtsProvider = 'elevenlabs' | 'google';
 
 /**
  * TTS strategy for audio generation
@@ -71,7 +71,7 @@ export interface UserSettingsOutput {
 /**
  * Valid TTS providers
  */
-export const VALID_TTS_PROVIDERS: TtsProvider[] = ['elevenlabs', 'openai', 'azure', 'google'];
+export const VALID_TTS_PROVIDERS: TtsProvider[] = ['elevenlabs', 'google'];
 
 /**
  * Valid TTS strategies

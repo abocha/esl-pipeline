@@ -34,7 +34,6 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@google-cloud/text-to-speech": "^6.2.0",
     "@elevenlabs/elevenlabs-js": "^2.38.1",
     "@esl-pipeline/contracts": "workspace:*",
     "@esl-pipeline/pmd": "workspace:*",
