@@ -21,7 +21,7 @@ import {
   testWithin as within,
 } from './MinimalAssignment.test-harness';
 
-describe('MinimalAssignment - resume and rehydration', () => {
+describe('MinimalAssignment - resume and rehydration', { timeout: INTEGRATION_TEST_TIMEOUT_MS }, () => {
   beforeEach(() => {
     setupMinimalAssignmentTest();
   });

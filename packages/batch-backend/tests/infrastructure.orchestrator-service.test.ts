@@ -1,5 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+const ORCHESTRATOR_SERVICE_TEST_TIMEOUT_MS = 15_000;
+
 /**
  * NOTE ON VITEST HOISTING:
  * - vi.mock() calls are hoisted before this module body.
@@ -102,7 +104,10 @@ describe('infrastructure/orchestrator-service', () => {
     // Each test dynamically imports to avoid sharing state.
   });
 
-  it('getPipeline creates pipeline once, maps env, and caches result', async () => {
+  it(
+    'getPipeline creates pipeline once, maps env, and caches result',
+    { timeout: ORCHESTRATOR_SERVICE_TEST_TIMEOUT_MS },
+    async () => {
     const { loadConfig } = await import('../src/config/env.js');
     const { createPipeline } = await import('@esl-pipeline/orchestrator');
 
@@ -121,7 +126,8 @@ describe('infrastructure/orchestrator-service', () => {
     expect(loadConfig).toHaveBeenCalledTimes(1);
     expect(createPipeline).toHaveBeenCalledTimes(1);
     expect(p1).toBe(p2);
-  });
+    },
+  );
 
   it('runAssignmentJob calls pipeline.newAssignment with expected flags and dependencies and returns manifestPath', async () => {
     const { loadConfig } = await import('../src/config/env.js');

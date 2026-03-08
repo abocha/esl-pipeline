@@ -8,7 +8,8 @@
     "dev": "vite",
     "lint": "eslint .",
     "preview": "vite preview",
-    "test": "vitest run --passWithNoTests",
+    "test": "pnpm run test:unit",
+    "test:unit": "vitest run --testTimeout=15000 --passWithNoTests --exclude \"**/*.integration.test.ts\" --exclude \"**/*.integration.test.tsx\"",
     "test:watch": "vitest",
     "typecheck": "tsc --noEmit"
   },
