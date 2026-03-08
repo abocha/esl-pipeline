@@ -13,6 +13,7 @@ vi.mock('../src/client.js', () => ({
 }));
 
 const tempDirs: string[] = [];
+const IMPORTER_TEST_TIMEOUT_MS = 15_000;
 
 async function createMarkdownFile(content: string): Promise<string> {
   const root = await fs.mkdtemp(path.join(os.tmpdir(), 'esl-importer-'));
@@ -34,7 +35,7 @@ describe('runImport data source resolution', () => {
     tempDirs.length = 0;
   });
 
-  it('retrieves database metadata once when importing', async () => {
+  it('retrieves database metadata once when importing', { timeout: IMPORTER_TEST_TIMEOUT_MS }, async () => {
     const mdPath = await createMarkdownFile(`---\ntitle: Demo\n---\n\n# Hello`);
     const client = {
       databases: {

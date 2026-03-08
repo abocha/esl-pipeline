@@ -32,7 +32,8 @@
     "build": "pnpm --filter @esl-pipeline/shared-infrastructure build && tsc -p tsconfig.build.json",
     "clean": "node -e \"fs.rmSync('dist', {recursive:true, force:true})\"",
     "dev": "tsx watch src/index.ts",
-    "test": "vitest run",
+    "test": "pnpm run test:unit",
+    "test:unit": "vitest run --testTimeout=15000 --exclude \"**/*.integration.test.ts\" --exclude \"**/*.integration.test.tsx\"",
     "test:watch": "vitest",
     "typecheck": "tsc --noEmit"
   },

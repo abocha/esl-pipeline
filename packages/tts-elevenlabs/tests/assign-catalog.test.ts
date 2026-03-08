@@ -1,4 +1,4 @@
-import { chmod, mkdtemp, writeFile } from 'node:fs/promises';
+import { mkdtemp, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
@@ -32,23 +32,29 @@ describe('loadVoicesCatalog error policy', () => {
     await expect(loadVoicesCatalog(dir)).rejects.toThrow(/Failed to read ElevenLabs voices catalog/);
   });
 
-  it.skipIf(process.platform === 'win32')(
-    'throws on unreadable catalog file instead of silently falling back',
-    async () => {
-      const dir = await mkdtemp(join(tmpdir(), 'tts-assign-'));
-      const unreadablePath = join(dir, 'voices.json');
-      await writeFile(unreadablePath, JSON.stringify({ voices: [] }), 'utf8');
-      await chmod(unreadablePath, 0o000);
+  it('throws on unreadable catalog file instead of silently falling back', async () => {
+    const unreadablePath = join(tmpdir(), `unreadable-voices-${Date.now()}.json`);
 
-      try {
-        vi.resetModules();
-        const { loadVoicesCatalog } = await import('../src/assign.js');
-        await expect(loadVoicesCatalog(unreadablePath)).rejects.toThrow(
-          /Failed to read ElevenLabs voices catalog/,
-        );
-      } finally {
-        await chmod(unreadablePath, 0o600);
-      }
-    },
-  );
+    vi.resetModules();
+    vi.doMock('node:fs/promises', async () => {
+      const actual = await vi.importActual<typeof import('node:fs/promises')>('node:fs/promises');
+      return {
+        ...actual,
+        readFile: vi.fn(async () => {
+          const error = new Error('permission denied') as NodeJS.ErrnoException;
+          error.code = 'EACCES';
+          throw error;
+        }),
+      };
+    });
+
+    try {
+      const { loadVoicesCatalog } = await import('../src/assign.js');
+      await expect(loadVoicesCatalog(unreadablePath)).rejects.toThrow(
+        /Failed to read ElevenLabs voices catalog/,
+      );
+    } finally {
+      vi.doUnmock('node:fs/promises');
+    }
+  });
 });
