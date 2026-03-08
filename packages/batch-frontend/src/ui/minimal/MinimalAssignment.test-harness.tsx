@@ -240,7 +240,7 @@ export function hydrateResumedAssignment(
     id: status.promptPackageId ?? 'pkg-1',
     recordingId: status.recordingId ?? 'rec-1',
     transcriptId: status.transcriptId ?? 'tx-1',
-    studentId: status.studentId,
+    studentId: status.studentId ?? null,
     profilePath: null,
     templateVersion: 'v1',
     notes: null,
