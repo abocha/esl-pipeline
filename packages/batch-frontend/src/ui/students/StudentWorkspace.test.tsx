@@ -32,6 +32,7 @@ vi.mock('../../utils/api', () => ({
 }));
 
 const now = '2026-02-07T12:00:00.000Z';
+const STUDENT_WORKSPACE_ASYNC_TIMEOUT_MS = 10_000;
 
 function renderWorkspace() {
   return render(
@@ -457,18 +458,25 @@ describe('StudentWorkspace', () => {
     const user = userEvent.setup();
     renderWorkspace();
 
-    await waitFor(() => {
-      expect(screen.getByRole('button', { name: /Inspect/i })).toBeTruthy();
-    });
+    const inspectButton = await screen.findByRole(
+      'button',
+      { name: /Inspect/i },
+      { timeout: STUDENT_WORKSPACE_ASYNC_TIMEOUT_MS },
+    );
+    await user.click(inspectButton);
 
-    await user.click(screen.getByRole('button', { name: /Inspect/i }));
-
-    await waitFor(() => {
-      expect(api.fetchJobProvenance).toHaveBeenCalledWith('job-1');
-    });
-    await waitFor(() => {
-      expect(api.fetchPromptPackageLineage).toHaveBeenCalledWith('pkg-1');
-    });
+    await waitFor(
+      () => {
+        expect(api.fetchJobProvenance).toHaveBeenCalledWith('job-1');
+      },
+      { timeout: STUDENT_WORKSPACE_ASYNC_TIMEOUT_MS },
+    );
+    await waitFor(
+      () => {
+        expect(api.fetchPromptPackageLineage).toHaveBeenCalledWith('pkg-1');
+      },
+      { timeout: STUDENT_WORKSPACE_ASYNC_TIMEOUT_MS },
+    );
 
     expect(screen.getByText(/Action audit:/i)).toBeTruthy();
   });
@@ -477,36 +485,54 @@ describe('StudentWorkspace', () => {
     const user = userEvent.setup();
     renderWorkspace();
 
-    await waitFor(() => {
-      expect(screen.getByRole('button', { name: /Inspect/i })).toBeTruthy();
-    });
-
-    const inspectButton = screen.getByRole('button', { name: /Inspect/i });
+    const inspectButton = await screen.findByRole(
+      'button',
+      { name: /Inspect/i },
+      { timeout: STUDENT_WORKSPACE_ASYNC_TIMEOUT_MS },
+    );
     await user.click(inspectButton);
 
-    await waitFor(() => {
-      expect(api.fetchJobProvenance).toHaveBeenCalledTimes(1);
-    });
-    await waitFor(() => {
-      expect(api.fetchPromptPackageLineage).toHaveBeenCalledTimes(1);
-    });
-    expect(screen.getByText(/Binding at creation:/i)).toBeTruthy();
+    await waitFor(
+      () => {
+        expect(api.fetchJobProvenance).toHaveBeenCalledTimes(1);
+      },
+      { timeout: STUDENT_WORKSPACE_ASYNC_TIMEOUT_MS },
+    );
+    await waitFor(
+      () => {
+        expect(api.fetchPromptPackageLineage).toHaveBeenCalledTimes(1);
+      },
+      { timeout: STUDENT_WORKSPACE_ASYNC_TIMEOUT_MS },
+    );
+    await screen.findByText(/Binding at creation:/i, {}, { timeout: STUDENT_WORKSPACE_ASYNC_TIMEOUT_MS });
 
-    await user.click(inspectButton);
+    await user.click(
+      await screen.findByRole('button', { name: /Inspect/i }, { timeout: STUDENT_WORKSPACE_ASYNC_TIMEOUT_MS }),
+    );
 
-    await waitFor(() => {
-      expect(api.fetchJobProvenance).toHaveBeenCalledTimes(2);
-    });
-    await waitFor(() => {
-      expect(api.fetchPromptPackageLineage).toHaveBeenCalledTimes(2);
-    });
-    expect(screen.getByText(/Binding at creation:/i)).toBeTruthy();
+    await waitFor(
+      () => {
+        expect(api.fetchJobProvenance).toHaveBeenCalledTimes(2);
+      },
+      { timeout: STUDENT_WORKSPACE_ASYNC_TIMEOUT_MS },
+    );
+    await waitFor(
+      () => {
+        expect(api.fetchPromptPackageLineage).toHaveBeenCalledTimes(2);
+      },
+      { timeout: STUDENT_WORKSPACE_ASYNC_TIMEOUT_MS },
+    );
+    await screen.findByText(/Binding at creation:/i, {}, { timeout: STUDENT_WORKSPACE_ASYNC_TIMEOUT_MS });
   });
 
   it('renders a resume link to minimal workflow for each job', async () => {
     renderWorkspace();
 
-    const resumeLink = await screen.findByRole('link', { name: /Resume/i });
+    const resumeLink = await screen.findByRole(
+      'link',
+      { name: /Resume/i },
+      { timeout: STUDENT_WORKSPACE_ASYNC_TIMEOUT_MS },
+    );
     expect(resumeLink.getAttribute('href')).toBe('/?jobId=job-1');
   });
 

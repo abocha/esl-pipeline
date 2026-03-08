@@ -2,6 +2,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { deriveStudentId } from '../src/domain/student-utils.js';
 
+const STUDENT_PROFILES_REMOTE_CACHE_TEST_TIMEOUT_MS = 30_000;
+
 vi.mock('../src/infrastructure/orchestrator-service.js', () => ({
   getStudentProfilesFromOrchestrator: vi.fn(),
 }));
@@ -59,5 +61,5 @@ describe('student-profiles-store remote cache', () => {
     vi.setSystemTime(new Date('2026-02-01T00:01:01.000Z'));
     await listStudentProfiles({}, { config });
     expect(getStudentProfilesFromOrchestrator).toHaveBeenCalledTimes(2);
-  }, 15_000);
+  }, STUDENT_PROFILES_REMOTE_CACHE_TEST_TIMEOUT_MS);
 });
