@@ -10,6 +10,7 @@
     "preview": "vite preview",
     "test": "pnpm run test:unit",
     "test:unit": "vitest run --testTimeout=15000 --passWithNoTests --exclude \"**/*.integration.test.ts\" --exclude \"**/*.integration.test.tsx\"",
+    "test:unit:timings": "vitest run --testTimeout=15000 --passWithNoTests --exclude \"**/*.integration.test.ts\" --exclude \"**/*.integration.test.tsx\" --reporter=json --outputFile=../../tmp/test-timings/frontend-unit-vitest.json",
     "test:watch": "vitest",
     "typecheck": "tsc --noEmit"
   },
