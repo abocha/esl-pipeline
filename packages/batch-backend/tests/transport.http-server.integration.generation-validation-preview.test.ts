@@ -312,6 +312,8 @@ describeHttpServerIntegrationSuite(
         learningPresetId: 'general-english',
         notionDatabase: 'notion-db',
         withTts: true,
+        ttsProvider: 'google',
+        googleTtsModel: 'chirp3_hd',
         forceTts: true,
         ttsStrategy: 'dialogue',
         upload: 's3',

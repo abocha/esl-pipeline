@@ -6,8 +6,7 @@ import type { VoiceSelectionDiagnostics } from '@esl-pipeline/contracts';
 import type { ParsedMarkdownContext } from '@esl-pipeline/pmd';
 
 export type TtsStrategy = 'auto' | 'tts' | 'dialogue';
-export type TtsProvider = 'elevenlabs' | 'google';
-export type GoogleTtsModel = 'chirp3_hd' | 'studio' | 'neural2' | 'wavenet';
+export type TtsProvider = 'elevenlabs';
 
 /**
  * Dialogue input for ElevenLabs Text-to-Dialogue API
@@ -84,12 +83,6 @@ export interface BuildStudyTextOptions {
 
   // Provider selection
   ttsProvider?: TtsProvider;
-
-  // Google Cloud Text-to-Speech options
-  googleTtsModel?: GoogleTtsModel;
-  googleLanguageCode?: string;
-  googleApiEndpoint?: string;
-  googleModelName?: string;
 }
 
 export interface BuildStudyTextInput {
@@ -137,12 +130,6 @@ export interface BuildPronunciationShadowSentenceOptions {
 
   // Provider selection
   ttsProvider?: TtsProvider;
-
-  // Google Cloud Text-to-Speech options
-  googleTtsModel?: GoogleTtsModel;
-  googleLanguageCode?: string;
-  googleApiEndpoint?: string;
-  googleModelName?: string;
 }
 
 export interface BuildPronunciationShadowSentenceResult {

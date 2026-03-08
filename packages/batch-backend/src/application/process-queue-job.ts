@@ -109,7 +109,7 @@ export async function processQueueJob(payload: QueueJobPayload): Promise<void> {
       | {
         elevenLabsApiKey?: string | null;
         notionToken?: string | null;
-        ttsProvider?: 'elevenlabs' | 'openai' | 'azure' | 'google' | null;
+        ttsProvider?: 'elevenlabs' | 'google' | null;
       }
       | undefined;
     if (running.userId) {

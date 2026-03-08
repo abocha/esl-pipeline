@@ -389,7 +389,8 @@ export function loadConfig(): BatchBackendConfig {
   // Orchestrator-related envs
   const notionToken = readString('NOTION_TOKEN');
   const notionDatabaseId = readString('NOTION_DATABASE_ID');
-  const elevenLabsApiKey = readString('ELEVENLABS_API_KEY');
+  const elevenLabsApiKey =
+    readString('ESL_TTS_PROVIDER_ELEVENLABS_API_KEY') ?? readString('ELEVENLABS_API_KEY');
 
   const manifestStoreEnv =
     (readString('ESL_PIPELINE_MANIFEST_STORE') as 'filesystem' | 's3' | undefined) || 'filesystem';

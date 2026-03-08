@@ -605,9 +605,6 @@ importers:
       '@esl-pipeline/tts-core':
         specifier: workspace:*
         version: link:../tts-core
-      '@google-cloud/text-to-speech':
-        specifier: ^6.2.0
-        version: 6.4.0
       js-yaml:
         specifier: ^4.1.1
         version: 4.1.1

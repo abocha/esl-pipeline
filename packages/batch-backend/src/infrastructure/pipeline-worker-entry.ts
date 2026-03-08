@@ -4,6 +4,7 @@ import { type NewAssignmentFlags, type RerunFlags } from '@esl-pipeline/orchestr
 import { type BatchBackendConfig, loadConfig } from '../config/env.js';
 import { getFfmpegSemaphore } from './ffmpeg-semaphore.js';
 import { logger as rootLogger } from './logger.js';
+import { applyUserSettingsToEnv } from './pipeline-worker-env.js';
 import {
   type RunAssignmentPayload,
   type RunRerunAssignmentPayload,
@@ -43,28 +44,6 @@ function isPipelineCancelledErrorLike(error: unknown): boolean {
     error.message.toLowerCase() === 'cancelled' ||
     error.message.toLowerCase().startsWith('cancelled:')
   );
-}
-
-function applyUserSettingsToEnv(settings?: {
-  elevenLabsApiKey?: string | null;
-  notionToken?: string | null;
-  ttsProvider?: 'elevenlabs' | 'openai' | 'azure' | 'google' | null;
-}) {
-  if (!settings) return;
-
-  if (settings.elevenLabsApiKey) {
-    process.env.ESL_TTS_PROVIDER_ELEVENLABS_API_KEY = settings.elevenLabsApiKey;
-  }
-
-  if (settings.notionToken) {
-    process.env.NOTION_TOKEN = settings.notionToken;
-  }
-
-  if (settings.ttsProvider === 'google') {
-    process.env.ESL_TTS_DEFAULT_PROVIDER = 'google';
-  } else if (settings.ttsProvider === 'elevenlabs') {
-    process.env.ESL_TTS_DEFAULT_PROVIDER = 'elevenlabs';
-  }
 }
 
 async function executePipeline(
@@ -259,7 +238,7 @@ async function main() {
       config.orchestrator.notionToken = payload.settings.notionToken;
     }
 
-    applyUserSettingsToEnv(payload.settings);
+    applyUserSettingsToEnv(payload.settings, config.orchestrator.elevenLabsApiKey);
 
     try {
       const result = await executePipeline(
