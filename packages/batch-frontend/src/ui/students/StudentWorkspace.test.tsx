@@ -32,7 +32,7 @@ vi.mock('../../utils/api', () => ({
 }));
 
 const now = '2026-02-07T12:00:00.000Z';
-const STUDENT_WORKSPACE_ASYNC_TIMEOUT_MS = 10_000;
+const STUDENT_WORKSPACE_ASYNC_TIMEOUT_MS = 5_000;
 
 function renderWorkspace() {
   return render(
@@ -401,10 +401,7 @@ describe('StudentWorkspace', () => {
     renderWorkspace();
 
     expect(screen.getByRole('heading', { name: /Student Workspace/i })).toBeTruthy();
-
-    await waitFor(() => {
-      expect(screen.getByText(/Current profile:/i)).toBeTruthy();
-    });
+    await screen.findByText(/Current profile:/i, {}, { timeout: STUDENT_WORKSPACE_ASYNC_TIMEOUT_MS });
 
     expect(screen.getByRole('heading', { name: /Assignment History/i })).toBeTruthy();
     expect(screen.getByRole('heading', { name: /Student Timeline/i })).toBeTruthy();
@@ -540,9 +537,11 @@ describe('StudentWorkspace', () => {
     const user = userEvent.setup();
     renderWorkspace();
 
-    await waitFor(() => {
-      expect(screen.getByRole('button', { name: /Save Student Binding/i })).toBeTruthy();
-    });
+    await screen.findByRole(
+      'button',
+      { name: /Save Student Binding/i },
+      { timeout: STUDENT_WORKSPACE_ASYNC_TIMEOUT_MS },
+    );
 
     await user.selectOptions(
       screen.getByRole('combobox', { name: /Bound profile/i }),
@@ -561,9 +560,11 @@ describe('StudentWorkspace', () => {
     const user = userEvent.setup();
     renderWorkspace();
 
-    await waitFor(() => {
-      expect(screen.getByRole('button', { name: /Save Template Content/i })).toBeTruthy();
-    });
+    await screen.findByRole(
+      'button',
+      { name: /Save Template Content/i },
+      { timeout: STUDENT_WORKSPACE_ASYNC_TIMEOUT_MS },
+    );
 
     const templateEditor = screen.getByPlaceholderText(
       /Select a template to edit/i,
@@ -592,9 +593,11 @@ describe('StudentWorkspace', () => {
 
     renderWorkspace();
 
-    await waitFor(() => {
-      expect(screen.getByRole('button', { name: /Create Template/i })).toBeTruthy();
-    });
+    await screen.findByRole(
+      'button',
+      { name: /Create Template/i },
+      { timeout: STUDENT_WORKSPACE_ASYNC_TIMEOUT_MS },
+    );
 
     await user.type(screen.getByLabelText(/New template ID/i), 'hw/custom-template.md');
     await user.click(screen.getByRole('button', { name: /Create Template/i }));
@@ -611,9 +614,11 @@ describe('StudentWorkspace', () => {
     const user = userEvent.setup();
     renderWorkspace();
 
-    await waitFor(() => {
-      expect(screen.getByRole('button', { name: /Create Student/i })).toBeTruthy();
-    });
+    await screen.findByRole(
+      'button',
+      { name: /Create Student/i },
+      { timeout: STUDENT_WORKSPACE_ASYNC_TIMEOUT_MS },
+    );
 
     await user.click(screen.getByRole('button', { name: /Create Student/i }));
     await user.click(screen.getByRole('button', { name: /^Create Student$/i }));
@@ -646,9 +651,11 @@ describe('StudentWorkspace', () => {
 
     renderWorkspace();
 
-    await waitFor(() => {
-      expect(screen.getByRole('button', { name: /Create Student/i })).toBeTruthy();
-    });
+    await screen.findByRole(
+      'button',
+      { name: /Create Student/i },
+      { timeout: STUDENT_WORKSPACE_ASYNC_TIMEOUT_MS },
+    );
 
     await user.click(screen.getByRole('button', { name: /Create Student/i }));
     await user.type(screen.getByLabelText(/Student Name/i), 'Alex');
@@ -671,9 +678,11 @@ describe('StudentWorkspace', () => {
 
     renderWorkspace();
 
-    await waitFor(() => {
-      expect(screen.getByRole('button', { name: /Create Student/i })).toBeTruthy();
-    });
+    await screen.findByRole(
+      'button',
+      { name: /Create Student/i },
+      { timeout: STUDENT_WORKSPACE_ASYNC_TIMEOUT_MS },
+    );
 
     await user.click(screen.getByRole('button', { name: /Create Student/i }));
     await user.type(screen.getByLabelText(/Student Name/i), 'Existing');
