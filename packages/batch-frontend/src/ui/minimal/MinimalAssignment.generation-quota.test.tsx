@@ -62,10 +62,8 @@ describe('MinimalAssignment - generation and quota', () => {
   it('shows quota panel from job options before first draft generation', async () => {
     render(<MinimalAssignment />);
 
-    await waitFor(() => {
-      expect(screen.getByText(/Generation quota/i)).toBeTruthy();
-      expect(screen.getByText(/Source: Hybrid/i)).toBeTruthy();
-    });
+    await screen.findByText(/Generation quota/i);
+    await screen.findByText(/Source: Hybrid/i);
     expect(screen.getByText(/RPM: 5/i)).toBeTruthy();
     expect(screen.getByText(/TPM: 250000/i)).toBeTruthy();
     expect(screen.getByText(/RPD: 20/i)).toBeTruthy();
@@ -76,10 +74,8 @@ describe('MinimalAssignment - generation and quota', () => {
     const user = userEvent.setup();
     render(<MinimalAssignment />);
 
-    await waitFor(() => {
-      expect(screen.getByText(/Source: Hybrid/i)).toBeTruthy();
-      expect(screen.getByText(/RPM: 5/i)).toBeTruthy();
-    });
+    await screen.findByText(/Source: Hybrid/i);
+    expect(screen.getByText(/RPM: 5/i)).toBeTruthy();
 
     vi.mocked(api.fetchJobOptions).mockResolvedValueOnce({
       presets: ['b1-default', 'b2-default'],
@@ -159,9 +155,7 @@ describe('MinimalAssignment - generation and quota', () => {
   it('shows relative and absolute freshness in quota panel', async () => {
     render(<MinimalAssignment />);
 
-    await waitFor(() => {
-      expect(screen.getByText(/Updated: (just now|\d+[mhd] ago) \(.+\)/i)).toBeTruthy();
-    });
+    await screen.findByText(/Updated: (just now|\d+[mhd] ago) \(.+\)/i);
   });
 
   it(
@@ -366,13 +360,9 @@ describe('MinimalAssignment - generation and quota', () => {
         });
       });
 
-      await waitFor(() => {
-        expect(
-          screen.getByText(
-            /Provider timed out\. Retry or choose a faster model\/provider\. Request ID: req-timeout-1/i,
-          ),
-        ).toBeTruthy();
-      });
+      await screen.findByText(
+        /Provider timed out\. Retry or choose a faster model\/provider\. Request ID: req-timeout-1/i,
+      );
     },
     INTEGRATION_TEST_TIMEOUT_MS,
   );

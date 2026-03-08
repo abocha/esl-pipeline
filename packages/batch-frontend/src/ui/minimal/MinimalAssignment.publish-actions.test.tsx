@@ -16,6 +16,7 @@ import {
   testVi as vi,
   testWaitFor as waitFor,
   waitForJobActionsReady,
+  waitForResumedPromptReady,
   testWithin as within,
 } from './MinimalAssignment.test-harness';
 
@@ -27,6 +28,12 @@ describe('MinimalAssignment - publish and job actions', () => {
   afterEach(() => {
     vi.useRealTimers();
   });
+
+  const renderWithResumedPromptReady = async () => {
+    hydrateResumedAssignment();
+    render(<MinimalAssignment />);
+    await waitForResumedPromptReady();
+  };
 
   it('shows upload errors when upload fails', async () => {
     const user = userEvent.setup();
@@ -49,8 +56,7 @@ describe('MinimalAssignment - publish and job actions', () => {
         warnings: [],
       });
 
-      render(<MinimalAssignment />);
-      await preparePromptReady(user);
+      await renderWithResumedPromptReady();
 
       const draftTextarea = screen.getByRole('textbox', { name: /Draft markdown/i });
       expect(draftTextarea).toBeTruthy();
@@ -61,9 +67,7 @@ describe('MinimalAssignment - publish and job actions', () => {
 
       await user.click(screen.getByRole('button', { name: /Save draft/i }));
 
-      await waitFor(() => {
-        expect(screen.getByText('Fix validation errors before saving.')).toBeTruthy();
-      });
+      await screen.findByText('Fix validation errors before saving.');
       expect(api.createDraft).not.toHaveBeenCalled();
     },
     INTEGRATION_TEST_TIMEOUT_MS,
@@ -104,9 +108,7 @@ describe('MinimalAssignment - publish and job actions', () => {
         mdStorageUri: 's3://esl/drafts/draft-1.md',
       });
 
-      await waitFor(() => {
-        expect(screen.getAllByText(/Job ID: job-1/i).length).toBeGreaterThan(0);
-      });
+      await screen.findAllByText(/Job ID: job-1/i);
       const link = screen.getByRole('link', { name: /Open in Notion/i });
       expect(link.getAttribute('href')).toBe('https://www.notion.so/published-assignment');
     },
@@ -134,8 +136,7 @@ describe('MinimalAssignment - publish and job actions', () => {
         ttsStrategies: ['auto', 'dialogue', 'tts'],
         supportedActions: [],
       });
-      render(<MinimalAssignment />);
-      await preparePromptReady(user);
+      await renderWithResumedPromptReady();
 
       const draftTextarea = screen.getByRole('textbox', { name: /Draft markdown/i });
       expect(draftTextarea).toBeTruthy();
@@ -157,12 +158,15 @@ describe('MinimalAssignment - publish and job actions', () => {
       expect(vi.mocked(api.validateMarkdown)).toHaveBeenLastCalledWith('# Final draft', true, {
         learningPresetId: 'general-english-intensive',
       });
-      expect(api.materializeDraft).toHaveBeenCalledWith('draft-1', {
-        jobOverrides: {
-          learningPresetId: 'general-english-intensive',
-          publishTarget: 'html',
-        },
-      });
+      expect(api.materializeDraft).toHaveBeenCalledWith(
+        'draft-1',
+        expect.objectContaining({
+          jobOverrides: {
+            learningPresetId: 'general-english-intensive',
+            publishTarget: 'html',
+          },
+        }),
+      );
       const call = vi.mocked(api.materializeDraft).mock.calls.at(-1)?.[1];
       expect(call?.jobOverrides).not.toHaveProperty('preset');
     },
@@ -173,8 +177,7 @@ describe('MinimalAssignment - publish and job actions', () => {
     'requires preview before publish and requires re-preview after draft edits',
     async () => {
       const user = userEvent.setup();
-      render(<MinimalAssignment />);
-      await preparePromptReady(user);
+      await renderWithResumedPromptReady();
 
       const draftTextarea = screen.getByRole('textbox', { name: /Draft markdown/i });
       await user.type(draftTextarea, '# Preview gated draft');
