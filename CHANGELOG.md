@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented here. Dates use `YYYY-MM-DD`.
 
+## [1.2.4] - 2026-03-08
+
+### Changed
+
+- Automated release from PR #22: test(repo): consolidate test stabilization and split unit monoliths (https://github.com/abocha/esl-pipeline/pull/22)
+
 ## [1.2.3] - 2026-03-07
 
 ### Changed
