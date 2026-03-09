@@ -38,14 +38,12 @@
     "@esl-pipeline/contracts": "workspace:*",
     "@esl-pipeline/pmd": "workspace:*",
     "@esl-pipeline/provider-runtime": "workspace:*",
-    "@esl-pipeline/shared-infrastructure": "workspace:*",
     "@esl-pipeline/tts-core": "workspace:*",
     "js-yaml": "^4.1.1"
   },
   "devDependencies": {
     "@types/js-yaml": "^4.0.9",
     "@types/node": "^25.3.5",
-    "tsx": "^4.21.0",
     "typescript": "^5.9.3",
     "vitest": "^4.0.18"
   },
