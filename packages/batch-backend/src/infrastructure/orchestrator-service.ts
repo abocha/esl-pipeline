@@ -379,9 +379,22 @@ export async function getStudentProfilesFromOrchestrator(): Promise<StudentProfi
 
 export function isManifestBucketMissingError(error: unknown): boolean {
   if (!error) return false;
+  const isNamedBucketMissingError = (value: unknown): boolean =>
+    typeof value === 'string' && (value === 'NoSuchBucket' || value === 'PermanentRedirect');
+
+  const errorLike =
+    typeof error === 'object' && error !== null ? (error as Record<string, unknown>) : null;
   if (
     error instanceof Error &&
-    (error.name === 'NoSuchBucket' || error.name === 'PermanentRedirect')
+    (isNamedBucketMissingError(error.name) ||
+      isNamedBucketMissingError(errorLike?.causeName) ||
+      isNamedBucketMissingError(errorLike?.code))
+  ) {
+    return true;
+  }
+  if (
+    isNamedBucketMissingError(errorLike?.causeName) ||
+    isNamedBucketMissingError(errorLike?.code)
   ) {
     return true;
   }

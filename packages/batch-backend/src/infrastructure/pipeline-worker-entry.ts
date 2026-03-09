@@ -6,6 +6,11 @@ import { getFfmpegSemaphore } from './ffmpeg-semaphore.js';
 import { logger as rootLogger } from './logger.js';
 import { applyUserSettingsToEnv } from './pipeline-worker-env.js';
 import {
+  resolveWorkerApiVersion,
+  toWorkerV2FailureError,
+  type OrchestratorApiVersion,
+} from './pipeline-worker-v2.js';
+import {
   type RunAssignmentPayload,
   type RunRerunAssignmentPayload,
   getPipeline,
@@ -13,7 +18,6 @@ import {
 } from './orchestrator-service.js';
 
 type WorkerExecutionMode = 'new_assignment' | 'rerun_assignment';
-type OrchestratorApiVersion = 'v1' | 'v2';
 
 interface WorkerRunMessage {
   type: 'run';
@@ -167,7 +171,14 @@ async function runAssignmentPipeline(
         executeNewAssignmentV2: (...args: unknown[]) => Promise<{
           ok: boolean;
           data?: PipelineRunResult;
-          error?: { message?: string; code?: string };
+          error?: {
+            message?: string;
+            code?: string;
+            causeName?: string;
+            category?: string;
+            stage?: string;
+            retryable?: boolean;
+          };
         }>;
       }
     ).executeNewAssignmentV2(
@@ -175,9 +186,7 @@ async function runAssignmentPipeline(
       { dependencies: { signal } },
     );
     if (!result.ok) {
-      const error = new Error(result.error?.message || 'orchestrator v2 newAssignment failed');
-      error.name = result.error?.code || 'ORCHESTRATOR_V2_ERROR';
-      throw error;
+      throw toWorkerV2FailureError(result.error, 'orchestrator v2 newAssignment failed');
     }
     return result.data ?? {};
   }
@@ -231,7 +240,14 @@ async function runRerunPipeline(
         executeRerunAssignmentV2: (...args: unknown[]) => Promise<{
           ok: boolean;
           data?: PipelineRunResult;
-          error?: { message?: string; code?: string };
+          error?: {
+            message?: string;
+            code?: string;
+            causeName?: string;
+            category?: string;
+            stage?: string;
+            retryable?: boolean;
+          };
         }>;
       }
     ).executeRerunAssignmentV2(
@@ -239,9 +255,7 @@ async function runRerunPipeline(
       { dependencies: { signal } },
     );
     if (!result.ok) {
-      const error = new Error(result.error?.message || 'orchestrator v2 rerunAssignment failed');
-      error.name = result.error?.code || 'ORCHESTRATOR_V2_ERROR';
-      throw error;
+      throw toWorkerV2FailureError(result.error, 'orchestrator v2 rerunAssignment failed');
     }
     return result.data ?? {};
   }
@@ -278,8 +292,10 @@ async function main() {
       msg.executionMode === 'rerun_assignment' ? 'rerun_assignment' : 'new_assignment';
     const log = rootLogger.child({ jobId: payload.jobId, runId, component: 'pipeline-worker' });
     const config = loadConfig();
-    const apiVersion: OrchestratorApiVersion =
-      msg.apiVersion === 'v2' ? 'v2' : config.orchestrator.apiVersion;
+    const apiVersion: OrchestratorApiVersion = resolveWorkerApiVersion(
+      msg.apiVersion,
+      config.orchestrator.apiVersion,
+    );
     const abortController = new AbortController();
     currentAbortController = abortController;
 
