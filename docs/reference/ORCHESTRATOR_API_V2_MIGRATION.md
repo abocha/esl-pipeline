@@ -53,16 +53,12 @@ All return `OrchestratorApiResultV2<T>`:
 7. `status`
 8. optional `detail`
 
-## Compatibility Adapters
+## Compatibility Status
 
-v1-shaped callers can execute through v2 adapters without changing payload shape:
-
-1. `newAssignmentViaV2`
-2. `rerunAssignmentViaV2`
-3. `getAssignmentStatusViaV2`
-4. `planRerunAssignmentViaV2`
-
-These preserve legacy call styles while running through v2 execution envelopes.
+1. Transitional v2 compatibility adapter exports were removed in Stage 8 cleanup.
+2. Callers should use either:
+   - v1 runtime functions directly (`newAssignment`, `rerunAssignment`, `getAssignmentStatus`, `planRerunAssignment`), or
+   - v2 DTO execution methods (`execute*V2`).
 
 ## Backend Cutover Status
 
@@ -77,3 +73,4 @@ Batch-backend runtime is cut over to v2:
 1. v1 orchestrator exports remain available for compatibility callers outside backend cutover.
 2. backend execution is standardized on v2 contracts.
 3. CLI/wizard/path-picker removals are completed in Stage 7.
+4. Stage 8 CI guardrails block orchestrator CLI reintroduction and contract/doc drift.

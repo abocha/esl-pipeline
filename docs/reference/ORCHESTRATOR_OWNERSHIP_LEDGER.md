@@ -72,9 +72,10 @@ The following suites are required to stay green before entering Stage 2:
 ### Queue B: Public Contract Evolution (Major Only If Needed)
 
 - Scope: explicit request/response DTOs and stable error/event schemas.
-- Status (2026-03-09): backend cut over to API v2 runtime path and temporary dual-path support retired; v1 exports remain for compatibility.
+- Status (2026-03-09): backend cut over to API v2 runtime path; temporary dual-path support and transitional v2 adapter exports retired in Stage 8.
 - Guardrails:
-  - Compatibility adapter layer for existing callers during transition.
+  - Keep v1 and v2 surfaces explicit and documented; do not reintroduce transitional wrapper APIs.
+  - CI boundary guardrail must stay green for orchestrator library-only checks.
   - Release label and migration notes aligned with versioning model.
 
 ## Non-Goals

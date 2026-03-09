@@ -5,7 +5,7 @@
 - Audience: AI agents, maintainers.
 - Read Time: 4 minutes.
 - Authority Level: Operational quickstart.
-- Last Verified Against: 2026-03-04 repo state.
+- Last Verified Against: 2026-03-09 repo state.
 - Owner: founder-maintainer + automation agents.
 - Review Cadence: biweekly.
 - Status: `active`.
@@ -42,13 +42,10 @@ pnpm docs:check
 pnpm dev:batch
 ```
 
-## Legacy Orchestrator CLI (Deprecated Compatibility)
+## Orchestrator Usage (Library-Only)
 
-```bash
-pnpm esl --md ./lessons/mission.md --preset b1-default --with-tts --upload s3
-```
-
-Do not use CLI as the primary operational path. The backend system is the active runtime entrypoint.
+Use orchestrator through programmatic APIs (`createPipeline` + execution methods) from backend and service code.
+Do not add or depend on CLI entrypoints in orchestrator.
 
 ## Batch System (Local Docker)
 

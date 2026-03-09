@@ -222,6 +222,7 @@ Verification commands (MUST pass before merging behavior changes):
 - `pnpm test` (unit lane)
 - `pnpm test:integration` (integration lane)
 - `pnpm smoke` (or equivalent orchestrator smoke/integration suite)
+- `pnpm guard:orchestrator:boundary` (library-only boundary + contract/doc sync guard)
 - Dependency alignment:
   - `pnpm deps:pin` — normalize shared versions (AWS SDK, Notion, ElevenLabs, React/Vite, Fastify/pg/Redis/bullmq, etc.).
   - `pnpm deps:upgrade:safe` — upgrade allowlisted SDKs (Notion/ElevenLabs/AWS S3) and stable utilities (axios/remark/unified/commander/ora/picocolors; extras via `SAFE_UPGRADE_EXTRA`), then reapply pins.
@@ -906,7 +907,7 @@ Update docs:
 
 Constraints:
 
-- Do not add new orchestrator CLI flags.
+- Do not reintroduce orchestrator CLI/wizard/path-picker surfaces.
 - If an operator entrypoint is required, implement it in batch-backend surfaces and document it in backend docs.
 
 ### 9.7. Extend Observability (Logging/Metrics)

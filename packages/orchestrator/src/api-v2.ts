@@ -10,21 +10,13 @@ import type {
   AssignmentProgressEvent,
   AssignmentStageEventV2,
   AssignmentStatus,
-  GetAssignmentStatusRequestV2,
-  NewAssignmentFlags,
-  NewAssignmentRequestV2,
   NewAssignmentResult,
   OrchestratorApiResultV2,
-  OrchestratorDependencies,
   OrchestratorErrorCategory,
   OrchestratorErrorV2,
   OrchestratorOperation,
   OrchestratorV2ExecutionContext,
-  RerunAssignmentRequestV2,
   RerunAssignmentResult,
-  RerunFlags,
-  RerunPlanRequest,
-  RerunPlanRequestV2,
   RerunPlanResult,
 } from './types.js';
 
@@ -161,46 +153,6 @@ export function unwrapOrThrowV2Result<T>(result: OrchestratorApiResultV2<T>): T 
   (err as { category?: string }).category = result.error.category;
   (err as { operation?: string }).operation = result.operation;
   throw err;
-}
-
-export function adaptLegacyNewAssignmentArgsToV2(
-  flags: NewAssignmentFlags,
-  dependencies: OrchestratorDependencies = {},
-): { request: NewAssignmentRequestV2; context: OrchestratorV2ExecutionContext } {
-  return {
-    request: { assignment: flags },
-    context: { dependencies },
-  };
-}
-
-export function adaptLegacyRerunAssignmentArgsToV2(
-  flags: RerunFlags,
-  dependencies: OrchestratorDependencies = {},
-): { request: RerunAssignmentRequestV2; context: OrchestratorV2ExecutionContext } {
-  return {
-    request: { assignment: flags },
-    context: { dependencies },
-  };
-}
-
-export function adaptLegacyStatusArgsToV2(
-  mdPath: string,
-  dependencies: OrchestratorDependencies = {},
-): { request: GetAssignmentStatusRequestV2; context: OrchestratorV2ExecutionContext } {
-  return {
-    request: { mdPath },
-    context: { dependencies },
-  };
-}
-
-export function adaptLegacyRerunPlanArgsToV2(
-  request: RerunPlanRequest,
-  dependencies: OrchestratorDependencies = {},
-): { request: RerunPlanRequestV2; context: OrchestratorV2ExecutionContext } {
-  return {
-    request: { rerunPlan: request },
-    context: { dependencies },
-  };
 }
 
 export type NewAssignmentOperationResultV2 = OrchestratorApiResultV2<NewAssignmentResult>;
