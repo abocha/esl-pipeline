@@ -142,8 +142,12 @@ vi.mock('@esl-pipeline/md-validator', () => {
   };
 });
 
-vi.mock('../src/application/student-profiles-store', () => {
+vi.mock('../src/application/student-profiles-store', async () => {
+  const actual = await vi.importActual<typeof import('../src/application/student-profiles-store.js')>(
+    '../src/application/student-profiles-store.js',
+  );
   return {
+    ...actual,
     listStudentProfiles: vi.fn(),
     getStudentProfileById: vi.fn(),
     createStudentProfile: vi.fn(),
