@@ -26,7 +26,6 @@ import {
 } from '@esl-pipeline/storage-uploader';
 import {
   buildPronunciationShadowSentenceMp3,
-  type BuildStudyTextResult,
   buildStudyTextMp3,
   hashStudyText,
 } from '@esl-pipeline/tts-core';
@@ -46,7 +45,7 @@ import {
   CURRENT_MANIFEST_SCHEMA_VERSION,
   createFilesystemManifestStore,
 } from './manifest.js';
-import { type PipelineLogger, noopLogger, noopMetrics } from './observability.js';
+import { noopLogger, noopMetrics } from './observability.js';
 import { computeRerunPlan } from './rerun-planner.js';
 import {
   type AudioArtifact,

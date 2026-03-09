@@ -48,10 +48,11 @@ describe('orchestrator api v2', () => {
     expect(result.ok).toBe(true);
     expect(result.schemaVersion).toBe('v2');
     expect(result.operation).toBe('new_assignment');
-    if (result.ok) {
-      expect(result.data.manifestPath).toBeDefined();
-      expect(result.data.steps).toContain('manifest');
+    if (!result.ok) {
+      throw new Error(`expected success result, received ${result.error.code}`);
     }
+    expect(result.data.manifestPath).toBeDefined();
+    expect(result.data.steps).toContain('manifest');
     expect(events.length).toBeGreaterThan(0);
     expect(events.every((event) => event.schemaVersion === 'v2')).toBe(true);
     expect(events.every((event) => event.operation === 'new_assignment')).toBe(true);
@@ -73,10 +74,11 @@ describe('orchestrator api v2', () => {
     expect(result.ok).toBe(false);
     expect(result.schemaVersion).toBe('v2');
     expect(result.operation).toBe('rerun_assignment');
-    if (!result.ok) {
-      expect(result.error.category).toBe('validation');
-      expect(result.error.code).toBe('VALIDATION_ERROR');
+    if (result.ok) {
+      throw new Error('expected rerun validation failure result');
     }
+    expect(result.error.category).toBe('validation');
+    expect(result.error.code).toBe('VALIDATION_ERROR');
   });
 
   it('supports v2 status and rerun planning DTOs', async () => {
@@ -90,17 +92,19 @@ describe('orchestrator api v2', () => {
     expect(status.ok).toBe(true);
     expect(status.schemaVersion).toBe('v2');
     expect(status.operation).toBe('get_assignment_status');
-    if (status.ok) {
-      expect(status.data.manifest).toBeNull();
-      expect(status.data.audioFileExists).toBe(false);
+    if (!status.ok) {
+      throw new Error(`expected status success, received ${status.error.code}`);
     }
+    expect(status.data.manifest).toBeNull();
+    expect(status.data.audioFileExists).toBe(false);
 
     expect(plan.ok).toBe(true);
     expect(plan.schemaVersion).toBe('v2');
     expect(plan.operation).toBe('plan_rerun_assignment');
-    if (plan.ok) {
-      expect(plan.data.errors.length).toBeGreaterThan(0);
+    if (!plan.ok) {
+      throw new Error(`expected plan success, received ${plan.error.code}`);
     }
+    expect(plan.data.errors.length).toBeGreaterThan(0);
   });
 
   it('categorizes cancellation errors with stable v2 schema', () => {

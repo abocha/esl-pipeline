@@ -128,7 +128,7 @@ export interface NewAssignmentFlags {
   dataSource?: string;
 }
 
-export interface NewAssignmentRequest extends NewAssignmentFlags {}
+export type NewAssignmentRequest = NewAssignmentFlags;
 
 export interface NewAssignmentRequestV2 {
   assignment: NewAssignmentRequest;
@@ -181,7 +181,7 @@ export interface RerunFlags {
   dialogueSeed?: number;
 }
 
-export interface RerunAssignmentRequest extends RerunFlags {}
+export type RerunAssignmentRequest = RerunFlags;
 
 export interface RerunAssignmentRequestV2 {
   assignment: RerunAssignmentRequest;

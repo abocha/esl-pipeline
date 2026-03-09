@@ -29,16 +29,28 @@ describe('runtime/publish-target-anytype', () => {
     >;
 
     await expect(resolveAnytypeSpaceId(client, 'explicit-id')).resolves.toBe('explicit-id');
-    await expect(
-      resolveAnytypeSpaceId(client, undefined, {
-        env: { ANYTYPE_SPACE_ID: 'from-env' } as NodeJS.ProcessEnv,
-      }),
-    ).resolves.toBe('from-env');
-    await expect(
-      resolveAnytypeSpaceId(client, undefined, {
-        env: { ANYTYPE_SPACE_NAME: 'Secondary' } as NodeJS.ProcessEnv,
-      }),
-    ).resolves.toBe('space-b');
+    const previousSpaceId = process.env.ANYTYPE_SPACE_ID;
+    const previousSpaceName = process.env.ANYTYPE_SPACE_NAME;
+    try {
+      process.env.ANYTYPE_SPACE_ID = 'from-env';
+      await expect(resolveAnytypeSpaceId(client)).resolves.toBe('from-env');
+
+      delete process.env.ANYTYPE_SPACE_ID;
+      process.env.ANYTYPE_SPACE_NAME = 'Secondary';
+      await expect(resolveAnytypeSpaceId(client)).resolves.toBe('space-b');
+    } finally {
+      if (previousSpaceId === undefined) {
+        delete process.env.ANYTYPE_SPACE_ID;
+      } else {
+        process.env.ANYTYPE_SPACE_ID = previousSpaceId;
+      }
+
+      if (previousSpaceName === undefined) {
+        delete process.env.ANYTYPE_SPACE_NAME;
+      } else {
+        process.env.ANYTYPE_SPACE_NAME = previousSpaceName;
+      }
+    }
   });
 
   it('throws validation error when space cannot be resolved', async () => {
@@ -50,7 +62,7 @@ describe('runtime/publish-target-anytype', () => {
 
   it('adds page to collection and logs success/failure', async () => {
     const logger = { log: vi.fn() };
-    const addObjectsToList = vi.fn().mockResolvedValue(undefined);
+    const addObjectsToList = vi.fn().mockResolvedValue();
     const client: Pick<AnytypeClient, 'addObjectsToList'> = { addObjectsToList } as Pick<
       AnytypeClient,
       'addObjectsToList'
