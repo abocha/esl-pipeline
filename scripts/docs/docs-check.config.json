@@ -20,6 +20,18 @@
     "docs/operations/pr-style-release-notes.md",
     "docs/operations/rollup-optional-binary-troubleshooting.md"
   ],
+  "non_core_docs": [
+    "docs/backend-frontend/DEPLOYMENT.md",
+    "docs/backend-frontend/batch-backend-ssot.md",
+    "docs/reference/env.md",
+    "docs/reference/pipeline-manifest.md",
+    "docs/reference/ORCHESTRATOR_API_V2_MIGRATION.md",
+    "docs/reference/GENERATION_PROVIDER_POLICY.md",
+    "packages/orchestrator/README.md",
+    "packages/batch-backend/README.md",
+    "packages/batch-frontend/README.md",
+    "packages/provider-runtime/README.md"
+  ],
   "exclude_docs": [],
   "exclude_prefixes": [
     "docs/archive/"
@@ -41,7 +53,17 @@
     "docs/operations/postgres-ops-health.md",
     "docs/operations/prompt-gallery-bootstrap.md",
     "docs/operations/pr-style-release-notes.md",
-    "docs/operations/rollup-optional-binary-troubleshooting.md"
+    "docs/operations/rollup-optional-binary-troubleshooting.md",
+    "docs/backend-frontend/DEPLOYMENT.md",
+    "docs/backend-frontend/batch-backend-ssot.md",
+    "docs/reference/env.md",
+    "docs/reference/pipeline-manifest.md",
+    "docs/reference/ORCHESTRATOR_API_V2_MIGRATION.md",
+    "docs/reference/GENERATION_PROVIDER_POLICY.md",
+    "packages/orchestrator/README.md",
+    "packages/batch-backend/README.md",
+    "packages/batch-frontend/README.md",
+    "packages/provider-runtime/README.md"
   ],
   "meta_required_fields": [
     "Audience",
@@ -54,6 +76,7 @@
   "freshness_days": {
     "core": 30,
     "ops": 45,
+    "non_core": 45,
     "ssot_warning": 60
   },
   "required_route_hints": [

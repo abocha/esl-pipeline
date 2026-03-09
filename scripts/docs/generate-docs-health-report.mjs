@@ -10,19 +10,21 @@ const config = loadDocsCheckConfig(repoRoot);
 
 const core = runDocsChecks('core', { repoRoot, config });
 const ops = runDocsChecks('ops', { repoRoot, config });
+const nonCore = runDocsChecks('non_core', { repoRoot, config });
 
 const checks = {
   core,
   ops,
+  non_core: nonCore,
 };
 
 const metrics = {
-  checkedDocs: core.docsChecked + ops.docsChecked,
-  errors: core.errors.length + ops.errors.length,
-  warnings: core.warnings.length + ops.warnings.length,
+  checkedDocs: core.docsChecked + ops.docsChecked + nonCore.docsChecked,
+  errors: core.errors.length + ops.errors.length + nonCore.errors.length,
+  warnings: core.warnings.length + ops.warnings.length + nonCore.warnings.length,
 };
 
-const scoring = buildScorecard({ core, ops, metrics });
+const scoring = buildScorecard({ core, ops, nonCore, metrics });
 
 const report = {
   generatedAt: now,
@@ -42,12 +44,13 @@ fs.writeFileSync(mdPath, toMarkdown(report), 'utf8');
 
 console.log(`docs health report written:\n- ${jsonPath}\n- ${mdPath}`);
 
-function buildScorecard({ core, ops, metrics }) {
+function buildScorecard({ core, ops, nonCore, metrics }) {
   const routingPenalty = countMatches(core.errors, ['missing-route-hint', 'missing-route-doc']);
-  const authorityPenalty = countMatches([...core.errors, ...ops.errors], ['missing-meta']);
-  const freshnessPenalty = countMatches([...core.errors, ...ops.errors], ['stale-doc', 'missing-freshness', 'invalid-freshness']);
+  const allErrors = [...core.errors, ...ops.errors, ...nonCore.errors];
+  const authorityPenalty = countMatches(allErrors, ['missing-meta']);
+  const freshnessPenalty = countMatches(allErrors, ['stale-doc', 'missing-freshness', 'invalid-freshness']);
   const enforcePenalty = metrics.errors;
-  const opsPenalty = ops.errors.length;
+  const opsPenalty = ops.errors.length + nonCore.errors.length;
 
   const routingClarity = clampScore(10 - routingPenalty * 1.5);
   const authorityClarity = clampScore(10 - authorityPenalty * 0.8);
@@ -126,6 +129,15 @@ function toMarkdown(report) {
   lines.push('');
   appendList(lines, checks.ops.errors, 'Ops errors');
   appendList(lines, checks.ops.warnings, 'Ops warnings');
+
+  lines.push('## Non-Core Check');
+  lines.push('');
+  lines.push(`- Docs checked: ${checks.non_core.docsChecked}`);
+  lines.push(`- Errors: ${checks.non_core.errors.length}`);
+  lines.push(`- Warnings: ${checks.non_core.warnings.length}`);
+  lines.push('');
+  appendList(lines, checks.non_core.errors, 'Non-core errors');
+  appendList(lines, checks.non_core.warnings, 'Non-core warnings');
 
   return `${lines.join('\n')}\n`;
 }

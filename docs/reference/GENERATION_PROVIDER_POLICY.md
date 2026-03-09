@@ -5,7 +5,10 @@
 - Audience: founder-maintainer and implementing agents.
 - Read Time: 8 minutes.
 - Authority Level: canonical WS2B provider/model/quota policy.
-- Last Updated: 2026-03-03.
+- Last Verified Against: 2026-03-10 repo state.
+- Owner: founder-maintainer + automation agents.
+- Review Cadence: biweekly or after provider policy/availability changes.
+- Status: `reference`.
 
 ## Purpose
 

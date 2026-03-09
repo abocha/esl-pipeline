@@ -1,5 +1,15 @@
 # Environment Configuration Guide
 
+## Meta
+
+- Audience: maintainers and implementing agents.
+- Read Time: 8 minutes.
+- Authority Level: environment contract reference.
+- Last Verified Against: 2026-03-10 repo state.
+- Owner: founder-maintainer + automation agents.
+- Review Cadence: biweekly or after environment contract changes.
+- Status: `active`.
+
 This repo uses a few env files for different runtimes:
 
 - `.env` (from `.env.example`): for orchestrator library usage and shared executable defaults.

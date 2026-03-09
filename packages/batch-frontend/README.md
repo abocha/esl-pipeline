@@ -1,5 +1,14 @@
 # @esl-pipeline/batch-frontend
 
+## Meta
+
+- Audience: maintainers and implementing agents.
+- Authority Level: Package entrypoint and operational usage guide.
+- Last Verified Against: 2026-03-09 repo state.
+- Owner: batch-frontend maintainers + automation agents.
+- Review Cadence: monthly or after major UI/workflow changes.
+- Status: `active`.
+
 React + Vite console for `@esl-pipeline/batch-backend`. This is a minimal,
 operator-facing UI that focuses on the core workflow only.
 
