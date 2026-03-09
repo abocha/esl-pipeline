@@ -5,7 +5,7 @@
 - Audience: maintainers and AI agents improving docs operations.
 - Read Time: 6 minutes.
 - Authority Level: Docs system design and operating model.
-- Last Verified Against: 2026-03-04 repo state.
+- Last Verified Against: 2026-03-10 repo state.
 - Owner: founder-maintainer + automation agents.
 - Review Cadence: monthly or after major workflow/tooling changes.
 - Status: `reference`.
@@ -44,15 +44,26 @@ Reference article:
 
 ## Operating Constraints (Pragmatic)
 
-- Start with high-impact enforced scope (core + active ops docs).
+- Keep enforced scope high-signal and explicitly enumerated.
 - Keep scripts fast and deterministic.
-- Warn first, enforce later when expanding scope.
+- Enforce through CI for all declared scopes.
 - Prefer archiving stale long docs over indefinite patching.
 
-## Enforced Scope (Phase 1)
+## Enforced Scope (Current)
 
 - Core routing and governance docs.
 - Active operations runbooks.
+- Selected non-core docs:
+  - `docs/backend-frontend/DEPLOYMENT.md`
+  - `docs/backend-frontend/batch-backend-ssot.md`
+  - `docs/reference/env.md`
+  - `docs/reference/pipeline-manifest.md`
+  - `docs/reference/ORCHESTRATOR_API_V2_MIGRATION.md`
+  - `docs/reference/GENERATION_PROVIDER_POLICY.md`
+  - `packages/orchestrator/README.md`
+  - `packages/batch-backend/README.md`
+  - `packages/batch-frontend/README.md`
+  - `packages/provider-runtime/README.md`
 
 See:
 - [`docs/reference/DOCS_GOVERNANCE.md`](DOCS_GOVERNANCE.md)

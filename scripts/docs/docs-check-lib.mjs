@@ -65,7 +65,9 @@ function resolveDocsForScope(scope, config) {
     ? (config.core_docs ?? [])
     : scope === 'ops'
       ? (config.active_ops_docs ?? [])
-      : null;
+      : scope === 'non_core'
+        ? (config.non_core_docs ?? [])
+        : null;
   if (!include) throw new Error(`Unsupported docs check scope: ${scope}`);
 
   const excludedDocs = new Set(config.exclude_docs ?? []);
@@ -172,7 +174,13 @@ function validateFreshness({ content, relPath, config, scope, errors, warnings }
   const today = new Date();
   const daysOld = Math.floor((today.getTime() - verifiedDate.getTime()) / MS_PER_DAY);
 
-  const threshold = scope === 'core' ? config.freshness_days?.core : config.freshness_days?.ops;
+  const threshold = scope === 'core'
+    ? config.freshness_days?.core
+    : scope === 'ops'
+      ? config.freshness_days?.ops
+      : scope === 'non_core'
+        ? config.freshness_days?.non_core
+        : undefined;
   if (typeof threshold === 'number' && daysOld > threshold) {
     errors.push(`[stale-doc] ${relPath} is ${daysOld} days old (max ${threshold})`);
     return;

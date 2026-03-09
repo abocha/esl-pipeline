@@ -1,5 +1,15 @@
 # Orchestrator API v2 Migration Guide (Cutover Stage)
 
+## Meta
+
+- Audience: maintainers and implementing agents.
+- Read Time: 5 minutes.
+- Authority Level: active migration and cutover guidance.
+- Last Verified Against: 2026-03-10 repo state.
+- Owner: orchestrator maintainers + automation agents.
+- Review Cadence: weekly while migration/cutover notes remain active.
+- Status: `active`.
+
 ## Summary
 
 API v2 is the active backend execution contract in this stage.
