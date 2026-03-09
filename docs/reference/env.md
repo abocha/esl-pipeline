@@ -43,6 +43,10 @@ Set these in `.env` (or your shell) when running `esl` or programmatic API calls
 - `ESL_TTS_PROVIDER_GOOGLE_VOICE_STUDIO` (optional) — default `studio` voice.
 - `ESL_TTS_PROVIDER_GOOGLE_VOICE_NEURAL2` (optional) — default `neural2` voice.
 - `ESL_TTS_PROVIDER_GOOGLE_VOICE_WAVENET` (optional) — default `wavenet` voice.
+- Google catalog and assignment notes:
+  - Google provider loads voices from live `listVoices` and caches in process (15m TTL).
+  - Auto-assignment currently scopes to English locales (`en-*`).
+  - Explicit `speaker_profiles.voice` / `voices.yml` mappings must match selected Google model family.
 - `VOICE_ALIGNMENT_V2_ENABLED` (optional, default `false`) — Enables v2 voice-alignment pipeline behavior.
 - `VOICE_ALIGNMENT_V2_STRICT_VALIDATION` (optional, default `false`) — Promotes voice metadata compatibility checks to hard validation errors.
 - `VOICE_ALIGNMENT_V2_MIN_SCORE` (optional, default `20`) — Minimum heuristic score accepted for strict auto voice assignment.

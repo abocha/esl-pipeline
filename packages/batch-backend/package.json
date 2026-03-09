@@ -55,6 +55,7 @@
     "@esl-pipeline/orchestrator": "workspace:*",
     "@esl-pipeline/provider-runtime": "workspace:*",
     "@esl-pipeline/shared-infrastructure": "workspace:*",
+    "@esl-pipeline/tts-provider-google": "workspace:*",
     "@fastify/cookie": "^11.0.2",
     "@fastify/multipart": "^9.4.0",
     "bcrypt": "^6.0.0",
