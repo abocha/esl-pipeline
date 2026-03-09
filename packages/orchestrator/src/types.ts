@@ -33,6 +33,8 @@ export interface OrchestratorDependencies {
   signal?: AbortSignal;
 }
 
+export type PublishTarget = 'notion' | 'anytype' | 'html';
+
 export interface NewAssignmentFlags {
   md: string;
   student?: string;
@@ -44,7 +46,7 @@ export interface NewAssignmentFlags {
   withTts?: boolean;
   ttsProvider?: TtsProvider;
   googleTtsModel?: GoogleTtsModel;
-  publishTarget?: 'notion' | 'anytype' | 'html';
+  publishTarget?: PublishTarget;
   anytypeSpaceId?: string;
 
   // TTS strategy fields
@@ -69,6 +71,20 @@ export interface NewAssignmentFlags {
   db?: string;
   dataSourceId?: string;
   dataSource?: string;
+}
+
+export interface NewAssignmentRequest extends NewAssignmentFlags {}
+
+export interface NewAssignmentResult {
+  pageId?: string;
+  pageUrl?: string;
+  anytypeUrl?: string;
+  htmlUrl?: string;
+  publishTarget?: PublishTarget;
+  audio?: AssignmentManifest['audio'];
+  colorized?: boolean;
+  manifestPath?: string;
+  steps: string[];
 }
 
 export interface AssignmentStatus {
@@ -100,6 +116,19 @@ export interface RerunFlags {
   dialogueLanguage?: string;
   dialogueStability?: number;
   dialogueSeed?: number;
+}
+
+export interface RerunAssignmentRequest extends RerunFlags {}
+
+export interface RerunAssignmentResult {
+  steps: string[];
+  audio?: AssignmentManifest['audio'];
+  pageId?: string;
+  pageUrl?: string;
+  anytypeUrl?: string;
+  htmlUrl?: string;
+  publishTarget?: PublishTarget;
+  manifestPath: string;
 }
 
 export type RerunTargetStage = NonNullable<RerunFlags['steps']>[number];

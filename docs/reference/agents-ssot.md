@@ -21,6 +21,9 @@ Start with `AGENTS.md` and `docs/README.md`; then read only the sections needed 
 
 - Runtime/tooling/env requirements: section `3`.
 - Package ownership and extension points: section `4`.
+- Orchestrator/batch ownership review artifacts:
+  - `docs/reference/ORCHESTRATOR_SYSTEM_REVIEW.md`
+  - `docs/reference/ORCHESTRATOR_OWNERSHIP_LEDGER.md`
 - Configuration and adapter rules: section `5`.
 - Manifest and pipeline behavior contracts: sections `6` and `7`.
 - CLI/programmatic API constraints: sections `8` and `9`.
@@ -368,6 +371,16 @@ Adapter rules:
   - Bypass existing selection patterns without updating this SSOT.
 
 Roadmap-only constructs (e.g., `SecretProvider`, advanced tenant-aware providers) are “to be confirmed” and MUST NOT be assumed present until implemented.
+
+#### 4.1.4. Ownership Boundary Rules (Orchestrator vs Batch Backend)
+
+Boundary invariants:
+
+- Canonical pipeline semantics (stage order, manifest semantics, rerun planner behavior) MUST remain owned by orchestrator.
+- Backend worker/process lifecycle behavior (IPC, cancellation relay, worker fallback strategy) MUST remain owned by batch-backend.
+- Shared helper logic duplicated across packages SHOULD be extracted into shared packages (for example `@esl-pipeline/shared-infrastructure`) when it is domain-neutral and reused by both sides.
+- Agents MUST consult the active ownership ledger before moving behavior across package boundaries:
+  - `docs/reference/ORCHESTRATOR_OWNERSHIP_LEDGER.md`
 
 ### 4.2. Supporting Packages (Per-Package Snapshots)
 
