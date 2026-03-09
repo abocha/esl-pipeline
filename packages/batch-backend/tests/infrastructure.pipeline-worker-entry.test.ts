@@ -4,6 +4,10 @@ import {
   applyUserSettingsToEnv,
   resolveEffectiveElevenLabsApiKey,
 } from '../src/infrastructure/pipeline-worker-env.js';
+import {
+  resolveWorkerApiVersion,
+  toWorkerV2FailureError,
+} from '../src/infrastructure/pipeline-worker-v2.js';
 
 const ORIGINAL_ELEVEN_KEY = process.env.ESL_TTS_PROVIDER_ELEVENLABS_API_KEY;
 const ORIGINAL_DEFAULT_PROVIDER = process.env.ESL_TTS_DEFAULT_PROVIDER;
@@ -60,5 +64,48 @@ describe('infrastructure/pipeline-worker-entry', () => {
     expect(process.env.ESL_TTS_PROVIDER_ELEVENLABS_API_KEY).toBe('user-eleven-key');
     expect(process.env.NOTION_TOKEN).toBe('user-notion-token');
     expect(process.env.ESL_TTS_DEFAULT_PROVIDER).toBe('google');
+  });
+
+  it('maps v2 failure causeName to error.name to preserve provider identity', () => {
+    const error = toWorkerV2FailureError(
+      {
+        message: 'No such bucket',
+        code: 'INFRASTRUCTURE_ERROR',
+        causeName: 'NoSuchBucket',
+        category: 'infrastructure',
+      },
+      'fallback message',
+    );
+
+    expect(error.message).toBe('No such bucket');
+    expect(error.name).toBe('NoSuchBucket');
+    expect((error as { code?: string }).code).toBe('INFRASTRUCTURE_ERROR');
+    expect((error as { causeName?: string }).causeName).toBe('NoSuchBucket');
+  });
+
+  it('falls back to v2 code for error.name when causeName is absent', () => {
+    const error = toWorkerV2FailureError(
+      {
+        message: 'Infrastructure failure',
+        code: 'INFRASTRUCTURE_ERROR',
+      },
+      'fallback message',
+    );
+
+    expect(error.name).toBe('INFRASTRUCTURE_ERROR');
+    expect((error as { code?: string }).code).toBe('INFRASTRUCTURE_ERROR');
+    expect((error as { causeName?: string }).causeName).toBeUndefined();
+  });
+
+  it('resolves worker api version from explicit v1 override', () => {
+    expect(resolveWorkerApiVersion('v1', 'v2')).toBe('v1');
+  });
+
+  it('resolves worker api version from explicit v2 override', () => {
+    expect(resolveWorkerApiVersion('v2', 'v1')).toBe('v2');
+  });
+
+  it('resolves worker api version from config default when override is missing', () => {
+    expect(resolveWorkerApiVersion(undefined, 'v2')).toBe('v2');
   });
 });

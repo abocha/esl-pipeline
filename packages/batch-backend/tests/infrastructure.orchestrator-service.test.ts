@@ -364,6 +364,29 @@ describe('infrastructure/orchestrator-service', () => {
   // This should be tested in integration tests with a real worker process and config files.
   it.todo('runAssignmentJob falls back to filesystem manifest store when S3 bucket is missing');
 
+  it('isManifestBucketMissingError detects provider identity from name, causeName, and code', async () => {
+    const { isManifestBucketMissingError } =
+      await import('../src/infrastructure/orchestrator-service.js');
+
+    const byName = new Error('bucket missing');
+    byName.name = 'NoSuchBucket';
+    expect(isManifestBucketMissingError(byName)).toBe(true);
+
+    expect(
+      isManifestBucketMissingError({
+        message: 'bucket missing',
+        causeName: 'PermanentRedirect',
+      }),
+    ).toBe(true);
+
+    expect(
+      isManifestBucketMissingError({
+        message: 'bucket missing',
+        code: 'NoSuchBucket',
+      }),
+    ).toBe(true);
+  });
+
   it('getJobOptionsFromOrchestrator delegates to orchestrator metadata helper', async () => {
     const { loadConfig } = await import('../src/config/env.js');
     const { getPipeline, getJobOptionsFromOrchestrator } =
