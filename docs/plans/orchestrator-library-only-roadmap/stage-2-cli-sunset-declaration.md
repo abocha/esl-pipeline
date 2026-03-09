@@ -34,3 +34,10 @@ Formally de-prioritize CLI as an operational path and establish a controlled dep
 1. Risk: hidden scripts still rely on CLI entrypoint.
 2. Mitigation: inventory internal scripts/workflows before Stage 7 removal.
 3. Rollback: retain deprecation-only posture and postpone removal until dependencies are migrated.
+
+## Implementation Notes (Stage 2 Execution)
+
+1. Backend-first operational guidance is now explicit in active docs (`README.md`, `docs/QUICK_START.md`, `AGENTS.md`, and SSOT sections for orchestrator ownership/API priority).
+2. CLI remains in code but is documented as deprecated compatibility only; new feature work is explicitly disallowed in SSOT deprecation-mode rules.
+3. Release/migration template for eventual CLI removal added:
+   - `docs/plans/orchestrator-library-only-roadmap/cli-removal-release-and-migration-note-template.md`

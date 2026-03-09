@@ -1,7 +1,7 @@
 # ESL Pipeline
 
 ESL Pipeline automates the flow from lesson input to published ESL homework.
-It supports both CLI usage and service-style programmatic integration.
+The operational path is backend-first (`batch-backend` + `batch-frontend`) with orchestrator as the canonical pipeline library engine.
 
 ## Fast Re-Entry
 
@@ -12,7 +12,7 @@ It supports both CLI usage and service-style programmatic integration.
 This monorepo currently provides:
 
 - A pipeline orchestrator (`@esl-pipeline/orchestrator`) for validation, publishing, optional TTS, upload, and manifest tracking.
-- A CLI (`esl`) for interactive and non-interactive assignment runs.
+- A legacy orchestrator CLI (`esl`) retained for compatibility during the library-only migration roadmap.
 - A batch backend/frontend system for upload -> transcript -> prompt -> draft -> publish workflows.
 - Shared packages for markdown validation, parsing, rendering, provider runtime, adapters, contracts, and infrastructure.
 
@@ -42,27 +42,28 @@ cp .env.batch-backend.example .env.batch-backend
 
 Fill required credentials as needed. See [`docs/reference/env.md`](docs/reference/env.md).
 
-### 2) Build CLI Package
+### 2) Start Operational Batch Stack (Primary)
 
 ```bash
-pnpm --filter @esl-pipeline/orchestrator build
+pnpm dev:batch
 ```
 
-### 3) Run First Pipeline Command
-
-Interactive:
+### 3) Validate Core Lanes
 
 ```bash
-pnpm esl --interactive
+pnpm check:fast
+pnpm docs:check
 ```
 
-Non-interactive:
+### Legacy CLI Compatibility (Deprecated)
+
+For temporary compatibility only (not the operational path):
 
 ```bash
 pnpm esl --md ./lessons/mission.md --preset b1-default --with-tts --upload s3
 ```
 
-### Zero-Install Option
+Zero-install legacy CLI:
 
 ```bash
 npx @esl-pipeline/orchestrator esl --interactive
@@ -98,7 +99,7 @@ Key exports:
 
 | Package                          | Purpose                             | Read Next                                  |
 | -------------------------------- | ----------------------------------- | ------------------------------------------ |
-| `packages/orchestrator`          | CLI + pipeline API                  | `packages/orchestrator/README.md`          |
+| `packages/orchestrator`          | Pipeline library API (legacy CLI)   | `packages/orchestrator/README.md`          |
 | `packages/md-validator`          | Markdown validation                 | `packages/md-validator/README.md`          |
 | `packages/pmd`                   | PMD parsing + study-text extraction | `packages/pmd/README.md`                   |
 | `packages/notion-adapter`        | Notion publishing adapter           | `packages/notion-adapter/README.md`        |

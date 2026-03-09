@@ -164,6 +164,18 @@ describe('infrastructure/orchestrator-service', () => {
     const result = await resultPromise;
 
     expect(result).toEqual({ manifestPath: '/manifests/job-1.json' });
+    expect(mockChildProcess.send).toHaveBeenNthCalledWith(1, {
+      type: 'run',
+      executionMode: 'new_assignment',
+      payload: {
+        jobId: 'job-1',
+        md: 'fixtures/ok.md',
+        preset: 'b1-default',
+        withTts: true,
+        upload: 's3',
+      },
+      runId: 'run-1',
+    });
   });
 
   it('runAssignmentJob rethrows when pipeline.newAssignment fails', async () => {
@@ -247,6 +259,38 @@ describe('infrastructure/orchestrator-service', () => {
     expect(mockChildProcess.send).toHaveBeenNthCalledWith(2, {
       type: 'abort',
       reason: 'cancelled by action',
+    });
+  });
+
+  it('runRerunAssignmentJob forwards rerun payload and execution mode to worker', async () => {
+    const { runRerunAssignmentJob } = await import('../src/infrastructure/orchestrator-service.js');
+
+    const resultPromise = runRerunAssignmentJob(
+      {
+        jobId: 'job-rerun-1',
+        md: 'fixtures/ok.md',
+        manifestMd: 'fixtures/source.md',
+        steps: ['upload', 'add-audio'],
+        upload: 's3',
+      },
+      'run-rerun-1',
+    );
+
+    simulateWorkerSuccess({ manifestPath: '/manifests/job-rerun-1.json' });
+    const result = await resultPromise;
+
+    expect(result).toEqual({ manifestPath: '/manifests/job-rerun-1.json' });
+    expect(mockChildProcess.send).toHaveBeenCalledWith({
+      type: 'run',
+      executionMode: 'rerun_assignment',
+      payload: {
+        jobId: 'job-rerun-1',
+        md: 'fixtures/ok.md',
+        manifestMd: 'fixtures/source.md',
+        steps: ['upload', 'add-audio'],
+        upload: 's3',
+      },
+      runId: 'run-rerun-1',
     });
   });
 
