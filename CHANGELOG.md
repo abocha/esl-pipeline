@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented here. Dates use `YYYY-MM-DD`.
 
+## [2.0.2] - 2026-03-09
+
+### Changed
+
+- Automated release from PR #27: chore(docs-gardening): expand non-core docs enforcement (https://github.com/abocha/esl-pipeline/pull/27)
+
 ## [2.0.1] - 2026-03-09
 
 ### Changed
