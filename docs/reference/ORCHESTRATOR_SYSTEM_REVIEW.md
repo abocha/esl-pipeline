@@ -71,14 +71,14 @@
 
 ### Confirmed Overlaps / Seams
 
-- Markdown publish helpers are implemented in both packages (audio link insertion and heading theme mapping behavior).
+- Markdown publish helpers are now shared through `@esl-pipeline/shared-infrastructure` (with thin orchestrator/backend wrappers).
 - Config path resolution is consumed in batch-backend for profile/config surfaces and by orchestrator itself.
 - Observability concerns are split: orchestrator emits stage telemetry; batch-backend maps those events into service logger/metrics systems.
 
 ### Boundary Health Snapshot
 
 - Good boundary: canonical stage behavior remains in orchestrator.
-- Mixed boundary: markdown preview/publish helper logic has duplication and should be reviewed for extraction.
+- Good boundary: markdown preview/publish helpers were extracted to shared-infrastructure and are no longer duplicated across orchestrator/backend runtime code.
 - Good boundary: worker orchestration concerns are better placed in batch-backend, not orchestrator.
 
 ## Refactor Constraints

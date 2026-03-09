@@ -31,7 +31,7 @@
 
 ## Component Map
 
-- `packages/orchestrator`: pipeline assembly and programmatic API entrypoints (legacy CLI is deprecated).
+- `packages/orchestrator`: pipeline assembly and library-only programmatic API entrypoints.
 - `packages/md-validator`: markdown validation.
 - `packages/pmd`: PMD parsing and study-text extraction.
 - `packages/notion-adapter`: Notion import + formatting + audio attach.
