@@ -71,7 +71,7 @@ When implementing from a plan file, re-read that exact plan file after every con
 
 ## Architecture Snapshot (High-Level)
 
-- `@esl-pipeline/orchestrator` is the canonical pipeline engine and programmatic API surface (legacy CLI is deprecated).
+- `@esl-pipeline/orchestrator` is the canonical pipeline engine and library-only programmatic API surface (CLI/wizard/path-picker retired).
 - `@esl-pipeline/batch-backend` and `@esl-pipeline/batch-frontend` are the operational batch system.
 - Supporting core packages:
   - `@esl-pipeline/md-validator`

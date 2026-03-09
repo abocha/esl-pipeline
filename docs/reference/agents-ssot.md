@@ -26,7 +26,7 @@ Start with `AGENTS.md` and `docs/README.md`; then read only the sections needed 
   - `docs/reference/ORCHESTRATOR_OWNERSHIP_LEDGER.md`
 - Configuration and adapter rules: section `5`.
 - Manifest and pipeline behavior contracts: section `6`.
-- Programmatic API + legacy CLI constraints: section `7`.
+- Programmatic API + library-only boundary constraints: section `7`.
 - Safety rails and extension playbooks: sections `8` and `9`.
 - CI/release/workflow constraints: sections `10`, `11`, and `12`.
 
@@ -41,7 +41,7 @@ This document enables deterministic decisions by AI agents and maintainers witho
 - What is stable API vs internal detail.
 - Where each behavior is implemented.
 - Which changes are allowed, which require coordination, and which are forbidden.
-- How to map common tasks (e.g., new CLI flags, adapters, manifests) onto concrete files and exports.
+- How to map common tasks (e.g., new entrypoint flags, adapters, manifests) onto concrete files and exports.
 
 Human-facing docs (e.g. [`README.md`](README.md)) explain conceptual usage. This SSOT explains:
 
@@ -98,7 +98,7 @@ The ESL Pipeline is a pnpm-based monorepo. Core directories:
 
 - [`packages/orchestrator`](packages/orchestrator)
   - Canonical programmatic pipeline entry point.
-  - Legacy CLI compatibility surface (deprecated; not the operational path).
+  - Library-only runtime surface (no CLI/wizard/path-picker).
 - [`packages/shared-infrastructure`](packages/shared-infrastructure)
   - Shared infrastructure utilities for environment loading, storage configuration, and manifest resolution.
 - [`packages/md-validator`](packages/md-validator)
@@ -239,7 +239,7 @@ Environment handling:
     - `loadCliEnv(options)` for standard `.env` loading from CWD + repo root.
     - Package-local wrappers MAY be used when package-specific files are required (for example `.env.batch-backend`), but wrappers MUST delegate to `loadCliEnv` instead of reimplementing parsing.
 - Programmatic API:
-  - `loadEnvFiles` mirrors CLI behavior for consumers.
+  - `loadEnvFiles` mirrors executable env bootstrap behavior for consumers.
   - Agents SHOULD use `loadEnvFiles` rather than reimplementing env loading.
 
 Required/commonly used environment variables (non-exhaustive; see README/backends docs):
@@ -937,7 +937,7 @@ Required steps:
    - Integrate into `newAssignment` / `rerunAssignment`.
 3. Update:
    - Manifests if new durable data is produced (with schema versioning rules).
-   - CLI flags if stage is user-controllable.
+   - Backend/operator controls if stage is user-controllable.
    - Tests across all affected packages.
    - This SSOT and other docs.
 
@@ -1000,7 +1000,7 @@ Semver:
   - `patch`: fixes/docs/ops/refactors without compatibility break.
 - Breaking changes to:
   - Orchestrator API,
-  - CLI behavior,
+  - Operator entrypoint behavior,
   - Manifest schema semantics,
   - Adapter selection semantics,
   REQUIRE:
@@ -1092,7 +1092,7 @@ This section is normative for current voice-alignment behavior.
 Any change affecting:
 
 - Public orchestrator exports or behavior.
-- CLI flags or semantics.
+- Operator entrypoint flags or semantics.
 - Manifest schema or storage behavior.
 - Adapters or environment selection.
 - Observability event names or metric keys.

@@ -62,7 +62,7 @@ describe('runtime/publish-target-anytype', () => {
 
   it('adds page to collection and logs success/failure', async () => {
     const logger = { log: vi.fn() };
-    const addObjectsToList = vi.fn().mockResolvedValue();
+    const addObjectsToList = vi.fn().mockResolvedValue({});
     const client: Pick<AnytypeClient, 'addObjectsToList'> = { addObjectsToList } as Pick<
       AnytypeClient,
       'addObjectsToList'

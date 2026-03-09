@@ -44,10 +44,19 @@ function collectTsFiles(dirPath, out = []) {
   return out;
 }
 
+function addDiffOutput(changed, diffOutput) {
+  if (diffOutput === null) return;
+  for (const line of diffOutput.split('\n')) {
+    const filePath = line.trim();
+    if (filePath) changed.add(filePath);
+  }
+}
+
 function resolveChangedFiles() {
   const changed = new Set();
   const eventName = process.env.GITHUB_EVENT_NAME;
   const baseRef = process.env.GITHUB_BASE_REF;
+  let hasBaseDiff = false;
 
   if (eventName === 'pull_request' && baseRef) {
     const remoteBase = `origin/${baseRef}`;
@@ -55,41 +64,29 @@ function resolveChangedFiles() {
       tryGit(['fetch', '--depth=1', 'origin', baseRef]);
     }
     if (tryGit(['rev-parse', '--verify', remoteBase])) {
-      const diff = tryGit(['diff', '--name-only', `${remoteBase}...HEAD`]);
-      if (diff !== null) {
-        for (const line of diff.split('\n')) {
-          const filePath = line.trim();
-          if (filePath) changed.add(filePath);
-        }
-      }
+      addDiffOutput(changed, tryGit(['diff', '--name-only', `${remoteBase}...HEAD`]));
+      hasBaseDiff = true;
     }
   }
 
-  if (tryGit(['rev-parse', '--verify', 'HEAD~1'])) {
-    const diff = tryGit(['diff', '--name-only', 'HEAD~1..HEAD']);
-    if (diff !== null) {
-      for (const line of diff.split('\n')) {
-        const filePath = line.trim();
-        if (filePath) changed.add(filePath);
-      }
+  if (!hasBaseDiff) {
+    const explicitBase = process.env.GUARD_ORCHESTRATOR_BASE_REF?.trim();
+    const baseCandidates = explicitBase
+      ? [explicitBase]
+      : ['origin/main', 'main'];
+
+    for (const candidate of baseCandidates) {
+      if (!candidate) continue;
+      if (!tryGit(['rev-parse', '--verify', candidate])) continue;
+      addDiffOutput(changed, tryGit(['diff', '--name-only', `${candidate}...HEAD`]));
+      hasBaseDiff = true;
+      break;
     }
   }
 
-  const staged = tryGit(['diff', '--name-only', '--cached']);
-  if (staged !== null) {
-    for (const line of staged.split('\n')) {
-      const filePath = line.trim();
-      if (filePath) changed.add(filePath);
-    }
-  }
-
-  const workingTree = tryGit(['diff', '--name-only', 'HEAD']);
-  if (workingTree !== null) {
-    for (const line of workingTree.split('\n')) {
-      const filePath = line.trim();
-      if (filePath) changed.add(filePath);
-    }
-  }
+  // Always include local pending edits in guard evaluation.
+  addDiffOutput(changed, tryGit(['diff', '--name-only', '--cached']));
+  addDiffOutput(changed, tryGit(['diff', '--name-only', 'HEAD']));
 
   return Array.from(changed);
 }
@@ -182,8 +179,11 @@ function main() {
       'packages/batch-backend/src/infrastructure/pipeline-worker-v2.ts',
     ];
     const docsSyncPaths = [
+      'AGENTS.md',
       'README.md',
+      'docs/PROJECT_OVERVIEW.md',
       'docs/QUICK_START.md',
+      'docs/reference/env.md',
       'packages/orchestrator/README.md',
       'docs/reference/agents-ssot.md',
       'docs/reference/ORCHESTRATOR_SYSTEM_REVIEW.md',
