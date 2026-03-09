@@ -14,8 +14,13 @@ import { createFilesystemConfigProvider } from './config.js';
 import type { ConfigProvider } from './config.js';
 import type {
   AssignmentProgressCallbacks,
+  GetAssignmentStatusRequestV2,
   NewAssignmentFlags,
+  NewAssignmentRequestV2,
+  OrchestratorV2ExecutionContext,
   OrchestratorDependencies,
+  RerunAssignmentRequestV2,
+  RerunPlanRequestV2,
   RerunPlanRequest,
   RerunPlanResult,
   RerunFlags,
@@ -243,6 +248,22 @@ export interface OrchestratorPipeline {
     mdPath: string,
     dependencies?: Pick<OrchestratorDependencies, 'runId'>,
   ): Promise<Awaited<ReturnType<OrchestratorModule['getAssignmentStatus']>>>;
+  executeNewAssignmentV2(
+    request: NewAssignmentRequestV2,
+    context?: OrchestratorV2ExecutionContext,
+  ): Promise<Awaited<ReturnType<OrchestratorModule['executeNewAssignmentV2']>>>;
+  executeRerunAssignmentV2(
+    request: RerunAssignmentRequestV2,
+    context?: OrchestratorV2ExecutionContext,
+  ): Promise<Awaited<ReturnType<OrchestratorModule['executeRerunAssignmentV2']>>>;
+  executeGetAssignmentStatusV2(
+    request: GetAssignmentStatusRequestV2,
+    context?: OrchestratorV2ExecutionContext,
+  ): Promise<Awaited<ReturnType<OrchestratorModule['executeGetAssignmentStatusV2']>>>;
+  executePlanRerunAssignmentV2(
+    request: RerunPlanRequestV2,
+    context?: OrchestratorV2ExecutionContext,
+  ): Promise<Awaited<ReturnType<OrchestratorModule['executePlanRerunAssignmentV2']>>>;
 }
 
 export function createPipeline(options: CreatePipelineOptions = {}): OrchestratorPipeline {
@@ -334,6 +355,80 @@ export function createPipeline(options: CreatePipelineOptions = {}): Orchestrato
         logger,
         metrics,
         runId: dependencies?.runId,
+      });
+    },
+    async executeNewAssignmentV2(request, context = {}) {
+      const { executeNewAssignmentV2 } = await orchestratorModuleLoader();
+      const merged: NewAssignmentRequestV2 = {
+        ...request,
+        assignment: {
+          ...request.assignment,
+          presetsPath: request.assignment.presetsPath ?? defaults.presetsPath,
+          voices: request.assignment.voices ?? defaults.voicesPath,
+          out: request.assignment.out ?? defaults.outDir,
+        },
+      };
+
+      return executeNewAssignmentV2(merged, {
+        ...context,
+        dependencies: {
+          manifestStore,
+          configProvider,
+          logger,
+          metrics,
+          runId: context.dependencies?.runId,
+          signal: context.dependencies?.signal,
+        },
+      });
+    },
+    async executeRerunAssignmentV2(request, context = {}) {
+      const { executeRerunAssignmentV2 } = await orchestratorModuleLoader();
+      const merged: RerunAssignmentRequestV2 = {
+        ...request,
+        assignment: {
+          ...request.assignment,
+          voices: request.assignment.voices ?? defaults.voicesPath,
+          out: request.assignment.out ?? defaults.outDir,
+        },
+      };
+      return executeRerunAssignmentV2(merged, {
+        ...context,
+        dependencies: {
+          manifestStore,
+          configProvider,
+          logger,
+          metrics,
+          runId: context.dependencies?.runId,
+          signal: context.dependencies?.signal,
+        },
+      });
+    },
+    async executeGetAssignmentStatusV2(request, context = {}) {
+      const { executeGetAssignmentStatusV2 } = await orchestratorModuleLoader();
+      return executeGetAssignmentStatusV2(request, {
+        ...context,
+        dependencies: {
+          manifestStore,
+          configProvider,
+          logger,
+          metrics,
+          runId: context.dependencies?.runId,
+          signal: context.dependencies?.signal,
+        },
+      });
+    },
+    async executePlanRerunAssignmentV2(request, context = {}) {
+      const { executePlanRerunAssignmentV2 } = await orchestratorModuleLoader();
+      return executePlanRerunAssignmentV2(request, {
+        ...context,
+        dependencies: {
+          manifestStore,
+          configProvider,
+          logger,
+          metrics,
+          runId: context.dependencies?.runId,
+          signal: context.dependencies?.signal,
+        },
       });
     },
   };

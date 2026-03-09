@@ -167,6 +167,7 @@ describe('infrastructure/orchestrator-service', () => {
     expect(mockChildProcess.send).toHaveBeenNthCalledWith(1, {
       type: 'run',
       executionMode: 'new_assignment',
+      apiVersion: 'v1',
       payload: {
         jobId: 'job-1',
         md: 'fixtures/ok.md',
@@ -254,7 +255,7 @@ describe('infrastructure/orchestrator-service', () => {
 
     expect(mockChildProcess.send).toHaveBeenNthCalledWith(
       1,
-      expect.objectContaining({ type: 'run' }),
+      expect.objectContaining({ type: 'run', apiVersion: 'v1' }),
     );
     expect(mockChildProcess.send).toHaveBeenNthCalledWith(2, {
       type: 'abort',
@@ -283,6 +284,7 @@ describe('infrastructure/orchestrator-service', () => {
     expect(mockChildProcess.send).toHaveBeenCalledWith({
       type: 'run',
       executionMode: 'rerun_assignment',
+      apiVersion: 'v1',
       payload: {
         jobId: 'job-rerun-1',
         md: 'fixtures/ok.md',
@@ -291,6 +293,68 @@ describe('infrastructure/orchestrator-service', () => {
         upload: 's3',
       },
       runId: 'run-rerun-1',
+    });
+  });
+
+  it('runAssignmentJob forwards apiVersion override to worker for v2 readiness', async () => {
+    const { runAssignmentJob } = await import('../src/infrastructure/orchestrator-service.js');
+
+    const resultPromise = runAssignmentJob(
+      {
+        jobId: 'job-v2-1',
+        md: 'fixtures/ok.md',
+      },
+      'run-v2-1',
+      { apiVersion: 'v2' },
+    );
+
+    simulateWorkerSuccess({ manifestPath: '/manifests/job-v2-1.json' });
+    await resultPromise;
+
+    expect(mockChildProcess.send).toHaveBeenCalledWith({
+      type: 'run',
+      executionMode: 'new_assignment',
+      apiVersion: 'v2',
+      payload: {
+        jobId: 'job-v2-1',
+        md: 'fixtures/ok.md',
+      },
+      runId: 'run-v2-1',
+    });
+  });
+
+  it('runAssignmentJob uses configured orchestrator apiVersion when override is omitted', async () => {
+    const { loadConfig } = await import('../src/config/env.js');
+    const { runAssignmentJob } = await import('../src/infrastructure/orchestrator-service.js');
+
+    (loadConfig as any).mockReturnValue({
+      orchestrator: {
+        apiVersion: 'v2',
+        manifestStore: 'filesystem',
+        configProvider: 'local',
+      },
+    });
+
+    const resultPromise = runAssignmentJob(
+      {
+        jobId: 'job-v2-default',
+        md: 'fixtures/ok.md',
+      },
+      'run-v2-default',
+    );
+
+    simulateWorkerSuccess({ manifestPath: '/manifests/job-v2-default.json' });
+    await resultPromise;
+
+    expect(mockChildProcess.send).toHaveBeenCalledWith({
+      type: 'run',
+      executionMode: 'new_assignment',
+      apiVersion: 'v2',
+      payload: {
+        jobId: 'job-v2-default',
+        md: 'fixtures/ok.md',
+      },
+      runId: 'run-v2-default',
     });
   });
 

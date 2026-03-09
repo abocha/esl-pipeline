@@ -31,6 +31,20 @@ import {
   hashStudyText,
 } from '@esl-pipeline/tts-core';
 
+import {
+  adaptLegacyNewAssignmentArgsToV2,
+  adaptLegacyRerunAssignmentArgsToV2,
+  adaptLegacyRerunPlanArgsToV2,
+  adaptLegacyStatusArgsToV2,
+  createProgressCallbacksFromV2Context,
+  failureResultV2,
+  successResultV2,
+  unwrapOrThrowV2Result,
+  type GetAssignmentStatusOperationResultV2,
+  type NewAssignmentOperationResultV2,
+  type PlanRerunAssignmentOperationResultV2,
+  type RerunAssignmentOperationResultV2,
+} from './api-v2.js';
 import { DEFAULT_PRESETS_PATH, DEFAULT_VOICES_PATH } from './config.js';
 import {
   type AssignmentManifest,
@@ -68,12 +82,19 @@ import {
 import { applyVoicePreferences } from './runtime/voice-preferences.js';
 import type {
   AssignmentProgressCallbacks,
+  GetAssignmentStatusRequestV2,
   AssignmentStage,
+  AssignmentStageEventV2,
   AssignmentStatus,
   NewAssignmentFlags,
+  NewAssignmentRequestV2,
   NewAssignmentResult,
   OrchestratorDependencies,
+  OrchestratorOperation,
+  OrchestratorV2ExecutionContext,
+  RerunAssignmentRequestV2,
   RerunAssignmentResult,
+  RerunPlanRequestV2,
   RerunPlanRequest,
   RerunPlanResult,
   RerunTargetStage,
@@ -86,16 +107,26 @@ export type {
   AssignmentStageStatus,
   AssignmentProgressEvent,
   AssignmentProgressCallbacks,
+  AssignmentStageEventV2,
   RerunPlanRequest,
+  RerunPlanRequestV2,
   RerunPlanResult,
   RerunTargetStage,
   OrchestratorDependencies,
+  OrchestratorApiResultV2,
+  OrchestratorErrorCategory,
+  OrchestratorErrorV2,
+  OrchestratorOperation,
+  OrchestratorV2ExecutionContext,
   NewAssignmentFlags,
   NewAssignmentRequest,
+  NewAssignmentRequestV2,
   NewAssignmentResult,
   AssignmentStatus,
+  GetAssignmentStatusRequestV2,
   RerunFlags,
   RerunAssignmentRequest,
+  RerunAssignmentRequestV2,
   RerunAssignmentResult,
   PublishTarget,
 } from './types.js';
@@ -187,6 +218,14 @@ export type {
   LoadEnvSummary,
 } from './pipeline.js';
 export {
+  categorizeOrchestratorError,
+  toStageEventV2,
+  type GetAssignmentStatusOperationResultV2,
+  type NewAssignmentOperationResultV2,
+  type PlanRerunAssignmentOperationResultV2,
+  type RerunAssignmentOperationResultV2,
+} from './api-v2.js';
+export {
   resolveJobOptions,
   type JobOptionsPayload,
   type VoiceOption as JobVoiceOption,
@@ -205,6 +244,111 @@ export async function planRerunAssignment(
     ...request,
     manifest,
   });
+}
+
+export async function executeNewAssignmentV2(
+  request: NewAssignmentRequestV2,
+  context: OrchestratorV2ExecutionContext = {},
+): Promise<NewAssignmentOperationResultV2> {
+  const operation: OrchestratorOperation = 'new_assignment';
+  try {
+    const callbacks = createProgressCallbacksFromV2Context(operation, context);
+    const data = await newAssignment(
+      request.assignment,
+      callbacks,
+      context.dependencies ?? {},
+    );
+    return successResultV2(operation, data);
+  } catch (error) {
+    return failureResultV2<NewAssignmentResult>(operation, error);
+  }
+}
+
+export async function executeRerunAssignmentV2(
+  request: RerunAssignmentRequestV2,
+  context: OrchestratorV2ExecutionContext = {},
+): Promise<RerunAssignmentOperationResultV2> {
+  const operation: OrchestratorOperation = 'rerun_assignment';
+  try {
+    const data = await rerunAssignment(request.assignment, context.dependencies ?? {});
+    return successResultV2(operation, data);
+  } catch (error) {
+    return failureResultV2<RerunAssignmentResult>(operation, error);
+  }
+}
+
+export async function executeGetAssignmentStatusV2(
+  request: GetAssignmentStatusRequestV2,
+  context: OrchestratorV2ExecutionContext = {},
+): Promise<GetAssignmentStatusOperationResultV2> {
+  const operation: OrchestratorOperation = 'get_assignment_status';
+  try {
+    const data = await getAssignmentStatus(request.mdPath, context.dependencies ?? {});
+    return successResultV2(operation, data);
+  } catch (error) {
+    return failureResultV2<AssignmentStatus>(operation, error);
+  }
+}
+
+export async function executePlanRerunAssignmentV2(
+  request: RerunPlanRequestV2,
+  context: OrchestratorV2ExecutionContext = {},
+): Promise<PlanRerunAssignmentOperationResultV2> {
+  const operation: OrchestratorOperation = 'plan_rerun_assignment';
+  try {
+    const data = await planRerunAssignment(request.rerunPlan, context.dependencies ?? {});
+    return successResultV2(operation, data);
+  } catch (error) {
+    return failureResultV2<RerunPlanResult>(operation, error);
+  }
+}
+
+export async function newAssignmentViaV2(
+  flags: NewAssignmentFlags,
+  callbacks: AssignmentProgressCallbacks = {},
+  dependencies: OrchestratorDependencies = {},
+): Promise<NewAssignmentResult> {
+  const { request, context } = adaptLegacyNewAssignmentArgsToV2(flags, dependencies);
+  const withCallbacks: OrchestratorV2ExecutionContext = callbacks.onStage
+    ? {
+        ...context,
+        onStageEvent: (event: AssignmentStageEventV2) =>
+          callbacks.onStage?.({
+            stage: event.stage,
+            status: event.status,
+            detail: event.detail,
+          }),
+      }
+    : context;
+  const result = await executeNewAssignmentV2(request, withCallbacks);
+  return unwrapOrThrowV2Result(result);
+}
+
+export async function rerunAssignmentViaV2(
+  flags: RerunFlags,
+  dependencies: OrchestratorDependencies = {},
+): Promise<RerunAssignmentResult> {
+  const { request, context } = adaptLegacyRerunAssignmentArgsToV2(flags, dependencies);
+  const result = await executeRerunAssignmentV2(request, context);
+  return unwrapOrThrowV2Result(result);
+}
+
+export async function getAssignmentStatusViaV2(
+  mdPath: string,
+  dependencies: OrchestratorDependencies = {},
+): Promise<AssignmentStatus> {
+  const { request, context } = adaptLegacyStatusArgsToV2(mdPath, dependencies);
+  const result = await executeGetAssignmentStatusV2(request, context);
+  return unwrapOrThrowV2Result(result);
+}
+
+export async function planRerunAssignmentViaV2(
+  request: RerunPlanRequest,
+  dependencies: OrchestratorDependencies = {},
+): Promise<RerunPlanResult> {
+  const adapted = adaptLegacyRerunPlanArgsToV2(request, dependencies);
+  const result = await executePlanRerunAssignmentV2(adapted.request, adapted.context);
+  return unwrapOrThrowV2Result(result);
 }
 
 export async function newAssignment(

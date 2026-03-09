@@ -20,6 +20,56 @@ export interface AssignmentProgressEvent {
   detail?: Record<string, unknown>;
 }
 
+export type OrchestratorOperation =
+  | 'new_assignment'
+  | 'rerun_assignment'
+  | 'get_assignment_status'
+  | 'plan_rerun_assignment';
+
+export type OrchestratorErrorCategory =
+  | 'cancelled'
+  | 'validation'
+  | 'configuration'
+  | 'manifest'
+  | 'infrastructure'
+  | 'unknown';
+
+export interface AssignmentStageEventV2 {
+  schemaVersion: 'v2';
+  source: 'orchestrator';
+  operation: OrchestratorOperation;
+  emittedAt: string;
+  runId?: string;
+  stage: AssignmentStage;
+  status: AssignmentStageStatus;
+  detail?: Record<string, unknown>;
+}
+
+export interface OrchestratorErrorV2 {
+  schemaVersion: 'v2';
+  operation: OrchestratorOperation;
+  category: OrchestratorErrorCategory;
+  code: string;
+  message: string;
+  retryable: boolean;
+  stage?: AssignmentStage;
+  causeName?: string;
+}
+
+export type OrchestratorApiResultV2<TData> =
+  | {
+      ok: true;
+      schemaVersion: 'v2';
+      operation: OrchestratorOperation;
+      data: TData;
+    }
+  | {
+      ok: false;
+      schemaVersion: 'v2';
+      operation: OrchestratorOperation;
+      error: OrchestratorErrorV2;
+    };
+
 export interface AssignmentProgressCallbacks {
   onStage?: (event: AssignmentProgressEvent) => void;
 }
@@ -31,6 +81,11 @@ export interface OrchestratorDependencies {
   metrics?: PipelineMetrics;
   runId?: string;
   signal?: AbortSignal;
+}
+
+export interface OrchestratorV2ExecutionContext {
+  dependencies?: OrchestratorDependencies;
+  onStageEvent?: (event: AssignmentStageEventV2) => void;
 }
 
 export type PublishTarget = 'notion' | 'anytype' | 'html';
@@ -75,6 +130,10 @@ export interface NewAssignmentFlags {
 
 export interface NewAssignmentRequest extends NewAssignmentFlags {}
 
+export interface NewAssignmentRequestV2 {
+  assignment: NewAssignmentRequest;
+}
+
 export interface NewAssignmentResult {
   pageId?: string;
   pageUrl?: string;
@@ -92,6 +151,10 @@ export interface AssignmentStatus {
   manifest: AssignmentManifest | null;
   mdHashMatches: boolean;
   audioFileExists: boolean;
+}
+
+export interface GetAssignmentStatusRequestV2 {
+  mdPath: string;
 }
 
 export interface RerunFlags {
@@ -120,6 +183,10 @@ export interface RerunFlags {
 
 export interface RerunAssignmentRequest extends RerunFlags {}
 
+export interface RerunAssignmentRequestV2 {
+  assignment: RerunAssignmentRequest;
+}
+
 export interface RerunAssignmentResult {
   steps: string[];
   audio?: AssignmentManifest['audio'];
@@ -144,6 +211,10 @@ export interface RerunPlanRequest {
   audio?: boolean;
   from?: RerunTargetStage;
   to?: RerunTargetStage;
+}
+
+export interface RerunPlanRequestV2 {
+  rerunPlan: RerunPlanRequest;
 }
 
 export interface RerunPlanResult {

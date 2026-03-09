@@ -75,6 +75,7 @@ export interface BatchBackendConfig {
     secure: boolean;
   };
   orchestrator: {
+    apiVersion: 'v1' | 'v2';
     notionToken?: string;
     notionDatabaseId?: string;
     elevenLabsApiKey?: string;
@@ -387,6 +388,12 @@ export function loadConfig(): BatchBackendConfig {
   }
 
   // Orchestrator-related envs
+  const orchestratorApiVersionRaw = readString('ESL_ORCHESTRATOR_API_VERSION', 'v1')!.toLowerCase();
+  if (orchestratorApiVersionRaw !== 'v1' && orchestratorApiVersionRaw !== 'v2') {
+    throw new Error('ESL_ORCHESTRATOR_API_VERSION must be one of: v1, v2');
+  }
+  const orchestratorApiVersion = orchestratorApiVersionRaw as 'v1' | 'v2';
+
   const notionToken = readString('NOTION_TOKEN');
   const notionDatabaseId = readString('NOTION_DATABASE_ID');
   const elevenLabsApiKey =
@@ -635,6 +642,7 @@ export function loadConfig(): BatchBackendConfig {
       secure: mailSecure,
     },
     orchestrator: {
+      apiVersion: orchestratorApiVersion,
       notionToken,
       notionDatabaseId,
       elevenLabsApiKey,
