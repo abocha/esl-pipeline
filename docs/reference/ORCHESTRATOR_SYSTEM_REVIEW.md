@@ -57,6 +57,7 @@
   - `executeRerunAssignmentV2`
   - `executeGetAssignmentStatusV2`
   - `executePlanRerunAssignmentV2`
+- Transitional `*ViaV2` compatibility wrapper exports are retired in Stage 8.
 - Manifest schema and additive evolution rules are defined in `docs/reference/pipeline-manifest.md`.
 - Observability event naming for pipeline and stage lifecycle remains contract-sensitive.
 

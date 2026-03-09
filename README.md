@@ -12,7 +12,6 @@ The operational path is backend-first (`batch-backend` + `batch-frontend`) with 
 This monorepo currently provides:
 
 - A pipeline orchestrator (`@esl-pipeline/orchestrator`) for validation, publishing, optional TTS, upload, and manifest tracking.
-- A legacy orchestrator CLI (`esl`) retained for compatibility during the library-only migration roadmap.
 - A batch backend/frontend system for upload -> transcript -> prompt -> draft -> publish workflows.
 - Shared packages for markdown validation, parsing, rendering, provider runtime, adapters, contracts, and infrastructure.
 
@@ -55,20 +54,6 @@ pnpm check:fast
 pnpm docs:check
 ```
 
-### Legacy CLI Compatibility (Deprecated)
-
-For temporary compatibility only (not the operational path):
-
-```bash
-pnpm esl --md ./lessons/mission.md --preset b1-default --with-tts --upload s3
-```
-
-Zero-install legacy CLI:
-
-```bash
-npx @esl-pipeline/orchestrator esl --interactive
-```
-
 ## Programmatic API In 60 Seconds
 
 ```ts
@@ -99,7 +84,7 @@ Key exports:
 
 | Package                          | Purpose                             | Read Next                                  |
 | -------------------------------- | ----------------------------------- | ------------------------------------------ |
-| `packages/orchestrator`          | Pipeline library API (legacy CLI)   | `packages/orchestrator/README.md`          |
+| `packages/orchestrator`          | Pipeline library API                | `packages/orchestrator/README.md`          |
 | `packages/md-validator`          | Markdown validation                 | `packages/md-validator/README.md`          |
 | `packages/pmd`                   | PMD parsing + study-text extraction | `packages/pmd/README.md`                   |
 | `packages/notion-adapter`        | Notion publishing adapter           | `packages/notion-adapter/README.md`        |

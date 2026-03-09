@@ -25,6 +25,8 @@ jobs:
       - name: Checkout
         # actions/checkout v6
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with:
+          fetch-depth: 0
 
       - name: Setup pnpm
         # pnpm/action-setup v4
@@ -51,6 +53,9 @@ jobs:
 
       - name: Contract version consistency
         run: pnpm release:verify:contracts
+
+      - name: Orchestrator boundary guardrails
+        run: pnpm guard:orchestrator:boundary
 
       - name: Docs sanity checks
         id: docs_sanity

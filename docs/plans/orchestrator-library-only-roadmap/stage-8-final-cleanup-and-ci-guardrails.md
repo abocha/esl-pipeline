@@ -38,3 +38,17 @@ Finalize the library-only architecture, remove transitional debt, and enforce bo
 1. Risk: aggressive cleanup removes needed fallback code too early.
 2. Mitigation: stage completion checklist and final verification sweep before deletion.
 3. Rollback: restore narrowly scoped adapters on a hotfix branch while retaining new boundary checks.
+
+## Implementation Notes (Stage 8 Execution)
+
+1. Removed transitional v2 compatibility adapter surface from orchestrator:
+   - retired `newAssignmentViaV2`, `rerunAssignmentViaV2`, `getAssignmentStatusViaV2`, `planRerunAssignmentViaV2`.
+   - removed legacy-shape adapter helpers from `api-v2.ts`.
+2. Removed stale root CLI invocation path (`pnpm esl`) and updated active docs to library-only posture.
+3. Added CI guardrail script (`pnpm guard:orchestrator:boundary`) and wired it into:
+   - `check:fast`
+   - CI static checks workflow
+4. Guardrails now enforce:
+   - no orchestrator CLI entrypoint/artifact reintroduction,
+   - no backend-runtime coupling patterns in orchestrator,
+   - docs/SSOT update requirement when contract-sensitive files change.

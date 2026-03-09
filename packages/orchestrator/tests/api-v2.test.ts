@@ -11,7 +11,6 @@ import {
   executeNewAssignmentV2,
   executePlanRerunAssignmentV2,
   executeRerunAssignmentV2,
-  newAssignmentViaV2,
 } from '../src/index.js';
 
 const okFixturePath = join(import.meta.dirname, '../../md-validator/fixtures/ok.md');
@@ -56,24 +55,6 @@ describe('orchestrator api v2', () => {
     expect(events.length).toBeGreaterThan(0);
     expect(events.every((event) => event.schemaVersion === 'v2')).toBe(true);
     expect(events.every((event) => event.operation === 'new_assignment')).toBe(true);
-  });
-
-  it('supports legacy-shape execution via v2 compatibility adapter', async () => {
-    const dir = await mkdtemp(join(tmpdir(), 'orchestrator-v2-compat-'));
-    const mdPath = join(dir, 'lesson.md');
-    await writeFile(mdPath, await readFile(okFixturePath, 'utf8'));
-
-    const result = await newAssignmentViaV2({
-      md: mdPath,
-      skipImport: true,
-      skipTts: true,
-      skipUpload: true,
-      upload: 's3',
-      dryRun: true,
-    });
-
-    expect(result.manifestPath).toBeDefined();
-    expect(result.steps).toContain('manifest');
   });
 
   it('returns categorized validation failure for rerun v2 without manifest', async () => {
