@@ -510,7 +510,6 @@ function createConfig(): BatchBackendConfig {
       secure: false,
     },
     orchestrator: {
-      apiVersion: 'v1',
       manifestStore: 'filesystem',
       configProvider: 'local',
     },

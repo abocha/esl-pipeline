@@ -39,3 +39,16 @@ Cut batch-backend to orchestrator API v2 and prove runtime parity before any CLI
 1. Risk: cutover exposes hidden coupling assumptions from legacy call shapes.
 2. Mitigation: keep short-lived rollback branch with adapter fallback until parity is signed off.
 3. Rollback: temporarily re-enable compatibility path while fixing contract mismatches.
+
+## Implementation Notes (Stage 6 Execution)
+
+1. Batch-backend worker execution is now v2-only:
+   - worker pipeline calls `executeNewAssignmentV2` and `executeRerunAssignmentV2` only.
+   - legacy backend v1/v2 runtime branching is removed.
+2. Transitional backend API-version selector is retired:
+   - `ESL_ORCHESTRATOR_API_VERSION` support is removed from backend config parsing and docs.
+   - worker run-message payload no longer carries an `apiVersion` toggle.
+3. Stage 5.1 error-identity and fallback behavior remains preserved on the v2-only path:
+   - v2 envelope `causeName` continues to map into thrown error identity.
+   - manifest-bucket fallback detection recognizes `name`, `causeName`, and `code`.
+4. Backend tests were updated to validate cutover behavior and fallback signal handling without dual-path assumptions.

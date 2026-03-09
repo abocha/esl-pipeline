@@ -1,12 +1,12 @@
-# Orchestrator API v2 Migration Guide (Additive Stage)
+# Orchestrator API v2 Migration Guide (Cutover Stage)
 
 ## Summary
 
-API v2 is additive in this stage. v1 remains fully supported.
+API v2 is the active backend execution contract in this stage.
 
 - v1 functions (`newAssignment`, `rerunAssignment`, `getAssignmentStatus`, `planRerunAssignment`) are unchanged.
 - v2 introduces explicit DTO envelopes and stable error/event schemas.
-- Batch-backend can opt into v2 runtime execution using `ESL_ORCHESTRATOR_API_VERSION=v2`.
+- Batch-backend now executes through v2 APIs only.
 
 ## v2 Entry Points
 
@@ -64,17 +64,16 @@ v1-shaped callers can execute through v2 adapters without changing payload shape
 
 These preserve legacy call styles while running through v2 execution envelopes.
 
-## Backend Dual-Readiness
+## Backend Cutover Status
 
-Batch-backend supports dual readiness:
+Batch-backend runtime is cut over to v2:
 
-1. default: `ESL_ORCHESTRATOR_API_VERSION=v1`
-2. opt-in: `ESL_ORCHESTRATOR_API_VERSION=v2`
-
-This enables incremental v2 verification in backend environments without production cutover.
+1. worker execution uses `executeNewAssignmentV2` / `executeRerunAssignmentV2`.
+2. transitional v1/v2 backend switching has been retired.
+3. `ESL_ORCHESTRATOR_API_VERSION` is no longer used by batch-backend.
 
 ## Deprecation Semantics (Current Stage)
 
-1. v1 is supported and not removed in this stage.
-2. v2 is the additive contract for cutover preparation.
-3. Removals (if any) are deferred to later major-impact stages after parity validation.
+1. v1 orchestrator exports remain available for compatibility callers outside backend cutover.
+2. backend execution is standardized on v2 contracts.
+3. CLI/wizard/path-picker removals remain deferred to later dedicated stages.

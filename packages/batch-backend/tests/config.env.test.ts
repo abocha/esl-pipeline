@@ -57,7 +57,6 @@ describe('config/env - core defaults', () => {
         expect(cfg.studentSystem?.fsFallback).toBe(true);
 
         // Orchestrator core defaults
-        expect(cfg.orchestrator.apiVersion).toBe('v1');
         expect(cfg.orchestrator.manifestStore).toBeDefined();
         expect(['filesystem', 's3']).toContain(cfg.orchestrator.manifestStore);
         expect(['local', 'http']).toContain(cfg.orchestrator.configProvider);
@@ -166,39 +165,6 @@ describe('config/env - orchestrator remote config provider mapping', () => {
         },
       ),
     ).rejects.toThrow('ESL_PIPELINE_CONFIG_CACHE_TTL_MS must be a non-negative integer');
-  });
-});
-
-describe('config/env - orchestrator api version mapping', () => {
-  beforeEach(() => {
-    vi.resetModules();
-  });
-
-  it('maps ESL_ORCHESTRATOR_API_VERSION=v2 into orchestrator config', async () => {
-    await withEnv(
-      {
-        NODE_ENV: 'test',
-        ESL_ORCHESTRATOR_API_VERSION: 'v2',
-      },
-      async () => {
-        const cfg = await loadConfigFresh();
-        expect(cfg.orchestrator.apiVersion).toBe('v2');
-      },
-    );
-  });
-
-  it('rejects invalid ESL_ORCHESTRATOR_API_VERSION', async () => {
-    await expect(
-      withEnv(
-        {
-          NODE_ENV: 'test',
-          ESL_ORCHESTRATOR_API_VERSION: 'legacy',
-        },
-        async () => {
-          await loadConfigFresh();
-        },
-      ),
-    ).rejects.toThrow('ESL_ORCHESTRATOR_API_VERSION must be one of: v1, v2');
   });
 });
 

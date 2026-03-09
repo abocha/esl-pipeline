@@ -763,7 +763,7 @@ Contracts:
 - Programmatic API is the primary behavioral source of truth.
 - New behavior MUST land in pipeline/orchestrator first.
 - Exposing behavior through CLI is optional and generally discouraged during CLI deprecation.
-- During additive v2 rollout, v1 and v2 surfaces may coexist; removals require explicit major-stage migration.
+- Batch-backend runtime is cut over to v2 execution envelopes; v1 and v2 exports may coexist for compatibility until explicit major-stage removals.
 
 Agents:
 

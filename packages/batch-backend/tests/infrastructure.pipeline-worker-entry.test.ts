@@ -5,7 +5,6 @@ import {
   resolveEffectiveElevenLabsApiKey,
 } from '../src/infrastructure/pipeline-worker-env.js';
 import {
-  resolveWorkerApiVersion,
   toWorkerV2FailureError,
 } from '../src/infrastructure/pipeline-worker-v2.js';
 
@@ -97,15 +96,4 @@ describe('infrastructure/pipeline-worker-entry', () => {
     expect((error as { causeName?: string }).causeName).toBeUndefined();
   });
 
-  it('resolves worker api version from explicit v1 override', () => {
-    expect(resolveWorkerApiVersion('v1', 'v2')).toBe('v1');
-  });
-
-  it('resolves worker api version from explicit v2 override', () => {
-    expect(resolveWorkerApiVersion('v2', 'v1')).toBe('v2');
-  });
-
-  it('resolves worker api version from config default when override is missing', () => {
-    expect(resolveWorkerApiVersion(undefined, 'v2')).toBe('v2');
-  });
 });

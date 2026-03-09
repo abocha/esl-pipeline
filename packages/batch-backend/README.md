@@ -21,7 +21,7 @@ Within the monorepo, `batch-backend` is the standardized “batch execution surf
   - Decouples ingestion from processing and supports horizontal scaling.
 - Orchestrator-native execution
   - Lazily constructs and caches an `@esl-pipeline/orchestrator` pipeline.
-  - For each job, invokes `pipeline.newAssignment()` with controlled flags.
+  - Worker execution uses orchestrator API v2 envelopes (`executeNewAssignmentV2` / `executeRerunAssignmentV2`).
 - Pluggable infra and storage
   - Configurable Postgres, Redis, and S3-compatible (MinIO) storage.
   - Manifest storage and config-provider behavior wired through env and orchestrator.
@@ -470,7 +470,7 @@ End-to-end flow:
        - Logger: wired to batch-backend logger.
        - Metrics: from [`metrics`](src/infrastructure/metrics.ts:15).
        - Manifest/config adapters derived from environment configuration.
-   - Invokes `pipeline.newAssignment(flags, { runId })`.
+   - Invokes orchestrator API v2 execution (`pipeline.executeNewAssignmentV2({ assignment: flags }, context)`).
    - On success:
      - Updates job `running` → `succeeded`.
      - Sets `manifestPath` and timestamps.
