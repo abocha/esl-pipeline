@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented here. Dates use `YYYY-MM-DD`.
 
+## [1.2.5] - 2026-03-09
+
+### Changed
+
+- Automated release from PR #23: test(batch-frontend): rebalance minimal assignment tests and add timing telemetry (https://github.com/abocha/esl-pipeline/pull/23)
+
 ## [1.2.4] - 2026-03-08
 
 ### Changed

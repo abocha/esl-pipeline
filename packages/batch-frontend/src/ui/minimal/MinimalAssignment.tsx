@@ -53,11 +53,16 @@ import {
 } from '../../utils/api';
 import { DropZone } from '../shared/DropZone';
 import { UploadProgress } from '../shared/UploadProgress';
+import {
+  getJobPollingDecision,
+  getRecordingPollingDecision,
+  isActivelyProcessingJobState,
+  isTerminalJobState,
+} from './MinimalAssignment.polling';
+import { getGenerationQuotaWindowDecision } from './MinimalAssignment.quota-window';
 
 const AUDIO_EXTENSIONS = ['.wav', '.mp3', '.m4a', '.aac', '.ogg', '.opus'];
 const POLL_INTERVAL_MS = 3000;
-const TERMINAL_JOB_STATES = new Set<JobStatus['state']>(['succeeded', 'failed']);
-const ACTIVE_JOB_STATES = new Set<JobStatus['state']>(['queued', 'running']);
 const FALLBACK_TTS_PROVIDERS = ['elevenlabs', 'google'] as const;
 const FALLBACK_GOOGLE_TTS_MODELS = ['chirp3_hd', 'studio', 'neural2', 'wavenet'] as const;
 const FALLBACK_ELEVENLABS_MODEL = 'eleven_multilingual_v2';
@@ -70,14 +75,6 @@ function isUiTtsProvider(value: string | null | undefined): value is UiTtsProvid
 
 function isGoogleTtsModel(value: string | null | undefined): value is GoogleTtsModel {
   return value === 'chirp3_hd' || value === 'studio' || value === 'neural2' || value === 'wavenet';
-}
-
-function isTerminalJobState(state: JobStatus['state'] | null | undefined): boolean {
-  return state ? TERMINAL_JOB_STATES.has(state) : false;
-}
-
-function isActivelyProcessingJobState(state: JobStatus['state'] | null | undefined): boolean {
-  return state ? ACTIVE_JOB_STATES.has(state) : false;
 }
 
 function isDefaultStudentName(name: string): boolean {
@@ -194,28 +191,6 @@ function formatAbsoluteTimestamp(timestamp: string): string {
     return timestamp;
   }
   return parsed.toLocaleString();
-}
-
-function isSameUtcDay(leftMs: number, rightMs: number): boolean {
-  const left = new Date(leftMs);
-  const right = new Date(rightMs);
-  return (
-    left.getUTCFullYear() === right.getUTCFullYear() &&
-    left.getUTCMonth() === right.getUTCMonth() &&
-    left.getUTCDate() === right.getUTCDate()
-  );
-}
-
-function isSameUtcMinute(leftMs: number, rightMs: number): boolean {
-  const left = new Date(leftMs);
-  const right = new Date(rightMs);
-  return (
-    left.getUTCFullYear() === right.getUTCFullYear() &&
-    left.getUTCMonth() === right.getUTCMonth() &&
-    left.getUTCDate() === right.getUTCDate() &&
-    left.getUTCHours() === right.getUTCHours() &&
-    left.getUTCMinutes() === right.getUTCMinutes()
-  );
 }
 
 interface SelectablePresetOption {
@@ -1029,14 +1004,19 @@ export const MinimalAssignment: React.FC = () => {
         setRecording(updated);
         setRecordingStatus(updated.status);
         setRecordingError(updated.error ?? null);
-        if (updated.status === 'transcribed' && !transcript?.transcriptId) {
+        const decision = getRecordingPollingDecision({
+          status: updated.status,
+          error: updated.error,
+          hasTranscriptId: Boolean(transcript?.transcriptId),
+        });
+        if (decision.shouldLoadTranscript) {
           void loadTranscript();
         }
-        if (updated.status === 'failed') {
+        if (decision.shouldMarkTranscriptFailed) {
           setTranscriptStatus('failed');
-          setTranscriptError(updated.error ?? 'Transcription failed.');
+          setTranscriptError(decision.transcriptFailureMessage);
         }
-        if (updated.status === 'transcribed' || updated.status === 'failed') {
+        if (!decision.shouldContinuePolling) {
           if (interval) clearInterval(interval);
           interval = null;
         }
@@ -1511,9 +1491,12 @@ export const MinimalAssignment: React.FC = () => {
         const refreshed = await getJobStatus(jobStatus.jobId);
         if (!active) return;
         setJobStatusState(refreshed);
-        if (!isActivelyProcessingJobState(refreshed.state)) {
+        const decision = getJobPollingDecision(refreshed.state);
+        if (!decision.shouldContinuePolling) {
           clearInterval(interval);
-          void loadResumeJobs();
+          if (decision.shouldRefreshResumeJobs) {
+            void loadResumeJobs();
+          }
         }
       } catch (error) {
         if (!active) return;
@@ -1795,62 +1778,14 @@ export const MinimalAssignment: React.FC = () => {
       selectedGenerationProvider === generationOptions.defaultProvider &&
       selectedGenerationModel === generationDefaultModelForSelection,
     );
-  const activeGenerationQuotaLastUpdatedMs = activeGenerationQuota
-    ? Date.parse(activeGenerationQuota.lastUpdatedAt)
-    : Number.NaN;
-  const activeGenerationQuotaWindowKnown = Number.isFinite(activeGenerationQuotaLastUpdatedMs);
-  const activeGenerationQuotaDayWindowCurrent =
-    activeGenerationQuotaWindowKnown &&
-    isSameUtcDay(activeGenerationQuotaLastUpdatedMs, quotaWindowTickMs);
-  const activeGenerationQuotaMinuteWindowCurrent =
-    activeGenerationQuotaWindowKnown &&
-    isSameUtcMinute(activeGenerationQuotaLastUpdatedMs, quotaWindowTickMs);
-  const dailyTokenHardBlocked =
-    activeGenerationQuota?.dailyTokenBudget === 0 &&
-    activeGenerationQuota?.dailyTokenRemaining !== undefined &&
-    activeGenerationQuota?.dailyTokenRemaining !== null &&
-    activeGenerationQuota.dailyTokenRemaining <= 0;
-  const dailyRequestHardBlocked =
-    activeGenerationQuota?.dailyRequestBudget === 0 &&
-    activeGenerationQuota?.dailyRequestRemaining !== undefined &&
-    activeGenerationQuota?.dailyRequestRemaining !== null &&
-    activeGenerationQuota.dailyRequestRemaining <= 0;
-  const rpmHardBlocked =
-    activeGenerationQuota?.rpmBudget === 0 &&
-    activeGenerationQuota?.rpmRemaining !== undefined &&
-    activeGenerationQuota?.rpmRemaining !== null &&
-    activeGenerationQuota.rpmRemaining <= 0;
-  const dailyTokenWindowBlocked =
-    !dailyTokenHardBlocked &&
-    activeGenerationQuota?.dailyTokenRemaining !== undefined &&
-    activeGenerationQuota?.dailyTokenRemaining !== null &&
-    activeGenerationQuota.dailyTokenRemaining <= 0 &&
-    activeGenerationQuotaDayWindowCurrent;
-  const dailyRequestWindowBlocked =
-    !dailyRequestHardBlocked &&
-    activeGenerationQuota?.dailyRequestRemaining !== undefined &&
-    activeGenerationQuota?.dailyRequestRemaining !== null &&
-    activeGenerationQuota.dailyRequestRemaining <= 0 &&
-    activeGenerationQuotaDayWindowCurrent;
-  const rpmWindowBlocked =
-    !rpmHardBlocked &&
-    activeGenerationQuota?.rpmRemaining !== undefined &&
-    activeGenerationQuota?.rpmRemaining !== null &&
-    activeGenerationQuota.rpmRemaining <= 0 &&
-    activeGenerationQuotaMinuteWindowCurrent;
-  const generationQuotaBlockedReason = activeQuotaAppliesToCurrentSelection
-    ? dailyTokenHardBlocked || dailyTokenWindowBlocked
-      ? 'Daily token budget exhausted for selected model/provider.'
-      : dailyRequestHardBlocked || dailyRequestWindowBlocked
-        ? 'Daily request budget exhausted for selected model/provider.'
-        : rpmHardBlocked || rpmWindowBlocked
-          ? 'Per-minute request budget exhausted. Wait for minute window reset.'
-          : null
-    : null;
+  const quotaWindowDecision = getGenerationQuotaWindowDecision({
+    quota: activeGenerationQuota,
+    quotaWindowTickMs,
+    activeQuotaAppliesToCurrentSelection,
+  });
+  const generationQuotaBlockedReason = quotaWindowDecision.blockedReason;
   const generationBlockedByQuota = Boolean(generationQuotaBlockedReason);
-  const shouldTrackQuotaWindow =
-    activeQuotaAppliesToCurrentSelection &&
-    (dailyTokenWindowBlocked || dailyRequestWindowBlocked || rpmWindowBlocked);
+  const shouldTrackQuotaWindow = quotaWindowDecision.shouldTrackWindow;
 
   useEffect(() => {
     if (!shouldTrackQuotaWindow) {
