@@ -13,10 +13,12 @@ import {
 } from './orchestrator-service.js';
 
 type WorkerExecutionMode = 'new_assignment' | 'rerun_assignment';
+type OrchestratorApiVersion = 'v1' | 'v2';
 
 interface WorkerRunMessage {
   type: 'run';
   executionMode?: WorkerExecutionMode;
+  apiVersion?: OrchestratorApiVersion;
   payload: RunAssignmentPayload | RunRerunAssignmentPayload;
   runId: string;
 }
@@ -49,6 +51,7 @@ function isPipelineCancelledErrorLike(error: unknown): boolean {
 async function executePipeline(
   payload: RunAssignmentPayload | RunRerunAssignmentPayload,
   executionMode: WorkerExecutionMode,
+  apiVersion: OrchestratorApiVersion,
   runId: string,
   config: BatchBackendConfig,
   signal?: AbortSignal,
@@ -83,6 +86,7 @@ async function executePipeline(
         ? await runRerunPipeline(
             pipeline,
             payload as RunRerunAssignmentPayload,
+            apiVersion,
             config.worker.ttsCacheDir,
             config.orchestrator.notionDatabaseId,
             signal,
@@ -90,6 +94,7 @@ async function executePipeline(
         : await runAssignmentPipeline(
             pipeline,
             payload as RunAssignmentPayload,
+            apiVersion,
             config.worker.ttsCacheDir,
             config.orchestrator.notionDatabaseId,
             signal,
@@ -119,6 +124,7 @@ async function executePipeline(
 async function runAssignmentPipeline(
   pipeline: ReturnType<typeof getPipeline>,
   payload: RunAssignmentPayload,
+  apiVersion: OrchestratorApiVersion,
   ttsOutDir: string,
   defaultNotionDatabaseId?: string,
   signal?: AbortSignal,
@@ -155,18 +161,41 @@ async function runAssignmentPipeline(
     flags.googleTtsModel = payload.googleTtsModel;
   }
 
-  return (pipeline as { newAssignment: (...args: unknown[]) => Promise<PipelineRunResult> }).newAssignment(
-    flags,
-    undefined,
-    {
-      signal,
-    },
-  );
+  if (apiVersion === 'v2') {
+    const result = await (
+      pipeline as {
+        executeNewAssignmentV2: (...args: unknown[]) => Promise<{
+          ok: boolean;
+          data?: PipelineRunResult;
+          error?: { message?: string; code?: string };
+        }>;
+      }
+    ).executeNewAssignmentV2(
+      { assignment: flags },
+      { dependencies: { signal } },
+    );
+    if (!result.ok) {
+      const error = new Error(result.error?.message || 'orchestrator v2 newAssignment failed');
+      error.name = result.error?.code || 'ORCHESTRATOR_V2_ERROR';
+      throw error;
+    }
+    return result.data ?? {};
+  }
+
+  return (pipeline as { newAssignment: (...args: unknown[]) => Promise<PipelineRunResult> })
+    .newAssignment(
+      flags,
+      undefined,
+      {
+        signal,
+      },
+    );
 }
 
 async function runRerunPipeline(
   pipeline: ReturnType<typeof getPipeline>,
   payload: RunRerunAssignmentPayload,
+  apiVersion: OrchestratorApiVersion,
   ttsOutDir: string,
   _defaultNotionDatabaseId?: string,
   signal?: AbortSignal,
@@ -196,10 +225,32 @@ async function runRerunPipeline(
     (flags as RerunFlags & { manifestMd?: string }).manifestMd = payload.manifestMd;
   }
 
-  return (pipeline as { rerunAssignment: (...args: unknown[]) => Promise<PipelineRunResult> }).rerunAssignment(
-    flags,
-    { signal },
-  );
+  if (apiVersion === 'v2') {
+    const result = await (
+      pipeline as {
+        executeRerunAssignmentV2: (...args: unknown[]) => Promise<{
+          ok: boolean;
+          data?: PipelineRunResult;
+          error?: { message?: string; code?: string };
+        }>;
+      }
+    ).executeRerunAssignmentV2(
+      { assignment: flags },
+      { dependencies: { signal } },
+    );
+    if (!result.ok) {
+      const error = new Error(result.error?.message || 'orchestrator v2 rerunAssignment failed');
+      error.name = result.error?.code || 'ORCHESTRATOR_V2_ERROR';
+      throw error;
+    }
+    return result.data ?? {};
+  }
+
+  return (pipeline as { rerunAssignment: (...args: unknown[]) => Promise<PipelineRunResult> })
+    .rerunAssignment(
+      flags,
+      { signal },
+    );
 }
 
 async function main() {
@@ -227,6 +278,8 @@ async function main() {
       msg.executionMode === 'rerun_assignment' ? 'rerun_assignment' : 'new_assignment';
     const log = rootLogger.child({ jobId: payload.jobId, runId, component: 'pipeline-worker' });
     const config = loadConfig();
+    const apiVersion: OrchestratorApiVersion =
+      msg.apiVersion === 'v2' ? 'v2' : config.orchestrator.apiVersion;
     const abortController = new AbortController();
     currentAbortController = abortController;
 
@@ -244,6 +297,7 @@ async function main() {
       const result = await executePipeline(
         payload,
         executionMode,
+        apiVersion,
         runId,
         config,
         abortController.signal,
@@ -280,6 +334,7 @@ async function main() {
           const result = await executePipeline(
             payload,
             executionMode,
+            apiVersion,
             runId,
             fallbackConfig,
             abortController.signal,

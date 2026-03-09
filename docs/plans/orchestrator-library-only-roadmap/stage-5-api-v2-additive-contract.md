@@ -39,3 +39,22 @@ Introduce explicit API v2 request/result contracts and stable error/event semant
 1. Risk: type-level additions create confusion or dual-path drift.
 2. Mitigation: strict adapter tests and canonical examples for both interfaces.
 3. Rollback: keep v2 behind opt-in path while hardening adapters and docs.
+
+## Implementation Notes (Stage 5 Execution)
+
+1. Added orchestrator API v2 DTO/result envelope surface with stable schema:
+   - request DTOs for new/rerun/status/plan
+   - `OrchestratorApiResultV2<T>` success/failure envelope
+   - stable `OrchestratorErrorV2` categories + codes
+   - stable `AssignmentStageEventV2` schema
+2. Added compatibility adapters from legacy call shapes to v2 execution:
+   - `newAssignmentViaV2`
+   - `rerunAssignmentViaV2`
+   - `getAssignmentStatusViaV2`
+   - `planRerunAssignmentViaV2`
+3. Added pipeline-level v2 methods on `createPipeline()` return type for dual-readiness.
+4. Added backend dual-readiness selector:
+   - `ESL_ORCHESTRATOR_API_VERSION` (`v1` default, `v2` opt-in)
+   - worker execution honors selected version while preserving v1 default behavior.
+5. Added migration guidance doc:
+   - `docs/reference/ORCHESTRATOR_API_V2_MIGRATION.md`

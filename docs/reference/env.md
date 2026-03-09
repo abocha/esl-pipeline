@@ -96,6 +96,7 @@ Set these in `.env` (or your shell) when running `esl` or programmatic API calls
 - `ESL_PIPELINE_CONFIG_CACHE_TTL_MS` (optional, default `60000`) — In-process cache TTL for remote config responses.
 - `ESL_PIPELINE_CONFIG_CACHE_STALE_IF_ERROR_MS` (optional, default `300000`) — How long stale remote config may be served when upstream fetches fail.
 - `ESL_PIPELINE_CONFIG_CONDITIONAL_REQUESTS` (optional, default `true`) — Enables conditional requests (`If-None-Match` / `If-Modified-Since`) for remote config revalidation.
+- `ESL_ORCHESTRATOR_API_VERSION` (optional, `v1`|`v2`, default `v1`) — Batch-backend orchestrator runtime contract selector for additive API v2 rollout.
 - `ESL_PIPELINE_CACHE_ENV` (optional, default `false`) — Enables memoized env loading in
   `loadCliEnv()` for executable entrypoints.
 - `LOG_LEVEL` (optional) — Verbosity for CLI logs.

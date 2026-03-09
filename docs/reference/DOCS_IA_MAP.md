@@ -29,6 +29,7 @@
 | Write/update tests | `docs/reference/TESTING_GUIDELINES.md` | `docs/reference/agents-ssot.md` |
 | Contracts/invariants | `docs/reference/agents-ssot.md` | `docs/backend-frontend/backend-frontend-alignment.md` |
 | Orchestrator architecture review / ownership refactor planning | `docs/reference/ORCHESTRATOR_SYSTEM_REVIEW.md` | `docs/reference/ORCHESTRATOR_OWNERSHIP_LEDGER.md`, `docs/reference/agents-ssot.md` |
+| Orchestrator API v2 migration and compatibility adapters | `docs/reference/ORCHESTRATOR_API_V2_MIGRATION.md` | `docs/reference/ORCHESTRATOR_SYSTEM_REVIEW.md`, `docs/reference/VERSIONING_MODEL.md` |
 | Markdown validator rules/rulesets | `docs/reference/MD_VALIDATOR_RULESET_CONVENTIONS.md` | `docs/reference/agents-ssot.md` |
 | Backend/frontend capability status | `docs/backend-frontend/backend-frontend-alignment.md` | `docs/backend-frontend/BATCH_SYSTEM.md` |
 | Prompt gallery DB runtime | `docs/operations/prompt-gallery-bootstrap.md` | `docs/reference/env.md` |

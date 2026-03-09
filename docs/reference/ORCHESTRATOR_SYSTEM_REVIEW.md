@@ -55,6 +55,11 @@
 ### Stable Contracts
 
 - Public API surface remains centered on `createPipeline` and orchestrator runtime methods.
+- Additive API v2 surface is available for explicit DTO/result envelopes:
+  - `executeNewAssignmentV2`
+  - `executeRerunAssignmentV2`
+  - `executeGetAssignmentStatusV2`
+  - `executePlanRerunAssignmentV2`
 - Manifest schema and additive evolution rules are defined in `docs/reference/pipeline-manifest.md`.
 - Observability event naming for pipeline and stage lifecycle remains contract-sensitive.
 
@@ -86,6 +91,7 @@
 ## Related
 
 - `docs/reference/ORCHESTRATOR_OWNERSHIP_LEDGER.md`
+- `docs/reference/ORCHESTRATOR_API_V2_MIGRATION.md`
 - `docs/reference/agents-ssot.md`
 - `docs/reference/pipeline-manifest.md`
 - `packages/orchestrator/src`

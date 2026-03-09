@@ -72,6 +72,7 @@ The following suites are required to stay green before entering Stage 2:
 ### Queue B: Public Contract Evolution (Major Only If Needed)
 
 - Scope: explicit request/response DTOs and stable error/event schemas.
+- Status (2026-03-09): additive API v2 DTO/result envelope and error/event schemas introduced; v1 remains active.
 - Guardrails:
   - Compatibility adapter layer for existing callers during transition.
   - Release label and migration notes aligned with versioning model.

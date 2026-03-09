@@ -191,6 +191,7 @@ type WorkerExecutionMode = 'new_assignment' | 'rerun_assignment';
 interface WorkerRunMessagePayload {
   type: 'run';
   executionMode: WorkerExecutionMode;
+  apiVersion?: 'v1' | 'v2';
   payload: RunAssignmentPayload | RunRerunAssignmentPayload;
   runId: string;
 }
@@ -204,6 +205,7 @@ type WorkerMessagePayload = WorkerRunMessagePayload | WorkerAbortMessagePayload;
 
 interface RunPipelineOptions {
   signal?: AbortSignal;
+  apiVersion?: 'v1' | 'v2';
 }
 
 function makeCancellationError(reason?: string): Error {
@@ -219,7 +221,8 @@ export async function runAssignmentJob(
   runId: string,
   options: RunPipelineOptions = {},
 ): Promise<{ manifestPath?: string; notionUrl?: string; anytypeUrl?: string; htmlUrl?: string }> {
-  return runPipelineWorker('new_assignment', payload, runId, options);
+  const apiVersion = options.apiVersion ?? loadConfig().orchestrator.apiVersion;
+  return runPipelineWorker('new_assignment', payload, runId, { ...options, apiVersion });
 }
 
 export async function runRerunAssignmentJob(
@@ -227,7 +230,8 @@ export async function runRerunAssignmentJob(
   runId: string,
   options: RunPipelineOptions = {},
 ): Promise<{ manifestPath?: string; notionUrl?: string; anytypeUrl?: string; htmlUrl?: string }> {
-  return runPipelineWorker('rerun_assignment', payload, runId, options);
+  const apiVersion = options.apiVersion ?? loadConfig().orchestrator.apiVersion;
+  return runPipelineWorker('rerun_assignment', payload, runId, { ...options, apiVersion });
 }
 
 async function runPipelineWorker(
@@ -237,7 +241,7 @@ async function runPipelineWorker(
   options: RunPipelineOptions = {},
 ): Promise<{ manifestPath?: string; notionUrl?: string; anytypeUrl?: string; htmlUrl?: string }> {
   const log = rootLogger.child({ jobId: payload.jobId, runId });
-  const { signal } = options;
+  const { signal, apiVersion = 'v1' } = options;
   if (signal?.aborted) {
     throw makeCancellationError(
       typeof signal.reason === 'string' ? signal.reason : undefined,
@@ -355,6 +359,7 @@ async function runPipelineWorker(
     const message: WorkerMessagePayload = {
       type: 'run',
       executionMode,
+      apiVersion,
       payload,
       runId,
     };
