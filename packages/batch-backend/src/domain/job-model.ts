@@ -2,9 +2,11 @@
 // Minimal job domain model for the batch-backend.
 // Keeps semantics simple and mirrors the `jobs` table schema used in db.ts.
 import type {
+  GoogleTtsModel,
   JobState,
   JobUploadOption,
   PublishTarget,
+  TtsProviderId,
   TtsStrategy,
 } from '@esl-pipeline/contracts';
 
@@ -31,6 +33,8 @@ export interface JobRecord {
   notionDatabase?: string | null;
   publishTarget?: PublishTarget | null;
   ttsStrategy?: TtsStrategy | null;
+  ttsProvider?: TtsProviderId | null;
+  googleTtsModel?: GoogleTtsModel | null;
   notionUrl?: string | null;
   anytypeUrl?: string | null;
   htmlUrl?: string | null;
@@ -83,5 +87,7 @@ export {
   type JobState,
   type JobUploadOption,
   type PublishTarget,
+  type TtsProviderId,
+  type GoogleTtsModel,
   type TtsStrategy,
 } from '@esl-pipeline/contracts';

@@ -12,6 +12,7 @@ import {
   UserSettingsRecord,
   UserTtsStrategy,
   getDefaultSettings,
+  isValidTtsProvider,
 } from './settings-model.js';
 
 /**
@@ -31,6 +32,26 @@ interface UserSettingsRow {
   updated_at: Date;
 }
 
+export function normalizeStoredTtsProvider(provider: string, userId: string): TtsProvider {
+  if (isValidTtsProvider(provider)) {
+    return provider;
+  }
+  if (provider === 'openai' || provider === 'azure') {
+    logger.warn('Normalizing legacy TTS provider in user settings', {
+      userId,
+      legacyProvider: provider,
+      fallbackProvider: 'elevenlabs',
+    });
+    return 'elevenlabs';
+  }
+  logger.warn('Unknown TTS provider in user settings; applying fallback', {
+    userId,
+    provider,
+    fallbackProvider: 'elevenlabs',
+  });
+  return 'elevenlabs';
+}
+
 /**
  * Map database row to domain model
  */
@@ -40,7 +61,7 @@ function mapRowToSettings(row: UserSettingsRow): UserSettingsRecord {
     userId: row.user_id,
     elevenLabsKeyEncrypted: row.elevenlabs_key_encrypted,
     notionTokenEncrypted: row.notion_token_encrypted,
-    ttsProvider: row.tts_provider as TtsProvider,
+    ttsProvider: normalizeStoredTtsProvider(row.tts_provider, row.user_id),
     defaultPreset: row.default_preset,
     defaultVoiceAccent: row.default_voice_accent,
     defaultTtsStrategy: row.default_tts_strategy as UserTtsStrategy,

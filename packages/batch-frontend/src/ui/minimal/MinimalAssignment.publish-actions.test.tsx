@@ -101,6 +101,8 @@ describe('MinimalAssignment - publish and job actions', () => {
         jobOverrides: {
           preset: 'b2-default',
           publishTarget: 'html',
+          withTts: true,
+          ttsProvider: 'elevenlabs',
         },
       });
       expect(api.approveJob).toHaveBeenCalledWith('job-1', {
@@ -134,6 +136,16 @@ describe('MinimalAssignment - publish and job actions', () => {
         voices: [{ id: 'voice-a', name: 'Voice A', accent: 'american' }],
         notionDatabases: [{ id: 'db-1', name: 'DB One' }],
         ttsStrategies: ['auto', 'dialogue', 'tts'],
+        ttsProviders: ['elevenlabs', 'google'],
+        ttsModelOptionsByProvider: {
+          elevenlabs: ['eleven_multilingual_v2'],
+          google: ['chirp3_hd', 'studio', 'neural2', 'wavenet'],
+        },
+        defaultTtsProvider: 'elevenlabs',
+        defaultTtsModelByProvider: {
+          elevenlabs: 'eleven_multilingual_v2',
+          google: 'chirp3_hd',
+        },
         supportedActions: [],
       });
       await renderWithResumedPromptReady();
@@ -161,10 +173,12 @@ describe('MinimalAssignment - publish and job actions', () => {
       expect(api.materializeDraft).toHaveBeenCalledWith(
         'draft-1',
         expect.objectContaining({
-          jobOverrides: {
+          jobOverrides: expect.objectContaining({
             learningPresetId: 'general-english-intensive',
             publishTarget: 'html',
-          },
+            withTts: true,
+            ttsProvider: 'elevenlabs',
+          }),
         }),
       );
       const call = vi.mocked(api.materializeDraft).mock.calls.at(-1)?.[1];
@@ -214,9 +228,63 @@ describe('MinimalAssignment - publish and job actions', () => {
         expect(api.rerunAudioJob).toHaveBeenCalledWith('job-1', {
           forceTts: false,
           ttsStrategy: 'auto',
+          ttsProvider: 'elevenlabs',
         });
       });
       expect(screen.getByText(/Audio rerun queued/i)).toBeTruthy();
+    },
+    INTEGRATION_TEST_TIMEOUT_MS,
+  );
+
+  it(
+    'uses selected google provider/model for publish and rerun payloads',
+    async () => {
+      const user = userEvent.setup();
+      render(<MinimalAssignment />);
+
+      await user.click(screen.getByRole('button', { name: /Drop audio file/i }));
+
+      await waitFor(() => {
+        expect(screen.getByDisplayValue('Student transcript text')).toBeTruthy();
+      });
+
+      await user.click(screen.getByRole('button', { name: /Generate prompt/i }));
+
+      await waitFor(() => {
+        expect(screen.getByDisplayValue('Prompt package output')).toBeTruthy();
+      });
+
+      const draftTextarea = screen.getByRole('textbox', { name: /Draft markdown/i });
+      await user.type(draftTextarea, '# Google TTS draft');
+      await user.selectOptions(screen.getByRole('combobox', { name: /^TTS provider$/i }), 'google');
+      await user.selectOptions(screen.getByRole('combobox', { name: /^TTS model$/i }), 'studio');
+
+      await previewCurrentDraft(user);
+      await user.click(screen.getByRole('button', { name: /Publish assignment/i }));
+
+      await waitFor(() => {
+        expect(api.materializeDraft).toHaveBeenCalled();
+      });
+      expect(api.materializeDraft).toHaveBeenCalledWith('draft-1', {
+        jobOverrides: expect.objectContaining({
+          publishTarget: 'html',
+          withTts: true,
+          ttsProvider: 'google',
+          googleTtsModel: 'studio',
+        }),
+      });
+
+      await user.click(screen.getByRole('button', { name: /Rerun audio/i }));
+
+      await waitFor(() => {
+        expect(api.rerunAudioJob).toHaveBeenCalledWith(
+          'job-1',
+          expect.objectContaining({
+            ttsProvider: 'google',
+            googleTtsModel: 'studio',
+          }),
+        );
+      });
     },
     INTEGRATION_TEST_TIMEOUT_MS,
   );
@@ -248,6 +316,7 @@ describe('MinimalAssignment - publish and job actions', () => {
             voiceId: 'voice-new',
             voiceAccent: 'british',
             ttsStrategy: 'dialogue',
+            ttsProvider: 'elevenlabs',
             dialogueLanguage: 'es',
             dialogueStability: 0.42,
             dialogueSeed: 7,

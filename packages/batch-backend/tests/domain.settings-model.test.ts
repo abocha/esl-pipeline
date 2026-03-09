@@ -15,8 +15,6 @@ describe('domain/settings-model', () => {
   describe('isValidTtsProvider', () => {
     it('returns true for valid providers', () => {
       expect(isValidTtsProvider('elevenlabs')).toBe(true);
-      expect(isValidTtsProvider('openai')).toBe(true);
-      expect(isValidTtsProvider('azure')).toBe(true);
       expect(isValidTtsProvider('google')).toBe(true);
     });
 
@@ -120,10 +118,8 @@ describe('domain/settings-model', () => {
   describe('VALID_TTS_PROVIDERS', () => {
     it('contains expected providers', () => {
       expect(VALID_TTS_PROVIDERS).toContain('elevenlabs');
-      expect(VALID_TTS_PROVIDERS).toContain('openai');
-      expect(VALID_TTS_PROVIDERS).toContain('azure');
       expect(VALID_TTS_PROVIDERS).toContain('google');
-      expect(VALID_TTS_PROVIDERS).toHaveLength(4);
+      expect(VALID_TTS_PROVIDERS).toHaveLength(2);
     });
   });
 

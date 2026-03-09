@@ -83,6 +83,16 @@ describe('application/get-job-options', () => {
         notionDatabases: [{ id: 'db-1', name: 'DB One' }],
         uploadOptions: ['auto', 's3', 'none'],
         ttsStrategies: ['auto', 'dialogue', 'tts'],
+        ttsProviders: ['elevenlabs', 'google'],
+        ttsModelOptionsByProvider: {
+          elevenlabs: ['eleven_turbo_v2_5'],
+          google: ['chirp3_hd', 'studio', 'neural2', 'wavenet'],
+        },
+        defaultTtsProvider: 'google',
+        defaultTtsModelByProvider: {
+          elevenlabs: 'eleven_turbo_v2_5',
+          google: 'studio',
+        },
         learningPresets: [
           {
             id: 'general-english',
@@ -117,6 +127,16 @@ describe('application/get-job-options', () => {
         notionDatabases: [{ id: 'db-1', name: 'DB One' }],
         uploadOptions: ['auto', 's3', 'none'],
         ttsStrategies: ['auto', 'dialogue', 'tts'],
+        ttsProviders: ['elevenlabs', 'google'],
+        ttsModelOptionsByProvider: {
+          elevenlabs: ['eleven_turbo_v2_5'],
+          google: ['chirp3_hd', 'studio', 'neural2', 'wavenet'],
+        },
+        defaultTtsProvider: 'google',
+        defaultTtsModelByProvider: {
+          elevenlabs: 'eleven_turbo_v2_5',
+          google: 'studio',
+        },
         learningPresets: [
           {
             id: 'general-english',
@@ -162,6 +182,16 @@ describe('application/get-job-options', () => {
       });
       expect(result.generation?.quota.usedRequestsToday).toBe(0);
       expect(result.generation?.quota.usedTokensToday).toBe(0);
+      expect(result.ttsProviders).toEqual(['elevenlabs', 'google']);
+      expect(result.ttsModelOptionsByProvider).toEqual({
+        elevenlabs: ['eleven_turbo_v2_5'],
+        google: ['chirp3_hd', 'studio', 'neural2', 'wavenet'],
+      });
+      expect(result.defaultTtsProvider).toBe('google');
+      expect(result.defaultTtsModelByProvider).toEqual({
+        elevenlabs: 'eleven_turbo_v2_5',
+        google: 'studio',
+      });
     },
   );
 
@@ -183,6 +213,16 @@ describe('application/get-job-options', () => {
       expect(result.cefrDefault).toEqual('B1');
       expect(result.uploadOptions).toEqual(['auto', 's3', 'none']);
       expect(result.ttsStrategies).toEqual(['auto']);
+      expect(result.ttsProviders).toEqual(['elevenlabs', 'google']);
+      expect(result.ttsModelOptionsByProvider).toEqual({
+        elevenlabs: ['eleven_multilingual_v2'],
+        google: ['chirp3_hd', 'studio', 'neural2', 'wavenet'],
+      });
+      expect(result.defaultTtsProvider).toEqual('elevenlabs');
+      expect(result.defaultTtsModelByProvider).toEqual({
+        elevenlabs: 'eleven_multilingual_v2',
+        google: 'chirp3_hd',
+      });
       expect(result.learningPresets).toEqual([
         {
           id: 'general-english',
@@ -227,6 +267,16 @@ describe('application/get-job-options', () => {
       notionDatabases: [{ id: 'db-1', name: 'DB One' }],
       uploadOptions: ['auto', 's3', 'none'],
       ttsStrategies: ['auto', 'dialogue', 'tts'],
+      ttsProviders: ['elevenlabs', 'google'],
+      ttsModelOptionsByProvider: {
+        elevenlabs: ['eleven_turbo_v2_5'],
+        google: ['chirp3_hd', 'studio', 'neural2', 'wavenet'],
+      },
+      defaultTtsProvider: 'google',
+      defaultTtsModelByProvider: {
+        elevenlabs: 'eleven_turbo_v2_5',
+        google: 'studio',
+      },
       learningPresets: [
         {
           id: 'general-english',
@@ -267,6 +317,16 @@ describe('application/get-job-options', () => {
       notionDatabases: [{ id: 'db-1', name: 'DB One' }],
       uploadOptions: ['auto', 's3', 'none'],
       ttsStrategies: ['auto', 'dialogue', 'tts'],
+      ttsProviders: ['elevenlabs', 'google'],
+      ttsModelOptionsByProvider: {
+        elevenlabs: ['eleven_turbo_v2_5'],
+        google: ['chirp3_hd', 'studio', 'neural2', 'wavenet'],
+      },
+      defaultTtsProvider: 'google',
+      defaultTtsModelByProvider: {
+        elevenlabs: 'eleven_turbo_v2_5',
+        google: 'studio',
+      },
       learningPresets: [
         {
           id: 'general-english',
@@ -288,9 +348,17 @@ describe('application/get-job-options', () => {
       first.generation.modelOptions[0]!.id = 'mutated-model-id';
       first.generation.quota.source = 'configured';
     }
+    if (first.ttsModelOptionsByProvider?.google) {
+      first.ttsModelOptionsByProvider.google[0] = 'mutated-google-model';
+    }
+    if (first.defaultTtsModelByProvider) {
+      first.defaultTtsModelByProvider.google = 'mutated-default-google-model';
+    }
 
     const second = await getJobOptions();
     expect(second.generation?.modelOptions[0]?.id).toBe('gpt-5.2');
     expect(second.generation?.quota.source).toBe('hybrid');
+    expect(second.ttsModelOptionsByProvider?.google?.[0]).toBe('chirp3_hd');
+    expect(second.defaultTtsModelByProvider?.google).toBe('studio');
   });
 });

@@ -185,16 +185,19 @@ Content here
   it('should handle environment variable defaults', async () => {
     // Set environment variables
     const originalEnv = {
-      ELEVENLABS_TTS_STRATEGY: process.env.ELEVENLABS_TTS_STRATEGY,
-      ELEVENLABS_DIALOGUE_LANGUAGE: process.env.ELEVENLABS_DIALOGUE_LANGUAGE,
-      ELEVENLABS_DIALOGUE_STABILITY: process.env.ELEVENLABS_DIALOGUE_STABILITY,
-      ELEVENLABS_DIALOGUE_SEED: process.env.ELEVENLABS_DIALOGUE_SEED,
+      ESL_TTS_PROVIDER_ELEVENLABS_STRATEGY: process.env.ESL_TTS_PROVIDER_ELEVENLABS_STRATEGY,
+      ESL_TTS_PROVIDER_ELEVENLABS_DIALOGUE_LANGUAGE:
+        process.env.ESL_TTS_PROVIDER_ELEVENLABS_DIALOGUE_LANGUAGE,
+      ESL_TTS_PROVIDER_ELEVENLABS_DIALOGUE_STABILITY:
+        process.env.ESL_TTS_PROVIDER_ELEVENLABS_DIALOGUE_STABILITY,
+      ESL_TTS_PROVIDER_ELEVENLABS_DIALOGUE_SEED:
+        process.env.ESL_TTS_PROVIDER_ELEVENLABS_DIALOGUE_SEED,
     };
 
-    process.env.ELEVENLABS_TTS_STRATEGY = 'dialogue';
-    process.env.ELEVENLABS_DIALOGUE_LANGUAGE = 'es';
-    process.env.ELEVENLABS_DIALOGUE_STABILITY = '0.8';
-    process.env.ELEVENLABS_DIALOGUE_SEED = '123';
+    process.env.ESL_TTS_PROVIDER_ELEVENLABS_STRATEGY = 'dialogue';
+    process.env.ESL_TTS_PROVIDER_ELEVENLABS_DIALOGUE_LANGUAGE = 'es';
+    process.env.ESL_TTS_PROVIDER_ELEVENLABS_DIALOGUE_STABILITY = '0.8';
+    process.env.ESL_TTS_PROVIDER_ELEVENLABS_DIALOGUE_SEED = '123';
 
     try {
       promptQueue.push({ main: 'start' }, { md: mdPath });
@@ -209,10 +212,18 @@ Content here
       );
 
       // Simulate applyEnvDefaults behavior
-      const ttsStrategy = process.env.ELEVENLABS_TTS_STRATEGY as 'auto' | 'dialogue' | 'tts';
-      const dialogueLanguage = process.env.ELEVENLABS_DIALOGUE_LANGUAGE;
-      const dialogueStability = Number.parseFloat(process.env.ELEVENLABS_DIALOGUE_STABILITY);
-      const dialogueSeed = Number.parseInt(process.env.ELEVENLABS_DIALOGUE_SEED, 10);
+      const ttsStrategy = process.env.ESL_TTS_PROVIDER_ELEVENLABS_STRATEGY as
+        | 'auto'
+        | 'dialogue'
+        | 'tts';
+      const dialogueLanguage = process.env.ESL_TTS_PROVIDER_ELEVENLABS_DIALOGUE_LANGUAGE;
+      const dialogueStability = Number.parseFloat(
+        process.env.ESL_TTS_PROVIDER_ELEVENLABS_DIALOGUE_STABILITY,
+      );
+      const dialogueSeed = Number.parseInt(
+        process.env.ESL_TTS_PROVIDER_ELEVENLABS_DIALOGUE_SEED,
+        10,
+      );
 
       // Verify environment defaults are applied
       expect(ttsStrategy).toBe('dialogue');
@@ -221,25 +232,29 @@ Content here
       expect(dialogueSeed).toBe(123);
     } finally {
       // Restore original environment
-      if (originalEnv.ELEVENLABS_TTS_STRATEGY === undefined) {
-        delete process.env.ELEVENLABS_TTS_STRATEGY;
+      if (originalEnv.ESL_TTS_PROVIDER_ELEVENLABS_STRATEGY === undefined) {
+        delete process.env.ESL_TTS_PROVIDER_ELEVENLABS_STRATEGY;
       } else {
-        process.env.ELEVENLABS_TTS_STRATEGY = originalEnv.ELEVENLABS_TTS_STRATEGY;
+        process.env.ESL_TTS_PROVIDER_ELEVENLABS_STRATEGY =
+          originalEnv.ESL_TTS_PROVIDER_ELEVENLABS_STRATEGY;
       }
-      if (originalEnv.ELEVENLABS_DIALOGUE_LANGUAGE === undefined) {
-        delete process.env.ELEVENLABS_DIALOGUE_LANGUAGE;
+      if (originalEnv.ESL_TTS_PROVIDER_ELEVENLABS_DIALOGUE_LANGUAGE === undefined) {
+        delete process.env.ESL_TTS_PROVIDER_ELEVENLABS_DIALOGUE_LANGUAGE;
       } else {
-        process.env.ELEVENLABS_DIALOGUE_LANGUAGE = originalEnv.ELEVENLABS_DIALOGUE_LANGUAGE;
+        process.env.ESL_TTS_PROVIDER_ELEVENLABS_DIALOGUE_LANGUAGE =
+          originalEnv.ESL_TTS_PROVIDER_ELEVENLABS_DIALOGUE_LANGUAGE;
       }
-      if (originalEnv.ELEVENLABS_DIALOGUE_STABILITY === undefined) {
-        delete process.env.ELEVENLABS_DIALOGUE_STABILITY;
+      if (originalEnv.ESL_TTS_PROVIDER_ELEVENLABS_DIALOGUE_STABILITY === undefined) {
+        delete process.env.ESL_TTS_PROVIDER_ELEVENLABS_DIALOGUE_STABILITY;
       } else {
-        process.env.ELEVENLABS_DIALOGUE_STABILITY = originalEnv.ELEVENLABS_DIALOGUE_STABILITY;
+        process.env.ESL_TTS_PROVIDER_ELEVENLABS_DIALOGUE_STABILITY =
+          originalEnv.ESL_TTS_PROVIDER_ELEVENLABS_DIALOGUE_STABILITY;
       }
-      if (originalEnv.ELEVENLABS_DIALOGUE_SEED === undefined) {
-        delete process.env.ELEVENLABS_DIALOGUE_SEED;
+      if (originalEnv.ESL_TTS_PROVIDER_ELEVENLABS_DIALOGUE_SEED === undefined) {
+        delete process.env.ESL_TTS_PROVIDER_ELEVENLABS_DIALOGUE_SEED;
       } else {
-        process.env.ELEVENLABS_DIALOGUE_SEED = originalEnv.ELEVENLABS_DIALOGUE_SEED;
+        process.env.ESL_TTS_PROVIDER_ELEVENLABS_DIALOGUE_SEED =
+          originalEnv.ESL_TTS_PROVIDER_ELEVENLABS_DIALOGUE_SEED;
       }
     }
   });

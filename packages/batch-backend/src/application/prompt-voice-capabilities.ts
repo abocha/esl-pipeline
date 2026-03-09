@@ -3,6 +3,7 @@ import { readFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
 
 import type { VoiceCapabilitiesSnapshot } from '@esl-pipeline/contracts';
+import { loadGoogleVoicesCatalog } from '@esl-pipeline/tts-provider-google';
 
 const VOICE_CATALOG_RELATIVE_PATH = 'packages/orchestrator/configs/elevenlabs.voices.json';
 const CAPABILITY_BLOCK_PATTERN = /```yaml\s*\n# CAPABILITY SNAPSHOT[^\n]*\n[\s\S]*?\n```/m;
@@ -48,11 +49,11 @@ export async function materializePromptTemplateWithCapabilities(params: {
     };
   }
 
-  const snapshot = await loadVoiceCapabilitiesSnapshot();
+  const snapshot = await loadMergedVoiceCapabilitiesSnapshot();
   if (!snapshot) {
     throw new Error(
       'Voice-aligned prompt templates require a voice capabilities snapshot. ' +
-        'Sync voices first or set ELEVENLABS_VOICES_PATH.',
+        'Sync ElevenLabs voices or configure Google TTS credentials.',
     );
   }
 
@@ -70,7 +71,7 @@ export async function materializePromptTemplateWithCapabilities(params: {
   };
 }
 
-async function loadVoiceCapabilitiesSnapshot(): Promise<VoiceCapabilitiesSnapshot | null> {
+async function loadElevenLabsVoiceCapabilitiesSnapshot(): Promise<VoiceCapabilitiesSnapshot | null> {
   const candidates = getVoiceCatalogCandidates();
   for (const candidate of candidates) {
     try {
@@ -87,6 +88,59 @@ async function loadVoiceCapabilitiesSnapshot(): Promise<VoiceCapabilitiesSnapsho
     }
   }
   return null;
+}
+
+async function loadGoogleVoiceCapabilitiesSnapshot(): Promise<VoiceCapabilitiesSnapshot | null> {
+  try {
+    const catalog = await loadGoogleVoicesCatalog();
+    return parseCapabilitiesSnapshot(catalog as VoiceCatalogLike);
+  } catch {
+    return null;
+  }
+}
+
+async function loadMergedVoiceCapabilitiesSnapshot(): Promise<VoiceCapabilitiesSnapshot | null> {
+  const [elevenLabs, google] = await Promise.all([
+    loadElevenLabsVoiceCapabilitiesSnapshot(),
+    loadGoogleVoiceCapabilitiesSnapshot(),
+  ]);
+  return mergeVoiceCapabilitySnapshots([elevenLabs, google].filter(Boolean) as VoiceCapabilitiesSnapshot[]);
+}
+
+function mergeVoiceCapabilitySnapshots(
+  snapshots: VoiceCapabilitiesSnapshot[],
+): VoiceCapabilitiesSnapshot | null {
+  if (snapshots.length === 0) return null;
+
+  const generatedAt = snapshots
+    .map((snapshot) => new Date(snapshot.generatedAt).getTime())
+    .filter((value) => Number.isFinite(value))
+    .sort((a, b) => b - a)[0];
+  const generatedAtIso =
+    typeof generatedAt === 'number' ? new Date(generatedAt).toISOString() : new Date().toISOString();
+
+  const role = new Set<string>();
+  const gender = new Set<string>();
+  const age = new Set<string>();
+  const accent = new Set<string>();
+  const style = new Set<string>();
+
+  for (const snapshot of snapshots) {
+    for (const value of snapshot.role ?? []) role.add(value);
+    for (const value of snapshot.gender ?? []) gender.add(value);
+    for (const value of snapshot.age ?? []) age.add(value);
+    for (const value of snapshot.accent ?? []) accent.add(value);
+    for (const value of snapshot.style ?? []) style.add(value);
+  }
+
+  return normalizeSnapshot({
+    generatedAt: generatedAtIso,
+    role: [...(role.size > 0 ? role : CANONICAL_ROLE)] as VoiceCapabilitiesSnapshot['role'],
+    gender: [...(gender.size > 0 ? gender : CANONICAL_GENDER)] as VoiceCapabilitiesSnapshot['gender'],
+    age: [...(age.size > 0 ? age : CANONICAL_AGE)] as VoiceCapabilitiesSnapshot['age'],
+    accent: [...accent],
+    style: [...style],
+  });
 }
 
 function parseCapabilitiesSnapshot(catalog: VoiceCatalogLike): VoiceCapabilitiesSnapshot | null {

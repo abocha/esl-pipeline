@@ -1,0 +1,52 @@
+{
+  "name": "@esl-pipeline/tts-provider-google",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Google Cloud TTS provider adapter for ESL Pipeline.",
+  "keywords": [
+    "esl",
+    "tts",
+    "google",
+    "vertex",
+    "audio"
+  ],
+  "license": "UNLICENSED",
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./dist/src/index.d.ts",
+      "import": "./dist/src/index.js",
+      "default": "./dist/src/index.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "main": "./dist/src/index.js",
+  "types": "./dist/src/index.d.ts",
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "pnpm --filter @esl-pipeline/shared-infrastructure build && tsc -p tsconfig.json",
+    "clean": "node -e \"fs.rmSync('dist', {recursive:true, force:true})\"",
+    "test": "pnpm --filter @esl-pipeline/tts-core build && vitest run",
+    "test:watch": "vitest",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@google-cloud/text-to-speech": "^6.2.0",
+    "@esl-pipeline/contracts": "workspace:*",
+    "@esl-pipeline/pmd": "workspace:*",
+    "@esl-pipeline/provider-runtime": "workspace:*",
+    "@esl-pipeline/tts-core": "workspace:*",
+    "js-yaml": "^4.1.1"
+  },
+  "devDependencies": {
+    "@types/js-yaml": "^4.0.9",
+    "@types/node": "^25.3.5",
+    "typescript": "^5.9.3",
+    "vitest": "^4.0.18"
+  },
+  "engines": {
+    "node": ">=24.11.1"
+  }
+}

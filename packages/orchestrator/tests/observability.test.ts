@@ -16,9 +16,9 @@ vi.mock('@esl-pipeline/notion-adapter', () => ({
   addOrReplaceAudioUnderStudyText: vi.fn().mockResolvedValue({ replaced: false, appended: true }),
 }));
 
-vi.mock('@esl-pipeline/tts-elevenlabs', async () => {
-  const actual = await vi.importActual<typeof import('@esl-pipeline/tts-elevenlabs')>(
-    '@esl-pipeline/tts-elevenlabs',
+vi.mock('@esl-pipeline/tts-core', async () => {
+  const actual = await vi.importActual<typeof import('@esl-pipeline/tts-core')>(
+    '@esl-pipeline/tts-core',
   );
   return {
     ...actual,
@@ -67,7 +67,7 @@ describe('orchestrator observability', () => {
     process.env.S3_BUCKET = 'observability-bucket';
     process.env.AWS_REGION = 'us-east-1';
 
-    const { buildStudyTextMp3 } = await import('@esl-pipeline/tts-elevenlabs');
+    const { buildStudyTextMp3 } = await import('@esl-pipeline/tts-core');
     vi.mocked(buildStudyTextMp3).mockResolvedValue({
       path: audioPath,
       hash: 'abc123',
@@ -145,7 +145,7 @@ describe('orchestrator observability', () => {
     process.env.S3_BUCKET = 'observability-bucket';
     process.env.AWS_REGION = 'us-east-1';
 
-    const { buildStudyTextMp3 } = await import('@esl-pipeline/tts-elevenlabs');
+    const { buildStudyTextMp3 } = await import('@esl-pipeline/tts-core');
     vi.mocked(buildStudyTextMp3).mockResolvedValue({
       path: audioPath,
       hash: 'abc123',

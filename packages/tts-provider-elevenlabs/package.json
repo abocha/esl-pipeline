@@ -1,8 +1,8 @@
 {
-  "name": "@esl-pipeline/tts-elevenlabs",
-  "version": "4.0.0",
+  "name": "@esl-pipeline/tts-provider-elevenlabs",
+  "version": "1.0.0",
   "private": true,
-  "description": "Generate study-text audio via ElevenLabs with caching and voice selection.",
+  "description": "ElevenLabs TTS provider adapter for ESL Pipeline.",
   "keywords": [
     "esl",
     "tts",
@@ -21,37 +21,29 @@
   },
   "main": "./dist/src/index.js",
   "types": "./dist/src/index.d.ts",
-  "bin": {
-    "tts-elevenlabs": "dist/bin/cli.js",
-    "tts-voices": "dist/bin/voices.js"
-  },
   "files": [
     "dist"
   ],
   "scripts": {
     "build": "pnpm --filter @esl-pipeline/shared-infrastructure build && tsc -p tsconfig.json",
     "clean": "node -e \"fs.rmSync('dist', {recursive:true, force:true})\"",
-    "dev": "tsx watch bin/cli.ts",
     "test": "pnpm run test:unit",
     "test:unit": "vitest run --exclude \"tests/integration.test.ts\"",
     "test:integration": "vitest run \"tests/integration.test.ts\"",
     "test:watch": "vitest",
-    "typecheck": "tsc --noEmit",
-    "voices:sync": "node dist/bin/voices.js"
+    "typecheck": "tsc --noEmit"
   },
   "dependencies": {
     "@elevenlabs/elevenlabs-js": "^2.38.1",
     "@esl-pipeline/contracts": "workspace:*",
     "@esl-pipeline/pmd": "workspace:*",
     "@esl-pipeline/provider-runtime": "workspace:*",
-    "@esl-pipeline/shared-infrastructure": "workspace:*",
-    "commander": "^14.0.2",
+    "@esl-pipeline/tts-core": "workspace:*",
     "js-yaml": "^4.1.1"
   },
   "devDependencies": {
     "@types/js-yaml": "^4.0.9",
     "@types/node": "^25.3.5",
-    "tsx": "^4.21.0",
     "typescript": "^5.9.3",
     "vitest": "^4.0.18"
   },

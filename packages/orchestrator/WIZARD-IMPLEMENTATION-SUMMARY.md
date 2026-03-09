@@ -24,16 +24,16 @@ Successfully implemented TTS strategy support in the orchestrator's interactive 
 ### 3. Environment Support
 
 - Added 4 new environment variables:
-  - `ELEVENLABS_TTS_STRATEGY` (auto/dialogue/tts)
-  - `ELEVENLABS_DIALOGUE_LANGUAGE` (ISO 639-1 code)
-  - `ELEVENLABS_DIALOGUE_STABILITY` (0.0-1.0)
-  - `ELEVENLABS_DIALOGUE_SEED` (integer)
+  - `ESL_TTS_PROVIDER_ELEVENLABS_STRATEGY` (auto/dialogue/tts)
+  - `ESL_TTS_PROVIDER_ELEVENLABS_DIALOGUE_LANGUAGE` (ISO 639-1 code)
+  - `ESL_TTS_PROVIDER_ELEVENLABS_DIALOGUE_STABILITY` (0.0-1.0)
+  - `ESL_TTS_PROVIDER_ELEVENLABS_DIALOGUE_SEED` (integer)
 - Proper validation of all environment variable values
 - Clear documentation in README
 
 ### 4. Integration
 
-- Updated pipeline to pass `ttsStrategy` options to `@esl-pipeline/tts-elevenlabs`
+- Updated pipeline to pass `ttsStrategy` options to `@esl-pipeline/tts-core`
 - Enhanced logging and error handling
 - Manifest updated to include `ttsStrategy` information
 - Complete CLI integration with flag parsing
@@ -70,7 +70,7 @@ This repo is private; backward compatibility is not a goal. Legacy “TTS mode�
 ### Build Verification
 
 - All packages build successfully
-- Full test suite passes (73 tests in tts-elevenlabs, 21 tests in orchestrator)
+- Full test suite passes (73 tests in tts-provider-elevenlabs, 21 tests in orchestrator)
 - No breaking changes introduced
 
 ## Key Files Created/Modified
@@ -121,10 +121,10 @@ pnpm esl --md lesson.md --with-tts --tts-strategy tts
 
 ```bash
 # Set defaults for consistent behavior
-export ELEVENLABS_TTS_STRATEGY=dialogue
-export ELEVENLABS_DIALOGUE_LANGUAGE=en
-export ELEVENLABS_DIALOGUE_STABILITY=0.75
-export ELEVENLABS_DIALOGUE_SEED=42
+export ESL_TTS_PROVIDER_ELEVENLABS_STRATEGY=dialogue
+export ESL_TTS_PROVIDER_ELEVENLABS_DIALOGUE_LANGUAGE=en
+export ESL_TTS_PROVIDER_ELEVENLABS_DIALOGUE_STABILITY=0.75
+export ESL_TTS_PROVIDER_ELEVENLABS_DIALOGUE_SEED=42
 
 # Then run normally
 pnpm esl --md lesson.md --with-tts
@@ -142,7 +142,7 @@ pnpm esl --md lesson.md --with-tts
 ### Recommended Migration Path
 
 1. Update to new version (backward compatible)
-2. Use `ELEVENLABS_TTS_STRATEGY=auto` in environment for consistent behavior
+2. Use `ESL_TTS_PROVIDER_ELEVENLABS_STRATEGY=auto` in environment for consistent behavior
 3. Use dialogue mode for conversation lessons with multiple speakers
 4. Prefer `tts` for longer, higher-level prose; prefer `dialogue` for “sentence-choppy” low-level texts
 5. Fine-tune with dialogue stability and seed values as needed

@@ -23,7 +23,7 @@ If this guide conflicts with [`docs/reference/agents-ssot.md`](agents-ssot.md), 
 2. [`package.json`](../../package.json)
 3. [`packages/batch-backend/package.json`](../../packages/batch-backend/package.json)
 4. [`packages/orchestrator/package.json`](../../packages/orchestrator/package.json)
-5. [`packages/tts-elevenlabs/package.json`](../../packages/tts-elevenlabs/package.json)
+5. [`packages/tts-core/package.json`](../../packages/tts-core/package.json)
 6. [`.github/workflows/ci.yml`](../../.github/workflows/ci.yml)
 
 ## Lane Contract

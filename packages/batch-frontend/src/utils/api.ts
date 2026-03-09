@@ -32,6 +32,7 @@ import { JobActionType } from '@esl-pipeline/contracts';
 
 import type {
   ActionCapability,
+  GoogleTtsModel as ContractGoogleTtsModel,
   GenerateDraftRequest as ContractGenerateDraftRequest,
   GenerateDraftResponse as ContractGenerateDraftResponse,
   GenerationErrorCategory,
@@ -47,6 +48,7 @@ import type {
   RecordingStatus as ContractRecordingStatus,
   StudentSummaryResponse as ContractStudentSummaryResponse,
   SubmitJobRequest as ContractSubmitJobRequest,
+  TtsProviderId as ContractTtsProviderId,
   TtsStrategy as ContractTtsStrategy,
   VoiceOption as ContractVoiceOption,
   JobActionRequest,
@@ -77,6 +79,8 @@ export type JobListResponse = ContractJobListResponse;
 export type JobSummaryResponse = ContractJobSummaryResponse;
 export type StudentSummaryResponse = ContractStudentSummaryResponse;
 export type JobConfigOverrides = ContractJobConfigOverrides;
+export type TtsProviderId = ContractTtsProviderId;
+export type GoogleTtsModel = ContractGoogleTtsModel;
 export type MarkdownValidationResponse = ContractMarkdownValidationResponse;
 export type GenerateDraftRequest = ContractGenerateDraftRequest;
 export type GenerateDraftResponse = ContractGenerateDraftResponse;
@@ -531,6 +535,8 @@ export interface RerunAudioPayload {
   voiceId?: string;
   voiceAccent?: string;
   ttsStrategy?: 'auto' | 'dialogue' | 'tts';
+  ttsProvider?: TtsProviderId;
+  googleTtsModel?: GoogleTtsModel;
   dialogueLanguage?: string;
   dialogueStability?: number;
   dialogueSeed?: number;
@@ -778,6 +784,10 @@ export interface JobOptionsResponse {
   cefrLevels?: ContractJobOptionsPayload['cefrLevels'];
   cefrDefault?: ContractJobOptionsPayload['cefrDefault'];
   generation?: ContractJobOptionsPayload['generation'];
+  ttsProviders?: ContractJobOptionsPayload['ttsProviders'];
+  ttsModelOptionsByProvider?: ContractJobOptionsPayload['ttsModelOptionsByProvider'];
+  defaultTtsProvider?: ContractJobOptionsPayload['defaultTtsProvider'];
+  defaultTtsModelByProvider?: ContractJobOptionsPayload['defaultTtsModelByProvider'];
   voiceAccents: ContractJobOptionsPayload['voiceAccents'];
   voices: ContractJobOptionsPayload['voices'];
   notionDatabases: ContractJobOptionsPayload['notionDatabases'];

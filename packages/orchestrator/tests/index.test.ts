@@ -5,9 +5,9 @@ import { describe, expect, it, vi } from 'vitest';
 
 import { newAssignment, rerunAssignment } from '../src/index.js';
 
-vi.mock('@esl-pipeline/tts-elevenlabs', async () => {
-  const actual = await vi.importActual<typeof import('@esl-pipeline/tts-elevenlabs')>(
-    '@esl-pipeline/tts-elevenlabs',
+vi.mock('@esl-pipeline/tts-core', async () => {
+  const actual = await vi.importActual<typeof import('@esl-pipeline/tts-core')>(
+    '@esl-pipeline/tts-core',
   );
   return {
     ...actual,
@@ -34,7 +34,7 @@ default: voice_id_default
     process.env.S3_BUCKET = 'test-bucket';
     process.env.AWS_REGION = 'us-east-1';
 
-    const { buildStudyTextMp3 } = await import('@esl-pipeline/tts-elevenlabs');
+    const { buildStudyTextMp3 } = await import('@esl-pipeline/tts-core');
     const audioPath = join(dir, 'lesson.mp3');
     await writeFile(audioPath, 'dummy');
     vi.mocked(buildStudyTextMp3).mockResolvedValue({
@@ -74,7 +74,7 @@ default: voice_id_default
     process.env.S3_BUCKET = 'test-bucket';
     process.env.AWS_REGION = 'us-east-1';
 
-    const { buildStudyTextMp3 } = await import('@esl-pipeline/tts-elevenlabs');
+    const { buildStudyTextMp3 } = await import('@esl-pipeline/tts-core');
     const audioPath = join(dir, 'lesson.mp3');
     await writeFile(audioPath, 'dummy');
     vi.mocked(buildStudyTextMp3).mockResolvedValue({
@@ -169,7 +169,7 @@ default: voice_id_default
     process.env.S3_BUCKET = 'test-bucket';
     process.env.AWS_REGION = 'us-east-1';
 
-    const { buildStudyTextMp3 } = await import('@esl-pipeline/tts-elevenlabs');
+    const { buildStudyTextMp3 } = await import('@esl-pipeline/tts-core');
     const audioPath = join(dir, 'lesson.mp3');
     await writeFile(audioPath, 'dummy');
     vi.mocked(buildStudyTextMp3).mockResolvedValue({
@@ -223,7 +223,7 @@ default: voice_id_default
     process.env.S3_BUCKET = 'test-bucket';
     process.env.AWS_REGION = 'us-east-1';
 
-    const { buildStudyTextMp3 } = await import('@esl-pipeline/tts-elevenlabs');
+    const { buildStudyTextMp3 } = await import('@esl-pipeline/tts-core');
     const audioPath = join(dir, 'lesson.mp3');
     await writeFile(audioPath, 'dummy');
     vi.mocked(buildStudyTextMp3).mockResolvedValue({

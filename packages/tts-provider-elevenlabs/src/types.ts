@@ -6,6 +6,7 @@ import type { VoiceSelectionDiagnostics } from '@esl-pipeline/contracts';
 import type { ParsedMarkdownContext } from '@esl-pipeline/pmd';
 
 export type TtsStrategy = 'auto' | 'tts' | 'dialogue';
+export type TtsProvider = 'elevenlabs';
 
 /**
  * Dialogue input for ElevenLabs Text-to-Dialogue API
@@ -79,6 +80,9 @@ export interface BuildStudyTextOptions {
   dialogueLanguage?: string;
   dialogueStability?: number;
   dialogueSeed?: number;
+
+  // Provider selection
+  ttsProvider?: TtsProvider;
 }
 
 export interface BuildStudyTextInput {
@@ -123,6 +127,9 @@ export interface BuildPronunciationShadowSentenceOptions {
   outputFormat?: string;
   modelId?: string;
   logger?: PipelineLogger;
+
+  // Provider selection
+  ttsProvider?: TtsProvider;
 }
 
 export interface BuildPronunciationShadowSentenceResult {

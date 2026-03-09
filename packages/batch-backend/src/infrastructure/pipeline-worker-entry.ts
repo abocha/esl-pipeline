@@ -4,6 +4,7 @@ import { type NewAssignmentFlags, type RerunFlags } from '@esl-pipeline/orchestr
 import { type BatchBackendConfig, loadConfig } from '../config/env.js';
 import { getFfmpegSemaphore } from './ffmpeg-semaphore.js';
 import { logger as rootLogger } from './logger.js';
+import { applyUserSettingsToEnv } from './pipeline-worker-env.js';
 import {
   type RunAssignmentPayload,
   type RunRerunAssignmentPayload,
@@ -43,21 +44,6 @@ function isPipelineCancelledErrorLike(error: unknown): boolean {
     error.message.toLowerCase() === 'cancelled' ||
     error.message.toLowerCase().startsWith('cancelled:')
   );
-}
-
-function applyUserSettingsToEnv(settings?: {
-  elevenLabsApiKey?: string | null;
-  notionToken?: string | null;
-}) {
-  if (!settings) return;
-
-  if (settings.elevenLabsApiKey) {
-    process.env.ELEVENLABS_API_KEY = settings.elevenLabsApiKey;
-  }
-
-  if (settings.notionToken) {
-    process.env.NOTION_TOKEN = settings.notionToken;
-  }
 }
 
 async function executePipeline(
@@ -161,6 +147,14 @@ async function runAssignmentPipeline(
     flags.ttsStrategy = payload.ttsStrategy;
   }
 
+  if (payload.ttsProvider) {
+    flags.ttsProvider = payload.ttsProvider;
+  }
+
+  if (payload.googleTtsModel) {
+    flags.googleTtsModel = payload.googleTtsModel;
+  }
+
   return (pipeline as { newAssignment: (...args: unknown[]) => Promise<PipelineRunResult> }).newAssignment(
     flags,
     undefined,
@@ -192,6 +186,8 @@ async function runRerunPipeline(
     accentPreference: payload.accentPreference ?? undefined,
     voiceId: payload.voiceId ?? undefined,
     ttsStrategy: payload.ttsStrategy ?? undefined,
+    ttsProvider: payload.ttsProvider ?? undefined,
+    googleTtsModel: payload.googleTtsModel ?? undefined,
     dialogueLanguage: payload.dialogueLanguage ?? undefined,
     dialogueStability: payload.dialogueStability ?? undefined,
     dialogueSeed: payload.dialogueSeed ?? undefined,
@@ -242,7 +238,7 @@ async function main() {
       config.orchestrator.notionToken = payload.settings.notionToken;
     }
 
-    applyUserSettingsToEnv(payload.settings);
+    applyUserSettingsToEnv(payload.settings, config.orchestrator.elevenLabsApiKey);
 
     try {
       const result = await executePipeline(

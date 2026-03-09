@@ -60,7 +60,11 @@ export async function createApprovalJobFromDraft(
   }
 
   const jobOverrides = params.jobOverrides ?? {};
-  const withTts = jobOverrides.withTts ?? hasTtsKey;
+  const withTts =
+    jobOverrides.withTts ??
+    (jobOverrides.ttsProvider === 'google'
+      ? true
+      : hasTtsKey);
   const selectedPreset = jobOverrides.preset ?? preset;
   const learningPresetId = normalizeLearningPresetId({
     learningPresetId: jobOverrides.learningPresetId,
@@ -81,6 +85,8 @@ export async function createApprovalJobFromDraft(
     promptAlias: provenance.promptAlias,
     withTts,
     ttsStrategy: jobOverrides.ttsStrategy ?? ttsStrategy,
+    ttsProvider: jobOverrides.ttsProvider,
+    googleTtsModel: jobOverrides.googleTtsModel,
     voiceAccent: jobOverrides.voiceAccent ?? voiceAccent,
     voiceId: jobOverrides.voiceId,
     forceTts: jobOverrides.forceTts,

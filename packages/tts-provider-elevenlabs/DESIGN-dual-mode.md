@@ -1,7 +1,7 @@
 # ElevenLabs TTS Strategy Design (Current)
 
 This document describes the current “dual path” audio generation behavior in
-`@esl-pipeline/tts-elevenlabs`.
+`@esl-pipeline/tts-provider-elevenlabs`.
 
 ## Terminology
 
@@ -15,7 +15,7 @@ This document describes the current “dual path” audio generation behavior in
 Inputs:
 
 - `BuildStudyTextOptions.ttsStrategy?: 'auto' | 'dialogue' | 'tts'`
-- `ELEVENLABS_TTS_STRATEGY` environment default (same values)
+- `ESL_TTS_PROVIDER_ELEVENLABS_STRATEGY` environment default (same values)
 
 Rules:
 
@@ -68,4 +68,4 @@ The package gates noisy strategy-selection logs behind:
 ## References
 
 - SSOT: `docs/reference/agents-ssot.md`
-- Runtime entrypoint: `packages/tts-elevenlabs/src/index.ts`
+- Runtime entrypoint: `packages/tts-provider-elevenlabs/src/index.ts`

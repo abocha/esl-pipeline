@@ -14,9 +14,9 @@ vi.mock('@esl-pipeline/notion-adapter', () => ({
   addOrReplaceAudioUnderStudyText: vi.fn().mockResolvedValue({ replaced: false, appended: true }),
 }));
 
-vi.mock('@esl-pipeline/tts-elevenlabs', async () => {
-  const actual = await vi.importActual<typeof import('@esl-pipeline/tts-elevenlabs')>(
-    '@esl-pipeline/tts-elevenlabs',
+vi.mock('@esl-pipeline/tts-core', async () => {
+  const actual = await vi.importActual<typeof import('@esl-pipeline/tts-core')>(
+    '@esl-pipeline/tts-core',
   );
   return {
     ...actual,
@@ -60,7 +60,7 @@ describe('orchestrator smoke', () => {
     await writeFile(mdPath, markdown.trim());
     await writeFile(audioPath, 'dummy audio');
 
-    const { buildStudyTextMp3 } = await import('@esl-pipeline/tts-elevenlabs');
+    const { buildStudyTextMp3 } = await import('@esl-pipeline/tts-core');
     vi.mocked(buildStudyTextMp3).mockResolvedValue({
       path: audioPath,
       hash: 'abc123',
@@ -166,7 +166,7 @@ describe('orchestrator smoke', () => {
     await writeFile(mdPath, okDoc);
     await writeFile(audioPath, 'dummy audio');
 
-    const { buildStudyTextMp3 } = await import('@esl-pipeline/tts-elevenlabs');
+    const { buildStudyTextMp3 } = await import('@esl-pipeline/tts-core');
     vi.mocked(buildStudyTextMp3).mockResolvedValue({
       path: audioPath,
       hash: 'abc123',
@@ -219,7 +219,7 @@ describe('orchestrator smoke', () => {
     await writeFile(mdPath, okDoc);
     await writeFile(audioPath, 'dummy audio');
 
-    const { buildStudyTextMp3 } = await import('@esl-pipeline/tts-elevenlabs');
+    const { buildStudyTextMp3 } = await import('@esl-pipeline/tts-core');
     vi.mocked(buildStudyTextMp3).mockResolvedValue({
       path: audioPath,
       hash: 'abc123',
@@ -259,7 +259,7 @@ describe('orchestrator smoke', () => {
     await writeFile(mdPath, okDoc);
     await writeFile(audioPath, 'dummy audio');
 
-    const { buildStudyTextMp3 } = await import('@esl-pipeline/tts-elevenlabs');
+    const { buildStudyTextMp3 } = await import('@esl-pipeline/tts-core');
     vi.mocked(buildStudyTextMp3).mockResolvedValue({
       path: audioPath,
       hash: 'abc123',

@@ -118,7 +118,7 @@ describe('buildDialogueHash', () => {
 describe('synthesizeDialogueChunk', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    delete process.env.ELEVENLABS_API_KEY;
+    delete process.env.ESL_TTS_PROVIDER_ELEVENLABS_API_KEY;
     delete process.env.ELEVENLABS_API_TOKEN;
   });
 
@@ -128,7 +128,7 @@ describe('synthesizeDialogueChunk', () => {
 
     const chunk: DialogueInput[] = [{ text: 'Hello', voiceId: 'voice1' }];
     await expect(synthesizeDialogueChunk(chunk, { inputs: chunk }, '')).rejects.toThrow(
-      'Missing ELEVENLABS_API_KEY',
+      'Missing ESL_TTS_PROVIDER_ELEVENLABS_API_KEY',
     );
   });
 
@@ -198,7 +198,7 @@ describe('synthesizeDialogue', () => {
 
   beforeEach(async () => {
     vi.clearAllMocks();
-    process.env.ELEVENLABS_SILENCE_TAIL_SECONDS = '0';
+    process.env.ESL_TTS_PROVIDER_ELEVENLABS_SILENCE_TAIL_SECONDS = '0';
     tempDir = await mkdtemp(join(tmpdir(), 'dialogue-test-'));
     vi.spyOn(ffmpeg, 'concatMp3Segments').mockImplementation(async (_segments, outFile) => {
       await writeFile(outFile, 'concatenated-audio');
@@ -207,7 +207,7 @@ describe('synthesizeDialogue', () => {
 
   afterEach(async () => {
     vi.restoreAllMocks();
-    delete process.env.ELEVENLABS_SILENCE_TAIL_SECONDS;
+    delete process.env.ESL_TTS_PROVIDER_ELEVENLABS_SILENCE_TAIL_SECONDS;
     await rm(tempDir, { recursive: true, force: true });
   });
 

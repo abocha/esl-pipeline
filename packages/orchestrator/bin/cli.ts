@@ -91,7 +91,7 @@ const usage = (): never => {
   console.error(`Usage:
   esl --md <file.md> [options]                        
       --interactive             Launch guided wizard for missing flags
-      --with-tts                Generate ElevenLabs audio
+      --with-tts                Generate TTS audio
       --accent <name>           Preferred voice accent (american, british, etc.)
       --upload s3               Upload audio to S3 (requires --with-tts)
       --skip-import             Reuse existing Notion page from manifest
@@ -124,6 +124,8 @@ interface RunFlags {
   presetsPath?: string;
   accentPreference?: string;
   withTts: boolean;
+  ttsProvider?: 'elevenlabs' | 'google';
+  googleTtsModel?: 'chirp3_hd' | 'studio' | 'neural2' | 'wavenet';
   ttsStrategy?: 'auto' | 'dialogue' | 'tts';
   dialogueLanguage?: string;
   dialogueStability?: number;
@@ -173,6 +175,12 @@ const parseRunFlags = async (args: string[]): Promise<RunFlags> => {
     .option('--presets-path <path>', 'Path to presets JSON')
     .option('--accent <name>', 'Preferred voice accent')
     .option('--with-tts', 'Generate ElevenLabs audio')
+    .option('--tts-provider <provider>', 'TTS provider (elevenlabs|google)', parseTtsProviderOption)
+    .option(
+      '--google-tts-model <model>',
+      'Google TTS model family (chirp3_hd|studio|neural2|wavenet)',
+      parseGoogleTtsModelOption,
+    )
     .option('--tts-strategy <strategy>', 'TTS strategy (auto|dialogue|tts)', (value) => {
       const allowed = ['auto', 'dialogue', 'tts'] as const;
       if (!allowed.includes(value as (typeof allowed)[number])) {
@@ -220,6 +228,8 @@ const parseRunFlags = async (args: string[]): Promise<RunFlags> => {
     presetsPath?: string;
     accent?: string;
     withTts?: boolean;
+    ttsProvider?: RunFlags['ttsProvider'];
+    googleTtsModel?: RunFlags['googleTtsModel'];
     ttsStrategy?: RunFlags['ttsStrategy'];
     dialogueLanguage?: string;
     dialogueStability?: number;
@@ -250,6 +260,8 @@ const parseRunFlags = async (args: string[]): Promise<RunFlags> => {
     presetsPath: opts.presetsPath,
     accentPreference: opts.accent,
     withTts: Boolean(opts.withTts),
+    ttsProvider: opts.ttsProvider,
+    googleTtsModel: opts.googleTtsModel,
     ttsStrategy: opts.ttsStrategy,
     dialogueLanguage: opts.dialogueLanguage,
     dialogueStability: opts.dialogueStability,
@@ -298,6 +310,31 @@ const parseUploadOption = (value: string): 's3' => {
     throw new InvalidOptionArgumentError('Upload must be "s3".');
   }
   return 's3';
+};
+
+const parseTtsProviderOption = (value: string): 'elevenlabs' | 'google' => {
+  const normalized = value.trim().toLowerCase();
+  if (normalized === 'elevenlabs' || normalized === 'google') {
+    return normalized;
+  }
+  throw new InvalidOptionArgumentError(
+    'TTS provider must be one of: elevenlabs, google.',
+  );
+};
+
+const parseGoogleTtsModelOption = (
+  value: string,
+): 'chirp3_hd' | 'studio' | 'neural2' | 'wavenet' => {
+  const normalized = value.trim().toLowerCase().replaceAll(/[^a-z0-9]+/g, '_');
+  if (normalized === 'chirp3hd' || normalized === 'chirp_3_hd' || normalized === 'chirp3_hd') {
+    return 'chirp3_hd';
+  }
+  if (normalized === 'studio' || normalized === 'neural2' || normalized === 'wavenet') {
+    return normalized as 'studio' | 'neural2' | 'wavenet';
+  }
+  throw new InvalidOptionArgumentError(
+    'Google TTS model must be one of: chirp3_hd, studio, neural2, wavenet.',
+  );
 };
 
 const parseRerunSteps = (value: string): RerunStep[] => {
@@ -669,6 +706,8 @@ const outputRunSummary = (
   if (flags.student) console.log(`  Student  : ${flags.student}`);
   if (flags.preset) console.log(`  Preset   : ${flags.preset}`);
   if (flags.accentPreference) console.log(`  Accent   : ${flags.accentPreference}`);
+  if (flags.ttsProvider) console.log(`  Provider : ${flags.ttsProvider}`);
+  if (flags.googleTtsModel) console.log(`  GCP Model: ${flags.googleTtsModel}`);
   console.log(`  Steps    : ${result.steps.join(', ')}`);
   if (result.manifestPath) console.log(`  Manifest : ${resolve(result.manifestPath)}`);
   if (result.pageUrl) console.log(`  Page URL : ${result.pageUrl}`);
@@ -737,6 +776,12 @@ const parseRerunFlags = async (args: string[]): Promise<ParsedRerunFlags> => {
     .option('--plan', 'Show rerun execution plan without running stages')
     .option('--voices <file>', 'Voice map file (YAML/JSON)')
     .option('--voice-id <id>', 'Preferred voice ID override')
+    .option('--tts-provider <provider>', 'TTS provider (elevenlabs|google)', parseTtsProviderOption)
+    .option(
+      '--google-tts-model <model>',
+      'Google TTS model family (chirp3_hd|studio|neural2|wavenet)',
+      parseGoogleTtsModelOption,
+    )
     .option('--out <dir>', 'Output directory for artifacts')
     .option('--force', 'Force overwrite existing artifacts')
     .option('--dry-run', 'Skip writes to remote services')
@@ -776,6 +821,8 @@ const parseRerunFlags = async (args: string[]): Promise<ParsedRerunFlags> => {
       to?: RerunStep;
       plan?: boolean;
       voiceId?: string;
+      ttsProvider?: RerunFlags['ttsProvider'];
+      googleTtsModel?: RerunFlags['googleTtsModel'];
       accent?: string;
       ttsStrategy?: RerunFlags['ttsStrategy'];
       dialogueLanguage?: string;
@@ -793,6 +840,8 @@ const parseRerunFlags = async (args: string[]): Promise<ParsedRerunFlags> => {
     planOnly: Boolean(opts.plan),
     voices: opts.voices,
     voiceId: opts.voiceId,
+    ttsProvider: opts.ttsProvider,
+    googleTtsModel: opts.googleTtsModel,
     out: opts.out,
     force: Boolean(opts.force),
     dryRun: Boolean(opts.dryRun),
@@ -843,6 +892,8 @@ async function handleRerun(args: string[]): Promise<void> {
     presign: rerunFlags.presign,
     accentPreference: rerunFlags.accentPreference,
     voiceId: rerunFlags.voiceId,
+    ttsProvider: rerunFlags.ttsProvider,
+    googleTtsModel: rerunFlags.googleTtsModel,
     ttsStrategy: rerunFlags.ttsStrategy,
     dialogueLanguage: rerunFlags.dialogueLanguage,
     dialogueStability: rerunFlags.dialogueStability,
@@ -912,7 +963,7 @@ const stageLabels: Record<AssignmentStage, string> = {
   validate: 'Validating markdown',
   import: 'Importing into Notion',
   colorize: 'Applying heading preset',
-  tts: 'Generating ElevenLabs audio',
+  tts: 'Generating TTS audio',
   upload: 'Uploading audio',
   'add-audio': 'Attaching audio in Notion',
   manifest: 'Writing manifest',
@@ -998,6 +1049,8 @@ async function handleRun(args: string[]): Promise<void> {
         },
       );
       assignmentFlags = wizardResult.flags;
+      if (parsed.ttsProvider) assignmentFlags.ttsProvider = parsed.ttsProvider;
+      if (parsed.googleTtsModel) assignmentFlags.googleTtsModel = parsed.googleTtsModel;
       wizardSelections = wizardResult.selections;
     } catch (error) {
       if (error instanceof WizardAbortedError) {
@@ -1016,6 +1069,8 @@ async function handleRun(args: string[]): Promise<void> {
       presetsPath: parsed.presetsPath ?? undefined,
       accentPreference: parsed.accentPreference ?? undefined,
       withTts: parsed.withTts ? true : undefined,
+      ttsProvider: parsed.ttsProvider ?? undefined,
+      googleTtsModel: parsed.googleTtsModel ?? undefined,
       ttsStrategy: parsed.ttsStrategy ?? undefined,
       dialogueLanguage: parsed.dialogueLanguage ?? undefined,
       dialogueStability: parsed.dialogueStability ?? undefined,
@@ -1055,6 +1110,8 @@ async function handleRun(args: string[]): Promise<void> {
   logger.info('Starting assignment pipeline', {
     md: appliedFlags.md,
     withTts: Boolean(appliedFlags.withTts),
+    ttsProvider: appliedFlags.ttsProvider,
+    googleTtsModel: appliedFlags.googleTtsModel,
     upload: appliedFlags.upload ?? 'none',
   });
 
@@ -1105,6 +1162,8 @@ async function handleRun(args: string[]): Promise<void> {
       presetsPath: appliedFlags.presetsPath,
       accentPreference: appliedFlags.accentPreference,
       withTts: Boolean(appliedFlags.withTts),
+      ttsProvider: appliedFlags.ttsProvider,
+      googleTtsModel: appliedFlags.googleTtsModel,
       upload: appliedFlags.upload,
       presign: appliedFlags.presign,
       publicRead: Boolean(appliedFlags.publicRead),
