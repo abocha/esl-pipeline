@@ -7,11 +7,13 @@ import {
   ConfigurationError,
   InfrastructureError,
   ValidationError,
+  normalizeSpeakerRole,
   type VoiceProviderErrorCategory,
   noopLogger,
 } from '@esl-pipeline/contracts';
 import {
   type Frontmatter,
+  type SpeakerProfile,
   extractFrontmatter,
   extractPronunciationShadowFocus,
   extractStudyText,
@@ -32,11 +34,14 @@ import {
 } from '@esl-pipeline/tts-core';
 
 import { concatMp3Segments, resolveFfmpegPath, setMp3TitleMetadata, synthSilenceMp3 } from './ffmpeg.js';
-import { synthesizeGoogleSpeech } from './google.js';
+import { listGoogleVoices, synthesizeGoogleSpeech, type GoogleVoiceListEntry } from './google.js';
 
 const GOOGLE_TTS_BYTE_LIMIT = 5000;
 const GOOGLE_TTS_MODEL_FAMILIES = ['chirp3_hd', 'studio', 'neural2', 'wavenet'] as const;
 const DEFAULT_GOOGLE_TTS_MODEL: GoogleTtsModel = 'chirp3_hd';
+const GOOGLE_VOICE_CATALOG_TTL_MS = 15 * 60 * 1000;
+const CANONICAL_ROLE = ['narrator', 'teacher', 'student', 'system'] as const;
+const CANONICAL_AGE = ['child', 'teen', 'young', 'adult', 'middle_aged', 'senior', 'universal'] as const;
 
 const DEFAULT_GOOGLE_VOICE_BY_MODEL: Record<GoogleTtsModel, string> = {
   chirp3_hd: 'en-US-Chirp3-HD-Charon',
@@ -58,13 +63,39 @@ interface StudyTextSegment {
 interface GoogleSpeakerAssignment {
   speaker: string;
   voiceName: string;
-  source: BuildStudyTextResult['voices'][number]['source'];
+  source: SpeakerVoiceAssignment['source'];
+  catalogVoice: GoogleCatalogVoice;
+  score?: number;
+  selectionReason: string;
+  capabilityMatches?: string[];
+  capabilityMismatches?: string[];
 }
 
 interface ResolvedVoiceLanguage {
   voiceName: string;
   languageCode: string;
 }
+
+interface GoogleCatalogVoice {
+  name: string;
+  modelFamily: GoogleTtsModel;
+  locale: string;
+  language: string;
+  gender: 'male' | 'female' | 'neutral';
+  accent: string;
+}
+
+interface GoogleCatalogSnapshot {
+  generatedAt: string;
+  voices: GoogleCatalogVoice[];
+}
+
+interface GoogleCatalogCacheEntry {
+  expiresAtMs: number;
+  snapshot: GoogleCatalogSnapshot;
+}
+
+let googleCatalogCache: GoogleCatalogCacheEntry | null = null;
 
 const MARKDOWN_STRIPPERS: [RegExp, string][] = [
   [/\r?\n/g, ' '],
@@ -162,25 +193,382 @@ function normalizeVoiceMapToken(value: unknown): string | undefined {
   return trimmed.length > 0 ? trimmed : undefined;
 }
 
+function normalizeSpeakerToken(value: string | undefined | null): string {
+  return (value ?? '')
+    .trim()
+    .toLowerCase()
+    .replaceAll(/[*_`~>#]/g, '')
+    .replaceAll(/\s+/g, ' ')
+    .replaceAll(/[:：]+$/g, '')
+    .trim();
+}
+
+function normalizeAccentToken(value: string | undefined): string | undefined {
+  if (!value) return undefined;
+  const normalized = value.trim().toLowerCase().replaceAll(/[\s-]+/g, '_');
+  if (!normalized) return undefined;
+  if (normalized.includes('american') || normalized === 'us') return 'american';
+  if (normalized.includes('british') || normalized === 'uk') return 'british';
+  if (normalized.includes('australian') || normalized === 'au') return 'australian';
+  if (normalized.includes('indian') || normalized === 'in') return 'indian';
+  if (normalized.includes('canadian') || normalized === 'ca') return 'canadian';
+  if (normalized.includes('irish') || normalized === 'ie') return 'irish';
+  if (normalized.includes('south_african') || normalized === 'za') return 'south_african';
+  return normalized;
+}
+
+function normalizeLanguageCodeToken(value: string): string {
+  const [langRaw, localeRaw] = value.trim().split('-', 2);
+  if (!langRaw || !localeRaw) return value.trim();
+  return `${langRaw.toLowerCase()}-${localeRaw.toUpperCase()}`;
+}
+
+function inferLocaleFromVoiceName(voiceName: string): string | undefined {
+  const match = /^([a-z]{2,3}-[A-Z]{2,3})-/.exec(voiceName.trim());
+  return match ? normalizeLanguageCodeToken(match[1] ?? '') : undefined;
+}
+
+function extractEnglishLocales(languageCodes: readonly string[], voiceName: string): string[] {
+  const locales = new Set<string>();
+  for (const raw of languageCodes) {
+    const code = normalizeLanguageCodeToken(raw);
+    if (code.toLowerCase().startsWith('en-')) {
+      locales.add(code);
+    }
+  }
+  const inferred = inferLocaleFromVoiceName(voiceName);
+  if (inferred?.toLowerCase().startsWith('en-')) {
+    locales.add(inferred);
+  }
+  return [...locales].sort((a, b) => a.localeCompare(b));
+}
+
+function resolveModelFamilyFromVoiceName(voiceName: string): GoogleTtsModel | undefined {
+  const name = voiceName.toLowerCase();
+  if (name.includes('-chirp3-hd-')) return 'chirp3_hd';
+  if (name.includes('-studio-')) return 'studio';
+  if (name.includes('-neural2-')) return 'neural2';
+  if (name.includes('-wavenet-')) return 'wavenet';
+  return undefined;
+}
+
+function normalizeGoogleGender(value: string | undefined): 'male' | 'female' | 'neutral' {
+  const normalized = (value ?? '').trim().toLowerCase();
+  if (normalized.includes('female')) return 'female';
+  if (normalized.includes('male')) return 'male';
+  return 'neutral';
+}
+
+function deriveAccentFromLocale(locale: string): string {
+  const normalized = locale.trim().toUpperCase();
+  if (normalized.endsWith('-US')) return 'american';
+  if (normalized.endsWith('-GB')) return 'british';
+  if (normalized.endsWith('-AU')) return 'australian';
+  if (normalized.endsWith('-IN')) return 'indian';
+  if (normalized.endsWith('-CA')) return 'canadian';
+  if (normalized.endsWith('-IE')) return 'irish';
+  if (normalized.endsWith('-ZA')) return 'south_african';
+  return normalized.toLowerCase().replaceAll('-', '_');
+}
+
+function buildFallbackGoogleCatalogSnapshot(): GoogleCatalogSnapshot {
+  const generatedAt = new Date().toISOString();
+  const fallbackVoices: GoogleCatalogVoice[] = GOOGLE_TTS_MODEL_FAMILIES.map((modelFamily) => {
+    const name = resolveGoogleDefaultVoice(modelFamily);
+    const locale = inferLocaleFromVoiceName(name) ?? 'en-US';
+    return {
+      name,
+      modelFamily,
+      locale,
+      language: locale.split('-')[0] ?? 'en',
+      gender: 'neutral',
+      accent: deriveAccentFromLocale(locale),
+    };
+  });
+  return { generatedAt, voices: fallbackVoices };
+}
+
+function buildGoogleCatalogSnapshotFromList(rawVoices: readonly GoogleVoiceListEntry[]): GoogleCatalogSnapshot {
+  const normalized: GoogleCatalogVoice[] = [];
+  for (const raw of rawVoices) {
+    const name = raw.name.trim();
+    if (!name) continue;
+    const modelFamily = resolveModelFamilyFromVoiceName(name);
+    if (!modelFamily) continue;
+    const locales = extractEnglishLocales(raw.languageCodes, name);
+    if (locales.length === 0) continue;
+    for (const locale of locales) {
+      normalized.push({
+        name,
+        modelFamily,
+        locale,
+        language: (locale.split('-')[0] ?? 'en').toLowerCase(),
+        gender: normalizeGoogleGender(raw.ssmlGender),
+        accent: deriveAccentFromLocale(locale),
+      });
+    }
+  }
+
+  normalized.sort(
+    (a, b) =>
+      a.modelFamily.localeCompare(b.modelFamily) ||
+      a.locale.localeCompare(b.locale) ||
+      a.name.localeCompare(b.name),
+  );
+
+  if (normalized.length === 0) {
+    return buildFallbackGoogleCatalogSnapshot();
+  }
+
+  return {
+    generatedAt: new Date().toISOString(),
+    voices: normalized,
+  };
+}
+
+async function loadGoogleCatalogSnapshot(): Promise<GoogleCatalogSnapshot> {
+  const now = Date.now();
+  if (googleCatalogCache && now < googleCatalogCache.expiresAtMs) {
+    return googleCatalogCache.snapshot;
+  }
+
+  try {
+    const apiEndpoint = resolveGoogleApiEndpoint();
+    const rawVoices = await listGoogleVoices(apiEndpoint ? { apiEndpoint } : undefined);
+    const snapshot = buildGoogleCatalogSnapshotFromList(rawVoices);
+    googleCatalogCache = {
+      expiresAtMs: now + GOOGLE_VOICE_CATALOG_TTL_MS,
+      snapshot,
+    };
+    return snapshot;
+  } catch {
+    const snapshot = buildFallbackGoogleCatalogSnapshot();
+    googleCatalogCache = {
+      expiresAtMs: now + GOOGLE_VOICE_CATALOG_TTL_MS,
+      snapshot,
+    };
+    return snapshot;
+  }
+}
+
+function buildVoiceLookupByName(snapshot: GoogleCatalogSnapshot): Map<string, GoogleCatalogVoice[]> {
+  const lookup = new Map<string, GoogleCatalogVoice[]>();
+  for (const voice of snapshot.voices) {
+    const list = lookup.get(voice.name) ?? [];
+    list.push(voice);
+    lookup.set(voice.name, list);
+  }
+  return lookup;
+}
+
 function resolveGoogleVoiceMapValue(voiceMap: VoiceMapConfig, speaker: string): string | undefined {
   const direct = normalizeVoiceMapToken((voiceMap as Record<string, unknown>)[speaker]);
   if (direct) return direct;
 
-  const normalizedSpeaker = speaker.trim().toLowerCase();
-  const entry = Object.entries(voiceMap).find(([key]) => key.trim().toLowerCase() === normalizedSpeaker);
+  const normalizedSpeaker = normalizeSpeakerToken(speaker);
+  const entry = Object.entries(voiceMap).find(
+    ([key]) => normalizeSpeakerToken(key) === normalizedSpeaker,
+  );
   return entry ? normalizeVoiceMapToken(entry[1]) : undefined;
 }
 
-function resolveGoogleSpeakerVoiceName(
-  voiceMap: VoiceMapConfig,
+function findSpeakerProfile(
+  profiles: SpeakerProfile[] | undefined,
   speaker: string,
-  providerDefaultVoice: string,
-): { voiceName: string; source: BuildStudyTextResult['voices'][number]['source'] } {
-  const explicit = resolveGoogleVoiceMapValue(voiceMap, speaker);
-  if (explicit) return { voiceName: explicit, source: 'voiceMap' };
-  const fromDefault = normalizeVoiceMapToken(voiceMap.default);
-  if (fromDefault) return { voiceName: fromDefault, source: 'default' };
-  return { voiceName: providerDefaultVoice, source: 'auto' };
+): SpeakerProfile | undefined {
+  if (!profiles?.length) return undefined;
+  const exactId = profiles.find((profile) => profile.id === speaker);
+  if (exactId) return exactId;
+  const exactDisplay = profiles.find((profile) => profile.display_name === speaker);
+  if (exactDisplay) return exactDisplay;
+  const normalizedSpeaker = normalizeSpeakerToken(speaker);
+  return profiles.find(
+    (profile) =>
+      normalizeSpeakerToken(profile.id) === normalizedSpeaker ||
+      normalizeSpeakerToken(profile.display_name ?? '') === normalizedSpeaker,
+  );
+}
+
+function guessGenderFromName(name: string): 'male' | 'female' | 'neutral' {
+  const normalized = normalizeSpeakerToken(name);
+  if (!normalized) return 'neutral';
+  if (/[ae]$/.test(normalized) || /(anna|maria|olga|sofia|eva|lisa|emma)$/.test(normalized)) {
+    return 'female';
+  }
+  if (/(alex|john|mike|jack|dan|peter|paul|martin)$/.test(normalized)) {
+    return 'male';
+  }
+  return 'neutral';
+}
+
+function resolveVoiceFromToken(
+  token: string,
+  voiceLookupByName: Map<string, GoogleCatalogVoice[]>,
+): GoogleCatalogVoice | undefined {
+  const trimmed = token.trim();
+  if (!trimmed) return undefined;
+  const exact = voiceLookupByName.get(trimmed)?.[0];
+  if (exact) return exact;
+  const lower = trimmed.toLowerCase();
+  for (const [name, voices] of voiceLookupByName.entries()) {
+    if (name.toLowerCase() === lower) {
+      return voices[0];
+    }
+  }
+  return undefined;
+}
+
+function describeSupportedVoicesForModelFamily(
+  modelFamily: GoogleTtsModel,
+  voices: readonly GoogleCatalogVoice[],
+): string {
+  const sample = voices
+    .filter((voice) => voice.modelFamily === modelFamily)
+    .slice(0, 8)
+    .map((voice) => voice.name);
+  if (sample.length === 0) return '(none)';
+  return sample.join(', ');
+}
+
+function buildGoogleSelectionReason(source: SpeakerVoiceAssignment['source']): string {
+  switch (source) {
+    case 'profile': {
+      return 'Selected from speaker_profiles.voice override.';
+    }
+    case 'voiceMap': {
+      return 'Selected from voices.yml explicit speaker mapping.';
+    }
+    case 'default': {
+      return 'Selected from voices.yml default mapping.';
+    }
+    case 'fallback': {
+      return 'Selected from fallback pool after heuristic scoring.';
+    }
+    case 'reuse': {
+      return 'Selected by controlled reuse fallback.';
+    }
+    default: {
+      return 'Selected by Google capability-aware heuristic scoring.';
+    }
+  }
+}
+
+function buildGoogleCapabilityDiagnostics(
+  profile: SpeakerProfile | undefined,
+  voice: GoogleCatalogVoice,
+): Pick<GoogleSpeakerAssignment, 'capabilityMatches' | 'capabilityMismatches'> {
+  if (!profile) {
+    return {};
+  }
+
+  const matches: string[] = [];
+  const mismatches: string[] = [];
+  const expectedGender =
+    typeof profile.gender === 'string' ? profile.gender.trim().toLowerCase() : undefined;
+  const expectedAccent = normalizeAccentToken(
+    typeof profile.accent === 'string' ? profile.accent : undefined,
+  );
+  const normalizedRole = normalizeSpeakerRole(profile.role);
+  const expectedStyle =
+    typeof profile.style === 'string' ? profile.style.trim().toLowerCase() : undefined;
+
+  if (expectedGender && expectedGender !== 'neutral') {
+    if (voice.gender === expectedGender) {
+      matches.push(`gender: ${expectedGender}`);
+    } else {
+      mismatches.push(`gender: expected "${expectedGender}" got "${voice.gender}"`);
+    }
+  }
+
+  if (expectedAccent) {
+    if (voice.accent === expectedAccent) {
+      matches.push(`accent: ${expectedAccent}`);
+    } else {
+      mismatches.push(`accent: expected "${expectedAccent}" got "${voice.accent}"`);
+    }
+  }
+
+  if (normalizedRole) {
+    matches.push(`role: ${normalizedRole}`);
+  }
+  if (expectedStyle) {
+    matches.push(`style: ${expectedStyle}`);
+  }
+
+  return {
+    capabilityMatches: matches.length > 0 ? matches : undefined,
+    capabilityMismatches: mismatches.length > 0 ? mismatches : undefined,
+  };
+}
+
+function assertVoiceInSelectedModelFamily(args: {
+  voice: GoogleCatalogVoice;
+  modelFamily: GoogleTtsModel;
+  source: SpeakerVoiceAssignment['source'];
+  speaker?: string;
+  availableVoices: readonly GoogleCatalogVoice[];
+}): void {
+  if (args.voice.modelFamily === args.modelFamily) return;
+  const speakerSuffix = args.speaker ? ` for speaker "${args.speaker}"` : '';
+  const supported = describeSupportedVoicesForModelFamily(args.modelFamily, args.availableVoices);
+  throw new ConfigurationError(
+    `Google voice "${args.voice.name}"${speakerSuffix} is ${args.voice.modelFamily}, but selected model family is ${args.modelFamily}. ` +
+      `Update ${args.source === 'profile' ? 'speaker_profiles.voice' : 'voices.yml/default voice'} to a ${args.modelFamily} voice, or change googleTtsModel. ` +
+      `Sample ${args.modelFamily} voices: ${supported}`,
+  );
+}
+
+function scoreGoogleVoiceCandidate(args: {
+  speaker: string;
+  voice: GoogleCatalogVoice;
+  profile: SpeakerProfile | undefined;
+  defaultAccent?: string;
+}): number {
+  const profileGender =
+    typeof args.profile?.gender === 'string' ? args.profile.gender.trim().toLowerCase() : undefined;
+  const preferredGender =
+    profileGender && profileGender !== 'neutral' ? profileGender : guessGenderFromName(args.speaker);
+  const preferredAccent = normalizeAccentToken(
+    typeof args.profile?.accent === 'string' ? args.profile.accent : args.defaultAccent,
+  );
+
+  let score = 0;
+  if (preferredGender && preferredGender !== 'neutral') {
+    if (args.voice.gender === preferredGender) {
+      score += 45;
+    } else {
+      score -= 20;
+    }
+  }
+
+  if (preferredAccent) {
+    if (args.voice.accent === preferredAccent) {
+      score += 35;
+    } else {
+      score -= 8;
+    }
+  }
+
+  const role = normalizeSpeakerRole(args.profile?.role);
+  if (role === 'narrator') {
+    score += args.voice.gender === 'female' ? 6 : 3;
+  } else if (role === 'teacher') {
+    score += 2;
+  }
+
+  const style = typeof args.profile?.style === 'string' ? args.profile.style.trim().toLowerCase() : '';
+  if (style.includes('narrat') && args.voice.gender === 'female') {
+    score += 2;
+  }
+  if (style.includes('convers') && args.voice.gender !== 'neutral') {
+    score += 1;
+  }
+
+  return score;
+}
+
+export function resetGoogleVoiceCatalogCacheForTests(): void {
+  googleCatalogCache = null;
 }
 
 function cleanSpeechText(text: string): string {
@@ -471,18 +859,149 @@ async function resolveStudyTextPlan(
   const normalizedText = sanitizedSegments.join('\n');
 
   const modelFamily = resolveGoogleTtsModel(opts.googleTtsModel);
-  const providerDefaultVoice = resolveGoogleDefaultVoice(modelFamily);
-  const defaultVoice = opts.defaultVoiceId?.trim() || providerDefaultVoice;
+  const catalogSnapshot = await loadGoogleCatalogSnapshot();
+  const voiceLookupByName = buildVoiceLookupByName(catalogSnapshot);
+  const modelVoices = catalogSnapshot.voices.filter((voice) => voice.modelFamily === modelFamily);
+  if (modelVoices.length === 0) {
+    throw new ConfigurationError(
+      `No Google voices are available for model family "${modelFamily}" in english locales.`,
+    );
+  }
+
+  const providerDefaultVoiceName = resolveGoogleDefaultVoice(modelFamily);
+  const providerDefaultVoice =
+    resolveVoiceFromToken(providerDefaultVoiceName, voiceLookupByName) ?? modelVoices[0]!;
+
   const voiceMap = await loadVoiceMap(opts.voiceMapPath);
   if (opts.defaultVoiceId) {
     voiceMap.default = opts.defaultVoiceId;
   }
 
   const speakers = collectSpeakers(segments, frontmatter);
-  const speakerAssignments = speakers.map((speaker) => {
-    const resolved = resolveGoogleSpeakerVoiceName(voiceMap, speaker, defaultVoice);
-    return { speaker, voiceName: resolved.voiceName, source: resolved.source };
-  });
+  const speakerAssignments: GoogleSpeakerAssignment[] = [];
+  const usedAutoVoices = new Set<string>();
+
+  for (const speaker of speakers) {
+    const profile = findSpeakerProfile(frontmatter.speaker_profiles, speaker);
+    const explicitProfileToken = normalizeVoiceMapToken(profile?.voice);
+    const explicitVoiceMapToken = resolveGoogleVoiceMapValue(voiceMap, speaker);
+    const explicitDefaultToken = normalizeVoiceMapToken(voiceMap.default);
+
+    const assignResolvedVoice = (args: {
+      voice: GoogleCatalogVoice;
+      source: SpeakerVoiceAssignment['source'];
+      score?: number;
+      profile: SpeakerProfile | undefined;
+    }) => {
+      const diagnostics = buildGoogleCapabilityDiagnostics(args.profile, args.voice);
+      speakerAssignments.push({
+        speaker,
+        voiceName: args.voice.name,
+        source: args.source,
+        catalogVoice: args.voice,
+        score: args.score,
+        selectionReason: buildGoogleSelectionReason(args.source),
+        capabilityMatches: diagnostics.capabilityMatches,
+        capabilityMismatches: diagnostics.capabilityMismatches,
+      });
+    };
+
+    if (explicitProfileToken) {
+      const resolved = resolveVoiceFromToken(explicitProfileToken, voiceLookupByName);
+      if (!resolved) {
+        throw new ConfigurationError(
+          `Google voice "${explicitProfileToken}" from speaker_profiles.voice for "${speaker}" ` +
+            `does not exist in the current Google english voice catalog.`,
+        );
+      }
+      assertVoiceInSelectedModelFamily({
+        voice: resolved,
+        modelFamily,
+        source: 'profile',
+        speaker,
+        availableVoices: catalogSnapshot.voices,
+      });
+      assignResolvedVoice({ voice: resolved, source: 'profile', profile });
+      usedAutoVoices.add(resolved.name);
+      continue;
+    }
+
+    if (explicitVoiceMapToken) {
+      const resolved = resolveVoiceFromToken(explicitVoiceMapToken, voiceLookupByName);
+      if (!resolved) {
+        throw new ConfigurationError(
+          `Google voice "${explicitVoiceMapToken}" from voices.yml mapping for "${speaker}" ` +
+            `does not exist in the current Google english voice catalog.`,
+        );
+      }
+      assertVoiceInSelectedModelFamily({
+        voice: resolved,
+        modelFamily,
+        source: 'voiceMap',
+        speaker,
+        availableVoices: catalogSnapshot.voices,
+      });
+      assignResolvedVoice({ voice: resolved, source: 'voiceMap', profile });
+      usedAutoVoices.add(resolved.name);
+      continue;
+    }
+
+    if (explicitDefaultToken) {
+      const resolved = resolveVoiceFromToken(explicitDefaultToken, voiceLookupByName);
+      if (!resolved) {
+        throw new ConfigurationError(
+          `Google voice "${explicitDefaultToken}" from voices.yml default does not exist in the current Google english voice catalog.`,
+        );
+      }
+      assertVoiceInSelectedModelFamily({
+        voice: resolved,
+        modelFamily,
+        source: 'default',
+        speaker,
+        availableVoices: catalogSnapshot.voices,
+      });
+      assignResolvedVoice({ voice: resolved, source: 'default', profile });
+      usedAutoVoices.add(resolved.name);
+      continue;
+    }
+
+    const scoredCandidates = modelVoices
+      .map((voice) => ({
+        voice,
+        score: scoreGoogleVoiceCandidate({
+          speaker,
+          voice,
+          profile,
+          defaultAccent: opts.defaultAccent,
+        }),
+      }))
+      .sort(
+        (a, b) =>
+          b.score - a.score ||
+          a.voice.locale.localeCompare(b.voice.locale) ||
+          a.voice.name.localeCompare(b.voice.name),
+      );
+
+    const preferred = scoredCandidates.find((candidate) => !usedAutoVoices.has(candidate.voice.name));
+    const selected = preferred ?? scoredCandidates[0];
+    if (!selected) {
+      assignResolvedVoice({ voice: providerDefaultVoice, source: 'reuse', profile });
+      usedAutoVoices.add(providerDefaultVoice.name);
+      continue;
+    }
+
+    const source: SpeakerVoiceAssignment['source'] = preferred
+      ? (selected.score > 0 ? 'auto' : 'fallback')
+      : 'reuse';
+
+    assignResolvedVoice({
+      voice: selected.voice,
+      source,
+      score: source === 'auto' ? selected.score : undefined,
+      profile,
+    });
+    usedAutoVoices.add(selected.voice.name);
+  }
 
   const voiceAssignments = Object.fromEntries(
     speakerAssignments.map((assignment) => [assignment.speaker, assignment.voiceName]),
@@ -492,6 +1011,14 @@ async function resolveStudyTextPlan(
     speaker: assignment.speaker,
     voiceId: assignment.voiceName,
     source: assignment.source,
+    score: assignment.score,
+    voiceName: assignment.voiceName,
+    gender: assignment.catalogVoice.gender,
+    accent: assignment.catalogVoice.accent,
+    useCase: assignment.catalogVoice.modelFamily,
+    selectionReason: assignment.selectionReason,
+    capabilityMatches: assignment.capabilityMatches,
+    capabilityMismatches: assignment.capabilityMismatches,
   }));
 
   return {
@@ -950,42 +1477,48 @@ export async function buildPronunciationShadowSentenceMp3Google(
   };
 }
 
-function buildDefaultGoogleVoices(): { modelFamily: GoogleTtsModel; voiceName: string }[] {
-  return GOOGLE_TTS_MODEL_FAMILIES.map((modelFamily) => ({
-    modelFamily,
-    voiceName: resolveGoogleDefaultVoice(modelFamily),
-  }));
-}
-
 export async function loadGoogleVoicesCatalog(): Promise<VoiceCatalog> {
-  const now = new Date().toISOString();
-  const byVoiceName = new Map<string, { modelFamily: GoogleTtsModel; voiceName: string }>();
-  for (const entry of buildDefaultGoogleVoices()) {
-    if (!byVoiceName.has(entry.voiceName)) {
-      byVoiceName.set(entry.voiceName, entry);
+  const snapshot = await loadGoogleCatalogSnapshot();
+  const accents = new Set<string>();
+  const genders = new Set<'male' | 'female' | 'neutral'>();
+  const styles = new Set<GoogleTtsModel>();
+  const byVoiceName = new Map<string, GoogleCatalogVoice>();
+
+  for (const voice of snapshot.voices) {
+    accents.add(voice.accent);
+    genders.add(voice.gender);
+    styles.add(voice.modelFamily);
+    const existing = byVoiceName.get(voice.name);
+    if (!existing || voice.locale < existing.locale) {
+      byVoiceName.set(voice.name, voice);
     }
   }
 
   return {
-    generatedAt: now,
+    generatedAt: snapshot.generatedAt,
     capabilities: {
-      generatedAt: now,
+      generatedAt: snapshot.generatedAt,
       provider: 'google',
-      role: ['narration', 'dialogue', 'pronunciation'],
-      gender: ['female', 'male', 'neutral'],
-      accent: ['en-US'],
-      style: ['chirp3_hd', 'studio', 'neural2', 'wavenet'],
+      role: [...CANONICAL_ROLE],
+      gender: [...new Set(genders.size > 0 ? genders : ['female', 'male', 'neutral'])].sort(),
+      age: [...CANONICAL_AGE],
+      accent: [...accents].sort(),
+      style: [...styles].sort(),
     },
-    voices: [...byVoiceName.values()].map((entry) => ({
-      id: entry.voiceName,
-      name: entry.voiceName,
+    voices: [...byVoiceName.values()].map((voice) => ({
+      id: voice.name,
+      name: voice.name,
       category: 'google',
       labels: {
         provider: 'google',
-        model_family: entry.modelFamily,
+        model_family: voice.modelFamily,
+        locale: voice.locale,
+        language: voice.language,
+        gender: voice.gender,
+        accent: voice.accent,
       },
-      useCase: 'study_text',
-      verifiedLanguages: [{ language: 'en', locale: 'en-US' }],
+      useCase: voice.modelFamily,
+      verifiedLanguages: [{ language: voice.language, locale: voice.locale }],
     })),
   };
 }
@@ -998,7 +1531,11 @@ export async function resolveGoogleSpeakerAssignments(
   return plan.speakerAssignments.map((assignment) => ({
     speaker: assignment.speaker,
     voiceId: assignment.voiceName,
-    source: assignment.source as SpeakerVoiceAssignment['source'],
+    source: assignment.source,
+    score: assignment.score,
+    selectionReason: assignment.selectionReason,
+    capabilityMatches: assignment.capabilityMatches,
+    capabilityMismatches: assignment.capabilityMismatches,
   }));
 }
 

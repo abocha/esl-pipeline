@@ -15,6 +15,12 @@ export interface GoogleSynthesizeSpeechRequest {
   modelName?: string;
 }
 
+export interface GoogleVoiceListEntry {
+  name: string;
+  languageCodes: string[];
+  ssmlGender?: string;
+}
+
 function buildCacheKey(options?: GoogleTtsClientOptions): string {
   return options?.apiEndpoint?.trim() || 'default';
 }
@@ -60,4 +66,30 @@ export async function synthesizeGoogleSpeech(
   });
 
   return normalizeAudioContent(response.audioContent);
+}
+
+export async function listGoogleVoices(
+  options?: GoogleTtsClientOptions,
+): Promise<GoogleVoiceListEntry[]> {
+  const client = getGoogleTtsClient(options);
+  const [response] = await client.listVoices({});
+  const rawVoices = Array.isArray(response.voices) ? response.voices : [];
+  const voices: GoogleVoiceListEntry[] = [];
+  for (const voice of rawVoices) {
+    const name = typeof voice.name === 'string' ? voice.name.trim() : '';
+    if (!name) continue;
+    const languageCodes = Array.isArray(voice.languageCodes)
+      ? voice.languageCodes
+        .map((code) => (typeof code === 'string' ? code.trim() : ''))
+        .filter((code) => code.length > 0)
+      : [];
+    const ssmlGender =
+      typeof voice.ssmlGender === 'string' ? voice.ssmlGender.trim() : String(voice.ssmlGender ?? '').trim();
+    voices.push({
+      name,
+      languageCodes,
+      ssmlGender: ssmlGender.length > 0 ? ssmlGender : undefined,
+    });
+  }
+  return voices;
 }
