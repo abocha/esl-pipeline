@@ -443,14 +443,18 @@ function describeSupportedVoicesForModelFamily(
 
 function describeAccentTier(tier: GoogleAccentSelectionTier): string {
   switch (tier) {
-    case 'exact':
+    case 'exact': {
       return 'exact accent match';
-    case 'regional_close':
+    }
+    case 'regional_close': {
       return 'regional close accent fallback';
-    case 'en_us_fallback':
+    }
+    case 'en_us_fallback': {
       return 'en-US fallback';
-    case 'general_en':
+    }
+    case 'general_en': {
       return 'general en-* fallback';
+    }
   }
 }
 
