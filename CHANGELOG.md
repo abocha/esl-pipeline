@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented here. Dates use `YYYY-MM-DD`.
 
+## [3.0.0] - 2026-03-09
+
+### Changed
+
+- Automated release from PR #28: refactor(batch-backend): retire filesystem student profile runtime (https://github.com/abocha/esl-pipeline/pull/28)
+
 ## [2.0.2] - 2026-03-09
 
 ### Changed
