@@ -600,7 +600,9 @@ describeHttpServerIntegrationSuite(
   });
 
   it('GET /config/students maps db-required student store errors to 503', async () => {
-    const { StudentProfileStoreError } = await import('../src/application/student-profiles-store.js');
+    const { StudentProfileStoreError } = await vi.importActual<
+      typeof import('../src/application/student-profiles-store.js')
+    >('../src/application/student-profiles-store.js');
     mockListStudentProfiles.mockRejectedValueOnce(
       new StudentProfileStoreError(
         'Student profile APIs require Postgres (PG_ENABLED=true)',
