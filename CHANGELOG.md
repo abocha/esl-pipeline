@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented here. Dates use `YYYY-MM-DD`.
 
+## [2.0.1] - 2026-03-09
+
+### Changed
+
+- Automated release from PR #26: fix(orchestrator): finalize library-only boundary docs and guardrails (https://github.com/abocha/esl-pipeline/pull/26)
+
 ## [2.0.0] - 2026-03-09
 
 ### Changed
