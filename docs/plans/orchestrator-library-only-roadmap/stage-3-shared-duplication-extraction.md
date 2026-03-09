@@ -35,3 +35,17 @@ Eliminate drift by extracting duplicated domain-neutral helper logic into a shar
 1. Risk: subtle markdown rendering or insertion regressions.
 2. Mitigation: before/after golden fixtures and integration assertions in both packages.
 3. Rollback: revert consumer switch-over while keeping shared module isolated for further hardening.
+
+## Implementation Notes (Stage 3 Execution)
+
+1. Added canonical shared helper module:
+   - `packages/shared-infrastructure/src/publish/index.ts`
+   - exported through `packages/shared-infrastructure/src/index.ts`
+2. Switched orchestrator publish utility implementation to shared helpers while preserving orchestrator-local API signatures (`packages/orchestrator/src/runtime/publish-utils.ts`).
+3. Switched batch-backend preview helper logic to shared helpers through compatibility wrappers in `packages/batch-backend/src/transport/extended-routes.ts`.
+4. Added shared helper parity tests:
+   - `packages/shared-infrastructure/tests/publish.test.ts`
+5. Stage 3 parity validation run:
+   - shared-infrastructure unit tests,
+   - orchestrator publish/runtime integration tests,
+   - batch-backend preview integration suite.

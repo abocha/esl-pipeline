@@ -61,6 +61,7 @@ The following suites are required to stay green before entering Stage 2:
 ### Queue A: Extract Shared Markdown Publish Helpers
 
 - Scope: utility-level extraction only, no stage semantics move.
+- Status (2026-03-09): completed for markdown/publish helper set used by orchestrator runtime and batch-backend preview route.
 - Guardrails:
   - Keep orchestrator and backend behavior byte-for-byte equivalent during migration.
   - Add characterization tests in both packages before switch-over.
