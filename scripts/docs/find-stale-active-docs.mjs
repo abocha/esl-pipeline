@@ -10,6 +10,13 @@ const activeRoots = [
   'docs',
 ];
 
+const explicitIncludedDocs = [
+  'packages/orchestrator/README.md',
+  'packages/batch-backend/README.md',
+  'packages/batch-frontend/README.md',
+  'packages/provider-runtime/README.md',
+];
+
 const excludedPrefixes = [
   'docs/archive/',
   'docs/drafts/',
@@ -104,7 +111,16 @@ function collectMarkdownFiles() {
   for (const root of activeRoots) {
     walk(root, files);
   }
-  return files;
+
+  for (const relPath of explicitIncludedDocs) {
+    if (excludedPrefixes.some((prefix) => relPath.startsWith(prefix))) continue;
+    const absPath = path.join(repoRoot, relPath);
+    if (fs.existsSync(absPath) && relPath.endsWith('.md')) {
+      files.push(relPath);
+    }
+  }
+
+  return [...new Set(files)].sort((a, b) => a.localeCompare(b));
 }
 
 function walk(relDir, files) {

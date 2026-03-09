@@ -1,5 +1,14 @@
 # @esl-pipeline/provider-runtime
 
+## Meta
+
+- Audience: maintainers and implementing agents.
+- Authority Level: Package entrypoint and shared runtime policy guide.
+- Last Verified Against: 2026-03-09 repo state.
+- Owner: provider-runtime maintainers + automation agents.
+- Review Cadence: monthly or after major provider policy/runtime changes.
+- Status: `active`.
+
 Shared provider runtime utilities for generation-related policy and error handling.
 
 ## Purpose
