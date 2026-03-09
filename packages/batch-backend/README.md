@@ -1,5 +1,14 @@
 # @esl-pipeline/batch-backend
 
+## Meta
+
+- Audience: maintainers and implementing agents.
+- Authority Level: Package entrypoint and operational usage guide.
+- Last Verified Against: 2026-03-09 repo state.
+- Owner: batch-backend maintainers + automation agents.
+- Review Cadence: monthly or after major API/worker changes.
+- Status: `active`.
+
 Internal batch execution backend for the ESL Pipeline monorepo.
 
 `@esl-pipeline/batch-backend` exposes a small, stable HTTP and queue surface for running ESL pipeline assignments asynchronously. It wraps the canonical pipeline engine from [`@esl-pipeline/orchestrator`](../orchestrator/README.md) behind a durable job model backed by Postgres, Redis/BullMQ, and optional S3/MinIO-based manifest storage. Callers submit Markdown-based jobs and track their lifecycle via this service, while all domain behavior (validation, extraction, Notion, TTS, uploads) remains owned by the orchestrator.

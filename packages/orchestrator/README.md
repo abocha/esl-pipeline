@@ -1,5 +1,14 @@
 # @esl-pipeline/orchestrator
 
+## Meta
+
+- Audience: maintainers and implementing agents.
+- Authority Level: Package entrypoint and API usage guide.
+- Last Verified Against: 2026-03-09 repo state.
+- Owner: orchestrator maintainers + automation agents.
+- Review Cadence: monthly or after major API/runtime changes.
+- Status: `active`.
+
 Library-only ESL pipeline engine for the monorepo.
 
 `@esl-pipeline/orchestrator` owns canonical pipeline semantics:

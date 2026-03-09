@@ -5,7 +5,7 @@
 - Audience: maintainers and AI agents editing docs.
 - Read Time: 3 minutes.
 - Authority Level: Governance policy.
-- Last Verified Against: 2026-03-05 repo state.
+- Last Verified Against: 2026-03-10 repo state.
 - Owner: founder-maintainer + automation agents.
 - Review Cadence: biweekly.
 - Status: `reference`.
@@ -44,7 +44,7 @@
 - `docs/backend-frontend/BATCH_SYSTEM.md`
 - `docs/backend-frontend/backend-frontend-alignment.md`
 
-## Active Ops Docs (Enforced In Phase 1)
+## Active Ops Docs (Enforced)
 
 - `docs/operations/docker-host-paths.md`
 - `docs/operations/postgres-backup-restore.md`
@@ -53,6 +53,19 @@
 - `docs/operations/prompt-gallery-bootstrap.md`
 - `docs/operations/pr-style-release-notes.md`
 - `docs/operations/rollup-optional-binary-troubleshooting.md`
+
+## Selected Non-Core Docs (Enforced)
+
+- `docs/backend-frontend/DEPLOYMENT.md`
+- `docs/backend-frontend/batch-backend-ssot.md`
+- `docs/reference/env.md`
+- `docs/reference/pipeline-manifest.md`
+- `docs/reference/ORCHESTRATOR_API_V2_MIGRATION.md`
+- `docs/reference/GENERATION_PROVIDER_POLICY.md`
+- `packages/orchestrator/README.md`
+- `packages/batch-backend/README.md`
+- `packages/batch-frontend/README.md`
+- `packages/provider-runtime/README.md`
 
 ## Rules
 
@@ -75,7 +88,7 @@ Before merge for docs-heavy changes:
 
 ## Metadata Contract (Enforced Scope)
 
-Core + active-ops docs must include these `Meta` keys:
+Core + active-ops + selected non-core docs must include these `Meta` keys:
 
 - `Audience`
 - `Authority Level`
@@ -91,7 +104,8 @@ Checks are configured in:
 
 - Core docs: max age `30` days from `Last Verified Against`.
 - Active ops docs: max age `45` days.
-- `docs/reference/agents-ssot.md`: warning threshold `60` days in Phase 1.
+- Selected non-core docs: max age `45` days.
+- `docs/reference/agents-ssot.md`: warning threshold `60` days.
 
 ## Rule Promotion Policy
 
@@ -102,6 +116,17 @@ When a docs issue repeats in review 2+ times:
 3. Update this governance doc.
 
 ## Rule Promotion Changelog
+
+### 2026-03-10
+
+- Expanded selected non-core enforcement to high-impact reference docs (`docs/reference/env.md`, `docs/reference/pipeline-manifest.md`, `docs/reference/ORCHESTRATOR_API_V2_MIGRATION.md`, `docs/reference/GENERATION_PROVIDER_POLICY.md`).
+- Applied required metadata/freshness normalization for the new reference-doc scope under hard-fail `non_core` checks.
+
+### 2026-03-09
+
+- Expanded enforced scope with selected non-core docs (`docs/backend-frontend/DEPLOYMENT.md`, `docs/backend-frontend/batch-backend-ssot.md`, and four package READMEs).
+- Added non-core freshness threshold enforcement (`non_core: 45 days`) and promoted hard-fail `docs:check` gating for this scope.
+- Expanded docs health and stale-active reporting to include selected non-core scope.
 
 ### 2026-03-04
 

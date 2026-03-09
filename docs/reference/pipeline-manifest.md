@@ -1,5 +1,15 @@
 # Pipeline Manifest Schema
 
+## Meta
+
+- Audience: maintainers and implementing agents.
+- Read Time: 6 minutes.
+- Authority Level: canonical manifest schema reference.
+- Last Verified Against: 2026-03-10 repo state.
+- Owner: founder-maintainer + automation agents.
+- Review Cadence: monthly or after manifest schema changes.
+- Status: `reference`.
+
 The orchestrator persists a manifest next to each Markdown lesson (or via a configured `ManifestStore`).
 This document captures the canonical schema so remote stores and services can validate their payloads.
 

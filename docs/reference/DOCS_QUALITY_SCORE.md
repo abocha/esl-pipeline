@@ -5,7 +5,7 @@
 - Audience: maintainers and AI agents.
 - Read Time: 4 minutes.
 - Authority Level: operational quality rubric.
-- Last Verified Against: 2026-03-04 repo state.
+- Last Verified Against: 2026-03-10 repo state.
 - Owner: founder-maintainer + automation agents.
 - Review Cadence: weekly (docs-gardening run).
 - Status: `reference`.
@@ -42,7 +42,7 @@
 ## Current Measured Snapshot (Automated)
 
 - Source: `tmp/docs-health-report.md` generated via `pnpm docs:health:report`.
-- Timestamp: 2026-03-04T05:33:34.953Z.
+- Timestamp: 2026-03-09T17:15:40.944Z.
 - Composite: **9.83 / 10**
 
 ## Next Target
@@ -51,9 +51,9 @@
 
 Priority levers:
 
-1. Expand enforcement coverage to `docs/backend-frontend/*` (non-archive).
-2. Add selected package READMEs (`orchestrator`, `batch-backend`, `batch-frontend`, `provider-runtime`) to checks.
-3. Tune stale-doc heuristic weights and routing coverage to reduce false positives.
+1. Improve archive hygiene from `8.8` to `>= 9.2` by reducing stale-active noise and ambiguity.
+2. Tune stale-doc heuristic weights and routing coverage to reduce false positives.
+3. Promote one recurring stale-candidate review issue into an additional scripted check.
 
 ## Update Policy
 
@@ -61,6 +61,24 @@ Priority levers:
 - Keep historical snapshots as dated sections below.
 
 ## Historical Snapshots
+
+### 2026-03-10 (wave 2 reference expansion)
+
+- Expanded hard-fail selected non-core enforcement to `docs/reference/env.md`, `docs/reference/pipeline-manifest.md`, `docs/reference/ORCHESTRATOR_API_V2_MIGRATION.md`, and `docs/reference/GENERATION_PROVIDER_POLICY.md`.
+- Health report now checks `27` docs across `core`, `ops`, and `non_core`.
+- Composite remained stable at 9.83 after expansion.
+
+### 2026-03-09 (non-core enforcement expansion)
+
+- Expanded hard-fail docs enforcement to selected non-core docs (`docs/backend-frontend/DEPLOYMENT.md`, `docs/backend-frontend/batch-backend-ssot.md`, and four package READMEs).
+- Health report now checks `23` docs across `core`, `ops`, and `non_core`.
+- Composite remained stable at 9.83 after expansion.
+
+### 2026-03-09
+
+- Weekly docs-gardening run completed (`pnpm docs:check`, `pnpm docs:health:report`, `pnpm docs:stale:active`).
+- Automated snapshot remained stable at 9.83.
+- No `docs:check` errors or warnings detected.
 
 ### 2026-03-04
 
