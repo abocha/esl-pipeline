@@ -29,7 +29,6 @@ export const DEFAULT_CONFIG_ROOT = resolve(moduleDir, '../configs');
 export const DEFAULT_PRESETS_PATH = join(DEFAULT_CONFIG_ROOT, 'presets.json');
 export const DEFAULT_VOICES_PATH = join(DEFAULT_CONFIG_ROOT, 'voices.yml');
 export const DEFAULT_STUDENTS_DIR = join(DEFAULT_CONFIG_ROOT, 'students');
-export const DEFAULT_WIZARD_DEFAULTS_PATH = join(DEFAULT_CONFIG_ROOT, 'wizard.defaults.json');
 export const DEFAULT_STUDENT_NAME = 'Default';
 
 export interface ConfigProvider {
@@ -78,7 +77,7 @@ export function createFilesystemConfigProvider(
                 profiles.push({ ...data, student: data.student.trim() });
               }
             } catch {
-              // ignore invalid JSON files; surfaced in wizard prompt later
+              // ignore invalid JSON files
             }
           }
         }

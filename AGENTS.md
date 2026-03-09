@@ -51,6 +51,9 @@ When implementing from a plan file, re-read that exact plan file after every con
 - Backend/frontend integration work:
   - [`docs/backend-frontend/BATCH_SYSTEM.md`](docs/backend-frontend/BATCH_SYSTEM.md)
   - [`docs/backend-frontend/backend-frontend-alignment.md`](docs/backend-frontend/backend-frontend-alignment.md)
+- Orchestrator architecture review + ownership decisions:
+  - [`docs/reference/ORCHESTRATOR_SYSTEM_REVIEW.md`](docs/reference/ORCHESTRATOR_SYSTEM_REVIEW.md)
+  - [`docs/reference/ORCHESTRATOR_OWNERSHIP_LEDGER.md`](docs/reference/ORCHESTRATOR_OWNERSHIP_LEDGER.md)
 - Prompt gallery (DB-canonical runtime):
   - [`docs/operations/prompt-gallery-bootstrap.md`](docs/operations/prompt-gallery-bootstrap.md)
 - Docker dev stack troubleshooting:
@@ -68,7 +71,7 @@ When implementing from a plan file, re-read that exact plan file after every con
 
 ## Architecture Snapshot (High-Level)
 
-- `@esl-pipeline/orchestrator` is the canonical pipeline engine and CLI/API surface.
+- `@esl-pipeline/orchestrator` is the canonical pipeline engine and library-only programmatic API surface (CLI/wizard/path-picker retired).
 - `@esl-pipeline/batch-backend` and `@esl-pipeline/batch-frontend` are the operational batch system.
 - Supporting core packages:
   - `@esl-pipeline/md-validator`

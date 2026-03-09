@@ -252,5 +252,10 @@ default: voice_id_default
 
     expect(rerun.steps).toEqual(['add-audio']);
     expect(rerun.manifestPath).toBe(initial.manifestPath);
+
+    const manifestAfterRerun = JSON.parse(await readFile(initial.manifestPath!, 'utf8'));
+    expect(manifestAfterRerun.publishTarget).toBe('html');
+    expect(manifestAfterRerun.audio?.url).toMatch(/^https:\/\/test-bucket\.s3\.amazonaws\.com\//);
+    expect(manifestAfterRerun.timestamp).toBeTypeOf('string');
   });
 });

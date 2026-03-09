@@ -14,8 +14,13 @@ import { createFilesystemConfigProvider } from './config.js';
 import type { ConfigProvider } from './config.js';
 import type {
   AssignmentProgressCallbacks,
+  GetAssignmentStatusRequestV2,
   NewAssignmentFlags,
+  NewAssignmentRequestV2,
+  OrchestratorV2ExecutionContext,
   OrchestratorDependencies,
+  RerunAssignmentRequestV2,
+  RerunPlanRequestV2,
   RerunPlanRequest,
   RerunPlanResult,
   RerunFlags,
@@ -57,7 +62,6 @@ export interface ResolvedConfigPaths {
   presetsPath: string;
   voicesPath: string;
   studentsDir: string;
-  wizardDefaultsPath: string;
 }
 
 interface ConfigPathsCacheEntry {
@@ -66,7 +70,6 @@ interface ConfigPathsCacheEntry {
     presets: { path: string; mtimeMs: number; size: number; exists: boolean };
     voices: { path: string; mtimeMs: number; size: number; exists: boolean };
     students: { path: string; mtimeMs: number; size: number; exists: boolean };
-    wizardDefaults: { path: string; mtimeMs: number; size: number; exists: boolean };
   };
 }
 
@@ -153,14 +156,12 @@ export function resolveConfigPaths(options: ResolveConfigPathsOptions = {}): Res
   }
 
   const configRoot = dirname(presetsPath);
-  const wizardDefaultsPath = join(configRoot, 'wizard.defaults.json');
 
   const result: ResolvedConfigPaths = {
     configRoot,
     presetsPath,
     voicesPath,
     studentsDir,
-    wizardDefaultsPath,
   };
 
   if (!memoizeEnabled || !cacheKey) {
@@ -171,7 +172,6 @@ export function resolveConfigPaths(options: ResolveConfigPathsOptions = {}): Res
     presets: statPath(presetsPath),
     voices: statPath(voicesPath),
     students: statPath(studentsDir),
-    wizardDefaults: statPath(wizardDefaultsPath),
   };
 
   const cached = configPathsCache.get(cacheKey);
@@ -188,11 +188,7 @@ export function resolveConfigPaths(options: ResolveConfigPathsOptions = {}): Res
       cached.meta.students.path === currentMeta.students.path &&
       cached.meta.students.exists === currentMeta.students.exists &&
       cached.meta.students.mtimeMs === currentMeta.students.mtimeMs &&
-      cached.meta.students.size === currentMeta.students.size &&
-      cached.meta.wizardDefaults.path === currentMeta.wizardDefaults.path &&
-      cached.meta.wizardDefaults.exists === currentMeta.wizardDefaults.exists &&
-      cached.meta.wizardDefaults.mtimeMs === currentMeta.wizardDefaults.mtimeMs &&
-      cached.meta.wizardDefaults.size === currentMeta.wizardDefaults.size;
+      cached.meta.students.size === currentMeta.students.size;
     if (fresh) {
       return cached.result;
     }
@@ -243,6 +239,22 @@ export interface OrchestratorPipeline {
     mdPath: string,
     dependencies?: Pick<OrchestratorDependencies, 'runId'>,
   ): Promise<Awaited<ReturnType<OrchestratorModule['getAssignmentStatus']>>>;
+  executeNewAssignmentV2(
+    request: NewAssignmentRequestV2,
+    context?: OrchestratorV2ExecutionContext,
+  ): Promise<Awaited<ReturnType<OrchestratorModule['executeNewAssignmentV2']>>>;
+  executeRerunAssignmentV2(
+    request: RerunAssignmentRequestV2,
+    context?: OrchestratorV2ExecutionContext,
+  ): Promise<Awaited<ReturnType<OrchestratorModule['executeRerunAssignmentV2']>>>;
+  executeGetAssignmentStatusV2(
+    request: GetAssignmentStatusRequestV2,
+    context?: OrchestratorV2ExecutionContext,
+  ): Promise<Awaited<ReturnType<OrchestratorModule['executeGetAssignmentStatusV2']>>>;
+  executePlanRerunAssignmentV2(
+    request: RerunPlanRequestV2,
+    context?: OrchestratorV2ExecutionContext,
+  ): Promise<Awaited<ReturnType<OrchestratorModule['executePlanRerunAssignmentV2']>>>;
 }
 
 export function createPipeline(options: CreatePipelineOptions = {}): OrchestratorPipeline {
@@ -334,6 +346,80 @@ export function createPipeline(options: CreatePipelineOptions = {}): Orchestrato
         logger,
         metrics,
         runId: dependencies?.runId,
+      });
+    },
+    async executeNewAssignmentV2(request, context = {}) {
+      const { executeNewAssignmentV2 } = await orchestratorModuleLoader();
+      const merged: NewAssignmentRequestV2 = {
+        ...request,
+        assignment: {
+          ...request.assignment,
+          presetsPath: request.assignment.presetsPath ?? defaults.presetsPath,
+          voices: request.assignment.voices ?? defaults.voicesPath,
+          out: request.assignment.out ?? defaults.outDir,
+        },
+      };
+
+      return executeNewAssignmentV2(merged, {
+        ...context,
+        dependencies: {
+          manifestStore,
+          configProvider,
+          logger,
+          metrics,
+          runId: context.dependencies?.runId,
+          signal: context.dependencies?.signal,
+        },
+      });
+    },
+    async executeRerunAssignmentV2(request, context = {}) {
+      const { executeRerunAssignmentV2 } = await orchestratorModuleLoader();
+      const merged: RerunAssignmentRequestV2 = {
+        ...request,
+        assignment: {
+          ...request.assignment,
+          voices: request.assignment.voices ?? defaults.voicesPath,
+          out: request.assignment.out ?? defaults.outDir,
+        },
+      };
+      return executeRerunAssignmentV2(merged, {
+        ...context,
+        dependencies: {
+          manifestStore,
+          configProvider,
+          logger,
+          metrics,
+          runId: context.dependencies?.runId,
+          signal: context.dependencies?.signal,
+        },
+      });
+    },
+    async executeGetAssignmentStatusV2(request, context = {}) {
+      const { executeGetAssignmentStatusV2 } = await orchestratorModuleLoader();
+      return executeGetAssignmentStatusV2(request, {
+        ...context,
+        dependencies: {
+          manifestStore,
+          configProvider,
+          logger,
+          metrics,
+          runId: context.dependencies?.runId,
+          signal: context.dependencies?.signal,
+        },
+      });
+    },
+    async executePlanRerunAssignmentV2(request, context = {}) {
+      const { executePlanRerunAssignmentV2 } = await orchestratorModuleLoader();
+      return executePlanRerunAssignmentV2(request, {
+        ...context,
+        dependencies: {
+          manifestStore,
+          configProvider,
+          logger,
+          metrics,
+          runId: context.dependencies?.runId,
+          signal: context.dependencies?.signal,
+        },
       });
     },
   };
@@ -435,10 +521,8 @@ export function resolveManifestPath(mdPath: string): string {
 }
 
 export {
-  type LoadCliEnvOptions,
   type LoadEnvOptions,
   type LoadEnvSummary,
-  loadCliEnv,
   loadEnvFiles,
   loadEnvFilesWithSummary,
 } from '@esl-pipeline/shared-infrastructure';

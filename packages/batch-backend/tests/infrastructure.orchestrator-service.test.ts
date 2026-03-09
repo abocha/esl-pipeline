@@ -42,7 +42,6 @@ const pipelineMock = {
     presetsPath: '/repo/packages/orchestrator/configs/presets.json',
     voicesPath: '/repo/packages/orchestrator/configs/voices.yml',
     studentsDir: '/repo/packages/orchestrator/configs/students',
-    wizardDefaultsPath: '/repo/packages/orchestrator/configs/wizard.defaults.json',
   },
 };
 vi.mock('@esl-pipeline/orchestrator', () => ({
@@ -53,7 +52,6 @@ vi.mock('@esl-pipeline/orchestrator', () => ({
     presetsPath: '/repo/packages/orchestrator/configs/presets.json',
     voicesPath: '/repo/packages/orchestrator/configs/voices.yml',
     studentsDir: '/repo/packages/orchestrator/configs/students',
-    wizardDefaultsPath: '/repo/packages/orchestrator/configs/wizard.defaults.json',
   }),
 }));
 
@@ -164,6 +162,18 @@ describe('infrastructure/orchestrator-service', () => {
     const result = await resultPromise;
 
     expect(result).toEqual({ manifestPath: '/manifests/job-1.json' });
+    expect(mockChildProcess.send).toHaveBeenNthCalledWith(1, {
+      type: 'run',
+      executionMode: 'new_assignment',
+      payload: {
+        jobId: 'job-1',
+        md: 'fixtures/ok.md',
+        preset: 'b1-default',
+        withTts: true,
+        upload: 's3',
+      },
+      runId: 'run-1',
+    });
   });
 
   it('runAssignmentJob rethrows when pipeline.newAssignment fails', async () => {
@@ -250,11 +260,66 @@ describe('infrastructure/orchestrator-service', () => {
     });
   });
 
+  it('runRerunAssignmentJob forwards rerun payload and execution mode to worker', async () => {
+    const { runRerunAssignmentJob } = await import('../src/infrastructure/orchestrator-service.js');
+
+    const resultPromise = runRerunAssignmentJob(
+      {
+        jobId: 'job-rerun-1',
+        md: 'fixtures/ok.md',
+        manifestMd: 'fixtures/source.md',
+        steps: ['upload', 'add-audio'],
+        upload: 's3',
+      },
+      'run-rerun-1',
+    );
+
+    simulateWorkerSuccess({ manifestPath: '/manifests/job-rerun-1.json' });
+    const result = await resultPromise;
+
+    expect(result).toEqual({ manifestPath: '/manifests/job-rerun-1.json' });
+    expect(mockChildProcess.send).toHaveBeenCalledWith({
+      type: 'run',
+      executionMode: 'rerun_assignment',
+      payload: {
+        jobId: 'job-rerun-1',
+        md: 'fixtures/ok.md',
+        manifestMd: 'fixtures/source.md',
+        steps: ['upload', 'add-audio'],
+        upload: 's3',
+      },
+      runId: 'run-rerun-1',
+    });
+  });
+
   // SKIPPED: This test validates fallback logic that occurs INSIDE the worker process.
   // Since runAssignmentJob() only spawns and communicates with a worker, and we're mocking
   // fork() to prevent real process spawning, we cannot test this fallback behavior at the unit level.
   // This should be tested in integration tests with a real worker process and config files.
   it.todo('runAssignmentJob falls back to filesystem manifest store when S3 bucket is missing');
+
+  it('isManifestBucketMissingError detects provider identity from name, causeName, and code', async () => {
+    const { isManifestBucketMissingError } =
+      await import('../src/infrastructure/orchestrator-service.js');
+
+    const byName = new Error('bucket missing');
+    byName.name = 'NoSuchBucket';
+    expect(isManifestBucketMissingError(byName)).toBe(true);
+
+    expect(
+      isManifestBucketMissingError({
+        message: 'bucket missing',
+        causeName: 'PermanentRedirect',
+      }),
+    ).toBe(true);
+
+    expect(
+      isManifestBucketMissingError({
+        message: 'bucket missing',
+        code: 'NoSuchBucket',
+      }),
+    ).toBe(true);
+  });
 
   it('getJobOptionsFromOrchestrator delegates to orchestrator metadata helper', async () => {
     const { loadConfig } = await import('../src/config/env.js');
