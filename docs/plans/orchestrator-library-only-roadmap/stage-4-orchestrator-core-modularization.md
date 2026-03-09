@@ -39,3 +39,19 @@ Restructure orchestrator internals into cohesive runtime modules while preservin
 1. Risk: internal refactor accidentally shifts stage sequencing or manifest mutation order.
 2. Mitigation: stage/order and manifest parity tests remain mandatory gate checks.
 3. Rollback: revert module boundary changes in targeted slices, not full package rollback.
+
+## Implementation Notes (Stage 4 Execution)
+
+1. Extracted policy/config resolution seam:
+   - `packages/orchestrator/src/runtime/voice-preferences.ts`
+   - moved voice/accent token resolution and catalog caching out of `index.ts`.
+2. Extracted publish-target helper seam for Anytype:
+   - `packages/orchestrator/src/runtime/publish-target-anytype.ts`
+   - moved object-id parsing, space resolution, and collection attach behavior out of `index.ts`.
+3. Extracted markdown artifact lifecycle cache seam:
+   - `packages/orchestrator/src/runtime/markdown-cache.ts`
+   - moved markdown read/cache behavior out of `index.ts`.
+4. Added focused runtime module tests:
+   - `packages/orchestrator/tests/runtime.voice-preferences.test.ts`
+   - `packages/orchestrator/tests/runtime.publish-target-anytype.test.ts`
+   - `packages/orchestrator/tests/runtime.markdown-cache.test.ts`
