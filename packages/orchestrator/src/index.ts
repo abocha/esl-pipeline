@@ -201,7 +201,6 @@ export type {
 } from './observability.js';
 export {
   createPipeline,
-  loadCliEnv,
   resolveConfigPaths,
   loadEnvFiles,
   loadEnvFilesWithSummary,
@@ -213,7 +212,6 @@ export type {
   ResolvedConfigPaths,
   PipelineNewAssignmentOptions,
   PipelineRerunOptions,
-  LoadCliEnvOptions,
   LoadEnvOptions,
   LoadEnvSummary,
 } from './pipeline.js';

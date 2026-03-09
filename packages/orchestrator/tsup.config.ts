@@ -5,7 +5,6 @@ const INTERNAL_BUNDLE = [/^@esl-pipeline\//];
 export default defineConfig(() => ({
   entry: {
     index: 'src/index.ts',
-    cli: 'bin/cli.ts',
   },
   target: 'node24',
   format: ['esm'],

@@ -40,3 +40,18 @@ Remove the orchestrator CLI surface entirely after backend cutover and parity ga
 1. Risk: hidden local scripts still invoke removed CLI.
 2. Mitigation: pre-removal usage inventory and migration notes.
 3. Rollback: restore compatibility shim package or temporary wrapper command outside orchestrator if urgent fallback is needed.
+
+## Implementation Notes (Stage 7 Execution)
+
+1. Removed orchestrator CLI/wizard/path-picker source and tests:
+   - deleted CLI entrypoint module and associated test coverage.
+   - deleted interactive wizard and path-picker modules and associated test coverage.
+2. Removed CLI entrypoint from package/build/runtime surfaces:
+   - removed `bin` mapping from orchestrator `package.json`.
+   - removed CLI bundle entry from `tsup` config.
+   - removed CLI postbuild handling and docker runtime CLI command.
+3. Updated orchestrator API export surface for library-only usage:
+   - removed `loadCliEnv` re-export and `LoadCliEnvOptions` type re-export from orchestrator public API.
+4. Updated active docs/SSOT:
+   - orchestrator docs now describe library-only contract and backend-only operational entrypoint.
+   - ownership/system-review/SSOT references to deprecated CLI surfaces are updated to retired status.

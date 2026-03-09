@@ -7,8 +7,7 @@
     "esl",
     "pipeline",
     "notion",
-    "tts",
-    "cli"
+    "tts"
   ],
   "license": "UNLICENSED",
   "type": "module",
@@ -22,9 +21,6 @@
   },
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
-  "bin": {
-    "esl": "dist/cli.js"
-  },
   "files": [
     "dist",
     "README.md",
@@ -35,13 +31,13 @@
     "build": "pnpm --filter @esl-pipeline/shared-infrastructure build && tsup --config tsup.config.ts && tsc -p tsconfig.types.json",
     "postbuild": "node ./scripts/postbuild.js",
     "clean": "node -e \"fs.rmSync('dist', {recursive:true, force:true})\"",
-    "dev": "tsx watch bin/cli.ts",
+    "dev": "vitest --watch",
     "docker:build": "cd ../.. && docker build -f packages/orchestrator/Dockerfile -t esl-pipeline/orchestrator:local .",
-    "docker:run": "docker run --rm esl-pipeline/orchestrator:local --version",
+    "docker:run": "docker run --rm esl-pipeline/orchestrator:local",
     "prepack": "pnpm run build",
     "test": "pnpm run test:unit",
     "test:unit": "vitest run --exclude \"tests/**/*.integration.test.ts\"",
-    "test:integration": "vitest run tests/pipeline.integration.test.ts tests/wizard-tts-mode.integration.test.ts",
+    "test:integration": "vitest run tests/pipeline.integration.test.ts",
     "test:watch": "vitest",
     "typecheck": "tsc --noEmit"
   },

@@ -18,7 +18,6 @@ const configPaths: ResolvedConfigPaths = {
   presetsPath: '/repo/packages/orchestrator/configs/presets.json',
   voicesPath: '/repo/packages/orchestrator/configs/voices.yml',
   studentsDir: '/repo/packages/orchestrator/configs/students',
-  wizardDefaultsPath: '/repo/packages/orchestrator/configs/wizard.defaults.json',
 };
 
 function createConfigProvider(overrides: Partial<ConfigProvider> = {}): ConfigProvider {

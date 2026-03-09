@@ -121,7 +121,7 @@ The ESL Pipeline is a pnpm-based monorepo. Core directories:
 - [`packages/provider-runtime`](packages/provider-runtime)
   - Shared provider runtime policy/classification helpers.
 - [`packages/orchestrator/configs`](packages/orchestrator/configs)
-  - Default presets, voices, student configs, and wizard defaults.
+  - Default presets, voices, and student configs.
 - [`docs`](docs)
   - Architecture, manifest schema, backend groundwork.
 - [`fixtures`](fixtures)
@@ -277,8 +277,6 @@ This section defines what each package owns, which exports are stable, and how t
 
 [`packages/orchestrator`](packages/orchestrator):
 
-- Hosts a legacy CLI compatibility surface (deprecated):
-  - [`packages/orchestrator/bin/cli.ts`](packages/orchestrator/bin/cli.ts)
 - Exposes the programmatic API:
   - [`packages/orchestrator/src/index.ts`](packages/orchestrator/src/index.ts)
   - [`packages/orchestrator/src/pipeline.ts`](packages/orchestrator/src/pipeline.ts)
@@ -291,8 +289,8 @@ Contract:
 
 - The orchestrator’s exported API is the primary, stable integration surface.
 - Supporting packages are considered internal dependencies unless explicitly documented otherwise.
-- CLI behavior MUST be a thin, faithful wrapper around orchestrator functions.
-- Batch-backend is the operational runtime entrypoint; CLI MUST NOT be treated as required for production workflows.
+- Orchestrator is library-only (CLI/wizard/path-picker removed).
+- Batch-backend is the operational runtime entrypoint.
 
 #### 4.1.2. Key Exports and Contracts
 
@@ -545,9 +543,6 @@ Local defaults live under [`packages/orchestrator/configs`](packages/orchestrato
   - Maps voices to ElevenLabs or other TTS configuration.
 - [`packages/orchestrator/configs/students/*.json`](packages/orchestrator/configs/students)
   - Per-student or profile configs.
-- `packages/orchestrator/configs/wizard.defaults.json` (runtime-generated when wizard defaults are saved)
-  - Stores interactive wizard preferences (e.g., `withTts`, upload target).
-  - Resolved via `wizardDefaultsPath` from `resolveConfigPaths`, which binds it to the same `configRoot` as presets.
 
 `createPipeline` and `ConfigProvider` determine how these are loaded. Agents:
 
@@ -591,7 +586,7 @@ Upload (S3) selection:
 - Credentials rely on standard AWS env vars (`AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`).
 - Optional caching toggles (per-process, default off):
   - `ESL_PIPELINE_CACHE_ENV`: memoizes `.env` loading; invalidates on mtime/size change.
-  - `ESL_PIPELINE_CACHE_CONFIG`: memoizes `resolveConfigPaths`; invalidates on mtime/size change of presets/voices/students/wizard defaults or when inputs differ.
+  - `ESL_PIPELINE_CACHE_CONFIG`: memoizes `resolveConfigPaths`; invalidates on mtime/size change of presets/voices/students or when inputs differ.
 
 Mapping to behavior is implemented in:
 
@@ -720,30 +715,15 @@ Agents MUST keep manifest behavior backward compatible unless explicitly perform
 
 ---
 
-## 7. Programmatic API and Legacy CLI: Contracts and Priorities
+## 7. Programmatic API: Contracts and Priorities
 
 ### 7.1. Operational Priority
 
 - Batch-backend is the active operational runtime entrypoint.
 - Orchestrator programmatic API is the canonical pipeline contract.
-- Orchestrator CLI/wizard/path-picker are deprecated compatibility surfaces on a staged removal path.
+- Orchestrator ships as a library-only package (no CLI/wizard/path-picker surface).
 
-### 7.2. Legacy CLI Constraints (Deprecation Mode)
-
-Legacy CLI implementation:
-
-- [`packages/orchestrator/bin/cli.ts`](packages/orchestrator/bin/cli.ts)
-
-Rules:
-
-- CLI is a thin adapter over orchestrator API.
-- Any CLI behavior MUST delegate to orchestrator exports, NOT duplicate logic.
-- No net-new CLI feature work is allowed during deprecation mode.
-- Only critical safety fixes are allowed until removal stage.
-- Rerun planning precedence MUST remain: `--steps` > `--audio` > `--from/--to` > default.
-- `--with-tts` is an explicit opt-in. When omitted, the orchestrator treats `withTts` as “no override” so that saved defaults from `packages/orchestrator/configs/wizard.defaults.json` or other configuration can apply.
-
-### 7.3. Programmatic API as Source of Truth
+### 7.2. Programmatic API as Source of Truth
 
 Programmatic usage via `@esl-pipeline/orchestrator`:
 
@@ -762,27 +742,11 @@ Contracts:
 
 - Programmatic API is the primary behavioral source of truth.
 - New behavior MUST land in pipeline/orchestrator first.
-- Exposing behavior through CLI is optional and generally discouraged during CLI deprecation.
 - Batch-backend runtime is cut over to v2 execution envelopes; v1 and v2 exports may coexist for compatibility until explicit major-stage removals.
 
 Agents:
 
-- MUST implement new semantics in orchestrator/core functions before wiring CLI.
-- MUST NOT embed pipeline logic directly in CLI argument handlers.
-
-### 7.4. Compatibility and Zero-Install Usage
-
-Zero-install usage:
-
-- `npx @esl-pipeline/orchestrator esl --help` (per README).
-
-Constraints:
-
-- Renaming binaries (e.g., `esl`) or changing command semantics is a breaking change.
-- Such changes REQUIRE:
-  - Semver update.
-  - README/SSOT updates.
-  - Migration notes.
+- MUST implement new semantics in orchestrator/core functions before any backend wiring changes.
 
 ---
 
@@ -938,24 +902,12 @@ Update docs:
   - [`docs/backend-frontend/backend-frontend-alignment.md`](docs/backend-frontend/backend-frontend-alignment.md) - API contract status and gap tracking.
 - This SSOT if relevant.
 
-### 9.6. Add a New CLI Flag
-
-Steps:
-
-1. Extend pipeline/orchestrator options:
-   - Modify relevant types and handling in [`packages/orchestrator/src/pipeline.ts`](packages/orchestrator/src/pipeline.ts) and/or [`packages/orchestrator/src/index.ts`](packages/orchestrator/src/index.ts).
-2. Wire flag in CLI:
-   - Update [`packages/orchestrator/bin/cli.ts`](packages/orchestrator/bin/cli.ts).
-3. Update docs:
-   - CLI usage in [`README.md`](README.md).
-   - This SSOT if behavior is part of core contracts.
-4. Add tests:
-   - CLI parsing.
-   - Pipeline integration.
+### 9.6. CLI Surface Policy
 
 Constraints:
 
-- CLI flags MUST reflect existing or newly added orchestrator options; no CLI-only logic.
+- Do not add new orchestrator CLI flags.
+- If an operator entrypoint is required, implement it in batch-backend surfaces and document it in backend docs.
 
 ### 9.7. Extend Observability (Logging/Metrics)
 
