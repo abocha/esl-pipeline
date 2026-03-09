@@ -7,7 +7,6 @@ Operational guide for moving student/profile metadata from filesystem JSON into 
 ## Prerequisites
 
 - Postgres reachable by `@esl-pipeline/batch-backend` (`PG_ENABLED=true`).
-- Local config provider (`ESL_PIPELINE_CONFIG_PROVIDER=local`).
 - Existing student JSON source directory (default from orchestrator config, or pass `--students-dir`).
 
 ## Rollout Steps
@@ -23,22 +22,20 @@ Operational guide for moving student/profile metadata from filesystem JSON into 
    - Spot-check profile bindings through API behavior (`profileId` on student records).
    - Optional one-off lifecycle verification:
      - `pnpm --filter @esl-pipeline/batch-backend run student-system:verify:oneoff`
-5. Enable DB-backed reads.
-   - Set `STUDENT_SYSTEM_SOURCE=hybrid` for transition.
-   - After confidence, set `STUDENT_SYSTEM_SOURCE=db` and `STUDENT_SYSTEM_FS_FALLBACK=false`.
+5. Keep runtime DB-only and remove deprecated student-system env vars if present.
+   - Do not set `STUDENT_SYSTEM_SOURCE`.
+   - Do not set `STUDENT_SYSTEM_FS_FALLBACK`.
 
 ## Verification Checklist
 
-- Student CRUD works from API/UI after mode switch.
+- Student CRUD works from API/UI in DB-only runtime mode.
 - Prompt package creation still resolves student-selected profile IDs.
-- No unexpected drop in `/students` total after switching from `hybrid` to `db`.
+- No unexpected drop in `/students` total after backfill.
 
 ## Rollback Strategy
 
-- Immediate runtime rollback:
-  - Set `STUDENT_SYSTEM_SOURCE=fs` and redeploy/restart backend.
-- Transitional rollback:
-  - Set `STUDENT_SYSTEM_SOURCE=hybrid` and keep `STUDENT_SYSTEM_FS_FALLBACK=true`.
+- Runtime rollback:
+  - Use a previous backend version only if emergency rollback is required.
 - Data rollback:
   - Do not drop new tables during Phase A. If needed, re-run backfill after correcting source JSON.
 

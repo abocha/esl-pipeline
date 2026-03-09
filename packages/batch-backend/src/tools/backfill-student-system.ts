@@ -1,4 +1,8 @@
+import fs from 'node:fs/promises';
+import type { Dirent } from 'node:fs';
 import path from 'node:path';
+
+import { resolveConfigPaths } from '@esl-pipeline/orchestrator';
 
 import type { BatchBackendConfig } from '../config/env.js';
 import { loadBatchBackendEnv } from '../bootstrap/env.js';
@@ -9,7 +13,7 @@ import {
   clearActiveStudentProfileBinding,
   setActiveStudentProfileBinding,
 } from '../domain/student-profile-binding-repository.js';
-import { listStudentProfiles } from '../application/student-profiles-store.js';
+import { deriveStudentId, normalizeStudentName } from '../domain/student-utils.js';
 
 interface CliOptions {
   dryRun: boolean;
@@ -22,6 +26,21 @@ interface BackfillStats {
   bindingsSet: number;
   bindingsCleared: number;
 }
+
+interface LegacyStudentProfile {
+  id: string;
+  student: string;
+  dbId: string | null;
+  pageParentId: string | null;
+  colorPreset: string | null;
+  voices: Record<string, string>;
+  manifestPreset: string | null;
+  accentPreference: string | null;
+  profileId: string | null;
+}
+
+const DEFAULT_STUDENT_NAME = 'Default';
+const DEFAULT_COLOR_PRESET = 'b1-default';
 
 function parseArgs(argv: string[]): CliOptions {
   const options: CliOptions = {
@@ -57,20 +76,105 @@ function parseArgs(argv: string[]): CliOptions {
   return options;
 }
 
-function toFsConfig(config: BatchBackendConfig): BatchBackendConfig {
-  return {
-    ...config,
-    studentSystem: {
-      source: 'fs',
-      fsFallback: true,
-    },
-  };
-}
-
 function profileLabelFromId(profileId: string): string {
   const base = path.basename(profileId, path.extname(profileId));
   const normalized = base.replaceAll(/[_-]+/g, ' ').trim();
   return normalized.length > 0 ? normalized : profileId;
+}
+
+function normalizeOptionalString(value?: string | null): string | null {
+  if (typeof value !== 'string') return value ?? null;
+  const trimmed = value.trim();
+  return trimmed.length > 0 ? trimmed : null;
+}
+
+function normalizeVoices(value: unknown): Record<string, string> {
+  if (!value || typeof value !== 'object') return {};
+  const entries = Object.entries(value as Record<string, unknown>).filter(
+    ([, token]) => typeof token === 'string' && token.trim().length > 0,
+  );
+  return Object.fromEntries(entries) as Record<string, string>;
+}
+
+function buildDefaultLegacyProfile(): LegacyStudentProfile {
+  return {
+    id: deriveStudentId(DEFAULT_STUDENT_NAME),
+    student: DEFAULT_STUDENT_NAME,
+    dbId: null,
+    pageParentId: null,
+    colorPreset: DEFAULT_COLOR_PRESET,
+    voices: {},
+    manifestPreset: null,
+    accentPreference: null,
+    profileId: null,
+  };
+}
+
+function resolveLegacyStudentsDir(config: BatchBackendConfig, explicitDir?: string): string {
+  if (explicitDir) {
+    return path.resolve(explicitDir);
+  }
+
+  const cwd = process.env.PIPELINE_CWD || process.cwd();
+  const configPaths = resolveConfigPaths({
+    cwd,
+    configDir: config.orchestrator.configDir,
+  });
+
+  return configPaths.studentsDir;
+}
+
+async function loadLegacyProfiles(studentsDir: string): Promise<LegacyStudentProfile[]> {
+  const map = new Map<string, LegacyStudentProfile>();
+
+  let entries: Dirent[] = [];
+  try {
+    entries = await fs.readdir(studentsDir, { withFileTypes: true });
+  } catch {
+    // Missing directory is treated as empty; default profile still gets seeded.
+  }
+
+  for (const entry of entries) {
+    if (!entry.isFile()) continue;
+    if (!entry.name.toLowerCase().endsWith('.json')) continue;
+
+    const filePath = path.join(studentsDir, entry.name);
+    let raw: unknown;
+    try {
+      raw = JSON.parse(await fs.readFile(filePath, 'utf8')) as unknown;
+    } catch {
+      continue;
+    }
+
+    if (!raw || typeof raw !== 'object') continue;
+    const json = raw as Record<string, unknown>;
+    const student = typeof json.student === 'string' ? normalizeStudentName(json.student) : '';
+    if (!student) continue;
+
+    const id = deriveStudentId(student);
+    if (map.has(id)) continue;
+
+    map.set(id, {
+      id,
+      student,
+      dbId: normalizeOptionalString(json.dbId as string | null | undefined),
+      pageParentId: normalizeOptionalString(json.pageParentId as string | null | undefined),
+      colorPreset: normalizeOptionalString(json.colorPreset as string | null | undefined),
+      voices: normalizeVoices(json.voices),
+      manifestPreset: normalizeOptionalString(json.manifestPreset as string | null | undefined),
+      accentPreference: normalizeOptionalString(
+        json.accentPreference as string | null | undefined,
+      ),
+      profileId: normalizeOptionalString(json.profileId as string | null | undefined),
+    });
+  }
+
+  const defaultId = deriveStudentId(DEFAULT_STUDENT_NAME);
+  if (!map.has(defaultId)) {
+    map.set(defaultId, buildDefaultLegacyProfile());
+  }
+
+  return [...map.values()].sort((a, b) => a.student.localeCompare(b.student));
 }
 
 async function run(): Promise<void> {
@@ -78,25 +182,12 @@ async function run(): Promise<void> {
   const options = parseArgs(process.argv.slice(2));
   const config = loadConfig();
 
-  if (config.orchestrator.configProvider === 'http') {
-    throw new Error('Backfill requires local config provider (ESL_PIPELINE_CONFIG_PROVIDER=local)');
-  }
-
   if (!options.dryRun && !config.pg.enabled) {
     throw new Error('Backfill requires Postgres (PG_ENABLED=true)');
   }
 
-  const sourceProfiles = await listStudentProfiles(
-    {
-      limit: 500,
-      offset: 0,
-      order: 'asc',
-    },
-    {
-      config: toFsConfig(config),
-      studentsDir: options.studentsDir,
-    },
-  );
+  const studentsDir = resolveLegacyStudentsDir(config, options.studentsDir);
+  const sourceProfiles = await loadLegacyProfiles(studentsDir);
 
   const stats: BackfillStats = {
     studentsUpserted: 0,
@@ -105,7 +196,7 @@ async function run(): Promise<void> {
     bindingsCleared: 0,
   };
 
-  for (const profile of sourceProfiles.items) {
+  for (const profile of sourceProfiles) {
     const studentId = profile.id;
     if (!studentId) continue;
 
@@ -113,13 +204,13 @@ async function run(): Promise<void> {
       await upsertStudent({
         id: studentId,
         student: profile.student,
-        dbId: profile.dbId ?? null,
-        pageParentId: profile.pageParentId ?? null,
-        colorPreset: profile.colorPreset ?? null,
-        accentPreference: profile.accentPreference ?? null,
-        manifestPreset: profile.manifestPreset ?? null,
-        profileId: profile.profileId ?? null,
-        voices: profile.voices ?? {},
+        dbId: profile.dbId,
+        pageParentId: profile.pageParentId,
+        colorPreset: profile.colorPreset,
+        accentPreference: profile.accentPreference,
+        manifestPreset: profile.manifestPreset,
+        profileId: profile.profileId,
+        voices: profile.voices,
       });
     }
     stats.studentsUpserted += 1;
@@ -151,7 +242,8 @@ async function run(): Promise<void> {
 
   const mode = options.dryRun ? 'DRY RUN' : 'APPLY';
   console.log(`[student-system-backfill] mode=${mode}`);
-  console.log(`[student-system-backfill] students=${sourceProfiles.items.length}`);
+  console.log(`[student-system-backfill] studentsDir=${studentsDir}`);
+  console.log(`[student-system-backfill] students=${sourceProfiles.length}`);
   console.log(`[student-system-backfill] studentsUpserted=${stats.studentsUpserted}`);
   console.log(`[student-system-backfill] profilesUpserted=${stats.profilesUpserted}`);
   console.log(`[student-system-backfill] bindingsSet=${stats.bindingsSet}`);

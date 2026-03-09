@@ -4,7 +4,7 @@
 
 - Audience: maintainers, backend/frontend agents.
 - Authority Level: implementation roadmap.
-- Last Updated: 2026-02-07.
+- Last Updated: 2026-03-10.
 
 ## Purpose
 
@@ -22,27 +22,22 @@
 
 ## Return-To-Track Checklist
 
-1. Confirm environment mode for migration completion:
-   - `STUDENT_SYSTEM_SOURCE=hybrid`
-   - `STUDENT_SYSTEM_FS_FALLBACK=true`
+1. Confirm Postgres is enabled for the target runtime (`PG_ENABLED=true`).
 2. Run migration verification:
    - `pnpm --filter @esl-pipeline/batch-backend run student-system:backfill:dry`
    - `pnpm --filter @esl-pipeline/batch-backend run student-system:backfill`
    - `pnpm --filter @esl-pipeline/batch-backend run student-system:verify:oneoff`
-3. Cut over to DB-canonical reads in target environment:
-   - `STUDENT_SYSTEM_SOURCE=db`
-   - `STUDENT_SYSTEM_FS_FALLBACK=false`
-4. Validate application health after cutover:
+3. Validate application health after backfill:
    - `pnpm check:fast`
    - perform one assignment flow through draft -> publish -> rerun audio.
-5. Start Phase B implementation only after steps 1-4 are complete and green.
+4. Start Phase B implementation only after steps 1-3 are complete and green.
 
 ## Design Decisions (Locked)
 
 1. Keep phased delivery (`A` through `E`) with each phase independently mergeable.
 2. Unify student/profile source-of-truth toward DB-backed metadata and revision history.
 3. Treat prompt templates/profiles as versioned artifacts, not only filesystem files.
-4. Preserve compatibility during migration with read-through/fallback behavior.
+4. Preserve migration safety with manual backfill tooling and explicit legacy-file warnings.
 5. Keep explainability first-class: every generated assignment should be traceable to exact profile/template revisions.
 
 ## Phase A: Canonical Data Model + Storage Unification
@@ -59,9 +54,7 @@
 
 1. Canonical tables for student profile metadata and bindings (DB as source-of-truth).
 2. Migration/import tool from current JSON/MD sources into DB records.
-3. Compatibility adapter:
-   - read DB first
-   - optional fallback read from filesystem during transition window.
+3. DB-only runtime for student APIs with one-time warning when legacy JSON files are detected.
 4. Operational docs:
    - migration runbook
    - rollback strategy.
@@ -71,13 +64,13 @@
 
 - Student/profile CRUD continues to work with existing API contracts.
 - No data loss during import.
-- System can run with filesystem fallback disabled in staging.
+- Runtime remains healthy with DB-only student CRUD behavior.
 
 ### Completed Outputs
 
 1. Canonical tables are in place: `students`, `profiles`, `student_profile_bindings`.
 2. Backfill tooling exists and has been executed in Docker for the current environment.
-3. DB-first + hybrid fallback behavior is wired via `STUDENT_SYSTEM_SOURCE` and `STUDENT_SYSTEM_FS_FALLBACK`.
+3. Student APIs are DB-only; legacy JSON is migration input for the backfill tool only.
 4. Operational guidance is documented in `docs/reference/STUDENT_SYSTEM_PHASE_A_RUNBOOK.md`.
 
 ## Phase B: First-Class Prompt Versioning
