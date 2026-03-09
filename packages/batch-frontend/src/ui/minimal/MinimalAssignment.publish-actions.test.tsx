@@ -1,10 +1,11 @@
-import { beforeEach, describe, it } from 'vitest';
+import { afterEach, beforeEach, describe, it } from 'vitest';
 
 import {
   INTEGRATION_TEST_TIMEOUT_MS,
+  hydrateResumedAssignment,
   makeLearningPreset,
   previewCurrentDraft,
-  publishAssignmentFlow,
+  preparePromptReady,
   setupMinimalAssignmentTest,
   testExpect as expect,
   testApi as api,
@@ -14,6 +15,8 @@ import {
   testUserEvent as userEvent,
   testVi as vi,
   testWaitFor as waitFor,
+  waitForJobActionsReady,
+  waitForResumedPromptReady,
   testWithin as within,
 } from './MinimalAssignment.test-harness';
 
@@ -21,6 +24,17 @@ describe('MinimalAssignment - publish and job actions', () => {
   beforeEach(() => {
     setupMinimalAssignmentTest();
   });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  const renderWithResumedPromptReady = async () => {
+    hydrateResumedAssignment();
+    render(<MinimalAssignment />);
+    await waitForResumedPromptReady();
+  };
+
   it('shows upload errors when upload fails', async () => {
     const user = userEvent.setup();
     vi.mocked(api.uploadRecording).mockRejectedValueOnce(new Error('Upload failed at gateway'));
@@ -29,9 +43,7 @@ describe('MinimalAssignment - publish and job actions', () => {
 
     await user.click(screen.getByRole('button', { name: /Drop audio file/i }));
 
-    await waitFor(() => {
-      expect(screen.getByText('Upload failed at gateway')).toBeTruthy();
-    });
+    await screen.findByText('Upload failed at gateway');
   });
 
   it(
@@ -44,19 +56,7 @@ describe('MinimalAssignment - publish and job actions', () => {
         warnings: [],
       });
 
-      render(<MinimalAssignment />);
-
-      await user.click(screen.getByRole('button', { name: /Drop audio file/i }));
-
-      await waitFor(() => {
-        expect(screen.getByDisplayValue('Student transcript text')).toBeTruthy();
-      });
-
-      await user.click(screen.getByRole('button', { name: /Generate prompt/i }));
-
-      await waitFor(() => {
-        expect(screen.getByDisplayValue('Prompt package output')).toBeTruthy();
-      });
+      await renderWithResumedPromptReady();
 
       const draftTextarea = screen.getByRole('textbox', { name: /Draft markdown/i });
       expect(draftTextarea).toBeTruthy();
@@ -67,9 +67,7 @@ describe('MinimalAssignment - publish and job actions', () => {
 
       await user.click(screen.getByRole('button', { name: /Save draft/i }));
 
-      await waitFor(() => {
-        expect(screen.getByText('Fix validation errors before saving.')).toBeTruthy();
-      });
+      await screen.findByText('Fix validation errors before saving.');
       expect(api.createDraft).not.toHaveBeenCalled();
     },
     INTEGRATION_TEST_TIMEOUT_MS,
@@ -80,18 +78,7 @@ describe('MinimalAssignment - publish and job actions', () => {
     async () => {
       const user = userEvent.setup();
       render(<MinimalAssignment />);
-
-      await user.click(screen.getByRole('button', { name: /Drop audio file/i }));
-
-      await waitFor(() => {
-        expect(screen.getByDisplayValue('Student transcript text')).toBeTruthy();
-      });
-
-      await user.click(screen.getByRole('button', { name: /Generate prompt/i }));
-
-      await waitFor(() => {
-        expect(screen.getByDisplayValue('Prompt package output')).toBeTruthy();
-      });
+      await preparePromptReady(user);
 
       const draftTextarea = screen.getByRole('textbox', { name: /Draft markdown/i });
       expect(draftTextarea).toBeTruthy();
@@ -121,9 +108,7 @@ describe('MinimalAssignment - publish and job actions', () => {
         mdStorageUri: 's3://esl/drafts/draft-1.md',
       });
 
-      await waitFor(() => {
-        expect(screen.getAllByText(/Job ID: job-1/i).length).toBeGreaterThan(0);
-      });
+      await screen.findAllByText(/Job ID: job-1/i);
       const link = screen.getByRole('link', { name: /Open in Notion/i });
       expect(link.getAttribute('href')).toBe('https://www.notion.so/published-assignment');
     },
@@ -151,19 +136,7 @@ describe('MinimalAssignment - publish and job actions', () => {
         ttsStrategies: ['auto', 'dialogue', 'tts'],
         supportedActions: [],
       });
-      render(<MinimalAssignment />);
-
-      await user.click(screen.getByRole('button', { name: /Drop audio file/i }));
-
-      await waitFor(() => {
-        expect(screen.getByDisplayValue('Student transcript text')).toBeTruthy();
-      });
-
-      await user.click(screen.getByRole('button', { name: /Generate prompt/i }));
-
-      await waitFor(() => {
-        expect(screen.getByDisplayValue('Prompt package output')).toBeTruthy();
-      });
+      await renderWithResumedPromptReady();
 
       const draftTextarea = screen.getByRole('textbox', { name: /Draft markdown/i });
       expect(draftTextarea).toBeTruthy();
@@ -185,12 +158,15 @@ describe('MinimalAssignment - publish and job actions', () => {
       expect(vi.mocked(api.validateMarkdown)).toHaveBeenLastCalledWith('# Final draft', true, {
         learningPresetId: 'general-english-intensive',
       });
-      expect(api.materializeDraft).toHaveBeenCalledWith('draft-1', {
-        jobOverrides: {
-          learningPresetId: 'general-english-intensive',
-          publishTarget: 'html',
-        },
-      });
+      expect(api.materializeDraft).toHaveBeenCalledWith(
+        'draft-1',
+        expect.objectContaining({
+          jobOverrides: {
+            learningPresetId: 'general-english-intensive',
+            publishTarget: 'html',
+          },
+        }),
+      );
       const call = vi.mocked(api.materializeDraft).mock.calls.at(-1)?.[1];
       expect(call?.jobOverrides).not.toHaveProperty('preset');
     },
@@ -201,19 +177,7 @@ describe('MinimalAssignment - publish and job actions', () => {
     'requires preview before publish and requires re-preview after draft edits',
     async () => {
       const user = userEvent.setup();
-      render(<MinimalAssignment />);
-
-      await user.click(screen.getByRole('button', { name: /Drop audio file/i }));
-
-      await waitFor(() => {
-        expect(screen.getByDisplayValue('Student transcript text')).toBeTruthy();
-      });
-
-      await user.click(screen.getByRole('button', { name: /Generate prompt/i }));
-
-      await waitFor(() => {
-        expect(screen.getByDisplayValue('Prompt package output')).toBeTruthy();
-      });
+      await renderWithResumedPromptReady();
 
       const draftTextarea = screen.getByRole('textbox', { name: /Draft markdown/i });
       await user.type(draftTextarea, '# Preview gated draft');
@@ -238,10 +202,11 @@ describe('MinimalAssignment - publish and job actions', () => {
   it(
     'queues a default rerun audio action for the current job',
     async () => {
-      const user = userEvent.setup();
+      vi.useFakeTimers({ shouldAdvanceTime: true });
+      const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
+      hydrateResumedAssignment();
       render(<MinimalAssignment />);
-
-      await publishAssignmentFlow(user);
+      await waitForJobActionsReady();
 
       await user.click(screen.getByRole('button', { name: /Rerun audio/i }));
 
@@ -259,10 +224,11 @@ describe('MinimalAssignment - publish and job actions', () => {
   it(
     'submits advanced rerun payload values',
     async () => {
-      const user = userEvent.setup();
+      vi.useFakeTimers({ shouldAdvanceTime: true });
+      const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
+      hydrateResumedAssignment();
       render(<MinimalAssignment />);
-
-      await publishAssignmentFlow(user);
+      await waitForJobActionsReady();
 
       await user.click(screen.getByRole('button', { name: /Show advanced rerun/i }));
       await user.type(screen.getByPlaceholderText('voice id override'), 'voice-new');
@@ -295,10 +261,11 @@ describe('MinimalAssignment - publish and job actions', () => {
   it(
     'queues a publish-only rerun action for the current job',
     async () => {
-      const user = userEvent.setup();
+      vi.useFakeTimers({ shouldAdvanceTime: true });
+      const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
+      hydrateResumedAssignment();
       render(<MinimalAssignment />);
-
-      await publishAssignmentFlow(user);
+      await waitForJobActionsReady();
 
       await user.click(screen.getAllByRole('button', { name: /Rerun publish/i })[0]!);
 
@@ -313,24 +280,28 @@ describe('MinimalAssignment - publish and job actions', () => {
   it(
     'submits cancel action with an optional reason when job is running',
     async () => {
-      const user = userEvent.setup();
-      vi.mocked(api.getJobStatus)
-        .mockResolvedValueOnce({
-          jobId: 'job-1',
+      vi.useFakeTimers({ shouldAdvanceTime: true });
+      const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
+      const runningStatus = hydrateResumedAssignment({
+        status: {
           state: 'running',
           publishTarget: 'notion',
           notionUrl: null,
+        },
+      });
+      vi.mocked(api.getJobStatus)
+        .mockResolvedValueOnce({
+          ...runningStatus,
+          state: 'running',
         } as never)
         .mockResolvedValueOnce({
-          jobId: 'job-1',
+          ...runningStatus,
           state: 'failed',
-          publishTarget: 'notion',
-          notionUrl: null,
           error: 'cancelled: duplicate run',
         } as never);
 
       render(<MinimalAssignment />);
-      await publishAssignmentFlow(user);
+      await waitForJobActionsReady();
 
       const reasonInput = screen.getByPlaceholderText('reason for cancellation');
       await user.type(reasonInput, 'duplicate run');
@@ -352,10 +323,10 @@ describe('MinimalAssignment - publish and job actions', () => {
   it(
     'keeps cancel disabled for terminal jobs',
     async () => {
-      const user = userEvent.setup();
+      vi.useFakeTimers({ shouldAdvanceTime: true });
+      hydrateResumedAssignment({ status: { state: 'succeeded' } });
       render(<MinimalAssignment />);
-
-      await publishAssignmentFlow(user);
+      await waitForJobActionsReady();
 
       const cancelButton = screen.getByRole('button', { name: /Cancel job/i });
       expect(cancelButton.getAttribute('disabled')).not.toBeNull();

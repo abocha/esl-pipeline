@@ -1,7 +1,8 @@
 import type * as ApiTypes from '../../utils/api';
-import { beforeEach, describe, it } from 'vitest';
+import { afterEach, beforeEach, describe, it } from 'vitest';
 
 import {
+  hydrateResumedAssignment,
   INTEGRATION_TEST_TIMEOUT_MS,
   UI_WAIT_TIMEOUT_MS,
   now,
@@ -17,12 +18,35 @@ import {
   testUserEvent as userEvent,
   testVi as vi,
   testWaitFor as waitFor,
+  waitForResumedPromptReady,
 } from './MinimalAssignment.test-harness';
 
 describe('MinimalAssignment - generation and quota', () => {
   beforeEach(() => {
     setupMinimalAssignmentTest();
   });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  const selectOpenAiGenerationModel = async (user: ReturnType<typeof userEvent.setup>) => {
+    await user.selectOptions(
+      screen.getByRole('combobox', { name: /Generation provider/i }),
+      'openai',
+    );
+    await user.selectOptions(
+      screen.getByRole('combobox', { name: /Generation model/i }),
+      'gpt-5.2',
+    );
+  };
+
+  const renderWithResumedPromptReady = async () => {
+    hydrateResumedAssignment();
+    render(<MinimalAssignment />);
+    await waitForResumedPromptReady();
+  };
+
   it('initializes generation provider/model from job options defaults', async () => {
     render(<MinimalAssignment />);
 
@@ -38,10 +62,8 @@ describe('MinimalAssignment - generation and quota', () => {
   it('shows quota panel from job options before first draft generation', async () => {
     render(<MinimalAssignment />);
 
-    await waitFor(() => {
-      expect(screen.getByText(/Generation quota/i)).toBeTruthy();
-      expect(screen.getByText(/Source: Hybrid/i)).toBeTruthy();
-    });
+    await screen.findByText(/Generation quota/i);
+    await screen.findByText(/Source: Hybrid/i);
     expect(screen.getByText(/RPM: 5/i)).toBeTruthy();
     expect(screen.getByText(/TPM: 250000/i)).toBeTruthy();
     expect(screen.getByText(/RPD: 20/i)).toBeTruthy();
@@ -52,10 +74,8 @@ describe('MinimalAssignment - generation and quota', () => {
     const user = userEvent.setup();
     render(<MinimalAssignment />);
 
-    await waitFor(() => {
-      expect(screen.getByText(/Source: Hybrid/i)).toBeTruthy();
-      expect(screen.getByText(/RPM: 5/i)).toBeTruthy();
-    });
+    await screen.findByText(/Source: Hybrid/i);
+    expect(screen.getByText(/RPM: 5/i)).toBeTruthy();
 
     vi.mocked(api.fetchJobOptions).mockResolvedValueOnce({
       presets: ['b1-default', 'b2-default'],
@@ -118,16 +138,8 @@ describe('MinimalAssignment - generation and quota', () => {
         },
       });
 
-      render(<MinimalAssignment />);
-      await preparePromptReady(user);
-      await user.selectOptions(
-        screen.getByRole('combobox', { name: /Generation provider/i }),
-        'openai',
-      );
-      await user.selectOptions(
-        screen.getByRole('combobox', { name: /Generation model/i }),
-        'gpt-5.2',
-      );
+      await renderWithResumedPromptReady();
+      await selectOpenAiGenerationModel(user);
       await user.click(screen.getByRole('button', { name: /Generate draft from prompt/i }));
 
       await waitFor(() => {
@@ -143,9 +155,7 @@ describe('MinimalAssignment - generation and quota', () => {
   it('shows relative and absolute freshness in quota panel', async () => {
     render(<MinimalAssignment />);
 
-    await waitFor(() => {
-      expect(screen.getByText(/Updated: (just now|\d+[mhd] ago) \(.+\)/i)).toBeTruthy();
-    });
+    await screen.findByText(/Updated: (just now|\d+[mhd] ago) \(.+\)/i);
   });
 
   it(
@@ -172,16 +182,8 @@ describe('MinimalAssignment - generation and quota', () => {
           }),
         );
 
-      render(<MinimalAssignment />);
-      await preparePromptReady(user);
-      await user.selectOptions(
-        screen.getByRole('combobox', { name: /Generation provider/i }),
-        'openai',
-      );
-      await user.selectOptions(
-        screen.getByRole('combobox', { name: /Generation model/i }),
-        'gpt-5.2',
-      );
+      await renderWithResumedPromptReady();
+      await selectOpenAiGenerationModel(user);
       await user.click(screen.getByRole('button', { name: /Generate draft from prompt/i }));
 
       await waitFor(() => {
@@ -214,16 +216,8 @@ describe('MinimalAssignment - generation and quota', () => {
         },
       });
 
-      render(<MinimalAssignment />);
-      await preparePromptReady(user);
-      await user.selectOptions(
-        screen.getByRole('combobox', { name: /Generation provider/i }),
-        'openai',
-      );
-      await user.selectOptions(
-        screen.getByRole('combobox', { name: /Generation model/i }),
-        'gpt-5.2',
-      );
+      await renderWithResumedPromptReady();
+      await selectOpenAiGenerationModel(user);
       await user.click(screen.getByRole('button', { name: /Generate draft from prompt/i }));
 
       await waitFor(() => {
@@ -262,16 +256,8 @@ describe('MinimalAssignment - generation and quota', () => {
           },
         });
 
-        render(<MinimalAssignment />);
-        await preparePromptReady(user);
-        await user.selectOptions(
-          screen.getByRole('combobox', { name: /Generation provider/i }),
-          'openai',
-        );
-        await user.selectOptions(
-          screen.getByRole('combobox', { name: /Generation model/i }),
-          'gpt-5.2',
-        );
+        await renderWithResumedPromptReady();
+        await selectOpenAiGenerationModel(user);
 
         const generateDraftButton = screen.getByRole('button', {
           name: /Generate draft from prompt/i,
@@ -331,18 +317,8 @@ describe('MinimalAssignment - generation and quota', () => {
     'generates draft markdown with selected provider/model',
     async () => {
       const user = userEvent.setup();
-      render(<MinimalAssignment />);
-
-      await preparePromptReady(user);
-
-      await user.selectOptions(
-        screen.getByRole('combobox', { name: /Generation provider/i }),
-        'openai',
-      );
-      await user.selectOptions(
-        screen.getByRole('combobox', { name: /Generation model/i }),
-        'gpt-5.2',
-      );
+      await renderWithResumedPromptReady();
+      await selectOpenAiGenerationModel(user);
 
       await user.click(screen.getByRole('button', { name: /Generate draft from prompt/i }));
 
@@ -372,17 +348,8 @@ describe('MinimalAssignment - generation and quota', () => {
         }),
       );
 
-      render(<MinimalAssignment />);
-      await preparePromptReady(user);
-
-      await user.selectOptions(
-        screen.getByRole('combobox', { name: /Generation provider/i }),
-        'openai',
-      );
-      await user.selectOptions(
-        screen.getByRole('combobox', { name: /Generation model/i }),
-        'gpt-5.2',
-      );
+      await renderWithResumedPromptReady();
+      await selectOpenAiGenerationModel(user);
       await user.click(screen.getByRole('button', { name: /Generate draft from prompt/i }));
 
       await waitFor(() => {
@@ -393,13 +360,9 @@ describe('MinimalAssignment - generation and quota', () => {
         });
       });
 
-      await waitFor(() => {
-        expect(
-          screen.getByText(
-            /Provider timed out\. Retry or choose a faster model\/provider\. Request ID: req-timeout-1/i,
-          ),
-        ).toBeTruthy();
-      });
+      await screen.findByText(
+        /Provider timed out\. Retry or choose a faster model\/provider\. Request ID: req-timeout-1/i,
+      );
     },
     INTEGRATION_TEST_TIMEOUT_MS,
   );
@@ -417,17 +380,8 @@ describe('MinimalAssignment - generation and quota', () => {
           lastUpdatedAt: now,
         },
       });
-      render(<MinimalAssignment />);
-
-      await preparePromptReady(user);
-      await user.selectOptions(
-        screen.getByRole('combobox', { name: /Generation provider/i }),
-        'openai',
-      );
-      await user.selectOptions(
-        screen.getByRole('combobox', { name: /Generation model/i }),
-        'gpt-5.2',
-      );
+      await renderWithResumedPromptReady();
+      await selectOpenAiGenerationModel(user);
 
       const draftTextarea = screen.getByRole('textbox', { name: /Draft markdown/i });
       await user.type(draftTextarea, '# Existing draft');
@@ -470,16 +424,8 @@ describe('MinimalAssignment - generation and quota', () => {
           }),
       );
 
-      render(<MinimalAssignment />);
-      await preparePromptReady(user);
-      await user.selectOptions(
-        screen.getByRole('combobox', { name: /Generation provider/i }),
-        'openai',
-      );
-      await user.selectOptions(
-        screen.getByRole('combobox', { name: /Generation model/i }),
-        'gpt-5.2',
-      );
+      await renderWithResumedPromptReady();
+      await selectOpenAiGenerationModel(user);
 
       await user.click(screen.getByRole('button', { name: /Generate draft from prompt/i }));
       await waitFor(() => {
