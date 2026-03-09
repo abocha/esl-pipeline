@@ -1,5 +1,3 @@
-export type OrchestratorApiVersion = 'v1' | 'v2';
-
 interface OrchestratorV2FailureEnvelope {
   message?: string;
   code?: string;
@@ -7,16 +5,6 @@ interface OrchestratorV2FailureEnvelope {
   category?: string;
   stage?: string;
   retryable?: boolean;
-}
-
-export function resolveWorkerApiVersion(
-  requested: OrchestratorApiVersion | undefined,
-  configured: OrchestratorApiVersion,
-): OrchestratorApiVersion {
-  if (requested === 'v1' || requested === 'v2') {
-    return requested;
-  }
-  return configured;
 }
 
 export function toWorkerV2FailureError(

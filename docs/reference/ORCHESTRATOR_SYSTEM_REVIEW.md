@@ -68,6 +68,7 @@
 ### Direct Integration Boundary
 
 - `batch-backend` depends on orchestrator as the pipeline engine via `createPipeline` and runtime methods.
+- Backend worker execution is standardized on orchestrator API v2 execution envelopes.
 - Batch worker lifecycle, process isolation, cancellation relay, and fallback behavior live in batch-backend worker infrastructure.
 
 ### Confirmed Overlaps / Seams
