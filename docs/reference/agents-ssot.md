@@ -21,9 +21,13 @@ Start with `AGENTS.md` and `docs/README.md`; then read only the sections needed 
 
 - Runtime/tooling/env requirements: section `3`.
 - Package ownership and extension points: section `4`.
+- Orchestrator/batch ownership review artifacts:
+  - `docs/reference/ORCHESTRATOR_SYSTEM_REVIEW.md`
+  - `docs/reference/ORCHESTRATOR_OWNERSHIP_LEDGER.md`
 - Configuration and adapter rules: section `5`.
-- Manifest and pipeline behavior contracts: sections `6` and `7`.
-- CLI/programmatic API constraints: sections `8` and `9`.
+- Manifest and pipeline behavior contracts: section `6`.
+- Programmatic API + library-only boundary constraints: section `7`.
+- Safety rails and extension playbooks: sections `8` and `9`.
 - CI/release/workflow constraints: sections `10`, `11`, and `12`.
 
 ---
@@ -37,7 +41,7 @@ This document enables deterministic decisions by AI agents and maintainers witho
 - What is stable API vs internal detail.
 - Where each behavior is implemented.
 - Which changes are allowed, which require coordination, and which are forbidden.
-- How to map common tasks (e.g., new CLI flags, adapters, manifests) onto concrete files and exports.
+- How to map common tasks (e.g., new entrypoint flags, adapters, manifests) onto concrete files and exports.
 
 Human-facing docs (e.g. [`README.md`](README.md)) explain conceptual usage. This SSOT explains:
 
@@ -93,7 +97,8 @@ Sections or bullets explicitly labeled “to be confirmed” describe intended f
 The ESL Pipeline is a pnpm-based monorepo. Core directories:
 
 - [`packages/orchestrator`](packages/orchestrator)
-  - Primary entry point (CLI and programmatic API).
+  - Canonical programmatic pipeline entry point.
+  - Library-only runtime surface (no CLI/wizard/path-picker).
 - [`packages/shared-infrastructure`](packages/shared-infrastructure)
   - Shared infrastructure utilities for environment loading, storage configuration, and manifest resolution.
 - [`packages/md-validator`](packages/md-validator)
@@ -116,7 +121,7 @@ The ESL Pipeline is a pnpm-based monorepo. Core directories:
 - [`packages/provider-runtime`](packages/provider-runtime)
   - Shared provider runtime policy/classification helpers.
 - [`packages/orchestrator/configs`](packages/orchestrator/configs)
-  - Default presets, voices, student configs, and wizard defaults.
+  - Default presets, voices, and student configs.
 - [`docs`](docs)
   - Architecture, manifest schema, backend groundwork.
 - [`fixtures`](fixtures)
@@ -217,6 +222,7 @@ Verification commands (MUST pass before merging behavior changes):
 - `pnpm test` (unit lane)
 - `pnpm test:integration` (integration lane)
 - `pnpm smoke` (or equivalent orchestrator smoke/integration suite)
+- `pnpm guard:orchestrator:boundary` (library-only boundary + contract/doc sync guard)
 - Dependency alignment:
   - `pnpm deps:pin` — normalize shared versions (AWS SDK, Notion, ElevenLabs, React/Vite, Fastify/pg/Redis/bullmq, etc.).
   - `pnpm deps:upgrade:safe` — upgrade allowlisted SDKs (Notion/ElevenLabs/AWS S3) and stable utilities (axios/remark/unified/commander/ora/picocolors; extras via `SAFE_UPGRADE_EXTRA`), then reapply pins.
@@ -233,7 +239,7 @@ Environment handling:
     - `loadCliEnv(options)` for standard `.env` loading from CWD + repo root.
     - Package-local wrappers MAY be used when package-specific files are required (for example `.env.batch-backend`), but wrappers MUST delegate to `loadCliEnv` instead of reimplementing parsing.
 - Programmatic API:
-  - `loadEnvFiles` mirrors CLI behavior for consumers.
+  - `loadEnvFiles` mirrors executable env bootstrap behavior for consumers.
   - Agents SHOULD use `loadEnvFiles` rather than reimplementing env loading.
 
 Required/commonly used environment variables (non-exhaustive; see README/backends docs):
@@ -272,8 +278,6 @@ This section defines what each package owns, which exports are stable, and how t
 
 [`packages/orchestrator`](packages/orchestrator):
 
-- Hosts the CLI:
-  - [`packages/orchestrator/bin/cli.ts`](packages/orchestrator/bin/cli.ts)
 - Exposes the programmatic API:
   - [`packages/orchestrator/src/index.ts`](packages/orchestrator/src/index.ts)
   - [`packages/orchestrator/src/pipeline.ts`](packages/orchestrator/src/pipeline.ts)
@@ -286,7 +290,8 @@ Contract:
 
 - The orchestrator’s exported API is the primary, stable integration surface.
 - Supporting packages are considered internal dependencies unless explicitly documented otherwise.
-- CLI behavior MUST be a thin, faithful wrapper around orchestrator functions.
+- Orchestrator is library-only (CLI/wizard/path-picker removed).
+- Batch-backend is the operational runtime entrypoint.
 
 #### 4.1.2. Key Exports and Contracts
 
@@ -368,6 +373,35 @@ Adapter rules:
   - Bypass existing selection patterns without updating this SSOT.
 
 Roadmap-only constructs (e.g., `SecretProvider`, advanced tenant-aware providers) are “to be confirmed” and MUST NOT be assumed present until implemented.
+
+#### 4.1.4. Ownership Boundary Rules (Orchestrator vs Batch Backend)
+
+Boundary invariants:
+
+- Canonical pipeline semantics (stage order, manifest semantics, rerun planner behavior) MUST remain owned by orchestrator.
+- Backend worker/process lifecycle behavior (IPC, cancellation relay, worker fallback strategy) MUST remain owned by batch-backend.
+- Shared helper logic duplicated across packages SHOULD be extracted into shared packages (for example `@esl-pipeline/shared-infrastructure`) when it is domain-neutral and reused by both sides.
+- Agents MUST consult the active ownership ledger before moving behavior across package boundaries:
+  - `docs/reference/ORCHESTRATOR_OWNERSHIP_LEDGER.md`
+
+#### 4.1.5. Stage 1 Baseline Lock (Mandatory Before Further Refactor Stages)
+
+Before entering Stage 2+ of the orchestrator library-only roadmap, agents MUST keep the Stage 1 characterization baseline green and unchanged in intent:
+
+- `packages/orchestrator/tests/pipeline.integration.test.ts`
+  - Canonical stage sequencing and callback status ordering for `newAssignment`.
+- `packages/orchestrator/tests/index.test.ts`
+  - Manifest lifecycle behavior (`newAssignment` write + rerun path semantics via `manifestMd`) and cancellation baseline.
+- `packages/orchestrator/tests/observability.test.ts`
+  - Stage/pipeline observability event naming and start/success/skipped patterns.
+- `packages/batch-backend/tests/infrastructure.orchestrator-service.test.ts`
+  - Backend->orchestrator boundary invocation, execution-mode payload shape, and abort relay behavior.
+
+If any of these behaviors intentionally change, agents MUST:
+
+1. Update the ownership ledger with rationale and migration path.
+2. Update this SSOT section and relevant plan stage docs.
+3. Treat compatibility impact under `docs/reference/VERSIONING_MODEL.md` before merge.
 
 ### 4.2. Supporting Packages (Per-Package Snapshots)
 
@@ -510,9 +544,6 @@ Local defaults live under [`packages/orchestrator/configs`](packages/orchestrato
   - Maps voices to ElevenLabs or other TTS configuration.
 - [`packages/orchestrator/configs/students/*.json`](packages/orchestrator/configs/students)
   - Per-student or profile configs.
-- `packages/orchestrator/configs/wizard.defaults.json` (runtime-generated when wizard defaults are saved)
-  - Stores interactive wizard preferences (e.g., `withTts`, upload target).
-  - Resolved via `wizardDefaultsPath` from `resolveConfigPaths`, which binds it to the same `configRoot` as presets.
 
 `createPipeline` and `ConfigProvider` determine how these are loaded. Agents:
 
@@ -556,7 +587,7 @@ Upload (S3) selection:
 - Credentials rely on standard AWS env vars (`AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`).
 - Optional caching toggles (per-process, default off):
   - `ESL_PIPELINE_CACHE_ENV`: memoizes `.env` loading; invalidates on mtime/size change.
-  - `ESL_PIPELINE_CACHE_CONFIG`: memoizes `resolveConfigPaths`; invalidates on mtime/size change of presets/voices/students/wizard defaults or when inputs differ.
+  - `ESL_PIPELINE_CACHE_CONFIG`: memoizes `resolveConfigPaths`; invalidates on mtime/size change of presets/voices/students or when inputs differ.
 
 Mapping to behavior is implemented in:
 
@@ -685,34 +716,13 @@ Agents MUST keep manifest behavior backward compatible unless explicitly perform
 
 ---
 
-## 7. CLI vs Programmatic API: Contracts and Priorities
+## 7. Programmatic API: Contracts and Priorities
 
-### 7.1. CLI Entry Points
+### 7.1. Operational Priority
 
-CLI implementation:
-
-- [`packages/orchestrator/bin/cli.ts`](packages/orchestrator/bin/cli.ts)
-
-Canonical commands (names/flags verified from CLI implementation):
-
-- `esl --md <file>`:
-  - Run full pipeline for given Markdown.
-- `esl status ...`:
-  - Inspect manifest/pipeline status.
-- `esl rerun ...`:
-  - Planner-backed rerun with updated options based on existing manifest.
-  - Supports `--steps`, `--audio`, `--from/--to`, and `--plan` (dry planning only).
-- `esl select ...`:
-  - Select runs or presets (per CLI implementation).
-- `esl --version`:
-  - Print version.
-
-Rules:
-
-- CLI is a thin adapter over orchestrator API.
-- Any CLI feature MUST delegate to orchestrator exports, NOT duplicate logic.
-- Rerun planning precedence MUST remain: `--steps` > `--audio` > `--from/--to` > default.
-- `--with-tts` is an explicit opt-in. When omitted, the orchestrator treats `withTts` as “no override” so that saved defaults from `packages/orchestrator/configs/wizard.defaults.json` or other configuration can apply.
+- Batch-backend is the active operational runtime entrypoint.
+- Orchestrator programmatic API is the canonical pipeline contract.
+- Orchestrator ships as a library-only package (no CLI/wizard/path-picker surface).
 
 ### 7.2. Programmatic API as Source of Truth
 
@@ -722,33 +732,22 @@ Programmatic usage via `@esl-pipeline/orchestrator`:
 - `loadEnvFiles`
 - `resolveConfigPaths`
 - `resolveManifestPath`
+- Additive v2 execution envelopes:
+  - `executeNewAssignmentV2`
+  - `executeRerunAssignmentV2`
+  - `executeGetAssignmentStatusV2`
+  - `executePlanRerunAssignmentV2`
 - Manifest helpers and adapter types.
 
 Contracts:
 
 - Programmatic API is the primary behavioral source of truth.
-- New behavior MUST:
-  - Land in pipeline/orchestrator first.
-  - Then be exposed via CLI as needed.
+- New behavior MUST land in pipeline/orchestrator first.
+- Batch-backend runtime is cut over to v2 execution envelopes; v1 and v2 exports may coexist for compatibility until explicit major-stage removals.
 
 Agents:
 
-- MUST implement new semantics in orchestrator/core functions before wiring CLI.
-- MUST NOT embed pipeline logic directly in CLI argument handlers.
-
-### 7.3. Compatibility and Zero-Install Usage
-
-Zero-install usage:
-
-- `npx @esl-pipeline/orchestrator esl --help` (per README).
-
-Constraints:
-
-- Renaming binaries (e.g., `esl`) or changing command semantics is a breaking change.
-- Such changes REQUIRE:
-  - Semver update.
-  - README/SSOT updates.
-  - Migration notes.
+- MUST implement new semantics in orchestrator/core functions before any backend wiring changes.
 
 ---
 
@@ -904,24 +903,12 @@ Update docs:
   - [`docs/backend-frontend/backend-frontend-alignment.md`](docs/backend-frontend/backend-frontend-alignment.md) - API contract status and gap tracking.
 - This SSOT if relevant.
 
-### 9.6. Add a New CLI Flag
-
-Steps:
-
-1. Extend pipeline/orchestrator options:
-   - Modify relevant types and handling in [`packages/orchestrator/src/pipeline.ts`](packages/orchestrator/src/pipeline.ts) and/or [`packages/orchestrator/src/index.ts`](packages/orchestrator/src/index.ts).
-2. Wire flag in CLI:
-   - Update [`packages/orchestrator/bin/cli.ts`](packages/orchestrator/bin/cli.ts).
-3. Update docs:
-   - CLI usage in [`README.md`](README.md).
-   - This SSOT if behavior is part of core contracts.
-4. Add tests:
-   - CLI parsing.
-   - Pipeline integration.
+### 9.6. CLI Surface Policy
 
 Constraints:
 
-- CLI flags MUST reflect existing or newly added orchestrator options; no CLI-only logic.
+- Do not reintroduce orchestrator CLI/wizard/path-picker surfaces.
+- If an operator entrypoint is required, implement it in batch-backend surfaces and document it in backend docs.
 
 ### 9.7. Extend Observability (Logging/Metrics)
 
@@ -950,7 +937,7 @@ Required steps:
    - Integrate into `newAssignment` / `rerunAssignment`.
 3. Update:
    - Manifests if new durable data is produced (with schema versioning rules).
-   - CLI flags if stage is user-controllable.
+   - Backend/operator controls if stage is user-controllable.
    - Tests across all affected packages.
    - This SSOT and other docs.
 
@@ -1013,7 +1000,7 @@ Semver:
   - `patch`: fixes/docs/ops/refactors without compatibility break.
 - Breaking changes to:
   - Orchestrator API,
-  - CLI behavior,
+  - Operator entrypoint behavior,
   - Manifest schema semantics,
   - Adapter selection semantics,
   REQUIRE:
@@ -1105,7 +1092,7 @@ This section is normative for current voice-alignment behavior.
 Any change affecting:
 
 - Public orchestrator exports or behavior.
-- CLI flags or semantics.
+- Operator entrypoint flags or semantics.
 - Manifest schema or storage behavior.
 - Adapters or environment selection.
 - Observability event names or metric keys.

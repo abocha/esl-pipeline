@@ -19,3 +19,5 @@
    Next phases for harness-aligned docs governance rollout (enforcement expansion + gardening calibration).
 3. `docs/plans/versioning-private-contracts-overhaul.md`  
    Private monorepo versioning overhaul with merge-driven release automation and explicit contract-version registry.
+4. `docs/plans/orchestrator-library-only-roadmap/README.md`  
+   Ownership-driven medium-scale roadmap to make orchestrator library-only and retire CLI/wizard/path-picker surfaces.

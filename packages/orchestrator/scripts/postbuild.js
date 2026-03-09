@@ -1,14 +1,6 @@
 #!/usr/bin/env node
-import { access, chmod, cp, readFile, writeFile } from 'node:fs/promises';
+import { access, cp, readFile, writeFile } from 'node:fs/promises';
 import { dirname, resolve } from 'node:path';
-
-async function ensureExecutable(file) {
-  try {
-    await chmod(file, 0o755);
-  } catch (error) {
-    console.warn(`[postbuild] warning: could not mark ${file} executable`, error);
-  }
-}
 
 async function copySharedConfigs() {
   const source = resolve(import.meta.dirname, '../configs');
@@ -89,10 +81,7 @@ async function normalizeSourcemapSources(mapFile) {
 }
 
 async function normalizeBuiltSourcemaps() {
-  await Promise.all([
-    normalizeSourcemapSources(resolve(import.meta.dirname, '../dist/index.js.map')),
-    normalizeSourcemapSources(resolve(import.meta.dirname, '../dist/cli.js.map')),
-  ]);
+  await normalizeSourcemapSources(resolve(import.meta.dirname, '../dist/index.js.map'));
 }
 
 async function stripSourcemapComment(file) {
@@ -112,14 +101,10 @@ async function stripSourcemapComment(file) {
 }
 
 async function stripBuiltSourcemapComments() {
-  await Promise.all([
-    stripSourcemapComment(resolve(import.meta.dirname, '../dist/index.js')),
-    stripSourcemapComment(resolve(import.meta.dirname, '../dist/cli.js')),
-  ]);
+  await stripSourcemapComment(resolve(import.meta.dirname, '../dist/index.js'));
 }
 
 await Promise.all([
-  ensureExecutable(resolve(import.meta.dirname, '../dist/cli.js')),
   copyEnvExample(),
   copySharedConfigs(),
   normalizeBuiltSourcemaps(),

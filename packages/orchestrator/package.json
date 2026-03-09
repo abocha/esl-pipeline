@@ -7,8 +7,7 @@
     "esl",
     "pipeline",
     "notion",
-    "tts",
-    "cli"
+    "tts"
   ],
   "license": "UNLICENSED",
   "type": "module",
@@ -22,9 +21,6 @@
   },
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
-  "bin": {
-    "esl": "dist/cli.js"
-  },
   "files": [
     "dist",
     "README.md",
@@ -35,13 +31,13 @@
     "build": "pnpm --filter @esl-pipeline/shared-infrastructure build && tsup --config tsup.config.ts && tsc -p tsconfig.types.json",
     "postbuild": "node ./scripts/postbuild.js",
     "clean": "node -e \"fs.rmSync('dist', {recursive:true, force:true})\"",
-    "dev": "tsx watch bin/cli.ts",
+    "dev": "vitest --watch",
     "docker:build": "cd ../.. && docker build -f packages/orchestrator/Dockerfile -t esl-pipeline/orchestrator:local .",
-    "docker:run": "docker run --rm esl-pipeline/orchestrator:local --version",
+    "docker:run": "docker run --rm esl-pipeline/orchestrator:local",
     "prepack": "pnpm run build",
     "test": "pnpm run test:unit",
     "test:unit": "vitest run --exclude \"tests/**/*.integration.test.ts\"",
-    "test:integration": "vitest run tests/pipeline.integration.test.ts tests/wizard-tts-mode.integration.test.ts",
+    "test:integration": "vitest run tests/pipeline.integration.test.ts",
     "test:watch": "vitest",
     "typecheck": "tsc --noEmit"
   },
@@ -49,14 +45,8 @@
     "@aws-sdk/client-s3": "^3.1004.0",
     "@elevenlabs/elevenlabs-js": "^2.38.1",
     "@notionhq/client": "^5.11.1",
-    "commander": "^14.0.2",
-    "enquirer": "^2.4.1",
-    "find-up": "^8.0.0",
-    "globby": "^16.1.1",
     "gray-matter": "^4.0.3",
     "js-yaml": "^4.1.1",
-    "ora": "9.3.0",
-    "picocolors": "^1.1.1",
     "remark-parse": "^11.0.0",
     "unified": "^11.0.5",
     "zod": "^4.1.13"
@@ -75,7 +65,6 @@
     "@esl-pipeline/tts-provider-google": "workspace:*",
     "@types/node": "^25.3.5",
     "tsup": "8.5.1",
-    "tsx": "^4.21.0",
     "typescript": "^5.9.3",
     "vitest": "^4.0.18"
   },

@@ -30,6 +30,9 @@
 - Setup/run commands: [`docs/QUICK_START.md`](QUICK_START.md)
 - Backend/frontend status: [`docs/backend-frontend/backend-frontend-alignment.md`](backend-frontend/backend-frontend-alignment.md)
 - Batch system map: [`docs/backend-frontend/BATCH_SYSTEM.md`](backend-frontend/BATCH_SYSTEM.md)
+- Orchestrator architecture and ownership:
+  - [`docs/reference/ORCHESTRATOR_SYSTEM_REVIEW.md`](reference/ORCHESTRATOR_SYSTEM_REVIEW.md)
+  - [`docs/reference/ORCHESTRATOR_OWNERSHIP_LEDGER.md`](reference/ORCHESTRATOR_OWNERSHIP_LEDGER.md)
 - Env contracts: [`docs/reference/env.md`](reference/env.md)
 - Test methodology + lane model: [`docs/reference/TESTING_GUIDELINES.md`](reference/TESTING_GUIDELINES.md)
 - Validator ruleset conventions: [`docs/reference/MD_VALIDATOR_RULESET_CONVENTIONS.md`](reference/MD_VALIDATOR_RULESET_CONVENTIONS.md)

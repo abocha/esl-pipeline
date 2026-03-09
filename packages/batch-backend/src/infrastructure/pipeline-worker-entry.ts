@@ -5,6 +5,7 @@ import { type BatchBackendConfig, loadConfig } from '../config/env.js';
 import { getFfmpegSemaphore } from './ffmpeg-semaphore.js';
 import { logger as rootLogger } from './logger.js';
 import { applyUserSettingsToEnv } from './pipeline-worker-env.js';
+import { toWorkerV2FailureError } from './pipeline-worker-v2.js';
 import {
   type RunAssignmentPayload,
   type RunRerunAssignmentPayload,
@@ -155,13 +156,29 @@ async function runAssignmentPipeline(
     flags.googleTtsModel = payload.googleTtsModel;
   }
 
-  return (pipeline as { newAssignment: (...args: unknown[]) => Promise<PipelineRunResult> }).newAssignment(
-    flags,
-    undefined,
-    {
-      signal,
-    },
+  const result = await (
+    pipeline as {
+      executeNewAssignmentV2: (...args: unknown[]) => Promise<{
+        ok: boolean;
+        data?: PipelineRunResult;
+        error?: {
+          message?: string;
+          code?: string;
+          causeName?: string;
+          category?: string;
+          stage?: string;
+          retryable?: boolean;
+        };
+      }>;
+    }
+  ).executeNewAssignmentV2(
+    { assignment: flags },
+    { dependencies: { signal } },
   );
+  if (!result.ok) {
+    throw toWorkerV2FailureError(result.error, 'orchestrator v2 newAssignment failed');
+  }
+  return result.data ?? {};
 }
 
 async function runRerunPipeline(
@@ -196,10 +213,29 @@ async function runRerunPipeline(
     (flags as RerunFlags & { manifestMd?: string }).manifestMd = payload.manifestMd;
   }
 
-  return (pipeline as { rerunAssignment: (...args: unknown[]) => Promise<PipelineRunResult> }).rerunAssignment(
-    flags,
-    { signal },
+  const result = await (
+    pipeline as {
+      executeRerunAssignmentV2: (...args: unknown[]) => Promise<{
+        ok: boolean;
+        data?: PipelineRunResult;
+        error?: {
+          message?: string;
+          code?: string;
+          causeName?: string;
+          category?: string;
+          stage?: string;
+          retryable?: boolean;
+        };
+      }>;
+    }
+  ).executeRerunAssignmentV2(
+    { assignment: flags },
+    { dependencies: { signal } },
   );
+  if (!result.ok) {
+    throw toWorkerV2FailureError(result.error, 'orchestrator v2 rerunAssignment failed');
+  }
+  return result.data ?? {};
 }
 
 async function main() {

@@ -2,7 +2,7 @@
 
 This repo uses a few env files for different runtimes:
 
-- `.env` (from `.env.example`): for local CLI / orchestrator usage.
+- `.env` (from `.env.example`): for orchestrator library usage and shared executable defaults.
 - `.env.batch-backend` (from `.env.batch-backend.example`): for the batch backend service (docker-compose).
 
 Node: 24.11.1+ (see `.nvmrc` / `package.json`).
@@ -15,9 +15,9 @@ Node: 24.11.1+ (see `.nvmrc` / `package.json`).
 - `loadCliEnv()` resolves workspace/root `.env` files consistently and supports optional memoized
   loading behavior.
 
-## Core (CLI / Orchestrator)
+## Core (Orchestrator Library)
 
-Set these in `.env` (or your shell) when running `esl` or programmatic API calls:
+Set these in `.env` (or your shell) when running orchestrator programmatic API calls and backend runtime flows:
 
 - `NOTION_TOKEN` — Notion integration token.
 - `NOTION_CLIENT_TIMEOUT` (optional) — Notion client timeout (ms).
@@ -98,7 +98,7 @@ Set these in `.env` (or your shell) when running `esl` or programmatic API calls
 - `ESL_PIPELINE_CONFIG_CONDITIONAL_REQUESTS` (optional, default `true`) — Enables conditional requests (`If-None-Match` / `If-Modified-Since`) for remote config revalidation.
 - `ESL_PIPELINE_CACHE_ENV` (optional, default `false`) — Enables memoized env loading in
   `loadCliEnv()` for executable entrypoints.
-- `LOG_LEVEL` (optional) — Verbosity for CLI logs.
+- `LOG_LEVEL` (optional) — Verbosity for executable runtime logs.
   - Backend logger supports: `trace` | `debug` | `info` | `warn` | `error` | `fatal` | `silent`.
 
 ## Generation Provider and Safety Vars (WS2B + WS3.5)
@@ -236,7 +236,7 @@ Use `.env.batch-backend` for the service stack. It includes all core keys above 
 
 Notes:
 
-- Keep `.env` focused on CLI usage; `.env.batch-backend` adds DB/Redis/storage/SMTP for the service.
+- Keep `.env` focused on shared library/runtime credentials; `.env.batch-backend` adds DB/Redis/storage/SMTP for the service.
 - Both orchestrator and batch-backend need `NOTION_TOKEN` and the provider-specific TTS credentials
   for whichever provider is selected.
 - For S3 manifests or uploads, set the `ESL_PIPELINE_MANIFEST_*` vars and `S3_*`/AWS creds together.

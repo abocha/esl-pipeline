@@ -5,7 +5,7 @@
 - Audience: AI agents, maintainers.
 - Read Time: 4 minutes.
 - Authority Level: Operational quickstart.
-- Last Verified Against: 2026-03-04 repo state.
+- Last Verified Against: 2026-03-09 repo state.
 - Owner: founder-maintainer + automation agents.
 - Review Cadence: biweekly.
 - Status: `active`.
@@ -36,15 +36,18 @@ pnpm check:fast
 pnpm docs:check
 ```
 
-## Orchestrator CLI
+## Operational Entry Point (Backend-First)
 
 ```bash
-pnpm esl --interactive
-pnpm esl --md ./lessons/mission.md --preset b1-default --with-tts --upload s3
-pnpm esl status --md ./lessons/mission.md
+pnpm dev:batch
 ```
 
-## Batch System (Optional)
+## Orchestrator Usage (Library-Only)
+
+Use orchestrator through programmatic APIs (`createPipeline` + execution methods) from backend and service code.
+Do not add or depend on CLI entrypoints in orchestrator.
+
+## Batch System (Local Docker)
 
 ```bash
 pnpm docker:up
