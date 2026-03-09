@@ -25,6 +25,9 @@ function createRichEnglishMockVoices(): GoogleVoiceListEntry[] {
     { name: 'en-US-Chirp3-HD-Charon', languageCodes: ['en-US'], ssmlGender: 'MALE' },
     { name: 'en-US-Chirp3-HD-Aoede', languageCodes: ['en-US'], ssmlGender: 'FEMALE' },
     { name: 'en-GB-Chirp3-HD-Gacrux', languageCodes: ['en-GB'], ssmlGender: 'FEMALE' },
+    { name: 'en-IE-Chirp3-HD-Orpheus', languageCodes: ['en-IE'], ssmlGender: 'MALE' },
+    { name: 'en-AU-Chirp3-HD-Orion', languageCodes: ['en-AU'], ssmlGender: 'MALE' },
+    { name: 'en-NZ-Chirp3-HD-Kea', languageCodes: ['en-NZ'], ssmlGender: 'FEMALE' },
     { name: 'en-US-Studio-O', languageCodes: ['en-US'], ssmlGender: 'FEMALE' },
     { name: 'en-US-Studio-Q', languageCodes: ['en-US'], ssmlGender: 'MALE' },
     { name: 'en-US-Neural2-A', languageCodes: ['en-US'], ssmlGender: 'MALE' },
@@ -32,6 +35,23 @@ function createRichEnglishMockVoices(): GoogleVoiceListEntry[] {
     { name: 'en-US-Wavenet-A', languageCodes: ['en-US'], ssmlGender: 'MALE' },
     { name: 'en-US-Wavenet-F', languageCodes: ['en-US'], ssmlGender: 'FEMALE' },
     { name: 'es-ES-Chirp3-HD-Despina', languageCodes: ['es-ES'], ssmlGender: 'FEMALE' },
+  ];
+}
+
+function createNoBritishButIrishVoices(): GoogleVoiceListEntry[] {
+  return [
+    { name: 'en-US-Chirp3-HD-Charon', languageCodes: ['en-US'], ssmlGender: 'MALE' },
+    { name: 'en-US-Chirp3-HD-Aoede', languageCodes: ['en-US'], ssmlGender: 'FEMALE' },
+    { name: 'en-IE-Chirp3-HD-Orpheus', languageCodes: ['en-IE'], ssmlGender: 'MALE' },
+  ];
+}
+
+function createNoBritishNoIrishVoices(): GoogleVoiceListEntry[] {
+  return [
+    { name: 'en-US-Chirp3-HD-Charon', languageCodes: ['en-US'], ssmlGender: 'MALE' },
+    { name: 'en-US-Chirp3-HD-Aoede', languageCodes: ['en-US'], ssmlGender: 'FEMALE' },
+    { name: 'en-AU-Chirp3-HD-Orion', languageCodes: ['en-AU'], ssmlGender: 'MALE' },
+    { name: 'en-NZ-Chirp3-HD-Kea', languageCodes: ['en-NZ'], ssmlGender: 'FEMALE' },
   ];
 }
 
@@ -63,6 +83,8 @@ describe('google provider adapter basics', () => {
     expect(charon?.labels?.model_family).toBe('chirp3_hd');
     expect(charon?.labels?.locale).toBe('en-US');
     expect(charon?.labels?.accent).toBe('american');
+    const kea = catalog.voices.find((voice) => voice.id === 'en-NZ-Chirp3-HD-Kea');
+    expect(kea?.labels?.accent).toBe('new_zealand');
     expect(catalog.capabilities?.style).toEqual(['chirp3_hd', 'neural2', 'studio', 'wavenet']);
   });
 
@@ -134,6 +156,142 @@ describe('google provider adapter basics', () => {
     expect(yulia?.voiceId).toBe('en-US-Chirp3-HD-Aoede');
     expect(narrator?.selectionReason).toContain('heuristic');
     expect(Array.isArray(narrator?.capabilityMatches)).toBe(true);
+  });
+
+  it('keeps exact accent match as highest-priority auto tier', async () => {
+    mockGoogleVoiceList(createRichEnglishMockVoices());
+    const workdir = await mkdtemp(join(tmpdir(), 'google-tts-provider-accent-exact-'));
+    const voiceMapPath = join(workdir, 'voices.yml');
+    await writeFile(voiceMapPath, ['auto: true'].join('\n'), 'utf8');
+
+    const md = [
+      '---',
+      'student: Example',
+      'speaker_profiles:',
+      '  - id: Narrator',
+      '    role: narrator',
+      '    gender: female',
+      '    accent: british',
+      '---',
+      '',
+      '## A) Study Text',
+      '',
+      ':::study-text Transcript',
+      'Narrator: Exact accent match should win.',
+      ':::',
+      '',
+    ].join('\n');
+
+    const result = await buildStudyTextMp3Google(
+      { context: parseMarkdownContext(md), mdPath: join(workdir, 'lesson.md') },
+      { voiceMapPath, outPath: workdir, googleTtsModel: 'chirp3_hd', preview: true },
+    );
+
+    expect(result.voices[0]?.voiceId).toBe('en-GB-Chirp3-HD-Gacrux');
+    expect(result.voices[0]?.selectionReason).toContain('exact accent match');
+  });
+
+  it('falls back to regional-close accent when exact accent is unavailable', async () => {
+    mockGoogleVoiceList(createNoBritishButIrishVoices());
+    const workdir = await mkdtemp(join(tmpdir(), 'google-tts-provider-accent-regional-'));
+    const voiceMapPath = join(workdir, 'voices.yml');
+    await writeFile(voiceMapPath, ['auto: true'].join('\n'), 'utf8');
+
+    const md = [
+      '---',
+      'student: Example',
+      'speaker_profiles:',
+      '  - id: Narrator',
+      '    role: narrator',
+      '    gender: male',
+      '    accent: british',
+      '---',
+      '',
+      '## A) Study Text',
+      '',
+      ':::study-text Transcript',
+      'Narrator: Regional close fallback should pick Irish.',
+      ':::',
+      '',
+    ].join('\n');
+
+    const result = await buildStudyTextMp3Google(
+      { context: parseMarkdownContext(md), mdPath: join(workdir, 'lesson.md') },
+      { voiceMapPath, outPath: workdir, googleTtsModel: 'chirp3_hd', preview: true },
+    );
+
+    expect(result.voices[0]?.voiceId).toBe('en-IE-Chirp3-HD-Orpheus');
+    expect(result.voices[0]?.selectionReason).toContain('regional close accent fallback');
+  });
+
+  it('falls back to en-US when exact and regional accents are unavailable', async () => {
+    mockGoogleVoiceList(createNoBritishNoIrishVoices());
+    const workdir = await mkdtemp(join(tmpdir(), 'google-tts-provider-accent-en-us-'));
+    const voiceMapPath = join(workdir, 'voices.yml');
+    await writeFile(voiceMapPath, ['auto: true'].join('\n'), 'utf8');
+
+    const md = [
+      '---',
+      'student: Example',
+      'speaker_profiles:',
+      '  - id: Narrator',
+      '    role: narrator',
+      '    gender: female',
+      '    accent: british',
+      '---',
+      '',
+      '## A) Study Text',
+      '',
+      ':::study-text Transcript',
+      'Narrator: Final fallback should prefer en-US.',
+      ':::',
+      '',
+    ].join('\n');
+
+    const result = await buildStudyTextMp3Google(
+      { context: parseMarkdownContext(md), mdPath: join(workdir, 'lesson.md') },
+      { voiceMapPath, outPath: workdir, googleTtsModel: 'chirp3_hd', preview: true },
+    );
+
+    expect(result.voices[0]?.voiceId).toBe('en-US-Chirp3-HD-Aoede');
+    expect(result.voices[0]?.selectionReason).toContain('en-US fallback');
+  });
+
+  it('handles unknown accents deterministically without crashing', async () => {
+    mockGoogleVoiceList(createRichEnglishMockVoices());
+    const workdir = await mkdtemp(join(tmpdir(), 'google-tts-provider-accent-unknown-'));
+    const voiceMapPath = join(workdir, 'voices.yml');
+    await writeFile(voiceMapPath, ['auto: true'].join('\n'), 'utf8');
+
+    const md = [
+      '---',
+      'student: Example',
+      'speaker_profiles:',
+      '  - id: Narrator',
+      '    role: narrator',
+      '    gender: female',
+      '    accent: martian',
+      '---',
+      '',
+      '## A) Study Text',
+      '',
+      ':::study-text Transcript',
+      'Narrator: Unknown accent should still resolve deterministically.',
+      ':::',
+      '',
+    ].join('\n');
+
+    const first = await buildStudyTextMp3Google(
+      { context: parseMarkdownContext(md), mdPath: join(workdir, 'lesson.md') },
+      { voiceMapPath, outPath: workdir, googleTtsModel: 'chirp3_hd', preview: true },
+    );
+    const second = await buildStudyTextMp3Google(
+      { context: parseMarkdownContext(md), mdPath: join(workdir, 'lesson.md') },
+      { voiceMapPath, outPath: workdir, googleTtsModel: 'chirp3_hd', preview: true },
+    );
+
+    expect(first.voices[0]?.voiceId.startsWith('en-US-')).toBe(true);
+    expect(second.voices[0]?.voiceId).toBe(first.voices[0]?.voiceId);
   });
 
   it('accepts explicit voices.yml mappings within selected model family', async () => {
@@ -286,6 +444,86 @@ describe('google provider adapter basics', () => {
     );
 
     expect(first).toEqual(second);
+  });
+
+  it('prefers voice locale over env language default for study-text synthesis', async () => {
+    mockGoogleVoiceList(createRichEnglishMockVoices());
+    const previousEnvLanguage = process.env.ESL_TTS_PROVIDER_GOOGLE_LANGUAGE_CODE;
+    process.env.ESL_TTS_PROVIDER_GOOGLE_LANGUAGE_CODE = 'en-US';
+
+    const workdir = await mkdtemp(join(tmpdir(), 'google-tts-provider-language-locale-study-'));
+    const voiceMapPath = join(workdir, 'voices.yml');
+    await writeFile(voiceMapPath, ['default: en-GB-Chirp3-HD-Gacrux'].join('\n'), 'utf8');
+
+    const context = parseMarkdownContext([
+      '---',
+      'student: Example',
+      '---',
+      '',
+      ':::study-text Transcript',
+      'Narrator: Locale should follow voice.',
+      ':::',
+      '',
+    ].join('\n'));
+
+    const synthSpy = vi
+      .spyOn(googleApi, 'synthesizeGoogleSpeech')
+      .mockResolvedValue(Buffer.from('mock-audio'));
+
+    try {
+      await buildStudyTextMp3Google(
+        { context, mdPath: join(workdir, 'lesson.md') },
+        { voiceMapPath, outPath: workdir },
+      );
+
+      const firstCall = synthSpy.mock.calls[0]?.[0];
+      expect(firstCall?.voiceName).toBe('en-GB-Chirp3-HD-Gacrux');
+      expect(firstCall?.languageCode).toBe('en-GB');
+    } finally {
+      if (previousEnvLanguage === undefined) {
+        delete process.env.ESL_TTS_PROVIDER_GOOGLE_LANGUAGE_CODE;
+      } else {
+        process.env.ESL_TTS_PROVIDER_GOOGLE_LANGUAGE_CODE = previousEnvLanguage;
+      }
+    }
+  });
+
+  it('prefers voice locale over env language default for shadow-sentence synthesis', async () => {
+    const previousEnvLanguage = process.env.ESL_TTS_PROVIDER_GOOGLE_LANGUAGE_CODE;
+    process.env.ESL_TTS_PROVIDER_GOOGLE_LANGUAGE_CODE = 'en-US';
+
+    const workdir = await mkdtemp(join(tmpdir(), 'google-tts-provider-language-locale-shadow-'));
+    const context = parseMarkdownContext([
+      '---',
+      'student: Example',
+      '---',
+      '',
+      '### C. Pronunciation Micro-Focus',
+      '- **Mode:** shadow_sentence',
+      '- **Shadow sentence:** Locale should follow voice.',
+      '',
+    ].join('\n'));
+
+    const synthSpy = vi
+      .spyOn(googleApi, 'synthesizeGoogleSpeech')
+      .mockResolvedValue(Buffer.from('mock-audio'));
+
+    try {
+      await buildPronunciationShadowSentenceMp3Google(
+        { context, mdPath: join(workdir, 'lesson.md'), voiceId: 'en-GB-Chirp3-HD-Gacrux' },
+        { outPath: workdir },
+      );
+
+      const firstCall = synthSpy.mock.calls[0]?.[0];
+      expect(firstCall?.voiceName).toBe('en-GB-Chirp3-HD-Gacrux');
+      expect(firstCall?.languageCode).toBe('en-GB');
+    } finally {
+      if (previousEnvLanguage === undefined) {
+        delete process.env.ESL_TTS_PROVIDER_GOOGLE_LANGUAGE_CODE;
+      } else {
+        process.env.ESL_TTS_PROVIDER_GOOGLE_LANGUAGE_CODE = previousEnvLanguage;
+      }
+    }
   });
 });
 

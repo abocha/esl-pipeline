@@ -95,6 +95,8 @@ interface GoogleCatalogCacheEntry {
   snapshot: GoogleCatalogSnapshot;
 }
 
+type GoogleAccentSelectionTier = 'exact' | 'regional_close' | 'en_us_fallback' | 'general_en';
+
 let googleCatalogCache: GoogleCatalogCacheEntry | null = null;
 
 const MARKDOWN_STRIPPERS: [RegExp, string][] = [
@@ -153,11 +155,16 @@ function resolveGoogleLanguageCode(
   explicitLanguageCode: string | undefined,
   voiceName: string,
 ): string {
+  const explicit = explicitLanguageCode?.trim();
+  if (explicit) return normalizeLanguageCodeToken(explicit);
+
+  const inferred = inferLocaleFromVoiceName(voiceName);
+  if (inferred) return normalizeLanguageCodeToken(inferred);
+
   const envLanguageCode = process.env.ESL_TTS_PROVIDER_GOOGLE_LANGUAGE_CODE?.trim();
-  if (explicitLanguageCode?.trim()) return explicitLanguageCode.trim();
-  if (envLanguageCode) return envLanguageCode;
-  const inferred = /^([a-z]{2,3}-[A-Z]{2,3})-/.exec(voiceName)?.[1];
-  return inferred ?? 'en-US';
+  if (envLanguageCode) return normalizeLanguageCodeToken(envLanguageCode);
+
+  return 'en-US';
 }
 
 function resolveGoogleApiEndpoint(explicitEndpoint?: string): string | undefined {
@@ -213,6 +220,9 @@ function normalizeAccentToken(value: string | undefined): string | undefined {
   if (normalized.includes('indian') || normalized === 'in') return 'indian';
   if (normalized.includes('canadian') || normalized === 'ca') return 'canadian';
   if (normalized.includes('irish') || normalized === 'ie') return 'irish';
+  if (normalized.includes('new_zealand') || normalized === 'nz' || normalized.includes('kiwi')) {
+    return 'new_zealand';
+  }
   if (normalized.includes('south_african') || normalized === 'za') return 'south_african';
   return normalized;
 }
@@ -267,6 +277,7 @@ function deriveAccentFromLocale(locale: string): string {
   if (normalized.endsWith('-IN')) return 'indian';
   if (normalized.endsWith('-CA')) return 'canadian';
   if (normalized.endsWith('-IE')) return 'irish';
+  if (normalized.endsWith('-NZ')) return 'new_zealand';
   if (normalized.endsWith('-ZA')) return 'south_african';
   return normalized.toLowerCase().replaceAll('-', '_');
 }
@@ -430,7 +441,27 @@ function describeSupportedVoicesForModelFamily(
   return sample.join(', ');
 }
 
-function buildGoogleSelectionReason(source: SpeakerVoiceAssignment['source']): string {
+function describeAccentTier(tier: GoogleAccentSelectionTier): string {
+  switch (tier) {
+    case 'exact':
+      return 'exact accent match';
+    case 'regional_close':
+      return 'regional close accent fallback';
+    case 'en_us_fallback':
+      return 'en-US fallback';
+    case 'general_en':
+      return 'general en-* fallback';
+  }
+}
+
+function buildGoogleSelectionReason(args: {
+  source: SpeakerVoiceAssignment['source'];
+  accentTier?: GoogleAccentSelectionTier;
+  preferredAccent?: string;
+  selectedAccent?: string;
+  selectedLocale?: string;
+}): string {
+  const source = args.source;
   switch (source) {
     case 'profile': {
       return 'Selected from speaker_profiles.voice override.';
@@ -442,12 +473,26 @@ function buildGoogleSelectionReason(source: SpeakerVoiceAssignment['source']): s
       return 'Selected from voices.yml default mapping.';
     }
     case 'fallback': {
-      return 'Selected from fallback pool after heuristic scoring.';
+      if (args.accentTier) {
+        const preferred = args.preferredAccent ?? 'unspecified';
+        return (
+          `Selected from accent fallback ladder (${describeAccentTier(args.accentTier)}). ` +
+          `Preferred accent: "${preferred}", selected: "${args.selectedAccent ?? 'unknown'}" (${args.selectedLocale ?? 'unknown locale'}).`
+        );
+      }
+      return 'Selected from accent fallback ladder after capability-aware scoring.';
     }
     case 'reuse': {
       return 'Selected by controlled reuse fallback.';
     }
     default: {
+      if (args.accentTier) {
+        const preferred = args.preferredAccent ?? 'unspecified';
+        return (
+          `Selected by Google capability-aware heuristic scoring (${describeAccentTier(args.accentTier)}). ` +
+          `Preferred accent: "${preferred}", selected: "${args.selectedAccent ?? 'unknown'}" (${args.selectedLocale ?? 'unknown locale'}).`
+        );
+      }
       return 'Selected by Google capability-aware heuristic scoring.';
     }
   }
@@ -518,19 +563,50 @@ function assertVoiceInSelectedModelFamily(args: {
   );
 }
 
+const REGIONAL_ACCENT_GROUPS: readonly (readonly string[])[] = [
+  ['american', 'canadian'],
+  ['british', 'irish'],
+  ['australian', 'new_zealand'],
+];
+
+function resolveRegionalCloseAccents(preferredAccent: string | undefined): Set<string> {
+  if (!preferredAccent) return new Set<string>();
+  const normalizedPreferred = normalizeAccentToken(preferredAccent);
+  if (!normalizedPreferred) return new Set<string>();
+  for (const group of REGIONAL_ACCENT_GROUPS) {
+    if (!group.includes(normalizedPreferred)) continue;
+    return new Set(group.filter((accent) => accent !== normalizedPreferred));
+  }
+  return new Set<string>();
+}
+
+function resolveGoogleAccentTier(args: {
+  voice: GoogleCatalogVoice;
+  preferredAccent?: string;
+  regionalCloseAccents: Set<string>;
+}): { rank: number; tier: GoogleAccentSelectionTier } {
+  const preferredAccent = normalizeAccentToken(args.preferredAccent);
+  if (preferredAccent && args.voice.accent === preferredAccent) {
+    return { rank: 0, tier: 'exact' };
+  }
+  if (args.regionalCloseAccents.has(args.voice.accent)) {
+    return { rank: 1, tier: 'regional_close' };
+  }
+  if (args.voice.locale.toUpperCase().endsWith('-US')) {
+    return { rank: 2, tier: 'en_us_fallback' };
+  }
+  return { rank: 3, tier: 'general_en' };
+}
+
 function scoreGoogleVoiceCandidate(args: {
   speaker: string;
   voice: GoogleCatalogVoice;
   profile: SpeakerProfile | undefined;
-  defaultAccent?: string;
 }): number {
   const profileGender =
     typeof args.profile?.gender === 'string' ? args.profile.gender.trim().toLowerCase() : undefined;
   const preferredGender =
     profileGender && profileGender !== 'neutral' ? profileGender : guessGenderFromName(args.speaker);
-  const preferredAccent = normalizeAccentToken(
-    typeof args.profile?.accent === 'string' ? args.profile.accent : args.defaultAccent,
-  );
 
   let score = 0;
   if (preferredGender && preferredGender !== 'neutral') {
@@ -538,14 +614,6 @@ function scoreGoogleVoiceCandidate(args: {
       score += 45;
     } else {
       score -= 20;
-    }
-  }
-
-  if (preferredAccent) {
-    if (args.voice.accent === preferredAccent) {
-      score += 35;
-    } else {
-      score -= 8;
     }
   }
 
@@ -892,6 +960,7 @@ async function resolveStudyTextPlan(
       source: SpeakerVoiceAssignment['source'];
       score?: number;
       profile: SpeakerProfile | undefined;
+      selectionReason?: string;
     }) => {
       const diagnostics = buildGoogleCapabilityDiagnostics(args.profile, args.voice);
       speakerAssignments.push({
@@ -900,7 +969,11 @@ async function resolveStudyTextPlan(
         source: args.source,
         catalogVoice: args.voice,
         score: args.score,
-        selectionReason: buildGoogleSelectionReason(args.source),
+        selectionReason:
+          args.selectionReason ??
+          buildGoogleSelectionReason({
+            source: args.source,
+          }),
         capabilityMatches: diagnostics.capabilityMatches,
         capabilityMismatches: diagnostics.capabilityMismatches,
       });
@@ -965,18 +1038,23 @@ async function resolveStudyTextPlan(
       continue;
     }
 
+    const preferredAccent = normalizeAccentToken(
+      typeof profile?.accent === 'string' ? profile.accent : opts.defaultAccent,
+    );
+    const regionalCloseAccents = resolveRegionalCloseAccents(preferredAccent);
     const scoredCandidates = modelVoices
       .map((voice) => ({
         voice,
-        score: scoreGoogleVoiceCandidate({
-          speaker,
+        score: scoreGoogleVoiceCandidate({ speaker, voice, profile }),
+        accentTier: resolveGoogleAccentTier({
           voice,
-          profile,
-          defaultAccent: opts.defaultAccent,
+          preferredAccent,
+          regionalCloseAccents,
         }),
       }))
       .sort(
         (a, b) =>
+          a.accentTier.rank - b.accentTier.rank ||
           b.score - a.score ||
           a.voice.locale.localeCompare(b.voice.locale) ||
           a.voice.name.localeCompare(b.voice.name),
@@ -991,14 +1069,26 @@ async function resolveStudyTextPlan(
     }
 
     const source: SpeakerVoiceAssignment['source'] = preferred
-      ? (selected.score > 0 ? 'auto' : 'fallback')
+      ? (selected.accentTier.rank <= 1 ? 'auto' : 'fallback')
       : 'reuse';
+
+    const selectionReason =
+      source === 'reuse'
+        ? undefined
+        : buildGoogleSelectionReason({
+          source,
+          accentTier: selected.accentTier.tier,
+          preferredAccent,
+          selectedAccent: selected.voice.accent,
+          selectedLocale: selected.voice.locale,
+        });
 
     assignResolvedVoice({
       voice: selected.voice,
       source,
-      score: source === 'auto' ? selected.score : undefined,
+      score: source === 'reuse' ? undefined : selected.score,
       profile,
+      selectionReason,
     });
     usedAutoVoices.add(selected.voice.name);
   }
