@@ -2,7 +2,8 @@ import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
+import * as googleProvider from '@esl-pipeline/tts-provider-google';
 
 import { createPromptPackage } from '../src/application/create-prompt-package.js';
 import { getPromptPackage } from '../src/application/get-prompt-package.js';
@@ -163,13 +164,27 @@ describe('application/prompt-package', () => {
 
     const previousVoicesPath = process.env.ELEVENLABS_VOICES_PATH;
     process.env.ELEVENLABS_VOICES_PATH = voicesPath;
+    vi
+      .spyOn(googleProvider, 'loadGoogleVoicesCatalog')
+      .mockResolvedValue({
+        generatedAt: '2026-01-06T00:00:00.000Z',
+        capabilities: {
+          generatedAt: '2026-01-06T00:00:00.000Z',
+          role: ['narrator', 'teacher', 'student', 'system'],
+          gender: ['male', 'female', 'neutral', 'child'],
+          age: ['child', 'teen', 'young', 'adult', 'middle_aged', 'senior', 'universal'],
+          accent: ['australian'],
+          style: ['chirp3_hd'],
+        },
+        voices: [],
+      });
     try {
       const transcript = createTranscriptRecord();
       const storage = createStorageStub({
         getText: async () => 'TRANSCRIPT BODY',
         putPromptPackage: async ({ promptPackageId, text }) => {
-          expect(text).toContain('accent: [american, british]');
-          expect(text).toContain('style: [conversational, professional]');
+          expect(text).toContain('accent: [american, australian, british]');
+          expect(text).toContain('style: [chirp3_hd, conversational, professional]');
           expect(text).not.toContain('<provider-backed values>');
           return { uri: `local://prompt-packages/${promptPackageId}.txt`, bytes: text.length };
         },
@@ -201,15 +216,25 @@ describe('application/prompt-package', () => {
         },
       );
 
-      expect(result?.voiceCapabilitiesSnapshot?.generatedAt).toBe('2026-01-05T00:00:00.000Z');
+      expect(result?.voiceCapabilitiesSnapshot?.generatedAt).toBe('2026-01-06T00:00:00.000Z');
       expect(result?.voiceCapabilitiesSnapshot?.hash).toMatch(/^[a-f0-9]{64}$/);
-      expect(result?.voiceCapabilitiesSnapshot?.capabilities.accent).toEqual(['american', 'british']);
+      expect(result?.voiceCapabilitiesSnapshot?.capabilities.accent).toEqual([
+        'american',
+        'australian',
+        'british',
+      ]);
+      expect(result?.voiceCapabilitiesSnapshot?.capabilities.style).toEqual([
+        'chirp3_hd',
+        'conversational',
+        'professional',
+      ]);
     } finally {
       if (previousVoicesPath === undefined) {
         delete process.env.ELEVENLABS_VOICES_PATH;
       } else {
         process.env.ELEVENLABS_VOICES_PATH = previousVoicesPath;
       }
+      vi.restoreAllMocks();
     }
   });
 

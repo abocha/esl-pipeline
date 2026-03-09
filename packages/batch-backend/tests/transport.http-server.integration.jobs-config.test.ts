@@ -85,6 +85,32 @@ describeHttpServerIntegrationSuite(
     });
   });
 
+  it('POST /jobs forwards google provider/model fields with explicit withTts', async () => {
+    const submitJob = vi.spyOn(submitJobModule, 'submitJob');
+    submitJob.mockResolvedValue({ jobId: 'job-google-1' });
+
+    const response = await app.inject({
+      method: 'POST',
+      url: '/jobs',
+      payload: {
+        md: 'fixtures/ok.md',
+        withTts: true,
+        ttsProvider: 'google',
+        googleTtsModel: 'chirp3_hd',
+      },
+    });
+
+    expect(response.statusCode).toBe(202);
+    expect(submitJob).toHaveBeenCalledWith(
+      expect.objectContaining({
+        md: 'fixtures/ok.md',
+        withTts: true,
+        ttsProvider: 'google',
+        googleTtsModel: 'chirp3_hd',
+      }),
+    );
+  });
+
   it('POST /jobs accepts learningPresetId and forwards it', async () => {
     const submitJob = vi.spyOn(submitJobModule, 'submitJob');
     submitJob.mockResolvedValue({ jobId: 'job-345' });
@@ -212,6 +238,8 @@ describeHttpServerIntegrationSuite(
       notionDatabase: 'db-123',
       publishTarget: null,
       ttsStrategy: 'dialogue',
+      ttsProvider: null,
+      googleTtsModel: null,
       notionUrl: 'https://notion.so/job-approve-1',
       anytypeUrl: null,
       autoPublish: null,

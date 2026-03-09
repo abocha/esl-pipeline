@@ -5,6 +5,7 @@ import type {
   DraftResponse,
   GenerateDraftRequest,
   GenerateDraftResponse,
+  GoogleTtsModel,
   JobOptionsResponse,
   JobProvenanceResponse,
   JobStatus,
@@ -62,6 +63,19 @@ import { getGenerationQuotaWindowDecision } from './MinimalAssignment.quota-wind
 
 const AUDIO_EXTENSIONS = ['.wav', '.mp3', '.m4a', '.aac', '.ogg', '.opus'];
 const POLL_INTERVAL_MS = 3000;
+const FALLBACK_TTS_PROVIDERS = ['elevenlabs', 'google'] as const;
+const FALLBACK_GOOGLE_TTS_MODELS = ['chirp3_hd', 'studio', 'neural2', 'wavenet'] as const;
+const FALLBACK_ELEVENLABS_MODEL = 'eleven_multilingual_v2';
+
+type UiTtsProvider = (typeof FALLBACK_TTS_PROVIDERS)[number];
+
+function isUiTtsProvider(value: string | null | undefined): value is UiTtsProvider {
+  return value === 'elevenlabs' || value === 'google';
+}
+
+function isGoogleTtsModel(value: string | null | undefined): value is GoogleTtsModel {
+  return value === 'chirp3_hd' || value === 'studio' || value === 'neural2' || value === 'wavenet';
+}
 
 function isDefaultStudentName(name: string): boolean {
   return name.trim().toLowerCase() === 'default';
@@ -257,6 +271,8 @@ export const MinimalAssignment: React.FC = () => {
   const [publishError, setPublishError] = useState<string | null>(null);
   const [jobStatus, setJobStatusState] = useState<JobStatus | null>(null);
   const [publishTarget, setPublishTarget] = useState<'notion' | 'anytype' | 'html'>('html');
+  const [selectedTtsProvider, setSelectedTtsProvider] = useState<UiTtsProvider>('elevenlabs');
+  const [selectedTtsModel, setSelectedTtsModel] = useState('');
   const [selectedPreset, setSelectedPreset] = useState('');
   const [jobOptions, setJobOptions] = useState<JobOptionsResponse | null>(null);
   const [jobOptionsError, setJobOptionsError] = useState<string | null>(null);
@@ -294,6 +310,8 @@ export const MinimalAssignment: React.FC = () => {
 
   const [showRerunAdvanced, setShowRerunAdvanced] = useState(false);
   const [rerunForceTts, setRerunForceTts] = useState(false);
+  const [rerunTtsProvider, setRerunTtsProvider] = useState<UiTtsProvider>('elevenlabs');
+  const [rerunGoogleTtsModel, setRerunGoogleTtsModel] = useState('');
   const [rerunVoiceId, setRerunVoiceId] = useState('');
   const [rerunVoiceAccent, setRerunVoiceAccent] = useState('');
   const [rerunTtsStrategy, setRerunTtsStrategy] = useState<'auto' | 'dialogue' | 'tts'>('auto');
@@ -319,6 +337,36 @@ export const MinimalAssignment: React.FC = () => {
     () =>
       generationModelOptions.filter((option) => option.provider === selectedGenerationProvider),
     [generationModelOptions, selectedGenerationProvider],
+  );
+  const ttsProviders = useMemo<UiTtsProvider[]>(() => {
+    const providers = (jobOptions?.ttsProviders ?? [])
+      .map((provider) => (isUiTtsProvider(provider) ? provider : null))
+      .filter((provider): provider is UiTtsProvider => provider !== null);
+    if (providers.length > 0) {
+      return [...new Set(providers)];
+    }
+    return [...FALLBACK_TTS_PROVIDERS];
+  }, [jobOptions?.ttsProviders]);
+  const ttsModelOptionsByProvider = useMemo(() => {
+    const elevenlabsConfigured = jobOptions?.ttsModelOptionsByProvider?.elevenlabs ?? [];
+    const googleConfigured = jobOptions?.ttsModelOptionsByProvider?.google ?? [];
+    const elevenlabsDefault =
+      (jobOptions?.defaultTtsModelByProvider?.elevenlabs ?? '').trim() || FALLBACK_ELEVENLABS_MODEL;
+    const elevenlabsOptions = [...new Set([...elevenlabsConfigured, elevenlabsDefault].filter(Boolean))];
+    const googleOptions = [...new Set(googleConfigured.length > 0 ? googleConfigured : [...FALLBACK_GOOGLE_TTS_MODELS])];
+
+    return {
+      elevenlabs: elevenlabsOptions.length > 0 ? elevenlabsOptions : [FALLBACK_ELEVENLABS_MODEL],
+      google: googleOptions.length > 0 ? googleOptions : [...FALLBACK_GOOGLE_TTS_MODELS],
+    };
+  }, [jobOptions?.defaultTtsModelByProvider, jobOptions?.ttsModelOptionsByProvider]);
+  const selectedTtsModelOptions = useMemo(
+    () => ttsModelOptionsByProvider[selectedTtsProvider] ?? [],
+    [selectedTtsProvider, ttsModelOptionsByProvider],
+  );
+  const selectedRerunTtsModelOptions = useMemo(
+    () => ttsModelOptionsByProvider[rerunTtsProvider] ?? [],
+    [rerunTtsProvider, ttsModelOptionsByProvider],
   );
 
   const presetOptions = useMemo(() => buildSelectablePresetOptions(jobOptions), [jobOptions]);
@@ -407,6 +455,8 @@ export const MinimalAssignment: React.FC = () => {
     setValidating(false);
     setPublishing(false);
     setPublishError(null);
+    setSelectedTtsProvider('elevenlabs');
+    setSelectedTtsModel('');
     setJobStatusState(null);
     setJobProvenance(null);
     setJobProvenanceError(null);
@@ -422,6 +472,8 @@ export const MinimalAssignment: React.FC = () => {
     setPreviewError(null);
     setPreviewing(false);
     setLastPreviewedDraftHash(null);
+    setRerunTtsProvider('elevenlabs');
+    setRerunGoogleTtsModel('');
   }, [invalidateDraftGenerationRequests]);
 
   const loadPromptOptions = useCallback(async () => {
@@ -529,6 +581,66 @@ export const MinimalAssignment: React.FC = () => {
       normalizePresetSelection(presetOptionIds, undefined, current),
     );
   }, [jobOptions, presetOptionIds, selectedPreset]);
+
+  useEffect(() => {
+    if (ttsProviders.length === 0) return;
+    const configuredDefault = jobOptions?.defaultTtsProvider;
+    const preferredProvider =
+      configuredDefault && ttsProviders.includes(configuredDefault)
+        ? configuredDefault
+        : ttsProviders[0];
+    if (!preferredProvider) return;
+    if (!ttsProviders.includes(selectedTtsProvider)) {
+      setSelectedTtsProvider(preferredProvider);
+    }
+  }, [jobOptions?.defaultTtsProvider, selectedTtsProvider, ttsProviders]);
+
+  useEffect(() => {
+    const modelOptions = ttsModelOptionsByProvider[selectedTtsProvider] ?? [];
+    if (modelOptions.length === 0) {
+      if (selectedTtsModel) setSelectedTtsModel('');
+      return;
+    }
+    const configuredDefault = jobOptions?.defaultTtsModelByProvider?.[selectedTtsProvider];
+    const preferredModel =
+      configuredDefault && modelOptions.includes(configuredDefault)
+        ? configuredDefault
+        : modelOptions[0];
+    if (!preferredModel) return;
+    if (!selectedTtsModel || !modelOptions.includes(selectedTtsModel)) {
+      setSelectedTtsModel(preferredModel);
+    }
+  }, [jobOptions?.defaultTtsModelByProvider, selectedTtsModel, selectedTtsProvider, ttsModelOptionsByProvider]);
+
+  useEffect(() => {
+    if (!ttsProviders.includes(rerunTtsProvider)) {
+      setRerunTtsProvider(selectedTtsProvider);
+    }
+  }, [rerunTtsProvider, selectedTtsProvider, ttsProviders]);
+
+  useEffect(() => {
+    const modelOptions = ttsModelOptionsByProvider[rerunTtsProvider] ?? [];
+    if (modelOptions.length === 0) {
+      if (rerunGoogleTtsModel) setRerunGoogleTtsModel('');
+      return;
+    }
+    const preferredModel =
+      rerunTtsProvider === 'google'
+        ? selectedTtsProvider === 'google' && selectedTtsModel && modelOptions.includes(selectedTtsModel)
+          ? selectedTtsModel
+          : modelOptions[0]
+        : modelOptions[0];
+    if (!preferredModel) return;
+    if (!rerunGoogleTtsModel || !modelOptions.includes(rerunGoogleTtsModel)) {
+      setRerunGoogleTtsModel(preferredModel);
+    }
+  }, [
+    rerunGoogleTtsModel,
+    rerunTtsProvider,
+    selectedTtsModel,
+    selectedTtsProvider,
+    ttsModelOptionsByProvider,
+  ]);
 
   useEffect(() => {
     if (generationProviders.length === 0) {
@@ -672,6 +784,15 @@ export const MinimalAssignment: React.FC = () => {
 
         if (status.publishTarget) {
           setPublishTarget(status.publishTarget);
+        }
+        const resumedTtsProvider = status.ttsProvider;
+        if (isUiTtsProvider(resumedTtsProvider)) {
+          setSelectedTtsProvider(resumedTtsProvider);
+          setRerunTtsProvider(resumedTtsProvider);
+        }
+        if (typeof status.googleTtsModel === 'string' && status.googleTtsModel.trim().length > 0) {
+          setSelectedTtsModel(status.googleTtsModel);
+          setRerunGoogleTtsModel(status.googleTtsModel);
         }
         const resumedPresetId = status.learningPresetId ?? status.preset;
         if (resumedPresetId) {
@@ -1274,6 +1395,10 @@ export const MinimalAssignment: React.FC = () => {
       return;
     }
     setPublishing(true);
+    setRerunTtsProvider(selectedTtsProvider);
+    if (selectedTtsProvider === 'google' && selectedTtsModel) {
+      setRerunGoogleTtsModel(selectedTtsModel);
+    }
 
     try {
       let savedDraft = draft;
@@ -1291,6 +1416,11 @@ export const MinimalAssignment: React.FC = () => {
         ...(jobStatus?.jobId ? { jobId: jobStatus.jobId } : {}),
         jobOverrides: {
           publishTarget,
+          withTts: true,
+          ttsProvider: selectedTtsProvider,
+          ...(selectedTtsProvider === 'google' && isGoogleTtsModel(selectedTtsModel)
+            ? { googleTtsModel: selectedTtsModel }
+            : {}),
           ...(validPreset
             ? learningPresetCatalogEnabled
               ? { learningPresetId: validPreset }
@@ -1415,10 +1545,18 @@ export const MinimalAssignment: React.FC = () => {
 
     const stabilityInput = rerunDialogueStability.trim();
     const seedInput = rerunDialogueSeed.trim();
+    const effectiveRerunTtsProvider = rerunTtsProvider || selectedTtsProvider;
     const payload: Parameters<typeof rerunAudioJob>[1] = {
       forceTts: rerunForceTts,
       ttsStrategy: rerunTtsStrategy,
+      ttsProvider: effectiveRerunTtsProvider,
     };
+    if (effectiveRerunTtsProvider === 'google') {
+      const modelCandidate = (rerunGoogleTtsModel || selectedTtsModel).trim();
+      if (isGoogleTtsModel(modelCandidate)) {
+        payload.googleTtsModel = modelCandidate;
+      }
+    }
 
     if (rerunVoiceId.trim()) {
       payload.voiceId = rerunVoiceId.trim();
@@ -2317,6 +2455,37 @@ export const MinimalAssignment: React.FC = () => {
           </select>
         </label>
         <label className="minimal-select">
+          TTS provider
+          <select
+            value={selectedTtsProvider}
+            onChange={(event) => setSelectedTtsProvider(event.target.value as UiTtsProvider)}
+            disabled={ttsProviders.length === 0}
+          >
+            {ttsProviders.map((provider) => (
+              <option key={provider} value={provider}>
+                {provider}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label className="minimal-select">
+          TTS model
+          <select
+            value={selectedTtsModel}
+            onChange={(event) => setSelectedTtsModel(event.target.value)}
+            disabled={selectedTtsModelOptions.length === 0}
+          >
+            {selectedTtsModelOptions.length === 0 ? (
+              <option value="">No models available</option>
+            ) : null}
+            {selectedTtsModelOptions.map((model) => (
+              <option key={model} value={model}>
+                {model}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label className="minimal-select">
           Publish to
           <select
             value={publishTarget}
@@ -2427,6 +2596,36 @@ export const MinimalAssignment: React.FC = () => {
                       onChange={(event) => setRerunVoiceAccent(event.target.value)}
                       placeholder="accent override"
                     />
+                  </label>
+                  <label className="minimal-field">
+                    <span>TTS provider</span>
+                    <select
+                      value={rerunTtsProvider}
+                      onChange={(event) => setRerunTtsProvider(event.target.value as UiTtsProvider)}
+                    >
+                      {ttsProviders.map((provider) => (
+                        <option key={provider} value={provider}>
+                          {provider}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  <label className="minimal-field">
+                    <span>TTS model</span>
+                    <select
+                      value={rerunGoogleTtsModel}
+                      onChange={(event) => setRerunGoogleTtsModel(event.target.value)}
+                      disabled={selectedRerunTtsModelOptions.length === 0}
+                    >
+                      {selectedRerunTtsModelOptions.length === 0 ? (
+                        <option value="">No models available</option>
+                      ) : null}
+                      {selectedRerunTtsModelOptions.map((model) => (
+                        <option key={model} value={model}>
+                          {model}
+                        </option>
+                      ))}
+                    </select>
                   </label>
                   <label className="minimal-field">
                     <span>TTS strategy</span>

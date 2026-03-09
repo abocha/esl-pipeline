@@ -14,7 +14,7 @@ export const MANIFEST_CONTRACT_VERSION = '1.0.0';
 export const PROMPT_SCHEMA_VERSION = '1.0.0';
 export const VALIDATOR_CONTRACT_VERSION = '1.0.0';
 export const DB_CONTRACT_VERSION = '0.7.0';
-export const DB_MIGRATION_HEAD = '0007_rls_readiness_artifacts';
+export const DB_MIGRATION_HEAD = '0008_jobs_tts_provider_and_google_model';
 
 export const CONTRACT_VERSIONS: Readonly<ContractVersionRegistry> = Object.freeze({
   api: API_CONTRACT_VERSION,

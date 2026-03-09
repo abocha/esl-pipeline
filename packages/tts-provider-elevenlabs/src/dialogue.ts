@@ -21,7 +21,7 @@ import type {
 } from './types.js';
 
 const DEFAULT_DIALOGUE_MODEL_ID = 'eleven_v3';
-const DEFAULT_OUTPUT_FORMAT = process.env.ELEVENLABS_OUTPUT_FORMAT ?? 'mp3_22050_32';
+const DEFAULT_OUTPUT_FORMAT = process.env.ESL_TTS_PROVIDER_ELEVENLABS_OUTPUT_FORMAT ?? 'mp3_22050_32';
 const MAX_DIALOGUE_INPUTS = 100;
 const MAX_TOTAL_CHARS = 5000;
 const DIALOGUE_TIMEOUT_SECONDS = 60;
@@ -173,8 +173,8 @@ export async function synthesizeDialogueChunk(
     throw new Error('Cannot synthesize empty dialogue chunk');
   }
 
-  if (!apiKey && !process.env.ELEVENLABS_API_KEY && !process.env.ELEVENLABS_API_TOKEN) {
-    throw new Error('Missing ELEVENLABS_API_KEY');
+  if (!apiKey && !process.env.ESL_TTS_PROVIDER_ELEVENLABS_API_KEY && !process.env.ESL_TTS_PROVIDER_ELEVENLABS_API_TOKEN) {
+    throw new Error('Missing ESL_TTS_PROVIDER_ELEVENLABS_API_KEY');
   }
 
   const normalizedChunk = normalizeDialogueInputs(chunk);
@@ -213,8 +213,8 @@ export async function synthesizeDialogueChunk(
 
 function ensureApiKey(apiKey: string): void {
   if (apiKey.trim().length > 0) return;
-  if (process.env.ELEVENLABS_API_KEY || process.env.ELEVENLABS_API_TOKEN) return;
-  throw new Error('Missing ELEVENLABS_API_KEY');
+  if (process.env.ESL_TTS_PROVIDER_ELEVENLABS_API_KEY || process.env.ESL_TTS_PROVIDER_ELEVENLABS_API_TOKEN) return;
+  throw new Error('Missing ESL_TTS_PROVIDER_ELEVENLABS_API_KEY');
 }
 
 /**
@@ -267,7 +267,7 @@ export async function synthesizeDialogue(
   }
 
   let tailSeconds = 0.4;
-  const tailEnv = process.env.ELEVENLABS_SILENCE_TAIL_SECONDS;
+  const tailEnv = process.env.ESL_TTS_PROVIDER_ELEVENLABS_SILENCE_TAIL_SECONDS;
   if (tailEnv && tailEnv.trim().length > 0) {
     const parsed = Number(tailEnv);
     if (Number.isFinite(parsed) && parsed >= 0 && parsed <= 5) {

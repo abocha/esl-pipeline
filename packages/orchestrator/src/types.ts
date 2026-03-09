@@ -1,6 +1,7 @@
 import type { ConfigProvider } from './config.js';
 import type { AssignmentManifest, ManifestStore } from './manifest.js';
 import type { PipelineLogger, PipelineMetrics } from './observability.js';
+import type { GoogleTtsModel, TtsProviderId as TtsProvider } from '@esl-pipeline/tts-core';
 
 export type AssignmentStage =
   | 'validate'
@@ -41,6 +42,8 @@ export interface NewAssignmentFlags {
   accentPreference?: string;
   voiceId?: string;
   withTts?: boolean;
+  ttsProvider?: TtsProvider;
+  googleTtsModel?: GoogleTtsModel;
   publishTarget?: 'notion' | 'anytype' | 'html';
   anytypeSpaceId?: string;
 
@@ -89,6 +92,8 @@ export interface RerunFlags {
   presign?: number;
   accentPreference?: string;
   voiceId?: string;
+  ttsProvider?: TtsProvider;
+  googleTtsModel?: GoogleTtsModel;
 
   // TTS strategy options for rerun
   ttsStrategy?: 'auto' | 'dialogue' | 'tts';

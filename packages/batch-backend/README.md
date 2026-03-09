@@ -46,7 +46,7 @@ High-level view:
 - Redis/BullMQ provides the work queue:
   - Decouples API from processing and supports horizontal worker scaling.
 - Optional MinIO/S3 is used for pipeline manifests when configured.
-- `@esl-pipeline/orchestrator` (and downstream packages like `md-validator`, `pmd`, `notion-adapter`, `tts-elevenlabs`, `storage-uploader`) implements the actual ESL content pipeline.
+- `@esl-pipeline/orchestrator` (and downstream packages like `md-validator`, `pmd`, `notion-adapter`, `tts-core`, `tts-provider-*`, `storage-uploader`) implements the actual ESL content pipeline.
 - `batch-backend` does not redefine pipeline behavior:
   - It orchestrates, persists, and observes orchestrator runs.
 
@@ -245,7 +245,8 @@ Mail (present but not part of the core job flow in this version):
 Orchestrator / pipeline integration:
 
 - `NOTION_TOKEN`
-- `ELEVENLABS_API_KEY`
+- `ESL_TTS_DEFAULT_PROVIDER`
+- `ESL_TTS_PROVIDER_ELEVENLABS_API_KEY` (required when provider is `elevenlabs`)
 - `ESL_PIPELINE_MANIFEST_STORE`
   - `filesystem` | `s3`.
   - Default:

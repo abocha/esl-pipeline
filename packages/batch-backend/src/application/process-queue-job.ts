@@ -105,26 +105,40 @@ export async function processQueueJob(payload: QueueJobPayload): Promise<void> {
     const uploadFlag = resolveUploadTarget(running.upload, config.storage.provider);
 
     // Fetch user settings if job is linked to a user
-    let userSettings: { elevenLabsApiKey?: string | null; notionToken?: string | null } | undefined;
+    let userSettings:
+      | {
+        elevenLabsApiKey?: string | null;
+        notionToken?: string | null;
+        ttsProvider?: 'elevenlabs' | 'google' | null;
+      }
+      | undefined;
     if (running.userId) {
       const settings = await getSettingsByUserId(running.userId);
       if (settings) {
         const elevenLabsApiKey = await getDecryptedElevenLabsKey(running.userId);
         const notionToken = await getDecryptedNotionToken(running.userId);
 
-        if (elevenLabsApiKey || notionToken) {
+        if (elevenLabsApiKey || notionToken || settings.ttsProvider) {
           userSettings = {
             elevenLabsApiKey: elevenLabsApiKey ?? null,
             notionToken: notionToken ?? null,
           };
+          if (settings.ttsProvider) {
+            userSettings.ttsProvider = settings.ttsProvider;
+          }
           log.info('Using user-specific settings for job', {
             userId: running.userId,
             hasElevenLabsKey: !!elevenLabsApiKey,
             hasNotionToken: !!notionToken,
+            ttsProvider: settings.ttsProvider,
           });
         }
       }
     }
+    const userSettingsTtsProvider =
+      userSettings?.ttsProvider === 'elevenlabs' || userSettings?.ttsProvider === 'google'
+        ? userSettings.ttsProvider
+        : undefined;
 
     const isRerunExecution =
       payload.executionMode === 'rerun_audio' || payload.executionMode === 'rerun_publish';
@@ -154,6 +168,13 @@ export async function processQueueJob(payload: QueueJobPayload): Promise<void> {
                   payload.rerun?.accentPreference ?? running.voiceAccent ?? undefined,
                 voiceId: payload.rerun?.voiceId ?? running.voiceId ?? undefined,
                 ttsStrategy: payload.rerun?.ttsStrategy ?? running.ttsStrategy ?? undefined,
+                ttsProvider:
+                  payload.rerun?.ttsProvider ??
+                  running.ttsProvider ??
+                  userSettingsTtsProvider ??
+                  undefined,
+                googleTtsModel:
+                  payload.rerun?.googleTtsModel ?? running.googleTtsModel ?? undefined,
                 dialogueLanguage: payload.rerun?.dialogueLanguage,
                 dialogueStability: payload.rerun?.dialogueStability,
                 dialogueSeed: payload.rerun?.dialogueSeed,
@@ -177,6 +198,8 @@ export async function processQueueJob(payload: QueueJobPayload): Promise<void> {
                   running.notionDatabase ?? config.orchestrator.notionDatabaseId ?? undefined,
                 publishTarget: running.publishTarget ?? undefined,
                 ttsStrategy: running.ttsStrategy ?? undefined,
+                ttsProvider: running.ttsProvider ?? userSettingsTtsProvider ?? undefined,
+                googleTtsModel: running.googleTtsModel ?? undefined,
                 settings: userSettings,
               },
               runId,

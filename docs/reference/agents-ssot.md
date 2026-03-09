@@ -103,8 +103,12 @@ The ESL Pipeline is a pnpm-based monorepo. Core directories:
 - [`packages/notion-adapter`](packages/notion-adapter)
   - Notion-specific adapter used by orchestrator; serves as the template for future adapters.
   - Handles Notion import, heading presets, and audio attachment.
-- [`packages/tts-elevenlabs`](packages/tts-elevenlabs)
-  - ElevenLabs TTS integration (uses system `ffmpeg`).
+- [`packages/tts-core`](packages/tts-core)
+  - TTS provider registry, contracts, and orchestration surface.
+- [`packages/tts-provider-elevenlabs`](packages/tts-provider-elevenlabs)
+  - ElevenLabs provider adapter (uses system `ffmpeg`).
+- [`packages/tts-provider-google`](packages/tts-provider-google)
+  - Google Cloud provider adapter (uses system `ffmpeg`).
 - [`packages/storage-uploader`](packages/storage-uploader)
   - File upload (e.g. S3); used by orchestrator.
 - [`packages/html-publisher`](packages/html-publisher)
@@ -133,7 +137,7 @@ Canonical pipeline stages (implemented via orchestrator and subpackages):
 3. Notion import + heading presets + audio attachment
    - Uses [`packages/notion-adapter`](packages/notion-adapter).
 4. Text-to-speech (TTS) generation
-   - Uses [`packages/tts-elevenlabs`](packages/tts-elevenlabs) with system `ffmpeg`.
+   - Uses [`packages/tts-core`](packages/tts-core) with explicit provider adapters.
 5. Upload/storage
    - Uses [`packages/storage-uploader`](packages/storage-uploader) (e.g., S3).
 6. Manifest persistence
@@ -178,7 +182,7 @@ Key artifacts:
   - Managed via `notion-adapter`.
 - Audio files
   - Local temporary output + remote URLs (e.g., S3).
-  - Owned by `tts-elevenlabs` + `storage-uploader`.
+  - Owned by `tts-core` + provider adapters + `storage-uploader`.
 - Assignment manifest
   - Canonical record of the pipeline run.
   - Schema documented in [`docs/reference/pipeline-manifest.md`](docs/reference/pipeline-manifest.md).
@@ -201,7 +205,7 @@ Agents MUST respect:
   - `pnpm` 8+ (use `corepack enable`).
 - FFmpeg:
   - Available on `PATH` or via `FFMPEG_PATH`.
-  - Required by `tts-elevenlabs`.
+  - Required by `tts-provider-elevenlabs` and `tts-provider-google`.
 - Module system:
   - ESM/modern TypeScript targets as configured in `tsconfig` files.
 
@@ -236,8 +240,10 @@ Required/commonly used environment variables (non-exhaustive; see README/backend
 
 - Notion:
   - `NOTION_TOKEN`
-- ElevenLabs:
-  - `ELEVENLABS_API_KEY`
+- TTS providers:
+  - `ESL_TTS_DEFAULT_PROVIDER`
+  - `ESL_TTS_PROVIDER_ORDER`
+  - `ESL_TTS_PROVIDER_ELEVENLABS_API_KEY`
 - AWS / storage:
   - `AWS_REGION`
   - `AWS_ACCESS_KEY_ID`
@@ -430,19 +436,27 @@ For all subsections:
 - Safe extensions:
   - Add new adapter operations as long as existing orchestrator calls remain backward compatible.
 
-#### 4.2.7. [`packages/tts-elevenlabs`](packages/tts-elevenlabs)
+#### 4.2.7. [`packages/tts-core`](packages/tts-core)
 
 - Role:
-  - Integrate with ElevenLabs to produce audio files.
+  - Provider-agnostic TTS contracts, registry, and orchestration entrypoints.
 - Contracts:
-  - Requires valid ElevenLabs credentials and ffmpeg.
-  - Produces file paths/metadata used by uploader and manifest.
-  - Supports study-text synthesis and optional pronunciation shadow-sentence synthesis
-    (activated by `**Mode:** shadow_sentence` content contract).
+  - `TtsEngine` composes explicit providers and resolves `ttsProvider` deterministically.
+  - Exposes shared manifest/result shapes consumed by orchestrator and batch surfaces.
 - Safe extensions:
-  - Additional voices/options; MUST NOT break default voice behavior.
+  - Add new providers via explicit adapter registration without branching inside core.
 
-#### 4.2.8. [`packages/storage-uploader`](packages/storage-uploader)
+#### 4.2.8. [`packages/tts-provider-elevenlabs`](packages/tts-provider-elevenlabs) and [`packages/tts-provider-google`](packages/tts-provider-google)
+
+- Role:
+  - Provider-specific synthesis, voice catalog loading, assignment resolution, and diagnostics.
+- Contracts:
+  - Provider env keys are namespaced under `ESL_TTS_PROVIDER_<PROVIDER>_*`.
+  - Provider adapters must return shared `BuildStudyTextResult` / `BuildPronunciationShadowSentenceResult` shapes.
+- Safe extensions:
+  - Provider-local model/voice expansion that preserves shared contracts.
+
+#### 4.2.9. [`packages/storage-uploader`](packages/storage-uploader)
 
 - Role:
   - Upload files (e.g., audio) to storage backends such as S3.
@@ -452,7 +466,7 @@ For all subsections:
 - Safe extensions:
   - New backends allowed; orchestrator updates required to route to them.
 
-#### 4.2.9. [`packages/shared-infrastructure`](packages/shared-infrastructure)
+#### 4.2.10. [`packages/shared-infrastructure`](packages/shared-infrastructure)
 
 - Role:
   - Centralized infrastructure utilities shared between orchestrator and batch-backend.
@@ -751,7 +765,7 @@ Agents MUST NOT:
 - Alter manifest schema in incompatible ways (see section 6.3).
 - Remove or silently change public orchestrator exports.
 - Change environment variable names or meanings that users depend on.
-- Remove ffmpeg/system requirements relied upon by `tts-elevenlabs`.
+- Remove ffmpeg/system requirements relied upon by TTS provider adapters.
 - Violate ESM/TypeScript configurations that build requires.
 
 ### 8.2. Editing Rules for Agents
@@ -818,7 +832,7 @@ Steps:
 
 1. Edit [`packages/orchestrator/configs/voices.yml`](packages/orchestrator/configs/voices.yml).
 2. Ensure compatibility with:
-   - `tts-elevenlabs` voice resolution.
+   - active TTS provider voice resolution (`tts-provider-elevenlabs` / `tts-provider-google`).
    - Any orchestrator logic that reads voices.
 3. Run tests affecting TTS and voice resolution.
 

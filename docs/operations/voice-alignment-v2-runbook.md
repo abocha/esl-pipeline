@@ -9,14 +9,14 @@ validation, and TTS execution.
 
 - Node `24.11.1+`
 - `pnpm` installed
-- `ELEVENLABS_API_KEY` configured
-- Voice catalog path available (`ELEVENLABS_VOICES_PATH` or default
+- `ESL_TTS_PROVIDER_ELEVENLABS_API_KEY` configured
+- Voice catalog path available (`ESL_TTS_PROVIDER_ELEVENLABS_VOICES_PATH` or default
   `packages/orchestrator/configs/elevenlabs.voices.json`)
 
 ## 1) Refresh Voice Catalog + Capability Snapshot
 
 1. Sync voices from provider:
-   - `pnpm --filter @esl-pipeline/tts-elevenlabs voices:sync`
+   - `pnpm --filter @esl-pipeline/tts-provider-elevenlabs exec node -e "import('./dist/src/index.js').then(async (m) => { const result = await m.syncVoices(); console.log(result); })"`
 2. Confirm catalog was written:
    - Check `generatedAt` and `capabilities` in `packages/orchestrator/configs/elevenlabs.voices.json`
 3. Commit updated catalog when intentional:

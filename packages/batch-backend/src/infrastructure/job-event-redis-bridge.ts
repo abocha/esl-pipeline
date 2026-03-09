@@ -36,6 +36,8 @@ interface SerializedJobRecord {
   publishTarget: string | null;
   notionDatabase: string | null;
   ttsStrategy: string | null;
+  ttsProvider: string | null;
+  googleTtsModel: string | null;
   notionUrl: string | null;
   anytypeUrl: string | null;
   htmlUrl: string | null;
@@ -297,6 +299,8 @@ function serializeJobRecord(job: JobRecord): SerializedJobRecord {
     publishTarget: job.publishTarget ?? null,
     notionDatabase: job.notionDatabase ?? null,
     ttsStrategy: job.ttsStrategy ?? null,
+    ttsProvider: job.ttsProvider ?? null,
+    googleTtsModel: job.googleTtsModel ?? null,
     notionUrl: job.notionUrl ?? null,
     anytypeUrl: job.anytypeUrl ?? null,
     htmlUrl: job.htmlUrl ?? null,
@@ -327,6 +331,8 @@ function deserializeJobRecord(serialized: SerializedJobRecord): JobRecord {
     publishTarget: normalizePublishTarget(serialized.publishTarget),
     notionDatabase: serialized.notionDatabase ?? null,
     ttsStrategy: normalizeTtsStrategy(serialized.ttsStrategy),
+    ttsProvider: normalizeTtsProvider(serialized.ttsProvider),
+    googleTtsModel: normalizeGoogleTtsModel(serialized.googleTtsModel),
     notionUrl: serialized.notionUrl ?? null,
     anytypeUrl: serialized.anytypeUrl ?? null,
     htmlUrl: serialized.htmlUrl ?? null,
@@ -348,5 +354,17 @@ function normalizePublishTarget(value: string | null | undefined): JobRecord['pu
 
 function normalizeTtsStrategy(value: string | null | undefined): JobRecord['ttsStrategy'] {
   if (value === 'auto' || value === 'dialogue' || value === 'tts') return value;
+  return null;
+}
+
+function normalizeTtsProvider(value: string | null | undefined): JobRecord['ttsProvider'] {
+  if (value === 'elevenlabs' || value === 'google') return value;
+  return null;
+}
+
+function normalizeGoogleTtsModel(value: string | null | undefined): JobRecord['googleTtsModel'] {
+  if (value === 'chirp3_hd' || value === 'studio' || value === 'neural2' || value === 'wavenet') {
+    return value;
+  }
   return null;
 }

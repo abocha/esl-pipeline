@@ -1133,7 +1133,7 @@ function applyEnvDefaults(state: WizardState): void {
     setStateValue(state, 'prefix', envPrefix, 'env', { overwrite: false });
   }
 
-  const envTtsStrategy = process.env.ELEVENLABS_TTS_STRATEGY as
+  const envTtsStrategy = process.env.ESL_TTS_PROVIDER_ELEVENLABS_STRATEGY as
     | 'auto'
     | 'dialogue'
     | 'tts'
@@ -1144,7 +1144,7 @@ function applyEnvDefaults(state: WizardState): void {
     setStateValue(state, 'ttsStrategy', 'auto', 'default');
   }
 
-  const envDialogueLanguage = process.env.ELEVENLABS_DIALOGUE_LANGUAGE;
+  const envDialogueLanguage = process.env.ESL_TTS_PROVIDER_ELEVENLABS_DIALOGUE_LANGUAGE;
   if (envDialogueLanguage && envDialogueLanguage.trim()) {
     const langRegex = /^[a-z]{2}$/i;
     if (langRegex.test(envDialogueLanguage)) {
@@ -1154,7 +1154,7 @@ function applyEnvDefaults(state: WizardState): void {
     }
   }
 
-  const envDialogueStability = process.env.ELEVENLABS_DIALOGUE_STABILITY;
+  const envDialogueStability = process.env.ESL_TTS_PROVIDER_ELEVENLABS_DIALOGUE_STABILITY;
   if (envDialogueStability) {
     const stability = Number.parseFloat(envDialogueStability);
     if (!Number.isNaN(stability) && stability >= 0 && stability <= 1) {
@@ -1162,7 +1162,7 @@ function applyEnvDefaults(state: WizardState): void {
     }
   }
 
-  const envDialogueSeed = process.env.ELEVENLABS_DIALOGUE_SEED;
+  const envDialogueSeed = process.env.ESL_TTS_PROVIDER_ELEVENLABS_DIALOGUE_SEED;
   if (envDialogueSeed) {
     const seed = Number.parseInt(envDialogueSeed, 10);
     if (!Number.isNaN(seed) && seed >= 0) {

@@ -23,6 +23,7 @@ docs/templates/*
 
 .env
 .env.batch-backend
+.secrets
 
 /uploads
 /tmp

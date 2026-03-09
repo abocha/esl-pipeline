@@ -80,6 +80,8 @@ export async function rerunPublish(
     notionDatabase: job.notionDatabase ?? undefined,
     publishTarget: job.publishTarget ?? undefined,
     ttsStrategy: job.ttsStrategy ?? undefined,
+    ttsProvider: job.ttsProvider ?? undefined,
+    googleTtsModel: job.googleTtsModel ?? undefined,
     userId: job.userId ?? undefined,
     autoPublish: job.autoPublish ?? undefined,
     sourceJobId: jobId,
@@ -100,6 +102,8 @@ export async function rerunPublish(
       voiceId: job.voiceId ?? undefined,
       accentPreference: job.voiceAccent ?? undefined,
       ttsStrategy: job.ttsStrategy ?? undefined,
+      ttsProvider: job.ttsProvider ?? undefined,
+      googleTtsModel: job.googleTtsModel ?? undefined,
     },
   });
 

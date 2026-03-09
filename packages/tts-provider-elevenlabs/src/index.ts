@@ -48,23 +48,34 @@ import type {
   BuildStudyTextResult,
 } from './types.js';
 
-const DEFAULT_MODEL_ID = process.env.ELEVENLABS_MODEL_ID ?? 'eleven_multilingual_v2';
+const DEFAULT_MODEL_ID = process.env.ESL_TTS_PROVIDER_ELEVENLABS_MODEL_ID ?? 'eleven_multilingual_v2';
 type TextToSpeechConvertBody = Parameters<
   ReturnType<typeof getElevenClient>['textToSpeech']['convert']
 >[1];
 type TtsConvertRequest = Pick<TextToSpeechConvertBody, 'modelId' | 'outputFormat'>;
 type TtsOutputFormat = NonNullable<TextToSpeechConvertBody['outputFormat']>;
 
-const DEFAULT_OUTPUT_FORMAT = (process.env.ELEVENLABS_OUTPUT_FORMAT ??
+const DEFAULT_OUTPUT_FORMAT = (process.env.ESL_TTS_PROVIDER_ELEVENLABS_OUTPUT_FORMAT ??
   'mp3_22050_32') as unknown as TtsOutputFormat;
 const DEFAULT_TTS_MAX_CHARS = 4500;
-const DEFAULT_TTS_PROVIDER = 'elevenlabs';
+const DEFAULT_TTS_PROVIDER = 'elevenlabs' as const;
 
 function isTtsDebugEnabled(): boolean {
-  const raw = process.env.ELEVENLABS_TTS_DEBUG ?? process.env.ESL_TTS_DEBUG;
+  const raw = process.env.ESL_TTS_DEBUG;
   if (!raw) return false;
   const normalized = raw.trim().toLowerCase();
   return normalized === '1' || normalized === 'true' || normalized === 'yes' || normalized === 'on';
+}
+
+function resolveTtsProvider(provider?: string): typeof DEFAULT_TTS_PROVIDER {
+  const raw = (provider ?? '')
+    .trim()
+    .toLowerCase();
+  if (!raw) return DEFAULT_TTS_PROVIDER;
+  if (raw === 'elevenlabs') return 'elevenlabs';
+  throw new ConfigurationError(
+    `Unsupported TTS provider "${provider}". This adapter supports only: elevenlabs.`,
+  );
 }
 
 export function hashStudyText(text: string): string {
@@ -115,7 +126,7 @@ function selectTtsStrategy(
   options: BuildStudyTextOptions,
   segments: StudyTextSegment[],
 ): 'dialogue' | 'tts' {
-  const envStrategy = process.env.ELEVENLABS_TTS_STRATEGY as TtsStrategy | undefined;
+  const envStrategy = process.env.ESL_TTS_PROVIDER_ELEVENLABS_STRATEGY as TtsStrategy | undefined;
   const strategy = options.ttsStrategy ?? envStrategy ?? 'auto';
 
   if (strategy === 'dialogue') return 'dialogue';
@@ -178,7 +189,7 @@ function percentile(values: number[], p: number): number {
 }
 
 function resolveTtsMaxChars(): number {
-  const raw = process.env.ELEVENLABS_TTS_MAX_CHARS;
+  const raw = process.env.ESL_TTS_PROVIDER_ELEVENLABS_MAX_CHARS;
   if (raw === undefined) return DEFAULT_TTS_MAX_CHARS;
   const parsed = Number(raw);
   if (Number.isFinite(parsed) && parsed >= 500) return Math.floor(parsed);
@@ -348,6 +359,7 @@ export async function buildStudyTextMp3(
   opts: BuildStudyTextOptions,
 ): Promise<BuildStudyTextResult> {
   const logger = opts.logger ?? noopLogger;
+  resolveTtsProvider(opts.ttsProvider);
   const frontmatter = extractFrontmatter(input.context);
   const studyText = extractStudyText(input.context);
   const segments = resolveStudyTextSegments(studyText.lines, frontmatter);
@@ -366,6 +378,7 @@ export async function buildStudyTextMp3(
   if (opts.defaultVoiceId) {
     voiceMap.default = opts.defaultVoiceId;
   }
+
   const catalog = await loadVoicesCatalog();
   const speakers = collectSpeakers(segments, frontmatter);
   const assignments = await resolveSpeakerVoices({
@@ -421,7 +434,7 @@ export async function buildStudyTextMp3(
 
   // Route to appropriate synthesis path
   if (selectedStrategy === 'dialogue') {
-    const apiKey = process.env.ELEVENLABS_API_KEY || process.env.ELEVENLABS_API_TOKEN || '';
+    const apiKey = process.env.ESL_TTS_PROVIDER_ELEVENLABS_API_KEY || process.env.ESL_TTS_PROVIDER_ELEVENLABS_API_TOKEN || '';
     const outputDir = resolve(opts.outPath || (input.mdPath ? dirname(input.mdPath) : process.cwd()));
     const inputs = toDialogueInputs(segments, speakerVoiceMap);
     const hash = buildDialogueHash(inputs, {
@@ -637,8 +650,8 @@ export async function buildStudyTextMp3(
   }
 
   let tailSeconds = 0.4;
-  if (process.env.ELEVENLABS_SILENCE_TAIL_SECONDS !== undefined) {
-    const parsed = Number(process.env.ELEVENLABS_SILENCE_TAIL_SECONDS);
+  if (process.env.ESL_TTS_PROVIDER_ELEVENLABS_SILENCE_TAIL_SECONDS !== undefined) {
+    const parsed = Number(process.env.ESL_TTS_PROVIDER_ELEVENLABS_SILENCE_TAIL_SECONDS);
     if (Number.isFinite(parsed) && parsed >= 0) {
       tailSeconds = parsed;
     }
@@ -716,12 +729,14 @@ export async function buildPronunciationShadowSentenceMp3(
 
   const outputDir = resolve(opts.outPath || (input.mdPath ? dirname(input.mdPath) : process.cwd()));
   await mkdir(outputDir, { recursive: true });
+  resolveTtsProvider(opts.ttsProvider);
   const modelId = opts.modelId ?? DEFAULT_MODEL_ID;
   const outputFormat = resolveOutputFormat(opts.outputFormat);
   const hash = createHash('sha256')
     .update(
       JSON.stringify({
         kind: 'pronunciation_shadow_sentence',
+        provider: DEFAULT_TTS_PROVIDER,
         text: sentence,
         voiceId: input.voiceId.trim(),
         modelId,
@@ -1035,6 +1050,7 @@ export {
 // Export types for orchestrator integration
 export type {
   TtsStrategy,
+  TtsProvider,
   DialogueInput,
   DialogueSynthesisOptions,
   DialogueSynthesisResult,
@@ -1049,3 +1065,4 @@ export type {
 
 // Export dialogue functions for orchestrator integration
 export { chunkDialogueInputs, buildDialogueHash, synthesizeDialogue } from './dialogue.js';
+export { createElevenLabsTtsProvider } from './adapter.js';

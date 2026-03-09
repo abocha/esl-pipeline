@@ -7,72 +7,87 @@ import type { JobRecord } from '../src/domain/job-model.js';
 import type { PromptPackageRecord } from '../src/domain/prompt-package-model.js';
 import type { UserSettingsRecord } from '../src/domain/settings-model.js';
 
+function buildDraft(): DraftRecord {
+  return {
+    id: 'draft-1',
+    promptPackageId: 'prompt-1',
+    studentId: 'student-1',
+    storageUri: 'local://drafts/draft-1.md',
+    createdBy: 'user-1',
+    createdAt: new Date('2024-01-01T00:00:00Z'),
+    updatedAt: new Date('2024-01-01T00:00:00Z'),
+  };
+}
+
+function buildPromptPackage(): PromptPackageRecord {
+  return {
+    id: 'prompt-1',
+    recordingId: 'recording-1',
+    transcriptId: 'transcript-1',
+    studentId: 'student-1',
+    profilePath: '/profiles/p1.md',
+    templateVersion: '/templates/t1.md',
+    notes: 'Notes',
+    storageUri: 'local://prompt-packages/prompt-1.txt',
+    createdAt: new Date('2024-01-01T00:00:00Z'),
+    updatedAt: new Date('2024-01-01T00:00:00Z'),
+  };
+}
+
+function buildApprovalJob(withTts: boolean): JobRecord {
+  return {
+    id: 'job-1',
+    state: 'awaiting_approval',
+    md: null,
+    recordingId: 'recording-1',
+    transcriptId: 'transcript-1',
+    promptPackageId: 'prompt-1',
+    draftId: 'draft-1',
+    preset: 'b2-intermediate',
+    withTts,
+    upload: null,
+    voiceId: null,
+    voiceAccent: 'british',
+    forceTts: null,
+    notionDatabase: null,
+    ttsStrategy: 'dialogue',
+    notionUrl: null,
+    createdAt: new Date('2024-01-01T00:00:00Z'),
+    updatedAt: new Date('2024-01-01T00:00:00Z'),
+    startedAt: null,
+    finishedAt: null,
+    error: null,
+    manifestPath: null,
+    userId: 'user-1',
+  };
+}
+
+function buildSettings(): UserSettingsRecord {
+  return {
+    id: 'settings-1',
+    userId: 'user-1',
+    elevenLabsKeyEncrypted: 'encrypted',
+    notionTokenEncrypted: null,
+    ttsProvider: 'elevenlabs',
+    defaultPreset: 'b2-intermediate',
+    defaultVoiceAccent: 'british',
+    defaultTtsStrategy: 'dialogue',
+    enableNotifications: true,
+    createdAt: new Date('2024-01-01T00:00:00Z'),
+    updatedAt: new Date('2024-01-01T00:00:00Z'),
+  };
+}
+
 describe('application/create-approval-job', () => {
   it('creates an awaiting_approval job from a draft and prompt package', async () => {
-    const draft: DraftRecord = {
-      id: 'draft-1',
-      promptPackageId: 'prompt-1',
-      studentId: 'student-1',
-      storageUri: 'local://drafts/draft-1.md',
-      createdBy: 'user-1',
-      createdAt: new Date('2024-01-01T00:00:00Z'),
-      updatedAt: new Date('2024-01-01T00:00:00Z'),
-    };
-    const promptPackage: PromptPackageRecord = {
-      id: 'prompt-1',
-      recordingId: 'recording-1',
-      transcriptId: 'transcript-1',
-      studentId: 'student-1',
-      profilePath: '/profiles/p1.md',
-      templateVersion: '/templates/t1.md',
-      notes: 'Notes',
-      storageUri: 'local://prompt-packages/prompt-1.txt',
-      createdAt: new Date('2024-01-01T00:00:00Z'),
-      updatedAt: new Date('2024-01-01T00:00:00Z'),
-    };
-
-    const approvalJob: JobRecord = {
-      id: 'job-1',
-      state: 'awaiting_approval',
-      md: null,
-      recordingId: 'recording-1',
-      transcriptId: 'transcript-1',
-      promptPackageId: 'prompt-1',
-      draftId: 'draft-1',
-      preset: 'b2-intermediate',
-      withTts: true,
-      upload: null,
-      voiceId: null,
-      voiceAccent: 'british',
-      forceTts: null,
-      notionDatabase: null,
-      ttsStrategy: 'dialogue',
-      notionUrl: null,
-      createdAt: new Date('2024-01-01T00:00:00Z'),
-      updatedAt: new Date('2024-01-01T00:00:00Z'),
-      startedAt: null,
-      finishedAt: null,
-      error: null,
-      manifestPath: null,
-      userId: 'user-1',
-    };
+    const draft = buildDraft();
+    const promptPackage = buildPromptPackage();
+    const approvalJob = buildApprovalJob(true);
 
     const insertApprovalJob = vi.fn().mockResolvedValue(approvalJob);
     const publishEvent = vi.fn();
     const config = loadConfig();
-    const settings: UserSettingsRecord = {
-      id: 'settings-1',
-      userId: 'user-1',
-      elevenLabsKeyEncrypted: 'encrypted',
-      notionTokenEncrypted: null,
-      ttsProvider: 'elevenlabs',
-      defaultPreset: 'b2-intermediate',
-      defaultVoiceAccent: 'british',
-      defaultTtsStrategy: 'dialogue',
-      enableNotifications: true,
-      createdAt: new Date('2024-01-01T00:00:00Z'),
-      updatedAt: new Date('2024-01-01T00:00:00Z'),
-    };
+    const settings = buildSettings();
 
     const job = await createApprovalJobFromDraft(
       { draft, promptPackage },
@@ -115,5 +130,98 @@ describe('application/create-approval-job', () => {
       upload: 'auto',
     });
     expect(publishEvent).toHaveBeenCalledWith({ type: 'job_created', job });
+  });
+
+  it('defaults withTts=true when google provider is selected without ElevenLabs key availability', async () => {
+    const draft = buildDraft();
+    const promptPackage = buildPromptPackage();
+    const approvalJob = buildApprovalJob(true);
+    const insertApprovalJob = vi.fn().mockResolvedValue(approvalJob);
+    const publishEvent = vi.fn();
+    const config = loadConfig();
+
+    await createApprovalJobFromDraft(
+      {
+        draft,
+        promptPackage,
+        jobOverrides: {
+          ttsProvider: 'google',
+          googleTtsModel: 'chirp3_hd',
+        },
+      },
+      {
+        jobs: { insertApprovalJob },
+        settings: {
+          getByUserId: vi.fn().mockResolvedValue({
+            ...buildSettings(),
+            elevenLabsKeyEncrypted: null,
+          }),
+          createDefault: vi.fn(),
+        },
+        config: {
+          ...config,
+          orchestrator: {
+            ...config.orchestrator,
+            elevenLabsApiKey: undefined,
+          },
+        },
+        publishEvent,
+      },
+    );
+
+    expect(insertApprovalJob).toHaveBeenCalledWith(
+      expect.objectContaining({
+        withTts: true,
+        ttsProvider: 'google',
+        googleTtsModel: 'chirp3_hd',
+      }),
+    );
+  });
+
+  it('honors explicit withTts override even when google provider is selected', async () => {
+    const draft = buildDraft();
+    const promptPackage = buildPromptPackage();
+    const approvalJob = buildApprovalJob(false);
+    const insertApprovalJob = vi.fn().mockResolvedValue(approvalJob);
+    const publishEvent = vi.fn();
+    const config = loadConfig();
+
+    await createApprovalJobFromDraft(
+      {
+        draft,
+        promptPackage,
+        jobOverrides: {
+          withTts: false,
+          ttsProvider: 'google',
+          googleTtsModel: 'studio',
+        },
+      },
+      {
+        jobs: { insertApprovalJob },
+        settings: {
+          getByUserId: vi.fn().mockResolvedValue({
+            ...buildSettings(),
+            elevenLabsKeyEncrypted: null,
+          }),
+          createDefault: vi.fn(),
+        },
+        config: {
+          ...config,
+          orchestrator: {
+            ...config.orchestrator,
+            elevenLabsApiKey: undefined,
+          },
+        },
+        publishEvent,
+      },
+    );
+
+    expect(insertApprovalJob).toHaveBeenCalledWith(
+      expect.objectContaining({
+        withTts: false,
+        ttsProvider: 'google',
+        googleTtsModel: 'studio',
+      }),
+    );
   });
 });

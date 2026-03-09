@@ -102,7 +102,9 @@ Key exports:
 | `packages/md-validator`          | Markdown validation                 | `packages/md-validator/README.md`          |
 | `packages/pmd`                   | PMD parsing + study-text extraction | `packages/pmd/README.md`                   |
 | `packages/notion-adapter`        | Notion publishing adapter           | `packages/notion-adapter/README.md`        |
-| `packages/tts-elevenlabs`        | ElevenLabs integration              | `packages/tts-elevenlabs/README.md`        |
+| `packages/tts-core`              | TTS core contracts/registry         | `packages/tts-core/README.md`              |
+| `packages/tts-provider-elevenlabs` | ElevenLabs TTS provider adapter  | `packages/tts-provider-elevenlabs/README.md` |
+| `packages/tts-provider-google`   | Google Cloud TTS provider adapter   | `packages/tts-provider-google/README.md`   |
 | `packages/storage-uploader`      | Upload/storage adapter              | `packages/storage-uploader/README.md`      |
 | `packages/html-publisher`        | Markdown/HTML rendering and publish | `packages/html-publisher/README.md`        |
 | `packages/provider-runtime`      | Provider runtime policy utilities   | `packages/provider-runtime/README.md`      |
