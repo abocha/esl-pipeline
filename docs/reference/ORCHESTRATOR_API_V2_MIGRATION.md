@@ -76,4 +76,4 @@ Batch-backend runtime is cut over to v2:
 
 1. v1 orchestrator exports remain available for compatibility callers outside backend cutover.
 2. backend execution is standardized on v2 contracts.
-3. CLI/wizard/path-picker removals remain deferred to later dedicated stages.
+3. CLI/wizard/path-picker removals are completed in Stage 7.

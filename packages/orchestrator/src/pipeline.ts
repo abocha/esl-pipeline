@@ -62,7 +62,6 @@ export interface ResolvedConfigPaths {
   presetsPath: string;
   voicesPath: string;
   studentsDir: string;
-  wizardDefaultsPath: string;
 }
 
 interface ConfigPathsCacheEntry {
@@ -71,7 +70,6 @@ interface ConfigPathsCacheEntry {
     presets: { path: string; mtimeMs: number; size: number; exists: boolean };
     voices: { path: string; mtimeMs: number; size: number; exists: boolean };
     students: { path: string; mtimeMs: number; size: number; exists: boolean };
-    wizardDefaults: { path: string; mtimeMs: number; size: number; exists: boolean };
   };
 }
 
@@ -158,14 +156,12 @@ export function resolveConfigPaths(options: ResolveConfigPathsOptions = {}): Res
   }
 
   const configRoot = dirname(presetsPath);
-  const wizardDefaultsPath = join(configRoot, 'wizard.defaults.json');
 
   const result: ResolvedConfigPaths = {
     configRoot,
     presetsPath,
     voicesPath,
     studentsDir,
-    wizardDefaultsPath,
   };
 
   if (!memoizeEnabled || !cacheKey) {
@@ -176,7 +172,6 @@ export function resolveConfigPaths(options: ResolveConfigPathsOptions = {}): Res
     presets: statPath(presetsPath),
     voices: statPath(voicesPath),
     students: statPath(studentsDir),
-    wizardDefaults: statPath(wizardDefaultsPath),
   };
 
   const cached = configPathsCache.get(cacheKey);
@@ -193,11 +188,7 @@ export function resolveConfigPaths(options: ResolveConfigPathsOptions = {}): Res
       cached.meta.students.path === currentMeta.students.path &&
       cached.meta.students.exists === currentMeta.students.exists &&
       cached.meta.students.mtimeMs === currentMeta.students.mtimeMs &&
-      cached.meta.students.size === currentMeta.students.size &&
-      cached.meta.wizardDefaults.path === currentMeta.wizardDefaults.path &&
-      cached.meta.wizardDefaults.exists === currentMeta.wizardDefaults.exists &&
-      cached.meta.wizardDefaults.mtimeMs === currentMeta.wizardDefaults.mtimeMs &&
-      cached.meta.wizardDefaults.size === currentMeta.wizardDefaults.size;
+      cached.meta.students.size === currentMeta.students.size;
     if (fresh) {
       return cached.result;
     }
@@ -530,10 +521,8 @@ export function resolveManifestPath(mdPath: string): string {
 }
 
 export {
-  type LoadCliEnvOptions,
   type LoadEnvOptions,
   type LoadEnvSummary,
-  loadCliEnv,
   loadEnvFiles,
   loadEnvFilesWithSummary,
 } from '@esl-pipeline/shared-infrastructure';

@@ -25,10 +25,7 @@
   - Stage semantics and manifest lifecycle are implemented here.
 - `packages/orchestrator/src/pipeline.ts`
   - Pipeline construction and dependency wiring (`createPipeline`, config/manifest adapter selection).
-- `packages/orchestrator/src/wizard.ts`
-  - Interactive settings capture and persistence (`wizard.defaults.json`).
-- `packages/orchestrator/bin/cli.ts`
-  - Thin command adapter over orchestrator API. CLI is deprecated and retained only for compatibility during staged removal.
+- CLI/wizard/path-picker surfaces were retired in Stage 7.
 
 ### Core Runtime Modules (post-refactor seam extraction)
 
@@ -86,7 +83,7 @@
 ## Refactor Constraints
 
 - Preserve orchestrator stage semantics unless an explicit major contract migration is approved.
-- Do not prioritize CLI feature work in current project state.
+- Keep orchestrator as a library-only runtime surface (no CLI/wizard/path-picker reintroduction).
 - Prefer ownership-driven placement over centralization for its own sake.
 
 ## Related

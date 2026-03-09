@@ -39,6 +39,5 @@ WORKDIR /app
 
 COPY --from=build /app /app
 
-# Default command is the orchestrator CLI, but allow docker-compose/docker run
-# to override it (e.g. to run batch-backend HTTP server or worker).
-CMD ["node", "packages/orchestrator/dist/cli.js"]
+# Library-only runtime smoke command. Batch-backend is the operational entrypoint.
+CMD ["node", "-e", "import('./packages/orchestrator/dist/index.js').then(() => console.log('orchestrator library ready'))"]
