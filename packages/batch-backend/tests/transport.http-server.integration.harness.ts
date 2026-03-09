@@ -131,10 +131,8 @@ vi.mock('../src/infrastructure/orchestrator-service', () => {
     uploadOptions: ['auto', 's3', 'none'] as const,
     ttsStrategies: ['auto', 'dialogue', 'tts'] as const,
   };
-  const orchestratorStudentProfilesMock = [{ student: 'Anna' }, { student: 'Bob' }, { student: '  ' }];
   return {
     getJobOptionsFromOrchestrator: vi.fn().mockResolvedValue(orchestratorJobOptionsMock),
-    getStudentProfilesFromOrchestrator: vi.fn().mockResolvedValue(orchestratorStudentProfilesMock),
   };
 });
 

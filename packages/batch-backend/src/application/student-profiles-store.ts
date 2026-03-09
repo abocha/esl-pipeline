@@ -1,4 +1,3 @@
-import { constants as FS } from 'node:fs';
 import fs from 'node:fs/promises';
 import path from 'node:path';
 
@@ -20,7 +19,7 @@ import {
   setActiveStudentProfileBinding,
 } from '../domain/student-profile-binding-repository.js';
 import { deriveStudentId, normalizeStudentName } from '../domain/student-utils.js';
-import { getStudentProfilesFromOrchestrator } from '../infrastructure/orchestrator-service.js';
+import { logger } from '../infrastructure/logger.js';
 
 export interface StudentProfileData {
   id: string;
@@ -94,25 +93,13 @@ const DEFAULT_STUDENT_NAME = 'Default';
 const DEFAULT_COLOR_PRESET = 'b1-default';
 const MAX_PAGE_LIMIT = 500;
 const PROFILE_EXTENSIONS = new Set(['.md', '.txt']);
-const REMOTE_PROFILES_CACHE_TTL_MS = 60_000;
 
 interface StudentProfileEntry extends StudentProfileData {
-  filePath?: string | null;
   isSynthetic?: boolean;
 }
 
-interface RemoteProfilesCacheEntry {
-  expiresAt: number;
-  items: StudentProfileEntry[];
-}
-
-let remoteProfilesCache: RemoteProfilesCacheEntry | null = null;
-let remoteProfilesInflight: Promise<StudentProfileEntry[]> | null = null;
-
-interface ResolveStudentsDirOptions {
-  config?: BatchBackendConfig;
-  studentsDir?: string;
-}
+let legacyStudentsDirWarned = false;
+let legacyStudentsDirCheckInFlight: Promise<void> | null = null;
 
 function getDependencies(overrides?: StudentStoreOverrides): StudentStoreDependencies {
   return {
@@ -133,24 +120,20 @@ function getDependencies(overrides?: StudentStoreOverrides): StudentStoreDepende
   };
 }
 
-function isRemoteConfigProvider(config: BatchBackendConfig): boolean {
-  return config.orchestrator.configProvider === 'http';
+function assertDbEnabled(config: BatchBackendConfig): void {
+  if (!config.pg.enabled) {
+    throw new StudentProfileStoreError(
+      'Student profile APIs require Postgres (PG_ENABLED=true)',
+      'student_profiles_db_required',
+      503,
+    );
+  }
 }
 
-function getStudentSystemSource(config: BatchBackendConfig): 'fs' | 'hybrid' | 'db' {
-  return config.studentSystem?.source ?? 'fs';
-}
-
-function isDbBackedSource(config: BatchBackendConfig): boolean {
-  const source = getStudentSystemSource(config);
-  return source === 'db' || source === 'hybrid';
-}
-
-function shouldReadFsFallback(config: BatchBackendConfig): boolean {
-  return getStudentSystemSource(config) === 'hybrid' && (config.studentSystem?.fsFallback ?? true);
-}
-
-async function resolveStudentsDir(options: ResolveStudentsDirOptions): Promise<string> {
+async function resolveStudentsDir(options: {
+  config?: BatchBackendConfig;
+  studentsDir?: string;
+}): Promise<string> {
   const config = options.config ?? loadConfig();
   if (options.studentsDir) {
     return path.resolve(options.studentsDir);
@@ -165,27 +148,48 @@ async function resolveStudentsDir(options: ResolveStudentsDirOptions): Promise<s
   return configPaths.studentsDir;
 }
 
-async function assertWritableDir(studentsDir: string): Promise<void> {
-  try {
-    const stats = await fs.stat(studentsDir);
-    if (!stats.isDirectory()) {
-      throw new StudentProfileStoreError(
-        'Students directory is not a directory',
-        'students_dir_invalid',
-        409,
-      );
-    }
-    await fs.access(studentsDir, FS.W_OK);
-  } catch (error) {
-    if (error instanceof StudentProfileStoreError) {
-      throw error;
-    }
-    throw new StudentProfileStoreError(
-      'Students directory is not writable',
-      'students_dir_not_writable',
-      409,
-    );
+async function warnIfLegacyStudentsDirPresent(
+  config: BatchBackendConfig,
+  studentsDir?: string,
+): Promise<void> {
+  if (legacyStudentsDirWarned) return;
+  if (legacyStudentsDirCheckInFlight) {
+    await legacyStudentsDirCheckInFlight;
+    return;
   }
+
+  legacyStudentsDirCheckInFlight = (async () => {
+    const resolved = await resolveStudentsDir({ config, studentsDir });
+    let entries: { name: string; isFile: () => boolean }[] = [];
+    try {
+      entries = await fs.readdir(resolved, { withFileTypes: true });
+    } catch {
+      return;
+    }
+
+    const legacyJsonCount = entries.filter(
+      (entry) => entry.isFile() && entry.name.toLowerCase().endsWith('.json'),
+    ).length;
+
+    if (legacyJsonCount <= 0) return;
+
+    legacyStudentsDirWarned = true;
+    logger.warn('Legacy student JSON files detected; runtime is DB-only for student APIs', {
+      component: 'student_profiles',
+      studentsDir: resolved,
+      legacyJsonCount,
+      action:
+        'Run student-system:backfill for migration and remove or archive JSON files after verification.',
+    });
+  })()
+    .catch(() => {
+      // Best-effort warning only.
+    })
+    .finally(() => {
+      legacyStudentsDirCheckInFlight = null;
+    });
+
+  await legacyStudentsDirCheckInFlight;
 }
 
 function normalizeOptionalString(value?: string | null): string | null {
@@ -247,41 +251,6 @@ function sanitizeProfileInput(input: Partial<StudentProfileInput>): Partial<Stud
   return sanitized;
 }
 
-function slugifyStudentName(name: string): string {
-  const normalized = normalizeStudentName(name).toLowerCase();
-  return normalized.replaceAll(/[^a-z0-9]+/g, '-').replaceAll(/^-+|-+$/g, '');
-}
-
-function isAscii(value: string): boolean {
-  return /^[\u0020-\u007E]+$/.test(value);
-}
-
-function ensureSafeFileBase(base: string): string {
-  const cleaned = base.replaceAll(/[/\\]/g, '-').replaceAll(/[^a-zA-Z0-9._-]+/g, '-');
-  const trimmed = cleaned.replaceAll(/^-+/g, '').replaceAll(/-+$/g, '');
-  if (!trimmed || !isAscii(trimmed)) {
-    throw new StudentProfileStoreError(
-      'Student filename contains unsupported characters',
-      'student_filename_invalid',
-      400,
-    );
-  }
-  return trimmed;
-}
-
-function buildStudentFilename(student: string, existingNames: Set<string>): string {
-  const slug = slugifyStudentName(student);
-  const base = slug || `student-${deriveStudentId(student).slice(0, 8)}`;
-  const safeBase = ensureSafeFileBase(base);
-  let candidate = `${safeBase}.json`;
-  let counter = 1;
-  while (existingNames.has(candidate)) {
-    candidate = `${safeBase}-${counter}.json`;
-    counter += 1;
-  }
-  return candidate;
-}
-
 function buildDefaultProfileEntry(): StudentProfileEntry {
   return {
     id: deriveStudentId(DEFAULT_STUDENT_NAME),
@@ -293,7 +262,6 @@ function buildDefaultProfileEntry(): StudentProfileEntry {
     manifestPreset: null,
     profileId: null,
     voices: {},
-    filePath: null,
     isSynthetic: true,
   };
 }
@@ -330,7 +298,6 @@ function mapStudentRecordToEntry(record: StudentRecord): StudentProfileEntry {
     manifestPreset: normalizeOptionalString(record.manifestPreset),
     profileId: normalizeOptionalString(record.profileId),
     voices: record.voices ? { ...record.voices } : {},
-    filePath: null,
   };
 }
 
@@ -394,239 +361,6 @@ async function syncBindingForStudent(
     reason,
     changedBy,
   });
-}
-
-async function loadLocalProfiles(studentsDir: string): Promise<StudentProfileEntry[]> {
-  const entries = await fs.readdir(studentsDir, { withFileTypes: true });
-  const profiles: StudentProfileEntry[] = [];
-
-  for (const entry of entries) {
-    if (!entry.isFile()) continue;
-    if (!entry.name.toLowerCase().endsWith('.json')) continue;
-    const filePath = path.join(studentsDir, entry.name);
-    try {
-      const data = JSON.parse(await fs.readFile(filePath, 'utf8')) as Partial<StudentProfileData>;
-      if (!data || typeof data.student !== 'string') continue;
-      const student = normalizeStudentName(data.student);
-      if (!student) continue;
-      const profile: StudentProfileEntry = {
-        id: deriveStudentId(student),
-        student,
-        dbId: normalizeOptionalString(data.dbId),
-        pageParentId: normalizeOptionalString(data.pageParentId),
-        colorPreset: normalizeOptionalString(data.colorPreset),
-        accentPreference: normalizeOptionalString(data.accentPreference),
-        manifestPreset: normalizeOptionalString(data.manifestPreset),
-        profileId: normalizeOptionalString(data.profileId),
-        voices: data.voices ? { ...data.voices } : {},
-        filePath,
-      };
-      profiles.push(profile);
-    } catch {
-      continue;
-    }
-  }
-
-  return ensureDefaultProfileEntry(profiles).sort((a, b) => a.student.localeCompare(b.student));
-}
-
-async function loadRemoteProfiles(): Promise<StudentProfileEntry[]> {
-  const now = Date.now();
-  if (remoteProfilesCache && remoteProfilesCache.expiresAt > now) {
-    return remoteProfilesCache.items.map((profile) => ({
-      ...profile,
-      voices: profile.voices ? { ...profile.voices } : {},
-    }));
-  }
-
-  if (remoteProfilesInflight) {
-    const items = await remoteProfilesInflight;
-    return items.map((profile) => ({
-      ...profile,
-      voices: profile.voices ? { ...profile.voices } : {},
-    }));
-  }
-
-  remoteProfilesInflight = (async () => {
-    const profiles = await getStudentProfilesFromOrchestrator();
-    return profiles
-      .map((profile): StudentProfileEntry | null => {
-        const student = typeof profile.student === 'string' ? normalizeStudentName(profile.student) : '';
-        if (!student) return null;
-        return {
-          id: deriveStudentId(student),
-          student,
-          dbId: normalizeOptionalString(profile.dbId),
-          pageParentId: normalizeOptionalString(profile.pageParentId),
-          colorPreset: normalizeOptionalString(profile.colorPreset),
-          accentPreference: normalizeOptionalString(profile.accentPreference),
-          manifestPreset: normalizeOptionalString(profile.manifestPreset),
-          profileId: normalizeOptionalString(profile.profileId),
-          voices: profile.voices ? { ...profile.voices } : {},
-          filePath: null,
-        };
-      })
-      .filter((profile): profile is StudentProfileEntry => profile !== null)
-      .sort((a, b) => a.student.localeCompare(b.student));
-  })();
-
-  try {
-    const profiles = await remoteProfilesInflight;
-    remoteProfilesCache = {
-      expiresAt: Date.now() + REMOTE_PROFILES_CACHE_TTL_MS,
-      items: profiles,
-    };
-    return profiles.map((profile) => ({
-      ...profile,
-      voices: profile.voices ? { ...profile.voices } : {},
-    }));
-  } finally {
-    remoteProfilesInflight = null;
-  }
-}
-
-async function getLocalProfileById(
-  id: string,
-  studentsDir: string,
-): Promise<StudentProfileEntry | null> {
-  if (!id) return null;
-  const profiles = await loadLocalProfiles(studentsDir);
-  return profiles.find((profile) => profile.id === id) ?? null;
-}
-
-async function createStudentProfileLocal(
-  input: StudentProfileInput,
-  studentsDir: string,
-): Promise<StudentProfileData> {
-  const sanitized = sanitizeProfileInput(input);
-  const student = sanitized.student?.trim();
-  if (!student) {
-    throw new StudentProfileStoreError('Student name is required', 'student_name_missing', 400);
-  }
-
-  await assertWritableDir(studentsDir);
-
-  const existing = await loadLocalProfiles(studentsDir);
-  const id = deriveStudentId(student);
-  if (existing.some((profile) => profile.id === id)) {
-    throw new StudentProfileStoreError('Student profile already exists', 'student_exists', 409);
-  }
-
-  const fileNames = new Set(
-    existing
-      .map((profile) => (profile.filePath ? path.basename(profile.filePath) : ''))
-      .filter(Boolean),
-  );
-  const filename = buildStudentFilename(student, fileNames);
-  const filePath = path.join(studentsDir, filename);
-
-  const payload: Record<string, unknown> = {
-    student,
-    dbId: sanitized.dbId ?? null,
-    pageParentId: sanitized.pageParentId ?? null,
-    colorPreset: sanitized.colorPreset ?? null,
-    accentPreference: sanitized.accentPreference ?? null,
-    manifestPreset: sanitized.manifestPreset ?? null,
-    profileId: sanitized.profileId ?? null,
-    voices: sanitized.voices ?? {},
-  };
-
-  await fs.writeFile(filePath, JSON.stringify(payload, null, 2), 'utf8');
-
-  return {
-    id,
-    student,
-    dbId: payload.dbId as string | null,
-    pageParentId: payload.pageParentId as string | null,
-    colorPreset: payload.colorPreset as string | null,
-    accentPreference: payload.accentPreference as string | null,
-    manifestPreset: payload.manifestPreset as string | null,
-    profileId: payload.profileId as string | null,
-    voices: payload.voices as Record<string, string>,
-  };
-}
-
-async function updateStudentProfileLocal(
-  id: string,
-  input: Partial<StudentProfileInput>,
-  studentsDir: string,
-): Promise<StudentProfileData | null> {
-  if (!id) return null;
-
-  const sanitized = sanitizeProfileInput(input);
-  if (Object.hasOwn(sanitized, 'student') && !(sanitized.student ?? '').trim()) {
-    throw new StudentProfileStoreError('Student name is required', 'student_name_missing', 400);
-  }
-  await assertWritableDir(studentsDir);
-
-  const profiles = await loadLocalProfiles(studentsDir);
-  const existing = profiles.find((profile) => profile.id === id);
-  if (!existing) return null;
-
-  if (sanitized.student && deriveStudentId(sanitized.student) !== id) {
-    throw new StudentProfileStoreError(
-      'Student name changes require migration',
-      'student_name_change_not_allowed',
-      400,
-    );
-  }
-
-  const merged: StudentProfileEntry = {
-    ...existing,
-    ...sanitized,
-    student: sanitized.student ?? existing.student,
-  };
-
-  let filePath = existing.filePath ?? null;
-  if (!filePath) {
-    const fileNames = new Set(
-      profiles
-        .map((profile) => (profile.filePath ? path.basename(profile.filePath) : ''))
-        .filter(Boolean),
-    );
-    const filename = buildStudentFilename(merged.student, fileNames);
-    filePath = path.join(studentsDir, filename);
-  }
-
-  const payload: Record<string, unknown> = {
-    student: merged.student,
-    dbId: merged.dbId ?? null,
-    pageParentId: merged.pageParentId ?? null,
-    colorPreset: merged.colorPreset ?? null,
-    accentPreference: merged.accentPreference ?? null,
-    manifestPreset: merged.manifestPreset ?? null,
-    profileId: merged.profileId ?? null,
-    voices: merged.voices ?? {},
-  };
-
-  await fs.writeFile(filePath, JSON.stringify(payload, null, 2), 'utf8');
-
-  return {
-    id,
-    student: merged.student,
-    dbId: merged.dbId ?? null,
-    pageParentId: merged.pageParentId ?? null,
-    colorPreset: merged.colorPreset ?? null,
-    accentPreference: merged.accentPreference ?? null,
-    manifestPreset: merged.manifestPreset ?? null,
-    profileId: merged.profileId ?? null,
-    voices: merged.voices ?? {},
-  };
-}
-
-async function deleteStudentProfileLocal(id: string, studentsDir: string): Promise<boolean> {
-  if (!id) return false;
-
-  await assertWritableDir(studentsDir);
-
-  const profiles = await loadLocalProfiles(studentsDir);
-  const existing = profiles.find((profile) => profile.id === id);
-  if (!existing || !existing.filePath) {
-    return false;
-  }
-
-  await fs.unlink(existing.filePath);
-  return true;
 }
 
 async function createStudentProfileDb(
@@ -695,8 +429,6 @@ async function updateStudentProfileDb(
   id: string,
   input: Partial<StudentProfileInput>,
   options: {
-    studentsDir?: string;
-    allowFsFallbackRead: boolean;
     dependencies: StudentStoreDependencies;
     bindingAudit?: {
       reason?: string | null;
@@ -710,25 +442,7 @@ async function updateStudentProfileDb(
     throw new StudentProfileStoreError('Student name is required', 'student_name_missing', 400);
   }
 
-  let existing = await options.dependencies.students.getById(id);
-  if (!existing && options.allowFsFallbackRead && options.studentsDir) {
-    const local = await getLocalProfileById(id, options.studentsDir);
-    if (local) {
-      existing = {
-        id: local.id,
-        student: local.student,
-        dbId: local.dbId ?? null,
-        pageParentId: local.pageParentId ?? null,
-        colorPreset: local.colorPreset ?? null,
-        voices: local.voices ?? {},
-        manifestPreset: local.manifestPreset ?? null,
-        accentPreference: local.accentPreference ?? null,
-        profileId: local.profileId ?? null,
-        createdAt: new Date(),
-        updatedAt: new Date(),
-      };
-    }
-  }
+  const existing = await options.dependencies.students.getById(id);
   if (!existing) return null;
 
   if (sanitized.student && deriveStudentId(sanitized.student) !== id) {
@@ -791,33 +505,18 @@ export async function listStudentProfiles(
   overrides?: StudentStoreOverrides,
 ): Promise<StudentProfileListResult> {
   const config = overrides?.config ?? loadConfig();
+  assertDbEnabled(config);
+  await warnIfLegacyStudentsDirPresent(config, overrides?.studentsDir);
 
-  if (isRemoteConfigProvider(config)) {
-    const remoteProfiles = await loadRemoteProfiles();
-    return applyListFilters(remoteProfiles, params);
-  }
+  const dependencies = getDependencies(overrides);
+  const dbResult = await dependencies.students.list({
+    limit: MAX_PAGE_LIMIT,
+    offset: 0,
+    order: 'asc',
+  });
 
-  if (isDbBackedSource(config)) {
-    const dependencies = getDependencies(overrides);
-    const dbResult = await dependencies.students.list({
-      limit: MAX_PAGE_LIMIT,
-      offset: 0,
-      order: 'asc',
-    });
-
-    if (dbResult.items.length === 0 && shouldReadFsFallback(config)) {
-      const studentsDir = await resolveStudentsDir({ config, studentsDir: overrides?.studentsDir });
-      const localProfiles = await loadLocalProfiles(studentsDir);
-      return applyListFilters(localProfiles, params);
-    }
-
-    const entries = ensureDefaultProfileEntry(dbResult.items.map((item) => mapStudentRecordToEntry(item)));
-    return applyListFilters(entries, params);
-  }
-
-  const studentsDir = await resolveStudentsDir({ config, studentsDir: overrides?.studentsDir });
-  const localProfiles = await loadLocalProfiles(studentsDir);
-  return applyListFilters(localProfiles, params);
+  const entries = ensureDefaultProfileEntry(dbResult.items.map((item) => mapStudentRecordToEntry(item)));
+  return applyListFilters(entries, params);
 }
 
 export async function getStudentProfileById(
@@ -827,36 +526,20 @@ export async function getStudentProfileById(
   if (!id) return null;
 
   const config = overrides?.config ?? loadConfig();
+  assertDbEnabled(config);
+  await warnIfLegacyStudentsDirPresent(config, overrides?.studentsDir);
 
-  if (isRemoteConfigProvider(config)) {
-    const remoteProfiles = await loadRemoteProfiles();
-    const remoteMatch = remoteProfiles.find((profile) => profile.id === id);
-    return remoteMatch ? toStudentProfileData(remoteMatch) : null;
+  const dependencies = getDependencies(overrides);
+  const record = await dependencies.students.getById(id);
+  if (record) {
+    return toStudentProfileData(mapStudentRecordToEntry(record));
   }
 
-  if (isDbBackedSource(config)) {
-    const dependencies = getDependencies(overrides);
-    const record = await dependencies.students.getById(id);
-    if (record) {
-      return toStudentProfileData(mapStudentRecordToEntry(record));
-    }
-
-    if (id === deriveStudentId(DEFAULT_STUDENT_NAME)) {
-      return toStudentProfileData(buildDefaultProfileEntry());
-    }
-
-    if (shouldReadFsFallback(config)) {
-      const studentsDir = await resolveStudentsDir({ config, studentsDir: overrides?.studentsDir });
-      const localMatch = await getLocalProfileById(id, studentsDir);
-      return localMatch ? toStudentProfileData(localMatch) : null;
-    }
-
-    return null;
+  if (id === deriveStudentId(DEFAULT_STUDENT_NAME)) {
+    return toStudentProfileData(buildDefaultProfileEntry());
   }
 
-  const studentsDir = await resolveStudentsDir({ config, studentsDir: overrides?.studentsDir });
-  const localMatch = await getLocalProfileById(id, studentsDir);
-  return localMatch ? toStudentProfileData(localMatch) : null;
+  return null;
 }
 
 export async function createStudentProfile(
@@ -864,23 +547,12 @@ export async function createStudentProfile(
   overrides?: StudentStoreOverrides,
 ): Promise<StudentProfileData> {
   const config = overrides?.config ?? loadConfig();
+  assertDbEnabled(config);
+  await warnIfLegacyStudentsDirPresent(config, overrides?.studentsDir);
 
-  if (isRemoteConfigProvider(config)) {
-    throw new StudentProfileStoreError(
-      'Student profiles are read-only when ESL_PIPELINE_CONFIG_PROVIDER=http',
-      'student_profiles_read_only',
-      409,
-    );
-  }
-
-  if (isDbBackedSource(config)) {
-    return createStudentProfileDb(input, getDependencies(overrides), {
-      bindingAudit: overrides?.bindingAudit,
-    });
-  }
-
-  const studentsDir = await resolveStudentsDir({ config, studentsDir: overrides?.studentsDir });
-  return createStudentProfileLocal(input, studentsDir);
+  return createStudentProfileDb(input, getDependencies(overrides), {
+    bindingAudit: overrides?.bindingAudit,
+  });
 }
 
 export async function updateStudentProfile(
@@ -891,27 +563,13 @@ export async function updateStudentProfile(
   if (!id) return null;
 
   const config = overrides?.config ?? loadConfig();
+  assertDbEnabled(config);
+  await warnIfLegacyStudentsDirPresent(config, overrides?.studentsDir);
 
-  if (isRemoteConfigProvider(config)) {
-    throw new StudentProfileStoreError(
-      'Student profiles are read-only when ESL_PIPELINE_CONFIG_PROVIDER=http',
-      'student_profiles_read_only',
-      409,
-    );
-  }
-
-  if (isDbBackedSource(config)) {
-    const studentsDir = await resolveStudentsDir({ config, studentsDir: overrides?.studentsDir });
-    return updateStudentProfileDb(id, input, {
-      studentsDir,
-      allowFsFallbackRead: shouldReadFsFallback(config),
-      dependencies: getDependencies(overrides),
-      bindingAudit: overrides?.bindingAudit,
-    });
-  }
-
-  const studentsDir = await resolveStudentsDir({ config, studentsDir: overrides?.studentsDir });
-  return updateStudentProfileLocal(id, input, studentsDir);
+  return updateStudentProfileDb(id, input, {
+    dependencies: getDependencies(overrides),
+    bindingAudit: overrides?.bindingAudit,
+  });
 }
 
 export async function deleteStudentProfile(
@@ -921,30 +579,9 @@ export async function deleteStudentProfile(
   if (!id) return false;
 
   const config = overrides?.config ?? loadConfig();
+  assertDbEnabled(config);
+  await warnIfLegacyStudentsDirPresent(config, overrides?.studentsDir);
 
-  if (isRemoteConfigProvider(config)) {
-    throw new StudentProfileStoreError(
-      'Student profiles are read-only when ESL_PIPELINE_CONFIG_PROVIDER=http',
-      'student_profiles_read_only',
-      409,
-    );
-  }
-
-  if (isDbBackedSource(config)) {
-    const dependencies = getDependencies(overrides);
-    const removed = await dependencies.students.remove(id);
-    if (removed) {
-      return true;
-    }
-
-    if (shouldReadFsFallback(config)) {
-      const studentsDir = await resolveStudentsDir({ config, studentsDir: overrides?.studentsDir });
-      return deleteStudentProfileLocal(id, studentsDir);
-    }
-
-    return false;
-  }
-
-  const studentsDir = await resolveStudentsDir({ config, studentsDir: overrides?.studentsDir });
-  return deleteStudentProfileLocal(id, studentsDir);
+  const dependencies = getDependencies(overrides);
+  return dependencies.students.remove(id);
 }
