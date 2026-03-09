@@ -2,7 +2,6 @@ import { randomUUID } from 'node:crypto';
 
 import { deleteStudentProfile, getStudentProfileById, listStudentProfiles, updateStudentProfile, createStudentProfile } from '../application/student-profiles-store.js';
 import { loadBatchBackendEnv } from '../bootstrap/env.js';
-import type { BatchBackendConfig } from '../config/env.js';
 import { loadConfig } from '../config/env.js';
 import { getProfileById } from '../domain/profile-repository.js';
 import { getActiveStudentProfileBinding } from '../domain/student-profile-binding-repository.js';
@@ -26,16 +25,6 @@ function parseArgs(argv: string[]): CliOptions {
   return options;
 }
 
-function toDbConfig(config: BatchBackendConfig): BatchBackendConfig {
-  return {
-    ...config,
-    studentSystem: {
-      source: 'db',
-      fsFallback: false,
-    },
-  };
-}
-
 function assertOrThrow(condition: unknown, message: string): asserts condition {
   if (!condition) {
     throw new Error(message);
@@ -55,7 +44,6 @@ async function run(): Promise<void> {
     throw new Error('Verification requires local config provider (ESL_PIPELINE_CONFIG_PROVIDER=local)');
   }
 
-  const dbConfig = toDbConfig(config);
   const suffix = randomUUID().slice(0, 8);
   const studentName = `PhaseA Oneoff ${suffix}`;
   const firstProfileId = `profiles/phase-a-oneoff-${suffix}.md`;
@@ -74,7 +62,7 @@ async function run(): Promise<void> {
           narrator: 'voice-test',
         },
       },
-      { config: dbConfig },
+      { config },
     );
     createdStudentId = created.id;
 
@@ -82,14 +70,14 @@ async function run(): Promise<void> {
     assertOrThrow(created.profileId === firstProfileId, 'Created profileId mismatch');
 
     console.log('[student-system-verify] step=get');
-    const loaded = await getStudentProfileById(created.id, { config: dbConfig });
+    const loaded = await getStudentProfileById(created.id, { config });
     assertOrThrow(loaded, 'Expected created student to be retrievable');
     assertOrThrow(loaded.profileId === firstProfileId, 'Loaded profileId mismatch');
 
     console.log('[student-system-verify] step=list-search');
     const listed = await listStudentProfiles(
       { search: suffix, limit: 20, offset: 0, order: 'asc' },
-      { config: dbConfig },
+      { config },
     );
     assertOrThrow(listed.items.some((item) => item.id === created.id), 'List did not include created student');
 
@@ -109,7 +97,7 @@ async function run(): Promise<void> {
         colorPreset: 'c1-default',
         profileId: secondProfileId,
       },
-      { config: dbConfig },
+      { config },
     );
     assertOrThrow(updated, 'Expected update to return student');
     assertOrThrow(updated.profileId === secondProfileId, 'Updated profileId mismatch');
@@ -131,11 +119,11 @@ async function run(): Promise<void> {
     }
 
     console.log('[student-system-verify] step=delete');
-    const removed = await deleteStudentProfile(created.id, { config: dbConfig });
+    const removed = await deleteStudentProfile(created.id, { config });
     assertOrThrow(removed, 'Expected delete to return true');
 
     console.log('[student-system-verify] step=get-after-delete');
-    const afterDelete = await getStudentProfileById(created.id, { config: dbConfig });
+    const afterDelete = await getStudentProfileById(created.id, { config });
     assertOrThrow(afterDelete === null, 'Expected deleted student to be missing');
 
     console.log('[student-system-verify] step=binding-after-delete');
@@ -146,7 +134,7 @@ async function run(): Promise<void> {
   } catch (error) {
     if (!options.keep && createdStudentId) {
       try {
-        await deleteStudentProfile(createdStudentId, { config: dbConfig });
+        await deleteStudentProfile(createdStudentId, { config });
       } catch {
         // Best-effort cleanup only.
       }

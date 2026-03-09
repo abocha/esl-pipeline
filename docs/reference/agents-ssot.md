@@ -543,13 +543,14 @@ Local defaults live under [`packages/orchestrator/configs`](packages/orchestrato
 - [`packages/orchestrator/configs/voices.yml`](packages/orchestrator/configs/voices.yml)
   - Maps voices to ElevenLabs or other TTS configuration.
 - [`packages/orchestrator/configs/students/*.json`](packages/orchestrator/configs/students)
-  - Per-student or profile configs.
+  - Orchestrator config-provider student metadata (not batch-backend student API storage).
 
 `createPipeline` and `ConfigProvider` determine how these are loaded. Agents:
 
 - MUST keep these files’ schemas consistent with orchestrator expectations.
 - MUST update or add tests when changing schema or behavior.
 - SHOULD treat changes as configuration-only; code changes go through orchestrator or adapters.
+- MUST treat batch-backend `/students` APIs as DB-only; `configs/students` JSON is not their runtime source.
 
 ### 5.2. Environment-Based Configuration
 
@@ -839,7 +840,7 @@ Constraints:
 
 - MUST NOT break default voice behavior or cause missing mappings for existing presets.
 
-### 9.3. Add or Update a Student Profile
+### 9.3. Add or Update an Orchestrator Student Config
 
 Steps:
 
@@ -852,7 +853,7 @@ Steps:
 Constraints:
 
 - Profiles MUST remain parseable and non-breaking to existing usage.
-- Runtime student profiles are configuration objects (not pedagogical history blobs).
+- These objects are orchestrator configuration records (not batch-backend `/students` storage).
 - `profileId` (when set) MUST be a normalized relative ID under the prompt profile root and use
   `.md` or `.txt`.
 - Prompt package profile resolution precedence MUST remain:

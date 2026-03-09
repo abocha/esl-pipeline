@@ -53,9 +53,6 @@ describe('config/env - core defaults', () => {
         expect(cfg.worker.ttsCacheMaxBytes).toBe(10 * 1024 * 1024 * 1024);
         expect(cfg.worker.ttsCacheMaintenanceIntervalMinutes).toBe(60);
         expect(cfg.worker.ttsCacheMaintenanceLockKey).toBe('910021');
-        expect(cfg.studentSystem?.source).toBe('fs');
-        expect(cfg.studentSystem?.fsFallback).toBe(true);
-
         // Orchestrator core defaults
         expect(cfg.orchestrator.manifestStore).toBeDefined();
         expect(['filesystem', 's3']).toContain(cfg.orchestrator.manifestStore);
@@ -65,38 +62,41 @@ describe('config/env - core defaults', () => {
   });
 });
 
-describe('config/env - student system source mapping', () => {
+describe('config/env - deprecated student system env vars', () => {
   beforeEach(() => {
     vi.resetModules();
   });
 
-  it('maps STUDENT_SYSTEM_SOURCE/STUDENT_SYSTEM_FS_FALLBACK into config', async () => {
-    await withEnv(
-      {
-        NODE_ENV: 'production',
-        STUDENT_SYSTEM_SOURCE: 'db',
-        STUDENT_SYSTEM_FS_FALLBACK: 'false',
-      },
-      async () => {
-        const cfg = await loadConfigFresh();
-        expect(cfg.studentSystem?.source).toBe('db');
-        expect(cfg.studentSystem?.fsFallback).toBe(false);
-      },
-    );
-  });
-
-  it('throws on invalid STUDENT_SYSTEM_SOURCE', async () => {
+  it('throws when STUDENT_SYSTEM_SOURCE is set', async () => {
     await expect(
       withEnv(
         {
           NODE_ENV: 'test',
-          STUDENT_SYSTEM_SOURCE: 'legacy',
+          STUDENT_SYSTEM_SOURCE: 'db',
         },
         async () => {
           await loadConfigFresh();
         },
       ),
-    ).rejects.toThrow('STUDENT_SYSTEM_SOURCE must be one of: fs, hybrid, db');
+    ).rejects.toThrow(
+      'STUDENT_SYSTEM_SOURCE has been removed. Student profile storage is now DB-only.',
+    );
+  });
+
+  it('throws when STUDENT_SYSTEM_FS_FALLBACK is set', async () => {
+    await expect(
+      withEnv(
+        {
+          NODE_ENV: 'test',
+          STUDENT_SYSTEM_FS_FALLBACK: 'true',
+        },
+        async () => {
+          await loadConfigFresh();
+        },
+      ),
+    ).rejects.toThrow(
+      'STUDENT_SYSTEM_FS_FALLBACK has been removed. Student profile storage is now DB-only.',
+    );
   });
 });
 
