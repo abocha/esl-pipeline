@@ -36,15 +36,21 @@ pnpm check:fast
 pnpm docs:check
 ```
 
-## Orchestrator CLI
+## Operational Entry Point (Backend-First)
 
 ```bash
-pnpm esl --interactive
-pnpm esl --md ./lessons/mission.md --preset b1-default --with-tts --upload s3
-pnpm esl status --md ./lessons/mission.md
+pnpm dev:batch
 ```
 
-## Batch System (Optional)
+## Legacy Orchestrator CLI (Deprecated Compatibility)
+
+```bash
+pnpm esl --md ./lessons/mission.md --preset b1-default --with-tts --upload s3
+```
+
+Do not use CLI as the primary operational path. The backend system is the active runtime entrypoint.
+
+## Batch System (Local Docker)
 
 ```bash
 pnpm docker:up

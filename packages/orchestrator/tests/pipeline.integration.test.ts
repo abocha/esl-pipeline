@@ -131,6 +131,19 @@ describe('pipeline integration', () => {
     expect(events.some((event) => event.stage === 'upload' && event.status === 'success')).toBe(
       true,
     );
+    expect(
+      events
+        .filter((event) => event.status !== 'start')
+        .map((event) => `${event.stage}:${event.status}`),
+    ).toEqual([
+      'validate:success',
+      'import:skipped',
+      'colorize:success',
+      'tts:success',
+      'upload:success',
+      'add-audio:skipped',
+      'manifest:success',
+    ]);
   });
 
   it('runs newAssignment with the remote config provider', async () => {
@@ -196,6 +209,19 @@ describe('pipeline integration', () => {
     expect(
       events.filter((event) => event.stage === 'import' && event.status === 'skipped'),
     ).toHaveLength(1);
+    expect(
+      events
+        .filter((event) => event.status !== 'start')
+        .map((event) => `${event.stage}:${event.status}`),
+    ).toEqual([
+      'validate:success',
+      'import:skipped',
+      'colorize:success',
+      'tts:success',
+      'upload:success',
+      'add-audio:skipped',
+      'manifest:success',
+    ]);
   });
 
   it('writes manifests to S3 when configured via environment variables', async () => {

@@ -28,7 +28,7 @@
 - `packages/orchestrator/src/wizard.ts`
   - Interactive settings capture and persistence (`wizard.defaults.json`).
 - `packages/orchestrator/bin/cli.ts`
-  - Thin command adapter over orchestrator API. CLI is currently low-priority operationally.
+  - Thin command adapter over orchestrator API. CLI is deprecated and retained only for compatibility during staged removal.
 
 ### Core Runtime Modules (post-refactor seam extraction)
 

@@ -25,8 +25,9 @@ Start with `AGENTS.md` and `docs/README.md`; then read only the sections needed 
   - `docs/reference/ORCHESTRATOR_SYSTEM_REVIEW.md`
   - `docs/reference/ORCHESTRATOR_OWNERSHIP_LEDGER.md`
 - Configuration and adapter rules: section `5`.
-- Manifest and pipeline behavior contracts: sections `6` and `7`.
-- CLI/programmatic API constraints: sections `8` and `9`.
+- Manifest and pipeline behavior contracts: section `6`.
+- Programmatic API + legacy CLI constraints: section `7`.
+- Safety rails and extension playbooks: sections `8` and `9`.
 - CI/release/workflow constraints: sections `10`, `11`, and `12`.
 
 ---
@@ -96,7 +97,8 @@ Sections or bullets explicitly labeled “to be confirmed” describe intended f
 The ESL Pipeline is a pnpm-based monorepo. Core directories:
 
 - [`packages/orchestrator`](packages/orchestrator)
-  - Primary entry point (CLI and programmatic API).
+  - Canonical programmatic pipeline entry point.
+  - Legacy CLI compatibility surface (deprecated; not the operational path).
 - [`packages/shared-infrastructure`](packages/shared-infrastructure)
   - Shared infrastructure utilities for environment loading, storage configuration, and manifest resolution.
 - [`packages/md-validator`](packages/md-validator)
@@ -275,7 +277,7 @@ This section defines what each package owns, which exports are stable, and how t
 
 [`packages/orchestrator`](packages/orchestrator):
 
-- Hosts the CLI:
+- Hosts a legacy CLI compatibility surface (deprecated):
   - [`packages/orchestrator/bin/cli.ts`](packages/orchestrator/bin/cli.ts)
 - Exposes the programmatic API:
   - [`packages/orchestrator/src/index.ts`](packages/orchestrator/src/index.ts)
@@ -290,6 +292,7 @@ Contract:
 - The orchestrator’s exported API is the primary, stable integration surface.
 - Supporting packages are considered internal dependencies unless explicitly documented otherwise.
 - CLI behavior MUST be a thin, faithful wrapper around orchestrator functions.
+- Batch-backend is the operational runtime entrypoint; CLI MUST NOT be treated as required for production workflows.
 
 #### 4.1.2. Key Exports and Contracts
 
@@ -381,6 +384,25 @@ Boundary invariants:
 - Shared helper logic duplicated across packages SHOULD be extracted into shared packages (for example `@esl-pipeline/shared-infrastructure`) when it is domain-neutral and reused by both sides.
 - Agents MUST consult the active ownership ledger before moving behavior across package boundaries:
   - `docs/reference/ORCHESTRATOR_OWNERSHIP_LEDGER.md`
+
+#### 4.1.5. Stage 1 Baseline Lock (Mandatory Before Further Refactor Stages)
+
+Before entering Stage 2+ of the orchestrator library-only roadmap, agents MUST keep the Stage 1 characterization baseline green and unchanged in intent:
+
+- `packages/orchestrator/tests/pipeline.integration.test.ts`
+  - Canonical stage sequencing and callback status ordering for `newAssignment`.
+- `packages/orchestrator/tests/index.test.ts`
+  - Manifest lifecycle behavior (`newAssignment` write + rerun path semantics via `manifestMd`) and cancellation baseline.
+- `packages/orchestrator/tests/observability.test.ts`
+  - Stage/pipeline observability event naming and start/success/skipped patterns.
+- `packages/batch-backend/tests/infrastructure.orchestrator-service.test.ts`
+  - Backend->orchestrator boundary invocation, execution-mode payload shape, and abort relay behavior.
+
+If any of these behaviors intentionally change, agents MUST:
+
+1. Update the ownership ledger with rationale and migration path.
+2. Update this SSOT section and relevant plan stage docs.
+3. Treat compatibility impact under `docs/reference/VERSIONING_MODEL.md` before merge.
 
 ### 4.2. Supporting Packages (Per-Package Snapshots)
 
@@ -698,36 +720,30 @@ Agents MUST keep manifest behavior backward compatible unless explicitly perform
 
 ---
 
-## 7. CLI vs Programmatic API: Contracts and Priorities
+## 7. Programmatic API and Legacy CLI: Contracts and Priorities
 
-### 7.1. CLI Entry Points
+### 7.1. Operational Priority
 
-CLI implementation:
+- Batch-backend is the active operational runtime entrypoint.
+- Orchestrator programmatic API is the canonical pipeline contract.
+- Orchestrator CLI/wizard/path-picker are deprecated compatibility surfaces on a staged removal path.
+
+### 7.2. Legacy CLI Constraints (Deprecation Mode)
+
+Legacy CLI implementation:
 
 - [`packages/orchestrator/bin/cli.ts`](packages/orchestrator/bin/cli.ts)
-
-Canonical commands (names/flags verified from CLI implementation):
-
-- `esl --md <file>`:
-  - Run full pipeline for given Markdown.
-- `esl status ...`:
-  - Inspect manifest/pipeline status.
-- `esl rerun ...`:
-  - Planner-backed rerun with updated options based on existing manifest.
-  - Supports `--steps`, `--audio`, `--from/--to`, and `--plan` (dry planning only).
-- `esl select ...`:
-  - Select runs or presets (per CLI implementation).
-- `esl --version`:
-  - Print version.
 
 Rules:
 
 - CLI is a thin adapter over orchestrator API.
-- Any CLI feature MUST delegate to orchestrator exports, NOT duplicate logic.
+- Any CLI behavior MUST delegate to orchestrator exports, NOT duplicate logic.
+- No net-new CLI feature work is allowed during deprecation mode.
+- Only critical safety fixes are allowed until removal stage.
 - Rerun planning precedence MUST remain: `--steps` > `--audio` > `--from/--to` > default.
 - `--with-tts` is an explicit opt-in. When omitted, the orchestrator treats `withTts` as “no override” so that saved defaults from `packages/orchestrator/configs/wizard.defaults.json` or other configuration can apply.
 
-### 7.2. Programmatic API as Source of Truth
+### 7.3. Programmatic API as Source of Truth
 
 Programmatic usage via `@esl-pipeline/orchestrator`:
 
@@ -740,16 +756,15 @@ Programmatic usage via `@esl-pipeline/orchestrator`:
 Contracts:
 
 - Programmatic API is the primary behavioral source of truth.
-- New behavior MUST:
-  - Land in pipeline/orchestrator first.
-  - Then be exposed via CLI as needed.
+- New behavior MUST land in pipeline/orchestrator first.
+- Exposing behavior through CLI is optional and generally discouraged during CLI deprecation.
 
 Agents:
 
 - MUST implement new semantics in orchestrator/core functions before wiring CLI.
 - MUST NOT embed pipeline logic directly in CLI argument handlers.
 
-### 7.3. Compatibility and Zero-Install Usage
+### 7.4. Compatibility and Zero-Install Usage
 
 Zero-install usage:
 

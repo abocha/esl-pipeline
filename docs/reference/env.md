@@ -2,7 +2,7 @@
 
 This repo uses a few env files for different runtimes:
 
-- `.env` (from `.env.example`): for local CLI / orchestrator usage.
+- `.env` (from `.env.example`): for orchestrator library usage and legacy CLI compatibility.
 - `.env.batch-backend` (from `.env.batch-backend.example`): for the batch backend service (docker-compose).
 
 Node: 24.11.1+ (see `.nvmrc` / `package.json`).
@@ -15,7 +15,7 @@ Node: 24.11.1+ (see `.nvmrc` / `package.json`).
 - `loadCliEnv()` resolves workspace/root `.env` files consistently and supports optional memoized
   loading behavior.
 
-## Core (CLI / Orchestrator)
+## Core (Orchestrator Library / Legacy CLI Compatibility)
 
 Set these in `.env` (or your shell) when running `esl` or programmatic API calls:
 

@@ -38,3 +38,16 @@ Create a trusted baseline for behavior and lock ownership decisions before any h
 1. Risk: incomplete baseline allows accidental regressions later.
 2. Mitigation: block entry to Stage 2+ until baseline suite is green.
 3. Rollback: pause further refactor and extend characterization coverage until gaps are closed.
+
+## Implementation Notes (Stage 1 Execution)
+
+1. Ownership ledger expanded with explicit decisions for:
+   - stage event schema ownership,
+   - cancellation relay split ownership,
+   - config/options boundary ownership,
+   - CLI/wizard/path-picker retirement target.
+2. Characterization coverage tightened:
+   - orchestrator stage callback terminal order assertions (`pipeline.integration.test.ts`),
+   - rerun manifest lifecycle assertions (`index.test.ts`),
+   - backend worker boundary execution-mode assertions (`infrastructure.orchestrator-service.test.ts`).
+3. SSOT now contains a mandatory Stage 1 baseline lock section that gates entry to Stage 2+.

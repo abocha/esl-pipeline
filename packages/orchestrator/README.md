@@ -1,26 +1,22 @@
 # @esl-pipeline/orchestrator
 
-End-to-end CLI orchestrator for ESL assignment workflows: validates markdown lessons, imports them to Notion, applies color presets, generates ElevenLabs audio, uploads to S3, and attaches audio blocks—all with manifest-based incremental reruns.
+Library-first pipeline engine for ESL assignment workflows: validates markdown lessons, imports/publishes content, generates optional TTS, uploads artifacts, and tracks manifest-based reruns.
+
+The CLI/wizard/path-picker surface in this package is deprecated and on a staged removal path. Use `@esl-pipeline/batch-backend` as the operational runtime entrypoint.
 
 ## Quick Start
 
-The **interactive wizard** is the recommended way to use the orchestrator. It guides you through the entire workflow:
+Operational (recommended):
 
 ```bash
-# In the esl-pipeline workspace
-pnpm esl --interactive
+pnpm dev:batch
 ```
 
-The wizard will:
+Legacy CLI compatibility (deprecated):
 
-- **Prompt for a markdown file** (or let you use the file picker)
-- **Load student profiles** and apply their defaults (database ID, color preset, accent preference)
-- **Manage saved preferences** (persistent across runs)
-- **Guide TTS configuration** (mode, language, stability, voices)
-- **Configure upload settings** (S3 prefix, presigned URLs, public read)
-- **Execute the pipeline** with visual progress spinners
-
-All your selections are automatically saved to `packages/orchestrator/configs/wizard.defaults.json` for the next run, making subsequent executions even faster.
+```bash
+pnpm esl --interactive
+```
 
 ## Prerequisites
 
