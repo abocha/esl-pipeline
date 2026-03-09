@@ -1,6 +1,6 @@
 {
   "name": "esl-pipeline",
-  "version": "1.2.4",
+  "version": "1.2.5",
   "private": true,
   "description": "ESL assignment pipeline tooling (validation, Notion import, TTS, S3 upload).",
   "keywords": [
@@ -80,7 +80,11 @@
     "ops:status:json": "bash scripts/docker/postgres-ops-status.sh --json",
     "smoke": "pnpm --filter @esl-pipeline/orchestrator test",
     "test": "pnpm -r --parallel --workspace-concurrency=4 --filter './packages/*' run test",
+    "test:coverage:core": "node scripts/test/run-core-coverage.mjs",
+    "test:coverage:report": "node scripts/test/generate-coverage-report.mjs",
     "test:integration": "pnpm build && pnpm -r --parallel --workspace-concurrency=4 --filter './packages/*' --if-present run test:integration",
+    "test:timings:frontend": "node scripts/test/run-frontend-unit-timings.mjs",
+    "test:timings:report": "node scripts/test/generate-frontend-timing-report.mjs",
     "test:topo": "pnpm -r --filter './packages/*' run test",
     "test:watch": "pnpm -r --filter './packages/*' --if-present run test:watch",
     "typecheck": "pnpm -r --filter './packages/*' --if-present run typecheck"
