@@ -131,10 +131,8 @@ vi.mock('../src/infrastructure/orchestrator-service', () => {
     uploadOptions: ['auto', 's3', 'none'] as const,
     ttsStrategies: ['auto', 'dialogue', 'tts'] as const,
   };
-  const orchestratorStudentProfilesMock = [{ student: 'Anna' }, { student: 'Bob' }, { student: '  ' }];
   return {
     getJobOptionsFromOrchestrator: vi.fn().mockResolvedValue(orchestratorJobOptionsMock),
-    getStudentProfilesFromOrchestrator: vi.fn().mockResolvedValue(orchestratorStudentProfilesMock),
   };
 });
 
@@ -144,8 +142,12 @@ vi.mock('@esl-pipeline/md-validator', () => {
   };
 });
 
-vi.mock('../src/application/student-profiles-store', () => {
+vi.mock('../src/application/student-profiles-store', async () => {
+  const actual = await vi.importActual<typeof import('../src/application/student-profiles-store.js')>(
+    '../src/application/student-profiles-store.js',
+  );
   return {
+    ...actual,
     listStudentProfiles: vi.fn(),
     getStudentProfileById: vi.fn(),
     createStudentProfile: vi.fn(),

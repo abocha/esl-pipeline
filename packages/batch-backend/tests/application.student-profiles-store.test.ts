@@ -1,4 +1,4 @@
-import { mkdir, mkdtemp, readFile, readdir, rm, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, rm } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
@@ -12,6 +12,7 @@ import {
   updateStudentProfile,
 } from '../src/application/student-profiles-store.js';
 import { loadConfig } from '../src/config/env.js';
+import type { StudentRecord } from '../src/domain/student-model.js';
 import { deriveStudentId } from '../src/domain/student-utils.js';
 
 const tempDirs: string[] = [];
@@ -29,23 +30,157 @@ afterEach(async () => {
   tempDirs.length = 0;
 });
 
+function makeRecord(overrides: Partial<StudentRecord> & Pick<StudentRecord, 'id' | 'student'>): StudentRecord {
+  const now = new Date('2026-01-01T00:00:00.000Z');
+  return {
+    id: overrides.id,
+    student: overrides.student,
+    dbId: overrides.dbId ?? null,
+    pageParentId: overrides.pageParentId ?? null,
+    colorPreset: overrides.colorPreset ?? null,
+    voices: overrides.voices ?? {},
+    manifestPreset: overrides.manifestPreset ?? null,
+    accentPreference: overrides.accentPreference ?? null,
+    profileId: overrides.profileId ?? null,
+    createdAt: overrides.createdAt ?? now,
+    updatedAt: overrides.updatedAt ?? now,
+  };
+}
+
+function createInMemoryDeps(initial: StudentRecord[] = []) {
+  const store = new Map<string, StudentRecord>(initial.map((record) => [record.id, record]));
+
+  return {
+    students: {
+      list: async (params?: { limit?: number; offset?: number; order?: 'asc' | 'desc' }) => {
+        const order = params?.order ?? 'asc';
+        const sorted = [...store.values()].sort((a, b) =>
+          order === 'asc' ? a.student.localeCompare(b.student) : b.student.localeCompare(a.student),
+        );
+        const offset = params?.offset ?? 0;
+        const limit = params?.limit ?? sorted.length;
+        return {
+          items: sorted.slice(offset, offset + limit),
+          total: sorted.length,
+          limit,
+          offset,
+          order,
+        };
+      },
+      getById: async (id: string) => store.get(id) ?? null,
+      insert: async (params: {
+        id?: string;
+        student: string;
+        dbId?: string | null;
+        pageParentId?: string | null;
+        colorPreset?: string | null;
+        voices?: Record<string, string>;
+        manifestPreset?: string | null;
+        accentPreference?: string | null;
+        profileId?: string | null;
+      }) => {
+        const id = params.id ?? deriveStudentId(params.student);
+        if (store.has(id)) {
+          const error = new Error('duplicate key value violates unique constraint') as Error & {
+            code?: string;
+          };
+          error.code = '23505';
+          throw error;
+        }
+        const record = makeRecord({
+          id,
+          student: params.student,
+          dbId: params.dbId ?? null,
+          pageParentId: params.pageParentId ?? null,
+          colorPreset: params.colorPreset ?? null,
+          voices: params.voices ?? {},
+          manifestPreset: params.manifestPreset ?? null,
+          accentPreference: params.accentPreference ?? null,
+          profileId: params.profileId ?? null,
+        });
+        store.set(id, record);
+        return record;
+      },
+      upsert: async (params: {
+        id?: string;
+        student: string;
+        dbId?: string | null;
+        pageParentId?: string | null;
+        colorPreset?: string | null;
+        voices?: Record<string, string>;
+        manifestPreset?: string | null;
+        accentPreference?: string | null;
+        profileId?: string | null;
+      }) => {
+        const id = params.id ?? deriveStudentId(params.student);
+        const existing = store.get(id);
+        const now = new Date('2026-01-02T00:00:00.000Z');
+        const record = makeRecord({
+          id,
+          student: params.student,
+          dbId: params.dbId ?? null,
+          pageParentId: params.pageParentId ?? null,
+          colorPreset: params.colorPreset ?? null,
+          voices: params.voices ?? {},
+          manifestPreset: params.manifestPreset ?? null,
+          accentPreference: params.accentPreference ?? null,
+          profileId: params.profileId ?? null,
+          createdAt: existing?.createdAt ?? now,
+          updatedAt: now,
+        });
+        store.set(id, record);
+        return record;
+      },
+      remove: async (id: string) => store.delete(id),
+    },
+    profiles: {
+      upsert: async () => ({
+        id: 'profile-id',
+        label: 'profile label',
+        activeRevisionId: null,
+        createdAt: new Date('2026-01-01T00:00:00.000Z'),
+        updatedAt: new Date('2026-01-01T00:00:00.000Z'),
+      }),
+    },
+    bindings: {
+      setActive: async () => ({
+        id: 'binding-1',
+        studentId: 'student-id',
+        profileId: 'profiles/default.md',
+        effectiveFrom: new Date('2026-01-01T00:00:00.000Z'),
+        effectiveTo: null,
+        reason: null,
+        changedBy: null,
+        createdAt: new Date('2026-01-01T00:00:00.000Z'),
+      }),
+      clearActive: async () => {},
+    },
+  };
+}
+
 describe('student-profiles-store', () => {
-  it('lists student profiles and injects the default profile', async () => {
+  it('lists DB-backed student profiles and injects the default profile', async () => {
     const studentsDir = await createStudentsDir();
-    await writeFile(
-      path.join(studentsDir, 'anna.json'),
-      JSON.stringify({ student: 'Anna', dbId: 'db-1' }),
-      'utf8',
+    const deps = createInMemoryDeps([
+      makeRecord({ id: deriveStudentId('Anna'), student: 'Anna', dbId: 'db-1' }),
+    ]);
+
+    const result = await listStudentProfiles(
+      { limit: 10 },
+      {
+        studentsDir,
+        deps,
+      },
     );
 
-    const result = await listStudentProfiles({ limit: 10 }, { studentsDir });
     const ids = result.items.map((item) => item.id);
     expect(ids).toContain(deriveStudentId('Anna'));
     expect(ids).toContain(deriveStudentId('Default'));
   });
 
-  it('creates, updates, and deletes a student profile', async () => {
+  it('creates, updates, gets, and deletes a DB-backed student profile', async () => {
     const studentsDir = await createStudentsDir();
+    const deps = createInMemoryDeps();
 
     const created = await createStudentProfile(
       {
@@ -54,55 +189,65 @@ describe('student-profiles-store', () => {
         profileId: 'profile.md',
         voices: {},
       },
-      { studentsDir },
+      { studentsDir, deps },
     );
     expect(created.student).toBe('New Student');
+
+    const loaded = await getStudentProfileById(created.id, { studentsDir, deps });
+    expect(loaded?.student).toBe('New Student');
 
     const updated = await updateStudentProfile(
       created.id,
       { colorPreset: 'b2-default' },
-      { studentsDir },
+      { studentsDir, deps },
     );
     expect(updated?.colorPreset).toBe('b2-default');
 
-    const files = await readdir(studentsDir);
-    const fileName = files.find((name) => name.endsWith('.json'));
-    expect(fileName).toBeTruthy();
-    const fileContent = await readFile(path.join(studentsDir, fileName!), 'utf8');
-    expect(fileContent).toContain('"student"');
-
-    const deleted = await deleteStudentProfile(created.id, { studentsDir });
+    const deleted = await deleteStudentProfile(created.id, { studentsDir, deps });
     expect(deleted).toBe(true);
 
-    const loaded = await getStudentProfileById(created.id, { studentsDir });
-    expect(loaded).toBeNull();
+    const missing = await getStudentProfileById(created.id, { studentsDir, deps });
+    expect(missing).toBeNull();
   });
 
   it('rejects student name changes that would alter the derived ID', async () => {
     const studentsDir = await createStudentsDir();
-    await writeFile(path.join(studentsDir, 'bob.json'), JSON.stringify({ student: 'Bob' }), 'utf8');
-
     const id = deriveStudentId('Bob');
-    await expect(updateStudentProfile(id, { student: 'Bobby' }, { studentsDir })).rejects.toThrow(
+    const deps = createInMemoryDeps([makeRecord({ id, student: 'Bob' })]);
+
+    await expect(updateStudentProfile(id, { student: 'Bobby' }, { studentsDir, deps })).rejects.toThrow(
       StudentProfileStoreError,
     );
   });
 
-  it('treats remote config providers as read-only', async () => {
+  it('allows DB reads/writes when ESL_PIPELINE_CONFIG_PROVIDER=http', async () => {
     const studentsDir = await createStudentsDir();
-    const config = loadConfig();
-    const readOnlyConfig = {
-      ...config,
-      orchestrator: { ...config.orchestrator, configProvider: 'http' as const },
+    const baseConfig = loadConfig();
+    const config = {
+      ...baseConfig,
+      orchestrator: {
+        ...baseConfig.orchestrator,
+        configProvider: 'http' as const,
+      },
     };
+    const deps = createInMemoryDeps();
 
-    await expect(
-      createStudentProfile({ student: 'Read Only' }, { studentsDir, config: readOnlyConfig }),
-    ).rejects.toThrow(StudentProfileStoreError);
+    const created = await createStudentProfile(
+      {
+        student: 'Remote Mode Write',
+        profileId: 'profiles/remote.md',
+      },
+      { studentsDir, config, deps },
+    );
+
+    expect(created.id).toBe(deriveStudentId('Remote Mode Write'));
+    const listed = await listStudentProfiles({ limit: 50 }, { studentsDir, config, deps });
+    expect(listed.items.some((item) => item.id === created.id)).toBe(true);
   });
 
   it('rejects malformed profileId values on create and update', async () => {
     const studentsDir = await createStudentsDir();
+    const deps = createInMemoryDeps();
 
     await expect(
       createStudentProfile(
@@ -110,7 +255,7 @@ describe('student-profiles-store', () => {
           student: 'Invalid Profile',
           profileId: '../outside.md',
         },
-        { studentsDir },
+        { studentsDir, deps },
       ),
     ).rejects.toThrow(StudentProfileStoreError);
 
@@ -119,7 +264,7 @@ describe('student-profiles-store', () => {
         student: 'Valid Profile',
         profileId: 'profiles/default.md',
       },
-      { studentsDir },
+      { studentsDir, deps },
     );
     expect(created.profileId).toBe('profiles/default.md');
 
@@ -129,19 +274,29 @@ describe('student-profiles-store', () => {
         {
           profileId: 'profile-without-extension',
         },
-        { studentsDir },
+        { studentsDir, deps },
       ),
     ).rejects.toThrow(StudentProfileStoreError);
   });
 
-  it('threads binding actor and reason metadata on DB-backed create', async () => {
-    const dbConfig = {
+  it('returns explicit db-required error when PG is disabled', async () => {
+    const studentsDir = await createStudentsDir();
+    const config = {
       ...loadConfig(),
-      studentSystem: {
-        source: 'db' as const,
-        fsFallback: false,
+      pg: {
+        ...loadConfig().pg,
+        enabled: false,
       },
     };
+
+    await expect(listStudentProfiles({}, { studentsDir, config })).rejects.toMatchObject({
+      code: 'student_profiles_db_required',
+      status: 503,
+    });
+  });
+
+  it('threads binding actor and reason metadata on DB-backed create', async () => {
+    const studentsDir = await createStudentsDir();
     const changedBy = 'user-123';
     const reason = 'student_create_manual';
     const setActiveCalls: { changedBy?: string | null; reason?: string | null }[] = [];
@@ -152,7 +307,7 @@ describe('student-profiles-store', () => {
         profileId: 'profiles/audit.md',
       },
       {
-        config: dbConfig,
+        studentsDir,
         bindingAudit: {
           changedBy,
           reason,
@@ -161,19 +316,18 @@ describe('student-profiles-store', () => {
           students: {
             list: async () => ({ items: [], total: 0, limit: 50, offset: 0, order: 'asc' }),
             getById: async () => null,
-            insert: async (params) => ({
-              id: params.id ?? deriveStudentId(params.student),
-              student: params.student,
-              dbId: params.dbId ?? null,
-              pageParentId: params.pageParentId ?? null,
-              colorPreset: params.colorPreset ?? null,
-              voices: params.voices ?? {},
-              manifestPreset: params.manifestPreset ?? null,
-              accentPreference: params.accentPreference ?? null,
-              profileId: params.profileId ?? null,
-              createdAt: new Date('2026-01-01T00:00:00.000Z'),
-              updatedAt: new Date('2026-01-01T00:00:00.000Z'),
-            }),
+            insert: async (params) =>
+              makeRecord({
+                id: params.id ?? deriveStudentId(params.student),
+                student: params.student,
+                dbId: params.dbId ?? null,
+                pageParentId: params.pageParentId ?? null,
+                colorPreset: params.colorPreset ?? null,
+                voices: params.voices ?? {},
+                manifestPreset: params.manifestPreset ?? null,
+                accentPreference: params.accentPreference ?? null,
+                profileId: params.profileId ?? null,
+              }),
             upsert: async () => {
               throw new Error('upsert should not be called for create');
             },
@@ -213,13 +367,7 @@ describe('student-profiles-store', () => {
   });
 
   it('threads binding actor and reason metadata on DB-backed unbind', async () => {
-    const dbConfig = {
-      ...loadConfig(),
-      studentSystem: {
-        source: 'db' as const,
-        fsFallback: false,
-      },
-    };
+    const studentsDir = await createStudentsDir();
     const studentId = deriveStudentId('Unbind Student');
     const changedBy = 'user-999';
     const reason = 'student_unbind_manual';
@@ -237,7 +385,7 @@ describe('student-profiles-store', () => {
         profileId: null,
       },
       {
-        config: dbConfig,
+        studentsDir,
         bindingAudit: {
           changedBy,
           reason,
@@ -245,35 +393,27 @@ describe('student-profiles-store', () => {
         deps: {
           students: {
             list: async () => ({ items: [], total: 0, limit: 50, offset: 0, order: 'asc' }),
-            getById: async () => ({
-              id: studentId,
-              student: 'Unbind Student',
-              dbId: null,
-              pageParentId: null,
-              colorPreset: null,
-              voices: {},
-              manifestPreset: null,
-              accentPreference: null,
-              profileId: 'profiles/original.md',
-              createdAt: new Date('2026-01-01T00:00:00.000Z'),
-              updatedAt: new Date('2026-01-01T00:00:00.000Z'),
-            }),
+            getById: async () =>
+              makeRecord({
+                id: studentId,
+                student: 'Unbind Student',
+                profileId: 'profiles/original.md',
+              }),
             insert: async () => {
               throw new Error('insert should not be called for update');
             },
-            upsert: async (params) => ({
-              id: params.id ?? studentId,
-              student: params.student ?? 'Unbind Student',
-              dbId: params.dbId ?? null,
-              pageParentId: params.pageParentId ?? null,
-              colorPreset: params.colorPreset ?? null,
-              voices: params.voices ?? {},
-              manifestPreset: params.manifestPreset ?? null,
-              accentPreference: params.accentPreference ?? null,
-              profileId: params.profileId ?? null,
-              createdAt: new Date('2026-01-01T00:00:00.000Z'),
-              updatedAt: new Date('2026-01-01T00:00:00.000Z'),
-            }),
+            upsert: async (params) =>
+              makeRecord({
+                id: params.id ?? studentId,
+                student: params.student ?? 'Unbind Student',
+                dbId: params.dbId ?? null,
+                pageParentId: params.pageParentId ?? null,
+                colorPreset: params.colorPreset ?? null,
+                voices: params.voices ?? {},
+                manifestPreset: params.manifestPreset ?? null,
+                accentPreference: params.accentPreference ?? null,
+                profileId: params.profileId ?? null,
+              }),
             remove: async () => false,
           },
           profiles: {

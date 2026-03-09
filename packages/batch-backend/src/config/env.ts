@@ -188,10 +188,6 @@ export interface BatchBackendConfig {
   drafts: {
     localExport: boolean;
   };
-  studentSystem?: {
-    source: 'fs' | 'hybrid' | 'db';
-    fsFallback: boolean;
-  };
   experimental: {
     extendedApiEnabled: boolean;
   };
@@ -203,14 +199,6 @@ function normalizeSameSite(value: string): 'lax' | 'strict' | 'none' {
     return normalized;
   }
   throw new Error('REFRESH_COOKIE_SAMESITE must be one of: lax, strict, none');
-}
-
-function normalizeStudentSystemSource(value: string): 'fs' | 'hybrid' | 'db' {
-  const normalized = value.trim().toLowerCase();
-  if (normalized === 'fs' || normalized === 'hybrid' || normalized === 'db') {
-    return normalized;
-  }
-  throw new Error('STUDENT_SYSTEM_SOURCE must be one of: fs, hybrid, db');
 }
 
 function normalizeGenerationProvider(value: string): GenerationProvider {
@@ -433,10 +421,16 @@ export function loadConfig(): BatchBackendConfig {
   )!;
   const draftLocalExport = readBool('DRAFT_LOCAL_EXPORT', nodeEnv === 'development');
 
-  const studentSystemSource = normalizeStudentSystemSource(
-    readString('STUDENT_SYSTEM_SOURCE', nodeEnv === 'test' ? 'fs' : 'hybrid')!,
-  );
-  const studentSystemFsFallback = readBool('STUDENT_SYSTEM_FS_FALLBACK', true);
+  if (typeof process.env.STUDENT_SYSTEM_SOURCE === 'string') {
+    throw new TypeError(
+      'STUDENT_SYSTEM_SOURCE has been removed. Student profile storage is now DB-only.',
+    );
+  }
+  if (typeof process.env.STUDENT_SYSTEM_FS_FALLBACK === 'string') {
+    throw new TypeError(
+      'STUDENT_SYSTEM_FS_FALLBACK has been removed. Student profile storage is now DB-only.',
+    );
+  }
 
   // Authentication configuration
   const jwtSecret = readString('JWT_SECRET', 'your-super-secret-jwt-key-change-in-production')!;
@@ -751,10 +745,6 @@ export function loadConfig(): BatchBackendConfig {
     },
     drafts: {
       localExport: draftLocalExport,
-    },
-    studentSystem: {
-      source: studentSystemSource,
-      fsFallback: studentSystemFsFallback,
     },
     experimental: {
       extendedApiEnabled,

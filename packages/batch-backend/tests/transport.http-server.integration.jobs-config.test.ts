@@ -14,10 +14,12 @@ describeHttpServerIntegrationSuite(
     getJobStatusModule,
     getVersionMeta,
     it,
+    mockListStudentProfiles,
     mockActivateProfileRevisionForProfile,
     mockDeleteProfileContent,
     mockDeleteTemplateContent,
     mockGetJobProvenance,
+    studentStoreModule,
     submitJobModule,
     vi,
   }) => {
@@ -595,6 +597,27 @@ describeHttpServerIntegrationSuite(
         { id: deriveStudentId('Anna'), name: 'Anna', profileId: null },
         { id: deriveStudentId('Bob'), name: 'Bob', profileId: null },
       ],
+    });
+  });
+
+  it('GET /config/students maps db-required student store errors to 503', async () => {
+    mockListStudentProfiles.mockRejectedValueOnce(
+      new studentStoreModule.StudentProfileStoreError(
+        'Student profile APIs require Postgres (PG_ENABLED=true)',
+        'student_profiles_db_required',
+        503,
+      ),
+    );
+
+    const response = await app.inject({
+      method: 'GET',
+      url: '/config/students',
+    });
+
+    expect(response.statusCode).toBe(503);
+    expect(response.json()).toMatchObject({
+      error: 'student_profiles_db_required',
+      code: 'student_profiles_db_required',
     });
   });
 

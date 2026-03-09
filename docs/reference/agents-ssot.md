@@ -542,14 +542,15 @@ Local defaults live under [`packages/orchestrator/configs`](packages/orchestrato
   - Defines pipeline presets (e.g., levels, behaviors).
 - [`packages/orchestrator/configs/voices.yml`](packages/orchestrator/configs/voices.yml)
   - Maps voices to ElevenLabs or other TTS configuration.
-- [`packages/orchestrator/configs/students/*.json`](packages/orchestrator/configs/students)
-  - Per-student or profile configs.
+- Orchestrator student config JSON files (loaded by orchestrator ConfigProvider)
+  - These are orchestrator config-provider student metadata records (not batch-backend student API storage).
 
 `createPipeline` and `ConfigProvider` determine how these are loaded. Agents:
 
 - MUST keep these files’ schemas consistent with orchestrator expectations.
 - MUST update or add tests when changing schema or behavior.
 - SHOULD treat changes as configuration-only; code changes go through orchestrator or adapters.
+- MUST treat batch-backend `/students` APIs as DB-only; orchestrator student config JSON is not their runtime source.
 
 ### 5.2. Environment-Based Configuration
 
@@ -839,11 +840,11 @@ Constraints:
 
 - MUST NOT break default voice behavior or cause missing mappings for existing presets.
 
-### 9.3. Add or Update a Student Profile
+### 9.3. Add or Update Orchestrator Student Config Metadata
 
 Steps:
 
-1. Add/modify JSON under [`packages/orchestrator/configs/students`](packages/orchestrator/configs/students).
+1. Add/modify orchestrator student config JSON records in the orchestrator config bundle.
 2. Follow existing schema patterns.
 3. If new shape is introduced, ensure:
    - ConfigProvider handles it.
@@ -852,7 +853,7 @@ Steps:
 Constraints:
 
 - Profiles MUST remain parseable and non-breaking to existing usage.
-- Runtime student profiles are configuration objects (not pedagogical history blobs).
+- These objects are orchestrator configuration records (not batch-backend `/students` storage).
 - `profileId` (when set) MUST be a normalized relative ID under the prompt profile root and use
   `.md` or `.txt`.
 - Prompt package profile resolution precedence MUST remain:

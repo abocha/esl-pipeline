@@ -380,6 +380,14 @@ export function registerExtendedRoutes(app: FastifyInstance, options: ExtendedRo
 
         return reply.send(students);
       } catch (error: unknown) {
+        if (error instanceof StudentProfileStoreError) {
+          return reply.code(error.status).send({
+            error: error.code,
+            message: error.message,
+            code: error.code,
+          });
+        }
+
         logger.error(error instanceof Error ? error : String(error), {
           event: 'http_request',
           route: routePath,
