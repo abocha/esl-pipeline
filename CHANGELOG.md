@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented here. Dates use `YYYY-MM-DD`.
 
+## [2.0.0] - 2026-03-09
+
+### Changed
+
+- Automated release from PR #24: feat(tts): cut over provider adapters and harden google voice assignment (https://github.com/abocha/esl-pipeline/pull/24)
+
 ## [1.2.5] - 2026-03-09
 
 ### Changed
