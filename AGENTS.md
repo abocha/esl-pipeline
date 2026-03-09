@@ -51,6 +51,9 @@ When implementing from a plan file, re-read that exact plan file after every con
 - Backend/frontend integration work:
   - [`docs/backend-frontend/BATCH_SYSTEM.md`](docs/backend-frontend/BATCH_SYSTEM.md)
   - [`docs/backend-frontend/backend-frontend-alignment.md`](docs/backend-frontend/backend-frontend-alignment.md)
+- Orchestrator architecture review + ownership decisions:
+  - [`docs/reference/ORCHESTRATOR_SYSTEM_REVIEW.md`](docs/reference/ORCHESTRATOR_SYSTEM_REVIEW.md)
+  - [`docs/reference/ORCHESTRATOR_OWNERSHIP_LEDGER.md`](docs/reference/ORCHESTRATOR_OWNERSHIP_LEDGER.md)
 - Prompt gallery (DB-canonical runtime):
   - [`docs/operations/prompt-gallery-bootstrap.md`](docs/operations/prompt-gallery-bootstrap.md)
 - Docker dev stack troubleshooting:
