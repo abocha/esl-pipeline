@@ -44,7 +44,7 @@ describe('runtime/audio-artifacts', () => {
   });
 
   it('emits reuse metrics only when reuse value is present', () => {
-    const increments: Array<{ metric: string; value?: number; tags?: Record<string, string> }> = [];
+    const increments: { metric: string; value?: number; tags?: Record<string, string> }[] = [];
     emitArtifactReuseMetric(
       {
         timing: () => {
@@ -66,7 +66,6 @@ describe('runtime/audio-artifacts', () => {
       },
       'audio',
       'study_text',
-      undefined,
     );
 
     expect(increments).toEqual([

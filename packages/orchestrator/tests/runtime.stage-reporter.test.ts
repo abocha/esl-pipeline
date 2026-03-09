@@ -6,9 +6,9 @@ import { createStageReporter } from '../src/runtime/stage-reporter.js';
 describe('runtime/stage-reporter', () => {
   it('emits stage lifecycle logs, callbacks, and metrics for success', () => {
     const logs: PipelineLogEvent[] = [];
-    const callbacks: Array<Record<string, unknown>> = [];
-    const timings: Array<{ metric: string; durationMs: number; tags?: Record<string, string> }> = [];
-    const increments: Array<{ metric: string; value?: number; tags?: Record<string, string> }> = [];
+    const callbacks: Record<string, unknown>[] = [];
+    const timings: { metric: string; durationMs: number; tags?: Record<string, string> }[] = [];
+    const increments: { metric: string; value?: number; tags?: Record<string, string> }[] = [];
 
     const logger: PipelineLogger = {
       log: (event) => logs.push(event),
@@ -50,7 +50,7 @@ describe('runtime/stage-reporter', () => {
 
   it('records skipped stages through recordSkip helper', () => {
     const logs: PipelineLogEvent[] = [];
-    const increments: Array<{ metric: string; value?: number; tags?: Record<string, string> }> = [];
+    const increments: { metric: string; value?: number; tags?: Record<string, string> }[] = [];
 
     const logger: PipelineLogger = {
       log: (event) => logs.push(event),

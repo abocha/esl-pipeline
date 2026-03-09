@@ -33,18 +33,24 @@ function isCancelledErrorLike(error: unknown): error is Error & { stage?: string
 
 function toErrorCode(category: OrchestratorErrorCategory): string {
   switch (category) {
-    case 'cancelled':
+    case 'cancelled': {
       return 'PIPELINE_CANCELLED';
-    case 'validation':
+    }
+    case 'validation': {
       return 'VALIDATION_ERROR';
-    case 'configuration':
+    }
+    case 'configuration': {
       return 'CONFIGURATION_ERROR';
-    case 'manifest':
+    }
+    case 'manifest': {
       return 'MANIFEST_ERROR';
-    case 'infrastructure':
+    }
+    case 'infrastructure': {
       return 'INFRASTRUCTURE_ERROR';
-    default:
+    }
+    default: {
       return 'UNKNOWN_ERROR';
+    }
   }
 }
 
