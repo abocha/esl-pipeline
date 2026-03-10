@@ -1,6 +1,22 @@
 import { Readable } from 'node:stream';
 import { describe, expect, it, vi } from 'vitest';
 
+const elevenLabsMocks = vi.hoisted(() => ({
+  convertMock: vi.fn(),
+}));
+
+vi.mock('@elevenlabs/elevenlabs-js', () => ({
+  ElevenLabsClient: class {
+    speechToText = {
+      convert: elevenLabsMocks.convertMock,
+    };
+
+    constructor(_opts: unknown) {
+      // noop
+    }
+  },
+}));
+
 import {
   processTranscribeJob,
   resolveElevenLabsSttApiKey,
@@ -164,6 +180,191 @@ describe('application/process-transcribe-job', () => {
     );
 
     expect(inserted[0]?.fallbackUsed).toBe(true);
+  });
+
+  it('uses ElevenLabs multichannel words to build interleaved dual-speaker timeline and persists scribe_v2', async () => {
+    const recording = createRecording('recording-elevenlabs-multichannel');
+    const config = createConfig();
+    config.transcription.sttProvider = 'elevenlabs';
+    config.orchestrator.elevenLabsApiKey = 'eleven-key';
+    const storedTexts: string[] = [];
+
+    const storage: TranscriptionStorage = {
+      ...createStorageStub(),
+      async putTranscript({ text }) {
+        storedTexts.push(text);
+        return { uri: 'local://transcripts/transcript-elevenlabs.txt', bytes: text.length };
+      },
+    };
+
+    elevenLabsMocks.convertMock.mockReset();
+    elevenLabsMocks.convertMock.mockResolvedValueOnce({
+      transcripts: [
+        {
+          channelIndex: 0,
+          text: 'Hi there',
+          words: [
+            { text: 'Hi', start: 0, end: 0.3, type: 'word', channelIndex: 0 },
+            { text: 'there', start: 1, end: 1.3, type: 'word', channelIndex: 0 },
+          ],
+        },
+        {
+          channelIndex: 1,
+          text: 'Hello teacher',
+          words: [
+            { text: 'Hello', start: 0.4, end: 0.7, type: 'word', channelIndex: 1 },
+            { text: 'teacher', start: 0.71, end: 0.9, type: 'word', channelIndex: 1 },
+          ],
+        },
+      ],
+    });
+
+    const result = await processTranscribeJob(
+      { recordingId: recording.id, sttProvider: 'elevenlabs' },
+      {
+        config,
+        storage,
+        deepgramClient: createDeepgramStub(),
+        recordings: {
+          async getById() {
+            return recording;
+          },
+          async updateStatus({ status, error }) {
+            recording.status = status;
+            recording.error = error ?? null;
+            return recording;
+          },
+        },
+        transcripts: {
+          async getByRecordingId() {
+            return null;
+          },
+          async insert(params) {
+            return {
+              id: params.id ?? 'transcript-elevenlabs-multichannel',
+              recordingId: params.recordingId,
+              storageUri: params.storageUri,
+              rawResponseUri: params.rawResponseUri ?? null,
+              mode: params.mode,
+              model: params.model,
+              language: params.language,
+              fallbackUsed: params.fallbackUsed,
+              summaryJson: params.summaryJson ?? null,
+              createdAt: new Date(),
+              updatedAt: new Date(),
+            };
+          },
+        },
+        publishEvent: vi.fn(),
+      },
+    );
+
+    expect(result?.model).toBe('scribe_v2');
+    expect(result?.fallbackUsed).toBe(false);
+    expect(storedTexts).toContain(
+      '[Teacher 00:00.000-00:00.300] Hi\n' +
+        '[Student 00:00.400-00:00.900] Hello teacher\n' +
+        '[Teacher 00:01.000-00:01.300] there',
+    );
+    expect(elevenLabsMocks.convertMock).toHaveBeenCalledTimes(1);
+    expect(elevenLabsMocks.convertMock).toHaveBeenNthCalledWith(
+      1,
+      expect.objectContaining({
+        modelId: 'scribe_v2',
+        useMultiChannel: true,
+        diarize: false,
+        timestampsGranularity: 'word',
+      }),
+    );
+  });
+
+  it('falls back from ElevenLabs multichannel failure to diarized parsing with speakerId/speaker_id support', async () => {
+    const recording = createRecording('recording-elevenlabs-fallback');
+    const config = createConfig();
+    config.transcription.sttProvider = 'elevenlabs';
+    config.orchestrator.elevenLabsApiKey = 'eleven-key';
+    const storedTexts: string[] = [];
+
+    const storage: TranscriptionStorage = {
+      ...createStorageStub(),
+      async putTranscript({ text }) {
+        storedTexts.push(text);
+        return { uri: 'local://transcripts/transcript-elevenlabs-fallback.txt', bytes: text.length };
+      },
+    };
+
+    elevenLabsMocks.convertMock.mockReset();
+    elevenLabsMocks.convertMock.mockRejectedValueOnce(new Error('multichannel unavailable'));
+    elevenLabsMocks.convertMock.mockResolvedValueOnce({
+      text: 'Hello there Hi',
+      words: [
+        { text: 'Hello', start: 0.1, end: 0.4, type: 'word', speakerId: 'speaker_0' },
+        { text: 'there', start: 0.41, end: 0.7, type: 'word', speaker_id: 'speaker_0' },
+        { text: 'Hi', start: 1.1, end: 1.3, type: 'word', speakerId: 'speaker_1' },
+      ],
+    });
+
+    const result = await processTranscribeJob(
+      { recordingId: recording.id, sttProvider: 'elevenlabs' },
+      {
+        config,
+        storage,
+        deepgramClient: createDeepgramStub(),
+        recordings: {
+          async getById() {
+            return recording;
+          },
+          async updateStatus({ status, error }) {
+            recording.status = status;
+            recording.error = error ?? null;
+            return recording;
+          },
+        },
+        transcripts: {
+          async getByRecordingId() {
+            return null;
+          },
+          async insert(params) {
+            return {
+              id: params.id ?? 'transcript-elevenlabs-fallback',
+              recordingId: params.recordingId,
+              storageUri: params.storageUri,
+              rawResponseUri: params.rawResponseUri ?? null,
+              mode: params.mode,
+              model: params.model,
+              language: params.language,
+              fallbackUsed: params.fallbackUsed,
+              summaryJson: params.summaryJson ?? null,
+              createdAt: new Date(),
+              updatedAt: new Date(),
+            };
+          },
+        },
+        publishEvent: vi.fn(),
+      },
+    );
+
+    expect(result?.model).toBe('scribe_v2');
+    expect(result?.fallbackUsed).toBe(true);
+    expect(storedTexts).toContain(
+      '[Teacher 00:00.100-00:00.700] Hello there\n[Student 00:01.100-00:01.300] Hi',
+    );
+    expect(elevenLabsMocks.convertMock).toHaveBeenCalledTimes(2);
+    expect(elevenLabsMocks.convertMock).toHaveBeenNthCalledWith(
+      1,
+      expect.objectContaining({
+        modelId: 'scribe_v2',
+        useMultiChannel: true,
+        diarize: false,
+      }),
+    );
+    expect(elevenLabsMocks.convertMock).toHaveBeenNthCalledWith(
+      2,
+      expect.objectContaining({
+        modelId: 'scribe_v2',
+        diarize: true,
+      }),
+    );
   });
 
   it('retries transient terminated transport errors and succeeds', async () => {

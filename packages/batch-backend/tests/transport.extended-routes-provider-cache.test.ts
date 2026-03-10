@@ -15,7 +15,7 @@ describe('transport/extended-routes STT cache provider inference', () => {
   it('infers elevenlabs provider from scribe model', () => {
     expect(
       inferTranscriptSttProvider({
-        model: 'scribe_v1',
+        model: 'scribe_v2',
         summaryJson: null,
       }),
     ).toBe('elevenlabs');
