@@ -381,6 +381,7 @@ Boundary invariants:
 - Canonical pipeline semantics (stage order, manifest semantics, rerun planner behavior) MUST remain owned by orchestrator.
 - Backend worker/process lifecycle behavior (IPC, cancellation relay, worker fallback strategy) MUST remain owned by batch-backend.
 - Batch-backend Redis job-event fanout MUST publish on targeted channels (`batch_job_events:<jobId>`) and use pattern subscriptions (`batch_job_events:*`) for all-jobs listeners.
+- Batch-backend job queries MUST resolve student ownership from `jobs.student_id` only; legacy coalesced joins across recordings/prompt packages/drafts are retired.
 - Batch-backend `user_settings.tts_provider` storage MUST stay canonical (`elevenlabs` or `google`); legacy provider values are migration-only and MUST NOT be reintroduced in runtime write paths.
 - Batch-backend auth middleware and `/auth/*` routes MUST use an injected `AuthService` created from validated runtime config, not ad-hoc environment fallback constructors.
 - Shared helper logic duplicated across packages SHOULD be extracted into shared packages (for example `@esl-pipeline/shared-infrastructure`) when it is domain-neutral and reused by both sides.
