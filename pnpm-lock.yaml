@@ -109,9 +109,6 @@ importers:
       '@aws-sdk/s3-request-presigner':
         specifier: ^3.1004.0
         version: 3.1004.0
-      '@deepgram/sdk':
-        specifier: ^5.0.0
-        version: 5.0.0
       '@elevenlabs/elevenlabs-js':
         specifier: ^2.38.1
         version: 2.38.1
