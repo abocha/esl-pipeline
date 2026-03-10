@@ -251,7 +251,7 @@ describe('orchestrator smoke', () => {
     expect(rerun.steps).toEqual(['upload', 'add-audio']);
   }, 15000);
 
-  it('preserves explicit upload prefix when studyText hash is missing', async () => {
+  it('preserves explicit upload prefix when studyText hash is missing and strips legacy audio alias on rerun', async () => {
     const dir = await mkdtemp(join(tmpdir(), 'orchestrator-legacy-prefix-'));
     const mdPath = join(dir, 'assignment.md');
     const audioPath = join(dir, 'lesson.mp3');
@@ -279,6 +279,11 @@ describe('orchestrator smoke', () => {
     });
 
     const manifest = JSON.parse(await readFile(firstRun.manifestPath!, 'utf8'));
+    manifest.audio = {
+      path: '/tmp/stale-legacy.mp3',
+      url: 'https://legacy.example.com/stale.mp3',
+      hash: 'legacy-hash',
+    };
     manifest.audioArtifacts.studyText.hash = undefined;
     await writeFile(firstRun.manifestPath!, JSON.stringify(manifest, null, 2));
 
@@ -297,5 +302,11 @@ describe('orchestrator smoke', () => {
     const uploadOpts = vi.mocked(uploadFile).mock.calls[0]?.[1];
     expect(uploadOpts?.prefix).toBe('legacy-prefix');
     expect(uploadOpts?.key).toBeUndefined();
+
+    const manifestAfter = JSON.parse(await readFile(firstRun.manifestPath!, 'utf8'));
+    expect(manifestAfter.audio).toBeUndefined();
+    expect(manifestAfter.audioArtifacts?.studyText?.url).toBe(
+      'https://s3.amazonaws.com/audio/file.mp3',
+    );
   }, 15000);
 });
