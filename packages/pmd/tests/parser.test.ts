@@ -28,7 +28,7 @@ describe('parsePmdDocument', () => {
     expect(callouts).toHaveLength(1);
   });
 
-  it('warns on legacy fenced input', () => {
+  it('rejects legacy fenced input', () => {
     const legacy = [
       '```',
       baseFrontmatter.trimEnd(),
@@ -38,10 +38,7 @@ describe('parsePmdDocument', () => {
       '```',
     ].join('\n');
 
-    const doc = parsePmdDocument(legacy);
-    expect(doc.meta.format).toBe('legacy-fenced');
-    expect(doc.warnings).toHaveLength(1);
-    expect(doc.warnings[0]?.code).toBe('legacy-fenced-input');
+    expect(() => parsePmdDocument(legacy)).toThrow(/Expected YAML frontmatter at byte 0/i);
   });
 
   it('detects study-text directives', () => {

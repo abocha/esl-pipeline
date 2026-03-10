@@ -524,7 +524,6 @@ export function registerExtendedRoutes(app: FastifyInstance, options: ExtendedRo
         strict: z.boolean().optional(),
         learningPresetId: z.string().trim().min(1).optional(),
         learningPresetVersion: z.string().trim().min(1).optional(),
-        preset: z.string().trim().min(1).optional(),
       });
 
       try {
@@ -534,7 +533,6 @@ export function registerExtendedRoutes(app: FastifyInstance, options: ExtendedRo
           strict: body.strict,
           learningPresetId: body.learningPresetId,
           learningPresetVersion: body.learningPresetVersion,
-          preset: body.preset,
         });
         const diagnostics = result.voiceDiagnostics;
         if (diagnostics?.errors && diagnostics.errors.length > 0) {
@@ -604,7 +602,6 @@ export function registerExtendedRoutes(app: FastifyInstance, options: ExtendedRo
       const schema = z.object({
         text: z.string().min(1),
         title: z.string().trim().min(1).optional(),
-        preset: z.string().trim().min(1).nullable().optional(),
         learningPresetId: z.string().trim().min(1).nullable().optional(),
         audioUrl: z.string().trim().nullable().optional(),
         pronunciationAudioUrl: z.string().trim().nullable().optional(),
@@ -613,8 +610,8 @@ export function registerExtendedRoutes(app: FastifyInstance, options: ExtendedRo
       try {
         const body = schema.parse(request.body ?? {});
         let headingTheme: { h2?: string; h3?: string } | undefined;
-        let presetName = body.preset?.trim();
-        if (!presetName && body.learningPresetId?.trim()) {
+        let presetName: string | undefined;
+        if (body.learningPresetId?.trim()) {
           const defaults = getDefaultSettings();
           presetName = defaults.defaultPreset;
           const authenticatedUser = getAuthenticatedUser(request);
@@ -2923,7 +2920,6 @@ export function registerExtendedRoutes(app: FastifyInstance, options: ExtendedRo
       const routePath = resolveRoutePath(request, 'POST /drafts/:draftId/materialize');
 
       const jobOverridesSchema = z.object({
-        preset: z.string().min(1).optional(),
         learningPresetId: z.string().min(1).optional(),
         notionDatabase: z.string().min(1).optional(),
         publishTarget: z.enum(['notion', 'anytype', 'html']).optional(),
@@ -3939,7 +3935,6 @@ export function registerExtendedRoutes(app: FastifyInstance, options: ExtendedRo
 
     const jobSchema = z.object({
       md: z.string().min(1),
-      preset: z.string().optional(),
       learningPresetId: z.string().optional(),
       withTts: z.boolean().optional(),
       upload: z.enum(['auto', 's3', 'none']).optional(),
@@ -3957,7 +3952,6 @@ export function registerExtendedRoutes(app: FastifyInstance, options: ExtendedRo
 
       const result = await submitJob({
         md: validatedData.md,
-        preset: validatedData.preset,
         learningPresetId: validatedData.learningPresetId,
         withTts: validatedData.withTts,
         upload: validatedData.upload,

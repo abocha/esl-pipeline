@@ -7,6 +7,11 @@ It defines the backlog item schema, deterministic prioritization, release policy
 
 This slice is planning-only and introduces no runtime behavior changes.
 
+Runtime policy for these retirements:
+
+1. Batch/runtime paths should converge to DB-canonical behavior with no filesystem fallback.
+2. Migration/backfill tooling may read legacy filesystem data as a migration input boundary.
+
 ## Backlog Item Schema (Canonical)
 
 Every backlog item MUST include all fields below:
@@ -71,7 +76,7 @@ Each item must declare a required label before implementation PR creation.
 Wave objectives:
 
 1. Wave 1: low-risk internal retirements and warning hardening.
-2. Wave 2: public-contract dual-path reductions with migration notes.
+2. Wave 2: public-contract dual-path reductions with migration notes, plus remaining DB-canonical runtime fallback removals discovered after Wave 1 closure.
 3. Wave 3: explicitly breaking removals with versioned communication.
 
 Wave assignment table:
@@ -89,6 +94,8 @@ Wave assignment table:
 | LR-002 | Wave 2 | Job submission dual-accept path for legacy `preset` | release:minor |
 | LR-003 | Wave 2 | Timeline query accepts legacy `job_approved` filter alias | release:minor |
 | LR-005 | Wave 2 | Generation env alias support for emergency override | release:minor |
+| LR-014 | Wave 2 | Student API runtime still probes legacy student JSON directory for warning emission | release:patch |
+| LR-015 | Wave 2 | Worker runtime downgrades manifest store to filesystem when S3 bucket is missing | release:patch |
 | LR-001 | Wave 3 | Legacy status route alias removal (`/jobs/:jobId/status`) | release:major |
 | LR-004 | Wave 3 | Manifest compatibility alias removal (`audio` -> `audioArtifacts.studyText`) | release:major |
 
@@ -104,5 +111,11 @@ Every implementation PR for a backlog item MUST include:
    - Runtime/API docs and SSOT references updated in the same PR.
 4. Required release label
    - Exactly one of `release:patch|release:minor|release:major` aligned to item requirements.
+
+For runtime filesystem-fallback retirements (for example LR-014/LR-015), PRs MUST also:
+
+1. confirm migration-only tooling remains functional,
+2. show explicit runtime failure/warning contract behavior after fallback removal,
+3. update operations docs that describe fallback expectations.
 
 Detailed execution workflow and PR checklist live in `docs/plans/legacy-retirement/legacy-retirement-execution-playbook.md`.

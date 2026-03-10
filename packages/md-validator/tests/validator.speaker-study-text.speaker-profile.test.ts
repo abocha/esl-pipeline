@@ -14,7 +14,6 @@ describeMdValidatorSuite(
       await writeFile(
         file,
         `
-\`\`\`markdown
 ---
 title: "Dialogue Test"
 student: Alex
@@ -73,7 +72,6 @@ content
 :::toggle-heading Teacher's Follow-up Plan
 content
 :::
-\`\`\`
     `.trim(),
       );
 
@@ -89,7 +87,6 @@ content
       await writeFile(
         file,
         `
-\`\`\`markdown
 ---
 title: "Dialogue Test"
 student: Alex
@@ -148,7 +145,6 @@ content
 :::toggle-heading Teacher's Follow-up Plan
 content
 :::
-\`\`\`
     `.trim(),
       );
 
@@ -163,7 +159,6 @@ content
       await writeFile(
         file,
         `
-\`\`\`markdown
 ---
 title: "Dialogue Test"
 student: Alex
@@ -229,7 +224,6 @@ content
 :::toggle-heading Teacher's Follow-up Plan
 content
 :::
-\`\`\`
     `.trim(),
       );
 
@@ -246,7 +240,6 @@ content
       await writeFile(
         file,
         `
-\`\`\`markdown
 ---
 title: "Dialogue Test"
 student: Alex
@@ -320,7 +313,6 @@ content
 :::toggle-heading Teacher's Follow-up Plan
 content
 :::
-\`\`\`
     `.trim(),
       );
 
@@ -340,7 +332,6 @@ content
       await writeFile(
         file,
         `
-\`\`\`markdown
 ---
 title: "Dialogue Test"
 student: Alex
@@ -406,7 +397,6 @@ content
 :::toggle-heading Teacher's Follow-up Plan
 content
 :::
-\`\`\`
     `.trim(),
       );
 
@@ -427,7 +417,6 @@ content
       await writeFile(
         file,
         `
-\`\`\`markdown
 ---
 title: "Dialogue Test"
 student: Alex
@@ -490,7 +479,6 @@ content
 :::toggle-heading Teacher's Follow-up Plan
 content
 :::
-\`\`\`
     `.trim(),
       );
 

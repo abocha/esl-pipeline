@@ -10,7 +10,6 @@ import {
   type RunAssignmentPayload,
   type RunRerunAssignmentPayload,
   getPipeline,
-  isManifestBucketMissingError,
 } from './orchestrator-service.js';
 
 type WorkerExecutionMode = 'new_assignment' | 'rerun_assignment';
@@ -287,89 +286,34 @@ async function main() {
       process.send!({ type: 'success', result });
       process.exit(0);
     } catch (error) {
-      // Handle fallback logic here
-      if (isManifestBucketMissingError(error) && config.orchestrator.manifestStore === 's3') {
-        log.warn(
-          'Manifest bucket missing; falling back to filesystem manifest store for this worker session',
-          {
-            bucket: config.orchestrator.manifestBucket,
-          },
-        );
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      const errorStack = error instanceof Error ? error.stack : undefined;
+      const errorName = error instanceof Error ? error.name : 'UnknownError';
 
-        const fallbackConfig: BatchBackendConfig = {
-          ...config,
-          orchestrator: {
-            ...config.orchestrator,
-            manifestStore: 'filesystem',
-            manifestBucket: undefined,
-          },
-        };
-
-        try {
-          // The pipeline instance is cached in the module scope of orchestrator-service.
-          // Since we've already initialized it with the original config, we must explicitly
-          // reset the cache to force a re-initialization with the fallback config.
-
-          const { resetPipelineCache } = await import('./orchestrator-service.js');
-          resetPipelineCache();
-
-          const result = await executePipeline(
-            payload,
-            executionMode,
-            runId,
-            fallbackConfig,
-            abortController.signal,
-          );
-          process.send!({ type: 'success', result });
-          process.exit(0);
-        } catch (error_) {
-          const fallbackErrorMessage = error_ instanceof Error ? error_.message : String(error_);
-          const fallbackErrorStack = error_ instanceof Error ? error_.stack : undefined;
-          const fallbackErrorName = error_ instanceof Error ? error_.name : 'UnknownError';
-
-          log.error(error_ instanceof Error ? error_ : String(error_), {
-            message: 'Assignment pipeline failed (after fallback)',
-          });
-          process.send!({
-            type: 'error',
-            error: {
-              message: fallbackErrorMessage,
-              stack: fallbackErrorStack,
-              name: fallbackErrorName,
-            },
-          });
-          process.exit(1);
-        }
-      } else {
-        const errorMessage = error instanceof Error ? error.message : String(error);
-        const errorStack = error instanceof Error ? error.stack : undefined;
-        const errorName = error instanceof Error ? error.name : 'UnknownError';
-
-        // Enhanced logging for PipelineError
-        if (error instanceof PipelineError) {
-          log.error(`[Worker] PipelineError: ${errorMessage}`, {
-            name: errorName,
-            stack: errorStack,
-          });
-        } else if (isPipelineCancelledErrorLike(error)) {
-          log.warn('[Worker] Pipeline cancelled', {
-            name: errorName,
-            message: errorMessage,
-          });
-        } else {
-          log.error(`[Worker] Unhandled error: ${errorMessage}`, { error: error });
-        }
-
-        process.send!({
-          type: 'error',
-          error: {
-            message: errorMessage,
-            stack: errorStack,
-            name: errorName,
-          },
+      // Enhanced logging for PipelineError
+      if (error instanceof PipelineError) {
+        log.error(`[Worker] PipelineError: ${errorMessage}`, {
+          name: errorName,
+          stack: errorStack,
         });
-        process.exit(1);
+      } else if (isPipelineCancelledErrorLike(error)) {
+        log.warn('[Worker] Pipeline cancelled', {
+          name: errorName,
+          message: errorMessage,
+        });
+      } else {
+        log.error(`[Worker] Unhandled error: ${errorMessage}`, { error: error });
       }
+
+      process.send!({
+        type: 'error',
+        error: {
+          message: errorMessage,
+          stack: errorStack,
+          name: errorName,
+        },
+      });
+      process.exit(1);
     } finally {
       currentAbortController = null;
     }

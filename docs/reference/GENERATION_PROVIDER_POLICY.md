@@ -172,8 +172,7 @@ Reference:
    - daily token usage/remaining
    - per-minute request usage/remaining
 4. OpenRouter is blocked by default through zero-budget defaults unless explicitly enabled.
-5. Intentional paid-mode override is available via `GEN_ALLOW_PAID_SPEND=true`
-   (legacy alias: `GEN_BUDGET_EMERGENCY_OVERRIDE=true`).
+5. Intentional paid-mode override is available via `GEN_ALLOW_PAID_SPEND=true`.
 
 ### WS3.5 Operational Semantics
 

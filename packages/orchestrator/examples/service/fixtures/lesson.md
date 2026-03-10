@@ -1,4 +1,3 @@
-```markdown
 ---
 title: Sample Lesson
 student: Demo Student
@@ -63,4 +62,3 @@ content
 :::toggle-heading Teacher's Follow-up Plan
 content
 :::
-```

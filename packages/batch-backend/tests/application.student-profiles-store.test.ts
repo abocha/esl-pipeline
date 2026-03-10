@@ -1,7 +1,4 @@
-import { mkdir, mkdtemp, rm } from 'node:fs/promises';
-import os from 'node:os';
-import path from 'node:path';
-import { afterEach, describe, expect, it } from 'vitest';
+import { describe, expect, it } from 'vitest';
 
 import {
   StudentProfileStoreError,
@@ -14,21 +11,6 @@ import {
 import { loadConfig } from '../src/config/env.js';
 import type { StudentRecord } from '../src/domain/student-model.js';
 import { deriveStudentId } from '../src/domain/student-utils.js';
-
-const tempDirs: string[] = [];
-
-async function createStudentsDir() {
-  const root = await mkdtemp(path.join(os.tmpdir(), 'esl-students-'));
-  const studentsDir = path.join(root, 'students');
-  await mkdir(studentsDir, { recursive: true });
-  tempDirs.push(root);
-  return studentsDir;
-}
-
-afterEach(async () => {
-  await Promise.all(tempDirs.map((dir) => rm(dir, { recursive: true, force: true })));
-  tempDirs.length = 0;
-});
 
 function makeRecord(overrides: Partial<StudentRecord> & Pick<StudentRecord, 'id' | 'student'>): StudentRecord {
   const now = new Date('2026-01-01T00:00:00.000Z');
@@ -160,18 +142,11 @@ function createInMemoryDeps(initial: StudentRecord[] = []) {
 
 describe('student-profiles-store', () => {
   it('lists DB-backed student profiles and injects the default profile', async () => {
-    const studentsDir = await createStudentsDir();
     const deps = createInMemoryDeps([
       makeRecord({ id: deriveStudentId('Anna'), student: 'Anna', dbId: 'db-1' }),
     ]);
 
-    const result = await listStudentProfiles(
-      { limit: 10 },
-      {
-        studentsDir,
-        deps,
-      },
-    );
+    const result = await listStudentProfiles({ limit: 10 }, { deps });
 
     const ids = result.items.map((item) => item.id);
     expect(ids).toContain(deriveStudentId('Anna'));
@@ -179,7 +154,6 @@ describe('student-profiles-store', () => {
   });
 
   it('creates, updates, gets, and deletes a DB-backed student profile', async () => {
-    const studentsDir = await createStudentsDir();
     const deps = createInMemoryDeps();
 
     const created = await createStudentProfile(
@@ -189,39 +163,37 @@ describe('student-profiles-store', () => {
         profileId: 'profile.md',
         voices: {},
       },
-      { studentsDir, deps },
+      { deps },
     );
     expect(created.student).toBe('New Student');
 
-    const loaded = await getStudentProfileById(created.id, { studentsDir, deps });
+    const loaded = await getStudentProfileById(created.id, { deps });
     expect(loaded?.student).toBe('New Student');
 
     const updated = await updateStudentProfile(
       created.id,
       { colorPreset: 'b2-default' },
-      { studentsDir, deps },
+      { deps },
     );
     expect(updated?.colorPreset).toBe('b2-default');
 
-    const deleted = await deleteStudentProfile(created.id, { studentsDir, deps });
+    const deleted = await deleteStudentProfile(created.id, { deps });
     expect(deleted).toBe(true);
 
-    const missing = await getStudentProfileById(created.id, { studentsDir, deps });
+    const missing = await getStudentProfileById(created.id, { deps });
     expect(missing).toBeNull();
   });
 
   it('rejects student name changes that would alter the derived ID', async () => {
-    const studentsDir = await createStudentsDir();
     const id = deriveStudentId('Bob');
     const deps = createInMemoryDeps([makeRecord({ id, student: 'Bob' })]);
 
-    await expect(updateStudentProfile(id, { student: 'Bobby' }, { studentsDir, deps })).rejects.toThrow(
+    await expect(updateStudentProfile(id, { student: 'Bobby' }, { deps })).rejects.toThrow(
       StudentProfileStoreError,
     );
   });
 
   it('allows DB reads/writes when ESL_PIPELINE_CONFIG_PROVIDER=http', async () => {
-    const studentsDir = await createStudentsDir();
     const baseConfig = loadConfig();
     const config = {
       ...baseConfig,
@@ -237,16 +209,15 @@ describe('student-profiles-store', () => {
         student: 'Remote Mode Write',
         profileId: 'profiles/remote.md',
       },
-      { studentsDir, config, deps },
+      { config, deps },
     );
 
     expect(created.id).toBe(deriveStudentId('Remote Mode Write'));
-    const listed = await listStudentProfiles({ limit: 50 }, { studentsDir, config, deps });
+    const listed = await listStudentProfiles({ limit: 50 }, { config, deps });
     expect(listed.items.some((item) => item.id === created.id)).toBe(true);
   });
 
   it('rejects malformed profileId values on create and update', async () => {
-    const studentsDir = await createStudentsDir();
     const deps = createInMemoryDeps();
 
     await expect(
@@ -255,7 +226,7 @@ describe('student-profiles-store', () => {
           student: 'Invalid Profile',
           profileId: '../outside.md',
         },
-        { studentsDir, deps },
+        { deps },
       ),
     ).rejects.toThrow(StudentProfileStoreError);
 
@@ -264,7 +235,7 @@ describe('student-profiles-store', () => {
         student: 'Valid Profile',
         profileId: 'profiles/default.md',
       },
-      { studentsDir, deps },
+      { deps },
     );
     expect(created.profileId).toBe('profiles/default.md');
 
@@ -274,13 +245,12 @@ describe('student-profiles-store', () => {
         {
           profileId: 'profile-without-extension',
         },
-        { studentsDir, deps },
+        { deps },
       ),
     ).rejects.toThrow(StudentProfileStoreError);
   });
 
   it('returns explicit db-required error when PG is disabled', async () => {
-    const studentsDir = await createStudentsDir();
     const config = {
       ...loadConfig(),
       pg: {
@@ -289,14 +259,13 @@ describe('student-profiles-store', () => {
       },
     };
 
-    await expect(listStudentProfiles({}, { studentsDir, config })).rejects.toMatchObject({
+    await expect(listStudentProfiles({}, { config })).rejects.toMatchObject({
       code: 'student_profiles_db_required',
       status: 503,
     });
   });
 
   it('threads binding actor and reason metadata on DB-backed create', async () => {
-    const studentsDir = await createStudentsDir();
     const changedBy = 'user-123';
     const reason = 'student_create_manual';
     const setActiveCalls: { changedBy?: string | null; reason?: string | null }[] = [];
@@ -307,7 +276,6 @@ describe('student-profiles-store', () => {
         profileId: 'profiles/audit.md',
       },
       {
-        studentsDir,
         bindingAudit: {
           changedBy,
           reason,
@@ -367,7 +335,6 @@ describe('student-profiles-store', () => {
   });
 
   it('threads binding actor and reason metadata on DB-backed unbind', async () => {
-    const studentsDir = await createStudentsDir();
     const studentId = deriveStudentId('Unbind Student');
     const changedBy = 'user-999';
     const reason = 'student_unbind_manual';
@@ -385,7 +352,6 @@ describe('student-profiles-store', () => {
         profileId: null,
       },
       {
-        studentsDir,
         bindingAudit: {
           changedBy,
           reason,

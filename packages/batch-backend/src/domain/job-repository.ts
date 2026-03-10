@@ -6,6 +6,7 @@
 import { randomUUID } from 'node:crypto';
 import { PoolClient } from 'pg';
 
+import { buildLearningPresetProvenance } from '../application/learning-preset.js';
 import { withPgClient } from '../infrastructure/db.js';
 import { logger } from '../infrastructure/logger.js';
 import type { VoiceProviderErrorCategory } from '@esl-pipeline/contracts';
@@ -161,6 +162,7 @@ export interface UpdateJobMetadataParams {
   id: string;
   expectedState?: JobState;
   preset?: string;
+  learningPresetId?: string;
   notionDatabase?: string;
   publishTarget?: PublishTarget;
   withTts?: boolean;
@@ -843,6 +845,22 @@ export async function updateJobMetadata(
   if (params.preset !== undefined) {
     values.push(params.preset);
     updates.push(`preset = $${values.length}`);
+  }
+
+  if (params.learningPresetId !== undefined) {
+    const provenance = buildLearningPresetProvenance(params.learningPresetId);
+
+    values.push(provenance.learningPresetId);
+    updates.push(`learning_preset_id = $${values.length}`, 'preset = NULL');
+
+    values.push(provenance.learningPresetVersion);
+    updates.push(`learning_preset_version = $${values.length}`);
+
+    values.push(provenance.promptSnapshotVersion);
+    updates.push(`prompt_snapshot_version = $${values.length}`);
+
+    values.push(provenance.promptAlias);
+    updates.push(`prompt_alias = $${values.length}`);
   }
 
   if (params.notionDatabase !== undefined) {

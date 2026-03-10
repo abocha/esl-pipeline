@@ -38,9 +38,8 @@ describeHttpServerIntegrationSuite(
     expect(response.statusCode).toBe(202);
     expect(response.json()).toEqual({ jobId: 'job-123' });
 
-    expect(submitJob).toHaveBeenCalledWith({
+    expect(submitJob).toHaveBeenLastCalledWith({
       md: 'fixtures/ok.md',
-      preset: undefined,
       learningPresetId: undefined,
       withTts: undefined,
       upload: undefined,
@@ -48,7 +47,10 @@ describeHttpServerIntegrationSuite(
       voiceAccent: undefined,
       forceTts: undefined,
       notionDatabase: undefined,
+      publishTarget: undefined,
       ttsStrategy: undefined,
+      ttsProvider: undefined,
+      googleTtsModel: undefined,
     });
   });
 
@@ -61,7 +63,7 @@ describeHttpServerIntegrationSuite(
       url: '/jobs',
       payload: {
         md: 'fixtures/ok.md',
-        preset: 'b1-default',
+        learningPresetId: 'general-english',
         withTts: true,
         upload: 'auto',
         voiceId: 'voice_amanda',
@@ -73,17 +75,19 @@ describeHttpServerIntegrationSuite(
     });
 
     expect(response.statusCode).toBe(202);
-    expect(submitJob).toHaveBeenCalledWith({
+    expect(submitJob).toHaveBeenLastCalledWith({
       md: 'fixtures/ok.md',
-      preset: 'b1-default',
-      learningPresetId: undefined,
+      learningPresetId: 'general-english',
       withTts: true,
       upload: 'auto',
       voiceId: 'voice_amanda',
       voiceAccent: 'american_female',
       forceTts: true,
       notionDatabase: 'db-123',
+      publishTarget: undefined,
       ttsStrategy: 'dialogue',
+      ttsProvider: undefined,
+      googleTtsModel: undefined,
     });
   });
 
@@ -127,9 +131,8 @@ describeHttpServerIntegrationSuite(
     });
 
     expect(response.statusCode).toBe(202);
-    expect(submitJob).toHaveBeenCalledWith({
+    expect(submitJob).toHaveBeenLastCalledWith({
       md: 'fixtures/ok.md',
-      preset: undefined,
       learningPresetId: 'general-english',
       withTts: undefined,
       upload: undefined,
@@ -139,6 +142,8 @@ describeHttpServerIntegrationSuite(
       notionDatabase: undefined,
       publishTarget: undefined,
       ttsStrategy: undefined,
+      ttsProvider: undefined,
+      googleTtsModel: undefined,
     });
   });
 

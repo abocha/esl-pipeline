@@ -11,20 +11,9 @@ export type TtsProvider = 'elevenlabs';
 /**
  * Dialogue input for ElevenLabs Text-to-Dialogue API
  */
-export type DialogueInput = DialogueInputCanonical | DialogueInputLegacy;
-
-export interface DialogueInputCanonical {
+export interface DialogueInput {
   text: string;
   voiceId: string;
-  /** @deprecated Use `voiceId`. */
-  voice_id?: string;
-}
-
-export interface DialogueInputLegacy {
-  text: string;
-  voiceId?: string;
-  /** @deprecated Kept for backwards compatibility. */
-  voice_id: string;
 }
 
 /**

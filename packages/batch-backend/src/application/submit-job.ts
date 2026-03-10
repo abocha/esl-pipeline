@@ -18,7 +18,6 @@ export type GoogleTtsModel = 'chirp3_hd' | 'studio' | 'neural2' | 'wavenet';
 
 export interface SubmitJobRequest {
   md: string;
-  preset?: string;
   learningPresetId?: string;
   withTts?: boolean;
   upload?: UploadTarget;
@@ -56,13 +55,6 @@ function validateSubmitJobRequest(req: SubmitJobRequest): void {
   const hasMd = typeof req.md === 'string' && req.md.trim().length > 0;
   if (!hasMd) {
     throw new ValidationError('md is required', 'md_required');
-  }
-
-  if (
-    req.preset !== undefined &&
-    (typeof req.preset !== 'string' || req.preset.trim().length === 0)
-  ) {
-    throw new ValidationError('preset must be a non-empty string when provided', 'invalid_preset');
   }
 
   if (
@@ -168,13 +160,11 @@ export async function submitJob(req: SubmitJobRequest): Promise<SubmitJobRespons
   validateSubmitJobRequest(req);
   const learningPresetId = normalizeLearningPresetId({
     learningPresetId: req.learningPresetId,
-    preset: req.preset,
   });
   const provenance = buildLearningPresetProvenance(learningPresetId);
 
   const job = await insertJob({
     md: req.md,
-    preset: req.preset,
     learningPresetId: provenance.learningPresetId,
     learningPresetVersion: provenance.learningPresetVersion,
     promptSnapshotVersion: provenance.promptSnapshotVersion,

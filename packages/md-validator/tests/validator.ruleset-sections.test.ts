@@ -12,7 +12,6 @@ describeMdValidatorSuite(
     const res = await validateMarkdownFile(path.join(fixturesPath, 'ok.md'));
     expect(res.ok).toBe(true);
     expect(res.errors.length).toBe(0);
-    expect(res.warnings).toContain('Legacy fenced markdown is deprecated; remove the code fence.');
   });
 
   it('fails bad fixture', async () => {
@@ -32,7 +31,7 @@ describeMdValidatorSuite(
     expect(res.issues?.length).toBeGreaterThan(0);
   });
 
-  it('falls back to general-english ruleset for unknown learningPresetId and warns', async () => {
+  it('falls back to general-english ruleset for unknown learningPresetId and emits warning issue metadata', async () => {
     const res = await validateMarkdownFile(path.join(fixturesPath, 'ok.md'), {
       learningPresetId: 'ielts-academic',
     });
@@ -43,7 +42,7 @@ describeMdValidatorSuite(
       fallbackReason: 'unknown_preset',
       requestedId: 'ielts-academic',
     });
-    expect(res.warnings.join('\n')).toMatch(/unknown learning preset/i);
+    expect(res.warnings.join('\n')).not.toMatch(/unknown learning preset/i);
     expect(
       res.issues?.some(
         (issue: ValidationIssueLike) => issue.code === 'ruleset.unknown_preset_fallback',
@@ -60,16 +59,15 @@ describeMdValidatorSuite(
     });
   });
 
-  it('maps legacy preset input to general-english ruleset', async () => {
+  it('ignores legacy preset input for ruleset resolution metadata', async () => {
     const res = await validateMarkdownFile(path.join(fixturesPath, 'ok.md'), {
       preset: 'b1-default',
     });
     expect(res.ok).toBe(true);
     expect(res.ruleset).toMatchObject({
       id: 'general-english',
-      fallbackApplied: true,
-      fallbackReason: 'legacy_preset_mapping',
-      requestedId: 'b1-default',
+      fallbackApplied: false,
+      requestedId: null,
     });
   });
 
@@ -97,7 +95,6 @@ describeMdValidatorSuite(
     await writeFile(
       file,
       `
-\`\`\`markdown
 ---
 title: "Flexible H2 Test"
 student: Anna
@@ -153,7 +150,6 @@ answers
 :::toggle-heading Teacher's Follow-up Plan
 plan
 :::
-\`\`\`
       `.trim(),
     );
 
@@ -165,10 +161,7 @@ plan
   it('allows extra H2 sections appended after section 9', async () => {
     const tempDir = await mkdtemp(path.join(tmpdir(), 'validator-'));
     const file = path.join(tempDir, 'extra-h2-after-core.md');
-    const md = buildBaseDoc('text').replace(
-      '\n```',
-      '\n\n## 10. Appendix Notes\ntext\n```',
-    );
+    const md = `${buildBaseDoc('text')}\n\n## 10. Appendix Notes\ntext`;
     await writeFile(file, md);
 
     const res = await validateMarkdownFile(file);
@@ -195,7 +188,7 @@ plan
   it('warns when fewer than 9 core H2 sections are present', async () => {
     const tempDir = await mkdtemp(path.join(tmpdir(), 'validator-'));
     const file = path.join(tempDir, 'missing-core-h2.md');
-    const md = `${buildBaseDoc('text').split("\n## 9. 👨‍🏫 Teacher's Follow-up Plan")[0]}\n\`\`\``;
+    const md = buildBaseDoc('text').split("\n## 9. 👨‍🏫 Teacher's Follow-up Plan")[0] ?? '';
     await writeFile(file, md);
 
     const res = await validateMarkdownFile(file);

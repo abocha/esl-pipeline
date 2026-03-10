@@ -130,7 +130,7 @@ describe('application/job-actions/action-handler', () => {
     await executeJobAction('job-missing', {
       type: JobActionType.EDIT_METADATA,
       requestedAt: new Date('2026-02-07T00:00:00.000Z'),
-      payload: { preset: 'b1-default' },
+      payload: { learningPresetId: 'general-english' },
     });
 
     expect(insertHistorySpy).not.toHaveBeenCalled();

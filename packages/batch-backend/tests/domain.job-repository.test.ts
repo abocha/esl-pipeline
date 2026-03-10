@@ -9,8 +9,10 @@ import {
   insertJob,
   listJobs,
   listFailedJobErrorsForReadiness,
+  updateJobMetadata,
   updateJobStateAndResult,
 } from '../src/domain/job-repository.js';
+import { buildLearningPresetProvenance } from '../src/application/learning-preset.js';
 import { withPgClient } from '../src/infrastructure/db.js';
 import { requirePgTestEnv } from './support/test-env.js';
 
@@ -180,6 +182,31 @@ describe('domain/job-repository', () => {
 
       const summaries = await getStudentJobSummaries([studentId]);
       expect(summaries).toEqual([]);
+    });
+
+    it('recomputes full learning preset provenance when learningPresetId is edited', async () => {
+      const job = await insertJob({
+        md: 'fixtures/ok.md',
+        preset: 'legacy-preset',
+        learningPresetVersion: 'legacy-v0',
+        promptSnapshotVersion: 'legacy_prompt',
+        promptAlias: 'legacy',
+      });
+
+      const updated = await updateJobMetadata({
+        id: job.id,
+        expectedState: 'queued',
+        learningPresetId: 'general-english',
+      });
+
+      const expected = buildLearningPresetProvenance('general-english');
+
+      expect(updated).not.toBeNull();
+      expect(updated!.preset).toBeNull();
+      expect(updated!.learningPresetId).toBe(expected.learningPresetId);
+      expect(updated!.learningPresetVersion).toBe(expected.learningPresetVersion);
+      expect(updated!.promptSnapshotVersion).toBe(expected.promptSnapshotVersion);
+      expect(updated!.promptAlias).toBe(expected.promptAlias);
     });
 
     it('rejects unsupported mode values at insert time', async () => {

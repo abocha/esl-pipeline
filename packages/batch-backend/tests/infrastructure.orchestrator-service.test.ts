@@ -292,12 +292,6 @@ describe('infrastructure/orchestrator-service', () => {
     });
   });
 
-  // SKIPPED: This test validates fallback logic that occurs INSIDE the worker process.
-  // Since runAssignmentJob() only spawns and communicates with a worker, and we're mocking
-  // fork() to prevent real process spawning, we cannot test this fallback behavior at the unit level.
-  // This should be tested in integration tests with a real worker process and config files.
-  it.todo('runAssignmentJob falls back to filesystem manifest store when S3 bucket is missing');
-
   it('isManifestBucketMissingError detects provider identity from name, causeName, and code', async () => {
     const { isManifestBucketMissingError } =
       await import('../src/infrastructure/orchestrator-service.js');
