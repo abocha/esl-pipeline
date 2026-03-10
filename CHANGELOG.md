@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented here. Dates use `YYYY-MM-DD`.
 
+## [4.1.0] - 2026-03-10
+
+### Changed
+
+- Automated release from PR #33: feat(stt): refactor multi-provider transcription architecture and add google v2 (https://github.com/abocha/esl-pipeline/pull/33)
+
 ## [4.0.1] - 2026-03-10
 
 ### Changed
