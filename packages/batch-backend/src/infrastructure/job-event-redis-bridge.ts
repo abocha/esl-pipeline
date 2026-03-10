@@ -19,6 +19,7 @@ import { createRedisClient } from './redis.js';
 
 const CHANNEL_BASE = 'batch_job_events';
 const JOB_CHANNEL_PREFIX = `${CHANNEL_BASE}:`;
+const ALL_JOBS_PATTERN = `${JOB_CHANNEL_PREFIX}*`;
 const INSTANCE_ID = randomUUID();
 
 interface SerializedJobRecord {
@@ -112,6 +113,9 @@ class RedisJobEventBridge {
     this.subscriber.on('message', (_channel, payload) => {
       this.handleRemoteEvent(payload);
     });
+    this.subscriber.on('pmessage', (_pattern, _channel, payload) => {
+      this.handleRemoteEvent(payload);
+    });
 
     // Listen to local events and forward them to Redis, but do not register as a remote consumer.
     this.unsubscribeLocal = subscribeJobEvents(
@@ -137,7 +141,7 @@ class RedisJobEventBridge {
 
     logger.info('Redis job event bridge enabled', {
       component: 'job-event-bridge',
-      channel: `${CHANNEL_BASE}[targeted]`,
+      channel: `${JOB_CHANNEL_PREFIX}<job-id> | ${ALL_JOBS_PATTERN}`,
     });
   }
 
@@ -159,10 +163,7 @@ class RedisJobEventBridge {
 
     const message = JSON.stringify(payload);
 
-    const channels = [
-      `${JOB_CHANNEL_PREFIX}${event.job.id}`, // targeted channel
-      CHANNEL_BASE, // legacy/fallback broadcast
-    ];
+    const channels = [`${JOB_CHANNEL_PREFIX}${event.job.id}`];
 
     void Promise.all(
       channels.map((channel) =>
@@ -213,9 +214,9 @@ class RedisJobEventBridge {
 
     // Wildcard subscribers (all jobs)
     if (snapshot.all > 0) {
-      // When wildcard subscribers exist, only subscribe to the broadcast channel once.
+      // When wildcard subscribers exist, subscribe to all targeted channels via pattern.
       if (!this.wildcardSubscribed) {
-        await this.subscriber.subscribe(CHANNEL_BASE);
+        await this.subscriber.psubscribe(ALL_JOBS_PATTERN);
         this.wildcardSubscribed = true;
       }
       // Drop any targeted subscriptions to avoid duplicate deliveries.
@@ -228,9 +229,9 @@ class RedisJobEventBridge {
       return;
     }
 
-    // No wildcard subscribers: ensure broadcast is unsubscribed and manage targeted channels.
+    // No wildcard subscribers: ensure pattern subscription is removed and manage targeted channels.
     if (this.wildcardSubscribed) {
-      await this.subscriber.unsubscribe(CHANNEL_BASE);
+      await this.subscriber.punsubscribe(ALL_JOBS_PATTERN);
       this.wildcardSubscribed = false;
     }
 

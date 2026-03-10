@@ -92,10 +92,9 @@ describe('infrastructure/job-event-redis-bridge', () => {
 
     expect(subscriber.subscribe).toHaveBeenCalledWith('batch_job_events:job-1');
 
-    // Publishes to targeted channel and legacy broadcast
-    expect(publisher.publish).toHaveBeenCalledTimes(2);
+    // Publishes only to targeted channel.
+    expect(publisher.publish).toHaveBeenCalledTimes(1);
     expect(publisher.publish.mock.calls[0]?.[0]).toBe('batch_job_events:job-1');
-    expect(publisher.publish.mock.calls[1]?.[0]).toBe('batch_job_events');
 
     const payloadStr = publisher.publish.mock.calls[0]?.[1];
     const payloadJson = JSON.parse(payloadStr);
@@ -168,7 +167,8 @@ describe('infrastructure/job-event-redis-bridge', () => {
       },
     });
 
-    subscriber.emit('message', 'batch_job_events', payload);
+    expect(subscriber.psubscribe).toHaveBeenCalledWith('batch_job_events:*');
+    subscriber.emit('pmessage', 'batch_job_events:*', 'batch_job_events:job-1', payload);
 
     // Should deliver once per local listener, not multiplied by channel overlap
     expect(received).toEqual(['job_state_changed', 'job_state_changed']);

@@ -56,6 +56,11 @@ Batch Frontend (React + Vite)
 - Approval and status: `/jobs/:jobId/approve`, `/jobs/:jobId`, `/jobs/events`
 - Validation: `/validation/markdown`
 
+Event fanout behavior (Redis bridge):
+
+- Job events publish on targeted channels only: `batch_job_events:<jobId>`.
+- All-jobs listeners consume targeted channels through pattern subscription: `batch_job_events:*`.
+
 ## Related
 
 - [`docs/operations/prompt-gallery-bootstrap.md`](../operations/prompt-gallery-bootstrap.md)
