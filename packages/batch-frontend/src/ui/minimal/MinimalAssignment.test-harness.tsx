@@ -159,6 +159,7 @@ export function makeTranscript(
     transcriptId: 'tx-1',
     text: 'Student transcript text',
     summaryJson: null,
+    sttProvider: 'deepgram',
     model: 'mock-model',
     language: 'en',
     mode: 'timeline',
