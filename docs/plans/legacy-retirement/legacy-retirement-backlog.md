@@ -105,4 +105,4 @@ Every implementation PR for a backlog item MUST include:
 4. Required release label
    - Exactly one of `release:patch|release:minor|release:major` aligned to item requirements.
 
-Detailed execution workflow and PR checklist live in `docs/plans/legacy-retirement-execution-playbook.md`.
+Detailed execution workflow and PR checklist live in `docs/plans/legacy-retirement/legacy-retirement-execution-playbook.md`.

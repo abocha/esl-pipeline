@@ -5,8 +5,8 @@
 This playbook defines the standard implementation workflow for each legacy retirement backlog item.
 Use it with:
 
-1. `docs/plans/legacy-retirement-backlog.md`
-2. `docs/plans/legacy-retirement-inventory.md`
+1. `docs/plans/legacy-retirement/legacy-retirement-backlog.md`
+2. `docs/plans/legacy-retirement/legacy-retirement-inventory.md`
 
 ## Item Lifecycle Workflow
 

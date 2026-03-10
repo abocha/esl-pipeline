@@ -172,67 +172,6 @@ export class FileStorageService {
   }
 
   /**
-   * Migrate files from filesystem to S3 (for backward compatibility)
-   */
-  async migrateFileToS3(key: string): Promise<FileStorageResult | null> {
-    if (!this.storageConfig.isS3Provider() || !this.s3Adapter) {
-      return null; // Only applicable when using S3
-    }
-
-    try {
-      // Check if file exists in filesystem
-      const fsMetadata = await this.getFilesystemMetadata(key);
-      if (!fsMetadata) {
-        return null; // File doesn't exist in filesystem
-      }
-
-      // Check if file already exists in S3
-      const s3Exists = await this.s3Adapter.fileExists(key);
-      if (s3Exists) {
-        // Generate URL for existing S3 file
-        const url = await this.s3Adapter.generatePresignedUrl(key);
-        return {
-          key,
-          url,
-          size: fsMetadata.size,
-          mimeType: fsMetadata.mimeType,
-          uploadedAt: new Date(),
-        };
-      }
-
-      // Read file from filesystem
-      const fsConfig = this.storageConfig.getFilesystemConfig();
-      const filePath = path.join(fsConfig.uploadDir, key);
-      const fileContent = await fs.readFile(filePath);
-
-      // Upload to S3
-      const result = await this.s3Adapter.uploadFile(
-        key,
-        fileContent,
-        fsMetadata.mimeType,
-        fsMetadata.size,
-      );
-      const url = await this.s3Adapter.generatePresignedUrl(key);
-
-      logger.info('File migrated from filesystem to S3', { key });
-
-      return {
-        key: result.key,
-        url,
-        size: result.size,
-        mimeType: result.mimeType,
-        uploadedAt: new Date(),
-      };
-    } catch (error) {
-      logger.error('Failed to migrate file to S3', {
-        key,
-        error: String(error),
-      });
-      return null;
-    }
-  }
-
-  /**
    * Upload file to local filesystem
    */
   private async uploadToFilesystem(

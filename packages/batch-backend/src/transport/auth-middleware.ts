@@ -2,6 +2,7 @@
 import { FastifyReply, FastifyRequest } from 'fastify';
 
 import { UserRole } from '../domain/user-model.js';
+import type { AuthService } from '../infrastructure/auth-service.js';
 import { logger } from '../infrastructure/logger.js';
 
 export interface AuthenticatedUser {
@@ -13,6 +14,8 @@ export interface AuthenticatedUser {
 export interface AuthenticatedRequest extends FastifyRequest {
   user: AuthenticatedUser;
 }
+
+let configuredAuthService: AuthService | null = null;
 
 /**
  * Authentication error classes
@@ -72,16 +75,27 @@ function resolveTokenFromRequest(request: FastifyRequest): string {
   throw new AuthenticationError('Authentication token is missing');
 }
 
+export function configureAuthMiddleware(authService: AuthService): void {
+  configuredAuthService = authService;
+}
+
+export function resetAuthMiddlewareForTests(): void {
+  configuredAuthService = null;
+}
+
+function requireAuthService(): AuthService {
+  if (!configuredAuthService) {
+    throw new Error('Authentication middleware is not configured');
+  }
+  return configuredAuthService;
+}
+
 /**
  * Verify JWT token and extract user information
  */
-async function verifyToken(token: string): Promise<AuthenticatedUser> {
+function verifyToken(token: string): AuthenticatedUser {
   try {
-    // Import here to avoid circular dependency
-    const { createAuthService } = await import('../infrastructure/auth-service.js');
-    const authService = createAuthService();
-
-    const payload = authService.verifyToken(token);
+    const payload = requireAuthService().verifyToken(token);
 
     return {
       id: payload.sub,
@@ -119,7 +133,7 @@ export async function authenticate(request: FastifyRequest, reply: FastifyReply)
   try {
     const token = resolveTokenFromRequest(request);
 
-    const user = await verifyToken(token);
+    const user = verifyToken(token);
 
     // Add user to request object
     (request as AuthenticatedRequest).user = user;
@@ -249,7 +263,7 @@ export async function optionalAuth(request: FastifyRequest): Promise<void> {
 
     try {
       const token = resolveTokenFromRequest(request);
-      const user = await verifyToken(token);
+      const user = verifyToken(token);
 
       // Add user to request object
       (request as AuthenticatedRequest).user = user;

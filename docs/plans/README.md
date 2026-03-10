@@ -21,9 +21,9 @@
    Private monorepo versioning overhaul with merge-driven release automation and explicit contract-version registry.
 4. `docs/plans/orchestrator-library-only-roadmap/README.md`  
    Ownership-driven medium-scale roadmap to make orchestrator library-only and retire CLI/wizard/path-picker surfaces.
-5. `docs/plans/legacy-retirement-backlog.md`  
+5. `docs/plans/legacy-retirement/legacy-retirement-backlog.md`  
    Canonical legacy-contract retirement backlog index with deterministic prioritization and wave sequencing.
-6. `docs/plans/legacy-retirement-inventory.md`  
+6. `docs/plans/legacy-retirement/legacy-retirement-inventory.md`  
    Itemized inventory of confirmed live legacy contracts mapped to backlog IDs.
-7. `docs/plans/legacy-retirement-execution-playbook.md`  
+7. `docs/plans/legacy-retirement/legacy-retirement-execution-playbook.md`  
    Standard implementation workflow, acceptance format, and release-label rules for retirement items.

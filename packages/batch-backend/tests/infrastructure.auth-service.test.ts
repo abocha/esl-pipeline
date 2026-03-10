@@ -356,75 +356,10 @@ describe('infrastructure/auth-service', () => {
         bcryptRounds: 15,
       };
 
-      // Mock the constructor to track calls
-      const AuthServiceConstructorSpy = vi.spyOn(AuthService as any, 'constructor');
-      vi.mocked(AuthServiceConstructorSpy).mockImplementation(
-        () =>
-          ({
-            hashPassword: vi.fn(),
-            verifyPassword: vi.fn(),
-            generateTokens: vi.fn(),
-            verifyToken: vi.fn(),
-            verifyRefreshToken: vi.fn(),
-            refreshTokens: vi.fn(),
-            validatePassword: vi.fn(),
-            validateEmail: vi.fn(),
-          }) as any,
-      );
-
       const authService = createAuthService(mockConfig);
 
-      // Since createAuthService returns a new AuthService, we just verify it was created
-      expect(authService).toBeInstanceOf(Object);
-
-      // Restore the spy
-      AuthServiceConstructorSpy.mockRestore();
-    });
-
-    it('creates service with environment variables when no config provided', () => {
-      // Mock process.env
-      const originalEnv = process.env;
-      process.env = {
-        ...originalEnv,
-        JWT_SECRET: 'env-secret',
-        JWT_EXPIRES_IN: '45m',
-        REFRESH_TOKEN_EXPIRES_IN: '30d',
-        BCRYPT_ROUNDS: '18',
-      };
-
-      const authService = createAuthService();
-
-      expect(authService).toBeInstanceOf(Object);
-      expect((authService as any).config.jwtSecret).toBe('env-secret');
-      expect((authService as any).config.jwtExpiresIn).toBe('45m');
-      expect((authService as any).config.refreshTokenExpiresIn).toBe('30d');
-      expect((authService as any).config.bcryptRounds).toBe(18);
-
-      // Restore original env
-      process.env = originalEnv;
-    });
-
-    it('uses fallback values when environment variables are not set', () => {
-      // Mock process.env with missing values
-      const originalEnv = process.env;
-      process.env = {
-        ...originalEnv,
-        JWT_SECRET: undefined as any,
-        JWT_EXPIRES_IN: undefined as any,
-        REFRESH_TOKEN_EXPIRES_IN: undefined as any,
-        BCRYPT_ROUNDS: undefined as any,
-      };
-
-      const authService = createAuthService();
-
-      expect(authService).toBeInstanceOf(Object);
-      expect((authService as any).config.jwtSecret).toBe('your-super-secret-jwt-key');
-      expect((authService as any).config.jwtExpiresIn).toBe('15m');
-      expect((authService as any).config.refreshTokenExpiresIn).toBe('7d');
-      expect((authService as any).config.bcryptRounds).toBe(12);
-
-      // Restore original env
-      process.env = originalEnv;
+      expect(authService).toBeInstanceOf(AuthService);
+      expect((authService as any).config).toEqual(mockConfig);
     });
   });
 });

@@ -2,9 +2,12 @@ import { randomUUID } from 'node:crypto';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 
 import {
+  countJobs,
   getJobById,
   getReadinessMetrics,
+  getStudentJobSummaries,
   insertJob,
+  listJobs,
   listFailedJobErrorsForReadiness,
   updateJobStateAndResult,
 } from '../src/domain/job-repository.js';
@@ -129,6 +132,54 @@ describe('domain/job-repository', () => {
     it('returns null for unknown id', async () => {
       const loaded = await getJobById(randomUUID());
       expect(loaded).toBeNull();
+    });
+
+    it('does not infer student from related rows when jobs.student_id is null', async () => {
+      const studentId = randomUUID();
+      const recordingId = randomUUID();
+      const jobId = randomUUID();
+      const now = new Date('2024-06-01T00:00:00.000Z');
+
+      await withPgClient(async (client) => {
+        await client.query(
+          `
+          INSERT INTO recordings (
+            id, source, student_id, source_path, storage_uri, bytes, status, created_at, updated_at
+          )
+          VALUES ($1, 'upload', NULL, 'fixtures/audio.wav', 'local://recordings/audio.wav', 1024, 'ingested', $2, $2)
+          `,
+          [recordingId, now],
+        );
+
+        await client.query(
+          `
+          INSERT INTO jobs (id, state, md, recording_id, created_at, updated_at)
+          VALUES ($1, 'queued', 'fixtures/ok.md', $2, $3, $3)
+          `,
+          [jobId, recordingId, now],
+        );
+
+        // Simulate post-insert drift: related entity gains student_id while jobs.student_id remains null.
+        await client.query('UPDATE recordings SET student_id = $1 WHERE id = $2', [studentId, recordingId]);
+      });
+
+      const loaded = await getJobById(jobId);
+      expect(loaded).not.toBeNull();
+      expect(loaded!.studentId).toBeNull();
+
+      const listed = await listJobs({
+        studentId,
+        limit: 50,
+        offset: 0,
+        order: 'desc',
+      });
+      expect(listed.some((job) => job.id === jobId)).toBe(false);
+
+      const count = await countJobs({ studentId });
+      expect(count).toBe(0);
+
+      const summaries = await getStudentJobSummaries([studentId]);
+      expect(summaries).toEqual([]);
     });
 
     it('rejects unsupported mode values at insert time', async () => {

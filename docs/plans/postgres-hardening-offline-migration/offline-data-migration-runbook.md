@@ -164,6 +164,9 @@ WHERE j.student_id IS NOT NULL
   );
 ```
 
+   - Retirement gate note:
+     - These two reconciliation counts are the unblock checks for LR-006 (retiring legacy student-join fallback in job queries).
+
 ## Step 5 - Rollback Procedure
 
 1. Stop API and workers.
