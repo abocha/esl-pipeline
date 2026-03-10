@@ -131,6 +131,14 @@ This lane tracks meaningful shipped capability that supports V1 but does not map
 - Relaxed speaker role contract handling with unknown-role invalidation + warnings (`cfc3f50`).
 - Why it matters: handles real-world transcripts more robustly without hiding quality signals.
 
+### WS0-J Legacy Contract Retirement Progress (Wave 3)
+
+- Wave 3 breaking retirements are executing in one `release:major` slice:
+  - `LR-001`: remove `/jobs/:jobId/status` alias.
+  - `LR-004`: remove manifest `audio` compatibility alias in favor of `audioArtifacts.*` only.
+- LR-001 preflight evidence captured at `tmp/legacy-retirement-evidence/2026-03-10-wave3/lr-001-preflight.md` for PR comment attachment.
+- Why it matters: closes remaining legacy compatibility contracts and enforces canonical API/manifest surfaces.
+
 ---
 
 ## Execution Card Template (Reuse for Every WS)

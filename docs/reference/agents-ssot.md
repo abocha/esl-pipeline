@@ -388,7 +388,9 @@ Boundary invariants:
 - Batch-backend `user_settings.tts_provider` storage MUST stay canonical (`elevenlabs` or `google`); legacy provider values are migration-only and MUST NOT be reintroduced in runtime write paths.
 - Batch-backend auth middleware and `/auth/*` routes MUST use an injected `AuthService` created from validated runtime config, not ad-hoc environment fallback constructors.
 - Batch-backend student timeline type filters MUST use canonical timeline types only (for example `job_awaiting_approval`); legacy alias values are retired.
+- Batch-backend job status reads MUST use canonical `GET /jobs/:jobId`; legacy `/jobs/:jobId/status` alias is retired.
 - Batch-backend submit/materialize request contracts MUST use `learningPresetId`; legacy request field `preset` is retired from these write paths.
+- Orchestrator manifest audio contract MUST be canonicalized to `audioArtifacts.*`; top-level manifest `audio` compatibility alias is retired.
 - ElevenLabs dialogue synthesis inputs MUST use canonical `voiceId`; legacy `voice_id` alias is retired from local input contracts.
 - Shared helper logic duplicated across packages SHOULD be extracted into shared packages (for example `@esl-pipeline/shared-infrastructure`) when it is domain-neutral and reused by both sides.
 - Agents MUST consult the active ownership ledger before moving behavior across package boundaries:
@@ -667,8 +669,8 @@ Manifest schema:
     - Optional TTS metadata fields persisted alongside audio:
       - `ttsStrategy`, `dialogueLanguage`, `dialogueStability`, `dialogueSeed`.
     - Additive artifact identity/reuse metadata:
-      - `audio.key`, `audio.etag`, `audio.sizeBytes`, `audio.reused`
-      - `audioArtifacts.studyText.*` (multi-artifact map; compatibility alias to `audio`)
+      - `audioArtifacts.studyText.key`, `audioArtifacts.studyText.etag`, `audioArtifacts.studyText.sizeBytes`, `audioArtifacts.studyText.reused`
+      - `audioArtifacts.studyText.*` (canonical study-text artifact map)
       - `audioArtifacts.pronunciationShadowSentence.*` (optional shadow-sentence reference audio)
       - `htmlHash`, `htmlKey`, `htmlEtag`, `htmlReused`
       - `notionColorization.preset`, `notionColorization.presetHash`, `notionColorization.pageId`, `notionColorization.mdHash`, `notionColorization.appliedAt`

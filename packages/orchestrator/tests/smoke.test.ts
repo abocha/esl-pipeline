@@ -109,7 +109,9 @@ describe('orchestrator smoke', () => {
 
     expect(rerun.steps).toEqual(['upload', 'add-audio']);
     const statusAfter = await getAssignmentStatus(mdPath);
-    expect(statusAfter.manifest?.audio?.url).toBe('https://s3.amazonaws.com/audio/file.mp3');
+    expect(statusAfter.manifest?.audioArtifacts?.studyText?.url).toBe(
+      'https://s3.amazonaws.com/audio/file.mp3',
+    );
     expect(initialTimestamp).toBeDefined();
     expect(statusAfter.manifest?.timestamp).toBeDefined();
     expect(statusAfter.manifest!.timestamp >= initialTimestamp!).toBe(true);
@@ -249,7 +251,7 @@ describe('orchestrator smoke', () => {
     expect(rerun.steps).toEqual(['upload', 'add-audio']);
   }, 15000);
 
-  it('preserves explicit upload prefix for legacy manifests without audio.hash', async () => {
+  it('preserves explicit upload prefix when studyText hash is missing', async () => {
     const dir = await mkdtemp(join(tmpdir(), 'orchestrator-legacy-prefix-'));
     const mdPath = join(dir, 'assignment.md');
     const audioPath = join(dir, 'lesson.mp3');
@@ -277,8 +279,7 @@ describe('orchestrator smoke', () => {
     });
 
     const manifest = JSON.parse(await readFile(firstRun.manifestPath!, 'utf8'));
-    manifest.audio.hash = undefined;
-    manifest.audioArtifacts = undefined;
+    manifest.audioArtifacts.studyText.hash = undefined;
     await writeFile(firstRun.manifestPath!, JSON.stringify(manifest, null, 2));
 
     const { uploadFile } = await import('@esl-pipeline/storage-uploader');

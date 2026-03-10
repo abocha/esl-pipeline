@@ -3,7 +3,8 @@ import { basename, dirname, join } from 'node:path';
 
 import type { BuildStudyTextResult } from '@esl-pipeline/tts-core';
 
-export const CURRENT_MANIFEST_SCHEMA_VERSION = 1;
+export const CURRENT_MANIFEST_SCHEMA_VERSION = 2;
+const LEGACY_MANIFEST_SCHEMA_VERSION = 1;
 
 export interface AudioArtifactManifest {
   path?: string;
@@ -39,7 +40,6 @@ export interface AssignmentManifest {
   htmlKey?: string;
   htmlEtag?: string;
   htmlReused?: boolean;
-  audio?: AudioArtifactManifest;
   audioArtifacts?: {
     studyText?: AudioArtifactManifest;
     pronunciationShadowSentence?: AudioArtifactManifest;
@@ -100,7 +100,7 @@ export function createFilesystemManifestStore(): ManifestStore {
         const contents = await readFile(manifestPathFor(mdPath), 'utf8');
         const parsed = JSON.parse(contents) as AssignmentManifest;
         if (parsed.schemaVersion === undefined) {
-          parsed.schemaVersion = CURRENT_MANIFEST_SCHEMA_VERSION;
+          parsed.schemaVersion = LEGACY_MANIFEST_SCHEMA_VERSION;
         }
         return parsed;
       } catch {
