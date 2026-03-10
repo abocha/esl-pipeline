@@ -99,7 +99,7 @@ default: voice_id_default
     expect(first.manifestPath).toBeDefined();
     expect(first.steps).toContain('manifest');
     const manifestJson = JSON.parse(await readFile(first.manifestPath!, 'utf8'));
-    expect(manifestJson.audio.url).toBeDefined();
+    expect(manifestJson.audioArtifacts.studyText.url).toBeDefined();
 
     vi.mocked(buildStudyTextMp3).mockClear();
 
@@ -255,7 +255,9 @@ default: voice_id_default
 
     const manifestAfterRerun = JSON.parse(await readFile(initial.manifestPath!, 'utf8'));
     expect(manifestAfterRerun.publishTarget).toBe('html');
-    expect(manifestAfterRerun.audio?.url).toMatch(/^https:\/\/test-bucket\.s3\.amazonaws\.com\//);
+    expect(manifestAfterRerun.audioArtifacts?.studyText?.url).toMatch(
+      /^https:\/\/test-bucket\.s3\.amazonaws\.com\//,
+    );
     expect(manifestAfterRerun.timestamp).toBeTypeOf('string');
   });
 });

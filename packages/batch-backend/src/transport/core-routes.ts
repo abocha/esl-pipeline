@@ -452,7 +452,6 @@ export function registerCoreRoutes(app: FastifyInstance, options: CoreRouteOptio
   });
 
   app.get('/jobs/:jobId', handleJobStatusRequest);
-  app.get('/jobs/:jobId/status', handleJobStatusRequest);
   if (authenticate) {
     app.get('/jobs/:jobId/provenance', { preHandler: [authenticate] }, handleJobProvenanceRequest);
   } else {

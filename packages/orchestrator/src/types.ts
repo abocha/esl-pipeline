@@ -1,5 +1,5 @@
 import type { ConfigProvider } from './config.js';
-import type { AssignmentManifest, ManifestStore } from './manifest.js';
+import type { AssignmentManifest, AudioArtifactManifest, ManifestStore } from './manifest.js';
 import type { PipelineLogger, PipelineMetrics } from './observability.js';
 import type { GoogleTtsModel, TtsProviderId as TtsProvider } from '@esl-pipeline/tts-core';
 
@@ -140,7 +140,7 @@ export interface NewAssignmentResult {
   anytypeUrl?: string;
   htmlUrl?: string;
   publishTarget?: PublishTarget;
-  audio?: AssignmentManifest['audio'];
+  audio?: AudioArtifactManifest;
   colorized?: boolean;
   manifestPath?: string;
   steps: string[];
@@ -189,7 +189,7 @@ export interface RerunAssignmentRequestV2 {
 
 export interface RerunAssignmentResult {
   steps: string[];
-  audio?: AssignmentManifest['audio'];
+  audio?: AudioArtifactManifest;
   pageId?: string;
   pageUrl?: string;
   anytypeUrl?: string;
