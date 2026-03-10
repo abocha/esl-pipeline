@@ -146,7 +146,7 @@ describe('domain/job-repository', () => {
           INSERT INTO recordings (
             id, source, student_id, source_path, storage_uri, bytes, status, created_at, updated_at
           )
-          VALUES ($1, 'upload', NULL, 'fixtures/audio.wav', 'local://recordings/audio.wav', 1024, 'ready', $2, $2)
+          VALUES ($1, 'upload', NULL, 'fixtures/audio.wav', 'local://recordings/audio.wav', 1024, 'ingested', $2, $2)
           `,
           [recordingId, now],
         );
