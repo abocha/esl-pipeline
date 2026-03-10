@@ -27,3 +27,5 @@
    Itemized inventory of confirmed live legacy contracts mapped to backlog IDs.
 7. `docs/plans/legacy-retirement/legacy-retirement-execution-playbook.md`  
    Standard implementation workflow, acceptance format, and release-label rules for retirement items.
+8. `docs/plans/stt-multi-provider-refactor/README.md`
+   STT provider-architecture parity plan (`core + adapters`), Google STT V2 onboarding, and transcript-provider persistence cutover.

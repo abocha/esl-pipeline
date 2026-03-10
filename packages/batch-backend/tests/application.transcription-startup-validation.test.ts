@@ -32,6 +32,7 @@ describe('validateTranscriptionConfig', () => {
     });
 
     const config = loadConfig();
+    config.stt.providers.deepgram.apiKey = 'dg-test-key';
 
     await expect(
       validateTranscriptionConfig({
@@ -60,6 +61,7 @@ describe('validateTranscriptionConfig', () => {
     });
 
     const config = loadConfig();
+    config.stt.providers.deepgram.apiKey = 'dg-test-key';
 
     await expect(
       validateTranscriptionConfig({
@@ -88,6 +90,7 @@ describe('validateTranscriptionConfig', () => {
     });
 
     const config = loadConfig();
+    config.stt.providers.deepgram.apiKey = 'dg-test-key';
 
     await expect(
       validateTranscriptionConfig({
@@ -113,6 +116,7 @@ describe('validateTranscriptionConfig', () => {
     });
 
     const config = loadConfig();
+    config.stt.providers.deepgram.apiKey = 'dg-test-key';
 
     await expect(
       validateTranscriptionConfig({
@@ -129,4 +133,74 @@ describe('validateTranscriptionConfig', () => {
       }),
     ).rejects.toThrow('Unable to create filesystem upload directory');
   });
+
+  it('throws when active deepgram STT provider has no credentials', async () => {
+    const root = await makeTempDir('esl-transcription-');
+    tempDirs.push(root);
+
+    const uploadDir = path.join(root, 'uploads');
+    const storageConfig = createStorageConfigService({
+      provider: 'filesystem',
+      filesystem: { uploadDir },
+    });
+
+    const config = withActiveSttProvider(loadConfig(), 'deepgram');
+    config.stt.providers.deepgram.apiKey = undefined;
+    config.stt.providers.deepgram.accessToken = undefined;
+
+    await expect(
+      validateTranscriptionConfig({
+        config,
+        storageConfig,
+        promptOptionsLoader: async () => ({
+          templates: [{ id: 'template.md', label: 'Template' }],
+          profiles: [{ id: 'profile.md', label: 'Profile' }],
+          defaults: {
+            templateId: 'template.md',
+            profileId: 'profile.md',
+          },
+        }),
+      }),
+    ).rejects.toThrow(/STT provider deepgram requires/i);
+  });
+
+  it('throws when active google STT provider is missing staging prerequisites', async () => {
+    const root = await makeTempDir('esl-transcription-');
+    tempDirs.push(root);
+
+    const uploadDir = path.join(root, 'uploads');
+    const storageConfig = createStorageConfigService({
+      provider: 'filesystem',
+      filesystem: { uploadDir },
+    });
+
+    const config = withActiveSttProvider(loadConfig(), 'google');
+    config.stt.providers.google.projectId = '';
+    config.stt.providers.google.gcsStagingBucket = '';
+
+    await expect(
+      validateTranscriptionConfig({
+        config,
+        storageConfig,
+        promptOptionsLoader: async () => ({
+          templates: [{ id: 'template.md', label: 'Template' }],
+          profiles: [{ id: 'profile.md', label: 'Profile' }],
+          defaults: {
+            templateId: 'template.md',
+            profileId: 'profile.md',
+          },
+        }),
+      }),
+    ).rejects.toThrow(/GOOGLE_STT_PROJECT_ID|GOOGLE_STT_GCS_STAGING_BUCKET/i);
+  });
 });
+
+function withActiveSttProvider(
+  config: ReturnType<typeof loadConfig>,
+  provider: 'deepgram' | 'elevenlabs' | 'google',
+): ReturnType<typeof loadConfig> {
+  const next = structuredClone(config);
+  next.transcription.sttProvider = provider;
+  next.stt.defaultProvider = provider;
+  return next;
+}

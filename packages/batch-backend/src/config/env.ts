@@ -6,7 +6,7 @@
 import { join, resolve as resolvePath } from 'node:path';
 
 import { readBool, readInt, readString } from '@esl-pipeline/shared-infrastructure';
-import type { GenerationProvider, GenerationQuotaSource } from '@esl-pipeline/contracts';
+import type { GenerationProvider, GenerationQuotaSource, SttProviderId } from '@esl-pipeline/contracts';
 
 export type GenerationSafetyMode = 'off' | 'warn' | 'hard_stop';
 
@@ -43,7 +43,8 @@ export interface BatchBackendConfig {
     queueName: string;
     mode: 'timeline' | 'stack';
     maxConcurrency: number;
-    sttProvider: 'deepgram' | 'elevenlabs';
+    sttProvider: SttProviderId;
+    sttProviders: SttProviderId[];
   };
   recordings: {
     maxFileSize: number;
@@ -54,6 +55,32 @@ export interface BatchBackendConfig {
     model: string;
     language: string;
     storeRawResponse: boolean;
+  };
+  stt: {
+    defaultProvider: SttProviderId;
+    providerOrder: SttProviderId[];
+    storeRawResponse: boolean;
+    providers: {
+      deepgram: {
+        apiKey?: string;
+        accessToken?: string;
+        model: string;
+        language: string;
+      };
+      elevenlabs: {
+        apiKey?: string;
+        model: string;
+      };
+      google: {
+        projectId?: string;
+        location: string;
+        recognizer?: string;
+        model: string;
+        languageCodes: string[];
+        gcsStagingBucket?: string;
+        gcsStagingPrefix: string;
+      };
+    };
   };
   worker: {
     concurrency: number;
@@ -217,6 +244,28 @@ function normalizeGenerationQuotaSource(value: string): GenerationQuotaSource {
   throw new Error('GEN_QUOTA_SOURCE_MODE must be one of: configured, provider, hybrid');
 }
 
+function normalizeSttProvider(value: string): SttProviderId {
+  const normalized = value.trim().toLowerCase();
+  if (normalized === 'deepgram' || normalized === 'elevenlabs' || normalized === 'google') {
+    return normalized;
+  }
+  throw new Error('STT provider must be one of: deepgram, elevenlabs, google');
+}
+
+function parseSttProviders(value: string): SttProviderId[] {
+  const tokens = value
+    .split(',')
+    .map((token) => token.trim())
+    .filter(Boolean);
+  if (tokens.length === 0) return [];
+  return [...new Set(tokens.map((token) => normalizeSttProvider(token)))];
+}
+
+function warnDeprecatedEnvAlias(legacyName: string, replacementName: string): void {
+  if (!process.env[legacyName]) return;
+  console.warn(`[config_deprecated] ${legacyName} is deprecated. Use ${replacementName} instead.`);
+}
+
 function normalizeGenerationSafetyMode(value: string): GenerationSafetyMode {
   const normalized = value.trim().toLowerCase();
   if (normalized === 'off' || normalized === 'warn' || normalized === 'hard_stop') {
@@ -303,17 +352,58 @@ export function loadConfig(): BatchBackendConfig {
     throw new Error('TRANSCRIBE_MODE must be "timeline" or "stack"');
   }
   const transcribeMaxConcurrency = readInt('TRANSCRIBE_MAX_CONCURRENCY', 2);
-  const sttProviderRaw = readString('STT_PROVIDER', 'deepgram')!.toLowerCase();
-  if (sttProviderRaw !== 'deepgram' && sttProviderRaw !== 'elevenlabs') {
-    throw new Error('STT_PROVIDER must be one of: deepgram, elevenlabs');
-  }
-  const sttProvider = sttProviderRaw as 'deepgram' | 'elevenlabs';
+  const sttDefaultProvider = normalizeSttProvider(
+    readString('ESL_STT_DEFAULT_PROVIDER', 'deepgram')!,
+  );
+  const sttProvider = normalizeSttProvider(readString('STT_PROVIDER', sttDefaultProvider)!);
+  const sttProviderOrderRaw = readString(
+    'ESL_STT_PROVIDER_ORDER',
+    `${sttDefaultProvider},deepgram,elevenlabs,google`,
+  )!;
+  const sttProviderOrder = parseSttProviders(sttProviderOrderRaw);
+  const sttProviders = [...new Set([sttProvider, sttDefaultProvider, ...sttProviderOrder])];
+  const sttStoreRawResponse = readBool(
+    'ESL_STT_STORE_RAW_RESPONSE',
+    readBool('DEEPGRAM_STORE_RAW_RESPONSE', true),
+  );
 
-  const deepgramApiKey = readString('DEEPGRAM_API_KEY');
-  const deepgramAccessToken = readString('DEEPGRAM_ACCESS_TOKEN');
-  const deepgramModel = readString('DEEPGRAM_MODEL', 'nova-3')!;
-  const deepgramLanguage = readString('DEEPGRAM_LANGUAGE', 'multi')!;
-  const deepgramStoreRawResponse = readBool('DEEPGRAM_STORE_RAW_RESPONSE', true);
+  warnDeprecatedEnvAlias('DEEPGRAM_STORE_RAW_RESPONSE', 'ESL_STT_STORE_RAW_RESPONSE');
+  warnDeprecatedEnvAlias('DEEPGRAM_API_KEY', 'ESL_STT_PROVIDER_DEEPGRAM_API_KEY');
+  warnDeprecatedEnvAlias('DEEPGRAM_ACCESS_TOKEN', 'ESL_STT_PROVIDER_DEEPGRAM_ACCESS_TOKEN');
+  warnDeprecatedEnvAlias('DEEPGRAM_MODEL', 'ESL_STT_PROVIDER_DEEPGRAM_MODEL');
+  warnDeprecatedEnvAlias('DEEPGRAM_LANGUAGE', 'ESL_STT_PROVIDER_DEEPGRAM_LANGUAGE');
+  warnDeprecatedEnvAlias('ELEVENLABS_API_KEY', 'ESL_STT_PROVIDER_ELEVENLABS_API_KEY');
+  warnDeprecatedEnvAlias('ELEVENLABS_API_TOKEN', 'ESL_STT_PROVIDER_ELEVENLABS_API_TOKEN');
+
+  const deepgramApiKey = readString('ESL_STT_PROVIDER_DEEPGRAM_API_KEY') ?? readString('DEEPGRAM_API_KEY');
+  const deepgramAccessToken =
+    readString('ESL_STT_PROVIDER_DEEPGRAM_ACCESS_TOKEN') ?? readString('DEEPGRAM_ACCESS_TOKEN');
+  const deepgramModel = readString(
+    'ESL_STT_PROVIDER_DEEPGRAM_MODEL',
+    readString('DEEPGRAM_MODEL', 'nova-3')!,
+  )!;
+  const deepgramLanguage = readString(
+    'ESL_STT_PROVIDER_DEEPGRAM_LANGUAGE',
+    readString('DEEPGRAM_LANGUAGE', 'multi')!,
+  )!;
+  const elevenLabsSttApiKey =
+    readString('ESL_STT_PROVIDER_ELEVENLABS_API_KEY') ??
+    readString('ESL_STT_PROVIDER_ELEVENLABS_API_TOKEN') ??
+    readString('ELEVENLABS_API_KEY') ??
+    readString('ELEVENLABS_API_TOKEN');
+  const elevenLabsSttModel = readString('ESL_STT_PROVIDER_ELEVENLABS_MODEL', 'scribe_v2')!;
+  const googleSttProjectId = readString('GOOGLE_STT_PROJECT_ID') ?? readString('GOOGLE_CLOUD_PROJECT');
+  const googleSttLocation = readString('GOOGLE_STT_LOCATION', 'us')!;
+  const googleSttRecognizer = readString('GOOGLE_STT_RECOGNIZER');
+  const googleSttModel = readString('GOOGLE_STT_MODEL', 'latest_long')!;
+  const googleSttLanguageCodes = (
+    readString('GOOGLE_STT_LANGUAGE_CODES', 'en-US') ?? 'en-US'
+  )
+    .split(',')
+    .map((value) => value.trim())
+    .filter(Boolean);
+  const googleSttGcsStagingBucket = readString('GOOGLE_STT_GCS_STAGING_BUCKET');
+  const googleSttGcsStagingPrefix = readString('GOOGLE_STT_GCS_STAGING_PREFIX', 'stt-staging')!;
 
   // Worker concurrency
   const workerConcurrency = readInt('WORKER_CONCURRENCY', 5);
@@ -597,6 +687,7 @@ export function loadConfig(): BatchBackendConfig {
       mode: transcribeMode,
       maxConcurrency: transcribeMaxConcurrency,
       sttProvider,
+      sttProviders,
     },
     recordings: {
       maxFileSize: recordingsMaxFileSize,
@@ -606,7 +697,33 @@ export function loadConfig(): BatchBackendConfig {
       accessToken: deepgramAccessToken,
       model: deepgramModel,
       language: deepgramLanguage,
-      storeRawResponse: deepgramStoreRawResponse,
+      storeRawResponse: sttStoreRawResponse,
+    },
+    stt: {
+      defaultProvider: sttDefaultProvider,
+      providerOrder: sttProviderOrder,
+      storeRawResponse: sttStoreRawResponse,
+      providers: {
+        deepgram: {
+          apiKey: deepgramApiKey,
+          accessToken: deepgramAccessToken,
+          model: deepgramModel,
+          language: deepgramLanguage,
+        },
+        elevenlabs: {
+          apiKey: elevenLabsSttApiKey ?? undefined,
+          model: elevenLabsSttModel,
+        },
+        google: {
+          projectId: googleSttProjectId ?? undefined,
+          location: googleSttLocation,
+          recognizer: googleSttRecognizer ?? undefined,
+          model: googleSttModel,
+          languageCodes: googleSttLanguageCodes,
+          gcsStagingBucket: googleSttGcsStagingBucket ?? undefined,
+          gcsStagingPrefix: googleSttGcsStagingPrefix,
+        },
+      },
     },
     worker: {
       concurrency: workerConcurrency,

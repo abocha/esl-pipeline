@@ -1,0 +1,40 @@
+{
+  "name": "@esl-pipeline/stt-provider-elevenlabs",
+  "version": "1.0.0",
+  "private": true,
+  "description": "ElevenLabs STT provider adapter for ESL Pipeline.",
+  "license": "UNLICENSED",
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./dist/src/index.d.ts",
+      "import": "./dist/src/index.js",
+      "default": "./dist/src/index.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "main": "./dist/src/index.js",
+  "types": "./dist/src/index.d.ts",
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "clean": "node -e \"fs.rmSync('dist', {recursive:true, force:true})\"",
+    "test": "pnpm --filter @esl-pipeline/stt-core build && pnpm run build && vitest run",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@elevenlabs/elevenlabs-js": "^2.38.1",
+    "@esl-pipeline/provider-runtime": "workspace:*",
+    "@esl-pipeline/stt-core": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/node": "^25.3.5",
+    "typescript": "^5.9.3",
+    "vitest": "^4.0.18"
+  },
+  "engines": {
+    "node": ">=24.11.1"
+  }
+}
