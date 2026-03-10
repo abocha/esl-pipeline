@@ -179,6 +179,9 @@ What happens:
 1. Downloads `.dump` and matching `.sha256` to `tmp/backups/postgres/remote-restore/`.
 2. Verifies dump digest before restore.
 3. Delegates restore to `postgres-backup-restore.sh`.
+4. If restored snapshot is older than current backend schema, run:
+   `docker compose exec -T batch-backend pnpm --filter @esl-pipeline/batch-backend db:migrate`
+   before serving normal API traffic.
 
 To validate download + digest only (no restore side effects):
 

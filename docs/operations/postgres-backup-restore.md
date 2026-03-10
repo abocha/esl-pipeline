@@ -103,6 +103,9 @@ Notes:
 
 - `--clean` is supported only for `.dump` restore.
 - Always verify a backup before a destructive restore.
+- Restoring older snapshots can leave schema behind current app code. After restore, run:
+  `docker compose exec -T batch-backend pnpm --filter @esl-pipeline/batch-backend db:migrate`
+  before starting normal API usage.
 
 ## Suggested Routine
 
