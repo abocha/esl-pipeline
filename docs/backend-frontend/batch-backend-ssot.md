@@ -103,6 +103,7 @@ Runbook: [`docs/operations/prompt-gallery-bootstrap.md`](../operations/prompt-ga
 - Worker processing is queue-driven and stateful; transitions are persisted.
 - Cancellation is cooperative for in-flight jobs.
 - SSE may be supplemented by polling fallback in frontend UX.
+- Job status endpoint is canonicalized to `GET /jobs/:id`; legacy `/jobs/:id/status` alias is retired.
 - Auth middleware and `/auth/*` routes are wired from one `AuthService` instance created from loaded runtime config (no constructor env fallback path).
 - Student timeline type filters accept canonical event types only (for example `job_awaiting_approval`), without legacy aliases.
 - Worker manifest execution does not retry with filesystem store when S3 manifest configuration is invalid or missing.
