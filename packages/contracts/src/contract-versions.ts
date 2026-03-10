@@ -14,7 +14,7 @@ export const MANIFEST_CONTRACT_VERSION = '2.0.0';
 export const PROMPT_SCHEMA_VERSION = '1.0.0';
 export const VALIDATOR_CONTRACT_VERSION = '1.0.0';
 export const DB_CONTRACT_VERSION = '0.7.0';
-export const DB_MIGRATION_HEAD = '0009_user_settings_tts_provider_canonicalization';
+export const DB_MIGRATION_HEAD = '0010_transcripts_stt_provider';
 
 export const CONTRACT_VERSIONS: Readonly<ContractVersionRegistry> = Object.freeze({
   api: API_CONTRACT_VERSION,
