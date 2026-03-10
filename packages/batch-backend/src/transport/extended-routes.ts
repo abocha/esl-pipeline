@@ -116,7 +116,7 @@ import {
   getUserById,
   updateUserLastLogin,
 } from '../domain/user-repository.js';
-import { createAuthService } from '../infrastructure/auth-service.js';
+import type { AuthService } from '../infrastructure/auth-service.js';
 import {
   FileSanitizationError,
   type FileSanitizationService,
@@ -141,6 +141,7 @@ type AsyncPreHandler = (request: FastifyRequest, reply: FastifyReply) => Promise
 
 export interface ExtendedRouteOptions {
   config: BatchBackendConfig;
+  authService: AuthService;
   authenticate: AsyncPreHandler;
   uploadRateLimitMiddleware: AsyncPreHandler;
   fileValidationService: FileValidationService | null;
@@ -311,6 +312,7 @@ function insertGeneratedPreviewAudio(
 export function registerExtendedRoutes(app: FastifyInstance, options: ExtendedRouteOptions): void {
   const {
     config,
+    authService,
     authenticate,
     uploadRateLimitMiddleware,
     fileValidationService,
@@ -3221,7 +3223,6 @@ export function registerExtendedRoutes(app: FastifyInstance, options: ExtendedRo
           });
         }
 
-        const authService = createAuthService();
         if (!authService.validateEmail(body.email)) {
           return reply.code(400).send({
             error: 'validation_failed',
@@ -3317,7 +3318,6 @@ export function registerExtendedRoutes(app: FastifyInstance, options: ExtendedRo
         });
       }
 
-      const authService = createAuthService();
       const isValidPassword = await authService.verifyPassword(body.password, user.passwordHash);
       if (!isValidPassword) {
         return reply.code(401).send({
@@ -3380,7 +3380,6 @@ export function registerExtendedRoutes(app: FastifyInstance, options: ExtendedRo
           });
         }
 
-        const authService = createAuthService();
         let refreshPayload;
         try {
           refreshPayload = authService.verifyRefreshToken(refreshToken);

@@ -103,6 +103,7 @@ Runbook: [`docs/operations/prompt-gallery-bootstrap.md`](../operations/prompt-ga
 - Worker processing is queue-driven and stateful; transitions are persisted.
 - Cancellation is cooperative for in-flight jobs.
 - SSE may be supplemented by polling fallback in frontend UX.
+- Auth middleware and `/auth/*` routes are wired from one `AuthService` instance created from loaded runtime config (no constructor env fallback path).
 
 ## Migrations and Schema Safety
 

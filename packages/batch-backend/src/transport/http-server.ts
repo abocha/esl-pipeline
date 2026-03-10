@@ -30,7 +30,8 @@ import {
   StorageConfigurationService,
   createStorageConfigService,
 } from '../infrastructure/storage-config.js';
-import { authenticate } from './auth-middleware.js';
+import { createAuthService } from '../infrastructure/auth-service.js';
+import { authenticate, configureAuthMiddleware } from './auth-middleware.js';
 import { registerCoreRoutes } from './core-routes.js';
 import { registerErrorHandler } from './error-handler.js';
 import { registerExtendedRoutes } from './extended-routes.js';
@@ -89,6 +90,13 @@ function buildStorageConfigurationService(config: ReturnType<typeof loadConfig>)
 
 export async function createHttpServer(): Promise<FastifyInstance> {
   const config = loadConfig();
+  const authService = createAuthService({
+    jwtSecret: config.auth.jwtSecret,
+    jwtExpiresIn: config.auth.jwtExpiresIn,
+    refreshTokenExpiresIn: config.auth.refreshTokenExpiresIn,
+    bcryptRounds: config.auth.bcryptRounds,
+  });
+  configureAuthMiddleware(authService);
   const app = Fastify({
     logger: false,
   });
@@ -132,6 +140,7 @@ export async function createHttpServer(): Promise<FastifyInstance> {
 
     registerExtendedRoutes(app, {
       config,
+      authService,
       authenticate,
       uploadRateLimitMiddleware,
       fileValidationService,

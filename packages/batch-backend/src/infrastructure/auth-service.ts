@@ -254,21 +254,6 @@ export class AuthService {
   }
 }
 
-/**
- * Create auth service from environment config
- */
-export function createAuthService(config?: AuthServiceConfig): AuthService {
-  if (config) {
-    return new AuthService(config);
-  }
-
-  // Fallback to environment variables for backward compatibility
-  const fallbackConfig: AuthServiceConfig = {
-    jwtSecret: process.env.JWT_SECRET || 'your-super-secret-jwt-key',
-    jwtExpiresIn: process.env.JWT_EXPIRES_IN || '15m',
-    refreshTokenExpiresIn: process.env.REFRESH_TOKEN_EXPIRES_IN || '7d',
-    bcryptRounds: Number.parseInt(process.env.BCRYPT_ROUNDS || '12'),
-  };
-
-  return new AuthService(fallbackConfig);
+export function createAuthService(config: AuthServiceConfig): AuthService {
+  return new AuthService(config);
 }
