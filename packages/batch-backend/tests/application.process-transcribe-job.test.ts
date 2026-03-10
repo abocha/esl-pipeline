@@ -385,8 +385,6 @@ function createConfig(): BatchBackendConfig {
           accessToken: undefined,
           model: 'nova-3',
           language: 'multi',
-          retryMax: 3,
-          retryBaseDelayMs: 0,
         },
         elevenlabs: {
           apiKey: undefined,
