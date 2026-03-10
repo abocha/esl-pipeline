@@ -361,7 +361,7 @@ export function loadConfig(): BatchBackendConfig {
     `${sttDefaultProvider},deepgram,elevenlabs,google`,
   )!;
   const sttProviderOrder = parseSttProviders(sttProviderOrderRaw);
-  const sttProviders = [...new Set([sttDefaultProvider, ...sttProviderOrder])];
+  const sttProviders = [...new Set([sttProvider, sttDefaultProvider, ...sttProviderOrder])];
   const sttStoreRawResponse = readBool(
     'ESL_STT_STORE_RAW_RESPONSE',
     readBool('DEEPGRAM_STORE_RAW_RESPONSE', true),
