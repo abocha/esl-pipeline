@@ -193,7 +193,7 @@ export async function processTranscribeJob(
 
     if (sttProvider === 'elevenlabs') {
       const elevenApiKey = resolveElevenLabsSttApiKey(config);
-      const { text, segments, raw } = await transcribeWithElevenLabs({
+      const { text, segments, raw, fallbackUsed } = await transcribeWithElevenLabs({
         storage: readStorage,
         storageUri: recording.storageUri,
         apiKey: elevenApiKey,
@@ -204,8 +204,10 @@ export async function processTranscribeJob(
       summaryJson = {
         provider: 'elevenlabs',
         segmentCount: segments.length,
+        fallbackUsed,
       };
       provider = 'elevenlabs';
+      usedFallback = fallbackUsed;
     } else {
       const { result, fallbackUsed } = await transcribeWithDeepgram({
         client: deepgramClient,
@@ -289,7 +291,7 @@ export async function processTranscribeJob(
       storageUri: transcriptStored.uri,
       rawResponseUri,
       mode,
-      model: provider === 'elevenlabs' ? 'scribe_v1' : config.deepgram.model,
+      model: provider === 'elevenlabs' ? ELEVENLABS_STT_MODEL : config.deepgram.model,
       language: provider === 'elevenlabs' ? 'auto' : config.deepgram.language,
       fallbackUsed: usedFallback,
       summaryJson,
@@ -386,16 +388,32 @@ async function transcribeWithDeepgram(args: {
 
 interface ElevenLabsWord {
   text?: string;
+  speakerId?: string | null;
   speaker_id?: string | null;
   start?: number;
   end?: number;
   type?: string;
+  channelIndex?: number;
+  channel_index?: number;
+}
+
+interface ElevenLabsChannelTranscript {
+  text?: string;
+  words?: ElevenLabsWord[];
+  channelIndex?: number;
+  channel_index?: number;
+}
+
+interface ElevenLabsMultichannelResponse {
+  transcripts?: ElevenLabsChannelTranscript[];
+  text?: string;
 }
 
 interface ElevenLabsTranscriptResult {
   text: string;
   segments: TranscriptSegment[];
   raw: unknown;
+  fallbackUsed: boolean;
 }
 
 interface TranscriptSegment {
@@ -431,63 +449,75 @@ async function transcribeWithElevenLabs(args: {
   const audioBuffer = Buffer.concat(chunks);
   const blob = new Blob([audioBuffer], { type: 'audio/mpeg' });
 
-  const response = await client.speechToText.convert({
-    file: blob,
-    modelId: 'scribe_v1',
-    diarize: true,
-    timestampsGranularity: 'word',
-  });
-
-  const words: ElevenLabsWord[] = (response as unknown as { words?: ElevenLabsWord[] }).words ?? [];
-  const fullText = (response as unknown as { text?: string }).text ?? '';
-
-  // Build segments by grouping consecutive same-speaker words
-  const segments: TranscriptSegment[] = [];
-  let currentSpeaker: number | undefined;
-  let currentText = '';
-  let currentStart: number | undefined;
-  let currentEnd: number | undefined;
-
-  for (const word of words) {
-    if (word.type === 'spacing') continue;
-    const wordText = word.text?.trim() ?? '';
-    if (!wordText) continue;
-
-    // Convert speaker_id like "speaker_0" => 0
-    let speakerIndex: number | undefined;
-    if (word.speaker_id !== null && word.speaker_id !== undefined) {
-      const match = /(\d+)$/.exec(word.speaker_id);
-      speakerIndex = match ? Number.parseInt(match[1] ?? '0', 10) : 0;
-    }
-
-    if (speakerIndex !== currentSpeaker && currentText) {
-      segments.push({
-        text: currentText.trim(),
-        speaker: currentSpeaker,
-        start: currentStart,
-        end: currentEnd,
-      });
-      currentText = '';
-      currentStart = undefined;
-      currentEnd = undefined;
-    }
-
-    currentSpeaker = speakerIndex;
-    currentText = currentText ? `${currentText} ${wordText}` : wordText;
-    if (currentStart === undefined && word.start !== undefined) currentStart = word.start;
-    if (word.end !== undefined) currentEnd = word.end;
-  }
-
-  if (currentText) {
-    segments.push({
-      text: currentText.trim(),
-      speaker: currentSpeaker,
-      start: currentStart,
-      end: currentEnd,
+  let primaryResponse: unknown;
+  let primaryError: unknown;
+  try {
+    primaryResponse = await client.speechToText.convert({
+      file: blob,
+      modelId: ELEVENLABS_STT_MODEL,
+      useMultiChannel: true,
+      diarize: false,
+      timestampsGranularity: 'word',
     });
+  } catch (error) {
+    primaryError = error;
   }
 
-  return { text: fullText, segments, raw: response };
+  if (primaryResponse !== undefined) {
+    const multichannel = parseElevenLabsMultichannel(primaryResponse);
+    if (multichannel && multichannel.segments.length > 0) {
+      return {
+        text: multichannel.text,
+        segments: multichannel.segments,
+        raw: primaryResponse,
+        fallbackUsed: false,
+      };
+    }
+
+    try {
+      const fallbackResponse = await client.speechToText.convert({
+        file: blob,
+        modelId: ELEVENLABS_STT_MODEL,
+        diarize: true,
+        timestampsGranularity: 'word',
+      });
+      const fallbackParsed = parseElevenLabsSingleChannel(fallbackResponse);
+      return {
+        text: fallbackParsed.text,
+        segments: fallbackParsed.segments,
+        raw: fallbackResponse,
+        fallbackUsed: true,
+      };
+    } catch (fallbackError) {
+      if (multichannel) {
+        return {
+          text: multichannel.text,
+          segments: multichannel.segments,
+          raw: primaryResponse,
+          fallbackUsed: false,
+        };
+      }
+      throw asError(fallbackError, 'ElevenLabs transcription failed');
+    }
+  }
+
+  try {
+    const fallbackResponse = await client.speechToText.convert({
+      file: blob,
+      modelId: ELEVENLABS_STT_MODEL,
+      diarize: true,
+      timestampsGranularity: 'word',
+    });
+    const fallbackParsed = parseElevenLabsSingleChannel(fallbackResponse);
+    return {
+      text: fallbackParsed.text,
+      segments: fallbackParsed.segments,
+      raw: fallbackResponse,
+      fallbackUsed: true,
+    };
+  } catch (fallbackError) {
+    throw asError(fallbackError ?? primaryError, 'ElevenLabs transcription failed');
+  }
 }
 
 function formatElevenLabsTranscript(
@@ -496,6 +526,153 @@ function formatElevenLabsTranscript(
   mode: TranscriptMode,
 ): string {
   return formatTranscriptFromSegments(rawText, segments, mode);
+}
+
+function parseElevenLabsMultichannel(
+  response: unknown,
+): { text: string; segments: TranscriptSegment[] } | null {
+  const transcripts = (response as ElevenLabsMultichannelResponse | null | undefined)?.transcripts;
+  if (!Array.isArray(transcripts) || transcripts.length === 0) {
+    return null;
+  }
+
+  const wordsWithContext: {
+    word: ElevenLabsWord;
+    channelIndex?: number;
+  }[] = [];
+
+  for (const transcript of transcripts) {
+    const transcriptChannelIndex = normalizeElevenLabsChannelIndex(
+      transcript.channelIndex ?? transcript.channel_index,
+    );
+    const words = transcript.words;
+    if (!Array.isArray(words) || words.length === 0) continue;
+    for (const word of words) {
+      wordsWithContext.push({ word, channelIndex: transcriptChannelIndex });
+    }
+  }
+
+  const text = transcripts
+    .map((transcript) => transcript.text?.trim() ?? '')
+    .filter((value) => value.length > 0)
+    .join(' ')
+    .trim() || ((response as ElevenLabsMultichannelResponse | null | undefined)?.text?.trim() ?? '');
+
+  const segments = buildElevenLabsSegments(wordsWithContext);
+  return { text, segments };
+}
+
+function parseElevenLabsSingleChannel(response: unknown): {
+  text: string;
+  segments: TranscriptSegment[];
+} {
+  const words: ElevenLabsWord[] = (response as { words?: ElevenLabsWord[] }).words ?? [];
+  const text = (response as { text?: string }).text?.trim() ?? '';
+  const segments = buildElevenLabsSegments(words.map((word) => ({ word })));
+  return { text, segments };
+}
+
+function buildElevenLabsSegments(
+  wordsWithContext: { word: ElevenLabsWord; channelIndex?: number }[],
+): TranscriptSegment[] {
+  if (wordsWithContext.length === 0) {
+    return [];
+  }
+
+  const timelineWords: {
+    order: number;
+    text: string;
+    speaker: number | undefined;
+    start: number | undefined;
+    end: number | undefined;
+  }[] = [];
+
+  for (const [index, entry] of wordsWithContext.entries()) {
+    const { word } = entry;
+    if (word.type === 'spacing') continue;
+    const text = word.text?.trim() ?? '';
+    if (!text) continue;
+    const speaker = resolveElevenLabsSpeakerIndex(word, entry.channelIndex);
+    const start = typeof word.start === 'number' ? word.start : undefined;
+    const end = typeof word.end === 'number' ? word.end : start;
+    timelineWords.push({
+      order: index,
+      text,
+      speaker,
+      start,
+      end,
+    });
+  }
+
+  timelineWords.sort((left, right) => {
+    const leftStart = typeof left.start === 'number' ? left.start : Number.POSITIVE_INFINITY;
+    const rightStart = typeof right.start === 'number' ? right.start : Number.POSITIVE_INFINITY;
+    if (leftStart !== rightStart) return leftStart - rightStart;
+    return left.order - right.order;
+  });
+
+  if (timelineWords.length === 0) {
+    return [];
+  }
+
+  const segments: TranscriptSegment[] = [];
+  let current: TranscriptSegment | null = null;
+
+  for (const item of timelineWords) {
+    if (
+      current &&
+      current.speaker === item.speaker &&
+      getGapSeconds(current.end, item.start) <= UTTERANCE_GAP_SEC
+    ) {
+      current.text = `${current.text} ${item.text}`.trim();
+      current.end = item.end ?? current.end;
+      continue;
+    }
+
+    if (current) {
+      segments.push(current);
+    }
+    current = {
+      text: item.text,
+      speaker: item.speaker,
+      start: item.start,
+      end: item.end,
+    };
+  }
+
+  if (current) {
+    segments.push(current);
+  }
+
+  return normalizeSegmentEnds(segments);
+}
+
+function resolveElevenLabsSpeakerIndex(word: ElevenLabsWord, channelIndex?: number): number | undefined {
+  const speakerId = resolveElevenLabsSpeakerId(word);
+  const fromSpeaker = parseElevenLabsSpeakerId(speakerId);
+  if (typeof fromSpeaker === 'number') return fromSpeaker;
+
+  const fromWordChannel = normalizeElevenLabsChannelIndex(word.channelIndex ?? word.channel_index);
+  if (typeof fromWordChannel === 'number') return fromWordChannel;
+  if (typeof channelIndex === 'number') return channelIndex;
+  return undefined;
+}
+
+function resolveElevenLabsSpeakerId(word: ElevenLabsWord): string | null {
+  if (typeof word.speakerId === 'string') return word.speakerId;
+  if (typeof word.speaker_id === 'string') return word.speaker_id;
+  return null;
+}
+
+function parseElevenLabsSpeakerId(speakerId: string | null): number | undefined {
+  if (!speakerId) return undefined;
+  const match = /(\d+)$/.exec(speakerId);
+  if (!match?.[1]) return undefined;
+  return Number.parseInt(match[1], 10);
+}
+
+function normalizeElevenLabsChannelIndex(value: unknown): number | undefined {
+  return typeof value === 'number' && Number.isFinite(value) ? value : undefined;
 }
 
 async function transcribeAttempt(
@@ -826,6 +1003,7 @@ function getGapSeconds(previousEnd?: number, nextStart?: number): number {
 }
 
 const UTTERANCE_GAP_SEC = 1.5;
+const ELEVENLABS_STT_MODEL = 'scribe_v2' as const;
 const TRANSCRIBE_ATTEMPT_MAX_RETRIES = 3;
 const TRANSCRIBE_ATTEMPT_BASE_DELAY_MS = process.env.NODE_ENV === 'test' ? 0 : 250;
 const RETRYABLE_DEEPGRAM_STATUS_CODES = new Set([408, 409, 425, 429, 500, 502, 503, 504]);
