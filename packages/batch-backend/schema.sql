@@ -551,7 +551,7 @@ CREATE TABLE IF NOT EXISTS user_settings (
   -- API Keys (encrypted at rest)
   elevenlabs_key_encrypted TEXT NULL,
   notion_token_encrypted TEXT NULL,
-  -- TTS Provider (groundwork for future expansion: 'openai', 'azure', etc.)
+  -- TTS Provider
   tts_provider TEXT NOT NULL DEFAULT 'elevenlabs',
   -- Preferences
   default_preset TEXT NOT NULL DEFAULT 'b1-default',
@@ -587,4 +587,4 @@ ALTER TABLE user_settings ADD CONSTRAINT user_settings_tts_strategy_check
   CHECK (default_tts_strategy IN ('auto', 'dialogue', 'tts'));
 
 ALTER TABLE user_settings ADD CONSTRAINT user_settings_tts_provider_check
-  CHECK (tts_provider IN ('elevenlabs', 'openai', 'azure', 'google'));
+  CHECK (tts_provider IN ('elevenlabs', 'google'));

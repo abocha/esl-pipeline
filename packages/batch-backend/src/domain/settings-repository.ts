@@ -36,15 +36,7 @@ export function normalizeStoredTtsProvider(provider: string, userId: string): Tt
   if (isValidTtsProvider(provider)) {
     return provider;
   }
-  if (provider === 'openai' || provider === 'azure') {
-    logger.warn('Normalizing legacy TTS provider in user settings', {
-      userId,
-      legacyProvider: provider,
-      fallbackProvider: 'elevenlabs',
-    });
-    return 'elevenlabs';
-  }
-  logger.warn('Unknown TTS provider in user settings; applying fallback', {
+  logger.warn('Unsupported TTS provider in user settings; applying fallback', {
     userId,
     provider,
     fallbackProvider: 'elevenlabs',

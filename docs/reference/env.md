@@ -251,6 +251,7 @@ Notes:
   for whichever provider is selected.
 - For S3 manifests or uploads, set the `ESL_PIPELINE_MANIFEST_*` vars and `S3_*`/AWS creds together.
 - TTS strategy defaults can be provided via `ESL_TTS_PROVIDER_ELEVENLABS_STRATEGY` and related provider-scoped options; manifests now persist these for reruns.
+- Batch-backend persistence for `user_settings.tts_provider` is canonical-only (`elevenlabs` or `google`); legacy stored values (`openai`, `azure`) are migration-cleanup only.
 - Batch backend startup validates `FILESYSTEM_UPLOAD_DIR` and `PROMPT_*` allowlists; misconfigured paths fail fast.
 - Use `RECORDINGS_MAX_FILE_SIZE` to raise audio upload limits without affecting general markdown uploads.
 - Postgres backup archival scripts read `PG_BACKUP_S3_*` variables; keep backup bucket/prefix separate from runtime `S3_BUCKET` upload paths.
