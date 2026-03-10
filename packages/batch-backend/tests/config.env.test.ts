@@ -202,6 +202,22 @@ describe('config/env - STT provider defaults', () => {
       },
     );
   });
+
+  it('includes active STT_PROVIDER in advertised sttProviders when missing from provider order', async () => {
+    await withEnv(
+      {
+        NODE_ENV: 'test',
+        STT_PROVIDER: 'google',
+        ESL_STT_DEFAULT_PROVIDER: 'deepgram',
+        ESL_STT_PROVIDER_ORDER: 'deepgram,elevenlabs',
+      },
+      async () => {
+        const cfg = await loadConfigFresh();
+        expect(cfg.transcription.sttProvider).toBe('google');
+        expect(cfg.transcription.sttProviders).toContain('google');
+      },
+    );
+  });
 });
 
 describe('config/env - TTS cache retention validation', () => {
