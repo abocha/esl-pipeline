@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented here. Dates use `YYYY-MM-DD`.
 
+## [3.0.1] - 2026-03-10
+
+### Changed
+
+- Automated release from PR #29: refactor(batch-backend): complete wave1 legacy retirement hardening (https://github.com/abocha/esl-pipeline/pull/29)
+
 ## [3.0.0] - 2026-03-09
 
 ### Changed
