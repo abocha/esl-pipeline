@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented here. Dates use `YYYY-MM-DD`.
 
+## [4.0.1] - 2026-03-10
+
+### Changed
+
+- Automated release from PR #32: fix(batch-backend): align elevenlabs stt timeline with deepgram parity (https://github.com/abocha/esl-pipeline/pull/32)
+
 ## [4.0.0] - 2026-03-10
 
 ### Changed
