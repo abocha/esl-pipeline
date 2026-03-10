@@ -898,7 +898,6 @@ export async function validateMarkdown(
   context?: {
     learningPresetId?: string | null;
     learningPresetVersion?: string | null;
-    preset?: string | null;
   },
 ): Promise<MarkdownValidationResponse> {
   try {
@@ -907,7 +906,6 @@ export async function validateMarkdown(
       strict,
       learningPresetId: context?.learningPresetId ?? undefined,
       learningPresetVersion: context?.learningPresetVersion ?? undefined,
-      preset: context?.preset ?? undefined,
     });
     return response.data;
   } catch (error: unknown) {
@@ -922,7 +920,6 @@ export async function validateMarkdown(
 export async function renderHtmlPreview(params: {
   text: string;
   title?: string;
-  preset?: string | null;
   learningPresetId?: string | null;
   audioUrl?: string | null;
   pronunciationAudioUrl?: string | null;
@@ -931,7 +928,6 @@ export async function renderHtmlPreview(params: {
     const response = await apiClient.post(buildApiProxyPath('/preview/html'), {
       text: params.text,
       title: params.title,
-      preset: params.preset,
       learningPresetId: params.learningPresetId,
       audioUrl: params.audioUrl,
       pronunciationAudioUrl: params.pronunciationAudioUrl,

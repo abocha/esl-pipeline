@@ -22,7 +22,7 @@ export interface PmdDocument {
   body: PmdBlock[];
   warnings: PmdWarning[];
   meta: {
-    format: 'canonical' | 'legacy-fenced';
+    format: 'canonical';
   };
 }
 

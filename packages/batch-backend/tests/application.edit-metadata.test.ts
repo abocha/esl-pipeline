@@ -54,7 +54,7 @@ describe('application/job-actions/edit-metadata', () => {
     const result = await editMetadata('job-1', {
       type: JobActionType.EDIT_METADATA,
       requestedAt: new Date(),
-      payload: { preset: 'b1-default' },
+      payload: { learningPresetId: 'general-english' },
     });
 
     expect(result.success).toBe(false);
@@ -67,7 +67,7 @@ describe('application/job-actions/edit-metadata', () => {
     const result = await editMetadata('job-1', {
       type: JobActionType.EDIT_METADATA,
       requestedAt: new Date(),
-      payload: { preset: '' },
+      payload: { learningPresetId: '' },
     });
 
     expect(result.success).toBe(false);
@@ -78,13 +78,13 @@ describe('application/job-actions/edit-metadata', () => {
     vi.spyOn(jobRepository, 'getJobById').mockResolvedValue(baseJob);
     vi.spyOn(jobRepository, 'updateJobMetadata').mockResolvedValue({
       ...baseJob,
-      preset: 'b1-default',
+      learningPresetId: 'general-english',
     });
 
     const result = await editMetadata('job-1', {
       type: JobActionType.EDIT_METADATA,
       requestedAt: new Date(),
-      payload: { preset: 'b1-default' },
+      payload: { learningPresetId: 'general-english' },
     });
 
     expect(result.success).toBe(true);

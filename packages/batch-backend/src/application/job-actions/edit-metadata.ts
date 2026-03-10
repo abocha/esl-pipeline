@@ -8,7 +8,7 @@ import { JobActionType } from '../../domain/job-actions.js';
 import { getJobById, updateJobMetadata } from '../../domain/job-repository.js';
 
 const editMetadataSchema = z.object({
-  preset: z.string().min(1).optional(),
+  learningPresetId: z.string().min(1).optional(),
   notionDatabase: z.string().min(1).optional(),
   publishTarget: z.enum(['notion', 'anytype', 'html']).optional(),
   withTts: z.boolean().optional(),
@@ -89,7 +89,7 @@ export async function editMetadata(
   const updated = await updateJobMetadata({
     id: jobId,
     expectedState: 'awaiting_approval',
-    preset: overrides.preset,
+    learningPresetId: overrides.learningPresetId,
     notionDatabase: overrides.notionDatabase,
     publishTarget: overrides.publishTarget,
     withTts: overrides.withTts,

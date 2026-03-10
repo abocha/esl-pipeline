@@ -26,7 +26,6 @@ describeMdValidatorSuite(
       await writeFile(
         file,
         `
-\`\`\`markdown
 ---
 title: Inline Test
 student: Leo
@@ -82,7 +81,6 @@ content
 :::toggle-heading Teacher's Follow-up Plan
 content
 :::
-\`\`\`
     `.trim(),
       );
 

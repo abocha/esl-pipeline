@@ -10,7 +10,6 @@ describeMdValidatorSuite(
       await writeFile(
         file,
         `
-\`\`\`markdown
 ---
 title: Letter Test
 student: Ana
@@ -75,7 +74,6 @@ content
 :::toggle-heading Teacher's Follow-up Plan
 content
 :::
-\`\`\`
     `.trim(),
       );
 
@@ -90,7 +88,6 @@ content
       await writeFile(
         file,
         `
-\`\`\`markdown
 ---
 title: Story Test
 student: Vera
@@ -148,7 +145,6 @@ content
 :::toggle-heading Teacher's Follow-up Plan
 content
 :::
-\`\`\`
     `.trim(),
       );
 

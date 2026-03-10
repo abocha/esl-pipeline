@@ -36,7 +36,7 @@ interface NormalizedDialogueInput {
 
 function normalizeDialogueInput(input: DialogueInput): NormalizedDialogueInput {
   const text = typeof input.text === 'string' ? input.text : '';
-  const voiceId = typeof input.voiceId === 'string' ? input.voiceId : input.voice_id;
+  const voiceId = input.voiceId;
 
   if (!voiceId || !voiceId.trim()) {
     throw new Error(`Dialogue input is missing voiceId for text: "${text.slice(0, 64)}"`);

@@ -25,6 +25,12 @@ Use it with:
 7. Mark status
    - Move item to `done` only after merged PR and passing checks.
 
+## DB-Canonical Boundary Rule
+
+1. Runtime services should not use filesystem fallback for canonical data paths.
+2. Migration/backfill tooling may read filesystem legacy sources when explicitly scoped to migration commands.
+3. Retirement PRs must preserve the migration-tool boundary while removing runtime fallback/probe behavior.
+
 ## Required Acceptance Format (Per Item)
 
 Every implementation PR MUST include these four sections in the description:
@@ -37,6 +43,11 @@ Every implementation PR MUST include these four sections in the description:
    - List every updated doc path from `docs_to_update`.
 4. Required release label
    - Exactly one label: `release:patch`, `release:minor`, or `release:major`.
+
+For filesystem-fallback retirement items, include one additional subsection:
+
+5. Migration boundary confirmation
+   - State which migration tools still read filesystem inputs and confirm runtime paths no longer do.
 
 ## Release Label Decision Rules
 
@@ -84,8 +95,14 @@ Before merging any item PR:
 3. `pnpm docs:check` passes when docs/contract text changed.
 4. PR has exactly one release label and matches item requirement.
 
+For items removing runtime filesystem fallback/probes:
+
+5. Include targeted assertions that runtime no longer downgrades to filesystem under error conditions.
+6. Include targeted assertions or smoke notes confirming migration tools still execute as documented.
+
 ## Rollout and Monitoring Expectations
 
 1. For `public_api` and `env` items, include rollout notes and migration timeline in PR body.
 2. For `breaking` items, include explicit removal date and impacted consumers.
 3. For data-compat retirements, include evidence query/results proving migration readiness.
+4. For filesystem-fallback retirements, include startup/worker log expectations showing explicit fail-fast or warning behavior without filesystem downgrade.

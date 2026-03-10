@@ -22,8 +22,7 @@
 3. Version is explicit and stable (`v1`, `v2`, ...).
 4. Unknown `learningPresetId` MUST fallback to `general-english@v1` with warning issue code:
    `ruleset.unknown_preset_fallback`.
-5. Legacy `preset` values map to `general-english@v1` with metadata reason:
-   `legacy_preset_mapping`.
+5. Legacy `preset` is not part of ruleset resolution; use `learningPresetId` (+ optional `learningPresetVersion`) for deterministic ruleset selection.
 
 ## Issue Model Conventions
 
@@ -44,12 +43,14 @@
 
 1. `validateMarkdown` input must stay backward-compatible:
    - existing `path|markdown|context` forms remain valid.
-   - new preset fields are optional and additive.
+   - ruleset selection is canonical via `learningPresetId` (+ optional `learningPresetVersion`).
 2. Legacy response fields MUST remain:
    - `ok`, `errors`, `warnings`, `meta`, `voiceDiagnostics`.
 3. Additive response fields are optional:
    - `issues`, `ruleset`.
-4. Deterministic ordering requirement:
+4. Ruleset-resolution fallback warnings are carried in canonical `issues` metadata and are not mirrored into legacy `warnings` strings.
+5. PMD input contract is canonical frontmatter-at-byte-0; legacy fenced markdown is rejected.
+6. Deterministic ordering requirement:
    - sort issues by `line -> ruleId -> message`.
 
 ## Change Checklist
@@ -59,4 +60,3 @@
    - `packages/contracts/src/index.ts`
    - `docs/reference/agents-ssot.md`
    - `packages/md-validator/README.md`
-

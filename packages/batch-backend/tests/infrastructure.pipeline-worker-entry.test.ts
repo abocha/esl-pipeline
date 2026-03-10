@@ -1,3 +1,6 @@
+import fs from 'node:fs/promises';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { afterEach, describe, expect, it } from 'vitest';
 
 import {
@@ -94,6 +97,17 @@ describe('infrastructure/pipeline-worker-entry', () => {
     expect(error.name).toBe('INFRASTRUCTURE_ERROR');
     expect((error as { code?: string }).code).toBe('INFRASTRUCTURE_ERROR');
     expect((error as { causeName?: string }).causeName).toBeUndefined();
+  });
+
+  it('does not carry runtime fallback code that downgrades manifest storage to filesystem', async () => {
+    const sourcePath = path.resolve(
+      path.dirname(fileURLToPath(import.meta.url)),
+      '../src/infrastructure/pipeline-worker-entry.ts',
+    );
+    const source = await fs.readFile(sourcePath, 'utf8');
+
+    expect(source).not.toContain('falling back to filesystem manifest store');
+    expect(source).not.toContain("manifestStore: 'filesystem'");
   });
 
 });
