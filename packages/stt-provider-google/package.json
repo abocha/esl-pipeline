@@ -27,7 +27,7 @@
   "dependencies": {
     "@esl-pipeline/provider-runtime": "workspace:*",
     "@esl-pipeline/stt-core": "workspace:*",
-    "@google-cloud/speech": "^6.7.0",
+    "@google-cloud/speech": "^7.3.0",
     "@google-cloud/storage": "^7.17.0"
   },
   "devDependencies": {
