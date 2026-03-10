@@ -5,7 +5,7 @@
 This inventory enumerates live legacy contracts confirmed in the repo scan.
 Each surface appears once and maps to one backlog item ID.
 
-Schema reference: `docs/plans/legacy-retirement-backlog.md`.
+Schema reference: `docs/plans/legacy-retirement/legacy-retirement-backlog.md`.
 
 ## Inventory Table
 
@@ -17,7 +17,7 @@ Schema reference: `docs/plans/legacy-retirement-backlog.md`.
 | LR-004 | Manifest `audio` compatibility alias | Orchestrator reads legacy `audio` as fallback to `audioArtifacts.studyText` | Remove fallback read path after migration window; keep `audioArtifacts.*` only | data_compat | breaking | high | orchestrator + contracts | Manifest migration guide and fixture updates complete | `pnpm --filter @esl-pipeline/orchestrator test -- runtime.audio-artifacts.test.ts` | `docs/reference/pipeline-manifest.md`; `docs/reference/agents-ssot.md`; `docs/reference/V1_IMPLEMENTATION_TRACKER.md` | queued |
 | LR-005 | Env alias `GEN_BUDGET_EMERGENCY_OVERRIDE` | Env loader treats alias as equivalent to `GEN_ALLOW_PAID_SPEND` | Remove alias; canonical env var only with startup guidance | env | additive | medium | batch-backend | Ops runbook updated; env example cleanup completed | `pnpm --filter @esl-pipeline/batch-backend test -- config.env.test.ts` | `docs/reference/env.md`; `docs/reference/GENERATION_PROVIDER_POLICY.md`; `.env.example` | queued |
 | LR-006 | Legacy student-join fallback in jobs queries | Job repository coalesces student via legacy joins when `jobs.student_id` is null | Remove legacy joins after data backfill proves `jobs.student_id` completeness | runtime_internal | none | medium | batch-backend + db-migration | Data audit query confirms zero null legacy rows in prod-like env | `pnpm --filter @esl-pipeline/batch-backend test -- domain.job-repository.test.ts` | `docs/plans/postgres-hardening-offline-migration/*`; `docs/reference/agents-ssot.md` | queued |
-| LR-007 | Redis legacy broadcast channel | Event bridge publishes to targeted channel and legacy `CHANNEL_BASE` broadcast | Publish to targeted channel only; retire fallback broadcast | runtime_internal | none | low | batch-backend | SSE/consumer subscriptions verified on targeted channels | `pnpm --filter @esl-pipeline/batch-backend test -- infrastructure.job-event-redis-bridge.test.ts` | `docs/backend-frontend/BATCH_SYSTEM.md`; `docs/reference/agents-ssot.md` | queued |
+| LR-007 | Redis legacy broadcast channel | Event bridge publishes to targeted channel and legacy `CHANNEL_BASE` broadcast | Publish to targeted channel only; retire fallback broadcast | runtime_internal | none | low | batch-backend | SSE/consumer subscriptions verified on targeted channels | `pnpm --filter @esl-pipeline/batch-backend test -- infrastructure.job-event-redis-bridge.test.ts` | `docs/backend-frontend/BATCH_SYSTEM.md`; `docs/reference/agents-ssot.md` | done |
 | LR-008 | Settings legacy provider normalization | Settings repository normalizes stored `openai`/`azure` to `elevenlabs` | Remove legacy provider values from storage path; migration sanitizes historical rows | runtime_internal | none | low | batch-backend | One-time SQL cleanup for historical values reviewed and executed | `pnpm --filter @esl-pipeline/batch-backend test -- domain.settings-repository.test.ts` | `docs/reference/env.md`; `docs/reference/agents-ssot.md` | queued |
 | LR-009 | Auth env fallback constructor path | Auth service can be created from direct env fallback values | Require explicit config injection path only in runtime wiring | runtime_internal | none | low | batch-backend | Bootstrap wiring already passes validated config in all entrypoints | `pnpm --filter @esl-pipeline/batch-backend test -- infrastructure.auth-service.test.ts` | `docs/backend-frontend/batch-backend-ssot.md`; `docs/reference/agents-ssot.md` | queued |
 | LR-010 | File storage backward-compat migration helper | File storage service exposes `migrateFileToS3` compatibility helper | Retire helper once migration runbook marks filesystem migration complete | runtime_internal | none | low | batch-backend | Storage migration runbook complete and verified | `pnpm --filter @esl-pipeline/batch-backend test -- infrastructure.file-storage-service.test.ts` | `docs/operations/postgres-ops-health.md`; `docs/reference/agents-ssot.md` | queued |
@@ -28,4 +28,4 @@ Schema reference: `docs/plans/legacy-retirement-backlog.md`.
 ## Notes
 
 1. `breaking_level` indicates expected compatibility impact at retirement time, not current behavior.
-2. Required release label for each item is defined in `docs/plans/legacy-retirement-backlog.md`.
+2. Required release label for each item is defined in `docs/plans/legacy-retirement/legacy-retirement-backlog.md`.
