@@ -21,11 +21,6 @@ export interface ParseOptions {
   includePositions?: boolean;
 }
 
-const LEGACY_WARNING: PmdWarning = {
-  code: 'legacy-fenced-input',
-  message: 'Legacy fenced markdown is deprecated; remove the code fence.',
-};
-
 const LEAF_DIRECTIVES = new Set(['toc', 'audio', 'video']);
 
 interface MdastNode {
@@ -250,9 +245,6 @@ export function parsePmdDocument(markdown: string, opts: ParseOptions = {}): Pmd
   const normalized = normalizeMarkdownSource(markdown);
   const source = normalized.source;
   const format = normalized.format;
-  if (format === 'legacy-fenced') {
-    warnings.push({ ...LEGACY_WARNING });
-  }
 
   const { frontmatter, content } = parseFrontmatter(source);
   const preprocessed = preprocessDirectives(content);

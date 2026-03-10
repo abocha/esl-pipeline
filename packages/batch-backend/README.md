@@ -323,8 +323,8 @@ Request:
 - Body (`SubmitJobRequest`):
   - `md: string` (required)
     - Markdown lesson path/identifier; non-empty.
-  - `preset?: string` (optional)
-    - Forwarded as-is to orchestrator.
+  - `learningPresetId?: string` (optional)
+    - Canonical learning preset selector for submit/materialize flows.
   - `withTts?: boolean` (optional)
     - Persisted on the job; when omitted, current behavior treats it as `false` (no TTS).
   - `upload?: string` (optional)
@@ -380,7 +380,8 @@ Successful response (`200 OK`):
     "jobId": "string",
     "state": "queued | running | awaiting_approval | succeeded | failed",
     "md": "string or null",
-    "preset": "string or null",
+    "learningPresetId": "string or null",
+    "preset": "string or null (legacy)",
     "withTts": "boolean or null",
     "upload": "auto | s3 | none | null",
     "notionUrl": "string or null",
@@ -464,11 +465,11 @@ End-to-end flow:
      - Uses `expectedState='queued'` to enforce optimistic concurrency.
      - If transition fails (null), another worker has claimed it → abort.
    - On successful transition to `running`:
-     - Calls [`runAssignmentJob`](src/infrastructure/orchestrator-service.ts:62) with:
-       - `jobId`
-       - `md`
-       - `preset?`
-       - `withTts?`
+   - Calls [`runAssignmentJob`](src/infrastructure/orchestrator-service.ts:62) with:
+      - `jobId`
+      - `md`
+      - `learningPresetId?`
+      - `withTts?`
        - `upload: 's3'` only if requested.
        - `runId = jobId` for correlation.
 
@@ -511,7 +512,8 @@ Job record shape (Postgres and `GET /jobs/:jobId`):
 - `transcriptId?: string | null`
 - `promptPackageId?: string | null`
 - `draftId?: string | null`
-- `preset?: string | null`
+- `learningPresetId?: string | null`
+- `preset?: string | null` (legacy storage field for historical rows)
 - `withTts?: boolean | null`
 - `upload?: string | null`
 - `voiceId?: string | null`
@@ -573,7 +575,7 @@ curl -X POST http://localhost:8080/jobs \
   -H "Content-Type: application/json" \
   -d '{
     "md": "./lessons/mission.md",
-    "preset": "b1-default",
+    "learningPresetId": "general-english",
     "withTts": true,
     "upload": "s3"
   }'
@@ -649,7 +651,7 @@ async function submitLesson(mdPath: string): Promise<string> {
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
       md: mdPath,
-      preset: 'b1-default',
+      learningPresetId: 'general-english',
       withTts: true,
       upload: 's3',
     }),

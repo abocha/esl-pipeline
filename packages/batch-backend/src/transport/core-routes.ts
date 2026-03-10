@@ -46,7 +46,6 @@ export function registerCoreRoutes(app: FastifyInstance, options: CoreRouteOptio
 
     const jobSchema = z.object({
       md: z.string().min(1),
-      preset: z.string().optional(),
       learningPresetId: z.string().min(1).optional(),
       withTts: z.boolean().optional(),
       upload: z.enum(['auto', 's3', 'none']).optional(),
@@ -64,7 +63,6 @@ export function registerCoreRoutes(app: FastifyInstance, options: CoreRouteOptio
 
     const result = await submitJob({
       md: validatedData.md,
-      preset: validatedData.preset,
       learningPresetId: validatedData.learningPresetId,
       withTts: validatedData.withTts,
       upload: validatedData.upload,

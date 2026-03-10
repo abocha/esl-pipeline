@@ -29,7 +29,6 @@ async function validateMarkdownFile(
 
 function buildBaseDoc(firstSectionContent: string): string {
   return `
-\`\`\`markdown
 ---
 title: 'Homework Assignment: Conditionals Type 2'
 student: Anna
@@ -111,7 +110,6 @@ text
 :::toggle Teacher’s Follow-up Plan
 notes
 :::
-\`\`\`
   `.trim();
 }
 
@@ -128,10 +126,6 @@ function withPronunciationSection(doc: string, sectionContent: string): string {
       '## 6. ✅ Your Turn: Complete the Mission!',
     ].join('\n'),
   );
-}
-
-function withoutLegacyFence(doc: string): string {
-  return doc.replace(/^```markdown\n/, '').replace(/\n```$/, '');
 }
 
 function withStrictReadyFrontmatter(doc: string): string {
@@ -174,7 +168,6 @@ export function describeMdValidatorSuite(title: string, register: (ctx: any) => 
       validateMarkdownFile,
       withPronunciationSection,
       withStrictReadyFrontmatter,
-      withoutLegacyFence,
       writeFile,
     });
   });

@@ -87,11 +87,9 @@ describe('chunkDialogueInputs', () => {
     expect(byCount[1]?.chunkIndex).toBe(1);
   });
 
-  it('accepts legacy voice_id payloads for compatibility', () => {
+  it('rejects dialogue input without canonical voiceId', () => {
     const legacy = [{ text: 'Hello', voice_id: 'legacy_voice' }] as unknown as DialogueInput[];
-    const chunks = chunkDialogueInputs(legacy);
-    expect(chunks).toHaveLength(1);
-    expect(chunks[0]?.inputs[0]).toEqual({ text: 'Hello', voiceId: 'legacy_voice' });
+    expect(() => chunkDialogueInputs(legacy)).toThrow(/missing voiceId/i);
   });
 });
 

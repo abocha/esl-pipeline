@@ -10,7 +10,6 @@ describeMdValidatorSuite(
       await writeFile(
         file,
         `
-\`\`\`markdown
 ---
 title: Indented Test
 student: Leo
@@ -63,7 +62,6 @@ content
 :::toggle-heading Teacher's Follow-up Plan
 content
 :::
-\`\`\`
     `.trim(),
       );
 
@@ -78,7 +76,6 @@ content
       await writeFile(
         file,
         `
-\`\`\`markdown
 ---
 title: Closing Test
 student: Leo
@@ -134,7 +131,6 @@ content
 :::toggle-heading Teacher's Follow-up Plan
 content
 :::
-\`\`\`
     `.trim(),
       );
 

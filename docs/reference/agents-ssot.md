@@ -382,10 +382,14 @@ Boundary invariants:
 - Backend worker/process lifecycle behavior (IPC, cancellation relay, worker fallback strategy) MUST remain owned by batch-backend.
 - Batch-backend Redis job-event fanout MUST publish on targeted channels (`batch_job_events:<jobId>`) and use pattern subscriptions (`batch_job_events:*`) for all-jobs listeners.
 - Batch-backend job queries MUST resolve student ownership from `jobs.student_id` only; legacy coalesced joins across recordings/prompt packages/drafts are retired.
+- Batch-backend student APIs MUST remain DB-only and MUST NOT probe orchestrator `studentsDir` JSON at runtime; legacy student JSON is migration-tool input only.
 - Batch-backend file storage runtime MUST NOT expose filesystem-to-S3 migration helpers; uploaded-file provider migrations are explicit runbook/migration operations.
+- Batch-backend worker runtime MUST NOT downgrade manifest storage from S3 to filesystem on bucket/config errors; such configuration errors fail fast.
 - Batch-backend `user_settings.tts_provider` storage MUST stay canonical (`elevenlabs` or `google`); legacy provider values are migration-only and MUST NOT be reintroduced in runtime write paths.
 - Batch-backend auth middleware and `/auth/*` routes MUST use an injected `AuthService` created from validated runtime config, not ad-hoc environment fallback constructors.
 - Batch-backend student timeline type filters MUST use canonical timeline types only (for example `job_awaiting_approval`); legacy alias values are retired.
+- Batch-backend submit/materialize request contracts MUST use `learningPresetId`; legacy request field `preset` is retired from these write paths.
+- ElevenLabs dialogue synthesis inputs MUST use canonical `voiceId`; legacy `voice_id` alias is retired from local input contracts.
 - Shared helper logic duplicated across packages SHOULD be extracted into shared packages (for example `@esl-pipeline/shared-infrastructure`) when it is domain-neutral and reused by both sides.
 - Agents MUST consult the active ownership ledger before moving behavior across package boundaries:
   - `docs/reference/ORCHESTRATOR_OWNERSHIP_LEDGER.md`
@@ -433,14 +437,15 @@ For all subsections:
   - Output shapes relied upon by orchestrator MUST remain stable.
   - `validateMarkdown` input is backward-compatible and additive:
     - existing input forms (`path`, `markdown`, `context`) remain valid.
-    - optional preset context is supported: `learningPresetId`, `learningPresetVersion`, and legacy `preset`.
+    - optional preset context is canonical: `learningPresetId`, `learningPresetVersion`.
   - Ruleset resolution is deterministic:
     - known `learningPresetId` resolves to mapped ruleset.
     - unknown `learningPresetId` falls back to `general-english@v1` with warning issue.
-    - legacy `preset` maps to `general-english@v1`.
+    - legacy `preset` is ignored by ruleset resolution.
   - Response contract is additive:
     - legacy fields (`ok`, `errors`, `warnings`, `meta`, `voiceDiagnostics`) remain.
     - additive fields are optional: `issues`, `ruleset`.
+    - ruleset-resolution fallback metadata is emitted via `issues` and is not mirrored into `warnings`.
 - Safe extensions:
   - Adding new validation options is allowed if defaults remain backward compatible.
 
@@ -452,6 +457,7 @@ For all subsections:
   - Exports in [`packages/pmd/src/index.ts`](packages/pmd/src/index.ts).
 - Contracts:
   - Output format consumed by downstream stages MUST remain stable.
+  - Input contract is canonical frontmatter-at-byte-0; legacy fenced markdown acceptance is retired.
 - Safe extensions:
   - Additional metadata allowed if orchestrator either ignores or explicitly supports it.
 

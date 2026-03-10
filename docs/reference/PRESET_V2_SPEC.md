@@ -23,6 +23,8 @@
 6. Direct LLM generation is queued for WS2B-S1 now that preset plumbing and provider policy lock are complete.
 7. `hw_prompt_v4-4_voice-aligned` is flag-gated (`VOICE_ALIGNMENT_V2_PROMPT`) and must be
    materialized with a runtime voice-capability snapshot.
+8. Batch runtime submit/materialize contracts are canonical on `learningPresetId`; legacy request
+   field `preset` is retired.
 
 ## Execution Status (Current)
 

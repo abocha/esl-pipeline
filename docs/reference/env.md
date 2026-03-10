@@ -249,6 +249,7 @@ Notes:
 - Both orchestrator and batch-backend need `NOTION_TOKEN` and the provider-specific TTS credentials
   for whichever provider is selected.
 - For S3 manifests or uploads, set the `ESL_PIPELINE_MANIFEST_*` vars and `S3_*`/AWS creds together.
+- Worker runtime does not downgrade manifest storage to filesystem; missing/invalid manifest bucket configuration fails fast.
 - TTS strategy defaults can be provided via `ESL_TTS_PROVIDER_ELEVENLABS_STRATEGY` and related provider-scoped options; manifests now persist these for reruns.
 - Batch-backend persistence for `user_settings.tts_provider` is canonical-only (`elevenlabs` or `google`); legacy stored values (`openai`, `azure`) are migration-cleanup only.
 - Batch backend startup validates `FILESYSTEM_UPLOAD_DIR` and `PROMPT_*` allowlists; misconfigured paths fail fast.

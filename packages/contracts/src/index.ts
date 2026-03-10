@@ -126,7 +126,6 @@ export interface LearningPresetProvenance {
 
 export interface SubmitJobRequest {
   md: string;
-  preset?: string;
   learningPresetId?: string;
   withTts?: boolean;
   forceTts?: boolean;
@@ -142,7 +141,6 @@ export interface SubmitJobRequest {
 }
 
 export interface JobConfigOverrides {
-  preset?: string;
   learningPresetId?: string;
   notionDatabase?: string;
   publishTarget?: PublishTarget;

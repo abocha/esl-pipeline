@@ -40,16 +40,10 @@ export const DEFAULT_LEARNING_PRESET: LearningPresetOption = {
 
 export function normalizeLearningPresetId(input: {
   learningPresetId?: string | null;
-  preset?: string | null;
 }): string | null {
   const learningPresetId = input.learningPresetId?.trim();
   if (learningPresetId && learningPresetId.length > 0) {
     return learningPresetId;
-  }
-
-  const legacyPreset = input.preset?.trim();
-  if (legacyPreset && legacyPreset.length > 0) {
-    return DEFAULT_LEARNING_PRESET_ID;
   }
 
   return null;

@@ -161,6 +161,7 @@ export interface UpdateJobMetadataParams {
   id: string;
   expectedState?: JobState;
   preset?: string;
+  learningPresetId?: string;
   notionDatabase?: string;
   publishTarget?: PublishTarget;
   withTts?: boolean;
@@ -843,6 +844,11 @@ export async function updateJobMetadata(
   if (params.preset !== undefined) {
     values.push(params.preset);
     updates.push(`preset = $${values.length}`);
+  }
+
+  if (params.learningPresetId !== undefined) {
+    values.push(params.learningPresetId);
+    updates.push(`learning_preset_id = $${values.length}`, 'preset = NULL');
   }
 
   if (params.notionDatabase !== undefined) {

@@ -83,7 +83,6 @@ describe('application/submit-job', () => {
     expect(insertJobSpy).toHaveBeenCalledTimes(1);
     expect(insertJobSpy).toHaveBeenCalledWith({
       md: request.md,
-      preset: request.preset,
       learningPresetId: null,
       learningPresetVersion: null,
       promptSnapshotVersion: null,
@@ -143,7 +142,7 @@ describe('application/submit-job', () => {
 
     await submitJob({
       md: fakeJob.md,
-      preset: fakeJob.preset!,
+      learningPresetId: 'general-english',
       withTts: fakeJob.withTts!,
       upload: fakeJob.upload as 's3',
       voiceId: fakeJob.voiceId,
@@ -155,7 +154,6 @@ describe('application/submit-job', () => {
 
     expect(insertJobSpy).toHaveBeenCalledWith({
       md: fakeJob.md,
-      preset: fakeJob.preset,
       learningPresetId: 'general-english',
       learningPresetVersion: 'v1',
       promptSnapshotVersion: 'hw_prompt_v4-2_clean',
@@ -209,7 +207,6 @@ describe('application/submit-job', () => {
 
     expect(insertJobSpy).toHaveBeenCalledWith({
       md: fakeJob.md,
-      preset: undefined,
       learningPresetId: 'general-english',
       learningPresetVersion: 'v1',
       promptSnapshotVersion: 'hw_prompt_v4-2_clean',
