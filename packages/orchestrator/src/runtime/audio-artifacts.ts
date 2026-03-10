@@ -1,8 +1,8 @@
-import type { AssignmentManifest } from '../manifest.js';
+import type { AssignmentManifest, AudioArtifactManifest } from '../manifest.js';
 import type { PipelineMetrics } from '../observability.js';
 
 export type AudioArtifactKind = 'study_text' | 'pronunciation_shadow_sentence';
-export type AudioArtifact = NonNullable<AssignmentManifest['audio']>;
+export type AudioArtifact = AudioArtifactManifest;
 
 export interface AudioArtifacts {
   studyText?: AudioArtifact;
@@ -18,7 +18,7 @@ export function resolveAudioArtifactsFromManifest(
 ): AudioArtifacts {
   if (!manifest) return {};
   return {
-    studyText: cloneAudioArtifact(manifest.audioArtifacts?.studyText ?? manifest.audio),
+    studyText: cloneAudioArtifact(manifest.audioArtifacts?.studyText),
     pronunciationShadowSentence: cloneAudioArtifact(manifest.audioArtifacts?.pronunciationShadowSentence),
   };
 }

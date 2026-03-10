@@ -79,7 +79,7 @@ export function computeRerunPlan(input: PlannerInput): RerunPlanResult {
   const planned = new Set<RerunTargetStage>(requested);
   const publishTarget = input.manifest.publishTarget ?? 'notion';
   const requiresAudioForPublish = publishTarget === 'notion' || publishTarget === 'anytype';
-  const studyAudio = input.manifest.audioArtifacts?.studyText ?? input.manifest.audio;
+  const studyAudio = input.manifest.audioArtifacts?.studyText;
   const pronunciationAudio = input.manifest.audioArtifacts?.pronunciationShadowSentence;
   const hasAnyAudioPath = Boolean(studyAudio?.path || pronunciationAudio?.path);
   const hasAnyAudioUrl = Boolean(studyAudio?.url || pronunciationAudio?.url);

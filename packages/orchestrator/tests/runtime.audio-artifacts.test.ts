@@ -20,16 +20,7 @@ describe('runtime/audio-artifacts', () => {
     );
   });
 
-  it('resolves artifact views from manifests including legacy audio alias', () => {
-    const legacy = resolveAudioArtifactsFromManifest({
-      mdHash: 'hash',
-      timestamp: '2026-03-09T00:00:00.000Z',
-      audio: { path: '/tmp/legacy.mp3', url: 'https://legacy.example.com/audio.mp3' },
-    });
-
-    expect(legacy.studyText?.path).toBe('/tmp/legacy.mp3');
-    expect(legacy.pronunciationShadowSentence).toBeUndefined();
-
+  it('resolves artifact views from manifests with canonical audioArtifacts payload', () => {
     const modern = resolveAudioArtifactsFromManifest({
       mdHash: 'hash',
       timestamp: '2026-03-09T00:00:00.000Z',
