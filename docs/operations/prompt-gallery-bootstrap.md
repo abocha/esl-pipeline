@@ -10,7 +10,7 @@
 - Status: `runbook`.
 
 Prompt templates and profiles are now runtime-managed from PostgreSQL revision tables.
-Backend startup validates DB prompt catalog readiness and fails if defaults are not active.
+Backend startup validates DB prompt catalog readiness and logs warnings when defaults are missing, so services can start while operators run bootstrap.
 
 ## Required bootstrap commands
 
@@ -35,14 +35,14 @@ pnpm --filter @esl-pipeline/batch-backend run prompt-assets:bootstrap
 - Activates imported revision when an asset has no active revision.
 - Verifies configured defaults are present and active.
 
-## Startup failure mode
+## Startup warning mode
 
-If backend startup fails with prompt catalog readiness/config errors:
+If backend startup logs prompt catalog readiness/config warnings:
 
 1. Run `prompt-assets:bootstrap:dry` and inspect discovery output.
 2. Confirm configured defaults are discovered.
 3. Run `prompt-assets:bootstrap`.
-4. Restart backend and worker.
+4. Restart backend and worker after bootstrap to clear readiness warnings.
 
 ## Archive semantics (no hard delete)
 

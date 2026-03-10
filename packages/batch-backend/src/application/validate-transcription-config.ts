@@ -74,21 +74,35 @@ async function validatePromptAssets(
   try {
     const options = await promptOptionsLoader({ config });
     if (options.templates.length === 0 || options.profiles.length === 0) {
-      throw new ConfigurationError(
+      await logPromptCatalogStartupWarning(
         `Prompt catalog is empty. Run ${bootstrapCommand} before starting backend services.`,
       );
+      return;
     }
     if (!options.defaults.templateId || !options.defaults.profileId) {
-      throw new ConfigurationError(
+      await logPromptCatalogStartupWarning(
         `Prompt defaults are not active in the DB catalog. Run ${bootstrapCommand} to seed and activate defaults.`,
       );
+      return;
     }
   } catch (error) {
     if (error instanceof PromptOptionError) {
-      throw new ConfigurationError(`Prompt configuration invalid: ${error.message}`, {
-        cause: error,
-      });
+      await logPromptCatalogStartupWarning(`Prompt configuration invalid: ${error.message}`);
+      return;
     }
-    throw error;
+    await logPromptCatalogStartupWarning(
+      `Prompt catalog startup validation skipped due to unexpected error: ${String(error)}`,
+    );
+  }
+}
+
+async function logPromptCatalogStartupWarning(message: string): Promise<void> {
+  try {
+    const { logger } = await import('../infrastructure/logger.js');
+    logger.warn(message, {
+      event: 'prompt_catalog_startup_validation_warning',
+    });
+  } catch {
+    console.warn(`[prompt_catalog_startup_validation_warning] ${message}`);
   }
 }
