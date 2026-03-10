@@ -381,7 +381,7 @@ describe('config/env - generation provider mapping', () => {
     ).rejects.toThrow('GEN_SAFETY_MODE must be one of: off, warn, hard_stop');
   });
 
-  it('enables emergency override via GEN_ALLOW_PAID_SPEND alias', async () => {
+  it('enables emergency override via GEN_ALLOW_PAID_SPEND', async () => {
     await withEnv(
       {
         NODE_ENV: 'test',
@@ -390,6 +390,19 @@ describe('config/env - generation provider mapping', () => {
       async () => {
         const cfg = await loadConfigFresh();
         expect(cfg.generation.budgetEmergencyOverride).toBe(true);
+      },
+    );
+  });
+
+  it('ignores deprecated GEN_BUDGET_EMERGENCY_OVERRIDE alias', async () => {
+    await withEnv(
+      {
+        NODE_ENV: 'test',
+        GEN_BUDGET_EMERGENCY_OVERRIDE: 'true',
+      },
+      async () => {
+        const cfg = await loadConfigFresh();
+        expect(cfg.generation.budgetEmergencyOverride).toBe(false);
       },
     );
   });
