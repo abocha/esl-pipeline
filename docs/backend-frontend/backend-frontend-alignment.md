@@ -5,7 +5,7 @@
 - Audience: AI agents and maintainers coordinating backend/frontend delivery.
 - Read Time: 8 minutes.
 - Authority Level: Canonical status tracker (human-readable).
-- Last Verified Against: 2026-03-04 repo state.
+- Last Verified Against: 2026-03-10 repo state.
 - Owner: backend/frontend maintainers + automation agents.
 - Review Cadence: weekly while active roadmap work continues.
 - Status: `active`.
@@ -54,6 +54,9 @@
    `budget_exceeded` transport/UI surfacing, and quota-window rollover-safe generation gating.
 9. Prompt gallery runtime is DB-canonical: prompt options/defaults resolve from active DB revisions
    with startup bootstrap/readiness checks.
+10. STT architecture now mirrors TTS with provider adapters (`deepgram`, `elevenlabs`, `google`),
+    canonical transcript provider persistence (`transcripts.stt_provider`), and metadata-driven STT
+    selector defaults in frontend job options flow.
 
 ## Capability Matrix
 
@@ -65,6 +68,8 @@
 | Transcript read (`GET /recordings/:id/transcript`)                                         | Done    | Done     | Recording transcript routes                   | None.                                               |
 | Transcript update (`PUT /recordings/:id/transcript`)                                       | Done    | Done     | Recording transcript routes                   | None.                                               |
 | Manual transcription retry (`POST /recordings/:id/transcribe`)                             | Done    | Done     | Recording transcribe route                    | None.                                               |
+| STT provider metadata (`sttProviders`, `defaultSttProvider`) + selector wiring             | Done    | Done     | `/config/job-options` additive STT metadata   | Keep provider/model defaults aligned with env policy. |
+| Transcript provider identity persistence (`transcripts.stt_provider`)                       | Done    | Partial  | Transcript repository + transcript payloads    | Historical rows are backfilled; no text artifact rewrite. |
 | Prompt options (`GET /config/prompts`)                                                     | Done    | Done     | Config routes + frontend prompt step          | Keep allowlists synchronized with storage roots.    |
 | Prompt package create/read                                                                 | Done    | Done     | Prompt-package routes                         | None.                                               |
 | Prompt capability provenance (`voiceCapabilitiesGeneratedAt/hash`)                         | Done    | Partial  | Prompt-package response + lineage payload     | Frontend can surface provenance metadata in inspector views. |

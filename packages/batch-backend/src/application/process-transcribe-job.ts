@@ -1,15 +1,20 @@
 import { randomUUID } from 'node:crypto';
-import type { Readable } from 'node:stream';
 
-import { ElevenLabsClient } from '@elevenlabs/elevenlabs-js';
+import type { SttProviderId } from '@esl-pipeline/contracts';
+import { classifyProviderRuntimeFailure } from '@esl-pipeline/provider-runtime';
+import {
+  formatSpeakerLabel,
+  formatTranscriptFromSegments,
+  type SttTranscriptionResult,
+  transcribeAudio,
+} from '@esl-pipeline/stt-core';
 
 import type { BatchBackendConfig } from '../config/env.js';
 import { loadConfig } from '../config/env.js';
 import { publishRecordingEvent } from '../domain/recording-events.js';
 import { getRecordingById, updateRecordingStatus } from '../domain/recording-repository.js';
-import { type TranscriptMode, type TranscriptRecord } from '../domain/transcript-model.js';
+import { type TranscriptRecord } from '../domain/transcript-model.js';
 import { getTranscriptByRecordingId, insertTranscript } from '../domain/transcript-repository.js';
-import { createDeepgramClient } from '../infrastructure/deepgram-client.js';
 import { createJobLogger } from '../infrastructure/logger.js';
 import type { TranscribeQueuePayload } from '../infrastructure/transcribe-queue.js';
 import type { TranscriptionStorage } from '../infrastructure/transcription-storage.js';
@@ -17,95 +22,11 @@ import {
   createTranscriptionStorage,
   createTranscriptionStorageForUri,
 } from '../infrastructure/transcription-storage.js';
-
-interface DeepgramResult {
-  metadata?: Record<string, unknown>;
-  results?: {
-    channels?: {
-      alternatives?: {
-        transcript?: string;
-        words?: {
-          end?: number;
-          speaker?: number;
-          start?: number;
-          punctuated_word?: string;
-          word?: string;
-        }[];
-      }[];
-    }[];
-    utterances?: {
-      channel?: number;
-      end?: number;
-      transcript?: string;
-      speaker?: number;
-      start?: number;
-    }[];
-  };
-}
-
-interface RetryableStatusError {
-  status?: unknown;
-  statusCode?: unknown;
-}
-
-interface DeepgramAcceptedResponseLike {
-  request_id?: unknown;
-}
-
-function resolveSttProvider(
-  requested: string | undefined,
-  fallback: 'deepgram' | 'elevenlabs',
-): 'deepgram' | 'elevenlabs' {
-  if (!requested) return fallback;
-  if (requested === 'deepgram' || requested === 'elevenlabs') {
-    return requested;
-  }
-  return fallback;
-}
-
-function isDeepgramAcceptedResponse(value: unknown): value is DeepgramAcceptedResponseLike {
-  if (!value || typeof value !== 'object') return false;
-  return typeof (value as DeepgramAcceptedResponseLike).request_id === 'string';
-}
-
-function asError(error: unknown, fallbackMessage: string): Error {
-  if (error instanceof Error) return error;
-  if (typeof error === 'string') return new Error(error);
-  if (error && typeof error === 'object' && 'message' in error) {
-    const message = (error as { message?: unknown }).message;
-    if (typeof message === 'string' && message.trim()) {
-      return new Error(message);
-    }
-  }
-  return new Error(fallbackMessage);
-}
-
-function resolveDeepgramResponse(value: unknown): DeepgramResult {
-  if (isDeepgramAcceptedResponse(value)) {
-    const requestId = String(value.request_id);
-    throw new Error(
-      `Deepgram returned async accepted response (request_id=${requestId}); synchronous transcription response is required.`,
-    );
-  }
-
-  return asDeepgramResult(value);
-}
+import { ensureSttProvidersRegistered } from './stt-provider-registry.js';
 
 export interface TranscribeDependencies {
   config: BatchBackendConfig;
   storage: TranscriptionStorage;
-  deepgramClient: {
-    listen: {
-      v1: {
-        media: {
-          transcribeFile: (
-            stream: Readable,
-            options: Record<string, unknown>,
-          ) => Promise<unknown>;
-        };
-      };
-    };
-  };
   recordings: {
     getById: typeof getRecordingById;
     updateStatus: typeof updateRecordingStatus;
@@ -115,11 +36,15 @@ export interface TranscribeDependencies {
     insert: typeof insertTranscript;
   };
   publishEvent: typeof publishRecordingEvent;
+  sttTranscribe: typeof transcribeAudio;
 }
 
 export function resolveElevenLabsSttApiKey(config: BatchBackendConfig): string {
   return (
+    config.stt.providers.elevenlabs.apiKey ??
     config.orchestrator.elevenLabsApiKey ??
+    process.env.ESL_STT_PROVIDER_ELEVENLABS_API_KEY ??
+    process.env.ESL_STT_PROVIDER_ELEVENLABS_API_TOKEN ??
     process.env.ELEVENLABS_API_KEY ??
     process.env.ELEVENLABS_API_TOKEN ??
     ''
@@ -133,12 +58,6 @@ export async function processTranscribeJob(
   const config = overrides?.config ?? loadConfig();
   const log = createJobLogger(payload.recordingId);
   const storage = overrides?.storage ?? createTranscriptionStorage();
-  const deepgramClient =
-    overrides?.deepgramClient ??
-    createDeepgramClient({
-      apiKey: config.deepgram.apiKey,
-      accessToken: config.deepgram.accessToken,
-    });
   const recordings = overrides?.recordings ?? {
     getById: getRecordingById,
     updateStatus: updateRecordingStatus,
@@ -148,6 +67,9 @@ export async function processTranscribeJob(
     insert: insertTranscript,
   };
   const publishEvent = overrides?.publishEvent ?? publishRecordingEvent;
+  const sttTranscribe = overrides?.sttTranscribe ?? transcribeAudio;
+
+  ensureSttProvidersRegistered();
 
   const recording = await recordings.getById(payload.recordingId);
   if (!recording) {
@@ -178,57 +100,21 @@ export async function processTranscribeJob(
 
   const mode = config.transcription.mode;
   const transcriptId = randomUUID();
+  const sttProvider = resolveSttProvider(payload.sttProvider, config.transcription.sttProvider);
 
   try {
-    const readStorage =
-      overrides?.storage ?? createTranscriptionStorageForUri(recording.storageUri);
-
-    const sttProvider = resolveSttProvider(payload.sttProvider, config.transcription.sttProvider);
-    let transcriptText: string;
-    let rawResponse: unknown = null;
-    let summaryJson: Record<string, unknown> | null = null;
-    let transcriptSegments: TranscriptSegment[] = [];
-    let provider: string;
-    let usedFallback = false;
-
-    if (sttProvider === 'elevenlabs') {
-      const elevenApiKey = resolveElevenLabsSttApiKey(config);
-      const { text, segments, raw, fallbackUsed } = await transcribeWithElevenLabs({
-        storage: readStorage,
+    const readStorage = overrides?.storage ?? createTranscriptionStorageForUri(recording.storageUri);
+    const transcription = await sttTranscribe({
+      provider: sttProvider,
+      context: {
+        recordingId: recording.id,
         storageUri: recording.storageUri,
-        apiKey: elevenApiKey,
-      });
-      transcriptText = formatElevenLabsTranscript(text, segments, mode);
-      transcriptSegments = segments;
-      rawResponse = raw;
-      summaryJson = {
-        provider: 'elevenlabs',
-        segmentCount: segments.length,
-        fallbackUsed,
-      };
-      provider = 'elevenlabs';
-      usedFallback = fallbackUsed;
-    } else {
-      const { result, fallbackUsed } = await transcribeWithDeepgram({
-        client: deepgramClient,
-        storage: readStorage,
-        storageUri: recording.storageUri,
-        model: config.deepgram.model,
-        language: config.deepgram.language,
-      });
-      const segments = mergeSegments(getTranscriptSegments(result));
-      transcriptText = formatTranscriptFromSegments(getRawTranscript(result), segments, mode);
-      transcriptSegments = segments;
-      rawResponse = result;
-      const deepgramSummary = buildSummary(result);
-      summaryJson = {
-        ...deepgramSummary,
-        provider: 'deepgram',
-        segmentCount: segments.length,
-      };
-      provider = 'deepgram';
-      usedFallback = fallbackUsed;
-    }
+        getStream: () => readStorage.getStream(recording.storageUri),
+      },
+      configByProvider: buildSttProviderConfig(config),
+    });
+
+    const transcriptText = formatTranscriptFromSegments(transcription.text, transcription.segments, mode);
 
     const transcriptStored = await storage.putTranscript({
       transcriptId,
@@ -236,16 +122,22 @@ export async function processTranscribeJob(
     });
 
     let rawResponseUri: string | null = null;
-    if (config.deepgram.storeRawResponse && rawResponse !== null) {
+    if (config.stt.storeRawResponse && transcription.rawResponse !== null) {
       const rawStored = await storage.putRawResponse({
         transcriptId,
-        json: rawResponse,
+        json: transcription.rawResponse,
       });
       rawResponseUri = rawStored.uri;
     }
 
-    const speakerTracks = buildSpeakerTracks(transcriptSegments);
-    let speakerTracksUri: string | null = null;
+    const speakerTracks = buildSpeakerTracks(transcription.segments);
+    let summaryJson: Record<string, unknown> = {
+      ...(transcription.summary ?? undefined),
+      provider: transcription.provider,
+      segmentCount: transcription.segments.length,
+      fallbackUsed: transcription.fallbackUsed,
+    };
+
     if (speakerTracks.tracks.length > 0) {
       const speakerTrackTranscripts: {
         speaker: number;
@@ -268,12 +160,10 @@ export async function processTranscribeJob(
         transcriptId: `${transcriptId}-speaker-tracks`,
         json: speakerTracks,
       });
-      speakerTracksUri = storedTracks.uri;
-      const summary = summaryJson ? { ...summaryJson } : {};
       summaryJson = {
-        ...summary,
+        ...summaryJson,
         speakerTracks: {
-          uri: speakerTracksUri,
+          uri: storedTracks.uri,
           transcripts: speakerTrackTranscripts,
           speakers: speakerTracks.tracks.map((track) => ({
             speaker: track.speaker,
@@ -291,9 +181,10 @@ export async function processTranscribeJob(
       storageUri: transcriptStored.uri,
       rawResponseUri,
       mode,
-      model: provider === 'elevenlabs' ? ELEVENLABS_STT_MODEL : config.deepgram.model,
-      language: provider === 'elevenlabs' ? 'auto' : config.deepgram.language,
-      fallbackUsed: usedFallback,
+      model: transcription.model,
+      language: transcription.language,
+      sttProvider: transcription.provider,
+      fallbackUsed: transcription.fallbackUsed,
       summaryJson,
     });
 
@@ -313,14 +204,21 @@ export async function processTranscribeJob(
 
     log.info('Recording transcribed', {
       transcriptId: transcriptRecord.id,
-      fallbackUsed: usedFallback,
-      provider,
+      fallbackUsed: transcription.fallbackUsed,
+      provider: transcription.provider,
       mode,
     });
 
     return transcriptRecord;
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
+    const statusCode = extractStatusCode(error);
+    const providerCategory = classifyProviderRuntimeFailure({
+      provider: sttProvider,
+      message,
+      ...(statusCode === null ? {} : { status: statusCode }),
+    });
+
     const failed = await recordings.updateStatus({
       id: recording.id,
       status: 'failed',
@@ -333,522 +231,54 @@ export async function processTranscribeJob(
 
     log.error(error instanceof Error ? error : String(error), {
       event: 'recording_transcribe_failed',
+      provider: sttProvider,
+      providerCategory,
     });
 
     throw error;
   }
 }
 
-async function transcribeWithDeepgram(args: {
-  client: TranscribeDependencies['deepgramClient'];
-  storage: TranscriptionStorage;
-  storageUri: string;
-  model: string;
-  language: string;
-}): Promise<{ result: DeepgramResult; fallbackUsed: boolean }> {
-  const primaryOptions = {
-    model: args.model,
-    language: args.language,
-    multichannel: true,
-    punctuate: true,
-    smart_format: true,
-    utterances: true,
+function resolveSttProvider(requested: SttProviderId | undefined, fallback: SttProviderId): SttProviderId {
+  if (!requested) return fallback;
+  return requested;
+}
+
+function buildSttProviderConfig(
+  config: BatchBackendConfig,
+): Partial<Record<SttProviderId, Record<string, unknown>>> {
+  return {
+    deepgram: {
+      apiKey: config.stt.providers.deepgram.apiKey,
+      accessToken: config.stt.providers.deepgram.accessToken,
+      model: config.stt.providers.deepgram.model,
+      language: config.stt.providers.deepgram.language,
+    },
+    elevenlabs: {
+      apiKey: resolveElevenLabsSttApiKey(config),
+      modelId: config.stt.providers.elevenlabs.model,
+    },
+    google: {
+      projectId: config.stt.providers.google.projectId,
+      location: config.stt.providers.google.location,
+      recognizer: config.stt.providers.google.recognizer,
+      model: config.stt.providers.google.model,
+      languageCodes: config.stt.providers.google.languageCodes,
+      gcsStagingBucket: config.stt.providers.google.gcsStagingBucket,
+      gcsStagingPrefix: config.stt.providers.google.gcsStagingPrefix,
+    },
   };
-  const fallbackOptions = {
-    model: args.model,
-    language: args.language,
-    diarize: true,
-    utterances: true,
-    punctuate: true,
-    smart_format: true,
-  };
-
-  try {
-    const primaryResult = await transcribeAttempt(args, primaryOptions);
-    const channelCount = getChannelCount(primaryResult);
-    if (channelCount === 1) {
-      try {
-        const fallbackResult = await transcribeAttempt(args, fallbackOptions);
-        return { result: fallbackResult, fallbackUsed: true };
-      } catch {
-        return { result: primaryResult, fallbackUsed: false };
-      }
-    }
-
-    return { result: primaryResult, fallbackUsed: false };
-  } catch (primaryError) {
-    try {
-      const fallbackResult = await transcribeAttempt(args, fallbackOptions);
-      return { result: fallbackResult, fallbackUsed: true };
-    } catch (fallbackError) {
-      throw asError(fallbackError ?? primaryError, 'Deepgram transcription failed');
-    }
-  }
 }
 
-interface ElevenLabsWord {
-  text?: string;
-  speakerId?: string | null;
-  speaker_id?: string | null;
-  start?: number;
-  end?: number;
-  type?: string;
-  channelIndex?: number;
-  channel_index?: number;
-}
-
-interface ElevenLabsChannelTranscript {
-  text?: string;
-  words?: ElevenLabsWord[];
-  channelIndex?: number;
-  channel_index?: number;
-}
-
-interface ElevenLabsMultichannelResponse {
-  transcripts?: ElevenLabsChannelTranscript[];
-  text?: string;
-}
-
-interface ElevenLabsTranscriptResult {
-  text: string;
-  segments: TranscriptSegment[];
-  raw: unknown;
-  fallbackUsed: boolean;
-}
-
-interface TranscriptSegment {
-  text: string;
-  speaker?: number;
-  start?: number;
-  end?: number;
-}
-
-async function transcribeWithElevenLabs(args: {
-  storage: TranscriptionStorage;
-  storageUri: string;
-  apiKey: string;
-}): Promise<ElevenLabsTranscriptResult> {
-  if (!args.apiKey.trim()) {
-    throw new Error('ELEVENLABS_API_KEY is required when STT_PROVIDER=elevenlabs');
-  }
-
-  const client = new ElevenLabsClient({ apiKey: args.apiKey });
-  const stream = await args.storage.getStream(args.storageUri);
-
-  // Collect the stream into a Buffer
-  const chunks: Buffer[] = [];
-  await new Promise<void>((resolve, reject) => {
-    (stream as NodeJS.ReadableStream).on('data', (chunk: Buffer | string) => {
-      chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
-    });
-    (stream as NodeJS.ReadableStream).on('end', resolve);
-    (stream as NodeJS.ReadableStream).on('error', reject);
-  });
-  stream.destroy();
-
-  const audioBuffer = Buffer.concat(chunks);
-  const blob = new Blob([audioBuffer], { type: 'audio/mpeg' });
-
-  let primaryResponse: unknown;
-  let primaryError: unknown;
-  try {
-    primaryResponse = await client.speechToText.convert({
-      file: blob,
-      modelId: ELEVENLABS_STT_MODEL,
-      useMultiChannel: true,
-      diarize: false,
-      timestampsGranularity: 'word',
-    });
-  } catch (error) {
-    primaryError = error;
-  }
-
-  if (primaryResponse !== undefined) {
-    const multichannel = parseElevenLabsMultichannel(primaryResponse);
-    if (multichannel && multichannel.segments.length > 0) {
-      return {
-        text: multichannel.text,
-        segments: multichannel.segments,
-        raw: primaryResponse,
-        fallbackUsed: false,
-      };
-    }
-
-    try {
-      const fallbackResponse = await client.speechToText.convert({
-        file: blob,
-        modelId: ELEVENLABS_STT_MODEL,
-        diarize: true,
-        timestampsGranularity: 'word',
-      });
-      const fallbackParsed = parseElevenLabsSingleChannel(fallbackResponse);
-      return {
-        text: fallbackParsed.text,
-        segments: fallbackParsed.segments,
-        raw: fallbackResponse,
-        fallbackUsed: true,
-      };
-    } catch (fallbackError) {
-      if (multichannel) {
-        return {
-          text: multichannel.text,
-          segments: multichannel.segments,
-          raw: primaryResponse,
-          fallbackUsed: false,
-        };
-      }
-      throw asError(fallbackError, 'ElevenLabs transcription failed');
-    }
-  }
-
-  try {
-    const fallbackResponse = await client.speechToText.convert({
-      file: blob,
-      modelId: ELEVENLABS_STT_MODEL,
-      diarize: true,
-      timestampsGranularity: 'word',
-    });
-    const fallbackParsed = parseElevenLabsSingleChannel(fallbackResponse);
-    return {
-      text: fallbackParsed.text,
-      segments: fallbackParsed.segments,
-      raw: fallbackResponse,
-      fallbackUsed: true,
-    };
-  } catch (fallbackError) {
-    throw asError(fallbackError ?? primaryError, 'ElevenLabs transcription failed');
-  }
-}
-
-function formatElevenLabsTranscript(
-  rawText: string,
-  segments: TranscriptSegment[],
-  mode: TranscriptMode,
-): string {
-  return formatTranscriptFromSegments(rawText, segments, mode);
-}
-
-function parseElevenLabsMultichannel(
-  response: unknown,
-): { text: string; segments: TranscriptSegment[] } | null {
-  const transcripts = (response as ElevenLabsMultichannelResponse | null | undefined)?.transcripts;
-  if (!Array.isArray(transcripts) || transcripts.length === 0) {
-    return null;
-  }
-
-  const wordsWithContext: {
-    word: ElevenLabsWord;
-    channelIndex?: number;
-  }[] = [];
-
-  for (const transcript of transcripts) {
-    const transcriptChannelIndex = normalizeElevenLabsChannelIndex(
-      transcript.channelIndex ?? transcript.channel_index,
-    );
-    const words = transcript.words;
-    if (!Array.isArray(words) || words.length === 0) continue;
-    for (const word of words) {
-      wordsWithContext.push({ word, channelIndex: transcriptChannelIndex });
-    }
-  }
-
-  const text = transcripts
-    .map((transcript) => transcript.text?.trim() ?? '')
-    .filter((value) => value.length > 0)
-    .join(' ')
-    .trim() || ((response as ElevenLabsMultichannelResponse | null | undefined)?.text?.trim() ?? '');
-
-  const segments = buildElevenLabsSegments(wordsWithContext);
-  return { text, segments };
-}
-
-function parseElevenLabsSingleChannel(response: unknown): {
-  text: string;
-  segments: TranscriptSegment[];
-} {
-  const words: ElevenLabsWord[] = (response as { words?: ElevenLabsWord[] }).words ?? [];
-  const text = (response as { text?: string }).text?.trim() ?? '';
-  const segments = buildElevenLabsSegments(words.map((word) => ({ word })));
-  return { text, segments };
-}
-
-function buildElevenLabsSegments(
-  wordsWithContext: { word: ElevenLabsWord; channelIndex?: number }[],
-): TranscriptSegment[] {
-  if (wordsWithContext.length === 0) {
-    return [];
-  }
-
-  const timelineWords: {
-    order: number;
-    text: string;
-    speaker: number | undefined;
-    start: number | undefined;
-    end: number | undefined;
-  }[] = [];
-
-  for (const [index, entry] of wordsWithContext.entries()) {
-    const { word } = entry;
-    if (word.type === 'spacing') continue;
-    const text = word.text?.trim() ?? '';
-    if (!text) continue;
-    const speaker = resolveElevenLabsSpeakerIndex(word, entry.channelIndex);
-    const start = typeof word.start === 'number' ? word.start : undefined;
-    const end = typeof word.end === 'number' ? word.end : start;
-    timelineWords.push({
-      order: index,
-      text,
-      speaker,
-      start,
-      end,
-    });
-  }
-
-  timelineWords.sort((left, right) => {
-    const leftStart = typeof left.start === 'number' ? left.start : Number.POSITIVE_INFINITY;
-    const rightStart = typeof right.start === 'number' ? right.start : Number.POSITIVE_INFINITY;
-    if (leftStart !== rightStart) return leftStart - rightStart;
-    return left.order - right.order;
-  });
-
-  if (timelineWords.length === 0) {
-    return [];
-  }
-
-  const segments: TranscriptSegment[] = [];
-  let current: TranscriptSegment | null = null;
-
-  for (const item of timelineWords) {
-    if (
-      current &&
-      current.speaker === item.speaker &&
-      getGapSeconds(current.end, item.start) <= UTTERANCE_GAP_SEC
-    ) {
-      current.text = `${current.text} ${item.text}`.trim();
-      current.end = item.end ?? current.end;
-      continue;
-    }
-
-    if (current) {
-      segments.push(current);
-    }
-    current = {
-      text: item.text,
-      speaker: item.speaker,
-      start: item.start,
-      end: item.end,
-    };
-  }
-
-  if (current) {
-    segments.push(current);
-  }
-
-  return normalizeSegmentEnds(segments);
-}
-
-function resolveElevenLabsSpeakerIndex(word: ElevenLabsWord, channelIndex?: number): number | undefined {
-  const speakerId = resolveElevenLabsSpeakerId(word);
-  const fromSpeaker = parseElevenLabsSpeakerId(speakerId);
-  if (typeof fromSpeaker === 'number') return fromSpeaker;
-
-  const fromWordChannel = normalizeElevenLabsChannelIndex(word.channelIndex ?? word.channel_index);
-  if (typeof fromWordChannel === 'number') return fromWordChannel;
-  if (typeof channelIndex === 'number') return channelIndex;
-  return undefined;
-}
-
-function resolveElevenLabsSpeakerId(word: ElevenLabsWord): string | null {
-  if (typeof word.speakerId === 'string') return word.speakerId;
-  if (typeof word.speaker_id === 'string') return word.speaker_id;
-  return null;
-}
-
-function parseElevenLabsSpeakerId(speakerId: string | null): number | undefined {
-  if (!speakerId) return undefined;
-  const match = /(\d+)$/.exec(speakerId);
-  if (!match?.[1]) return undefined;
-  return Number.parseInt(match[1], 10);
-}
-
-function normalizeElevenLabsChannelIndex(value: unknown): number | undefined {
-  return typeof value === 'number' && Number.isFinite(value) ? value : undefined;
-}
-
-async function transcribeAttempt(
-  args: {
-    client: TranscribeDependencies['deepgramClient'];
-    storage: TranscriptionStorage;
-    storageUri: string;
-  },
-  options: Record<string, unknown>,
-): Promise<DeepgramResult> {
-  let lastError: unknown = null;
-
-  for (let attempt = 1; attempt <= TRANSCRIBE_ATTEMPT_MAX_RETRIES; attempt += 1) {
-    const stream = await args.storage.getStream(args.storageUri);
-    try {
-      const response = await args.client.listen.v1.media.transcribeFile(stream, options);
-      return resolveDeepgramResponse(response);
-    } catch (error) {
-      if (!isRetryableTranscriptionError(error)) {
-        throw asError(error, 'Deepgram transcription failed');
-      }
-      lastError = error;
-    } finally {
-      // Close stream descriptors promptly before retrying.
-      stream.destroy();
-    }
-
-    if (attempt < TRANSCRIBE_ATTEMPT_MAX_RETRIES) {
-      await wait(getRetryDelayMs(attempt));
-    }
-  }
-
-  throw asError(lastError, 'Deepgram transcription failed after retries');
-}
-
-function isRetryableTranscriptionError(error: unknown): boolean {
-  const status = getRetryableStatus(error);
-  if (typeof status === 'number' && RETRYABLE_DEEPGRAM_STATUS_CODES.has(status)) {
-    return true;
-  }
-
-  const message = extractErrorMessage(error).toLowerCase();
-  if (!message) return false;
-  return RETRYABLE_DEEPGRAM_MESSAGE_PATTERNS.some((pattern) => message.includes(pattern));
-}
-
-function getRetryableStatus(error: unknown): number | null {
+function extractStatusCode(error: unknown): number | null {
   if (!error || typeof error !== 'object') return null;
-  const status = (error as RetryableStatusError).status;
+  const status = (error as { status?: unknown }).status;
   if (typeof status === 'number') return status;
-  const statusCode = (error as RetryableStatusError).statusCode;
+  const statusCode = (error as { statusCode?: unknown }).statusCode;
   return typeof statusCode === 'number' ? statusCode : null;
 }
 
-function extractErrorMessage(error: unknown): string {
-  if (!error) return '';
-  if (typeof error === 'string') return error;
-  if (error instanceof Error) return error.message;
-  if (typeof error === 'object' && 'message' in error) {
-    const message = (error as { message?: unknown }).message;
-    return typeof message === 'string' ? message : '';
-  }
-  return String(error);
-}
-
-function getRetryDelayMs(attempt: number): number {
-  return Math.min(TRANSCRIBE_ATTEMPT_BASE_DELAY_MS * 2 ** (attempt - 1), 2_000);
-}
-
-async function wait(ms: number): Promise<void> {
-  await new Promise((resolve) => setTimeout(resolve, ms));
-}
-
-function formatTranscriptFromSegments(
-  transcript: string,
-  utterances: TranscriptSegment[],
-  mode: TranscriptMode,
-): string {
-  if (utterances.length === 0) {
-    return transcript;
-  }
-
-  if (mode === 'stack') {
-    const grouped = new Map<number, string[]>();
-    for (const utterance of utterances) {
-      const speaker = utterance.speaker ?? 0;
-      const list = grouped.get(speaker) ?? [];
-      list.push(utterance.text);
-      grouped.set(speaker, list);
-    }
-
-    return [...grouped.entries()]
-      .map(([speaker, lines]) => `${formatSpeakerLabel(speaker)}:\n${lines.join('\n')}`)
-      .join('\n\n');
-  }
-
-  return utterances
-    .map((utterance) => {
-      const start = formatTimestamp(utterance.start ?? 0);
-      const end = formatTimestamp(utterance.end ?? utterance.start ?? 0);
-      const speaker = formatSpeakerLabel(utterance.speaker ?? 0);
-      return `[${speaker} ${start}-${end}] ${utterance.text}`;
-    })
-    .join('\n');
-}
-
-function getRawTranscript(result: DeepgramResult): string {
-  const channel = result.results?.channels?.[0];
-  const alternative = channel?.alternatives?.[0];
-  const transcript = alternative?.transcript ?? '';
-  return transcript.trim();
-}
-
-function asDeepgramResult(value: unknown): DeepgramResult {
-  if (!value || typeof value !== 'object') {
-    return {};
-  }
-  return value as DeepgramResult;
-}
-
-function getTranscriptSegments(result: DeepgramResult): {
-  text: string;
-  speaker?: number;
-  start?: number;
-  end?: number;
-}[] {
-  const utterances = result.results?.utterances;
-  if (Array.isArray(utterances) && utterances.length > 0) {
-    const segments = utterances
-      .map((item) => ({
-        text: (item.transcript ?? '').trim(),
-        speaker: resolveSpeakerIndex(item.channel, item.speaker),
-        start: typeof item.start === 'number' ? item.start : undefined,
-        end: typeof item.end === 'number' ? item.end : undefined,
-      }))
-      .filter((item) => item.text.length > 0);
-    return normalizeSegmentEnds(segments).sort((a, b) => (a.start ?? 0) - (b.start ?? 0));
-  }
-
-  return buildSegmentsFromWords(result);
-}
-
-function buildSummary(result: DeepgramResult): Record<string, unknown> | null {
-  const metadata = result.metadata ?? null;
-  const channelCount = result.results?.channels?.length;
-
-  if (!metadata && !channelCount) {
-    return null;
-  }
-
-  const summary: Record<string, unknown> = metadata ? { ...metadata } : {};
-  if (channelCount) {
-    summary.channels = channelCount;
-  }
-
-  return summary;
-}
-
-function formatTimestamp(seconds: number): string {
-  if (!Number.isFinite(seconds)) return '00:00.000';
-  const totalMillis = Math.round(seconds * 1000);
-  const mins = Math.floor(totalMillis / 60_000);
-  const secs = Math.floor((totalMillis % 60_000) / 1000);
-  const millis = totalMillis % 1000;
-  return `${mins.toString().padStart(2, '0')}:${secs
-    .toString()
-    .padStart(2, '0')}.${millis.toString().padStart(3, '0')}`;
-}
-
-function formatSpeakerLabel(index: number): string {
-  if (index === 0) return 'Teacher';
-  if (index === 1) return 'Student';
-  return `Speaker ${index + 1}`;
-}
-
-function buildSpeakerTracks(segments: TranscriptSegment[]): {
+function buildSpeakerTracks(segments: SttTranscriptionResult['segments']): {
   tracks: {
     speaker: number;
     label: string;
@@ -885,138 +315,3 @@ function buildSpeakerTracks(segments: TranscriptSegment[]): {
       }),
   };
 }
-
-function getChannelCount(result: DeepgramResult): number | null {
-  const metadataChannels = (result.metadata as { channels?: unknown } | undefined)?.channels;
-  if (typeof metadataChannels === 'number') {
-    return metadataChannels;
-  }
-  if (Array.isArray(result.results?.channels)) {
-    return result.results?.channels?.length ?? null;
-  }
-  return null;
-}
-
-function resolveSpeakerIndex(channel?: number, speaker?: number): number | undefined {
-  if (typeof channel === 'number') return channel;
-  if (typeof speaker === 'number') return speaker;
-  return undefined;
-}
-
-function buildSegmentsFromWords(result: DeepgramResult): {
-  text: string;
-  speaker?: number;
-  start?: number;
-  end?: number;
-}[] {
-  const channels = result.results?.channels;
-  if (!Array.isArray(channels) || channels.length === 0) {
-    return [];
-  }
-
-  const segments: {
-    text: string;
-    speaker?: number;
-    start?: number;
-    end?: number;
-  }[] = [];
-
-  for (const [channelIndex, channel] of channels.entries()) {
-    const words = channel.alternatives?.[0]?.words;
-    if (!Array.isArray(words) || words.length === 0) {
-      continue;
-    }
-
-    let current: { text: string; speaker?: number; start?: number; end?: number } | null = null;
-
-    for (const word of words) {
-      const text = (word.punctuated_word ?? word.word ?? '').trim();
-      if (!text) continue;
-      const start = typeof word.start === 'number' ? word.start : undefined;
-      const end = typeof word.end === 'number' ? word.end : start;
-
-      if (!current) {
-        current = { text, speaker: channelIndex, start, end };
-        continue;
-      }
-
-      const gap = getGapSeconds(current.end, start);
-      if (gap > UTTERANCE_GAP_SEC) {
-        segments.push(current);
-        current = { text, speaker: channelIndex, start, end };
-        continue;
-      }
-
-      current.text = `${current.text} ${text}`;
-      current.end = end ?? current.end;
-    }
-
-    if (current) {
-      segments.push(current);
-    }
-  }
-
-  return segments.sort((a, b) => (a.start ?? 0) - (b.start ?? 0));
-}
-
-function normalizeSegmentEnds<T extends { start?: number; end?: number }>(segments: T[]): T[] {
-  return segments.map((segment, index) => {
-    if (typeof segment.end === 'number') return segment;
-    const nextStart = segments[index + 1]?.start;
-    return {
-      ...segment,
-      end: typeof nextStart === 'number' ? nextStart : segment.start,
-    };
-  });
-}
-
-function mergeSegments(
-  segments: { text: string; speaker?: number; start?: number; end?: number }[],
-): { text: string; speaker?: number; start?: number; end?: number }[] {
-  if (segments.length === 0) return segments;
-  const merged: { text: string; speaker?: number; start?: number; end?: number }[] = [];
-
-  for (const segment of segments) {
-    const previous = merged.at(-1);
-    if (
-      previous &&
-      previous.speaker === segment.speaker &&
-      getGapSeconds(previous.end, segment.start) <= UTTERANCE_GAP_SEC
-    ) {
-      previous.text = `${previous.text} ${segment.text}`.trim();
-      previous.end = segment.end ?? previous.end;
-      continue;
-    }
-    merged.push({ ...segment });
-  }
-
-  return merged;
-}
-
-function getGapSeconds(previousEnd?: number, nextStart?: number): number {
-  const previous = typeof previousEnd === 'number' ? previousEnd : Number.NaN;
-  const next = typeof nextStart === 'number' ? nextStart : Number.NaN;
-  if (!Number.isFinite(previous) || !Number.isFinite(next)) {
-    return 0;
-  }
-  return next - previous;
-}
-
-const UTTERANCE_GAP_SEC = 1.5;
-const ELEVENLABS_STT_MODEL = 'scribe_v2' as const;
-const TRANSCRIBE_ATTEMPT_MAX_RETRIES = 3;
-const TRANSCRIBE_ATTEMPT_BASE_DELAY_MS = process.env.NODE_ENV === 'test' ? 0 : 250;
-const RETRYABLE_DEEPGRAM_STATUS_CODES = new Set([408, 409, 425, 429, 500, 502, 503, 504]);
-const RETRYABLE_DEEPGRAM_MESSAGE_PATTERNS = [
-  'terminated',
-  'fetch failed',
-  'network',
-  'socket',
-  'timeout',
-  'timed out',
-  'etimedout',
-  'econnreset',
-  'econnrefused',
-  'aborted',
-  'connection reset',
-];

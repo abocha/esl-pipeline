@@ -1,4 +1,5 @@
 import { JobsOptions, Processor, Queue, QueueEvents, Worker } from 'bullmq';
+import type { SttProviderId } from '@esl-pipeline/contracts';
 
 import { loadConfig } from '../config/env.js';
 import { createJobLogger, logger } from './logger.js';
@@ -6,7 +7,7 @@ import { createRedisClient } from './redis.js';
 
 export interface TranscribeQueuePayload {
   recordingId: string;
-  sttProvider?: 'deepgram' | 'elevenlabs';
+  sttProvider?: SttProviderId;
 }
 
 let queueSingleton: Queue<TranscribeQueuePayload> | null = null;

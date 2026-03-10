@@ -19,6 +19,7 @@ export function createTranscriptRecord(): TranscriptRecord {
     mode: 'timeline',
     model: 'nova-3',
     language: 'en',
+    sttProvider: 'deepgram',
     fallbackUsed: false,
     summaryJson: null,
     createdAt: new Date('2024-01-01T00:00:00Z'),

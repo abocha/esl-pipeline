@@ -124,9 +124,27 @@ describe('integration/migrations', () => {
         GROUP BY template_id
         `,
       );
+      const transcriptProviderResult = await pool.query<{ stt_provider: string }>(
+        `
+        SELECT stt_provider
+        FROM transcripts
+        WHERE id = '66666666-6666-4666-8666-666666666661'
+        `,
+      );
+      const transcriptProviderConstraint = await pool.query<{ present: boolean }>(
+        `
+        SELECT EXISTS (
+          SELECT 1
+          FROM pg_constraint
+          WHERE conname = 'transcripts_stt_provider_check'
+        ) AS present
+        `,
+      );
 
       expect(profileResult.rows.every((row) => row.active_count === 1)).toBe(true);
       expect(templateResult.rows.every((row) => row.active_count === 1)).toBe(true);
+      expect(transcriptProviderResult.rows[0]?.stt_provider).toBe('deepgram');
+      expect(transcriptProviderConstraint.rows[0]?.present).toBe(true);
     });
   }, testTimeout);
 
