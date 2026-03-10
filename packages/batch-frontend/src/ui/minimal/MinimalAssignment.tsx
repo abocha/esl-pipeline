@@ -1341,9 +1341,7 @@ export const MinimalAssignment: React.FC = () => {
       const response = await validateMarkdown(
         draftText.trim(),
         true,
-        learningPresetCatalogEnabled
-          ? { learningPresetId: selectedValidationPreset }
-          : { preset: selectedValidationPreset },
+        learningPresetCatalogEnabled ? { learningPresetId: selectedValidationPreset } : undefined,
       );
       setValidation(response);
       return response;
@@ -1421,11 +1419,7 @@ export const MinimalAssignment: React.FC = () => {
           ...(selectedTtsProvider === 'google' && isGoogleTtsModel(selectedTtsModel)
             ? { googleTtsModel: selectedTtsModel }
             : {}),
-          ...(validPreset
-            ? learningPresetCatalogEnabled
-              ? { learningPresetId: validPreset }
-              : { preset: validPreset }
-            : {}),
+          ...(validPreset && learningPresetCatalogEnabled ? { learningPresetId: validPreset } : {}),
         },
       });
       await approveJob(materialized.jobId, {
@@ -1467,7 +1461,6 @@ export const MinimalAssignment: React.FC = () => {
       const htmlResponse = await renderHtmlPreview({
         text: normalizedDraft,
         title: validationResult.meta?.title?.trim() || undefined,
-        preset: learningPresetCatalogEnabled ? null : validPreset,
         learningPresetId: learningPresetCatalogEnabled ? validPreset : null,
       });
       const html = htmlResponse.html;

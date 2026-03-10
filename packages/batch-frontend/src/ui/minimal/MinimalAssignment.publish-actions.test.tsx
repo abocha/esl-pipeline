@@ -94,12 +94,12 @@ describe('MinimalAssignment - publish and job actions', () => {
       await waitFor(() => {
         expect(api.createDraft).toHaveBeenCalledWith('pkg-1', '# Final draft');
       });
-      expect(vi.mocked(api.validateMarkdown)).toHaveBeenLastCalledWith('# Final draft', true, {
-        preset: 'b2-default',
-      });
+      const validationCall = vi.mocked(api.validateMarkdown).mock.calls.at(-1);
+      expect(validationCall?.[0]).toBe('# Final draft');
+      expect(validationCall?.[1]).toBe(true);
+      expect(validationCall?.[2]).toBeUndefined();
       expect(api.materializeDraft).toHaveBeenCalledWith('draft-1', {
         jobOverrides: {
-          preset: 'b2-default',
           publishTarget: 'html',
           withTts: true,
           ttsProvider: 'elevenlabs',

@@ -42,4 +42,5 @@ Operational guide for moving student/profile metadata from filesystem JSON into 
 ## Notes
 
 - Backfill is idempotent (`upsert` semantics by deterministic student ID).
+- Legacy student JSON is migration-tool input only; batch-backend runtime student APIs do not scan filesystem student directories.
 - `student_profile_bindings` keeps historical linkage and is updated as student profile assignments change.

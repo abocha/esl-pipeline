@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 
-import { getStudentTimeline } from '../src/application/student-timeline.js';
+import { getStudentTimeline, type StudentTimelineType } from '../src/application/student-timeline.js';
 import { deriveStudentId } from '../src/domain/student-utils.js';
 import { withPgClient } from '../src/infrastructure/db.js';
 import { requirePgTestEnv } from './support/test-env.js';
@@ -114,6 +114,10 @@ describe('student-timeline', () => {
     const failedOnly = await getStudentTimeline(studentId, { statuses: ['failed'] });
     expect(failedOnly.items).toHaveLength(1);
     expect(failedOnly.items[0]?.status).toBe('failed');
+
+    const legacyAliasType = 'job_approved' as unknown as StudentTimelineType;
+    const legacyAliasFilter = await getStudentTimeline(studentId, { types: [legacyAliasType] });
+    expect(legacyAliasFilter.items).toHaveLength(0);
   });
 
   it('includes student profile binding changes with governance details', async () => {

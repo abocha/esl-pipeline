@@ -1,4 +1,3 @@
-```markdown
 ---
 title: ''
 student: ''
@@ -10,4 +9,3 @@ input_type: generate
 ## 1. OOPS
 
 (no rest)
-```

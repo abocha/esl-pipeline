@@ -12,7 +12,6 @@ describeMdValidatorSuite(
     tmpdir,
     validateMarkdownFile,
     withStrictReadyFrontmatter,
-    withoutLegacyFence,
     writeFile,
   }) => {
   it('warns when column-list has no columns', async () => {
@@ -135,7 +134,7 @@ describeMdValidatorSuite(
   it('keeps comprehension-count recommendation non-blocking in strict mode', async () => {
     const tempDir = await mkdtemp(path.join(tmpdir(), 'validator-'));
     const file = path.join(tempDir, 'strict-comprehension-count.md');
-    const md = withStrictReadyFrontmatter(withoutLegacyFence(buildBaseDoc('text'))).replace(
+    const md = withStrictReadyFrontmatter(buildBaseDoc('text')).replace(
       '1. x\n2. y',
       '1. x',
     );
@@ -149,7 +148,7 @@ describeMdValidatorSuite(
   it('treats H2 contract mismatches as blocking in strict mode', async () => {
     const tempDir = await mkdtemp(path.join(tmpdir(), 'validator-'));
     const file = path.join(tempDir, 'strict-h2-mismatch.md');
-    const md = withStrictReadyFrontmatter(withoutLegacyFence(buildBaseDoc('text'))).replace(
+    const md = withStrictReadyFrontmatter(buildBaseDoc('text')).replace(
       '## 5. ✍️ Practice & Pronunciation',
       '## 5. Practice',
     );
@@ -163,7 +162,7 @@ describeMdValidatorSuite(
   it('treats speaker alignment warnings as blocking in strict mode', async () => {
     const tempDir = await mkdtemp(path.join(tmpdir(), 'validator-'));
     const file = path.join(tempDir, 'strict-speaker-mismatch.md');
-    const md = withStrictReadyFrontmatter(withoutLegacyFence(buildBaseDoc('text'))).replace(
+    const md = withStrictReadyFrontmatter(buildBaseDoc('text')).replace(
       '[Mara]: Hello!',
       'Sam: Hello!',
     );
@@ -209,7 +208,7 @@ describeMdValidatorSuite(
   it('keeps extra-after-core H2 warning non-blocking in strict mode', async () => {
     const tempDir = await mkdtemp(path.join(tmpdir(), 'validator-'));
     const file = path.join(tempDir, 'strict-extra-h2-after-core.md');
-    const md = `${withStrictReadyFrontmatter(withoutLegacyFence(buildBaseDoc('text')))}\n\n## 10. Appendix Notes\ntext`;
+    const md = `${withStrictReadyFrontmatter(buildBaseDoc('text'))}\n\n## 10. Appendix Notes\ntext`;
     await writeFile(file, md);
 
     const res = await validateMarkdownFile(file, { strict: true });

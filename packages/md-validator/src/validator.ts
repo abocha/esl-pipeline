@@ -1,7 +1,6 @@
 import type { MarkdownValidationResponse, MarkdownValidationRuleSetInfo } from '@esl-pipeline/contracts';
 
 import {
-  appendResolutionIssuesToLegacyPayload,
   buildIssuesFromLegacyMessages,
   mergeIssues,
   withRulesetMetadata,
@@ -64,7 +63,6 @@ export async function validateMarkdown(input: ValidateMarkdownInput): Promise<Va
   const rulesetResolution = resolveValidationRuleset({
     learningPresetId: resolvedInput.learningPresetId,
     learningPresetVersion: resolvedInput.learningPresetVersion,
-    preset: resolvedInput.preset,
   });
 
   const rulesetResult = await executeRuleset(rulesetResolution.ruleset, {
@@ -78,12 +76,6 @@ export async function validateMarkdown(input: ValidateMarkdownInput): Promise<Va
     warnings: [...(rulesetResult.warnings ?? [])],
   };
 
-  const mergedLegacy = appendResolutionIssuesToLegacyPayload({
-    errors: [...legacyPayload.errors],
-    warnings: [...legacyPayload.warnings],
-    resolutionIssues: rulesetResolution.issues,
-  });
-
   // Build legacy-derived issues from pre-resolution payload to avoid duplicating
   // canonical ruleset-resolution issues in `issues`.
   const legacyIssues = buildIssuesFromLegacyMessages(legacyPayload);
@@ -93,8 +85,8 @@ export async function validateMarkdown(input: ValidateMarkdownInput): Promise<Va
   const response: MarkdownValidationResponse = {
     ...rulesetResult,
     ok: hasExplicitErrors ? false : rulesetResult.ok,
-    errors: mergedLegacy.errors,
-    warnings: mergedLegacy.warnings,
+    errors: legacyPayload.errors,
+    warnings: legacyPayload.warnings,
   };
 
   return withRulesetMetadata(

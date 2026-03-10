@@ -37,7 +37,7 @@
 1. Keep phased delivery (`A` through `E`) with each phase independently mergeable.
 2. Unify student/profile source-of-truth toward DB-backed metadata and revision history.
 3. Treat prompt templates/profiles as versioned artifacts, not only filesystem files.
-4. Preserve migration safety with manual backfill tooling and explicit legacy-file warnings.
+4. Preserve migration safety with manual backfill tooling; runtime does not probe or warn on legacy files.
 5. Keep explainability first-class: every generated assignment should be traceable to exact profile/template revisions.
 
 ## Phase A: Canonical Data Model + Storage Unification
@@ -54,7 +54,7 @@
 
 1. Canonical tables for student profile metadata and bindings (DB as source-of-truth).
 2. Migration/import tool from current JSON/MD sources into DB records.
-3. DB-only runtime for student APIs with one-time warning when legacy JSON files are detected.
+3. DB-only runtime for student APIs with no runtime filesystem probing of legacy JSON files.
 4. Operational docs:
    - migration runbook
    - rollback strategy.

@@ -3,6 +3,7 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 
+import { PromptOptionError } from '../src/application/prompt-options.js';
 import { validateTranscriptionConfig } from '../src/application/validate-transcription-config.js';
 import { loadConfig } from '../src/config/env.js';
 import { createStorageConfigService } from '../src/infrastructure/storage-config.js';
@@ -48,7 +49,7 @@ describe('validateTranscriptionConfig', () => {
     ).resolves.toBeUndefined();
   });
 
-  it('fails when prompt defaults are not active in DB catalog', async () => {
+  it('does not block startup when prompt defaults are not active in DB catalog', async () => {
     const root = await makeTempDir('esl-transcription-');
     tempDirs.push(root);
 
@@ -73,7 +74,30 @@ describe('validateTranscriptionConfig', () => {
           },
         }),
       }),
-    ).rejects.toThrow('Prompt defaults are not active in the DB catalog');
+    ).resolves.toBeUndefined();
+  });
+
+  it('does not block startup when prompt option loading fails', async () => {
+    const root = await makeTempDir('esl-transcription-');
+    tempDirs.push(root);
+
+    const uploadDir = path.join(root, 'uploads');
+    const storageConfig = createStorageConfigService({
+      provider: 'filesystem',
+      filesystem: { uploadDir },
+    });
+
+    const config = loadConfig();
+
+    await expect(
+      validateTranscriptionConfig({
+        config,
+        storageConfig,
+        promptOptionsLoader: async () => {
+          throw new PromptOptionError('profilePath must reference an allowlisted profile', 'bad_path');
+        },
+      }),
+    ).resolves.toBeUndefined();
   });
 
   it('throws when filesystem upload dir cannot be created', async () => {

@@ -27,3 +27,8 @@ import { createElevenLabsTtsProvider } from '@esl-pipeline/tts-provider-elevenla
 
 registerTtsProvider(createElevenLabsTtsProvider());
 ```
+
+## Dialogue Input Contract
+
+- Local dialogue synthesis inputs use canonical camelCase `voiceId`.
+- Legacy snake_case `voice_id` is retired from local request payloads.

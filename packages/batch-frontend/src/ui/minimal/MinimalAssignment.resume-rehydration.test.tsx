@@ -561,7 +561,6 @@ describe('MinimalAssignment - resume and rehydration', { timeout: INTEGRATION_TE
       const secondPublishCall = vi.mocked(api.materializeDraft).mock.calls[1]?.[1];
       expect(secondPublishCall?.jobOverrides).toEqual({
         publishTarget: 'html',
-        preset: 'b2-default',
         withTts: true,
         ttsProvider: 'elevenlabs',
       });

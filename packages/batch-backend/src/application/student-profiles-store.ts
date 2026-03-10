@@ -1,7 +1,4 @@
-import fs from 'node:fs/promises';
 import path from 'node:path';
-
-import { resolveConfigPaths } from '@esl-pipeline/orchestrator';
 
 import type { BatchBackendConfig } from '../config/env.js';
 import { loadConfig } from '../config/env.js';
@@ -19,7 +16,6 @@ import {
   setActiveStudentProfileBinding,
 } from '../domain/student-profile-binding-repository.js';
 import { deriveStudentId, normalizeStudentName } from '../domain/student-utils.js';
-import { logger } from '../infrastructure/logger.js';
 
 export interface StudentProfileData {
   id: string;
@@ -69,7 +65,6 @@ interface StudentStoreDependencies {
 
 interface StudentStoreOverrides {
   config?: BatchBackendConfig;
-  studentsDir?: string;
   bindingAudit?: {
     reason?: string | null;
     changedBy?: string | null;
@@ -98,9 +93,6 @@ interface StudentProfileEntry extends StudentProfileData {
   isSynthetic?: boolean;
 }
 
-let legacyStudentsDirWarned = false;
-let legacyStudentsDirCheckInFlight: Promise<void> | null = null;
-
 function getDependencies(overrides?: StudentStoreOverrides): StudentStoreDependencies {
   return {
     students: {
@@ -128,68 +120,6 @@ function assertDbEnabled(config: BatchBackendConfig): void {
       503,
     );
   }
-}
-
-async function resolveStudentsDir(options: {
-  config?: BatchBackendConfig;
-  studentsDir?: string;
-}): Promise<string> {
-  const config = options.config ?? loadConfig();
-  if (options.studentsDir) {
-    return path.resolve(options.studentsDir);
-  }
-
-  const cwd = process.env.PIPELINE_CWD || process.cwd();
-  const configPaths = resolveConfigPaths({
-    cwd,
-    configDir: config.orchestrator.configDir,
-  });
-
-  return configPaths.studentsDir;
-}
-
-async function warnIfLegacyStudentsDirPresent(
-  config: BatchBackendConfig,
-  studentsDir?: string,
-): Promise<void> {
-  if (legacyStudentsDirWarned) return;
-  if (legacyStudentsDirCheckInFlight) {
-    await legacyStudentsDirCheckInFlight;
-    return;
-  }
-
-  legacyStudentsDirCheckInFlight = (async () => {
-    const resolved = await resolveStudentsDir({ config, studentsDir });
-    let entries: { name: string; isFile: () => boolean }[] = [];
-    try {
-      entries = await fs.readdir(resolved, { withFileTypes: true });
-    } catch {
-      return;
-    }
-
-    const legacyJsonCount = entries.filter(
-      (entry) => entry.isFile() && entry.name.toLowerCase().endsWith('.json'),
-    ).length;
-
-    if (legacyJsonCount <= 0) return;
-
-    legacyStudentsDirWarned = true;
-    logger.warn('Legacy student JSON files detected; runtime is DB-only for student APIs', {
-      component: 'student_profiles',
-      studentsDir: resolved,
-      legacyJsonCount,
-      action:
-        'Run student-system:backfill for migration and remove or archive JSON files after verification.',
-    });
-  })()
-    .catch(() => {
-      // Best-effort warning only.
-    })
-    .finally(() => {
-      legacyStudentsDirCheckInFlight = null;
-    });
-
-  await legacyStudentsDirCheckInFlight;
 }
 
 function normalizeOptionalString(value?: string | null): string | null {
@@ -506,7 +436,6 @@ export async function listStudentProfiles(
 ): Promise<StudentProfileListResult> {
   const config = overrides?.config ?? loadConfig();
   assertDbEnabled(config);
-  await warnIfLegacyStudentsDirPresent(config, overrides?.studentsDir);
 
   const dependencies = getDependencies(overrides);
   const dbResult = await dependencies.students.list({
@@ -527,7 +456,6 @@ export async function getStudentProfileById(
 
   const config = overrides?.config ?? loadConfig();
   assertDbEnabled(config);
-  await warnIfLegacyStudentsDirPresent(config, overrides?.studentsDir);
 
   const dependencies = getDependencies(overrides);
   const record = await dependencies.students.getById(id);
@@ -548,7 +476,6 @@ export async function createStudentProfile(
 ): Promise<StudentProfileData> {
   const config = overrides?.config ?? loadConfig();
   assertDbEnabled(config);
-  await warnIfLegacyStudentsDirPresent(config, overrides?.studentsDir);
 
   return createStudentProfileDb(input, getDependencies(overrides), {
     bindingAudit: overrides?.bindingAudit,
@@ -564,7 +491,6 @@ export async function updateStudentProfile(
 
   const config = overrides?.config ?? loadConfig();
   assertDbEnabled(config);
-  await warnIfLegacyStudentsDirPresent(config, overrides?.studentsDir);
 
   return updateStudentProfileDb(id, input, {
     dependencies: getDependencies(overrides),
@@ -580,7 +506,6 @@ export async function deleteStudentProfile(
 
   const config = overrides?.config ?? loadConfig();
   assertDbEnabled(config);
-  await warnIfLegacyStudentsDirPresent(config, overrides?.studentsDir);
 
   const dependencies = getDependencies(overrides);
   return dependencies.students.remove(id);

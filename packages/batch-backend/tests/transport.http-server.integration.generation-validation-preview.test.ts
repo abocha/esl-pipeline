@@ -308,7 +308,6 @@ describeHttpServerIntegrationSuite(
 
     const payload = {
       jobOverrides: {
-        preset: 'b1-default',
         learningPresetId: 'general-english',
         notionDatabase: 'notion-db',
         withTts: true,
@@ -376,7 +375,6 @@ describeHttpServerIntegrationSuite(
         strict: true,
         learningPresetId: 'general-english',
         learningPresetVersion: 'v1',
-        preset: 'b1-default',
       },
     });
 
@@ -400,7 +398,6 @@ describeHttpServerIntegrationSuite(
       strict: true,
       learningPresetId: 'general-english',
       learningPresetVersion: 'v1',
-      preset: 'b1-default',
     });
   });
 
@@ -469,7 +466,6 @@ describeHttpServerIntegrationSuite(
       strict: true,
       learningPresetId: 'ielts-academic',
       learningPresetVersion: undefined,
-      preset: undefined,
     });
   });
 

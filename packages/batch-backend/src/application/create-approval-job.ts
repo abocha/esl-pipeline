@@ -9,7 +9,11 @@ import { insertApprovalJob } from '../domain/job-repository.js';
 import type { PromptPackageRecord } from '../domain/prompt-package-model.js';
 import { getDefaultSettings } from '../domain/settings-model.js';
 import { createDefaultSettings, getSettingsByUserId } from '../domain/settings-repository.js';
-import { buildLearningPresetProvenance, normalizeLearningPresetId } from './learning-preset.js';
+import {
+  DEFAULT_LEARNING_PRESET_ID,
+  buildLearningPresetProvenance,
+  normalizeLearningPresetId,
+} from './learning-preset.js';
 
 export interface CreateApprovalJobParams {
   draft: DraftRecord;
@@ -65,11 +69,11 @@ export async function createApprovalJobFromDraft(
     (jobOverrides.ttsProvider === 'google'
       ? true
       : hasTtsKey);
-  const selectedPreset = jobOverrides.preset ?? preset;
-  const learningPresetId = normalizeLearningPresetId({
-    learningPresetId: jobOverrides.learningPresetId,
-    preset: selectedPreset,
-  });
+  const selectedPreset = preset;
+  const learningPresetId =
+    normalizeLearningPresetId({
+      learningPresetId: jobOverrides.learningPresetId,
+    }) ?? DEFAULT_LEARNING_PRESET_ID;
   const provenance = buildLearningPresetProvenance(learningPresetId);
 
   const job = await jobs.insertApprovalJob({

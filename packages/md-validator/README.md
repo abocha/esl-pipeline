@@ -16,7 +16,7 @@ The validator now uses a ruleset engine layout:
 - `src/validator.ts`: compatibility facade (`validateMarkdown`)
 - `src/core/*`: input normalization + issue/result shaping
 - `src/rules/*`: execution contracts + base rule group placeholders
-- `src/rulesets/registry.ts`: ruleset resolution (`learningPresetId` / legacy `preset`)
+- `src/rulesets/registry.ts`: ruleset resolution (`learningPresetId`)
 - `src/rulesets/general-english/v1.ts`: current implemented ruleset logic
 
 Current effective ruleset:
@@ -33,7 +33,6 @@ const result = await validateMarkdown({
   strict: true,
   learningPresetId: 'general-english', // optional
   learningPresetVersion: 'v1', // optional
-  preset: 'b1-default', // optional legacy passthrough
 });
 ```
 
@@ -49,8 +48,7 @@ Resolution order:
 
 1. Known `learningPresetId` -> mapped ruleset.
 2. Unknown `learningPresetId` -> fallback to `general-english@v1` + warning issue.
-3. Legacy `preset` present -> mapped to `general-english@v1` (legacy mapping metadata).
-4. No preset context -> `general-english@v1`.
+3. No preset context -> `general-english@v1`.
 
 ## Response model
 
@@ -82,4 +80,3 @@ Additive fields:
 ```bash
 pnpm --filter @esl-pipeline/md-validator test
 ```
-

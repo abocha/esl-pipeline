@@ -6,7 +6,6 @@ import { validateGeneralEnglishRuleset } from './general-english/v1.js';
 interface RulesetResolutionInput {
   learningPresetId?: string | null;
   learningPresetVersion?: string | null;
-  preset?: string | null;
 }
 
 const GENERAL_ENGLISH_RULESET: ValidationRulesetDefinition = {
@@ -81,9 +80,7 @@ export function resolveValidationRuleset(input: RulesetResolutionInput): Ruleset
   const fallbackRuleset = GENERAL_ENGLISH_RULESET;
   const requestedId = input.learningPresetId?.trim() || null;
   const requestedVersion = input.learningPresetVersion?.trim() || null;
-  const legacyPreset = input.preset?.trim() || null;
-
-  if (!requestedId && !legacyPreset) {
+  if (!requestedId) {
     return {
       ruleset: fallbackRuleset,
       requestedId: null,
@@ -92,46 +89,34 @@ export function resolveValidationRuleset(input: RulesetResolutionInput): Ruleset
       issues: [],
     };
   }
+  const found = resolveRulesetByLearningPresetId(requestedId);
+  if (!found) {
+    return {
+      ruleset: fallbackRuleset,
+      requestedId,
+      requestedVersion,
+      fallbackApplied: true,
+      fallbackReason: 'unknown_preset',
+      issues: [issueForUnknownPreset(requestedId, fallbackRuleset)],
+    };
+  }
 
-  if (requestedId) {
-    const found = resolveRulesetByLearningPresetId(requestedId);
-    if (!found) {
-      return {
-        ruleset: fallbackRuleset,
-        requestedId,
-        requestedVersion,
-        fallbackApplied: true,
-        fallbackReason: 'unknown_preset',
-        issues: [issueForUnknownPreset(requestedId, fallbackRuleset)],
-      };
-    }
-
-    if (requestedVersion && requestedVersion !== found.version) {
-      return {
-        ruleset: found,
-        requestedId,
-        requestedVersion,
-        fallbackApplied: true,
-        fallbackReason: 'unknown_version',
-        issues: [issueForUnknownVersion(requestedVersion, found)],
-      };
-    }
-
+  if (requestedVersion && requestedVersion !== found.version) {
     return {
       ruleset: found,
       requestedId,
       requestedVersion,
-      fallbackApplied: false,
-      issues: [],
+      fallbackApplied: true,
+      fallbackReason: 'unknown_version',
+      issues: [issueForUnknownVersion(requestedVersion, found)],
     };
   }
 
   return {
-    ruleset: fallbackRuleset,
-    requestedId: legacyPreset,
+    ruleset: found,
+    requestedId,
     requestedVersion,
-    fallbackApplied: true,
-    fallbackReason: 'legacy_preset_mapping',
+    fallbackApplied: false,
     issues: [],
   };
 }

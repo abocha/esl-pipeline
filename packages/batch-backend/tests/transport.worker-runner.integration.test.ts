@@ -1,6 +1,6 @@
 import Fastify from 'fastify';
+import { randomUUID } from 'node:crypto';
 import fs from 'node:fs/promises';
-import os from 'node:os';
 import path from 'node:path';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 
@@ -47,6 +47,63 @@ let app: ReturnType<typeof Fastify>;
 let workerStop: (() => Promise<void>) | null = null;
 let markdownFixtureDir: string | null = null;
 let markdownFixturePath = '';
+const integrationFixtureMarkdown = `---
+title: 'Worker Runner Integration Fixture'
+student: Integration Student
+level: A2
+topic: Integration Pipeline
+input_type: generate
+speaker_labels: [Alex, Mara]
+---
+
+## 1. This Week's Mission Briefing
+text
+
+## 2. Your Homework Roadmap
+text
+
+## 3. Input Material: The Source
+:::study-text
+[Alex]: Hi!
+[Mara]: Hello!
+:::
+
+## 4. Language Toolkit: Useful Language
+text
+
+## 5. Practice & Pronunciation
+### A. Controlled Practice
+1. one
+2. two
+3. three
+4. four
+5. five
+6. six
+7. seven
+8. eight
+### B. Comprehension Check
+1. question
+2. question
+
+### C. Pronunciation Micro-Focus
+text
+
+## 6. Your Turn: Complete the Mission!
+text
+
+## 7. Why This Mission Helps You
+text
+
+## 8. Answer Key & Sample Mission
+:::toggle Answer Key
+notes
+:::
+
+## 9. Teacher's Follow-up Plan
+:::toggle Teacher's Follow-up Plan
+notes
+:::
+`;
 
 async function truncateJobs() {
   await withPgClient(async (client) => {
@@ -60,11 +117,15 @@ const integrationTimeout = resolveTestTimeout(60_000);
 
 describe('transport/worker-runner - full pipeline (requires Postgres + Redis)', () => {
   beforeAll(async () => {
+    process.env.BATCH_JOBS_QUEUE_NAME = `worker-runner-integration-${randomUUID()}`;
+
     // Ensure clean DB state.
     await truncateJobs();
-    markdownFixtureDir = await fs.mkdtemp(path.join(os.tmpdir(), 'worker-runner-integration-'));
+    const testTmpRoot = path.join(process.cwd(), '.tmp');
+    await fs.mkdir(testTmpRoot, { recursive: true });
+    markdownFixtureDir = await fs.mkdtemp(path.join(testTmpRoot, 'worker-runner-integration-'));
     markdownFixturePath = path.join(markdownFixtureDir, 'ok.md');
-    await fs.writeFile(markdownFixturePath, '# Integration test fixture\n', 'utf8');
+    await fs.writeFile(markdownFixturePath, integrationFixtureMarkdown, 'utf8');
 
     // Start HTTP server on ephemeral port.
     // http-server.ts currently binds directly; for tests we simulate by creating Fastify
@@ -76,7 +137,6 @@ describe('transport/worker-runner - full pipeline (requires Postgres + Redis)', 
         const body = request.body as any;
         const result = await submitJobModule.submitJob({
           md: body?.md,
-          preset: body?.preset,
           withTts: body?.withTts,
           upload: body?.upload,
         });
