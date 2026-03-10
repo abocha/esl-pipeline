@@ -12,6 +12,7 @@ import type {
   GenerationOptionsPayload,
   JobOptionsPayload,
   NotionDatabaseOption,
+  SttProviderId,
   TtsProviderId,
   VoiceOption,
 } from '@esl-pipeline/contracts';
@@ -42,6 +43,7 @@ const DEFAULT_CEFR_LEVELS: CefrLevel[] = ['A1', 'A2', 'B1', 'B2', 'C1', 'C2'];
 const DEFAULT_CEFR_DEFAULT: CefrLevel = 'B1';
 const JOB_OPTIONS_CACHE_TTL_MS = 60_000;
 const DEFAULT_TTS_PROVIDERS: TtsProviderId[] = ['elevenlabs', 'google'];
+const DEFAULT_STT_PROVIDERS: SttProviderId[] = ['deepgram', 'elevenlabs', 'google'];
 const DEFAULT_GOOGLE_TTS_MODELS: GoogleTtsModel[] = ['chirp3_hd', 'studio', 'neural2', 'wavenet'];
 
 // TODO: Replace these with data pulled from the orchestrator config provider or
@@ -106,6 +108,15 @@ export async function getJobOptions(): Promise<JobOptionsResponse> {
         defaultTtsProvider: result.defaultTtsProvider,
         defaultTtsModelByProvider: result.defaultTtsModelByProvider,
       });
+      const sttMetadata = resolveSttMetadata(
+        {
+          sttProviders: result.sttProviders,
+          defaultSttProvider: result.defaultSttProvider,
+          sttModelOptionsByProvider: result.sttModelOptionsByProvider,
+          defaultSttModelByProvider: result.defaultSttModelByProvider,
+        },
+        runtimeConfig,
+      );
 
       return {
         ...result,
@@ -114,6 +125,7 @@ export async function getJobOptions(): Promise<JobOptionsResponse> {
         generation,
         notionDatabases,
         learningPresets,
+        ...sttMetadata,
         ...ttsMetadata,
         supportedActions,
       };
@@ -172,8 +184,74 @@ async function loadStaticJobOptions(runtimeConfig: ReturnType<typeof loadConfig>
     learningPresets: [...STATIC_OPTIONS.learningPresets],
     uploadOptions: [...STATIC_OPTIONS.uploadOptions],
     ttsStrategies: [...STATIC_OPTIONS.ttsStrategies],
+    ...resolveSttMetadata({}, runtimeConfig),
     ...resolveTtsMetadata(),
     supportedActions,
+  };
+}
+
+function resolveSttMetadata(
+  input: {
+    sttProviders?: SttProviderId[];
+    defaultSttProvider?: SttProviderId;
+    sttModelOptionsByProvider?: Partial<Record<SttProviderId, string[]>>;
+    defaultSttModelByProvider?: Partial<Record<SttProviderId, string>>;
+  },
+  runtimeConfig: ReturnType<typeof loadConfig>,
+): {
+  sttProviders: SttProviderId[];
+  defaultSttProvider: SttProviderId;
+  sttModelOptionsByProvider: Partial<Record<SttProviderId, string[]>>;
+  defaultSttModelByProvider: Partial<Record<SttProviderId, string>>;
+} {
+  const candidates =
+    input.sttProviders?.length && input.sttProviders.length > 0
+      ? input.sttProviders
+      : runtimeConfig.transcription.sttProviders.length > 0
+        ? runtimeConfig.transcription.sttProviders
+        : DEFAULT_STT_PROVIDERS;
+  const sttProviders = [...new Set(candidates)].filter(
+    (provider): provider is SttProviderId =>
+      provider === 'deepgram' || provider === 'elevenlabs' || provider === 'google',
+  );
+
+  const sttModelOptionsByProvider: Partial<Record<SttProviderId, string[]>> = {
+    ...input.sttModelOptionsByProvider,
+  };
+  if (!sttModelOptionsByProvider.deepgram || sttModelOptionsByProvider.deepgram.length === 0) {
+    sttModelOptionsByProvider.deepgram = [runtimeConfig.stt.providers.deepgram.model];
+  }
+  if (!sttModelOptionsByProvider.elevenlabs || sttModelOptionsByProvider.elevenlabs.length === 0) {
+    sttModelOptionsByProvider.elevenlabs = [runtimeConfig.stt.providers.elevenlabs.model];
+  }
+  if (!sttModelOptionsByProvider.google || sttModelOptionsByProvider.google.length === 0) {
+    sttModelOptionsByProvider.google = [runtimeConfig.stt.providers.google.model];
+  }
+
+  const defaultSttModelByProvider: Partial<Record<SttProviderId, string>> = {
+    ...input.defaultSttModelByProvider,
+  };
+  if (!defaultSttModelByProvider.deepgram) {
+    defaultSttModelByProvider.deepgram = sttModelOptionsByProvider.deepgram[0];
+  }
+  if (!defaultSttModelByProvider.elevenlabs) {
+    defaultSttModelByProvider.elevenlabs = sttModelOptionsByProvider.elevenlabs[0];
+  }
+  if (!defaultSttModelByProvider.google) {
+    defaultSttModelByProvider.google = sttModelOptionsByProvider.google[0];
+  }
+
+  const defaultSttProviderCandidate =
+    input.defaultSttProvider ?? runtimeConfig.transcription.sttProvider ?? 'deepgram';
+  const defaultSttProvider = sttProviders.includes(defaultSttProviderCandidate)
+    ? defaultSttProviderCandidate
+    : (sttProviders[0] ?? 'deepgram');
+
+  return {
+    sttProviders,
+    defaultSttProvider,
+    sttModelOptionsByProvider,
+    defaultSttModelByProvider,
   };
 }
 

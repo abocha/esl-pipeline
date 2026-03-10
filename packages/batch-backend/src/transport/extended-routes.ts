@@ -5,7 +5,7 @@ import path from 'node:path';
 import { Readable, Transform } from 'node:stream';
 import { z } from 'zod';
 
-import type { JobState } from '@esl-pipeline/contracts';
+import type { JobState, SttProviderId } from '@esl-pipeline/contracts';
 import { createStaticPageHtml } from '@esl-pipeline/html-publisher';
 import { validateMarkdown } from '@esl-pipeline/md-validator';
 import { loadPreset } from '@esl-pipeline/notion-adapter';
@@ -239,16 +239,21 @@ function hasPronunciationReferenceMode(markdown: string): boolean {
 
 function normalizeSttProvider(
   value: unknown,
-): 'deepgram' | 'elevenlabs' | null {
+): SttProviderId | null {
   if (typeof value !== 'string') return null;
   const normalized = value.trim().toLowerCase();
-  if (normalized === 'deepgram' || normalized === 'elevenlabs') return normalized;
+  if (normalized === 'deepgram' || normalized === 'elevenlabs' || normalized === 'google') {
+    return normalized;
+  }
   return null;
 }
 
 export function inferTranscriptSttProvider(
-  transcript: Pick<TranscriptRecord, 'model' | 'summaryJson'>,
-): 'deepgram' | 'elevenlabs' | null {
+  transcript: Pick<TranscriptRecord, 'model' | 'summaryJson'> &
+    Partial<Pick<TranscriptRecord, 'sttProvider'>>,
+): SttProviderId | null {
+  if (transcript.sttProvider) return transcript.sttProvider;
+
   const summaryJson = transcript.summaryJson;
   const summaryProvider = normalizeSttProvider(
     summaryJson && typeof summaryJson === 'object'
@@ -262,15 +267,62 @@ export function inferTranscriptSttProvider(
   if (normalizedModel.includes('scribe') || normalizedModel.includes('eleven')) {
     return 'elevenlabs';
   }
-  return 'deepgram';
+  if (normalizedModel.includes('google')) {
+    return 'google';
+  }
+  if (
+    normalizedModel.includes('nova') ||
+    normalizedModel.includes('deepgram') ||
+    normalizedModel.includes('enhanced')
+  ) {
+    return 'deepgram';
+  }
+  return null;
 }
 
-function shouldReuseCachedTranscriptForProvider(
-  effectiveProvider: 'deepgram' | 'elevenlabs',
-  transcript: Pick<TranscriptRecord, 'model' | 'summaryJson'>,
-): boolean {
-  const inferredProvider = inferTranscriptSttProvider(transcript);
-  return inferredProvider !== null && inferredProvider === effectiveProvider;
+function resolveExpectedSttModelAndLanguage(
+  config: BatchBackendConfig,
+  provider: SttProviderId,
+): { model: string; language: string } {
+  if (provider === 'elevenlabs') {
+    return {
+      model: config.stt.providers.elevenlabs.model,
+      language: 'auto',
+    };
+  }
+  if (provider === 'google') {
+    return {
+      model: config.stt.providers.google.model,
+      language: config.stt.providers.google.languageCodes[0] ?? 'auto',
+    };
+  }
+  return {
+    model: config.stt.providers.deepgram.model,
+    language: config.stt.providers.deepgram.language,
+  };
+}
+
+function shouldReuseCachedTranscriptForFingerprint(args: {
+  effectiveProvider: SttProviderId;
+  mode: TranscriptRecord['mode'];
+  model: string;
+  language: string;
+  transcript: Pick<TranscriptRecord, 'sttProvider' | 'mode' | 'model' | 'language' | 'summaryJson'>;
+}): boolean {
+  const inferredProvider = inferTranscriptSttProvider(args.transcript);
+  if (inferredProvider === null || inferredProvider !== args.effectiveProvider) {
+    return false;
+  }
+  if (args.transcript.mode !== args.mode) {
+    return false;
+  }
+  if (args.transcript.model.trim().toLowerCase() !== args.model.trim().toLowerCase()) {
+    return false;
+  }
+  if (args.transcript.language.trim().toLowerCase() !== args.language.trim().toLowerCase()) {
+    return false;
+  }
+  return true;
 }
 
 function resolveHeadingThemeFromPreset(
@@ -2090,7 +2142,7 @@ export function registerExtendedRoutes(app: FastifyInstance, options: ExtendedRo
       const querySchema = z.object({
         studentId: z.string().uuid().optional(),
         student: z.string().min(1).optional(),
-        sttProvider: z.enum(['deepgram', 'elevenlabs']).optional(),
+        sttProvider: z.enum(['deepgram', 'elevenlabs', 'google']).optional(),
       });
       let authenticatedUser;
 
@@ -2129,6 +2181,7 @@ export function registerExtendedRoutes(app: FastifyInstance, options: ExtendedRo
         const studentId = query.studentId ?? (studentName ? deriveStudentId(studentName) : null);
         const requestedSttProvider = query.sttProvider;
         const effectiveSttProvider = requestedSttProvider ?? config.transcription.sttProvider;
+        const expectedFingerprint = resolveExpectedSttModelAndLanguage(config, effectiveSttProvider);
 
         const filename = file.filename || '';
         const fileBuffer = await readFileBuffer(file.file);
@@ -2191,7 +2244,15 @@ export function registerExtendedRoutes(app: FastifyInstance, options: ExtendedRo
               continue;
             }
 
-            if (!shouldReuseCachedTranscriptForProvider(effectiveSttProvider, cachedTranscript)) {
+            if (
+              !shouldReuseCachedTranscriptForFingerprint({
+                effectiveProvider: effectiveSttProvider,
+                mode: config.transcription.mode,
+                model: expectedFingerprint.model,
+                language: expectedFingerprint.language,
+                transcript: cachedTranscript,
+              })
+            ) {
               continue;
             }
 
@@ -2486,7 +2547,7 @@ export function registerExtendedRoutes(app: FastifyInstance, options: ExtendedRo
       const routePath = resolveRoutePath(request, 'POST /recordings/:recordingId/transcribe');
       const bodySchema = z
         .object({
-          sttProvider: z.enum(['deepgram', 'elevenlabs']).optional(),
+          sttProvider: z.enum(['deepgram', 'elevenlabs', 'google']).optional(),
         })
         .optional();
 

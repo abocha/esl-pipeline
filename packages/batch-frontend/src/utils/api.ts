@@ -46,6 +46,7 @@ import type {
   JobSummaryResponse as ContractJobSummaryResponse,
   MarkdownValidationResponse as ContractMarkdownValidationResponse,
   RecordingStatus as ContractRecordingStatus,
+  SttProviderId as ContractSttProviderId,
   StudentSummaryResponse as ContractStudentSummaryResponse,
   SubmitJobRequest as ContractSubmitJobRequest,
   TtsProviderId as ContractTtsProviderId,
@@ -66,7 +67,7 @@ import apiClient, {
 export type JobState = ContractJobState;
 export type TtsStrategy = ContractTtsStrategy;
 export type RecordingStatus = ContractRecordingStatus;
-export type SttProvider = 'deepgram' | 'elevenlabs';
+export type SttProvider = ContractSttProviderId;
 export type UserRole = 'admin' | 'user' | 'viewer';
 export type RegisterRole = Exclude<UserRole, 'admin'>;
 
@@ -93,6 +94,7 @@ export interface RecordingTranscriptResponse {
   transcriptId: string;
   text: string;
   summaryJson: Record<string, unknown> | null;
+  sttProvider: SttProvider;
   model: string;
   language: string;
   mode: 'timeline' | 'stack';
@@ -784,6 +786,10 @@ export interface JobOptionsResponse {
   cefrLevels?: ContractJobOptionsPayload['cefrLevels'];
   cefrDefault?: ContractJobOptionsPayload['cefrDefault'];
   generation?: ContractJobOptionsPayload['generation'];
+  sttProviders?: ContractJobOptionsPayload['sttProviders'];
+  defaultSttProvider?: ContractJobOptionsPayload['defaultSttProvider'];
+  sttModelOptionsByProvider?: ContractJobOptionsPayload['sttModelOptionsByProvider'];
+  defaultSttModelByProvider?: ContractJobOptionsPayload['defaultSttModelByProvider'];
   ttsProviders?: ContractJobOptionsPayload['ttsProviders'];
   ttsModelOptionsByProvider?: ContractJobOptionsPayload['ttsModelOptionsByProvider'];
   defaultTtsProvider?: ContractJobOptionsPayload['defaultTtsProvider'];

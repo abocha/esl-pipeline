@@ -217,8 +217,32 @@ Use `.env.batch-backend` for the service stack. It includes all core keys above 
   - `ESL_TTS_PROVIDER_ELEVENLABS_VOICES_PATH`, `REPO_ROOT`, `APP_ROOT`, `PROJECT_ROOT`
 - Transcription pipeline:
   - `TRANSCRIBE_MODE` (`timeline`|`stack`), `TRANSCRIBE_MAX_CONCURRENCY`
-  - `DEEPGRAM_API_KEY`, `DEEPGRAM_ACCESS_TOKEN` (optional), `DEEPGRAM_MODEL`, `DEEPGRAM_LANGUAGE`,
-    `DEEPGRAM_STORE_RAW_RESPONSE`
+  - Provider selection:
+    - `STT_PROVIDER` (default provider override, `deepgram`|`elevenlabs`|`google`)
+    - `ESL_STT_DEFAULT_PROVIDER` (canonical default provider key)
+    - `ESL_STT_PROVIDER_ORDER` (comma-separated provider priority list used for metadata/default resolution)
+  - Provider namespaced STT settings:
+    - Deepgram:
+      - `ESL_STT_PROVIDER_DEEPGRAM_API_KEY`
+      - `ESL_STT_PROVIDER_DEEPGRAM_ACCESS_TOKEN` (optional)
+      - `ESL_STT_PROVIDER_DEEPGRAM_MODEL` (default `nova-3`)
+      - `ESL_STT_PROVIDER_DEEPGRAM_LANGUAGE` (default `multi`)
+    - ElevenLabs (Scribe):
+      - `ESL_STT_PROVIDER_ELEVENLABS_API_KEY` (or `ESL_STT_PROVIDER_ELEVENLABS_API_TOKEN`)
+      - `ESL_STT_PROVIDER_ELEVENLABS_MODEL` (default `scribe_v2`)
+    - Google Cloud STT V2:
+      - `GOOGLE_STT_PROJECT_ID`
+      - `GOOGLE_STT_LOCATION` (default `us`)
+      - `GOOGLE_STT_RECOGNIZER` (optional recognizer path override)
+      - `GOOGLE_STT_MODEL` (default `latest_long`)
+      - `GOOGLE_STT_LANGUAGE_CODES` (comma-separated, default `en-US`)
+      - `GOOGLE_STT_GCS_STAGING_BUCKET` (required when `STT_PROVIDER=google`)
+      - `GOOGLE_STT_GCS_STAGING_PREFIX` (default `stt-staging`)
+  - STT runtime flags:
+    - `ESL_STT_STORE_RAW_RESPONSE` (default `true`; controls raw STT response persistence)
+  - Legacy STT aliases remain supported with deprecation warnings:
+    - `DEEPGRAM_API_KEY`, `DEEPGRAM_ACCESS_TOKEN`, `DEEPGRAM_MODEL`, `DEEPGRAM_LANGUAGE`, `DEEPGRAM_STORE_RAW_RESPONSE`
+    - `ELEVENLABS_API_KEY`, `ELEVENLABS_API_TOKEN`
   - `WORKER_CONCURRENCY`, `MAX_CONCURRENT_FFMPEG`
   - ElevenLabs TTS cache controls:
     - `BATCH_TTS_CACHE_DIR` (default `./tmp/tts-cache`) — persistent audio cache directory used by worker pipeline runs.
@@ -252,7 +276,7 @@ Notes:
 - Worker runtime does not downgrade manifest storage to filesystem; missing/invalid manifest bucket configuration fails fast.
 - TTS strategy defaults can be provided via `ESL_TTS_PROVIDER_ELEVENLABS_STRATEGY` and related provider-scoped options; manifests now persist these for reruns.
 - Batch-backend persistence for `user_settings.tts_provider` is canonical-only (`elevenlabs` or `google`); legacy stored values (`openai`, `azure`) are migration-cleanup only.
-- Batch backend startup validates `FILESYSTEM_UPLOAD_DIR` and `PROMPT_*` allowlists; misconfigured paths fail fast.
+- Batch backend startup validates `FILESYSTEM_UPLOAD_DIR`, `PROMPT_*` allowlists, and active STT provider prerequisites (credentials + Google staging requirements); misconfigured paths fail fast.
 - Use `RECORDINGS_MAX_FILE_SIZE` to raise audio upload limits without affecting general markdown uploads.
 - Postgres backup archival scripts read `PG_BACKUP_S3_*` variables; keep backup bucket/prefix separate from runtime `S3_BUCKET` upload paths.
 - Ops status/alert helpers (`postgres-ops-status.sh`, `run-postgres-ops-alert.sh`, `run-aws-key-rotation-reminder.sh`) reuse `.env.batch-backend` and the `PG_BACKUP_*` thresholds above.

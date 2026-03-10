@@ -49,6 +49,33 @@ describe('MinimalAssignment - prompt and draft prep', { timeout: PROMPT_DRAFT_TE
     }
   });
 
+  it('uses metadata-driven STT default provider for upload payloads', async () => {
+    const defaultOptions = await api.fetchJobOptions();
+    vi.mocked(api.fetchJobOptions).mockReset();
+    vi.mocked(api.fetchJobOptions).mockResolvedValueOnce({
+      ...defaultOptions,
+      sttProviders: ['google', 'deepgram'],
+      defaultSttProvider: 'google',
+    });
+
+    const user = userEvent.setup();
+    render(<MinimalAssignment />);
+
+    const sttProviderSelect = await screen.findByRole('combobox', { name: /STT provider/i });
+    await waitFor(() => {
+      expect((sttProviderSelect as HTMLSelectElement).value).toBe('google');
+    });
+    await user.click(screen.getByRole('button', { name: /Drop audio file/i }));
+
+    await waitFor(() => {
+      expect(api.uploadRecording).toHaveBeenCalledTimes(1);
+    });
+    expect(api.uploadRecording).toHaveBeenCalledWith(
+      expect.any(File),
+      expect.objectContaining({ sttProvider: 'google' }),
+    );
+  });
+
   it('shows a cache-hit notice when transcript reuse is available', async () => {
     const user = userEvent.setup();
     vi.mocked(api.uploadRecording).mockResolvedValueOnce(

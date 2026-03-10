@@ -1,4 +1,5 @@
 import type { TranscriptMode, TranscriptRecord } from '../domain/transcript-model.js';
+import type { SttProviderId } from '@esl-pipeline/contracts';
 import { getTranscriptByRecordingId } from '../domain/transcript-repository.js';
 import type { TranscriptionStorage } from '../infrastructure/transcription-storage.js';
 import { createTranscriptionStorageForUri } from '../infrastructure/transcription-storage.js';
@@ -8,6 +9,7 @@ export interface RecordingTranscriptResponse {
   transcriptId: string;
   text: string;
   summaryJson: Record<string, unknown> | null;
+  sttProvider: SttProviderId;
   model: string;
   language: string;
   mode: TranscriptMode;
@@ -49,6 +51,7 @@ export function buildRecordingTranscriptResponse(
     transcriptId: transcript.id,
     text,
     summaryJson: transcript.summaryJson ?? null,
+    sttProvider: transcript.sttProvider,
     model: transcript.model,
     language: transcript.language,
     mode: transcript.mode,

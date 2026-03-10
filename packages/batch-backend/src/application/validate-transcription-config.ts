@@ -22,8 +22,57 @@ export async function validateTranscriptionConfig(
   const storageConfig = overrides?.storageConfig ?? createStorageConfigService();
   const promptOptionsLoader = overrides?.promptOptionsLoader ?? getPromptOptions;
 
+  validateActiveSttProviderConfig(config);
   await validateStorageConfig(storageConfig);
   await validatePromptAssets(config, promptOptionsLoader);
+}
+
+function validateActiveSttProviderConfig(config: BatchBackendConfig): void {
+  const activeProvider = config.transcription.sttProvider ?? config.stt.defaultProvider;
+
+  if (activeProvider === 'deepgram') {
+    const deepgramApiKey = config.stt.providers.deepgram.apiKey?.trim();
+    const deepgramAccessToken = config.stt.providers.deepgram.accessToken?.trim();
+    if (!deepgramApiKey && !deepgramAccessToken) {
+      throw new ConfigurationError(
+        'STT provider deepgram requires ESL_STT_PROVIDER_DEEPGRAM_API_KEY or ESL_STT_PROVIDER_DEEPGRAM_ACCESS_TOKEN.',
+      );
+    }
+    return;
+  }
+
+  if (activeProvider === 'elevenlabs') {
+    const elevenlabsApiKey =
+      config.stt.providers.elevenlabs.apiKey?.trim() ??
+      config.orchestrator.elevenLabsApiKey?.trim() ??
+      process.env.ESL_STT_PROVIDER_ELEVENLABS_API_KEY?.trim() ??
+      process.env.ESL_STT_PROVIDER_ELEVENLABS_API_TOKEN?.trim() ??
+      process.env.ELEVENLABS_API_KEY?.trim() ??
+      process.env.ELEVENLABS_API_TOKEN?.trim();
+    if (!elevenlabsApiKey) {
+      throw new ConfigurationError(
+        'STT provider elevenlabs requires ESL_STT_PROVIDER_ELEVENLABS_API_KEY (or compatible alias).',
+      );
+    }
+    return;
+  }
+
+  if (activeProvider === 'google') {
+    const projectId = config.stt.providers.google.projectId?.trim();
+    const location = config.stt.providers.google.location?.trim();
+    const stagingBucket = config.stt.providers.google.gcsStagingBucket?.trim();
+    if (!projectId) {
+      throw new ConfigurationError('STT provider google requires GOOGLE_STT_PROJECT_ID.');
+    }
+    if (!location) {
+      throw new ConfigurationError('STT provider google requires GOOGLE_STT_LOCATION.');
+    }
+    if (!stagingBucket) {
+      throw new ConfigurationError(
+        'STT provider google requires GOOGLE_STT_GCS_STAGING_BUCKET for non-gs:// uploads.',
+      );
+    }
+  }
 }
 
 async function validateStorageConfig(storageConfig: StorageConfigurationService): Promise<void> {

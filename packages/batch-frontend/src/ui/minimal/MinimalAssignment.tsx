@@ -63,6 +63,7 @@ import { getGenerationQuotaWindowDecision } from './MinimalAssignment.quota-wind
 
 const AUDIO_EXTENSIONS = ['.wav', '.mp3', '.m4a', '.aac', '.ogg', '.opus'];
 const POLL_INTERVAL_MS = 3000;
+const FALLBACK_STT_PROVIDERS: SttProvider[] = ['deepgram', 'elevenlabs', 'google'];
 const FALLBACK_TTS_PROVIDERS = ['elevenlabs', 'google'] as const;
 const FALLBACK_GOOGLE_TTS_MODELS = ['chirp3_hd', 'studio', 'neural2', 'wavenet'] as const;
 const FALLBACK_ELEVENLABS_MODEL = 'eleven_multilingual_v2';
@@ -71,6 +72,16 @@ type UiTtsProvider = (typeof FALLBACK_TTS_PROVIDERS)[number];
 
 function isUiTtsProvider(value: string | null | undefined): value is UiTtsProvider {
   return value === 'elevenlabs' || value === 'google';
+}
+
+function isSttProvider(value: string | null | undefined): value is SttProvider {
+  return value === 'deepgram' || value === 'elevenlabs' || value === 'google';
+}
+
+function formatSttProviderLabel(provider: SttProvider): string {
+  if (provider === 'deepgram') return 'Deepgram';
+  if (provider === 'elevenlabs') return 'ElevenLabs';
+  return 'Google';
 }
 
 function isGoogleTtsModel(value: string | null | undefined): value is GoogleTtsModel {
@@ -229,6 +240,7 @@ export const MinimalAssignment: React.FC = () => {
   const [selectedFileName, setSelectedFileName] = useState<string | null>(null);
   const [selectedSttProvider, setSelectedSttProvider] = useState<SttProvider>('deepgram');
   const uploadAbortRef = useRef<AbortController | null>(null);
+  const sttProviderUserChangedRef = useRef(false);
   const generationRequestVersionRef = useRef(0);
 
   const [transcript, setTranscript] = useState<RecordingTranscriptResponse | null>(null);
@@ -338,6 +350,15 @@ export const MinimalAssignment: React.FC = () => {
       generationModelOptions.filter((option) => option.provider === selectedGenerationProvider),
     [generationModelOptions, selectedGenerationProvider],
   );
+  const sttProviders = useMemo<SttProvider[]>(() => {
+    const providers = (jobOptions?.sttProviders ?? [])
+      .map((provider) => (isSttProvider(provider) ? provider : null))
+      .filter((provider): provider is SttProvider => provider !== null);
+    if (providers.length > 0) {
+      return [...new Set(providers)];
+    }
+    return [...FALLBACK_STT_PROVIDERS];
+  }, [jobOptions?.sttProviders]);
   const ttsProviders = useMemo<UiTtsProvider[]>(() => {
     const providers = (jobOptions?.ttsProviders ?? [])
       .map((provider) => (isUiTtsProvider(provider) ? provider : null))
@@ -425,6 +446,7 @@ export const MinimalAssignment: React.FC = () => {
     invalidateDraftGenerationRequests();
     uploadAbortRef.current?.abort();
     uploadAbortRef.current = null;
+    sttProviderUserChangedRef.current = false;
     writeJobIdToQuery(null);
     setRecording(null);
     setRecordingStatus(null);
@@ -581,6 +603,29 @@ export const MinimalAssignment: React.FC = () => {
       normalizePresetSelection(presetOptionIds, undefined, current),
     );
   }, [jobOptions, presetOptionIds, selectedPreset]);
+
+  useEffect(() => {
+    if (sttProviders.length === 0) return;
+    const configuredDefault = jobOptions?.defaultSttProvider;
+    const preferredProvider =
+      configuredDefault && sttProviders.includes(configuredDefault)
+        ? configuredDefault
+        : sttProviders[0];
+    if (!preferredProvider) return;
+    if (
+      configuredDefault &&
+      sttProviders.includes(configuredDefault) &&
+      !sttProviderUserChangedRef.current &&
+      selectedSttProvider !== configuredDefault
+    ) {
+      setSelectedSttProvider(configuredDefault);
+      return;
+    }
+
+    if (!sttProviders.includes(selectedSttProvider)) {
+      setSelectedSttProvider(preferredProvider);
+    }
+  }, [jobOptions?.defaultSttProvider, selectedSttProvider, sttProviders]);
 
   useEffect(() => {
     if (ttsProviders.length === 0) return;
@@ -1924,10 +1969,17 @@ export const MinimalAssignment: React.FC = () => {
           STT provider
           <select
             value={selectedSttProvider}
-            onChange={(event) => setSelectedSttProvider(event.target.value as SttProvider)}
+            onChange={(event) => {
+              sttProviderUserChangedRef.current = true;
+              setSelectedSttProvider(event.target.value as SttProvider);
+            }}
+            disabled={sttProviders.length === 0}
           >
-            <option value="deepgram">Deepgram</option>
-            <option value="elevenlabs">ElevenLabs</option>
+            {sttProviders.map((provider) => (
+              <option key={provider} value={provider}>
+                {formatSttProviderLabel(provider)}
+              </option>
+            ))}
           </select>
         </label>
         {selectedStudent ? (
