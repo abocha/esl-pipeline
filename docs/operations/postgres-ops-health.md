@@ -24,6 +24,7 @@ This runbook covers operational health checks layered on top of the backup + res
 - Restore-drill freshness threshold: `PG_BACKUP_HEALTH_MAX_DRILL_AGE_DAYS=35`
 - Key-rotation threshold: `PG_BACKUP_KEY_ROTATION_MAX_AGE_DAYS=80`
 - Alert cooldown: `PG_BACKUP_ALERT_COOLDOWN_MINUTES=360`
+- LR-010 storage-retirement invariant: `uploaded_files` rows with `storage_provider='filesystem'` should remain `0` in active environments.
 
 ## Required Env (Telegram + IAM)
 
