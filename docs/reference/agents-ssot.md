@@ -114,6 +114,14 @@ The ESL Pipeline is a pnpm-based monorepo. Core directories:
   - ElevenLabs provider adapter (uses system `ffmpeg`).
 - [`packages/tts-provider-google`](packages/tts-provider-google)
   - Google Cloud provider adapter (uses system `ffmpeg`).
+- [`packages/stt-core`](packages/stt-core)
+  - STT provider registry, contracts, and orchestration surface.
+- [`packages/stt-provider-deepgram`](packages/stt-provider-deepgram)
+  - Deepgram STT provider adapter.
+- [`packages/stt-provider-elevenlabs`](packages/stt-provider-elevenlabs)
+  - ElevenLabs STT provider adapter (Scribe models).
+- [`packages/stt-provider-google`](packages/stt-provider-google)
+  - Google Cloud STT V2 provider adapter with GCS staging support.
 - [`packages/storage-uploader`](packages/storage-uploader)
   - File upload (e.g. S3); used by orchestrator.
 - [`packages/html-publisher`](packages/html-publisher)
@@ -386,6 +394,7 @@ Boundary invariants:
 - Batch-backend file storage runtime MUST NOT expose filesystem-to-S3 migration helpers; uploaded-file provider migrations are explicit runbook/migration operations.
 - Batch-backend worker runtime MUST NOT downgrade manifest storage from S3 to filesystem on bucket/config errors; such configuration errors fail fast.
 - Batch-backend `user_settings.tts_provider` storage MUST stay canonical (`elevenlabs` or `google`); legacy provider values are migration-only and MUST NOT be reintroduced in runtime write paths.
+- Batch-backend transcript provider identity MUST be persisted in `transcripts.stt_provider`; runtime selection/caching MUST use this canonical field and treat summary/model inference as compatibility fallback only.
 - Batch-backend auth middleware and `/auth/*` routes MUST use an injected `AuthService` created from validated runtime config, not ad-hoc environment fallback constructors.
 - Batch-backend student timeline type filters MUST use canonical timeline types only (for example `job_awaiting_approval`); legacy alias values are retired.
 - Batch-backend job status reads MUST use canonical `GET /jobs/:jobId`; legacy `/jobs/:jobId/status` alias is retired.
@@ -503,6 +512,17 @@ For all subsections:
   - Provider adapters must return shared `BuildStudyTextResult` / `BuildPronunciationShadowSentenceResult` shapes.
 - Safe extensions:
   - Provider-local model/voice expansion that preserves shared contracts.
+
+#### 4.2.8A. [`packages/stt-core`](packages/stt-core), [`packages/stt-provider-deepgram`](packages/stt-provider-deepgram), [`packages/stt-provider-elevenlabs`](packages/stt-provider-elevenlabs), and [`packages/stt-provider-google`](packages/stt-provider-google)
+
+- Role:
+  - Provider-agnostic STT contracts/registry plus provider-specific adapter implementations.
+- Contracts:
+  - STT provider id contract is canonical: `deepgram` | `elevenlabs` | `google`.
+  - Selected STT provider executes provider-local fallback only (for example multichannel -> diarized inside a provider), never cross-provider runtime fallback.
+  - Transcript persistence MUST write canonical provider identity to `transcripts.stt_provider`.
+- Safe extensions:
+  - Add new STT providers through adapter registration in `stt-core` without branching provider logic inside batch application handlers.
 
 #### 4.2.9. [`packages/storage-uploader`](packages/storage-uploader)
 

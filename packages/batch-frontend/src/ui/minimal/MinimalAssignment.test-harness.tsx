@@ -314,6 +314,18 @@ export function setupMinimalAssignmentTest() {
         voiceAccents: ['american'],
         voices: [{ id: 'voice-a', name: 'Voice A', accent: 'american' }],
         notionDatabases: [{ id: 'db-1', name: 'DB One' }],
+        sttProviders: ['deepgram', 'elevenlabs', 'google'],
+        defaultSttProvider: 'deepgram',
+        sttModelOptionsByProvider: {
+          deepgram: ['nova-3'],
+          elevenlabs: ['scribe_v2'],
+          google: ['latest_long'],
+        },
+        defaultSttModelByProvider: {
+          deepgram: 'nova-3',
+          elevenlabs: 'scribe_v2',
+          google: 'latest_long',
+        },
         ttsStrategies: ['auto', 'dialogue', 'tts'],
         ttsProviders: ['elevenlabs', 'google'],
         ttsModelOptionsByProvider: {

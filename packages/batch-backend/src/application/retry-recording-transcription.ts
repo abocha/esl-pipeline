@@ -1,5 +1,6 @@
 import { publishRecordingEvent } from '../domain/recording-events.js';
 import type { RecordingRecord } from '../domain/recording-model.js';
+import type { SttProviderId } from '@esl-pipeline/contracts';
 import { getRecordingById, updateRecordingStatus } from '../domain/recording-repository.js';
 import { createTranscribeQueue } from '../infrastructure/transcribe-queue.js';
 import { type RecordingDto, recordingToDto } from './recording-dto.js';
@@ -21,14 +22,14 @@ export interface RetryRecordingDependencies {
   };
   enqueue: (payload: {
     recordingId: string;
-    sttProvider?: 'deepgram' | 'elevenlabs';
+    sttProvider?: SttProviderId;
   }) => Promise<void>;
   publishEvent: typeof publishRecordingEvent;
 }
 
 export async function retryRecordingTranscription(
   recordingId: string,
-  params?: { sttProvider?: 'deepgram' | 'elevenlabs' },
+  params?: { sttProvider?: SttProviderId },
   overrides?: Partial<RetryRecordingDependencies>,
 ): Promise<RecordingDto | null> {
   if (!recordingId) return null;

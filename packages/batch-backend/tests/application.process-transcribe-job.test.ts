@@ -1,6 +1,9 @@
 import { Readable } from 'node:stream';
 import { describe, expect, it, vi } from 'vitest';
 
+import type { SttProviderId } from '@esl-pipeline/contracts';
+import type { SttTranscriptionResult } from '@esl-pipeline/stt-core';
+
 import {
   processTranscribeJob,
   resolveElevenLabsSttApiKey,
@@ -17,28 +20,25 @@ describe('application/process-transcribe-job', () => {
     const updates: string[] = [];
 
     const storage = createStorageStub();
-    const deepgramClient = createDeepgramStub({
-      results: {
-        utterances: [
-          { transcript: 'Hello there', speaker: 0, start: 0.2 },
-          { transcript: 'Hi!', speaker: 1, start: 1 },
+    const sttTranscribe = vi.fn(async () =>
+      createSttResult({
+        provider: 'deepgram',
+        model: 'nova-3',
+        language: 'multi',
+        text: 'Hello there Hi!',
+        segments: [
+          { text: 'Hello there', speaker: 0, start: 0.2, end: 0.8 },
+          { text: 'Hi!', speaker: 1, start: 1, end: 1.3 },
         ],
-        channels: [
-          {
-            alternatives: [{ transcript: 'Hello there Hi!' }],
-          },
-        ],
-      },
-    });
-
-    const config = createConfig();
+      }),
+    );
 
     const result = await processTranscribeJob(
       { recordingId: recording.id },
       {
-        config,
+        config: createConfig(),
         storage,
-        deepgramClient,
+        sttTranscribe,
         recordings: {
           async getById(id: string) {
             return id === recording.id ? recording : null;
@@ -64,6 +64,7 @@ describe('application/process-transcribe-job', () => {
               mode: params.mode,
               model: params.model,
               language: params.language,
+              sttProvider: params.sttProvider,
               fallbackUsed: params.fallbackUsed,
               summaryJson: params.summaryJson ?? null,
               createdAt: new Date(),
@@ -81,14 +82,21 @@ describe('application/process-transcribe-job', () => {
     expect(result?.recordingId).toBe(recording.id);
     expect(result?.mode).toBe('timeline');
     expect(result?.fallbackUsed).toBe(false);
-    expect(result?.storageUri).toContain('local://transcripts/');
+    expect(result?.sttProvider).toBe('deepgram');
     expect((result?.summaryJson as { provider?: unknown } | null)?.provider).toBe('deepgram');
     expect(updates).toEqual(['transcribing', 'transcribed']);
+    expect(sttTranscribe).toHaveBeenCalledWith(
+      expect.objectContaining({
+        provider: 'deepgram',
+      }),
+    );
   });
 
   it('accepts ELEVENLABS_API_TOKEN fallback for ElevenLabs STT credentials', () => {
     const config = createConfig();
+    config.stt.providers.elevenlabs.apiKey = undefined;
     config.orchestrator.elevenLabsApiKey = undefined;
+
     const previousApiKey = process.env.ELEVENLABS_API_KEY;
     const previousApiToken = process.env.ELEVENLABS_API_TOKEN;
     delete process.env.ELEVENLABS_API_KEY;
@@ -110,24 +118,25 @@ describe('application/process-transcribe-job', () => {
     }
   });
 
-  it('uses fallback diarized transcription when multichannel fails', async () => {
-    const recording = createRecording('recording-2');
-    const storage = createStorageStub();
-    const deepgramClient = createDeepgramStub(null, {
-      results: {
-        utterances: [{ transcript: 'Fallback text', speaker: 0, start: 0.1 }],
-        channels: [{ alternatives: [{ transcript: 'Fallback text' }] }],
-      },
-    });
-
+  it('persists fallbackUsed when provider returns fallback transcript', async () => {
+    const recording = createRecording('recording-fallback');
     const inserted: TranscriptRecord[] = [];
 
     await processTranscribeJob(
       { recordingId: recording.id },
       {
         config: createConfig(),
-        storage,
-        deepgramClient,
+        storage: createStorageStub(),
+        sttTranscribe: vi.fn(async () =>
+          createSttResult({
+            provider: 'elevenlabs',
+            model: 'scribe_v2',
+            language: 'auto',
+            text: 'Fallback text',
+            segments: [{ text: 'Fallback text', speaker: 0, start: 0.1, end: 0.9 }],
+            fallbackUsed: true,
+          }),
+        ),
         recordings: {
           async getById() {
             return recording;
@@ -143,13 +152,14 @@ describe('application/process-transcribe-job', () => {
           },
           async insert(params) {
             const transcript: TranscriptRecord = {
-              id: params.id ?? 'transcript-2',
+              id: params.id ?? 'transcript-fallback',
               recordingId: params.recordingId,
               storageUri: params.storageUri,
               rawResponseUri: params.rawResponseUri ?? null,
               mode: params.mode,
               model: params.model,
               language: params.language,
+              sttProvider: params.sttProvider,
               fallbackUsed: params.fallbackUsed,
               summaryJson: params.summaryJson ?? null,
               createdAt: new Date(),
@@ -164,173 +174,11 @@ describe('application/process-transcribe-job', () => {
     );
 
     expect(inserted[0]?.fallbackUsed).toBe(true);
+    expect(inserted[0]?.sttProvider).toBe('elevenlabs');
   });
 
-  it('retries transient terminated transport errors and succeeds', async () => {
-    const recording = createRecording('recording-retry-terminated');
-    let attemptCount = 0;
-
-    const deepgramClient = {
-      listen: {
-        v1: {
-          media: {
-          async transcribeFile() {
-            attemptCount += 1;
-            if (attemptCount === 1) {
-              throw new TypeError('terminated');
-            }
-            return {
-              metadata: { channels: 2 },
-              results: {
-                utterances: [{ transcript: 'Recovered transcript', speaker: 0, start: 0.1 }],
-                channels: [
-                  { alternatives: [{ transcript: 'Recovered transcript' }] },
-                  { alternatives: [{ transcript: '' }] },
-                ],
-              },
-            };
-          },
-        },
-        },
-      },
-    };
-
-    const result = await processTranscribeJob(
-      { recordingId: recording.id },
-      {
-        config: createConfig(),
-        storage: createStorageStub(),
-        deepgramClient,
-        recordings: {
-          async getById() {
-            return recording;
-          },
-          async updateStatus({ status, error }) {
-            recording.status = status;
-            recording.error = error ?? null;
-            return recording;
-          },
-        },
-        transcripts: {
-          async getByRecordingId() {
-            return null;
-          },
-          async insert(params) {
-            return {
-              id: params.id ?? 'transcript-retry-terminated',
-              recordingId: params.recordingId,
-              storageUri: params.storageUri,
-              rawResponseUri: params.rawResponseUri ?? null,
-              mode: params.mode,
-              model: params.model,
-              language: params.language,
-              fallbackUsed: params.fallbackUsed,
-              summaryJson: params.summaryJson ?? null,
-              createdAt: new Date(),
-              updatedAt: new Date(),
-            };
-          },
-        },
-        publishEvent: vi.fn(),
-      },
-    );
-
-    expect(result).not.toBeNull();
-    expect(result?.fallbackUsed).toBe(false);
-    expect(attemptCount).toBe(2);
-    expect(recording.status).toBe('transcribed');
-    expect(recording.error).toBeNull();
-  });
-
-  it('retries transient statusCode failures and succeeds', async () => {
-    const recording = createRecording('recording-retry-status-code');
-    let attemptCount = 0;
-
-    const deepgramClient = {
-      listen: {
-        v1: {
-          media: {
-            async transcribeFile() {
-              attemptCount += 1;
-              if (attemptCount === 1) {
-                throw { statusCode: 503, message: 'service unavailable' };
-              }
-              return {
-                metadata: { channels: 2 },
-                results: {
-                  utterances: [{ transcript: 'Recovered transcript', speaker: 0, start: 0.1 }],
-                  channels: [
-                    { alternatives: [{ transcript: 'Recovered transcript' }] },
-                    { alternatives: [{ transcript: '' }] },
-                  ],
-                },
-              };
-            },
-          },
-        },
-      },
-    };
-
-    const result = await processTranscribeJob(
-      { recordingId: recording.id },
-      {
-        config: createConfig(),
-        storage: createStorageStub(),
-        deepgramClient,
-        recordings: {
-          async getById() {
-            return recording;
-          },
-          async updateStatus({ status, error }) {
-            recording.status = status;
-            recording.error = error ?? null;
-            return recording;
-          },
-        },
-        transcripts: {
-          async getByRecordingId() {
-            return null;
-          },
-          async insert(params) {
-            return {
-              id: params.id ?? 'transcript-retry-status-code',
-              recordingId: params.recordingId,
-              storageUri: params.storageUri,
-              rawResponseUri: params.rawResponseUri ?? null,
-              mode: params.mode,
-              model: params.model,
-              language: params.language,
-              fallbackUsed: params.fallbackUsed,
-              summaryJson: params.summaryJson ?? null,
-              createdAt: new Date(),
-              updatedAt: new Date(),
-            };
-          },
-        },
-        publishEvent: vi.fn(),
-      },
-    );
-
-    expect(result).not.toBeNull();
-    expect(attemptCount).toBe(2);
-    expect(recording.status).toBe('transcribed');
-    expect(recording.error).toBeNull();
-  });
-
-  it('fails loudly when Deepgram returns async accepted response', async () => {
-    const recording = createRecording('recording-accepted-response');
-
-    const deepgramClient = {
-      listen: {
-        v1: {
-          media: {
-            async transcribeFile() {
-              return { request_id: 'req-123' };
-            },
-          },
-        },
-      },
-    };
+  it('marks recording failed when STT provider throws', async () => {
+    const recording = createRecording('recording-fail');
 
     await expect(
       processTranscribeJob(
@@ -338,7 +186,50 @@ describe('application/process-transcribe-job', () => {
         {
           config: createConfig(),
           storage: createStorageStub(),
-          deepgramClient,
+          sttTranscribe: vi.fn(async () => {
+            throw new Error('service unavailable');
+          }),
+          recordings: {
+            async getById() {
+              return recording;
+            },
+            async updateStatus({ status, error }) {
+              recording.status = status;
+              recording.error = error ?? null;
+              return recording;
+            },
+          },
+          transcripts: {
+            async getByRecordingId() {
+              return null;
+            },
+            async insert() {
+              throw new Error('insert should not be called on failures');
+            },
+          },
+          publishEvent: vi.fn(),
+        },
+      ),
+    ).rejects.toThrow('service unavailable');
+
+    expect(recording.status).toBe('failed');
+    expect(recording.error).toContain('service unavailable');
+  });
+
+  it('fails loudly when provider raises async accepted response error', async () => {
+    const recording = createRecording('recording-accepted-response');
+
+    await expect(
+      processTranscribeJob(
+        { recordingId: recording.id },
+        {
+          config: createConfig(),
+          storage: createStorageStub(),
+          sttTranscribe: vi.fn(async () => {
+            throw new Error(
+              'Deepgram returned async accepted response (request_id=req-123); synchronous transcription response is required.',
+            );
+          }),
           recordings: {
             async getById() {
               return recording;
@@ -361,6 +252,7 @@ describe('application/process-transcribe-job', () => {
         },
       ),
     ).rejects.toThrow(/async accepted response/i);
+
     expect(recording.status).toBe('failed');
   });
 
@@ -376,27 +268,23 @@ describe('application/process-transcribe-job', () => {
       },
     };
 
-    const deepgramClient = createDeepgramStub({
-      metadata: { channels: 2 },
-      results: {
-        utterances: [
-          { transcript: 'Hello', speaker: 0, start: 0, end: 0.5 },
-          { transcript: 'there.', speaker: 0, start: 0.7, end: 1.2 },
-          { transcript: 'Hi.', speaker: 1, start: 2, end: 2.4 },
-        ],
-        channels: [
-          { alternatives: [{ transcript: 'Hello there.' }] },
-          { alternatives: [{ transcript: 'Hi.' }] },
-        ],
-      },
-    });
-
     await processTranscribeJob(
       { recordingId: recording.id },
       {
         config: createConfig(),
         storage,
-        deepgramClient,
+        sttTranscribe: vi.fn(async () =>
+          createSttResult({
+            provider: 'deepgram',
+            model: 'nova-3',
+            language: 'multi',
+            text: 'Hello there. Hi.',
+            segments: [
+              { text: 'Hello there.', speaker: 0, start: 0, end: 1.2 },
+              { text: 'Hi.', speaker: 1, start: 2, end: 2.4 },
+            ],
+          }),
+        ),
         recordings: {
           async getById() {
             return recording;
@@ -419,6 +307,7 @@ describe('application/process-transcribe-job', () => {
               mode: params.mode,
               model: params.model,
               language: params.language,
+              sttProvider: params.sttProvider,
               fallbackUsed: params.fallbackUsed,
               summaryJson: params.summaryJson ?? null,
               createdAt: new Date(),
@@ -484,6 +373,35 @@ function createConfig(): BatchBackendConfig {
       mode: 'timeline',
       maxConcurrency: 1,
       sttProvider: 'deepgram',
+      sttProviders: ['deepgram', 'elevenlabs', 'google'],
+    },
+    stt: {
+      defaultProvider: 'deepgram',
+      providerOrder: ['deepgram', 'elevenlabs', 'google'],
+      storeRawResponse: true,
+      providers: {
+        deepgram: {
+          apiKey: 'dg-key',
+          accessToken: undefined,
+          model: 'nova-3',
+          language: 'multi',
+          retryMax: 3,
+          retryBaseDelayMs: 0,
+        },
+        elevenlabs: {
+          apiKey: undefined,
+          model: 'scribe_v2',
+        },
+        google: {
+          projectId: '',
+          location: 'us-central1',
+          recognizer: undefined,
+          model: 'latest_long',
+          languageCodes: ['en-US'],
+          gcsStagingBucket: '',
+          gcsStagingPrefix: 'stt-staging',
+        },
+      },
     },
     recordings: { maxFileSize: 0 },
     deepgram: {
@@ -638,27 +556,25 @@ function createStorageStub(): TranscriptionStorage {
   };
 }
 
-function createDeepgramStub(primaryResult?: unknown, fallbackResult?: unknown) {
-  const calls: unknown[] = [];
+function createSttResult(params: {
+  provider: SttProviderId;
+  model: string;
+  language: string;
+  text: string;
+  segments: SttTranscriptionResult['segments'];
+  fallbackUsed?: boolean;
+}): SttTranscriptionResult {
   return {
-    listen: {
-      v1: {
-        media: {
-          async transcribeFile(_stream: Readable, options: Record<string, unknown>) {
-            calls.push(options);
-            if (calls.length === 1 && primaryResult === null) {
-              throw new Error('primary failed');
-            }
-            if (calls.length === 1 && primaryResult !== undefined) {
-              return primaryResult;
-            }
-            if (fallbackResult === undefined) {
-              throw new Error('fallback failed');
-            }
-            return fallbackResult;
-          },
-        },
-      },
+    provider: params.provider,
+    model: params.model,
+    language: params.language,
+    text: params.text,
+    segments: params.segments,
+    rawResponse: { provider: params.provider },
+    fallbackUsed: params.fallbackUsed ?? false,
+    summary: {
+      provider: params.provider,
+      segmentCount: params.segments.length,
     },
   };
 }

@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import { PoolClient } from 'pg';
+import type { SttProviderId } from '@esl-pipeline/contracts';
 
 import { withPgClient } from '../infrastructure/db.js';
 import { logger } from '../infrastructure/logger.js';
@@ -17,6 +18,7 @@ interface TranscriptRow {
   mode: string;
   model: string;
   language: string;
+  stt_provider: SttProviderId;
   fallback_used: boolean;
   summary_json: Record<string, unknown> | null;
   created_at: Date;
@@ -31,6 +33,7 @@ export interface InsertTranscriptParams {
   mode: TranscriptMode;
   model: string;
   language: string;
+  sttProvider: SttProviderId;
   fallbackUsed: boolean;
   summaryJson?: Record<string, unknown> | null;
 }
@@ -42,7 +45,7 @@ export async function getTranscriptByRecordingId(
     const result = await client.query(
       `
       SELECT id, recording_id, storage_uri, raw_response_uri, mode, model, language,
-             fallback_used, summary_json, created_at, updated_at
+             stt_provider, fallback_used, summary_json, created_at, updated_at
       FROM transcripts
       WHERE recording_id = $1
       ORDER BY created_at DESC
@@ -71,12 +74,13 @@ export async function insertTranscript(params: InsertTranscriptParams): Promise<
         mode,
         model,
         language,
+        stt_provider,
         fallback_used,
         summary_json,
         created_at,
         updated_at
       )
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
       RETURNING
         id,
         recording_id,
@@ -85,6 +89,7 @@ export async function insertTranscript(params: InsertTranscriptParams): Promise<
         mode,
         model,
         language,
+        stt_provider,
         fallback_used,
         summary_json,
         created_at,
@@ -98,6 +103,7 @@ export async function insertTranscript(params: InsertTranscriptParams): Promise<
         params.mode,
         params.model,
         params.language,
+        params.sttProvider,
         params.fallbackUsed,
         params.summaryJson ?? null,
         now,
@@ -132,6 +138,7 @@ export async function updateTranscriptStorage(params: {
         mode,
         model,
         language,
+        stt_provider,
         fallback_used,
         summary_json,
         created_at,
@@ -161,6 +168,7 @@ function mapRowToTranscript(row: TranscriptRow): TranscriptRecord {
     mode,
     model: row.model,
     language: row.language,
+    sttProvider: row.stt_provider,
     fallbackUsed: row.fallback_used,
     summaryJson: row.summary_json ?? null,
     createdAt: row.created_at,

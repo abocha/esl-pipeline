@@ -5,7 +5,7 @@
 - Audience: AI agents touching recording/transcript/prompt/draft flow.
 - Read Time: 8 minutes.
 - Authority Level: Active design spec.
-- Last Verified Against: 2026-03-04 repo state.
+- Last Verified Against: 2026-03-10 repo state.
 
 ## Purpose
 
@@ -27,12 +27,17 @@
 - Upload-based ingestion and queue-backed transcription are active.
 - Transcript review/edit, prompt package generation, draft save, and materialize+approve are active.
 - Prompt template/profile selection is DB-canonical (active revisions in Postgres).
+- STT execution is provider-agnostic (`stt-core` + provider adapters) with active providers:
+  - `deepgram`
+  - `elevenlabs` (Scribe v2)
+  - `google` (Cloud STT V2 with required GCS staging for non-`gs://` inputs)
 - Historical staged manual is archived.
 
 ## Artifact Model
 
 - `recording`: uploaded audio artifact + status metadata.
 - `transcript`: text artifact + optional raw model response metadata.
+  - canonical provider identity is persisted on each row (`transcripts.stt_provider`).
 - `prompt package`: template/profile/notes/transcript assembly output.
 - `draft`: user-provided markdown artifact prior to approval.
 - `job`: orchestrator handoff and publish lifecycle.
@@ -41,6 +46,7 @@
 
 - Users interact with artifact IDs, not file paths.
 - Re-transcription is explicit, not implicit.
+- Runtime provider selection is explicit (`request override` or configured default); no cross-provider fallback.
 - Draft materialization is the handoff boundary to approval/publish flow.
 - Prompt assembly order is deterministic:
   1. template
@@ -70,6 +76,7 @@
 - storage adapter/config mismatch
 - large recording limits
 - provider outages (Deepgram, Notion, TTS, S3)
+- STT provider credential/prerequisite drift (Deepgram token, ElevenLabs key, Google project/staging bucket)
 - SSE interruptions requiring polling fallback
 
 ## Do / Don't

@@ -168,6 +168,42 @@ describe('config/env - orchestrator remote config provider mapping', () => {
   });
 });
 
+describe('config/env - STT provider defaults', () => {
+  beforeEach(() => {
+    vi.resetModules();
+  });
+
+  it('uses ESL_STT_DEFAULT_PROVIDER when STT_PROVIDER is unset', async () => {
+    await withEnv(
+      {
+        NODE_ENV: 'test',
+        STT_PROVIDER: '',
+        ESL_STT_DEFAULT_PROVIDER: 'google',
+      },
+      async () => {
+        const cfg = await loadConfigFresh();
+        expect(cfg.transcription.sttProvider).toBe('google');
+        expect(cfg.stt.defaultProvider).toBe('google');
+      },
+    );
+  });
+
+  it('allows STT_PROVIDER to override ESL_STT_DEFAULT_PROVIDER when explicitly set', async () => {
+    await withEnv(
+      {
+        NODE_ENV: 'test',
+        STT_PROVIDER: 'deepgram',
+        ESL_STT_DEFAULT_PROVIDER: 'google',
+      },
+      async () => {
+        const cfg = await loadConfigFresh();
+        expect(cfg.transcription.sttProvider).toBe('deepgram');
+        expect(cfg.stt.defaultProvider).toBe('google');
+      },
+    );
+  });
+});
+
 describe('config/env - TTS cache retention validation', () => {
   beforeEach(() => {
     vi.resetModules();
