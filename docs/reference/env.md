@@ -137,7 +137,6 @@ Safety mode and hard caps:
 - `GEN_STRICT_NO_PAID` (default `true`)
 - `GEN_MAX_OUTPUT_TOKENS_HARD` (default `1200`)
 - `GEN_ALLOW_PAID_SPEND` (default `false`; floodgates switch that bypasses strict allowlists + hard budget checks)
-- `GEN_BUDGET_EMERGENCY_OVERRIDE` (default `false`; legacy alias for `GEN_ALLOW_PAID_SPEND`)
 
 Fail-safe testing defaults (recommended local baseline):
 

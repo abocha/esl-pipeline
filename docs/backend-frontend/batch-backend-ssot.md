@@ -104,6 +104,7 @@ Runbook: [`docs/operations/prompt-gallery-bootstrap.md`](../operations/prompt-ga
 - Cancellation is cooperative for in-flight jobs.
 - SSE may be supplemented by polling fallback in frontend UX.
 - Auth middleware and `/auth/*` routes are wired from one `AuthService` instance created from loaded runtime config (no constructor env fallback path).
+- Student timeline type filters accept canonical event types only (for example `job_awaiting_approval`), without legacy aliases.
 
 ## Migrations and Schema Safety
 

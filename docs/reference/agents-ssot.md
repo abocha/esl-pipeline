@@ -385,6 +385,7 @@ Boundary invariants:
 - Batch-backend file storage runtime MUST NOT expose filesystem-to-S3 migration helpers; uploaded-file provider migrations are explicit runbook/migration operations.
 - Batch-backend `user_settings.tts_provider` storage MUST stay canonical (`elevenlabs` or `google`); legacy provider values are migration-only and MUST NOT be reintroduced in runtime write paths.
 - Batch-backend auth middleware and `/auth/*` routes MUST use an injected `AuthService` created from validated runtime config, not ad-hoc environment fallback constructors.
+- Batch-backend student timeline type filters MUST use canonical timeline types only (for example `job_awaiting_approval`); legacy alias values are retired.
 - Shared helper logic duplicated across packages SHOULD be extracted into shared packages (for example `@esl-pipeline/shared-infrastructure`) when it is domain-neutral and reused by both sides.
 - Agents MUST consult the active ownership ledger before moving behavior across package boundaries:
   - `docs/reference/ORCHESTRATOR_OWNERSHIP_LEDGER.md`

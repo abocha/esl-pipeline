@@ -111,7 +111,6 @@ function normalizeTypeFilter(
   const list = Array.isArray(types) ? types : String(types).split(',');
   const filtered = list
     .map((value) => value.trim())
-    .map((value) => (value === 'job_approved' ? 'job_awaiting_approval' : value))
     .filter((value): value is StudentTimelineType => value.length > 0);
   return filtered.length > 0 ? new Set(filtered) : null;
 }

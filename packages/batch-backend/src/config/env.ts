@@ -507,8 +507,7 @@ export function loadConfig(): BatchBackendConfig {
   const generationStrictNoPaid = readBool('GEN_STRICT_NO_PAID', true);
   const generationMaxOutputTokensHard = readInt('GEN_MAX_OUTPUT_TOKENS_HARD', 1200);
   const generationAllowPaidSpend = readBool('GEN_ALLOW_PAID_SPEND', false);
-  const generationBudgetEmergencyOverride =
-    generationAllowPaidSpend || readBool('GEN_BUDGET_EMERGENCY_OVERRIDE', false);
+  const generationBudgetEmergencyOverride = generationAllowPaidSpend;
 
   const generationOpenAiModelPrimary = readString('GEN_OPENAI_MODEL_PRIMARY', 'gpt-5.2')!;
   const generationOpenAiModelFallback = readString('GEN_OPENAI_MODEL_FALLBACK', 'gpt-5-mini')!;
