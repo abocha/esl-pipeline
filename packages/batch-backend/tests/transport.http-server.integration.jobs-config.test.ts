@@ -369,6 +369,7 @@ describeHttpServerIntegrationSuite(
 
   it('GET /jobs/:jobId/status is not supported', async () => {
     const getJobStatus = vi.spyOn(getJobStatusModule, 'getJobStatus');
+    getJobStatus.mockClear();
 
     const response = await app.inject({
       method: 'GET',
