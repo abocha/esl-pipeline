@@ -1620,8 +1620,11 @@ export async function rerunAssignment(
       });
     }
 
+    const { audio: _legacyAudio, ...manifestWithoutLegacyAudio } = manifest as AssignmentManifest & {
+      audio?: unknown;
+    };
     const updatedManifest: AssignmentManifest = {
-      ...manifest,
+      ...manifestWithoutLegacyAudio,
       schemaVersion: CURRENT_MANIFEST_SCHEMA_VERSION,
       mdHash: hashStudyText(mdContents),
       publishTarget,
