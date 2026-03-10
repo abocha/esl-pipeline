@@ -9,9 +9,11 @@ describe('rerun planner', () => {
       manifest: {
         mdHash: 'hash',
         pageId: 'page-1',
-        audio: {
-          path: '/tmp/audio.mp3',
-          url: 'https://example.com/audio.mp3',
+        audioArtifacts: {
+          studyText: {
+            path: '/tmp/audio.mp3',
+            url: 'https://example.com/audio.mp3',
+          },
         },
         timestamp: '2026-01-01T00:00:00.000Z',
       },
@@ -45,9 +47,11 @@ describe('rerun planner', () => {
       manifest: {
         mdHash: 'hash',
         pageId: 'page-1',
-        audio: {
-          path: '/tmp/audio.mp3',
-          url: 'https://example.com/audio.mp3',
+        audioArtifacts: {
+          studyText: {
+            path: '/tmp/audio.mp3',
+            url: 'https://example.com/audio.mp3',
+          },
         },
         timestamp: '2026-01-01T00:00:00.000Z',
       },
@@ -91,9 +95,11 @@ describe('rerun planner', () => {
       steps: ['add-audio'],
       manifest: {
         mdHash: 'hash',
-        audio: {
-          path: '/tmp/audio.mp3',
-          url: 'https://example.com/audio.mp3',
+        audioArtifacts: {
+          studyText: {
+            path: '/tmp/audio.mp3',
+            url: 'https://example.com/audio.mp3',
+          },
         },
         timestamp: '2026-01-01T00:00:00.000Z',
       },
@@ -111,9 +117,11 @@ describe('rerun planner', () => {
         mdHash: 'hash',
         publishTarget: 'anytype',
         anytypePageId: 'anytype-page',
-        audio: {
-          path: '/tmp/audio.mp3',
-          url: 'https://example.com/audio.mp3',
+        audioArtifacts: {
+          studyText: {
+            path: '/tmp/audio.mp3',
+            url: 'https://example.com/audio.mp3',
+          },
         },
         timestamp: '2026-01-01T00:00:00.000Z',
       },

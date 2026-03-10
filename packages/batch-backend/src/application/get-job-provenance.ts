@@ -247,17 +247,19 @@ async function readTtsMetadataFromManifest(manifestPath: string | null | undefin
   try {
     const raw = await readFile(manifestPath, 'utf8');
     const parsed = JSON.parse(raw) as {
-      audio?: {
-        tts?: {
-          provider?: unknown;
-          generatedCharacters?: unknown;
-          cachedCharacters?: unknown;
-          costPer1kCharsUsd?: unknown;
-          estimatedSpendUsd?: unknown;
+      audioArtifacts?: {
+        studyText?: {
+          tts?: {
+            provider?: unknown;
+            generatedCharacters?: unknown;
+            cachedCharacters?: unknown;
+            costPer1kCharsUsd?: unknown;
+            estimatedSpendUsd?: unknown;
+          };
         };
       };
     };
-    const tts = parsed.audio?.tts;
+    const tts = parsed.audioArtifacts?.studyText?.tts;
     if (!tts || typeof tts !== 'object') return null;
 
     const generatedCharacters =

@@ -15,18 +15,17 @@ This document captures the canonical schema so remote stores and services can va
 
 ## Schema Versioning
 
-- **Current version:** `1`
-- Every manifest written by the pipeline now includes `schemaVersion: 1`.
-- Older manifests (created before versioning) are treated as version `1` when read; the orchestrator
-  will automatically annotate the field when rewriting the manifest.
+- **Current version:** `2`
+- Every manifest written by the pipeline now includes `schemaVersion: 2`.
+- Older manifests without `schemaVersion` are treated as legacy version `1` when read.
 - Future breaking changes to the manifest structure must bump `CURRENT_MANIFEST_SCHEMA_VERSION` in
   `packages/orchestrator/src/manifest.ts` and extend this document with migration guidance.
 
-## JSON Structure (v1)
+## JSON Structure (v2)
 
 ```jsonc
 {
-  "schemaVersion": 1,
+  "schemaVersion": 2,
   "mdHash": "<sha256 hash of the Markdown study text>",
   "timestamp": "2024-07-19T12:34:56.789Z",
   "preset": "b1-default", // optional, last applied heading preset
@@ -40,41 +39,8 @@ This document captures the canonical schema so remote stores and services can va
   },
   "pageId": "<notion-page-id>", // optional, populated after Notion import
   "pageUrl": "https://www.notion.so/...", // optional, populated after Notion import
-  "audio": {
-    // optional, populated after TTS/upload steps
-    "path": "./lessons/audio.mp3", // local file path to generated audio
-    "url": "https://...", // remote URL after upload
-    "hash": "<sha256 audio hash>",
-    "key": "audio/final/<sha256>.mp3", // optional remote object key
-    "etag": "\"abc123...\"", // optional remote ETag from storage backend
-    "sizeBytes": 123456, // optional uploaded object size
-    "reused": true, // optional reuse signal for idempotent uploads
-    "voices": [
-      // details returned by tts-core provider adapters
-      {
-        "speaker": "Narrator",
-        "voiceId": "voice-id",
-        "voiceName": "Caleb",
-        "source": "voiceMap",
-        "gender": "male",
-        "accent": "american",
-        "score": 0.92,
-        "selectionReason": "Matched explicit speaker_profiles.voice override",
-        "capabilityMatches": ["gender:male", "accent:american"],
-        "capabilityMismatches": [],
-      },
-    ],
-    "tts": {
-      // optional provider-usage telemetry for spend/reuse diagnostics
-      "provider": "elevenlabs",
-      "generatedCharacters": 1320,
-      "cachedCharacters": 480,
-      "costPer1kCharsUsd": 0.3,
-      "estimatedSpendUsd": 0.396,
-    },
-  },
   "audioArtifacts": {
-    // optional, additive multi-artifact map (schemaVersion remains 1)
+    // optional multi-artifact map (canonical in schema v2)
     "studyText": {
       "path": "./lessons/audio.mp3",
       "url": "https://...",
@@ -83,6 +49,27 @@ This document captures the canonical schema so remote stores and services can va
       "etag": "\"abc123...\"",
       "sizeBytes": 123456,
       "reused": true,
+      "voices": [
+        {
+          "speaker": "Narrator",
+          "voiceId": "voice-id",
+          "voiceName": "Caleb",
+          "source": "voiceMap",
+          "gender": "male",
+          "accent": "american",
+          "score": 0.92,
+          "selectionReason": "Matched explicit speaker_profiles.voice override",
+          "capabilityMatches": ["gender:male", "accent:american"],
+          "capabilityMismatches": []
+        }
+      ],
+      "tts": {
+        "provider": "elevenlabs",
+        "generatedCharacters": 1320,
+        "cachedCharacters": 480,
+        "costPer1kCharsUsd": 0.3,
+        "estimatedSpendUsd": 0.396
+      },
       "notionBlockId": "<notion-block-id>",
     },
     "pronunciationShadowSentence": {
@@ -111,35 +98,33 @@ This document captures the canonical schema so remote stores and services can va
 
 - `mdHash` is produced by `hashStudyText` and enables idempotence/skip logic.
 - `timestamp` reflects the last pipeline write and is updated on reruns.
-- `audio.voices` mirrors the response from `@esl-pipeline/tts-core` provider contracts; provider
+- `audioArtifacts.studyText.voices` mirrors the response from `@esl-pipeline/tts-core` provider contracts; provider
   adapters compute values in that shared shape.
-- `audio.tts` is optional usage telemetry: generated vs cached provider characters plus optional
+- `audioArtifacts.studyText.tts` is optional usage telemetry: generated vs cached provider characters plus optional
   cost estimate fields when pricing env vars are configured.
-- `audio.key`/`audio.hash` provide deterministic artifact identity for reruns and upload dedupe.
-- `audio.reused` and `htmlReused` are operational hints showing whether remote upload/publish reused
+- `audioArtifacts.studyText.key`/`audioArtifacts.studyText.hash` provide deterministic artifact identity for reruns and upload dedupe.
+- `audioArtifacts.studyText.reused` and `htmlReused` are operational hints showing whether remote upload/publish reused
   an existing content-addressed object.
-- `audioArtifacts` is additive under schema version `1` and stores per-target audio artifacts:
-  - `audioArtifacts.studyText` mirrors the legacy `audio` payload.
-  - `audioArtifacts.pronunciationShadowSentence` stores optional reference audio for
-    `Mode: shadow_sentence` pronunciation tasks.
-- `audio` remains a compatibility alias for study-text audio (`audioArtifacts.studyText`) so older
-  readers continue to work unchanged.
+- `audioArtifacts` stores per-target audio artifacts:
+  - `audioArtifacts.studyText` for primary study-text audio.
+  - `audioArtifacts.pronunciationShadowSentence` for optional `Mode: shadow_sentence` reference audio.
 - `audioArtifacts.*.notionBlockId` is optional and lets reruns replace only previously inserted
   generated audio blocks near semantic anchors.
 - `notionColorization` captures the Notion preset fingerprint used for idempotent colorization skip
   decisions. Consumers SHOULD treat the object as optional and additive.
 - When `notionColorization.presetHash`/`mdHash` still match the current run context, orchestrator may
   skip colorization calls to avoid redundant Notion API churn while preserving manifest provenance.
-- `audio.voices[*].selectionReason`, `capabilityMatches`, and `capabilityMismatches` are additive
+- `audioArtifacts.studyText.voices[*].selectionReason`, `capabilityMatches`, and `capabilityMismatches` are additive
   explainability fields for voice-alignment v2. Consumers SHOULD treat them as optional.
 - `ttsStrategy` and related dialogue fields capture the TTS strategy used for reproducibility. These fields
-  are optional and additive under schema version `1`.
+  are optional and additive under schema version `2`.
 
 ## Backwards Compatibility
 
 - Services should tolerate unknown fields to allow additive evolution.
-- When reading manifests without `schemaVersion`, assume version `1`. The orchestrator already
-  applies this fallback when parsing legacy files.
+- When reading manifests without `schemaVersion`, the orchestrator treats them as legacy version `1`.
+- Runtime logic is canonicalized to `audioArtifacts.*`; legacy manifests that only contain top-level `audio`
+  do not get implicit alias fallback and should be regenerated to schema `2`.
 - Remote stores should persist manifests verbatim to avoid losing optional fields used by other
   stages (e.g., future metadata for adapters).
 

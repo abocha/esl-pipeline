@@ -1,3 +1,6 @@
+import { mkdtemp, writeFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { describe, expect, it, vi } from 'vitest';
 
 const mockGetJobById = vi.fn();
@@ -53,6 +56,67 @@ describe('application/get-job-provenance', () => {
       message: 'Voice generation timed out while calling provider for this lesson',
       providerStatus: undefined,
       actionableHint: 'Retry with smaller chunks or increased provider timeout settings.',
+    });
+  });
+
+  it('reads tts metadata from canonical audioArtifacts.studyText manifest path', async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'job-provenance-'));
+    const manifestPath = join(dir, 'job.manifest.json');
+    await writeFile(
+      manifestPath,
+      JSON.stringify(
+        {
+          audioArtifacts: {
+            studyText: {
+              tts: {
+                provider: 'elevenlabs',
+                generatedCharacters: 1200,
+                cachedCharacters: 300,
+                costPer1kCharsUsd: 0.3,
+                estimatedSpendUsd: 0.45,
+              },
+            },
+          },
+        },
+        null,
+        2,
+      ),
+      'utf8',
+    );
+
+    mockGetJobById.mockResolvedValueOnce({
+      id: 'job-2',
+      state: 'succeeded',
+      createdAt: new Date('2024-03-01T00:00:00.000Z'),
+      updatedAt: new Date('2024-03-01T00:02:00.000Z'),
+      startedAt: new Date('2024-03-01T00:00:30.000Z'),
+      finishedAt: new Date('2024-03-01T00:02:00.000Z'),
+      sourceJobId: null,
+      manifestPath,
+      notionUrl: null,
+      anytypeUrl: null,
+      htmlUrl: null,
+      error: null,
+    });
+    mockListJobActionHistoryForJob.mockResolvedValue([]);
+    mockWithPgClient.mockImplementation(async (fn: (client: { query: () => unknown }) => unknown) =>
+      fn({
+        query: vi.fn().mockResolvedValue({ rows: [] }),
+      }),
+    );
+    mockGetPromptPackageLineage.mockResolvedValue(null);
+
+    const { getJobProvenance } = await import('../src/application/get-job-provenance.js');
+    const result = await getJobProvenance('job-2');
+
+    expect(result?.tts).toEqual({
+      provider: 'elevenlabs',
+      generatedCharacters: 1200,
+      cachedCharacters: 300,
+      totalCharacters: 1500,
+      cacheHitRatio: 0.2,
+      costPer1kCharsUsd: 0.3,
+      estimatedSpendUsd: 0.45,
     });
   });
 });

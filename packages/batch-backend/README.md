@@ -403,7 +403,7 @@ Error responses:
 
 Compatibility:
 
-- `/jobs/:jobId/status` remains available as an alias for `/jobs/:jobId` for legacy clients, but all documentation and integrations should migrate to `/jobs/:jobId`.
+- `GET /jobs/:jobId` is the canonical and only supported job-status route.
 
 Side effects:
 

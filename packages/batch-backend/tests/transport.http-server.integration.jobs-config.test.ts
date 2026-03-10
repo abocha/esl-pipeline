@@ -367,43 +367,17 @@ describeHttpServerIntegrationSuite(
     expect(getJobStatus).toHaveBeenCalledWith('job-1');
   });
 
-  it('GET /jobs/:jobId/status remains available as an alias', async () => {
+  it('GET /jobs/:jobId/status is not supported', async () => {
     const getJobStatus = vi.spyOn(getJobStatusModule, 'getJobStatus');
-    getJobStatus.mockResolvedValue({
-      jobId: 'job-2',
-      md: 'fixtures/ok.md',
-      recordingId: null,
-      transcriptId: null,
-      promptPackageId: null,
-      draftId: null,
-      preset: null,
-      withTts: null,
-      upload: null,
-      voiceId: null,
-      voiceAccent: null,
-      forceTts: null,
-      notionDatabase: null,
-      publishTarget: 'notion',
-      ttsStrategy: null,
-      autoPublish: null,
-      notionUrl: null,
-      anytypeUrl: null,
-      state: 'queued',
-      createdAt: '2024-01-01T00:00:00.000Z',
-      updatedAt: '2024-01-01T00:00:00.000Z',
-      startedAt: null,
-      finishedAt: null,
-      error: null,
-      manifestPath: null,
-    });
+    getJobStatus.mockClear();
 
     const response = await app.inject({
       method: 'GET',
       url: '/jobs/job-2/status',
     });
 
-    expect(response.statusCode).toBe(200);
-    expect(getJobStatus).toHaveBeenCalledWith('job-2');
+    expect(response.statusCode).toBe(404);
+    expect(getJobStatus).not.toHaveBeenCalled();
   });
 
   it('GET /jobs/:jobId/provenance returns provenance payload', async () => {

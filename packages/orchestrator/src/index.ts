@@ -967,7 +967,6 @@ export async function newAssignment(
       htmlKey,
       htmlEtag,
       htmlReused,
-      audio: audioArtifacts.studyText,
       audioArtifacts: {
         studyText: audioArtifacts.studyText,
         pronunciationShadowSentence: audioArtifacts.pronunciationShadowSentence,
@@ -1080,7 +1079,7 @@ export async function getAssignmentStatus(
     }
 
     let audioFileExists = false;
-    const studyAudioPath = manifest?.audioArtifacts?.studyText?.path ?? manifest?.audio?.path;
+    const studyAudioPath = manifest?.audioArtifacts?.studyText?.path;
     if (studyAudioPath) {
       try {
         await access(studyAudioPath, FS.F_OK);
@@ -1621,8 +1620,11 @@ export async function rerunAssignment(
       });
     }
 
+    const { audio: _legacyAudio, ...manifestWithoutLegacyAudio } = manifest as AssignmentManifest & {
+      audio?: unknown;
+    };
     const updatedManifest: AssignmentManifest = {
-      ...manifest,
+      ...manifestWithoutLegacyAudio,
       schemaVersion: CURRENT_MANIFEST_SCHEMA_VERSION,
       mdHash: hashStudyText(mdContents),
       publishTarget,
@@ -1632,7 +1634,6 @@ export async function rerunAssignment(
       htmlKey,
       htmlEtag,
       htmlReused,
-      audio: audioArtifacts.studyText,
       audioArtifacts: {
         studyText: audioArtifacts.studyText,
         pronunciationShadowSentence: audioArtifacts.pronunciationShadowSentence,
@@ -1666,7 +1667,7 @@ export async function rerunAssignment(
 
     return {
       steps: executed,
-      audio: updatedManifest.audio,
+      audio: updatedManifest.audioArtifacts?.studyText,
       pageId: updatedManifest.pageId,
       pageUrl: updatedManifest.pageUrl,
       anytypeUrl: updatedManifest.anytypeUrl,
