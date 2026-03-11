@@ -1,0 +1,43 @@
+{
+  "name": "@esl-pipeline/telegram-ops-bot",
+  "version": "1.1.0",
+  "private": true,
+  "description": "Telegram operations control panel bot for ESL Pipeline.",
+  "license": "UNLICENSED",
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./dist/src/index.d.ts",
+      "import": "./dist/src/index.js",
+      "default": "./dist/src/index.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "main": "./dist/src/index.js",
+  "types": "./dist/src/index.d.ts",
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "clean": "node -e \"fs.rmSync('dist', {recursive:true, force:true})\"",
+    "dev": "tsx watch --tsconfig tsconfig.json src/index.ts",
+    "start": "node dist/src/index.js",
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@esl-pipeline/contracts": "workspace:*",
+    "@esl-pipeline/shared-infrastructure": "workspace:*",
+    "@grammyjs/types": "^3.25.0"
+  },
+  "devDependencies": {
+    "@types/node": "^25.3.5",
+    "tsx": "^4.21.0",
+    "typescript": "^5.9.3",
+    "vitest": "^4.0.18"
+  },
+  "engines": {
+    "node": ">=24.11.1"
+  }
+}

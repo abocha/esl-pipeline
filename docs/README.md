@@ -47,6 +47,8 @@
   - [`docs/operations/postgres-backup-s3.md`](operations/postgres-backup-s3.md)
 - Ops health alerts/status/key rotation:
   - [`docs/operations/postgres-ops-health.md`](operations/postgres-ops-health.md)
+- Telegram ops control panel bot:
+  - [`docs/operations/telegram-ops-control-panel.md`](operations/telegram-ops-control-panel.md)
 - Prompt gallery DB bootstrap:
   - [`docs/operations/prompt-gallery-bootstrap.md`](operations/prompt-gallery-bootstrap.md)
 - Versioning and release automation:

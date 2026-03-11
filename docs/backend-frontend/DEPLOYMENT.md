@@ -98,12 +98,16 @@ Details: [`docs/operations/prompt-gallery-bootstrap.md`](../operations/prompt-ga
   - `pnpm ops:status`
 - Alert check (Telegram + cooldown/recovery):
   - `pnpm ops:alert:check`
+- Telegram control-panel bot (optional, threaded ops commands):
+  - enable `TELEGRAM_OPS_BOT_ENABLED=true`
+  - ensure `BATCH_BACKEND_ENABLE_OPS_CONTROL=true`
 
 Runbooks:
 
 - [`docs/operations/postgres-backup-restore.md`](../operations/postgres-backup-restore.md)
 - [`docs/operations/postgres-backup-s3.md`](../operations/postgres-backup-s3.md)
 - [`docs/operations/postgres-ops-health.md`](../operations/postgres-ops-health.md)
+- [`docs/operations/telegram-ops-control-panel.md`](../operations/telegram-ops-control-panel.md)
 
 ## CI Expectations
 

@@ -61,6 +61,7 @@ services:
       - .env.batch-backend
     command: [ 'node', 'dist/transport/worker-runner.js' ]
     restart: unless-stopped
+
   postgres:
     image: postgres:18-alpine
     # Persistent DB (named volume).
@@ -93,6 +94,18 @@ services:
       interval: 5s
       timeout: 3s
       retries: 10
+
+  telegram-ops-bot:
+    build:
+      context: .
+      dockerfile: packages/telegram-ops-bot/Dockerfile
+      tags:
+        - esl-pipeline/telegram-ops-bot:local
+    depends_on:
+      - batch-backend
+    env_file:
+      - .env.batch-backend
+    restart: unless-stopped
 
 volumes:
   postgres_data:

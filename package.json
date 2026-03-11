@@ -40,6 +40,7 @@
     "docs:health:report": "node scripts/docs/generate-docs-health-report.mjs",
     "docs:stale:active": "node scripts/docs/find-stale-active-docs.mjs",
     "dev:batch": "concurrently -k -n api,worker,frontend -c cyan,magenta,green \"pnpm --filter @esl-pipeline/batch-backend dev:api\" \"pnpm --filter @esl-pipeline/batch-backend dev:worker\" \"pnpm --filter @esl-pipeline/batch-frontend dev\"",
+    "dev:telegram-ops-bot": "pnpm --filter @esl-pipeline/telegram-ops-bot dev",
     "dev:orchestrator": "pnpm --filter @esl-pipeline/orchestrator dev",
     "docker:prepare": "bash scripts/docker/prepare-host-paths.sh",
     "docker:up": "pnpm docker:prepare && docker compose -p esl-pipeline -f docker-compose.yml up -d",

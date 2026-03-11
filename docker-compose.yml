@@ -154,6 +154,30 @@ services:
       timeout: 3s
       retries: 10
 
+  telegram-ops-bot:
+    image: esl-pipeline/dev-node:local
+    depends_on:
+      batch-backend:
+        condition: service_started
+      deps:
+        condition: service_completed_successfully
+    volumes:
+      - ./:/app
+      - workspace_node_modules:/app/node_modules
+      - workspace_pnpm_store:/pnpm
+    environment:
+      NODE_ENV: development
+      PNPM_STORE_DIR: /pnpm/store
+      NPM_CONFIG_STORE_DIR: /pnpm/store
+    env_file:
+      - .env.batch-backend
+    command: >
+      sh -lc "
+        pnpm --filter @esl-pipeline/telegram-ops-bot dev
+      "
+    user: '${UID:-1000}:${GID:-1000}'
+    pull_policy: never
+
   transcribe-worker:
     image: esl-pipeline/dev-node:local
     depends_on:
