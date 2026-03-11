@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented here. Dates use `YYYY-MM-DD`.
 
+## [4.3.0] - 2026-03-11
+
+### Changed
+
+- Automated release from PR #36: feat(batch-system): harden telegram ops runtime and add shareable bot cards (https://github.com/abocha/esl-pipeline/pull/36)
+
 ## [4.2.0] - 2026-03-11
 
 ### Changed
