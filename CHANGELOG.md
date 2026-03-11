@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented here. Dates use `YYYY-MM-DD`.
 
+## [4.1.1] - 2026-03-11
+
+### Changed
+
+- Automated release from PR #34: fix(ops-backup): guard empty snapshots and improve backup notifications (https://github.com/abocha/esl-pipeline/pull/34)
+
 ## [4.1.0] - 2026-03-10
 
 ### Changed
