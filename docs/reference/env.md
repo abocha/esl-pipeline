@@ -90,6 +90,7 @@ Set these in `.env` (or your shell) when running orchestrator programmatic API c
     - `PG_BACKUP_KEY_ROTATION_MAX_AGE_DAYS` (optional, default `80`) — Active AWS key-age threshold.
     - `PG_BACKUP_ALERT_COOLDOWN_MINUTES` (optional, default `360`) — Suppress repeated unhealthy alerts until cooldown expires.
     - `PG_BACKUP_IAM_USER` (optional) — Explicit IAM username for key-age checks (auto-derived from STS caller when omitted).
+    - `PG_CONTAINER_NAME` (optional) — Explicit Postgres container name/id used by backup/restore scripts for `docker exec` (recommended for containerized ops-control actions).
     - `PG_BACKUP_ALERT_TELEGRAM_BOT_TOKEN` (optional) — Telegram bot token for ops alerts and backup/restore completion notifications.
     - `PG_BACKUP_ALERT_TELEGRAM_CHAT_ID` (optional) — Telegram target chat/channel id for alerts and completion notifications.
     - `PG_BACKUP_ALERT_TELEGRAM_THREAD_ID` (optional) — Telegram forum thread id.
@@ -192,10 +193,15 @@ Use `.env.batch-backend` for the service stack. It includes all core keys above 
 - Ops control API (additive, admin-auth, optional):
   - `BATCH_BACKEND_ENABLE_OPS_CONTROL` (default `false`) — Enables `/ops/status`, `/ops/actions`, `/ops/actions/:operationId`.
   - `BATCH_BACKEND_OPS_CONTROL_BOT_SECRET` (optional) — Requires matching `x-ops-bot-secret` header for `/ops/*`.
-  - Runtime note: default ops commands use `bash`; production backend image includes `bash` for these wrappers.
+  - Runtime note: default ops commands require `bash`, `aws`, and `docker` CLI availability in backend runtime.
+  - Runtime note: default scripts depend on GNU-style `date`/`find` behavior (`coreutils`, `findutils`) for timestamp parsing and dump discovery.
+  - Runtime note: `/backup` and `/drill` require Docker socket access in backend container (`/var/run/docker.sock`).
+  - Runtime note (dev compose): when backend runs as non-root user, `DOCKER_GID` must match host socket group id (for example `stat -c %g /var/run/docker.sock`) so Docker CLI can access the socket.
+  - Runtime note: backend image must include `scripts/docker/*` because default wrappers reference those paths.
   - `BATCH_BACKEND_OPS_CONTROL_STATUS_COMMAND` (default `bash scripts/docker/postgres-ops-status.sh --json`) — Command wrapper used by `GET /ops/status`.
   - `BATCH_BACKEND_OPS_CONTROL_BACKUP_COMMAND` (default `bash scripts/docker/postgres-backup-s3.sh backup-upload`) — Command wrapper for `backup_upload`.
   - `BATCH_BACKEND_OPS_CONTROL_RESTORE_DRILL_COMMAND` (default `PG_BACKUP_RESTORE_DRILL_AUTO=true bash scripts/docker/run-postgres-restore-drill-reminder.sh`) — Command wrapper for `restore_drill_download_only`.
+  - If you set these command wrappers in a shell-sourced `.env` file, wrap values in quotes (for example `"bash scripts/docker/postgres-ops-status.sh --json"`), otherwise shell sourcing treats trailing tokens as executable commands.
   - `BATCH_BACKEND_OPS_CONTROL_ACTION_TIMEOUT_MS` (default `600000`) — Timeout per ops command execution.
   - `BATCH_BACKEND_OPS_CONTROL_ACTION_HISTORY_LIMIT` (default `100`) — In-memory history target for ops action statuses. Queued/running actions are never evicted; temporary overflow is allowed until active actions finish.
 - Telegram ops bot runtime (separate package/service, optional):
@@ -310,4 +316,5 @@ Notes:
 - Use `RECORDINGS_MAX_FILE_SIZE` to raise audio upload limits without affecting general markdown uploads.
 - Postgres backup archival scripts read `PG_BACKUP_S3_*` variables; keep backup bucket/prefix separate from runtime `S3_BUCKET` upload paths.
 - Backup/restore scripts and ops status/alert helpers (`postgres-backup-restore.sh`, `postgres-backup-s3.sh`, `postgres-ops-status.sh`, `run-postgres-ops-alert.sh`, `run-aws-key-rotation-reminder.sh`) reuse `.env.batch-backend` and the `PG_BACKUP_*` thresholds above.
+- AWS auth for these scripts is env-driven in runtime (`AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `AWS_REGION`, plus `PG_BACKUP_S3_*`), not interactive `aws configure`.
 - For voice-alignment operations and rollout, see `docs/operations/voice-alignment-v2-runbook.md`.

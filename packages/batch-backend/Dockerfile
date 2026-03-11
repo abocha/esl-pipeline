@@ -33,12 +33,20 @@ ENV NODE_ENV=production \
 
 RUN apk add --no-cache \
         bash \
+        aws-cli \
         ca-certificates \
+        coreutils \
+        curl \
+        docker-cli \
+        docker-cli-compose \
+        findutils \
         ffmpeg
 
 WORKDIR /app
 
 COPY --from=build /app/deployed/ ./
+COPY scripts/docker ./scripts/docker
+RUN chmod +x ./scripts/docker/*.sh
 
 EXPOSE 8080
 

@@ -18,10 +18,14 @@ services:
         target: /app/uploads
         bind:
           create_host_path: false
+      - /var/run/docker.sock:/var/run/docker.sock
     environment:
       NODE_ENV: production
       PIPELINE_CWD: /app
       FILESYSTEM_UPLOAD_DIR: /app/uploads
+      PG_BACKUP_ENV_FILE: /dev/null
+      PG_CONTAINER_NAME: ${COMPOSE_PROJECT_NAME:-esl-pipeline-prod}-postgres-1
+      PG_BACKUP_RESTORE_DRILL_REPORT_LATEST: /app/tmp/logs/backup/restore-drill-report-latest.json
     env_file:
       - .env.batch-backend
     ports:

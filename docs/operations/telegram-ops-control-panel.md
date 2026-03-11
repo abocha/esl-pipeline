@@ -29,7 +29,12 @@
 - `/ops/*` endpoints require admin auth.
 - Optional defense-in-depth: set `BATCH_BACKEND_OPS_CONTROL_BOT_SECRET`.
   - When set, `/ops/*` also require `x-ops-bot-secret`.
-- Backend runtime includes `bash` so default ops command wrappers execute in production without custom image changes.
+- Backend runtime must include `bash`, `aws`, and `docker` CLI for default ops command wrappers.
+- Backend runtime must include GNU-compatible `date`/`find` tooling (`coreutils`, `findutils`) used by backup/status scripts.
+- Backend runtime must include `scripts/docker/*` at `/app/scripts/docker/*` (default wrapper paths).
+- For action commands (`/backup`, `/drill`), backend container must have Docker socket access (`/var/run/docker.sock`) and set `PG_CONTAINER_NAME` to target Postgres deterministically.
+- In dev compose where backend runs as non-root user, set `DOCKER_GID` to host socket group id so Docker CLI can access `/var/run/docker.sock`.
+- AWS auth for status/backup/drill scripts is env-based (`AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `AWS_REGION`, plus `PG_BACKUP_S3_*`); no interactive `aws configure` step is used.
 - Telegram bot requires explicit allowlist (`TELEGRAM_OPS_BOT_ALLOWED_USER_IDS`).
 - Bot enforces per-user command rate limiting.
 - Bot defaults to read-only mode (`TELEGRAM_OPS_BOT_ENABLE_ACTION_COMMANDS=false`) until operators explicitly enable action commands.
@@ -68,9 +73,10 @@ Read commands:
 - `/help`
 - `/status`
 - `/op <operationId>`
-- `/finished [limit]`
+- `/finished [limit]` (admin service-account path; lists latest succeeded jobs across users)
 - `/job <jobId>`
 - `/links <jobId>`
+- `/share <jobId>` (student-forward alias of `/links`)
 
 Safe action commands:
 
@@ -78,6 +84,27 @@ Safe action commands:
 - `/drill`
 
 No restart commands are implemented in V1.
+
+## Share Card Behavior (`/links`, `/share`)
+
+Bot output is optimized for forwarding to students:
+
+1. Assignment card (preview disabled):
+   - Single clickable link only.
+   - Link text: `<emoji> Homework Assignment: <full title>`.
+   - Emoji/title extraction priority:
+     - markdown frontmatter/H1 (including local `.md` file-path resolution),
+     - published HTML fallback (`<title>` + `.hero-emoji`).
+2. Audio card 1 (preview enabled, if available):
+   - `🎧 Listen 1: Study Text`
+3. Audio card 2 (preview enabled, if available):
+   - `🗣️ Listen 2: Pronunciation`
+
+Audio URL extraction priority:
+
+1. generated markdown links (`Audio recording: Study Text`, `Audio recording: Pronunciation Shadow Sentence`)
+2. markdown path hints (`/audio/final/`, `/audio/pronunciation-shadow/`)
+3. published HTML fallback (`htmlUrl`) with same path hints
 
 ## Deployment Notes
 
