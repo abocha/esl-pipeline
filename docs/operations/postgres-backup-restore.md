@@ -71,6 +71,34 @@ Each backup creates:
 - `<prefix>_schema.sql` (schema only)
 - `<prefix>.sha256` (checksums)
 
+### Empty-Source Guard
+
+`backup` now blocks empty-source snapshots by default using anchor-table probes:
+
+- `users`
+- `jobs`
+- `transcripts`
+
+If all anchor tables are empty, backup exits non-zero and does not emit a successful backup set.
+
+To intentionally allow an empty-source snapshot:
+
+```bash
+PG_BACKUP_ALLOW_EMPTY_SOURCE=true pnpm docker:db:backup -- intentional-empty
+```
+
+The script logs a guard summary and decision for each backup run.
+
+### Completion Telegram Notifications
+
+`backup` and `restore` send completion Telegram messages (success/failure) when:
+
+- `PG_BACKUP_ALERT_TELEGRAM_BOT_TOKEN` is set
+- `PG_BACKUP_ALERT_TELEGRAM_CHAT_ID` is set
+- `PG_BACKUP_ALERT_TELEGRAM_DISABLE` is not `true`
+
+Messages include operation, status, UTC timestamp, duration, db name, source/target, and failure context (when applicable).
+
 ## Verify
 
 Verify checksum and, for `.dump`, verify TOC readability with `pg_restore -l`:
