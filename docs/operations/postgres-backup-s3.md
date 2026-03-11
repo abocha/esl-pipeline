@@ -121,6 +121,7 @@ PG_BACKUP_S3_ENV=dev
 Optional maintenance knobs:
 
 ```bash
+PG_BACKUP_ALLOW_EMPTY_SOURCE=false
 PG_BACKUP_LOCAL_RETENTION_DAYS=30
 PG_BACKUP_REMOTE_RESTORE_RETENTION_DAYS=14
 PG_BACKUP_LOG_RETENTION_DAYS=30
@@ -135,11 +136,18 @@ Create and upload a fresh set:
 pnpm docker:db:backup:s3 -- nightly
 ```
 
+`backup-upload` inherits empty-source protection from `postgres-backup-restore.sh` during local backup creation:
+
+- default behavior blocks backup/upload when `users`, `jobs`, and `transcripts` are all empty.
+- override only when intentional: `PG_BACKUP_ALLOW_EMPTY_SOURCE=true`.
+
 Upload latest existing set only:
 
 ```bash
 pnpm docker:db:upload:s3
 ```
+
+`upload-latest` does not perform source-db guard checks because it reuses an already-created local dump set.
 
 List remote objects:
 
@@ -179,12 +187,31 @@ What happens:
 1. Downloads `.dump` and matching `.sha256` to `tmp/backups/postgres/remote-restore/`.
 2. Verifies dump digest before restore.
 3. Delegates restore to `postgres-backup-restore.sh`.
+4. If restored snapshot is older than current backend schema, run:
+   `docker compose exec -T batch-backend pnpm --filter @esl-pipeline/batch-backend db:migrate`
+   before serving normal API traffic.
 
 To validate download + digest only (no restore side effects):
 
 ```bash
 pnpm docker:db:restore:s3 -- backups/postgres/dev/esl_batch/2026/03/03/<set>/<set>.dump --download-only
 ```
+
+## Completion Telegram Notifications
+
+Completion notifications are sent for:
+
+- `backup-upload` (success/failure)
+- `restore-remote` (success/failure, including `--download-only`)
+
+Notification delivery uses the same env vars as ops alerts:
+
+- `PG_BACKUP_ALERT_TELEGRAM_BOT_TOKEN`
+- `PG_BACKUP_ALERT_TELEGRAM_CHAT_ID`
+- optional `PG_BACKUP_ALERT_TELEGRAM_THREAD_ID`
+- `PG_BACKUP_ALERT_TELEGRAM_DISABLE`
+
+When `postgres-backup-s3.sh` calls `postgres-backup-restore.sh`, nested completion notifications are internally suppressed to avoid duplicate Telegram messages.
 
 ## Daily Automation (Host systemd)
 
