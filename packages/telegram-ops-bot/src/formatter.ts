@@ -138,13 +138,13 @@ function resolveAudioUrlFromMarkdown(
 ): string | null {
   if (!markdown) return null;
 
-  const labelRegex = new RegExp(`\\[${escapeRegExp(linkLabel)}\\]\\((https?:\\/\\/[^\\s)]+)\\)`, 'i');
+  const labelRegex = new RegExp(String.raw`\[${escapeRegExp(linkLabel)}\]\((https?:\/\/[^\s)]+)\)`, 'i');
   const labeledMatch = markdown.match(labelRegex);
   if (labeledMatch?.[1]) {
     return labeledMatch[1];
   }
 
-  const hintedRegex = new RegExp(`(https?:\\/\\/\\S*${escapeRegExp(pathHint)}\\S*\\.mp3(?:\\?\\S*)?)`, 'i');
+  const hintedRegex = new RegExp(String.raw`(https?:\/\/\S*${escapeRegExp(pathHint)}\S*\.mp3(?:\?\S*)?)`, 'i');
   const hintedMatch = markdown.match(hintedRegex);
   if (hintedMatch?.[1]) {
     return hintedMatch[1];
@@ -154,14 +154,14 @@ function resolveAudioUrlFromMarkdown(
 }
 
 function escapeRegExp(value: string): string {
-  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  return value.replaceAll(/[.*+?^${}()|[\]\\]/g, String.raw`\$&`);
 }
 
 function normalizeAssignmentTitle(value: string | null | undefined): string | null {
   if (!value) return null;
   const trimmed = value.trim();
   if (!trimmed) return null;
-  return trimmed.replace(/^homework\s+ass+i?ignment\s*:\s*/i, '').trim() || null;
+  return trimmed.replaceAll(/^homework\s+ass+i?ignment\s*:\s*/gi, '').trim() || null;
 }
 
 function normalizeAssignmentEmoji(value: string | null | undefined): string | null {

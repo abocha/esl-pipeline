@@ -123,14 +123,14 @@ function looksLikeMarkdownFilePath(value: string): boolean {
 
 function extractLabeledMarkdownAudioUrl(markdown: string | null | undefined, label: string): string | null {
   if (!markdown) return null;
-  const pattern = new RegExp(`\\[${escapeRegExp(label)}\\]\\((https?:\\/\\/[^\\s)]+)\\)`, 'i');
+  const pattern = new RegExp(String.raw`\[${escapeRegExp(label)}\]\((https?:\/\/[^\s)]+)\)`, 'i');
   const match = markdown.match(pattern);
   return match?.[1] ?? null;
 }
 
 function extractAudioUrlByPathHint(input: string | null | undefined, pathHint: string): string | null {
   if (!input) return null;
-  const pattern = new RegExp(`(https?:\\/\\/\\S*${escapeRegExp(pathHint)}\\S*\\.mp3(?:\\?\\S*)?)`, 'i');
+  const pattern = new RegExp(String.raw`(https?:\/\/\S*${escapeRegExp(pathHint)}\S*\.mp3(?:\?\S*)?)`, 'i');
   const match = input.match(pattern);
   return match?.[1] ?? null;
 }
@@ -190,23 +190,23 @@ function decodeHtmlEntities(value: string): string {
 }
 
 function cleanupTitleToken(value: string): string | null {
-  const trimmed = value.trim().replace(/^['"]|['"]$/g, '');
+  const trimmed = value.trim().replaceAll(/^['"]|['"]$/g, '');
   if (!trimmed) return null;
-  return trimmed.replace(/^homework\s+ass+i?ignment\s*:\s*/i, '').trim() || null;
+  return trimmed.replaceAll(/^homework\s+ass+i?ignment\s*:\s*/gi, '').trim() || null;
 }
 
 function cleanupIconToken(value: string): string | null {
-  const trimmed = value.trim().replace(/^['"]|['"]$/g, '');
+  const trimmed = value.trim().replaceAll(/^['"]|['"]$/g, '');
   if (!trimmed) return null;
   return trimmed;
 }
 
 function stripTags(value: string): string {
-  return value.replace(/<[^>]*>/g, '');
+  return value.replaceAll(/<[^>]*>/g, '');
 }
 
 function escapeRegExp(value: string): string {
-  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  return value.replaceAll(/[.*+?^${}()|[\]\\]/g, String.raw`\$&`);
 }
 
 async function fetchTextWithTimeout(url: string, timeoutMs: number): Promise<string | null> {
