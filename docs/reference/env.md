@@ -210,6 +210,8 @@ Use `.env.batch-backend` for the service stack. It includes all core keys above 
   - `TELEGRAM_OPS_BOT_POLL_TIMEOUT_SECONDS` (default `20`) — Telegram long-poll timeout.
   - `TELEGRAM_OPS_BOT_COMMAND_WINDOW_MS` (default `60000`) — Per-user rate-limit window.
   - `TELEGRAM_OPS_BOT_MAX_COMMANDS_PER_WINDOW` (default `20`) — Max commands per user in rate-limit window.
+  - `TELEGRAM_OPS_BOT_ENABLE_ACTION_COMMANDS` (default `false`) — Enables/disables mutating action commands (`/backup`, `/drill`).
+  - `TELEGRAM_OPS_BOT_SKIP_PENDING_UPDATES_ON_STARTUP` (default `true`) — Initializes poll offset from latest pending update to avoid stale command replay after restarts.
   - `TELEGRAM_OPS_BOT_TOPIC_AUTO_CREATE` (default `true`) — Try creating domain topics (`ops`, `jobs`, `alerts`) on startup.
   - `TELEGRAM_OPS_BOT_DEFAULT_THREAD_ID` (optional) — Fallback thread when topic routing is unavailable.
   - `TELEGRAM_OPS_BOT_TOPICS_STATE_FILE` (default `tmp/state/telegram-ops-topics.json`) — Cached topic mapping state.

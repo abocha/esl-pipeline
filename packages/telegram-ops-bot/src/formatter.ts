@@ -98,6 +98,22 @@ export function formatActionQueued(status: OpsActionStatus): string {
   ].join('\n');
 }
 
+export function formatActionStatus(status: OpsActionStatus): string {
+  const emoji =
+    status.state === 'succeeded' ? '✅' : status.state === 'failed' ? '❌' : status.state === 'running' ? '▶️' : '⏳';
+  return [
+    `<b>${emoji} Action status</b>`,
+    `<b>Action</b> <code>${escapeHtml(status.action)}</code>`,
+    `<b>Operation</b> <code>${escapeHtml(status.operationId)}</code>`,
+    `<b>State</b> <code>${escapeHtml(status.state)}</code>`,
+    `<b>Requested</b> <code>${escapeHtml(status.requestedAt)}</code>`,
+    `<b>Started</b> <code>${escapeHtml(formatNullable(status.startedAt))}</code>`,
+    `<b>Finished</b> <code>${escapeHtml(formatNullable(status.finishedAt))}</code>`,
+    `<b>Exit</b> <code>${escapeHtml(formatNullable(status.exitCode === null ? null : String(status.exitCode)))}</code>`,
+    `<b>Message</b> ${escapeHtml(formatNullable(status.message))}`,
+  ].join('\n');
+}
+
 export function formatCommandError(message: string): string {
   return `<b>Command failed</b>\n\n${escapeHtml(message)}`;
 }

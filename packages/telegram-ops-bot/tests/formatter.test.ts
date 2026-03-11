@@ -1,8 +1,30 @@
 import { describe, expect, it } from 'vitest';
 
-import { formatJobLinks } from '../src/formatter.js';
+import { formatActionStatus, formatJobLinks } from '../src/formatter.js';
 
 describe('formatter', () => {
+  it('renders operation status details', () => {
+    const html = formatActionStatus({
+      operationId: 'op-77',
+      action: 'backup_upload',
+      state: 'running',
+      requestedAt: '2026-03-11T00:00:00Z',
+      startedAt: '2026-03-11T00:00:01Z',
+      finishedAt: null,
+      requestedBy: 'telegram',
+      requestedByUserId: 'user-1',
+      message: 'Action started',
+      command: 'bash backup',
+      exitCode: null,
+      stdoutTail: null,
+      stderrTail: null,
+    });
+
+    expect(html).toContain('op-77');
+    expect(html).toContain('running');
+    expect(html).toContain('Action started');
+  });
+
   it('renders available links and app links', () => {
     const html = formatJobLinks(
       {

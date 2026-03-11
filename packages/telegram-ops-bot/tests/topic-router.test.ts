@@ -21,6 +21,8 @@ function createConfig(stateFile: string): BotConfig {
     pollTimeoutSeconds: 1,
     commandWindowMs: 60_000,
     maxCommandsPerWindow: 20,
+    enableActionCommands: true,
+    skipPendingUpdatesOnStartup: true,
     topicAutoCreate: true,
     defaultThreadId: 999,
     topicsStateFile: stateFile,

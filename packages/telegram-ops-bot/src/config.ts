@@ -45,6 +45,8 @@ export function loadBotConfigFromEnv(): BotConfig {
   const pollTimeoutSeconds = readInt('TELEGRAM_OPS_BOT_POLL_TIMEOUT_SECONDS', 20);
   const commandWindowMs = readInt('TELEGRAM_OPS_BOT_COMMAND_WINDOW_MS', 60_000);
   const maxCommandsPerWindow = readInt('TELEGRAM_OPS_BOT_MAX_COMMANDS_PER_WINDOW', 20);
+  const enableActionCommands = readBool('TELEGRAM_OPS_BOT_ENABLE_ACTION_COMMANDS', false);
+  const skipPendingUpdatesOnStartup = readBool('TELEGRAM_OPS_BOT_SKIP_PENDING_UPDATES_ON_STARTUP', true);
 
   const topicAutoCreate = readBool('TELEGRAM_OPS_BOT_TOPIC_AUTO_CREATE', true);
   const defaultThreadId = parseOptionalThreadId(readString('TELEGRAM_OPS_BOT_DEFAULT_THREAD_ID'));
@@ -107,6 +109,8 @@ export function loadBotConfigFromEnv(): BotConfig {
     pollTimeoutSeconds,
     commandWindowMs,
     maxCommandsPerWindow,
+    enableActionCommands,
+    skipPendingUpdatesOnStartup,
     topicAutoCreate,
     defaultThreadId,
     topicsStateFile,

@@ -18,6 +18,8 @@ function createBaseContext(overrides: Partial<CommandContext>): CommandContext {
       pollTimeoutSeconds: 1,
       commandWindowMs: 60_000,
       maxCommandsPerWindow: 20,
+      enableActionCommands: true,
+      skipPendingUpdatesOnStartup: true,
       topicAutoCreate: false,
       topicsStateFile: '/tmp/telegram-topics.json',
       topicNames: {
@@ -152,5 +154,65 @@ describe('telegram commands', () => {
         command: 'backup',
       }),
     );
+  });
+
+  it('blocks action commands in read-only mode', async () => {
+    const registry = createCommandRegistry();
+    const backupCommand = registry.resolve('backup');
+    expect(backupCommand).toBeDefined();
+
+    const base = createBaseContext({});
+    const context = createBaseContext({
+      config: {
+        ...base.config,
+        enableActionCommands: false,
+      },
+      command: 'backup',
+      args: ['nightly'],
+    });
+
+    await backupCommand?.execute(context);
+
+    const enqueueMock = context.backend.enqueueOpsAction as ReturnType<typeof vi.fn>;
+    expect(enqueueMock).toHaveBeenCalledTimes(0);
+
+    const sendMock = context.messenger.sendHtmlMessage as ReturnType<typeof vi.fn>;
+    expect(sendMock).toHaveBeenCalledTimes(1);
+    expect(sendMock.mock.calls[0]?.[0].html).toContain('read-only mode');
+  });
+
+  it('runs /op and shows one operation status', async () => {
+    const registry = createCommandRegistry();
+    const opCommand = registry.resolve('op');
+    expect(opCommand).toBeDefined();
+
+    const context = createBaseContext({
+      command: 'op',
+      args: ['op-123'],
+    });
+    const getStatusMock = context.backend.getOpsActionStatus as ReturnType<typeof vi.fn>;
+    getStatusMock.mockResolvedValue({
+      operationId: 'op-123',
+      action: 'backup_upload',
+      state: 'running',
+      requestedAt: '2026-03-11T00:00:00.000Z',
+      startedAt: '2026-03-11T00:00:01.000Z',
+      finishedAt: null,
+      requestedBy: 'telegram',
+      requestedByUserId: 'u1',
+      message: 'Action started',
+      command: 'bash scripts/docker/postgres-backup-s3.sh backup-upload',
+      exitCode: null,
+      stdoutTail: null,
+      stderrTail: null,
+    });
+
+    await opCommand?.execute(context);
+
+    expect(getStatusMock).toHaveBeenCalledWith('op-123');
+    const sendMock = context.messenger.sendHtmlMessage as ReturnType<typeof vi.fn>;
+    expect(sendMock).toHaveBeenCalledTimes(1);
+    expect(sendMock.mock.calls[0]?.[0].html).toContain('op-123');
+    expect(sendMock.mock.calls[0]?.[0].html).toContain('running');
   });
 });
