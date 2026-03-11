@@ -58,7 +58,12 @@ export interface BackendClient {
 }
 
 export interface TelegramMessenger {
-  sendHtmlMessage: (args: { chatId: string; threadId?: number; html: string }) => Promise<void>;
+  sendHtmlMessage: (args: {
+    chatId: string;
+    threadId?: number;
+    html: string;
+    disableLinkPreview?: boolean;
+  }) => Promise<void>;
 }
 
 export interface TopicRouter {

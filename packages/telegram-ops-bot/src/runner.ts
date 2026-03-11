@@ -44,11 +44,12 @@ export class TelegramOpsBotRunner {
     this.audit = args.audit;
     this.registry = createCommandRegistry();
     this.messenger = {
-      sendHtmlMessage: async ({ chatId, threadId, html }) => {
+      sendHtmlMessage: async ({ chatId, threadId, html, disableLinkPreview }) => {
         await this.telegram.sendHtmlMessage({
           chatId,
           threadId,
           html,
+          disableLinkPreview,
         });
       },
     };

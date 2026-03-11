@@ -25,8 +25,9 @@ Phases:
 
 Current mapping:
 1. Current PR scope is `A1` with selected `A2` hardening included.
-2. Student-facing expansion draft starts at `B1` candidate.
-3. Direct student conversation remains `C0` until explicit go/no-go.
+2. Student-shareable card delivery (`/links`, `/share`) is implemented as selected `A2` output hardening.
+3. Student-facing expansion draft starts at `B1` candidate.
+4. Direct student conversation remains `C0` until explicit go/no-go.
 
 ## Delivery Buckets
 
@@ -41,8 +42,11 @@ Current mapping:
 | Skip stale queued Telegram updates on startup to avoid command replay after restarts | P0 | Now | Implemented | `A2` hardening |
 | Read-only-by-default bot mode with explicit action enable gate | P0 | Now | Implemented | `A2` hardening |
 | Add operation status lookup command in bot UX | P1 | Now | Implemented | `A1` completeness |
+| Forwardable student-share cards with separate audio preview messages (`/links`, `/share`) | P1 | Now | Implemented | selected `A2` hardening |
+| Cross-user finished-job visibility for service account path (`/admin/jobs`) | P1 | Now | Implemented | `A2` operator UX |
 | Add backend transport integration tests for `/ops/*` endpoints | P1 | After Manual V1 | Planned | `A2` hardening |
 | Add Docker smoke workflow for Telegram command loop in Compose | P1 | After Manual V1 | Planned | `A2` hardening |
+| Add deterministic smoke checks for `/share` card rendering and audio extraction fallback | P1 | After Manual V1 | Planned | `A2` hardening |
 | Improve topic cache healing for stale/deleted forum topics | P2 | After Manual V1 | Planned | `A2` hardening |
 | Persist ops action history in DB (instead of in-memory only) | P1 | V2 / Defer | Planned | `A2` durability |
 | Multi-instance coordination for bot state (rate limit/topic map) | P2 | V2 / Defer | Planned | `A2` scale |
@@ -73,6 +77,7 @@ Current state:
 
 1. Backend `/ops/*` route integration tests are green in CI.
 2. Compose smoke workflow demonstrates thread routing + command safety guards.
+3. `/share` smoke checks validate assignment title/icon extraction and audio fallback extraction from published HTML.
 
 ## Rollback Notes
 

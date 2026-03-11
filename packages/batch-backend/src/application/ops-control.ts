@@ -384,6 +384,7 @@ function buildStatusFailureResponse(reason: string, now: Date): OpsStatusRespons
 
 function runShellCommand(command: string, timeoutMs: number): Promise<RunCommandResult> {
   return new Promise((resolve) => {
+    const runnerCwd = process.env.PIPELINE_CWD?.trim() || process.cwd();
     let stdout = '';
     let stderr = '';
     let timedOut = false;
@@ -408,6 +409,7 @@ function runShellCommand(command: string, timeoutMs: number): Promise<RunCommand
     try {
       child = spawn('bash', ['-lc', command], {
         env: process.env,
+        cwd: runnerCwd,
         stdio: ['ignore', 'pipe', 'pipe'],
       });
     } catch (error: unknown) {
