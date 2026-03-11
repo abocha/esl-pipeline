@@ -70,7 +70,7 @@ export class HttpBackendClient {
       order: 'desc',
       limit: String(safeLimit),
     });
-    return this.requestJson<JobListResponse>('GET', `/user/jobs?${query.toString()}`);
+    return this.requestJson<JobListResponse>('GET', `/admin/jobs?${query.toString()}`);
   }
 
   async getJob(jobId: string): Promise<JobStatusDto> {

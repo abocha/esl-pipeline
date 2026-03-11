@@ -112,7 +112,7 @@ describeHttpServerIntegrationSuite(
       offset: 5,
     });
 
-    const call = listJobs.mock.calls[0]?.[0];
+    const call = listJobs.mock.calls.at(-1)?.[0];
     expect(call?.states).toEqual(['queued', 'failed']);
     expect(call?.studentId).toBe(studentId);
     expect(call?.limit).toBe(10);
@@ -121,6 +121,45 @@ describeHttpServerIntegrationSuite(
     expect(call?.userId).toBe('test-user-id');
     expect(call?.from?.toISOString()).toBe('2024-01-01T00:00:00.000Z');
     expect(call?.to?.toISOString()).toBe('2024-02-01T00:00:00.000Z');
+  });
+
+  it('GET /admin/jobs applies filters and returns cross-user scope by default', async () => {
+    const listJobs = vi.spyOn(listJobsModule, 'listJobsWithDefaults');
+    listJobs.mockResolvedValue({
+      jobs: [],
+      total: 0,
+      limit: 20,
+      offset: 0,
+    });
+
+    const studentId = deriveStudentId('Boris');
+    const response = await app.inject({
+      method: 'GET',
+      url:
+        '/admin/jobs?state=succeeded' +
+        `&studentId=${studentId}` +
+        '&from=2024-02-01T00:00:00.000Z' +
+        '&to=2024-02-15T00:00:00.000Z' +
+        '&limit=20&offset=0&order=desc',
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toEqual({
+      jobs: [],
+      total: 0,
+      limit: 20,
+      offset: 0,
+    });
+
+    const call = listJobs.mock.calls.at(-1)?.[0];
+    expect(call?.states).toEqual(['succeeded']);
+    expect(call?.studentId).toBe(studentId);
+    expect(call?.limit).toBe(20);
+    expect(call?.offset).toBe(0);
+    expect(call?.order).toBe('desc');
+    expect(call?.userId).toBeNull();
+    expect(call?.from?.toISOString()).toBe('2024-02-01T00:00:00.000Z');
+    expect(call?.to?.toISOString()).toBe('2024-02-15T00:00:00.000Z');
   });
 
   it('GET /user/jobs/summary returns summary response', async () => {

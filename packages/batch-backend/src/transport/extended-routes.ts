@@ -3549,19 +3549,49 @@ export function registerExtendedRoutes(app: FastifyInstance, options: ExtendedRo
     '/admin/jobs',
     { preHandler: [authenticate, requireRole(['admin'])] },
     async (request, reply) => {
+      const routePath = resolveRoutePath(request, 'GET /admin/jobs');
+      const querySchema = z.object({
+        state: z.union([z.string(), z.array(z.string())]).optional(),
+        studentId: z.string().uuid().optional(),
+        from: z.coerce.date().optional(),
+        to: z.coerce.date().optional(),
+        limit: z.coerce.number().int().min(1).max(200).optional(),
+        offset: z.coerce.number().int().min(0).optional(),
+        order: z.enum(['asc', 'desc']).optional(),
+        userId: z.string().uuid().optional(),
+      });
+
       try {
-        const jobs: unknown[] = [];
+        const query = querySchema.parse(request.query ?? {});
+        const states = normalizeJobStateFilter(query.state);
+        const jobs = await listJobsWithDefaults({
+          states,
+          studentId: query.studentId ?? null,
+          from: query.from ?? null,
+          to: query.to ?? null,
+          limit: query.limit,
+          offset: query.offset,
+          order: query.order,
+          userId: query.userId ?? null,
+        });
 
-        logger.info('Admin listed all jobs', {
+        logger.info('HTTP request handled', {
+          event: 'http_request',
+          route: routePath,
+          statusCode: 200,
           userId: getAuthenticatedUser(request)?.id,
-          jobCount: jobs.length,
         });
 
-        return reply.code(200).send({
-          jobs,
-          total: jobs.length,
-        });
+        return reply.code(200).send(jobs);
       } catch (error: unknown) {
+        if (error instanceof z.ZodError) {
+          return reply.code(400).send({
+            error: 'validation_failed',
+            message: 'Invalid query parameters',
+            details: error.issues,
+          });
+        }
+
         logger.error(error instanceof Error ? error : String(error), {
           event: 'admin_list_jobs_failed',
           userId: getAuthenticatedUser(request)?.id,

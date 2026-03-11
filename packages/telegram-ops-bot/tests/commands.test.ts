@@ -215,4 +215,304 @@ describe('telegram commands', () => {
     expect(sendMock.mock.calls[0]?.[0].html).toContain('op-123');
     expect(sendMock.mock.calls[0]?.[0].html).toContain('running');
   });
+
+  it('runs /links with student-share summary and one audio preview message', async () => {
+    const registry = createCommandRegistry();
+    const linksCommand = registry.resolve('links');
+    expect(linksCommand).toBeDefined();
+
+    const context = createBaseContext({
+      command: 'links',
+      args: ['job-42'],
+    });
+
+    const getJobMock = context.backend.getJob as ReturnType<typeof vi.fn>;
+    getJobMock.mockResolvedValue({
+      jobId: 'job-42',
+      studentId: null,
+      md: '[Audio recording: Study Text](https://bucket.s3.amazonaws.com/audio/final/study.mp3)',
+      recordingId: null,
+      transcriptId: null,
+      promptPackageId: null,
+      draftId: null,
+      preset: null,
+      withTts: null,
+      voiceId: null,
+      upload: null,
+      voiceAccent: null,
+      forceTts: null,
+      notionDatabase: null,
+      publishTarget: null,
+      ttsStrategy: null,
+      autoPublish: null,
+      notionUrl: 'https://notion.so/assignment',
+      anytypeUrl: null,
+      htmlUrl: null,
+      state: 'succeeded',
+      createdAt: '2026-03-11T00:00:00Z',
+      updatedAt: '2026-03-11T00:00:00Z',
+      startedAt: null,
+      finishedAt: null,
+      error: null,
+      manifestPath: null,
+    });
+
+    await linksCommand?.execute(context);
+
+    expect(getJobMock).toHaveBeenCalledWith('job-42');
+    const sendMock = context.messenger.sendHtmlMessage as ReturnType<typeof vi.fn>;
+    expect(sendMock).toHaveBeenCalledTimes(2);
+    expect(sendMock.mock.calls[0]?.[0].disableLinkPreview).toBe(true);
+    expect(sendMock.mock.calls[0]?.[0].html).toContain('<a href="https://notion.so/assignment">Homework Assignment');
+    expect(sendMock.mock.calls[1]?.[0].disableLinkPreview).toBe(false);
+    expect(sendMock.mock.calls[1]?.[0].html).toContain('🎧 Listen 1: Study Text');
+    expect(sendMock.mock.calls[1]?.[0].html).toContain('audio/final/study.mp3');
+  });
+
+  it('runs /links and falls back to htmlUrl when md is a file path', async () => {
+    const registry = createCommandRegistry();
+    const linksCommand = registry.resolve('links');
+    expect(linksCommand).toBeDefined();
+
+    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      new Response(
+        [
+          '<html><head><title>Homework Assignment: Office Rules &amp; Modal Verbs</title></head><body>',
+          '<div class="hero-emoji">🏢</div>',
+          'https://bucket.s3.amazonaws.com/audio/final/from-html-study.mp3',
+          'https://bucket.s3.amazonaws.com/audio/pronunciation-shadow/from-html-pron.mp3',
+          '</body></html>',
+        ].join('\n'),
+        { status: 200 },
+      ),
+    );
+
+    const context = createBaseContext({
+      command: 'links',
+      args: ['job-77'],
+    });
+
+    const getJobMock = context.backend.getJob as ReturnType<typeof vi.fn>;
+    getJobMock.mockResolvedValue({
+      jobId: 'job-77',
+      studentId: null,
+      md: '/app/uploads/drafts/not-present.md',
+      recordingId: null,
+      transcriptId: null,
+      promptPackageId: null,
+      draftId: null,
+      preset: null,
+      withTts: null,
+      voiceId: null,
+      upload: null,
+      voiceAccent: null,
+      forceTts: null,
+      notionDatabase: null,
+      publishTarget: null,
+      ttsStrategy: null,
+      autoPublish: null,
+      notionUrl: null,
+      anytypeUrl: null,
+      htmlUrl: 'https://example.com/assignment.html',
+      state: 'succeeded',
+      createdAt: '2026-03-11T00:00:00Z',
+      updatedAt: '2026-03-11T00:00:00Z',
+      startedAt: null,
+      finishedAt: null,
+      error: null,
+      manifestPath: null,
+    });
+
+    await linksCommand?.execute(context);
+
+    const sendMock = context.messenger.sendHtmlMessage as ReturnType<typeof vi.fn>;
+    expect(sendMock).toHaveBeenCalledTimes(3);
+    expect(sendMock.mock.calls[0]?.[0].disableLinkPreview).toBe(true);
+    expect(sendMock.mock.calls[0]?.[0].html).toContain(
+      '<a href="https://example.com/assignment.html">🏢 Homework Assignment: Office Rules &amp; Modal Verbs</a>',
+    );
+    expect(sendMock.mock.calls[1]?.[0].disableLinkPreview).toBe(false);
+    expect(sendMock.mock.calls[2]?.[0].disableLinkPreview).toBe(false);
+    expect(sendMock.mock.calls[1]?.[0].html).toContain('🎧 Listen 1: Study Text');
+    expect(sendMock.mock.calls[2]?.[0].html).toContain('🗣️ Listen 2: Pronunciation');
+    expect(sendMock.mock.calls[1]?.[0].html).toContain('audio/final/from-html-study.mp3');
+    expect(sendMock.mock.calls[2]?.[0].html).toContain('audio/pronunciation-shadow/from-html-pron.mp3');
+
+    fetchSpy.mockRestore();
+  });
+
+  it('runs /links without html fallback when markdown already has title and audio links', async () => {
+    const registry = createCommandRegistry();
+    const linksCommand = registry.resolve('links');
+    expect(linksCommand).toBeDefined();
+
+    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      new Response('<html><head><title>Fallback Title</title></head><body>ignored</body></html>', {
+        status: 200,
+      }),
+    );
+
+    const context = createBaseContext({
+      command: 'links',
+      args: ['job-101'],
+    });
+
+    const getJobMock = context.backend.getJob as ReturnType<typeof vi.fn>;
+    getJobMock.mockResolvedValue({
+      jobId: 'job-101',
+      studentId: null,
+      md: [
+        '---',
+        'title: "Homework Assignment: Office Rules & Modal Verbs"',
+        '---',
+        '[Study clip](https://bucket.s3.amazonaws.com/audio/final/from-md-study.mp3)',
+        '[Pron clip](https://bucket.s3.amazonaws.com/audio/pronunciation-shadow/from-md-pron.mp3)',
+      ].join('\n'),
+      recordingId: null,
+      transcriptId: null,
+      promptPackageId: null,
+      draftId: null,
+      preset: null,
+      withTts: null,
+      voiceId: null,
+      upload: null,
+      voiceAccent: null,
+      forceTts: null,
+      notionDatabase: null,
+      publishTarget: null,
+      ttsStrategy: null,
+      autoPublish: null,
+      notionUrl: 'https://notion.so/assignment-101',
+      anytypeUrl: null,
+      htmlUrl: 'https://example.com/fallback-only-if-needed.html',
+      state: 'succeeded',
+      createdAt: '2026-03-11T00:00:00Z',
+      updatedAt: '2026-03-11T00:00:00Z',
+      startedAt: null,
+      finishedAt: null,
+      error: null,
+      manifestPath: null,
+    });
+
+    await linksCommand?.execute(context);
+
+    expect(fetchSpy).not.toHaveBeenCalled();
+
+    const sendMock = context.messenger.sendHtmlMessage as ReturnType<typeof vi.fn>;
+    expect(sendMock).toHaveBeenCalledTimes(3);
+    expect(sendMock.mock.calls[0]?.[0].html).toContain(
+      '<a href="https://example.com/fallback-only-if-needed.html">Homework Assignment: Office Rules &amp; Modal Verbs</a>',
+    );
+    expect(sendMock.mock.calls[1]?.[0].html).toContain('audio/final/from-md-study.mp3');
+    expect(sendMock.mock.calls[2]?.[0].html).toContain('audio/pronunciation-shadow/from-md-pron.mp3');
+
+    fetchSpy.mockRestore();
+  });
+
+  it('runs /links and avoids trailing delimiters in fallback audio URL extraction', async () => {
+    const registry = createCommandRegistry();
+    const linksCommand = registry.resolve('links');
+    expect(linksCommand).toBeDefined();
+
+    const context = createBaseContext({
+      command: 'links',
+      args: ['job-102'],
+    });
+
+    const getJobMock = context.backend.getJob as ReturnType<typeof vi.fn>;
+    getJobMock.mockResolvedValue({
+      jobId: 'job-102',
+      studentId: null,
+      md: [
+        '---',
+        'title: "Homework Assignment: Delimiter Regression"',
+        '---',
+        '[Audio](https://bucket.s3.amazonaws.com/audio/final/delimited-study.mp3?token=abc123)',
+      ].join('\n'),
+      recordingId: null,
+      transcriptId: null,
+      promptPackageId: null,
+      draftId: null,
+      preset: null,
+      withTts: null,
+      voiceId: null,
+      upload: null,
+      voiceAccent: null,
+      forceTts: null,
+      notionDatabase: null,
+      publishTarget: null,
+      ttsStrategy: null,
+      autoPublish: null,
+      notionUrl: 'https://notion.so/assignment-102',
+      anytypeUrl: null,
+      htmlUrl: null,
+      state: 'succeeded',
+      createdAt: '2026-03-11T00:00:00Z',
+      updatedAt: '2026-03-11T00:00:00Z',
+      startedAt: null,
+      finishedAt: null,
+      error: null,
+      manifestPath: null,
+    });
+
+    await linksCommand?.execute(context);
+
+    const sendMock = context.messenger.sendHtmlMessage as ReturnType<typeof vi.fn>;
+    expect(sendMock).toHaveBeenCalledTimes(2);
+    expect(sendMock.mock.calls[1]?.[0].html).toContain(
+      'href="https://bucket.s3.amazonaws.com/audio/final/delimited-study.mp3?token=abc123"',
+    );
+    expect(sendMock.mock.calls[1]?.[0].html).not.toContain('token=abc123)');
+  });
+
+  it('runs /share and mirrors student-share output', async () => {
+    const registry = createCommandRegistry();
+    const shareCommand = registry.resolve('share');
+    expect(shareCommand).toBeDefined();
+
+    const context = createBaseContext({
+      command: 'share',
+      args: ['job-88'],
+    });
+
+    const getJobMock = context.backend.getJob as ReturnType<typeof vi.fn>;
+    getJobMock.mockResolvedValue({
+      jobId: 'job-88',
+      studentId: null,
+      md: '[Audio recording: Study Text](https://bucket.s3.amazonaws.com/audio/final/share-study.mp3)',
+      recordingId: null,
+      transcriptId: null,
+      promptPackageId: null,
+      draftId: null,
+      preset: null,
+      withTts: null,
+      voiceId: null,
+      upload: null,
+      voiceAccent: null,
+      forceTts: null,
+      notionDatabase: null,
+      publishTarget: null,
+      ttsStrategy: null,
+      autoPublish: null,
+      notionUrl: 'https://notion.so/share-assignment',
+      anytypeUrl: null,
+      htmlUrl: null,
+      state: 'succeeded',
+      createdAt: '2026-03-11T00:00:00Z',
+      updatedAt: '2026-03-11T00:00:00Z',
+      startedAt: null,
+      finishedAt: null,
+      error: null,
+      manifestPath: null,
+    });
+
+    await shareCommand?.execute(context);
+
+    const sendMock = context.messenger.sendHtmlMessage as ReturnType<typeof vi.fn>;
+    expect(sendMock).toHaveBeenCalledTimes(2);
+    expect(sendMock.mock.calls[0]?.[0].html).toContain(
+      '<a href="https://notion.so/share-assignment">Homework Assignment',
+    );
+    expect(sendMock.mock.calls[1]?.[0].html).toContain('🎧 Listen 1: Study Text');
+  });
 });

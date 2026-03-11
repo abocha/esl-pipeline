@@ -2,6 +2,9 @@ import type { JobListResponse, JobStatusDto, OpsActionStatus, OpsStatusResponse 
 
 import type { CommandDefinition } from './types.js';
 
+const STUDY_TEXT_AUDIO_LINK_LABEL = 'Audio recording: Study Text';
+const PRONUNCIATION_AUDIO_LINK_LABEL = 'Audio recording: Pronunciation Shadow Sentence';
+
 export function escapeHtml(value: string): string {
   return value.replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;');
 }
@@ -63,29 +66,109 @@ export function formatJobDetails(job: JobStatusDto): string {
   ].join('\n');
 }
 
-export function formatJobLinks(job: JobStatusDto, appBaseUrl?: string): string {
-  const links: string[] = [];
-  if (job.notionUrl) links.push(`<a href="${escapeHtml(job.notionUrl)}">Notion</a>`);
-  if (job.anytypeUrl) links.push(`<a href="${escapeHtml(job.anytypeUrl)}">Anytype</a>`);
-  if (job.htmlUrl) links.push(`<a href="${escapeHtml(job.htmlUrl)}">HTML</a>`);
+export function formatJobLinks(
+  job: JobStatusDto,
+  appBaseUrl?: string,
+  options?: {
+    studyTextAudioUrl?: string | null;
+    pronunciationAudioUrl?: string | null;
+    includeAudioLinks?: boolean;
+    assignmentTitle?: string | null;
+    assignmentEmoji?: string | null;
+  },
+): string {
+  const assignmentUrl = job.htmlUrl ?? job.notionUrl ?? job.anytypeUrl ?? resolveAppJobUrl(job.jobId, appBaseUrl);
+  const includeAudioLinks = options?.includeAudioLinks ?? true;
+  const assignmentTitle = normalizeAssignmentTitle(options?.assignmentTitle);
+  const headingText =
+    assignmentTitle && assignmentTitle.toLowerCase() !== 'homework assignment'
+      ? `Homework Assignment: ${assignmentTitle}`
+      : 'Homework Assignment';
+  const assignmentLabel = [normalizeAssignmentEmoji(options?.assignmentEmoji), headingText]
+    .filter(Boolean)
+    .join(' ');
+  const studyTextAudioUrl =
+    options?.studyTextAudioUrl ??
+    resolveAudioUrlFromMarkdown(job.md, STUDY_TEXT_AUDIO_LINK_LABEL, '/audio/final/');
+  const pronunciationAudioUrl =
+    options?.pronunciationAudioUrl ??
+    resolveAudioUrlFromMarkdown(job.md, PRONUNCIATION_AUDIO_LINK_LABEL, '/audio/pronunciation-shadow/');
 
-  if (appBaseUrl) {
-    const normalized = appBaseUrl.replace(/\/+$/, '');
-    links.push(`<a href="${escapeHtml(`${normalized}/jobs/${encodeURIComponent(job.jobId)}`)}">App job</a>`);
-    if (job.recordingId) {
-      links.push(
-        `<a href="${escapeHtml(`${normalized}/recordings/${encodeURIComponent(job.recordingId)}`)}">Recording</a>`,
+  const lines: string[] = [];
+  if (assignmentUrl) {
+    lines.push(`<a href="${escapeHtml(assignmentUrl)}">${escapeHtml(assignmentLabel)}</a>`);
+  } else {
+    lines.push(`<b>${escapeHtml(assignmentLabel)}</b>`);
+  }
+
+  if (!includeAudioLinks) {
+    return lines.join('\n');
+  }
+
+  if (includeAudioLinks) {
+    if (studyTextAudioUrl) {
+      lines.push(`• <a href="${escapeHtml(studyTextAudioUrl)}">🎧 Listen 1: Study Text</a>`);
+    }
+    if (pronunciationAudioUrl) {
+      lines.push(
+        `• <a href="${escapeHtml(pronunciationAudioUrl)}">🗣️ Listen 2: Pronunciation</a>`,
       );
     }
   }
 
-  if (links.length === 0) {
-    return `<b>Links</b>\n\nNo links available for <code>${escapeHtml(job.jobId)}</code>.`;
+  return lines.join('\n');
+}
+
+export function formatAudioPlaybackLink(label: string, url: string): string {
+  const safeLabel = escapeHtml(label);
+  const safeUrl = escapeHtml(url);
+  return `<a href="${safeUrl}">${safeLabel}</a>`;
+}
+
+function resolveAppJobUrl(jobId: string, appBaseUrl?: string): string | null {
+  if (!appBaseUrl) return null;
+  const normalized = appBaseUrl.replace(/\/+$/, '');
+  return `${normalized}/jobs/${encodeURIComponent(jobId)}`;
+}
+
+function resolveAudioUrlFromMarkdown(
+  markdown: string | null | undefined,
+  linkLabel: string,
+  pathHint: string,
+): string | null {
+  if (!markdown) return null;
+
+  const labelRegex = new RegExp(String.raw`\[${escapeRegExp(linkLabel)}\]\((https?:\/\/[^\s)]+)\)`, 'i');
+  const labeledMatch = markdown.match(labelRegex);
+  if (labeledMatch?.[1]) {
+    return labeledMatch[1];
   }
 
-  return [`<b>Links for <code>${escapeHtml(job.jobId)}</code></b>`, '', ...links.map((link) => `• ${link}`)].join(
-    '\n',
-  );
+  const hintedRegex = new RegExp(String.raw`(https?:\/\/\S*${escapeRegExp(pathHint)}\S*\.mp3(?:\?\S*)?)`, 'i');
+  const hintedMatch = markdown.match(hintedRegex);
+  if (hintedMatch?.[1]) {
+    return hintedMatch[1];
+  }
+
+  return null;
+}
+
+function escapeRegExp(value: string): string {
+  return value.replaceAll(/[.*+?^${}()|[\]\\]/g, String.raw`\$&`);
+}
+
+function normalizeAssignmentTitle(value: string | null | undefined): string | null {
+  if (!value) return null;
+  const trimmed = value.trim();
+  if (!trimmed) return null;
+  return trimmed.replaceAll(/^homework\s+ass+i?ignment\s*:\s*/gi, '').trim() || null;
+}
+
+function normalizeAssignmentEmoji(value: string | null | undefined): string | null {
+  if (!value) return null;
+  const trimmed = value.trim();
+  if (!trimmed) return null;
+  return trimmed;
 }
 
 export function formatActionQueued(status: OpsActionStatus): string {
