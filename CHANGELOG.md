@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented here. Dates use `YYYY-MM-DD`.
 
+## [4.2.0] - 2026-03-11
+
+### Changed
+
+- Automated release from PR #35: feat(ops-control): add telegram ops bot groundwork and hardening (https://github.com/abocha/esl-pipeline/pull/35)
+
 ## [4.1.1] - 2026-03-11
 
 ### Changed
