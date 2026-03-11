@@ -521,6 +521,15 @@ function createConfig(): BatchBackendConfig {
     drafts: {
       localExport: false,
     },
+    opsControl: {
+      enabled: false,
+      botSharedSecret: undefined,
+      statusCommand: 'echo {}',
+      backupCommand: 'echo backup',
+      restoreDrillCommand: 'echo restore-drill',
+      actionTimeoutMs: 60_000,
+      actionHistoryLimit: 100,
+    },
     experimental: {
       extendedApiEnabled: false,
     },

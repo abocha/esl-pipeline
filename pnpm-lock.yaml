@@ -645,6 +645,31 @@ importers:
         specifier: ^4.0.18
         version: 4.0.18(@types/node@25.3.5)(jiti@2.6.1)(jsdom@28.1.0)(tsx@4.21.0)(yaml@2.8.2)
 
+  packages/telegram-ops-bot:
+    dependencies:
+      '@esl-pipeline/contracts':
+        specifier: workspace:*
+        version: link:../contracts
+      '@esl-pipeline/shared-infrastructure':
+        specifier: workspace:*
+        version: link:../shared-infrastructure
+      '@grammyjs/types':
+        specifier: ^3.25.0
+        version: 3.25.0
+    devDependencies:
+      '@types/node':
+        specifier: ^25.3.5
+        version: 25.3.5
+      tsx:
+        specifier: ^4.21.0
+        version: 4.21.0
+      typescript:
+        specifier: ^5.9.3
+        version: 5.9.3
+      vitest:
+        specifier: ^4.0.18
+        version: 4.0.18(@types/node@25.3.5)(jiti@2.6.1)(jsdom@28.1.0)(tsx@4.21.0)(yaml@2.8.2)
+
   packages/tts-core:
     dependencies:
       '@esl-pipeline/contracts':
@@ -1341,6 +1366,9 @@ packages:
   '@google-cloud/text-to-speech@6.4.0':
     resolution: {integrity: sha512-KUnK+mBYz9aegxHrBbwEignOkGRqXvqOXs/EGY7CAJhMFKuNSieW02/PV/ipVRsJM11MP69qgTgEetoyAN0HAg==}
     engines: {node: '>=18'}
+
+  '@grammyjs/types@3.25.0':
+    resolution: {integrity: sha512-iN9i5p+8ZOu9OMxWNcguojQfz4K/PDyMPOnL7PPCON+SoA/F8OKMH3uR7CVUkYfdNe0GCz8QOzAWrnqusQYFOg==}
 
   '@grpc/grpc-js@1.14.3':
     resolution: {integrity: sha512-Iq8QQQ/7X3Sac15oB6p0FmUg/klxQvXLeileoqrTRGJYLV+/9tubbr9ipz0GKHjmXVsgFPo/+W+2cA8eNcR+XA==}
@@ -5606,6 +5634,8 @@ snapshots:
       google-gax: 5.0.6
     transitivePeerDependencies:
       - supports-color
+
+  '@grammyjs/types@3.25.0': {}
 
   '@grpc/grpc-js@1.14.3':
     dependencies:

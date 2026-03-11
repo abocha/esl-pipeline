@@ -460,6 +460,83 @@ describe('config/env - generation provider mapping', () => {
   });
 });
 
+describe('config/env - ops control settings', () => {
+  beforeEach(() => {
+    vi.resetModules();
+  });
+
+  it('provides safe defaults for ops control', async () => {
+    await withEnv(
+      {
+        NODE_ENV: 'test',
+      },
+      async () => {
+        const cfg = await loadConfigFresh();
+        expect(cfg.opsControl.enabled).toBe(false);
+        expect(cfg.opsControl.botSharedSecret).toBeUndefined();
+        expect(cfg.opsControl.statusCommand).toContain('postgres-ops-status.sh --json');
+        expect(cfg.opsControl.backupCommand).toContain('postgres-backup-s3.sh backup-upload');
+        expect(cfg.opsControl.restoreDrillCommand).toContain('run-postgres-restore-drill-reminder.sh');
+        expect(cfg.opsControl.actionTimeoutMs).toBe(10 * 60 * 1000);
+        expect(cfg.opsControl.actionHistoryLimit).toBe(100);
+      },
+    );
+  });
+
+  it('maps ops control overrides', async () => {
+    await withEnv(
+      {
+        NODE_ENV: 'test',
+        BATCH_BACKEND_ENABLE_OPS_CONTROL: 'true',
+        BATCH_BACKEND_OPS_CONTROL_BOT_SECRET: 'secret-token',
+        BATCH_BACKEND_OPS_CONTROL_STATUS_COMMAND: 'echo {}',
+        BATCH_BACKEND_OPS_CONTROL_BACKUP_COMMAND: 'echo backup',
+        BATCH_BACKEND_OPS_CONTROL_RESTORE_DRILL_COMMAND: 'echo drill',
+        BATCH_BACKEND_OPS_CONTROL_ACTION_TIMEOUT_MS: '45000',
+        BATCH_BACKEND_OPS_CONTROL_ACTION_HISTORY_LIMIT: '42',
+      },
+      async () => {
+        const cfg = await loadConfigFresh();
+        expect(cfg.opsControl.enabled).toBe(true);
+        expect(cfg.opsControl.botSharedSecret).toBe('secret-token');
+        expect(cfg.opsControl.statusCommand).toBe('echo {}');
+        expect(cfg.opsControl.backupCommand).toBe('echo backup');
+        expect(cfg.opsControl.restoreDrillCommand).toBe('echo drill');
+        expect(cfg.opsControl.actionTimeoutMs).toBe(45000);
+        expect(cfg.opsControl.actionHistoryLimit).toBe(42);
+      },
+    );
+  });
+
+  it('rejects out-of-range timeout and history limit', async () => {
+    await expect(
+      withEnv(
+        {
+          NODE_ENV: 'test',
+          BATCH_BACKEND_OPS_CONTROL_ACTION_TIMEOUT_MS: '999',
+        },
+        async () => {
+          await loadConfigFresh();
+        },
+      ),
+    ).rejects.toThrow(
+      'BATCH_BACKEND_OPS_CONTROL_ACTION_TIMEOUT_MS must be between 1000 and 3600000',
+    );
+
+    await expect(
+      withEnv(
+        {
+          NODE_ENV: 'test',
+          BATCH_BACKEND_OPS_CONTROL_ACTION_HISTORY_LIMIT: '0',
+        },
+        async () => {
+          await loadConfigFresh();
+        },
+      ),
+    ).rejects.toThrow('BATCH_BACKEND_OPS_CONTROL_ACTION_HISTORY_LIMIT must be between 1 and 1000');
+  });
+});
+
 describe('config/env - postgres pool tuning', () => {
   beforeEach(() => {
     vi.resetModules();

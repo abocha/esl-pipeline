@@ -215,6 +215,15 @@ export interface BatchBackendConfig {
   drafts: {
     localExport: boolean;
   };
+  opsControl: {
+    enabled: boolean;
+    botSharedSecret?: string;
+    statusCommand: string;
+    backupCommand: string;
+    restoreDrillCommand: string;
+    actionTimeoutMs: number;
+    actionHistoryLimit: number;
+  };
   experimental: {
     extendedApiEnabled: boolean;
   };
@@ -510,6 +519,32 @@ export function loadConfig(): BatchBackendConfig {
     'docs/templates/PROFILE_2025-11-16.md',
   )!;
   const draftLocalExport = readBool('DRAFT_LOCAL_EXPORT', nodeEnv === 'development');
+
+  const opsControlEnabled = readBool('BATCH_BACKEND_ENABLE_OPS_CONTROL', false);
+  const opsControlBotSharedSecret = readString('BATCH_BACKEND_OPS_CONTROL_BOT_SECRET');
+  const opsControlStatusCommand = readString(
+    'BATCH_BACKEND_OPS_CONTROL_STATUS_COMMAND',
+    'bash scripts/docker/postgres-ops-status.sh --json',
+  )!;
+  const opsControlBackupCommand = readString(
+    'BATCH_BACKEND_OPS_CONTROL_BACKUP_COMMAND',
+    'bash scripts/docker/postgres-backup-s3.sh backup-upload',
+  )!;
+  const opsControlRestoreDrillCommand = readString(
+    'BATCH_BACKEND_OPS_CONTROL_RESTORE_DRILL_COMMAND',
+    'PG_BACKUP_RESTORE_DRILL_AUTO=true bash scripts/docker/run-postgres-restore-drill-reminder.sh',
+  )!;
+  const opsControlActionTimeoutMs = readInt(
+    'BATCH_BACKEND_OPS_CONTROL_ACTION_TIMEOUT_MS',
+    10 * 60 * 1000,
+  );
+  const opsControlActionHistoryLimit = readInt('BATCH_BACKEND_OPS_CONTROL_ACTION_HISTORY_LIMIT', 100);
+  if (opsControlActionTimeoutMs < 1000 || opsControlActionTimeoutMs > 60 * 60 * 1000) {
+    throw new Error('BATCH_BACKEND_OPS_CONTROL_ACTION_TIMEOUT_MS must be between 1000 and 3600000');
+  }
+  if (opsControlActionHistoryLimit < 1 || opsControlActionHistoryLimit > 1000) {
+    throw new Error('BATCH_BACKEND_OPS_CONTROL_ACTION_HISTORY_LIMIT must be between 1 and 1000');
+  }
 
   if (typeof process.env.STUDENT_SYSTEM_SOURCE === 'string') {
     throw new TypeError(
@@ -861,6 +896,15 @@ export function loadConfig(): BatchBackendConfig {
     },
     drafts: {
       localExport: draftLocalExport,
+    },
+    opsControl: {
+      enabled: opsControlEnabled,
+      botSharedSecret: opsControlBotSharedSecret ?? undefined,
+      statusCommand: opsControlStatusCommand,
+      backupCommand: opsControlBackupCommand,
+      restoreDrillCommand: opsControlRestoreDrillCommand,
+      actionTimeoutMs: opsControlActionTimeoutMs,
+      actionHistoryLimit: opsControlActionHistoryLimit,
     },
     experimental: {
       extendedApiEnabled,
