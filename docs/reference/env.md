@@ -189,6 +189,32 @@ Use `.env.batch-backend` for the service stack. It includes all core keys above 
 - `NODE_ENV` — `development` for local.
 - `BATCH_BACKEND_HTTP_PORT` — HTTP port.
 - `BATCH_BACKEND_ENABLE_EXTENDED_API` — Enable uploads/auth/admin routes.
+- Ops control API (additive, admin-auth, optional):
+  - `BATCH_BACKEND_ENABLE_OPS_CONTROL` (default `false`) — Enables `/ops/status`, `/ops/actions`, `/ops/actions/:operationId`.
+  - `BATCH_BACKEND_OPS_CONTROL_BOT_SECRET` (optional) — Requires matching `x-ops-bot-secret` header for `/ops/*`.
+  - `BATCH_BACKEND_OPS_CONTROL_STATUS_COMMAND` (default `bash scripts/docker/postgres-ops-status.sh --json`) — Command wrapper used by `GET /ops/status`.
+  - `BATCH_BACKEND_OPS_CONTROL_BACKUP_COMMAND` (default `bash scripts/docker/postgres-backup-s3.sh backup-upload`) — Command wrapper for `backup_upload`.
+  - `BATCH_BACKEND_OPS_CONTROL_RESTORE_DRILL_COMMAND` (default `PG_BACKUP_RESTORE_DRILL_AUTO=true bash scripts/docker/run-postgres-restore-drill-reminder.sh`) — Command wrapper for `restore_drill_download_only`.
+  - `BATCH_BACKEND_OPS_CONTROL_ACTION_TIMEOUT_MS` (default `600000`) — Timeout per ops command execution.
+  - `BATCH_BACKEND_OPS_CONTROL_ACTION_HISTORY_LIMIT` (default `100`) — In-memory bounded history size for ops action statuses.
+- Telegram ops bot runtime (separate package/service, optional):
+  - `TELEGRAM_OPS_BOT_ENABLED` (default `false`) — Starts/stops bot runtime.
+  - `TELEGRAM_OPS_BOT_TOKEN` — Telegram bot token.
+  - `TELEGRAM_OPS_BOT_CHAT_ID` — Target chat id (forum supergroup or regular chat id).
+  - `TELEGRAM_OPS_BOT_ALLOWED_USER_IDS` — Comma-separated operator Telegram user ids.
+  - `TELEGRAM_OPS_BOT_BACKEND_URL` (default `http://batch-backend:8080`) — Backend base URL.
+  - `TELEGRAM_OPS_BOT_BACKEND_EMAIL`, `TELEGRAM_OPS_BOT_BACKEND_PASSWORD` — Service-account login credentials.
+  - `TELEGRAM_OPS_BOT_BACKEND_TIMEOUT_MS` (default `15000`) — Backend request timeout.
+  - `TELEGRAM_OPS_BOT_BACKEND_SHARED_SECRET` (optional) — Shared secret sent as `x-ops-bot-secret` for `/ops/*`.
+  - `TELEGRAM_OPS_BOT_POLL_INTERVAL_MS` (default `1500`) — Retry/sleep interval between polling iterations.
+  - `TELEGRAM_OPS_BOT_POLL_TIMEOUT_SECONDS` (default `20`) — Telegram long-poll timeout.
+  - `TELEGRAM_OPS_BOT_COMMAND_WINDOW_MS` (default `60000`) — Per-user rate-limit window.
+  - `TELEGRAM_OPS_BOT_MAX_COMMANDS_PER_WINDOW` (default `20`) — Max commands per user in rate-limit window.
+  - `TELEGRAM_OPS_BOT_TOPIC_AUTO_CREATE` (default `true`) — Try creating domain topics (`ops`, `jobs`, `alerts`) on startup.
+  - `TELEGRAM_OPS_BOT_DEFAULT_THREAD_ID` (optional) — Fallback thread when topic routing is unavailable.
+  - `TELEGRAM_OPS_BOT_TOPICS_STATE_FILE` (default `tmp/state/telegram-ops-topics.json`) — Cached topic mapping state.
+  - `TELEGRAM_OPS_BOT_TOPIC_NAME_OPS`, `TELEGRAM_OPS_BOT_TOPIC_NAME_JOBS`, `TELEGRAM_OPS_BOT_TOPIC_NAME_ALERTS` — Auto-created topic names.
+  - `TELEGRAM_OPS_BOT_APP_BASE_URL` (optional) — Base URL for pretty links in bot messages.
 - `FILESYSTEM_UPLOAD_DIR` — Local uploads path (shared volume).
 - `DRAFT_LOCAL_EXPORT` (optional, default `true` in dev, `false` otherwise) — Persist materialized draft markdown files under `FILESYSTEM_UPLOAD_DIR/drafts`.
 - `PIPELINE_CWD` — Orchestrator working directory for pipeline runs.

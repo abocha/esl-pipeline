@@ -57,6 +57,8 @@
 10. STT architecture now mirrors TTS with provider adapters (`deepgram`, `elevenlabs`, `google`),
     canonical transcript provider persistence (`transcripts.stt_provider`), and metadata-driven STT
     selector defaults in frontend job options flow.
+11. Telegram ops control groundwork landed with a dedicated bot package, additive backend `/ops/*`
+    control surface, and forum-thread routing/fallback behavior for operations commands.
 
 ## Capability Matrix
 
@@ -67,6 +69,7 @@
 | Recording status/read (`GET /recordings/:id`)                                              | Done    | Done     | Backend recording routes + frontend polling   | Keep SSE/polling fallback behavior aligned.         |
 | Transcript read (`GET /recordings/:id/transcript`)                                         | Done    | Done     | Recording transcript routes                   | None.                                               |
 | Transcript update (`PUT /recordings/:id/transcript`)                                       | Done    | Done     | Recording transcript routes                   | None.                                               |
+| Telegram ops control panel (`/ops/status`, `/ops/actions`)                                 | Done    | Partial  | `@esl-pipeline/telegram-ops-bot` + backend ops routes | V1 is operator-driven via Telegram; web UI not planned in this slice. |
 | Manual transcription retry (`POST /recordings/:id/transcribe`)                             | Done    | Done     | Recording transcribe route                    | None.                                               |
 | STT provider metadata (`sttProviders`, `defaultSttProvider`) + selector wiring             | Done    | Done     | `/config/job-options` additive STT metadata   | Keep provider/model defaults aligned with env policy. |
 | Transcript provider identity persistence (`transcripts.stt_provider`)                       | Done    | Partial  | Transcript repository + transcript payloads    | Historical rows are backfilled; no text artifact rewrite. |
