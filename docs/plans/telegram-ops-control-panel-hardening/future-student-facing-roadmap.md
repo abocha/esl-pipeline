@@ -8,6 +8,13 @@ Current confidence:
 - Confirmed: rich student-facing messaging and Telegram-to-website account association.
 - Uncertain: direct student conversation mode.
 
+Recent `A2` baseline now in place (2026-03-11):
+
+1. `/links` + `/share` emit student-forwardable cards.
+2. Assignment card is a single clickable link with full title (and icon when available).
+3. Audio cards are split into separate Telegram messages so each can render its own playable preview.
+4. Bot can recover title/icon/audio links from published HTML when job markdown payload is path-only.
+
 Locked naming in this roadmap:
 1. `A` = Ops Control Bot
 2. `B` = Teacher Workflow Bot
@@ -80,3 +87,12 @@ Roadmap label: `C0`
 3. Collect usage feedback and support incidents for 2-4 weeks.
 4. Promote selected `B2` items.
 5. Re-evaluate `C0` student direct-conversation go/no-go.
+
+## Immediate Next Backlog (Post-`A2` Foundation)
+
+Roadmap label: `B1-prep`
+
+1. Add teacher-selectable student target in Telegram and emit `/share` cards directly to that student thread/chat.
+2. Add templated “share with note” variants (homework push + brief teacher note) with strict audit logging.
+3. Add backend DTO support for canonical assignment title/icon/audio fields to remove HTML parsing dependency.
+4. Add delivery metrics for share cards (sent/failed/open proxy) and alerting on repeated send failures.

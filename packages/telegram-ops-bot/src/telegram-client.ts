@@ -76,15 +76,21 @@ export class TelegramClient {
     chatId: string;
     html: string;
     threadId?: number;
+    disableLinkPreview?: boolean;
   }): Promise<Message.TextMessage> {
+    const disableLinkPreview = args.disableLinkPreview ?? true;
     const payload: NonNullable<MethodArgs<'sendMessage'>> = {
       chat_id: args.chatId,
       text: args.html,
       parse_mode: 'HTML',
-      link_preview_options: {
-        is_disabled: true,
-      },
       ...(args.threadId ? { message_thread_id: args.threadId } : {}),
+      ...(disableLinkPreview
+        ? {
+            link_preview_options: {
+              is_disabled: true,
+            },
+          }
+        : {}),
     };
     return this.call('sendMessage', payload);
   }
