@@ -95,7 +95,7 @@ async function resolveSharePayloadForJob(context: CommandContext, mdOrHtmlSource
 
   const markdownTitle = extractAssignmentTitleFromMarkdown(markdown);
   const markdownEmoji = extractAssignmentEmojiFromMarkdown(markdown);
-  if ((!studyTextAudioUrl || !pronunciationAudioUrl || !markdownTitle || !markdownEmoji) && mdOrHtmlSource.htmlUrl) {
+  if ((!studyTextAudioUrl || !pronunciationAudioUrl || !markdownTitle) && mdOrHtmlSource.htmlUrl) {
     html = await fetchTextWithTimeout(mdOrHtmlSource.htmlUrl, context.config.backendTimeoutMs);
     if (html) {
       studyTextAudioUrl ??= extractAudioUrlByPathHint(html, '/audio/final/');
@@ -130,7 +130,10 @@ function extractLabeledMarkdownAudioUrl(markdown: string | null | undefined, lab
 
 function extractAudioUrlByPathHint(input: string | null | undefined, pathHint: string): string | null {
   if (!input) return null;
-  const pattern = new RegExp(String.raw`(https?:\/\/\S*${escapeRegExp(pathHint)}\S*\.mp3(?:\?\S*)?)`, 'i');
+  const pattern = new RegExp(
+    String.raw`(https?:\/\/[^\s<>"')\]]*${escapeRegExp(pathHint)}[^\s<>"')\]]*\.mp3(?:\?[^\s<>"')\]]*)?)`,
+    'i',
+  );
   const match = input.match(pattern);
   return match?.[1] ?? null;
 }
