@@ -192,11 +192,12 @@ Use `.env.batch-backend` for the service stack. It includes all core keys above 
 - Ops control API (additive, admin-auth, optional):
   - `BATCH_BACKEND_ENABLE_OPS_CONTROL` (default `false`) — Enables `/ops/status`, `/ops/actions`, `/ops/actions/:operationId`.
   - `BATCH_BACKEND_OPS_CONTROL_BOT_SECRET` (optional) — Requires matching `x-ops-bot-secret` header for `/ops/*`.
+  - Runtime note: default ops commands use `bash`; production backend image includes `bash` for these wrappers.
   - `BATCH_BACKEND_OPS_CONTROL_STATUS_COMMAND` (default `bash scripts/docker/postgres-ops-status.sh --json`) — Command wrapper used by `GET /ops/status`.
   - `BATCH_BACKEND_OPS_CONTROL_BACKUP_COMMAND` (default `bash scripts/docker/postgres-backup-s3.sh backup-upload`) — Command wrapper for `backup_upload`.
   - `BATCH_BACKEND_OPS_CONTROL_RESTORE_DRILL_COMMAND` (default `PG_BACKUP_RESTORE_DRILL_AUTO=true bash scripts/docker/run-postgres-restore-drill-reminder.sh`) — Command wrapper for `restore_drill_download_only`.
   - `BATCH_BACKEND_OPS_CONTROL_ACTION_TIMEOUT_MS` (default `600000`) — Timeout per ops command execution.
-  - `BATCH_BACKEND_OPS_CONTROL_ACTION_HISTORY_LIMIT` (default `100`) — In-memory bounded history size for ops action statuses.
+  - `BATCH_BACKEND_OPS_CONTROL_ACTION_HISTORY_LIMIT` (default `100`) — In-memory history target for ops action statuses. Queued/running actions are never evicted; temporary overflow is allowed until active actions finish.
 - Telegram ops bot runtime (separate package/service, optional):
   - `TELEGRAM_OPS_BOT_ENABLED` (default `false`) — Starts/stops bot runtime.
   - `TELEGRAM_OPS_BOT_TOKEN` — Telegram bot token.

@@ -16,6 +16,22 @@ async function loadOpsControlFresh() {
   return module;
 }
 
+async function waitForTerminalActionStatus(
+  ops: Awaited<ReturnType<typeof loadOpsControlFresh>>,
+  operationId: string,
+  timeoutMs = 12_000,
+) {
+  const startedAt = Date.now();
+  while (Date.now() - startedAt < timeoutMs) {
+    const current = ops.getOpsActionStatus(operationId);
+    if (current && (current.state === 'succeeded' || current.state === 'failed')) {
+      return current;
+    }
+    await new Promise((resolve) => setTimeout(resolve, 50));
+  }
+  throw new Error(`Timed out waiting for terminal state for operation ${operationId}`);
+}
+
 describe('application/ops-control', () => {
   beforeEach(() => {
     vi.resetModules();
@@ -164,6 +180,110 @@ describe('application/ops-control', () => {
         expect(ops.shouldRequireOpsBotSecret()).toBe(true);
         expect(ops.isValidOpsBotSecret('shared-secret')).toBe(true);
         expect(ops.isValidOpsBotSecret('nope')).toBe(false);
+      },
+    );
+  });
+
+  it('surfaces actionable failure details when shell runner cannot launch', async () => {
+    await withEnv(
+      {
+        NODE_ENV: 'test',
+        BATCH_BACKEND_ENABLE_OPS_CONTROL: 'true',
+        BATCH_BACKEND_OPS_CONTROL_STATUS_COMMAND: 'echo "{}"',
+        PATH: '/__missing_path__',
+      },
+      async () => {
+        const ops = await loadOpsControlFresh();
+        const status = await ops.getOpsStatus();
+        expect(status.overall.state).toBe('critical');
+        expect(status.overall.reasons[0]).toContain('Failed to launch command runner');
+        expect(status.overall.reasons[0]).toContain('Ensure bash is installed');
+      },
+    );
+  });
+
+  it('escalates timed out commands from TERM to KILL and marks action failed', async () => {
+    await withEnv(
+      {
+        NODE_ENV: 'test',
+        BATCH_BACKEND_ENABLE_OPS_CONTROL: 'true',
+        BATCH_BACKEND_OPS_CONTROL_ACTION_TIMEOUT_MS: '1000',
+        BATCH_BACKEND_OPS_CONTROL_RESTORE_DRILL_COMMAND: "trap '' TERM; sleep 30",
+      },
+      async () => {
+        const ops = await loadOpsControlFresh();
+        ops.setOpsControlDependenciesForTests({
+          randomId: () => 'timeout-op',
+        });
+
+        const startedAt = Date.now();
+        await ops.enqueueOpsAction(
+          { action: 'restore_drill_download_only' },
+          { requestedBy: 'telegram:42', requestedByUserId: 'user-1' },
+        );
+
+        const completed = await waitForTerminalActionStatus(ops, 'timeout-op', 10_000);
+        const elapsedMs = Date.now() - startedAt;
+
+        expect(completed.state).toBe('failed');
+        expect(completed.message).toContain('timed out after 1000ms');
+        expect(completed.exitCode).toBe(124);
+        expect(elapsedMs).toBeLessThan(10_000);
+      },
+    );
+  });
+
+  it('does not evict queued/running actions when history limit is exceeded', async () => {
+    await withEnv(
+      {
+        NODE_ENV: 'test',
+        BATCH_BACKEND_ENABLE_OPS_CONTROL: 'true',
+        BATCH_BACKEND_OPS_CONTROL_BACKUP_COMMAND: 'echo backup',
+        BATCH_BACKEND_OPS_CONTROL_ACTION_HISTORY_LIMIT: '1',
+      },
+      async () => {
+        const commands: string[] = [];
+        const pendingResolves: ((value: { exitCode: number; stdout: string; stderr: string; timedOut: boolean }) => void)[] = [];
+        const ids = ['op-1', 'op-2'];
+
+        const ops = await loadOpsControlFresh();
+        ops.setOpsControlDependenciesForTests({
+          randomId: () => ids.shift() ?? 'op-fallback',
+          runCommand: async (command) => {
+            commands.push(command);
+            return new Promise((resolve) => {
+              pendingResolves.push(resolve);
+            });
+          },
+        });
+
+        await ops.enqueueOpsAction(
+          { action: 'backup_upload', label: 'one' },
+          { requestedBy: 'telegram:42', requestedByUserId: 'user-1' },
+        );
+        await ops.enqueueOpsAction(
+          { action: 'backup_upload', label: 'two' },
+          { requestedBy: 'telegram:42', requestedByUserId: 'user-1' },
+        );
+
+        await new Promise((resolve) => setTimeout(resolve, 0));
+
+        expect(ops.getOpsActionStatus('op-1')).not.toBeNull();
+        expect(ops.getOpsActionStatus('op-2')).not.toBeNull();
+
+        for (const resolve of pendingResolves) {
+          resolve({
+            exitCode: 0,
+            stdout: 'done',
+            stderr: '',
+            timedOut: false,
+          });
+        }
+
+        await waitForTerminalActionStatus(ops, 'op-2');
+
+        expect(commands).toContain("echo backup 'one'");
+        expect(commands).toContain("echo backup 'two'");
       },
     );
   });
