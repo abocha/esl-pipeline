@@ -10,6 +10,7 @@
 - Status: `runbook`.
 
 This runbook covers operational health checks layered on top of the backup + restore-drill flow.
+Backup/restore completion notifications are handled by the backup scripts themselves and are separate from transition-based ops alerts in this runbook.
 
 ## Commands
 
@@ -37,6 +38,12 @@ PG_BACKUP_ALERT_TELEGRAM_CHAT_ID=-1001234567890
 # PG_BACKUP_ALERT_TELEGRAM_THREAD_ID=42
 PG_BACKUP_ALERT_TELEGRAM_DISABLE=false
 ```
+
+These Telegram variables are shared by:
+
+- completion notifications from backup/restore scripts
+- transition-based ops alerts (`run-postgres-ops-alert.sh`)
+- key-rotation reminders (`run-aws-key-rotation-reminder.sh`)
 
 Optional IAM user override:
 
