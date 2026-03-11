@@ -1,5 +1,6 @@
-import { spawn } from 'node:child_process';
+import { spawn, type ChildProcessByStdio } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
+import type { Readable } from 'node:stream';
 
 import type {
   OpsActionRequest,
@@ -12,6 +13,7 @@ import { loadConfig } from '../config/env.js';
 
 const STDOUT_STDERR_MAX_BYTES = 256 * 1024;
 const OUTPUT_TAIL_MAX_CHARS = 3000;
+const TERM_TO_KILL_GRACE_MS = 2000;
 
 interface RunCommandResult {
   exitCode: number;
@@ -131,7 +133,12 @@ export async function enqueueOpsAction(
   storeAction(initial, config.opsControl.actionHistoryLimit);
 
   setImmediate(() => {
-    void runQueuedAction(operationId, command, config.opsControl.actionTimeoutMs);
+    void runQueuedAction(
+      operationId,
+      command,
+      config.opsControl.actionTimeoutMs,
+      config.opsControl.actionHistoryLimit,
+    );
   });
 
   return { ...initial };
@@ -165,7 +172,12 @@ function shellEscape(value: string): string {
   return `'${value.replaceAll("'", escapedSingleQuote)}'`;
 }
 
-async function runQueuedAction(operationId: string, command: string, timeoutMs: number): Promise<void> {
+async function runQueuedAction(
+  operationId: string,
+  command: string,
+  timeoutMs: number,
+  actionHistoryLimit: number,
+): Promise<void> {
   const queued = actionStore.get(operationId);
   if (!queued) return;
 
@@ -189,26 +201,59 @@ async function runQueuedAction(operationId: string, command: string, timeoutMs: 
     exitCode: result.exitCode,
     stdoutTail: tailOutput(result.stdout),
     stderrTail: tailOutput(result.stderr),
-  });
+  }, actionHistoryLimit);
 }
 
-function updateAction(operationId: string, patch: Partial<InternalActionStatus>): void {
+function updateAction(
+  operationId: string,
+  patch: Partial<InternalActionStatus>,
+  actionHistoryLimit?: number,
+): void {
   const existing = actionStore.get(operationId);
   if (!existing) return;
   actionStore.set(operationId, {
     ...existing,
     ...patch,
   });
+  if (typeof actionHistoryLimit === 'number') {
+    pruneActionHistory(actionHistoryLimit);
+  }
 }
 
 function storeAction(action: InternalActionStatus, maxActions: number): void {
   actionStore.set(action.operationId, action);
   actionOrder.push(action.operationId);
+  pruneActionHistory(maxActions);
+}
 
+function isTerminalAction(action: InternalActionStatus): boolean {
+  return action.state === 'succeeded' || action.state === 'failed';
+}
+
+function pruneActionHistory(maxActions: number): void {
   while (actionOrder.length > maxActions) {
-    const evicted = actionOrder.shift();
-    if (!evicted) continue;
-    actionStore.delete(evicted);
+    let evictIndex = -1;
+    for (const [index, operationId] of actionOrder.entries()) {
+      if (!operationId) continue;
+      const action = actionStore.get(operationId);
+      if (!action) {
+        evictIndex = index;
+        break;
+      }
+      if (isTerminalAction(action)) {
+        evictIndex = index;
+        break;
+      }
+    }
+
+    // Keep non-terminal actions even when over limit; prune once actions become terminal.
+    if (evictIndex < 0) {
+      break;
+    }
+
+    const [evictedOperationId] = actionOrder.splice(evictIndex, 1);
+    if (!evictedOperationId) continue;
+    actionStore.delete(evictedOperationId);
   }
 }
 
@@ -342,20 +387,56 @@ function runShellCommand(command: string, timeoutMs: number): Promise<RunCommand
     let stdout = '';
     let stderr = '';
     let timedOut = false;
+    let hasExited = false;
+    let settled = false;
+    let timeoutTimer: NodeJS.Timeout | null = null;
+    let killEscalationTimer: NodeJS.Timeout | null = null;
 
-    const child = spawn('bash', ['-lc', command], {
-      env: process.env,
-      stdio: ['ignore', 'pipe', 'pipe'],
-    });
+    const finish = (result: RunCommandResult): void => {
+      if (settled) return;
+      settled = true;
+      if (timeoutTimer) {
+        clearTimeout(timeoutTimer);
+      }
+      if (killEscalationTimer) {
+        clearTimeout(killEscalationTimer);
+      }
+      resolve(result);
+    };
 
-    const timer = setTimeout(() => {
+    let child: ChildProcessByStdio<null, Readable, Readable>;
+    try {
+      child = spawn('bash', ['-lc', command], {
+        env: process.env,
+        stdio: ['ignore', 'pipe', 'pipe'],
+      });
+    } catch (error: unknown) {
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      finish({
+        exitCode: 1,
+        stdout,
+        stderr: [
+          stderr,
+          errorMessage,
+          'Failed to launch command runner. Ensure bash is installed and command exists.',
+        ]
+          .filter(Boolean)
+          .join('\n')
+          .trim(),
+        timedOut,
+      });
+      return;
+    }
+
+    timeoutTimer = setTimeout(() => {
       timedOut = true;
       child.kill('SIGTERM');
-      setTimeout(() => {
-        if (!child.killed) {
+      killEscalationTimer = setTimeout(() => {
+        if (!hasExited) {
           child.kill('SIGKILL');
         }
-      }, 2000).unref();
+      }, TERM_TO_KILL_GRACE_MS);
+      killEscalationTimer.unref();
     }, timeoutMs);
 
     child.stdout.on('data', (chunk: Buffer | string) => {
@@ -373,22 +454,26 @@ function runShellCommand(command: string, timeoutMs: number): Promise<RunCommand
     });
 
     child.on('error', (error) => {
-      clearTimeout(timer);
+      hasExited = true;
       const errorMessage = error instanceof Error ? error.message : String(error);
-      resolve({
+      const launchHint =
+        (error as NodeJS.ErrnoException).code === 'ENOENT'
+          ? 'Failed to launch command runner. Ensure bash is installed and command exists.'
+          : 'Failed to launch command runner.';
+      finish({
         exitCode: 1,
         stdout,
-        stderr: `${stderr}\n${errorMessage}`.trim(),
+        stderr: [stderr, errorMessage, launchHint].filter(Boolean).join('\n').trim(),
         timedOut,
       });
     });
 
-    child.on('close', (code) => {
-      clearTimeout(timer);
-      resolve({
-        exitCode: code ?? 1,
+    child.on('close', (code, signal) => {
+      hasExited = true;
+      finish({
+        exitCode: code ?? (timedOut ? 124 : 1),
         stdout,
-        stderr,
+        stderr: [stderr, signal ? `Process terminated by signal ${signal}.` : ''].filter(Boolean).join('\n').trim(),
         timedOut,
       });
     });

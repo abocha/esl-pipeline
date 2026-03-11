@@ -29,6 +29,7 @@
 - `/ops/*` endpoints require admin auth.
 - Optional defense-in-depth: set `BATCH_BACKEND_OPS_CONTROL_BOT_SECRET`.
   - When set, `/ops/*` also require `x-ops-bot-secret`.
+- Backend runtime includes `bash` so default ops command wrappers execute in production without custom image changes.
 - Telegram bot requires explicit allowlist (`TELEGRAM_OPS_BOT_ALLOWED_USER_IDS`).
 - Bot enforces per-user command rate limiting.
 - Bot defaults to read-only mode (`TELEGRAM_OPS_BOT_ENABLE_ACTION_COMMANDS=false`) until operators explicitly enable action commands.
@@ -92,6 +93,7 @@ No restart commands are implemented in V1.
 3. Run `/backup` and verify `operationId` is returned.
 4. Poll `GET /ops/actions/:operationId` until terminal state.
 5. Verify topic routing behavior in a forum-enabled chat and fallback behavior in non-forum chats.
+6. If action load exceeds `BATCH_BACKEND_OPS_CONTROL_ACTION_HISTORY_LIMIT`, expect temporary status-history overflow while actions are active; terminal history is pruned first.
 
 ## Related
 

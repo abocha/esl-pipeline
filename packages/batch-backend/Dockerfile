@@ -32,6 +32,7 @@ ENV NODE_ENV=production \
     FILESYSTEM_UPLOAD_DIR=/app/uploads
 
 RUN apk add --no-cache \
+        bash \
         ca-certificates \
         ffmpeg
 
