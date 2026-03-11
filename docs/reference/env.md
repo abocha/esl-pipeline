@@ -74,6 +74,7 @@ Set these in `.env` (or your shell) when running orchestrator programmatic API c
   - `PG_BACKUP_S3_KMS_KEY_ID` (required when `PG_BACKUP_S3_SSE=aws:kms`) — KMS key ARN/ID.
   - `PG_BACKUP_S3_ENV` (optional, default `dev`) — Environment segment in backup key paths.
   - `PG_BACKUP_S3_PROFILE` (optional) — AWS CLI profile override for backup scripts.
+  - `PG_BACKUP_ALLOW_EMPTY_SOURCE` (optional, default `false`) — Blocks backup creation when anchor tables (`users`,`jobs`,`transcripts`) are all empty; set `true` only for intentional empty snapshots.
   - Scheduler wrapper vars:
     - `PG_BACKUP_ENV_FILE` (optional, default `.env.batch-backend`) — Env file loaded by backup S3 scripts.
     - `PG_BACKUP_LOG_DIR` (optional, default `tmp/logs/backup`) — Backup scheduler log location.
@@ -89,8 +90,8 @@ Set these in `.env` (or your shell) when running orchestrator programmatic API c
     - `PG_BACKUP_KEY_ROTATION_MAX_AGE_DAYS` (optional, default `80`) — Active AWS key-age threshold.
     - `PG_BACKUP_ALERT_COOLDOWN_MINUTES` (optional, default `360`) — Suppress repeated unhealthy alerts until cooldown expires.
     - `PG_BACKUP_IAM_USER` (optional) — Explicit IAM username for key-age checks (auto-derived from STS caller when omitted).
-    - `PG_BACKUP_ALERT_TELEGRAM_BOT_TOKEN` (optional) — Telegram bot token for ops alerts.
-    - `PG_BACKUP_ALERT_TELEGRAM_CHAT_ID` (optional) — Telegram target chat/channel id.
+    - `PG_BACKUP_ALERT_TELEGRAM_BOT_TOKEN` (optional) — Telegram bot token for ops alerts and backup/restore completion notifications.
+    - `PG_BACKUP_ALERT_TELEGRAM_CHAT_ID` (optional) — Telegram target chat/channel id for alerts and completion notifications.
     - `PG_BACKUP_ALERT_TELEGRAM_THREAD_ID` (optional) — Telegram forum thread id.
     - `PG_BACKUP_ALERT_TELEGRAM_DISABLE` (optional, default `false`) — Disable Telegram delivery while keeping local status checks active.
 - `ESL_PIPELINE_MANIFEST_STORE` (optional, `filesystem`|`s3`, default `filesystem`) — Manifest backend.
@@ -279,5 +280,5 @@ Notes:
 - Batch backend startup validates `FILESYSTEM_UPLOAD_DIR`, `PROMPT_*` allowlists, and active STT provider prerequisites (credentials + Google staging requirements); misconfigured paths fail fast.
 - Use `RECORDINGS_MAX_FILE_SIZE` to raise audio upload limits without affecting general markdown uploads.
 - Postgres backup archival scripts read `PG_BACKUP_S3_*` variables; keep backup bucket/prefix separate from runtime `S3_BUCKET` upload paths.
-- Ops status/alert helpers (`postgres-ops-status.sh`, `run-postgres-ops-alert.sh`, `run-aws-key-rotation-reminder.sh`) reuse `.env.batch-backend` and the `PG_BACKUP_*` thresholds above.
+- Backup/restore scripts and ops status/alert helpers (`postgres-backup-restore.sh`, `postgres-backup-s3.sh`, `postgres-ops-status.sh`, `run-postgres-ops-alert.sh`, `run-aws-key-rotation-reminder.sh`) reuse `.env.batch-backend` and the `PG_BACKUP_*` thresholds above.
 - For voice-alignment operations and rollout, see `docs/operations/voice-alignment-v2-runbook.md`.
