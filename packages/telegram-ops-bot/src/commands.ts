@@ -1,5 +1,6 @@
 import {
   formatActionQueued,
+  formatActionStatus,
   formatCommandError,
   formatFinishedJobs,
   formatHelp,
@@ -38,6 +39,18 @@ async function sendDomainMessage(
   });
 }
 
+async function guardActionCommandsEnabled(context: CommandContext): Promise<boolean> {
+  if (context.config.enableActionCommands) {
+    return true;
+  }
+  await sendDomainMessage(
+    context,
+    'ops',
+    '<b>Action commands disabled</b>\n\nThis bot is running in read-only mode. Enable `TELEGRAM_OPS_BOT_ENABLE_ACTION_COMMANDS=true` to use `/backup` and `/drill`.',
+  );
+  return false;
+}
+
 export function createCommandRegistry(): CommandRegistry {
   const commands: CommandDefinition[] = [
     {
@@ -55,6 +68,20 @@ export function createCommandRegistry(): CommandRegistry {
       async execute(context) {
         const status = await context.backend.getOpsStatus();
         await sendDomainMessage(context, 'ops', formatOpsStatus(status));
+      },
+    },
+    {
+      command: 'op',
+      description: 'Show one operation status (/op <operationId>)',
+      domain: 'ops',
+      async execute(context) {
+        const operationId = context.args[0]?.trim();
+        if (!operationId) {
+          await sendDomainMessage(context, 'ops', formatCommandError('Usage: /op <operationId>'));
+          return;
+        }
+        const status = await context.backend.getOpsActionStatus(operationId);
+        await sendDomainMessage(context, 'ops', formatActionStatus(status));
       },
     },
     {
@@ -101,6 +128,9 @@ export function createCommandRegistry(): CommandRegistry {
       description: 'Queue backup upload (/backup [label])',
       domain: 'ops',
       async execute(context) {
+        if (!(await guardActionCommandsEnabled(context))) {
+          return;
+        }
         const label = context.args.join(' ').trim();
         const result = await context.backend.enqueueOpsAction({
           action: 'backup_upload',
@@ -128,6 +158,9 @@ export function createCommandRegistry(): CommandRegistry {
       description: 'Queue restore drill (download-only)',
       domain: 'ops',
       async execute(context) {
+        if (!(await guardActionCommandsEnabled(context))) {
+          return;
+        }
         const result = await context.backend.enqueueOpsAction({
           action: 'restore_drill_download_only',
         });

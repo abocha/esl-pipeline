@@ -31,6 +31,7 @@
   - When set, `/ops/*` also require `x-ops-bot-secret`.
 - Telegram bot requires explicit allowlist (`TELEGRAM_OPS_BOT_ALLOWED_USER_IDS`).
 - Bot enforces per-user command rate limiting.
+- Bot defaults to read-only mode (`TELEGRAM_OPS_BOT_ENABLE_ACTION_COMMANDS=false`) until operators explicitly enable action commands.
 - V1 action allowlist is intentionally narrow:
   - `backup_upload`
   - `restore_drill_download_only`
@@ -45,10 +46,12 @@ Domain routing:
 
 Startup behavior:
 
-1. Bot attempts forum-topic verification for `TELEGRAM_OPS_BOT_CHAT_ID`.
-2. If forum-enabled and auto-create is on, bot creates missing domain topics.
-3. Topic ids are cached in `TELEGRAM_OPS_BOT_TOPICS_STATE_FILE`.
-4. If topic creation/check fails, bot falls back to default routing.
+1. Bot resolves its own username (`getMe`) for strict command mention matching.
+2. If `TELEGRAM_OPS_BOT_SKIP_PENDING_UPDATES_ON_STARTUP=true`, bot starts polling from the latest pending update to avoid replaying stale commands.
+3. Bot attempts forum-topic verification for `TELEGRAM_OPS_BOT_CHAT_ID`.
+4. If forum-enabled and auto-create is on, bot creates missing domain topics.
+5. Topic ids are cached in `TELEGRAM_OPS_BOT_TOPICS_STATE_FILE`.
+6. If topic creation/check fails, bot falls back to default routing.
 
 Fallback precedence:
 
@@ -63,6 +66,7 @@ Read commands:
 
 - `/help`
 - `/status`
+- `/op <operationId>`
 - `/finished [limit]`
 - `/job <jobId>`
 - `/links <jobId>`

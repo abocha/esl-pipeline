@@ -57,6 +57,9 @@ export class TelegramOpsBotRunner {
   async start(): Promise<void> {
     this.running = true;
     await this.resolveBotUsername();
+    if (this.config.skipPendingUpdatesOnStartup) {
+      await this.initializeUpdateOffsetFromLatestPending();
+    }
     await this.topicRouter.initialize();
 
     this.audit.log({
@@ -287,6 +290,49 @@ export class TelegramOpsBotRunner {
         level: 'warn',
         event: 'bot_identity_lookup_failed',
         message: 'Failed to resolve bot identity; mention-addressed commands will be ignored',
+        chatId: this.config.chatId,
+        details: {
+          error: error instanceof Error ? error.message : String(error),
+        },
+      });
+    }
+  }
+
+  private async initializeUpdateOffsetFromLatestPending(): Promise<void> {
+    try {
+      const updates = await this.telegram.getUpdates({
+        offset: -1,
+        limit: 1,
+        timeout: 0,
+        allowed_updates: ['message'],
+      });
+      const latest = updates.at(-1);
+      if (!latest) {
+        this.audit.log({
+          level: 'info',
+          event: 'poll_offset_initialized_empty',
+          message: 'No pending Telegram updates found on startup',
+          chatId: this.config.chatId,
+        });
+        return;
+      }
+
+      this.updateOffset = latest.update_id + 1;
+      this.audit.log({
+        level: 'info',
+        event: 'poll_offset_initialized_from_latest',
+        message: 'Skipped pending updates on startup',
+        chatId: this.config.chatId,
+        details: {
+          latestUpdateId: latest.update_id,
+          nextOffset: this.updateOffset,
+        },
+      });
+    } catch (error: unknown) {
+      this.audit.log({
+        level: 'warn',
+        event: 'poll_offset_initialize_failed',
+        message: 'Failed to initialize startup poll offset; continuing from default offset',
         chatId: this.config.chatId,
         details: {
           error: error instanceof Error ? error.message : String(error),

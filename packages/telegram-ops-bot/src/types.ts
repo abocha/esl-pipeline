@@ -23,6 +23,8 @@ export interface BotConfig {
   pollTimeoutSeconds: number;
   commandWindowMs: number;
   maxCommandsPerWindow: number;
+  enableActionCommands: boolean;
+  skipPendingUpdatesOnStartup: boolean;
   topicAutoCreate: boolean;
   defaultThreadId?: number;
   topicsStateFile: string;
