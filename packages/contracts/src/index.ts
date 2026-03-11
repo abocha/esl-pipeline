@@ -221,6 +221,71 @@ export interface JobSummaryResponse {
   };
 }
 
+export type OpsHealthState = 'healthy' | 'degraded' | 'critical';
+
+export type OpsActionId = 'backup_upload' | 'restore_drill_download_only';
+export type OpsActionState = 'queued' | 'running' | 'succeeded' | 'failed';
+
+export interface OpsStatusResponse {
+  checkedAtUtc: string;
+  overall: {
+    state: OpsHealthState;
+    reasons: string[];
+  };
+  thresholds: {
+    backupMaxAgeHours: number | null;
+    drillMaxAgeDays: number | null;
+    keyRotationMaxAgeDays: number | null;
+  };
+  backup: {
+    state: OpsHealthState;
+    reason: string;
+    latestDumpKey: string | null;
+    lastModifiedUtc: string | null;
+    ageHours: number | null;
+  };
+  restoreDrill: {
+    state: OpsHealthState;
+    reason: string;
+    lastReportUtc: string | null;
+    ageDays: number | null;
+    reportStatus: string | null;
+    reportMode: string | null;
+    latestRemoteDumpKey: string | null;
+    drillResult: string | null;
+  };
+  keyRotation: {
+    state: OpsHealthState;
+    reason: string;
+    iamUser: string | null;
+    oldestAccessKeyId: string | null;
+    oldestCreatedUtc: string | null;
+    oldestAgeDays: number | null;
+    oldestLastUsedUtc: string | null;
+  };
+}
+
+export interface OpsActionRequest {
+  action: OpsActionId;
+  label?: string;
+}
+
+export interface OpsActionStatus {
+  operationId: string;
+  action: OpsActionId;
+  state: OpsActionState;
+  requestedAt: string;
+  startedAt: string | null;
+  finishedAt: string | null;
+  requestedBy: string | null;
+  requestedByUserId: string | null;
+  message: string | null;
+  command: string;
+  exitCode: number | null;
+  stdoutTail: string | null;
+  stderrTail: string | null;
+}
+
 export type ReadinessMetricName =
   | 'publishSuccessRate'
   | 'medianPublishLatencyMs'
