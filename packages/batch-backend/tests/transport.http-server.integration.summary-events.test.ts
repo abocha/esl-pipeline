@@ -112,7 +112,7 @@ describeHttpServerIntegrationSuite(
       offset: 5,
     });
 
-    const call = listJobs.mock.calls[0]?.[0];
+    const call = listJobs.mock.calls.at(-1)?.[0];
     expect(call?.states).toEqual(['queued', 'failed']);
     expect(call?.studentId).toBe(studentId);
     expect(call?.limit).toBe(10);
@@ -151,7 +151,7 @@ describeHttpServerIntegrationSuite(
       offset: 0,
     });
 
-    const call = listJobs.mock.calls[0]?.[0];
+    const call = listJobs.mock.calls.at(-1)?.[0];
     expect(call?.states).toEqual(['succeeded']);
     expect(call?.studentId).toBe(studentId);
     expect(call?.limit).toBe(20);
