@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented here. Dates use `YYYY-MM-DD`.
 
+## [4.3.1] - 2026-03-12
+
+### Changed
+
+- Automated release from PR #37: chore: deps upgrades plus docker and lint hygiene sweep (https://github.com/abocha/esl-pipeline/pull/37)
+
 ## [4.3.0] - 2026-03-11
 
 ### Changed
