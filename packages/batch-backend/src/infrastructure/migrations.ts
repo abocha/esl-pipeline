@@ -4,6 +4,8 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { PoolClient } from 'pg';
 
+import { readBool } from '@esl-pipeline/shared-infrastructure';
+
 import { loadConfig } from '../config/env.js';
 import { closePgPool, createPgPool } from './db.js';
 import { logger } from './logger.js';
@@ -58,11 +60,7 @@ function getMigrationLockKey(): string {
 }
 
 function shouldFailOnPendingMigrationsInManualMode(nodeEnv: string): boolean {
-  const raw = process.env.PG_FAIL_ON_PENDING_MIGRATIONS?.trim().toLowerCase();
-  if (raw === undefined || raw === '') {
-    return nodeEnv === 'production';
-  }
-  return raw === 'true';
+  return readBool('PG_FAIL_ON_PENDING_MIGRATIONS', nodeEnv === 'production');
 }
 
 async function ensureMigrationTable(client: PoolClient): Promise<void> {
