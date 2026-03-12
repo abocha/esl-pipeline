@@ -255,6 +255,7 @@ Use `.env.batch-backend` for the service stack. It includes all core keys above 
 - Prompt/job metadata fallbacks:
   - `NOTION_DB_OPTIONS`, `NOTION_DB_ID`, `NOTION_DB_NAME`, `NOTION_DB_LABEL`
   - `ESL_TTS_PROVIDER_ELEVENLABS_VOICES_PATH`, `REPO_ROOT`, `APP_ROOT`, `PROJECT_ROOT`
+  - `BATCH_BACKEND_JOB_OPTIONS_ALLOW_STATIC_FALLBACK` (default `false`) — Enables emergency static fallback for `/config/job-options` when orchestrator metadata fetch fails.
 - Transcription pipeline:
   - `TRANSCRIBE_MODE` (`timeline`|`stack`), `TRANSCRIBE_MAX_CONCURRENCY`
   - Provider selection:

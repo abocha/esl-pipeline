@@ -1,7 +1,7 @@
 // packages/batch-backend/src/application/get-job-options.ts
 //
-// Batch frontend metadata endpoint. Primarily proxies orchestrator config,
-// with the static section below serving as a fallback when orchestration fails.
+// Batch frontend metadata endpoint. Primarily proxies orchestrator config.
+// Static metadata fallback is available only when explicitly enabled via env.
 import { readFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
 
@@ -46,8 +46,8 @@ const DEFAULT_TTS_PROVIDERS: TtsProviderId[] = ['elevenlabs', 'google'];
 const DEFAULT_STT_PROVIDERS: SttProviderId[] = ['deepgram', 'elevenlabs', 'google'];
 const DEFAULT_GOOGLE_TTS_MODELS: GoogleTtsModel[] = ['chirp3_hd', 'studio', 'neural2', 'wavenet'];
 
-// TODO: Replace these with data pulled from the orchestrator config provider or
-// dedicated metadata service once available (tracked in backend/frontend Phase 5).
+// TODO: Remove static metadata fallback once orchestrator metadata reliability SLO is met.
+// Kept behind an explicit env gate for emergency recovery only.
 const STATIC_OPTIONS: Omit<JobOptionsResponse, 'supportedActions'> = {
   presets: ['b1-default'],
   learningPresets: [DEFAULT_LEARNING_PRESET],
@@ -130,7 +130,21 @@ export async function getJobOptions(): Promise<JobOptionsResponse> {
         supportedActions,
       };
     } catch (error) {
-      logger.warn('Failed to load job options from orchestrator. Falling back to static config.', {
+      if (!runtimeConfig.jobOptions.allowStaticFallback) {
+        logger.error(
+          'Failed to load job options from orchestrator and static fallback is disabled.',
+          {
+            event: 'job_options_orchestrator_unavailable',
+            staticFallbackEnabled: false,
+            error: error instanceof Error ? error.message : String(error),
+          },
+        );
+        throw error;
+      }
+
+      logger.warn('Failed to load job options from orchestrator. Using static fallback config.', {
+        event: 'job_options_static_fallback',
+        staticFallbackEnabled: true,
         error: error instanceof Error ? error.message : String(error),
       });
       return loadStaticJobOptions(runtimeConfig);
