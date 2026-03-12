@@ -79,7 +79,18 @@ services:
       POSTGRES_DB: esl_batch
     ports:
       - '127.0.0.1:5432:5432'
-    command: ['postgres', '-c', 'fsync=off', '-c', 'listen_addresses=*']
+    command:
+      [
+        'postgres',
+        '-c',
+        'fsync=on',
+        '-c',
+        'synchronous_commit=on',
+        '-c',
+        'wal_compression=on',
+        '-c',
+        'listen_addresses=*',
+      ]
     healthcheck:
       test: ['CMD-SHELL', 'pg_isready -U esl -d esl_batch']
       interval: 5s
@@ -92,7 +103,8 @@ services:
       - redis_data:/data
     ports:
       - '127.0.0.1:6379:6379'
-    command: ['redis-server', '--save', '', '--appendonly', 'no']
+    command:
+      ['redis-server', '--save', '', '--appendonly', 'yes', '--appendfsync', 'everysec']
     healthcheck:
       test: ['CMD', 'redis-cli', 'ping']
       interval: 5s

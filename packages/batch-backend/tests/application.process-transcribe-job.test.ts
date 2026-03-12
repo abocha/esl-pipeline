@@ -521,6 +521,9 @@ function createConfig(): BatchBackendConfig {
     drafts: {
       localExport: false,
     },
+    jobOptions: {
+      allowStaticFallback: false,
+    },
     opsControl: {
       enabled: false,
       botSharedSecret: undefined,

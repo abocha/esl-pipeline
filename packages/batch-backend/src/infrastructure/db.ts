@@ -10,6 +10,9 @@ import { logger } from './logger.js';
 
 let pool: Pool | null = null;
 let schemaReadyPromise: Promise<void> | null = null;
+let legacySchemaPatchWarningLogged = false;
+
+const LEGACY_SCHEMA_PATCH_OVERRIDE_ENV = 'PG_ENABLE_LEGACY_SCHEMA_PATCHES';
 
 const RETRYABLE_PG_ERROR_CODES = new Set([
   '40001', // serialization_failure
@@ -36,6 +39,7 @@ const RETRYABLE_MESSAGE_PATTERNS = [
   'server closed the connection unexpectedly',
 ];
 
+// LEGACY_SCHEMA_PATCH_CATALOG_BEGIN
 const JOBS_TABLE_SQL = `
 CREATE TABLE IF NOT EXISTS jobs (
   id UUID PRIMARY KEY,
@@ -1199,8 +1203,22 @@ const GENERATION_BUDGET_COUNTERS_INDEX_PATCHES: string[] = [
 ];
 
 // Deprecated in favor of migration runner tooling.
-// Kept exported temporarily for operator-assisted legacy recoveries.
+// Kept exported temporarily for operator-assisted emergency recoveries only.
 export async function ensureJobsSchema(client: PoolClient): Promise<void> {
+  if (!isLegacySchemaPatchOverrideEnabled()) {
+    throw new Error(
+      `${LEGACY_SCHEMA_PATCH_OVERRIDE_ENV}=true is required to run legacy runtime schema patching. Use versioned migrations (db:migrate) as the primary schema path.`,
+    );
+  }
+  if (!legacySchemaPatchWarningLogged) {
+    legacySchemaPatchWarningLogged = true;
+    logger.warn('Legacy runtime schema patch path enabled; prefer versioned migrations', {
+      component: 'pg',
+      event: 'legacy_schema_patch_mode_enabled',
+      envVar: LEGACY_SCHEMA_PATCH_OVERRIDE_ENV,
+    });
+  }
+
   if (schemaReadyPromise) {
     await schemaReadyPromise;
     return;
@@ -1347,6 +1365,11 @@ export async function ensureJobsSchema(client: PoolClient): Promise<void> {
   await schemaReadyPromise;
 }
 
+function isLegacySchemaPatchOverrideEnabled(): boolean {
+  return process.env[LEGACY_SCHEMA_PATCH_OVERRIDE_ENV] === 'true';
+}
+
+// LEGACY_SCHEMA_PATCH_CATALOG_END
 // createPgPool.declaration()
 export function createPgPool(): Pool {
   if (pool) return pool;

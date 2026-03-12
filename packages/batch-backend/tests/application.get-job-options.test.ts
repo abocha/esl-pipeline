@@ -63,6 +63,7 @@ describe('application/get-job-options', () => {
     delete process.env.NOTION_DB_NAME;
     delete process.env.NOTION_DB_LABEL;
     delete process.env.NOTION_DB_OPTIONS;
+    delete process.env.BATCH_BACKEND_JOB_OPTIONS_ALLOW_STATIC_FALLBACK;
   });
 
   it(
@@ -199,6 +200,7 @@ describe('application/get-job-options', () => {
     'falls back to static options when orchestrator helper fails',
     { timeout: GET_JOB_OPTIONS_TEST_TIMEOUT_MS },
     async () => {
+      process.env.BATCH_BACKEND_JOB_OPTIONS_ALLOW_STATIC_FALLBACK = 'true';
       const { getJobOptions } = await import('../src/application/get-job-options.js');
       const { getJobOptionsFromOrchestrator } =
         await import('../src/infrastructure/orchestrator-service.js');
@@ -243,8 +245,31 @@ describe('application/get-job-options', () => {
       expect(result.supportedActions).toHaveLength(4);
 
       expect(logger.warn).toHaveBeenCalledWith(
-        'Failed to load job options from orchestrator. Falling back to static config.',
+        'Failed to load job options from orchestrator. Using static fallback config.',
         expect.objectContaining({ error: 'boom' }),
+      );
+    },
+  );
+
+  it(
+    'throws when orchestrator helper fails and static fallback is disabled',
+    { timeout: GET_JOB_OPTIONS_TEST_TIMEOUT_MS },
+    async () => {
+      process.env.BATCH_BACKEND_JOB_OPTIONS_ALLOW_STATIC_FALLBACK = 'false';
+      const { getJobOptions } = await import('../src/application/get-job-options.js');
+      const { getJobOptionsFromOrchestrator } =
+        await import('../src/infrastructure/orchestrator-service.js');
+      const { logger } = await import('../src/infrastructure/logger.js');
+
+      vi.mocked(getJobOptionsFromOrchestrator).mockRejectedValue(new Error('boom'));
+
+      await expect(getJobOptions()).rejects.toThrow('boom');
+      expect(logger.error).toHaveBeenCalledWith(
+        'Failed to load job options from orchestrator and static fallback is disabled.',
+        expect.objectContaining({
+          staticFallbackEnabled: false,
+          error: 'boom',
+        }),
       );
     },
   );

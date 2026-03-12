@@ -57,6 +57,26 @@ describe('config/env - core defaults', () => {
         expect(cfg.orchestrator.manifestStore).toBeDefined();
         expect(['filesystem', 's3']).toContain(cfg.orchestrator.manifestStore);
         expect(['local', 'http']).toContain(cfg.orchestrator.configProvider);
+        expect(cfg.jobOptions.allowStaticFallback).toBe(false);
+      },
+    );
+  });
+});
+
+describe('config/env - job options static fallback gate', () => {
+  beforeEach(() => {
+    vi.resetModules();
+  });
+
+  it('maps BATCH_BACKEND_JOB_OPTIONS_ALLOW_STATIC_FALLBACK override', async () => {
+    await withEnv(
+      {
+        NODE_ENV: 'test',
+        BATCH_BACKEND_JOB_OPTIONS_ALLOW_STATIC_FALLBACK: 'true',
+      },
+      async () => {
+        const cfg = await loadConfigFresh();
+        expect(cfg.jobOptions.allowStaticFallback).toBe(true);
       },
     );
   });

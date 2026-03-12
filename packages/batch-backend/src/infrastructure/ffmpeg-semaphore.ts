@@ -41,9 +41,6 @@ export class FfmpegSemaphore {
     const lockKey = `${LOCK_KEY_PREFIX}${operationId}`;
 
     while (true) {
-      // Clean up expired locks before attempting acquisition
-      await this.cleanupStaleLocks();
-
       // Count active (non-expired) locks
       const activeLocks = await this.countActiveLocks();
 
@@ -106,8 +103,20 @@ export class FfmpegSemaphore {
    * Count currently active (non-expired) locks.
    */
   private async countActiveLocks(): Promise<number> {
-    const keys = await this.redis.keys(`${LOCK_KEY_PREFIX}*`);
-    return keys.length;
+    let cursor = '0';
+    let count = 0;
+    do {
+      const [nextCursor, keys] = await this.redis.scan(
+        cursor,
+        'MATCH',
+        `${LOCK_KEY_PREFIX}*`,
+        'COUNT',
+        200,
+      );
+      cursor = nextCursor;
+      count += keys.length;
+    } while (cursor !== '0');
+    return count;
   }
 
   /**
@@ -115,19 +124,55 @@ export class FfmpegSemaphore {
    * Redis will auto-expire them, but this ensures cleanup happens promptly.
    */
   private async cleanupStaleLocks(): Promise<void> {
-    const keys = await this.redis.keys(`${LOCK_KEY_PREFIX}*`);
+    let cursor = '0';
 
-    for (const key of keys) {
-      const ttl = await this.redis.ttl(key);
-      if (ttl === -1) {
-        // Key exists but has no TTL (shouldn't happen, but defensive)
-        await this.redis.del(key);
-        logger.warn('Cleaned up lock without TTL', { key });
-      } else if (ttl === -2) {
-        // Key doesn't exist (already expired)
+    do {
+      const [nextCursor, keys] = await this.redis.scan(
+        cursor,
+        'MATCH',
+        `${LOCK_KEY_PREFIX}*`,
+        'COUNT',
+        200,
+      );
+      cursor = nextCursor;
+
+      if (keys.length === 0) {
         continue;
       }
-    }
+
+      const pipeline = this.redis.pipeline();
+      for (const key of keys) {
+        pipeline.ttl(key);
+      }
+      const ttlResults = await pipeline.exec();
+
+      if (!ttlResults) {
+        continue;
+      }
+
+      const keysWithoutTtl: string[] = [];
+      for (const [index, result] of ttlResults.entries()) {
+        if (!result) continue;
+        const [error, ttl] = result;
+        if (error) {
+          logger.warn('Failed to inspect FFmpeg lock TTL', {
+            key: keys[index],
+            error: error.message,
+          });
+          continue;
+        }
+        if (ttl === -1 && keys[index]) {
+          keysWithoutTtl.push(keys[index]);
+        }
+      }
+
+      if (keysWithoutTtl.length > 0) {
+        await this.redis.del(...keysWithoutTtl);
+        logger.warn('Cleaned up FFmpeg locks without TTL', {
+          count: keysWithoutTtl.length,
+        });
+      }
+    } while (cursor !== '0');
   }
 
   /**
@@ -187,7 +232,20 @@ export class FfmpegSemaphore {
    * Reset semaphore state (for maintenance/recovery).
    */
   async reset(): Promise<void> {
-    const lockKeys = await this.redis.keys(`${LOCK_KEY_PREFIX}*`);
+    const lockKeys: string[] = [];
+    let cursor = '0';
+    do {
+      const [nextCursor, keys] = await this.redis.scan(
+        cursor,
+        'MATCH',
+        `${LOCK_KEY_PREFIX}*`,
+        'COUNT',
+        200,
+      );
+      cursor = nextCursor;
+      lockKeys.push(...keys);
+    } while (cursor !== '0');
+
     if (lockKeys.length > 0) {
       await this.redis.del(...lockKeys);
     }

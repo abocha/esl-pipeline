@@ -12,6 +12,11 @@ Runtime policy for these retirements:
 1. Batch/runtime paths should converge to DB-canonical behavior with no filesystem fallback.
 2. Migration/backfill tooling may read legacy filesystem data as a migration input boundary.
 
+## Completed Wave Plan Archives
+
+1. `docs/plans/completed/legacy-retirement/legacy-retirement-plan_wave1.md`
+2. `docs/plans/completed/legacy-retirement/legacy-retirement-plan_wave2.md`
+
 ## Backlog Item Schema (Canonical)
 
 Every backlog item MUST include all fields below:
