@@ -1,4 +1,4 @@
-import Fastify from 'fastify';
+import Fastify, { type FastifyReply, type FastifyRequest } from 'fastify';
 import { randomUUID } from 'node:crypto';
 import fs from 'node:fs/promises';
 import path from 'node:path';
@@ -132,23 +132,39 @@ describe('transport/worker-runner - full pipeline (requires Postgres + Redis)', 
     // and wiring identical routes inline for inject()-based calls.
     app = Fastify({ logger: false });
 
-    app.post('/jobs', async (request: any, reply: any) => {
+    app.post(
+      '/jobs',
+      async (
+        request: FastifyRequest<{
+          Body: {
+            md: string;
+            withTts?: boolean;
+            upload?: 'auto' | 's3' | 'none';
+          };
+        }>,
+        reply: FastifyReply,
+      ) => {
       try {
-        const body = request.body as any;
+        const body = request.body;
         const result = await submitJobModule.submitJob({
           md: body?.md,
           withTts: body?.withTts,
           upload: body?.upload,
         });
         return reply.code(202).send(result);
-      } catch (error: any) {
-        return reply.code(400).send({ error: error?.message ?? 'Failed to submit job' });
+      } catch (error: unknown) {
+        return reply
+          .code(400)
+          .send({ error: error instanceof Error ? error.message : 'Failed to submit job' });
       }
-    });
+      },
+    );
 
-    app.get('/jobs/:jobId', async (request: any, reply: any) => {
+    app.get(
+      '/jobs/:jobId',
+      async (request: FastifyRequest<{ Params: { jobId: string } }>, reply: FastifyReply) => {
       try {
-        const { jobId } = request.params as any;
+        const { jobId } = request.params;
         const status = await getJobStatusModule.getJobStatus(jobId);
         if (!status) {
           return reply.code(404).send({ error: 'Job not found' });
@@ -157,7 +173,8 @@ describe('transport/worker-runner - full pipeline (requires Postgres + Redis)', 
       } catch {
         return reply.code(500).send({ error: 'Failed to fetch job status' });
       }
-    });
+      },
+    );
 
     await app.ready();
 
