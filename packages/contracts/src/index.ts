@@ -350,7 +350,14 @@ export type ContentSource = 'generate' | 'authentic';
 export type StudyTextType = 'monologue' | 'dialogue';
 export type SpeakerRole = 'narrator' | 'teacher' | 'student' | 'system';
 export type SpeakerGender = 'male' | 'female' | 'neutral' | 'child';
-export type SpeakerAge = 'child' | 'teen' | 'young' | 'adult' | 'middle_aged' | 'senior' | 'universal';
+export type SpeakerAge =
+  | 'child'
+  | 'teen'
+  | 'young'
+  | 'adult'
+  | 'middle_aged'
+  | 'senior'
+  | 'universal';
 
 const SPEAKER_ROLE_ALIAS_SETS: Record<SpeakerRole, readonly string[]> = {
   narrator: [
@@ -489,11 +496,7 @@ const SPEAKER_ROLE_ALIAS_LOOKUP: ReadonlyMap<string, SpeakerRole> = (() => {
 })();
 
 function normalizeSpeakerRoleToken(value: string): string {
-  return value
-    .trim()
-    .toLowerCase()
-    .replaceAll(/[_-]+/g, ' ')
-    .replaceAll(/\s+/g, ' ');
+  return value.trim().toLowerCase().replaceAll(/[_-]+/g, ' ').replaceAll(/\s+/g, ' ');
 }
 
 export function normalizeSpeakerRole(value: unknown): SpeakerRole | undefined {

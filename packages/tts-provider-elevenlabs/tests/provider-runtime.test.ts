@@ -1,5 +1,11 @@
 import { describe, expect, it, vi } from 'vitest';
 
+import {
+  classifyElevenLabsVoiceProviderError,
+  formatElevenLabsProviderError,
+  isElevenLabsTtsRetryableStatus,
+} from '../src/provider-runtime.js';
+
 const mocks = vi.hoisted(() => {
   class HoistedElevenLabsError extends Error {
     statusCode?: number;
@@ -28,12 +34,6 @@ vi.mock('@elevenlabs/elevenlabs-js', () => ({
   ElevenLabsError: mocks.HoistedElevenLabsError,
   ElevenLabsTimeoutError: mocks.HoistedElevenLabsTimeoutError,
 }));
-
-import {
-  classifyElevenLabsVoiceProviderError,
-  formatElevenLabsProviderError,
-  isElevenLabsTtsRetryableStatus,
-} from '../src/provider-runtime.js';
 
 describe('tts provider-runtime adapter', () => {
   it('classifies ElevenLabs timeout errors as provider_timeout', () => {

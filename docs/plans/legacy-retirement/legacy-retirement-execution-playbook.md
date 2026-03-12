@@ -66,23 +66,28 @@ Copy this block into each retirement PR:
 
 ```md
 ### Legacy Retirement Item
+
 - ID: <LR-xxx>
 - Surface: <name>
 - Breaking Level: <none|additive|breaking>
 - Required Release Label: <release:patch|release:minor|release:major>
 
 ### Required Tests
+
 - [ ] <command 1>
 - [ ] <command 2>
 
 ### Contract Behavior
+
 - [ ] Expected response/error behavior validated and documented.
 
 ### Docs Updated
+
 - [ ] <doc path 1>
 - [ ] <doc path 2>
 
 ### Completion
+
 - [ ] Inventory status updated to `done` after merge.
 ```
 

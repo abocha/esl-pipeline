@@ -28,7 +28,9 @@ Outcome:
 ## Preconditions
 
 1. Release automation has been merged:
+
 - [`/.github/workflows/release-on-merge.yml`](../../.github/workflows/release-on-merge.yml)
+
 2. Team/operator explicitly approves destructive tag cleanup.
 3. You have admin push permissions for tags.
 4. Working tree is clean.
@@ -71,6 +73,7 @@ Expected: no legacy release tags remain.
 
 1. Merge one PR labeled `release:major` to produce `v1.0.0`.
 2. Verify workflow produced:
+
 - bot commit `chore(release): v1.0.0`
 - tag `v1.0.0`
 - root `package.json` version `1.0.0`

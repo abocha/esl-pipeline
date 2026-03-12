@@ -1,11 +1,9 @@
 import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
-
 import { describe, expect, it } from 'vitest';
 
 import { createPromptPackage } from '../src/application/create-prompt-package.js';
-
 import {
   createConfig,
   createProfileRevisionRepositoryStub,

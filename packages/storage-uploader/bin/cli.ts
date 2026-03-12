@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 import { Command } from 'commander';
+
 import { loadCliEnv } from '@esl-pipeline/shared-infrastructure';
 
 import { uploadFile } from '../src/index.js';

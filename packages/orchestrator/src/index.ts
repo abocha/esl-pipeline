@@ -20,10 +20,7 @@ import {
   runImport,
 } from '@esl-pipeline/notion-adapter';
 import { extractPronunciationShadowFocus, parseMarkdownContext } from '@esl-pipeline/pmd';
-import {
-  deriveS3UploadAddress,
-  uploadFile,
-} from '@esl-pipeline/storage-uploader';
+import { deriveS3UploadAddress, uploadFile } from '@esl-pipeline/storage-uploader';
 import {
   buildPronunciationShadowSentenceMp3,
   buildStudyTextMp3,
@@ -31,13 +28,13 @@ import {
 } from '@esl-pipeline/tts-core';
 
 import {
-  createProgressCallbacksFromV2Context,
-  failureResultV2,
-  successResultV2,
   type GetAssignmentStatusOperationResultV2,
   type NewAssignmentOperationResultV2,
   type PlanRerunAssignmentOperationResultV2,
   type RerunAssignmentOperationResultV2,
+  createProgressCallbacksFromV2Context,
+  failureResultV2,
+  successResultV2,
 } from './api-v2.js';
 import { DEFAULT_PRESETS_PATH, DEFAULT_VOICES_PATH } from './config.js';
 import {
@@ -57,15 +54,15 @@ import {
 } from './runtime/audio-artifacts.js';
 import { readMarkdownCached } from './runtime/markdown-cache.js';
 import {
-  insertGeneratedAudioLinks,
-  resolveHeadingTheme,
-  resolveMarkdownTitle,
-} from './runtime/publish-utils.js';
-import {
   addAnytypePageToCollection,
   resolveAnytypeObjectId,
   resolveAnytypeSpaceId,
 } from './runtime/publish-target-anytype.js';
+import {
+  insertGeneratedAudioLinks,
+  resolveHeadingTheme,
+  resolveMarkdownTitle,
+} from './runtime/publish-utils.js';
 import { createStageReporter } from './runtime/stage-reporter.js';
 import {
   buildTtsSpendSummary,
@@ -74,11 +71,12 @@ import {
   summarizeVoiceSelections,
 } from './runtime/tts-telemetry.js';
 import { applyVoicePreferences } from './runtime/voice-preferences.js';
+import { ensureTtsProvidersRegistered } from './tts-provider-registry.js';
 import type {
   AssignmentProgressCallbacks,
-  GetAssignmentStatusRequestV2,
   AssignmentStage,
   AssignmentStatus,
+  GetAssignmentStatusRequestV2,
   NewAssignmentFlags,
   NewAssignmentRequestV2,
   NewAssignmentResult,
@@ -87,13 +85,12 @@ import type {
   OrchestratorV2ExecutionContext,
   RerunAssignmentRequestV2,
   RerunAssignmentResult,
-  RerunPlanRequestV2,
+  RerunFlags,
   RerunPlanRequest,
+  RerunPlanRequestV2,
   RerunPlanResult,
   RerunTargetStage,
-  RerunFlags,
 } from './types.js';
-import { ensureTtsProvidersRegistered } from './tts-provider-registry.js';
 
 export type {
   AssignmentStage,
@@ -244,11 +241,7 @@ export async function executeNewAssignmentV2(
   const operation: OrchestratorOperation = 'new_assignment';
   try {
     const callbacks = createProgressCallbacksFromV2Context(operation, context);
-    const data = await newAssignment(
-      request.assignment,
-      callbacks,
-      context.dependencies ?? {},
-    );
+    const data = await newAssignment(request.assignment, callbacks, context.dependencies ?? {});
     return successResultV2(operation, data);
   } catch (error) {
     return failureResultV2<NewAssignmentResult>(operation, error);
@@ -607,13 +600,13 @@ export async function newAssignment(
             if (error.message.includes('voice mapping') && flags.ttsStrategy === 'dialogue') {
               throw new Error(
                 `Dialogue mode requires voice mappings for all speakers. ` +
-                `Check your voices.yml file. ${error.message}`,
+                  `Check your voices.yml file. ${error.message}`,
               );
             }
             if (error.message.includes('text-to-dialogue') && flags.ttsStrategy === 'dialogue') {
               throw new Error(
                 `Dialogue mode failed: ${error.message}\n` +
-                'Try switching to TTS strategy with --tts-strategy tts',
+                  'Try switching to TTS strategy with --tts-strategy tts',
               );
             }
           }
@@ -630,10 +623,14 @@ export async function newAssignment(
         const voiceSummary = summarizeVoiceSelections(ttsResult.voices);
 
         if (ttsResult.generatedCharacters !== undefined && ttsResult.generatedCharacters > 0) {
-          metrics.increment('esl.tts.provider_characters', ttsResult.generatedCharacters, { type: 'generated' });
+          metrics.increment('esl.tts.provider_characters', ttsResult.generatedCharacters, {
+            type: 'generated',
+          });
         }
         if (ttsResult.cachedCharacters !== undefined && ttsResult.cachedCharacters > 0) {
-          metrics.increment('esl.tts.provider_characters', ttsResult.cachedCharacters, { type: 'cached' });
+          metrics.increment('esl.tts.provider_characters', ttsResult.cachedCharacters, {
+            type: 'cached',
+          });
         }
 
         emitStage('tts', 'success', {
@@ -653,7 +650,7 @@ export async function newAssignment(
           await access(audioPath, FS.F_OK).catch(() => {
             throw new InfrastructureError(
               `No audio file produced at ${audioPath}. ` +
-              `Check that :::study-text has lines and voices.yml has 'default' or 'auto: true'.`,
+                `Check that :::study-text has lines and voices.yml has 'default' or 'auto: true'.`,
             );
           });
         }
@@ -684,7 +681,10 @@ export async function newAssignment(
               voiceId: shadowResult.voiceId,
               tts: shadowTtsSummary,
             };
-            if (shadowResult.generatedCharacters !== undefined && shadowResult.generatedCharacters > 0) {
+            if (
+              shadowResult.generatedCharacters !== undefined &&
+              shadowResult.generatedCharacters > 0
+            ) {
               metrics.increment('esl.tts.provider_characters', shadowResult.generatedCharacters, {
                 type: 'generated',
               });
@@ -838,7 +838,10 @@ export async function newAssignment(
           });
         }
       } else {
-        recordSkip('add-audio', studyTextAudioUrl || pronunciationAudioUrl ? 'missing pageId' : 'no audio url available');
+        recordSkip(
+          'add-audio',
+          studyTextAudioUrl || pronunciationAudioUrl ? 'missing pageId' : 'no audio url available',
+        );
       }
     } else if (publishTarget === 'anytype' && anytypePageId && anytypeSpaceId) {
       if (flags.skipUpload) {
@@ -1271,13 +1274,13 @@ export async function rerunAssignment(
           if (error.message.includes('voice mapping') && flags.ttsStrategy === 'dialogue') {
             throw new Error(
               `Dialogue mode requires voice mappings for all speakers. ` +
-              `Check your voices.yml file. ${error.message}`,
+                `Check your voices.yml file. ${error.message}`,
             );
           }
           if (error.message.includes('text-to-dialogue') && flags.ttsStrategy === 'dialogue') {
             throw new Error(
               `Dialogue mode failed: ${error.message}\n` +
-              'Try switching to TTS strategy with --tts-strategy tts',
+                'Try switching to TTS strategy with --tts-strategy tts',
             );
           }
         }
@@ -1307,10 +1310,14 @@ export async function rerunAssignment(
       emitVoiceSelectionMetrics(metrics, ttsResult.voices);
 
       if (ttsResult.generatedCharacters !== undefined && ttsResult.generatedCharacters > 0) {
-        metrics.increment('esl.tts.provider_characters', ttsResult.generatedCharacters, { type: 'generated' });
+        metrics.increment('esl.tts.provider_characters', ttsResult.generatedCharacters, {
+          type: 'generated',
+        });
       }
       if (ttsResult.cachedCharacters !== undefined && ttsResult.cachedCharacters > 0) {
-        metrics.increment('esl.tts.provider_characters', ttsResult.cachedCharacters, { type: 'cached' });
+        metrics.increment('esl.tts.provider_characters', ttsResult.cachedCharacters, {
+          type: 'cached',
+        });
       }
 
       emitStage('tts', 'success', {
@@ -1349,7 +1356,10 @@ export async function rerunAssignment(
             tts: shadowTts,
             notionBlockId: audioArtifacts.pronunciationShadowSentence?.notionBlockId,
           };
-          if (shadowResult.generatedCharacters !== undefined && shadowResult.generatedCharacters > 0) {
+          if (
+            shadowResult.generatedCharacters !== undefined &&
+            shadowResult.generatedCharacters > 0
+          ) {
             metrics.increment('esl.tts.provider_characters', shadowResult.generatedCharacters, {
               type: 'generated',
             });
@@ -1373,7 +1383,10 @@ export async function rerunAssignment(
     if (stepsToRun.has('upload')) {
       emitStage('upload', 'start');
       throwIfCancelled(signal, 'upload');
-      const rerunArtifactEntries: { kind: AudioArtifactKind; artifact: AudioArtifact | undefined }[] = [
+      const rerunArtifactEntries: {
+        kind: AudioArtifactKind;
+        artifact: AudioArtifact | undefined;
+      }[] = [
         { kind: 'study_text', artifact: audioArtifacts.studyText },
         {
           kind: 'pronunciation_shadow_sentence',
@@ -1620,9 +1633,10 @@ export async function rerunAssignment(
       });
     }
 
-    const { audio: _legacyAudio, ...manifestWithoutLegacyAudio } = manifest as AssignmentManifest & {
-      audio?: unknown;
-    };
+    const { audio: _legacyAudio, ...manifestWithoutLegacyAudio } =
+      manifest as AssignmentManifest & {
+        audio?: unknown;
+      };
     const updatedManifest: AssignmentManifest = {
       ...manifestWithoutLegacyAudio,
       schemaVersion: CURRENT_MANIFEST_SCHEMA_VERSION,

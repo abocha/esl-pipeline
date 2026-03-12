@@ -2,14 +2,12 @@ import { createHash } from 'node:crypto';
 import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
-
 import { describe, expect, it } from 'vitest';
 
 import { createPromptPackage } from '../src/application/create-prompt-package.js';
 import type { PromptPackageRecord } from '../src/domain/prompt-package-model.js';
 import type { InsertPromptPackageParams } from '../src/domain/prompt-package-repository.js';
 import type { RecordingRecord } from '../src/domain/recording-model.js';
-
 import {
   createBindingResolverStub,
   createConfig,
@@ -32,8 +30,12 @@ describe('application/prompt-package', () => {
     const transcript = createTranscriptRecord();
     const activeTemplateContent = 'DB TEMPLATE\nINSERT PROFILE HERE\nEND\n';
     const activeProfileContent = 'DB PROFILE\n';
-    const activeTemplateHash = createHash('sha256').update(activeTemplateContent, 'utf8').digest('hex');
-    const activeProfileHash = createHash('sha256').update(activeProfileContent, 'utf8').digest('hex');
+    const activeTemplateHash = createHash('sha256')
+      .update(activeTemplateContent, 'utf8')
+      .digest('hex');
+    const activeProfileHash = createHash('sha256')
+      .update(activeProfileContent, 'utf8')
+      .digest('hex');
     const storage = createStorageStub({
       getText: async () => 'TRANSCRIPT BODY',
       putPromptPackage: async ({ promptPackageId, text }) => {

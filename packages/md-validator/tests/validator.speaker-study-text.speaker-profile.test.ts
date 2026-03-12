@@ -1,5 +1,6 @@
-import { describeMdValidatorSuite } from './validator.test-harness.js';
 import { expect, it } from 'vitest';
+
+import { describeMdValidatorSuite } from './validator.test-harness.js';
 
 interface SpeakerProfileLike {
   role?: string;
@@ -318,12 +319,9 @@ content
 
       const res = await validateMarkdownFile(file);
       expect(res.errors.join('\n')).not.toMatch(/speaker_profiles\.\d+\.role/i);
-      expect(res.meta?.speaker_profiles?.map((profile: SpeakerProfileLike) => profile.role)).toEqual([
-        'teacher',
-        'student',
-        'teacher',
-        'student',
-      ]);
+      expect(
+        res.meta?.speaker_profiles?.map((profile: SpeakerProfileLike) => profile.role),
+      ).toEqual(['teacher', 'student', 'teacher', 'student']);
     });
 
     it('warns on unknown speaker role and keeps validation non-blocking', async () => {
@@ -405,10 +403,9 @@ content
       expect(res.errors.join('\n')).not.toMatch(/speaker_profiles role/i);
       expect(res.warnings.join('\n')).toMatch(/speaker_profiles role "alien ambassador"/i);
       expect(res.warnings.join('\n')).toMatch(/Role score will be 0/i);
-      expect(res.meta?.speaker_profiles?.map((profile: SpeakerProfileLike) => profile.role)).toEqual([
-        undefined,
-        'student',
-      ]);
+      expect(
+        res.meta?.speaker_profiles?.map((profile: SpeakerProfileLike) => profile.role),
+      ).toEqual([undefined, 'student']);
     });
 
     it('warns when speaker labels are missing speaker profiles', async () => {

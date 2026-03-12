@@ -15,11 +15,7 @@ function createHeaders(values: Record<string, string> = {}) {
   };
 }
 
-const createJsonResponse = (
-  body: unknown,
-  status = 200,
-  headers: Record<string, string> = {},
-) =>
+const createJsonResponse = (body: unknown, status = 200, headers: Record<string, string> = {}) =>
   ({
     ok: status >= 200 && status < 300,
     status,
@@ -28,11 +24,7 @@ const createJsonResponse = (
     json: async () => body,
   }) as Response;
 
-const createTextResponse = (
-  body: string,
-  status = 200,
-  headers: Record<string, string> = {},
-) =>
+const createTextResponse = (body: string, status = 200, headers: Record<string, string> = {}) =>
   ({
     ok: status >= 200 && status < 300,
     status,
@@ -59,11 +51,7 @@ describe('RemoteConfigProvider', () => {
       .mockResolvedValueOnce(createJsonResponse({ 'b1-default': { h2: '#ff0000' } }))
       .mockResolvedValueOnce(createJsonResponse([{ student: 'Test Student' }]))
       .mockResolvedValueOnce(
-        createTextResponse(
-          `voices:\n  narrator: voice-id\n`,
-          200,
-          { ETag: '"voices-v1"' },
-        ),
+        createTextResponse(`voices:\n  narrator: voice-id\n`, 200, { ETag: '"voices-v1"' }),
       );
 
     const provider = new RemoteConfigProvider({ baseUrl: 'https://config.test/', token: 'abc' });
@@ -116,11 +104,10 @@ describe('RemoteConfigProvider', () => {
     vi.useFakeTimers();
     fetchMock
       .mockResolvedValueOnce(
-        createJsonResponse(
-          { alpha: { h2: '#00ff00' } },
-          200,
-          { ETag: '"presets-v1"', 'Last-Modified': 'Tue, 10 Feb 2026 00:00:00 GMT' },
-        ),
+        createJsonResponse({ alpha: { h2: '#00ff00' } }, 200, {
+          ETag: '"presets-v1"',
+          'Last-Modified': 'Tue, 10 Feb 2026 00:00:00 GMT',
+        }),
       )
       .mockResolvedValueOnce(createJsonResponse({}, 304));
 

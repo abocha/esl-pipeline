@@ -1038,7 +1038,7 @@ Semver:
   - Operator entrypoint behavior,
   - Manifest schema semantics,
   - Adapter selection semantics,
-  REQUIRE:
+    REQUIRE:
   - appropriate release label selection and semver bump,
   - contract version updates where applicable,
   - documentation updates in:

@@ -61,7 +61,9 @@ const SpeakerProfileSchema = z
     display_name: z.string().trim().min(1).optional(),
     role: z.string().trim().min(1).optional(),
     gender: z.enum(['male', 'female', 'neutral', 'child']).optional(),
-    age: z.enum(['child', 'teen', 'young', 'adult', 'middle_aged', 'senior', 'universal']).optional(),
+    age: z
+      .enum(['child', 'teen', 'young', 'adult', 'middle_aged', 'senior', 'universal'])
+      .optional(),
     accent: z.string().trim().min(1).optional(),
     style: z.string().trim().min(1).optional(),
     voice: z.string().trim().min(1).optional(),
@@ -416,7 +418,8 @@ function isVoiceAlignmentEnabled(): boolean {
 
 function classifyShadowMismatch(message: string): string | null {
   const normalized = message.toLowerCase();
-  if (normalized.includes('input_type') && normalized.includes('legacy')) return 'legacy_input_type';
+  if (normalized.includes('input_type') && normalized.includes('legacy'))
+    return 'legacy_input_type';
   if (normalized.includes('study_text_type is required')) return 'missing_study_text_type';
   if (normalized.includes('study_text_type') && normalized.includes('conflicts with legacy')) {
     return 'study_text_type_conflict';
@@ -430,14 +433,20 @@ function classifyShadowMismatch(message: string): string | null {
   if (normalized.includes('speaker_profiles are set but speaker_labels are missing')) {
     return 'missing_speaker_labels';
   }
-  if (normalized.includes('has no matching speaker_profile')) return 'missing_speaker_profile_for_label';
-  if (normalized.includes('speaker_profiles id') && normalized.includes('not present in speaker_labels')) {
+  if (normalized.includes('has no matching speaker_profile'))
+    return 'missing_speaker_profile_for_label';
+  if (
+    normalized.includes('speaker_profiles id') &&
+    normalized.includes('not present in speaker_labels')
+  ) {
     return 'unmatched_speaker_profile';
   }
-  if (normalized.includes('does not exist in the current voice catalog')) return 'invalid_speaker_voice';
+  if (normalized.includes('does not exist in the current voice catalog'))
+    return 'invalid_speaker_voice';
   if (normalized.includes('unsupported accent')) return 'unsupported_accent';
   if (normalized.includes('unsupported style')) return 'unsupported_style';
-  if (normalized.includes('voice catalog') && normalized.includes('unavailable')) return 'catalog_unavailable';
+  if (normalized.includes('voice catalog') && normalized.includes('unavailable'))
+    return 'catalog_unavailable';
   return null;
 }
 
@@ -461,7 +470,10 @@ function buildShadowModeDiagnostics(messages: string[]): {
 }
 
 function normalizeCapabilityToken(value: string): string {
-  return value.trim().toLowerCase().replaceAll(/[\s-]+/g, '_');
+  return value
+    .trim()
+    .toLowerCase()
+    .replaceAll(/[\s-]+/g, '_');
 }
 
 function splitCapabilityValues(value: unknown): string[] {
@@ -500,14 +512,28 @@ function normalizeVoiceCapabilities(
 ): VoiceCapabilitiesSnapshot {
   return {
     generatedAt: capabilities.generatedAt,
-    role: [...new Set(capabilities.role.map((value) => normalizeCapabilityToken(value)))].sort() as VoiceCapabilitiesSnapshot['role'],
-    gender: [...new Set(capabilities.gender.map((value) => normalizeCapabilityToken(value)))].sort() as VoiceCapabilitiesSnapshot['gender'],
-    age: [...new Set(capabilities.age.map((value) => normalizeCapabilityToken(value)))].sort() as VoiceCapabilitiesSnapshot['age'],
+    role: [
+      ...new Set(capabilities.role.map((value) => normalizeCapabilityToken(value))),
+    ].sort() as VoiceCapabilitiesSnapshot['role'],
+    gender: [
+      ...new Set(capabilities.gender.map((value) => normalizeCapabilityToken(value))),
+    ].sort() as VoiceCapabilitiesSnapshot['gender'],
+    age: [
+      ...new Set(capabilities.age.map((value) => normalizeCapabilityToken(value))),
+    ].sort() as VoiceCapabilitiesSnapshot['age'],
     accent: [
-      ...new Set(capabilities.accent.map((value) => normalizeAccent(value)).filter((value) => value.length > 0)),
+      ...new Set(
+        capabilities.accent
+          .map((value) => normalizeAccent(value))
+          .filter((value) => value.length > 0),
+      ),
     ].sort(),
     style: [
-      ...new Set(capabilities.style.map((value) => normalizeStyle(value)).filter((value) => value.length > 0)),
+      ...new Set(
+        capabilities.style
+          .map((value) => normalizeStyle(value))
+          .filter((value) => value.length > 0),
+      ),
     ].sort(),
   };
 }
@@ -554,7 +580,9 @@ function deriveVoiceCapabilities(catalog: VoiceCatalogLike): VoiceCapabilitiesSn
   return {
     generatedAt: new Date().toISOString(),
     role: [...CANONICAL_ROLES],
-    gender: [...(genders.size > 0 ? genders : CANONICAL_GENDERS)].sort() as VoiceCapabilitiesSnapshot['gender'],
+    gender: [
+      ...(genders.size > 0 ? genders : CANONICAL_GENDERS),
+    ].sort() as VoiceCapabilitiesSnapshot['gender'],
     age: [...(ages.size > 0 ? ages : CANONICAL_AGES)].sort() as VoiceCapabilitiesSnapshot['age'],
     accent: [...accents].sort(),
     style: [...styles].sort(),
@@ -628,7 +656,9 @@ async function loadVoiceCatalog(rawFile: string): Promise<{
     }
   }
 
-  diagnosticsWarnings.push('Voice catalog not found; voice override and capability checks were skipped.');
+  diagnosticsWarnings.push(
+    'Voice catalog not found; voice override and capability checks were skipped.',
+  );
   return { diagnosticsWarnings };
 }
 
@@ -811,7 +841,9 @@ function validateSpeakerMetadataAlignment(
 
   for (const profile of profiles) {
     if (!labelSet.has(normalizeSpeakerToken(profile.id))) {
-      warnings.push(`Front matter: speaker_profiles id "${profile.id}" is not present in speaker_labels.`);
+      warnings.push(
+        `Front matter: speaker_profiles id "${profile.id}" is not present in speaker_labels.`,
+      );
     }
   }
 
@@ -876,7 +908,9 @@ function validateSpeakerMetadataAlignment(
   }
 }
 
-async function resolveValidateInput(input: GeneralEnglishValidateInput): Promise<ResolvedValidateInput> {
+async function resolveValidateInput(
+  input: GeneralEnglishValidateInput,
+): Promise<ResolvedValidateInput> {
   const strict = input.strict ?? false;
   if ('context' in input) {
     return {
@@ -949,7 +983,9 @@ export async function validateGeneralEnglishRuleset(
     ? new Set(
         voiceCatalogLoad.catalog.voices.flatMap((voice) => {
           const names = [voice.id, voice.name]
-            .filter((value): value is string => typeof value === 'string' && value.trim().length > 0)
+            .filter(
+              (value): value is string => typeof value === 'string' && value.trim().length > 0,
+            )
             .map((value) => normalizeSpeakerToken(value));
           return names;
         }),
@@ -1100,7 +1136,9 @@ export async function validateGeneralEnglishRuleset(
         const hasSpeakerLabels = Boolean(meta?.speaker_labels && meta.speaker_labels.length > 0);
         let enforceExplicitSpeakers = false;
         if (hasSpeakerLabels) {
-          const labelSet = new Set(meta!.speaker_labels!.map((s: string) => s.trim().toLowerCase()));
+          const labelSet = new Set(
+            meta!.speaker_labels!.map((s: string) => s.trim().toLowerCase()),
+          );
           const onlyNarrator = labelSet.size === 1 && labelSet.has('narrator');
           if (!onlyNarrator) {
             enforceExplicitSpeakers = true;

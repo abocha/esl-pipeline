@@ -401,7 +401,11 @@ describe('StudentWorkspace', () => {
     renderWorkspace();
 
     expect(screen.getByRole('heading', { name: /Student Workspace/i })).toBeTruthy();
-    await screen.findByText(/Current profile:/i, {}, { timeout: STUDENT_WORKSPACE_ASYNC_TIMEOUT_MS });
+    await screen.findByText(
+      /Current profile:/i,
+      {},
+      { timeout: STUDENT_WORKSPACE_ASYNC_TIMEOUT_MS },
+    );
 
     expect(screen.getByRole('heading', { name: /Assignment History/i })).toBeTruthy();
     expect(screen.getByRole('heading', { name: /Student Timeline/i })).toBeTruthy();
@@ -437,7 +441,10 @@ describe('StudentWorkspace', () => {
       expect(api.getStudentTimeline).toHaveBeenCalledTimes(1);
     });
 
-    await user.selectOptions(screen.getByRole('combobox', { name: /Event type/i }), 'job_completed');
+    await user.selectOptions(
+      screen.getByRole('combobox', { name: /Event type/i }),
+      'job_completed',
+    );
     expect(api.getStudentTimeline).toHaveBeenCalledTimes(1);
 
     const applyButtons = screen.getAllByRole('button', { name: /Apply/i });
@@ -501,10 +508,18 @@ describe('StudentWorkspace', () => {
       },
       { timeout: STUDENT_WORKSPACE_ASYNC_TIMEOUT_MS },
     );
-    await screen.findByText(/Binding at creation:/i, {}, { timeout: STUDENT_WORKSPACE_ASYNC_TIMEOUT_MS });
+    await screen.findByText(
+      /Binding at creation:/i,
+      {},
+      { timeout: STUDENT_WORKSPACE_ASYNC_TIMEOUT_MS },
+    );
 
     await user.click(
-      await screen.findByRole('button', { name: /Inspect/i }, { timeout: STUDENT_WORKSPACE_ASYNC_TIMEOUT_MS }),
+      await screen.findByRole(
+        'button',
+        { name: /Inspect/i },
+        { timeout: STUDENT_WORKSPACE_ASYNC_TIMEOUT_MS },
+      ),
     );
 
     await waitFor(
@@ -519,7 +534,11 @@ describe('StudentWorkspace', () => {
       },
       { timeout: STUDENT_WORKSPACE_ASYNC_TIMEOUT_MS },
     );
-    await screen.findByText(/Binding at creation:/i, {}, { timeout: STUDENT_WORKSPACE_ASYNC_TIMEOUT_MS });
+    await screen.findByText(
+      /Binding at creation:/i,
+      {},
+      { timeout: STUDENT_WORKSPACE_ASYNC_TIMEOUT_MS },
+    );
   });
 
   it('renders a resume link to minimal workflow for each job', async () => {

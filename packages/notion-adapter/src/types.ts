@@ -1,6 +1,7 @@
+import type { DatabaseObjectResponse } from '@notionhq/client/build/src/api-endpoints.js';
+
 import type { PipelineLogger } from '@esl-pipeline/contracts';
 import type { ParsedMarkdownContext } from '@esl-pipeline/pmd';
-import type { DatabaseObjectResponse } from '@notionhq/client/build/src/api-endpoints.js';
 
 export interface ImportOptions {
   context: ParsedMarkdownContext;

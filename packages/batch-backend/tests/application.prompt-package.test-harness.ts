@@ -6,8 +6,8 @@ import type { BatchBackendConfig } from '../src/config/env.js';
 import type { ProfileRevisionRecord } from '../src/domain/profile-revision-model.js';
 import type { PromptPackageRecord } from '../src/domain/prompt-package-model.js';
 import type { InsertPromptPackageParams } from '../src/domain/prompt-package-repository.js';
-import type { TranscriptRecord } from '../src/domain/transcript-model.js';
 import type { TemplateRevisionRecord } from '../src/domain/template-revision-model.js';
+import type { TranscriptRecord } from '../src/domain/transcript-model.js';
 import type { TranscriptionStorage } from '../src/infrastructure/transcription-storage.js';
 
 export function createTranscriptRecord(): TranscriptRecord {
@@ -27,7 +27,9 @@ export function createTranscriptRecord(): TranscriptRecord {
   };
 }
 
-export function createStorageStub(overrides: Partial<TranscriptionStorage> = {}): TranscriptionStorage {
+export function createStorageStub(
+  overrides: Partial<TranscriptionStorage> = {},
+): TranscriptionStorage {
   return {
     putAudio: async () => ({ uri: 'local://recordings/recording.opus', bytes: 1 }),
     putTranscript: async () => ({ uri: 'local://transcripts/transcript-1.txt', bytes: 1 }),
@@ -106,9 +108,7 @@ export function createProfileRevisionRepositoryStub(
           restoredFromRevisionId: null,
         } satisfies ProfileRevisionRecord;
       }),
-    getLatestByHash:
-      overrides.getLatestByHash ??
-      (async () => null),
+    getLatestByHash: overrides.getLatestByHash ?? (async () => null),
     activate: async (
       _profileId: string,
       _revisionId: string,
@@ -193,9 +193,7 @@ export function createTemplateRevisionRepositoryStub(
           restoredFromRevisionId: null,
         } satisfies TemplateRevisionRecord;
       }),
-    getLatestByHash:
-      overrides.getLatestByHash ??
-      (async () => null),
+    getLatestByHash: overrides.getLatestByHash ?? (async () => null),
     activate: async (
       _templateId: string,
       _revisionId: string,
@@ -241,11 +239,13 @@ export function createBindingResolverStub() {
   };
 }
 
-export function createPromptOptionsStub(options: {
-  strictAllowlist?: boolean;
-  allowedTemplateIds?: string[];
-  allowedProfileIds?: string[];
-} = {}) {
+export function createPromptOptionsStub(
+  options: {
+    strictAllowlist?: boolean;
+    allowedTemplateIds?: string[];
+    allowedProfileIds?: string[];
+  } = {},
+) {
   return {
     resolveSelection: async (
       params: {
@@ -259,16 +259,15 @@ export function createPromptOptionsStub(options: {
       if (!config) throw new Error('config is required');
 
       const defaultTemplateId = path.basename(config.prompt.templatePath).replaceAll('\\', '/');
-      const defaultProfileId = path.basename(config.prompt.defaultProfilePath).replaceAll('\\', '/');
+      const defaultProfileId = path
+        .basename(config.prompt.defaultProfilePath)
+        .replaceAll('\\', '/');
 
       const allowedTemplateIds = new Set([
         defaultTemplateId,
         ...(options.allowedTemplateIds ?? []),
       ]);
-      const allowedProfileIds = new Set([
-        defaultProfileId,
-        ...(options.allowedProfileIds ?? []),
-      ]);
+      const allowedProfileIds = new Set([defaultProfileId, ...(options.allowedProfileIds ?? [])]);
 
       const templateId = params.templateId ?? defaultTemplateId;
       if (options.strictAllowlist && !allowedTemplateIds.has(templateId)) {

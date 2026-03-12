@@ -83,8 +83,18 @@ describe('stt-provider-google', () => {
               alternatives: [
                 {
                   words: [
-                    { word: 'Hello', startOffset: '0.1s', endOffset: '0.5s', speakerLabel: 'speaker_0' },
-                    { word: 'Hi', startOffset: '1.0s', endOffset: '1.5s', speakerLabel: 'speaker_1' },
+                    {
+                      word: 'Hello',
+                      startOffset: '0.1s',
+                      endOffset: '0.5s',
+                      speakerLabel: 'speaker_0',
+                    },
+                    {
+                      word: 'Hi',
+                      startOffset: '1.0s',
+                      endOffset: '1.5s',
+                      speakerLabel: 'speaker_1',
+                    },
                   ],
                 },
               ],

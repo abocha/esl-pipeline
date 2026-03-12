@@ -1109,7 +1109,10 @@ function applyTaskListRule(md: MarkdownIt): void {
 }
 
 function appendTokenClass(
-  token: { attrGet: (name: string) => string | null; attrSet: (name: string, value: string) => void },
+  token: {
+    attrGet: (name: string) => string | null;
+    attrSet: (name: string, value: string) => void;
+  },
   className: string,
 ): void {
   const current = token.attrGet('class');
@@ -1163,7 +1166,9 @@ function preprocessMarkdown(markdown: string, allowRawHtml: boolean): string {
       const rawUrl = trimmed.replace(/^:::\s*audio(\s+|$)/, '').trim();
       const safeUrl = sanitizeMediaUrl(rawUrl);
       if (safeUrl) {
-        out.push(`<audio controls preload="metadata" src="${escapeHtmlAttribute(safeUrl)}"></audio>`);
+        out.push(
+          `<audio controls preload="metadata" src="${escapeHtmlAttribute(safeUrl)}"></audio>`,
+        );
       } else {
         out.push(renderAudioPlaceholder());
       }
@@ -1250,15 +1255,13 @@ function normalizePronunciationSectionMarkdown(markdown: string): string {
 
     let next = trimmed;
 
-    const codeWrappedField =
-      /^(?:[-*]\s+)?`(\*\*(?:mode|shadow sentence):\*\*.+)`$/i.exec(next);
+    const codeWrappedField = /^(?:[-*]\s+)?`(\*\*(?:mode|shadow sentence):\*\*.+)`$/i.exec(next);
     if (codeWrappedField?.[1]) {
       normalized.push(codeWrappedField[1]);
       continue;
     }
 
-    const plainBulletField =
-      /^(?:[-*]\s+)(\*\*(?:mode|shadow sentence):\*\*.+)$/i.exec(next);
+    const plainBulletField = /^(?:[-*]\s+)(\*\*(?:mode|shadow sentence):\*\*.+)$/i.exec(next);
     if (plainBulletField?.[1]) {
       normalized.push(plainBulletField[1]);
       continue;
@@ -1389,7 +1392,11 @@ function normalizeFrontmatterValue(value: string): string {
   return trimmed.replaceAll(/^['"]|['"]$/g, '');
 }
 
-function renderHeader(title: string, frontmatter: Frontmatter, options: ResolvedRenderOptions): string {
+function renderHeader(
+  title: string,
+  frontmatter: Frontmatter,
+  options: ResolvedRenderOptions,
+): string {
   const iconValue = frontmatter.icon?.trim() || '📘';
   const icon = `<div class="hero-emoji" aria-hidden="true">${escapeHtml(iconValue)}</div>`;
 
@@ -1564,11 +1571,15 @@ function sanitizeRenderedHtml(html: string, allowRawHtml: boolean): string {
     return isAllowedEmbedUrl(src) ? iframeBlock : '';
   });
 
-  sanitized = sanitized.replaceAll(/\s(href|src)=("|')([^"']*)(\2)/gi, (full, attr, quote, value) => {
-    const attribute = String(attr).toLowerCase();
-    const safeValue = attribute === 'href' ? sanitizeLinkHref(value) : sanitizeMediaUrl(value) ?? '#';
-    return ` ${attribute}=${quote}${escapeHtmlAttribute(safeValue)}${quote}`;
-  });
+  sanitized = sanitized.replaceAll(
+    /\s(href|src)=("|')([^"']*)(\2)/gi,
+    (full, attr, quote, value) => {
+      const attribute = String(attr).toLowerCase();
+      const safeValue =
+        attribute === 'href' ? sanitizeLinkHref(value) : (sanitizeMediaUrl(value) ?? '#');
+      return ` ${attribute}=${quote}${escapeHtmlAttribute(safeValue)}${quote}`;
+    },
+  );
 
   if (!allowRawHtml) {
     sanitized = sanitized.replaceAll(/<object\b[\s\S]*?<\/object>/gi, '');
@@ -1643,7 +1654,12 @@ function isSafeRelativePath(value: string): boolean {
   if (value.startsWith('//') || value.startsWith('#')) {
     return false;
   }
-  if (value.startsWith('/') || value.startsWith('./') || value.startsWith('../') || value.startsWith('?')) {
+  if (
+    value.startsWith('/') ||
+    value.startsWith('./') ||
+    value.startsWith('../') ||
+    value.startsWith('?')
+  ) {
     return true;
   }
   if (hasExplicitScheme(value)) {
@@ -1679,7 +1695,8 @@ function replaceColumnMarkers(html: string): string {
 function wrapTableOfContents(html: string): string {
   return html.replaceAll(
     /<(nav|div)\s+class="table-of-contents"[\s\S]*?<\/\1>/gi,
-    (tocHtml) => `<details class="toc-shell"><summary>Contents</summary><div class="content"><div class="content-inner">${tocHtml}</div></div></details>`,
+    (tocHtml) =>
+      `<details class="toc-shell"><summary>Contents</summary><div class="content"><div class="content-inner">${tocHtml}</div></div></details>`,
   );
 }
 
@@ -1729,7 +1746,10 @@ function normalizeGrammarMatrixColumnMarkup(sectionHtml: string): string {
         (_paragraphHtml, rawAttrs: string, rawContent: string) => {
           const attrs = rawAttrs || '';
           const normalizedContent = normalizeInlineHtmlSpacing(String(rawContent || ''));
-          const plainText = normalizedContent.replaceAll(/<[^>]+>/g, ' ').replaceAll(/\s+/g, ' ').trim();
+          const plainText = normalizedContent
+            .replaceAll(/<[^>]+>/g, ' ')
+            .replaceAll(/\s+/g, ' ')
+            .trim();
           const wordCount = plainText.length > 0 ? plainText.split(' ').filter(Boolean).length : 0;
           const isRuleParagraph = /^rule:/i.test(plainText);
           const useProseAlignment = !isRuleParagraph && wordCount >= 12;
@@ -1816,7 +1836,9 @@ function markFirstGrammarHeading(columnInner: string): string {
   const headingMatch = /<h([1-6])\b([^>]*)>([\s\S]*?)<\/h\1>/i.exec(columnInner);
   const paragraphMatch = /<p\b([^>]*)>([\s\S]*?)<\/p>/i.exec(columnInner);
 
-  const headingIndex = headingMatch ? (headingMatch.index ?? Number.POSITIVE_INFINITY) : Number.POSITIVE_INFINITY;
+  const headingIndex = headingMatch
+    ? (headingMatch.index ?? Number.POSITIVE_INFINITY)
+    : Number.POSITIVE_INFINITY;
   const paragraphIndex = paragraphMatch
     ? (paragraphMatch.index ?? Number.POSITIVE_INFINITY)
     : Number.POSITIVE_INFINITY;

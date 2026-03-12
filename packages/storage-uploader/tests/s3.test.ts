@@ -1,7 +1,7 @@
+import { createHash } from 'node:crypto';
 import { unlink, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { basename, join } from 'node:path';
-import { createHash } from 'node:crypto';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { PipelineLogEvent, PipelineLogger } from '@esl-pipeline/contracts';

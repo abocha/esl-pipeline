@@ -27,15 +27,15 @@
 
 ## Current Baseline (2026-03-04)
 
-| Dimension | Score | Notes |
-| --- | --- | --- |
-| Routing clarity | 9.2 | Strong route chain and IA map coverage. |
-| Authority/ownership clarity | 8.8 | SSOT precedence clear; owner metadata rollout in progress. |
-| Freshness and drift resistance | 8.2 | Core docs refreshed; broader scope needs automated cadence. |
-| Mechanical enforceability | 8.0 | Core checks in CI; ops and health artifacts being expanded. |
-| Ops runbook reliability | 9.0 | Strong backup/ops/troubleshooting runbooks. |
-| Archive hygiene | 8.9 | Active/archive split clear, with backend archive now added. |
-| Agent onboarding speed | 8.6 | Good fast-path flow; can improve via score-driven grooming. |
+| Dimension                      | Score | Notes                                                       |
+| ------------------------------ | ----- | ----------------------------------------------------------- |
+| Routing clarity                | 9.2   | Strong route chain and IA map coverage.                     |
+| Authority/ownership clarity    | 8.8   | SSOT precedence clear; owner metadata rollout in progress.  |
+| Freshness and drift resistance | 8.2   | Core docs refreshed; broader scope needs automated cadence. |
+| Mechanical enforceability      | 8.0   | Core checks in CI; ops and health artifacts being expanded. |
+| Ops runbook reliability        | 9.0   | Strong backup/ops/troubleshooting runbooks.                 |
+| Archive hygiene                | 8.9   | Active/archive split clear, with backend archive now added. |
+| Agent onboarding speed         | 8.6   | Good fast-path flow; can improve via score-driven grooming. |
 
 **Composite (mean): 8.7 / 10**
 

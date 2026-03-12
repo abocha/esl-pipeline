@@ -1,7 +1,6 @@
 import { mkdtemp, readFile, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-
 import { describe, expect, it } from 'vitest';
 
 import {
@@ -21,7 +20,8 @@ describe('orchestrator api v2', () => {
     const mdPath = join(dir, 'lesson.md');
     await writeFile(mdPath, await readFile(okFixturePath, 'utf8'));
 
-    const events: { schemaVersion: string; operation: string; stage: string; status: string }[] = [];
+    const events: { schemaVersion: string; operation: string; stage: string; status: string }[] =
+      [];
     const result = await executeNewAssignmentV2(
       {
         assignment: {

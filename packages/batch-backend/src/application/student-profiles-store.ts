@@ -5,16 +5,16 @@ import { loadConfig } from '../config/env.js';
 import { upsertProfile } from '../domain/profile-repository.js';
 import type { StudentRecord } from '../domain/student-model.js';
 import {
+  clearActiveStudentProfileBinding,
+  setActiveStudentProfileBinding,
+} from '../domain/student-profile-binding-repository.js';
+import {
   deleteStudent,
   getStudentById,
   insertStudent,
   listStudents,
   upsertStudent,
 } from '../domain/student-repository.js';
-import {
-  clearActiveStudentProfileBinding,
-  setActiveStudentProfileBinding,
-} from '../domain/student-profile-binding-repository.js';
 import { deriveStudentId, normalizeStudentName } from '../domain/student-utils.js';
 
 export interface StudentProfileData {
@@ -394,7 +394,9 @@ async function updateStudentProfileDb(
     accentPreference: has('accentPreference')
       ? (sanitized.accentPreference ?? null)
       : existing.accentPreference,
-    manifestPreset: has('manifestPreset') ? (sanitized.manifestPreset ?? null) : existing.manifestPreset,
+    manifestPreset: has('manifestPreset')
+      ? (sanitized.manifestPreset ?? null)
+      : existing.manifestPreset,
     profileId: has('profileId') ? (sanitized.profileId ?? null) : existing.profileId,
     voices: has('voices') ? (sanitized.voices ?? {}) : existing.voices,
   };
@@ -444,7 +446,9 @@ export async function listStudentProfiles(
     order: 'asc',
   });
 
-  const entries = ensureDefaultProfileEntry(dbResult.items.map((item) => mapStudentRecordToEntry(item)));
+  const entries = ensureDefaultProfileEntry(
+    dbResult.items.map((item) => mapStudentRecordToEntry(item)),
+  );
   return applyListFilters(entries, params);
 }
 

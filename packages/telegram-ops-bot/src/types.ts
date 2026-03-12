@@ -1,3 +1,5 @@
+import type { Message, Update } from '@grammyjs/types';
+
 import type {
   JobListResponse,
   JobStatusDto,
@@ -5,7 +7,6 @@ import type {
   OpsActionStatus,
   OpsStatusResponse,
 } from '@esl-pipeline/contracts';
-import type { Message, Update } from '@grammyjs/types';
 
 export type BotDomain = 'ops' | 'jobs' | 'alerts';
 

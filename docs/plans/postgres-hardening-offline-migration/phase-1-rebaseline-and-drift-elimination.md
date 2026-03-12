@@ -75,8 +75,8 @@ Lock every schema object into one of four statuses so there are zero open schema
 - Source of truth policy for this repo:
   - Future truth: versioned migrations.
   - Interim for Phase 1 decisions:
-	  - Semantic behavior in runtime (db.ts) wins when protecting existing data invariants.
-	  - SQL file object coverage wins when objects are actively referenced by domain code (settings-repository, extended routes, etc.).
+    - Semantic behavior in runtime (db.ts) wins when protecting existing data invariants.
+    - SQL file object coverage wins when objects are actively referenced by domain code (settings-repository, extended routes, etc.).
 - Rule must be documented in decision ledger with rationale.
 
 4. Produce per-object decisions.
@@ -111,6 +111,7 @@ Lock every schema object into one of four statuses so there are zero open schema
 ## Important API / Interface / Type Impact in Phase 1
 
 The following future interfaces are pre-declared (for Phase 2 implementation consistency):
+
 1. Migration step IDs (MIG-###) in ledger.
 2. Canonical object naming conventions for constraints/indexes/triggers.
 

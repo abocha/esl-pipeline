@@ -6,10 +6,11 @@
 import { randomUUID } from 'node:crypto';
 import { PoolClient } from 'pg';
 
+import type { VoiceProviderErrorCategory } from '@esl-pipeline/contracts';
+
 import { buildLearningPresetProvenance } from '../application/learning-preset.js';
 import { withPgClient } from '../infrastructure/db.js';
 import { logger } from '../infrastructure/logger.js';
-import type { VoiceProviderErrorCategory } from '@esl-pipeline/contracts';
 import {
   GoogleTtsModel,
   JobRecord,

@@ -24,13 +24,17 @@ export const MinimalShell: React.FC<MinimalShellProps> = ({ user, onLogout, chil
           <NavLink
             to="/"
             end
-            className={({ isActive }) => (isActive ? 'minimal-nav-link active' : 'minimal-nav-link')}
+            className={({ isActive }) =>
+              isActive ? 'minimal-nav-link active' : 'minimal-nav-link'
+            }
           >
             Minimal Flow
           </NavLink>
           <NavLink
             to="/students/workspace"
-            className={({ isActive }) => (isActive ? 'minimal-nav-link active' : 'minimal-nav-link')}
+            className={({ isActive }) =>
+              isActive ? 'minimal-nav-link active' : 'minimal-nav-link'
+            }
           >
             Student Workspace
           </NavLink>

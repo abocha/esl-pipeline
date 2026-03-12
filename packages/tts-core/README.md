@@ -14,7 +14,7 @@ Provider-agnostic TTS core contracts and orchestration utilities.
 ## Typical Usage
 
 ```ts
-import { registerTtsProvider, buildStudyTextMp3 } from '@esl-pipeline/tts-core';
+import { buildStudyTextMp3, registerTtsProvider } from '@esl-pipeline/tts-core';
 import { createElevenLabsTtsProvider } from '@esl-pipeline/tts-provider-elevenlabs';
 import { createGoogleTtsProvider } from '@esl-pipeline/tts-provider-google';
 

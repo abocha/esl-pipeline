@@ -20,7 +20,9 @@ export function isTerminalJobState(state: JobStatus['state'] | null | undefined)
   return state ? TERMINAL_JOB_STATES.has(state) : false;
 }
 
-export function isActivelyProcessingJobState(state: JobStatus['state'] | null | undefined): boolean {
+export function isActivelyProcessingJobState(
+  state: JobStatus['state'] | null | undefined,
+): boolean {
   return state ? ACTIVE_JOB_STATES.has(state) : false;
 }
 
@@ -37,7 +39,7 @@ export function getRecordingPollingDecision(params: {
     shouldContinuePolling: !isTerminal,
     shouldLoadTranscript: status === 'transcribed' && !hasTranscriptId,
     shouldMarkTranscriptFailed: isFailed,
-    transcriptFailureMessage: isFailed ? error ?? 'Transcription failed.' : null,
+    transcriptFailureMessage: isFailed ? (error ?? 'Transcription failed.') : null,
   };
 }
 

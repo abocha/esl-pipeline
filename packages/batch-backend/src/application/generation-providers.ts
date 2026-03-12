@@ -418,7 +418,10 @@ export async function executeGoogleGeneration(args: {
     const errorBlock = cast.error as Record<string, unknown> | undefined;
     throw new ProviderExecutionError({
       provider: 'google_ai_studio',
-      message: parseErrorMessage(payload, `Google AI Studio request failed (HTTP ${response.status})`),
+      message: parseErrorMessage(
+        payload,
+        `Google AI Studio request failed (HTTP ${response.status})`,
+      ),
       status: response.status,
       code:
         (typeof errorBlock?.status === 'string' ? errorBlock.status : undefined) ??

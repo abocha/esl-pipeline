@@ -17,10 +17,5 @@
     "services-alphabetical-order": 2,
     "top-level-properties-order": 2
   },
-  "exclude": [
-    ".git",
-    "dist",
-    "node_modules",
-    ".pnpm-store"
-  ]
+  "exclude": [".git", "dist", "node_modules", ".pnpm-store"]
 }

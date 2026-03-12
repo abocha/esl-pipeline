@@ -1,5 +1,6 @@
-import type { GenerationProvider } from '@esl-pipeline/contracts';
 import type { PoolClient } from 'pg';
+
+import type { GenerationProvider } from '@esl-pipeline/contracts';
 
 import { withPgClient } from '../infrastructure/db.js';
 

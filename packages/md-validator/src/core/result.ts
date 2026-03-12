@@ -61,7 +61,10 @@ function inferCategory(message: string): MarkdownValidationIssueCategory {
   return 'contract';
 }
 
-function inferBlockingInStrict(message: string, severity: MarkdownValidationIssueSeverity): boolean {
+function inferBlockingInStrict(
+  message: string,
+  severity: MarkdownValidationIssueSeverity,
+): boolean {
   if (severity === 'error') return true;
 
   const normalized = message.toLowerCase();
@@ -105,7 +108,10 @@ export function buildIssuesFromLegacyMessages(input: {
 
     const category = inferCategory(message);
     const issue: MarkdownValidationIssue = {
-      code: issueCodeFromMessage(message, severity === 'error' ? 'validation_error' : 'validation_warning'),
+      code: issueCodeFromMessage(
+        message,
+        severity === 'error' ? 'validation_error' : 'validation_warning',
+      ),
       ruleId: inferRuleId(message),
       severity,
       message,

@@ -9,8 +9,8 @@ import {
   restoreProfileRevision,
   upsertProfileContent,
 } from '../src/application/profile-content.js';
-import type { ProfileRevisionRecord } from '../src/domain/profile-revision-model.js';
 import type { ProfileRecord } from '../src/domain/profile-model.js';
+import type { ProfileRevisionRecord } from '../src/domain/profile-revision-model.js';
 
 function createInMemoryDependencies(seed?: {
   profiles?: { id: string; label: string; content: string }[];
@@ -65,7 +65,10 @@ function createInMemoryDependencies(seed?: {
     }
   }
 
-  const getLatestRevisionByHash = (profileId: string, contentHash: string): ProfileRevisionRecord | null => {
+  const getLatestRevisionByHash = (
+    profileId: string,
+    contentHash: string,
+  ): ProfileRevisionRecord | null => {
     for (let index = revisions.length - 1; index >= 0; index -= 1) {
       const revision = revisions[index];
       if (revision && revision.profileId === profileId && revision.contentHash === contentHash) {
@@ -77,7 +80,9 @@ function createInMemoryDependencies(seed?: {
 
   return {
     profiles: {
-      list: async (params: { search?: string; limit?: number; offset?: number; order?: 'asc' | 'desc' } = {}) => {
+      list: async (
+        params: { search?: string; limit?: number; offset?: number; order?: 'asc' | 'desc' } = {},
+      ) => {
         const { limit = 500, offset = 0, order = 'asc' } = params;
         const sorted = [...profiles.values()].sort((a, b) =>
           order === 'asc' ? a.label.localeCompare(b.label) : b.label.localeCompare(a.label),
@@ -111,7 +116,10 @@ function createInMemoryDependencies(seed?: {
         profiles.set(id, next);
         return next;
       },
-      setActive: async (profileId: string, revisionId: string | null): Promise<ProfileRecord | null> => {
+      setActive: async (
+        profileId: string,
+        revisionId: string | null,
+      ): Promise<ProfileRecord | null> => {
         const existing = profiles.get(profileId);
         if (!existing) return null;
         const next = {
@@ -160,7 +168,9 @@ function createInMemoryDependencies(seed?: {
         return revision;
       },
       activate: async (profileId: string, revisionId: string) => {
-        const target = revisions.find((revision) => revision.profileId === profileId && revision.id === revisionId);
+        const target = revisions.find(
+          (revision) => revision.profileId === profileId && revision.id === revisionId,
+        );
         if (!target) return null;
         for (const current of revisions) {
           if (current.profileId !== profileId) continue;
@@ -213,7 +223,9 @@ function createInMemoryDependencies(seed?: {
         };
       },
       getById: async (profileId: string, revisionId: string) =>
-        revisions.find((revision) => revision.profileId === profileId && revision.id === revisionId) ?? null,
+        revisions.find(
+          (revision) => revision.profileId === profileId && revision.id === revisionId,
+        ) ?? null,
     },
   };
 }
@@ -221,7 +233,9 @@ function createInMemoryDependencies(seed?: {
 describe('application/profile-content (DB-only)', () => {
   it('lists active profiles and reads active revision content', async () => {
     const deps = createInMemoryDependencies({
-      profiles: [{ id: 'default.md', label: 'Default Profile', content: 'Default profile content' }],
+      profiles: [
+        { id: 'default.md', label: 'Default Profile', content: 'Default profile content' },
+      ],
     });
 
     const list = await listProfileContents(deps);

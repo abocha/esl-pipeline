@@ -9,8 +9,8 @@ import {
   restoreTemplateRevision,
   upsertTemplateContent,
 } from '../src/application/template-content.js';
-import type { TemplateRevisionRecord } from '../src/domain/template-revision-model.js';
 import type { TemplateRecord } from '../src/domain/template-model.js';
+import type { TemplateRevisionRecord } from '../src/domain/template-revision-model.js';
 
 const BASE_TEMPLATE = 'Header\nINSERT PROFILE HERE\nFooter';
 
@@ -82,7 +82,9 @@ function createInMemoryDependencies(seed?: {
 
   return {
     templates: {
-      list: async (params: { search?: string; limit?: number; offset?: number; order?: 'asc' | 'desc' } = {}) => {
+      list: async (
+        params: { search?: string; limit?: number; offset?: number; order?: 'asc' | 'desc' } = {},
+      ) => {
         const { limit = 500, offset = 0, order = 'asc' } = params;
         const sorted = [...templates.values()].sort((a, b) =>
           order === 'asc' ? a.label.localeCompare(b.label) : b.label.localeCompare(a.label),
@@ -116,7 +118,10 @@ function createInMemoryDependencies(seed?: {
         templates.set(id, next);
         return next;
       },
-      setActive: async (templateId: string, revisionId: string | null): Promise<TemplateRecord | null> => {
+      setActive: async (
+        templateId: string,
+        revisionId: string | null,
+      ): Promise<TemplateRecord | null> => {
         const existing = templates.get(templateId);
         if (!existing) return null;
         const next = {
@@ -224,7 +229,9 @@ function createInMemoryDependencies(seed?: {
         };
       },
       getById: async (templateId: string, revisionId: string) =>
-        revisions.find((revision) => revision.templateId === templateId && revision.id === revisionId) ?? null,
+        revisions.find(
+          (revision) => revision.templateId === templateId && revision.id === revisionId,
+        ) ?? null,
     },
   };
 }
@@ -272,9 +279,11 @@ describe('application/template-content (DB-only)', () => {
   it('rejects template saves without INSERT PROFILE HERE marker', async () => {
     const deps = createInMemoryDependencies();
 
-    await expect(upsertTemplateContent('invalid.md', 'No marker here', deps)).rejects.toMatchObject({
-      code: 'template_marker_missing',
-    } satisfies Partial<TemplateContentError>);
+    await expect(upsertTemplateContent('invalid.md', 'No marker here', deps)).rejects.toMatchObject(
+      {
+        code: 'template_marker_missing',
+      } satisfies Partial<TemplateContentError>,
+    );
   });
 
   it('archives templates and keeps revisions for restore', async () => {

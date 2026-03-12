@@ -12,7 +12,9 @@ import { loadConfig } from '../src/config/env.js';
 import type { StudentRecord } from '../src/domain/student-model.js';
 import { deriveStudentId } from '../src/domain/student-utils.js';
 
-function makeRecord(overrides: Partial<StudentRecord> & Pick<StudentRecord, 'id' | 'student'>): StudentRecord {
+function makeRecord(
+  overrides: Partial<StudentRecord> & Pick<StudentRecord, 'id' | 'student'>,
+): StudentRecord {
   const now = new Date('2026-01-01T00:00:00.000Z');
   return {
     id: overrides.id,
@@ -170,11 +172,7 @@ describe('student-profiles-store', () => {
     const loaded = await getStudentProfileById(created.id, { deps });
     expect(loaded?.student).toBe('New Student');
 
-    const updated = await updateStudentProfile(
-      created.id,
-      { colorPreset: 'b2-default' },
-      { deps },
-    );
+    const updated = await updateStudentProfile(created.id, { colorPreset: 'b2-default' }, { deps });
     expect(updated?.colorPreset).toBe('b2-default');
 
     const deleted = await deleteStudentProfile(created.id, { deps });

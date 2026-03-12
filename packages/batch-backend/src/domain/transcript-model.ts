@@ -1,4 +1,5 @@
 import { z } from 'zod';
+
 import type { SttProviderId } from '@esl-pipeline/contracts';
 
 export type TranscriptMode = 'timeline' | 'stack';

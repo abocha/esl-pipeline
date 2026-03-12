@@ -57,7 +57,9 @@ describe('runProviderFallbackLadder', () => {
   });
 
   it('fails fast on contract errors', async () => {
-    const runCandidate = vi.fn<(_candidate: Candidate) => Promise<string>>().mockRejectedValue(new Error('contract'));
+    const runCandidate = vi
+      .fn<(_candidate: Candidate) => Promise<string>>()
+      .mockRejectedValue(new Error('contract'));
 
     await expect(
       runProviderFallbackLadder<Candidate, string, MappedError>({

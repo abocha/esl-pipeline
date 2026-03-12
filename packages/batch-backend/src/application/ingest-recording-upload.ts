@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import path from 'node:path';
 import type { Readable } from 'node:stream';
+
 import type { SttProviderId } from '@esl-pipeline/contracts';
 
 import type { RecordingRecord } from '../domain/recording-model.js';
@@ -23,10 +24,7 @@ export interface UploadRecordingOptions {
   sttProvider?: SttProviderId;
   storage: TranscriptionStorage;
   repository: RecordingRepository;
-  enqueue: (payload: {
-    recordingId: string;
-    sttProvider?: SttProviderId;
-  }) => Promise<void>;
+  enqueue: (payload: { recordingId: string; sttProvider?: SttProviderId }) => Promise<void>;
 }
 
 export interface RecordingRepository {

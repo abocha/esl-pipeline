@@ -8,8 +8,8 @@ import { resolve } from 'node:path';
 import type {
   ActionCapability,
   CefrLevel,
-  GoogleTtsModel,
   GenerationOptionsPayload,
+  GoogleTtsModel,
   JobOptionsPayload,
   NotionDatabaseOption,
   SttProviderId,
@@ -149,7 +149,9 @@ export async function getJobOptions(): Promise<JobOptionsResponse> {
   }
 }
 
-async function loadStaticJobOptions(runtimeConfig: ReturnType<typeof loadConfig>): Promise<JobOptionsResponse> {
+async function loadStaticJobOptions(
+  runtimeConfig: ReturnType<typeof loadConfig>,
+): Promise<JobOptionsResponse> {
   const notionDatabases = resolveNotionDatabases();
   const voices = await loadVoiceOptions();
   const voiceAccents =
@@ -268,7 +270,9 @@ function resolveTtsMetadata(
   defaultTtsProvider: TtsProviderId;
   defaultTtsModelByProvider: Partial<Record<TtsProviderId, string>>;
 } {
-  const ttsProviders = (input.ttsProviders?.length ? input.ttsProviders : DEFAULT_TTS_PROVIDERS).filter(
+  const ttsProviders = (
+    input.ttsProviders?.length ? input.ttsProviders : DEFAULT_TTS_PROVIDERS
+  ).filter(
     (provider): provider is TtsProviderId => provider === 'elevenlabs' || provider === 'google',
   );
   const uniqueProviders = [...new Set(ttsProviders)];
@@ -296,12 +300,16 @@ function resolveTtsMetadata(
     !modelOptionsByProvider.google.includes(defaultModelByProvider.google)
   ) {
     defaultModelByProvider.google =
-      process.env.ESL_TTS_PROVIDER_GOOGLE_MODEL?.trim() || modelOptionsByProvider.google[0] || 'chirp3_hd';
+      process.env.ESL_TTS_PROVIDER_GOOGLE_MODEL?.trim() ||
+      modelOptionsByProvider.google[0] ||
+      'chirp3_hd';
   }
 
   const defaultProviderRaw = input.defaultTtsProvider ?? process.env.ESL_TTS_DEFAULT_PROVIDER;
   const normalizedDefaultProvider =
-    defaultProviderRaw === 'elevenlabs' || defaultProviderRaw === 'google' ? defaultProviderRaw : undefined;
+    defaultProviderRaw === 'elevenlabs' || defaultProviderRaw === 'google'
+      ? defaultProviderRaw
+      : undefined;
   const defaultProvider =
     normalizedDefaultProvider && uniqueProviders.includes(normalizedDefaultProvider)
       ? normalizedDefaultProvider
@@ -350,15 +358,12 @@ async function withQuotaUsage(
         usedTokensToday: Math.max(usage.reservedTokensToday, usage.actualTokensToday),
         dailyRequestUsed: usage.requestsToday,
         dailyRequestRemaining:
-          (generation.quota.dailyRequestBudget ??
-            generation.quota.requestsPerDay ??
-            null) === null
+          (generation.quota.dailyRequestBudget ?? generation.quota.requestsPerDay ?? null) === null
             ? null
             : Math.max(
                 0,
-                (generation.quota.dailyRequestBudget ??
-                  generation.quota.requestsPerDay ??
-                  0) - usage.requestsToday,
+                (generation.quota.dailyRequestBudget ?? generation.quota.requestsPerDay ?? 0) -
+                  usage.requestsToday,
               ),
         dailyTokenUsed: Math.max(usage.reservedTokensToday, usage.actualTokensToday),
         dailyTokenRemaining:
@@ -372,9 +377,7 @@ async function withQuotaUsage(
               ),
         rpmUsed: usage.requestsPerMinuteUsed,
         rpmRemaining:
-          (generation.quota.rpmBudget ??
-            generation.quota.requestsPerMinute ??
-            null) === null
+          (generation.quota.rpmBudget ?? generation.quota.requestsPerMinute ?? null) === null
             ? null
             : Math.max(
                 0,
@@ -384,11 +387,14 @@ async function withQuotaUsage(
       },
     };
   } catch (error) {
-    logger.warn('Failed to resolve generation quota usage snapshot; using baseline quota metadata.', {
-      error: error instanceof Error ? error.message : String(error),
-      provider,
-      model,
-    });
+    logger.warn(
+      'Failed to resolve generation quota usage snapshot; using baseline quota metadata.',
+      {
+        error: error instanceof Error ? error.message : String(error),
+        provider,
+        model,
+      },
+    );
     return generation;
   }
 }

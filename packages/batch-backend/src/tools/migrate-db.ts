@@ -122,7 +122,7 @@ async function main(): Promise<void> {
 if (process.argv[1] === fileURLToPath(import.meta.url)) {
   void main()
     .catch((error: unknown) => {
-      const message = error instanceof Error ? error.stack ?? error.message : String(error);
+      const message = error instanceof Error ? (error.stack ?? error.message) : String(error);
       console.error(message);
       process.exitCode = 1;
     })

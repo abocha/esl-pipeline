@@ -97,7 +97,10 @@ describe('validateTranscriptionConfig', () => {
         config,
         storageConfig,
         promptOptionsLoader: async () => {
-          throw new PromptOptionError('profilePath must reference an allowlisted profile', 'bad_path');
+          throw new PromptOptionError(
+            'profilePath must reference an allowlisted profile',
+            'bad_path',
+          );
         },
       }),
     ).resolves.toBeUndefined();

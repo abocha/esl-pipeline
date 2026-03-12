@@ -2,9 +2,10 @@
 import { request as httpRequest } from 'node:http';
 import { Readable } from 'node:stream';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
+
+import { CONTRACT_VERSIONS, DB_MIGRATION_HEAD } from '@esl-pipeline/contracts';
 import { validateMarkdown } from '@esl-pipeline/md-validator';
 import * as notionAdapterModule from '@esl-pipeline/notion-adapter';
-import { CONTRACT_VERSIONS, DB_MIGRATION_HEAD } from '@esl-pipeline/contracts';
 
 import * as approveJobModule from '../src/application/approve-job.js';
 import * as createDraftModule from '../src/application/create-draft.js';
@@ -20,24 +21,24 @@ import * as jobSummaryModule from '../src/application/job-summary.js';
 import * as listJobsModule from '../src/application/list-jobs.js';
 import * as listRecordingsModule from '../src/application/list-recordings.js';
 import * as materializeDraftModule from '../src/application/materialize-draft.js';
-import * as readinessMetricsModule from '../src/application/readiness-metrics.js';
-import { getVersionMeta } from '../src/application/version-meta.js';
 import * as profileContentModule from '../src/application/profile-content.js';
 import { ProfilePathError } from '../src/application/profile-path.js';
+import * as readinessMetricsModule from '../src/application/readiness-metrics.js';
 import * as retryRecordingModule from '../src/application/retry-recording-transcription.js';
-import * as studentStoreModule from '../src/application/student-profiles-store.js';
 import * as studentBindingsModule from '../src/application/student-profile-bindings.js';
+import * as studentStoreModule from '../src/application/student-profiles-store.js';
 import * as studentSummaryModule from '../src/application/student-summary.js';
 import * as studentTimelineModule from '../src/application/student-timeline.js';
 import * as submitJobModule from '../src/application/submit-job.js';
 import * as templateContentModule from '../src/application/template-content.js';
 import * as updateRecordingTranscriptModule from '../src/application/update-recording-transcript.js';
+import { getVersionMeta } from '../src/application/version-meta.js';
 import { publishJobEvent } from '../src/domain/job-events.js';
 import { publishRecordingEvent } from '../src/domain/recording-events.js';
 import * as recordingRepositoryModule from '../src/domain/recording-repository.js';
+import * as settingsRepositoryModule from '../src/domain/settings-repository.js';
 import { deriveStudentId } from '../src/domain/student-utils.js';
 import * as transcriptRepositoryModule from '../src/domain/transcript-repository.js';
-import * as settingsRepositoryModule from '../src/domain/settings-repository.js';
 import * as loggerModule from '../src/infrastructure/logger.js';
 import * as transcriptionStorageModule from '../src/infrastructure/transcription-storage.js';
 import { createHttpServer } from '../src/transport/http-server.js';
@@ -143,9 +144,9 @@ vi.mock('@esl-pipeline/md-validator', () => {
 });
 
 vi.mock('../src/application/student-profiles-store', async () => {
-  const actual = await vi.importActual<typeof import('../src/application/student-profiles-store.js')>(
-    '../src/application/student-profiles-store.js',
-  );
+  const actual = await vi.importActual<
+    typeof import('../src/application/student-profiles-store.js')
+  >('../src/application/student-profiles-store.js');
   return {
     ...actual,
     listStudentProfiles: vi.fn(),
@@ -212,7 +213,10 @@ vi.mock('../src/application/get-prompt-options.js', () => {
   };
 });
 
-export function describeHttpServerIntegrationSuite(title: string, register: (ctx: any) => void): void {
+export function describeHttpServerIntegrationSuite(
+  title: string,
+  register: (ctx: any) => void,
+): void {
   describe(title, () => {
     let app: Awaited<ReturnType<typeof createHttpServer>>;
     const mockListStudentProfiles = vi.mocked(studentStoreModule.listStudentProfiles);
@@ -224,8 +228,12 @@ export function describeHttpServerIntegrationSuite(title: string, register: (ctx
     const mockGetProfileContent = vi.mocked(profileContentModule.getProfileContent);
     const mockUpsertProfileContent = vi.mocked(profileContentModule.upsertProfileContent);
     const mockDeleteProfileContent = vi.mocked(profileContentModule.deleteProfileContent);
-    const mockListProfileRevisionsForProfile = vi.mocked(profileContentModule.listProfileRevisionsForProfile);
-    const mockGetProfileRevisionForProfile = vi.mocked(profileContentModule.getProfileRevisionForProfile);
+    const mockListProfileRevisionsForProfile = vi.mocked(
+      profileContentModule.listProfileRevisionsForProfile,
+    );
+    const mockGetProfileRevisionForProfile = vi.mocked(
+      profileContentModule.getProfileRevisionForProfile,
+    );
     const mockRestoreProfileRevision = vi.mocked(profileContentModule.restoreProfileRevision);
     const mockActivateProfileRevisionForProfile = vi.mocked(
       profileContentModule.activateProfileRevisionForProfile,

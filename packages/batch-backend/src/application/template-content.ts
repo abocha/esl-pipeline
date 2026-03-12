@@ -3,6 +3,12 @@ import path from 'node:path';
 
 import type { BatchBackendConfig } from '../config/env.js';
 import { loadConfig } from '../config/env.js';
+import {
+  getTemplateById,
+  listTemplates,
+  setTemplateActiveRevision,
+  upsertTemplate,
+} from '../domain/template-repository.js';
 import type {
   TemplateRevisionRecord,
   TemplateRevisionSource,
@@ -16,12 +22,6 @@ import {
   insertTemplateRevision,
   listTemplateRevisions,
 } from '../domain/template-revision-repository.js';
-import {
-  getTemplateById,
-  listTemplates,
-  setTemplateActiveRevision,
-  upsertTemplate,
-} from '../domain/template-repository.js';
 import type { PromptOption } from './prompt-options.js';
 
 const TEMPLATE_EXTENSIONS = new Set(['.md', '.txt']);
@@ -136,9 +136,7 @@ function formatTemplateLabel(templateId: string): string {
 }
 
 function validateTemplateMarker(content: string): void {
-  const hasMarker = content
-    .split(/\r?\n/)
-    .some((line) => line.trim() === TEMPLATE_PROFILE_MARKER);
+  const hasMarker = content.split(/\r?\n/).some((line) => line.trim() === TEMPLATE_PROFILE_MARKER);
 
   if (!hasMarker) {
     throw new TemplateContentError(
@@ -293,7 +291,10 @@ export async function getTemplateContent(
   const template = await dependencies.templates.getById(normalizedTemplateId);
   if (!template?.activeRevisionId) return null;
 
-  const revision = await dependencies.revisions.getById(normalizedTemplateId, template.activeRevisionId);
+  const revision = await dependencies.revisions.getById(
+    normalizedTemplateId,
+    template.activeRevisionId,
+  );
   if (!revision) return null;
 
   return {

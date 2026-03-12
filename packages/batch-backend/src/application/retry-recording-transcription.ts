@@ -1,6 +1,7 @@
+import type { SttProviderId } from '@esl-pipeline/contracts';
+
 import { publishRecordingEvent } from '../domain/recording-events.js';
 import type { RecordingRecord } from '../domain/recording-model.js';
-import type { SttProviderId } from '@esl-pipeline/contracts';
 import { getRecordingById, updateRecordingStatus } from '../domain/recording-repository.js';
 import { createTranscribeQueue } from '../infrastructure/transcribe-queue.js';
 import { type RecordingDto, recordingToDto } from './recording-dto.js';
@@ -20,10 +21,7 @@ export interface RetryRecordingDependencies {
     getById: typeof getRecordingById;
     updateStatus: typeof updateRecordingStatus;
   };
-  enqueue: (payload: {
-    recordingId: string;
-    sttProvider?: SttProviderId;
-  }) => Promise<void>;
+  enqueue: (payload: { recordingId: string; sttProvider?: SttProviderId }) => Promise<void>;
   publishEvent: typeof publishRecordingEvent;
 }
 

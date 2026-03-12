@@ -13,7 +13,9 @@ function parseUrl(value: string, name: string): URL {
   try {
     return new URL(value);
   } catch (error) {
-    throw new Error(`${name} must be a valid URL: ${error instanceof Error ? error.message : String(error)}`);
+    throw new Error(
+      `${name} must be a valid URL: ${error instanceof Error ? error.message : String(error)}`,
+    );
   }
 }
 

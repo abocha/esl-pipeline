@@ -17,7 +17,9 @@ export function formatTimestamp(seconds: number): string {
     .padStart(2, '0')}.${millis.toString().padStart(3, '0')}`;
 }
 
-export function normalizeSegmentEnds<T extends { start?: number; end?: number }>(segments: T[]): T[] {
+export function normalizeSegmentEnds<T extends { start?: number; end?: number }>(
+  segments: T[],
+): T[] {
   return segments.map((segment, index) => {
     if (typeof segment.end === 'number') {
       return segment;

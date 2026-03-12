@@ -117,8 +117,7 @@ async function validatePromptAssets(
   config: BatchBackendConfig,
   promptOptionsLoader: typeof getPromptOptions,
 ): Promise<void> {
-  const bootstrapCommand =
-    'pnpm --filter @esl-pipeline/batch-backend run prompt-assets:bootstrap';
+  const bootstrapCommand = 'pnpm --filter @esl-pipeline/batch-backend run prompt-assets:bootstrap';
 
   try {
     const options = await promptOptionsLoader({ config });

@@ -134,7 +134,7 @@ WHERE j.student_id IS NULL
   AND COALESCE(r.student_id, p.student_id, rp.student_id, d.student_id, pd.student_id, rd.student_id) IS NOT NULL;
 ```
 
-   - drift rows should be `0`:
+- drift rows should be `0`:
 
 ```sql
 SELECT COUNT(*)::bigint AS denorm_drift_rows
@@ -164,8 +164,8 @@ WHERE j.student_id IS NOT NULL
   );
 ```
 
-   - Retirement gate note:
-     - These two reconciliation counts are the unblock checks for LR-006 (retiring legacy student-join fallback in job queries).
+- Retirement gate note:
+  - These two reconciliation counts are the unblock checks for LR-006 (retiring legacy student-join fallback in job queries).
 
 ## Step 5 - Rollback Procedure
 

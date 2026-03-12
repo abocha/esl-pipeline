@@ -83,7 +83,8 @@ export function resolveGenerationCandidates(args: {
   let fallbackRank = 0;
 
   if (args.modelOverride && args.modelOverride.trim().length > 0) {
-    const overrideProvider = args.providerOverride ?? prioritizedProviders[0] ?? args.config.defaultProvider;
+    const overrideProvider =
+      args.providerOverride ?? prioritizedProviders[0] ?? args.config.defaultProvider;
     candidates.push({
       provider: overrideProvider,
       model: args.modelOverride.trim(),
@@ -94,7 +95,9 @@ export function resolveGenerationCandidates(args: {
 
   for (const provider of prioritizedProviders) {
     for (const model of getModelLadderForProvider(args.config, provider)) {
-      if (candidates.some((candidate) => candidate.provider === provider && candidate.model === model)) {
+      if (
+        candidates.some((candidate) => candidate.provider === provider && candidate.model === model)
+      ) {
         continue;
       }
       candidates.push({ provider, model, fallbackRank });
@@ -160,10 +163,13 @@ export function buildQuotaSnapshot(args: {
     dailyTokenBudget = args.config.providers.openai.dailyTokenBudget ?? null;
   } else if (args.provider === 'google_ai_studio') {
     const googleBaseline = getGoogleQuotaBaseline(args.model);
-    requestsPerMinute = args.config.providers.googleAiStudio.rpmBudget ?? googleBaseline.requestsPerMinute ?? null;
+    requestsPerMinute =
+      args.config.providers.googleAiStudio.rpmBudget ?? googleBaseline.requestsPerMinute ?? null;
     tokensPerMinute = googleBaseline.tokensPerMinute ?? null;
     requestsPerDay =
-      args.config.providers.googleAiStudio.dailyRequestBudget ?? googleBaseline.requestsPerDay ?? null;
+      args.config.providers.googleAiStudio.dailyRequestBudget ??
+      googleBaseline.requestsPerDay ??
+      null;
   } else {
     requestsPerMinute = args.config.providers.openrouter.rpmBudget ?? null;
     requestsPerDay = args.config.providers.openrouter.dailyRequestBudget ?? null;
@@ -171,7 +177,9 @@ export function buildQuotaSnapshot(args: {
   }
 
   const usedRequestsToday = usage?.requestsToday ?? null;
-  const usedTokensToday = usage ? Math.max(usage.reservedTokensToday, usage.actualTokensToday) : null;
+  const usedTokensToday = usage
+    ? Math.max(usage.reservedTokensToday, usage.actualTokensToday)
+    : null;
   const rpmUsed = usage?.requestsPerMinuteUsed ?? null;
 
   return {
@@ -187,24 +195,18 @@ export function buildQuotaSnapshot(args: {
     dailyRequestBudget: requestsPerDay,
     dailyRequestUsed: usedRequestsToday,
     dailyRequestRemaining:
-      requestsPerDay === undefined ||
-      requestsPerDay === null ||
-      usedRequestsToday === null
+      requestsPerDay === undefined || requestsPerDay === null || usedRequestsToday === null
         ? null
         : Math.max(0, requestsPerDay - usedRequestsToday),
     dailyTokenUsed: usedTokensToday,
     dailyTokenRemaining:
-      dailyTokenBudget === undefined ||
-      dailyTokenBudget === null ||
-      usedTokensToday === null
+      dailyTokenBudget === undefined || dailyTokenBudget === null || usedTokensToday === null
         ? null
         : Math.max(0, dailyTokenBudget - usedTokensToday),
     rpmBudget: requestsPerMinute,
     rpmUsed,
     rpmRemaining:
-      requestsPerMinute === undefined ||
-      requestsPerMinute === null ||
-      rpmUsed === null
+      requestsPerMinute === undefined || requestsPerMinute === null || rpmUsed === null
         ? null
         : Math.max(0, requestsPerMinute - rpmUsed),
   };
@@ -224,7 +226,10 @@ export function buildGenerationOptionsPayload(args: {
 }): GenerationOptionsPayload {
   const providers = resolveGenerationProviderOrder(args.config);
   const modelOptions: GenerationModelOption[] = [];
-  const metadataByProviderModel = new Map<string, Pick<GenerationModelOption, 'tier' | 'defaultSelected'>>();
+  const metadataByProviderModel = new Map<
+    string,
+    Pick<GenerationModelOption, 'tier' | 'defaultSelected'>
+  >();
 
   for (const provider of providers) {
     const models = getModelLadderForProvider(args.config, provider);

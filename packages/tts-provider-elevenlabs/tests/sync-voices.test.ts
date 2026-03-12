@@ -1,7 +1,6 @@
 import { mkdir, mkdtemp, readFile, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
-
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const originalCwd = process.cwd();
@@ -18,7 +17,11 @@ describe.sequential('syncVoices path resolution', () => {
 
   it('writes default output to workspace-root orchestrator catalog path', async () => {
     const workspace = await mkdtemp(join(tmpdir(), 'tts-sync-'));
-    await writeFile(join(workspace, 'pnpm-workspace.yaml'), 'packages:\n  - "packages/*"\n', 'utf8');
+    await writeFile(
+      join(workspace, 'pnpm-workspace.yaml'),
+      'packages:\n  - "packages/*"\n',
+      'utf8',
+    );
     await writeFile(join(workspace, 'package.json'), '{"name":"workspace","private":true}', 'utf8');
     await mkdir(join(workspace, 'packages', 'tts-provider-elevenlabs'), { recursive: true });
     await writeFile(join(workspace, 'packages', 'tts-provider-elevenlabs', '.gitkeep'), '', 'utf8');
@@ -46,7 +49,11 @@ describe.sequential('syncVoices path resolution', () => {
 
   it('uses explicit --out destination as-is', async () => {
     const workspace = await mkdtemp(join(tmpdir(), 'tts-sync-'));
-    await writeFile(join(workspace, 'pnpm-workspace.yaml'), 'packages:\n  - "packages/*"\n', 'utf8');
+    await writeFile(
+      join(workspace, 'pnpm-workspace.yaml'),
+      'packages:\n  - "packages/*"\n',
+      'utf8',
+    );
     await writeFile(join(workspace, 'package.json'), '{"name":"workspace","private":true}', 'utf8');
     await mkdir(join(workspace, 'packages', 'tts-provider-elevenlabs'), { recursive: true });
     await writeFile(join(workspace, 'packages', 'tts-provider-elevenlabs', '.gitkeep'), '', 'utf8');

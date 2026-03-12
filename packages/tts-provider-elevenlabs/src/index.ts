@@ -48,7 +48,8 @@ import type {
   BuildStudyTextResult,
 } from './types.js';
 
-const DEFAULT_MODEL_ID = process.env.ESL_TTS_PROVIDER_ELEVENLABS_MODEL_ID ?? 'eleven_multilingual_v2';
+const DEFAULT_MODEL_ID =
+  process.env.ESL_TTS_PROVIDER_ELEVENLABS_MODEL_ID ?? 'eleven_multilingual_v2';
 type TextToSpeechConvertBody = Parameters<
   ReturnType<typeof getElevenClient>['textToSpeech']['convert']
 >[1];
@@ -68,9 +69,7 @@ function isTtsDebugEnabled(): boolean {
 }
 
 function resolveTtsProvider(provider?: string): typeof DEFAULT_TTS_PROVIDER {
-  const raw = (provider ?? '')
-    .trim()
-    .toLowerCase();
+  const raw = (provider ?? '').trim().toLowerCase();
   if (!raw) return DEFAULT_TTS_PROVIDER;
   if (raw === 'elevenlabs') return 'elevenlabs';
   throw new ConfigurationError(
@@ -93,7 +92,7 @@ async function ensureFileExists(path: string): Promise<void> {
   }
   throw new InfrastructureError(
     `Expected output file to exist but it was missing: ${path}. ` +
-    `This likely indicates a failed TTS synthesis or an unexpected output path.`,
+      `This likely indicates a failed TTS synthesis or an unexpected output path.`,
   );
 }
 
@@ -282,7 +281,7 @@ function toDialogueInputs(
     if (!voiceId) {
       throw new ConfigurationError(
         `No voice mapping found for speaker "${speaker}". ` +
-        `Available speakers: ${[...voiceAssignments.keys()].join(', ') || '(none)'}`,
+          `Available speakers: ${[...voiceAssignments.keys()].join(', ') || '(none)'}`,
       );
     }
     const sanitizedText = cleanSpeechText(seg.text);
@@ -434,8 +433,13 @@ export async function buildStudyTextMp3(
 
   // Route to appropriate synthesis path
   if (selectedStrategy === 'dialogue') {
-    const apiKey = process.env.ESL_TTS_PROVIDER_ELEVENLABS_API_KEY || process.env.ESL_TTS_PROVIDER_ELEVENLABS_API_TOKEN || '';
-    const outputDir = resolve(opts.outPath || (input.mdPath ? dirname(input.mdPath) : process.cwd()));
+    const apiKey =
+      process.env.ESL_TTS_PROVIDER_ELEVENLABS_API_KEY ||
+      process.env.ESL_TTS_PROVIDER_ELEVENLABS_API_TOKEN ||
+      '';
+    const outputDir = resolve(
+      opts.outPath || (input.mdPath ? dirname(input.mdPath) : process.cwd()),
+    );
     const inputs = toDialogueInputs(segments, speakerVoiceMap);
     const hash = buildDialogueHash(inputs, {
       modelId: 'eleven_v3',
@@ -526,7 +530,10 @@ export async function buildStudyTextMp3(
         return {
           path: targetPath,
           hash,
-          duration: calculateApproxDuration(cachedStats.size, resolveOutputFormat(opts.outputFormat)),
+          duration: calculateApproxDuration(
+            cachedStats.size,
+            resolveOutputFormat(opts.outputFormat),
+          ),
           provider: DEFAULT_TTS_PROVIDER,
           voices: voiceSummaries,
           cachedCharacters: normalizedText.length,
@@ -594,7 +601,7 @@ export async function buildStudyTextMp3(
     if (!voiceId) {
       throw new ConfigurationError(
         `No ElevenLabs voice could be resolved for line "${segment.raw}". ` +
-        `Ensure frontmatter speaker profiles or voices.yml provide enough information.`,
+          `Ensure frontmatter speaker profiles or voices.yml provide enough information.`,
       );
     }
 
@@ -895,8 +902,8 @@ function resolveStudyTextSegments(lines: string[], frontmatter: Frontmatter): St
   const segments: StudyTextSegment[] = [];
   const labelOrder = Array.isArray(frontmatter.speaker_labels)
     ? frontmatter.speaker_labels
-      .map((label) => (typeof label === 'string' ? cleanSpeakerName(label) : ''))
-      .filter(Boolean)
+        .map((label) => (typeof label === 'string' ? cleanSpeakerName(label) : ''))
+        .filter(Boolean)
     : [];
   const nonNarratorFallback = labelOrder.find((label) => label.toLowerCase() !== 'narrator');
   const singleFallback = labelOrder.length === 1 ? labelOrder[0] : undefined;
@@ -998,11 +1005,7 @@ class SynthesisRuntimeError extends InfrastructureError {
   readonly category: VoiceProviderErrorCategory;
   readonly retryable: boolean;
 
-  constructor(args: {
-    message: string;
-    category: VoiceProviderErrorCategory;
-    retryable: boolean;
-  }) {
+  constructor(args: { message: string; category: VoiceProviderErrorCategory; retryable: boolean }) {
     super(args.message);
     this.name = 'SynthesisRuntimeError';
     this.category = args.category;

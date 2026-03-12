@@ -4,13 +4,13 @@ import { type NewAssignmentFlags, type RerunFlags } from '@esl-pipeline/orchestr
 import { type BatchBackendConfig, loadConfig } from '../config/env.js';
 import { getFfmpegSemaphore } from './ffmpeg-semaphore.js';
 import { logger as rootLogger } from './logger.js';
-import { applyUserSettingsToEnv } from './pipeline-worker-env.js';
-import { toWorkerV2FailureError } from './pipeline-worker-v2.js';
 import {
   type RunAssignmentPayload,
   type RunRerunAssignmentPayload,
   getPipeline,
 } from './orchestrator-service.js';
+import { applyUserSettingsToEnv } from './pipeline-worker-env.js';
+import { toWorkerV2FailureError } from './pipeline-worker-v2.js';
 
 type WorkerExecutionMode = 'new_assignment' | 'rerun_assignment';
 
@@ -170,10 +170,7 @@ async function runAssignmentPipeline(
         };
       }>;
     }
-  ).executeNewAssignmentV2(
-    { assignment: flags },
-    { dependencies: { signal } },
-  );
+  ).executeNewAssignmentV2({ assignment: flags }, { dependencies: { signal } });
   if (!result.ok) {
     throw toWorkerV2FailureError(result.error, 'orchestrator v2 newAssignment failed');
   }
@@ -227,10 +224,7 @@ async function runRerunPipeline(
         };
       }>;
     }
-  ).executeRerunAssignmentV2(
-    { assignment: flags },
-    { dependencies: { signal } },
-  );
+  ).executeRerunAssignmentV2({ assignment: flags }, { dependencies: { signal } });
   if (!result.ok) {
     throw toWorkerV2FailureError(result.error, 'orchestrator v2 rerunAssignment failed');
   }

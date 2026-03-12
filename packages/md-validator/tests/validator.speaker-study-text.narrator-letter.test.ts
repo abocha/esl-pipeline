@@ -1,5 +1,6 @@
-import { describeMdValidatorSuite } from './validator.test-harness.js';
 import { expect, it } from 'vitest';
+
+import { describeMdValidatorSuite } from './validator.test-harness.js';
 
 describeMdValidatorSuite(
   'md-validator [speaker-and-study-text]',

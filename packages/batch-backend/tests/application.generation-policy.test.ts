@@ -1,12 +1,14 @@
 import { describe, expect, it } from 'vitest';
 
-import type { BatchBackendConfig } from '../src/config/env.js';
 import {
   buildGenerationOptionsPayload,
   resolveGenerationCandidates,
 } from '../src/application/generation-policy.js';
+import type { BatchBackendConfig } from '../src/config/env.js';
 
-function buildConfig(overrides: Partial<BatchBackendConfig['generation']> = {}): BatchBackendConfig['generation'] {
+function buildConfig(
+  overrides: Partial<BatchBackendConfig['generation']> = {},
+): BatchBackendConfig['generation'] {
   return {
     defaultProvider: 'openai',
     fallbackProviders: ['google_ai_studio', 'openrouter'],
@@ -69,10 +71,16 @@ describe('application/generation-policy', () => {
     const options = buildGenerationOptionsPayload({ config });
     const candidates = resolveGenerationCandidates({ config });
 
-    expect(options.modelOptions.map((option) => option.fallbackRank)).toEqual(
-      [...options.modelOptions.keys()],
-    );
-    expect(options.modelOptions.map(({ provider, id, fallbackRank }) => ({ provider, id, fallbackRank }))).toEqual(
+    expect(options.modelOptions.map((option) => option.fallbackRank)).toEqual([
+      ...options.modelOptions.keys(),
+    ]);
+    expect(
+      options.modelOptions.map(({ provider, id, fallbackRank }) => ({
+        provider,
+        id,
+        fallbackRank,
+      })),
+    ).toEqual(
       candidates.map(({ provider, model, fallbackRank }) => ({
         provider,
         id: model,

@@ -1,9 +1,16 @@
 import type { Message, Update } from '@grammyjs/types';
 
+import { type CommandRegistry, createCommandRegistry, parseCommandText } from './commands.js';
 import { formatCommandError } from './formatter.js';
-import type { AuditLogger, BackendClient, BotConfig, CommandContext, TelegramMessenger, TopicRouter } from './types.js';
-import { createCommandRegistry, parseCommandText, type CommandRegistry } from './commands.js';
 import type { TelegramClient } from './telegram-client.js';
+import type {
+  AuditLogger,
+  BackendClient,
+  BotConfig,
+  CommandContext,
+  TelegramMessenger,
+  TopicRouter,
+} from './types.js';
 
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));

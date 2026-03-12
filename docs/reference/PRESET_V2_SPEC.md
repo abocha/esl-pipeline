@@ -111,26 +111,26 @@ type PresetTrack = 'general-english' | 'ielts' | 'teens' | 'custom';
 type CefrLevel = 'A1' | 'A2' | 'B1' | 'B2' | 'C1' | 'C2';
 
 interface LearningPresetV2 {
-  id: string;                  // stable key
-  version: string;             // semantic or date-based version
-  alias?: string;              // stable pointer label, e.g. "current"
-  track: PresetTrack;          // MVP content: general-english only
-  title: string;               // human-friendly label
+  id: string; // stable key
+  version: string; // semantic or date-based version
+  alias?: string; // stable pointer label, e.g. "current"
+  track: PresetTrack; // MVP content: general-english only
+  title: string; // human-friendly label
   status: 'draft' | 'active' | 'deprecated';
-  promptTemplate: string;      // generation prompt body or template ref
-  promptVariables: string[];   // variables expected by template
-  cefrSupport?: CefrLevel[];   // plumbing-ready even if content-limited in MVP
+  promptTemplate: string; // generation prompt body or template ref
+  promptVariables: string[]; // variables expected by template
+  cefrSupport?: CefrLevel[]; // plumbing-ready even if content-limited in MVP
   defaultCefr?: CefrLevel;
   outputSchema: AssignmentOutputSchemaV2;
-  qualityNotes?: string;       // pedagogic guidance
+  qualityNotes?: string; // pedagogic guidance
   author: string;
   updatedAt: string;
 }
 
 interface AssignmentOutputSchemaV2 {
-  requiredSections: string[];  // e.g. warmup, vocab, grammar, speaking, homework
+  requiredSections: string[]; // e.g. warmup, vocab, grammar, speaking, homework
   optionalSections?: string[];
-  validationHints?: string[];  // content quality constraints
+  validationHints?: string[]; // content quality constraints
 }
 ```
 
