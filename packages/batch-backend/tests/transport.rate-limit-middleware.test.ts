@@ -3,11 +3,13 @@
 // Tests for rate limiting middleware covering Redis-based rate limiting,
 // burst handling, and middleware integration.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import type { Redis } from 'ioredis';
 
+import { loadConfig } from '../src/config/env.js';
 import { createRedisClient } from '../src/infrastructure/redis.js';
 import {
+  type RateLimiterRedisClient,
   RateLimiterService,
+  createRateLimiterService,
   createUploadRateLimitMiddleware,
 } from '../src/transport/rate-limit-middleware.js';
 
@@ -18,38 +20,53 @@ vi.mock('../src/infrastructure/redis', () => ({
 
 // Mock config loading
 vi.mock('../src/config/env', () => ({
-  loadConfig: vi.fn(() => ({
-    redis: { enabled: true },
-    security: {
-      uploadRateLimit: 10,
-      uploadBurstLimit: 20,
-      enableRateLimiting: true,
-    },
-  })),
+  loadConfig: vi.fn(),
 }));
+
+interface MockRedisClient {
+  eval: ReturnType<typeof vi.fn>;
+  evalsha: ReturnType<typeof vi.fn>;
+  script: ReturnType<typeof vi.fn>;
+  zcard: ReturnType<typeof vi.fn>;
+  ping: ReturnType<typeof vi.fn>;
+}
+
+function createMockRedisClient(): MockRedisClient {
+  return {
+    eval: vi.fn(),
+    evalsha: vi.fn(),
+    script: vi.fn(),
+    zcard: vi.fn(),
+    ping: vi.fn().mockResolvedValue('PONG'),
+  };
+}
+
+function setRateLimiterConfig(overrides?: {
+  redisEnabled?: boolean;
+  uploadRateLimit?: number;
+  uploadBurstLimit?: number;
+  enableRateLimiting?: boolean;
+}) {
+  vi.mocked(loadConfig).mockReturnValue({
+    redis: { enabled: overrides?.redisEnabled ?? true },
+    security: {
+      uploadRateLimit: overrides?.uploadRateLimit ?? 10,
+      uploadBurstLimit: overrides?.uploadBurstLimit ?? 20,
+      enableRateLimiting: overrides?.enableRateLimiting ?? true,
+    },
+  } as unknown as ReturnType<typeof loadConfig>);
+}
 
 describe('RateLimiterService', () => {
   let rateLimiter: RateLimiterService;
-  let mockRedis: {
-    eval: ReturnType<typeof vi.fn>;
-    evalsha: ReturnType<typeof vi.fn>;
-    script: ReturnType<typeof vi.fn>;
-    zcard: ReturnType<typeof vi.fn>;
-  };
-  const asRedis = (value: unknown): Redis => value as Redis;
+  let mockRedis: MockRedisClient;
 
   beforeEach(() => {
-    mockRedis = {
-      eval: vi.fn(),
-      evalsha: vi.fn(),
-      script: vi.fn(),
-      zcard: vi.fn(),
-    };
-
-    (createRedisClient as unknown as ReturnType<typeof vi.fn>).mockReturnValue(asRedis(mockRedis));
+    mockRedis = createMockRedisClient();
+    setRateLimiterConfig();
 
     // Create with Redis enabled
-    rateLimiter = new RateLimiterService(asRedis(mockRedis), {
+    rateLimiter = new RateLimiterService(mockRedis as unknown as RateLimiterRedisClient, {
       windowSize: 60 * 1000, // 1 minute
       maxRequests: 10,
       burstLimit: 20,
@@ -187,27 +204,30 @@ describe('RateLimiterService', () => {
 
 describe('Rate Limit Middleware', () => {
   let rateLimiter: RateLimiterService;
-  let mockRedis: {
-    eval: ReturnType<typeof vi.fn>;
-    evalsha: ReturnType<typeof vi.fn>;
-    script: ReturnType<typeof vi.fn>;
-    zcard: ReturnType<typeof vi.fn>;
-  };
-  const asRedis = (value: unknown): Redis => value as Redis;
+  let mockRedis: MockRedisClient;
 
   beforeEach(() => {
-    mockRedis = {
-      eval: vi.fn(),
-      evalsha: vi.fn(),
-      script: vi.fn(),
-      zcard: vi.fn(),
-    };
+    mockRedis = createMockRedisClient();
+    setRateLimiterConfig();
+  });
 
-    (createRedisClient as unknown as ReturnType<typeof vi.fn>).mockReturnValue(asRedis(mockRedis));
+  it('returns no-op limiter when rate limiting is disabled without requiring Redis calls', async () => {
+    setRateLimiterConfig({ enableRateLimiting: false });
+    vi.mocked(createRedisClient).mockImplementation(() => {
+      throw new Error('createRedisClient should not be called when rate limiting is disabled');
+    });
+
+    const noOpLimiter = await createRateLimiterService();
+    const result = await noOpLimiter.checkRateLimit('user:123');
+
+    expect(result.allowed).toBe(true);
+    expect(result.limit).toBe(10);
+    expect(result.count).toBe(0);
+    expect(createRedisClient).not.toHaveBeenCalled();
   });
 
   it('should handle rate limit exceeded', async () => {
-    rateLimiter = new RateLimiterService(asRedis(mockRedis), {
+    rateLimiter = new RateLimiterService(mockRedis as unknown as RateLimiterRedisClient, {
       windowSize: 60 * 1000,
       maxRequests: 10,
       burstLimit: 20,
@@ -224,7 +244,7 @@ describe('Rate Limit Middleware', () => {
   });
 
   it('should use IP address when no user authenticated', async () => {
-    rateLimiter = new RateLimiterService(asRedis(mockRedis), {
+    rateLimiter = new RateLimiterService(mockRedis as unknown as RateLimiterRedisClient, {
       windowSize: 60 * 1000,
       maxRequests: 10,
       burstLimit: 20,
@@ -263,7 +283,9 @@ describe('Rate Limit Middleware', () => {
     });
     const middleware = createUploadRateLimitMiddleware({
       checkRateLimit,
-    } as unknown as RateLimiterService);
+      getUsageStats: vi.fn(),
+      cleanupExpired: vi.fn(),
+    });
 
     const mockRequest = {
       headers: {
@@ -292,7 +314,9 @@ describe('Rate Limit Middleware', () => {
     });
     const middleware = createUploadRateLimitMiddleware({
       checkRateLimit,
-    } as unknown as RateLimiterService);
+      getUsageStats: vi.fn(),
+      cleanupExpired: vi.fn(),
+    });
 
     const mockRequest = {
       headers: {

@@ -5,6 +5,8 @@ import { z } from 'zod';
 
 import type { EditMetadataAction, JobActionResult } from '../../domain/job-actions.js';
 import { JobActionType } from '../../domain/job-actions.js';
+import { publishJobEvent } from '../../domain/job-events.js';
+import type { JobRecord } from '../../domain/job-model.js';
 import { getJobById, updateJobMetadata } from '../../domain/job-repository.js';
 
 const editMetadataSchema = z.object({
@@ -20,6 +22,37 @@ const editMetadataSchema = z.object({
   voiceId: z.string().min(1).optional(),
   voiceAccent: z.string().min(1).optional(),
 });
+type EditMetadataOverrides = z.infer<typeof editMetadataSchema>;
+
+function getEffectiveMetadataOverrides(
+  job: JobRecord,
+  overrides: EditMetadataOverrides,
+): EditMetadataOverrides {
+  const effective: EditMetadataOverrides = {};
+  const assignIfChanged = <K extends keyof EditMetadataOverrides>(
+    key: K,
+    current: EditMetadataOverrides[K],
+  ): void => {
+    const next = overrides[key];
+    if (next !== undefined && next !== current) {
+      effective[key] = next;
+    }
+  };
+
+  assignIfChanged('learningPresetId', job.learningPresetId ?? undefined);
+  assignIfChanged('notionDatabase', job.notionDatabase ?? undefined);
+  assignIfChanged('publishTarget', job.publishTarget ?? undefined);
+  assignIfChanged('withTts', job.withTts ?? undefined);
+  assignIfChanged('forceTts', job.forceTts ?? undefined);
+  assignIfChanged('ttsStrategy', job.ttsStrategy ?? undefined);
+  assignIfChanged('ttsProvider', job.ttsProvider ?? undefined);
+  assignIfChanged('googleTtsModel', job.googleTtsModel ?? undefined);
+  assignIfChanged('upload', job.upload ?? undefined);
+  assignIfChanged('voiceId', job.voiceId ?? undefined);
+  assignIfChanged('voiceAccent', job.voiceAccent ?? undefined);
+
+  return effective;
+}
 
 /**
  * Edit job metadata without rerunning the job
@@ -28,12 +61,11 @@ const editMetadataSchema = z.object({
  * @param action - Edit metadata action with new values
  * @returns Action result indicating success/failure
  *
- * TODO: Implement actual metadata editing:
- * 1. Validate new metadata values
- * 2. Update job record in database
- * 3. Optionally update manifest file if it exists
- * 4. Emit job_state_changed event
- * 5. Return success with updated job data
+ * Side-effect contract:
+ * 1. Persist effective metadata overrides in `jobs` while the job is `awaiting_approval`.
+ * 2. Emit `job_state_changed` with the updated record so subscribers refresh approval screens.
+ * 3. Treat empty payloads and unchanged overrides as successful no-op requests.
+ * 4. Do not mutate manifest artifacts here; approval/rerun flow handles manifest regeneration.
  */
 export async function editMetadata(
   jobId: string,
@@ -75,11 +107,22 @@ export async function editMetadata(
     };
   }
 
-  const overrides = parsed.data;
-  if (Object.keys(overrides).length === 0) {
+  const requestedOverrides = parsed.data;
+  if (Object.keys(requestedOverrides).length === 0) {
     return {
       success: true,
       message: 'No metadata changes requested',
+      jobId,
+      actionType: JobActionType.EDIT_METADATA,
+      timestamp: new Date(),
+    };
+  }
+
+  const overrides = getEffectiveMetadataOverrides(job, requestedOverrides);
+  if (Object.keys(overrides).length === 0) {
+    return {
+      success: true,
+      message: 'No metadata changes detected',
       jobId,
       actionType: JobActionType.EDIT_METADATA,
       timestamp: new Date(),
@@ -112,6 +155,8 @@ export async function editMetadata(
       error: 'not_found',
     };
   }
+
+  publishJobEvent({ type: 'job_state_changed', job: updated });
 
   return {
     success: true,

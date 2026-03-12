@@ -26,7 +26,7 @@ This backlog is intended to be executed incrementally with safe, test-backed pat
 
 | Wave | Scope | Status |
 | ---- | ----- | ------ |
-| Wave 1 | `B5`, `B3`, `B4` | Planned |
+| Wave 1 | `B5`, `B3`, `B4` | Implemented (pending review) |
 | Wave 2 | `B6`, `B1` | Planned |
 | Wave 3 | `B2` | Planned |
 

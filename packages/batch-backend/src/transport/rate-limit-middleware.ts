@@ -4,7 +4,7 @@
 // Implements per-user rate limiting with burst support for optimal UX while maintaining security.
 // Includes comprehensive security event logging for all rate limiting operations.
 import { FastifyReply, FastifyRequest } from 'fastify';
-import { Redis } from 'ioredis';
+import type { Redis } from 'ioredis';
 
 import { loadConfig } from '../config/env.js';
 import { logger } from '../infrastructure/logger.js';
@@ -31,6 +31,22 @@ export interface RateLimitConfig {
   burstLimit: number; // Maximum burst requests allowed
   burstWindow: number; // Burst window in milliseconds
   keyPrefix: string; // Redis key prefix for rate limiting
+}
+
+export interface UploadRateLimiter {
+  checkRateLimit(identifier: string): Promise<RateLimitResult>;
+  getUsageStats(identifier: string): Promise<{
+    mainWindow: { count: number; windowStart: number; windowEnd: number };
+    burstWindow: { count: number; windowStart: number; windowEnd: number };
+  }>;
+  cleanupExpired(): Promise<void>;
+}
+
+export interface RateLimiterRedisClient {
+  zcard: Redis['zcard'];
+  eval: Redis['eval'];
+  evalsha?: Redis['evalsha'];
+  script?: Redis['script'];
 }
 
 const RATE_LIMIT_SCRIPT = `
@@ -109,14 +125,14 @@ export class RateLimitError extends Error {
   }
 }
 
-export class RateLimiterService {
-  private redis: Redis;
+export class RedisRateLimiter implements UploadRateLimiter {
+  private redis: RateLimiterRedisClient;
   private config: RateLimitConfig;
   private securityLogger: SecurityLogger;
   private rateLimitScriptSha: string | null = null;
   private requestCounter = 0;
 
-  constructor(redis: Redis, config: RateLimitConfig, securityLogger?: SecurityLogger) {
+  constructor(redis: RateLimiterRedisClient, config: RateLimitConfig, securityLogger?: SecurityLogger) {
     this.redis = redis;
     this.config = config;
     this.securityLogger = securityLogger || this.createDefaultSecurityLogger();
@@ -316,11 +332,7 @@ export class RateLimiterService {
   private async runRateLimitScript(keys: [string, string], args: string[]): Promise<unknown> {
     const numKeys = keys.length;
     const scriptArgs = [...keys, ...args] as [string, string, ...string[]];
-    const redisWithScript = this.redis as Redis & {
-      evalsha?: (...params: unknown[]) => Promise<unknown>;
-      eval?: (...params: unknown[]) => Promise<unknown>;
-      script?: (...params: unknown[]) => Promise<unknown>;
-    };
+    const redisWithScript = this.redis;
 
     if (this.rateLimitScriptSha && redisWithScript.evalsha) {
       try {
@@ -442,10 +454,12 @@ export class RateLimiterService {
   }
 }
 
+export { RedisRateLimiter as RateLimiterService };
+
 /**
  * Create rate limiter service from configuration
  */
-export async function createRateLimiterService(): Promise<RateLimiterService> {
+export async function createRateLimiterService(): Promise<UploadRateLimiter> {
   const REDIS_READY_TIMEOUT_MS = 300;
   const config = loadConfig();
 
@@ -494,7 +508,7 @@ export async function createRateLimiterService(): Promise<RateLimiterService> {
 
     logger.info('Redis connection established successfully for rate limiting');
 
-    return new RateLimiterService(redis, rateLimitConfig);
+    return new RedisRateLimiter(redis, rateLimitConfig);
   } catch (error) {
     // Enhanced error handling for Redis failures
     const errorMessage = error instanceof Error ? error.message : String(error);
@@ -516,21 +530,12 @@ export async function createRateLimiterService(): Promise<RateLimiterService> {
  * No-op rate limiter that always allows requests (for when rate limiting is disabled)
  * CRITICAL FIX: Enhanced NoOp mode error handling and logging
  */
-class NoOpRateLimiter extends RateLimiterService {
+export class NoOpRateLimiter implements UploadRateLimiter {
   private static readonly MAX_REQUESTS = 1000;
   private static readonly WINDOW_SIZE = 60_000;
   private readonly fallbackActive: boolean = true;
 
   constructor() {
-    // Create a dummy redis client to satisfy constructor
-    super({} as Redis, {
-      windowSize: NoOpRateLimiter.WINDOW_SIZE,
-      maxRequests: NoOpRateLimiter.MAX_REQUESTS,
-      burstLimit: 2000,
-      burstWindow: 10_000,
-      keyPrefix: 'noop',
-    });
-
     // Log that NoOp mode is active for debugging
     logger.warn('NoOp rate limiter activated', {
       event: 'noop_rate_limiter_active',
@@ -540,7 +545,7 @@ class NoOpRateLimiter extends RateLimiterService {
     });
   }
 
-  override async checkRateLimit(identifier: string): Promise<RateLimitResult> {
+  async checkRateLimit(identifier: string): Promise<RateLimitResult> {
     // CRITICAL FIX: Log NoOp rate limit check for monitoring
     logger.debug('NoOp rate limiter check', {
       event: 'noop_rate_limit_check',
@@ -560,7 +565,7 @@ class NoOpRateLimiter extends RateLimiterService {
     };
   }
 
-  override async getUsageStats(identifier: string) {
+  async getUsageStats(identifier: string) {
     // CRITICAL FIX: Return consistent stats even in NoOp mode
     const now = Date.now();
     const windowStart = Math.floor(now / NoOpRateLimiter.WINDOW_SIZE) * NoOpRateLimiter.WINDOW_SIZE;
@@ -585,7 +590,7 @@ class NoOpRateLimiter extends RateLimiterService {
     };
   }
 
-  override async cleanupExpired(): Promise<void> {
+  async cleanupExpired(): Promise<void> {
     // CRITICAL FIX: Log cleanup attempts even though we do nothing
     logger.debug('NoOp rate limiter cleanup (no-op)', {
       event: 'noop_rate_limit_cleanup',
@@ -595,28 +600,13 @@ class NoOpRateLimiter extends RateLimiterService {
     // Intentionally do nothing - Redis operations are not available
     return;
   }
-
-  /**
-   * CRITICAL FIX: Enhanced error handling for NoOp mode operations
-   */
-  protected async handleOperation(operation: string, error: Error): Promise<void> {
-    logger.warn(`NoOp rate limiter operation failed (expected in fallback mode)`, {
-      event: 'noop_operation_failed',
-      operation,
-      error: error.message,
-      fallbackMode: this.fallbackActive,
-      suggestion: 'This is expected when Redis is unavailable',
-    });
-
-    // Don't re-throw errors in NoOp mode to maintain availability
-  }
 }
 
 /**
  * Fastify middleware for rate limiting upload endpoints
  * CRITICAL FIX: Proper HTTP response handling for rate limits
  */
-export function createUploadRateLimitMiddleware(rateLimiter: RateLimiterService) {
+export function createUploadRateLimitMiddleware(rateLimiter: UploadRateLimiter) {
   return async function rateLimitMiddleware(
     request: FastifyRequest,
     reply: FastifyReply,
