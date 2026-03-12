@@ -16,19 +16,19 @@ This backlog is intended to be executed incrementally with safe, test-backed pat
 | B5 | Decouple NoOp and Redis rate limiter implementations | Current inheritance requires dummy Redis wiring and weakens type clarity. | S | L | Introduce a small rate-limiter interface with independent `RedisRateLimiter` and `NoOpRateLimiter`. |
 | B6 | Reduce `as any` test typing debt in batch-backend | Type casts in tests can hide real contract drift and reduce refactor confidence. | M | L | Replace cast-heavy mocks with typed helpers for Redis, DB, and transport dependencies. |
 
-## Wave Plans
+## Wave Plans (Completed)
 
-1. [Wave 1 - Quick ROI](./wave-1-quick-roi.md): `B5`, `B3`, `B4`
-2. [Wave 2 - Maintainability](./wave-2-maintainability.md): `B6`, `B1`
-3. [Wave 3 - Schema Unification](./wave-3-schema-unification.md): `B2`
+1. [Wave 1 - Quick ROI](../completed/wave-1-quick-roi.md): `B5`, `B3`, `B4`
+2. [Wave 2 - Maintainability](../completed/wave-2-maintainability.md): `B6`, `B1`
+3. [Wave 3 - Schema Unification](../completed/wave-3-schema-unification.md): `B2`
 
 ## Wave Status
 
 | Wave | Scope | Status |
 | ---- | ----- | ------ |
-| Wave 1 | `B5`, `B3`, `B4` | Implemented (pending review) |
-| Wave 2 | `B6`, `B1` | Planned |
-| Wave 3 | `B2` | Planned |
+| Wave 1 | `B5`, `B3`, `B4` | Completed |
+| Wave 2 | `B6`, `B1` | Completed |
+| Wave 3 | `B2` | Completed |
 
 ## Acceptance Pattern (Per Item)
 
