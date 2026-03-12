@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented here. Dates use `YYYY-MM-DD`.
 
+## [4.3.2] - 2026-03-12
+
+### Changed
+
+- Automated release from PR #38: batch-backend wave hardening + completed plan archive (https://github.com/abocha/esl-pipeline/pull/38)
+
 ## [4.3.1] - 2026-03-12
 
 ### Changed
