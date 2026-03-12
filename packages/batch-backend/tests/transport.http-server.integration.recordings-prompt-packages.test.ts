@@ -22,9 +22,9 @@ describeHttpServerIntegrationSuite(
   }) => {
     it('POST /recordings/upload reuses existing transcript when hash already exists', async () => {
       const listRecordingsBySha256 = vi.spyOn(recordingRepositoryModule, 'listRecordingsBySha256');
-      const getTranscriptByRecordingId = vi.spyOn(
+      const listLatestTranscriptsByRecordingIds = vi.spyOn(
         transcriptRepositoryModule,
-        'getTranscriptByRecordingId',
+        'listLatestTranscriptsByRecordingIds',
       );
       const insertRecording = vi.spyOn(recordingRepositoryModule, 'insertRecording');
 
@@ -45,20 +45,22 @@ describeHttpServerIntegrationSuite(
           updatedAt: new Date('2024-01-01T00:05:00.000Z'),
         },
       ]);
-      getTranscriptByRecordingId.mockResolvedValueOnce({
-        id: 'transcript-cached',
-        recordingId: 'recording-cached',
-        storageUri: 'memory://transcripts/transcript-cached.txt',
-        rawResponseUri: null,
-        mode: 'timeline',
-        model: 'nova-3',
-        language: 'multi',
-        sttProvider: 'deepgram',
-        fallbackUsed: false,
-        summaryJson: null,
-        createdAt: new Date('2024-01-01T00:05:00.000Z'),
-        updatedAt: new Date('2024-01-01T00:05:00.000Z'),
-      });
+      listLatestTranscriptsByRecordingIds.mockResolvedValueOnce([
+        {
+          id: 'transcript-cached',
+          recordingId: 'recording-cached',
+          storageUri: 'memory://transcripts/transcript-cached.txt',
+          rawResponseUri: null,
+          mode: 'timeline',
+          model: 'nova-3',
+          language: 'multi',
+          sttProvider: 'deepgram',
+          fallbackUsed: false,
+          summaryJson: null,
+          createdAt: new Date('2024-01-01T00:05:00.000Z'),
+          updatedAt: new Date('2024-01-01T00:05:00.000Z'),
+        },
+      ]);
       insertRecording.mockClear();
 
       const boundary = '----esl-test-boundary';
@@ -94,9 +96,9 @@ describeHttpServerIntegrationSuite(
 
     it('POST /recordings/upload matches cached transcript by effective provider when query omits sttProvider', async () => {
       const listRecordingsBySha256 = vi.spyOn(recordingRepositoryModule, 'listRecordingsBySha256');
-      const getTranscriptByRecordingId = vi.spyOn(
+      const listLatestTranscriptsByRecordingIds = vi.spyOn(
         transcriptRepositoryModule,
-        'getTranscriptByRecordingId',
+        'listLatestTranscriptsByRecordingIds',
       );
       const insertRecording = vi.spyOn(recordingRepositoryModule, 'insertRecording');
 
@@ -132,8 +134,8 @@ describeHttpServerIntegrationSuite(
           updatedAt: new Date('2024-01-01T00:05:00.000Z'),
         },
       ]);
-      getTranscriptByRecordingId
-        .mockResolvedValueOnce({
+      listLatestTranscriptsByRecordingIds.mockResolvedValueOnce([
+        {
           id: 'transcript-elevenlabs',
           recordingId: 'recording-elevenlabs',
           storageUri: 'memory://transcripts/transcript-elevenlabs.txt',
@@ -146,8 +148,8 @@ describeHttpServerIntegrationSuite(
           summaryJson: { provider: 'elevenlabs' },
           createdAt: new Date('2024-01-02T00:05:00.000Z'),
           updatedAt: new Date('2024-01-02T00:05:00.000Z'),
-        })
-        .mockResolvedValueOnce({
+        },
+        {
           id: 'transcript-deepgram',
           recordingId: 'recording-deepgram',
           storageUri: 'memory://transcripts/transcript-deepgram.txt',
@@ -160,7 +162,8 @@ describeHttpServerIntegrationSuite(
           summaryJson: { provider: 'deepgram' },
           createdAt: new Date('2024-01-01T00:05:00.000Z'),
           updatedAt: new Date('2024-01-01T00:05:00.000Z'),
-        });
+        },
+      ]);
       insertRecording.mockClear();
 
       const boundary = '----esl-test-boundary-2';
@@ -197,9 +200,9 @@ describeHttpServerIntegrationSuite(
 
     it('POST /recordings/upload honors explicit sttProvider against mixed cached transcripts', async () => {
       const listRecordingsBySha256 = vi.spyOn(recordingRepositoryModule, 'listRecordingsBySha256');
-      const getTranscriptByRecordingId = vi.spyOn(
+      const listLatestTranscriptsByRecordingIds = vi.spyOn(
         transcriptRepositoryModule,
-        'getTranscriptByRecordingId',
+        'listLatestTranscriptsByRecordingIds',
       );
       const insertRecording = vi.spyOn(recordingRepositoryModule, 'insertRecording');
 
@@ -235,8 +238,8 @@ describeHttpServerIntegrationSuite(
           updatedAt: new Date('2024-01-01T00:05:00.000Z'),
         },
       ]);
-      getTranscriptByRecordingId
-        .mockResolvedValueOnce({
+      listLatestTranscriptsByRecordingIds.mockResolvedValueOnce([
+        {
           id: 'transcript-deepgram',
           recordingId: 'recording-deepgram',
           storageUri: 'memory://transcripts/transcript-deepgram.txt',
@@ -249,8 +252,8 @@ describeHttpServerIntegrationSuite(
           summaryJson: { provider: 'deepgram' },
           createdAt: new Date('2024-01-02T00:05:00.000Z'),
           updatedAt: new Date('2024-01-02T00:05:00.000Z'),
-        })
-        .mockResolvedValueOnce({
+        },
+        {
           id: 'transcript-elevenlabs',
           recordingId: 'recording-elevenlabs',
           storageUri: 'memory://transcripts/transcript-elevenlabs.txt',
@@ -263,7 +266,8 @@ describeHttpServerIntegrationSuite(
           summaryJson: { provider: 'elevenlabs' },
           createdAt: new Date('2024-01-01T00:05:00.000Z'),
           updatedAt: new Date('2024-01-01T00:05:00.000Z'),
-        });
+        },
+      ]);
       insertRecording.mockClear();
 
       const boundary = '----esl-test-boundary-3';

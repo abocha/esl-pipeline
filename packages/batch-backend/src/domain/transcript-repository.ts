@@ -60,6 +60,31 @@ export async function getTranscriptByRecordingId(
   return row ? mapRowToTranscript(row) : null;
 }
 
+export async function listLatestTranscriptsByRecordingIds(
+  recordingIds: string[],
+): Promise<TranscriptRecord[]> {
+  if (recordingIds.length === 0) {
+    return [];
+  }
+
+  const rows = await withPgClient(async (client: PoolClient) => {
+    const result = await client.query(
+      `
+      SELECT DISTINCT ON (recording_id)
+             id, recording_id, storage_uri, raw_response_uri, mode, model, language,
+             stt_provider, fallback_used, summary_json, created_at, updated_at
+      FROM transcripts
+      WHERE recording_id = ANY($1::uuid[])
+      ORDER BY recording_id, created_at DESC, id DESC
+      `,
+      [recordingIds],
+    );
+    return result.rows;
+  });
+
+  return rows.map((row) => mapRowToTranscript(row));
+}
+
 export async function insertTranscript(params: InsertTranscriptParams): Promise<TranscriptRecord> {
   const id = params.id ?? randomUUID();
   const now = new Date();
