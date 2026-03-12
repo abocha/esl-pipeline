@@ -152,10 +152,18 @@ send_completion_telegram() {
   local text="$1"
   local url="https://api.telegram.org/bot${PG_BACKUP_ALERT_TELEGRAM_BOT_TOKEN}/sendMessage"
   local args=(-sS -X POST "$url" -d "chat_id=${PG_BACKUP_ALERT_TELEGRAM_CHAT_ID}" -d "parse_mode=HTML" --data-urlencode "text=${text}" -d "disable_web_page_preview=true")
+  local response
   if [[ -n "$PG_BACKUP_ALERT_TELEGRAM_THREAD_ID" ]]; then
     args+=(-d "message_thread_id=${PG_BACKUP_ALERT_TELEGRAM_THREAD_ID}")
   fi
-  curl "${args[@]}" >/dev/null
+  if ! response="$(curl "${args[@]}")"; then
+    return 1
+  fi
+  if [[ "$response" == *'"ok":true'* ]]; then
+    return 0
+  fi
+  echo "WARN: Telegram API rejected completion message: $response" >&2
+  return 1
 }
 
 emit_completion_notification() {
