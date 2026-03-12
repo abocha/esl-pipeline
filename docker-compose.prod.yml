@@ -87,7 +87,7 @@ services:
       retries: 10
 
   redis:
-    image: redis:alpine
+    image: redis:8-alpine
     volumes:
       - redis_data:/data
     ports:
@@ -112,6 +112,5 @@ services:
     restart: unless-stopped
 
 volumes:
-  postgres_data:
   postgres18_data:
   redis_data:

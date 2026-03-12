@@ -9,12 +9,17 @@ import * as assign from '../src/assign.js';
 import * as dialogue from '../src/dialogue.js';
 import * as eleven from '../src/eleven.js';
 import * as ffm from '../src/ffmpeg.js';
+import type { VoiceCatalog } from '../src/assign.js';
 import {
   buildPronunciationShadowSentenceMp3,
   buildStudyTextMp3,
 } from '../src/index.js';
 
 const encoder = new TextEncoder();
+type Tail<T extends readonly unknown[]> = T extends readonly [unknown, ...infer Rest] ? Rest : never;
+type StudyTextTailArgs = Tail<Parameters<typeof buildStudyTextMp3>>;
+type ShadowSentenceTailArgs = Tail<Parameters<typeof buildPronunciationShadowSentenceMp3>>;
+type ElevenConvertRequest = Parameters<ReturnType<typeof eleven.getElevenClient>['textToSpeech']['convert']>[1];
 
 export const makeMockStream = (payload: string) =>
   new ReadableStream<Uint8Array>({
@@ -30,7 +35,7 @@ export const writeFixture = async (filePath: string, contents: string) => {
 
 export const buildStudyTextMp3FromPath = async (
   mdPath: string,
-  ...args: Parameters<typeof buildStudyTextMp3> extends [any, ...infer Rest] ? Rest : never
+  ...args: StudyTextTailArgs
 ) => {
   const markdown = await readFile(mdPath, 'utf8');
   const context = parseMarkdownContext(markdown);
@@ -40,9 +45,7 @@ export const buildStudyTextMp3FromPath = async (
 export const buildPronunciationShadowSentenceMp3FromPath = async (
   mdPath: string,
   voiceId: string,
-  ...args: Parameters<typeof buildPronunciationShadowSentenceMp3> extends [any, ...infer Rest]
-    ? Rest
-    : never
+  ...args: ShadowSentenceTailArgs
 ) => {
   const markdown = await readFile(mdPath, 'utf8');
   const context = parseMarkdownContext(markdown);
@@ -75,7 +78,7 @@ default: voice_id_default
   return { tempMdPath, tempVoiceMapPath };
 };
 
-const catalogMock = {
+const catalogMock: VoiceCatalog = {
   voices: [
     {
       id: 'voice_narrator',
@@ -141,12 +144,12 @@ const catalogMock = {
 };
 
 export const setupClientMock = () => {
-  const convertMock = vi.fn(async (_voiceId: string, request: any) =>
+  const convertMock = vi.fn(async (_voiceId: string, request: ElevenConvertRequest) =>
     makeMockStream(request?.text ?? 'audio'),
   );
   vi.spyOn(eleven, 'getElevenClient').mockReturnValue({
     textToSpeech: { convert: convertMock },
-  } as any);
+  } as unknown as ReturnType<typeof eleven.getElevenClient>);
   return convertMock;
 };
 
@@ -176,7 +179,7 @@ export const setupTtsTestSuite = () => {
   });
 
   beforeEach(() => {
-    vi.spyOn(assign, 'loadVoicesCatalog').mockResolvedValue(catalogMock as any);
+    vi.spyOn(assign, 'loadVoicesCatalog').mockResolvedValue(catalogMock);
     vi.spyOn(ffm, 'resolveFfmpegPath').mockResolvedValue('ffmpeg');
     vi.spyOn(ffm, 'synthSilenceMp3').mockImplementation(async (outFile: string) => {
       await writeFile(outFile, 'silence');

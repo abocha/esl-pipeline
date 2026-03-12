@@ -84,6 +84,9 @@ describe('application/process-queue-job', () => {
         ttsStrategy: initial.ttsStrategy,
       });
       expect(path.isAbsolute(payload.md)).toBe(true);
+      if (initial.md == null) {
+        throw new Error('expected fixture job md path');
+      }
       expect(payload.md.replaceAll('\\', '/').endsWith(initial.md)).toBe(true);
       expect(typeof runId).toBe('string');
       expect(runId.length).toBeGreaterThan(0);
