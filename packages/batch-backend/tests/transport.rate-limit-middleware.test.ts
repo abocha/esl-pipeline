@@ -3,6 +3,7 @@
 // Tests for rate limiting middleware covering Redis-based rate limiting,
 // burst handling, and middleware integration.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import type { Redis } from 'ioredis';
 
 import { createRedisClient } from '../src/infrastructure/redis.js';
 import {
@@ -29,22 +30,26 @@ vi.mock('../src/config/env', () => ({
 
 describe('RateLimiterService', () => {
   let rateLimiter: RateLimiterService;
-  let mockRedis: any;
+  let mockRedis: {
+    eval: ReturnType<typeof vi.fn>;
+    evalsha: ReturnType<typeof vi.fn>;
+    script: ReturnType<typeof vi.fn>;
+    zcard: ReturnType<typeof vi.fn>;
+  };
+  const asRedis = (value: unknown): Redis => value as Redis;
 
   beforeEach(() => {
     mockRedis = {
-      zremrangebyscore: vi.fn(),
+      eval: vi.fn(),
+      evalsha: vi.fn(),
+      script: vi.fn(),
       zcard: vi.fn(),
-      zadd: vi.fn(),
-      expire: vi.fn(),
-      keys: vi.fn(),
-      zrange: vi.fn(),
     };
 
-    (createRedisClient as any).mockReturnValue(mockRedis);
+    (createRedisClient as unknown as ReturnType<typeof vi.fn>).mockReturnValue(asRedis(mockRedis));
 
     // Create with Redis enabled
-    rateLimiter = new RateLimiterService(mockRedis, {
+    rateLimiter = new RateLimiterService(asRedis(mockRedis), {
       windowSize: 60 * 1000, // 1 minute
       maxRequests: 10,
       burstLimit: 20,
@@ -59,35 +64,29 @@ describe('RateLimiterService', () => {
 
   describe('Rate Limiting Logic', () => {
     it('should allow requests within limit', async () => {
-      mockRedis.zremrangebyscore.mockResolvedValue(0);
-      mockRedis.zcard
-        .mockResolvedValueOnce(5) // 5 requests in main window
-        .mockResolvedValueOnce(5); // 5 requests in burst window
-      mockRedis.zadd.mockResolvedValue(1);
+      mockRedis.eval.mockResolvedValue([1, 6, 6, 0, 0, -1, -1]);
 
       const result = await rateLimiter.checkRateLimit('user:123');
 
       expect(result.allowed).toBe(true);
       expect(result.remainingRequests).toBe(4); // 10 - 6 = 4
       expect(result.count).toBe(6);
-      expect(mockRedis.zadd).toHaveBeenCalledWith(
-        expect.stringContaining('user:123:main'),
-        expect.any(Number),
-        expect.any(String),
-      );
-      expect(mockRedis.zadd).toHaveBeenCalledWith(
-        expect.stringContaining('user:123:burst'),
-        expect.any(Number),
-        expect.any(String),
-      );
+    });
+
+    it('should block requests over burst window limit', async () => {
+      mockRedis.eval.mockResolvedValue([0, 2, 20, 0, 1, -1, Date.now() - 1000]);
+
+      const result = await rateLimiter.checkRateLimit('user:123');
+
+      expect(result.allowed).toBe(false);
+      expect(result.remainingRequests).toBe(0);
+      expect(result.limit).toBe(20);
+      expect(result.count).toBe(20);
+      expect(result.retryAfter).toBeDefined();
     });
 
     it('should block requests over main window limit', async () => {
-      mockRedis.zremrangebyscore.mockResolvedValue(0);
-      mockRedis.zcard
-        .mockResolvedValueOnce(10) // Main window at limit
-        .mockResolvedValueOnce(5); // Burst window allows
-      mockRedis.zadd.mockResolvedValue(1);
+      mockRedis.eval.mockResolvedValue([0, 10, 5, 1, 0, Date.now() - 1000, -1]);
 
       const result = await rateLimiter.checkRateLimit('user:123');
 
@@ -97,17 +96,7 @@ describe('RateLimiterService', () => {
     });
 
     it('should block when both windows exceed limits', async () => {
-      mockRedis.zremrangebyscore.mockResolvedValue(0);
-      // This mock now responds based on the key, not call order.
-      mockRedis.zcard.mockImplementation(async (key: string) => {
-        if (key.includes(':main')) {
-          return 10; // Main window is full
-        }
-        if (key.includes(':burst')) {
-          return 20; // Burst window is full
-        }
-        return 0;
-      });
+      mockRedis.eval.mockResolvedValue([0, 10, 20, 1, 1, Date.now() - 3000, Date.now() - 1000]);
 
       const result = await rateLimiter.checkRateLimit('user:123');
 
@@ -118,32 +107,53 @@ describe('RateLimiterService', () => {
   });
 
   describe('Redis Operations', () => {
-    it('should clean expired entries', async () => {
-      mockRedis.zremrangebyscore.mockResolvedValue(5);
-      mockRedis.zcard.mockResolvedValue(3);
+    it('should execute rate limiting logic atomically via eval', async () => {
+      mockRedis.eval.mockResolvedValue([1, 3, 2, 0, 0, -1, -1]);
 
       await rateLimiter.checkRateLimit('user:123');
 
-      expect(mockRedis.zremrangebyscore).toHaveBeenCalledWith(
+      expect(mockRedis.eval).toHaveBeenCalledTimes(1);
+      expect(mockRedis.eval).toHaveBeenCalledWith(
         expect.any(String),
-        0,
-        expect.any(Number),
+        2,
+        expect.stringContaining('user:123:main'),
+        expect.stringContaining('user:123:burst'),
+        expect.any(String),
+        expect.any(String),
+        expect.any(String),
+        '10',
+        '20',
+        '60',
+        '10',
+        expect.any(String),
       );
     });
 
-    it('should set TTL on keys', async () => {
-      mockRedis.zremrangebyscore.mockResolvedValue(0);
-      mockRedis.zcard.mockResolvedValue(2);
-      mockRedis.zadd.mockResolvedValue(1);
+    it('should use evalsha path when script is loaded', async () => {
+      mockRedis.script.mockResolvedValue('sha123');
+      mockRedis.evalsha.mockResolvedValue([1, 4, 3, 0, 0, -1, -1]);
 
       await rateLimiter.checkRateLimit('user:123');
 
-      expect(mockRedis.expire).toHaveBeenCalledWith(expect.stringContaining(':main'), 60);
-      expect(mockRedis.expire).toHaveBeenCalledWith(expect.stringContaining(':burst'), 10);
+      expect(mockRedis.script).toHaveBeenCalledWith('LOAD', expect.any(String));
+      expect(mockRedis.evalsha).toHaveBeenCalledWith(
+        'sha123',
+        2,
+        expect.stringContaining('user:123:main'),
+        expect.stringContaining('user:123:burst'),
+        expect.any(String),
+        expect.any(String),
+        expect.any(String),
+        '10',
+        '20',
+        '60',
+        '10',
+        expect.any(String),
+      );
     });
 
     it('should BLOCK requests on Redis errors to protect the service (fail-closed)', async () => {
-      mockRedis.zcard.mockRejectedValue(new Error('Connection failed'));
+      mockRedis.eval.mockRejectedValue(new Error('Connection failed'));
 
       const result = await rateLimiter.checkRateLimit('user:123');
 
@@ -156,9 +166,7 @@ describe('RateLimiterService', () => {
 
   describe('Retry Time Calculation', () => {
     it('should calculate retry time based on oldest request', async () => {
-      mockRedis.zremrangebyscore.mockResolvedValue(0);
-      mockRedis.zcard.mockResolvedValue(10);
-      mockRedis.zrange.mockResolvedValue(['', '1699123456000']); // 1 minute ago
+      mockRedis.eval.mockResolvedValue([0, 10, 4, 1, 0, Date.now() - 1000, -1]);
 
       const result = await rateLimiter.checkRateLimit('user:123');
 
@@ -167,9 +175,7 @@ describe('RateLimiterService', () => {
     });
 
     it('should handle missing oldest request data', async () => {
-      mockRedis.zremrangebyscore.mockResolvedValue(0);
-      mockRedis.zcard.mockResolvedValue(10);
-      mockRedis.zrange.mockResolvedValue([]);
+      mockRedis.eval.mockResolvedValue([0, 10, 1, 1, 0, -1, -1]);
 
       const result = await rateLimiter.checkRateLimit('user:123');
 
@@ -181,23 +187,27 @@ describe('RateLimiterService', () => {
 
 describe('Rate Limit Middleware', () => {
   let rateLimiter: RateLimiterService;
-  let mockRedis: any;
+  let mockRedis: {
+    eval: ReturnType<typeof vi.fn>;
+    evalsha: ReturnType<typeof vi.fn>;
+    script: ReturnType<typeof vi.fn>;
+    zcard: ReturnType<typeof vi.fn>;
+  };
+  const asRedis = (value: unknown): Redis => value as Redis;
 
   beforeEach(() => {
     mockRedis = {
-      zremrangebyscore: vi.fn(),
+      eval: vi.fn(),
+      evalsha: vi.fn(),
+      script: vi.fn(),
       zcard: vi.fn(),
-      zadd: vi.fn(),
-      expire: vi.fn(),
-      keys: vi.fn(),
-      zrange: vi.fn(),
     };
 
-    (createRedisClient as any).mockReturnValue(mockRedis);
+    (createRedisClient as unknown as ReturnType<typeof vi.fn>).mockReturnValue(asRedis(mockRedis));
   });
 
   it('should handle rate limit exceeded', async () => {
-    rateLimiter = new RateLimiterService(mockRedis, {
+    rateLimiter = new RateLimiterService(asRedis(mockRedis), {
       windowSize: 60 * 1000,
       maxRequests: 10,
       burstLimit: 20,
@@ -205,9 +215,7 @@ describe('Rate Limit Middleware', () => {
       keyPrefix: 'test:rate_limit',
     });
 
-    mockRedis.zremrangebyscore.mockResolvedValue(0);
-    mockRedis.zcard.mockResolvedValue(10);
-    mockRedis.zrange.mockResolvedValue([]);
+    mockRedis.eval.mockResolvedValue([0, 10, 2, 1, 0, -1, -1]);
 
     const result = await rateLimiter.checkRateLimit('user:123');
 
@@ -216,7 +224,7 @@ describe('Rate Limit Middleware', () => {
   });
 
   it('should use IP address when no user authenticated', async () => {
-    rateLimiter = new RateLimiterService(mockRedis, {
+    rateLimiter = new RateLimiterService(asRedis(mockRedis), {
       windowSize: 60 * 1000,
       maxRequests: 10,
       burstLimit: 20,
@@ -224,16 +232,23 @@ describe('Rate Limit Middleware', () => {
       keyPrefix: 'test:rate_limit',
     });
 
-    mockRedis.zremrangebyscore.mockResolvedValue(0);
-    mockRedis.zcard.mockResolvedValue(5);
-    mockRedis.zadd.mockResolvedValue(1);
+    mockRedis.eval.mockResolvedValue([1, 6, 4, 0, 0, -1, -1]);
 
     const result = await rateLimiter.checkRateLimit('192.168.1.1');
 
     expect(result.allowed).toBe(true);
-    expect(mockRedis.zadd).toHaveBeenCalledWith(
+    expect(mockRedis.eval).toHaveBeenCalledWith(
+      expect.any(String),
+      2,
       expect.stringContaining('192.168.1.1'),
-      expect.any(Number),
+      expect.stringContaining('192.168.1.1'),
+      expect.any(String),
+      expect.any(String),
+      expect.any(String),
+      '10',
+      '20',
+      '60',
+      '10',
       expect.any(String),
     );
   });

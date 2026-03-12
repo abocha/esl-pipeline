@@ -30,6 +30,7 @@ export const DEFAULT_PRESETS_PATH = join(DEFAULT_CONFIG_ROOT, 'presets.json');
 export const DEFAULT_VOICES_PATH = join(DEFAULT_CONFIG_ROOT, 'voices.yml');
 export const DEFAULT_STUDENTS_DIR = join(DEFAULT_CONFIG_ROOT, 'students');
 export const DEFAULT_STUDENT_NAME = 'Default';
+const STUDENT_PROFILE_READ_CONCURRENCY = 8;
 
 export interface ConfigProvider {
   loadPresets(presetsPath?: string): Promise<PresetMap>;
@@ -67,20 +68,31 @@ export function createFilesystemConfigProvider(
       const directory = studentsDir ?? defaults.studentsDir;
       try {
         const entries = await readdir(directory, { withFileTypes: true });
+        const candidates = entries
+          .filter((entry) => entry.isFile() && entry.name.toLowerCase().endsWith('.json'))
+          .map((entry) => join(directory, entry.name));
+
         const profiles: StudentProfile[] = [];
-        for (const entry of entries) {
-          if (entry.isFile() && entry.name.toLowerCase().endsWith('.json')) {
-            const filePath = join(directory, entry.name);
-            try {
+        for (let index = 0; index < candidates.length; index += STUDENT_PROFILE_READ_CONCURRENCY) {
+          const batch = candidates.slice(index, index + STUDENT_PROFILE_READ_CONCURRENCY);
+          const settled = await Promise.allSettled(
+            batch.map(async (filePath): Promise<StudentProfile | null> => {
               const data = JSON.parse(await readFile(filePath, 'utf8')) as StudentProfile;
               if (data && typeof data.student === 'string' && data.student.trim().length > 0) {
-                profiles.push({ ...data, student: data.student.trim() });
+                return { ...data, student: data.student.trim() };
               }
-            } catch {
-              // ignore invalid JSON files
+              return null;
+            }),
+          );
+
+          for (const result of settled) {
+            if (result.status !== 'fulfilled' || !result.value) {
+              continue;
             }
+            profiles.push(result.value);
           }
         }
+
         if (!profiles.some((profile) => profile.student === DEFAULT_STUDENT_NAME)) {
           profiles.push({
             student: DEFAULT_STUDENT_NAME,

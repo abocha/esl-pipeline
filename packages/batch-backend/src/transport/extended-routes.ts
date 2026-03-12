@@ -107,7 +107,7 @@ import {
 } from '../domain/settings-repository.js';
 import { deriveStudentId, normalizeStudentName } from '../domain/student-utils.js';
 import type { TranscriptRecord } from '../domain/transcript-model.js';
-import { getTranscriptByRecordingId } from '../domain/transcript-repository.js';
+import { listLatestTranscriptsByRecordingIds } from '../domain/transcript-repository.js';
 import {
   UserLogin,
   UserRegistration,
@@ -2260,12 +2260,18 @@ export function registerExtendedRoutes(app: FastifyInstance, options: ExtendedRo
 
         const cachedRecordings = await listRecordingsBySha256(fileSha256);
         if (cachedRecordings.length > 0) {
+          const latestTranscripts = await listLatestTranscriptsByRecordingIds(
+            cachedRecordings.map((recording) => recording.id),
+          );
+          const transcriptByRecordingId = new Map(
+            latestTranscripts.map((transcript) => [transcript.recordingId, transcript] as const),
+          );
           let transcriptCandidates = 0;
           let providerMatches = 0;
           let providerUnknown = 0;
 
           for (const cachedRecording of cachedRecordings) {
-            const cachedTranscript = await getTranscriptByRecordingId(cachedRecording.id);
+            const cachedTranscript = transcriptByRecordingId.get(cachedRecording.id);
             if (!cachedTranscript) {
               continue;
             }
