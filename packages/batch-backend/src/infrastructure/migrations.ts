@@ -2,7 +2,6 @@ import { createHash } from 'node:crypto';
 import { promises as fs } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-
 import { PoolClient } from 'pg';
 
 import { loadConfig } from '../config/env.js';
@@ -166,7 +165,10 @@ export async function runMigrations(): Promise<void> {
   const status = await getMigrationStatus();
   if (status.checksumMismatches.length > 0) {
     const details = status.checksumMismatches
-      .map((entry) => `${entry.id} (db=${entry.actual.slice(0, 12)}, file=${entry.expected.slice(0, 12)})`)
+      .map(
+        (entry) =>
+          `${entry.id} (db=${entry.actual.slice(0, 12)}, file=${entry.expected.slice(0, 12)})`,
+      )
       .join(', ');
     throw new Error(`Migration checksum mismatch detected: ${details}`);
   }

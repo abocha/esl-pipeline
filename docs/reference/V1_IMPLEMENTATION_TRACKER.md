@@ -52,17 +52,17 @@ Rules:
 
 ## Workstream Order and Gates
 
-| Workstream | Status | Start | End | Dependency Gate |
-| --- | --- | --- | --- | --- |
-| WS0 Delivered foundation lane | `complete` | historical | historical | none |
-| WS1 CEFR baseline presets | `complete` | W1 (2026-02-09) | W3 (2026-03-01) | none |
-| WS6 Readiness instrumentation (minimal first) | `complete` | W1 (2026-02-09) | W4 (2026-03-08) | WS1 metric hooks merged |
-| WS2A Preset plumbing MVP | `complete` | W4 (2026-03-02) | W7 (2026-03-29) | WS1 + WS6 complete |
-| WS2B Direct LLM generation | `complete` | W8 (2026-03-30) | W9 (2026-04-12) | WS2A complete |
-| WS3 TTS abstraction + fallback | `complete` | W10 (2026-04-13) | W12 (2026-05-03) | WS2B seam pattern stable |
-| WS5 Cost and quota policy | `parked` | W11 (2026-04-20) | W13 (2026-05-10) | WS2B + WS3/WS3.5 usage telemetry available |
-| WS4 CRM-lite lesson ledger | `parked` | W13 (2026-05-04) | W15 (2026-05-24) | WS2A assignment flow stable |
-| Stabilization and gate review | `in_progress` | W16 (2026-05-25) | W17 (2026-06-07) | WS2A-WS6 MVP complete |
+| Workstream                                    | Status        | Start            | End              | Dependency Gate                            |
+| --------------------------------------------- | ------------- | ---------------- | ---------------- | ------------------------------------------ |
+| WS0 Delivered foundation lane                 | `complete`    | historical       | historical       | none                                       |
+| WS1 CEFR baseline presets                     | `complete`    | W1 (2026-02-09)  | W3 (2026-03-01)  | none                                       |
+| WS6 Readiness instrumentation (minimal first) | `complete`    | W1 (2026-02-09)  | W4 (2026-03-08)  | WS1 metric hooks merged                    |
+| WS2A Preset plumbing MVP                      | `complete`    | W4 (2026-03-02)  | W7 (2026-03-29)  | WS1 + WS6 complete                         |
+| WS2B Direct LLM generation                    | `complete`    | W8 (2026-03-30)  | W9 (2026-04-12)  | WS2A complete                              |
+| WS3 TTS abstraction + fallback                | `complete`    | W10 (2026-04-13) | W12 (2026-05-03) | WS2B seam pattern stable                   |
+| WS5 Cost and quota policy                     | `parked`      | W11 (2026-04-20) | W13 (2026-05-10) | WS2B + WS3/WS3.5 usage telemetry available |
+| WS4 CRM-lite lesson ledger                    | `parked`      | W13 (2026-05-04) | W15 (2026-05-24) | WS2A assignment flow stable                |
+| Stabilization and gate review                 | `in_progress` | W16 (2026-05-25) | W17 (2026-06-07) | WS2A-WS6 MVP complete                      |
 
 ---
 
@@ -725,7 +725,7 @@ Recent evidence:
 - [x] Baseline prompt lock still points to `docs/templates/hw_prompt_v4-2_clean.md`.
 - [x] WS5 go/no-go decision recorded based on telemetry stability evidence.
 - [ ] `docs/playbooks/WEEKLY_PRODUCT_REVIEW_TEMPLATE.md` completed.
-Pending note: complete this artifact in the next weekly review cycle and link the decision evidence.
+      Pending note: complete this artifact in the next weekly review cycle and link the decision evidence.
 
 ## Related
 

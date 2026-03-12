@@ -1,33 +1,50 @@
-FROM node:24-alpine
+FROM node:24-alpine AS dev-base
 
 ENV PNPM_HOME=/pnpm
-ENV UV_CACHE_DIR=/uv/cache \
-    UV_PYTHON_INSTALL_DIR=/uv/python \
-    UV_PYTHON=3.12 \
-    PATH="${PNPM_HOME}:${PATH}" \
+ENV PATH="${PNPM_HOME}:${PATH}" \
     NODE_ENV=development \
     CI=false
 
 SHELL ["/bin/ash", "-eo", "pipefail", "-c"]
 
-# Install system dependencies
 RUN corepack enable && corepack prepare pnpm@10 --activate \
     && apk add --no-cache \
-        aws-cli \
-        bash \
         ca-certificates \
-        coreutils \
-        curl \
-        docker-cli \
-        docker-cli-compose \
-        findutils \
         ffmpeg \
-    && curl -LsSf https://astral.sh/uv/install.sh | env XDG_BIN_HOME=/usr/local/bin sh -s -- --no-modify-path \
-    && mkdir -p /pnpm /uv/cache /uv/python \
-    && chmod 0777 /pnpm /uv/cache /uv/python \
-    && uv python install 3.12 --install-dir /uv/python --default --no-progress
+    && mkdir -p /pnpm \
+    && chmod 0777 /pnpm
 
 WORKDIR /app
 
 # No COPY or RUN pnpm install here.
 # We rely on volume mounts and running pnpm install at runtime (or pre-installed in volume).
+
+FROM dev-base AS dev-ops
+
+RUN apk add --no-cache \
+        aws-cli \
+        bash \
+        coreutils \
+        curl \
+        docker-cli \
+        docker-cli-compose \
+        findutils
+
+FROM dev-ops AS dev-tools
+
+ENV UV_CACHE_DIR=/uv/cache \
+    UV_PYTHON_INSTALL_DIR=/uv/python \
+    UV_PYTHON=3.12
+
+RUN curl -LsSf https://astral.sh/uv/install.sh -o /tmp/uv-install.sh \
+    && env XDG_BIN_HOME=/usr/local/bin sh /tmp/uv-install.sh --no-modify-path \
+    && rm -f /tmp/uv-install.sh \
+    && mkdir -p /uv/cache /uv/python \
+    && chmod 0777 /uv/cache /uv/python \
+    && uv python install 3.12 --install-dir /uv/python --default --no-progress
+
+FROM dev-base AS default
+
+FROM dev-ops AS ops
+
+FROM dev-tools AS tools

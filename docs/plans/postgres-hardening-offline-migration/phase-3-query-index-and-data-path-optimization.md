@@ -14,98 +14,136 @@ Guidance basis used for this spec:
 ## Important API / Interface / Type Changes
 
 1. Schema:
-  - Add jobs.student_id UUID NULL.
+
+- Add jobs.student_id UUID NULL.
+
 2. Migrations:
-  - Add packages/batch-backend/migrations/0006_jobs_student_denorm_and_indexes.sql.
+
+- Add packages/batch-backend/migrations/0006_jobs_student_denorm_and_indexes.sql.
+
 3. Runtime query behavior:
-  - job-repository primary student filtering/path uses jobs.student_id.
-  - Compatibility fallback join path retained only where studentId filtering is requested and jobs.student_id IS NULL.
+
+- job-repository primary student filtering/path uses jobs.student_id.
+- Compatibility fallback join path retained only where studentId filtering is requested and jobs.student_id IS NULL.
+
 4. Verification:
-  - Extend db:verify checks to require new indexes and jobs.student_id column presence.
+
+- Extend db:verify checks to require new indexes and jobs.student_id column presence.
+
 5. External API:
-  - No HTTP contract changes.
+
+- No HTTP contract changes.
 
 ## Implementation Plan (Decision-Complete)
 
 1. Add migration 0006_jobs_student_denorm_and_indexes.sql.
-  - ALTER TABLE jobs ADD COLUMN IF NOT EXISTS student_id UUID NULL;
-  - Backfill in deterministic priority:
-	  1. existing jobs.student_id (if already present),
-	  2. recordings.student_id,
-	  3. prompt_packages.student_id,
-	  4. prompt-package recording student (rp.student_id),
-	  5. drafts.student_id,
-	  6. draft->prompt-package student (pd.student_id),
-	  7. draft->prompt-package->recording student (rd.student_id),
-	  8. source-job inherited student (src.student_id via jobs.source_job_id).
-  - Create maintenance trigger function on jobs:
-	  - recompute NEW.student_id on insert and on updates touching recording_id, prompt_package_id, draft_id, or source_job_id.
-	  - trigger name: set_jobs_student_id.
-  - Create Phase 3 composite indexes (additive, no drops):
-	  - idx_jobs_student_created_at_id on (student_id, created_at DESC, id DESC)
-	  - idx_jobs_created_at_id on (created_at DESC, id DESC)
-	  - idx_jobs_user_created_at_id on (user_id, created_at DESC, id DESC)
-	  - idx_jobs_publish_target_state_created_at on (publish_target, state, created_at DESC)
+
+- ALTER TABLE jobs ADD COLUMN IF NOT EXISTS student_id UUID NULL;
+- Backfill in deterministic priority:
+  1.  existing jobs.student_id (if already present),
+  2.  recordings.student_id,
+  3.  prompt_packages.student_id,
+  4.  prompt-package recording student (rp.student_id),
+  5.  drafts.student_id,
+  6.  draft->prompt-package student (pd.student_id),
+  7.  draft->prompt-package->recording student (rd.student_id),
+  8.  source-job inherited student (src.student_id via jobs.source_job_id).
+- Create maintenance trigger function on jobs:
+  - recompute NEW.student_id on insert and on updates touching recording_id, prompt_package_id, draft_id, or source_job_id.
+  - trigger name: set_jobs_student_id.
+- Create Phase 3 composite indexes (additive, no drops):
+  - idx_jobs_student_created_at_id on (student_id, created_at DESC, id DESC)
+  - idx_jobs_created_at_id on (created_at DESC, id DESC)
+  - idx_jobs_user_created_at_id on (user_id, created_at DESC, id DESC)
+  - idx_jobs_publish_target_state_created_at on (publish_target, state, created_at DESC)
+
 2. Refactor packages/batch-backend/src/domain/job-repository.ts.
-  - For non-student-filtered list/count/summary queries:
-	  - remove unnecessary student join chain.
-	  - select j.student_id directly.
-  - For student-filtered queries (listJobs, countJobs, getJobSummary, getStudentJobSummaries):
-	  - primary predicate: j.student_id = $n.
-	  - compatibility fallback branch: include old COALESCE join path only when j.student_id IS NULL.
-  - Keep response mapping unchanged (studentId field preserved).
+
+- For non-student-filtered list/count/summary queries:
+  - remove unnecessary student join chain.
+  - select j.student_id directly.
+- For student-filtered queries (listJobs, countJobs, getJobSummary, getStudentJobSummaries):
+  - primary predicate: j.student_id = $n.
+  - compatibility fallback branch: include old COALESCE join path only when j.student_id IS NULL.
+- Keep response mapping unchanged (studentId field preserved).
+
 3. Refactor packages/batch-backend/src/application/student-timeline.ts.
-  - For jobs and job_action_history timeline branches:
-	  - primary filter uses j.student_id = $1.
-	  - retain fallback predicate for j.student_id IS NULL with existing COALESCE chain for one compatibility window.
-  - Keep event payload/output unchanged.
+
+- For jobs and job_action_history timeline branches:
+  - primary filter uses j.student_id = $1.
+  - retain fallback predicate for j.student_id IS NULL with existing COALESCE chain for one compatibility window.
+- Keep event payload/output unchanged.
+
 4. Extend verification in packages/batch-backend/src/infrastructure/migration-verify.ts.
-  - Add required indexes:
-	  - idx_jobs_student_created_at_id
-	  - idx_jobs_created_at_id
-	  - idx_jobs_user_created_at_id
-	  - idx_jobs_publish_target_state_created_at
-  - Add required column check:
-	  - jobs.student_id exists.
+
+- Add required indexes:
+  - idx_jobs_student_created_at_id
+  - idx_jobs_created_at_id
+  - idx_jobs_user_created_at_id
+  - idx_jobs_publish_target_state_created_at
+- Add required column check:
+  - jobs.student_id exists.
+
 5. Update docs.
-  - Update docs/plans/postgres-hardening-offline-migration/phase-3-query-index-and-data-path-optimization.md with executed details and fallback-window rule.
-  - Add Phase 3 reconciliation SQL snippet to docs/plans/postgres-hardening-offline-migration/offline-data-migration-runbook.md.
+
+- Update docs/plans/postgres-hardening-offline-migration/phase-3-query-index-and-data-path-optimization.md with executed details and fallback-window rule.
+- Add Phase 3 reconciliation SQL snippet to docs/plans/postgres-hardening-offline-migration/offline-data-migration-runbook.md.
 
 ## Compatibility Window Rule (Locked)
 
 1. Duration: one release cycle after Phase 3 deploy.
 2. During window:
-  - fallback join path remains only for student-filtered queries where jobs.student_id IS NULL.
+
+- fallback join path remains only for student-filtered queries where jobs.student_id IS NULL.
+
 3. Exit condition to remove fallback in next phase:
-  - reconciliation query returns 0 rows where student can be derived but jobs.student_id is null.
+
+- reconciliation query returns 0 rows where student can be derived but jobs.student_id is null.
 
 ## Reconciliation / Acceptance SQL (must be documented and run)
 
 1. Null-but-derivable check:
-  - count jobs where jobs.student_id IS NULL and legacy COALESCE path resolves non-null.
+
+- count jobs where jobs.student_id IS NULL and legacy COALESCE path resolves non-null.
+
 2. Drift check:
-  - count jobs where jobs.student_id IS DISTINCT FROM derived legacy student.
+
+- count jobs where jobs.student_id IS DISTINCT FROM derived legacy student.
+
 3. Phase acceptance requires both counts = 0 after migration + smoke traffic.
 
 ## Test Cases and Scenarios
 
 1. Migration apply/idempotency:
-  - db:migrate applies 0006 once, rerun is no-op.
+
+- db:migrate applies 0006 once, rerun is no-op.
+
 2. Repository behavior:
-  - listJobs/countJobs/getJobSummary return unchanged functional results with student filter.
+
+- listJobs/countJobs/getJobSummary return unchanged functional results with student filter.
+
 3. Student timeline behavior:
-  - timeline items/count unchanged for seeded student data.
+
+- timeline items/count unchanged for seeded student data.
+
 4. Backfill correctness:
-  - seeded legacy rows (student only on recording/prompt/draft/source_job) are populated into jobs.student_id.
+
+- seeded legacy rows (student only on recording/prompt/draft/source_job) are populated into jobs.student_id.
+
 5. Trigger maintenance:
-  - updating job.draft_id / job.prompt_package_id / job.recording_id updates jobs.student_id automatically.
+
+- updating job.draft_id / job.prompt_package_id / job.recording_id updates jobs.student_id automatically.
+
 6. Verify command:
-  - fails if required Phase 3 indexes/column are missing.
+
+- fails if required Phase 3 indexes/column are missing.
+
 7. Plan evidence:
-  - collect EXPLAIN (ANALYZE, BUFFERS) for:
-	  - user-scoped list query with order/limit,
-	  - student-scoped list query with order/limit,
-	  - job summary by publish/state window.
+
+- collect EXPLAIN (ANALYZE, BUFFERS) for:
+  - user-scoped list query with order/limit,
+  - student-scoped list query with order/limit,
+  - job summary by publish/state window.
 
 ## Assumptions and Defaults
 

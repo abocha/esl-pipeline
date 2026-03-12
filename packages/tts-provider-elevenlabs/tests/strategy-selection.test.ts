@@ -2,9 +2,9 @@ import { mkdtemp, readFile, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { parseMarkdownContext } from '@esl-pipeline/pmd';
 
 import type { PipelineLogEvent, PipelineLogger } from '@esl-pipeline/contracts';
+import { parseMarkdownContext } from '@esl-pipeline/pmd';
 
 import * as assign from '../src/assign.js';
 import * as dialogue from '../src/dialogue.js';
@@ -238,7 +238,11 @@ Mara: Hello!
 
     process.env.ESL_TTS_PROVIDER_ELEVENLABS_STRATEGY = 'dialogue';
 
-    await buildStudyTextMp3FromPath(md, { voiceMapPath: voiceMap, outPath: dir, ttsStrategy: 'tts' });
+    await buildStudyTextMp3FromPath(md, {
+      voiceMapPath: voiceMap,
+      outPath: dir,
+      ttsStrategy: 'tts',
+    });
 
     expect(dialogueSpy).not.toHaveBeenCalled();
     expect(convertMock).toHaveBeenCalled();

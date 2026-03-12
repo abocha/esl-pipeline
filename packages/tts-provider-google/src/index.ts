@@ -7,9 +7,9 @@ import {
   ConfigurationError,
   InfrastructureError,
   ValidationError,
-  normalizeSpeakerRole,
   type VoiceProviderErrorCategory,
   noopLogger,
+  normalizeSpeakerRole,
 } from '@esl-pipeline/contracts';
 import {
   type Frontmatter,
@@ -20,7 +20,6 @@ import {
 } from '@esl-pipeline/pmd';
 import { runProviderFallbackLadder } from '@esl-pipeline/provider-runtime';
 import {
-  hashStudyText,
   type BuildPronunciationShadowSentenceInput,
   type BuildPronunciationShadowSentenceOptions,
   type BuildPronunciationShadowSentenceResult,
@@ -31,17 +30,31 @@ import {
   type SpeakerVoiceAssignment,
   type TtsProviderAdapter,
   type VoiceCatalog,
+  hashStudyText,
 } from '@esl-pipeline/tts-core';
 
-import { concatMp3Segments, resolveFfmpegPath, setMp3TitleMetadata, synthSilenceMp3 } from './ffmpeg.js';
-import { listGoogleVoices, synthesizeGoogleSpeech, type GoogleVoiceListEntry } from './google.js';
+import {
+  concatMp3Segments,
+  resolveFfmpegPath,
+  setMp3TitleMetadata,
+  synthSilenceMp3,
+} from './ffmpeg.js';
+import { type GoogleVoiceListEntry, listGoogleVoices, synthesizeGoogleSpeech } from './google.js';
 
 const GOOGLE_TTS_BYTE_LIMIT = 5000;
 const GOOGLE_TTS_MODEL_FAMILIES = ['chirp3_hd', 'studio', 'neural2', 'wavenet'] as const;
 const DEFAULT_GOOGLE_TTS_MODEL: GoogleTtsModel = 'chirp3_hd';
 const GOOGLE_VOICE_CATALOG_TTL_MS = 15 * 60 * 1000;
 const CANONICAL_ROLE = ['narrator', 'teacher', 'student', 'system'] as const;
-const CANONICAL_AGE = ['child', 'teen', 'young', 'adult', 'middle_aged', 'senior', 'universal'] as const;
+const CANONICAL_AGE = [
+  'child',
+  'teen',
+  'young',
+  'adult',
+  'middle_aged',
+  'senior',
+  'universal',
+] as const;
 
 const DEFAULT_GOOGLE_VOICE_BY_MODEL: Record<GoogleTtsModel, string> = {
   chirp3_hd: 'en-US-Chirp3-HD-Charon',
@@ -137,16 +150,28 @@ export function resolveGoogleTtsModel(model?: string): GoogleTtsModel {
 function resolveGoogleDefaultVoice(model: GoogleTtsModel): string {
   switch (model) {
     case 'chirp3_hd': {
-      return process.env.ESL_TTS_PROVIDER_GOOGLE_VOICE_CHIRP3_HD?.trim() || DEFAULT_GOOGLE_VOICE_BY_MODEL.chirp3_hd;
+      return (
+        process.env.ESL_TTS_PROVIDER_GOOGLE_VOICE_CHIRP3_HD?.trim() ||
+        DEFAULT_GOOGLE_VOICE_BY_MODEL.chirp3_hd
+      );
     }
     case 'studio': {
-      return process.env.ESL_TTS_PROVIDER_GOOGLE_VOICE_STUDIO?.trim() || DEFAULT_GOOGLE_VOICE_BY_MODEL.studio;
+      return (
+        process.env.ESL_TTS_PROVIDER_GOOGLE_VOICE_STUDIO?.trim() ||
+        DEFAULT_GOOGLE_VOICE_BY_MODEL.studio
+      );
     }
     case 'neural2': {
-      return process.env.ESL_TTS_PROVIDER_GOOGLE_VOICE_NEURAL2?.trim() || DEFAULT_GOOGLE_VOICE_BY_MODEL.neural2;
+      return (
+        process.env.ESL_TTS_PROVIDER_GOOGLE_VOICE_NEURAL2?.trim() ||
+        DEFAULT_GOOGLE_VOICE_BY_MODEL.neural2
+      );
     }
     case 'wavenet': {
-      return process.env.ESL_TTS_PROVIDER_GOOGLE_VOICE_WAVENET?.trim() || DEFAULT_GOOGLE_VOICE_BY_MODEL.wavenet;
+      return (
+        process.env.ESL_TTS_PROVIDER_GOOGLE_VOICE_WAVENET?.trim() ||
+        DEFAULT_GOOGLE_VOICE_BY_MODEL.wavenet
+      );
     }
   }
 }
@@ -212,7 +237,10 @@ function normalizeSpeakerToken(value: string | undefined | null): string {
 
 function normalizeAccentToken(value: string | undefined): string | undefined {
   if (!value) return undefined;
-  const normalized = value.trim().toLowerCase().replaceAll(/[\s-]+/g, '_');
+  const normalized = value
+    .trim()
+    .toLowerCase()
+    .replaceAll(/[\s-]+/g, '_');
   if (!normalized) return undefined;
   if (normalized.includes('american') || normalized === 'us') return 'american';
   if (normalized.includes('british') || normalized === 'uk') return 'british';
@@ -299,7 +327,9 @@ function buildFallbackGoogleCatalogSnapshot(): GoogleCatalogSnapshot {
   return { generatedAt, voices: fallbackVoices };
 }
 
-function buildGoogleCatalogSnapshotFromList(rawVoices: readonly GoogleVoiceListEntry[]): GoogleCatalogSnapshot {
+function buildGoogleCatalogSnapshotFromList(
+  rawVoices: readonly GoogleVoiceListEntry[],
+): GoogleCatalogSnapshot {
   const normalized: GoogleCatalogVoice[] = [];
   for (const raw of rawVoices) {
     const name = raw.name.trim();
@@ -362,7 +392,9 @@ async function loadGoogleCatalogSnapshot(): Promise<GoogleCatalogSnapshot> {
   }
 }
 
-function buildVoiceLookupByName(snapshot: GoogleCatalogSnapshot): Map<string, GoogleCatalogVoice[]> {
+function buildVoiceLookupByName(
+  snapshot: GoogleCatalogSnapshot,
+): Map<string, GoogleCatalogVoice[]> {
   const lookup = new Map<string, GoogleCatalogVoice[]>();
   for (const voice of snapshot.voices) {
     const list = lookup.get(voice.name) ?? [];
@@ -610,7 +642,9 @@ function scoreGoogleVoiceCandidate(args: {
   const profileGender =
     typeof args.profile?.gender === 'string' ? args.profile.gender.trim().toLowerCase() : undefined;
   const preferredGender =
-    profileGender && profileGender !== 'neutral' ? profileGender : guessGenderFromName(args.speaker);
+    profileGender && profileGender !== 'neutral'
+      ? profileGender
+      : guessGenderFromName(args.speaker);
 
   let score = 0;
   if (preferredGender && preferredGender !== 'neutral') {
@@ -628,7 +662,8 @@ function scoreGoogleVoiceCandidate(args: {
     score += 2;
   }
 
-  const style = typeof args.profile?.style === 'string' ? args.profile.style.trim().toLowerCase() : '';
+  const style =
+    typeof args.profile?.style === 'string' ? args.profile.style.trim().toLowerCase() : '';
   if (style.includes('narrat') && args.voice.gender === 'female') {
     score += 2;
   }
@@ -714,8 +749,8 @@ function resolveStudyTextSegments(lines: string[], frontmatter: Frontmatter): St
   const segments: StudyTextSegment[] = [];
   const labelOrder = Array.isArray(frontmatter.speaker_labels)
     ? frontmatter.speaker_labels
-      .map((label) => (typeof label === 'string' ? cleanSpeakerName(label) : ''))
-      .filter(Boolean)
+        .map((label) => (typeof label === 'string' ? cleanSpeakerName(label) : ''))
+        .filter(Boolean)
     : [];
   const nonNarratorFallback = labelOrder.find((label) => label.toLowerCase() !== 'narrator');
   const singleFallback = labelOrder.length === 1 ? labelOrder[0] : undefined;
@@ -1064,7 +1099,9 @@ async function resolveStudyTextPlan(
           a.voice.name.localeCompare(b.voice.name),
       );
 
-    const preferred = scoredCandidates.find((candidate) => !usedAutoVoices.has(candidate.voice.name));
+    const preferred = scoredCandidates.find(
+      (candidate) => !usedAutoVoices.has(candidate.voice.name),
+    );
     const selected = preferred ?? scoredCandidates[0];
     if (!selected) {
       assignResolvedVoice({ voice: providerDefaultVoice, source: 'reuse', profile });
@@ -1073,19 +1110,21 @@ async function resolveStudyTextPlan(
     }
 
     const source: SpeakerVoiceAssignment['source'] = preferred
-      ? (selected.accentTier.rank <= 1 ? 'auto' : 'fallback')
+      ? selected.accentTier.rank <= 1
+        ? 'auto'
+        : 'fallback'
       : 'reuse';
 
     const selectionReason =
       source === 'reuse'
         ? undefined
         : buildGoogleSelectionReason({
-          source,
-          accentTier: selected.accentTier.tier,
-          preferredAccent,
-          selectedAccent: selected.voice.accent,
-          selectedLocale: selected.voice.locale,
-        });
+            source,
+            accentTier: selected.accentTier.tier,
+            preferredAccent,
+            selectedAccent: selected.voice.accent,
+            selectedLocale: selected.voice.locale,
+          });
 
     assignResolvedVoice({
       voice: selected.voice,
@@ -1130,8 +1169,8 @@ function buildResolvedVoiceLanguages(
   assignments: GoogleSpeakerAssignment[],
   explicitLanguageCode: string | undefined,
 ): ResolvedVoiceLanguage[] {
-  const uniqueVoices = [...new Set(assignments.map((assignment) => assignment.voiceName))].sort((a, b) =>
-    a.localeCompare(b),
+  const uniqueVoices = [...new Set(assignments.map((assignment) => assignment.voiceName))].sort(
+    (a, b) => a.localeCompare(b),
   );
   return uniqueVoices.map((voiceName) => ({
     voiceName,
@@ -1143,11 +1182,7 @@ class SynthesisRuntimeError extends InfrastructureError {
   readonly category: VoiceProviderErrorCategory;
   readonly retryable: boolean;
 
-  constructor(args: {
-    message: string;
-    category: VoiceProviderErrorCategory;
-    retryable: boolean;
-  }) {
+  constructor(args: { message: string; category: VoiceProviderErrorCategory; retryable: boolean }) {
     super(args.message);
     this.name = 'SynthesisRuntimeError';
     this.category = args.category;
@@ -1254,7 +1289,8 @@ export async function buildStudyTextMp3Google(
     voiceAssignments,
     voiceSummaries,
   } = plan;
-  const modelName = opts.googleModelName ?? process.env.ESL_TTS_PROVIDER_GOOGLE_MODEL_NAME ?? undefined;
+  const modelName =
+    opts.googleModelName ?? process.env.ESL_TTS_PROVIDER_GOOGLE_MODEL_NAME ?? undefined;
   const voiceLanguages = buildResolvedVoiceLanguages(speakerAssignments, opts.googleLanguageCode);
 
   const hashInput = JSON.stringify({
@@ -1352,7 +1388,7 @@ export async function buildStudyTextMp3Google(
     if (!voiceName) {
       throw new ConfigurationError(
         `No Google voice could be resolved for line "${segment.raw}". ` +
-        'Add voices.yml mappings or set ESL_TTS_PROVIDER_GOOGLE_VOICE_* defaults.',
+          'Add voices.yml mappings or set ESL_TTS_PROVIDER_GOOGLE_VOICE_* defaults.',
       );
     }
 
@@ -1491,7 +1527,8 @@ export async function buildPronunciationShadowSentenceMp3Google(
   const voiceName = input.voiceId.trim();
   const languageCode = resolveGoogleLanguageCode(opts.googleLanguageCode, voiceName);
   const apiEndpoint = resolveGoogleApiEndpoint(opts.googleApiEndpoint);
-  const modelName = opts.googleModelName ?? process.env.ESL_TTS_PROVIDER_GOOGLE_MODEL_NAME ?? undefined;
+  const modelName =
+    opts.googleModelName ?? process.env.ESL_TTS_PROVIDER_GOOGLE_MODEL_NAME ?? undefined;
 
   const hash = createHash('sha256')
     .update(

@@ -28,10 +28,10 @@
     "@esl-pipeline/provider-runtime": "workspace:*",
     "@esl-pipeline/stt-core": "workspace:*",
     "@google-cloud/speech": "^7.3.0",
-    "@google-cloud/storage": "^7.17.0"
+    "@google-cloud/storage": "^7.19.0"
   },
   "devDependencies": {
-    "@types/node": "^25.3.5",
+    "@types/node": "^25.4.0",
     "typescript": "^5.9.3",
     "vitest": "^4.0.18"
   },

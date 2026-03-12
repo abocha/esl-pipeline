@@ -76,8 +76,13 @@ describe('formatter', () => {
   });
 
   it('renders one-line audio playback link without duplicate labels', () => {
-    const html = formatAudioPlaybackLink('🎧 Listen 1: Study Text', 'https://example.com/audio/final/a.mp3');
-    expect(html).toBe('<a href="https://example.com/audio/final/a.mp3">🎧 Listen 1: Study Text</a>');
+    const html = formatAudioPlaybackLink(
+      '🎧 Listen 1: Study Text',
+      'https://example.com/audio/final/a.mp3',
+    );
+    expect(html).toBe(
+      '<a href="https://example.com/audio/final/a.mp3">🎧 Listen 1: Study Text</a>',
+    );
   });
 
   it('renders assignment-only card when audio links are disabled', () => {

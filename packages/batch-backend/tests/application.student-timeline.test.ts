@@ -1,7 +1,10 @@
 import { randomUUID } from 'node:crypto';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 
-import { getStudentTimeline, type StudentTimelineType } from '../src/application/student-timeline.js';
+import {
+  type StudentTimelineType,
+  getStudentTimeline,
+} from '../src/application/student-timeline.js';
 import { deriveStudentId } from '../src/domain/student-utils.js';
 import { withPgClient } from '../src/infrastructure/db.js';
 import { requirePgTestEnv } from './support/test-env.js';

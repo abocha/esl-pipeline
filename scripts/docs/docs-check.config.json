@@ -33,9 +33,7 @@
     "packages/provider-runtime/README.md"
   ],
   "exclude_docs": [],
-  "exclude_prefixes": [
-    "docs/archive/"
-  ],
+  "exclude_prefixes": ["docs/archive/"],
   "meta_required_docs": [
     "AGENTS.md",
     "docs/README.md",
@@ -82,18 +80,11 @@
   "required_route_hints": [
     {
       "file": "AGENTS.md",
-      "hints": [
-        "docs/README.md",
-        "docs/reference/DOCS_IA_MAP.md",
-        "docs/reference/agents-ssot.md"
-      ]
+      "hints": ["docs/README.md", "docs/reference/DOCS_IA_MAP.md", "docs/reference/agents-ssot.md"]
     },
     {
       "file": "docs/README.md",
-      "hints": [
-        "reference/DOCS_IA_MAP.md",
-        "reference/agents-ssot.md"
-      ]
+      "hints": ["reference/DOCS_IA_MAP.md", "reference/agents-ssot.md"]
     },
     {
       "file": "docs/reference/DOCS_IA_MAP.md",
@@ -114,7 +105,5 @@
     "`configs/wizard.defaults.json`",
     "file://"
   ],
-  "allowed_missing_targets": [
-    "packages/orchestrator/configs/wizard.defaults.json"
-  ]
+  "allowed_missing_targets": ["packages/orchestrator/configs/wizard.defaults.json"]
 }

@@ -1,11 +1,11 @@
+import type { ProfileRevisionRecord } from '../domain/profile-revision-model.js';
 import { getActiveProfileRevision } from '../domain/profile-revision-repository.js';
 import type { PromptPackageRecord } from '../domain/prompt-package-model.js';
-import type { ProfileRevisionRecord } from '../domain/profile-revision-model.js';
+import { getPromptPackageById } from '../domain/prompt-package-repository.js';
 import type { StudentProfileBindingRecord } from '../domain/student-profile-binding-model.js';
+import { getStudentProfileBindingAt } from '../domain/student-profile-binding-repository.js';
 import type { TemplateRevisionRecord } from '../domain/template-revision-model.js';
 import { getActiveTemplateRevision } from '../domain/template-revision-repository.js';
-import { getPromptPackageById } from '../domain/prompt-package-repository.js';
-import { getStudentProfileBindingAt } from '../domain/student-profile-binding-repository.js';
 import type { TranscriptionStorage } from '../infrastructure/transcription-storage.js';
 import { createTranscriptionStorageForUri } from '../infrastructure/transcription-storage.js';
 import { type PromptPackageResponse, toPromptPackageResponse } from './create-prompt-package.js';
@@ -177,7 +177,10 @@ export async function getPromptPackageLineage(
       : Promise.resolve(null),
   ]);
 
-  const profileDrift = await detectPromptPackageProfileDrift(promptPackage, profileRevisions.getActive);
+  const profileDrift = await detectPromptPackageProfileDrift(
+    promptPackage,
+    profileRevisions.getActive,
+  );
   const templateDrift = await detectPromptPackageTemplateDrift(
     promptPackage,
     templateRevisions.getActive,
@@ -233,7 +236,8 @@ export async function getPromptPackageLineage(
       drift: templateDrift,
     },
     voiceCapabilitiesSnapshot:
-      promptPackage.resolvedVoiceCapabilitiesHash || promptPackage.resolvedVoiceCapabilitiesGeneratedAt
+      promptPackage.resolvedVoiceCapabilitiesHash ||
+      promptPackage.resolvedVoiceCapabilitiesGeneratedAt
         ? {
             generatedAt: promptPackage.resolvedVoiceCapabilitiesGeneratedAt
               ? promptPackage.resolvedVoiceCapabilitiesGeneratedAt.toISOString()

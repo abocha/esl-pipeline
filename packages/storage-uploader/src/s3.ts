@@ -65,7 +65,12 @@ function resolveSkipIfExists(explicit?: boolean): boolean {
   const disabled = process.env.ESL_ARTIFACT_REUSE_DISABLE;
   if (!disabled) return true;
   const normalized = disabled.trim().toLowerCase();
-  return !(normalized === '1' || normalized === 'true' || normalized === 'yes' || normalized === 'on');
+  return !(
+    normalized === '1' ||
+    normalized === 'true' ||
+    normalized === 'yes' ||
+    normalized === 'on'
+  );
 }
 
 function resolveContentType(localPath: string, override?: string): string {
@@ -217,7 +222,14 @@ export async function uploadToS3(
   if (publicRead) {
     try {
       const res = await sendPutObject('public-read');
-      return { url, key: resolvedKey, etag: res.ETag, reused: false, sizeBytes: stats.size, sha256: resolvedSha256 };
+      return {
+        url,
+        key: resolvedKey,
+        etag: res.ETag,
+        reused: false,
+        sizeBytes: stats.size,
+        sha256: resolvedSha256,
+      };
     } catch (error: unknown) {
       if (!isAclNotSupported(error)) throw error;
       // Fall back to no-ACL
@@ -233,5 +245,12 @@ export async function uploadToS3(
 
   // No ACL path (recommended with ACLs disabled)
   const res = await sendPutObject();
-  return { url, key: resolvedKey, etag: res.ETag, reused: false, sizeBytes: stats.size, sha256: resolvedSha256 };
+  return {
+    url,
+    key: resolvedKey,
+    etag: res.ETag,
+    reused: false,
+    sizeBytes: stats.size,
+    sha256: resolvedSha256,
+  };
 }

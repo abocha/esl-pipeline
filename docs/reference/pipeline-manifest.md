@@ -35,7 +35,7 @@ This document captures the canonical schema so remote stores and services can va
     "presetHash": "<sha256 hash of normalized preset payload>",
     "pageId": "<notion-page-id>",
     "mdHash": "<sha256 hash of markdown used for colorization>",
-    "appliedAt": "2024-07-19T12:30:00.000Z"
+    "appliedAt": "2024-07-19T12:30:00.000Z",
   },
   "pageId": "<notion-page-id>", // optional, populated after Notion import
   "pageUrl": "https://www.notion.so/...", // optional, populated after Notion import
@@ -60,15 +60,15 @@ This document captures the canonical schema so remote stores and services can va
           "score": 0.92,
           "selectionReason": "Matched explicit speaker_profiles.voice override",
           "capabilityMatches": ["gender:male", "accent:american"],
-          "capabilityMismatches": []
-        }
+          "capabilityMismatches": [],
+        },
       ],
       "tts": {
         "provider": "elevenlabs",
         "generatedCharacters": 1320,
         "cachedCharacters": 480,
         "costPer1kCharsUsd": 0.3,
-        "estimatedSpendUsd": 0.396
+        "estimatedSpendUsd": 0.396,
       },
       "notionBlockId": "<notion-block-id>",
     },

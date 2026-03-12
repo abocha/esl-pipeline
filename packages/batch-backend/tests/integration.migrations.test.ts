@@ -1,6 +1,5 @@
 import fs from 'node:fs/promises';
 import path from 'node:path';
-
 import { Pool } from 'pg';
 import { afterAll, beforeEach, describe, expect, it } from 'vitest';
 
@@ -81,7 +80,13 @@ async function assertSchemaHealthy(scenario: string): Promise<void> {
       WHERE schemaname = 'public'
         AND indexname = ANY($1::text[])
       `,
-      [['idx_recordings_source_path_trgm', 'idx_recordings_storage_uri_trgm', 'idx_recordings_id_trgm']],
+      [
+        [
+          'idx_recordings_source_path_trgm',
+          'idx_recordings_storage_uri_trgm',
+          'idx_recordings_id_trgm',
+        ],
+      ],
     );
     const indexNames = new Set(indexResult.rows.map((row) => row.indexname));
     expect(indexNames.has('idx_recordings_source_path_trgm')).toBe(true);
@@ -99,77 +104,89 @@ describe('integration/migrations', () => {
     await closePgPool();
   });
 
-  it('fresh bootstrap applies all migrations and verifies cleanly', async () => {
-    await runMigrations();
-    await assertSchemaHealthy('fresh-bootstrap');
-  }, testTimeout);
+  it(
+    'fresh bootstrap applies all migrations and verifies cleanly',
+    async () => {
+      await runMigrations();
+      await assertSchemaHealthy('fresh-bootstrap');
+    },
+    testTimeout,
+  );
 
-  it('legacy schema upgrade applies migrations without drift', async () => {
-    await applyLegacySchemaFixture();
-    await runMigrations();
-    await assertSchemaHealthy('legacy-upgrade');
+  it(
+    'legacy schema upgrade applies migrations without drift',
+    async () => {
+      await applyLegacySchemaFixture();
+      await runMigrations();
+      await assertSchemaHealthy('legacy-upgrade');
 
-    await withAdminClient(async (pool) => {
-      const profileResult = await pool.query<{ profile_id: string; active_count: number }>(
-        `
+      await withAdminClient(async (pool) => {
+        const profileResult = await pool.query<{ profile_id: string; active_count: number }>(
+          `
         SELECT profile_id, COUNT(*) FILTER (WHERE status = 'active')::int AS active_count
         FROM profile_revisions
         GROUP BY profile_id
         `,
-      );
-      const templateResult = await pool.query<{ template_id: string; active_count: number }>(
-        `
+        );
+        const templateResult = await pool.query<{ template_id: string; active_count: number }>(
+          `
         SELECT template_id, COUNT(*) FILTER (WHERE status = 'active')::int AS active_count
         FROM template_revisions
         GROUP BY template_id
         `,
-      );
-      const transcriptProviderResult = await pool.query<{ stt_provider: string }>(
-        `
+        );
+        const transcriptProviderResult = await pool.query<{ stt_provider: string }>(
+          `
         SELECT stt_provider
         FROM transcripts
         WHERE id = '66666666-6666-4666-8666-666666666661'
         `,
-      );
-      const transcriptProviderConstraint = await pool.query<{ present: boolean }>(
-        `
+        );
+        const transcriptProviderConstraint = await pool.query<{ present: boolean }>(
+          `
         SELECT EXISTS (
           SELECT 1
           FROM pg_constraint
           WHERE conname = 'transcripts_stt_provider_check'
         ) AS present
         `,
+        );
+
+        expect(profileResult.rows.every((row) => row.active_count === 1)).toBe(true);
+        expect(templateResult.rows.every((row) => row.active_count === 1)).toBe(true);
+        expect(transcriptProviderResult.rows[0]?.stt_provider).toBe('deepgram');
+        expect(transcriptProviderConstraint.rows[0]?.present).toBe(true);
+      });
+    },
+    testTimeout,
+  );
+
+  it(
+    'idempotency re-run leaves migration history unchanged',
+    async () => {
+      await runMigrations();
+      const firstStatus = await getMigrationStatus();
+      await runMigrations();
+      const secondStatus = await getMigrationStatus();
+
+      await assertSchemaHealthy('idempotency');
+
+      expect(firstStatus.applied.map((migration) => migration.id)).toEqual(
+        secondStatus.applied.map((migration) => migration.id),
       );
 
-      expect(profileResult.rows.every((row) => row.active_count === 1)).toBe(true);
-      expect(templateResult.rows.every((row) => row.active_count === 1)).toBe(true);
-      expect(transcriptProviderResult.rows[0]?.stt_provider).toBe('deepgram');
-      expect(transcriptProviderConstraint.rows[0]?.present).toBe(true);
-    });
-  }, testTimeout);
-
-  it('idempotency re-run leaves migration history unchanged', async () => {
-    await runMigrations();
-    const firstStatus = await getMigrationStatus();
-    await runMigrations();
-    const secondStatus = await getMigrationStatus();
-
-    await assertSchemaHealthy('idempotency');
-
-    expect(firstStatus.applied.map((migration) => migration.id)).toEqual(
-      secondStatus.applied.map((migration) => migration.id),
-    );
-
-    await withAdminClient(async (pool) => {
-      const duplicateResult = await pool.query<{ id: string }>(
-        `
+      await withAdminClient(async (pool) => {
+        const duplicateResult = await pool.query<{ id: string }>(
+          `
         SELECT id
         FROM schema_migrations
         GROUP BY id
         HAVING COUNT(*) > 1
         `,
-      );
-      expect(duplicateResult.rows).toHaveLength(0);
-    });
-  }, testTimeout);
+        );
+        expect(duplicateResult.rows).toHaveLength(0);
+      });
+    },
+    testTimeout,
+  );
 });

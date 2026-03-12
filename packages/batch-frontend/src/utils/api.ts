@@ -28,15 +28,13 @@
  * - GET /user/profile, /user/files (authenticated)
  */
 import { type AxiosError, type AxiosProgressEvent, isAxiosError } from 'axios';
-import { JobActionType } from '@esl-pipeline/contracts';
 
+import { JobActionType } from '@esl-pipeline/contracts';
 import type {
   ActionCapability,
-  GoogleTtsModel as ContractGoogleTtsModel,
   GenerateDraftRequest as ContractGenerateDraftRequest,
   GenerateDraftResponse as ContractGenerateDraftResponse,
-  GenerationErrorCategory,
-  GenerationProvider,
+  GoogleTtsModel as ContractGoogleTtsModel,
   JobConfigOverrides as ContractJobConfigOverrides,
   JobEventPayload as ContractJobEventPayload,
   JobEventType as ContractJobEventType,
@@ -52,6 +50,8 @@ import type {
   TtsProviderId as ContractTtsProviderId,
   TtsStrategy as ContractTtsStrategy,
   VoiceOption as ContractVoiceOption,
+  GenerationErrorCategory,
+  GenerationProvider,
   JobActionRequest,
   JobStatusDto,
   StreamEventMessage,
@@ -757,7 +757,12 @@ export class GenerationDraftApiError extends Error {
       code?: GenerationErrorCategory | string;
       provider?: GenerationProvider;
       model?: string;
-      limitType?: 'rpm' | 'daily_requests' | 'daily_tokens' | 'max_output_tokens' | 'model_not_allowed';
+      limitType?:
+        | 'rpm'
+        | 'daily_requests'
+        | 'daily_tokens'
+        | 'max_output_tokens'
+        | 'model_not_allowed';
       limit?: number;
       used?: number;
       window?: 'minute' | 'day' | 'request';
@@ -1874,9 +1879,7 @@ export async function fetchJobProvenance(jobId: string): Promise<JobProvenanceRe
   }
 }
 
-export async function generateDraft(
-  request: GenerateDraftRequest,
-): Promise<GenerateDraftResponse> {
+export async function generateDraft(request: GenerateDraftRequest): Promise<GenerateDraftResponse> {
   try {
     const response = await apiClient.post(buildApiProxyPath('/generation/drafts'), request, {
       timeout: GENERATE_DRAFT_REQUEST_TIMEOUT_MS,

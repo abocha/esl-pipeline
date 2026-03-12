@@ -1,18 +1,18 @@
 import { randomUUID } from 'node:crypto';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 
+import { buildLearningPresetProvenance } from '../src/application/learning-preset.js';
 import {
   countJobs,
   getJobById,
   getReadinessMetrics,
   getStudentJobSummaries,
   insertJob,
-  listJobs,
   listFailedJobErrorsForReadiness,
+  listJobs,
   updateJobMetadata,
   updateJobStateAndResult,
 } from '../src/domain/job-repository.js';
-import { buildLearningPresetProvenance } from '../src/application/learning-preset.js';
 import { withPgClient } from '../src/infrastructure/db.js';
 import { requirePgTestEnv } from './support/test-env.js';
 
@@ -162,7 +162,10 @@ describe('domain/job-repository', () => {
         );
 
         // Simulate post-insert drift: related entity gains student_id while jobs.student_id remains null.
-        await client.query('UPDATE recordings SET student_id = $1 WHERE id = $2', [studentId, recordingId]);
+        await client.query('UPDATE recordings SET student_id = $1 WHERE id = $2', [
+          studentId,
+          recordingId,
+        ]);
       });
 
       const loaded = await getJobById(jobId);
@@ -455,7 +458,9 @@ describe('domain/job-repository', () => {
         userId: null,
       });
 
-      expect(result).toEqual(expect.arrayContaining(['User A provider failure', 'User B provider failure']));
+      expect(result).toEqual(
+        expect.arrayContaining(['User A provider failure', 'User B provider failure']),
+      );
       expect(result).toHaveLength(2);
     });
   });

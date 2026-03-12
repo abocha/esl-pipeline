@@ -46,13 +46,13 @@ API, manifest schema, tests, and docs.
 1. Add a new extractor in packages/pmd/src/extract.ts that locates section ### C. ... Pronunciation Micro-Focus.
 2. Parse lines for Mode, Shadow sentence, and word drill entries with transcription.
 3. Return structured object:
- { mode, shadowSentence, words: [{ text, transcription }], sectionStartLine, issues[] } or null if mode is absent/not shadow.
+   { mode, shadowSentence, words: [{ text, transcription }], sectionStartLine, issues[] } or null if mode is absent/not shadow.
 4. Export this extractor from packages/pmd/src/index.ts.
 
 ## 3) Validation Rules for Shadow-Sentence Contract
 
 1. In packages/md-validator/src/validator.ts, call the new PMD extractor and enforce:
- Mode: shadow_sentence implies one non-empty shadow sentence line, 3-5 word entries, and transcription format /.../.
+   Mode: shadow_sentence implies one non-empty shadow sentence line, 3-5 word entries, and transcription format /.../.
 2. Emit validation errors (not warnings) for malformed shadow mode so invalid content is blocked early when mode is declared.
 3. Keep lessons without Mode: shadow_sentence unaffected.
 
@@ -69,20 +69,20 @@ API, manifest schema, tests, and docs.
 
 1. In packages/orchestrator/src/index.ts, keep existing study-text flow intact and add optional pronunciation sentence flow after study-text TTS succeeds.
 2. Resolve pronunciation voice deterministically from study-text result:
- prefer Narrator voice assignment, else first resolved study voice.
+   prefer Narrator voice assignment, else first resolved study voice.
 3. Add helper structure in-memory:
- audioArtifacts.studyText and optional audioArtifacts.pronunciationShadowSentence.
+   audioArtifacts.studyText and optional audioArtifacts.pronunciationShadowSentence.
 4. Upload stage uploads both artifacts when present; study-text key stays audio/final/<hash>.mp3; pronunciation key becomes audio/pronunciation-shadow/<hash>.mp3.
 5. Keep audio field in returned result and manifest as study-text alias for compatibility.
 6. Add-audio stage behavior:
- for notion, attach study-text audio near study-text and pronunciation audio near pronunciation section.
- for anytype and html, inject two generated audio links into markdown before publishing.
+   for notion, attach study-text audio near study-text and pronunciation audio near pronunciation section.
+   for anytype and html, inject two generated audio links into markdown before publishing.
 7. Update rerun paths to preserve and reuse both artifacts when available; old manifests continue to work via audio fallback.
 
 ## 6) Manifest Schema (Additive Only)
 
 1. In packages/orchestrator/src/manifest.ts, add:
- audioArtifacts?: { studyText?: ..., pronunciationShadowSentence?: ... }.
+   audioArtifacts?: { studyText?: ..., pronunciationShadowSentence?: ... }.
 2. Keep CURRENT_MANIFEST_SCHEMA_VERSION = 1.
 3. Continue writing legacy-compatible audio from audioArtifacts.studyText.
 4. Include optional notionBlockId under each artifact to support targeted replacement on reruns without deleting unrelated audio blocks.
@@ -99,7 +99,7 @@ API, manifest schema, tests, and docs.
 
 1. Replace insertAudioBeforeStudyText with a generalized generated-audio injector in packages/orchestrator/src/index.ts.
 2. Generated link labels are fixed:
- [Audio recording: Study Text](...) and [Audio recording: Pronunciation Shadow Sentence](...).
+   [Audio recording: Study Text](...) and [Audio recording: Pronunciation Shadow Sentence](...).
 3. Study link insertion anchor: immediately before first :::study-text.
 4. Pronunciation link insertion anchor: immediately after heading ### C. ... Pronunciation Micro-Focus.
 5. Cleanup logic removes only these two generated labels to avoid touching user-authored audio directives/links.
@@ -107,13 +107,13 @@ API, manifest schema, tests, and docs.
 ## 9) HTML Renderer: Browser SpeechSynthesis for Word Drill
 
 1. In packages/html-publisher/src/rendering.ts, add DOM post-processing script:
- detect pronunciation section in Mode: shadow_sentence, parse word list entries, append per-word play button.
+   detect pronunciation section in Mode: shadow_sentence, parse word list entries, append per-word play button.
 2. Voice selection policy:
- first available en-US, else any en-*, else browser default.
+   first available en-US, else any en-\*, else browser default.
 3. Playback policy:
- button click only; speechSynthesis.cancel() then speak word utterance.
+   button click only; speechSynthesis.cancel() then speak word utterance.
 4. Compatibility policy:
- if SpeechSynthesis unsupported, render no controls and fail silently.
+   if SpeechSynthesis unsupported, render no controls and fail silently.
 5. Add minimal CSS classes for controls and accessible labels.
 
 ## 10) Batch Preview API and Frontend Hook
@@ -149,6 +149,7 @@ API, manifest schema, tests, and docs.
 ## B) TTS ElevenLabs
 
 3. Retryable provider errors follow retry policy and then succeed/fail with categorized errors.
+
 ## C) Orchestrator
 
 1. newAssignment with valid shadow mode produces two artifacts in manifest and uploads both.

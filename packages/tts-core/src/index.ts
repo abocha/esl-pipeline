@@ -1,3 +1,4 @@
+import { createTtsEngine } from './engine.js';
 import type {
   BuildPronunciationShadowSentenceInput,
   BuildPronunciationShadowSentenceOptions,
@@ -10,7 +11,6 @@ import type {
   TtsProviderId,
   VoiceCatalog,
 } from './types.js';
-import { createTtsEngine } from './engine.js';
 
 let defaultEngine: TtsEngine = createTtsEngine();
 

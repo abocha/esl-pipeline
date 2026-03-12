@@ -46,12 +46,18 @@ export function loadBotConfigFromEnv(): BotConfig {
   const commandWindowMs = readInt('TELEGRAM_OPS_BOT_COMMAND_WINDOW_MS', 60_000);
   const maxCommandsPerWindow = readInt('TELEGRAM_OPS_BOT_MAX_COMMANDS_PER_WINDOW', 20);
   const enableActionCommands = readBool('TELEGRAM_OPS_BOT_ENABLE_ACTION_COMMANDS', false);
-  const skipPendingUpdatesOnStartup = readBool('TELEGRAM_OPS_BOT_SKIP_PENDING_UPDATES_ON_STARTUP', true);
+  const skipPendingUpdatesOnStartup = readBool(
+    'TELEGRAM_OPS_BOT_SKIP_PENDING_UPDATES_ON_STARTUP',
+    true,
+  );
 
   const topicAutoCreate = readBool('TELEGRAM_OPS_BOT_TOPIC_AUTO_CREATE', true);
   const defaultThreadId = parseOptionalThreadId(readString('TELEGRAM_OPS_BOT_DEFAULT_THREAD_ID'));
   const topicsStateFile = path.resolve(
-    readString('TELEGRAM_OPS_BOT_TOPICS_STATE_FILE', path.join(process.cwd(), 'tmp/state/telegram-ops-topics.json'))!,
+    readString(
+      'TELEGRAM_OPS_BOT_TOPICS_STATE_FILE',
+      path.join(process.cwd(), 'tmp/state/telegram-ops-topics.json'),
+    )!,
   );
 
   const topicNames = {
@@ -91,7 +97,9 @@ export function loadBotConfigFromEnv(): BotConfig {
       );
     }
     if (allowedUserIds.size === 0) {
-      throw new Error('TELEGRAM_OPS_BOT_ALLOWED_USER_IDS must contain at least one numeric Telegram user id');
+      throw new Error(
+        'TELEGRAM_OPS_BOT_ALLOWED_USER_IDS must contain at least one numeric Telegram user id',
+      );
     }
   }
 

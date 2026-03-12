@@ -46,13 +46,13 @@
 
 ### Key Differences from Text-to-Speech
 
-| Feature  | Text-to-Dialogue            | Text-to-Speech                  |
-| -------- | --------------------------- | ------------------------------- |
-| Model    | `eleven_v3`                 | `eleven_multilingual_v2`        |
+| Feature  | Text-to-Dialogue           | Text-to-Speech                  |
+| -------- | -------------------------- | ------------------------------- |
+| Model    | `eleven_v3`                | `eleven_multilingual_v2`        |
 | Input    | Array of `{text, voiceId}` | Single `text` string            |
-| Speakers | Multiple per request        | One per request                 |
-| Endpoint | `/v1/text-to-dialogue`      | `/v1/text-to-speech/{voice_id}` |
-| Use Case | Conversations, dialogues    | Monologues, narration           |
+| Speakers | Multiple per request       | One per request                 |
+| Endpoint | `/v1/text-to-dialogue`     | `/v1/text-to-speech/{voice_id}` |
+| Use Case | Conversations, dialogues   | Monologues, narration           |
 
 ### Best Practices
 

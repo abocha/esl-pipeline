@@ -1,12 +1,12 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { executeJobAction } from '../src/application/job-actions/action-handler.js';
-import { JobActionType } from '../src/domain/job-actions.js';
-import * as historyRepository from '../src/domain/job-action-history-repository.js';
 import * as cancelModule from '../src/application/job-actions/cancel-job.js';
 import * as editModule from '../src/application/job-actions/edit-metadata.js';
 import * as rerunModule from '../src/application/job-actions/rerun-audio.js';
 import * as rerunPublishModule from '../src/application/job-actions/rerun-publish.js';
+import * as historyRepository from '../src/domain/job-action-history-repository.js';
+import { JobActionType } from '../src/domain/job-actions.js';
 
 describe('application/job-actions/action-handler', () => {
   const rerunSpy = vi.spyOn(rerunModule, 'rerunAudio');

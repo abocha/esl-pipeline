@@ -146,12 +146,7 @@ export async function setActiveStudentProfileBinding(
         WHERE student_id = $1
           AND effective_to IS NULL
         `,
-        [
-          params.studentId,
-          effectiveFrom,
-          params.reason ?? null,
-          params.changedBy ?? null,
-        ],
+        [params.studentId, effectiveFrom, params.reason ?? null, params.changedBy ?? null],
       );
 
       const id = randomUUID();

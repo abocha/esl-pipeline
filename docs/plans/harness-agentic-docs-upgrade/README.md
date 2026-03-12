@@ -33,4 +33,3 @@ This directory defines the next implementation phases to finish the roadmap.
 1. `pnpm docs:check`
 2. `pnpm docs:health:report`
 3. `pnpm docs:stale:active`
-

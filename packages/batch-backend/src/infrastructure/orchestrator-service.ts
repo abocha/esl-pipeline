@@ -13,8 +13,8 @@ import {
   type ManifestStore,
   type PipelineLogEvent,
   type PipelineLogger,
-  type RerunFlags,
   RemoteConfigProvider,
+  type RerunFlags,
   S3ManifestStore,
   createPipeline,
   resolveConfigPaths,
@@ -228,9 +228,7 @@ async function runPipelineWorker(
   const log = rootLogger.child({ jobId: payload.jobId, runId });
   const { signal } = options;
   if (signal?.aborted) {
-    throw makeCancellationError(
-      typeof signal.reason === 'string' ? signal.reason : undefined,
-    );
+    throw makeCancellationError(typeof signal.reason === 'string' ? signal.reason : undefined);
   }
 
   return new Promise((resolve, reject) => {
@@ -306,7 +304,12 @@ async function runPipelineWorker(
         resolved = true;
         finalize();
         resolve(
-          message.result as { manifestPath?: string; notionUrl?: string; anytypeUrl?: string; htmlUrl?: string },
+          message.result as {
+            manifestPath?: string;
+            notionUrl?: string;
+            anytypeUrl?: string;
+            htmlUrl?: string;
+          },
         );
       } else if (message.type === 'error') {
         if (resolved) return;

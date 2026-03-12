@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto';
-import { writeFile, unlink } from 'node:fs/promises';
+import { unlink, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { basename, extname, join } from 'node:path';
 
@@ -36,8 +36,7 @@ export async function publishHtmlToS3(
   options: PublishHtmlOptions = {},
 ): Promise<Omit<HtmlPublishResult, 'html'>> {
   const renderHash =
-    options.renderHash ??
-    hashHtmlArtifact(`html-v${HTML_ARTIFACT_IDENTITY_VERSION}:${html}`);
+    options.renderHash ?? hashHtmlArtifact(`html-v${HTML_ARTIFACT_IDENTITY_VERSION}:${html}`);
   const localPath = join(tmpdir(), `esl-html-${renderHash}.html`);
   const key = resolveHtmlObjectKey(renderHash, options);
 

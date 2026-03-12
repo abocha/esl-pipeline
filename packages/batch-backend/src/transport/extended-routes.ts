@@ -17,8 +17,8 @@ import {
 } from '@esl-pipeline/shared-infrastructure';
 
 import { createDraft } from '../application/create-draft.js';
-import { GenerateDraftProviderError, generateDraft } from '../application/generate-draft.js';
 import { createPromptPackage } from '../application/create-prompt-package.js';
+import { GenerateDraftProviderError, generateDraft } from '../application/generate-draft.js';
 import { getDraft } from '../application/get-draft.js';
 import { getJobOptions } from '../application/get-job-options.js';
 import { getPromptOptions } from '../application/get-prompt-options.js';
@@ -38,10 +38,9 @@ import {
   isValidOpsBotSecret,
   shouldRequireOpsBotSecret,
 } from '../application/ops-control.js';
-import { getReadinessMetricsWithDefaults } from '../application/readiness-metrics.js';
 import {
-  activateProfileRevisionForProfile,
   ProfileContentError,
+  activateProfileRevisionForProfile,
   deleteProfileContent,
   getProfileContent,
   getProfileRevisionForProfile,
@@ -52,22 +51,17 @@ import {
 } from '../application/profile-content.js';
 import { ProfilePathError } from '../application/profile-path.js';
 import { PromptOptionError } from '../application/prompt-options.js';
+import { getReadinessMetricsWithDefaults } from '../application/readiness-metrics.js';
 import { recordingToDto } from '../application/recording-dto.js';
 import {
   RecordingRetryError,
   retryRecordingTranscription,
 } from '../application/retry-recording-transcription.js';
 import {
-  TemplateContentError,
-  deleteTemplateContent,
-  activateTemplateRevisionForTemplate,
-  getTemplateContent,
-  getTemplateRevisionForTemplate,
-  listTemplateContents,
-  listTemplateRevisionsForTemplate,
-  restoreTemplateRevision,
-  upsertTemplateContent,
-} from '../application/template-content.js';
+  getActiveStudentProfileBindingForStudent,
+  listStudentProfileBindingsForStudent,
+  resolveStudentProfileBindingAt,
+} from '../application/student-profile-bindings.js';
 import {
   StudentProfileStoreError,
   createStudentProfile,
@@ -76,28 +70,32 @@ import {
   listStudentProfiles,
   updateStudentProfile,
 } from '../application/student-profiles-store.js';
-import {
-  getActiveStudentProfileBindingForStudent,
-  listStudentProfileBindingsForStudent,
-  resolveStudentProfileBindingAt,
-} from '../application/student-profile-bindings.js';
 import { getStudentSummaryWithDefaults } from '../application/student-summary.js';
 import { type StudentTimelineType, getStudentTimeline } from '../application/student-timeline.js';
 import { SubmitJobRequest, ValidationError, submitJob } from '../application/submit-job.js';
+import {
+  TemplateContentError,
+  activateTemplateRevisionForTemplate,
+  deleteTemplateContent,
+  getTemplateContent,
+  getTemplateRevisionForTemplate,
+  listTemplateContents,
+  listTemplateRevisionsForTemplate,
+  restoreTemplateRevision,
+  upsertTemplateContent,
+} from '../application/template-content.js';
 import { updateRecordingTranscript } from '../application/update-recording-transcript.js';
 import type { BatchBackendConfig } from '../config/env.js';
 import { RecordingSourceSchema, RecordingStatusSchema } from '../domain/recording-model.js';
 import {
   getRecordingById,
-  listRecordingsBySha256,
   insertRecording,
+  listRecordingsBySha256,
   updateRecordingStatus,
 } from '../domain/recording-repository.js';
-import type { TranscriptRecord } from '../domain/transcript-model.js';
-import { getTranscriptByRecordingId } from '../domain/transcript-repository.js';
 import {
-  getDefaultSettings,
   UserSettingsInput,
+  getDefaultSettings,
   isValidTtsProvider,
   isValidTtsStrategy,
   sanitizeSettings,
@@ -108,6 +106,8 @@ import {
   upsertSettings,
 } from '../domain/settings-repository.js';
 import { deriveStudentId, normalizeStudentName } from '../domain/student-utils.js';
+import type { TranscriptRecord } from '../domain/transcript-model.js';
+import { getTranscriptByRecordingId } from '../domain/transcript-repository.js';
 import {
   UserLogin,
   UserRegistration,
@@ -232,8 +232,7 @@ function parsePronunciationMode(markdown: string): string | null {
     const normalizedLine = /^`[^`]+`$/.test(withoutBullet)
       ? withoutBullet.slice(1, -1).trim()
       : withoutBullet;
-    const modeMatch =
-      /^(?:\*\*)?mode\s*:\s*(?:\*\*)?\s*(.+?)\s*$/i.exec(normalizedLine);
+    const modeMatch = /^(?:\*\*)?mode\s*:\s*(?:\*\*)?\s*(.+?)\s*$/i.exec(normalizedLine);
     if (!modeMatch?.[1]) {
       continue;
     }
@@ -251,9 +250,7 @@ function hasPronunciationReferenceMode(markdown: string): boolean {
   return mode === 'shadow_sentence' || mode === 'connected_speech';
 }
 
-function normalizeSttProvider(
-  value: unknown,
-): SttProviderId | null {
+function normalizeSttProvider(value: unknown): SttProviderId | null {
   if (typeof value !== 'string') return null;
   const normalized = value.trim().toLowerCase();
   if (normalized === 'deepgram' || normalized === 'elevenlabs' || normalized === 'google') {
@@ -698,12 +695,15 @@ export function registerExtendedRoutes(app: FastifyInstance, options: ExtendedRo
             const preset = await loadPreset(presetName, configPaths.presetsPath);
             headingTheme = resolveHeadingThemeFromPreset(preset);
           } catch (error) {
-            logger.warn('Failed to resolve preset for HTML preview. Falling back to default theme.', {
-              event: 'preview_preset_fallback',
-              route: routePath,
-              preset: presetName,
-              error: error instanceof Error ? error.message : String(error),
-            });
+            logger.warn(
+              'Failed to resolve preset for HTML preview. Falling back to default theme.',
+              {
+                event: 'preview_preset_fallback',
+                route: routePath,
+                preset: presetName,
+                error: error instanceof Error ? error.message : String(error),
+              },
+            );
           }
         }
 
@@ -712,9 +712,13 @@ export function registerExtendedRoutes(app: FastifyInstance, options: ExtendedRo
           pronunciationAudioUrl: body.pronunciationAudioUrl,
           includePronunciation: hasPronunciationReferenceMode(body.text),
         });
-        const html = await createStaticPageHtml(markdown, resolvePreviewTitle(body.text, body.title), {
-          headingTheme,
-        });
+        const html = await createStaticPageHtml(
+          markdown,
+          resolvePreviewTitle(body.text, body.title),
+          {
+            headingTheme,
+          },
+        );
 
         logger.info('HTTP request handled', {
           event: 'http_request',
@@ -1604,7 +1608,10 @@ export function registerExtendedRoutes(app: FastifyInstance, options: ExtendedRo
       preHandler: [authenticate],
     },
     async (request, reply) => {
-      const routePath = resolveRoutePath(request, 'POST /profiles/:id/revisions/:revisionId/restore');
+      const routePath = resolveRoutePath(
+        request,
+        'POST /profiles/:id/revisions/:revisionId/restore',
+      );
       const paramsSchema = z.object({
         id: z.string().min(1),
         revisionId: z.string().uuid(),
@@ -1662,7 +1669,10 @@ export function registerExtendedRoutes(app: FastifyInstance, options: ExtendedRo
       preHandler: [authenticate],
     },
     async (request, reply) => {
-      const routePath = resolveRoutePath(request, 'POST /profiles/:id/revisions/:revisionId/activate');
+      const routePath = resolveRoutePath(
+        request,
+        'POST /profiles/:id/revisions/:revisionId/activate',
+      );
       const paramsSchema = z.object({
         id: z.string().min(1),
         revisionId: z.string().uuid(),
@@ -2038,7 +2048,10 @@ export function registerExtendedRoutes(app: FastifyInstance, options: ExtendedRo
       preHandler: [authenticate],
     },
     async (request, reply) => {
-      const routePath = resolveRoutePath(request, 'POST /templates/:id/revisions/:revisionId/restore');
+      const routePath = resolveRoutePath(
+        request,
+        'POST /templates/:id/revisions/:revisionId/restore',
+      );
       const paramsSchema = z.object({
         id: z.string().min(1),
         revisionId: z.string().uuid(),
@@ -2096,7 +2109,10 @@ export function registerExtendedRoutes(app: FastifyInstance, options: ExtendedRo
       preHandler: [authenticate],
     },
     async (request, reply) => {
-      const routePath = resolveRoutePath(request, 'POST /templates/:id/revisions/:revisionId/activate');
+      const routePath = resolveRoutePath(
+        request,
+        'POST /templates/:id/revisions/:revisionId/activate',
+      );
       const paramsSchema = z.object({
         id: z.string().min(1),
         revisionId: z.string().uuid(),
@@ -2195,7 +2211,10 @@ export function registerExtendedRoutes(app: FastifyInstance, options: ExtendedRo
         const studentId = query.studentId ?? (studentName ? deriveStudentId(studentName) : null);
         const requestedSttProvider = query.sttProvider;
         const effectiveSttProvider = requestedSttProvider ?? config.transcription.sttProvider;
-        const expectedFingerprint = resolveExpectedSttModelAndLanguage(config, effectiveSttProvider);
+        const expectedFingerprint = resolveExpectedSttModelAndLanguage(
+          config,
+          effectiveSttProvider,
+        );
 
         const filename = file.filename || '';
         const fileBuffer = await readFileBuffer(file.file);
@@ -3434,81 +3453,77 @@ export function registerExtendedRoutes(app: FastifyInstance, options: ExtendedRo
     }
   });
 
-  app.post(
-    '/auth/refresh',
-    { preHandler: [uploadRateLimitMiddleware] },
-    async (request, reply) => {
-      const body = request.body as { refreshToken?: string } | undefined;
-      const cookies = request.cookies as Record<string, string> | undefined;
-      const refreshToken = cookies?.[config.auth.refreshCookieName] ?? body?.refreshToken ?? null;
+  app.post('/auth/refresh', { preHandler: [uploadRateLimitMiddleware] }, async (request, reply) => {
+    const body = request.body as { refreshToken?: string } | undefined;
+    const cookies = request.cookies as Record<string, string> | undefined;
+    const refreshToken = cookies?.[config.auth.refreshCookieName] ?? body?.refreshToken ?? null;
 
-      try {
-        if (!refreshToken) {
-          return reply.code(400).send({
-            error: 'validation_failed',
-            message: 'Refresh token is required',
-            code: 'missing_refresh_token',
-          });
-        }
-
-        let refreshPayload;
-        try {
-          refreshPayload = authService.verifyRefreshToken(refreshToken);
-        } catch (error) {
-          logger.warn('Invalid refresh token presented', {
-            error: error instanceof Error ? error.message : String(error),
-          });
-          return reply.code(401).send({
-            error: 'unauthorized',
-            message: 'Invalid refresh token',
-            code: 'invalid_refresh_token',
-          });
-        }
-
-        const tokens = authService.refreshTokens(refreshToken);
-        const user = await getUserById(refreshPayload.sub);
-        if (!user || !user.isActive) {
-          return reply.code(401).send({
-            error: 'unauthorized',
-            message: 'User account is inactive or no longer exists',
-            code: 'user_inactive',
-          });
-        }
-
-        logger.info('Token refresh successful', {
-          userId: refreshPayload.sub,
-          userEmail: refreshPayload.email,
-        });
-
-        setRefreshCookie(reply, config, tokens.refreshToken, tokens.refreshExpiresIn);
-
-        return reply.code(200).send({
-          message: 'Token refresh successful',
-          user: {
-            id: user.id,
-            email: user.email,
-            role: user.role,
-            isActive: user.isActive,
-          },
-          accessToken: tokens.accessToken,
-          expiresIn: tokens.expiresIn,
-        });
-      } catch (error: unknown) {
-        logger.error(error instanceof Error ? error : String(error), {
-          event: 'http_request',
-          route: 'POST /auth/refresh',
-          statusCode: 500,
-          error: 'internal_error',
-        });
-
-        return reply.code(401).send({
-          error: 'unauthorized',
-          message: 'Token refresh failed',
-          code: 'refresh_failed',
+    try {
+      if (!refreshToken) {
+        return reply.code(400).send({
+          error: 'validation_failed',
+          message: 'Refresh token is required',
+          code: 'missing_refresh_token',
         });
       }
-    },
-  );
+
+      let refreshPayload;
+      try {
+        refreshPayload = authService.verifyRefreshToken(refreshToken);
+      } catch (error) {
+        logger.warn('Invalid refresh token presented', {
+          error: error instanceof Error ? error.message : String(error),
+        });
+        return reply.code(401).send({
+          error: 'unauthorized',
+          message: 'Invalid refresh token',
+          code: 'invalid_refresh_token',
+        });
+      }
+
+      const tokens = authService.refreshTokens(refreshToken);
+      const user = await getUserById(refreshPayload.sub);
+      if (!user || !user.isActive) {
+        return reply.code(401).send({
+          error: 'unauthorized',
+          message: 'User account is inactive or no longer exists',
+          code: 'user_inactive',
+        });
+      }
+
+      logger.info('Token refresh successful', {
+        userId: refreshPayload.sub,
+        userEmail: refreshPayload.email,
+      });
+
+      setRefreshCookie(reply, config, tokens.refreshToken, tokens.refreshExpiresIn);
+
+      return reply.code(200).send({
+        message: 'Token refresh successful',
+        user: {
+          id: user.id,
+          email: user.email,
+          role: user.role,
+          isActive: user.isActive,
+        },
+        accessToken: tokens.accessToken,
+        expiresIn: tokens.expiresIn,
+      });
+    } catch (error: unknown) {
+      logger.error(error instanceof Error ? error : String(error), {
+        event: 'http_request',
+        route: 'POST /auth/refresh',
+        statusCode: 500,
+        error: 'internal_error',
+      });
+
+      return reply.code(401).send({
+        error: 'unauthorized',
+        message: 'Token refresh failed',
+        code: 'refresh_failed',
+      });
+    }
+  });
 
   app.post('/auth/logout', { preHandler: [uploadRateLimitMiddleware] }, async (_request, reply) => {
     clearRefreshCookie(reply, config);
@@ -4355,13 +4370,13 @@ export function registerExtendedRoutes(app: FastifyInstance, options: ExtendedRo
         });
       }
 
-        logger.info('Job action executed', {
-          event: 'job_action_executed',
-          userId: authenticatedUser?.id,
-          jobId,
-          actionType: result.actionType,
-          success: result.success,
-        });
+      logger.info('Job action executed', {
+        event: 'job_action_executed',
+        userId: authenticatedUser?.id,
+        jobId,
+        actionType: result.actionType,
+        success: result.success,
+      });
 
       return reply.send({
         success: result.success,

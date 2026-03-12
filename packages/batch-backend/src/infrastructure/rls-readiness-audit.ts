@@ -89,9 +89,7 @@ async function verifyIndexes(client: PoolClient, errors: string[]): Promise<void
   const discovered = new Set(result.rows.map((row) => row.indexname));
   for (const requirement of REQUIRED_POLICY_INDEXES) {
     if (!discovered.has(requirement.index)) {
-      errors.push(
-        `Missing RLS policy-supporting index: ${requirement.table}.${requirement.index}`,
-      );
+      errors.push(`Missing RLS policy-supporting index: ${requirement.table}.${requirement.index}`);
     }
   }
 }
@@ -151,9 +149,7 @@ export async function runRlsReadinessAuditWithClient(
   const enabledRlsTables = await loadRlsEnabledTables(client);
 
   if (enabledRlsTables.length > 0) {
-    warnings.push(
-      `RLS already enabled on user-scoped table(s): ${enabledRlsTables.join(', ')}`,
-    );
+    warnings.push(`RLS already enabled on user-scoped table(s): ${enabledRlsTables.join(', ')}`);
   }
 
   return {

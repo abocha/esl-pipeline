@@ -19,15 +19,9 @@ import {
   getDecryptedNotionToken,
   getSettingsByUserId,
 } from '../domain/settings-repository.js';
+import { registerRunningJob, unregisterRunningJob } from '../infrastructure/job-cancellation.js';
 import { createJobLogger } from '../infrastructure/logger.js';
-import {
-  runAssignmentJob,
-  runRerunAssignmentJob,
-} from '../infrastructure/orchestrator-service.js';
-import {
-  registerRunningJob,
-  unregisterRunningJob,
-} from '../infrastructure/job-cancellation.js';
+import { runAssignmentJob, runRerunAssignmentJob } from '../infrastructure/orchestrator-service.js';
 import type { QueueJobPayload } from '../infrastructure/queue-bullmq.js';
 import { createTranscriptionStorageForUri } from '../infrastructure/transcription-storage.js';
 import {
@@ -107,10 +101,10 @@ export async function processQueueJob(payload: QueueJobPayload): Promise<void> {
     // Fetch user settings if job is linked to a user
     let userSettings:
       | {
-        elevenLabsApiKey?: string | null;
-        notionToken?: string | null;
-        ttsProvider?: 'elevenlabs' | 'google' | null;
-      }
+          elevenLabsApiKey?: string | null;
+          notionToken?: string | null;
+          ttsProvider?: 'elevenlabs' | 'google' | null;
+        }
       | undefined;
     if (running.userId) {
       const settings = await getSettingsByUserId(running.userId);

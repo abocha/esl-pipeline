@@ -29,7 +29,9 @@ describe('MinimalAssignment quota window helper', () => {
       activeQuotaAppliesToCurrentSelection: true,
     });
 
-    expect(decision.blockedReason).toBe('Daily token budget exhausted for selected model/provider.');
+    expect(decision.blockedReason).toBe(
+      'Daily token budget exhausted for selected model/provider.',
+    );
     expect(decision.shouldTrackWindow).toBe(false);
   });
 

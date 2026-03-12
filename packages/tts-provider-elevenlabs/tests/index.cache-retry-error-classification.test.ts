@@ -1,6 +1,5 @@
 import { unlink } from 'node:fs/promises';
 import { join } from 'node:path';
-
 import { describe, expect, it, vi } from 'vitest';
 
 import * as eleven from '../src/eleven.js';
@@ -34,7 +33,9 @@ describe('tts elevenlabs integration', () => {
         outPath: dir,
         ttsStrategy: 'tts',
       }),
-    ).rejects.toThrow(/Failed to synthesize line with voice "voice_id_default" \[provider_rate_limit\]/);
+    ).rejects.toThrow(
+      /Failed to synthesize line with voice "voice_id_default" \[provider_rate_limit\]/,
+    );
     expect(convertMock).toHaveBeenCalledTimes(3);
   });
 
@@ -54,7 +55,9 @@ describe('tts elevenlabs integration', () => {
         outPath: dir,
         ttsStrategy: 'tts',
       }),
-    ).rejects.toThrow(/Failed to synthesize line with voice "voice_id_default" \[provider_contract_error\]/);
+    ).rejects.toThrow(
+      /Failed to synthesize line with voice "voice_id_default" \[provider_contract_error\]/,
+    );
     expect(convertMock).toHaveBeenCalledTimes(3);
   });
 

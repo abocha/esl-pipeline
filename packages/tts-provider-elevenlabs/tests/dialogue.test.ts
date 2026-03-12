@@ -1,8 +1,16 @@
 import { mkdtemp, readFile, readdir, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+
+import {
+  buildDialogueHash,
+  chunkDialogueInputs,
+  synthesizeDialogue,
+  synthesizeDialogueChunk,
+} from '../src/dialogue.js';
+import * as ffmpeg from '../src/ffmpeg.js';
+import type { DialogueInput, DialogueSynthesisOptions } from '../src/types.js';
 
 const mocks = vi.hoisted(() => {
   const convertMock = vi.fn();
@@ -42,15 +50,6 @@ vi.mock('@elevenlabs/elevenlabs-js', () => ({
   ElevenLabsError: mocks.HoistedElevenLabsError,
   ElevenLabsTimeoutError: mocks.HoistedElevenLabsTimeoutError,
 }));
-
-import {
-  buildDialogueHash,
-  chunkDialogueInputs,
-  synthesizeDialogue,
-  synthesizeDialogueChunk,
-} from '../src/dialogue.js';
-import * as ffmpeg from '../src/ffmpeg.js';
-import type { DialogueInput, DialogueSynthesisOptions } from '../src/types.js';
 
 function streamFromText(text: string): ReadableStream<Uint8Array> {
   const encoder = new TextEncoder();
@@ -122,7 +121,9 @@ describe('synthesizeDialogueChunk', () => {
 
   it('validates missing credentials and empty chunk', async () => {
     const opts: DialogueSynthesisOptions = { inputs: [] };
-    await expect(synthesizeDialogueChunk([], opts, '')).rejects.toThrow('Cannot synthesize empty dialogue chunk');
+    await expect(synthesizeDialogueChunk([], opts, '')).rejects.toThrow(
+      'Cannot synthesize empty dialogue chunk',
+    );
 
     const chunk: DialogueInput[] = [{ text: 'Hello', voiceId: 'voice1' }];
     await expect(synthesizeDialogueChunk(chunk, { inputs: chunk }, '')).rejects.toThrow(

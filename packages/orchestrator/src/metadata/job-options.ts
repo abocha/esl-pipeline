@@ -58,7 +58,8 @@ export async function resolveJobOptions(
   const { voices, voiceAccents } = normalizeVoiceCatalogToOptions(voiceCatalog);
   const ttsProviders = resolveRegisteredTtsProviders();
   const defaultTtsProvider = resolveDefaultTtsProvider(ttsProviders);
-  const { ttsModelOptionsByProvider, defaultTtsModelByProvider } = buildTtsModelMetadata(ttsProviders);
+  const { ttsModelOptionsByProvider, defaultTtsModelByProvider } =
+    buildTtsModelMetadata(ttsProviders);
 
   return {
     presets,
@@ -91,9 +92,7 @@ function resolveDefaultTtsProvider(availableProviders: TtsProviderId[]): TtsProv
   return availableProviders[0];
 }
 
-function buildTtsModelMetadata(
-  availableProviders: TtsProviderId[],
-): {
+function buildTtsModelMetadata(availableProviders: TtsProviderId[]): {
   ttsModelOptionsByProvider: Partial<Record<TtsProviderId, string[]>>;
   defaultTtsModelByProvider: Partial<Record<TtsProviderId, string>>;
 } {
@@ -103,7 +102,9 @@ function buildTtsModelMetadata(
   for (const providerId of availableProviders) {
     if (providerId === 'google') {
       ttsModelOptionsByProvider.google = [...GOOGLE_TTS_MODELS];
-      const metadataModel = getRegisteredTtsProvider('google')?.providerMetadata({}).modelFamily?.trim();
+      const metadataModel = getRegisteredTtsProvider('google')
+        ?.providerMetadata({})
+        .modelFamily?.trim();
       const defaultModel =
         metadataModel && GOOGLE_TTS_MODELS.includes(metadataModel as GoogleTtsModel)
           ? metadataModel

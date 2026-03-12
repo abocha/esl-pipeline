@@ -44,12 +44,14 @@ Out of scope:
 ## Important API / Interface / Type Changes
 
 1. `@esl-pipeline/contracts` adds:
+
 - contract version constants
 - `CONTRACT_VERSIONS`
 - `DB_MIGRATION_HEAD`
 - `VersionMetaResponse`
 
 2. Batch backend adds endpoint:
+
 - `GET /meta/version`
 
 Response shape:
@@ -71,25 +73,30 @@ Response shape:
 ## File-by-File Implementation Plan
 
 1. Contracts foundation:
+
 - `packages/contracts/src/contract-versions.ts` (new)
 - `packages/contracts/src/index.ts` (exports + DTO)
 
 2. Backend endpoint:
+
 - `packages/batch-backend/src/application/version-meta.ts` (new)
 - `packages/batch-backend/src/transport/core-routes.ts` (`/meta/version`)
 - `packages/batch-backend/tests/transport.http-server.integration.test.ts` (coverage)
 
 3. Release scripts:
+
 - `scripts/release/compute-next-version.mjs` (new)
 - `scripts/release/resolve-release-bump-from-pr.mjs` (new)
 - `scripts/release/verify-contract-version-consistency.mjs` (new)
 - `scripts/release/write-release-files.mjs` (new)
 
 4. Workflow automation:
+
 - `.github/workflows/ci.yml` (PR release-label guard + contract consistency step)
 - `.github/workflows/release-on-merge.yml` (new)
 
 5. Policy and docs:
+
 - `package.json` (remove changesets scripts/dependency; add release scripts)
 - `packages/orchestrator/package.json` (`private: true`)
 - `CONTRIBUTING.md`
@@ -105,12 +112,15 @@ Response shape:
 ## Version Bump Matrix
 
 1. Major:
+
 - Breaking compatibility in any tracked contract.
 
 2. Minor:
+
 - Backward-compatible feature additions across contract/product surface.
 
 3. Patch:
+
 - Fixes/docs/ops/refactors with no contract break.
 
 ## CI / Release Workflow Spec
@@ -118,9 +128,11 @@ Response shape:
 PR checks:
 
 1. PR must include exactly one release label:
+
 - `release:major`
 - `release:minor`
 - `release:patch`
+
 2. Contract consistency checker must pass.
 
 On merged PR to main:
@@ -135,16 +147,19 @@ On merged PR to main:
 ## Test Cases And Scenarios
 
 1. Script unit behavior:
+
 - release label parser fails on 0 or >1 labels.
 - semver bump script computes major/minor/patch correctly.
 - contract verifier fails on invalid semver constants.
 - contract verifier fails when DB migration head is stale.
 
 2. Backend route:
+
 - `/meta/version` returns expected payload.
 - `/meta/version` available even when extended API is disabled.
 
 3. CI/Workflow:
+
 - PR without release label fails guard.
 - PR with conflicting release labels fails guard.
 - merged PR creates synchronized commit + tag.

@@ -3,11 +3,11 @@ import path from 'node:path';
 import type { BatchBackendConfig } from '../config/env.js';
 import { loadConfig } from '../config/env.js';
 import type { ProfileRecord } from '../domain/profile-model.js';
-import { listProfileIdsWithActiveRevision } from '../domain/profile-revision-repository.js';
 import { getProfileById, listProfiles } from '../domain/profile-repository.js';
+import { listProfileIdsWithActiveRevision } from '../domain/profile-revision-repository.js';
 import type { TemplateRecord } from '../domain/template-model.js';
-import { listTemplateIdsWithActiveRevision } from '../domain/template-revision-repository.js';
 import { getTemplateById, listTemplates } from '../domain/template-repository.js';
+import { listTemplateIdsWithActiveRevision } from '../domain/template-revision-repository.js';
 import { resolveRepoPath } from './prompt-assembly.js';
 
 const PROMPT_EXTENSIONS = new Set(['.md', '.txt']);
@@ -222,7 +222,10 @@ export async function resolvePromptSelection(
 async function loadPromptOptionLists(
   dependencies: PromptOptionsDependencies,
 ): Promise<PromptOptionLists> {
-  const templateRoot = resolveConfiguredPromptRoot(dependencies.config.prompt.templatePath, 'template');
+  const templateRoot = resolveConfiguredPromptRoot(
+    dependencies.config.prompt.templatePath,
+    'template',
+  );
   const profileRoot = resolveConfiguredPromptRoot(
     dependencies.config.prompt.defaultProfilePath,
     'profile',
@@ -304,9 +307,7 @@ async function listAllProfileRecords(
   return items;
 }
 
-async function loadTemplateOptionList(
-  dependencies: PromptOptionsDependencies,
-): Promise<{
+async function loadTemplateOptionList(dependencies: PromptOptionsDependencies): Promise<{
   templates: PromptOptionWithPath[];
   templateRoot: string;
   defaultTemplateId: string | null;
@@ -319,9 +320,7 @@ async function loadTemplateOptionList(
   };
 }
 
-async function loadProfileOptionList(
-  dependencies: PromptOptionsDependencies,
-): Promise<{
+async function loadProfileOptionList(dependencies: PromptOptionsDependencies): Promise<{
   profiles: PromptOptionWithPath[];
   profileRoot: string;
   defaultProfileId: string | null;

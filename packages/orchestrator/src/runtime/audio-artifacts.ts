@@ -19,7 +19,9 @@ export function resolveAudioArtifactsFromManifest(
   if (!manifest) return {};
   return {
     studyText: cloneAudioArtifact(manifest.audioArtifacts?.studyText),
-    pronunciationShadowSentence: cloneAudioArtifact(manifest.audioArtifacts?.pronunciationShadowSentence),
+    pronunciationShadowSentence: cloneAudioArtifact(
+      manifest.audioArtifacts?.pronunciationShadowSentence,
+    ),
   };
 }
 

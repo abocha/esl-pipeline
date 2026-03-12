@@ -2,13 +2,13 @@ import type { GenerationProvider } from '@esl-pipeline/contracts';
 
 import type { BatchBackendConfig } from '../config/env.js';
 import {
-  getGenerationBudgetUsage,
-  recordGenerationActualUsage,
-  reserveGenerationBudget,
   type GenerationBudgetLimitType,
   type GenerationBudgetReservationResult,
   type GenerationBudgetUsage,
   type ReserveGenerationBudgetInput,
+  getGenerationBudgetUsage,
+  recordGenerationActualUsage,
+  reserveGenerationBudget,
 } from '../domain/generation-budget-repository.js';
 
 const ESTIMATED_CHARS_PER_TOKEN = 4;
@@ -96,10 +96,7 @@ function counterKey(args: {
   return `${args.bucket}:${args.bucketStart.toISOString()}:${args.provider}:${args.model}`;
 }
 
-function getCounter(
-  map: Map<string, InMemoryCounters>,
-  key: string,
-): InMemoryCounters {
+function getCounter(map: Map<string, InMemoryCounters>, key: string): InMemoryCounters {
   const current = map.get(key);
   if (current) return current;
   const created: InMemoryCounters = {
@@ -260,7 +257,10 @@ const inMemoryGenerationBudgetRepository: GenerationBudgetRepository = {
   },
 };
 
-function resolveProviderLimits(config: BatchBackendConfig['generation'], provider: GenerationProvider) {
+function resolveProviderLimits(
+  config: BatchBackendConfig['generation'],
+  provider: GenerationProvider,
+) {
   if (provider === 'openai') {
     return {
       rpmBudget: config.providers.openai.rpmBudget,
@@ -290,7 +290,9 @@ function resolveAllowedModels(
     return new Set(config.models.openai.allowed.map((model) => model.trim()).filter(Boolean));
   }
   if (provider === 'google_ai_studio') {
-    return new Set(config.models.googleAiStudio.allowed.map((model) => model.trim()).filter(Boolean));
+    return new Set(
+      config.models.googleAiStudio.allowed.map((model) => model.trim()).filter(Boolean),
+    );
   }
   return new Set(config.models.openrouter.allowed.map((model) => model.trim()).filter(Boolean));
 }
@@ -300,7 +302,9 @@ function estimateTokens(args: {
   requestedMaxOutputTokens?: number;
   hardCap: number;
 }): number {
-  const estimatedInputTokens = Math.ceil(Math.max(1, args.prompt.length) / ESTIMATED_CHARS_PER_TOKEN);
+  const estimatedInputTokens = Math.ceil(
+    Math.max(1, args.prompt.length) / ESTIMATED_CHARS_PER_TOKEN,
+  );
   const outputBudget =
     typeof args.requestedMaxOutputTokens === 'number' && args.requestedMaxOutputTokens > 0
       ? Math.floor(args.requestedMaxOutputTokens)

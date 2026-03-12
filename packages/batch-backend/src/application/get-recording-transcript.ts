@@ -1,5 +1,6 @@
-import type { TranscriptMode, TranscriptRecord } from '../domain/transcript-model.js';
 import type { SttProviderId } from '@esl-pipeline/contracts';
+
+import type { TranscriptMode, TranscriptRecord } from '../domain/transcript-model.js';
 import { getTranscriptByRecordingId } from '../domain/transcript-repository.js';
 import type { TranscriptionStorage } from '../infrastructure/transcription-storage.js';
 import { createTranscriptionStorageForUri } from '../infrastructure/transcription-storage.js';

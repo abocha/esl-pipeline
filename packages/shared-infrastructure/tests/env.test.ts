@@ -212,7 +212,10 @@ describe('env utilities', () => {
     const originalEnv = process.env;
 
     beforeEach(() => {
-      testRoot = join(tmpdir(), `test-cli-env-${Date.now()}-${Math.random().toString(16).slice(2)}`);
+      testRoot = join(
+        tmpdir(),
+        `test-cli-env-${Date.now()}-${Math.random().toString(16).slice(2)}`,
+      );
       repoRoot = join(testRoot, 'repo');
       cwdDir = join(repoRoot, 'workspace');
       const modulePath = join(repoRoot, 'packages', 'orchestrator', 'dist', 'cli.js');

@@ -1,11 +1,13 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { GenerateDraftProviderError, generateDraft } from '../src/application/generate-draft.js';
+import { ProviderExecutionError } from '../src/application/generation-providers.js';
 import type { BatchBackendConfig } from '../src/config/env.js';
 import { loadConfig } from '../src/config/env.js';
-import { generateDraft, GenerateDraftProviderError } from '../src/application/generate-draft.js';
-import { ProviderExecutionError } from '../src/application/generation-providers.js';
 
-function createConfig(overrides: Partial<BatchBackendConfig['generation']> = {}): BatchBackendConfig {
+function createConfig(
+  overrides: Partial<BatchBackendConfig['generation']> = {},
+): BatchBackendConfig {
   const base = loadConfig();
   return {
     ...base,
@@ -28,7 +30,12 @@ function createConfig(overrides: Partial<BatchBackendConfig['generation']> = {})
           primary: 'gemini-3-flash-preview',
           fallback: 'gemini-2.5-flash-lite',
           tertiary: 'gemini-2.5-pro',
-          allowed: ['gemini-3-flash-preview', 'gemini-2.5-flash-lite', 'gemini-2.5-pro', 'gemini-custom-001'],
+          allowed: [
+            'gemini-3-flash-preview',
+            'gemini-2.5-flash-lite',
+            'gemini-2.5-pro',
+            'gemini-custom-001',
+          ],
         },
         openrouter: {
           primary: 'openrouter/test-primary',

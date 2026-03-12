@@ -2,6 +2,7 @@ import { mkdtemp, readFile, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, expect, it, vi } from 'vitest';
+
 import { parseMarkdownContext } from '@esl-pipeline/pmd';
 
 import { pickVoiceForSpeaker } from '../src/assign.js';
@@ -110,7 +111,11 @@ describe('tts elevenlabs gender-aware voice selection', () => {
       voiceMap: { auto: true },
       catalog: {
         voices: [
-          { id: 'voice_social', name: 'Social', labels: { use_case: 'social', descriptive: 'casual' } },
+          {
+            id: 'voice_social',
+            name: 'Social',
+            labels: { use_case: 'social', descriptive: 'casual' },
+          },
           {
             id: 'voice_formal',
             name: 'Formal',

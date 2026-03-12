@@ -40,9 +40,7 @@ const NOTION_COLOR_TO_HEX: Record<string, string> = {
 function normalizePronunciationSectionLine(line: string): string {
   const trimmed = line.trim();
   const withoutBullet = trimmed.replace(/^\s*(?:[-*]\s+)?/, '').trim();
-  return /^`[^`]+`$/.test(withoutBullet)
-    ? withoutBullet.slice(1, -1).trim()
-    : withoutBullet;
+  return /^`[^`]+`$/.test(withoutBullet) ? withoutBullet.slice(1, -1).trim() : withoutBullet;
 }
 
 function parseShadowSentenceLine(line: string): { matches: boolean; hasValue: boolean } {

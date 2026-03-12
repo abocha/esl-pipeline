@@ -3,21 +3,29 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
+import { getPromptOptions } from '../application/prompt-options.js';
 import { loadBatchBackendEnv } from '../bootstrap/env.js';
 import { loadConfig } from '../config/env.js';
-import { getPromptOptions } from '../application/prompt-options.js';
+import {
+  getProfileById,
+  setProfileActiveRevision,
+  upsertProfile,
+} from '../domain/profile-repository.js';
 import {
   activateProfileRevision,
   getLatestProfileRevisionByHash,
   insertProfileRevision,
 } from '../domain/profile-revision-repository.js';
-import { getProfileById, setProfileActiveRevision, upsertProfile } from '../domain/profile-repository.js';
+import {
+  getTemplateById,
+  setTemplateActiveRevision,
+  upsertTemplate,
+} from '../domain/template-repository.js';
 import {
   activateTemplateRevision,
   getLatestTemplateRevisionByHash,
   insertTemplateRevision,
 } from '../domain/template-revision-repository.js';
-import { getTemplateById, setTemplateActiveRevision, upsertTemplate } from '../domain/template-repository.js';
 import { closePgPool } from '../infrastructure/db.js';
 
 const PROMPT_EXTENSIONS = new Set(['.md', '.txt']);
@@ -148,15 +156,10 @@ async function collectPromptFiles(rootDir: string): Promise<string[]> {
 }
 
 function hasTemplateMarker(content: string): boolean {
-  return content
-    .split(/\r?\n/)
-    .some((line) => line.trim() === TEMPLATE_PROFILE_MARKER);
+  return content.split(/\r?\n/).some((line) => line.trim() === TEMPLATE_PROFILE_MARKER);
 }
 
-async function scanAssets(params: {
-  templateRoot: string;
-  profileRoot: string;
-}): Promise<{
+async function scanAssets(params: { templateRoot: string; profileRoot: string }): Promise<{
   templates: ScannedAsset[];
   profiles: ScannedAsset[];
   scannedFiles: number;
@@ -195,7 +198,9 @@ async function scanAssets(params: {
     }
 
     if (!isWithinRoot(params.profileRoot, absolutePath)) continue;
-    const id = normalizePromptId(path.relative(params.profileRoot, absolutePath).split(path.sep).join('/'));
+    const id = normalizePromptId(
+      path.relative(params.profileRoot, absolutePath).split(path.sep).join('/'),
+    );
     profiles.push({
       id,
       absolutePath,
@@ -212,7 +217,11 @@ async function scanAssets(params: {
   };
 }
 
-async function importTemplates(assets: ScannedAsset[], dryRun: boolean, stats: BootstrapStats): Promise<void> {
+async function importTemplates(
+  assets: ScannedAsset[],
+  dryRun: boolean,
+  stats: BootstrapStats,
+): Promise<void> {
   for (const asset of assets) {
     const existing = await getTemplateById(asset.id);
     const current = dryRun
@@ -256,7 +265,11 @@ async function importTemplates(assets: ScannedAsset[], dryRun: boolean, stats: B
   }
 }
 
-async function importProfiles(assets: ScannedAsset[], dryRun: boolean, stats: BootstrapStats): Promise<void> {
+async function importProfiles(
+  assets: ScannedAsset[],
+  dryRun: boolean,
+  stats: BootstrapStats,
+): Promise<void> {
   for (const asset of assets) {
     const existing = await getProfileById(asset.id);
     const current = dryRun
@@ -352,7 +365,9 @@ async function run(): Promise<void> {
   };
 
   if (scanned.templates.length === 0) {
-    throw new Error('No template assets discovered. Ensure template files include INSERT PROFILE HERE marker.');
+    throw new Error(
+      'No template assets discovered. Ensure template files include INSERT PROFILE HERE marker.',
+    );
   }
   if (scanned.profiles.length === 0) {
     throw new Error('No profile assets discovered. Ensure profile files exist under profile root.');

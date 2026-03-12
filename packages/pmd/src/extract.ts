@@ -53,7 +53,7 @@ function normalizeLabel(value: string): string {
   return value
     .replaceAll(/[\u2018\u2019]/g, "'")
     .trim()
-      .toLowerCase();
+    .toLowerCase();
 }
 
 function normalizeHeadingText(value: string): string {
@@ -204,18 +204,12 @@ function findFirstPronunciationHeading(body: PmdBlock[]): PmdHeading | null {
   return null;
 }
 
-function parseMarkedField(
-  line: string,
-  marker: 'mode' | 'shadow sentence',
-): string | null {
+function parseMarkedField(line: string, marker: 'mode' | 'shadow sentence'): string | null {
   const withoutBullet = line.replace(/^\s*(?:[-*]\s+)?/, '').trim();
   const normalizedLine = /^`[^`]+`$/.test(withoutBullet)
     ? withoutBullet.slice(1, -1).trim()
     : withoutBullet;
-  const regex = new RegExp(
-    String.raw`^(?:\*\*)?${marker}\s*:\s*(?:\*\*)?\s*(.+?)\s*$`,
-    'i',
-  );
+  const regex = new RegExp(String.raw`^(?:\*\*)?${marker}\s*:\s*(?:\*\*)?\s*(.+?)\s*$`, 'i');
   const match = regex.exec(normalizedLine);
   if (!match?.[1]) return null;
   const value = match[1].trim();
@@ -251,8 +245,7 @@ function parsePronunciationWordLine(
       return {
         issue: {
           code: 'invalid_word_transcription',
-          message:
-            'Word transcription must be wrapped in forward slashes, e.g. /wɜːd/.',
+          message: 'Word transcription must be wrapped in forward slashes, e.g. /wɜːd/.',
           line: lineNumber,
         },
       };
@@ -305,19 +298,21 @@ export function extractPronunciationShadowFocus(
   const sortedHeadings = [
     ...collectHeadings(md.document.body, 2),
     ...collectHeadings(md.document.body, 3),
-  ]
-    .sort((a, b) => {
-      const aLine = a.position?.start.line ?? 0;
-      const bLine = b.position?.start.line ?? 0;
-      return aLine - bLine;
-    });
+  ].sort((a, b) => {
+    const aLine = a.position?.start.line ?? 0;
+    const bLine = b.position?.start.line ?? 0;
+    return aLine - bLine;
+  });
   const nextHeading = sortedHeadings.find((candidate) => {
     const line = candidate.position?.start.line ?? 0;
     if (line <= sectionStartLine) return false;
     return candidate.depth <= 3;
   });
   const endLineExclusive = nextHeading?.position?.start.line ?? md.contentLines.length + 1;
-  const sectionLines = md.contentLines.slice(sectionStartLine, Math.max(sectionStartLine, endLineExclusive - 1));
+  const sectionLines = md.contentLines.slice(
+    sectionStartLine,
+    Math.max(sectionStartLine, endLineExclusive - 1),
+  );
 
   let modeValue: string | null = null;
   let shadowSentence: string | undefined;

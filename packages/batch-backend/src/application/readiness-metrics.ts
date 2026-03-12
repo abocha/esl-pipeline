@@ -1,9 +1,6 @@
 import type { ReadinessMetricsResponse, VoiceProviderErrorCategory } from '@esl-pipeline/contracts';
 
-import {
-  getReadinessMetrics,
-  listFailedJobErrorsForReadiness,
-} from '../domain/job-repository.js';
+import { getReadinessMetrics, listFailedJobErrorsForReadiness } from '../domain/job-repository.js';
 import { logger } from '../infrastructure/logger.js';
 import { READINESS_METRIC_SOURCE_MAP } from '../infrastructure/metrics.js';
 import {
@@ -71,18 +68,21 @@ export async function getReadinessMetricsWithDefaults(
   );
 
   if (hasTotalDrift || hasBreakdownDrift) {
-    logger.warn('Readiness provider-error totals differ between legacy SQL and parser normalization', {
-      event: 'readiness_provider_error_drift',
-      legacyProviderErrors,
-      normalizedProviderErrors,
-      legacyProviderErrorBreakdown,
-      normalizedProviderErrorBreakdown: normalizedProviderErrorBreakdownWithZeros,
-      hasTotalDrift,
-      hasBreakdownDrift,
-      from: resolved.from.toISOString(),
-      to: resolved.to.toISOString(),
-      userId: params.userId ?? null,
-    });
+    logger.warn(
+      'Readiness provider-error totals differ between legacy SQL and parser normalization',
+      {
+        event: 'readiness_provider_error_drift',
+        legacyProviderErrors,
+        normalizedProviderErrors,
+        legacyProviderErrorBreakdown,
+        normalizedProviderErrorBreakdown: normalizedProviderErrorBreakdownWithZeros,
+        hasTotalDrift,
+        hasBreakdownDrift,
+        from: resolved.from.toISOString(),
+        to: resolved.to.toISOString(),
+        userId: params.userId ?? null,
+      },
+    );
   }
 
   return {

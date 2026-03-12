@@ -3,6 +3,7 @@ import * as path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { ConfigurationError } from '@esl-pipeline/contracts';
+
 import { getElevenClient } from './eleven.js';
 import { buildVoiceCapabilitiesSnapshot } from './voiceCapabilities.js';
 
@@ -146,6 +147,10 @@ export async function syncVoices(outPath = DEFAULT_VOICES_OUT) {
   const usesDefault = path.normalize(requestedOut) === path.normalize(DEFAULT_VOICES_OUT);
   const abs = usesDefault ? await resolveDefaultOutPath() : path.resolve(requestedOut);
   await mkdir(path.dirname(abs), { recursive: true });
-  await writeFile(abs, JSON.stringify({ generatedAt, capabilities, voices: rows }, null, 2), 'utf8');
+  await writeFile(
+    abs,
+    JSON.stringify({ generatedAt, capabilities, voices: rows }, null, 2),
+    'utf8',
+  );
   return { count: rows.length, outPath: abs };
 }

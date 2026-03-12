@@ -37,6 +37,12 @@ pnpm docker:up
 
 `docker:prepare` creates required directories and validates write access.
 
+Optional tooling container (UV + Python) is now profile-gated and off by default:
+
+```bash
+docker compose -p esl-pipeline -f docker-compose.yml --profile tools up -d tools
+```
+
 ## Common Error
 
 If you see:

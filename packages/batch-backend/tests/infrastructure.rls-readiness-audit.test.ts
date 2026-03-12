@@ -89,9 +89,7 @@ describe('infrastructure/rls-readiness-audit', () => {
     expect(result.errors).toContain(
       'Missing RLS policy: uploaded_files.uploaded_files_user_scope_policy',
     );
-    expect(result.errors).toContain(
-      'Missing RLS policy-supporting index: jobs.idx_jobs_user_id',
-    );
+    expect(result.errors).toContain('Missing RLS policy-supporting index: jobs.idx_jobs_user_id');
     expect(result.errors).toContain('Unsafe PUBLIC grant on user-scoped table: jobs.SELECT');
   });
 

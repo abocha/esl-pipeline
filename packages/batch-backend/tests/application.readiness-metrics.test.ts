@@ -27,11 +27,13 @@ describe('application/readiness-metrics', () => {
       voiceFallbackSelections: null,
       voiceReuseSelections: null,
     });
-    const listFailedErrorsForReadiness = vi.fn().mockResolvedValue([
-      'Text-to-Dialogue synthesis failed [provider_rate_limit]: HTTP 429: too many requests',
-      'Voice generation timed out while calling provider for this lesson',
-      'frontmatter validation failed: missing title',
-    ]);
+    const listFailedErrorsForReadiness = vi
+      .fn()
+      .mockResolvedValue([
+        'Text-to-Dialogue synthesis failed [provider_rate_limit]: HTTP 429: too many requests',
+        'Voice generation timed out while calling provider for this lesson',
+        'frontmatter validation failed: missing title',
+      ]);
     const warnSpy = vi.spyOn(logger, 'warn');
 
     const from = new Date('2024-03-01T00:00:00.000Z');
@@ -193,10 +195,12 @@ describe('application/readiness-metrics', () => {
       voiceFallbackSelections: null,
       voiceReuseSelections: null,
     });
-    const listFailedErrorsForReadiness = vi.fn().mockResolvedValue([
-      'Text-to-Dialogue synthesis failed [provider_rate_limit]: HTTP 429',
-      'Provider timed out while generating dialogue',
-    ]);
+    const listFailedErrorsForReadiness = vi
+      .fn()
+      .mockResolvedValue([
+        'Text-to-Dialogue synthesis failed [provider_rate_limit]: HTTP 429',
+        'Provider timed out while generating dialogue',
+      ]);
     const warnSpy = vi.spyOn(logger, 'warn');
 
     await getReadinessMetricsWithDefaults(

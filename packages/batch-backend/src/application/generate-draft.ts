@@ -5,9 +5,9 @@ import type {
   GenerationProvider,
 } from '@esl-pipeline/contracts';
 import {
+  type ProviderRuntimeClassificationRules,
   classifyProviderRuntimeFailure,
   runProviderFallbackLadder,
-  type ProviderRuntimeClassificationRules,
 } from '@esl-pipeline/provider-runtime';
 
 import type { BatchBackendConfig } from '../config/env.js';
@@ -16,21 +16,21 @@ import type { GenerationBudgetUsage } from '../domain/generation-budget-reposito
 import { logger } from '../infrastructure/logger.js';
 import {
   GenerationBudgetExceededError,
+  type GenerationBudgetGuardDependencies,
   enforceGenerationBudgetBeforeAttempt,
   recordGenerationBudgetUsageAfterSuccess,
   resolveGenerationBudgetRepository,
-  type GenerationBudgetGuardDependencies,
 } from './generation-budget-guard.js';
-import { getPromptPackage } from './get-prompt-package.js';
+import { buildQuotaSnapshot, resolveGenerationCandidates } from './generation-policy.js';
 import {
+  ProviderExecutionError,
   type ProviderExecutionRequest,
   type ProviderExecutionResult,
-  ProviderExecutionError,
   executeGoogleGeneration,
   executeOpenAiGeneration,
   executeOpenRouterGeneration,
 } from './generation-providers.js';
-import { buildQuotaSnapshot, resolveGenerationCandidates } from './generation-policy.js';
+import { getPromptPackage } from './get-prompt-package.js';
 
 type ProviderExecutor = (args: {
   config: BatchBackendConfig['generation'];
@@ -120,7 +120,8 @@ export async function generateDraft(
     overrides: overrides?.budget,
   });
   const now = overrides?.now ?? (() => new Date());
-  const sleep = overrides?.sleep ?? ((ms: number) => new Promise((resolve) => setTimeout(resolve, ms)));
+  const sleep =
+    overrides?.sleep ?? ((ms: number) => new Promise((resolve) => setTimeout(resolve, ms)));
 
   const promptPackage = await promptPackages.getById(request.promptPackageId);
   if (!promptPackage) {
@@ -138,7 +139,8 @@ export async function generateDraft(
       category: 'provider_contract_error',
       provider: request.provider ?? config.generation.defaultProvider,
       model: request.model ?? 'unspecified',
-      message: 'No generation candidates are available for the current provider/model configuration.',
+      message:
+        'No generation candidates are available for the current provider/model configuration.',
     });
   }
 
@@ -210,8 +212,7 @@ export async function generateDraft(
     isFailFastError: (mappedError) =>
       mappedError.category === 'provider_contract_error' ||
       mappedError.category === 'budget_exceeded',
-    getRetryMax: (candidate) =>
-      retryMaxForProvider(config.generation, candidate.provider),
+    getRetryMax: (candidate) => retryMaxForProvider(config.generation, candidate.provider),
     getRetryBackoffMs: (candidate) =>
       retryBackoffForProvider(config.generation, candidate.provider),
     sleep,
@@ -277,7 +278,8 @@ function retryBackoffForProvider(
   provider: GenerationProvider,
 ): number {
   if (provider === 'openai') return Math.max(0, config.providers.openai.retryBackoffMs);
-  if (provider === 'google_ai_studio') return Math.max(0, config.providers.googleAiStudio.retryBackoffMs);
+  if (provider === 'google_ai_studio')
+    return Math.max(0, config.providers.googleAiStudio.retryBackoffMs);
   return Math.max(0, config.providers.openrouter.retryBackoffMs);
 }
 
@@ -345,8 +347,7 @@ function getErrorDetails(error: unknown): {
 
   if (error instanceof Error) {
     const maybeStatus = error as Error & { status?: number; code?: unknown };
-    const code =
-      typeof maybeStatus.code === 'string' ? maybeStatus.code : undefined;
+    const code = typeof maybeStatus.code === 'string' ? maybeStatus.code : undefined;
     return {
       status: maybeStatus.status,
       code,

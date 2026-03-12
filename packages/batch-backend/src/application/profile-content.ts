@@ -3,6 +3,12 @@ import path from 'node:path';
 
 import type { BatchBackendConfig } from '../config/env.js';
 import { loadConfig } from '../config/env.js';
+import {
+  getProfileById,
+  listProfiles,
+  setProfileActiveRevision,
+  upsertProfile,
+} from '../domain/profile-repository.js';
 import type {
   ProfileRevisionRecord,
   ProfileRevisionSource,
@@ -15,12 +21,6 @@ import {
   insertProfileRevision,
   listProfileRevisions,
 } from '../domain/profile-revision-repository.js';
-import {
-  getProfileById,
-  listProfiles,
-  setProfileActiveRevision,
-  upsertProfile,
-} from '../domain/profile-repository.js';
 import type { PromptOption } from './prompt-options.js';
 
 const PROFILE_EXTENSIONS = new Set(['.md', '.txt']);
@@ -155,9 +155,7 @@ function hashProfileContent(content: string): string {
   return createHash('sha256').update(content, 'utf8').digest('hex');
 }
 
-function toProfileRevisionSummary(
-  revision: ProfileRevisionRecord,
-): ProfileRevisionSummaryResponse {
+function toProfileRevisionSummary(revision: ProfileRevisionRecord): ProfileRevisionSummaryResponse {
   return {
     id: revision.id,
     profileId: revision.profileId,
@@ -270,7 +268,10 @@ export async function getProfileContent(
   const profile = await dependencies.profiles.getById(normalizedProfileId);
   if (!profile?.activeRevisionId) return null;
 
-  const revision = await dependencies.revisions.getById(normalizedProfileId, profile.activeRevisionId);
+  const revision = await dependencies.revisions.getById(
+    normalizedProfileId,
+    profile.activeRevisionId,
+  );
   if (!revision) return null;
 
   return {

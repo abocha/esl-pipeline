@@ -2,16 +2,16 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Link } from 'react-router-dom';
 
 import type {
-  JobState,
   JobListResponse,
   JobProvenanceResponse,
+  JobState,
   ProfileRevisionSummaryResponse,
   PromptPackageLineageResponse,
-  TemplateRevisionSummaryResponse,
   StudentProfile,
-  StudentTimelineType,
   StudentProfileBindingListResponse,
   StudentTimelineResponse,
+  StudentTimelineType,
+  TemplateRevisionSummaryResponse,
 } from '../../utils/api';
 import {
   activateProfileRevision,
@@ -144,8 +144,9 @@ export const StudentWorkspace: React.FC = () => {
   const [createStudentBusy, setCreateStudentBusy] = useState(false);
   const [createStudentError, setCreateStudentError] = useState<string | null>(null);
   const [createStudentSuccess, setCreateStudentSuccess] = useState<string | null>(null);
-  const [createStudentForm, setCreateStudentForm] =
-    useState<CreateStudentFormState>(INITIAL_CREATE_STUDENT_FORM);
+  const [createStudentForm, setCreateStudentForm] = useState<CreateStudentFormState>(
+    INITIAL_CREATE_STUDENT_FORM,
+  );
 
   const [profileOptions, setProfileOptions] = useState<{ id: string; label: string }[]>([]);
   const [profileOptionsError, setProfileOptionsError] = useState<string | null>(null);
@@ -153,9 +154,9 @@ export const StudentWorkspace: React.FC = () => {
 
   const [profileEditorText, setProfileEditorText] = useState('');
   const [loadedProfileContent, setLoadedProfileContent] = useState('');
-  const [profileBusy, setProfileBusy] = useState<'loading' | 'saving' | 'restoring' | 'activating' | null>(
-    null,
-  );
+  const [profileBusy, setProfileBusy] = useState<
+    'loading' | 'saving' | 'restoring' | 'activating' | null
+  >(null);
   const [profileError, setProfileError] = useState<string | null>(null);
   const [profileSuccess, setProfileSuccess] = useState<string | null>(null);
   const [profileRevisions, setProfileRevisions] = useState<ProfileRevisionSummaryResponse[]>([]);
@@ -176,24 +177,22 @@ export const StudentWorkspace: React.FC = () => {
   const [jobHistory, setJobHistory] = useState<JobListResponse['jobs']>([]);
   const [jobsLoading, setJobsLoading] = useState(false);
   const [jobsError, setJobsError] = useState<string | null>(null);
-  const [historyFiltersDraft, setHistoryFiltersDraft] = useState<HistoryFilters>(
-    INITIAL_HISTORY_FILTERS,
-  );
-  const [historyFiltersApplied, setHistoryFiltersApplied] = useState<HistoryFilters>(
-    INITIAL_HISTORY_FILTERS,
-  );
+  const [historyFiltersDraft, setHistoryFiltersDraft] =
+    useState<HistoryFilters>(INITIAL_HISTORY_FILTERS);
+  const [historyFiltersApplied, setHistoryFiltersApplied] =
+    useState<HistoryFilters>(INITIAL_HISTORY_FILTERS);
 
   const [timeline, setTimeline] = useState<StudentTimelineResponse['items']>([]);
   const [timelineLoading, setTimelineLoading] = useState(false);
   const [timelineError, setTimelineError] = useState<string | null>(null);
-  const [timelineFiltersDraft, setTimelineFiltersDraft] = useState<TimelineFilters>(
-    INITIAL_TIMELINE_FILTERS,
-  );
-  const [timelineFiltersApplied, setTimelineFiltersApplied] = useState<TimelineFilters>(
-    INITIAL_TIMELINE_FILTERS,
-  );
+  const [timelineFiltersDraft, setTimelineFiltersDraft] =
+    useState<TimelineFilters>(INITIAL_TIMELINE_FILTERS);
+  const [timelineFiltersApplied, setTimelineFiltersApplied] =
+    useState<TimelineFilters>(INITIAL_TIMELINE_FILTERS);
 
-  const [bindingHistory, setBindingHistory] = useState<StudentProfileBindingListResponse['items']>([]);
+  const [bindingHistory, setBindingHistory] = useState<StudentProfileBindingListResponse['items']>(
+    [],
+  );
   const [bindingHistoryLoading, setBindingHistoryLoading] = useState(false);
   const [bindingHistoryError, setBindingHistoryError] = useState<string | null>(null);
 
@@ -432,7 +431,8 @@ export const StudentWorkspace: React.FC = () => {
       setBindingHistory(response.items ?? []);
     } catch (error) {
       if (requestId !== bindingsRequestId.current) return;
-      const message = error instanceof Error ? error.message : 'Unable to load profile binding history.';
+      const message =
+        error instanceof Error ? error.message : 'Unable to load profile binding history.';
       setBindingHistoryError(message);
       setBindingHistory([]);
     } finally {
@@ -509,7 +509,9 @@ export const StudentWorkspace: React.FC = () => {
         ...(createStudentForm.accentPreference
           ? { accentPreference: createStudentForm.accentPreference }
           : {}),
-        ...(createStudentForm.manifestPreset ? { manifestPreset: createStudentForm.manifestPreset } : {}),
+        ...(createStudentForm.manifestPreset
+          ? { manifestPreset: createStudentForm.manifestPreset }
+          : {}),
       });
 
       await Promise.all([loadStudents(), loadProfileOptions()]);
@@ -544,7 +546,8 @@ export const StudentWorkspace: React.FC = () => {
         loadTimeline(selectedStudentId, timelineFiltersAppliedRef.current),
       ]);
     } catch (error) {
-      const message = error instanceof Error ? error.message : 'Unable to update student profile binding.';
+      const message =
+        error instanceof Error ? error.message : 'Unable to update student profile binding.';
       setProfileError(message);
     } finally {
       setProfileBindingSaving(false);
@@ -563,7 +566,11 @@ export const StudentWorkspace: React.FC = () => {
     try {
       const saved = await upsertProfileContent(selectedProfileId, profileEditorText);
       setLoadedProfileContent(saved.content ?? '');
-      const revisions = await listProfileRevisions(saved.id, { limit: 25, offset: 0, order: 'desc' });
+      const revisions = await listProfileRevisions(saved.id, {
+        limit: 25,
+        offset: 0,
+        order: 'desc',
+      });
       setProfileRevisions(revisions.items ?? []);
       setProfileSuccess('Profile content saved.');
       await loadTimeline(selectedStudentId, timelineFiltersAppliedRef.current);
@@ -584,12 +591,17 @@ export const StudentWorkspace: React.FC = () => {
       const restored = await restoreProfileRevision(selectedProfileId, revisionId);
       setProfileEditorText(restored.content ?? '');
       setLoadedProfileContent(restored.content ?? '');
-      const revisions = await listProfileRevisions(restored.id, { limit: 25, offset: 0, order: 'desc' });
+      const revisions = await listProfileRevisions(restored.id, {
+        limit: 25,
+        offset: 0,
+        order: 'desc',
+      });
       setProfileRevisions(revisions.items ?? []);
       setProfileSuccess('Profile revision restored.');
       await loadTimeline(selectedStudentId, timelineFiltersAppliedRef.current);
     } catch (error) {
-      const message = error instanceof Error ? error.message : 'Unable to restore profile revision.';
+      const message =
+        error instanceof Error ? error.message : 'Unable to restore profile revision.';
       setProfileError(message);
     } finally {
       setProfileBusy(null);
@@ -607,7 +619,8 @@ export const StudentWorkspace: React.FC = () => {
       setProfileSuccess('Profile revision activated.');
       await loadTimeline(selectedStudentId, timelineFiltersAppliedRef.current);
     } catch (error) {
-      const message = error instanceof Error ? error.message : 'Unable to activate profile revision.';
+      const message =
+        error instanceof Error ? error.message : 'Unable to activate profile revision.';
       setProfileError(message);
     } finally {
       setProfileBusy(null);
@@ -660,7 +673,11 @@ INSERT PROFILE HERE
       const saved = await upsertTemplateContent(selectedTemplateId, templateEditorText);
       setTemplateEditorText(saved.content ?? '');
       setLoadedTemplateContent(saved.content ?? '');
-      const revisions = await listTemplateRevisions(saved.id, { limit: 25, offset: 0, order: 'desc' });
+      const revisions = await listTemplateRevisions(saved.id, {
+        limit: 25,
+        offset: 0,
+        order: 'desc',
+      });
       setTemplateRevisions(revisions.items ?? []);
       setTemplateSuccess('Template content saved.');
       await loadTemplateOptions();
@@ -682,13 +699,18 @@ INSERT PROFILE HERE
       const restored = await restoreTemplateRevision(selectedTemplateId, revisionId);
       setTemplateEditorText(restored.content ?? '');
       setLoadedTemplateContent(restored.content ?? '');
-      const revisions = await listTemplateRevisions(restored.id, { limit: 25, offset: 0, order: 'desc' });
+      const revisions = await listTemplateRevisions(restored.id, {
+        limit: 25,
+        offset: 0,
+        order: 'desc',
+      });
       setTemplateRevisions(revisions.items ?? []);
       setTemplateSuccess('Template revision restored.');
       await loadTemplateOptions();
       await loadTimeline(selectedStudentId, timelineFiltersAppliedRef.current);
     } catch (error) {
-      const message = error instanceof Error ? error.message : 'Unable to restore template revision.';
+      const message =
+        error instanceof Error ? error.message : 'Unable to restore template revision.';
       setTemplateError(message);
     } finally {
       setTemplateBusy(null);
@@ -707,7 +729,8 @@ INSERT PROFILE HERE
       await loadTemplateOptions();
       await loadTimeline(selectedStudentId, timelineFiltersAppliedRef.current);
     } catch (error) {
-      const message = error instanceof Error ? error.message : 'Unable to activate template revision.';
+      const message =
+        error instanceof Error ? error.message : 'Unable to activate template revision.';
       setTemplateError(message);
     } finally {
       setTemplateBusy(null);
@@ -873,7 +896,9 @@ INSERT PROFILE HERE
             <p>Choose the student context for all workspace panels.</p>
           </header>
 
-          {createStudentSuccess ? <p className="workspace-success">{createStudentSuccess}</p> : null}
+          {createStudentSuccess ? (
+            <p className="workspace-success">{createStudentSuccess}</p>
+          ) : null}
 
           {isCreateStudentOpen ? (
             <div className="workspace-create-panel">
@@ -1090,7 +1115,9 @@ INSERT PROFILE HERE
               {bindingHistory.map((binding) => (
                 <div key={binding.id} className="workspace-list-item">
                   <span>{binding.profileId}</span>
-                  <span className="workspace-muted">{new Date(binding.effectiveFrom).toLocaleString()}</span>
+                  <span className="workspace-muted">
+                    {new Date(binding.effectiveFrom).toLocaleString()}
+                  </span>
                 </div>
               ))}
             </div>
@@ -1139,7 +1166,9 @@ INSERT PROFILE HERE
                       <strong>{revision.versionLabel ?? revision.id}</strong>
                       <span className="workspace-muted"> {revision.status ?? 'unknown'}</span>
                     </div>
-                    <div className="workspace-muted">{new Date(revision.createdAt).toLocaleString()}</div>
+                    <div className="workspace-muted">
+                      {new Date(revision.createdAt).toLocaleString()}
+                    </div>
                   </div>
                   <div className="workspace-inline">
                     <button
@@ -1253,7 +1282,9 @@ INSERT PROFILE HERE
                       <strong>{revision.versionLabel ?? revision.id}</strong>
                       <span className="workspace-muted"> {revision.status ?? 'unknown'}</span>
                     </div>
-                    <div className="workspace-muted">{new Date(revision.createdAt).toLocaleString()}</div>
+                    <div className="workspace-muted">
+                      {new Date(revision.createdAt).toLocaleString()}
+                    </div>
                   </div>
                   <div className="workspace-inline">
                     <button
@@ -1363,7 +1394,10 @@ INSERT PROFILE HERE
                 </thead>
                 <tbody>
                   {jobHistory.map((job) => (
-                    <tr key={job.jobId} className={selectedJobId === job.jobId ? 'workspace-selected-row' : ''}>
+                    <tr
+                      key={job.jobId}
+                      className={selectedJobId === job.jobId ? 'workspace-selected-row' : ''}
+                    >
                       <td>
                         <code>{job.jobId.slice(0, 8)}</code>
                         <div className="workspace-muted">prompt {job.promptPackageId ?? 'n/a'}</div>
@@ -1422,7 +1456,9 @@ INSERT PROFILE HERE
             <p className="workspace-muted">Select an assignment from history first.</p>
           )}
 
-          {jobProvenanceLoading ? <p className="workspace-muted">Loading job provenance...</p> : null}
+          {jobProvenanceLoading ? (
+            <p className="workspace-muted">Loading job provenance...</p>
+          ) : null}
           {jobProvenanceError ? <p className="workspace-error">{jobProvenanceError}</p> : null}
 
           {jobProvenance ? (
@@ -1452,7 +1488,8 @@ INSERT PROFILE HERE
                   <div>
                     <strong>{action.actionType}</strong>
                     <div className="workspace-muted">
-                      {new Date(action.requestedAt).toLocaleString()} by {action.requestedBy ?? 'unknown'}
+                      {new Date(action.requestedAt).toLocaleString()} by{' '}
+                      {action.requestedBy ?? 'unknown'}
                     </div>
                   </div>
                   <span>{action.outcome}</span>
@@ -1479,7 +1516,8 @@ INSERT PROFILE HERE
                 <strong>Template drift:</strong> {lineage.template.drift?.reason ?? 'none'}
               </span>
               <span>
-                <strong>Binding at creation:</strong> {lineage.bindingAtCreation?.profileId ?? 'n/a'}
+                <strong>Binding at creation:</strong>{' '}
+                {lineage.bindingAtCreation?.profileId ?? 'n/a'}
               </span>
             </div>
           ) : null}
@@ -1556,10 +1594,15 @@ INSERT PROFILE HERE
           ) : timeline.length > 0 ? (
             <div className="workspace-list">
               {timeline.map((event, index) => (
-                <div key={`${event.type}-${event.createdAt}-${index}`} className="workspace-list-item">
+                <div
+                  key={`${event.type}-${event.createdAt}-${index}`}
+                  className="workspace-list-item"
+                >
                   <div>
                     <strong>{event.type}</strong>
-                    <div className="workspace-muted">{new Date(event.createdAt).toLocaleString()}</div>
+                    <div className="workspace-muted">
+                      {new Date(event.createdAt).toLocaleString()}
+                    </div>
                   </div>
                   <span>{event.status}</span>
                 </div>

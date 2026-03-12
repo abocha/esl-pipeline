@@ -1,4 +1,9 @@
-import type { JobListResponse, JobStatusDto, OpsActionStatus, OpsStatusResponse } from '@esl-pipeline/contracts';
+import type {
+  JobListResponse,
+  JobStatusDto,
+  OpsActionStatus,
+  OpsStatusResponse,
+} from '@esl-pipeline/contracts';
 
 import type { CommandDefinition } from './types.js';
 
@@ -17,7 +22,10 @@ function formatNullable(value: string | null | undefined): string {
 export function formatHelp(commands: CommandDefinition[]): string {
   const lines = [...commands]
     .sort((a, b) => a.command.localeCompare(b.command))
-    .map((command) => `<code>/${escapeHtml(command.command)}</code> — ${escapeHtml(command.description)}`);
+    .map(
+      (command) =>
+        `<code>/${escapeHtml(command.command)}</code> — ${escapeHtml(command.description)}`,
+    );
 
   return `<b>ESL Ops Control</b>\n\n${lines.join('\n')}`;
 }
@@ -25,7 +33,8 @@ export function formatHelp(commands: CommandDefinition[]): string {
 export function formatOpsStatus(status: OpsStatusResponse): string {
   const emoji =
     status.overall.state === 'healthy' ? '✅' : status.overall.state === 'degraded' ? '⚠️' : '❌';
-  const reasons = status.overall.reasons.length > 0 ? status.overall.reasons : ['All checks healthy'];
+  const reasons =
+    status.overall.reasons.length > 0 ? status.overall.reasons : ['All checks healthy'];
 
   return [
     `<b>${emoji} Ops Status: ${escapeHtml(status.overall.state.toUpperCase())}</b>`,
@@ -77,7 +86,8 @@ export function formatJobLinks(
     assignmentEmoji?: string | null;
   },
 ): string {
-  const assignmentUrl = job.htmlUrl ?? job.notionUrl ?? job.anytypeUrl ?? resolveAppJobUrl(job.jobId, appBaseUrl);
+  const assignmentUrl =
+    job.htmlUrl ?? job.notionUrl ?? job.anytypeUrl ?? resolveAppJobUrl(job.jobId, appBaseUrl);
   const includeAudioLinks = options?.includeAudioLinks ?? true;
   const assignmentTitle = normalizeAssignmentTitle(options?.assignmentTitle);
   const headingText =
@@ -92,7 +102,11 @@ export function formatJobLinks(
     resolveAudioUrlFromMarkdown(job.md, STUDY_TEXT_AUDIO_LINK_LABEL, '/audio/final/');
   const pronunciationAudioUrl =
     options?.pronunciationAudioUrl ??
-    resolveAudioUrlFromMarkdown(job.md, PRONUNCIATION_AUDIO_LINK_LABEL, '/audio/pronunciation-shadow/');
+    resolveAudioUrlFromMarkdown(
+      job.md,
+      PRONUNCIATION_AUDIO_LINK_LABEL,
+      '/audio/pronunciation-shadow/',
+    );
 
   const lines: string[] = [];
   if (assignmentUrl) {
@@ -110,9 +124,7 @@ export function formatJobLinks(
       lines.push(`• <a href="${escapeHtml(studyTextAudioUrl)}">🎧 Listen 1: Study Text</a>`);
     }
     if (pronunciationAudioUrl) {
-      lines.push(
-        `• <a href="${escapeHtml(pronunciationAudioUrl)}">🗣️ Listen 2: Pronunciation</a>`,
-      );
+      lines.push(`• <a href="${escapeHtml(pronunciationAudioUrl)}">🗣️ Listen 2: Pronunciation</a>`);
     }
   }
 
@@ -138,13 +150,19 @@ function resolveAudioUrlFromMarkdown(
 ): string | null {
   if (!markdown) return null;
 
-  const labelRegex = new RegExp(String.raw`\[${escapeRegExp(linkLabel)}\]\((https?:\/\/[^\s)]+)\)`, 'i');
+  const labelRegex = new RegExp(
+    String.raw`\[${escapeRegExp(linkLabel)}\]\((https?:\/\/[^\s)]+)\)`,
+    'i',
+  );
   const labeledMatch = markdown.match(labelRegex);
   if (labeledMatch?.[1]) {
     return labeledMatch[1];
   }
 
-  const hintedRegex = new RegExp(String.raw`(https?:\/\/\S*${escapeRegExp(pathHint)}\S*\.mp3(?:\?\S*)?)`, 'i');
+  const hintedRegex = new RegExp(
+    String.raw`(https?:\/\/\S*${escapeRegExp(pathHint)}\S*\.mp3(?:\?\S*)?)`,
+    'i',
+  );
   const hintedMatch = markdown.match(hintedRegex);
   if (hintedMatch?.[1]) {
     return hintedMatch[1];
@@ -183,7 +201,13 @@ export function formatActionQueued(status: OpsActionStatus): string {
 
 export function formatActionStatus(status: OpsActionStatus): string {
   const emoji =
-    status.state === 'succeeded' ? '✅' : status.state === 'failed' ? '❌' : status.state === 'running' ? '▶️' : '⏳';
+    status.state === 'succeeded'
+      ? '✅'
+      : status.state === 'failed'
+        ? '❌'
+        : status.state === 'running'
+          ? '▶️'
+          : '⏳';
   return [
     `<b>${emoji} Action status</b>`,
     `<b>Action</b> <code>${escapeHtml(status.action)}</code>`,

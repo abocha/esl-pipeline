@@ -3,6 +3,7 @@
 // - Container-friendly (stdout JSON).
 // - Pretty printing in development only.
 // - Supports child loggers with jobId/runId bindings.
+import { createRequire } from 'node:module';
 import pino from 'pino';
 
 export interface LogFields {
@@ -19,6 +20,14 @@ export interface Logger {
   child(bindings: LogFields): Logger;
 }
 
+export interface ResolveLoggerTransportOptions {
+  nodeEnv?: string;
+  resolveModule?: (specifier: string) => string;
+  warn?: (message: string) => void;
+}
+
+const require = createRequire(import.meta.url);
+
 // logger.declaration()
 export const logger: Logger = createRootLogger();
 
@@ -29,19 +38,39 @@ function resolveLogLevel(): string {
   return process.env.LOG_LEVEL || 'info';
 }
 
+export function resolveLoggerTransport(
+  options: ResolveLoggerTransportOptions = {},
+): pino.LoggerOptions['transport'] {
+  const {
+    nodeEnv = process.env.NODE_ENV,
+    resolveModule = (specifier: string) => require.resolve(specifier),
+    warn = (message: string) => console.warn(message),
+  } = options;
+
+  if (nodeEnv !== 'development') {
+    return undefined;
+  }
+
+  try {
+    resolveModule('pino-pretty');
+  } catch {
+    warn('pino-pretty is unavailable; falling back to JSON logs.');
+    return undefined;
+  }
+
+  return {
+    target: 'pino-pretty',
+    options: {
+      colorize: true,
+      translateTime: 'SYS:standard',
+    },
+  };
+}
+
 function createRootLogger(): Logger {
   const base = pino({
     level: resolveLogLevel(),
-    transport:
-      process.env.NODE_ENV === 'development'
-        ? {
-            target: 'pino-pretty',
-            options: {
-              colorize: true,
-              translateTime: 'SYS:standard',
-            },
-          }
-        : undefined,
+    transport: resolveLoggerTransport(),
   });
 
   const wrap = (instance: pino.Logger): Logger => ({

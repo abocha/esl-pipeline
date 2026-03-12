@@ -42,14 +42,11 @@ describe('infrastructure/db session context helpers', () => {
     mockQuery.mockResolvedValue({ rows: [] });
     const db = await import('../src/infrastructure/db.js');
 
-    await db.setPgSessionContext(
-      { query: mockQuery } as unknown as import('pg').PoolClient,
-      {
-        userId: ' 00000000-0000-4000-8000-000000000001 ',
-        userRole: ' admin ',
-        rlsBypass: true,
-      },
-    );
+    await db.setPgSessionContext({ query: mockQuery } as unknown as import('pg').PoolClient, {
+      userId: ' 00000000-0000-4000-8000-000000000001 ',
+      userRole: ' admin ',
+      rlsBypass: true,
+    });
 
     expect(mockQuery).toHaveBeenCalledTimes(3);
     expect(mockQuery.mock.calls[0]).toEqual([

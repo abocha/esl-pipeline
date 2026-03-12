@@ -43,7 +43,9 @@ function normalizeOptionalToken(value: string | null | undefined): string | null
   return trimmed.length > 0 ? trimmed : null;
 }
 
-export async function resolveValidateInput(input: ValidateMarkdownInput): Promise<ResolvedValidateInput> {
+export async function resolveValidateInput(
+  input: ValidateMarkdownInput,
+): Promise<ResolvedValidateInput> {
   const strict = input.strict ?? false;
   const learningPresetId = normalizeOptionalToken(input.learningPresetId);
   const learningPresetVersion = normalizeOptionalToken(input.learningPresetVersion);
