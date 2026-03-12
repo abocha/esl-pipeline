@@ -107,6 +107,7 @@ Set these in `.env` (or your shell) when running orchestrator programmatic API c
 - `ESL_PIPELINE_CONFIG_VOICES_PATH` (optional) — Remote voices path.
 - `ESL_PIPELINE_CONFIG_CACHE_TTL_MS` (optional, default `60000`) — In-process cache TTL for remote config responses.
 - `ESL_PIPELINE_CONFIG_CACHE_STALE_IF_ERROR_MS` (optional, default `300000`) — How long stale remote config may be served when upstream fetches fail.
+  - Operational baseline: `.env.batch-backend.example` pins these to `120000` / `900000` for steadier backend runtime behavior.
 - `ESL_PIPELINE_CONFIG_CONDITIONAL_REQUESTS` (optional, default `true`) — Enables conditional requests (`If-None-Match` / `If-Modified-Since`) for remote config revalidation.
 - `ESL_PIPELINE_CACHE_ENV` (optional, default `false`) — Enables memoized env loading in
   `loadCliEnv()` for executable entrypoints.
@@ -190,6 +191,9 @@ Use `.env.batch-backend` for the service stack. It includes all core keys above 
 - `NODE_ENV` — `development` for local.
 - `BATCH_BACKEND_HTTP_PORT` — HTTP port.
 - `BATCH_BACKEND_ENABLE_EXTENDED_API` — Enable uploads/auth/admin routes.
+- Compose durability profile:
+  - `docker-compose.yml` (dev) intentionally favors speed (`postgres` with `fsync=off`; `redis` without AOF persistence).
+  - `docker-compose.prod.yml` should keep durability-first settings (`postgres` with `fsync=on` + `synchronous_commit=on`; `redis` with AOF `everysec`).
 - Ops control API (additive, admin-auth, optional):
   - `BATCH_BACKEND_ENABLE_OPS_CONTROL` (default `false`) — Enables `/ops/status`, `/ops/actions`, `/ops/actions/:operationId`.
   - `BATCH_BACKEND_OPS_CONTROL_BOT_SECRET` (optional) — Requires matching `x-ops-bot-secret` header for `/ops/*`.
