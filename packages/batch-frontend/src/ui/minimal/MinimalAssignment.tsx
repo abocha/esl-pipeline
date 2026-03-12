@@ -1,4 +1,3 @@
-import copy from 'copy-to-clipboard';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import type {
@@ -51,6 +50,7 @@ import {
   uploadRecording,
   validateMarkdown,
 } from '../../utils/api';
+import { copyTextToClipboard } from '../../utils/clipboard';
 import { DropZone } from '../shared/DropZone';
 import { UploadProgress } from '../shared/UploadProgress';
 import {
@@ -1265,9 +1265,9 @@ export const MinimalAssignment: React.FC = () => {
     }
   };
 
-  const handleCopyPrompt = () => {
+  const handleCopyPrompt = async () => {
     if (!promptText.trim()) return;
-    const success = copy(promptText);
+    const success = await copyTextToClipboard(promptText);
     setPromptCopyState(success ? 'copied' : 'error');
     setTimeout(() => setPromptCopyState('idle'), 2000);
   };
