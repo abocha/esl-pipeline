@@ -33,3 +33,5 @@
    Gap inventory + execution timing for Telegram ops bot hardening (`Now`, `After Manual V1`, `V2/Defer`).
 10. `docs/plans/backlog/README.md`
    Prioritized optimization and technical-debt backlog for safe incremental execution.
+11. `docs/plans/completed/README.md`
+   Completed wave plans (optimization backlog + finished legacy-retirement waves) moved out of active planning directories for easier navigation and historical traceability.
