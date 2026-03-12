@@ -3,6 +3,7 @@
 // Tests for rate limiting middleware covering Redis-based rate limiting,
 // burst handling, and middleware integration.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import type { FastifyReply, FastifyRequest } from 'fastify';
 
 import { loadConfig } from '../src/config/env.js';
 import { createRedisClient } from '../src/infrastructure/redis.js';
@@ -28,7 +29,6 @@ interface MockRedisClient {
   evalsha: ReturnType<typeof vi.fn>;
   script: ReturnType<typeof vi.fn>;
   zcard: ReturnType<typeof vi.fn>;
-  ping: ReturnType<typeof vi.fn>;
 }
 
 function createMockRedisClient(): MockRedisClient {
@@ -37,8 +37,11 @@ function createMockRedisClient(): MockRedisClient {
     evalsha: vi.fn(),
     script: vi.fn(),
     zcard: vi.fn(),
-    ping: vi.fn().mockResolvedValue('PONG'),
   };
+}
+
+function asRateLimiterRedisClient(mockRedis: MockRedisClient): RateLimiterRedisClient {
+  return mockRedis as unknown as RateLimiterRedisClient;
 }
 
 function setRateLimiterConfig(overrides?: {
@@ -66,7 +69,7 @@ describe('RateLimiterService', () => {
     setRateLimiterConfig();
 
     // Create with Redis enabled
-    rateLimiter = new RateLimiterService(mockRedis as unknown as RateLimiterRedisClient, {
+    rateLimiter = new RateLimiterService(asRateLimiterRedisClient(mockRedis), {
       windowSize: 60 * 1000, // 1 minute
       maxRequests: 10,
       burstLimit: 20,
@@ -227,7 +230,7 @@ describe('Rate Limit Middleware', () => {
   });
 
   it('should handle rate limit exceeded', async () => {
-    rateLimiter = new RateLimiterService(mockRedis as unknown as RateLimiterRedisClient, {
+    rateLimiter = new RateLimiterService(asRateLimiterRedisClient(mockRedis), {
       windowSize: 60 * 1000,
       maxRequests: 10,
       burstLimit: 20,
@@ -244,7 +247,7 @@ describe('Rate Limit Middleware', () => {
   });
 
   it('should use IP address when no user authenticated', async () => {
-    rateLimiter = new RateLimiterService(mockRedis as unknown as RateLimiterRedisClient, {
+    rateLimiter = new RateLimiterService(asRateLimiterRedisClient(mockRedis), {
       windowSize: 60 * 1000,
       maxRequests: 10,
       burstLimit: 20,
@@ -287,19 +290,17 @@ describe('Rate Limit Middleware', () => {
       cleanupExpired: vi.fn(),
     });
 
-    const mockRequest = {
+    const mockRequest = createMiddlewareRequest({
       headers: {
         'x-forwarded-for': '203.0.113.9',
         'x-real-ip': '198.51.100.8',
       },
       ip: '10.0.0.5',
       user: null,
-    };
-    const mockReply = {
-      header: vi.fn().mockReturnThis(),
-    };
+    });
+    const mockReply = createMiddlewareReply();
 
-    await middleware(mockRequest as any, mockReply as any);
+    await middleware(mockRequest, mockReply);
 
     expect(checkRateLimit).toHaveBeenCalledWith('ip:10.0.0.5');
   });
@@ -318,19 +319,35 @@ describe('Rate Limit Middleware', () => {
       cleanupExpired: vi.fn(),
     });
 
-    const mockRequest = {
+    const mockRequest = createMiddlewareRequest({
       headers: {
         'x-forwarded-for': '203.0.113.9',
       },
       ip: '10.0.0.5',
       user: { id: 'user-42' },
-    };
-    const mockReply = {
-      header: vi.fn().mockReturnThis(),
-    };
+    });
+    const mockReply = createMiddlewareReply();
 
-    await middleware(mockRequest as any, mockReply as any);
+    await middleware(mockRequest, mockReply);
 
     expect(checkRateLimit).toHaveBeenCalledWith('user:user-42');
   });
 });
+
+function createMiddlewareRequest(options: {
+  headers: Record<string, string>;
+  ip: string;
+  user: { id: string } | null;
+}): FastifyRequest {
+  return {
+    headers: options.headers,
+    ip: options.ip,
+    user: options.user,
+  } as unknown as FastifyRequest;
+}
+
+function createMiddlewareReply(): FastifyReply {
+  return {
+    header: vi.fn().mockReturnThis(),
+  } as unknown as FastifyReply;
+}
