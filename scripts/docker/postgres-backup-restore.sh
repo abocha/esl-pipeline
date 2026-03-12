@@ -121,6 +121,14 @@ can_send_completion_telegram() {
   [[ -n "$PG_BACKUP_ALERT_TELEGRAM_BOT_TOKEN" && -n "$PG_BACKUP_ALERT_TELEGRAM_CHAT_ID" ]]
 }
 
+warn_if_telegram_chat_targets_differ() {
+  local backup_chat_id="${PG_BACKUP_ALERT_TELEGRAM_CHAT_ID:-}"
+  local ops_chat_id="${TELEGRAM_OPS_BOT_CHAT_ID:-}"
+  if [[ -n "$backup_chat_id" && -n "$ops_chat_id" && "$backup_chat_id" != "$ops_chat_id" ]]; then
+    echo "WARN: PG_BACKUP_ALERT_TELEGRAM_CHAT_ID (${backup_chat_id}) differs from TELEGRAM_OPS_BOT_CHAT_ID (${ops_chat_id}). Backup completion notifications will use PG_BACKUP_ALERT_TELEGRAM_CHAT_ID."
+  fi
+}
+
 send_completion_telegram() {
   local text="$1"
   local url="https://api.telegram.org/bot${PG_BACKUP_ALERT_TELEGRAM_BOT_TOKEN}/sendMessage"
@@ -548,6 +556,7 @@ do_restore() {
 
 main() {
   require_commands
+  warn_if_telegram_chat_targets_differ
 
   local action="${1:-}"
   if [[ -z "$action" ]]; then

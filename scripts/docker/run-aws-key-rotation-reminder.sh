@@ -7,8 +7,8 @@ DEFAULT_LOG_DIR="${ROOT_DIR}/tmp/logs/backup"
 
 ENV_FILE="${PG_BACKUP_ENV_FILE:-$DEFAULT_ENV_FILE}"
 if [[ -f "$ENV_FILE" ]]; then
-  # shellcheck source=/dev/null
   set -a
+  # shellcheck disable=SC1090
   . "$ENV_FILE"
   set +a
 fi

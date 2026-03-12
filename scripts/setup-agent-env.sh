@@ -99,7 +99,8 @@ sanitize_frontend_dist() {
   fi
 
   if [[ ! -w "$dist_dir" ]] || find "$dist_dir" -mindepth 1 ! -writable -print -quit | grep -q .; then
-    local backup_dir="$HOME/tmp/esl-pipeline-batch-frontend-dist-backup-$(date +%Y%m%d%H%M%S)"
+    local backup_dir=""
+    backup_dir="$HOME/tmp/esl-pipeline-batch-frontend-dist-backup-$(date +%Y%m%d%H%M%S)"
     mkdir -p "$(dirname "$backup_dir")"
     mv "$dist_dir" "$backup_dir"
     mkdir -p "$dist_dir"

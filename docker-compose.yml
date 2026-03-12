@@ -189,6 +189,31 @@ services:
     user: '${UID:-1000}:${GID:-1000}'
     pull_policy: never
 
+  tools:
+    image: esl-pipeline/dev-node-tools:local
+    build:
+      context: .
+      dockerfile: packages/batch-backend/Dockerfile.dev
+      target: tools
+    depends_on:
+      deps:
+        condition: service_completed_successfully
+    volumes:
+      - ./:/app
+      - workspace_node_modules:/app/node_modules
+      - workspace_pnpm_store:/pnpm
+    environment:
+      NODE_ENV: development
+      PNPM_STORE_DIR: /pnpm/store
+      NPM_CONFIG_STORE_DIR: /pnpm/store
+    command: >
+      sh -lc "
+        sleep infinity
+      "
+    user: '${UID:-1000}:${GID:-1000}'
+    profiles: [ "tools" ]
+    pull_policy: never
+
   transcribe-worker:
     image: esl-pipeline/dev-node-base:local
     depends_on:
@@ -222,33 +247,7 @@ services:
     user: '${UID:-1000}:${GID:-1000}'
     pull_policy: never
 
-  tools:
-    profiles: [ "tools" ]
-    image: esl-pipeline/dev-node-tools:local
-    build:
-      context: .
-      dockerfile: packages/batch-backend/Dockerfile.dev
-      target: tools
-    depends_on:
-      deps:
-        condition: service_completed_successfully
-    volumes:
-      - ./:/app
-      - workspace_node_modules:/app/node_modules
-      - workspace_pnpm_store:/pnpm
-    environment:
-      NODE_ENV: development
-      PNPM_STORE_DIR: /pnpm/store
-      NPM_CONFIG_STORE_DIR: /pnpm/store
-    command: >
-      sh -lc "
-        sleep infinity
-      "
-    user: '${UID:-1000}:${GID:-1000}'
-    pull_policy: never
-
 volumes:
-  postgres_data:
   postgres18_data:
   redis_data:
   workspace_node_modules:

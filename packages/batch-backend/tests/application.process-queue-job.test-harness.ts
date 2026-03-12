@@ -9,6 +9,7 @@ import * as loggerModule from '../src/infrastructure/logger.js';
 import * as orchestratorService from '../src/infrastructure/orchestrator-service.js';
 import * as transcriptionStorage from '../src/infrastructure/transcription-storage.js';
 import * as ttsCacheMaintenanceCoordinator from '../src/infrastructure/tts-cache-maintenance-coordinator.js';
+import type { JobRecord } from '../src/domain/job-model.js';
 
 vi.mock('../src/infrastructure/logger', async () => {
   const actual = await vi.importActual<typeof loggerModule>('../src/infrastructure/logger');
@@ -57,10 +58,8 @@ beforeEach(() => {
 });
 
 export function makeJob(
-  overrides: Partial<
-    ReturnType<(typeof jobRepository)['getJobById']> extends Promise<infer R> ? NonNullable<R> : never
-  > = {},
-): any {
+  overrides: Partial<JobRecord> = {},
+): JobRecord {
   const now = new Date('2024-01-01T10:00:00Z');
   return {
     id: 'job-1',
@@ -83,5 +82,5 @@ export function makeJob(
     error: null,
     manifestPath: null,
     ...overrides,
-  } as any;
+  };
 }

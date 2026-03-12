@@ -51,6 +51,7 @@
     "docker:dev:down": "docker compose -p esl-pipeline -f docker-compose.yml down --remove-orphans",
     "docker:dev:ps": "docker compose -p esl-pipeline -f docker-compose.yml ps",
     "docker:dev:recover": "pnpm docker:prepare && bash scripts/docker/recover-dev-stack.sh",
+    "docker:backup": "pnpm docker:db:backup",
     "docker:db:backup": "bash scripts/docker/postgres-backup-restore.sh backup",
     "docker:db:backup:s3": "bash scripts/docker/postgres-backup-s3.sh backup-upload",
     "docker:db:backup:s3:scheduled": "bash scripts/docker/run-postgres-backup-s3.sh",
