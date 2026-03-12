@@ -51,4 +51,3 @@ Selected packages (locked):
    Mitigation: enforce only selected high-value READMEs in this phase.
 2. Risk: stale content hidden behind passing metadata.
    Mitigation: include substantive manual review during phase execution.
-

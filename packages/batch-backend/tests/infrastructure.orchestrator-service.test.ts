@@ -106,24 +106,24 @@ describe('infrastructure/orchestrator-service', () => {
     'getPipeline creates pipeline once, maps env, and caches result',
     { timeout: ORCHESTRATOR_SERVICE_TEST_TIMEOUT_MS },
     async () => {
-    const { loadConfig } = await import('../src/config/env.js');
-    const { createPipeline } = await import('@esl-pipeline/orchestrator');
+      const { loadConfig } = await import('../src/config/env.js');
+      const { createPipeline } = await import('@esl-pipeline/orchestrator');
 
-    (loadConfig as any).mockReturnValue({
-      orchestrator: {
-        manifestStore: 'filesystem',
-        configProvider: 'local',
-      },
-    });
+      (loadConfig as any).mockReturnValue({
+        orchestrator: {
+          manifestStore: 'filesystem',
+          configProvider: 'local',
+        },
+      });
 
-    const { getPipeline } = await import('../src/infrastructure/orchestrator-service.js');
+      const { getPipeline } = await import('../src/infrastructure/orchestrator-service.js');
 
-    const p1 = getPipeline();
-    const p2 = getPipeline();
+      const p1 = getPipeline();
+      const p2 = getPipeline();
 
-    expect(loadConfig).toHaveBeenCalledTimes(1);
-    expect(createPipeline).toHaveBeenCalledTimes(1);
-    expect(p1).toBe(p2);
+      expect(loadConfig).toHaveBeenCalledTimes(1);
+      expect(createPipeline).toHaveBeenCalledTimes(1);
+      expect(p1).toBe(p2);
     },
   );
 

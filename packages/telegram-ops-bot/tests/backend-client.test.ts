@@ -11,8 +11,12 @@ describe('backend client', () => {
     const fetchMock: typeof fetch = vi.fn(async (input, init) => {
       const url = String(input);
       urls.push(url);
-      authHeaders.push(String((init?.headers as Record<string, string> | undefined)?.Authorization ?? ''));
-      secretHeaders.push(String((init?.headers as Record<string, string> | undefined)?.['x-ops-bot-secret'] ?? ''));
+      authHeaders.push(
+        String((init?.headers as Record<string, string> | undefined)?.Authorization ?? ''),
+      );
+      secretHeaders.push(
+        String((init?.headers as Record<string, string> | undefined)?.['x-ops-bot-secret'] ?? ''),
+      );
 
       if (url.endsWith('/auth/login')) {
         return Response.json(
@@ -49,8 +53,18 @@ describe('backend client', () => {
           {
             checkedAtUtc: '2026-03-11T00:00:00Z',
             overall: { state: 'healthy', reasons: [] },
-            thresholds: { backupMaxAgeHours: null, drillMaxAgeDays: null, keyRotationMaxAgeDays: null },
-            backup: { state: 'healthy', reason: 'ok', latestDumpKey: null, lastModifiedUtc: null, ageHours: null },
+            thresholds: {
+              backupMaxAgeHours: null,
+              drillMaxAgeDays: null,
+              keyRotationMaxAgeDays: null,
+            },
+            backup: {
+              state: 'healthy',
+              reason: 'ok',
+              latestDumpKey: null,
+              lastModifiedUtc: null,
+              ageHours: null,
+            },
             restoreDrill: {
               state: 'healthy',
               reason: 'ok',
@@ -97,7 +111,9 @@ describe('backend client', () => {
     expect(urls.filter((url) => url.endsWith('/ops/status'))).toHaveLength(2);
     expect(authHeaders.some((header) => header.includes('Bearer token-1'))).toBe(true);
     expect(authHeaders.some((header) => header.includes('Bearer token-2'))).toBe(true);
-    expect(secretHeaders.filter((header) => header === 'shared-secret').length).toBeGreaterThanOrEqual(2);
+    expect(
+      secretHeaders.filter((header) => header === 'shared-secret').length,
+    ).toBeGreaterThanOrEqual(2);
   });
 
   it('queries finished jobs from the admin jobs endpoint', async () => {

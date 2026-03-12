@@ -1,8 +1,12 @@
+import { ElevenLabsClient } from '@elevenlabs/elevenlabs-js';
 import type { Readable } from 'node:stream';
 
-import { ElevenLabsClient } from '@elevenlabs/elevenlabs-js';
 import { classifyProviderRuntimeFailure } from '@esl-pipeline/provider-runtime';
-import { mergeSegments, type SttProviderAdapter, type TranscriptSegment } from '@esl-pipeline/stt-core';
+import {
+  type SttProviderAdapter,
+  type TranscriptSegment,
+  mergeSegments,
+} from '@esl-pipeline/stt-core';
 
 interface ElevenLabsWord {
   text?: string;
@@ -225,7 +229,10 @@ function parseElevenLabsMultichannelResponse(
   return { text, segments };
 }
 
-function parseElevenLabsDiarizedResponse(response: unknown): { text: string; segments: TranscriptSegment[] } {
+function parseElevenLabsDiarizedResponse(response: unknown): {
+  text: string;
+  segments: TranscriptSegment[];
+} {
   const text = ((response as { text?: string }).text ?? '').trim();
   const words: ElevenLabsWord[] = (response as { words?: ElevenLabsWord[] }).words ?? [];
   const segments = buildElevenLabsSegments(words.map((word) => ({ word })));
@@ -292,7 +299,10 @@ function buildElevenLabsSegments(
   return mergeSegments(segments);
 }
 
-function resolveElevenLabsSpeakerIndex(word: ElevenLabsWord, channelIndex?: number): number | undefined {
+function resolveElevenLabsSpeakerIndex(
+  word: ElevenLabsWord,
+  channelIndex?: number,
+): number | undefined {
   const speakerId = resolveElevenLabsSpeakerId(word);
   const fromSpeaker = parseElevenLabsSpeakerId(speakerId);
   if (typeof fromSpeaker === 'number') return fromSpeaker;

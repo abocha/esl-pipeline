@@ -1,8 +1,8 @@
 import path from 'node:path';
-
 import { beforeEach, vi } from 'vitest';
 
 import * as jobEvents from '../src/domain/job-events.js';
+import type { JobRecord } from '../src/domain/job-model.js';
 import * as jobRepository from '../src/domain/job-repository.js';
 import * as settingsRepository from '../src/domain/settings-repository.js';
 import * as loggerModule from '../src/infrastructure/logger.js';
@@ -28,7 +28,10 @@ export const runAssignmentJobSpy = vi.spyOn(orchestratorService, 'runAssignmentJ
 export const runRerunAssignmentJobSpy = vi.spyOn(orchestratorService, 'runRerunAssignmentJob');
 export const publishJobEventSpy = vi.spyOn(jobEvents, 'publishJobEvent');
 export const getSettingsByUserIdSpy = vi.spyOn(settingsRepository, 'getSettingsByUserId');
-export const getDecryptedElevenLabsKeySpy = vi.spyOn(settingsRepository, 'getDecryptedElevenLabsKey');
+export const getDecryptedElevenLabsKeySpy = vi.spyOn(
+  settingsRepository,
+  'getDecryptedElevenLabsKey',
+);
 export const getDecryptedNotionTokenSpy = vi.spyOn(settingsRepository, 'getDecryptedNotionToken');
 export const createTranscriptionStorageForUriSpy = vi.spyOn(
   transcriptionStorage,
@@ -56,11 +59,7 @@ beforeEach(() => {
   withTtsCacheActivitySharedLockSpy.mockImplementation(async (_options, callback) => callback());
 });
 
-export function makeJob(
-  overrides: Partial<
-    ReturnType<(typeof jobRepository)['getJobById']> extends Promise<infer R> ? NonNullable<R> : never
-  > = {},
-): any {
+export function makeJob(overrides: Partial<JobRecord> = {}): JobRecord {
   const now = new Date('2024-01-01T10:00:00Z');
   return {
     id: 'job-1',
@@ -83,5 +82,5 @@ export function makeJob(
     error: null,
     manifestPath: null,
     ...overrides,
-  } as any;
+  };
 }

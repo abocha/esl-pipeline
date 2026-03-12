@@ -1,9 +1,10 @@
 #!/usr/bin/env node
 import { Command } from 'commander';
-import { loadCliEnv } from '@esl-pipeline/shared-infrastructure';
 import fs from 'node:fs';
 import path from 'node:path';
 import pc from 'picocolors';
+
+import { loadCliEnv } from '@esl-pipeline/shared-infrastructure';
 
 import { validateMarkdown } from '../src/validator.js';
 

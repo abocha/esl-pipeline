@@ -2,7 +2,11 @@ name: ${COMPOSE_PROJECT_NAME:-esl-pipeline}
 
 services:
   batch-backend:
-    image: esl-pipeline/dev-node:local
+    image: esl-pipeline/dev-node-ops:local
+    build:
+      context: .
+      dockerfile: packages/batch-backend/Dockerfile.dev
+      target: ops
     depends_on:
       deps:
         condition: service_completed_successfully
@@ -69,7 +73,7 @@ services:
     pull_policy: never
 
   batch-worker:
-    image: esl-pipeline/dev-node:local
+    image: esl-pipeline/dev-node-base:local
     depends_on:
       deps:
         condition: service_completed_successfully
@@ -102,10 +106,11 @@ services:
     pull_policy: never
 
   deps:
-    image: esl-pipeline/dev-node:local
+    image: esl-pipeline/dev-node-base:local
     build:
       context: .
       dockerfile: packages/batch-backend/Dockerfile.dev
+      target: default
     volumes:
       - ./:/app
       - workspace_node_modules:/app/node_modules
@@ -120,7 +125,7 @@ services:
         chmod -R 0777 /app/node_modules /pnpm &&
         pnpm install &&
         pnpm -r --filter './packages/*' run build &&
-        find /app/packages -mindepth 2 -maxdepth 2 -type d -name dist -exec chown -R ${UID:-1000}:${GID:-1000} {} + &&
+        find /app/packages -mindepth 2 -maxdepth 2 -type d -name dist -exec chown -R ${UID:-1000}:${GID:-1000} {} \\; &&
         chown -R ${UID:-1000}:${GID:-1000} /app/node_modules /pnpm
       "
     working_dir: /app
@@ -139,29 +144,29 @@ services:
       POSTGRES_DB: esl_batch
     ports:
       - '127.0.0.1:5432:5432'
-    command: [ 'postgres', '-c', 'fsync=off', '-c', 'listen_addresses=*' ]
+    command: ['postgres', '-c', 'fsync=off', '-c', 'listen_addresses=*']
     healthcheck:
-      test: [ 'CMD-SHELL', 'pg_isready -U esl -d esl_batch' ]
+      test: ['CMD-SHELL', 'pg_isready -U esl -d esl_batch']
       interval: 5s
       timeout: 3s
       retries: 10
 
   redis:
-    image: redis:alpine
+    image: redis:8-alpine
     # Persistent data (named volume).
     volumes:
       - redis_data:/data
     ports:
       - '127.0.0.1:6379:6379'
-    command: [ 'redis-server', '--save', '', '--appendonly', 'no' ]
+    command: ['redis-server', '--save', '', '--appendonly', 'no']
     healthcheck:
-      test: [ 'CMD', 'redis-cli', 'ping' ]
+      test: ['CMD', 'redis-cli', 'ping']
       interval: 5s
       timeout: 3s
       retries: 10
 
   telegram-ops-bot:
-    image: esl-pipeline/dev-node:local
+    image: esl-pipeline/dev-node-base:local
     depends_on:
       batch-backend:
         condition: service_started
@@ -184,8 +189,33 @@ services:
     user: '${UID:-1000}:${GID:-1000}'
     pull_policy: never
 
+  tools:
+    image: esl-pipeline/dev-node-tools:local
+    build:
+      context: .
+      dockerfile: packages/batch-backend/Dockerfile.dev
+      target: tools
+    depends_on:
+      deps:
+        condition: service_completed_successfully
+    volumes:
+      - ./:/app
+      - workspace_node_modules:/app/node_modules
+      - workspace_pnpm_store:/pnpm
+    environment:
+      NODE_ENV: development
+      PNPM_STORE_DIR: /pnpm/store
+      NPM_CONFIG_STORE_DIR: /pnpm/store
+    command: >
+      sh -lc "
+        sleep infinity
+      "
+    user: '${UID:-1000}:${GID:-1000}'
+    profiles: ['tools']
+    pull_policy: never
+
   transcribe-worker:
-    image: esl-pipeline/dev-node:local
+    image: esl-pipeline/dev-node-base:local
     depends_on:
       deps:
         condition: service_completed_successfully
@@ -218,7 +248,6 @@ services:
     pull_policy: never
 
 volumes:
-  postgres_data:
   postgres18_data:
   redis_data:
   workspace_node_modules:

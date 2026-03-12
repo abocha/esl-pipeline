@@ -1,7 +1,7 @@
-import type { BotConfig, BotDomain, TopicRouter } from './types.js';
-import type { AuditLogger } from './types.js';
 import { loadTopicState, saveTopicState } from './state.js';
 import type { TelegramClient } from './telegram-client.js';
+import type { BotConfig, BotDomain, TopicRouter } from './types.js';
+import type { AuditLogger } from './types.js';
 
 export class ForumTopicRouter implements TopicRouter {
   private readonly config: BotConfig;

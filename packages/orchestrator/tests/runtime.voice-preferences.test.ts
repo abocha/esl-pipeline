@@ -7,9 +7,8 @@ const ttsMocks = vi.hoisted(() => ({
 }));
 
 vi.mock('@esl-pipeline/tts-core', async () => {
-  const actual = await vi.importActual<typeof import('@esl-pipeline/tts-core')>(
-    '@esl-pipeline/tts-core',
-  );
+  const actual =
+    await vi.importActual<typeof import('@esl-pipeline/tts-core')>('@esl-pipeline/tts-core');
   return {
     ...actual,
     loadVoicesCatalog: ttsMocks.loadVoicesCatalog,

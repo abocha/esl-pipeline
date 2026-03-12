@@ -1,6 +1,9 @@
 import type { AxiosError } from 'axios';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { GenerationDraftApiError, generateDraft } from './api';
+import apiClient, { buildApiProxyPath, handleApiError, isAuthError } from './api-client';
+
 vi.mock('./api-client', () => ({
   __esModule: true,
   default: {
@@ -17,13 +20,6 @@ vi.mock('./api-client', () => ({
       error.response?.status === 401 || error.response?.status === 403,
   ),
 }));
-
-import apiClient, {
-  buildApiProxyPath,
-  handleApiError,
-  isAuthError,
-} from './api-client';
-import { GenerationDraftApiError, generateDraft } from './api';
 
 function makeAxiosError(args: {
   status?: number;
@@ -71,11 +67,15 @@ describe('utils/api generateDraft', () => {
     const result = await generateDraft({ promptPackageId: 'pkg-1' });
 
     expect(buildApiProxyPath).toHaveBeenCalledWith('/generation/drafts');
-    expect(apiClient.post).toHaveBeenCalledWith('/api/generation/drafts', {
-      promptPackageId: 'pkg-1',
-    }, {
-      timeout: 240000,
-    });
+    expect(apiClient.post).toHaveBeenCalledWith(
+      '/api/generation/drafts',
+      {
+        promptPackageId: 'pkg-1',
+      },
+      {
+        timeout: 240000,
+      },
+    );
     expect(result).toEqual(response);
   });
 

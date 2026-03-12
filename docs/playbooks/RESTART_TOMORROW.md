@@ -26,7 +26,7 @@ If you are touching backup operations, also open:
 4. Find the active workstream and its `Now` task.
 5. Pick exactly one micro-task that can fit in 30-90 minutes.
 6. Write this sentence in your notes:
-   - "Today I only need to finish: ____."
+   - "Today I only need to finish: \_\_\_\_."
 
 ## Session Modes (Choose One, No Guilt)
 
@@ -102,20 +102,24 @@ This is mandatory. It is your bridge back in tomorrow.
 ## Session YYYY-MM-DD
 
 Mode: low / normal / high
-Workstream: WS__
+Workstream: WS\_\_
 Today's one target:
 
 Done:
-- 
+
+-
 
 Evidence link:
-- 
+
+-
 
 First step next session:
-- 
+
+-
 
 Blocker:
-- 
+
+-
 ```
 
 ## Grounding Reminder

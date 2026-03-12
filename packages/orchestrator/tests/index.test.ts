@@ -6,9 +6,8 @@ import { describe, expect, it, vi } from 'vitest';
 import { newAssignment, rerunAssignment } from '../src/index.js';
 
 vi.mock('@esl-pipeline/tts-core', async () => {
-  const actual = await vi.importActual<typeof import('@esl-pipeline/tts-core')>(
-    '@esl-pipeline/tts-core',
-  );
+  const actual =
+    await vi.importActual<typeof import('@esl-pipeline/tts-core')>('@esl-pipeline/tts-core');
   return {
     ...actual,
     buildStudyTextMp3: vi.fn(),

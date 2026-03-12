@@ -476,7 +476,9 @@ describe('config/env - ops control settings', () => {
         expect(cfg.opsControl.botSharedSecret).toBeUndefined();
         expect(cfg.opsControl.statusCommand).toContain('postgres-ops-status.sh --json');
         expect(cfg.opsControl.backupCommand).toContain('postgres-backup-s3.sh backup-upload');
-        expect(cfg.opsControl.restoreDrillCommand).toContain('run-postgres-restore-drill-reminder.sh');
+        expect(cfg.opsControl.restoreDrillCommand).toContain(
+          'run-postgres-restore-drill-reminder.sh',
+        );
         expect(cfg.opsControl.actionTimeoutMs).toBe(10 * 60 * 1000);
         expect(cfg.opsControl.actionHistoryLimit).toBe(100);
       },

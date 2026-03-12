@@ -65,10 +65,13 @@ interface ResolvedSharePayload {
   assignmentEmoji: string | null;
 }
 
-async function resolveSharePayloadForJob(context: CommandContext, mdOrHtmlSource: {
-  md: string | null;
-  htmlUrl?: string | null;
-}): Promise<ResolvedSharePayload> {
+async function resolveSharePayloadForJob(
+  context: CommandContext,
+  mdOrHtmlSource: {
+    md: string | null;
+    htmlUrl?: string | null;
+  },
+): Promise<ResolvedSharePayload> {
   let markdown: string | null = mdOrHtmlSource.md;
   let html: string | null = null;
 
@@ -121,14 +124,20 @@ function looksLikeMarkdownFilePath(value: string): boolean {
   return trimmed.startsWith('/') || trimmed.startsWith('./') || trimmed.startsWith('../');
 }
 
-function extractLabeledMarkdownAudioUrl(markdown: string | null | undefined, label: string): string | null {
+function extractLabeledMarkdownAudioUrl(
+  markdown: string | null | undefined,
+  label: string,
+): string | null {
   if (!markdown) return null;
   const pattern = new RegExp(String.raw`\[${escapeRegExp(label)}\]\((https?:\/\/[^\s)]+)\)`, 'i');
   const match = markdown.match(pattern);
   return match?.[1] ?? null;
 }
 
-function extractAudioUrlByPathHint(input: string | null | undefined, pathHint: string): string | null {
+function extractAudioUrlByPathHint(
+  input: string | null | undefined,
+  pathHint: string,
+): string | null {
   if (!input) return null;
   const pattern = new RegExp(
     String.raw`(https?:\/\/[^\s<>"')\]]*${escapeRegExp(pathHint)}[^\s<>"')\]]*\.mp3(?:\?[^\s<>"')\]]*)?)`,
@@ -230,10 +239,17 @@ async function fetchTextWithTimeout(url: string, timeoutMs: number): Promise<str
   }
 }
 
-async function sendShareableJobLinks(context: CommandContext, jobIdRaw: string | undefined): Promise<void> {
+async function sendShareableJobLinks(
+  context: CommandContext,
+  jobIdRaw: string | undefined,
+): Promise<void> {
   const jobId = jobIdRaw?.trim();
   if (!jobId) {
-    await sendDomainMessage(context, 'jobs', formatCommandError(`Usage: /${context.command} <jobId>`));
+    await sendDomainMessage(
+      context,
+      'jobs',
+      formatCommandError(`Usage: /${context.command} <jobId>`),
+    );
     return;
   }
 
@@ -317,7 +333,9 @@ export function createCommandRegistry(): CommandRegistry {
       domain: 'jobs',
       async execute(context) {
         const requestedLimit = context.args[0] ? Number(context.args[0]) : 10;
-        const limit = Number.isInteger(requestedLimit) ? Math.max(1, Math.min(20, requestedLimit)) : 10;
+        const limit = Number.isInteger(requestedLimit)
+          ? Math.max(1, Math.min(20, requestedLimit))
+          : 10;
         const jobs = await context.backend.getFinishedJobs(limit);
         await sendDomainMessage(context, 'jobs', formatFinishedJobs(jobs));
       },

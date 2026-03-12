@@ -53,7 +53,9 @@ Great explanation.
     expect(analysis.source).toBe('heuristic');
     expect(analysis.lessonSummary.length).toBeGreaterThan(0);
     expect(analysis.vocabularyFocus.length).toBeGreaterThan(0);
-    expect(analysis.grammarWatchlist.join(' ')).toMatch(/I am agree|he\/she goes|Adverb placement/i);
+    expect(analysis.grammarWatchlist.join(' ')).toMatch(
+      /I am agree|he\/she goes|Adverb placement/i,
+    );
   });
 
   it('normalizes and merges transcript analysis payloads', () => {
@@ -69,10 +71,7 @@ Great explanation.
     });
     expect(normalized).not.toBeNull();
 
-    const merged = mergeTranscriptAnalysis(
-      { provider: 'deepgram' },
-      normalized!,
-    );
+    const merged = mergeTranscriptAnalysis({ provider: 'deepgram' }, normalized!);
     expect(merged.provider).toBe('deepgram');
     expect(merged.analysis).toBeDefined();
   });

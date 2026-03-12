@@ -81,23 +81,23 @@ Wave objectives:
 
 Wave assignment table:
 
-| id | wave | rationale | required_release_label |
-| --- | --- | --- | --- |
-| LR-006 | Wave 1 | Internal data-compat join cleanup after migration confirmation | release:patch |
-| LR-007 | Wave 1 | Internal event bridge fallback channel retirement | release:patch |
-| LR-008 | Wave 1 | Internal settings normalization cleanup with safe defaults retained | release:patch |
-| LR-009 | Wave 1 | Internal constructor fallback retirement and startup hardening | release:patch |
-| LR-010 | Wave 1 | Internal migration helper retirement after storage migration verification | release:patch |
-| LR-011 | Wave 2 | Validation contract keeps legacy payload fields and legacy preset mapping | release:minor |
-| LR-012 | Wave 2 | Parser accepts legacy fenced markdown inputs | release:minor |
-| LR-013 | Wave 2 | TTS adapter accepts legacy `voice_id` field | release:minor |
-| LR-002 | Wave 2 | Job submission dual-accept path for legacy `preset` | release:minor |
-| LR-003 | Wave 2 | Timeline query accepts legacy `job_approved` filter alias | release:minor |
-| LR-005 | Wave 2 | Generation env alias support for emergency override | release:minor |
-| LR-014 | Wave 2 | Student API runtime still probes legacy student JSON directory for warning emission | release:patch |
-| LR-015 | Wave 2 | Worker runtime downgrades manifest store to filesystem when S3 bucket is missing | release:patch |
-| LR-001 | Wave 3 | Legacy status route alias removal (`/jobs/:jobId/status`) | release:major |
-| LR-004 | Wave 3 | Manifest compatibility alias removal (`audio` -> `audioArtifacts.studyText`) | release:major |
+| id     | wave   | rationale                                                                           | required_release_label |
+| ------ | ------ | ----------------------------------------------------------------------------------- | ---------------------- |
+| LR-006 | Wave 1 | Internal data-compat join cleanup after migration confirmation                      | release:patch          |
+| LR-007 | Wave 1 | Internal event bridge fallback channel retirement                                   | release:patch          |
+| LR-008 | Wave 1 | Internal settings normalization cleanup with safe defaults retained                 | release:patch          |
+| LR-009 | Wave 1 | Internal constructor fallback retirement and startup hardening                      | release:patch          |
+| LR-010 | Wave 1 | Internal migration helper retirement after storage migration verification           | release:patch          |
+| LR-011 | Wave 2 | Validation contract keeps legacy payload fields and legacy preset mapping           | release:minor          |
+| LR-012 | Wave 2 | Parser accepts legacy fenced markdown inputs                                        | release:minor          |
+| LR-013 | Wave 2 | TTS adapter accepts legacy `voice_id` field                                         | release:minor          |
+| LR-002 | Wave 2 | Job submission dual-accept path for legacy `preset`                                 | release:minor          |
+| LR-003 | Wave 2 | Timeline query accepts legacy `job_approved` filter alias                           | release:minor          |
+| LR-005 | Wave 2 | Generation env alias support for emergency override                                 | release:minor          |
+| LR-014 | Wave 2 | Student API runtime still probes legacy student JSON directory for warning emission | release:patch          |
+| LR-015 | Wave 2 | Worker runtime downgrades manifest store to filesystem when S3 bucket is missing    | release:patch          |
+| LR-001 | Wave 3 | Legacy status route alias removal (`/jobs/:jobId/status`)                           | release:major          |
+| LR-004 | Wave 3 | Manifest compatibility alias removal (`audio` -> `audioArtifacts.studyText`)        | release:major          |
 
 ## Per-Item Acceptance Contract
 

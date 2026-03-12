@@ -86,10 +86,7 @@ export function classifyProviderRuntimeFailure(
   }
 
   if (providerRules) {
-    if (
-      providerRules.timeoutStatusMin !== undefined &&
-      status >= providerRules.timeoutStatusMin
-    ) {
+    if (providerRules.timeoutStatusMin !== undefined && status >= providerRules.timeoutStatusMin) {
       return 'provider_timeout';
     }
     if (includesNumber(providerRules.timeoutStatuses, status)) {
@@ -153,8 +150,14 @@ function mergeRules(
       const key = normalize(provider);
       const baseProviderRules = mergedByProvider[key] ?? {};
       mergedByProvider[key] = {
-        rateLimitCodes: mergeStringList(baseProviderRules.rateLimitCodes, providerRules.rateLimitCodes),
-        timeoutStatuses: mergeNumberList(baseProviderRules.timeoutStatuses, providerRules.timeoutStatuses),
+        rateLimitCodes: mergeStringList(
+          baseProviderRules.rateLimitCodes,
+          providerRules.rateLimitCodes,
+        ),
+        timeoutStatuses: mergeNumberList(
+          baseProviderRules.timeoutStatuses,
+          providerRules.timeoutStatuses,
+        ),
         timeoutStatusMin:
           providerRules.timeoutStatusMin === undefined
             ? baseProviderRules.timeoutStatusMin
@@ -165,9 +168,15 @@ function mergeRules(
   }
 
   return {
-    rateLimitStatuses: mergeNumberList(baseRules.rateLimitStatuses, overrideRules.rateLimitStatuses),
+    rateLimitStatuses: mergeNumberList(
+      baseRules.rateLimitStatuses,
+      overrideRules.rateLimitStatuses,
+    ),
     timeoutStatuses: mergeNumberList(baseRules.timeoutStatuses, overrideRules.timeoutStatuses),
-    timeoutErrorNames: mergeStringList(baseRules.timeoutErrorNames, overrideRules.timeoutErrorNames),
+    timeoutErrorNames: mergeStringList(
+      baseRules.timeoutErrorNames,
+      overrideRules.timeoutErrorNames,
+    ),
     timeoutCodes: mergeStringList(baseRules.timeoutCodes, overrideRules.timeoutCodes),
     timeoutMessageSubstrings: mergeStringList(
       baseRules.timeoutMessageSubstrings,

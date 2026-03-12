@@ -133,7 +133,9 @@ export function makeJobStatus(overrides: Partial<api.JobStatus> = {}): api.JobSt
   };
 }
 
-export function makeRecording(overrides: Partial<api.RecordingListItem> = {}): api.RecordingListItem {
+export function makeRecording(
+  overrides: Partial<api.RecordingListItem> = {},
+): api.RecordingListItem {
   return {
     recordingId: 'rec-1',
     status: 'ingested',
@@ -273,297 +275,297 @@ export async function waitForJobActionsReady(jobId = 'job-1') {
 
 export function setupMinimalAssignmentTest() {
   vi.useRealTimers();
-      vi.clearAllMocks();
-      globalThis.history.replaceState(null, '', '/');
-  
-      vi.mocked(api.fetchPromptOptions).mockResolvedValue({
-        templates: [{ id: 'tpl-default', label: 'Default Template' }],
-        profiles: [{ id: 'profile-default', label: 'Default Profile' }],
-        defaults: {
-          templateId: 'tpl-default',
-          profileId: 'profile-default',
+  vi.clearAllMocks();
+  globalThis.history.replaceState(null, '', '/');
+
+  vi.mocked(api.fetchPromptOptions).mockResolvedValue({
+    templates: [{ id: 'tpl-default', label: 'Default Template' }],
+    profiles: [{ id: 'profile-default', label: 'Default Profile' }],
+    defaults: {
+      templateId: 'tpl-default',
+      profileId: 'profile-default',
+    },
+  });
+  vi.mocked(api.fetchJobOptions).mockResolvedValue({
+    presets: ['b1-default', 'b2-default'],
+    cefrLevels: ['A1', 'A2', 'B1', 'B2', 'C1', 'C2'],
+    cefrDefault: 'B1',
+    generation: {
+      providers: ['openai', 'google_ai_studio', 'openrouter'],
+      defaultProvider: 'openai',
+      modelOptions: [
+        {
+          provider: 'openai',
+          id: 'gpt-5.2',
+          tier: 'primary',
+          fallbackRank: 0,
+          defaultSelected: true,
+          enabled: true,
         },
-      });
-      vi.mocked(api.fetchJobOptions).mockResolvedValue({
-        presets: ['b1-default', 'b2-default'],
-        cefrLevels: ['A1', 'A2', 'B1', 'B2', 'C1', 'C2'],
-        cefrDefault: 'B1',
-        generation: {
-          providers: ['openai', 'google_ai_studio', 'openrouter'],
-          defaultProvider: 'openai',
-          modelOptions: [
-            {
-              provider: 'openai',
-              id: 'gpt-5.2',
-              tier: 'primary',
-              fallbackRank: 0,
-              defaultSelected: true,
-              enabled: true,
-            },
-          ],
-          defaultModelByProvider: {
-            openai: 'gpt-5.2',
-          },
-          quota: {
-            source: 'hybrid',
-            lastUpdatedAt: '2026-02-18T00:00:00.000Z',
-            requestsPerMinute: 5,
-            tokensPerMinute: 250000,
-            requestsPerDay: 20,
-          },
-        },
-        voiceAccents: ['american'],
-        voices: [{ id: 'voice-a', name: 'Voice A', accent: 'american' }],
-        notionDatabases: [{ id: 'db-1', name: 'DB One' }],
-        sttProviders: ['deepgram', 'elevenlabs', 'google'],
-        defaultSttProvider: 'deepgram',
-        sttModelOptionsByProvider: {
-          deepgram: ['nova-3'],
-          elevenlabs: ['scribe_v2'],
-          google: ['latest_long'],
-        },
-        defaultSttModelByProvider: {
-          deepgram: 'nova-3',
-          elevenlabs: 'scribe_v2',
-          google: 'latest_long',
-        },
-        ttsStrategies: ['auto', 'dialogue', 'tts'],
-        ttsProviders: ['elevenlabs', 'google'],
-        ttsModelOptionsByProvider: {
-          elevenlabs: ['eleven_multilingual_v2'],
-          google: ['chirp3_hd', 'studio', 'neural2', 'wavenet'],
-        },
-        defaultTtsProvider: 'elevenlabs',
-        defaultTtsModelByProvider: {
-          elevenlabs: 'eleven_multilingual_v2',
-          google: 'chirp3_hd',
-        },
-        supportedActions: [
-          {
-            type: 'rerun_audio',
-            label: 'Rerun audio',
-            description: 'Regenerate audio',
-            implemented: true,
-          },
-          {
-            type: 'cancel',
-            label: 'Cancel',
-            description: 'Cancel active job',
-            implemented: true,
-          },
-          {
-            type: 'rerun_publish',
-            label: 'Rerun publish',
-            description: 'Rerun publish stage',
-            implemented: true,
-          },
-        ],
-      });
-      vi.mocked(api.fetchStudentOptions).mockResolvedValue({
-        students: [
-          { id: 'student-default', name: 'Default', profileId: 'profile-default.md' },
-          { id: 'student-alex', name: 'Alex', profileId: 'profiles/alex.md' },
-        ],
-      });
-      vi.mocked(api.listUserJobs).mockResolvedValue({
-        jobs: [],
-        total: 0,
-        limit: 20,
-        offset: 0,
-      });
-      vi.mocked(api.listProfileContents).mockResolvedValue({
-        profiles: [{ id: 'profile-default.md', label: 'Default Profile' }],
-      });
-      vi.mocked(api.getProfileContent).mockResolvedValue({
-        id: 'profile-default.md',
-        label: 'Default Profile',
-        content: 'PROFILE CONTENT',
-        currentRevisionId: 'revision-1',
-        updatedAt: now,
-      });
-      vi.mocked(api.listProfileRevisions).mockResolvedValue({
-        items: [
-          {
-            id: 'revision-1',
-            profileId: 'profile-default.md',
-            contentHash: 'hash-1',
-            source: 'create',
-            createdAt: now,
-            createdBy: null,
-            restoredFromRevisionId: null,
-          },
-        ],
-        total: 1,
-        limit: 20,
-        offset: 0,
-        order: 'desc',
-      });
-      vi.mocked(api.upsertProfileContent).mockResolvedValue({
-        id: 'profile-default.md',
-        label: 'Default Profile',
-        content: 'PROFILE CONTENT',
-        currentRevisionId: 'revision-1',
-        updatedAt: now,
-      });
-      vi.mocked(api.restoreProfileRevision).mockResolvedValue({
-        id: 'profile-default.md',
-        label: 'Default Profile',
-        content: 'PROFILE CONTENT',
-        currentRevisionId: 'revision-1',
-        updatedAt: now,
-      });
-  
-      vi.mocked(api.uploadRecording).mockResolvedValue(makeRecording());
-      vi.mocked(api.getRecording).mockResolvedValue(
-        makeRecording({
-          status: 'transcribed',
-          transcriptId: 'tx-1',
-        }),
-      );
-      vi.mocked(api.fetchRecordingTranscript).mockResolvedValue(makeTranscript());
-  
-      vi.mocked(api.createPromptPackage).mockResolvedValue({
-        id: 'pkg-1',
-        recordingId: 'rec-1',
-        transcriptId: 'tx-1',
-        studentId: null,
-        profilePath: null,
-        templateVersion: 'v1',
-        notes: null,
-        storageUri: 'memory://prompt/pkg-1',
-        text: 'Prompt package output',
+      ],
+      defaultModelByProvider: {
+        openai: 'gpt-5.2',
+      },
+      quota: {
+        source: 'hybrid',
+        lastUpdatedAt: '2026-02-18T00:00:00.000Z',
+        requestsPerMinute: 5,
+        tokensPerMinute: 250000,
+        requestsPerDay: 20,
+      },
+    },
+    voiceAccents: ['american'],
+    voices: [{ id: 'voice-a', name: 'Voice A', accent: 'american' }],
+    notionDatabases: [{ id: 'db-1', name: 'DB One' }],
+    sttProviders: ['deepgram', 'elevenlabs', 'google'],
+    defaultSttProvider: 'deepgram',
+    sttModelOptionsByProvider: {
+      deepgram: ['nova-3'],
+      elevenlabs: ['scribe_v2'],
+      google: ['latest_long'],
+    },
+    defaultSttModelByProvider: {
+      deepgram: 'nova-3',
+      elevenlabs: 'scribe_v2',
+      google: 'latest_long',
+    },
+    ttsStrategies: ['auto', 'dialogue', 'tts'],
+    ttsProviders: ['elevenlabs', 'google'],
+    ttsModelOptionsByProvider: {
+      elevenlabs: ['eleven_multilingual_v2'],
+      google: ['chirp3_hd', 'studio', 'neural2', 'wavenet'],
+    },
+    defaultTtsProvider: 'elevenlabs',
+    defaultTtsModelByProvider: {
+      elevenlabs: 'eleven_multilingual_v2',
+      google: 'chirp3_hd',
+    },
+    supportedActions: [
+      {
+        type: 'rerun_audio',
+        label: 'Rerun audio',
+        description: 'Regenerate audio',
+        implemented: true,
+      },
+      {
+        type: 'cancel',
+        label: 'Cancel',
+        description: 'Cancel active job',
+        implemented: true,
+      },
+      {
+        type: 'rerun_publish',
+        label: 'Rerun publish',
+        description: 'Rerun publish stage',
+        implemented: true,
+      },
+    ],
+  });
+  vi.mocked(api.fetchStudentOptions).mockResolvedValue({
+    students: [
+      { id: 'student-default', name: 'Default', profileId: 'profile-default.md' },
+      { id: 'student-alex', name: 'Alex', profileId: 'profiles/alex.md' },
+    ],
+  });
+  vi.mocked(api.listUserJobs).mockResolvedValue({
+    jobs: [],
+    total: 0,
+    limit: 20,
+    offset: 0,
+  });
+  vi.mocked(api.listProfileContents).mockResolvedValue({
+    profiles: [{ id: 'profile-default.md', label: 'Default Profile' }],
+  });
+  vi.mocked(api.getProfileContent).mockResolvedValue({
+    id: 'profile-default.md',
+    label: 'Default Profile',
+    content: 'PROFILE CONTENT',
+    currentRevisionId: 'revision-1',
+    updatedAt: now,
+  });
+  vi.mocked(api.listProfileRevisions).mockResolvedValue({
+    items: [
+      {
+        id: 'revision-1',
+        profileId: 'profile-default.md',
+        contentHash: 'hash-1',
+        source: 'create',
         createdAt: now,
-        updatedAt: now,
-      });
-      vi.mocked(api.fetchPromptPackage).mockResolvedValue({
-        id: 'pkg-1',
-        recordingId: 'rec-1',
-        transcriptId: 'tx-1',
-        studentId: null,
-        profilePath: null,
-        templateVersion: 'v1',
-        notes: null,
-        storageUri: 'memory://prompt/pkg-1',
-        text: 'Prompt package output',
-        createdAt: now,
-        updatedAt: now,
-      });
-      vi.mocked(api.generateDraft).mockResolvedValue({
-        text: '# Generated assignment draft',
-        provider: 'openai',
-        model: 'gpt-5.2',
-        quota: {
-          source: 'hybrid',
-          lastUpdatedAt: now,
-        },
-      });
-  
-      vi.mocked(api.validateMarkdown).mockResolvedValue({
-        ok: true,
-        errors: [],
-        warnings: [],
-      });
-  
-      vi.mocked(api.createDraft).mockResolvedValue({
-        id: 'draft-1',
-        promptPackageId: 'pkg-1',
-        studentId: null,
-        storageUri: 'memory://drafts/draft-1',
-        createdBy: 'user-1',
-        text: '# Draft markdown',
-        createdAt: now,
-        updatedAt: now,
-      });
-      vi.mocked(api.fetchDraft).mockResolvedValue({
-        id: 'draft-1',
-        promptPackageId: 'pkg-1',
-        studentId: null,
-        storageUri: 'memory://drafts/draft-1',
-        createdBy: 'user-1',
-        text: '# Draft markdown',
-        createdAt: now,
-        updatedAt: now,
-      });
-  
-      vi.mocked(api.updateDraft).mockResolvedValue({
-        id: 'draft-1',
-        promptPackageId: 'pkg-1',
-        studentId: null,
-        storageUri: 'memory://drafts/draft-1',
-        createdBy: 'user-1',
-        text: '# Draft markdown',
-        createdAt: now,
-        updatedAt: now,
-      });
-  
-      vi.mocked(api.materializeDraft).mockResolvedValue({
-        draftId: 'draft-1',
-        jobId: 'job-1',
-        mdPath: '/tmp/assignment.md',
-        mdStorageUri: 's3://esl/drafts/draft-1.md',
-      });
-  
-      vi.mocked(api.approveJob).mockResolvedValue({ jobId: 'job-1' } as never);
-      vi.mocked(api.getJobStatus).mockResolvedValue({
-        jobId: 'job-1',
-        state: 'succeeded',
-        publishTarget: 'notion',
-        notionUrl: 'https://www.notion.so/published-assignment',
-      } as never);
-      vi.mocked(api.fetchJobProvenance).mockResolvedValue({
-        job: {
-          id: 'job-1',
-          state: 'succeeded',
-          createdAt: now,
-          updatedAt: now,
-          startedAt: now,
-          finishedAt: now,
-          sourceJobId: null,
-          manifestPath: null,
-          notionUrl: 'https://www.notion.so/published-assignment',
-          anytypeUrl: null,
-          error: null,
-        },
-        sourceJob: null,
-        recording: null,
-        transcript: null,
-        promptPackage: null,
-        draft: null,
-        tts: null,
-        lineage: null,
-        actions: [],
-      });
-      vi.mocked(api.rerunAudioJob).mockResolvedValue({
-        success: true,
-        message: 'Audio rerun queued',
-        actionType: 'rerun_audio',
-        jobId: 'job-1',
-      });
-      vi.mocked(api.rerunPublishJob).mockResolvedValue({
-        success: true,
-        message: 'Publish rerun queued',
-        actionType: 'rerun_publish',
-        jobId: 'job-1',
-      });
-      vi.mocked(api.cancelJob).mockResolvedValue({
-        success: true,
-        message: 'Job cancelled',
-        actionType: 'cancel',
-        jobId: 'job-1',
-      });
-      vi.mocked(api.retryRecordingTranscription).mockResolvedValue(
-        makeRecording({
-          status: 'transcribing',
-        }),
-      );
-      vi.mocked(api.updateRecordingTranscript).mockResolvedValue(
-        makeTranscript({
-          text: 'Saved transcript text',
-        }),
-      );
-      vi.mocked(api.renderHtmlPreview).mockResolvedValue({
-        html: '<html><body><h1>Preview</h1></body></html>',
-      });
+        createdBy: null,
+        restoredFromRevisionId: null,
+      },
+    ],
+    total: 1,
+    limit: 20,
+    offset: 0,
+    order: 'desc',
+  });
+  vi.mocked(api.upsertProfileContent).mockResolvedValue({
+    id: 'profile-default.md',
+    label: 'Default Profile',
+    content: 'PROFILE CONTENT',
+    currentRevisionId: 'revision-1',
+    updatedAt: now,
+  });
+  vi.mocked(api.restoreProfileRevision).mockResolvedValue({
+    id: 'profile-default.md',
+    label: 'Default Profile',
+    content: 'PROFILE CONTENT',
+    currentRevisionId: 'revision-1',
+    updatedAt: now,
+  });
+
+  vi.mocked(api.uploadRecording).mockResolvedValue(makeRecording());
+  vi.mocked(api.getRecording).mockResolvedValue(
+    makeRecording({
+      status: 'transcribed',
+      transcriptId: 'tx-1',
+    }),
+  );
+  vi.mocked(api.fetchRecordingTranscript).mockResolvedValue(makeTranscript());
+
+  vi.mocked(api.createPromptPackage).mockResolvedValue({
+    id: 'pkg-1',
+    recordingId: 'rec-1',
+    transcriptId: 'tx-1',
+    studentId: null,
+    profilePath: null,
+    templateVersion: 'v1',
+    notes: null,
+    storageUri: 'memory://prompt/pkg-1',
+    text: 'Prompt package output',
+    createdAt: now,
+    updatedAt: now,
+  });
+  vi.mocked(api.fetchPromptPackage).mockResolvedValue({
+    id: 'pkg-1',
+    recordingId: 'rec-1',
+    transcriptId: 'tx-1',
+    studentId: null,
+    profilePath: null,
+    templateVersion: 'v1',
+    notes: null,
+    storageUri: 'memory://prompt/pkg-1',
+    text: 'Prompt package output',
+    createdAt: now,
+    updatedAt: now,
+  });
+  vi.mocked(api.generateDraft).mockResolvedValue({
+    text: '# Generated assignment draft',
+    provider: 'openai',
+    model: 'gpt-5.2',
+    quota: {
+      source: 'hybrid',
+      lastUpdatedAt: now,
+    },
+  });
+
+  vi.mocked(api.validateMarkdown).mockResolvedValue({
+    ok: true,
+    errors: [],
+    warnings: [],
+  });
+
+  vi.mocked(api.createDraft).mockResolvedValue({
+    id: 'draft-1',
+    promptPackageId: 'pkg-1',
+    studentId: null,
+    storageUri: 'memory://drafts/draft-1',
+    createdBy: 'user-1',
+    text: '# Draft markdown',
+    createdAt: now,
+    updatedAt: now,
+  });
+  vi.mocked(api.fetchDraft).mockResolvedValue({
+    id: 'draft-1',
+    promptPackageId: 'pkg-1',
+    studentId: null,
+    storageUri: 'memory://drafts/draft-1',
+    createdBy: 'user-1',
+    text: '# Draft markdown',
+    createdAt: now,
+    updatedAt: now,
+  });
+
+  vi.mocked(api.updateDraft).mockResolvedValue({
+    id: 'draft-1',
+    promptPackageId: 'pkg-1',
+    studentId: null,
+    storageUri: 'memory://drafts/draft-1',
+    createdBy: 'user-1',
+    text: '# Draft markdown',
+    createdAt: now,
+    updatedAt: now,
+  });
+
+  vi.mocked(api.materializeDraft).mockResolvedValue({
+    draftId: 'draft-1',
+    jobId: 'job-1',
+    mdPath: '/tmp/assignment.md',
+    mdStorageUri: 's3://esl/drafts/draft-1.md',
+  });
+
+  vi.mocked(api.approveJob).mockResolvedValue({ jobId: 'job-1' } as never);
+  vi.mocked(api.getJobStatus).mockResolvedValue({
+    jobId: 'job-1',
+    state: 'succeeded',
+    publishTarget: 'notion',
+    notionUrl: 'https://www.notion.so/published-assignment',
+  } as never);
+  vi.mocked(api.fetchJobProvenance).mockResolvedValue({
+    job: {
+      id: 'job-1',
+      state: 'succeeded',
+      createdAt: now,
+      updatedAt: now,
+      startedAt: now,
+      finishedAt: now,
+      sourceJobId: null,
+      manifestPath: null,
+      notionUrl: 'https://www.notion.so/published-assignment',
+      anytypeUrl: null,
+      error: null,
+    },
+    sourceJob: null,
+    recording: null,
+    transcript: null,
+    promptPackage: null,
+    draft: null,
+    tts: null,
+    lineage: null,
+    actions: [],
+  });
+  vi.mocked(api.rerunAudioJob).mockResolvedValue({
+    success: true,
+    message: 'Audio rerun queued',
+    actionType: 'rerun_audio',
+    jobId: 'job-1',
+  });
+  vi.mocked(api.rerunPublishJob).mockResolvedValue({
+    success: true,
+    message: 'Publish rerun queued',
+    actionType: 'rerun_publish',
+    jobId: 'job-1',
+  });
+  vi.mocked(api.cancelJob).mockResolvedValue({
+    success: true,
+    message: 'Job cancelled',
+    actionType: 'cancel',
+    jobId: 'job-1',
+  });
+  vi.mocked(api.retryRecordingTranscription).mockResolvedValue(
+    makeRecording({
+      status: 'transcribing',
+    }),
+  );
+  vi.mocked(api.updateRecordingTranscript).mockResolvedValue(
+    makeTranscript({
+      text: 'Saved transcript text',
+    }),
+  );
+  vi.mocked(api.renderHtmlPreview).mockResolvedValue({
+    html: '<html><body><h1>Preview</h1></body></html>',
+  });
 }
 
 export const testAct = act;

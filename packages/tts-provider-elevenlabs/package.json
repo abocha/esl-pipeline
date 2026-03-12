@@ -28,8 +28,8 @@
     "build": "pnpm --filter @esl-pipeline/shared-infrastructure build && tsc -p tsconfig.json",
     "clean": "node -e \"fs.rmSync('dist', {recursive:true, force:true})\"",
     "test": "pnpm run test:unit",
-    "test:unit": "vitest run --exclude \"tests/integration.test.ts\"",
     "test:integration": "vitest run \"tests/integration.test.ts\"",
+    "test:unit": "vitest run --exclude \"tests/integration.test.ts\"",
     "test:watch": "vitest",
     "typecheck": "tsc --noEmit"
   },
@@ -43,7 +43,7 @@
   },
   "devDependencies": {
     "@types/js-yaml": "^4.0.9",
-    "@types/node": "^25.3.5",
+    "@types/node": "^25.4.0",
     "typescript": "^5.9.3",
     "vitest": "^4.0.18"
   },

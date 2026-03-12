@@ -243,7 +243,12 @@ describe('application/ops-control', () => {
       },
       async () => {
         const commands: string[] = [];
-        const pendingResolves: ((value: { exitCode: number; stdout: string; stderr: string; timedOut: boolean }) => void)[] = [];
+        const pendingResolves: ((value: {
+          exitCode: number;
+          stdout: string;
+          stderr: string;
+          timedOut: boolean;
+        }) => void)[] = [];
         const ids = ['op-1', 'op-2'];
 
         const ops = await loadOpsControlFresh();

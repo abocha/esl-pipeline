@@ -1,4 +1,3 @@
-import copy from 'copy-to-clipboard';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import type {
@@ -20,37 +19,38 @@ import type {
   StudentOption,
 } from '../../utils/api';
 import {
+  GenerationDraftApiError,
   approveJob,
   cancelJob,
   createDraft,
   createPromptPackage,
   fetchDraft,
-  fetchJobProvenance,
-  fetchStudentOptions,
   fetchJobOptions,
-  fetchPromptPackage,
+  fetchJobProvenance,
   fetchPromptOptions,
+  fetchPromptPackage,
   fetchRecordingTranscript,
+  fetchStudentOptions,
   generateDraft,
-  GenerationDraftApiError,
   getJobStatus,
   getProfileContent,
   getRecording,
-  listUserJobs,
   listProfileContents,
   listProfileRevisions,
+  listUserJobs,
   materializeDraft,
-  restoreProfileRevision,
-  retryRecordingTranscription,
+  renderHtmlPreview,
   rerunAudioJob,
   rerunPublishJob,
-  renderHtmlPreview,
-  upsertProfileContent,
+  restoreProfileRevision,
+  retryRecordingTranscription,
   updateDraft,
   updateRecordingTranscript,
   uploadRecording,
+  upsertProfileContent,
   validateMarkdown,
 } from '../../utils/api';
+import { copyTextToClipboard } from '../../utils/clipboard';
 import { DropZone } from '../shared/DropZone';
 import { UploadProgress } from '../shared/UploadProgress';
 import {
@@ -267,8 +267,9 @@ export const MinimalAssignment: React.FC = () => {
   const [generationSuccess, setGenerationSuccess] = useState<string | null>(null);
   const [selectedGenerationProvider, setSelectedGenerationProvider] = useState('');
   const [selectedGenerationModel, setSelectedGenerationModel] = useState('');
-  const [generationRuntimeQuotaSnapshot, setGenerationRuntimeQuotaSnapshot] =
-    useState<GenerateDraftResponse['quota'] | null>(null);
+  const [generationRuntimeQuotaSnapshot, setGenerationRuntimeQuotaSnapshot] = useState<
+    GenerateDraftResponse['quota'] | null
+  >(null);
   const [generationRuntimeSelection, setGenerationRuntimeSelection] = useState<{
     provider: string;
     model: string;
@@ -308,9 +309,9 @@ export const MinimalAssignment: React.FC = () => {
   const [loadedProfileContent, setLoadedProfileContent] = useState('');
   const [profileRevisions, setProfileRevisions] = useState<ProfileRevisionSummaryResponse[]>([]);
   const [profileRevisionError, setProfileRevisionError] = useState<string | null>(null);
-  const [profileBusy, setProfileBusy] = useState<'loading' | 'saving' | 'creating' | 'restoring' | null>(
-    null,
-  );
+  const [profileBusy, setProfileBusy] = useState<
+    'loading' | 'saving' | 'creating' | 'restoring' | null
+  >(null);
   const [profileSuccess, setProfileSuccess] = useState<string | null>(null);
 
   const [actionBusy, setActionBusy] = useState<'rerun' | 'rerun_publish' | 'cancel' | null>(null);
@@ -346,8 +347,7 @@ export const MinimalAssignment: React.FC = () => {
     [generationOptions],
   );
   const generationModelsForProvider = useMemo(
-    () =>
-      generationModelOptions.filter((option) => option.provider === selectedGenerationProvider),
+    () => generationModelOptions.filter((option) => option.provider === selectedGenerationProvider),
     [generationModelOptions, selectedGenerationProvider],
   );
   const sttProviders = useMemo<SttProvider[]>(() => {
@@ -373,8 +373,12 @@ export const MinimalAssignment: React.FC = () => {
     const googleConfigured = jobOptions?.ttsModelOptionsByProvider?.google ?? [];
     const elevenlabsDefault =
       (jobOptions?.defaultTtsModelByProvider?.elevenlabs ?? '').trim() || FALLBACK_ELEVENLABS_MODEL;
-    const elevenlabsOptions = [...new Set([...elevenlabsConfigured, elevenlabsDefault].filter(Boolean))];
-    const googleOptions = [...new Set(googleConfigured.length > 0 ? googleConfigured : [...FALLBACK_GOOGLE_TTS_MODELS])];
+    const elevenlabsOptions = [
+      ...new Set([...elevenlabsConfigured, elevenlabsDefault].filter(Boolean)),
+    ];
+    const googleOptions = [
+      ...new Set(googleConfigured.length > 0 ? googleConfigured : [...FALLBACK_GOOGLE_TTS_MODELS]),
+    ];
 
     return {
       elevenlabs: elevenlabsOptions.length > 0 ? elevenlabsOptions : [FALLBACK_ELEVENLABS_MODEL],
@@ -421,9 +425,7 @@ export const MinimalAssignment: React.FC = () => {
       setSelectedResumeJobId((current) => {
         if (current && jobs.some((job) => job.jobId === current)) return current;
         return (
-          jobs.find((job) => isActivelyProcessingJobState(job.state))?.jobId ??
-          jobs[0]?.jobId ??
-          ''
+          jobs.find((job) => isActivelyProcessingJobState(job.state))?.jobId ?? jobs[0]?.jobId ?? ''
         );
       });
       setResumeError(null);
@@ -599,9 +601,7 @@ export const MinimalAssignment: React.FC = () => {
     if (!jobOptions) {
       return;
     }
-    setSelectedPreset((current) =>
-      normalizePresetSelection(presetOptionIds, undefined, current),
-    );
+    setSelectedPreset((current) => normalizePresetSelection(presetOptionIds, undefined, current));
   }, [jobOptions, presetOptionIds, selectedPreset]);
 
   useEffect(() => {
@@ -655,7 +655,12 @@ export const MinimalAssignment: React.FC = () => {
     if (!selectedTtsModel || !modelOptions.includes(selectedTtsModel)) {
       setSelectedTtsModel(preferredModel);
     }
-  }, [jobOptions?.defaultTtsModelByProvider, selectedTtsModel, selectedTtsProvider, ttsModelOptionsByProvider]);
+  }, [
+    jobOptions?.defaultTtsModelByProvider,
+    selectedTtsModel,
+    selectedTtsProvider,
+    ttsModelOptionsByProvider,
+  ]);
 
   useEffect(() => {
     if (!ttsProviders.includes(rerunTtsProvider)) {
@@ -671,7 +676,9 @@ export const MinimalAssignment: React.FC = () => {
     }
     const preferredModel =
       rerunTtsProvider === 'google'
-        ? selectedTtsProvider === 'google' && selectedTtsModel && modelOptions.includes(selectedTtsModel)
+        ? selectedTtsProvider === 'google' &&
+          selectedTtsModel &&
+          modelOptions.includes(selectedTtsModel)
           ? selectedTtsModel
           : modelOptions[0]
         : modelOptions[0];
@@ -705,11 +712,7 @@ export const MinimalAssignment: React.FC = () => {
     if (!selectedGenerationProvider || !hasSelectedProvider) {
       setSelectedGenerationProvider(fallbackProvider);
     }
-  }, [
-    generationOptions?.defaultProvider,
-    generationProviders,
-    selectedGenerationProvider,
-  ]);
+  }, [generationOptions?.defaultProvider, generationProviders, selectedGenerationProvider]);
 
   useEffect(() => {
     if (!selectedGenerationProvider || generationModelsForProvider.length === 0) {
@@ -721,9 +724,9 @@ export const MinimalAssignment: React.FC = () => {
     const modelIds = generationModelsForProvider.map((option) => option.id);
     const configuredDefaultModel =
       generationOptions?.defaultModelByProvider?.[
-      selectedGenerationProvider as keyof NonNullable<
-        typeof generationOptions
-      >['defaultModelByProvider']
+        selectedGenerationProvider as keyof NonNullable<
+          typeof generationOptions
+        >['defaultModelByProvider']
       ];
     const defaultSelectedModel = generationModelsForProvider.find(
       (option) => option.defaultSelected,
@@ -780,9 +783,7 @@ export const MinimalAssignment: React.FC = () => {
         setRecordingError(response.error ?? null);
         setSelectedFileName(response.displayName || file.name);
         setUploadCacheNotice(
-          response.cacheHit
-            ? 'Reused an existing transcript for this exact audio file.'
-            : null,
+          response.cacheHit ? 'Reused an existing transcript for this exact audio file.' : null,
         );
       } catch (error) {
         if (controller.signal.aborted) {
@@ -842,7 +843,11 @@ export const MinimalAssignment: React.FC = () => {
         const resumedPresetId = status.learningPresetId ?? status.preset;
         if (resumedPresetId) {
           setSelectedPreset((current) =>
-            normalizePresetSelection(jobOptions ? presetOptionIds : undefined, resumedPresetId, current),
+            normalizePresetSelection(
+              jobOptions ? presetOptionIds : undefined,
+              resumedPresetId,
+              current,
+            ),
           );
         }
 
@@ -857,9 +862,15 @@ export const MinimalAssignment: React.FC = () => {
               resolvedStudentId = resumedRecording.studentId;
             }
 
-            if (status.transcriptId || resumedRecording.transcriptId || resumedRecording.status === 'transcribed') {
+            if (
+              status.transcriptId ||
+              resumedRecording.transcriptId ||
+              resumedRecording.status === 'transcribed'
+            ) {
               try {
-                const resumedTranscript = await fetchRecordingTranscript(resumedRecording.recordingId);
+                const resumedTranscript = await fetchRecordingTranscript(
+                  resumedRecording.recordingId,
+                );
                 setTranscript(resumedTranscript);
                 setTranscriptText(resumedTranscript.text ?? '');
                 setTranscriptStatus('ready');
@@ -867,7 +878,10 @@ export const MinimalAssignment: React.FC = () => {
               } catch (error) {
                 const message =
                   error instanceof Error ? error.message : 'Unable to load transcript.';
-                if (resumedRecording.status === 'transcribing' || resumedRecording.status === 'queued') {
+                if (
+                  resumedRecording.status === 'transcribing' ||
+                  resumedRecording.status === 'queued'
+                ) {
                   setTranscriptStatus('processing');
                   setTranscriptError(null);
                 } else {
@@ -914,7 +928,8 @@ export const MinimalAssignment: React.FC = () => {
               resolvedStudentId = resumedPromptPackage.studentId;
             }
           } catch (error) {
-            const message = error instanceof Error ? error.message : 'Unable to load prompt package.';
+            const message =
+              error instanceof Error ? error.message : 'Unable to load prompt package.';
             setPromptPackage(null);
             setPromptText('');
             setPromptError(message);
@@ -1199,7 +1214,11 @@ export const MinimalAssignment: React.FC = () => {
     try {
       const saved = await upsertProfileContent(selectedProfileId, profileEditorText);
       setLoadedProfileContent(saved.content);
-      const revisions = await listProfileRevisions(saved.id, { limit: 20, offset: 0, order: 'desc' });
+      const revisions = await listProfileRevisions(saved.id, {
+        limit: 20,
+        offset: 0,
+        order: 'desc',
+      });
       setProfileRevisions(revisions.items ?? []);
       setProfileSuccess(`Saved ${saved.id}.`);
     } catch (error) {
@@ -1220,11 +1239,16 @@ export const MinimalAssignment: React.FC = () => {
       const restored = await restoreProfileRevision(selectedProfileId, revisionId);
       setProfileEditorText(restored.content);
       setLoadedProfileContent(restored.content);
-      const revisions = await listProfileRevisions(restored.id, { limit: 20, offset: 0, order: 'desc' });
+      const revisions = await listProfileRevisions(restored.id, {
+        limit: 20,
+        offset: 0,
+        order: 'desc',
+      });
       setProfileRevisions(revisions.items ?? []);
       setProfileSuccess('Profile restored from revision.');
     } catch (error) {
-      const message = error instanceof Error ? error.message : 'Unable to restore profile revision.';
+      const message =
+        error instanceof Error ? error.message : 'Unable to restore profile revision.';
       setProfileRevisionError(message);
     } finally {
       setProfileBusy(null);
@@ -1265,9 +1289,9 @@ export const MinimalAssignment: React.FC = () => {
     }
   };
 
-  const handleCopyPrompt = () => {
+  const handleCopyPrompt = async () => {
     if (!promptText.trim()) return;
-    const success = copy(promptText);
+    const success = await copyTextToClipboard(promptText);
     setPromptCopyState(success ? 'copied' : 'error');
     setTimeout(() => setPromptCopyState('idle'), 2000);
   };
@@ -1286,7 +1310,7 @@ export const MinimalAssignment: React.FC = () => {
       const limitDetails =
         error instanceof GenerationDraftApiError && error.limitType
           ? ` Limit: ${error.used ?? '?'} / ${error.limit ?? '?'}` +
-          (error.window ? ` (${error.window} window).` : '.')
+            (error.window ? ` (${error.window} window).` : '.')
           : '';
       const baseMessage =
         code === 'provider_rate_limit'
@@ -1712,7 +1736,7 @@ export const MinimalAssignment: React.FC = () => {
     (job: JobStatus): string => {
       const isAudioRerun = Boolean(job.sourceJobId && job.withTts);
       const baseName = job.studentId
-        ? studentNameById.get(job.studentId) ?? `Student ${job.studentId.slice(0, 8)}`
+        ? (studentNameById.get(job.studentId) ?? `Student ${job.studentId.slice(0, 8)}`)
         : 'No student';
       if (isAudioRerun) {
         const rerunMode = job.forceTts === true ? 'forced' : 'cache allowed';
@@ -1742,7 +1766,7 @@ export const MinimalAssignment: React.FC = () => {
   const jobPublishTarget = jobStatus?.publishTarget ?? publishTarget;
   const publishUrl =
     jobPublishTarget === 'anytype'
-      ? jobStatus?.anytypeUrl ?? jobStatus?.htmlUrl
+      ? (jobStatus?.anytypeUrl ?? jobStatus?.htmlUrl)
       : jobPublishTarget === 'html'
         ? jobStatus?.htmlUrl
         : jobStatus?.notionUrl;
@@ -1804,18 +1828,18 @@ export const MinimalAssignment: React.FC = () => {
     Boolean(jobStatus?.jobId) && cancelImplemented && cancelAllowedState && actionBusy === null;
   const generationDefaultModelForSelection =
     generationOptions?.defaultModelByProvider?.[
-    selectedGenerationProvider as keyof NonNullable<
-      typeof generationOptions
-    >['defaultModelByProvider']
+      selectedGenerationProvider as keyof NonNullable<
+        typeof generationOptions
+      >['defaultModelByProvider']
     ] ?? generationModelsForProvider[0]?.id;
   const activeQuotaAppliesToCurrentSelection = generationRuntimeQuotaSnapshot
     ? generationRuntimeSelection?.provider === selectedGenerationProvider &&
-    generationRuntimeSelection?.model === selectedGenerationModel
+      generationRuntimeSelection?.model === selectedGenerationModel
     : Boolean(
-      generationOptions &&
-      selectedGenerationProvider === generationOptions.defaultProvider &&
-      selectedGenerationModel === generationDefaultModelForSelection,
-    );
+        generationOptions &&
+        selectedGenerationProvider === generationOptions.defaultProvider &&
+        selectedGenerationModel === generationDefaultModelForSelection,
+      );
   const quotaWindowDecision = getGenerationQuotaWindowDecision({
     quota: activeGenerationQuota,
     quotaWindowTickMs,
@@ -2231,7 +2255,8 @@ export const MinimalAssignment: React.FC = () => {
           <div className="minimal-alert warning">
             <strong>Profile drift detected</strong>
             <p className="minimal-help">
-              The profile changed after this prompt package was created ({promptPackage.profileDrift.reason}
+              The profile changed after this prompt package was created (
+              {promptPackage.profileDrift.reason}
               ). Regenerate the prompt to use the latest profile.
             </p>
           </div>
@@ -2336,67 +2361,67 @@ export const MinimalAssignment: React.FC = () => {
                   {generationQuotaHasNumericValues ? (
                     <div className="minimal-quota-grid">
                       {activeGenerationQuota.requestsPerMinute === undefined ||
-                        activeGenerationQuota.requestsPerMinute === null ? null : (
+                      activeGenerationQuota.requestsPerMinute === null ? null : (
                         <div className="minimal-quota-item">
                           RPM: {activeGenerationQuota.requestsPerMinute}
                         </div>
                       )}
                       {activeGenerationQuota.tokensPerMinute === undefined ||
-                        activeGenerationQuota.tokensPerMinute === null ? null : (
+                      activeGenerationQuota.tokensPerMinute === null ? null : (
                         <div className="minimal-quota-item">
                           TPM: {activeGenerationQuota.tokensPerMinute}
                         </div>
                       )}
                       {activeGenerationQuota.requestsPerDay === undefined ||
-                        activeGenerationQuota.requestsPerDay === null ? null : (
+                      activeGenerationQuota.requestsPerDay === null ? null : (
                         <div className="minimal-quota-item">
                           RPD: {activeGenerationQuota.requestsPerDay}
                         </div>
                       )}
                       {activeGenerationQuota.dailyTokenBudget === undefined ||
-                        activeGenerationQuota.dailyTokenBudget === null ? null : (
+                      activeGenerationQuota.dailyTokenBudget === null ? null : (
                         <div className="minimal-quota-item">
                           Daily token budget: {activeGenerationQuota.dailyTokenBudget}
                         </div>
                       )}
                       {activeGenerationQuota.dailyTokenRemaining === undefined ||
-                        activeGenerationQuota.dailyTokenRemaining === null ? null : (
+                      activeGenerationQuota.dailyTokenRemaining === null ? null : (
                         <div className="minimal-quota-item">
                           Daily token remaining: {activeGenerationQuota.dailyTokenRemaining}
                         </div>
                       )}
                       {activeGenerationQuota.dailyRequestBudget === undefined ||
-                        activeGenerationQuota.dailyRequestBudget === null ? null : (
+                      activeGenerationQuota.dailyRequestBudget === null ? null : (
                         <div className="minimal-quota-item">
                           Daily request budget: {activeGenerationQuota.dailyRequestBudget}
                         </div>
                       )}
                       {activeGenerationQuota.dailyRequestRemaining === undefined ||
-                        activeGenerationQuota.dailyRequestRemaining === null ? null : (
+                      activeGenerationQuota.dailyRequestRemaining === null ? null : (
                         <div className="minimal-quota-item">
                           Daily request remaining: {activeGenerationQuota.dailyRequestRemaining}
                         </div>
                       )}
                       {activeGenerationQuota.rpmBudget === undefined ||
-                        activeGenerationQuota.rpmBudget === null ? null : (
+                      activeGenerationQuota.rpmBudget === null ? null : (
                         <div className="minimal-quota-item">
                           RPM budget: {activeGenerationQuota.rpmBudget}
                         </div>
                       )}
                       {activeGenerationQuota.rpmRemaining === undefined ||
-                        activeGenerationQuota.rpmRemaining === null ? null : (
+                      activeGenerationQuota.rpmRemaining === null ? null : (
                         <div className="minimal-quota-item">
                           RPM remaining: {activeGenerationQuota.rpmRemaining}
                         </div>
                       )}
                       {activeGenerationQuota.usedRequestsToday === undefined ||
-                        activeGenerationQuota.usedRequestsToday === null ? null : (
+                      activeGenerationQuota.usedRequestsToday === null ? null : (
                         <div className="minimal-quota-item">
                           Used requests today: {activeGenerationQuota.usedRequestsToday}
                         </div>
                       )}
                       {activeGenerationQuota.usedTokensToday === undefined ||
-                        activeGenerationQuota.usedTokensToday === null ? null : (
+                      activeGenerationQuota.usedTokensToday === null ? null : (
                         <div className="minimal-quota-item">
                           Used tokens today: {activeGenerationQuota.usedTokensToday}
                         </div>
@@ -2489,9 +2514,7 @@ export const MinimalAssignment: React.FC = () => {
             onChange={(event) => setSelectedPreset(event.target.value)}
             disabled={!jobOptions || presetOptions.length === 0}
           >
-            {presetOptions.length > 0 ? null : (
-              <option value="">No presets available</option>
-            )}
+            {presetOptions.length > 0 ? null : <option value="">No presets available</option>}
             {presetOptions.map((preset) => (
               <option key={preset.id} value={preset.id}>
                 {preset.label}
@@ -2682,15 +2705,15 @@ export const MinimalAssignment: React.FC = () => {
                     >
                       {jobOptions?.ttsStrategies?.length
                         ? jobOptions.ttsStrategies.map((strategy) => (
-                          <option key={strategy} value={strategy}>
-                            {strategy}
-                          </option>
-                        ))
+                            <option key={strategy} value={strategy}>
+                              {strategy}
+                            </option>
+                          ))
                         : ['auto', 'dialogue', 'tts'].map((strategy) => (
-                          <option key={strategy} value={strategy}>
-                            {strategy}
-                          </option>
-                        ))}
+                            <option key={strategy} value={strategy}>
+                              {strategy}
+                            </option>
+                          ))}
                     </select>
                   </label>
                   <label className="minimal-field">
@@ -2748,14 +2771,16 @@ export const MinimalAssignment: React.FC = () => {
                 </button>
               </div>
               {!cancelAllowedState && jobStatus ? (
-                <p className="minimal-muted">Cancel is only available for queued or running jobs.</p>
+                <p className="minimal-muted">
+                  Cancel is only available for queued or running jobs.
+                </p>
               ) : null}
             </div>
             {jobOptionsError ? <p className="minimal-error">{jobOptionsError}</p> : null}
             {!rerunImplemented || !rerunPublishImplemented || !cancelImplemented ? (
               <p className="minimal-muted">
-                Some actions are unavailable because backend capability metadata does not mark them as
-                implemented.
+                Some actions are unavailable because backend capability metadata does not mark them
+                as implemented.
               </p>
             ) : null}
             {actionError ? <p className="minimal-error">{actionError}</p> : null}
@@ -2796,7 +2821,7 @@ export const MinimalAssignment: React.FC = () => {
                     </div>
                   ) : null}
                   {jobProvenance.lineage?.profile?.snapshot?.revisionId ||
-                    jobProvenance.lineage?.template?.snapshot?.revisionId ? (
+                  jobProvenance.lineage?.template?.snapshot?.revisionId ? (
                     <div className="minimal-meta">
                       <span>
                         Profile revision:{' '}
@@ -2816,7 +2841,9 @@ export const MinimalAssignment: React.FC = () => {
                       </span>
                       <span>
                         Bound from:{' '}
-                        {new Date(jobProvenance.lineage.bindingAtCreation.effectiveFrom).toLocaleString()}
+                        {new Date(
+                          jobProvenance.lineage.bindingAtCreation.effectiveFrom,
+                        ).toLocaleString()}
                       </span>
                     </div>
                   ) : null}
@@ -2842,7 +2869,9 @@ export const MinimalAssignment: React.FC = () => {
             </div>
           </>
         ) : (
-          <p className="minimal-help">Publish once to create a job, then actions become available.</p>
+          <p className="minimal-help">
+            Publish once to create a job, then actions become available.
+          </p>
         )}
       </section>
 

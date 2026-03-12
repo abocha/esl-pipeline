@@ -1,8 +1,8 @@
 import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
-
 import { describe, expect, it, vi } from 'vitest';
+
 import * as googleProvider from '@esl-pipeline/tts-provider-google';
 
 import { materializePromptTemplateWithCapabilities } from '../src/application/prompt-voice-capabilities.js';

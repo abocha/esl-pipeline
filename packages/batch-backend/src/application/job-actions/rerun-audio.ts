@@ -4,8 +4,8 @@
 import { z } from 'zod';
 
 import type { JobActionResult, RerunAudioAction } from '../../domain/job-actions.js';
-import { publishJobEvent } from '../../domain/job-events.js';
 import { JobActionType } from '../../domain/job-actions.js';
+import { publishJobEvent } from '../../domain/job-events.js';
 import { getJobById, insertJob } from '../../domain/job-repository.js';
 import { createJobQueue } from '../../infrastructure/queue-bullmq.js';
 
@@ -29,7 +29,10 @@ const rerunAudioSchema = z.object({
  * @returns Action result indicating success/failure
  *
  */
-export async function rerunAudio(jobId: string, action: RerunAudioAction): Promise<JobActionResult> {
+export async function rerunAudio(
+  jobId: string,
+  action: RerunAudioAction,
+): Promise<JobActionResult> {
   const job = await getJobById(jobId);
   if (!job) {
     return {
@@ -122,7 +125,7 @@ export async function rerunAudio(jobId: string, action: RerunAudioAction): Promi
   return {
     success: true,
     message:
-      payload.forceTts ?? false
+      (payload.forceTts ?? false)
         ? 'Audio rerun queued (forced regeneration)'
         : 'Audio rerun queued (cache reuse allowed)',
     jobId: rerunJob.id,

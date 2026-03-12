@@ -1,6 +1,12 @@
 import { randomUUID } from 'node:crypto';
 
-import { deleteStudentProfile, getStudentProfileById, listStudentProfiles, updateStudentProfile, createStudentProfile } from '../application/student-profiles-store.js';
+import {
+  createStudentProfile,
+  deleteStudentProfile,
+  getStudentProfileById,
+  listStudentProfiles,
+  updateStudentProfile,
+} from '../application/student-profiles-store.js';
 import { loadBatchBackendEnv } from '../bootstrap/env.js';
 import { loadConfig } from '../config/env.js';
 import { getProfileById } from '../domain/profile-repository.js';
@@ -41,7 +47,9 @@ async function run(): Promise<void> {
   }
 
   if (config.orchestrator.configProvider === 'http') {
-    throw new Error('Verification requires local config provider (ESL_PIPELINE_CONFIG_PROVIDER=local)');
+    throw new Error(
+      'Verification requires local config provider (ESL_PIPELINE_CONFIG_PROVIDER=local)',
+    );
   }
 
   const suffix = randomUUID().slice(0, 8);
@@ -79,12 +87,18 @@ async function run(): Promise<void> {
       { search: suffix, limit: 20, offset: 0, order: 'asc' },
       { config },
     );
-    assertOrThrow(listed.items.some((item) => item.id === created.id), 'List did not include created student');
+    assertOrThrow(
+      listed.items.some((item) => item.id === created.id),
+      'List did not include created student',
+    );
 
     console.log('[student-system-verify] step=binding-check-initial');
     const initialBinding = await getActiveStudentProfileBinding(created.id);
     assertOrThrow(initialBinding, 'Expected active binding after create');
-    assertOrThrow(initialBinding.profileId === firstProfileId, 'Initial binding profileId mismatch');
+    assertOrThrow(
+      initialBinding.profileId === firstProfileId,
+      'Initial binding profileId mismatch',
+    );
 
     console.log('[student-system-verify] step=profile-record-check-initial');
     const initialProfileRecord = await getProfileById(firstProfileId);
@@ -106,7 +120,10 @@ async function run(): Promise<void> {
     console.log('[student-system-verify] step=binding-check-updated');
     const updatedBinding = await getActiveStudentProfileBinding(created.id);
     assertOrThrow(updatedBinding, 'Expected active binding after update');
-    assertOrThrow(updatedBinding.profileId === secondProfileId, 'Updated binding profileId mismatch');
+    assertOrThrow(
+      updatedBinding.profileId === secondProfileId,
+      'Updated binding profileId mismatch',
+    );
 
     console.log('[student-system-verify] step=profile-record-check-updated');
     const updatedProfileRecord = await getProfileById(secondProfileId);

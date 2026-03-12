@@ -60,7 +60,10 @@ export class HttpBackendClient {
   }
 
   async getOpsActionStatus(operationId: string): Promise<OpsActionStatus> {
-    return this.requestJson<OpsActionStatus>('GET', `/ops/actions/${encodeURIComponent(operationId)}`);
+    return this.requestJson<OpsActionStatus>(
+      'GET',
+      `/ops/actions/${encodeURIComponent(operationId)}`,
+    );
   }
 
   async getFinishedJobs(limit: number): Promise<JobListResponse> {
@@ -162,10 +165,15 @@ export class HttpBackendClient {
   }
 
   private async login(): Promise<void> {
-    const response = await this.request('POST', '/auth/login', {
-      email: this.email,
-      password: this.password,
-    }, false);
+    const response = await this.request(
+      'POST',
+      '/auth/login',
+      {
+        email: this.email,
+        password: this.password,
+      },
+      false,
+    );
 
     if (!response.ok) {
       const message = await extractErrorMessage(response);

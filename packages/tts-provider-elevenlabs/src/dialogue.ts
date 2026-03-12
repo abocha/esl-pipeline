@@ -1,9 +1,9 @@
+import { ElevenLabsClient } from '@elevenlabs/elevenlabs-js';
 import { createHash } from 'node:crypto';
 import { createWriteStream } from 'node:fs';
 import { stat } from 'node:fs/promises';
 import { resolve } from 'node:path';
 
-import { ElevenLabsClient } from '@elevenlabs/elevenlabs-js';
 import { InfrastructureError } from '@esl-pipeline/contracts';
 
 import { estimateDurationFromFileSize } from './audioDuration.js';
@@ -21,12 +21,15 @@ import type {
 } from './types.js';
 
 const DEFAULT_DIALOGUE_MODEL_ID = 'eleven_v3';
-const DEFAULT_OUTPUT_FORMAT = process.env.ESL_TTS_PROVIDER_ELEVENLABS_OUTPUT_FORMAT ?? 'mp3_22050_32';
+const DEFAULT_OUTPUT_FORMAT =
+  process.env.ESL_TTS_PROVIDER_ELEVENLABS_OUTPUT_FORMAT ?? 'mp3_22050_32';
 const MAX_DIALOGUE_INPUTS = 100;
 const MAX_TOTAL_CHARS = 5000;
 const DIALOGUE_TIMEOUT_SECONDS = 60;
 const DIALOGUE_MAX_RETRIES = 2;
-type DialogueConvertBody = Parameters<ReturnType<typeof getElevenClient>['textToDialogue']['convert']>[0];
+type DialogueConvertBody = Parameters<
+  ReturnType<typeof getElevenClient>['textToDialogue']['convert']
+>[0];
 type DialogueOutputFormat = NonNullable<DialogueConvertBody['outputFormat']>;
 
 interface NormalizedDialogueInput {
@@ -173,7 +176,11 @@ export async function synthesizeDialogueChunk(
     throw new Error('Cannot synthesize empty dialogue chunk');
   }
 
-  if (!apiKey && !process.env.ESL_TTS_PROVIDER_ELEVENLABS_API_KEY && !process.env.ESL_TTS_PROVIDER_ELEVENLABS_API_TOKEN) {
+  if (
+    !apiKey &&
+    !process.env.ESL_TTS_PROVIDER_ELEVENLABS_API_KEY &&
+    !process.env.ESL_TTS_PROVIDER_ELEVENLABS_API_TOKEN
+  ) {
     throw new Error('Missing ESL_TTS_PROVIDER_ELEVENLABS_API_KEY');
   }
 
@@ -205,15 +212,17 @@ export async function synthesizeDialogueChunk(
       error,
       messageForClassification: formatted,
     });
-    throw new InfrastructureError(
-      `Text-to-Dialogue synthesis failed [${category}]: ${formatted}`,
-    );
+    throw new InfrastructureError(`Text-to-Dialogue synthesis failed [${category}]: ${formatted}`);
   }
 }
 
 function ensureApiKey(apiKey: string): void {
   if (apiKey.trim().length > 0) return;
-  if (process.env.ESL_TTS_PROVIDER_ELEVENLABS_API_KEY || process.env.ESL_TTS_PROVIDER_ELEVENLABS_API_TOKEN) return;
+  if (
+    process.env.ESL_TTS_PROVIDER_ELEVENLABS_API_KEY ||
+    process.env.ESL_TTS_PROVIDER_ELEVENLABS_API_TOKEN
+  )
+    return;
   throw new Error('Missing ESL_TTS_PROVIDER_ELEVENLABS_API_KEY');
 }
 
@@ -330,10 +339,20 @@ export async function synthesizeDialogue(
 
     if (concatInputs.length === 1 && concatInputs[0]) {
       if (concatInputs[0] !== finalPath) {
-        await concatMp3Segments(concatInputs, finalPath, true, resolvedFfmpeg ?? normalizedOptions.ffmpegPath);
+        await concatMp3Segments(
+          concatInputs,
+          finalPath,
+          true,
+          resolvedFfmpeg ?? normalizedOptions.ffmpegPath,
+        );
       }
     } else {
-      await concatMp3Segments(concatInputs, finalPath, true, resolvedFfmpeg ?? normalizedOptions.ffmpegPath);
+      await concatMp3Segments(
+        concatInputs,
+        finalPath,
+        true,
+        resolvedFfmpeg ?? normalizedOptions.ffmpegPath,
+      );
     }
 
     // Calculate approximate duration

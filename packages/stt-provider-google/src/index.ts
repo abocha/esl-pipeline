@@ -1,9 +1,13 @@
+import { SpeechClient } from '@google-cloud/speech';
+import { Storage } from '@google-cloud/storage';
 import type { Readable } from 'node:stream';
 
 import { classifyProviderRuntimeFailure } from '@esl-pipeline/provider-runtime';
-import { mergeSegments, type SttProviderAdapter, type TranscriptSegment } from '@esl-pipeline/stt-core';
-import { SpeechClient } from '@google-cloud/speech';
-import { Storage } from '@google-cloud/storage';
+import {
+  type SttProviderAdapter,
+  type TranscriptSegment,
+  mergeSegments,
+} from '@esl-pipeline/stt-core';
 
 interface GoogleWordLike {
   word?: string;
@@ -242,13 +246,10 @@ async function resolveGoogleInputUri(args: {
   const prefix = args.config.gcsStagingPrefix?.trim() || 'stt-staging';
   const objectName = `${prefix}/${args.context.recordingId}-${args.now().getTime()}.audio`;
 
-  await args.storageClient
-    .bucket(args.config.gcsStagingBucket)
-    .file(objectName)
-    .save(buffer, {
-      resumable: false,
-      contentType: 'application/octet-stream',
-    });
+  await args.storageClient.bucket(args.config.gcsStagingBucket).file(objectName).save(buffer, {
+    resumable: false,
+    contentType: 'application/octet-stream',
+  });
 
   return `gs://${args.config.gcsStagingBucket}/${objectName}`;
 }
@@ -320,7 +321,10 @@ function parseGoogleResponse(response: GoogleResponseLike): {
   }
 
   const segments = buildSegments(words);
-  const text = segments.map((segment) => segment.text).join(' ').trim();
+  const text = segments
+    .map((segment) => segment.text)
+    .join(' ')
+    .trim();
   return { text, segments };
 }
 

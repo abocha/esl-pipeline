@@ -3,8 +3,8 @@ import type {
   SttEngine,
   SttProviderAdapter,
   SttProviderId,
-  SttTranscriptionResult,
   SttTranscribeContext,
+  SttTranscriptionResult,
 } from './types.js';
 
 let defaultEngine: SttEngine = createSttEngine();

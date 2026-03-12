@@ -9,8 +9,8 @@ STATUS_SCRIPT="${ROOT_DIR}/scripts/docker/postgres-ops-status.sh"
 
 ENV_FILE="${PG_BACKUP_ENV_FILE:-$DEFAULT_ENV_FILE}"
 if [[ -f "$ENV_FILE" ]]; then
-  # shellcheck source=/dev/null
   set -a
+  # shellcheck disable=SC1090
   . "$ENV_FILE"
   set +a
 fi

@@ -1,7 +1,6 @@
 import { mkdtemp, readFile } from 'node:fs/promises';
-import path from 'node:path';
 import { tmpdir } from 'node:os';
-
+import path from 'node:path';
 import { describe, expect, it, vi } from 'vitest';
 
 import { ForumTopicRouter } from '../src/topic-router.js';
@@ -62,7 +61,9 @@ describe('topic router', () => {
     expect(router.resolveThreadId({ domain: 'jobs' })).toBe(202);
     expect(router.resolveThreadId({ domain: 'alerts' })).toBe(303);
 
-    const state = JSON.parse(await readFile(stateFile, 'utf8')) as { topics: Record<string, number> };
+    const state = JSON.parse(await readFile(stateFile, 'utf8')) as {
+      topics: Record<string, number>;
+    };
     expect(state.topics.ops).toBe(101);
     expect(state.topics.jobs).toBe(202);
     expect(state.topics.alerts).toBe(303);

@@ -4,10 +4,10 @@ import {
   extractAnswerKey,
   extractFrontmatter,
   extractPronunciationShadowFocus,
-  parseMarkdownContext,
   extractSections,
   extractStudyText,
   extractTeacherNotes,
+  parseMarkdownContext,
 } from '../src/index.js';
 
 const sample = `---

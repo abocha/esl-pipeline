@@ -191,82 +191,90 @@ describe('transport/worker-runner - full pipeline (requires Postgres + Redis)', 
     await truncateJobs();
   }, integrationTimeout);
 
-  it('runs job to succeeded when orchestrator succeeds', async () => {
-    runAssignmentJobMock.mockResolvedValue({
-      manifestPath: '/manifests/integration.json',
-    });
-
-    const submitRes = await app.inject({
-      method: 'POST',
-      url: '/jobs',
-      payload: { md: markdownFixturePath },
-    });
-
-    expect(submitRes.statusCode).toBe(202);
-    const { jobId } = submitRes.json() as { jobId: string };
-    expect(jobId).toBeDefined();
-
-    // Poll GET /jobs/:jobId until job reaches succeeded or timeout.
-    const deadline = Date.now() + 20_000;
-    let finalStatus: any = null;
-
-    while (Date.now() < deadline) {
-      const statusRes = await app.inject({
-        method: 'GET',
-        url: `/jobs/${jobId}`,
+  it(
+    'runs job to succeeded when orchestrator succeeds',
+    async () => {
+      runAssignmentJobMock.mockResolvedValue({
+        manifestPath: '/manifests/integration.json',
       });
 
-      if (statusRes.statusCode === 200) {
-        const body = statusRes.json();
-        if (body.state === 'succeeded') {
-          finalStatus = body;
-          break;
-        }
-      }
-
-      await new Promise((resolve) => setTimeout(resolve, 500));
-    }
-
-    expect(finalStatus).not.toBeNull();
-    expect(finalStatus.state).toBe('succeeded');
-    expect(finalStatus.manifestPath).toBe('/manifests/integration.json');
-  }, integrationTimeout);
-
-  it('eventually marks job failed when orchestrator consistently fails', async () => {
-    runAssignmentJobMock.mockRejectedValue(new Error('orchestrator down'));
-
-    const submitRes = await app.inject({
-      method: 'POST',
-      url: '/jobs',
-      payload: { md: markdownFixturePath },
-    });
-
-    expect(submitRes.statusCode).toBe(202);
-    const { jobId } = submitRes.json() as { jobId: string };
-    expect(jobId).toBeDefined();
-
-    const deadline = Date.now() + 30_000;
-    let finalStatus: any = null;
-
-    while (Date.now() < deadline) {
-      const statusRes = await app.inject({
-        method: 'GET',
-        url: `/jobs/${jobId}`,
+      const submitRes = await app.inject({
+        method: 'POST',
+        url: '/jobs',
+        payload: { md: markdownFixturePath },
       });
 
-      if (statusRes.statusCode === 200) {
-        const body = statusRes.json();
-        if (body.state === 'failed') {
-          finalStatus = body;
-          break;
+      expect(submitRes.statusCode).toBe(202);
+      const { jobId } = submitRes.json() as { jobId: string };
+      expect(jobId).toBeDefined();
+
+      // Poll GET /jobs/:jobId until job reaches succeeded or timeout.
+      const deadline = Date.now() + 20_000;
+      let finalStatus: any = null;
+
+      while (Date.now() < deadline) {
+        const statusRes = await app.inject({
+          method: 'GET',
+          url: `/jobs/${jobId}`,
+        });
+
+        if (statusRes.statusCode === 200) {
+          const body = statusRes.json();
+          if (body.state === 'succeeded') {
+            finalStatus = body;
+            break;
+          }
         }
+
+        await new Promise((resolve) => setTimeout(resolve, 500));
       }
 
-      await new Promise((resolve) => setTimeout(resolve, 1000));
-    }
+      expect(finalStatus).not.toBeNull();
+      expect(finalStatus.state).toBe('succeeded');
+      expect(finalStatus.manifestPath).toBe('/manifests/integration.json');
+    },
+    integrationTimeout,
+  );
 
-    expect(finalStatus).not.toBeNull();
-    expect(finalStatus.state).toBe('failed');
-    expect(finalStatus.error).toContain('orchestrator down');
-  }, integrationTimeout);
+  it(
+    'eventually marks job failed when orchestrator consistently fails',
+    async () => {
+      runAssignmentJobMock.mockRejectedValue(new Error('orchestrator down'));
+
+      const submitRes = await app.inject({
+        method: 'POST',
+        url: '/jobs',
+        payload: { md: markdownFixturePath },
+      });
+
+      expect(submitRes.statusCode).toBe(202);
+      const { jobId } = submitRes.json() as { jobId: string };
+      expect(jobId).toBeDefined();
+
+      const deadline = Date.now() + 30_000;
+      let finalStatus: any = null;
+
+      while (Date.now() < deadline) {
+        const statusRes = await app.inject({
+          method: 'GET',
+          url: `/jobs/${jobId}`,
+        });
+
+        if (statusRes.statusCode === 200) {
+          const body = statusRes.json();
+          if (body.state === 'failed') {
+            finalStatus = body;
+            break;
+          }
+        }
+
+        await new Promise((resolve) => setTimeout(resolve, 1000));
+      }
+
+      expect(finalStatus).not.toBeNull();
+      expect(finalStatus.state).toBe('failed');
+      expect(finalStatus.error).toContain('orchestrator down');
+    },
+    integrationTimeout,
+  );
 });

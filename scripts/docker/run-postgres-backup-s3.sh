@@ -15,8 +15,8 @@ if [[ ! -x "$BACKUP_SCRIPT" ]]; then
 fi
 
 if [[ -f "$ENV_FILE" ]]; then
-  # shellcheck source=/dev/null
   set -a
+  # shellcheck disable=SC1090
   . "$ENV_FILE"
   set +a
 else

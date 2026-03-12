@@ -263,7 +263,9 @@ describe('telegram commands', () => {
     const sendMock = context.messenger.sendHtmlMessage as ReturnType<typeof vi.fn>;
     expect(sendMock).toHaveBeenCalledTimes(2);
     expect(sendMock.mock.calls[0]?.[0].disableLinkPreview).toBe(true);
-    expect(sendMock.mock.calls[0]?.[0].html).toContain('<a href="https://notion.so/assignment">Homework Assignment');
+    expect(sendMock.mock.calls[0]?.[0].html).toContain(
+      '<a href="https://notion.so/assignment">Homework Assignment',
+    );
     expect(sendMock.mock.calls[1]?.[0].disableLinkPreview).toBe(false);
     expect(sendMock.mock.calls[1]?.[0].html).toContain('🎧 Listen 1: Study Text');
     expect(sendMock.mock.calls[1]?.[0].html).toContain('audio/final/study.mp3');
@@ -274,18 +276,20 @@ describe('telegram commands', () => {
     const linksCommand = registry.resolve('links');
     expect(linksCommand).toBeDefined();
 
-    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValue(
-      new Response(
-        [
-          '<html><head><title>Homework Assignment: Office Rules &amp; Modal Verbs</title></head><body>',
-          '<div class="hero-emoji">🏢</div>',
-          'https://bucket.s3.amazonaws.com/audio/final/from-html-study.mp3',
-          'https://bucket.s3.amazonaws.com/audio/pronunciation-shadow/from-html-pron.mp3',
-          '</body></html>',
-        ].join('\n'),
-        { status: 200 },
-      ),
-    );
+    const fetchSpy = vi
+      .spyOn(globalThis, 'fetch')
+      .mockResolvedValue(
+        new Response(
+          [
+            '<html><head><title>Homework Assignment: Office Rules &amp; Modal Verbs</title></head><body>',
+            '<div class="hero-emoji">🏢</div>',
+            'https://bucket.s3.amazonaws.com/audio/final/from-html-study.mp3',
+            'https://bucket.s3.amazonaws.com/audio/pronunciation-shadow/from-html-pron.mp3',
+            '</body></html>',
+          ].join('\n'),
+          { status: 200 },
+        ),
+      );
 
     const context = createBaseContext({
       command: 'links',
@@ -336,7 +340,9 @@ describe('telegram commands', () => {
     expect(sendMock.mock.calls[1]?.[0].html).toContain('🎧 Listen 1: Study Text');
     expect(sendMock.mock.calls[2]?.[0].html).toContain('🗣️ Listen 2: Pronunciation');
     expect(sendMock.mock.calls[1]?.[0].html).toContain('audio/final/from-html-study.mp3');
-    expect(sendMock.mock.calls[2]?.[0].html).toContain('audio/pronunciation-shadow/from-html-pron.mp3');
+    expect(sendMock.mock.calls[2]?.[0].html).toContain(
+      'audio/pronunciation-shadow/from-html-pron.mp3',
+    );
 
     fetchSpy.mockRestore();
   });
@@ -404,7 +410,9 @@ describe('telegram commands', () => {
       '<a href="https://example.com/fallback-only-if-needed.html">Homework Assignment: Office Rules &amp; Modal Verbs</a>',
     );
     expect(sendMock.mock.calls[1]?.[0].html).toContain('audio/final/from-md-study.mp3');
-    expect(sendMock.mock.calls[2]?.[0].html).toContain('audio/pronunciation-shadow/from-md-pron.mp3');
+    expect(sendMock.mock.calls[2]?.[0].html).toContain(
+      'audio/pronunciation-shadow/from-md-pron.mp3',
+    );
 
     fetchSpy.mockRestore();
   });

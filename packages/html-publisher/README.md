@@ -13,8 +13,8 @@ Shared HTML renderer/publisher used by multiple publish targets (direct `html` a
 
 - Single-backtick inline snippets render as `<code>` and can include rich inline Markdown formatting
   (for example `` `**Bold cue:** *slowly*` ``).
-- Multi-backtick inline code spans are preserved as literal code (for example `` ``a`` `` and
-  `` ``a `b` c`` ``).
+- Multi-backtick inline code spans are preserved as literal code (for example ` `a` ` and
+  ` `a `b` c` `).
 - Fenced code blocks remain untouched by preprocessing.
 - Pronunciation micro-focus content receives additional normalization to clean LLM-variant bullet/code wrappers.
 

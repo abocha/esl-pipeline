@@ -45,7 +45,9 @@ export async function uploadFile(
   const trimmedKey = opts.key?.trim();
   const explicitKey = trimmedKey
     ? normalizeS3ObjectKey(
-        keyPrefix && !trimmedKey.startsWith(`${keyPrefix}/`) ? `${keyPrefix}/${trimmedKey}` : trimmedKey,
+        keyPrefix && !trimmedKey.startsWith(`${keyPrefix}/`)
+          ? `${keyPrefix}/${trimmedKey}`
+          : trimmedKey,
       )
     : undefined;
 

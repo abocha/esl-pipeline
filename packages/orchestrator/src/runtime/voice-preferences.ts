@@ -1,4 +1,4 @@
-import { loadVoicesCatalog, type VoiceCatalog } from '@esl-pipeline/tts-core';
+import { type VoiceCatalog, loadVoicesCatalog } from '@esl-pipeline/tts-core';
 
 interface VoicePreferenceFlags {
   voiceId?: string;

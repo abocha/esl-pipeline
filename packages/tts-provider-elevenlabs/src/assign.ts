@@ -8,6 +8,7 @@ import {
   normalizeSpeakerRole,
 } from '@esl-pipeline/contracts';
 import type { VoiceCapabilitiesSnapshot } from '@esl-pipeline/contracts';
+
 import { getVoiceCapabilities } from './voiceCapabilities.js';
 
 export interface VoiceCatalog {

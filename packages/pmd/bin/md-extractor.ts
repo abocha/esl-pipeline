@@ -4,10 +4,10 @@ import { readFile } from 'node:fs/promises';
 import {
   extractAnswerKey,
   extractFrontmatter,
-  parseMarkdownContext,
   extractSections,
   extractStudyText,
   extractTeacherNotes,
+  parseMarkdownContext,
 } from '../src/index.js';
 
 function requireArg(args: string[], flag: string): string {

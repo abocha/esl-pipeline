@@ -1,8 +1,13 @@
+import { DeepgramClient } from '@deepgram/sdk';
 import type { Readable } from 'node:stream';
 
-import { DeepgramClient } from '@deepgram/sdk';
 import { classifyProviderRuntimeFailure } from '@esl-pipeline/provider-runtime';
-import { mergeSegments, normalizeSegmentEnds, type SttProviderAdapter, type TranscriptSegment } from '@esl-pipeline/stt-core';
+import {
+  type SttProviderAdapter,
+  type TranscriptSegment,
+  mergeSegments,
+  normalizeSegmentEnds,
+} from '@esl-pipeline/stt-core';
 
 interface RetryableStatusError {
   status?: unknown;
@@ -82,7 +87,8 @@ export function createDeepgramSttProvider(
   deps: DeepgramSttDependencies = {},
 ): SttProviderAdapter<DeepgramSttConfig> {
   const clientFactory = deps.clientFactory ?? defaultClientFactory;
-  const sleep = deps.sleep ?? (async (ms: number) => new Promise((resolve) => setTimeout(resolve, ms)));
+  const sleep =
+    deps.sleep ?? (async (ms: number) => new Promise((resolve) => setTimeout(resolve, ms)));
 
   return {
     id: 'deepgram',

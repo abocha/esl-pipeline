@@ -31,4 +31,3 @@
 
 1. Optional additional enforcement scope for other package READMEs.
 2. Optional richer graph-based routing analysis if needed later.
-

@@ -62,8 +62,12 @@ describe('application/voice-provider-error', () => {
   });
 
   it('does not classify non-provider HTTP status failures as voice provider errors', () => {
-    expect(parseVoiceProviderError('Notion API failed with HTTP 429: too many requests')).toBeNull();
-    expect(parseVoiceProviderError('S3 upload failed with HTTP 503: service unavailable')).toBeNull();
+    expect(
+      parseVoiceProviderError('Notion API failed with HTTP 429: too many requests'),
+    ).toBeNull();
+    expect(
+      parseVoiceProviderError('S3 upload failed with HTTP 503: service unavailable'),
+    ).toBeNull();
     expect(parseVoiceProviderError('Auth middleware rejected request with HTTP 422')).toBeNull();
   });
 

@@ -1,9 +1,9 @@
+import type { StudentProfileBindingRecord } from '../domain/student-profile-binding-model.js';
 import {
   getActiveStudentProfileBinding,
   getStudentProfileBindingAt,
   listStudentProfileBindings,
 } from '../domain/student-profile-binding-repository.js';
-import type { StudentProfileBindingRecord } from '../domain/student-profile-binding-model.js';
 
 export interface StudentProfileBindingResponse {
   id: string;

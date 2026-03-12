@@ -1,4 +1,4 @@
-import { spawn, type ChildProcessByStdio } from 'node:child_process';
+import { type ChildProcessByStdio, spawn } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
 import type { Readable } from 'node:stream';
 
@@ -44,7 +44,9 @@ const dependencies: OpsControlDependencies = {
 const actionStore = new Map<string, InternalActionStatus>();
 const actionOrder: string[] = [];
 
-export function setOpsControlDependenciesForTests(overrides: Partial<OpsControlDependencies>): void {
+export function setOpsControlDependenciesForTests(
+  overrides: Partial<OpsControlDependencies>,
+): void {
   Object.assign(dependencies, overrides);
 }
 
@@ -63,7 +65,9 @@ export function isOpsControlEnabled(): boolean {
 
 export function assertOpsControlEnabled(): void {
   if (!isOpsControlEnabled()) {
-    throw new Error('Ops control is disabled. Set BATCH_BACKEND_ENABLE_OPS_CONTROL=true to enable /ops endpoints.');
+    throw new Error(
+      'Ops control is disabled. Set BATCH_BACKEND_ENABLE_OPS_CONTROL=true to enable /ops endpoints.',
+    );
   }
 }
 
@@ -162,7 +166,9 @@ function resolveActionCommand(request: OpsActionRequest): string {
       return config.opsControl.restoreDrillCommand;
     }
     default: {
-      throw new Error(`Unsupported ops action: ${(request as { action?: unknown }).action as string}`);
+      throw new Error(
+        `Unsupported ops action: ${(request as { action?: unknown }).action as string}`,
+      );
     }
   }
 }
@@ -190,18 +196,22 @@ async function runQueuedAction(
   const result = await dependencies.runCommand(command, timeoutMs);
 
   const successful = result.exitCode === 0 && !result.timedOut;
-  updateAction(operationId, {
-    state: successful ? 'succeeded' : 'failed',
-    finishedAt: dependencies.now().toISOString(),
-    message: successful
-      ? 'Action completed successfully'
-      : result.timedOut
-        ? `Action timed out after ${timeoutMs}ms`
-        : `Action failed with exit code ${result.exitCode}`,
-    exitCode: result.exitCode,
-    stdoutTail: tailOutput(result.stdout),
-    stderrTail: tailOutput(result.stderr),
-  }, actionHistoryLimit);
+  updateAction(
+    operationId,
+    {
+      state: successful ? 'succeeded' : 'failed',
+      finishedAt: dependencies.now().toISOString(),
+      message: successful
+        ? 'Action completed successfully'
+        : result.timedOut
+          ? `Action timed out after ${timeoutMs}ms`
+          : `Action failed with exit code ${result.exitCode}`,
+      exitCode: result.exitCode,
+      stdoutTail: tailOutput(result.stdout),
+      stderrTail: tailOutput(result.stderr),
+    },
+    actionHistoryLimit,
+  );
 }
 
 function updateAction(
@@ -475,7 +485,10 @@ function runShellCommand(command: string, timeoutMs: number): Promise<RunCommand
       finish({
         exitCode: code ?? (timedOut ? 124 : 1),
         stdout,
-        stderr: [stderr, signal ? `Process terminated by signal ${signal}.` : ''].filter(Boolean).join('\n').trim(),
+        stderr: [stderr, signal ? `Process terminated by signal ${signal}.` : '']
+          .filter(Boolean)
+          .join('\n')
+          .trim(),
         timedOut,
       });
     });

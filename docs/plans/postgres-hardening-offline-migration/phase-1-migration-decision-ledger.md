@@ -122,4 +122,3 @@ Each item has a fixed migration step id for Phase 2 implementation.
 2. pool/runtime env hardening: Phase 4.
 3. RLS enforcement switch: Phase 5.
 4. CI mandatory PG enforcement: Phase 6.
-

@@ -11,6 +11,7 @@ import { fileURLToPath } from 'node:url';
 import { validateTranscriptionConfig } from '../application/validate-transcription-config.js';
 import { loadBatchBackendEnv } from '../bootstrap/env.js';
 import { loadConfig } from '../config/env.js';
+import { createAuthService } from '../infrastructure/auth-service.js';
 import {
   type FileSanitizationService,
   createFileSanitizationService,
@@ -30,7 +31,6 @@ import {
   StorageConfigurationService,
   createStorageConfigService,
 } from '../infrastructure/storage-config.js';
-import { createAuthService } from '../infrastructure/auth-service.js';
 import { authenticate, configureAuthMiddleware } from './auth-middleware.js';
 import { registerCoreRoutes } from './core-routes.js';
 import { registerErrorHandler } from './error-handler.js';
