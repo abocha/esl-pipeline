@@ -31,3 +31,5 @@
    STT provider-architecture parity plan (`core + adapters`), Google STT V2 onboarding, and transcript-provider persistence cutover.
 9. `docs/plans/telegram-ops-control-panel-hardening/README.md`
    Gap inventory + execution timing for Telegram ops bot hardening (`Now`, `After Manual V1`, `V2/Defer`).
+10. `docs/plans/backlog/README.md`
+   Prioritized optimization and technical-debt backlog for safe incremental execution.
