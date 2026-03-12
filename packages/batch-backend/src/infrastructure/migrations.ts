@@ -4,6 +4,8 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { PoolClient } from 'pg';
 
+import { readBool } from '@esl-pipeline/shared-infrastructure';
+
 import { loadConfig } from '../config/env.js';
 import { closePgPool, createPgPool } from './db.js';
 import { logger } from './logger.js';
@@ -55,6 +57,10 @@ function resolveMigrationsDir(): string {
 function getMigrationLockKey(): string {
   const config = loadConfig();
   return config.pg.migrationLockKey;
+}
+
+function shouldFailOnPendingMigrationsInManualMode(nodeEnv: string): boolean {
+  return readBool('PG_FAIL_ON_PENDING_MIGRATIONS', nodeEnv === 'production');
 }
 
 async function ensureMigrationTable(client: PoolClient): Promise<void> {
@@ -239,6 +245,7 @@ export async function runMigrations(): Promise<void> {
 
 export async function runMigrationsIfConfigured(): Promise<void> {
   const config = loadConfig();
+  const failOnPendingInManualMode = shouldFailOnPendingMigrationsInManualMode(config.nodeEnv);
   if (!config.pg.enabled) {
     logger.info('Postgres disabled; skipping migration checks', {
       component: 'pg-migrations',
@@ -259,8 +266,16 @@ export async function runMigrationsIfConfigured(): Promise<void> {
       component: 'pg-migrations',
       event: 'pg_migration_mode_manual',
       pendingCount: status.pending.length,
+      failOnPending: failOnPendingInManualMode,
     });
     if (status.pending.length > 0) {
+      if (failOnPendingInManualMode) {
+        throw new Error(
+          `Pending migrations detected with PG_AUTO_MIGRATE_ON_BOOT=false: ${status.pending
+            .map((migration) => migration.id)
+            .join(', ')}. Run db:migrate before startup or set PG_FAIL_ON_PENDING_MIGRATIONS=false for an explicit temporary override.`,
+        );
+      }
       logger.warn('Pending migrations detected and PG_AUTO_MIGRATE_ON_BOOT=false', {
         component: 'pg-migrations',
         pendingCount: status.pending.length,

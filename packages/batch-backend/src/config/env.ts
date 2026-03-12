@@ -219,6 +219,9 @@ export interface BatchBackendConfig {
   drafts: {
     localExport: boolean;
   };
+  jobOptions: {
+    allowStaticFallback: boolean;
+  };
   opsControl: {
     enabled: boolean;
     botSharedSecret?: string;
@@ -518,6 +521,10 @@ export function loadConfig(): BatchBackendConfig {
     'docs/templates/PROFILE_2025-11-16.md',
   )!;
   const draftLocalExport = readBool('DRAFT_LOCAL_EXPORT', nodeEnv === 'development');
+  const jobOptionsAllowStaticFallback = readBool(
+    'BATCH_BACKEND_JOB_OPTIONS_ALLOW_STATIC_FALLBACK',
+    false,
+  );
 
   const opsControlEnabled = readBool('BATCH_BACKEND_ENABLE_OPS_CONTROL', false);
   const opsControlBotSharedSecret = readString('BATCH_BACKEND_OPS_CONTROL_BOT_SECRET');
@@ -892,6 +899,9 @@ export function loadConfig(): BatchBackendConfig {
     },
     drafts: {
       localExport: draftLocalExport,
+    },
+    jobOptions: {
+      allowStaticFallback: jobOptionsAllowStaticFallback,
     },
     opsControl: {
       enabled: opsControlEnabled,

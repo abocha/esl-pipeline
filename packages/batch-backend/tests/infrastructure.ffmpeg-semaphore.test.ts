@@ -7,13 +7,13 @@ import { FfmpegSemaphore, resetFfmpegSemaphore } from '../src/infrastructure/ffm
 const mockRedis = {
   set: vi.fn(),
   del: vi.fn(),
-  keys: vi.fn(),
-  ttl: vi.fn(),
+  scan: vi.fn(),
   rpush: vi.fn(),
   lpop: vi.fn(),
   lpush: vi.fn(),
   blpop: vi.fn(),
   llen: vi.fn(),
+  pipeline: vi.fn(),
 };
 
 vi.mock('../src/infrastructure/redis.js', () => ({
@@ -34,10 +34,13 @@ describe('FfmpegSemaphore', () => {
     vi.clearAllMocks();
     resetFfmpegSemaphore();
 
+    const ttl = vi.fn().mockReturnThis();
+    const exec = vi.fn().mockResolvedValue([]);
+    mockRedis.pipeline.mockReturnValue({ ttl, exec });
+
     // Safe defaults so any acquire() call completes without spinning
-    mockRedis.keys.mockResolvedValue([]);
+    mockRedis.scan.mockResolvedValue(['0', []]);
     mockRedis.set.mockResolvedValue('OK');
-    mockRedis.ttl.mockResolvedValue(120);
     mockRedis.blpop.mockResolvedValue(null);
   });
 
@@ -51,7 +54,7 @@ describe('FfmpegSemaphore', () => {
     it('acquires successfully when under limit', async () => {
       // Disable periodic cleanup in tests to avoid timer complications
       const semaphore = new FfmpegSemaphore(3, false);
-      mockRedis.keys.mockResolvedValue(['lock1', 'lock2']); // 2 active locks
+      mockRedis.scan.mockResolvedValue(['0', ['lock1', 'lock2']]); // 2 active locks
       mockRedis.set.mockResolvedValue('OK'); // Successful acquisition
 
       await semaphore.acquire('op-1');
@@ -69,9 +72,9 @@ describe('FfmpegSemaphore', () => {
       const semaphore = new FfmpegSemaphore(2, false);
 
       // First: at limit (2 active locks), second: slot available
-      mockRedis.keys
-        .mockResolvedValueOnce(['lock1', 'lock2']) // 2 active = at limit
-        .mockResolvedValueOnce(['lock1']); // 1 active = available
+      mockRedis.scan
+        .mockResolvedValueOnce(['0', ['lock1', 'lock2']]) // 2 active = at limit
+        .mockResolvedValueOnce(['0', ['lock1']]); // 1 active = available
 
       mockRedis.set
         .mockResolvedValueOnce(null) // First attempt fails
@@ -103,7 +106,7 @@ describe('FfmpegSemaphore', () => {
   describe('getStats', () => {
     it('returns current semaphore state', async () => {
       const semaphore = new FfmpegSemaphore(5, false);
-      mockRedis.keys.mockResolvedValue(['lock1', 'lock2', 'lock3']);
+      mockRedis.scan.mockResolvedValue(['0', ['lock1', 'lock2', 'lock3']]);
       mockRedis.llen.mockResolvedValue(2);
 
       const stats = await semaphore.getStats();
@@ -119,12 +122,12 @@ describe('FfmpegSemaphore', () => {
   describe('reset', () => {
     it('clears all locks and queue', async () => {
       const semaphore = new FfmpegSemaphore(3, false);
-      mockRedis.keys.mockResolvedValue(['lock1', 'lock2']);
+      mockRedis.scan.mockResolvedValue(['0', ['lock1', 'lock2']]);
       mockRedis.del.mockResolvedValue(2);
 
       await semaphore.reset();
 
-      expect(mockRedis.keys).toHaveBeenCalledWith('esl:ffmpeg:lock:*');
+      expect(mockRedis.scan).toHaveBeenCalledWith('0', 'MATCH', 'esl:ffmpeg:lock:*', 'COUNT', 200);
       expect(mockRedis.del).toHaveBeenCalledWith('lock1', 'lock2');
       expect(mockRedis.del).toHaveBeenCalledWith('esl:ffmpeg:semaphore:queue');
     });
@@ -133,13 +136,17 @@ describe('FfmpegSemaphore', () => {
   describe('crashed worker recovery', () => {
     it('cleans up locks without TTL', async () => {
       const semaphore = new FfmpegSemaphore(3, false);
-      mockRedis.keys.mockResolvedValue(['lock1', 'lock2']);
-      mockRedis.ttl.mockResolvedValueOnce(-1).mockResolvedValueOnce(120); // First has no TTL
-      mockRedis.set.mockResolvedValue('OK');
+      const ttl = vi.fn().mockReturnThis();
+      const exec = vi.fn().mockResolvedValue([
+        [null, -1],
+        [null, 120],
+      ]);
+      mockRedis.pipeline.mockReturnValueOnce({ ttl, exec });
+      mockRedis.scan.mockResolvedValueOnce(['0', ['lock1', 'lock2']]);
 
-      await semaphore.acquire('op-1');
+      await (semaphore as unknown as { cleanupStaleLocks: () => Promise<void> }).cleanupStaleLocks();
 
-      expect(mockRedis.ttl).toHaveBeenCalled();
+      expect(ttl).toHaveBeenCalledTimes(2);
       expect(mockRedis.del).toHaveBeenCalledWith('lock1'); // Cleaned up stale lock
     });
   });

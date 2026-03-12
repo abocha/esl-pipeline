@@ -107,6 +107,7 @@ Set these in `.env` (or your shell) when running orchestrator programmatic API c
 - `ESL_PIPELINE_CONFIG_VOICES_PATH` (optional) — Remote voices path.
 - `ESL_PIPELINE_CONFIG_CACHE_TTL_MS` (optional, default `60000`) — In-process cache TTL for remote config responses.
 - `ESL_PIPELINE_CONFIG_CACHE_STALE_IF_ERROR_MS` (optional, default `300000`) — How long stale remote config may be served when upstream fetches fail.
+  - Operational baseline: `.env.batch-backend.example` pins these to `120000` / `900000` for steadier backend runtime behavior.
 - `ESL_PIPELINE_CONFIG_CONDITIONAL_REQUESTS` (optional, default `true`) — Enables conditional requests (`If-None-Match` / `If-Modified-Since`) for remote config revalidation.
 - `ESL_PIPELINE_CACHE_ENV` (optional, default `false`) — Enables memoized env loading in
   `loadCliEnv()` for executable entrypoints.
@@ -190,6 +191,9 @@ Use `.env.batch-backend` for the service stack. It includes all core keys above 
 - `NODE_ENV` — `development` for local.
 - `BATCH_BACKEND_HTTP_PORT` — HTTP port.
 - `BATCH_BACKEND_ENABLE_EXTENDED_API` — Enable uploads/auth/admin routes.
+- Compose durability profile:
+  - `docker-compose.yml` (dev) intentionally favors speed (`postgres` with `fsync=off`; `redis` without AOF persistence).
+  - `docker-compose.prod.yml` should keep durability-first settings (`postgres` with `fsync=on` + `synchronous_commit=on`; `redis` with AOF `everysec`).
 - Ops control API (additive, admin-auth, optional):
   - `BATCH_BACKEND_ENABLE_OPS_CONTROL` (default `false`) — Enables `/ops/status`, `/ops/actions`, `/ops/actions/:operationId`.
   - `BATCH_BACKEND_OPS_CONTROL_BOT_SECRET` (optional) — Requires matching `x-ops-bot-secret` header for `/ops/*`.
@@ -229,7 +233,8 @@ Use `.env.batch-backend` for the service stack. It includes all core keys above 
 - `PIPELINE_CWD` — Orchestrator working directory for pipeline runs.
 - Postgres: `PG_ENABLED`, `PG_HOST`, `PG_PORT`, `PG_USER`, `PG_PASSWORD`, `PG_DATABASE` (or `PG_CONNECTION_STRING`),
   `PG_POOL_MAX`, `PG_IDLE_TIMEOUT_MS`, `PG_CONNECTION_TIMEOUT_MS`, `PG_AUTO_MIGRATE_ON_BOOT`,
-  `PG_MIGRATION_LOCK_KEY`, `PG_MIGRATIONS_DIR`.
+  `PG_MIGRATION_LOCK_KEY`, `PG_MIGRATIONS_DIR`, `PG_FAIL_ON_PENDING_MIGRATIONS` (default `true` in production, `false` otherwise),
+  `PG_ENABLE_LEGACY_SCHEMA_PATCHES` (emergency-only; default `false`).
 - Redis: `REDIS_ENABLED`, `REDIS_HOST`, `REDIS_PORT`, `REDIS_PASSWORD` (optional).
 - BullMQ: `BATCH_JOBS_QUEUE_NAME`, `TRANSCRIBE_QUEUE_NAME`.
 - SMTP (optional): `MAIL_ENABLED`, `MAIL_HOST`, `MAIL_PORT`, `MAIL_FROM`, `MAIL_SECURE`, `MAIL_USER`, `MAIL_PASSWORD`.
@@ -251,6 +256,7 @@ Use `.env.batch-backend` for the service stack. It includes all core keys above 
 - Prompt/job metadata fallbacks:
   - `NOTION_DB_OPTIONS`, `NOTION_DB_ID`, `NOTION_DB_NAME`, `NOTION_DB_LABEL`
   - `ESL_TTS_PROVIDER_ELEVENLABS_VOICES_PATH`, `REPO_ROOT`, `APP_ROOT`, `PROJECT_ROOT`
+  - `BATCH_BACKEND_JOB_OPTIONS_ALLOW_STATIC_FALLBACK` (default `false`) — Enables emergency static fallback for `/config/job-options` when orchestrator metadata fetch fails.
 - Transcription pipeline:
   - `TRANSCRIBE_MODE` (`timeline`|`stack`), `TRANSCRIBE_MAX_CONCURRENCY`
   - Provider selection:
@@ -314,6 +320,8 @@ Notes:
 - Batch-backend persistence for `user_settings.tts_provider` is canonical-only (`elevenlabs` or `google`); legacy stored values (`openai`, `azure`) are migration-cleanup only.
 - Batch backend startup validates `FILESYSTEM_UPLOAD_DIR`, `PROMPT_*` allowlists, and active STT provider prerequisites (credentials + Google staging requirements); misconfigured paths fail fast.
 - Use `RECORDINGS_MAX_FILE_SIZE` to raise audio upload limits without affecting general markdown uploads.
+- Runtime schema patch fallback is disabled by default; keep `PG_ENABLE_LEGACY_SCHEMA_PATCHES` unset unless performing an operator-approved emergency recovery.
+- Manual migration mode (`PG_AUTO_MIGRATE_ON_BOOT=false`) can fail fast on pending migrations via `PG_FAIL_ON_PENDING_MIGRATIONS`; in production this defaults to fail-fast.
 - Postgres backup archival scripts read `PG_BACKUP_S3_*` variables; keep backup bucket/prefix separate from runtime `S3_BUCKET` upload paths.
 - Backup/restore scripts and ops status/alert helpers (`postgres-backup-restore.sh`, `postgres-backup-s3.sh`, `postgres-ops-status.sh`, `run-postgres-ops-alert.sh`, `run-aws-key-rotation-reminder.sh`) reuse `.env.batch-backend` and the `PG_BACKUP_*` thresholds above.
 - AWS auth for these scripts is env-driven in runtime (`AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `AWS_REGION`, plus `PG_BACKUP_S3_*`), not interactive `aws configure`.
