@@ -29,6 +29,18 @@ export function requirePgTestEnv(): PgTestEnv {
   if (!['postgres:', 'postgresql:'].includes(parsed.protocol)) {
     throw new Error('BATCH_BACKEND_TEST_PG must use postgres:// or postgresql://.');
   }
+  const rawDbName = parsed.pathname.replace(/^\/+/, '').trim();
+  if (!rawDbName || rawDbName.includes('/')) {
+    throw new Error(
+      'BATCH_BACKEND_TEST_PG must include exactly one database name in URL path (for example: .../esl_batch_test).',
+    );
+  }
+  const dbName = decodeURIComponent(rawDbName);
+  if (!dbName.toLowerCase().endsWith('_test')) {
+    throw new Error(
+      `BATCH_BACKEND_TEST_PG must target a dedicated test database ending with "_test". Received "${dbName}".`,
+    );
+  }
 
   process.env.PG_ENABLED = process.env.PG_ENABLED ?? 'true';
   process.env.PG_AUTO_MIGRATE_ON_BOOT = process.env.PG_AUTO_MIGRATE_ON_BOOT ?? 'false';
