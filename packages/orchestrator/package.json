@@ -63,7 +63,7 @@
     "@esl-pipeline/tts-core": "workspace:*",
     "@esl-pipeline/tts-provider-elevenlabs": "workspace:*",
     "@esl-pipeline/tts-provider-google": "workspace:*",
-    "@types/node": "^25.3.5",
+    "@types/node": "^25.4.0",
     "tsup": "8.5.1",
     "typescript": "^5.9.3",
     "vitest": "^4.0.18"
