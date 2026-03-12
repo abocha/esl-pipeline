@@ -57,6 +57,14 @@ function getMigrationLockKey(): string {
   return config.pg.migrationLockKey;
 }
 
+function shouldFailOnPendingMigrationsInManualMode(nodeEnv: string): boolean {
+  const raw = process.env.PG_FAIL_ON_PENDING_MIGRATIONS?.trim().toLowerCase();
+  if (raw === undefined || raw === '') {
+    return nodeEnv === 'production';
+  }
+  return raw === 'true';
+}
+
 async function ensureMigrationTable(client: PoolClient): Promise<void> {
   await client.query(`
     CREATE TABLE IF NOT EXISTS schema_migrations (
@@ -239,6 +247,7 @@ export async function runMigrations(): Promise<void> {
 
 export async function runMigrationsIfConfigured(): Promise<void> {
   const config = loadConfig();
+  const failOnPendingInManualMode = shouldFailOnPendingMigrationsInManualMode(config.nodeEnv);
   if (!config.pg.enabled) {
     logger.info('Postgres disabled; skipping migration checks', {
       component: 'pg-migrations',
@@ -259,8 +268,16 @@ export async function runMigrationsIfConfigured(): Promise<void> {
       component: 'pg-migrations',
       event: 'pg_migration_mode_manual',
       pendingCount: status.pending.length,
+      failOnPending: failOnPendingInManualMode,
     });
     if (status.pending.length > 0) {
+      if (failOnPendingInManualMode) {
+        throw new Error(
+          `Pending migrations detected with PG_AUTO_MIGRATE_ON_BOOT=false: ${status.pending
+            .map((migration) => migration.id)
+            .join(', ')}. Run db:migrate before startup or set PG_FAIL_ON_PENDING_MIGRATIONS=false for an explicit temporary override.`,
+        );
+      }
       logger.warn('Pending migrations detected and PG_AUTO_MIGRATE_ON_BOOT=false', {
         component: 'pg-migrations',
         pendingCount: status.pending.length,
