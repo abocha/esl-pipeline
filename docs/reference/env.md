@@ -192,7 +192,7 @@ Use `.env.batch-backend` for the service stack. It includes all core keys above 
 - `BATCH_BACKEND_HTTP_PORT` — HTTP port.
 - `BATCH_BACKEND_ENABLE_EXTENDED_API` — Enable uploads/auth/admin routes.
 - Compose durability profile:
-  - `docker-compose.yml` (dev) intentionally favors speed (`postgres` with `fsync=off`; `redis` without AOF persistence).
+  - `docker-compose.yml` (dev) now keeps Postgres durability on (`fsync=on`); Redis remains non-persistent by default (AOF disabled).
   - `docker-compose.prod.yml` should keep durability-first settings (`postgres` with `fsync=on` + `synchronous_commit=on`; `redis` with AOF `everysec`).
 - Ops control API (additive, admin-auth, optional):
   - `BATCH_BACKEND_ENABLE_OPS_CONTROL` (default `false`) — Enables `/ops/status`, `/ops/actions`, `/ops/actions/:operationId`.

@@ -58,6 +58,8 @@ For `@esl-pipeline/batch-backend`:
   - DB migration lane (`test:db:migrations`)
   - DB query lane (`test:db:postgres`)
   - worker integration lane (`test:integration:worker`)
+- DB safety invariant:
+  - `BATCH_BACKEND_TEST_PG` must point to a database name ending in `_test`; non-`_test` targets are rejected by the test env helper to prevent destructive test SQL from hitting dev/runtime data.
 
 ## File Naming and Routing
 
