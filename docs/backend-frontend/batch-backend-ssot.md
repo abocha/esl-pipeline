@@ -116,6 +116,11 @@ Runbook: [`docs/operations/prompt-gallery-bootstrap.md`](../operations/prompt-ga
   - `pnpm --filter @esl-pipeline/batch-backend db:status`
   - `pnpm --filter @esl-pipeline/batch-backend db:migrate`
   - `pnpm --filter @esl-pipeline/batch-backend db:verify`
+- Runtime legacy schema patching (`ensureJobsSchema`) is emergency-only and requires explicit `PG_ENABLE_LEGACY_SCHEMA_PATCHES=true`.
+- CI enforces a frozen legacy patch catalog; new schema changes must land in versioned migrations.
+- Manual migration mode can be made fail-fast on pending migrations (`PG_FAIL_ON_PENDING_MIGRATIONS`; default enabled in production).
+- Inventory mapping of legacy patch groups to migration parity:
+  - [`docs/backend-frontend/batch-backend-legacy-schema-inventory.md`](./batch-backend-legacy-schema-inventory.md)
 
 ## Local/CI Validation
 
