@@ -65,10 +65,7 @@ export async function createApprovalJobFromDraft(
 
   const jobOverrides = params.jobOverrides ?? {};
   const withTts =
-    jobOverrides.withTts ??
-    (jobOverrides.ttsProvider === 'google'
-      ? true
-      : hasTtsKey);
+    jobOverrides.withTts ?? (jobOverrides.ttsProvider === 'google' ? true : hasTtsKey);
   const selectedPreset = preset;
   const learningPresetId =
     normalizeLearningPresetId({

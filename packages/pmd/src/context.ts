@@ -1,6 +1,6 @@
 import matter from 'gray-matter';
 
-import { parsePmdDocument, type ParseOptions } from './parser.js';
+import { type ParseOptions, parsePmdDocument } from './parser.js';
 import { normalizeMarkdownSource } from './source.js';
 import type { ParsedMarkdownContext } from './types.js';
 

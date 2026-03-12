@@ -1,7 +1,6 @@
 import { mkdtemp, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-
 import { describe, expect, it, vi } from 'vitest';
 
 describe('loadVoicesCatalog error policy', () => {
@@ -20,7 +19,9 @@ describe('loadVoicesCatalog error policy', () => {
 
     vi.resetModules();
     const { loadVoicesCatalog } = await import('../src/assign.js');
-    await expect(loadVoicesCatalog(invalidPath)).rejects.toThrow(/Invalid ElevenLabs voices catalog JSON/);
+    await expect(loadVoicesCatalog(invalidPath)).rejects.toThrow(
+      /Invalid ElevenLabs voices catalog JSON/,
+    );
     await expect(loadVoicesCatalog(invalidPath)).rejects.toThrow(invalidPath);
   });
 
@@ -29,7 +30,9 @@ describe('loadVoicesCatalog error policy', () => {
 
     vi.resetModules();
     const { loadVoicesCatalog } = await import('../src/assign.js');
-    await expect(loadVoicesCatalog(dir)).rejects.toThrow(/Failed to read ElevenLabs voices catalog/);
+    await expect(loadVoicesCatalog(dir)).rejects.toThrow(
+      /Failed to read ElevenLabs voices catalog/,
+    );
   });
 
   it('throws on unreadable catalog file instead of silently falling back', async () => {

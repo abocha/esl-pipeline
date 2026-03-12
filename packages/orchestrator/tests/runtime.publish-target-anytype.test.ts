@@ -1,6 +1,7 @@
+import { describe, expect, it, vi } from 'vitest';
+
 import type { AnytypeClient } from '@esl-pipeline/anytype-adapter';
 import { ValidationError } from '@esl-pipeline/contracts';
-import { describe, expect, it, vi } from 'vitest';
 
 import {
   addAnytypePageToCollection,

@@ -1,6 +1,6 @@
-import { withPgClient } from '../infrastructure/db.js';
 import type { BatchBackendConfig } from '../config/env.js';
 import { loadConfig } from '../config/env.js';
+import { withPgClient } from '../infrastructure/db.js';
 
 const LESSON_ANALYSIS_VERSION = 1;
 
@@ -44,9 +44,7 @@ export function normalizeTranscriptAnalysis(value: unknown): TranscriptAnalysisS
       ? cast.generatedAt
       : null;
   const provider =
-    typeof cast.provider === 'string' && cast.provider.trim().length > 0
-      ? cast.provider
-      : null;
+    typeof cast.provider === 'string' && cast.provider.trim().length > 0 ? cast.provider : null;
   const lessonSummary =
     typeof cast.lessonSummary === 'string' && cast.lessonSummary.trim().length > 0
       ? cast.lessonSummary.trim()
@@ -130,7 +128,10 @@ export function extractStudentOnlyTranscript(transcript: string): string {
     }
   }
 
-  return studentLines.join('\n').replaceAll(/\n{3,}/g, '\n\n').trim();
+  return studentLines
+    .join('\n')
+    .replaceAll(/\n{3,}/g, '\n\n')
+    .trim();
 }
 
 export function resolveStudentTrackTranscriptUri(
@@ -191,8 +192,10 @@ export function extractGrammarWatchlist(text: string): string[] {
   if (/\bhe go\b/.test(normalized) || /\bshe go\b/.test(normalized)) {
     watchlist.push('Third-person present tense agreement ("he/she goes")');
   }
-  if (/\bmore better\b/.test(normalized)) watchlist.push('Double comparative ("better", not "more better")');
-  if (/\bi very like\b/.test(normalized)) watchlist.push('Adverb placement ("I like ... very much")');
+  if (/\bmore better\b/.test(normalized))
+    watchlist.push('Double comparative ("better", not "more better")');
+  if (/\bi very like\b/.test(normalized))
+    watchlist.push('Adverb placement ("I like ... very much")');
   return watchlist;
 }
 

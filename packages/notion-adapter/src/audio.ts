@@ -1,4 +1,4 @@
-import { APIErrorCode, isNotionClientError, type Client } from '@notionhq/client';
+import { APIErrorCode, type Client, isNotionClientError } from '@notionhq/client';
 
 import { ValidationError } from '@esl-pipeline/contracts';
 
@@ -113,7 +113,7 @@ function findAnchorForTarget(
     }
     const adjacent = blocks[anchorIndex - 1];
     const adjacentAudioBlockId =
-      adjacent?.type === 'audio' ? (String(adjacent.id ?? '').trim() || undefined) : undefined;
+      adjacent?.type === 'audio' ? String(adjacent.id ?? '').trim() || undefined : undefined;
     return {
       anchorBlockId,
       insertAfterBlockId: previousNonAudioBlockId,
@@ -125,7 +125,7 @@ function findAnchorForTarget(
 
   const adjacent = blocks[anchorIndex + 1];
   const adjacentAudioBlockId =
-    adjacent?.type === 'audio' ? (String(adjacent.id ?? '').trim() || undefined) : undefined;
+    adjacent?.type === 'audio' ? String(adjacent.id ?? '').trim() || undefined : undefined;
   return {
     anchorBlockId,
     insertAfterBlockId: anchorBlockId,

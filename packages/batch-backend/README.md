@@ -466,12 +466,12 @@ End-to-end flow:
      - If transition fails (null), another worker has claimed it → abort.
    - On successful transition to `running`:
    - Calls [`runAssignmentJob`](src/infrastructure/orchestrator-service.ts:62) with:
-      - `jobId`
-      - `md`
-      - `learningPresetId?`
-      - `withTts?`
-       - `upload: 's3'` only if requested.
-       - `runId = jobId` for correlation.
+     - `jobId`
+     - `md`
+     - `learningPresetId?`
+     - `withTts?`
+     - `upload: 's3'` only if requested.
+     - `runId = jobId` for correlation.
 
 4. Orchestrator execution (`runAssignmentJob`)
    - [`getPipeline`](src/infrastructure/orchestrator-service.ts:23):

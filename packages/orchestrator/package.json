@@ -36,8 +36,8 @@
     "docker:run": "docker run --rm esl-pipeline/orchestrator:local",
     "prepack": "pnpm run build",
     "test": "pnpm run test:unit",
-    "test:unit": "vitest run --exclude \"tests/**/*.integration.test.ts\"",
     "test:integration": "vitest run tests/pipeline.integration.test.ts",
+    "test:unit": "vitest run --exclude \"tests/**/*.integration.test.ts\"",
     "test:watch": "vitest",
     "typecheck": "tsc --noEmit"
   },

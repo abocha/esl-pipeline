@@ -1,5 +1,6 @@
-import { describeMdValidatorSuite } from './validator.test-harness.js';
 import { expect, it } from 'vitest';
+
+import { describeMdValidatorSuite } from './validator.test-harness.js';
 
 describeMdValidatorSuite(
   'md-validator [speaker-and-study-text]',
@@ -9,9 +10,11 @@ describeMdValidatorSuite(
       const file = path.join(tempDir, 'video-directive-space.md');
       await writeFile(
         file,
-        buildBaseDoc(`
+        buildBaseDoc(
+          `
 :::video https://example.com/demo.mp4
-      `.trim()),
+      `.trim(),
+        ),
       );
 
       const res = await validateMarkdownFile(file);

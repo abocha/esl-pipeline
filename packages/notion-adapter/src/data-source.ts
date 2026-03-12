@@ -11,9 +11,9 @@ import { createHash } from 'node:crypto';
 
 import { withRetry } from './retry.js';
 import type {
-  ResolvedNotionTarget,
   ResolveDataSourceInput,
   ResolveDataSourceResult,
+  ResolvedNotionTarget,
 } from './types.js';
 
 type SearchResult = SearchResponse['results'][number];

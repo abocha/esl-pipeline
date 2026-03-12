@@ -1,4 +1,7 @@
-import type { VoiceProviderErrorCategory, VoiceProviderErrorDetails } from '@esl-pipeline/contracts';
+import type {
+  VoiceProviderErrorCategory,
+  VoiceProviderErrorDetails,
+} from '@esl-pipeline/contracts';
 
 const CATEGORY_PATTERN =
   /\[(invalid_voice_id|unsupported_voice_capability|provider_rate_limit|provider_timeout|provider_contract_error)\]/i;
@@ -61,9 +64,7 @@ export function parseVoiceProviderErrors(
   return parsed;
 }
 
-export function countVoiceProviderErrors(
-  details: readonly VoiceProviderErrorDetails[],
-): number {
+export function countVoiceProviderErrors(details: readonly VoiceProviderErrorDetails[]): number {
   return details.length;
 }
 
@@ -91,16 +92,24 @@ function inferCategoryFromMessage(
     PROVIDER_CONTEXT_PATTERN.test(message) || message.includes('voice generation');
 
   if (message.includes('invalid voice')) return 'invalid_voice_id';
-  if (message.includes('unsupported') && (message.includes('accent') || message.includes('style'))) {
+  if (
+    message.includes('unsupported') &&
+    (message.includes('accent') || message.includes('style'))
+  ) {
     return 'unsupported_voice_capability';
   }
   if (hasProviderContext && providerStatus === 429) return 'provider_rate_limit';
-  if (hasProviderContext && (message.includes('rate limit') || message.includes('too many requests'))) {
+  if (
+    hasProviderContext &&
+    (message.includes('rate limit') || message.includes('too many requests'))
+  ) {
     return 'provider_rate_limit';
   }
   if (
     hasProviderContext &&
-    (providerStatus === 408 || providerStatus === 504 || (providerStatus !== undefined && providerStatus >= 500))
+    (providerStatus === 408 ||
+      providerStatus === 504 ||
+      (providerStatus !== undefined && providerStatus >= 500))
   ) {
     return 'provider_timeout';
   }
@@ -119,7 +128,11 @@ function inferCategoryFromMessage(
   ) {
     return 'provider_contract_error';
   }
-  if (message.includes('provider') || message.includes('text-to-dialogue') || message.includes('tts')) {
+  if (
+    message.includes('provider') ||
+    message.includes('text-to-dialogue') ||
+    message.includes('tts')
+  ) {
     return 'provider_contract_error';
   }
   return null;

@@ -2,7 +2,7 @@ import { existsSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-import { loadEnvFilesWithSummary, type LoadEnvSummary } from './loaders.js';
+import { type LoadEnvSummary, loadEnvFilesWithSummary } from './loaders.js';
 
 /**
  * Standard env bootstrap for executable entrypoints (CLI, workers, one-off tools).

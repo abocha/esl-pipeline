@@ -104,7 +104,10 @@ describe('application/prompt-options', () => {
   });
 
   it('returns null defaults when configured IDs are not active in DB', async () => {
-    const config = createConfig('docs/templates/missing-template.md', 'docs/profiles/missing-profile.md');
+    const config = createConfig(
+      'docs/templates/missing-template.md',
+      'docs/profiles/missing-profile.md',
+    );
 
     const options = await getPromptOptions({
       config,
@@ -291,7 +294,10 @@ describe('application/prompt-options', () => {
   });
 
   it('excludes prompts when pointer exists but no active revision is confirmed', async () => {
-    const config = createConfig('docs/templates/default-template.md', 'docs/profiles/default-profile.md');
+    const config = createConfig(
+      'docs/templates/default-template.md',
+      'docs/profiles/default-profile.md',
+    );
 
     const options = await getPromptOptions({
       config,

@@ -80,11 +80,13 @@ export async function listGoogleVoices(
     if (!name) continue;
     const languageCodes = Array.isArray(voice.languageCodes)
       ? voice.languageCodes
-        .map((code) => (typeof code === 'string' ? code.trim() : ''))
-        .filter((code) => code.length > 0)
+          .map((code) => (typeof code === 'string' ? code.trim() : ''))
+          .filter((code) => code.length > 0)
       : [];
     const ssmlGender =
-      typeof voice.ssmlGender === 'string' ? voice.ssmlGender.trim() : String(voice.ssmlGender ?? '').trim();
+      typeof voice.ssmlGender === 'string'
+        ? voice.ssmlGender.trim()
+        : String(voice.ssmlGender ?? '').trim();
     voices.push({
       name,
       languageCodes,

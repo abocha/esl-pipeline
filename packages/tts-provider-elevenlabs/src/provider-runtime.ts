@@ -1,8 +1,9 @@
 import { ElevenLabsError, ElevenLabsTimeoutError } from '@elevenlabs/elevenlabs-js';
+
 import type { VoiceProviderErrorCategory } from '@esl-pipeline/contracts';
 import {
-  classifyProviderRuntimeFailure,
   type ProviderRuntimeClassificationRules,
+  classifyProviderRuntimeFailure,
 } from '@esl-pipeline/provider-runtime';
 
 const ELEVENLABS_PROVIDER = 'elevenlabs';
@@ -24,7 +25,9 @@ export interface ElevenLabsRuntimeErrorDetails {
   name?: string;
 }
 
-export function extractElevenLabsRuntimeErrorDetails(error: unknown): ElevenLabsRuntimeErrorDetails {
+export function extractElevenLabsRuntimeErrorDetails(
+  error: unknown,
+): ElevenLabsRuntimeErrorDetails {
   const status = extractElevenLabsStatusCode(error);
   const code = extractStringProperty(error, 'code');
   const message = error instanceof Error ? error.message : String(error);

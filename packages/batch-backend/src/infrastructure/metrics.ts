@@ -1,5 +1,4 @@
 // packages/batch-backend/src/infrastructure/metrics.ts
-
 // Minimal metrics facade used by the batch-backend and orchestrator wrapper.
 // Default implementation is noop so the service runs without a metrics stack.
 // Hook up Prometheus/statsd/etc by replacing the exported `metrics` in one place.
@@ -38,7 +37,8 @@ export const READINESS_METRIC_SOURCE_MAP: ReadinessMetricSourceMap = {
   firstSessionSuccessProxy: {
     source: 'jobs table, first publish job per user inside request window',
     window: 'request window, default last 7 days by jobs.created_at',
-    calculation: 'users whose first in-window publish job succeeded / users with an in-window publish job',
+    calculation:
+      'users whose first in-window publish job succeeded / users with an in-window publish job',
   },
   voiceValidationFailureRate: {
     source: 'jobs table failed rows with voice/frontmatter validation signatures in error text',

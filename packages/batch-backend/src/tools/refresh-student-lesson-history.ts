@@ -3,24 +3,24 @@ import type { PoolClient } from 'pg';
 import type { GenerationProvider } from '@esl-pipeline/contracts';
 
 import {
-  buildHeuristicTranscriptAnalysis,
-  extractStudentOnlyTranscript,
-  mergeTranscriptAnalysis,
-  resolveStudentTrackTranscriptUri,
-  type TranscriptAnalysisSnapshot,
-} from '../application/student-lesson-history.js';
-import { loadBatchBackendEnv } from '../bootstrap/env.js';
-import { type BatchBackendConfig, loadConfig } from '../config/env.js';
-import {
   executeGoogleGeneration,
   executeOpenAiGeneration,
   executeOpenRouterGeneration,
 } from '../application/generation-providers.js';
 import {
-  createTranscriptionStorageForUri,
-  type TranscriptionStorage,
-} from '../infrastructure/transcription-storage.js';
+  type TranscriptAnalysisSnapshot,
+  buildHeuristicTranscriptAnalysis,
+  extractStudentOnlyTranscript,
+  mergeTranscriptAnalysis,
+  resolveStudentTrackTranscriptUri,
+} from '../application/student-lesson-history.js';
+import { loadBatchBackendEnv } from '../bootstrap/env.js';
+import { type BatchBackendConfig, loadConfig } from '../config/env.js';
 import { withPgClient } from '../infrastructure/db.js';
+import {
+  type TranscriptionStorage,
+  createTranscriptionStorageForUri,
+} from '../infrastructure/transcription-storage.js';
 
 interface TranscriptRow {
   id: string;
@@ -70,7 +70,11 @@ function parseArgs(argv: string[]): CliOptions {
       const value = argv[index + 1];
       if (!value) throw new Error('Missing value for --provider');
       const normalized = value.trim().toLowerCase();
-      if (normalized !== 'openai' && normalized !== 'google_ai_studio' && normalized !== 'openrouter') {
+      if (
+        normalized !== 'openai' &&
+        normalized !== 'google_ai_studio' &&
+        normalized !== 'openrouter'
+      ) {
         throw new Error('Invalid --provider. Use openai, google_ai_studio, or openrouter');
       }
       options.provider = normalized;
@@ -186,8 +190,7 @@ function toAnalysisMap(payload: unknown): Map<string, TranscriptAnalysisSnapshot
     const grammarWatchlist = Array.isArray(cast.grammarWatchlist)
       ? cast.grammarWatchlist.filter((value): value is string => typeof value === 'string')
       : [];
-    const lessonSummary =
-      typeof cast.lessonSummary === 'string' ? cast.lessonSummary.trim() : '';
+    const lessonSummary = typeof cast.lessonSummary === 'string' ? cast.lessonSummary.trim() : '';
     const provider = typeof cast.provider === 'string' ? cast.provider.trim() : 'batch_llm';
     const model = typeof cast.model === 'string' && cast.model.trim() ? cast.model.trim() : null;
 

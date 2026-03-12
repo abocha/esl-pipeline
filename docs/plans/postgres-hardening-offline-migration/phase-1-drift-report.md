@@ -102,38 +102,38 @@ Only in `db.ts`:
 
 ## High-Risk Drift Findings
 
-1. **`jobs.auto_publish` drift (critical correctness risk).**  
-   - `schema.sql` includes `auto_publish` in `jobs` table definition.  
-   - `db.ts` `JOBS_TABLE_SQL` does not include `auto_publish`, and `JOBS_SCHEMA_PATCHES` do not add it.  
+1. **`jobs.auto_publish` drift (critical correctness risk).**
+   - `schema.sql` includes `auto_publish` in `jobs` table definition.
+   - `db.ts` `JOBS_TABLE_SQL` does not include `auto_publish`, and `JOBS_SCHEMA_PATCHES` do not add it.
    - repository code reads/writes `auto_publish` (`packages/batch-backend/src/domain/job-repository.ts`).
 
-2. **`user_settings` is used by runtime but absent from `db.ts` schema bootstrap (critical runtime risk).**  
-   - `settings-repository` and extended routes query `user_settings`.  
+2. **`user_settings` is used by runtime but absent from `db.ts` schema bootstrap (critical runtime risk).**
+   - `settings-repository` and extended routes query `user_settings`.
    - `db.ts` does not create/patch `user_settings`.
 
-3. **`templates` is used by runtime but absent from `schema.sql` (critical fresh-init risk).**  
-   - `template-repository` and routes depend on `templates`.  
+3. **`templates` is used by runtime but absent from `schema.sql` (critical fresh-init risk).**
+   - `template-repository` and routes depend on `templates`.
    - `schema.sql` does not define `templates`, while `db.ts` does.
 
 4. **`job_action_history` and `generation_budget_counters` are in active runtime paths but absent from `schema.sql` (high risk).**
 
-5. **Revision lifecycle model drift (high risk).**  
-   - `db.ts` adds `status/version_number/version_label/activated_at/deprecated_at` + unique partial indexes.  
+5. **Revision lifecycle model drift (high risk).**
+   - `db.ts` adds `status/version_number/version_label/activated_at/deprecated_at` + unique partial indexes.
    - `schema.sql` base definitions are older and do not fully reflect this model.
 
-6. **Users/jobs governance constraints differ (medium-high).**  
-   - `schema.sql` applies `users_role_check`, `users_email_check`, `jobs_state_check`, `jobs_mode_check`;  
+6. **Users/jobs governance constraints differ (medium-high).**
+   - `schema.sql` applies `users_role_check`, `users_email_check`, `jobs_state_check`, `jobs_mode_check`;
    - `db.ts` currently does not enforce these.
 
-7. **Jobs indexing model diverges (medium-high).**  
-   - `schema.sql`: mostly single-column indexes for joins/filtering.  
-   - `db.ts`: composite `(state, created_at)` and `source_job_id`.  
+7. **Jobs indexing model diverges (medium-high).**
+   - `schema.sql`: mostly single-column indexes for joins/filtering.
+   - `db.ts`: composite `(state, created_at)` and `source_job_id`.
    - current query patterns require explicit canonical index policy.
 
-8. **Feature table asymmetry (medium).**  
+8. **Feature table asymmetry (medium).**
    - `uploaded_files` exists in `schema.sql` only and appears currently unused in runtime code.
 
-9. **Extension handling asymmetry (medium).**  
+9. **Extension handling asymmetry (medium).**
    - UUID extension setup only in `schema.sql`; trigram extension setup only in `db.ts`.
 
 ## Drift Classification Matrix (Phase 1 Outcome)
@@ -188,4 +188,3 @@ WHERE p.id IS NULL;
 
 Phase 1 drift discovery is complete and decision-ready.
 All unresolved items are moved into the canonical object map and migration decision ledger.
-

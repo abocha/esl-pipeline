@@ -1,25 +1,26 @@
 import { mkdtemp, readFile, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-
-import { parseMarkdownContext } from '@esl-pipeline/pmd';
 import { afterEach, beforeEach, vi } from 'vitest';
 
+import { parseMarkdownContext } from '@esl-pipeline/pmd';
+
 import * as assign from '../src/assign.js';
+import type { VoiceCatalog } from '../src/assign.js';
 import * as dialogue from '../src/dialogue.js';
 import * as eleven from '../src/eleven.js';
 import * as ffm from '../src/ffmpeg.js';
-import type { VoiceCatalog } from '../src/assign.js';
-import {
-  buildPronunciationShadowSentenceMp3,
-  buildStudyTextMp3,
-} from '../src/index.js';
+import { buildPronunciationShadowSentenceMp3, buildStudyTextMp3 } from '../src/index.js';
 
 const encoder = new TextEncoder();
-type Tail<T extends readonly unknown[]> = T extends readonly [unknown, ...infer Rest] ? Rest : never;
+type Tail<T extends readonly unknown[]> = T extends readonly [unknown, ...infer Rest]
+  ? Rest
+  : never;
 type StudyTextTailArgs = Tail<Parameters<typeof buildStudyTextMp3>>;
 type ShadowSentenceTailArgs = Tail<Parameters<typeof buildPronunciationShadowSentenceMp3>>;
-type ElevenConvertRequest = Parameters<ReturnType<typeof eleven.getElevenClient>['textToSpeech']['convert']>[1];
+type ElevenConvertRequest = Parameters<
+  ReturnType<typeof eleven.getElevenClient>['textToSpeech']['convert']
+>[1];
 
 export const makeMockStream = (payload: string) =>
   new ReadableStream<Uint8Array>({
@@ -33,10 +34,7 @@ export const writeFixture = async (filePath: string, contents: string) => {
   await writeFile(filePath, contents.trim());
 };
 
-export const buildStudyTextMp3FromPath = async (
-  mdPath: string,
-  ...args: StudyTextTailArgs
-) => {
+export const buildStudyTextMp3FromPath = async (mdPath: string, ...args: StudyTextTailArgs) => {
   const markdown = await readFile(mdPath, 'utf8');
   const context = parseMarkdownContext(markdown);
   return buildStudyTextMp3({ context, mdPath }, ...args);

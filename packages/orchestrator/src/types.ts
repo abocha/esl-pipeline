@@ -1,7 +1,8 @@
+import type { GoogleTtsModel, TtsProviderId as TtsProvider } from '@esl-pipeline/tts-core';
+
 import type { ConfigProvider } from './config.js';
 import type { AssignmentManifest, AudioArtifactManifest, ManifestStore } from './manifest.js';
 import type { PipelineLogger, PipelineMetrics } from './observability.js';
-import type { GoogleTtsModel, TtsProviderId as TtsProvider } from '@esl-pipeline/tts-core';
 
 export type AssignmentStage =
   | 'validate'

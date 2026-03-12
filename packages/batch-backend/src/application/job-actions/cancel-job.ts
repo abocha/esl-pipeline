@@ -25,10 +25,7 @@ export async function cancelJob(jobId: string, action: CancelJobAction): Promise
   }
 
   const rawReason = action.payload?.reason;
-  if (
-    rawReason !== undefined &&
-    (typeof rawReason !== 'string' || rawReason.trim().length === 0)
-  ) {
+  if (rawReason !== undefined && (typeof rawReason !== 'string' || rawReason.trim().length === 0)) {
     return {
       success: false,
       message: 'Cancel reason must be a non-empty string when provided',

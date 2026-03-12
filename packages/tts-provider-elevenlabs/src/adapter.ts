@@ -43,7 +43,7 @@ export function createElevenLabsTtsProvider(): TtsProviderAdapter {
         return result.voices.map((voice) => ({
           speaker: voice.speaker,
           voiceId: voice.voiceId,
-          source: ((voice.source as SpeakerVoiceAssignment['source']) ?? 'auto'),
+          source: (voice.source as SpeakerVoiceAssignment['source']) ?? 'auto',
           score: voice.score,
           selectionReason: voice.selectionReason,
           capabilityMatches: voice.capabilityMatches,

@@ -140,13 +140,19 @@ export function buildVoiceCapabilitiesSnapshot(
 function normalizeSnapshot(snapshot: VoiceCapabilitiesSnapshot): VoiceCapabilitiesSnapshot {
   return {
     generatedAt: snapshot.generatedAt,
-    role: [...new Set(snapshot.role.map((value) => toComparableToken(value) as SpeakerRole))].sort(),
+    role: [
+      ...new Set(snapshot.role.map((value) => toComparableToken(value) as SpeakerRole)),
+    ].sort(),
     gender: [
       ...new Set(snapshot.gender.map((value) => toComparableToken(value) as SpeakerGender)),
     ].sort(),
     age: [...new Set(snapshot.age.map((value) => toComparableToken(value) as SpeakerAge))].sort(),
-    accent: [...new Set(snapshot.accent.map((value) => normalizeAccent(value)).filter(Boolean))].sort(),
-    style: [...new Set(snapshot.style.map((value) => normalizeStyle(value)).filter(Boolean))].sort(),
+    accent: [
+      ...new Set(snapshot.accent.map((value) => normalizeAccent(value)).filter(Boolean)),
+    ].sort(),
+    style: [
+      ...new Set(snapshot.style.map((value) => normalizeStyle(value)).filter(Boolean)),
+    ].sort(),
   };
 }
 
@@ -169,6 +175,7 @@ export function validateCapabilityValue(
   if (kind === 'accent') return capabilities.accent.includes(normalized);
   if (kind === 'style') return capabilities.style.includes(normalized);
   if (kind === 'age') return capabilities.age.includes(toComparableToken(value) as SpeakerAge);
-  if (kind === 'gender') return capabilities.gender.includes(toComparableToken(value) as SpeakerGender);
+  if (kind === 'gender')
+    return capabilities.gender.includes(toComparableToken(value) as SpeakerGender);
   return capabilities.role.includes(toComparableToken(value) as SpeakerRole);
 }

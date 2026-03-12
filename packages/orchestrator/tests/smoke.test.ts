@@ -15,9 +15,8 @@ vi.mock('@esl-pipeline/notion-adapter', () => ({
 }));
 
 vi.mock('@esl-pipeline/tts-core', async () => {
-  const actual = await vi.importActual<typeof import('@esl-pipeline/tts-core')>(
-    '@esl-pipeline/tts-core',
-  );
+  const actual =
+    await vi.importActual<typeof import('@esl-pipeline/tts-core')>('@esl-pipeline/tts-core');
   return {
     ...actual,
     buildStudyTextMp3: vi.fn(),

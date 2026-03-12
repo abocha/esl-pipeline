@@ -1,10 +1,11 @@
 import { createHash } from 'node:crypto';
-
 import { describe, expect, it } from 'vitest';
 
-import { getPromptPackage, getPromptPackageLineage } from '../src/application/get-prompt-package.js';
+import {
+  getPromptPackage,
+  getPromptPackageLineage,
+} from '../src/application/get-prompt-package.js';
 import type { PromptPackageRecord } from '../src/domain/prompt-package-model.js';
-
 import {
   createProfileRevisionRepositoryStub,
   createStorageStub,
@@ -133,9 +134,13 @@ describe('application/prompt-package', () => {
   });
 
   it('returns prompt lineage with snapshot and current revision metadata', async () => {
-    const snapshotProfileHash = createHash('sha256').update('SNAPSHOT PROFILE', 'utf8').digest('hex');
+    const snapshotProfileHash = createHash('sha256')
+      .update('SNAPSHOT PROFILE', 'utf8')
+      .digest('hex');
     const currentProfileHash = createHash('sha256').update('CURRENT PROFILE', 'utf8').digest('hex');
-    const snapshotTemplateHash = createHash('sha256').update('SNAPSHOT TEMPLATE', 'utf8').digest('hex');
+    const snapshotTemplateHash = createHash('sha256')
+      .update('SNAPSHOT TEMPLATE', 'utf8')
+      .digest('hex');
 
     const lineage = await getPromptPackageLineage('prompt-1', {
       promptPackages: {

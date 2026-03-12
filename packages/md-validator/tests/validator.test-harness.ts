@@ -115,9 +115,13 @@ notes
 
 function withPronunciationSection(doc: string, sectionContent: string): string {
   return doc.replace(
-    ['### C. 🎙️ Pronunciation Micro-Focus (≈1 min)', '', 'text', '', '## 6. ✅ Your Turn: Complete the Mission!'].join(
-      '\n',
-    ),
+    [
+      '### C. 🎙️ Pronunciation Micro-Focus (≈1 min)',
+      '',
+      'text',
+      '',
+      '## 6. ✅ Your Turn: Complete the Mission!',
+    ].join('\n'),
     [
       '### C. 🎙️ Pronunciation Micro-Focus (≈1 min)',
       '',

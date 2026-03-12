@@ -149,10 +149,12 @@ describe('integration/query-plan-regression', () => {
     await closePgPool();
   });
 
-  it('list-jobs path keeps ordered user index usage', async () => {
-    const plan = await explainQuery(
-      'list-jobs-user',
-      `
+  it(
+    'list-jobs path keeps ordered user index usage',
+    async () => {
+      const plan = await explainQuery(
+        'list-jobs-user',
+        `
       SELECT id
       FROM jobs
       WHERE user_id = $1::uuid
@@ -161,23 +163,27 @@ describe('integration/query-plan-regression', () => {
       ORDER BY created_at DESC, id DESC
       LIMIT 50
       `,
-      [
-        TARGET_USER_ID,
-        new Date('2020-01-01T00:00:00.000Z'),
-        new Date('2040-01-01T00:00:00.000Z'),
-      ],
-    );
+        [
+          TARGET_USER_ID,
+          new Date('2020-01-01T00:00:00.000Z'),
+          new Date('2040-01-01T00:00:00.000Z'),
+        ],
+      );
 
-    const indexNames = new Set<string>();
-    collectIndexNames(plan.Plan, indexNames);
-    expect(indexNames.has('idx_jobs_user_created_at_id')).toBe(true);
-    expect(hasSeqScanOnRelation(plan.Plan, 'jobs')).toBe(false);
-  }, testTimeout);
+      const indexNames = new Set<string>();
+      collectIndexNames(plan.Plan, indexNames);
+      expect(indexNames.has('idx_jobs_user_created_at_id')).toBe(true);
+      expect(hasSeqScanOnRelation(plan.Plan, 'jobs')).toBe(false);
+    },
+    testTimeout,
+  );
 
-  it('readiness path keeps publish-target/state index usage', async () => {
-    const plan = await explainQuery(
-      'readiness-window',
-      `
+  it(
+    'readiness path keeps publish-target/state index usage',
+    async () => {
+      const plan = await explainQuery(
+        'readiness-window',
+        `
       SELECT COUNT(*)
       FROM jobs
       WHERE publish_target = 'html'
@@ -185,30 +191,36 @@ describe('integration/query-plan-regression', () => {
         AND created_at >= $1
         AND created_at <= $2
       `,
-      [new Date('2020-01-01T00:00:00.000Z'), new Date('2040-01-01T00:00:00.000Z')],
-    );
+        [new Date('2020-01-01T00:00:00.000Z'), new Date('2040-01-01T00:00:00.000Z')],
+      );
 
-    const indexNames = new Set<string>();
-    collectIndexNames(plan.Plan, indexNames);
-    expect(indexNames.has('idx_jobs_publish_target_state_created_at')).toBe(true);
-    expect(hasSeqScanOnRelation(plan.Plan, 'jobs')).toBe(false);
-  }, testTimeout);
+      const indexNames = new Set<string>();
+      collectIndexNames(plan.Plan, indexNames);
+      expect(indexNames.has('idx_jobs_publish_target_state_created_at')).toBe(true);
+      expect(hasSeqScanOnRelation(plan.Plan, 'jobs')).toBe(false);
+    },
+    testTimeout,
+  );
 
-  it('student summary path keeps student/date index usage', async () => {
-    const plan = await explainQuery(
-      'student-summary',
-      `
+  it(
+    'student summary path keeps student/date index usage',
+    async () => {
+      const plan = await explainQuery(
+        'student-summary',
+        `
       SELECT student_id, MAX(COALESCE(finished_at, updated_at, created_at))
       FROM jobs
       WHERE student_id = ANY($1::uuid[])
       GROUP BY student_id
       `,
-      [[TARGET_STUDENT_ID]],
-    );
+        [[TARGET_STUDENT_ID]],
+      );
 
-    const indexNames = new Set<string>();
-    collectIndexNames(plan.Plan, indexNames);
-    expect(indexNames.has('idx_jobs_student_created_at_id')).toBe(true);
-    expect(hasSeqScanOnRelation(plan.Plan, 'jobs')).toBe(false);
-  }, testTimeout);
+      const indexNames = new Set<string>();
+      collectIndexNames(plan.Plan, indexNames);
+      expect(indexNames.has('idx_jobs_student_created_at_id')).toBe(true);
+      expect(hasSeqScanOnRelation(plan.Plan, 'jobs')).toBe(false);
+    },
+    testTimeout,
+  );
 });

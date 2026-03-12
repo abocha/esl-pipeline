@@ -61,7 +61,11 @@ describe('infrastructure/file-storage-service', () => {
     const key = 'stream/audio.bin';
     const payload = Buffer.from('audio-bytes');
 
-    const uploaded = await service.uploadFile(key, Readable.from([payload]), 'application/octet-stream');
+    const uploaded = await service.uploadFile(
+      key,
+      Readable.from([payload]),
+      'application/octet-stream',
+    );
 
     expect(uploaded.size).toBe(payload.length);
     const stored = await fs.readFile(path.join(tempDir, key));

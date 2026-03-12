@@ -154,7 +154,8 @@ describe('application/job-dto', () => {
     const dto = jobRecordToDto(job);
     expect(dto.providerError).toEqual({
       category: 'provider_rate_limit',
-      message: 'Text-to-Dialogue synthesis failed [provider_rate_limit]: HTTP 429: too many requests',
+      message:
+        'Text-to-Dialogue synthesis failed [provider_rate_limit]: HTTP 429: too many requests',
       providerStatus: 429,
       actionableHint: 'Retry later or reduce request concurrency/chunk size.',
     });

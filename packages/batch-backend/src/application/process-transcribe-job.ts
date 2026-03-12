@@ -3,9 +3,9 @@ import { randomUUID } from 'node:crypto';
 import type { SttProviderId } from '@esl-pipeline/contracts';
 import { classifyProviderRuntimeFailure } from '@esl-pipeline/provider-runtime';
 import {
+  type SttTranscriptionResult,
   formatSpeakerLabel,
   formatTranscriptFromSegments,
-  type SttTranscriptionResult,
   transcribeAudio,
 } from '@esl-pipeline/stt-core';
 
@@ -103,7 +103,8 @@ export async function processTranscribeJob(
   const sttProvider = resolveSttProvider(payload.sttProvider, config.transcription.sttProvider);
 
   try {
-    const readStorage = overrides?.storage ?? createTranscriptionStorageForUri(recording.storageUri);
+    const readStorage =
+      overrides?.storage ?? createTranscriptionStorageForUri(recording.storageUri);
     const transcription = await sttTranscribe({
       provider: sttProvider,
       context: {
@@ -114,7 +115,11 @@ export async function processTranscribeJob(
       configByProvider: buildSttProviderConfig(config),
     });
 
-    const transcriptText = formatTranscriptFromSegments(transcription.text, transcription.segments, mode);
+    const transcriptText = formatTranscriptFromSegments(
+      transcription.text,
+      transcription.segments,
+      mode,
+    );
 
     const transcriptStored = await storage.putTranscript({
       transcriptId,
@@ -239,7 +244,10 @@ export async function processTranscribeJob(
   }
 }
 
-function resolveSttProvider(requested: SttProviderId | undefined, fallback: SttProviderId): SttProviderId {
+function resolveSttProvider(
+  requested: SttProviderId | undefined,
+  fallback: SttProviderId,
+): SttProviderId {
   if (!requested) return fallback;
   return requested;
 }

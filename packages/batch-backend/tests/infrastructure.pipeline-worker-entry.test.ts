@@ -7,9 +7,7 @@ import {
   applyUserSettingsToEnv,
   resolveEffectiveElevenLabsApiKey,
 } from '../src/infrastructure/pipeline-worker-env.js';
-import {
-  toWorkerV2FailureError,
-} from '../src/infrastructure/pipeline-worker-v2.js';
+import { toWorkerV2FailureError } from '../src/infrastructure/pipeline-worker-v2.js';
 
 const ORIGINAL_ELEVEN_KEY = process.env.ESL_TTS_PROVIDER_ELEVENLABS_API_KEY;
 const ORIGINAL_DEFAULT_PROVIDER = process.env.ESL_TTS_DEFAULT_PROVIDER;
@@ -109,5 +107,4 @@ describe('infrastructure/pipeline-worker-entry', () => {
     expect(source).not.toContain('falling back to filesystem manifest store');
     expect(source).not.toContain("manifestStore: 'filesystem'");
   });
-
 });

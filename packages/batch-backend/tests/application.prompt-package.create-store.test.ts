@@ -1,15 +1,14 @@
 import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
-
 import { describe, expect, it, vi } from 'vitest';
+
 import * as googleProvider from '@esl-pipeline/tts-provider-google';
 
 import { createPromptPackage } from '../src/application/create-prompt-package.js';
 import { getPromptPackage } from '../src/application/get-prompt-package.js';
 import type { PromptPackageRecord } from '../src/domain/prompt-package-model.js';
 import type { InsertPromptPackageParams } from '../src/domain/prompt-package-repository.js';
-
 import {
   createBindingResolverStub,
   createConfig,
@@ -164,20 +163,18 @@ describe('application/prompt-package', () => {
 
     const previousVoicesPath = process.env.ELEVENLABS_VOICES_PATH;
     process.env.ELEVENLABS_VOICES_PATH = voicesPath;
-    vi
-      .spyOn(googleProvider, 'loadGoogleVoicesCatalog')
-      .mockResolvedValue({
+    vi.spyOn(googleProvider, 'loadGoogleVoicesCatalog').mockResolvedValue({
+      generatedAt: '2026-01-06T00:00:00.000Z',
+      capabilities: {
         generatedAt: '2026-01-06T00:00:00.000Z',
-        capabilities: {
-          generatedAt: '2026-01-06T00:00:00.000Z',
-          role: ['narrator', 'teacher', 'student', 'system'],
-          gender: ['male', 'female', 'neutral', 'child'],
-          age: ['child', 'teen', 'young', 'adult', 'middle_aged', 'senior', 'universal'],
-          accent: ['australian'],
-          style: ['chirp3_hd'],
-        },
-        voices: [],
-      });
+        role: ['narrator', 'teacher', 'student', 'system'],
+        gender: ['male', 'female', 'neutral', 'child'],
+        age: ['child', 'teen', 'young', 'adult', 'middle_aged', 'senior', 'universal'],
+        accent: ['australian'],
+        style: ['chirp3_hd'],
+      },
+      voices: [],
+    });
     try {
       const transcript = createTranscriptRecord();
       const storage = createStorageStub({

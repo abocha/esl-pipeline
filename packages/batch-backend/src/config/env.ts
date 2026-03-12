@@ -5,8 +5,12 @@
 // - Only throws when a feature is explicitly enabled but misconfigured.
 import { join, resolve as resolvePath } from 'node:path';
 
+import type {
+  GenerationProvider,
+  GenerationQuotaSource,
+  SttProviderId,
+} from '@esl-pipeline/contracts';
 import { readBool, readInt, readString } from '@esl-pipeline/shared-infrastructure';
-import type { GenerationProvider, GenerationQuotaSource, SttProviderId } from '@esl-pipeline/contracts';
 
 export type GenerationSafetyMode = 'off' | 'warn' | 'hard_stop';
 
@@ -384,7 +388,8 @@ export function loadConfig(): BatchBackendConfig {
   warnDeprecatedEnvAlias('ELEVENLABS_API_KEY', 'ESL_STT_PROVIDER_ELEVENLABS_API_KEY');
   warnDeprecatedEnvAlias('ELEVENLABS_API_TOKEN', 'ESL_STT_PROVIDER_ELEVENLABS_API_TOKEN');
 
-  const deepgramApiKey = readString('ESL_STT_PROVIDER_DEEPGRAM_API_KEY') ?? readString('DEEPGRAM_API_KEY');
+  const deepgramApiKey =
+    readString('ESL_STT_PROVIDER_DEEPGRAM_API_KEY') ?? readString('DEEPGRAM_API_KEY');
   const deepgramAccessToken =
     readString('ESL_STT_PROVIDER_DEEPGRAM_ACCESS_TOKEN') ?? readString('DEEPGRAM_ACCESS_TOKEN');
   const deepgramModel = readString(
@@ -401,13 +406,12 @@ export function loadConfig(): BatchBackendConfig {
     readString('ELEVENLABS_API_KEY') ??
     readString('ELEVENLABS_API_TOKEN');
   const elevenLabsSttModel = readString('ESL_STT_PROVIDER_ELEVENLABS_MODEL', 'scribe_v2')!;
-  const googleSttProjectId = readString('GOOGLE_STT_PROJECT_ID') ?? readString('GOOGLE_CLOUD_PROJECT');
+  const googleSttProjectId =
+    readString('GOOGLE_STT_PROJECT_ID') ?? readString('GOOGLE_CLOUD_PROJECT');
   const googleSttLocation = readString('GOOGLE_STT_LOCATION', 'us')!;
   const googleSttRecognizer = readString('GOOGLE_STT_RECOGNIZER');
   const googleSttModel = readString('GOOGLE_STT_MODEL', 'latest_long')!;
-  const googleSttLanguageCodes = (
-    readString('GOOGLE_STT_LANGUAGE_CODES', 'en-US') ?? 'en-US'
-  )
+  const googleSttLanguageCodes = (readString('GOOGLE_STT_LANGUAGE_CODES', 'en-US') ?? 'en-US')
     .split(',')
     .map((value) => value.trim())
     .filter(Boolean);
@@ -431,10 +435,7 @@ export function loadConfig(): BatchBackendConfig {
     'BATCH_TTS_CACHE_MAINTENANCE_INTERVAL_MINUTES',
     60,
   );
-  const ttsCacheMaintenanceLockKey = readString(
-    'BATCH_TTS_CACHE_MAINTENANCE_LOCK_KEY',
-    '910021',
-  )!;
+  const ttsCacheMaintenanceLockKey = readString('BATCH_TTS_CACHE_MAINTENANCE_LOCK_KEY', '910021')!;
   if (ttsCacheMaxAgeDays < 0) {
     throw new Error('BATCH_TTS_CACHE_MAX_AGE_DAYS must be a non-negative integer');
   }
@@ -442,9 +443,7 @@ export function loadConfig(): BatchBackendConfig {
     throw new Error('BATCH_TTS_CACHE_MAX_BYTES must be a non-negative integer');
   }
   if (ttsCacheMaintenanceIntervalMinutes < 0) {
-    throw new Error(
-      'BATCH_TTS_CACHE_MAINTENANCE_INTERVAL_MINUTES must be a non-negative integer',
-    );
+    throw new Error('BATCH_TTS_CACHE_MAINTENANCE_INTERVAL_MINUTES must be a non-negative integer');
   }
   if (!/^-?\d+$/.test(ttsCacheMaintenanceLockKey)) {
     throw new Error(
@@ -538,7 +537,10 @@ export function loadConfig(): BatchBackendConfig {
     'BATCH_BACKEND_OPS_CONTROL_ACTION_TIMEOUT_MS',
     10 * 60 * 1000,
   );
-  const opsControlActionHistoryLimit = readInt('BATCH_BACKEND_OPS_CONTROL_ACTION_HISTORY_LIMIT', 100);
+  const opsControlActionHistoryLimit = readInt(
+    'BATCH_BACKEND_OPS_CONTROL_ACTION_HISTORY_LIMIT',
+    100,
+  );
   if (opsControlActionTimeoutMs < 1000 || opsControlActionTimeoutMs > 60 * 60 * 1000) {
     throw new Error('BATCH_BACKEND_OPS_CONTROL_ACTION_TIMEOUT_MS must be between 1000 and 3600000');
   }
@@ -648,10 +650,7 @@ export function loadConfig(): BatchBackendConfig {
     'GEN_GOOGLE_MODEL_FALLBACK',
     'gemini-2.5-flash-lite',
   )!;
-  const generationGoogleModelTertiary = readString(
-    'GEN_GOOGLE_MODEL_TERTIARY',
-    'gemini-2.5-pro',
-  )!;
+  const generationGoogleModelTertiary = readString('GEN_GOOGLE_MODEL_TERTIARY', 'gemini-2.5-pro')!;
   const generationGoogleAllowedModels = readStringList(
     'GEN_ALLOWED_MODELS_GOOGLE',
     `${generationGoogleModelPrimary},${generationGoogleModelFallback},${generationGoogleModelTertiary}`,
@@ -673,10 +672,7 @@ export function loadConfig(): BatchBackendConfig {
   const generationOpenRouterRetryMax = readInt('GEN_OPENROUTER_RETRY_MAX', 1);
   const generationOpenRouterRetryBackoffMs = readInt('GEN_OPENROUTER_RETRY_BACKOFF_MS', 250);
   const generationOpenRouterRpmBudget = readInt('GEN_OPENROUTER_RPM_BUDGET', 0);
-  const generationOpenRouterDailyRequestBudget = readInt(
-    'GEN_OPENROUTER_DAILY_REQUEST_BUDGET',
-    0,
-  );
+  const generationOpenRouterDailyRequestBudget = readInt('GEN_OPENROUTER_DAILY_REQUEST_BUDGET', 0);
 
   const openAiApiKey = readString('OPENAI_API_KEY');
   const geminiApiKey = readString('GEMINI_API_KEY');

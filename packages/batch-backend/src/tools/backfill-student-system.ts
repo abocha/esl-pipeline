@@ -1,18 +1,18 @@
-import fs from 'node:fs/promises';
 import type { Dirent } from 'node:fs';
+import fs from 'node:fs/promises';
 import path from 'node:path';
 
 import { resolveConfigPaths } from '@esl-pipeline/orchestrator';
 
-import type { BatchBackendConfig } from '../config/env.js';
 import { loadBatchBackendEnv } from '../bootstrap/env.js';
+import type { BatchBackendConfig } from '../config/env.js';
 import { loadConfig } from '../config/env.js';
 import { upsertProfile } from '../domain/profile-repository.js';
-import { upsertStudent } from '../domain/student-repository.js';
 import {
   clearActiveStudentProfileBinding,
   setActiveStudentProfileBinding,
 } from '../domain/student-profile-binding-repository.js';
+import { upsertStudent } from '../domain/student-repository.js';
 import { deriveStudentId, normalizeStudentName } from '../domain/student-utils.js';
 
 interface CliOptions {
@@ -162,9 +162,7 @@ async function loadLegacyProfiles(studentsDir: string): Promise<LegacyStudentPro
       colorPreset: normalizeOptionalString(json.colorPreset as string | null | undefined),
       voices: normalizeVoices(json.voices),
       manifestPreset: normalizeOptionalString(json.manifestPreset as string | null | undefined),
-      accentPreference: normalizeOptionalString(
-        json.accentPreference as string | null | undefined,
-      ),
+      accentPreference: normalizeOptionalString(json.accentPreference as string | null | undefined),
       profileId: normalizeOptionalString(json.profileId as string | null | undefined),
     });
   }

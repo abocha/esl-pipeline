@@ -63,7 +63,7 @@ services:
       FILESYSTEM_UPLOAD_DIR: /app/uploads
     env_file:
       - .env.batch-backend
-    command: [ 'node', 'dist/transport/worker-runner.js' ]
+    command: ['node', 'dist/transport/worker-runner.js']
     restart: unless-stopped
 
   postgres:
@@ -79,9 +79,9 @@ services:
       POSTGRES_DB: esl_batch
     ports:
       - '127.0.0.1:5432:5432'
-    command: [ 'postgres', '-c', 'fsync=off', '-c', 'listen_addresses=*' ]
+    command: ['postgres', '-c', 'fsync=off', '-c', 'listen_addresses=*']
     healthcheck:
-      test: [ 'CMD-SHELL', 'pg_isready -U esl -d esl_batch' ]
+      test: ['CMD-SHELL', 'pg_isready -U esl -d esl_batch']
       interval: 5s
       timeout: 3s
       retries: 10
@@ -92,9 +92,9 @@ services:
       - redis_data:/data
     ports:
       - '127.0.0.1:6379:6379'
-    command: [ 'redis-server', '--save', '', '--appendonly', 'no' ]
+    command: ['redis-server', '--save', '', '--appendonly', 'no']
     healthcheck:
-      test: [ 'CMD', 'redis-cli', 'ping' ]
+      test: ['CMD', 'redis-cli', 'ping']
       interval: 5s
       timeout: 3s
       retries: 10

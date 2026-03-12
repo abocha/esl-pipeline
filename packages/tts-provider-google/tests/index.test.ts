@@ -1,11 +1,12 @@
 import { mkdtemp, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-
-import { parseMarkdownContext } from '@esl-pipeline/pmd';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { parseMarkdownContext } from '@esl-pipeline/pmd';
+
 import * as googleApi from '../src/google.js';
+import type { GoogleVoiceListEntry } from '../src/google.js';
 import {
   buildPronunciationShadowSentenceMp3Google,
   buildStudyTextMp3Google,
@@ -14,7 +15,6 @@ import {
   resolveGoogleSpeakerAssignments,
   resolveGoogleTtsModel,
 } from '../src/index.js';
-import type { GoogleVoiceListEntry } from '../src/google.js';
 
 function mockGoogleVoiceList(voices: GoogleVoiceListEntry[]) {
   vi.spyOn(googleApi, 'listGoogleVoices').mockResolvedValue(voices);
@@ -91,7 +91,9 @@ describe('google provider adapter basics', () => {
   it('caches Google voice catalog for 15 minutes', async () => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date('2026-03-09T00:00:00.000Z'));
-    const spy = vi.spyOn(googleApi, 'listGoogleVoices').mockResolvedValue(createRichEnglishMockVoices());
+    const spy = vi
+      .spyOn(googleApi, 'listGoogleVoices')
+      .mockResolvedValue(createRichEnglishMockVoices());
     await loadGoogleVoicesCatalog();
     await loadGoogleVoicesCatalog();
     expect(spy).toHaveBeenCalledTimes(1);
@@ -324,8 +326,16 @@ describe('google provider adapter basics', () => {
     );
 
     expect(assignments).toEqual([
-      expect.objectContaining({ speaker: 'Alex', voiceId: 'en-US-Chirp3-HD-Aoede', source: 'voiceMap' }),
-      expect.objectContaining({ speaker: 'Yulia', voiceId: 'en-US-Chirp3-HD-Charon', source: 'default' }),
+      expect.objectContaining({
+        speaker: 'Alex',
+        voiceId: 'en-US-Chirp3-HD-Aoede',
+        source: 'voiceMap',
+      }),
+      expect.objectContaining({
+        speaker: 'Yulia',
+        voiceId: 'en-US-Chirp3-HD-Charon',
+        source: 'default',
+      }),
     ]);
   });
 
@@ -360,46 +370,43 @@ describe('google provider adapter basics', () => {
     ['studio', /^en-[A-Z]{2}-Studio-/],
     ['neural2', /^en-[A-Z]{2}-Neural2-/],
     ['wavenet', /^en-[A-Z]{2}-Wavenet-/],
-  ] as const)(
-    'selects only %s voices for auto assignment',
-    async (model, expectedPattern) => {
-      mockGoogleVoiceList(createRichEnglishMockVoices());
-      const workdir = await mkdtemp(join(tmpdir(), `google-tts-provider-model-${model}-`));
-      const voiceMapPath = join(workdir, 'voices.yml');
-      await writeFile(voiceMapPath, 'auto: true\n', 'utf8');
+  ] as const)('selects only %s voices for auto assignment', async (model, expectedPattern) => {
+    mockGoogleVoiceList(createRichEnglishMockVoices());
+    const workdir = await mkdtemp(join(tmpdir(), `google-tts-provider-model-${model}-`));
+    const voiceMapPath = join(workdir, 'voices.yml');
+    await writeFile(voiceMapPath, 'auto: true\n', 'utf8');
 
-      const md = [
-        '---',
-        'student: Example',
-        'speaker_labels: [Narrator, Alex]',
-        'speaker_profiles:',
-        '  - id: Narrator',
-        '    role: narrator',
-        '    gender: female',
-        '  - id: Alex',
-        '    role: student',
-        '    gender: male',
-        '---',
-        '',
-        '## A) Study Text',
-        '',
-        ':::study-text Transcript',
-        'Narrator: Model test line one.',
-        'Alex: Model test line two.',
-        ':::',
-        '',
-      ].join('\n');
+    const md = [
+      '---',
+      'student: Example',
+      'speaker_labels: [Narrator, Alex]',
+      'speaker_profiles:',
+      '  - id: Narrator',
+      '    role: narrator',
+      '    gender: female',
+      '  - id: Alex',
+      '    role: student',
+      '    gender: male',
+      '---',
+      '',
+      '## A) Study Text',
+      '',
+      ':::study-text Transcript',
+      'Narrator: Model test line one.',
+      'Alex: Model test line two.',
+      ':::',
+      '',
+    ].join('\n');
 
-      const result = await buildStudyTextMp3Google(
-        { context: parseMarkdownContext(md), mdPath: join(workdir, 'lesson.md') },
-        { voiceMapPath, outPath: workdir, googleTtsModel: model, preview: true },
-      );
+    const result = await buildStudyTextMp3Google(
+      { context: parseMarkdownContext(md), mdPath: join(workdir, 'lesson.md') },
+      { voiceMapPath, outPath: workdir, googleTtsModel: model, preview: true },
+    );
 
-      for (const voice of result.voices) {
-        expect(voice.voiceId).toMatch(expectedPattern);
-      }
-    },
-  );
+    for (const voice of result.voices) {
+      expect(voice.voiceId).toMatch(expectedPattern);
+    }
+  });
 
   it('returns deterministic assignments for identical input', async () => {
     mockGoogleVoiceList(createRichEnglishMockVoices());
@@ -455,16 +462,18 @@ describe('google provider adapter basics', () => {
     const voiceMapPath = join(workdir, 'voices.yml');
     await writeFile(voiceMapPath, ['default: en-GB-Chirp3-HD-Gacrux'].join('\n'), 'utf8');
 
-    const context = parseMarkdownContext([
-      '---',
-      'student: Example',
-      '---',
-      '',
-      ':::study-text Transcript',
-      'Narrator: Locale should follow voice.',
-      ':::',
-      '',
-    ].join('\n'));
+    const context = parseMarkdownContext(
+      [
+        '---',
+        'student: Example',
+        '---',
+        '',
+        ':::study-text Transcript',
+        'Narrator: Locale should follow voice.',
+        ':::',
+        '',
+      ].join('\n'),
+    );
 
     const synthSpy = vi
       .spyOn(googleApi, 'synthesizeGoogleSpeech')
@@ -493,16 +502,18 @@ describe('google provider adapter basics', () => {
     process.env.ESL_TTS_PROVIDER_GOOGLE_LANGUAGE_CODE = 'en-US';
 
     const workdir = await mkdtemp(join(tmpdir(), 'google-tts-provider-language-locale-shadow-'));
-    const context = parseMarkdownContext([
-      '---',
-      'student: Example',
-      '---',
-      '',
-      '### C. Pronunciation Micro-Focus',
-      '- **Mode:** shadow_sentence',
-      '- **Shadow sentence:** Locale should follow voice.',
-      '',
-    ].join('\n'));
+    const context = parseMarkdownContext(
+      [
+        '---',
+        'student: Example',
+        '---',
+        '',
+        '### C. Pronunciation Micro-Focus',
+        '- **Mode:** shadow_sentence',
+        '- **Shadow sentence:** Locale should follow voice.',
+        '',
+      ].join('\n'),
+    );
 
     const synthSpy = vi
       .spyOn(googleApi, 'synthesizeGoogleSpeech')
@@ -534,16 +545,18 @@ describe('google cache-key regression coverage', () => {
     const voiceMapPath = join(workdir, 'voices.yml');
     await writeFile(voiceMapPath, 'default: en-US-Chirp3-HD-Charon\n', 'utf8');
 
-    const context = parseMarkdownContext([
-      '---',
-      'student: Example',
-      '---',
-      '',
-      ':::study-text Transcript',
-      'Narrator: Cache key language regression test.',
-      ':::',
-      '',
-    ].join('\n'));
+    const context = parseMarkdownContext(
+      [
+        '---',
+        'student: Example',
+        '---',
+        '',
+        ':::study-text Transcript',
+        'Narrator: Cache key language regression test.',
+        ':::',
+        '',
+      ].join('\n'),
+    );
 
     const synthSpy = vi
       .spyOn(googleApi, 'synthesizeGoogleSpeech')
@@ -569,16 +582,18 @@ describe('google cache-key regression coverage', () => {
     const voiceMapPath = join(workdir, 'voices.yml');
     await writeFile(voiceMapPath, 'default: en-US-Chirp3-HD-Charon\n', 'utf8');
 
-    const context = parseMarkdownContext([
-      '---',
-      'student: Example',
-      '---',
-      '',
-      ':::study-text Transcript',
-      'Narrator: Cache key model regression test.',
-      ':::',
-      '',
-    ].join('\n'));
+    const context = parseMarkdownContext(
+      [
+        '---',
+        'student: Example',
+        '---',
+        '',
+        ':::study-text Transcript',
+        'Narrator: Cache key model regression test.',
+        ':::',
+        '',
+      ].join('\n'),
+    );
 
     const synthSpy = vi
       .spyOn(googleApi, 'synthesizeGoogleSpeech')
@@ -600,16 +615,18 @@ describe('google cache-key regression coverage', () => {
 
   it('regenerates shadow sentence when googleLanguageCode changes with force=false', async () => {
     const workdir = await mkdtemp(join(tmpdir(), 'google-tts-provider-cache-shadow-'));
-    const context = parseMarkdownContext([
-      '---',
-      'student: Example',
-      '---',
-      '',
-      '### C. Pronunciation Micro-Focus',
-      '- **Mode:** shadow_sentence',
-      '- **Shadow sentence:** Language-sensitive pronunciation sample.',
-      '',
-    ].join('\n'));
+    const context = parseMarkdownContext(
+      [
+        '---',
+        'student: Example',
+        '---',
+        '',
+        '### C. Pronunciation Micro-Focus',
+        '- **Mode:** shadow_sentence',
+        '- **Shadow sentence:** Language-sensitive pronunciation sample.',
+        '',
+      ].join('\n'),
+    );
 
     const synthSpy = vi
       .spyOn(googleApi, 'synthesizeGoogleSpeech')

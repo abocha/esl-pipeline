@@ -24,9 +24,8 @@ describe('infrastructure/tts-cache-maintenance-coordinator', () => {
   });
 
   it('short-circuits before lock acquisition when maintenance is disabled', async () => {
-    const { maybeRunTtsCacheMaintenanceWithPgLock } = await import(
-      '../src/infrastructure/tts-cache-maintenance-coordinator.js'
-    );
+    const { maybeRunTtsCacheMaintenanceWithPgLock } =
+      await import('../src/infrastructure/tts-cache-maintenance-coordinator.js');
 
     const result = await maybeRunTtsCacheMaintenanceWithPgLock({
       cacheDir: '/tmp/tts-cache',
@@ -54,13 +53,12 @@ describe('infrastructure/tts-cache-maintenance-coordinator', () => {
       .mockResolvedValueOnce({ rows: [{ pg_advisory_lock_shared: true }] })
       .mockResolvedValueOnce({ rows: [{ pg_advisory_unlock_shared: true }] });
 
-    mockWithPgClient.mockImplementationOnce(async (fn: (client: { query: typeof query }) => unknown) =>
-      fn({ query }),
+    mockWithPgClient.mockImplementationOnce(
+      async (fn: (client: { query: typeof query }) => unknown) => fn({ query }),
     );
 
-    const { withTtsCacheActivitySharedLock } = await import(
-      '../src/infrastructure/tts-cache-maintenance-coordinator.js'
-    );
+    const { withTtsCacheActivitySharedLock } =
+      await import('../src/infrastructure/tts-cache-maintenance-coordinator.js');
 
     const result = await withTtsCacheActivitySharedLock({ lockKey: '910021' }, async () => 'done');
 
@@ -79,13 +77,12 @@ describe('infrastructure/tts-cache-maintenance-coordinator', () => {
       .mockResolvedValueOnce({ rows: [{ pg_advisory_lock_shared: true }] })
       .mockResolvedValueOnce({ rows: [{ pg_advisory_unlock_shared: true }] });
 
-    mockWithPgClient.mockImplementationOnce(async (fn: (client: { query: typeof query }) => unknown) =>
-      fn({ query }),
+    mockWithPgClient.mockImplementationOnce(
+      async (fn: (client: { query: typeof query }) => unknown) => fn({ query }),
     );
 
-    const { withTtsCacheActivitySharedLock } = await import(
-      '../src/infrastructure/tts-cache-maintenance-coordinator.js'
-    );
+    const { withTtsCacheActivitySharedLock } =
+      await import('../src/infrastructure/tts-cache-maintenance-coordinator.js');
 
     await expect(
       withTtsCacheActivitySharedLock({ lockKey: '910021' }, async () => {
@@ -128,9 +125,8 @@ describe('infrastructure/tts-cache-maintenance-coordinator', () => {
       fn({ query }),
     );
 
-    const { maybeRunTtsCacheMaintenanceWithPgLock, withTtsCacheActivitySharedLock } = await import(
-      '../src/infrastructure/tts-cache-maintenance-coordinator.js'
-    );
+    const { maybeRunTtsCacheMaintenanceWithPgLock, withTtsCacheActivitySharedLock } =
+      await import('../src/infrastructure/tts-cache-maintenance-coordinator.js');
 
     const result = await withTtsCacheActivitySharedLock({ lockKey: '910021' }, () =>
       maybeRunTtsCacheMaintenanceWithPgLock({
@@ -163,8 +159,8 @@ describe('infrastructure/tts-cache-maintenance-coordinator', () => {
       .mockResolvedValueOnce({ rows: [{ acquired: true }] })
       .mockResolvedValueOnce({ rows: [{ pg_advisory_unlock: true }] });
 
-    mockWithPgClient.mockImplementationOnce(async (fn: (client: { query: typeof query }) => unknown) =>
-      fn({ query }),
+    mockWithPgClient.mockImplementationOnce(
+      async (fn: (client: { query: typeof query }) => unknown) => fn({ query }),
     );
     mockMaybeRunTtsCacheMaintenance.mockResolvedValueOnce({
       ran: true,
@@ -174,9 +170,8 @@ describe('infrastructure/tts-cache-maintenance-coordinator', () => {
       remainingBytes: 128,
     });
 
-    const { maybeRunTtsCacheMaintenanceWithPgLock } = await import(
-      '../src/infrastructure/tts-cache-maintenance-coordinator.js'
-    );
+    const { maybeRunTtsCacheMaintenanceWithPgLock } =
+      await import('../src/infrastructure/tts-cache-maintenance-coordinator.js');
 
     const result = await maybeRunTtsCacheMaintenanceWithPgLock({
       cacheDir: '/tmp/tts-cache',
@@ -204,13 +199,12 @@ describe('infrastructure/tts-cache-maintenance-coordinator', () => {
   it('skips maintenance when advisory lock is already held by another worker', async () => {
     const query = vi.fn().mockResolvedValueOnce({ rows: [{ acquired: false }] });
 
-    mockWithPgClient.mockImplementationOnce(async (fn: (client: { query: typeof query }) => unknown) =>
-      fn({ query }),
+    mockWithPgClient.mockImplementationOnce(
+      async (fn: (client: { query: typeof query }) => unknown) => fn({ query }),
     );
 
-    const { maybeRunTtsCacheMaintenanceWithPgLock } = await import(
-      '../src/infrastructure/tts-cache-maintenance-coordinator.js'
-    );
+    const { maybeRunTtsCacheMaintenanceWithPgLock } =
+      await import('../src/infrastructure/tts-cache-maintenance-coordinator.js');
 
     const result = await maybeRunTtsCacheMaintenanceWithPgLock({
       cacheDir: '/tmp/tts-cache',
@@ -238,14 +232,13 @@ describe('infrastructure/tts-cache-maintenance-coordinator', () => {
       .mockResolvedValueOnce({ rows: [{ acquired: true }] })
       .mockResolvedValueOnce({ rows: [{ pg_advisory_unlock: true }] });
 
-    mockWithPgClient.mockImplementationOnce(async (fn: (client: { query: typeof query }) => unknown) =>
-      fn({ query }),
+    mockWithPgClient.mockImplementationOnce(
+      async (fn: (client: { query: typeof query }) => unknown) => fn({ query }),
     );
     mockMaybeRunTtsCacheMaintenance.mockRejectedValueOnce(new Error('maintenance failed'));
 
-    const { maybeRunTtsCacheMaintenanceWithPgLock } = await import(
-      '../src/infrastructure/tts-cache-maintenance-coordinator.js'
-    );
+    const { maybeRunTtsCacheMaintenanceWithPgLock } =
+      await import('../src/infrastructure/tts-cache-maintenance-coordinator.js');
 
     await expect(
       maybeRunTtsCacheMaintenanceWithPgLock({
@@ -266,8 +259,8 @@ describe('infrastructure/tts-cache-maintenance-coordinator', () => {
       .mockResolvedValueOnce({ rows: [{ acquired: true }] })
       .mockRejectedValueOnce(new Error('unlock failed'));
 
-    mockWithPgClient.mockImplementationOnce(async (fn: (client: { query: typeof query }) => unknown) =>
-      fn({ query }),
+    mockWithPgClient.mockImplementationOnce(
+      async (fn: (client: { query: typeof query }) => unknown) => fn({ query }),
     );
     mockMaybeRunTtsCacheMaintenance.mockResolvedValueOnce({
       ran: true,
@@ -277,9 +270,8 @@ describe('infrastructure/tts-cache-maintenance-coordinator', () => {
       remainingBytes: 512,
     });
 
-    const { maybeRunTtsCacheMaintenanceWithPgLock } = await import(
-      '../src/infrastructure/tts-cache-maintenance-coordinator.js'
-    );
+    const { maybeRunTtsCacheMaintenanceWithPgLock } =
+      await import('../src/infrastructure/tts-cache-maintenance-coordinator.js');
 
     const result = await maybeRunTtsCacheMaintenanceWithPgLock({
       cacheDir: '/tmp/tts-cache',
@@ -306,13 +298,12 @@ describe('infrastructure/tts-cache-maintenance-coordinator', () => {
       .mockResolvedValueOnce({ rows: [{ pg_advisory_lock_shared: true }] })
       .mockRejectedValueOnce(new Error('shared unlock failed'));
 
-    mockWithPgClient.mockImplementationOnce(async (fn: (client: { query: typeof query }) => unknown) =>
-      fn({ query }),
+    mockWithPgClient.mockImplementationOnce(
+      async (fn: (client: { query: typeof query }) => unknown) => fn({ query }),
     );
 
-    const { withTtsCacheActivitySharedLock } = await import(
-      '../src/infrastructure/tts-cache-maintenance-coordinator.js'
-    );
+    const { withTtsCacheActivitySharedLock } =
+      await import('../src/infrastructure/tts-cache-maintenance-coordinator.js');
 
     const result = await withTtsCacheActivitySharedLock({ lockKey: '910021' }, async () => 'ok');
 

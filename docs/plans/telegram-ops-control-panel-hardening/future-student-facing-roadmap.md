@@ -5,6 +5,7 @@
 This roadmap captures founder intent from **March 11, 2026** for extending the Telegram bot beyond internal ops-control use.
 
 Current confidence:
+
 - Confirmed: rich student-facing messaging and Telegram-to-website account association.
 - Uncertain: direct student conversation mode.
 
@@ -16,6 +17,7 @@ Recent `A2` baseline now in place (2026-03-11):
 4. Bot can recover title/icon/audio links from published HTML when job markdown payload is path-only.
 
 Locked naming in this roadmap:
+
 1. `A` = Ops Control Bot
 2. `B` = Teacher Workflow Bot
 3. `C` = Student Self-Service Bot

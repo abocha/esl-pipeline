@@ -1,8 +1,8 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { rerunAudio } from '../src/application/job-actions/rerun-audio.js';
-import * as jobEvents from '../src/domain/job-events.js';
 import { JobActionType } from '../src/domain/job-actions.js';
+import * as jobEvents from '../src/domain/job-events.js';
 import * as jobRepository from '../src/domain/job-repository.js';
 import * as queueModule from '../src/infrastructure/queue-bullmq.js';
 

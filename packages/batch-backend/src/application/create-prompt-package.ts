@@ -4,19 +4,19 @@ import type { VoiceCapabilitiesSnapshot } from '@esl-pipeline/contracts';
 
 import type { BatchBackendConfig } from '../config/env.js';
 import { loadConfig } from '../config/env.js';
-import type { PromptPackageRecord } from '../domain/prompt-package-model.js';
-import { insertPromptPackage } from '../domain/prompt-package-repository.js';
+import type { ProfileRevisionRecord } from '../domain/profile-revision-model.js';
 import {
   activateProfileRevision,
   getActiveProfileRevision,
 } from '../domain/profile-revision-repository.js';
-import type { ProfileRevisionRecord } from '../domain/profile-revision-model.js';
+import type { PromptPackageRecord } from '../domain/prompt-package-model.js';
+import { insertPromptPackage } from '../domain/prompt-package-repository.js';
+import { getRecordingById } from '../domain/recording-repository.js';
+import type { TemplateRevisionRecord } from '../domain/template-revision-model.js';
 import {
   activateTemplateRevision,
   getActiveTemplateRevision,
 } from '../domain/template-revision-repository.js';
-import type { TemplateRevisionRecord } from '../domain/template-revision-model.js';
-import { getRecordingById } from '../domain/recording-repository.js';
 import { getTranscriptByRecordingId } from '../domain/transcript-repository.js';
 import type { TranscriptionStorage } from '../infrastructure/transcription-storage.js';
 import {
@@ -173,14 +173,16 @@ export async function createPromptPackage(
   const bindingLookupAt =
     params.bindingEffectiveAt && !Number.isNaN(params.bindingEffectiveAt.getTime())
       ? params.bindingEffectiveAt
-      : recording?.createdAt ?? new Date();
+      : (recording?.createdAt ?? new Date());
 
   let studentProfileId: string | null = null;
   if (recording?.studentId) {
     const studentProfile = await students.getById(recording.studentId, { config });
     studentProfileId = studentProfile?.profileId ?? null;
     if (!studentProfileId) {
-      const binding = await bindings.resolveAt(recording.studentId, bindingLookupAt).catch(() => null);
+      const binding = await bindings
+        .resolveAt(recording.studentId, bindingLookupAt)
+        .catch(() => null);
       studentProfileId = binding?.profileId ?? null;
     }
   }
@@ -325,7 +327,9 @@ export function toPromptPackageResponse(
             capabilities:
               promptPackage.resolvedVoiceCapabilitiesSnapshot ??
               ({
-                generatedAt: (promptPackage.resolvedVoiceCapabilitiesGeneratedAt as Date).toISOString(),
+                generatedAt: (
+                  promptPackage.resolvedVoiceCapabilitiesGeneratedAt as Date
+                ).toISOString(),
                 role: ['narrator', 'teacher', 'student', 'system'],
                 gender: ['male', 'female', 'neutral', 'child'],
                 age: ['child', 'teen', 'young', 'adult', 'middle_aged', 'senior', 'universal'],

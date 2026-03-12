@@ -1,12 +1,12 @@
 // packages/batch-backend/src/application/job-actions/action-handler.ts
 //
 // Central dispatcher for job actions
+import { insertJobActionHistory } from '../../domain/job-action-history-repository.js';
 import {
-  JobActionType,
   type AnyJobAction,
   type JobActionResult,
+  JobActionType,
 } from '../../domain/job-actions.js';
-import { insertJobActionHistory } from '../../domain/job-action-history-repository.js';
 import { logger } from '../../infrastructure/logger.js';
 import { cancelJob } from './cancel-job.js';
 import { editMetadata } from './edit-metadata.js';
@@ -113,7 +113,8 @@ export function getActionMetadata(): Record<JobActionType, ActionMetadata> {
     },
     [JobActionType.RERUN_PUBLISH]: {
       label: 'Rerun Publish',
-      description: 'Rerun publish/attach stage while reusing existing audio artifacts when possible',
+      description:
+        'Rerun publish/attach stage while reusing existing audio artifacts when possible',
       requiresFields: [],
       implemented: true,
     },

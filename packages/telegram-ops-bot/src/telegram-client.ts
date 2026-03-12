@@ -1,10 +1,17 @@
-import type { ApiMethods, ApiResponse, ChatFullInfo, ForumTopic, Message, Update, UserFromGetMe } from '@grammyjs/types';
+import type {
+  ApiMethods,
+  ApiResponse,
+  ChatFullInfo,
+  ForumTopic,
+  Message,
+  Update,
+  UserFromGetMe,
+} from '@grammyjs/types';
 
 type TelegramApi = ApiMethods<never>;
 type TelegramMethod = keyof TelegramApi;
-type MethodArgs<M extends TelegramMethod> = Parameters<TelegramApi[M]> extends []
-  ? undefined
-  : Parameters<TelegramApi[M]>[0];
+type MethodArgs<M extends TelegramMethod> =
+  Parameters<TelegramApi[M]> extends [] ? undefined : Parameters<TelegramApi[M]>[0];
 type MethodResult<M extends TelegramMethod> = ReturnType<TelegramApi[M]>;
 
 export class TelegramApiError extends Error {

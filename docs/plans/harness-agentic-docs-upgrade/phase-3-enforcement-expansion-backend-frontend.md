@@ -55,4 +55,3 @@ Expand docs enforcement coverage from Core + Active Ops to active non-archive do
    Mitigation: move truly historical content to archive and keep active subset enforced.
 2. Risk: routing drift due to missing cross-links.
    Mitigation: add required route hints only for docs that are true route anchors.
-

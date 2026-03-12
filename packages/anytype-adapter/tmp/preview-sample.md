@@ -9,7 +9,7 @@ topic: Grammar Review
 
 ## Introduction
 
-Welcome to this **lesson preview**. This page demonstrates the *Inter* font, hero section alignment, and the new dark mode support.
+Welcome to this **lesson preview**. This page demonstrates the _Inter_ font, hero section alignment, and the new dark mode support.
 
 Here's some `inline code` styling which is used for emphasis in lessons.
 
@@ -32,12 +32,16 @@ Here is some study text that students can expand to review important concepts. P
 ::: column-list
 
 ::: column
+
 ### Left Column
+
 This content appears on the left side on wider screens.
 :::
 
 ::: column
+
 ### Right Column
+
 This content appears on the right side on wider screens.
 :::
 

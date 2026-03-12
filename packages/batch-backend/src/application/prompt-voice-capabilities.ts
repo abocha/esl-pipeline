@@ -7,8 +7,18 @@ import { loadGoogleVoicesCatalog } from '@esl-pipeline/tts-provider-google';
 
 const VOICE_CATALOG_RELATIVE_PATH = 'packages/orchestrator/configs/elevenlabs.voices.json';
 const CAPABILITY_BLOCK_PATTERN = /```yaml\s*\n# CAPABILITY SNAPSHOT[^\n]*\n[\s\S]*?\n```/m;
-const CANONICAL_ROLE: VoiceCapabilitiesSnapshot['role'] = ['narrator', 'teacher', 'student', 'system'];
-const CANONICAL_GENDER: VoiceCapabilitiesSnapshot['gender'] = ['male', 'female', 'neutral', 'child'];
+const CANONICAL_ROLE: VoiceCapabilitiesSnapshot['role'] = [
+  'narrator',
+  'teacher',
+  'student',
+  'system',
+];
+const CANONICAL_GENDER: VoiceCapabilitiesSnapshot['gender'] = [
+  'male',
+  'female',
+  'neutral',
+  'child',
+];
 const CANONICAL_AGE: VoiceCapabilitiesSnapshot['age'] = [
   'child',
   'teen',
@@ -104,7 +114,9 @@ async function loadMergedVoiceCapabilitiesSnapshot(): Promise<VoiceCapabilitiesS
     loadElevenLabsVoiceCapabilitiesSnapshot(),
     loadGoogleVoiceCapabilitiesSnapshot(),
   ]);
-  return mergeVoiceCapabilitySnapshots([elevenLabs, google].filter(Boolean) as VoiceCapabilitiesSnapshot[]);
+  return mergeVoiceCapabilitySnapshots(
+    [elevenLabs, google].filter(Boolean) as VoiceCapabilitiesSnapshot[],
+  );
 }
 
 function mergeVoiceCapabilitySnapshots(
@@ -117,7 +129,9 @@ function mergeVoiceCapabilitySnapshots(
     .filter((value) => Number.isFinite(value))
     .sort((a, b) => b - a)[0];
   const generatedAtIso =
-    typeof generatedAt === 'number' ? new Date(generatedAt).toISOString() : new Date().toISOString();
+    typeof generatedAt === 'number'
+      ? new Date(generatedAt).toISOString()
+      : new Date().toISOString();
 
   const role = new Set<string>();
   const gender = new Set<string>();
@@ -136,7 +150,9 @@ function mergeVoiceCapabilitySnapshots(
   return normalizeSnapshot({
     generatedAt: generatedAtIso,
     role: [...(role.size > 0 ? role : CANONICAL_ROLE)] as VoiceCapabilitiesSnapshot['role'],
-    gender: [...(gender.size > 0 ? gender : CANONICAL_GENDER)] as VoiceCapabilitiesSnapshot['gender'],
+    gender: [
+      ...(gender.size > 0 ? gender : CANONICAL_GENDER),
+    ] as VoiceCapabilitiesSnapshot['gender'],
     age: [...(age.size > 0 ? age : CANONICAL_AGE)] as VoiceCapabilitiesSnapshot['age'],
     accent: [...accent],
     style: [...style],
@@ -205,7 +221,8 @@ function parseCapabilitiesSnapshot(catalog: VoiceCatalogLike): VoiceCapabilities
   }
 
   return normalizeSnapshot({
-    generatedAt: typeof catalog.generatedAt === 'string' ? catalog.generatedAt : new Date().toISOString(),
+    generatedAt:
+      typeof catalog.generatedAt === 'string' ? catalog.generatedAt : new Date().toISOString(),
     role: [...CANONICAL_ROLE],
     gender: [...(genders.size > 0 ? genders : CANONICAL_GENDER)],
     age: [...(ages.size > 0 ? ages : CANONICAL_AGE)],
@@ -220,19 +237,30 @@ function normalizeSnapshot(snapshot: VoiceCapabilitiesSnapshot): VoiceCapabiliti
     generatedAt: Number.isNaN(generatedAt.getTime())
       ? new Date().toISOString()
       : generatedAt.toISOString(),
-    role: [...new Set(snapshot.role.map((value) => normalizeEnum(value)))].sort() as VoiceCapabilitiesSnapshot['role'],
-    gender: [...new Set(snapshot.gender.map((value) => normalizeEnum(value)))].sort() as VoiceCapabilitiesSnapshot['gender'],
-    age: [...new Set(snapshot.age.map((value) => normalizeEnum(value)))].sort() as VoiceCapabilitiesSnapshot['age'],
-    accent: [...new Set(snapshot.accent.map((value) => normalizeAccent(value)).filter(Boolean))].sort(),
-    style: [...new Set(snapshot.style.map((value) => normalizeStyle(value)).filter(Boolean))].sort(),
+    role: [
+      ...new Set(snapshot.role.map((value) => normalizeEnum(value))),
+    ].sort() as VoiceCapabilitiesSnapshot['role'],
+    gender: [
+      ...new Set(snapshot.gender.map((value) => normalizeEnum(value))),
+    ].sort() as VoiceCapabilitiesSnapshot['gender'],
+    age: [
+      ...new Set(snapshot.age.map((value) => normalizeEnum(value))),
+    ].sort() as VoiceCapabilitiesSnapshot['age'],
+    accent: [
+      ...new Set(snapshot.accent.map((value) => normalizeAccent(value)).filter(Boolean)),
+    ].sort(),
+    style: [
+      ...new Set(snapshot.style.map((value) => normalizeStyle(value)).filter(Boolean)),
+    ].sort(),
   };
 }
 
-function injectCapabilitiesBlock(templateContent: string, snapshot: VoiceCapabilitiesSnapshot): string {
+function injectCapabilitiesBlock(
+  templateContent: string,
+  snapshot: VoiceCapabilitiesSnapshot,
+): string {
   if (!templateContent.includes('# CAPABILITY SNAPSHOT')) {
-    throw new Error(
-      'Voice-aligned prompt template is missing the capability snapshot marker.',
-    );
+    throw new Error('Voice-aligned prompt template is missing the capability snapshot marker.');
   }
 
   const replacement = [
@@ -250,9 +278,7 @@ function injectCapabilitiesBlock(templateContent: string, snapshot: VoiceCapabil
     return templateContent.replace(CAPABILITY_BLOCK_PATTERN, replacement);
   }
 
-  throw new Error(
-    'Voice-aligned prompt template capability snapshot block format is invalid.',
-  );
+  throw new Error('Voice-aligned prompt template capability snapshot block format is invalid.');
 }
 
 function formatInlineList(values: readonly string[]): string {

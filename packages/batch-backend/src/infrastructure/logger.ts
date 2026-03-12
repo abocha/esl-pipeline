@@ -4,7 +4,6 @@
 // - Pretty printing in development only.
 // - Supports child loggers with jobId/runId bindings.
 import { createRequire } from 'node:module';
-
 import pino from 'pino';
 
 export interface LogFields {

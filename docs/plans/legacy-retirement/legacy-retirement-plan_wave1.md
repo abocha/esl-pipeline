@@ -1,10 +1,12 @@
 ## Wave 1 Implementation Plan (Step-by-Step, Single PR, Commit-by-Item)
 
 ### Summary
+
 Implement Wave 1 in a new branch with one commit per backlog item, then open one combined Wave 1 PR.  
 Per your decisions, proceed now with unblocked items (`LR-007`, `LR-008`, `LR-009`) and block `LR-006`/`LR-010` until dependency evidence is provided in PR comments.
 
 ### Implementation Sequence
+
 1. Branching and PR shape
    - Create `codex/legacy-retirement-wave1` from `main`.
    - Use one commit per item (local review checkpoints), then one consolidated Wave 1 PR with `release:patch`.
@@ -34,6 +36,7 @@ Per your decisions, proceed now with unblocked items (`LR-007`, `LR-008`, `LR-00
    - Review ping: after this commit.
 
 ### Blocked Items and Unblocking Evidence
+
 1. `LR-006` remains blocked until prod-like evidence is attached in PR comments:
    - Run and paste outputs for the two reconciliation queries already documented in `docs/plans/postgres-hardening-offline-migration/offline-data-migration-runbook.md`:
      - `null_but_derivable` count
@@ -45,6 +48,7 @@ Per your decisions, proceed now with unblocked items (`LR-007`, `LR-008`, `LR-00
    - Required unblock condition: migration completion confirmed by captured output, then retire `migrateFileToS3`.
 
 ### Test Plan
+
 1. Per-item required tests
    - `LR-007`: `pnpm --filter @esl-pipeline/batch-backend test -- infrastructure.job-event-redis-bridge.test.ts`
    - `LR-008`: `pnpm --filter @esl-pipeline/batch-backend test -- domain.settings-repository.test.ts`
@@ -58,11 +62,13 @@ Per your decisions, proceed now with unblocked items (`LR-007`, `LR-008`, `LR-00
    - Ensure PR has exactly one label: `release:patch`.
 
 ### Assumptions and Defaults
+
 1. Single Wave 1 PR, with one commit per item and review ping after each commit.
 2. `LR-006` and `LR-010` are hard-blocked until evidence is provided (no code changes for those items before unblock).
 3. No public API contract changes are expected for unblocked Wave 1 items; all are internal/runtime hardening.
 4. Inventory statuses are updated as work progresses (`in_progress`/`done` for unblocked items, `blocked` for gated items).
 
 ### Closure Note
+
 Wave 1 execution is complete.
 Any newly discovered runtime filesystem fallback retirements are tracked in Wave 2 planning and sequencing.

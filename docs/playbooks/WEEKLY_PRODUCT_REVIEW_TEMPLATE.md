@@ -19,14 +19,14 @@
 
 ## 1) Readiness Scorecard Snapshot
 
-| Metric | Current | Previous | Status (`G/Y/R`) | Notes |
-| --- | --- | --- | --- | --- |
-| Median time to publish assignment |  |  |  |  |
-| Assignment end-to-end success rate |  |  |  |  |
-| First-session tutor success rate |  |  |  |  |
-| Support interventions per tutor/week |  |  |  |  |
-| Weekly tutor retention (4+ weeks) |  |  |  |  |
-| Tutor-reported weekly time saved |  |  |  |  |
+| Metric                               | Current | Previous | Status (`G/Y/R`) | Notes |
+| ------------------------------------ | ------- | -------- | ---------------- | ----- |
+| Median time to publish assignment    |         |          |                  |       |
+| Assignment end-to-end success rate   |         |          |                  |       |
+| First-session tutor success rate     |         |          |                  |       |
+| Support interventions per tutor/week |         |          |                  |       |
+| Weekly tutor retention (4+ weeks)    |         |          |                  |       |
+| Tutor-reported weekly time saved     |         |          |                  |       |
 
 ## 2) Top Tutor Pain Signals (Evidence)
 
@@ -60,12 +60,12 @@
 
 ## 5) Risk and Threshold Review
 
-| Risk | Current signal | Threshold crossed? | Action |
-| --- | --- | --- | --- |
-| Provider spend spike |  |  |  |
-| Onboarding failure |  |  |  |
-| Support overload |  |  |  |
-| Ledger trust mismatch |  |  |  |
+| Risk                  | Current signal | Threshold crossed? | Action |
+| --------------------- | -------------- | ------------------ | ------ |
+| Provider spend spike  |                |                    |        |
+| Onboarding failure    |                |                    |        |
+| Support overload      |                |                    |        |
+| Ledger trust mismatch |                |                    |        |
 
 ## 6) Decision Log (Reality Anchors)
 

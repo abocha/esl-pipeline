@@ -61,7 +61,12 @@ describe('telegram runner mention handling', () => {
             },
           },
         ]),
-        getMe: vi.fn(async () => ({ id: 999, is_bot: true, first_name: 'ESL', username: 'esl_ops_bot' })),
+        getMe: vi.fn(async () => ({
+          id: 999,
+          is_bot: true,
+          first_name: 'ESL',
+          username: 'esl_ops_bot',
+        })),
         sendHtmlMessage: vi.fn(async () => {}),
       } as never,
       backend: {
@@ -95,7 +100,12 @@ describe('telegram runner mention handling', () => {
       config: createConfig(),
       telegram: {
         getUpdates: vi.fn(async () => []),
-        getMe: vi.fn(async () => ({ id: 999, is_bot: true, first_name: 'ESL', username: 'esl_ops_bot' })),
+        getMe: vi.fn(async () => ({
+          id: 999,
+          is_bot: true,
+          first_name: 'ESL',
+          username: 'esl_ops_bot',
+        })),
         sendHtmlMessage,
       } as never,
       backend: {
@@ -113,37 +123,44 @@ describe('telegram runner mention handling', () => {
     });
 
     (runner as unknown as { botUsername: string | null }).botUsername = 'esl_ops_bot';
-    await (runner as unknown as { processUpdate: (update: unknown) => Promise<void> }).processUpdate(
-      createUpdate('/backup@another_bot nightly'),
-    );
+    await (
+      runner as unknown as { processUpdate: (update: unknown) => Promise<void> }
+    ).processUpdate(createUpdate('/backup@another_bot nightly'));
 
     expect(enqueueOpsAction).toHaveBeenCalledTimes(0);
     expect(sendHtmlMessage).toHaveBeenCalledTimes(0);
   });
 
   it('executes commands addressed to this bot', async () => {
-    const enqueueOpsAction = vi.fn(async (): Promise<OpsActionStatus> => ({
-      operationId: 'op-1',
-      action: 'backup_upload',
-      state: 'queued',
-      requestedAt: '2026-03-11T00:00:00.000Z',
-      startedAt: null,
-      finishedAt: null,
-      requestedBy: 'telegram',
-      requestedByUserId: 'user-1',
-      message: 'queued',
-      command: 'echo backup',
-      exitCode: null,
-      stdoutTail: null,
-      stderrTail: null,
-    }));
+    const enqueueOpsAction = vi.fn(
+      async (): Promise<OpsActionStatus> => ({
+        operationId: 'op-1',
+        action: 'backup_upload',
+        state: 'queued',
+        requestedAt: '2026-03-11T00:00:00.000Z',
+        startedAt: null,
+        finishedAt: null,
+        requestedBy: 'telegram',
+        requestedByUserId: 'user-1',
+        message: 'queued',
+        command: 'echo backup',
+        exitCode: null,
+        stdoutTail: null,
+        stderrTail: null,
+      }),
+    );
     const sendHtmlMessage = vi.fn(async () => {});
 
     const runner = new TelegramOpsBotRunner({
       config: createConfig(),
       telegram: {
         getUpdates: vi.fn(async () => []),
-        getMe: vi.fn(async () => ({ id: 999, is_bot: true, first_name: 'ESL', username: 'esl_ops_bot' })),
+        getMe: vi.fn(async () => ({
+          id: 999,
+          is_bot: true,
+          first_name: 'ESL',
+          username: 'esl_ops_bot',
+        })),
         sendHtmlMessage,
       } as never,
       backend: {
@@ -161,9 +178,9 @@ describe('telegram runner mention handling', () => {
     });
 
     (runner as unknown as { botUsername: string | null }).botUsername = 'esl_ops_bot';
-    await (runner as unknown as { processUpdate: (update: unknown) => Promise<void> }).processUpdate(
-      createUpdate('/backup@esl_ops_bot nightly'),
-    );
+    await (
+      runner as unknown as { processUpdate: (update: unknown) => Promise<void> }
+    ).processUpdate(createUpdate('/backup@esl_ops_bot nightly'));
 
     expect(enqueueOpsAction).toHaveBeenCalledTimes(1);
     expect(enqueueOpsAction).toHaveBeenCalledWith({

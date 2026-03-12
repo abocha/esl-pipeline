@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import { PoolClient } from 'pg';
+
 import type { SttProviderId } from '@esl-pipeline/contracts';
 
 import { withPgClient } from '../infrastructure/db.js';

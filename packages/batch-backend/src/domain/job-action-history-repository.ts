@@ -77,9 +77,7 @@ export async function insertJobActionHistory(
   return mapRow(row);
 }
 
-export async function listJobActionHistoryForJob(
-  jobId: string,
-): Promise<JobActionHistoryRecord[]> {
+export async function listJobActionHistoryForJob(jobId: string): Promise<JobActionHistoryRecord[]> {
   const rows = await withPgClient(async (client: PoolClient) => {
     const result = await client.query(
       `

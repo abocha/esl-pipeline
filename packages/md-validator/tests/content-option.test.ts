@@ -10,16 +10,16 @@ describe('validateMarkdown with markdown input', () => {
     { timeout: CONTENT_OPTION_TEST_TIMEOUT_MS },
     async () => {
       vi.resetModules();
-    const readFileMock = vi.fn(() => {
-      throw new Error('readFile should not be called when content is provided');
-    });
-    vi.doMock('node:fs/promises', async () => {
-      const actual = await vi.importActual<typeof import('node:fs/promises')>('node:fs/promises');
-      return {
-        ...actual,
-        readFile: readFileMock,
-      };
-    });
+      const readFileMock = vi.fn(() => {
+        throw new Error('readFile should not be called when content is provided');
+      });
+      vi.doMock('node:fs/promises', async () => {
+        const actual = await vi.importActual<typeof import('node:fs/promises')>('node:fs/promises');
+        return {
+          ...actual,
+          readFile: readFileMock,
+        };
+      });
 
       try {
         // Re-import validateMarkdown to pick up mocked fs/promises

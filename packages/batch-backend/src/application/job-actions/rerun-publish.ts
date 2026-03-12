@@ -4,8 +4,8 @@
 import { z } from 'zod';
 
 import type { JobActionResult, RerunPublishAction } from '../../domain/job-actions.js';
-import { publishJobEvent } from '../../domain/job-events.js';
 import { JobActionType } from '../../domain/job-actions.js';
+import { publishJobEvent } from '../../domain/job-events.js';
 import { getJobById, insertJob } from '../../domain/job-repository.js';
 import { createJobQueue } from '../../infrastructure/queue-bullmq.js';
 

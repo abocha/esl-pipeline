@@ -2,11 +2,11 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import * as uploader from '@esl-pipeline/storage-uploader';
 
+import { publishHtmlToS3, renderAndPublishMarkdownToS3 } from '../src/publish.js';
+
 const uploadState = {
   seenKeys: new Set<string>(),
 };
-
-import { publishHtmlToS3, renderAndPublishMarkdownToS3 } from '../src/publish.js';
 
 describe('publish', () => {
   beforeEach(() => {

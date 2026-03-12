@@ -47,4 +47,3 @@ Harden the ongoing docs-gardening loop by reducing false positives and systemati
    Mitigation: require repeated occurrence before promotion.
 2. Risk: too many strict checks reduce iteration speed.
    Mitigation: stage new checks as warnings first when risk is unclear.
-
