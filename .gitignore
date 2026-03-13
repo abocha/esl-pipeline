@@ -20,6 +20,7 @@ docs/templates/*
 .vscode
 .agent
 .codex
+.artifacts
 
 .env
 .env.batch-backend
