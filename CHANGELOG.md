@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented here. Dates use `YYYY-MM-DD`.
 
+## [4.4.1] - 2026-03-13
+
+### Changed
+
+- Automated release from PR #42: [codex] expand docs gardening and prune routed docs (https://github.com/abocha/esl-pipeline/pull/42)
+
 ## [4.4.0] - 2026-03-13
 
 ### Changed
