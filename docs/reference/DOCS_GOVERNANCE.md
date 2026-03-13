@@ -6,6 +6,7 @@
 - Read Time: 3 minutes.
 - Authority Level: Governance policy.
 - Last Verified Against: 2026-03-10 repo state.
+- Last Verified Against: 2026-03-13 repo state.
 - Owner: founder-maintainer + automation agents.
 - Review Cadence: biweekly.
 - Status: `reference`.
@@ -27,6 +28,9 @@
 - `active`: current implementation guidance.
 - `reference`: contract/spec-level source of truth.
 - `runbook`: operations/procedure guidance.
+- `spec`: active design boundary or model doc.
+- `roadmap`: sequenced plan or multi-phase delivery doc.
+- `generated`: machine-produced reference index.
 - `archive`: historical, non-authoritative material.
 
 ## Core Docs (Highest Maintenance Priority)
@@ -53,6 +57,8 @@
 - `docs/operations/prompt-gallery-bootstrap.md`
 - `docs/operations/pr-style-release-notes.md`
 - `docs/operations/rollup-optional-binary-troubleshooting.md`
+- `docs/operations/telegram-ops-control-panel.md`
+- `docs/operations/voice-alignment-v2-runbook.md`
 
 ## Selected Non-Core Docs (Enforced)
 
@@ -62,9 +68,14 @@
 - `docs/reference/pipeline-manifest.md`
 - `docs/reference/ORCHESTRATOR_API_V2_MIGRATION.md`
 - `docs/reference/GENERATION_PROVIDER_POLICY.md`
+- `docs/reference/AGENT_LEGIBILITY_MODEL.md`
+- `docs/reference/DOCS_GARDENING_PLAYBOOK.md`
+- `docs/reference/DOCS_GARDENING_SCORECARD.md`
+- `docs/plans/README.md`
 - `packages/orchestrator/README.md`
 - `packages/batch-backend/README.md`
 - `packages/batch-frontend/README.md`
+- `packages/telegram-ops-bot/README.md`
 - `packages/provider-runtime/README.md`
 
 ## Rules
@@ -72,19 +83,39 @@
 - Keep router docs concise; avoid duplicating deep specs.
 - Update core docs when behavior/status changes.
 - Prefer archiving stale long docs over incremental patching.
+- Generated docs under `docs/generated/` are reference-only lookup aids, not policy sources.
 - Do not use machine-local file URI links in active docs.
 - If docs conflict, SSOT and code win.
+
+## Archive Discipline
+
+- Archive when a doc is no longer routed by active docs or is superseded by a better active source.
+- Do not archive a doc that is still the only explanation of a live decision or still linked from SSOT/router docs.
+- Every archive move must update:
+  - the relevant archive index
+  - active router links
+  - replacement pointers when they exist
+
+## Package README Policy
+
+- Operational package READMEs must document:
+  - package role
+  - current runtime/public surface
+  - related env/runbook links
+  - validation commands
+- Package READMEs should link to deeper runbooks/reference docs instead of duplicating long specs.
 
 ## Operational Policy
 
 Before merge for docs-heavy changes:
 
-1. Run `pnpm docs:check`.
-2. Generate report: `pnpm docs:health:report`.
-3. Generate stale candidates: `pnpm docs:stale:active`.
-4. Verify router chain is coherent:
+1. Regenerate indexes when repo inventories changed: `pnpm docs:generate:indexes`.
+2. Run `pnpm docs:check`.
+3. Generate report: `pnpm docs:health:report`.
+4. Generate stale candidates: `pnpm docs:stale:active`.
+5. Verify router chain is coherent:
    `AGENTS.md` -> `docs/README.md` -> `DOCS_IA_MAP.md` -> task docs.
-5. Confirm archive docs are not presented as canonical.
+6. Confirm archive docs are not presented as canonical.
 
 ## Metadata Contract (Enforced Scope)
 
@@ -117,6 +148,12 @@ When a docs issue repeats in review 2+ times:
 
 ## Rule Promotion Changelog
 
+### 2026-03-13
+
+- Added explicit agent-legibility and docs-gardening reference docs, plus a generated-docs router.
+- Expanded enforcement scope to include `docs/operations/telegram-ops-control-panel.md`, `docs/operations/voice-alignment-v2-runbook.md`, `docs/plans/README.md`, the new gardening reference docs, and `packages/telegram-ops-bot/README.md`.
+- Added generated-reference policy and promoted `pnpm docs:generate:indexes` into the standard docs-heavy change loop.
+
 ### 2026-03-10
 
 - Expanded selected non-core enforcement to high-impact reference docs (`docs/reference/env.md`, `docs/reference/pipeline-manifest.md`, `docs/reference/ORCHESTRATOR_API_V2_MIGRATION.md`, `docs/reference/GENERATION_PROVIDER_POLICY.md`).
@@ -137,7 +174,10 @@ When a docs issue repeats in review 2+ times:
 ## Related
 
 - [`docs/reference/DOCS_IA_MAP.md`](DOCS_IA_MAP.md)
+- [`docs/reference/AGENT_LEGIBILITY_MODEL.md`](AGENT_LEGIBILITY_MODEL.md)
 - [`docs/reference/HARNESS_AGENTIC_DOCS_MODEL.md`](HARNESS_AGENTIC_DOCS_MODEL.md)
+- [`docs/reference/DOCS_GARDENING_PLAYBOOK.md`](DOCS_GARDENING_PLAYBOOK.md)
+- [`docs/reference/DOCS_GARDENING_SCORECARD.md`](DOCS_GARDENING_SCORECARD.md)
 - [`docs/reference/DOCS_QUALITY_SCORE.md`](DOCS_QUALITY_SCORE.md)
-- [`docs/playbooks/DOC_GARDENING_PLAYBOOK.md`](../playbooks/DOC_GARDENING_PLAYBOOK.md)
+- [`docs/generated/README.md`](../generated/README.md)
 - [`docs/archive/README.md`](../archive/README.md)

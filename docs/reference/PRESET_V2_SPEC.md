@@ -5,7 +5,10 @@
 - Audience: founder, maintainers, AI agents.
 - Read Time: 12 minutes.
 - Authority Level: canonical preset architecture spec.
-- Last Updated: 2026-02-28.
+- Last Verified Against: 2026-03-13 repo state.
+- Owner: founder-maintainer + backend/frontend maintainers.
+- Review Cadence: monthly or after preset/runtime contract changes.
+- Status: `reference`.
 
 ## Purpose
 

@@ -1,41 +1,73 @@
 # Plans Directory
 
+## Meta
+
+- Audience: maintainers and AI agents working from plan docs.
+- Read Time: 4 minutes.
+- Authority Level: planning router.
+- Last Verified Against: 2026-03-13 repo state.
+- Owner: founder-maintainer + automation agents.
+- Review Cadence: monthly or after major planning-topology changes.
+- Status: `router`.
+
 ## Purpose
 
-`docs/plans` is the home for implementation plans that are intended to be executed in this repository.
+- Route readers to active implementation plans, long-lived roadmaps, backlog surfaces, and completed historical plans.
+- Clarify where a new plan should live and when a plan should be superseded, moved, or archived.
 
-## Conventions
+## Plan Types
 
-1. Keep one subdirectory per plan topic.
-2. Include a plan-level `README.md` with summary, scope, and phase index.
-3. Split execution detail by phase so implementation can be delegated safely.
-4. Include explicit runbook and acceptance criteria files when data migrations are involved.
+### Topic router
 
-## Current Plans
+- A directory `README.md` that explains the scope, phase index, and assumptions for a plan topic.
 
-1. `docs/plans/postgres-hardening-offline-migration/README.md`  
-   PostgreSQL hardening, schema governance, and offline data-preserving migration plan.
-2. `docs/plans/harness-agentic-docs-upgrade/README.md`  
-   Next phases for harness-aligned docs governance rollout (enforcement expansion + gardening calibration).
-3. `docs/plans/versioning-private-contracts-overhaul.md`  
-   Private monorepo versioning overhaul with merge-driven release automation and explicit contract-version registry.
-4. `docs/plans/orchestrator-library-only-roadmap/README.md`  
-   Ownership-driven medium-scale roadmap to make orchestrator library-only and retire CLI/wizard/path-picker surfaces.
-5. `docs/plans/legacy-retirement/legacy-retirement-backlog.md`  
-   Canonical legacy-contract retirement backlog index with deterministic prioritization and wave sequencing.
-6. `docs/plans/legacy-retirement/legacy-retirement-inventory.md`  
-   Itemized inventory of confirmed live legacy contracts mapped to backlog IDs.
-7. `docs/plans/legacy-retirement/legacy-retirement-execution-playbook.md`  
-   Standard implementation workflow, acceptance format, and release-label rules for retirement items.
-8. `docs/plans/stt-multi-provider-refactor/README.md`
-   STT provider-architecture parity plan (`core + adapters`), Google STT V2 onboarding, and transcript-provider persistence cutover.
-9. `docs/plans/telegram-ops-control-panel-hardening/README.md`
-   Gap inventory + execution timing for Telegram ops bot hardening (`Now`, `After Manual V1`, `V2/Defer`).
-10. `docs/plans/telegram-ops-control-panel-hardening/A3-ux-activation.md`
-   Discoverability/onboarding plan for the Telegram ops bot after the `A2` hardening baseline.
-11. `docs/plans/telegram-ops-control-panel-hardening/A4-guided-telegram-interaction.md`
-   Guided interaction/navigation plan for Telegram ops bot callback flows, inline controls, and recent-ops browsing.
-12. `docs/plans/backlog/README.md`
-   Prioritized optimization and technical-debt backlog for safe incremental execution.
-13. `docs/plans/completed/README.md`
-   Completed wave plans (optimization backlog + finished legacy-retirement waves) moved out of active planning directories for easier navigation and historical traceability.
+### Phase/detail plan
+
+- A concrete implementation or verification slice under a topic directory.
+- Best when work can be delegated or reviewed phase-by-phase.
+
+### Standalone active plan
+
+- A one-file plan used when the topic is cohesive and does not need a full subdirectory.
+
+### Completed plan
+
+- Historical execution truth moved under `docs/plans/completed/` for traceability without cluttering active routing.
+
+## Lifecycle Rules
+
+1. Create a new topic directory when a workstream will span multiple phases or follow-up docs.
+2. Use a standalone plan file only when the topic is small enough to stay coherent in one document.
+3. Supersede a plan when:
+   - a newer plan replaces its execution truth, or
+   - the work has moved into SSOT/runbooks and the plan is now historical.
+4. Move completed execution plans under `docs/plans/completed/` instead of leaving them mixed with active work.
+5. Update this router whenever a new active plan topic or standalone plan becomes part of normal execution flow.
+
+## Active Plan Routes
+
+### Topic directories
+
+1. `docs/plans/postgres-hardening-offline-migration/README.md`
+2. `docs/plans/harness-agentic-docs-upgrade/README.md`
+3. `docs/plans/orchestrator-library-only-roadmap/README.md`
+4. `docs/plans/stt-multi-provider-refactor/README.md`
+5. `docs/plans/telegram-ops-control-panel-hardening/README.md`
+6. `docs/plans/backlog/README.md`
+
+### Standalone active plans
+
+1. `docs/plans/versioning-private-contracts-overhaul.md`
+2. `docs/plans/legacy-retirement/legacy-retirement-backlog.md`
+3. `docs/plans/legacy-retirement/legacy-retirement-inventory.md`
+4. `docs/plans/legacy-retirement/legacy-retirement-execution-playbook.md`
+
+## Historical and Generated Aids
+
+- Completed plans: [`docs/plans/completed/README.md`](completed/README.md)
+- Generated plan inventory: [`docs/generated/plans-index.md`](../generated/plans-index.md)
+
+## Related
+
+- [`docs/reference/DOCS_GARDENING_PLAYBOOK.md`](../reference/DOCS_GARDENING_PLAYBOOK.md)
+- [`docs/generated/README.md`](../generated/README.md)

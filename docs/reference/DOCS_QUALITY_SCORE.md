@@ -5,7 +5,7 @@
 - Audience: maintainers and AI agents.
 - Read Time: 4 minutes.
 - Authority Level: operational quality rubric.
-- Last Verified Against: 2026-03-10 repo state.
+- Last Verified Against: 2026-03-13 repo state.
 - Owner: founder-maintainer + automation agents.
 - Review Cadence: weekly (docs-gardening run).
 - Status: `reference`.
@@ -14,6 +14,7 @@
 
 - Provide objective quality scoring for the docs system.
 - Track trendline and prioritize upgrades by measurable gaps.
+- Complement the operational gardening scorecard with a broader quality rubric.
 
 ## Rubric (0-10 per dimension)
 
@@ -84,3 +85,8 @@ Priority levers:
 
 - Baseline established at 8.7.
 - Automated post-upgrade snapshot recorded at 9.83.
+
+## Related
+
+- [`docs/reference/DOCS_GARDENING_SCORECARD.md`](DOCS_GARDENING_SCORECARD.md)
+- [`docs/reference/DOCS_GARDENING_PLAYBOOK.md`](DOCS_GARDENING_PLAYBOOK.md)

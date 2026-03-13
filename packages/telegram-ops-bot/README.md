@@ -1,5 +1,14 @@
 # @esl-pipeline/telegram-ops-bot
 
+## Meta
+
+- Audience: maintainers and implementing agents.
+- Authority Level: package entrypoint and runtime usage guide.
+- Last Verified Against: 2026-03-13 repo state.
+- Owner: backend/ops maintainers + automation agents.
+- Review Cadence: monthly or after control-surface changes.
+- Status: `active`.
+
 Telegram operations + sharing bot for ESL Pipeline.
 
 ## Scope
@@ -8,13 +17,19 @@ Telegram operations + sharing bot for ESL Pipeline.
 - API-first integration with `@esl-pipeline/batch-backend`.
 - Topic/thread routing across `ops`, `jobs`, and `alerts` domains.
 - Safe-by-default operations surface (read-only until explicitly enabled).
+- Private-chat onboarding surface for allowlisted operators.
+- Guided ops-chat control panel with inline buttons and edit-in-place navigation.
 - Student-forwardable assignment sharing cards (`/links`, `/share`).
 
 ## Command Surface
 
+Onboarding commands:
+
+- `/start` — orient allowlisted operators and point them to the configured ops chat.
+- `/help` — onboarding help in private chat; guided control panel in the configured ops chat.
+
 Read commands:
 
-- `/help` — list commands.
 - `/status` — run backend ops health snapshot.
 - `/op <operationId>` — check one ops action lifecycle state.
 - `/finished [limit]` — list latest succeeded jobs.
@@ -24,8 +39,27 @@ Read commands:
 
 Action commands (gated by `TELEGRAM_OPS_BOT_ENABLE_ACTION_COMMANDS=true`):
 
-- `/backup [label]`
+- `/backup [label]` — typed advanced path; guided panel triggers unlabeled backup only.
 - `/drill`
+- `/approve <token>` — required in webhook mode for guided or typed high-risk actions.
+
+Private-chat scope in `A3`:
+
+- Allowlisted operators can use `/start` and `/help` in private chat.
+- Other commands remain scoped to `TELEGRAM_OPS_BOT_CHAT_ID`.
+- Non-onboarding private-chat commands redirect operators back to the configured ops chat.
+
+Guided control behavior in `A4`:
+
+- `/help` in the configured ops chat opens a guided control panel.
+- Primary guided controls:
+  - `Status`
+  - `Finished Jobs`
+  - `Recent Operations`
+  - `Backup` / `Drill` when action commands are enabled
+- Guided read flows answer callback queries immediately and edit the existing panel message in place when possible.
+- Guided `Backup` / `Drill` are confirm-first and preserve the existing polling vs webhook approval model.
+- If a panel can no longer be edited, the bot sends a replacement message in the same routed thread.
 
 ## Sharing Behavior (`/links` and `/share`)
 
@@ -57,7 +91,7 @@ Link-preview behavior:
 The bot authenticates to batch-backend using a service account and requires:
 
 - Extended API auth routes (`/auth/login`) enabled.
-- Ops control routes enabled for `/status`, `/backup`, `/drill` paths.
+- Ops control routes enabled for `/status`, `/backup`, `/drill`, and recent action history paths.
 - Admin role for the service account.
 - `/admin/jobs` access for cross-user `/finished` listing.
 
@@ -109,6 +143,16 @@ Rate-limit / polling controls:
 - `TELEGRAM_OPS_BOT_POLL_TIMEOUT_SECONDS`
 - `TELEGRAM_OPS_BOT_COMMAND_WINDOW_MS`
 - `TELEGRAM_OPS_BOT_MAX_COMMANDS_PER_WINDOW`
+
+Transport/runtime notes:
+
+- Polling mode requests both `message` and `callback_query` updates.
+- Startup metadata sync best-effort configures:
+  - command lists for private chats and the configured ops chat,
+  - bot short description,
+  - bot description,
+  - default commands menu button.
+- Metadata sync failures are warning-level only and do not block startup.
 
 Related env/runbook docs:
 
