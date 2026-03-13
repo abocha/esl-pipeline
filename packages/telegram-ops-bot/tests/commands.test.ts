@@ -1,6 +1,11 @@
-import { describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { createCommandRegistry, parseCommandText } from '../src/commands.js';
+import { InMemoryApprovalReplayStore } from '../src/approval-replay-store.js';
+import {
+  createCommandRegistry,
+  parseCommandText,
+  resetAdvancedControlApprovalsForTests,
+} from '../src/commands.js';
 import type { CommandContext } from '../src/types.js';
 
 function createBaseContext(overrides: Partial<CommandContext>): CommandContext {
@@ -8,11 +13,17 @@ function createBaseContext(overrides: Partial<CommandContext>): CommandContext {
     config: {
       enabled: true,
       token: 'token',
+      apiBaseUrl: 'https://api.telegram.org',
+      mode: 'polling',
+      webhookHost: '0.0.0.0',
+      webhookPort: 8091,
+      webhookPath: '/telegram/webhook',
       chatId: '123',
       backendBaseUrl: 'http://localhost:8080',
       backendEmail: 'bot@example.com',
       backendPassword: 'secret',
       backendTimeoutMs: 1000,
+      leaderElectionEnabled: false,
       allowedUserIds: new Set([1]),
       pollIntervalMs: 100,
       pollTimeoutSeconds: 1,
@@ -42,6 +53,7 @@ function createBaseContext(overrides: Partial<CommandContext>): CommandContext {
     topicRouter: {
       initialize: vi.fn(async () => {}),
       resolveThreadId: vi.fn(() => 42),
+      healStaleThread: vi.fn(async () => {}),
     },
     audit: {
       log: vi.fn(),
@@ -71,6 +83,10 @@ function createBaseContext(overrides: Partial<CommandContext>): CommandContext {
 }
 
 describe('telegram commands', () => {
+  beforeEach(() => {
+    resetAdvancedControlApprovalsForTests();
+  });
+
   it('parses slash commands with mentions and args', () => {
     expect(parseCommandText('/backup nightly smoke')).toEqual({
       command: 'backup',
@@ -522,5 +538,380 @@ describe('telegram commands', () => {
       '<a href="https://notion.so/share-assignment">Homework Assignment',
     );
     expect(sendMock.mock.calls[1]?.[0].html).toContain('🎧 Listen 1: Study Text');
+
+    const auditLogMock = context.audit.log as ReturnType<typeof vi.fn>;
+    expect(auditLogMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        event: 'share_path_telemetry',
+        details: expect.objectContaining({
+          studyAudioSource: 'markdown_label',
+          missingPronunciationAudio: true,
+          missingAudioCount: 1,
+        }),
+      }),
+    );
+  });
+
+  it('requires /approve token for /backup in webhook mode', async () => {
+    const registry = createCommandRegistry();
+    const backupCommand = registry.resolve('backup');
+    expect(backupCommand).toBeDefined();
+
+    const context = createBaseContext({
+      config: {
+        ...createBaseContext({}).config,
+        mode: 'webhook',
+      },
+      command: 'backup',
+      args: ['nightly', 'smoke'],
+    });
+
+    await backupCommand?.execute(context);
+
+    const enqueueMock = context.backend.enqueueOpsAction as ReturnType<typeof vi.fn>;
+    expect(enqueueMock).toHaveBeenCalledTimes(0);
+
+    const sendMock = context.messenger.sendHtmlMessage as ReturnType<typeof vi.fn>;
+    expect(sendMock).toHaveBeenCalledTimes(1);
+    expect(sendMock.mock.calls[0]?.[0].html).toContain('Approval required');
+    expect(sendMock.mock.calls[0]?.[0].html).toContain('/approve');
+  });
+
+  it('applies /approve token and enqueues pending action in webhook mode', async () => {
+    const registry = createCommandRegistry();
+    const backupCommand = registry.resolve('backup');
+    const approveCommand = registry.resolve('approve');
+    expect(backupCommand).toBeDefined();
+    expect(approveCommand).toBeDefined();
+
+    const enqueueMock = vi.fn(async () => ({
+      operationId: 'op-approved',
+      action: 'backup_upload' as const,
+      state: 'queued' as const,
+      requestedAt: '2026-03-11T00:00:00.000Z',
+      startedAt: null,
+      finishedAt: null,
+      requestedBy: 'telegram',
+      requestedByUserId: 'u1',
+      message: 'queued',
+      command: 'cmd',
+      exitCode: null,
+      stdoutTail: null,
+      stderrTail: null,
+    }));
+
+    const webhookConfig = {
+      ...createBaseContext({}).config,
+      mode: 'webhook' as const,
+    };
+    const backupContext = createBaseContext({
+      config: webhookConfig,
+      backend: {
+        ...createBaseContext({}).backend,
+        enqueueOpsAction: enqueueMock,
+      },
+      command: 'backup',
+      args: ['nightly', 'smoke'],
+    });
+    await backupCommand?.execute(backupContext);
+
+    const backupSendMock = backupContext.messenger.sendHtmlMessage as ReturnType<typeof vi.fn>;
+    const approvalMessage = String(backupSendMock.mock.calls[0]?.[0].html ?? '');
+    const tokenMatch = approvalMessage.match(/\/approve\s+([A-Za-z0-9._-]+)/);
+    expect(tokenMatch?.[1]).toBeTruthy();
+    const token = tokenMatch?.[1] ?? '';
+
+    const approveContext = createBaseContext({
+      config: webhookConfig,
+      backend: {
+        ...createBaseContext({}).backend,
+        enqueueOpsAction: enqueueMock,
+      },
+      command: 'approve',
+      args: [token],
+    });
+    await approveCommand?.execute(approveContext);
+
+    expect(enqueueMock).toHaveBeenCalledTimes(1);
+    expect(enqueueMock).toHaveBeenCalledWith({
+      action: 'backup_upload',
+      label: 'nightly smoke',
+    });
+
+    const approveSendMock = approveContext.messenger.sendHtmlMessage as ReturnType<typeof vi.fn>;
+    expect(approveSendMock).toHaveBeenCalledTimes(1);
+    expect(String(approveSendMock.mock.calls[0]?.[0].html)).toContain('op-approved');
+  });
+
+  it('rejects replayed /approve token after first successful use', async () => {
+    const registry = createCommandRegistry();
+    const backupCommand = registry.resolve('backup');
+    const approveCommand = registry.resolve('approve');
+    expect(backupCommand).toBeDefined();
+    expect(approveCommand).toBeDefined();
+
+    const enqueueMock = vi.fn(async () => ({
+      operationId: 'op-approved-once',
+      action: 'backup_upload' as const,
+      state: 'queued' as const,
+      requestedAt: '2026-03-11T00:00:00.000Z',
+      startedAt: null,
+      finishedAt: null,
+      requestedBy: 'telegram',
+      requestedByUserId: 'u1',
+      message: 'queued',
+      command: 'cmd',
+      exitCode: null,
+      stdoutTail: null,
+      stderrTail: null,
+    }));
+
+    const webhookConfig = {
+      ...createBaseContext({}).config,
+      mode: 'webhook' as const,
+    };
+    const backupContext = createBaseContext({
+      config: webhookConfig,
+      backend: {
+        ...createBaseContext({}).backend,
+        enqueueOpsAction: enqueueMock,
+      },
+      command: 'backup',
+      args: ['nightly'],
+    });
+    await backupCommand?.execute(backupContext);
+
+    const backupSendMock = backupContext.messenger.sendHtmlMessage as ReturnType<typeof vi.fn>;
+    const approvalMessage = String(backupSendMock.mock.calls[0]?.[0].html ?? '');
+    const tokenMatch = approvalMessage.match(/\/approve\s+([A-Za-z0-9._-]+)/);
+    expect(tokenMatch?.[1]).toBeTruthy();
+    const token = tokenMatch?.[1] ?? '';
+
+    const firstApproveContext = createBaseContext({
+      config: webhookConfig,
+      backend: {
+        ...createBaseContext({}).backend,
+        enqueueOpsAction: enqueueMock,
+      },
+      command: 'approve',
+      args: [token],
+    });
+    await approveCommand?.execute(firstApproveContext);
+
+    const secondApproveContext = createBaseContext({
+      config: webhookConfig,
+      backend: {
+        ...createBaseContext({}).backend,
+        enqueueOpsAction: enqueueMock,
+      },
+      command: 'approve',
+      args: [token],
+    });
+    await approveCommand?.execute(secondApproveContext);
+
+    expect(enqueueMock).toHaveBeenCalledTimes(1);
+    const secondSendMock = secondApproveContext.messenger.sendHtmlMessage as ReturnType<typeof vi.fn>;
+    expect(secondSendMock).toHaveBeenCalledTimes(1);
+    expect(String(secondSendMock.mock.calls[0]?.[0].html)).toContain('already been used');
+  });
+
+  it('keeps approval token consumed when enqueue confirmation fails ambiguously', async () => {
+    const registry = createCommandRegistry();
+    const backupCommand = registry.resolve('backup');
+    const approveCommand = registry.resolve('approve');
+    expect(backupCommand).toBeDefined();
+    expect(approveCommand).toBeDefined();
+
+    const enqueueMock = vi.fn(async () => {
+      throw new Error('network timeout after request write');
+    });
+
+    const webhookConfig = {
+      ...createBaseContext({}).config,
+      mode: 'webhook' as const,
+    };
+    const backupContext = createBaseContext({
+      config: webhookConfig,
+      backend: {
+        ...createBaseContext({}).backend,
+        enqueueOpsAction: enqueueMock,
+      },
+      command: 'backup',
+      args: ['nightly'],
+    });
+    await backupCommand?.execute(backupContext);
+
+    const backupSendMock = backupContext.messenger.sendHtmlMessage as ReturnType<typeof vi.fn>;
+    const approvalMessage = String(backupSendMock.mock.calls[0]?.[0].html ?? '');
+    const tokenMatch = approvalMessage.match(/\/approve\s+([A-Za-z0-9._-]+)/);
+    expect(tokenMatch?.[1]).toBeTruthy();
+    const token = tokenMatch?.[1] ?? '';
+
+    const firstApproveContext = createBaseContext({
+      config: webhookConfig,
+      backend: {
+        ...createBaseContext({}).backend,
+        enqueueOpsAction: enqueueMock,
+      },
+      command: 'approve',
+      args: [token],
+    });
+    await expect(approveCommand?.execute(firstApproveContext)).rejects.toThrow(
+      'Approval enqueue confirmation failed after token was consumed',
+    );
+
+    const secondApproveContext = createBaseContext({
+      config: webhookConfig,
+      backend: {
+        ...createBaseContext({}).backend,
+        enqueueOpsAction: enqueueMock,
+      },
+      command: 'approve',
+      args: [token],
+    });
+    await approveCommand?.execute(secondApproveContext);
+
+    expect(enqueueMock).toHaveBeenCalledTimes(1);
+    const secondSendMock = secondApproveContext.messenger.sendHtmlMessage as ReturnType<typeof vi.fn>;
+    expect(secondSendMock).toHaveBeenCalledTimes(1);
+    expect(String(secondSendMock.mock.calls[0]?.[0].html)).toContain('already been used');
+  });
+
+  it('accepts /approve token across registry instances (restart-safe)', async () => {
+    const replayStore = new InMemoryApprovalReplayStore();
+    const registryA = createCommandRegistry({ replayStore });
+    const registryB = createCommandRegistry({ replayStore });
+    const backupCommand = registryA.resolve('backup');
+    const approveCommand = registryB.resolve('approve');
+    expect(backupCommand).toBeDefined();
+    expect(approveCommand).toBeDefined();
+
+    const enqueueMock = vi.fn(async () => ({
+      operationId: 'op-approved-restart-safe',
+      action: 'backup_upload' as const,
+      state: 'queued' as const,
+      requestedAt: '2026-03-11T00:00:00.000Z',
+      startedAt: null,
+      finishedAt: null,
+      requestedBy: 'telegram',
+      requestedByUserId: 'u1',
+      message: 'queued',
+      command: 'cmd',
+      exitCode: null,
+      stdoutTail: null,
+      stderrTail: null,
+    }));
+
+    const webhookConfig = {
+      ...createBaseContext({}).config,
+      mode: 'webhook' as const,
+    };
+    const backupContext = createBaseContext({
+      config: webhookConfig,
+      backend: {
+        ...createBaseContext({}).backend,
+        enqueueOpsAction: enqueueMock,
+      },
+      command: 'backup',
+      args: ['nightly'],
+    });
+    await backupCommand?.execute(backupContext);
+
+    const backupSendMock = backupContext.messenger.sendHtmlMessage as ReturnType<typeof vi.fn>;
+    const approvalMessage = String(backupSendMock.mock.calls[0]?.[0].html ?? '');
+    const tokenMatch = approvalMessage.match(/\/approve\s+([A-Za-z0-9._-]+)/);
+    expect(tokenMatch?.[1]).toBeTruthy();
+    const token = tokenMatch?.[1] ?? '';
+
+    const approveContext = createBaseContext({
+      config: webhookConfig,
+      backend: {
+        ...createBaseContext({}).backend,
+        enqueueOpsAction: enqueueMock,
+      },
+      command: 'approve',
+      args: [token],
+    });
+    await approveCommand?.execute(approveContext);
+
+    expect(enqueueMock).toHaveBeenCalledTimes(1);
+    expect(enqueueMock).toHaveBeenCalledWith({
+      action: 'backup_upload',
+      label: 'nightly',
+    });
+  });
+
+  it('rejects replayed /approve token across registry instances when sharing replay store', async () => {
+    const replayStore = new InMemoryApprovalReplayStore();
+    const registryA = createCommandRegistry({ replayStore });
+    const registryB = createCommandRegistry({ replayStore });
+    const backupCommand = registryA.resolve('backup');
+    const approveCommand = registryB.resolve('approve');
+    expect(backupCommand).toBeDefined();
+    expect(approveCommand).toBeDefined();
+
+    const enqueueMock = vi.fn(async () => ({
+      operationId: 'op-approved-shared-store',
+      action: 'backup_upload' as const,
+      state: 'queued' as const,
+      requestedAt: '2026-03-11T00:00:00.000Z',
+      startedAt: null,
+      finishedAt: null,
+      requestedBy: 'telegram',
+      requestedByUserId: 'u1',
+      message: 'queued',
+      command: 'cmd',
+      exitCode: null,
+      stdoutTail: null,
+      stderrTail: null,
+    }));
+
+    const webhookConfig = {
+      ...createBaseContext({}).config,
+      mode: 'webhook' as const,
+    };
+    const backupContext = createBaseContext({
+      config: webhookConfig,
+      backend: {
+        ...createBaseContext({}).backend,
+        enqueueOpsAction: enqueueMock,
+      },
+      command: 'backup',
+      args: ['nightly'],
+    });
+    await backupCommand?.execute(backupContext);
+
+    const backupSendMock = backupContext.messenger.sendHtmlMessage as ReturnType<typeof vi.fn>;
+    const approvalMessage = String(backupSendMock.mock.calls[0]?.[0].html ?? '');
+    const tokenMatch = approvalMessage.match(/\/approve\s+([A-Za-z0-9._-]+)/);
+    expect(tokenMatch?.[1]).toBeTruthy();
+    const token = tokenMatch?.[1] ?? '';
+
+    const firstApproveContext = createBaseContext({
+      config: webhookConfig,
+      backend: {
+        ...createBaseContext({}).backend,
+        enqueueOpsAction: enqueueMock,
+      },
+      command: 'approve',
+      args: [token],
+    });
+    await approveCommand?.execute(firstApproveContext);
+
+    const secondApproveContext = createBaseContext({
+      config: webhookConfig,
+      backend: {
+        ...createBaseContext({}).backend,
+        enqueueOpsAction: enqueueMock,
+      },
+      command: 'approve',
+      args: [token],
+    });
+    await approveCommand?.execute(secondApproveContext);
+
+    expect(enqueueMock).toHaveBeenCalledTimes(1);
+    const secondSendMock = secondApproveContext.messenger.sendHtmlMessage as ReturnType<typeof vi.fn>;
+    expect(secondSendMock).toHaveBeenCalledTimes(1);
+    expect(String(secondSendMock.mock.calls[0]?.[0].html)).toContain('already been used');
   });
 });

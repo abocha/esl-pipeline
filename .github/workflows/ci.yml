@@ -326,3 +326,27 @@ jobs:
           name: backend-db-integration-artifacts
           path: ${{ github.workspace }}/.artifacts/backend-db-integration
           if-no-files-found: warn
+
+  telegram-compose-smoke:
+    name: telegram command-loop compose smoke
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    env:
+      TELEGRAM_SMOKE_ARTIFACT_DIR: ${{ github.workspace }}/.artifacts/telegram-compose-smoke
+    steps:
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+
+      - name: Docker compose version
+        run: docker compose version
+
+      - name: Run Telegram compose smoke workflow
+        run: bash scripts/smoke/run-telegram-ops-compose-smoke.sh
+
+      - name: Upload Telegram compose smoke artifacts
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: telegram-compose-smoke-artifacts
+          path: ${{ github.workspace }}/.artifacts/telegram-compose-smoke
+          if-no-files-found: warn

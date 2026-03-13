@@ -2,7 +2,8 @@
 
 ## Summary
 
-Gap inventory and delivery schedule for post-groundwork hardening of the Telegram Ops Control Panel.
+Feature/durability hardening inventory for the Telegram Ops Control Panel is implemented.  
+Current focus is rollout-readiness closeout for polling-mode GA (preflight/verify tooling + operational sign-off evidence).
 
 Related draft:
 
@@ -49,13 +50,13 @@ Current mapping:
 | Add operation status lookup command in bot UX                                             | P1       | Now             | Implemented | `A1` completeness       |
 | Forwardable student-share cards with separate audio preview messages (`/links`, `/share`) | P1       | Now             | Implemented | selected `A2` hardening |
 | Cross-user finished-job visibility for service account path (`/admin/jobs`)               | P1       | Now             | Implemented | `A2` operator UX        |
-| Add backend transport integration tests for `/ops/*` endpoints                            | P1       | After Manual V1 | Planned     | `A2` hardening          |
-| Add Docker smoke workflow for Telegram command loop in Compose                            | P1       | After Manual V1 | Planned     | `A2` hardening          |
-| Add deterministic smoke checks for `/share` card rendering and audio extraction fallback  | P1       | After Manual V1 | Planned     | `A2` hardening          |
-| Improve topic cache healing for stale/deleted forum topics                                | P2       | After Manual V1 | Planned     | `A2` hardening          |
-| Persist ops action history in DB (instead of in-memory only)                              | P1       | V2 / Defer      | Planned     | `A2` durability         |
-| Multi-instance coordination for bot state (rate limit/topic map)                          | P2       | V2 / Defer      | Planned     | `A2` scale              |
-| Webhook mode and advanced controls (restart/maintenance approvals)                        | P2       | V2 / Defer      | Planned     | post-`A2` expansion     |
+| Add backend transport integration tests for `/ops/*` endpoints                            | P1       | After Manual V1 | Implemented | `A2` hardening          |
+| Add Docker smoke workflow for Telegram command loop in Compose                            | P1       | After Manual V1 | Implemented | `A2` hardening          |
+| Add deterministic smoke checks for `/share` card rendering and audio extraction fallback  | P1       | After Manual V1 | Implemented | `A2` hardening          |
+| Improve topic cache healing for stale/deleted forum topics                                | P2       | After Manual V1 | Implemented | `A2` hardening          |
+| Persist ops action history in DB (instead of in-memory only)                              | P1       | V2 / Defer      | Implemented | `A2` durability         |
+| Multi-instance coordination for bot state (rate limit/topic map)                          | P2       | V2 / Defer      | Implemented | `A2` scale              |
+| Webhook mode and advanced controls (restart/maintenance approvals)                        | P2       | V2 / Defer      | Implemented | post-`A2` expansion     |
 
 ## Semver Mapping (Package)
 
@@ -91,3 +92,19 @@ Current state:
 
 - To immediately freeze mutating actions without stopping the bot: set `TELEGRAM_OPS_BOT_ENABLE_ACTION_COMMANDS=false`.
 - To preserve legacy startup behavior (not recommended): set `TELEGRAM_OPS_BOT_SKIP_PENDING_UPDATES_ON_STARTUP=false`.
+
+## Polling GA Closeout Gates
+
+Use this rollout-closeout sequence:
+
+1. `pnpm check:fast`
+2. `pnpm --filter @esl-pipeline/telegram-ops-bot test`
+3. `pnpm test:integration`
+4. `bash scripts/smoke/run-telegram-ops-compose-smoke.sh`
+5. `pnpm ops:telegram:preflight --profile=readonly_canary`
+6. Post-deploy: `pnpm ops:telegram:verify` (+ `--operation-id=<known-operation-id>` after backend restart)
+
+Artifacts:
+
+- `tmp/telegram-ops-go-live/preflight.json`
+- `tmp/telegram-ops-go-live/verify.json`

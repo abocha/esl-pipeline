@@ -101,6 +101,9 @@ Details: [`docs/operations/prompt-gallery-bootstrap.md`](../operations/prompt-ga
 - Telegram control-panel bot (optional, threaded ops commands):
   - enable `TELEGRAM_OPS_BOT_ENABLED=true`
   - ensure `BATCH_BACKEND_ENABLE_OPS_CONTROL=true`
+  - run rollout closeout tooling:
+    - `pnpm ops:telegram:preflight --profile=readonly_canary`
+    - post-deploy `pnpm ops:telegram:verify`
 
 Runbooks:
 

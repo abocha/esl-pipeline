@@ -532,6 +532,7 @@ function createConfig(): BatchBackendConfig {
       restoreDrillCommand: 'echo restore-drill',
       actionTimeoutMs: 60_000,
       actionHistoryLimit: 100,
+      actionRetentionDays: 30,
     },
     experimental: {
       extendedApiEnabled: false,
