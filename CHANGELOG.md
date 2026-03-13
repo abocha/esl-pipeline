@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented here. Dates use `YYYY-MM-DD`.
 
+## [4.4.0] - 2026-03-13
+
+### Changed
+
+- Automated release from PR #41: feat(telegram-ops-bot): ship a3 onboarding and a4 guided interaction (https://github.com/abocha/esl-pipeline/pull/41)
+
 ## [4.3.4] - 2026-03-13
 
 ### Changed
