@@ -5,7 +5,7 @@ import { TelegramClient } from '../src/telegram-client.js';
 describe('telegram client metadata methods', () => {
   it('serializes setMyCommands payloads correctly', async () => {
     const fetchImpl = vi.fn(async () =>
-      new Response(JSON.stringify({ ok: true, result: true }), {
+      Response.json({ ok: true, result: true }, {
         status: 200,
         headers: { 'content-type': 'application/json' },
       }),
@@ -38,7 +38,7 @@ describe('telegram client metadata methods', () => {
 
   it('serializes setChatMenuButton payloads correctly', async () => {
     const fetchImpl = vi.fn(async () =>
-      new Response(JSON.stringify({ ok: true, result: true }), {
+      Response.json({ ok: true, result: true }, {
         status: 200,
         headers: { 'content-type': 'application/json' },
       }),
@@ -63,7 +63,7 @@ describe('telegram client metadata methods', () => {
 
   it('serializes editMessageText and answerCallbackQuery payloads correctly', async () => {
     const fetchImpl = vi.fn(async () =>
-      new Response(JSON.stringify({ ok: true, result: true }), {
+      Response.json({ ok: true, result: true }, {
         status: 200,
         headers: { 'content-type': 'application/json' },
       }),

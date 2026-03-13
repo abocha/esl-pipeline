@@ -140,11 +140,7 @@ export async function handleGuidedCallback(args: {
       if (!guidedConfirmGuards.has(confirmKey)) {
         guidedConfirmGuards.set(confirmKey, nowMs + CONFIRM_GUARD_TTL_MS);
         try {
-          if (action.action === 'backup') {
-            await executeBackupAction(actionContext);
-          } else {
-            await executeDrillAction(actionContext);
-          }
+          await (action.action === 'backup' ? executeBackupAction(actionContext) : executeDrillAction(actionContext));
         } catch (error: unknown) {
           guidedConfirmGuards.delete(confirmKey);
           throw error;

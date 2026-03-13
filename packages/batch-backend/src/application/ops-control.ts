@@ -329,10 +329,10 @@ export async function listOpsActions(args?: {
     return persisted;
   }
 
-  const actions = [...actionOrder]
-    .reverse()
+  const actions = actionOrder
+    .toReversed()
     .map((operationId) => actionStore.get(operationId))
-    .filter((action): action is InternalActionStatus => Boolean(action));
+    .filter(Boolean);
 
   return {
     actions: actions.slice(offset, offset + limit).map((action) => ({ ...action })),
