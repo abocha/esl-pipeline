@@ -1,6 +1,7 @@
 import type {
   JobListResponse,
   JobStatusDto,
+  OpsActionListResponse,
   OpsActionStatus,
   OpsStatusResponse,
 } from '@esl-pipeline/contracts';
@@ -44,6 +45,21 @@ export function formatHelpWithOptions(
     lines.join('\n'),
     ...(footer.length > 0 ? ['', ...footer.map((line) => escapeHtml(line))] : []),
   ].join('\n');
+}
+
+export function formatGuidedHelpHome(args: {
+  commands: CommandDefinition[];
+  enableActionCommands: boolean;
+}): string {
+  return formatHelpWithOptions(args.commands, {
+    title: 'ESL Ops Control Panel',
+    footerLines: [
+      args.enableActionCommands
+        ? 'Guided actions below are enabled for this deployment.'
+        : 'This deployment is currently read-only.',
+      'Use the buttons below for quick navigation, or keep using slash commands directly.',
+    ],
+  });
 }
 
 export function formatOpsStatus(status: OpsStatusResponse): string {
@@ -237,8 +253,66 @@ export function formatActionStatus(status: OpsActionStatus): string {
   ].join('\n');
 }
 
+export function formatRecentOpsActions(response: OpsActionListResponse): string {
+  if (response.actions.length === 0) {
+    return '<b>Recent operations</b>\n\nNo ops actions recorded yet.';
+  }
+
+  const lines = response.actions.map((action) => {
+    const summary = action.message?.trim() || action.command;
+    return `• <code>${escapeHtml(action.operationId)}</code> — ${escapeHtml(action.state)} (${escapeHtml(summary)})`;
+  });
+
+  return [
+    '<b>Recent operations</b>',
+    '',
+    ...lines,
+    '',
+    `Showing ${response.actions.length} of ${response.total}.`,
+  ].join('\n');
+}
+
 export function formatCommandError(message: string): string {
   return `<b>Command failed</b>\n\n${escapeHtml(message)}`;
+}
+
+export function formatGuidedActionConfirmation(args: {
+  action: 'backup' | 'drill';
+  webhookMode: boolean;
+}): string {
+  if (args.action === 'backup') {
+    return [
+      '<b>Confirm backup upload</b>',
+      '',
+      'This runs the default unlabeled backup upload.',
+      'Use <code>/backup &lt;label&gt;</code> if you need a custom label.',
+      args.webhookMode
+        ? 'Confirming here will generate the normal approval-token flow.'
+        : 'Confirming here will queue the backup immediately.',
+    ].join('\n');
+  }
+
+  return [
+    '<b>Confirm restore drill</b>',
+    '',
+    'This runs the download-only restore drill.',
+    args.webhookMode
+      ? 'Confirming here will generate the normal approval-token flow.'
+      : 'Confirming here will queue the drill immediately.',
+  ].join('\n');
+}
+
+export function formatGuidedActionSubmitted(args: {
+  action: 'backup' | 'drill';
+  webhookMode: boolean;
+}): string {
+  return [
+    `<b>${args.action === 'backup' ? 'Backup' : 'Restore drill'} request submitted</b>`,
+    '',
+    args.webhookMode
+      ? 'The approval or execution result was posted as a new ops message. The confirm button here has been disabled.'
+      : 'The queued result was posted as a new ops message. The confirm button here has been disabled.',
+  ].join('\n');
 }
 
 export function formatStartMessage(args: {

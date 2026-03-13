@@ -45,11 +45,17 @@ function createBaseContext(overrides: Partial<CommandContext>): CommandContext {
       getOpsStatus: vi.fn(),
       enqueueOpsAction: vi.fn(),
       getOpsActionStatus: vi.fn(),
+      listOpsActions: vi.fn(),
       getFinishedJobs: vi.fn(),
       getJob: vi.fn(),
     },
     messenger: {
-      sendHtmlMessage: vi.fn(async () => {}),
+      sendHtmlMessage: vi.fn(async (args) => ({
+        message_id: 99,
+        date: 1,
+        chat: { id: Number(args.chatId), type: 'supergroup', title: 'Ops Chat' },
+        text: args.html,
+      })),
     },
     topicRouter: {
       initialize: vi.fn(async () => {}),
@@ -151,6 +157,48 @@ describe('telegram commands', () => {
             command: 'start',
           }),
         }),
+      }),
+    );
+  });
+
+  it('renders guided /help in the ops chat with inline controls', async () => {
+    const registry = createCommandRegistry();
+    const helpCommand = registry.resolve('help');
+    expect(helpCommand).toBeDefined();
+
+    const context = createBaseContext({
+      update: {
+        update_id: 1,
+        message: {
+          message_id: 1,
+          date: 1,
+          text: '/help',
+          chat: { id: 123, type: 'supergroup', title: 'Ops Chat', is_forum: true },
+          from: { id: 1, is_bot: false, first_name: 'Ops' },
+        },
+      },
+      message: {
+        message_id: 1,
+        date: 1,
+        text: '/help',
+        chat: { id: 123, type: 'supergroup', title: 'Ops Chat', is_forum: true },
+        from: { id: 1, is_bot: false, first_name: 'Ops' },
+      } as CommandContext['message'],
+    });
+
+    await helpCommand?.execute(context);
+
+    const sendMock = context.messenger.sendHtmlMessage as ReturnType<typeof vi.fn>;
+    expect(sendMock).toHaveBeenCalledTimes(1);
+    expect(sendMock.mock.calls[0]?.[0].html).toContain('ESL Ops Control Panel');
+    expect(sendMock.mock.calls[0]?.[0].replyMarkup).toEqual(
+      expect.objectContaining({
+        inline_keyboard: expect.arrayContaining([
+          expect.arrayContaining([
+            expect.objectContaining({ text: 'Status' }),
+            expect.objectContaining({ text: 'Finished Jobs' }),
+          ]),
+        ]),
       }),
     );
   });

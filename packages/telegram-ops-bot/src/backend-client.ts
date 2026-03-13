@@ -1,6 +1,7 @@
 import type {
   JobListResponse,
   JobStatusDto,
+  OpsActionListResponse,
   OpsActionRequest,
   OpsActionStatus,
   OpsStatusResponse,
@@ -64,6 +65,16 @@ export class HttpBackendClient {
       'GET',
       `/ops/actions/${encodeURIComponent(operationId)}`,
     );
+  }
+
+  async listOpsActions(limit: number, offset = 0): Promise<OpsActionListResponse> {
+    const safeLimit = Number.isInteger(limit) ? Math.max(1, Math.min(20, limit)) : 10;
+    const safeOffset = Number.isInteger(offset) ? Math.max(0, offset) : 0;
+    const query = new URLSearchParams({
+      limit: String(safeLimit),
+      offset: String(safeOffset),
+    });
+    return this.requestJson<OpsActionListResponse>('GET', `/ops/actions?${query.toString()}`);
   }
 
   async getFinishedJobs(limit: number): Promise<JobListResponse> {

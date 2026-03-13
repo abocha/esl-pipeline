@@ -3,6 +3,7 @@ import { randomUUID } from 'node:crypto';
 import type { Readable } from 'node:stream';
 
 import type {
+  OpsActionListResponse,
   OpsActionRequest,
   OpsActionStatus,
   OpsHealthState,
@@ -14,6 +15,7 @@ import {
   claimQueuedOpsActionOwnership,
   finalizeOwnedOpsAction,
   getOpsActionStatusByOperationId,
+  listOpsActions as listPersistedOpsActions,
   listResumableOpsActions,
   pruneOpsActionHistoryByFinishedAt,
   upsertOpsActionStatus,
@@ -55,6 +57,7 @@ interface OpsControlDependencies {
   isPersistenceEnabled: () => boolean;
   upsertPersistedAction: (action: InternalActionStatus) => Promise<InternalActionStatus>;
   readPersistedAction: (operationId: string) => Promise<InternalActionStatus | null>;
+  listPersistedActions: (args: { limit: number; offset: number }) => Promise<OpsActionListResponse>;
   claimPersistedActionOwnership: (
     params: ClaimOpsActionOwnershipParams,
   ) => Promise<InternalActionStatus | null>;
@@ -85,6 +88,7 @@ const dependencies: OpsControlDependencies = {
   isPersistenceEnabled: () => loadConfig().pg.enabled,
   upsertPersistedAction: async (action) => upsertOpsActionStatus(action),
   readPersistedAction: async (operationId) => getOpsActionStatusByOperationId(operationId),
+  listPersistedActions: async ({ limit, offset }) => listPersistedOpsActions({ limit, offset }),
   claimPersistedActionOwnership: async (params) => claimQueuedOpsActionOwnership(params),
   listResumablePersistedActions: async ({ now, limit }) => listResumableOpsActions({ now, limit }),
   finalizeOwnedPersistedAction: async (params) => finalizeOwnedOpsAction(params),
@@ -122,6 +126,8 @@ export function resetOpsControlStateForTests(): void {
   dependencies.isPersistenceEnabled = () => loadConfig().pg.enabled;
   dependencies.upsertPersistedAction = async (action) => upsertOpsActionStatus(action);
   dependencies.readPersistedAction = async (operationId) => getOpsActionStatusByOperationId(operationId);
+  dependencies.listPersistedActions = async ({ limit, offset }) =>
+    listPersistedOpsActions({ limit, offset });
   dependencies.claimPersistedActionOwnership = async (params) =>
     claimQueuedOpsActionOwnership(params);
   dependencies.listResumablePersistedActions = async ({ now, limit }) =>
@@ -304,6 +310,36 @@ export async function getOpsActionStatus(operationId: string): Promise<OpsAction
   }
 
   return cached ? { ...cached } : null;
+}
+
+export async function listOpsActions(args?: {
+  limit?: number;
+  offset?: number;
+}): Promise<OpsActionListResponse> {
+  assertOpsControlEnabled();
+  const config = loadConfig();
+  const limit = normalizeActionListLimit(args?.limit);
+  const offset = normalizeActionListOffset(args?.offset);
+
+  if (dependencies.isPersistenceEnabled()) {
+    const persisted = await dependencies.listPersistedActions({ limit, offset });
+    for (const action of persisted.actions) {
+      storeAction(action, config.opsControl.actionHistoryLimit);
+    }
+    return persisted;
+  }
+
+  const actions = [...actionOrder]
+    .reverse()
+    .map((operationId) => actionStore.get(operationId))
+    .filter((action): action is InternalActionStatus => Boolean(action));
+
+  return {
+    actions: actions.slice(offset, offset + limit).map((action) => ({ ...action })),
+    total: actions.length,
+    limit,
+    offset,
+  };
 }
 
 function resolveActionCommand(request: OpsActionRequest): string {
@@ -597,6 +633,21 @@ function tailOutput(value: string): string | null {
   if (!trimmed) return null;
   if (trimmed.length <= OUTPUT_TAIL_MAX_CHARS) return trimmed;
   return trimmed.slice(-OUTPUT_TAIL_MAX_CHARS);
+}
+
+function normalizeActionListLimit(value: number | undefined): number {
+  if (!Number.isInteger(value)) {
+    return 10;
+  }
+  const safeValue = value as number;
+  return Math.max(1, Math.min(20, safeValue));
+}
+
+function normalizeActionListOffset(value: number | undefined): number {
+  if (typeof value !== 'number' || !Number.isInteger(value) || value < 0) {
+    return 0;
+  }
+  return value;
 }
 
 function normalizeHealthState(value: unknown): OpsHealthState {

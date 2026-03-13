@@ -21,7 +21,7 @@ export function emitBotMetricCounter(args: {
   args.audit.log({
     level: 'info',
     event: 'bot_metric',
-    message: 'Bot metric recorded',
+    message: 'Bot metric emitted',
     details: {
       metric: args.metric,
       value: args.value ?? 1,
