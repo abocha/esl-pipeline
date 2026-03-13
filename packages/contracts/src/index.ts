@@ -286,6 +286,13 @@ export interface OpsActionStatus {
   stderrTail: string | null;
 }
 
+export interface OpsActionListResponse {
+  actions: OpsActionStatus[];
+  total: number;
+  limit: number;
+  offset: number;
+}
+
 export type ReadinessMetricName =
   | 'publishSuccessRate'
   | 'medianPublishLatencyMs'

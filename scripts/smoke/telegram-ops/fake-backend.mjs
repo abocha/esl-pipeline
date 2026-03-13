@@ -137,6 +137,28 @@ function buildOpsActionStatus(operationId) {
   };
 }
 
+function buildOpsActionList() {
+  return {
+    actions: [
+      buildOpsActionStatus(process.env.TELEGRAM_SMOKE_OP_ID ?? 'smoke-op-1'),
+      {
+        ...buildOpsActionStatus('smoke-op-older'),
+        action: 'restore_drill_download_only',
+        state: 'running',
+        requestedAt: '2026-03-13T04:50:00.000Z',
+        startedAt: '2026-03-13T04:51:00.000Z',
+        finishedAt: null,
+        message: 'Drill still running',
+        command: 'bash scripts/docker/postgres-backup-restore.sh drill-download-only',
+        exitCode: null,
+      },
+    ],
+    total: 2,
+    limit: 10,
+    offset: 0,
+  };
+}
+
 function buildJob(jobId) {
   const safeJobId = typeof jobId === 'string' && jobId.trim() ? jobId.trim() : defaultShareJobId;
   return {
@@ -292,6 +314,11 @@ async function handler(req, res) {
   if (req.method === 'GET' && pathname.startsWith('/ops/actions/')) {
     const operationId = decodeURIComponent(pathname.replace('/ops/actions/', '') || 'smoke-op-1');
     sendJson(res, 200, buildOpsActionStatus(operationId));
+    return;
+  }
+
+  if (req.method === 'GET' && pathname === '/ops/actions') {
+    sendJson(res, 200, buildOpsActionList());
     return;
   }
 

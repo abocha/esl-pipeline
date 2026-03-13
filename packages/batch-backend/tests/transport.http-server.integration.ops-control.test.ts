@@ -251,6 +251,67 @@ describeHttpServerIntegrationSuite(
       });
     });
 
+    it('returns 200 for GET /ops/actions with capped pagination and newest-first payloads', async () => {
+      await withOpsApp({}, async (app) => {
+        opsControlModule.setOpsControlDependenciesForTests({
+          isPersistenceEnabled: () => true,
+          listPersistedActions: async ({ limit, offset }) => ({
+            actions: [
+              {
+                operationId: 'op-3',
+                action: 'backup_upload',
+                state: 'succeeded',
+                requestedAt: '2026-03-11T00:03:00.000Z',
+                startedAt: '2026-03-11T00:03:10.000Z',
+                finishedAt: '2026-03-11T00:03:30.000Z',
+                requestedBy: 'test@example.com',
+                requestedByUserId: 'test-user-id',
+                message: 'done',
+                command: 'backup',
+                exitCode: 0,
+                stdoutTail: null,
+                stderrTail: null,
+              },
+              {
+                operationId: 'op-2',
+                action: 'restore_drill_download_only',
+                state: 'running',
+                requestedAt: '2026-03-11T00:02:00.000Z',
+                startedAt: '2026-03-11T00:02:05.000Z',
+                finishedAt: null,
+                requestedBy: 'test@example.com',
+                requestedByUserId: 'test-user-id',
+                message: 'running',
+                command: 'drill',
+                exitCode: null,
+                stdoutTail: null,
+                stderrTail: null,
+              },
+            ],
+            total: 3,
+            limit,
+            offset,
+          }),
+        });
+
+        const response = await app.inject({
+          method: 'GET',
+          url: '/ops/actions?limit=99&offset=-5',
+        });
+
+        expect(response.statusCode).toBe(200);
+        expect(response.json()).toEqual({
+          actions: [
+            expect.objectContaining({ operationId: 'op-3' }),
+            expect.objectContaining({ operationId: 'op-2' }),
+          ],
+          total: 3,
+          limit: 20,
+          offset: 0,
+        });
+      });
+    });
+
     it('returns 200 for /ops/actions/:operationId when action exists', async () => {
       await withOpsApp({}, async (app) => {
         opsControlModule.setOpsControlDependenciesForTests({
@@ -372,6 +433,28 @@ describeHttpServerIntegrationSuite(
         expect(response.json()).toEqual({
           error: 'internal_error',
           message: 'Failed to fetch ops action status',
+        });
+      });
+    });
+
+    it('maps internal action-list failures to a stable 500 shape', async () => {
+      await withOpsApp({}, async (app) => {
+        opsControlModule.setOpsControlDependenciesForTests({
+          isPersistenceEnabled: () => true,
+          listPersistedActions: async () => {
+            throw new Error('list lookup exploded');
+          },
+        });
+
+        const response = await app.inject({
+          method: 'GET',
+          url: '/ops/actions',
+        });
+
+        expect(response.statusCode).toBe(500);
+        expect(response.json()).toEqual({
+          error: 'internal_error',
+          message: 'Failed to list ops actions',
         });
       });
     });

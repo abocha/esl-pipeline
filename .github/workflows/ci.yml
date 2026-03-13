@@ -266,9 +266,6 @@ jobs:
           cache: pnpm
           cache-dependency-path: pnpm-lock.yaml
 
-      - name: Install PostgreSQL client
-        run: sudo apt-get update && sudo apt-get install -y postgresql-client
-
       - name: Install deps
         run: pnpm install --frozen-lockfile
 
@@ -277,12 +274,21 @@ jobs:
 
       - name: Wait for Postgres and Redis
         run: |
-          until pg_isready -h 127.0.0.1 -p 5432 -U postgres -d esl_batch_test; do
+          set -euo pipefail
+          for attempt in {1..30}; do
+            if timeout 1 bash -c '</dev/tcp/127.0.0.1/5432'; then
+              break
+            fi
             sleep 2
           done
-          until timeout 1 bash -c '</dev/tcp/127.0.0.1/6379'; do
+          timeout 1 bash -c '</dev/tcp/127.0.0.1/5432'
+          for attempt in {1..30}; do
+            if timeout 1 bash -c '</dev/tcp/127.0.0.1/6379'; then
+              break
+            fi
             sleep 2
           done
+          timeout 1 bash -c '</dev/tcp/127.0.0.1/6379'
 
       - name: Migration preflight
         run: |
@@ -310,14 +316,19 @@ jobs:
       - name: Capture schema snapshot on failure
         if: failure()
         run: |
+          set -euo pipefail
           mkdir -p "$BATCH_BACKEND_TEST_ARTIFACTS_DIR"
-          PGPASSWORD=postgres pg_dump \
-            --host 127.0.0.1 \
-            --port 5432 \
-            --username postgres \
-            --schema-only \
-            --dbname esl_batch_test \
-            > "$BATCH_BACKEND_TEST_ARTIFACTS_DIR/schema.sql" || true
+          postgres_container_id="$(docker ps --filter "ancestor=postgres:18" --format '{{.ID}}' | head -n1)"
+          if [[ -n "$postgres_container_id" ]]; then
+            docker exec "$postgres_container_id" sh -lc \
+              'PGPASSWORD=postgres pg_dump --schema-only --username postgres --dbname esl_batch_test' \
+              > "$BATCH_BACKEND_TEST_ARTIFACTS_DIR/schema.sql" \
+              || printf '%s\n' 'schema snapshot failed inside postgres:18 service container' \
+                > "$BATCH_BACKEND_TEST_ARTIFACTS_DIR/schema-snapshot-note.txt"
+          else
+            printf '%s\n' 'schema snapshot skipped: postgres:18 service container was not found' \
+              > "$BATCH_BACKEND_TEST_ARTIFACTS_DIR/schema-snapshot-note.txt"
+          fi
 
       - name: Upload backend db + worker artifacts
         if: always()

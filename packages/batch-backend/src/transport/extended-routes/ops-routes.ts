@@ -8,6 +8,7 @@ import {
   getOpsActionStatus,
   getOpsStatus,
   isValidOpsBotSecret,
+  listOpsActions,
   shouldRequireOpsBotSecret,
 } from '../../application/ops-control.js';
 import { logger } from '../../infrastructure/logger.js';
@@ -87,6 +88,41 @@ export function registerOpsRoutes(app: FastifyInstance, context: ExtendedRoutesC
         return reply.code(500).send({
           error: 'internal_error',
           message: 'Failed to enqueue ops action',
+        });
+      }
+    },
+  );
+
+  app.get(
+    '/ops/actions',
+    { preHandler: [authenticate, requireRole(['admin'])] },
+    async (request, reply) => {
+      if (!ensureOpsBotSecret(request, reply)) return;
+      const querySchema = z.object({
+        limit: z.coerce.number().int().optional(),
+        offset: z.coerce.number().int().optional(),
+      });
+
+      try {
+        const { limit, offset } = querySchema.parse(request.query ?? {});
+        const actions = await listOpsActions({ limit, offset });
+        return reply.code(200).send(actions);
+      } catch (error: unknown) {
+        if (error instanceof z.ZodError) {
+          return reply.code(400).send({
+            error: 'validation_failed',
+            message: 'Invalid ops action list query',
+            details: error.issues,
+          });
+        }
+
+        logger.error(error instanceof Error ? error : String(error), {
+          event: 'ops_action_list_failed',
+          userId: getAuthenticatedUser(request)?.id,
+        });
+        return reply.code(500).send({
+          error: 'internal_error',
+          message: 'Failed to list ops actions',
         });
       }
     },

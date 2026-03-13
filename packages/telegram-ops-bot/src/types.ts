@@ -3,6 +3,7 @@ import type { Message, Update } from '@grammyjs/types';
 import type {
   JobListResponse,
   JobStatusDto,
+  OpsActionListResponse,
   OpsActionRequest,
   OpsActionStatus,
   OpsStatusResponse,
@@ -62,8 +63,18 @@ export interface BackendClient {
   getOpsStatus: () => Promise<OpsStatusResponse>;
   enqueueOpsAction: (payload: OpsActionRequest) => Promise<OpsActionStatus>;
   getOpsActionStatus: (operationId: string) => Promise<OpsActionStatus>;
+  listOpsActions: (limit: number, offset?: number) => Promise<OpsActionListResponse>;
   getFinishedJobs: (limit: number) => Promise<JobListResponse>;
   getJob: (jobId: string) => Promise<JobStatusDto>;
+}
+
+export interface TelegramInlineKeyboardButton {
+  text: string;
+  callback_data: string;
+}
+
+export interface TelegramInlineKeyboardMarkup {
+  inline_keyboard: TelegramInlineKeyboardButton[][];
 }
 
 export interface TelegramMessenger {
@@ -73,7 +84,8 @@ export interface TelegramMessenger {
     domain?: BotDomain;
     html: string;
     disableLinkPreview?: boolean;
-  }) => Promise<void>;
+    replyMarkup?: TelegramInlineKeyboardMarkup;
+  }) => Promise<Message.TextMessage>;
 }
 
 export interface TopicRouter {
