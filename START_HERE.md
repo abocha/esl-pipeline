@@ -8,8 +8,9 @@ If your brain is overloaded, use this file and do only what it says.
 2. Open: `docs/reference/PRESET_V2_SPEC.md`
 3. Open: `docs/playbooks/RESTART_TOMORROW.md`
 4. Open: `docs/reference/V1_IMPLEMENTATION_TRACKER.md`
-5. Pick one micro-task (30-90 min max).
-6. Write: `Today I only need to finish: ____`
+5. If you need the active execution map, open: `docs/plans/README.md`
+6. Pick one micro-task (30-90 min max).
+7. Write: `Today I only need to finish: ____`
 
 That is enough to be back on track.
 
@@ -28,7 +29,8 @@ That is enough to be back on track.
 2. `docs/reference/PRESET_V2_SPEC.md`
 3. `docs/playbooks/RESTART_TOMORROW.md`
 4. `docs/reference/V1_IMPLEMENTATION_TRACKER.md`
-5. `docs/playbooks/WEEKLY_PRODUCT_REVIEW_TEMPLATE.md`
+5. `docs/plans/README.md`
+6. `docs/playbooks/WEEKLY_PRODUCT_REVIEW_TEMPLATE.md`
 
 ## If You Feel Stuck
 

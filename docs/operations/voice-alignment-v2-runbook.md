@@ -1,5 +1,15 @@
 # Voice Alignment V2 Runbook
 
+## Meta
+
+- Audience: maintainers and operators managing voice-alignment rollout.
+- Read Time: 5 minutes.
+- Authority Level: operations runbook.
+- Last Verified Against: 2026-03-13 repo state.
+- Owner: backend/ops maintainers + automation agents.
+- Review Cadence: monthly or after voice-alignment workflow changes.
+- Status: `runbook`.
+
 ## Purpose
 
 Operational guide for rolling out and maintaining voice-alignment v2 safely across prompting,

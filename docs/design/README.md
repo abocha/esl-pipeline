@@ -5,7 +5,10 @@
 - Audience: AI agents and maintainers.
 - Read Time: 1 minute.
 - Authority Level: Design router.
-- Last Verified Against: 2026-02-06 repo state.
+- Last Verified Against: 2026-03-13 repo state.
+- Owner: backend/frontend maintainers + automation agents.
+- Review Cadence: monthly or after transcription-flow changes.
+- Status: `router`.
 
 ## Purpose
 
@@ -18,9 +21,9 @@
 
 ## Canonical Sources
 
-1. `docs/design/TRANSCRIPTION_PIPELINE_SPEC.md`
-2. `docs/backend-frontend/backend-frontend-alignment.md`
-3. `docs/reference/agents-ssot.md`
+1. [`docs/design/TRANSCRIPTION_PIPELINE_SPEC.md`](TRANSCRIPTION_PIPELINE_SPEC.md)
+2. [`docs/backend-frontend/backend-frontend-alignment.md`](../backend-frontend/backend-frontend-alignment.md)
+3. [`docs/reference/agents-ssot.md`](../reference/agents-ssot.md)
 
 ## Current State
 
@@ -34,5 +37,5 @@
 
 ## Related
 
-- `docs/archive/frontend/README.md`
-- `docs/PIPELINE_INTEGRATION_VISION.md`
+- [`docs/archive/frontend/README.md`](../archive/frontend/README.md)
+- [`docs/PIPELINE_INTEGRATION_VISION.md`](../PIPELINE_INTEGRATION_VISION.md)

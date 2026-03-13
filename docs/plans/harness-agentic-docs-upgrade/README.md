@@ -2,15 +2,7 @@
 
 ## Summary
 
-This plan captures the remaining phases from `tmp/harness-plan.md` after the initial foundation rollout.
-
-Completed baseline:
-
-1. Core + active-ops docs checks are live.
-2. Docs health and stale-candidate reporting are live.
-3. CI/docs-gardening workflow scaffolding is live.
-
-This directory defines the next implementation phases to finish the roadmap.
+This topic captures the remaining phases after the initial docs-governance baseline landed.
 
 ## Scope and Locked Decisions
 
@@ -30,6 +22,7 @@ This directory defines the next implementation phases to finish the roadmap.
 
 ## Operator Commands
 
+1. `pnpm docs:generate:indexes`
 1. `pnpm docs:check`
 2. `pnpm docs:health:report`
 3. `pnpm docs:stale:active`
