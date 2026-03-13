@@ -274,22 +274,17 @@ async function defaultOpsActionsSchemaProbe(args) {
 
   let PgClient;
   try {
-    const pgModule = await import('pg');
+    const backendRequire = createRequire(
+      path.join(REPO_ROOT, 'packages', 'batch-backend', 'package.json'),
+    );
+    const pgModule = backendRequire('pg');
     PgClient = pgModule.Client;
   } catch {
-    try {
-      const backendRequire = createRequire(
-        path.join(REPO_ROOT, 'packages', 'batch-backend', 'package.json'),
-      );
-      const pgModule = backendRequire('pg');
-      PgClient = pgModule.Client;
-    } catch {
-      return {
-        available: false,
-        exists: null,
-        warning: 'Schema probe unavailable: pg module not resolvable from this runtime.',
-      };
-    }
+    return {
+      available: false,
+      exists: null,
+      warning: 'Schema probe unavailable: pg module not resolvable from backend runtime.',
+    };
   }
 
   const client = new PgClient(config);
