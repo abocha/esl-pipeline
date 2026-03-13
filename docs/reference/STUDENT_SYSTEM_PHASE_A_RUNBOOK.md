@@ -1,5 +1,15 @@
 # Student System Phase A Runbook
 
+## Meta
+
+- Audience: maintainers and migration operators.
+- Read Time: 4 minutes.
+- Authority Level: migration runbook.
+- Last Verified Against: 2026-03-13 repo state.
+- Owner: backend/frontend maintainers + automation agents.
+- Review Cadence: quarterly or after student backfill flow changes.
+- Status: `runbook`.
+
 ## Purpose
 
 Operational guide for moving student/profile metadata from filesystem JSON into canonical Postgres tables (`students`, `profiles`, `student_profile_bindings`).

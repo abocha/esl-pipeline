@@ -5,7 +5,7 @@
 - Audience: maintainers and AI agents improving docs operations.
 - Read Time: 6 minutes.
 - Authority Level: Docs system design and operating model.
-- Last Verified Against: 2026-03-10 repo state.
+- Last Verified Against: 2026-03-13 repo state.
 - Owner: founder-maintainer + automation agents.
 - Review Cadence: monthly or after major workflow/tooling changes.
 - Status: `reference`.
@@ -14,6 +14,7 @@
 
 - Translate harness-engineering principles into concrete, enforceable repo rules.
 - Keep docs agent-friendly without overengineering.
+- Preserve the direct mapping back to the Harness article while the canonical repo model lives in `AGENT_LEGIBILITY_MODEL.md`.
 
 Reference article:
 `https://openai.com/index/harness-engineering/` (February 11, 2026)
@@ -74,11 +75,13 @@ See:
 
 - Score quality with [`docs/reference/DOCS_QUALITY_SCORE.md`](DOCS_QUALITY_SCORE.md).
 - Track health via generated reports in `tmp/`.
-- Execute gardening process from [`docs/playbooks/DOC_GARDENING_PLAYBOOK.md`](../playbooks/DOC_GARDENING_PLAYBOOK.md).
+- Execute gardening process from [`docs/reference/DOCS_GARDENING_PLAYBOOK.md`](DOCS_GARDENING_PLAYBOOK.md).
 
 ## Related
 
 - [`AGENTS.md`](../../AGENTS.md)
+- [`docs/reference/AGENT_LEGIBILITY_MODEL.md`](AGENT_LEGIBILITY_MODEL.md)
 - [`docs/reference/DOCS_GOVERNANCE.md`](DOCS_GOVERNANCE.md)
+- [`docs/reference/DOCS_GARDENING_PLAYBOOK.md`](DOCS_GARDENING_PLAYBOOK.md)
 - [`docs/reference/DOCS_IA_MAP.md`](DOCS_IA_MAP.md)
 - [`docs/reference/agents-ssot.md`](agents-ssot.md)

@@ -3,44 +3,30 @@
 ## Meta
 
 - Audience: maintainers and implementing agents.
-- Authority Level: Package entrypoint and shared runtime policy guide.
-- Last Verified Against: 2026-03-09 repo state.
+- Authority Level: package entrypoint and shared runtime policy guide.
+- Last Verified Against: 2026-03-13 repo state.
 - Owner: provider-runtime maintainers + automation agents.
 - Review Cadence: monthly or after major provider policy/runtime changes.
 - Status: `active`.
 
-Shared provider runtime utilities for generation-related policy and error handling.
+Shared generation-provider runtime helpers.
 
-## Purpose
+## Role
 
-`@esl-pipeline/provider-runtime` centralizes provider/runtime helpers so backend flows
-can reuse consistent classification and fallback behavior without duplicating logic.
+This package centralizes reusable generation runtime behavior for backend flows:
 
-Current modules are exported from [`src/index.ts`](src/index.ts):
+- provider/model error classification
+- retry and fallback hints
+- provider ladder helpers
 
-- `classification`
-- `hints`
-- `ladder`
+Policy remains canonical in:
 
-## Typical Use
+- [`docs/reference/GENERATION_PROVIDER_POLICY.md`](../../docs/reference/GENERATION_PROVIDER_POLICY.md)
+- [`packages/batch-backend/README.md`](../batch-backend/README.md)
 
-This package is consumed by batch backend generation policy/runtime paths to:
-
-- classify provider/model errors into stable categories,
-- derive retry/fallback hints,
-- apply provider ladder behavior consistently.
-
-## Development
-
-From repo root:
+## Validation
 
 ```bash
 pnpm --filter @esl-pipeline/provider-runtime build
 pnpm --filter @esl-pipeline/provider-runtime test
 ```
-
-## Related
-
-- [`packages/batch-backend/README.md`](../batch-backend/README.md)
-- [`docs/reference/GENERATION_PROVIDER_POLICY.md`](../../docs/reference/GENERATION_PROVIDER_POLICY.md)
-- [`docs/reference/agents-ssot.md`](../../docs/reference/agents-ssot.md)

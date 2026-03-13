@@ -5,7 +5,7 @@
 - Audience: AI agents, maintainers.
 - Read Time: 2 minutes.
 - Authority Level: Router.
-- Last Verified Against: 2026-03-05 repo state.
+- Last Verified Against: 2026-03-13 repo state.
 - Owner: founder-maintainer + automation agents.
 - Review Cadence: biweekly.
 - Status: `router`.
@@ -49,12 +49,58 @@
   - [`docs/operations/postgres-ops-health.md`](operations/postgres-ops-health.md)
 - Telegram ops control panel bot:
   - [`docs/operations/telegram-ops-control-panel.md`](operations/telegram-ops-control-panel.md)
+- Voice-alignment rollout and diagnostics:
+  - [`docs/operations/voice-alignment-v2-runbook.md`](operations/voice-alignment-v2-runbook.md)
 - Prompt gallery DB bootstrap:
   - [`docs/operations/prompt-gallery-bootstrap.md`](operations/prompt-gallery-bootstrap.md)
 - Versioning and release automation:
   - [`docs/reference/VERSIONING_MODEL.md`](reference/VERSIONING_MODEL.md)
 - Historical pre-v1 tag reset record:
   - [`docs/archive/release/versioning-tag-reset-runbook.md`](archive/release/versioning-tag-reset-runbook.md)
+
+## Design and Product Paths
+
+- Transcription and publish-flow design:
+  - [`docs/design/README.md`](design/README.md)
+  - [`docs/design/TRANSCRIPTION_PIPELINE_SPEC.md`](design/TRANSCRIPTION_PIPELINE_SPEC.md)
+  - [`docs/PIPELINE_INTEGRATION_VISION.md`](PIPELINE_INTEGRATION_VISION.md)
+- Learning preset architecture and provider policy:
+  - [`docs/reference/PRESET_V2_SPEC.md`](reference/PRESET_V2_SPEC.md)
+  - [`docs/reference/GENERATION_PROVIDER_POLICY.md`](reference/GENERATION_PROVIDER_POLICY.md)
+- Generation-provider evaluation profiles:
+  - [`docs/reference/OPENAI_RESPONSES_WS2B_PROFILE.md`](reference/OPENAI_RESPONSES_WS2B_PROFILE.md)
+  - [`docs/reference/OPENROUTER_WS2B_PROFILE.md`](reference/OPENROUTER_WS2B_PROFILE.md)
+  - [`docs/reference/GOOGLE_GENAI_WS2B_PROFILE.md`](reference/GOOGLE_GENAI_WS2B_PROFILE.md)
+- Student system roadmap and migration runbook:
+  - [`docs/reference/STUDENT_SYSTEM_ROADMAP.md`](reference/STUDENT_SYSTEM_ROADMAP.md)
+  - [`docs/reference/STUDENT_SYSTEM_PHASE_A_RUNBOOK.md`](reference/STUDENT_SYSTEM_PHASE_A_RUNBOOK.md)
+- Product readiness and review cadence:
+  - [`docs/reference/PRODUCT_NORTH_STAR_AND_READINESS.md`](reference/PRODUCT_NORTH_STAR_AND_READINESS.md)
+  - [`docs/playbooks/WEEKLY_PRODUCT_REVIEW_TEMPLATE.md`](playbooks/WEEKLY_PRODUCT_REVIEW_TEMPLATE.md)
+- Implementation continuity tracker:
+  - [`docs/reference/V1_IMPLEMENTATION_TRACKER.md`](reference/V1_IMPLEMENTATION_TRACKER.md)
+
+## Docs System Paths
+
+- Docs governance and agent legibility:
+  - [`docs/reference/DOCS_GOVERNANCE.md`](reference/DOCS_GOVERNANCE.md)
+  - [`docs/reference/AGENT_LEGIBILITY_MODEL.md`](reference/AGENT_LEGIBILITY_MODEL.md)
+  - [`docs/reference/HARNESS_AGENTIC_DOCS_MODEL.md`](reference/HARNESS_AGENTIC_DOCS_MODEL.md)
+- Docs gardening and scorecards:
+  - [`docs/reference/DOCS_GARDENING_PLAYBOOK.md`](reference/DOCS_GARDENING_PLAYBOOK.md)
+  - [`docs/reference/DOCS_GARDENING_SCORECARD.md`](reference/DOCS_GARDENING_SCORECARD.md)
+  - [`docs/reference/DOCS_QUALITY_SCORE.md`](reference/DOCS_QUALITY_SCORE.md)
+- Generated reference indexes:
+  - [`docs/generated/README.md`](generated/README.md)
+  - [`docs/generated/env-surface-index.md`](generated/env-surface-index.md)
+
+## Planning Paths
+
+- Plans router:
+  - [`docs/plans/README.md`](plans/README.md)
+- Active/completed planning topics:
+  - [`docs/plans/backlog/README.md`](plans/backlog/README.md)
+  - [`docs/plans/completed/README.md`](plans/completed/README.md)
 
 ## Rules of Thumb
 
