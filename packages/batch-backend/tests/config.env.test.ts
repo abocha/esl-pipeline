@@ -501,6 +501,7 @@ describe('config/env - ops control settings', () => {
         );
         expect(cfg.opsControl.actionTimeoutMs).toBe(10 * 60 * 1000);
         expect(cfg.opsControl.actionHistoryLimit).toBe(100);
+        expect(cfg.opsControl.actionRetentionDays).toBe(30);
       },
     );
   });
@@ -516,6 +517,7 @@ describe('config/env - ops control settings', () => {
         BATCH_BACKEND_OPS_CONTROL_RESTORE_DRILL_COMMAND: 'echo drill',
         BATCH_BACKEND_OPS_CONTROL_ACTION_TIMEOUT_MS: '45000',
         BATCH_BACKEND_OPS_CONTROL_ACTION_HISTORY_LIMIT: '42',
+        BATCH_BACKEND_OPS_CONTROL_ACTION_RETENTION_DAYS: '14',
       },
       async () => {
         const cfg = await loadConfigFresh();
@@ -526,11 +528,12 @@ describe('config/env - ops control settings', () => {
         expect(cfg.opsControl.restoreDrillCommand).toBe('echo drill');
         expect(cfg.opsControl.actionTimeoutMs).toBe(45000);
         expect(cfg.opsControl.actionHistoryLimit).toBe(42);
+        expect(cfg.opsControl.actionRetentionDays).toBe(14);
       },
     );
   });
 
-  it('rejects out-of-range timeout and history limit', async () => {
+  it('rejects out-of-range timeout/history/retention settings', async () => {
     await expect(
       withEnv(
         {
@@ -556,6 +559,20 @@ describe('config/env - ops control settings', () => {
         },
       ),
     ).rejects.toThrow('BATCH_BACKEND_OPS_CONTROL_ACTION_HISTORY_LIMIT must be between 1 and 1000');
+
+    await expect(
+      withEnv(
+        {
+          NODE_ENV: 'test',
+          BATCH_BACKEND_OPS_CONTROL_ACTION_RETENTION_DAYS: '0',
+        },
+        async () => {
+          await loadConfigFresh();
+        },
+      ),
+    ).rejects.toThrow(
+      'BATCH_BACKEND_OPS_CONTROL_ACTION_RETENTION_DAYS must be between 1 and 3650',
+    );
   });
 });
 

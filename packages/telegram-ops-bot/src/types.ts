@@ -9,16 +9,24 @@ import type {
 } from '@esl-pipeline/contracts';
 
 export type BotDomain = 'ops' | 'jobs' | 'alerts';
+export type BotMode = 'polling' | 'webhook';
 
 export interface BotConfig {
   enabled: boolean;
   token: string;
+  apiBaseUrl: string;
+  mode: BotMode;
+  webhookHost: string;
+  webhookPort: number;
+  webhookPath: string;
+  webhookSecretToken?: string;
   chatId: string;
   backendBaseUrl: string;
   backendEmail: string;
   backendPassword: string;
   backendTimeoutMs: number;
   backendSharedSecret?: string;
+  leaderElectionEnabled: boolean;
   allowedUserIds: Set<number>;
   pollIntervalMs: number;
   pollTimeoutSeconds: number;
@@ -62,6 +70,7 @@ export interface TelegramMessenger {
   sendHtmlMessage: (args: {
     chatId: string;
     threadId?: number;
+    domain?: BotDomain;
     html: string;
     disableLinkPreview?: boolean;
   }) => Promise<void>;
@@ -70,6 +79,12 @@ export interface TelegramMessenger {
 export interface TopicRouter {
   initialize: () => Promise<void>;
   resolveThreadId: (args: { domain: BotDomain; incomingThreadId?: number }) => number | undefined;
+  healStaleThread: (args: { domain: BotDomain; staleThreadId: number }) => Promise<number | undefined>;
+}
+
+export interface PollLeaderElection {
+  isLeader: () => Promise<boolean>;
+  close: () => Promise<void>;
 }
 
 export interface CommandContext {

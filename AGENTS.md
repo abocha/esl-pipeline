@@ -118,6 +118,20 @@ Dependency hygiene when touching deps:
 3. `pnpm deps:audit:strict`
 4. `pnpm check:fast`
 
+## Host vs Container Env Context (Mandatory)
+
+When working with scripts/commands that read environment:
+
+- Treat `host-invoked CLI` and `container runtime` as distinct execution contexts.
+  - Host CLI runs from local shell/network context.
+  - Services in Compose use Docker DNS/service networking.
+- Do not require changing container-safe defaults just to make host checks pass.
+  - In this repo, `PG_HOST=postgres` is canonical for Compose services.
+  - Host checks should adapt internally when they need `127.0.0.1`.
+- Prefer script-level adaptation over operator shell gymnastics.
+  - If a release/readiness script runs from host, it should normalize host-specific env needs itself.
+- On WSL/Linux host-run tooling, proactively set safe temp envs (`TMPDIR`, `TMP`, `TEMP`) inside scripts when Node/tsx IPC sockets may fail on mounted Windows temp paths.
+
 ## Docs Change Rules
 
 When editing docs:

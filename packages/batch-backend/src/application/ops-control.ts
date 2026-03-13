@@ -10,10 +10,35 @@ import type {
 } from '@esl-pipeline/contracts';
 
 import { loadConfig } from '../config/env.js';
+import {
+  claimQueuedOpsActionOwnership,
+  finalizeOwnedOpsAction,
+  getOpsActionStatusByOperationId,
+  listResumableOpsActions,
+  pruneOpsActionHistoryByFinishedAt,
+  upsertOpsActionStatus,
+  type ClaimOpsActionOwnershipParams,
+  type FinalizeOwnedOpsActionParams,
+} from '../domain/ops-action-repository.js';
+import { logger } from '../infrastructure/logger.js';
 
 const STDOUT_STDERR_MAX_BYTES = 256 * 1024;
 const OUTPUT_TAIL_MAX_CHARS = 3000;
 const TERM_TO_KILL_GRACE_MS = 2000;
+const ACTION_OWNER_GRACE_MS = 60_000;
+const ACTION_RETENTION_PRUNE_BATCH_SIZE = 100;
+const ACTION_RETENTION_PRUNE_MAX_BATCHES_PER_PASS = 5;
+const ACTION_RETENTION_PRUNE_INTERVAL_MS = 60_000;
+const ACTION_RETENTION_MS_PER_DAY = 24 * 60 * 60 * 1000;
+const ACTION_RESUME_SWEEP_INTERVAL_MS = 30_000;
+const ACTION_FINALIZE_RETRY_ATTEMPTS = 3;
+const ACTION_FINALIZE_RETRY_DELAY_MS = 250;
+const ACTION_FALLBACK_UPSERT_RETRY_ATTEMPTS = 3;
+const ACTION_FALLBACK_UPSERT_RETRY_DELAY_MS = 250;
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
 
 interface RunCommandResult {
   exitCode: number;
@@ -26,6 +51,21 @@ interface OpsControlDependencies {
   now: () => Date;
   randomId: () => string;
   runCommand: (command: string, timeoutMs: number) => Promise<RunCommandResult>;
+  ownerId: () => string;
+  isPersistenceEnabled: () => boolean;
+  upsertPersistedAction: (action: InternalActionStatus) => Promise<InternalActionStatus>;
+  readPersistedAction: (operationId: string) => Promise<InternalActionStatus | null>;
+  claimPersistedActionOwnership: (
+    params: ClaimOpsActionOwnershipParams,
+  ) => Promise<InternalActionStatus | null>;
+  listResumablePersistedActions: (args: {
+    now: Date;
+    limit: number;
+  }) => Promise<InternalActionStatus[]>;
+  finalizeOwnedPersistedAction: (
+    params: FinalizeOwnedOpsActionParams,
+  ) => Promise<InternalActionStatus | null>;
+  prunePersistedActions: (before: Date, limit: number) => Promise<number>;
 }
 
 interface EnqueueOptions {
@@ -35,14 +75,29 @@ interface EnqueueOptions {
 
 type InternalActionStatus = OpsActionStatus;
 
+const ownerId = `ops-control:${process.pid}:${randomUUID()}`;
+
 const dependencies: OpsControlDependencies = {
   now: () => new Date(),
   randomId: () => randomUUID(),
   runCommand: (command, timeoutMs) => runShellCommand(command, timeoutMs),
+  ownerId: () => ownerId,
+  isPersistenceEnabled: () => loadConfig().pg.enabled,
+  upsertPersistedAction: async (action) => upsertOpsActionStatus(action),
+  readPersistedAction: async (operationId) => getOpsActionStatusByOperationId(operationId),
+  claimPersistedActionOwnership: async (params) => claimQueuedOpsActionOwnership(params),
+  listResumablePersistedActions: async ({ now, limit }) => listResumableOpsActions({ now, limit }),
+  finalizeOwnedPersistedAction: async (params) => finalizeOwnedOpsAction(params),
+  prunePersistedActions: async (before, limit) =>
+    pruneOpsActionHistoryByFinishedAt({ before, limit }),
 };
 
 const actionStore = new Map<string, InternalActionStatus>();
 const actionOrder: string[] = [];
+let retentionPruneInFlight = false;
+let lastRetentionPruneStartedAtMs = 0;
+let persistedActionResumeInFlight = false;
+let persistedActionResumeSweepTimer: ReturnType<typeof setInterval> | null = null;
 
 export function setOpsControlDependenciesForTests(
   overrides: Partial<OpsControlDependencies>,
@@ -53,9 +108,27 @@ export function setOpsControlDependenciesForTests(
 export function resetOpsControlStateForTests(): void {
   actionStore.clear();
   actionOrder.length = 0;
+  retentionPruneInFlight = false;
+  lastRetentionPruneStartedAtMs = 0;
+  persistedActionResumeInFlight = false;
+  if (persistedActionResumeSweepTimer) {
+    clearInterval(persistedActionResumeSweepTimer);
+  }
+  persistedActionResumeSweepTimer = null;
   dependencies.now = () => new Date();
   dependencies.randomId = () => randomUUID();
   dependencies.runCommand = (command, timeoutMs) => runShellCommand(command, timeoutMs);
+  dependencies.ownerId = () => ownerId;
+  dependencies.isPersistenceEnabled = () => loadConfig().pg.enabled;
+  dependencies.upsertPersistedAction = async (action) => upsertOpsActionStatus(action);
+  dependencies.readPersistedAction = async (operationId) => getOpsActionStatusByOperationId(operationId);
+  dependencies.claimPersistedActionOwnership = async (params) =>
+    claimQueuedOpsActionOwnership(params);
+  dependencies.listResumablePersistedActions = async ({ now, limit }) =>
+    listResumableOpsActions({ now, limit });
+  dependencies.finalizeOwnedPersistedAction = async (params) => finalizeOwnedOpsAction(params);
+  dependencies.prunePersistedActions = async (before, limit) =>
+    pruneOpsActionHistoryByFinishedAt({ before, limit });
 }
 
 export function isOpsControlEnabled(): boolean {
@@ -134,7 +207,12 @@ export async function enqueueOpsAction(
     stderrTail: null,
   };
 
-  storeAction(initial, config.opsControl.actionHistoryLimit);
+  let queued = initial;
+  if (dependencies.isPersistenceEnabled()) {
+    queued = await dependencies.upsertPersistedAction(initial);
+  }
+  storeAction(queued, config.opsControl.actionHistoryLimit);
+  void maybePrunePersistedActions(config.opsControl.actionRetentionDays);
 
   setImmediate(() => {
     void runQueuedAction(
@@ -142,16 +220,90 @@ export async function enqueueOpsAction(
       command,
       config.opsControl.actionTimeoutMs,
       config.opsControl.actionHistoryLimit,
+      config.opsControl.actionRetentionDays,
     );
   });
 
-  return { ...initial };
+  return { ...queued };
 }
 
-export function getOpsActionStatus(operationId: string): OpsActionStatus | null {
-  const found = actionStore.get(operationId);
-  if (!found) return null;
-  return { ...found };
+export async function resumePersistedOpsActionsOnStartup(): Promise<void> {
+  const config = loadConfig();
+  if (!config.opsControl.enabled || !dependencies.isPersistenceEnabled()) {
+    return;
+  }
+  if (!persistedActionResumeSweepTimer) {
+    persistedActionResumeSweepTimer = setInterval(() => {
+      void resumePersistedOpsActionsOnStartup();
+    }, ACTION_RESUME_SWEEP_INTERVAL_MS);
+    persistedActionResumeSweepTimer.unref?.();
+  }
+  if (persistedActionResumeInFlight) {
+    return;
+  }
+
+  persistedActionResumeInFlight = true;
+  try {
+    const resumable = await dependencies.listResumablePersistedActions({
+      now: dependencies.now(),
+      limit: config.opsControl.actionHistoryLimit,
+    });
+    for (const action of resumable) {
+      const existing = actionStore.get(action.operationId);
+      if (existing && isTerminalActionState(existing.state)) {
+        logger.warn('Skipping resumable action because local state is already terminal', {
+          event: 'ops_action_resume_skipped_terminal_cache',
+          operationId: action.operationId,
+          cachedState: existing.state,
+          persistedState: action.state,
+        });
+        continue;
+      }
+      storeAction(action, config.opsControl.actionHistoryLimit);
+      setImmediate(() => {
+        void runQueuedAction(
+          action.operationId,
+          action.command,
+          config.opsControl.actionTimeoutMs,
+          config.opsControl.actionHistoryLimit,
+          config.opsControl.actionRetentionDays,
+        );
+      });
+    }
+
+    if (resumable.length > 0) {
+      logger.info('Resumed persisted ops actions on startup', {
+        event: 'ops_action_resume_startup',
+        resumedCount: resumable.length,
+      });
+    }
+  } catch (error: unknown) {
+    logger.error('Failed to resume persisted ops actions on startup', {
+      event: 'ops_action_resume_startup_failed',
+      error: error instanceof Error ? error.message : String(error),
+    });
+  } finally {
+    persistedActionResumeInFlight = false;
+  }
+}
+
+export async function getOpsActionStatus(operationId: string): Promise<OpsActionStatus | null> {
+  const cached = actionStore.get(operationId);
+  if (!dependencies.isPersistenceEnabled()) {
+    return cached ? { ...cached } : null;
+  }
+
+  const persisted = await dependencies.readPersistedAction(operationId);
+  if (persisted) {
+    const config = loadConfig();
+    if (cached && isTerminalActionState(cached.state) && !isTerminalActionState(persisted.state)) {
+      return { ...cached };
+    }
+    storeAction(persisted, config.opsControl.actionHistoryLimit);
+    return { ...persisted };
+  }
+
+  return cached ? { ...cached } : null;
 }
 
 function resolveActionCommand(request: OpsActionRequest): string {
@@ -183,35 +335,166 @@ async function runQueuedAction(
   command: string,
   timeoutMs: number,
   actionHistoryLimit: number,
+  actionRetentionDays: number,
 ): Promise<void> {
-  const queued = actionStore.get(operationId);
+  let queued = actionStore.get(operationId) ?? null;
+  if (!queued && dependencies.isPersistenceEnabled()) {
+    const persisted = await dependencies.readPersistedAction(operationId);
+    if (persisted) {
+      storeAction(persisted, actionHistoryLimit);
+      queued = persisted;
+    }
+  }
   if (!queued) return;
+  if (isTerminalActionState(queued.state)) return;
 
-  updateAction(operationId, {
-    state: 'running',
-    startedAt: dependencies.now().toISOString(),
-    message: 'Action started',
-  });
+  let runningAction: InternalActionStatus | null = null;
+  if (dependencies.isPersistenceEnabled()) {
+    const startedAt = dependencies.now();
+    const claimed = await dependencies.claimPersistedActionOwnership({
+      operationId,
+      ownerId: dependencies.ownerId(),
+      startedAt,
+      ownershipExpiresAt: new Date(startedAt.getTime() + timeoutMs + ACTION_OWNER_GRACE_MS),
+      message: 'Action started',
+    });
+    if (!claimed) {
+      const persisted = await dependencies.readPersistedAction(operationId);
+      if (persisted) {
+        storeAction(persisted, actionHistoryLimit);
+      }
+      return;
+    }
+    runningAction = claimed;
+  } else {
+    updateAction(operationId, {
+      state: 'running',
+      startedAt: dependencies.now().toISOString(),
+      message: 'Action started',
+    });
+    runningAction = actionStore.get(operationId) ?? null;
+  }
+  if (!runningAction) return;
+
+  storeAction(runningAction, actionHistoryLimit);
 
   const result = await dependencies.runCommand(command, timeoutMs);
 
   const successful = result.exitCode === 0 && !result.timedOut;
-  updateAction(
-    operationId,
-    {
-      state: successful ? 'succeeded' : 'failed',
-      finishedAt: dependencies.now().toISOString(),
-      message: successful
-        ? 'Action completed successfully'
-        : result.timedOut
-          ? `Action timed out after ${timeoutMs}ms`
-          : `Action failed with exit code ${result.exitCode}`,
-      exitCode: result.exitCode,
-      stdoutTail: tailOutput(result.stdout),
-      stderrTail: tailOutput(result.stderr),
-    },
-    actionHistoryLimit,
-  );
+  const finishedAt = dependencies.now();
+  const finishedMessage = successful
+    ? 'Action completed successfully'
+    : result.timedOut
+      ? `Action timed out after ${timeoutMs}ms`
+      : `Action failed with exit code ${result.exitCode}`;
+  const finalizedState: Extract<InternalActionStatus['state'], 'succeeded' | 'failed'> = successful
+    ? 'succeeded'
+    : 'failed';
+
+  const finishedPatch: Pick<
+    InternalActionStatus,
+    'state' | 'finishedAt' | 'message' | 'exitCode' | 'stdoutTail' | 'stderrTail'
+  > = {
+    state: finalizedState,
+    finishedAt: finishedAt.toISOString(),
+    message: finishedMessage,
+    exitCode: result.exitCode,
+    stdoutTail: tailOutput(result.stdout),
+    stderrTail: tailOutput(result.stderr),
+  };
+
+  if (dependencies.isPersistenceEnabled()) {
+    const finalizeParams: FinalizeOwnedOpsActionParams = {
+      operationId,
+      ownerId: dependencies.ownerId(),
+      state: finalizedState,
+      finishedAt,
+      message: finishedMessage,
+      exitCode: finishedPatch.exitCode,
+      stdoutTail: finishedPatch.stdoutTail,
+      stderrTail: finishedPatch.stderrTail,
+    };
+    try {
+      const finalized = await finalizePersistedActionWithRetry(finalizeParams);
+      if (finalized) {
+        storeAction(finalized, actionHistoryLimit);
+      } else {
+        const persisted = await dependencies.readPersistedAction(operationId);
+        if (persisted) {
+          storeAction(persisted, actionHistoryLimit);
+        }
+      }
+    } catch (error: unknown) {
+      logger.error('Failed to finalize persisted ops action after retries; attempting terminal fallback upsert', {
+        event: 'ops_action_finalize_retry_exhausted',
+        operationId,
+        error: error instanceof Error ? error.message : String(error),
+      });
+
+      const terminalSnapshot: InternalActionStatus = {
+        ...runningAction,
+        ...finishedPatch,
+      };
+      try {
+        const fallbackPersisted = await upsertPersistedActionWithRetry(terminalSnapshot);
+        logger.info('Persisted terminal ops action via fallback upsert after finalize failure', {
+          event: 'ops_action_finalize_fallback_upsert_succeeded',
+          operationId,
+          state: fallbackPersisted.state,
+        });
+        storeAction(fallbackPersisted, actionHistoryLimit);
+      } catch (fallbackError: unknown) {
+        logger.error(
+          'Failed to persist terminal ops action via fallback upsert; manual intervention required',
+          {
+            event: 'ops_action_finalize_fallback_upsert_failed',
+            severity: 'critical',
+            operationId,
+            error: fallbackError instanceof Error ? fallbackError.message : String(fallbackError),
+          },
+        );
+        storeAction(terminalSnapshot, actionHistoryLimit);
+        return;
+      }
+    }
+  } else {
+    updateAction(operationId, finishedPatch, actionHistoryLimit);
+  }
+  void maybePrunePersistedActions(actionRetentionDays);
+}
+
+async function finalizePersistedActionWithRetry(
+  params: FinalizeOwnedOpsActionParams,
+): Promise<InternalActionStatus | null> {
+  let lastError: unknown;
+  for (let attempt = 1; attempt <= ACTION_FINALIZE_RETRY_ATTEMPTS; attempt += 1) {
+    try {
+      return await dependencies.finalizeOwnedPersistedAction(params);
+    } catch (error: unknown) {
+      lastError = error;
+      if (attempt < ACTION_FINALIZE_RETRY_ATTEMPTS) {
+        await sleep(ACTION_FINALIZE_RETRY_DELAY_MS);
+      }
+    }
+  }
+  throw lastError;
+}
+
+async function upsertPersistedActionWithRetry(
+  action: InternalActionStatus,
+): Promise<InternalActionStatus> {
+  let lastError: unknown;
+  for (let attempt = 1; attempt <= ACTION_FALLBACK_UPSERT_RETRY_ATTEMPTS; attempt += 1) {
+    try {
+      return await dependencies.upsertPersistedAction(action);
+    } catch (error: unknown) {
+      lastError = error;
+      if (attempt < ACTION_FALLBACK_UPSERT_RETRY_ATTEMPTS) {
+        await sleep(ACTION_FALLBACK_UPSERT_RETRY_DELAY_MS);
+      }
+    }
+  }
+  throw lastError;
 }
 
 function updateAction(
@@ -231,9 +514,51 @@ function updateAction(
 }
 
 function storeAction(action: InternalActionStatus, maxActions: number): void {
+  if (!actionStore.has(action.operationId)) {
+    actionOrder.push(action.operationId);
+  }
   actionStore.set(action.operationId, action);
-  actionOrder.push(action.operationId);
   pruneActionHistory(maxActions);
+}
+
+function isTerminalActionState(state: InternalActionStatus['state']): state is 'succeeded' | 'failed' {
+  return state === 'succeeded' || state === 'failed';
+}
+
+async function maybePrunePersistedActions(retentionDays: number): Promise<void> {
+  if (!dependencies.isPersistenceEnabled()) return;
+  if (retentionDays <= 0) return;
+  if (retentionPruneInFlight) return;
+
+  const now = dependencies.now();
+  const nowMs = now.getTime();
+  if (nowMs - lastRetentionPruneStartedAtMs < ACTION_RETENTION_PRUNE_INTERVAL_MS) {
+    return;
+  }
+
+  retentionPruneInFlight = true;
+  lastRetentionPruneStartedAtMs = nowMs;
+  const cutoff = new Date(nowMs - retentionDays * ACTION_RETENTION_MS_PER_DAY);
+
+  try {
+    for (let batchIndex = 0; batchIndex < ACTION_RETENTION_PRUNE_MAX_BATCHES_PER_PASS; batchIndex++) {
+      const deleted = await dependencies.prunePersistedActions(
+        cutoff,
+        ACTION_RETENTION_PRUNE_BATCH_SIZE,
+      );
+      if (deleted < ACTION_RETENTION_PRUNE_BATCH_SIZE) {
+        break;
+      }
+    }
+  } catch (error: unknown) {
+    logger.warn('Failed to prune ops action history', {
+      event: 'ops_action_retention_prune_failed',
+      error: error instanceof Error ? error.message : String(error),
+      retentionDays,
+    });
+  } finally {
+    retentionPruneInFlight = false;
+  }
 }
 
 function isTerminalAction(action: InternalActionStatus): boolean {
