@@ -1,7 +1,7 @@
 import { createHash, createHmac, randomUUID, timingSafeEqual } from 'node:crypto';
 import { readFile } from 'node:fs/promises';
 
-import type { OpsActionRequest } from '@esl-pipeline/contracts';
+import type { JobListResponse, OpsActionListResponse, OpsActionRequest } from '@esl-pipeline/contracts';
 
 import {
   type ApprovalReplayStore,
@@ -14,15 +14,25 @@ import {
   formatCommandError,
   formatFinishedJobs,
   formatHelp,
+  formatGuidedHelpHome,
+  formatGuidedActionConfirmation,
+  formatGuidedActionSubmitted,
   formatHelpWithOptions,
   formatJobDetails,
   formatJobLinks,
   formatOpsStatus,
   formatPrivateOnboardingRedirect,
+  formatRecentOpsActions,
   formatStartMessage,
 } from './formatter.js';
+import { encodeGuidedCallback } from './guided-callbacks.js';
 import { emitBotMetricCounter } from './metrics.js';
-import type { CommandContext, CommandDefinition, ParsedCommand } from './types.js';
+import type {
+  CommandContext,
+  CommandDefinition,
+  ParsedCommand,
+  TelegramInlineKeyboardMarkup,
+} from './types.js';
 
 export interface CommandRegistry {
   commands: CommandDefinition[];
@@ -359,17 +369,137 @@ export function getAdvertisedCommands(
   return commands.filter((command) => visibleInOpsChat(command, config));
 }
 
+export function buildGuidedHomeKeyboard(config: CommandContext['config']): TelegramInlineKeyboardMarkup {
+  const rows = [
+    [
+      { text: 'Status', callback_data: encodeGuidedCallback({ kind: 'status' }) },
+      { text: 'Finished Jobs', callback_data: encodeGuidedCallback({ kind: 'finished' }) },
+    ],
+    [{ text: 'Recent Operations', callback_data: encodeGuidedCallback({ kind: 'recent_ops' }) }],
+  ];
+
+  if (config.enableActionCommands) {
+    rows.push([
+      { text: 'Backup', callback_data: encodeGuidedCallback({ kind: 'action', action: 'backup' }) },
+      { text: 'Drill', callback_data: encodeGuidedCallback({ kind: 'action', action: 'drill' }) },
+    ]);
+  }
+
+  return {
+    inline_keyboard: rows,
+  };
+}
+
+export function buildGuidedActionConfirmationKeyboard(
+  action: 'backup' | 'drill',
+): TelegramInlineKeyboardMarkup {
+  return {
+    inline_keyboard: [
+      [
+        {
+          text: action === 'backup' ? 'Confirm Backup' : 'Confirm Drill',
+          callback_data: encodeGuidedCallback({ kind: 'confirm', action }),
+        },
+      ],
+      [{ text: 'Home', callback_data: encodeGuidedCallback({ kind: 'home' }) }],
+    ],
+  };
+}
+
+export function buildGuidedHomeOnlyKeyboard(): TelegramInlineKeyboardMarkup {
+  return {
+    inline_keyboard: [[{ text: 'Home', callback_data: encodeGuidedCallback({ kind: 'home' }) }]],
+  };
+}
+
+export function buildStatusKeyboard(): TelegramInlineKeyboardMarkup {
+  return {
+    inline_keyboard: [
+      [
+        { text: 'Refresh', callback_data: encodeGuidedCallback({ kind: 'status' }) },
+        { text: 'Home', callback_data: encodeGuidedCallback({ kind: 'home' }) },
+      ],
+    ],
+  };
+}
+
+export function buildFinishedJobsKeyboard(response: JobListResponse): TelegramInlineKeyboardMarkup {
+  const buttons = response.jobs.slice(0, 5).map((job) => [
+    {
+      text: job.jobId.slice(0, 12),
+      callback_data: encodeGuidedCallback({ kind: 'job', jobId: job.jobId }),
+    },
+  ]);
+  return {
+    inline_keyboard: [
+      ...buttons,
+      [
+        { text: 'Refresh', callback_data: encodeGuidedCallback({ kind: 'finished' }) },
+        { text: 'Home', callback_data: encodeGuidedCallback({ kind: 'home' }) },
+      ],
+    ],
+  };
+}
+
+export function buildRecentOpsKeyboard(response: OpsActionListResponse): TelegramInlineKeyboardMarkup {
+  const buttons = response.actions.slice(0, 5).map((action) => [
+    {
+      text: action.operationId.slice(0, 12),
+      callback_data: encodeGuidedCallback({ kind: 'op', operationId: action.operationId }),
+    },
+  ]);
+  return {
+    inline_keyboard: [
+      ...buttons,
+      [
+        { text: 'Refresh', callback_data: encodeGuidedCallback({ kind: 'recent_ops' }) },
+        { text: 'Home', callback_data: encodeGuidedCallback({ kind: 'home' }) },
+      ],
+    ],
+  };
+}
+
+export function buildJobDetailsKeyboard(jobId: string): TelegramInlineKeyboardMarkup {
+  return {
+    inline_keyboard: [
+      [
+        { text: 'Links', callback_data: encodeGuidedCallback({ kind: 'job_links', jobId }) },
+        { text: 'Share', callback_data: encodeGuidedCallback({ kind: 'job_share', jobId }) },
+      ],
+      [
+        { text: 'Refresh', callback_data: encodeGuidedCallback({ kind: 'job', jobId }) },
+        { text: 'Back', callback_data: encodeGuidedCallback({ kind: 'finished' }) },
+        { text: 'Home', callback_data: encodeGuidedCallback({ kind: 'home' }) },
+      ],
+    ],
+  };
+}
+
+export function buildOperationDetailsKeyboard(operationId: string): TelegramInlineKeyboardMarkup {
+  return {
+    inline_keyboard: [
+      [
+        { text: 'Refresh', callback_data: encodeGuidedCallback({ kind: 'op', operationId }) },
+        { text: 'Back', callback_data: encodeGuidedCallback({ kind: 'recent_ops' }) },
+        { text: 'Home', callback_data: encodeGuidedCallback({ kind: 'home' }) },
+      ],
+    ],
+  };
+}
+
 async function sendDirectMessage(
   context: CommandContext,
   html: string,
   options?: {
     disableLinkPreview?: boolean;
+    replyMarkup?: TelegramInlineKeyboardMarkup;
   },
-): Promise<void> {
-  await context.messenger.sendHtmlMessage({
+) {
+  return context.messenger.sendHtmlMessage({
     chatId: replyChatId(context),
     html,
     disableLinkPreview: options?.disableLinkPreview,
+    replyMarkup: options?.replyMarkup,
   });
 }
 
@@ -406,18 +536,20 @@ async function sendDomainMessage(
   html: string,
   options?: {
     disableLinkPreview?: boolean;
+    replyMarkup?: TelegramInlineKeyboardMarkup;
   },
-): Promise<void> {
+) {
   const threadId = context.topicRouter.resolveThreadId({
     domain,
     incomingThreadId: incomingThreadId(context),
   });
-  await context.messenger.sendHtmlMessage({
+  return context.messenger.sendHtmlMessage({
     chatId: context.config.chatId,
     threadId,
     domain,
     html,
     disableLinkPreview: options?.disableLinkPreview,
+    replyMarkup: options?.replyMarkup,
   });
 }
 
@@ -431,6 +563,123 @@ async function guardActionCommandsEnabled(context: CommandContext): Promise<bool
     '<b>Action commands disabled</b>\n\nThis bot is running in read-only mode. Enable `TELEGRAM_OPS_BOT_ENABLE_ACTION_COMMANDS=true` to use `/backup` and `/drill`.',
   );
   return false;
+}
+
+export async function renderGuidedHome(
+  context: CommandContext,
+  commands: CommandDefinition[],
+): Promise<{ html: string; replyMarkup: TelegramInlineKeyboardMarkup }> {
+  const opsCommands = getAdvertisedCommands(commands, context.config, 'ops_chat');
+  return {
+    html: formatGuidedHelpHome({
+      commands: opsCommands,
+      enableActionCommands: context.config.enableActionCommands,
+    }),
+    replyMarkup: buildGuidedHomeKeyboard(context.config),
+  };
+}
+
+export async function loadOpsStatusView(context: CommandContext): Promise<{
+  html: string;
+  replyMarkup: TelegramInlineKeyboardMarkup;
+}> {
+  const status = await context.backend.getOpsStatus();
+  return {
+    html: formatOpsStatus(status),
+    replyMarkup: buildStatusKeyboard(),
+  };
+}
+
+export async function loadFinishedJobsView(
+  context: CommandContext,
+  limit = 10,
+): Promise<{
+  html: string;
+  replyMarkup: TelegramInlineKeyboardMarkup;
+  response: JobListResponse;
+}> {
+  const response = await context.backend.getFinishedJobs(limit);
+  return {
+    html: formatFinishedJobs(response),
+    replyMarkup: buildFinishedJobsKeyboard(response),
+    response,
+  };
+}
+
+export async function loadRecentOpsView(
+  context: CommandContext,
+  limit = 10,
+): Promise<{
+  html: string;
+  replyMarkup: TelegramInlineKeyboardMarkup;
+  response: OpsActionListResponse;
+}> {
+  const response = await context.backend.listOpsActions(limit, 0);
+  return {
+    html: formatRecentOpsActions(response),
+    replyMarkup: buildRecentOpsKeyboard(response),
+    response,
+  };
+}
+
+export async function loadJobDetailsView(
+  context: CommandContext,
+  jobId: string,
+): Promise<{
+  html: string;
+  replyMarkup: TelegramInlineKeyboardMarkup;
+}> {
+  const job = await context.backend.getJob(jobId);
+  return {
+    html: formatJobDetails(job),
+    replyMarkup: buildJobDetailsKeyboard(jobId),
+  };
+}
+
+export async function loadOperationDetailsView(
+  context: CommandContext,
+  operationId: string,
+): Promise<{
+  html: string;
+  replyMarkup: TelegramInlineKeyboardMarkup;
+}> {
+  const status = await context.backend.getOpsActionStatus(operationId);
+  return {
+    html: formatActionStatus(status),
+    replyMarkup: buildOperationDetailsKeyboard(operationId),
+  };
+}
+
+export function renderGuidedActionConfirmation(
+  context: CommandContext,
+  action: 'backup' | 'drill',
+): {
+  html: string;
+  replyMarkup: TelegramInlineKeyboardMarkup;
+} {
+  return {
+    html: formatGuidedActionConfirmation({
+      action,
+      webhookMode: context.config.mode === 'webhook',
+    }),
+    replyMarkup: buildGuidedActionConfirmationKeyboard(action),
+  };
+}
+
+export function renderGuidedActionSubmitted(
+  context: CommandContext,
+  action: 'backup' | 'drill',
+): {
+  html: string;
+  replyMarkup: TelegramInlineKeyboardMarkup;
+} {
+  return {
+    html: formatGuidedActionSubmitted({
+      action,
+      webhookMode: context.config.mode === 'webhook',
+    }),
+    replyMarkup: buildGuidedHomeOnlyKeyboard(),
+  };
 }
 
 interface ResolvedSharePayload {
@@ -729,7 +978,7 @@ async function fetchTextWithTimeout(url: string, timeoutMs: number): Promise<str
   }
 }
 
-async function sendShareableJobLinks(
+export async function sendShareableJobLinks(
   context: CommandContext,
   jobIdRaw: string | undefined,
 ): Promise<void> {
@@ -852,6 +1101,69 @@ async function sendShareableJobLinks(
   }
 }
 
+export async function executeBackupAction(
+  context: CommandContext,
+  label?: string,
+): Promise<void> {
+  if (!(await guardActionCommandsEnabled(context))) {
+    return;
+  }
+  const trimmedLabel = label?.trim();
+  const request: OpsActionRequest = {
+    action: 'backup_upload',
+    ...(trimmedLabel ? { label: trimmedLabel } : {}),
+  };
+  if (advancedControlsEnabled(context)) {
+    await queueAdvancedApproval(context, 'backup', request);
+    return;
+  }
+  const result = await context.backend.enqueueOpsAction(request);
+  context.audit.log({
+    level: 'info',
+    event: 'ops_action_enqueued',
+    message: 'Ops action queued from Telegram command',
+    userId: context.fromUserId,
+    chatId: context.config.chatId,
+    threadId: incomingThreadId(context),
+    command: context.command,
+    commandArgs: context.args,
+    operationId: result.operationId,
+    details: {
+      action: result.action,
+    },
+  });
+  await sendDomainMessage(context, 'ops', formatActionQueued(result));
+}
+
+export async function executeDrillAction(context: CommandContext): Promise<void> {
+  if (!(await guardActionCommandsEnabled(context))) {
+    return;
+  }
+  const request: OpsActionRequest = {
+    action: 'restore_drill_download_only',
+  };
+  if (advancedControlsEnabled(context)) {
+    await queueAdvancedApproval(context, 'drill', request);
+    return;
+  }
+  const result = await context.backend.enqueueOpsAction(request);
+  context.audit.log({
+    level: 'info',
+    event: 'ops_action_enqueued',
+    message: 'Ops action queued from Telegram command',
+    userId: context.fromUserId,
+    chatId: context.config.chatId,
+    threadId: incomingThreadId(context),
+    command: context.command,
+    commandArgs: context.args,
+    operationId: result.operationId,
+    details: {
+      action: result.action,
+    },
+  });
+  await sendDomainMessage(context, 'ops', formatActionQueued(result));
+}
+
 export function createCommandRegistry(args?: { replayStore?: ApprovalReplayStore }): CommandRegistry {
   const replayStore = args?.replayStore ?? defaultApprovalReplayStore;
   const commands: CommandDefinition[] = [
@@ -901,8 +1213,10 @@ export function createCommandRegistry(args?: { replayStore?: ApprovalReplayStore
             }),
           );
         } else {
-          const opsCommands = getAdvertisedCommands(commands, context.config, 'ops_chat');
-          await sendDomainMessage(context, 'ops', formatHelp(opsCommands));
+          const guidedHome = await renderGuidedHome(context, commands);
+          await sendDomainMessage(context, 'ops', guidedHome.html, {
+            replyMarkup: guidedHome.replyMarkup,
+          });
         }
         emitUxLatencyMetric(context, 'help', startedAtMs);
       },
@@ -912,8 +1226,8 @@ export function createCommandRegistry(args?: { replayStore?: ApprovalReplayStore
       description: 'Show machine status summary',
       domain: 'ops',
       async execute(context) {
-        const status = await context.backend.getOpsStatus();
-        await sendDomainMessage(context, 'ops', formatOpsStatus(status));
+        const view = await loadOpsStatusView(context);
+        await sendDomainMessage(context, 'ops', view.html);
       },
     },
     {
@@ -926,8 +1240,8 @@ export function createCommandRegistry(args?: { replayStore?: ApprovalReplayStore
           await sendDomainMessage(context, 'ops', formatCommandError('Usage: /op <operationId>'));
           return;
         }
-        const status = await context.backend.getOpsActionStatus(operationId);
-        await sendDomainMessage(context, 'ops', formatActionStatus(status));
+        const view = await loadOperationDetailsView(context, operationId);
+        await sendDomainMessage(context, 'ops', view.html);
       },
     },
     {
@@ -939,8 +1253,8 @@ export function createCommandRegistry(args?: { replayStore?: ApprovalReplayStore
         const limit = Number.isInteger(requestedLimit)
           ? Math.max(1, Math.min(20, requestedLimit))
           : 10;
-        const jobs = await context.backend.getFinishedJobs(limit);
-        await sendDomainMessage(context, 'jobs', formatFinishedJobs(jobs));
+        const view = await loadFinishedJobsView(context, limit);
+        await sendDomainMessage(context, 'jobs', view.html);
       },
     },
     {
@@ -953,8 +1267,8 @@ export function createCommandRegistry(args?: { replayStore?: ApprovalReplayStore
           await sendDomainMessage(context, 'jobs', formatCommandError('Usage: /job <jobId>'));
           return;
         }
-        const job = await context.backend.getJob(jobId);
-        await sendDomainMessage(context, 'jobs', formatJobDetails(job));
+        const view = await loadJobDetailsView(context, jobId);
+        await sendDomainMessage(context, 'jobs', view.html);
       },
     },
     {
@@ -978,34 +1292,7 @@ export function createCommandRegistry(args?: { replayStore?: ApprovalReplayStore
       description: 'Queue backup upload (/backup [label])',
       domain: 'ops',
       async execute(context) {
-        if (!(await guardActionCommandsEnabled(context))) {
-          return;
-        }
-        const label = context.args.join(' ').trim();
-        const request: OpsActionRequest = {
-          action: 'backup_upload',
-          ...(label ? { label } : {}),
-        };
-        if (advancedControlsEnabled(context)) {
-          await queueAdvancedApproval(context, 'backup', request);
-          return;
-        }
-        const result = await context.backend.enqueueOpsAction(request);
-        context.audit.log({
-          level: 'info',
-          event: 'ops_action_enqueued',
-          message: 'Ops action queued from Telegram command',
-          userId: context.fromUserId,
-          chatId: context.config.chatId,
-          threadId: incomingThreadId(context),
-          command: context.command,
-          commandArgs: context.args,
-          operationId: result.operationId,
-          details: {
-            action: result.action,
-          },
-        });
-        await sendDomainMessage(context, 'ops', formatActionQueued(result));
+        await executeBackupAction(context, context.args.join(' ').trim());
       },
     },
     {
@@ -1013,32 +1300,7 @@ export function createCommandRegistry(args?: { replayStore?: ApprovalReplayStore
       description: 'Queue restore drill (download-only)',
       domain: 'ops',
       async execute(context) {
-        if (!(await guardActionCommandsEnabled(context))) {
-          return;
-        }
-        const request: OpsActionRequest = {
-          action: 'restore_drill_download_only',
-        };
-        if (advancedControlsEnabled(context)) {
-          await queueAdvancedApproval(context, 'drill', request);
-          return;
-        }
-        const result = await context.backend.enqueueOpsAction(request);
-        context.audit.log({
-          level: 'info',
-          event: 'ops_action_enqueued',
-          message: 'Ops action queued from Telegram command',
-          userId: context.fromUserId,
-          chatId: context.config.chatId,
-          threadId: incomingThreadId(context),
-          command: context.command,
-          commandArgs: context.args,
-          operationId: result.operationId,
-          details: {
-            action: result.action,
-          },
-        });
-        await sendDomainMessage(context, 'ops', formatActionQueued(result));
+        await executeDrillAction(context);
       },
     },
     {

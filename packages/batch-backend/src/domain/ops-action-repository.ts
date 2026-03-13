@@ -1,6 +1,6 @@
 import type { PoolClient } from 'pg';
 
-import type { OpsActionState, OpsActionStatus } from '@esl-pipeline/contracts';
+import type { OpsActionListResponse, OpsActionState, OpsActionStatus } from '@esl-pipeline/contracts';
 
 import { withPgClient } from '../infrastructure/db.js';
 
@@ -145,6 +145,42 @@ export async function getOpsActionStatusByOperationId(
   });
 
   return row ? mapRow(row) : null;
+}
+
+export async function listOpsActions(params: {
+  limit: number;
+  offset: number;
+}): Promise<OpsActionListResponse> {
+  const result = await withPgClient(async (client: PoolClient) => {
+    const countResult = await client.query<{ count: string }>(
+      `
+      SELECT COUNT(*)::text AS count
+      FROM ops_actions
+      `,
+    );
+    const rowsResult = await client.query(
+      `
+      SELECT ${SELECT_COLUMNS}
+      FROM ops_actions
+      ORDER BY requested_at DESC, created_at DESC, operation_id DESC
+      LIMIT $1
+      OFFSET $2
+      `,
+      [params.limit, params.offset],
+    );
+
+    return {
+      total: Number(countResult.rows[0]?.count ?? '0'),
+      rows: rowsResult.rows as OpsActionRow[],
+    };
+  });
+
+  return {
+    actions: result.rows.map((row) => mapRow(row)),
+    total: result.total,
+    limit: params.limit,
+    offset: params.offset,
+  };
 }
 
 export async function claimQueuedOpsActionOwnership(

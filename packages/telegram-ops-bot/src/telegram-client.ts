@@ -8,6 +8,8 @@ import type {
   UserFromGetMe,
 } from '@grammyjs/types';
 
+import type { TelegramInlineKeyboardMarkup } from './types.js';
+
 type TelegramApi = ApiMethods<never>;
 type TelegramMethod = keyof TelegramApi;
 type MethodArgs<M extends TelegramMethod> =
@@ -103,6 +105,7 @@ export class TelegramClient {
     html: string;
     threadId?: number;
     disableLinkPreview?: boolean;
+    replyMarkup?: TelegramInlineKeyboardMarkup;
   }): Promise<Message.TextMessage> {
     const disableLinkPreview = args.disableLinkPreview ?? true;
     const payload: NonNullable<MethodArgs<'sendMessage'>> = {
@@ -110,6 +113,7 @@ export class TelegramClient {
       text: args.html,
       parse_mode: 'HTML',
       ...(args.threadId ? { message_thread_id: args.threadId } : {}),
+      ...(args.replyMarkup ? { reply_markup: args.replyMarkup } : {}),
       ...(disableLinkPreview
         ? {
             link_preview_options: {
@@ -119,5 +123,34 @@ export class TelegramClient {
         : {}),
     };
     return this.call('sendMessage', payload);
+  }
+
+  editHtmlMessage(args: {
+    chatId: string;
+    messageId: number;
+    html: string;
+    disableLinkPreview?: boolean;
+    replyMarkup?: TelegramInlineKeyboardMarkup;
+  }): Promise<Message | true> {
+    const disableLinkPreview = args.disableLinkPreview ?? true;
+    const payload: NonNullable<MethodArgs<'editMessageText'>> = {
+      chat_id: args.chatId,
+      message_id: args.messageId,
+      text: args.html,
+      parse_mode: 'HTML',
+      ...(args.replyMarkup ? { reply_markup: args.replyMarkup } : {}),
+      ...(disableLinkPreview
+        ? {
+            link_preview_options: {
+              is_disabled: true,
+            },
+          }
+        : {}),
+    };
+    return this.call('editMessageText', payload);
+  }
+
+  answerCallbackQuery(args: NonNullable<MethodArgs<'answerCallbackQuery'>>): Promise<true> {
+    return this.call('answerCallbackQuery', args);
   }
 }

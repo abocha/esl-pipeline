@@ -133,6 +133,8 @@ compose up -d telegram-ops-bot-smoke
 
 wait_for_topics_ready
 
+OPS_THREAD="$(curl -fsS "${API_URL}/_test/state" | node -e "const fs=require('node:fs'); const s=JSON.parse(fs.readFileSync(0,'utf8')); const topic=(s.createdTopics||[]).find((entry)=>entry.name==='Ops Control'); if (!topic) process.exit(1); process.stdout.write(String(topic.message_thread_id));")"
+
 cat <<JSON | curl -fsS -X POST -H 'Content-Type: application/json' "${API_URL}/_test/enqueue-updates" -d @- >/dev/null
 {
   "updates": [
@@ -143,27 +145,140 @@ cat <<JSON | curl -fsS -X POST -H 'Content-Type: application/json' "${API_URL}/_
         "date": ${now_epoch},
         "chat": {"id": ${SMOKE_CHAT_ID}, "type": "supergroup", "title": "Smoke Ops Chat", "is_forum": true},
         "from": {"id": ${SMOKE_ALLOWED_USER_ID}, "is_bot": false, "first_name": "Smoke Operator"},
-        "text": "/status"
+        "message_thread_id": ${OPS_THREAD},
+        "text": "/help"
       }
-    },
+    }
+  ]
+}
+JSON
+
+wait_for_messages 1
+
+PANEL_MESSAGE_ID="$(curl -fsS "${API_URL}/_test/state" | node -e "const fs=require('node:fs'); const s=JSON.parse(fs.readFileSync(0,'utf8')); const first=(s.sentMessages||[])[0]; if (!first) process.exit(1); process.stdout.write(String(first.message_id));")"
+
+cat <<JSON | curl -fsS -X POST -H 'Content-Type: application/json' "${API_URL}/_test/enqueue-updates" -d @- >/dev/null
+{
+  "updates": [
     {
       "update_id": 302,
-      "message": {
-        "message_id": 302,
-        "date": ${now_epoch},
-        "chat": {"id": ${SMOKE_CHAT_ID}, "type": "supergroup", "title": "Smoke Ops Chat", "is_forum": true},
+      "callback_query": {
+        "id": "cb-status",
         "from": {"id": ${SMOKE_ALLOWED_USER_ID}, "is_bot": false, "first_name": "Smoke Operator"},
-        "text": "/op ${SMOKE_OP_ID}"
+        "data": "a4|s",
+        "message": {
+          "message_id": ${PANEL_MESSAGE_ID},
+          "date": ${now_epoch},
+          "message_thread_id": ${OPS_THREAD},
+          "chat": {"id": ${SMOKE_CHAT_ID}, "type": "supergroup", "title": "Smoke Ops Chat", "is_forum": true},
+          "from": {"id": ${SMOKE_ALLOWED_USER_ID}, "is_bot": false, "first_name": "Smoke Operator"},
+          "text": "/help"
+        }
       }
     },
     {
       "update_id": 303,
-      "message": {
-        "message_id": 303,
-        "date": ${now_epoch},
-        "chat": {"id": ${SMOKE_CHAT_ID}, "type": "supergroup", "title": "Smoke Ops Chat", "is_forum": true},
+      "callback_query": {
+        "id": "cb-recent",
         "from": {"id": ${SMOKE_ALLOWED_USER_ID}, "is_bot": false, "first_name": "Smoke Operator"},
-        "text": "/share ${SMOKE_SHARE_JOB_ID}"
+        "data": "a4|r",
+        "message": {
+          "message_id": ${PANEL_MESSAGE_ID},
+          "date": ${now_epoch},
+          "message_thread_id": ${OPS_THREAD},
+          "chat": {"id": ${SMOKE_CHAT_ID}, "type": "supergroup", "title": "Smoke Ops Chat", "is_forum": true},
+          "from": {"id": ${SMOKE_ALLOWED_USER_ID}, "is_bot": false, "first_name": "Smoke Operator"},
+          "text": "/help"
+        }
+      }
+    },
+    {
+      "update_id": 304,
+      "callback_query": {
+        "id": "cb-op",
+        "from": {"id": ${SMOKE_ALLOWED_USER_ID}, "is_bot": false, "first_name": "Smoke Operator"},
+        "data": "a4|o|${SMOKE_OP_ID}",
+        "message": {
+          "message_id": ${PANEL_MESSAGE_ID},
+          "date": ${now_epoch},
+          "message_thread_id": ${OPS_THREAD},
+          "chat": {"id": ${SMOKE_CHAT_ID}, "type": "supergroup", "title": "Smoke Ops Chat", "is_forum": true},
+          "from": {"id": ${SMOKE_ALLOWED_USER_ID}, "is_bot": false, "first_name": "Smoke Operator"},
+          "text": "/help"
+        }
+      }
+    },
+    {
+      "update_id": 305,
+      "callback_query": {
+        "id": "cb-finished",
+        "from": {"id": ${SMOKE_ALLOWED_USER_ID}, "is_bot": false, "first_name": "Smoke Operator"},
+        "data": "a4|f",
+        "message": {
+          "message_id": ${PANEL_MESSAGE_ID},
+          "date": ${now_epoch},
+          "message_thread_id": ${OPS_THREAD},
+          "chat": {"id": ${SMOKE_CHAT_ID}, "type": "supergroup", "title": "Smoke Ops Chat", "is_forum": true},
+          "from": {"id": ${SMOKE_ALLOWED_USER_ID}, "is_bot": false, "first_name": "Smoke Operator"},
+          "text": "/help"
+        }
+      }
+    },
+    {
+      "update_id": 306,
+      "callback_query": {
+        "id": "cb-job",
+        "from": {"id": ${SMOKE_ALLOWED_USER_ID}, "is_bot": false, "first_name": "Smoke Operator"},
+        "data": "a4|j|${SMOKE_SHARE_JOB_ID}",
+        "message": {
+          "message_id": ${PANEL_MESSAGE_ID},
+          "date": ${now_epoch},
+          "message_thread_id": ${OPS_THREAD},
+          "chat": {"id": ${SMOKE_CHAT_ID}, "type": "supergroup", "title": "Smoke Ops Chat", "is_forum": true},
+          "from": {"id": ${SMOKE_ALLOWED_USER_ID}, "is_bot": false, "first_name": "Smoke Operator"},
+          "text": "/help"
+        }
+      }
+    },
+    {
+      "update_id": 307,
+      "callback_query": {
+        "id": "cb-share",
+        "from": {"id": ${SMOKE_ALLOWED_USER_ID}, "is_bot": false, "first_name": "Smoke Operator"},
+        "data": "a4|js|${SMOKE_SHARE_JOB_ID}",
+        "message": {
+          "message_id": ${PANEL_MESSAGE_ID},
+          "date": ${now_epoch},
+          "message_thread_id": ${OPS_THREAD},
+          "chat": {"id": ${SMOKE_CHAT_ID}, "type": "supergroup", "title": "Smoke Ops Chat", "is_forum": true},
+          "from": {"id": ${SMOKE_ALLOWED_USER_ID}, "is_bot": false, "first_name": "Smoke Operator"},
+          "text": "/help"
+        }
+      }
+    }
+  ]
+}
+JSON
+
+curl -fsS -X POST -H 'Content-Type: application/json' "${API_URL}/_test/fail-next-edit" -d '{}' >/dev/null
+
+cat <<JSON | curl -fsS -X POST -H 'Content-Type: application/json' "${API_URL}/_test/enqueue-updates" -d @- >/dev/null
+{
+  "updates": [
+    {
+      "update_id": 308,
+      "callback_query": {
+        "id": "cb-status-fallback",
+        "from": {"id": ${SMOKE_ALLOWED_USER_ID}, "is_bot": false, "first_name": "Smoke Operator"},
+        "data": "a4|s",
+        "message": {
+          "message_id": ${PANEL_MESSAGE_ID},
+          "date": ${now_epoch},
+          "message_thread_id": ${OPS_THREAD},
+          "chat": {"id": ${SMOKE_CHAT_ID}, "type": "supergroup", "title": "Smoke Ops Chat", "is_forum": true},
+          "from": {"id": ${SMOKE_ALLOWED_USER_ID}, "is_bot": false, "first_name": "Smoke Operator"},
+          "text": "/help"
+        }
       }
     }
   ]
@@ -179,6 +294,7 @@ STATE_PATH="${ARTIFACT_DIR}/telegram-api-state.final.json" \
 BACKEND_STATE_PATH="${ARTIFACT_DIR}/fake-backend-state.final.json" \
 EXPECTED_CHAT_ID="${SMOKE_CHAT_ID}" \
 EXPECTED_OP_ID="${SMOKE_OP_ID}" \
+EXPECTED_SHARE_JOB_ID="${SMOKE_SHARE_JOB_ID}" \
 node <<'NODE'
 const fs = require('node:fs');
 
@@ -193,6 +309,8 @@ function assert(condition, message) {
 
 const createdTopics = state.createdTopics ?? [];
 const sentMessages = state.sentMessages ?? [];
+const editedMessages = state.editedMessages ?? [];
+const answeredCallbacks = state.answeredCallbacks ?? [];
 const metadata = state.metadata ?? {};
 const topicByName = new Map(createdTopics.map((topic) => [topic.name, topic.message_thread_id]));
 
@@ -235,33 +353,60 @@ assert((metadata.shortDescriptions ?? []).length === 1, 'Expected one short desc
 assert((metadata.descriptions ?? []).length === 1, 'Expected one description sync call');
 assert((metadata.menuButtons ?? []).length === 1, 'Expected one menu button sync call');
 
-const statusMessages = sentMessages.filter((entry) =>
-  String(entry?.payload?.text ?? '').includes('Ops Status:'),
-);
-assert(statusMessages.length === 1, `Expected exactly 1 /status response (startup replay guard), got ${statusMessages.length}`);
-
-const opMessages = sentMessages.filter((entry) => String(entry?.payload?.text ?? '').includes('Action status'));
-assert(opMessages.length === 1, `Expected exactly 1 /op response, got ${opMessages.length}`);
-
-if (statusMessages[0]) {
+const helpPanel = sentMessages[0];
+assert(Boolean(helpPanel), 'Missing guided /help panel message');
+if (helpPanel) {
   assert(
-    String(statusMessages[0].payload.chat_id) === String(process.env.EXPECTED_CHAT_ID),
-    'Status response chat_id mismatch',
+    String(helpPanel.payload.chat_id) === String(process.env.EXPECTED_CHAT_ID),
+    'Help panel chat_id mismatch',
   );
   assert(
-    statusMessages[0].payload.message_thread_id === opsThread,
-    'Status response should route to ops thread',
+    helpPanel.payload.message_thread_id === opsThread,
+    'Help panel should route to ops thread',
+  );
+  assert(
+    Array.isArray(helpPanel.payload.reply_markup?.inline_keyboard) &&
+      helpPanel.payload.reply_markup.inline_keyboard.length > 0,
+    'Help panel should include inline keyboard controls',
   );
 }
 
-if (opMessages[0]) {
+assert(answeredCallbacks.length >= 7, `Expected at least 7 answered callbacks, got ${answeredCallbacks.length}`);
+
+const statusEdit = editedMessages.find((entry) =>
+  String(entry?.payload?.text ?? '').includes('Ops Status:'),
+);
+assert(Boolean(statusEdit), 'Missing callback-driven status edit');
+
+const recentOpsEdit = editedMessages.find((entry) =>
+  String(entry?.payload?.text ?? '').includes('Recent operations'),
+);
+assert(Boolean(recentOpsEdit), 'Missing callback-driven recent operations edit');
+
+const opEdit = editedMessages.find((entry) =>
+  String(entry?.payload?.text ?? '').includes(String(process.env.EXPECTED_OP_ID)),
+);
+assert(Boolean(opEdit), 'Missing callback-driven operation detail edit');
+
+const finishedJobsEdit = editedMessages.find((entry) =>
+  String(entry?.payload?.text ?? '').includes('Finished jobs'),
+);
+assert(Boolean(finishedJobsEdit), 'Missing callback-driven finished jobs edit');
+
+const jobDetailEdit = editedMessages.find((entry) =>
+  String(entry?.payload?.text ?? '').includes(String(process.env.EXPECTED_SHARE_JOB_ID)),
+);
+assert(Boolean(jobDetailEdit), 'Missing callback-driven job detail edit');
+
+const fallbackStatusMessage = sentMessages.find(
+  (entry, index) =>
+    index > 0 && String(entry?.payload?.text ?? '').includes('Ops Status:'),
+);
+assert(Boolean(fallbackStatusMessage), 'Missing replacement message after forced edit failure');
+if (fallbackStatusMessage) {
   assert(
-    opMessages[0].payload.message_thread_id === opsThread,
-    'Op response should route to ops thread',
-  );
-  assert(
-    String(opMessages[0].payload.text).includes(String(process.env.EXPECTED_OP_ID)),
-    'Op response should include requested operation id',
+    fallbackStatusMessage.payload.message_thread_id === opsThread,
+    'Fallback status message should stay in the ops thread',
   );
 }
 
@@ -312,6 +457,9 @@ if (opsStatusRequest) {
     'Bot should forward x-ops-bot-secret for /ops endpoints',
   );
 }
+
+const opsListRequest = (backendState.requests ?? []).find((entry) => entry.path === '/ops/actions');
+assert(Boolean(opsListRequest), 'Fake backend did not receive /ops/actions list request');
 
 const jobRequest = (backendState.requests ?? []).find((entry) =>
   String(entry.path).startsWith('/jobs/'),
