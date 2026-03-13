@@ -22,6 +22,7 @@
 ## Generated Indexes
 
 - [`docs/generated/backend-route-index.md`](backend-route-index.md)
+- [`docs/generated/env-surface-index.md`](env-surface-index.md)
 - [`docs/generated/package-readme-index.md`](package-readme-index.md)
 - [`docs/generated/plans-index.md`](plans-index.md)
 

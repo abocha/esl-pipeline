@@ -92,6 +92,7 @@
   - [`docs/reference/DOCS_QUALITY_SCORE.md`](reference/DOCS_QUALITY_SCORE.md)
 - Generated reference indexes:
   - [`docs/generated/README.md`](generated/README.md)
+  - [`docs/generated/env-surface-index.md`](generated/env-surface-index.md)
 
 ## Planning Paths
 
