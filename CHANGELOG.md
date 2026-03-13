@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented here. Dates use `YYYY-MM-DD`.
 
+## [4.3.4] - 2026-03-13
+
+### Changed
+
+- Automated release from PR #40: fix(telegram-ops): close A-track hardening gaps and add polling GA gates (https://github.com/abocha/esl-pipeline/pull/40)
+
 ## [4.3.3] - 2026-03-12
 
 ### Changed
