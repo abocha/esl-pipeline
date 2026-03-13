@@ -5,6 +5,7 @@
 - Audience: AI agents and maintainers.
 - Authority Level: router + operating contract.
 - Last Verified Against: 2026-03-05 repo state.
+- Last Verified Against: 2026-03-13 repo state.
 - Owner: founder-maintainer + automation agents.
 - Review Cadence: biweekly or after major workflow/tooling changes.
 - Status: `router`.
@@ -66,6 +67,13 @@ When implementing from a plan file, re-read that exact plan file after every con
   - [`docs/operations/pr-style-release-notes.md`](docs/operations/pr-style-release-notes.md)
 - Release/versioning model and automation:
   - [`docs/reference/VERSIONING_MODEL.md`](docs/reference/VERSIONING_MODEL.md)
+- Docs gardening, archive policy, and generated references:
+  - [`docs/reference/DOCS_GOVERNANCE.md`](docs/reference/DOCS_GOVERNANCE.md)
+  - [`docs/reference/AGENT_LEGIBILITY_MODEL.md`](docs/reference/AGENT_LEGIBILITY_MODEL.md)
+  - [`docs/reference/DOCS_GARDENING_PLAYBOOK.md`](docs/reference/DOCS_GARDENING_PLAYBOOK.md)
+  - [`docs/generated/README.md`](docs/generated/README.md)
+- Plan routing and lifecycle:
+  - [`docs/plans/README.md`](docs/plans/README.md)
 - Historical pre-v1 tag reset record:
   - [`docs/archive/release/versioning-tag-reset-runbook.md`](docs/archive/release/versioning-tag-reset-runbook.md)
 
@@ -148,6 +156,9 @@ Before merge for docs-heavy work:
 Docs governance and IA:
 
 - [`docs/reference/DOCS_GOVERNANCE.md`](docs/reference/DOCS_GOVERNANCE.md)
+- [`docs/reference/AGENT_LEGIBILITY_MODEL.md`](docs/reference/AGENT_LEGIBILITY_MODEL.md)
+- [`docs/reference/DOCS_GARDENING_PLAYBOOK.md`](docs/reference/DOCS_GARDENING_PLAYBOOK.md)
+- [`docs/reference/DOCS_GARDENING_SCORECARD.md`](docs/reference/DOCS_GARDENING_SCORECARD.md)
 - [`docs/reference/DOCS_IA_MAP.md`](docs/reference/DOCS_IA_MAP.md)
 - [`docs/reference/HARNESS_AGENTIC_DOCS_MODEL.md`](docs/reference/HARNESS_AGENTIC_DOCS_MODEL.md)
 - [`docs/reference/DOCS_QUALITY_SCORE.md`](docs/reference/DOCS_QUALITY_SCORE.md)

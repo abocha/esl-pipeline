@@ -18,7 +18,9 @@
     "docs/operations/postgres-ops-health.md",
     "docs/operations/prompt-gallery-bootstrap.md",
     "docs/operations/pr-style-release-notes.md",
-    "docs/operations/rollup-optional-binary-troubleshooting.md"
+    "docs/operations/rollup-optional-binary-troubleshooting.md",
+    "docs/operations/telegram-ops-control-panel.md",
+    "docs/operations/voice-alignment-v2-runbook.md"
   ],
   "non_core_docs": [
     "docs/backend-frontend/DEPLOYMENT.md",
@@ -27,9 +29,14 @@
     "docs/reference/pipeline-manifest.md",
     "docs/reference/ORCHESTRATOR_API_V2_MIGRATION.md",
     "docs/reference/GENERATION_PROVIDER_POLICY.md",
+    "docs/reference/AGENT_LEGIBILITY_MODEL.md",
+    "docs/reference/DOCS_GARDENING_PLAYBOOK.md",
+    "docs/reference/DOCS_GARDENING_SCORECARD.md",
+    "docs/plans/README.md",
     "packages/orchestrator/README.md",
     "packages/batch-backend/README.md",
     "packages/batch-frontend/README.md",
+    "packages/telegram-ops-bot/README.md",
     "packages/provider-runtime/README.md"
   ],
   "exclude_docs": [],

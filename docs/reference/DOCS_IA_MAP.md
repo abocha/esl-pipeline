@@ -5,7 +5,7 @@
 - Audience: AI agents and maintainers.
 - Read Time: 3 minutes.
 - Authority Level: Active routing map.
-- Last Verified Against: 2026-03-09 repo state.
+- Last Verified Against: 2026-03-13 repo state.
 - Owner: founder-maintainer + automation agents.
 - Review Cadence: biweekly.
 - Status: `router`.
@@ -37,6 +37,17 @@
 | Postgres backup/restore routine                                | `docs/operations/postgres-backup-restore.md`          | `docs/operations/postgres-backup-s3.md`                                              |
 | Ops health alerts and key checks                               | `docs/operations/postgres-ops-health.md`              | `docs/reference/env.md`                                                              |
 | Telegram ops control panel                                     | `docs/operations/telegram-ops-control-panel.md`       | `docs/reference/env.md`                                                              |
+| Voice-alignment rollout and diagnostics                        | `docs/operations/voice-alignment-v2-runbook.md`       | `docs/reference/env.md`                                                              |
+| Transcription / recording / draft flow                         | `docs/design/TRANSCRIPTION_PIPELINE_SPEC.md`          | `docs/PIPELINE_INTEGRATION_VISION.md`, `docs/backend-frontend/backend-frontend-alignment.md` |
+| Learning preset architecture and prompt governance             | `docs/reference/PRESET_V2_SPEC.md`                    | `docs/reference/GENERATION_PROVIDER_POLICY.md`, `docs/reference/agents-ssot.md`      |
+| Generation provider/model decision review                      | `docs/reference/GENERATION_PROVIDER_POLICY.md`        | `docs/reference/OPENAI_RESPONSES_WS2B_PROFILE.md`, `docs/reference/OPENROUTER_WS2B_PROFILE.md`, `docs/reference/GOOGLE_GENAI_WS2B_PROFILE.md` |
+| Student system roadmap and DB migration lineage                | `docs/reference/STUDENT_SYSTEM_ROADMAP.md`            | `docs/reference/STUDENT_SYSTEM_PHASE_A_RUNBOOK.md`, `docs/reference/agents-ssot.md`  |
+| Product readiness / weekly review planning                     | `docs/reference/PRODUCT_NORTH_STAR_AND_READINESS.md`  | `docs/playbooks/WEEKLY_PRODUCT_REVIEW_TEMPLATE.md`                                   |
+| Resume broad V1 continuity work                                | `docs/reference/V1_IMPLEMENTATION_TRACKER.md`         | `START_HERE.md`, `docs/playbooks/RESTART_TOMORROW.md`                                |
+| Docs gardening / archive / generated-reference work            | `docs/reference/DOCS_GOVERNANCE.md`                   | `docs/reference/AGENT_LEGIBILITY_MODEL.md`, `docs/reference/DOCS_GARDENING_PLAYBOOK.md`, `docs/generated/README.md` |
+| Package README sync                                            | `docs/reference/DOCS_GARDENING_PLAYBOOK.md`           | `docs/generated/package-readme-index.md`, `docs/reference/DOCS_GOVERNANCE.md`        |
+| Repo inventories / generated indexes                           | `docs/generated/README.md`                            | `docs/generated/backend-route-index.md`, `docs/generated/package-readme-index.md`, `docs/generated/plans-index.md` |
+| Plan lifecycle / where to put a new plan                       | `docs/plans/README.md`                                | `docs/generated/plans-index.md`, `docs/reference/DOCS_GARDENING_PLAYBOOK.md`         |
 | PR workflow, release notes, and versioning                     | `AGENTS.md`                                           | `docs/reference/VERSIONING_MODEL.md`, `docs/operations/pr-style-release-notes.md`    |
 | Restart after context overload                                 | `START_HERE.md`                                       | `docs/playbooks/RESTART_TOMORROW.md`                                                 |
 

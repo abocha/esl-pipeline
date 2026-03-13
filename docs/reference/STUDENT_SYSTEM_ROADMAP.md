@@ -4,7 +4,10 @@
 
 - Audience: maintainers, backend/frontend agents.
 - Authority Level: implementation roadmap.
-- Last Updated: 2026-03-10.
+- Last Verified Against: 2026-03-13 repo state.
+- Owner: backend/frontend maintainers + automation agents.
+- Review Cadence: monthly or after student-system milestone changes.
+- Status: `roadmap`.
 
 ## Purpose
 

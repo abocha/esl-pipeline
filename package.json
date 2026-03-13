@@ -66,6 +66,7 @@
     "docs:check:core": "node scripts/docs/check-core-docs.mjs",
     "docs:check:non-core": "node scripts/docs/check-non-core-docs.mjs",
     "docs:check:ops": "node scripts/docs/check-active-ops-docs.mjs",
+    "docs:generate:indexes": "node scripts/docs/generate-docs-indexes.mjs",
     "docs:health:report": "node scripts/docs/generate-docs-health-report.mjs",
     "docs:stale:active": "node scripts/docs/find-stale-active-docs.mjs",
     "format": "pnpm exec prettier --check \"**/*.{ts,tsx,js,json,md,yml,yaml}\"",
