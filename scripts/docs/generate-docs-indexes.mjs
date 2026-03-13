@@ -99,6 +99,172 @@ async function generatePackageReadmeIndex() {
   await writeGenerated('docs/generated/package-readme-index.md', lines.join('\n'));
 }
 
+async function extractEnvKeysFromExample(relativePath) {
+  const contents = await readFile(path.join(rootDir, relativePath), 'utf8');
+  const keys = new Set();
+  for (const rawLine of contents.split('\n')) {
+    const line = rawLine.trim();
+    const candidate = line.startsWith('#') ? line.slice(1).trim() : line;
+    const match = candidate.match(/^([A-Z0-9_]+)=/);
+    if (match) {
+      keys.add(match[1]);
+    }
+  }
+  return [...keys].sort((left, right) => left.localeCompare(right));
+}
+
+function classifyEnvSurface(key) {
+  if (
+    key.startsWith('TELEGRAM_OPS_BOT_') ||
+    key.startsWith('BATCH_BACKEND_OPS_CONTROL_')
+  ) {
+    return {
+      surface: 'telegram_ops',
+      details: 'docs/operations/telegram-ops-control-panel.md',
+    };
+  }
+
+  if (key.startsWith('PG_BACKUP_') || key === 'PG_CONTAINER_NAME') {
+    return {
+      surface: 'postgres_ops',
+      details: 'docs/operations/postgres-backup-restore.md',
+    };
+  }
+
+  if (
+    key.startsWith('GEN_') ||
+    key === 'OPENAI_API_KEY' ||
+    key === 'GEMINI_API_KEY' ||
+    key === 'OPENROUTER_API_KEY' ||
+    key === 'OPENROUTER_HTTP_REFERER' ||
+    key === 'OPENROUTER_X_TITLE'
+  ) {
+    return {
+      surface: 'generation_runtime',
+      details: 'docs/reference/GENERATION_PROVIDER_POLICY.md',
+    };
+  }
+
+  if (
+    key.startsWith('ESL_STT_') ||
+    key.startsWith('TRANSCRIBE_') ||
+    key === 'STT_PROVIDER'
+  ) {
+    return {
+      surface: 'speech_runtime',
+      details: 'docs/reference/env.md',
+    };
+  }
+
+  if (
+    key.startsWith('ESL_TTS_') ||
+    key.startsWith('VOICE_ALIGNMENT_') ||
+    key === 'ELEVENLABS_VOICES_PATH'
+  ) {
+    return {
+      surface: 'speech_runtime',
+      details: 'docs/reference/env.md',
+    };
+  }
+
+  if (
+    key.startsWith('PG_') ||
+    key.startsWith('REDIS_') ||
+    key === 'BATCH_JOBS_QUEUE_NAME' ||
+    key === 'TRANSCRIBE_QUEUE_NAME' ||
+    key === 'WORKER_CONCURRENCY' ||
+    key === 'MAX_CONCURRENT_FFMPEG' ||
+    key === 'FILESYSTEM_UPLOAD_DIR' ||
+    key === 'DRAFT_LOCAL_EXPORT' ||
+    key === 'PIPELINE_CWD' ||
+    key.startsWith('JWT_') ||
+    key.startsWith('REFRESH_') ||
+    key === 'BCRYPT_ROUNDS' ||
+    key === 'MAX_FILE_SIZE' ||
+    key === 'ALLOWED_MIME_TYPES' ||
+    key.startsWith('UPLOAD_') ||
+    key.startsWith('ENABLE_') ||
+    key.startsWith('CORS_') ||
+    key === 'SECURITY_HEADERS_ENABLED' ||
+    key === 'HSTS_MAX_AGE' ||
+    key === 'BATCH_BACKEND_HTTP_PORT' ||
+    key === 'BATCH_BACKEND_ENABLE_EXTENDED_API' ||
+    key === 'NODE_ENV'
+  ) {
+    return {
+      surface: 'batch_backend',
+      details: 'packages/batch-backend/README.md',
+    };
+  }
+
+  if (
+    key === 'NOTION_TOKEN' ||
+    key.startsWith('NOTION_') ||
+    key.startsWith('ANYTYPE_') ||
+    key.startsWith('S3_') ||
+    key.startsWith('AWS_') ||
+    key.startsWith('STORAGE_') ||
+    key.startsWith('ESL_PIPELINE_') ||
+    key.startsWith('MINIO_') ||
+    key.startsWith('MAIL_') ||
+    key === 'LOG_LEVEL' ||
+    key === 'RECORDINGS_MAX_FILE_SIZE'
+  ) {
+    return {
+      surface: 'shared_runtime',
+      details: 'docs/reference/env.md',
+    };
+  }
+
+  return {
+    surface: 'misc',
+    details: 'docs/reference/env.md',
+  };
+}
+
+async function generateEnvSurfaceIndex() {
+  const exampleFiles = ['.env.example', '.env.batch-backend.example'];
+  const rows = [];
+
+  for (const exampleFile of exampleFiles) {
+    const keys = await extractEnvKeysFromExample(exampleFile);
+    for (const key of keys) {
+      const classification = classifyEnvSurface(key);
+      rows.push({
+        key,
+        exampleFile,
+        surface: classification.surface,
+        details: classification.details,
+      });
+    }
+  }
+
+  rows.sort((left, right) => {
+    const keyOrder = left.key.localeCompare(right.key);
+    if (keyOrder !== 0) return keyOrder;
+    return left.exampleFile.localeCompare(right.exampleFile);
+  });
+
+  const lines = [
+    formatGeneratedHeader(
+      'Environment Surface Index',
+      'Provide an exhaustive lookup table for env keys surfaced in the checked example env files without duplicating the policy narrative from `docs/reference/env.md`.',
+      'Keys are extracted from `.env.example` and `.env.batch-backend.example`; surface ownership is classified by prefix and documented next-hop links.',
+    ),
+    '## Environment Keys',
+    '',
+    '| Key | Example File | Surface | Details |',
+    '| --- | --- | --- | --- |',
+    ...rows.map(
+      (row) =>
+        `| \`${row.key}\` | \`${row.exampleFile}\` | ${row.surface} | \`${row.details}\` |`,
+    ),
+    '',
+  ];
+
+  await writeGenerated('docs/generated/env-surface-index.md', lines.join('\n'));
+}
+
 function classifyPlanPath(relativePath) {
   if (relativePath === 'docs/plans/README.md') return 'router';
   if (relativePath.startsWith('docs/plans/completed/')) return 'completed';
@@ -201,3 +367,4 @@ async function generateBackendRouteIndex() {
 await generatePackageReadmeIndex();
 await generatePlansIndex();
 await generateBackendRouteIndex();
+await generateEnvSurfaceIndex();

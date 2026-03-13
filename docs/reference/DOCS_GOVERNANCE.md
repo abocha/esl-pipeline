@@ -5,7 +5,6 @@
 - Audience: maintainers and AI agents editing docs.
 - Read Time: 3 minutes.
 - Authority Level: Governance policy.
-- Last Verified Against: 2026-03-10 repo state.
 - Last Verified Against: 2026-03-13 repo state.
 - Owner: founder-maintainer + automation agents.
 - Review Cadence: biweekly.

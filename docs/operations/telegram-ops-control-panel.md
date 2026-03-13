@@ -3,7 +3,7 @@
 ## Meta
 
 - Audience: maintainers and operators running Telegram-based operational controls.
-- Read Time: 6 minutes.
+- Read Time: 5 minutes.
 - Authority Level: operations runbook.
 - Last Verified Against: 2026-03-13 repo state.
 - Owner: backend/ops maintainers + automation agents.
@@ -12,14 +12,13 @@
 
 ## Purpose
 
-- Operate the `@esl-pipeline/telegram-ops-bot` service safely.
-- Document command behavior, thread/topic routing, and fallback paths.
-- Clarify backend `/ops/*` prerequisites and shared-secret hardening.
+- Operate `@esl-pipeline/telegram-ops-bot` safely.
+- Keep the safety model, routing behavior, and troubleshooting signals in one place.
 
 ## Components
 
-- Bot runtime package: `packages/telegram-ops-bot`
-- Backend ops control endpoints:
+- bot package: `packages/telegram-ops-bot`
+- backend endpoints:
   - `GET /ops/status`
   - `GET /ops/actions`
   - `POST /ops/actions`
@@ -27,289 +26,154 @@
 
 ## Safety Model
 
-- `/ops/*` endpoints require admin auth.
-- Optional defense-in-depth: set `BATCH_BACKEND_OPS_CONTROL_BOT_SECRET`.
-  - When set, `/ops/*` also require `x-ops-bot-secret`.
-- Backend runtime must include `bash`, `aws`, and `docker` CLI for default ops command wrappers.
-- Backend runtime must include GNU-compatible `date`/`find` tooling (`coreutils`, `findutils`) used by backup/status scripts.
-- Backend runtime must include `scripts/docker/*` at `/app/scripts/docker/*` (default wrapper paths).
-- For action commands (`/backup`, `/drill`), backend container must have Docker socket access (`/var/run/docker.sock`) and set `PG_CONTAINER_NAME` to target Postgres deterministically.
-- In dev compose where backend runs as non-root user, set `DOCKER_GID` to host socket group id so Docker CLI can access `/var/run/docker.sock`.
-- AWS auth for status/backup/drill scripts is env-based (`AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `AWS_REGION`, plus `PG_BACKUP_S3_*`); no interactive `aws configure` step is used.
-- Telegram bot requires explicit allowlist (`TELEGRAM_OPS_BOT_ALLOWED_USER_IDS`).
-- Bot enforces per-user command rate limiting.
-- Bot defaults to read-only mode (`TELEGRAM_OPS_BOT_ENABLE_ACTION_COMMANDS=false`) until operators explicitly enable action commands.
-- V1 action allowlist is intentionally narrow:
+- `/ops/*` requires admin auth.
+- Optional defense-in-depth:
+  - `BATCH_BACKEND_OPS_CONTROL_BOT_SECRET`
+- Bot access is allowlisted by Telegram user id.
+- Per-user command rate limiting is enforced.
+- Mutating commands remain off by default:
+  - `TELEGRAM_OPS_BOT_ENABLE_ACTION_COMMANDS=false`
+- Action allowlist remains intentionally narrow:
   - `backup_upload`
   - `restore_drill_download_only`
 
-## Threaded Mode
+Backend prerequisites for action commands:
 
-Domain routing:
+- `bash`, `aws`, and `docker` CLI available
+- GNU-compatible `date`/`find`
+- `scripts/docker/*` present in the runtime image
+- Docker socket access plus `PG_CONTAINER_NAME` for deterministic targeting
 
-- `ops`
-- `jobs`
-- `alerts`
+## Current UX Surface
 
-Startup behavior:
+Onboarding:
 
-1. Bot resolves its own username (`getMe`) for strict command mention matching.
-2. If `TELEGRAM_OPS_BOT_SKIP_PENDING_UPDATES_ON_STARTUP=true`, bot starts polling from the latest pending update to avoid replaying stale commands.
-3. Bot attempts forum-topic verification for `TELEGRAM_OPS_BOT_CHAT_ID`.
-4. If forum-enabled and auto-create is on, bot creates missing domain topics.
-5. Topic ids are cached in `TELEGRAM_OPS_BOT_TOPICS_STATE_FILE`.
-6. If topic creation/check fails, bot falls back to default routing.
-
-Fallback precedence:
-
-1. incoming command thread (`message_thread_id`) if present
-2. mapped domain topic thread id
-3. `TELEGRAM_OPS_BOT_DEFAULT_THREAD_ID` if set
-4. chat root (no thread id)
-
-## Commands (V1)
-
-Onboarding commands:
-
-- `/start` (available in allowlisted private chats and the configured ops chat)
+- `/start`
 - `/help`
 
 Read commands:
 
 - `/status`
 - `/op <operationId>`
-- `/finished [limit]` (admin service-account path; lists latest succeeded jobs across users)
+- `/finished [limit]`
 - `/job <jobId>`
 - `/links <jobId>`
-- `/share <jobId>` (student-forward alias of `/links`)
+- `/share <jobId>`
 
-Safe action commands:
+Safe actions:
 
 - `/backup [label]`
 - `/drill`
+- `/approve <token>` in webhook approval flows
 
-No restart commands are implemented in V1.
+Behavior notes:
 
-Private-chat behavior in `A3`:
+- private chat is onboarding-only
+- configured ops chat gets the full routed/guided surface
+- `/help` opens the guided control panel in the ops chat
+- guided action flows are confirm-first and must preserve the existing approval model
 
-- Allowlisted operators may use `/start` and `/help` in private chat for onboarding.
-- Other commands remain scoped to `TELEGRAM_OPS_BOT_CHAT_ID`.
-- Private-chat attempts to run ops commands receive a redirect back to the configured ops chat.
+## Routing and Transport
 
-Guided control behavior in `A4`:
+Domains:
 
-- `/help` in the configured ops chat opens a guided control panel with inline controls.
-- Primary guided controls:
-  - `Status`
-  - `Finished Jobs`
-  - `Recent Operations`
-  - `Backup` / `Drill` only when action commands are enabled
-- Guided read flows edit the existing panel message in place when possible.
-- Guided `Backup` / `Drill` are confirm-first and preserve the same execution/approval rules as typed commands.
-- If a panel message can no longer be edited, the bot sends a replacement message in the same thread.
+- `ops`
+- `jobs`
+- `alerts`
 
-## Share Card Behavior (`/links`, `/share`)
+Fallback order:
 
-Bot output is optimized for forwarding to students:
+1. incoming thread id
+2. mapped topic id
+3. configured default thread
+4. chat root
 
-1. Assignment card (preview disabled):
-   - Single clickable link only.
-   - Link text: `<emoji> Homework Assignment: <full title>`.
-   - Emoji/title extraction priority:
-     - markdown frontmatter/H1 (including local `.md` file-path resolution),
-     - published HTML fallback (`<title>` + `.hero-emoji`).
-2. Audio card 1 (preview enabled, if available):
-   - `🎧 Listen 1: Study Text`
-3. Audio card 2 (preview enabled, if available):
-   - `🗣️ Listen 2: Pronunciation`
+Transport notes:
 
-Audio URL extraction priority:
+- polling is default
+- webhook is opt-in
+- polling requests both `message` and `callback_query` updates
+- startup metadata sync is best-effort and non-fatal
 
-1. generated markdown links (`Audio recording: Study Text`, `Audio recording: Pronunciation Shadow Sentence`)
-2. markdown path hints (`/audio/final/`, `/audio/pronunciation-shadow/`)
-3. published HTML fallback (`htmlUrl`) with same path hints
+## Operational Checks
 
-## Deployment Notes
+Rollout/readiness sequence:
 
-- Dev compose service: `telegram-ops-bot` in `docker-compose.yml`.
-- Prod compose service: `telegram-ops-bot` in `docker-compose.prod.yml`.
-- Bot startup is gated by `TELEGRAM_OPS_BOT_ENABLED=true`.
-- For deterministic smoke/fake API runs, point `TELEGRAM_OPS_BOT_API_BASE_URL` at the test API endpoint.
-- Polling transport defaults to `TELEGRAM_OPS_BOT_MODE=polling`; set `TELEGRAM_OPS_BOT_LEADER_ELECTION_ENABLED=true` only when multi-instance polling coordination is configured.
-- Guided controls require callback updates, so polling requests both `message` and `callback_query` updates.
-- `/approve` replay protection is persisted in Postgres; configure `TELEGRAM_OPS_BOT_APPROVAL_REPLAY_DATABASE_URL` if replay-state storage should use a dedicated DSN.
-- On startup, the bot best-effort syncs Telegram metadata derived from the live command registry:
-  - private-chat commands: `/start`, `/help`
-  - configured ops-chat commands: capability-aware ops command set
-  - short description, long description, and default menu button
-  - sync failures are warning-level only and do not block startup
-- Webhook transport is opt-in (`TELEGRAM_OPS_BOT_MODE=webhook`) and uses:
-  - `TELEGRAM_OPS_BOT_WEBHOOK_HOST`
-  - `TELEGRAM_OPS_BOT_WEBHOOK_PORT`
-  - `TELEGRAM_OPS_BOT_WEBHOOK_PATH`
-  - Optional hardening: `TELEGRAM_OPS_BOT_WEBHOOK_SECRET_TOKEN` (enforces inbound `x-telegram-bot-api-secret-token`).
-- Backend control surface is gated by `BATCH_BACKEND_ENABLE_OPS_CONTROL=true`.
+```bash
+pnpm check:fast
+pnpm --filter @esl-pipeline/telegram-ops-bot test
+pnpm test:integration
+bash scripts/smoke/run-telegram-ops-compose-smoke.sh
+pnpm ops:telegram:preflight --profile=readonly_canary
+```
 
-## Polling GA Closeout Commands
+Post-deploy:
 
-Run this sequence for rollout-readiness evidence (from repo root):
+```bash
+pnpm ops:telegram:verify
+```
 
-1. `pnpm check:fast`
-2. `pnpm --filter @esl-pipeline/telegram-ops-bot test`
-3. `pnpm test:integration`
-4. `bash scripts/smoke/run-telegram-ops-compose-smoke.sh`
-5. `pnpm ops:telegram:preflight --profile=readonly_canary`
-
-Optional helper command for the same sequence:
-
-- `pnpm ops:telegram:ga:gates`
-
-Preflight artifact path:
+Artifacts:
 
 - `tmp/telegram-ops-go-live/preflight.json`
-
-Post-deploy verification:
-
-1. `pnpm ops:telegram:verify`
-2. Restart backend.
-3. Re-run continuity check with an existing operation id:
-   - `pnpm ops:telegram:verify --operation-id=<known-operation-id>`
-
-Post-deploy verify artifact path:
-
 - `tmp/telegram-ops-go-live/verify.json`
-
-Profiles:
-
-- `readonly_canary` (default): requires `TELEGRAM_OPS_BOT_ENABLE_ACTION_COMMANDS=false`.
-- `mutable_ops`: allows mutating commands only with strict shared-secret/auth checks passing.
 
 ## Troubleshooting
 
-### Startup Replay Protection
+### Startup replay protection
 
-- Keep `TELEGRAM_OPS_BOT_SKIP_PENDING_UPDATES_ON_STARTUP=true` to avoid replaying stale queued commands after restarts.
-- Under leader-election startup failures, startup replay skipping is finalized as skipped to avoid dropping live updates once connectivity recovers.
-- Validate startup logs:
-  - `poll_offset_initialized_from_latest` means replay guard is active.
-  - `poll_offset_initialize_failed` means offset init failed and polling falls back to default offset.
-  - `startup_replay_guard_skipped_standby` means this replica started as standby and intentionally skipped startup backlog trimming.
-  - `startup_replay_guard_skipped_unavailable` means leader-election was unavailable during startup and backlog trimming was intentionally skipped.
-  - In webhook mode, `webhook_listener_started` confirms bind success; `webhook_listener_start_failed` indicates listener bind failure.
-- In deterministic compose smoke, stale pre-start commands should not emit outbound messages once fresh commands are injected.
+Keep `TELEGRAM_OPS_BOT_SKIP_PENDING_UPDATES_ON_STARTUP=true`.
 
-### Topic Healing and Stale Cache Recovery
+Key events:
 
-- If forum topics are deleted/renamed, clear `TELEGRAM_OPS_BOT_TOPICS_STATE_FILE` and restart to force topic re-discovery/re-creation.
-- Ensure `TELEGRAM_OPS_BOT_TOPIC_AUTO_CREATE=true` for automatic healing in forum chats.
-- Review startup logs for:
-  - `topic_router_topic_created`
-  - `topic_router_topic_create_failed`
-  - `topic_router_chat_lookup_failed`
-  - `topic_router_fallback_non_forum`
-- Review runtime healing logs for:
-  - `topic_stale_detected`
-  - `topic_recreated`
-  - `topic_heal_fallback`
-- Fallback routing remains: incoming thread -> mapped topic -> `TELEGRAM_OPS_BOT_DEFAULT_THREAD_ID` -> chat root.
+- `poll_offset_initialized_from_latest`
+- `poll_offset_initialize_failed`
+- `startup_replay_guard_skipped_standby`
+- `startup_replay_guard_skipped_unavailable`
+- `webhook_listener_started`
+- `webhook_listener_start_failed`
 
-### Share Fallback Diagnostics (`/links`, `/share`)
+### Topic healing
 
-- Missing assignment title/icon usually means markdown had no frontmatter/H1 and `htmlUrl` fallback was unreachable or lacked `<title>` / `.hero-emoji`.
-- Missing pronunciation/study audio links usually means both markdown labels/path hints and published HTML fallback links were absent.
-- Verify from bot runtime network:
-  - `GET /jobs/:jobId` returns `md` and/or reachable `htmlUrl`.
-  - Published HTML contains expected `/audio/final/` and `/audio/pronunciation-shadow/` paths.
-- Run deterministic smoke for command-loop + routing + fallback coverage:
-  - `bash scripts/smoke/run-telegram-ops-compose-smoke.sh`
+If forum topics drift:
 
-### Telemetry Counters (Log-Based)
+1. clear `TELEGRAM_OPS_BOT_TOPICS_STATE_FILE`
+2. ensure `TELEGRAM_OPS_BOT_TOPIC_AUTO_CREATE=true`
+3. restart the bot
 
-- Bot emits additive metric-style telemetry under `event=bot_metric`.
-- Primary metric names:
-  - `command_outcome` with statuses `completed`, `failed`, `denied_not_allowed`, `denied_rate_limited`, `unknown`
-  - `ux_entry_usage` with commands (`start`, `help`) and audience (`private_onboarding`, `ops_chat`)
-  - `ux_response_latency_ms` with commands (`start`, `help`) and audience (`private_onboarding`, `ops_chat`)
-  - `callback_usage` by guided view/action family
-  - `callback_outcome` with statuses `completed`, `edit_fallback`, `failed`, `denied_scope`, `unknown`
-  - `callback_response_latency_ms` by guided view/action family
-  - `share_extraction_source` with source labels (`markdown_label`, `markdown_path`, `html_path`)
-  - `share_missing_audio` with kinds (`missing_study`, `missing_pronunciation`, `missing_any`)
-  - `share_fallback_source` with source label (`html`)
-- Keep existing structured events (`command_outcome`, `share_path_telemetry`) for detailed debugging context.
-- Guided-control events include:
-  - `callback_received`
-  - `callback_answered`
-  - `callback_render_completed`
-  - `callback_edit_fallback_used`
-  - `callback_render_failed`
-- Metadata sync emits:
-  - `telegram_metadata_sync_succeeded`
-  - `telegram_metadata_sync_failed`
+Key events:
 
-## Soak Playbook (Blocking Sign-Off)
+- `topic_router_topic_created`
+- `topic_router_topic_create_failed`
+- `topic_stale_detected`
+- `topic_recreated`
+- `topic_heal_fallback`
 
-Escalation owner:
+### Share fallback diagnostics
 
-- Backend/ops maintainer on-call for this deployment window.
+Check:
 
-Fixed soak sequence:
+- job payload still exposes `md` or reachable `htmlUrl`
+- published HTML still contains expected audio paths
+- compose smoke still passes
 
-1. Keep canary profile active (`TELEGRAM_OPS_BOT_ENABLE_ACTION_COMMANDS=false`) and confirm `/status`, `/op`, `/share` behavior in the target chat.
-2. Confirm startup/leadership/replay events in bot logs as operational checks:
-   - `poll_offset_initialized_from_latest`
-   - `poll_leader_acquired` / `poll_leader_standby`
-   - `startup_replay_guard_skipped_standby` / `startup_replay_guard_skipped_unavailable` (if relevant)
-3. Run a real ops action and capture `operationId`, then restart backend and verify lookup continuity with:
-   - `pnpm ops:telegram:verify --operation-id=<known-operation-id>`
-4. Validate `/share` output ordering and extraction precedence in the live chat:
-   - assignment card first (preview disabled)
-   - audio cards after (preview enabled)
+### Telemetry signals
 
-Blocking soak checks:
+Primary counters/events:
 
-1. No unhealed stale-topic incidents.
-2. No `/share` precedence regressions.
-3. Persisted ops action continuity across backend restart.
-
-Rollback toggles:
-
-1. Freeze mutating commands: `TELEGRAM_OPS_BOT_ENABLE_ACTION_COMMANDS=false`.
-2. Disable bot process: `TELEGRAM_OPS_BOT_ENABLED=false`.
-3. Disable backend control surface: `BATCH_BACKEND_ENABLE_OPS_CONTROL=false`.
-
-Expected outcomes:
-
-1. Preflight and post-deploy verify reports are green.
-2. Manual soak checks pass without blocking incidents.
-3. Artifact bundle under `tmp/telegram-ops-go-live/` is available for release evidence.
-
-## Webhook Pilot Checklist (Non-Blocking)
-
-Webhook transport is explicitly non-blocking for polling GA closeout. For pilot readiness only:
-
-1. Configure webhook listener settings:
-   - `TELEGRAM_OPS_BOT_MODE=webhook`
-   - `TELEGRAM_OPS_BOT_WEBHOOK_HOST`
-   - `TELEGRAM_OPS_BOT_WEBHOOK_PORT`
-   - `TELEGRAM_OPS_BOT_WEBHOOK_PATH`
-2. Configure inbound secret validation:
-   - `TELEGRAM_OPS_BOT_WEBHOOK_SECRET_TOKEN`
-   - Ensure ingress forwards `x-telegram-bot-api-secret-token`.
-3. Ensure replay-store DB permissions for approval token replay protection:
-   - `TELEGRAM_OPS_BOT_APPROVAL_REPLAY_DATABASE_URL` (optional override)
-   - Table create/insert/delete access for `telegram_approval_replay_tokens`.
-
-## Validation Checklist
-
-1. Confirm backend login works with service account credentials.
-2. Run `/status` and verify JSON-backed status summary is returned.
-3. Run `/op <operationId>` and verify lifecycle response is returned.
-4. Verify topic routing behavior in a forum-enabled chat and fallback behavior in non-forum chats.
-5. If action load exceeds `BATCH_BACKEND_OPS_CONTROL_ACTION_HISTORY_LIMIT`, expect temporary status-history overflow while actions are active; terminal history is pruned first.
+- `command_outcome`
+- `ux_entry_usage`
+- `ux_response_latency_ms`
+- `callback_usage`
+- `callback_outcome`
+- `callback_response_latency_ms`
+- `share_extraction_source`
+- `share_missing_audio`
+- `telegram_metadata_sync_succeeded`
+- `telegram_metadata_sync_failed`
 
 ## Related
 
-- `docs/reference/env.md`
-- `docs/operations/postgres-backup-s3.md`
-- `docs/operations/postgres-ops-health.md`
+- [`packages/telegram-ops-bot/README.md`](../../packages/telegram-ops-bot/README.md)
+- [`docs/reference/env.md`](../reference/env.md)
+- [`docs/plans/telegram-ops-control-panel-hardening/README.md`](../plans/telegram-ops-control-panel-hardening/README.md)
