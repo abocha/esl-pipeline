@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { InMemoryApprovalReplayStore } from '../src/approval-replay-store.js';
 import {
   createCommandRegistry,
+  getAdvertisedCommands,
   parseCommandText,
   resetAdvancedControlApprovalsForTests,
 } from '../src/commands.js';
@@ -104,6 +105,87 @@ describe('telegram commands', () => {
       mentionedBot: 'another_bot',
     });
     expect(parseCommandText('hello')).toBeNull();
+  });
+
+  it('runs /start with onboarding guidance in read-only mode', async () => {
+    const registry = createCommandRegistry();
+    const startCommand = registry.resolve('start');
+    expect(startCommand).toBeDefined();
+
+    const base = createBaseContext({});
+    const context = createBaseContext({
+      config: {
+        ...base.config,
+        enableActionCommands: false,
+      },
+      command: 'start',
+      args: [],
+    });
+
+    await startCommand?.execute(context);
+
+    const sendMock = context.messenger.sendHtmlMessage as ReturnType<typeof vi.fn>;
+    expect(sendMock).toHaveBeenCalledTimes(1);
+    expect(sendMock.mock.calls[0]?.[0].html).toContain('internal Telegram control surface');
+    expect(sendMock.mock.calls[0]?.[0].html).toContain('read-only mode');
+    expect(sendMock.mock.calls[0]?.[0].html).toContain('/help');
+
+    const auditLogMock = context.audit.log as ReturnType<typeof vi.fn>;
+    expect(auditLogMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        event: 'bot_metric',
+        details: expect.objectContaining({
+          metric: 'ux_entry_usage',
+          labels: expect.objectContaining({
+            command: 'start',
+          }),
+        }),
+      }),
+    );
+    expect(auditLogMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        event: 'bot_metric',
+        details: expect.objectContaining({
+          metric: 'ux_response_latency_ms',
+          labels: expect.objectContaining({
+            command: 'start',
+          }),
+        }),
+      }),
+    );
+  });
+
+  it('filters advertised commands by runtime capability and audience', () => {
+    const registry = createCommandRegistry();
+    const base = createBaseContext({});
+
+    const privateCommands = getAdvertisedCommands(
+      registry.commands,
+      base.config,
+      'private_onboarding',
+    ).map((command) => command.command);
+    expect(privateCommands).toEqual(['start', 'help']);
+
+    const readOnlyOpsCommands = getAdvertisedCommands(registry.commands, {
+      ...base.config,
+      enableActionCommands: false,
+      mode: 'polling',
+    }, 'ops_chat').map((command) => command.command);
+    expect(readOnlyOpsCommands).toContain('help');
+    expect(readOnlyOpsCommands).toContain('status');
+    expect(readOnlyOpsCommands).not.toContain('start');
+    expect(readOnlyOpsCommands).not.toContain('backup');
+    expect(readOnlyOpsCommands).not.toContain('drill');
+    expect(readOnlyOpsCommands).not.toContain('approve');
+
+    const webhookOpsCommands = getAdvertisedCommands(registry.commands, {
+      ...base.config,
+      enableActionCommands: true,
+      mode: 'webhook',
+    }, 'ops_chat').map((command) => command.command);
+    expect(webhookOpsCommands).toContain('backup');
+    expect(webhookOpsCommands).toContain('drill');
+    expect(webhookOpsCommands).toContain('approve');
   });
 
   it('does not send command-local error response for /status failures', async () => {

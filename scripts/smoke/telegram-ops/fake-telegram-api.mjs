@@ -29,6 +29,16 @@ const state = {
     getChat: 0,
     createForumTopic: 0,
     sendMessage: 0,
+    setMyCommands: 0,
+    setMyDescription: 0,
+    setMyShortDescription: 0,
+    setChatMenuButton: 0,
+  },
+  metadata: {
+    commands: [],
+    descriptions: [],
+    shortDescriptions: [],
+    menuButtons: [],
   },
   getUpdatesRequests: [],
   nextMessageId: 50_000,
@@ -246,6 +256,46 @@ async function handleTelegramMethod(req, res, method, payload) {
     return;
   }
 
+  if (method === 'setMyCommands') {
+    state.calls.setMyCommands += 1;
+    state.metadata.commands.push({
+      ts: new Date().toISOString(),
+      payload,
+    });
+    apiSuccess(res, true);
+    return;
+  }
+
+  if (method === 'setMyDescription') {
+    state.calls.setMyDescription += 1;
+    state.metadata.descriptions.push({
+      ts: new Date().toISOString(),
+      payload,
+    });
+    apiSuccess(res, true);
+    return;
+  }
+
+  if (method === 'setMyShortDescription') {
+    state.calls.setMyShortDescription += 1;
+    state.metadata.shortDescriptions.push({
+      ts: new Date().toISOString(),
+      payload,
+    });
+    apiSuccess(res, true);
+    return;
+  }
+
+  if (method === 'setChatMenuButton') {
+    state.calls.setChatMenuButton += 1;
+    state.metadata.menuButtons.push({
+      ts: new Date().toISOString(),
+      payload,
+    });
+    apiSuccess(res, true);
+    return;
+  }
+
   apiError(res, 404, `Unsupported method: ${method}`);
 }
 
@@ -272,6 +322,16 @@ async function handler(req, res) {
       getChat: 0,
       createForumTopic: 0,
       sendMessage: 0,
+      setMyCommands: 0,
+      setMyDescription: 0,
+      setMyShortDescription: 0,
+      setChatMenuButton: 0,
+    };
+    state.metadata = {
+      commands: [],
+      descriptions: [],
+      shortDescriptions: [],
+      menuButtons: [],
     };
     state.getUpdatesRequests = [];
     state.nextMessageId = 50_000;

@@ -7,10 +7,12 @@ import { createAuditLogger } from './audit.js';
 import { HttpBackendClient } from './backend-client.js';
 import { loadBotConfigFromEnv } from './config.js';
 import { PostgresPollingLeaderElection } from './leader-election.js';
+import { syncTelegramMetadataBestEffort } from './metadata-sync.js';
 import { TelegramOpsBotRunner } from './runner.js';
 import { TelegramClient } from './telegram-client.js';
 import { ForumTopicRouter } from './topic-router.js';
 import { type RunningWebhookUpdateServer, startWebhookUpdateServer } from './webhook-server.js';
+import { createCommandRegistry } from './commands.js';
 
 export async function startTelegramOpsBot(): Promise<void> {
   loadCliEnv({
@@ -49,6 +51,16 @@ export async function startTelegramOpsBot(): Promise<void> {
       ? PostgresPollingLeaderElection.fromEnv(audit)
       : undefined;
   const approvalReplayStore = PostgresApprovalReplayStore.fromEnv(audit);
+  const registry = createCommandRegistry({
+    replayStore: approvalReplayStore,
+  });
+
+  await syncTelegramMetadataBestEffort({
+    telegram,
+    config,
+    audit,
+    registry,
+  });
 
   const runner = new TelegramOpsBotRunner({
     config,

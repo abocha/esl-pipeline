@@ -20,6 +20,16 @@ function formatNullable(value: string | null | undefined): string {
 }
 
 export function formatHelp(commands: CommandDefinition[]): string {
+  return formatHelpWithOptions(commands);
+}
+
+export function formatHelpWithOptions(
+  commands: CommandDefinition[],
+  options?: {
+    title?: string;
+    footerLines?: string[];
+  },
+): string {
   const lines = [...commands]
     .sort((a, b) => a.command.localeCompare(b.command))
     .map(
@@ -27,7 +37,13 @@ export function formatHelp(commands: CommandDefinition[]): string {
         `<code>/${escapeHtml(command.command)}</code> — ${escapeHtml(command.description)}`,
     );
 
-  return `<b>ESL Ops Control</b>\n\n${lines.join('\n')}`;
+  const footer = options?.footerLines?.filter(Boolean) ?? [];
+  return [
+    `<b>${escapeHtml(options?.title ?? 'ESL Ops Control')}</b>`,
+    '',
+    lines.join('\n'),
+    ...(footer.length > 0 ? ['', ...footer.map((line) => escapeHtml(line))] : []),
+  ].join('\n');
 }
 
 export function formatOpsStatus(status: OpsStatusResponse): string {
@@ -223,4 +239,35 @@ export function formatActionStatus(status: OpsActionStatus): string {
 
 export function formatCommandError(message: string): string {
   return `<b>Command failed</b>\n\n${escapeHtml(message)}`;
+}
+
+export function formatStartMessage(args: {
+  enableActionCommands: boolean;
+  opsChatId: string;
+  inOpsChat: boolean;
+}): string {
+  const modeLine = args.enableActionCommands
+    ? 'This deployment currently allows the safe action commands that are enabled for ops.'
+    : 'This deployment is currently running in read-only mode.';
+  const locationLine = args.inOpsChat
+    ? 'You are already in the configured ops chat for command execution.'
+    : `Run operational commands in the configured ops chat: <code>${escapeHtml(args.opsChatId)}</code>.`;
+
+  return [
+    '<b>ESL Ops Control</b>',
+    '',
+    'This bot is the internal Telegram control surface for ESL Pipeline operations.',
+    modeLine,
+    'Use <code>/help</code> to see the onboarding commands available here.',
+    locationLine,
+  ].join('\n');
+}
+
+export function formatPrivateOnboardingRedirect(opsChatId: string): string {
+  return [
+    '<b>Use the ops chat for this command</b>',
+    '',
+    'Private chat is limited to onboarding in this phase.',
+    `Use <code>/start</code> or <code>/help</code> here, then switch to the configured ops chat: <code>${escapeHtml(opsChatId)}</code>.`,
+  ].join('\n');
 }

@@ -2,7 +2,7 @@ import type { Message, Update } from '@grammyjs/types';
 
 import type { ApprovalReplayStore } from './approval-replay-store.js';
 import { type CommandRegistry, createCommandRegistry, parseCommandText } from './commands.js';
-import { formatCommandError } from './formatter.js';
+import { formatCommandError, formatPrivateOnboardingRedirect } from './formatter.js';
 import { emitBotMetricCounter } from './metrics.js';
 import { TelegramApiError, type TelegramClient } from './telegram-client.js';
 import type {
@@ -297,7 +297,8 @@ export class TelegramOpsBotRunner {
     }
 
     const chatId = String(message.chat.id);
-    if (chatId !== this.config.chatId) {
+    const isPrivateChat = message.chat.type === 'private';
+    if (chatId !== this.config.chatId && !isPrivateChat) {
       return;
     }
 
@@ -345,8 +346,26 @@ export class TelegramOpsBotRunner {
         },
       });
       await this.sendSimpleMessage({
+        chatId,
         html: '<b>Access denied</b>\n\nYour Telegram user id is not allowed for this bot.',
         threadId,
+      });
+      return;
+    }
+
+    if (isPrivateChat && parsed.command !== 'start' && parsed.command !== 'help') {
+      this.audit.log({
+        level: 'info',
+        event: 'command_rejected_private_chat_scope',
+        message: 'Rejected private-chat command outside onboarding scope',
+        userId: fromUserId,
+        chatId,
+        command: parsed.command,
+        commandArgs: parsed.args,
+      });
+      await this.sendSimpleMessage({
+        chatId,
+        html: formatPrivateOnboardingRedirect(this.config.chatId),
       });
       return;
     }
@@ -370,6 +389,7 @@ export class TelegramOpsBotRunner {
         },
       });
       await this.sendSimpleMessage({
+        chatId,
         html: '<b>Rate limit</b>\n\nPlease wait a minute before sending more commands.',
         threadId,
       });
@@ -387,6 +407,7 @@ export class TelegramOpsBotRunner {
         },
       });
       await this.sendSimpleMessage({
+        chatId,
         html: `<b>Unknown command</b>\n\nUse <code>/help</code> to list commands.`,
         threadId,
       });
@@ -468,6 +489,7 @@ export class TelegramOpsBotRunner {
         error: err,
       });
       await this.sendSimpleMessage({
+        chatId,
         html: formatCommandError(err),
         threadId,
       });
@@ -496,9 +518,13 @@ export class TelegramOpsBotRunner {
     return undefined;
   }
 
-  private async sendSimpleMessage(args: { html: string; threadId?: number }): Promise<void> {
+  private async sendSimpleMessage(args: {
+    chatId?: string;
+    html: string;
+    threadId?: number;
+  }): Promise<void> {
     await this.messenger.sendHtmlMessage({
-      chatId: this.config.chatId,
+      chatId: args.chatId ?? this.config.chatId,
       threadId: args.threadId,
       html: args.html,
     });

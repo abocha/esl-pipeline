@@ -82,6 +82,22 @@ export class TelegramClient {
     return this.call('createForumTopic', args);
   }
 
+  setMyCommands(args: NonNullable<MethodArgs<'setMyCommands'>>): Promise<true> {
+    return this.call('setMyCommands', args);
+  }
+
+  setMyDescription(args: NonNullable<MethodArgs<'setMyDescription'>>): Promise<true> {
+    return this.call('setMyDescription', args);
+  }
+
+  setMyShortDescription(args: NonNullable<MethodArgs<'setMyShortDescription'>>): Promise<true> {
+    return this.call('setMyShortDescription', args);
+  }
+
+  setChatMenuButton(args: NonNullable<MethodArgs<'setChatMenuButton'>>): Promise<true> {
+    return this.call('setChatMenuButton', args);
+  }
+
   async sendHtmlMessage(args: {
     chatId: string;
     html: string;
