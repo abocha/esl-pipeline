@@ -22,13 +22,28 @@ const state = {
   allowedUserId,
   updates: [],
   sentMessages: [],
+  editedMessages: [],
+  answeredCallbacks: [],
   createdTopics: [],
+  failNextEdit: false,
   calls: {
     getMe: 0,
     getUpdates: 0,
     getChat: 0,
     createForumTopic: 0,
     sendMessage: 0,
+    editMessageText: 0,
+    answerCallbackQuery: 0,
+    setMyCommands: 0,
+    setMyDescription: 0,
+    setMyShortDescription: 0,
+    setChatMenuButton: 0,
+  },
+  metadata: {
+    commands: [],
+    descriptions: [],
+    shortDescriptions: [],
+    menuButtons: [],
   },
   getUpdatesRequests: [],
   nextMessageId: 50_000,
@@ -83,41 +98,70 @@ function normalizeUpdate(rawUpdate) {
   const updateId = Number.isInteger(rawUpdate?.update_id)
     ? rawUpdate.update_id
     : state.nextUpdateId++;
-  const message = {
-    message_id: Number.isInteger(rawUpdate?.message?.message_id)
-      ? rawUpdate.message.message_id
-      : updateId,
-    date: Number.isInteger(rawUpdate?.message?.date)
-      ? rawUpdate.message.date
-      : Math.floor(Date.now() / 1_000),
-    chat: {
-      id: Number.isInteger(rawUpdate?.message?.chat?.id) ? rawUpdate.message.chat.id : chatId,
-      type: rawUpdate?.message?.chat?.type ?? 'supergroup',
-      title: rawUpdate?.message?.chat?.title ?? 'Smoke Ops Chat',
-      is_forum:
-        typeof rawUpdate?.message?.chat?.is_forum === 'boolean'
-          ? rawUpdate.message.chat.is_forum
-          : true,
-    },
-    from: {
-      id: Number.isInteger(rawUpdate?.message?.from?.id)
-        ? rawUpdate.message.from.id
-        : allowedUserId,
-      is_bot: Boolean(rawUpdate?.message?.from?.is_bot ?? false),
-      first_name: rawUpdate?.message?.from?.first_name ?? 'Smoke Operator',
-      username: rawUpdate?.message?.from?.username ?? 'smoke_operator',
-    },
-    text: typeof rawUpdate?.message?.text === 'string' ? rawUpdate.message.text : '/status',
-  };
-
-  if (Number.isInteger(rawUpdate?.message?.message_thread_id)) {
-    message.message_thread_id = rawUpdate.message.message_thread_id;
+  if (rawUpdate?.callback_query) {
+    return {
+      update_id: updateId,
+      callback_query: {
+        id:
+          typeof rawUpdate.callback_query.id === 'string'
+            ? rawUpdate.callback_query.id
+            : `cb-${updateId}`,
+        from: {
+          id: Number.isInteger(rawUpdate.callback_query?.from?.id)
+            ? rawUpdate.callback_query.from.id
+            : allowedUserId,
+          is_bot: Boolean(rawUpdate.callback_query?.from?.is_bot ?? false),
+          first_name: rawUpdate.callback_query?.from?.first_name ?? 'Smoke Operator',
+          username: rawUpdate.callback_query?.from?.username ?? 'smoke_operator',
+        },
+        data:
+          typeof rawUpdate.callback_query.data === 'string'
+            ? rawUpdate.callback_query.data
+            : 'a4|h',
+        message: normalizeMessage(rawUpdate.callback_query.message),
+      },
+    };
   }
 
   return {
     update_id: updateId,
-    message,
+    message: normalizeMessage(rawUpdate.message),
   };
+}
+
+function normalizeMessage(rawMessage) {
+  const message = {
+    message_id: Number.isInteger(rawMessage?.message_id)
+      ? rawMessage.message_id
+      : state.nextMessageId++,
+    date: Number.isInteger(rawMessage?.date)
+      ? rawMessage.date
+      : Math.floor(Date.now() / 1_000),
+    chat: {
+      id: Number.isInteger(rawMessage?.chat?.id) ? rawMessage.chat.id : chatId,
+      type: rawMessage?.chat?.type ?? 'supergroup',
+      title: rawMessage?.chat?.title ?? 'Smoke Ops Chat',
+      is_forum:
+        typeof rawMessage?.chat?.is_forum === 'boolean'
+          ? rawMessage.chat.is_forum
+          : true,
+    },
+    from: {
+      id: Number.isInteger(rawMessage?.from?.id)
+        ? rawMessage.from.id
+        : allowedUserId,
+      is_bot: Boolean(rawMessage?.from?.is_bot ?? false),
+      first_name: rawMessage?.from?.first_name ?? 'Smoke Operator',
+      username: rawMessage?.from?.username ?? 'smoke_operator',
+    },
+    text: typeof rawMessage?.text === 'string' ? rawMessage.text : '/status',
+  };
+
+  if (Number.isInteger(rawMessage?.message_thread_id)) {
+    message.message_thread_id = rawMessage.message_thread_id;
+  }
+
+  return message;
 }
 
 function enqueueUpdates(rawUpdates) {
@@ -226,14 +270,16 @@ async function handleTelegramMethod(req, res, method, payload) {
     const messageThreadId = Number.isInteger(payload.message_thread_id)
       ? payload.message_thread_id
       : null;
+    const messageId = state.nextMessageId++;
     state.sentMessages.push({
       ts: new Date().toISOString(),
+      message_id: messageId,
       payload,
       message_thread_id: messageThreadId,
     });
 
     apiSuccess(res, {
-      message_id: state.nextMessageId++,
+      message_id: messageId,
       date: Math.floor(Date.now() / 1_000),
       chat: {
         id: chatId,
@@ -243,6 +289,81 @@ async function handleTelegramMethod(req, res, method, payload) {
       ...(messageThreadId ? { message_thread_id: messageThreadId } : {}),
       text: typeof payload.text === 'string' ? payload.text : '',
     });
+    return;
+  }
+
+  if (method === 'editMessageText') {
+    state.calls.editMessageText += 1;
+    if (state.failNextEdit) {
+      state.failNextEdit = false;
+      apiError(res, 400, "Bad Request: message can't be edited");
+      return;
+    }
+
+    state.editedMessages.push({
+      ts: new Date().toISOString(),
+      payload,
+    });
+    apiSuccess(res, {
+      message_id: Number.isInteger(payload.message_id) ? payload.message_id : state.nextMessageId++,
+      date: Math.floor(Date.now() / 1_000),
+      chat: {
+        id: chatId,
+        type: 'supergroup',
+        title: 'Smoke Ops Chat',
+      },
+      text: typeof payload.text === 'string' ? payload.text : '',
+    });
+    return;
+  }
+
+  if (method === 'answerCallbackQuery') {
+    state.calls.answerCallbackQuery += 1;
+    state.answeredCallbacks.push({
+      ts: new Date().toISOString(),
+      payload,
+    });
+    apiSuccess(res, true);
+    return;
+  }
+
+  if (method === 'setMyCommands') {
+    state.calls.setMyCommands += 1;
+    state.metadata.commands.push({
+      ts: new Date().toISOString(),
+      payload,
+    });
+    apiSuccess(res, true);
+    return;
+  }
+
+  if (method === 'setMyDescription') {
+    state.calls.setMyDescription += 1;
+    state.metadata.descriptions.push({
+      ts: new Date().toISOString(),
+      payload,
+    });
+    apiSuccess(res, true);
+    return;
+  }
+
+  if (method === 'setMyShortDescription') {
+    state.calls.setMyShortDescription += 1;
+    state.metadata.shortDescriptions.push({
+      ts: new Date().toISOString(),
+      payload,
+    });
+    apiSuccess(res, true);
+    return;
+  }
+
+  if (method === 'setChatMenuButton') {
+    state.calls.setChatMenuButton += 1;
+    state.metadata.menuButtons.push({
+      ts: new Date().toISOString(),
+      payload,
+    });
+    apiSuccess(res, true);
     return;
   }
 
@@ -265,18 +386,39 @@ async function handler(req, res) {
   if (req.method === 'POST' && requestUrl === '/_test/reset') {
     state.updates = [];
     state.sentMessages = [];
+    state.editedMessages = [];
+    state.answeredCallbacks = [];
     state.createdTopics = [];
+    state.failNextEdit = false;
     state.calls = {
       getMe: 0,
       getUpdates: 0,
       getChat: 0,
       createForumTopic: 0,
       sendMessage: 0,
+      editMessageText: 0,
+      answerCallbackQuery: 0,
+      setMyCommands: 0,
+      setMyDescription: 0,
+      setMyShortDescription: 0,
+      setChatMenuButton: 0,
+    };
+    state.metadata = {
+      commands: [],
+      descriptions: [],
+      shortDescriptions: [],
+      menuButtons: [],
     };
     state.getUpdatesRequests = [];
     state.nextMessageId = 50_000;
     state.nextUpdateId = 1_000;
     state.nextTopicId = 9_500;
+    sendJson(res, 200, { ok: true });
+    return;
+  }
+
+  if (req.method === 'POST' && requestUrl === '/_test/fail-next-edit') {
+    state.failNextEdit = true;
     sendJson(res, 200, { ok: true });
     return;
   }

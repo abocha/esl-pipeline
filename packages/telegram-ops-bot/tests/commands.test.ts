@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { InMemoryApprovalReplayStore } from '../src/approval-replay-store.js';
 import {
   createCommandRegistry,
+  getAdvertisedCommands,
   parseCommandText,
   resetAdvancedControlApprovalsForTests,
 } from '../src/commands.js';
@@ -44,11 +45,17 @@ function createBaseContext(overrides: Partial<CommandContext>): CommandContext {
       getOpsStatus: vi.fn(),
       enqueueOpsAction: vi.fn(),
       getOpsActionStatus: vi.fn(),
+      listOpsActions: vi.fn(),
       getFinishedJobs: vi.fn(),
       getJob: vi.fn(),
     },
     messenger: {
-      sendHtmlMessage: vi.fn(async () => {}),
+      sendHtmlMessage: vi.fn(async (args) => ({
+        message_id: 99,
+        date: 1,
+        chat: { id: Number(args.chatId), type: 'supergroup', title: 'Ops Chat' },
+        text: args.html,
+      })),
     },
     topicRouter: {
       initialize: vi.fn(async () => {}),
@@ -104,6 +111,129 @@ describe('telegram commands', () => {
       mentionedBot: 'another_bot',
     });
     expect(parseCommandText('hello')).toBeNull();
+  });
+
+  it('runs /start with onboarding guidance in read-only mode', async () => {
+    const registry = createCommandRegistry();
+    const startCommand = registry.resolve('start');
+    expect(startCommand).toBeDefined();
+
+    const base = createBaseContext({});
+    const context = createBaseContext({
+      config: {
+        ...base.config,
+        enableActionCommands: false,
+      },
+      command: 'start',
+      args: [],
+    });
+
+    await startCommand?.execute(context);
+
+    const sendMock = context.messenger.sendHtmlMessage as ReturnType<typeof vi.fn>;
+    expect(sendMock).toHaveBeenCalledTimes(1);
+    expect(sendMock.mock.calls[0]?.[0].html).toContain('internal Telegram control surface');
+    expect(sendMock.mock.calls[0]?.[0].html).toContain('read-only mode');
+    expect(sendMock.mock.calls[0]?.[0].html).toContain('/help');
+
+    const auditLogMock = context.audit.log as ReturnType<typeof vi.fn>;
+    expect(auditLogMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        event: 'bot_metric',
+        details: expect.objectContaining({
+          metric: 'ux_entry_usage',
+          labels: expect.objectContaining({
+            command: 'start',
+          }),
+        }),
+      }),
+    );
+    expect(auditLogMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        event: 'bot_metric',
+        details: expect.objectContaining({
+          metric: 'ux_response_latency_ms',
+          labels: expect.objectContaining({
+            command: 'start',
+          }),
+        }),
+      }),
+    );
+  });
+
+  it('renders guided /help in the ops chat with inline controls', async () => {
+    const registry = createCommandRegistry();
+    const helpCommand = registry.resolve('help');
+    expect(helpCommand).toBeDefined();
+
+    const context = createBaseContext({
+      update: {
+        update_id: 1,
+        message: {
+          message_id: 1,
+          date: 1,
+          text: '/help',
+          chat: { id: 123, type: 'supergroup', title: 'Ops Chat', is_forum: true },
+          from: { id: 1, is_bot: false, first_name: 'Ops' },
+        },
+      },
+      message: {
+        message_id: 1,
+        date: 1,
+        text: '/help',
+        chat: { id: 123, type: 'supergroup', title: 'Ops Chat', is_forum: true },
+        from: { id: 1, is_bot: false, first_name: 'Ops' },
+      } as CommandContext['message'],
+    });
+
+    await helpCommand?.execute(context);
+
+    const sendMock = context.messenger.sendHtmlMessage as ReturnType<typeof vi.fn>;
+    expect(sendMock).toHaveBeenCalledTimes(1);
+    expect(sendMock.mock.calls[0]?.[0].html).toContain('ESL Ops Control Panel');
+    expect(sendMock.mock.calls[0]?.[0].replyMarkup).toEqual(
+      expect.objectContaining({
+        inline_keyboard: expect.arrayContaining([
+          expect.arrayContaining([
+            expect.objectContaining({ text: 'Status' }),
+            expect.objectContaining({ text: 'Finished Jobs' }),
+          ]),
+        ]),
+      }),
+    );
+  });
+
+  it('filters advertised commands by runtime capability and audience', () => {
+    const registry = createCommandRegistry();
+    const base = createBaseContext({});
+
+    const privateCommands = getAdvertisedCommands(
+      registry.commands,
+      base.config,
+      'private_onboarding',
+    ).map((command) => command.command);
+    expect(privateCommands).toEqual(['start', 'help']);
+
+    const readOnlyOpsCommands = getAdvertisedCommands(registry.commands, {
+      ...base.config,
+      enableActionCommands: false,
+      mode: 'polling',
+    }, 'ops_chat').map((command) => command.command);
+    expect(readOnlyOpsCommands).toContain('help');
+    expect(readOnlyOpsCommands).toContain('status');
+    expect(readOnlyOpsCommands).not.toContain('start');
+    expect(readOnlyOpsCommands).not.toContain('backup');
+    expect(readOnlyOpsCommands).not.toContain('drill');
+    expect(readOnlyOpsCommands).not.toContain('approve');
+
+    const webhookOpsCommands = getAdvertisedCommands(registry.commands, {
+      ...base.config,
+      enableActionCommands: true,
+      mode: 'webhook',
+    }, 'ops_chat').map((command) => command.command);
+    expect(webhookOpsCommands).toContain('backup');
+    expect(webhookOpsCommands).toContain('drill');
+    expect(webhookOpsCommands).toContain('approve');
   });
 
   it('does not send command-local error response for /status failures', async () => {

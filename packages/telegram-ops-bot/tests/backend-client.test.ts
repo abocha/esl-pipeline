@@ -166,4 +166,54 @@ describe('backend client', () => {
     expect(urls.some((url) => url.includes('/admin/jobs?'))).toBe(true);
     expect(urls.some((url) => url.includes('/user/jobs?'))).toBe(false);
   });
+
+  it('queries recent ops actions with bounded pagination params', async () => {
+    const urls: string[] = [];
+
+    const fetchMock: typeof fetch = vi.fn(async (input) => {
+      const url = String(input);
+      urls.push(url);
+
+      if (url.endsWith('/auth/login')) {
+        return Response.json(
+          {
+            accessToken: 'token-1',
+            expiresIn: 3600,
+          },
+          {
+            status: 200,
+            headers: {
+              'set-cookie': 'esl_refresh=abc; Path=/; HttpOnly',
+            },
+          },
+        );
+      }
+
+      if (url.includes('/ops/actions?')) {
+        return Response.json(
+          {
+            actions: [],
+            total: 0,
+            limit: 20,
+            offset: 0,
+          },
+          { status: 200 },
+        );
+      }
+
+      return new Response('not found', { status: 404 });
+    }) as unknown as typeof fetch;
+
+    const client = new HttpBackendClient({
+      baseUrl: 'http://batch-backend:8080',
+      email: 'bot@example.com',
+      password: 'secret',
+      timeoutMs: 10_000,
+      fetchImpl: fetchMock,
+    });
+
+    await client.listOpsActions(50, -3);
+
+    expect(urls.some((url) => url.includes('/ops/actions?limit=20&offset=0'))).toBe(true);
+  });
 });

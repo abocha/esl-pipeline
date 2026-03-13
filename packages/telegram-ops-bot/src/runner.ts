@@ -2,7 +2,8 @@ import type { Message, Update } from '@grammyjs/types';
 
 import type { ApprovalReplayStore } from './approval-replay-store.js';
 import { type CommandRegistry, createCommandRegistry, parseCommandText } from './commands.js';
-import { formatCommandError } from './formatter.js';
+import { formatCommandError, formatPrivateOnboardingRedirect } from './formatter.js';
+import { handleGuidedCallback } from './guided-ui.js';
 import { emitBotMetricCounter } from './metrics.js';
 import { TelegramApiError, type TelegramClient } from './telegram-client.js';
 import type {
@@ -12,6 +13,7 @@ import type {
   BotConfig,
   CommandContext,
   PollLeaderElection,
+  TelegramInlineKeyboardMarkup,
   TelegramMessenger,
   TopicRouter,
 } from './types.js';
@@ -25,6 +27,15 @@ function hasTextField(message: Update['message']): message is NonNullable<Update
     return false;
   }
   return typeof (message as { text?: unknown }).text === 'string';
+}
+
+function hasCallbackQueryData(
+  update: Update,
+): update is Update & { callback_query: NonNullable<Update['callback_query']> } {
+  if (!('callback_query' in update) || !update.callback_query) {
+    return false;
+  }
+  return typeof update.callback_query.data === 'string' && update.callback_query.data.length > 0;
 }
 
 function isStaleOrDeletedThreadError(error: unknown): boolean {
@@ -43,6 +54,69 @@ function isStaleOrDeletedThreadError(error: unknown): boolean {
     message.includes('topic closed') ||
     message.includes('topic deleted')
   );
+}
+
+function isEditTargetUnavailableError(error: unknown): boolean {
+  if (!(error instanceof TelegramApiError)) {
+    return false;
+  }
+  if (error.method !== 'editMessageText') {
+    return false;
+  }
+  const message = error.message.toLowerCase();
+  return (
+    message.includes("message can't be edited") ||
+    message.includes('message to edit not found') ||
+    message.includes('message identifier is not specified') ||
+    message.includes('message thread not found')
+  );
+}
+
+function isMessageNotModifiedError(error: unknown): boolean {
+  return (
+    error instanceof TelegramApiError &&
+    error.method === 'editMessageText' &&
+    error.message.toLowerCase().includes('message is not modified')
+  );
+}
+
+function callbackMetricLabel(data: string): string {
+  const [, kind, param] = data.split('|');
+  switch (kind) {
+    case 'h': {
+      return 'home';
+    }
+    case 's': {
+      return 'status';
+    }
+    case 'f': {
+      return 'finished';
+    }
+    case 'r': {
+      return 'recent_ops';
+    }
+    case 'j': {
+      return 'job';
+    }
+    case 'o': {
+      return 'op';
+    }
+    case 'jl': {
+      return 'job_links';
+    }
+    case 'js': {
+      return 'job_share';
+    }
+    case 'a': {
+      return param === 'backup' || param === 'drill' ? `action_${param}` : 'action_unknown';
+    }
+    case 'c': {
+      return param === 'backup' || param === 'drill' ? `confirm_${param}` : 'confirm_unknown';
+    }
+    default: {
+      return 'unknown';
+    }
+  }
 }
 
 type LeadershipState = 'leader' | 'follower' | null;
@@ -86,22 +160,30 @@ export class TelegramOpsBotRunner {
       replayStore: this.approvalReplayStore,
     });
     this.messenger = {
-      sendHtmlMessage: async ({ chatId, threadId, domain, html, disableLinkPreview }) => {
+      sendHtmlMessage: async ({
+        chatId,
+        threadId,
+        domain,
+        html,
+        disableLinkPreview,
+        replyMarkup,
+      }) => {
         if (typeof threadId === 'number' && domain) {
-          await this.sendHtmlMessageWithTopicHealing({
+          return this.sendHtmlMessageWithTopicHealing({
             chatId,
             domain,
             threadId,
             html,
             disableLinkPreview,
+            replyMarkup,
           });
-          return;
         }
-        await this.telegram.sendHtmlMessage({
+        return this.telegram.sendHtmlMessage({
           chatId,
           threadId,
           html,
           disableLinkPreview,
+          replyMarkup,
         });
       },
     };
@@ -174,7 +256,7 @@ export class TelegramOpsBotRunner {
         const updates = await this.telegram.getUpdates({
           offset: this.updateOffset,
           timeout: this.config.pollTimeoutSeconds,
-          allowed_updates: ['message'],
+          allowed_updates: ['message', 'callback_query'],
         });
 
         for (const update of updates) {
@@ -286,18 +368,26 @@ export class TelegramOpsBotRunner {
   }
 
   private async processUpdate(update: Update): Promise<void> {
-    if (!('message' in update) || !hasTextField(update.message)) {
+    if (hasCallbackQueryData(update)) {
+      await this.processCallbackQuery(update);
       return;
     }
 
-    const message = update.message as Message.TextMessage;
+    if (!('message' in update) || !hasTextField(update.message)) {
+      return;
+    }
+    await this.processMessageUpdate(update, update.message as Message.TextMessage);
+  }
+
+  private async processMessageUpdate(update: Update, message: Message.TextMessage): Promise<void> {
     const fromUserId = message.from?.id;
     if (typeof fromUserId !== 'number') {
       return;
     }
 
     const chatId = String(message.chat.id);
-    if (chatId !== this.config.chatId) {
+    const isPrivateChat = message.chat.type === 'private';
+    if (chatId !== this.config.chatId && !isPrivateChat) {
       return;
     }
 
@@ -345,8 +435,26 @@ export class TelegramOpsBotRunner {
         },
       });
       await this.sendSimpleMessage({
+        chatId,
         html: '<b>Access denied</b>\n\nYour Telegram user id is not allowed for this bot.',
         threadId,
+      });
+      return;
+    }
+
+    if (isPrivateChat && parsed.command !== 'start' && parsed.command !== 'help') {
+      this.audit.log({
+        level: 'info',
+        event: 'command_rejected_private_chat_scope',
+        message: 'Rejected private-chat command outside onboarding scope',
+        userId: fromUserId,
+        chatId,
+        command: parsed.command,
+        commandArgs: parsed.args,
+      });
+      await this.sendSimpleMessage({
+        chatId,
+        html: formatPrivateOnboardingRedirect(this.config.chatId),
       });
       return;
     }
@@ -370,6 +478,7 @@ export class TelegramOpsBotRunner {
         },
       });
       await this.sendSimpleMessage({
+        chatId,
         html: '<b>Rate limit</b>\n\nPlease wait a minute before sending more commands.',
         threadId,
       });
@@ -387,6 +496,7 @@ export class TelegramOpsBotRunner {
         },
       });
       await this.sendSimpleMessage({
+        chatId,
         html: `<b>Unknown command</b>\n\nUse <code>/help</code> to list commands.`,
         threadId,
       });
@@ -468,6 +578,191 @@ export class TelegramOpsBotRunner {
         error: err,
       });
       await this.sendSimpleMessage({
+        chatId,
+        html: formatCommandError(err),
+        threadId,
+      });
+    }
+  }
+
+  private async processCallbackQuery(
+    update: Update & { callback_query: NonNullable<Update['callback_query']> },
+  ): Promise<void> {
+    const callback = update.callback_query;
+    const fromUserId = callback.from?.id;
+    if (typeof fromUserId !== 'number') {
+      return;
+    }
+
+    const callbackMessage = callback.message;
+    if (!callbackMessage || !('chat' in callbackMessage)) {
+      await this.answerCallbackQuery({
+        callbackQueryId: callback.id,
+      });
+      return;
+    }
+    const callbackData = callback.data;
+    if (typeof callbackData !== 'string' || callbackData.length === 0) {
+      await this.answerCallbackQuery({
+        callbackQueryId: callback.id,
+      });
+      return;
+    }
+
+    const chatId = String(callbackMessage.chat.id);
+    const threadId = this.resolveIncomingThreadId(callbackMessage as Message.TextMessage);
+    const isPrivateChat = callbackMessage.chat.type === 'private';
+
+    this.audit.log({
+      level: 'info',
+      event: 'callback_received',
+      message: 'Callback query received',
+      userId: fromUserId,
+      chatId,
+      threadId,
+      details: {
+        data: callbackData,
+      },
+    });
+
+    emitBotMetricCounter({
+      audit: this.audit,
+      metric: 'callback_usage',
+      labels: {
+        action: callbackMetricLabel(callbackData),
+      },
+    });
+
+    if (chatId !== this.config.chatId || isPrivateChat) {
+      await this.answerCallbackQuery({
+        callbackQueryId: callback.id,
+        text: 'Guided controls only work in the configured ops chat.',
+      });
+      this.logCallbackOutcome({
+        status: 'denied_scope',
+        chatId,
+        threadId,
+        fromUserId,
+        data: callbackData,
+      });
+      return;
+    }
+
+    if (!this.config.allowedUserIds.has(fromUserId)) {
+      await this.answerCallbackQuery({
+        callbackQueryId: callback.id,
+        text: 'Access denied.',
+      });
+      this.logCallbackOutcome({
+        status: 'denied_scope',
+        chatId,
+        threadId,
+        fromUserId,
+        data: callbackData,
+      });
+      return;
+    }
+
+    if (!this.consumeRateLimit(fromUserId)) {
+      await this.answerCallbackQuery({
+        callbackQueryId: callback.id,
+        text: 'Rate limit hit. Please wait a minute.',
+      });
+      this.logCallbackOutcome({
+        status: 'failed',
+        chatId,
+        threadId,
+        fromUserId,
+        data: callbackData,
+        reason: 'rate_limited',
+      });
+      return;
+    }
+
+    const callbackStartedAt = Date.now();
+    await this.answerCallbackQuery({
+      callbackQueryId: callback.id,
+    });
+
+    const context: CommandContext = {
+      config: this.config,
+      backend: this.backend,
+      messenger: this.messenger,
+      topicRouter: this.topicRouter,
+      audit: this.audit,
+      update,
+      message: callbackMessage as Message.TextMessage,
+      fromUserId,
+      command: 'help',
+      args: [],
+    };
+
+    try {
+      const result = await handleGuidedCallback({
+        data: callbackData,
+        context,
+        commands: this.registry.commands,
+      });
+      if (!result) {
+        this.logCallbackOutcome({
+          status: 'unknown',
+          chatId,
+          threadId,
+          fromUserId,
+          data: callbackData,
+        });
+        return;
+      }
+
+      if (result.kind === 'noop') {
+        this.logCallbackOutcome({
+          status: 'completed',
+          chatId,
+          threadId,
+          fromUserId,
+          data: callbackData,
+          durationMs: Date.now() - callbackStartedAt,
+        });
+        return;
+      }
+
+      await this.renderCallbackResult({
+        chatId,
+        threadId,
+        domain: result.domain,
+        callbackData,
+        callbackMessageId: callbackMessage.message_id,
+        fromUserId,
+        html: result.html,
+        replyMarkup: result.replyMarkup,
+        disableLinkPreview: result.disableLinkPreview,
+        callbackStartedAt,
+      });
+    } catch (error: unknown) {
+      const err = error instanceof Error ? error.message : String(error);
+      this.audit.log({
+        level: 'error',
+        event: 'callback_render_failed',
+        message: 'Failed to process guided callback query',
+        userId: fromUserId,
+        chatId,
+        threadId,
+        details: {
+          data: callbackData,
+          error: err,
+        },
+      });
+      this.logCallbackOutcome({
+        status: 'failed',
+        chatId,
+        threadId,
+        fromUserId,
+        data: callbackData,
+        durationMs: Date.now() - callbackStartedAt,
+        reason: err,
+      });
+      await this.sendSimpleMessage({
+        chatId,
         html: formatCommandError(err),
         threadId,
       });
@@ -496,11 +791,128 @@ export class TelegramOpsBotRunner {
     return undefined;
   }
 
-  private async sendSimpleMessage(args: { html: string; threadId?: number }): Promise<void> {
-    await this.messenger.sendHtmlMessage({
-      chatId: this.config.chatId,
+  private async sendSimpleMessage(args: {
+    chatId?: string;
+    html: string;
+    threadId?: number;
+    replyMarkup?: TelegramInlineKeyboardMarkup;
+  }) {
+    return this.messenger.sendHtmlMessage({
+      chatId: args.chatId ?? this.config.chatId,
       threadId: args.threadId,
       html: args.html,
+      replyMarkup: args.replyMarkup,
+    });
+  }
+
+  private async renderCallbackResult(args: {
+    chatId: string;
+    threadId?: number;
+    domain: BotDomain;
+    callbackMessageId: number;
+    callbackData: string;
+    fromUserId: number;
+    html: string;
+    replyMarkup?: TelegramInlineKeyboardMarkup;
+    disableLinkPreview?: boolean;
+    callbackStartedAt: number;
+  }): Promise<void> {
+    try {
+      await this.telegram.editHtmlMessage({
+        chatId: args.chatId,
+        messageId: args.callbackMessageId,
+        html: args.html,
+        disableLinkPreview: args.disableLinkPreview,
+        replyMarkup: args.replyMarkup,
+      });
+      this.audit.log({
+        level: 'info',
+        event: 'callback_render_completed',
+        message: 'Guided callback rendered via message edit',
+        userId: args.fromUserId,
+        chatId: args.chatId,
+        threadId: args.threadId,
+        details: {
+          data: args.callbackData,
+        },
+      });
+      this.logCallbackOutcome({
+        status: 'completed',
+        chatId: args.chatId,
+        threadId: args.threadId,
+        fromUserId: args.fromUserId,
+        data: args.callbackData,
+        durationMs: Date.now() - args.callbackStartedAt,
+      });
+      return;
+    } catch (error: unknown) {
+      if (isMessageNotModifiedError(error)) {
+        this.logCallbackOutcome({
+          status: 'completed',
+          chatId: args.chatId,
+          threadId: args.threadId,
+          fromUserId: args.fromUserId,
+          data: args.callbackData,
+          durationMs: Date.now() - args.callbackStartedAt,
+        });
+        return;
+      }
+      if (!isEditTargetUnavailableError(error)) {
+        throw error;
+      }
+    }
+
+    await (typeof args.threadId === 'number' ? this.sendHtmlMessageWithTopicHealing({
+        chatId: args.chatId,
+        domain: args.domain,
+        threadId: args.threadId,
+        html: args.html,
+        disableLinkPreview: args.disableLinkPreview,
+        replyMarkup: args.replyMarkup,
+      }) : this.sendSimpleMessage({
+        chatId: args.chatId,
+        threadId: args.threadId,
+        html: args.html,
+        replyMarkup: args.replyMarkup,
+      }));
+    this.audit.log({
+      level: 'warn',
+      event: 'callback_edit_fallback_used',
+      message: 'Guided callback edit failed; sent replacement message',
+      userId: args.fromUserId,
+      chatId: args.chatId,
+      threadId: args.threadId,
+      details: {
+        data: args.callbackData,
+      },
+    });
+    this.logCallbackOutcome({
+      status: 'edit_fallback',
+      chatId: args.chatId,
+      threadId: args.threadId,
+      fromUserId: args.fromUserId,
+      data: args.callbackData,
+      durationMs: Date.now() - args.callbackStartedAt,
+    });
+  }
+
+  private async answerCallbackQuery(args: {
+    callbackQueryId: string;
+    text?: string;
+  }): Promise<void> {
+    await this.telegram.answerCallbackQuery({
+      callback_query_id: args.callbackQueryId,
+      ...(args.text ? { text: args.text } : {}),
+    });
+    this.audit.log({
+      level: 'info',
+      event: 'callback_answered',
+      message: 'Callback query answered',
+      chatId: this.config.chatId,
+      details: {
+        callbackQueryId: args.callbackQueryId,
+        answeredWithText: Boolean(args.text),
+      },
     });
   }
 
@@ -540,25 +952,72 @@ export class TelegramOpsBotRunner {
     });
   }
 
+  private logCallbackOutcome(args: {
+    status: 'completed' | 'edit_fallback' | 'failed' | 'denied_scope' | 'unknown';
+    chatId: string;
+    threadId?: number;
+    fromUserId: number;
+    data: string;
+    durationMs?: number;
+    reason?: string;
+  }): void {
+    this.audit.log({
+      level: args.status === 'failed' ? 'error' : 'info',
+      event: 'callback_outcome',
+      message: 'Callback execution outcome recorded',
+      userId: args.fromUserId,
+      chatId: args.chatId,
+      threadId: args.threadId,
+      details: {
+        status: args.status,
+        data: args.data,
+        action: callbackMetricLabel(args.data),
+        ...(typeof args.durationMs === 'number' ? { durationMs: args.durationMs } : {}),
+        ...(args.reason ? { reason: args.reason } : {}),
+      },
+    });
+    emitBotMetricCounter({
+      audit: this.audit,
+      metric: 'callback_outcome',
+      labels: {
+        status: args.status,
+        action: callbackMetricLabel(args.data),
+        ...(args.reason ? { reason: args.reason } : {}),
+      },
+    });
+    if (typeof args.durationMs === 'number') {
+      emitBotMetricCounter({
+        audit: this.audit,
+        metric: 'callback_response_latency_ms',
+        value: args.durationMs,
+        labels: {
+          action: callbackMetricLabel(args.data),
+          status: args.status,
+        },
+      });
+    }
+  }
+
   private async sendHtmlMessageWithTopicHealing(args: {
     chatId: string;
     domain: BotDomain;
     threadId: number;
     html: string;
     disableLinkPreview?: boolean;
-  }): Promise<void> {
+    replyMarkup?: TelegramInlineKeyboardMarkup;
+  }) {
     const basePayload = {
       chatId: args.chatId,
       html: args.html,
       disableLinkPreview: args.disableLinkPreview,
+      replyMarkup: args.replyMarkup,
     };
 
     try {
-      await this.telegram.sendHtmlMessage({
+      return await this.telegram.sendHtmlMessage({
         ...basePayload,
         threadId: args.threadId,
       });
-      return;
     } catch (error: unknown) {
       if (!isStaleOrDeletedThreadError(error)) {
         throw error;
@@ -602,11 +1061,10 @@ export class TelegramOpsBotRunner {
           : this.config.defaultThreadId;
 
     try {
-      await this.telegram.sendHtmlMessage({
+      return await this.telegram.sendHtmlMessage({
         ...basePayload,
         threadId: retryThreadId,
       });
-      return;
     } catch (retryError: unknown) {
       const fallbackThreadId =
         retryThreadId === this.config.defaultThreadId ? undefined : this.config.defaultThreadId;
@@ -628,7 +1086,7 @@ export class TelegramOpsBotRunner {
         },
       });
 
-      await this.telegram.sendHtmlMessage({
+      return this.telegram.sendHtmlMessage({
         ...basePayload,
         threadId: fallbackThreadId,
       });
@@ -668,7 +1126,7 @@ export class TelegramOpsBotRunner {
         offset: -1,
         limit: 1,
         timeout: 0,
-        allowed_updates: ['message'],
+        allowed_updates: ['message', 'callback_query'],
       });
       const latest = updates.at(-1);
       if (!latest) {

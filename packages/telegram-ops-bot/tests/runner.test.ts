@@ -1,8 +1,9 @@
-import { describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { JobStatusDto, OpsActionStatus } from '@esl-pipeline/contracts';
 
 import { TelegramOpsBotRunner } from '../src/runner.js';
+import { resetGuidedConfirmGuardsForTests } from '../src/guided-ui.js';
 import { TelegramApiError } from '../src/telegram-client.js';
 import type { BotConfig, PollLeaderElection } from '../src/types.js';
 
@@ -45,6 +46,7 @@ function createUpdate(
     updateId?: number;
     fromUserId?: number;
     chatId?: number;
+    chatType?: 'private' | 'supergroup';
     threadId?: number;
   },
 ) {
@@ -54,12 +56,47 @@ function createUpdate(
       message_id: 11,
       date: 1_700_000_000,
       text,
-      chat: { id: overrides?.chatId ?? 123, type: 'private' },
+      chat: { id: overrides?.chatId ?? 123, type: overrides?.chatType ?? 'private' },
       from: { id: overrides?.fromUserId ?? 1, is_bot: false, first_name: 'Ops' },
       ...(typeof overrides?.threadId === 'number' ? { message_thread_id: overrides.threadId } : {}),
     },
   };
 }
+
+function createCallbackUpdate(
+  data: string,
+  overrides?: {
+    updateId?: number;
+    callbackId?: string;
+    fromUserId?: number;
+    chatId?: number;
+    chatType?: 'private' | 'supergroup';
+    threadId?: number;
+    messageId?: number;
+  },
+) {
+  return {
+    update_id: overrides?.updateId ?? 1,
+    callback_query: {
+      id: overrides?.callbackId ?? 'cb-1',
+      from: { id: overrides?.fromUserId ?? 1, is_bot: false, first_name: 'Ops' },
+      data,
+      message: {
+        message_id: overrides?.messageId ?? 42,
+        date: 1_700_000_000,
+        text: '/help',
+        chat: { id: overrides?.chatId ?? 123, type: overrides?.chatType ?? 'supergroup' },
+        ...(typeof overrides?.threadId === 'number'
+          ? { message_thread_id: overrides.threadId }
+          : {}),
+      },
+    },
+  };
+}
+
+beforeEach(() => {
+  resetGuidedConfirmGuardsForTests();
+});
 
 function createJob(overrides: Partial<JobStatusDto> = {}): JobStatusDto {
   return {
@@ -97,12 +134,15 @@ function createJob(overrides: Partial<JobStatusDto> = {}): JobStatusDto {
 function createRunner(args?: {
   config?: Partial<BotConfig>;
   sendHtmlMessage?: ReturnType<typeof vi.fn>;
+  editHtmlMessage?: ReturnType<typeof vi.fn>;
+  answerCallbackQuery?: ReturnType<typeof vi.fn>;
   getUpdates?: ReturnType<typeof vi.fn>;
   getMe?: ReturnType<typeof vi.fn>;
   backend?: Partial<{
     getOpsStatus: ReturnType<typeof vi.fn>;
     enqueueOpsAction: ReturnType<typeof vi.fn>;
     getOpsActionStatus: ReturnType<typeof vi.fn>;
+    listOpsActions: ReturnType<typeof vi.fn>;
     getFinishedJobs: ReturnType<typeof vi.fn>;
     getJob: ReturnType<typeof vi.fn>;
   }>;
@@ -120,6 +160,7 @@ function createRunner(args?: {
     getOpsStatus: ReturnType<typeof vi.fn>;
     enqueueOpsAction: ReturnType<typeof vi.fn>;
     getOpsActionStatus: ReturnType<typeof vi.fn>;
+    listOpsActions: ReturnType<typeof vi.fn>;
     getFinishedJobs: ReturnType<typeof vi.fn>;
     getJob: ReturnType<typeof vi.fn>;
   };
@@ -130,8 +171,17 @@ function createRunner(args?: {
   };
   auditLog: ReturnType<typeof vi.fn>;
 } {
-  const sendHtmlMessage = args?.sendHtmlMessage ?? vi.fn(async () => {});
+  const sendHtmlMessage =
+    args?.sendHtmlMessage ??
+    vi.fn(async (payload: { chatId: string; html: string }) => ({
+      message_id: 77,
+      date: 1_700_000_000,
+      chat: { id: Number(payload.chatId), type: 'supergroup', title: 'Ops Chat' },
+      text: payload.html,
+    }));
   const getUpdates = args?.getUpdates ?? vi.fn(async () => []);
+  const editHtmlMessage = args?.editHtmlMessage ?? vi.fn(async () => true);
+  const answerCallbackQuery = args?.answerCallbackQuery ?? vi.fn(async () => true);
   const getMe =
     args?.getMe ??
     vi.fn(async () => ({
@@ -144,6 +194,7 @@ function createRunner(args?: {
     getOpsStatus: args?.backend?.getOpsStatus ?? vi.fn(),
     enqueueOpsAction: args?.backend?.enqueueOpsAction ?? vi.fn(),
     getOpsActionStatus: args?.backend?.getOpsActionStatus ?? vi.fn(),
+    listOpsActions: args?.backend?.listOpsActions ?? vi.fn(),
     getFinishedJobs: args?.backend?.getFinishedJobs ?? vi.fn(),
     getJob: args?.backend?.getJob ?? vi.fn(),
   };
@@ -160,6 +211,8 @@ function createRunner(args?: {
       getUpdates,
       getMe,
       sendHtmlMessage,
+      editHtmlMessage,
+      answerCallbackQuery,
     } as never,
     backend: backend as never,
     topicRouter: topicRouter as never,
@@ -176,10 +229,17 @@ function createRunner(args?: {
   };
 }
 
-async function processUpdate(runner: TelegramOpsBotRunner, update: ReturnType<typeof createUpdate>) {
-  await (runner as unknown as { processUpdate: (u: ReturnType<typeof createUpdate>) => Promise<void> }).processUpdate(
-    update,
-  );
+async function processUpdate(
+  runner: TelegramOpsBotRunner,
+  update: ReturnType<typeof createUpdate> | ReturnType<typeof createCallbackUpdate>,
+) {
+  await (
+    runner as unknown as {
+      processUpdate: (
+        u: ReturnType<typeof createUpdate> | ReturnType<typeof createCallbackUpdate>,
+      ) => Promise<void>;
+    }
+  ).processUpdate(update);
 }
 
 describe('telegram runner mention handling', () => {
@@ -217,7 +277,10 @@ describe('telegram runner mention handling', () => {
     });
 
     (runner as unknown as { botUsername: string | null }).botUsername = 'esl_ops_bot';
-    await processUpdate(runner, createUpdate('/backup@another_bot nightly'));
+    await processUpdate(
+      runner,
+      createUpdate('/backup@another_bot nightly', { chatId: 123, chatType: 'supergroup' }),
+    );
 
     expect(enqueueOpsAction).toHaveBeenCalledTimes(0);
     expect(sendHtmlMessage).toHaveBeenCalledTimes(0);
@@ -248,7 +311,10 @@ describe('telegram runner mention handling', () => {
     });
 
     (runner as unknown as { botUsername: string | null }).botUsername = 'esl_ops_bot';
-    await processUpdate(runner, createUpdate('/backup@esl_ops_bot nightly'));
+    await processUpdate(
+      runner,
+      createUpdate('/backup@esl_ops_bot nightly', { chatId: 123, chatType: 'supergroup' }),
+    );
 
     expect(enqueueOpsAction).toHaveBeenCalledWith({
       action: 'backup_upload',
@@ -264,8 +330,11 @@ describe('telegram runner mention handling', () => {
       },
     });
 
-    await processUpdate(runner, createUpdate('/status', { fromUserId: 1 }));
-    await processUpdate(runner, createUpdate('/unknown', { fromUserId: 99, updateId: 2 }));
+    await processUpdate(runner, createUpdate('/status', { fromUserId: 1, chatId: 123, chatType: 'supergroup' }));
+    await processUpdate(
+      runner,
+      createUpdate('/unknown', { fromUserId: 99, updateId: 2, chatId: 123, chatType: 'supergroup' }),
+    );
 
     expect(auditLog).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -300,8 +369,14 @@ describe('telegram runner mention handling', () => {
       },
     });
 
-    await processUpdate(runner, createUpdate('/help', { fromUserId: 1, updateId: 10 }));
-    await processUpdate(runner, createUpdate('/help', { fromUserId: 1, updateId: 11 }));
+    await processUpdate(
+      runner,
+      createUpdate('/help', { fromUserId: 1, updateId: 10, chatId: 123, chatType: 'supergroup' }),
+    );
+    await processUpdate(
+      runner,
+      createUpdate('/help', { fromUserId: 1, updateId: 11, chatId: 123, chatType: 'supergroup' }),
+    );
 
     expect(auditLog).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -460,6 +535,381 @@ describe('telegram runner webhook mode', () => {
 
     expect(getUpdates).toHaveBeenCalledTimes(0);
   });
+
+  it('allows private-chat /start for allowlisted operators', async () => {
+    const { runner, sendHtmlMessage, auditLog } = createRunner();
+
+    await processUpdate(runner, createUpdate('/start', { chatId: 999, chatType: 'private' }));
+
+    expect(sendHtmlMessage).toHaveBeenCalledTimes(1);
+    expect(sendHtmlMessage.mock.calls[0]?.[0].chatId).toBe('999');
+    expect(sendHtmlMessage.mock.calls[0]?.[0].html).toContain('internal Telegram control surface');
+    expect(auditLog).toHaveBeenCalledWith(
+      expect.objectContaining({
+        event: 'bot_metric',
+        details: expect.objectContaining({
+          metric: 'ux_entry_usage',
+          labels: expect.objectContaining({
+            command: 'start',
+            audience: 'private_onboarding',
+          }),
+        }),
+      }),
+    );
+  });
+
+  it('replies to non-allowlisted private-chat onboarding attempts in the DM only', async () => {
+    const { runner, sendHtmlMessage, auditLog } = createRunner({
+      config: {
+        allowedUserIds: new Set([99]),
+      },
+    });
+
+    await processUpdate(runner, createUpdate('/start', { fromUserId: 1, chatId: 999, chatType: 'private' }));
+
+    expect(sendHtmlMessage).toHaveBeenCalledTimes(1);
+    expect(sendHtmlMessage.mock.calls[0]?.[0].chatId).toBe('999');
+    expect(sendHtmlMessage.mock.calls[0]?.[0].html).toContain('Access denied');
+    expect(auditLog).toHaveBeenCalledWith(
+      expect.objectContaining({
+        event: 'command_rejected_user_not_allowed',
+        chatId: '999',
+      }),
+    );
+  });
+
+  it('rejects private-chat operational commands with a redirect', async () => {
+    const enqueueOpsAction = vi.fn();
+    const { runner, sendHtmlMessage, auditLog } = createRunner({
+      backend: {
+        enqueueOpsAction,
+      },
+    });
+
+    await processUpdate(runner, createUpdate('/backup nightly', { chatId: 999, chatType: 'private' }));
+
+    expect(enqueueOpsAction).toHaveBeenCalledTimes(0);
+    expect(sendHtmlMessage).toHaveBeenCalledTimes(1);
+    expect(sendHtmlMessage.mock.calls[0]?.[0].chatId).toBe('999');
+    expect(sendHtmlMessage.mock.calls[0]?.[0].html).toContain('Private chat is limited to onboarding');
+    expect(auditLog).toHaveBeenCalledWith(
+      expect.objectContaining({
+        event: 'command_rejected_private_chat_scope',
+      }),
+    );
+  });
+
+  it('allows private-chat /help with onboarding-oriented copy', async () => {
+    const { runner, sendHtmlMessage } = createRunner();
+
+    await processUpdate(runner, createUpdate('/help', { chatId: 999, chatType: 'private' }));
+
+    expect(sendHtmlMessage).toHaveBeenCalledTimes(1);
+    expect(sendHtmlMessage.mock.calls[0]?.[0].chatId).toBe('999');
+    expect(sendHtmlMessage.mock.calls[0]?.[0].html).toContain('ESL Ops Control Onboarding');
+    expect(sendHtmlMessage.mock.calls[0]?.[0].html).toContain('/start');
+    expect(sendHtmlMessage.mock.calls[0]?.[0].html).toContain('/help');
+  });
+
+  it('renders guided callbacks by editing the existing ops-chat message', async () => {
+    const editHtmlMessage = vi.fn(async () => true);
+    const answerCallbackQuery = vi.fn(async () => true);
+    const getOpsStatus = vi.fn(async () => ({
+      checkedAtUtc: '2026-03-13T00:00:00Z',
+      overall: { state: 'healthy', reasons: ['ok'] },
+      thresholds: {
+        backupMaxAgeHours: null,
+        drillMaxAgeDays: null,
+        keyRotationMaxAgeDays: null,
+      },
+      backup: {
+        state: 'healthy',
+        reason: 'ok',
+        latestDumpKey: null,
+        lastModifiedUtc: null,
+        ageHours: null,
+      },
+      restoreDrill: {
+        state: 'healthy',
+        reason: 'ok',
+        lastReportUtc: null,
+        ageDays: null,
+        reportStatus: null,
+        reportMode: null,
+        latestRemoteDumpKey: null,
+        drillResult: null,
+      },
+      keyRotation: {
+        state: 'healthy',
+        reason: 'ok',
+        iamUser: null,
+        oldestAccessKeyId: null,
+        oldestCreatedUtc: null,
+        oldestAgeDays: null,
+        oldestLastUsedUtc: null,
+      },
+    }));
+    const { runner, sendHtmlMessage } = createRunner({
+      editHtmlMessage,
+      answerCallbackQuery,
+      backend: {
+        getOpsStatus,
+      },
+    });
+
+    await processUpdate(runner, createCallbackUpdate('a4|s', { chatId: 123, chatType: 'supergroup' }));
+
+    expect(answerCallbackQuery).toHaveBeenCalledTimes(1);
+    expect(editHtmlMessage).toHaveBeenCalledTimes(1);
+    const firstEditCall = editHtmlMessage.mock.calls[0] as [{ html: string }] | undefined;
+    expect(firstEditCall?.[0].html).toContain('Ops Status');
+    expect(sendHtmlMessage).toHaveBeenCalledTimes(0);
+  });
+
+  it('falls back to a replacement message when callback edits are unavailable', async () => {
+    const editHtmlMessage = vi.fn(async () => {
+      throw new TelegramApiError("Bad Request: message can't be edited", 'editMessageText', 400);
+    });
+    const answerCallbackQuery = vi.fn(async () => true);
+    const listOpsActions = vi.fn(async () => ({
+      actions: [
+        {
+          operationId: 'op-1',
+          action: 'backup_upload',
+          state: 'succeeded',
+          requestedAt: '2026-03-13T00:00:00Z',
+          startedAt: '2026-03-13T00:01:00Z',
+          finishedAt: '2026-03-13T00:02:00Z',
+          requestedBy: 'ops@example.com',
+          requestedByUserId: 'user-1',
+          message: 'completed',
+          command: 'backup',
+          exitCode: 0,
+          stdoutTail: null,
+          stderrTail: null,
+        },
+      ],
+      total: 1,
+      limit: 10,
+      offset: 0,
+    }));
+    const sendHtmlMessage = vi.fn(async (payload: { chatId: string; html: string }) => ({
+      message_id: 88,
+      date: 1_700_000_000,
+      chat: { id: Number(payload.chatId), type: 'supergroup', title: 'Ops Chat' },
+      text: payload.html,
+    }));
+    const { runner } = createRunner({
+      sendHtmlMessage,
+      editHtmlMessage,
+      answerCallbackQuery,
+      backend: {
+        listOpsActions,
+      },
+    });
+
+    await processUpdate(runner, createCallbackUpdate('a4|r', { chatId: 123, chatType: 'supergroup' }));
+
+    expect(answerCallbackQuery).toHaveBeenCalledTimes(1);
+    expect(editHtmlMessage).toHaveBeenCalledTimes(1);
+    expect(sendHtmlMessage).toHaveBeenCalledTimes(1);
+    expect(sendHtmlMessage.mock.calls[0]?.[0].html).toContain('Recent operations');
+  });
+
+  it('replaces guided confirm panels after the first backup press', async () => {
+    const editHtmlMessage = vi.fn(async () => true);
+    const answerCallbackQuery = vi.fn(async () => true);
+    const enqueueOpsAction = vi.fn(async () => ({
+      operationId: 'op-confirm-1',
+      action: 'backup_upload' as const,
+      state: 'queued' as const,
+      requestedAt: '2026-03-13T00:00:00Z',
+      startedAt: null,
+      finishedAt: null,
+      requestedBy: 'telegram',
+      requestedByUserId: 'user-1',
+      message: 'queued',
+      command: 'backup',
+      exitCode: null,
+      stdoutTail: null,
+      stderrTail: null,
+    }));
+    const sendHtmlMessage = vi.fn(async (payload: { chatId: string; html: string }) => ({
+      message_id: 88,
+      date: 1_700_000_000,
+      chat: { id: Number(payload.chatId), type: 'supergroup', title: 'Ops Chat' },
+      text: payload.html,
+    }));
+    const { runner } = createRunner({
+      sendHtmlMessage,
+      editHtmlMessage,
+      answerCallbackQuery,
+      backend: {
+        enqueueOpsAction,
+      },
+    });
+
+    await processUpdate(
+      runner,
+      createCallbackUpdate('a4|c|backup', { chatId: 123, chatType: 'supergroup' }),
+    );
+
+    expect(enqueueOpsAction).toHaveBeenCalledTimes(1);
+    expect(sendHtmlMessage).toHaveBeenCalledTimes(1);
+    const editCall = editHtmlMessage.mock.calls[0] as
+      | [{ html: string; replyMarkup?: { inline_keyboard: { text: string }[][] } }]
+      | undefined;
+    expect(editCall?.[0].html).toContain('request submitted');
+    expect(editCall?.[0].replyMarkup?.inline_keyboard).toEqual([[{ text: 'Home', callback_data: 'a4|h' }]]);
+  });
+
+  it('deduplicates rapid duplicate confirm callbacks before executing backup side effects', async () => {
+    const editHtmlMessage = vi.fn(async () => true);
+    const answerCallbackQuery = vi.fn(async () => true);
+    const enqueueOpsAction = vi.fn(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 25));
+      return {
+        operationId: 'op-confirm-race',
+        action: 'backup_upload' as const,
+        state: 'queued' as const,
+        requestedAt: '2026-03-13T00:00:00Z',
+        startedAt: null,
+        finishedAt: null,
+        requestedBy: 'telegram',
+        requestedByUserId: 'user-1',
+        message: 'queued',
+        command: 'backup',
+        exitCode: null,
+        stdoutTail: null,
+        stderrTail: null,
+      };
+    });
+    const sendHtmlMessage = vi.fn(async (payload: { chatId: string; html: string }) => ({
+      message_id: 90,
+      date: 1_700_000_000,
+      chat: { id: Number(payload.chatId), type: 'supergroup', title: 'Ops Chat' },
+      text: payload.html,
+    }));
+    const { runner } = createRunner({
+      sendHtmlMessage,
+      editHtmlMessage,
+      answerCallbackQuery,
+      backend: {
+        enqueueOpsAction,
+      },
+    });
+
+    await Promise.all([
+      processUpdate(
+        runner,
+        createCallbackUpdate('a4|c|backup', {
+          callbackId: 'cb-race-1',
+          chatId: 123,
+          chatType: 'supergroup',
+          messageId: 500,
+        }),
+      ),
+      processUpdate(
+        runner,
+        createCallbackUpdate('a4|c|backup', {
+          callbackId: 'cb-race-2',
+          chatId: 123,
+          chatType: 'supergroup',
+          messageId: 500,
+        }),
+      ),
+    ]);
+
+    expect(enqueueOpsAction).toHaveBeenCalledTimes(1);
+    expect(answerCallbackQuery).toHaveBeenCalledTimes(2);
+    expect(editHtmlMessage).toHaveBeenCalledTimes(2);
+  });
+
+  it('routes callback edit fallbacks through topic healing for stale threads', async () => {
+    const editHtmlMessage = vi.fn(async () => {
+      throw new TelegramApiError('Bad Request: message thread not found', 'editMessageText', 400);
+    });
+    const answerCallbackQuery = vi.fn(async () => true);
+    const getOpsStatus = vi.fn(async () => ({
+      checkedAtUtc: '2026-03-13T00:00:00Z',
+      overall: { state: 'healthy', reasons: ['ok'] },
+      thresholds: {
+        backupMaxAgeHours: null,
+        drillMaxAgeDays: null,
+        keyRotationMaxAgeDays: null,
+      },
+      backup: {
+        state: 'healthy',
+        reason: 'ok',
+        latestDumpKey: null,
+        lastModifiedUtc: null,
+        ageHours: null,
+      },
+      restoreDrill: {
+        state: 'healthy',
+        reason: 'ok',
+        lastReportUtc: null,
+        ageDays: null,
+        reportStatus: null,
+        reportMode: null,
+        latestRemoteDumpKey: null,
+        drillResult: null,
+      },
+      keyRotation: {
+        state: 'healthy',
+        reason: 'ok',
+        iamUser: null,
+        oldestAccessKeyId: null,
+        oldestCreatedUtc: null,
+        oldestAgeDays: null,
+        oldestLastUsedUtc: null,
+      },
+    }));
+    const sendHtmlMessage = vi
+      .fn()
+      .mockRejectedValueOnce(
+        new TelegramApiError('Bad Request: message thread not found', 'sendMessage', 400),
+      )
+      .mockResolvedValue({
+        message_id: 89,
+        date: 1_700_000_000,
+        chat: { id: 123, type: 'supergroup', title: 'Ops Chat' },
+        text: 'fallback',
+      });
+    const healStaleThread = vi.fn(async () => 991);
+    const { runner, auditLog } = createRunner({
+      sendHtmlMessage,
+      editHtmlMessage,
+      answerCallbackQuery,
+      backend: {
+        getOpsStatus,
+      },
+      topicRouter: {
+        healStaleThread,
+      },
+    });
+
+    await processUpdate(
+      runner,
+      createCallbackUpdate('a4|s', {
+        chatId: 123,
+        chatType: 'supergroup',
+        threadId: 77,
+      }),
+    );
+
+    expect(healStaleThread).toHaveBeenCalledWith({
+      domain: 'ops',
+      staleThreadId: 77,
+    });
+    expect(sendHtmlMessage).toHaveBeenCalledTimes(2);
+    expect(sendHtmlMessage.mock.calls[1]?.[0].threadId).toBe(991);
+    expect(auditLog).toHaveBeenCalledWith(
+      expect.objectContaining({
+        event: 'callback_edit_fallback_used',
+      }),
+    );
+  });
 });
 
 describe('telegram runner /share smoke', () => {
@@ -489,7 +939,7 @@ describe('telegram runner /share smoke', () => {
       },
     });
 
-    await processUpdate(runner, createUpdate('/share job-md-first'));
+    await processUpdate(runner, createUpdate('/share job-md-first', { chatId: 123, chatType: 'supergroup' }));
 
     expect(backend.getJob).toHaveBeenCalledWith('job-md-first');
     expect(fetchSpy).not.toHaveBeenCalled();
@@ -547,7 +997,10 @@ describe('telegram runner /share smoke', () => {
       },
     });
 
-    await processUpdate(runner, createUpdate('/share job-html-fallback'));
+    await processUpdate(
+      runner,
+      createUpdate('/share job-html-fallback', { chatId: 123, chatType: 'supergroup' }),
+    );
 
     expect(fetchSpy).toHaveBeenCalledOnce();
     expect(sendHtmlMessage).toHaveBeenCalledTimes(3);
@@ -599,7 +1052,10 @@ describe('telegram runner /share smoke', () => {
       },
     });
 
-    await processUpdate(runner, createUpdate('/share job-md-path-precedence'));
+    await processUpdate(
+      runner,
+      createUpdate('/share job-md-path-precedence', { chatId: 123, chatType: 'supergroup' }),
+    );
 
     expect(fetchSpy).toHaveBeenCalledOnce();
     expect(sendHtmlMessage).toHaveBeenCalledTimes(3);
@@ -648,7 +1104,7 @@ describe('telegram runner /share smoke', () => {
       },
     });
 
-    await processUpdate(runner, createUpdate('/share job-no-audio'));
+    await processUpdate(runner, createUpdate('/share job-no-audio', { chatId: 123, chatType: 'supergroup' }));
 
     expect(sendHtmlMessage).toHaveBeenCalledTimes(1);
     expect(sendHtmlMessage.mock.calls[0]?.[0].disableLinkPreview).toBe(true);
@@ -697,7 +1153,7 @@ describe('telegram runner /share smoke', () => {
       },
     });
 
-    await processUpdate(runner, createUpdate('/share job-heal'));
+    await processUpdate(runner, createUpdate('/share job-heal', { chatId: 123, chatType: 'supergroup' }));
 
     expect(healStaleThread).toHaveBeenCalledWith({
       domain: 'jobs',
@@ -747,7 +1203,10 @@ describe('telegram runner /share smoke', () => {
       },
     });
 
-    await processUpdate(runner, createUpdate('/share job-heal-success'));
+    await processUpdate(
+      runner,
+      createUpdate('/share job-heal-success', { chatId: 123, chatType: 'supergroup' }),
+    );
 
     expect(healStaleThread).toHaveBeenCalledTimes(1);
     expect(sendHtmlMessage).toHaveBeenCalledTimes(2);
