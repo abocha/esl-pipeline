@@ -45,6 +45,7 @@ function createUpdate(
     updateId?: number;
     fromUserId?: number;
     chatId?: number;
+    chatType?: 'private' | 'supergroup';
     threadId?: number;
   },
 ) {
@@ -54,7 +55,7 @@ function createUpdate(
       message_id: 11,
       date: 1_700_000_000,
       text,
-      chat: { id: overrides?.chatId ?? 123, type: 'private' },
+      chat: { id: overrides?.chatId ?? 123, type: overrides?.chatType ?? 'private' },
       from: { id: overrides?.fromUserId ?? 1, is_bot: false, first_name: 'Ops' },
       ...(typeof overrides?.threadId === 'number' ? { message_thread_id: overrides.threadId } : {}),
     },
@@ -217,7 +218,10 @@ describe('telegram runner mention handling', () => {
     });
 
     (runner as unknown as { botUsername: string | null }).botUsername = 'esl_ops_bot';
-    await processUpdate(runner, createUpdate('/backup@another_bot nightly'));
+    await processUpdate(
+      runner,
+      createUpdate('/backup@another_bot nightly', { chatId: 123, chatType: 'supergroup' }),
+    );
 
     expect(enqueueOpsAction).toHaveBeenCalledTimes(0);
     expect(sendHtmlMessage).toHaveBeenCalledTimes(0);
@@ -248,7 +252,10 @@ describe('telegram runner mention handling', () => {
     });
 
     (runner as unknown as { botUsername: string | null }).botUsername = 'esl_ops_bot';
-    await processUpdate(runner, createUpdate('/backup@esl_ops_bot nightly'));
+    await processUpdate(
+      runner,
+      createUpdate('/backup@esl_ops_bot nightly', { chatId: 123, chatType: 'supergroup' }),
+    );
 
     expect(enqueueOpsAction).toHaveBeenCalledWith({
       action: 'backup_upload',
@@ -264,8 +271,11 @@ describe('telegram runner mention handling', () => {
       },
     });
 
-    await processUpdate(runner, createUpdate('/status', { fromUserId: 1 }));
-    await processUpdate(runner, createUpdate('/unknown', { fromUserId: 99, updateId: 2 }));
+    await processUpdate(runner, createUpdate('/status', { fromUserId: 1, chatId: 123, chatType: 'supergroup' }));
+    await processUpdate(
+      runner,
+      createUpdate('/unknown', { fromUserId: 99, updateId: 2, chatId: 123, chatType: 'supergroup' }),
+    );
 
     expect(auditLog).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -300,8 +310,14 @@ describe('telegram runner mention handling', () => {
       },
     });
 
-    await processUpdate(runner, createUpdate('/help', { fromUserId: 1, updateId: 10 }));
-    await processUpdate(runner, createUpdate('/help', { fromUserId: 1, updateId: 11 }));
+    await processUpdate(
+      runner,
+      createUpdate('/help', { fromUserId: 1, updateId: 10, chatId: 123, chatType: 'supergroup' }),
+    );
+    await processUpdate(
+      runner,
+      createUpdate('/help', { fromUserId: 1, updateId: 11, chatId: 123, chatType: 'supergroup' }),
+    );
 
     expect(auditLog).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -460,6 +476,81 @@ describe('telegram runner webhook mode', () => {
 
     expect(getUpdates).toHaveBeenCalledTimes(0);
   });
+
+  it('allows private-chat /start for allowlisted operators', async () => {
+    const { runner, sendHtmlMessage, auditLog } = createRunner();
+
+    await processUpdate(runner, createUpdate('/start', { chatId: 999, chatType: 'private' }));
+
+    expect(sendHtmlMessage).toHaveBeenCalledTimes(1);
+    expect(sendHtmlMessage.mock.calls[0]?.[0].chatId).toBe('999');
+    expect(sendHtmlMessage.mock.calls[0]?.[0].html).toContain('internal Telegram control surface');
+    expect(auditLog).toHaveBeenCalledWith(
+      expect.objectContaining({
+        event: 'bot_metric',
+        details: expect.objectContaining({
+          metric: 'ux_entry_usage',
+          labels: expect.objectContaining({
+            command: 'start',
+            audience: 'private_onboarding',
+          }),
+        }),
+      }),
+    );
+  });
+
+  it('replies to non-allowlisted private-chat onboarding attempts in the DM only', async () => {
+    const { runner, sendHtmlMessage, auditLog } = createRunner({
+      config: {
+        allowedUserIds: new Set([99]),
+      },
+    });
+
+    await processUpdate(runner, createUpdate('/start', { fromUserId: 1, chatId: 999, chatType: 'private' }));
+
+    expect(sendHtmlMessage).toHaveBeenCalledTimes(1);
+    expect(sendHtmlMessage.mock.calls[0]?.[0].chatId).toBe('999');
+    expect(sendHtmlMessage.mock.calls[0]?.[0].html).toContain('Access denied');
+    expect(auditLog).toHaveBeenCalledWith(
+      expect.objectContaining({
+        event: 'command_rejected_user_not_allowed',
+        chatId: '999',
+      }),
+    );
+  });
+
+  it('rejects private-chat operational commands with a redirect', async () => {
+    const enqueueOpsAction = vi.fn();
+    const { runner, sendHtmlMessage, auditLog } = createRunner({
+      backend: {
+        enqueueOpsAction,
+      },
+    });
+
+    await processUpdate(runner, createUpdate('/backup nightly', { chatId: 999, chatType: 'private' }));
+
+    expect(enqueueOpsAction).toHaveBeenCalledTimes(0);
+    expect(sendHtmlMessage).toHaveBeenCalledTimes(1);
+    expect(sendHtmlMessage.mock.calls[0]?.[0].chatId).toBe('999');
+    expect(sendHtmlMessage.mock.calls[0]?.[0].html).toContain('Private chat is limited to onboarding');
+    expect(auditLog).toHaveBeenCalledWith(
+      expect.objectContaining({
+        event: 'command_rejected_private_chat_scope',
+      }),
+    );
+  });
+
+  it('allows private-chat /help with onboarding-oriented copy', async () => {
+    const { runner, sendHtmlMessage } = createRunner();
+
+    await processUpdate(runner, createUpdate('/help', { chatId: 999, chatType: 'private' }));
+
+    expect(sendHtmlMessage).toHaveBeenCalledTimes(1);
+    expect(sendHtmlMessage.mock.calls[0]?.[0].chatId).toBe('999');
+    expect(sendHtmlMessage.mock.calls[0]?.[0].html).toContain('ESL Ops Control Onboarding');
+    expect(sendHtmlMessage.mock.calls[0]?.[0].html).toContain('/start');
+    expect(sendHtmlMessage.mock.calls[0]?.[0].html).toContain('/help');
+  });
 });
 
 describe('telegram runner /share smoke', () => {
@@ -489,7 +580,7 @@ describe('telegram runner /share smoke', () => {
       },
     });
 
-    await processUpdate(runner, createUpdate('/share job-md-first'));
+    await processUpdate(runner, createUpdate('/share job-md-first', { chatId: 123, chatType: 'supergroup' }));
 
     expect(backend.getJob).toHaveBeenCalledWith('job-md-first');
     expect(fetchSpy).not.toHaveBeenCalled();
@@ -547,7 +638,10 @@ describe('telegram runner /share smoke', () => {
       },
     });
 
-    await processUpdate(runner, createUpdate('/share job-html-fallback'));
+    await processUpdate(
+      runner,
+      createUpdate('/share job-html-fallback', { chatId: 123, chatType: 'supergroup' }),
+    );
 
     expect(fetchSpy).toHaveBeenCalledOnce();
     expect(sendHtmlMessage).toHaveBeenCalledTimes(3);
@@ -599,7 +693,10 @@ describe('telegram runner /share smoke', () => {
       },
     });
 
-    await processUpdate(runner, createUpdate('/share job-md-path-precedence'));
+    await processUpdate(
+      runner,
+      createUpdate('/share job-md-path-precedence', { chatId: 123, chatType: 'supergroup' }),
+    );
 
     expect(fetchSpy).toHaveBeenCalledOnce();
     expect(sendHtmlMessage).toHaveBeenCalledTimes(3);
@@ -648,7 +745,7 @@ describe('telegram runner /share smoke', () => {
       },
     });
 
-    await processUpdate(runner, createUpdate('/share job-no-audio'));
+    await processUpdate(runner, createUpdate('/share job-no-audio', { chatId: 123, chatType: 'supergroup' }));
 
     expect(sendHtmlMessage).toHaveBeenCalledTimes(1);
     expect(sendHtmlMessage.mock.calls[0]?.[0].disableLinkPreview).toBe(true);
@@ -697,7 +794,7 @@ describe('telegram runner /share smoke', () => {
       },
     });
 
-    await processUpdate(runner, createUpdate('/share job-heal'));
+    await processUpdate(runner, createUpdate('/share job-heal', { chatId: 123, chatType: 'supergroup' }));
 
     expect(healStaleThread).toHaveBeenCalledWith({
       domain: 'jobs',
@@ -747,7 +844,10 @@ describe('telegram runner /share smoke', () => {
       },
     });
 
-    await processUpdate(runner, createUpdate('/share job-heal-success'));
+    await processUpdate(
+      runner,
+      createUpdate('/share job-heal-success', { chatId: 123, chatType: 'supergroup' }),
+    );
 
     expect(healStaleThread).toHaveBeenCalledTimes(1);
     expect(sendHtmlMessage).toHaveBeenCalledTimes(2);

@@ -8,6 +8,8 @@ Current focus is rollout-readiness closeout for polling-mode GA (preflight/verif
 Related draft:
 
 - `future-student-facing-roadmap.md` — exploratory product expansion notes for student-facing Telegram workflows.
+- `a-track-ux-audit.md` — repo-grounded UX audit of the live `A` track bot against current Telegram best practices.
+- `A3-ux-activation.md` — discoverability/onboarding implementation plan for `A3`, with `A4` reserved for guided interaction.
 
 ## Locked Telegram Bot Version Naming
 
@@ -27,13 +29,16 @@ Phases:
 1. `0` = Discovery / product validation only
 2. `1` = Functional V1 (usable baseline)
 3. `2` = Hardening / scale / observability
+4. `3` = UX activation / discoverability
+5. `4` = Guided interaction / navigation
 
 Current mapping:
 
-1. Current PR scope is `A1` with selected `A2` hardening included.
-2. Student-shareable card delivery (`/links`, `/share`) is implemented as selected `A2` output hardening.
-3. Student-facing expansion draft starts at `B1` candidate.
-4. Direct student conversation remains `C0` until explicit go/no-go.
+1. `A2` baseline is the hardened internal ops bot with selected output UX already shipped.
+2. `A3` is the discoverability activation phase (`/start`, onboarding help, metadata sync, UX-health telemetry).
+3. `A4` is reserved for guided Telegram interaction (inline controls, callback flows, edited-message navigation).
+4. Student-facing expansion draft starts at `B1` candidate.
+5. Direct student conversation remains `C0` until explicit go/no-go.
 
 ## Delivery Buckets
 

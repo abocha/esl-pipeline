@@ -193,6 +193,7 @@ function assert(condition, message) {
 
 const createdTopics = state.createdTopics ?? [];
 const sentMessages = state.sentMessages ?? [];
+const metadata = state.metadata ?? {};
 const topicByName = new Map(createdTopics.map((topic) => [topic.name, topic.message_thread_id]));
 
 const opsThread = topicByName.get('Ops Control');
@@ -200,6 +201,39 @@ const jobsThread = topicByName.get('Jobs');
 
 assert(typeof opsThread === 'number', 'Missing created Ops Control topic thread id');
 assert(typeof jobsThread === 'number', 'Missing created Jobs topic thread id');
+
+const commandScopes = metadata.commands ?? [];
+assert(commandScopes.length === 2, `Expected exactly 2 setMyCommands calls, got ${commandScopes.length}`);
+
+const privateScope = commandScopes.find((entry) => entry?.payload?.scope?.type === 'all_private_chats');
+assert(Boolean(privateScope), 'Missing all_private_chats command scope registration');
+if (privateScope) {
+  const privateCommands = (privateScope.payload.commands ?? []).map((command) => command.command);
+  assert(
+    JSON.stringify(privateCommands) === JSON.stringify(['start', 'help']),
+    `Unexpected private command scope: ${JSON.stringify(privateCommands)}`,
+  );
+}
+
+const opsScope = commandScopes.find(
+  (entry) =>
+    entry?.payload?.scope?.type === 'chat' &&
+    String(entry?.payload?.scope?.chat_id) === String(process.env.EXPECTED_CHAT_ID),
+);
+assert(Boolean(opsScope), 'Missing configured ops chat command scope registration');
+if (opsScope) {
+  const opsCommands = (opsScope.payload.commands ?? []).map((command) => command.command);
+  assert(!opsCommands.includes('start'), 'Ops chat scope should not advertise /start');
+  assert(opsCommands.includes('help'), 'Ops chat scope should advertise /help');
+  assert(opsCommands.includes('status'), 'Ops chat scope should advertise /status');
+  assert(!opsCommands.includes('backup'), 'Read-only smoke should not advertise /backup');
+  assert(!opsCommands.includes('drill'), 'Read-only smoke should not advertise /drill');
+  assert(!opsCommands.includes('approve'), 'Polling smoke should not advertise /approve');
+}
+
+assert((metadata.shortDescriptions ?? []).length === 1, 'Expected one short description sync call');
+assert((metadata.descriptions ?? []).length === 1, 'Expected one description sync call');
+assert((metadata.menuButtons ?? []).length === 1, 'Expected one menu button sync call');
 
 const statusMessages = sentMessages.filter((entry) =>
   String(entry?.payload?.text ?? '').includes('Ops Status:'),

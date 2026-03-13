@@ -14,9 +14,12 @@ import {
   formatCommandError,
   formatFinishedJobs,
   formatHelp,
+  formatHelpWithOptions,
   formatJobDetails,
   formatJobLinks,
   formatOpsStatus,
+  formatPrivateOnboardingRedirect,
+  formatStartMessage,
 } from './formatter.js';
 import { emitBotMetricCounter } from './metrics.js';
 import type { CommandContext, CommandDefinition, ParsedCommand } from './types.js';
@@ -25,6 +28,8 @@ export interface CommandRegistry {
   commands: CommandDefinition[];
   resolve: (commandName: string) => CommandDefinition | undefined;
 }
+
+export type CommandAudience = 'private_onboarding' | 'ops_chat';
 
 interface PendingAdvancedApproval {
   requestedAtMs: number;
@@ -315,6 +320,84 @@ function incomingThreadId(context: CommandContext): number | undefined {
     return threadId;
   }
   return undefined;
+}
+
+function replyChatId(context: CommandContext): string {
+  return String(context.message.chat.id);
+}
+
+function isPrivateChatContext(context: CommandContext): boolean {
+  return context.message.chat.type === 'private';
+}
+
+function visibleInOpsChat(command: CommandDefinition, config: CommandContext['config']): boolean {
+  if (command.command === 'start') {
+    return false;
+  }
+  if (command.command === 'backup' || command.command === 'drill') {
+    return config.enableActionCommands;
+  }
+  if (command.command === 'approve') {
+    return config.enableActionCommands && config.mode === 'webhook';
+  }
+  return true;
+}
+
+export function isPrivateOnboardingCommand(commandName: string): boolean {
+  return commandName === 'start' || commandName === 'help';
+}
+
+export function getAdvertisedCommands(
+  commands: CommandDefinition[],
+  config: CommandContext['config'],
+  audience: CommandAudience,
+): CommandDefinition[] {
+  if (audience === 'private_onboarding') {
+    return commands.filter((command) => isPrivateOnboardingCommand(command.command));
+  }
+
+  return commands.filter((command) => visibleInOpsChat(command, config));
+}
+
+async function sendDirectMessage(
+  context: CommandContext,
+  html: string,
+  options?: {
+    disableLinkPreview?: boolean;
+  },
+): Promise<void> {
+  await context.messenger.sendHtmlMessage({
+    chatId: replyChatId(context),
+    html,
+    disableLinkPreview: options?.disableLinkPreview,
+  });
+}
+
+function emitUxUsageMetric(context: CommandContext, command: 'start' | 'help'): void {
+  emitBotMetricCounter({
+    audit: context.audit,
+    metric: 'ux_entry_usage',
+    labels: {
+      command,
+      audience: isPrivateChatContext(context) ? 'private_onboarding' : 'ops_chat',
+    },
+  });
+}
+
+function emitUxLatencyMetric(
+  context: CommandContext,
+  command: 'start' | 'help',
+  startedAtMs: number,
+): void {
+  emitBotMetricCounter({
+    audit: context.audit,
+    metric: 'ux_response_latency_ms',
+    value: Date.now() - startedAtMs,
+    labels: {
+      command,
+      audience: isPrivateChatContext(context) ? 'private_onboarding' : 'ops_chat',
+    },
+  });
 }
 
 async function sendDomainMessage(
@@ -773,11 +856,55 @@ export function createCommandRegistry(args?: { replayStore?: ApprovalReplayStore
   const replayStore = args?.replayStore ?? defaultApprovalReplayStore;
   const commands: CommandDefinition[] = [
     {
+      command: 'start',
+      description: 'Show bot onboarding and where to run ops commands',
+      domain: 'ops',
+      async execute(context) {
+        emitUxUsageMetric(context, 'start');
+        const startedAtMs = Date.now();
+        const html = formatStartMessage({
+          enableActionCommands: context.config.enableActionCommands,
+          opsChatId: context.config.chatId,
+          inOpsChat: !isPrivateChatContext(context),
+        });
+        if (isPrivateChatContext(context)) {
+          await sendDirectMessage(context, html);
+        } else {
+          await sendDomainMessage(context, 'ops', html);
+        }
+        emitUxLatencyMetric(context, 'start', startedAtMs);
+      },
+    },
+    {
       command: 'help',
       description: 'Show available commands',
       domain: 'ops',
       async execute(context) {
-        await sendDomainMessage(context, 'ops', formatHelp(commands));
+        emitUxUsageMetric(context, 'help');
+        const startedAtMs = Date.now();
+        if (isPrivateChatContext(context)) {
+          const privateCommands = getAdvertisedCommands(
+            commands,
+            context.config,
+            'private_onboarding',
+          );
+          await sendDirectMessage(
+            context,
+            formatHelpWithOptions(privateCommands, {
+              title: 'ESL Ops Control Onboarding',
+              footerLines: [
+                context.config.enableActionCommands
+                  ? 'This deployment currently allows enabled action commands in the ops chat.'
+                  : 'This deployment is currently read-only in the ops chat.',
+                `Run operational commands in the configured ops chat: ${context.config.chatId}.`,
+              ],
+            }),
+          );
+        } else {
+          const opsCommands = getAdvertisedCommands(commands, context.config, 'ops_chat');
+          await sendDomainMessage(context, 'ops', formatHelp(opsCommands));
+        }
+        emitUxLatencyMetric(context, 'help', startedAtMs);
       },
     },
     {

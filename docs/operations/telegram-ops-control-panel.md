@@ -68,9 +68,13 @@ Fallback precedence:
 
 ## Commands (V1)
 
+Onboarding commands:
+
+- `/start` (available in allowlisted private chats and the configured ops chat)
+- `/help`
+
 Read commands:
 
-- `/help`
 - `/status`
 - `/op <operationId>`
 - `/finished [limit]` (admin service-account path; lists latest succeeded jobs across users)
@@ -84,6 +88,12 @@ Safe action commands:
 - `/drill`
 
 No restart commands are implemented in V1.
+
+Private-chat behavior in `A3`:
+
+- Allowlisted operators may use `/start` and `/help` in private chat for onboarding.
+- Other commands remain scoped to `TELEGRAM_OPS_BOT_CHAT_ID`.
+- Private-chat attempts to run ops commands receive a redirect back to the configured ops chat.
 
 ## Share Card Behavior (`/links`, `/share`)
 
@@ -114,6 +124,11 @@ Audio URL extraction priority:
 - For deterministic smoke/fake API runs, point `TELEGRAM_OPS_BOT_API_BASE_URL` at the test API endpoint.
 - Polling transport defaults to `TELEGRAM_OPS_BOT_MODE=polling`; set `TELEGRAM_OPS_BOT_LEADER_ELECTION_ENABLED=true` only when multi-instance polling coordination is configured.
 - `/approve` replay protection is persisted in Postgres; configure `TELEGRAM_OPS_BOT_APPROVAL_REPLAY_DATABASE_URL` if replay-state storage should use a dedicated DSN.
+- On startup, the bot best-effort syncs Telegram metadata derived from the live command registry:
+  - private-chat commands: `/start`, `/help`
+  - configured ops-chat commands: capability-aware ops command set
+  - short description, long description, and default menu button
+  - sync failures are warning-level only and do not block startup
 - Webhook transport is opt-in (`TELEGRAM_OPS_BOT_MODE=webhook`) and uses:
   - `TELEGRAM_OPS_BOT_WEBHOOK_HOST`
   - `TELEGRAM_OPS_BOT_WEBHOOK_PORT`
@@ -199,10 +214,15 @@ Profiles:
 - Bot emits additive counter-style telemetry under `event=bot_metric`.
 - Primary metric names:
   - `command_outcome` with statuses `completed`, `failed`, `denied_not_allowed`, `denied_rate_limited`, `unknown`
+  - `ux_entry_usage` with commands (`start`, `help`) and audience (`private_onboarding`, `ops_chat`)
+  - `ux_response_latency_ms` with commands (`start`, `help`) and audience (`private_onboarding`, `ops_chat`)
   - `share_extraction_source` with source labels (`markdown_label`, `markdown_path`, `html_path`)
   - `share_missing_audio` with kinds (`missing_study`, `missing_pronunciation`, `missing_any`)
   - `share_fallback_source` with source label (`html`)
 - Keep existing structured events (`command_outcome`, `share_path_telemetry`) for detailed debugging context.
+- Metadata sync emits:
+  - `telegram_metadata_sync_succeeded`
+  - `telegram_metadata_sync_failed`
 
 ## Soak Playbook (Blocking Sign-Off)
 
