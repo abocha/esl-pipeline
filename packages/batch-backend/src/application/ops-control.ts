@@ -329,10 +329,18 @@ export async function listOpsActions(args?: {
     return persisted;
   }
 
-  const actions = actionOrder
-    .toReversed()
-    .map((operationId) => actionStore.get(operationId))
-    .filter(Boolean);
+  const actions: InternalActionStatus[] = [];
+  for (let index = actionOrder.length - 1; index >= 0; index -= 1) {
+    const operationId = actionOrder[index];
+    if (!operationId) {
+      continue;
+    }
+
+    const action = actionStore.get(operationId);
+    if (action) {
+      actions.push(action);
+    }
+  }
 
   return {
     actions: actions.slice(offset, offset + limit).map((action) => ({ ...action })),
