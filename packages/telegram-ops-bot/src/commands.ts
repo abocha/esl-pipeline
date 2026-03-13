@@ -1,5 +1,12 @@
+import { createHash, createHmac, randomUUID, timingSafeEqual } from 'node:crypto';
 import { readFile } from 'node:fs/promises';
 
+import type { OpsActionRequest } from '@esl-pipeline/contracts';
+
+import {
+  type ApprovalReplayStore,
+  InMemoryApprovalReplayStore,
+} from './approval-replay-store.js';
 import {
   formatActionQueued,
   formatActionStatus,
@@ -11,11 +18,295 @@ import {
   formatJobLinks,
   formatOpsStatus,
 } from './formatter.js';
+import { emitBotMetricCounter } from './metrics.js';
 import type { CommandContext, CommandDefinition, ParsedCommand } from './types.js';
 
 export interface CommandRegistry {
   commands: CommandDefinition[];
   resolve: (commandName: string) => CommandDefinition | undefined;
+}
+
+interface PendingAdvancedApproval {
+  requestedAtMs: number;
+  expiresAtMs: number;
+  requestedByUserId: number;
+  request: OpsActionRequest;
+  sourceCommand: 'backup' | 'drill';
+}
+
+const ADVANCED_APPROVAL_TTL_MS = 10 * 60 * 1000;
+const ADVANCED_APPROVAL_TOKEN_VERSION = 1;
+const defaultApprovalReplayStore = new InMemoryApprovalReplayStore();
+
+export function resetAdvancedControlApprovalsForTests(): void {
+  defaultApprovalReplayStore.resetForTests();
+}
+
+function advancedControlsEnabled(context: CommandContext): boolean {
+  return context.config.mode === 'webhook';
+}
+
+function advancedApprovalTokenSecret(context: CommandContext): string {
+  return `${context.config.token}:${context.config.chatId}`;
+}
+
+function signApprovalTokenPayload(payloadSegment: string, secret: string): string {
+  return createHmac('sha256', secret).update(payloadSegment).digest('base64url');
+}
+
+function approvalTokenFingerprint(token: string): string {
+  return createHash('sha256').update(token).digest('hex');
+}
+
+function createApprovalToken(context: CommandContext, approval: PendingAdvancedApproval): string {
+  const payload = {
+    v: ADVANCED_APPROVAL_TOKEN_VERSION,
+    n: randomUUID(),
+    iat: approval.requestedAtMs,
+    exp: approval.expiresAtMs,
+    uid: approval.requestedByUserId,
+    sourceCommand: approval.sourceCommand,
+    action: approval.request.action,
+    label: approval.request.label ?? null,
+  };
+  const encodedPayload = Buffer.from(JSON.stringify(payload), 'utf8').toString('base64url');
+  const signature = signApprovalTokenPayload(encodedPayload, advancedApprovalTokenSecret(context));
+  return `${encodedPayload}.${signature}`;
+}
+
+function decodeApprovalToken(
+  context: CommandContext,
+  token: string,
+  nowMs: number,
+): PendingAdvancedApproval | null {
+  const [encodedPayload, providedSignature, extra] = token.split('.');
+  if (!encodedPayload || !providedSignature || extra) {
+    return null;
+  }
+
+  const expectedSignature = signApprovalTokenPayload(
+    encodedPayload,
+    advancedApprovalTokenSecret(context),
+  );
+  const expectedBuffer = Buffer.from(expectedSignature, 'utf8');
+  const providedBuffer = Buffer.from(providedSignature, 'utf8');
+  if (expectedBuffer.length !== providedBuffer.length) {
+    return null;
+  }
+  if (!timingSafeEqual(expectedBuffer, providedBuffer)) {
+    return null;
+  }
+
+  let payload: unknown;
+  try {
+    payload = JSON.parse(Buffer.from(encodedPayload, 'base64url').toString('utf8'));
+  } catch {
+    return null;
+  }
+  if (!payload || typeof payload !== 'object') {
+    return null;
+  }
+
+  const obj = payload as Record<string, unknown>;
+  if (obj.v !== ADVANCED_APPROVAL_TOKEN_VERSION) {
+    return null;
+  }
+  if (typeof obj.iat !== 'number' || !Number.isFinite(obj.iat)) {
+    return null;
+  }
+  if (typeof obj.exp !== 'number' || !Number.isFinite(obj.exp) || obj.exp <= nowMs) {
+    return null;
+  }
+  if (typeof obj.uid !== 'number' || !Number.isInteger(obj.uid) || obj.uid <= 0) {
+    return null;
+  }
+  if (obj.sourceCommand !== 'backup' && obj.sourceCommand !== 'drill') {
+    return null;
+  }
+
+  const action = obj.action;
+  if (action !== 'backup_upload' && action !== 'restore_drill_download_only') {
+    return null;
+  }
+  if (
+    (obj.sourceCommand === 'backup' && action !== 'backup_upload') ||
+    (obj.sourceCommand === 'drill' && action !== 'restore_drill_download_only')
+  ) {
+    return null;
+  }
+
+  const rawLabel = obj.label;
+  const label =
+    typeof rawLabel === 'string' && rawLabel.trim().length > 0 ? rawLabel.trim() : undefined;
+
+  return {
+    requestedAtMs: obj.iat,
+    expiresAtMs: obj.exp,
+    requestedByUserId: obj.uid,
+    sourceCommand: obj.sourceCommand,
+    request: label ? { action, label } : { action },
+  };
+}
+
+async function queueAdvancedApproval(
+  context: CommandContext,
+  sourceCommand: 'backup' | 'drill',
+  request: OpsActionRequest,
+): Promise<void> {
+  const nowMs = Date.now();
+  const approval: PendingAdvancedApproval = {
+    requestedAtMs: nowMs,
+    expiresAtMs: nowMs + ADVANCED_APPROVAL_TTL_MS,
+    requestedByUserId: context.fromUserId,
+    request,
+    sourceCommand,
+  };
+  const token = createApprovalToken(context, approval);
+
+  context.audit.log({
+    level: 'info',
+    event: 'advanced_control_approval_requested',
+    message: 'Approval token created for high-risk action command',
+    userId: context.fromUserId,
+    chatId: context.config.chatId,
+    threadId: incomingThreadId(context),
+    command: context.command,
+    commandArgs: context.args,
+    details: {
+      sourceCommand,
+      token,
+      expiresInMs: ADVANCED_APPROVAL_TTL_MS,
+      action: request.action,
+    },
+  });
+
+  await sendDomainMessage(
+    context,
+    'ops',
+    [
+      '<b>Approval required</b>',
+      '',
+      `Confirm <code>/${sourceCommand}</code> with <code>/approve ${token}</code>.`,
+      'Token expires in 10 minutes.',
+    ].join('\n'),
+  );
+}
+
+async function approveAdvancedAction(
+  context: CommandContext,
+  tokenRaw: string | undefined,
+  replayStore: ApprovalReplayStore,
+): Promise<void> {
+  if (!advancedControlsEnabled(context)) {
+    await sendDomainMessage(
+      context,
+      'ops',
+      formatCommandError(
+        'Advanced controls are disabled. Set TELEGRAM_OPS_BOT_MODE=webhook to use /approve.',
+      ),
+    );
+    return;
+  }
+
+  const token = tokenRaw?.trim();
+  if (!token) {
+    await sendDomainMessage(context, 'ops', formatCommandError('Usage: /approve <token>'));
+    return;
+  }
+
+  const nowMs = Date.now();
+  const pending = decodeApprovalToken(context, token, nowMs);
+  if (!pending) {
+    await sendDomainMessage(
+      context,
+      'ops',
+      formatCommandError('Approval token not found or expired.'),
+    );
+    return;
+  }
+
+  if (pending.requestedByUserId !== context.fromUserId) {
+    await sendDomainMessage(
+      context,
+      'ops',
+      formatCommandError('Only the requesting operator can approve this action token.'),
+    );
+    return;
+  }
+
+  const tokenFingerprint = approvalTokenFingerprint(token);
+  let reserveResult;
+  try {
+    reserveResult = await replayStore.reserveTokenUse({
+      tokenFingerprint,
+      nowMs,
+      expiresAtMs: pending.expiresAtMs,
+    });
+  } catch (error: unknown) {
+    context.audit.log({
+      level: 'error',
+      event: 'advanced_control_approval_replay_store_failed',
+      message: 'Approval replay guard check failed',
+      userId: context.fromUserId,
+      chatId: context.config.chatId,
+      threadId: incomingThreadId(context),
+      command: context.command,
+      commandArgs: context.args,
+      details: {
+        error: error instanceof Error ? error.message : String(error),
+      },
+    });
+    await sendDomainMessage(
+      context,
+      'ops',
+      formatCommandError('Approval verification unavailable. Please retry shortly.'),
+    );
+    return;
+  }
+  if (reserveResult === 'replayed') {
+    await sendDomainMessage(context, 'ops', formatCommandError('Approval token has already been used.'));
+    return;
+  }
+
+  const result = await (async () => {
+    try {
+      return await context.backend.enqueueOpsAction(pending.request);
+    } catch (error: unknown) {
+      context.audit.log({
+        level: 'warn',
+        event: 'advanced_control_approval_enqueue_ambiguous',
+        message: 'Approval token left reserved after enqueue failure to avoid duplicate execution',
+        userId: context.fromUserId,
+        chatId: context.config.chatId,
+        threadId: incomingThreadId(context),
+        command: context.command,
+        commandArgs: context.args,
+        details: {
+          error: error instanceof Error ? error.message : String(error),
+        },
+      });
+      throw new Error(
+        'Approval enqueue confirmation failed after token was consumed. Do not reuse this token; start a new request if action is still needed.',
+      );
+    }
+  })();
+  context.audit.log({
+    level: 'info',
+    event: 'advanced_control_approval_applied',
+    message: 'Approved high-risk action command and enqueued action',
+    userId: context.fromUserId,
+    chatId: context.config.chatId,
+    threadId: incomingThreadId(context),
+    command: context.command,
+    commandArgs: context.args,
+    operationId: result.operationId,
+    details: {
+      sourceCommand: pending.sourceCommand,
+      token,
+      action: result.action,
+    },
+  });
+  await sendDomainMessage(context, 'ops', formatActionQueued(result));
 }
 
 function incomingThreadId(context: CommandContext): number | undefined {
@@ -41,6 +332,7 @@ async function sendDomainMessage(
   await context.messenger.sendHtmlMessage({
     chatId: context.config.chatId,
     threadId,
+    domain,
     html,
     disableLinkPreview: options?.disableLinkPreview,
   });
@@ -63,6 +355,18 @@ interface ResolvedSharePayload {
   pronunciationAudioUrl: string | null;
   assignmentTitle: string | null;
   assignmentEmoji: string | null;
+  telemetry: {
+    markdownSource: 'none' | 'inline' | 'file_path';
+    htmlFetched: boolean;
+    usedHtmlFallback: boolean;
+    studyAudioSource: 'markdown_label' | 'markdown_path' | 'html_path' | 'missing';
+    pronunciationAudioSource: 'markdown_label' | 'markdown_path' | 'html_path' | 'missing';
+    titleSource: 'markdown_frontmatter' | 'markdown_heading' | 'html_title' | 'missing';
+    emojiSource: 'markdown_frontmatter' | 'html_hero' | 'missing';
+    missingStudyAudio: boolean;
+    missingPronunciationAudio: boolean;
+    missingAudioCount: number;
+  };
 }
 
 async function resolveSharePayloadForJob(
@@ -73,48 +377,118 @@ async function resolveSharePayloadForJob(
   },
 ): Promise<ResolvedSharePayload> {
   let markdown: string | null = mdOrHtmlSource.md;
+  let markdownSource: 'none' | 'inline' | 'file_path' = markdown ? 'inline' : 'none';
   let html: string | null = null;
 
   if (markdown && looksLikeMarkdownFilePath(markdown)) {
+    markdownSource = 'file_path';
     try {
       markdown = await readFile(markdown, 'utf8');
     } catch {
       // Ignore filesystem read errors; we'll try HTML fallback.
+      markdown = null;
     }
   }
 
-  let studyTextAudioUrl = extractLabeledMarkdownAudioUrl(markdown, 'Audio recording: Study Text');
-  if (!studyTextAudioUrl) {
-    studyTextAudioUrl = extractAudioUrlByPathHint(markdown, '/audio/final/');
+  let studyTextAudioUrl: string | null = null;
+  let studyAudioSource: ResolvedSharePayload['telemetry']['studyAudioSource'] = 'missing';
+  const studyTextLabeledUrl = extractLabeledMarkdownAudioUrl(markdown, 'Audio recording: Study Text');
+  if (studyTextLabeledUrl) {
+    studyTextAudioUrl = studyTextLabeledUrl;
+    studyAudioSource = 'markdown_label';
+  } else {
+    const studyTextFallbackUrl = extractAudioUrlByPathHint(markdown, '/audio/final/');
+    if (studyTextFallbackUrl) {
+      studyTextAudioUrl = studyTextFallbackUrl;
+      studyAudioSource = 'markdown_path';
+    }
   }
 
-  let pronunciationAudioUrl = extractLabeledMarkdownAudioUrl(
+  let pronunciationAudioUrl: string | null = null;
+  let pronunciationAudioSource: ResolvedSharePayload['telemetry']['pronunciationAudioSource'] = 'missing';
+  const pronunciationLabeledUrl = extractLabeledMarkdownAudioUrl(
     markdown,
     'Audio recording: Pronunciation Shadow Sentence',
   );
-  if (!pronunciationAudioUrl) {
-    pronunciationAudioUrl = extractAudioUrlByPathHint(markdown, '/audio/pronunciation-shadow/');
+  if (pronunciationLabeledUrl) {
+    pronunciationAudioUrl = pronunciationLabeledUrl;
+    pronunciationAudioSource = 'markdown_label';
+  } else {
+    const pronunciationFallbackUrl = extractAudioUrlByPathHint(markdown, '/audio/pronunciation-shadow/');
+    if (pronunciationFallbackUrl) {
+      pronunciationAudioUrl = pronunciationFallbackUrl;
+      pronunciationAudioSource = 'markdown_path';
+    }
   }
 
   const markdownTitle = extractAssignmentTitleFromMarkdown(markdown);
   const markdownEmoji = extractAssignmentEmojiFromMarkdown(markdown);
+  const markdownTitleSource = detectMarkdownTitleSource(markdownTitle, markdown);
+  const markdownEmojiSource = detectMarkdownEmojiSource(markdownEmoji, markdown);
+  let htmlFetched = false;
+
   if ((!studyTextAudioUrl || !pronunciationAudioUrl || !markdownTitle) && mdOrHtmlSource.htmlUrl) {
     html = await fetchTextWithTimeout(mdOrHtmlSource.htmlUrl, context.config.backendTimeoutMs);
+    htmlFetched = html !== null;
     if (html) {
-      studyTextAudioUrl ??= extractAudioUrlByPathHint(html, '/audio/final/');
-      pronunciationAudioUrl ??= extractAudioUrlByPathHint(html, '/audio/pronunciation-shadow/');
+      if (!studyTextAudioUrl) {
+        const htmlStudyTextAudioUrl = extractAudioUrlByPathHint(html, '/audio/final/');
+        if (htmlStudyTextAudioUrl) {
+          studyTextAudioUrl = htmlStudyTextAudioUrl;
+          studyAudioSource = 'html_path';
+        }
+      }
+      if (!pronunciationAudioUrl) {
+        const htmlPronunciationAudioUrl = extractAudioUrlByPathHint(
+          html,
+          '/audio/pronunciation-shadow/',
+        );
+        if (htmlPronunciationAudioUrl) {
+          pronunciationAudioUrl = htmlPronunciationAudioUrl;
+          pronunciationAudioSource = 'html_path';
+        }
+      }
     }
   }
+
   const htmlTitle = extractAssignmentTitleFromHtml(html);
   const htmlEmoji = extractAssignmentEmojiFromHtml(html);
+
   const assignmentTitle = markdownTitle ?? htmlTitle ?? null;
   const assignmentEmoji = markdownEmoji ?? htmlEmoji ?? null;
+  const titleSource: ResolvedSharePayload['telemetry']['titleSource'] = markdownTitle
+    ? (markdownTitleSource ?? 'missing')
+    : htmlTitle
+      ? 'html_title'
+      : 'missing';
+  const emojiSource: ResolvedSharePayload['telemetry']['emojiSource'] = markdownEmoji
+    ? (markdownEmojiSource ?? 'missing')
+    : htmlEmoji
+      ? 'html_hero'
+      : 'missing';
+  const missingStudyAudio = studyTextAudioUrl === null;
+  const missingPronunciationAudio = pronunciationAudioUrl === null;
+  const missingAudioCount = Number(missingStudyAudio) + Number(missingPronunciationAudio);
+  const usedHtmlFallback =
+    studyAudioSource === 'html_path' || pronunciationAudioSource === 'html_path' || titleSource === 'html_title';
 
   return {
     studyTextAudioUrl,
     pronunciationAudioUrl,
     assignmentTitle,
     assignmentEmoji,
+    telemetry: {
+      markdownSource,
+      htmlFetched,
+      usedHtmlFallback,
+      studyAudioSource,
+      pronunciationAudioSource,
+      titleSource,
+      emojiSource,
+      missingStudyAudio,
+      missingPronunciationAudio,
+      missingAudioCount,
+    },
   };
 }
 
@@ -172,6 +546,39 @@ function extractAssignmentEmojiFromMarkdown(markdown: string | null | undefined)
   const iconMatch = frontmatterMatch[1].match(/^\s*icon:\s*(.+)\s*$/im);
   if (!iconMatch?.[1]) return null;
   return cleanupIconToken(iconMatch[1]);
+}
+
+function detectMarkdownTitleSource(
+  title: string | null,
+  markdown: string | null | undefined,
+): 'markdown_frontmatter' | 'markdown_heading' | null {
+  if (!title || !markdown) return null;
+  const frontmatterMatch = markdown.match(/^---\r?\n([\s\S]*?)\r?\n---(?:\r?\n|$)/);
+  if (frontmatterMatch?.[1]) {
+    const titleMatch = frontmatterMatch[1].match(/^\s*title:\s*(.+)\s*$/im);
+    if (titleMatch?.[1] && cleanupTitleToken(titleMatch[1]) === title) {
+      return 'markdown_frontmatter';
+    }
+  }
+  const headingMatch = markdown.match(/^#\s+(.+)$/m);
+  if (headingMatch?.[1] && cleanupTitleToken(headingMatch[1]) === title) {
+    return 'markdown_heading';
+  }
+  return null;
+}
+
+function detectMarkdownEmojiSource(
+  emoji: string | null,
+  markdown: string | null | undefined,
+): 'markdown_frontmatter' | null {
+  if (!emoji || !markdown) return null;
+  const frontmatterMatch = markdown.match(/^---\r?\n([\s\S]*?)\r?\n---(?:\r?\n|$)/);
+  if (!frontmatterMatch?.[1]) return null;
+  const iconMatch = frontmatterMatch[1].match(/^\s*icon:\s*(.+)\s*$/im);
+  if (iconMatch?.[1] && cleanupIconToken(iconMatch[1]) === emoji) {
+    return 'markdown_frontmatter';
+  }
+  return null;
 }
 
 function extractAssignmentTitleFromHtml(html: string | null | undefined): string | null {
@@ -259,6 +666,74 @@ async function sendShareableJobLinks(
     htmlUrl: job.htmlUrl,
   });
 
+  context.audit.log({
+    level: 'info',
+    event: 'share_path_telemetry',
+    message: 'Resolved share extraction sources',
+    userId: context.fromUserId,
+    chatId: context.config.chatId,
+    threadId: incomingThreadId(context),
+    command: context.command,
+    commandArgs: context.args,
+    details: {
+      jobId,
+      htmlUrlPresent: Boolean(job.htmlUrl),
+      ...sharePayload.telemetry,
+    },
+  });
+
+  for (const [kind, source] of [
+    ['study', sharePayload.telemetry.studyAudioSource],
+    ['pronunciation', sharePayload.telemetry.pronunciationAudioSource],
+  ] as const) {
+    if (source === 'markdown_label' || source === 'markdown_path' || source === 'html_path') {
+      emitBotMetricCounter({
+        audit: context.audit,
+        metric: 'share_extraction_source',
+        labels: {
+          kind,
+          source,
+        },
+      });
+    }
+  }
+  if (sharePayload.telemetry.missingStudyAudio) {
+    emitBotMetricCounter({
+      audit: context.audit,
+      metric: 'share_missing_audio',
+      labels: {
+        kind: 'missing_study',
+      },
+    });
+  }
+  if (sharePayload.telemetry.missingPronunciationAudio) {
+    emitBotMetricCounter({
+      audit: context.audit,
+      metric: 'share_missing_audio',
+      labels: {
+        kind: 'missing_pronunciation',
+      },
+    });
+  }
+  if (sharePayload.telemetry.missingAudioCount > 0) {
+    emitBotMetricCounter({
+      audit: context.audit,
+      metric: 'share_missing_audio',
+      labels: {
+        kind: 'missing_any',
+      },
+    });
+  }
+  if (sharePayload.telemetry.usedHtmlFallback) {
+    emitBotMetricCounter({
+      audit: context.audit,
+      metric: 'share_fallback_source',
+      labels: {
+        source: 'html',
+      },
+    });
+  }
+
   await sendDomainMessage(
     context,
     'jobs',
@@ -294,7 +769,8 @@ async function sendShareableJobLinks(
   }
 }
 
-export function createCommandRegistry(): CommandRegistry {
+export function createCommandRegistry(args?: { replayStore?: ApprovalReplayStore }): CommandRegistry {
+  const replayStore = args?.replayStore ?? defaultApprovalReplayStore;
   const commands: CommandDefinition[] = [
     {
       command: 'help',
@@ -379,10 +855,15 @@ export function createCommandRegistry(): CommandRegistry {
           return;
         }
         const label = context.args.join(' ').trim();
-        const result = await context.backend.enqueueOpsAction({
+        const request: OpsActionRequest = {
           action: 'backup_upload',
           ...(label ? { label } : {}),
-        });
+        };
+        if (advancedControlsEnabled(context)) {
+          await queueAdvancedApproval(context, 'backup', request);
+          return;
+        }
+        const result = await context.backend.enqueueOpsAction(request);
         context.audit.log({
           level: 'info',
           event: 'ops_action_enqueued',
@@ -408,9 +889,14 @@ export function createCommandRegistry(): CommandRegistry {
         if (!(await guardActionCommandsEnabled(context))) {
           return;
         }
-        const result = await context.backend.enqueueOpsAction({
+        const request: OpsActionRequest = {
           action: 'restore_drill_download_only',
-        });
+        };
+        if (advancedControlsEnabled(context)) {
+          await queueAdvancedApproval(context, 'drill', request);
+          return;
+        }
+        const result = await context.backend.enqueueOpsAction(request);
         context.audit.log({
           level: 'info',
           event: 'ops_action_enqueued',
@@ -426,6 +912,14 @@ export function createCommandRegistry(): CommandRegistry {
           },
         });
         await sendDomainMessage(context, 'ops', formatActionQueued(result));
+      },
+    },
+    {
+      command: 'approve',
+      description: 'Approve a pending advanced action (/approve <token>)',
+      domain: 'ops',
+      async execute(context) {
+        await approveAdvancedAction(context, context.args[0], replayStore);
       },
     },
   ];

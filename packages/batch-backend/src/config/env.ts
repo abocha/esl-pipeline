@@ -230,6 +230,7 @@ export interface BatchBackendConfig {
     restoreDrillCommand: string;
     actionTimeoutMs: number;
     actionHistoryLimit: number;
+    actionRetentionDays: number;
   };
   experimental: {
     extendedApiEnabled: boolean;
@@ -548,11 +549,20 @@ export function loadConfig(): BatchBackendConfig {
     'BATCH_BACKEND_OPS_CONTROL_ACTION_HISTORY_LIMIT',
     100,
   );
+  const opsControlActionRetentionDays = readInt(
+    'BATCH_BACKEND_OPS_CONTROL_ACTION_RETENTION_DAYS',
+    30,
+  );
   if (opsControlActionTimeoutMs < 1000 || opsControlActionTimeoutMs > 60 * 60 * 1000) {
     throw new Error('BATCH_BACKEND_OPS_CONTROL_ACTION_TIMEOUT_MS must be between 1000 and 3600000');
   }
   if (opsControlActionHistoryLimit < 1 || opsControlActionHistoryLimit > 1000) {
     throw new Error('BATCH_BACKEND_OPS_CONTROL_ACTION_HISTORY_LIMIT must be between 1 and 1000');
+  }
+  if (opsControlActionRetentionDays < 1 || opsControlActionRetentionDays > 3650) {
+    throw new Error(
+      'BATCH_BACKEND_OPS_CONTROL_ACTION_RETENTION_DAYS must be between 1 and 3650',
+    );
   }
 
   if (typeof process.env.STUDENT_SYSTEM_SOURCE === 'string') {
@@ -911,6 +921,7 @@ export function loadConfig(): BatchBackendConfig {
       restoreDrillCommand: opsControlRestoreDrillCommand,
       actionTimeoutMs: opsControlActionTimeoutMs,
       actionHistoryLimit: opsControlActionHistoryLimit,
+      actionRetentionDays: opsControlActionRetentionDays,
     },
     experimental: {
       extendedApiEnabled,

@@ -29,7 +29,8 @@
   "dependencies": {
     "@esl-pipeline/contracts": "workspace:*",
     "@esl-pipeline/shared-infrastructure": "workspace:*",
-    "@grammyjs/types": "^3.25.0"
+    "@grammyjs/types": "^3.25.0",
+    "pg": "^8.20.0"
   },
   "devDependencies": {
     "@types/node": "^25.4.0",

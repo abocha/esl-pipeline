@@ -208,8 +208,18 @@ Use `.env.batch-backend` for the service stack. It includes all core keys above 
   - If you set these command wrappers in a shell-sourced `.env` file, wrap values in quotes (for example `"bash scripts/docker/postgres-ops-status.sh --json"`), otherwise shell sourcing treats trailing tokens as executable commands.
   - `BATCH_BACKEND_OPS_CONTROL_ACTION_TIMEOUT_MS` (default `600000`) — Timeout per ops command execution.
   - `BATCH_BACKEND_OPS_CONTROL_ACTION_HISTORY_LIMIT` (default `100`) — In-memory history target for ops action statuses. Queued/running actions are never evicted; temporary overflow is allowed until active actions finish.
+  - `BATCH_BACKEND_OPS_CONTROL_ACTION_RETENTION_DAYS` (default `30`) — Retention window for pruning terminal/persisted ops action history.
 - Telegram ops bot runtime (separate package/service, optional):
   - `TELEGRAM_OPS_BOT_ENABLED` (default `false`) — Starts/stops bot runtime.
+  - `TELEGRAM_OPS_BOT_API_BASE_URL` (default `https://api.telegram.org`) — Telegram Bot API base URL (supports deterministic smoke/fake API endpoints).
+  - `TELEGRAM_OPS_BOT_MODE` (default `polling`) — Bot transport mode (`polling` or `webhook`).
+  - `TELEGRAM_OPS_BOT_LEADER_ELECTION_ENABLED` (default `false`) — Enables polling leader election for multi-instance safety.
+  - `TELEGRAM_OPS_BOT_APPROVAL_REPLAY_DATABASE_URL` (optional) — Postgres DSN for shared `/approve` token replay protection (falls back to leader-election/`PG_*` settings).
+  - `TELEGRAM_OPS_BOT_APPROVAL_REPLAY_PRUNE_INTERVAL_MS` (default `60000`) — Interval for pruning expired `/approve` replay tokens.
+  - `TELEGRAM_OPS_BOT_WEBHOOK_HOST` (default `0.0.0.0`) — Webhook listener bind host when mode is `webhook`.
+  - `TELEGRAM_OPS_BOT_WEBHOOK_PORT` (default `8091`) — Webhook listener port when mode is `webhook`.
+  - `TELEGRAM_OPS_BOT_WEBHOOK_PATH` (default `/telegram/webhook`) — Webhook request path when mode is `webhook`.
+  - `TELEGRAM_OPS_BOT_WEBHOOK_SECRET_TOKEN` (optional) — Required inbound `x-telegram-bot-api-secret-token` value for webhook requests.
   - `TELEGRAM_OPS_BOT_TOKEN` — Telegram bot token.
   - `TELEGRAM_OPS_BOT_CHAT_ID` — Target chat id (forum supergroup or regular chat id).
   - `TELEGRAM_OPS_BOT_ALLOWED_USER_IDS` — Comma-separated operator Telegram user ids.

@@ -103,7 +103,7 @@ export function registerOpsRoutes(app: FastifyInstance, context: ExtendedRoutesC
 
       try {
         const { operationId } = paramsSchema.parse(request.params ?? {});
-        const status = getOpsActionStatus(operationId);
+        const status = await getOpsActionStatus(operationId);
         if (!status) {
           return reply.code(404).send({
             error: 'not_found',

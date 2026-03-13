@@ -28,20 +28,23 @@ export class TelegramApiError extends Error {
 
 export interface TelegramClientOptions {
   token: string;
+  apiBaseUrl?: string;
   fetchImpl?: typeof fetch;
 }
 
 export class TelegramClient {
   private readonly token: string;
+  private readonly apiBaseUrl: string;
   private readonly fetchImpl: typeof fetch;
 
   constructor(options: TelegramClientOptions) {
     this.token = options.token;
+    this.apiBaseUrl = (options.apiBaseUrl ?? 'https://api.telegram.org').replace(/\/+$/, '');
     this.fetchImpl = options.fetchImpl ?? fetch;
   }
 
   async call<M extends TelegramMethod>(method: M, args?: MethodArgs<M>): Promise<MethodResult<M>> {
-    const url = `https://api.telegram.org/bot${this.token}/${String(method)}`;
+    const url = `${this.apiBaseUrl}/bot${this.token}/${String(method)}`;
     const response = await this.fetchImpl(url, {
       method: 'POST',
       headers: {

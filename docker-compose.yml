@@ -189,6 +189,139 @@ services:
     user: '${UID:-1000}:${GID:-1000}'
     pull_policy: never
 
+  telegram-ops-bot-smoke:
+    image: esl-pipeline/dev-node-base:local
+    depends_on:
+      telegram-smoke-api:
+        condition: service_healthy
+      telegram-smoke-backend:
+        condition: service_healthy
+      telegram-smoke-deps:
+        condition: service_completed_successfully
+    volumes:
+      - ./:/app
+      - workspace_node_modules:/app/node_modules
+      - workspace_pnpm_store:/pnpm
+    environment:
+      NODE_ENV: development
+      PNPM_STORE_DIR: /pnpm/store
+      NPM_CONFIG_STORE_DIR: /pnpm/store
+      TELEGRAM_OPS_BOT_ENABLED: 'true'
+      TELEGRAM_OPS_BOT_TOKEN: '${TELEGRAM_SMOKE_BOT_TOKEN:-123456789:smoke-token}'
+      TELEGRAM_OPS_BOT_CHAT_ID: '${TELEGRAM_SMOKE_CHAT_ID:--1001234567890}'
+      TELEGRAM_OPS_BOT_ALLOWED_USER_IDS: '${TELEGRAM_SMOKE_ALLOWED_USER_ID:-12345678}'
+      TELEGRAM_OPS_BOT_API_BASE_URL: 'http://telegram-smoke-api:18080'
+      TELEGRAM_OPS_BOT_MODE: 'polling'
+      TELEGRAM_OPS_BOT_LEADER_ELECTION_ENABLED: 'false'
+      TELEGRAM_OPS_BOT_BACKEND_URL: 'http://telegram-smoke-backend:18081'
+      TELEGRAM_OPS_BOT_BACKEND_EMAIL: '${TELEGRAM_SMOKE_BACKEND_EMAIL:-ops-bot@example.com}'
+      TELEGRAM_OPS_BOT_BACKEND_PASSWORD: '${TELEGRAM_SMOKE_BACKEND_PASSWORD:-smoke-password}'
+      TELEGRAM_OPS_BOT_BACKEND_TIMEOUT_MS: '5000'
+      TELEGRAM_OPS_BOT_BACKEND_SHARED_SECRET: '${TELEGRAM_SMOKE_BACKEND_SECRET:-smoke-secret}'
+      TELEGRAM_OPS_BOT_POLL_INTERVAL_MS: '250'
+      TELEGRAM_OPS_BOT_POLL_TIMEOUT_SECONDS: '1'
+      TELEGRAM_OPS_BOT_COMMAND_WINDOW_MS: '60000'
+      TELEGRAM_OPS_BOT_MAX_COMMANDS_PER_WINDOW: '20'
+      TELEGRAM_OPS_BOT_ENABLE_ACTION_COMMANDS: 'false'
+      TELEGRAM_OPS_BOT_SKIP_PENDING_UPDATES_ON_STARTUP: 'true'
+      TELEGRAM_OPS_BOT_TOPIC_AUTO_CREATE: 'true'
+      TELEGRAM_OPS_BOT_TOPICS_STATE_FILE: '/tmp/telegram-ops-topics-smoke.json'
+      TELEGRAM_OPS_BOT_TOPIC_NAME_OPS: 'Ops Control'
+      TELEGRAM_OPS_BOT_TOPIC_NAME_JOBS: 'Jobs'
+      TELEGRAM_OPS_BOT_TOPIC_NAME_ALERTS: 'Alerts'
+      TELEGRAM_OPS_BOT_APP_BASE_URL: 'https://batch-smoke.example.com'
+    command: >
+      sh -lc "
+        pnpm --filter @esl-pipeline/telegram-ops-bot dev
+      "
+    user: '${UID:-1000}:${GID:-1000}'
+    profiles: ['telegram-smoke']
+    pull_policy: never
+
+  telegram-smoke-api:
+    image: node:24-bookworm-slim
+    volumes:
+      - ./:/app:ro
+    environment:
+      TELEGRAM_SMOKE_TOKEN: '${TELEGRAM_SMOKE_BOT_TOKEN:-123456789:smoke-token}'
+      TELEGRAM_SMOKE_CHAT_ID: '${TELEGRAM_SMOKE_CHAT_ID:--1001234567890}'
+      TELEGRAM_SMOKE_ALLOWED_USER_ID: '${TELEGRAM_SMOKE_ALLOWED_USER_ID:-12345678}'
+      TELEGRAM_SMOKE_API_HOST: '0.0.0.0'
+      TELEGRAM_SMOKE_API_PORT: '18080'
+    ports:
+      - '127.0.0.1:${TELEGRAM_SMOKE_API_HOST_PORT:-18080}:18080'
+    command: >
+      sh -lc "
+        node scripts/smoke/telegram-ops/fake-telegram-api.mjs
+      "
+    working_dir: /app
+    healthcheck:
+      test:
+        [
+          'CMD-SHELL',
+          "node -e \"fetch('http://127.0.0.1:18080/_health').then((r) => process.exit(r.ok ? 0 : 1)).catch(() => process.exit(1))\"",
+        ]
+      interval: 2s
+      timeout: 2s
+      retries: 20
+    profiles: ['telegram-smoke']
+
+  telegram-smoke-backend:
+    image: node:24-bookworm-slim
+    volumes:
+      - ./:/app:ro
+    environment:
+      TELEGRAM_SMOKE_BACKEND_HOST: '0.0.0.0'
+      TELEGRAM_SMOKE_BACKEND_PORT: '18081'
+      TELEGRAM_SMOKE_BACKEND_SECRET: '${TELEGRAM_SMOKE_BACKEND_SECRET:-smoke-secret}'
+      TELEGRAM_SMOKE_BACKEND_EMAIL: '${TELEGRAM_SMOKE_BACKEND_EMAIL:-ops-bot@example.com}'
+      TELEGRAM_SMOKE_BACKEND_PASSWORD: '${TELEGRAM_SMOKE_BACKEND_PASSWORD:-smoke-password}'
+      TELEGRAM_SMOKE_SHARE_JOB_ID: '${TELEGRAM_SMOKE_SHARE_JOB_ID:-job-smoke-1}'
+    ports:
+      - '127.0.0.1:${TELEGRAM_SMOKE_BACKEND_HOST_PORT:-18081}:18081'
+    command: >
+      sh -lc "
+        node scripts/smoke/telegram-ops/fake-backend.mjs
+      "
+    working_dir: /app
+    healthcheck:
+      test:
+        [
+          'CMD-SHELL',
+          "node -e \"fetch('http://127.0.0.1:18081/_health').then((r) => process.exit(r.ok ? 0 : 1)).catch(() => process.exit(1))\"",
+        ]
+      interval: 2s
+      timeout: 2s
+      retries: 20
+    profiles: ['telegram-smoke']
+
+  telegram-smoke-deps:
+    image: esl-pipeline/dev-node-base:local
+    build:
+      context: .
+      dockerfile: packages/batch-backend/Dockerfile.dev
+      target: default
+    volumes:
+      - ./:/app
+      - workspace_node_modules:/app/node_modules
+      - workspace_pnpm_store:/pnpm
+    environment:
+      PNPM_STORE_DIR: /pnpm/store
+      NPM_CONFIG_STORE_DIR: /pnpm/store
+      CI: 'false'
+    command: >
+      sh -lc "
+        mkdir -p /app/node_modules /pnpm/store &&
+        chmod -R 0777 /app/node_modules /pnpm &&
+        pnpm install --no-frozen-lockfile &&
+        pnpm --filter @esl-pipeline/telegram-ops-bot... run build &&
+        chown -R ${UID:-1000}:${GID:-1000} /app/node_modules /pnpm /app/packages/contracts/dist /app/packages/shared-infrastructure/dist /app/packages/telegram-ops-bot/dist
+      "
+    working_dir: /app
+    user: '0:0'
+    profiles: ['telegram-smoke']
+    pull_policy: never
+
   tools:
     image: esl-pipeline/dev-node-tools:local
     build:

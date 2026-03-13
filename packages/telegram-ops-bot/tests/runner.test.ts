@@ -1,19 +1,26 @@
 import { describe, expect, it, vi } from 'vitest';
 
-import type { OpsActionStatus } from '@esl-pipeline/contracts';
+import type { JobStatusDto, OpsActionStatus } from '@esl-pipeline/contracts';
 
 import { TelegramOpsBotRunner } from '../src/runner.js';
-import type { BotConfig } from '../src/types.js';
+import { TelegramApiError } from '../src/telegram-client.js';
+import type { BotConfig, PollLeaderElection } from '../src/types.js';
 
-function createConfig(): BotConfig {
+function createConfig(overrides: Partial<BotConfig> = {}): BotConfig {
   return {
     enabled: true,
     token: 'token',
+    apiBaseUrl: 'https://api.telegram.org',
+    mode: 'polling',
+    webhookHost: '0.0.0.0',
+    webhookPort: 8091,
+    webhookPath: '/telegram/webhook',
     chatId: '123',
     backendBaseUrl: 'http://localhost:8080',
     backendEmail: 'bot@example.com',
     backendPassword: 'secret',
     backendTimeoutMs: 1000,
+    leaderElectionEnabled: false,
     allowedUserIds: new Set([1]),
     pollIntervalMs: 100,
     pollTimeoutSeconds: 1,
@@ -28,59 +35,168 @@ function createConfig(): BotConfig {
       jobs: 'Jobs',
       alerts: 'Alerts',
     },
+    ...overrides,
   };
 }
 
-function createUpdate(text: string) {
+function createUpdate(
+  text: string,
+  overrides?: {
+    updateId?: number;
+    fromUserId?: number;
+    chatId?: number;
+    threadId?: number;
+  },
+) {
   return {
-    update_id: 1,
+    update_id: overrides?.updateId ?? 1,
     message: {
       message_id: 11,
       date: 1_700_000_000,
       text,
-      chat: { id: 123, type: 'private' },
-      from: { id: 1, is_bot: false, first_name: 'Ops' },
+      chat: { id: overrides?.chatId ?? 123, type: 'private' },
+      from: { id: overrides?.fromUserId ?? 1, is_bot: false, first_name: 'Ops' },
+      ...(typeof overrides?.threadId === 'number' ? { message_thread_id: overrides.threadId } : {}),
     },
   };
 }
 
+function createJob(overrides: Partial<JobStatusDto> = {}): JobStatusDto {
+  return {
+    jobId: 'job-1',
+    studentId: null,
+    md: null,
+    recordingId: null,
+    transcriptId: null,
+    promptPackageId: null,
+    draftId: null,
+    preset: null,
+    withTts: null,
+    voiceId: null,
+    upload: null,
+    voiceAccent: null,
+    forceTts: null,
+    notionDatabase: null,
+    publishTarget: null,
+    ttsStrategy: null,
+    autoPublish: null,
+    notionUrl: null,
+    anytypeUrl: null,
+    htmlUrl: null,
+    state: 'succeeded',
+    createdAt: '2026-03-11T00:00:00Z',
+    updatedAt: '2026-03-11T00:00:00Z',
+    startedAt: null,
+    finishedAt: null,
+    error: null,
+    manifestPath: null,
+    ...overrides,
+  };
+}
+
+function createRunner(args?: {
+  config?: Partial<BotConfig>;
+  sendHtmlMessage?: ReturnType<typeof vi.fn>;
+  getUpdates?: ReturnType<typeof vi.fn>;
+  getMe?: ReturnType<typeof vi.fn>;
+  backend?: Partial<{
+    getOpsStatus: ReturnType<typeof vi.fn>;
+    enqueueOpsAction: ReturnType<typeof vi.fn>;
+    getOpsActionStatus: ReturnType<typeof vi.fn>;
+    getFinishedJobs: ReturnType<typeof vi.fn>;
+    getJob: ReturnType<typeof vi.fn>;
+  }>;
+  topicRouter?: Partial<{
+    initialize: ReturnType<typeof vi.fn>;
+    resolveThreadId: ReturnType<typeof vi.fn>;
+    healStaleThread: ReturnType<typeof vi.fn>;
+  }>;
+  auditLog?: ReturnType<typeof vi.fn>;
+  leaderElection?: PollLeaderElection;
+}): {
+  runner: TelegramOpsBotRunner;
+  sendHtmlMessage: ReturnType<typeof vi.fn>;
+  backend: {
+    getOpsStatus: ReturnType<typeof vi.fn>;
+    enqueueOpsAction: ReturnType<typeof vi.fn>;
+    getOpsActionStatus: ReturnType<typeof vi.fn>;
+    getFinishedJobs: ReturnType<typeof vi.fn>;
+    getJob: ReturnType<typeof vi.fn>;
+  };
+  topicRouter: {
+    initialize: ReturnType<typeof vi.fn>;
+    resolveThreadId: ReturnType<typeof vi.fn>;
+    healStaleThread: ReturnType<typeof vi.fn>;
+  };
+  auditLog: ReturnType<typeof vi.fn>;
+} {
+  const sendHtmlMessage = args?.sendHtmlMessage ?? vi.fn(async () => {});
+  const getUpdates = args?.getUpdates ?? vi.fn(async () => []);
+  const getMe =
+    args?.getMe ??
+    vi.fn(async () => ({
+      id: 999,
+      is_bot: true,
+      first_name: 'ESL',
+      username: 'esl_ops_bot',
+    }));
+  const backend = {
+    getOpsStatus: args?.backend?.getOpsStatus ?? vi.fn(),
+    enqueueOpsAction: args?.backend?.enqueueOpsAction ?? vi.fn(),
+    getOpsActionStatus: args?.backend?.getOpsActionStatus ?? vi.fn(),
+    getFinishedJobs: args?.backend?.getFinishedJobs ?? vi.fn(),
+    getJob: args?.backend?.getJob ?? vi.fn(),
+  };
+  const topicRouter = {
+    initialize: args?.topicRouter?.initialize ?? vi.fn(async () => {}),
+    resolveThreadId: args?.topicRouter?.resolveThreadId ?? vi.fn(() => 77),
+    healStaleThread: args?.topicRouter?.healStaleThread ?? vi.fn(async () => {}),
+  };
+  const auditLog = args?.auditLog ?? vi.fn();
+
+  const runner = new TelegramOpsBotRunner({
+    config: createConfig(args?.config),
+    telegram: {
+      getUpdates,
+      getMe,
+      sendHtmlMessage,
+    } as never,
+    backend: backend as never,
+    topicRouter: topicRouter as never,
+    audit: { log: auditLog } as never,
+    leaderElection: args?.leaderElection,
+  });
+
+  return {
+    runner,
+    sendHtmlMessage,
+    backend,
+    topicRouter,
+    auditLog,
+  };
+}
+
+async function processUpdate(runner: TelegramOpsBotRunner, update: ReturnType<typeof createUpdate>) {
+  await (runner as unknown as { processUpdate: (u: ReturnType<typeof createUpdate>) => Promise<void> }).processUpdate(
+    update,
+  );
+}
+
 describe('telegram runner mention handling', () => {
   it('initializes poll offset from latest pending update', async () => {
-    const runner = new TelegramOpsBotRunner({
-      config: createConfig(),
-      telegram: {
-        getUpdates: vi.fn(async () => [
-          {
-            update_id: 101,
-            message: {
-              message_id: 11,
-              date: 1_700_000_000,
-              text: '/status',
-              chat: { id: 123, type: 'private' },
-              from: { id: 1, is_bot: false, first_name: 'Ops' },
-            },
+    const { runner } = createRunner({
+      getUpdates: vi.fn(async () => [
+        {
+          update_id: 101,
+          message: {
+            message_id: 11,
+            date: 1_700_000_000,
+            text: '/status',
+            chat: { id: 123, type: 'private' },
+            from: { id: 1, is_bot: false, first_name: 'Ops' },
           },
-        ]),
-        getMe: vi.fn(async () => ({
-          id: 999,
-          is_bot: true,
-          first_name: 'ESL',
-          username: 'esl_ops_bot',
-        })),
-        sendHtmlMessage: vi.fn(async () => {}),
-      } as never,
-      backend: {
-        getOpsStatus: vi.fn(),
-        enqueueOpsAction: vi.fn(),
-        getOpsActionStatus: vi.fn(),
-        getFinishedJobs: vi.fn(),
-        getJob: vi.fn(),
-      },
-      topicRouter: {
-        initialize: vi.fn(async () => {}),
-        resolveThreadId: vi.fn(() => 77),
-      },
-      audit: { log: vi.fn() },
+        },
+      ]),
     });
 
     await (
@@ -94,38 +210,14 @@ describe('telegram runner mention handling', () => {
 
   it('ignores commands explicitly addressed to another bot', async () => {
     const enqueueOpsAction = vi.fn();
-    const sendHtmlMessage = vi.fn(async () => {});
-
-    const runner = new TelegramOpsBotRunner({
-      config: createConfig(),
-      telegram: {
-        getUpdates: vi.fn(async () => []),
-        getMe: vi.fn(async () => ({
-          id: 999,
-          is_bot: true,
-          first_name: 'ESL',
-          username: 'esl_ops_bot',
-        })),
-        sendHtmlMessage,
-      } as never,
+    const { runner, sendHtmlMessage } = createRunner({
       backend: {
-        getOpsStatus: vi.fn(),
         enqueueOpsAction,
-        getOpsActionStatus: vi.fn(),
-        getFinishedJobs: vi.fn(),
-        getJob: vi.fn(),
       },
-      topicRouter: {
-        initialize: vi.fn(async () => {}),
-        resolveThreadId: vi.fn(() => 77),
-      },
-      audit: { log: vi.fn() },
     });
 
     (runner as unknown as { botUsername: string | null }).botUsername = 'esl_ops_bot';
-    await (
-      runner as unknown as { processUpdate: (update: unknown) => Promise<void> }
-    ).processUpdate(createUpdate('/backup@another_bot nightly'));
+    await processUpdate(runner, createUpdate('/backup@another_bot nightly'));
 
     expect(enqueueOpsAction).toHaveBeenCalledTimes(0);
     expect(sendHtmlMessage).toHaveBeenCalledTimes(0);
@@ -149,44 +241,523 @@ describe('telegram runner mention handling', () => {
         stderrTail: null,
       }),
     );
-    const sendHtmlMessage = vi.fn(async () => {});
-
-    const runner = new TelegramOpsBotRunner({
-      config: createConfig(),
-      telegram: {
-        getUpdates: vi.fn(async () => []),
-        getMe: vi.fn(async () => ({
-          id: 999,
-          is_bot: true,
-          first_name: 'ESL',
-          username: 'esl_ops_bot',
-        })),
-        sendHtmlMessage,
-      } as never,
+    const { runner, sendHtmlMessage } = createRunner({
       backend: {
-        getOpsStatus: vi.fn(),
         enqueueOpsAction,
-        getOpsActionStatus: vi.fn(),
-        getFinishedJobs: vi.fn(),
-        getJob: vi.fn(),
       },
-      topicRouter: {
-        initialize: vi.fn(async () => {}),
-        resolveThreadId: vi.fn(() => 77),
-      },
-      audit: { log: vi.fn() },
     });
 
     (runner as unknown as { botUsername: string | null }).botUsername = 'esl_ops_bot';
-    await (
-      runner as unknown as { processUpdate: (update: unknown) => Promise<void> }
-    ).processUpdate(createUpdate('/backup@esl_ops_bot nightly'));
+    await processUpdate(runner, createUpdate('/backup@esl_ops_bot nightly'));
 
-    expect(enqueueOpsAction).toHaveBeenCalledTimes(1);
     expect(enqueueOpsAction).toHaveBeenCalledWith({
       action: 'backup_upload',
       label: 'nightly',
     });
     expect(sendHtmlMessage).toHaveBeenCalledTimes(1);
+  });
+
+  it('emits denied and unknown command outcome metrics', async () => {
+    const { runner, auditLog } = createRunner({
+      config: {
+        allowedUserIds: new Set([99]),
+      },
+    });
+
+    await processUpdate(runner, createUpdate('/status', { fromUserId: 1 }));
+    await processUpdate(runner, createUpdate('/unknown', { fromUserId: 99, updateId: 2 }));
+
+    expect(auditLog).toHaveBeenCalledWith(
+      expect.objectContaining({
+        event: 'bot_metric',
+        details: expect.objectContaining({
+          metric: 'command_outcome',
+          labels: expect.objectContaining({
+            status: 'denied_not_allowed',
+            command: 'status',
+          }),
+        }),
+      }),
+    );
+    expect(auditLog).toHaveBeenCalledWith(
+      expect.objectContaining({
+        event: 'bot_metric',
+        details: expect.objectContaining({
+          metric: 'command_outcome',
+          labels: expect.objectContaining({
+            status: 'unknown',
+            command: 'unknown',
+          }),
+        }),
+      }),
+    );
+  });
+
+  it('emits denied_rate_limited command outcome metric', async () => {
+    const { runner, auditLog } = createRunner({
+      config: {
+        maxCommandsPerWindow: 1,
+      },
+    });
+
+    await processUpdate(runner, createUpdate('/help', { fromUserId: 1, updateId: 10 }));
+    await processUpdate(runner, createUpdate('/help', { fromUserId: 1, updateId: 11 }));
+
+    expect(auditLog).toHaveBeenCalledWith(
+      expect.objectContaining({
+        event: 'bot_metric',
+        details: expect.objectContaining({
+          metric: 'command_outcome',
+          labels: expect.objectContaining({
+            status: 'denied_rate_limited',
+            command: 'help',
+          }),
+        }),
+      }),
+    );
+  });
+
+  it('does not initialize startup replay offset while this replica is standby follower', async () => {
+    const getUpdates = vi.fn(async () => []);
+    const leaderElection: PollLeaderElection = {
+      isLeader: vi.fn(async () => false),
+      close: vi.fn(async () => {}),
+    };
+    const { runner } = createRunner({
+      config: {
+        mode: 'polling',
+        skipPendingUpdatesOnStartup: true,
+        pollIntervalMs: 10,
+      },
+      getUpdates,
+      leaderElection,
+    });
+
+    const startPromise = runner.start();
+    await new Promise((resolve) => setTimeout(resolve, 35));
+    runner.stop();
+    await startPromise;
+
+    expect(getUpdates).toHaveBeenCalledTimes(0);
+  });
+
+  it('initializes startup replay offset when this replica starts as leader', async () => {
+    const getUpdates = vi.fn(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 5));
+      return [];
+    });
+    const leaderElection: PollLeaderElection = {
+      isLeader: vi.fn(async () => true),
+      close: vi.fn(async () => {}),
+    };
+    const { runner } = createRunner({
+      config: {
+        mode: 'polling',
+        skipPendingUpdatesOnStartup: true,
+        pollIntervalMs: 10,
+      },
+      getUpdates,
+      leaderElection,
+    });
+
+    const startPromise = runner.start();
+    await new Promise((resolve) => setTimeout(resolve, 40));
+    runner.stop();
+    await startPromise;
+
+    const calls = getUpdates.mock.calls as unknown as [Record<string, unknown>][];
+    expect(calls.some(([params]) => params.offset === -1 && params.limit === 1)).toBe(true);
+  });
+
+  it('does not treat pre-failover updates as startup backlog after becoming leader', async () => {
+    const getUpdates = vi.fn(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 5));
+      return [];
+    });
+    const isLeader = vi.fn(async () => false);
+    isLeader.mockResolvedValueOnce(false);
+    isLeader.mockResolvedValueOnce(false);
+    isLeader.mockResolvedValue(true);
+    const leaderElection: PollLeaderElection = {
+      isLeader,
+      close: vi.fn(async () => {}),
+    };
+    const { runner } = createRunner({
+      config: {
+        mode: 'polling',
+        skipPendingUpdatesOnStartup: true,
+        pollIntervalMs: 10,
+      },
+      getUpdates,
+      leaderElection,
+    });
+
+    const startPromise = runner.start();
+    await new Promise((resolve) => setTimeout(resolve, 70));
+    runner.stop();
+    await startPromise;
+
+    const calls = getUpdates.mock.calls as unknown as [Record<string, unknown>][];
+    expect(calls.some(([params]) => params.offset === -1 && params.limit === 1)).toBe(false);
+    expect(calls.some(([params]) => typeof params.timeout === 'number')).toBe(true);
+  });
+
+  it('finalizes startup replay handling after leader-check failure and never late-skips backlog', async () => {
+    const getUpdates = vi.fn(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 5));
+      return [];
+    });
+    const isLeader = vi
+      .fn<() => Promise<boolean>>()
+      .mockRejectedValueOnce(new Error('pg unavailable during startup'))
+      .mockResolvedValue(true)
+      .mockResolvedValue(true);
+    const leaderElection: PollLeaderElection = {
+      isLeader,
+      close: vi.fn(async () => {}),
+    };
+    const { runner, auditLog } = createRunner({
+      config: {
+        mode: 'polling',
+        skipPendingUpdatesOnStartup: true,
+        pollIntervalMs: 10,
+      },
+      getUpdates,
+      leaderElection,
+    });
+
+    const startPromise = runner.start();
+    await new Promise((resolve) => setTimeout(resolve, 75));
+    runner.stop();
+    await startPromise;
+
+    const calls = getUpdates.mock.calls as unknown as [Record<string, unknown>][];
+    expect(calls.some(([params]) => params.offset === -1 && params.limit === 1)).toBe(false);
+    expect(calls.some(([params]) => typeof params.timeout === 'number')).toBe(true);
+    expect(auditLog).toHaveBeenCalledWith(
+      expect.objectContaining({
+        event: 'startup_replay_guard_skipped_unavailable',
+      }),
+    );
+  });
+});
+
+describe('telegram runner webhook mode', () => {
+  it('does not poll Telegram updates in webhook mode', async () => {
+    const getUpdates = vi.fn(async () => []);
+    const { runner } = createRunner({
+      config: {
+        mode: 'webhook',
+        pollIntervalMs: 10,
+      },
+      getUpdates,
+    });
+
+    const startPromise = runner.start();
+    await new Promise((resolve) => setTimeout(resolve, 40));
+    runner.stop();
+    await startPromise;
+
+    expect(getUpdates).toHaveBeenCalledTimes(0);
+  });
+});
+
+describe('telegram runner /share smoke', () => {
+  it('uses markdown-first extraction precedence and preserves ordering + preview flags', async () => {
+    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      new Response('<html><head><title>Fallback Title</title></head><body>ignored</body></html>', {
+        status: 200,
+      }),
+    );
+
+    const { runner, backend, sendHtmlMessage, auditLog } = createRunner({
+      backend: {
+        getJob: vi.fn(async () =>
+          createJob({
+            jobId: 'job-md-first',
+            md: [
+              '---',
+              'title: "Homework Assignment: Markdown First"',
+              'icon: "📘"',
+              '---',
+              '[Audio recording: Study Text](https://bucket.s3.amazonaws.com/audio/final/md-first-study.mp3)',
+              '[Audio recording: Pronunciation Shadow Sentence](https://bucket.s3.amazonaws.com/audio/pronunciation-shadow/md-first-pron.mp3)',
+            ].join('\n'),
+            htmlUrl: 'https://example.com/fallback-if-needed.html',
+          }),
+        ),
+      },
+    });
+
+    await processUpdate(runner, createUpdate('/share job-md-first'));
+
+    expect(backend.getJob).toHaveBeenCalledWith('job-md-first');
+    expect(fetchSpy).not.toHaveBeenCalled();
+    expect(sendHtmlMessage).toHaveBeenCalledTimes(3);
+    expect(sendHtmlMessage.mock.calls[0]?.[0].disableLinkPreview).toBe(true);
+    expect(sendHtmlMessage.mock.calls[1]?.[0].disableLinkPreview).toBe(false);
+    expect(sendHtmlMessage.mock.calls[2]?.[0].disableLinkPreview).toBe(false);
+    expect(sendHtmlMessage.mock.calls[1]?.[0].html).toContain('🎧 Listen 1: Study Text');
+    expect(sendHtmlMessage.mock.calls[2]?.[0].html).toContain('🗣️ Listen 2: Pronunciation');
+    expect(auditLog).toHaveBeenCalledWith(
+      expect.objectContaining({
+        event: 'share_path_telemetry',
+        details: expect.objectContaining({
+          usedHtmlFallback: false,
+          studyAudioSource: 'markdown_label',
+          pronunciationAudioSource: 'markdown_label',
+        }),
+      }),
+    );
+    expect(auditLog).toHaveBeenCalledWith(
+      expect.objectContaining({
+        event: 'command_outcome',
+        details: expect.objectContaining({
+          status: 'completed',
+        }),
+      }),
+    );
+
+    fetchSpy.mockRestore();
+  });
+
+  it('falls back to html extraction when markdown content is unavailable', async () => {
+    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      new Response(
+        [
+          '<html><head><title>Homework Assignment: Html Fallback</title></head><body>',
+          '<div class="hero-emoji">🏢</div>',
+          'https://bucket.s3.amazonaws.com/audio/final/html-study.mp3',
+          'https://bucket.s3.amazonaws.com/audio/pronunciation-shadow/html-pron.mp3',
+          '</body></html>',
+        ].join('\n'),
+        { status: 200 },
+      ),
+    );
+
+    const { runner, sendHtmlMessage, auditLog } = createRunner({
+      backend: {
+        getJob: vi.fn(async () =>
+          createJob({
+            jobId: 'job-html-fallback',
+            md: '/tmp/does-not-exist.md',
+            htmlUrl: 'https://example.com/share-fallback.html',
+          }),
+        ),
+      },
+    });
+
+    await processUpdate(runner, createUpdate('/share job-html-fallback'));
+
+    expect(fetchSpy).toHaveBeenCalledOnce();
+    expect(sendHtmlMessage).toHaveBeenCalledTimes(3);
+    expect(sendHtmlMessage.mock.calls[0]?.[0].html).toContain('🏢 Homework Assignment: Html Fallback');
+    expect(sendHtmlMessage.mock.calls[1]?.[0].html).toContain('audio/final/html-study.mp3');
+    expect(sendHtmlMessage.mock.calls[2]?.[0].html).toContain(
+      'audio/pronunciation-shadow/html-pron.mp3',
+    );
+    expect(auditLog).toHaveBeenCalledWith(
+      expect.objectContaining({
+        event: 'share_path_telemetry',
+        details: expect.objectContaining({
+          usedHtmlFallback: true,
+          studyAudioSource: 'html_path',
+          pronunciationAudioSource: 'html_path',
+        }),
+      }),
+    );
+
+    fetchSpy.mockRestore();
+  });
+
+  it('keeps markdown path-hint audio precedence over competing html audio urls', async () => {
+    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      new Response(
+        [
+          '<html><head><title>Homework Assignment: Html Title</title></head><body>',
+          'https://bucket.s3.amazonaws.com/audio/final/html-should-not-win.mp3',
+          'https://bucket.s3.amazonaws.com/audio/pronunciation-shadow/html-should-not-win.mp3',
+          '</body></html>',
+        ].join('\n'),
+        { status: 200 },
+      ),
+    );
+
+    const { runner, sendHtmlMessage, auditLog } = createRunner({
+      backend: {
+        getJob: vi.fn(async () =>
+          createJob({
+            jobId: 'job-md-path-precedence',
+            md: [
+              'content without heading title to trigger html title fallback',
+              'https://bucket.s3.amazonaws.com/audio/final/md-path-study.mp3',
+              'https://bucket.s3.amazonaws.com/audio/pronunciation-shadow/md-path-pron.mp3',
+            ].join('\n'),
+            htmlUrl: 'https://example.com/share-md-path-precedence.html',
+          }),
+        ),
+      },
+    });
+
+    await processUpdate(runner, createUpdate('/share job-md-path-precedence'));
+
+    expect(fetchSpy).toHaveBeenCalledOnce();
+    expect(sendHtmlMessage).toHaveBeenCalledTimes(3);
+    expect(sendHtmlMessage.mock.calls[0]?.[0].disableLinkPreview).toBe(true);
+    expect(sendHtmlMessage.mock.calls[1]?.[0].disableLinkPreview).toBe(false);
+    expect(sendHtmlMessage.mock.calls[2]?.[0].disableLinkPreview).toBe(false);
+    expect(sendHtmlMessage.mock.calls[1]?.[0].html).toContain('audio/final/md-path-study.mp3');
+    expect(sendHtmlMessage.mock.calls[2]?.[0].html).toContain(
+      'audio/pronunciation-shadow/md-path-pron.mp3',
+    );
+    expect(sendHtmlMessage.mock.calls[1]?.[0].html).not.toContain('html-should-not-win.mp3');
+    expect(sendHtmlMessage.mock.calls[2]?.[0].html).not.toContain('html-should-not-win.mp3');
+    expect(auditLog).toHaveBeenCalledWith(
+      expect.objectContaining({
+        event: 'share_path_telemetry',
+        details: expect.objectContaining({
+          studyAudioSource: 'markdown_path',
+          pronunciationAudioSource: 'markdown_path',
+        }),
+      }),
+    );
+    expect(auditLog).toHaveBeenCalledWith(
+      expect.objectContaining({
+        event: 'bot_metric',
+        details: expect.objectContaining({
+          metric: 'share_extraction_source',
+          labels: expect.objectContaining({
+            source: 'markdown_path',
+          }),
+        }),
+      }),
+    );
+
+    fetchSpy.mockRestore();
+  });
+
+  it('degrades gracefully when audio links are missing', async () => {
+    const { runner, sendHtmlMessage, auditLog } = createRunner({
+      backend: {
+        getJob: vi.fn(async () =>
+          createJob({
+            jobId: 'job-no-audio',
+            htmlUrl: 'https://example.com/no-audio.html',
+          }),
+        ),
+      },
+    });
+
+    await processUpdate(runner, createUpdate('/share job-no-audio'));
+
+    expect(sendHtmlMessage).toHaveBeenCalledTimes(1);
+    expect(sendHtmlMessage.mock.calls[0]?.[0].disableLinkPreview).toBe(true);
+    expect(auditLog).toHaveBeenCalledWith(
+      expect.objectContaining({
+        event: 'share_path_telemetry',
+        details: expect.objectContaining({
+          missingStudyAudio: true,
+          missingPronunciationAudio: true,
+          missingAudioCount: 2,
+        }),
+      }),
+    );
+  });
+
+  it('heals stale thread with bounded retries and fallback without infinite looping', async () => {
+    const sendHtmlMessage = vi
+      .fn()
+      .mockRejectedValueOnce(
+        new TelegramApiError('Bad Request: message thread not found', 'sendMessage', 400),
+      )
+      .mockRejectedValueOnce(
+        new TelegramApiError('Bad Request: message thread not found', 'sendMessage', 400),
+      )
+      .mockResolvedValueOnce({
+        message_id: 33,
+      });
+    const healStaleThread = vi.fn(async () => {});
+
+    const { runner, auditLog } = createRunner({
+      config: {
+        defaultThreadId: 999,
+      },
+      sendHtmlMessage,
+      topicRouter: {
+        resolveThreadId: vi.fn(() => 333),
+        healStaleThread,
+      },
+      backend: {
+        getJob: vi.fn(async () =>
+          createJob({
+            jobId: 'job-heal',
+            htmlUrl: 'https://example.com/no-audio-heal.html',
+          }),
+        ),
+      },
+    });
+
+    await processUpdate(runner, createUpdate('/share job-heal'));
+
+    expect(healStaleThread).toHaveBeenCalledWith({
+      domain: 'jobs',
+      staleThreadId: 333,
+    });
+    expect(healStaleThread).toHaveBeenCalledTimes(1);
+    expect(sendHtmlMessage).toHaveBeenCalledTimes(3);
+    expect(sendHtmlMessage.mock.calls[0]?.[0].threadId).toBe(333);
+    expect(sendHtmlMessage.mock.calls[1]?.[0].threadId).toBe(999);
+    expect(sendHtmlMessage.mock.calls[2]?.[0].threadId).toBeUndefined();
+    expect(auditLog).toHaveBeenCalledWith(
+      expect.objectContaining({
+        event: 'topic_stale_detected',
+      }),
+    );
+    expect(auditLog).toHaveBeenCalledWith(
+      expect.objectContaining({
+        event: 'topic_heal_fallback',
+      }),
+    );
+  });
+
+  it('emits topic_recreated event when stale thread healing recreates a topic successfully', async () => {
+    const sendHtmlMessage = vi
+      .fn()
+      .mockRejectedValueOnce(
+        new TelegramApiError('Bad Request: message thread not found', 'sendMessage', 400),
+      )
+      .mockResolvedValueOnce({
+        message_id: 44,
+      });
+    const healStaleThread = vi.fn(async () => 444);
+
+    const { runner, auditLog } = createRunner({
+      sendHtmlMessage,
+      topicRouter: {
+        resolveThreadId: vi.fn(() => 333),
+        healStaleThread,
+      },
+      backend: {
+        getJob: vi.fn(async () =>
+          createJob({
+            jobId: 'job-heal-success',
+            htmlUrl: 'https://example.com/heal-success.html',
+          }),
+        ),
+      },
+    });
+
+    await processUpdate(runner, createUpdate('/share job-heal-success'));
+
+    expect(healStaleThread).toHaveBeenCalledTimes(1);
+    expect(sendHtmlMessage).toHaveBeenCalledTimes(2);
+    expect(sendHtmlMessage.mock.calls[0]?.[0].threadId).toBe(333);
+    expect(sendHtmlMessage.mock.calls[1]?.[0].threadId).toBe(444);
+    expect(auditLog).toHaveBeenCalledWith(
+      expect.objectContaining({
+        event: 'topic_recreated',
+        threadId: 444,
+      }),
+    );
   });
 });

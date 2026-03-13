@@ -9,6 +9,7 @@ import Fastify, { type FastifyInstance } from 'fastify';
 import { fileURLToPath } from 'node:url';
 
 import { validateTranscriptionConfig } from '../application/validate-transcription-config.js';
+import { resumePersistedOpsActionsOnStartup } from '../application/ops-control.js';
 import { loadBatchBackendEnv } from '../bootstrap/env.js';
 import { loadConfig } from '../config/env.js';
 import { createAuthService } from '../infrastructure/auth-service.js';
@@ -174,6 +175,7 @@ export async function startHttpServer(): Promise<void> {
       connectionTimeoutMs: config.pg.connectionTimeoutMs,
     });
     await runMigrationsIfConfigured();
+    await resumePersistedOpsActionsOnStartup();
     await validateTranscriptionConfig({ config });
     await enableRedisJobEventBridge();
     await enableRedisRecordingEventBridge();

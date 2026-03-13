@@ -2,12 +2,15 @@ import { fileURLToPath } from 'node:url';
 
 import { loadCliEnv } from '@esl-pipeline/shared-infrastructure';
 
+import { PostgresApprovalReplayStore } from './approval-replay-store.js';
 import { createAuditLogger } from './audit.js';
 import { HttpBackendClient } from './backend-client.js';
 import { loadBotConfigFromEnv } from './config.js';
+import { PostgresPollingLeaderElection } from './leader-election.js';
 import { TelegramOpsBotRunner } from './runner.js';
 import { TelegramClient } from './telegram-client.js';
 import { ForumTopicRouter } from './topic-router.js';
+import { type RunningWebhookUpdateServer, startWebhookUpdateServer } from './webhook-server.js';
 
 export async function startTelegramOpsBot(): Promise<void> {
   loadCliEnv({
@@ -23,7 +26,10 @@ export async function startTelegramOpsBot(): Promise<void> {
   }
 
   const audit = createAuditLogger();
-  const telegram = new TelegramClient({ token: config.token });
+  const telegram = new TelegramClient({
+    token: config.token,
+    apiBaseUrl: config.apiBaseUrl,
+  });
   const backend = new HttpBackendClient({
     baseUrl: config.backendBaseUrl,
     email: config.backendEmail,
@@ -38,13 +44,33 @@ export async function startTelegramOpsBot(): Promise<void> {
     audit,
   });
 
+  const leaderElection =
+    config.mode === 'polling' && config.leaderElectionEnabled
+      ? PostgresPollingLeaderElection.fromEnv(audit)
+      : undefined;
+  const approvalReplayStore = PostgresApprovalReplayStore.fromEnv(audit);
+
   const runner = new TelegramOpsBotRunner({
     config,
     telegram,
     backend,
     topicRouter,
     audit,
+    leaderElection,
+    approvalReplayStore,
   });
+
+  let webhookServer: RunningWebhookUpdateServer | null = null;
+  if (config.mode === 'webhook') {
+    await runner.prepareForWebhookUpdates();
+    webhookServer = await startWebhookUpdateServer({
+      config,
+      audit,
+      onUpdate: async (update) => {
+        await runner.handleWebhookUpdate(update);
+      },
+    });
+  }
 
   const shutdown = () => {
     audit.log({
@@ -54,12 +80,22 @@ export async function startTelegramOpsBot(): Promise<void> {
       chatId: config.chatId,
     });
     runner.stop();
+    if (webhookServer) {
+      void webhookServer.close();
+    }
   };
 
   process.on('SIGINT', shutdown);
   process.on('SIGTERM', shutdown);
 
-  await runner.start();
+  try {
+    await runner.start();
+  } finally {
+    if (webhookServer) {
+      await webhookServer.close();
+    }
+    await approvalReplayStore.close();
+  }
 }
 
 if (process.argv[1] === fileURLToPath(import.meta.url)) {
