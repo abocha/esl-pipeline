@@ -13,7 +13,6 @@ import {
   formatAudioPlaybackLink,
   formatCommandError,
   formatFinishedJobs,
-  formatHelp,
   formatGuidedHelpHome,
   formatGuidedActionConfirmation,
   formatGuidedActionSubmitted,
@@ -21,7 +20,6 @@ import {
   formatJobDetails,
   formatJobLinks,
   formatOpsStatus,
-  formatPrivateOnboardingRedirect,
   formatRecentOpsActions,
   formatStartMessage,
 } from './formatter.js';
@@ -1179,11 +1177,7 @@ export function createCommandRegistry(args?: { replayStore?: ApprovalReplayStore
           opsChatId: context.config.chatId,
           inOpsChat: !isPrivateChatContext(context),
         });
-        if (isPrivateChatContext(context)) {
-          await sendDirectMessage(context, html);
-        } else {
-          await sendDomainMessage(context, 'ops', html);
-        }
+        await (isPrivateChatContext(context) ? sendDirectMessage(context, html) : sendDomainMessage(context, 'ops', html));
         emitUxLatencyMetric(context, 'start', startedAtMs);
       },
     },

@@ -83,28 +83,39 @@ function isMessageNotModifiedError(error: unknown): boolean {
 function callbackMetricLabel(data: string): string {
   const [, kind, param] = data.split('|');
   switch (kind) {
-    case 'h':
+    case 'h': {
       return 'home';
-    case 's':
+    }
+    case 's': {
       return 'status';
-    case 'f':
+    }
+    case 'f': {
       return 'finished';
-    case 'r':
+    }
+    case 'r': {
       return 'recent_ops';
-    case 'j':
+    }
+    case 'j': {
       return 'job';
-    case 'o':
+    }
+    case 'o': {
       return 'op';
-    case 'jl':
+    }
+    case 'jl': {
       return 'job_links';
-    case 'js':
+    }
+    case 'js': {
       return 'job_share';
-    case 'a':
+    }
+    case 'a': {
       return param === 'backup' || param === 'drill' ? `action_${param}` : 'action_unknown';
-    case 'c':
+    }
+    case 'c': {
       return param === 'backup' || param === 'drill' ? `confirm_${param}` : 'confirm_unknown';
-    default:
+    }
+    default: {
       return 'unknown';
+    }
   }
 }
 
@@ -851,23 +862,19 @@ export class TelegramOpsBotRunner {
       }
     }
 
-    if (typeof args.threadId === 'number') {
-      await this.sendHtmlMessageWithTopicHealing({
+    await (typeof args.threadId === 'number' ? this.sendHtmlMessageWithTopicHealing({
         chatId: args.chatId,
         domain: args.domain,
         threadId: args.threadId,
         html: args.html,
         disableLinkPreview: args.disableLinkPreview,
         replyMarkup: args.replyMarkup,
-      });
-    } else {
-      await this.sendSimpleMessage({
+      }) : this.sendSimpleMessage({
         chatId: args.chatId,
         threadId: args.threadId,
         html: args.html,
         replyMarkup: args.replyMarkup,
-      });
-    }
+      }));
     this.audit.log({
       level: 'warn',
       event: 'callback_edit_fallback_used',

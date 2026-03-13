@@ -28,10 +28,10 @@ export async function syncTelegramMetadataBestEffort(args: {
     }),
   );
 
-  const steps: Array<{
+  const steps: {
     name: string;
     run: () => Promise<unknown>;
-  }> = [
+  }[] = [
     {
       name: 'set_my_commands_private',
       run: () =>

@@ -757,7 +757,7 @@ describe('telegram runner webhook mode', () => {
     expect(enqueueOpsAction).toHaveBeenCalledTimes(1);
     expect(sendHtmlMessage).toHaveBeenCalledTimes(1);
     const editCall = editHtmlMessage.mock.calls[0] as
-      | [{ html: string; replyMarkup?: { inline_keyboard: Array<Array<{ text: string }>> } }]
+      | [{ html: string; replyMarkup?: { inline_keyboard: { text: string }[][] } }]
       | undefined;
     expect(editCall?.[0].html).toContain('request submitted');
     expect(editCall?.[0].replyMarkup?.inline_keyboard).toEqual([[{ text: 'Home', callback_data: 'a4|h' }]]);
@@ -877,7 +877,7 @@ describe('telegram runner webhook mode', () => {
         text: 'fallback',
       });
     const healStaleThread = vi.fn(async () => 991);
-    const { runner, topicRouter, auditLog } = createRunner({
+    const { runner, auditLog } = createRunner({
       sendHtmlMessage,
       editHtmlMessage,
       answerCallbackQuery,
