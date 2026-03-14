@@ -139,7 +139,7 @@ function encodeDayCode(iso: string | undefined): string {
   }
   const parsed = Date.parse(iso);
   if (Number.isNaN(parsed)) {
-    throw new Error(`Cannot encode jobs view day from ${iso}.`);
+    throw new TypeError(`Cannot encode jobs view day from ${iso}.`);
   }
   return Math.floor(parsed / MS_PER_DAY)
     .toString(36)
@@ -735,28 +735,32 @@ export function buildJobsViewKeyboard(
   }
   if (args.scope === 'student' && args.backToStudentId) {
     const studentRef = toStudentRef(args.backToStudentId);
-    rows.push([
-      { text: 'Recent', callback_data: encodeGuidedCallback({ kind: 'jobs_view', viewKey: `sr:${studentRef}` }) },
-      { text: 'Failed', callback_data: encodeGuidedCallback({ kind: 'jobs_view', viewKey: `sf:${studentRef}` }) },
-      { text: 'Succeeded', callback_data: encodeGuidedCallback({ kind: 'jobs_view', viewKey: `ss:${studentRef}` }) },
-    ]);
-    rows.push([
-      { text: 'Back to Student', callback_data: encodeGuidedCallback({ kind: 'student', studentId: args.backToStudentId }) },
-      { text: 'Home', callback_data: encodeGuidedCallback({ kind: 'home' }) },
-    ]);
+    rows.push(
+      [
+        { text: 'Recent', callback_data: encodeGuidedCallback({ kind: 'jobs_view', viewKey: `sr:${studentRef}` }) },
+        { text: 'Failed', callback_data: encodeGuidedCallback({ kind: 'jobs_view', viewKey: `sf:${studentRef}` }) },
+        { text: 'Succeeded', callback_data: encodeGuidedCallback({ kind: 'jobs_view', viewKey: `ss:${studentRef}` }) },
+      ],
+      [
+        { text: 'Back to Student', callback_data: encodeGuidedCallback({ kind: 'student', studentId: args.backToStudentId }) },
+        { text: 'Home', callback_data: encodeGuidedCallback({ kind: 'home' }) },
+      ],
+    );
   }
   if (args.scope === 'today') {
-    rows.push([
-      { text: 'Failed', callback_data: encodeGuidedCallback({ kind: 'jobs_view', viewKey: 'tf' }) },
-      { text: 'Running', callback_data: encodeGuidedCallback({ kind: 'jobs_view', viewKey: 'tn' }) },
-      { text: 'Awaiting', callback_data: encodeGuidedCallback({ kind: 'jobs_view', viewKey: 'tw' }) },
-      { text: 'Finished', callback_data: encodeGuidedCallback({ kind: 'jobs_view', viewKey: 'ts' }) },
-    ]);
-    rows.push([
-      { text: 'All Today', callback_data: encodeGuidedCallback({ kind: 'jobs_view', viewKey: 'ta' }) },
-      { text: 'Back to Today', callback_data: encodeGuidedCallback({ kind: 'today' }) },
-      { text: 'Home', callback_data: encodeGuidedCallback({ kind: 'home' }) },
-    ]);
+    rows.push(
+      [
+        { text: 'Failed', callback_data: encodeGuidedCallback({ kind: 'jobs_view', viewKey: 'tf' }) },
+        { text: 'Running', callback_data: encodeGuidedCallback({ kind: 'jobs_view', viewKey: 'tn' }) },
+        { text: 'Awaiting', callback_data: encodeGuidedCallback({ kind: 'jobs_view', viewKey: 'tw' }) },
+        { text: 'Finished', callback_data: encodeGuidedCallback({ kind: 'jobs_view', viewKey: 'ts' }) },
+      ],
+      [
+        { text: 'All Today', callback_data: encodeGuidedCallback({ kind: 'jobs_view', viewKey: 'ta' }) },
+        { text: 'Back to Today', callback_data: encodeGuidedCallback({ kind: 'today' }) },
+        { text: 'Home', callback_data: encodeGuidedCallback({ kind: 'home' }) },
+      ],
+    );
   }
 
   return {
@@ -1583,7 +1587,7 @@ function parseJobsFilterInput(raw: string, now = new Date()): ParsedJobsFilter |
     switch (key) {
       case 'state': {
         const states = value.split(',').map((item) => item.trim()).filter(Boolean);
-        if (states.length === 0 || !states.every(isJobState)) {
+        if (states.length === 0 || !states.every((state) => isJobState(state))) {
           return { error: 'state must be queued, running, awaiting_approval, succeeded, or failed.' };
         }
         parsed.states = states;
@@ -1698,14 +1702,13 @@ function splitCommandArguments(input: string): string[] {
   const tokens: string[] = [];
   let current = '';
   let inQuotes = false;
-  for (let index = 0; index < input.length; index += 1) {
-    const char = input[index];
+  for (const char of input) {
     if (char === '"') {
       inQuotes = !inQuotes;
       current += char;
       continue;
     }
-    if (char !== undefined && /\s/.test(char) && !inQuotes) {
+    if (/\s/.test(char) && !inQuotes) {
       if (current) {
         tokens.push(current);
         current = '';
