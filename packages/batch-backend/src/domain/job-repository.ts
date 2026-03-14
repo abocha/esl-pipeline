@@ -28,6 +28,7 @@ import {
 interface JobRow {
   id: string;
   student_id?: string | null;
+  student_name?: string | null;
   state: string;
   md: string | null;
   md_storage_uri: string | null;
@@ -228,6 +229,7 @@ async function insertJobWithState(params: InsertJobParams, state: JobState): Pro
       RETURNING
         id,
         student_id,
+        (SELECT s.student FROM students s WHERE s.id = jobs.student_id) AS student_name,
         state,
         md,
         md_storage_uri,
@@ -310,6 +312,7 @@ export async function getJobById(id: string): Promise<JobRecord | null> {
       SELECT
         j.id,
         j.student_id,
+        (SELECT s.student FROM students s WHERE s.id = j.student_id) AS student_name,
         j.state,
         j.md,
         j.md_storage_uri,
@@ -372,6 +375,7 @@ export async function listJobs(options: JobListOptions): Promise<JobRecord[]> {
       SELECT
         j.id,
         j.student_id,
+        (SELECT s.student FROM students s WHERE s.id = j.student_id) AS student_name,
         j.state,
         j.md,
         j.md_storage_uri,
@@ -705,6 +709,7 @@ export async function updateJobStateAndResult(args: {
       RETURNING
         id,
         student_id,
+        (SELECT s.student FROM students s WHERE s.id = jobs.student_id) AS student_name,
         state,
         md,
         md_storage_uri,
@@ -788,6 +793,7 @@ export async function updateJobDraftLink(args: {
       RETURNING
         id,
         student_id,
+        (SELECT s.student FROM students s WHERE s.id = jobs.student_id) AS student_name,
         state,
         md,
         md_storage_uri,
@@ -938,6 +944,7 @@ export async function updateJobMetadata(
       RETURNING
         id,
         student_id,
+        (SELECT s.student FROM students s WHERE s.id = jobs.student_id) AS student_name,
         state,
         md,
         md_storage_uri,
@@ -1023,6 +1030,7 @@ export async function approveJob(args: {
       RETURNING
         id,
         student_id,
+        (SELECT s.student FROM students s WHERE s.id = jobs.student_id) AS student_name,
         state,
         md,
         md_storage_uri,
@@ -1104,6 +1112,7 @@ function mapRowToJob(row: JobRow): JobRecord {
   return {
     id: row.id,
     studentId: row.student_id ?? null,
+    studentName: row.student_name ?? null,
     state: row.state as JobState,
     md: row.md,
     mdStorageUri: row.md_storage_uri ?? null,

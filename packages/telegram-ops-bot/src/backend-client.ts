@@ -1,11 +1,16 @@
 import type {
+  JobSummaryResponse,
   JobListResponse,
   JobStatusDto,
   OpsActionListResponse,
   OpsActionRequest,
   OpsActionStatus,
   OpsStatusResponse,
+  StudentProfileListResponse,
+  StudentSummaryResponse,
 } from '@esl-pipeline/contracts';
+
+import type { BotJobListParams, BotJobSummaryParams, BotStudentSummaryParams } from './types.js';
 
 export interface BackendClientOptions {
   baseUrl: string;
@@ -77,14 +82,79 @@ export class HttpBackendClient {
     return this.requestJson<OpsActionListResponse>('GET', `/ops/actions?${query.toString()}`);
   }
 
+  async listJobs(params: BotJobListParams = {}): Promise<JobListResponse> {
+    const query = new URLSearchParams();
+    if (params.states && params.states.length > 0) {
+      query.set('state', params.states.join(','));
+    }
+    if (params.studentId) {
+      query.set('studentId', params.studentId);
+    }
+    if (params.from) {
+      query.set('from', params.from);
+    }
+    if (params.to) {
+      query.set('to', params.to);
+    }
+    if (Number.isInteger(params.limit)) {
+      query.set('limit', String(Math.max(1, Math.min(200, params.limit ?? 10))));
+    }
+    if (Number.isInteger(params.offset)) {
+      query.set('offset', String(Math.max(0, params.offset ?? 0)));
+    }
+    if (params.order === 'asc' || params.order === 'desc') {
+      query.set('order', params.order);
+    }
+    const suffix = query.size > 0 ? `?${query.toString()}` : '';
+    return this.requestJson<JobListResponse>('GET', `/admin/jobs${suffix}`);
+  }
+
+  async getAdminJobSummary(params: BotJobSummaryParams = {}): Promise<JobSummaryResponse> {
+    const query = new URLSearchParams();
+    if (params.from) {
+      query.set('from', params.from);
+    }
+    if (params.to) {
+      query.set('to', params.to);
+    }
+    const suffix = query.size > 0 ? `?${query.toString()}` : '';
+    return this.requestJson<JobSummaryResponse>('GET', `/admin/jobs/summary${suffix}`);
+  }
+
+  async listStudentSummaries(
+    params: BotStudentSummaryParams = {},
+  ): Promise<StudentSummaryResponse> {
+    const query = new URLSearchParams();
+    if (Number.isInteger(params.limit)) {
+      query.set('limit', String(Math.max(1, Math.min(100, params.limit ?? 10))));
+    }
+    if (Number.isInteger(params.offset)) {
+      query.set('offset', String(Math.max(0, params.offset ?? 0)));
+    }
+    if (params.order === 'asc' || params.order === 'desc') {
+      query.set('order', params.order);
+    }
+    const suffix = query.size > 0 ? `?${query.toString()}` : '';
+    return this.requestJson<StudentSummaryResponse>('GET', `/students/summary${suffix}`);
+  }
+
+  async searchStudents(queryRaw: string, limit = 10): Promise<StudentProfileListResponse> {
+    const query = new URLSearchParams({
+      q: queryRaw,
+      limit: String(Math.max(1, Math.min(500, limit))),
+      offset: '0',
+      order: 'asc',
+    });
+    return this.requestJson<StudentProfileListResponse>('GET', `/students?${query.toString()}`);
+  }
+
   async getFinishedJobs(limit: number): Promise<JobListResponse> {
     const safeLimit = Number.isInteger(limit) ? Math.max(1, Math.min(50, limit)) : 10;
-    const query = new URLSearchParams({
-      state: 'succeeded',
+    return this.listJobs({
+      states: ['succeeded'],
       order: 'desc',
-      limit: String(safeLimit),
+      limit: safeLimit,
     });
-    return this.requestJson<JobListResponse>('GET', `/admin/jobs?${query.toString()}`);
   }
 
   async getJob(jobId: string): Promise<JobStatusDto> {
