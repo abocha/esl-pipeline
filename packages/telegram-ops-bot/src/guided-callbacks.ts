@@ -1,11 +1,30 @@
 export type GuidedActionName = 'backup' | 'drill';
+export type JobsViewKey =
+  | 'gr'
+  | 'gf'
+  | 'gn'
+  | 'gs'
+  | 'ta'
+  | 'tf'
+  | 'tn'
+  | 'tw'
+  | 'ts'
+  | `sr:${string}`
+  | `sf:${string}`
+  | `ss:${string}`
+  | `q:${string}`;
 
 export type GuidedCallbackAction =
   | { kind: 'home' }
   | { kind: 'status' }
+  | { kind: 'today' }
   | { kind: 'finished' }
   | { kind: 'recent_ops' }
-  | { kind: 'job'; jobId: string }
+  | { kind: 'students_home' }
+  | { kind: 'students_page'; offset: number }
+  | { kind: 'jobs_view'; viewKey: JobsViewKey }
+  | { kind: 'student'; studentId: string }
+  | { kind: 'job'; jobId: string; backViewKey?: JobsViewKey }
   | { kind: 'op'; operationId: string }
   | { kind: 'job_links'; jobId: string }
   | { kind: 'job_share'; jobId: string }
@@ -22,14 +41,31 @@ export function encodeGuidedCallback(action: GuidedCallbackAction): string {
     case 'status': {
       return `${CALLBACK_VERSION}|s`;
     }
+    case 'today': {
+      return `${CALLBACK_VERSION}|t`;
+    }
     case 'finished': {
       return `${CALLBACK_VERSION}|f`;
     }
     case 'recent_ops': {
       return `${CALLBACK_VERSION}|r`;
     }
+    case 'students_home': {
+      return `${CALLBACK_VERSION}|sh`;
+    }
+    case 'students_page': {
+      return `${CALLBACK_VERSION}|sp|${action.offset}`;
+    }
+    case 'jobs_view': {
+      return `${CALLBACK_VERSION}|v|${action.viewKey}`;
+    }
+    case 'student': {
+      return `${CALLBACK_VERSION}|st|${action.studentId}`;
+    }
     case 'job': {
-      return `${CALLBACK_VERSION}|j|${action.jobId}`;
+      return action.backViewKey
+        ? `${CALLBACK_VERSION}|j|${action.jobId}|${action.backViewKey}`
+        : `${CALLBACK_VERSION}|j|${action.jobId}`;
     }
     case 'op': {
       return `${CALLBACK_VERSION}|o|${action.operationId}`;
@@ -50,8 +86,9 @@ export function encodeGuidedCallback(action: GuidedCallbackAction): string {
 }
 
 export function decodeGuidedCallback(value: string): GuidedCallbackAction | null {
-  const [version, kind, param, extra] = value.split('|');
-  if (version !== CALLBACK_VERSION || !kind || extra) {
+  const parts = value.split('|');
+  const [version, kind, ...rest] = parts;
+  if (version !== CALLBACK_VERSION || !kind) {
     return null;
   }
 
@@ -62,34 +99,70 @@ export function decodeGuidedCallback(value: string): GuidedCallbackAction | null
     case 's': {
       return { kind: 'status' };
     }
+    case 't': {
+      return rest.length === 0 ? { kind: 'today' } : null;
+    }
     case 'f': {
       return { kind: 'finished' };
     }
     case 'r': {
       return { kind: 'recent_ops' };
     }
+    case 'sh': {
+      return rest.length === 0 ? { kind: 'students_home' } : null;
+    }
+    case 'sp': {
+      if (rest.length !== 1) {
+        return null;
+      }
+      const offset = Number(rest[0]);
+      return Number.isInteger(offset) && offset >= 0 ? { kind: 'students_page', offset } : null;
+    }
+    case 'v': {
+      if (rest.length !== 1) {
+        return null;
+      }
+      const [viewKey] = rest;
+      return viewKey && isJobsViewKey(viewKey) ? { kind: 'jobs_view', viewKey } : null;
+    }
+    case 'st': {
+      return rest.length === 1 && rest[0] ? { kind: 'student', studentId: rest[0] } : null;
+    }
     case 'j': {
-      return param ? { kind: 'job', jobId: param } : null;
+      if (rest.length === 1 && rest[0]) {
+        return { kind: 'job', jobId: rest[0] };
+      }
+      const [jobId, backViewKey] = rest;
+      if (rest.length === 2 && jobId && backViewKey && isJobsViewKey(backViewKey)) {
+        return { kind: 'job', jobId, backViewKey };
+      }
+      return null;
     }
     case 'o': {
-      return param ? { kind: 'op', operationId: param } : null;
+      return rest.length === 1 && rest[0] ? { kind: 'op', operationId: rest[0] } : null;
     }
     case 'jl': {
-      return param ? { kind: 'job_links', jobId: param } : null;
+      return rest.length === 1 && rest[0] ? { kind: 'job_links', jobId: rest[0] } : null;
     }
     case 'js': {
-      return param ? { kind: 'job_share', jobId: param } : null;
+      return rest.length === 1 && rest[0] ? { kind: 'job_share', jobId: rest[0] } : null;
     }
     case 'a': {
-      return param === 'backup' || param === 'drill' ? { kind: 'action', action: param } : null;
+      return rest.length === 1 && (rest[0] === 'backup' || rest[0] === 'drill')
+        ? { kind: 'action', action: rest[0] }
+        : null;
     }
     case 'c': {
-      return param === 'backup' || param === 'drill'
-        ? { kind: 'confirm', action: param }
+      return rest.length === 1 && (rest[0] === 'backup' || rest[0] === 'drill')
+        ? { kind: 'confirm', action: rest[0] }
         : null;
     }
     default: {
       return null;
     }
   }
+}
+
+function isJobsViewKey(value: string): value is JobsViewKey {
+  return /^(gr|gf|gn|gs|ta|tf|tn|tw|ts|s[rfs]:[a-z0-9-]{1,16}|q:[a-z0-9_-]{22})$/i.test(value);
 }

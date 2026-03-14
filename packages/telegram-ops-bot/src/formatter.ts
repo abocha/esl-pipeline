@@ -1,12 +1,15 @@
 import type {
   JobListResponse,
+  JobSummaryResponse,
   JobStatusDto,
   OpsActionListResponse,
   OpsActionStatus,
   OpsStatusResponse,
+  StudentProfileDto,
+  StudentSummaryResponse,
 } from '@esl-pipeline/contracts';
 
-import type { CommandDefinition } from './types.js';
+import type { BotConfig, BotDomain, BotRuntimeSnapshot, CommandDefinition } from './types.js';
 
 const STUDY_TEXT_AUDIO_LINK_LABEL = 'Audio recording: Study Text';
 const PRONUNCIATION_AUDIO_LINK_LABEL = 'Audio recording: Pronunciation Shadow Sentence';
@@ -18,6 +21,69 @@ export function escapeHtml(value: string): string {
 function formatNullable(value: string | null | undefined): string {
   if (!value) return 'n/a';
   return value;
+}
+
+export function formatLocalizedDateTime(value: string | null | undefined): string {
+  if (!value) return 'n/a';
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) {
+    return value;
+  }
+  const iso = parsed.toISOString();
+  return `${iso.slice(0, 10)} ${iso.slice(11, 16)} UTC`;
+}
+
+function formatStudentDisplayName(job: Pick<JobStatusDto, 'studentId' | 'studentName'>): string {
+  return formatNullable(job.studentName?.trim() || job.studentId);
+}
+
+function formatShortIdentifier(value: string | null | undefined, length = 8): string | null {
+  const trimmed = value?.trim();
+  if (!trimmed) return null;
+  return trimmed.slice(0, length);
+}
+
+function formatStudentIdentity(job: Pick<JobStatusDto, 'studentId' | 'studentName'>): string {
+  const studentName = job.studentName?.trim();
+  const shortStudentId = formatShortIdentifier(job.studentId);
+  if (studentName && shortStudentId) {
+    return `${studentName} (${shortStudentId})`;
+  }
+  return formatStudentDisplayName(job);
+}
+
+function formatPreset(job: Pick<JobStatusDto, 'learningPresetId' | 'preset'>): string {
+  return formatNullable(job.learningPresetId ?? job.preset);
+}
+
+function formatJobTimestamp(job: Pick<JobStatusDto, 'finishedAt' | 'updatedAt' | 'createdAt'>): string {
+  return formatLocalizedDateTime(job.finishedAt ?? job.updatedAt ?? job.createdAt);
+}
+
+function formatJobListLine(job: JobStatusDto): string {
+  return [
+    `• <b>${escapeHtml(formatStudentIdentity(job))}</b>`,
+    `<b>State</b> ${escapeHtml(job.state)}`,
+    `<b>When</b> ${escapeHtml(formatJobTimestamp(job))}`,
+    `<b>Preset</b> ${escapeHtml(formatPreset(job))}`,
+    `<code>${escapeHtml(job.jobId)}</code>`,
+  ].join('\n');
+}
+
+function formatStudentSummaryLine(
+  student: StudentSummaryResponse['items'][number],
+): string {
+  const details: string[] = [];
+  if (student.lastLessonAt) {
+    details.push(`Last lesson ${formatLocalizedDateTime(student.lastLessonAt)}`);
+  }
+  if (student.pendingDrafts > 0) {
+    details.push(`Pending drafts ${student.pendingDrafts}`);
+  }
+  return [
+    `• <b>${escapeHtml(student.name)} (${escapeHtml(student.id.slice(0, 8))})</b>`,
+    details.length > 0 ? details.map((detail) => escapeHtml(detail)).join(' · ') : 'No recent activity',
+  ].join('\n');
 }
 
 export function formatHelp(commands: CommandDefinition[]): string {
@@ -83,27 +149,275 @@ export function formatOpsStatus(status: OpsStatusResponse): string {
 
 export function formatFinishedJobs(response: JobListResponse): string {
   if (response.jobs.length === 0) {
-    return '<b>Finished jobs</b>\n\nNo succeeded jobs found.';
+    return '<b>Jobs · Recent Finished</b>\n\nNo succeeded jobs found.';
   }
-
-  const lines = response.jobs.slice(0, 10).map((job) => {
-    const label = job.learningPresetId ?? job.preset ?? 'unknown';
-    return `• <code>${escapeHtml(job.jobId)}</code> — ${escapeHtml(label)} (${escapeHtml(job.finishedAt ?? job.updatedAt)})`;
-  });
-
-  return `<b>Finished jobs</b>\n\n${lines.join('\n')}`;
+  return [
+    '<b>Jobs · Recent Finished</b>',
+    '',
+    `<b>Showing</b> ${response.jobs.length} of ${response.total}`,
+    '',
+    response.jobs.slice(0, 10).map((job) => formatJobListLine(job)).join('\n\n'),
+  ].join('\n');
 }
 
-export function formatJobDetails(job: JobStatusDto): string {
+export function formatJobDetails(
+  job: JobStatusDto,
+  options?: {
+    assignmentTitle?: string | null;
+  },
+): string {
+  const assignmentTitle = normalizeAssignmentTitle(options?.assignmentTitle);
   return [
-    `<b>Job ${escapeHtml(job.state.toUpperCase())}</b>`,
+    `<b>Job · ${escapeHtml(job.state.toUpperCase())}</b>`,
     `<code>${escapeHtml(job.jobId)}</code>`,
     '',
-    `<b>Student</b> ${escapeHtml(formatNullable(job.studentId))}`,
-    `<b>Created</b> <code>${escapeHtml(job.createdAt)}</code>`,
-    `<b>Finished</b> <code>${escapeHtml(formatNullable(job.finishedAt))}</code>`,
+    `<b>Student</b> ${escapeHtml(formatStudentDisplayName(job))}`,
+    `<b>Homework</b> ${escapeHtml(formatNullable(assignmentTitle))}`,
+    `<b>Created</b> ${escapeHtml(formatLocalizedDateTime(job.createdAt))}`,
+    `<b>Finished</b> ${escapeHtml(formatLocalizedDateTime(job.finishedAt))}`,
     `<b>Preset</b> ${escapeHtml(formatNullable(job.learningPresetId ?? job.preset))}`,
     `<b>Error</b> ${escapeHtml(formatNullable(job.error))}`,
+  ].join('\n');
+}
+
+export function formatShareJobHeader(
+  job: JobStatusDto,
+  options?: {
+    assignmentTitle?: string | null;
+  },
+): string {
+  const assignmentTitle = normalizeAssignmentTitle(options?.assignmentTitle);
+  return [
+    '<b>Share package</b>',
+    `<b>Student</b> ${escapeHtml(formatStudentIdentity(job))}`,
+    `<b>Job</b> <code>${escapeHtml(job.jobId)}</code>`,
+    `<b>Created</b> ${escapeHtml(formatLocalizedDateTime(job.createdAt))}`,
+    `<b>Finished</b> ${escapeHtml(formatLocalizedDateTime(job.finishedAt ?? job.updatedAt))}`,
+    `<b>Homework</b> ${escapeHtml(formatNullable(assignmentTitle))}`,
+    `<b>Preset</b> ${escapeHtml(formatNullable(job.learningPresetId ?? job.preset))}`,
+  ].join('\n');
+}
+
+export function formatStudentNotFound(query: string): string {
+  return [
+    '<b>No student matched</b>',
+    '',
+    `No student matched <code>${escapeHtml(query)}</code>.`,
+    'Try a full name, UUID, or UUID prefix.',
+    'Examples: <code>/student Margarita</code> or <code>/student 72444fdf</code>',
+  ].join('\n');
+}
+
+export function formatStudentDisambiguation(args: {
+  query: string;
+  matches: StudentProfileDto[];
+  footer?: string;
+}): string {
+  const lines = args.matches.map(
+    (student) => `• <b>${escapeHtml(student.student)}</b> — <code>${escapeHtml(student.id.slice(0, 8))}</code>`,
+  );
+  return [
+    '<b>Multiple students matched</b>',
+    '',
+    `Query: <code>${escapeHtml(args.query)}</code>`,
+    ...lines,
+    ...(args.footer ? ['', escapeHtml(args.footer)] : []),
+  ].join('\n');
+}
+
+export function formatStudentSummary(args: {
+  student: StudentProfileDto;
+  latestJob: JobStatusDto | null;
+  latestAssignmentTitle: string | null;
+  recentJobs: JobStatusDto[];
+}): string {
+  const latest = args.latestJob;
+  const recentJobsSection =
+    args.recentJobs.length === 0
+      ? 'No jobs yet.'
+      : args.recentJobs
+          .map(
+            (job) =>
+              `• ${escapeHtml(job.state)} · ${escapeHtml(formatJobTimestamp(job))} · ${escapeHtml(formatPreset(job))} · <code>${escapeHtml(job.jobId.slice(0, 12))}</code>`,
+          )
+          .join('\n');
+
+  return [
+    `<b>${escapeHtml(args.student.student)} (${escapeHtml(args.student.id.slice(0, 8))})</b>`,
+    '',
+    `<b>Latest state</b> ${escapeHtml(latest?.state ?? 'n/a')}`,
+    `<b>Latest time</b> ${escapeHtml(latest ? formatJobTimestamp(latest) : 'n/a')}`,
+    `<b>Latest homework</b> ${escapeHtml(formatNullable(args.latestAssignmentTitle))}`,
+    '',
+    '<b>Recent jobs</b>',
+    recentJobsSection,
+  ].join('\n');
+}
+
+export function formatJobsQueryResults(args: {
+  response: JobListResponse;
+  normalizedFilters: string[];
+  title?: string;
+  footerLines?: string[];
+  emptyMessage?: string;
+}): string {
+  const title = args.title ?? 'Jobs';
+  const footerLines = args.footerLines ?? [];
+  const normalizedFilters = args.normalizedFilters.join(' ');
+  if (args.response.jobs.length === 0) {
+    return [
+      `<b>${escapeHtml(title)}</b>`,
+      '',
+      `<b>Filters</b> ${escapeHtml(normalizedFilters)}`,
+      escapeHtml(args.emptyMessage ?? 'No jobs matched.'),
+      ...(footerLines.length > 0 ? ['', ...footerLines.map((line) => escapeHtml(line))] : []),
+    ].join('\n');
+  }
+
+  return [
+    `<b>${escapeHtml(title)}</b>`,
+    '',
+    `<b>Filters</b> ${escapeHtml(normalizedFilters)}`,
+    `<b>Showing</b> ${args.response.jobs.length} of ${args.response.total}`,
+    '',
+    args.response.jobs.map((job) => formatJobListLine(job)).join('\n\n'),
+    ...(footerLines.length > 0 ? ['', ...footerLines.map((line) => escapeHtml(line))] : []),
+  ].join('\n');
+}
+
+export function formatTodaySummary(args: {
+  dateLabel: string;
+  summary: JobSummaryResponse;
+  failedJobs: JobStatusDto[];
+  runningJobs: JobStatusDto[];
+  succeededJobs: JobStatusDto[];
+}): string {
+  const attentionLines: string[] = [];
+  if ((args.summary.byState.failed ?? 0) > 0) {
+    attentionLines.push(`• Failed: ${args.summary.byState.failed}`);
+  }
+  if ((args.summary.byState.running ?? 0) > 0) {
+    attentionLines.push(`• Running: ${args.summary.byState.running}`);
+  }
+  if ((args.summary.byState.awaiting_approval ?? 0) > 0) {
+    attentionLines.push(`• Awaiting approval: ${args.summary.byState.awaiting_approval}`);
+  }
+
+  return [
+    `<b>Today · ${escapeHtml(args.dateLabel)} UTC</b>`,
+    '',
+    `<b>Total</b> ${args.summary.total}`,
+    `<b>Succeeded</b> ${args.summary.byState.succeeded ?? 0}`,
+    `<b>Failed</b> ${args.summary.byState.failed ?? 0}`,
+    `<b>Running</b> ${args.summary.byState.running ?? 0}`,
+    `<b>Queued</b> ${args.summary.byState.queued ?? 0}`,
+    `<b>Awaiting approval</b> ${args.summary.byState.awaiting_approval ?? 0}`,
+    ...(attentionLines.length > 0 ? ['', '<b>Attention</b>', ...attentionLines] : []),
+    ...(args.succeededJobs.length > 0
+      ? ['', '<b>Recent finished</b>', ...args.succeededJobs.map((job) => `• ${escapeHtml(formatStudentIdentity(job))} · ${escapeHtml(formatJobTimestamp(job))} · <code>${escapeHtml(job.jobId.slice(0, 12))}</code>`)]
+      : []),
+    ...(args.failedJobs.length > 0
+      ? ['', '<b>Recent failures</b>', ...args.failedJobs.map((job) => `• ${escapeHtml(formatStudentIdentity(job))} · ${escapeHtml(formatJobTimestamp(job))} · ${escapeHtml(formatNullable(job.error))}`)]
+      : []),
+    ...(args.runningJobs.length > 0
+      ? ['', '<b>Running now</b>', ...args.runningJobs.map((job) => `• ${escapeHtml(formatStudentIdentity(job))} · ${escapeHtml(formatJobTimestamp(job))} · <code>${escapeHtml(job.jobId.slice(0, 12))}</code>`)]
+      : []),
+    '',
+    '<b>Follow up</b>',
+    '<code>/jobs state:failed since:today</code>',
+    '<code>/jobs state:running</code>',
+  ].join('\n');
+}
+
+export function formatBotStatusReport(args: {
+  runtimeSnapshot: BotRuntimeSnapshot;
+  config: BotConfig;
+  backendReachable: boolean;
+  backendError: string | null;
+  topicStates: {
+    domain: BotDomain;
+    threadId?: number;
+    routing: 'topic' | 'default' | 'unresolved';
+  }[];
+}): string {
+  const healthy = args.runtimeSnapshot.initialized && args.backendReachable;
+  const warnings: string[] = [];
+  if (!args.runtimeSnapshot.initialized) {
+    warnings.push('• Runtime not fully initialized');
+  }
+  if (!args.backendReachable) {
+    warnings.push(`• Backend check failed: ${args.backendError ?? 'unknown error'}`);
+  }
+  for (const topic of args.topicStates) {
+    if (topic.routing === 'default') {
+      warnings.push(`• ${topic.domain} is using default thread routing`);
+    }
+    if (topic.routing === 'unresolved') {
+      warnings.push(`• ${topic.domain} has no resolved topic/default thread`);
+    }
+  }
+
+  const topicLines = args.topicStates.map((topic) => {
+    const label =
+      topic.routing === 'topic'
+        ? `${topic.threadId}`
+        : topic.routing === 'default'
+          ? `${topic.threadId} (default)`
+          : 'unresolved';
+    return `• ${topic.domain}: ${escapeHtml(label)}`;
+  });
+
+  return [
+    `<b>${healthy ? '✅' : '⚠️'} Bot status: ${healthy ? 'healthy' : 'degraded'}</b>`,
+    '',
+    '<b>Bot</b>',
+    `• Username: ${escapeHtml(formatNullable(args.runtimeSnapshot.botUsername))}`,
+    `• Mode: ${escapeHtml(args.runtimeSnapshot.mode)}`,
+    `• Actions: ${escapeHtml(args.config.enableActionCommands ? 'enabled' : 'read-only')}`,
+    '',
+    `<b>${args.runtimeSnapshot.mode === 'polling' ? 'Polling' : 'Webhook'}</b>`,
+    ...(args.runtimeSnapshot.mode === 'polling'
+      ? [
+          `• Poll interval: ${args.config.pollIntervalMs} ms`,
+          `• Poll timeout: ${args.config.pollTimeoutSeconds} s`,
+          `• Leader election: ${args.config.leaderElectionEnabled ? 'enabled' : 'disabled'}`,
+          `• Leadership: ${escapeHtml(args.runtimeSnapshot.leadershipState)}`,
+        ]
+      : [
+          `• Host: ${escapeHtml(args.config.webhookHost)}`,
+          `• Port: ${args.config.webhookPort}`,
+          `• Path: <code>${escapeHtml(args.config.webhookPath)}</code>`,
+          `• Secret token: ${args.config.webhookSecretToken ? 'configured' : 'not configured'}`,
+        ]),
+    '',
+    '<b>Backend</b>',
+    `• Reachable: ${args.backendReachable ? 'yes' : 'no'}`,
+    ...(args.backendError ? [`• Error: ${escapeHtml(args.backendError)}`] : []),
+    '',
+    '<b>Topics</b>',
+    ...topicLines,
+    ...(warnings.length > 0 ? ['', '<b>Warnings</b>', ...warnings.map((line) => escapeHtml(line))] : []),
+  ].join('\n');
+}
+
+export function formatStudentsBrowser(args: {
+  response: StudentSummaryResponse;
+  page: number;
+}): string {
+  if (args.response.items.length === 0) {
+    return [
+      `<b>Students · Page ${args.page}</b>`,
+      '',
+      'No students found.',
+    ].join('\n');
+  }
+
+  return [
+    `<b>Students · Page ${args.page}</b>`,
+    '',
+    `<b>Showing</b> ${args.response.items.length} of ${args.response.total}`,
+    '',
+    args.response.items.map((student) => formatStudentSummaryLine(student)).join('\n\n'),
   ].join('\n');
 }
 

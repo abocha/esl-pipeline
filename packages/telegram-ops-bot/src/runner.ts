@@ -12,6 +12,7 @@ import type {
   BotDomain,
   BotConfig,
   CommandContext,
+  BotRuntimeSnapshot,
   PollLeaderElection,
   TelegramInlineKeyboardMarkup,
   TelegramMessenger,
@@ -89,11 +90,26 @@ function callbackMetricLabel(data: string): string {
     case 's': {
       return 'status';
     }
+    case 't': {
+      return 'today';
+    }
     case 'f': {
       return 'finished';
     }
     case 'r': {
       return 'recent_ops';
+    }
+    case 'sh': {
+      return 'students_home';
+    }
+    case 'sp': {
+      return 'students_page';
+    }
+    case 'v': {
+      return 'jobs_view';
+    }
+    case 'st': {
+      return 'student';
     }
     case 'j': {
       return 'job';
@@ -292,6 +308,19 @@ export class TelegramOpsBotRunner {
     }
     await this.topicRouter.initialize();
     this.initialized = true;
+  }
+
+  private buildRuntimeSnapshot(): BotRuntimeSnapshot {
+    const leadershipState =
+      this.config.mode === 'webhook' || !this.leaderElection
+        ? 'not_applicable'
+        : (this.leadershipState ?? 'unknown');
+    return {
+      initialized: this.initialized,
+      botUsername: this.botUsername,
+      mode: this.config.mode,
+      leadershipState,
+    };
   }
 
   private async maybeApplyStartupReplayGuard(canPollThisCycle: boolean): Promise<void> {
@@ -506,6 +535,7 @@ export class TelegramOpsBotRunner {
     const context: CommandContext = {
       config: this.config,
       backend: this.backend,
+      runtimeSnapshot: this.buildRuntimeSnapshot(),
       messenger: this.messenger,
       topicRouter: this.topicRouter,
       audit: this.audit,
@@ -687,6 +717,7 @@ export class TelegramOpsBotRunner {
     const context: CommandContext = {
       config: this.config,
       backend: this.backend,
+      runtimeSnapshot: this.buildRuntimeSnapshot(),
       messenger: this.messenger,
       topicRouter: this.topicRouter,
       audit: this.audit,

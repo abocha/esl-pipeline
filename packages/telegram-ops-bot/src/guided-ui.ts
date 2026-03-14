@@ -3,9 +3,13 @@ import {
   executeDrillAction,
   loadFinishedJobsView,
   loadJobDetailsView,
+  loadJobsViewFromKey,
   loadOperationDetailsView,
   loadOpsStatusView,
   loadRecentOpsView,
+  loadStudentView,
+  loadStudentsView,
+  loadTodayView,
   renderGuidedActionConfirmation,
   renderGuidedActionSubmitted,
   renderGuidedHome,
@@ -67,8 +71,44 @@ export async function handleGuidedCallback(args: {
         replyMarkup: view.replyMarkup,
       };
     }
+    case 'today': {
+      const view = await loadTodayView(withCommand(args.context, 'today'));
+      return {
+        kind: 'render',
+        domain: 'jobs',
+        html: view.html,
+        replyMarkup: view.replyMarkup,
+      };
+    }
     case 'finished': {
       const view = await loadFinishedJobsView(withCommand(args.context, 'finished'));
+      return {
+        kind: 'render',
+        domain: 'jobs',
+        html: view.html,
+        replyMarkup: view.replyMarkup,
+      };
+    }
+    case 'students_home': {
+      const view = await loadStudentsView(withCommand(args.context, 'students'), 0);
+      return {
+        kind: 'render',
+        domain: 'jobs',
+        html: view.html,
+        replyMarkup: view.replyMarkup,
+      };
+    }
+    case 'students_page': {
+      const view = await loadStudentsView(withCommand(args.context, 'students'), action.offset);
+      return {
+        kind: 'render',
+        domain: 'jobs',
+        html: view.html,
+        replyMarkup: view.replyMarkup,
+      };
+    }
+    case 'jobs_view': {
+      const view = await loadJobsViewFromKey(withCommand(args.context, 'jobs'), action.viewKey);
       return {
         kind: 'render',
         domain: 'jobs',
@@ -85,8 +125,24 @@ export async function handleGuidedCallback(args: {
         replyMarkup: view.replyMarkup,
       };
     }
+    case 'student': {
+      const view = await loadStudentView(
+        withCommand(args.context, 'student', [action.studentId]),
+        action.studentId,
+      );
+      return {
+        kind: 'render',
+        domain: 'jobs',
+        html: view.html,
+        replyMarkup: view.replyMarkup,
+      };
+    }
     case 'job': {
-      const view = await loadJobDetailsView(withCommand(args.context, 'job', [action.jobId]), action.jobId);
+      const view = await loadJobDetailsView(
+        withCommand(args.context, 'job', [action.jobId]),
+        action.jobId,
+        action.backViewKey,
+      );
       return {
         kind: 'render',
         domain: 'jobs',

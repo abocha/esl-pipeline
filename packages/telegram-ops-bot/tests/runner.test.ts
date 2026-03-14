@@ -143,6 +143,10 @@ function createRunner(args?: {
     enqueueOpsAction: ReturnType<typeof vi.fn>;
     getOpsActionStatus: ReturnType<typeof vi.fn>;
     listOpsActions: ReturnType<typeof vi.fn>;
+    listJobs: ReturnType<typeof vi.fn>;
+    getAdminJobSummary: ReturnType<typeof vi.fn>;
+    listStudentSummaries: ReturnType<typeof vi.fn>;
+    searchStudents: ReturnType<typeof vi.fn>;
     getFinishedJobs: ReturnType<typeof vi.fn>;
     getJob: ReturnType<typeof vi.fn>;
   }>;
@@ -161,6 +165,10 @@ function createRunner(args?: {
     enqueueOpsAction: ReturnType<typeof vi.fn>;
     getOpsActionStatus: ReturnType<typeof vi.fn>;
     listOpsActions: ReturnType<typeof vi.fn>;
+    listJobs: ReturnType<typeof vi.fn>;
+    getAdminJobSummary: ReturnType<typeof vi.fn>;
+    listStudentSummaries: ReturnType<typeof vi.fn>;
+    searchStudents: ReturnType<typeof vi.fn>;
     getFinishedJobs: ReturnType<typeof vi.fn>;
     getJob: ReturnType<typeof vi.fn>;
   };
@@ -195,6 +203,10 @@ function createRunner(args?: {
     enqueueOpsAction: args?.backend?.enqueueOpsAction ?? vi.fn(),
     getOpsActionStatus: args?.backend?.getOpsActionStatus ?? vi.fn(),
     listOpsActions: args?.backend?.listOpsActions ?? vi.fn(),
+    listJobs: args?.backend?.listJobs ?? vi.fn(),
+    getAdminJobSummary: args?.backend?.getAdminJobSummary ?? vi.fn(),
+    listStudentSummaries: args?.backend?.listStudentSummaries ?? vi.fn(),
+    searchStudents: args?.backend?.searchStudents ?? vi.fn(),
     getFinishedJobs: args?.backend?.getFinishedJobs ?? vi.fn(),
     getJob: args?.backend?.getJob ?? vi.fn(),
   };
@@ -666,6 +678,236 @@ describe('telegram runner webhook mode', () => {
     expect(sendHtmlMessage).toHaveBeenCalledTimes(0);
   });
 
+  it('renders guided student callbacks by editing the existing jobs message', async () => {
+    const editHtmlMessage = vi.fn(async () => true);
+    const answerCallbackQuery = vi.fn(async () => true);
+    const searchStudents = vi
+      .fn()
+      .mockResolvedValueOnce({
+        items: [{ id: '72444fdf-4abe-43ce-9166-5a1529c2e6cb', student: 'Margarita' }],
+        total: 1,
+        limit: 10,
+        offset: 0,
+        order: 'asc',
+      });
+    const listJobs = vi.fn(async () => ({
+      jobs: [
+        createJob({
+          jobId: 'job-student-1',
+          studentId: '72444fdf-4abe-43ce-9166-5a1529c2e6cb',
+          studentName: 'Margarita',
+          md: '# Homework Assignment: The Cafe & The Adjective Trap',
+          learningPresetId: 'general-english',
+          finishedAt: '2026-03-14T08:47:06.373Z',
+        }),
+      ],
+      total: 1,
+      limit: 5,
+      offset: 0,
+    }));
+    const { runner, sendHtmlMessage } = createRunner({
+      editHtmlMessage,
+      answerCallbackQuery,
+      backend: {
+        searchStudents,
+        listJobs,
+      },
+    });
+
+    await processUpdate(
+      runner,
+      createCallbackUpdate('a4|st|72444fdf-4abe-43ce-9166-5a1529c2e6cb', {
+        chatId: 123,
+        chatType: 'supergroup',
+      }),
+    );
+
+    expect(answerCallbackQuery).toHaveBeenCalledTimes(1);
+    expect(searchStudents).toHaveBeenCalledWith('72444fdf-4abe-43ce-9166-5a1529c2e6cb', 500);
+    expect(listJobs).toHaveBeenCalledWith({
+      studentId: '72444fdf-4abe-43ce-9166-5a1529c2e6cb',
+      order: 'desc',
+      limit: 5,
+    });
+    expect(editHtmlMessage).toHaveBeenCalledTimes(1);
+    const firstEditCall = editHtmlMessage.mock.calls[0] as
+      | [{ html: string; replyMarkup?: { inline_keyboard: { text: string }[][] } }]
+      | undefined;
+    expect(firstEditCall?.[0].html).toContain('Margarita (72444fdf)');
+    expect(firstEditCall?.[0].replyMarkup?.inline_keyboard).toEqual(
+      expect.arrayContaining([
+        expect.arrayContaining([
+          expect.objectContaining({ text: 'Recent Jobs' }),
+          expect.objectContaining({ text: 'Failed' }),
+          expect.objectContaining({ text: 'Succeeded' }),
+        ]),
+        expect.arrayContaining([
+          expect.objectContaining({ text: 'Latest Job' }),
+          expect.objectContaining({ text: 'Share Latest' }),
+        ]),
+      ]),
+    );
+    expect(sendHtmlMessage).toHaveBeenCalledTimes(0);
+  });
+
+  it('preserves filtered /jobs context when opening job details', async () => {
+    const searchStudents = vi.fn(async () => ({
+      items: [{ id: 'student-1', student: 'Mary Jane' }],
+      total: 1,
+      limit: 500,
+      offset: 0,
+      order: 'asc',
+    }));
+    const listJobs = vi.fn(async () => ({
+      jobs: [
+        createJob({
+          jobId: 'job-filter-1',
+          studentId: 'student-1',
+          studentName: 'Mary Jane',
+          state: 'failed',
+        }),
+      ],
+      total: 1,
+      limit: 10,
+      offset: 0,
+    }));
+    const getJob = vi.fn(async () =>
+      createJob({
+        jobId: 'job-filter-1',
+        studentId: 'student-1',
+        studentName: 'Mary Jane',
+        state: 'failed',
+      }),
+    );
+    const editHtmlMessage = vi.fn(async () => true);
+    const answerCallbackQuery = vi.fn(async () => true);
+    const { runner, sendHtmlMessage } = createRunner({
+      editHtmlMessage,
+      answerCallbackQuery,
+      backend: {
+        searchStudents,
+        listJobs,
+        getJob,
+      },
+    });
+
+    await processUpdate(
+      runner,
+      createUpdate('/jobs state:failed student:"Mary Jane"', {
+        chatId: 123,
+        chatType: 'supergroup',
+      }),
+    );
+
+    const firstReplyMarkup = sendHtmlMessage.mock.calls[0]?.[0]?.replyMarkup as
+      | { inline_keyboard: { callback_data: string }[][] }
+      | undefined;
+    const jobCallbackData = firstReplyMarkup?.inline_keyboard[0]?.[0]?.callback_data;
+    expect(jobCallbackData).toMatch(/^a4\|j\|job-filter-1\|q:[a-z0-9_-]{22}$/);
+
+    await processUpdate(
+      runner,
+      createCallbackUpdate(jobCallbackData ?? '', {
+        chatId: 123,
+        chatType: 'supergroup',
+      }),
+    );
+
+    const firstEditCall = editHtmlMessage.mock.calls[0] as
+      | [{ replyMarkup?: { inline_keyboard: { text: string; callback_data: string }[][] } }]
+      | undefined;
+    const jobDetailsMarkup = firstEditCall?.[0]?.replyMarkup;
+    const backButton = jobDetailsMarkup?.inline_keyboard[1]?.find((button) => button.text === 'Back');
+    expect(backButton?.callback_data).toMatch(/^a4\|v\|q:[a-z0-9_-]{22}$/);
+  });
+
+  it('renders guided students browser callbacks with paging controls', async () => {
+    const editHtmlMessage = vi.fn(async () => true);
+    const answerCallbackQuery = vi.fn(async () => true);
+    const listStudentSummaries = vi.fn(async () => ({
+      items: [
+        {
+          id: '72444fdf-4abe-43ce-9166-5a1529c2e6cb',
+          name: 'Margarita',
+          lastLessonAt: '2026-03-14T08:47:06.373Z',
+          pendingDrafts: 1,
+        },
+      ],
+      total: 11,
+      limit: 10,
+      offset: 0,
+    }));
+    const { runner } = createRunner({
+      editHtmlMessage,
+      answerCallbackQuery,
+      backend: {
+        listStudentSummaries,
+      },
+    });
+
+    await processUpdate(
+      runner,
+      createCallbackUpdate('a4|sh', {
+        chatId: 123,
+        chatType: 'supergroup',
+      }),
+    );
+
+    expect(answerCallbackQuery).toHaveBeenCalledTimes(1);
+    expect(listStudentSummaries).toHaveBeenCalledWith({
+      limit: 10,
+      offset: 0,
+      order: 'desc',
+    });
+    const firstEditCall = editHtmlMessage.mock.calls[0] as
+      | [{ html: string; replyMarkup?: { inline_keyboard: { text: string }[][] } }]
+      | undefined;
+    expect(firstEditCall?.[0].html).toContain('Students · Page 1');
+    expect(firstEditCall?.[0].replyMarkup?.inline_keyboard).toEqual(
+      expect.arrayContaining([
+        [expect.objectContaining({ text: 'Margarita · 72444fdf' })],
+        expect.arrayContaining([expect.objectContaining({ text: 'Next' })]),
+      ]),
+    );
+  });
+
+  it('keeps legacy job_links callbacks working by routing them through share', async () => {
+    const answerCallbackQuery = vi.fn(async () => true);
+    const sendHtmlMessage = vi.fn(async (payload: { chatId: string; html: string }) => ({
+      message_id: 88,
+      date: 1_700_000_000,
+      chat: { id: Number(payload.chatId), type: 'supergroup', title: 'Ops Chat' },
+      text: payload.html,
+    }));
+    const { runner } = createRunner({
+      sendHtmlMessage,
+      answerCallbackQuery,
+      backend: {
+        getJob: vi.fn(async () =>
+          createJob({
+            jobId: 'job-legacy-links',
+            htmlUrl: 'https://example.com/share.html',
+            studentId: 'student-1',
+            studentName: 'Mary Jane',
+          }),
+        ),
+      },
+    });
+
+    await processUpdate(
+      runner,
+      createCallbackUpdate('a4|jl|job-legacy-links', {
+        chatId: 123,
+        chatType: 'supergroup',
+      }),
+    );
+
+    expect(answerCallbackQuery).toHaveBeenCalledTimes(1);
+    expect(sendHtmlMessage).toHaveBeenCalledTimes(3);
+    expect(sendHtmlMessage.mock.calls[0]?.[0].html).toContain('Use <code>/share</code> going forward.');
+    expect(sendHtmlMessage.mock.calls[1]?.[0].html).toContain('<b>Share package</b>');
+  });
+
   it('falls back to a replacement message when callback edits are unavailable', async () => {
     const editHtmlMessage = vi.fn(async () => {
       throw new TelegramApiError("Bad Request: message can't be edited", 'editMessageText', 400);
@@ -943,12 +1185,14 @@ describe('telegram runner /share smoke', () => {
 
     expect(backend.getJob).toHaveBeenCalledWith('job-md-first');
     expect(fetchSpy).not.toHaveBeenCalled();
-    expect(sendHtmlMessage).toHaveBeenCalledTimes(3);
+    expect(sendHtmlMessage).toHaveBeenCalledTimes(4);
     expect(sendHtmlMessage.mock.calls[0]?.[0].disableLinkPreview).toBe(true);
-    expect(sendHtmlMessage.mock.calls[1]?.[0].disableLinkPreview).toBe(false);
+    expect(sendHtmlMessage.mock.calls[0]?.[0].html).toContain('<b>Share package</b>');
+    expect(sendHtmlMessage.mock.calls[1]?.[0].disableLinkPreview).toBe(true);
     expect(sendHtmlMessage.mock.calls[2]?.[0].disableLinkPreview).toBe(false);
-    expect(sendHtmlMessage.mock.calls[1]?.[0].html).toContain('🎧 Listen 1: Study Text');
-    expect(sendHtmlMessage.mock.calls[2]?.[0].html).toContain('🗣️ Listen 2: Pronunciation');
+    expect(sendHtmlMessage.mock.calls[3]?.[0].disableLinkPreview).toBe(false);
+    expect(sendHtmlMessage.mock.calls[2]?.[0].html).toContain('🎧 Listen 1: Study Text');
+    expect(sendHtmlMessage.mock.calls[3]?.[0].html).toContain('🗣️ Listen 2: Pronunciation');
     expect(auditLog).toHaveBeenCalledWith(
       expect.objectContaining({
         event: 'share_path_telemetry',
@@ -1003,10 +1247,11 @@ describe('telegram runner /share smoke', () => {
     );
 
     expect(fetchSpy).toHaveBeenCalledOnce();
-    expect(sendHtmlMessage).toHaveBeenCalledTimes(3);
-    expect(sendHtmlMessage.mock.calls[0]?.[0].html).toContain('🏢 Homework Assignment: Html Fallback');
-    expect(sendHtmlMessage.mock.calls[1]?.[0].html).toContain('audio/final/html-study.mp3');
-    expect(sendHtmlMessage.mock.calls[2]?.[0].html).toContain(
+    expect(sendHtmlMessage).toHaveBeenCalledTimes(4);
+    expect(sendHtmlMessage.mock.calls[0]?.[0].html).toContain('<b>Share package</b>');
+    expect(sendHtmlMessage.mock.calls[1]?.[0].html).toContain('🏢 Homework Assignment: Html Fallback');
+    expect(sendHtmlMessage.mock.calls[2]?.[0].html).toContain('audio/final/html-study.mp3');
+    expect(sendHtmlMessage.mock.calls[3]?.[0].html).toContain(
       'audio/pronunciation-shadow/html-pron.mp3',
     );
     expect(auditLog).toHaveBeenCalledWith(
@@ -1058,16 +1303,17 @@ describe('telegram runner /share smoke', () => {
     );
 
     expect(fetchSpy).toHaveBeenCalledOnce();
-    expect(sendHtmlMessage).toHaveBeenCalledTimes(3);
+    expect(sendHtmlMessage).toHaveBeenCalledTimes(4);
     expect(sendHtmlMessage.mock.calls[0]?.[0].disableLinkPreview).toBe(true);
-    expect(sendHtmlMessage.mock.calls[1]?.[0].disableLinkPreview).toBe(false);
+    expect(sendHtmlMessage.mock.calls[1]?.[0].disableLinkPreview).toBe(true);
     expect(sendHtmlMessage.mock.calls[2]?.[0].disableLinkPreview).toBe(false);
-    expect(sendHtmlMessage.mock.calls[1]?.[0].html).toContain('audio/final/md-path-study.mp3');
-    expect(sendHtmlMessage.mock.calls[2]?.[0].html).toContain(
+    expect(sendHtmlMessage.mock.calls[3]?.[0].disableLinkPreview).toBe(false);
+    expect(sendHtmlMessage.mock.calls[2]?.[0].html).toContain('audio/final/md-path-study.mp3');
+    expect(sendHtmlMessage.mock.calls[3]?.[0].html).toContain(
       'audio/pronunciation-shadow/md-path-pron.mp3',
     );
-    expect(sendHtmlMessage.mock.calls[1]?.[0].html).not.toContain('html-should-not-win.mp3');
     expect(sendHtmlMessage.mock.calls[2]?.[0].html).not.toContain('html-should-not-win.mp3');
+    expect(sendHtmlMessage.mock.calls[3]?.[0].html).not.toContain('html-should-not-win.mp3');
     expect(auditLog).toHaveBeenCalledWith(
       expect.objectContaining({
         event: 'share_path_telemetry',
@@ -1106,8 +1352,9 @@ describe('telegram runner /share smoke', () => {
 
     await processUpdate(runner, createUpdate('/share job-no-audio', { chatId: 123, chatType: 'supergroup' }));
 
-    expect(sendHtmlMessage).toHaveBeenCalledTimes(1);
-    expect(sendHtmlMessage.mock.calls[0]?.[0].disableLinkPreview).toBe(true);
+    expect(sendHtmlMessage).toHaveBeenCalledTimes(2);
+    expect(sendHtmlMessage.mock.calls[0]?.[0].html).toContain('<b>Share package</b>');
+    expect(sendHtmlMessage.mock.calls[1]?.[0].disableLinkPreview).toBe(true);
     expect(auditLog).toHaveBeenCalledWith(
       expect.objectContaining({
         event: 'share_path_telemetry',
@@ -1160,10 +1407,11 @@ describe('telegram runner /share smoke', () => {
       staleThreadId: 333,
     });
     expect(healStaleThread).toHaveBeenCalledTimes(1);
-    expect(sendHtmlMessage).toHaveBeenCalledTimes(3);
+    expect(sendHtmlMessage).toHaveBeenCalledTimes(4);
     expect(sendHtmlMessage.mock.calls[0]?.[0].threadId).toBe(333);
     expect(sendHtmlMessage.mock.calls[1]?.[0].threadId).toBe(999);
     expect(sendHtmlMessage.mock.calls[2]?.[0].threadId).toBeUndefined();
+    expect(sendHtmlMessage.mock.calls[3]?.[0].threadId).toBe(333);
     expect(auditLog).toHaveBeenCalledWith(
       expect.objectContaining({
         event: 'topic_stale_detected',
@@ -1209,9 +1457,10 @@ describe('telegram runner /share smoke', () => {
     );
 
     expect(healStaleThread).toHaveBeenCalledTimes(1);
-    expect(sendHtmlMessage).toHaveBeenCalledTimes(2);
+    expect(sendHtmlMessage).toHaveBeenCalledTimes(3);
     expect(sendHtmlMessage.mock.calls[0]?.[0].threadId).toBe(333);
     expect(sendHtmlMessage.mock.calls[1]?.[0].threadId).toBe(444);
+    expect(sendHtmlMessage.mock.calls[2]?.[0].threadId).toBe(333);
     expect(auditLog).toHaveBeenCalledWith(
       expect.objectContaining({
         event: 'topic_recreated',

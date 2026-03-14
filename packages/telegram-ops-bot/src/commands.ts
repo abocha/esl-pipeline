@@ -1,7 +1,15 @@
 import { createHash, createHmac, randomUUID, timingSafeEqual } from 'node:crypto';
 import { readFile } from 'node:fs/promises';
 
-import type { JobListResponse, OpsActionListResponse, OpsActionRequest } from '@esl-pipeline/contracts';
+import type {
+  JobListResponse,
+  JobState,
+  JobStatusDto,
+  OpsActionListResponse,
+  OpsActionRequest,
+  StudentProfileDto,
+  StudentSummaryResponse,
+} from '@esl-pipeline/contracts';
 
 import {
   type ApprovalReplayStore,
@@ -11,21 +19,30 @@ import {
   formatActionQueued,
   formatActionStatus,
   formatAudioPlaybackLink,
+  formatBotStatusReport,
   formatCommandError,
   formatFinishedJobs,
   formatGuidedHelpHome,
   formatGuidedActionConfirmation,
   formatGuidedActionSubmitted,
   formatHelpWithOptions,
+  formatJobsQueryResults,
   formatJobDetails,
   formatJobLinks,
+  formatShareJobHeader,
   formatOpsStatus,
   formatRecentOpsActions,
   formatStartMessage,
+  formatStudentDisambiguation,
+  formatStudentNotFound,
+  formatStudentSummary,
+  formatStudentsBrowser,
+  formatTodaySummary,
 } from './formatter.js';
-import { encodeGuidedCallback } from './guided-callbacks.js';
+import { type JobsViewKey, encodeGuidedCallback } from './guided-callbacks.js';
 import { emitBotMetricCounter } from './metrics.js';
 import type {
+  BotDomain,
   CommandContext,
   CommandDefinition,
   ParsedCommand,
@@ -49,7 +66,155 @@ interface PendingAdvancedApproval {
 
 const ADVANCED_APPROVAL_TTL_MS = 10 * 60 * 1000;
 const ADVANCED_APPROVAL_TOKEN_VERSION = 1;
+const STUDENTS_PAGE_SIZE = 10;
+const STUDENT_RESOLUTION_LIMIT = 500;
+const COMPACT_JOBS_VIEW_VERSION = '1';
+const COMPACT_JOBS_VIEW_EMPTY_DAY = 'zzz';
+const COMPACT_JOBS_VIEW_EMPTY_STUDENT = '____________';
+const MS_PER_DAY = 24 * 60 * 60 * 1000;
+const EXACT_UUID_REGEX =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const defaultApprovalReplayStore = new InMemoryApprovalReplayStore();
+
+interface StudentMatchResult {
+  status: 'none' | 'single' | 'multiple';
+  matches: StudentProfileDto[];
+}
+
+interface StudentViewModel {
+  student: StudentProfileDto;
+  jobs: JobStatusDto[];
+  latestJob: JobStatusDto | null;
+  latestAssignmentTitle: string | null;
+}
+
+interface StudentSummaryViewModel {
+  response: StudentSummaryResponse;
+  page: number;
+  offset: number;
+}
+
+interface ParsedJobsFilter {
+  states?: JobState[];
+  studentQuery?: string;
+  from?: string;
+  to?: string;
+  limit: number;
+  order: 'asc' | 'desc';
+  normalizedTokens: string[];
+}
+
+interface JobsViewOptions {
+  title?: string;
+  footerLines?: string[];
+  emptyMessage?: string;
+  viewKey?: JobsViewKey;
+  keyboardScope?: 'global' | 'today' | 'student';
+  backToStudentId?: string;
+}
+
+const JOB_STATE_BIT_BY_STATE: Record<JobState, number> = {
+  queued: 1,
+  running: 2,
+  awaiting_approval: 4,
+  succeeded: 8,
+  failed: 16,
+};
+
+const JOB_STATE_ORDER: readonly JobState[] = [
+  'queued',
+  'running',
+  'awaiting_approval',
+  'succeeded',
+  'failed',
+];
+
+function toCompactStudentRef(studentId: string): string {
+  return studentId.slice(0, 12).toLowerCase().padEnd(12, '_');
+}
+
+function encodeDayCode(iso: string | undefined): string {
+  if (!iso) {
+    return COMPACT_JOBS_VIEW_EMPTY_DAY;
+  }
+  const parsed = Date.parse(iso);
+  if (Number.isNaN(parsed)) {
+    throw new TypeError(`Cannot encode jobs view day from ${iso}.`);
+  }
+  return Math.floor(parsed / MS_PER_DAY)
+    .toString(36)
+    .padStart(3, '0')
+    .slice(-3);
+}
+
+function decodeDayCode(dayCode: string): string | null {
+  if (dayCode === COMPACT_JOBS_VIEW_EMPTY_DAY) {
+    return null;
+  }
+  const daysSinceEpoch = Number.parseInt(dayCode, 36);
+  if (!Number.isFinite(daysSinceEpoch) || daysSinceEpoch < 0) {
+    throw new Error(`Invalid jobs view day code: ${dayCode}`);
+  }
+  return new Date(daysSinceEpoch * MS_PER_DAY).toISOString();
+}
+
+function encodeJobStateMask(states: JobState[] | undefined): string {
+  const mask = (states ?? []).reduce((value, state) => value | JOB_STATE_BIT_BY_STATE[state], 0);
+  return mask.toString(36);
+}
+
+function decodeJobStateMask(maskCode: string): JobState[] | undefined {
+  const mask = Number.parseInt(maskCode, 36);
+  if (!Number.isFinite(mask) || mask < 0 || mask > 31) {
+    throw new Error(`Invalid jobs view state mask: ${maskCode}`);
+  }
+  const states = JOB_STATE_ORDER.filter((state) => (mask & JOB_STATE_BIT_BY_STATE[state]) !== 0);
+  return states.length > 0 ? states : undefined;
+}
+
+function buildAdHocJobsViewKey(
+  parsed: ParsedJobsFilter,
+  options: JobsViewOptions,
+): JobsViewKey {
+  const limitCode = parsed.limit.toString(36);
+  const studentCode = options.backToStudentId
+    ? toCompactStudentRef(options.backToStudentId)
+    : COMPACT_JOBS_VIEW_EMPTY_STUDENT;
+  const orderCode = parsed.order === 'asc' ? 'a' : 'd';
+  return `q:${COMPACT_JOBS_VIEW_VERSION}${encodeJobStateMask(parsed.states)}${limitCode}${orderCode}${encodeDayCode(parsed.from)}${encodeDayCode(parsed.to)}${studentCode}` as JobsViewKey;
+}
+
+function buildNormalizedJobsTokens(
+  parsed: {
+    states?: JobState[];
+    studentLabel?: string;
+    from?: string;
+    to?: string;
+    limit: number;
+    order: 'asc' | 'desc';
+  },
+): string[] {
+  const tokens: string[] = [];
+  if (parsed.states && parsed.states.length > 0) {
+    tokens.push(`state:${parsed.states.join(',')}`);
+  }
+  if (parsed.studentLabel) {
+    tokens.push(`student:${parsed.studentLabel}`);
+  }
+  if (parsed.from) {
+    tokens.push(`since:${parsed.from.slice(0, 10)}`);
+  }
+  if (parsed.to) {
+    tokens.push(`before:${parsed.to.slice(0, 10)}`);
+  }
+  if (parsed.limit !== 10) {
+    tokens.push(`limit:${parsed.limit}`);
+  }
+  if (parsed.order !== 'desc') {
+    tokens.push(`order:${parsed.order}`);
+  }
+  return tokens.length > 0 ? tokens : ['latest 10 jobs'];
+}
 
 export function resetAdvancedControlApprovalsForTests(): void {
   defaultApprovalReplayStore.resetForTests();
@@ -342,6 +507,9 @@ function visibleInOpsChat(command: CommandDefinition, config: CommandContext['co
   if (command.command === 'start') {
     return false;
   }
+  if (command.command === 'links') {
+    return false;
+  }
   if (command.command === 'backup' || command.command === 'drill') {
     return config.enableActionCommands;
   }
@@ -370,8 +538,12 @@ export function getAdvertisedCommands(
 export function buildGuidedHomeKeyboard(config: CommandContext['config']): TelegramInlineKeyboardMarkup {
   const rows = [
     [
+      { text: 'Today', callback_data: encodeGuidedCallback({ kind: 'today' }) },
+      { text: 'Students', callback_data: encodeGuidedCallback({ kind: 'students_home' }) },
+    ],
+    [
+      { text: 'Finished', callback_data: encodeGuidedCallback({ kind: 'finished' }) },
       { text: 'Status', callback_data: encodeGuidedCallback({ kind: 'status' }) },
-      { text: 'Finished Jobs', callback_data: encodeGuidedCallback({ kind: 'finished' }) },
     ],
     [{ text: 'Recent Operations', callback_data: encodeGuidedCallback({ kind: 'recent_ops' }) }],
   ];
@@ -422,17 +594,235 @@ export function buildStatusKeyboard(): TelegramInlineKeyboardMarkup {
 }
 
 export function buildFinishedJobsKeyboard(response: JobListResponse): TelegramInlineKeyboardMarkup {
-  const buttons = response.jobs.slice(0, 5).map((job) => [
+  return buildJobsViewKeyboard(response, {
+    viewKey: 'gs',
+    scope: 'global',
+  });
+}
+
+function buildFinishedJobButtonLabel(job: JobListResponse['jobs'][number]): string {
+  const studentName = job.studentName?.trim();
+  const studentId = job.studentId?.trim();
+  const shortStudentId = studentId ? studentId.slice(0, 8) : null;
+
+  if (studentName && shortStudentId) {
+    const combined = `${studentName} · ${shortStudentId}`;
+    return combined.length > 30 ? `${combined.slice(0, 27)}...` : combined;
+  }
+
+  if (studentName) {
+    return studentName.length > 30 ? `${studentName.slice(0, 27)}...` : studentName;
+  }
+
+  if (shortStudentId) {
+    return shortStudentId;
+  }
+
+  return job.jobId.slice(0, 12);
+}
+
+function buildStudentButtonLabel(student: StudentProfileDto): string {
+  const shortStudentId = student.id.slice(0, 8);
+  const combined = `${student.student} · ${shortStudentId}`;
+  return combined.length > 30 ? `${combined.slice(0, 27)}...` : combined;
+}
+
+export function buildStudentDisambiguationKeyboard(
+  matches: StudentProfileDto[],
+): TelegramInlineKeyboardMarkup {
+  const buttons = matches.slice(0, 5).map((student) => [
     {
-      text: job.jobId.slice(0, 12),
-      callback_data: encodeGuidedCallback({ kind: 'job', jobId: job.jobId }),
+      text: buildStudentButtonLabel(student),
+      callback_data: encodeGuidedCallback({ kind: 'student', studentId: student.id }),
     },
   ]);
   return {
     inline_keyboard: [
       ...buttons,
+      [{ text: 'Home', callback_data: encodeGuidedCallback({ kind: 'home' }) }],
+    ],
+  };
+}
+
+export function buildStudentDetailsKeyboard(args: {
+  studentId: string;
+  latestJobId?: string | null;
+  shareLatestJobId?: string | null;
+}): TelegramInlineKeyboardMarkup {
+  const rows: TelegramInlineKeyboardMarkup['inline_keyboard'] = [];
+  const studentRef = toStudentRef(args.studentId);
+  rows.push([
+    {
+      text: 'Recent Jobs',
+      callback_data: encodeGuidedCallback({ kind: 'jobs_view', viewKey: `sr:${studentRef}` }),
+    },
+    {
+      text: 'Failed',
+      callback_data: encodeGuidedCallback({ kind: 'jobs_view', viewKey: `sf:${studentRef}` }),
+    },
+    {
+      text: 'Succeeded',
+      callback_data: encodeGuidedCallback({ kind: 'jobs_view', viewKey: `ss:${studentRef}` }),
+    },
+  ]);
+  if (args.latestJobId || args.shareLatestJobId) {
+    rows.push(
       [
-        { text: 'Refresh', callback_data: encodeGuidedCallback({ kind: 'finished' }) },
+        ...(args.latestJobId
+          ? [
+              {
+                text: 'Latest Job',
+                callback_data: encodeGuidedCallback({
+                  kind: 'job',
+                  jobId: args.latestJobId,
+                  backViewKey: `sr:${studentRef}`,
+                }),
+              },
+            ]
+          : []),
+        ...(args.shareLatestJobId
+          ? [
+              {
+                text: 'Share Latest',
+                callback_data: encodeGuidedCallback({
+                  kind: 'job_share',
+                  jobId: args.shareLatestJobId,
+                }),
+              },
+            ]
+          : []),
+      ].filter(Boolean) as TelegramInlineKeyboardMarkup['inline_keyboard'][number],
+    );
+  }
+  rows.push([
+    {
+      text: 'Refresh',
+      callback_data: encodeGuidedCallback({ kind: 'student', studentId: args.studentId }),
+    },
+    { text: 'Home', callback_data: encodeGuidedCallback({ kind: 'home' }) },
+  ]);
+  return { inline_keyboard: rows };
+}
+
+export function buildJobsViewKeyboard(
+  response: JobListResponse,
+  args: {
+    viewKey?: JobsViewKey;
+    scope: 'global' | 'today' | 'student';
+    backToStudentId?: string;
+  },
+): TelegramInlineKeyboardMarkup {
+  const buttons = response.jobs.slice(0, 5).map((job) => [
+    {
+      text: buildFinishedJobButtonLabel(job),
+      callback_data: encodeGuidedCallback({
+        kind: 'job',
+        jobId: job.jobId,
+        ...(args.viewKey ? { backViewKey: args.viewKey } : {}),
+      }),
+    },
+  ]);
+
+  const rows: TelegramInlineKeyboardMarkup['inline_keyboard'] = [...buttons];
+  if (args.scope === 'global') {
+    rows.push([
+      { text: 'Failed', callback_data: encodeGuidedCallback({ kind: 'jobs_view', viewKey: 'gf' }) },
+      { text: 'Running', callback_data: encodeGuidedCallback({ kind: 'jobs_view', viewKey: 'gn' }) },
+      { text: 'Succeeded', callback_data: encodeGuidedCallback({ kind: 'jobs_view', viewKey: 'gs' }) },
+      { text: 'Today', callback_data: encodeGuidedCallback({ kind: 'jobs_view', viewKey: 'ta' }) },
+      { text: 'Home', callback_data: encodeGuidedCallback({ kind: 'home' }) },
+    ]);
+  }
+  if (args.scope === 'student' && args.backToStudentId) {
+    const studentRef = toStudentRef(args.backToStudentId);
+    rows.push(
+      [
+        { text: 'Recent', callback_data: encodeGuidedCallback({ kind: 'jobs_view', viewKey: `sr:${studentRef}` }) },
+        { text: 'Failed', callback_data: encodeGuidedCallback({ kind: 'jobs_view', viewKey: `sf:${studentRef}` }) },
+        { text: 'Succeeded', callback_data: encodeGuidedCallback({ kind: 'jobs_view', viewKey: `ss:${studentRef}` }) },
+      ],
+      [
+        { text: 'Back to Student', callback_data: encodeGuidedCallback({ kind: 'student', studentId: args.backToStudentId }) },
+        { text: 'Home', callback_data: encodeGuidedCallback({ kind: 'home' }) },
+      ],
+    );
+  }
+  if (args.scope === 'today') {
+    rows.push(
+      [
+        { text: 'Failed', callback_data: encodeGuidedCallback({ kind: 'jobs_view', viewKey: 'tf' }) },
+        { text: 'Running', callback_data: encodeGuidedCallback({ kind: 'jobs_view', viewKey: 'tn' }) },
+        { text: 'Awaiting', callback_data: encodeGuidedCallback({ kind: 'jobs_view', viewKey: 'tw' }) },
+        { text: 'Finished', callback_data: encodeGuidedCallback({ kind: 'jobs_view', viewKey: 'ts' }) },
+      ],
+      [
+        { text: 'All Today', callback_data: encodeGuidedCallback({ kind: 'jobs_view', viewKey: 'ta' }) },
+        { text: 'Back to Today', callback_data: encodeGuidedCallback({ kind: 'today' }) },
+        { text: 'Home', callback_data: encodeGuidedCallback({ kind: 'home' }) },
+      ],
+    );
+  }
+
+  return {
+    inline_keyboard: rows,
+  };
+}
+
+export function buildJobsQueryKeyboard(response: JobListResponse): TelegramInlineKeyboardMarkup {
+  return buildJobsViewKeyboard(response, {
+    scope: 'global',
+  });
+}
+
+export function buildStudentsKeyboard(args: {
+  response: StudentSummaryResponse;
+  offset: number;
+}): TelegramInlineKeyboardMarkup {
+  const buttons = args.response.items.map((student) => [
+    {
+      text: `${student.name} · ${student.id.slice(0, 8)}`,
+      callback_data: encodeGuidedCallback({ kind: 'student', studentId: student.id }),
+    },
+  ]);
+  const navigation: TelegramInlineKeyboardMarkup['inline_keyboard'][number] = [];
+  if (args.offset > 0) {
+    navigation.push({
+      text: 'Prev',
+      callback_data: encodeGuidedCallback({
+        kind: 'students_page',
+        offset: Math.max(0, args.offset - STUDENTS_PAGE_SIZE),
+      }),
+    });
+  }
+  if (args.offset + args.response.items.length < args.response.total) {
+    navigation.push({
+      text: 'Next',
+      callback_data: encodeGuidedCallback({
+        kind: 'students_page',
+        offset: args.offset + STUDENTS_PAGE_SIZE,
+      }),
+    });
+  }
+  navigation.push({
+    text: 'Home',
+    callback_data: encodeGuidedCallback({ kind: 'home' }),
+  });
+  return {
+    inline_keyboard: [...buttons, navigation],
+  };
+}
+
+export function buildTodayKeyboard(): TelegramInlineKeyboardMarkup {
+  return {
+    inline_keyboard: [
+      [
+        { text: 'Failed', callback_data: encodeGuidedCallback({ kind: 'jobs_view', viewKey: 'tf' }) },
+        { text: 'Running', callback_data: encodeGuidedCallback({ kind: 'jobs_view', viewKey: 'tn' }) },
+        { text: 'Awaiting', callback_data: encodeGuidedCallback({ kind: 'jobs_view', viewKey: 'tw' }) },
+      ],
+      [
+        { text: 'Finished', callback_data: encodeGuidedCallback({ kind: 'jobs_view', viewKey: 'ts' }) },
+        { text: 'All Today', callback_data: encodeGuidedCallback({ kind: 'jobs_view', viewKey: 'ta' }) },
         { text: 'Home', callback_data: encodeGuidedCallback({ kind: 'home' }) },
       ],
     ],
@@ -457,16 +847,30 @@ export function buildRecentOpsKeyboard(response: OpsActionListResponse): Telegra
   };
 }
 
-export function buildJobDetailsKeyboard(jobId: string): TelegramInlineKeyboardMarkup {
+export function buildJobDetailsKeyboard(
+  jobId: string,
+  backViewKey?: JobsViewKey,
+): TelegramInlineKeyboardMarkup {
   return {
     inline_keyboard: [
       [
-        { text: 'Links', callback_data: encodeGuidedCallback({ kind: 'job_links', jobId }) },
         { text: 'Share', callback_data: encodeGuidedCallback({ kind: 'job_share', jobId }) },
       ],
       [
-        { text: 'Refresh', callback_data: encodeGuidedCallback({ kind: 'job', jobId }) },
-        { text: 'Back', callback_data: encodeGuidedCallback({ kind: 'finished' }) },
+        {
+          text: 'Refresh',
+          callback_data: encodeGuidedCallback({
+            kind: 'job',
+            jobId,
+            ...(backViewKey ? { backViewKey } : {}),
+          }),
+        },
+        {
+          text: 'Back',
+          callback_data: backViewKey
+            ? encodeGuidedCallback({ kind: 'jobs_view', viewKey: backViewKey })
+            : encodeGuidedCallback({ kind: 'finished' }),
+        },
         { text: 'Home', callback_data: encodeGuidedCallback({ kind: 'home' }) },
       ],
     ],
@@ -604,6 +1008,37 @@ export async function loadFinishedJobsView(
   };
 }
 
+export async function loadStudentsView(
+  context: CommandContext,
+  offset = 0,
+): Promise<{
+  html: string;
+  replyMarkup: TelegramInlineKeyboardMarkup;
+  response: StudentSummaryResponse;
+}> {
+  const response = await context.backend.listStudentSummaries({
+    limit: STUDENTS_PAGE_SIZE,
+    offset,
+    order: 'desc',
+  });
+  const viewModel: StudentSummaryViewModel = {
+    response,
+    page: Math.floor(offset / STUDENTS_PAGE_SIZE) + 1,
+    offset,
+  };
+  return {
+    html: formatStudentsBrowser({
+      response: viewModel.response,
+      page: viewModel.page,
+    }),
+    replyMarkup: buildStudentsKeyboard({
+      response: viewModel.response,
+      offset: viewModel.offset,
+    }),
+    response,
+  };
+}
+
 export async function loadRecentOpsView(
   context: CommandContext,
   limit = 10,
@@ -620,17 +1055,178 @@ export async function loadRecentOpsView(
   };
 }
 
+export async function loadStudentView(
+  context: CommandContext,
+  studentId: string,
+): Promise<{
+  html: string;
+  replyMarkup: TelegramInlineKeyboardMarkup;
+}> {
+  const viewModel = await loadStudentViewModel(context, studentId);
+  return {
+    html: formatStudentSummary({
+      student: viewModel.student,
+      latestJob: viewModel.latestJob,
+      latestAssignmentTitle: viewModel.latestAssignmentTitle,
+      recentJobs: viewModel.jobs,
+    }),
+    replyMarkup: buildStudentDetailsKeyboard({
+      studentId: viewModel.student.id,
+      latestJobId: viewModel.latestJob?.jobId ?? null,
+      shareLatestJobId:
+        viewModel.latestJob?.state === 'succeeded' ? viewModel.latestJob.jobId : null,
+    }),
+  };
+}
+
+export async function loadJobsView(
+  context: CommandContext,
+  parsed: ParsedJobsFilter,
+  options: JobsViewOptions = {},
+): Promise<{
+  html: string;
+  replyMarkup: TelegramInlineKeyboardMarkup;
+  response: JobListResponse;
+}> {
+  const resolvedStudent = options.backToStudentId
+    ? { status: 'single' as const, matches: [await resolveStudentById(context, options.backToStudentId)] }
+    : parsed.studentQuery
+      ? await resolveStudentQuery(context, parsed.studentQuery)
+      : null;
+  if (resolvedStudent?.status === 'none') {
+    return {
+      html: formatStudentNotFound(parsed.studentQuery ?? ''),
+      replyMarkup: buildGuidedHomeOnlyKeyboard(),
+      response: { jobs: [], total: 0, limit: parsed.limit, offset: 0 },
+    };
+  }
+  if (resolvedStudent?.status === 'multiple') {
+    return {
+      html: formatStudentDisambiguation({
+        query: parsed.studentQuery ?? '',
+        matches: resolvedStudent.matches.slice(0, 5),
+        footer: 'Multiple students matched. Re-run /jobs with an exact student ID.',
+      }),
+      replyMarkup: buildGuidedHomeOnlyKeyboard(),
+      response: { jobs: [], total: 0, limit: parsed.limit, offset: 0 },
+    };
+  }
+  const response = await context.backend.listJobs({
+    states: parsed.states ?? null,
+    studentId: resolvedStudent?.matches[0]?.id ?? null,
+    from: parsed.from ?? null,
+    to: parsed.to ?? null,
+    limit: parsed.limit,
+    offset: 0,
+    order: parsed.order,
+  });
+  const effectiveBackToStudentId = resolvedStudent?.matches[0]?.id ?? options.backToStudentId;
+  const effectiveViewKey =
+    options.viewKey ??
+    buildAdHocJobsViewKey(parsed, {
+      ...options,
+      backToStudentId: effectiveBackToStudentId,
+    });
+  return {
+    html: formatJobsQueryResults({
+      response,
+      normalizedFilters: parsed.normalizedTokens,
+      title: options.title,
+      footerLines: options.footerLines,
+      emptyMessage: options.emptyMessage,
+    }),
+    replyMarkup: buildJobsViewKeyboard(response, {
+      scope: options.keyboardScope ?? 'global',
+      viewKey: effectiveViewKey,
+      backToStudentId: effectiveBackToStudentId,
+    }),
+    response,
+  };
+}
+
+export async function loadJobsViewFromKey(
+  context: CommandContext,
+  viewKey: JobsViewKey,
+): Promise<{
+  html: string;
+  replyMarkup: TelegramInlineKeyboardMarkup;
+  response: JobListResponse;
+}> {
+  const descriptor = await describeJobsViewKey(context, viewKey);
+  return loadJobsView(context, descriptor.parsed, descriptor.options);
+}
+
+export async function loadTodayView(
+  context: CommandContext,
+  now = new Date(),
+): Promise<{
+  html: string;
+  replyMarkup: TelegramInlineKeyboardMarkup;
+}> {
+  const dayStart = startOfUtcDay(now);
+  const from = dayStart.toISOString();
+  const to = now.toISOString();
+  const [summary, failed, running, succeeded] = await Promise.all([
+    context.backend.getAdminJobSummary({ from, to }),
+    context.backend.listJobs({ states: ['failed'], from, to, order: 'desc', limit: 3 }),
+    context.backend.listJobs({ states: ['running'], from, to, order: 'desc', limit: 3 }),
+    context.backend.listJobs({ states: ['succeeded'], from, to, order: 'desc', limit: 5 }),
+  ]);
+  return {
+    html: formatTodaySummary({
+      dateLabel: formatUtcDateOnly(dayStart),
+      summary,
+      failedJobs: failed.jobs,
+      runningJobs: running.jobs,
+      succeededJobs: succeeded.jobs,
+    }),
+    replyMarkup: buildTodayKeyboard(),
+  };
+}
+
+export async function loadBotStatusView(context: CommandContext): Promise<{
+  html: string;
+}> {
+  let backendReachable = true;
+  let backendError: string | null = null;
+  try {
+    await context.backend.getOpsStatus();
+  } catch (error: unknown) {
+    backendReachable = false;
+    backendError = error instanceof Error ? error.message : String(error);
+  }
+  const topicStates = (['ops', 'jobs', 'alerts'] as const).map((domain) =>
+    resolveTopicStatus(context, domain),
+  );
+  return {
+    html: formatBotStatusReport({
+      runtimeSnapshot: context.runtimeSnapshot,
+      config: context.config,
+      backendReachable,
+      backendError,
+      topicStates,
+    }),
+  };
+}
+
 export async function loadJobDetailsView(
   context: CommandContext,
   jobId: string,
+  backViewKey?: JobsViewKey,
 ): Promise<{
   html: string;
   replyMarkup: TelegramInlineKeyboardMarkup;
 }> {
   const job = await context.backend.getJob(jobId);
+  const sharePayload = await resolveSharePayloadForJob(context, {
+    md: job.md,
+    htmlUrl: job.htmlUrl,
+  });
   return {
-    html: formatJobDetails(job),
-    replyMarkup: buildJobDetailsKeyboard(jobId),
+    html: formatJobDetails(job, {
+      assignmentTitle: sharePayload.assignmentTitle,
+    }),
+    replyMarkup: buildJobDetailsKeyboard(jobId, backViewKey),
   };
 }
 
@@ -646,6 +1242,545 @@ export async function loadOperationDetailsView(
     html: formatActionStatus(status),
     replyMarkup: buildOperationDetailsKeyboard(operationId),
   };
+}
+
+async function loadStudentViewModel(
+  context: CommandContext,
+  studentId: string,
+): Promise<StudentViewModel> {
+  const student = await resolveStudentById(context, studentId);
+  const jobsResponse = await context.backend.listJobs({
+    studentId: student.id,
+    order: 'desc',
+    limit: 5,
+  });
+  const latestJob = jobsResponse.jobs[0] ?? null;
+  const latestAssignmentTitle = await resolveAssignmentTitleForJob(context, latestJob);
+  return {
+    student,
+    jobs: jobsResponse.jobs,
+    latestJob,
+    latestAssignmentTitle,
+  };
+}
+
+async function resolveAssignmentTitleForJob(
+  context: CommandContext,
+  job: JobStatusDto | null,
+): Promise<string | null> {
+  if (!job) {
+    return null;
+  }
+  const sharePayload = await resolveSharePayloadForJob(context, {
+    md: job.md,
+    htmlUrl: job.htmlUrl,
+  });
+  return sharePayload.assignmentTitle;
+}
+
+async function resolveStudentById(
+  context: CommandContext,
+  studentId: string,
+): Promise<StudentProfileDto> {
+  const response = await context.backend.searchStudents(studentId, STUDENT_RESOLUTION_LIMIT);
+  const student =
+    response.items.find((candidate) => candidate.id.toLowerCase() === studentId.toLowerCase()) ??
+    null;
+  if (!student) {
+    throw new Error(`Student ${studentId} could not be resolved.`);
+  }
+  return student;
+}
+
+async function resolveStudentRef(
+  context: CommandContext,
+  studentRef: string,
+): Promise<StudentProfileDto | null> {
+  const response = await context.backend.searchStudents(studentRef, STUDENT_RESOLUTION_LIMIT);
+  const exactPrefixMatches = response.items.filter((student) =>
+    student.id.toLowerCase().startsWith(studentRef.toLowerCase()),
+  );
+  if (exactPrefixMatches.length === 1) {
+    return exactPrefixMatches[0] ?? null;
+  }
+  return null;
+}
+
+async function resolveStudentQuery(
+  context: CommandContext,
+  queryRaw: string,
+): Promise<StudentMatchResult> {
+  const query = queryRaw.trim();
+  if (!query) {
+    return { status: 'none', matches: [] };
+  }
+  const response = await context.backend.searchStudents(query, STUDENT_RESOLUTION_LIMIT);
+  const matches = response.items;
+  if (matches.length === 0) {
+    return { status: 'none', matches: [] };
+  }
+
+  if (EXACT_UUID_REGEX.test(query)) {
+    const exactIdMatches = matches.filter((student) => student.id.toLowerCase() === query.toLowerCase());
+    if (exactIdMatches.length === 1) {
+      return { status: 'single', matches: exactIdMatches };
+    }
+  }
+
+  const exactNameMatches = matches.filter(
+    (student) => student.student.trim().toLowerCase() === query.toLowerCase(),
+  );
+  if (exactNameMatches.length === 1) {
+    return { status: 'single', matches: exactNameMatches };
+  }
+  if (exactNameMatches.length > 1) {
+    return { status: 'multiple', matches: exactNameMatches };
+  }
+
+  return matches.length === 1
+    ? { status: 'single', matches }
+    : { status: 'multiple', matches };
+}
+
+function toStudentRef(studentId: string): string {
+  return studentId.slice(0, 12);
+}
+
+async function describeJobsViewKey(
+  context: CommandContext,
+  viewKey: JobsViewKey,
+): Promise<{
+  parsed: ParsedJobsFilter;
+  options: JobsViewOptions;
+}> {
+  const now = new Date();
+  const todayStart = startOfUtcDay(now).toISOString();
+  if (viewKey === 'gr') {
+    return {
+      parsed: {
+        limit: 10,
+        order: 'desc',
+        normalizedTokens: ['latest 10 jobs'],
+      },
+      options: {
+        title: 'Browse Jobs',
+        footerLines: [
+          'Try /jobs failed',
+          'Try /jobs running today',
+          'Try /jobs Margarita',
+        ],
+        keyboardScope: 'global',
+        viewKey,
+      },
+    };
+  }
+  if (viewKey === 'gf' || viewKey === 'gn' || viewKey === 'gs') {
+    const state = viewKey === 'gf' ? 'failed' : viewKey === 'gn' ? 'running' : 'succeeded';
+    return {
+      parsed: {
+        states: [state],
+        limit: 10,
+        order: 'desc',
+        normalizedTokens: [`state:${state}`],
+      },
+      options: {
+        title:
+          viewKey === 'gf'
+            ? 'Jobs · Failed'
+            : viewKey === 'gn'
+              ? 'Jobs · Running'
+              : 'Jobs · Recent Finished',
+        keyboardScope: 'global',
+        viewKey,
+      },
+    };
+  }
+  if (viewKey === 'ta' || viewKey === 'tf' || viewKey === 'tn' || viewKey === 'tw' || viewKey === 'ts') {
+    const state =
+      viewKey === 'tf'
+        ? 'failed'
+        : viewKey === 'tn'
+          ? 'running'
+          : viewKey === 'tw'
+            ? 'awaiting_approval'
+            : viewKey === 'ts'
+              ? 'succeeded'
+              : null;
+    const title =
+      viewKey === 'ta'
+        ? 'Jobs · Today'
+        : viewKey === 'tf'
+          ? 'Jobs · Failed · Today'
+          : viewKey === 'tn'
+            ? 'Jobs · Running · Today'
+            : viewKey === 'tw'
+              ? 'Jobs · Awaiting · Today'
+              : 'Jobs · Finished · Today';
+    return {
+      parsed: {
+        ...(state ? { states: [state] } : {}),
+        from: todayStart,
+        limit: 10,
+        order: 'desc',
+        normalizedTokens: [
+          ...(state ? [`state:${state}`] : []),
+          'since:today',
+        ],
+      },
+      options: {
+        title,
+        keyboardScope: 'today',
+        viewKey,
+      },
+    };
+  }
+
+  if (viewKey.startsWith('q:')) {
+    const payload = viewKey.slice(2);
+    if (payload.length !== 22 || payload[0] !== COMPACT_JOBS_VIEW_VERSION) {
+      throw new Error(`Unsupported jobs view: ${viewKey}`);
+    }
+    const states = decodeJobStateMask(payload.charAt(1));
+    const limitCode = payload[2];
+    if (!limitCode) {
+      throw new Error(`Invalid jobs view limit in ${viewKey}`);
+    }
+    const limit = Number.parseInt(limitCode, 36);
+    if (!Number.isInteger(limit) || limit < 1 || limit > 20) {
+      throw new Error(`Invalid jobs view limit in ${viewKey}`);
+    }
+    const orderCode = payload.charAt(3);
+    if (orderCode !== 'a' && orderCode !== 'd') {
+      throw new Error(`Invalid jobs view order in ${viewKey}`);
+    }
+    const from = decodeDayCode(payload.slice(4, 7)) ?? undefined;
+    const to = decodeDayCode(payload.slice(7, 10)) ?? undefined;
+    const studentCode = payload.slice(10, 22);
+    const studentRef = studentCode === COMPACT_JOBS_VIEW_EMPTY_STUDENT
+      ? null
+      : studentCode.replace(/_+$/u, '');
+    const student = studentRef
+      ? await resolveStudentRef(context, studentRef)
+      : null;
+    if (studentRef && !student) {
+      throw new Error(`Student view ${viewKey} could not be resolved.`);
+    }
+    const parsed: ParsedJobsFilter = {
+      ...(states ? { states } : {}),
+      ...(student ? { studentQuery: student.student } : {}),
+      ...(from ? { from } : {}),
+      ...(to ? { to } : {}),
+      limit,
+      order: orderCode === 'a' ? 'asc' : 'desc',
+      normalizedTokens: buildNormalizedJobsTokens({
+        states,
+        studentLabel: student?.student,
+        from,
+        to,
+        limit,
+        order: orderCode === 'a' ? 'asc' : 'desc',
+      }),
+    };
+    return {
+      parsed,
+      options: {
+        title: 'Jobs',
+        keyboardScope: 'global',
+        viewKey,
+        ...(student ? { backToStudentId: student.id } : {}),
+      },
+    };
+  }
+
+  const studentViewMatch = viewKey.match(/^(sr|sf|ss):(.+)$/i);
+  if (!studentViewMatch?.[1] || !studentViewMatch?.[2]) {
+    throw new Error(`Unsupported jobs view: ${viewKey}`);
+  }
+
+  const student = await resolveStudentRef(context, studentViewMatch[2]);
+  if (!student) {
+    throw new Error(`Student view ${viewKey} could not be resolved.`);
+  }
+  const state =
+    studentViewMatch[1] === 'sf'
+      ? 'failed'
+      : studentViewMatch[1] === 'ss'
+        ? 'succeeded'
+        : null;
+  const title =
+    studentViewMatch[1] === 'sf'
+      ? `Jobs · ${student.student} (${student.id.slice(0, 8)}) · Failed`
+      : studentViewMatch[1] === 'ss'
+        ? `Jobs · ${student.student} (${student.id.slice(0, 8)}) · Succeeded`
+        : `Jobs · ${student.student} (${student.id.slice(0, 8)}) · Recent`;
+  return {
+    parsed: {
+      ...(state ? { states: [state] } : {}),
+      limit: 10,
+      order: 'desc',
+      normalizedTokens: [
+        ...(state ? [`state:${state}`] : []),
+        `student:${student.student}`,
+      ],
+    },
+    options: {
+      title,
+      keyboardScope: 'student',
+      backToStudentId: student.id,
+      viewKey,
+    },
+  };
+}
+
+function parseJobsFilterInput(raw: string, now = new Date()): ParsedJobsFilter | { error: string } {
+  const trimmed = raw.trim();
+  if (!trimmed) {
+    return {
+      limit: 10,
+      order: 'desc',
+      normalizedTokens: ['latest 10 jobs'],
+    };
+  }
+
+  const tokens = splitCommandArguments(trimmed);
+  if (tokens.some((token) => token.startsWith('__PARSE_ERROR__'))) {
+    return { error: 'Quoted filter values must be closed, e.g. student:"Mary Jane".' };
+  }
+  const hasStructuredTokens = tokens.some((token) => token.includes(':'));
+
+  if (!hasStructuredTokens) {
+    const parsedKeywordResult = parseSoftJobsKeywords(tokens, now);
+    if (parsedKeywordResult) {
+      return parsedKeywordResult;
+    }
+    return {
+      studentQuery: trimmed,
+      limit: 10,
+      order: 'desc',
+      normalizedTokens: [`student:${trimmed}`],
+    };
+  }
+
+  const parsed: ParsedJobsFilter = {
+    limit: 10,
+    order: 'desc',
+    normalizedTokens: [],
+  };
+  const seenKeys = new Set<string>();
+
+  for (const token of tokens) {
+    const separatorIndex = token.indexOf(':');
+    if (separatorIndex <= 0) {
+      return { error: 'Usage: /jobs state:failed since:today student:"Mary Jane" limit:10' };
+    }
+    const key = token.slice(0, separatorIndex).trim().toLowerCase();
+    const rawValue = token.slice(separatorIndex + 1).trim();
+    if (!rawValue) {
+      return { error: `Missing value for ${key}.` };
+    }
+    if (seenKeys.has(key)) {
+      return { error: `Duplicate filter key: ${key}.` };
+    }
+    seenKeys.add(key);
+    const value = stripMatchingQuotes(rawValue);
+
+    switch (key) {
+      case 'state': {
+        const states = value.split(',').map((item) => item.trim()).filter(Boolean);
+        if (states.length === 0 || !states.every((state) => isJobState(state))) {
+          return { error: 'state must be queued, running, awaiting_approval, succeeded, or failed.' };
+        }
+        parsed.states = states;
+        parsed.normalizedTokens.push(`state:${states.join(',')}`);
+        break;
+      }
+      case 'student': {
+        parsed.studentQuery = value;
+        parsed.normalizedTokens.push(`student:${value}`);
+        break;
+      }
+      case 'since': {
+        const since = resolveDateFilter(value, 'since', now);
+        if (!since) {
+          return { error: 'since must be today, yesterday, or YYYY-MM-DD.' };
+        }
+        parsed.from = since.toISOString();
+        parsed.normalizedTokens.push(`since:${value}`);
+        break;
+      }
+      case 'before': {
+        const before = resolveDateFilter(value, 'before', now);
+        if (!before) {
+          return { error: 'before must be today, yesterday, or YYYY-MM-DD.' };
+        }
+        parsed.to = before.toISOString();
+        parsed.normalizedTokens.push(`before:${value}`);
+        break;
+      }
+      case 'limit': {
+        const limit = Number(value);
+        if (!Number.isInteger(limit) || limit < 1 || limit > 20) {
+          return { error: 'limit must be an integer between 1 and 20.' };
+        }
+        parsed.limit = limit;
+        parsed.normalizedTokens.push(`limit:${limit}`);
+        break;
+      }
+      case 'order': {
+        if (value !== 'asc' && value !== 'desc') {
+          return { error: 'order must be asc or desc.' };
+        }
+        parsed.order = value;
+        parsed.normalizedTokens.push(`order:${value}`);
+        break;
+      }
+      default: {
+        return { error: `Unknown filter key: ${key}.` };
+      }
+    }
+  }
+
+  if (parsed.from && parsed.to && new Date(parsed.from) >= new Date(parsed.to)) {
+    return { error: 'since must be earlier than before.' };
+  }
+
+  return parsed;
+}
+
+function parseSoftJobsKeywords(tokens: string[], now: Date): ParsedJobsFilter | null {
+  const states: JobState[] = [];
+  let from: string | undefined;
+  let to: string | undefined;
+  const residualTokens: string[] = [];
+
+  for (const token of tokens) {
+    const value = stripMatchingQuotes(token).trim();
+    const lower = value.toLowerCase();
+    if (lower === 'failed' || lower === 'running' || lower === 'succeeded') {
+      states.push(lower);
+      continue;
+    }
+    if (lower === 'today') {
+      from = startOfUtcDay(now).toISOString();
+      continue;
+    }
+    if (lower === 'yesterday') {
+      const yesterday = startOfUtcDay(now);
+      yesterday.setUTCDate(yesterday.getUTCDate() - 1);
+      from = yesterday.toISOString();
+      to = startOfUtcDay(now).toISOString();
+      continue;
+    }
+    residualTokens.push(value);
+  }
+
+  if (states.length === 0 && !from && !to) {
+    return null;
+  }
+
+  const normalizedTokens = [
+    ...(states.length > 0 ? [`state:${states.join(',')}`] : []),
+    ...(from ? [`since:${to ? 'yesterday' : 'today'}`] : []),
+  ];
+  const studentQuery = residualTokens.join(' ').trim();
+  if (studentQuery) {
+    normalizedTokens.push(`student:${studentQuery}`);
+  }
+
+  return {
+    ...(states.length > 0 ? { states } : {}),
+    ...(studentQuery ? { studentQuery } : {}),
+    ...(from ? { from } : {}),
+    ...(to ? { to } : {}),
+    limit: 10,
+    order: 'desc',
+    normalizedTokens,
+  };
+}
+
+function splitCommandArguments(input: string): string[] {
+  const tokens: string[] = [];
+  let current = '';
+  let inQuotes = false;
+  for (const char of input) {
+    if (char === '"') {
+      inQuotes = !inQuotes;
+      current += char;
+      continue;
+    }
+    if (/\s/.test(char) && !inQuotes) {
+      if (current) {
+        tokens.push(current);
+        current = '';
+      }
+      continue;
+    }
+    current += char;
+  }
+  if (inQuotes) {
+    return [`__PARSE_ERROR__:${input}`];
+  }
+  if (current) {
+    tokens.push(current);
+  }
+  return tokens;
+}
+
+function stripMatchingQuotes(value: string): string {
+  return value.startsWith('"') && value.endsWith('"') ? value.slice(1, -1) : value;
+}
+
+function isJobState(value: string): value is JobState {
+  return ['queued', 'running', 'awaiting_approval', 'succeeded', 'failed'].includes(value);
+}
+
+function resolveDateFilter(
+  value: string,
+  kind: 'since' | 'before',
+  now: Date,
+): Date | null {
+  if (value === 'today') {
+    return startOfUtcDay(now);
+  }
+  if (value === 'yesterday') {
+    const day = startOfUtcDay(now);
+    day.setUTCDate(day.getUTCDate() - 1);
+    return day;
+  }
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) {
+    return null;
+  }
+  const parsed = new Date(`${value}T00:00:00.000Z`);
+  if (Number.isNaN(parsed.getTime())) {
+    return null;
+  }
+  if (kind === 'before') {
+    return parsed;
+  }
+  return parsed;
+}
+
+function startOfUtcDay(value: Date): Date {
+  return new Date(Date.UTC(value.getUTCFullYear(), value.getUTCMonth(), value.getUTCDate()));
+}
+
+function formatUtcDateOnly(value: Date): string {
+  return value.toISOString().slice(0, 10);
+}
+
+function resolveTopicStatus(context: CommandContext, domain: BotDomain): {
+  domain: BotDomain;
+  threadId?: number;
+  routing: 'topic' | 'default' | 'unresolved';
+} {
+  const threadId = context.topicRouter.resolveThreadId({ domain });
+  if (typeof threadId !== 'number') {
+    return { domain, routing: 'unresolved' };
+  }
+  if (context.config.defaultThreadId && threadId === context.config.defaultThreadId) {
+    return { domain, threadId, routing: 'default' };
+  }
+  return { domain, threadId, routing: 'topic' };
 }
 
 export function renderGuidedActionConfirmation(
@@ -995,6 +2130,7 @@ export async function sendShareableJobLinks(
     md: job.md,
     htmlUrl: job.htmlUrl,
   });
+  const includeShareHeader = context.command === 'share' || context.command === 'links';
 
   context.audit.log({
     level: 'info',
@@ -1062,6 +2198,24 @@ export async function sendShareableJobLinks(
         source: 'html',
       },
     });
+  }
+
+  if (includeShareHeader) {
+    if (context.command === 'links') {
+      await sendDomainMessage(context, 'jobs', 'Use <code>/share</code> going forward.', {
+        disableLinkPreview: true,
+      });
+    }
+    await sendDomainMessage(
+      context,
+      'jobs',
+      formatShareJobHeader(job, {
+        assignmentTitle: sharePayload.assignmentTitle,
+      }),
+      {
+        disableLinkPreview: true,
+      },
+    );
   }
 
   await sendDomainMessage(
@@ -1221,7 +2375,9 @@ export function createCommandRegistry(args?: { replayStore?: ApprovalReplayStore
       domain: 'ops',
       async execute(context) {
         const view = await loadOpsStatusView(context);
-        await sendDomainMessage(context, 'ops', view.html);
+        await sendDomainMessage(context, 'ops', view.html, {
+          replyMarkup: view.replyMarkup,
+        });
       },
     },
     {
@@ -1235,7 +2391,9 @@ export function createCommandRegistry(args?: { replayStore?: ApprovalReplayStore
           return;
         }
         const view = await loadOperationDetailsView(context, operationId);
-        await sendDomainMessage(context, 'ops', view.html);
+        await sendDomainMessage(context, 'ops', view.html, {
+          replyMarkup: view.replyMarkup,
+        });
       },
     },
     {
@@ -1248,7 +2406,9 @@ export function createCommandRegistry(args?: { replayStore?: ApprovalReplayStore
           ? Math.max(1, Math.min(20, requestedLimit))
           : 10;
         const view = await loadFinishedJobsView(context, limit);
-        await sendDomainMessage(context, 'jobs', view.html);
+        await sendDomainMessage(context, 'jobs', view.html, {
+          replyMarkup: view.replyMarkup,
+        });
       },
     },
     {
@@ -1262,12 +2422,14 @@ export function createCommandRegistry(args?: { replayStore?: ApprovalReplayStore
           return;
         }
         const view = await loadJobDetailsView(context, jobId);
-        await sendDomainMessage(context, 'jobs', view.html);
+        await sendDomainMessage(context, 'jobs', view.html, {
+          replyMarkup: view.replyMarkup,
+        });
       },
     },
     {
       command: 'links',
-      description: 'Show shareable links for one job (/links <jobId>)',
+      description: 'Compatibility alias for /share (/links <jobId>)',
       domain: 'jobs',
       async execute(context) {
         await sendShareableJobLinks(context, context.args[0]);
@@ -1275,10 +2437,108 @@ export function createCommandRegistry(args?: { replayStore?: ApprovalReplayStore
     },
     {
       command: 'share',
-      description: 'Create student-shareable cards (/share <jobId>)',
+      description: 'Send the student package (/share <jobId>)',
       domain: 'jobs',
       async execute(context) {
         await sendShareableJobLinks(context, context.args[0]);
+      },
+    },
+    {
+      command: 'students',
+      description: 'Browse students by recent activity',
+      domain: 'jobs',
+      async execute(context) {
+        const view = await loadStudentsView(context, 0);
+        await sendDomainMessage(context, 'jobs', view.html, {
+          replyMarkup: view.replyMarkup,
+        });
+      },
+    },
+    {
+      command: 'student',
+      description: 'Show one student summary (/student <name-or-id>)',
+      domain: 'jobs',
+      async execute(context) {
+        const query = context.args.join(' ').trim();
+        if (!query) {
+          await sendDomainMessage(
+            context,
+            'jobs',
+            formatCommandError('Usage: /student <name-or-id>\nExamples: /student Margarita or /student 72444fdf'),
+          );
+          return;
+        }
+        const resolved = await resolveStudentQuery(context, query);
+        if (resolved.status === 'none') {
+          await sendDomainMessage(context, 'jobs', formatStudentNotFound(query));
+          return;
+        }
+        if (resolved.status === 'multiple') {
+          await sendDomainMessage(
+            context,
+            'jobs',
+            formatStudentDisambiguation({
+              query,
+              matches: resolved.matches.slice(0, 5),
+              footer: 'Select the exact student below.',
+            }),
+            {
+              replyMarkup: buildStudentDisambiguationKeyboard(resolved.matches),
+            },
+          );
+          return;
+        }
+        const view = await loadStudentView(context, resolved.matches[0]!.id);
+        await sendDomainMessage(context, 'jobs', view.html, {
+          replyMarkup: view.replyMarkup,
+        });
+      },
+    },
+    {
+      command: 'jobs',
+      description: 'Browse jobs (/jobs [filters])',
+      domain: 'jobs',
+      async execute(context) {
+        const raw = context.args.join(' ').trim();
+        if (!raw) {
+          const browseView = await loadJobsViewFromKey(context, 'gr');
+          await sendDomainMessage(context, 'jobs', browseView.html, {
+            replyMarkup: browseView.replyMarkup,
+          });
+          return;
+        }
+        const parsed = parseJobsFilterInput(raw);
+        if ('error' in parsed) {
+          await sendDomainMessage(context, 'jobs', formatCommandError(parsed.error));
+          return;
+        }
+        const view = await loadJobsView(context, parsed, {
+          title: 'Jobs',
+          keyboardScope: 'global',
+        });
+        await sendDomainMessage(context, 'jobs', view.html, {
+          replyMarkup: view.replyMarkup,
+        });
+      },
+    },
+    {
+      command: 'today',
+      description: 'Show today job dashboard in UTC',
+      domain: 'jobs',
+      async execute(context) {
+        const view = await loadTodayView(context);
+        await sendDomainMessage(context, 'jobs', view.html, {
+          replyMarkup: view.replyMarkup,
+        });
+      },
+    },
+    {
+      command: 'botstatus',
+      description: 'Show bot runtime + backend diagnostics',
+      domain: 'ops',
+      async execute(context) {
+        const view = await loadBotStatusView(context);
+        await sendDomainMessage(context, 'ops', view.html);
       },
     },
     {

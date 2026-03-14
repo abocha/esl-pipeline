@@ -11,6 +11,7 @@ export function jobRecordToDto(job: JobRecord): JobStatusDto {
   return {
     jobId: job.id,
     ...(job.studentId ? { studentId: job.studentId } : {}),
+    ...(job.studentName ? { studentName: job.studentName } : {}),
     md: job.md,
     ...(job.mdStorageUri ? { mdStorageUri: job.mdStorageUri } : {}),
     recordingId: job.recordingId ?? null,
