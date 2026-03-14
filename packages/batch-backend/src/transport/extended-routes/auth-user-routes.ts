@@ -363,6 +363,53 @@ export function registerAuthUserRoutes(app: FastifyInstance, context: ExtendedRo
     },
   );
 
+  app.get(
+    '/admin/jobs/summary',
+    { preHandler: [authenticate, requireRole(['admin'])] },
+    async (request, reply) => {
+      const routePath = resolveRoutePath(request, 'GET /admin/jobs/summary');
+      const querySchema = z.object({
+        from: z.coerce.date().optional(),
+        to: z.coerce.date().optional(),
+      });
+
+      try {
+        const query = querySchema.parse(request.query ?? {});
+        const summary = await getJobSummaryWithDefaults({
+          from: query.from ?? null,
+          to: query.to ?? null,
+          userId: null,
+        });
+
+        logger.info('HTTP request handled', {
+          event: 'http_request',
+          route: routePath,
+          statusCode: 200,
+          userId: getAuthenticatedUser(request)?.id,
+        });
+
+        return reply.code(200).send(summary);
+      } catch (error: unknown) {
+        if (error instanceof z.ZodError) {
+          return reply.code(400).send({
+            error: 'validation_failed',
+            message: 'Invalid query parameters',
+            details: error.issues,
+          });
+        }
+
+        logger.error(error instanceof Error ? error : String(error), {
+          event: 'admin_get_jobs_summary_failed',
+          userId: getAuthenticatedUser(request)?.id,
+        });
+
+        return reply.code(500).send({
+          error: 'internal_error',
+        });
+      }
+    },
+  );
+
   app.delete(
     '/admin/jobs/:jobId',
     { preHandler: [authenticate, requireRole(['admin'])] },

@@ -5,7 +5,7 @@
 - Audience: maintainers and operators running Telegram-based operational controls.
 - Read Time: 5 minutes.
 - Authority Level: operations runbook.
-- Last Verified Against: 2026-03-13 repo state.
+- Last Verified Against: 2026-03-14 repo state.
 - Owner: backend/ops maintainers + automation agents.
 - Review Cadence: monthly or after bot/control-surface changes.
 - Status: `runbook`.
@@ -55,9 +55,13 @@ Read commands:
 
 - `/status`
 - `/op <operationId>`
+- `/students`
+- `/student <name-or-id>`
+- `/jobs [filter]`
+- `/today`
+- `/botstatus`
 - `/finished [limit]`
 - `/job <jobId>`
-- `/links <jobId>`
 - `/share <jobId>`
 
 Safe actions:
@@ -72,6 +76,46 @@ Behavior notes:
 - configured ops chat gets the full routed/guided surface
 - `/help` opens the guided control panel in the ops chat
 - guided action flows are confirm-first and must preserve the existing approval model
+- operator browsing follows a summary to browse to detail to share flow:
+  - `/today` and `/student` open scoped `/jobs` views
+  - `/finished` is the recent-succeeded preset for the shared jobs list renderer
+  - `/students` is a paged recent-activity browser over `/students/summary`
+- `/job` now prefers `Share` as the single visible output action
+- `/links` is retired from the visible UX; direct `/links <jobId>` calls are treated as a compatibility alias to `/share` and return a short deprecation note
+- job and student timestamps display in explicit UTC (`YYYY-MM-DD HH:mm UTC`)
+
+## Browse Surface
+
+Primary browse entries:
+
+- `/today` for the current UTC-day dashboard and attention lists
+- `/students` for recent-activity student browsing
+- `/student <name-or-id>` for direct student lookup
+- `/jobs [filter]` for canonical filtered job browsing
+- `/finished [limit]` for the recent-finished jobs preset
+
+`/jobs` filter behavior:
+
+- structured filters:
+  - `state:`
+  - `student:`
+  - `since:`
+  - `before:`
+  - `limit:`
+  - `order:`
+- soft parsing supports common operator shorthand such as:
+  - `/jobs failed`
+  - `/jobs running today`
+  - `/jobs Margarita`
+  - `/jobs failed Margarita`
+- ad-hoc filtered views preserve their browse context when operators open a job and then use `Back` or `Refresh`
+
+Student browsing behavior:
+
+- `/students` shows unique students ordered by recent lesson activity, with null activity last
+- each row includes name, short student id, recent lesson time, and pending drafts count when present
+- `/student` highlights latest state, latest UTC time, latest homework title, and recent jobs
+- latest homework resolution matches the `/job` and `/share` title extraction path, including markdown file-path and HTML fallback handling
 
 ## Routing and Transport
 

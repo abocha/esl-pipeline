@@ -2,15 +2,48 @@ import type { Message, Update } from '@grammyjs/types';
 
 import type {
   JobListResponse,
+  JobState,
   JobStatusDto,
+  JobSummaryResponse,
   OpsActionListResponse,
   OpsActionRequest,
   OpsActionStatus,
   OpsStatusResponse,
+  StudentProfileListResponse,
+  StudentSummaryResponse,
 } from '@esl-pipeline/contracts';
 
 export type BotDomain = 'ops' | 'jobs' | 'alerts';
 export type BotMode = 'polling' | 'webhook';
+export type BotLeadershipState = 'leader' | 'follower' | 'unknown' | 'not_applicable';
+
+export interface BotRuntimeSnapshot {
+  initialized: boolean;
+  botUsername: string | null;
+  mode: BotMode;
+  leadershipState: BotLeadershipState;
+}
+
+export interface BotJobListParams {
+  states?: JobState[] | null;
+  studentId?: string | null;
+  from?: string | null;
+  to?: string | null;
+  limit?: number;
+  offset?: number;
+  order?: 'asc' | 'desc';
+}
+
+export interface BotJobSummaryParams {
+  from?: string | null;
+  to?: string | null;
+}
+
+export interface BotStudentSummaryParams {
+  limit?: number;
+  offset?: number;
+  order?: 'asc' | 'desc';
+}
 
 export interface BotConfig {
   enabled: boolean;
@@ -64,6 +97,10 @@ export interface BackendClient {
   enqueueOpsAction: (payload: OpsActionRequest) => Promise<OpsActionStatus>;
   getOpsActionStatus: (operationId: string) => Promise<OpsActionStatus>;
   listOpsActions: (limit: number, offset?: number) => Promise<OpsActionListResponse>;
+  listJobs: (params?: BotJobListParams) => Promise<JobListResponse>;
+  getAdminJobSummary: (params?: BotJobSummaryParams) => Promise<JobSummaryResponse>;
+  listStudentSummaries: (params?: BotStudentSummaryParams) => Promise<StudentSummaryResponse>;
+  searchStudents: (query: string, limit?: number) => Promise<StudentProfileListResponse>;
   getFinishedJobs: (limit: number) => Promise<JobListResponse>;
   getJob: (jobId: string) => Promise<JobStatusDto>;
 }
@@ -102,6 +139,7 @@ export interface PollLeaderElection {
 export interface CommandContext {
   config: BotConfig;
   backend: BackendClient;
+  runtimeSnapshot: BotRuntimeSnapshot;
   messenger: TelegramMessenger;
   topicRouter: TopicRouter;
   audit: AuditLogger;

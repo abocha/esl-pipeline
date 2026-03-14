@@ -218,6 +218,77 @@ describeHttpServerIntegrationSuite(
       expect(call?.to?.toISOString()).toBe('2024-03-07T00:00:00.000Z');
     });
 
+    it('GET /admin/jobs/summary returns summary response without user scoping', async () => {
+      const getSummary = vi.spyOn(jobSummaryModule, 'getJobSummaryWithDefaults');
+      getSummary.mockResolvedValue({
+        total: 9,
+        byState: {
+          queued: 1,
+          running: 1,
+          awaiting_approval: 2,
+          succeeded: 4,
+          failed: 1,
+        },
+        pendingApprovals: 2,
+        last7Days: {
+          total: 9,
+          succeeded: 4,
+          failed: 1,
+        },
+        tts: {
+          enabled: 5,
+          succeeded: 4,
+        },
+      });
+
+      const response = await app.inject({
+        method: 'GET',
+        url: '/admin/jobs/summary?from=2024-04-01T00:00:00.000Z&to=2024-04-02T00:00:00.000Z',
+      });
+
+      expect(response.statusCode).toBe(200);
+      expect(response.json()).toEqual({
+        total: 9,
+        byState: {
+          queued: 1,
+          running: 1,
+          awaiting_approval: 2,
+          succeeded: 4,
+          failed: 1,
+        },
+        pendingApprovals: 2,
+        last7Days: {
+          total: 9,
+          succeeded: 4,
+          failed: 1,
+        },
+        tts: {
+          enabled: 5,
+          succeeded: 4,
+        },
+      });
+
+      const call = getSummary.mock.calls.at(-1)?.[0];
+      expect(call?.userId).toBeNull();
+      expect(call?.from?.toISOString()).toBe('2024-04-01T00:00:00.000Z');
+      expect(call?.to?.toISOString()).toBe('2024-04-02T00:00:00.000Z');
+    });
+
+    it('GET /admin/jobs/summary validates from/to query params', async () => {
+      const response = await app.inject({
+        method: 'GET',
+        url: '/admin/jobs/summary?from=not-a-date&to=2024-04-02T00:00:00.000Z',
+      });
+
+      expect(response.statusCode).toBe(400);
+      expect(response.json()).toEqual(
+        expect.objectContaining({
+          error: expect.any(String),
+          message: expect.any(String),
+        }),
+      );
+    });
+
     it('GET /metrics/readiness returns readiness metrics response', async () => {
       const getReadiness = vi.spyOn(readinessMetricsModule, 'getReadinessMetricsWithDefaults');
       getReadiness.mockResolvedValue({
