@@ -389,7 +389,7 @@ const opEdit = editedMessages.find((entry) =>
 assert(Boolean(opEdit), 'Missing callback-driven operation detail edit');
 
 const finishedJobsEdit = editedMessages.find((entry) =>
-  String(entry?.payload?.text ?? '').includes('Finished jobs'),
+  String(entry?.payload?.text ?? '').includes('Jobs · Recent Finished'),
 );
 assert(Boolean(finishedJobsEdit), 'Missing callback-driven finished jobs edit');
 
