@@ -13,6 +13,7 @@
 | --- | --- | --- |
 | GET | `/admin/jobs` | `packages/batch-backend/src/transport/extended-routes/auth-user-routes.ts` |
 | DELETE | `/admin/jobs/:jobId` | `packages/batch-backend/src/transport/extended-routes/auth-user-routes.ts` |
+| GET | `/admin/jobs/summary` | `packages/batch-backend/src/transport/extended-routes/auth-user-routes.ts` |
 | GET | `/admin/stats` | `packages/batch-backend/src/transport/extended-routes/auth-user-routes.ts` |
 | GET | `/admin/users` | `packages/batch-backend/src/transport/extended-routes/auth-user-routes.ts` |
 | POST | `/auth/login` | `packages/batch-backend/src/transport/extended-routes/auth-user-routes.ts` |

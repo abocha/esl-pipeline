@@ -4,7 +4,7 @@
 
 - Audience: maintainers and implementing agents.
 - Authority Level: package entrypoint and runtime usage guide.
-- Last Verified Against: 2026-03-13 repo state.
+- Last Verified Against: 2026-03-14 repo state.
 - Owner: backend/ops maintainers + automation agents.
 - Review Cadence: monthly or after control-surface changes.
 - Status: `active`.
@@ -16,9 +16,9 @@ Telegram control surface for internal ESL Pipeline operations.
 This package provides:
 
 - allowlisted operator onboarding via `/start` and `/help`
-- guided ops-chat controls for status, finished jobs, recent ops, and safe actions
+- guided ops-chat controls for status, student/job browsing, recent ops, and safe actions
 - topic-aware routing across `ops`, `jobs`, and `alerts`
-- share-card output for `/links` and `/share`
+- share-card output through `/share`
 
 It depends on `@esl-pipeline/batch-backend` for job and `/ops/*` data. Deeper operational detail lives in:
 
@@ -30,8 +30,22 @@ It depends on `@esl-pipeline/batch-backend` for job and `/ops/*` data. Deeper op
 Commands:
 
 - onboarding: `/start`, `/help`
-- reads: `/status`, `/op`, `/finished`, `/job`, `/links`, `/share`
+- reads: `/status`, `/op`, `/students`, `/student`, `/jobs`, `/today`, `/botstatus`, `/finished`, `/job`, `/share`
 - gated actions: `/backup`, `/drill`, `/approve`
+
+Browse model:
+
+- summary to browse to detail to share
+- `/today` and `/student` pivot into filtered `/jobs` list views
+- `/finished` is a recent-succeeded jobs preset over the shared jobs renderer
+- `/students` is a paged recent-activity browser backed by `/students/summary`
+- `/job` exposes `Share` as the primary output action
+- `/links` is retired from the visible UX and remains only as a temporary compatibility alias to `/share`
+
+Display notes:
+
+- operator-facing timestamps are rendered in explicit UTC as `YYYY-MM-DD HH:mm UTC`
+- job and student surfaces lead with human-readable identity and use short ids as supporting context
 
 Runtime modes:
 
