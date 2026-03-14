@@ -13,6 +13,7 @@ import type {
 export interface JobRecord {
   id: string;
   studentId?: string | null;
+  studentName?: string | null;
   state: JobState;
   md: string | null;
   mdStorageUri?: string | null;

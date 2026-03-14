@@ -163,6 +163,7 @@ export interface JobConfigOverrides {
 export interface JobStatusDto {
   jobId: string;
   studentId?: string | null;
+  studentName?: string | null;
   md: string | null;
   mdStorageUri?: string | null;
   recordingId: string | null;
@@ -351,6 +352,26 @@ export interface StudentSummaryResponse {
   total: number;
   limit: number;
   offset: number;
+}
+
+export interface StudentProfileDto {
+  id: string;
+  student: string;
+  dbId?: string | null;
+  pageParentId?: string | null;
+  colorPreset?: string | null;
+  voices?: Record<string, string>;
+  manifestPreset?: string | null;
+  accentPreference?: string | null;
+  profileId?: string | null;
+}
+
+export interface StudentProfileListResponse {
+  items: StudentProfileDto[];
+  total: number;
+  limit: number;
+  offset: number;
+  order: 'asc' | 'desc';
 }
 
 export type ContentSource = 'generate' | 'authentic';

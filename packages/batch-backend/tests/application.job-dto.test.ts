@@ -7,6 +7,8 @@ describe('application/job-dto', () => {
   it('serializes JobRecord fields with ISO timestamps', () => {
     const job: JobRecord = {
       id: 'job-1',
+      studentId: 'student-1',
+      studentName: 'Alice Nguyen',
       state: 'succeeded',
       md: 'fixtures/ok.md',
       recordingId: 'recording-1',
@@ -38,6 +40,8 @@ describe('application/job-dto', () => {
 
     expect(jobRecordToDto(job)).toEqual({
       jobId: 'job-1',
+      studentId: 'student-1',
+      studentName: 'Alice Nguyen',
       md: 'fixtures/ok.md',
       recordingId: 'recording-1',
       transcriptId: 'transcript-1',
