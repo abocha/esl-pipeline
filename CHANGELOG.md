@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented here. Dates use `YYYY-MM-DD`.
 
+## [4.5.1] - 2026-03-15
+
+### Changed
+
+- Automated release from PR #44: [codex] deps safe+major upgrades and Vite React plugin migration (https://github.com/abocha/esl-pipeline/pull/44)
+
 ## [4.5.0] - 2026-03-14
 
 ### Changed
