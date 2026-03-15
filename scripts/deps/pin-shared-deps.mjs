@@ -17,8 +17,8 @@ const SHARED = {
   'react-dom': '^19.2.0',
   axios: '^1.13.6',
   '@tanstack/react-query': '^5.90.11',
-  vite: '^7.2.4',
-  '@vitejs/plugin-react-swc': '^4.2.2',
+  vite: '^8.0.0',
+  '@vitejs/plugin-react': '^6.0.1',
   // Backend
   fastify: '^5.8.2',
   pg: '^8.20.0',
