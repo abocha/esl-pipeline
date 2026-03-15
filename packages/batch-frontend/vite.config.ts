@@ -1,5 +1,5 @@
 /// <reference types="vitest" />
-import react from '@vitejs/plugin-react-swc';
+import react from '@vitejs/plugin-react';
 import type { ProxyOptions } from 'vite';
 import { defineConfig } from 'vitest/config';
 
