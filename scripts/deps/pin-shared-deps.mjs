@@ -5,9 +5,9 @@ import { existsSync, readFileSync, readdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 
 const SHARED = {
-  '@aws-sdk/client-s3': '^3.1004.0',
-  '@aws-sdk/s3-request-presigner': '^3.1004.0',
-  '@aws-sdk/lib-storage': '^3.1004.0',
+  '@aws-sdk/client-s3': '^3.1010.0',
+  '@aws-sdk/s3-request-presigner': '^3.1010.0',
+  '@aws-sdk/lib-storage': '^3.1010.0',
   '@elevenlabs/elevenlabs-js': '^2.38.1',
   '@notionhq/client': '^5.11.1',
   commander: '^14.0.2',
