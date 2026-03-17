@@ -4,7 +4,7 @@
 
 - Audience: maintainers and AI agents operating local Docker workflows.
 - Authority Level: operations runbook.
-- Last Verified Against: 2026-03-04 repo state.
+- Last Verified Against: 2026-03-17 repo state.
 - Owner: ops maintainer + automation agents.
 - Review Cadence: monthly or after Docker workflow changes.
 - Status: `runbook`.
@@ -24,7 +24,7 @@ If host paths are missing, Docker may auto-create them with root ownership and c
   - Docker dev services use named volumes:
     - `workspace_node_modules` mounted at `/app/node_modules`
     - `workspace_pnpm_store` mounted at `/pnpm` (with `PNPM_STORE_DIR=/pnpm/store`)
-  - `deps` bootstraps dependency volume permissions, then hands ownership back to `${UID}:${GID}`.
+  - `deps` bootstraps dependency volume permissions, then hands ownership back to `${UID}:${GID}` for both `/app/node_modules` and package-local `packages/*/node_modules` entries created during install.
 - Source code is still bind-mounted at `/app` for live reload.
 - This avoids host/container dependency churn while preserving fast Docker restarts.
 
