@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented here. Dates use `YYYY-MM-DD`.
 
+## [4.5.2] - 2026-03-17
+
+### Changed
+
+- Automated release from PR #45: chore(deps): upgrade workspace deps and fix docker ownership (https://github.com/abocha/esl-pipeline/pull/45)
+
 ## [4.5.1] - 2026-03-15
 
 ### Changed
