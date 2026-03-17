@@ -126,6 +126,7 @@ services:
         pnpm install &&
         pnpm -r --filter './packages/*' run build &&
         find /app/packages -mindepth 2 -maxdepth 2 -type d -name dist -exec chown -R ${UID:-1000}:${GID:-1000} {} \\; &&
+        find /app/packages -mindepth 2 -maxdepth 2 -type d -name node_modules -exec chown -R ${UID:-1000}:${GID:-1000} {} \\; &&
         chown -R ${UID:-1000}:${GID:-1000} /app/node_modules /pnpm
       "
     working_dir: /app
@@ -315,6 +316,7 @@ services:
         chmod -R 0777 /app/node_modules /pnpm &&
         pnpm install --no-frozen-lockfile &&
         pnpm --filter @esl-pipeline/telegram-ops-bot... run build &&
+        find /app/packages -mindepth 2 -maxdepth 2 -type d -name node_modules -exec chown -R ${UID:-1000}:${GID:-1000} {} \\; &&
         chown -R ${UID:-1000}:${GID:-1000} /app/node_modules /pnpm /app/packages/contracts/dist /app/packages/shared-infrastructure/dist /app/packages/telegram-ops-bot/dist
       "
     working_dir: /app
