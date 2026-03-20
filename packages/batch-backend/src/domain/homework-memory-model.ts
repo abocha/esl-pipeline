@@ -69,7 +69,7 @@ export interface HomeworkMemoryPublishTarget {
   publishedAt?: string | null;
 }
 
-export interface HomeworkMemoryGenerationNotes extends Record<string, unknown> {}
+export type HomeworkMemoryGenerationNotes = Record<string, unknown>;
 
 export interface HomeworkMemoryRecord {
   id: string;

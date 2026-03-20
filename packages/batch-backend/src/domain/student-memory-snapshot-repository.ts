@@ -74,12 +74,185 @@ export type InsertCanonicalReadyStudentMemorySnapshotParams = Omit<
   'status'
 >;
 
+export interface EnsurePendingStudentMemorySnapshotParams {
+  id?: string;
+  studentId: string;
+  schemaVersion: string;
+  generatedAt?: Date;
+  provider: string;
+  model: string;
+  generationNotes?: StudentMemorySnapshotGenerationNotes | null;
+  sourceEntryId?: string | null;
+}
+
+export interface EnsurePendingStudentMemorySnapshotResult {
+  outcome: 'created' | 'pending_exists';
+  entry: StudentMemorySnapshotRecord;
+}
+
 export interface ListStudentMemorySnapshotsOptions {
   studentId?: string | null;
   statuses?: StudentMemorySnapshotStatus[];
   limit: number;
   offset: number;
   order?: 'asc' | 'desc';
+}
+
+export async function ensurePendingStudentMemorySnapshot(
+  params: EnsurePendingStudentMemorySnapshotParams,
+): Promise<EnsurePendingStudentMemorySnapshotResult> {
+  const id = params.id ?? randomUUID();
+  const generatedAt = params.generatedAt ?? new Date();
+
+  return withPgClient(async (client: PoolClient) => {
+    await client.query('BEGIN');
+    try {
+      await client.query('SELECT id FROM students WHERE id = $1 FOR UPDATE', [params.studentId]);
+
+      if (params.sourceEntryId) {
+        const pendingResult = await client.query<StudentMemorySnapshotRow>(
+          `
+          SELECT
+            id,
+            student_id,
+            schema_version,
+            generated_at,
+            provider,
+            model,
+            status,
+            source_kind,
+            lesson_memory_entry_ids,
+            homework_memory_entry_ids,
+            content_hash,
+            generation_notes,
+            stable_strengths,
+            recurring_issues,
+            active_review_backlog,
+            recent_progress,
+            personal_facts,
+            recommended_assignment_directions,
+            unresolved_issues,
+            snapshot_summary,
+            superseded_by_id,
+            superseded_at,
+            created_at,
+            updated_at
+          FROM student_memory_snapshots
+          WHERE student_id = $1
+            AND status = 'pending'
+            AND generation_notes ->> 'sourceEntryId' = $2
+          ORDER BY generated_at DESC, created_at DESC, id DESC
+          LIMIT 1
+          `,
+          [params.studentId, params.sourceEntryId],
+        );
+
+        const latestPending = pendingResult.rows[0];
+        if (latestPending) {
+          await client.query('COMMIT');
+          return {
+            outcome: 'pending_exists',
+            entry: mapRowToStudentMemorySnapshot(latestPending),
+          };
+        }
+      }
+
+      const insertResult = await client.query<StudentMemorySnapshotRow>(
+        `
+        INSERT INTO student_memory_snapshots (
+          id,
+          student_id,
+          schema_version,
+          generated_at,
+          provider,
+          model,
+          status,
+          source_kind,
+          lesson_memory_entry_ids,
+          homework_memory_entry_ids,
+          content_hash,
+          generation_notes,
+          stable_strengths,
+          recurring_issues,
+          active_review_backlog,
+          recent_progress,
+          personal_facts,
+          recommended_assignment_directions,
+          unresolved_issues,
+          snapshot_summary
+        )
+        VALUES (
+          $1, $2, $3, $4, $5, $6, 'pending', 'student_memory_rollup', $7, $8, $9, $10,
+          $11, $12, $13, $14, $15, $16, $17, $18
+        )
+        RETURNING
+          id,
+          student_id,
+          schema_version,
+          generated_at,
+          provider,
+          model,
+          status,
+          source_kind,
+          lesson_memory_entry_ids,
+          homework_memory_entry_ids,
+          content_hash,
+          generation_notes,
+          stable_strengths,
+          recurring_issues,
+          active_review_backlog,
+          recent_progress,
+          personal_facts,
+          recommended_assignment_directions,
+          unresolved_issues,
+          snapshot_summary,
+          superseded_by_id,
+          superseded_at,
+          created_at,
+          updated_at
+        `,
+        [
+          id,
+          params.studentId,
+          params.schemaVersion,
+          generatedAt,
+          params.provider,
+          params.model,
+          [],
+          [],
+          null,
+          params.generationNotes ?? null,
+          JSON.stringify([]),
+          JSON.stringify([]),
+          JSON.stringify([]),
+          JSON.stringify([]),
+          JSON.stringify([]),
+          JSON.stringify([]),
+          JSON.stringify([]),
+          null,
+        ],
+      );
+
+      const insertedRow = insertResult.rows[0];
+      if (!insertedRow) {
+        throw new Error('Failed to insert pending student-memory snapshot');
+      }
+
+      await client.query('COMMIT');
+      const inserted = mapRowToStudentMemorySnapshot(insertedRow);
+      logger.info('Pending student memory snapshot inserted', {
+        studentMemorySnapshotId: inserted.id,
+        studentId: params.studentId,
+      });
+      return {
+        outcome: 'created',
+        entry: inserted,
+      };
+    } catch (error) {
+      await client.query('ROLLBACK');
+      throw error;
+    }
+  });
 }
 
 export async function insertStudentMemorySnapshot(
@@ -382,11 +555,130 @@ export async function getLatestReadyStudentMemorySnapshotByStudentId(
   return row ? mapRowToStudentMemorySnapshot(row) : null;
 }
 
+export async function supersedePendingStudentMemorySnapshotsForStudent(params: {
+  studentId: string;
+  supersededById: string;
+  supersededAt?: Date;
+  maxGeneratedAt?: Date;
+}): Promise<StudentMemorySnapshotRecord[]> {
+  const supersededAt = params.supersededAt ?? new Date();
+  const maxGeneratedAt = params.maxGeneratedAt ?? supersededAt;
+
+  const rows = await withPgClient(async (client: PoolClient) => {
+    const result = await client.query(
+      `
+      UPDATE student_memory_snapshots
+      SET
+        status = 'superseded',
+        superseded_by_id = $1,
+        superseded_at = $2,
+        updated_at = NOW()
+      WHERE student_id = $3
+        AND status = 'pending'
+        AND generated_at <= $4
+      RETURNING
+        id,
+        student_id,
+        schema_version,
+        generated_at,
+        provider,
+        model,
+        status,
+        source_kind,
+        lesson_memory_entry_ids,
+        homework_memory_entry_ids,
+        content_hash,
+        generation_notes,
+        stable_strengths,
+        recurring_issues,
+        active_review_backlog,
+        recent_progress,
+        personal_facts,
+        recommended_assignment_directions,
+        unresolved_issues,
+        snapshot_summary,
+        superseded_by_id,
+        superseded_at,
+        created_at,
+        updated_at
+      `,
+      [params.supersededById, supersededAt, params.studentId, maxGeneratedAt],
+    );
+    return result.rows;
+  });
+
+  return rows.map((row) => mapRowToStudentMemorySnapshot(row));
+}
+
+export async function markStudentMemorySnapshotFailed(params: {
+  id: string;
+  errorMessage: string;
+  providerRequestId?: string | null;
+  usage?: unknown;
+}): Promise<StudentMemorySnapshotRecord | null> {
+  const existing = await getStudentMemorySnapshotById(params.id);
+  if (!existing) {
+    return null;
+  }
+
+  const generationNotes: StudentMemorySnapshotGenerationNotes = {
+    ...existing.generationNotes,
+    error: params.errorMessage,
+    providerRequestId:
+      params.providerRequestId ?? (existing.generationNotes?.providerRequestId ?? null),
+    usage: params.usage ?? (existing.generationNotes?.usage ?? null),
+    failedAt: new Date().toISOString(),
+  };
+
+  const row = await withPgClient(async (client: PoolClient) => {
+    const result = await client.query(
+      `
+      UPDATE student_memory_snapshots
+      SET
+        status = 'failed',
+        generation_notes = $2::jsonb,
+        updated_at = NOW()
+      WHERE id = $1
+        AND status = 'pending'
+      RETURNING
+        id,
+        student_id,
+        schema_version,
+        generated_at,
+        provider,
+        model,
+        status,
+        source_kind,
+        lesson_memory_entry_ids,
+        homework_memory_entry_ids,
+        content_hash,
+        generation_notes,
+        stable_strengths,
+        recurring_issues,
+        active_review_backlog,
+        recent_progress,
+        personal_facts,
+        recommended_assignment_directions,
+        unresolved_issues,
+        snapshot_summary,
+        superseded_by_id,
+        superseded_at,
+        created_at,
+        updated_at
+      `,
+      [params.id, JSON.stringify(generationNotes)],
+    );
+    return result.rows[0];
+  });
+
+  return row ? mapRowToStudentMemorySnapshot(row) : null;
+}
+
 export async function listStudentMemorySnapshots(
   options: ListStudentMemorySnapshotsOptions,
 ): Promise<StudentMemorySnapshotRecord[]> {
   const { studentId, statuses, limit, offset, order = 'desc' } = options;
-  const values: Array<string | string[] | number> = [];
+  const values: (string | string[] | number)[] = [];
   const clauses: string[] = [];
 
   if (studentId) {

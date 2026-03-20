@@ -126,7 +126,7 @@ async function listReplayTargets(args: {
   transcriptId?: string;
 }): Promise<ReplayTargetRow[]> {
   return withPgClient(async (client: PoolClient) => {
-    const values: Array<string | number> = [];
+    const values: (string | number)[] = [];
     const whereClauses = ['r.student_id IS NOT NULL'];
 
     if (args.studentId) {
@@ -148,18 +148,20 @@ async function listReplayTargets(args: {
             AND lme.status = 'ready'
         )`);
       } else if (args.selection === 'failed') {
-        whereClauses.push(`NOT EXISTS (
-          SELECT 1
-          FROM lesson_memory_entries lme
-          WHERE lme.transcript_id = t.id
-            AND lme.status = 'ready'
-        )`);
-        whereClauses.push(`EXISTS (
-          SELECT 1
-          FROM lesson_memory_entries lme
-          WHERE lme.transcript_id = t.id
-            AND lme.status = 'failed'
-        )`);
+        whereClauses.push(
+          `NOT EXISTS (
+            SELECT 1
+            FROM lesson_memory_entries lme
+            WHERE lme.transcript_id = t.id
+              AND lme.status = 'ready'
+          )`,
+          `EXISTS (
+            SELECT 1
+            FROM lesson_memory_entries lme
+            WHERE lme.transcript_id = t.id
+              AND lme.status = 'failed'
+          )`,
+        );
       }
     }
 

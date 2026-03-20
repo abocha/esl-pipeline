@@ -27,6 +27,7 @@
 - Frontend is an authenticated assignment console.
 - Backend exposes extended API routes and queue-backed processing.
 - Prompt templates/profiles are runtime-managed from Postgres revisions (DB-canonical).
+- Canonical student-memory artifacts, inspection routes, and replay tooling are backend-live.
 - Orchestrator remains the publish execution engine after approval handoff.
 
 ## Architecture
@@ -51,10 +52,17 @@ Batch Frontend (React + Vite)
 
 - Auth: `/auth/*`
 - Recordings/transcripts: `/recordings/*`
+- Students: `GET /students/:id/memory`, `GET /students/:id/lesson-memory`, `GET /students/:id/homework-memory`, `GET /students/:id/memory-snapshots` for authenticated student-memory inspection
 - Prompt config/options: `/config/prompts`, `/config/job-options`
 - Prompt package and drafts: `/recordings/:id/prompt-package`, `GET /prompt-packages/:id` for canonical prompt-package lineage and assignment-level memory provenance inspection, `/prompt-packages/:id/draft`, `/drafts/:id/materialize`
 - Approval and status: `/jobs/:jobId/approve`, `/jobs/:jobId`, `/jobs/events`
 - Validation: `/validation/markdown`
+
+Operator repair/backfill surfaces:
+
+- `pnpm --filter @esl-pipeline/batch-backend lesson-memory:refresh`
+- `pnpm --filter @esl-pipeline/batch-backend exec tsx --tsconfig tsconfig.json src/tools/refresh-homework-memory.ts`
+- `pnpm --filter @esl-pipeline/batch-backend exec tsx --tsconfig tsconfig.json src/tools/refresh-student-memory-snapshots.ts`
 
 Event fanout behavior (Redis bridge):
 

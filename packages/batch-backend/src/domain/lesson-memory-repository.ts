@@ -92,8 +92,7 @@ export interface ListRecentReadyLessonMemoryOptions {
 
 export type InsertCanonicalReadyLessonMemoryParams = Omit<InsertLessonMemoryParams, 'status'>;
 
-export interface EnsurePendingLessonMemoryEntryParams
-  extends Omit<InsertLessonMemoryParams, 'status'> {}
+export type EnsurePendingLessonMemoryEntryParams = Omit<InsertLessonMemoryParams, 'status'>;
 
 export interface EnsurePendingLessonMemoryEntryResult {
   outcome: 'created' | 'pending_exists' | 'ready_exists';
@@ -687,7 +686,7 @@ export async function listLessonMemoryEntries(
   options: ListLessonMemoryEntriesOptions,
 ): Promise<LessonMemoryRecord[]> {
   const { studentId, transcriptId, recordingId, statuses, limit, offset, order = 'desc' } = options;
-  const values: Array<string | string[] | number> = [];
+  const values: (string | string[] | number)[] = [];
   const clauses: string[] = [];
   const requiresCanonicalReadyFilter =
     Array.isArray(statuses) &&
@@ -776,7 +775,7 @@ export async function listRecentReadyLessonMemoryByStudentId(
   studentId: string,
   options: ListRecentReadyLessonMemoryOptions,
 ): Promise<LessonMemoryRecord[]> {
-  const values: Array<string | number> = [studentId];
+  const values: (string | number)[] = [studentId];
   const clauses = ['lesson_memory_entries.student_id = $1', `lesson_memory_entries.status = 'ready'`];
 
   if (options.excludeTranscriptId) {
@@ -838,7 +837,7 @@ export async function supersedeReadyLessonMemoryEntriesForTranscript(params: {
   supersededAt?: Date;
 }): Promise<LessonMemoryRecord[]> {
   const supersededAt = params.supersededAt ?? new Date();
-  const values: Array<string | Date> = [params.supersededById, supersededAt, params.transcriptId];
+  const values: (string | Date)[] = [params.supersededById, supersededAt, params.transcriptId];
   const clauses = [`transcript_id = $3`, `status = 'ready'`, `id <> $1`];
 
   if (params.excludeEntryId) {
@@ -964,7 +963,7 @@ export async function markLessonMemoryEntryFailed(params: {
   }
 
   const generationNotes: LessonMemoryGenerationNotes = {
-    ...(existing.generationNotes ?? {}),
+    ...existing.generationNotes,
     error: params.errorMessage,
     providerRequestId: params.providerRequestId ?? (existing.generationNotes?.providerRequestId ?? null),
     usage: params.usage ?? (existing.generationNotes?.usage ?? null),

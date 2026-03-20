@@ -72,7 +72,7 @@ export async function generateHomeworkMemoryFromSource(args: {
     model: args.request.model,
     contentHash: args.request.source.contentHash,
     generationNotes: {
-      ...(args.request.pendingGenerationNotes ?? {}),
+      ...args.request.pendingGenerationNotes,
       pendingEntryId: args.request.pendingEntryId ?? null,
       providerRequestId: extraction.providerRequestId ?? null,
       usage: extraction.usage ?? null,

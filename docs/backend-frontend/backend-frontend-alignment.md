@@ -36,6 +36,7 @@ Provider-specific generation details stay in:
 - direct generation, TTS fallback, and generation safety guardrails are shipped
 - prompt catalog runtime is DB-canonical
 - STT provider architecture now mirrors TTS
+- student-memory backend surfaces, provenance, and replay tooling are live
 - Telegram ops control surface is live for operator workflows
 
 ## Capability Matrix
@@ -50,6 +51,7 @@ Provider-specific generation details stay in:
 | Job status and core job actions | Done | Done | keep DTOs contract-first |
 | Student summary/profile/bindings | Done | Partial | workspace hardening continues |
 | Student timeline + provenance | Done | Done | continue ergonomics pass |
+| Student memory inspection + replay tooling | Done | Deferred | backend routes, prompt-package provenance, and replay tools are live; minimal UI remains later-phase work |
 | Direct generation provider/model selection | Done | Done | keep quota semantics aligned |
 | Generation safety guardrails | Done | Done | continue battle-testing telemetry |
 | STT provider metadata + persistence | Done | Done | keep defaults aligned with env policy |
@@ -60,8 +62,9 @@ Provider-specific generation details stay in:
 
 1. Frontend SSE resilience still depends on explicit polling fallback behavior.
 2. Student workspace needs continued UX hardening even though the core route is live.
-3. Voice-alignment readiness counters and thresholds still need fuller frontend treatment.
-4. Parser-only telemetry cutover remains deferred; parity monitoring is still active.
+3. Student-memory UI remains deferred even though backend inspection and replay surfaces are now live.
+4. Voice-alignment readiness counters and thresholds still need fuller frontend treatment.
+5. Parser-only telemetry cutover remains deferred; parity monitoring is still active.
 
 ## Rules
 

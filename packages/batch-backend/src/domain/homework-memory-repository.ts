@@ -590,7 +590,7 @@ export async function listHomeworkMemoryEntries(
 ): Promise<HomeworkMemoryRecord[]> {
   const { studentId, jobId, assignmentLineageKey, statuses, limit, offset, order = 'desc' } =
     options;
-  const values: Array<string | string[] | number> = [];
+  const values: (string | string[] | number)[] = [];
   const clauses: string[] = [];
 
   if (studentId) {
@@ -644,7 +644,7 @@ export async function listRecentReadyHomeworkMemoryByStudentId(
   studentId: string,
   options: ListRecentReadyHomeworkMemoryOptions,
 ): Promise<HomeworkMemoryRecord[]> {
-  const values: Array<string | number> = [studentId];
+  const values: (string | number)[] = [studentId];
   const clauses = ['student_id = $1', `status = 'ready'`];
 
   if (options.excludeAssignmentLineageKey) {
@@ -680,7 +680,7 @@ export async function supersedeReadyHomeworkMemoryEntriesForAssignmentLineage(pa
   supersededAt?: Date;
 }): Promise<HomeworkMemoryRecord[]> {
   const supersededAt = params.supersededAt ?? new Date();
-  const values: Array<string | Date> = [params.supersededById, supersededAt, params.assignmentLineageKey];
+  const values: (string | Date)[] = [params.supersededById, supersededAt, params.assignmentLineageKey];
   const clauses = [`assignment_lineage_key = $3`, `status = 'ready'`, `id <> $1`];
 
   if (params.excludeEntryId) {
@@ -761,7 +761,7 @@ export async function markHomeworkMemoryEntryFailed(params: {
   }
 
   const generationNotes: HomeworkMemoryGenerationNotes = {
-    ...(existing.generationNotes ?? {}),
+    ...existing.generationNotes,
     error: params.errorMessage,
     providerRequestId:
       params.providerRequestId ?? (existing.generationNotes?.providerRequestId ?? null),

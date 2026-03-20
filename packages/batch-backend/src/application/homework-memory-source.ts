@@ -289,14 +289,18 @@ function normalizePublishTarget(value: string | null): PublishTarget | null {
 
 function resolvePublishUrl(row: HomeworkSourceJobRow, target: PublishTarget): string | null {
   switch (target) {
-    case 'notion':
+    case 'notion': {
       return row.notion_url ?? null;
-    case 'anytype':
+    }
+    case 'anytype': {
       return row.anytype_url ?? null;
-    case 'html':
+    }
+    case 'html': {
       return row.html_url ?? null;
-    default:
+    }
+    default: {
       return null;
+    }
   }
 }
 

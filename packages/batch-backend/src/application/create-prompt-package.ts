@@ -92,9 +92,17 @@ export interface PromptPackageResponse {
     selectedLessonMemoryIds: string[];
     selectedHomeworkMemoryIds: string[];
     retrievalPolicyVersion: string | null;
+    layerAvailability: PromptPackageMemoryLayerAvailability;
   };
   createdAt: string;
   updatedAt: string;
+}
+
+export interface PromptPackageMemoryLayerAvailability {
+  studentMemorySnapshot: 'available' | 'missing' | 'not_applicable';
+  recentLessonMemory: 'available' | 'missing' | 'not_applicable';
+  recentHomeworkMemory: 'available' | 'missing' | 'not_applicable';
+  retrievalPolicy: 'available' | 'missing' | 'not_applicable';
 }
 
 export interface CreatePromptPackageDependencies {
@@ -389,9 +397,39 @@ export function toPromptPackageResponse(
       selectedLessonMemoryIds: promptPackage.selectedLessonMemoryIds ?? [],
       selectedHomeworkMemoryIds: promptPackage.selectedHomeworkMemoryIds ?? [],
       retrievalPolicyVersion: promptPackage.retrievalPolicyVersion ?? null,
+      layerAvailability: getPromptPackageMemoryLayerAvailability(promptPackage),
     },
     createdAt: promptPackage.createdAt.toISOString(),
     updatedAt: promptPackage.updatedAt.toISOString(),
+  };
+}
+
+export function getPromptPackageMemoryLayerAvailability(
+  promptPackage: Pick<
+    PromptPackageRecord,
+    | 'studentId'
+    | 'studentMemorySnapshotId'
+    | 'selectedLessonMemoryIds'
+    | 'selectedHomeworkMemoryIds'
+    | 'retrievalPolicyVersion'
+  >,
+): PromptPackageMemoryLayerAvailability {
+  if (!promptPackage.studentId) {
+    return {
+      studentMemorySnapshot: 'not_applicable',
+      recentLessonMemory: 'not_applicable',
+      recentHomeworkMemory: 'not_applicable',
+      retrievalPolicy: 'not_applicable',
+    };
+  }
+
+  return {
+    studentMemorySnapshot: promptPackage.studentMemorySnapshotId ? 'available' : 'missing',
+    recentLessonMemory:
+      (promptPackage.selectedLessonMemoryIds?.length ?? 0) > 0 ? 'available' : 'missing',
+    recentHomeworkMemory:
+      (promptPackage.selectedHomeworkMemoryIds?.length ?? 0) > 0 ? 'available' : 'missing',
+    retrievalPolicy: promptPackage.retrievalPolicyVersion ? 'available' : 'missing',
   };
 }
 

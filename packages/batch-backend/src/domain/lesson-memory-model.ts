@@ -72,7 +72,7 @@ export interface PronunciationFocusEntry {
   evidence: PronunciationEvidence[];
 }
 
-export interface LessonMemoryGenerationNotes extends Record<string, unknown> {}
+export type LessonMemoryGenerationNotes = Record<string, unknown>;
 
 export interface LessonMemoryRecord {
   id: string;
