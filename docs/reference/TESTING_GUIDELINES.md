@@ -60,6 +60,21 @@ For `@esl-pipeline/batch-backend`:
   - worker integration lane (`test:integration:worker`)
 - DB safety invariant:
   - `BATCH_BACKEND_TEST_PG` must point to a database name ending in `_test`; non-`_test` targets are rejected by the test env helper to prevent destructive test SQL from hitting dev/runtime data.
+- Local Docker/Postgres note:
+  - `.env.batch-backend` may define `BATCH_BACKEND_TEST_PG` for the host-accessible test database, but current PG-backed suites import the DB layer before `requirePgTestEnv()` rewrites `PG_CONNECTION_STRING`.
+  - For host-run PG-backed tests, export `PG_CONNECTION_STRING="$BATCH_BACKEND_TEST_PG"` in the shell before invoking Vitest or package test scripts.
+  - On WSL/Linux host-run `tsx` commands, also set safe temp envs such as `TMPDIR=/tmp/codex-tmp`, `TMP=/tmp/codex-tmp`, and `TEMP=/tmp/codex-tmp` to avoid IPC socket failures on mounted temp paths.
+  - Example flow:
+
+```bash
+mkdir -p /tmp/codex-tmp
+set -a
+source .env.batch-backend
+set +a
+export TMPDIR=/tmp/codex-tmp TMP=/tmp/codex-tmp TEMP=/tmp/codex-tmp
+export PG_CONNECTION_STRING="$BATCH_BACKEND_TEST_PG"
+pnpm --filter @esl-pipeline/batch-backend exec vitest run --config ../../vitest.config.ts tests/domain.lesson-memory-repository.test.ts
+```
 
 ## File Naming and Routing
 

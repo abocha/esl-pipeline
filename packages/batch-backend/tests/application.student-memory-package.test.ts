@@ -1,0 +1,147 @@
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+
+const {
+  getLatestReadyStudentMemorySnapshotByStudentIdMock,
+  listRecentReadyLessonMemoryByStudentIdMock,
+  listRecentReadyHomeworkMemoryByStudentIdMock,
+  buildStudentLessonHistoryPackageContextMock,
+} = vi.hoisted(() => ({
+  getLatestReadyStudentMemorySnapshotByStudentIdMock: vi.fn(),
+  listRecentReadyLessonMemoryByStudentIdMock: vi.fn(),
+  listRecentReadyHomeworkMemoryByStudentIdMock: vi.fn(),
+  buildStudentLessonHistoryPackageContextMock: vi.fn(),
+}));
+
+vi.mock('../src/domain/student-memory-snapshot-repository.js', () => ({
+  getLatestReadyStudentMemorySnapshotByStudentId:
+    getLatestReadyStudentMemorySnapshotByStudentIdMock,
+}));
+
+vi.mock('../src/domain/lesson-memory-repository.js', () => ({
+  listRecentReadyLessonMemoryByStudentId: listRecentReadyLessonMemoryByStudentIdMock,
+}));
+
+vi.mock('../src/domain/homework-memory-repository.js', () => ({
+  listRecentReadyHomeworkMemoryByStudentId: listRecentReadyHomeworkMemoryByStudentIdMock,
+}));
+
+vi.mock('../src/application/student-lesson-history.js', () => ({
+  buildStudentLessonHistoryPackageContext: buildStudentLessonHistoryPackageContextMock,
+}));
+
+import { buildStudentMemoryPackageContext } from '../src/application/student-memory-package.js';
+
+describe('application/student-memory-package', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it('builds canonical prompt-package memory context from snapshot, lesson memory, and homework memory', async () => {
+    getLatestReadyStudentMemorySnapshotByStudentIdMock.mockResolvedValue({
+      id: 'snapshot-1',
+      contentHash: 'snapshot-hash-1',
+      snapshotSummary: 'Long-term summary',
+      unresolvedIssues: [
+        {
+          priority: 'high',
+          label: 'Past simple vs present perfect',
+          note: 'Still unstable in spontaneous speech.',
+        },
+      ],
+    });
+    listRecentReadyLessonMemoryByStudentIdMock.mockResolvedValue([
+      {
+        id: 'lesson-1',
+        generatedAt: new Date('2026-03-18T00:00:00.000Z'),
+        lessonSummary: 'Worked on advice language.',
+        topicsDiscussed: [{ topic: 'Advice', note: 'Advice language and framing.' }],
+        grammarWatchlist: [{ name: 'Present perfect', note: 'Still unstable.' }],
+        vocabularyFocus: [{ text: 'give advice', note: 'Useful phrase.' }],
+        pronunciationFocus: [],
+        followUpRecommendations: [{ label: 'Give advice with because', note: 'Carry forward.' }],
+      },
+    ]);
+    listRecentReadyHomeworkMemoryByStudentIdMock.mockResolvedValue([
+      {
+        id: 'homework-1',
+        generatedAt: new Date('2026-03-19T00:00:00.000Z'),
+        homeworkSummary: 'Advice mission with review grammar.',
+        topic: 'Giving advice',
+        grammarTargets: [{ name: 'Should', note: 'Main target.', targetKind: 'mixed' }],
+        reviewTargets: [{ label: 'Present perfect', note: 'Brief review.' }],
+        taskList: [
+          {
+            section: 'Mission',
+            task: 'Give advice to the person from the text.',
+            taskType: 'mission',
+            review: true,
+          },
+        ],
+        pronunciationFocus: [],
+        teacherFollowUpCues: [{ cueType: 'monitoring', note: 'Check should vs have to.' }],
+      },
+    ]);
+    buildStudentLessonHistoryPackageContextMock.mockResolvedValue({
+      text: null,
+      selectedLessonMemoryIds: [],
+      source: 'none',
+    });
+
+    const result = await buildStudentMemoryPackageContext({
+      studentId: 'student-1',
+      currentTranscriptId: 'transcript-current',
+      config: {
+        pg: {
+          enabled: true,
+        },
+      } as never,
+    });
+
+    expect(result).toMatchObject({
+      studentMemorySnapshotId: 'snapshot-1',
+      studentMemorySnapshotHash: 'snapshot-hash-1',
+      selectedLessonMemoryIds: ['lesson-1'],
+      selectedHomeworkMemoryIds: ['homework-1'],
+      retrievalPolicyVersion: 'student-memory-v1',
+      source: 'canonical',
+    });
+    expect(result.text).toContain('[STUDENT_MEMORY_SNAPSHOT]');
+    expect(result.text).toContain('[UNRESOLVED_ISSUES]');
+    expect(result.text).toContain('[RECENT_LESSON_MEMORY]');
+    expect(result.text).toContain('[RECENT_HOMEWORK_MEMORY]');
+    expect(result.text).toContain('Grammar watchlist: Present perfect');
+    expect(result.text).toContain('Review targets: Present perfect');
+    expect(buildStudentLessonHistoryPackageContextMock).not.toHaveBeenCalled();
+  });
+
+  it('falls back to legacy history when canonical memory is absent', async () => {
+    getLatestReadyStudentMemorySnapshotByStudentIdMock.mockResolvedValue(null);
+    listRecentReadyLessonMemoryByStudentIdMock.mockResolvedValue([]);
+    listRecentReadyHomeworkMemoryByStudentIdMock.mockResolvedValue([]);
+    buildStudentLessonHistoryPackageContextMock.mockResolvedValue({
+      text: '[LEGACY_HISTORY]\nLegacy summary',
+      selectedLessonMemoryIds: ['legacy-lesson-1'],
+      source: 'legacy',
+    });
+
+    const result = await buildStudentMemoryPackageContext({
+      studentId: 'student-1',
+      currentTranscriptId: 'transcript-current',
+      config: {
+        pg: {
+          enabled: true,
+        },
+      } as never,
+    });
+
+    expect(result).toEqual({
+      text: '[LEGACY_HISTORY]\nLegacy summary',
+      studentMemorySnapshotId: null,
+      studentMemorySnapshotHash: null,
+      selectedLessonMemoryIds: ['legacy-lesson-1'],
+      selectedHomeworkMemoryIds: [],
+      retrievalPolicyVersion: null,
+      source: 'legacy',
+    });
+  });
+});

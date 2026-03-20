@@ -18,6 +18,7 @@ import {
   getActiveTemplateRevision,
 } from '../domain/template-revision-repository.js';
 import { getTranscriptByRecordingId } from '../domain/transcript-repository.js';
+import { logger } from '../infrastructure/logger.js';
 import type { TranscriptionStorage } from '../infrastructure/transcription-storage.js';
 import {
   createTranscriptionStorage,
@@ -26,7 +27,8 @@ import {
 import { stitchPromptPayload } from './prompt-assembly.js';
 import { PromptOptionError, resolvePromptSelection } from './prompt-options.js';
 import { materializePromptTemplateWithCapabilities } from './prompt-voice-capabilities.js';
-import { buildStudentLessonHistoryPackageContext } from './student-lesson-history.js';
+import { requestLessonMemoryGeneration } from './request-lesson-memory-generation.js';
+import { buildStudentMemoryPackageContext } from './student-memory-package.js';
 import { resolveStudentProfileBindingAt } from './student-profile-bindings.js';
 import { getStudentProfileById } from './student-profiles-store.js';
 
@@ -124,6 +126,9 @@ export interface CreatePromptPackageDependencies {
     activate: typeof activateTemplateRevision;
     getActive: typeof getActiveTemplateRevision;
   };
+  lessonMemory: {
+    requestGeneration: typeof requestLessonMemoryGeneration;
+  };
 }
 
 interface PromptArtifactResolution {
@@ -173,6 +178,9 @@ export async function createPromptPackage(
     activate: activateTemplateRevision,
     getActive: getActiveTemplateRevision,
   };
+  const lessonMemory = overrides?.lessonMemory ?? {
+    requestGeneration: requestLessonMemoryGeneration,
+  };
 
   const transcript = await transcripts.getByRecordingId(params.recordingId);
   if (!transcript) return null;
@@ -215,7 +223,7 @@ export async function createPromptPackage(
     }),
     readStorage.getText(transcript.storageUri),
   ]);
-  const historyContext = await buildStudentLessonHistoryPackageContext({
+  const historyContext = await buildStudentMemoryPackageContext({
     studentId: recording?.studentId ?? null,
     currentTranscriptId: transcript.id,
     config,
@@ -244,11 +252,11 @@ export async function createPromptPackage(
     recordingId: transcript.recordingId,
     transcriptId: transcript.id,
     studentId: recording?.studentId ?? null,
-    studentMemorySnapshotId: null,
-    studentMemorySnapshotHash: null,
+    studentMemorySnapshotId: historyContext.studentMemorySnapshotId,
+    studentMemorySnapshotHash: historyContext.studentMemorySnapshotHash,
     selectedLessonMemoryIds: historyContext.selectedLessonMemoryIds,
-    selectedHomeworkMemoryIds: [],
-    retrievalPolicyVersion: historyContext.source === 'canonical' ? 'student-memory-v1' : null,
+    selectedHomeworkMemoryIds: historyContext.selectedHomeworkMemoryIds,
+    retrievalPolicyVersion: historyContext.retrievalPolicyVersion,
     profilePath: selection.profilePath,
     resolvedProfileId: selection.profileId,
     resolvedProfileHash: artifacts.profile.hash,
@@ -270,7 +278,31 @@ export async function createPromptPackage(
     storageUri: stored.uri,
   });
 
-  return toPromptPackageResponse(promptPackage, payload);
+  const response = toPromptPackageResponse(promptPackage, payload);
+
+  if (recording?.studentId && (config as { generation?: unknown }).generation) {
+    void lessonMemory
+      .requestGeneration({
+        config,
+        params: {
+          studentId: recording.studentId,
+          transcriptId: transcript.id,
+          recordingId: transcript.recordingId,
+          promptPackageId: promptPackage.id,
+          trigger: 'prompt-package-created',
+        },
+      })
+      .catch((error) => {
+        logger.warn('Lesson-memory enqueue failed after prompt-package creation; continuing', {
+          event: 'lesson_memory_enqueue_failed_non_blocking',
+          promptPackageId: promptPackage.id,
+          transcriptId: transcript.id,
+          error: error instanceof Error ? error.message : String(error),
+        });
+      });
+  }
+
+  return response;
 }
 
 export function toPromptPackageResponse(

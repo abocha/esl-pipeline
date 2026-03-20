@@ -92,6 +92,22 @@ async function assertSchemaHealthy(scenario: string): Promise<void> {
     expect(indexNames.has('idx_recordings_source_path_trgm')).toBe(true);
     expect(indexNames.has('idx_recordings_storage_uri_trgm')).toBe(true);
     expect(indexNames.has('idx_recordings_id_trgm')).toBe(true);
+
+    const studentMemorySnapshotColumns = await pool.query<{ column_name: string }>(
+      `
+      SELECT column_name
+      FROM information_schema.columns
+      WHERE table_schema = 'public'
+        AND table_name = 'student_memory_snapshots'
+      `,
+    );
+    const studentMemorySnapshotColumnSet = new Set(
+      studentMemorySnapshotColumns.rows.map((row) => row.column_name),
+    );
+    expect(studentMemorySnapshotColumnSet.has('lesson_memory_entry_ids')).toBe(true);
+    expect(studentMemorySnapshotColumnSet.has('homework_memory_entry_ids')).toBe(true);
+    expect(studentMemorySnapshotColumnSet.has('content_hash')).toBe(true);
+    expect(studentMemorySnapshotColumnSet.has('unresolved_issues')).toBe(true);
   });
 }
 

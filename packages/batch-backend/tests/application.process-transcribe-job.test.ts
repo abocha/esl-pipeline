@@ -375,6 +375,10 @@ function createConfig(): BatchBackendConfig {
       sttProvider: 'deepgram',
       sttProviders: ['deepgram', 'elevenlabs', 'google'],
     },
+    studentMemory: {
+      queueName: 'student-memory-queue',
+      maxConcurrency: 1,
+    },
     stt: {
       defaultProvider: 'deepgram',
       providerOrder: ['deepgram', 'elevenlabs', 'google'],
