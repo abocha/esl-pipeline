@@ -85,6 +85,8 @@ export interface ListRecentReadyLessonMemoryOptions {
   excludeTranscriptId?: string | null;
 }
 
+export type InsertCanonicalReadyLessonMemoryParams = Omit<InsertLessonMemoryParams, 'status'>;
+
 export async function insertLessonMemoryEntry(
   params: InsertLessonMemoryParams,
 ): Promise<LessonMemoryRecord> {
@@ -160,15 +162,15 @@ export async function insertLessonMemoryEntry(
         params.status,
         params.generationNotes ?? null,
         params.lessonSummary ?? null,
-        params.topicsDiscussed ?? [],
-        params.mistakePatterns ?? [],
-        params.grammarReviewed ?? [],
-        params.grammarWatchlist ?? [],
-        params.vocabularyFocus ?? [],
-        params.pronunciationFocus ?? [],
-        params.studentFacts ?? [],
-        params.progressSignals ?? [],
-        params.followUpRecommendations ?? [],
+        JSON.stringify(params.topicsDiscussed ?? []),
+        JSON.stringify(params.mistakePatterns ?? []),
+        JSON.stringify(params.grammarReviewed ?? []),
+        JSON.stringify(params.grammarWatchlist ?? []),
+        JSON.stringify(params.vocabularyFocus ?? []),
+        JSON.stringify(params.pronunciationFocus ?? []),
+        JSON.stringify(params.studentFacts ?? []),
+        JSON.stringify(params.progressSignals ?? []),
+        JSON.stringify(params.followUpRecommendations ?? []),
       ],
     );
     return result.rows[0];
@@ -178,6 +180,128 @@ export async function insertLessonMemoryEntry(
     lessonMemoryEntryId: id,
     transcriptId: params.transcriptId,
     status: params.status,
+  });
+
+  return mapRowToLessonMemory(row);
+}
+
+export async function insertCanonicalReadyLessonMemoryEntry(
+  params: InsertCanonicalReadyLessonMemoryParams,
+): Promise<LessonMemoryRecord> {
+  const id = params.id ?? randomUUID();
+  const generatedAt = params.generatedAt ?? new Date();
+
+  const row = await withPgClient(async (client: PoolClient) => {
+    await client.query('BEGIN');
+    try {
+      // Serialize canonical ready replacement per transcript to avoid supersession races.
+      await client.query('SELECT id FROM transcripts WHERE id = $1 FOR UPDATE', [params.transcriptId]);
+
+      const insertResult = await client.query(
+        `
+        INSERT INTO lesson_memory_entries (
+          id,
+          student_id,
+          transcript_id,
+          recording_id,
+          schema_version,
+          generated_at,
+          provider,
+          model,
+          status,
+          source_kind,
+          generation_notes,
+          lesson_summary,
+          topics_discussed,
+          mistake_patterns,
+          grammar_reviewed,
+          grammar_watchlist,
+          vocabulary_focus,
+          pronunciation_focus,
+          student_facts,
+          progress_signals,
+          follow_up_recommendations
+        )
+        VALUES (
+          $1, $2, $3, $4, $5, $6, $7, $8, 'ready', 'lesson_transcript', $9, $10,
+          $11, $12, $13, $14, $15, $16, $17, $18, $19
+        )
+        RETURNING
+          id,
+          student_id,
+          transcript_id,
+          recording_id,
+          schema_version,
+          generated_at,
+          provider,
+          model,
+          status,
+          source_kind,
+          generation_notes,
+          lesson_summary,
+          topics_discussed,
+          mistake_patterns,
+          grammar_reviewed,
+          grammar_watchlist,
+          vocabulary_focus,
+          pronunciation_focus,
+          student_facts,
+          progress_signals,
+          follow_up_recommendations,
+          superseded_by_id,
+          superseded_at,
+          created_at,
+          updated_at
+        `,
+        [
+          id,
+          params.studentId,
+          params.transcriptId,
+          params.recordingId,
+          params.schemaVersion,
+          generatedAt,
+          params.provider,
+          params.model,
+          params.generationNotes ?? null,
+          params.lessonSummary ?? null,
+          JSON.stringify(params.topicsDiscussed ?? []),
+          JSON.stringify(params.mistakePatterns ?? []),
+          JSON.stringify(params.grammarReviewed ?? []),
+          JSON.stringify(params.grammarWatchlist ?? []),
+          JSON.stringify(params.vocabularyFocus ?? []),
+          JSON.stringify(params.pronunciationFocus ?? []),
+          JSON.stringify(params.studentFacts ?? []),
+          JSON.stringify(params.progressSignals ?? []),
+          JSON.stringify(params.followUpRecommendations ?? []),
+        ],
+      );
+
+      await client.query(
+        `
+        UPDATE lesson_memory_entries
+        SET
+          status = 'superseded',
+          superseded_by_id = $1,
+          superseded_at = $2,
+          updated_at = NOW()
+        WHERE transcript_id = $3
+          AND status = 'ready'
+          AND id <> $1
+        `,
+        [id, generatedAt, params.transcriptId],
+      );
+
+      await client.query('COMMIT');
+      return insertResult.rows[0];
+    } catch (error) {
+      await client.query('ROLLBACK');
+      throw error;
+    }
+  });
+
+  logger.info('Canonical ready lesson memory entry inserted', {
+    lessonMemoryEntryId: id,
+    transcriptId: params.transcriptId,
   });
 
   return mapRowToLessonMemory(row);
