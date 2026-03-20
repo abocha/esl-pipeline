@@ -4,12 +4,10 @@ const {
   getLatestReadyStudentMemorySnapshotByStudentIdMock,
   listRecentReadyLessonMemoryByStudentIdMock,
   listRecentReadyHomeworkMemoryByStudentIdMock,
-  buildStudentLessonHistoryPackageContextMock,
 } = vi.hoisted(() => ({
   getLatestReadyStudentMemorySnapshotByStudentIdMock: vi.fn(),
   listRecentReadyLessonMemoryByStudentIdMock: vi.fn(),
   listRecentReadyHomeworkMemoryByStudentIdMock: vi.fn(),
-  buildStudentLessonHistoryPackageContextMock: vi.fn(),
 }));
 
 vi.mock('../src/domain/student-memory-snapshot-repository.js', () => ({
@@ -23,10 +21,6 @@ vi.mock('../src/domain/lesson-memory-repository.js', () => ({
 
 vi.mock('../src/domain/homework-memory-repository.js', () => ({
   listRecentReadyHomeworkMemoryByStudentId: listRecentReadyHomeworkMemoryByStudentIdMock,
-}));
-
-vi.mock('../src/application/student-lesson-history.js', () => ({
-  buildStudentLessonHistoryPackageContext: buildStudentLessonHistoryPackageContextMock,
 }));
 
 import { buildStudentMemoryPackageContext } from '../src/application/student-memory-package.js';
@@ -81,12 +75,6 @@ describe('application/student-memory-package', () => {
         teacherFollowUpCues: [{ cueType: 'monitoring', note: 'Check should vs have to.' }],
       },
     ]);
-    buildStudentLessonHistoryPackageContextMock.mockResolvedValue({
-      text: null,
-      selectedLessonMemoryIds: [],
-      source: 'none',
-    });
-
     const result = await buildStudentMemoryPackageContext({
       studentId: 'student-1',
       currentTranscriptId: 'transcript-current',
@@ -111,18 +99,12 @@ describe('application/student-memory-package', () => {
     expect(result.text).toContain('[RECENT_HOMEWORK_MEMORY]');
     expect(result.text).toContain('Grammar watchlist: Present perfect');
     expect(result.text).toContain('Review targets: Present perfect');
-    expect(buildStudentLessonHistoryPackageContextMock).not.toHaveBeenCalled();
   });
 
-  it('falls back to legacy history when canonical memory is absent', async () => {
+  it('returns no runtime memory context when canonical memory is absent', async () => {
     getLatestReadyStudentMemorySnapshotByStudentIdMock.mockResolvedValue(null);
     listRecentReadyLessonMemoryByStudentIdMock.mockResolvedValue([]);
     listRecentReadyHomeworkMemoryByStudentIdMock.mockResolvedValue([]);
-    buildStudentLessonHistoryPackageContextMock.mockResolvedValue({
-      text: '[LEGACY_HISTORY]\nLegacy summary',
-      selectedLessonMemoryIds: ['legacy-lesson-1'],
-      source: 'legacy',
-    });
 
     const result = await buildStudentMemoryPackageContext({
       studentId: 'student-1',
@@ -135,13 +117,13 @@ describe('application/student-memory-package', () => {
     });
 
     expect(result).toEqual({
-      text: '[LEGACY_HISTORY]\nLegacy summary',
+      text: null,
       studentMemorySnapshotId: null,
       studentMemorySnapshotHash: null,
-      selectedLessonMemoryIds: ['legacy-lesson-1'],
+      selectedLessonMemoryIds: [],
       selectedHomeworkMemoryIds: [],
       retrievalPolicyVersion: null,
-      source: 'legacy',
+      source: 'none',
     });
   });
 });

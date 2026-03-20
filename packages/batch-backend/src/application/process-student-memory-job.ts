@@ -40,6 +40,8 @@ export async function processStudentMemoryJob(args: {
     await processHomeworkMemoryJob({
       config: args.config,
       payload: args.payload,
+      attemptsMade: args.attemptsMade,
+      maxAttempts: args.maxAttempts,
     });
     return;
   }

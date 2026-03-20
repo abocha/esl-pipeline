@@ -26,6 +26,7 @@ import { ProfilePathError } from '../src/application/profile-path.js';
 import * as readinessMetricsModule from '../src/application/readiness-metrics.js';
 import * as retryRecordingModule from '../src/application/retry-recording-transcription.js';
 import * as studentBindingsModule from '../src/application/student-profile-bindings.js';
+import * as studentMemoryInspectionModule from '../src/application/student-memory-inspection.js';
 import * as studentStoreModule from '../src/application/student-profiles-store.js';
 import * as studentSummaryModule from '../src/application/student-summary.js';
 import * as studentTimelineModule from '../src/application/student-timeline.js';
@@ -189,6 +190,15 @@ vi.mock('../src/application/student-timeline', () => {
   };
 });
 
+vi.mock('../src/application/student-memory-inspection', () => {
+  return {
+    getStudentMemoryOverview: vi.fn(),
+    listStudentLessonMemory: vi.fn(),
+    listStudentHomeworkMemory: vi.fn(),
+    listStudentMemorySnapshotsForStudent: vi.fn(),
+  };
+});
+
 vi.mock('../src/application/student-profile-bindings', () => {
   return {
     listStudentProfileBindingsForStudent: vi.fn(),
@@ -253,6 +263,16 @@ export function describeHttpServerIntegrationSuite(
       templateContentModule.activateTemplateRevisionForTemplate,
     );
     const mockGetStudentTimeline = vi.mocked(studentTimelineModule.getStudentTimeline);
+    const mockGetStudentMemoryOverview = vi.mocked(
+      studentMemoryInspectionModule.getStudentMemoryOverview,
+    );
+    const mockListStudentLessonMemory = vi.mocked(studentMemoryInspectionModule.listStudentLessonMemory);
+    const mockListStudentHomeworkMemory = vi.mocked(
+      studentMemoryInspectionModule.listStudentHomeworkMemory,
+    );
+    const mockListStudentMemorySnapshotsForStudent = vi.mocked(
+      studentMemoryInspectionModule.listStudentMemorySnapshotsForStudent,
+    );
     const mockListStudentProfileBindingsForStudent = vi.mocked(
       studentBindingsModule.listStudentProfileBindingsForStudent,
     );
@@ -486,6 +506,37 @@ export function describeHttpServerIntegrationSuite(
         offset: 0,
         order: 'desc',
       });
+      mockGetStudentMemoryOverview.mockResolvedValue({
+        studentId: deriveStudentId('Anna'),
+        latestReadyStudentMemorySnapshot: null,
+        recentReadyLessonMemory: [],
+        recentReadyHomeworkMemory: [],
+        unresolvedIssues: [],
+      });
+      mockListStudentLessonMemory.mockResolvedValue({
+        studentId: deriveStudentId('Anna'),
+        items: [],
+        limit: 50,
+        offset: 0,
+        order: 'desc',
+        statuses: null,
+      });
+      mockListStudentHomeworkMemory.mockResolvedValue({
+        studentId: deriveStudentId('Anna'),
+        items: [],
+        limit: 50,
+        offset: 0,
+        order: 'desc',
+        statuses: null,
+      });
+      mockListStudentMemorySnapshotsForStudent.mockResolvedValue({
+        studentId: deriveStudentId('Anna'),
+        items: [],
+        limit: 50,
+        offset: 0,
+        order: 'desc',
+        statuses: null,
+      });
       mockGetJobProvenance.mockResolvedValue({
         job: {
           id: 'test-job-1',
@@ -584,6 +635,7 @@ export function describeHttpServerIntegrationSuite(
       studentStoreModule,
       studentBindingsModule,
       studentSummaryModule,
+      studentMemoryInspectionModule,
       studentTimelineModule,
       submitJobModule,
       templateContentModule,
@@ -618,6 +670,10 @@ export function describeHttpServerIntegrationSuite(
       mockRestoreTemplateRevision,
       mockActivateTemplateRevisionForTemplate,
       mockGetStudentTimeline,
+      mockGetStudentMemoryOverview,
+      mockListStudentLessonMemory,
+      mockListStudentHomeworkMemory,
+      mockListStudentMemorySnapshotsForStudent,
       mockListStudentProfileBindingsForStudent,
       mockGetActiveStudentProfileBindingForStudent,
       mockGetJobProvenance,

@@ -5,7 +5,7 @@ import path from 'node:path';
 import type { PublishTarget } from '@esl-pipeline/contracts';
 import type { PoolClient } from 'pg';
 
-import type { HomeworkMemoryPublishTarget, HomeworkMemoryRecord } from '../domain/homework-memory-model.js';
+import type { HomeworkMemoryPublishTarget } from '../domain/homework-memory-model.js';
 import { getLatestReadyHomeworkMemoryByAssignmentLineageKey } from '../domain/homework-memory-repository.js';
 import { withPgClient } from '../infrastructure/db.js';
 import { createTranscriptionStorageForUri } from '../infrastructure/transcription-storage.js';
@@ -50,11 +50,7 @@ export interface HomeworkMemorySourceBundle {
 
 export interface HomeworkMemoryGenerationDecision {
   shouldGenerate: boolean;
-  reason:
-    | 'missing_ready_entry'
-    | 'published_content_changed'
-    | 'publish_targets_expanded'
-    | 'no_material_change';
+  reason: 'missing_ready_entry' | 'published_content_changed' | 'no_material_change';
   source: HomeworkMemorySourceBundle;
 }
 
@@ -124,10 +120,6 @@ export async function evaluateHomeworkMemoryGenerationForSucceededJob(
 
   if ((latestReady.contentHash ?? null) !== source.contentHash) {
     return { shouldGenerate: true, reason: 'published_content_changed', source };
-  }
-
-  if (hasPublishTargetExpansion(latestReady, source.publishTargets)) {
-    return { shouldGenerate: true, reason: 'publish_targets_expanded', source };
   }
 
   return { shouldGenerate: false, reason: 'no_material_change', source };
@@ -286,26 +278,6 @@ function mergePublishTargets(rows: HomeworkSourceJobRow[]): HomeworkMemoryPublis
   }
 
   return [...byTarget.values()].sort((left, right) => left.target.localeCompare(right.target));
-}
-
-function hasPublishTargetExpansion(
-  latestReady: HomeworkMemoryRecord,
-  nextTargets: HomeworkMemoryPublishTarget[],
-): boolean {
-  const existingTargets = new Set(latestReady.publishTargets.map((target) => target.target));
-  const candidateTargets = new Set(nextTargets.map((target) => target.target));
-
-  if (candidateTargets.size > existingTargets.size) {
-    return true;
-  }
-
-  for (const target of candidateTargets) {
-    if (!existingTargets.has(target)) {
-      return true;
-    }
-  }
-
-  return false;
 }
 
 function normalizePublishTarget(value: string | null): PublishTarget | null {
