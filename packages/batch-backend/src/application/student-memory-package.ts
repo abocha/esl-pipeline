@@ -5,10 +5,6 @@ import type { LessonMemoryRecord } from '../domain/lesson-memory-model.js';
 import { listRecentReadyLessonMemoryByStudentId } from '../domain/lesson-memory-repository.js';
 import { getLatestReadyStudentMemorySnapshotByStudentId } from '../domain/student-memory-snapshot-repository.js';
 import type { StudentMemorySnapshotRecord } from '../domain/student-memory-snapshot-model.js';
-import {
-  buildStudentLessonHistoryPackageContext,
-  type StudentLessonHistoryPackageContext,
-} from './student-lesson-history.js';
 
 export interface StudentMemoryPackageContext {
   text: string | null;
@@ -77,20 +73,14 @@ export async function buildStudentMemoryPackageContext(args: {
     };
   }
 
-  const legacy = await buildStudentLessonHistoryPackageContext({
-    studentId: args.studentId,
-    currentTranscriptId: args.currentTranscriptId,
-    config: args.config,
-  });
-
   return {
-    text: legacy.text,
+    text: null,
     studentMemorySnapshotId: null,
     studentMemorySnapshotHash: null,
-    selectedLessonMemoryIds: legacy.selectedLessonMemoryIds,
+    selectedLessonMemoryIds: [],
     selectedHomeworkMemoryIds: [],
     retrievalPolicyVersion: null,
-    source: legacy.source === 'legacy' ? 'legacy' : 'none',
+    source: 'none',
   };
 }
 

@@ -1,5 +1,7 @@
 import { randomUUID } from 'node:crypto';
 
+import type { GenerationProvider } from '@esl-pipeline/contracts';
+
 import type { BatchBackendConfig } from '../config/env.js';
 import { createStudentMemoryQueue } from '../infrastructure/student-memory-queue.js';
 import { logger } from '../infrastructure/logger.js';
@@ -9,13 +11,19 @@ export interface RequestStudentMemorySnapshotRefreshParams {
   studentId: string;
   trigger: 'lesson-memory-ready' | 'homework-memory-ready' | 'manual-replay';
   sourceEntryId?: string | null;
+  providerOverride?: GenerationProvider;
+  modelOverride?: string;
 }
 
 export async function requestStudentMemorySnapshotRefresh(args: {
   config: BatchBackendConfig;
   params: RequestStudentMemorySnapshotRefreshParams;
 }): Promise<void> {
-  const candidate = resolveGenerationCandidates({ config: args.config.generation })[0];
+  const candidate = resolveGenerationCandidates({
+    config: args.config.generation,
+    providerOverride: args.params.providerOverride,
+    modelOverride: args.params.modelOverride,
+  })[0];
   if (!candidate) {
     throw new Error('No generation candidate is available for student-memory snapshot extraction');
   }

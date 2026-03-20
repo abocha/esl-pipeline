@@ -106,6 +106,11 @@ describe('application/homework-memory-generation', () => {
             plainText: '# homework',
           },
         },
+        pendingEntryId: 'pending-1',
+        pendingGenerationNotes: {
+          trigger: 'publish-succeeded',
+          requestedAt: '2026-03-20T15:31:00.000Z',
+        },
         provider: 'openrouter',
         model: 'qwen/qwen3.5',
         prompt: 'extract homework memory',
@@ -135,6 +140,11 @@ describe('application/homework-memory-generation', () => {
         assignmentLineageKey: 'job-root',
         schemaVersion: 'homework-memory.v1',
         contentHash: 'sha-123',
+        generationNotes: expect.objectContaining({
+          trigger: 'publish-succeeded',
+          pendingEntryId: 'pending-1',
+          providerRequestId: 'req-homework-1',
+        }),
       }),
     );
     expect(result.providerRequestId).toBe('req-homework-1');

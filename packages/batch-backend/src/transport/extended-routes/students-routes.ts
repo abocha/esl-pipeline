@@ -7,6 +7,12 @@ import {
   resolveStudentProfileBindingAt,
 } from '../../application/student-profile-bindings.js';
 import {
+  getStudentMemoryOverview,
+  listStudentHomeworkMemory,
+  listStudentLessonMemory,
+  listStudentMemorySnapshotsForStudent,
+} from '../../application/student-memory-inspection.js';
+import {
   StudentProfileStoreError,
   createStudentProfile,
   deleteStudentProfile,
@@ -14,6 +20,9 @@ import {
   listStudentProfiles,
   updateStudentProfile,
 } from '../../application/student-profiles-store.js';
+import { HomeworkMemoryEntryStatusSchema } from '../../domain/homework-memory-model.js';
+import { LessonMemoryEntryStatusSchema } from '../../domain/lesson-memory-model.js';
+import { StudentMemorySnapshotStatusSchema } from '../../domain/student-memory-snapshot-model.js';
 import { getStudentSummaryWithDefaults } from '../../application/student-summary.js';
 import { type StudentTimelineType, getStudentTimeline } from '../../application/student-timeline.js';
 import { logger } from '../../infrastructure/logger.js';
@@ -170,6 +179,280 @@ export function registerStudentRoutes(app: FastifyInstance, context: ExtendedRou
             error: error.code,
             message: error.message,
             code: error.code,
+          });
+        }
+
+        logger.error(error instanceof Error ? error : String(error), {
+          event: 'http_request',
+          route: routePath,
+          statusCode: 500,
+          error: 'internal_error',
+        });
+
+        return errorResponse(reply, 'internal_error');
+      }
+    },
+  );
+
+  app.get(
+    '/students/:id/memory',
+    {
+      preHandler: [authenticate],
+    },
+    async (request, reply) => {
+      const routePath = resolveRoutePath(request, 'GET /students/:id/memory');
+      const paramsSchema = z.object({
+        id: z.string().min(1),
+      });
+      const querySchema = z.object({
+        lessonLimit: z.coerce.number().int().min(1).max(100).optional(),
+        homeworkLimit: z.coerce.number().int().min(1).max(100).optional(),
+      });
+
+      try {
+        const params = paramsSchema.parse(request.params ?? {});
+        const query = querySchema.parse(request.query ?? {});
+        const overview = await getStudentMemoryOverview({
+          studentId: params.id,
+          lessonLimit: query.lessonLimit,
+          homeworkLimit: query.homeworkLimit,
+          config: context.config,
+        });
+
+        if (!overview) {
+          return errorResponse(reply, 'not_found');
+        }
+
+        logger.info('HTTP request handled', {
+          event: 'http_request',
+          route: routePath,
+          statusCode: 200,
+          studentId: params.id,
+        });
+
+        return reply.send(overview);
+      } catch (error: unknown) {
+        if (error instanceof z.ZodError) {
+          return reply.code(400).send({
+            error: 'validation_failed',
+            message: 'Invalid request parameters',
+            details: error.issues,
+          });
+        }
+
+        logger.error(error instanceof Error ? error : String(error), {
+          event: 'http_request',
+          route: routePath,
+          statusCode: 500,
+          error: 'internal_error',
+        });
+
+        return errorResponse(reply, 'internal_error');
+      }
+    },
+  );
+
+  app.get(
+    '/students/:id/lesson-memory',
+    {
+      preHandler: [authenticate],
+    },
+    async (request, reply) => {
+      const routePath = resolveRoutePath(request, 'GET /students/:id/lesson-memory');
+      const paramsSchema = z.object({
+        id: z.string().min(1),
+      });
+      const querySchema = z.object({
+        status: z.string().optional(),
+        limit: z.coerce.number().int().min(1).max(500).optional(),
+        offset: z.coerce.number().int().min(0).optional(),
+        order: z.enum(['asc', 'desc']).optional(),
+      });
+
+      try {
+        const params = paramsSchema.parse(request.params ?? {});
+        const query = querySchema.parse(request.query ?? {});
+        const statuses = query.status
+          ? z
+              .array(LessonMemoryEntryStatusSchema)
+              .parse(
+                query.status
+                  .split(',')
+                  .map((value) => value.trim())
+                  .filter(Boolean),
+              )
+          : undefined;
+        const result = await listStudentLessonMemory({
+          studentId: params.id,
+          statuses,
+          limit: query.limit,
+          offset: query.offset,
+          order: query.order,
+          config: context.config,
+        });
+
+        if (!result) {
+          return errorResponse(reply, 'not_found');
+        }
+
+        logger.info('HTTP request handled', {
+          event: 'http_request',
+          route: routePath,
+          statusCode: 200,
+          studentId: params.id,
+        });
+
+        return reply.send(result);
+      } catch (error: unknown) {
+        if (error instanceof z.ZodError) {
+          return reply.code(400).send({
+            error: 'validation_failed',
+            message: 'Invalid request parameters',
+            details: error.issues,
+          });
+        }
+
+        logger.error(error instanceof Error ? error : String(error), {
+          event: 'http_request',
+          route: routePath,
+          statusCode: 500,
+          error: 'internal_error',
+        });
+
+        return errorResponse(reply, 'internal_error');
+      }
+    },
+  );
+
+  app.get(
+    '/students/:id/homework-memory',
+    {
+      preHandler: [authenticate],
+    },
+    async (request, reply) => {
+      const routePath = resolveRoutePath(request, 'GET /students/:id/homework-memory');
+      const paramsSchema = z.object({
+        id: z.string().min(1),
+      });
+      const querySchema = z.object({
+        status: z.string().optional(),
+        limit: z.coerce.number().int().min(1).max(500).optional(),
+        offset: z.coerce.number().int().min(0).optional(),
+        order: z.enum(['asc', 'desc']).optional(),
+      });
+
+      try {
+        const params = paramsSchema.parse(request.params ?? {});
+        const query = querySchema.parse(request.query ?? {});
+        const statuses = query.status
+          ? z
+              .array(HomeworkMemoryEntryStatusSchema)
+              .parse(
+                query.status
+                  .split(',')
+                  .map((value) => value.trim())
+                  .filter(Boolean),
+              )
+          : undefined;
+        const result = await listStudentHomeworkMemory({
+          studentId: params.id,
+          statuses,
+          limit: query.limit,
+          offset: query.offset,
+          order: query.order,
+          config: context.config,
+        });
+
+        if (!result) {
+          return errorResponse(reply, 'not_found');
+        }
+
+        logger.info('HTTP request handled', {
+          event: 'http_request',
+          route: routePath,
+          statusCode: 200,
+          studentId: params.id,
+        });
+
+        return reply.send(result);
+      } catch (error: unknown) {
+        if (error instanceof z.ZodError) {
+          return reply.code(400).send({
+            error: 'validation_failed',
+            message: 'Invalid request parameters',
+            details: error.issues,
+          });
+        }
+
+        logger.error(error instanceof Error ? error : String(error), {
+          event: 'http_request',
+          route: routePath,
+          statusCode: 500,
+          error: 'internal_error',
+        });
+
+        return errorResponse(reply, 'internal_error');
+      }
+    },
+  );
+
+  app.get(
+    '/students/:id/memory-snapshots',
+    {
+      preHandler: [authenticate],
+    },
+    async (request, reply) => {
+      const routePath = resolveRoutePath(request, 'GET /students/:id/memory-snapshots');
+      const paramsSchema = z.object({
+        id: z.string().min(1),
+      });
+      const querySchema = z.object({
+        status: z.string().optional(),
+        limit: z.coerce.number().int().min(1).max(500).optional(),
+        offset: z.coerce.number().int().min(0).optional(),
+        order: z.enum(['asc', 'desc']).optional(),
+      });
+
+      try {
+        const params = paramsSchema.parse(request.params ?? {});
+        const query = querySchema.parse(request.query ?? {});
+        const statuses = query.status
+          ? z
+              .array(StudentMemorySnapshotStatusSchema)
+              .parse(
+                query.status
+                  .split(',')
+                  .map((value) => value.trim())
+                  .filter(Boolean),
+              )
+          : undefined;
+        const result = await listStudentMemorySnapshotsForStudent({
+          studentId: params.id,
+          statuses,
+          limit: query.limit,
+          offset: query.offset,
+          order: query.order,
+          config: context.config,
+        });
+
+        if (!result) {
+          return errorResponse(reply, 'not_found');
+        }
+
+        logger.info('HTTP request handled', {
+          event: 'http_request',
+          route: routePath,
+          statusCode: 200,
+          studentId: params.id,
+        });
+
+        return reply.send(result);
+      } catch (error: unknown) {
+        if (error instanceof z.ZodError) {
+          return reply.code(400).send({
+            error: 'validation_failed',
+            message: 'Invalid request parameters',
+            details: error.issues,
           });
         }
 

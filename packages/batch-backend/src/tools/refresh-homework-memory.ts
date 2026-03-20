@@ -1,0 +1,181 @@
+import type { GenerationProvider } from '@esl-pipeline/contracts';
+
+import {
+  listHomeworkMemoryBackfillTargets,
+  requestHomeworkMemoryBackfill,
+  resolveHomeworkMemoryBackfillCandidate,
+  type HomeworkMemoryBackfillSelection,
+} from '../application/homework-memory-backfill.js';
+import { loadBatchBackendEnv } from '../bootstrap/env.js';
+import { loadConfig } from '../config/env.js';
+
+interface CliOptions {
+  limit: number;
+  selection: HomeworkMemoryBackfillSelection;
+  provider?: GenerationProvider;
+  model?: string;
+  studentId?: string;
+  jobId?: string;
+  dryRun: boolean;
+}
+
+function parseArgs(argv: string[]): CliOptions {
+  const options: CliOptions = {
+    limit: 80,
+    selection: 'missing',
+    dryRun: false,
+  };
+
+  for (let index = 0; index < argv.length; index += 1) {
+    const arg = argv[index];
+    if (!arg || arg === '--') {
+      continue;
+    }
+
+    if (arg === '--dry-run') {
+      options.dryRun = true;
+      continue;
+    }
+
+    if (arg === '--limit') {
+      const value = argv[index + 1];
+      if (!value) {
+        throw new Error('Missing value for --limit');
+      }
+      options.limit = Math.max(1, Number.parseInt(value, 10) || 80);
+      index += 1;
+      continue;
+    }
+
+    if (arg === '--selection') {
+      const value = argv[index + 1]?.trim().toLowerCase();
+      if (!value) {
+        throw new Error('Missing value for --selection');
+      }
+      if (value !== 'missing' && value !== 'failed' && value !== 'all') {
+        throw new Error('Invalid --selection. Use missing, failed, or all');
+      }
+      options.selection = value;
+      index += 1;
+      continue;
+    }
+
+    if (arg === '--provider') {
+      const value = argv[index + 1]?.trim().toLowerCase();
+      if (!value) {
+        throw new Error('Missing value for --provider');
+      }
+      if (value !== 'openai' && value !== 'google_ai_studio' && value !== 'openrouter') {
+        throw new Error('Invalid --provider. Use openai, google_ai_studio, or openrouter');
+      }
+      options.provider = value;
+      index += 1;
+      continue;
+    }
+
+    if (arg === '--model') {
+      const value = argv[index + 1]?.trim();
+      if (!value) {
+        throw new Error('Missing value for --model');
+      }
+      options.model = value;
+      index += 1;
+      continue;
+    }
+
+    if (arg === '--student-id') {
+      const value = argv[index + 1]?.trim();
+      if (!value) {
+        throw new Error('Missing value for --student-id');
+      }
+      options.studentId = value;
+      index += 1;
+      continue;
+    }
+
+    if (arg === '--job-id') {
+      const value = argv[index + 1]?.trim();
+      if (!value) {
+        throw new Error('Missing value for --job-id');
+      }
+      options.jobId = value;
+      index += 1;
+      continue;
+    }
+
+    throw new Error(`Unknown argument: ${arg}`);
+  }
+
+  return options;
+}
+
+function printDryRunTargets(targets: Awaited<ReturnType<typeof listHomeworkMemoryBackfillTargets>>) {
+  for (const target of targets) {
+    console.log(
+      [
+        '[homework-memory-refresh][dry-run]',
+        `job=${target.jobId}`,
+        `student=${target.studentId}`,
+        `publishedAt=${target.publishedAt}`,
+        `selection=${target.selectionReason}`,
+      ].join(' '),
+    );
+  }
+}
+
+async function run(): Promise<void> {
+  loadBatchBackendEnv(import.meta.url, 'batch-backend-tool-refresh-homework-memory');
+  const options = parseArgs(process.argv.slice(2));
+  const config = loadConfig();
+
+  if (!config.pg.enabled) {
+    throw new Error('PG_ENABLED=true is required');
+  }
+
+  const candidate = resolveHomeworkMemoryBackfillCandidate({
+    config,
+    providerOverride: options.provider,
+    modelOverride: options.model,
+  });
+  const targets = await listHomeworkMemoryBackfillTargets({
+    limit: options.limit,
+    selection: options.selection,
+    studentId: options.studentId,
+    jobId: options.jobId,
+  });
+
+  if (targets.length === 0) {
+    console.log('[homework-memory-refresh] no succeeded publish jobs matched the requested scope');
+    return;
+  }
+
+  if (options.dryRun) {
+    printDryRunTargets(targets);
+    console.log(`[homework-memory-refresh] provider=${candidate.provider} model=${candidate.model}`);
+    console.log(
+      `[homework-memory-refresh] selection=${options.selection} processed=${targets.length} requested=0`,
+    );
+    console.log('[homework-memory-refresh] dryRun=true');
+    return;
+  }
+
+  const result = await requestHomeworkMemoryBackfill({
+    config,
+    targets,
+    providerOverride: options.provider,
+    modelOverride: options.model,
+    forceRegenerate: options.selection !== 'missing',
+  });
+
+  console.log(`[homework-memory-refresh] provider=${candidate.provider} model=${candidate.model}`);
+  console.log(
+    `[homework-memory-refresh] selection=${options.selection} processed=${targets.length} requested=${result.requested}`,
+  );
+  console.log('[homework-memory-refresh] dryRun=false');
+}
+
+void run().catch((error) => {
+  const message = error instanceof Error ? error.message : String(error);
+  console.error(`[homework-memory-refresh] failed: ${message}`);
+  process.exitCode = 1;
+});

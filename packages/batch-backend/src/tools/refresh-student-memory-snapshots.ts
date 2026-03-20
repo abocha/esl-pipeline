@@ -1,0 +1,176 @@
+import type { GenerationProvider } from '@esl-pipeline/contracts';
+
+import {
+  listStudentMemorySnapshotBackfillTargets,
+  requestStudentMemorySnapshotBackfill,
+  resolveStudentMemorySnapshotBackfillCandidate,
+  type StudentMemorySnapshotBackfillSelection,
+} from '../application/student-memory-snapshot-backfill.js';
+import { loadBatchBackendEnv } from '../bootstrap/env.js';
+import { loadConfig } from '../config/env.js';
+
+interface CliOptions {
+  limit: number;
+  selection: StudentMemorySnapshotBackfillSelection;
+  provider?: GenerationProvider;
+  model?: string;
+  studentId?: string;
+  dryRun: boolean;
+}
+
+function parseArgs(argv: string[]): CliOptions {
+  const options: CliOptions = {
+    limit: 80,
+    selection: 'missing',
+    dryRun: false,
+  };
+
+  for (let index = 0; index < argv.length; index += 1) {
+    const arg = argv[index];
+    if (!arg || arg === '--') {
+      continue;
+    }
+
+    if (arg === '--dry-run') {
+      options.dryRun = true;
+      continue;
+    }
+
+    if (arg === '--limit') {
+      const value = argv[index + 1];
+      if (!value) {
+        throw new Error('Missing value for --limit');
+      }
+      options.limit = Math.max(1, Number.parseInt(value, 10) || 80);
+      index += 1;
+      continue;
+    }
+
+    if (arg === '--selection') {
+      const value = argv[index + 1]?.trim().toLowerCase();
+      if (!value) {
+        throw new Error('Missing value for --selection');
+      }
+      if (value !== 'missing' && value !== 'failed' && value !== 'all') {
+        throw new Error('Invalid --selection. Use missing, failed, or all');
+      }
+      options.selection = value;
+      index += 1;
+      continue;
+    }
+
+    if (arg === '--provider') {
+      const value = argv[index + 1]?.trim().toLowerCase();
+      if (!value) {
+        throw new Error('Missing value for --provider');
+      }
+      if (value !== 'openai' && value !== 'google_ai_studio' && value !== 'openrouter') {
+        throw new Error('Invalid --provider. Use openai, google_ai_studio, or openrouter');
+      }
+      options.provider = value;
+      index += 1;
+      continue;
+    }
+
+    if (arg === '--model') {
+      const value = argv[index + 1]?.trim();
+      if (!value) {
+        throw new Error('Missing value for --model');
+      }
+      options.model = value;
+      index += 1;
+      continue;
+    }
+
+    if (arg === '--student-id') {
+      const value = argv[index + 1]?.trim();
+      if (!value) {
+        throw new Error('Missing value for --student-id');
+      }
+      options.studentId = value;
+      index += 1;
+      continue;
+    }
+
+    throw new Error(`Unknown argument: ${arg}`);
+  }
+
+  return options;
+}
+
+function printDryRunTargets(
+  targets: Awaited<ReturnType<typeof listStudentMemorySnapshotBackfillTargets>>,
+) {
+  for (const target of targets) {
+    console.log(
+      [
+        '[student-memory-snapshot-refresh][dry-run]',
+        `student=${target.studentId}`,
+        `latestMemoryAt=${target.latestMemoryAt}`,
+        `hasReadySnapshot=${target.hasReadySnapshot}`,
+        `latestReadySnapshotAt=${target.latestReadySnapshotAt ?? 'none'}`,
+      ].join(' '),
+    );
+  }
+}
+
+async function run(): Promise<void> {
+  loadBatchBackendEnv(import.meta.url, 'batch-backend-tool-refresh-student-memory-snapshots');
+  const options = parseArgs(process.argv.slice(2));
+  const config = loadConfig();
+
+  if (!config.pg.enabled) {
+    throw new Error('PG_ENABLED=true is required');
+  }
+
+  const candidate = resolveStudentMemorySnapshotBackfillCandidate({
+    config,
+    providerOverride: options.provider,
+    modelOverride: options.model,
+  });
+  const targets = await listStudentMemorySnapshotBackfillTargets({
+    limit: options.limit,
+    selection: options.selection,
+    studentId: options.studentId,
+  });
+
+  if (targets.length === 0) {
+    console.log(
+      '[student-memory-snapshot-refresh] no students with canonical memory matched the requested scope',
+    );
+    return;
+  }
+
+  if (options.dryRun) {
+    printDryRunTargets(targets);
+    console.log(
+      `[student-memory-snapshot-refresh] provider=${candidate.provider} model=${candidate.model}`,
+    );
+    console.log(
+      `[student-memory-snapshot-refresh] selection=${options.selection} processed=${targets.length} requested=0`,
+    );
+    console.log('[student-memory-snapshot-refresh] dryRun=true');
+    return;
+  }
+
+  const result = await requestStudentMemorySnapshotBackfill({
+    config,
+    targets,
+    providerOverride: options.provider,
+    modelOverride: options.model,
+  });
+
+  console.log(
+    `[student-memory-snapshot-refresh] provider=${candidate.provider} model=${candidate.model}`,
+  );
+  console.log(
+    `[student-memory-snapshot-refresh] selection=${options.selection} processed=${targets.length} requested=${result.requested}`,
+  );
+  console.log('[student-memory-snapshot-refresh] dryRun=false');
+}
+
+void run().catch((error) => {
+  const message = error instanceof Error ? error.message : String(error);
+  console.error(`[student-memory-snapshot-refresh] failed: ${message}`);
+  process.exitCode = 1;
+});

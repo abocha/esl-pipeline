@@ -14,6 +14,8 @@ export const HOMEWORK_MEMORY_SCHEMA_VERSION = 'homework-memory.v1';
 
 export interface GenerateHomeworkMemoryFromSourceRequest {
   source: HomeworkMemorySourceBundle;
+  pendingEntryId?: string | null;
+  pendingGenerationNotes?: Record<string, unknown> | null;
   provider: GenerationProvider;
   model: string;
   prompt: string;
@@ -70,6 +72,8 @@ export async function generateHomeworkMemoryFromSource(args: {
     model: args.request.model,
     contentHash: args.request.source.contentHash,
     generationNotes: {
+      ...(args.request.pendingGenerationNotes ?? {}),
+      pendingEntryId: args.request.pendingEntryId ?? null,
       providerRequestId: extraction.providerRequestId ?? null,
       usage: extraction.usage ?? null,
     },

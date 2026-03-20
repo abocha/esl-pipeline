@@ -16,7 +16,12 @@ vi.mock('../src/infrastructure/student-memory-queue.js', () => ({
 }));
 
 vi.mock('../src/application/generation-policy.js', () => ({
-  resolveGenerationCandidates: vi.fn(() => [{ provider: 'openai', model: 'gpt-5.2' }]),
+  resolveGenerationCandidates: vi.fn((args?: { providerOverride?: string; modelOverride?: string }) => [
+    {
+      provider: args?.providerOverride ?? 'openai',
+      model: args?.modelOverride ?? 'gpt-5.2',
+    },
+  ]),
 }));
 
 vi.mock('../src/infrastructure/logger.js', () => ({
@@ -75,6 +80,28 @@ describe('application/request-student-memory-snapshot-refresh', () => {
       expect.objectContaining({
         jobId: 'student-memory-snapshot:student-1:manual-replay:uuid-1',
       }),
+    );
+  });
+
+  it('honors provider and model overrides for manual replay', async () => {
+    await requestStudentMemorySnapshotRefresh({
+      config: {
+        generation: {},
+      } as never,
+      params: {
+        studentId: 'student-1',
+        trigger: 'manual-replay',
+        providerOverride: 'openrouter',
+        modelOverride: 'qwen/qwen3.5',
+      },
+    });
+
+    expect(enqueueMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        provider: 'openrouter',
+        model: 'qwen/qwen3.5',
+      }),
+      expect.any(Object),
     );
   });
 });

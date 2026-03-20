@@ -129,7 +129,7 @@ describeIfPg('application/homework-memory-source', () => {
     expect(source.normalizedMarkdown.sections.some((section) => section.heading.includes('Your Mission'))).toBe(true);
   });
 
-  it('requests regeneration when publish-target metadata expands for unchanged markdown', async () => {
+  it('treats publish-target expansion as non-material when the published markdown is unchanged', async () => {
     const studentId = randomUUID();
     const recordingId = randomUUID();
     const transcriptId = randomUUID();
@@ -209,8 +209,8 @@ describeIfPg('application/homework-memory-source', () => {
 
     const decision = await evaluateHomeworkMemoryGenerationForSucceededJob(rerunJobId);
 
-    expect(decision.shouldGenerate).toBe(true);
-    expect(decision.reason).toBe('publish_targets_expanded');
+    expect(decision.shouldGenerate).toBe(false);
+    expect(decision.reason).toBe('no_material_change');
     expect(decision.source.publishTargets.map((target) => target.target)).toEqual(['html', 'notion']);
   });
 });

@@ -91,6 +91,15 @@ export interface InsertHomeworkMemoryParams {
 }
 
 export type InsertCanonicalReadyHomeworkMemoryParams = Omit<InsertHomeworkMemoryParams, 'status'>;
+export interface EnsurePendingHomeworkMemoryEntryParams
+  extends Omit<InsertHomeworkMemoryParams, 'status'> {
+  bypassReadyReuse?: boolean;
+}
+
+export interface EnsurePendingHomeworkMemoryEntryResult {
+  outcome: 'created' | 'pending_exists' | 'ready_exists';
+  entry: HomeworkMemoryRecord;
+}
 
 export interface ListHomeworkMemoryEntriesOptions {
   studentId?: string | null;
@@ -347,6 +356,174 @@ export async function insertCanonicalReadyHomeworkMemoryEntry(
   return mapRowToHomeworkMemory(row);
 }
 
+export async function ensurePendingHomeworkMemoryEntry(
+  params: EnsurePendingHomeworkMemoryEntryParams,
+): Promise<EnsurePendingHomeworkMemoryEntryResult> {
+  const id = params.id ?? randomUUID();
+  const generatedAt = params.generatedAt ?? new Date();
+
+  return withPgClient(async (client: PoolClient) => {
+    await client.query('BEGIN');
+    try {
+      await client.query('SELECT id FROM jobs WHERE id = $1 FOR UPDATE', [params.assignmentLineageKey]);
+
+      if (!params.bypassReadyReuse) {
+        const readyResult = await client.query<HomeworkMemoryRow>(
+          `
+          SELECT
+            ${HOMEWORK_MEMORY_COLUMNS}
+          FROM homework_memory_entries
+          WHERE assignment_lineage_key = $1
+            AND status = 'ready'
+            AND content_hash IS NOT DISTINCT FROM $2
+          ORDER BY generated_at DESC, created_at DESC, id DESC
+          LIMIT 1
+          `,
+          [params.assignmentLineageKey, params.contentHash ?? null],
+        );
+
+        const latestReady = readyResult.rows[0];
+        if (latestReady) {
+          await client.query('COMMIT');
+          return {
+            outcome: 'ready_exists',
+            entry: mapRowToHomeworkMemory(latestReady),
+          };
+        }
+      }
+
+      const pendingResult = await client.query<HomeworkMemoryRow>(
+        `
+        SELECT
+          ${HOMEWORK_MEMORY_COLUMNS}
+        FROM homework_memory_entries
+        WHERE assignment_lineage_key = $1
+          AND status = 'pending'
+          AND content_hash IS NOT DISTINCT FROM $2
+        ORDER BY generated_at DESC, created_at DESC, id DESC
+        LIMIT 1
+        `,
+        [params.assignmentLineageKey, params.contentHash ?? null],
+      );
+
+      const latestPending = pendingResult.rows[0];
+      if (latestPending) {
+        await client.query('COMMIT');
+        return {
+          outcome: 'pending_exists',
+          entry: mapRowToHomeworkMemory(latestPending),
+        };
+      }
+
+      const insertResult = await client.query<HomeworkMemoryRow>(
+        `
+        INSERT INTO homework_memory_entries (
+          id,
+          student_id,
+          job_id,
+          assignment_lineage_key,
+          prompt_package_id,
+          draft_id,
+          recording_id,
+          transcript_id,
+          schema_version,
+          generated_at,
+          provider,
+          model,
+          status,
+          source_kind,
+          content_hash,
+          generation_notes,
+          homework_summary,
+          topic,
+          grammar_targets,
+          vocabulary_targets,
+          review_targets,
+          task_list,
+          pronunciation_focus,
+          study_text_type,
+          input_type,
+          communicative_outcome,
+          teacher_follow_up_cues,
+          published_at,
+          publish_targets
+        )
+        VALUES (
+          $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, 'pending', 'published_assignment',
+          $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27
+        )
+        RETURNING
+          ${HOMEWORK_MEMORY_COLUMNS}
+        `,
+        [
+          id,
+          params.studentId,
+          params.jobId,
+          params.assignmentLineageKey,
+          params.promptPackageId ?? null,
+          params.draftId ?? null,
+          params.recordingId ?? null,
+          params.transcriptId ?? null,
+          params.schemaVersion,
+          generatedAt,
+          params.provider,
+          params.model,
+          params.contentHash ?? null,
+          params.generationNotes ?? null,
+          params.homeworkSummary ?? null,
+          params.topic ?? null,
+          JSON.stringify(params.grammarTargets ?? []),
+          JSON.stringify(params.vocabularyTargets ?? []),
+          JSON.stringify(params.reviewTargets ?? []),
+          JSON.stringify(params.taskList ?? []),
+          JSON.stringify(params.pronunciationFocus ?? []),
+          params.studyTextType ?? null,
+          params.inputType ?? null,
+          params.communicativeOutcome ?? null,
+          JSON.stringify(params.teacherFollowUpCues ?? []),
+          params.publishedAt,
+          JSON.stringify(params.publishTargets ?? []),
+        ],
+      );
+
+      const insertedRow = insertResult.rows[0];
+      if (!insertedRow) {
+        throw new Error('Failed to insert pending homework memory entry');
+      }
+
+      await client.query(
+        `
+        UPDATE homework_memory_entries
+        SET
+          status = 'superseded',
+          superseded_by_id = $1,
+          superseded_at = $2,
+          updated_at = NOW()
+        WHERE assignment_lineage_key = $3
+          AND status = 'pending'
+          AND id <> $1
+        `,
+        [id, generatedAt, params.assignmentLineageKey],
+      );
+
+      await client.query('COMMIT');
+      const inserted = mapRowToHomeworkMemory(insertedRow);
+      logger.info('Pending homework memory entry inserted', {
+        homeworkMemoryEntryId: inserted.id,
+        jobId: params.jobId,
+        assignmentLineageKey: params.assignmentLineageKey,
+      });
+      return {
+        outcome: 'created',
+        entry: inserted,
+      };
+    } catch (error) {
+      await client.query('ROLLBACK');
+      throw error;
+    }
+  });
+}
+
 export async function getHomeworkMemoryEntryById(id: string): Promise<HomeworkMemoryRecord | null> {
   const row = await withPgClient(async (client: PoolClient) => {
     const result = await client.query(
@@ -375,6 +552,28 @@ export async function getLatestReadyHomeworkMemoryByAssignmentLineageKey(
       FROM homework_memory_entries
       WHERE assignment_lineage_key = $1
         AND status = 'ready'
+      ORDER BY generated_at DESC, created_at DESC, id DESC
+      LIMIT 1
+      `,
+      [assignmentLineageKey],
+    );
+    return result.rows[0];
+  });
+
+  return row ? mapRowToHomeworkMemory(row) : null;
+}
+
+export async function getLatestPendingHomeworkMemoryByAssignmentLineageKey(
+  assignmentLineageKey: string,
+): Promise<HomeworkMemoryRecord | null> {
+  const row = await withPgClient(async (client: PoolClient) => {
+    const result = await client.query(
+      `
+      SELECT
+        ${HOMEWORK_MEMORY_COLUMNS}
+      FROM homework_memory_entries
+      WHERE assignment_lineage_key = $1
+        AND status = 'pending'
       ORDER BY generated_at DESC, created_at DESC, id DESC
       LIMIT 1
       `,
@@ -516,6 +715,79 @@ export async function supersedeReadyHomeworkMemoryEntriesForAssignmentLineage(pa
   }
 
   return rows.map((row) => mapRowToHomeworkMemory(row));
+}
+
+export async function supersedePendingHomeworkMemoryEntriesForAssignmentLineage(params: {
+  assignmentLineageKey: string;
+  supersededById: string;
+  supersededAt?: Date;
+  maxGeneratedAt?: Date;
+}): Promise<HomeworkMemoryRecord[]> {
+  const supersededAt = params.supersededAt ?? new Date();
+  const maxGeneratedAt = params.maxGeneratedAt ?? supersededAt;
+
+  const rows = await withPgClient(async (client: PoolClient) => {
+    const result = await client.query(
+      `
+      UPDATE homework_memory_entries
+      SET
+        status = 'superseded',
+        superseded_by_id = $1,
+        superseded_at = $2,
+        updated_at = NOW()
+      WHERE assignment_lineage_key = $3
+        AND status = 'pending'
+        AND generated_at <= $4
+      RETURNING
+        ${HOMEWORK_MEMORY_COLUMNS}
+      `,
+      [params.supersededById, supersededAt, params.assignmentLineageKey, maxGeneratedAt],
+    );
+    return result.rows;
+  });
+
+  return rows.map((row) => mapRowToHomeworkMemory(row));
+}
+
+export async function markHomeworkMemoryEntryFailed(params: {
+  id: string;
+  errorMessage: string;
+  providerRequestId?: string | null;
+  usage?: unknown;
+}): Promise<HomeworkMemoryRecord | null> {
+  const existing = await getHomeworkMemoryEntryById(params.id);
+  if (!existing) {
+    return null;
+  }
+
+  const generationNotes: HomeworkMemoryGenerationNotes = {
+    ...(existing.generationNotes ?? {}),
+    error: params.errorMessage,
+    providerRequestId:
+      params.providerRequestId ?? (existing.generationNotes?.providerRequestId ?? null),
+    usage: params.usage ?? (existing.generationNotes?.usage ?? null),
+    failedAt: new Date().toISOString(),
+  };
+
+  const row = await withPgClient(async (client: PoolClient) => {
+    const result = await client.query(
+      `
+      UPDATE homework_memory_entries
+      SET
+        status = 'failed',
+        generation_notes = $2::jsonb,
+        updated_at = NOW()
+      WHERE id = $1
+        AND status = 'pending'
+      RETURNING
+        ${HOMEWORK_MEMORY_COLUMNS}
+      `,
+      [params.id, JSON.stringify(generationNotes)],
+    );
+    return result.rows[0];
+  });
+
+  return row ? mapRowToHomeworkMemory(row) : null;
 }
 
 function mapRowToHomeworkMemory(row: HomeworkMemoryRow): HomeworkMemoryRecord {
