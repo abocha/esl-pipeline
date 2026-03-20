@@ -248,7 +248,7 @@ export async function createPromptPackage(
     studentMemorySnapshotHash: null,
     selectedLessonMemoryIds: historyContext.selectedLessonMemoryIds,
     selectedHomeworkMemoryIds: [],
-    retrievalPolicyVersion: recording?.studentId ? 'student-memory-v1' : null,
+    retrievalPolicyVersion: historyContext.source === 'canonical' ? 'student-memory-v1' : null,
     profilePath: selection.profilePath,
     resolvedProfileId: selection.profileId,
     resolvedProfileHash: artifacts.profile.hash,

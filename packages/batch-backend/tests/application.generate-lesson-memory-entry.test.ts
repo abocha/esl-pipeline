@@ -39,7 +39,7 @@ describe('application/generate-lesson-memory-entry', () => {
       usage: { inputTokens: 100, outputTokens: 50, totalTokens: 150 },
     });
 
-    const insert = vi.fn().mockImplementation(async (params): Promise<LessonMemoryRecord> => ({
+    const insertCanonicalReady = vi.fn().mockImplementation(async (params): Promise<LessonMemoryRecord> => ({
       id: 'lesson-memory-1',
       studentId: params.studentId,
       transcriptId: params.transcriptId,
@@ -66,7 +66,6 @@ describe('application/generate-lesson-memory-entry', () => {
       createdAt: params.generatedAt,
       updatedAt: params.generatedAt,
     }));
-    const supersedeReadyForTranscript = vi.fn().mockResolvedValue([]);
     const now = () => new Date('2026-03-20T15:00:00.000Z');
 
     const result = await generateLessonMemoryEntry({
@@ -82,8 +81,7 @@ describe('application/generate-lesson-memory-entry', () => {
       overrides: {
         extractor,
         repository: {
-          insert,
-          supersedeReadyForTranscript,
+          insertCanonicalReady,
         },
         now,
       },
@@ -98,7 +96,7 @@ describe('application/generate-lesson-memory-entry', () => {
         maxOutputTokens: undefined,
       },
     });
-    expect(insert).toHaveBeenCalledWith(
+    expect(insertCanonicalReady).toHaveBeenCalledWith(
       expect.objectContaining({
         studentId: 'student-1',
         transcriptId: 'transcript-1',
@@ -106,16 +104,9 @@ describe('application/generate-lesson-memory-entry', () => {
         schemaVersion: 'lesson-memory.v1',
         provider: 'openrouter',
         model: 'qwen/qwen3-235b-a22b',
-        status: 'ready',
         lessonSummary: 'Talked about travel plans and present perfect.',
       }),
     );
-    expect(supersedeReadyForTranscript).toHaveBeenCalledWith({
-      transcriptId: 'transcript-1',
-      supersededById: 'lesson-memory-1',
-      excludeEntryId: 'lesson-memory-1',
-      supersededAt: new Date('2026-03-20T15:00:00.000Z'),
-    });
     expect(result.providerRequestId).toBe('req-1');
     expect(result.usage?.totalTokens).toBe(150);
   });
