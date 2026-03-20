@@ -53,7 +53,8 @@
 3. `docs/plans/orchestrator-library-only-roadmap/README.md`
 4. `docs/plans/stt-multi-provider-refactor/README.md`
 5. `docs/plans/telegram-ops-control-panel-hardening/README.md`
-6. `docs/plans/backlog/README.md`
+6. `docs/plans/student-memory-system-upgrade/README.md`
+7. `docs/plans/backlog/README.md`
 
 ### Standalone active plans
 

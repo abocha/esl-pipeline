@@ -67,7 +67,7 @@ Env reference: [`docs/reference/env.md`](../reference/env.md)
 - Prompt and drafts:
   - `GET /config/prompts`
   - `POST /recordings/:id/prompt-package`
-  - `GET /prompt-packages/:id`
+  - `GET /prompt-packages/:id` - canonical prompt-package lineage and assignment-level memory provenance inspection surface
   - `POST /prompt-packages/:id/draft`
   - `GET /drafts/:id`
   - `POST /drafts/:id/materialize`

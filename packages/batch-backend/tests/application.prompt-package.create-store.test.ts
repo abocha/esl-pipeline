@@ -272,6 +272,13 @@ describe('application/prompt-package', () => {
       notes: 'Notes',
       storageUri: 'local://prompt-packages/prompt-1.txt',
       text: 'Prompt package text',
+      memory: {
+        studentMemorySnapshotId: null,
+        studentMemorySnapshotHash: null,
+        selectedLessonMemoryIds: [],
+        selectedHomeworkMemoryIds: [],
+        retrievalPolicyVersion: null,
+      },
       createdAt: '2024-01-01T00:00:00.000Z',
       updatedAt: '2024-01-01T00:10:00.000Z',
     });

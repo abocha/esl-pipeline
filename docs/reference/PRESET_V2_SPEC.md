@@ -85,9 +85,17 @@ Out of scope:
 - DB-first entities are the canonical direction.
 - Prompt snapshots remain reference assets, not the long-term source of truth.
 - Frontend/runtime should treat preset choice as a stable contract input, not a model-tier prompt fork.
+- Pedagogical invariants for the current homework track live in
+  [`docs/reference/HOMEWORK_PEDAGOGY_AND_TEMPLATE_SPEC.md`](HOMEWORK_PEDAGOGY_AND_TEMPLATE_SPEC.md).
+- Student-memory extraction capability and exact semantic output schemas live in:
+  - [`docs/reference/STUDENT_MEMORY_EXTRACTION_CAPABILITY_POLICY.md`](STUDENT_MEMORY_EXTRACTION_CAPABILITY_POLICY.md)
+  - [`docs/reference/STUDENT_MEMORY_EXTRACTION_SCHEMA_SPEC.md`](STUDENT_MEMORY_EXTRACTION_SCHEMA_SPEC.md)
 
 ## Related
 
+- [`docs/reference/HOMEWORK_PEDAGOGY_AND_TEMPLATE_SPEC.md`](HOMEWORK_PEDAGOGY_AND_TEMPLATE_SPEC.md)
+- [`docs/reference/STUDENT_MEMORY_EXTRACTION_CAPABILITY_POLICY.md`](STUDENT_MEMORY_EXTRACTION_CAPABILITY_POLICY.md)
+- [`docs/reference/STUDENT_MEMORY_EXTRACTION_SCHEMA_SPEC.md`](STUDENT_MEMORY_EXTRACTION_SCHEMA_SPEC.md)
 - [`docs/reference/GENERATION_PROVIDER_POLICY.md`](GENERATION_PROVIDER_POLICY.md)
 - [`docs/reference/V1_IMPLEMENTATION_TRACKER.md`](V1_IMPLEMENTATION_TRACKER.md)
 - [`docs/reference/PRODUCT_NORTH_STAR_AND_READINESS.md`](PRODUCT_NORTH_STAR_AND_READINESS.md)

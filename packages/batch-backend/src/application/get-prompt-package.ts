@@ -94,6 +94,13 @@ export interface PromptPackageLineageResponse {
     generatedAt: string | null;
     hash: string | null;
   } | null;
+  memory: {
+    studentMemorySnapshotId: string | null;
+    studentMemorySnapshotHash: string | null;
+    selectedLessonMemoryIds: string[];
+    selectedHomeworkMemoryIds: string[];
+    retrievalPolicyVersion: string | null;
+  };
   bindingAtCreation?: {
     bindingId: string;
     studentId: string;
@@ -245,6 +252,13 @@ export async function getPromptPackageLineage(
             hash: promptPackage.resolvedVoiceCapabilitiesHash ?? null,
           }
         : null,
+    memory: {
+      studentMemorySnapshotId: promptPackage.studentMemorySnapshotId ?? null,
+      studentMemorySnapshotHash: promptPackage.studentMemorySnapshotHash ?? null,
+      selectedLessonMemoryIds: promptPackage.selectedLessonMemoryIds ?? [],
+      selectedHomeworkMemoryIds: promptPackage.selectedHomeworkMemoryIds ?? [],
+      retrievalPolicyVersion: promptPackage.retrievalPolicyVersion ?? null,
+    },
     bindingAtCreation: bindingAtCreation ? toBindingSnapshot(bindingAtCreation) : null,
   };
 }

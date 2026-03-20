@@ -26,7 +26,7 @@ import {
 import { stitchPromptPayload } from './prompt-assembly.js';
 import { PromptOptionError, resolvePromptSelection } from './prompt-options.js';
 import { materializePromptTemplateWithCapabilities } from './prompt-voice-capabilities.js';
-import { buildStudentLessonHistoryContext } from './student-lesson-history.js';
+import { buildStudentLessonHistoryPackageContext } from './student-lesson-history.js';
 import { resolveStudentProfileBindingAt } from './student-profile-bindings.js';
 import { getStudentProfileById } from './student-profiles-store.js';
 
@@ -83,6 +83,13 @@ export interface PromptPackageResponse {
     generatedAt: string;
     hash: string;
     capabilities: VoiceCapabilitiesSnapshot;
+  };
+  memory: {
+    studentMemorySnapshotId: string | null;
+    studentMemorySnapshotHash: string | null;
+    selectedLessonMemoryIds: string[];
+    selectedHomeworkMemoryIds: string[];
+    retrievalPolicyVersion: string | null;
   };
   createdAt: string;
   updatedAt: string;
@@ -208,7 +215,7 @@ export async function createPromptPackage(
     }),
     readStorage.getText(transcript.storageUri),
   ]);
-  const historyContext = await buildStudentLessonHistoryContext({
+  const historyContext = await buildStudentLessonHistoryPackageContext({
     studentId: recording?.studentId ?? null,
     currentTranscriptId: transcript.id,
     config,
@@ -223,7 +230,7 @@ export async function createPromptPackage(
     profile: artifacts.profile.content,
     transcript: transcriptText,
     notes: params.notes,
-    history: historyContext,
+    history: historyContext.text,
   });
 
   const promptPackageId = randomUUID();
@@ -237,6 +244,11 @@ export async function createPromptPackage(
     recordingId: transcript.recordingId,
     transcriptId: transcript.id,
     studentId: recording?.studentId ?? null,
+    studentMemorySnapshotId: null,
+    studentMemorySnapshotHash: null,
+    selectedLessonMemoryIds: historyContext.selectedLessonMemoryIds,
+    selectedHomeworkMemoryIds: [],
+    retrievalPolicyVersion: recording?.studentId ? 'student-memory-v1' : null,
     profilePath: selection.profilePath,
     resolvedProfileId: selection.profileId,
     resolvedProfileHash: artifacts.profile.hash,
@@ -339,6 +351,13 @@ export function toPromptPackageResponse(
           },
         }
       : {}),
+    memory: {
+      studentMemorySnapshotId: promptPackage.studentMemorySnapshotId ?? null,
+      studentMemorySnapshotHash: promptPackage.studentMemorySnapshotHash ?? null,
+      selectedLessonMemoryIds: promptPackage.selectedLessonMemoryIds ?? [],
+      selectedHomeworkMemoryIds: promptPackage.selectedHomeworkMemoryIds ?? [],
+      retrievalPolicyVersion: promptPackage.retrievalPolicyVersion ?? null,
+    },
     createdAt: promptPackage.createdAt.toISOString(),
     updatedAt: promptPackage.updatedAt.toISOString(),
   };

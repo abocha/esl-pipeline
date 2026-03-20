@@ -1,5 +1,7 @@
 import type { BatchBackendConfig } from '../config/env.js';
 import { loadConfig } from '../config/env.js';
+import type { LessonMemoryRecord } from '../domain/lesson-memory-model.js';
+import { listRecentReadyLessonMemoryByStudentId } from '../domain/lesson-memory-repository.js';
 import { withPgClient } from '../infrastructure/db.js';
 
 const LESSON_ANALYSIS_VERSION = 1;
@@ -25,6 +27,12 @@ interface SpeakerTrackTranscriptRef {
   speaker: number;
   label: string;
   uri: string;
+}
+
+export interface StudentLessonHistoryPackageContext {
+  text: string | null;
+  selectedLessonMemoryIds: string[];
+  source: 'canonical' | 'legacy' | 'none';
 }
 
 function asStringArray(value: unknown): string[] {
@@ -230,10 +238,45 @@ export async function buildStudentLessonHistoryContext(params: {
   maxLessons?: number;
   config?: BatchBackendConfig;
 }): Promise<string | null> {
-  if (!params.studentId) return null;
+  const context = await buildStudentLessonHistoryPackageContext(params);
+  return context.text;
+}
+
+export async function buildStudentLessonHistoryPackageContext(params: {
+  studentId: string | null;
+  currentTranscriptId: string;
+  maxLessons?: number;
+  config?: BatchBackendConfig;
+}): Promise<StudentLessonHistoryPackageContext> {
+  if (!params.studentId) {
+    return {
+      text: null,
+      selectedLessonMemoryIds: [],
+      source: 'none',
+    };
+  }
   const config = params.config ?? loadConfig();
   const pgEnabled = Boolean((config as { pg?: { enabled?: boolean } }).pg?.enabled);
-  if (!pgEnabled) return null;
+  if (!pgEnabled) {
+    return {
+      text: null,
+      selectedLessonMemoryIds: [],
+      source: 'none',
+    };
+  }
+
+  const canonicalRows = await listRecentReadyLessonMemoryByStudentId(params.studentId, {
+    excludeTranscriptId: params.currentTranscriptId,
+    limit: params.maxLessons ?? 6,
+  }).catch(() => [] as LessonMemoryRecord[]);
+
+  if (canonicalRows.length > 0) {
+    return {
+      text: formatCanonicalLessonHistory(canonicalRows),
+      selectedLessonMemoryIds: canonicalRows.map((row) => row.id),
+      source: 'canonical',
+    };
+  }
 
   const rows = await withPgClient(async (client) => {
     const result = await client.query<StudentLessonRow>(
@@ -254,7 +297,13 @@ export async function buildStudentLessonHistoryContext(params: {
     return result.rows;
   }).catch(() => [] as StudentLessonRow[]);
 
-  if (rows.length === 0) return null;
+  if (rows.length === 0) {
+    return {
+      text: null,
+      selectedLessonMemoryIds: [],
+      source: 'none',
+    };
+  }
 
   const lessonLines: string[] = [];
   const vocabFrequency = new Map<string, number>();
@@ -280,6 +329,55 @@ export async function buildStudentLessonHistoryContext(params: {
     }
     for (const item of analysis?.grammarWatchlist ?? []) {
       grammarFrequency.set(item, (grammarFrequency.get(item) ?? 0) + 1);
+    }
+  }
+
+  const vocabularyFocus = [...vocabFrequency.entries()]
+    .sort((left, right) => right[1] - left[1])
+    .slice(0, 12)
+    .map(([token]) => token);
+  const grammarWatchlist = [...grammarFrequency.entries()]
+    .sort((left, right) => right[1] - left[1])
+    .slice(0, 8)
+    .map(([item]) => item);
+
+  const parts = ['Recent lessons:', ...lessonLines];
+  if (vocabularyFocus.length > 0) {
+    parts.push('', `Vocabulary focus candidates: ${vocabularyFocus.join(', ')}`);
+  }
+  if (grammarWatchlist.length > 0) {
+    parts.push('', 'Grammar watchlist:', ...grammarWatchlist.map((item) => `- ${item}`));
+  }
+
+  return {
+    text: parts.join('\n'),
+    selectedLessonMemoryIds: [],
+    source: 'legacy',
+  };
+}
+
+function formatCanonicalLessonHistory(rows: LessonMemoryRecord[]): string {
+  const lessonLines: string[] = [];
+  const vocabFrequency = new Map<string, number>();
+  const grammarFrequency = new Map<string, number>();
+
+  for (const row of rows) {
+    const summary =
+      typeof row.lessonSummary === 'string' && row.lessonSummary.trim().length > 0
+        ? row.lessonSummary.trim()
+        : 'Lesson memory available.';
+    lessonLines.push(`- ${row.generatedAt.toISOString()}: ${summary}`);
+
+    for (const item of row.vocabularyFocus) {
+      const normalized = item.text.trim().toLowerCase();
+      if (!normalized) continue;
+      vocabFrequency.set(normalized, (vocabFrequency.get(normalized) ?? 0) + 1);
+    }
+
+    for (const item of row.grammarWatchlist) {
+      const normalized = item.name.trim();
+      if (!normalized) continue;
+      grammarFrequency.set(normalized, (grammarFrequency.get(normalized) ?? 0) + 1);
     }
   }
 
