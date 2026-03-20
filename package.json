@@ -33,7 +33,7 @@
     "deps:check": "pnpm deps:pin && git diff --quiet --exit-code",
     "deps:pin": "node scripts/deps/pin-shared-deps.mjs",
     "deps:upgrade:safe": "node scripts/deps/safe-upgrade.mjs",
-    "dev:batch": "concurrently -k -n api,worker,frontend -c cyan,magenta,green \"pnpm --filter @esl-pipeline/batch-backend dev:api\" \"pnpm --filter @esl-pipeline/batch-backend dev:worker\" \"pnpm --filter @esl-pipeline/batch-frontend dev\"",
+    "dev:batch": "concurrently -k -n api,worker,memory,frontend -c cyan,magenta,yellow,green \"pnpm --filter @esl-pipeline/batch-backend dev:api\" \"pnpm --filter @esl-pipeline/batch-backend dev:worker\" \"pnpm --filter @esl-pipeline/batch-backend dev:student-memory-worker\" \"pnpm --filter @esl-pipeline/batch-frontend dev\"",
     "dev:orchestrator": "pnpm --filter @esl-pipeline/orchestrator dev",
     "dev:telegram-ops-bot": "pnpm --filter @esl-pipeline/telegram-ops-bot dev",
     "docker:backup": "pnpm docker:db:backup",

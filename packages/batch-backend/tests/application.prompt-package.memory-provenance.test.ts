@@ -96,6 +96,9 @@ describe('application/prompt-package memory provenance', () => {
         templateRevisions: createTemplateRevisionRepositoryStub(),
         bindings: createBindingResolverStub(),
         promptOptions: createPromptOptionsStub(),
+        lessonMemory: {
+          requestGeneration: async () => null,
+        },
       },
     );
 

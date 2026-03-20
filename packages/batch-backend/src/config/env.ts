@@ -50,6 +50,10 @@ export interface BatchBackendConfig {
     sttProvider: SttProviderId;
     sttProviders: SttProviderId[];
   };
+  studentMemory: {
+    queueName: string;
+    maxConcurrency: number;
+  };
   recordings: {
     maxFileSize: number;
   };
@@ -362,6 +366,8 @@ export function loadConfig(): BatchBackendConfig {
   // Queue
   const queueName = readString('BATCH_JOBS_QUEUE_NAME', 'esl-jobs')!;
   const transcribeQueueName = readString('TRANSCRIBE_QUEUE_NAME', 'transcribe-queue')!;
+  const studentMemoryQueueName = readString('STUDENT_MEMORY_QUEUE_NAME', 'student-memory-queue')!;
+  const studentMemoryMaxConcurrency = readInt('STUDENT_MEMORY_MAX_CONCURRENCY', 2);
 
   const recordingsMaxFileSize = readInt('RECORDINGS_MAX_FILE_SIZE', 100 * 1024 * 1024);
   const transcribeMode = readString('TRANSCRIBE_MODE', 'timeline') as 'timeline' | 'stack';
@@ -736,6 +742,10 @@ export function loadConfig(): BatchBackendConfig {
       maxConcurrency: transcribeMaxConcurrency,
       sttProvider,
       sttProviders,
+    },
+    studentMemory: {
+      queueName: studentMemoryQueueName,
+      maxConcurrency: studentMemoryMaxConcurrency,
     },
     recordings: {
       maxFileSize: recordingsMaxFileSize,

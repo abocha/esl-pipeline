@@ -206,6 +206,81 @@ CREATE TABLE IF NOT EXISTS lesson_memory_entries (
     CHECK (source_kind = 'lesson_transcript')
 );
 
+CREATE TABLE IF NOT EXISTS student_memory_snapshots (
+  id UUID PRIMARY KEY,
+  student_id UUID NOT NULL REFERENCES students(id) ON DELETE CASCADE,
+  schema_version TEXT NOT NULL,
+  generated_at TIMESTAMPTZ NOT NULL,
+  provider TEXT NOT NULL,
+  model TEXT NOT NULL,
+  status TEXT NOT NULL,
+  source_kind TEXT NOT NULL DEFAULT 'student_memory_rollup',
+  lesson_memory_entry_ids UUID[] NOT NULL DEFAULT ARRAY[]::uuid[],
+  homework_memory_entry_ids UUID[] NOT NULL DEFAULT ARRAY[]::uuid[],
+  content_hash TEXT NULL,
+  generation_notes JSONB NULL,
+  stable_strengths JSONB NOT NULL DEFAULT '[]'::jsonb,
+  recurring_issues JSONB NOT NULL DEFAULT '[]'::jsonb,
+  active_review_backlog JSONB NOT NULL DEFAULT '[]'::jsonb,
+  recent_progress JSONB NOT NULL DEFAULT '[]'::jsonb,
+  personal_facts JSONB NOT NULL DEFAULT '[]'::jsonb,
+  recommended_assignment_directions JSONB NOT NULL DEFAULT '[]'::jsonb,
+  unresolved_issues JSONB NOT NULL DEFAULT '[]'::jsonb,
+  snapshot_summary TEXT NULL,
+  superseded_by_id UUID NULL REFERENCES student_memory_snapshots(id) ON DELETE SET NULL,
+  superseded_at TIMESTAMPTZ NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  CONSTRAINT student_memory_snapshots_status_check
+    CHECK (status IN ('pending', 'ready', 'failed', 'superseded')),
+  CONSTRAINT student_memory_snapshots_source_kind_check
+    CHECK (source_kind = 'student_memory_rollup')
+);
+
+CREATE TABLE IF NOT EXISTS homework_memory_entries (
+  id UUID PRIMARY KEY,
+  student_id UUID NOT NULL REFERENCES students(id) ON DELETE CASCADE,
+  job_id UUID NOT NULL REFERENCES jobs(id) ON DELETE CASCADE,
+  assignment_lineage_key UUID NOT NULL REFERENCES jobs(id) ON DELETE CASCADE,
+  prompt_package_id UUID NULL REFERENCES prompt_packages(id) ON DELETE SET NULL,
+  draft_id UUID NULL REFERENCES drafts(id) ON DELETE SET NULL,
+  recording_id UUID NULL REFERENCES recordings(id) ON DELETE SET NULL,
+  transcript_id UUID NULL REFERENCES transcripts(id) ON DELETE SET NULL,
+  schema_version TEXT NOT NULL,
+  generated_at TIMESTAMPTZ NOT NULL,
+  provider TEXT NOT NULL,
+  model TEXT NOT NULL,
+  status TEXT NOT NULL,
+  source_kind TEXT NOT NULL DEFAULT 'published_assignment',
+  content_hash TEXT NULL,
+  generation_notes JSONB NULL,
+  homework_summary TEXT NULL,
+  topic TEXT NULL,
+  grammar_targets JSONB NOT NULL DEFAULT '[]'::jsonb,
+  vocabulary_targets JSONB NOT NULL DEFAULT '[]'::jsonb,
+  review_targets JSONB NOT NULL DEFAULT '[]'::jsonb,
+  task_list JSONB NOT NULL DEFAULT '[]'::jsonb,
+  pronunciation_focus JSONB NOT NULL DEFAULT '[]'::jsonb,
+  study_text_type TEXT NULL,
+  input_type TEXT NULL,
+  communicative_outcome TEXT NULL,
+  teacher_follow_up_cues JSONB NOT NULL DEFAULT '[]'::jsonb,
+  published_at TIMESTAMPTZ NOT NULL,
+  publish_targets JSONB NOT NULL DEFAULT '[]'::jsonb,
+  superseded_by_id UUID NULL REFERENCES homework_memory_entries(id) ON DELETE SET NULL,
+  superseded_at TIMESTAMPTZ NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  CONSTRAINT homework_memory_entries_status_check
+    CHECK (status IN ('pending', 'ready', 'failed', 'superseded')),
+  CONSTRAINT homework_memory_entries_source_kind_check
+    CHECK (source_kind = 'published_assignment'),
+  CONSTRAINT homework_memory_entries_study_text_type_check
+    CHECK (study_text_type IS NULL OR study_text_type IN ('monologue', 'dialogue')),
+  CONSTRAINT homework_memory_entries_input_type_check
+    CHECK (input_type IS NULL OR input_type IN ('generate', 'authentic'))
+);
+
 CREATE TABLE IF NOT EXISTS profiles (
   id TEXT PRIMARY KEY,
   label TEXT NOT NULL,
@@ -339,6 +414,24 @@ CREATE INDEX IF NOT EXISTS idx_lesson_memory_entries_status_generated_at
 CREATE INDEX IF NOT EXISTS idx_lesson_memory_entries_transcript_ready_lookup
   ON lesson_memory_entries(transcript_id, generated_at DESC, id DESC)
   WHERE status = 'ready';
+CREATE INDEX IF NOT EXISTS idx_student_memory_snapshots_student_generated_at
+  ON student_memory_snapshots(student_id, generated_at DESC, id DESC);
+CREATE INDEX IF NOT EXISTS idx_student_memory_snapshots_status_generated_at
+  ON student_memory_snapshots(status, generated_at DESC, id DESC);
+CREATE INDEX IF NOT EXISTS idx_student_memory_snapshots_student_ready_lookup
+  ON student_memory_snapshots(student_id, generated_at DESC, id DESC)
+  WHERE status = 'ready';
+CREATE INDEX IF NOT EXISTS idx_homework_memory_entries_student_generated_at
+  ON homework_memory_entries(student_id, generated_at DESC, id DESC);
+CREATE INDEX IF NOT EXISTS idx_homework_memory_entries_job_generated_at
+  ON homework_memory_entries(job_id, generated_at DESC, id DESC);
+CREATE INDEX IF NOT EXISTS idx_homework_memory_entries_lineage_generated_at
+  ON homework_memory_entries(assignment_lineage_key, generated_at DESC, id DESC);
+CREATE INDEX IF NOT EXISTS idx_homework_memory_entries_status_generated_at
+  ON homework_memory_entries(status, generated_at DESC, id DESC);
+CREATE INDEX IF NOT EXISTS idx_homework_memory_entries_lineage_ready_lookup
+  ON homework_memory_entries(assignment_lineage_key, generated_at DESC, id DESC)
+  WHERE status = 'ready';
 CREATE INDEX IF NOT EXISTS idx_drafts_prompt_package_id ON drafts(prompt_package_id);
 CREATE INDEX IF NOT EXISTS idx_drafts_created_by ON drafts(created_by);
 CREATE INDEX IF NOT EXISTS idx_profile_revisions_profile_id_created_at ON profile_revisions(profile_id, created_at DESC);
@@ -394,6 +487,23 @@ $$ LANGUAGE plpgsql;
 
 -- Trigger function to keep updated_at in sync for lesson_memory_entries on any UPDATE.
 CREATE OR REPLACE FUNCTION set_lesson_memory_entries_updated_at()
+RETURNS TRIGGER AS $$
+BEGIN
+  NEW.updated_at = NOW();
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+-- Trigger function to keep updated_at in sync for student_memory_snapshots on any UPDATE.
+CREATE OR REPLACE FUNCTION set_student_memory_snapshots_updated_at()
+RETURNS TRIGGER AS $$
+BEGIN
+  NEW.updated_at = NOW();
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE OR REPLACE FUNCTION set_homework_memory_entries_updated_at()
 RETURNS TRIGGER AS $$
 BEGIN
   NEW.updated_at = NOW();
@@ -476,6 +586,20 @@ CREATE TRIGGER set_lesson_memory_entries_updated_at
 BEFORE UPDATE ON lesson_memory_entries
 FOR EACH ROW
 EXECUTE FUNCTION set_lesson_memory_entries_updated_at();
+
+-- Ensure a single trigger with the expected name is present for student_memory_snapshots.
+DROP TRIGGER IF EXISTS set_student_memory_snapshots_updated_at ON student_memory_snapshots;
+DROP TRIGGER IF EXISTS set_homework_memory_entries_updated_at ON homework_memory_entries;
+
+CREATE TRIGGER set_student_memory_snapshots_updated_at
+BEFORE UPDATE ON student_memory_snapshots
+FOR EACH ROW
+EXECUTE FUNCTION set_student_memory_snapshots_updated_at();
+
+CREATE TRIGGER set_homework_memory_entries_updated_at
+BEFORE UPDATE ON homework_memory_entries
+FOR EACH ROW
+EXECUTE FUNCTION set_homework_memory_entries_updated_at();
 
 -- Ensure a single trigger with the expected name is present for drafts.
 DROP TRIGGER IF EXISTS set_drafts_updated_at ON drafts;
