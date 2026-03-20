@@ -51,6 +51,8 @@
   - [`docs/operations/telegram-ops-control-panel.md`](operations/telegram-ops-control-panel.md)
 - Voice-alignment rollout and diagnostics:
   - [`docs/operations/voice-alignment-v2-runbook.md`](operations/voice-alignment-v2-runbook.md)
+- Student-memory replay and backfill:
+  - [`docs/operations/student-memory-replay-backfill.md`](operations/student-memory-replay-backfill.md)
 - Prompt gallery DB bootstrap:
   - [`docs/operations/prompt-gallery-bootstrap.md`](operations/prompt-gallery-bootstrap.md)
 - Versioning and release automation:

@@ -38,7 +38,7 @@ export interface StudentMemoryUnresolvedIssue {
   priority: StudentMemoryPriority;
 }
 
-export interface StudentMemorySnapshotGenerationNotes extends Record<string, unknown> {}
+export type StudentMemorySnapshotGenerationNotes = Record<string, unknown>;
 
 export interface StudentMemorySnapshotRecord {
   id: string;

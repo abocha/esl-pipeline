@@ -1,6 +1,6 @@
 export interface NormalizedHomeworkMarkdown {
   frontmatter: string | null;
-  sections: Array<{ heading: string; content: string }>;
+  sections: { heading: string; content: string }[];
   plainText: string;
 }
 
@@ -12,7 +12,7 @@ export function normalizeHomeworkMarkdown(markdown: string): NormalizedHomeworkM
 
   const sectionRegex = /^###\s+(.+)$/gm;
   const matches = [...body.matchAll(sectionRegex)];
-  const sections: Array<{ heading: string; content: string }> = [];
+  const sections: { heading: string; content: string }[] = [];
 
   if (matches.length === 0) {
     sections.push({ heading: 'Document', content: body });
@@ -47,10 +47,10 @@ export function normalizeHomeworkMarkdown(markdown: string): NormalizedHomeworkM
 
 function stripMarkdown(input: string): string {
   return input
-    .replace(/```[\s\S]*?```/g, ' ')
-    .replace(/`([^`]+)`/g, '$1')
-    .replace(/\[(.*?)\]\((.*?)\)/g, '$1')
-    .replace(/[*_>#:-]+/g, ' ')
-    .replace(/\s+/g, ' ')
+    .replaceAll(/```[\s\S]*?```/g, ' ')
+    .replaceAll(/`([^`]+)`/g, '$1')
+    .replaceAll(/\[(.*?)\]\((.*?)\)/g, '$1')
+    .replaceAll(/[*_>#:-]+/g, ' ')
+    .replaceAll(/\s+/g, ' ')
     .trim();
 }

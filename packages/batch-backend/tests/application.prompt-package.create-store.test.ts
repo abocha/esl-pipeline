@@ -284,6 +284,12 @@ describe('application/prompt-package', () => {
         selectedLessonMemoryIds: [],
         selectedHomeworkMemoryIds: [],
         retrievalPolicyVersion: null,
+        layerAvailability: {
+          studentMemorySnapshot: 'missing',
+          recentLessonMemory: 'missing',
+          recentHomeworkMemory: 'missing',
+          retrievalPolicy: 'missing',
+        },
       },
       createdAt: '2024-01-01T00:00:00.000Z',
       updatedAt: '2024-01-01T00:10:00.000Z',

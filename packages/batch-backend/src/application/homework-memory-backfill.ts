@@ -95,7 +95,7 @@ async function listSucceededHomeworkReplayCandidates(args: {
   jobId?: string;
 }): Promise<HomeworkReplayCandidateRow[]> {
   return withPgClient(async (client: PoolClient) => {
-    const values: Array<string | number> = [];
+    const values: (string | number)[] = [];
     const filters = [
       `j.state = 'succeeded'`,
       'j.student_id IS NOT NULL',

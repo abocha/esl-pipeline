@@ -1,11 +1,14 @@
-import { randomUUID } from 'node:crypto';
-
 import type { GenerationProvider } from '@esl-pipeline/contracts';
 
 import type { BatchBackendConfig } from '../config/env.js';
+import {
+  ensurePendingStudentMemorySnapshot,
+  type EnsurePendingStudentMemorySnapshotResult,
+} from '../domain/student-memory-snapshot-repository.js';
 import { createStudentMemoryQueue } from '../infrastructure/student-memory-queue.js';
 import { logger } from '../infrastructure/logger.js';
 import { resolveGenerationCandidates } from './generation-policy.js';
+import { STUDENT_MEMORY_SNAPSHOT_SCHEMA_VERSION } from './student-memory-snapshot-generation.js';
 
 export interface RequestStudentMemorySnapshotRefreshParams {
   studentId: string;
@@ -15,10 +18,27 @@ export interface RequestStudentMemorySnapshotRefreshParams {
   modelOverride?: string;
 }
 
+export interface RequestStudentMemorySnapshotRefreshDependencies {
+  snapshots: {
+    ensurePending: typeof ensurePendingStudentMemorySnapshot;
+  };
+  queue: {
+    enqueue: ReturnType<typeof createStudentMemoryQueue>['enqueue'];
+  };
+  now: () => Date;
+}
+
 export async function requestStudentMemorySnapshotRefresh(args: {
   config: BatchBackendConfig;
   params: RequestStudentMemorySnapshotRefreshParams;
-}): Promise<void> {
+  overrides?: Partial<RequestStudentMemorySnapshotRefreshDependencies>;
+}): Promise<EnsurePendingStudentMemorySnapshotResult> {
+  const snapshots = args.overrides?.snapshots ?? {
+    ensurePending: ensurePendingStudentMemorySnapshot,
+  };
+  const queue = args.overrides?.queue ?? createStudentMemoryQueue();
+  const now = args.overrides?.now ?? (() => new Date());
+
   const candidate = resolveGenerationCandidates({
     config: args.config.generation,
     providerOverride: args.params.providerOverride,
@@ -28,22 +48,33 @@ export async function requestStudentMemorySnapshotRefresh(args: {
     throw new Error('No generation candidate is available for student-memory snapshot extraction');
   }
 
-  const queueSuffix =
-    args.params.sourceEntryId && args.params.sourceEntryId.trim().length > 0
-      ? args.params.sourceEntryId
-      : `${args.params.trigger}:${randomUUID()}`;
+  const requestedAt = now();
+  const pending = await snapshots.ensurePending({
+    studentId: args.params.studentId,
+    schemaVersion: STUDENT_MEMORY_SNAPSHOT_SCHEMA_VERSION,
+    generatedAt: requestedAt,
+    provider: candidate.provider,
+    model: candidate.model,
+    sourceEntryId: args.params.sourceEntryId ?? null,
+    generationNotes: {
+      trigger: args.params.trigger,
+      sourceEntryId: args.params.sourceEntryId ?? null,
+      requestedAt: requestedAt.toISOString(),
+    },
+  });
 
-  await createStudentMemoryQueue().enqueue(
+  await queue.enqueue(
     {
       kind: 'student-memory-snapshot-refresh',
       studentId: args.params.studentId,
+      pendingEntryId: pending.entry.id,
       provider: candidate.provider,
       model: candidate.model,
       trigger: args.params.trigger,
       sourceEntryId: args.params.sourceEntryId ?? null,
     },
     {
-      jobId: `student-memory-snapshot:${args.params.studentId}:${queueSuffix}`,
+      jobId: `student-memory-snapshot:${args.params.studentId}:${pending.entry.id}`,
     },
   );
 
@@ -52,5 +83,9 @@ export async function requestStudentMemorySnapshotRefresh(args: {
     studentId: args.params.studentId,
     trigger: args.params.trigger,
     sourceEntryId: args.params.sourceEntryId ?? null,
+    pendingEntryId: pending.entry.id,
+    outcome: pending.outcome,
   });
+
+  return pending;
 }

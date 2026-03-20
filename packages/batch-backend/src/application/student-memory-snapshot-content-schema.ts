@@ -1,7 +1,6 @@
 import { z } from 'zod';
 
 import {
-  FactEvidenceSchema,
   LessonMemoryFactAuthoritySchema,
   LessonMemoryLabeledNoteSchema,
   LessonMemoryConfidenceSchema,
@@ -210,4 +209,4 @@ export {
   FactEvidenceSchema,
   LessonMemoryFactAuthoritySchema,
   StudentFactContentSchema,
-};
+} from './lesson-memory-content-schema.js';

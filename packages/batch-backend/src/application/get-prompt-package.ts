@@ -8,7 +8,12 @@ import type { TemplateRevisionRecord } from '../domain/template-revision-model.j
 import { getActiveTemplateRevision } from '../domain/template-revision-repository.js';
 import type { TranscriptionStorage } from '../infrastructure/transcription-storage.js';
 import { createTranscriptionStorageForUri } from '../infrastructure/transcription-storage.js';
-import { type PromptPackageResponse, toPromptPackageResponse } from './create-prompt-package.js';
+import {
+  getPromptPackageMemoryLayerAvailability,
+  type PromptPackageMemoryLayerAvailability,
+  type PromptPackageResponse,
+  toPromptPackageResponse,
+} from './create-prompt-package.js';
 
 type PromptPackageProfileDriftReason = 'profile_missing' | 'profile_content_changed';
 type PromptPackageTemplateDriftReason = 'template_missing' | 'template_content_changed';
@@ -100,6 +105,7 @@ export interface PromptPackageLineageResponse {
     selectedLessonMemoryIds: string[];
     selectedHomeworkMemoryIds: string[];
     retrievalPolicyVersion: string | null;
+    layerAvailability: PromptPackageMemoryLayerAvailability;
   };
   bindingAtCreation?: {
     bindingId: string;
@@ -258,6 +264,7 @@ export async function getPromptPackageLineage(
       selectedLessonMemoryIds: promptPackage.selectedLessonMemoryIds ?? [],
       selectedHomeworkMemoryIds: promptPackage.selectedHomeworkMemoryIds ?? [],
       retrievalPolicyVersion: promptPackage.retrievalPolicyVersion ?? null,
+      layerAvailability: getPromptPackageMemoryLayerAvailability(promptPackage),
     },
     bindingAtCreation: bindingAtCreation ? toBindingSnapshot(bindingAtCreation) : null,
   };

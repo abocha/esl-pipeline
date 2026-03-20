@@ -19,6 +19,8 @@ export interface GenerateStudentMemorySnapshotRequest {
   studentId: string;
   lessonMemoryEntryIds: string[];
   homeworkMemoryEntryIds: string[];
+  pendingEntryId?: string | null;
+  pendingGenerationNotes?: Record<string, unknown> | null;
   provider: GenerationProvider;
   model: string;
   prompt: string;
@@ -75,6 +77,8 @@ export async function generateStudentMemorySnapshot(args: {
     homeworkMemoryEntryIds: args.request.homeworkMemoryEntryIds,
     contentHash,
     generationNotes: {
+      ...args.request.pendingGenerationNotes,
+      pendingEntryId: args.request.pendingEntryId ?? null,
       providerRequestId: extraction.providerRequestId ?? null,
       usage: extraction.usage ?? null,
     },

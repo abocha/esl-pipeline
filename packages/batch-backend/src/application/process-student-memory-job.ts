@@ -1,7 +1,12 @@
 import type { BatchBackendConfig } from '../config/env.js';
-import { logger } from '../infrastructure/logger.js';
-import { processHomeworkMemoryJob, type ProcessHomeworkMemoryJobPayload } from './process-homework-memory-job.js';
-import { processLessonMemoryJob, type ProcessLessonMemoryJobPayload } from './process-lesson-memory-job.js';
+import {
+  processHomeworkMemoryJob,
+  type ProcessHomeworkMemoryJobPayload,
+} from './process-homework-memory-job.js';
+import {
+  processLessonMemoryJob,
+  type ProcessLessonMemoryJobPayload,
+} from './process-lesson-memory-job.js';
 import {
   processStudentMemorySnapshotJob,
   type ProcessStudentMemorySnapshotJobPayload,
@@ -32,6 +37,8 @@ export async function processStudentMemoryJob(args: {
     await processStudentMemorySnapshotJob({
       config: args.config,
       payload: args.payload,
+      attemptsMade: args.attemptsMade,
+      maxAttempts: args.maxAttempts,
     });
     return;
   }

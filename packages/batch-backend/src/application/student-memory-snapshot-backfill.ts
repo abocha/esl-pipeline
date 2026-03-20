@@ -88,7 +88,7 @@ async function listSnapshotReplayCandidates(args: {
   studentId?: string;
 }): Promise<StudentMemorySnapshotCandidateRow[]> {
   return withPgClient(async (client: PoolClient) => {
-    const values: Array<string | number> = [];
+    const values: (string | number)[] = [];
     const filters: string[] = [];
 
     if (args.studentId) {
