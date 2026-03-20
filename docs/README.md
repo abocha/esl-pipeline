@@ -66,6 +66,9 @@
   - [`docs/PIPELINE_INTEGRATION_VISION.md`](PIPELINE_INTEGRATION_VISION.md)
 - Learning preset architecture and provider policy:
   - [`docs/reference/PRESET_V2_SPEC.md`](reference/PRESET_V2_SPEC.md)
+  - [`docs/reference/HOMEWORK_PEDAGOGY_AND_TEMPLATE_SPEC.md`](reference/HOMEWORK_PEDAGOGY_AND_TEMPLATE_SPEC.md)
+  - [`docs/reference/STUDENT_MEMORY_EXTRACTION_CAPABILITY_POLICY.md`](reference/STUDENT_MEMORY_EXTRACTION_CAPABILITY_POLICY.md)
+  - [`docs/reference/STUDENT_MEMORY_EXTRACTION_SCHEMA_SPEC.md`](reference/STUDENT_MEMORY_EXTRACTION_SCHEMA_SPEC.md)
   - [`docs/reference/GENERATION_PROVIDER_POLICY.md`](reference/GENERATION_PROVIDER_POLICY.md)
 - Generation-provider evaluation profiles:
   - [`docs/reference/OPENAI_RESPONSES_WS2B_PROFILE.md`](reference/OPENAI_RESPONSES_WS2B_PROFILE.md)

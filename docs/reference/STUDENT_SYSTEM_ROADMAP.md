@@ -58,7 +58,8 @@
 - outcome:
   - immutable revision lineage
   - activation lifecycle for templates/profiles
-  - lineage API for prompt packages
+  - lineage API for prompt packages, including the canonical assignment-level inspection surface on
+    `GET /prompt-packages/:id`
 
 ### Phase C: Historical student binding governance
 

@@ -5,6 +5,11 @@ export interface PromptPackageRecord {
   recordingId: string;
   transcriptId: string;
   studentId?: string | null;
+  studentMemorySnapshotId?: string | null;
+  studentMemorySnapshotHash?: string | null;
+  selectedLessonMemoryIds?: string[];
+  selectedHomeworkMemoryIds?: string[];
+  retrievalPolicyVersion?: string | null;
   profilePath?: string | null;
   resolvedProfileId?: string | null;
   resolvedProfileHash?: string | null;

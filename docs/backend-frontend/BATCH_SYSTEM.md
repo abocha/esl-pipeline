@@ -52,7 +52,7 @@ Batch Frontend (React + Vite)
 - Auth: `/auth/*`
 - Recordings/transcripts: `/recordings/*`
 - Prompt config/options: `/config/prompts`, `/config/job-options`
-- Prompt package and drafts: `/recordings/:id/prompt-package`, `/prompt-packages/:id/draft`, `/drafts/:id/materialize`
+- Prompt package and drafts: `/recordings/:id/prompt-package`, `GET /prompt-packages/:id` for canonical prompt-package lineage and assignment-level memory provenance inspection, `/prompt-packages/:id/draft`, `/drafts/:id/materialize`
 - Approval and status: `/jobs/:jobId/approve`, `/jobs/:jobId`, `/jobs/events`
 - Validation: `/validation/markdown`
 
