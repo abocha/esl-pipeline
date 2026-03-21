@@ -93,6 +93,37 @@ Example:
 pnpm --filter @esl-pipeline/batch-backend exec tsx --tsconfig tsconfig.json src/tools/refresh-student-memory-snapshots.ts --selection missing --limit 20
 ```
 
+## Sampled Rollout Verification
+
+Use this workflow after replay or before trusting a broader rollout on a few representative
+students.
+
+1. Open the student workspace and inspect the read-only student-memory section for:
+   - latest ready snapshot summary
+   - unresolved issues
+   - recent lesson memory entries
+   - recent homework memory entries
+2. Inspect one recent assignment for the same student and confirm prompt-package memory provenance:
+   - snapshot id used
+   - selected lesson/homework memory ids
+   - retrieval policy version
+   - explicit layer availability markers
+3. Compare the prompt-package lineage against the latest transcript and current student-memory
+   overview.
+4. If continuity looks stale:
+   - correct source truth first when needed
+   - run the targeted replay command with `--dry-run`
+   - rerun without `--dry-run`
+   - re-check the student workspace and prompt-package provenance
+
+Verification rule:
+
+1. The student workspace is the read-only inspection surface for current memory state.
+2. `GET /prompt-packages/:id` and `GET /prompt-packages/:id/lineage` remain the canonical
+   assignment-level provenance surfaces.
+3. Replay should rebuild canonical artifacts from source truth rather than patching generated rows
+   manually.
+
 ## Related
 
 - [`docs/plans/student-memory-system-upgrade/README.md`](../plans/student-memory-system-upgrade/README.md)

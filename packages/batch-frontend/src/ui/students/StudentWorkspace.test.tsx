@@ -14,6 +14,7 @@ vi.mock('../../utils/api', () => ({
   fetchJobProvenance: vi.fn(),
   fetchPromptPackageLineage: vi.fn(),
   getProfileContent: vi.fn(),
+  getStudentMemoryOverview: vi.fn(),
   getStudentProfile: vi.fn(),
   getStudentTimeline: vi.fn(),
   getTemplateContent: vi.fn(),
@@ -191,6 +192,117 @@ describe('StudentWorkspace', () => {
       order: 'desc',
     });
 
+    vi.mocked(api.getStudentMemoryOverview).mockResolvedValue({
+      studentId: 'student-default',
+      latestReadyStudentMemorySnapshot: {
+        id: 'snapshot-1',
+        studentId: 'student-default',
+        schemaVersion: 'student-memory-snapshot.v1',
+        generatedAt: now,
+        provider: 'openai',
+        model: 'gpt-5.4',
+        status: 'ready',
+        sourceKind: 'student_memory_rollup',
+        lessonMemoryEntryIds: ['lesson-1'],
+        homeworkMemoryEntryIds: ['homework-1'],
+        contentHash: 'snapshot-hash-1',
+        generationNotes: null,
+        stableStrengths: [],
+        recurringIssues: [],
+        activeReviewBacklog: [],
+        recentProgress: [],
+        personalFacts: [],
+        recommendedAssignmentDirections: [],
+        unresolvedIssues: [
+          {
+            label: 'Article choice',
+            issueType: 'grammar',
+            note: 'Still dropping articles in singular noun phrases.',
+            priority: 'high',
+          },
+        ],
+        snapshotSummary: 'The student is improving fluency but still needs article review.',
+        supersededById: null,
+        supersededAt: null,
+        createdAt: now,
+        updatedAt: now,
+      },
+      recentReadyLessonMemory: [
+        {
+          id: 'lesson-1',
+          studentId: 'student-default',
+          transcriptId: 'tx-older-1',
+          recordingId: 'rec-older-1',
+          schemaVersion: 'lesson-memory.v1',
+          generatedAt: now,
+          provider: 'openai',
+          model: 'gpt-5.4',
+          status: 'ready',
+          sourceKind: 'lesson_transcript',
+          generationNotes: null,
+          lessonSummary: 'Travel lesson with article corrections.',
+          topicsDiscussed: [{ topic: 'Travel', note: 'Planned a future trip.' }],
+          mistakePatterns: [],
+          grammarReviewed: [],
+          grammarWatchlist: [],
+          vocabularyFocus: [],
+          pronunciationFocus: [],
+          studentFacts: [],
+          progressSignals: [],
+          followUpRecommendations: [],
+          supersededById: null,
+          supersededAt: null,
+          createdAt: now,
+          updatedAt: now,
+        },
+      ],
+      recentReadyHomeworkMemory: [
+        {
+          id: 'homework-1',
+          studentId: 'student-default',
+          jobId: 'job-1',
+          assignmentLineageKey: 'assignment-root-1',
+          promptPackageId: 'pkg-1',
+          draftId: 'draft-1',
+          recordingId: 'rec-1',
+          transcriptId: 'tx-1',
+          schemaVersion: 'homework-memory.v1',
+          generatedAt: now,
+          provider: 'openrouter',
+          model: 'qwen/qwen3.5',
+          status: 'ready',
+          sourceKind: 'published_assignment',
+          contentHash: 'homework-hash-1',
+          generationNotes: null,
+          homeworkSummary: 'Give advice to a traveler using article prompts.',
+          topic: 'Travel advice',
+          grammarTargets: [],
+          vocabularyTargets: [],
+          reviewTargets: [],
+          taskList: [],
+          pronunciationFocus: [],
+          studyTextType: 'dialogue',
+          inputType: 'generate',
+          communicativeOutcome: 'Give advice',
+          teacherFollowUpCues: [],
+          publishedAt: now,
+          publishTargets: [],
+          supersededById: null,
+          supersededAt: null,
+          createdAt: now,
+          updatedAt: now,
+        },
+      ],
+      unresolvedIssues: [
+        {
+          label: 'Article choice',
+          issueType: 'grammar',
+          note: 'Still dropping articles in singular noun phrases.',
+          priority: 'high',
+        },
+      ],
+    });
+
     vi.mocked(api.listStudentProfileBindings).mockResolvedValue({
       items: [
         {
@@ -314,6 +426,19 @@ describe('StudentWorkspace', () => {
         },
         drift: null,
       },
+      memory: {
+        studentMemorySnapshotId: 'snapshot-1',
+        studentMemorySnapshotHash: 'snapshot-hash-1',
+        selectedLessonMemoryIds: ['lesson-1', 'lesson-0'],
+        selectedHomeworkMemoryIds: ['homework-1'],
+        retrievalPolicyVersion: 'student-memory-v1',
+        layerAvailability: {
+          studentMemorySnapshot: 'available',
+          recentLessonMemory: 'available',
+          recentHomeworkMemory: 'available',
+          retrievalPolicy: 'available',
+        },
+      },
       bindingAtCreation: {
         bindingId: 'binding-1',
         studentId: 'student-default',
@@ -409,6 +534,10 @@ describe('StudentWorkspace', () => {
 
     expect(screen.getByRole('heading', { name: /Assignment History/i })).toBeTruthy();
     expect(screen.getByRole('heading', { name: /Student Timeline/i })).toBeTruthy();
+    expect(api.getStudentMemoryOverview).toHaveBeenCalledWith('student-default', {
+      lessonLimit: 3,
+      homeworkLimit: 2,
+    });
   });
 
   it('does not refetch assignment history until apply is clicked', async () => {
@@ -483,6 +612,35 @@ describe('StudentWorkspace', () => {
     );
 
     expect(screen.getByText(/Action audit:/i)).toBeTruthy();
+    expect(screen.getByText(/Assignment Memory Provenance/i)).toBeTruthy();
+    expect(screen.getByText(/Snapshot at creation:/i)).toBeTruthy();
+  });
+
+  it('renders the read-only student memory overview near provenance', async () => {
+    const user = userEvent.setup();
+    renderWorkspace();
+
+    await screen.findByText(
+      /The student is improving fluency but still needs article review\./i,
+      {},
+      { timeout: STUDENT_WORKSPACE_ASYNC_TIMEOUT_MS },
+    );
+    expect(screen.getByText(/Travel lesson with article corrections\./i)).toBeTruthy();
+    expect(screen.getByText(/Travel advice/i)).toBeTruthy();
+    expect(screen.getByText(/Article choice/i)).toBeTruthy();
+
+    const inspectButton = await screen.findByRole(
+      'button',
+      { name: /Inspect/i },
+      { timeout: STUDENT_WORKSPACE_ASYNC_TIMEOUT_MS },
+    );
+    await user.click(inspectButton);
+
+    await screen.findByText(/Selected lesson memory IDs:/i, {}, {
+      timeout: STUDENT_WORKSPACE_ASYNC_TIMEOUT_MS,
+    });
+    expect(screen.getByText(/student-memory-v1/i)).toBeTruthy();
+    expect(screen.getByText(/Selected homework memory IDs:/i)).toBeTruthy();
   });
 
   it('re-fetches lineage when inspecting the same job repeatedly', async () => {

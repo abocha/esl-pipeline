@@ -7,13 +7,16 @@ import { getLatestReadyStudentMemorySnapshotByStudentId } from '../domain/studen
 import type { StudentMemorySnapshotRecord } from '../domain/student-memory-snapshot-model.js';
 
 export interface StudentMemoryPackageContext {
-  text: string | null;
+  studentMemorySnapshotBlock: string;
+  recentLessonMemoryBlock: string;
+  recentHomeworkMemoryBlock: string;
+  unresolvedIssuesBlock: string;
   studentMemorySnapshotId: string | null;
   studentMemorySnapshotHash: string | null;
   selectedLessonMemoryIds: string[];
   selectedHomeworkMemoryIds: string[];
   retrievalPolicyVersion: string | null;
-  source: 'canonical' | 'legacy' | 'none';
+  source: 'canonical' | 'none';
 }
 
 export async function buildStudentMemoryPackageContext(args: {
@@ -23,7 +26,14 @@ export async function buildStudentMemoryPackageContext(args: {
 }): Promise<StudentMemoryPackageContext> {
   if (!args.studentId) {
     return {
-      text: null,
+      studentMemorySnapshotBlock:
+        'Not applicable for this prompt package because no student is bound to the recording.',
+      recentLessonMemoryBlock:
+        'Not applicable for this prompt package because no student is bound to the recording.',
+      recentHomeworkMemoryBlock:
+        'Not applicable for this prompt package because no student is bound to the recording.',
+      unresolvedIssuesBlock:
+        'Not applicable for this prompt package because no student is bound to the recording.',
       studentMemorySnapshotId: null,
       studentMemorySnapshotHash: null,
       selectedLessonMemoryIds: [],
@@ -36,7 +46,14 @@ export async function buildStudentMemoryPackageContext(args: {
   const pgEnabled = Boolean((args.config as { pg?: { enabled?: boolean } } | undefined)?.pg?.enabled);
   if (!pgEnabled) {
     return {
-      text: null,
+      studentMemorySnapshotBlock:
+        'Not available for this prompt package because canonical student-memory retrieval is disabled.',
+      recentLessonMemoryBlock:
+        'Not available for this prompt package because canonical student-memory retrieval is disabled.',
+      recentHomeworkMemoryBlock:
+        'Not available for this prompt package because canonical student-memory retrieval is disabled.',
+      unresolvedIssuesBlock:
+        'Not available for this prompt package because canonical student-memory retrieval is disabled.',
       studentMemorySnapshotId: null,
       studentMemorySnapshotHash: null,
       selectedLessonMemoryIds: [],
@@ -59,7 +76,7 @@ export async function buildStudentMemoryPackageContext(args: {
 
   if (snapshot || recentLessons.length > 0 || recentHomework.length > 0) {
     return {
-      text: formatStudentMemoryPackageContext({
+      ...formatStudentMemoryPackageContext({
         snapshot,
         recentLessons,
         recentHomework,
@@ -74,7 +91,11 @@ export async function buildStudentMemoryPackageContext(args: {
   }
 
   return {
-    text: null,
+    studentMemorySnapshotBlock: 'No long-term student-memory snapshot available yet.',
+    recentLessonMemoryBlock: 'No recent lesson-memory entries available for retrieval.',
+    recentHomeworkMemoryBlock: 'No recent homework-memory entries available for retrieval.',
+    unresolvedIssuesBlock:
+      'No unresolved issues available because no student-memory snapshot is available yet.',
     studentMemorySnapshotId: null,
     studentMemorySnapshotHash: null,
     selectedLessonMemoryIds: [],
@@ -88,45 +109,64 @@ function formatStudentMemoryPackageContext(args: {
   snapshot: StudentMemorySnapshotRecord | null;
   recentLessons: LessonMemoryRecord[];
   recentHomework: HomeworkMemoryRecord[];
-}): string {
-  const parts: string[] = [];
+}): Pick<
+  StudentMemoryPackageContext,
+  | 'studentMemorySnapshotBlock'
+  | 'recentLessonMemoryBlock'
+  | 'recentHomeworkMemoryBlock'
+  | 'unresolvedIssuesBlock'
+> {
+  return {
+    studentMemorySnapshotBlock: formatStudentMemorySnapshotBlock(args.snapshot),
+    recentLessonMemoryBlock:
+      args.recentLessons.length > 0
+        ? args.recentLessons.flatMap((entry) => formatLessonMemoryEntry(entry)).join('\n')
+        : 'No recent lesson-memory entries available for retrieval.',
+    recentHomeworkMemoryBlock:
+      args.recentHomework.length > 0
+        ? args.recentHomework.flatMap((entry) => formatHomeworkMemoryEntry(entry)).join('\n')
+        : 'No recent homework-memory entries available for retrieval.',
+    unresolvedIssuesBlock: formatUnresolvedIssuesBlock(args.snapshot),
+  };
+}
 
-  if (args.snapshot) {
-    parts.push(
-      '[STUDENT_MEMORY_SNAPSHOT]',
-      args.snapshot.snapshotSummary ?? 'Student-memory snapshot available.',
-    );
-
-    if (args.snapshot.unresolvedIssues.length > 0) {
-      parts.push(
-        '',
-        '[UNRESOLVED_ISSUES]',
-        ...args.snapshot.unresolvedIssues.map(
-          (issue) => `- (${issue.priority}) ${issue.label}: ${issue.note}`,
-        ),
-      );
-    }
-  } else {
-    parts.push('[STUDENT_MEMORY_SNAPSHOT]', 'No long-term student-memory snapshot available yet.');
+function formatStudentMemorySnapshotBlock(snapshot: StudentMemorySnapshotRecord | null): string {
+  if (!snapshot) {
+    return 'No long-term student-memory snapshot available yet.';
   }
 
-  if (args.recentLessons.length > 0) {
-    parts.push(
-      '',
-      '[RECENT_LESSON_MEMORY]',
-      ...args.recentLessons.flatMap((entry) => formatLessonMemoryEntry(entry)),
-    );
+  const lines = [snapshot.snapshotSummary?.trim() || 'Long-term student-memory snapshot available.'];
+  appendLabeledSummary(lines, 'Stable strengths', snapshot.stableStrengths.map((item) => item.label), 3);
+  appendLabeledSummary(lines, 'Recurring issues', snapshot.recurringIssues.map((item) => item.label), 3);
+  appendLabeledSummary(
+    lines,
+    'Active review backlog',
+    snapshot.activeReviewBacklog.map((item) => item.label),
+    3,
+  );
+  appendLabeledSummary(lines, 'Recent progress', snapshot.recentProgress.map((item) => item.label), 3);
+  appendLabeledSummary(
+    lines,
+    'Recommended assignment directions',
+    snapshot.recommendedAssignmentDirections.map((item) => item.direction),
+    3,
+  );
+  appendLabeledSummary(lines, 'Personal facts', snapshot.personalFacts.map((item) => item.fact), 3);
+  return lines.join('\n');
+}
+
+function formatUnresolvedIssuesBlock(snapshot: StudentMemorySnapshotRecord | null): string {
+  if (!snapshot) {
+    return 'No unresolved issues available because no student-memory snapshot is available yet.';
   }
 
-  if (args.recentHomework.length > 0) {
-    parts.push(
-      '',
-      '[RECENT_HOMEWORK_MEMORY]',
-      ...args.recentHomework.flatMap((entry) => formatHomeworkMemoryEntry(entry)),
-    );
+  if (snapshot.unresolvedIssues.length === 0) {
+    return 'No unresolved issues recorded in the current student-memory snapshot.';
   }
 
-  return parts.join('\n');
+  return snapshot.unresolvedIssues
+    .map((issue) => `- (${issue.priority}) ${issue.label}: ${issue.note}`)
+    .join('\n');
 }
 
 function formatLessonMemoryEntry(entry: LessonMemoryRecord): string[] {
@@ -218,4 +258,18 @@ function summarizeValues(values: string[], limit: number): string | null {
   }
 
   return normalized.join('; ');
+}
+
+function appendLabeledSummary(
+  lines: string[],
+  label: string,
+  values: string[],
+  limit: number,
+): void {
+  const summary = summarizeValues(values, limit);
+  if (!summary) {
+    return;
+  }
+
+  lines.push(`${label}: ${summary}`);
 }

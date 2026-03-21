@@ -43,6 +43,7 @@ import type {
   JobState as ContractJobState,
   JobSummaryResponse as ContractJobSummaryResponse,
   MarkdownValidationResponse as ContractMarkdownValidationResponse,
+  PublishTarget,
   RecordingStatus as ContractRecordingStatus,
   SttProviderId as ContractSttProviderId,
   StudentSummaryResponse as ContractStudentSummaryResponse,
@@ -290,6 +291,293 @@ export interface StudentTimelineResponse {
   order: 'asc' | 'desc';
 }
 
+export type MemoryConfidence = 'low' | 'medium' | 'high';
+export type StudentFactAuthority = 'teacher_confirmed' | 'student_stated' | 'model_inferred';
+export type LessonMemoryEntryStatus = 'pending' | 'ready' | 'failed' | 'superseded';
+export type HomeworkMemoryEntryStatus = 'pending' | 'ready' | 'failed' | 'superseded';
+export type StudentMemorySnapshotStatus = 'pending' | 'ready' | 'failed' | 'superseded';
+export type StudentMemoryIssueType =
+  | 'grammar'
+  | 'vocabulary'
+  | 'pronunciation'
+  | 'fluency'
+  | 'communication'
+  | 'review_loop'
+  | 'other';
+export type StudentMemoryPriority = 'low' | 'medium' | 'high';
+export type HomeworkMemoryInputType = 'generate' | 'authentic';
+export type HomeworkMemoryStudyTextType = 'monologue' | 'dialogue';
+export type HomeworkMemoryTaskType =
+  | 'roadmap'
+  | 'input'
+  | 'grammar'
+  | 'vocabulary'
+  | 'controlled_practice'
+  | 'comprehension'
+  | 'pronunciation'
+  | 'mission'
+  | 'teacher_follow_up'
+  | 'other';
+export type HomeworkMemoryTargetKind = 'new' | 'review' | 'mixed';
+export type HomeworkMemoryFollowUpCueType = 'warm_up' | 'error_focus' | 'monitoring' | 'other';
+export type HomeworkMemoryPronunciationMode =
+  | 'shadow_sentence'
+  | 'intonation'
+  | 'rhythm_chunking'
+  | 'sentence_stress'
+  | 'connected_speech'
+  | 'minimal_pair'
+  | 'other';
+
+export interface FactEvidence {
+  quote: string;
+  speakerRole?: 'student' | 'teacher' | null;
+  evidenceNote?: string | null;
+  transcriptSpan?: string | null;
+}
+
+export interface MistakeEvidence {
+  observedForm: string;
+  suggestedTarget?: string | null;
+  evidenceQuote?: string | null;
+  evidenceNote?: string | null;
+  confidenceNote?: string | null;
+}
+
+export interface PronunciationEvidence {
+  observedIssue: string;
+  focusWords: string[];
+  evidenceQuote?: string | null;
+  evidenceNote?: string | null;
+  confidenceNote?: string | null;
+}
+
+export interface StudentFact {
+  fact: string;
+  category: string;
+  authority: StudentFactAuthority;
+  confidence: MemoryConfidence;
+  evidence: FactEvidence[];
+  reviewNeeded: boolean;
+}
+
+export interface NamedNote {
+  name: string;
+  note: string;
+}
+
+export interface LabeledNote {
+  label: string;
+  note: string;
+}
+
+export interface TextNote {
+  text: string;
+  note: string;
+}
+
+export interface TopicNote {
+  topic: string;
+  note: string;
+}
+
+export interface MistakePattern {
+  label: string;
+  explanation: string;
+  reviewRecommended: boolean;
+  confidence: MemoryConfidence;
+  evidence: MistakeEvidence[];
+}
+
+export interface PronunciationFocusEntry {
+  label: string;
+  note: string;
+  confidence: MemoryConfidence;
+  evidence: PronunciationEvidence[];
+}
+
+export interface LessonMemoryRecord {
+  id: string;
+  studentId: string;
+  transcriptId: string;
+  recordingId: string;
+  schemaVersion: string;
+  generatedAt: string;
+  provider: string;
+  model: string;
+  status: LessonMemoryEntryStatus;
+  sourceKind: 'lesson_transcript';
+  generationNotes?: Record<string, unknown> | null;
+  lessonSummary?: string | null;
+  topicsDiscussed: TopicNote[];
+  mistakePatterns: MistakePattern[];
+  grammarReviewed: NamedNote[];
+  grammarWatchlist: NamedNote[];
+  vocabularyFocus: TextNote[];
+  pronunciationFocus: PronunciationFocusEntry[];
+  studentFacts: StudentFact[];
+  progressSignals: LabeledNote[];
+  followUpRecommendations: LabeledNote[];
+  supersededById?: string | null;
+  supersededAt?: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface HomeworkMemoryNamedTarget {
+  name: string;
+  note: string;
+  targetKind: HomeworkMemoryTargetKind;
+}
+
+export interface HomeworkMemoryVocabularyTarget {
+  text: string;
+  note: string;
+  targetKind: HomeworkMemoryTargetKind;
+}
+
+export interface HomeworkMemoryTaskEntry {
+  section: string;
+  task: string;
+  taskType: HomeworkMemoryTaskType;
+  review: boolean;
+}
+
+export interface HomeworkMemoryPronunciationFocusEntry {
+  mode: HomeworkMemoryPronunciationMode;
+  target: string;
+  action: string;
+}
+
+export interface HomeworkMemoryTeacherFollowUpCue {
+  cueType: HomeworkMemoryFollowUpCueType;
+  note: string;
+}
+
+export interface HomeworkMemoryPublishTarget {
+  target: PublishTarget;
+  url?: string | null;
+  jobId?: string | null;
+  publishedAt?: string | null;
+}
+
+export interface HomeworkMemoryRecord {
+  id: string;
+  studentId: string;
+  jobId: string;
+  assignmentLineageKey: string;
+  promptPackageId?: string | null;
+  draftId?: string | null;
+  recordingId?: string | null;
+  transcriptId?: string | null;
+  schemaVersion: string;
+  generatedAt: string;
+  provider: string;
+  model: string;
+  status: HomeworkMemoryEntryStatus;
+  sourceKind: 'published_assignment';
+  contentHash?: string | null;
+  generationNotes?: Record<string, unknown> | null;
+  homeworkSummary?: string | null;
+  topic?: string | null;
+  grammarTargets: HomeworkMemoryNamedTarget[];
+  vocabularyTargets: HomeworkMemoryVocabularyTarget[];
+  reviewTargets: LabeledNote[];
+  taskList: HomeworkMemoryTaskEntry[];
+  pronunciationFocus: HomeworkMemoryPronunciationFocusEntry[];
+  studyTextType?: HomeworkMemoryStudyTextType | null;
+  inputType?: HomeworkMemoryInputType | null;
+  communicativeOutcome?: string | null;
+  teacherFollowUpCues: HomeworkMemoryTeacherFollowUpCue[];
+  publishedAt: string;
+  publishTargets: HomeworkMemoryPublishTarget[];
+  supersededById?: string | null;
+  supersededAt?: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface StudentMemoryRecurringIssue {
+  label: string;
+  issueType: StudentMemoryIssueType;
+  note: string;
+  confidence: MemoryConfidence;
+}
+
+export interface StudentMemoryRecommendedAssignmentDirection {
+  direction: string;
+  rationale: string;
+}
+
+export interface StudentMemoryUnresolvedIssue {
+  label: string;
+  issueType: StudentMemoryIssueType;
+  note: string;
+  priority: StudentMemoryPriority;
+}
+
+export interface StudentMemorySnapshotRecord {
+  id: string;
+  studentId: string;
+  schemaVersion: string;
+  generatedAt: string;
+  provider: string;
+  model: string;
+  status: StudentMemorySnapshotStatus;
+  sourceKind: 'student_memory_rollup';
+  lessonMemoryEntryIds: string[];
+  homeworkMemoryEntryIds: string[];
+  contentHash?: string | null;
+  generationNotes?: Record<string, unknown> | null;
+  stableStrengths: LabeledNote[];
+  recurringIssues: StudentMemoryRecurringIssue[];
+  activeReviewBacklog: LabeledNote[];
+  recentProgress: LabeledNote[];
+  personalFacts: StudentFact[];
+  recommendedAssignmentDirections: StudentMemoryRecommendedAssignmentDirection[];
+  unresolvedIssues: StudentMemoryUnresolvedIssue[];
+  snapshotSummary?: string | null;
+  supersededById?: string | null;
+  supersededAt?: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface StudentMemoryOverviewResponse {
+  studentId: string;
+  latestReadyStudentMemorySnapshot: StudentMemorySnapshotRecord | null;
+  recentReadyLessonMemory: LessonMemoryRecord[];
+  recentReadyHomeworkMemory: HomeworkMemoryRecord[];
+  unresolvedIssues: StudentMemoryUnresolvedIssue[];
+}
+
+export interface StudentLessonMemoryListResponse {
+  studentId: string;
+  items: LessonMemoryRecord[];
+  limit: number;
+  offset: number;
+  order: 'asc' | 'desc';
+  statuses: LessonMemoryEntryStatus[] | null;
+}
+
+export interface StudentHomeworkMemoryListResponse {
+  studentId: string;
+  items: HomeworkMemoryRecord[];
+  limit: number;
+  offset: number;
+  order: 'asc' | 'desc';
+  statuses: HomeworkMemoryEntryStatus[] | null;
+}
+
+export interface StudentMemorySnapshotListResponse {
+  studentId: string;
+  items: StudentMemorySnapshotRecord[];
+  limit: number;
+  offset: number;
+  order: 'asc' | 'desc';
+  statuses: StudentMemorySnapshotStatus[] | null;
+}
+
 export interface StudentProfileBindingResponse {
   id: string;
   studentId: string;
@@ -363,8 +651,25 @@ export interface PromptPackageResponse {
     currentTemplateRevisionId: string | null;
     currentTemplateUpdatedAt: string | null;
   };
+  memory?: {
+    studentMemorySnapshotId: string | null;
+    studentMemorySnapshotHash: string | null;
+    selectedLessonMemoryIds: string[];
+    selectedHomeworkMemoryIds: string[];
+    retrievalPolicyVersion: string | null;
+    layerAvailability: PromptPackageMemoryLayerAvailability;
+  };
   createdAt: string;
   updatedAt: string;
+}
+
+export type PromptPackageMemoryLayerAvailabilityState = 'available' | 'missing' | 'not_applicable';
+
+export interface PromptPackageMemoryLayerAvailability {
+  studentMemorySnapshot: PromptPackageMemoryLayerAvailabilityState;
+  recentLessonMemory: PromptPackageMemoryLayerAvailabilityState;
+  recentHomeworkMemory: PromptPackageMemoryLayerAvailabilityState;
+  retrievalPolicy: PromptPackageMemoryLayerAvailabilityState;
 }
 
 export interface PromptPackageLineageResponse {
@@ -411,6 +716,18 @@ export interface PromptPackageLineageResponse {
       updatedAt: string | null;
     };
     drift: PromptPackageResponse['templateDrift'] | null;
+  };
+  voiceCapabilitiesSnapshot?: {
+    generatedAt: string | null;
+    hash: string | null;
+  } | null;
+  memory: {
+    studentMemorySnapshotId: string | null;
+    studentMemorySnapshotHash: string | null;
+    selectedLessonMemoryIds: string[];
+    selectedHomeworkMemoryIds: string[];
+    retrievalPolicyVersion: string | null;
+    layerAvailability: PromptPackageMemoryLayerAvailability;
   };
   bindingAtCreation?: {
     bindingId: string;
@@ -1736,6 +2053,148 @@ export async function getStudentTimeline(
     const axiosError = toAxiosError(error);
     if (axiosError && isAuthError(axiosError)) {
       throw new Error('Authentication required. Please login to view timelines.');
+    }
+    throw new Error(axiosError ? handleApiError(axiosError) : formatUnknownError(error));
+  }
+}
+
+export async function getStudentMemoryOverview(
+  studentId: string,
+  params: {
+    lessonLimit?: number;
+    homeworkLimit?: number;
+  } = {},
+): Promise<StudentMemoryOverviewResponse> {
+  try {
+    const response = await apiClient.get(
+      buildApiProxyPath(`/students/${encodeURIComponent(studentId)}/memory`),
+      { params },
+    );
+    return response.data;
+  } catch (error: unknown) {
+    const axiosError = toAxiosError(error);
+    if (axiosError && isAuthError(axiosError)) {
+      throw new Error('Authentication required. Please login to view student memory.');
+    }
+    throw new Error(axiosError ? handleApiError(axiosError) : formatUnknownError(error));
+  }
+}
+
+export async function listStudentLessonMemoryEntries(
+  studentId: string,
+  params: {
+    status?: LessonMemoryEntryStatus | LessonMemoryEntryStatus[];
+    limit?: number;
+    offset?: number;
+    order?: 'asc' | 'desc';
+  } = {},
+): Promise<StudentLessonMemoryListResponse> {
+  try {
+    const search = new URLSearchParams();
+    if (params.status) {
+      const values = Array.isArray(params.status) ? params.status : [params.status];
+      search.set('status', values.join(','));
+    }
+    if (typeof params.limit === 'number') {
+      search.set('limit', String(params.limit));
+    }
+    if (typeof params.offset === 'number') {
+      search.set('offset', String(params.offset));
+    }
+    if (params.order) {
+      search.set('order', params.order);
+    }
+
+    const query = search.toString();
+    const url = query
+      ? `/students/${encodeURIComponent(studentId)}/lesson-memory?${query}`
+      : `/students/${encodeURIComponent(studentId)}/lesson-memory`;
+    const response = await apiClient.get(buildApiProxyPath(url));
+    return response.data;
+  } catch (error: unknown) {
+    const axiosError = toAxiosError(error);
+    if (axiosError && isAuthError(axiosError)) {
+      throw new Error('Authentication required. Please login to view lesson memory.');
+    }
+    throw new Error(axiosError ? handleApiError(axiosError) : formatUnknownError(error));
+  }
+}
+
+export async function listStudentHomeworkMemoryEntries(
+  studentId: string,
+  params: {
+    status?: HomeworkMemoryEntryStatus | HomeworkMemoryEntryStatus[];
+    limit?: number;
+    offset?: number;
+    order?: 'asc' | 'desc';
+  } = {},
+): Promise<StudentHomeworkMemoryListResponse> {
+  try {
+    const search = new URLSearchParams();
+    if (params.status) {
+      const values = Array.isArray(params.status) ? params.status : [params.status];
+      search.set('status', values.join(','));
+    }
+    if (typeof params.limit === 'number') {
+      search.set('limit', String(params.limit));
+    }
+    if (typeof params.offset === 'number') {
+      search.set('offset', String(params.offset));
+    }
+    if (params.order) {
+      search.set('order', params.order);
+    }
+
+    const query = search.toString();
+    const url = query
+      ? `/students/${encodeURIComponent(studentId)}/homework-memory?${query}`
+      : `/students/${encodeURIComponent(studentId)}/homework-memory`;
+    const response = await apiClient.get(buildApiProxyPath(url));
+    return response.data;
+  } catch (error: unknown) {
+    const axiosError = toAxiosError(error);
+    if (axiosError && isAuthError(axiosError)) {
+      throw new Error('Authentication required. Please login to view homework memory.');
+    }
+    throw new Error(axiosError ? handleApiError(axiosError) : formatUnknownError(error));
+  }
+}
+
+export async function listStudentMemorySnapshots(
+  studentId: string,
+  params: {
+    status?: StudentMemorySnapshotStatus | StudentMemorySnapshotStatus[];
+    limit?: number;
+    offset?: number;
+    order?: 'asc' | 'desc';
+  } = {},
+): Promise<StudentMemorySnapshotListResponse> {
+  try {
+    const search = new URLSearchParams();
+    if (params.status) {
+      const values = Array.isArray(params.status) ? params.status : [params.status];
+      search.set('status', values.join(','));
+    }
+    if (typeof params.limit === 'number') {
+      search.set('limit', String(params.limit));
+    }
+    if (typeof params.offset === 'number') {
+      search.set('offset', String(params.offset));
+    }
+    if (params.order) {
+      search.set('order', params.order);
+    }
+
+    const query = search.toString();
+    const url = query
+      ? `/students/${encodeURIComponent(studentId)}/memory-snapshots?${query}`
+      : `/students/${encodeURIComponent(studentId)}/memory-snapshots`;
+    const response = await apiClient.get(buildApiProxyPath(url));
+    return response.data;
+  } catch (error: unknown) {
+    const axiosError = toAxiosError(error);
+    if (axiosError && isAuthError(axiosError)) {
+      throw new Error('Authentication required. Please login to view student memory snapshots.');
     }
     throw new Error(axiosError ? handleApiError(axiosError) : formatUnknownError(error));
   }

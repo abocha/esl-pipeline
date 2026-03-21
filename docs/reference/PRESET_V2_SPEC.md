@@ -32,7 +32,7 @@
 - baseline prompt snapshot:
   - `docs/templates/hw_prompt_v4-2_clean.md`
 - voice-aligned prompt snapshot:
-  - `docs/templates/hw_prompt_v4-4_voice-aligned.md`
+  - `docs/templates/hw_prompt_v4-5_voice-aligned.md`
 - runtime default lineage:
   - learning preset id: `general-english`
   - learning preset version: `v1`
@@ -60,7 +60,7 @@ Every generated draft should retain:
 
 When `VOICE_ALIGNMENT_V2_PROMPT=true`:
 
-- use `hw_prompt_v4-4_voice-aligned`
+- use `hw_prompt_v4-5_voice-aligned`
 - inject capability enums from the current voice catalog snapshot
 - persist capability provenance
 - fail fast if the capability snapshot cannot be resolved

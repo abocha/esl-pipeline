@@ -520,7 +520,7 @@ export function loadConfig(): BatchBackendConfig {
   const promptTemplatePath = readString(
     'PROMPT_TEMPLATE_PATH',
     voiceAlignmentPromptV2
-      ? 'docs/templates/hw_prompt_v4-4_voice-aligned.md'
+      ? 'docs/templates/hw_prompt_v4-5_voice-aligned.md'
       : 'docs/templates/hw_prompt_v4-2_clean.md',
   )!;
   const promptProfilePath = readString(
