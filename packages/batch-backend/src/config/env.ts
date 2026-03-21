@@ -516,12 +516,9 @@ export function loadConfig(): BatchBackendConfig {
 
   const configDir = readString('ESL_PIPELINE_CONFIG_DIR');
 
-  const voiceAlignmentPromptV2 = readBool('VOICE_ALIGNMENT_V2_PROMPT', false);
   const promptTemplatePath = readString(
     'PROMPT_TEMPLATE_PATH',
-    voiceAlignmentPromptV2
-      ? 'docs/templates/hw_prompt_v4-5_voice-aligned.md'
-      : 'docs/templates/hw_prompt_v4-2_clean.md',
+    'docs/templates/hw_prompt_v4-5_voice-aligned.md',
   )!;
   const promptProfilePath = readString(
     'PROMPT_PROFILE_PATH',
@@ -676,7 +673,14 @@ export function loadConfig(): BatchBackendConfig {
   const generationGoogleModelTertiary = readString('GEN_GOOGLE_MODEL_TERTIARY', 'gemini-2.5-pro')!;
   const generationGoogleAllowedModels = readStringList(
     'GEN_ALLOWED_MODELS_GOOGLE',
-    `${generationGoogleModelPrimary},${generationGoogleModelFallback},${generationGoogleModelTertiary}`,
+    [
+      'gemini-3.1-pro-preview',
+      generationGoogleModelPrimary,
+      'gemini-3.1-flash-lite-preview',
+      generationGoogleModelTertiary,
+      'gemini-2.5-flash',
+      generationGoogleModelFallback,
+    ].join(','),
   );
   const generationOpenRouterModelPrimary = readString('GEN_OPENROUTER_MODEL_PRIMARY');
   const generationOpenRouterModelFallback = readString('GEN_OPENROUTER_MODEL_FALLBACK');

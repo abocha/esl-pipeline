@@ -33,6 +33,15 @@
 - primary: `gemini-3-flash-preview`
 - fallback: `gemini-2.5-flash-lite`
 - tertiary fallback: `gemini-2.5-pro`
+- deprecated/removed from roster:
+  - `gemini-3-pro-preview` (deprecated and shut down on March 9, 2026)
+- current allowlisted roster for text generation:
+  - `gemini-3.1-pro-preview`
+  - `gemini-3-flash-preview`
+  - `gemini-3.1-flash-lite-preview`
+  - `gemini-2.5-pro`
+  - `gemini-2.5-flash`
+  - `gemini-2.5-flash-lite`
 
 ### OpenRouter
 

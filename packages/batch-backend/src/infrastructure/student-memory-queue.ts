@@ -13,6 +13,10 @@ export interface EnqueueStudentMemoryOptions {
   attempts?: number;
 }
 
+function sanitizeStudentMemoryJobId(jobId: string): string {
+  return jobId.replaceAll(':', '__');
+}
+
 export function createStudentMemoryQueue() {
   const config = loadConfig();
   const queueName = config.studentMemory.queueName;
@@ -57,7 +61,7 @@ export function createStudentMemoryQueue() {
         backoff: { type: 'exponential', delay: 1000 },
         removeOnComplete: 1000,
         removeOnFail: 1000,
-        ...(options.jobId ? { jobId: options.jobId } : {}),
+        ...(options.jobId ? { jobId: sanitizeStudentMemoryJobId(options.jobId) } : {}),
       };
       await queueSingleton!.add(payload.kind, payload, opts);
     },
@@ -106,4 +110,3 @@ export function createStudentMemoryWorker(
 
   return worker;
 }
-
