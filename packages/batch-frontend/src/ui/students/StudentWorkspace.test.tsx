@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
@@ -9,7 +9,9 @@ import { StudentWorkspace } from './StudentWorkspace';
 vi.mock('../../utils/api', () => ({
   activateProfileRevision: vi.fn(),
   activateTemplateRevision: vi.fn(),
+  approveStudentProfileCandidate: vi.fn(),
   createStudentProfile: vi.fn(),
+  deferStudentProfileCandidate: vi.fn(),
   deleteTemplateContent: vi.fn(),
   fetchJobProvenance: vi.fn(),
   fetchPromptPackageLineage: vi.fn(),
@@ -18,6 +20,7 @@ vi.mock('../../utils/api', () => ({
   getStudentProfile: vi.fn(),
   getStudentTimeline: vi.fn(),
   getTemplateContent: vi.fn(),
+  listStudentProfileCandidates: vi.fn(),
   listProfileContents: vi.fn(),
   listProfileRevisions: vi.fn(),
   listStudentProfileBindings: vi.fn(),
@@ -25,6 +28,8 @@ vi.mock('../../utils/api', () => ({
   listTemplateContents: vi.fn(),
   listTemplateRevisions: vi.fn(),
   listUserJobs: vi.fn(),
+  promoteStudentProfileCandidates: vi.fn(),
+  rejectStudentProfileCandidate: vi.fn(),
   restoreProfileRevision: vi.fn(),
   restoreTemplateRevision: vi.fn(),
   updateStudentProfile: vi.fn(),
@@ -515,6 +520,214 @@ describe('StudentWorkspace', () => {
 
     vi.mocked(api.deleteTemplateContent).mockResolvedValue();
 
+    vi.mocked(api.listStudentProfileCandidates).mockResolvedValue({
+      studentId: 'student-default',
+      items: [
+        {
+          id: 'candidate-pending',
+          studentId: 'student-default',
+          proposedFact: 'Uses English with product and engineering teams at work.',
+          approvedFactText: null,
+          category: 'work_context',
+          targetSection: 'work_communication_context',
+          sourceSummary: 'Repeatedly mentioned sprint planning and client calls.',
+          authority: 'student_stated',
+          confidence: 'high',
+          evidence: [
+            {
+              quote: 'I have meetings with developers and clients every week.',
+              speakerRole: 'student',
+              transcriptSpan: '00:14-00:19',
+              evidenceNote: 'Direct work-context statement.',
+              sourceKind: 'lesson_memory',
+              sourceArtifactId: 'lesson-1',
+            },
+          ],
+          sourceSnapshotId: 'snapshot-1',
+          sourceLessonMemoryIds: ['lesson-1'],
+          status: 'pending_review',
+          reviewState: 'unreviewed',
+          reviewerId: null,
+          reviewerNote: null,
+          reviewedAt: null,
+          promotedRevisionId: null,
+          promotedAt: null,
+          supersededById: null,
+          createdAt: now,
+          updatedAt: now,
+        },
+        {
+          id: 'candidate-approved',
+          studentId: 'student-default',
+          proposedFact: 'Prefers structured homework with clear review blocks.',
+          approvedFactText: 'Prefers structured homework with built-in review blocks.',
+          category: 'study_preferences',
+          targetSection: 'learning_preferences_study_habits',
+          sourceSummary: 'Consistent request across recent assignments.',
+          authority: 'teacher_confirmed',
+          confidence: 'high',
+          evidence: [
+            {
+              quote: 'Please include review tasks so I do not forget old material.',
+              speakerRole: 'student',
+              transcriptSpan: '00:31-00:35',
+              evidenceNote: 'Direct study preference.',
+              sourceKind: 'student_memory_snapshot',
+              sourceArtifactId: 'snapshot-1',
+            },
+          ],
+          sourceSnapshotId: 'snapshot-1',
+          sourceLessonMemoryIds: ['lesson-1'],
+          status: 'approved',
+          reviewState: 'approved',
+          reviewerId: 'user-1',
+          reviewerNote: 'Matches long-running pattern.',
+          reviewedAt: now,
+          promotedRevisionId: null,
+          promotedAt: null,
+          supersededById: null,
+          createdAt: now,
+          updatedAt: now,
+        },
+        {
+          id: 'candidate-deferred',
+          studentId: 'student-default',
+          proposedFact: 'Might be interested in pickleball strategy vocabulary.',
+          approvedFactText: null,
+          category: 'interests',
+          targetSection: 'interests_personal_context',
+          sourceSummary: 'Mentioned once; needs another corroborating lesson.',
+          authority: 'model_inferred',
+          confidence: 'medium',
+          evidence: [
+            {
+              quote: 'I played pickleball with my wife yesterday.',
+              speakerRole: 'student',
+              transcriptSpan: '00:51-00:54',
+              evidenceNote: 'Single mention so far.',
+              sourceKind: 'lesson_memory',
+              sourceArtifactId: 'lesson-1',
+            },
+          ],
+          sourceSnapshotId: 'snapshot-1',
+          sourceLessonMemoryIds: ['lesson-1'],
+          status: 'pending_review',
+          reviewState: 'deferred',
+          reviewerId: 'user-1',
+          reviewerNote: 'Need another signal before promoting.',
+          reviewedAt: now,
+          promotedRevisionId: null,
+          promotedAt: null,
+          supersededById: null,
+          createdAt: now,
+          updatedAt: now,
+        },
+      ],
+      total: 3,
+      limit: 200,
+      offset: 0,
+      order: 'desc',
+    });
+
+    vi.mocked(api.approveStudentProfileCandidate).mockImplementation(
+      async (_studentId, candidateId, payload) => ({
+        id: candidateId,
+        studentId: 'student-default',
+        proposedFact: 'Uses English with product and engineering teams at work.',
+        approvedFactText:
+          payload?.approvedFactText ?? 'Uses English with product and engineering teams at work.',
+        category: 'work_context',
+        targetSection: 'work_communication_context',
+        sourceSummary: 'Repeatedly mentioned sprint planning and client calls.',
+        authority: 'student_stated',
+        confidence: 'high',
+        evidence: [
+          {
+            quote: 'I have meetings with developers and clients every week.',
+            speakerRole: 'student',
+            transcriptSpan: '00:14-00:19',
+            evidenceNote: 'Direct work-context statement.',
+            sourceKind: 'lesson_memory',
+            sourceArtifactId: 'lesson-1',
+          },
+        ],
+        sourceSnapshotId: 'snapshot-1',
+        sourceLessonMemoryIds: ['lesson-1'],
+        status: 'approved',
+        reviewState: 'approved',
+        reviewerId: 'user-1',
+        reviewerNote: payload?.reviewerNote ?? null,
+        reviewedAt: now,
+        promotedRevisionId: null,
+        promotedAt: null,
+        supersededById: null,
+        createdAt: now,
+        updatedAt: now,
+      }),
+    );
+
+    vi.mocked(api.rejectStudentProfileCandidate).mockImplementation(
+      async (_studentId, candidateId, payload) => ({
+        id: candidateId,
+        studentId: 'student-default',
+        proposedFact: 'Uses English with product and engineering teams at work.',
+        approvedFactText: null,
+        category: 'work_context',
+        targetSection: 'work_communication_context',
+        sourceSummary: 'Repeatedly mentioned sprint planning and client calls.',
+        authority: 'student_stated',
+        confidence: 'high',
+        evidence: [],
+        sourceSnapshotId: 'snapshot-1',
+        sourceLessonMemoryIds: ['lesson-1'],
+        status: 'rejected',
+        reviewState: 'rejected',
+        reviewerId: 'user-1',
+        reviewerNote: payload?.reviewerNote ?? null,
+        reviewedAt: now,
+        promotedRevisionId: null,
+        promotedAt: null,
+        supersededById: null,
+        createdAt: now,
+        updatedAt: now,
+      }),
+    );
+
+    vi.mocked(api.deferStudentProfileCandidate).mockImplementation(
+      async (_studentId, candidateId, payload) => ({
+        id: candidateId,
+        studentId: 'student-default',
+        proposedFact: 'Uses English with product and engineering teams at work.',
+        approvedFactText: null,
+        category: 'work_context',
+        targetSection: 'work_communication_context',
+        sourceSummary: 'Repeatedly mentioned sprint planning and client calls.',
+        authority: 'student_stated',
+        confidence: 'high',
+        evidence: [],
+        sourceSnapshotId: 'snapshot-1',
+        sourceLessonMemoryIds: ['lesson-1'],
+        status: 'pending_review',
+        reviewState: 'deferred',
+        reviewerId: 'user-1',
+        reviewerNote: payload?.reviewerNote ?? null,
+        reviewedAt: now,
+        promotedRevisionId: null,
+        promotedAt: null,
+        supersededById: null,
+        createdAt: now,
+        updatedAt: now,
+      }),
+    );
+
+    vi.mocked(api.promoteStudentProfileCandidates).mockResolvedValue({
+      draftRevisionId: 'revision-draft-2',
+      profileId: 'profile-default.md',
+      includedCandidateIds: ['candidate-approved'],
+      excludedCandidateIds: [],
+      contentHash: 'draft-hash-2',
+    });
+
     vi.mocked(api.createStudentProfile).mockResolvedValue({
       id: 'student-created',
       student: 'Created Student',
@@ -642,6 +855,102 @@ describe('StudentWorkspace', () => {
     expect(screen.getByText(/student-memory-v1/i)).toBeTruthy();
     expect(screen.getByText(/Selected homework memory IDs:/i)).toBeTruthy();
   });
+
+  it('renders pending profile candidates grouped by target section', async () => {
+    renderWorkspace();
+
+    await screen.findByText(/Profile Candidates/i, {}, { timeout: STUDENT_WORKSPACE_ASYNC_TIMEOUT_MS });
+    await screen.findAllByText(/Work and communication context/i, {}, {
+      timeout: STUDENT_WORKSPACE_ASYNC_TIMEOUT_MS,
+    });
+
+    expect(
+      screen.getAllByText(/Uses English with product and engineering teams at work\./i).length,
+    ).toBeGreaterThan(0);
+    expect(
+      screen.queryByText(/Prefers structured homework with built-in review blocks\./i),
+    ).toBeNull();
+  });
+
+  it('shows reviewed profile candidates including deferred items', async () => {
+    const user = userEvent.setup();
+    renderWorkspace();
+
+    await screen.findByLabelText(/Profile Candidate Review Bucket/i, {}, {
+      timeout: STUDENT_WORKSPACE_ASYNC_TIMEOUT_MS,
+    });
+    await user.selectOptions(
+      screen.getByLabelText(/Profile Candidate Review Bucket/i),
+      'reviewed',
+    );
+
+    await screen.findAllByText(/Prefers structured homework with built-in review blocks\./i);
+    expect(
+      screen.getAllByText(/Might be interested in pickleball strategy vocabulary\./i).length,
+    ).toBeGreaterThan(0);
+    expect(screen.getAllByText(/Deferred/i).length).toBeGreaterThan(0);
+  });
+
+  it(
+    'approves a profile candidate with edited text and a reviewer note',
+    async () => {
+      const user = userEvent.setup();
+      renderWorkspace();
+
+      const approvedText = await screen.findByLabelText(
+        /Approved Fact Text candidate-pending/i,
+        {},
+        { timeout: STUDENT_WORKSPACE_ASYNC_TIMEOUT_MS },
+      );
+      await user.clear(approvedText);
+      await user.type(approvedText, 'Uses English with product, engineering, and client teams.');
+      await user.type(screen.getByLabelText(/Reviewer Note candidate-pending/i), 'Confirmed.');
+      await user.click(screen.getByRole('button', { name: /^Approve$/i }));
+
+      await waitFor(() => {
+        expect(api.approveStudentProfileCandidate).toHaveBeenCalledWith(
+          'student-default',
+          'candidate-pending',
+          {
+            approvedFactText: 'Uses English with product, engineering, and client teams.',
+            reviewerNote: 'Confirmed.',
+          },
+        );
+      });
+    },
+    10000,
+  );
+
+  it(
+    'promotes an explicit subset of approved profile candidates into a draft revision',
+    async () => {
+      const user = userEvent.setup();
+      renderWorkspace();
+
+      await screen.findByLabelText(/Profile Candidate Review Bucket/i, {}, {
+        timeout: STUDENT_WORKSPACE_ASYNC_TIMEOUT_MS,
+      });
+      await user.selectOptions(
+        screen.getByLabelText(/Profile Candidate Review Bucket/i),
+        'reviewed',
+      );
+      await screen.findAllByText(/Prefers structured homework with built-in review blocks\./i);
+
+      await user.click(screen.getByLabelText(/Select candidate candidate-approved for promotion/i));
+      await user.type(screen.getByLabelText(/Promotion Note/i), 'Promote the verified study habits.');
+      await user.click(screen.getByRole('button', { name: /Generate Draft Revision/i }));
+
+      await waitFor(() => {
+        expect(api.promoteStudentProfileCandidates).toHaveBeenCalledWith('student-default', {
+          candidateIds: ['candidate-approved'],
+          reviewerNote: 'Promote the verified study habits.',
+        });
+      });
+
+      expect(screen.getByText(/Draft revision revision-draft-2 created/i)).toBeTruthy();
+    },
+    10000,
+  );
 
   it('re-fetches lineage when inspecting the same job repeatedly', async () => {
     const user = userEvent.setup();
@@ -849,29 +1158,120 @@ describe('StudentWorkspace', () => {
     expect(screen.getByText(/Created student Alex/i)).toBeTruthy();
   });
 
-  it('keeps create form values on create failure', async () => {
-    const user = userEvent.setup();
-    vi.mocked(api.createStudentProfile).mockRejectedValue(new Error('Student already exists'));
+  it(
+    'creates a complete starter profile payload and lets it override the initial profile picker',
+    async () => {
+      const user = userEvent.setup();
+      renderWorkspace();
 
-    renderWorkspace();
+      await screen.findByRole(
+        'button',
+        { name: /Create Student/i },
+        { timeout: STUDENT_WORKSPACE_ASYNC_TIMEOUT_MS },
+      );
 
-    await screen.findByRole(
-      'button',
-      { name: /Create Student/i },
-      { timeout: STUDENT_WORKSPACE_ASYNC_TIMEOUT_MS },
-    );
+      await user.click(screen.getByRole('button', { name: /Create Student/i }));
+      await screen.findByLabelText(/Student Name/i);
+      fireEvent.change(screen.getByLabelText(/Student Name/i), { target: { value: 'Mira' } });
+      await user.selectOptions(screen.getByLabelText(/Initial Profile/i), 'profile-alt.md');
+      await user.click(screen.getByText(/Starter profile \(optional\)/i));
+      fireEvent.change(screen.getByLabelText(/Starter Level/i), { target: { value: 'B1' } });
+      fireEvent.change(screen.getByLabelText(/Starter Goals/i), {
+        target: { value: 'Speak more clearly at work.' },
+      });
+      fireEvent.change(screen.getByLabelText(/Profession Or Context/i), {
+        target: { value: 'CSM with intl clients.' },
+      });
+      fireEvent.change(screen.getByLabelText(/Interests/i), {
+        target: { value: 'Travel and books.' },
+      });
+      fireEvent.change(screen.getByLabelText(/Long-Running Challenges/i), {
+        target: { value: 'Needs clearer tense control.' },
+      });
+      fireEvent.change(screen.getByLabelText(/Study Preferences Or Constraints/i), {
+        target: { value: 'Prefers structured review blocks.' },
+      });
+      await user.click(screen.getByRole('button', { name: /^Create Student$/i }));
 
-    await user.click(screen.getByRole('button', { name: /Create Student/i }));
-    await user.type(screen.getByLabelText(/Student Name/i), 'Existing');
-    await user.click(screen.getByText(/Advanced fields/i));
-    await user.type(screen.getByLabelText(/Color Preset/i), 'amber');
-    await user.click(screen.getByRole('button', { name: /^Create Student$/i }));
+      await waitFor(() => {
+        expect(api.createStudentProfile).toHaveBeenCalledWith({
+          student: 'Mira',
+          starterProfile: {
+            level: 'B1',
+            goals: 'Speak more clearly at work.',
+            professionOrContext: 'CSM with intl clients.',
+            interests: 'Travel and books.',
+            longRunningChallenges: 'Needs clearer tense control.',
+            studyPreferencesOrConstraints: 'Prefers structured review blocks.',
+          },
+        });
+      });
+    },
+    15000,
+  );
 
-    await waitFor(() => {
-      expect(screen.getByText(/Student already exists/i)).toBeTruthy();
-    });
+  it(
+    'blocks create when the starter profile section is partially filled',
+    async () => {
+      const user = userEvent.setup();
+      renderWorkspace();
 
-    expect((screen.getByLabelText(/Student Name/i) as HTMLInputElement).value).toBe('Existing');
-    expect((screen.getByLabelText(/Color Preset/i) as HTMLInputElement).value).toBe('amber');
-  });
+      await screen.findByRole(
+        'button',
+        { name: /Create Student/i },
+        { timeout: STUDENT_WORKSPACE_ASYNC_TIMEOUT_MS },
+      );
+
+      await user.click(screen.getByRole('button', { name: /Create Student/i }));
+      fireEvent.change(screen.getByLabelText(/Student Name/i), { target: { value: 'Mira' } });
+      await user.click(screen.getByText(/Starter profile \(optional\)/i));
+      fireEvent.change(screen.getByLabelText(/Starter Goals/i), {
+        target: { value: 'Speak more clearly at work.' },
+      });
+      await user.click(screen.getByRole('button', { name: /^Create Student$/i }));
+
+      expect(api.createStudentProfile).not.toHaveBeenCalled();
+      expect(
+        screen.getByText(
+          /Complete all required starter profile fields or clear the starter profile section/i,
+        ),
+      ).toBeTruthy();
+    },
+    15000,
+  );
+
+  it(
+    'keeps create form values on create failure',
+    async () => {
+      const user = userEvent.setup();
+      vi.mocked(api.createStudentProfile).mockRejectedValue(new Error('Student already exists'));
+
+      renderWorkspace();
+
+      await screen.findByRole(
+        'button',
+        { name: /Create Student/i },
+        { timeout: STUDENT_WORKSPACE_ASYNC_TIMEOUT_MS },
+      );
+
+      await user.click(screen.getByRole('button', { name: /Create Student/i }));
+      await screen.findByLabelText(/Student Name/i);
+      fireEvent.change(screen.getByLabelText(/Student Name/i), {
+        target: { value: 'Existing' },
+      });
+      await user.click(screen.getByText(/Advanced fields/i));
+      fireEvent.change(screen.getByLabelText(/Color Preset/i), {
+        target: { value: 'amber' },
+      });
+      await user.click(screen.getByRole('button', { name: /^Create Student$/i }));
+
+      await waitFor(() => {
+        expect(screen.getByText(/Student already exists/i)).toBeTruthy();
+      });
+
+      expect((screen.getByLabelText(/Student Name/i) as HTMLInputElement).value).toBe('Existing');
+      expect((screen.getByLabelText(/Color Preset/i) as HTMLInputElement).value).toBe('amber');
+    },
+    10000,
+  );
 });

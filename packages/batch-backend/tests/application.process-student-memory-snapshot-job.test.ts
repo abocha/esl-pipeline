@@ -11,6 +11,7 @@ describe('application/process-student-memory-snapshot-job', () => {
       },
     });
     const supersedePendingForStudent = vi.fn().mockResolvedValue([]);
+    const requestRefresh = vi.fn().mockResolvedValue();
 
     await processStudentMemorySnapshotJob({
       config: {
@@ -59,6 +60,9 @@ describe('application/process-student-memory-snapshot-job', () => {
           markFailed: vi.fn(),
           supersedePendingForStudent,
         },
+        profileCandidates: {
+          requestRefresh,
+        },
         generator,
       },
     });
@@ -76,6 +80,13 @@ describe('application/process-student-memory-snapshot-job', () => {
       }),
     );
     expect(supersedePendingForStudent).toHaveBeenCalled();
+    expect(requestRefresh).toHaveBeenCalledWith({
+      params: {
+        studentId: 'student-1',
+        sourceSnapshotId: 'snapshot-ready-1',
+        trigger: 'student-memory-snapshot-ready',
+      },
+    });
   });
 
   it('marks the pending snapshot row failed on the final attempt', async () => {
@@ -130,6 +141,9 @@ describe('application/process-student-memory-snapshot-job', () => {
             }),
             markFailed,
             supersedePendingForStudent: vi.fn(),
+          },
+          profileCandidates: {
+            requestRefresh: vi.fn().mockResolvedValue(),
           },
           generator: vi.fn().mockRejectedValue(new Error('structured output failed')),
         },

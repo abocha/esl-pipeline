@@ -2,7 +2,9 @@ import type { AxiosError } from 'axios';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import {
+  approveStudentProfileCandidate,
   getStudentMemoryOverview,
+  listStudentProfileCandidates,
   listStudentHomeworkMemoryEntries,
   listStudentLessonMemoryEntries,
   listStudentMemorySnapshots,
@@ -13,6 +15,7 @@ vi.mock('./api-client', () => ({
   __esModule: true,
   default: {
     get: vi.fn(),
+    post: vi.fn(),
   },
   buildApiProxyPath: vi.fn((path: string) => `/api${path}`),
   getApiAuthToken: vi.fn(() => null),
@@ -112,6 +115,93 @@ describe('utils/api student memory fetchers', () => {
 
     expect(buildApiProxyPath).toHaveBeenCalledWith(
       '/students/student-1/memory-snapshots?status=ready%2Cfailed&order=desc',
+    );
+  });
+
+  it('maps backend profile candidate DTOs into the workspace shape', async () => {
+    vi.mocked(apiClient.get).mockResolvedValueOnce({
+      data: {
+        studentId: 'student-1',
+        items: [
+          {
+            id: 'candidate-1',
+            studentId: 'student-1',
+            fact: 'Uses English in sprint planning and client calls.',
+            approvedFact: 'Uses English with product, engineering, and client teams.',
+            category: 'work context',
+            targetSection: 'work_communication_context',
+            authority: 'teacher_confirmed',
+            confidence: 'high',
+            evidence: [],
+            sourceSnapshotId: 'snapshot-1',
+            sourceLessonMemoryIds: ['lesson-1', 'lesson-2'],
+            status: 'approved',
+            reviewState: 'approved',
+            reviewerId: 'user-1',
+            reviewerNote: null,
+            reviewedAt: '2026-03-22T00:00:00.000Z',
+            promotedRevisionId: null,
+            promotedAt: null,
+            supersededById: null,
+            createdAt: '2026-03-22T00:00:00.000Z',
+            updatedAt: '2026-03-22T00:00:00.000Z',
+          },
+        ],
+        total: 1,
+        limit: 50,
+        offset: 0,
+        order: 'desc',
+      },
+    } as never);
+
+    const result = await listStudentProfileCandidates('student-1');
+
+    expect(result.items[0]).toMatchObject({
+      proposedFact: 'Uses English in sprint planning and client calls.',
+      approvedFactText: 'Uses English with product, engineering, and client teams.',
+      targetSection: 'work_communication_context',
+      sourceSummary: 'Latest student-memory snapshot + 2 lesson memory entries',
+    });
+  });
+
+  it('posts edited approval text using approvedFactText', async () => {
+    vi.mocked(apiClient.post).mockResolvedValueOnce({
+      data: {
+        id: 'candidate-1',
+        studentId: 'student-1',
+        fact: 'Uses English in sprint planning and client calls.',
+        approvedFact: 'Uses English with product, engineering, and client teams.',
+        category: 'work context',
+        targetSection: 'work_communication_context',
+        authority: 'teacher_confirmed',
+        confidence: 'high',
+        evidence: [],
+        sourceSnapshotId: 'snapshot-1',
+        sourceLessonMemoryIds: ['lesson-1'],
+        status: 'approved',
+        reviewState: 'approved',
+        reviewerId: 'user-1',
+        reviewerNote: 'Durable enough for profile',
+        reviewedAt: '2026-03-22T00:00:00.000Z',
+        promotedRevisionId: null,
+        promotedAt: null,
+        supersededById: null,
+        createdAt: '2026-03-22T00:00:00.000Z',
+        updatedAt: '2026-03-22T00:00:00.000Z',
+      },
+    } as never);
+
+    await approveStudentProfileCandidate('student-1', 'candidate-1', {
+      approvedFactText: 'Uses English with product, engineering, and client teams.',
+      reviewerNote: 'Durable enough for profile',
+    });
+
+    expect(apiClient.post).toHaveBeenCalledWith(
+      '/api/students/student-1/profile-candidates/candidate-1/approve',
+      {
+        approvedFactText: 'Uses English with product, engineering, and client teams.',
+        reviewerNote: 'Durable enough for profile',
+      },
     );
   });
 

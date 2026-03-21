@@ -151,7 +151,19 @@ export interface StudentProfile {
   profileId?: string | null;
 }
 
-export type StudentProfileInput = Omit<StudentProfile, 'id'>;
+export interface StarterProfileInput {
+  level?: string | null;
+  goals?: string | null;
+  professionOrContext?: string | null;
+  interests?: string | null;
+  longRunningChallenges?: string | null;
+  studyPreferencesOrConstraints?: string | null;
+  teacherNotes?: string | null;
+}
+
+export type StudentProfileInput = Omit<StudentProfile, 'id'> & {
+  starterProfile?: StarterProfileInput | null;
+};
 export type StudentProfileUpdate = Partial<StudentProfileInput>;
 
 export interface StudentProfileListResponse {
@@ -183,7 +195,13 @@ export interface ProfileRevisionSummaryResponse {
   id: string;
   profileId: string;
   contentHash: string;
-  source: 'create' | 'update' | 'restore';
+  source:
+    | 'create'
+    | 'update'
+    | 'restore'
+    | 'starter_profile_form'
+    | 'candidate_promotion'
+    | 'legacy_normalization';
   status?: 'draft' | 'active' | 'deprecated';
   versionNumber?: number;
   versionLabel?: string;
@@ -576,6 +594,160 @@ export interface StudentMemorySnapshotListResponse {
   offset: number;
   order: 'asc' | 'desc';
   statuses: StudentMemorySnapshotStatus[] | null;
+}
+
+export type StudentProfileCandidateStatus =
+  | 'pending_review'
+  | 'approved'
+  | 'rejected'
+  | 'promoted'
+  | 'superseded';
+
+export type StudentProfileCandidateReviewState =
+  | 'unreviewed'
+  | 'deferred'
+  | 'approved'
+  | 'rejected';
+
+export interface StudentProfileCandidateEvidence extends FactEvidence {
+  sourceKind?: string | null;
+  sourceArtifactId?: string | null;
+}
+
+export interface StudentProfileCandidate {
+  id: string;
+  studentId: string;
+  proposedFact: string;
+  approvedFactText?: string | null;
+  category: string;
+  targetSection: string;
+  sourceSummary?: string | null;
+  authority?: StudentFactAuthority | null;
+  confidence?: MemoryConfidence | null;
+  evidence: StudentProfileCandidateEvidence[];
+  sourceSnapshotId?: string | null;
+  sourceLessonMemoryIds: string[];
+  status: StudentProfileCandidateStatus;
+  reviewState: StudentProfileCandidateReviewState;
+  reviewerId?: string | null;
+  reviewerNote?: string | null;
+  reviewedAt?: string | null;
+  promotedRevisionId?: string | null;
+  promotedAt?: string | null;
+  supersededById?: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+interface StudentProfileCandidateApiRecord {
+  id: string;
+  studentId: string;
+  fact?: string | null;
+  proposedFact?: string | null;
+  approvedFact?: string | null;
+  approvedFactText?: string | null;
+  category: string;
+  targetSection: string;
+  sourceSummary?: string | null;
+  authority?: StudentFactAuthority | null;
+  confidence?: MemoryConfidence | null;
+  evidence: StudentProfileCandidateEvidence[];
+  sourceSnapshotId?: string | null;
+  sourceLessonMemoryIds: string[];
+  status: StudentProfileCandidateStatus;
+  reviewState: StudentProfileCandidateReviewState;
+  reviewerId?: string | null;
+  reviewerNote?: string | null;
+  reviewedAt?: string | null;
+  promotedRevisionId?: string | null;
+  promotedAt?: string | null;
+  supersededById?: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface StudentProfileCandidateListResponse {
+  studentId: string;
+  items: StudentProfileCandidate[];
+  total: number;
+  limit: number;
+  offset: number;
+  order: 'asc' | 'desc';
+}
+
+export interface ApproveStudentProfileCandidateRequest {
+  approvedFactText?: string;
+  reviewerNote?: string;
+}
+
+export interface RejectStudentProfileCandidateRequest {
+  reviewerNote?: string;
+}
+
+export interface DeferStudentProfileCandidateRequest {
+  reviewerNote?: string;
+}
+
+export interface StudentProfileCandidatePromotionRequest {
+  candidateIds: string[];
+  baseRevisionId?: string;
+  reviewerNote?: string;
+}
+
+export interface StudentProfileCandidatePromotionResponse {
+  draftRevisionId: string;
+  profileId: string;
+  includedCandidateIds: string[];
+  excludedCandidateIds: string[];
+  contentHash?: string | null;
+}
+
+function buildCandidateSourceSummary(record: StudentProfileCandidateApiRecord): string | null {
+  if (typeof record.sourceSummary === 'string' && record.sourceSummary.trim().length > 0) {
+    return record.sourceSummary;
+  }
+
+  const parts: string[] = [];
+  if (record.sourceSnapshotId) {
+    parts.push('Latest student-memory snapshot');
+  }
+  if (record.sourceLessonMemoryIds.length > 0) {
+    const lessonCount = record.sourceLessonMemoryIds.length;
+    parts.push(
+      `${lessonCount} lesson memory entr${lessonCount === 1 ? 'y' : 'ies'}`,
+    );
+  }
+
+  return parts.length > 0 ? parts.join(' + ') : null;
+}
+
+function mapStudentProfileCandidate(
+  record: StudentProfileCandidateApiRecord,
+): StudentProfileCandidate {
+  return {
+    id: record.id,
+    studentId: record.studentId,
+    proposedFact: record.proposedFact ?? record.fact ?? '',
+    approvedFactText: record.approvedFactText ?? record.approvedFact ?? null,
+    category: record.category,
+    targetSection: record.targetSection,
+    sourceSummary: buildCandidateSourceSummary(record),
+    authority: record.authority ?? null,
+    confidence: record.confidence ?? null,
+    evidence: record.evidence ?? [],
+    sourceSnapshotId: record.sourceSnapshotId ?? null,
+    sourceLessonMemoryIds: record.sourceLessonMemoryIds ?? [],
+    status: record.status,
+    reviewState: record.reviewState,
+    reviewerId: record.reviewerId ?? null,
+    reviewerNote: record.reviewerNote ?? null,
+    reviewedAt: record.reviewedAt ?? null,
+    promotedRevisionId: record.promotedRevisionId ?? null,
+    promotedAt: record.promotedAt ?? null,
+    supersededById: record.supersededById ?? null,
+    createdAt: record.createdAt,
+    updatedAt: record.updatedAt,
+  };
 }
 
 export interface StudentProfileBindingResponse {
@@ -2075,6 +2247,150 @@ export async function getStudentMemoryOverview(
     const axiosError = toAxiosError(error);
     if (axiosError && isAuthError(axiosError)) {
       throw new Error('Authentication required. Please login to view student memory.');
+    }
+    throw new Error(axiosError ? handleApiError(axiosError) : formatUnknownError(error));
+  }
+}
+
+export async function listStudentProfileCandidates(
+  studentId: string,
+  params: {
+    status?: StudentProfileCandidateStatus | StudentProfileCandidateStatus[];
+    reviewState?: StudentProfileCandidateReviewState | StudentProfileCandidateReviewState[];
+    limit?: number;
+    offset?: number;
+    order?: 'asc' | 'desc';
+  } = {},
+): Promise<StudentProfileCandidateListResponse> {
+  try {
+    const search = new URLSearchParams();
+    if (params.status) {
+      const values = Array.isArray(params.status) ? params.status : [params.status];
+      search.set('status', values.join(','));
+    }
+    if (params.reviewState) {
+      const values = Array.isArray(params.reviewState)
+        ? params.reviewState
+        : [params.reviewState];
+      search.set('reviewState', values.join(','));
+    }
+    if (typeof params.limit === 'number') {
+      search.set('limit', String(params.limit));
+    }
+    if (typeof params.offset === 'number') {
+      search.set('offset', String(params.offset));
+    }
+    if (params.order) {
+      search.set('order', params.order);
+    }
+
+    const query = search.toString();
+    const url = query
+      ? `/students/${encodeURIComponent(studentId)}/profile-candidates?${query}`
+      : `/students/${encodeURIComponent(studentId)}/profile-candidates`;
+    const response = await apiClient.get(buildApiProxyPath(url));
+    const data = response.data as StudentProfileCandidateListResponse & {
+      items?: StudentProfileCandidateApiRecord[];
+    };
+    return {
+      ...data,
+      items: (data.items ?? []).map((item) => mapStudentProfileCandidate(item)),
+    };
+  } catch (error: unknown) {
+    const axiosError = toAxiosError(error);
+    if (axiosError && isAuthError(axiosError)) {
+      throw new Error('Authentication required. Please login to view profile candidates.');
+    }
+    throw new Error(axiosError ? handleApiError(axiosError) : formatUnknownError(error));
+  }
+}
+
+export async function approveStudentProfileCandidate(
+  studentId: string,
+  candidateId: string,
+  payload: ApproveStudentProfileCandidateRequest = {},
+): Promise<StudentProfileCandidate> {
+  try {
+    const response = await apiClient.post(
+      buildApiProxyPath(
+        `/students/${encodeURIComponent(studentId)}/profile-candidates/${encodeURIComponent(
+          candidateId,
+        )}/approve`,
+      ),
+      payload,
+    );
+    return mapStudentProfileCandidate(response.data as StudentProfileCandidateApiRecord);
+  } catch (error: unknown) {
+    const axiosError = toAxiosError(error);
+    if (axiosError && isAuthError(axiosError)) {
+      throw new Error('Authentication required. Please login to approve profile candidates.');
+    }
+    throw new Error(axiosError ? handleApiError(axiosError) : formatUnknownError(error));
+  }
+}
+
+export async function rejectStudentProfileCandidate(
+  studentId: string,
+  candidateId: string,
+  payload: RejectStudentProfileCandidateRequest = {},
+): Promise<StudentProfileCandidate> {
+  try {
+    const response = await apiClient.post(
+      buildApiProxyPath(
+        `/students/${encodeURIComponent(studentId)}/profile-candidates/${encodeURIComponent(
+          candidateId,
+        )}/reject`,
+      ),
+      payload,
+    );
+    return mapStudentProfileCandidate(response.data as StudentProfileCandidateApiRecord);
+  } catch (error: unknown) {
+    const axiosError = toAxiosError(error);
+    if (axiosError && isAuthError(axiosError)) {
+      throw new Error('Authentication required. Please login to reject profile candidates.');
+    }
+    throw new Error(axiosError ? handleApiError(axiosError) : formatUnknownError(error));
+  }
+}
+
+export async function deferStudentProfileCandidate(
+  studentId: string,
+  candidateId: string,
+  payload: DeferStudentProfileCandidateRequest = {},
+): Promise<StudentProfileCandidate> {
+  try {
+    const response = await apiClient.post(
+      buildApiProxyPath(
+        `/students/${encodeURIComponent(studentId)}/profile-candidates/${encodeURIComponent(
+          candidateId,
+        )}/defer`,
+      ),
+      payload,
+    );
+    return mapStudentProfileCandidate(response.data as StudentProfileCandidateApiRecord);
+  } catch (error: unknown) {
+    const axiosError = toAxiosError(error);
+    if (axiosError && isAuthError(axiosError)) {
+      throw new Error('Authentication required. Please login to defer profile candidates.');
+    }
+    throw new Error(axiosError ? handleApiError(axiosError) : formatUnknownError(error));
+  }
+}
+
+export async function promoteStudentProfileCandidates(
+  studentId: string,
+  payload: StudentProfileCandidatePromotionRequest,
+): Promise<StudentProfileCandidatePromotionResponse> {
+  try {
+    const response = await apiClient.post(
+      buildApiProxyPath(`/students/${encodeURIComponent(studentId)}/profile-candidates/promote`),
+      payload,
+    );
+    return response.data;
+  } catch (error: unknown) {
+    const axiosError = toAxiosError(error);
+    if (axiosError && isAuthError(axiosError)) {
+      throw new Error('Authentication required. Please login to promote profile candidates.');
     }
     throw new Error(axiosError ? handleApiError(axiosError) : formatUnknownError(error));
   }

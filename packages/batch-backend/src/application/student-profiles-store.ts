@@ -2,7 +2,12 @@ import path from 'node:path';
 
 import type { BatchBackendConfig } from '../config/env.js';
 import { loadConfig } from '../config/env.js';
-import { upsertProfile } from '../domain/profile-repository.js';
+import { saveProfileRevisionContent } from './profile-content.js';
+import {
+  type StarterProfileInput,
+  renderStarterProfileContent,
+} from './starter-profile-content.js';
+import { getProfileById, upsertProfile } from '../domain/profile-repository.js';
 import type { StudentRecord } from '../domain/student-model.js';
 import {
   clearActiveStudentProfileBinding,
@@ -29,7 +34,11 @@ export interface StudentProfileData {
   profileId?: string | null;
 }
 
-export type StudentProfileInput = Omit<StudentProfileData, 'id'>;
+export interface StudentProfileCreateInput extends Omit<StudentProfileData, 'id'> {
+  starterProfile?: StarterProfileInput | null;
+}
+
+export type StudentProfileInput = StudentProfileCreateInput;
 
 export interface StudentProfileListResult {
   items: StudentProfileData[];
@@ -55,7 +64,9 @@ interface StudentStoreDependencies {
     remove: typeof deleteStudent;
   };
   profiles: {
+    getById: typeof getProfileById;
     upsert: typeof upsertProfile;
+    saveRevision: typeof saveProfileRevisionContent;
   };
   bindings: {
     setActive: typeof setActiveStudentProfileBinding;
@@ -103,7 +114,9 @@ function getDependencies(overrides?: StudentStoreOverrides): StudentStoreDepende
       remove: overrides?.deps?.students?.remove ?? deleteStudent,
     },
     profiles: {
+      getById: overrides?.deps?.profiles?.getById ?? getProfileById,
       upsert: overrides?.deps?.profiles?.upsert ?? upsertProfile,
+      saveRevision: overrides?.deps?.profiles?.saveRevision ?? saveProfileRevisionContent,
     },
     bindings: {
       setActive: overrides?.deps?.bindings?.setActive ?? setActiveStudentProfileBinding,
@@ -177,6 +190,9 @@ function sanitizeProfileInput(input: Partial<StudentProfileInput>): Partial<Stud
   }
   if ('voices' in input) {
     sanitized.voices = input.voices ? { ...input.voices } : {};
+  }
+  if ('starterProfile' in input) {
+    sanitized.starterProfile = input.starterProfile ?? null;
   }
   return sanitized;
 }
@@ -267,6 +283,10 @@ function profileLabelFromId(profileId: string): string {
   return normalized.length > 0 ? normalized : profileId;
 }
 
+function deriveStarterProfileId(studentId: string): string {
+  return `profiles/students/${studentId}.md`;
+}
+
 async function syncBindingForStudent(
   studentId: string,
   profileId: string | null,
@@ -315,10 +335,24 @@ async function createStudentProfileDb(
     throw new StudentProfileStoreError('Student profile already exists', 'student_exists', 409);
   }
 
-  if (sanitized.profileId) {
+  const starterProfile = sanitized.starterProfile ?? null;
+  const profileId = sanitized.profileId ?? (starterProfile ? deriveStarterProfileId(id) : null);
+
+  if (starterProfile && profileId) {
+    const existingProfile = await dependencies.profiles.getById(profileId);
+    if (existingProfile?.activeRevisionId) {
+      throw new StudentProfileStoreError(
+        'starterProfile requires a new or empty profileId',
+        'starter_profile_profile_conflict',
+        409,
+      );
+    }
+  }
+
+  if (profileId) {
     await dependencies.profiles.upsert({
-      id: sanitized.profileId,
-      label: profileLabelFromId(sanitized.profileId),
+      id: profileId,
+      label: profileLabelFromId(profileId),
       activeRevisionId: null,
     });
   }
@@ -333,7 +367,7 @@ async function createStudentProfileDb(
       colorPreset: sanitized.colorPreset ?? null,
       accentPreference: sanitized.accentPreference ?? null,
       manifestPreset: sanitized.manifestPreset ?? null,
-      profileId: sanitized.profileId ?? null,
+      profileId,
       voices: sanitized.voices ?? {},
     });
   } catch (error) {
@@ -341,6 +375,28 @@ async function createStudentProfileDb(
     if (pgError?.code === '23505') {
       throw new StudentProfileStoreError('Student profile already exists', 'student_exists', 409);
     }
+    throw error;
+  }
+
+  try {
+    if (starterProfile && profileId) {
+      const starterProfileContent = renderStarterProfileContent({
+        studentName: student,
+        starterProfile,
+      });
+
+      await dependencies.profiles.saveRevision(
+        profileId,
+        starterProfileContent,
+        {
+          source: 'starter_profile_form',
+          status: 'active',
+          createdBy: options?.bindingAudit?.changedBy ?? null,
+        },
+      );
+    }
+  } catch (error) {
+    await dependencies.students.remove(inserted.id).catch(() => false);
     throw error;
   }
 

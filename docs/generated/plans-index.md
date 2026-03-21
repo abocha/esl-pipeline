@@ -68,6 +68,14 @@
 | phase/detail | Phase 6 - Frontend, Ops, Backfill, and Rollout | `docs/plans/student-memory-system-upgrade/phase-6-frontend-ops-backfill-and-rollout.md` |
 | topic | Student Memory System Upgrade | `docs/plans/student-memory-system-upgrade/README.md` |
 | phase/detail | Verification, Acceptance, and Assumptions | `docs/plans/student-memory-system-upgrade/verification-acceptance-and-assumptions.md` |
+| phase/detail | Student Profile Enrichment Implementation Plan | `docs/plans/student-profile-enrichment/implementation.md` |
+| phase/detail | Phase 1: Candidate Fact Pipeline | `docs/plans/student-profile-enrichment/phase-1-candidate-fact-pipeline.md` |
+| phase/detail | Phase 2: Teacher Review Workflow | `docs/plans/student-profile-enrichment/phase-2-teacher-review-workflow.md` |
+| phase/detail | Phase 3: Profile Revision Promotion | `docs/plans/student-profile-enrichment/phase-3-profile-revision-promotion.md` |
+| phase/detail | Phase 4: Starter Profile UX | `docs/plans/student-profile-enrichment/phase-4-starter-profile-ux.md` |
+| phase/detail | Phase 5: Live Transition and Operator Adoption | `docs/plans/student-profile-enrichment/phase-5-live-transition-and-operator-adoption.md` |
+| topic | Student Profile Enrichment and Verification | `docs/plans/student-profile-enrichment/README.md` |
+| phase/detail | Verification, Acceptance, and Assumptions | `docs/plans/student-profile-enrichment/verification-acceptance-and-assumptions.md` |
 | phase/detail | A-Track Telegram UX Audit | `docs/plans/telegram-ops-control-panel-hardening/a-track-ux-audit.md` |
 | phase/detail | A-Track Completion Plan: `A2` Closeout + `A` Durability | `docs/plans/telegram-ops-control-panel-hardening/A2-closeout.md` |
 | phase/detail | A-Track Phase Plan: `A3` UX Activation | `docs/plans/telegram-ops-control-panel-hardening/A3-ux-activation.md` |

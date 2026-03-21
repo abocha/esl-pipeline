@@ -11,11 +11,16 @@ import {
   processStudentMemorySnapshotJob,
   type ProcessStudentMemorySnapshotJobPayload,
 } from './process-student-memory-snapshot-job.js';
+import {
+  processStudentProfileCandidateRefreshJob,
+  type ProcessStudentProfileCandidateRefreshJobPayload,
+} from './process-student-profile-candidate-refresh-job.js';
 
 export type StudentMemoryQueuePayload =
   | ProcessLessonMemoryJobPayload
   | ProcessHomeworkMemoryJobPayload
-  | ProcessStudentMemorySnapshotJobPayload;
+  | ProcessStudentMemorySnapshotJobPayload
+  | ProcessStudentProfileCandidateRefreshJobPayload;
 
 export async function processStudentMemoryJob(args: {
   config: BatchBackendConfig['generation'];
@@ -51,5 +56,11 @@ export async function processStudentMemoryJob(args: {
       maxAttempts: args.maxAttempts,
     });
     return;
+  }
+
+  if (args.payload.kind === 'student-profile-candidate-refresh') {
+    await processStudentProfileCandidateRefreshJob({
+      payload: args.payload,
+    });
   }
 }
