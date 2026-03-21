@@ -231,7 +231,7 @@ export async function createPromptPackage(
     }),
     readStorage.getText(transcript.storageUri),
   ]);
-  const historyContext = await buildStudentMemoryPackageContext({
+  const memoryContext = await buildStudentMemoryPackageContext({
     studentId: recording?.studentId ?? null,
     currentTranscriptId: transcript.id,
     config,
@@ -244,9 +244,12 @@ export async function createPromptPackage(
   const payload = stitchPromptPayload({
     template: templateMaterialization.materializedTemplate,
     profile: artifacts.profile.content,
+    studentMemorySnapshot: memoryContext.studentMemorySnapshotBlock,
+    recentLessonMemory: memoryContext.recentLessonMemoryBlock,
+    recentHomeworkMemory: memoryContext.recentHomeworkMemoryBlock,
+    unresolvedIssues: memoryContext.unresolvedIssuesBlock,
     transcript: transcriptText,
     notes: params.notes,
-    history: historyContext.text,
   });
 
   const promptPackageId = randomUUID();
@@ -260,11 +263,11 @@ export async function createPromptPackage(
     recordingId: transcript.recordingId,
     transcriptId: transcript.id,
     studentId: recording?.studentId ?? null,
-    studentMemorySnapshotId: historyContext.studentMemorySnapshotId,
-    studentMemorySnapshotHash: historyContext.studentMemorySnapshotHash,
-    selectedLessonMemoryIds: historyContext.selectedLessonMemoryIds,
-    selectedHomeworkMemoryIds: historyContext.selectedHomeworkMemoryIds,
-    retrievalPolicyVersion: historyContext.retrievalPolicyVersion,
+    studentMemorySnapshotId: memoryContext.studentMemorySnapshotId,
+    studentMemorySnapshotHash: memoryContext.studentMemorySnapshotHash,
+    selectedLessonMemoryIds: memoryContext.selectedLessonMemoryIds,
+    selectedHomeworkMemoryIds: memoryContext.selectedHomeworkMemoryIds,
+    retrievalPolicyVersion: memoryContext.retrievalPolicyVersion,
     profilePath: selection.profilePath,
     resolvedProfileId: selection.profileId,
     resolvedProfileHash: artifacts.profile.hash,

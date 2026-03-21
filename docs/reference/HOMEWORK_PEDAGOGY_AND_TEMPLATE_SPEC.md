@@ -20,13 +20,14 @@
 
 ## Baseline
 
-This spec is intentionally based very closely on the current executable prompt snapshot:
+This spec is intentionally based very closely on the protected pedagogical baseline snapshot:
 
 - [`docs/templates/hw_prompt_v4-4_voice-aligned.md`](../templates/hw_prompt_v4-4_voice-aligned.md)
 
-That template is the current production-quality expression of the homework method. This reference
-doc does not replace it as the executable artifact. Instead, it explains which pedagogical moves in
-that template are deliberate, protected, and worth preserving as the system evolves.
+That template is the canonical pedagogical reference for the homework method. The current
+memory-aware runtime snapshot may evolve in a newer prompt file, but this doc exists to explain
+which pedagogical moves in `v4.4` are deliberate, protected, and worth preserving as the system
+evolves.
 
 ## Relationship to Other Docs
 
@@ -73,6 +74,13 @@ The assignment method embodied by `v4.4` follows this teaching loop:
 9. leave both the student and the teacher with clean next-step guidance
 
 This loop is the real product. The prompt and formatting exist to deliver it consistently.
+
+Runtime note:
+
+- `v4.4` remains the protected pedagogical baseline reference.
+- The current stateless memory-aware runtime snapshot may evolve in a newer prompt file, but it
+  should remain a faithful operational expression of the same teaching method rather than a new
+  pedagogy.
 
 ## Section-by-Section Assignment Contract
 
@@ -444,6 +452,7 @@ method while improving the surrounding system.
 ## Related
 
 - [`docs/templates/hw_prompt_v4-4_voice-aligned.md`](../templates/hw_prompt_v4-4_voice-aligned.md)
+- [`docs/templates/hw_prompt_v4-5_voice-aligned.md`](../templates/hw_prompt_v4-5_voice-aligned.md)
 - [`docs/reference/PRESET_V2_SPEC.md`](PRESET_V2_SPEC.md)
 - [`docs/plans/student-memory-system-upgrade/phase-4-student-rollup-and-retrieval-packaging.md`](../plans/student-memory-system-upgrade/phase-4-student-rollup-and-retrieval-packaging.md)
 - [`docs/plans/student-memory-system-upgrade/phase-5-prompt-template-and-provider-runtime.md`](../plans/student-memory-system-upgrade/phase-5-prompt-template-and-provider-runtime.md)

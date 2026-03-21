@@ -36,9 +36,33 @@ describe('application/prompt-package', () => {
     const storage = createStorageStub({
       getText: async () => 'TRANSCRIPT BODY',
       putPromptPackage: async ({ promptPackageId, text }) => {
-        expect(text).toContain('PROFILE CONTENT');
-        expect(text).toContain('[NOTES]\nSome notes');
-        expect(text).toContain('[TRANSCRIPT]\nTRANSCRIPT BODY');
+        expect(text).toContain('[FOUNDATIONAL_PROFILE]\nPROFILE CONTENT');
+        expect(text).toContain(
+          '[STUDENT_MEMORY_SNAPSHOT]\nNot available for this prompt package because canonical student-memory retrieval is disabled.',
+        );
+        expect(text).toContain(
+          '[RECENT_LESSON_MEMORY]\nNot available for this prompt package because canonical student-memory retrieval is disabled.',
+        );
+        expect(text).toContain(
+          '[RECENT_HOMEWORK_MEMORY]\nNot available for this prompt package because canonical student-memory retrieval is disabled.',
+        );
+        expect(text).toContain(
+          '[UNRESOLVED_ISSUES]\nNot available for this prompt package because canonical student-memory retrieval is disabled.',
+        );
+        expect(text).toContain('[TEACHER_NOTES]\nSome notes');
+        expect(text).toContain('[LATEST_TRANSCRIPT]\nTRANSCRIPT BODY');
+        expect(text).not.toContain('[LESSON_HISTORY]');
+        expect(
+          text.indexOf('[STUDENT_MEMORY_SNAPSHOT]') < text.indexOf('[RECENT_LESSON_MEMORY]'),
+        ).toBe(true);
+        expect(text.indexOf('[RECENT_LESSON_MEMORY]') < text.indexOf('[RECENT_HOMEWORK_MEMORY]')).toBe(
+          true,
+        );
+        expect(text.indexOf('[RECENT_HOMEWORK_MEMORY]') < text.indexOf('[UNRESOLVED_ISSUES]')).toBe(
+          true,
+        );
+        expect(text.indexOf('[UNRESOLVED_ISSUES]') < text.indexOf('[TEACHER_NOTES]')).toBe(true);
+        expect(text.indexOf('[TEACHER_NOTES]') < text.indexOf('[LATEST_TRANSCRIPT]')).toBe(true);
         return { uri: `local://prompt-packages/${promptPackageId}.txt`, bytes: text.length };
       },
     });
@@ -126,7 +150,7 @@ describe('application/prompt-package', () => {
 
   it('injects capabilities into voice-aligned prompt templates and persists provenance', async () => {
     const allowedDir = await fs.mkdtemp(path.join(os.tmpdir(), 'esl-prompt-v44-'));
-    const templatePath = path.join(allowedDir, 'hw_prompt_v4-4_voice-aligned.md');
+    const templatePath = path.join(allowedDir, 'hw_prompt_v4-5_voice-aligned.md');
     const profilePath = path.join(allowedDir, 'profile.md');
     const voicesPath = path.join(allowedDir, 'voices.json');
 
@@ -193,7 +217,7 @@ describe('application/prompt-package', () => {
       const result = await createPromptPackage(
         {
           recordingId: transcript.recordingId,
-          templateId: 'hw_prompt_v4-4_voice-aligned.md',
+          templateId: 'hw_prompt_v4-5_voice-aligned.md',
           profileId: 'profile.md',
         },
         {

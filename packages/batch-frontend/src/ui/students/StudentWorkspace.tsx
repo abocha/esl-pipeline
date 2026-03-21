@@ -7,6 +7,7 @@ import type {
   JobState,
   ProfileRevisionSummaryResponse,
   PromptPackageLineageResponse,
+  StudentMemoryOverviewResponse,
   StudentProfile,
   StudentProfileBindingListResponse,
   StudentTimelineResponse,
@@ -21,6 +22,7 @@ import {
   fetchJobProvenance,
   fetchPromptPackageLineage,
   getProfileContent,
+  getStudentMemoryOverview,
   getStudentProfile,
   getStudentTimeline,
   getTemplateContent,
@@ -40,6 +42,8 @@ import {
 
 const HISTORY_LIMIT = 25;
 const BINDING_LIMIT = 20;
+const MEMORY_OVERVIEW_LESSON_LIMIT = 3;
+const MEMORY_OVERVIEW_HOMEWORK_LIMIT = 2;
 const TIMELINE_TYPES: StudentTimelineType[] = [
   'recording_ingested',
   'transcript_ready',
@@ -131,6 +135,13 @@ function sortStudentsForPicker(items: StudentProfile[]): StudentProfile[] {
   });
 }
 
+function formatDateTime(value?: string | null): string {
+  if (!value) return 'n/a';
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return 'n/a';
+  return date.toLocaleString();
+}
+
 export const StudentWorkspace: React.FC = () => {
   const [students, setStudents] = useState<StudentProfile[]>([]);
   const [studentsLoading, setStudentsLoading] = useState(false);
@@ -196,6 +207,10 @@ export const StudentWorkspace: React.FC = () => {
   const [bindingHistoryLoading, setBindingHistoryLoading] = useState(false);
   const [bindingHistoryError, setBindingHistoryError] = useState<string | null>(null);
 
+  const [memoryOverview, setMemoryOverview] = useState<StudentMemoryOverviewResponse | null>(null);
+  const [memoryOverviewLoading, setMemoryOverviewLoading] = useState(false);
+  const [memoryOverviewError, setMemoryOverviewError] = useState<string | null>(null);
+
   const [selectedJobId, setSelectedJobId] = useState('');
   const [selectedPromptPackageId, setSelectedPromptPackageId] = useState('');
   const [inspectRequestId, setInspectRequestId] = useState(0);
@@ -212,6 +227,7 @@ export const StudentWorkspace: React.FC = () => {
   const historyRequestId = useRef(0);
   const timelineRequestId = useRef(0);
   const bindingsRequestId = useRef(0);
+  const memoryOverviewRequestId = useRef(0);
 
   const historyFiltersAppliedRef = useRef(historyFiltersApplied);
   const timelineFiltersAppliedRef = useRef(timelineFiltersApplied);
@@ -442,6 +458,34 @@ export const StudentWorkspace: React.FC = () => {
     }
   }, []);
 
+  const loadMemoryOverview = useCallback(async (studentId: string) => {
+    const requestId = ++memoryOverviewRequestId.current;
+    if (!studentId) {
+      setMemoryOverview(null);
+      return;
+    }
+
+    setMemoryOverviewLoading(true);
+    setMemoryOverviewError(null);
+    try {
+      const response = await getStudentMemoryOverview(studentId, {
+        lessonLimit: MEMORY_OVERVIEW_LESSON_LIMIT,
+        homeworkLimit: MEMORY_OVERVIEW_HOMEWORK_LIMIT,
+      });
+      if (requestId !== memoryOverviewRequestId.current) return;
+      setMemoryOverview(response);
+    } catch (error) {
+      if (requestId !== memoryOverviewRequestId.current) return;
+      const message = error instanceof Error ? error.message : 'Unable to load student memory.';
+      setMemoryOverviewError(message);
+      setMemoryOverview(null);
+    } finally {
+      if (requestId === memoryOverviewRequestId.current) {
+        setMemoryOverviewLoading(false);
+      }
+    }
+  }, []);
+
   const loadSelectedStudent = useCallback(
     async (studentId: string) => {
       const requestId = ++selectedStudentRequestId.current;
@@ -449,11 +493,13 @@ export const StudentWorkspace: React.FC = () => {
         historyRequestId.current += 1;
         timelineRequestId.current += 1;
         bindingsRequestId.current += 1;
+        memoryOverviewRequestId.current += 1;
         setSelectedStudent(null);
         setSelectedProfileId('');
         setJobHistory([]);
         setTimeline([]);
         setBindingHistory([]);
+        setMemoryOverview(null);
         return;
       }
 
@@ -474,9 +520,10 @@ export const StudentWorkspace: React.FC = () => {
         loadJobHistory(studentId, historyFiltersAppliedRef.current),
         loadTimeline(studentId, timelineFiltersAppliedRef.current),
         loadBindings(studentId),
+        loadMemoryOverview(studentId),
       ]);
     },
-    [loadBindings, loadJobHistory, loadTimeline],
+    [loadBindings, loadJobHistory, loadMemoryOverview, loadTimeline],
   );
 
   const handleRefreshAll = useCallback(async () => {
@@ -1498,28 +1545,186 @@ INSERT PROFILE HERE
             </div>
           ) : null}
 
+          <div>
+            <h3>Student Memory</h3>
+            <p className="workspace-muted">
+              Latest snapshot summary plus the recent lesson and homework memory used to build
+              continuity over time.
+            </p>
+
+            {memoryOverviewLoading ? (
+              <p className="workspace-muted">Loading student memory...</p>
+            ) : null}
+            {memoryOverviewError ? <p className="workspace-error">{memoryOverviewError}</p> : null}
+
+            {memoryOverview?.latestReadyStudentMemorySnapshot ? (
+              <>
+                <div className="workspace-meta">
+                  <span>
+                    <strong>Latest snapshot:</strong>{' '}
+                    {memoryOverview.latestReadyStudentMemorySnapshot.id}
+                  </span>
+                  <span>
+                    <strong>Status:</strong>{' '}
+                    {memoryOverview.latestReadyStudentMemorySnapshot.status}
+                  </span>
+                  <span>
+                    <strong>Generated:</strong>{' '}
+                    {formatDateTime(memoryOverview.latestReadyStudentMemorySnapshot.generatedAt)}
+                  </span>
+                </div>
+                <p>
+                  {memoryOverview.latestReadyStudentMemorySnapshot.snapshotSummary ??
+                    'No snapshot summary available.'}
+                </p>
+              </>
+            ) : !memoryOverviewLoading && !memoryOverviewError ? (
+              <p className="workspace-muted">No ready student-memory snapshot available yet.</p>
+            ) : null}
+
+            <div>
+              <strong>Unresolved issues</strong>
+              {memoryOverview?.unresolvedIssues.length ? (
+                <div className="workspace-list">
+                  {memoryOverview.unresolvedIssues.map((issue) => (
+                    <div key={`${issue.issueType}:${issue.label}`} className="workspace-list-item">
+                      <div>
+                        <strong>{issue.label}</strong>
+                        <div className="workspace-muted">{issue.note}</div>
+                      </div>
+                      <span>
+                        {issue.issueType} · {issue.priority}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <p className="workspace-muted">No unresolved issues recorded in the latest snapshot.</p>
+              )}
+            </div>
+
+            <div>
+              <strong>Recent lesson memory</strong>
+              {memoryOverview?.recentReadyLessonMemory.length ? (
+                <div className="workspace-list">
+                  {memoryOverview.recentReadyLessonMemory.map((entry) => (
+                    <div key={entry.id} className="workspace-list-item">
+                      <div>
+                        <strong>{entry.lessonSummary ?? 'Lesson memory entry'}</strong>
+                        <div className="workspace-muted">
+                          {entry.topicsDiscussed.slice(0, 2).map((topic) => topic.topic).join(', ') ||
+                            'No topics recorded'}
+                        </div>
+                      </div>
+                      <span>{formatDateTime(entry.generatedAt)}</span>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <p className="workspace-muted">No recent lesson-memory entries available.</p>
+              )}
+            </div>
+
+            <div>
+              <strong>Recent homework memory</strong>
+              {memoryOverview?.recentReadyHomeworkMemory.length ? (
+                <div className="workspace-list">
+                  {memoryOverview.recentReadyHomeworkMemory.map((entry) => (
+                    <div key={entry.id} className="workspace-list-item">
+                      <div>
+                        <strong>{entry.topic ?? 'Homework memory entry'}</strong>
+                        <div className="workspace-muted">
+                          {entry.homeworkSummary ?? entry.communicativeOutcome ?? 'No summary recorded'}
+                        </div>
+                      </div>
+                      <span>{formatDateTime(entry.publishedAt)}</span>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <p className="workspace-muted">No recent homework-memory entries available.</p>
+              )}
+            </div>
+          </div>
+
           {lineageLoading ? <p className="workspace-muted">Loading prompt lineage...</p> : null}
           {lineageError ? <p className="workspace-error">{lineageError}</p> : null}
 
           {lineage ? (
-            <div className="workspace-meta">
-              <span>
-                <strong>Profile revision:</strong> {lineage.profile.snapshot.revisionId ?? 'n/a'}
-              </span>
-              <span>
-                <strong>Template revision:</strong> {lineage.template.snapshot.revisionId ?? 'n/a'}
-              </span>
-              <span>
-                <strong>Profile drift:</strong> {lineage.profile.drift?.reason ?? 'none'}
-              </span>
-              <span>
-                <strong>Template drift:</strong> {lineage.template.drift?.reason ?? 'none'}
-              </span>
-              <span>
-                <strong>Binding at creation:</strong>{' '}
-                {lineage.bindingAtCreation?.profileId ?? 'n/a'}
-              </span>
-            </div>
+            <>
+              <div className="workspace-meta">
+                <span>
+                  <strong>Profile revision:</strong> {lineage.profile.snapshot.revisionId ?? 'n/a'}
+                </span>
+                <span>
+                  <strong>Template revision:</strong> {lineage.template.snapshot.revisionId ?? 'n/a'}
+                </span>
+                <span>
+                  <strong>Profile drift:</strong> {lineage.profile.drift?.reason ?? 'none'}
+                </span>
+                <span>
+                  <strong>Template drift:</strong> {lineage.template.drift?.reason ?? 'none'}
+                </span>
+                <span>
+                  <strong>Binding at creation:</strong>{' '}
+                  {lineage.bindingAtCreation?.profileId ?? 'n/a'}
+                </span>
+              </div>
+
+              <div>
+                <h3>Assignment Memory Provenance</h3>
+                <div className="workspace-meta">
+                  <span>
+                    <strong>Snapshot at creation:</strong>{' '}
+                    {lineage.memory.studentMemorySnapshotId ?? 'none'}
+                  </span>
+                  <span>
+                    <strong>Snapshot hash:</strong>{' '}
+                    {lineage.memory.studentMemorySnapshotHash ?? 'none'}
+                  </span>
+                  <span>
+                    <strong>Retrieval policy:</strong>{' '}
+                    {lineage.memory.retrievalPolicyVersion ?? 'none'}
+                  </span>
+                </div>
+
+                <div className="workspace-meta">
+                  <span>
+                    <strong>Selected lesson memory IDs:</strong>{' '}
+                    {lineage.memory.selectedLessonMemoryIds.length > 0
+                      ? lineage.memory.selectedLessonMemoryIds.join(', ')
+                      : 'none'}
+                  </span>
+                  <span>
+                    <strong>Selected homework memory IDs:</strong>{' '}
+                    {lineage.memory.selectedHomeworkMemoryIds.length > 0
+                      ? lineage.memory.selectedHomeworkMemoryIds.join(', ')
+                      : 'none'}
+                  </span>
+                </div>
+
+                <div className="workspace-list">
+                  <div className="workspace-list-item">
+                    <strong>Layer availability</strong>
+                    <span>
+                      snapshot {lineage.memory.layerAvailability.studentMemorySnapshot}
+                    </span>
+                  </div>
+                  <div className="workspace-list-item">
+                    <strong>Recent lesson memory</strong>
+                    <span>{lineage.memory.layerAvailability.recentLessonMemory}</span>
+                  </div>
+                  <div className="workspace-list-item">
+                    <strong>Recent homework memory</strong>
+                    <span>{lineage.memory.layerAvailability.recentHomeworkMemory}</span>
+                  </div>
+                  <div className="workspace-list-item">
+                    <strong>Retrieval policy</strong>
+                    <span>{lineage.memory.layerAvailability.retrievalPolicy}</span>
+                  </div>
+                </div>
+              </div>
+            </>
           ) : null}
         </article>
 

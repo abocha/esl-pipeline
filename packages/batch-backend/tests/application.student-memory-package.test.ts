@@ -35,6 +35,32 @@ describe('application/student-memory-package', () => {
       id: 'snapshot-1',
       contentHash: 'snapshot-hash-1',
       snapshotSummary: 'Long-term summary',
+      stableStrengths: [{ label: 'Uses advice phrases well', note: 'Stable' }],
+      recurringIssues: [
+        {
+          label: 'Present perfect',
+          issueType: 'grammar',
+          note: 'Still unstable.',
+          confidence: 'high',
+        },
+      ],
+      activeReviewBacklog: [{ label: 'Advice connectors', note: 'Keep reviewing.' }],
+      recentProgress: [{ label: 'Longer answers', note: 'Speaking more.' }],
+      personalFacts: [
+        {
+          fact: 'Likes giving practical advice',
+          category: 'preference',
+          authority: 'model_inferred',
+          confidence: 'medium',
+          sourceArtifactIds: ['lesson-1'],
+        },
+      ],
+      recommendedAssignmentDirections: [
+        {
+          direction: 'Use advice scenarios with short spoken responses',
+          rationale: 'Build on the lesson topic.',
+        },
+      ],
       unresolvedIssues: [
         {
           priority: 'high',
@@ -93,12 +119,18 @@ describe('application/student-memory-package', () => {
       retrievalPolicyVersion: 'student-memory-v1',
       source: 'canonical',
     });
-    expect(result.text).toContain('[STUDENT_MEMORY_SNAPSHOT]');
-    expect(result.text).toContain('[UNRESOLVED_ISSUES]');
-    expect(result.text).toContain('[RECENT_LESSON_MEMORY]');
-    expect(result.text).toContain('[RECENT_HOMEWORK_MEMORY]');
-    expect(result.text).toContain('Grammar watchlist: Present perfect');
-    expect(result.text).toContain('Review targets: Present perfect');
+    expect(result.studentMemorySnapshotBlock).toContain('Long-term summary');
+    expect(result.studentMemorySnapshotBlock).toContain('Stable strengths: Uses advice phrases well');
+    expect(result.studentMemorySnapshotBlock).toContain('Recurring issues: Present perfect');
+    expect(result.studentMemorySnapshotBlock).toContain(
+      'Recommended assignment directions: Use advice scenarios with short spoken responses',
+    );
+    expect(result.studentMemorySnapshotBlock).toContain(
+      'Personal facts: Likes giving practical advice',
+    );
+    expect(result.unresolvedIssuesBlock).toContain('(high) Past simple vs present perfect');
+    expect(result.recentLessonMemoryBlock).toContain('Grammar watchlist: Present perfect');
+    expect(result.recentHomeworkMemoryBlock).toContain('Review targets: Present perfect');
   });
 
   it('returns no runtime memory context when canonical memory is absent', async () => {
@@ -117,7 +149,11 @@ describe('application/student-memory-package', () => {
     });
 
     expect(result).toEqual({
-      text: null,
+      studentMemorySnapshotBlock: 'No long-term student-memory snapshot available yet.',
+      recentLessonMemoryBlock: 'No recent lesson-memory entries available for retrieval.',
+      recentHomeworkMemoryBlock: 'No recent homework-memory entries available for retrieval.',
+      unresolvedIssuesBlock:
+        'No unresolved issues available because no student-memory snapshot is available yet.',
       studentMemorySnapshotId: null,
       studentMemorySnapshotHash: null,
       selectedLessonMemoryIds: [],
