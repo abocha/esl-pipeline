@@ -72,7 +72,7 @@ describe('infrastructure/student-memory-queue', () => {
     vi.clearAllMocks();
   });
 
-  it('enqueues student-memory jobs with a dedupe-friendly job id', async () => {
+  it('sanitizes student-memory job ids so BullMQ accepts them', async () => {
     const { enqueue } = createStudentMemoryQueue();
     const mocks = getMockStorage();
 
@@ -95,7 +95,7 @@ describe('infrastructure/student-memory-queue', () => {
         transcriptId: 'transcript-1',
       }),
       expect.objectContaining({
-        jobId: 'lesson-memory:transcript-1',
+        jobId: 'lesson-memory__transcript-1',
         attempts: 5,
       }),
     );

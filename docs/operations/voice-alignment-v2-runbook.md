@@ -43,31 +43,30 @@ validation, and TTS execution.
    - Run a v4.5 prompt package generation and ensure capability placeholders are replaced.
    - Confirm prompt package response includes capability provenance metadata (generatedAt + hash).
 
-## 3) Flag Progression Playbook
+## 3) Validation Progression Playbook
 
 Progress flags in this order:
 
 1. Shadow validation only:
    - `VOICE_ALIGNMENT_V2_ENABLED=true`
    - `VOICE_ALIGNMENT_V2_STRICT_VALIDATION=false`
-   - `VOICE_ALIGNMENT_V2_PROMPT=false`
-   - Expected: non-blocking validation + `voiceDiagnostics.shadowMode` telemetry.
+   - Expected: non-blocking validation + `voiceDiagnostics.shadowMode` telemetry while the
+     voice-aligned prompt remains the default runtime.
 2. Strict validation:
    - `VOICE_ALIGNMENT_V2_ENABLED=true`
    - `VOICE_ALIGNMENT_V2_STRICT_VALIDATION=true`
-   - `VOICE_ALIGNMENT_V2_PROMPT=false`
    - Expected: voice metadata mismatches block publish flow.
-3. Voice-aligned prompt:
+3. Steady state:
    - `VOICE_ALIGNMENT_V2_ENABLED=true`
    - `VOICE_ALIGNMENT_V2_STRICT_VALIDATION=true`
-   - `VOICE_ALIGNMENT_V2_PROMPT=true`
    - Expected: v4.5 prompt selected and capability enums injected at package time.
 
 Rollback:
 
 1. Disable strict first (`VOICE_ALIGNMENT_V2_STRICT_VALIDATION=false`).
 2. If needed, disable v2 entirely (`VOICE_ALIGNMENT_V2_ENABLED=false`).
-3. Keep `VOICE_ALIGNMENT_V2_PROMPT=false` while diagnosing prompt/capability issues.
+3. Prompt selection stays on the voice-aligned v4.5 snapshot; diagnose capability issues with
+   validation controls rather than a prompt-selection flag.
 
 ## 4) Monitoring and Readiness Checks
 

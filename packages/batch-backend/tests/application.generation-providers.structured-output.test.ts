@@ -140,7 +140,7 @@ describe('application/generation-providers structured output', () => {
     const result = await executeGoogleStructuredGeneration({
       config: createGenerationConfig(),
       request: {
-        model: 'gemini-3-pro',
+        model: 'gemini-3.1-pro-preview',
         prompt: 'Extract lesson memory',
         responseSchema: {
           name: 'lesson_memory_content',

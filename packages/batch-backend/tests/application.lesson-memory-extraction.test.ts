@@ -158,7 +158,7 @@ describe('application/lesson-memory-extraction', () => {
         config: createGenerationConfig(),
         request: {
           provider: 'google_ai_studio',
-          model: 'gemini-3-pro',
+          model: 'gemini-3.1-pro-preview',
           prompt: 'Extract lesson memory',
         },
         executors: {

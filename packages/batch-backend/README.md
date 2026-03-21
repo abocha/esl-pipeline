@@ -43,6 +43,7 @@ Useful indexes:
 
 - Postgres is the durable store.
 - Redis/BullMQ backs queue execution.
+- Local/dev startup runs the API server, batch worker, transcribe worker, and dedicated student-memory worker as separate processes.
 - Prompt catalog runtime is DB-canonical.
 - Prompt-package lineage is the canonical assignment-level student-memory provenance surface.
 - Student-memory replay/backfill is source-truth driven; version 1 repair uses regenerate workflows rather than manual memory-row editing.
