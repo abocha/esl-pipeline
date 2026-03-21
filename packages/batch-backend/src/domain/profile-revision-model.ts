@@ -1,4 +1,10 @@
-export type ProfileRevisionSource = 'create' | 'update' | 'restore';
+export type ProfileRevisionSource =
+  | 'create'
+  | 'update'
+  | 'restore'
+  | 'starter_profile_form'
+  | 'candidate_promotion'
+  | 'legacy_normalization';
 export type RevisionStatus = 'draft' | 'active' | 'deprecated';
 
 export interface ProfileRevisionRecord {

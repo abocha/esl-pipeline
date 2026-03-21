@@ -1,0 +1,26 @@
+import { logger } from '../infrastructure/logger.js';
+import { refreshStudentProfileCandidatesFromCanonicalMemory } from './student-profile-candidates.js';
+
+export interface ProcessStudentProfileCandidateRefreshJobPayload {
+  kind: 'student-profile-candidate-refresh';
+  studentId: string;
+  sourceSnapshotId?: string | null;
+  trigger: 'student-memory-snapshot-ready' | 'manual-replay';
+}
+
+export async function processStudentProfileCandidateRefreshJob(args: {
+  payload: ProcessStudentProfileCandidateRefreshJobPayload;
+}): Promise<void> {
+  const result = await refreshStudentProfileCandidatesFromCanonicalMemory({
+    studentId: args.payload.studentId,
+  });
+
+  logger.info('Student profile candidate refresh processed', {
+    event: 'student_profile_candidate_refresh_processed',
+    studentId: args.payload.studentId,
+    sourceSnapshotId: args.payload.sourceSnapshotId ?? null,
+    trigger: args.payload.trigger,
+    created: result?.created.length ?? 0,
+    skipped: result?.skippedCandidateKeys.length ?? 0,
+  });
+}

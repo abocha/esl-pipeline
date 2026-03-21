@@ -23,6 +23,12 @@ import {
   getLatestReadyStudentMemorySnapshotByStudentId,
   listStudentMemorySnapshots,
 } from '../domain/student-memory-snapshot-repository.js';
+import type {
+  StudentProfileCandidateRecord,
+  StudentProfileCandidateReviewState,
+  StudentProfileCandidateStatus,
+} from '../domain/student-profile-candidate-model.js';
+import { listStudentProfileCandidates } from '../domain/student-profile-candidate-repository.js';
 import type { StudentProfileData } from './student-profiles-store.js';
 import { getStudentProfileById } from './student-profiles-store.js';
 
@@ -67,6 +73,17 @@ export interface StudentMemorySnapshotListResponse {
   statuses: StudentMemorySnapshotStatus[] | null;
 }
 
+export interface StudentProfileCandidateListResponse {
+  studentId: string;
+  items: StudentProfileCandidateRecord[];
+  total: number;
+  limit: number;
+  offset: number;
+  order: 'asc' | 'desc';
+  statuses: StudentProfileCandidateStatus[] | null;
+  reviewStates: StudentProfileCandidateReviewState[] | null;
+}
+
 interface StudentMemoryInspectionDependencies {
   students: {
     getById: typeof getStudentProfileById;
@@ -82,6 +99,9 @@ interface StudentMemoryInspectionDependencies {
   snapshots: {
     getLatestReadyByStudentId: typeof getLatestReadyStudentMemorySnapshotByStudentId;
     list: typeof listStudentMemorySnapshots;
+  };
+  profileCandidates: {
+    list: typeof listStudentProfileCandidates;
   };
 }
 
@@ -184,6 +204,52 @@ export async function listStudentLessonMemory(args: {
     offset,
     order,
     statuses: args.statuses ?? null,
+  };
+}
+
+export async function listStudentProfileCandidatesForStudent(args: {
+  studentId: string;
+  statuses?: StudentProfileCandidateStatus[];
+  reviewStates?: StudentProfileCandidateReviewState[];
+  limit?: number;
+  offset?: number;
+  order?: 'asc' | 'desc';
+  config?: BatchBackendConfig;
+  overrides?: Partial<StudentMemoryInspectionDependencies>;
+}): Promise<StudentProfileCandidateListResponse | null> {
+  const students = args.overrides?.students ?? {
+    getById: getStudentProfileById,
+  };
+  const profileCandidates = args.overrides?.profileCandidates ?? {
+    list: listStudentProfileCandidates,
+  };
+
+  const student = await resolveStudent(args.studentId, args.config, students);
+  if (!student) {
+    return null;
+  }
+
+  const limit = args.limit ?? DEFAULT_LIST_LIMIT;
+  const offset = args.offset ?? DEFAULT_LIST_OFFSET;
+  const order = args.order ?? DEFAULT_LIST_ORDER;
+  const result = await profileCandidates.list({
+    studentId: args.studentId,
+    statuses: args.statuses,
+    reviewStates: args.reviewStates,
+    limit,
+    offset,
+    order,
+  });
+
+  return {
+    studentId: args.studentId,
+    items: result.items,
+    total: result.total,
+    limit: result.limit,
+    offset: result.offset,
+    order: result.order,
+    statuses: args.statuses ?? null,
+    reviewStates: args.reviewStates ?? null,
   };
 }
 

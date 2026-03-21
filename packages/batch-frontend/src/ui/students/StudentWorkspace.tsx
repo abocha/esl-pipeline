@@ -2,11 +2,13 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Link } from 'react-router-dom';
 
 import type {
+  StudentProfileCandidate,
   JobListResponse,
   JobProvenanceResponse,
   JobState,
   ProfileRevisionSummaryResponse,
   PromptPackageLineageResponse,
+  StarterProfileInput,
   StudentMemoryOverviewResponse,
   StudentProfile,
   StudentProfileBindingListResponse,
@@ -17,7 +19,9 @@ import type {
 import {
   activateProfileRevision,
   activateTemplateRevision,
+  approveStudentProfileCandidate,
   createStudentProfile,
+  deferStudentProfileCandidate,
   deleteTemplateContent,
   fetchJobProvenance,
   fetchPromptPackageLineage,
@@ -26,6 +30,7 @@ import {
   getStudentProfile,
   getStudentTimeline,
   getTemplateContent,
+  listStudentProfileCandidates,
   listProfileContents,
   listProfileRevisions,
   listStudentProfileBindings,
@@ -33,6 +38,8 @@ import {
   listTemplateContents,
   listTemplateRevisions,
   listUserJobs,
+  promoteStudentProfileCandidates,
+  rejectStudentProfileCandidate,
   restoreProfileRevision,
   restoreTemplateRevision,
   updateStudentProfile,
@@ -44,6 +51,9 @@ const HISTORY_LIMIT = 25;
 const BINDING_LIMIT = 20;
 const MEMORY_OVERVIEW_LESSON_LIMIT = 3;
 const MEMORY_OVERVIEW_HOMEWORK_LIMIT = 2;
+const PROFILE_CANDIDATE_LIMIT = 200;
+const PROFILE_CANDIDATE_PENDING_FILTER = 'pending';
+const PROFILE_CANDIDATE_REVIEWED_FILTER = 'reviewed';
 const TIMELINE_TYPES: StudentTimelineType[] = [
   'recording_ingested',
   'transcript_ready',
@@ -79,6 +89,13 @@ interface CreateStudentFormState {
   colorPreset: string;
   accentPreference: string;
   manifestPreset: string;
+  starterLevel: string;
+  starterGoals: string;
+  starterProfessionOrContext: string;
+  starterInterests: string;
+  starterLongRunningChallenges: string;
+  starterStudyPreferencesOrConstraints: string;
+  starterTeacherNotes: string;
 }
 
 const INITIAL_CREATE_STUDENT_FORM: CreateStudentFormState = {
@@ -89,7 +106,20 @@ const INITIAL_CREATE_STUDENT_FORM: CreateStudentFormState = {
   colorPreset: '',
   accentPreference: '',
   manifestPreset: '',
+  starterLevel: '',
+  starterGoals: '',
+  starterProfessionOrContext: '',
+  starterInterests: '',
+  starterLongRunningChallenges: '',
+  starterStudyPreferencesOrConstraints: '',
+  starterTeacherNotes: '',
 };
+
+type ProfileCandidateFilter =
+  | typeof PROFILE_CANDIDATE_PENDING_FILTER
+  | typeof PROFILE_CANDIDATE_REVIEWED_FILTER;
+
+type CandidateActionKind = 'approve' | 'reject' | 'defer';
 
 interface HistoryFilters {
   state: 'all' | JobState;
@@ -140,6 +170,107 @@ function formatDateTime(value?: string | null): string {
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return 'n/a';
   return date.toLocaleString();
+}
+
+function toTitleCaseLabel(value: string): string {
+  return value
+    .split(/[_-]+/g)
+    .filter(Boolean)
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(' ');
+}
+
+function buildStarterProfileInput(
+  form: CreateStudentFormState,
+): {
+  starterProfile?: StarterProfileInput;
+  hasAnyValue: boolean;
+  hasMissingRequired: boolean;
+} {
+  const starterProfile: StarterProfileInput = {
+    level: form.starterLevel.trim() || undefined,
+    goals: form.starterGoals.trim() || undefined,
+    professionOrContext: form.starterProfessionOrContext.trim() || undefined,
+    interests: form.starterInterests.trim() || undefined,
+    longRunningChallenges: form.starterLongRunningChallenges.trim() || undefined,
+    studyPreferencesOrConstraints:
+      form.starterStudyPreferencesOrConstraints.trim() || undefined,
+    teacherNotes: form.starterTeacherNotes.trim() || undefined,
+  };
+
+  const requiredFields = [
+    starterProfile.goals,
+    starterProfile.professionOrContext,
+    starterProfile.interests,
+    starterProfile.longRunningChallenges,
+    starterProfile.studyPreferencesOrConstraints,
+  ];
+  const hasAnyValue = Object.values(starterProfile).some((value) => value && value.length > 0);
+  const hasMissingRequired =
+    hasAnyValue && requiredFields.some((value) => !value || value.trim().length === 0);
+
+  return {
+    starterProfile: hasAnyValue && !hasMissingRequired ? starterProfile : undefined,
+    hasAnyValue,
+    hasMissingRequired,
+  };
+}
+
+function isPendingCandidate(candidate: StudentProfileCandidate): boolean {
+  return candidate.status === 'pending_review' && candidate.reviewState === 'unreviewed';
+}
+
+function isReviewedCandidate(candidate: StudentProfileCandidate): boolean {
+  return !isPendingCandidate(candidate);
+}
+
+function isSelectableForPromotion(candidate: StudentProfileCandidate): boolean {
+  return candidate.status === 'approved';
+}
+
+function formatCandidateSectionLabel(section: string): string {
+  switch (section) {
+    case 'goals_motivation': {
+      return 'Goals and motivation';
+    }
+    case 'work_communication_context': {
+      return 'Work and communication context';
+    }
+    case 'interests_personal_context': {
+      return 'Interests and personal context';
+    }
+    case 'learning_preferences_study_habits': {
+      return 'Learning preferences and study habits';
+    }
+    case 'long_running_strengths': {
+      return 'Long-running strengths';
+    }
+    case 'persistent_challenges_constraints': {
+      return 'Persistent challenges or constraints';
+    }
+    default: {
+      return toTitleCaseLabel(section);
+    }
+  }
+}
+
+function formatCandidateStateLabel(candidate: StudentProfileCandidate): string {
+  if (candidate.status === 'promoted') {
+    return 'Promoted';
+  }
+  if (candidate.status === 'approved') {
+    return 'Approved, not yet promoted';
+  }
+  if (candidate.status === 'rejected') {
+    return 'Rejected';
+  }
+  if (candidate.reviewState === 'deferred') {
+    return 'Deferred';
+  }
+  if (candidate.status === 'superseded') {
+    return 'Superseded';
+  }
+  return 'Pending review';
 }
 
 export const StudentWorkspace: React.FC = () => {
@@ -210,6 +341,28 @@ export const StudentWorkspace: React.FC = () => {
   const [memoryOverview, setMemoryOverview] = useState<StudentMemoryOverviewResponse | null>(null);
   const [memoryOverviewLoading, setMemoryOverviewLoading] = useState(false);
   const [memoryOverviewError, setMemoryOverviewError] = useState<string | null>(null);
+  const [profileCandidates, setProfileCandidates] = useState<StudentProfileCandidate[]>([]);
+  const [profileCandidatesLoading, setProfileCandidatesLoading] = useState(false);
+  const [profileCandidatesError, setProfileCandidatesError] = useState<string | null>(null);
+  const [profileCandidateFilter, setProfileCandidateFilter] = useState<ProfileCandidateFilter>(
+    PROFILE_CANDIDATE_PENDING_FILTER,
+  );
+  const [profileCandidateAction, setProfileCandidateAction] = useState<{
+    candidateId: string;
+    action: CandidateActionKind;
+  } | null>(null);
+  const [profileCandidateDrafts, setProfileCandidateDrafts] = useState<
+    Record<string, { approvedFactText: string; reviewerNote: string }>
+  >({});
+  const [selectedCandidateIds, setSelectedCandidateIds] = useState<string[]>([]);
+  const [profileCandidatePromotionNote, setProfileCandidatePromotionNote] = useState('');
+  const [profileCandidatePromotionBusy, setProfileCandidatePromotionBusy] = useState(false);
+  const [profileCandidatePromotionError, setProfileCandidatePromotionError] = useState<
+    string | null
+  >(null);
+  const [profileCandidatePromotionSuccess, setProfileCandidatePromotionSuccess] = useState<
+    string | null
+  >(null);
 
   const [selectedJobId, setSelectedJobId] = useState('');
   const [selectedPromptPackageId, setSelectedPromptPackageId] = useState('');
@@ -228,6 +381,7 @@ export const StudentWorkspace: React.FC = () => {
   const timelineRequestId = useRef(0);
   const bindingsRequestId = useRef(0);
   const memoryOverviewRequestId = useRef(0);
+  const profileCandidatesRequestId = useRef(0);
 
   const historyFiltersAppliedRef = useRef(historyFiltersApplied);
   const timelineFiltersAppliedRef = useRef(timelineFiltersApplied);
@@ -247,6 +401,37 @@ export const StudentWorkspace: React.FC = () => {
     [loadedTemplateContent, templateEditorText],
   );
 
+  const visibleProfileCandidates = useMemo(
+    () =>
+      profileCandidates.filter((candidate) =>
+        profileCandidateFilter === PROFILE_CANDIDATE_PENDING_FILTER
+          ? isPendingCandidate(candidate)
+          : isReviewedCandidate(candidate),
+      ),
+    [profileCandidateFilter, profileCandidates],
+  );
+
+  const groupedProfileCandidates = useMemo(() => {
+    const groups = new Map<string, StudentProfileCandidate[]>();
+    for (const candidate of visibleProfileCandidates) {
+      const key = candidate.targetSection || 'other';
+      const bucket = groups.get(key);
+      if (bucket) {
+        bucket.push(candidate);
+      } else {
+        groups.set(key, [candidate]);
+      }
+    }
+    return [...groups.entries()].sort(([left], [right]) =>
+      formatCandidateSectionLabel(left).localeCompare(formatCandidateSectionLabel(right)),
+    );
+  }, [visibleProfileCandidates]);
+
+  const approvedCandidatesReadyForPromotion = useMemo(
+    () => profileCandidates.filter((candidate) => isSelectableForPromotion(candidate)),
+    [profileCandidates],
+  );
+
   useEffect(() => {
     historyFiltersAppliedRef.current = historyFiltersApplied;
   }, [historyFiltersApplied]);
@@ -254,6 +439,39 @@ export const StudentWorkspace: React.FC = () => {
   useEffect(() => {
     timelineFiltersAppliedRef.current = timelineFiltersApplied;
   }, [timelineFiltersApplied]);
+
+  useEffect(() => {
+    setProfileCandidateDrafts({});
+    setSelectedCandidateIds([]);
+    setProfileCandidatePromotionNote('');
+    setProfileCandidatePromotionError(null);
+    setProfileCandidatePromotionSuccess(null);
+  }, [selectedStudentId]);
+
+  const mergeProfileCandidate = useCallback((candidate: StudentProfileCandidate) => {
+    setProfileCandidates((current) =>
+      current.map((item) => (item.id === candidate.id ? candidate : item)),
+    );
+    if (!isSelectableForPromotion(candidate)) {
+      setSelectedCandidateIds((current) => current.filter((item) => item !== candidate.id));
+    }
+  }, []);
+
+  const updateProfileCandidateDraft = useCallback(
+    (candidateId: string, patch: Partial<{ approvedFactText: string; reviewerNote: string }>) => {
+      setProfileCandidateDrafts((current) => {
+        const existing = current[candidateId] ?? { approvedFactText: '', reviewerNote: '' };
+        return {
+          ...current,
+          [candidateId]: {
+            approvedFactText: patch.approvedFactText ?? existing.approvedFactText,
+            reviewerNote: patch.reviewerNote ?? existing.reviewerNote,
+          },
+        };
+      });
+    },
+    [],
+  );
 
   const loadStudents = useCallback(async () => {
     setStudentsLoading(true);
@@ -486,6 +704,47 @@ export const StudentWorkspace: React.FC = () => {
     }
   }, []);
 
+  const loadProfileCandidates = useCallback(async (studentId: string) => {
+    const requestId = ++profileCandidatesRequestId.current;
+    if (!studentId) {
+      setProfileCandidates([]);
+      setSelectedCandidateIds([]);
+      setProfileCandidatePromotionError(null);
+      setProfileCandidatePromotionSuccess(null);
+      return;
+    }
+
+    setProfileCandidatesLoading(true);
+    setProfileCandidatesError(null);
+    try {
+      const response = await listStudentProfileCandidates(studentId, {
+        limit: PROFILE_CANDIDATE_LIMIT,
+        offset: 0,
+        order: 'desc',
+      });
+      if (requestId !== profileCandidatesRequestId.current) return;
+      setProfileCandidates(response.items ?? []);
+      setSelectedCandidateIds((current) =>
+        current.filter((candidateId) =>
+          (response.items ?? []).some(
+            (candidate) => candidate.id === candidateId && isSelectableForPromotion(candidate),
+          ),
+        ),
+      );
+    } catch (error) {
+      if (requestId !== profileCandidatesRequestId.current) return;
+      const message =
+        error instanceof Error ? error.message : 'Unable to load profile candidates.';
+      setProfileCandidatesError(message);
+      setProfileCandidates([]);
+      setSelectedCandidateIds([]);
+    } finally {
+      if (requestId === profileCandidatesRequestId.current) {
+        setProfileCandidatesLoading(false);
+      }
+    }
+  }, []);
+
   const loadSelectedStudent = useCallback(
     async (studentId: string) => {
       const requestId = ++selectedStudentRequestId.current;
@@ -494,12 +753,17 @@ export const StudentWorkspace: React.FC = () => {
         timelineRequestId.current += 1;
         bindingsRequestId.current += 1;
         memoryOverviewRequestId.current += 1;
+        profileCandidatesRequestId.current += 1;
         setSelectedStudent(null);
         setSelectedProfileId('');
         setJobHistory([]);
         setTimeline([]);
         setBindingHistory([]);
         setMemoryOverview(null);
+        setProfileCandidates([]);
+        setSelectedCandidateIds([]);
+        setProfileCandidatePromotionError(null);
+        setProfileCandidatePromotionSuccess(null);
         return;
       }
 
@@ -521,9 +785,10 @@ export const StudentWorkspace: React.FC = () => {
         loadTimeline(studentId, timelineFiltersAppliedRef.current),
         loadBindings(studentId),
         loadMemoryOverview(studentId),
+        loadProfileCandidates(studentId),
       ]);
     },
-    [loadBindings, loadJobHistory, loadMemoryOverview, loadTimeline],
+    [loadBindings, loadJobHistory, loadMemoryOverview, loadProfileCandidates, loadTimeline],
   );
 
   const handleRefreshAll = useCallback(async () => {
@@ -542,6 +807,15 @@ export const StudentWorkspace: React.FC = () => {
       return;
     }
 
+    const starterProfileState = buildStarterProfileInput(createStudentForm);
+    if (starterProfileState.hasMissingRequired) {
+      setCreateStudentError(
+        'Complete all required starter profile fields or clear the starter profile section before creating the student.',
+      );
+      return;
+    }
+    const starterProfile = starterProfileState.starterProfile;
+
     setCreateStudentBusy(true);
     setCreateStudentError(null);
     setCreateStudentSuccess(null);
@@ -549,7 +823,9 @@ export const StudentWorkspace: React.FC = () => {
     try {
       const created = await createStudentProfile({
         student,
-        ...(createStudentForm.profileId ? { profileId: createStudentForm.profileId } : {}),
+        ...(!starterProfile && createStudentForm.profileId
+          ? { profileId: createStudentForm.profileId }
+          : {}),
         ...(createStudentForm.dbId ? { dbId: createStudentForm.dbId } : {}),
         ...(createStudentForm.pageParentId ? { pageParentId: createStudentForm.pageParentId } : {}),
         ...(createStudentForm.colorPreset ? { colorPreset: createStudentForm.colorPreset } : {}),
@@ -559,6 +835,7 @@ export const StudentWorkspace: React.FC = () => {
         ...(createStudentForm.manifestPreset
           ? { manifestPreset: createStudentForm.manifestPreset }
           : {}),
+        ...(starterProfile ? { starterProfile } : {}),
       });
 
       await Promise.all([loadStudents(), loadProfileOptions()]);
@@ -671,6 +948,96 @@ export const StudentWorkspace: React.FC = () => {
       setProfileError(message);
     } finally {
       setProfileBusy(null);
+    }
+  };
+
+  const handleReviewProfileCandidate = async (
+    candidate: StudentProfileCandidate,
+    action: CandidateActionKind,
+  ) => {
+    if (!selectedStudentId) return;
+
+    const draft = profileCandidateDrafts[candidate.id];
+    const reviewerNote = draft?.reviewerNote.trim();
+    const approvedFactText = draft?.approvedFactText.trim();
+
+    setProfileCandidateAction({ candidateId: candidate.id, action });
+    setProfileCandidatesError(null);
+    setProfileCandidatePromotionError(null);
+    setProfileCandidatePromotionSuccess(null);
+    try {
+      if (action === 'approve') {
+        const updated = await approveStudentProfileCandidate(selectedStudentId, candidate.id, {
+          ...(approvedFactText ? { approvedFactText } : {}),
+          ...(reviewerNote ? { reviewerNote } : {}),
+        });
+        mergeProfileCandidate(updated);
+      } else if (action === 'reject') {
+        const updated = await rejectStudentProfileCandidate(selectedStudentId, candidate.id, {
+          ...(reviewerNote ? { reviewerNote } : {}),
+        });
+        mergeProfileCandidate(updated);
+      } else {
+        const updated = await deferStudentProfileCandidate(selectedStudentId, candidate.id, {
+          ...(reviewerNote ? { reviewerNote } : {}),
+        });
+        mergeProfileCandidate(updated);
+      }
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message : 'Unable to update profile candidate review.';
+      setProfileCandidatesError(message);
+    } finally {
+      setProfileCandidateAction(null);
+    }
+  };
+
+  const handleToggleCandidateSelection = (candidateId: string, checked: boolean) => {
+    setSelectedCandidateIds((current) => {
+      if (checked) {
+        return current.includes(candidateId) ? current : [...current, candidateId];
+      }
+      return current.filter((item) => item !== candidateId);
+    });
+  };
+
+  const handleSelectAllApprovedCandidates = () => {
+    setSelectedCandidateIds(approvedCandidatesReadyForPromotion.map((candidate) => candidate.id));
+  };
+
+  const handlePromoteProfileCandidates = async () => {
+    if (!selectedStudentId) return;
+    if (selectedCandidateIds.length === 0) {
+      setProfileCandidatePromotionError('Select at least one approved candidate to promote.');
+      return;
+    }
+
+    setProfileCandidatePromotionBusy(true);
+    setProfileCandidatePromotionError(null);
+    setProfileCandidatePromotionSuccess(null);
+    try {
+      const response = await promoteStudentProfileCandidates(selectedStudentId, {
+        candidateIds: selectedCandidateIds,
+        ...(profileCandidatePromotionNote.trim()
+          ? { reviewerNote: profileCandidatePromotionNote.trim() }
+          : {}),
+      });
+      setProfileCandidatePromotionSuccess(
+        `Draft revision ${response.draftRevisionId} created. Review it below, then activate when ready.`,
+      );
+      setSelectedCandidateIds([]);
+      setProfileCandidatePromotionNote('');
+      await Promise.all([
+        loadProfileCandidates(selectedStudentId),
+        selectedProfileId ? loadSelectedProfile(selectedProfileId) : Promise.resolve(),
+        loadTimeline(selectedStudentId, timelineFiltersAppliedRef.current),
+      ]);
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message : 'Unable to promote approved profile candidates.';
+      setProfileCandidatePromotionError(message);
+    } finally {
+      setProfileCandidatePromotionBusy(false);
     }
   };
 
@@ -986,6 +1353,126 @@ INSERT PROFILE HERE
               </label>
 
               <details className="workspace-advanced">
+                <summary>Starter profile (optional)</summary>
+                <p className="workspace-muted">
+                  Use this when you want the system to create an initial bound profile from teacher
+                  input. If you fill this in, it takes precedence over the Initial Profile picker.
+                </p>
+                <div className="workspace-grid">
+                  <label className="workspace-field">
+                    Starter Level
+                    <input
+                      aria-label="Starter Level"
+                      value={createStudentForm.starterLevel}
+                      onChange={(event) =>
+                        setCreateStudentForm((current) => ({
+                          ...current,
+                          starterLevel: event.target.value,
+                        }))
+                      }
+                      placeholder="e.g. A2"
+                    />
+                  </label>
+
+                  <label className="workspace-field workspace-field-span-2">
+                    Starter Goals
+                    <textarea
+                      aria-label="Starter Goals"
+                      value={createStudentForm.starterGoals}
+                      onChange={(event) =>
+                        setCreateStudentForm((current) => ({
+                          ...current,
+                          starterGoals: event.target.value,
+                        }))
+                      }
+                      rows={3}
+                      placeholder="What is this student trying to achieve?"
+                    />
+                  </label>
+
+                  <label className="workspace-field workspace-field-span-2">
+                    Profession Or Context
+                    <textarea
+                      aria-label="Profession Or Context"
+                      value={createStudentForm.starterProfessionOrContext}
+                      onChange={(event) =>
+                        setCreateStudentForm((current) => ({
+                          ...current,
+                          starterProfessionOrContext: event.target.value,
+                        }))
+                      }
+                      rows={2}
+                      placeholder="Work, life context, communication situations"
+                    />
+                  </label>
+
+                  <label className="workspace-field workspace-field-span-2">
+                    Interests
+                    <textarea
+                      aria-label="Interests"
+                      value={createStudentForm.starterInterests}
+                      onChange={(event) =>
+                        setCreateStudentForm((current) => ({
+                          ...current,
+                          starterInterests: event.target.value,
+                        }))
+                      }
+                      rows={2}
+                      placeholder="Topics or hobbies that help personalize homework"
+                    />
+                  </label>
+
+                  <label className="workspace-field workspace-field-span-2">
+                    Long-Running Challenges
+                    <textarea
+                      aria-label="Long-Running Challenges"
+                      value={createStudentForm.starterLongRunningChallenges}
+                      onChange={(event) =>
+                        setCreateStudentForm((current) => ({
+                          ...current,
+                          starterLongRunningChallenges: event.target.value,
+                        }))
+                      }
+                      rows={2}
+                      placeholder="Persistent issues, constraints, or caution areas"
+                    />
+                  </label>
+
+                  <label className="workspace-field workspace-field-span-2">
+                    Study Preferences Or Constraints
+                    <textarea
+                      aria-label="Study Preferences Or Constraints"
+                      value={createStudentForm.starterStudyPreferencesOrConstraints}
+                      onChange={(event) =>
+                        setCreateStudentForm((current) => ({
+                          ...current,
+                          starterStudyPreferencesOrConstraints: event.target.value,
+                        }))
+                      }
+                      rows={2}
+                      placeholder="Preferences, habits, formatting requests, constraints"
+                    />
+                  </label>
+
+                  <label className="workspace-field workspace-field-span-2">
+                    Starter Teacher Notes
+                    <textarea
+                      aria-label="Starter Teacher Notes"
+                      value={createStudentForm.starterTeacherNotes}
+                      onChange={(event) =>
+                        setCreateStudentForm((current) => ({
+                          ...current,
+                          starterTeacherNotes: event.target.value,
+                        }))
+                      }
+                      rows={2}
+                      placeholder="Anything the first profile draft should preserve"
+                    />
+                  </label>
+                </div>
+              </details>
+
+              <details className="workspace-advanced">
                 <summary>Advanced fields</summary>
                 <div className="workspace-grid">
                   <label className="workspace-field">
@@ -1240,6 +1727,304 @@ INSERT PROFILE HERE
             </div>
           ) : (
             <p className="workspace-muted">No profile revisions to show.</p>
+          )}
+        </article>
+
+        <article className="workspace-card card">
+          <header>
+            <h2>Profile Candidates</h2>
+            <p>
+              Review candidate profile facts here, then generate a draft revision and activate it
+              through the normal profile revision controls.
+            </p>
+          </header>
+
+          <div className="workspace-inline workspace-filter-row">
+            <label className="workspace-field">
+              Review bucket
+              <select
+                aria-label="Profile Candidate Review Bucket"
+                value={profileCandidateFilter}
+                onChange={(event) =>
+                  setProfileCandidateFilter(event.target.value as ProfileCandidateFilter)
+                }
+                disabled={!selectedStudentId}
+              >
+                <option value={PROFILE_CANDIDATE_PENDING_FILTER}>Pending</option>
+                <option value={PROFILE_CANDIDATE_REVIEWED_FILTER}>Reviewed</option>
+              </select>
+            </label>
+
+            <button
+              type="button"
+              className="workspace-secondary-btn"
+              onClick={() => void loadProfileCandidates(selectedStudentId)}
+              disabled={!selectedStudentId || profileCandidatesLoading}
+            >
+              {profileCandidatesLoading ? 'Refreshing...' : 'Refresh Candidates'}
+            </button>
+          </div>
+
+          <div className="workspace-create-panel">
+            <div className="workspace-inline workspace-header-row">
+              <div>
+                <strong>Promotion queue</strong>
+                <div className="workspace-muted">
+                  {approvedCandidatesReadyForPromotion.length} approved candidate
+                  {approvedCandidatesReadyForPromotion.length === 1 ? '' : 's'} ready for
+                  promotion.
+                </div>
+              </div>
+
+              <button
+                type="button"
+                className="workspace-secondary-btn"
+                onClick={handleSelectAllApprovedCandidates}
+                disabled={approvedCandidatesReadyForPromotion.length === 0}
+              >
+                Select All Approved
+              </button>
+            </div>
+
+            <label className="workspace-field">
+              Promotion Note
+              <textarea
+                aria-label="Promotion Note"
+                value={profileCandidatePromotionNote}
+                onChange={(event) => setProfileCandidatePromotionNote(event.target.value)}
+                rows={2}
+                placeholder="Optional note explaining this promotion batch"
+                disabled={!selectedStudentId || profileCandidatePromotionBusy}
+              />
+            </label>
+
+            <div className="workspace-inline">
+              <span className="workspace-muted">
+                {selectedCandidateIds.length} selected for draft revision generation
+              </span>
+              <button
+                type="button"
+                className="workspace-primary-btn"
+                onClick={() => void handlePromoteProfileCandidates()}
+                disabled={!selectedStudentId || profileCandidatePromotionBusy}
+              >
+                {profileCandidatePromotionBusy ? 'Generating Draft...' : 'Generate Draft Revision'}
+              </button>
+            </div>
+
+            {profileCandidatePromotionError ? (
+              <p className="workspace-error">{profileCandidatePromotionError}</p>
+            ) : null}
+            {profileCandidatePromotionSuccess ? (
+              <p className="workspace-success">{profileCandidatePromotionSuccess}</p>
+            ) : null}
+          </div>
+
+          {profileCandidatesError ? <p className="workspace-error">{profileCandidatesError}</p> : null}
+
+          {selectedStudentId ? profileCandidatesLoading && profileCandidates.length === 0 ? (
+            <p className="workspace-muted">Loading profile candidates...</p>
+          ) : groupedProfileCandidates.length > 0 ? (
+            groupedProfileCandidates.map(([section, candidates]) => (
+              <section key={section} className="workspace-candidate-group">
+                <div className="workspace-inline workspace-header-row">
+                  <h3>{formatCandidateSectionLabel(section)}</h3>
+                  <span className="workspace-muted">
+                    {candidates.length} candidate{candidates.length === 1 ? '' : 's'}
+                  </span>
+                </div>
+
+                <div className="workspace-list">
+                  {candidates.map((candidate) => {
+                    const draft = profileCandidateDrafts[candidate.id];
+                    const approvedFactText =
+                      draft?.approvedFactText ??
+                      candidate.approvedFactText ??
+                      candidate.proposedFact;
+                    const reviewerNote = draft?.reviewerNote ?? '';
+                    const isBusy = profileCandidateAction?.candidateId === candidate.id;
+                    const isTerminal =
+                      candidate.status === 'promoted' || candidate.status === 'superseded';
+                    const isSelected = selectedCandidateIds.includes(candidate.id);
+
+                    return (
+                      <details key={candidate.id} className="workspace-candidate-details">
+                        <summary className="workspace-candidate-summary">
+                          <div>
+                            <strong>{candidate.approvedFactText ?? candidate.proposedFact}</strong>
+                            <div className="workspace-muted">
+                              {toTitleCaseLabel(candidate.category)} ·{' '}
+                              {formatCandidateStateLabel(candidate)}
+                            </div>
+                          </div>
+
+                          <div className="workspace-inline">
+                            {isSelectableForPromotion(candidate) ? (
+                              <label
+                                className="workspace-inline workspace-muted"
+                                onClick={(event) => event.stopPropagation()}
+                              >
+                                <input
+                                  type="checkbox"
+                                  aria-label={`Select candidate ${candidate.id} for promotion`}
+                                  checked={isSelected}
+                                  onChange={(event) =>
+                                    handleToggleCandidateSelection(
+                                      candidate.id,
+                                      event.target.checked,
+                                    )
+                                  }
+                                />
+                                Select
+                              </label>
+                            ) : null}
+                            <span className="workspace-pill">
+                              {formatCandidateStateLabel(candidate)}
+                            </span>
+                          </div>
+                        </summary>
+
+                        <div className="workspace-candidate-body">
+                          <div className="workspace-meta">
+                            <span>
+                              <strong>Target section:</strong>{' '}
+                              {formatCandidateSectionLabel(candidate.targetSection)}
+                            </span>
+                            <span>
+                              <strong>Authority:</strong> {candidate.authority ?? 'n/a'}
+                            </span>
+                            <span>
+                              <strong>Confidence:</strong> {candidate.confidence ?? 'n/a'}
+                            </span>
+                            <span>
+                              <strong>Source summary:</strong> {candidate.sourceSummary ?? 'n/a'}
+                            </span>
+                            <span>
+                              <strong>Snapshot:</strong> {candidate.sourceSnapshotId ?? 'none'}
+                            </span>
+                            <span>
+                              <strong>Lesson memory IDs:</strong>{' '}
+                              {candidate.sourceLessonMemoryIds.length > 0
+                                ? candidate.sourceLessonMemoryIds.join(', ')
+                                : 'none'}
+                            </span>
+                            <span>
+                              <strong>Promoted revision:</strong>{' '}
+                              {candidate.promotedRevisionId ?? 'not yet promoted'}
+                            </span>
+                          </div>
+
+                          <div>
+                            <strong>Original proposal</strong>
+                            <p>{candidate.proposedFact}</p>
+                          </div>
+
+                          <label className="workspace-field">
+                            Approved Fact Text
+                            <textarea
+                              aria-label={`Approved Fact Text ${candidate.id}`}
+                              value={approvedFactText}
+                              onChange={(event) =>
+                                updateProfileCandidateDraft(candidate.id, {
+                                  approvedFactText: event.target.value,
+                                })
+                              }
+                              rows={3}
+                              disabled={isTerminal || isBusy}
+                            />
+                          </label>
+
+                          <label className="workspace-field">
+                            Reviewer Note
+                            <textarea
+                              aria-label={`Reviewer Note ${candidate.id}`}
+                              value={reviewerNote}
+                              onChange={(event) =>
+                                updateProfileCandidateDraft(candidate.id, {
+                                  reviewerNote: event.target.value,
+                                })
+                              }
+                              rows={2}
+                              disabled={isTerminal || isBusy}
+                            />
+                          </label>
+
+                          <div>
+                            <strong>Evidence</strong>
+                            {candidate.evidence.length > 0 ? (
+                              <div className="workspace-list">
+                                {candidate.evidence.map((evidence, index) => (
+                                  <div
+                                    key={`${candidate.id}-evidence-${index}`}
+                                    className="workspace-list-item workspace-list-item-stack"
+                                  >
+                                    <div>
+                                      <strong>{evidence.quote}</strong>
+                                      <div className="workspace-muted">
+                                        {evidence.speakerRole ?? 'unknown'}
+                                        {evidence.transcriptSpan
+                                          ? ` · ${evidence.transcriptSpan}`
+                                          : ''}
+                                        {evidence.sourceKind ? ` · ${evidence.sourceKind}` : ''}
+                                      </div>
+                                      {evidence.evidenceNote ? (
+                                        <div className="workspace-muted">{evidence.evidenceNote}</div>
+                                      ) : null}
+                                    </div>
+                                    <span>{evidence.sourceArtifactId ?? 'n/a'}</span>
+                                  </div>
+                                ))}
+                              </div>
+                            ) : (
+                              <p className="workspace-muted">No evidence excerpts provided.</p>
+                            )}
+                          </div>
+
+                          <div className="workspace-inline">
+                            <button
+                              type="button"
+                              className="workspace-primary-btn"
+                              onClick={() => void handleReviewProfileCandidate(candidate, 'approve')}
+                              disabled={isTerminal || isBusy}
+                            >
+                              {isBusy && profileCandidateAction?.action === 'approve'
+                                ? 'Saving...'
+                                : 'Approve'}
+                            </button>
+                            <button
+                              type="button"
+                              className="workspace-secondary-btn"
+                              onClick={() => void handleReviewProfileCandidate(candidate, 'defer')}
+                              disabled={isTerminal || isBusy}
+                            >
+                              {isBusy && profileCandidateAction?.action === 'defer'
+                                ? 'Saving...'
+                                : 'Defer'}
+                            </button>
+                            <button
+                              type="button"
+                              className="workspace-secondary-btn"
+                              onClick={() => void handleReviewProfileCandidate(candidate, 'reject')}
+                              disabled={isTerminal || isBusy}
+                            >
+                              {isBusy && profileCandidateAction?.action === 'reject'
+                                ? 'Saving...'
+                                : 'Reject'}
+                            </button>
+                          </div>
+                        </div>
+                      </details>
+                    );
+                  })}
+                </div>
+              </section>
+            ))
+          ) : (
+            <p className="workspace-muted">
+              No {profileCandidateFilter} profile candidates visible for this student.
+            </p>
+          ) : (
+            <p className="workspace-muted">Select a student to inspect profile candidates.</p>
           )}
         </article>
 
@@ -1875,6 +2660,10 @@ INSERT PROFILE HERE
           color: var(--text-tertiary);
         }
 
+        .workspace-field-span-2 {
+          grid-column: span 2;
+        }
+
         .workspace-field select,
         .workspace-field input,
         .workspace-card textarea {
@@ -1985,6 +2774,50 @@ INSERT PROFILE HERE
           gap: var(--space-2);
         }
 
+        .workspace-list-item-stack {
+          align-items: start;
+        }
+
+        .workspace-pill {
+          border-radius: var(--radius-full);
+          border: 1px solid var(--border-medium);
+          padding: 0.125rem 0.5rem;
+          font-size: var(--text-xs);
+          background: var(--bg-primary);
+          color: var(--text-secondary);
+        }
+
+        .workspace-candidate-group {
+          display: grid;
+          gap: var(--space-2);
+        }
+
+        .workspace-candidate-details {
+          border: 1px solid var(--border-light);
+          border-radius: var(--radius-md);
+          background: var(--bg-secondary);
+          padding: var(--space-2) var(--space-3);
+        }
+
+        .workspace-candidate-summary {
+          list-style: none;
+          cursor: pointer;
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          gap: var(--space-2);
+        }
+
+        .workspace-candidate-summary::-webkit-details-marker {
+          display: none;
+        }
+
+        .workspace-candidate-body {
+          display: grid;
+          gap: var(--space-3);
+          padding-top: var(--space-3);
+        }
+
         .workspace-table-wrap {
           overflow-x: auto;
         }
@@ -2026,6 +2859,10 @@ INSERT PROFILE HERE
           .workspace-grid,
           .workspace-grid-wide {
             grid-template-columns: 1fr;
+          }
+
+          .workspace-field-span-2 {
+            grid-column: span 1;
           }
         }
       `}</style>

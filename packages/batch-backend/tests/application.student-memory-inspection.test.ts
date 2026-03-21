@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 
 import {
   getStudentMemoryOverview,
+  listStudentProfileCandidatesForStudent,
   listStudentMemorySnapshotsForStudent,
 } from '../src/application/student-memory-inspection.js';
 
@@ -99,6 +100,55 @@ describe('application/student-memory-inspection', () => {
       order: 'asc',
       statuses: ['ready'],
       items: [{ id: 'snapshot-1', status: 'ready' }],
+    });
+  });
+
+  it('returns paginated profile-candidate inspection with review-state filters', async () => {
+    const list = vi.fn().mockResolvedValue({
+      items: [
+        {
+          id: 'candidate-1',
+          status: 'pending_review',
+          reviewState: 'deferred',
+        },
+      ],
+      total: 1,
+      limit: 10,
+      offset: 0,
+      order: 'asc',
+    });
+
+    const result = await listStudentProfileCandidatesForStudent({
+      studentId: 'student-1',
+      statuses: ['pending_review'],
+      reviewStates: ['deferred'],
+      limit: 10,
+      offset: 0,
+      order: 'asc',
+      overrides: {
+        students: {
+          getById: vi.fn().mockResolvedValue({ id: 'student-1' }),
+        },
+        profileCandidates: {
+          list,
+        },
+      },
+    });
+
+    expect(list).toHaveBeenCalledWith({
+      studentId: 'student-1',
+      statuses: ['pending_review'],
+      reviewStates: ['deferred'],
+      limit: 10,
+      offset: 0,
+      order: 'asc',
+    });
+    expect(result).toMatchObject({
+      studentId: 'student-1',
+      statuses: ['pending_review'],
+      reviewStates: ['deferred'],
+      items: [{ id: 'candidate-1', reviewState: 'deferred' }],
+      total: 1,
     });
   });
 });

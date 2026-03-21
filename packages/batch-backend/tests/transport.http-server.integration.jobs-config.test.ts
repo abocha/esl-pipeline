@@ -693,6 +693,28 @@ describeHttpServerIntegrationSuite(
       });
     });
 
+    it('POST /students accepts starterProfile payload', async () => {
+      const response = await app.inject({
+        method: 'POST',
+        url: '/students',
+        payload: {
+          student: 'Starter Student',
+          starterProfile: {
+            goals: 'Speak more confidently in meetings.',
+            professionOrContext: 'Works with clients in IT.',
+            interests: 'Likes travel and films.',
+            longRunningChallenges: 'Needs more tense stability.',
+            studyPreferencesOrConstraints: 'Prefers structured explanations.',
+          },
+        },
+      });
+
+      expect(response.statusCode).toBe(201);
+      expect(response.json()).toMatchObject({
+        student: expect.any(String),
+      });
+    });
+
     it('PUT /students/:id updates a student profile', async () => {
       const response = await app.inject({
         method: 'PUT',
@@ -752,6 +774,95 @@ describeHttpServerIntegrationSuite(
         limit: 20,
         offset: 0,
         order: 'desc',
+      });
+    });
+
+    it('GET /students/:id/profile-candidates returns candidate list payload', async () => {
+      const response = await app.inject({
+        method: 'GET',
+        url: `/students/${deriveStudentId('Anna')}/profile-candidates?reviewState=approved`,
+      });
+
+      expect(response.statusCode).toBe(200);
+      expect(response.json()).toEqual({
+        studentId: deriveStudentId('Anna'),
+        items: [],
+        total: 0,
+        limit: 50,
+        offset: 0,
+        order: 'desc',
+        statuses: null,
+        reviewStates: null,
+      });
+    });
+
+    it('POST /students/:id/profile-candidates/:candidateId/approve approves a candidate', async () => {
+      const response = await app.inject({
+        method: 'POST',
+        url: `/students/${deriveStudentId('Anna')}/profile-candidates/candidate-1/approve`,
+        payload: {
+          approvedFact: 'Wants to speak English more confidently at work.',
+        },
+      });
+
+      expect(response.statusCode).toBe(200);
+      expect(response.json()).toMatchObject({
+        id: 'candidate-1',
+        status: 'approved',
+        reviewState: 'approved',
+      });
+    });
+
+    it('POST /students/:id/profile-candidates/:candidateId/reject rejects a candidate', async () => {
+      const response = await app.inject({
+        method: 'POST',
+        url: `/students/${deriveStudentId('Anna')}/profile-candidates/candidate-1/reject`,
+        payload: {
+          reviewerNote: 'Too tentative for the profile.',
+        },
+      });
+
+      expect(response.statusCode).toBe(200);
+      expect(response.json()).toMatchObject({
+        id: 'candidate-1',
+        status: 'rejected',
+        reviewState: 'rejected',
+      });
+    });
+
+    it('POST /students/:id/profile-candidates/:candidateId/defer defers a candidate', async () => {
+      const response = await app.inject({
+        method: 'POST',
+        url: `/students/${deriveStudentId('Anna')}/profile-candidates/candidate-1/defer`,
+        payload: {
+          reviewerNote: 'Need another lesson first.',
+        },
+      });
+
+      expect(response.statusCode).toBe(200);
+      expect(response.json()).toMatchObject({
+        id: 'candidate-1',
+        status: 'pending_review',
+        reviewState: 'deferred',
+      });
+    });
+
+    it('POST /students/:id/profile-candidates/promote creates a draft revision from explicit selection', async () => {
+      const response = await app.inject({
+        method: 'POST',
+        url: `/students/${deriveStudentId('Anna')}/profile-candidates/promote`,
+        payload: {
+          candidateIds: ['candidate-1'],
+        },
+      });
+
+      expect(response.statusCode).toBe(200);
+      expect(response.json()).toEqual({
+        draftRevisionId: 'profile-revision-draft',
+        profileId: 'profiles/anna.md',
+        includedCandidateIds: ['candidate-1'],
+        excludedCandidateIds: [],
+        contentHash: 'profile-draft-hash',
       });
     });
 

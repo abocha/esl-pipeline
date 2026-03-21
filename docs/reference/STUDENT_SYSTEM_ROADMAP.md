@@ -89,6 +89,29 @@
   - destructive-action guardrails
   - smoother tutor workflow ergonomics
 
+### Phase F: Teacher-verified profile enrichment
+
+- status: planned
+- target outcome:
+  - starter teacher-authored profile at student creation
+  - generated candidate durable profile facts from canonical student memory
+  - teacher review before promotion into foundational profile revisions
+- active plan:
+  - [`docs/plans/student-profile-enrichment/README.md`](../plans/student-profile-enrichment/README.md)
+
+### Phase G: Live transition and operator adoption
+
+- status: planned
+- target outcome:
+  - safe mixed-state operation while legacy overloaded profiles still exist
+  - one-student-at-a-time normalization into the new profile-plus-memory model
+  - operator runbook for live adoption
+- note:
+  - this is a temporary transition layer, not a new permanent architecture tier
+- active docs:
+  - [`docs/plans/student-profile-enrichment/phase-5-live-transition-and-operator-adoption.md`](../plans/student-profile-enrichment/phase-5-live-transition-and-operator-adoption.md)
+  - [`docs/operations/legacy-profile-normalization.md`](../operations/legacy-profile-normalization.md)
+
 ## Cross-Phase Rules
 
 1. Keep active routes backward-compatible unless explicitly versioned.

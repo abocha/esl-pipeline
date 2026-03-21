@@ -10,10 +10,12 @@ import {
   markStudentMemorySnapshotFailed,
   supersedePendingStudentMemorySnapshotsForStudent,
 } from '../domain/student-memory-snapshot-repository.js';
+import { logger } from '../infrastructure/logger.js';
 import {
   generateStudentMemorySnapshot,
   type GenerateStudentMemorySnapshotDependencies,
 } from './student-memory-snapshot-generation.js';
+import { requestStudentProfileCandidateRefresh } from './request-student-profile-candidate-refresh.js';
 import { buildStudentMemorySnapshotPrompt } from './student-memory-snapshot-prompt.js';
 
 export interface ProcessStudentMemorySnapshotJobPayload {
@@ -38,6 +40,9 @@ export interface ProcessStudentMemorySnapshotJobDependencies {
     markFailed: typeof markStudentMemorySnapshotFailed;
     supersedePendingForStudent: typeof supersedePendingStudentMemorySnapshotsForStudent;
   };
+  profileCandidates: {
+    requestRefresh: typeof requestStudentProfileCandidateRefresh;
+  };
   generator: typeof generateStudentMemorySnapshot;
 }
 
@@ -58,6 +63,9 @@ export async function processStudentMemorySnapshotJob(args: {
     getById: getStudentMemorySnapshotById,
     markFailed: markStudentMemorySnapshotFailed,
     supersedePendingForStudent: supersedePendingStudentMemorySnapshotsForStudent,
+  };
+  const profileCandidates = args.overrides?.profileCandidates ?? {
+    requestRefresh: requestStudentProfileCandidateRefresh,
   };
   const generator = args.overrides?.generator ?? generateStudentMemorySnapshot;
 
@@ -110,6 +118,26 @@ export async function processStudentMemorySnapshotJob(args: {
       supersededAt: result.snapshot.generatedAt,
       maxGeneratedAt: pendingEntry.generatedAt,
     });
+
+    try {
+      await profileCandidates.requestRefresh({
+        params: {
+          studentId: args.payload.studentId,
+          sourceSnapshotId: result.snapshot.id,
+          trigger:
+            args.payload.trigger === 'manual-replay'
+              ? 'manual-replay'
+              : 'student-memory-snapshot-ready',
+        },
+      });
+    } catch (enqueueError) {
+      logger.warn('Student profile candidate refresh enqueue failed; continuing', {
+        event: 'student_profile_candidate_refresh_enqueue_failed',
+        studentId: args.payload.studentId,
+        sourceSnapshotId: result.snapshot.id,
+        error: enqueueError instanceof Error ? enqueueError.message : String(enqueueError),
+      });
+    }
   } catch (error) {
     await markFailureIfFinalAttempt({
       payload: args.payload,
