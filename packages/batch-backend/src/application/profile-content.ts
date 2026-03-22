@@ -12,6 +12,7 @@ import {
 import type {
   ProfileRevisionRecord,
   ProfileRevisionSource,
+  RevisionStatus,
 } from '../domain/profile-revision-model.js';
 import {
   activateProfileRevision,
@@ -21,6 +22,7 @@ import {
   insertProfileRevision,
   listProfileRevisions,
 } from '../domain/profile-revision-repository.js';
+import { markStudentProfileCandidatesPromotedByRevision } from '../domain/student-profile-candidate-repository.js';
 import type { PromptOption } from './prompt-options.js';
 
 const PROFILE_EXTENSIONS = new Set(['.md', '.txt']);
@@ -83,12 +85,20 @@ interface ProfileContentDependencies {
     upsert: typeof upsertProfile;
     setActive: typeof setProfileActiveRevision;
   };
+  candidates: {
+    markPromotedByRevision: typeof markStudentProfileCandidatesPromotedByRevision;
+  };
 }
 
 interface UpsertProfileContentOptions {
   source?: ProfileRevisionSource;
   createdBy?: string | null;
   restoredFromRevisionId?: string | null;
+}
+
+export interface SaveProfileRevisionContentOptions extends UpsertProfileContentOptions {
+  status?: RevisionStatus;
+  dedupeByHash?: boolean;
 }
 
 export class ProfileContentError extends Error {
@@ -147,6 +157,9 @@ function getDependencies(
       getById: getProfileById,
       upsert: upsertProfile,
       setActive: setProfileActiveRevision,
+    },
+    candidates: overrides?.candidates ?? {
+      markPromotedByRevision: markStudentProfileCandidatesPromotedByRevision,
     },
   };
 }
@@ -208,6 +221,33 @@ async function upsertProfileContentWithRevision(
 ): Promise<ProfileContentResponse> {
   const dependencies = getDependencies(overrides);
   const normalizedProfileId = normalizeProfileId(profileId);
+  const existingProfile = await dependencies.profiles.getById(normalizedProfileId);
+  const label = existingProfile?.label ?? formatProfileLabel(normalizedProfileId);
+  const revision = await saveProfileRevision(profileId, content, overrides, {
+    source: options.source,
+    createdBy: options.createdBy ?? null,
+    restoredFromRevisionId: options.restoredFromRevisionId ?? null,
+    status: 'active',
+    dedupeByHash: options.source !== 'restore',
+  });
+
+  return {
+    id: normalizedProfileId,
+    label,
+    content: revision.content,
+    currentRevisionId: revision.id,
+    updatedAt: revision.createdAt,
+  };
+}
+
+async function saveProfileRevision(
+  profileId: string,
+  content: string,
+  overrides: Partial<ProfileContentDependencies> | undefined,
+  options: SaveProfileRevisionContentOptions,
+): Promise<ProfileRevisionDetailResponse> {
+  const dependencies = getDependencies(overrides);
+  const normalizedProfileId = normalizeProfileId(profileId);
   const normalizedContent = content ?? '';
   const existingProfile = await dependencies.profiles.getById(normalizedProfileId);
   const label = existingProfile?.label ?? formatProfileLabel(normalizedProfileId);
@@ -220,9 +260,10 @@ async function upsertProfileContentWithRevision(
 
   const hash = hashProfileContent(normalizedContent);
   const source = options.source ?? (existingProfile ? 'update' : 'create');
+  const status = options.status ?? 'active';
 
   const existingRevision =
-    source === 'restore'
+    options.dedupeByHash === false || source === 'restore'
       ? null
       : await dependencies.revisions.getLatestByHash(normalizedProfileId, hash);
 
@@ -233,21 +274,22 @@ async function upsertProfileContentWithRevision(
       content: normalizedContent,
       contentHash: hash,
       source,
+      status,
       createdBy: options.createdBy ?? null,
       restoredFromRevisionId: options.restoredFromRevisionId ?? null,
     }));
 
-  await Promise.all([
-    dependencies.revisions.activate(normalizedProfileId, revision.id),
-    dependencies.profiles.setActive(normalizedProfileId, revision.id),
-  ]);
+  if (status === 'active') {
+    await Promise.all([
+      dependencies.revisions.activate(normalizedProfileId, revision.id),
+      dependencies.profiles.setActive(normalizedProfileId, revision.id),
+    ]);
+  }
 
   return {
-    id: normalizedProfileId,
-    label,
+    ...toProfileRevisionSummary(revision),
+    profileId: normalizedProfileId,
     content: revision.content,
-    currentRevisionId: revision.id,
-    updatedAt: revision.createdAt.toISOString(),
   };
 }
 
@@ -293,6 +335,15 @@ export async function upsertProfileContent(
     createdBy: overrides?.createdBy ?? null,
     restoredFromRevisionId: null,
   });
+}
+
+export async function saveProfileRevisionContent(
+  profileId: string,
+  content: string,
+  options: SaveProfileRevisionContentOptions = {},
+  overrides?: Partial<ProfileContentDependencies>,
+): Promise<ProfileRevisionDetailResponse> {
+  return saveProfileRevision(profileId, content, overrides, options);
 }
 
 export async function deleteProfileContent(
@@ -395,6 +446,9 @@ export async function activateProfileRevisionForProfile(
   if (!activated) return null;
 
   await dependencies.profiles.setActive(normalizedProfileId, activated.id);
+  if (activated.source === 'candidate_promotion') {
+    await dependencies.candidates.markPromotedByRevision(activated.id);
+  }
 
   return {
     ...toProfileRevisionSummary(activated),

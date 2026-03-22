@@ -1,0 +1,91 @@
+import type { GenerationProvider } from '@esl-pipeline/contracts';
+
+import type { BatchBackendConfig } from '../config/env.js';
+import {
+  ensurePendingStudentMemorySnapshot,
+  type EnsurePendingStudentMemorySnapshotResult,
+} from '../domain/student-memory-snapshot-repository.js';
+import { createStudentMemoryQueue } from '../infrastructure/student-memory-queue.js';
+import { logger } from '../infrastructure/logger.js';
+import { resolveGenerationCandidates } from './generation-policy.js';
+import { STUDENT_MEMORY_SNAPSHOT_SCHEMA_VERSION } from './student-memory-snapshot-generation.js';
+
+export interface RequestStudentMemorySnapshotRefreshParams {
+  studentId: string;
+  trigger: 'lesson-memory-ready' | 'homework-memory-ready' | 'manual-replay';
+  sourceEntryId?: string | null;
+  providerOverride?: GenerationProvider;
+  modelOverride?: string;
+}
+
+export interface RequestStudentMemorySnapshotRefreshDependencies {
+  snapshots: {
+    ensurePending: typeof ensurePendingStudentMemorySnapshot;
+  };
+  queue: {
+    enqueue: ReturnType<typeof createStudentMemoryQueue>['enqueue'];
+  };
+  now: () => Date;
+}
+
+export async function requestStudentMemorySnapshotRefresh(args: {
+  config: BatchBackendConfig;
+  params: RequestStudentMemorySnapshotRefreshParams;
+  overrides?: Partial<RequestStudentMemorySnapshotRefreshDependencies>;
+}): Promise<EnsurePendingStudentMemorySnapshotResult> {
+  const snapshots = args.overrides?.snapshots ?? {
+    ensurePending: ensurePendingStudentMemorySnapshot,
+  };
+  const queue = args.overrides?.queue ?? createStudentMemoryQueue();
+  const now = args.overrides?.now ?? (() => new Date());
+
+  const candidate = resolveGenerationCandidates({
+    config: args.config.generation,
+    providerOverride: args.params.providerOverride,
+    modelOverride: args.params.modelOverride,
+  })[0];
+  if (!candidate) {
+    throw new Error('No generation candidate is available for student-memory snapshot extraction');
+  }
+
+  const requestedAt = now();
+  const pending = await snapshots.ensurePending({
+    studentId: args.params.studentId,
+    schemaVersion: STUDENT_MEMORY_SNAPSHOT_SCHEMA_VERSION,
+    generatedAt: requestedAt,
+    provider: candidate.provider,
+    model: candidate.model,
+    sourceEntryId: args.params.sourceEntryId ?? null,
+    generationNotes: {
+      trigger: args.params.trigger,
+      sourceEntryId: args.params.sourceEntryId ?? null,
+      requestedAt: requestedAt.toISOString(),
+    },
+  });
+
+  await queue.enqueue(
+    {
+      kind: 'student-memory-snapshot-refresh',
+      studentId: args.params.studentId,
+      pendingEntryId: pending.entry.id,
+      provider: candidate.provider,
+      model: candidate.model,
+      trigger: args.params.trigger,
+      sourceEntryId: args.params.sourceEntryId ?? null,
+    },
+    {
+      jobId: `student-memory-snapshot:${args.params.studentId}:${pending.entry.id}`,
+    },
+  );
+
+  logger.info('Student-memory snapshot refresh requested', {
+    event: 'student_memory_snapshot_refresh_requested',
+    studentId: args.params.studentId,
+    trigger: args.params.trigger,
+    sourceEntryId: args.params.sourceEntryId ?? null,
+    pendingEntryId: pending.entry.id,
+    outcome: pending.outcome,
+  });
+
+  return pending;
+}

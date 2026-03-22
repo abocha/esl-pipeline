@@ -374,8 +374,6 @@
 | `VOICE_ALIGNMENT_V2_ENABLED` | `.env.example` | speech_runtime | `docs/reference/env.md` |
 | `VOICE_ALIGNMENT_V2_MIN_SCORE` | `.env.batch-backend.example` | speech_runtime | `docs/reference/env.md` |
 | `VOICE_ALIGNMENT_V2_MIN_SCORE` | `.env.example` | speech_runtime | `docs/reference/env.md` |
-| `VOICE_ALIGNMENT_V2_PROMPT` | `.env.batch-backend.example` | speech_runtime | `docs/reference/env.md` |
-| `VOICE_ALIGNMENT_V2_PROMPT` | `.env.example` | speech_runtime | `docs/reference/env.md` |
 | `VOICE_ALIGNMENT_V2_STRICT_VALIDATION` | `.env.batch-backend.example` | speech_runtime | `docs/reference/env.md` |
 | `VOICE_ALIGNMENT_V2_STRICT_VALIDATION` | `.env.example` | speech_runtime | `docs/reference/env.md` |
 | `WORKER_CONCURRENCY` | `.env.batch-backend.example` | batch_backend | `packages/batch-backend/README.md` |

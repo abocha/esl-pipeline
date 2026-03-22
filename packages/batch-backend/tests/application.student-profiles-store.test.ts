@@ -33,6 +33,14 @@ function makeRecord(
 
 function createInMemoryDeps(initial: StudentRecord[] = []) {
   const store = new Map<string, StudentRecord>(initial.map((record) => [record.id, record]));
+  const profiles = new Map<
+    string,
+    {
+      id: string;
+      label: string;
+      activeRevisionId: string | null;
+    }
+  >();
 
   return {
     students: {
@@ -118,13 +126,71 @@ function createInMemoryDeps(initial: StudentRecord[] = []) {
       remove: async (id: string) => store.delete(id),
     },
     profiles: {
-      upsert: async () => ({
-        id: 'profile-id',
-        label: 'profile label',
-        activeRevisionId: null,
-        createdAt: new Date('2026-01-01T00:00:00.000Z'),
-        updatedAt: new Date('2026-01-01T00:00:00.000Z'),
-      }),
+      getById: async (id: string) => {
+        const profile = profiles.get(id);
+        return profile
+          ? {
+              ...profile,
+              createdAt: new Date('2026-01-01T00:00:00.000Z'),
+              updatedAt: new Date('2026-01-01T00:00:00.000Z'),
+            }
+          : null;
+      },
+      upsert: async ({
+        id,
+        label,
+        activeRevisionId,
+      }: {
+        id: string;
+        label: string;
+        activeRevisionId?: string | null;
+      }) => {
+        const existing = profiles.get(id);
+        const next = {
+          id,
+          label,
+          activeRevisionId: activeRevisionId ?? existing?.activeRevisionId ?? null,
+        };
+        profiles.set(id, next);
+        return {
+          ...next,
+          createdAt: new Date('2026-01-01T00:00:00.000Z'),
+          updatedAt: new Date('2026-01-01T00:00:00.000Z'),
+        };
+      },
+      saveRevision: async (
+        profileId: string,
+        content: string,
+        options?: {
+          source?: string;
+          status?: 'draft' | 'active' | 'deprecated';
+          createdBy?: string | null;
+        },
+      ) => {
+        const existing = profiles.get(profileId);
+        profiles.set(profileId, {
+          id: profileId,
+          label: existing?.label ?? profileId,
+          activeRevisionId:
+            options?.status === 'active' ? `${profileId}-revision-1` : existing?.activeRevisionId ?? null,
+        });
+        return {
+          id: `${profileId}-revision-1`,
+          profileId,
+          contentHash: 'hash',
+          source: (options?.source as 'create') ?? 'starter_profile_form',
+          status: options?.status ?? 'active',
+          versionNumber: 1,
+          versionLabel: 'v1',
+          activatedAt:
+            options?.status === 'active' ? '2026-01-01T00:00:00.000Z' : null,
+          deprecatedAt: null,
+          createdAt: '2026-01-01T00:00:00.000Z',
+          createdBy: options?.createdBy ?? null,
+          restoredFromRevisionId: null,
+          content,
+        };
+      },
     },
     bindings: {
       setActive: async () => ({
@@ -180,6 +246,82 @@ describe('student-profiles-store', () => {
 
     const missing = await getStudentProfileById(created.id, { deps });
     expect(missing).toBeNull();
+  });
+
+  it('creates an active starter profile revision when starterProfile is provided', async () => {
+    const deps = createInMemoryDeps();
+
+    const created = await createStudentProfile(
+      {
+        student: 'Starter Student',
+        starterProfile: {
+          goals: 'Speak more confidently in meetings.',
+          professionOrContext: 'Works with clients in IT.',
+          interests: 'Likes travel and films.',
+          longRunningChallenges: 'Needs more tense stability.',
+          studyPreferencesOrConstraints: 'Prefers structured explanations.',
+        },
+      },
+      { deps },
+    );
+
+    expect(created.profileId).toBe(`profiles/students/${created.id}.md`);
+
+    const listed = await listStudentProfiles({ limit: 50 }, { deps });
+    expect(listed.items.some((item) => item.id === created.id && item.profileId === created.profileId)).toBe(true);
+  });
+
+  it('creates a starter profile revision and derived profile binding when starterProfile is supplied', async () => {
+    const deps = createInMemoryDeps();
+
+    const created = await createStudentProfile(
+      {
+        student: 'Starter Student',
+        starterProfile: {
+          level: null,
+          goals: 'Speak more confidently in client calls.',
+          professionOrContext: 'Works as a product manager in IT.',
+          interests: 'Pickleball and music production.',
+          longRunningChallenges: 'Needs clearer tense control under pressure.',
+          studyPreferencesOrConstraints: 'Prefers structured explanations and short review loops.',
+          teacherNotes: 'Likes practical work scenarios.',
+        },
+      },
+      { deps },
+    );
+
+    expect(created.profileId).toBe(`profiles/students/${created.id}.md`);
+
+    const loaded = await getStudentProfileById(created.id, { deps });
+    expect(loaded?.profileId).toBe(`profiles/students/${created.id}.md`);
+  });
+
+  it('rejects starterProfile create requests that point at an already active profile', async () => {
+    const deps = createInMemoryDeps();
+    await deps.profiles.upsert({
+      id: 'profiles/existing.md',
+      label: 'Existing',
+      activeRevisionId: 'revision-1',
+    });
+
+    await expect(
+      createStudentProfile(
+        {
+          student: 'Starter Conflict',
+          profileId: 'profiles/existing.md',
+          starterProfile: {
+            goals: 'Goal',
+            professionOrContext: 'Context',
+            interests: 'Interests',
+            longRunningChallenges: 'Challenges',
+            studyPreferencesOrConstraints: 'Preferences',
+          },
+        },
+        { deps },
+      ),
+    ).rejects.toMatchObject({
+      code: 'starter_profile_profile_conflict',
+    });
   });
 
   it('rejects student name changes that would alter the derived ID', async () => {
@@ -300,6 +442,7 @@ describe('student-profiles-store', () => {
             remove: async () => false,
           },
           profiles: {
+            getById: async () => null,
             upsert: async () => ({
               id: 'profiles/audit.md',
               label: 'audit',
@@ -307,6 +450,9 @@ describe('student-profiles-store', () => {
               createdAt: new Date('2026-01-01T00:00:00.000Z'),
               updatedAt: new Date('2026-01-01T00:00:00.000Z'),
             }),
+            saveRevision: async () => {
+              throw new Error('saveRevision should not be called without starterProfile');
+            },
           },
           bindings: {
             setActive: async (params) => {
@@ -381,6 +527,7 @@ describe('student-profiles-store', () => {
             remove: async () => false,
           },
           profiles: {
+            getById: async () => null,
             upsert: async () => ({
               id: 'profiles/original.md',
               label: 'original',
@@ -388,6 +535,9 @@ describe('student-profiles-store', () => {
               createdAt: new Date('2026-01-01T00:00:00.000Z'),
               updatedAt: new Date('2026-01-01T00:00:00.000Z'),
             }),
+            saveRevision: async () => {
+              throw new Error('saveRevision should not be called on unbind');
+            },
           },
           bindings: {
             setActive: async () => {

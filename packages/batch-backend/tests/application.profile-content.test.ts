@@ -1,12 +1,14 @@
 import { describe, expect, it } from 'vitest';
 
 import {
+  activateProfileRevisionForProfile,
   deleteProfileContent,
   getProfileContent,
   getProfileRevisionForProfile,
   listProfileContents,
   listProfileRevisionsForProfile,
   restoreProfileRevision,
+  saveProfileRevisionContent,
   upsertProfileContent,
 } from '../src/application/profile-content.js';
 import type { ProfileRecord } from '../src/domain/profile-model.js';
@@ -22,7 +24,14 @@ function createInMemoryDependencies(seed?: {
     profileId: string;
     content: string;
     contentHash: string;
-    source: 'create' | 'update' | 'restore';
+    source:
+      | 'create'
+      | 'update'
+      | 'restore'
+      | 'starter_profile_form'
+      | 'candidate_promotion'
+      | 'legacy_normalization';
+    status?: 'draft' | 'active' | 'deprecated';
     createdBy?: string | null;
     restoredFromRevisionId?: string | null;
   }): ProfileRevisionRecord => {
@@ -34,11 +43,15 @@ function createInMemoryDependencies(seed?: {
       content: params.content,
       contentHash: params.contentHash,
       source: params.source,
-      status: 'active',
+      status: params.status ?? 'active',
       versionNumber,
       versionLabel: `v${versionNumber}`,
-      activatedAt: new Date('2026-01-01T00:00:00.000Z'),
-      deprecatedAt: null,
+      activatedAt:
+        (params.status ?? 'active') === 'active' ? new Date('2026-01-01T00:00:00.000Z') : null,
+      deprecatedAt:
+        (params.status ?? 'active') === 'deprecated'
+          ? new Date('2026-01-01T00:00:00.000Z')
+          : null,
       createdAt: new Date(`2026-01-01T00:00:0${Math.min(versionNumber, 9)}.000Z`),
       createdBy: params.createdBy ?? null,
       restoredFromRevisionId: params.restoredFromRevisionId ?? null,
@@ -131,6 +144,9 @@ function createInMemoryDependencies(seed?: {
         return next;
       },
     },
+    candidates: {
+      markPromotedByRevision: async (_revisionId: string) => {},
+    },
     revisions: {
       getLatestByHash: async (profileId: string, contentHash: string) =>
         getLatestRevisionByHash(profileId, contentHash),
@@ -139,13 +155,21 @@ function createInMemoryDependencies(seed?: {
         content,
         contentHash,
         source,
+        status,
         createdBy,
         restoredFromRevisionId,
       }: {
         profileId: string;
         content: string;
         contentHash: string;
-        source?: 'create' | 'update' | 'restore';
+        source?:
+          | 'create'
+          | 'update'
+          | 'restore'
+          | 'starter_profile_form'
+          | 'candidate_promotion'
+          | 'legacy_normalization';
+        status?: 'draft' | 'active' | 'deprecated';
         createdBy?: string | null;
         restoredFromRevisionId?: string | null;
       }) => {
@@ -154,14 +178,17 @@ function createInMemoryDependencies(seed?: {
           content,
           contentHash,
           source: source ?? 'update',
+          status,
           createdBy,
           restoredFromRevisionId,
         });
-        for (const current of revisions) {
-          if (current.profileId === profileId && current.status === 'active') {
-            current.status = 'deprecated';
-            current.activatedAt = null;
-            current.deprecatedAt = new Date('2026-01-01T00:00:00.000Z');
+        if ((status ?? 'active') === 'active') {
+          for (const current of revisions) {
+            if (current.profileId === profileId && current.status === 'active') {
+              current.status = 'deprecated';
+              current.activatedAt = null;
+              current.deprecatedAt = new Date('2026-01-01T00:00:00.000Z');
+            }
           }
         }
         revisions.push(revision);
@@ -309,5 +336,59 @@ describe('application/profile-content (DB-only)', () => {
 
     const latest = await getProfileContent('default.md', deps);
     expect(latest?.content).toBe('Version 1');
+  });
+
+  it('creates draft revisions without changing the active revision', async () => {
+    const deps = createInMemoryDependencies({
+      profiles: [{ id: 'default.md', label: 'Default Profile', content: 'Version 1' }],
+    });
+
+    const draft = await saveProfileRevisionContent(
+      'default.md',
+      'Version 2 draft',
+      {
+        source: 'candidate_promotion',
+        status: 'draft',
+        createdBy: 'teacher-1',
+      },
+      deps,
+    );
+
+    expect(draft.status).toBe('draft');
+    expect(draft.source).toBe('candidate_promotion');
+
+    const active = await getProfileContent('default.md', deps);
+    expect(active?.content).toBe('Version 1');
+
+    const revisions = await listProfileRevisionsForProfile('default.md', { order: 'desc' }, deps);
+    expect(revisions?.items[0]?.status).toBe('draft');
+    expect(revisions?.items[1]?.status).toBe('active');
+  });
+
+  it('marks linked approved candidates as promoted when a candidate-promotion revision is activated', async () => {
+    const deps = createInMemoryDependencies({
+      profiles: [{ id: 'default.md', label: 'Default Profile', content: 'Version 1' }],
+    });
+    const markPromotedByRevision = async (revisionId: string) => {
+      promotions.push(revisionId);
+    };
+    const promotions: string[] = [];
+    deps.candidates.markPromotedByRevision = markPromotedByRevision;
+
+    const draft = await saveProfileRevisionContent(
+      'default.md',
+      'Version 2 draft',
+      {
+        source: 'candidate_promotion',
+        status: 'draft',
+        createdBy: 'teacher-1',
+      },
+      deps,
+    );
+
+    const activated = await activateProfileRevisionForProfile('default.md', draft.id, deps);
+
+    expect(activated?.status).toBe('active');
+    expect(promotions).toEqual([draft.id]);
   });
 });

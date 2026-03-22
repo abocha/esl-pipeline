@@ -60,10 +60,28 @@
 | phase/detail | Phase 6 - Frontend, Docs, and Operations | `docs/plans/stt-multi-provider-refactor/phase-6-frontend-docs-and-ops.md` |
 | topic | STT Multi-Provider Refactor | `docs/plans/stt-multi-provider-refactor/README.md` |
 | phase/detail | Verification, Acceptance, and Assumptions | `docs/plans/stt-multi-provider-refactor/verification-acceptance-and-assumptions.md` |
+| phase/detail | Phase 1 - Requirements, Contracts, and Schema Boundaries | `docs/plans/student-memory-system-upgrade/phase-1-requirements-contracts-and-schema-boundaries.md` |
+| phase/detail | Phase 2 - Lesson Memory Pipeline | `docs/plans/student-memory-system-upgrade/phase-2-lesson-memory-pipeline.md` |
+| phase/detail | Phase 3 - Homework Memory Pipeline | `docs/plans/student-memory-system-upgrade/phase-3-homework-memory-pipeline.md` |
+| phase/detail | Phase 4 - Student Rollup and Retrieval Packaging | `docs/plans/student-memory-system-upgrade/phase-4-student-rollup-and-retrieval-packaging.md` |
+| phase/detail | Phase 5 - Prompt Template and Provider Runtime | `docs/plans/student-memory-system-upgrade/phase-5-prompt-template-and-provider-runtime.md` |
+| phase/detail | Phase 6 - Frontend, Ops, Backfill, and Rollout | `docs/plans/student-memory-system-upgrade/phase-6-frontend-ops-backfill-and-rollout.md` |
+| topic | Student Memory System Upgrade | `docs/plans/student-memory-system-upgrade/README.md` |
+| phase/detail | Verification, Acceptance, and Assumptions | `docs/plans/student-memory-system-upgrade/verification-acceptance-and-assumptions.md` |
+| phase/detail | Student Profile Enrichment Implementation Plan | `docs/plans/student-profile-enrichment/implementation.md` |
+| phase/detail | Phase 1: Candidate Fact Pipeline | `docs/plans/student-profile-enrichment/phase-1-candidate-fact-pipeline.md` |
+| phase/detail | Phase 2: Teacher Review Workflow | `docs/plans/student-profile-enrichment/phase-2-teacher-review-workflow.md` |
+| phase/detail | Phase 3: Profile Revision Promotion | `docs/plans/student-profile-enrichment/phase-3-profile-revision-promotion.md` |
+| phase/detail | Phase 4: Starter Profile UX | `docs/plans/student-profile-enrichment/phase-4-starter-profile-ux.md` |
+| phase/detail | Phase 5: Live Transition and Operator Adoption | `docs/plans/student-profile-enrichment/phase-5-live-transition-and-operator-adoption.md` |
+| topic | Student Profile Enrichment and Verification | `docs/plans/student-profile-enrichment/README.md` |
+| phase/detail | Verification, Acceptance, and Assumptions | `docs/plans/student-profile-enrichment/verification-acceptance-and-assumptions.md` |
 | phase/detail | A-Track Telegram UX Audit | `docs/plans/telegram-ops-control-panel-hardening/a-track-ux-audit.md` |
 | phase/detail | A-Track Completion Plan: `A2` Closeout + `A` Durability | `docs/plans/telegram-ops-control-panel-hardening/A2-closeout.md` |
 | phase/detail | A-Track Phase Plan: `A3` UX Activation | `docs/plans/telegram-ops-control-panel-hardening/A3-ux-activation.md` |
 | phase/detail | `A4` Guided Telegram Interaction | `docs/plans/telegram-ops-control-panel-hardening/A4-guided-telegram-interaction.md` |
 | phase/detail | Telegram Bot Future Student-Facing Roadmap (Draft) | `docs/plans/telegram-ops-control-panel-hardening/future-student-facing-roadmap.md` |
+| phase/detail | Plan: Add `/student`, `/jobs`, `/today`, and `/botstatus` to Telegram Ops Bot | `docs/plans/telegram-ops-control-panel-hardening/new-operations.md` |
 | topic | Telegram Ops Control Panel Hardening Plan | `docs/plans/telegram-ops-control-panel-hardening/README.md` |
+| phase/detail | V2 Telegram Ops Bot UX: Summary → Browse → Detail → Share | `docs/plans/telegram-ops-control-panel-hardening/ux-v2.md` |
 | standalone | Versioning Private Contracts Overhaul | `docs/plans/versioning-private-contracts-overhaul.md` |

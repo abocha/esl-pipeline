@@ -13,6 +13,8 @@ packages/orchestrator/configs/students/*.json
 !packages/orchestrator/configs/students/default.json
 docs/templates/*
 !docs/templates/hw_prompt_v4-3_voice-aligned.md
+!docs/templates/hw_prompt_v4-4_voice-aligned.md
+!docs/templates/hw_prompt_v4-5_voice-aligned.md
 
 .kilocode
 .pnpm-store

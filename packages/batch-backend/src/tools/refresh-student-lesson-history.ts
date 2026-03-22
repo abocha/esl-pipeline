@@ -2,89 +2,113 @@ import type { PoolClient } from 'pg';
 
 import type { GenerationProvider } from '@esl-pipeline/contracts';
 
-import {
-  executeGoogleGeneration,
-  executeOpenAiGeneration,
-  executeOpenRouterGeneration,
-} from '../application/generation-providers.js';
-import {
-  type TranscriptAnalysisSnapshot,
-  buildHeuristicTranscriptAnalysis,
-  extractStudentOnlyTranscript,
-  mergeTranscriptAnalysis,
-  resolveStudentTrackTranscriptUri,
-} from '../application/student-lesson-history.js';
+import { requestLessonMemoryGeneration } from '../application/request-lesson-memory-generation.js';
 import { loadBatchBackendEnv } from '../bootstrap/env.js';
 import { type BatchBackendConfig, loadConfig } from '../config/env.js';
 import { withPgClient } from '../infrastructure/db.js';
-import {
-  type TranscriptionStorage,
-  createTranscriptionStorageForUri,
-} from '../infrastructure/transcription-storage.js';
 
-interface TranscriptRow {
-  id: string;
+interface ReplayTargetRow {
+  transcript_id: string;
+  recording_id: string;
   student_id: string;
-  storage_uri: string;
-  summary_json: Record<string, unknown> | null;
+  created_at: Date;
+  has_ready: boolean;
+  has_pending: boolean;
+  has_failed: boolean;
 }
+
+type SelectionMode = 'missing' | 'failed' | 'all';
 
 interface CliOptions {
   limit: number;
-  batchSize: number;
+  selection: SelectionMode;
   provider?: GenerationProvider;
   model?: string;
+  studentId?: string;
+  transcriptId?: string;
   dryRun: boolean;
 }
 
 function parseArgs(argv: string[]): CliOptions {
   const options: CliOptions = {
     limit: 80,
-    batchSize: 8,
+    selection: 'missing',
     dryRun: false,
   };
 
   for (let index = 0; index < argv.length; index += 1) {
     const arg = argv[index];
-    if (!arg) continue;
+    if (!arg) {
+      continue;
+    }
 
     if (arg === '--dry-run') {
       options.dryRun = true;
       continue;
     }
+
     if (arg === '--limit') {
       const value = argv[index + 1];
-      if (!value) throw new Error('Missing value for --limit');
+      if (!value) {
+        throw new Error('Missing value for --limit');
+      }
       options.limit = Math.max(1, Number.parseInt(value, 10) || 80);
       index += 1;
       continue;
     }
-    if (arg === '--batch-size') {
-      const value = argv[index + 1];
-      if (!value) throw new Error('Missing value for --batch-size');
-      options.batchSize = Math.max(1, Math.min(20, Number.parseInt(value, 10) || 8));
+
+    if (arg === '--selection') {
+      const value = argv[index + 1]?.trim().toLowerCase();
+      if (!value) {
+        throw new Error('Missing value for --selection');
+      }
+      if (value !== 'missing' && value !== 'failed' && value !== 'all') {
+        throw new Error('Invalid --selection. Use missing, failed, or all');
+      }
+      options.selection = value;
       index += 1;
       continue;
     }
+
     if (arg === '--provider') {
-      const value = argv[index + 1];
-      if (!value) throw new Error('Missing value for --provider');
-      const normalized = value.trim().toLowerCase();
-      if (
-        normalized !== 'openai' &&
-        normalized !== 'google_ai_studio' &&
-        normalized !== 'openrouter'
-      ) {
+      const value = argv[index + 1]?.trim().toLowerCase();
+      if (!value) {
+        throw new Error('Missing value for --provider');
+      }
+      if (value !== 'openai' && value !== 'google_ai_studio' && value !== 'openrouter') {
         throw new Error('Invalid --provider. Use openai, google_ai_studio, or openrouter');
       }
-      options.provider = normalized;
+      options.provider = value;
       index += 1;
       continue;
     }
+
     if (arg === '--model') {
-      const value = argv[index + 1];
-      if (!value) throw new Error('Missing value for --model');
-      options.model = value.trim();
+      const value = argv[index + 1]?.trim();
+      if (!value) {
+        throw new Error('Missing value for --model');
+      }
+      options.model = value;
+      index += 1;
+      continue;
+    }
+
+    if (arg === '--student-id') {
+      const value = argv[index + 1]?.trim();
+      if (!value) {
+        throw new Error('Missing value for --student-id');
+      }
+      options.studentId = value;
+      index += 1;
+      continue;
+    }
+
+    if (arg === '--transcript-id') {
+      const value = argv[index + 1]?.trim();
+      if (!value) {
+        throw new Error('Missing value for --transcript-id');
+      }
+      options.transcriptId = value;
       index += 1;
       continue;
     }
@@ -95,42 +119,90 @@ function parseArgs(argv: string[]): CliOptions {
   return options;
 }
 
-async function listTranscriptsNeedingAnalysis(limit: number): Promise<TranscriptRow[]> {
+async function listReplayTargets(args: {
+  selection: SelectionMode;
+  limit: number;
+  studentId?: string;
+  transcriptId?: string;
+}): Promise<ReplayTargetRow[]> {
   return withPgClient(async (client: PoolClient) => {
-    const result = await client.query<TranscriptRow>(
+    const values: (string | number)[] = [];
+    const whereClauses = ['r.student_id IS NOT NULL'];
+
+    if (args.studentId) {
+      values.push(args.studentId);
+      whereClauses.push(`r.student_id = $${values.length}`);
+    }
+
+    if (args.transcriptId) {
+      values.push(args.transcriptId);
+      whereClauses.push(`t.id = $${values.length}`);
+    }
+
+    if (!args.transcriptId) {
+      if (args.selection === 'missing') {
+        whereClauses.push(`NOT EXISTS (
+          SELECT 1
+          FROM lesson_memory_entries lme
+          WHERE lme.transcript_id = t.id
+            AND lme.status = 'ready'
+        )`);
+      } else if (args.selection === 'failed') {
+        whereClauses.push(
+          `NOT EXISTS (
+            SELECT 1
+            FROM lesson_memory_entries lme
+            WHERE lme.transcript_id = t.id
+              AND lme.status = 'ready'
+          )`,
+          `EXISTS (
+            SELECT 1
+            FROM lesson_memory_entries lme
+            WHERE lme.transcript_id = t.id
+              AND lme.status = 'failed'
+          )`,
+        );
+      }
+    }
+
+    values.push(args.limit);
+    const limitParam = values.length;
+
+    const result = await client.query<ReplayTargetRow>(
       `
       SELECT
-        t.id,
+        t.id AS transcript_id,
+        t.recording_id,
         r.student_id,
-        t.storage_uri,
-        t.summary_json
+        t.created_at,
+        EXISTS (
+          SELECT 1
+          FROM lesson_memory_entries lme
+          WHERE lme.transcript_id = t.id
+            AND lme.status = 'ready'
+        ) AS has_ready,
+        EXISTS (
+          SELECT 1
+          FROM lesson_memory_entries lme
+          WHERE lme.transcript_id = t.id
+            AND lme.status = 'pending'
+        ) AS has_pending,
+        EXISTS (
+          SELECT 1
+          FROM lesson_memory_entries lme
+          WHERE lme.transcript_id = t.id
+            AND lme.status = 'failed'
+        ) AS has_failed
       FROM transcripts t
       INNER JOIN recordings r ON r.id = t.recording_id
-      WHERE r.student_id IS NOT NULL
-        AND (t.summary_json IS NULL OR NOT (t.summary_json ? 'analysis'))
-      ORDER BY t.created_at DESC
-      LIMIT $1
+      WHERE ${whereClauses.join(' AND ')}
+      ORDER BY t.created_at DESC, t.id DESC
+      LIMIT $${limitParam}
       `,
-      [limit],
+      values,
     );
-    return result.rows;
-  });
-}
 
-async function updateTranscriptSummary(
-  transcriptId: string,
-  summaryJson: Record<string, unknown>,
-): Promise<void> {
-  await withPgClient(async (client: PoolClient) => {
-    await client.query(
-      `
-      UPDATE transcripts
-      SET summary_json = $2::jsonb,
-          updated_at = now()
-      WHERE id = $1
-      `,
-      [transcriptId, JSON.stringify(summaryJson)],
-    );
+    return result.rows;
   });
 }
 
@@ -138,9 +210,11 @@ function resolveModel(config: BatchBackendConfig, provider: GenerationProvider):
   if (provider === 'openai') {
     return config.generation.models.openai.primary;
   }
+
   if (provider === 'google_ai_studio') {
     return config.generation.models.googleAiStudio.primary;
   }
+
   return (
     config.generation.models.openrouter.primary ??
     config.generation.models.openrouter.fallback ??
@@ -149,126 +223,8 @@ function resolveModel(config: BatchBackendConfig, provider: GenerationProvider):
   );
 }
 
-function extractJsonObject(text: string): Record<string, unknown> | null {
-  const direct = text.trim();
-  if (!direct) return null;
-  try {
-    return JSON.parse(direct) as Record<string, unknown>;
-  } catch {
-    // noop
-  }
-
-  const start = direct.indexOf('{');
-  const end = direct.lastIndexOf('}');
-  if (start === -1 || end === -1 || end <= start) return null;
-
-  try {
-    return JSON.parse(direct.slice(start, end + 1)) as Record<string, unknown>;
-  } catch {
-    return null;
-  }
-}
-
-function toAnalysisMap(payload: unknown): Map<string, TranscriptAnalysisSnapshot> {
-  const results = new Map<string, TranscriptAnalysisSnapshot>();
-  if (!payload || typeof payload !== 'object') return results;
-  const items = (payload as { items?: unknown }).items;
-  if (!Array.isArray(items)) return results;
-
-  for (const item of items) {
-    if (!item || typeof item !== 'object') continue;
-    const cast = item as Record<string, unknown>;
-    const transcriptId =
-      typeof cast.transcriptId === 'string' && cast.transcriptId.trim().length > 0
-        ? cast.transcriptId
-        : null;
-    if (!transcriptId) continue;
-
-    const vocabularyFocus = Array.isArray(cast.vocabularyFocus)
-      ? cast.vocabularyFocus.filter((value): value is string => typeof value === 'string')
-      : [];
-    const grammarWatchlist = Array.isArray(cast.grammarWatchlist)
-      ? cast.grammarWatchlist.filter((value): value is string => typeof value === 'string')
-      : [];
-    const lessonSummary = typeof cast.lessonSummary === 'string' ? cast.lessonSummary.trim() : '';
-    const provider = typeof cast.provider === 'string' ? cast.provider.trim() : 'batch_llm';
-    const model = typeof cast.model === 'string' && cast.model.trim() ? cast.model.trim() : null;
-
-    results.set(transcriptId, {
-      version: 1,
-      generatedAt: new Date().toISOString(),
-      provider: provider || 'batch_llm',
-      model,
-      lessonSummary,
-      vocabularyFocus,
-      grammarWatchlist,
-      source: 'batch_llm',
-    });
-  }
-
-  return results;
-}
-
-async function runBatchAnalysis(args: {
-  config: BatchBackendConfig;
-  provider: GenerationProvider;
-  model: string;
-  batch: {
-    transcriptId: string;
-    studentId: string;
-    text: string;
-  }[];
-}): Promise<Map<string, TranscriptAnalysisSnapshot>> {
-  const prompt = [
-    'You analyze ESL student transcripts.',
-    'Return ONLY JSON with this exact schema:',
-    '{"items":[{"transcriptId":"string","lessonSummary":"string","vocabularyFocus":["string"],"grammarWatchlist":["string"],"provider":"string","model":"string|null"}]}',
-    'Rules:',
-    '- lessonSummary: one short sentence focused on student progress/problems.',
-    '- vocabularyFocus: up to 8 words or short phrases the student used repeatedly or struggled with.',
-    '- grammarWatchlist: up to 6 concise grammar issues.',
-    '- Do not include markdown fences.',
-    '',
-    'Input transcripts:',
-    JSON.stringify(
-      args.batch.map((item) => ({
-        transcriptId: item.transcriptId,
-        studentId: item.studentId,
-        text: item.text.slice(0, 2500),
-      })),
-      null,
-      2,
-    ),
-  ].join('\n');
-
-  const request = {
-    model: args.model,
-    prompt,
-    maxOutputTokens: 1500,
-    stream: false,
-  };
-
-  const result =
-    args.provider === 'openai'
-      ? await executeOpenAiGeneration({ config: args.config.generation, request })
-      : args.provider === 'google_ai_studio'
-        ? await executeGoogleGeneration({ config: args.config.generation, request })
-        : await executeOpenRouterGeneration({ config: args.config.generation, request });
-
-  const parsed = extractJsonObject(result.text);
-  return toAnalysisMap(parsed);
-}
-
-function chunk<T>(items: T[], size: number): T[][] {
-  const out: T[][] = [];
-  for (let index = 0; index < items.length; index += size) {
-    out.push(items.slice(index, index + size));
-  }
-  return out;
-}
-
 async function run(): Promise<void> {
-  loadBatchBackendEnv(import.meta.url, 'batch-backend-tool-refresh-lesson-history');
+  loadBatchBackendEnv(import.meta.url, 'batch-backend-tool-refresh-lesson-memory');
   const options = parseArgs(process.argv.slice(2));
   const config = loadConfig();
 
@@ -278,105 +234,76 @@ async function run(): Promise<void> {
 
   const provider = options.provider ?? config.generation.defaultProvider;
   const model = options.model ?? resolveModel(config, provider);
-  const rows = await listTranscriptsNeedingAnalysis(options.limit);
+  const targets = await listReplayTargets({
+    selection: options.selection,
+    limit: options.limit,
+    studentId: options.studentId,
+    transcriptId: options.transcriptId,
+  });
 
-  if (rows.length === 0) {
-    console.log('[lesson-history] no transcripts need analysis');
+  if (targets.length === 0) {
+    console.log('[lesson-memory-refresh] no transcripts matched the requested scope');
     return;
   }
 
-  const prepared: {
-    row: TranscriptRow;
-    studentText: string;
-  }[] = [];
-  for (const row of rows) {
-    try {
-      const studentTrackUri = resolveStudentTrackTranscriptUri(row.summary_json);
+  let requested = 0;
+  let readyExists = 0;
+  let pendingExists = 0;
 
-      let text = '';
-      if (studentTrackUri) {
-        try {
-          const studentTrackStorage: TranscriptionStorage =
-            createTranscriptionStorageForUri(studentTrackUri);
-          text = await studentTrackStorage.getText(studentTrackUri);
-        } catch {
-          text = '';
-        }
-      }
-
-      if (!text.trim()) {
-        const storage: TranscriptionStorage = createTranscriptionStorageForUri(row.storage_uri);
-        text = await storage.getText(row.storage_uri);
-      }
-
-      const studentOnly = extractStudentOnlyTranscript(text);
-      prepared.push({
-        row,
-        studentText: studentOnly.trim().length > 0 ? studentOnly : text,
-      });
-    } catch {
-      prepared.push({
-        row,
-        studentText: '',
-      });
+  for (const target of targets) {
+    if (options.dryRun) {
+      console.log(
+        [
+          '[lesson-memory-refresh][dry-run]',
+          `transcript=${target.transcript_id}`,
+          `recording=${target.recording_id}`,
+          `student=${target.student_id}`,
+          `hasReady=${target.has_ready}`,
+          `hasPending=${target.has_pending}`,
+          `hasFailed=${target.has_failed}`,
+        ].join(' '),
+      );
+      continue;
     }
+
+    const result = await requestLessonMemoryGeneration({
+      config,
+      params: {
+        studentId: target.student_id,
+        transcriptId: target.transcript_id,
+        recordingId: target.recording_id,
+        trigger: 'replay',
+        providerOverride: provider,
+        modelOverride: model,
+      },
+    });
+
+    if (!result) {
+      continue;
+    }
+
+    if (result.outcome === 'ready_exists') {
+      readyExists += 1;
+      continue;
+    }
+
+    if (result.outcome === 'pending_exists') {
+      pendingExists += 1;
+      continue;
+    }
+
+    requested += 1;
   }
 
-  let updated = 0;
-  let llmGenerated = 0;
-  let heuristicGenerated = 0;
-
-  for (const batchRows of chunk(prepared, options.batchSize)) {
-    const batchInput = batchRows.map((item) => ({
-      transcriptId: item.row.id,
-      studentId: item.row.student_id,
-      text: item.studentText,
-    }));
-
-    let llmMap = new Map<string, TranscriptAnalysisSnapshot>();
-    try {
-      llmMap = await runBatchAnalysis({
-        config,
-        provider,
-        model,
-        batch: batchInput,
-      });
-    } catch {
-      llmMap = new Map<string, TranscriptAnalysisSnapshot>();
-    }
-
-    for (const item of batchRows) {
-      const llmAnalysis = llmMap.get(item.row.id);
-      const analysis =
-        llmAnalysis ??
-        buildHeuristicTranscriptAnalysis({
-          text: item.studentText,
-          provider: 'heuristic',
-          model: null,
-        });
-
-      if (analysis.source === 'batch_llm') {
-        llmGenerated += 1;
-      } else {
-        heuristicGenerated += 1;
-      }
-
-      const merged = mergeTranscriptAnalysis(item.row.summary_json, analysis);
-      if (!options.dryRun) {
-        await updateTranscriptSummary(item.row.id, merged);
-      }
-      updated += 1;
-    }
-  }
-
-  console.log(`[lesson-history] provider=${provider} model=${model}`);
-  console.log(`[lesson-history] processed=${rows.length} updated=${updated}`);
-  console.log(`[lesson-history] llm=${llmGenerated} heuristic=${heuristicGenerated}`);
-  console.log(`[lesson-history] dryRun=${options.dryRun}`);
+  console.log(`[lesson-memory-refresh] provider=${provider} model=${model}`);
+  console.log(
+    `[lesson-memory-refresh] selection=${options.selection} processed=${targets.length} requested=${requested} readyExists=${readyExists} pendingExists=${pendingExists}`,
+  );
+  console.log(`[lesson-memory-refresh] dryRun=${options.dryRun}`);
 }
 
-run().catch((error) => {
+void run().catch((error) => {
   const message = error instanceof Error ? error.message : String(error);
-  console.error(`[lesson-history] failed: ${message}`);
+  console.error(`[lesson-memory-refresh] failed: ${message}`);
   process.exitCode = 1;
 });

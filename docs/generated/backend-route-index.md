@@ -67,6 +67,15 @@
 | PUT | `/students/:id` | `packages/batch-backend/src/transport/extended-routes/students-routes.ts` |
 | GET | `/students/:id/bindings` | `packages/batch-backend/src/transport/extended-routes/students-routes.ts` |
 | GET | `/students/:id/bindings/active` | `packages/batch-backend/src/transport/extended-routes/students-routes.ts` |
+| GET | `/students/:id/homework-memory` | `packages/batch-backend/src/transport/extended-routes/students-routes.ts` |
+| GET | `/students/:id/lesson-memory` | `packages/batch-backend/src/transport/extended-routes/students-routes.ts` |
+| GET | `/students/:id/memory` | `packages/batch-backend/src/transport/extended-routes/students-routes.ts` |
+| GET | `/students/:id/memory-snapshots` | `packages/batch-backend/src/transport/extended-routes/students-routes.ts` |
+| GET | `/students/:id/profile-candidates` | `packages/batch-backend/src/transport/extended-routes/students-routes.ts` |
+| POST | `/students/:id/profile-candidates/:candidateId/approve` | `packages/batch-backend/src/transport/extended-routes/students-routes.ts` |
+| POST | `/students/:id/profile-candidates/:candidateId/defer` | `packages/batch-backend/src/transport/extended-routes/students-routes.ts` |
+| POST | `/students/:id/profile-candidates/:candidateId/reject` | `packages/batch-backend/src/transport/extended-routes/students-routes.ts` |
+| POST | `/students/:id/profile-candidates/promote` | `packages/batch-backend/src/transport/extended-routes/students-routes.ts` |
 | GET | `/students/:id/timeline` | `packages/batch-backend/src/transport/extended-routes/students-routes.ts` |
 | GET | `/students/summary` | `packages/batch-backend/src/transport/extended-routes/students-routes.ts` |
 | GET | `/templates` | `packages/batch-backend/src/transport/extended-routes/profiles-templates-routes.ts` |

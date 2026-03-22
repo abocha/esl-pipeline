@@ -33,6 +33,15 @@
 - primary: `gemini-3-flash-preview`
 - fallback: `gemini-2.5-flash-lite`
 - tertiary fallback: `gemini-2.5-pro`
+- deprecated/removed from roster:
+  - `gemini-3-pro-preview` (deprecated and shut down on March 9, 2026)
+- current allowlisted roster for text generation:
+  - `gemini-3.1-pro-preview`
+  - `gemini-3-flash-preview`
+  - `gemini-3.1-flash-lite-preview`
+  - `gemini-2.5-pro`
+  - `gemini-2.5-flash`
+  - `gemini-2.5-flash-lite`
 
 ### OpenRouter
 
@@ -80,9 +89,13 @@ Additional rules:
 - `POST /generation/drafts` may accept provider/model overrides
 - responses must retain provider/model/quota context for auditability
 - preset semantics and provider semantics must stay decoupled
+- student-memory extraction capability is governed separately by
+  [`docs/reference/STUDENT_MEMORY_EXTRACTION_CAPABILITY_POLICY.md`](STUDENT_MEMORY_EXTRACTION_CAPABILITY_POLICY.md)
 
 ## Detailed Provider References
 
+- [`docs/reference/STUDENT_MEMORY_EXTRACTION_CAPABILITY_POLICY.md`](STUDENT_MEMORY_EXTRACTION_CAPABILITY_POLICY.md)
+- [`docs/reference/STUDENT_MEMORY_EXTRACTION_SCHEMA_SPEC.md`](STUDENT_MEMORY_EXTRACTION_SCHEMA_SPEC.md)
 - [`docs/reference/OPENAI_RESPONSES_WS2B_PROFILE.md`](OPENAI_RESPONSES_WS2B_PROFILE.md)
 - [`docs/reference/GOOGLE_GENAI_WS2B_PROFILE.md`](GOOGLE_GENAI_WS2B_PROFILE.md)
 - [`docs/reference/OPENROUTER_WS2B_PROFILE.md`](OPENROUTER_WS2B_PROFILE.md)

@@ -28,6 +28,7 @@ import {
   maybeRunTtsCacheMaintenanceWithPgLock,
   withTtsCacheActivitySharedLock,
 } from '../infrastructure/tts-cache-maintenance-coordinator.js';
+import { requestHomeworkMemoryGeneration } from './request-homework-memory-generation.js';
 
 // processQueueJob.declaration()
 export async function processQueueJob(payload: QueueJobPayload): Promise<void> {
@@ -230,6 +231,20 @@ export async function processQueueJob(payload: QueueJobPayload): Promise<void> {
 
     if (succeeded) {
       publishJobEvent({ type: 'job_state_changed', job: succeeded });
+      if (succeeded.studentId && (config as { generation?: unknown }).generation) {
+        void requestHomeworkMemoryGeneration({
+          config,
+          params: {
+            jobId,
+            studentId: succeeded.studentId ?? null,
+          },
+        }).catch((enqueueError) => {
+          log.warn('Homework-memory enqueue failed after publish success; continuing', {
+            event: 'homework_memory_enqueue_failed_non_blocking',
+            error: enqueueError instanceof Error ? enqueueError.message : String(enqueueError),
+          });
+        });
+      }
       log.info('Job processed successfully', {
         manifestPath: result.manifestPath,
       });

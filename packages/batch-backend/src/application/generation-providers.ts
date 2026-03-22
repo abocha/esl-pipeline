@@ -9,8 +9,29 @@ export interface ProviderExecutionRequest {
   stream?: boolean;
 }
 
+export interface StructuredOutputSchema {
+  name: string;
+  description?: string;
+  schema: Record<string, unknown>;
+  strict?: boolean;
+}
+
+export interface ProviderStructuredExecutionRequest {
+  model: string;
+  prompt: string;
+  responseSchema: StructuredOutputSchema;
+  maxOutputTokens?: number;
+}
+
 export interface ProviderExecutionResult {
   text: string;
+  providerRequestId?: string;
+  usage?: GenerateDraftUsage;
+}
+
+export interface ProviderStructuredExecutionResult {
+  output: unknown;
+  rawText: string;
   providerRequestId?: string;
   usage?: GenerateDraftUsage;
 }
@@ -69,6 +90,41 @@ function parseErrorMessage(errorBody: unknown, fallback: string): string {
   }
 
   return fallback;
+}
+
+function extractJsonValue(text: string): unknown {
+  const direct = text.trim();
+  if (!direct) {
+    throw new Error('Structured output text was empty');
+  }
+
+  try {
+    return JSON.parse(direct);
+  } catch {
+    // noop
+  }
+
+  const objectStart = direct.indexOf('{');
+  const objectEnd = direct.lastIndexOf('}');
+  if (objectStart !== -1 && objectEnd !== -1 && objectEnd > objectStart) {
+    try {
+      return JSON.parse(direct.slice(objectStart, objectEnd + 1));
+    } catch {
+      // noop
+    }
+  }
+
+  const arrayStart = direct.indexOf('[');
+  const arrayEnd = direct.lastIndexOf(']');
+  if (arrayStart !== -1 && arrayEnd !== -1 && arrayEnd > arrayStart) {
+    try {
+      return JSON.parse(direct.slice(arrayStart, arrayEnd + 1));
+    } catch {
+      // noop
+    }
+  }
+
+  throw new Error('Structured output text did not contain valid JSON');
 }
 
 function setUsageField<Key extends keyof GenerateDraftUsage>(
@@ -364,6 +420,117 @@ export async function executeOpenAiGeneration(args: {
   };
 }
 
+export async function executeOpenAiStructuredGeneration(args: {
+  config: BatchBackendConfig['generation'];
+  request: ProviderStructuredExecutionRequest;
+}): Promise<ProviderStructuredExecutionResult> {
+  const apiKey = args.config.providers.openai.apiKey;
+  if (!apiKey) {
+    throw new ProviderExecutionError({
+      provider: 'openai',
+      message: 'OPENAI_API_KEY is not configured',
+      status: 401,
+      code: 'missing_api_key',
+    });
+  }
+
+  const response = await fetchWithTimeout(
+    'https://api.openai.com/v1/responses',
+    {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${apiKey}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        model: args.request.model,
+        input: args.request.prompt,
+        stream: false,
+        text: {
+          format: {
+            type: 'json_schema',
+            name: args.request.responseSchema.name,
+            schema: args.request.responseSchema.schema,
+            strict: args.request.responseSchema.strict ?? true,
+            ...(typeof args.request.responseSchema.description === 'string'
+              ? { description: args.request.responseSchema.description }
+              : {}),
+          },
+        },
+        ...(typeof args.request.maxOutputTokens === 'number'
+          ? { max_output_tokens: args.request.maxOutputTokens }
+          : {}),
+      }),
+    },
+    args.config.providers.openai.requestTimeoutMs,
+  );
+
+  let payload: unknown;
+  try {
+    payload = await response.json();
+  } catch {
+    throw new ProviderExecutionError({
+      provider: 'openai',
+      message: `OpenAI returned non-JSON response (HTTP ${response.status})`,
+      status: response.status,
+      code: 'malformed_payload',
+    });
+  }
+
+  if (!response.ok) {
+    const cast = payload as Record<string, unknown>;
+    const errorBlock = cast.error as Record<string, unknown> | undefined;
+    throw new ProviderExecutionError({
+      provider: 'openai',
+      message: parseErrorMessage(payload, `OpenAI request failed (HTTP ${response.status})`),
+      status: response.status,
+      code:
+        (typeof errorBlock?.code === 'string' ? errorBlock.code : undefined) ??
+        (typeof cast.code === 'string' ? cast.code : undefined),
+    });
+  }
+
+  if (!payload || typeof payload !== 'object') {
+    throw new ProviderExecutionError({
+      provider: 'openai',
+      message: 'OpenAI returned malformed payload',
+      status: 502,
+      code: 'malformed_payload',
+    });
+  }
+
+  const cast = payload as Record<string, unknown>;
+  const rawText = extractOpenAiText(cast);
+  if (!rawText) {
+    throw new ProviderExecutionError({
+      provider: 'openai',
+      message: 'OpenAI structured response did not contain output text',
+      status: 502,
+      code: 'malformed_payload',
+    });
+  }
+
+  let output: unknown;
+  try {
+    output = extractJsonValue(rawText);
+  } catch (error) {
+    throw new ProviderExecutionError({
+      provider: 'openai',
+      message:
+        error instanceof Error ? error.message : 'OpenAI structured response JSON parsing failed',
+      status: 502,
+      code: 'malformed_structured_output',
+    });
+  }
+
+  return {
+    output,
+    rawText,
+    providerRequestId: typeof cast.id === 'string' ? cast.id : undefined,
+    usage: parseOpenAiUsage(cast),
+  };
+}
+
 export async function executeGoogleGeneration(args: {
   config: BatchBackendConfig['generation'];
   request: ProviderExecutionRequest;
@@ -451,6 +618,120 @@ export async function executeGoogleGeneration(args: {
 
   return {
     text,
+    providerRequestId: typeof cast.responseId === 'string' ? cast.responseId : undefined,
+    usage: parseGoogleUsage(cast),
+  };
+}
+
+export async function executeGoogleStructuredGeneration(args: {
+  config: BatchBackendConfig['generation'];
+  request: ProviderStructuredExecutionRequest;
+}): Promise<ProviderStructuredExecutionResult> {
+  const apiKey = args.config.providers.googleAiStudio.apiKey;
+  if (!apiKey) {
+    throw new ProviderExecutionError({
+      provider: 'google_ai_studio',
+      message: 'GEMINI_API_KEY is not configured',
+      status: 401,
+      code: 'missing_api_key',
+    });
+  }
+
+  const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(args.request.model)}:generateContent?key=${encodeURIComponent(apiKey)}`;
+  const generationConfig: Record<string, unknown> = {
+    responseMimeType: 'application/json',
+    responseJsonSchema: args.request.responseSchema.schema,
+  };
+  if (typeof args.request.maxOutputTokens === 'number') {
+    generationConfig.maxOutputTokens = args.request.maxOutputTokens;
+  }
+
+  const response = await fetchWithTimeout(
+    endpoint,
+    {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        contents: [
+          {
+            role: 'user',
+            parts: [{ text: args.request.prompt }],
+          },
+        ],
+        generationConfig,
+      }),
+    },
+    args.config.providers.googleAiStudio.requestTimeoutMs,
+  );
+
+  let payload: unknown;
+  try {
+    payload = await response.json();
+  } catch {
+    throw new ProviderExecutionError({
+      provider: 'google_ai_studio',
+      message: `Google AI Studio returned non-JSON response (HTTP ${response.status})`,
+      status: response.status,
+      code: 'malformed_payload',
+    });
+  }
+
+  if (!response.ok) {
+    const cast = payload as Record<string, unknown>;
+    const errorBlock = cast.error as Record<string, unknown> | undefined;
+    throw new ProviderExecutionError({
+      provider: 'google_ai_studio',
+      message: parseErrorMessage(
+        payload,
+        `Google AI Studio request failed (HTTP ${response.status})`,
+      ),
+      status: response.status,
+      code:
+        (typeof errorBlock?.status === 'string' ? errorBlock.status : undefined) ??
+        (typeof cast.status === 'string' ? cast.status : undefined),
+    });
+  }
+
+  if (!payload || typeof payload !== 'object') {
+    throw new ProviderExecutionError({
+      provider: 'google_ai_studio',
+      message: 'Google AI Studio returned malformed payload',
+      status: 502,
+      code: 'malformed_payload',
+    });
+  }
+
+  const cast = payload as Record<string, unknown>;
+  const rawText = extractGoogleText(cast);
+  if (!rawText) {
+    throw new ProviderExecutionError({
+      provider: 'google_ai_studio',
+      message: 'Google AI Studio structured response did not contain output text',
+      status: 502,
+      code: 'malformed_payload',
+    });
+  }
+
+  let output: unknown;
+  try {
+    output = extractJsonValue(rawText);
+  } catch (error) {
+    throw new ProviderExecutionError({
+      provider: 'google_ai_studio',
+      message:
+        error instanceof Error
+          ? error.message
+          : 'Google AI Studio structured response JSON parsing failed',
+      status: 502,
+      code: 'malformed_structured_output',
+    });
+  }
+
+  return {
+    output,
+    rawText,
     providerRequestId: typeof cast.responseId === 'string' ? cast.responseId : undefined,
     usage: parseGoogleUsage(cast),
   };
@@ -550,6 +831,132 @@ export async function executeOpenRouterGeneration(args: {
 
   return {
     text,
+    providerRequestId: typeof cast.id === 'string' ? cast.id : undefined,
+    usage: parseOpenRouterUsage(cast),
+  };
+}
+
+export async function executeOpenRouterStructuredGeneration(args: {
+  config: BatchBackendConfig['generation'];
+  request: ProviderStructuredExecutionRequest;
+}): Promise<ProviderStructuredExecutionResult> {
+  const apiKey = args.config.providers.openrouter.apiKey;
+  if (!apiKey) {
+    throw new ProviderExecutionError({
+      provider: 'openrouter',
+      message: 'OPENROUTER_API_KEY is not configured',
+      status: 401,
+      code: 'missing_api_key',
+    });
+  }
+
+  const headers: Record<string, string> = {
+    Authorization: `Bearer ${apiKey}`,
+    'Content-Type': 'application/json',
+  };
+  if (args.config.providers.openrouter.httpReferer) {
+    headers['HTTP-Referer'] = args.config.providers.openrouter.httpReferer;
+  }
+  if (args.config.providers.openrouter.xTitle) {
+    headers['X-Title'] = args.config.providers.openrouter.xTitle;
+  }
+
+  const response = await fetchWithTimeout(
+    'https://openrouter.ai/api/v1/chat/completions',
+    {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({
+        model: args.request.model,
+        stream: false,
+        messages: [
+          {
+            role: 'user',
+            content: args.request.prompt,
+          },
+        ],
+        response_format: {
+          type: 'json_schema',
+          json_schema: {
+            name: args.request.responseSchema.name,
+            strict: args.request.responseSchema.strict ?? true,
+            schema: args.request.responseSchema.schema,
+            ...(typeof args.request.responseSchema.description === 'string'
+              ? { description: args.request.responseSchema.description }
+              : {}),
+          },
+        },
+        ...(typeof args.request.maxOutputTokens === 'number'
+          ? { max_tokens: args.request.maxOutputTokens }
+          : {}),
+      }),
+    },
+    args.config.providers.openrouter.requestTimeoutMs,
+  );
+
+  let payload: unknown;
+  try {
+    payload = await response.json();
+  } catch {
+    throw new ProviderExecutionError({
+      provider: 'openrouter',
+      message: `OpenRouter returned non-JSON response (HTTP ${response.status})`,
+      status: response.status,
+      code: 'malformed_payload',
+    });
+  }
+
+  if (!response.ok) {
+    const cast = payload as Record<string, unknown>;
+    const errorBlock = cast.error as Record<string, unknown> | undefined;
+    throw new ProviderExecutionError({
+      provider: 'openrouter',
+      message: parseErrorMessage(payload, `OpenRouter request failed (HTTP ${response.status})`),
+      status: response.status,
+      code:
+        (typeof errorBlock?.code === 'string' ? errorBlock.code : undefined) ??
+        (typeof cast.code === 'string' ? cast.code : undefined),
+    });
+  }
+
+  if (!payload || typeof payload !== 'object') {
+    throw new ProviderExecutionError({
+      provider: 'openrouter',
+      message: 'OpenRouter returned malformed payload',
+      status: 502,
+      code: 'malformed_payload',
+    });
+  }
+
+  const cast = payload as Record<string, unknown>;
+  const rawText = extractOpenRouterText(cast);
+  if (!rawText) {
+    throw new ProviderExecutionError({
+      provider: 'openrouter',
+      message: 'OpenRouter structured response did not contain output text',
+      status: 502,
+      code: 'malformed_payload',
+    });
+  }
+
+  let output: unknown;
+  try {
+    output = extractJsonValue(rawText);
+  } catch (error) {
+    throw new ProviderExecutionError({
+      provider: 'openrouter',
+      message:
+        error instanceof Error
+          ? error.message
+          : 'OpenRouter structured response JSON parsing failed',
+      status: 502,
+      code: 'malformed_structured_output',
+    });
+  }
+
+  return {
+    output,
+    rawText,
     providerRequestId: typeof cast.id === 'string' ? cast.id : undefined,
     usage: parseOpenRouterUsage(cast),
   };
