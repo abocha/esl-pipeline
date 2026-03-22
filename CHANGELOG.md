@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented here. Dates use `YYYY-MM-DD`.
 
+## [4.6.0] - 2026-03-22
+
+### Changed
+
+- Automated release from PR #46: feat(student-system): implement profile enrichment workflow (https://github.com/abocha/esl-pipeline/pull/46)
+
 ## [4.5.2] - 2026-03-17
 
 ### Changed
