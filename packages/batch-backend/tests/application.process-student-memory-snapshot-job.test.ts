@@ -11,7 +11,7 @@ describe('application/process-student-memory-snapshot-job', () => {
       },
     });
     const supersedePendingForStudent = vi.fn().mockResolvedValue([]);
-    const requestRefresh = vi.fn().mockResolvedValue(undefined);
+    const requestRefresh = vi.fn().mockImplementation(async () => {});
 
     await processStudentMemorySnapshotJob({
       config: {
@@ -143,7 +143,7 @@ describe('application/process-student-memory-snapshot-job', () => {
             supersedePendingForStudent: vi.fn(),
           },
           profileCandidates: {
-            requestRefresh: vi.fn().mockResolvedValue(undefined),
+            requestRefresh: vi.fn().mockImplementation(async () => {}),
           },
           generator: vi.fn().mockRejectedValue(new Error('structured output failed')),
         },
