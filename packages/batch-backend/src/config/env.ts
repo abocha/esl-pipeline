@@ -652,7 +652,7 @@ export function loadConfig(): BatchBackendConfig {
     readString('GEN_SAFETY_MODE', 'hard_stop')!,
   );
   const generationStrictNoPaid = readBool('GEN_STRICT_NO_PAID', true);
-  const generationMaxOutputTokensHard = readInt('GEN_MAX_OUTPUT_TOKENS_HARD', 1200);
+  const generationMaxOutputTokensHard = readInt('GEN_MAX_OUTPUT_TOKENS_HARD', 3200);
   const generationAllowPaidSpend = readBool('GEN_ALLOW_PAID_SPEND', false);
   const generationBudgetEmergencyOverride = generationAllowPaidSpend;
 

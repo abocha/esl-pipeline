@@ -9,6 +9,7 @@ const {
   updateJobStateAndResultSpy,
   runAssignmentJobSpy,
   runRerunAssignmentJobSpy,
+  requestHomeworkMemoryGenerationSpy,
   withTtsCacheActivitySharedLockSpy,
 } = h;
 
@@ -73,6 +74,7 @@ describe('application/process-queue-job', () => {
         signal: expect.any(AbortSignal),
       }),
     );
+    expect(requestHomeworkMemoryGenerationSpy).not.toHaveBeenCalled();
   });
 
   it('defaults rerun force=false when payload and job force settings are omitted', async () => {
@@ -125,6 +127,7 @@ describe('application/process-queue-job', () => {
         signal: expect.any(AbortSignal),
       }),
     );
+    expect(requestHomeworkMemoryGenerationSpy).not.toHaveBeenCalled();
   });
 
   it('processes rerun_publish jobs via rerunAssignment execution path', async () => {

@@ -54,7 +54,7 @@ export async function requestHomeworkMemoryBackfill(args: {
   let requested = 0;
 
   for (const target of args.targets) {
-    await requestHomeworkMemoryGeneration({
+    const result = await requestHomeworkMemoryGeneration({
       config: args.config,
       params: {
         jobId: target.jobId,
@@ -64,7 +64,9 @@ export async function requestHomeworkMemoryBackfill(args: {
         forceRegenerate: args.forceRegenerate ?? false,
       },
     });
-    requested += 1;
+    if (result) {
+      requested += 1;
+    }
   }
 
   return { requested };
@@ -100,6 +102,7 @@ async function listSucceededHomeworkReplayCandidates(args: {
       `j.state = 'succeeded'`,
       'j.student_id IS NOT NULL',
       '(j.md IS NOT NULL OR j.md_storage_uri IS NOT NULL)',
+      'j.source_job_id IS NULL',
     ];
 
     if (args.studentId) {
