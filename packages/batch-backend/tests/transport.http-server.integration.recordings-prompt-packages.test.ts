@@ -673,6 +673,19 @@ describeHttpServerIntegrationSuite(
         notes: 'Some notes',
         storageUri: 'local://prompt-packages/prompt-1.txt',
         text: 'PROMPT TEXT',
+        memory: {
+          studentMemorySnapshotId: null,
+          studentMemorySnapshotHash: null,
+          selectedLessonMemoryIds: [],
+          selectedHomeworkMemoryIds: [],
+          retrievalPolicyVersion: null,
+          layerAvailability: {
+            studentMemorySnapshot: 'not_applicable',
+            recentLessonMemory: 'not_applicable',
+            recentHomeworkMemory: 'not_applicable',
+            retrievalPolicy: 'not_applicable',
+          },
+        },
         createdAt: '2024-01-01T00:00:00.000Z',
         updatedAt: '2024-01-01T00:10:00.000Z',
       });
@@ -694,6 +707,19 @@ describeHttpServerIntegrationSuite(
         notes: 'Some notes',
         storageUri: 'local://prompt-packages/prompt-1.txt',
         text: 'PROMPT TEXT',
+        memory: {
+          studentMemorySnapshotId: null,
+          studentMemorySnapshotHash: null,
+          selectedLessonMemoryIds: [],
+          selectedHomeworkMemoryIds: [],
+          retrievalPolicyVersion: null,
+          layerAvailability: {
+            studentMemorySnapshot: 'not_applicable',
+            recentLessonMemory: 'not_applicable',
+            recentHomeworkMemory: 'not_applicable',
+            retrievalPolicy: 'not_applicable',
+          },
+        },
         createdAt: '2024-01-01T00:00:00.000Z',
         updatedAt: '2024-01-01T00:10:00.000Z',
       });
@@ -758,6 +784,19 @@ describeHttpServerIntegrationSuite(
         notes: 'Some notes',
         storageUri: 'local://prompt-packages/prompt-1.txt',
         text: 'PROMPT TEXT',
+        memory: {
+          studentMemorySnapshotId: null,
+          studentMemorySnapshotHash: null,
+          selectedLessonMemoryIds: [],
+          selectedHomeworkMemoryIds: [],
+          retrievalPolicyVersion: null,
+          layerAvailability: {
+            studentMemorySnapshot: 'missing',
+            recentLessonMemory: 'missing',
+            recentHomeworkMemory: 'missing',
+            retrievalPolicy: 'missing',
+          },
+        },
         createdAt: '2024-01-01T00:00:00.000Z',
         updatedAt: '2024-01-01T00:10:00.000Z',
       });
@@ -778,6 +817,19 @@ describeHttpServerIntegrationSuite(
         notes: 'Some notes',
         storageUri: 'local://prompt-packages/prompt-1.txt',
         text: 'PROMPT TEXT',
+        memory: {
+          studentMemorySnapshotId: null,
+          studentMemorySnapshotHash: null,
+          selectedLessonMemoryIds: [],
+          selectedHomeworkMemoryIds: [],
+          retrievalPolicyVersion: null,
+          layerAvailability: {
+            studentMemorySnapshot: 'missing',
+            recentLessonMemory: 'missing',
+            recentHomeworkMemory: 'missing',
+            retrievalPolicy: 'missing',
+          },
+        },
         createdAt: '2024-01-01T00:00:00.000Z',
         updatedAt: '2024-01-01T00:10:00.000Z',
       });
@@ -851,6 +903,19 @@ describeHttpServerIntegrationSuite(
             updatedAt: '2024-01-01T00:00:00.000Z',
           },
           drift: null,
+        },
+        memory: {
+          studentMemorySnapshotId: null,
+          studentMemorySnapshotHash: null,
+          selectedLessonMemoryIds: [],
+          selectedHomeworkMemoryIds: [],
+          retrievalPolicyVersion: null,
+          layerAvailability: {
+            studentMemorySnapshot: 'missing',
+            recentLessonMemory: 'missing',
+            recentHomeworkMemory: 'missing',
+            retrievalPolicy: 'missing',
+          },
         },
       });
 

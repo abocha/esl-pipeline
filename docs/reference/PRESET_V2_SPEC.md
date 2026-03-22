@@ -29,10 +29,8 @@
 
 ## Current Baseline
 
-- baseline prompt snapshot:
-  - `docs/templates/hw_prompt_v4-2_clean.md`
-- voice-aligned prompt snapshot:
-  - `docs/templates/hw_prompt_v4-4_voice-aligned.md`
+- active prompt snapshot:
+  - `docs/templates/hw_prompt_v4-5_voice-aligned.md`
 - runtime default lineage:
   - learning preset id: `general-english`
   - learning preset version: `v1`
@@ -58,9 +56,8 @@ Every generated draft should retain:
 
 ## Voice-Alignment Rules
 
-When `VOICE_ALIGNMENT_V2_PROMPT=true`:
+The default `general-english` preset uses `hw_prompt_v4-5_voice-aligned`.
 
-- use `hw_prompt_v4-4_voice-aligned`
 - inject capability enums from the current voice catalog snapshot
 - persist capability provenance
 - fail fast if the capability snapshot cannot be resolved
@@ -85,9 +82,17 @@ Out of scope:
 - DB-first entities are the canonical direction.
 - Prompt snapshots remain reference assets, not the long-term source of truth.
 - Frontend/runtime should treat preset choice as a stable contract input, not a model-tier prompt fork.
+- Pedagogical invariants for the current homework track live in
+  [`docs/reference/HOMEWORK_PEDAGOGY_AND_TEMPLATE_SPEC.md`](HOMEWORK_PEDAGOGY_AND_TEMPLATE_SPEC.md).
+- Student-memory extraction capability and exact semantic output schemas live in:
+  - [`docs/reference/STUDENT_MEMORY_EXTRACTION_CAPABILITY_POLICY.md`](STUDENT_MEMORY_EXTRACTION_CAPABILITY_POLICY.md)
+  - [`docs/reference/STUDENT_MEMORY_EXTRACTION_SCHEMA_SPEC.md`](STUDENT_MEMORY_EXTRACTION_SCHEMA_SPEC.md)
 
 ## Related
 
+- [`docs/reference/HOMEWORK_PEDAGOGY_AND_TEMPLATE_SPEC.md`](HOMEWORK_PEDAGOGY_AND_TEMPLATE_SPEC.md)
+- [`docs/reference/STUDENT_MEMORY_EXTRACTION_CAPABILITY_POLICY.md`](STUDENT_MEMORY_EXTRACTION_CAPABILITY_POLICY.md)
+- [`docs/reference/STUDENT_MEMORY_EXTRACTION_SCHEMA_SPEC.md`](STUDENT_MEMORY_EXTRACTION_SCHEMA_SPEC.md)
 - [`docs/reference/GENERATION_PROVIDER_POLICY.md`](GENERATION_PROVIDER_POLICY.md)
 - [`docs/reference/V1_IMPLEMENTATION_TRACKER.md`](V1_IMPLEMENTATION_TRACKER.md)
 - [`docs/reference/PRODUCT_NORTH_STAR_AND_READINESS.md`](PRODUCT_NORTH_STAR_AND_READINESS.md)

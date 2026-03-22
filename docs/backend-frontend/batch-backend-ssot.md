@@ -28,6 +28,7 @@
 It owns:
 
 - Authenticated HTTP surface for recording/transcript/prompt/draft/job workflows.
+- Authenticated student-memory inspection surfaces and prompt-package provenance inspection.
 - Queue-backed job orchestration and worker lifecycle.
 - Persistence of workflow artifacts in Postgres.
 - Integration bridge to orchestrator for final publish execution.
@@ -67,10 +68,15 @@ Env reference: [`docs/reference/env.md`](../reference/env.md)
 - Prompt and drafts:
   - `GET /config/prompts`
   - `POST /recordings/:id/prompt-package`
-  - `GET /prompt-packages/:id`
+  - `GET /prompt-packages/:id` - canonical prompt-package lineage and assignment-level memory provenance inspection surface
   - `POST /prompt-packages/:id/draft`
   - `GET /drafts/:id`
   - `POST /drafts/:id/materialize`
+- Students and student memory:
+  - `GET /students/:id/memory`
+  - `GET /students/:id/lesson-memory`
+  - `GET /students/:id/homework-memory`
+  - `GET /students/:id/memory-snapshots`
 - Jobs and events:
   - `GET /jobs/:id`
   - `POST /jobs/:id/approve`
@@ -129,6 +135,12 @@ Recommended checks when changing backend behavior:
 1. `pnpm --filter @esl-pipeline/batch-backend typecheck`
 2. `pnpm --filter @esl-pipeline/batch-backend test`
 3. Postgres-backed tests in CI must remain green (`postgres tests`, `worker integration`).
+
+Student-memory repair tooling:
+
+1. `pnpm --filter @esl-pipeline/batch-backend lesson-memory:refresh`
+2. `pnpm --filter @esl-pipeline/batch-backend exec tsx --tsconfig tsconfig.json src/tools/refresh-homework-memory.ts`
+3. `pnpm --filter @esl-pipeline/batch-backend exec tsx --tsconfig tsconfig.json src/tools/refresh-student-memory-snapshots.ts`
 
 ## Change Policy
 

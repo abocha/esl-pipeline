@@ -163,7 +163,7 @@ export function createTemplateRevisionRepositoryStub(
       (async (templateId: string) => {
         const contentByTemplateId: Record<string, string> = {
           'template.md': 'Hello\nINSERT PROFILE HERE\nFooter\n',
-          'hw_prompt_v4-4_voice-aligned.md': [
+          'hw_prompt_v4-5_voice-aligned.md': [
             'Header',
             'INSERT PROFILE HERE',
             '```yaml',

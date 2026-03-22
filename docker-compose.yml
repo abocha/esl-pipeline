@@ -166,6 +166,39 @@ services:
       timeout: 3s
       retries: 10
 
+  student-memory-worker:
+    image: esl-pipeline/dev-node-base:local
+    depends_on:
+      deps:
+        condition: service_completed_successfully
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_started
+    volumes:
+      - type: bind
+        source: ./uploads
+        target: /app/uploads
+        bind:
+          create_host_path: false
+      - ./:/app
+      - workspace_node_modules:/app/node_modules
+      - workspace_pnpm_store:/pnpm
+    environment:
+      NODE_ENV: development
+      PIPELINE_CWD: /app
+      FILESYSTEM_UPLOAD_DIR: /app/uploads
+      PNPM_STORE_DIR: /pnpm/store
+      NPM_CONFIG_STORE_DIR: /pnpm/store
+    env_file:
+      - .env.batch-backend
+    command: >
+      sh -lc "
+        pnpm --filter @esl-pipeline/batch-backend dev:student-memory-worker
+      "
+    user: '${UID:-1000}:${GID:-1000}'
+    pull_policy: never
+
   telegram-ops-bot:
     image: esl-pipeline/dev-node-base:local
     depends_on:

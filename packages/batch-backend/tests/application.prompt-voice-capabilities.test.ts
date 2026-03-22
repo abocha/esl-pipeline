@@ -61,7 +61,7 @@ describe('application/prompt-voice-capabilities', () => {
 
     try {
       const result = await materializePromptTemplateWithCapabilities({
-        templateId: 'hw_prompt_v4-4_voice-aligned.md',
+        templateId: 'hw_prompt_v4-5_voice-aligned.md',
         templateContent: TEMPLATE,
       });
 
@@ -93,7 +93,7 @@ describe('application/prompt-voice-capabilities', () => {
 
     try {
       const result = await materializePromptTemplateWithCapabilities({
-        templateId: 'hw_prompt_v4-4_voice-aligned.md',
+        templateId: 'hw_prompt_v4-5_voice-aligned.md',
         templateContent: TEMPLATE,
       });
 

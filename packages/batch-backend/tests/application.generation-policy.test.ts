@@ -140,7 +140,7 @@ describe('application/generation-policy', () => {
             'gemini-2.5-flash-lite',
             'gemini-2.5-flash',
             'gemini-2.5-pro',
-            'gemini-3-pro-preview',
+            'gemini-3.1-pro-preview',
           ],
         },
         openrouter: {
@@ -160,12 +160,12 @@ describe('application/generation-policy', () => {
       'gemini-2.5-flash-lite',
       'gemini-2.5-flash',
       'gemini-2.5-pro',
-      'gemini-3-pro-preview',
+      'gemini-3.1-pro-preview',
     ]);
 
     const options = buildGenerationOptionsPayload({ config });
     const extraModel = options.modelOptions.find(
-      (option) => option.provider === 'google_ai_studio' && option.id === 'gemini-3-pro-preview',
+      (option) => option.provider === 'google_ai_studio' && option.id === 'gemini-3.1-pro-preview',
     );
     expect(extraModel?.tier).toBe('custom');
     expect(extraModel?.defaultSelected).toBe(false);
