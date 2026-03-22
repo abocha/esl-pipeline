@@ -108,6 +108,18 @@ async function assertSchemaHealthy(scenario: string): Promise<void> {
     expect(studentMemorySnapshotColumnSet.has('homework_memory_entry_ids')).toBe(true);
     expect(studentMemorySnapshotColumnSet.has('content_hash')).toBe(true);
     expect(studentMemorySnapshotColumnSet.has('unresolved_issues')).toBe(true);
+
+    const profileRevisionSourceConstraint = await pool.query<{ definition: string }>(
+      `
+      SELECT pg_get_constraintdef(oid) AS definition
+      FROM pg_constraint
+      WHERE conname = 'profile_revisions_source_check'
+      `,
+    );
+    const definition = profileRevisionSourceConstraint.rows[0]?.definition ?? '';
+    expect(definition).toContain('starter_profile_form');
+    expect(definition).toContain('candidate_promotion');
+    expect(definition).toContain('legacy_normalization');
   });
 }
 
