@@ -383,7 +383,7 @@ describe('config/env - generation provider mapping', () => {
         expect(cfg.generation.quotaSourceMode).toBe('hybrid');
         expect(cfg.generation.safetyMode).toBe('hard_stop');
         expect(cfg.generation.strictNoPaid).toBe(true);
-        expect(cfg.generation.maxOutputTokensHard).toBe(1200);
+        expect(cfg.generation.maxOutputTokensHard).toBe(3200);
         expect(cfg.generation.budgetEmergencyOverride).toBe(false);
         expect(cfg.generation.models.openai.primary).toBe('gpt-5.2');
         expect(cfg.generation.providers.openai.dailyTokenBudget).toBe(120000);
