@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented here. Dates use `YYYY-MM-DD`.
 
+## [4.6.1] - 2026-03-22
+
+### Changed
+
+- Automated release from PR #47: fix(batch-backend): harden homework memory replay guards (https://github.com/abocha/esl-pipeline/pull/47)
+
 ## [4.6.0] - 2026-03-22
 
 ### Changed
