@@ -58,6 +58,16 @@ export async function requestHomeworkMemoryGeneration(args: {
   }
 
   const sourceBundle = await source.resolveFromSucceededJob(args.params.jobId);
+  if (sourceBundle.assignmentLineageKey !== args.params.jobId) {
+    logger.info('Homework-memory generation skipped for rerun descendant job', {
+      event: 'homework_memory_generation_skipped_rerun_descendant',
+      jobId: args.params.jobId,
+      assignmentLineageKey: sourceBundle.assignmentLineageKey,
+      studentId: args.params.studentId,
+    });
+    return null;
+  }
+
   const requestedAt = now();
   const pending = await homeworkMemory.ensurePending({
     studentId: sourceBundle.studentId,
@@ -94,7 +104,7 @@ export async function requestHomeworkMemoryGeneration(args: {
         model: candidate.model,
       },
       {
-        jobId: `homework-memory:${args.params.jobId}`,
+        jobId: `homework-memory:${pending.entry.id}`,
       },
     );
   }
