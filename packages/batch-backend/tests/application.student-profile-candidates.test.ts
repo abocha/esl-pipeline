@@ -38,7 +38,7 @@ describe('application/student-profile-candidates', () => {
       updatedAt: new Date('2026-03-22T00:00:00.000Z'),
       ...params,
     }));
-    const supersedePending = vi.fn().mockResolvedValue(undefined);
+    const supersedePending = vi.fn().mockImplementation(async () => {});
 
     const result = await refreshStudentProfileCandidatesFromCanonicalMemory({
       studentId: 'student-1',
