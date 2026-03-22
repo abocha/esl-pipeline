@@ -231,7 +231,11 @@ export async function processQueueJob(payload: QueueJobPayload): Promise<void> {
 
     if (succeeded) {
       publishJobEvent({ type: 'job_state_changed', job: succeeded });
-      if (succeeded.studentId && (config as { generation?: unknown }).generation) {
+      if (
+        !isRerunExecution &&
+        succeeded.studentId &&
+        (config as { generation?: unknown }).generation
+      ) {
         void requestHomeworkMemoryGeneration({
           config,
           params: {

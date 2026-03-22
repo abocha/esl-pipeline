@@ -88,6 +88,12 @@
   - UX hardening
   - destructive-action guardrails
   - smoother tutor workflow ergonomics
+  - operator-facing chronology cleanup in memory overview panels
+    - current `Recent homework memory` can look misleading after backfills because the backend
+      overview selects by homework-memory generation recency while the UI displays assignment
+      `publishedAt`
+    - future UI pass should either sort that overview by `publishedAt DESC` or label the displayed
+      timestamp semantics more explicitly
 
 ### Phase F: Teacher-verified profile enrichment
 

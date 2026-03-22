@@ -5,6 +5,7 @@ import * as jobEvents from '../src/domain/job-events.js';
 import type { JobRecord } from '../src/domain/job-model.js';
 import * as jobRepository from '../src/domain/job-repository.js';
 import * as settingsRepository from '../src/domain/settings-repository.js';
+import * as homeworkMemoryGeneration from '../src/application/request-homework-memory-generation.js';
 import * as loggerModule from '../src/infrastructure/logger.js';
 import * as orchestratorService from '../src/infrastructure/orchestrator-service.js';
 import * as transcriptionStorage from '../src/infrastructure/transcription-storage.js';
@@ -45,6 +46,10 @@ export const withTtsCacheActivitySharedLockSpy = vi.spyOn(
   ttsCacheMaintenanceCoordinator,
   'withTtsCacheActivitySharedLock',
 );
+export const requestHomeworkMemoryGenerationSpy = vi.spyOn(
+  homeworkMemoryGeneration,
+  'requestHomeworkMemoryGeneration',
+);
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -57,6 +62,7 @@ beforeEach(() => {
     remainingBytes: 0,
   });
   withTtsCacheActivitySharedLockSpy.mockImplementation(async (_options, callback) => callback());
+  requestHomeworkMemoryGenerationSpy.mockResolvedValue(null);
 });
 
 export function makeJob(overrides: Partial<JobRecord> = {}): JobRecord {

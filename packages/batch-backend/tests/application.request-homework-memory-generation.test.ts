@@ -50,7 +50,7 @@ describe('application/request-homework-memory-generation', () => {
     vi.clearAllMocks();
     resolveHomeworkMemorySourceFromSucceededJobMock.mockResolvedValue({
       jobId: 'job-2',
-      assignmentLineageKey: 'lineage-1',
+      assignmentLineageKey: 'job-2',
       studentId: 'student-1',
       publishedAt: new Date('2026-03-20T00:00:00.000Z'),
       publishedMarkdown: '# Homework',
@@ -70,7 +70,7 @@ describe('application/request-homework-memory-generation', () => {
     });
   });
 
-  it('uses the succeeded job id as the BullMQ dedupe key so newer revisions are not collapsed away', async () => {
+  it('uses the pending entry id as the BullMQ job key so forced reruns enqueue fresh work', async () => {
     await requestHomeworkMemoryGeneration({
       config: {
         generation: {},
@@ -84,7 +84,7 @@ describe('application/request-homework-memory-generation', () => {
     expect(resolveHomeworkMemorySourceFromSucceededJobMock).toHaveBeenCalledWith('job-2');
     expect(ensurePendingHomeworkMemoryEntryMock).toHaveBeenCalledWith(
       expect.objectContaining({
-        assignmentLineageKey: 'lineage-1',
+        assignmentLineageKey: 'job-2',
         contentHash: 'hash-1',
         schemaVersion: 'homework-memory.v1',
       }),
@@ -97,7 +97,7 @@ describe('application/request-homework-memory-generation', () => {
         pendingEntryId: 'pending-1',
       }),
       expect.objectContaining({
-        jobId: 'homework-memory:job-2',
+        jobId: 'homework-memory:pending-1',
       }),
     );
   });
@@ -129,7 +129,7 @@ describe('application/request-homework-memory-generation', () => {
         pendingEntryId: 'pending-1',
       }),
       expect.objectContaining({
-        jobId: 'homework-memory:job-2',
+        jobId: 'homework-memory:pending-1',
       }),
     );
   });
@@ -182,5 +182,36 @@ describe('application/request-homework-memory-generation', () => {
       }),
       expect.any(Object),
     );
+  });
+
+  it('skips rerun descendant jobs so only canonical root assignments generate homework memory', async () => {
+    resolveHomeworkMemorySourceFromSucceededJobMock.mockResolvedValue({
+      jobId: 'job-rerun',
+      assignmentLineageKey: 'job-root',
+      studentId: 'student-1',
+      publishedAt: new Date('2026-03-20T00:00:00.000Z'),
+      publishedMarkdown: '# Homework',
+      contentHash: 'hash-1',
+      publishTargets: [],
+      normalizedMarkdown: {
+        frontmatter: null,
+        sections: [],
+        plainText: '# Homework',
+      },
+    });
+
+    const result = await requestHomeworkMemoryGeneration({
+      config: {
+        generation: {},
+      } as never,
+      params: {
+        jobId: 'job-rerun',
+        studentId: 'student-1',
+      },
+    });
+
+    expect(result).toBeNull();
+    expect(ensurePendingHomeworkMemoryEntryMock).not.toHaveBeenCalled();
+    expect(enqueueMock).not.toHaveBeenCalled();
   });
 });
