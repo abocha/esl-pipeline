@@ -6,7 +6,6 @@
     "moduleResolution": "Bundler",
     "target": "ES2022",
     "lib": ["ES2022"],
-    "baseUrl": ".",
     "paths": {
       "@esl-pipeline/contracts": ["../contracts/src/index.ts"],
       "@esl-pipeline/html-publisher": ["../html-publisher/src/index.ts"],
