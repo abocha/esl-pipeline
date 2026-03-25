@@ -168,6 +168,16 @@
 | `GEN_OPENAI_MODEL_FALLBACK` | `.env.example` | generation_runtime | `docs/reference/GENERATION_PROVIDER_POLICY.md` |
 | `GEN_OPENAI_MODEL_PRIMARY` | `.env.batch-backend.example` | generation_runtime | `docs/reference/GENERATION_PROVIDER_POLICY.md` |
 | `GEN_OPENAI_MODEL_PRIMARY` | `.env.example` | generation_runtime | `docs/reference/GENERATION_PROVIDER_POLICY.md` |
+| `GEN_OPENAI_MODEL_PROFILE_DRAFT_FALLBACK` | `.env.batch-backend.example` | generation_runtime | `docs/reference/GENERATION_PROVIDER_POLICY.md` |
+| `GEN_OPENAI_MODEL_PROFILE_DRAFT_FALLBACK` | `.env.example` | generation_runtime | `docs/reference/GENERATION_PROVIDER_POLICY.md` |
+| `GEN_OPENAI_MODEL_PROFILE_DRAFT_PRIMARY` | `.env.batch-backend.example` | generation_runtime | `docs/reference/GENERATION_PROVIDER_POLICY.md` |
+| `GEN_OPENAI_MODEL_PROFILE_DRAFT_PRIMARY` | `.env.example` | generation_runtime | `docs/reference/GENERATION_PROVIDER_POLICY.md` |
+| `GEN_OPENAI_MODEL_PROFILE_DRAFT_TERTIARY` | `.env.batch-backend.example` | generation_runtime | `docs/reference/GENERATION_PROVIDER_POLICY.md` |
+| `GEN_OPENAI_MODEL_PROFILE_DRAFT_TERTIARY` | `.env.example` | generation_runtime | `docs/reference/GENERATION_PROVIDER_POLICY.md` |
+| `GEN_OPENAI_MODEL_STUDENT_MEMORY_FALLBACK` | `.env.batch-backend.example` | generation_runtime | `docs/reference/GENERATION_PROVIDER_POLICY.md` |
+| `GEN_OPENAI_MODEL_STUDENT_MEMORY_FALLBACK` | `.env.example` | generation_runtime | `docs/reference/GENERATION_PROVIDER_POLICY.md` |
+| `GEN_OPENAI_MODEL_STUDENT_MEMORY_PRIMARY` | `.env.batch-backend.example` | generation_runtime | `docs/reference/GENERATION_PROVIDER_POLICY.md` |
+| `GEN_OPENAI_MODEL_STUDENT_MEMORY_PRIMARY` | `.env.example` | generation_runtime | `docs/reference/GENERATION_PROVIDER_POLICY.md` |
 | `GEN_OPENAI_REQUEST_TIMEOUT_MS` | `.env.batch-backend.example` | generation_runtime | `docs/reference/GENERATION_PROVIDER_POLICY.md` |
 | `GEN_OPENAI_REQUEST_TIMEOUT_MS` | `.env.example` | generation_runtime | `docs/reference/GENERATION_PROVIDER_POLICY.md` |
 | `GEN_OPENAI_RETRY_BACKOFF_MS` | `.env.batch-backend.example` | generation_runtime | `docs/reference/GENERATION_PROVIDER_POLICY.md` |
