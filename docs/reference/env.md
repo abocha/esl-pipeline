@@ -132,7 +132,8 @@ Read next:
 - Generation battle-testing defaults should stay fail-safe:
   - `GEN_SAFETY_MODE=hard_stop`
   - `GEN_STRICT_NO_PAID=true`
-  - `GEN_MAX_OUTPUT_TOKENS_HARD=1200`
+  - `GEN_MAX_OUTPUT_TOKENS_HARD=3200`
+- Direct generation provider requests default to 240000 ms unless overridden per provider.
 - Telegram mutating ops stay disabled unless `TELEGRAM_OPS_BOT_ENABLE_ACTION_COMMANDS=true`.
 - Backend ops control is additive and should remain off unless explicitly enabled with `BATCH_BACKEND_ENABLE_OPS_CONTROL=true`.
 

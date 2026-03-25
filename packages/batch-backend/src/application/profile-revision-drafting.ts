@@ -131,6 +131,7 @@ export async function generateProfileRevisionDraft(args: {
 
   const candidates = resolveGenerationCandidates({
     config: config.generation,
+    workload: 'profile_revision_drafting',
     providerOverride: args.request.providerOverride,
     modelOverride: args.request.modelOverride,
   });

@@ -14,6 +14,12 @@ export interface GenerationCandidate {
   fallbackRank: number;
 }
 
+export type GenerationWorkload =
+  | 'default'
+  | 'draft_generation'
+  | 'student_memory_extraction'
+  | 'profile_revision_drafting';
+
 const POLICY_PROVIDER_ORDER: readonly GenerationProvider[] = [
   'openai',
   'google_ai_studio',
@@ -43,8 +49,36 @@ export function resolveGenerationProviderOrder(
 export function getModelLadderForProvider(
   config: BatchBackendConfig['generation'],
   provider: GenerationProvider,
+  workload: GenerationWorkload = 'default',
 ): string[] {
   if (provider === 'openai') {
+    if (workload === 'student_memory_extraction') {
+      // Intentionally cross-referenced defaults: bulk extraction prefers the
+      // cheaper/smaller model first, so studentMemoryPrimary falls back to the
+      // general `fallback` (nano-class), and studentMemoryFallback to `primary`.
+      // Set GEN_OPENAI_MODEL_STUDENT_MEMORY_{PRIMARY,FALLBACK} to override.
+      return uniqueNonEmpty([
+        config.models.openai.studentMemoryPrimary ?? config.models.openai.fallback,
+        config.models.openai.studentMemoryFallback ?? config.models.openai.primary,
+        config.models.openai.primary,
+        config.models.openai.fallback,
+        ...config.models.openai.allowed,
+      ]);
+    }
+    if (workload === 'profile_revision_drafting') {
+      return uniqueNonEmpty([
+        config.models.openai.profileDraftPrimary ?? config.models.openai.primary,
+        config.models.openai.profileDraftFallback ?? config.models.openai.fallback,
+        // profileDraftTertiary defaults to the general fallback; uniqueNonEmpty
+        // will silently collapse it if it equals a prior rung. Set
+        // GEN_OPENAI_MODEL_PROFILE_DRAFT_TERTIARY to a distinct model to keep
+        // three separate rungs.
+        config.models.openai.profileDraftTertiary,
+        config.models.openai.primary,
+        config.models.openai.fallback,
+        ...config.models.openai.allowed,
+      ]);
+    }
     return uniqueNonEmpty([
       config.models.openai.primary,
       config.models.openai.fallback,
@@ -68,6 +102,7 @@ export function getModelLadderForProvider(
 
 export function resolveGenerationCandidates(args: {
   config: BatchBackendConfig['generation'];
+  workload?: GenerationWorkload;
   providerOverride?: GenerationProvider;
   modelOverride?: string;
 }): GenerationCandidate[] {
@@ -94,7 +129,7 @@ export function resolveGenerationCandidates(args: {
   }
 
   for (const provider of prioritizedProviders) {
-    for (const model of getModelLadderForProvider(args.config, provider)) {
+    for (const model of getModelLadderForProvider(args.config, provider, args.workload)) {
       if (
         candidates.some((candidate) => candidate.provider === provider && candidate.model === model)
       ) {
