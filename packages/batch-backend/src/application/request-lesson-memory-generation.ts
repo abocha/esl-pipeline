@@ -45,7 +45,10 @@ export async function requestLessonMemoryGeneration(args: {
   const queue = args.overrides?.queue ?? createStudentMemoryQueue();
   const now = args.overrides?.now ?? (() => new Date());
 
-  const defaultCandidate = resolveGenerationCandidates({ config: args.config.generation })[0];
+  const defaultCandidate = resolveGenerationCandidates({
+    config: args.config.generation,
+    workload: 'student_memory_extraction',
+  })[0];
   const candidate =
     args.params.providerOverride && args.params.modelOverride
       ? {

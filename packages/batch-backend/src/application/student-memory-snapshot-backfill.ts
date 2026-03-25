@@ -71,6 +71,7 @@ export function resolveStudentMemorySnapshotBackfillCandidate(args: {
 }): { provider: GenerationProvider; model: string } {
   const candidate = resolveGenerationCandidates({
     config: args.config.generation,
+    workload: 'student_memory_extraction',
     providerOverride: args.providerOverride,
     modelOverride: args.modelOverride,
   })[0];

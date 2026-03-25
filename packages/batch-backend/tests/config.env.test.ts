@@ -53,6 +53,9 @@ describe('config/env - core defaults', () => {
         expect(cfg.worker.ttsCacheMaxBytes).toBe(10 * 1024 * 1024 * 1024);
         expect(cfg.worker.ttsCacheMaintenanceIntervalMinutes).toBe(60);
         expect(cfg.worker.ttsCacheMaintenanceLockKey).toBe('910021');
+        expect(cfg.generation.providers.openai.requestTimeoutMs).toBe(240_000);
+        expect(cfg.generation.providers.googleAiStudio.requestTimeoutMs).toBe(240_000);
+        expect(cfg.generation.providers.openrouter.requestTimeoutMs).toBe(240_000);
         // Orchestrator core defaults
         expect(cfg.orchestrator.manifestStore).toBeDefined();
         expect(['filesystem', 's3']).toContain(cfg.orchestrator.manifestStore);
@@ -385,7 +388,13 @@ describe('config/env - generation provider mapping', () => {
         expect(cfg.generation.strictNoPaid).toBe(true);
         expect(cfg.generation.maxOutputTokensHard).toBe(3200);
         expect(cfg.generation.budgetEmergencyOverride).toBe(false);
-        expect(cfg.generation.models.openai.primary).toBe('gpt-5.2');
+        expect(cfg.generation.models.openai.primary).toBe('gpt-5.4-mini');
+        expect(cfg.generation.models.openai.fallback).toBe('gpt-5.4-nano');
+        expect(cfg.generation.models.openai.studentMemoryPrimary).toBe('gpt-5.4-nano');
+        expect(cfg.generation.models.openai.studentMemoryFallback).toBe('gpt-5.4-mini');
+        expect(cfg.generation.models.openai.profileDraftPrimary).toBe('gpt-5.4');
+        expect(cfg.generation.models.openai.profileDraftFallback).toBe('gpt-5.4-mini');
+        expect(cfg.generation.models.openai.profileDraftTertiary).toBe('gpt-5.4-nano');
         expect(cfg.generation.providers.openai.dailyTokenBudget).toBe(120000);
         expect(cfg.generation.providers.openrouter.dailyTokenBudget).toBe(0);
       },
@@ -403,6 +412,12 @@ describe('config/env - generation provider mapping', () => {
         GEN_STRICT_NO_PAID: 'false',
         GEN_MAX_OUTPUT_TOKENS_HARD: '900',
         GEN_OPENAI_MODEL_PRIMARY: 'gpt-test',
+        GEN_OPENAI_MODEL_FALLBACK: 'gpt-small',
+        GEN_OPENAI_MODEL_STUDENT_MEMORY_PRIMARY: 'gpt-memory',
+        GEN_OPENAI_MODEL_STUDENT_MEMORY_FALLBACK: 'gpt-memory-fallback',
+        GEN_OPENAI_MODEL_PROFILE_DRAFT_PRIMARY: 'gpt-big',
+        GEN_OPENAI_MODEL_PROFILE_DRAFT_FALLBACK: 'gpt-big-fallback',
+        GEN_OPENAI_MODEL_PROFILE_DRAFT_TERTIARY: 'gpt-big-tertiary',
         GEN_ALLOWED_MODELS_OPENAI: 'gpt-test,gpt-mini',
         OPENAI_API_KEY: 'openai-key',
         GEMINI_API_KEY: 'google-key',
@@ -417,6 +432,12 @@ describe('config/env - generation provider mapping', () => {
         expect(cfg.generation.strictNoPaid).toBe(false);
         expect(cfg.generation.maxOutputTokensHard).toBe(900);
         expect(cfg.generation.models.openai.primary).toBe('gpt-test');
+        expect(cfg.generation.models.openai.fallback).toBe('gpt-small');
+        expect(cfg.generation.models.openai.studentMemoryPrimary).toBe('gpt-memory');
+        expect(cfg.generation.models.openai.studentMemoryFallback).toBe('gpt-memory-fallback');
+        expect(cfg.generation.models.openai.profileDraftPrimary).toBe('gpt-big');
+        expect(cfg.generation.models.openai.profileDraftFallback).toBe('gpt-big-fallback');
+        expect(cfg.generation.models.openai.profileDraftTertiary).toBe('gpt-big-tertiary');
         expect(cfg.generation.models.openai.allowed).toEqual(['gpt-test', 'gpt-mini']);
         expect(cfg.generation.providers.openai.apiKey).toBe('openai-key');
         expect(cfg.generation.providers.googleAiStudio.apiKey).toBe('google-key');

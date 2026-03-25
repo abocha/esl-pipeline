@@ -3,6 +3,7 @@ import type { PoolClient } from 'pg';
 import type { GenerationProvider } from '@esl-pipeline/contracts';
 
 import { requestLessonMemoryGeneration } from '../application/request-lesson-memory-generation.js';
+import { resolveGenerationCandidates } from '../application/generation-policy.js';
 import { loadBatchBackendEnv } from '../bootstrap/env.js';
 import { type BatchBackendConfig, loadConfig } from '../config/env.js';
 import { withPgClient } from '../infrastructure/db.js';
@@ -207,18 +208,12 @@ async function listReplayTargets(args: {
 }
 
 function resolveModel(config: BatchBackendConfig, provider: GenerationProvider): string {
-  if (provider === 'openai') {
-    return config.generation.models.openai.primary;
-  }
-
-  if (provider === 'google_ai_studio') {
-    return config.generation.models.googleAiStudio.primary;
-  }
-
   return (
-    config.generation.models.openrouter.primary ??
-    config.generation.models.openrouter.fallback ??
-    config.generation.models.openrouter.allowed[0] ??
+    resolveGenerationCandidates({
+      config: config.generation,
+      workload: 'student_memory_extraction',
+      providerOverride: provider,
+    })[0]?.model ??
     'openai/gpt-4o-mini'
   );
 }

@@ -172,6 +172,11 @@ export interface BatchBackendConfig {
         primary: string;
         fallback: string;
         allowed: string[];
+        studentMemoryPrimary?: string;
+        studentMemoryFallback?: string;
+        profileDraftPrimary?: string;
+        profileDraftFallback?: string;
+        profileDraftTertiary?: string;
       };
       googleAiStudio: {
         primary: string;
@@ -656,8 +661,28 @@ export function loadConfig(): BatchBackendConfig {
   const generationAllowPaidSpend = readBool('GEN_ALLOW_PAID_SPEND', false);
   const generationBudgetEmergencyOverride = generationAllowPaidSpend;
 
-  const generationOpenAiModelPrimary = readString('GEN_OPENAI_MODEL_PRIMARY', 'gpt-5.2')!;
-  const generationOpenAiModelFallback = readString('GEN_OPENAI_MODEL_FALLBACK', 'gpt-5-mini')!;
+  const generationOpenAiModelPrimary = readString('GEN_OPENAI_MODEL_PRIMARY', 'gpt-5.4-mini')!;
+  const generationOpenAiModelFallback = readString('GEN_OPENAI_MODEL_FALLBACK', 'gpt-5.4-nano')!;
+  const generationOpenAiMemoryModelPrimary = readString(
+    'GEN_OPENAI_MODEL_STUDENT_MEMORY_PRIMARY',
+    generationOpenAiModelFallback,
+  )!;
+  const generationOpenAiMemoryModelFallback = readString(
+    'GEN_OPENAI_MODEL_STUDENT_MEMORY_FALLBACK',
+    generationOpenAiModelPrimary,
+  )!;
+  const generationOpenAiProfileDraftModelPrimary = readString(
+    'GEN_OPENAI_MODEL_PROFILE_DRAFT_PRIMARY',
+    'gpt-5.4',
+  )!;
+  const generationOpenAiProfileDraftModelFallback = readString(
+    'GEN_OPENAI_MODEL_PROFILE_DRAFT_FALLBACK',
+    generationOpenAiModelPrimary,
+  )!;
+  const generationOpenAiProfileDraftModelTertiary = readString(
+    'GEN_OPENAI_MODEL_PROFILE_DRAFT_TERTIARY',
+    generationOpenAiModelFallback,
+  )!;
   const generationOpenAiAllowedModels = readStringList(
     'GEN_ALLOWED_MODELS_OPENAI',
     `${generationOpenAiModelPrimary},${generationOpenAiModelFallback}`,
@@ -686,16 +711,16 @@ export function loadConfig(): BatchBackendConfig {
   const generationOpenRouterModelFallback = readString('GEN_OPENROUTER_MODEL_FALLBACK');
   const generationOpenRouterAllowedModels = readStringList('GEN_ALLOWED_MODELS_OPENROUTER', '');
 
-  const generationOpenAiTimeoutMs = readInt('GEN_OPENAI_REQUEST_TIMEOUT_MS', 30_000);
+  const generationOpenAiTimeoutMs = readInt('GEN_OPENAI_REQUEST_TIMEOUT_MS', 240_000);
   const generationOpenAiRetryMax = readInt('GEN_OPENAI_RETRY_MAX', 1);
   const generationOpenAiRetryBackoffMs = readInt('GEN_OPENAI_RETRY_BACKOFF_MS', 250);
   const generationOpenAiRpmBudget = readInt('GEN_OPENAI_RPM_BUDGET', 3);
   const generationOpenAiDailyRequestBudget = readInt('GEN_OPENAI_DAILY_REQUEST_BUDGET', 40);
-  const generationGoogleTimeoutMs = readInt('GEN_GOOGLE_REQUEST_TIMEOUT_MS', 30_000);
+  const generationGoogleTimeoutMs = readInt('GEN_GOOGLE_REQUEST_TIMEOUT_MS', 240_000);
   const generationGoogleRetryMax = readInt('GEN_GOOGLE_RETRY_MAX', 1);
   const generationGoogleRetryBackoffMs = readInt('GEN_GOOGLE_RETRY_BACKOFF_MS', 250);
   const generationGoogleRpmBudget = readInt('GEN_GOOGLE_RPM_BUDGET', 4);
-  const generationOpenRouterTimeoutMs = readInt('GEN_OPENROUTER_REQUEST_TIMEOUT_MS', 30_000);
+  const generationOpenRouterTimeoutMs = readInt('GEN_OPENROUTER_REQUEST_TIMEOUT_MS', 240_000);
   const generationOpenRouterRetryMax = readInt('GEN_OPENROUTER_RETRY_MAX', 1);
   const generationOpenRouterRetryBackoffMs = readInt('GEN_OPENROUTER_RETRY_BACKOFF_MS', 250);
   const generationOpenRouterRpmBudget = readInt('GEN_OPENROUTER_RPM_BUDGET', 0);
@@ -869,6 +894,11 @@ export function loadConfig(): BatchBackendConfig {
           primary: generationOpenAiModelPrimary,
           fallback: generationOpenAiModelFallback,
           allowed: generationOpenAiAllowedModels,
+          studentMemoryPrimary: generationOpenAiMemoryModelPrimary,
+          studentMemoryFallback: generationOpenAiMemoryModelFallback,
+          profileDraftPrimary: generationOpenAiProfileDraftModelPrimary,
+          profileDraftFallback: generationOpenAiProfileDraftModelFallback,
+          profileDraftTertiary: generationOpenAiProfileDraftModelTertiary,
         },
         googleAiStudio: {
           primary: generationGoogleModelPrimary,

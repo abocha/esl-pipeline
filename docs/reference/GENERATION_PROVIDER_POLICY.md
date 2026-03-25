@@ -25,8 +25,16 @@
 
 ### OpenAI
 
-- primary: `gpt-5.2`
-- fallback: `gpt-5-mini`
+- direct draft generation:
+  - primary: `gpt-5.4-mini`
+  - fallback: `gpt-5.4-nano`
+- student-memory extraction:
+  - primary: `gpt-5.4-nano`
+  - fallback: `gpt-5.4-mini`
+- profile revision drafting:
+  - primary: `gpt-5.4`
+  - fallback: `gpt-5.4-mini`
+  - tertiary fallback: `gpt-5.4-nano`
 
 ### Google AI Studio
 
@@ -58,12 +66,13 @@
 ## Runtime Rules
 
 1. Retry, timeout, and budgets are configured per provider.
-2. Errors must normalize to:
+2. Default provider request timeout is 240000 ms (4 minutes) for direct generation paths.
+3. Errors must normalize to:
    - `provider_rate_limit`
    - `provider_timeout`
    - `provider_contract_error`
    - `budget_exceeded`
-3. Fallback behavior:
+4. Fallback behavior:
    - rate limit / quota -> fallback
    - timeout -> retry then fallback
    - contract/schema failure -> fail fast
@@ -73,7 +82,7 @@
 
 - `GEN_SAFETY_MODE=hard_stop`
 - `GEN_STRICT_NO_PAID=true`
-- `GEN_MAX_OUTPUT_TOKENS_HARD=1200`
+- `GEN_MAX_OUTPUT_TOKENS_HARD=3200`
 - `GEN_ALLOW_PAID_SPEND=false`
 
 Additional rules:
