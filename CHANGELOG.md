@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented here. Dates use `YYYY-MM-DD`.
 
+## [4.7.0] - 2026-03-25
+
+### Changed
+
+- Automated release from PR #49: feat: workload-based model generation ladders and timeouts (https://github.com/abocha/esl-pipeline/pull/49)
+
 ## [4.6.1] - 2026-03-22
 
 ### Changed
