@@ -69,7 +69,7 @@ export function buildApiProxyPath(path: string): string {
 // Create axios instance with default config
 const apiClient: AxiosInstance = axios.create({
   baseURL: backendBaseUrl || undefined,
-  timeout: 30_000, // 30 seconds
+  timeout: 240_000, // 240 seconds — matches backend GEN_*_REQUEST_TIMEOUT_MS
   withCredentials: true,
   headers: {
     'Content-Type': 'application/json',

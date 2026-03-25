@@ -75,6 +75,31 @@ describe('rendering', () => {
     expect(renderedDocument.querySelector('.word-tts-button')).toBeNull();
   });
 
+  it('renders play controls for both sides of each minimal pair', async () => {
+    const markdown = `### C. Pronunciation Micro-Focus
+  
+  **Mode:** minimal_pair
+  **Target:** Differentiating the short /ɪ/ from the long /iː/.
+  
+  1. Stiff /stɪf/ — Steve /stiːv/
+  2. Live /lɪv/ — Leave /liːv/`;
+    const html = await renderToHtml(markdown, 'Minimal Pair Controls');
+    const renderedDocument = createRenderedDocument(html);
+
+    const listItems = [...renderedDocument.querySelectorAll('.markdown-body li')];
+    const firstItem = listItems.find((item) => item.textContent?.includes('Stiff'));
+    const buttons = firstItem ? [...firstItem.querySelectorAll('.word-tts-button')] : [];
+    const transcriptions = firstItem
+      ? [...firstItem.querySelectorAll('.word-tts-transcription')].map((node) => node.textContent)
+      : [];
+
+    expect(buttons).toHaveLength(2);
+    expect(buttons[0]?.getAttribute('aria-label')).toContain('Stiff /stɪf/');
+    expect(buttons[1]?.getAttribute('aria-label')).toContain('Steve /stiːv/');
+    expect(transcriptions).toEqual(['/stɪf/', '/stiːv/']);
+    expect(firstItem?.querySelector('.pronunciation-word-pair')).toBeTruthy();
+  });
+
   it('emits a parseable behavior script', async () => {
     const html = await renderToHtml('### C. Pronunciation Micro-Focus', 'Script Parse');
     const scriptText = extractBehaviorScript(html);

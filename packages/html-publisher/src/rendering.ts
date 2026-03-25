@@ -397,6 +397,18 @@ body {
   width: auto;
   max-width: 100%;
 }
+.pronunciation-word-pair {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 12px;
+  flex-wrap: wrap;
+  width: auto;
+  max-width: 100%;
+}
+.pronunciation-word-pair-separator {
+  color: var(--page-muted);
+  font-weight: 600;
+}
 .pronunciation-word-content {
   display: inline-flex;
   align-items: baseline;
@@ -2879,6 +2891,14 @@ function buildBehaviorScript(features: ResolvedFeatures): string {
           return content;
         };
 
+        const normalizeWordLabel = (value) =>
+          String(value || '')
+            .replace(/^\\d+\\.\\s*/, '')
+            .replace(/[—-]\\s*$/, '')
+            .split(String.fromCharCode(96))
+            .join('')
+            .trim();
+
         const parseWordDrillLine = (rawLine) => {
           const normalized = String(rawLine || '').trim();
           if (!normalized) return null;
@@ -2888,13 +2908,7 @@ function buildBehaviorScript(features: ResolvedFeatures): string {
 
           const transcription = transcriptionTailMatch[1].trim();
           const note = (transcriptionTailMatch[2] || '').trim();
-          const rawWord = normalized
-            .slice(0, transcriptionTailMatch.index)
-            .replace(/^\\d+\\.\\s*/, '')
-            .replace(/[—-]\\s*$/, '')
-            .split(String.fromCharCode(96))
-            .join('')
-            .trim();
+          const rawWord = normalizeWordLabel(normalized.slice(0, transcriptionTailMatch.index));
           if (!rawWord) return null;
 
           return {
@@ -2902,6 +2916,89 @@ function buildBehaviorScript(features: ResolvedFeatures): string {
             transcription,
             note,
           };
+        };
+
+        const parseMinimalPairLine = (rawLine) => {
+          const normalized = String(rawLine || '')
+            .replace(/^\\d+\\.\\s*/, '')
+            .trim();
+          if (!normalized) return null;
+
+          // Accepts em-dash (—), en-dash (–), or hyphen (-) as the pair
+          // separator in source text; the rendered separator is always em-dash.
+          const pairMatch =
+            /^(.+?)\\s+(\\/[^/\\n]+\\/)\\s+[—–-]\\s+(.+?)\\s+(\\/[^/\\n]+\\/)(?:\\s+(.+))?$/.exec(
+              normalized,
+            );
+          if (!pairMatch) return null;
+
+          return {
+            left: {
+              // Groups are already isolated by the regex; use trim() directly
+              // to avoid the redundant leading-digit / trailing-dash strip that
+              // normalizeWordLabel applies (those patterns can't appear here).
+              word: String(pairMatch[1]).trim(),
+              transcription: pairMatch[2].trim(),
+              note: '',
+            },
+            right: {
+              word: String(pairMatch[3]).trim(),
+              transcription: pairMatch[4].trim(),
+              note: (pairMatch[5] || '').trim(),
+            },
+          };
+        };
+
+
+        const createFallbackWordContent = (word) => {
+          const content = document.createElement('span');
+          content.className = 'pronunciation-word-content';
+
+          const label = document.createElement('span');
+          label.className = 'pronunciation-word-label';
+          label.textContent = word;
+          content.appendChild(label);
+
+          return content;
+        };
+
+        const createWordMain = (word, transcription, note, wordContent) => {
+          const controls = document.createElement('span');
+          controls.className = 'pronunciation-word-tts';
+
+          const button = document.createElement('button');
+          button.type = 'button';
+          button.className = 'word-tts-button';
+          button.textContent = 'Play';
+          button.setAttribute(
+            'aria-label',
+            'Play pronunciation for ' + word + ' ' + transcription,
+          );
+          button.addEventListener('click', () => speakWord(word));
+
+          const transcriptionBadge = document.createElement('span');
+          transcriptionBadge.className = 'word-tts-transcription';
+          transcriptionBadge.textContent = transcription;
+          transcriptionBadge.setAttribute('aria-hidden', 'true');
+
+          controls.appendChild(button);
+          controls.appendChild(transcriptionBadge);
+
+          if (note) {
+            const noteText = document.createElement('span');
+            noteText.className = 'pronunciation-word-note';
+            noteText.textContent = note;
+            controls.appendChild(noteText);
+          }
+
+          const wordMain = document.createElement('span');
+          wordMain.className = 'pronunciation-word-main';
+          if (wordContent instanceof HTMLElement) {
+            wordMain.appendChild(wordContent);
+          }
+          wordMain.appendChild(controls);
+
+          return wordMain;
         };
 
         const listItems = [];
@@ -2922,6 +3019,44 @@ function buildBehaviorScript(features: ResolvedFeatures): string {
           const raw = (item.textContent || '').replace(/\\s+/g, ' ').trim();
 
           if (wordDrillEnabled) {
+            if (pronunciationMode === 'minimal_pair') {
+              const parsedPair = parseMinimalPairLine(raw);
+              if (parsedPair) {
+                const pair = document.createElement('span');
+                pair.className = 'pronunciation-word-pair';
+
+                pair.appendChild(
+                  createWordMain(
+                    parsedPair.left.word,
+                    parsedPair.left.transcription,
+                    parsedPair.left.note,
+                    createFallbackWordContent(parsedPair.left.word),
+                  ),
+                );
+
+                const separator = document.createElement('span');
+                separator.className = 'pronunciation-word-pair-separator';
+                separator.textContent = '—';
+                pair.appendChild(separator);
+
+                pair.appendChild(
+                  createWordMain(
+                    parsedPair.right.word,
+                    parsedPair.right.transcription,
+                    parsedPair.right.note,
+                    createFallbackWordContent(parsedPair.right.word),
+                  ),
+                );
+
+                item.classList.add('pronunciation-word-item');
+                while (item.firstChild) {
+                  item.removeChild(item.firstChild);
+                }
+                item.appendChild(pair);
+                return;
+              }
+            }
+
             const parsed = parseWordDrillLine(raw);
             if (parsed) {
               const word = parsed.word;
@@ -2929,41 +3064,8 @@ function buildBehaviorScript(features: ResolvedFeatures): string {
               const note = parsed.note;
               if (!word) return;
 
-              const controls = document.createElement('span');
-              controls.className = 'pronunciation-word-tts';
-
-              const button = document.createElement('button');
-              button.type = 'button';
-              button.className = 'word-tts-button';
-              button.textContent = 'Play';
-              button.setAttribute(
-                'aria-label',
-                'Play pronunciation for ' + word + ' ' + transcription,
-              );
-              button.addEventListener('click', () => speakWord(word));
-
-              const transcriptionBadge = document.createElement('span');
-              transcriptionBadge.className = 'word-tts-transcription';
-              transcriptionBadge.textContent = transcription;
-              transcriptionBadge.setAttribute('aria-hidden', 'true');
-
-              const noteText = document.createElement('span');
-              noteText.className = 'pronunciation-word-note';
-              noteText.textContent = note;
-
-              const wordMain = document.createElement('span');
-              wordMain.className = 'pronunciation-word-main';
               const wordContent = buildWordContentNodes(item, word, transcription);
-              controls.appendChild(button);
-              controls.appendChild(transcriptionBadge);
-              if (note) {
-                controls.appendChild(noteText);
-              }
-
-              if (wordContent instanceof HTMLElement) {
-                wordMain.appendChild(wordContent);
-              }
-              wordMain.appendChild(controls);
+              const wordMain = createWordMain(word, transcription, note, wordContent);
 
               item.classList.add('pronunciation-word-item');
               while (item.firstChild) {

@@ -15,13 +15,18 @@ function buildConfig(
     quotaSourceMode: 'hybrid',
     safetyMode: 'hard_stop',
     strictNoPaid: true,
-    maxOutputTokensHard: 1200,
+    maxOutputTokensHard: 3200,
     budgetEmergencyOverride: false,
     models: {
       openai: {
-        primary: 'gpt-5.2',
-        fallback: 'gpt-5-mini',
-        allowed: ['gpt-5.2', 'gpt-5-mini'],
+        primary: 'gpt-5.4-mini',
+        fallback: 'gpt-5.4-nano',
+        allowed: ['gpt-5.4-mini', 'gpt-5.4-nano'],
+        studentMemoryPrimary: 'gpt-5.4-nano',
+        studentMemoryFallback: 'gpt-5.4-mini',
+        profileDraftPrimary: 'gpt-5.4',
+        profileDraftFallback: 'gpt-5.4-mini',
+        profileDraftTertiary: 'gpt-5.4-nano',
       },
       googleAiStudio: {
         primary: 'gemini-3-flash-preview',
@@ -37,7 +42,7 @@ function buildConfig(
     },
     providers: {
       openai: {
-        requestTimeoutMs: 30_000,
+        requestTimeoutMs: 240_000,
         retryMax: 1,
         retryBackoffMs: 250,
         dailyTokenBudget: 120_000,
@@ -45,14 +50,14 @@ function buildConfig(
         rpmBudget: 3,
       },
       googleAiStudio: {
-        requestTimeoutMs: 30_000,
+        requestTimeoutMs: 240_000,
         retryMax: 1,
         retryBackoffMs: 250,
         dailyRequestBudget: 12,
         rpmBudget: 4,
       },
       openrouter: {
-        requestTimeoutMs: 30_000,
+        requestTimeoutMs: 240_000,
         retryMax: 1,
         retryBackoffMs: 250,
         dailyTokenBudget: 0,
@@ -95,7 +100,7 @@ describe('application/generation-policy', () => {
       fallbackProviders: ['openai', 'openrouter'],
       providers: {
         openai: {
-          requestTimeoutMs: 30_000,
+          requestTimeoutMs: 240_000,
           retryMax: 1,
           retryBackoffMs: 250,
           dailyTokenBudget: 120_000,
@@ -103,14 +108,14 @@ describe('application/generation-policy', () => {
           rpmBudget: 3,
         },
         googleAiStudio: {
-          requestTimeoutMs: 30_000,
+          requestTimeoutMs: 240_000,
           retryMax: 1,
           retryBackoffMs: 250,
           dailyRequestBudget: 0,
           rpmBudget: 4,
         },
         openrouter: {
-          requestTimeoutMs: 30_000,
+          requestTimeoutMs: 240_000,
           retryMax: 1,
           retryBackoffMs: 250,
           dailyTokenBudget: 0,
@@ -128,9 +133,14 @@ describe('application/generation-policy', () => {
     const config = buildConfig({
       models: {
         openai: {
-          primary: 'gpt-5.2',
-          fallback: 'gpt-5-mini',
-          allowed: ['gpt-5.2', 'gpt-5-mini'],
+          primary: 'gpt-5.4-mini',
+          fallback: 'gpt-5.4-nano',
+          allowed: ['gpt-5.4-mini', 'gpt-5.4-nano'],
+          studentMemoryPrimary: 'gpt-5.4-nano',
+          studentMemoryFallback: 'gpt-5.4-mini',
+          profileDraftPrimary: 'gpt-5.4',
+          profileDraftFallback: 'gpt-5.4-mini',
+          profileDraftTertiary: 'gpt-5.4-nano',
         },
         googleAiStudio: {
           primary: 'gemini-2.5-flash-lite',
@@ -169,5 +179,73 @@ describe('application/generation-policy', () => {
     );
     expect(extraModel?.tier).toBe('custom');
     expect(extraModel?.defaultSelected).toBe(false);
+  });
+
+  it('uses workload-specific openai ladders for memory extraction and profile drafting', () => {
+    const config = buildConfig();
+
+    expect(
+      resolveGenerationCandidates({
+        config,
+        workload: 'student_memory_extraction',
+        providerOverride: 'openai',
+      })
+        .filter((candidate) => candidate.provider === 'openai')
+        .map((candidate) => candidate.model)
+        .slice(0, 3),
+    ).toEqual(['gpt-5.4-nano', 'gpt-5.4-mini']);
+
+    expect(
+      resolveGenerationCandidates({
+        config,
+        workload: 'profile_revision_drafting',
+        providerOverride: 'openai',
+      })
+        .filter((candidate) => candidate.provider === 'openai')
+        .map((candidate) => candidate.model)
+        .slice(0, 3),
+    ).toEqual(['gpt-5.4', 'gpt-5.4-mini', 'gpt-5.4-nano']);
+  });
+
+  it('collapses profileDraftTertiary when it equals a prior rung, keeps it when distinct', () => {
+    // Default config: profileDraftTertiary = 'gpt-5.4-nano' = general fallback.
+    // uniqueNonEmpty deduplicates it, so only two distinct OpenAI rungs remain.
+    const configCollapsed = buildConfig();
+    const collapsedModels = resolveGenerationCandidates({
+      config: configCollapsed,
+      workload: 'profile_revision_drafting',
+      providerOverride: 'openai',
+    })
+      .filter((c) => c.provider === 'openai')
+      .map((c) => c.model);
+    // gpt-5.4-nano appears only once (deduplicated)
+    expect(collapsedModels.filter((m) => m === 'gpt-5.4-nano')).toHaveLength(1);
+    expect(collapsedModels.slice(0, 3)).toEqual(['gpt-5.4', 'gpt-5.4-mini', 'gpt-5.4-nano']);
+
+    // Explicit distinct tertiary: preserves a true three-rung ladder.
+    const configDistinct = buildConfig({
+      models: {
+        openai: {
+          primary: 'gpt-5.4-mini',
+          fallback: 'gpt-5.4-nano',
+          allowed: ['gpt-5.4-mini', 'gpt-5.4-nano'],
+          studentMemoryPrimary: 'gpt-5.4-nano',
+          studentMemoryFallback: 'gpt-5.4-mini',
+          profileDraftPrimary: 'gpt-5.4',
+          profileDraftFallback: 'gpt-5.4-mini',
+          profileDraftTertiary: 'gpt-5.4-turbo', // distinct model
+        },
+        googleAiStudio: configCollapsed.models.googleAiStudio,
+        openrouter: configCollapsed.models.openrouter,
+      },
+    });
+    const distinctModels = resolveGenerationCandidates({
+      config: configDistinct,
+      workload: 'profile_revision_drafting',
+      providerOverride: 'openai',
+    })
+      .filter((c) => c.provider === 'openai')
+      .map((c) => c.model);
+    expect(distinctModels.slice(0, 3)).toEqual(['gpt-5.4', 'gpt-5.4-mini', 'gpt-5.4-turbo']);
   });
 });

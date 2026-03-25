@@ -166,6 +166,7 @@ export async function generateDraft(
 
   const candidates = resolveGenerationCandidates({
     config: config.generation,
+    workload: 'draft_generation',
     providerOverride: request.provider,
     modelOverride: request.model,
   });

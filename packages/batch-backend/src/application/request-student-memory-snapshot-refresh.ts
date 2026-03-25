@@ -41,6 +41,7 @@ export async function requestStudentMemorySnapshotRefresh(args: {
 
   const candidate = resolveGenerationCandidates({
     config: args.config.generation,
+    workload: 'student_memory_extraction',
     providerOverride: args.params.providerOverride,
     modelOverride: args.params.modelOverride,
   })[0];

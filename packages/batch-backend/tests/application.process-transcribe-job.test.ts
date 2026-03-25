@@ -490,7 +490,7 @@ function createConfig(): BatchBackendConfig {
       providers: {
         openai: {
           apiKey: undefined,
-          requestTimeoutMs: 30_000,
+          requestTimeoutMs: 240_000,
           retryMax: 1,
           retryBackoffMs: 250,
           dailyTokenBudget: 120_000,
@@ -499,7 +499,7 @@ function createConfig(): BatchBackendConfig {
         },
         googleAiStudio: {
           apiKey: undefined,
-          requestTimeoutMs: 30_000,
+          requestTimeoutMs: 240_000,
           retryMax: 1,
           retryBackoffMs: 250,
           dailyRequestBudget: 12,
@@ -509,7 +509,7 @@ function createConfig(): BatchBackendConfig {
           apiKey: undefined,
           httpReferer: undefined,
           xTitle: undefined,
-          requestTimeoutMs: 30_000,
+          requestTimeoutMs: 240_000,
           retryMax: 1,
           retryBackoffMs: 250,
           dailyTokenBudget: 0,
