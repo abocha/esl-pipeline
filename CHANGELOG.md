@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented here. Dates use `YYYY-MM-DD`.
 
+## [4.7.2] - 2026-03-26
+
+### Changed
+
+- Automated release from PR #51: chore: refresh outdated dependencies (https://github.com/abocha/esl-pipeline/pull/51)
+
 ## [4.7.1] - 2026-03-26
 
 ### Changed
