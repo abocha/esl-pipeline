@@ -101,22 +101,22 @@
     "@eslint/js": "^10.0.1",
     "@trivago/prettier-plugin-sort-imports": "^6.0.2",
     "@types/node": "^25.5.0",
-    "@vitest/coverage-v8": "^4.1.0",
-    "@vitest/eslint-plugin": "^1.6.12",
+    "@vitest/coverage-v8": "^4.1.2",
+    "@vitest/eslint-plugin": "^1.6.13",
     "concurrently": "^9.2.1",
     "dclint": "3.1.0",
-    "eslint": "^10.0.3",
+    "eslint": "^10.1.0",
     "eslint-config-prettier": "^10.1.8",
     "eslint-plugin-n": "^17.24.0",
     "eslint-plugin-react-refresh": "^0.5.2",
     "eslint-plugin-unicorn": "^63.0.0",
     "globals": "^17.4.0",
-    "knip": "^5.87.0",
+    "knip": "^6.0.6",
     "prettier": "^3.8.1",
     "prettier-plugin-packagejson": "^3.0.2",
     "typescript": "^6.0.2",
-    "typescript-eslint": "^8.57.1",
-    "vitest": "^4.1.0"
+    "typescript-eslint": "^8.57.2",
+    "vitest": "^4.1.2"
   },
   "packageManager": "pnpm@10.33.0+sha512.10568bb4a6afb58c9eb3630da90cc9516417abebd3fabbe6739f0ae795728da1491e9db5a544c76ad8eb7570f5c4bb3d6c637b2cb41bfdcdb47fa823c8649319",
   "engines": {
@@ -126,7 +126,7 @@
     "overrides": {
       "@trivago/prettier-plugin-sort-imports>lodash-es": "^4.17.23",
       "ajv@>=8.0.0 <8.18.0": "^8.18.0",
-      "ioredis": "^5.10.0",
+      "ioredis": "^5.10.1",
       "minimatch": "^10.2.4",
       "rollup": "^4.59.0"
     }
