@@ -34,7 +34,7 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@elevenlabs/elevenlabs-js": "^2.38.1",
+    "@elevenlabs/elevenlabs-js": "^2.40.0",
     "@esl-pipeline/contracts": "workspace:*",
     "@esl-pipeline/pmd": "workspace:*",
     "@esl-pipeline/provider-runtime": "workspace:*",
@@ -45,7 +45,7 @@
     "@types/js-yaml": "^4.0.9",
     "@types/node": "^25.5.0",
     "typescript": "^6.0.2",
-    "vitest": "^4.1.0"
+    "vitest": "^4.1.2"
   },
   "engines": {
     "node": ">=24.11.1"
