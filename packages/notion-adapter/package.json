@@ -37,7 +37,7 @@
     "@esl-pipeline/contracts": "workspace:*",
     "@esl-pipeline/md-validator": "workspace:*",
     "@esl-pipeline/pmd": "workspace:*",
-    "@notionhq/client": "^5.11.1",
+    "@notionhq/client": "^5.15.0",
     "gray-matter": "^4.0.3",
     "zod": "^4.1.13"
   },
@@ -45,7 +45,7 @@
     "@types/node": "^25.5.0",
     "tsx": "^4.21.0",
     "typescript": "^6.0.2",
-    "vitest": "^4.1.0"
+    "vitest": "^4.1.2"
   },
   "engines": {
     "node": ">=24.11.1"
