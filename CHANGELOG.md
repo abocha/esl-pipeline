@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented here. Dates use `YYYY-MM-DD`.
 
+## [4.7.1] - 2026-03-26
+
+### Changed
+
+- Automated release from PR #50: chore: forward-port TypeScript 6 upgrade onto current main (https://github.com/abocha/esl-pipeline/pull/50)
+
 ## [4.7.0] - 2026-03-25
 
 ### Changed
