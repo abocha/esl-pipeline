@@ -16,9 +16,8 @@
     // Make sure Vite/DOM types are available in the editor for ESLint/TS.
     "types": ["vite/client", "vitest"],
     // Local path aliases for this package.
-    "baseUrl": "./",
     "paths": {
-      "@/*": ["src/*"]
+      "@/*": ["./src/*"]
     }
   },
   // Include only local package sources/config so project-service stays focused.
