@@ -7,6 +7,11 @@ import type {
   PmdBlock,
   PmdDirectiveBlock,
   PmdHeading,
+  PronunciationConnectedSpeechItem,
+  PronunciationFocus,
+  PronunciationGenericDrillItem,
+  PronunciationMinimalPairItem,
+  PronunciationMode,
   PronunciationShadowFocus,
   PronunciationShadowIssue,
   PronunciationShadowWord,
@@ -204,7 +209,17 @@ function findFirstPronunciationHeading(body: PmdBlock[]): PmdHeading | null {
   return null;
 }
 
-function parseMarkedField(line: string, marker: 'mode' | 'shadow sentence'): string | null {
+function parseMarkedField(
+  line: string,
+  marker:
+    | 'mode'
+    | 'shadow sentence'
+    | 'target'
+    | 'focus'
+    | 'action'
+    | 'deliverable'
+    | 'contour cue',
+): string | null {
   const withoutBullet = line.replace(/^\s*(?:[-*]\s+)?/, '').trim();
   const normalizedLine = /^`[^`]+`$/.test(withoutBullet)
     ? withoutBullet.slice(1, -1).trim()
@@ -217,6 +232,21 @@ function parseMarkedField(line: string, marker: 'mode' | 'shadow sentence'): str
     return value.slice(1, -1).trim();
   }
   return value;
+}
+
+const PRONUNCIATION_MODES = new Set<PronunciationMode>([
+  'shadow_sentence',
+  'intonation',
+  'rhythm_chunking',
+  'sentence_stress',
+  'connected_speech',
+  'minimal_pair',
+]);
+
+function normalizePronunciationMode(value: string | null): PronunciationMode | null {
+  if (!value) return null;
+  const normalized = value.trim().toLowerCase() as PronunciationMode;
+  return PRONUNCIATION_MODES.has(normalized) ? normalized : null;
 }
 
 function parsePronunciationWordLine(
@@ -278,18 +308,184 @@ function parsePronunciationWordLine(
     };
   }
   const transcription = transcriptionTailMatch[1].trim();
+  const note = (transcriptionTailMatch[2] || '').trim() || undefined;
   return {
     word: {
       text,
       transcription,
       line: lineNumber,
+      note,
     },
   };
 }
 
-export function extractPronunciationShadowFocus(
-  md: ParsedMarkdownContext,
-): PronunciationShadowFocus | null {
+function parseMinimalPairLine(
+  line: string,
+  lineNumber: number,
+): { pair?: PronunciationMinimalPairItem; issue?: PronunciationShadowIssue } | null {
+  const numberedItem = /^\s*(?:[-*]\s+)?\d+\.\s+/.test(line);
+  if (!numberedItem) return null;
+
+  const itemContent = line.replace(/^\s*(?:[-*]\s+)?\d+\.\s*/, '').trim();
+  if (!itemContent) {
+    return {
+      issue: {
+        code: 'invalid_minimal_pair_format',
+        message:
+          'Minimal pair line must use "1. word /ipa/ — word /ipa/" format.',
+        line: lineNumber,
+      },
+    };
+  }
+
+  const match =
+    /^(.+?)\s+(\/[^/\n]+\/)\s+[—–-]\s+(.+?)\s+(\/[^/\n]+\/)(?:\s+(.+))?$/.exec(itemContent);
+  if (!match) {
+    return {
+      issue: {
+        code: 'invalid_minimal_pair_format',
+        message:
+          'Minimal pair line must use "1. word /ipa/ — word /ipa/" format.',
+        line: lineNumber,
+      },
+    };
+  }
+
+  return {
+    pair: {
+      left: {
+        text: (match[1] ?? '').replaceAll('**', '').replaceAll('`', '').trim(),
+        transcription: (match[2] ?? '').trim(),
+        line: lineNumber,
+      },
+      right: {
+        text: (match[3] ?? '').replaceAll('**', '').replaceAll('`', '').trim(),
+        transcription: (match[4] ?? '').trim(),
+        line: lineNumber,
+      },
+      line: lineNumber,
+      note: (match[5] || '').trim() || undefined,
+    },
+  };
+}
+
+function parseConnectedSpeechLine(
+  line: string,
+  lineNumber: number,
+): { connected?: PronunciationConnectedSpeechItem; issue?: PronunciationShadowIssue } | null {
+  const numberedItem = /^\s*(?:[-*]\s+)?\d+\.\s+/.test(line);
+  if (!numberedItem) return null;
+
+  const itemContent = line.replace(/^\s*(?:[-*]\s+)?\d+\.\s*/, '').trim();
+  if (!itemContent) {
+    return {
+      issue: {
+        code: 'invalid_connected_speech_format',
+        message:
+          'Connected speech line must use "1. \"careful form\" -> connected form" format.',
+        line: lineNumber,
+      },
+    };
+  }
+
+  const parts = itemContent.split(/\s*(?:->|→)\s*/);
+  if (parts.length < 2) {
+    return {
+      issue: {
+        code: 'invalid_connected_speech_format',
+        message:
+          'Connected speech line must use "1. \"careful form\" -> connected form" format.',
+        line: lineNumber,
+      },
+    };
+  }
+
+  const careful = parts[0]?.trim().replaceAll(/^["'“”`]+|["'“”`]+$/g, '') || '';
+  const remainder = parts.slice(1).join(' -> ').trim();
+  if (!careful || !remainder) {
+    return {
+      issue: {
+        code: 'invalid_connected_speech_format',
+        message:
+          'Connected speech line must use "1. \"careful form\" -> connected form" format.',
+        line: lineNumber,
+      },
+    };
+  }
+
+  const noteMatch = /^(.*?)(?:\s+\((.+)\))?$/.exec(remainder);
+  const connected = noteMatch?.[1]?.trim() ?? remainder;
+  const note = noteMatch?.[2]?.trim() || undefined;
+
+  return {
+    connected: {
+      careful,
+      connected,
+      line: lineNumber,
+      note,
+    },
+  };
+}
+
+function parseGenericPronunciationLine(
+  line: string,
+  lineNumber: number,
+): { drill?: PronunciationGenericDrillItem; issue?: PronunciationShadowIssue } | null {
+  const numberedItem = /^\s*(?:[-*]\s+)?\d+\.\s+/.test(line);
+  if (!numberedItem) return null;
+
+  const itemContent = line.replace(/^\s*(?:[-*]\s+)?\d+\.\s*/, '').trim();
+  if (!itemContent) {
+    return {
+      issue: {
+        code: 'invalid_pronunciation_drill_format',
+        message:
+          'Pronunciation drill line must use "1. text" or "1. text — /transcription/" format.',
+        line: lineNumber,
+      },
+    };
+  }
+
+  const transcriptionTailMatch = /(\/[^/\n]+\/)(?:\s+(.+))?$/.exec(itemContent);
+  if (transcriptionTailMatch?.[1]) {
+    const rawText = itemContent
+      .slice(0, transcriptionTailMatch.index)
+      .replace(/[—-]\s*$/, '')
+      .replaceAll('**', '')
+      .replaceAll('`', '')
+      .trim();
+    if (!rawText) {
+      return {
+        issue: {
+          code: 'invalid_pronunciation_drill_format',
+          message:
+            'Pronunciation drill line must use "1. text" or "1. text — /transcription/" format.',
+          line: lineNumber,
+        },
+      };
+    }
+    return {
+      drill: {
+        text: rawText,
+        transcription: transcriptionTailMatch[1].trim(),
+        note: (transcriptionTailMatch[2] || '').trim() || undefined,
+        line: lineNumber,
+      },
+    };
+  }
+
+  return {
+    drill: {
+      text: itemContent.replaceAll('`', '').trim(),
+      line: lineNumber,
+    },
+  };
+}
+
+function getPronunciationSection(md: ParsedMarkdownContext): {
+  sectionStartLine: number;
+  sectionLines: string[];
+} | null {
   const heading = findFirstPronunciationHeading(md.document.body);
   if (!heading) return null;
   const sectionStartLine = heading.position?.start.line ?? 0;
@@ -314,18 +510,60 @@ export function extractPronunciationShadowFocus(
     Math.max(sectionStartLine, endLineExclusive - 1),
   );
 
-  let modeValue: string | null = null;
+  return { sectionStartLine, sectionLines };
+}
+
+export function extractPronunciationFocus(md: ParsedMarkdownContext): PronunciationFocus | null {
+  const section = getPronunciationSection(md);
+  if (!section) return null;
+  const { sectionStartLine, sectionLines } = section;
+
+  let modeValue: PronunciationMode | null = null;
+  let target: string | undefined;
+  let focus: string | undefined;
+  let action: string | undefined;
+  let deliverable: string | undefined;
+  let contourCue: string | undefined;
   let shadowSentence: string | undefined;
   const words: PronunciationShadowWord[] = [];
+  const pairs: PronunciationMinimalPairItem[] = [];
+  const lines: PronunciationConnectedSpeechItem[] = [];
+  const drills: PronunciationGenericDrillItem[] = [];
   const issues: PronunciationShadowIssue[] = [];
 
   for (const [index, rawLine] of sectionLines.entries()) {
     const trimmed = rawLine.trim();
     if (!trimmed || trimmed === ':::') continue;
 
-    const mode = parseMarkedField(trimmed, 'mode');
+    const mode = normalizePronunciationMode(parseMarkedField(trimmed, 'mode'));
     if (mode) {
-      modeValue = mode.toLowerCase();
+      modeValue = mode;
+      continue;
+    }
+
+    const targetField = parseMarkedField(trimmed, 'target');
+    if (targetField) {
+      target = targetField;
+      continue;
+    }
+    const focusField = parseMarkedField(trimmed, 'focus');
+    if (focusField) {
+      focus = focusField;
+      continue;
+    }
+    const actionField = parseMarkedField(trimmed, 'action');
+    if (actionField) {
+      action = actionField;
+      continue;
+    }
+    const deliverableField = parseMarkedField(trimmed, 'deliverable');
+    if (deliverableField) {
+      deliverable = deliverableField;
+      continue;
+    }
+    const contourCueField = parseMarkedField(trimmed, 'contour cue');
+    if (contourCueField) {
+      contourCue = contourCueField;
       continue;
     }
 
@@ -335,23 +573,103 @@ export function extractPronunciationShadowFocus(
       continue;
     }
 
-    const parsedWord = parsePronunciationWordLine(trimmed, sectionStartLine + index + 1);
-    if (parsedWord?.word) {
-      words.push(parsedWord.word);
+    const lineNumber = sectionStartLine + index + 1;
+    if (modeValue === 'shadow_sentence') {
+      const parsedWord = parsePronunciationWordLine(trimmed, lineNumber);
+      if (parsedWord?.word) {
+        words.push(parsedWord.word);
+        continue;
+      }
+      if (parsedWord?.issue) {
+        issues.push(parsedWord.issue);
+      }
       continue;
     }
-    if (parsedWord?.issue) {
-      issues.push(parsedWord.issue);
+    if (modeValue === 'minimal_pair') {
+      const parsedPair = parseMinimalPairLine(trimmed, lineNumber);
+      if (parsedPair?.pair) {
+        pairs.push(parsedPair.pair);
+        continue;
+      }
+      if (parsedPair?.issue) {
+        issues.push(parsedPair.issue);
+      }
+      continue;
+    }
+    if (modeValue === 'connected_speech') {
+      const parsedLine = parseConnectedSpeechLine(trimmed, lineNumber);
+      if (parsedLine?.connected) {
+        lines.push(parsedLine.connected);
+        continue;
+      }
+      if (parsedLine?.issue) {
+        issues.push(parsedLine.issue);
+      }
+      continue;
+    }
+    if (modeValue) {
+      const parsedDrill = parseGenericPronunciationLine(trimmed, lineNumber);
+      if (parsedDrill?.drill) {
+        drills.push(parsedDrill.drill);
+        continue;
+      }
+      if (parsedDrill?.issue) {
+        issues.push(parsedDrill.issue);
+      }
     }
   }
 
-  if (modeValue !== 'shadow_sentence') return null;
+  if (!modeValue) return null;
 
-  return {
-    mode: 'shadow_sentence',
-    shadowSentence,
-    words,
+  const shared = {
+    target,
+    focus,
+    action,
+    deliverable,
     sectionStartLine,
     issues,
+  };
+
+  if (modeValue === 'shadow_sentence') {
+    return {
+      mode: 'shadow_sentence',
+      shadowSentence,
+      words,
+      ...shared,
+    };
+  }
+  if (modeValue === 'minimal_pair') {
+    return {
+      mode: 'minimal_pair',
+      pairs,
+      ...shared,
+    };
+  }
+  if (modeValue === 'connected_speech') {
+    return {
+      mode: 'connected_speech',
+      lines,
+      ...shared,
+    };
+  }
+  return {
+    mode: modeValue,
+    drills,
+    contourCue,
+    ...shared,
+  };
+}
+
+export function extractPronunciationShadowFocus(
+  md: ParsedMarkdownContext,
+): PronunciationShadowFocus | null {
+  const focus = extractPronunciationFocus(md);
+  if (!focus || focus.mode !== 'shadow_sentence') return null;
+  return {
+    mode: 'shadow_sentence',
+    shadowSentence: focus.shadowSentence,
+    words: focus.words,
+    sectionStartLine: focus.sectionStartLine,
+    issues: focus.issues,
   };
 }

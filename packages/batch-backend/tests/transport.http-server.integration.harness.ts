@@ -467,14 +467,14 @@ export function describeHttpServerIntegrationSuite(
       mockGetTemplateContent.mockResolvedValue({
         id: 'template.md',
         label: 'Template',
-        content: String.raw`Template content\nINSERT PROFILE HERE`,
+        content: String.raw`Template content`,
         currentRevisionId: 'template-revision-1',
         updatedAt: '2024-01-01T00:00:00.000Z',
       });
       mockUpsertTemplateContent.mockResolvedValue({
         id: 'template.md',
         label: 'Template',
-        content: String.raw`Updated template content\nINSERT PROFILE HERE`,
+        content: String.raw`Updated template content`,
         currentRevisionId: 'template-revision-2',
         updatedAt: '2024-01-02T00:00:00.000Z',
       });

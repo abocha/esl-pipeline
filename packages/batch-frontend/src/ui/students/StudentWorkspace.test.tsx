@@ -39,6 +39,31 @@ vi.mock('../../utils/api', () => ({
 
 const now = '2026-02-07T12:00:00.000Z';
 const STUDENT_WORKSPACE_ASYNC_TIMEOUT_MS = 5_000;
+const CLEAN_TEMPLATE_STARTER_CONTENT = String.raw`## **System Prompt: ESL Homework Generator**
+
+**Role & Scope**
+You are an Expert ESL Content Assistant operating in a stateless backend runtime. Produce one complete homework assignment for one adult ESL student.
+
+**Working Context Contract**
+Treat the labeled context blocks appended after these instructions as the complete runtime context for this request.
+
+**Context Priority Rules**
+Use the runtime blocks in this order:
+1. **[LATEST_TRANSCRIPT]**
+2. **[TEACHER_NOTES]**
+3. **[UNRESOLVED_ISSUES]**, **[RECENT_LESSON_MEMORY]**, **[RECENT_HOMEWORK_MEMORY]**
+4. **[STUDENT_MEMORY_SNAPSHOT]**
+5. **[FOUNDATIONAL_PROFILE]**
+
+**Task-Specific Generation Rules**
+1. Produce one coherent homework mission.
+2. Use one primary input source.
+3. If no input type is specified, default to \`generate\`.
+
+**Output Formatting Rules**
+- Return one Markdown code block with YAML front matter.
+- Use the required section structure.
+`;
 
 function renderWorkspace() {
   return render(
@@ -117,7 +142,7 @@ describe('StudentWorkspace', () => {
     vi.mocked(api.getTemplateContent).mockResolvedValue({
       id: 'template-default.md',
       label: 'Default Template',
-      content: String.raw`HEADER\nINSERT PROFILE HERE\nFOOTER`,
+      content: CLEAN_TEMPLATE_STARTER_CONTENT,
       currentRevisionId: 'template-revision-1',
       updatedAt: now,
     });
@@ -489,7 +514,7 @@ describe('StudentWorkspace', () => {
     vi.mocked(api.upsertTemplateContent).mockResolvedValue({
       id: 'template-default.md',
       label: 'Default Template',
-      content: String.raw`HEADER\nINSERT PROFILE HERE\nFOOTER`,
+      content: CLEAN_TEMPLATE_STARTER_CONTENT,
       currentRevisionId: 'template-revision-2',
       updatedAt: now,
     });
@@ -497,7 +522,7 @@ describe('StudentWorkspace', () => {
     vi.mocked(api.restoreTemplateRevision).mockResolvedValue({
       id: 'template-default.md',
       label: 'Default Template',
-      content: String.raw`HEADER\nINSERT PROFILE HERE\nFOOTER`,
+      content: CLEAN_TEMPLATE_STARTER_CONTENT,
       currentRevisionId: 'template-revision-1',
       updatedAt: now,
     });
@@ -515,7 +540,7 @@ describe('StudentWorkspace', () => {
       createdAt: now,
       createdBy: 'user-1',
       restoredFromRevisionId: null,
-      content: String.raw`HEADER\nINSERT PROFILE HERE\nFOOTER`,
+      content: CLEAN_TEMPLATE_STARTER_CONTENT,
     });
 
     vi.mocked(api.deleteTemplateContent).mockResolvedValue();
@@ -902,9 +927,12 @@ describe('StudentWorkspace', () => {
         {},
         { timeout: STUDENT_WORKSPACE_ASYNC_TIMEOUT_MS },
       );
-      await user.clear(approvedText);
-      await user.type(approvedText, 'Uses English with product, engineering, and client teams.');
-      await user.type(screen.getByLabelText(/Reviewer Note candidate-pending/i), 'Confirmed.');
+      fireEvent.change(approvedText, {
+        target: { value: 'Uses English with product, engineering, and client teams.' },
+      });
+      fireEvent.change(screen.getByLabelText(/Reviewer Note candidate-pending/i), {
+        target: { value: 'Confirmed.' },
+      });
       await user.click(screen.getByRole('button', { name: /^Approve$/i }));
 
       await waitFor(() => {
@@ -1056,23 +1084,23 @@ describe('StudentWorkspace', () => {
       /Select a template to edit/i,
     ) as HTMLTextAreaElement;
     await user.clear(templateEditor);
-    await user.type(templateEditor, String.raw`HEADER\nINSERT PROFILE HERE\nUPDATED`);
+    await user.type(templateEditor, String.raw`HEADER\nUPDATED`);
     await user.click(screen.getByRole('button', { name: /Save Template Content/i }));
 
     await waitFor(() => {
       expect(api.upsertTemplateContent).toHaveBeenCalledWith(
         'template-default.md',
-        expect.stringContaining('INSERT PROFILE HERE'),
+        expect.stringContaining(String.raw`HEADER\nUPDATED`),
       );
     });
   });
 
-  it('creates template with scaffold marker on its own line', async () => {
+  it('creates template with a clean static scaffold', async () => {
     const user = userEvent.setup();
     vi.mocked(api.upsertTemplateContent).mockResolvedValue({
       id: 'hw/custom-template.md',
       label: 'Custom Template',
-      content: '## Prompt\n\nINSERT PROFILE HERE\n\n## Transcript\n',
+      content: CLEAN_TEMPLATE_STARTER_CONTENT,
       currentRevisionId: 'template-revision-3',
       updatedAt: now,
     });
@@ -1091,7 +1119,7 @@ describe('StudentWorkspace', () => {
     await waitFor(() => {
       expect(api.upsertTemplateContent).toHaveBeenCalledWith(
         'hw/custom-template.md',
-        '## Prompt\n\nINSERT PROFILE HERE\n\n## Transcript\n',
+        CLEAN_TEMPLATE_STARTER_CONTENT,
       );
     });
   });

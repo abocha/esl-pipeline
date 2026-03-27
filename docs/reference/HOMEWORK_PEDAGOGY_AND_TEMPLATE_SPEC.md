@@ -20,28 +20,30 @@
 
 ## Baseline
 
-This spec is intentionally based very closely on the protected pedagogical baseline snapshot:
+This spec is intentionally based on the current canonical prompt baseline:
 
-- [`docs/templates/hw_prompt_v4-4_voice-aligned.md`](../templates/hw_prompt_v4-4_voice-aligned.md)
+- [`docs/prompt-gallery/templates/hw_prompt_definitive.md`](../prompt-gallery/templates/hw_prompt_definitive.md)
 
-That template is the canonical pedagogical reference for the homework method. The current
-memory-aware runtime snapshot may evolve in a newer prompt file, but this doc exists to explain
-which pedagogical moves in `v4.4` are deliberate, protected, and worth preserving as the system
-evolves.
+That template is the canonical pedagogical reference for the homework method. This doc exists to
+explain which pedagogical moves in the definitive prompt are deliberate, protected, and worth
+preserving as the system evolves.
 
 ## Relationship to Other Docs
 
 - Use this doc for pedagogy, assignment anatomy, and continuity intent.
 - Use [`docs/reference/PRESET_V2_SPEC.md`](PRESET_V2_SPEC.md) for preset architecture and prompt
   governance.
+- Use [`docs/reference/HOMEWORK_PROMPTING_SYSTEM_GUIDE.md`](HOMEWORK_PROMPTING_SYSTEM_GUIDE.md)
+  for the current runtime prompt-package shape, section-order guidance, and prompt-assembly
+  recommendations.
 - Use [`docs/plans/student-memory-system-upgrade/phase-5-prompt-template-and-provider-runtime.md`](../plans/student-memory-system-upgrade/phase-5-prompt-template-and-provider-runtime.md)
   for memory-aware prompt assembly/runtime behavior.
 - Use the template file itself for exact output wording and syntax requirements.
 
 ## Locked Decisions
 
-1. The `v4.4` voice-aligned homework shape is the canonical pedagogical baseline for
-   `general-english` version 1.
+1. The definitive homework shape is the canonical pedagogical baseline for `general-english`
+   version 1.
 2. Prompt wording may evolve, but the assignment's pedagogical spine should not be casually
    re-invented.
 3. One homework should feel like one coherent mission, not a loose bundle of unrelated exercises.
@@ -451,8 +453,7 @@ method while improving the surrounding system.
 
 ## Related
 
-- [`docs/templates/hw_prompt_v4-4_voice-aligned.md`](../templates/hw_prompt_v4-4_voice-aligned.md)
-- [`docs/templates/hw_prompt_v4-5_voice-aligned.md`](../templates/hw_prompt_v4-5_voice-aligned.md)
+- [`docs/prompt-gallery/templates/hw_prompt_definitive.md`](../prompt-gallery/templates/hw_prompt_definitive.md)
 - [`docs/reference/PRESET_V2_SPEC.md`](PRESET_V2_SPEC.md)
 - [`docs/plans/student-memory-system-upgrade/phase-4-student-rollup-and-retrieval-packaging.md`](../plans/student-memory-system-upgrade/phase-4-student-rollup-and-retrieval-packaging.md)
 - [`docs/plans/student-memory-system-upgrade/phase-5-prompt-template-and-provider-runtime.md`](../plans/student-memory-system-upgrade/phase-5-prompt-template-and-provider-runtime.md)

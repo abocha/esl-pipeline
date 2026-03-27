@@ -31,6 +31,7 @@ import { requestLessonMemoryGeneration } from './request-lesson-memory-generatio
 import { buildStudentMemoryPackageContext } from './student-memory-package.js';
 import { resolveStudentProfileBindingAt } from './student-profile-bindings.js';
 import { getStudentProfileById } from './student-profiles-store.js';
+const LEGACY_PROFILE_MARKER = 'INSERT PROFILE HERE';
 
 export interface CreatePromptPackageParams {
   recordingId: string;
@@ -494,6 +495,12 @@ async function resolveTemplateArtifact(params: {
   const { selection, activeTemplateRevision } = params;
 
   if (activeTemplateRevision) {
+    if (activeTemplateRevision.content.includes(LEGACY_PROFILE_MARKER)) {
+      throw new PromptOptionError(
+        `Active template "${selection.templateId}" still uses retired legacy marker ${LEGACY_PROFILE_MARKER}. Migrate or replace the template revision before generation.`,
+        'template_revision_legacy_marker',
+      );
+    }
     return {
       content: activeTemplateRevision.content,
       hash: activeTemplateRevision.contentHash,

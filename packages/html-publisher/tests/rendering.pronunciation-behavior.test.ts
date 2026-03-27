@@ -1,8 +1,24 @@
 // @vitest-environment jsdom
 import { describe, expect, it } from 'vitest';
+import type {
+  PronunciationAudioClip,
+  PronunciationAudioPayload,
+} from '@esl-pipeline/shared-infrastructure';
 
 import { renderToHtml } from '../src/rendering.js';
 import { createRenderedDocument, extractBehaviorScript } from './rendering.test-harness.js';
+
+function buildPronunciationAudioPayload(
+  mode: PronunciationAudioPayload['mode'],
+  itemClips: PronunciationAudioClip[],
+  primaryClip?: PronunciationAudioClip,
+): PronunciationAudioPayload {
+  return {
+    mode,
+    ...(primaryClip ? { primaryClip } : {}),
+    itemClips,
+  };
+}
 
 describe('rendering', () => {
   it('ships browser word-level pronunciation controls for shadow_sentence mode', async () => {
@@ -14,7 +30,30 @@ describe('rendering', () => {
   1. weather — /ˈweð.ər/
   2. unexpectedly — /ˌʌn.ɪkˈspek.tɪd.li/
   3. warm — /wɔːrm/`;
-    const html = await renderToHtml(markdown, 'Pronunciation');
+    const html = await renderToHtml(markdown, 'Pronunciation', {
+      pronunciationAudio: buildPronunciationAudioPayload(
+        'shadow_sentence',
+        [
+          {
+            id: 'shadow-word-1-edge',
+            itemIndex: 0,
+            kind: 'word_item',
+            engine: 'edge',
+            text: 'weather',
+            url: 'https://example.com/weather.mp3',
+            label: 'Word',
+          },
+        ],
+        {
+          id: 'primary-shadow',
+          kind: 'shadow_sentence',
+          engine: 'provider',
+          text: 'The weather was unexpectedly warm.',
+          url: 'https://example.com/shadow.mp3',
+          label: 'Sentence',
+        },
+      ),
+    });
     expect(html).toContain('.word-tts-button');
     expect(html).toContain('.pronunciation-word-tts');
     expect(html).toContain('.pronunciation-shadow-sentence');
@@ -26,7 +65,7 @@ describe('rendering', () => {
     expect(html).not.toContain('justify-content: space-between;');
     expect(html).toContain('shadow_sentence');
     expect(html).not.toContain('item.replaceChildren(wordMain);');
-    expect(html).toContain('speechSynthesis');
+    expect(html).toContain('esl-pronunciation-audio');
   });
 
   it('ships browser connected-speech playback controls', async () => {
@@ -37,27 +76,151 @@ describe('rendering', () => {
   1. "Change helps us." -> Change help-sus.
   2. "It gives us food." -> It give-sus food.
   3. "Light feels stronger." -> Light feel-stronger.`;
-    const html = await renderToHtml(markdown, 'Connected Speech');
+    const html = await renderToHtml(markdown, 'Connected Speech', {
+      pronunciationAudio: buildPronunciationAudioPayload('connected_speech', [
+        {
+          id: 'connected-1',
+          itemIndex: 0,
+          kind: 'connected_target',
+          engine: 'provider',
+          text: 'Change help-sus.',
+          url: 'https://example.com/connected-1.mp3',
+          label: 'Play',
+        },
+      ]),
+    });
+    const renderedDocument = createRenderedDocument(html);
+    const listItems = [...renderedDocument.querySelectorAll('.markdown-body li')];
+    const firstItem = listItems.find((item) => item.textContent?.includes('Change helps us.'));
+
     expect(html).toContain('connected_speech');
     expect(html).toContain('Play connected speech line');
+    expect(firstItem?.querySelector('.pronunciation-connected-line')).toBeTruthy();
+    expect(firstItem?.querySelector('.pronunciation-connected-careful')?.textContent).toContain(
+      'Change helps us.',
+    );
+    expect(firstItem?.querySelector('.pronunciation-connected-target')?.textContent).toContain(
+      'Change help-sus.',
+    );
   });
 
-  it('ships word-level pronunciation controls for non-shadow pronunciation modes', async () => {
+  it('renders sentence-level pronunciation controls for intonation mode', async () => {
     const markdown = `### C. Pronunciation Micro-Focus
   
   **Mode:** intonation
   
-  1. rise-fall — /ˈraɪz.fɔːl/
-  2. contrastive stress — /kənˈtræs.tɪv stres/`;
-    const html = await renderToHtml(markdown, 'Intonation Pronunciation');
+  1. Do you have a second? — /duː juː hæv ə ˈsekənd/ Contour cue: rise
+  2. Is everything okay? — /ɪz ˈevriθɪŋ oʊˈkeɪ/ Contour cue: rise`;
+    const html = await renderToHtml(markdown, 'Intonation Pronunciation', {
+      pronunciationAudio: buildPronunciationAudioPayload('intonation', [
+        {
+          id: 'intonation-1',
+          itemIndex: 0,
+          kind: 'sentence_item',
+          engine: 'provider',
+          text: 'Do you have a second?',
+          url: 'https://example.com/intonation-1.mp3',
+          label: 'Play',
+        },
+      ]),
+    });
     const renderedDocument = createRenderedDocument(html);
 
     const listItems = [...renderedDocument.querySelectorAll('.markdown-body li')];
-    const firstItem = listItems.find((item) => item.textContent?.includes('rise-fall'));
+    const firstItem = listItems.find((item) => item.textContent?.includes('Do you have a second?'));
 
     expect(firstItem?.querySelector('.word-tts-button')?.textContent).toBe('Play');
-    expect(firstItem?.querySelector('.word-tts-transcription')?.textContent).toBe('/ˈraɪz.fɔːl/');
-    expect(firstItem?.textContent?.match(/\/ˈraɪz.fɔːl\//g)?.length ?? 0).toBe(1);
+    expect(firstItem?.querySelector('.pronunciation-line-text')?.textContent).toContain(
+      'Do you have a second?',
+    );
+    expect(firstItem?.querySelector('.word-tts-transcription')?.textContent).toBe(
+      '/duː juː hæv ə ˈsekənd/',
+    );
+    expect(firstItem?.querySelector('.pronunciation-contour-badge')?.textContent).toBe('rise');
+  });
+
+  it('renders disabled pronunciation buttons when preview payload has no clip URLs yet', async () => {
+    const markdown = `### C. Pronunciation Micro-Focus
+  
+  **Mode:** intonation
+  
+  1. Do you have a second? — /duː juː hæv ə ˈsekənd/ Contour cue: rise`;
+    const html = await renderToHtml(markdown, 'Preview Pronunciation', {
+      pronunciationAudio: buildPronunciationAudioPayload('intonation', [
+        {
+          id: 'intonation-1',
+          itemIndex: 0,
+          kind: 'sentence_item',
+          engine: 'provider',
+          text: 'Do you have a second?',
+          label: 'Play',
+        },
+      ]),
+    });
+    const renderedDocument = createRenderedDocument(html);
+    const button = renderedDocument.querySelector('.word-tts-button');
+
+    expect(button).toBeTruthy();
+    expect(button?.getAttribute('disabled')).not.toBeNull();
+    expect(button?.getAttribute('title')).toContain('not generated yet');
+  });
+
+  it('renders rhythm_chunking drill lines with playback controls', async () => {
+    const markdown = `### C. Pronunciation Micro-Focus
+  
+  **Mode:** rhythm_chunking
+  
+  1. We should | review this | carefully. — /wi ʃʊd rɪˈvjuː ðɪs ˈkeə.fəl.i/
+  2. Let me know | when you arrive. — /let mi nəʊ wen ju əˈraɪv/`;
+    const html = await renderToHtml(markdown, 'Rhythm Chunking', {
+      pronunciationAudio: buildPronunciationAudioPayload('rhythm_chunking', [
+        {
+          id: 'rhythm-1',
+          itemIndex: 0,
+          kind: 'sentence_item',
+          engine: 'provider',
+          text: 'We should review this carefully.',
+          url: 'https://example.com/rhythm-1.mp3',
+          label: 'Play',
+        },
+      ]),
+    });
+    const renderedDocument = createRenderedDocument(html);
+
+    const listItems = [...renderedDocument.querySelectorAll('.markdown-body li')];
+    const firstItem = listItems.find((item) => item.textContent?.includes('We should'));
+
+    expect(firstItem?.querySelector('.word-tts-button')?.textContent).toBe('Play');
+    expect(firstItem?.textContent).toContain('We should | review this | carefully.');
+  });
+
+  it('renders sentence_stress drill lines with playback controls', async () => {
+    const markdown = `### C. Pronunciation Micro-Focus
+  
+  **Mode:** sentence_stress
+  
+  1. We **really** need to leave now. — /wi ˈrɪə.li niːd tə liːv naʊ/
+  2. I **can** help with that. — /aɪ kən help wɪð ðæt/`;
+    const html = await renderToHtml(markdown, 'Sentence Stress', {
+      pronunciationAudio: buildPronunciationAudioPayload('sentence_stress', [
+        {
+          id: 'stress-1',
+          itemIndex: 0,
+          kind: 'sentence_item',
+          engine: 'provider',
+          text: 'We really need to leave now.',
+          url: 'https://example.com/stress-1.mp3',
+          label: 'Play',
+        },
+      ]),
+    });
+    const renderedDocument = createRenderedDocument(html);
+
+    const listItems = [...renderedDocument.querySelectorAll('.markdown-body li')];
+    const firstItem = listItems.find((item) => item.textContent?.includes('really'));
+
+    expect(firstItem?.querySelector('.word-tts-button')?.textContent).toBe('Play');
+    expect(firstItem?.textContent).toContain('really');
   });
 
   it('does not require numbered word drills in other pronunciation modes', async () => {
@@ -83,7 +246,28 @@ describe('rendering', () => {
   
   1. Stiff /stɪf/ — Steve /stiːv/
   2. Live /lɪv/ — Leave /liːv/`;
-    const html = await renderToHtml(markdown, 'Minimal Pair Controls');
+    const html = await renderToHtml(markdown, 'Minimal Pair Controls', {
+      pronunciationAudio: buildPronunciationAudioPayload('minimal_pair', [
+        {
+          id: 'minimal-1-left',
+          itemIndex: 0,
+          kind: 'pair_left',
+          engine: 'edge',
+          text: 'Stiff',
+          url: 'https://example.com/stiff.mp3',
+          label: 'Left',
+        },
+        {
+          id: 'minimal-1-right',
+          itemIndex: 0,
+          kind: 'pair_right',
+          engine: 'edge',
+          text: 'Steve',
+          url: 'https://example.com/steve.mp3',
+          label: 'Right',
+        },
+      ]),
+    });
     const renderedDocument = createRenderedDocument(html);
 
     const listItems = [...renderedDocument.querySelectorAll('.markdown-body li')];
@@ -100,6 +284,51 @@ describe('rendering', () => {
     expect(firstItem?.querySelector('.pronunciation-word-pair')).toBeTruthy();
   });
 
+  it('matches drill item clips by numbered drill order inside pronunciation callouts', async () => {
+    const markdown = `### C. Pronunciation Micro-Focus
+  
+  :::callout 🗣️
+  - **Mode:** minimal_pair
+  - **Target:** Hear the short /ɪ/ and long /iː/ clearly.
+  - **Focus:** Notice the vowel length difference.
+  - **Action:** Listen and repeat both words.
+  - **Deliverable:** One short recording.
+  - 1. ship /ʃɪp/ — sheep /ʃiːp/
+  - 2. live /lɪv/ — leave /liːv/
+  :::`;
+    const html = await renderToHtml(markdown, 'Minimal Pair Callout Indexing', {
+      pronunciationAudio: buildPronunciationAudioPayload('minimal_pair', [
+        {
+          id: 'minimal-callout-1-left',
+          itemIndex: 0,
+          kind: 'pair_left',
+          engine: 'edge',
+          text: 'ship',
+          url: 'https://example.com/ship.mp3',
+          label: 'Left',
+        },
+        {
+          id: 'minimal-callout-1-right',
+          itemIndex: 0,
+          kind: 'pair_right',
+          engine: 'edge',
+          text: 'sheep',
+          url: 'https://example.com/sheep.mp3',
+          label: 'Right',
+        },
+      ]),
+    });
+    const renderedDocument = createRenderedDocument(html);
+
+    const listItems = [...renderedDocument.querySelectorAll('.callout .content li')];
+    const drillItem = listItems.find((item) => item.textContent?.includes('ship'));
+    const buttons = drillItem ? [...drillItem.querySelectorAll('.word-tts-button')] : [];
+
+    expect(buttons).toHaveLength(2);
+    expect(buttons[0]?.getAttribute('aria-label')).toContain('ship /ʃɪp/');
+    expect(buttons[1]?.getAttribute('aria-label')).toContain('sheep /ʃiːp/');
+  });
+
   it('emits a parseable behavior script', async () => {
     const html = await renderToHtml('### C. Pronunciation Micro-Focus', 'Script Parse');
     const scriptText = extractBehaviorScript(html);
@@ -113,7 +342,7 @@ describe('rendering', () => {
     expect(scriptText).toContain(
       "existingColgroup.getAttribute('data-generated-colgroup') !== 'true'",
     );
-    expect(scriptText).toContain('speechSynthesis');
+    expect(scriptText).toContain('esl-pronunciation-audio');
     expect(() => new Function(scriptText)).not.toThrow();
   });
 
@@ -189,7 +418,19 @@ describe('rendering', () => {
   1. \`Flood\` — /flʌd/
   2. *Vehicle* — /viːɪkl/
   3. **Stopped** — /stɒpt/`;
-    const html = await renderToHtml(markdown, 'Pronunciation Inline Markup');
+    const html = await renderToHtml(markdown, 'Pronunciation Inline Markup', {
+      pronunciationAudio: buildPronunciationAudioPayload('shadow_sentence', [
+        {
+          id: 'inline-1',
+          itemIndex: 0,
+          kind: 'word_item',
+          engine: 'edge',
+          text: 'Flood',
+          url: 'https://example.com/flood.mp3',
+          label: 'Play',
+        },
+      ]),
+    });
     const renderedDocument = createRenderedDocument(html);
 
     const listItems = [...renderedDocument.querySelectorAll('.markdown-body li')];
@@ -216,7 +457,19 @@ describe('rendering', () => {
   
   1. wouldn't — /ˈwʊd.ənt/ (wu-DNT, NOT wud-not!)
   2. appointment — /əˈpɔɪnt.mənt/`;
-    const html = await renderToHtml(markdown, 'Pronunciation Notes');
+    const html = await renderToHtml(markdown, 'Pronunciation Notes', {
+      pronunciationAudio: buildPronunciationAudioPayload('shadow_sentence', [
+        {
+          id: 'notes-1',
+          itemIndex: 0,
+          kind: 'word_item',
+          engine: 'edge',
+          text: "wouldn't",
+          url: 'https://example.com/wouldnt.mp3',
+          label: 'Play',
+        },
+      ]),
+    });
     const renderedDocument = createRenderedDocument(html);
 
     const listItems = [...renderedDocument.querySelectorAll('.markdown-body li')];
@@ -247,7 +500,19 @@ describe('rendering', () => {
   1. wouldn't /ˈwʊd.ənt/
   2. have /əv/
   3. appointment /əˈpɔɪnt.mənt/`;
-    const html = await renderToHtml(markdown, 'Pronunciation No Dash');
+    const html = await renderToHtml(markdown, 'Pronunciation No Dash', {
+      pronunciationAudio: buildPronunciationAudioPayload('shadow_sentence', [
+        {
+          id: 'no-dash-1',
+          itemIndex: 0,
+          kind: 'word_item',
+          engine: 'edge',
+          text: "wouldn't",
+          url: 'https://example.com/no-dash.mp3',
+          label: 'Play',
+        },
+      ]),
+    });
     const renderedDocument = createRenderedDocument(html);
 
     const listItems = [...renderedDocument.querySelectorAll('.markdown-body li')];
@@ -273,7 +538,28 @@ describe('rendering', () => {
   1. and/or — /ˈændɔːr/
   2. either/or /ˈaɪðərɔːr/
   3. quickly /ˈkwɪkli/`;
-    const html = await renderToHtml(markdown, 'Pronunciation Slash Word');
+    const html = await renderToHtml(markdown, 'Pronunciation Slash Word', {
+      pronunciationAudio: buildPronunciationAudioPayload('shadow_sentence', [
+        {
+          id: 'slash-1',
+          itemIndex: 0,
+          kind: 'word_item',
+          engine: 'edge',
+          text: 'and/or',
+          url: 'https://example.com/and-or.mp3',
+          label: 'Play',
+        },
+        {
+          id: 'slash-2',
+          itemIndex: 1,
+          kind: 'word_item',
+          engine: 'edge',
+          text: 'either/or',
+          url: 'https://example.com/either-or.mp3',
+          label: 'Play',
+        },
+      ]),
+    });
     const renderedDocument = createRenderedDocument(html);
 
     const listItems = [...renderedDocument.querySelectorAll('.markdown-body li')];

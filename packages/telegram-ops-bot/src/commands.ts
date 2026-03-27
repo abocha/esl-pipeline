@@ -1873,13 +1873,17 @@ async function resolveSharePayloadForJob(
   let pronunciationAudioSource: ResolvedSharePayload['telemetry']['pronunciationAudioSource'] = 'missing';
   const pronunciationLabeledUrl = extractLabeledMarkdownAudioUrl(
     markdown,
-    'Audio recording: Pronunciation Shadow Sentence',
+    'Audio recording: Pronunciation Practice',
   );
   if (pronunciationLabeledUrl) {
     pronunciationAudioUrl = pronunciationLabeledUrl;
     pronunciationAudioSource = 'markdown_label';
   } else {
-    const pronunciationFallbackUrl = extractAudioUrlByPathHint(markdown, '/audio/pronunciation-shadow/');
+    const pronunciationFallbackUrl = extractAudioUrlByPathHints(markdown, [
+      '/audio/pronunciation/',
+      '/audio/pronunciation-item/',
+      '/audio/pronunciation-shadow/',
+    ]);
     if (pronunciationFallbackUrl) {
       pronunciationAudioUrl = pronunciationFallbackUrl;
       pronunciationAudioSource = 'markdown_path';
@@ -1904,10 +1908,11 @@ async function resolveSharePayloadForJob(
         }
       }
       if (!pronunciationAudioUrl) {
-        const htmlPronunciationAudioUrl = extractAudioUrlByPathHint(
-          html,
+        const htmlPronunciationAudioUrl = extractAudioUrlByPathHints(html, [
+          '/audio/pronunciation/',
+          '/audio/pronunciation-item/',
           '/audio/pronunciation-shadow/',
-        );
+        ]);
         if (htmlPronunciationAudioUrl) {
           pronunciationAudioUrl = htmlPronunciationAudioUrl;
           pronunciationAudioSource = 'html_path';
@@ -1984,6 +1989,20 @@ function extractAudioUrlByPathHint(
   );
   const match = input.match(pattern);
   return match?.[1] ?? null;
+}
+
+function extractAudioUrlByPathHints(
+  input: string | null | undefined,
+  pathHints: readonly string[],
+): string | null {
+  for (const pathHint of pathHints) {
+    const match = extractAudioUrlByPathHint(input, pathHint);
+    if (match) {
+      return match;
+    }
+  }
+
+  return null;
 }
 
 function extractAssignmentTitleFromMarkdown(markdown: string | null | undefined): string | null {

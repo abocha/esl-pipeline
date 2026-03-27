@@ -5,7 +5,7 @@ import { stitchPromptPayload } from '../src/application/prompt-assembly.js';
 describe('application/prompt-assembly', () => {
   it('assembles explicit memory-aware prompt blocks in canonical order', () => {
     const result = stitchPromptPayload({
-      template: 'HEADER\nINSERT PROFILE HERE\nFOOTER\n',
+      template: 'HEADER\nFOOTER\n',
       profile: 'PROFILE CONTENT',
       studentMemorySnapshot: 'Snapshot summary',
       recentLessonMemory: 'Lesson entry',
@@ -23,6 +23,7 @@ describe('application/prompt-assembly', () => {
     expect(result).toContain('[TEACHER_NOTES]\nTeacher note');
     expect(result).toContain('[LATEST_TRANSCRIPT]\nTranscript text');
     expect(result).not.toContain('[LESSON_HISTORY]');
+    expect(result.indexOf('HEADER\nFOOTER')).toBeLessThan(result.indexOf('[FOUNDATIONAL_PROFILE]'));
 
     const expectedOrder = [
       '[FOUNDATIONAL_PROFILE]',
@@ -40,7 +41,7 @@ describe('application/prompt-assembly', () => {
 
   it('uses explicit absence markers for teacher notes when omitted', () => {
     const result = stitchPromptPayload({
-      template: 'HEADER\nINSERT PROFILE HERE\nFOOTER\n',
+      template: 'HEADER\nFOOTER\n',
       profile: 'PROFILE CONTENT',
       studentMemorySnapshot: 'No long-term student-memory snapshot available yet.',
       recentLessonMemory: 'No recent lesson-memory entries available for retrieval.',
@@ -55,7 +56,7 @@ describe('application/prompt-assembly', () => {
 
   it('falls back to an explicit stable absence marker when a block body is blank', () => {
     const result = stitchPromptPayload({
-      template: 'HEADER\nINSERT PROFILE HERE\nFOOTER\n',
+      template: 'HEADER\nFOOTER\n',
       profile: 'PROFILE CONTENT',
       studentMemorySnapshot: '',
       recentLessonMemory: '  ',

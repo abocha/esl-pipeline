@@ -72,6 +72,7 @@ export async function renderAndPublishMarkdownToS3(
     features: options.features,
     theme: options.theme,
     headingTheme: options.headingTheme,
+    pronunciationAudio: options.pronunciationAudio,
   });
 
   const upload = await publishHtmlToS3(html, {

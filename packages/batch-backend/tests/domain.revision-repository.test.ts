@@ -89,7 +89,7 @@ describe('domain/revision-repositories', () => {
 
     const first = await insertTemplateRevision({
       templateId,
-      content: 'Template version 1\nINSERT PROFILE HERE',
+      content: 'Template version 1',
       contentHash: 'hash-template-v1',
       source: 'create',
       status: 'active',
@@ -97,7 +97,7 @@ describe('domain/revision-repositories', () => {
 
     const second = await insertTemplateRevision({
       templateId,
-      content: 'Template version 2\nINSERT PROFILE HERE',
+      content: 'Template version 2',
       contentHash: 'hash-template-v2',
       source: 'update',
       status: 'active',

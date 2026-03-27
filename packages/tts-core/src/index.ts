@@ -1,5 +1,8 @@
 import { createTtsEngine } from './engine.js';
 import type {
+  BuildPronunciationTextInput,
+  BuildPronunciationTextOptions,
+  BuildPronunciationTextResult,
   BuildPronunciationShadowSentenceInput,
   BuildPronunciationShadowSentenceOptions,
   BuildPronunciationShadowSentenceResult,
@@ -44,6 +47,13 @@ export async function buildPronunciationShadowSentenceMp3(
   return defaultEngine.buildPronunciationShadowSentenceMp3(input, options);
 }
 
+export async function buildPronunciationTextMp3(
+  input: BuildPronunciationTextInput,
+  options: BuildPronunciationTextOptions,
+): Promise<BuildPronunciationTextResult> {
+  return defaultEngine.buildPronunciationTextMp3(input, options);
+}
+
 export async function loadVoicesCatalog(provider?: TtsProviderId): Promise<VoiceCatalog> {
   return defaultEngine.loadVoicesCatalog(provider);
 }
@@ -52,6 +62,9 @@ export { hashStudyText } from './hash.js';
 
 export { createTtsEngine } from './engine.js';
 export type {
+  BuildPronunciationTextInput,
+  BuildPronunciationTextOptions,
+  BuildPronunciationTextResult,
   BuildPronunciationShadowSentenceInput,
   BuildPronunciationShadowSentenceOptions,
   BuildPronunciationShadowSentenceResult,

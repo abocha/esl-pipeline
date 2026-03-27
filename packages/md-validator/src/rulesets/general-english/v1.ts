@@ -18,7 +18,7 @@ import type {
   PmdHeading,
 } from '@esl-pipeline/pmd';
 import {
-  extractPronunciationShadowFocus,
+  extractPronunciationFocus,
   findDirectiveBlocks,
   parseMarkdownContext,
 } from '@esl-pipeline/pmd';
@@ -183,6 +183,10 @@ const NON_BLOCKING_WARNING_PREFIXES = [
   'Additional H2 sections after section 9 are ignored',
   'Controlled Practice has ',
   'Comprehension Check has ',
+  'Missing "### <letter>. Pronunciation Micro-Focus" section under H2 #5.',
+  'Pronunciation Micro-Focus is missing a supported ',
+  'Pronunciation Micro-Focus (line ',
+  'Line ',
   'Front matter: speaker_profiles role "',
 ];
 
@@ -393,6 +397,96 @@ function countListItems(blocks: PmdBlock[]): number {
     }
   }
   return count;
+}
+
+function pushPronunciationWarnings(
+  warnings: string[],
+  pronunciationFocus: NonNullable<ReturnType<typeof extractPronunciationFocus>>,
+  lineOffset: number,
+): void {
+  const displayLine = applyLineOffset(pronunciationFocus.sectionStartLine, lineOffset);
+  const missingSharedFields: [key: string, value: string | undefined][] = [
+    ['Target', pronunciationFocus.target],
+    ['Focus', pronunciationFocus.focus],
+    ['Action', pronunciationFocus.action],
+    ['Deliverable', pronunciationFocus.deliverable],
+  ];
+
+  for (const [label, value] of missingSharedFields) {
+    if (!value?.trim()) {
+      warnings.push(
+        `Pronunciation Micro-Focus (line ${displayLine}): missing "**${label}:** <value>" for ${pronunciationFocus.mode} mode.`,
+      );
+    }
+  }
+
+  switch (pronunciationFocus.mode) {
+    case 'shadow_sentence': {
+      if (!pronunciationFocus.shadowSentence?.trim()) {
+        warnings.push(
+          `Pronunciation Micro-Focus (line ${displayLine}): missing "**Shadow sentence:** <sentence>" for shadow_sentence mode.`,
+        );
+      }
+      if (pronunciationFocus.words.length < 3 || pronunciationFocus.words.length > 5) {
+        warnings.push(
+          `Pronunciation Micro-Focus (line ${displayLine}): shadow_sentence mode requires 3-5 word drill lines in "1. word — /transcription/" or "1. word /transcription/" format.`,
+        );
+      }
+      break;
+    }
+    case 'minimal_pair': {
+      if (pronunciationFocus.pairs.length < 2 || pronunciationFocus.pairs.length > 5) {
+        warnings.push(
+          `Pronunciation Micro-Focus (line ${displayLine}): minimal_pair mode recommends 2-5 lines in "1. word /ipa/ — word /ipa/" format.`,
+        );
+      }
+      break;
+    }
+    case 'connected_speech': {
+      if (pronunciationFocus.lines.length < 2 || pronunciationFocus.lines.length > 4) {
+        warnings.push(
+          `Pronunciation Micro-Focus (line ${displayLine}): connected_speech mode recommends 2-4 lines in "1. \"careful form\" -> connected form" format.`,
+        );
+      }
+      break;
+    }
+    case 'intonation': {
+      if (pronunciationFocus.drills.length < 2 || pronunciationFocus.drills.length > 4) {
+        warnings.push(
+          `Pronunciation Micro-Focus (line ${displayLine}): intonation mode recommends 2-4 numbered drill lines.`,
+        );
+      }
+      break;
+    }
+    case 'rhythm_chunking': {
+      if (pronunciationFocus.drills.length < 2 || pronunciationFocus.drills.length > 4) {
+        warnings.push(
+          `Pronunciation Micro-Focus (line ${displayLine}): rhythm_chunking mode recommends 2-4 numbered drill lines.`,
+        );
+      }
+      if (
+        pronunciationFocus.drills.length > 0 &&
+        !pronunciationFocus.drills.some((item) => item.text.includes('|'))
+      ) {
+        warnings.push(
+          `Pronunciation Micro-Focus (line ${displayLine}): rhythm_chunking mode should show chunk boundaries with "|" in the numbered drill lines.`,
+        );
+      }
+      break;
+    }
+    case 'sentence_stress': {
+      if (pronunciationFocus.drills.length < 2 || pronunciationFocus.drills.length > 4) {
+        warnings.push(
+          `Pronunciation Micro-Focus (line ${displayLine}): sentence_stress mode recommends 2-4 numbered drill lines.`,
+        );
+      }
+      break;
+    }
+  }
+
+  for (const issue of pronunciationFocus.issues) {
+    warnings.push(`Line ${applyLineOffset(issue.line, lineOffset)}: ${issue.message}`);
+  }
 }
 
 function isNonBlockingWarning(message: string): boolean {
@@ -1225,24 +1319,17 @@ export async function validateGeneralEnglishRuleset(
     isPronunciationMicroFocusHeading(heading.text),
   );
   if (!pronunciationHeading) {
-    errors.push('Missing "### <letter>. Pronunciation Micro-Focus" section under H2 #5.');
+    warnings.push('Missing "### <letter>. Pronunciation Micro-Focus" section under H2 #5.');
   }
 
-  const pronunciationShadow = parsedContext ? extractPronunciationShadowFocus(parsedContext) : null;
-  if (pronunciationShadow) {
-    if (!pronunciationShadow.shadowSentence?.trim()) {
-      errors.push(
-        `Pronunciation Micro-Focus (line ${applyLineOffset(pronunciationShadow.sectionStartLine, lineOffset)}): missing "**Shadow sentence:** <sentence>" for shadow_sentence mode.`,
-      );
-    }
-    if (pronunciationShadow.words.length < 3 || pronunciationShadow.words.length > 5) {
-      errors.push(
-        `Pronunciation Micro-Focus (line ${applyLineOffset(pronunciationShadow.sectionStartLine, lineOffset)}): shadow_sentence mode requires 3-5 word drill lines in "1. word — /transcription/" or "1. word /transcription/" format.`,
-      );
-    }
-    for (const issue of pronunciationShadow.issues) {
-      errors.push(`Line ${applyLineOffset(issue.line, lineOffset)}: ${issue.message}`);
-    }
+  const pronunciationFocus = parsedContext ? extractPronunciationFocus(parsedContext) : null;
+  if (pronunciationHeading && !pronunciationFocus) {
+    warnings.push(
+      'Pronunciation Micro-Focus is missing a supported "**Mode:** <shadow_sentence | intonation | rhythm_chunking | sentence_stress | connected_speech | minimal_pair>" line.',
+    );
+  }
+  if (pronunciationFocus) {
+    pushPronunciationWarnings(warnings, pronunciationFocus, lineOffset);
   }
 
   // e) no nested code blocks inside the doc

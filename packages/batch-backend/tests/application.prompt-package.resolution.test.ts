@@ -24,11 +24,11 @@ describe('application/prompt-package', () => {
     const allowedDir = await fs.mkdtemp(path.join(os.tmpdir(), 'esl-prompt-allowed-'));
     const templatePath = path.join(allowedDir, 'template.md');
     const profilePath = path.join(allowedDir, 'profile.md');
-    await fs.writeFile(templatePath, 'FS TEMPLATE\nINSERT PROFILE HERE\nEND\n', 'utf8');
+    await fs.writeFile(templatePath, 'FS TEMPLATE\nEND\n', 'utf8');
     await fs.writeFile(profilePath, 'FS PROFILE\n', 'utf8');
 
     const transcript = createTranscriptRecord();
-    const activeTemplateContent = 'DB TEMPLATE\nINSERT PROFILE HERE\nEND\n';
+    const activeTemplateContent = 'DB TEMPLATE\nEND\n';
     const activeProfileContent = 'DB PROFILE\n';
     const activeTemplateHash = createHash('sha256')
       .update(activeTemplateContent, 'utf8')
@@ -115,7 +115,7 @@ describe('application/prompt-package', () => {
     const allowedDir = await fs.mkdtemp(path.join(os.tmpdir(), 'esl-prompt-allowed-'));
     const templatePath = path.join(allowedDir, 'template.md');
     const profilePath = path.join(allowedDir, 'profile.md');
-    await fs.writeFile(templatePath, 'TEMPLATE FS\nINSERT PROFILE HERE\nEND\n', 'utf8');
+    await fs.writeFile(templatePath, 'TEMPLATE FS\nEND\n', 'utf8');
     await fs.writeFile(profilePath, 'PROFILE FS\n', 'utf8');
 
     const transcript = createTranscriptRecord();
@@ -151,9 +151,9 @@ describe('application/prompt-package', () => {
     const templateV1 = {
       id: 'template-revision-v1',
       templateId: 'template.md',
-      content: 'TEMPLATE V1\nINSERT PROFILE HERE\nEND\n',
+      content: 'TEMPLATE V1\nEND\n',
       contentHash: createHash('sha256')
-        .update('TEMPLATE V1\nINSERT PROFILE HERE\nEND\n', 'utf8')
+        .update('TEMPLATE V1\nEND\n', 'utf8')
         .digest('hex'),
       source: 'update' as const,
       status: 'active' as const,
@@ -257,7 +257,7 @@ describe('application/prompt-package', () => {
     const templatePath = path.join(allowedDir, 'template.md');
     const profilePath = path.join(allowedDir, 'profile.md');
 
-    await fs.writeFile(templatePath, 'Hello\nINSERT PROFILE HERE\nFooter\n', 'utf8');
+    await fs.writeFile(templatePath, 'Hello\nFooter\n', 'utf8');
     await fs.writeFile(profilePath, 'PROFILE CONTENT\n', 'utf8');
 
     const transcript = createTranscriptRecord();
@@ -323,7 +323,7 @@ describe('application/prompt-package', () => {
     const defaultProfilePath = path.join(allowedDir, 'default-profile.md');
     const profilePath = path.join(outsideDir, 'profile.md');
 
-    await fs.writeFile(templatePath, 'Hello\nINSERT PROFILE HERE\nFooter\n', 'utf8');
+    await fs.writeFile(templatePath, 'Hello\nFooter\n', 'utf8');
     await fs.writeFile(defaultProfilePath, 'DEFAULT PROFILE\n', 'utf8');
     await fs.writeFile(profilePath, 'PROFILE CONTENT\n', 'utf8');
 
@@ -371,7 +371,7 @@ describe('application/prompt-package', () => {
     const studentProfilePath = path.join(allowedDir, 'profiles', 'student-a.md');
 
     await fs.mkdir(path.dirname(studentProfilePath), { recursive: true });
-    await fs.writeFile(templatePath, 'Hello\nINSERT PROFILE HERE\nFooter\n', 'utf8');
+    await fs.writeFile(templatePath, 'Hello\nFooter\n', 'utf8');
     await fs.writeFile(defaultProfilePath, 'DEFAULT PROFILE\n', 'utf8');
     await fs.writeFile(studentProfilePath, 'STUDENT PROFILE CONTENT\n', 'utf8');
 
@@ -436,7 +436,7 @@ describe('application/prompt-package', () => {
     const explicitProfilePath = path.join(allowedDir, 'profiles', 'explicit.md');
 
     await fs.mkdir(path.dirname(studentProfilePath), { recursive: true });
-    await fs.writeFile(templatePath, 'Hello\nINSERT PROFILE HERE\nFooter\n', 'utf8');
+    await fs.writeFile(templatePath, 'Hello\nFooter\n', 'utf8');
     await fs.writeFile(defaultProfilePath, 'DEFAULT PROFILE\n', 'utf8');
     await fs.writeFile(studentProfilePath, 'STUDENT PROFILE CONTENT\n', 'utf8');
     await fs.writeFile(explicitProfilePath, 'EXPLICIT PROFILE CONTENT\n', 'utf8');

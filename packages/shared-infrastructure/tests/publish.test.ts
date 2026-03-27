@@ -24,12 +24,12 @@ describe('publish helpers', () => {
 
     const output = insertGeneratedAudioLinks(markdown, {
       studyTextUrl: 'https://new.example.com/study.mp3',
-      pronunciationShadowSentenceUrl: 'https://new.example.com/pronunciation.mp3',
+      pronunciationAudioUrl: 'https://new.example.com/pronunciation.mp3',
     });
 
     expect(output).toContain('[Audio recording: Study Text](https://new.example.com/study.mp3)');
     expect(output).toContain(
-      '[Audio recording: Pronunciation Shadow Sentence](https://new.example.com/pronunciation.mp3)',
+      '[Audio recording: Pronunciation Practice](https://new.example.com/pronunciation.mp3)',
     );
     expect(output).not.toContain('https://old.example.com/study.mp3');
   });
@@ -68,6 +68,27 @@ describe('publish helpers', () => {
     expect(placeholders).toHaveLength(2);
     expect(output).not.toContain('<!-- esl-generated-study-text-audio-placeholder -->');
     expect(output).not.toContain('<!-- esl-generated-pronunciation-audio-placeholder -->');
+  });
+
+  it('removes legacy pronunciation links before inserting the canonical one', () => {
+    const markdown = [
+      '# Lesson',
+      '',
+      '### Pronunciation Micro-Focus',
+      '- Shadow sentence: Hello there',
+      '',
+      '[Audio recording: Pronunciation Shadow Sentence](https://old.example.com/pronunciation.mp3)',
+    ].join('\n');
+
+    const output = insertGeneratedAudioLinks(markdown, {
+      pronunciationAudioUrl: 'https://new.example.com/pronunciation.mp3',
+    });
+
+    expect(output).toContain(
+      '[Audio recording: Pronunciation Practice](https://new.example.com/pronunciation.mp3)',
+    );
+    expect(output).not.toContain('Pronunciation Shadow Sentence');
+    expect(output).not.toContain('https://old.example.com/pronunciation.mp3');
   });
 
   it('resolves markdown title with explicit/meta/frontmatter/heading/fallback precedence', () => {

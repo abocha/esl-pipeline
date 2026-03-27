@@ -4,7 +4,8 @@ const TRANSCRIPT_REGEX = /transcript/i;
 const PRONUNCIATION_HEADING_REGEX = /^###\s+.*pronunciation.*micro.*focus/i;
 const AUDIO_DIRECTIVE_REGEX = /^:::\s*audio(\s+.*)?$/i;
 const STUDY_TEXT_AUDIO_LINK_LABEL = 'Audio recording: Study Text';
-const PRONUNCIATION_AUDIO_LINK_LABEL = 'Audio recording: Pronunciation Shadow Sentence';
+const PRONUNCIATION_AUDIO_LINK_LABEL = 'Audio recording: Pronunciation Practice';
+const LEGACY_PRONUNCIATION_AUDIO_LINK_LABEL = 'Audio recording: Pronunciation Shadow Sentence';
 const GENERATED_STUDY_TEXT_AUDIO_LINK_REGEX = new RegExp(
   String.raw`^\[${STUDY_TEXT_AUDIO_LINK_LABEL}\]\([^)]+\)\s*$`,
   'i',
@@ -13,6 +14,46 @@ const GENERATED_PRONUNCIATION_AUDIO_LINK_REGEX = new RegExp(
   String.raw`^\[${PRONUNCIATION_AUDIO_LINK_LABEL}\]\([^)]+\)\s*$`,
   'i',
 );
+const GENERATED_LEGACY_PRONUNCIATION_AUDIO_LINK_REGEX = new RegExp(
+  String.raw`^\[${LEGACY_PRONUNCIATION_AUDIO_LINK_LABEL}\]\([^)]+\)\s*$`,
+  'i',
+);
+
+export type PronunciationAudioMode =
+  | 'shadow_sentence'
+  | 'intonation'
+  | 'rhythm_chunking'
+  | 'sentence_stress'
+  | 'connected_speech'
+  | 'minimal_pair';
+
+export type PronunciationAudioEngine = 'provider' | 'edge';
+
+export type PronunciationAudioClipKind =
+  | 'primary'
+  | 'shadow_sentence'
+  | 'sentence_item'
+  | 'word_item'
+  | 'pair_left'
+  | 'pair_right'
+  | 'connected_target';
+
+export interface PronunciationAudioClip {
+  id: string;
+  kind: PronunciationAudioClipKind;
+  engine: PronunciationAudioEngine;
+  text: string;
+  url?: string;
+  itemIndex?: number;
+  note?: string;
+  label?: string;
+}
+
+export interface PronunciationAudioPayload {
+  mode: PronunciationAudioMode;
+  primaryClip?: PronunciationAudioClip | null;
+  itemClips?: PronunciationAudioClip[];
+}
 
 const NOTION_COLOR_TO_HEX: Record<string, string> = {
   default: '#1b1b1d',
@@ -118,7 +159,8 @@ export function resolveMarkdownTitle(options: ResolveMarkdownTitleOptions): stri
 
 export interface InsertGeneratedAudioLinksOptions {
   studyTextUrl?: string | null;
-  pronunciationShadowSentenceUrl?: string | null;
+  pronunciationAudioUrl?: string | null;
+  pronunciationAudio?: PronunciationAudioPayload | null;
   includePronunciation?: boolean;
   insertStudyPlaceholderWhenMissing?: boolean;
   insertPronunciationPlaceholderWhenMissing?: boolean;
@@ -180,7 +222,8 @@ export function insertGeneratedAudioLinks(
 
     if (
       GENERATED_STUDY_TEXT_AUDIO_LINK_REGEX.test(trimmed) ||
-      GENERATED_PRONUNCIATION_AUDIO_LINK_REGEX.test(trimmed)
+      GENERATED_PRONUNCIATION_AUDIO_LINK_REGEX.test(trimmed) ||
+      GENERATED_LEGACY_PRONUNCIATION_AUDIO_LINK_REGEX.test(trimmed)
     ) {
       continue;
     }
@@ -222,10 +265,13 @@ export function insertGeneratedAudioLinks(
 
   const includePronunciation =
     options.includePronunciation ??
-    (Boolean(options.pronunciationShadowSentenceUrl?.trim()) ||
+    (Boolean(options.pronunciationAudio?.primaryClip?.url?.trim()) ||
+      Boolean(options.pronunciationAudioUrl?.trim()) ||
       Boolean(options.insertPronunciationPlaceholderWhenMissing));
   if (includePronunciation) {
-    const pronunciationAudioUrl = options.pronunciationShadowSentenceUrl?.trim();
+    const pronunciationAudioUrl =
+      options.pronunciationAudio?.primaryClip?.url?.trim() ??
+      options.pronunciationAudioUrl?.trim();
     if (pronunciationAudioUrl) {
       const audioLine = `[${PRONUNCIATION_AUDIO_LINK_LABEL}](${pronunciationAudioUrl})`;
       if (!next.some((line) => line.trim() === audioLine)) {

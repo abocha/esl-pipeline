@@ -1,7 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
 import {
-  TemplateContentError,
   deleteTemplateContent,
   getTemplateContent,
   listTemplateContents,
@@ -12,7 +11,7 @@ import {
 import type { TemplateRecord } from '../src/domain/template-model.js';
 import type { TemplateRevisionRecord } from '../src/domain/template-revision-model.js';
 
-const BASE_TEMPLATE = 'Header\nINSERT PROFILE HERE\nFooter';
+const BASE_TEMPLATE = 'Header\nFooter';
 
 function createInMemoryDependencies(seed?: {
   templates?: { id: string; label: string; content: string }[];
@@ -246,7 +245,7 @@ describe('application/template-content (DB-only)', () => {
     expect(list.templates).toEqual([{ id: 'default.md', label: 'Default Template' }]);
 
     const content = await getTemplateContent('default.md', deps);
-    expect(content?.content).toContain('INSERT PROFILE HERE');
+    expect(content?.content).toBe(BASE_TEMPLATE);
     expect(content?.currentRevisionId).toBeTruthy();
   });
 
@@ -255,7 +254,7 @@ describe('application/template-content (DB-only)', () => {
       templates: Array.from({ length: 550 }, (_, index) => ({
         id: `template-${index}.md`,
         label: `Template ${index}`,
-        content: `Header ${index}\nINSERT PROFILE HERE\nFooter ${index}`,
+        content: `Header ${index}\nFooter ${index}`,
       })),
     });
 
@@ -276,14 +275,23 @@ describe('application/template-content (DB-only)', () => {
     expect(listCalls[1]).toMatchObject({ limit: 500, offset: 500, order: 'asc' });
   });
 
-  it('rejects template saves without INSERT PROFILE HERE marker', async () => {
+  it('accepts template saves without requiring a marker', async () => {
     const deps = createInMemoryDependencies();
 
-    await expect(upsertTemplateContent('invalid.md', 'No marker here', deps)).rejects.toMatchObject(
-      {
-        code: 'template_marker_missing',
-      } satisfies Partial<TemplateContentError>,
-    );
+    const saved = await upsertTemplateContent('markerless.md', 'No marker here', deps);
+    expect(saved.content).toBe('No marker here');
+    expect(saved.currentRevisionId).toBeTruthy();
+  });
+
+  it('rejects template saves that still contain the retired inline profile marker', async () => {
+    const deps = createInMemoryDependencies();
+
+    await expect(
+      upsertTemplateContent('legacy.md', 'Header\nINSERT PROFILE HERE\nFooter', deps),
+    ).rejects.toMatchObject({
+      code: 'template_legacy_marker_forbidden',
+      status: 400,
+    });
   });
 
   it('archives templates and keeps revisions for restore', async () => {
@@ -306,6 +314,6 @@ describe('application/template-content (DB-only)', () => {
     if (!revisionId) throw new Error('Expected revision id');
 
     const restored = await restoreTemplateRevision('custom.md', revisionId, deps);
-    expect(restored?.content).toContain('INSERT PROFILE HERE');
+    expect(restored?.content).toBe(BASE_TEMPLATE);
   });
 });

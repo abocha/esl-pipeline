@@ -23,19 +23,11 @@ export function createRenderedDocument(html: string): Document {
 
   const browserWindow = globalThis as Window & typeof globalThis;
 
-  Object.defineProperty(browserWindow, 'speechSynthesis', {
+  Object.defineProperty(browserWindow, 'Audio', {
     configurable: true,
-    value: {
-      getVoices: () => [],
-      cancel: () => {},
-      speak: () => {},
-    },
-  });
-  Object.defineProperty(browserWindow, 'SpeechSynthesisUtterance', {
-    configurable: true,
-    value: function SpeechSynthesisUtterance(this: { text: string; lang: string }, text: string) {
-      this.text = text;
-      this.lang = 'en-US';
+    value: function Audio(this: { src: string; play: () => Promise<void> }, src: string) {
+      this.src = src;
+      this.play = async () => {};
     },
   });
   Object.defineProperty(browserWindow, 'matchMedia', {

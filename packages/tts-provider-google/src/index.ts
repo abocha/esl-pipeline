@@ -20,6 +20,9 @@ import {
 } from '@esl-pipeline/pmd';
 import { runProviderFallbackLadder } from '@esl-pipeline/provider-runtime';
 import {
+  type BuildPronunciationTextInput,
+  type BuildPronunciationTextOptions,
+  type BuildPronunciationTextResult,
   type BuildPronunciationShadowSentenceInput,
   type BuildPronunciationShadowSentenceOptions,
   type BuildPronunciationShadowSentenceResult,
@@ -926,6 +929,16 @@ function buildShadowSentenceOutputFileName(hash: string, frontmatter: Frontmatte
   return prefix ? `${prefix}-${hash}-shadow-sentence.mp3` : `${hash}-shadow-sentence.mp3`;
 }
 
+function buildPronunciationOutputFileName(
+  hash: string,
+  frontmatter: Frontmatter,
+  fileStem?: string,
+): string {
+  const prefix = sanitizeStudentName(frontmatter.student);
+  const stem = fileStem?.trim().replaceAll(/[^a-z0-9-]+/gi, '-').replaceAll(/^-+|-+$/g, '') || 'pronunciation';
+  return prefix ? `${prefix}-${hash}-${stem}.mp3` : `${hash}-${stem}.mp3`;
+}
+
 async function fileExistsNonEmpty(path: string): Promise<boolean> {
   try {
     const stats = await stat(path);
@@ -1608,6 +1621,117 @@ export async function buildPronunciationShadowSentenceMp3Google(
   };
 }
 
+export async function buildPronunciationTextMp3Google(
+  input: BuildPronunciationTextInput,
+  opts: BuildPronunciationTextOptions,
+): Promise<BuildPronunciationTextResult> {
+  if (!input.voiceId?.trim()) {
+    throw new ValidationError('voiceId is required for pronunciation synthesis.');
+  }
+
+  const logger = opts.logger ?? noopLogger;
+  const sentence = cleanSpeechText(input.text ?? '');
+  if (!sentence) {
+    throw new ValidationError('Pronunciation synthesis text is empty.');
+  }
+
+  const frontmatter: Frontmatter = {
+    title: input.title?.trim() || 'Pronunciation Practice',
+    student: 'student',
+    level: 'Unknown',
+    topic: 'English Practice',
+    input_type: 'generate',
+  };
+  const outputDir = resolve(opts.outPath || (input.mdPath ? dirname(input.mdPath) : process.cwd()));
+  await mkdir(outputDir, { recursive: true });
+
+  const modelFamily = resolveGoogleTtsModel(opts.googleTtsModel);
+  const voiceName = input.voiceId.trim();
+  const languageCode = resolveGoogleLanguageCode(opts.googleLanguageCode, voiceName);
+  const apiEndpoint = resolveGoogleApiEndpoint(opts.googleApiEndpoint);
+  const modelName =
+    opts.googleModelName ?? process.env.ESL_TTS_PROVIDER_GOOGLE_MODEL_NAME ?? undefined;
+  const fileStem = opts.fileStem?.trim() || 'pronunciation';
+  const hash = createHash('sha256')
+    .update(
+      JSON.stringify({
+        kind: input.kind ?? 'pronunciation_text',
+        provider: 'google',
+        text: sentence,
+        voiceId: voiceName,
+        modelFamily,
+        modelName,
+        languageCode,
+        fileStem,
+      }),
+    )
+    .digest('hex');
+
+  const targetPath = resolve(outputDir, buildPronunciationOutputFileName(hash, frontmatter, fileStem));
+  const generatedCharacters = sentence.length;
+
+  if (opts.preview) {
+    return {
+      path: targetPath,
+      duration: undefined,
+      hash,
+      provider: 'google',
+      voiceId: voiceName,
+      generatedCharacters,
+      cachedCharacters: 0,
+    };
+  }
+
+  if (!opts.force && (await fileExistsNonEmpty(targetPath))) {
+    return {
+      path: targetPath,
+      duration: undefined,
+      hash,
+      provider: 'google',
+      voiceId: voiceName,
+      generatedCharacters: 0,
+      cachedCharacters: generatedCharacters,
+    };
+  }
+
+  logger.log({
+    level: 'info',
+    stage: 'tts',
+    message: 'Generating pronunciation text audio',
+    detail: {
+      provider: 'google',
+      voiceName,
+      modelFamily,
+      languageCode,
+      fileStem,
+    },
+  });
+
+  await synthesizeGoogleChunkWithRetry(sentence, voiceName, targetPath, {
+    languageCode,
+    apiEndpoint,
+    modelName,
+  });
+
+  const titleMeta =
+    typeof input.title === 'string' && input.title.trim().length > 0
+      ? `${input.title.trim()} — ${opts.titleSuffix?.trim() || 'Pronunciation'}`
+      : '';
+  if (titleMeta) {
+    await setMp3TitleMetadata(targetPath, titleMeta, await resolveFfmpegPath(opts.ffmpegPath));
+  }
+
+  return {
+    path: targetPath,
+    duration: undefined,
+    hash,
+    provider: 'google',
+    voiceId: voiceName,
+    generatedCharacters,
+    cachedCharacters: 0,
+  };
+}
+
 export async function loadGoogleVoicesCatalog(): Promise<VoiceCatalog> {
   const snapshot = await loadGoogleCatalogSnapshot();
   const accents = new Set<string>();
@@ -1701,6 +1825,12 @@ export function createGoogleTtsProvider(): TtsProviderAdapter {
     },
     async synthesizeShadowSentence(input, options) {
       return buildPronunciationShadowSentenceMp3Google(input, {
+        ...options,
+        ttsProvider: 'google',
+      });
+    },
+    async synthesizePronunciationText(input, options) {
+      return buildPronunciationTextMp3Google(input, {
         ...options,
         ttsProvider: 'google',
       });

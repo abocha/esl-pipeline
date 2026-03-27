@@ -2,6 +2,7 @@ import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 
 import { hashStudyText } from '../src/index.js';
+import { createElevenLabsTtsProvider } from '../src/adapter.js';
 import {
   buildPronunciationShadowSentenceMp3FromPath,
   createTempDir,
@@ -96,5 +97,31 @@ Narrator: Main text.
     expect(second.generatedCharacters).toBe(0);
     expect(second.cachedCharacters).toBeGreaterThan(0);
     expect(convertMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('uses eleven_flash_v2_5 by default for pronunciation text synthesis', async () => {
+    const dir = await createTempDir('tts-pronunciation-text-');
+    const convertMock = setupClientMock();
+    const provider = createElevenLabsTtsProvider();
+
+    await provider.synthesizePronunciationText(
+      {
+        text: 'The device is as heavy as the old one.',
+        voiceId: 'voice_narrator',
+        title: 'Pronunciation Lesson',
+      },
+      {
+        outPath: dir,
+        ttsProvider: 'elevenlabs',
+      },
+    );
+
+    expect(convertMock).toHaveBeenCalledWith(
+      'voice_narrator',
+      expect.objectContaining({
+        modelId: 'eleven_flash_v2_5',
+        text: 'The device is as heavy as the old one.',
+      }),
+    );
   });
 });

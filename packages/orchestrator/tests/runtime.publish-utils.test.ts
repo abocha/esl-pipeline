@@ -24,14 +24,34 @@ describe('runtime/publish-utils', () => {
 
     const updated = insertGeneratedAudioLinks(markdown, {
       studyTextUrl: 'https://new.example.com/study.mp3',
-      pronunciationShadowSentenceUrl: 'https://new.example.com/pronunciation.mp3',
+      pronunciationAudioUrl: 'https://new.example.com/pronunciation.mp3',
     });
 
     expect(updated).toContain('[Audio recording: Study Text](https://new.example.com/study.mp3)');
     expect(updated).toContain(
-      '[Audio recording: Pronunciation Shadow Sentence](https://new.example.com/pronunciation.mp3)',
+      '[Audio recording: Pronunciation Practice](https://new.example.com/pronunciation.mp3)',
     );
     expect(updated).not.toContain('https://old.example.com/study.mp3');
+  });
+
+  it('replaces legacy pronunciation links with the canonical pronunciation label', () => {
+    const markdown = [
+      '# Lesson Title',
+      '',
+      '### Pronunciation Micro-Focus',
+      '- Shadow sentence: "Hello there"',
+      '',
+      '[Audio recording: Pronunciation Shadow Sentence](https://old.example.com/pronunciation.mp3)',
+    ].join('\n');
+
+    const updated = insertGeneratedAudioLinks(markdown, {
+      pronunciationAudioUrl: 'https://new.example.com/pronunciation.mp3',
+    });
+
+    expect(updated).toContain(
+      '[Audio recording: Pronunciation Practice](https://new.example.com/pronunciation.mp3)',
+    );
+    expect(updated).not.toContain('https://old.example.com/pronunciation.mp3');
   });
 
   it('resolves title using meta title first, then heading, then fallback', () => {

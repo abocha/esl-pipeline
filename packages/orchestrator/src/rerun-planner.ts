@@ -1,4 +1,5 @@
 import type { AssignmentManifest } from './manifest.js';
+import { resolveAudioArtifactsFromManifest } from './runtime/audio-artifacts.js';
 import type { RerunPlanRequest, RerunPlanResult, RerunTargetStage } from './types.js';
 
 const RERUN_STAGE_ORDER: RerunTargetStage[] = ['tts', 'upload', 'add-audio'];
@@ -79,10 +80,19 @@ export function computeRerunPlan(input: PlannerInput): RerunPlanResult {
   const planned = new Set<RerunTargetStage>(requested);
   const publishTarget = input.manifest.publishTarget ?? 'notion';
   const requiresAudioForPublish = publishTarget === 'notion' || publishTarget === 'anytype';
-  const studyAudio = input.manifest.audioArtifacts?.studyText;
-  const pronunciationAudio = input.manifest.audioArtifacts?.pronunciationShadowSentence;
-  const hasAnyAudioPath = Boolean(studyAudio?.path || pronunciationAudio?.path);
-  const hasAnyAudioUrl = Boolean(studyAudio?.url || pronunciationAudio?.url);
+  const audioArtifacts = resolveAudioArtifactsFromManifest(input.manifest);
+  const studyAudio = audioArtifacts.studyText;
+  const pronunciationAudio = audioArtifacts.pronunciation;
+  const hasAnyPronunciationPath = Boolean(
+    pronunciationAudio?.primaryClip?.path ||
+      pronunciationAudio?.itemClips?.some((clip) => Boolean(clip?.path)),
+  );
+  const hasAnyPronunciationUrl = Boolean(
+    pronunciationAudio?.primaryClip?.url ||
+      pronunciationAudio?.itemClips?.some((clip) => Boolean(clip?.url)),
+  );
+  const hasAnyAudioPath = Boolean(studyAudio?.path || hasAnyPronunciationPath);
+  const hasAnyAudioUrl = Boolean(studyAudio?.url || hasAnyPronunciationUrl);
 
   if (
     planned.has('add-audio') &&

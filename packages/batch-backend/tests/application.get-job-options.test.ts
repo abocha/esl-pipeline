@@ -233,7 +233,7 @@ describe('application/get-job-options', () => {
           title: 'General English',
           track: 'general-english',
           status: 'active',
-          promptSnapshotVersion: 'hw_prompt_v4-5_voice-aligned',
+          promptSnapshotVersion: 'hw_prompt_definitive',
         },
       ]);
       expect(result.notionDatabases).toEqual([

@@ -1,5 +1,15 @@
 import { describeHttpServerIntegrationSuite } from './transport.http-server.integration.harness.js';
 
+function extractPronunciationAudioPayload(html: string): Record<string, unknown> | null {
+  const match = html.match(
+    /<script\b[^>]*\bid="esl-pronunciation-audio"[^>]*>([\s\S]*?)<\/script>/i,
+  );
+  if (!match?.[1]) {
+    return null;
+  }
+  return JSON.parse(match[1]) as Record<string, unknown>;
+}
+
 describeHttpServerIntegrationSuite(
   'transport/http-server - integration (in-process) [generation-validation-preview]',
   ({
@@ -670,6 +680,12 @@ describeHttpServerIntegrationSuite(
       expect(payload.html.lastIndexOf('Audio track generating...')).toBeGreaterThan(
         payload.html.indexOf('Shadow sentence'),
       );
+      expect(payload.html).toContain('esl-pronunciation-audio');
+      const pronunciationAudio = extractPronunciationAudioPayload(payload.html);
+      expect(pronunciationAudio?.primaryClip).toMatchObject({ id: 'preview-shadow-sentence' });
+      expect(pronunciationAudio?.itemClips).toEqual(
+        expect.arrayContaining([expect.objectContaining({ id: 'preview-shadow-word-1' })]),
+      );
     });
 
     it('POST /preview/html places pronunciation audio URL below shadow sentence content', async () => {
@@ -694,7 +710,7 @@ describeHttpServerIntegrationSuite(
       expect(response.statusCode).toBe(200);
       const payload = response.json() as { html: string };
       expect(payload.html).toContain('https://example.com/pronunciation.mp3');
-      const audioIndex = payload.html.indexOf('Audio recording: Pronunciation Shadow Sentence');
+      const audioIndex = payload.html.indexOf('Audio recording: Pronunciation Practice');
       expect(audioIndex).toBeGreaterThan(payload.html.indexOf('Shadow sentence'));
       expect(audioIndex).toBeLessThan(payload.html.indexOf('review —'));
     });
@@ -720,7 +736,7 @@ describeHttpServerIntegrationSuite(
 
       expect(response.statusCode).toBe(200);
       const payload = response.json() as { html: string };
-      const audioIndex = payload.html.indexOf('Audio recording: Pronunciation Shadow Sentence');
+      const audioIndex = payload.html.indexOf('Audio recording: Pronunciation Practice');
       expect(audioIndex).toBeGreaterThan(
         payload.html.indexOf('There was a flood, so the vehicle stopped working.'),
       );
@@ -752,6 +768,47 @@ describeHttpServerIntegrationSuite(
       const payload = response.json() as { html: string };
       const placeholderCount = (payload.html.match(/Audio track generating\.\.\./g) ?? []).length;
       expect(placeholderCount).toBeGreaterThanOrEqual(2);
+      const pronunciationAudio = extractPronunciationAudioPayload(payload.html);
+      expect(pronunciationAudio?.itemClips).toEqual(
+        expect.arrayContaining([expect.objectContaining({ id: 'preview-connected-1' })]),
+      );
+    });
+
+    it('POST /preview/html injects pronunciation placeholder in minimal_pair mode', async () => {
+      const response = await app.inject({
+        method: 'POST',
+        url: '/preview/html',
+        payload: {
+          text: [
+            '### C. Pronunciation Micro-Focus',
+            '',
+            '**Mode:** minimal_pair',
+            '**Target:** Hear the short /ɪ/ and long /iː/ clearly.',
+            '',
+            '1. ship /ʃɪp/ — sheep /ʃiːp/',
+            '2. live /lɪv/ — leave /liːv/',
+            '',
+            ':::study-text Transcript',
+            'Teacher: Hello!',
+            ':::',
+          ].join('\n'),
+        },
+      });
+
+      expect(response.statusCode).toBe(200);
+      const payload = response.json() as { html: string };
+      const placeholderCount = (payload.html.match(/Audio track generating\.\.\./g) ?? []).length;
+      expect(placeholderCount).toBeGreaterThanOrEqual(2);
+      const pronunciationAudio = extractPronunciationAudioPayload(payload.html);
+      expect(pronunciationAudio?.primaryClip).toMatchObject({
+        id: 'preview-minimal-pair-primary',
+      });
+      expect(pronunciationAudio?.itemClips).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({ id: 'preview-minimal-pair-1-left' }),
+          expect.objectContaining({ id: 'preview-minimal-pair-1-right' }),
+        ]),
+      );
     });
 
     it('POST /preview/html preserves user-authored audio directives', async () => {

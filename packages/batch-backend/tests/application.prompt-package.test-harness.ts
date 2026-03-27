@@ -162,10 +162,9 @@ export function createTemplateRevisionRepositoryStub(
       overrides.getActive ??
       (async (templateId: string) => {
         const contentByTemplateId: Record<string, string> = {
-          'template.md': 'Hello\nINSERT PROFILE HERE\nFooter\n',
-          'hw_prompt_v4-5_voice-aligned.md': [
+          'template.md': 'Hello\nFooter\n',
+          'hw_prompt_definitive.md': [
             'Header',
-            'INSERT PROFILE HERE',
             '```yaml',
             '# CAPABILITY SNAPSHOT (injected dynamically per voice catalog refresh)',
             'role: [narrator, teacher, student, system]',
@@ -176,7 +175,7 @@ export function createTemplateRevisionRepositoryStub(
             '```',
           ].join('\n'),
         };
-        const content = contentByTemplateId[templateId] ?? 'Hello\nINSERT PROFILE HERE\nFooter\n';
+        const content = contentByTemplateId[templateId] ?? 'Hello\nFooter\n';
         return {
           id: `active-${templateId}`,
           templateId,
