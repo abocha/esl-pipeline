@@ -9,6 +9,7 @@ ENV EDGE_TTS_VENV=/opt/edge-tts
 ENV PATH="${EDGE_TTS_VENV}/bin:${PNPM_HOME}:${PATH}" \
     ESL_EDGE_TTS_BIN="${EDGE_TTS_VENV}/bin/edge-tts" \
     ESL_EDGE_TTS_PYTHON="${EDGE_TTS_VENV}/bin/python" \
+    ESL_EDGE_TTS_VOICE=en-US-AriaNeural \
     NODE_ENV=development \
     CI=false
 
