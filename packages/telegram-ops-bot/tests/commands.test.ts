@@ -567,7 +567,7 @@ describe('telegram commands', () => {
             '<html><head><title>Homework Assignment: Office Rules &amp; Modal Verbs</title></head><body>',
             '<div class="hero-emoji">🏢</div>',
             'https://bucket.s3.amazonaws.com/audio/final/from-html-study.mp3',
-            'https://bucket.s3.amazonaws.com/audio/pronunciation-shadow/from-html-pron.mp3',
+            'https://bucket.s3.amazonaws.com/audio/pronunciation/from-html-pron.mp3',
             '</body></html>',
           ].join('\n'),
           { status: 200 },
@@ -625,7 +625,7 @@ describe('telegram commands', () => {
     expect(sendMock.mock.calls[4]?.[0].html).toContain('🗣️ Listen 2: Pronunciation');
     expect(sendMock.mock.calls[3]?.[0].html).toContain('audio/final/from-html-study.mp3');
     expect(sendMock.mock.calls[4]?.[0].html).toContain(
-      'audio/pronunciation-shadow/from-html-pron.mp3',
+      'audio/pronunciation/from-html-pron.mp3',
     );
 
     fetchSpy.mockRestore();
@@ -656,7 +656,7 @@ describe('telegram commands', () => {
         'title: "Homework Assignment: Office Rules & Modal Verbs"',
         '---',
         '[Study clip](https://bucket.s3.amazonaws.com/audio/final/from-md-study.mp3)',
-        '[Pron clip](https://bucket.s3.amazonaws.com/audio/pronunciation-shadow/from-md-pron.mp3)',
+        '[Pron clip](https://bucket.s3.amazonaws.com/audio/pronunciation/from-md-pron.mp3)',
       ].join('\n'),
       recordingId: null,
       transcriptId: null,
@@ -695,7 +695,7 @@ describe('telegram commands', () => {
     );
     expect(sendMock.mock.calls[3]?.[0].html).toContain('audio/final/from-md-study.mp3');
     expect(sendMock.mock.calls[4]?.[0].html).toContain(
-      'audio/pronunciation-shadow/from-md-pron.mp3',
+      'audio/pronunciation/from-md-pron.mp3',
     );
 
     fetchSpy.mockRestore();

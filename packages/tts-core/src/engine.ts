@@ -1,6 +1,9 @@
 import { ConfigurationError } from '@esl-pipeline/contracts';
 
 import type {
+  BuildPronunciationTextInput,
+  BuildPronunciationTextOptions,
+  BuildPronunciationTextResult,
   BuildPronunciationShadowSentenceInput,
   BuildPronunciationShadowSentenceOptions,
   BuildPronunciationShadowSentenceResult,
@@ -102,6 +105,15 @@ export class DefaultTtsEngine implements TtsEngine {
     const providerId = this.resolveProviderId(options.ttsProvider);
     const provider = this.resolveProviderOrThrow(providerId);
     return provider.synthesizeShadowSentence(input, { ...options, ttsProvider: providerId });
+  }
+
+  async buildPronunciationTextMp3(
+    input: BuildPronunciationTextInput,
+    options: BuildPronunciationTextOptions,
+  ): Promise<BuildPronunciationTextResult> {
+    const providerId = this.resolveProviderId(options.ttsProvider);
+    const provider = this.resolveProviderOrThrow(providerId);
+    return provider.synthesizePronunciationText(input, { ...options, ttsProvider: providerId });
   }
 
   async loadVoicesCatalog(provider?: TtsProviderId): Promise<VoiceCatalog> {

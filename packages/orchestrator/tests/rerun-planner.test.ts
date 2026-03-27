@@ -146,4 +146,25 @@ describe('rerun planner', () => {
     expect(plan.requires.missingManifestFields).toEqual([]);
     expect(plan.errors).toEqual([]);
   });
+
+  it('reuses legacy pronunciation shadow artifacts when planning reruns', () => {
+    const plan = computeRerunPlan({
+      md: '/tmp/lesson.md',
+      steps: ['upload', 'add-audio'],
+      manifest: {
+        mdHash: 'hash',
+        pageId: 'page-1',
+        audioArtifacts: {
+          pronunciationShadowSentence: {
+            path: '/tmp/legacy-pronunciation.mp3',
+            url: 'https://example.com/legacy-pronunciation.mp3',
+          },
+        },
+        timestamp: '2026-01-01T00:00:00.000Z',
+      },
+    });
+
+    expect(plan.executable).toEqual(['upload', 'add-audio']);
+    expect(plan.errors).toEqual([]);
+  });
 });

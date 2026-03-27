@@ -5,7 +5,7 @@ import { ValidationError } from '@esl-pipeline/contracts';
 import { createNotionClient } from './client.js';
 import { withRetry } from './retry.js';
 
-type AudioTarget = 'study-text' | 'pronunciation-shadow-sentence';
+type AudioTarget = 'study-text' | 'pronunciation-practice' | 'pronunciation-shadow-sentence';
 
 export interface AddAudioOpts {
   replace?: boolean;

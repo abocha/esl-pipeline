@@ -15,8 +15,8 @@ describe('runtime/audio-artifacts', () => {
     expect(resolveAudioArtifactKey('abc123', '/root/prefix/', 'study_text')).toBe(
       'root/prefix/audio/final/abc123.mp3',
     );
-    expect(resolveAudioArtifactKey('abc123', 'root', 'pronunciation_shadow_sentence')).toBe(
-      'root/audio/pronunciation-shadow/abc123.mp3',
+    expect(resolveAudioArtifactKey('abc123', 'root', 'pronunciation_primary')).toBe(
+      'root/audio/pronunciation/abc123.mp3',
     );
   });
 
@@ -26,12 +26,40 @@ describe('runtime/audio-artifacts', () => {
       timestamp: '2026-03-09T00:00:00.000Z',
       audioArtifacts: {
         studyText: { path: '/tmp/study.mp3' },
-        pronunciationShadowSentence: { path: '/tmp/pronunciation.mp3' },
+        pronunciation: {
+          mode: 'shadow_sentence',
+          primaryClip: {
+            id: 'primary-shadow-sentence',
+            kind: 'shadow_sentence',
+            engine: 'provider',
+            text: 'Hello there',
+            path: '/tmp/pronunciation.mp3',
+          },
+        },
       },
     });
 
     expect(modern.studyText?.path).toBe('/tmp/study.mp3');
-    expect(modern.pronunciationShadowSentence?.path).toBe('/tmp/pronunciation.mp3');
+    expect(modern.pronunciation?.primaryClip?.path).toBe('/tmp/pronunciation.mp3');
+  });
+
+  it('reuses legacy pronunciation shadow audio from older manifests', () => {
+    const legacy = resolveAudioArtifactsFromManifest({
+      mdHash: 'hash',
+      timestamp: '2026-03-09T00:00:00.000Z',
+      audioArtifacts: {
+        pronunciationShadowSentence: {
+          path: '/tmp/legacy-pronunciation.mp3',
+          url: 'https://example.com/legacy-pronunciation.mp3',
+        },
+      },
+    });
+
+    expect(legacy.pronunciation?.mode).toBe('shadow_sentence');
+    expect(legacy.pronunciation?.primaryClip?.path).toBe('/tmp/legacy-pronunciation.mp3');
+    expect(legacy.pronunciation?.primaryClip?.url).toBe(
+      'https://example.com/legacy-pronunciation.mp3',
+    );
   });
 
   it('emits reuse metrics only when reuse value is present', () => {

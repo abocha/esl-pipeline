@@ -32,6 +32,14 @@ function createProvider(id: TtsProviderId): TtsProviderAdapter {
         provider: id,
       };
     },
+    async synthesizePronunciationText() {
+      return {
+        path: `/tmp/${id}-pronunciation.mp3`,
+        hash: `${id}-pronunciation`,
+        voiceId: id,
+        provider: id,
+      };
+    },
   };
 }
 

@@ -1173,7 +1173,7 @@ describe('telegram runner /share smoke', () => {
               'icon: "📘"',
               '---',
               '[Audio recording: Study Text](https://bucket.s3.amazonaws.com/audio/final/md-first-study.mp3)',
-              '[Audio recording: Pronunciation Shadow Sentence](https://bucket.s3.amazonaws.com/audio/pronunciation-shadow/md-first-pron.mp3)',
+              '[Audio recording: Pronunciation Practice](https://bucket.s3.amazonaws.com/audio/pronunciation/md-first-pron.mp3)',
             ].join('\n'),
             htmlUrl: 'https://example.com/fallback-if-needed.html',
           }),
@@ -1222,7 +1222,7 @@ describe('telegram runner /share smoke', () => {
           '<html><head><title>Homework Assignment: Html Fallback</title></head><body>',
           '<div class="hero-emoji">🏢</div>',
           'https://bucket.s3.amazonaws.com/audio/final/html-study.mp3',
-          'https://bucket.s3.amazonaws.com/audio/pronunciation-shadow/html-pron.mp3',
+          'https://bucket.s3.amazonaws.com/audio/pronunciation/html-pron.mp3',
           '</body></html>',
         ].join('\n'),
         { status: 200 },
@@ -1252,7 +1252,7 @@ describe('telegram runner /share smoke', () => {
     expect(sendHtmlMessage.mock.calls[1]?.[0].html).toContain('🏢 Homework Assignment: Html Fallback');
     expect(sendHtmlMessage.mock.calls[2]?.[0].html).toContain('audio/final/html-study.mp3');
     expect(sendHtmlMessage.mock.calls[3]?.[0].html).toContain(
-      'audio/pronunciation-shadow/html-pron.mp3',
+      'audio/pronunciation/html-pron.mp3',
     );
     expect(auditLog).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -1274,7 +1274,7 @@ describe('telegram runner /share smoke', () => {
         [
           '<html><head><title>Homework Assignment: Html Title</title></head><body>',
           'https://bucket.s3.amazonaws.com/audio/final/html-should-not-win.mp3',
-          'https://bucket.s3.amazonaws.com/audio/pronunciation-shadow/html-should-not-win.mp3',
+          'https://bucket.s3.amazonaws.com/audio/pronunciation/html-should-not-win.mp3',
           '</body></html>',
         ].join('\n'),
         { status: 200 },
@@ -1289,7 +1289,7 @@ describe('telegram runner /share smoke', () => {
             md: [
               'content without heading title to trigger html title fallback',
               'https://bucket.s3.amazonaws.com/audio/final/md-path-study.mp3',
-              'https://bucket.s3.amazonaws.com/audio/pronunciation-shadow/md-path-pron.mp3',
+              'https://bucket.s3.amazonaws.com/audio/pronunciation/md-path-pron.mp3',
             ].join('\n'),
             htmlUrl: 'https://example.com/share-md-path-precedence.html',
           }),
@@ -1310,7 +1310,7 @@ describe('telegram runner /share smoke', () => {
     expect(sendHtmlMessage.mock.calls[3]?.[0].disableLinkPreview).toBe(false);
     expect(sendHtmlMessage.mock.calls[2]?.[0].html).toContain('audio/final/md-path-study.mp3');
     expect(sendHtmlMessage.mock.calls[3]?.[0].html).toContain(
-      'audio/pronunciation-shadow/md-path-pron.mp3',
+      'audio/pronunciation/md-path-pron.mp3',
     );
     expect(sendHtmlMessage.mock.calls[2]?.[0].html).not.toContain('html-should-not-win.mp3');
     expect(sendHtmlMessage.mock.calls[3]?.[0].html).not.toContain('html-should-not-win.mp3');

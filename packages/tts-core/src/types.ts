@@ -20,6 +20,14 @@ export interface BuildPronunciationShadowSentenceInput {
   mdPath?: string;
 }
 
+export interface BuildPronunciationTextInput {
+  text: string;
+  voiceId: string;
+  mdPath?: string;
+  title?: string;
+  kind?: string;
+}
+
 export interface BuildStudyTextOptions {
   voiceMapPath: string;
   outPath: string;
@@ -56,6 +64,23 @@ export interface BuildPronunciationShadowSentenceOptions {
   googleModelName?: string;
 }
 
+export interface BuildPronunciationTextOptions {
+  outPath: string;
+  preview?: boolean;
+  force?: boolean;
+  ffmpegPath?: string;
+  outputFormat?: string;
+  modelId?: string;
+  logger?: PipelineLogger;
+  ttsProvider?: TtsProviderId;
+  googleTtsModel?: GoogleTtsModel;
+  googleLanguageCode?: string;
+  googleApiEndpoint?: string;
+  googleModelName?: string;
+  fileStem?: string;
+  titleSuffix?: string;
+}
+
 export interface VoiceSelectionSummary {
   speaker: string;
   voiceId: string;
@@ -82,6 +107,16 @@ export interface BuildStudyTextResult {
 }
 
 export interface BuildPronunciationShadowSentenceResult {
+  path: string;
+  duration?: number;
+  hash: string;
+  provider?: string;
+  voiceId: string;
+  generatedCharacters?: number;
+  cachedCharacters?: number;
+}
+
+export interface BuildPronunciationTextResult {
   path: string;
   duration?: number;
   hash: string;
@@ -163,6 +198,10 @@ export interface TtsProviderAdapter {
     input: BuildPronunciationShadowSentenceInput,
     options: BuildPronunciationShadowSentenceOptions,
   ): Promise<BuildPronunciationShadowSentenceResult>;
+  synthesizePronunciationText(
+    input: BuildPronunciationTextInput,
+    options: BuildPronunciationTextOptions,
+  ): Promise<BuildPronunciationTextResult>;
 }
 
 export interface TtsEngine {
@@ -177,5 +216,9 @@ export interface TtsEngine {
     input: BuildPronunciationShadowSentenceInput,
     options: BuildPronunciationShadowSentenceOptions,
   ): Promise<BuildPronunciationShadowSentenceResult>;
+  buildPronunciationTextMp3(
+    input: BuildPronunciationTextInput,
+    options: BuildPronunciationTextOptions,
+  ): Promise<BuildPronunciationTextResult>;
   loadVoicesCatalog(provider?: TtsProviderId): Promise<VoiceCatalog>;
 }

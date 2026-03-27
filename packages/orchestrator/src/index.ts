@@ -19,10 +19,9 @@ import {
   loadPreset,
   runImport,
 } from '@esl-pipeline/notion-adapter';
-import { extractPronunciationShadowFocus, parseMarkdownContext } from '@esl-pipeline/pmd';
+import { parseMarkdownContext } from '@esl-pipeline/pmd';
 import { deriveS3UploadAddress, uploadFile } from '@esl-pipeline/storage-uploader';
 import {
-  buildPronunciationShadowSentenceMp3,
   buildStudyTextMp3,
   hashStudyText,
 } from '@esl-pipeline/tts-core';
@@ -63,6 +62,7 @@ import {
   resolveHeadingTheme,
   resolveMarkdownTitle,
 } from './runtime/publish-utils.js';
+import { synthesizePronunciationAudio } from './runtime/pronunciation-audio.js';
 import { createStageReporter } from './runtime/stage-reporter.js';
 import {
   buildTtsSpendSummary,
@@ -530,7 +530,6 @@ export async function newAssignment(
       recordSkip('colorize', 'no preset selected');
     }
 
-    const shadowFocus = extractPronunciationShadowFocus(markdownContext);
     let audioArtifacts = resolveAudioArtifactsFromManifest(previousManifest);
     if (flags.withTts) {
       if (flags.skipTts) {
@@ -655,56 +654,20 @@ export async function newAssignment(
           });
         }
 
-        if (shadowFocus?.shadowSentence?.trim()) {
-          const narratorVoiceId = ttsResult.voiceAssignments?.Narrator;
-          const fallbackVoiceId = narratorVoiceId ?? ttsResult.voices[0]?.voiceId;
-          if (fallbackVoiceId) {
-            const shadowResult = await buildPronunciationShadowSentenceMp3(
-              {
-                context: markdownContext,
-                mdPath: flags.md,
-                voiceId: fallbackVoiceId,
-              },
-              {
-                outPath: flags.out ?? dirname(flags.md),
-                preview: flags.dryRun,
-                force: flags.force || flags.redoTts,
-                ttsProvider: flags.ttsProvider,
-                googleTtsModel: flags.googleTtsModel,
-                logger,
-              },
-            );
-            const shadowTtsSummary = buildTtsSpendSummary(shadowResult);
-            audioArtifacts.pronunciationShadowSentence = {
-              path: shadowResult.path,
-              hash: shadowResult.hash,
-              voiceId: shadowResult.voiceId,
-              tts: shadowTtsSummary,
-            };
-            if (
-              shadowResult.generatedCharacters !== undefined &&
-              shadowResult.generatedCharacters > 0
-            ) {
-              metrics.increment('esl.tts.provider_characters', shadowResult.generatedCharacters, {
-                type: 'generated',
-              });
-            }
-            if (shadowResult.cachedCharacters !== undefined && shadowResult.cachedCharacters > 0) {
-              metrics.increment('esl.tts.provider_characters', shadowResult.cachedCharacters, {
-                type: 'cached',
-              });
-            }
-          } else {
-            logger.log({
-              level: 'warn',
-              stage: 'tts',
-              message: 'Skipping pronunciation shadow sentence TTS: no resolved voice id.',
-            });
-            audioArtifacts.pronunciationShadowSentence = undefined;
-          }
-        } else {
-          audioArtifacts.pronunciationShadowSentence = undefined;
-        }
+        const narratorVoiceId = ttsResult.voiceAssignments?.Narrator;
+        const fallbackVoiceId = narratorVoiceId ?? ttsResult.voices[0]?.voiceId;
+        audioArtifacts.pronunciation = await synthesizePronunciationAudio({
+          context: markdownContext,
+          mdPath: flags.md,
+          outPath: flags.out ?? dirname(flags.md),
+          title: validation.meta?.title ?? basename(flags.md).replace(/\.[^.]+$/, ''),
+          preview: flags.dryRun,
+          force: flags.force || flags.redoTts,
+          ttsProvider: flags.ttsProvider,
+          googleTtsModel: flags.googleTtsModel,
+          logger,
+          providerVoiceId: fallbackVoiceId,
+        });
       }
     } else {
       recordSkip('tts', 'tts disabled');
@@ -714,9 +677,13 @@ export async function newAssignment(
     const artifactEntries: { kind: AudioArtifactKind; artifact: AudioArtifact | undefined }[] = [
       { kind: 'study_text', artifact: audioArtifacts.studyText },
       {
-        kind: 'pronunciation_shadow_sentence',
-        artifact: audioArtifacts.pronunciationShadowSentence,
+        kind: 'pronunciation_primary',
+        artifact: audioArtifacts.pronunciation?.primaryClip ?? undefined,
       },
+      ...(audioArtifacts.pronunciation?.itemClips ?? []).map((artifact) => ({
+        kind: 'pronunciation_item' as const,
+        artifact,
+      })),
     ];
     const uploadableArtifacts = artifactEntries.filter((entry) => entry.artifact?.path);
     if (flags.upload === 's3' && uploadableArtifacts.length > 0) {
@@ -777,7 +744,7 @@ export async function newAssignment(
         throwIfCancelled(signal, 'upload');
         emitStage('upload', 'success', {
           studyTextUrl: audioArtifacts.studyText?.url,
-          pronunciationUrl: audioArtifacts.pronunciationShadowSentence?.url,
+          pronunciationUrl: audioArtifacts.pronunciation?.primaryClip?.url,
           dryRun: flags.dryRun,
         });
       }
@@ -786,7 +753,7 @@ export async function newAssignment(
     }
 
     const studyTextAudioUrl = audioArtifacts.studyText?.url;
-    const pronunciationAudioUrl = audioArtifacts.pronunciationShadowSentence?.url;
+    const pronunciationAudioUrl = audioArtifacts.pronunciation?.primaryClip?.url;
 
     if (publishTarget === 'notion') {
       if ((studyTextAudioUrl || pronunciationAudioUrl) && pageId) {
@@ -819,12 +786,12 @@ export async function newAssignment(
           if (pronunciationAudioUrl) {
             const result = await addOrReplaceAudio(pageId, pronunciationAudioUrl, {
               replace: flags.force,
-              target: 'pronunciation-shadow-sentence',
-              previousBlockId: audioArtifacts.pronunciationShadowSentence?.notionBlockId,
+              target: 'pronunciation-practice',
+              previousBlockId: audioArtifacts.pronunciation?.primaryClip?.notionBlockId,
             });
-            if (result.blockId) {
-              audioArtifacts.pronunciationShadowSentence = {
-                ...audioArtifacts.pronunciationShadowSentence,
+            if (result.blockId && audioArtifacts.pronunciation?.primaryClip) {
+              audioArtifacts.pronunciation.primaryClip = {
+                ...audioArtifacts.pronunciation.primaryClip,
                 notionBlockId: result.blockId,
               };
             }
@@ -861,7 +828,8 @@ export async function newAssignment(
         throwIfCancelled(signal, 'add-audio');
         const updatedBody = insertGeneratedAudioLinks(page.body ?? '', {
           studyTextUrl: studyTextAudioUrl,
-          pronunciationShadowSentenceUrl: pronunciationAudioUrl,
+          pronunciationAudioUrl,
+          pronunciationAudio: audioArtifacts.pronunciation,
         });
         if (updatedBody !== page.body) {
           await client.updateObject(anytypeSpaceId, anytypePageId, {
@@ -878,7 +846,8 @@ export async function newAssignment(
 
         const publishMarkdown = insertGeneratedAudioLinks(mdContents, {
           studyTextUrl: studyTextAudioUrl,
-          pronunciationShadowSentenceUrl: pronunciationAudioUrl,
+          pronunciationAudioUrl,
+          pronunciationAudio: audioArtifacts.pronunciation,
         });
         const publishTitle = resolveMarkdownTitle(
           mdContents,
@@ -923,7 +892,8 @@ export async function newAssignment(
 
         const publishMarkdown = insertGeneratedAudioLinks(mdContents, {
           studyTextUrl: studyTextAudioUrl,
-          pronunciationShadowSentenceUrl: pronunciationAudioUrl,
+          pronunciationAudioUrl,
+          pronunciationAudio: audioArtifacts.pronunciation,
         });
         const publishTitle = resolveMarkdownTitle(
           mdContents,
@@ -934,6 +904,7 @@ export async function newAssignment(
           headingTheme,
           title: publishTitle,
           markdown: publishMarkdown,
+          pronunciationAudio: audioArtifacts.pronunciation,
         });
         throwIfCancelled(signal, 'add-audio');
         htmlUrl = publishResult.url;
@@ -972,7 +943,7 @@ export async function newAssignment(
       htmlReused,
       audioArtifacts: {
         studyText: audioArtifacts.studyText,
-        pronunciationShadowSentence: audioArtifacts.pronunciationShadowSentence,
+        pronunciation: audioArtifacts.pronunciation,
       },
       preset: flags.preset,
       notionColorization,
@@ -1218,7 +1189,6 @@ export async function rerunAssignment(
       emitStage('tts', 'start');
       throwIfCancelled(signal, 'tts');
       const markdownContext = parseMarkdownContext(mdContents);
-      const shadowFocus = extractPronunciationShadowFocus(markdownContext);
 
       // TTS mode debug logging for rerun
       if (flags.ttsStrategy) {
@@ -1329,52 +1299,24 @@ export async function rerunAssignment(
         estimatedSpendUsd: audioTts.estimatedSpendUsd,
       });
 
-      if (shadowFocus?.shadowSentence?.trim()) {
-        const narratorVoiceId = ttsResult.voiceAssignments?.Narrator;
-        const fallbackVoiceId = narratorVoiceId ?? ttsResult.voices[0]?.voiceId;
-        if (fallbackVoiceId) {
-          const shadowResult = await buildPronunciationShadowSentenceMp3(
-            {
-              context: markdownContext,
-              mdPath: flags.md,
-              voiceId: fallbackVoiceId,
-            },
-            {
-              outPath: flags.out ?? dirname(flags.md),
-              preview: flags.dryRun,
-              force: flags.force,
-              ttsProvider: flags.ttsProvider,
-              googleTtsModel: flags.googleTtsModel,
-              logger,
-            },
-          );
-          const shadowTts = buildTtsSpendSummary(shadowResult);
-          audioArtifacts.pronunciationShadowSentence = {
-            path: shadowResult.path,
-            hash: shadowResult.hash,
-            voiceId: shadowResult.voiceId,
-            tts: shadowTts,
-            notionBlockId: audioArtifacts.pronunciationShadowSentence?.notionBlockId,
-          };
-          if (
-            shadowResult.generatedCharacters !== undefined &&
-            shadowResult.generatedCharacters > 0
-          ) {
-            metrics.increment('esl.tts.provider_characters', shadowResult.generatedCharacters, {
-              type: 'generated',
-            });
-          }
-          if (shadowResult.cachedCharacters !== undefined && shadowResult.cachedCharacters > 0) {
-            metrics.increment('esl.tts.provider_characters', shadowResult.cachedCharacters, {
-              type: 'cached',
-            });
-          }
-        } else {
-          audioArtifacts.pronunciationShadowSentence = undefined;
-        }
-      } else {
-        audioArtifacts.pronunciationShadowSentence = undefined;
-      }
+      const narratorVoiceId = ttsResult.voiceAssignments?.Narrator;
+      const fallbackVoiceId = narratorVoiceId ?? ttsResult.voices[0]?.voiceId;
+      const pronunciationTitle = resolveMarkdownTitle(
+        mdContents,
+        basename(flags.md).replace(/\.[^.]+$/, ''),
+      );
+      audioArtifacts.pronunciation = await synthesizePronunciationAudio({
+        context: markdownContext,
+        mdPath: flags.md,
+        outPath: flags.out ?? dirname(flags.md),
+        title: pronunciationTitle,
+        preview: flags.dryRun,
+        force: flags.force,
+        ttsProvider: flags.ttsProvider,
+        googleTtsModel: flags.googleTtsModel,
+        logger,
+        providerVoiceId: fallbackVoiceId,
+      });
       executed.push('tts');
     } else {
       emitStage('tts', 'skipped', { reason: skipReasonByStage.get('tts') ?? 'not requested' });
@@ -1389,9 +1331,13 @@ export async function rerunAssignment(
       }[] = [
         { kind: 'study_text', artifact: audioArtifacts.studyText },
         {
-          kind: 'pronunciation_shadow_sentence',
-          artifact: audioArtifacts.pronunciationShadowSentence,
+          kind: 'pronunciation_primary',
+          artifact: audioArtifacts.pronunciation?.primaryClip ?? undefined,
         },
+        ...(audioArtifacts.pronunciation?.itemClips ?? []).map((artifact) => ({
+          kind: 'pronunciation_item' as const,
+          artifact,
+        })),
       ];
       const uploadable = rerunArtifactEntries.filter((entry) => entry.artifact?.path);
       if (uploadable.length === 0) {
@@ -1459,7 +1405,7 @@ export async function rerunAssignment(
 
       emitStage('upload', 'success', {
         studyTextUrl: audioArtifacts.studyText?.url,
-        pronunciationUrl: audioArtifacts.pronunciationShadowSentence?.url,
+        pronunciationUrl: audioArtifacts.pronunciation?.primaryClip?.url,
         dryRun: flags.dryRun,
       });
       executed.push('upload');
@@ -1473,7 +1419,7 @@ export async function rerunAssignment(
       emitStage('add-audio', 'start');
       throwIfCancelled(signal, 'add-audio');
       const studyTextAudioUrl = audioArtifacts.studyText?.url;
-      const pronunciationAudioUrl = audioArtifacts.pronunciationShadowSentence?.url;
+      const pronunciationAudioUrl = audioArtifacts.pronunciation?.primaryClip?.url;
       if (publishTarget === 'notion') {
         const targetPageId = manifest.pageId;
         if (!targetPageId) {
@@ -1502,12 +1448,12 @@ export async function rerunAssignment(
           if (pronunciationAudioUrl) {
             const result = await addOrReplaceAudio(targetPageId, pronunciationAudioUrl, {
               replace: flags.force,
-              target: 'pronunciation-shadow-sentence',
-              previousBlockId: audioArtifacts.pronunciationShadowSentence?.notionBlockId,
+              target: 'pronunciation-practice',
+              previousBlockId: audioArtifacts.pronunciation?.primaryClip?.notionBlockId,
             });
-            if (result.blockId) {
-              audioArtifacts.pronunciationShadowSentence = {
-                ...audioArtifacts.pronunciationShadowSentence,
+            if (result.blockId && audioArtifacts.pronunciation?.primaryClip) {
+              audioArtifacts.pronunciation.primaryClip = {
+                ...audioArtifacts.pronunciation.primaryClip,
                 notionBlockId: result.blockId,
               };
             }
@@ -1538,7 +1484,8 @@ export async function rerunAssignment(
           throwIfCancelled(signal, 'add-audio');
           const updatedBody = insertGeneratedAudioLinks(page.body ?? '', {
             studyTextUrl: studyTextAudioUrl,
-            pronunciationShadowSentenceUrl: pronunciationAudioUrl,
+            pronunciationAudioUrl,
+            pronunciationAudio: audioArtifacts.pronunciation,
           });
           if (updatedBody !== page.body) {
             await client.updateObject(targetSpaceId, targetPageId, { body: updatedBody });
@@ -1553,7 +1500,8 @@ export async function rerunAssignment(
 
           const publishMarkdown = insertGeneratedAudioLinks(mdContents, {
             studyTextUrl: studyTextAudioUrl,
-            pronunciationShadowSentenceUrl: pronunciationAudioUrl,
+            pronunciationAudioUrl,
+            pronunciationAudio: audioArtifacts.pronunciation,
           });
           const publishTitle = resolveMarkdownTitle(
             mdContents,
@@ -1595,7 +1543,8 @@ export async function rerunAssignment(
 
           const publishMarkdown = insertGeneratedAudioLinks(mdContents, {
             studyTextUrl: studyTextAudioUrl,
-            pronunciationShadowSentenceUrl: pronunciationAudioUrl,
+            pronunciationAudioUrl,
+            pronunciationAudio: audioArtifacts.pronunciation,
           });
           const publishTitle = resolveMarkdownTitle(
             mdContents,
@@ -1606,6 +1555,7 @@ export async function rerunAssignment(
             headingTheme,
             title: publishTitle,
             markdown: publishMarkdown,
+            pronunciationAudio: audioArtifacts.pronunciation,
           });
           throwIfCancelled(signal, 'add-audio');
           htmlUrl = publishResult.url;
@@ -1650,7 +1600,7 @@ export async function rerunAssignment(
       htmlReused,
       audioArtifacts: {
         studyText: audioArtifacts.studyText,
-        pronunciationShadowSentence: audioArtifacts.pronunciationShadowSentence,
+        pronunciation: audioArtifacts.pronunciation,
       },
 
       // Preserve prior TTS metadata unless explicitly overridden
