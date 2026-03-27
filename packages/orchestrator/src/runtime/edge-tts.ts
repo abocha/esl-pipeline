@@ -26,7 +26,8 @@ export interface EdgeTtsSynthesisResult {
   voice: string;
 }
 
-const DEFAULT_EDGE_TTS_VOICE = process.env.ESL_EDGE_TTS_VOICE?.trim() || 'en-US-AriaNeural';
+const DEFAULT_EDGE_TTS_VOICE = 'en-US-AriaNeural';
+const SUPPORTED_EDGE_TTS_VOICE_REGEX = /^en-(?:US|GB)-[A-Za-z]+Neural$/;
 
 async function fileExistsNonEmpty(path: string): Promise<boolean> {
   try {
@@ -56,6 +57,29 @@ function resolveEdgeTtsCommand(): { command: string; argsPrefix: string[] } {
 function sanitizeFileStem(value: string | undefined): string {
   const stem = value?.trim().replaceAll(/[^a-z0-9-]+/gi, '-').replaceAll(/^-+|-+$/g, '');
   return stem || 'pronunciation-edge';
+}
+
+function resolveEdgeTtsVoice(logger: PipelineLogger, requestedVoice?: string | null): string {
+  const explicitVoice = requestedVoice?.trim() || process.env.ESL_EDGE_TTS_VOICE?.trim() || '';
+  if (!explicitVoice) {
+    return DEFAULT_EDGE_TTS_VOICE;
+  }
+
+  if (SUPPORTED_EDGE_TTS_VOICE_REGEX.test(explicitVoice)) {
+    return explicitVoice;
+  }
+
+  logger.log({
+    level: 'warn',
+    stage: 'tts',
+    message: 'Invalid edge-tts voice override; falling back to default English voice',
+    detail: {
+      requestedVoice: explicitVoice,
+      fallbackVoice: DEFAULT_EDGE_TTS_VOICE,
+      allowedPattern: SUPPORTED_EDGE_TTS_VOICE_REGEX.source,
+    },
+  });
+  return DEFAULT_EDGE_TTS_VOICE;
 }
 
 async function spawnProcess(
@@ -114,7 +138,7 @@ export async function synthesizeEdgeTtsClip(
   const outputDir = resolve(options.outPath);
   await mkdir(outputDir, { recursive: true });
 
-  const voice = options.voice?.trim() || DEFAULT_EDGE_TTS_VOICE;
+  const voice = resolveEdgeTtsVoice(logger, options.voice);
   const fileStem = sanitizeFileStem(options.fileStem);
   const hash = createHash('sha256')
     .update(
