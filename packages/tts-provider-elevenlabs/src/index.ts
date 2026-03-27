@@ -53,6 +53,8 @@ import type {
 
 const DEFAULT_MODEL_ID =
   process.env.ESL_TTS_PROVIDER_ELEVENLABS_MODEL_ID ?? 'eleven_multilingual_v2';
+const DEFAULT_PRONUNCIATION_MODEL_ID =
+  process.env.ESL_TTS_PROVIDER_ELEVENLABS_PRONUNCIATION_MODEL_ID ?? 'eleven_flash_v2_5';
 type TextToSpeechConvertBody = Parameters<
   ReturnType<typeof getElevenClient>['textToSpeech']['convert']
 >[1];
@@ -752,7 +754,7 @@ export async function buildPronunciationShadowSentenceMp3(
   const outputDir = resolve(opts.outPath || (input.mdPath ? dirname(input.mdPath) : process.cwd()));
   await mkdir(outputDir, { recursive: true });
   resolveTtsProvider(opts.ttsProvider);
-  const modelId = opts.modelId ?? DEFAULT_MODEL_ID;
+  const modelId = opts.modelId ?? DEFAULT_PRONUNCIATION_MODEL_ID;
   const outputFormat = resolveOutputFormat(opts.outputFormat);
   const hash = createHash('sha256')
     .update(
@@ -849,7 +851,7 @@ export async function buildPronunciationTextMp3(
   const outputDir = resolve(opts.outPath || (input.mdPath ? dirname(input.mdPath) : process.cwd()));
   await mkdir(outputDir, { recursive: true });
   resolveTtsProvider(opts.ttsProvider);
-  const modelId = opts.modelId ?? DEFAULT_MODEL_ID;
+  const modelId = opts.modelId ?? DEFAULT_PRONUNCIATION_MODEL_ID;
   const outputFormat = resolveOutputFormat(opts.outputFormat);
   const fileStem = opts.fileStem?.trim() || 'pronunciation';
   const hash = createHash('sha256')

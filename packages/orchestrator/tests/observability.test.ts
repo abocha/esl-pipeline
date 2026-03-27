@@ -198,7 +198,7 @@ describe('orchestrator observability', () => {
       hash: 'abc123',
       voices: [{ speaker: 'Anna', voiceId: 'voice_id_default', source: 'default' }],
     });
-    vi.mocked(synthesizePronunciationAudio).mockResolvedValue(undefined);
+    vi.mocked(synthesizePronunciationAudio).mockImplementation(async () => {});
 
     const { newAssignment, rerunAssignment } = await import('../src/index.js');
     await newAssignment(
