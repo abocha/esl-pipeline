@@ -345,6 +345,9 @@ Keep this section compact. After the shared fields above, include exactly one mo
   - `1. <word1> /<ipa1>/ — <word2> /<ipa2>/`
 - If `**Mode:** connected_speech`, you MUST include 2-4 numbered transformation lines:
   - `1. "<careful form>" -> <connected form>`
+  - `<careful form>` must be the normal written phrase or sentence.
+  - `<connected form>` must be a learner-facing plain-text spoken-form respelling such as `help-sus`, `wanna`, `as-heavy-as`, or `gonna`, not IPA and not slash transcription.
+  - Do not write the right-hand side as `/.../`.
 - If `**Mode:** intonation`, you MUST include 2-4 numbered drill lines:
   - `1. <short phrase or question> — /<transcription>/`
   - You may also add `**Contour cue:** rise | fall | rise-fall | fall-rise` when it helps.

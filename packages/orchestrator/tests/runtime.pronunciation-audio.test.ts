@@ -82,4 +82,65 @@ describe('runtime/pronunciation-audio', () => {
       ]),
     );
   });
+
+  it('uses careful connected-speech text when the connected target is IPA-only', async () => {
+    vi.mocked(extractPronunciationFocus).mockReturnValue({
+      mode: 'connected_speech',
+      lines: [
+        {
+          line: 1,
+          careful: 'The device is as heavy as the old one.',
+          connected: '/ðə dɪˈvaɪs ɪz æz ˈhɛvi æz ði əʊld wʌn/',
+        },
+      ],
+      sectionStartLine: 1,
+      issues: [],
+    });
+    vi.mocked(buildPronunciationTextMp3).mockImplementation(async ({ text }) => ({
+      path: `/tmp/${String(text).replaceAll(/\s+/g, '-')}.mp3`,
+      hash: `hash-${String(text).replaceAll(/\s+/g, '-')}`,
+      voiceId: 'provider-voice',
+      provider: 'elevenlabs',
+      generatedCharacters: String(text).length,
+      cachedCharacters: 0,
+    }));
+
+    const logs: unknown[] = [];
+    const result = await synthesizePronunciationAudio({
+      context: {} as never,
+      mdPath: '/tmp/example.md',
+      outPath: '/tmp',
+      title: 'Pronunciation',
+      providerVoiceId: 'voice-1',
+      logger: {
+        log: (entry: unknown) => logs.push(entry),
+      } as never,
+    });
+
+    expect(result?.mode).toBe('connected_speech');
+    expect(vi.mocked(buildPronunciationTextMp3)).toHaveBeenCalledTimes(2);
+    expect(vi.mocked(buildPronunciationTextMp3)).toHaveBeenNthCalledWith(
+      1,
+      expect.objectContaining({
+        text: 'The device is as heavy as the old one.',
+      }),
+      expect.any(Object),
+    );
+    expect(vi.mocked(buildPronunciationTextMp3)).toHaveBeenNthCalledWith(
+      2,
+      expect.objectContaining({
+        text: 'The device is as heavy as the old one.',
+      }),
+      expect.any(Object),
+    );
+    expect(logs).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          level: 'warn',
+          message:
+            'Connected-speech pronunciation target was IPA-only; using careful text for provider TTS',
+        }),
+      ]),
+    );
+  });
 });

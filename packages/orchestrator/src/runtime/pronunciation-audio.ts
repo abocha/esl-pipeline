@@ -36,6 +36,7 @@ const EDGE_TTS_PROVIDER_FALLBACK_WARNING: PronunciationAudioWarning = {
   message:
     'edge-tts was unavailable for word/pair pronunciation clips, so provider pronunciation audio was used instead.',
 };
+const IPA_TRANSCRIPTION_ONLY_REGEX = /^\/[^/\n]+\/$/;
 
 function normalizeSpeechText(value: string): string {
   return String(value || '')
@@ -49,6 +50,35 @@ function normalizeSpeechText(value: string): string {
 
 function normalizeConnectedSpeechText(value: string): string {
   return normalizeSpeechText(value).replaceAll(/\s*->\s*/g, ' ');
+}
+
+function looksLikeIpaTranscription(value: string): boolean {
+  return IPA_TRANSCRIPTION_ONLY_REGEX.test(value.trim());
+}
+
+function resolveConnectedSpeechSpeechText(
+  line: Extract<PronunciationFocus, { mode: 'connected_speech' }>['lines'][number],
+  logger?: PipelineLogger,
+): string {
+  const connected = normalizeConnectedSpeechText(line.connected);
+  if (connected && !looksLikeIpaTranscription(connected)) {
+    return connected;
+  }
+
+  const careful = normalizeSpeechText(line.careful);
+  if (connected && careful) {
+    logger?.log({
+      level: 'warn',
+      stage: 'tts',
+      message: 'Connected-speech pronunciation target was IPA-only; using careful text for provider TTS',
+      detail: {
+        line: line.line,
+        connected,
+        careful,
+      },
+    });
+  }
+  return careful || connected;
 }
 
 function isLongShadowDrill(text: string): boolean {
@@ -343,7 +373,10 @@ export async function synthesizePronunciationAudio(
       break;
     }
     case 'connected_speech': {
-      const primaryText = buildGenericPrimaryText(focus);
+      const spokenLines = focus.lines
+        .map((line) => resolveConnectedSpeechSpeechText(line, options.logger))
+        .filter(Boolean);
+      const primaryText = spokenLines.join(' ').trim();
       if (primaryText) {
         primaryClip = await synthesizeProviderClip(
           {
@@ -357,13 +390,15 @@ export async function synthesizePronunciationAudio(
         );
       }
       for (const [index, line] of focus.lines.entries()) {
+        const spokenText = resolveConnectedSpeechSpeechText(line, options.logger);
+        if (!spokenText) continue;
         const clip = await synthesizeProviderClip(
           {
             id: `connected-speech-${index + 1}`,
             itemIndex: index,
             kind: 'connected_target',
             engine: 'provider',
-            text: normalizeConnectedSpeechText(line.connected),
+            text: spokenText,
             label: 'Play',
             note: line.note,
           },
