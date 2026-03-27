@@ -46,6 +46,12 @@ vi.mock('@esl-pipeline/storage-uploader', async () => {
   };
 });
 
+vi.mock('../src/runtime/pronunciation-audio.js', () => ({
+  synthesizePronunciationAudio: vi.fn(),
+}));
+
+import { synthesizePronunciationAudio } from '../src/runtime/pronunciation-audio.js';
+
 describe('orchestrator observability', () => {
   afterEach(() => {
     vi.clearAllMocks();
@@ -71,6 +77,34 @@ describe('orchestrator observability', () => {
       path: audioPath,
       hash: 'abc123',
       voices: [{ speaker: 'Anna', voiceId: 'voice_id_default', source: 'default' }],
+    });
+    vi.mocked(synthesizePronunciationAudio).mockResolvedValue({
+      mode: 'shadow_sentence',
+      primaryClip: {
+        id: 'pron-primary',
+        kind: 'shadow_sentence',
+        engine: 'provider',
+        text: 'Hello there.',
+        tts: {
+          provider: 'google',
+          generatedCharacters: 12,
+          cachedCharacters: 3,
+        },
+      },
+      itemClips: [
+        {
+          id: 'pron-item-1',
+          itemIndex: 0,
+          kind: 'sentence_item',
+          engine: 'provider',
+          text: 'Hello',
+          tts: {
+            provider: 'google',
+            generatedCharacters: 5,
+            cachedCharacters: 2,
+          },
+        },
+      ],
     });
 
     const logs: PipelineLogEvent[] = [];
@@ -128,6 +162,20 @@ describe('orchestrator observability', () => {
     expect(successCounters.map((c) => c.tags?.stage)).toEqual(
       expect.arrayContaining(expectedStages),
     );
+    expect(increments).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          metric: 'esl.tts.provider_characters',
+          value: 17,
+          tags: { type: 'generated' },
+        }),
+        expect.objectContaining({
+          metric: 'esl.tts.provider_characters',
+          value: 5,
+          tags: { type: 'cached' },
+        }),
+      ]),
+    );
   }, 20_000);
 
   it('emits start/success events for rerunAssignment steps', async () => {
@@ -150,6 +198,7 @@ describe('orchestrator observability', () => {
       hash: 'abc123',
       voices: [{ speaker: 'Anna', voiceId: 'voice_id_default', source: 'default' }],
     });
+    vi.mocked(synthesizePronunciationAudio).mockImplementation(async () => {});
 
     const { newAssignment, rerunAssignment } = await import('../src/index.js');
     await newAssignment(

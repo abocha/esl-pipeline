@@ -117,7 +117,7 @@ describe('application/create-approval-job', () => {
       preset: 'b2-intermediate',
       learningPresetId: 'general-english',
       learningPresetVersion: 'v1',
-      promptSnapshotVersion: 'hw_prompt_v4-5_voice-aligned',
+      promptSnapshotVersion: 'hw_prompt_definitive',
       promptAlias: 'current',
       withTts: true,
       autoPublish: undefined,

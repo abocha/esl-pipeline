@@ -51,6 +51,11 @@ function createProviderMock(id: TtsProviderId, modelFamily: string): TtsProvider
       hash: 'hash-shadow',
       voiceId: 'voice-1',
     })),
+    synthesizePronunciationText: vi.fn(async () => ({
+      path: '/tmp/pronunciation.mp3',
+      hash: 'hash-pronunciation',
+      voiceId: 'voice-1',
+    })),
   };
 }
 

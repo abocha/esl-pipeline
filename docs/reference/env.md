@@ -41,7 +41,7 @@ Primary groups:
 - Notion / publishing:
   - `NOTION_*`, `ANYTYPE_*`
 - Speech runtime:
-  - `ESL_TTS_*`, `ESL_STT_*`, `VOICE_ALIGNMENT_V2_*`
+  - `ESL_TTS_*`, `ESL_STT_*`, `ESL_EDGE_TTS_*`, `VOICE_ALIGNMENT_V2_*`
 - Storage / uploads / manifests:
   - `AWS_*`, `S3_*`, `STORAGE_*`, `ESL_PIPELINE_MANIFEST_*`
 - Remote config:
@@ -128,6 +128,8 @@ Read next:
 ## Default and Safety Notes
 
 - Prefer namespaced canonical variables over legacy aliases when both exist.
+- Container images provision `edge-tts` for server-side pronunciation synthesis and expose
+  `ESL_EDGE_TTS_BIN` / `ESL_EDGE_TTS_PYTHON` defaults; override them only when using a custom runtime install.
 - Budget values of `0` are intentional hard stops, not “unset”.
 - Generation battle-testing defaults should stay fail-safe:
   - `GEN_SAFETY_MODE=hard_stop`

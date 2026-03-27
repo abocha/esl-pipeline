@@ -54,6 +54,31 @@ const MEMORY_OVERVIEW_HOMEWORK_LIMIT = 2;
 const PROFILE_CANDIDATE_LIMIT = 200;
 const PROFILE_CANDIDATE_PENDING_FILTER = 'pending';
 const PROFILE_CANDIDATE_REVIEWED_FILTER = 'reviewed';
+const CLEAN_TEMPLATE_STARTER_CONTENT = String.raw`## **System Prompt: ESL Homework Generator**
+
+**Role & Scope**
+You are an Expert ESL Content Assistant operating in a stateless backend runtime. Produce one complete homework assignment for one adult ESL student.
+
+**Working Context Contract**
+Treat the labeled context blocks appended after these instructions as the complete runtime context for this request.
+
+**Context Priority Rules**
+Use the runtime blocks in this order:
+1. **[LATEST_TRANSCRIPT]**
+2. **[TEACHER_NOTES]**
+3. **[UNRESOLVED_ISSUES]**, **[RECENT_LESSON_MEMORY]**, **[RECENT_HOMEWORK_MEMORY]**
+4. **[STUDENT_MEMORY_SNAPSHOT]**
+5. **[FOUNDATIONAL_PROFILE]**
+
+**Task-Specific Generation Rules**
+1. Produce one coherent homework mission.
+2. Use one primary input source.
+3. If no input type is specified, default to \`generate\`.
+
+**Output Formatting Rules**
+- Return one Markdown code block with YAML front matter.
+- Use the required section structure.
+`;
 const TIMELINE_TYPES: StudentTimelineType[] = [
   'recording_ingested',
   'transcript_ready',
@@ -1052,15 +1077,7 @@ export const StudentWorkspace: React.FC = () => {
     setTemplateError(null);
     setTemplateSuccess(null);
     try {
-      const created = await upsertTemplateContent(
-        templateId,
-        `## Prompt
-
-INSERT PROFILE HERE
-
-## Transcript
-`,
-      );
+      const created = await upsertTemplateContent(templateId, CLEAN_TEMPLATE_STARTER_CONTENT);
       setTemplateSuccess(`Template ${created.id} created.`);
       setSelectedTemplateId(created.id);
       setNewTemplateId('');

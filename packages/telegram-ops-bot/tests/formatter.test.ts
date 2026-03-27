@@ -180,7 +180,7 @@ describe('formatter', () => {
         md: [
           '# Lesson',
           '[Audio recording: Study Text](https://bucket.s3.amazonaws.com/audio/final/study.mp3)',
-          '[Audio recording: Pronunciation Shadow Sentence](https://bucket.s3.amazonaws.com/audio/pronunciation-shadow/pron.mp3)',
+          '[Audio recording: Pronunciation Practice](https://bucket.s3.amazonaws.com/audio/pronunciation/pron.mp3)',
         ].join('\n'),
         recordingId: 'rec-1',
         transcriptId: null,
@@ -219,7 +219,7 @@ describe('formatter', () => {
     expect(html).toContain('🎧 Listen 1: Study Text');
     expect(html).toContain('https://bucket.s3.amazonaws.com/audio/final/study.mp3');
     expect(html).toContain('🗣️ Listen 2: Pronunciation');
-    expect(html).toContain('https://bucket.s3.amazonaws.com/audio/pronunciation-shadow/pron.mp3');
+    expect(html).toContain('https://bucket.s3.amazonaws.com/audio/pronunciation/pron.mp3');
   });
 
   it('renders one-line audio playback link without duplicate labels', () => {

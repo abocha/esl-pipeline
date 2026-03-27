@@ -25,8 +25,8 @@ import {
 import type { PromptOption } from './prompt-options.js';
 
 const TEMPLATE_EXTENSIONS = new Set(['.md', '.txt']);
-const TEMPLATE_PROFILE_MARKER = 'INSERT PROFILE HERE';
 const MAX_OPTION_PAGE_LIMIT = 500;
+const LEGACY_PROFILE_MARKER = 'INSERT PROFILE HERE';
 
 export interface TemplateContentListResponse {
   templates: PromptOption[];
@@ -135,18 +135,6 @@ function formatTemplateLabel(templateId: string): string {
   return normalized.length > 0 ? normalized : templateId;
 }
 
-function validateTemplateMarker(content: string): void {
-  const hasMarker = content.split(/\r?\n/).some((line) => line.trim() === TEMPLATE_PROFILE_MARKER);
-
-  if (!hasMarker) {
-    throw new TemplateContentError(
-      'Template content must include INSERT PROFILE HERE marker',
-      'template_marker_missing',
-      400,
-    );
-  }
-}
-
 function getDependencies(
   overrides?: Partial<TemplateContentDependencies>,
 ): TemplateContentDependencies {
@@ -171,6 +159,18 @@ function getDependencies(
 
 function hashTemplateContent(content: string): string {
   return createHash('sha256').update(content, 'utf8').digest('hex');
+}
+
+function assertTemplateUsesCanonicalAssembly(content: string): void {
+  if (!content.includes(LEGACY_PROFILE_MARKER)) {
+    return;
+  }
+
+  throw new TemplateContentError(
+    `Templates must not contain retired legacy marker ${LEGACY_PROFILE_MARKER}.`,
+    'template_legacy_marker_forbidden',
+    400,
+  );
 }
 
 function toTemplateRevisionSummary(
@@ -229,8 +229,7 @@ async function upsertTemplateContentWithRevision(
   const dependencies = getDependencies(overrides);
   const normalizedTemplateId = normalizeTemplateId(templateId);
   const normalizedContent = content ?? '';
-
-  validateTemplateMarker(normalizedContent);
+  assertTemplateUsesCanonicalAssembly(normalizedContent);
 
   const existingTemplate = await dependencies.templates.getById(normalizedTemplateId);
   const label = existingTemplate?.label ?? formatTemplateLabel(normalizedTemplateId);
@@ -396,6 +395,7 @@ export async function restoreTemplateRevision(
 
   const revision = await dependencies.revisions.getById(normalizedTemplateId, revisionId);
   if (!revision) return null;
+  assertTemplateUsesCanonicalAssembly(revision.content);
 
   return upsertTemplateContentWithRevision(normalizedTemplateId, revision.content, overrides, {
     source: 'restore',
@@ -413,6 +413,10 @@ export async function activateTemplateRevisionForTemplate(
   const normalizedTemplateId = normalizeTemplateId(templateId);
   const template = await dependencies.templates.getById(normalizedTemplateId);
   if (!template) return null;
+
+  const existingRevision = await dependencies.revisions.getById(normalizedTemplateId, revisionId);
+  if (!existingRevision) return null;
+  assertTemplateUsesCanonicalAssembly(existingRevision.content);
 
   const activated = await dependencies.revisions.activate(normalizedTemplateId, revisionId);
   if (!activated) return null;

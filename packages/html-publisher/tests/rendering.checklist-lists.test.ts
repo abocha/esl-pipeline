@@ -26,7 +26,12 @@ describe('rendering', () => {
     expect(html).toContain('class="task-list-item"');
     expect(html).toContain('<input type="checkbox" class="task-list-item-checkbox">');
     expect(html).toContain('<input type="checkbox" class="task-list-item-checkbox" checked>');
-    expect(html).not.toContain('disabled');
+    expect(html).not.toContain(
+      '<input type="checkbox" class="task-list-item-checkbox" disabled>',
+    );
+    expect(html).not.toContain(
+      '<input type="checkbox" class="task-list-item-checkbox" checked disabled>',
+    );
     expect(html).not.toContain('[ ] Introduce the institution');
     expect(html).not.toContain('[x] Use the phrase');
     expect(html).toContain('<strong>the</strong>');

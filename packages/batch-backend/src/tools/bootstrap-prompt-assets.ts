@@ -18,18 +18,20 @@ import {
 } from '../domain/profile-revision-repository.js';
 import {
   getTemplateById,
+  listTemplates,
   setTemplateActiveRevision,
   upsertTemplate,
 } from '../domain/template-repository.js';
 import {
   activateTemplateRevision,
+  deprecateActiveTemplateRevision,
   getLatestTemplateRevisionByHash,
   insertTemplateRevision,
 } from '../domain/template-revision-repository.js';
 import { closePgPool } from '../infrastructure/db.js';
 
 const PROMPT_EXTENSIONS = new Set(['.md', '.txt']);
-const TEMPLATE_PROFILE_MARKER = 'INSERT PROFILE HERE';
+const LEGACY_PROFILE_MARKER = 'INSERT PROFILE HERE';
 
 interface CliOptions {
   dryRun: boolean;
@@ -50,6 +52,7 @@ interface BootstrapStats {
   createdRevisions: number;
   reusedRevisions: number;
   activatedRevisions: number;
+  retiredTemplates: number;
 }
 
 function parseArgs(argv: string[]): CliOptions {
@@ -127,6 +130,21 @@ function resolveConfiguredDefaultId(configuredPath: string, type: 'template' | '
   return normalizePromptId(path.posix.basename(normalized));
 }
 
+function assertDistinctRoots(templateRoot: string, profileRoot: string): void {
+  const resolvedTemplateRoot = path.resolve(templateRoot);
+  const resolvedProfileRoot = path.resolve(profileRoot);
+  const overlap =
+    isWithinRoot(resolvedTemplateRoot, resolvedProfileRoot) ||
+    isWithinRoot(resolvedProfileRoot, resolvedTemplateRoot);
+  if (!overlap) {
+    return;
+  }
+
+  throw new Error(
+    `Prompt template and profile roots must be distinct and non-overlapping (templateRoot=${resolvedTemplateRoot}, profileRoot=${resolvedProfileRoot}).`,
+  );
+}
+
 async function collectPromptFiles(rootDir: string): Promise<string[]> {
   const resolvedRoot = path.resolve(rootDir);
   const stats = await fs.stat(resolvedRoot).catch(() => null);
@@ -155,60 +173,60 @@ async function collectPromptFiles(rootDir: string): Promise<string[]> {
   return files;
 }
 
-function hasTemplateMarker(content: string): boolean {
-  return content.split(/\r?\n/).some((line) => line.trim() === TEMPLATE_PROFILE_MARKER);
+function assertNoLegacyTemplateMarker(content: string, assetPath: string): void {
+  if (!content.includes(LEGACY_PROFILE_MARKER)) {
+    return;
+  }
+
+  throw new Error(
+    `Template asset contains retired legacy marker ${LEGACY_PROFILE_MARKER}: ${assetPath}`,
+  );
 }
 
-async function scanAssets(params: { templateRoot: string; profileRoot: string }): Promise<{
+async function scanAssetRoot(
+  rootDir: string,
+  kind: 'template' | 'profile',
+): Promise<ScannedAsset[]> {
+  const files = await collectPromptFiles(rootDir);
+  const assets: ScannedAsset[] = [];
+
+  for (const absolutePath of files.sort((a, b) => a.localeCompare(b))) {
+    const content = await fs.readFile(absolutePath, 'utf8');
+    if (kind === 'template') {
+      assertNoLegacyTemplateMarker(content, absolutePath);
+    }
+
+    const id = normalizePromptId(path.relative(rootDir, absolutePath).split(path.sep).join('/'));
+    assets.push({
+      id,
+      absolutePath,
+      content,
+      hash: hashContent(content),
+      label: formatLabel(id),
+    });
+  }
+
+  return assets;
+}
+
+export async function scanAssets(params: {
+  templateRoot: string;
+  profileRoot: string;
+}): Promise<{
   templates: ScannedAsset[];
   profiles: ScannedAsset[];
   scannedFiles: number;
 }> {
-  const roots = [...new Set([path.resolve(params.templateRoot), path.resolve(params.profileRoot)])];
-  const discoveredFiles = new Set<string>();
+  assertDistinctRoots(params.templateRoot, params.profileRoot);
+  const [templates, profiles] = await Promise.all([
+    scanAssetRoot(path.resolve(params.templateRoot), 'template'),
+    scanAssetRoot(path.resolve(params.profileRoot), 'profile'),
+  ]);
 
-  for (const root of roots) {
-    const files = await collectPromptFiles(root);
-    for (const file of files) {
-      discoveredFiles.add(file);
-    }
-  }
-
-  const templates: ScannedAsset[] = [];
-  const profiles: ScannedAsset[] = [];
-
-  for (const absolutePath of [...discoveredFiles].sort((a, b) => a.localeCompare(b))) {
-    const content = await fs.readFile(absolutePath, 'utf8');
-    const hash = hashContent(content);
-    const kind = hasTemplateMarker(content) ? 'template' : 'profile';
-
-    if (kind === 'template') {
-      if (!isWithinRoot(params.templateRoot, absolutePath)) continue;
-      const id = normalizePromptId(
-        path.relative(params.templateRoot, absolutePath).split(path.sep).join('/'),
-      );
-      templates.push({
-        id,
-        absolutePath,
-        content,
-        hash,
-        label: formatLabel(id),
-      });
-      continue;
-    }
-
-    if (!isWithinRoot(params.profileRoot, absolutePath)) continue;
-    const id = normalizePromptId(
-      path.relative(params.profileRoot, absolutePath).split(path.sep).join('/'),
-    );
-    profiles.push({
-      id,
-      absolutePath,
-      content,
-      hash,
-      label: formatLabel(id),
-    });
-  }
+  const discoveredFiles = new Set<string>([
+    ...templates.map((item) => item.absolutePath),
+    ...profiles.map((item) => item.absolutePath),
+  ]);
 
   return {
     templates,
@@ -313,6 +331,43 @@ async function importProfiles(
   }
 }
 
+async function retireMissingTemplateAssets(
+  activeTemplateIds: readonly string[],
+  dryRun: boolean,
+  stats: BootstrapStats,
+): Promise<void> {
+  if (activeTemplateIds.length === 0) {
+    return;
+  }
+
+  let offset = 0;
+  const allowlist = new Set(activeTemplateIds);
+
+  while (true) {
+    const listed = await listTemplates({
+      limit: 500,
+      offset,
+      order: 'asc',
+    });
+
+    for (const template of listed.items) {
+      if (!template.activeRevisionId) continue;
+      if (allowlist.has(template.id)) continue;
+
+      stats.retiredTemplates += 1;
+      if (!dryRun) {
+        await deprecateActiveTemplateRevision(template.id);
+        await setTemplateActiveRevision(template.id, null);
+      }
+    }
+
+    offset += listed.items.length;
+    if (offset >= listed.total || listed.items.length === 0) {
+      break;
+    }
+  }
+}
+
 function printSummary(params: {
   mode: 'dry-run' | 'apply';
   stats: BootstrapStats;
@@ -332,6 +387,7 @@ function printSummary(params: {
   console.log(`[prompt-assets-bootstrap] createdRevisions=${params.stats.createdRevisions}`);
   console.log(`[prompt-assets-bootstrap] reusedRevisions=${params.stats.reusedRevisions}`);
   console.log(`[prompt-assets-bootstrap] activatedRevisions=${params.stats.activatedRevisions}`);
+  console.log(`[prompt-assets-bootstrap] retiredTemplates=${params.stats.retiredTemplates}`);
 }
 
 async function run(): Promise<void> {
@@ -362,12 +418,11 @@ async function run(): Promise<void> {
     createdRevisions: 0,
     reusedRevisions: 0,
     activatedRevisions: 0,
+    retiredTemplates: 0,
   };
 
   if (scanned.templates.length === 0) {
-    throw new Error(
-      'No template assets discovered. Ensure template files include INSERT PROFILE HERE marker.',
-    );
+    throw new Error('No template assets discovered. Ensure template files exist under template root.');
   }
   if (scanned.profiles.length === 0) {
     throw new Error('No profile assets discovered. Ensure profile files exist under profile root.');
@@ -384,6 +439,11 @@ async function run(): Promise<void> {
 
   await importTemplates(scanned.templates, options.dryRun, stats);
   await importProfiles(scanned.profiles, options.dryRun, stats);
+  await retireMissingTemplateAssets(
+    scanned.templates.map((item) => item.id),
+    options.dryRun,
+    stats,
+  );
 
   printSummary({
     mode: options.dryRun ? 'dry-run' : 'apply',

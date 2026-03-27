@@ -5,8 +5,11 @@ import { createStaticPageHtml } from '@esl-pipeline/html-publisher';
 import { validateMarkdown } from '@esl-pipeline/md-validator';
 import { loadPreset } from '@esl-pipeline/notion-adapter';
 import { resolveConfigPaths } from '@esl-pipeline/orchestrator';
+import { extractPronunciationFocus, parseMarkdownContext } from '@esl-pipeline/pmd';
 import {
   insertGeneratedAudioLinks,
+  type PronunciationAudioClip,
+  type PronunciationAudioPayload,
   resolveHeadingTheme,
   resolveMarkdownTitle,
 } from '@esl-pipeline/shared-infrastructure';
@@ -65,8 +68,362 @@ function parsePronunciationMode(markdown: string): string | null {
 
 function hasPronunciationReferenceMode(markdown: string): boolean {
   const mode = parsePronunciationMode(markdown);
-  if (!mode) return false;
-  return mode === 'shadow_sentence' || mode === 'connected_speech';
+  return mode !== null;
+}
+
+function normalizePronunciationText(value: string): string {
+  return String(value || '')
+    .replaceAll('**', '')
+    .replaceAll('`', '')
+    .replaceAll('|', ' ')
+    .replaceAll(/["“”]/g, '')
+    .replaceAll(/\s+/g, ' ')
+    .trim();
+}
+
+function isLongShadowDrill(text: string): boolean {
+  const normalized = normalizePronunciationText(text);
+  const words = normalized.split(/\s+/).filter(Boolean);
+  return words.length >= 3 || normalized.length >= 18;
+}
+
+function buildPreviewClip(clip: Omit<PronunciationAudioClip, 'url'>): PronunciationAudioClip {
+  return { ...clip };
+}
+
+function collectPronunciationSectionLines(markdown: string): string[] {
+  const lines = markdown.split('\n');
+  let inPronunciationSection = false;
+  const sectionLines: string[] = [];
+
+  for (const line of lines) {
+    const trimmed = line.trim();
+    if (!inPronunciationSection) {
+      if (PRONUNCIATION_HEADING_REGEX.test(trimmed)) {
+        inPronunciationSection = true;
+      }
+      continue;
+    }
+
+    if (/^#{2,3}\s+/.test(trimmed)) {
+      break;
+    }
+
+    sectionLines.push(line);
+  }
+
+  return sectionLines;
+}
+
+function normalizePronunciationSectionLine(line: string): string {
+  const trimmed = line.trim();
+  const withoutBullet = trimmed.replace(/^\s*(?:[-*]\s+)?/, '').trim();
+  return /^`[^`]+`$/.test(withoutBullet) ? withoutBullet.slice(1, -1).trim() : withoutBullet;
+}
+
+function extractPronunciationItemBody(line: string): string | null {
+  const normalized = normalizePronunciationSectionLine(line);
+  const match = /^\d+\.\s*(.+)$/.exec(normalized);
+  return match?.[1]?.trim() ?? null;
+}
+
+function extractTextBeforeTranscription(value: string): string {
+  return normalizePronunciationText(
+    value.replace(/\s+[—-]\s*\/[^/\n]+\/(?:\s+.+)?$/u, '').trim() || value,
+  );
+}
+
+function buildFallbackPreviewPronunciationAudio(markdown: string): PronunciationAudioPayload | null {
+  const mode = parsePronunciationMode(markdown);
+  if (!mode) return null;
+
+  const sectionLines = collectPronunciationSectionLines(markdown);
+  const numberedBodies = sectionLines
+    .map((line) => extractPronunciationItemBody(line))
+    .filter(Boolean) as string[];
+
+  switch (mode) {
+    case 'shadow_sentence': {
+      let shadowSentence = '';
+      for (let index = 0; index < sectionLines.length; index += 1) {
+        const normalized = normalizePronunciationSectionLine(sectionLines[index] ?? '');
+        const match = /^(?:\*\*)?shadow sentence\s*:\s*(?:\*\*)?\s*(.*)$/i.exec(normalized);
+        if (!match) continue;
+        shadowSentence = normalizePronunciationText(match[1] ?? '');
+        if (!shadowSentence) {
+          for (let nextIndex = index + 1; nextIndex < sectionLines.length; nextIndex += 1) {
+            const candidate = normalizePronunciationSectionLine(sectionLines[nextIndex] ?? '');
+            if (!candidate || /^(?:\*\*)?(mode|target|focus|action|deliverable)\s*:/i.test(candidate)) {
+              continue;
+            }
+            if (/^\d+\.\s*/.test(candidate)) {
+              break;
+            }
+            shadowSentence = normalizePronunciationText(candidate);
+            break;
+          }
+        }
+        break;
+      }
+
+      const itemClips = numberedBodies.flatMap((body, index) => {
+        const normalizedWord = extractTextBeforeTranscription(body);
+        if (!normalizedWord) return [];
+        const clips: PronunciationAudioClip[] = [
+          buildPreviewClip({
+            id: `preview-shadow-word-${index + 1}`,
+            itemIndex: index,
+            kind: 'word_item',
+            engine: 'edge',
+            text: normalizedWord,
+            label: 'Play',
+          }),
+        ];
+        if (isLongShadowDrill(normalizedWord)) {
+          clips.push(
+            buildPreviewClip({
+              id: `preview-shadow-word-${index + 1}-natural`,
+              itemIndex: index,
+              kind: 'sentence_item',
+              engine: 'provider',
+              text: normalizedWord,
+              label: 'Natural',
+            }),
+          );
+        }
+        return clips;
+      });
+
+      return {
+        mode: 'shadow_sentence',
+        ...(shadowSentence
+          ? {
+              primaryClip: buildPreviewClip({
+                id: 'preview-shadow-sentence',
+                kind: 'shadow_sentence',
+                engine: 'provider',
+                text: shadowSentence,
+                label: 'Sentence',
+              }),
+            }
+          : {}),
+        itemClips,
+      };
+    }
+    case 'minimal_pair': {
+      return {
+        mode: 'minimal_pair',
+        primaryClip: buildPreviewClip({
+          id: 'preview-minimal-pair-primary',
+          kind: 'primary',
+          engine: 'edge',
+          text: numberedBodies
+            .flatMap((body) => {
+              const pairMatch =
+                /^(.+?)\s+\/[^/\n]+\/\s+[—–-]\s+(.+?)\s+\/[^/\n]+\/(?:\s+.+)?$/u.exec(body);
+              return pairMatch ? [pairMatch[1] ?? '', pairMatch[2] ?? ''] : [body];
+            })
+            .map((text) => normalizePronunciationText(text))
+            .filter(Boolean)
+            .join(' '),
+          label: 'Practice',
+        }),
+        itemClips: numberedBodies.flatMap((body, index) => {
+          const pairMatch =
+            /^(.+?)\s+\/[^/\n]+\/\s+[—–-]\s+(.+?)\s+\/[^/\n]+\/(?:\s+.+)?$/u.exec(body);
+          const left = normalizePronunciationText(pairMatch?.[1] ?? body);
+          const right = normalizePronunciationText(pairMatch?.[2] ?? body);
+          return [
+            buildPreviewClip({
+              id: `preview-minimal-pair-${index + 1}-left`,
+              itemIndex: index,
+              kind: 'pair_left',
+              engine: 'edge',
+              text: left,
+              label: 'Left',
+            }),
+            buildPreviewClip({
+              id: `preview-minimal-pair-${index + 1}-right`,
+              itemIndex: index,
+              kind: 'pair_right',
+              engine: 'edge',
+              text: right,
+              label: 'Right',
+            }),
+          ];
+        }),
+      };
+    }
+    case 'connected_speech': {
+      return {
+        mode: 'connected_speech',
+        itemClips: numberedBodies.map((body, index) => {
+          const match = /^["“]?(.+?)["”]?\s*(?:→|->)\s*(.+)$/u.exec(body);
+          return buildPreviewClip({
+            id: `preview-connected-${index + 1}`,
+            itemIndex: index,
+            kind: 'connected_target',
+            engine: 'provider',
+            text: normalizePronunciationText(match?.[2] ?? body),
+            label: 'Play',
+          });
+        }),
+      };
+    }
+    case 'intonation':
+    case 'rhythm_chunking':
+    case 'sentence_stress': {
+      return {
+        mode,
+        itemClips: numberedBodies.map((body, index) =>
+          buildPreviewClip({
+            id: `preview-${mode}-${index + 1}`,
+            itemIndex: index,
+            kind: 'sentence_item',
+            engine: 'provider',
+            text: extractTextBeforeTranscription(body),
+            label: 'Play',
+          }),
+        ),
+      };
+    }
+    default: {
+      return null;
+    }
+  }
+}
+
+function buildPreviewPronunciationAudio(markdown: string): PronunciationAudioPayload | null {
+  const focus = (() => {
+    try {
+      return extractPronunciationFocus(parseMarkdownContext(markdown));
+    } catch {
+      return null;
+    }
+  })();
+  if (!focus) return buildFallbackPreviewPronunciationAudio(markdown);
+
+  switch (focus.mode) {
+    case 'shadow_sentence': {
+      const primaryClip = focus.shadowSentence?.trim()
+        ? buildPreviewClip({
+            id: 'preview-shadow-sentence',
+            kind: 'shadow_sentence',
+            engine: 'provider',
+            text: normalizePronunciationText(focus.shadowSentence),
+            label: 'Sentence',
+          })
+        : null;
+
+      const itemClips = focus.words.flatMap((word, index) => {
+        const normalizedWord = normalizePronunciationText(word.text);
+        if (!normalizedWord) return [];
+
+        const clips: PronunciationAudioClip[] = [
+          buildPreviewClip({
+            id: `preview-shadow-word-${index + 1}`,
+            itemIndex: index,
+            kind: 'word_item',
+            engine: 'edge',
+            text: normalizedWord,
+            label: 'Play',
+            note: word.note,
+          }),
+        ];
+
+        if (isLongShadowDrill(normalizedWord)) {
+          clips.push(
+            buildPreviewClip({
+              id: `preview-shadow-word-${index + 1}-natural`,
+              itemIndex: index,
+              kind: 'sentence_item',
+              engine: 'provider',
+              text: normalizedWord,
+              label: 'Natural',
+              note: word.note,
+            }),
+          );
+        }
+
+        return clips;
+      });
+
+      return {
+        mode: focus.mode,
+        ...(primaryClip ? { primaryClip } : {}),
+        itemClips,
+      };
+    }
+    case 'minimal_pair': {
+      return {
+        mode: focus.mode,
+        primaryClip: buildPreviewClip({
+          id: 'preview-minimal-pair-primary',
+          kind: 'primary',
+          engine: 'edge',
+          text: focus.pairs
+            .flatMap((pair) => [pair.left.text, pair.right.text])
+            .map((item) => normalizePronunciationText(item))
+            .filter(Boolean)
+            .join(' '),
+          label: 'Practice',
+        }),
+        itemClips: focus.pairs.flatMap((pair, index) => [
+          buildPreviewClip({
+            id: `preview-minimal-pair-${index + 1}-left`,
+            itemIndex: index,
+            kind: 'pair_left',
+            engine: 'edge',
+            text: normalizePronunciationText(pair.left.text),
+            label: 'Left',
+          }),
+          buildPreviewClip({
+            id: `preview-minimal-pair-${index + 1}-right`,
+            itemIndex: index,
+            kind: 'pair_right',
+            engine: 'edge',
+            text: normalizePronunciationText(pair.right.text),
+            label: 'Right',
+            note: pair.note,
+          }),
+        ]),
+      };
+    }
+    case 'connected_speech': {
+      return {
+        mode: focus.mode,
+        itemClips: focus.lines.map((line, index) =>
+          buildPreviewClip({
+            id: `preview-connected-${index + 1}`,
+            itemIndex: index,
+            kind: 'connected_target',
+            engine: 'provider',
+            text: normalizePronunciationText(line.connected),
+            label: 'Play',
+            note: line.note,
+          }),
+        ),
+      };
+    }
+    case 'intonation':
+    case 'rhythm_chunking':
+    case 'sentence_stress': {
+      return {
+        mode: focus.mode,
+        itemClips: focus.drills.map((drill, index) =>
+          buildPreviewClip({
+            id: `preview-${focus.mode}-${index + 1}`,
+            itemIndex: index,
+            kind: 'sentence_item',
+            engine: 'provider',
+            text: normalizePronunciationText(drill.text),
+            label: 'Play',
+            note: drill.note,
+          }),
+        ),
+      };
+    }
+  }
 }
 
 function resolveHeadingThemeFromPreset(
@@ -89,12 +446,14 @@ function insertGeneratedPreviewAudio(
   options: {
     studyTextAudioUrl?: string | null;
     pronunciationAudioUrl?: string | null;
+    pronunciationAudio?: PronunciationAudioPayload | null;
     includePronunciation: boolean;
   },
 ): string {
   return insertGeneratedAudioLinks(markdown, {
     studyTextUrl: options.studyTextAudioUrl,
-    pronunciationShadowSentenceUrl: options.pronunciationAudioUrl,
+    pronunciationAudioUrl: options.pronunciationAudioUrl,
+    pronunciationAudio: options.pronunciationAudio,
     includePronunciation: options.includePronunciation,
     insertStudyPlaceholderWhenMissing: true,
     insertPronunciationPlaceholderWhenMissing: options.includePronunciation,
@@ -389,6 +748,7 @@ export function registerConfigRoutes(app: FastifyInstance, context: ExtendedRout
         learningPresetId: z.string().trim().min(1).nullable().optional(),
         audioUrl: z.string().trim().nullable().optional(),
         pronunciationAudioUrl: z.string().trim().nullable().optional(),
+        pronunciationAudio: z.record(z.string(), z.unknown()).nullable().optional(),
       });
 
       try {
@@ -428,13 +788,20 @@ export function registerConfigRoutes(app: FastifyInstance, context: ExtendedRout
           }
         }
 
+        const previewPronunciationAudio =
+          (body.pronunciationAudio as PronunciationAudioPayload | null | undefined) ??
+          buildPreviewPronunciationAudio(body.text);
+
         const markdown = insertGeneratedPreviewAudio(body.text, {
           studyTextAudioUrl: body.audioUrl,
           pronunciationAudioUrl: body.pronunciationAudioUrl,
-          includePronunciation: hasPronunciationReferenceMode(body.text),
+          pronunciationAudio: previewPronunciationAudio ?? null,
+          includePronunciation:
+            previewPronunciationAudio !== null || hasPronunciationReferenceMode(body.text),
         });
         const html = await createStaticPageHtml(markdown, resolvePreviewTitle(body.text, body.title), {
           headingTheme,
+          pronunciationAudio: previewPronunciationAudio ?? null,
         });
 
         logger.info('HTTP request handled', {
