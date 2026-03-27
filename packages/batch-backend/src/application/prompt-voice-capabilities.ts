@@ -49,8 +49,8 @@ export async function materializePromptTemplateWithCapabilities(params: {
   templateId: string;
   templateContent: string;
 }): Promise<PromptVoiceCapabilitiesResolution> {
-  const isVoiceAlignedTemplate = params.templateId.includes('voice-aligned');
-  if (!isVoiceAlignedTemplate) {
+  const includesCapabilityBlock = CAPABILITY_BLOCK_PATTERN.test(params.templateContent);
+  if (!includesCapabilityBlock) {
     return {
       materializedTemplate: params.templateContent,
       capabilitiesSnapshot: null,

@@ -22,7 +22,7 @@ describe('application/prompt-package', () => {
     const boundProfilePath = path.join(allowedDir, 'profiles', 'bound.md');
 
     await fs.mkdir(path.dirname(boundProfilePath), { recursive: true });
-    await fs.writeFile(templatePath, 'Hello\nINSERT PROFILE HERE\nFooter\n', 'utf8');
+    await fs.writeFile(templatePath, 'Hello\nFooter\n', 'utf8');
     await fs.writeFile(defaultProfilePath, 'DEFAULT PROFILE\n', 'utf8');
     await fs.writeFile(boundProfilePath, 'BOUND PROFILE CONTENT\n', 'utf8');
 
@@ -101,7 +101,7 @@ describe('application/prompt-package', () => {
     const boundProfilePath = path.join(allowedDir, 'profiles', 'bound.md');
 
     await fs.mkdir(path.dirname(boundProfilePath), { recursive: true });
-    await fs.writeFile(templatePath, 'Hello\nINSERT PROFILE HERE\nFooter\n', 'utf8');
+    await fs.writeFile(templatePath, 'Hello\nFooter\n', 'utf8');
     await fs.writeFile(defaultProfilePath, 'DEFAULT PROFILE\n', 'utf8');
     await fs.writeFile(boundProfilePath, 'BOUND PROFILE CONTENT\n', 'utf8');
 

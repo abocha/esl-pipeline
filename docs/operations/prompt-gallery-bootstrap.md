@@ -28,11 +28,13 @@ pnpm --filter @esl-pipeline/batch-backend run prompt-assets:bootstrap
   - `ESL_PIPELINE_CONFIG_PROVIDER=local`
   - `PG_ENABLED=true`
 - Scans configured prompt roots (`PROMPT_TEMPLATE_PATH` and `PROMPT_PROFILE_PATH` parents).
-- Classifies files:
-  - template: contains exact `INSERT PROFILE HERE` marker line
-  - profile: all other `.md`/`.txt` files
+- Requires template/profile roots to be distinct and non-overlapping.
+- Classifies files by root only:
+  - template: files discovered from the configured template root
+  - profile: files discovered from the configured profile root
 - Upserts prompt assets and hash-deduplicated revisions.
 - Activates imported revision when an asset has no active revision.
+- Retires active DB templates that are no longer present under the configured template root.
 - Verifies configured defaults are present and active.
 
 ## Startup warning mode
