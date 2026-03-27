@@ -13,9 +13,9 @@ export interface PromptStitchOptions {
 }
 
 export function stitchPromptPayload(options: PromptStitchOptions): string {
-  const { merged } = replaceProfileBlock(options.template, options.profile);
   return [
-    merged.trimEnd(),
+    options.template.trimEnd(),
+    formatLabeledBlock('FOUNDATIONAL_PROFILE', options.profile),
     formatLabeledBlock('STUDENT_MEMORY_SNAPSHOT', options.studentMemorySnapshot),
     formatLabeledBlock('RECENT_LESSON_MEMORY', options.recentLessonMemory),
     formatLabeledBlock('RECENT_HOMEWORK_MEMORY', options.recentHomeworkMemory),
@@ -27,19 +27,6 @@ export function stitchPromptPayload(options: PromptStitchOptions): string {
     formatLabeledBlock('LATEST_TRANSCRIPT', options.transcript),
     '',
   ].join('\n\n');
-}
-
-function replaceProfileBlock(template: string, profile: string): { merged: string } {
-  const lines = template.split(/\r?\n/);
-  const index = lines.findIndex((line) => line.trim() === 'INSERT PROFILE HERE');
-  if (index === -1) {
-    throw new Error('Prompt template is missing INSERT PROFILE HERE marker');
-  }
-
-  const before = lines.slice(0, index).join('\n');
-  const after = lines.slice(index + 1).join('\n');
-  const merged = [before, `[FOUNDATIONAL_PROFILE]\n${profile.trimEnd()}`, after].join('\n');
-  return { merged };
 }
 
 function formatLabeledBlock(label: string, content: string): string {

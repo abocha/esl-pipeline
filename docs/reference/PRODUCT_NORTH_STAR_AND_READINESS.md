@@ -43,7 +43,7 @@ The product is successful when it consistently does all three:
   - learning preset model (`prompt + metadata + output contract`),
   - Prompt Workspace foundations,
   - one trusted shipped preset content track: `general-english`,
-  - canonical baseline prompt: `docs/templates/hw_prompt_v4-2_clean.md`.
+  - canonical baseline prompt: `docs/prompt-gallery/templates/hw_prompt_definitive.md`.
 - Direct LLM generation through backend API (deferred until preset plumbing MVP passes acceptance criteria).
 - At least one low-cost TTS fallback in addition to premium providers.
 - Basic CRM-lite ledger:

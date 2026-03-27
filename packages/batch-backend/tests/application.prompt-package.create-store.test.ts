@@ -28,7 +28,7 @@ describe('application/prompt-package', () => {
     const defaultProfilePath = path.join(allowedDir, 'default-profile.md');
     const profilePath = path.join(outsideDir, 'profile.md');
 
-    await fs.writeFile(templatePath, 'Hello\nINSERT PROFILE HERE\nFooter\n', 'utf8');
+    await fs.writeFile(templatePath, 'Hello\nFooter\n', 'utf8');
     await fs.writeFile(defaultProfilePath, 'DEFAULT PROFILE\n', 'utf8');
     await fs.writeFile(profilePath, 'PROFILE CONTENT\n', 'utf8');
 
@@ -52,6 +52,7 @@ describe('application/prompt-package', () => {
         expect(text).toContain('[TEACHER_NOTES]\nSome notes');
         expect(text).toContain('[LATEST_TRANSCRIPT]\nTRANSCRIPT BODY');
         expect(text).not.toContain('[LESSON_HISTORY]');
+        expect(text.indexOf('Hello\nFooter')).toBeLessThan(text.indexOf('[FOUNDATIONAL_PROFILE]'));
         expect(
           text.indexOf('[STUDENT_MEMORY_SNAPSHOT]') < text.indexOf('[RECENT_LESSON_MEMORY]'),
         ).toBe(true);
@@ -148,9 +149,9 @@ describe('application/prompt-package', () => {
     expect(result?.profileSnapshot?.resolvedProfileRevisionId).toBe('active-profile.md');
   });
 
-  it('injects capabilities into voice-aligned prompt templates and persists provenance', async () => {
+  it('injects capabilities into templates that include a capability block and persists provenance', async () => {
     const allowedDir = await fs.mkdtemp(path.join(os.tmpdir(), 'esl-prompt-v44-'));
-    const templatePath = path.join(allowedDir, 'hw_prompt_v4-5_voice-aligned.md');
+    const templatePath = path.join(allowedDir, 'hw_prompt_definitive.md');
     const profilePath = path.join(allowedDir, 'profile.md');
     const voicesPath = path.join(allowedDir, 'voices.json');
 
@@ -158,7 +159,6 @@ describe('application/prompt-package', () => {
       templatePath,
       [
         'Header',
-        'INSERT PROFILE HERE',
         '```yaml',
         '# CAPABILITY SNAPSHOT (injected dynamically per voice catalog refresh)',
         'role: [narrator, teacher, student, system]',
@@ -217,7 +217,7 @@ describe('application/prompt-package', () => {
       const result = await createPromptPackage(
         {
           recordingId: transcript.recordingId,
-          templateId: 'hw_prompt_v4-5_voice-aligned.md',
+          templateId: 'hw_prompt_definitive.md',
           profileId: 'profile.md',
         },
         {

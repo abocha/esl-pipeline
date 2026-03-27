@@ -74,7 +74,7 @@ This order protects architecture and avoids rewrites later.
 Scope lock reminder:
 
 - In this phase, ship `general-english` preset content only.
-- Baseline prompt is `docs/templates/hw_prompt_v4-2_clean.md`.
+- Baseline prompt is `docs/prompt-gallery/templates/hw_prompt_definitive.md`.
 
 ## Anti-Spiral Rules
 

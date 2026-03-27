@@ -1,6 +1,6 @@
 export const DEFAULT_LEARNING_PRESET_ID = 'general-english';
 export const DEFAULT_LEARNING_PRESET_VERSION = 'v1';
-export const DEFAULT_PROMPT_SNAPSHOT_VERSION = 'hw_prompt_v4-5_voice-aligned';
+export const DEFAULT_PROMPT_SNAPSHOT_VERSION = 'hw_prompt_definitive';
 export const DEFAULT_PROMPT_ALIAS = 'current';
 
 export interface LearningPresetOption {
