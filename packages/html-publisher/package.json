@@ -39,6 +39,7 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "@esl-pipeline/shared-infrastructure": "workspace:*",
     "@esl-pipeline/storage-uploader": "workspace:*",
     "markdown-it": "^14.1.1",
     "markdown-it-anchor": "^9.2.0",

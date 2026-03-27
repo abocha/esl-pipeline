@@ -58,6 +58,7 @@
     "@esl-pipeline/md-validator": "workspace:*",
     "@esl-pipeline/notion-adapter": "workspace:*",
     "@esl-pipeline/orchestrator": "workspace:*",
+    "@esl-pipeline/pmd": "workspace:*",
     "@esl-pipeline/provider-runtime": "workspace:*",
     "@esl-pipeline/shared-infrastructure": "workspace:*",
     "@esl-pipeline/stt-core": "workspace:*",
