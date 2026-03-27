@@ -190,7 +190,7 @@ describeMdValidatorSuite(
       );
     });
 
-    it('fails when pronunciation micro-focus heading is missing under H2 #5', async () => {
+    it('warns when pronunciation micro-focus heading is missing under H2 #5', async () => {
       const tempDir = await mkdtemp(path.join(tmpdir(), 'validator-'));
       const file = path.join(tempDir, 'pronunciation-missing-under-h2-5.md');
       const md = buildBaseDoc('text').replace(
@@ -200,8 +200,24 @@ describeMdValidatorSuite(
       await writeFile(file, md);
 
       const res = await validateMarkdownFile(file);
-      expect(res.ok).toBe(false);
-      expect(res.errors).toContain(
+      expect(res.ok).toBe(true);
+      expect(res.warnings).toContain(
+        'Missing "### <letter>. Pronunciation Micro-Focus" section under H2 #5.',
+      );
+    });
+
+    it('keeps missing pronunciation micro-focus non-blocking in strict mode', async () => {
+      const tempDir = await mkdtemp(path.join(tmpdir(), 'validator-'));
+      const file = path.join(tempDir, 'strict-pronunciation-missing-under-h2-5.md');
+      const md = buildBaseDoc('text').replace(
+        '### C. 🎙️ Pronunciation Micro-Focus (≈1 min)',
+        '### C. 🎙️ Accent Drill (≈1 min)',
+      );
+      await writeFile(file, withStrictReadyFrontmatter(md));
+
+      const res = await validateMarkdownFile(file, { strict: true });
+      expect(res.ok).toBe(true);
+      expect(res.warnings).toContain(
         'Missing "### <letter>. Pronunciation Micro-Focus" section under H2 #5.',
       );
     });
