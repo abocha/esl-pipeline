@@ -108,6 +108,14 @@ export interface BuildPronunciationShadowSentenceInput {
   mdPath?: string;
 }
 
+export interface BuildPronunciationTextInput {
+  text: string;
+  voiceId: string;
+  mdPath?: string;
+  title?: string;
+  kind?: string;
+}
+
 export interface BuildPronunciationShadowSentenceOptions {
   outPath: string;
   preview?: boolean;
@@ -121,7 +129,30 @@ export interface BuildPronunciationShadowSentenceOptions {
   ttsProvider?: TtsProvider;
 }
 
+export interface BuildPronunciationTextOptions {
+  outPath: string;
+  preview?: boolean;
+  force?: boolean;
+  ffmpegPath?: string;
+  outputFormat?: string;
+  modelId?: string;
+  logger?: PipelineLogger;
+  ttsProvider?: TtsProvider;
+  fileStem?: string;
+  titleSuffix?: string;
+}
+
 export interface BuildPronunciationShadowSentenceResult {
+  path: string;
+  duration?: number;
+  hash: string;
+  provider?: string;
+  voiceId: string;
+  generatedCharacters?: number;
+  cachedCharacters?: number;
+}
+
+export interface BuildPronunciationTextResult {
   path: string;
   duration?: number;
   hash: string;

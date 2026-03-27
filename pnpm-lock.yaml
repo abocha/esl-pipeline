@@ -127,6 +127,9 @@ importers:
       '@esl-pipeline/orchestrator':
         specifier: workspace:*
         version: link:../orchestrator
+      '@esl-pipeline/pmd':
+        specifier: workspace:*
+        version: link:../pmd
       '@esl-pipeline/provider-runtime':
         specifier: workspace:*
         version: link:../provider-runtime
@@ -276,6 +279,9 @@ importers:
 
   packages/html-publisher:
     dependencies:
+      '@esl-pipeline/shared-infrastructure':
+        specifier: workspace:*
+        version: link:../shared-infrastructure
       '@esl-pipeline/storage-uploader':
         specifier: workspace:*
         version: link:../storage-uploader

@@ -40,6 +40,9 @@ import {
 import { type VoiceMapConfig, resolveSpeakerVoices } from './speakerAssignment.js';
 import type { DialogueInput, TtsStrategy } from './types.js';
 import type {
+  BuildPronunciationTextInput,
+  BuildPronunciationTextOptions,
+  BuildPronunciationTextResult,
   BuildPronunciationShadowSentenceInput,
   BuildPronunciationShadowSentenceOptions,
   BuildPronunciationShadowSentenceResult,
@@ -116,6 +119,18 @@ function buildOutputFileName(hash: string, frontmatter: Frontmatter): string {
 function buildShadowSentenceOutputFileName(hash: string, frontmatter: Frontmatter): string {
   const prefix = sanitizeStudentName(frontmatter.student);
   return prefix ? `${prefix}-${hash}-shadow-sentence.mp3` : `${hash}-shadow-sentence.mp3`;
+}
+
+function buildPronunciationOutputFileName(
+  hash: string,
+  frontmatter: Frontmatter,
+  fileStem?: string,
+): string {
+  const prefix = sanitizeStudentName(frontmatter.student);
+  const stem =
+    fileStem?.trim().replaceAll(/[^a-z0-9-]+/gi, '-').replaceAll(/^-+|-+$/g, '') ||
+    'pronunciation';
+  return prefix ? `${prefix}-${hash}-${stem}.mp3` : `${hash}-${stem}.mp3`;
 }
 
 /**
@@ -794,6 +809,105 @@ export async function buildPronunciationShadowSentenceMp3(
   const titleMeta =
     typeof frontmatter.title === 'string' && frontmatter.title.trim().length > 0
       ? `${frontmatter.title.trim()} — Pronunciation Shadow Sentence`
+      : '';
+  if (titleMeta) {
+    await setMp3TitleMetadata(targetPath, titleMeta, await resolveFfmpegPath(opts.ffmpegPath));
+  }
+
+  return {
+    path: targetPath,
+    duration: await approximateDurationFromFile(targetPath, outputFormat),
+    hash,
+    provider: DEFAULT_TTS_PROVIDER,
+    voiceId: input.voiceId.trim(),
+    generatedCharacters,
+    cachedCharacters: 0,
+  };
+}
+
+export async function buildPronunciationTextMp3(
+  input: BuildPronunciationTextInput,
+  opts: BuildPronunciationTextOptions,
+): Promise<BuildPronunciationTextResult> {
+  if (!input.voiceId?.trim()) {
+    throw new ValidationError('voiceId is required for pronunciation synthesis.');
+  }
+
+  const logger = opts.logger ?? noopLogger;
+  const sentence = cleanSpeechText(input.text ?? '');
+  if (!sentence) {
+    throw new ValidationError('Pronunciation synthesis text is empty.');
+  }
+
+  const frontmatter: Frontmatter = {
+    title: input.title?.trim() || 'Pronunciation Practice',
+    student: 'student',
+    level: 'Unknown',
+    topic: 'English Practice',
+    input_type: 'generate',
+  };
+  const outputDir = resolve(opts.outPath || (input.mdPath ? dirname(input.mdPath) : process.cwd()));
+  await mkdir(outputDir, { recursive: true });
+  resolveTtsProvider(opts.ttsProvider);
+  const modelId = opts.modelId ?? DEFAULT_MODEL_ID;
+  const outputFormat = resolveOutputFormat(opts.outputFormat);
+  const fileStem = opts.fileStem?.trim() || 'pronunciation';
+  const hash = createHash('sha256')
+    .update(
+      JSON.stringify({
+        kind: input.kind ?? 'pronunciation_text',
+        provider: DEFAULT_TTS_PROVIDER,
+        text: sentence,
+        voiceId: input.voiceId.trim(),
+        modelId,
+        outputFormat,
+        fileStem,
+      }),
+    )
+    .digest('hex');
+  const targetPath = resolve(outputDir, buildPronunciationOutputFileName(hash, frontmatter, fileStem));
+  const generatedCharacters = sentence.length;
+
+  if (opts.preview) {
+    return {
+      path: targetPath,
+      duration: undefined,
+      hash,
+      provider: DEFAULT_TTS_PROVIDER,
+      voiceId: input.voiceId.trim(),
+      generatedCharacters,
+      cachedCharacters: 0,
+    };
+  }
+
+  if (!opts.force && (await fileExistsNonEmpty(targetPath))) {
+    return {
+      path: targetPath,
+      duration: await approximateDurationFromFile(targetPath, outputFormat),
+      hash,
+      provider: DEFAULT_TTS_PROVIDER,
+      voiceId: input.voiceId.trim(),
+      generatedCharacters: 0,
+      cachedCharacters: generatedCharacters,
+    };
+  }
+
+  const client = getElevenClient();
+  logger.log({
+    level: 'info',
+    stage: 'tts',
+    message: 'Generating pronunciation text audio',
+    detail: { voiceId: input.voiceId.trim(), modelId, outputFormat, fileStem },
+  });
+  await synthesizeLineWithRetry(client, input.voiceId.trim(), sentence, targetPath, {
+    modelId,
+    outputFormat,
+  });
+  await ensureFileExists(targetPath);
+
+  const titleMeta =
+    typeof input.title === 'string' && input.title.trim().length > 0
+      ? `${input.title.trim()} — ${opts.titleSuffix?.trim() || 'Pronunciation'}`
       : '';
   if (titleMeta) {
     await setMp3TitleMetadata(targetPath, titleMeta, await resolveFfmpegPath(opts.ffmpegPath));

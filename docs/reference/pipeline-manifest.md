@@ -16,7 +16,7 @@ This document captures the canonical schema so remote stores and services can va
 ## Schema Versioning
 
 - **Current version:** `2`
-- Every manifest written by the pipeline now includes `schemaVersion: 2`.
+- Every manifest written by the pipeline now includes `schemaVersion: 3`.
 - Older manifests without `schemaVersion` are treated as legacy version `1` when read.
 - Future breaking changes to the manifest structure must bump `CURRENT_MANIFEST_SCHEMA_VERSION` in
   `packages/orchestrator/src/manifest.ts` and extend this document with migration guidance.
@@ -25,7 +25,7 @@ This document captures the canonical schema so remote stores and services can va
 
 ```jsonc
 {
-  "schemaVersion": 2,
+  "schemaVersion": 3,
   "mdHash": "<sha256 hash of the Markdown study text>",
   "timestamp": "2024-07-19T12:34:56.789Z",
   "preset": "b1-default", // optional, last applied heading preset
@@ -72,13 +72,31 @@ This document captures the canonical schema so remote stores and services can va
       },
       "notionBlockId": "<notion-block-id>",
     },
-    "pronunciationShadowSentence": {
-      "path": "./lessons/audio-shadow.mp3",
-      "url": "https://...",
-      "hash": "<sha256 pronunciation sentence hash>",
-      "key": "audio/pronunciation-shadow/<sha256>.mp3",
-      "voiceId": "<elevenlabs-voice-id>",
-      "notionBlockId": "<notion-block-id>",
+    "pronunciation": {
+      "mode": "shadow_sentence",
+      "primaryClip": {
+        "id": "primary-shadow-sentence",
+        "kind": "shadow_sentence",
+        "engine": "provider",
+        "text": "We should review this carefully.",
+        "path": "./lessons/audio-shadow.mp3",
+        "url": "https://...",
+        "hash": "<sha256 pronunciation sentence hash>",
+        "key": "audio/pronunciation/<sha256>.mp3",
+        "voiceId": "<provider-voice-id>",
+        "notionBlockId": "<notion-block-id>"
+      },
+      "itemClips": [
+        {
+          "id": "shadow-word-1-edge",
+          "kind": "word_item",
+          "engine": "edge",
+          "itemIndex": 0,
+          "text": "review",
+          "path": "./lessons/audio-pronunciation-item.mp3",
+          "url": "https://..."
+        }
+      ]
     },
   },
   // TTS metadata (additive, optional)
@@ -107,7 +125,7 @@ This document captures the canonical schema so remote stores and services can va
   an existing content-addressed object.
 - `audioArtifacts` stores per-target audio artifacts:
   - `audioArtifacts.studyText` for primary study-text audio.
-  - `audioArtifacts.pronunciationShadowSentence` for optional `Mode: shadow_sentence` reference audio.
+  - `audioArtifacts.pronunciation` for canonical pronunciation audio, including the primary section clip and optional item clips.
 - `audioArtifacts.*.notionBlockId` is optional and lets reruns replace only previously inserted
   generated audio blocks near semantic anchors.
 - `notionColorization` captures the Notion preset fingerprint used for idempotent colorization skip
@@ -117,7 +135,7 @@ This document captures the canonical schema so remote stores and services can va
 - `audioArtifacts.studyText.voices[*].selectionReason`, `capabilityMatches`, and `capabilityMismatches` are additive
   explainability fields for voice-alignment v2. Consumers SHOULD treat them as optional.
 - `ttsStrategy` and related dialogue fields capture the TTS strategy used for reproducibility. These fields
-  are optional and additive under schema version `2`.
+  are optional and additive under schema version `3`.
 
 ## Backwards Compatibility
 

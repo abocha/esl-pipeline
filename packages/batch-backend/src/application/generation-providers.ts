@@ -27,6 +27,7 @@ export interface ProviderExecutionResult {
   text: string;
   providerRequestId?: string;
   usage?: GenerateDraftUsage;
+  finishReason?: string;
 }
 
 export interface ProviderStructuredExecutionResult {
@@ -34,6 +35,7 @@ export interface ProviderStructuredExecutionResult {
   rawText: string;
   providerRequestId?: string;
   usage?: GenerateDraftUsage;
+  finishReason?: string;
 }
 
 export class ProviderExecutionError extends Error {
@@ -203,6 +205,34 @@ function extractOpenAiText(payload: Record<string, unknown>): string | null {
   return chunks.join('');
 }
 
+function extractOpenAiFinishReason(payload: Record<string, unknown>): string | undefined {
+  const output = payload.output;
+  if (Array.isArray(output)) {
+    for (const item of output) {
+      if (!item || typeof item !== 'object') continue;
+      const finishReason = (item as Record<string, unknown>).finish_reason;
+      if (typeof finishReason === 'string' && finishReason.trim().length > 0) {
+        return finishReason;
+      }
+    }
+  }
+
+  const status = payload.status;
+  if (typeof status === 'string' && status.trim().length > 0) {
+    return status;
+  }
+
+  const incompleteDetails = payload.incomplete_details;
+  if (incompleteDetails && typeof incompleteDetails === 'object') {
+    const reason = (incompleteDetails as Record<string, unknown>).reason;
+    if (typeof reason === 'string' && reason.trim().length > 0) {
+      return `incomplete:${reason}`;
+    }
+  }
+
+  return undefined;
+}
+
 function parseGoogleUsage(payload: Record<string, unknown>): GenerateDraftUsage | undefined {
   const usage = payload.usageMetadata;
   if (!usage || typeof usage !== 'object') return undefined;
@@ -261,6 +291,18 @@ function extractGoogleText(payload: Record<string, unknown>): string | null {
 
   if (chunks.length === 0) return null;
   return chunks.join('');
+}
+
+function extractGoogleFinishReason(payload: Record<string, unknown>): string | undefined {
+  const candidates = payload.candidates;
+  if (!Array.isArray(candidates) || candidates.length === 0) return undefined;
+  const first = candidates[0];
+  if (!first || typeof first !== 'object') return undefined;
+  const finishReason = (first as Record<string, unknown>).finishReason;
+  if (typeof finishReason === 'string' && finishReason.trim().length > 0) {
+    return finishReason;
+  }
+  return undefined;
 }
 
 function parseOpenRouterUsage(payload: Record<string, unknown>): GenerateDraftUsage | undefined {
@@ -332,6 +374,18 @@ function extractOpenRouterText(payload: Record<string, unknown>): string | null 
   }
 
   return null;
+}
+
+function extractOpenRouterFinishReason(payload: Record<string, unknown>): string | undefined {
+  const choices = payload.choices;
+  if (!Array.isArray(choices) || choices.length === 0) return undefined;
+  const first = choices[0];
+  if (!first || typeof first !== 'object') return undefined;
+  const finishReason = (first as Record<string, unknown>).finish_reason;
+  if (typeof finishReason === 'string' && finishReason.trim().length > 0) {
+    return finishReason;
+  }
+  return undefined;
 }
 
 export async function executeOpenAiGeneration(args: {
@@ -417,6 +471,7 @@ export async function executeOpenAiGeneration(args: {
     text,
     providerRequestId: typeof cast.id === 'string' ? cast.id : undefined,
     usage: parseOpenAiUsage(cast),
+    finishReason: extractOpenAiFinishReason(cast),
   };
 }
 
@@ -528,6 +583,7 @@ export async function executeOpenAiStructuredGeneration(args: {
     rawText,
     providerRequestId: typeof cast.id === 'string' ? cast.id : undefined,
     usage: parseOpenAiUsage(cast),
+    finishReason: extractOpenAiFinishReason(cast),
   };
 }
 
@@ -620,6 +676,7 @@ export async function executeGoogleGeneration(args: {
     text,
     providerRequestId: typeof cast.responseId === 'string' ? cast.responseId : undefined,
     usage: parseGoogleUsage(cast),
+    finishReason: extractGoogleFinishReason(cast),
   };
 }
 
@@ -734,6 +791,7 @@ export async function executeGoogleStructuredGeneration(args: {
     rawText,
     providerRequestId: typeof cast.responseId === 'string' ? cast.responseId : undefined,
     usage: parseGoogleUsage(cast),
+    finishReason: extractGoogleFinishReason(cast),
   };
 }
 
@@ -833,6 +891,7 @@ export async function executeOpenRouterGeneration(args: {
     text,
     providerRequestId: typeof cast.id === 'string' ? cast.id : undefined,
     usage: parseOpenRouterUsage(cast),
+    finishReason: extractOpenRouterFinishReason(cast),
   };
 }
 
@@ -959,5 +1018,6 @@ export async function executeOpenRouterStructuredGeneration(args: {
     rawText,
     providerRequestId: typeof cast.id === 'string' ? cast.id : undefined,
     usage: parseOpenRouterUsage(cast),
+    finishReason: extractOpenRouterFinishReason(cast),
   };
 }

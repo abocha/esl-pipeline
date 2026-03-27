@@ -1,6 +1,7 @@
 import type { ColorPreset } from '@esl-pipeline/notion-adapter';
 import {
   insertGeneratedAudioLinks as insertGeneratedAudioLinksShared,
+  type PronunciationAudioPayload,
   resolveHeadingTheme as resolveHeadingThemeShared,
   resolveMarkdownTitle as resolveMarkdownTitleShared,
 } from '@esl-pipeline/shared-infrastructure';
@@ -9,12 +10,14 @@ export function insertGeneratedAudioLinks(
   markdown: string,
   urls: {
     studyTextUrl?: string;
-    pronunciationShadowSentenceUrl?: string;
+    pronunciationAudioUrl?: string;
+    pronunciationAudio?: PronunciationAudioPayload;
   },
 ): string {
   return insertGeneratedAudioLinksShared(markdown, {
     studyTextUrl: urls.studyTextUrl,
-    pronunciationShadowSentenceUrl: urls.pronunciationShadowSentenceUrl,
+    pronunciationAudioUrl: urls.pronunciationAudioUrl,
+    pronunciationAudio: urls.pronunciationAudio,
   });
 }
 

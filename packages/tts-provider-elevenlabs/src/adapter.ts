@@ -1,4 +1,6 @@
 import type {
+  BuildPronunciationTextInput,
+  BuildPronunciationTextOptions,
   BuildPronunciationShadowSentenceInput,
   BuildPronunciationShadowSentenceOptions,
   BuildStudyTextInput,
@@ -8,6 +10,7 @@ import type {
 } from '@esl-pipeline/tts-core';
 
 import {
+  buildPronunciationTextMp3,
   buildPronunciationShadowSentenceMp3,
   buildStudyTextMp3,
   loadVoicesCatalog,
@@ -59,6 +62,12 @@ export function createElevenLabsTtsProvider(): TtsProviderAdapter {
       options: BuildPronunciationShadowSentenceOptions,
     ) {
       return buildPronunciationShadowSentenceMp3(input, { ...options, ttsProvider: 'elevenlabs' });
+    },
+    async synthesizePronunciationText(
+      input: BuildPronunciationTextInput,
+      options: BuildPronunciationTextOptions,
+    ) {
+      return buildPronunciationTextMp3(input, { ...options, ttsProvider: 'elevenlabs' });
     },
   };
 }
