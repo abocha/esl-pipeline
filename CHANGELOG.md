@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented here. Dates use `YYYY-MM-DD`.
 
+## [5.0.0] - 2026-03-27
+
+### Changed
+
+- Automated release from PR #52: feat: migrate prompt gallery and overhaul pronunciation pipeline (https://github.com/abocha/esl-pipeline/pull/52)
+
 ## [4.7.2] - 2026-03-26
 
 ### Changed
