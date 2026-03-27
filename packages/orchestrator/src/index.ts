@@ -46,6 +46,7 @@ import { computeRerunPlan } from './rerun-planner.js';
 import {
   type AudioArtifact,
   type AudioArtifactKind,
+  type PronunciationAudioArtifact,
   deriveS3GlobalUrl,
   emitArtifactReuseMetric,
   resolveAudioArtifactKey,
@@ -165,6 +166,37 @@ export function isPipelineCancelledError(error: unknown): error is PipelineCance
 function throwIfCancelled(signal: AbortSignal | undefined, stage: AssignmentStage): void {
   if (!signal?.aborted) return;
   throw new PipelineCancelledError(stage, signal.reason);
+}
+
+function emitPronunciationProviderCharacterMetrics(
+  metrics: typeof fallbackMetrics,
+  pronunciation: PronunciationAudioArtifact | undefined,
+): void {
+  if (!pronunciation) return;
+
+  let generatedCharacters = 0;
+  let cachedCharacters = 0;
+  const clips = [
+    ...(pronunciation.primaryClip ? [pronunciation.primaryClip] : []),
+    ...(pronunciation.itemClips ?? []),
+  ];
+
+  for (const clip of clips) {
+    if (clip.engine !== 'provider') continue;
+    generatedCharacters += Math.max(0, clip.tts?.generatedCharacters ?? 0);
+    cachedCharacters += Math.max(0, clip.tts?.cachedCharacters ?? 0);
+  }
+
+  if (generatedCharacters > 0) {
+    metrics.increment('esl.tts.provider_characters', generatedCharacters, {
+      type: 'generated',
+    });
+  }
+  if (cachedCharacters > 0) {
+    metrics.increment('esl.tts.provider_characters', cachedCharacters, {
+      type: 'cached',
+    });
+  }
 }
 
 export {
@@ -668,6 +700,7 @@ export async function newAssignment(
           logger,
           providerVoiceId: fallbackVoiceId,
         });
+        emitPronunciationProviderCharacterMetrics(metrics, audioArtifacts.pronunciation);
       }
     } else {
       recordSkip('tts', 'tts disabled');
@@ -1317,6 +1350,7 @@ export async function rerunAssignment(
         logger,
         providerVoiceId: fallbackVoiceId,
       });
+      emitPronunciationProviderCharacterMetrics(metrics, audioArtifacts.pronunciation);
       executed.push('tts');
     } else {
       emitStage('tts', 'skipped', { reason: skipReasonByStage.get('tts') ?? 'not requested' });
