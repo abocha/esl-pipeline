@@ -965,7 +965,9 @@ describe('StudentWorkspace', () => {
       await screen.findAllByText(/Prefers structured homework with built-in review blocks\./i);
 
       await user.click(screen.getByLabelText(/Select candidate candidate-approved for promotion/i));
-      await user.type(screen.getByLabelText(/Promotion Note/i), 'Promote the verified study habits.');
+      fireEvent.change(screen.getByLabelText(/Promotion Note/i), {
+        target: { value: 'Promote the verified study habits.' },
+      });
       await user.click(screen.getByRole('button', { name: /Generate Draft Revision/i }));
 
       await waitFor(() => {

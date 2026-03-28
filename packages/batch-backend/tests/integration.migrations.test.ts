@@ -120,6 +120,19 @@ async function assertSchemaHealthy(scenario: string): Promise<void> {
     expect(studentMemorySnapshotColumnSet.has('content_hash')).toBe(true);
     expect(studentMemorySnapshotColumnSet.has('unresolved_issues')).toBe(true);
 
+    const jobsColumns = await pool.query<{ column_name: string }>(
+      `
+      SELECT column_name
+      FROM information_schema.columns
+      WHERE table_schema = 'public'
+        AND table_name = 'jobs'
+      `,
+    );
+    const jobsColumnSet = new Set(jobsColumns.rows.map((row) => row.column_name));
+    expect(jobsColumnSet.has('started_at')).toBe(true);
+    expect(jobsColumnSet.has('finished_at')).toBe(true);
+    expect(jobsColumnSet.has('error')).toBe(true);
+
     const profileRevisionSourceConstraint = await pool.query<{ definition: string }>(
       `
       SELECT pg_get_constraintdef(oid) AS definition
@@ -261,6 +274,85 @@ describe('integration/migrations', () => {
         `,
         );
         expect(duplicateResult.rows).toHaveLength(0);
+      });
+    },
+    testTimeout,
+  );
+
+  it(
+    'legacy rerun action rows upgrade cleanly through the rerun-unification migration',
+    async () => {
+      await applyLegacySchemaFixture();
+
+      await withAdminClient(async (pool) => {
+        await pool.query(`
+          CREATE TABLE IF NOT EXISTS job_action_history (
+            id UUID PRIMARY KEY,
+            job_id UUID NOT NULL,
+            action_type TEXT NOT NULL,
+            payload_json JSONB NULL,
+            requested_at TIMESTAMPTZ NOT NULL,
+            requested_by UUID NULL,
+            outcome TEXT NOT NULL,
+            message TEXT NOT NULL,
+            error_code TEXT NULL,
+            created_job_id UUID NULL,
+            created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+          );
+        `);
+
+        await pool.query(`
+          ALTER TABLE job_action_history
+            DROP CONSTRAINT IF EXISTS job_action_history_action_type_check;
+          ALTER TABLE job_action_history
+            ADD CONSTRAINT job_action_history_action_type_check
+            CHECK (action_type IN ('rerun_audio', 'rerun_publish', 'cancel', 'edit_metadata'));
+        `);
+
+        await pool.query(
+          `
+          INSERT INTO job_action_history (
+            id,
+            job_id,
+            action_type,
+            payload_json,
+            requested_at,
+            requested_by,
+            outcome,
+            message,
+            error_code,
+            created_job_id,
+            created_at
+          )
+          VALUES (
+            'c3fbb9aa-0b3c-406a-94a5-4c50760625ab',
+            '99999999-9999-4999-8999-999999999991',
+            'rerun_publish',
+            '{}'::jsonb,
+            NOW() - INTERVAL '1 day',
+            '11111111-1111-4111-8111-111111111111',
+            'failed',
+            'Publish can only be rerun for succeeded jobs',
+            'invalid_state',
+            NULL,
+            NOW() - INTERVAL '1 day'
+          )
+          `,
+        );
+      });
+
+      await runMigrations();
+      await assertSchemaHealthy('legacy-upgrade-rerun-history');
+
+      await withAdminClient(async (pool) => {
+        const actionTypes = await pool.query<{ action_type: string }>(
+          `
+          SELECT action_type
+          FROM job_action_history
+          WHERE id = 'c3fbb9aa-0b3c-406a-94a5-4c50760625ab'
+          `,
+        );
+        expect(actionTypes.rows[0]?.action_type).toBe('rerun');
       });
     },
     testTimeout,
