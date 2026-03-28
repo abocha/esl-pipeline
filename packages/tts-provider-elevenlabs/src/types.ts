@@ -62,6 +62,7 @@ export interface BuildStudyTextOptions {
   defaultVoiceId?: string;
   ffmpegPath?: string;
   outputFormat?: string;
+  modelId?: string;
   logger?: PipelineLogger;
 
   // Strategy selection (auto chooses based on content heuristics)

@@ -92,6 +92,15 @@ function parseShadowSentenceLine(line: string): { matches: boolean; hasValue: bo
   return { matches: true, hasValue: value.length > 0 };
 }
 
+function parseNaturalSentencePracticeLine(line: string): { matches: boolean; hasValue: boolean } {
+  const normalizedLine = normalizePronunciationSectionLine(line);
+  const match =
+    /^(?:\*\*)?natural sentence practice\s*:\s*(?:\*\*)?\s*(.*)$/i.exec(normalizedLine);
+  if (!match) return { matches: false, hasValue: false };
+  const value = (match[1] ?? '').trim();
+  return { matches: true, hasValue: value.length > 0 };
+}
+
 function extractFrontmatterTitle(markdown: string): string | null {
   const frontmatterMatch = markdown.match(/^---\r?\n([\s\S]*?)\r?\n---(?:\r?\n|$)/);
   if (!frontmatterMatch) {
@@ -180,10 +189,10 @@ export function insertGeneratedAudioLinks(
   const cleaned: string[] = [];
   let studyMarkerIndex = -1;
   let studyFallbackIndex = -1;
-  let pronunciationHeadingIndex = -1;
   let pronunciationAnchorIndex = -1;
   let inPronunciationSection = false;
   let pendingShadowSentenceValue = false;
+  let pendingNaturalSentenceValue = false;
   let skipGeneratedPlaceholderDirective = false;
 
   const studyPlaceholderMarker = options.removeGeneratedPlaceholderMarkers?.study;
@@ -213,11 +222,11 @@ export function insertGeneratedAudioLinks(
       if (TRANSCRIPT_REGEX.test(trimmed)) studyMarkerIndex = cleaned.length;
     }
     if (PRONUNCIATION_HEADING_REGEX.test(trimmed)) {
-      pronunciationHeadingIndex = cleaned.length;
       inPronunciationSection = true;
     } else if (inPronunciationSection && /^#{2,3}\s+/.test(trimmed)) {
       inPronunciationSection = false;
       pendingShadowSentenceValue = false;
+      pendingNaturalSentenceValue = false;
     }
 
     if (
@@ -229,18 +238,31 @@ export function insertGeneratedAudioLinks(
     }
     if (inPronunciationSection) {
       const shadowSentence = parseShadowSentenceLine(trimmed);
-      if (shadowSentence.matches) {
+      const naturalSentencePractice = parseNaturalSentencePracticeLine(trimmed);
+      if (shadowSentence.matches || naturalSentencePractice.matches) {
         pronunciationAnchorIndex = cleaned.length;
-        pendingShadowSentenceValue = !shadowSentence.hasValue;
-      } else if (pendingShadowSentenceValue && trimmed.length > 0) {
-        pronunciationAnchorIndex = cleaned.length;
-        pendingShadowSentenceValue = false;
+        pendingShadowSentenceValue = shadowSentence.matches && !shadowSentence.hasValue;
+        pendingNaturalSentenceValue =
+          naturalSentencePractice.matches && !naturalSentencePractice.hasValue;
+      } else if (
+        (pendingShadowSentenceValue || pendingNaturalSentenceValue) &&
+        trimmed.length > 0
+      ) {
+        if (/^:::/i.test(trimmed)) {
+          pendingShadowSentenceValue = false;
+          pendingNaturalSentenceValue = false;
+        } else {
+          pronunciationAnchorIndex = cleaned.length;
+          pendingShadowSentenceValue = false;
+          pendingNaturalSentenceValue = false;
+        }
       }
     }
     cleaned.push(line);
   }
 
   const next = [...cleaned];
+  let pronunciationAnchorOffset = 0;
   const studyTextUrl = options.studyTextUrl?.trim();
   if (studyTextUrl) {
     const audioLine = `[${STUDY_TEXT_AUDIO_LINK_LABEL}](${studyTextUrl})`;
@@ -252,6 +274,9 @@ export function insertGeneratedAudioLinks(
             ? studyFallbackIndex
             : next.length;
       next.splice(insertAt, 0, audioLine, '');
+      if (pronunciationAnchorIndex >= 0 && insertAt <= pronunciationAnchorIndex) {
+        pronunciationAnchorOffset += 2;
+      }
     }
   } else if (options.insertStudyPlaceholderWhenMissing) {
     const insertAt =
@@ -261,6 +286,9 @@ export function insertGeneratedAudioLinks(
           ? studyFallbackIndex
           : next.length;
     next.splice(insertAt, 0, options.studyPlaceholder ?? ':::audio', '');
+    if (pronunciationAnchorIndex >= 0 && insertAt <= pronunciationAnchorIndex) {
+      pronunciationAnchorOffset += 2;
+    }
   }
 
   const includePronunciation =
@@ -268,28 +296,18 @@ export function insertGeneratedAudioLinks(
     (Boolean(options.pronunciationAudio?.primaryClip?.url?.trim()) ||
       Boolean(options.pronunciationAudioUrl?.trim()) ||
       Boolean(options.insertPronunciationPlaceholderWhenMissing));
-  if (includePronunciation) {
+  if (includePronunciation && pronunciationAnchorIndex >= 0) {
     const pronunciationAudioUrl =
       options.pronunciationAudio?.primaryClip?.url?.trim() ??
       options.pronunciationAudioUrl?.trim();
     if (pronunciationAudioUrl) {
       const audioLine = `[${PRONUNCIATION_AUDIO_LINK_LABEL}](${pronunciationAudioUrl})`;
       if (!next.some((line) => line.trim() === audioLine)) {
-        const headingIndex =
-          pronunciationAnchorIndex >= 0
-            ? pronunciationAnchorIndex + 1
-            : pronunciationHeadingIndex >= 0
-              ? pronunciationHeadingIndex + 1
-              : next.length;
+        const headingIndex = pronunciationAnchorIndex + pronunciationAnchorOffset + 1;
         next.splice(headingIndex, 0, '', audioLine, '');
       }
     } else if (options.insertPronunciationPlaceholderWhenMissing) {
-      const headingIndex =
-        pronunciationAnchorIndex >= 0
-          ? pronunciationAnchorIndex + 1
-          : pronunciationHeadingIndex >= 0
-            ? pronunciationHeadingIndex + 1
-            : next.length;
+      const headingIndex = pronunciationAnchorIndex + pronunciationAnchorOffset + 1;
       next.splice(headingIndex, 0, '', options.pronunciationPlaceholder ?? ':::audio', '');
     }
   }

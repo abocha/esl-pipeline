@@ -115,7 +115,7 @@ describe('metadata/job-options', () => {
     expect(result.ttsStrategies).toEqual(['auto', 'dialogue', 'tts']);
     expect(result.ttsProviders).toEqual(['elevenlabs', 'google']);
     expect(result.ttsModelOptionsByProvider).toEqual({
-      elevenlabs: ['eleven_multilingual_v2'],
+      elevenlabs: ['eleven_v3', 'eleven_multilingual_v2', 'eleven_flash_v2_5', 'eleven_flash_v2'],
       google: ['chirp3_hd', 'studio', 'neural2', 'wavenet'],
     });
     expect(result.defaultTtsProvider).toBe('elevenlabs');

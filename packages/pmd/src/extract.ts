@@ -214,6 +214,7 @@ function parseMarkedField(
   marker:
     | 'mode'
     | 'shadow sentence'
+    | 'natural sentence practice'
     | 'target'
     | 'focus'
     | 'action'
@@ -525,6 +526,7 @@ export function extractPronunciationFocus(md: ParsedMarkdownContext): Pronunciat
   let deliverable: string | undefined;
   let contourCue: string | undefined;
   let shadowSentence: string | undefined;
+  let naturalSentence: string | undefined;
   const words: PronunciationShadowWord[] = [];
   const pairs: PronunciationMinimalPairItem[] = [];
   const lines: PronunciationConnectedSpeechItem[] = [];
@@ -570,6 +572,11 @@ export function extractPronunciationFocus(md: ParsedMarkdownContext): Pronunciat
     const sentence = parseMarkedField(trimmed, 'shadow sentence');
     if (sentence) {
       shadowSentence = sentence;
+      continue;
+    }
+    const naturalSentenceField = parseMarkedField(trimmed, 'natural sentence practice');
+    if (naturalSentenceField) {
+      naturalSentence = naturalSentenceField;
       continue;
     }
 
@@ -649,12 +656,14 @@ export function extractPronunciationFocus(md: ParsedMarkdownContext): Pronunciat
     return {
       mode: 'connected_speech',
       lines,
+      naturalSentence,
       ...shared,
     };
   }
   return {
     mode: modeValue,
     drills,
+    naturalSentence,
     contourCue,
     ...shared,
   };

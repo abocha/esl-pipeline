@@ -209,12 +209,14 @@ export type PronunciationFocus =
   | (PronunciationCommonFields & {
       mode: 'connected_speech';
       lines: PronunciationConnectedSpeechItem[];
+      naturalSentence?: string;
       sectionStartLine: number;
       issues: PronunciationShadowIssue[];
     })
   | (PronunciationCommonFields & {
       mode: 'intonation' | 'rhythm_chunking' | 'sentence_stress';
       drills: PronunciationGenericDrillItem[];
+      naturalSentence?: string;
       sectionStartLine: number;
       issues: PronunciationShadowIssue[];
       contourCue?: string;

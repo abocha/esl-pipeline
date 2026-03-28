@@ -73,13 +73,21 @@ Populate required credentials/keys referenced in:
 
 ## Database Migration Flow
 
-Run before serving production traffic:
+Run before serving production traffic on existing databases:
 
 ```bash
 pnpm --filter @esl-pipeline/batch-backend db:status
 pnpm --filter @esl-pipeline/batch-backend db:migrate
 pnpm --filter @esl-pipeline/batch-backend db:verify
 ```
+
+For fresh environments bootstrapped from the generated schema baseline, verify the baseline stays current when schema work changes:
+
+```bash
+pnpm --filter @esl-pipeline/batch-backend db:verify-baseline
+```
+
+These baseline commands require a Postgres connection with permission to create and drop temporary databases for verification.
 
 ## Prompt Catalog Bootstrap (Required for Fresh Envs)
 

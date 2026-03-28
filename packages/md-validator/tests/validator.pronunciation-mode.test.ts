@@ -176,6 +176,26 @@ describeMdValidatorSuite(
       expect(res.warnings.join('\n')).toMatch(/connected speech line must use/i);
     });
 
+    it('warns when connected_speech is missing the final natural sentence block', async () => {
+      const tempDir = await mkdtemp(path.join(tmpdir(), 'validator-'));
+      const file = path.join(tempDir, 'connected-speech-pronunciation-missing-natural.md');
+      const section = [
+        ':::callout 🗣️',
+        '**Mode:** connected_speech',
+        '**Target:** Link final consonants and following vowels smoothly.',
+        '**Focus:** Listen for how the words join together.',
+        '**Action:** Read each careful form, then the connected form.',
+        '**Deliverable:** A 10-second voice note of your practice.',
+        '1. "Change helps us." -> Change help-sus.',
+        '2. "It gives us food." -> It give-sus food.',
+        ':::',
+      ].join('\n');
+      await writeFile(file, withPronunciationSection(buildBaseDoc('text'), section));
+      const res = await validateMarkdownFile(file);
+      expect(res.ok).toBe(true);
+      expect(res.warnings.join('\n')).toMatch(/natural sentence practice/i);
+    });
+
     it('warns when rhythm_chunking lines do not show chunk boundaries', async () => {
       const tempDir = await mkdtemp(path.join(tmpdir(), 'validator-'));
       const file = path.join(tempDir, 'rhythm-chunking-pronunciation-boundaries.md');
@@ -194,6 +214,26 @@ describeMdValidatorSuite(
       const res = await validateMarkdownFile(file);
       expect(res.ok).toBe(true);
       expect(res.warnings.join('\n')).toMatch(/should show chunk boundaries with "\|"/i);
+    });
+
+    it('warns when intonation is missing the final natural sentence block', async () => {
+      const tempDir = await mkdtemp(path.join(tmpdir(), 'validator-'));
+      const file = path.join(tempDir, 'intonation-pronunciation-missing-natural.md');
+      const section = [
+        ':::callout 🗣️',
+        '**Mode:** intonation',
+        '**Target:** Rising final intonation for yes/no questions.',
+        '**Focus:** Let your pitch slide upward on the final stressed word.',
+        '**Action:** Read each question once, then again more naturally.',
+        '**Deliverable:** A 10-second voice note of your practice.',
+        '1. Do you have a second? — /duː juː hæv ə ˈsekənd/',
+        '2. Is everything okay? — /ɪz ˈevriθɪŋ oʊˈkeɪ/',
+        ':::',
+      ].join('\n');
+      await writeFile(file, withPronunciationSection(buildBaseDoc('text'), section));
+      const res = await validateMarkdownFile(file);
+      expect(res.ok).toBe(true);
+      expect(res.warnings.join('\n')).toMatch(/natural sentence practice/i);
     });
   },
 );

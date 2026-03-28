@@ -319,11 +319,12 @@ async function buildDialogueMp3(
   frontmatter: Frontmatter,
 ): Promise<BuildStudyTextResult> {
   const { dialogueLanguage, dialogueStability, dialogueSeed } = options;
+  const modelId = options.modelId ?? 'eleven_v3';
   // Synthesize dialogue
   const result = await synthesizeDialogue(
     {
       inputs,
-      modelId: 'eleven_v3',
+      modelId,
       languageCode: dialogueLanguage,
       stability: dialogueStability,
       seed: dialogueSeed,
@@ -459,7 +460,7 @@ export async function buildStudyTextMp3(
     );
     const inputs = toDialogueInputs(segments, speakerVoiceMap);
     const hash = buildDialogueHash(inputs, {
-      modelId: 'eleven_v3',
+      modelId: opts.modelId ?? 'eleven_v3',
       outputFormat: resolveOutputFormat(opts.outputFormat),
       languageCode: opts.dialogueLanguage,
       stability: opts.dialogueStability,
@@ -646,7 +647,7 @@ export async function buildStudyTextMp3(
       const chunkHashInput = JSON.stringify({
         voiceId: run.voiceId,
         text: chunkText,
-        modelId: DEFAULT_MODEL_ID,
+        modelId: opts.modelId ?? DEFAULT_MODEL_ID,
         outputFormat: resolveOutputFormat(opts.outputFormat),
       });
       const chunkHash = createHash('sha256').update(chunkHashInput).digest('hex');
@@ -660,7 +661,7 @@ export async function buildStudyTextMp3(
       }
 
       await synthesizeLineWithRetry(eleven, run.voiceId, chunkText, chunkFilePath, {
-        modelId: DEFAULT_MODEL_ID,
+        modelId: opts.modelId ?? DEFAULT_MODEL_ID,
         outputFormat: resolveOutputFormat(opts.outputFormat),
       });
       generatedCharacters += chunkText.length;

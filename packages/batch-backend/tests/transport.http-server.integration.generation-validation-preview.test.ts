@@ -757,6 +757,8 @@ describeHttpServerIntegrationSuite(
             '- 2. "It gives us food." -> It give-sus food.',
             '- 3. "Light feels stronger." -> Light feel-stronger.',
             '',
+            '**Natural sentence practice:** The device is as heavy as the old one.',
+            '',
             ':::study-text Transcript',
             'Teacher: Hello!',
             ':::',
@@ -768,7 +770,13 @@ describeHttpServerIntegrationSuite(
       const payload = response.json() as { html: string };
       const placeholderCount = (payload.html.match(/Audio track generating\.\.\./g) ?? []).length;
       expect(placeholderCount).toBeGreaterThanOrEqual(2);
+      expect(payload.html.lastIndexOf('Audio track generating...')).toBeGreaterThan(
+        payload.html.indexOf('Natural sentence practice'),
+      );
       const pronunciationAudio = extractPronunciationAudioPayload(payload.html);
+      expect(pronunciationAudio?.primaryClip).toMatchObject({
+        id: 'preview-connected-speech-sentence',
+      });
       expect(pronunciationAudio?.itemClips).toEqual(
         expect.arrayContaining([expect.objectContaining({ id: 'preview-connected-1' })]),
       );
@@ -798,11 +806,9 @@ describeHttpServerIntegrationSuite(
       expect(response.statusCode).toBe(200);
       const payload = response.json() as { html: string };
       const placeholderCount = (payload.html.match(/Audio track generating\.\.\./g) ?? []).length;
-      expect(placeholderCount).toBeGreaterThanOrEqual(2);
+      expect(placeholderCount).toBe(1);
       const pronunciationAudio = extractPronunciationAudioPayload(payload.html);
-      expect(pronunciationAudio?.primaryClip).toMatchObject({
-        id: 'preview-minimal-pair-primary',
-      });
+      expect(pronunciationAudio?.primaryClip).toBeUndefined();
       expect(pronunciationAudio?.itemClips).toEqual(
         expect.arrayContaining([
           expect.objectContaining({ id: 'preview-minimal-pair-1-left' }),

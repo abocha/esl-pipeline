@@ -279,28 +279,45 @@ _(Write 2-3 short questions about the main ideas of the study text. Check meanin
 
 **Deliverable:** A 10-second voice note of your practice.
 
-Keep this section compact. After the shared fields above, include exactly one mode-specific drill block and nothing extra:
+Keep this section compact. Build it in two layers when the mode is sentence-level:
+
+- First, give the student 2-5 short prep drills that isolate the target.
+- Then, end with one clearly marked final read-aloud sentence in normal English spelling.
+- The final sentence is the real-speech target and should feel natural, complete, and closely aligned with the study text or mission.
+
+Use these exact mode contracts:
 
 - If `**Mode:** shadow_sentence`, you MUST include:
-  - `**Shadow sentence:** <full sentence>`
   - `1. <word or chunk> — /<transcription>/`
   - `2. <word or chunk> — /<transcription>/`
   - `3. <word or chunk> — /<transcription>/`
   - Add up to 5 numbered drill lines total.
+  - After the numbered drills, add exactly one final line:
+  - `**Shadow sentence:** <full sentence>`
 - If `**Mode:** minimal_pair`, you MUST include 2-5 numbered pair lines:
   - `1. <word1> /<ipa1>/ — <word2> /<ipa2>/`
+  - Do not add a `Natural sentence practice` block for this mode.
 - If `**Mode:** connected_speech`, you MUST include 2-4 numbered transformation lines:
   - `1. "<careful form>" -> <connected form>`
   - `<careful form>` must be the normal written phrase or sentence.
   - `<connected form>` must be a learner-facing plain-text spoken-form respelling such as `help-sus`, `wanna`, `as-heavy-as`, or `gonna`, not IPA and not slash transcription.
   - Do not write the right-hand side as `/.../`.
+  - After the numbered drills, add exactly one final line:
+  - `**Natural sentence practice:** <full sentence>`
+  - This final sentence must be normal orthographic English and show the target in real connected speech.
 - If `**Mode:** intonation`, you MUST include 2-4 numbered drill lines:
   - `1. <short phrase or question> — /<transcription>/`
   - You may also add `**Contour cue:** rise | fall | rise-fall | fall-rise` when it helps.
+  - After the numbered drills, add exactly one final line:
+  - `**Natural sentence practice:** <full sentence or question>`
 - If `**Mode:** rhythm_chunking`, you MUST include 2-4 numbered drill lines:
   - `1. <phrase | chunk | chunk> — /<transcription>/`
+  - After the numbered drills, add exactly one final line:
+  - `**Natural sentence practice:** <full sentence>`
 - If `**Mode:** sentence_stress`, you MUST include 2-4 numbered drill lines:
   - `1. We **really** need to leave now. — /<transcription>/`
+  - After the numbered drills, add exactly one final line:
+  - `**Natural sentence practice:** <full sentence>`
 :::
 
 ## 6. ✅ Your Turn: Complete the Mission!

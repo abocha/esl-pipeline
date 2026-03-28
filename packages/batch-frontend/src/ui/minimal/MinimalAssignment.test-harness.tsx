@@ -54,8 +54,7 @@ vi.mock('../../utils/api', () => ({
   materializeDraft: vi.fn(),
   restoreProfileRevision: vi.fn(),
   retryRecordingTranscription: vi.fn(),
-  rerunAudioJob: vi.fn(),
-  rerunPublishJob: vi.fn(),
+  rerunJob: vi.fn(),
   renderHtmlPreview: vi
     .fn()
     .mockResolvedValue({ html: '<html><body><h1>Preview</h1></body></html>' }),
@@ -103,6 +102,7 @@ export function makeJobStatus(overrides: Partial<api.JobStatus> = {}): api.JobSt
     studentId: null,
     md: '/tmp/assignment.md',
     mdStorageUri: null,
+    pronunciationMode: null,
     recordingId: null,
     transcriptId: null,
     promptPackageId: null,
@@ -223,6 +223,7 @@ export function hydrateResumedAssignment(
     status?: Partial<api.JobStatus>;
     jobs?: api.JobStatus[];
     promptText?: string;
+    draftText?: string;
   } = {},
 ) {
   const status = makeJobStatus({
@@ -230,6 +231,7 @@ export function hydrateResumedAssignment(
     recordingId: 'rec-1',
     transcriptId: 'tx-1',
     promptPackageId: 'pkg-1',
+    ...(overrides.draftText ? { draftId: 'draft-1' } : {}),
     ...overrides.status,
   });
   const jobs = overrides.jobs ?? [status];
@@ -254,6 +256,18 @@ export function hydrateResumedAssignment(
     createdAt: now,
     updatedAt: now,
   });
+  if (overrides.draftText) {
+    vi.mocked(api.fetchDraft).mockResolvedValue({
+      id: status.draftId ?? 'draft-1',
+      promptPackageId: status.promptPackageId ?? 'pkg-1',
+      studentId: status.studentId ?? null,
+      storageUri: 'memory://drafts/draft-1',
+      createdBy: 'user-1',
+      text: overrides.draftText,
+      createdAt: now,
+      updatedAt: now,
+    });
+  }
 
   globalThis.history.replaceState(null, '', `/?jobId=${status.jobId}`);
   return status;
@@ -342,21 +356,15 @@ export function setupMinimalAssignmentTest() {
     },
     supportedActions: [
       {
-        type: 'rerun_audio',
-        label: 'Rerun audio',
-        description: 'Regenerate audio',
+        type: 'rerun',
+        label: 'Rerun',
+        description: 'Republish current draft or selectively regenerate audio families',
         implemented: true,
       },
       {
         type: 'cancel',
         label: 'Cancel',
         description: 'Cancel active job',
-        implemented: true,
-      },
-      {
-        type: 'rerun_publish',
-        label: 'Rerun publish',
-        description: 'Rerun publish stage',
         implemented: true,
       },
     ],
@@ -535,17 +543,11 @@ export function setupMinimalAssignmentTest() {
     lineage: null,
     actions: [],
   });
-  vi.mocked(api.rerunAudioJob).mockResolvedValue({
+  vi.mocked(api.rerunJob).mockResolvedValue({
     success: true,
-    message: 'Audio rerun queued',
-    actionType: 'rerun_audio',
+    message: 'Rerun queued',
     jobId: 'job-1',
-  });
-  vi.mocked(api.rerunPublishJob).mockResolvedValue({
-    success: true,
-    message: 'Publish rerun queued',
-    actionType: 'rerun_publish',
-    jobId: 'job-1',
+    actionType: 'rerun',
   });
   vi.mocked(api.cancelJob).mockResolvedValue({
     success: true,

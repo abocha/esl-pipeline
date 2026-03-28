@@ -1,4 +1,10 @@
-import type { GoogleTtsModel, TtsProviderId as TtsProvider } from '@esl-pipeline/tts-core';
+import type {
+  ElevenLabsTtsModelId,
+  GoogleTtsModel,
+  PronunciationChunkTtsProviderId,
+} from '@esl-pipeline/contracts';
+import type { PronunciationAudioMode } from '@esl-pipeline/shared-infrastructure';
+import type { TtsProviderId as TtsProvider } from '@esl-pipeline/tts-core';
 
 import type { ConfigProvider } from './config.js';
 import type { AssignmentManifest, AudioArtifactManifest, ManifestStore } from './manifest.js';
@@ -23,9 +29,9 @@ export interface AssignmentProgressEvent {
 
 export type OrchestratorOperation =
   | 'new_assignment'
-  | 'rerun_assignment'
+  | 'rerun'
   | 'get_assignment_status'
-  | 'plan_rerun_assignment';
+  | 'plan_rerun';
 
 export type OrchestratorErrorCategory =
   | 'cancelled'
@@ -161,25 +167,37 @@ export interface GetAssignmentStatusRequestV2 {
 export interface RerunFlags {
   md: string;
   manifestMd?: string;
-  steps?: ('tts' | 'upload' | 'add-audio')[];
   voices?: string;
   out?: string;
-  force?: boolean;
   dryRun?: boolean;
   upload?: 's3';
   prefix?: string;
   publicRead?: boolean;
   presign?: number;
-  accentPreference?: string;
-  voiceId?: string;
-  ttsProvider?: TtsProvider;
-  googleTtsModel?: GoogleTtsModel;
-
-  // TTS strategy options for rerun
-  ttsStrategy?: 'auto' | 'dialogue' | 'tts';
-  dialogueLanguage?: string;
-  dialogueStability?: number;
-  dialogueSeed?: number;
+  republishOnly?: boolean;
+  regenerateStudyTextAudio?: boolean;
+  regeneratePronunciationMainAudio?: boolean;
+  regeneratePronunciationChunkAudio?: boolean;
+  studyTextVoiceAccent?: string;
+  studyTextVoiceId?: string;
+  studyTextTtsProvider?: TtsProvider;
+  studyTextElevenlabsModel?: ElevenLabsTtsModelId;
+  studyTextGoogleTtsModel?: GoogleTtsModel;
+  studyTextTtsStrategy?: 'auto' | 'dialogue' | 'tts';
+  studyTextDialogueLanguage?: string;
+  studyTextDialogueStability?: number;
+  studyTextDialogueSeed?: number;
+  pronunciationMainVoiceAccent?: string;
+  pronunciationMainVoiceId?: string;
+  pronunciationMainTtsProvider?: TtsProvider;
+  pronunciationMainElevenlabsModel?: ElevenLabsTtsModelId;
+  pronunciationMainGoogleTtsModel?: GoogleTtsModel;
+  pronunciationChunkVoiceAccent?: string;
+  pronunciationChunkVoiceId?: string;
+  pronunciationChunkTtsProvider?: PronunciationChunkTtsProviderId;
+  pronunciationChunkElevenlabsModel?: ElevenLabsTtsModelId;
+  pronunciationChunkGoogleTtsModel?: GoogleTtsModel;
+  pronunciationChunkEdgeVoice?: string;
 }
 
 export type RerunAssignmentRequest = RerunFlags;
@@ -199,7 +217,7 @@ export interface RerunAssignmentResult {
   manifestPath: string;
 }
 
-export type RerunTargetStage = NonNullable<RerunFlags['steps']>[number];
+export type RerunTargetStage = 'tts' | 'upload' | 'add-audio';
 
 export interface RerunPlanSkip {
   stage: RerunTargetStage;
@@ -208,10 +226,10 @@ export interface RerunPlanSkip {
 
 export interface RerunPlanRequest {
   md: string;
-  steps?: RerunTargetStage[];
-  audio?: boolean;
-  from?: RerunTargetStage;
-  to?: RerunTargetStage;
+  republishOnly?: boolean;
+  regenerateStudyTextAudio?: boolean;
+  regeneratePronunciationMainAudio?: boolean;
+  regeneratePronunciationChunkAudio?: boolean;
 }
 
 export interface RerunPlanRequestV2 {
@@ -219,9 +237,20 @@ export interface RerunPlanRequestV2 {
 }
 
 export interface RerunPlanResult {
-  requested: RerunTargetStage[];
+  requested: {
+    republishOnly: boolean;
+    regenerateStudyTextAudio: boolean;
+    regeneratePronunciationMainAudio: boolean;
+    regeneratePronunciationChunkAudio: boolean;
+  };
   executable: RerunTargetStage[];
   skipped: RerunPlanSkip[];
+  willReuse: {
+    studyTextAudio: boolean;
+    pronunciationMainAudio: boolean;
+    pronunciationChunkAudio: boolean;
+  };
+  detectedPronunciationMode?: PronunciationAudioMode | null;
   requires: {
     missingManifestFields: string[];
   };

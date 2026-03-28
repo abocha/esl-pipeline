@@ -19,7 +19,7 @@ import {
   loadPreset,
   runImport,
 } from '@esl-pipeline/notion-adapter';
-import { parseMarkdownContext } from '@esl-pipeline/pmd';
+import { extractPronunciationFocus, parseMarkdownContext } from '@esl-pipeline/pmd';
 import { deriveS3UploadAddress, uploadFile } from '@esl-pipeline/storage-uploader';
 import {
   buildStudyTextMp3,
@@ -199,6 +199,36 @@ function emitPronunciationProviderCharacterMetrics(
   }
 }
 
+async function applyRerunVoicePreferences(flags: RerunFlags): Promise<void> {
+  const studyTextPreferences = {
+    voiceId: flags.studyTextVoiceId,
+    accentPreference: flags.studyTextVoiceAccent,
+  };
+  await applyVoicePreferences(studyTextPreferences);
+  flags.studyTextVoiceId = studyTextPreferences.voiceId;
+  flags.studyTextVoiceAccent = studyTextPreferences.accentPreference;
+
+  const pronunciationMainPreferences = {
+    voiceId: flags.pronunciationMainVoiceId,
+    accentPreference: flags.pronunciationMainVoiceAccent,
+  };
+  await applyVoicePreferences(pronunciationMainPreferences);
+  flags.pronunciationMainVoiceId = pronunciationMainPreferences.voiceId;
+  flags.pronunciationMainVoiceAccent = pronunciationMainPreferences.accentPreference;
+
+  const pronunciationChunkPreferences = {
+    voiceId: flags.pronunciationChunkVoiceId,
+    accentPreference: flags.pronunciationChunkVoiceAccent,
+  };
+  await applyVoicePreferences(pronunciationChunkPreferences);
+  flags.pronunciationChunkVoiceId = pronunciationChunkPreferences.voiceId;
+  flags.pronunciationChunkVoiceAccent = pronunciationChunkPreferences.accentPreference;
+}
+
+function resolveDefaultChunkProvider(mode?: string | null): 'edge-tts' | 'elevenlabs' {
+  return mode === 'connected_speech' ? 'elevenlabs' : 'edge-tts';
+}
+
 export {
   manifestPathFor,
   readManifest,
@@ -284,7 +314,7 @@ export async function executeRerunAssignmentV2(
   request: RerunAssignmentRequestV2,
   context: OrchestratorV2ExecutionContext = {},
 ): Promise<RerunAssignmentOperationResultV2> {
-  const operation: OrchestratorOperation = 'rerun_assignment';
+  const operation: OrchestratorOperation = 'rerun';
   try {
     const data = await rerunAssignment(request.assignment, context.dependencies ?? {});
     return successResultV2(operation, data);
@@ -310,7 +340,7 @@ export async function executePlanRerunAssignmentV2(
   request: RerunPlanRequestV2,
   context: OrchestratorV2ExecutionContext = {},
 ): Promise<PlanRerunAssignmentOperationResultV2> {
-  const operation: OrchestratorOperation = 'plan_rerun_assignment';
+  const operation: OrchestratorOperation = 'plan_rerun';
   try {
     const data = await planRerunAssignment(request.rerunPlan, context.dependencies ?? {});
     return successResultV2(operation, data);
@@ -695,10 +725,10 @@ export async function newAssignment(
           title: validation.meta?.title ?? basename(flags.md).replace(/\.[^.]+$/, ''),
           preview: flags.dryRun,
           force: flags.force || flags.redoTts,
-          ttsProvider: flags.ttsProvider,
-          googleTtsModel: flags.googleTtsModel,
+          primaryTtsProvider: flags.ttsProvider,
+          primaryGoogleTtsModel: flags.googleTtsModel,
           logger,
-          providerVoiceId: fallbackVoiceId,
+          primaryVoiceId: fallbackVoiceId,
         });
         emitPronunciationProviderCharacterMetrics(metrics, audioArtifacts.pronunciation);
       }
@@ -1151,7 +1181,7 @@ export async function rerunAssignment(
   const manifestMd = flags.manifestMd?.trim() || flags.md;
   const pipelineStartedAt = Date.now();
   throwIfCancelled(signal, 'tts');
-  await applyVoicePreferences(flags);
+  await applyRerunVoicePreferences(flags);
   throwIfCancelled(signal, 'tts');
   const { emitStage } = createStageReporter({
     logger,
@@ -1164,7 +1194,16 @@ export async function rerunAssignment(
     message: 'pipeline.rerunAssignment.start',
     runId,
     stage: 'pipeline',
-    detail: { md: flags.md, manifestMd, requestedSteps: flags.steps },
+    detail: {
+      md: flags.md,
+      manifestMd,
+      requested: {
+        republishOnly: flags.republishOnly ?? false,
+        regenerateStudyTextAudio: flags.regenerateStudyTextAudio ?? false,
+        regeneratePronunciationMainAudio: flags.regeneratePronunciationMainAudio ?? false,
+        regeneratePronunciationChunkAudio: flags.regeneratePronunciationChunkAudio ?? false,
+      },
+    },
   });
 
   try {
@@ -1172,7 +1211,10 @@ export async function rerunAssignment(
     const manifest = await manifestStore.readManifest(manifestMd);
     const rerunPlan = computeRerunPlan({
       md: manifestMd,
-      steps: flags.steps,
+      republishOnly: flags.republishOnly,
+      regenerateStudyTextAudio: flags.regenerateStudyTextAudio,
+      regeneratePronunciationMainAudio: flags.regeneratePronunciationMainAudio,
+      regeneratePronunciationChunkAudio: flags.regeneratePronunciationChunkAudio,
       manifest,
     });
     if (rerunPlan.errors.length > 0) {
@@ -1191,6 +1233,11 @@ export async function rerunAssignment(
     }
 
     const mdContents = await readMarkdownCached(flags.md);
+    const markdownContext = rerunPlan.executable.includes('tts') ? parseMarkdownContext(mdContents) : null;
+    const detectedPronunciationMode =
+      (markdownContext ? extractPronunciationFocus(markdownContext)?.mode : null) ??
+      rerunPlan.detectedPronunciationMode ??
+      null;
     const audioArtifacts = resolveAudioArtifactsFromManifest(manifest);
     let audioPath = audioArtifacts.studyText?.path;
     let audioUrl = audioArtifacts.studyText?.url;
@@ -1221,136 +1268,178 @@ export async function rerunAssignment(
     if (stepsToRun.has('tts')) {
       emitStage('tts', 'start');
       throwIfCancelled(signal, 'tts');
-      const markdownContext = parseMarkdownContext(mdContents);
+      if (!markdownContext) {
+        throw new ValidationError('Cannot regenerate audio without parseable markdown context.');
+      }
 
       // TTS mode debug logging for rerun
-      if (flags.ttsStrategy) {
+      if (flags.studyTextTtsStrategy) {
         logger.log({
           level: 'info',
-          message: `Using TTS strategy: ${flags.ttsStrategy}`,
+          message: `Using TTS strategy: ${flags.studyTextTtsStrategy}`,
           detail: {
-            ttsStrategy: flags.ttsStrategy,
-            dialogueLanguage: flags.dialogueLanguage,
-            dialogueStability: flags.dialogueStability,
-            dialogueSeed: flags.dialogueSeed,
+            ttsStrategy: flags.studyTextTtsStrategy,
+            dialogueLanguage: flags.studyTextDialogueLanguage,
+            dialogueStability: flags.studyTextDialogueStability,
+            dialogueSeed: flags.studyTextDialogueSeed,
           },
         });
       }
 
-      let ttsResult: Awaited<ReturnType<typeof buildStudyTextMp3>>;
-      try {
-        ttsResult = await buildStudyTextMp3(
-          {
-            context: markdownContext,
-            mdPath: flags.md,
-          },
-          {
-            voiceMapPath: flags.voices ?? DEFAULT_VOICES_PATH,
-            outPath: flags.out ?? dirname(flags.md),
-            preview: flags.dryRun,
-            force: flags.force,
-            defaultAccent: flags.accentPreference,
-            defaultVoiceId: flags.voiceId,
-            ttsProvider: flags.ttsProvider,
-            googleTtsModel: flags.googleTtsModel,
+      let ttsResult: Awaited<ReturnType<typeof buildStudyTextMp3>> | null = null;
+      if (flags.regenerateStudyTextAudio) {
+        try {
+          ttsResult = await buildStudyTextMp3(
+            {
+              context: markdownContext,
+              mdPath: flags.md,
+            },
+            {
+              voiceMapPath: flags.voices ?? DEFAULT_VOICES_PATH,
+              outPath: flags.out ?? dirname(flags.md),
+              preview: flags.dryRun,
+              force: true,
+              defaultAccent: flags.studyTextVoiceAccent,
+              defaultVoiceId: flags.studyTextVoiceId,
+              modelId: flags.studyTextElevenlabsModel,
+              ttsProvider: flags.studyTextTtsProvider,
+              googleTtsModel: flags.studyTextGoogleTtsModel,
+              ttsStrategy: flags.studyTextTtsStrategy,
+              dialogueLanguage: flags.studyTextDialogueLanguage,
+              dialogueStability: flags.studyTextDialogueStability,
+              dialogueSeed: flags.studyTextDialogueSeed,
+              logger,
+            },
+          );
+          throwIfCancelled(signal, 'tts');
+        } catch (error: unknown) {
+          const category = categorizeProviderErrorFromMessage(error);
+          if (category) {
+            metrics.increment('esl.voice_alignment.provider_error', 1, { category });
+          }
+          if (error instanceof FfmpegNotFoundError) {
+            throw new Error(`TTS requires FFmpeg.\n\n${error.message}`, { cause: error });
+          }
 
-            // Pass TTS strategy options to TTS package
-            ttsStrategy: flags.ttsStrategy,
-            dialogueLanguage: flags.dialogueLanguage,
-            dialogueStability: flags.dialogueStability,
-            dialogueSeed: flags.dialogueSeed,
-            logger,
-          },
+          if (error instanceof Error) {
+            if (
+              error.message.includes('voice mapping') &&
+              flags.studyTextTtsStrategy === 'dialogue'
+            ) {
+              throw new Error(
+                `Dialogue mode requires voice mappings for all speakers. ` +
+                  `Check your voices.yml file. ${error.message}`,
+              );
+            }
+            if (
+              error.message.includes('text-to-dialogue') &&
+              flags.studyTextTtsStrategy === 'dialogue'
+            ) {
+              throw new Error(
+                `Dialogue mode failed: ${error.message}\n` +
+                  'Try switching the study-text TTS strategy to standard TTS.',
+              );
+            }
+          }
+          throw error;
+        }
+
+        audioPath = ttsResult.path;
+        audioHash = ttsResult.hash;
+        audioUrl = undefined;
+        audioKey = undefined;
+        audioEtag = undefined;
+        audioSizeBytes = undefined;
+        audioReused = undefined;
+        audioVoices = ttsResult.voices;
+        audioTts = buildTtsSpendSummary(ttsResult);
+        audioArtifacts.studyText = {
+          path: audioPath,
+          url: audioUrl,
+          hash: audioHash,
+          key: audioKey,
+          etag: audioEtag,
+          sizeBytes: audioSizeBytes,
+          reused: audioReused,
+          voices: audioVoices,
+          tts: audioTts,
+          notionBlockId: audioArtifacts.studyText?.notionBlockId,
+        };
+        emitVoiceSelectionMetrics(metrics, ttsResult.voices);
+
+        if (ttsResult.generatedCharacters !== undefined && ttsResult.generatedCharacters > 0) {
+          metrics.increment('esl.tts.provider_characters', ttsResult.generatedCharacters, {
+            type: 'generated',
+          });
+        }
+        if (ttsResult.cachedCharacters !== undefined && ttsResult.cachedCharacters > 0) {
+          metrics.increment('esl.tts.provider_characters', ttsResult.cachedCharacters, {
+            type: 'cached',
+          });
+        }
+      }
+
+      if (flags.regeneratePronunciationMainAudio || flags.regeneratePronunciationChunkAudio) {
+        const narratorVoiceId = ttsResult?.voiceAssignments?.Narrator;
+        const fallbackVoiceId =
+          narratorVoiceId ??
+          ttsResult?.voices[0]?.voiceId ??
+          audioArtifacts.studyText?.voices?.[0]?.voiceId ??
+          audioArtifacts.pronunciation?.primaryClip?.voiceId;
+        const pronunciationTitle = resolveMarkdownTitle(
+          mdContents,
+          basename(flags.md).replace(/\.[^.]+$/, ''),
         );
-        throwIfCancelled(signal, 'tts');
-      } catch (error: unknown) {
-        const category = categorizeProviderErrorFromMessage(error);
-        if (category) {
-          metrics.increment('esl.voice_alignment.provider_error', 1, { category });
-        }
-        if (error instanceof FfmpegNotFoundError) {
-          throw new Error(`TTS requires FFmpeg.\n\n${error.message}`, { cause: error });
-        }
-
-        // Enhanced TTS mode error handling
-        if (error instanceof Error) {
-          if (error.message.includes('voice mapping') && flags.ttsStrategy === 'dialogue') {
-            throw new Error(
-              `Dialogue mode requires voice mappings for all speakers. ` +
-                `Check your voices.yml file. ${error.message}`,
-            );
-          }
-          if (error.message.includes('text-to-dialogue') && flags.ttsStrategy === 'dialogue') {
-            throw new Error(
-              `Dialogue mode failed: ${error.message}\n` +
-                'Try switching to TTS strategy with --tts-strategy tts',
-            );
-          }
-        }
-        throw error;
-      }
-      audioPath = ttsResult.path;
-      audioHash = ttsResult.hash;
-      audioUrl = undefined;
-      audioKey = undefined;
-      audioEtag = undefined;
-      audioSizeBytes = undefined;
-      audioReused = undefined;
-      audioVoices = ttsResult.voices;
-      audioTts = buildTtsSpendSummary(ttsResult);
-      audioArtifacts.studyText = {
-        path: audioPath,
-        url: audioUrl,
-        hash: audioHash,
-        key: audioKey,
-        etag: audioEtag,
-        sizeBytes: audioSizeBytes,
-        reused: audioReused,
-        voices: audioVoices,
-        tts: audioTts,
-        notionBlockId: audioArtifacts.studyText?.notionBlockId,
-      };
-      emitVoiceSelectionMetrics(metrics, ttsResult.voices);
-
-      if (ttsResult.generatedCharacters !== undefined && ttsResult.generatedCharacters > 0) {
-        metrics.increment('esl.tts.provider_characters', ttsResult.generatedCharacters, {
-          type: 'generated',
+        const generatedPronunciation = await synthesizePronunciationAudio({
+          context: markdownContext,
+          mdPath: flags.md,
+          outPath: flags.out ?? dirname(flags.md),
+          title: pronunciationTitle,
+          preview: flags.dryRun,
+          force: true,
+          regeneratePrimary: flags.regeneratePronunciationMainAudio,
+          regenerateItems: flags.regeneratePronunciationChunkAudio,
+          primaryTtsProvider: flags.pronunciationMainTtsProvider,
+          primaryGoogleTtsModel: flags.pronunciationMainGoogleTtsModel,
+          primaryModelId: flags.pronunciationMainElevenlabsModel,
+          primaryVoiceId: flags.pronunciationMainVoiceId ?? fallbackVoiceId,
+          chunkTtsProvider:
+            flags.pronunciationChunkTtsProvider ??
+            resolveDefaultChunkProvider(detectedPronunciationMode),
+          chunkGoogleTtsModel: flags.pronunciationChunkGoogleTtsModel,
+          chunkModelId: flags.pronunciationChunkElevenlabsModel,
+          chunkVoiceId: flags.pronunciationChunkVoiceId ?? fallbackVoiceId,
+          chunkEdgeVoice: flags.pronunciationChunkEdgeVoice,
+          logger,
         });
-      }
-      if (ttsResult.cachedCharacters !== undefined && ttsResult.cachedCharacters > 0) {
-        metrics.increment('esl.tts.provider_characters', ttsResult.cachedCharacters, {
-          type: 'cached',
-        });
+        audioArtifacts.pronunciation = generatedPronunciation
+          ? {
+              ...(audioArtifacts.pronunciation ?? { mode: generatedPronunciation.mode }),
+              mode: generatedPronunciation.mode,
+              primaryClip: flags.regeneratePronunciationMainAudio
+                ? generatedPronunciation.primaryClip ?? undefined
+                : audioArtifacts.pronunciation?.primaryClip,
+              itemClips: flags.regeneratePronunciationChunkAudio
+                ? generatedPronunciation.itemClips
+                : audioArtifacts.pronunciation?.itemClips,
+              warnings: generatedPronunciation.warnings,
+            }
+          : audioArtifacts.pronunciation;
+        emitPronunciationProviderCharacterMetrics(metrics, generatedPronunciation);
       }
 
       emitStage('tts', 'success', {
         preview: flags.dryRun,
-        voices: ttsResult.voices,
-        generatedCharacters: ttsResult.generatedCharacters,
-        cachedCharacters: ttsResult.cachedCharacters,
-        ttsProvider: audioTts.provider,
-        estimatedSpendUsd: audioTts.estimatedSpendUsd,
+        detectedPronunciationMode,
+        regeneratedStudyTextAudio: flags.regenerateStudyTextAudio ?? false,
+        regeneratedPronunciationMainAudio: flags.regeneratePronunciationMainAudio ?? false,
+        regeneratedPronunciationChunkAudio: flags.regeneratePronunciationChunkAudio ?? false,
+        voices: ttsResult?.voices,
+        generatedCharacters: ttsResult?.generatedCharacters,
+        cachedCharacters: ttsResult?.cachedCharacters,
+        ttsProvider: audioTts?.provider,
+        estimatedSpendUsd: audioTts?.estimatedSpendUsd,
       });
-
-      const narratorVoiceId = ttsResult.voiceAssignments?.Narrator;
-      const fallbackVoiceId = narratorVoiceId ?? ttsResult.voices[0]?.voiceId;
-      const pronunciationTitle = resolveMarkdownTitle(
-        mdContents,
-        basename(flags.md).replace(/\.[^.]+$/, ''),
-      );
-      audioArtifacts.pronunciation = await synthesizePronunciationAudio({
-        context: markdownContext,
-        mdPath: flags.md,
-        outPath: flags.out ?? dirname(flags.md),
-        title: pronunciationTitle,
-        preview: flags.dryRun,
-        force: flags.force,
-        ttsProvider: flags.ttsProvider,
-        googleTtsModel: flags.googleTtsModel,
-        logger,
-        providerVoiceId: fallbackVoiceId,
-      });
-      emitPronunciationProviderCharacterMetrics(metrics, audioArtifacts.pronunciation);
       executed.push('tts');
     } else {
       emitStage('tts', 'skipped', { reason: skipReasonByStage.get('tts') ?? 'not requested' });
@@ -1468,7 +1557,7 @@ export async function rerunAssignment(
         if (!flags.dryRun) {
           if (studyTextAudioUrl) {
             const result = await addOrReplaceAudio(targetPageId, studyTextAudioUrl, {
-              replace: flags.force,
+              replace: true,
               target: 'study-text',
               previousBlockId: audioArtifacts.studyText?.notionBlockId,
             });
@@ -1481,7 +1570,7 @@ export async function rerunAssignment(
           }
           if (pronunciationAudioUrl) {
             const result = await addOrReplaceAudio(targetPageId, pronunciationAudioUrl, {
-              replace: flags.force,
+              replace: true,
               target: 'pronunciation-practice',
               previousBlockId: audioArtifacts.pronunciation?.primaryClip?.notionBlockId,
             });
@@ -1638,10 +1727,10 @@ export async function rerunAssignment(
       },
 
       // Preserve prior TTS metadata unless explicitly overridden
-      ttsStrategy: flags.ttsStrategy ?? manifest.ttsStrategy,
-      dialogueLanguage: flags.dialogueLanguage ?? manifest.dialogueLanguage,
-      dialogueStability: flags.dialogueStability ?? manifest.dialogueStability,
-      dialogueSeed: flags.dialogueSeed ?? manifest.dialogueSeed,
+      ttsStrategy: flags.studyTextTtsStrategy ?? manifest.ttsStrategy,
+      dialogueLanguage: flags.studyTextDialogueLanguage ?? manifest.dialogueLanguage,
+      dialogueStability: flags.studyTextDialogueStability ?? manifest.dialogueStability,
+      dialogueSeed: flags.studyTextDialogueSeed ?? manifest.dialogueSeed,
 
       timestamp: new Date().toISOString(),
     };
@@ -1660,8 +1749,8 @@ export async function rerunAssignment(
       stage: 'pipeline',
       detail: { durationMs, steps: executed },
     });
-    metrics.timing('esl.pipeline.rerun_assignment.duration_ms', durationMs, { result: 'success' });
-    metrics.increment('esl.pipeline.rerun_assignment.success', 1, {});
+    metrics.timing('esl.pipeline.rerun.duration_ms', durationMs, { result: 'success' });
+    metrics.increment('esl.pipeline.rerun.success', 1, {});
 
     return {
       steps: executed,
@@ -1687,10 +1776,10 @@ export async function rerunAssignment(
           cancelledStage: error.stage,
         },
       });
-      metrics.timing('esl.pipeline.rerun_assignment.duration_ms', durationMs, {
+      metrics.timing('esl.pipeline.rerun.duration_ms', durationMs, {
         result: 'cancelled',
       });
-      metrics.increment('esl.pipeline.rerun_assignment.cancelled', 1, {});
+      metrics.increment('esl.pipeline.rerun.cancelled', 1, {});
       throw error;
     }
 
@@ -1704,8 +1793,8 @@ export async function rerunAssignment(
         error: error instanceof Error ? error.message : String(error),
       },
     });
-    metrics.timing('esl.pipeline.rerun_assignment.duration_ms', durationMs, { result: 'failure' });
-    metrics.increment('esl.pipeline.rerun_assignment.failure', 1, {});
+    metrics.timing('esl.pipeline.rerun.duration_ms', durationMs, { result: 'failure' });
+    metrics.increment('esl.pipeline.rerun.failure', 1, {});
     throw error;
   }
 }
