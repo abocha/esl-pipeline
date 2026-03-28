@@ -37,7 +37,7 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@aws-sdk/client-s3": "^3.1018.0",
+    "@aws-sdk/client-s3": "^3.1019.0",
     "@esl-pipeline/contracts": "workspace:*",
     "@esl-pipeline/shared-infrastructure": "workspace:*",
     "commander": "^14.0.2"
