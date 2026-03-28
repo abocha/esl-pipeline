@@ -10,8 +10,7 @@ import {
 import { logger } from '../../infrastructure/logger.js';
 import { cancelJob } from './cancel-job.js';
 import { editMetadata } from './edit-metadata.js';
-import { rerunAudio } from './rerun-audio.js';
-import { rerunPublish } from './rerun-publish.js';
+import { rerun } from './rerun.js';
 
 /**
  * Execute a job action by routing to the appropriate handler
@@ -26,13 +25,8 @@ export async function executeJobAction(
 ): Promise<JobActionResult> {
   let result: JobActionResult;
   switch (action.type) {
-    case JobActionType.RERUN_AUDIO: {
-      result = await rerunAudio(jobId, action);
-      break;
-    }
-
-    case JobActionType.RERUN_PUBLISH: {
-      result = await rerunPublish(jobId, action);
+    case JobActionType.RERUN: {
+      result = await rerun(jobId, action);
       break;
     }
 
@@ -53,11 +47,7 @@ export async function executeJobAction(
 
   // Missing jobs are not persisted due to strict FK constraints on job_action_history.job_id.
   if (result.error !== 'not_found') {
-    const createdJobId =
-      (action.type === JobActionType.RERUN_AUDIO || action.type === JobActionType.RERUN_PUBLISH) &&
-      result.success
-        ? result.jobId
-        : null;
+    const createdJobId = action.type === JobActionType.RERUN && result.success ? result.jobId : null;
     const payload =
       action.payload && typeof action.payload === 'object'
         ? (action.payload as Record<string, unknown>)
@@ -105,16 +95,10 @@ export interface ActionMetadata {
  */
 export function getActionMetadata(): Record<JobActionType, ActionMetadata> {
   return {
-    [JobActionType.RERUN_AUDIO]: {
-      label: 'Rerun Audio Generation',
-      description: 'Regenerate TTS audio for this job with optional voice/TTS overrides',
-      requiresFields: [],
-      implemented: true,
-    },
-    [JobActionType.RERUN_PUBLISH]: {
-      label: 'Rerun Publish',
+    [JobActionType.RERUN]: {
+      label: 'Rerun',
       description:
-        'Rerun publish/attach stage while reusing existing audio artifacts when possible',
+        'Republish current draft or selectively regenerate study-text and pronunciation audio families',
       requiresFields: [],
       implemented: true,
     },

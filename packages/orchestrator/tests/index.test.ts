@@ -192,7 +192,9 @@ default: voice_id_default
       rerunAssignment(
         {
           md: mdPath,
-          steps: ['tts', 'upload', 'add-audio'],
+          regenerateStudyTextAudio: true,
+          regeneratePronunciationMainAudio: true,
+          regeneratePronunciationChunkAudio: true,
           upload: 's3',
           dryRun: true,
           voices: voiceMapPath,
@@ -243,7 +245,7 @@ default: voice_id_default
     const rerun = await rerunAssignment({
       md: tempMdPath,
       manifestMd: mdPath,
-      steps: ['add-audio'],
+      republishOnly: true,
       upload: 's3',
       dryRun: true,
       voices: voiceMapPath,

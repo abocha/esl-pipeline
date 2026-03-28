@@ -8,57 +8,59 @@ interface PlannerInput extends RerunPlanRequest {
   manifest: AssignmentManifest | null;
 }
 
-function uniqueStages(stages: RerunTargetStage[]): RerunTargetStage[] {
-  return [...new Set(stages)];
+function buildRequestedSummary(input: PlannerInput): RerunPlanResult['requested'] {
+  return {
+    republishOnly: input.republishOnly === true,
+    regenerateStudyTextAudio: input.regenerateStudyTextAudio === true,
+    regeneratePronunciationMainAudio: input.regeneratePronunciationMainAudio === true,
+    regeneratePronunciationChunkAudio: input.regeneratePronunciationChunkAudio === true,
+  };
 }
 
-function expandRange(
-  from: RerunTargetStage = 'tts',
-  to: RerunTargetStage = 'add-audio',
-): RerunTargetStage[] {
-  const startIndex = RERUN_STAGE_ORDER.indexOf(from);
-  const endIndex = RERUN_STAGE_ORDER.indexOf(to);
-  if (startIndex === -1 || endIndex === -1 || startIndex > endIndex) {
-    return [];
-  }
-  return RERUN_STAGE_ORDER.slice(startIndex, endIndex + 1);
-}
-
-function resolveRequestedStages(input: PlannerInput): {
-  requested: RerunTargetStage[];
-  errors: string[];
-} {
-  if (input.steps && input.steps.length > 0) {
-    return { requested: uniqueStages(input.steps), errors: [] };
-  }
-
-  if (input.audio) {
-    return { requested: [...RERUN_STAGE_ORDER], errors: [] };
-  }
-
-  if (input.from || input.to) {
-    const requested = expandRange(input.from, input.to);
-    if (requested.length === 0) {
-      return {
-        requested: [],
-        errors: [
-          `Invalid rerun range: from=${String(input.from)} to=${String(input.to)}. Use ordered stages: ${RERUN_STAGE_ORDER.join(' -> ')}`,
-        ],
-      };
-    }
-    return { requested, errors: [] };
-  }
-
-  return { requested: ['upload', 'add-audio'], errors: [] };
+function hasAnyRegeneration(requested: RerunPlanResult['requested']): boolean {
+  return (
+    requested.regenerateStudyTextAudio ||
+    requested.regeneratePronunciationMainAudio ||
+    requested.regeneratePronunciationChunkAudio
+  );
 }
 
 export function computeRerunPlan(input: PlannerInput): RerunPlanResult {
   const missingManifestFields = new Set<string>();
   const errors: string[] = [];
+  const requested = buildRequestedSummary(input);
+  const regenerationSelected = hasAnyRegeneration(requested);
 
-  const requestedResolution = resolveRequestedStages(input);
-  const requested = requestedResolution.requested;
-  errors.push(...requestedResolution.errors);
+  if (requested.republishOnly && regenerationSelected) {
+    errors.push('Republish-only reruns cannot be combined with regeneration targets.');
+  }
+
+  if (!requested.republishOnly && !regenerationSelected) {
+    errors.push(
+      'Select republish-only or at least one regeneration target for the rerun request.',
+    );
+  }
+
+  if (errors.length > 0) {
+    return {
+      requested,
+      executable: [],
+      skipped: RERUN_STAGE_ORDER.map((stage) => ({
+        stage,
+        reason: 'invalid rerun request',
+      })),
+      willReuse: {
+        studyTextAudio: false,
+        pronunciationMainAudio: false,
+        pronunciationChunkAudio: false,
+      },
+      detectedPronunciationMode: null,
+      requires: {
+        missingManifestFields: [],
+      },
+      errors,
+    };
+  }
 
   if (!input.manifest) {
     missingManifestFields.add('manifest');
@@ -70,6 +72,12 @@ export function computeRerunPlan(input: PlannerInput): RerunPlanResult {
         stage,
         reason: 'missing manifest',
       })),
+      willReuse: {
+        studyTextAudio: false,
+        pronunciationMainAudio: false,
+        pronunciationChunkAudio: false,
+      },
+      detectedPronunciationMode: null,
       requires: {
         missingManifestFields: [...missingManifestFields],
       },
@@ -77,54 +85,30 @@ export function computeRerunPlan(input: PlannerInput): RerunPlanResult {
     };
   }
 
-  const planned = new Set<RerunTargetStage>(requested);
+  const executable: RerunTargetStage[] = requested.republishOnly
+    ? ['add-audio']
+    : [...RERUN_STAGE_ORDER];
+  const skipped = RERUN_STAGE_ORDER.filter((stage) => !executable.includes(stage)).map((stage) => ({
+    stage,
+    reason: 'not requested',
+  }));
   const publishTarget = input.manifest.publishTarget ?? 'notion';
-  const requiresAudioForPublish = publishTarget === 'notion' || publishTarget === 'anytype';
   const audioArtifacts = resolveAudioArtifactsFromManifest(input.manifest);
-  const studyAudio = audioArtifacts.studyText;
-  const pronunciationAudio = audioArtifacts.pronunciation;
-  const hasAnyPronunciationPath = Boolean(
-    pronunciationAudio?.primaryClip?.path ||
-      pronunciationAudio?.itemClips?.some((clip) => Boolean(clip?.path)),
+  const hasStudyTextUrl = Boolean(audioArtifacts.studyText?.url);
+  const hasPronunciationPrimaryUrl = Boolean(audioArtifacts.pronunciation?.primaryClip?.url);
+  const hasPronunciationItemUrl = Boolean(
+    audioArtifacts.pronunciation?.itemClips?.some((clip) => Boolean(clip?.url)),
   );
-  const hasAnyPronunciationUrl = Boolean(
-    pronunciationAudio?.primaryClip?.url ||
-      pronunciationAudio?.itemClips?.some((clip) => Boolean(clip?.url)),
-  );
-  const hasAnyAudioPath = Boolean(studyAudio?.path || hasAnyPronunciationPath);
-  const hasAnyAudioUrl = Boolean(studyAudio?.url || hasAnyPronunciationUrl);
+  const hasAnyAudioUrl = hasStudyTextUrl || hasPronunciationPrimaryUrl || hasPronunciationItemUrl;
 
-  if (
-    planned.has('add-audio') &&
-    !planned.has('upload') &&
-    requiresAudioForPublish &&
-    !hasAnyAudioUrl
-  ) {
-    planned.add('upload');
+  if (requested.republishOnly) {
+    if ((publishTarget === 'notion' || publishTarget === 'anytype') && !hasAnyAudioUrl) {
+      missingManifestFields.add('audio.url');
+      errors.push('Republish requires existing audio URLs in the manifest for this publish target.');
+    }
   }
 
-  if (planned.has('upload') && !planned.has('tts') && !hasAnyAudioPath) {
-    planned.add('tts');
-  }
-
-  const executable = RERUN_STAGE_ORDER.filter((stage) => planned.has(stage));
-
-  if (planned.has('upload') && !planned.has('tts') && !hasAnyAudioPath) {
-    missingManifestFields.add('audio.path');
-    errors.push('Upload requires audio.path in manifest or including tts in requested steps.');
-  }
-
-  if (
-    planned.has('add-audio') &&
-    !planned.has('upload') &&
-    requiresAudioForPublish &&
-    !hasAnyAudioUrl
-  ) {
-    missingManifestFields.add('audio.url');
-    errors.push('Add-audio requires audio.url in manifest or including upload in requested steps.');
-  }
-
-  if (planned.has('add-audio')) {
+  if (executable.includes('add-audio')) {
     if (publishTarget === 'anytype') {
       if (!input.manifest.anytypePageId) {
         missingManifestFields.add('anytypePageId');
@@ -143,15 +127,17 @@ export function computeRerunPlan(input: PlannerInput): RerunPlanResult {
     );
   }
 
-  const skipped = RERUN_STAGE_ORDER.filter((stage) => !planned.has(stage)).map((stage) => ({
-    stage,
-    reason: 'not requested',
-  }));
-
   return {
     requested,
     executable,
     skipped,
+    willReuse: {
+      studyTextAudio: requested.republishOnly || !requested.regenerateStudyTextAudio,
+      pronunciationMainAudio: requested.republishOnly || !requested.regeneratePronunciationMainAudio,
+      pronunciationChunkAudio:
+        requested.republishOnly || !requested.regeneratePronunciationChunkAudio,
+    },
+    detectedPronunciationMode: audioArtifacts.pronunciation?.mode ?? null,
     requires: {
       missingManifestFields: [...missingManifestFields],
     },

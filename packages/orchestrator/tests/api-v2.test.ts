@@ -66,14 +66,14 @@ describe('orchestrator api v2', () => {
     const result = await executeRerunAssignmentV2({
       assignment: {
         md: mdPath,
-        steps: ['upload'],
+        republishOnly: true,
         upload: 's3',
       },
     });
 
     expect(result.ok).toBe(false);
     expect(result.schemaVersion).toBe('v2');
-    expect(result.operation).toBe('rerun_assignment');
+    expect(result.operation).toBe('rerun');
     if (result.ok) {
       throw new Error('expected rerun validation failure result');
     }
@@ -100,7 +100,7 @@ describe('orchestrator api v2', () => {
 
     expect(plan.ok).toBe(true);
     expect(plan.schemaVersion).toBe('v2');
-    expect(plan.operation).toBe('plan_rerun_assignment');
+    expect(plan.operation).toBe('plan_rerun');
     if (!plan.ok) {
       throw new Error(`expected plan success, received ${plan.error.code}`);
     }

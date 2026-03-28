@@ -100,13 +100,13 @@ describe('orchestrator smoke', () => {
 
     const rerun = await rerunAssignment({
       md: mdPath,
-      steps: ['upload', 'add-audio'],
+      republishOnly: true,
       upload: 's3',
       dryRun: false,
       publicRead: false,
     });
 
-    expect(rerun.steps).toEqual(['upload', 'add-audio']);
+    expect(rerun.steps).toEqual(['add-audio']);
     const statusAfter = await getAssignmentStatus(mdPath);
     expect(statusAfter.manifest?.audioArtifacts?.studyText?.url).toBe(
       'https://s3.amazonaws.com/audio/file.mp3',
@@ -198,7 +198,7 @@ describe('orchestrator smoke', () => {
 
     const rerun = await rerunAssignment({
       md: mdPath,
-      steps: ['upload', 'add-audio'],
+      republishOnly: true,
       upload: 's3',
       dryRun: false,
     });
@@ -242,15 +242,15 @@ describe('orchestrator smoke', () => {
 
     const rerun = await rerunAssignment({
       md: mdPath,
-      steps: ['upload', 'add-audio'],
+      republishOnly: true,
       upload: 's3',
       dryRun: false,
     });
 
-    expect(rerun.steps).toEqual(['upload', 'add-audio']);
+    expect(rerun.steps).toEqual(['add-audio']);
   }, 15000);
 
-  it('preserves explicit upload prefix when studyText hash is missing and strips legacy audio alias on rerun', async () => {
+  it('strips legacy audio alias on republish rerun', async () => {
     const dir = await mkdtemp(join(tmpdir(), 'orchestrator-legacy-prefix-'));
     const mdPath = join(dir, 'assignment.md');
     const audioPath = join(dir, 'lesson.mp3');
@@ -286,21 +286,13 @@ describe('orchestrator smoke', () => {
     manifest.audioArtifacts.studyText.hash = undefined;
     await writeFile(firstRun.manifestPath!, JSON.stringify(manifest, null, 2));
 
-    const { uploadFile } = await import('@esl-pipeline/storage-uploader');
-    vi.mocked(uploadFile).mockClear();
-
     await rerunAssignment({
       md: mdPath,
-      steps: ['upload'],
+      republishOnly: true,
       upload: 's3',
       dryRun: false,
       prefix: 'legacy-prefix',
     });
-
-    expect(uploadFile).toHaveBeenCalledTimes(1);
-    const uploadOpts = vi.mocked(uploadFile).mock.calls[0]?.[1];
-    expect(uploadOpts?.prefix).toBe('legacy-prefix');
-    expect(uploadOpts?.key).toBeUndefined();
 
     const manifestAfter = JSON.parse(await readFile(firstRun.manifestPath!, 'utf8'));
     expect(manifestAfter.audio).toBeUndefined();

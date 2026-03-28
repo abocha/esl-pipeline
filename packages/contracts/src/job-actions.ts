@@ -1,16 +1,49 @@
 // packages/contracts/src/job-actions.ts
 //
 // Shared types for job actions between backend and frontend
-import type { JobConfigOverrides } from './index.js';
+import type {
+  ElevenLabsTtsModelId,
+  GoogleTtsModel,
+  JobConfigOverrides,
+  PronunciationChunkTtsProviderId,
+  TtsProviderId,
+  TtsStrategy,
+} from './index.js';
 
 /**
  * Supported job action types
  */
 export enum JobActionType {
-  RERUN_AUDIO = 'rerun_audio',
-  RERUN_PUBLISH = 'rerun_publish',
+  RERUN = 'rerun',
   CANCEL = 'cancel',
   EDIT_METADATA = 'edit_metadata',
+}
+
+export interface RerunJobPayload {
+  republishOnly?: boolean;
+  regenerateStudyTextAudio?: boolean;
+  regeneratePronunciationMainAudio?: boolean;
+  regeneratePronunciationChunkAudio?: boolean;
+  studyTextTtsProvider?: TtsProviderId;
+  studyTextElevenlabsModel?: ElevenLabsTtsModelId;
+  studyTextGoogleTtsModel?: GoogleTtsModel;
+  studyTextVoiceId?: string;
+  studyTextVoiceAccent?: string;
+  studyTextTtsStrategy?: TtsStrategy;
+  studyTextDialogueLanguage?: string;
+  studyTextDialogueStability?: number;
+  studyTextDialogueSeed?: number;
+  pronunciationMainTtsProvider?: TtsProviderId;
+  pronunciationMainElevenlabsModel?: ElevenLabsTtsModelId;
+  pronunciationMainGoogleTtsModel?: GoogleTtsModel;
+  pronunciationMainVoiceId?: string;
+  pronunciationMainVoiceAccent?: string;
+  pronunciationChunkTtsProvider?: PronunciationChunkTtsProviderId;
+  pronunciationChunkElevenlabsModel?: ElevenLabsTtsModelId;
+  pronunciationChunkGoogleTtsModel?: GoogleTtsModel;
+  pronunciationChunkVoiceId?: string;
+  pronunciationChunkVoiceAccent?: string;
+  pronunciationChunkEdgeVoice?: string;
 }
 
 /**
@@ -18,24 +51,8 @@ export enum JobActionType {
  */
 export type JobActionRequest =
   | {
-      type: JobActionType.RERUN_AUDIO;
-      payload?: {
-        forceTts?: boolean;
-        voiceId?: string;
-        voiceAccent?: string;
-        ttsStrategy?: 'auto' | 'dialogue' | 'tts';
-        ttsProvider?: 'elevenlabs' | 'google';
-        googleTtsModel?: 'chirp3_hd' | 'studio' | 'neural2' | 'wavenet';
-        dialogueLanguage?: string;
-        dialogueStability?: number;
-        dialogueSeed?: number;
-      };
-    }
-  | {
-      type: JobActionType.RERUN_PUBLISH;
-      payload?: {
-        upload?: 's3';
-      };
+      type: JobActionType.RERUN;
+      payload?: RerunJobPayload;
     }
   | {
       type: JobActionType.CANCEL;
