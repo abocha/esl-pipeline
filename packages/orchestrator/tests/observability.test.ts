@@ -227,15 +227,15 @@ describe('orchestrator observability', () => {
     await rerunAssignment(
       {
         md: mdPath,
-        steps: ['upload', 'add-audio'],
+        republishOnly: true,
         upload: 's3',
         dryRun: true,
       },
       { logger, metrics, runId: 'run-rerun' },
     );
 
-    // Only upload/add-audio/manifest are executed; tts is skipped and should not emit start/success.
-    const executedStages = ['upload', 'add-audio', 'manifest'];
+    // Only add-audio/manifest are executed for republish-only reruns; tts/upload are skipped.
+    const executedStages = ['add-audio', 'manifest'];
     for (const stage of executedStages) {
       const start = logs.find((e) => e.message === `stage.${stage}.start`);
       const success = logs.find((e) => e.message === `stage.${stage}.success`);
@@ -247,13 +247,16 @@ describe('orchestrator observability', () => {
       (e) => e.message === 'stage.tts.skipped' || e.message === 'stage.tts.success',
     );
     expect(skippedTts?.message).toBe('stage.tts.skipped');
+    const skippedUpload = logs.find(
+      (e) => e.message === 'stage.upload.skipped' || e.message === 'stage.upload.success',
+    );
+    expect(skippedUpload?.message).toBe('stage.upload.skipped');
 
     const stageTimings = timings.filter((t) => t.metric === 'esl.pipeline.stage.duration_ms');
     expect(stageTimings.map((t) => t.tags?.stage)).toEqual(expect.arrayContaining(executedStages));
     expect(
       timings.some(
-        (t) =>
-          t.metric === 'esl.pipeline.rerun_assignment.duration_ms' && t.tags?.result === 'success',
+        (t) => t.metric === 'esl.pipeline.rerun.duration_ms' && t.tags?.result === 'success',
       ),
     ).toBe(true);
 

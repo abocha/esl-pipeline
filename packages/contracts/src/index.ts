@@ -5,6 +5,12 @@ export type JobState = 'queued' | 'running' | 'awaiting_approval' | 'succeeded' 
 export type TtsStrategy = 'auto' | 'dialogue' | 'tts';
 export type TtsStrategyOption = TtsStrategy;
 export type TtsProviderId = 'elevenlabs' | 'google';
+export type ElevenLabsTtsModelId =
+  | 'eleven_v3'
+  | 'eleven_multilingual_v2'
+  | 'eleven_flash_v2_5'
+  | 'eleven_flash_v2';
+export type PronunciationChunkTtsProviderId = TtsProviderId | 'edge-tts';
 export type SttProviderId = 'deepgram' | 'elevenlabs' | 'google';
 export type GoogleTtsModel = 'chirp3_hd' | 'studio' | 'neural2' | 'wavenet';
 export type CefrLevel = 'A1' | 'A2' | 'B1' | 'B2' | 'C1' | 'C2';
@@ -166,6 +172,14 @@ export interface JobStatusDto {
   studentName?: string | null;
   md: string | null;
   mdStorageUri?: string | null;
+  pronunciationMode?:
+    | 'shadow_sentence'
+    | 'connected_speech'
+    | 'intonation'
+    | 'rhythm_chunking'
+    | 'sentence_stress'
+    | 'minimal_pair'
+    | null;
   recordingId: string | null;
   transcriptId: string | null;
   promptPackageId: string | null;

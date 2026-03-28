@@ -12,24 +12,50 @@ import { createRedisClient } from './redis.js';
 
 export interface QueueJobPayload {
   jobId: string;
-  executionMode?: 'new_assignment' | 'rerun_audio' | 'rerun_publish';
+  executionMode?: 'new_assignment' | 'rerun';
   sourceJobId?: string;
   rerun?: {
-    steps?: ('tts' | 'upload' | 'add-audio')[];
     manifestMd?: string;
     upload?: 's3';
-    force?: boolean;
+    republishOnly?: boolean;
+    regenerateStudyTextAudio?: boolean;
+    regeneratePronunciationMainAudio?: boolean;
+    regeneratePronunciationChunkAudio?: boolean;
     prefix?: string;
     publicRead?: boolean;
     presign?: number;
-    accentPreference?: string;
-    voiceId?: string;
-    ttsStrategy?: 'auto' | 'dialogue' | 'tts';
-    ttsProvider?: 'elevenlabs' | 'google';
-    googleTtsModel?: 'chirp3_hd' | 'studio' | 'neural2' | 'wavenet';
-    dialogueLanguage?: string;
-    dialogueStability?: number;
-    dialogueSeed?: number;
+    studyTextVoiceAccent?: string;
+    studyTextVoiceId?: string;
+    studyTextTtsStrategy?: 'auto' | 'dialogue' | 'tts';
+    studyTextTtsProvider?: 'elevenlabs' | 'google';
+    studyTextElevenlabsModel?:
+      | 'eleven_v3'
+      | 'eleven_multilingual_v2'
+      | 'eleven_flash_v2_5'
+      | 'eleven_flash_v2';
+    studyTextGoogleTtsModel?: 'chirp3_hd' | 'studio' | 'neural2' | 'wavenet';
+    studyTextDialogueLanguage?: string;
+    studyTextDialogueStability?: number;
+    studyTextDialogueSeed?: number;
+    pronunciationMainVoiceAccent?: string;
+    pronunciationMainVoiceId?: string;
+    pronunciationMainTtsProvider?: 'elevenlabs' | 'google';
+    pronunciationMainElevenlabsModel?:
+      | 'eleven_v3'
+      | 'eleven_multilingual_v2'
+      | 'eleven_flash_v2_5'
+      | 'eleven_flash_v2';
+    pronunciationMainGoogleTtsModel?: 'chirp3_hd' | 'studio' | 'neural2' | 'wavenet';
+    pronunciationChunkVoiceAccent?: string;
+    pronunciationChunkVoiceId?: string;
+    pronunciationChunkTtsProvider?: 'edge-tts' | 'elevenlabs' | 'google';
+    pronunciationChunkElevenlabsModel?:
+      | 'eleven_v3'
+      | 'eleven_multilingual_v2'
+      | 'eleven_flash_v2_5'
+      | 'eleven_flash_v2';
+    pronunciationChunkGoogleTtsModel?: 'chirp3_hd' | 'studio' | 'neural2' | 'wavenet';
+    pronunciationChunkEdgeVoice?: string;
   };
 }
 

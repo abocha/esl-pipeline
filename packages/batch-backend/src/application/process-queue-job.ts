@@ -135,12 +135,17 @@ export async function processQueueJob(payload: QueueJobPayload): Promise<void> {
         ? userSettings.ttsProvider
         : undefined;
 
-    const isRerunExecution =
-      payload.executionMode === 'rerun_audio' || payload.executionMode === 'rerun_publish';
-    const rerunSteps = payload.rerun?.steps ?? ['tts', 'upload', 'add-audio'];
+    const isRerunExecution = payload.executionMode === 'rerun';
+    const rerunRequestsGeneration =
+      !payload.rerun?.republishOnly &&
+      Boolean(
+        payload.rerun?.regenerateStudyTextAudio ||
+          payload.rerun?.regeneratePronunciationMainAudio ||
+          payload.rerun?.regeneratePronunciationChunkAudio,
+      );
     const shouldHoldTtsCacheActivityLock =
       config.worker.ttsCacheMaintenanceIntervalMinutes > 0 &&
-      (isRerunExecution ? rerunSteps.includes('tts') : running.withTts === true);
+      (isRerunExecution ? rerunRequestsGeneration : running.withTts === true);
 
     const executePipeline = async () => {
       try {
@@ -153,26 +158,47 @@ export async function processQueueJob(payload: QueueJobPayload): Promise<void> {
                 jobId,
                 md: markdownInput.mdPath,
                 manifestMd,
-                steps: rerunSteps,
                 upload: payload.rerun?.upload ?? 's3',
-                force: payload.rerun?.force ?? running.forceTts ?? false,
+                republishOnly: payload.rerun?.republishOnly ?? false,
+                regenerateStudyTextAudio: payload.rerun?.regenerateStudyTextAudio ?? false,
+                regeneratePronunciationMainAudio:
+                  payload.rerun?.regeneratePronunciationMainAudio ?? false,
+                regeneratePronunciationChunkAudio:
+                  payload.rerun?.regeneratePronunciationChunkAudio ?? false,
                 prefix: payload.rerun?.prefix,
                 publicRead: payload.rerun?.publicRead,
                 presign: payload.rerun?.presign,
-                accentPreference:
-                  payload.rerun?.accentPreference ?? running.voiceAccent ?? undefined,
-                voiceId: payload.rerun?.voiceId ?? running.voiceId ?? undefined,
-                ttsStrategy: payload.rerun?.ttsStrategy ?? running.ttsStrategy ?? undefined,
-                ttsProvider:
-                  payload.rerun?.ttsProvider ??
+                studyTextVoiceAccent:
+                  payload.rerun?.studyTextVoiceAccent ?? running.voiceAccent ?? undefined,
+                studyTextVoiceId: payload.rerun?.studyTextVoiceId ?? running.voiceId ?? undefined,
+                studyTextTtsStrategy:
+                  payload.rerun?.studyTextTtsStrategy ?? running.ttsStrategy ?? undefined,
+                studyTextTtsProvider:
+                  payload.rerun?.studyTextTtsProvider ??
                   running.ttsProvider ??
                   userSettingsTtsProvider ??
                   undefined,
-                googleTtsModel:
-                  payload.rerun?.googleTtsModel ?? running.googleTtsModel ?? undefined,
-                dialogueLanguage: payload.rerun?.dialogueLanguage,
-                dialogueStability: payload.rerun?.dialogueStability,
-                dialogueSeed: payload.rerun?.dialogueSeed,
+                studyTextElevenlabsModel: payload.rerun?.studyTextElevenlabsModel,
+                studyTextGoogleTtsModel:
+                  payload.rerun?.studyTextGoogleTtsModel ?? running.googleTtsModel ?? undefined,
+                studyTextDialogueLanguage: payload.rerun?.studyTextDialogueLanguage,
+                studyTextDialogueStability: payload.rerun?.studyTextDialogueStability,
+                studyTextDialogueSeed: payload.rerun?.studyTextDialogueSeed,
+                pronunciationMainVoiceAccent: payload.rerun?.pronunciationMainVoiceAccent,
+                pronunciationMainVoiceId: payload.rerun?.pronunciationMainVoiceId,
+                pronunciationMainTtsProvider: payload.rerun?.pronunciationMainTtsProvider,
+                pronunciationMainElevenlabsModel:
+                  payload.rerun?.pronunciationMainElevenlabsModel,
+                pronunciationMainGoogleTtsModel:
+                  payload.rerun?.pronunciationMainGoogleTtsModel,
+                pronunciationChunkVoiceAccent: payload.rerun?.pronunciationChunkVoiceAccent,
+                pronunciationChunkVoiceId: payload.rerun?.pronunciationChunkVoiceId,
+                pronunciationChunkTtsProvider: payload.rerun?.pronunciationChunkTtsProvider,
+                pronunciationChunkElevenlabsModel:
+                  payload.rerun?.pronunciationChunkElevenlabsModel,
+                pronunciationChunkGoogleTtsModel:
+                  payload.rerun?.pronunciationChunkGoogleTtsModel,
+                pronunciationChunkEdgeVoice: payload.rerun?.pronunciationChunkEdgeVoice,
                 settings: userSettings,
               },
               runId,

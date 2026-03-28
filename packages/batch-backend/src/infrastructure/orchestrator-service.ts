@@ -14,7 +14,6 @@ import {
   type PipelineLogEvent,
   type PipelineLogger,
   RemoteConfigProvider,
-  type RerunFlags,
   S3ManifestStore,
   createPipeline,
   resolveConfigPaths,
@@ -158,24 +157,53 @@ export interface RunRerunAssignmentPayload {
   jobId: string;
   md: string;
   manifestMd?: string;
-  steps?: NonNullable<RerunFlags['steps']>;
+  republishOnly?: boolean;
+  regenerateStudyTextAudio?: boolean;
+  regeneratePronunciationMainAudio?: boolean;
+  regeneratePronunciationChunkAudio?: boolean;
   upload?: 's3';
-  force?: boolean;
   prefix?: string;
   publicRead?: boolean;
   presign?: number;
-  accentPreference?: string | null;
-  voiceId?: string | null;
-  ttsStrategy?: TtsStrategy | null;
-  ttsProvider?: 'elevenlabs' | 'google' | null;
-  googleTtsModel?: 'chirp3_hd' | 'studio' | 'neural2' | 'wavenet' | null;
-  dialogueLanguage?: string | null;
-  dialogueStability?: number | null;
-  dialogueSeed?: number | null;
+  studyTextVoiceAccent?: string | null;
+  studyTextVoiceId?: string | null;
+  studyTextTtsStrategy?: TtsStrategy | null;
+  studyTextTtsProvider?: 'elevenlabs' | 'google' | null;
+  studyTextElevenlabsModel?:
+    | 'eleven_v3'
+    | 'eleven_multilingual_v2'
+    | 'eleven_flash_v2_5'
+    | 'eleven_flash_v2'
+    | null;
+  studyTextGoogleTtsModel?: 'chirp3_hd' | 'studio' | 'neural2' | 'wavenet' | null;
+  studyTextDialogueLanguage?: string | null;
+  studyTextDialogueStability?: number | null;
+  studyTextDialogueSeed?: number | null;
+  pronunciationMainVoiceAccent?: string | null;
+  pronunciationMainVoiceId?: string | null;
+  pronunciationMainTtsProvider?: 'elevenlabs' | 'google' | null;
+  pronunciationMainElevenlabsModel?:
+    | 'eleven_v3'
+    | 'eleven_multilingual_v2'
+    | 'eleven_flash_v2_5'
+    | 'eleven_flash_v2'
+    | null;
+  pronunciationMainGoogleTtsModel?: 'chirp3_hd' | 'studio' | 'neural2' | 'wavenet' | null;
+  pronunciationChunkVoiceAccent?: string | null;
+  pronunciationChunkVoiceId?: string | null;
+  pronunciationChunkTtsProvider?: 'edge-tts' | 'elevenlabs' | 'google' | null;
+  pronunciationChunkElevenlabsModel?:
+    | 'eleven_v3'
+    | 'eleven_multilingual_v2'
+    | 'eleven_flash_v2_5'
+    | 'eleven_flash_v2'
+    | null;
+  pronunciationChunkGoogleTtsModel?: 'chirp3_hd' | 'studio' | 'neural2' | 'wavenet' | null;
+  pronunciationChunkEdgeVoice?: string | null;
   settings?: RunJobSettings;
 }
 
-type WorkerExecutionMode = 'new_assignment' | 'rerun_assignment';
+type WorkerExecutionMode = 'new_assignment' | 'rerun';
 
 interface WorkerRunMessagePayload {
   type: 'run';
@@ -216,7 +244,7 @@ export async function runRerunAssignmentJob(
   runId: string,
   options: RunPipelineOptions = {},
 ): Promise<{ manifestPath?: string; notionUrl?: string; anytypeUrl?: string; htmlUrl?: string }> {
-  return runPipelineWorker('rerun_assignment', payload, runId, options);
+  return runPipelineWorker('rerun', payload, runId, options);
 }
 
 async function runPipelineWorker(

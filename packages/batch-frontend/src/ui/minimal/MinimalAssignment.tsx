@@ -40,8 +40,7 @@ import {
   listUserJobs,
   materializeDraft,
   renderHtmlPreview,
-  rerunAudioJob,
-  rerunPublishJob,
+  rerunJob,
   restoreProfileRevision,
   retryRecordingTranscription,
   updateDraft,
@@ -65,13 +64,34 @@ const AUDIO_EXTENSIONS = ['.wav', '.mp3', '.m4a', '.aac', '.ogg', '.opus'];
 const POLL_INTERVAL_MS = 3000;
 const FALLBACK_STT_PROVIDERS: SttProvider[] = ['deepgram', 'elevenlabs', 'google'];
 const FALLBACK_TTS_PROVIDERS = ['elevenlabs', 'google'] as const;
+const FALLBACK_PRONUNCIATION_CHUNK_TTS_PROVIDERS = ['edge-tts', 'elevenlabs', 'google'] as const;
 const FALLBACK_GOOGLE_TTS_MODELS = ['chirp3_hd', 'studio', 'neural2', 'wavenet'] as const;
 const FALLBACK_ELEVENLABS_MODEL = 'eleven_multilingual_v2';
+const FALLBACK_ELEVENLABS_MODELS = [
+  'eleven_v3',
+  'eleven_multilingual_v2',
+  'eleven_flash_v2_5',
+  'eleven_flash_v2',
+] as const;
 
 type UiTtsProvider = (typeof FALLBACK_TTS_PROVIDERS)[number];
+type UiPronunciationChunkTtsProvider = (typeof FALLBACK_PRONUNCIATION_CHUNK_TTS_PROVIDERS)[number];
+type PronunciationMode =
+  | 'shadow_sentence'
+  | 'connected_speech'
+  | 'intonation'
+  | 'rhythm_chunking'
+  | 'sentence_stress'
+  | 'minimal_pair';
 
 function isUiTtsProvider(value: string | null | undefined): value is UiTtsProvider {
   return value === 'elevenlabs' || value === 'google';
+}
+
+function isUiPronunciationChunkTtsProvider(
+  value: string | null | undefined,
+): value is UiPronunciationChunkTtsProvider {
+  return value === 'edge-tts' || value === 'elevenlabs' || value === 'google';
 }
 
 function isSttProvider(value: string | null | undefined): value is SttProvider {
@@ -204,6 +224,26 @@ function formatAbsoluteTimestamp(timestamp: string): string {
   return parsed.toLocaleString();
 }
 
+function detectPronunciationModeFromDraft(text: string): PronunciationMode | null {
+  const match = text.match(/\*\*Mode:\*\*\s*([a-z_]+)/i);
+  if (!match) return null;
+  const mode = match[1]?.trim().toLowerCase();
+  return mode === 'shadow_sentence' ||
+    mode === 'connected_speech' ||
+    mode === 'intonation' ||
+    mode === 'rhythm_chunking' ||
+    mode === 'sentence_stress' ||
+    mode === 'minimal_pair'
+    ? mode
+    : null;
+}
+
+function getDefaultPronunciationChunkProviderForMode(
+  mode: PronunciationMode | null,
+): UiPronunciationChunkTtsProvider {
+  return mode === 'connected_speech' ? 'elevenlabs' : 'edge-tts';
+}
+
 interface SelectablePresetOption {
   id: string;
   label: string;
@@ -314,23 +354,41 @@ export const MinimalAssignment: React.FC = () => {
   >(null);
   const [profileSuccess, setProfileSuccess] = useState<string | null>(null);
 
-  const [actionBusy, setActionBusy] = useState<'rerun' | 'rerun_publish' | 'cancel' | null>(null);
+  const [actionBusy, setActionBusy] = useState<'rerun' | 'cancel' | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
   const [actionSuccess, setActionSuccess] = useState<string | null>(null);
   const [jobProvenance, setJobProvenance] = useState<JobProvenanceResponse | null>(null);
   const [jobProvenanceLoading, setJobProvenanceLoading] = useState(false);
   const [jobProvenanceError, setJobProvenanceError] = useState<string | null>(null);
 
-  const [showRerunAdvanced, setShowRerunAdvanced] = useState(false);
-  const [rerunForceTts, setRerunForceTts] = useState(false);
-  const [rerunTtsProvider, setRerunTtsProvider] = useState<UiTtsProvider>('elevenlabs');
-  const [rerunGoogleTtsModel, setRerunGoogleTtsModel] = useState('');
-  const [rerunVoiceId, setRerunVoiceId] = useState('');
-  const [rerunVoiceAccent, setRerunVoiceAccent] = useState('');
-  const [rerunTtsStrategy, setRerunTtsStrategy] = useState<'auto' | 'dialogue' | 'tts'>('auto');
-  const [rerunDialogueLanguage, setRerunDialogueLanguage] = useState('');
-  const [rerunDialogueStability, setRerunDialogueStability] = useState('');
-  const [rerunDialogueSeed, setRerunDialogueSeed] = useState('');
+  const [showCustomRerun, setShowCustomRerun] = useState(false);
+  const [rerunStudyTextAudio, setRerunStudyTextAudio] = useState(false);
+  const [rerunPronunciationMainAudio, setRerunPronunciationMainAudio] = useState(false);
+  const [rerunPronunciationChunkAudio, setRerunPronunciationChunkAudio] = useState(false);
+  const [rerunStudyTextProvider, setRerunStudyTextProvider] = useState<UiTtsProvider>('elevenlabs');
+  const [rerunStudyTextModel, setRerunStudyTextModel] = useState('');
+  const [rerunStudyTextVoiceId, setRerunStudyTextVoiceId] = useState('');
+  const [rerunStudyTextVoiceAccent, setRerunStudyTextVoiceAccent] = useState('');
+  const [rerunStudyTextStrategy, setRerunStudyTextStrategy] = useState<'auto' | 'dialogue' | 'tts'>('auto');
+  const [rerunStudyTextDialogueLanguage, setRerunStudyTextDialogueLanguage] = useState('');
+  const [rerunStudyTextDialogueStability, setRerunStudyTextDialogueStability] = useState('');
+  const [rerunStudyTextDialogueSeed, setRerunStudyTextDialogueSeed] = useState('');
+  const [rerunPronunciationMainProvider, setRerunPronunciationMainProvider] =
+    useState<UiTtsProvider>('elevenlabs');
+  const [rerunPronunciationMainModel, setRerunPronunciationMainModel] = useState('');
+  const [rerunPronunciationMainVoiceId, setRerunPronunciationMainVoiceId] = useState('');
+  const [rerunPronunciationMainVoiceAccent, setRerunPronunciationMainVoiceAccent] = useState('');
+  const [rerunPronunciationChunkProvider, setRerunPronunciationChunkProvider] =
+    useState<UiPronunciationChunkTtsProvider>('edge-tts');
+  const [rerunPronunciationChunkProviderDirty, setRerunPronunciationChunkProviderDirty] =
+    useState(false);
+  const [rerunTargetPronunciationMode, setRerunTargetPronunciationMode] =
+    useState<PronunciationMode | null>(null);
+  const [rerunPronunciationChunkModel, setRerunPronunciationChunkModel] = useState('');
+  const [rerunPronunciationChunkVoiceId, setRerunPronunciationChunkVoiceId] = useState('');
+  const [rerunPronunciationChunkVoiceAccent, setRerunPronunciationChunkVoiceAccent] =
+    useState('');
+  const [rerunPronunciationChunkEdgeVoice, setRerunPronunciationChunkEdgeVoice] = useState('');
   const [cancelReason, setCancelReason] = useState('');
   const [previewHtml, setPreviewHtml] = useState<string | null>(null);
   const [previewError, setPreviewError] = useState<string | null>(null);
@@ -389,9 +447,25 @@ export const MinimalAssignment: React.FC = () => {
     () => ttsModelOptionsByProvider[selectedTtsProvider] ?? [],
     [selectedTtsProvider, ttsModelOptionsByProvider],
   );
-  const selectedRerunTtsModelOptions = useMemo(
-    () => ttsModelOptionsByProvider[rerunTtsProvider] ?? [],
-    [rerunTtsProvider, ttsModelOptionsByProvider],
+  const elevenlabsModelOptions = useMemo(
+    () => ttsModelOptionsByProvider.elevenlabs ?? [...FALLBACK_ELEVENLABS_MODELS],
+    [ttsModelOptionsByProvider],
+  );
+  const elevenlabsStandardModelOptions = useMemo(
+    () =>
+      elevenlabsModelOptions.filter(
+        (model): model is Exclude<(typeof FALLBACK_ELEVENLABS_MODELS)[number], 'eleven_v3'> =>
+          model !== 'eleven_v3',
+      ),
+    [elevenlabsModelOptions],
+  );
+  const googleTtsModelOptions = useMemo(
+    () => ttsModelOptionsByProvider.google ?? [...FALLBACK_GOOGLE_TTS_MODELS],
+    [ttsModelOptionsByProvider],
+  );
+  const defaultPronunciationChunkProvider = useMemo<UiPronunciationChunkTtsProvider>(
+    () => getDefaultPronunciationChunkProviderForMode(rerunTargetPronunciationMode),
+    [rerunTargetPronunciationMode],
   );
 
   const presetOptions = useMemo(() => buildSelectablePresetOptions(jobOptions), [jobOptions]);
@@ -496,8 +570,16 @@ export const MinimalAssignment: React.FC = () => {
     setPreviewError(null);
     setPreviewing(false);
     setLastPreviewedDraftHash(null);
-    setRerunTtsProvider('elevenlabs');
-    setRerunGoogleTtsModel('');
+    setShowCustomRerun(false);
+    setRerunStudyTextAudio(false);
+    setRerunPronunciationMainAudio(false);
+    setRerunPronunciationChunkAudio(false);
+    setRerunStudyTextProvider('elevenlabs');
+    setRerunStudyTextModel('');
+    setRerunPronunciationMainProvider('elevenlabs');
+    setRerunPronunciationMainModel('');
+    setRerunPronunciationChunkProvider('edge-tts');
+    setRerunPronunciationChunkModel('');
   }, [invalidateDraftGenerationRequests]);
 
   const loadPromptOptions = useCallback(async () => {
@@ -663,35 +745,130 @@ export const MinimalAssignment: React.FC = () => {
   ]);
 
   useEffect(() => {
-    if (!ttsProviders.includes(rerunTtsProvider)) {
-      setRerunTtsProvider(selectedTtsProvider);
+    if (!ttsProviders.includes(rerunStudyTextProvider)) {
+      setRerunStudyTextProvider(selectedTtsProvider);
     }
-  }, [rerunTtsProvider, selectedTtsProvider, ttsProviders]);
+  }, [rerunStudyTextProvider, selectedTtsProvider, ttsProviders]);
 
   useEffect(() => {
-    const modelOptions = ttsModelOptionsByProvider[rerunTtsProvider] ?? [];
-    if (modelOptions.length === 0) {
-      if (rerunGoogleTtsModel) setRerunGoogleTtsModel('');
-      return;
+    if (!ttsProviders.includes(rerunPronunciationMainProvider)) {
+      setRerunPronunciationMainProvider(selectedTtsProvider);
     }
-    const preferredModel =
-      rerunTtsProvider === 'google'
-        ? selectedTtsProvider === 'google' &&
-          selectedTtsModel &&
-          modelOptions.includes(selectedTtsModel)
-          ? selectedTtsModel
-          : modelOptions[0]
-        : modelOptions[0];
-    if (!preferredModel) return;
-    if (!rerunGoogleTtsModel || !modelOptions.includes(rerunGoogleTtsModel)) {
-      setRerunGoogleTtsModel(preferredModel);
+  }, [rerunPronunciationMainProvider, selectedTtsProvider, ttsProviders]);
+
+  useEffect(() => {
+    if (!isUiPronunciationChunkTtsProvider(rerunPronunciationChunkProvider)) {
+      setRerunPronunciationChunkProvider(defaultPronunciationChunkProvider);
+    }
+  }, [defaultPronunciationChunkProvider, rerunPronunciationChunkProvider]);
+
+  useEffect(() => {
+    if (!rerunPronunciationChunkProviderDirty) {
+      setRerunPronunciationChunkProvider(defaultPronunciationChunkProvider);
     }
   }, [
-    rerunGoogleTtsModel,
-    rerunTtsProvider,
-    selectedTtsModel,
-    selectedTtsProvider,
-    ttsModelOptionsByProvider,
+    defaultPronunciationChunkProvider,
+    rerunPronunciationChunkProviderDirty,
+    jobStatus?.jobId,
+  ]);
+
+  useEffect(() => {
+    if (rerunStudyTextProvider === 'google') {
+      if (!rerunStudyTextModel || !googleTtsModelOptions.includes(rerunStudyTextModel)) {
+        setRerunStudyTextModel(googleTtsModelOptions[0] ?? '');
+      }
+      return;
+    }
+    if (rerunStudyTextStrategy === 'auto') {
+      if (rerunStudyTextModel) {
+        setRerunStudyTextModel('');
+      }
+      return;
+    }
+    if (rerunStudyTextStrategy === 'dialogue') {
+      if (rerunStudyTextModel && rerunStudyTextModel !== 'eleven_v3') {
+        setRerunStudyTextModel('');
+      }
+      return;
+    }
+    if (
+      rerunStudyTextModel &&
+      !elevenlabsStandardModelOptions.includes(
+        rerunStudyTextModel as (typeof elevenlabsStandardModelOptions)[number],
+      )
+    ) {
+      setRerunStudyTextModel('');
+    }
+  }, [
+    elevenlabsStandardModelOptions,
+    googleTtsModelOptions,
+    rerunStudyTextModel,
+    rerunStudyTextProvider,
+    rerunStudyTextStrategy,
+  ]);
+
+  useEffect(() => {
+    if (rerunPronunciationMainProvider === 'google') {
+      if (
+        !rerunPronunciationMainModel ||
+        !googleTtsModelOptions.includes(rerunPronunciationMainModel)
+      ) {
+        setRerunPronunciationMainModel(googleTtsModelOptions[0] ?? '');
+      }
+      return;
+    }
+    if (
+      !rerunPronunciationMainModel ||
+      !elevenlabsStandardModelOptions.includes(
+        rerunPronunciationMainModel as (typeof elevenlabsStandardModelOptions)[number],
+      )
+    ) {
+      setRerunPronunciationMainModel(
+        elevenlabsStandardModelOptions.find((model) => model === 'eleven_flash_v2_5') ??
+          elevenlabsStandardModelOptions[0] ??
+          '',
+      );
+    }
+  }, [
+    elevenlabsStandardModelOptions,
+    googleTtsModelOptions,
+    rerunPronunciationMainModel,
+    rerunPronunciationMainProvider,
+  ]);
+
+  useEffect(() => {
+    if (rerunPronunciationChunkProvider === 'google') {
+      if (
+        !rerunPronunciationChunkModel ||
+        !googleTtsModelOptions.includes(rerunPronunciationChunkModel)
+      ) {
+        setRerunPronunciationChunkModel(googleTtsModelOptions[0] ?? '');
+      }
+      return;
+    }
+    if (rerunPronunciationChunkProvider === 'elevenlabs') {
+      if (
+        !rerunPronunciationChunkModel ||
+        !elevenlabsStandardModelOptions.includes(
+          rerunPronunciationChunkModel as (typeof elevenlabsStandardModelOptions)[number],
+        )
+      ) {
+        setRerunPronunciationChunkModel(
+          elevenlabsStandardModelOptions.find((model) => model === 'eleven_flash_v2_5') ??
+            elevenlabsStandardModelOptions[0] ??
+            '',
+        );
+      }
+      return;
+    }
+    if (rerunPronunciationChunkModel) {
+      setRerunPronunciationChunkModel('');
+    }
+  }, [
+    elevenlabsStandardModelOptions,
+    googleTtsModelOptions,
+    rerunPronunciationChunkModel,
+    rerunPronunciationChunkProvider,
   ]);
 
   useEffect(() => {
@@ -834,11 +1011,13 @@ export const MinimalAssignment: React.FC = () => {
         const resumedTtsProvider = status.ttsProvider;
         if (isUiTtsProvider(resumedTtsProvider)) {
           setSelectedTtsProvider(resumedTtsProvider);
-          setRerunTtsProvider(resumedTtsProvider);
+          setRerunStudyTextProvider(resumedTtsProvider);
+          setRerunPronunciationMainProvider(resumedTtsProvider);
         }
         if (typeof status.googleTtsModel === 'string' && status.googleTtsModel.trim().length > 0) {
           setSelectedTtsModel(status.googleTtsModel);
-          setRerunGoogleTtsModel(status.googleTtsModel);
+          setRerunStudyTextModel(status.googleTtsModel);
+          setRerunPronunciationMainModel(status.googleTtsModel);
         }
         const resumedPresetId = status.learningPresetId ?? status.preset;
         if (resumedPresetId) {
@@ -940,11 +1119,14 @@ export const MinimalAssignment: React.FC = () => {
           setPromptError(null);
         }
 
+        const persistedPronunciationMode = status.pronunciationMode ?? null;
+
         if (status.draftId) {
           try {
             const resumedDraft = await fetchDraft(status.draftId);
             setDraft(resumedDraft);
             setDraftText(resumedDraft.text ?? '');
+            setRerunTargetPronunciationMode(detectPronunciationModeFromDraft(resumedDraft.text ?? ''));
             setDraftError(null);
             if (!resolvedStudentId && resumedDraft.studentId) {
               resolvedStudentId = resumedDraft.studentId;
@@ -953,11 +1135,13 @@ export const MinimalAssignment: React.FC = () => {
             const message = error instanceof Error ? error.message : 'Unable to load saved draft.';
             setDraft(null);
             setDraftText('');
+            setRerunTargetPronunciationMode(persistedPronunciationMode);
             setDraftError(message);
           }
         } else {
           setDraft(null);
           setDraftText('');
+          setRerunTargetPronunciationMode(persistedPronunciationMode);
           setDraftError(null);
         }
 
@@ -1445,6 +1629,7 @@ export const MinimalAssignment: React.FC = () => {
         ? await updateDraft(draft.id, draftText.trim())
         : await createDraft(promptPackage.id, draftText.trim());
       setDraft(response);
+      setRerunTargetPronunciationMode(detectPronunciationModeFromDraft(response.text ?? draftText));
       return response;
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Unable to save draft.';
@@ -1462,10 +1647,6 @@ export const MinimalAssignment: React.FC = () => {
       return;
     }
     setPublishing(true);
-    setRerunTtsProvider(selectedTtsProvider);
-    if (selectedTtsProvider === 'google' && selectedTtsModel) {
-      setRerunGoogleTtsModel(selectedTtsModel);
-    }
 
     try {
       let savedDraft = draft;
@@ -1577,8 +1758,9 @@ export const MinimalAssignment: React.FC = () => {
     setActionBusy(null);
     setActionError(null);
     setActionSuccess(null);
-    setShowRerunAdvanced(false);
+    setShowCustomRerun(false);
     setCancelReason('');
+    setRerunPronunciationChunkProviderDirty(false);
   }, [jobStatus?.jobId]);
 
   useEffect(() => {
@@ -1602,59 +1784,18 @@ export const MinimalAssignment: React.FC = () => {
     void loadJobProvenance(jobStatus.jobId);
   }, [jobStatus?.jobId, loadJobProvenance]);
 
-  const handleRerunAudio = async () => {
+  const queueRerun = async (
+    payload: Parameters<typeof rerunJob>[1],
+    fallbackMessage: string,
+  ) => {
     if (!jobStatus?.jobId) return;
-
-    const stabilityInput = rerunDialogueStability.trim();
-    const seedInput = rerunDialogueSeed.trim();
-    const effectiveRerunTtsProvider = rerunTtsProvider || selectedTtsProvider;
-    const payload: Parameters<typeof rerunAudioJob>[1] = {
-      forceTts: rerunForceTts,
-      ttsStrategy: rerunTtsStrategy,
-      ttsProvider: effectiveRerunTtsProvider,
-    };
-    if (effectiveRerunTtsProvider === 'google') {
-      const modelCandidate = (rerunGoogleTtsModel || selectedTtsModel).trim();
-      if (isGoogleTtsModel(modelCandidate)) {
-        payload.googleTtsModel = modelCandidate;
-      }
-    }
-
-    if (rerunVoiceId.trim()) {
-      payload.voiceId = rerunVoiceId.trim();
-    }
-    if (rerunVoiceAccent.trim()) {
-      payload.voiceAccent = rerunVoiceAccent.trim();
-    }
-    if (rerunDialogueLanguage.trim()) {
-      payload.dialogueLanguage = rerunDialogueLanguage.trim();
-    }
-    if (stabilityInput) {
-      const parsed = Number(stabilityInput);
-      if (Number.isNaN(parsed) || parsed < 0 || parsed > 1) {
-        setActionError('Dialogue stability must be a number between 0 and 1.');
-        return;
-      }
-      payload.dialogueStability = parsed;
-    }
-    if (seedInput) {
-      const parsed = Number(seedInput);
-      if (!Number.isInteger(parsed)) {
-        setActionError('Dialogue seed must be an integer.');
-        return;
-      }
-      payload.dialogueSeed = parsed;
-    }
 
     setActionBusy('rerun');
     setActionError(null);
     setActionSuccess(null);
     try {
-      const result = await rerunAudioJob(jobStatus.jobId, payload);
-      const modeHint = rerunForceTts
-        ? 'Forced regeneration enabled (no cache reuse).'
-        : 'Cache reuse is allowed for unchanged chunks.';
-      setActionSuccess(`${result.message ?? 'Audio rerun queued.'} ${modeHint}`);
+      const result = await rerunJob(jobStatus.jobId, payload);
+      setActionSuccess(result.message ?? fallbackMessage);
       const nextJobId = result.jobId || jobStatus.jobId;
       const refreshed = await getJobStatus(nextJobId);
       setJobStatusState(refreshed);
@@ -1664,36 +1805,128 @@ export const MinimalAssignment: React.FC = () => {
       await loadJobProvenance(refreshed.jobId);
       await loadResumeJobs();
     } catch (error) {
-      const message = error instanceof Error ? error.message : 'Unable to rerun audio.';
+      const message = error instanceof Error ? error.message : fallbackMessage;
       setActionError(message);
     } finally {
       setActionBusy(null);
     }
   };
 
-  const handleRerunPublish = async () => {
+  const handleRepublishCurrentDraft = async () => {
+    await queueRerun({ republishOnly: true }, 'Republish queued.');
+  };
+
+  const handleRegeneratePronunciationAudio = async () => {
+    await queueRerun(
+      {
+        regeneratePronunciationMainAudio: true,
+        regeneratePronunciationChunkAudio: true,
+      },
+      'Pronunciation rerun queued.',
+    );
+  };
+
+  const handleRegenerateStudyTextAudio = async () => {
+    await queueRerun({ regenerateStudyTextAudio: true }, 'Study-text rerun queued.');
+  };
+
+  const handleRegenerateAllAudio = async () => {
+    await queueRerun(
+      {
+        regenerateStudyTextAudio: true,
+        regeneratePronunciationMainAudio: true,
+        regeneratePronunciationChunkAudio: true,
+      },
+      'Full audio rerun queued.',
+    );
+  };
+
+  const handleCustomRerun = async () => {
     if (!jobStatus?.jobId) return;
 
-    setActionBusy('rerun_publish');
-    setActionError(null);
-    setActionSuccess(null);
-    try {
-      const result = await rerunPublishJob(jobStatus.jobId);
-      setActionSuccess(result.message ?? 'Publish rerun queued.');
-      const nextJobId = result.jobId || jobStatus.jobId;
-      const refreshed = await getJobStatus(nextJobId);
-      setJobStatusState(refreshed);
-      setSelectedResumeJobId(refreshed.jobId);
-      setPinnedJobExpanded(!isTerminalJobState(refreshed.state));
-      writeJobIdToQuery(refreshed.jobId);
-      await loadJobProvenance(refreshed.jobId);
-      await loadResumeJobs();
-    } catch (error) {
-      const message = error instanceof Error ? error.message : 'Unable to rerun publish.';
-      setActionError(message);
-    } finally {
-      setActionBusy(null);
+    const payload: Parameters<typeof rerunJob>[1] = {};
+    if (rerunStudyTextAudio) {
+      payload.regenerateStudyTextAudio = true;
+      payload.studyTextTtsProvider = rerunStudyTextProvider;
+      payload.studyTextVoiceId = rerunStudyTextVoiceId.trim() || undefined;
+      payload.studyTextVoiceAccent = rerunStudyTextVoiceAccent.trim() || undefined;
+      payload.studyTextTtsStrategy = rerunStudyTextStrategy;
+      payload.studyTextDialogueLanguage = rerunStudyTextDialogueLanguage.trim() || undefined;
+      const stabilityInput = rerunStudyTextDialogueStability.trim();
+      if (stabilityInput) {
+        const parsed = Number(stabilityInput);
+        if (Number.isNaN(parsed) || parsed < 0 || parsed > 1) {
+          setActionError('Dialogue stability must be a number between 0 and 1.');
+          return;
+        }
+        payload.studyTextDialogueStability = parsed;
+      }
+      const seedInput = rerunStudyTextDialogueSeed.trim();
+      if (seedInput) {
+        const parsed = Number(seedInput);
+        if (!Number.isInteger(parsed)) {
+          setActionError('Dialogue seed must be an integer.');
+          return;
+        }
+        payload.studyTextDialogueSeed = parsed;
+      }
+      if (rerunStudyTextProvider === 'google') {
+        if (isGoogleTtsModel(rerunStudyTextModel)) {
+          payload.studyTextGoogleTtsModel = rerunStudyTextModel;
+        }
+      } else if (rerunStudyTextModel.trim()) {
+        payload.studyTextElevenlabsModel = rerunStudyTextModel as
+          | 'eleven_v3'
+          | 'eleven_multilingual_v2'
+          | 'eleven_flash_v2_5'
+          | 'eleven_flash_v2';
+      }
     }
+
+    if (rerunPronunciationMainAudio) {
+      payload.regeneratePronunciationMainAudio = true;
+      payload.pronunciationMainTtsProvider = rerunPronunciationMainProvider;
+      payload.pronunciationMainVoiceId = rerunPronunciationMainVoiceId.trim() || undefined;
+      payload.pronunciationMainVoiceAccent =
+        rerunPronunciationMainVoiceAccent.trim() || undefined;
+      if (rerunPronunciationMainProvider === 'google') {
+        if (isGoogleTtsModel(rerunPronunciationMainModel)) {
+          payload.pronunciationMainGoogleTtsModel = rerunPronunciationMainModel;
+        }
+      } else if (rerunPronunciationMainModel.trim()) {
+        payload.pronunciationMainElevenlabsModel = rerunPronunciationMainModel as
+          | 'eleven_v3'
+          | 'eleven_multilingual_v2'
+          | 'eleven_flash_v2_5'
+          | 'eleven_flash_v2';
+      }
+    }
+
+    if (rerunPronunciationChunkAudio) {
+      payload.regeneratePronunciationChunkAudio = true;
+      payload.pronunciationChunkTtsProvider = rerunPronunciationChunkProvider;
+      payload.pronunciationChunkVoiceId = rerunPronunciationChunkVoiceId.trim() || undefined;
+      payload.pronunciationChunkVoiceAccent =
+        rerunPronunciationChunkVoiceAccent.trim() || undefined;
+      if (rerunPronunciationChunkProvider === 'google') {
+        if (isGoogleTtsModel(rerunPronunciationChunkModel)) {
+          payload.pronunciationChunkGoogleTtsModel = rerunPronunciationChunkModel;
+        }
+      } else if (rerunPronunciationChunkProvider === 'elevenlabs') {
+        if (rerunPronunciationChunkModel.trim()) {
+          payload.pronunciationChunkElevenlabsModel = rerunPronunciationChunkModel as
+            | 'eleven_v3'
+            | 'eleven_multilingual_v2'
+            | 'eleven_flash_v2_5'
+            | 'eleven_flash_v2';
+        }
+      } else {
+        payload.pronunciationChunkEdgeVoice =
+          rerunPronunciationChunkEdgeVoice.trim() || undefined;
+      }
+    }
+
+    await queueRerun(payload, 'Custom rerun queued.');
   };
 
   const handleCancelJob = async () => {
@@ -1739,11 +1972,10 @@ export const MinimalAssignment: React.FC = () => {
         ? (studentNameById.get(job.studentId) ?? `Student ${job.studentId.slice(0, 8)}`)
         : 'No student';
       if (isAudioRerun) {
-        const rerunMode = job.forceTts === true ? 'forced' : 'cache allowed';
         if (!job.studentId) {
-          return `Audio rerun (${rerunMode})`;
+          return 'Audio regeneration';
         }
-        return `${baseName} (Audio rerun, ${rerunMode})`;
+        return `${baseName} (Audio regeneration)`;
       }
       return baseName;
     },
@@ -1813,19 +2045,26 @@ export const MinimalAssignment: React.FC = () => {
     ].some((value) => value !== undefined && value !== null),
   );
   const rerunImplemented =
-    actionCapabilities.find((capability) => capability.type === 'rerun_audio')?.implemented ??
-    false;
-  const rerunPublishImplemented =
-    actionCapabilities.find((capability) => capability.type === 'rerun_publish')?.implemented ??
+    actionCapabilities.find((capability) => capability.type === 'rerun')?.implemented ??
     false;
   const cancelImplemented =
     actionCapabilities.find((capability) => capability.type === 'cancel')?.implemented ?? false;
   const cancelAllowedState = jobStatus?.state === 'queued' || jobStatus?.state === 'running';
   const rerunEnabled = Boolean(jobStatus?.jobId) && rerunImplemented && actionBusy === null;
-  const rerunPublishEnabled =
-    Boolean(jobStatus?.jobId) && rerunPublishImplemented && actionBusy === null;
   const cancelEnabled =
     Boolean(jobStatus?.jobId) && cancelImplemented && cancelAllowedState && actionBusy === null;
+  const customRerunHasSelection =
+    rerunStudyTextAudio || rerunPronunciationMainAudio || rerunPronunciationChunkAudio;
+  const customRerunSummary = [
+    rerunStudyTextAudio ? 'regenerate study-text audio' : 'reuse study-text audio',
+    rerunPronunciationMainAudio
+      ? 'regenerate main pronunciation audio'
+      : 'reuse main pronunciation audio',
+    rerunPronunciationChunkAudio
+      ? 'regenerate pronunciation chunk audio'
+      : 'reuse pronunciation chunk audio',
+    'refresh published output',
+  ];
   const generationDefaultModelForSelection =
     generationOptions?.defaultModelByProvider?.[
       selectedGenerationProvider as keyof NonNullable<
@@ -1932,18 +2171,18 @@ export const MinimalAssignment: React.FC = () => {
                 <button
                   type="button"
                   className="minimal-secondary"
-                  onClick={() => void handleRerunAudio()}
+                  onClick={() => void handleRegeneratePronunciationAudio()}
                   disabled={!rerunEnabled}
                 >
-                  {actionBusy === 'rerun' ? 'Queuing rerun...' : 'Rerun audio'}
+                  {actionBusy === 'rerun' ? 'Queuing rerun...' : 'Regenerate pronunciation'}
                 </button>
                 <button
                   type="button"
                   className="minimal-secondary"
-                  onClick={() => void handleRerunPublish()}
-                  disabled={!rerunPublishEnabled}
+                  onClick={() => void handleRepublishCurrentDraft()}
+                  disabled={!rerunEnabled}
                 >
-                  {actionBusy === 'rerun_publish' ? 'Queuing publish...' : 'Rerun publish'}
+                  {actionBusy === 'rerun' ? 'Queuing rerun...' : 'Republish'}
                 </button>
                 <button
                   type="button"
@@ -2605,152 +2844,345 @@ export const MinimalAssignment: React.FC = () => {
         {jobReady ? (
           <>
             <p className="minimal-help">
-              Rerun audio generation, rerun publish only, or cancel active jobs. Availability is
-              driven by backend capabilities.
+              Choose exactly what to regenerate. Audio families you do not select stay as-is, and
+              any regeneration automatically uploads fresh artifacts and refreshes the published
+              result.
             </p>
             <div className="minimal-meta">
               <span>Job ID: {jobStatus?.jobId}</span>
               <span>State: {jobStatus?.state}</span>
             </div>
-            <div className="minimal-action-row">
-              <div className="minimal-action-card">
-                <div className="minimal-inline">
-                  <button
-                    type="button"
-                    className="minimal-primary"
-                    onClick={() => void handleRerunPublish()}
-                    disabled={!rerunPublishEnabled}
-                  >
-                    {actionBusy === 'rerun_publish' ? 'Queuing publish...' : 'Rerun publish'}
-                  </button>
-                </div>
-                <p className="minimal-help">
-                  Re-run publish stage and reuse existing audio artifacts when available.
-                </p>
-              </div>
+            <div className="minimal-grid">
+              <button
+                type="button"
+                className="minimal-primary"
+                onClick={() => void handleRepublishCurrentDraft()}
+                disabled={!rerunEnabled}
+              >
+                {actionBusy === 'rerun' ? 'Queuing rerun...' : 'Republish current draft'}
+              </button>
+              <button
+                type="button"
+                className="minimal-primary"
+                onClick={() => void handleRegeneratePronunciationAudio()}
+                disabled={!rerunEnabled}
+              >
+                {actionBusy === 'rerun' ? 'Queuing rerun...' : 'Regenerate pronunciation audio'}
+              </button>
+              <button
+                type="button"
+                className="minimal-primary"
+                onClick={() => void handleRegenerateStudyTextAudio()}
+                disabled={!rerunEnabled}
+              >
+                {actionBusy === 'rerun' ? 'Queuing rerun...' : 'Regenerate study-text audio'}
+              </button>
+              <button
+                type="button"
+                className="minimal-primary"
+                onClick={() => void handleRegenerateAllAudio()}
+                disabled={!rerunEnabled}
+              >
+                {actionBusy === 'rerun' ? 'Queuing rerun...' : 'Regenerate all audio'}
+              </button>
+              <button
+                type="button"
+                className="minimal-secondary"
+                onClick={() => setShowCustomRerun((current) => !current)}
+                disabled={!rerunEnabled}
+              >
+                {showCustomRerun ? 'Hide custom rerun' : 'Custom rerun'}
+              </button>
             </div>
-            <div className="minimal-block">
-              <div className="minimal-inline">
-                <button
-                  type="button"
-                  className="minimal-primary"
-                  onClick={() => void handleRerunAudio()}
-                  disabled={!rerunEnabled}
-                >
-                  {actionBusy === 'rerun' ? 'Queuing rerun...' : 'Rerun audio'}
-                </button>
-                <button
-                  type="button"
-                  className="minimal-secondary"
-                  onClick={() => setShowRerunAdvanced((current) => !current)}
-                >
-                  {showRerunAdvanced ? 'Hide advanced' : 'Show advanced rerun'}
-                </button>
-              </div>
-              {showRerunAdvanced ? (
+            <p className="minimal-help">
+              Pronunciation chunks default to `edge-tts`, except `connected_speech`, which defaults
+              to ElevenLabs.
+            </p>
+            {showCustomRerun ? (
+              <div className="minimal-block">
                 <div className="minimal-grid">
-                  <label className="minimal-field">
-                    <span>Voice ID</span>
+                  <label className="minimal-checkbox">
                     <input
-                      value={rerunVoiceId}
-                      onChange={(event) => setRerunVoiceId(event.target.value)}
-                      placeholder="voice id override"
+                      type="checkbox"
+                      checked={rerunStudyTextAudio}
+                      onChange={(event) => setRerunStudyTextAudio(event.target.checked)}
                     />
-                  </label>
-                  <label className="minimal-field">
-                    <span>Voice Accent</span>
-                    <input
-                      value={rerunVoiceAccent}
-                      onChange={(event) => setRerunVoiceAccent(event.target.value)}
-                      placeholder="accent override"
-                    />
-                  </label>
-                  <label className="minimal-field">
-                    <span>TTS provider</span>
-                    <select
-                      value={rerunTtsProvider}
-                      onChange={(event) => setRerunTtsProvider(event.target.value as UiTtsProvider)}
-                    >
-                      {ttsProviders.map((provider) => (
-                        <option key={provider} value={provider}>
-                          {provider}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
-                  <label className="minimal-field">
-                    <span>TTS model</span>
-                    <select
-                      value={rerunGoogleTtsModel}
-                      onChange={(event) => setRerunGoogleTtsModel(event.target.value)}
-                      disabled={selectedRerunTtsModelOptions.length === 0}
-                    >
-                      {selectedRerunTtsModelOptions.length === 0 ? (
-                        <option value="">No models available</option>
-                      ) : null}
-                      {selectedRerunTtsModelOptions.map((model) => (
-                        <option key={model} value={model}>
-                          {model}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
-                  <label className="minimal-field">
-                    <span>TTS strategy</span>
-                    <select
-                      value={rerunTtsStrategy}
-                      onChange={(event) =>
-                        setRerunTtsStrategy(event.target.value as 'auto' | 'dialogue' | 'tts')
-                      }
-                    >
-                      {jobOptions?.ttsStrategies?.length
-                        ? jobOptions.ttsStrategies.map((strategy) => (
-                            <option key={strategy} value={strategy}>
-                              {strategy}
-                            </option>
-                          ))
-                        : ['auto', 'dialogue', 'tts'].map((strategy) => (
-                            <option key={strategy} value={strategy}>
-                              {strategy}
-                            </option>
-                          ))}
-                    </select>
-                  </label>
-                  <label className="minimal-field">
-                    <span>Dialogue language</span>
-                    <input
-                      value={rerunDialogueLanguage}
-                      onChange={(event) => setRerunDialogueLanguage(event.target.value)}
-                      placeholder="e.g. es"
-                    />
-                  </label>
-                  <label className="minimal-field">
-                    <span>Dialogue stability (0..1)</span>
-                    <input
-                      value={rerunDialogueStability}
-                      onChange={(event) => setRerunDialogueStability(event.target.value)}
-                      placeholder="0.42"
-                    />
-                  </label>
-                  <label className="minimal-field">
-                    <span>Dialogue seed (integer)</span>
-                    <input
-                      value={rerunDialogueSeed}
-                      onChange={(event) => setRerunDialogueSeed(event.target.value)}
-                      placeholder="7"
-                    />
+                    <span>Study-text audio</span>
                   </label>
                   <label className="minimal-checkbox">
                     <input
                       type="checkbox"
-                      checked={rerunForceTts}
-                      onChange={(event) => setRerunForceTts(event.target.checked)}
+                      checked={rerunPronunciationMainAudio}
+                      onChange={(event) => setRerunPronunciationMainAudio(event.target.checked)}
                     />
-                    <span>Force TTS regeneration</span>
+                    <span>Main pronunciation audio</span>
+                  </label>
+                  <label className="minimal-checkbox">
+                    <input
+                      type="checkbox"
+                      checked={rerunPronunciationChunkAudio}
+                      onChange={(event) => setRerunPronunciationChunkAudio(event.target.checked)}
+                    />
+                    <span>Pronunciation chunk audio</span>
                   </label>
                 </div>
-              ) : null}
-            </div>
+                <p className="minimal-help">{customRerunSummary.join(' • ')}</p>
+                {rerunStudyTextAudio ? (
+                  <div className="minimal-grid">
+                    <label className="minimal-field">
+                      <span>Study-text provider</span>
+                      <select
+                        value={rerunStudyTextProvider}
+                        onChange={(event) =>
+                          setRerunStudyTextProvider(event.target.value as UiTtsProvider)
+                        }
+                      >
+                        {ttsProviders.map((provider) => (
+                          <option key={provider} value={provider}>
+                            {provider}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                    <label className="minimal-field">
+                      <span>Study-text model</span>
+                      <select
+                        value={rerunStudyTextModel}
+                        onChange={(event) => setRerunStudyTextModel(event.target.value)}
+                      >
+                        {rerunStudyTextProvider === 'google' ? (
+                          googleTtsModelOptions.map((model) => (
+                            <option key={model} value={model}>
+                              {model}
+                            </option>
+                          ))
+                        ) : rerunStudyTextStrategy === 'auto' ? (
+                          <option value="">
+                            Strategy default (`dialogue` {`->`} `eleven_v3`, `tts` {`->`} `eleven_multilingual_v2`)
+                          </option>
+                        ) : rerunStudyTextStrategy === 'dialogue' ? (
+                          <>
+                            <option value="">Dialogue default (`eleven_v3`)</option>
+                            <option value="eleven_v3">eleven_v3</option>
+                          </>
+                        ) : (
+                          <>
+                            <option value="">TTS default (`eleven_multilingual_v2`)</option>
+                            {elevenlabsStandardModelOptions.map((model) => (
+                              <option key={model} value={model}>
+                                {model}
+                              </option>
+                            ))}
+                          </>
+                        )}
+                      </select>
+                    </label>
+                    <label className="minimal-field">
+                      <span>Study-text voice ID</span>
+                      <input
+                        value={rerunStudyTextVoiceId}
+                        onChange={(event) => setRerunStudyTextVoiceId(event.target.value)}
+                        placeholder="voice id override"
+                      />
+                    </label>
+                    <label className="minimal-field">
+                      <span>Study-text accent</span>
+                      <input
+                        value={rerunStudyTextVoiceAccent}
+                        onChange={(event) => setRerunStudyTextVoiceAccent(event.target.value)}
+                        placeholder="accent override"
+                      />
+                    </label>
+                    <label className="minimal-field">
+                      <span>Study-text strategy</span>
+                      <select
+                        value={rerunStudyTextStrategy}
+                        onChange={(event) =>
+                          setRerunStudyTextStrategy(
+                            event.target.value as 'auto' | 'dialogue' | 'tts',
+                          )
+                        }
+                      >
+                        {(jobOptions?.ttsStrategies?.length
+                          ? jobOptions.ttsStrategies
+                          : ['auto', 'dialogue', 'tts']
+                        ).map((strategy) => (
+                          <option key={strategy} value={strategy}>
+                            {strategy}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                    <label className="minimal-field">
+                      <span>Dialogue language</span>
+                      <input
+                        value={rerunStudyTextDialogueLanguage}
+                        onChange={(event) => setRerunStudyTextDialogueLanguage(event.target.value)}
+                        placeholder="e.g. es"
+                      />
+                    </label>
+                    <label className="minimal-field">
+                      <span>Dialogue stability (0..1)</span>
+                      <input
+                        value={rerunStudyTextDialogueStability}
+                        onChange={(event) => setRerunStudyTextDialogueStability(event.target.value)}
+                        placeholder="0.42"
+                      />
+                    </label>
+                    <label className="minimal-field">
+                      <span>Dialogue seed (integer)</span>
+                      <input
+                        value={rerunStudyTextDialogueSeed}
+                        onChange={(event) => setRerunStudyTextDialogueSeed(event.target.value)}
+                        placeholder="7"
+                      />
+                    </label>
+                  </div>
+                ) : null}
+                {rerunPronunciationMainAudio ? (
+                  <div className="minimal-grid">
+                    <label className="minimal-field">
+                      <span>Main pronunciation provider</span>
+                      <select
+                        value={rerunPronunciationMainProvider}
+                        onChange={(event) =>
+                          setRerunPronunciationMainProvider(event.target.value as UiTtsProvider)
+                        }
+                      >
+                        {ttsProviders.map((provider) => (
+                          <option key={provider} value={provider}>
+                            {provider}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                    <label className="minimal-field">
+                      <span>Main pronunciation model</span>
+                      <select
+                        value={rerunPronunciationMainModel}
+                        onChange={(event) => setRerunPronunciationMainModel(event.target.value)}
+                      >
+                        {(rerunPronunciationMainProvider === 'google'
+                          ? googleTtsModelOptions
+                          : elevenlabsStandardModelOptions
+                        ).map((model) => (
+                          <option key={model} value={model}>
+                            {model}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                    <label className="minimal-field">
+                      <span>Main pronunciation voice ID</span>
+                      <input
+                        value={rerunPronunciationMainVoiceId}
+                        onChange={(event) => setRerunPronunciationMainVoiceId(event.target.value)}
+                        placeholder="voice id override"
+                      />
+                    </label>
+                    <label className="minimal-field">
+                      <span>Main pronunciation accent</span>
+                      <input
+                        value={rerunPronunciationMainVoiceAccent}
+                        onChange={(event) =>
+                          setRerunPronunciationMainVoiceAccent(event.target.value)
+                        }
+                        placeholder="accent override"
+                      />
+                    </label>
+                  </div>
+                ) : null}
+                {rerunPronunciationChunkAudio ? (
+                  <div className="minimal-grid">
+                    <label className="minimal-field">
+                      <span>Pronunciation chunk provider</span>
+                      <select
+                        value={rerunPronunciationChunkProvider}
+                        onChange={(event) => {
+                          setRerunPronunciationChunkProviderDirty(true);
+                          setRerunPronunciationChunkProvider(
+                            event.target.value as UiPronunciationChunkTtsProvider,
+                          );
+                        }}
+                      >
+                        {FALLBACK_PRONUNCIATION_CHUNK_TTS_PROVIDERS.map((provider) => (
+                          <option key={provider} value={provider}>
+                            {provider}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                    {rerunPronunciationChunkProvider === 'edge-tts' ? (
+                      <label className="minimal-field">
+                        <span>Edge voice</span>
+                        <input
+                          value={rerunPronunciationChunkEdgeVoice}
+                          onChange={(event) =>
+                            setRerunPronunciationChunkEdgeVoice(event.target.value)
+                          }
+                          placeholder="e.g. en-US-AriaNeural"
+                        />
+                      </label>
+                    ) : (
+                      <>
+                        <label className="minimal-field">
+                          <span>Pronunciation chunk model</span>
+                          <select
+                            value={rerunPronunciationChunkModel}
+                            onChange={(event) =>
+                              setRerunPronunciationChunkModel(event.target.value)
+                            }
+                          >
+                            {(rerunPronunciationChunkProvider === 'google'
+                              ? googleTtsModelOptions
+                              : elevenlabsStandardModelOptions
+                            ).map((model) => (
+                              <option key={model} value={model}>
+                                {model}
+                              </option>
+                            ))}
+                          </select>
+                        </label>
+                        <label className="minimal-field">
+                          <span>Pronunciation chunk voice ID</span>
+                          <input
+                            value={rerunPronunciationChunkVoiceId}
+                            onChange={(event) =>
+                              setRerunPronunciationChunkVoiceId(event.target.value)
+                            }
+                            placeholder="voice id override"
+                          />
+                        </label>
+                        <label className="minimal-field">
+                          <span>Pronunciation chunk accent</span>
+                          <input
+                            value={rerunPronunciationChunkVoiceAccent}
+                            onChange={(event) =>
+                              setRerunPronunciationChunkVoiceAccent(event.target.value)
+                            }
+                            placeholder="accent override"
+                          />
+                        </label>
+                      </>
+                    )}
+                  </div>
+                ) : null}
+                <div className="minimal-inline">
+                  <button
+                    type="button"
+                    className="minimal-primary"
+                    onClick={() => void handleCustomRerun()}
+                    disabled={!rerunEnabled || !customRerunHasSelection}
+                  >
+                    {actionBusy === 'rerun' ? 'Queuing rerun...' : 'Queue custom rerun'}
+                  </button>
+                </div>
+                <p className="minimal-help">
+                  `eleven_v3` is dialogue-only. `eleven_flash_v2` is the only ElevenLabs model
+                  that supports IPA. `eleven_flash_v2_5` is the fast, cheap pronunciation option.
+                </p>
+              </div>
+            ) : null}
             <div className="minimal-block">
               <div className="minimal-inline">
                 <label className="minimal-field grow">
@@ -2777,7 +3209,7 @@ export const MinimalAssignment: React.FC = () => {
               ) : null}
             </div>
             {jobOptionsError ? <p className="minimal-error">{jobOptionsError}</p> : null}
-            {!rerunImplemented || !rerunPublishImplemented || !cancelImplemented ? (
+            {!rerunImplemented || !cancelImplemented ? (
               <p className="minimal-muted">
                 Some actions are unavailable because backend capability metadata does not mark them
                 as implemented.

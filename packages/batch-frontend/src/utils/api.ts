@@ -32,6 +32,7 @@ import { type AxiosError, type AxiosProgressEvent, isAxiosError } from 'axios';
 import { JobActionType } from '@esl-pipeline/contracts';
 import type {
   ActionCapability,
+  ElevenLabsTtsModelId as ContractElevenLabsTtsModelId,
   GenerateDraftRequest as ContractGenerateDraftRequest,
   GenerateDraftResponse as ContractGenerateDraftResponse,
   GoogleTtsModel as ContractGoogleTtsModel,
@@ -44,7 +45,9 @@ import type {
   JobSummaryResponse as ContractJobSummaryResponse,
   MarkdownValidationResponse as ContractMarkdownValidationResponse,
   PublishTarget,
+  PronunciationChunkTtsProviderId as ContractPronunciationChunkTtsProviderId,
   RecordingStatus as ContractRecordingStatus,
+  RerunJobPayload as ContractRerunJobPayload,
   SttProviderId as ContractSttProviderId,
   StudentSummaryResponse as ContractStudentSummaryResponse,
   SubmitJobRequest as ContractSubmitJobRequest,
@@ -83,10 +86,13 @@ export type StudentSummaryResponse = ContractStudentSummaryResponse;
 export type JobConfigOverrides = ContractJobConfigOverrides;
 export type TtsProviderId = ContractTtsProviderId;
 export type GoogleTtsModel = ContractGoogleTtsModel;
+export type ElevenLabsTtsModelId = ContractElevenLabsTtsModelId;
+export type PronunciationChunkTtsProviderId = ContractPronunciationChunkTtsProviderId;
 export type MarkdownValidationResponse = ContractMarkdownValidationResponse;
 export type GenerateDraftRequest = ContractGenerateDraftRequest;
 export type GenerateDraftResponse = ContractGenerateDraftResponse;
 export type GenerationDraftErrorCode = GenerationErrorCategory;
+export type RerunJobPayload = ContractRerunJobPayload;
 
 const GENERATE_DRAFT_REQUEST_TIMEOUT_MS = 240_000;
 
@@ -282,8 +288,7 @@ export type StudentTimelineType =
   | 'template_revision_saved'
   | 'template_revision_restored'
   | 'template_revision_activated'
-  | 'job_action_rerun_audio'
-  | 'job_action_rerun_publish'
+  | 'job_action_rerun'
   | 'job_action_cancel'
   | 'job_action_edit_metadata';
 
@@ -1021,24 +1026,8 @@ export interface JobActionResponse {
   timestamp?: string;
 }
 
-export interface RerunAudioPayload {
-  forceTts?: boolean;
-  voiceId?: string;
-  voiceAccent?: string;
-  ttsStrategy?: 'auto' | 'dialogue' | 'tts';
-  ttsProvider?: TtsProviderId;
-  googleTtsModel?: GoogleTtsModel;
-  dialogueLanguage?: string;
-  dialogueStability?: number;
-  dialogueSeed?: number;
-}
-
 export interface CancelJobPayload {
   reason?: string;
-}
-
-export interface RerunPublishPayload {
-  upload?: 's3';
 }
 
 export async function listRecordings(
@@ -2755,22 +2744,12 @@ export async function submitJobAction(
   }
 }
 
-export async function rerunAudioJob(
+export async function rerunJob(
   jobId: string,
-  payload?: RerunAudioPayload,
+  payload?: RerunJobPayload,
 ): Promise<JobActionResponse> {
   return submitJobAction(jobId, {
-    type: JobActionType.RERUN_AUDIO,
-    payload,
-  });
-}
-
-export async function rerunPublishJob(
-  jobId: string,
-  payload?: RerunPublishPayload,
-): Promise<JobActionResponse> {
-  return submitJobAction(jobId, {
-    type: JobActionType.RERUN_PUBLISH,
+    type: JobActionType.RERUN,
     payload,
   });
 }

@@ -5,9 +5,12 @@ import { closePgPool } from '../infrastructure/db.js';
 import { verifyMigrations } from '../infrastructure/migration-verify.js';
 import { getMigrationStatus, runMigrations } from '../infrastructure/migrations.js';
 import { runRlsReadinessAudit } from '../infrastructure/rls-readiness-audit.js';
+import { verifySchemaBaseline, writeSchemaBaseline } from '../infrastructure/schema-baseline.js';
 
 function printUsage(): void {
-  console.log('Usage: tsx src/tools/migrate-db.ts <migrate|status|verify|rls-audit>');
+  console.log(
+    'Usage: tsx src/tools/migrate-db.ts <migrate|status|verify|generate-baseline|verify-baseline|rls-audit>',
+  );
 }
 
 async function handleStatus(): Promise<void> {
@@ -65,6 +68,25 @@ async function handleVerify(): Promise<void> {
   process.exitCode = 1;
 }
 
+async function handleGenerateBaseline(): Promise<void> {
+  const destinationPath = await writeSchemaBaseline();
+  console.log(`Schema baseline written to ${destinationPath}`);
+}
+
+async function handleVerifyBaseline(): Promise<void> {
+  const result = await verifySchemaBaseline();
+  if (result.ok) {
+    console.log('Schema baseline verification passed.');
+    return;
+  }
+
+  console.log('Schema baseline verification failed:');
+  for (const error of result.errors) {
+    console.log(`  - ${error}`);
+  }
+  process.exitCode = 1;
+}
+
 async function handleRlsAudit(): Promise<void> {
   const result = await runRlsReadinessAudit();
   if (result.ok) {
@@ -106,6 +128,14 @@ async function main(): Promise<void> {
     }
     case 'verify': {
       await handleVerify();
+      break;
+    }
+    case 'generate-baseline': {
+      await handleGenerateBaseline();
+      break;
+    }
+    case 'verify-baseline': {
+      await handleVerifyBaseline();
       break;
     }
     case 'rls-audit': {

@@ -53,7 +53,7 @@ describe('runtime/pronunciation-audio', () => {
       mdPath: '/tmp/example.md',
       outPath: '/tmp',
       title: 'Pronunciation',
-      providerVoiceId: 'voice-1',
+      chunkVoiceId: 'voice-1',
       logger: {
         log: (entry: unknown) => logs.push(entry),
       } as never,
@@ -67,11 +67,11 @@ describe('runtime/pronunciation-audio', () => {
           'edge-tts was unavailable for word/pair pronunciation clips, so provider pronunciation audio was used instead.',
       },
     ]);
-    expect(result?.primaryClip?.engine).toBe('provider');
+    expect(result?.primaryClip).toBeNull();
     expect(result?.itemClips?.every((entry: { engine: string }) => entry.engine === 'provider')).toBe(
       true,
     );
-    expect(vi.mocked(buildPronunciationTextMp3)).toHaveBeenCalledTimes(3);
+    expect(vi.mocked(buildPronunciationTextMp3)).toHaveBeenCalledTimes(2);
     expect(logs).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
@@ -86,6 +86,7 @@ describe('runtime/pronunciation-audio', () => {
   it('uses careful connected-speech text when the connected target is IPA-only', async () => {
     vi.mocked(extractPronunciationFocus).mockReturnValue({
       mode: 'connected_speech',
+      naturalSentence: 'The device is as heavy as the old one.',
       lines: [
         {
           line: 1,
@@ -111,13 +112,15 @@ describe('runtime/pronunciation-audio', () => {
       mdPath: '/tmp/example.md',
       outPath: '/tmp',
       title: 'Pronunciation',
-      providerVoiceId: 'voice-1',
+      primaryVoiceId: 'voice-1',
+      chunkVoiceId: 'voice-1',
       logger: {
         log: (entry: unknown) => logs.push(entry),
       } as never,
     });
 
     expect(result?.mode).toBe('connected_speech');
+    expect(result?.primaryClip?.text).toBe('The device is as heavy as the old one.');
     expect(vi.mocked(buildPronunciationTextMp3)).toHaveBeenCalledTimes(2);
     expect(vi.mocked(buildPronunciationTextMp3)).toHaveBeenNthCalledWith(
       1,
@@ -141,6 +144,55 @@ describe('runtime/pronunciation-audio', () => {
             'Connected-speech pronunciation target was IPA-only; using careful text for provider TTS',
         }),
       ]),
+    );
+  });
+
+  it('reuses the primary provider voice for sentence-level item clips when no chunk voice override is provided', async () => {
+    vi.mocked(extractPronunciationFocus).mockReturnValue({
+      mode: 'sentence_stress',
+      naturalSentence: 'We really need to leave now before traffic gets worse.',
+      drills: [
+        {
+          line: 1,
+          text: 'We REALLY need to leave now.',
+        },
+      ],
+      sectionStartLine: 1,
+      issues: [],
+    });
+    vi.mocked(buildPronunciationTextMp3).mockImplementation(async ({ text, voiceId }) => ({
+      path: `/tmp/${String(text).replaceAll(/\s+/g, '-')}.mp3`,
+      hash: `hash-${String(text).replaceAll(/\s+/g, '-')}`,
+      voiceId,
+      provider: 'google',
+      generatedCharacters: String(text).length,
+      cachedCharacters: 0,
+    }));
+
+    const result = await synthesizePronunciationAudio({
+      context: {} as never,
+      mdPath: '/tmp/example.md',
+      outPath: '/tmp',
+      title: 'Pronunciation',
+      primaryTtsProvider: 'google',
+      primaryGoogleTtsModel: 'studio',
+      primaryVoiceId: 'voice-primary',
+    });
+
+    expect(result?.mode).toBe('sentence_stress');
+    expect(result?.primaryClip?.voiceId).toBe('voice-primary');
+    expect(result?.itemClips).toHaveLength(1);
+    expect(result?.itemClips?.[0]?.voiceId).toBe('voice-primary');
+    expect(vi.mocked(buildPronunciationTextMp3)).toHaveBeenNthCalledWith(
+      2,
+      expect.objectContaining({
+        text: 'We REALLY need to leave now.',
+        voiceId: 'voice-primary',
+      }),
+      expect.objectContaining({
+        ttsProvider: 'google',
+        googleTtsModel: 'studio',
+      }),
     );
   });
 });

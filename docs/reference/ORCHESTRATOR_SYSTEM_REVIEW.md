@@ -47,7 +47,13 @@
 ### Stage Flow (Canonical)
 
 - `validate` -> `import` -> `colorize` -> `tts` -> `upload` -> `add-audio` -> `manifest`
-- `rerun` executes a planner-selected subset of `tts`, `upload`, `add-audio`, then rewrites manifest.
+- `rerun` is regeneration-intent driven:
+  - `republishOnly` derives `add-audio -> manifest`
+  - any regeneration target derives `tts -> upload -> add-audio -> manifest`
+- Rerun planning is now family-aware, not only stage-aware:
+  - study-text audio
+  - pronunciation primary/sentence-anchor audio
+  - pronunciation item/chunk audio
 
 ### Stable Contracts
 

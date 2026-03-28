@@ -448,6 +448,11 @@ function pushPronunciationWarnings(
           `Pronunciation Micro-Focus (line ${displayLine}): connected_speech mode recommends 2-4 lines in "1. \"careful form\" -> connected form" format.`,
         );
       }
+      if (!pronunciationFocus.naturalSentence?.trim()) {
+        warnings.push(
+          `Pronunciation Micro-Focus (line ${displayLine}): connected_speech mode recommends one "**Natural sentence practice:** <sentence>" line after the numbered drills.`,
+        );
+      }
       break;
     }
     case 'intonation': {
@@ -456,12 +461,22 @@ function pushPronunciationWarnings(
           `Pronunciation Micro-Focus (line ${displayLine}): intonation mode recommends 2-4 numbered drill lines.`,
         );
       }
+      if (!pronunciationFocus.naturalSentence?.trim()) {
+        warnings.push(
+          `Pronunciation Micro-Focus (line ${displayLine}): intonation mode recommends one "**Natural sentence practice:** <sentence or question>" line after the numbered drills.`,
+        );
+      }
       break;
     }
     case 'rhythm_chunking': {
       if (pronunciationFocus.drills.length < 2 || pronunciationFocus.drills.length > 4) {
         warnings.push(
           `Pronunciation Micro-Focus (line ${displayLine}): rhythm_chunking mode recommends 2-4 numbered drill lines.`,
+        );
+      }
+      if (!pronunciationFocus.naturalSentence?.trim()) {
+        warnings.push(
+          `Pronunciation Micro-Focus (line ${displayLine}): rhythm_chunking mode recommends one "**Natural sentence practice:** <sentence>" line after the numbered drills.`,
         );
       }
       if (
@@ -478,6 +493,11 @@ function pushPronunciationWarnings(
       if (pronunciationFocus.drills.length < 2 || pronunciationFocus.drills.length > 4) {
         warnings.push(
           `Pronunciation Micro-Focus (line ${displayLine}): sentence_stress mode recommends 2-4 numbered drill lines.`,
+        );
+      }
+      if (!pronunciationFocus.naturalSentence?.trim()) {
+        warnings.push(
+          `Pronunciation Micro-Focus (line ${displayLine}): sentence_stress mode recommends one "**Natural sentence practice:** <sentence>" line after the numbered drills.`,
         );
       }
       break;

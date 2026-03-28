@@ -400,7 +400,7 @@ describe('StudentWorkspace', () => {
       actions: [
         {
           id: 'action-1',
-          actionType: 'rerun_audio',
+          actionType: 'rerun',
           outcome: 'succeeded',
           requestedAt: now,
           requestedBy: 'user-1',

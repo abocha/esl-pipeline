@@ -12,7 +12,7 @@ import {
 import { applyUserSettingsToEnv } from './pipeline-worker-env.js';
 import { toWorkerV2FailureError } from './pipeline-worker-v2.js';
 
-type WorkerExecutionMode = 'new_assignment' | 'rerun_assignment';
+type WorkerExecutionMode = 'new_assignment' | 'rerun';
 
 interface WorkerRunMessage {
   type: 'run';
@@ -60,10 +60,8 @@ async function executePipeline(
   const ffmpegSemaphore = getFfmpegSemaphore(config.worker.maxConcurrentFfmpeg);
 
   const requiresTtsSemaphore =
-    executionMode === 'rerun_assignment'
-      ? ((payload as RunRerunAssignmentPayload).steps ?? ['tts', 'upload', 'add-audio']).includes(
-          'tts',
-        )
+    executionMode === 'rerun'
+      ? !((payload as RunRerunAssignmentPayload).republishOnly ?? false)
       : Boolean((payload as RunAssignmentPayload).withTts);
 
   // Acquire semaphore before TTS operations if TTS is enabled
@@ -79,7 +77,7 @@ async function executePipeline(
   try {
     const started = Date.now();
     const result =
-      executionMode === 'rerun_assignment'
+      executionMode === 'rerun'
         ? await runRerunPipeline(
             pipeline,
             payload as RunRerunAssignmentPayload,
@@ -186,24 +184,35 @@ async function runRerunPipeline(
 ): Promise<PipelineRunResult> {
   const flags: RerunFlags = {
     md: payload.md,
-    steps:
-      payload.steps && payload.steps.length > 0
-        ? payload.steps
-        : (['tts', 'upload', 'add-audio'] as NonNullable<RerunFlags['steps']>),
+    republishOnly: payload.republishOnly ?? false,
+    regenerateStudyTextAudio: payload.regenerateStudyTextAudio ?? false,
+    regeneratePronunciationMainAudio: payload.regeneratePronunciationMainAudio ?? false,
+    regeneratePronunciationChunkAudio: payload.regeneratePronunciationChunkAudio ?? false,
     upload: payload.upload ?? 's3',
-    force: payload.force ?? false,
     out: ttsOutDir,
     prefix: payload.prefix,
     publicRead: payload.publicRead,
     presign: payload.presign,
-    accentPreference: payload.accentPreference ?? undefined,
-    voiceId: payload.voiceId ?? undefined,
-    ttsStrategy: payload.ttsStrategy ?? undefined,
-    ttsProvider: payload.ttsProvider ?? undefined,
-    googleTtsModel: payload.googleTtsModel ?? undefined,
-    dialogueLanguage: payload.dialogueLanguage ?? undefined,
-    dialogueStability: payload.dialogueStability ?? undefined,
-    dialogueSeed: payload.dialogueSeed ?? undefined,
+    studyTextVoiceAccent: payload.studyTextVoiceAccent ?? undefined,
+    studyTextVoiceId: payload.studyTextVoiceId ?? undefined,
+    studyTextTtsStrategy: payload.studyTextTtsStrategy ?? undefined,
+    studyTextTtsProvider: payload.studyTextTtsProvider ?? undefined,
+    studyTextElevenlabsModel: payload.studyTextElevenlabsModel ?? undefined,
+    studyTextGoogleTtsModel: payload.studyTextGoogleTtsModel ?? undefined,
+    studyTextDialogueLanguage: payload.studyTextDialogueLanguage ?? undefined,
+    studyTextDialogueStability: payload.studyTextDialogueStability ?? undefined,
+    studyTextDialogueSeed: payload.studyTextDialogueSeed ?? undefined,
+    pronunciationMainVoiceAccent: payload.pronunciationMainVoiceAccent ?? undefined,
+    pronunciationMainVoiceId: payload.pronunciationMainVoiceId ?? undefined,
+    pronunciationMainTtsProvider: payload.pronunciationMainTtsProvider ?? undefined,
+    pronunciationMainElevenlabsModel: payload.pronunciationMainElevenlabsModel ?? undefined,
+    pronunciationMainGoogleTtsModel: payload.pronunciationMainGoogleTtsModel ?? undefined,
+    pronunciationChunkVoiceAccent: payload.pronunciationChunkVoiceAccent ?? undefined,
+    pronunciationChunkVoiceId: payload.pronunciationChunkVoiceId ?? undefined,
+    pronunciationChunkTtsProvider: payload.pronunciationChunkTtsProvider ?? undefined,
+    pronunciationChunkElevenlabsModel: payload.pronunciationChunkElevenlabsModel ?? undefined,
+    pronunciationChunkGoogleTtsModel: payload.pronunciationChunkGoogleTtsModel ?? undefined,
+    pronunciationChunkEdgeVoice: payload.pronunciationChunkEdgeVoice ?? undefined,
   };
   if (payload.manifestMd) {
     (flags as RerunFlags & { manifestMd?: string }).manifestMd = payload.manifestMd;
@@ -253,7 +262,7 @@ async function main() {
 
     const { payload, runId } = msg;
     const executionMode: WorkerExecutionMode =
-      msg.executionMode === 'rerun_assignment' ? 'rerun_assignment' : 'new_assignment';
+      msg.executionMode === 'rerun' ? 'rerun' : 'new_assignment';
     const log = rootLogger.child({ jobId: payload.jobId, runId, component: 'pipeline-worker' });
     const config = loadConfig();
     const abortController = new AbortController();

@@ -118,12 +118,19 @@ Runbook: [`docs/operations/prompt-gallery-bootstrap.md`](../operations/prompt-ga
 
 - Schema changes are managed under:
   - [`packages/batch-backend/migrations`](../../packages/batch-backend/migrations)
+- Fresh-install baseline is generated at:
+  - [`packages/batch-backend/schema.sql`](../../packages/batch-backend/schema.sql)
 - Expected operational commands:
   - `pnpm --filter @esl-pipeline/batch-backend db:status`
   - `pnpm --filter @esl-pipeline/batch-backend db:migrate`
   - `pnpm --filter @esl-pipeline/batch-backend db:verify`
+  - `pnpm --filter @esl-pipeline/batch-backend db:generate-baseline`
+  - `pnpm --filter @esl-pipeline/batch-backend db:verify-baseline`
+- Existing databases upgrade through migrations; brand-new databases may initialize from the generated fresh baseline.
+- Baseline generation/verification commands require a Postgres connection that can create and drop temporary databases.
 - Runtime legacy schema patching (`ensureJobsSchema`) is emergency-only and requires explicit `PG_ENABLE_LEGACY_SCHEMA_PATCHES=true`.
 - CI enforces a frozen legacy patch catalog; new schema changes must land in versioned migrations.
+- CI also verifies that the generated baseline matches the full migrated schema.
 - Manual migration mode can be made fail-fast on pending migrations (`PG_FAIL_ON_PENDING_MIGRATIONS`; default enabled in production).
 - Inventory mapping of legacy patch groups to migration parity:
   - [`docs/backend-frontend/batch-backend-legacy-schema-inventory.md`](./batch-backend-legacy-schema-inventory.md)

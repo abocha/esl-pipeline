@@ -977,7 +977,7 @@ export function registerAuthUserRoutes(app: FastifyInstance, context: ExtendedRo
     const body = request.body as { type?: string; payload?: unknown };
 
     try {
-      const validActionTypes = ['rerun_audio', 'rerun_publish', 'cancel', 'edit_metadata'];
+      const validActionTypes = ['rerun', 'cancel', 'edit_metadata'];
       if (!body || !body.type || !validActionTypes.includes(body.type)) {
         return reply.code(400).send({
           error: 'validation_failed',

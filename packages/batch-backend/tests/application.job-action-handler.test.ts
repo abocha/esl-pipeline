@@ -3,14 +3,12 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { executeJobAction } from '../src/application/job-actions/action-handler.js';
 import * as cancelModule from '../src/application/job-actions/cancel-job.js';
 import * as editModule from '../src/application/job-actions/edit-metadata.js';
-import * as rerunModule from '../src/application/job-actions/rerun-audio.js';
-import * as rerunPublishModule from '../src/application/job-actions/rerun-publish.js';
+import * as rerunModule from '../src/application/job-actions/rerun.js';
 import * as historyRepository from '../src/domain/job-action-history-repository.js';
 import { JobActionType } from '../src/domain/job-actions.js';
 
 describe('application/job-actions/action-handler', () => {
-  const rerunSpy = vi.spyOn(rerunModule, 'rerunAudio');
-  const rerunPublishSpy = vi.spyOn(rerunPublishModule, 'rerunPublish');
+  const rerunSpy = vi.spyOn(rerunModule, 'rerun');
   const cancelSpy = vi.spyOn(cancelModule, 'cancelJob');
   const editSpy = vi.spyOn(editModule, 'editMetadata');
   const insertHistorySpy = vi.spyOn(historyRepository, 'insertJobActionHistory');
@@ -20,7 +18,7 @@ describe('application/job-actions/action-handler', () => {
     insertHistorySpy.mockResolvedValue({
       id: 'history-1',
       jobId: 'job-1',
-      actionType: JobActionType.RERUN_AUDIO,
+      actionType: JobActionType.RERUN,
       payload: {},
       requestedAt: new Date('2026-02-07T00:00:00.000Z'),
       requestedBy: 'user-1',
@@ -35,28 +33,28 @@ describe('application/job-actions/action-handler', () => {
   it('persists action history for successful rerun actions', async () => {
     rerunSpy.mockResolvedValue({
       success: true,
-      message: 'Audio rerun queued',
+      message: 'Rerun queued',
       jobId: 'job-rerun',
-      actionType: JobActionType.RERUN_AUDIO,
+      actionType: JobActionType.RERUN,
       timestamp: new Date('2026-02-07T00:00:00.000Z'),
     });
 
     const requestedAt = new Date('2026-02-07T00:00:00.000Z');
     await executeJobAction('job-source', {
-      type: JobActionType.RERUN_AUDIO,
+      type: JobActionType.RERUN,
       requestedAt,
       requestedBy: 'user-1',
-      payload: { forceTts: true },
+      payload: { regenerateStudyTextAudio: true },
     });
 
     expect(insertHistorySpy).toHaveBeenCalledWith({
       jobId: 'job-source',
-      actionType: JobActionType.RERUN_AUDIO,
-      payload: { forceTts: true },
+      actionType: JobActionType.RERUN,
+      payload: { regenerateStudyTextAudio: true },
       requestedAt,
       requestedBy: 'user-1',
       outcome: 'succeeded',
-      message: 'Audio rerun queued',
+      message: 'Rerun queued',
       errorCode: null,
       createdJobId: 'job-rerun',
     });
@@ -89,27 +87,27 @@ describe('application/job-actions/action-handler', () => {
     );
   });
 
-  it('persists createdJobId for successful rerun_publish actions', async () => {
-    rerunPublishSpy.mockResolvedValue({
+  it('persists createdJobId for successful rerun actions', async () => {
+    rerunSpy.mockResolvedValue({
       success: true,
-      message: 'Publish rerun queued',
+      message: 'Republish queued',
       jobId: 'job-publish-rerun',
-      actionType: JobActionType.RERUN_PUBLISH,
+      actionType: JobActionType.RERUN,
       timestamp: new Date('2026-02-07T00:00:00.000Z'),
     });
 
     const requestedAt = new Date('2026-02-07T00:00:00.000Z');
     await executeJobAction('job-source', {
-      type: JobActionType.RERUN_PUBLISH,
+      type: JobActionType.RERUN,
       requestedAt,
       requestedBy: 'user-1',
-      payload: {},
+      payload: { republishOnly: true },
     });
 
     expect(insertHistorySpy).toHaveBeenCalledWith(
       expect.objectContaining({
         jobId: 'job-source',
-        actionType: JobActionType.RERUN_PUBLISH,
+        actionType: JobActionType.RERUN,
         outcome: 'succeeded',
         errorCode: null,
         createdJobId: 'job-publish-rerun',
