@@ -120,6 +120,19 @@ async function assertSchemaHealthy(scenario: string): Promise<void> {
     expect(studentMemorySnapshotColumnSet.has('content_hash')).toBe(true);
     expect(studentMemorySnapshotColumnSet.has('unresolved_issues')).toBe(true);
 
+    const jobsColumns = await pool.query<{ column_name: string }>(
+      `
+      SELECT column_name
+      FROM information_schema.columns
+      WHERE table_schema = 'public'
+        AND table_name = 'jobs'
+      `,
+    );
+    const jobsColumnSet = new Set(jobsColumns.rows.map((row) => row.column_name));
+    expect(jobsColumnSet.has('started_at')).toBe(true);
+    expect(jobsColumnSet.has('finished_at')).toBe(true);
+    expect(jobsColumnSet.has('error')).toBe(true);
+
     const profileRevisionSourceConstraint = await pool.query<{ definition: string }>(
       `
       SELECT pg_get_constraintdef(oid) AS definition
