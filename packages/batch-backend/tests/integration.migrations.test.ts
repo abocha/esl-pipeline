@@ -1,16 +1,21 @@
 import fs from 'node:fs/promises';
 import path from 'node:path';
+import { execFile as execFileCallback } from 'node:child_process';
 import { Pool } from 'pg';
 import { afterAll, beforeEach, describe, expect, it } from 'vitest';
+import { promisify } from 'node:util';
 
 import { closePgPool } from '../src/infrastructure/db.js';
 import { verifyMigrations } from '../src/infrastructure/migration-verify.js';
 import { getMigrationStatus, runMigrations } from '../src/infrastructure/migrations.js';
+import { generateSchemaBaselineSql } from '../src/infrastructure/schema-baseline.js';
 import { requirePgTestEnv, resolveTestTimeout, writeTestArtifact } from './support/test-env.js';
 
 const { connectionString } = requirePgTestEnv();
 const testTimeout = resolveTestTimeout(120_000);
 const legacyFixturePath = path.resolve(import.meta.dirname, 'fixtures', 'pg-legacy-schema.sql');
+const schemaBaselinePath = path.resolve(import.meta.dirname, '..', 'schema.sql');
+const execFile = promisify(execFileCallback);
 
 async function withAdminClient<T>(fn: (pool: Pool) => Promise<T>): Promise<T> {
   const pool = new Pool({ connectionString });
@@ -35,6 +40,12 @@ async function applyLegacySchemaFixture(): Promise<void> {
   const sql = await fs.readFile(legacyFixturePath, 'utf8');
   await withAdminClient(async (pool) => {
     await pool.query(sql);
+  });
+}
+
+async function applySchemaBaselineFixture(): Promise<void> {
+  await execFile('psql', [connectionString, '-v', 'ON_ERROR_STOP=1', '-f', schemaBaselinePath], {
+    maxBuffer: 20 * 1024 * 1024,
   });
 }
 
@@ -137,6 +148,28 @@ describe('integration/migrations', () => {
     async () => {
       await runMigrations();
       await assertSchemaHealthy('fresh-bootstrap');
+    },
+    testTimeout,
+  );
+
+  it(
+    'generated schema baseline matches current migration output',
+    async () => {
+      const expected = await generateSchemaBaselineSql(connectionString);
+      const actual = await fs.readFile(schemaBaselinePath, 'utf8');
+
+      await writeTestArtifact('schema-baseline-generated.sql', expected);
+
+      expect(actual).toBe(expected);
+    },
+    testTimeout,
+  );
+
+  it(
+    'schema baseline bootstrap verifies cleanly without pending migrations',
+    async () => {
+      await applySchemaBaselineFixture();
+      await assertSchemaHealthy('schema-baseline-bootstrap');
     },
     testTimeout,
   );
