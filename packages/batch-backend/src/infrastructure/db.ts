@@ -1047,6 +1047,8 @@ END $$;`,
 DECLARE
   current_definition TEXT;
 BEGIN
+  -- Mirror the migration ordering: drop the legacy action-type constraint before
+  -- rewriting rerun_* history rows to the canonical 'rerun' value.
   SELECT pg_get_constraintdef(oid)
   INTO current_definition
   FROM pg_constraint
