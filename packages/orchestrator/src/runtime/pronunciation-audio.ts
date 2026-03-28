@@ -247,18 +247,15 @@ function buildGenericPrimaryText(focus: PronunciationFocus): string | null {
       return focus.shadowSentence ? normalizeSpeechText(focus.shadowSentence) : null;
     }
     case 'minimal_pair': {
-      return focus.pairs
-        .map((pair) => `${normalizeSpeechText(pair.left.text)}. ${normalizeSpeechText(pair.right.text)}.`)
-        .join(' ')
-        .trim();
+      return null;
     }
     case 'connected_speech': {
-      return focus.lines.map((line) => normalizeConnectedSpeechText(line.connected)).join(' ').trim();
+      return focus.naturalSentence ? normalizeSpeechText(focus.naturalSentence) : null;
     }
     case 'intonation':
     case 'rhythm_chunking':
     case 'sentence_stress': {
-      return focus.drills.map((drill) => normalizeSpeechText(drill.text)).join(' ').trim();
+      return focus.naturalSentence ? normalizeSpeechText(focus.naturalSentence) : null;
     }
   }
 }
@@ -321,21 +318,6 @@ export async function synthesizePronunciationAudio(
       break;
     }
     case 'minimal_pair': {
-      const primaryText = buildGenericPrimaryText(focus);
-      if (primaryText) {
-        primaryClip = await synthesizeEdgeClipWithProviderFallback({
-          clip: {
-            id: 'primary-minimal-pair',
-            kind: 'primary',
-            engine: 'edge',
-            text: primaryText,
-            label: 'Practice',
-          },
-          options,
-          warnings,
-          state: fallbackState,
-        });
-      }
       for (const [index, pair] of focus.pairs.entries()) {
         itemClips.push(
           ...(await Promise.all([
@@ -373,10 +355,7 @@ export async function synthesizePronunciationAudio(
       break;
     }
     case 'connected_speech': {
-      const spokenLines = focus.lines
-        .map((line) => resolveConnectedSpeechSpeechText(line, options.logger))
-        .filter(Boolean);
-      const primaryText = spokenLines.join(' ').trim();
+      const primaryText = buildGenericPrimaryText(focus);
       if (primaryText) {
         primaryClip = await synthesizeProviderClip(
           {
@@ -384,7 +363,7 @@ export async function synthesizePronunciationAudio(
             kind: 'primary',
             engine: 'provider',
             text: primaryText,
-            label: 'Practice',
+            label: 'Sentence',
           },
           options,
         );
@@ -419,7 +398,7 @@ export async function synthesizePronunciationAudio(
             kind: 'primary',
             engine: 'provider',
             text: primaryText,
-            label: 'Practice',
+            label: 'Sentence',
           },
           options,
         );

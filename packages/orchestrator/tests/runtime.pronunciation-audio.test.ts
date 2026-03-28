@@ -67,11 +67,11 @@ describe('runtime/pronunciation-audio', () => {
           'edge-tts was unavailable for word/pair pronunciation clips, so provider pronunciation audio was used instead.',
       },
     ]);
-    expect(result?.primaryClip?.engine).toBe('provider');
+    expect(result?.primaryClip).toBeNull();
     expect(result?.itemClips?.every((entry: { engine: string }) => entry.engine === 'provider')).toBe(
       true,
     );
-    expect(vi.mocked(buildPronunciationTextMp3)).toHaveBeenCalledTimes(3);
+    expect(vi.mocked(buildPronunciationTextMp3)).toHaveBeenCalledTimes(2);
     expect(logs).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
@@ -86,6 +86,7 @@ describe('runtime/pronunciation-audio', () => {
   it('uses careful connected-speech text when the connected target is IPA-only', async () => {
     vi.mocked(extractPronunciationFocus).mockReturnValue({
       mode: 'connected_speech',
+      naturalSentence: 'The device is as heavy as the old one.',
       lines: [
         {
           line: 1,
@@ -118,6 +119,7 @@ describe('runtime/pronunciation-audio', () => {
     });
 
     expect(result?.mode).toBe('connected_speech');
+    expect(result?.primaryClip?.text).toBe('The device is as heavy as the old one.');
     expect(vi.mocked(buildPronunciationTextMp3)).toHaveBeenCalledTimes(2);
     expect(vi.mocked(buildPronunciationTextMp3)).toHaveBeenNthCalledWith(
       1,

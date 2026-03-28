@@ -16,7 +16,7 @@ describe('runtime/publish-utils', () => {
       ':::',
       '',
       '### Pronunciation Micro-Focus',
-      '- Shadow sentence: "Hello there"',
+      '**Shadow sentence:** Hello there',
       '',
       '[Audio recording: Study Text](https://old.example.com/study.mp3)',
       '',
@@ -32,6 +32,9 @@ describe('runtime/publish-utils', () => {
       '[Audio recording: Pronunciation Practice](https://new.example.com/pronunciation.mp3)',
     );
     expect(updated).not.toContain('https://old.example.com/study.mp3');
+    expect(updated.lastIndexOf('Audio recording: Pronunciation Practice')).toBeGreaterThan(
+      updated.indexOf('Shadow sentence'),
+    );
   });
 
   it('replaces legacy pronunciation links with the canonical pronunciation label', () => {
@@ -39,7 +42,7 @@ describe('runtime/publish-utils', () => {
       '# Lesson Title',
       '',
       '### Pronunciation Micro-Focus',
-      '- Shadow sentence: "Hello there"',
+      '**Shadow sentence:** Hello there',
       '',
       '[Audio recording: Pronunciation Shadow Sentence](https://old.example.com/pronunciation.mp3)',
     ].join('\n');
@@ -52,6 +55,23 @@ describe('runtime/publish-utils', () => {
       '[Audio recording: Pronunciation Practice](https://new.example.com/pronunciation.mp3)',
     );
     expect(updated).not.toContain('https://old.example.com/pronunciation.mp3');
+  });
+
+  it('does not add a pronunciation link for minimal_pair sections without a sentence anchor', () => {
+    const markdown = [
+      '# Lesson Title',
+      '',
+      '### Pronunciation Micro-Focus',
+      '**Mode:** minimal_pair',
+      '1. ship /ʃɪp/ — sheep /ʃiːp/',
+      '2. live /lɪv/ — leave /liːv/',
+    ].join('\n');
+
+    const updated = insertGeneratedAudioLinks(markdown, {
+      pronunciationAudioUrl: 'https://new.example.com/pronunciation.mp3',
+    });
+
+    expect(updated).not.toContain('Audio recording: Pronunciation Practice');
   });
 
   it('resolves title using meta title first, then heading, then fallback', () => {
