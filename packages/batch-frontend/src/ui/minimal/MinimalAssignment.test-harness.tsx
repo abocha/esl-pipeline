@@ -102,6 +102,7 @@ export function makeJobStatus(overrides: Partial<api.JobStatus> = {}): api.JobSt
     studentId: null,
     md: '/tmp/assignment.md',
     mdStorageUri: null,
+    pronunciationMode: null,
     recordingId: null,
     transcriptId: null,
     promptPackageId: null,
