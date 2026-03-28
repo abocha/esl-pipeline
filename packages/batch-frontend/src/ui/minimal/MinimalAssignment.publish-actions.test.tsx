@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, it } from 'vitest';
+import { fireEvent } from '@testing-library/react';
 
 import {
   INTEGRATION_TEST_TIMEOUT_MS,
@@ -334,6 +335,77 @@ describe('MinimalAssignment - publish and job actions', () => {
       expect(vi.mocked(api.rerunJob).mock.calls.at(-1)?.[1]).not.toHaveProperty(
         'studyTextElevenlabsModel',
       );
+    },
+    INTEGRATION_TEST_TIMEOUT_MS,
+  );
+
+  it(
+    'defaults pronunciation chunk provider from the saved rerun target draft, not the edited textarea',
+    async () => {
+      const connectedSpeechDraft = `# Draft markdown
+
+**Mode:** connected_speech
+1. "as heavy as" -> as-heavy-as
+**Natural sentence practice:** The device is as heavy as the old one.`;
+      const user = userEvent.setup();
+      hydrateResumedAssignment({ draftText: connectedSpeechDraft });
+      render(<MinimalAssignment />);
+      await waitForJobActionsReady();
+      await waitFor(() => {
+        expect(api.fetchDraft).toHaveBeenCalledWith('draft-1');
+      });
+      expect(
+        (screen.getByRole('textbox', { name: /Draft markdown/i }) as HTMLTextAreaElement).value,
+      ).toBe(connectedSpeechDraft);
+
+      fireEvent.change(screen.getByRole('textbox', { name: /Draft markdown/i }), {
+        target: {
+          value: `# Draft markdown
+
+**Mode:** minimal_pair
+1. ship / sheep`,
+        },
+      });
+
+      await user.click(screen.getByRole('button', { name: /Custom rerun/i }));
+      await user.click(screen.getByRole('checkbox', { name: /Pronunciation chunk audio/i }));
+
+      expect(
+        (screen.getByRole('combobox', {
+          name: /Pronunciation chunk provider/i,
+        }) as HTMLSelectElement).value,
+      ).toBe('elevenlabs');
+    },
+    INTEGRATION_TEST_TIMEOUT_MS,
+  );
+
+  it(
+    'limits elevenlabs rerun model choices to valid paths',
+    async () => {
+      const user = userEvent.setup();
+      hydrateResumedAssignment();
+      render(<MinimalAssignment />);
+      await waitForJobActionsReady();
+
+      await user.click(screen.getByRole('button', { name: /Custom rerun/i }));
+      await user.click(screen.getByRole('checkbox', { name: /Study-text audio/i }));
+      await user.click(screen.getByRole('checkbox', { name: /Main pronunciation audio/i }));
+      await user.click(screen.getByRole('checkbox', { name: /Pronunciation chunk audio/i }));
+      await user.selectOptions(
+        screen.getByRole('combobox', { name: /Pronunciation chunk provider/i }),
+        'elevenlabs',
+      );
+
+      const studyModel = screen.getByRole('combobox', { name: /Study-text model/i });
+      const mainModel = screen.getByRole('combobox', { name: /Main pronunciation model/i });
+      const chunkModel = screen.getByRole('combobox', { name: /Pronunciation chunk model/i });
+
+      expect(within(studyModel).queryByRole('option', { name: 'eleven_v3' })).toBeNull();
+      expect(within(mainModel).queryByRole('option', { name: 'eleven_v3' })).toBeNull();
+      expect(within(chunkModel).queryByRole('option', { name: 'eleven_v3' })).toBeNull();
+
+      await user.selectOptions(screen.getByRole('combobox', { name: /Study-text strategy/i }), 'dialogue');
+      expect(within(studyModel).getByRole('option', { name: 'eleven_v3' })).toBeTruthy();
     },
     INTEGRATION_TEST_TIMEOUT_MS,
   );

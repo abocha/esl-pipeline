@@ -62,6 +62,59 @@ const rerunSchema = z
           'Select republish-only or at least one of study-text, pronunciation main, or pronunciation chunk regeneration.',
       });
     }
+
+    if (
+      payload.studyTextTtsProvider === 'elevenlabs' &&
+      payload.studyTextTtsStrategy === 'auto' &&
+      payload.studyTextElevenlabsModel !== undefined
+    ) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['studyTextElevenlabsModel'],
+        message: 'Automatic ElevenLabs study-text reruns must use strategy-default model selection.',
+      });
+    }
+
+    if (
+      payload.studyTextTtsProvider === 'elevenlabs' &&
+      payload.studyTextElevenlabsModel === 'eleven_v3' &&
+      payload.studyTextTtsStrategy !== 'dialogue'
+    ) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['studyTextElevenlabsModel'],
+        message: 'eleven_v3 is only valid for ElevenLabs dialogue study-text reruns.',
+      });
+    }
+
+    if (
+      payload.studyTextTtsProvider === 'elevenlabs' &&
+      payload.studyTextTtsStrategy === 'dialogue' &&
+      payload.studyTextElevenlabsModel !== undefined &&
+      payload.studyTextElevenlabsModel !== 'eleven_v3'
+    ) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['studyTextElevenlabsModel'],
+        message: 'Dialogue study-text reruns only support eleven_v3.',
+      });
+    }
+
+    if (payload.pronunciationMainElevenlabsModel === 'eleven_v3') {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['pronunciationMainElevenlabsModel'],
+        message: 'eleven_v3 cannot be used for pronunciation main synthesis.',
+      });
+    }
+
+    if (payload.pronunciationChunkElevenlabsModel === 'eleven_v3') {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['pronunciationChunkElevenlabsModel'],
+        message: 'eleven_v3 cannot be used for pronunciation chunk synthesis.',
+      });
+    }
   });
 
 function describeRerunMessage(payload: z.infer<typeof rerunSchema>): string {

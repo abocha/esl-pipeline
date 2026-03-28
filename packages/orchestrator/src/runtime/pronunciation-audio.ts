@@ -314,10 +314,13 @@ export async function synthesizePronunciationAudio(
   const shouldGenerateItems = options.regenerateItems !== false;
   const chunkProvider = resolveChunkProvider(focus, options.chunkTtsProvider);
   const chunkProviderConfig: ProviderClipSynthesisConfig = {
-    ttsProvider: chunkProvider === 'edge-tts' ? options.primaryTtsProvider : chunkProvider ?? undefined,
-    googleTtsModel: options.chunkGoogleTtsModel,
-    modelId: options.chunkModelId,
-    voiceId: options.chunkVoiceId,
+    ttsProvider:
+      chunkProvider === 'edge-tts'
+        ? options.primaryTtsProvider
+        : chunkProvider ?? options.primaryTtsProvider,
+    googleTtsModel: options.chunkGoogleTtsModel ?? options.primaryGoogleTtsModel,
+    modelId: options.chunkModelId ?? options.primaryModelId,
+    voiceId: options.chunkVoiceId ?? options.primaryVoiceId,
   };
   const primaryProviderConfig: ProviderClipSynthesisConfig = {
     ttsProvider: options.primaryTtsProvider,

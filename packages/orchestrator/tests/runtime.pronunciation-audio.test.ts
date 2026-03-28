@@ -146,4 +146,53 @@ describe('runtime/pronunciation-audio', () => {
       ]),
     );
   });
+
+  it('reuses the primary provider voice for sentence-level item clips when no chunk voice override is provided', async () => {
+    vi.mocked(extractPronunciationFocus).mockReturnValue({
+      mode: 'sentence_stress',
+      naturalSentence: 'We really need to leave now before traffic gets worse.',
+      drills: [
+        {
+          line: 1,
+          text: 'We REALLY need to leave now.',
+        },
+      ],
+      sectionStartLine: 1,
+      issues: [],
+    });
+    vi.mocked(buildPronunciationTextMp3).mockImplementation(async ({ text, voiceId }) => ({
+      path: `/tmp/${String(text).replaceAll(/\s+/g, '-')}.mp3`,
+      hash: `hash-${String(text).replaceAll(/\s+/g, '-')}`,
+      voiceId,
+      provider: 'google',
+      generatedCharacters: String(text).length,
+      cachedCharacters: 0,
+    }));
+
+    const result = await synthesizePronunciationAudio({
+      context: {} as never,
+      mdPath: '/tmp/example.md',
+      outPath: '/tmp',
+      title: 'Pronunciation',
+      primaryTtsProvider: 'google',
+      primaryGoogleTtsModel: 'studio',
+      primaryVoiceId: 'voice-primary',
+    });
+
+    expect(result?.mode).toBe('sentence_stress');
+    expect(result?.primaryClip?.voiceId).toBe('voice-primary');
+    expect(result?.itemClips).toHaveLength(1);
+    expect(result?.itemClips?.[0]?.voiceId).toBe('voice-primary');
+    expect(vi.mocked(buildPronunciationTextMp3)).toHaveBeenNthCalledWith(
+      2,
+      expect.objectContaining({
+        text: 'We REALLY need to leave now.',
+        voiceId: 'voice-primary',
+      }),
+      expect.objectContaining({
+        ttsProvider: 'google',
+        googleTtsModel: 'studio',
+      }),
+    );
+  });
 });

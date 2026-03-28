@@ -73,6 +73,9 @@ const FALLBACK_ELEVENLABS_MODELS = [
   'eleven_flash_v2_5',
   'eleven_flash_v2',
 ] as const;
+const FALLBACK_ELEVENLABS_STANDARD_MODELS = FALLBACK_ELEVENLABS_MODELS.filter(
+  (model) => model !== 'eleven_v3',
+);
 
 type UiTtsProvider = (typeof FALLBACK_TTS_PROVIDERS)[number];
 type UiPronunciationChunkTtsProvider = (typeof FALLBACK_PRONUNCIATION_CHUNK_TTS_PROVIDERS)[number];
@@ -238,6 +241,12 @@ function detectPronunciationModeFromDraft(text: string): PronunciationMode | nul
     : null;
 }
 
+function getDefaultPronunciationChunkProviderForMode(
+  mode: PronunciationMode | null,
+): UiPronunciationChunkTtsProvider {
+  return mode === 'connected_speech' ? 'elevenlabs' : 'edge-tts';
+}
+
 interface SelectablePresetOption {
   id: string;
   label: string;
@@ -374,6 +383,10 @@ export const MinimalAssignment: React.FC = () => {
   const [rerunPronunciationMainVoiceAccent, setRerunPronunciationMainVoiceAccent] = useState('');
   const [rerunPronunciationChunkProvider, setRerunPronunciationChunkProvider] =
     useState<UiPronunciationChunkTtsProvider>('edge-tts');
+  const [rerunPronunciationChunkProviderDirty, setRerunPronunciationChunkProviderDirty] =
+    useState(false);
+  const [rerunTargetPronunciationMode, setRerunTargetPronunciationMode] =
+    useState<PronunciationMode | null>(null);
   const [rerunPronunciationChunkModel, setRerunPronunciationChunkModel] = useState('');
   const [rerunPronunciationChunkVoiceId, setRerunPronunciationChunkVoiceId] = useState('');
   const [rerunPronunciationChunkVoiceAccent, setRerunPronunciationChunkVoiceAccent] =
@@ -441,17 +454,21 @@ export const MinimalAssignment: React.FC = () => {
     () => ttsModelOptionsByProvider.elevenlabs ?? [...FALLBACK_ELEVENLABS_MODELS],
     [ttsModelOptionsByProvider],
   );
+  const elevenlabsStandardModelOptions = useMemo(
+    () =>
+      elevenlabsModelOptions.filter(
+        (model): model is Exclude<(typeof FALLBACK_ELEVENLABS_MODELS)[number], 'eleven_v3'> =>
+          model !== 'eleven_v3',
+      ),
+    [elevenlabsModelOptions],
+  );
   const googleTtsModelOptions = useMemo(
     () => ttsModelOptionsByProvider.google ?? [...FALLBACK_GOOGLE_TTS_MODELS],
     [ttsModelOptionsByProvider],
   );
-  const detectedPronunciationMode = useMemo(
-    () => detectPronunciationModeFromDraft(draftText),
-    [draftText],
-  );
   const defaultPronunciationChunkProvider = useMemo<UiPronunciationChunkTtsProvider>(
-    () => (detectedPronunciationMode === 'connected_speech' ? 'elevenlabs' : 'edge-tts'),
-    [detectedPronunciationMode],
+    () => getDefaultPronunciationChunkProviderForMode(rerunTargetPronunciationMode),
+    [rerunTargetPronunciationMode],
   );
 
   const presetOptions = useMemo(() => buildSelectablePresetOptions(jobOptions), [jobOptions]);
@@ -749,8 +766,14 @@ export const MinimalAssignment: React.FC = () => {
   }, [defaultPronunciationChunkProvider, rerunPronunciationChunkProvider]);
 
   useEffect(() => {
-    setRerunPronunciationChunkProvider(defaultPronunciationChunkProvider);
-  }, [defaultPronunciationChunkProvider, jobStatus?.jobId]);
+    if (!rerunPronunciationChunkProviderDirty) {
+      setRerunPronunciationChunkProvider(defaultPronunciationChunkProvider);
+    }
+  }, [
+    defaultPronunciationChunkProvider,
+    rerunPronunciationChunkProviderDirty,
+    jobStatus?.jobId,
+  ]);
 
   useEffect(() => {
     if (rerunStudyTextProvider === 'google') {
@@ -759,14 +782,32 @@ export const MinimalAssignment: React.FC = () => {
       }
       return;
     }
-    if (rerunStudyTextModel && !elevenlabsModelOptions.includes(rerunStudyTextModel)) {
+    if (rerunStudyTextStrategy === 'auto') {
+      if (rerunStudyTextModel) {
+        setRerunStudyTextModel('');
+      }
+      return;
+    }
+    if (rerunStudyTextStrategy === 'dialogue') {
+      if (rerunStudyTextModel && rerunStudyTextModel !== 'eleven_v3') {
+        setRerunStudyTextModel('');
+      }
+      return;
+    }
+    if (
+      rerunStudyTextModel &&
+      !elevenlabsStandardModelOptions.includes(
+        rerunStudyTextModel as (typeof elevenlabsStandardModelOptions)[number],
+      )
+    ) {
       setRerunStudyTextModel('');
     }
   }, [
-    elevenlabsModelOptions,
+    elevenlabsStandardModelOptions,
     googleTtsModelOptions,
     rerunStudyTextModel,
     rerunStudyTextProvider,
+    rerunStudyTextStrategy,
   ]);
 
   useEffect(() => {
@@ -781,12 +822,18 @@ export const MinimalAssignment: React.FC = () => {
     }
     if (
       !rerunPronunciationMainModel ||
-      !elevenlabsModelOptions.includes(rerunPronunciationMainModel)
+      !elevenlabsStandardModelOptions.includes(
+        rerunPronunciationMainModel as (typeof elevenlabsStandardModelOptions)[number],
+      )
     ) {
-      setRerunPronunciationMainModel('eleven_flash_v2_5');
+      setRerunPronunciationMainModel(
+        elevenlabsStandardModelOptions.find((model) => model === 'eleven_flash_v2_5') ??
+          elevenlabsStandardModelOptions[0] ??
+          '',
+      );
     }
   }, [
-    elevenlabsModelOptions,
+    elevenlabsStandardModelOptions,
     googleTtsModelOptions,
     rerunPronunciationMainModel,
     rerunPronunciationMainProvider,
@@ -805,9 +852,15 @@ export const MinimalAssignment: React.FC = () => {
     if (rerunPronunciationChunkProvider === 'elevenlabs') {
       if (
         !rerunPronunciationChunkModel ||
-        !elevenlabsModelOptions.includes(rerunPronunciationChunkModel)
+        !elevenlabsStandardModelOptions.includes(
+          rerunPronunciationChunkModel as (typeof elevenlabsStandardModelOptions)[number],
+        )
       ) {
-        setRerunPronunciationChunkModel('eleven_flash_v2_5');
+        setRerunPronunciationChunkModel(
+          elevenlabsStandardModelOptions.find((model) => model === 'eleven_flash_v2_5') ??
+            elevenlabsStandardModelOptions[0] ??
+            '',
+        );
       }
       return;
     }
@@ -815,7 +868,7 @@ export const MinimalAssignment: React.FC = () => {
       setRerunPronunciationChunkModel('');
     }
   }, [
-    elevenlabsModelOptions,
+    elevenlabsStandardModelOptions,
     googleTtsModelOptions,
     rerunPronunciationChunkModel,
     rerunPronunciationChunkProvider,
@@ -1074,6 +1127,7 @@ export const MinimalAssignment: React.FC = () => {
             const resumedDraft = await fetchDraft(status.draftId);
             setDraft(resumedDraft);
             setDraftText(resumedDraft.text ?? '');
+            setRerunTargetPronunciationMode(detectPronunciationModeFromDraft(resumedDraft.text ?? ''));
             setDraftError(null);
             if (!resolvedStudentId && resumedDraft.studentId) {
               resolvedStudentId = resumedDraft.studentId;
@@ -1082,11 +1136,13 @@ export const MinimalAssignment: React.FC = () => {
             const message = error instanceof Error ? error.message : 'Unable to load saved draft.';
             setDraft(null);
             setDraftText('');
+            setRerunTargetPronunciationMode(null);
             setDraftError(message);
           }
         } else {
           setDraft(null);
           setDraftText('');
+          setRerunTargetPronunciationMode(null);
           setDraftError(null);
         }
 
@@ -1574,6 +1630,7 @@ export const MinimalAssignment: React.FC = () => {
         ? await updateDraft(draft.id, draftText.trim())
         : await createDraft(promptPackage.id, draftText.trim());
       setDraft(response);
+      setRerunTargetPronunciationMode(detectPronunciationModeFromDraft(response.text ?? draftText));
       return response;
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Unable to save draft.';
@@ -1704,6 +1761,7 @@ export const MinimalAssignment: React.FC = () => {
     setActionSuccess(null);
     setShowCustomRerun(false);
     setCancelReason('');
+    setRerunPronunciationChunkProviderDirty(false);
   }, [jobStatus?.jobId]);
 
   useEffect(() => {
@@ -2899,12 +2957,19 @@ export const MinimalAssignment: React.FC = () => {
                               {model}
                             </option>
                           ))
+                        ) : rerunStudyTextStrategy === 'auto' ? (
+                          <option value="">
+                            Strategy default (`dialogue` {`->`} `eleven_v3`, `tts` {`->`} `eleven_multilingual_v2`)
+                          </option>
+                        ) : rerunStudyTextStrategy === 'dialogue' ? (
+                          <>
+                            <option value="">Dialogue default (`eleven_v3`)</option>
+                            <option value="eleven_v3">eleven_v3</option>
+                          </>
                         ) : (
                           <>
-                            <option value="">
-                              Strategy default (`dialogue` {`->`} `eleven_v3`, `tts` {`->`} `eleven_multilingual_v2`)
-                            </option>
-                            {elevenlabsModelOptions.map((model) => (
+                            <option value="">TTS default (`eleven_multilingual_v2`)</option>
+                            {elevenlabsStandardModelOptions.map((model) => (
                               <option key={model} value={model}>
                                 {model}
                               </option>
@@ -3000,7 +3065,7 @@ export const MinimalAssignment: React.FC = () => {
                       >
                         {(rerunPronunciationMainProvider === 'google'
                           ? googleTtsModelOptions
-                          : elevenlabsModelOptions
+                          : elevenlabsStandardModelOptions
                         ).map((model) => (
                           <option key={model} value={model}>
                             {model}
@@ -3034,11 +3099,12 @@ export const MinimalAssignment: React.FC = () => {
                       <span>Pronunciation chunk provider</span>
                       <select
                         value={rerunPronunciationChunkProvider}
-                        onChange={(event) =>
+                        onChange={(event) => {
+                          setRerunPronunciationChunkProviderDirty(true);
                           setRerunPronunciationChunkProvider(
                             event.target.value as UiPronunciationChunkTtsProvider,
-                          )
-                        }
+                          );
+                        }}
                       >
                         {FALLBACK_PRONUNCIATION_CHUNK_TTS_PROVIDERS.map((provider) => (
                           <option key={provider} value={provider}>
@@ -3070,7 +3136,7 @@ export const MinimalAssignment: React.FC = () => {
                           >
                             {(rerunPronunciationChunkProvider === 'google'
                               ? googleTtsModelOptions
-                              : elevenlabsModelOptions
+                              : elevenlabsStandardModelOptions
                             ).map((model) => (
                               <option key={model} value={model}>
                                 {model}
@@ -3113,9 +3179,8 @@ export const MinimalAssignment: React.FC = () => {
                   </button>
                 </div>
                 <p className="minimal-help">
-                  `eleven_v3` is dialogue-oriented. `eleven_flash_v2` is the only ElevenLabs
-                  model that supports IPA. `eleven_flash_v2_5` is the fast, cheap pronunciation
-                  option.
+                  `eleven_v3` is dialogue-only. `eleven_flash_v2` is the only ElevenLabs model
+                  that supports IPA. `eleven_flash_v2_5` is the fast, cheap pronunciation option.
                 </p>
               </div>
             ) : null}
