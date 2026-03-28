@@ -297,6 +297,7 @@ jobs:
           pnpm --filter @esl-pipeline/batch-backend db:migrate 2>&1 | tee "$BATCH_BACKEND_TEST_ARTIFACTS_DIR/db-migrate.log"
           pnpm --filter @esl-pipeline/batch-backend db:status 2>&1 | tee "$BATCH_BACKEND_TEST_ARTIFACTS_DIR/db-status.log"
           pnpm --filter @esl-pipeline/batch-backend db:verify 2>&1 | tee "$BATCH_BACKEND_TEST_ARTIFACTS_DIR/db-verify.log"
+          pnpm --filter @esl-pipeline/batch-backend db:verify-baseline 2>&1 | tee "$BATCH_BACKEND_TEST_ARTIFACTS_DIR/db-verify-baseline.log"
 
       - name: Migration matrix tests
         run: |

@@ -48,6 +48,7 @@ Useful indexes:
 - Prompt-package lineage is the canonical assignment-level student-memory provenance surface.
 - Student-memory replay/backfill is source-truth driven; version 1 repair uses regenerate workflows rather than manual memory-row editing.
 - Schema changes belong in versioned migrations; runtime legacy patching is emergency-only.
+- Fresh database bootstrap uses the generated `schema.sql` baseline; existing databases upgrade through versioned migrations.
 - Extended API and ops-control surfaces are additive and must be explicitly enabled.
 
 ## Environment and Docs
@@ -81,7 +82,10 @@ From repo root:
 pnpm --filter @esl-pipeline/batch-backend build
 pnpm --filter @esl-pipeline/batch-backend test
 pnpm --filter @esl-pipeline/batch-backend test:integration:http
+pnpm --filter @esl-pipeline/batch-backend db:verify-baseline
 ```
+
+`db:generate-baseline` and `db:verify-baseline` require a Postgres connection that can create and drop temporary databases on the target server.
 
 Repo-wide checks commonly used before merge:
 

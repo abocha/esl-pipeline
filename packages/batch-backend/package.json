@@ -13,6 +13,8 @@
     "db:rls-audit": "tsx --tsconfig tsconfig.json src/tools/migrate-db.ts rls-audit",
     "db:status": "tsx --tsconfig tsconfig.json src/tools/migrate-db.ts status",
     "db:verify": "tsx --tsconfig tsconfig.json src/tools/migrate-db.ts verify",
+    "db:generate-baseline": "tsx --tsconfig tsconfig.json src/tools/migrate-db.ts generate-baseline",
+    "db:verify-baseline": "tsx --tsconfig tsconfig.json src/tools/migrate-db.ts verify-baseline",
     "dev:api": "tsx watch --tsconfig tsconfig.json src/transport/http-server.ts",
     "dev:student-memory-worker": "tsx watch --tsconfig tsconfig.json src/transport/student-memory-worker.ts",
     "dev:transcribe-worker": "tsx watch --tsconfig tsconfig.json src/transport/transcribe-worker.ts",
