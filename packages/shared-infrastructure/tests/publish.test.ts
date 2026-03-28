@@ -16,7 +16,7 @@ describe('publish helpers', () => {
       ':::',
       '',
       '### Pronunciation Micro-Focus',
-      '- Shadow sentence: Hello there',
+      '**Shadow sentence:** Hello there',
       '',
       '[Audio recording: Study Text](https://old.example.com/study.mp3)',
       '',
@@ -32,6 +32,9 @@ describe('publish helpers', () => {
       '[Audio recording: Pronunciation Practice](https://new.example.com/pronunciation.mp3)',
     );
     expect(output).not.toContain('https://old.example.com/study.mp3');
+    expect(output.lastIndexOf('Audio recording: Pronunciation Practice')).toBeGreaterThan(
+      output.indexOf('Shadow sentence'),
+    );
   });
 
   it('supports preview placeholder injection and removes prior generated placeholder directives', () => {
@@ -46,7 +49,7 @@ describe('publish helpers', () => {
       ':::',
       '',
       '### Pronunciation Micro-Focus',
-      '- Shadow sentence:',
+      '**Shadow sentence:**',
       '  Hello there',
       '',
       '<!-- esl-generated-pronunciation-audio-placeholder -->',
@@ -75,7 +78,7 @@ describe('publish helpers', () => {
       '# Lesson',
       '',
       '### Pronunciation Micro-Focus',
-      '- Shadow sentence: Hello there',
+      '**Shadow sentence:** Hello there',
       '',
       '[Audio recording: Pronunciation Shadow Sentence](https://old.example.com/pronunciation.mp3)',
     ].join('\n');
@@ -89,6 +92,23 @@ describe('publish helpers', () => {
     );
     expect(output).not.toContain('Pronunciation Shadow Sentence');
     expect(output).not.toContain('https://old.example.com/pronunciation.mp3');
+  });
+
+  it('does not inject pronunciation links when there is no sentence anchor', () => {
+    const markdown = [
+      '# Lesson',
+      '',
+      '### Pronunciation Micro-Focus',
+      '**Mode:** minimal_pair',
+      '1. ship /ʃɪp/ — sheep /ʃiːp/',
+      '2. live /lɪv/ — leave /liːv/',
+    ].join('\n');
+
+    const output = insertGeneratedAudioLinks(markdown, {
+      pronunciationAudioUrl: 'https://new.example.com/pronunciation.mp3',
+    });
+
+    expect(output).not.toContain('Audio recording: Pronunciation Practice');
   });
 
   it('resolves markdown title with explicit/meta/frontmatter/heading/fallback precedence', () => {

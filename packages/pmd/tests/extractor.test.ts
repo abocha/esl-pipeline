@@ -203,7 +203,10 @@ describe('pmd extractor', () => {
           '1. "Change helps us." -> Change help-sus.',
         )
         .replace('2. **working** — /ˈwɜːrkɪŋ/', '2. "It gives us food." -> It give-sus food.')
-        .replace('3. **morning** — /ˈmɔːrnɪŋ/', ''),
+        .replace(
+          '3. **morning** — /ˈmɔːrnɪŋ/',
+          '**Natural sentence practice:** The device is as heavy as the old one.',
+        ),
     );
     const pronunciation = extractPronunciationFocus(connectedSpeechContext);
     expect(pronunciation?.mode).toBe('connected_speech');
@@ -211,6 +214,7 @@ describe('pmd extractor', () => {
     expect(pronunciation.lines).toHaveLength(2);
     expect(pronunciation.lines[0]?.careful).toBe('Change helps us.');
     expect(pronunciation.lines[0]?.connected).toBe('Change help-sus.');
+    expect(pronunciation.naturalSentence).toBe('The device is as heavy as the old one.');
   });
 
   it('extracts intonation pronunciation metadata', () => {
@@ -223,7 +227,10 @@ describe('pmd extractor', () => {
         )
         .replace('1. **thinking** — /ˈθɪŋkɪŋ/', '1. Are you free tonight? — /ɑː juː friː təˈnaɪt/')
         .replace('2. **working** — /ˈwɜːrkɪŋ/', '2. That sounds really great. — /ðæt saʊndz ˈrɪə.li ɡreɪt/')
-        .replace('3. **morning** — /ˈmɔːrnɪŋ/', ''),
+        .replace(
+          '3. **morning** — /ˈmɔːrnɪŋ/',
+          '**Natural sentence practice:** Are you free tonight after work?',
+        ),
     );
     const pronunciation = extractPronunciationFocus(intonationContext);
     expect(pronunciation?.mode).toBe('intonation');
@@ -231,5 +238,6 @@ describe('pmd extractor', () => {
     expect(pronunciation.drills).toHaveLength(2);
     expect(pronunciation.contourCue).toBe('rise-fall');
     expect(pronunciation.drills[0]?.transcription).toBe('/ɑː juː friː təˈnaɪt/');
+    expect(pronunciation.naturalSentence).toBe('Are you free tonight after work?');
   });
 });

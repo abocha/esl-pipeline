@@ -1336,13 +1336,15 @@ function normalizePronunciationSectionMarkdown(markdown: string): string {
 
     let next = trimmed;
 
-    const codeWrappedField = /^(?:[-*]\s+)?`(\*\*(?:mode|shadow sentence):\*\*.+)`$/i.exec(next);
+    const codeWrappedField =
+      /^(?:[-*]\s+)?`(\*\*(?:mode|shadow sentence|natural sentence practice):\*\*.+)`$/i.exec(next);
     if (codeWrappedField?.[1]) {
       normalized.push(codeWrappedField[1]);
       continue;
     }
 
-    const plainBulletField = /^(?:[-*]\s+)(\*\*(?:mode|shadow sentence):\*\*.+)$/i.exec(next);
+    const plainBulletField =
+      /^(?:[-*]\s+)(\*\*(?:mode|shadow sentence|natural sentence practice):\*\*.+)$/i.exec(next);
     if (plainBulletField?.[1]) {
       normalized.push(plainBulletField[1]);
       continue;
@@ -2795,43 +2797,50 @@ function buildBehaviorScript(features: ResolvedFeatures): string {
       const connectedSpeechEnabled = pronunciationMode === 'connected_speech';
 
       if (wordDrillEnabled || connectedSpeechEnabled) {
-        const hasShadowSentenceLabel = (element) => {
+        const hasSentenceAnchorLabel = (element) => {
           if (!(element instanceof HTMLElement)) return false;
           const rawText = String(element.textContent || '')
             .replace(/\\s+/g, ' ')
             .trim();
-          return /(^|\\b)shadow sentence\\s*:/i.test(rawText);
+          return /(^|\\b)(shadow sentence|natural sentence practice)\\s*:/i.test(rawText);
         };
 
         const findFirstMatchingDescendant = (root, selector) => {
           if (!(root instanceof HTMLElement)) return null;
           const candidates = Array.from(root.querySelectorAll(selector));
-          return candidates.find((candidate) => hasShadowSentenceLabel(candidate)) || null;
+          return candidates.find((candidate) => hasSentenceAnchorLabel(candidate)) || null;
         };
 
-        const highlightShadowSentence = () => {
-          const existing = document.querySelector('.pronunciation-shadow-sentence');
+        const highlightSentenceAnchor = () => {
+          const existing = document.querySelector('.pronunciation-sentence-anchor, .pronunciation-shadow-sentence');
           if (existing instanceof HTMLElement) {
             return existing;
           }
-          const shadowSentenceLabel = sectionElements
+          const sentenceAnchorLabel = sectionElements
             .flatMap((element) =>
               element instanceof HTMLElement
                 ? Array.from(element.querySelectorAll('strong, b'))
                 : [],
             )
             .find((candidate) =>
-              /^(?:shadow sentence:?)$/i.test(String(candidate.textContent || '').trim()),
+              /^(?:shadow sentence:?|natural sentence practice:?)$/i.test(
+                String(candidate.textContent || '').trim(),
+              ),
             );
           if (
-            shadowSentenceLabel instanceof HTMLElement &&
-            shadowSentenceLabel.parentElement instanceof HTMLElement
+            sentenceAnchorLabel instanceof HTMLElement &&
+            sentenceAnchorLabel.parentElement instanceof HTMLElement
           ) {
-            const parent = shadowSentenceLabel.parentElement;
+            const parent = sentenceAnchorLabel.parentElement;
             const wrapper = document.createElement('span');
-            wrapper.className = 'pronunciation-shadow-sentence';
-            parent.insertBefore(wrapper, shadowSentenceLabel);
-            let current = shadowSentenceLabel;
+            wrapper.className = 'pronunciation-sentence-anchor';
+            if (/^shadow sentence:?$/i.test(String(sentenceAnchorLabel.textContent || '').trim())) {
+              wrapper.classList.add('pronunciation-shadow-sentence');
+            } else {
+              wrapper.classList.add('pronunciation-natural-sentence');
+            }
+            parent.insertBefore(wrapper, sentenceAnchorLabel);
+            let current = sentenceAnchorLabel;
             while (current) {
               const nextSibling = current.nextSibling;
               wrapper.appendChild(current);
@@ -2841,7 +2850,7 @@ function buildBehaviorScript(features: ResolvedFeatures): string {
               parent.tagName === 'P' &&
               !/\bmode\s*:/i.test(String(parent.textContent || ''))
             ) {
-              parent.classList.add('pronunciation-shadow-sentence');
+              parent.classList.add('pronunciation-sentence-anchor');
             }
             return wrapper;
           }
@@ -2850,10 +2859,19 @@ function buildBehaviorScript(features: ResolvedFeatures): string {
             if (!(element instanceof HTMLElement)) return false;
             if (element.classList.contains('callout')) return false;
             if (!element.matches('li, p, blockquote')) return false;
-            return hasShadowSentenceLabel(element);
+            return hasSentenceAnchorLabel(element);
           });
           if (directBlockMatch instanceof HTMLElement) {
-            directBlockMatch.classList.add('pronunciation-shadow-sentence');
+            directBlockMatch.classList.add('pronunciation-sentence-anchor');
+            if (
+              /(^|\\b)shadow sentence\\s*:/i.test(
+                String(directBlockMatch.textContent || '').replace(/\\s+/g, ' ').trim(),
+              )
+            ) {
+              directBlockMatch.classList.add('pronunciation-shadow-sentence');
+            } else {
+              directBlockMatch.classList.add('pronunciation-natural-sentence');
+            }
             return directBlockMatch;
           }
 
@@ -2863,7 +2881,16 @@ function buildBehaviorScript(features: ResolvedFeatures): string {
             for (const selector of descendantSelectors) {
               const match = findFirstMatchingDescendant(element, selector);
               if (match instanceof HTMLElement) {
-                match.classList.add('pronunciation-shadow-sentence');
+                match.classList.add('pronunciation-sentence-anchor');
+                if (
+                  /(^|\\b)shadow sentence\\s*:/i.test(
+                    String(match.textContent || '').replace(/\\s+/g, ' ').trim(),
+                  )
+                ) {
+                  match.classList.add('pronunciation-shadow-sentence');
+                } else {
+                  match.classList.add('pronunciation-natural-sentence');
+                }
                 return match;
               }
             }
@@ -2872,8 +2899,8 @@ function buildBehaviorScript(features: ResolvedFeatures): string {
           return null;
         };
 
-        if (wordDrillEnabled) {
-          highlightShadowSentence();
+        if (wordDrillEnabled || connectedSpeechEnabled) {
+          highlightSentenceAnchor();
         }
         const clipList = Array.isArray(pronunciationAudio.itemClips)
           ? pronunciationAudio.itemClips
@@ -3236,22 +3263,6 @@ function buildBehaviorScript(features: ResolvedFeatures): string {
             listItems.push(item);
           });
         });
-
-        const shadowSentenceElement =
-          wordDrillEnabled
-            ? document.querySelector('.pronunciation-shadow-sentence')
-            : null;
-        if (
-          shadowSentenceElement instanceof HTMLElement &&
-          pronunciationAudio?.primaryClip &&
-          pronunciationMode === 'shadow_sentence'
-        ) {
-          const controls = document.createElement('span');
-          controls.className = 'pronunciation-line-meta';
-          appendClipButtons(controls, [pronunciationAudio.primaryClip], 'Sentence', 'Play shadow sentence');
-          shadowSentenceElement.appendChild(document.createElement('br'));
-          shadowSentenceElement.appendChild(controls);
-        }
 
         let drillItemIndex = 0;
         listItems.forEach((item) => {

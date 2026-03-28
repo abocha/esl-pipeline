@@ -75,23 +75,37 @@ describe('rendering', () => {
   
   1. "Change helps us." -> Change help-sus.
   2. "It gives us food." -> It give-sus food.
-  3. "Light feels stronger." -> Light feel-stronger.`;
+  3. "Light feels stronger." -> Light feel-stronger.
+
+  **Natural sentence practice:** The device is as heavy as the old one.`;
     const html = await renderToHtml(markdown, 'Connected Speech', {
-      pronunciationAudio: buildPronunciationAudioPayload('connected_speech', [
+      pronunciationAudio: buildPronunciationAudioPayload(
+        'connected_speech',
+        [
+          {
+            id: 'connected-1',
+            itemIndex: 0,
+            kind: 'connected_target',
+            engine: 'provider',
+            text: 'Change help-sus.',
+            url: 'https://example.com/connected-1.mp3',
+            label: 'Play',
+          },
+        ],
         {
-          id: 'connected-1',
-          itemIndex: 0,
-          kind: 'connected_target',
+          id: 'connected-sentence',
+          kind: 'primary',
           engine: 'provider',
-          text: 'Change help-sus.',
-          url: 'https://example.com/connected-1.mp3',
-          label: 'Play',
+          text: 'The device is as heavy as the old one.',
+          url: 'https://example.com/connected-sentence.mp3',
+          label: 'Sentence',
         },
-      ]),
+      ),
     });
     const renderedDocument = createRenderedDocument(html);
     const listItems = [...renderedDocument.querySelectorAll('.markdown-body li')];
     const firstItem = listItems.find((item) => item.textContent?.includes('Change helps us.'));
+    const sentenceAnchor = renderedDocument.querySelector('.pronunciation-natural-sentence');
 
     expect(html).toContain('connected_speech');
     expect(html).toContain('Play connected speech line');
@@ -102,6 +116,8 @@ describe('rendering', () => {
     expect(firstItem?.querySelector('.pronunciation-connected-target')?.textContent).toContain(
       'Change help-sus.',
     );
+    expect(sentenceAnchor?.textContent).toContain('Natural sentence practice:');
+    expect(sentenceAnchor?.textContent).toContain('The device is as heavy as the old one.');
   });
 
   it('renders sentence-level pronunciation controls for intonation mode', async () => {
@@ -110,24 +126,38 @@ describe('rendering', () => {
   **Mode:** intonation
   
   1. Do you have a second? — /duː juː hæv ə ˈsekənd/ Contour cue: rise
-  2. Is everything okay? — /ɪz ˈevriθɪŋ oʊˈkeɪ/ Contour cue: rise`;
+  2. Is everything okay? — /ɪz ˈevriθɪŋ oʊˈkeɪ/ Contour cue: rise
+
+  **Natural sentence practice:** Are you free tonight after work?`;
     const html = await renderToHtml(markdown, 'Intonation Pronunciation', {
-      pronunciationAudio: buildPronunciationAudioPayload('intonation', [
+      pronunciationAudio: buildPronunciationAudioPayload(
+        'intonation',
+        [
+          {
+            id: 'intonation-1',
+            itemIndex: 0,
+            kind: 'sentence_item',
+            engine: 'provider',
+            text: 'Do you have a second?',
+            url: 'https://example.com/intonation-1.mp3',
+            label: 'Play',
+          },
+        ],
         {
-          id: 'intonation-1',
-          itemIndex: 0,
-          kind: 'sentence_item',
+          id: 'intonation-sentence',
+          kind: 'primary',
           engine: 'provider',
-          text: 'Do you have a second?',
-          url: 'https://example.com/intonation-1.mp3',
-          label: 'Play',
+          text: 'Are you free tonight after work?',
+          url: 'https://example.com/intonation-sentence.mp3',
+          label: 'Sentence',
         },
-      ]),
+      ),
     });
     const renderedDocument = createRenderedDocument(html);
 
     const listItems = [...renderedDocument.querySelectorAll('.markdown-body li')];
     const firstItem = listItems.find((item) => item.textContent?.includes('Do you have a second?'));
+    const sentenceAnchor = renderedDocument.querySelector('.pronunciation-natural-sentence');
 
     expect(firstItem?.querySelector('.word-tts-button')?.textContent).toBe('Play');
     expect(firstItem?.querySelector('.pronunciation-line-text')?.textContent).toContain(
@@ -137,6 +167,7 @@ describe('rendering', () => {
       '/duː juː hæv ə ˈsekənd/',
     );
     expect(firstItem?.querySelector('.pronunciation-contour-badge')?.textContent).toBe('rise');
+    expect(sentenceAnchor?.textContent).toContain('Are you free tonight after work?');
   });
 
   it('renders disabled pronunciation buttons when preview payload has no clip URLs yet', async () => {
@@ -144,25 +175,39 @@ describe('rendering', () => {
   
   **Mode:** intonation
   
-  1. Do you have a second? — /duː juː hæv ə ˈsekənd/ Contour cue: rise`;
+  1. Do you have a second? — /duː juː hæv ə ˈsekənd/ Contour cue: rise
+
+  **Natural sentence practice:** Are you free tonight after work?`;
     const html = await renderToHtml(markdown, 'Preview Pronunciation', {
-      pronunciationAudio: buildPronunciationAudioPayload('intonation', [
+      pronunciationAudio: buildPronunciationAudioPayload(
+        'intonation',
+        [
+          {
+            id: 'intonation-1',
+            itemIndex: 0,
+            kind: 'sentence_item',
+            engine: 'provider',
+            text: 'Do you have a second?',
+            label: 'Play',
+          },
+        ],
         {
-          id: 'intonation-1',
-          itemIndex: 0,
-          kind: 'sentence_item',
+          id: 'intonation-sentence',
+          kind: 'primary',
           engine: 'provider',
-          text: 'Do you have a second?',
-          label: 'Play',
+          text: 'Are you free tonight after work?',
+          label: 'Sentence',
         },
-      ]),
+      ),
     });
     const renderedDocument = createRenderedDocument(html);
-    const button = renderedDocument.querySelector('.word-tts-button');
+    const buttons = [...renderedDocument.querySelectorAll('.word-tts-button')];
+    const sentenceAnchor = renderedDocument.querySelector('.pronunciation-natural-sentence');
 
-    expect(button).toBeTruthy();
-    expect(button?.getAttribute('disabled')).not.toBeNull();
-    expect(button?.getAttribute('title')).toContain('not generated yet');
+    expect(buttons).toHaveLength(1);
+    expect(buttons.every((button) => button.getAttribute('disabled') !== null)).toBe(true);
+    expect(buttons[0]?.getAttribute('title')).toContain('not generated yet');
+    expect(sentenceAnchor?.textContent).toContain('Natural sentence practice:');
   });
 
   it('renders rhythm_chunking drill lines with playback controls', async () => {
@@ -171,27 +216,42 @@ describe('rendering', () => {
   **Mode:** rhythm_chunking
   
   1. We should | review this | carefully. — /wi ʃʊd rɪˈvjuː ðɪs ˈkeə.fəl.i/
-  2. Let me know | when you arrive. — /let mi nəʊ wen ju əˈraɪv/`;
+  2. Let me know | when you arrive. — /let mi nəʊ wen ju əˈraɪv/
+
+  **Natural sentence practice:** We should review this carefully before class.`;
     const html = await renderToHtml(markdown, 'Rhythm Chunking', {
-      pronunciationAudio: buildPronunciationAudioPayload('rhythm_chunking', [
+      pronunciationAudio: buildPronunciationAudioPayload(
+        'rhythm_chunking',
+        [
+          {
+            id: 'rhythm-1',
+            itemIndex: 0,
+            kind: 'sentence_item',
+            engine: 'provider',
+            text: 'We should review this carefully.',
+            url: 'https://example.com/rhythm-1.mp3',
+            label: 'Play',
+          },
+        ],
         {
-          id: 'rhythm-1',
-          itemIndex: 0,
-          kind: 'sentence_item',
+          id: 'rhythm-sentence',
+          kind: 'primary',
           engine: 'provider',
-          text: 'We should review this carefully.',
-          url: 'https://example.com/rhythm-1.mp3',
-          label: 'Play',
+          text: 'We should review this carefully before class.',
+          url: 'https://example.com/rhythm-sentence.mp3',
+          label: 'Sentence',
         },
-      ]),
+      ),
     });
     const renderedDocument = createRenderedDocument(html);
 
     const listItems = [...renderedDocument.querySelectorAll('.markdown-body li')];
     const firstItem = listItems.find((item) => item.textContent?.includes('We should'));
+    const sentenceAnchor = renderedDocument.querySelector('.pronunciation-natural-sentence');
 
     expect(firstItem?.querySelector('.word-tts-button')?.textContent).toBe('Play');
     expect(firstItem?.textContent).toContain('We should | review this | carefully.');
+    expect(sentenceAnchor?.textContent).toContain('We should review this carefully before class.');
   });
 
   it('renders sentence_stress drill lines with playback controls', async () => {
@@ -200,27 +260,44 @@ describe('rendering', () => {
   **Mode:** sentence_stress
   
   1. We **really** need to leave now. — /wi ˈrɪə.li niːd tə liːv naʊ/
-  2. I **can** help with that. — /aɪ kən help wɪð ðæt/`;
+  2. I **can** help with that. — /aɪ kən help wɪð ðæt/
+
+  **Natural sentence practice:** We really need to leave now before traffic gets worse.`;
     const html = await renderToHtml(markdown, 'Sentence Stress', {
-      pronunciationAudio: buildPronunciationAudioPayload('sentence_stress', [
+      pronunciationAudio: buildPronunciationAudioPayload(
+        'sentence_stress',
+        [
+          {
+            id: 'stress-1',
+            itemIndex: 0,
+            kind: 'sentence_item',
+            engine: 'provider',
+            text: 'We really need to leave now.',
+            url: 'https://example.com/stress-1.mp3',
+            label: 'Play',
+          },
+        ],
         {
-          id: 'stress-1',
-          itemIndex: 0,
-          kind: 'sentence_item',
+          id: 'stress-sentence',
+          kind: 'primary',
           engine: 'provider',
-          text: 'We really need to leave now.',
-          url: 'https://example.com/stress-1.mp3',
-          label: 'Play',
+          text: 'We really need to leave now before traffic gets worse.',
+          url: 'https://example.com/stress-sentence.mp3',
+          label: 'Sentence',
         },
-      ]),
+      ),
     });
     const renderedDocument = createRenderedDocument(html);
 
     const listItems = [...renderedDocument.querySelectorAll('.markdown-body li')];
     const firstItem = listItems.find((item) => item.textContent?.includes('really'));
+    const sentenceAnchor = renderedDocument.querySelector('.pronunciation-natural-sentence');
 
     expect(firstItem?.querySelector('.word-tts-button')?.textContent).toBe('Play');
     expect(firstItem?.textContent).toContain('really');
+    expect(sentenceAnchor?.textContent).toContain(
+      'We really need to leave now before traffic gets worse.',
+    );
   });
 
   it('does not require numbered word drills in other pronunciation modes', async () => {
@@ -406,7 +483,7 @@ describe('rendering', () => {
 
     const paragraphs = [...renderedDocument.querySelectorAll('.callout .content p')];
     expect(paragraphs[0]?.classList.contains('pronunciation-shadow-sentence')).toBe(false);
-    expect(paragraphs[1]?.classList.contains('pronunciation-shadow-sentence')).toBe(true);
+    expect(paragraphs[1]?.querySelector('.pronunciation-shadow-sentence')).toBeTruthy();
   });
 
   it('preserves inline markup in word-drill items after behavior script runs', async () => {

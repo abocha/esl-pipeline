@@ -121,6 +121,48 @@ function normalizePronunciationSectionLine(line: string): string {
   return /^`[^`]+`$/.test(withoutBullet) ? withoutBullet.slice(1, -1).trim() : withoutBullet;
 }
 
+function extractPronunciationMarkedField(markdown: string, fieldLabel: string): string {
+  const normalized = normalizePronunciationSectionLine(markdown);
+  const pattern = new RegExp(
+    String.raw`^(?:\*\*)?${fieldLabel}\s*:\s*(?:\*\*)?\s*(.*)$`,
+    'i',
+  );
+  const match = pattern.exec(normalized);
+  return (match?.[1] ?? '').trim();
+}
+
+function extractPronunciationMarkedFieldValue(
+  sectionLines: string[],
+  fieldLabel: string,
+): string {
+  for (let index = 0; index < sectionLines.length; index += 1) {
+    const current = sectionLines[index] ?? '';
+    const inlineValue = extractPronunciationMarkedField(current, fieldLabel);
+    const normalized = normalizePronunciationSectionLine(current);
+    const isFieldLine = new RegExp(String.raw`^(?:\*\*)?${fieldLabel}\s*:`, 'i').test(normalized);
+    if (!isFieldLine) continue;
+    if (inlineValue) {
+      return normalizePronunciationText(inlineValue);
+    }
+    for (let nextIndex = index + 1; nextIndex < sectionLines.length; nextIndex += 1) {
+      const candidate = normalizePronunciationSectionLine(sectionLines[nextIndex] ?? '');
+      if (
+        !candidate ||
+        /^(?:\*\*)?(mode|target|focus|action|deliverable|shadow sentence|natural sentence practice)\s*:/i.test(
+          candidate,
+        )
+      ) {
+        continue;
+      }
+      if (/^\d+\.\s*/.test(candidate)) {
+        break;
+      }
+      return normalizePronunciationText(candidate);
+    }
+  }
+  return '';
+}
+
 function extractPronunciationItemBody(line: string): string | null {
   const normalized = normalizePronunciationSectionLine(line);
   const match = /^\d+\.\s*(.+)$/.exec(normalized);
@@ -144,27 +186,7 @@ function buildFallbackPreviewPronunciationAudio(markdown: string): Pronunciation
 
   switch (mode) {
     case 'shadow_sentence': {
-      let shadowSentence = '';
-      for (let index = 0; index < sectionLines.length; index += 1) {
-        const normalized = normalizePronunciationSectionLine(sectionLines[index] ?? '');
-        const match = /^(?:\*\*)?shadow sentence\s*:\s*(?:\*\*)?\s*(.*)$/i.exec(normalized);
-        if (!match) continue;
-        shadowSentence = normalizePronunciationText(match[1] ?? '');
-        if (!shadowSentence) {
-          for (let nextIndex = index + 1; nextIndex < sectionLines.length; nextIndex += 1) {
-            const candidate = normalizePronunciationSectionLine(sectionLines[nextIndex] ?? '');
-            if (!candidate || /^(?:\*\*)?(mode|target|focus|action|deliverable)\s*:/i.test(candidate)) {
-              continue;
-            }
-            if (/^\d+\.\s*/.test(candidate)) {
-              break;
-            }
-            shadowSentence = normalizePronunciationText(candidate);
-            break;
-          }
-        }
-        break;
-      }
+      const shadowSentence = extractPronunciationMarkedFieldValue(sectionLines, 'shadow sentence');
 
       const itemClips = numberedBodies.flatMap((body, index) => {
         const normalizedWord = extractTextBeforeTranscription(body);
@@ -213,21 +235,6 @@ function buildFallbackPreviewPronunciationAudio(markdown: string): Pronunciation
     case 'minimal_pair': {
       return {
         mode: 'minimal_pair',
-        primaryClip: buildPreviewClip({
-          id: 'preview-minimal-pair-primary',
-          kind: 'primary',
-          engine: 'edge',
-          text: numberedBodies
-            .flatMap((body) => {
-              const pairMatch =
-                /^(.+?)\s+\/[^/\n]+\/\s+[—–-]\s+(.+?)\s+\/[^/\n]+\/(?:\s+.+)?$/u.exec(body);
-              return pairMatch ? [pairMatch[1] ?? '', pairMatch[2] ?? ''] : [body];
-            })
-            .map((text) => normalizePronunciationText(text))
-            .filter(Boolean)
-            .join(' '),
-          label: 'Practice',
-        }),
         itemClips: numberedBodies.flatMap((body, index) => {
           const pairMatch =
             /^(.+?)\s+\/[^/\n]+\/\s+[—–-]\s+(.+?)\s+\/[^/\n]+\/(?:\s+.+)?$/u.exec(body);
@@ -255,8 +262,23 @@ function buildFallbackPreviewPronunciationAudio(markdown: string): Pronunciation
       };
     }
     case 'connected_speech': {
+      const naturalSentence = extractPronunciationMarkedFieldValue(
+        sectionLines,
+        'natural sentence practice',
+      );
       return {
         mode: 'connected_speech',
+        ...(naturalSentence
+          ? {
+              primaryClip: buildPreviewClip({
+                id: 'preview-connected-speech-sentence',
+                kind: 'primary',
+                engine: 'provider',
+                text: normalizePronunciationText(naturalSentence),
+                label: 'Sentence',
+              }),
+            }
+          : {}),
         itemClips: numberedBodies.map((body, index) => {
           const match = /^["“]?(.+?)["”]?\s*(?:→|->)\s*(.+)$/u.exec(body);
           return buildPreviewClip({
@@ -273,8 +295,23 @@ function buildFallbackPreviewPronunciationAudio(markdown: string): Pronunciation
     case 'intonation':
     case 'rhythm_chunking':
     case 'sentence_stress': {
+      const naturalSentence = extractPronunciationMarkedFieldValue(
+        sectionLines,
+        'natural sentence practice',
+      );
       return {
         mode,
+        ...(naturalSentence
+          ? {
+              primaryClip: buildPreviewClip({
+                id: `preview-${mode}-sentence`,
+                kind: 'primary',
+                engine: 'provider',
+                text: normalizePronunciationText(naturalSentence),
+                label: 'Sentence',
+              }),
+            }
+          : {}),
         itemClips: numberedBodies.map((body, index) =>
           buildPreviewClip({
             id: `preview-${mode}-${index + 1}`,
@@ -357,17 +394,6 @@ function buildPreviewPronunciationAudio(markdown: string): PronunciationAudioPay
     case 'minimal_pair': {
       return {
         mode: focus.mode,
-        primaryClip: buildPreviewClip({
-          id: 'preview-minimal-pair-primary',
-          kind: 'primary',
-          engine: 'edge',
-          text: focus.pairs
-            .flatMap((pair) => [pair.left.text, pair.right.text])
-            .map((item) => normalizePronunciationText(item))
-            .filter(Boolean)
-            .join(' '),
-          label: 'Practice',
-        }),
         itemClips: focus.pairs.flatMap((pair, index) => [
           buildPreviewClip({
             id: `preview-minimal-pair-${index + 1}-left`,
@@ -390,8 +416,18 @@ function buildPreviewPronunciationAudio(markdown: string): PronunciationAudioPay
       };
     }
     case 'connected_speech': {
+      const primaryClip = focus.naturalSentence?.trim()
+        ? buildPreviewClip({
+            id: 'preview-connected-speech-sentence',
+            kind: 'primary',
+            engine: 'provider',
+            text: normalizePronunciationText(focus.naturalSentence),
+            label: 'Sentence',
+          })
+        : null;
       return {
         mode: focus.mode,
+        ...(primaryClip ? { primaryClip } : {}),
         itemClips: focus.lines.map((line, index) =>
           buildPreviewClip({
             id: `preview-connected-${index + 1}`,
@@ -408,8 +444,18 @@ function buildPreviewPronunciationAudio(markdown: string): PronunciationAudioPay
     case 'intonation':
     case 'rhythm_chunking':
     case 'sentence_stress': {
+      const primaryClip = focus.naturalSentence?.trim()
+        ? buildPreviewClip({
+            id: `preview-${focus.mode}-sentence`,
+            kind: 'primary',
+            engine: 'provider',
+            text: normalizePronunciationText(focus.naturalSentence),
+            label: 'Sentence',
+          })
+        : null;
       return {
         mode: focus.mode,
+        ...(primaryClip ? { primaryClip } : {}),
         itemClips: focus.drills.map((drill, index) =>
           buildPreviewClip({
             id: `preview-${focus.mode}-${index + 1}`,
