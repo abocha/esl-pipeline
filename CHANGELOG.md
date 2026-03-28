@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented here. Dates use `YYYY-MM-DD`.
 
+## [6.0.0] - 2026-03-28
+
+### Changed
+
+- Automated release from PR #53: feat: redesign rerun flow and anchor pronunciation audio (https://github.com/abocha/esl-pipeline/pull/53)
+
 ## [5.0.0] - 2026-03-27
 
 ### Changed
