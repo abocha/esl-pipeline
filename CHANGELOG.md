@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented here. Dates use `YYYY-MM-DD`.
 
+## [6.0.1] - 2026-03-28
+
+### Changed
+
+- Automated release from PR #54: fix: unblock backend startup migration and refresh dependencies (https://github.com/abocha/esl-pipeline/pull/54)
+
 ## [6.0.0] - 2026-03-28
 
 ### Changed
