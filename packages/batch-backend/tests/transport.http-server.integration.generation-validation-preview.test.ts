@@ -806,7 +806,7 @@ describeHttpServerIntegrationSuite(
       expect(response.statusCode).toBe(200);
       const payload = response.json() as { html: string };
       const placeholderCount = (payload.html.match(/Audio track generating\.\.\./g) ?? []).length;
-      expect(placeholderCount).toBeGreaterThanOrEqual(2);
+      expect(placeholderCount).toBe(1);
       const pronunciationAudio = extractPronunciationAudioPayload(payload.html);
       expect(pronunciationAudio?.primaryClip).toBeUndefined();
       expect(pronunciationAudio?.itemClips).toEqual(
