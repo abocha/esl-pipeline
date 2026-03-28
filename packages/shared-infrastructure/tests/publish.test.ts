@@ -111,6 +111,28 @@ describe('publish helpers', () => {
     expect(output).not.toContain('Audio recording: Pronunciation Practice');
   });
 
+  it('does not anchor an empty natural sentence line to a following study-text block', () => {
+    const markdown = [
+      '# Lesson',
+      '',
+      '### Pronunciation Micro-Focus',
+      '**Mode:** connected_speech',
+      '**Natural sentence practice:**',
+      ':::study-text Transcript',
+      'Narrator: Hello',
+      ':::',
+    ].join('\n');
+
+    const output = insertGeneratedAudioLinks(markdown, {
+      includePronunciation: true,
+      insertPronunciationPlaceholderWhenMissing: true,
+    });
+
+    expect(output).not.toContain('Audio recording: Pronunciation Practice');
+    expect(output.indexOf(':::audio')).toBeGreaterThan(output.indexOf('Natural sentence practice'));
+    expect(output.indexOf(':::audio')).toBeLessThan(output.indexOf(':::study-text Transcript'));
+  });
+
   it('resolves markdown title with explicit/meta/frontmatter/heading/fallback precedence', () => {
     const markdown = ['---', 'title: Frontmatter Title', '---', '', '# Heading Title'].join('\n');
 

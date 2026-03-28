@@ -74,6 +74,31 @@ describe('runtime/publish-utils', () => {
     expect(updated).not.toContain('Audio recording: Pronunciation Practice');
   });
 
+  it('does not anchor an empty natural sentence line to a following study-text block', () => {
+    const markdown = [
+      '# Lesson Title',
+      '',
+      '### Pronunciation Micro-Focus',
+      '**Mode:** connected_speech',
+      '**Natural sentence practice:**',
+      ':::study-text Transcript',
+      'Narrator: Hello',
+      ':::',
+    ].join('\n');
+
+    const updated = insertGeneratedAudioLinks(markdown, {
+      pronunciationAudioUrl: 'https://new.example.com/pronunciation.mp3',
+    });
+
+    expect(updated).toContain('Audio recording: Pronunciation Practice');
+    expect(updated.indexOf('Audio recording: Pronunciation Practice')).toBeGreaterThan(
+      updated.indexOf('Natural sentence practice'),
+    );
+    expect(updated.indexOf('Audio recording: Pronunciation Practice')).toBeLessThan(
+      updated.indexOf(':::study-text Transcript'),
+    );
+  });
+
   it('resolves title using meta title first, then heading, then fallback', () => {
     const markdown = '# Heading Title\n\nContent';
 
