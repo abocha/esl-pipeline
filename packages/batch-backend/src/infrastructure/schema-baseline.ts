@@ -28,11 +28,6 @@ const DEFAULT_DOCKER_COMPOSE_PATH = path.resolve(
   '..',
   'docker-compose.yml',
 );
-const OPTIONAL_PG_TRGM_INDEX_NAMES = [
-  'idx_recordings_id_trgm',
-  'idx_recordings_source_path_trgm',
-  'idx_recordings_storage_uri_trgm',
-] as const;
 const OPTIONAL_PG_TRGM_SQL = `
 DO $$
 BEGIN
@@ -168,14 +163,14 @@ function buildGeneratedHeader(): string {
 
 function normalizeDumpSql(rawSql: string): string {
   const filtered = rawSql
-    .replace(/\r\n/g, '\n')
+    .replaceAll('\r\n', '\n')
     .split('\n')
     .filter((line) => {
       const trimmed = line.trim();
       if (
         trimmed.startsWith('--') ||
-        trimmed.startsWith('\\restrict') ||
-        trimmed.startsWith('\\unrestrict') ||
+        trimmed.startsWith(String.raw`\restrict`) ||
+        trimmed.startsWith(String.raw`\unrestrict`) ||
         trimmed.startsWith('SET ') ||
         trimmed === "SELECT pg_catalog.set_config('search_path', '', false);" ||
         trimmed === 'CREATE EXTENSION IF NOT EXISTS pg_trgm WITH SCHEMA public;' ||
@@ -190,9 +185,9 @@ function normalizeDumpSql(rawSql: string): string {
     .join('\n');
 
   const collapsed = filtered
-    .replace(/\n{3,}/g, '\n\n')
-    .replace(/^\s+/, '')
-    .replace(/\s+$/, '');
+    .replaceAll(/\n{3,}/g, '\n\n')
+    .replaceAll(/^\s+/g, '')
+    .replaceAll(/\s+$/g, '');
 
   return `${buildGeneratedHeader()}${collapsed}\n\n-- Optional pg_trgm support retained from migrations.\n${OPTIONAL_PG_TRGM_SQL}\n`;
 }

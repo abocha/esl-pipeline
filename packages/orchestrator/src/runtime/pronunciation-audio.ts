@@ -288,13 +288,15 @@ function resolveChunkProvider(
   if (requested) return requested;
   switch (focus.mode) {
     case 'shadow_sentence':
-    case 'minimal_pair':
+    case 'minimal_pair': {
       return 'edge-tts';
+    }
     case 'connected_speech':
     case 'intonation':
     case 'rhythm_chunking':
-    case 'sentence_stress':
+    case 'sentence_stress': {
       return null;
+    }
   }
 }
 
@@ -398,7 +400,7 @@ export async function synthesizePronunciationAudio(
     case 'minimal_pair': {
       if (!shouldGenerateItems) break;
       for (const [index, pair] of focus.pairs.entries()) {
-        const clips =
+        const resolvedClips =
           chunkProvider === 'edge-tts'
             ? await Promise.all([
                 synthesizeEdgeClipWithProviderFallback({
@@ -432,36 +434,35 @@ export async function synthesizePronunciationAudio(
                   state: fallbackState,
                 }),
               ])
-            : (
-                await Promise.all([
-                  synthesizeProviderClip(
-                    {
-                      id: `minimal-pair-${index + 1}-left`,
-                      itemIndex: index,
-                      kind: 'pair_left',
-                      engine: 'provider',
-                      text: normalizeSpeechText(pair.left.text),
-                      label: 'Left',
-                      note: pair.note,
-                    },
-                    options,
-                    chunkProviderConfig,
-                  ),
-                  synthesizeProviderClip(
-                    {
-                      id: `minimal-pair-${index + 1}-right`,
-                      itemIndex: index,
-                      kind: 'pair_right',
-                      engine: 'provider',
-                      text: normalizeSpeechText(pair.right.text),
-                      label: 'Right',
-                      note: pair.note,
-                    },
-                    options,
-                    chunkProviderConfig,
-                  ),
-                ])
-              ).filter((clip): clip is PronunciationClipRecord => Boolean(clip));
+            : await Promise.all([
+                synthesizeProviderClip(
+                  {
+                    id: `minimal-pair-${index + 1}-left`,
+                    itemIndex: index,
+                    kind: 'pair_left',
+                    engine: 'provider',
+                    text: normalizeSpeechText(pair.left.text),
+                    label: 'Left',
+                    note: pair.note,
+                  },
+                  options,
+                  chunkProviderConfig,
+                ),
+                synthesizeProviderClip(
+                  {
+                    id: `minimal-pair-${index + 1}-right`,
+                    itemIndex: index,
+                    kind: 'pair_right',
+                    engine: 'provider',
+                    text: normalizeSpeechText(pair.right.text),
+                    label: 'Right',
+                    note: pair.note,
+                  },
+                  options,
+                  chunkProviderConfig,
+                ),
+              ]);
+        const clips = resolvedClips.filter(Boolean) as PronunciationClipRecord[];
         itemClips.push(...clips);
       }
       break;
