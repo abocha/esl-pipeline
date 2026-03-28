@@ -38,6 +38,7 @@ Provider-specific generation details stay in:
 - STT provider architecture now mirrors TTS
 - student-memory backend surfaces, prompt runtime packaging, provenance, replay tooling, and minimal workspace inspection UI are live
 - Telegram ops control surface is live for operator workflows
+- rerun is now a single regeneration-intent workflow with explicit study-text / pronunciation-main / pronunciation-chunk controls
 
 ## Capability Matrix
 
@@ -48,7 +49,7 @@ Provider-specific generation details stay in:
 | Manual transcription retry | Done | Done | none |
 | Prompt options / prompt package flow | Done | Done | keep allowlists aligned |
 | Draft save/materialize/publish approve | Done | Done | none |
-| Job status and core job actions | Done | Done | keep DTOs contract-first |
+| Job status and core job actions | Done | Done | rerun is a single action; chunk defaults remain mode-aware |
 | Student summary/profile/bindings | Done | Partial | workspace hardening continues |
 | Student timeline + provenance | Done | Done | continue ergonomics pass |
 | Student memory inspection + replay tooling | Done | Done | backend routes, prompt-package provenance, replay tools, and the minimal workspace inspection UI are live |
@@ -64,6 +65,22 @@ Provider-specific generation details stay in:
 2. Student workspace needs continued UX hardening even though the core route is live.
 3. Voice-alignment readiness counters and thresholds still need fuller frontend treatment.
 4. Parser-only telemetry cutover remains deferred; parity monitoring is still active.
+
+## Rerun Contract Snapshot
+
+- The old split `rerun_audio` / `rerun_publish` UI is retired.
+- The live rerun surface is one canonical action with:
+  - republish-only
+  - study-text regeneration
+  - main pronunciation regeneration
+  - pronunciation chunk regeneration
+- Regeneration intent derives the runtime stage chain automatically; operators do not select `tts` / `upload` / `add-audio` directly.
+- Pronunciation chunk provider defaults are mode-aware:
+  - `edge-tts` for most modes
+  - `elevenlabs` for `connected_speech`
+- Study-text ElevenLabs reruns preserve original-run defaults unless the user explicitly selects another model:
+  - `dialogue` -> `eleven_v3`
+  - `tts` -> `eleven_multilingual_v2`
 
 ## Rules
 
