@@ -131,6 +131,18 @@ async function assertSchemaHealthy(scenario: string): Promise<void> {
     expect(definition).toContain('starter_profile_form');
     expect(definition).toContain('candidate_promotion');
     expect(definition).toContain('legacy_normalization');
+
+    const actionTypeConstraint = await pool.query<{ definition: string }>(
+      `
+      SELECT pg_get_constraintdef(oid) AS definition
+      FROM pg_constraint
+      WHERE conname = 'job_action_history_action_type_check'
+      `,
+    );
+    const actionDefinition = actionTypeConstraint.rows[0]?.definition ?? '';
+    expect(actionDefinition).toContain("'rerun'");
+    expect(actionDefinition).not.toContain('rerun_audio');
+    expect(actionDefinition).not.toContain('rerun_publish');
   });
 }
 
@@ -161,6 +173,9 @@ describe('integration/migrations', () => {
       await writeTestArtifact('schema-baseline-generated.sql', expected);
 
       expect(actual).toBe(expected);
+      expect(actual).not.toContain('CREATE EXTENSION IF NOT EXISTS pg_trgm WITH SCHEMA public;');
+      expect(actual).not.toContain('COMMENT ON EXTENSION pg_trgm');
+      expect(actual).toContain('Skipping pg_trgm extension creation because privileges are insufficient.');
     },
     testTimeout,
   );

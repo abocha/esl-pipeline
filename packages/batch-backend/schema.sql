@@ -2,10 +2,6 @@
 -- GENERATED FILE: refresh with `pnpm --filter @esl-pipeline/batch-backend db:generate-baseline`.
 -- Do not hand-edit.
 -- Fresh-install baseline generated from the full versioned migration chain.
-CREATE EXTENSION IF NOT EXISTS pg_trgm WITH SCHEMA public;
-
-COMMENT ON EXTENSION pg_trgm IS 'text similarity measurement and index searching based on trigrams';
-
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp" WITH SCHEMA public;
 
 COMMENT ON EXTENSION "uuid-ossp" IS 'generate universally unique identifiers (UUIDs)';
@@ -347,7 +343,7 @@ CREATE TABLE public.job_action_history (
     error_code text,
     created_job_id uuid,
     created_at timestamp with time zone DEFAULT now() NOT NULL,
-    CONSTRAINT job_action_history_action_type_check CHECK ((action_type = ANY (ARRAY['rerun_audio'::text, 'rerun_publish'::text, 'cancel'::text, 'edit_metadata'::text]))),
+    CONSTRAINT job_action_history_action_type_check CHECK ((action_type = ANY (ARRAY['rerun'::text, 'cancel'::text, 'edit_metadata'::text]))),
     CONSTRAINT job_action_history_outcome_check CHECK ((outcome = ANY (ARRAY['succeeded'::text, 'failed'::text])))
 );
 
@@ -894,15 +890,9 @@ CREATE INDEX idx_prompt_packages_transcript_id ON public.prompt_packages USING b
 
 CREATE INDEX idx_recordings_created_at ON public.recordings USING btree (created_at);
 
-CREATE INDEX idx_recordings_id_trgm ON public.recordings USING gin (((id)::text) public.gin_trgm_ops);
-
 CREATE INDEX idx_recordings_source ON public.recordings USING btree (source);
 
-CREATE INDEX idx_recordings_source_path_trgm ON public.recordings USING gin (source_path public.gin_trgm_ops);
-
 CREATE INDEX idx_recordings_status ON public.recordings USING btree (status);
-
-CREATE INDEX idx_recordings_storage_uri_trgm ON public.recordings USING gin (storage_uri public.gin_trgm_ops);
 
 CREATE INDEX idx_recordings_student_id ON public.recordings USING btree (student_id);
 
@@ -1141,6 +1131,54 @@ CREATE POLICY user_settings_user_scope_policy ON public.user_settings USING ((pu
 
 CREATE POLICY users_self_access_policy ON public.users USING ((public.app_rls_bypass() OR (id = public.app_current_user_id()))) WITH CHECK ((public.app_rls_bypass() OR (id = public.app_current_user_id())));
 
+-- Optional pg_trgm support retained from migrations.
+DO $$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_extension WHERE extname = 'pg_trgm') THEN
+    BEGIN
+      CREATE EXTENSION pg_trgm;
+    EXCEPTION
+      WHEN insufficient_privilege THEN
+        RAISE NOTICE 'Skipping pg_trgm extension creation because privileges are insufficient.';
+    END;
+  END IF;
+END $$;
+
+DO $$
+BEGIN
+  IF EXISTS (SELECT 1 FROM pg_extension WHERE extname = 'pg_trgm') THEN
+    IF NOT EXISTS (
+      SELECT 1
+      FROM pg_indexes
+      WHERE schemaname = 'public'
+        AND indexname = 'idx_recordings_source_path_trgm'
+    ) THEN
+      CREATE INDEX idx_recordings_source_path_trgm
+        ON recordings USING gin (source_path gin_trgm_ops);
+    END IF;
+
+    IF NOT EXISTS (
+      SELECT 1
+      FROM pg_indexes
+      WHERE schemaname = 'public'
+        AND indexname = 'idx_recordings_storage_uri_trgm'
+    ) THEN
+      CREATE INDEX idx_recordings_storage_uri_trgm
+        ON recordings USING gin (storage_uri gin_trgm_ops);
+    END IF;
+
+    IF NOT EXISTS (
+      SELECT 1
+      FROM pg_indexes
+      WHERE schemaname = 'public'
+        AND indexname = 'idx_recordings_id_trgm'
+    ) THEN
+      CREATE INDEX idx_recordings_id_trgm
+        ON recordings USING gin ((id::text) gin_trgm_ops);
+    END IF;
+  END IF;
+END $$;
+
 -- Seed migration ledger so fresh baseline installs report a clean migration state.
 INSERT INTO public.schema_migrations (id, checksum, applied_at, execution_ms, tool_version)
 VALUES
@@ -1161,5 +1199,6 @@ VALUES
   ('0015_homework_memory_contract_alignment', '14bc78443078281e46f0b7375c50a89f230bbdcb231d3777e23d7ee5e2db6f23', '2000-01-01T00:00:00Z'::timestamptz, 0, 'batch-backend-schema-baseline-v1'),
   ('0016_student_profile_candidates_foundations', '70160d75099b260ddd842f0a1a5c6f1e864bd405e136a37e2163a98066e991f9', '2000-01-01T00:00:00Z'::timestamptz, 0, 'batch-backend-schema-baseline-v1'),
   ('0017_student_profile_candidate_draft_revisions', 'f731fe61af5c9e0b43cf4effc9ca897602f5f83ab8a3cabb6852e3d1a36acab1', '2000-01-01T00:00:00Z'::timestamptz, 0, 'batch-backend-schema-baseline-v1'),
-  ('0018_profile_revision_source_expansion', 'cc12fb7fd63205e5dee24c04ba10342b8d9016f057786955d3912d0a2ef606bf', '2000-01-01T00:00:00Z'::timestamptz, 0, 'batch-backend-schema-baseline-v1')
+  ('0018_profile_revision_source_expansion', 'cc12fb7fd63205e5dee24c04ba10342b8d9016f057786955d3912d0a2ef606bf', '2000-01-01T00:00:00Z'::timestamptz, 0, 'batch-backend-schema-baseline-v1'),
+  ('0019_job_action_rerun_unification', '51d0adb87f2327b9b638404ed18765c1e5271eefc57463c1352852031c9d634c', '2000-01-01T00:00:00Z'::timestamptz, 0, 'batch-backend-schema-baseline-v1')
 ON CONFLICT (id) DO NOTHING;

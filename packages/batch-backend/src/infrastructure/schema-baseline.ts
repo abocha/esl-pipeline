@@ -20,6 +20,67 @@ const DEFAULT_BASELINE_PATH = path.resolve(
   '..',
   'schema.sql',
 );
+const DEFAULT_DOCKER_COMPOSE_PATH = path.resolve(
+  path.dirname(fileURLToPath(import.meta.url)),
+  '..',
+  '..',
+  '..',
+  '..',
+  'docker-compose.yml',
+);
+const OPTIONAL_PG_TRGM_INDEX_NAMES = [
+  'idx_recordings_id_trgm',
+  'idx_recordings_source_path_trgm',
+  'idx_recordings_storage_uri_trgm',
+] as const;
+const OPTIONAL_PG_TRGM_SQL = `
+DO $$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_extension WHERE extname = 'pg_trgm') THEN
+    BEGIN
+      CREATE EXTENSION pg_trgm;
+    EXCEPTION
+      WHEN insufficient_privilege THEN
+        RAISE NOTICE 'Skipping pg_trgm extension creation because privileges are insufficient.';
+    END;
+  END IF;
+END $$;
+
+DO $$
+BEGIN
+  IF EXISTS (SELECT 1 FROM pg_extension WHERE extname = 'pg_trgm') THEN
+    IF NOT EXISTS (
+      SELECT 1
+      FROM pg_indexes
+      WHERE schemaname = 'public'
+        AND indexname = 'idx_recordings_source_path_trgm'
+    ) THEN
+      CREATE INDEX idx_recordings_source_path_trgm
+        ON recordings USING gin (source_path gin_trgm_ops);
+    END IF;
+
+    IF NOT EXISTS (
+      SELECT 1
+      FROM pg_indexes
+      WHERE schemaname = 'public'
+        AND indexname = 'idx_recordings_storage_uri_trgm'
+    ) THEN
+      CREATE INDEX idx_recordings_storage_uri_trgm
+        ON recordings USING gin (storage_uri gin_trgm_ops);
+    END IF;
+
+    IF NOT EXISTS (
+      SELECT 1
+      FROM pg_indexes
+      WHERE schemaname = 'public'
+        AND indexname = 'idx_recordings_id_trgm'
+    ) THEN
+      CREATE INDEX idx_recordings_id_trgm
+        ON recordings USING gin ((id::text) gin_trgm_ops);
+    END IF;
+  END IF;
+END $$;
+`.trim();
 
 export interface SchemaBaselineVerificationResult {
   ok: boolean;
@@ -31,9 +92,37 @@ function resolveBaselinePath(): string {
 }
 
 function buildAdminConnectionString(connectionString: string): string {
+  return connectionString;
+}
+
+async function canConnect(connectionString: string): Promise<boolean> {
+  const pool = new Pool({ connectionString });
+  try {
+    await pool.query('SELECT 1');
+    return true;
+  } catch {
+    return false;
+  } finally {
+    await pool.end();
+  }
+}
+
+async function resolveReachableConnectionString(connectionString: string): Promise<string> {
   const parsed = new URL(connectionString);
-  parsed.pathname = '/postgres';
-  return parsed.toString();
+  if (parsed.hostname !== 'postgres') {
+    return connectionString;
+  }
+  if (await canConnect(connectionString)) {
+    return connectionString;
+  }
+
+  parsed.hostname = '127.0.0.1';
+  const hostFallback = parsed.toString();
+  if (await canConnect(hostFallback)) {
+    return hostFallback;
+  }
+
+  return connectionString;
 }
 
 function quoteIdentifier(identifier: string): string {
@@ -66,7 +155,11 @@ function normalizeDumpSql(rawSql: string): string {
         trimmed.startsWith('\\restrict') ||
         trimmed.startsWith('\\unrestrict') ||
         trimmed.startsWith('SET ') ||
-        trimmed === "SELECT pg_catalog.set_config('search_path', '', false);"
+        trimmed === "SELECT pg_catalog.set_config('search_path', '', false);" ||
+        trimmed === 'CREATE EXTENSION IF NOT EXISTS pg_trgm WITH SCHEMA public;' ||
+        trimmed ===
+          "COMMENT ON EXTENSION pg_trgm IS 'text similarity measurement and index searching based on trigrams';" ||
+        trimmed.includes('gin_trgm_ops')
       ) {
         return false;
       }
@@ -79,7 +172,7 @@ function normalizeDumpSql(rawSql: string): string {
     .replace(/^\s+/, '')
     .replace(/\s+$/, '');
 
-  return `${buildGeneratedHeader()}${collapsed}\n`;
+  return `${buildGeneratedHeader()}${collapsed}\n\n-- Optional pg_trgm support retained from migrations.\n${OPTIONAL_PG_TRGM_SQL}\n`;
 }
 
 function buildSchemaMigrationsSeed(
@@ -183,21 +276,43 @@ async function resolveServerMajorVersion(connectionString: string): Promise<stri
 }
 
 async function resolveDockerPostgresContainer(serverMajorVersion: string): Promise<string | null> {
+  const configuredContainer = process.env.BATCH_BACKEND_SCHEMA_BASELINE_PG_DUMP_CONTAINER?.trim();
+  if (configuredContainer) {
+    return configuredContainer;
+  }
+
+  try {
+    const { stdout } = await execFile('docker', [
+      'compose',
+      '-f',
+      DEFAULT_DOCKER_COMPOSE_PATH,
+      'ps',
+      '-q',
+      'postgres',
+    ]);
+    const containerId = stdout.trim();
+    if (containerId) {
+      return containerId;
+    }
+  } catch {
+    // Fall through to generic discovery.
+  }
+
   try {
     const { stdout } = await execFile('docker', [
       'ps',
       '--format',
-      '{{.ID}} {{.Image}}',
+      '{{.ID}} {{.Image}} {{.Ports}}',
     ]);
-    const match = stdout
+    const candidates = stdout
       .split('\n')
       .map((line) => line.trim())
-      .filter(Boolean)
-      .find((line) => {
-        const [, image] = line.split(/\s+/, 2);
-        return image?.startsWith(`postgres:${serverMajorVersion}`);
-      });
-    return match ? match.split(/\s+/, 1)[0] ?? null : null;
+      .filter(Boolean);
+    if (candidates.length === 1) {
+      const [id, image] = candidates[0]!.split(/\s+/, 3);
+      return image?.startsWith(`postgres:${serverMajorVersion}`) ? id ?? null : null;
+    }
+    return null;
   } catch {
     return null;
   }
@@ -235,11 +350,9 @@ async function dumpSchemaWithDockerPgDump(
   if (parsed.username) {
     args.push('--username', decodeURIComponent(parsed.username));
   }
+  args.push('--host', 'localhost');
   if (parsed.port && parsed.port !== '5432') {
     args.push('--port', parsed.port);
-  }
-  if (parsed.hostname && !['127.0.0.1', 'localhost', 'postgres'].includes(parsed.hostname)) {
-    args.push('--host', parsed.hostname);
   }
   args.push('--dbname', dbName);
 
@@ -269,7 +382,8 @@ export async function generateSchemaBaselineSql(
     throw new Error('PG_CONNECTION_STRING is required to generate the schema baseline.');
   }
 
-  return withTemporaryDatabase(connectionString, async (tempConnectionString) => {
+  const reachableConnectionString = await resolveReachableConnectionString(connectionString);
+  return withTemporaryDatabase(reachableConnectionString, async (tempConnectionString) => {
     await withConnectionStringOverride(tempConnectionString, async () => {
       await runMigrations();
     });
@@ -307,7 +421,8 @@ export async function verifySchemaBaseline(
     };
   }
 
-  const expected = await generateSchemaBaselineSql(connectionString);
+  const reachableConnectionString = await resolveReachableConnectionString(connectionString);
+  const expected = await generateSchemaBaselineSql(reachableConnectionString);
   const actual = await fs.readFile(baselinePath, 'utf8');
   const errors: string[] = [];
 
@@ -317,7 +432,7 @@ export async function verifySchemaBaseline(
     );
   }
 
-  await withTemporaryDatabase(connectionString, async (tempConnectionString) => {
+  await withTemporaryDatabase(reachableConnectionString, async (tempConnectionString) => {
     await applySqlFile(tempConnectionString, baselinePath);
     const status = await withConnectionStringOverride(tempConnectionString, async () =>
       getMigrationStatus(),
