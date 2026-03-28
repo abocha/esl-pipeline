@@ -134,6 +134,8 @@ async function prepareMigrationPrerequisites(
     return;
   }
 
+  // The historical action-type check rejects 'rerun', so 0019 cannot rewrite
+  // legacy rows until that legacy constraint is temporarily removed.
   await client.query(`
     DO $$
     DECLARE
