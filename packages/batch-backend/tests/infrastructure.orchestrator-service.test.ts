@@ -268,7 +268,7 @@ describe('infrastructure/orchestrator-service', () => {
         jobId: 'job-rerun-1',
         md: 'fixtures/ok.md',
         manifestMd: 'fixtures/source.md',
-        steps: ['upload', 'add-audio'],
+        republishOnly: true,
         upload: 's3',
       },
       'run-rerun-1',
@@ -280,12 +280,12 @@ describe('infrastructure/orchestrator-service', () => {
     expect(result).toEqual({ manifestPath: '/manifests/job-rerun-1.json' });
     expect(mockChildProcess.send).toHaveBeenCalledWith({
       type: 'run',
-      executionMode: 'rerun_assignment',
+      executionMode: 'rerun',
       payload: {
         jobId: 'job-rerun-1',
         md: 'fixtures/ok.md',
         manifestMd: 'fixtures/source.md',
-        steps: ['upload', 'add-audio'],
+        republishOnly: true,
         upload: 's3',
       },
       runId: 'run-rerun-1',

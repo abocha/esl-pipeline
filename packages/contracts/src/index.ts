@@ -5,6 +5,12 @@ export type JobState = 'queued' | 'running' | 'awaiting_approval' | 'succeeded' 
 export type TtsStrategy = 'auto' | 'dialogue' | 'tts';
 export type TtsStrategyOption = TtsStrategy;
 export type TtsProviderId = 'elevenlabs' | 'google';
+export type ElevenLabsTtsModelId =
+  | 'eleven_v3'
+  | 'eleven_multilingual_v2'
+  | 'eleven_flash_v2_5'
+  | 'eleven_flash_v2';
+export type PronunciationChunkTtsProviderId = TtsProviderId | 'edge-tts';
 export type SttProviderId = 'deepgram' | 'elevenlabs' | 'google';
 export type GoogleTtsModel = 'chirp3_hd' | 'studio' | 'neural2' | 'wavenet';
 export type CefrLevel = 'A1' | 'A2' | 'B1' | 'B2' | 'C1' | 'C2';

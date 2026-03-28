@@ -38,19 +38,20 @@ describe('application/process-queue-job', () => {
 
     await processQueueJob({
       jobId: 'job-1',
-      executionMode: 'rerun_audio',
+      executionMode: 'rerun',
       sourceJobId: 'job-source',
       rerun: {
-        steps: ['tts', 'upload', 'add-audio'],
+        regenerateStudyTextAudio: true,
+        regeneratePronunciationMainAudio: true,
+        regeneratePronunciationChunkAudio: true,
         manifestMd: '/tmp/source-assignment.md',
         upload: 's3',
-        force: true,
-        voiceId: 'voice-new',
-        accentPreference: 'british',
-        ttsStrategy: 'dialogue',
-        dialogueLanguage: 'es',
-        dialogueStability: 0.42,
-        dialogueSeed: 7,
+        studyTextVoiceId: 'voice-new',
+        studyTextVoiceAccent: 'british',
+        studyTextTtsStrategy: 'dialogue',
+        studyTextDialogueLanguage: 'es',
+        studyTextDialogueStability: 0.42,
+        studyTextDialogueSeed: 7,
       },
     });
 
@@ -59,15 +60,16 @@ describe('application/process-queue-job', () => {
       expect.objectContaining({
         jobId: 'job-1',
         manifestMd: '/tmp/source-assignment.md',
-        steps: ['tts', 'upload', 'add-audio'],
+        regenerateStudyTextAudio: true,
+        regeneratePronunciationMainAudio: true,
+        regeneratePronunciationChunkAudio: true,
         upload: 's3',
-        force: true,
-        voiceId: 'voice-new',
-        accentPreference: 'british',
-        ttsStrategy: 'dialogue',
-        dialogueLanguage: 'es',
-        dialogueStability: 0.42,
-        dialogueSeed: 7,
+        studyTextVoiceId: 'voice-new',
+        studyTextVoiceAccent: 'british',
+        studyTextTtsStrategy: 'dialogue',
+        studyTextDialogueLanguage: 'es',
+        studyTextDialogueStability: 0.42,
+        studyTextDialogueSeed: 7,
       }),
       expect.any(String),
       expect.objectContaining({
@@ -105,10 +107,10 @@ describe('application/process-queue-job', () => {
 
     await processQueueJob({
       jobId: 'job-1',
-      executionMode: 'rerun_audio',
+      executionMode: 'rerun',
       sourceJobId: 'job-source',
       rerun: {
-        steps: ['tts', 'upload', 'add-audio'],
+        regenerateStudyTextAudio: true,
         manifestMd: '/tmp/source-assignment.md',
         upload: 's3',
       },
@@ -118,9 +120,9 @@ describe('application/process-queue-job', () => {
       expect.objectContaining({
         jobId: 'job-1',
         manifestMd: '/tmp/source-assignment.md',
-        steps: ['tts', 'upload', 'add-audio'],
+        regenerateStudyTextAudio: true,
         upload: 's3',
-        force: false,
+        republishOnly: false,
       }),
       expect.any(String),
       expect.objectContaining({
@@ -130,7 +132,7 @@ describe('application/process-queue-job', () => {
     expect(requestHomeworkMemoryGenerationSpy).not.toHaveBeenCalled();
   });
 
-  it('processes rerun_publish jobs via rerunAssignment execution path', async () => {
+  it('processes republish-only rerun jobs via rerunAssignment execution path', async () => {
     const initial = makeJob({ state: 'queued' });
     getJobByIdSpy.mockResolvedValue(initial);
 
@@ -154,13 +156,12 @@ describe('application/process-queue-job', () => {
 
     await processQueueJob({
       jobId: 'job-1',
-      executionMode: 'rerun_publish',
+      executionMode: 'rerun',
       sourceJobId: 'job-source',
       rerun: {
-        steps: ['add-audio'],
+        republishOnly: true,
         manifestMd: '/tmp/source-assignment.md',
         upload: 's3',
-        force: false,
       },
     });
 
@@ -170,9 +171,8 @@ describe('application/process-queue-job', () => {
       expect.objectContaining({
         jobId: 'job-1',
         manifestMd: '/tmp/source-assignment.md',
-        steps: ['add-audio'],
+        republishOnly: true,
         upload: 's3',
-        force: false,
       }),
       expect.any(String),
       expect.objectContaining({

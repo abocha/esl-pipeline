@@ -53,7 +53,7 @@ describe('runtime/pronunciation-audio', () => {
       mdPath: '/tmp/example.md',
       outPath: '/tmp',
       title: 'Pronunciation',
-      providerVoiceId: 'voice-1',
+      chunkVoiceId: 'voice-1',
       logger: {
         log: (entry: unknown) => logs.push(entry),
       } as never,
@@ -112,7 +112,8 @@ describe('runtime/pronunciation-audio', () => {
       mdPath: '/tmp/example.md',
       outPath: '/tmp',
       title: 'Pronunciation',
-      providerVoiceId: 'voice-1',
+      primaryVoiceId: 'voice-1',
+      chunkVoiceId: 'voice-1',
       logger: {
         log: (entry: unknown) => logs.push(entry),
       } as never,

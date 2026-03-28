@@ -86,12 +86,17 @@ describe('application/get-job-options', () => {
         ttsStrategies: ['auto', 'dialogue', 'tts'],
         ttsProviders: ['elevenlabs', 'google'],
         ttsModelOptionsByProvider: {
-          elevenlabs: ['eleven_turbo_v2_5'],
+          elevenlabs: [
+            'eleven_v3',
+            'eleven_multilingual_v2',
+            'eleven_flash_v2_5',
+            'eleven_flash_v2',
+          ],
           google: ['chirp3_hd', 'studio', 'neural2', 'wavenet'],
         },
         defaultTtsProvider: 'google',
         defaultTtsModelByProvider: {
-          elevenlabs: 'eleven_turbo_v2_5',
+          elevenlabs: 'eleven_flash_v2_5',
           google: 'studio',
         },
         learningPresets: [
@@ -113,16 +118,6 @@ describe('application/get-job-options', () => {
         presets: ['alpha'],
         cefrLevels: ['A2', 'B1', 'B2'],
         cefrDefault: 'B1',
-        generation: expect.objectContaining({
-          providers: buildGenerationOptions().providers,
-          defaultProvider: 'openai',
-          modelOptions: buildGenerationOptions().modelOptions,
-          quota: expect.objectContaining({
-            source: 'hybrid',
-            requestsPerMinute: 5,
-            requestsPerDay: 20,
-          }),
-        }),
         voiceAccents: ['accent_one'],
         voices: [{ id: 'voice-1', name: 'Voice One', accent: 'accent_one', gender: 'female' }],
         notionDatabases: [{ id: 'db-1', name: 'DB One' }],
@@ -130,12 +125,17 @@ describe('application/get-job-options', () => {
         ttsStrategies: ['auto', 'dialogue', 'tts'],
         ttsProviders: ['elevenlabs', 'google'],
         ttsModelOptionsByProvider: {
-          elevenlabs: ['eleven_turbo_v2_5'],
+          elevenlabs: [
+            'eleven_v3',
+            'eleven_multilingual_v2',
+            'eleven_flash_v2_5',
+            'eleven_flash_v2',
+          ],
           google: ['chirp3_hd', 'studio', 'neural2', 'wavenet'],
         },
         defaultTtsProvider: 'google',
         defaultTtsModelByProvider: {
-          elevenlabs: 'eleven_turbo_v2_5',
+          elevenlabs: 'eleven_flash_v2_5',
           google: 'studio',
         },
         learningPresets: [
@@ -149,48 +149,58 @@ describe('application/get-job-options', () => {
             promptSnapshotVersion: 'hw_prompt_v4-2_clean',
           },
         ],
-        supportedActions: [
-          {
-            type: 'rerun_audio',
-            label: 'Rerun Audio Generation',
-            description: 'Regenerate TTS audio for this job with optional voice/TTS overrides',
-            requiresFields: [],
-            implemented: true,
-          },
-          {
-            type: 'rerun_publish',
-            label: 'Rerun Publish',
-            description:
-              'Rerun publish/attach stage while reusing existing audio artifacts when possible',
-            requiresFields: [],
-            implemented: true,
-          },
-          {
-            type: 'cancel',
-            label: 'Cancel Job',
-            description: 'Cancel a queued or running job',
-            requiresFields: [],
-            implemented: true,
-          },
-          {
-            type: 'edit_metadata',
-            label: 'Edit Job Metadata',
-            description: 'Update job configuration without rerunning',
-            requiresFields: [],
-            implemented: true,
-          },
-        ],
       });
+      expect(result.generation).toEqual(
+        expect.objectContaining({
+          providers: buildGenerationOptions().providers,
+          defaultProvider: 'openai',
+          modelOptions: buildGenerationOptions().modelOptions,
+          quota: expect.objectContaining({
+            source: 'hybrid',
+            requestsPerMinute: 5,
+            requestsPerDay: 20,
+          }),
+        }),
+      );
+      expect(result.supportedActions).toEqual([
+        {
+          type: 'rerun',
+          label: 'Rerun',
+          description:
+            'Republish current draft or selectively regenerate study-text and pronunciation audio families',
+          requiresFields: [],
+          implemented: true,
+        },
+        {
+          type: 'cancel',
+          label: 'Cancel Job',
+          description: 'Cancel a queued or running job',
+          requiresFields: [],
+          implemented: true,
+        },
+        {
+          type: 'edit_metadata',
+          label: 'Edit Job Metadata',
+          description: 'Update job configuration without rerunning',
+          requiresFields: [],
+          implemented: true,
+        },
+      ]);
       expect(result.generation?.quota.usedRequestsToday).toBe(0);
       expect(result.generation?.quota.usedTokensToday).toBe(0);
       expect(result.ttsProviders).toEqual(['elevenlabs', 'google']);
       expect(result.ttsModelOptionsByProvider).toEqual({
-        elevenlabs: ['eleven_turbo_v2_5'],
+        elevenlabs: [
+          'eleven_v3',
+          'eleven_multilingual_v2',
+          'eleven_flash_v2_5',
+          'eleven_flash_v2',
+        ],
         google: ['chirp3_hd', 'studio', 'neural2', 'wavenet'],
       });
       expect(result.defaultTtsProvider).toBe('google');
       expect(result.defaultTtsModelByProvider).toEqual({
-        elevenlabs: 'eleven_turbo_v2_5',
+        elevenlabs: 'eleven_flash_v2_5',
         google: 'studio',
       });
     },
@@ -217,7 +227,12 @@ describe('application/get-job-options', () => {
       expect(result.ttsStrategies).toEqual(['auto']);
       expect(result.ttsProviders).toEqual(['elevenlabs', 'google']);
       expect(result.ttsModelOptionsByProvider).toEqual({
-        elevenlabs: ['eleven_multilingual_v2'],
+        elevenlabs: [
+          'eleven_v3',
+          'eleven_multilingual_v2',
+          'eleven_flash_v2_5',
+          'eleven_flash_v2',
+        ],
         google: ['chirp3_hd', 'studio', 'neural2', 'wavenet'],
       });
       expect(result.defaultTtsProvider).toEqual('elevenlabs');
@@ -242,7 +257,7 @@ describe('application/get-job-options', () => {
       ]);
       expect(result.voiceAccents.length).toBeGreaterThan(0);
       expect(Array.isArray(result.voices)).toBe(true);
-      expect(result.supportedActions).toHaveLength(4);
+      expect(result.supportedActions).toHaveLength(3);
 
       expect(logger.warn).toHaveBeenCalledWith(
         'Failed to load job options from orchestrator. Using static fallback config.',

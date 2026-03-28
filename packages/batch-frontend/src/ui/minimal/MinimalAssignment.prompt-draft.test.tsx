@@ -139,7 +139,7 @@ describe(
       );
     });
 
-    it('labels audio rerun jobs with explicit rerun mode in recent jobs', async () => {
+    it('labels audio rerun jobs as audio regeneration in recent jobs', async () => {
       vi.mocked(api.listUserJobs).mockResolvedValueOnce({
         jobs: [
           {
@@ -179,7 +179,7 @@ describe(
       render(<MinimalAssignment />);
 
       await waitFor(() => {
-        expect(screen.getByRole('option', { name: /Audio rerun \(cache allowed\)/i })).toBeTruthy();
+        expect(screen.getByRole('option', { name: /Audio regeneration/i })).toBeTruthy();
       });
     });
 

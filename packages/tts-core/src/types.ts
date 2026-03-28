@@ -37,6 +37,7 @@ export interface BuildStudyTextOptions {
   defaultVoiceId?: string;
   ffmpegPath?: string;
   outputFormat?: string;
+  modelId?: string;
   logger?: PipelineLogger;
   ttsStrategy?: TtsStrategy;
   dialogueLanguage?: string;

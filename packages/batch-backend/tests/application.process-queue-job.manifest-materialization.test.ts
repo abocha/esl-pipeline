@@ -54,13 +54,12 @@ describe('application/process-queue-job', () => {
 
     await processQueueJob({
       jobId: 'job-1',
-      executionMode: 'rerun_publish',
+      executionMode: 'rerun',
       sourceJobId: 'job-source',
       rerun: {
         manifestMd: '/tmp/source-assignment.md',
-        steps: ['add-audio'],
+        republishOnly: true,
         upload: 's3',
-        force: false,
       },
     });
 
@@ -105,13 +104,12 @@ describe('application/process-queue-job', () => {
     try {
       await processQueueJob({
         jobId: 'job-1',
-        executionMode: 'rerun_audio',
+        executionMode: 'rerun',
         sourceJobId: 'job-source',
         rerun: {
-          steps: ['tts', 'upload', 'add-audio'],
+          regenerateStudyTextAudio: true,
           manifestMd: 'lesson.md',
           upload: 's3',
-          force: false,
         },
       });
 
@@ -164,12 +162,11 @@ describe('application/process-queue-job', () => {
     try {
       await processQueueJob({
         jobId: 'job-1',
-        executionMode: 'rerun_audio',
+        executionMode: 'rerun',
         sourceJobId: 'job-source',
         rerun: {
-          steps: ['tts', 'upload', 'add-audio'],
+          regenerateStudyTextAudio: true,
           upload: 's3',
-          force: false,
         },
       });
 

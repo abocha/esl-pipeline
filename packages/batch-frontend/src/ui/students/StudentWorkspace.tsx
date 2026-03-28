@@ -93,8 +93,7 @@ const TIMELINE_TYPES: StudentTimelineType[] = [
   'template_revision_saved',
   'template_revision_restored',
   'template_revision_activated',
-  'job_action_rerun_audio',
-  'job_action_rerun_publish',
+  'job_action_rerun',
   'job_action_cancel',
   'job_action_edit_metadata',
 ];

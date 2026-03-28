@@ -214,7 +214,7 @@ describe('MinimalAssignment - publish and job actions', () => {
   );
 
   it(
-    'queues a default rerun audio action for the current job',
+    'queues the pronunciation rerun preset for the current job',
     async () => {
       vi.useFakeTimers({ shouldAdvanceTime: true });
       const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
@@ -222,22 +222,21 @@ describe('MinimalAssignment - publish and job actions', () => {
       render(<MinimalAssignment />);
       await waitForJobActionsReady();
 
-      await user.click(screen.getByRole('button', { name: /Rerun audio/i }));
+      await user.click(screen.getByRole('button', { name: /Regenerate pronunciation audio/i }));
 
       await waitFor(() => {
-        expect(api.rerunAudioJob).toHaveBeenCalledWith('job-1', {
-          forceTts: false,
-          ttsStrategy: 'auto',
-          ttsProvider: 'elevenlabs',
+        expect(api.rerunJob).toHaveBeenCalledWith('job-1', {
+          regeneratePronunciationMainAudio: true,
+          regeneratePronunciationChunkAudio: true,
         });
       });
-      expect(screen.getByText(/Audio rerun queued/i)).toBeTruthy();
+      expect(screen.getByText(/Rerun queued/i)).toBeTruthy();
     },
     INTEGRATION_TEST_TIMEOUT_MS,
   );
 
   it(
-    'uses selected google provider/model for publish and rerun payloads',
+    'uses selected google provider/model for publish and custom rerun payloads',
     async () => {
       const user = userEvent.setup();
       render(<MinimalAssignment />);
@@ -274,14 +273,19 @@ describe('MinimalAssignment - publish and job actions', () => {
         }),
       });
 
-      await user.click(screen.getByRole('button', { name: /Rerun audio/i }));
+      await user.click(screen.getByRole('button', { name: /Custom rerun/i }));
+      await user.click(screen.getByRole('checkbox', { name: /Study-text audio/i }));
+      await user.selectOptions(screen.getByRole('combobox', { name: /Study-text provider/i }), 'google');
+      await user.selectOptions(screen.getByRole('combobox', { name: /Study-text model/i }), 'studio');
+      await user.click(screen.getByRole('button', { name: /Queue custom rerun/i }));
 
       await waitFor(() => {
-        expect(api.rerunAudioJob).toHaveBeenCalledWith(
+        expect(api.rerunJob).toHaveBeenCalledWith(
           'job-1',
           expect.objectContaining({
-            ttsProvider: 'google',
-            googleTtsModel: 'studio',
+            regenerateStudyTextAudio: true,
+            studyTextTtsProvider: 'google',
+            studyTextGoogleTtsModel: 'studio',
           }),
         );
       });
@@ -290,7 +294,7 @@ describe('MinimalAssignment - publish and job actions', () => {
   );
 
   it(
-    'submits advanced rerun payload values',
+    'submits custom rerun payload values',
     async () => {
       vi.useFakeTimers({ shouldAdvanceTime: true });
       const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
@@ -298,37 +302,44 @@ describe('MinimalAssignment - publish and job actions', () => {
       render(<MinimalAssignment />);
       await waitForJobActionsReady();
 
-      await user.click(screen.getByRole('button', { name: /Show advanced rerun/i }));
-      await user.type(screen.getByPlaceholderText('voice id override'), 'voice-new');
-      await user.type(screen.getByPlaceholderText('accent override'), 'british');
-      await user.selectOptions(screen.getByRole('combobox', { name: /TTS strategy/i }), 'dialogue');
+      await user.click(screen.getByRole('button', { name: /Custom rerun/i }));
+      await user.click(screen.getByRole('checkbox', { name: /Study-text audio/i }));
+      await user.type(screen.getByRole('textbox', { name: /Study-text voice ID/i }), 'voice-new');
+      await user.type(screen.getByRole('textbox', { name: /Study-text accent/i }), 'british');
+      await user.selectOptions(
+        screen.getByRole('combobox', { name: /Study-text strategy/i }),
+        'dialogue',
+      );
       await user.type(screen.getByPlaceholderText('e.g. es'), 'es');
       await user.type(screen.getByPlaceholderText('0.42'), '0.42');
       await user.type(screen.getByPlaceholderText('7'), '7');
 
-      await user.click(screen.getByRole('button', { name: /Rerun audio/i }));
+      await user.click(screen.getByRole('button', { name: /Queue custom rerun/i }));
 
       await waitFor(() => {
-        expect(api.rerunAudioJob).toHaveBeenCalledWith(
+        expect(api.rerunJob).toHaveBeenCalledWith(
           'job-1',
           expect.objectContaining({
-            forceTts: false,
-            voiceId: 'voice-new',
-            voiceAccent: 'british',
-            ttsStrategy: 'dialogue',
-            ttsProvider: 'elevenlabs',
-            dialogueLanguage: 'es',
-            dialogueStability: 0.42,
-            dialogueSeed: 7,
+            regenerateStudyTextAudio: true,
+            studyTextVoiceId: 'voice-new',
+            studyTextVoiceAccent: 'british',
+            studyTextTtsStrategy: 'dialogue',
+            studyTextTtsProvider: 'elevenlabs',
+            studyTextDialogueLanguage: 'es',
+            studyTextDialogueStability: 0.42,
+            studyTextDialogueSeed: 7,
           }),
         );
       });
+      expect(vi.mocked(api.rerunJob).mock.calls.at(-1)?.[1]).not.toHaveProperty(
+        'studyTextElevenlabsModel',
+      );
     },
     INTEGRATION_TEST_TIMEOUT_MS,
   );
 
   it(
-    'queues a publish-only rerun action for the current job',
+    'queues a republish-only rerun action for the current job',
     async () => {
       vi.useFakeTimers({ shouldAdvanceTime: true });
       const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
@@ -336,12 +347,12 @@ describe('MinimalAssignment - publish and job actions', () => {
       render(<MinimalAssignment />);
       await waitForJobActionsReady();
 
-      await user.click(screen.getAllByRole('button', { name: /Rerun publish/i })[0]!);
+      await user.click(screen.getByRole('button', { name: /Republish current draft/i }));
 
       await waitFor(() => {
-        expect(api.rerunPublishJob).toHaveBeenCalledWith('job-1');
+        expect(api.rerunJob).toHaveBeenCalledWith('job-1', { republishOnly: true });
       });
-      expect(screen.getByText('Publish rerun queued')).toBeTruthy();
+      expect(screen.getByText('Rerun queued')).toBeTruthy();
     },
     INTEGRATION_TEST_TIMEOUT_MS,
   );

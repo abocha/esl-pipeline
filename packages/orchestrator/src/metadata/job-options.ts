@@ -1,4 +1,5 @@
 import type {
+  ElevenLabsTtsModelId,
   GoogleTtsModel,
   JobOptionsPayload,
   NotionDatabaseOption,
@@ -34,6 +35,12 @@ type ResolveJobOptionsSource =
 const DEFAULT_UPLOAD_OPTIONS: UploadOption[] = ['auto', 's3', 'none'];
 const DEFAULT_TTS_STRATEGIES: TtsStrategyOption[] = ['auto', 'dialogue', 'tts'];
 const GOOGLE_TTS_MODELS: GoogleTtsModel[] = ['chirp3_hd', 'studio', 'neural2', 'wavenet'];
+const ELEVENLABS_TTS_MODELS: ElevenLabsTtsModelId[] = [
+  'eleven_v3',
+  'eleven_multilingual_v2',
+  'eleven_flash_v2_5',
+  'eleven_flash_v2',
+];
 
 export async function resolveJobOptions(
   source: ResolveJobOptionsSource,
@@ -116,8 +123,12 @@ function buildTtsModelMetadata(availableProviders: TtsProviderId[]): {
     const modelFamily =
       getRegisteredTtsProvider('elevenlabs')?.providerMetadata({}).modelFamily?.trim() ||
       'eleven_multilingual_v2';
-    ttsModelOptionsByProvider.elevenlabs = [modelFamily];
-    defaultTtsModelByProvider.elevenlabs = modelFamily;
+    ttsModelOptionsByProvider.elevenlabs = [...ELEVENLABS_TTS_MODELS];
+    defaultTtsModelByProvider.elevenlabs = ELEVENLABS_TTS_MODELS.includes(
+      modelFamily as ElevenLabsTtsModelId,
+    )
+      ? modelFamily
+      : 'eleven_multilingual_v2';
   }
 
   return { ttsModelOptionsByProvider, defaultTtsModelByProvider };

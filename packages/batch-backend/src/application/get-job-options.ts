@@ -45,6 +45,12 @@ const JOB_OPTIONS_CACHE_TTL_MS = 60_000;
 const DEFAULT_TTS_PROVIDERS: TtsProviderId[] = ['elevenlabs', 'google'];
 const DEFAULT_STT_PROVIDERS: SttProviderId[] = ['deepgram', 'elevenlabs', 'google'];
 const DEFAULT_GOOGLE_TTS_MODELS: GoogleTtsModel[] = ['chirp3_hd', 'studio', 'neural2', 'wavenet'];
+const DEFAULT_ELEVENLABS_TTS_MODELS = [
+  'eleven_v3',
+  'eleven_multilingual_v2',
+  'eleven_flash_v2_5',
+  'eleven_flash_v2',
+] as const;
 
 // TODO: Remove static metadata fallback once orchestrator metadata reliability SLO is met.
 // Kept behind an explicit env gate for emergency recovery only.
@@ -298,12 +304,11 @@ function resolveTtsMetadata(
   };
 
   if (!modelOptionsByProvider.elevenlabs || modelOptionsByProvider.elevenlabs.length === 0) {
-    modelOptionsByProvider.elevenlabs = [
-      process.env.ESL_TTS_PROVIDER_ELEVENLABS_MODEL_ID?.trim() || 'eleven_multilingual_v2',
-    ];
+    modelOptionsByProvider.elevenlabs = [...DEFAULT_ELEVENLABS_TTS_MODELS];
   }
   if (!defaultModelByProvider.elevenlabs) {
-    defaultModelByProvider.elevenlabs = modelOptionsByProvider.elevenlabs[0];
+    defaultModelByProvider.elevenlabs =
+      process.env.ESL_TTS_PROVIDER_ELEVENLABS_MODEL_ID?.trim() || 'eleven_multilingual_v2';
   }
 
   if (!modelOptionsByProvider.google || modelOptionsByProvider.google.length === 0) {

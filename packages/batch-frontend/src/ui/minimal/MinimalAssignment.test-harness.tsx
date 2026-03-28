@@ -54,8 +54,7 @@ vi.mock('../../utils/api', () => ({
   materializeDraft: vi.fn(),
   restoreProfileRevision: vi.fn(),
   retryRecordingTranscription: vi.fn(),
-  rerunAudioJob: vi.fn(),
-  rerunPublishJob: vi.fn(),
+  rerunJob: vi.fn(),
   renderHtmlPreview: vi
     .fn()
     .mockResolvedValue({ html: '<html><body><h1>Preview</h1></body></html>' }),
@@ -342,21 +341,15 @@ export function setupMinimalAssignmentTest() {
     },
     supportedActions: [
       {
-        type: 'rerun_audio',
-        label: 'Rerun audio',
-        description: 'Regenerate audio',
+        type: 'rerun',
+        label: 'Rerun',
+        description: 'Republish current draft or selectively regenerate audio families',
         implemented: true,
       },
       {
         type: 'cancel',
         label: 'Cancel',
         description: 'Cancel active job',
-        implemented: true,
-      },
-      {
-        type: 'rerun_publish',
-        label: 'Rerun publish',
-        description: 'Rerun publish stage',
         implemented: true,
       },
     ],
@@ -535,17 +528,11 @@ export function setupMinimalAssignmentTest() {
     lineage: null,
     actions: [],
   });
-  vi.mocked(api.rerunAudioJob).mockResolvedValue({
+  vi.mocked(api.rerunJob).mockResolvedValue({
     success: true,
-    message: 'Audio rerun queued',
-    actionType: 'rerun_audio',
+    message: 'Rerun queued',
     jobId: 'job-1',
-  });
-  vi.mocked(api.rerunPublishJob).mockResolvedValue({
-    success: true,
-    message: 'Publish rerun queued',
-    actionType: 'rerun_publish',
-    jobId: 'job-1',
+    actionType: 'rerun',
   });
   vi.mocked(api.cancelJob).mockResolvedValue({
     success: true,

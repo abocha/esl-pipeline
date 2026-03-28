@@ -363,7 +363,7 @@ describe('student-timeline', () => {
         VALUES (
           $1,
           $2,
-          'rerun_publish',
+          'rerun',
           '{}'::jsonb,
           $3,
           NULL,
@@ -387,10 +387,10 @@ describe('student-timeline', () => {
     expect(timeline.items.some((item) => item.type === 'profile_revision_activated')).toBe(true);
     expect(timeline.items.some((item) => item.type === 'template_revision_restored')).toBe(true);
     expect(timeline.items.some((item) => item.type === 'template_revision_activated')).toBe(true);
-    const actionEvent = timeline.items.find((item) => item.type === 'job_action_rerun_publish');
+    const actionEvent = timeline.items.find((item) => item.type === 'job_action_rerun');
     expect(actionEvent?.status).toBe('succeeded');
     expect(actionEvent?.details).toMatchObject({
-      actionType: 'rerun_publish',
+      actionType: 'rerun',
       message: 'Publish rerun queued',
     });
   });
