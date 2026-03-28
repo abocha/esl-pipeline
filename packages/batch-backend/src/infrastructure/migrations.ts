@@ -126,6 +126,37 @@ async function releaseMigrationLock(client: PoolClient, lockKey: string): Promis
   await client.query('SELECT pg_advisory_unlock($1::bigint)', [lockKey]);
 }
 
+async function prepareMigrationPrerequisites(
+  client: PoolClient,
+  migrationId: string,
+): Promise<void> {
+  if (migrationId !== '0019_job_action_rerun_unification') {
+    return;
+  }
+
+  await client.query(`
+    DO $$
+    DECLARE
+      current_definition TEXT;
+    BEGIN
+      SELECT pg_get_constraintdef(oid)
+      INTO current_definition
+      FROM pg_constraint
+      WHERE conname = 'job_action_history_action_type_check'
+      LIMIT 1;
+
+      IF current_definition IS NOT NULL
+         AND (
+           position('rerun_publish' in current_definition) > 0
+           OR position('rerun_audio' in current_definition) > 0
+         ) THEN
+        ALTER TABLE job_action_history
+          DROP CONSTRAINT job_action_history_action_type_check;
+      END IF;
+    END $$;
+  `);
+}
+
 export async function getMigrationStatus(): Promise<MigrationStatus> {
   const migrationsDir = resolveMigrationsDir();
   const discovered = await readMigrationFiles(migrationsDir);
@@ -208,6 +239,7 @@ export async function runMigrations(): Promise<void> {
       const startedAt = Date.now();
       await client.query('BEGIN');
       try {
+        await prepareMigrationPrerequisites(client, migration.id);
         await client.query(migration.sql);
         const executionMs = Date.now() - startedAt;
         await client.query(
