@@ -14,7 +14,6 @@ import {
   type PipelineLogEvent,
   type PipelineLogger,
   RemoteConfigProvider,
-  type RerunFlags,
   S3ManifestStore,
   createPipeline,
   resolveConfigPaths,

@@ -132,8 +132,8 @@ function describeRerunMessage(payload: z.infer<typeof rerunSchema>): string {
 function collectEffectiveValidationErrors(
   payload: z.infer<typeof rerunSchema>,
   job: Awaited<ReturnType<typeof getJobById>>,
-): Array<{ path: (string | number)[]; message: string }> {
-  const issues: Array<{ path: (string | number)[]; message: string }> = [];
+): { path: (string | number)[]; message: string }[] {
+  const issues: { path: (string | number)[]; message: string }[] = [];
   const effectiveStudyTextProvider = payload.studyTextTtsProvider ?? job?.ttsProvider ?? undefined;
   const effectiveStudyTextStrategy = payload.studyTextTtsStrategy ?? job?.ttsStrategy ?? undefined;
   const explicitStudyTextModel = payload.studyTextElevenlabsModel;

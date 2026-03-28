@@ -9,7 +9,7 @@ vi.mock('../src/domain/job-repository.js', () => ({
 
 vi.mock('../src/infrastructure/queue-bullmq.js', () => ({
   createJobQueue: vi.fn(() => ({
-    enqueue: vi.fn().mockResolvedValue(undefined),
+    enqueue: vi.fn().mockImplementation(async () => {}),
   })),
 }));
 

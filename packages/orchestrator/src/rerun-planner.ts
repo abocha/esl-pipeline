@@ -101,11 +101,9 @@ export function computeRerunPlan(input: PlannerInput): RerunPlanResult {
   );
   const hasAnyAudioUrl = hasStudyTextUrl || hasPronunciationPrimaryUrl || hasPronunciationItemUrl;
 
-  if (requested.republishOnly) {
-    if ((publishTarget === 'notion' || publishTarget === 'anytype') && !hasAnyAudioUrl) {
-      missingManifestFields.add('audio.url');
-      errors.push('Republish requires existing audio URLs in the manifest for this publish target.');
-    }
+  if (requested.republishOnly && (publishTarget === 'notion' || publishTarget === 'anytype') && !hasAnyAudioUrl) {
+    missingManifestFields.add('audio.url');
+    errors.push('Republish requires existing audio URLs in the manifest for this publish target.');
   }
 
   if (executable.includes('add-audio')) {

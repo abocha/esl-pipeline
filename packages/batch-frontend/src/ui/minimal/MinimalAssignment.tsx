@@ -73,9 +73,6 @@ const FALLBACK_ELEVENLABS_MODELS = [
   'eleven_flash_v2_5',
   'eleven_flash_v2',
 ] as const;
-const FALLBACK_ELEVENLABS_STANDARD_MODELS = FALLBACK_ELEVENLABS_MODELS.filter(
-  (model) => model !== 'eleven_v3',
-);
 
 type UiTtsProvider = (typeof FALLBACK_TTS_PROVIDERS)[number];
 type UiPronunciationChunkTtsProvider = (typeof FALLBACK_PRONUNCIATION_CHUNK_TTS_PROVIDERS)[number];
