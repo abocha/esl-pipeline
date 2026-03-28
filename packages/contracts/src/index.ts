@@ -172,6 +172,14 @@ export interface JobStatusDto {
   studentName?: string | null;
   md: string | null;
   mdStorageUri?: string | null;
+  pronunciationMode?:
+    | 'shadow_sentence'
+    | 'connected_speech'
+    | 'intonation'
+    | 'rhythm_chunking'
+    | 'sentence_stress'
+    | 'minimal_pair'
+    | null;
   recordingId: string | null;
   transcriptId: string | null;
   promptPackageId: string | null;

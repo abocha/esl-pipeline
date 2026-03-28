@@ -129,6 +129,52 @@ function describeRerunMessage(payload: z.infer<typeof rerunSchema>): string {
   return `Rerun queued (${labels.join(', ')})`;
 }
 
+function collectEffectiveValidationErrors(
+  payload: z.infer<typeof rerunSchema>,
+  job: Awaited<ReturnType<typeof getJobById>>,
+): Array<{ path: (string | number)[]; message: string }> {
+  const issues: Array<{ path: (string | number)[]; message: string }> = [];
+  const effectiveStudyTextProvider = payload.studyTextTtsProvider ?? job?.ttsProvider ?? undefined;
+  const effectiveStudyTextStrategy = payload.studyTextTtsStrategy ?? job?.ttsStrategy ?? undefined;
+  const explicitStudyTextModel = payload.studyTextElevenlabsModel;
+
+  if (
+    effectiveStudyTextProvider === 'elevenlabs' &&
+    effectiveStudyTextStrategy === 'auto' &&
+    explicitStudyTextModel !== undefined
+  ) {
+    issues.push({
+      path: ['studyTextElevenlabsModel'],
+      message: 'Automatic ElevenLabs study-text reruns must use strategy-default model selection.',
+    });
+  }
+
+  if (
+    effectiveStudyTextProvider === 'elevenlabs' &&
+    explicitStudyTextModel === 'eleven_v3' &&
+    effectiveStudyTextStrategy !== 'dialogue'
+  ) {
+    issues.push({
+      path: ['studyTextElevenlabsModel'],
+      message: 'eleven_v3 is only valid for ElevenLabs dialogue study-text reruns.',
+    });
+  }
+
+  if (
+    effectiveStudyTextProvider === 'elevenlabs' &&
+    effectiveStudyTextStrategy === 'dialogue' &&
+    explicitStudyTextModel !== undefined &&
+    explicitStudyTextModel !== 'eleven_v3'
+  ) {
+    issues.push({
+      path: ['studyTextElevenlabsModel'],
+      message: 'Dialogue study-text reruns only support eleven_v3.',
+    });
+  }
+
+  return issues;
+}
+
 export async function rerun(jobId: string, action: RerunAction): Promise<JobActionResult> {
   const job = await getJobById(jobId);
   if (!job) {
@@ -177,6 +223,18 @@ export async function rerun(jobId: string, action: RerunAction): Promise<JobActi
   }
 
   const payload = parsed.data;
+  const effectiveValidationErrors = collectEffectiveValidationErrors(payload, job);
+  if (effectiveValidationErrors.length > 0) {
+    return {
+      success: false,
+      message: effectiveValidationErrors[0]!.message,
+      jobId,
+      actionType: JobActionType.RERUN,
+      timestamp: new Date(),
+      error: 'validation_failed',
+    };
+  }
+
   const rerunJob = await insertJob({
     md: job.md,
     mdStorageUri: job.mdStorageUri ?? undefined,

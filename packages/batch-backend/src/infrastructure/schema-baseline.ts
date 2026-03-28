@@ -82,6 +82,28 @@ BEGIN
 END $$;
 `.trim();
 
+export function selectDockerPostgresContainerId(
+  dockerPsOutput: string,
+  serverMajorVersion: string,
+): string | null {
+  const candidates = dockerPsOutput
+    .split('\n')
+    .map((line) => line.trim())
+    .filter(Boolean)
+    .map((line) => {
+      const [id, image] = line.split(/\s+/, 3);
+      return { id: id ?? null, image: image ?? null };
+    })
+    .filter(
+      (candidate): candidate is { id: string; image: string } =>
+        candidate.id !== null &&
+        candidate.image !== null &&
+        candidate.image.startsWith(`postgres:${serverMajorVersion}`),
+    );
+
+  return candidates.length === 1 ? candidates[0]!.id : null;
+}
+
 export interface SchemaBaselineVerificationResult {
   ok: boolean;
   errors: string[];
@@ -304,15 +326,7 @@ async function resolveDockerPostgresContainer(serverMajorVersion: string): Promi
       '--format',
       '{{.ID}} {{.Image}} {{.Ports}}',
     ]);
-    const candidates = stdout
-      .split('\n')
-      .map((line) => line.trim())
-      .filter(Boolean);
-    if (candidates.length === 1) {
-      const [id, image] = candidates[0]!.split(/\s+/, 3);
-      return image?.startsWith(`postgres:${serverMajorVersion}`) ? id ?? null : null;
-    }
-    return null;
+    return selectDockerPostgresContainerId(stdout, serverMajorVersion);
   } catch {
     return null;
   }

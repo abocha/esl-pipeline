@@ -380,6 +380,31 @@ describe('MinimalAssignment - publish and job actions', () => {
   );
 
   it(
+    'defaults pronunciation chunk provider from the persisted job pronunciation mode when no draft is linked',
+    async () => {
+      const user = userEvent.setup();
+      hydrateResumedAssignment({
+        status: {
+          draftId: null,
+          pronunciationMode: 'connected_speech',
+        },
+      });
+      render(<MinimalAssignment />);
+      await waitForJobActionsReady();
+
+      await user.click(screen.getByRole('button', { name: /Custom rerun/i }));
+      await user.click(screen.getByRole('checkbox', { name: /Pronunciation chunk audio/i }));
+
+      expect(
+        (screen.getByRole('combobox', {
+          name: /Pronunciation chunk provider/i,
+        }) as HTMLSelectElement).value,
+      ).toBe('elevenlabs');
+    },
+    INTEGRATION_TEST_TIMEOUT_MS,
+  );
+
+  it(
     'limits elevenlabs rerun model choices to valid paths',
     async () => {
       const user = userEvent.setup();

@@ -90,4 +90,64 @@ describe('application/job-actions/rerun', () => {
     expect(result.success).toBe(true);
     expect(vi.mocked(insertJob)).toHaveBeenCalledTimes(1);
   });
+
+  it('rejects inherited dialogue strategy when the explicit study-text model is not eleven_v3', async () => {
+    vi.mocked(getJobById).mockResolvedValue({
+      id: 'job-1',
+      state: 'succeeded',
+      md: '/tmp/job.md',
+      mdStorageUri: 's3://drafts/job.md',
+      withTts: true,
+      ttsProvider: 'elevenlabs',
+      ttsStrategy: 'dialogue',
+      voiceId: 'voice-1',
+      voiceAccent: 'american',
+      googleTtsModel: 'chirp3_hd',
+      publishTarget: 'html',
+      userId: 'user-1',
+    } as never);
+
+    const result = await rerun('job-1', {
+      type: JobActionType.RERUN,
+      requestedAt,
+      payload: {
+        regenerateStudyTextAudio: true,
+        studyTextElevenlabsModel: 'eleven_multilingual_v2',
+      },
+    });
+
+    expect(result.success).toBe(false);
+    expect(result.error).toBe('validation_failed');
+    expect(vi.mocked(insertJob)).not.toHaveBeenCalled();
+  });
+
+  it('rejects inherited auto strategy when an explicit study-text elevenlabs model is provided', async () => {
+    vi.mocked(getJobById).mockResolvedValue({
+      id: 'job-1',
+      state: 'succeeded',
+      md: '/tmp/job.md',
+      mdStorageUri: 's3://drafts/job.md',
+      withTts: true,
+      ttsProvider: 'elevenlabs',
+      ttsStrategy: 'auto',
+      voiceId: 'voice-1',
+      voiceAccent: 'american',
+      googleTtsModel: 'chirp3_hd',
+      publishTarget: 'html',
+      userId: 'user-1',
+    } as never);
+
+    const result = await rerun('job-1', {
+      type: JobActionType.RERUN,
+      requestedAt,
+      payload: {
+        regenerateStudyTextAudio: true,
+        studyTextElevenlabsModel: 'eleven_flash_v2_5',
+      },
+    });
+
+    expect(result.success).toBe(false);
+    expect(result.error).toBe('validation_failed');
+    expect(vi.mocked(insertJob)).not.toHaveBeenCalled();
+  });
 });

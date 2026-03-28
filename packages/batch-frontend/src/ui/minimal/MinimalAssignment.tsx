@@ -1122,6 +1122,8 @@ export const MinimalAssignment: React.FC = () => {
           setPromptError(null);
         }
 
+        const persistedPronunciationMode = status.pronunciationMode ?? null;
+
         if (status.draftId) {
           try {
             const resumedDraft = await fetchDraft(status.draftId);
@@ -1136,13 +1138,13 @@ export const MinimalAssignment: React.FC = () => {
             const message = error instanceof Error ? error.message : 'Unable to load saved draft.';
             setDraft(null);
             setDraftText('');
-            setRerunTargetPronunciationMode(null);
+            setRerunTargetPronunciationMode(persistedPronunciationMode);
             setDraftError(message);
           }
         } else {
           setDraft(null);
           setDraftText('');
-          setRerunTargetPronunciationMode(null);
+          setRerunTargetPronunciationMode(persistedPronunciationMode);
           setDraftError(null);
         }
 
