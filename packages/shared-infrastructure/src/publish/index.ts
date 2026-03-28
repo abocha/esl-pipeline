@@ -248,9 +248,14 @@ export function insertGeneratedAudioLinks(
         (pendingShadowSentenceValue || pendingNaturalSentenceValue) &&
         trimmed.length > 0
       ) {
-        pronunciationAnchorIndex = cleaned.length;
-        pendingShadowSentenceValue = false;
-        pendingNaturalSentenceValue = false;
+        if (/^:::/i.test(trimmed)) {
+          pendingShadowSentenceValue = false;
+          pendingNaturalSentenceValue = false;
+        } else {
+          pronunciationAnchorIndex = cleaned.length;
+          pendingShadowSentenceValue = false;
+          pendingNaturalSentenceValue = false;
+        }
       }
     }
     cleaned.push(line);

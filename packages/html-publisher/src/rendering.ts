@@ -2899,9 +2899,8 @@ function buildBehaviorScript(features: ResolvedFeatures): string {
           return null;
         };
 
-        if (wordDrillEnabled || connectedSpeechEnabled) {
-          highlightSentenceAnchor();
-        }
+        const sentenceAnchorElement =
+          wordDrillEnabled || connectedSpeechEnabled ? highlightSentenceAnchor() : null;
         const clipList = Array.isArray(pronunciationAudio.itemClips)
           ? pronunciationAudio.itemClips
           : [];
@@ -2954,6 +2953,24 @@ function buildBehaviorScript(features: ResolvedFeatures): string {
             );
           }
         };
+
+        if (
+          sentenceAnchorElement instanceof HTMLElement &&
+          pronunciationAudio?.primaryClip &&
+          !sentenceAnchorElement.querySelector('[data-sentence-anchor-controls="true"]')
+        ) {
+          const controls = document.createElement('span');
+          controls.className = 'pronunciation-line-meta';
+          controls.dataset.sentenceAnchorControls = 'true';
+          appendClipButtons(
+            controls,
+            [pronunciationAudio.primaryClip],
+            pronunciationAudio.primaryClip.label || 'Sentence',
+            'Play pronunciation sentence',
+          );
+          sentenceAnchorElement.appendChild(document.createElement('br'));
+          sentenceAnchorElement.appendChild(controls);
+        }
 
         const trimTrailingDelimiterInContainer = (container) => {
           if (!(container instanceof HTMLElement)) return;
