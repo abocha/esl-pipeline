@@ -103,6 +103,9 @@ const JOBS_SCHEMA_PATCHES: string[] = [
   'ALTER TABLE jobs ADD COLUMN IF NOT EXISTS manifest_path TEXT NULL',
   'ALTER TABLE jobs ADD COLUMN IF NOT EXISTS source_job_id UUID NULL',
   'ALTER TABLE jobs ADD COLUMN IF NOT EXISTS user_id UUID NULL',
+  'ALTER TABLE jobs ADD COLUMN IF NOT EXISTS started_at TIMESTAMPTZ NULL',
+  'ALTER TABLE jobs ADD COLUMN IF NOT EXISTS finished_at TIMESTAMPTZ NULL',
+  'ALTER TABLE jobs ADD COLUMN IF NOT EXISTS error TEXT NULL',
 ];
 
 const JOBS_INDEX_PATCHES: string[] = [
@@ -1047,6 +1050,24 @@ END $$;`,
 DECLARE
   current_definition TEXT;
 BEGIN
+  -- Mirror the migration ordering: drop the legacy action-type constraint before
+  -- rewriting rerun_* history rows to the canonical 'rerun' value.
+  SELECT pg_get_constraintdef(oid)
+  INTO current_definition
+  FROM pg_constraint
+  WHERE conname = 'job_action_history_action_type_check'
+  LIMIT 1;
+
+  IF current_definition IS NOT NULL
+     AND (
+       position('rerun_publish' in current_definition) > 0
+       OR position('rerun_audio' in current_definition) > 0
+       OR position('''rerun''' in current_definition) = 0
+     ) THEN
+    ALTER TABLE job_action_history
+      DROP CONSTRAINT job_action_history_action_type_check;
+  END IF;
+
   UPDATE job_action_history
   SET action_type = 'rerun'
   WHERE action_type IN ('rerun_audio', 'rerun_publish');

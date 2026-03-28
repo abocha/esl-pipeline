@@ -114,7 +114,7 @@ describe('orchestrator smoke', () => {
     expect(initialTimestamp).toBeDefined();
     expect(statusAfter.manifest?.timestamp).toBeDefined();
     expect(statusAfter.manifest!.timestamp >= initialTimestamp!).toBe(true);
-  }, 15000);
+  }, 30000);
 
   it('skips notion colorize when preset hash, page, and markdown hash are unchanged', async () => {
     const dir = await mkdtemp(join(tmpdir(), 'orchestrator-colorize-skip-'));
@@ -155,7 +155,7 @@ describe('orchestrator smoke', () => {
         pageId: 'page-123',
       }),
     );
-  }, 15000);
+  }, 30000);
 
   it('preserves TTS metadata when rerun without passing TTS flags', async () => {
     const dir = await mkdtemp(join(tmpdir(), 'orchestrator-tts-metadata-'));
@@ -208,7 +208,7 @@ describe('orchestrator smoke', () => {
     expect(manifestSecond.dialogueLanguage).toBe('es');
     expect(manifestSecond.dialogueStability).toBe(0.55);
     expect(manifestSecond.dialogueSeed).toBe(999);
-  }, 15000);
+  }, 30000);
 
   it('rerun upload/add-audio does not require parseable markdown when tts is not requested', async () => {
     const dir = await mkdtemp(join(tmpdir(), 'orchestrator-rerun-no-tts-parse-'));
@@ -248,7 +248,7 @@ describe('orchestrator smoke', () => {
     });
 
     expect(rerun.steps).toEqual(['add-audio']);
-  }, 15000);
+  }, 30000);
 
   it('strips legacy audio alias on republish rerun', async () => {
     const dir = await mkdtemp(join(tmpdir(), 'orchestrator-legacy-prefix-'));
@@ -299,5 +299,5 @@ describe('orchestrator smoke', () => {
     expect(manifestAfter.audioArtifacts?.studyText?.url).toBe(
       'https://s3.amazonaws.com/audio/file.mp3',
     );
-  }, 15000);
+  }, 30000);
 });

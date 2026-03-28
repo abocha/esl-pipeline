@@ -1200,5 +1200,6 @@ VALUES
   ('0016_student_profile_candidates_foundations', '70160d75099b260ddd842f0a1a5c6f1e864bd405e136a37e2163a98066e991f9', '2000-01-01T00:00:00Z'::timestamptz, 0, 'batch-backend-schema-baseline-v1'),
   ('0017_student_profile_candidate_draft_revisions', 'f731fe61af5c9e0b43cf4effc9ca897602f5f83ab8a3cabb6852e3d1a36acab1', '2000-01-01T00:00:00Z'::timestamptz, 0, 'batch-backend-schema-baseline-v1'),
   ('0018_profile_revision_source_expansion', 'cc12fb7fd63205e5dee24c04ba10342b8d9016f057786955d3912d0a2ef606bf', '2000-01-01T00:00:00Z'::timestamptz, 0, 'batch-backend-schema-baseline-v1'),
-  ('0019_job_action_rerun_unification', '51d0adb87f2327b9b638404ed18765c1e5271eefc57463c1352852031c9d634c', '2000-01-01T00:00:00Z'::timestamptz, 0, 'batch-backend-schema-baseline-v1')
+  ('0019_job_action_rerun_unification', '51d0adb87f2327b9b638404ed18765c1e5271eefc57463c1352852031c9d634c', '2000-01-01T00:00:00Z'::timestamptz, 0, 'batch-backend-schema-baseline-v1'),
+  ('0020_jobs_lifecycle_timestamps_backfill', '17acde111d3c46287ee8d819bd2814d4ae4b706bcfd5c1d0fd9a131658599e82', '2000-01-01T00:00:00Z'::timestamptz, 0, 'batch-backend-schema-baseline-v1')
 ON CONFLICT (id) DO NOTHING;
