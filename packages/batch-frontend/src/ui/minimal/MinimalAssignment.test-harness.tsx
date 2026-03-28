@@ -222,6 +222,7 @@ export function hydrateResumedAssignment(
     status?: Partial<api.JobStatus>;
     jobs?: api.JobStatus[];
     promptText?: string;
+    draftText?: string;
   } = {},
 ) {
   const status = makeJobStatus({
@@ -229,6 +230,7 @@ export function hydrateResumedAssignment(
     recordingId: 'rec-1',
     transcriptId: 'tx-1',
     promptPackageId: 'pkg-1',
+    ...(overrides.draftText ? { draftId: 'draft-1' } : {}),
     ...overrides.status,
   });
   const jobs = overrides.jobs ?? [status];
@@ -253,6 +255,18 @@ export function hydrateResumedAssignment(
     createdAt: now,
     updatedAt: now,
   });
+  if (overrides.draftText) {
+    vi.mocked(api.fetchDraft).mockResolvedValue({
+      id: status.draftId ?? 'draft-1',
+      promptPackageId: status.promptPackageId ?? 'pkg-1',
+      studentId: status.studentId ?? null,
+      storageUri: 'memory://drafts/draft-1',
+      createdBy: 'user-1',
+      text: overrides.draftText,
+      createdAt: now,
+      updatedAt: now,
+    });
+  }
 
   globalThis.history.replaceState(null, '', `/?jobId=${status.jobId}`);
   return status;
