@@ -37,7 +37,9 @@
     "prepack": "pnpm run build",
     "test": "pnpm run test:unit",
     "test:integration": "vitest run tests/pipeline.integration.test.ts",
-    "test:unit": "vitest run --testTimeout=30000 --exclude \"tests/**/*.integration.test.ts\"",
+    "test:unit:setup": "pnpm --filter @esl-pipeline/contracts build && pnpm --filter @esl-pipeline/provider-runtime build && pnpm --filter @esl-pipeline/shared-infrastructure build && pnpm --filter @esl-pipeline/pmd build && pnpm --filter @esl-pipeline/anytype-adapter build && pnpm --filter @esl-pipeline/md-validator build && pnpm --filter @esl-pipeline/notion-adapter build && pnpm --filter @esl-pipeline/storage-uploader build && pnpm --filter @esl-pipeline/tts-core build && pnpm --filter @esl-pipeline/tts-provider-elevenlabs build && pnpm --filter @esl-pipeline/tts-provider-google build && pnpm --filter @esl-pipeline/html-publisher build",
+    "test:unit": "pnpm run test:unit:setup && vitest run --testTimeout=30000 --exclude \"tests/**/*.integration.test.ts\"",
+    "test:unit:timings": "pnpm run test:unit:setup && vitest run --testTimeout=30000 --reporter=json --outputFile=../../tmp/test-timings/orchestrator/vitest.json --exclude \"tests/**/*.integration.test.ts\"",
     "test:watch": "vitest",
     "typecheck": "tsc --noEmit"
   },

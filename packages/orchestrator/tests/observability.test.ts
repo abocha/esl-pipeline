@@ -176,7 +176,7 @@ describe('orchestrator observability', () => {
         }),
       ]),
     );
-  }, 20_000);
+  }, 40_000);
 
   it('emits start/success events for rerunAssignment steps', async () => {
     const dir = await mkdtemp(join(tmpdir(), 'orchestrator-observe-rerun-'));

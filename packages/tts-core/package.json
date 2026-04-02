@@ -21,7 +21,8 @@
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "clean": "node -e \"fs.rmSync('dist', {recursive:true, force:true})\"",
-    "test": "vitest run",
+    "test": "pnpm run test:unit",
+    "test:unit": "vitest run --exclude \"**/*.integration.test.ts\" --exclude \"**/*.integration.test.tsx\"",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {

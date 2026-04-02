@@ -1,5 +1,13 @@
 /* eslint-disable react-refresh/only-export-components, unicorn/prefer-export-from */
-import { act, configure, render, screen, waitFor, within } from '@testing-library/react';
+import {
+  act,
+  configure,
+  render,
+  screen,
+  waitFor,
+  within,
+  type RenderResult,
+} from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { expect, vi } from 'vitest';
 
@@ -284,6 +292,159 @@ export async function waitForJobActionsReady(jobId = 'job-1') {
       expect(screen.getAllByText(new RegExp(`Job ID: ${jobId}`, 'i')).length).toBeGreaterThan(0);
     },
     { timeout: UI_WAIT_TIMEOUT_MS },
+  );
+}
+
+export function createMinimalUser(): ReturnType<typeof userEvent.setup> {
+  return userEvent.setup();
+}
+
+export function createTimerAwareMinimalUser(): ReturnType<typeof userEvent.setup> {
+  return userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
+}
+
+export function renderMinimalAssignment(): RenderResult {
+  return render(<MinimalAssignment />);
+}
+
+export async function renderPromptReadyAssignment(
+  options: {
+    user?: ReturnType<typeof userEvent.setup>;
+  } = {},
+): Promise<RenderResult & { user: ReturnType<typeof userEvent.setup> }> {
+  const user = options.user ?? createMinimalUser();
+  const result = renderMinimalAssignment();
+  await preparePromptReady(user);
+  return { ...result, user };
+}
+
+export async function renderDraftReadyAssignment(
+  overrides: Parameters<typeof hydrateResumedAssignment>[0] = {},
+  options: {
+    user?: ReturnType<typeof userEvent.setup>;
+    waitFor?: 'promptReady' | 'jobActions' | 'none';
+  } = {},
+): Promise<
+  RenderResult & {
+    user: ReturnType<typeof userEvent.setup>;
+    status: ReturnType<typeof hydrateResumedAssignment>;
+  }
+> {
+  return renderResumedAssignment(
+    {
+      ...overrides,
+      draftText: overrides.draftText ?? '# Draft markdown',
+    },
+    options,
+  );
+}
+
+export async function renderPreviewReadyAssignment(
+  overrides: Parameters<typeof hydrateResumedAssignment>[0] = {},
+): Promise<
+  RenderResult & {
+    user: ReturnType<typeof userEvent.setup>;
+    status: ReturnType<typeof hydrateResumedAssignment>;
+  }
+> {
+  const rendered = await renderDraftReadyAssignment(overrides, { waitFor: 'promptReady' });
+  await previewCurrentDraft(rendered.user);
+  return rendered;
+}
+
+export async function renderPublishedActionsAssignment(
+  overrides: Parameters<typeof hydrateResumedAssignment>[0] = {},
+): Promise<
+  RenderResult & {
+    user: ReturnType<typeof userEvent.setup>;
+    status: ReturnType<typeof hydrateResumedAssignment>;
+  }
+> {
+  return renderPublishedAssignment(overrides, { user: createMinimalUser() });
+}
+
+export async function renderGenerationReadyAssignment(
+  overrides: Parameters<typeof hydrateResumedAssignment>[0] = {},
+): Promise<
+  RenderResult & {
+    user: ReturnType<typeof userEvent.setup>;
+    status: ReturnType<typeof hydrateResumedAssignment>;
+  }
+> {
+  return renderResumedAssignment(
+    {
+      ...overrides,
+      draftText: overrides.draftText ?? '# Draft markdown',
+    },
+    { user: createMinimalUser(), waitFor: 'promptReady' },
+  );
+}
+
+export async function renderResumedFailureAssignment(
+  overrides: Parameters<typeof hydrateResumedAssignment>[0] = {},
+): Promise<
+  RenderResult & {
+    user: ReturnType<typeof userEvent.setup>;
+    status: ReturnType<typeof hydrateResumedAssignment>;
+  }
+> {
+  return renderResumedAssignment(
+    {
+      ...overrides,
+      status: {
+        state: 'failed',
+        error: 'Something went wrong.',
+        ...overrides.status,
+      },
+    },
+    { waitFor: 'jobActions' },
+  );
+}
+
+export async function renderResumedAssignment(
+  overrides: Parameters<typeof hydrateResumedAssignment>[0] = {},
+  options: {
+    user?: ReturnType<typeof userEvent.setup>;
+    waitFor?: 'promptReady' | 'jobActions' | 'none';
+  } = {},
+): Promise<
+  RenderResult & {
+    user: ReturnType<typeof userEvent.setup>;
+    status: ReturnType<typeof hydrateResumedAssignment>;
+  }
+> {
+  const status = hydrateResumedAssignment(overrides);
+  const user = options.user ?? createMinimalUser();
+  const result = renderMinimalAssignment();
+  const readyState = options.waitFor ?? 'promptReady';
+  if (readyState === 'promptReady') {
+    await waitForResumedPromptReady(overrides.promptText ?? 'Prompt package output');
+  } else if (readyState === 'jobActions') {
+    await waitForJobActionsReady(status.jobId);
+  }
+  return { ...result, user, status };
+}
+
+export async function renderPublishedAssignment(
+  overrides: Parameters<typeof hydrateResumedAssignment>[0] = {},
+  options: {
+    user?: ReturnType<typeof userEvent.setup>;
+  } = {},
+): Promise<
+  RenderResult & {
+    user: ReturnType<typeof userEvent.setup>;
+    status: ReturnType<typeof hydrateResumedAssignment>;
+  }
+> {
+  return renderResumedAssignment(
+    {
+      ...overrides,
+      status: {
+        state: 'succeeded',
+        ...overrides.status,
+      },
+    },
+    { ...options, waitFor: 'jobActions' },
   );
 }
 

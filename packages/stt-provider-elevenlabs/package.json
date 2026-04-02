@@ -21,7 +21,9 @@
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "clean": "node -e \"fs.rmSync('dist', {recursive:true, force:true})\"",
-    "test": "pnpm --filter @esl-pipeline/stt-core build && pnpm run build && vitest run",
+    "test": "pnpm run test:unit",
+    "test:unit:setup": "pnpm --filter @esl-pipeline/contracts build && pnpm --filter @esl-pipeline/provider-runtime build && pnpm --filter @esl-pipeline/stt-core build",
+    "test:unit": "pnpm run test:unit:setup && vitest run --exclude \"**/*.integration.test.ts\" --exclude \"**/*.integration.test.tsx\"",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {

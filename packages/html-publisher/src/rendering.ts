@@ -147,91 +147,142 @@ body {
   transition: background-color 0.3s ease, color 0.3s ease;
 }
 .page {
-  max-width: 940px;
-  margin: 28px auto 56px;
+  position: relative;
+  max-width: 980px;
+  margin: 32px auto 60px;
   background: var(--page-card);
   border-radius: 18px;
-  padding: 28px 34px 44px;
+  padding: 28px 36px 48px 88px;
   border: 1px solid color-mix(in srgb, var(--page-line) 70%, var(--page-card) 30%);
-  box-shadow: 0 12px 34px rgba(56, 44, 24, 0.08);
+  box-shadow: 0 18px 42px rgba(56, 44, 24, 0.08);
   transition: background-color 0.3s ease, border-color 0.3s ease;
 }
+.page::before {
+  content: '';
+  position: absolute;
+  top: var(--editorial-rail-start, 246px);
+  bottom: 52px;
+  left: 46px;
+  width: 1px;
+  background: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--theme-h2) 36%, transparent 64%) 0%,
+    color-mix(in srgb, var(--theme-h2) 18%, var(--page-line) 82%) 20%,
+    color-mix(in srgb, var(--theme-h2) 18%, var(--page-line) 82%) 82%,
+    transparent 100%
+  );
+  pointer-events: none;
+}
 .page-header {
-  margin-bottom: 18px;
+  position: relative;
+  margin-bottom: 30px;
 }
 .hero {
   position: relative;
-  display: flex;
+  display: grid;
+  grid-template-columns: 104px minmax(0, 1fr);
   align-items: center;
-  gap: 20px;
-  min-height: 140px;
-  padding: 24px 26px;
-  border-radius: 16px;
+  justify-content: start;
+  gap: 24px;
+  min-height: 0;
+  padding: 24px 30px 22px;
+  border-radius: 18px;
   border: 1px solid color-mix(in srgb, var(--page-line) 72%, var(--page-card) 28%);
   background:
-    radial-gradient(circle at 22% 24%, color-mix(in srgb, var(--page-card) 70%, transparent 30%), transparent 55%),
-    linear-gradient(135deg, var(--theme-h1) 0%, var(--theme-h2) 45%, var(--theme-h3) 100%);
+    radial-gradient(circle at 14% 24%, color-mix(in srgb, #ffffff 84%, var(--theme-h1) 16%) 0%, transparent 30%),
+    linear-gradient(
+      120deg,
+      color-mix(in srgb, var(--theme-h1) 16%, var(--page-card) 84%) 0%,
+      color-mix(in srgb, #ffffff 14%, var(--page-card) 86%) 34%,
+      color-mix(in srgb, var(--theme-h2) 18%, var(--page-card) 82%) 70%,
+      color-mix(in srgb, var(--theme-h3) 22%, var(--page-card) 78%) 100%
+    );
   overflow: hidden;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.45);
+}
+.hero::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background:
+    linear-gradient(112deg, rgba(255, 255, 255, 0.16) 0%, rgba(255, 255, 255, 0) 38%),
+    linear-gradient(132deg, rgba(255, 255, 255, 0) 0%, rgba(255, 255, 255, 0.12) 48%, rgba(255, 255, 255, 0) 74%),
+    radial-gradient(circle at 82% 18%, color-mix(in srgb, #ffffff 52%, transparent 48%) 0%, transparent 30%);
+  opacity: 0.72;
+  pointer-events: none;
 }
 .hero::after {
   content: '';
   position: absolute;
   inset: 0;
   background:
-    repeating-linear-gradient(135deg, rgba(255, 255, 255, 0.18), rgba(255, 255, 255, 0.18) 2px, transparent 2px, transparent 12px);
-  opacity: 0.45;
+    linear-gradient(180deg, rgba(255, 255, 255, 0.18) 0%, rgba(255, 255, 255, 0) 56%),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.18) 0%, rgba(255, 255, 255, 0) 34%);
+  opacity: 0.84;
   pointer-events: none;
 }
 .hero-emoji {
   position: relative;
   z-index: 1;
-  font-size: clamp(72px, 10vw, 110px);
+  font-size: clamp(62px, 7vw, 88px);
   line-height: 1;
-  filter: drop-shadow(0 6px 14px rgba(36, 30, 18, 0.18));
+  filter: drop-shadow(0 8px 14px rgba(36, 30, 18, 0.12));
   flex-shrink: 0;
+  justify-self: center;
 }
 .hero-content {
   position: relative;
   z-index: 1;
   display: grid;
-  gap: 8px;
-  flex: 1;
+  gap: 12px;
   min-width: 0;
+  max-width: 760px;
+  align-content: center;
 }
 .hero-title {
   margin: 0;
   font-family: 'Iowan Old Style', 'Palatino Linotype', Palatino, Georgia, serif;
-  font-size: clamp(30px, 4.4vw, 44px);
+  font-size: clamp(31px, 3.8vw, 44px);
   font-weight: 700;
-  letter-spacing: -0.025em;
-  line-height: 1.08;
+  letter-spacing: -0.03em;
+  line-height: 1.04;
   text-wrap: balance;
+  max-inline-size: 24ch;
 }
 .page-tags {
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
+  align-items: center;
+  max-width: 38rem;
 }
 .tag {
   display: inline-flex;
   align-items: center;
-  padding: 4px 10px;
+  padding: 5px 10px;
   border-radius: 999px;
-  background: var(--tag-bg);
-  color: var(--page-text);
-  font-size: 12px;
-  font-weight: 650;
-  letter-spacing: 0.03em;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.56) 0%, rgba(255, 255, 255, 0.18) 100%),
+    color-mix(in srgb, var(--tag-bg) 58%, var(--page-card) 42%);
+  color: color-mix(in srgb, var(--page-text) 84%, var(--page-muted) 16%);
+  border: 1px solid color-mix(in srgb, var(--page-line) 72%, var(--page-card) 28%);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.42),
+    0 1px 2px rgba(56, 44, 24, 0.06);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
   text-transform: uppercase;
   transition: background-color 0.3s ease, color 0.3s ease;
 }
 .markdown-body h1,
 .markdown-body h2,
-.markdown-body h3 {
+.markdown-body h3,
+.markdown-body h4 {
   margin: 0;
   padding: 0;
   letter-spacing: -0.01em;
-  line-height: 1.25;
+  line-height: 1.18;
 }
 .markdown-body h1 {
   font-family: 'Iowan Old Style', 'Palatino Linotype', Palatino, Georgia, serif;
@@ -240,12 +291,40 @@ body {
   margin-bottom: 12px;
 }
 .markdown-body h2 {
-  font-size: 23px;
-  margin: 28px 0 12px;
+  font-size: 24px;
+  margin: 40px 0 16px;
 }
 .markdown-body h3 {
-  font-size: 19px;
-  margin: 21px 0 10px;
+  font-size: 18.5px;
+  margin: 26px 0 10px;
+}
+.markdown-body h4 {
+  font-size: 12.5px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  line-height: 1.35;
+  margin: 20px 0 10px;
+  text-transform: uppercase;
+  color: color-mix(in srgb, var(--page-text) 76%, var(--page-muted) 24%);
+}
+.markdown-body > h2 {
+  position: relative;
+  margin-left: -20px;
+  padding-left: 16px;
+}
+.markdown-body > h2::before {
+  content: '';
+  position: absolute;
+  left: -44px;
+  top: 50%;
+  width: 10px;
+  height: 10px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--theme-h2) 46%, var(--page-card) 54%);
+  box-shadow:
+    0 0 0 4px var(--page-card),
+    0 0 0 5px color-mix(in srgb, var(--theme-h2) 24%, var(--page-line) 76%);
+  transform: translateY(-50%);
 }
 .markdown-body .heading-text {
   display: inline-block;
@@ -255,13 +334,29 @@ body {
   background: var(--theme-h1);
 }
 .markdown-body h2 .heading-text {
-  background: var(--theme-h2);
+  padding: 5px 12px 6px;
+  border-radius: 999px;
+  border: 1px solid color-mix(in srgb, var(--theme-h2) 20%, var(--page-line) 80%);
+  background: color-mix(in srgb, var(--theme-h2) 16%, var(--page-card) 84%);
+  box-shadow: 0 4px 12px rgba(56, 44, 24, 0.04);
 }
 .markdown-body h3 .heading-text {
-  background: var(--theme-h3);
+  padding: 4px 10px;
+  border-radius: 10px;
+  border: 1px solid color-mix(in srgb, var(--theme-h3) 18%, var(--page-line) 82%);
+  background: color-mix(in srgb, var(--theme-h3) 14%, var(--page-card) 86%);
+  box-shadow: 0 2px 8px rgba(56, 44, 24, 0.035);
+}
+.markdown-body h4 .heading-text {
+  padding: 0 0 4px;
+  border-radius: 0;
+  border: none;
+  border-bottom: 1px solid color-mix(in srgb, var(--theme-h3) 18%, var(--page-line) 82%);
+  background: none;
+  box-shadow: none;
 }
 .markdown-body p {
-  margin: 8px 0 14px;
+  margin: 8px 0 12px;
 }
 .markdown-body a {
   color: #134278;
@@ -280,11 +375,30 @@ body {
 }
 .markdown-body ul,
 .markdown-body ol {
-  margin: 8px 0 16px;
+  margin: 10px 0 18px;
   padding-left: 22px;
 }
 .markdown-body li {
-  margin: 6px 0;
+  margin: 8px 0;
+  padding-left: 2px;
+}
+.markdown-body li::marker {
+  color: color-mix(in srgb, var(--theme-h2) 44%, var(--page-line) 56%);
+  font-weight: 700;
+}
+.markdown-body > h2 + *,
+.markdown-body > h3 + * {
+  margin-top: 0;
+}
+.markdown-body > h2 + .callout,
+.markdown-body > h2 + .study-text,
+.markdown-body > h2 + .toc-shell,
+.markdown-body > h2 + details,
+.markdown-body > h3 + .callout,
+.markdown-body > h3 + .study-text,
+.markdown-body > h3 + .toc-shell,
+.markdown-body > h3 + details {
+  margin-top: 6px;
 }
 .markdown-body li.task-list-item {
   list-style: none;
@@ -312,19 +426,29 @@ body {
 .markdown-body hr {
   border: none;
   border-top: 1px solid var(--page-line);
-  margin: 24px 0;
+  margin: 30px 0;
+}
+.callout,
+.study-text,
+.toc-shell,
+.audio-figure,
+details:not(.study-text) {
+  border-radius: 16px;
+  border: 1px solid color-mix(in srgb, var(--page-line) 72%, var(--page-card) 28%);
+  background: color-mix(in srgb, var(--page-card) 96%, var(--page-bg) 4%);
+  box-shadow:
+    0 10px 24px rgba(56, 44, 24, 0.045),
+    inset 0 1px 0 rgba(255, 255, 255, 0.42);
 }
 .audio-figure {
-  margin: 14px 0 20px;
-  padding: 12px 14px;
-  border: 1px solid var(--page-line);
-  border-radius: 12px;
-  background: color-mix(in srgb, var(--page-card) 94%, var(--page-bg) 6%);
-  transition: border-color 0.2s ease;
+  margin: 16px 0 20px;
+  padding: 14px 16px;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
 }
 .audio-figure:hover,
 .audio-figure:focus-within {
   border-color: var(--callout-border);
+  box-shadow: 0 10px 22px rgba(56, 44, 24, 0.06);
 }
 .audio-figure audio {
   width: 100%;
@@ -490,7 +614,9 @@ body {
   font-weight: 600;
   letter-spacing: 0.01em;
 }
-.pronunciation-shadow-sentence {
+.pronunciation-shadow-sentence,
+.pronunciation-natural-sentence {
+  display: block;
   margin: 14px 0 16px;
   padding: 12px 14px;
   border-radius: 12px;
@@ -501,24 +627,52 @@ body {
   font-size: 1.05em;
   line-height: 1.55;
 }
-.pronunciation-shadow-sentence strong {
+.pronunciation-shadow-sentence strong,
+.pronunciation-natural-sentence strong {
   color: color-mix(in srgb, var(--page-text) 88%, var(--theme-h2) 12%);
   letter-spacing: 0.01em;
 }
 .callout {
-  background: var(--callout-bg);
-  padding: 16px 18px;
-  border-radius: 12px;
-  border: 1px solid var(--page-line);
-  border-left: 4px solid var(--callout-border);
-  display: flex;
-  gap: 12px;
-  margin: 16px 0;
+  position: relative;
+  padding: 18px 20px;
+  display: grid;
+  grid-template-columns: 34px 1fr;
+  gap: 14px;
+  margin: 18px 0;
+  align-items: start;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.28) 0%, rgba(255, 255, 255, 0) 44%),
+    color-mix(in srgb, var(--callout-bg) 31%, var(--page-card) 69%);
+}
+.callout::before {
+  content: '';
+  position: absolute;
+  left: 18px;
+  top: 18px;
+  bottom: 18px;
+  width: 2px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--callout-border) 64%, transparent 36%);
+  opacity: 0.7;
 }
 .callout .icon {
-  font-size: 22px;
-  line-height: 1.2;
-  margin-top: 2px;
+  width: 32px;
+  height: 32px;
+  display: grid;
+  place-items: center;
+  border-radius: 999px;
+  font-size: 18px;
+  line-height: 1;
+  margin-top: 1px;
+  background: color-mix(in srgb, var(--theme-h1) 14%, var(--page-card) 86%);
+  border: 1px solid color-mix(in srgb, var(--callout-border) 42%, var(--page-line) 58%);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.38),
+    0 2px 6px rgba(56, 44, 24, 0.06);
+}
+.callout .content {
+  display: grid;
+  gap: 4px;
 }
 .callout .content > :first-child {
   margin-top: 0;
@@ -527,23 +681,30 @@ body {
   margin-bottom: 0;
 }
 .study-text {
-  background: color-mix(in srgb, var(--page-card) 94%, var(--page-bg) 6%);
-  padding: 16px 18px;
-  border-radius: 12px;
-  border: 1px solid var(--page-line);
-  margin: 16px 0;
+  padding: 0;
+  margin: 18px 0;
   transition: background-color 0.3s ease, border-color 0.3s ease;
 }
-.study-text summary {
-  font-size: 13px;
-  letter-spacing: 0.04em;
+.study-text summary,
+.toc-shell summary {
+  font-size: 12px;
+  letter-spacing: 0.08em;
   text-transform: uppercase;
   color: var(--page-muted);
   font-weight: 700;
   cursor: pointer;
 }
+.study-text summary {
+  padding: 13px 16px 12px;
+  background: color-mix(in srgb, var(--toc-bg) 20%, var(--page-card) 80%);
+}
+.study-text[open] summary,
+.toc-shell[open] summary {
+  border-bottom: 1px solid color-mix(in srgb, var(--page-line) 64%, var(--page-card) 36%);
+}
 .study-text .content {
-  margin-top: 10px;
+  margin-top: 0;
+  padding: 14px 16px 16px;
 }
 .study-text .content > :first-child {
   margin-top: 0;
@@ -560,9 +721,9 @@ body {
   min-width: 240px;
 }
 .column-list.grammar-matrix-grid {
-  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
-  gap: 16px;
-  margin: 16px 0 20px;
+  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+  gap: 18px;
+  margin: 14px 0 24px;
   padding: clamp(14px, 2vw, 22px);
   border-radius: 18px;
   border: 1px solid color-mix(in srgb, var(--callout-border) 55%, var(--page-line) 45%);
@@ -575,11 +736,11 @@ body {
 }
 .column-list.grammar-matrix-grid .column {
   min-width: 0;
-  padding: 14px 16px 15px;
+  padding: 16px 18px 18px;
   border-radius: 14px;
   border: 1px solid color-mix(in srgb, var(--page-line) 74%, var(--callout-border) 26%);
   background: color-mix(in srgb, var(--page-card) 90%, #ffffff 10%);
-  box-shadow: 0 10px 22px color-mix(in srgb, var(--page-line) 42%, transparent 58%);
+  box-shadow: 0 8px 18px color-mix(in srgb, var(--page-line) 34%, transparent 66%);
 }
 .column-list.grammar-matrix-grid .column > :first-child {
   margin-top: 0;
@@ -594,6 +755,14 @@ body {
   border-bottom: 1px dashed color-mix(in srgb, var(--page-line) 65%, transparent 35%);
   text-wrap: balance;
 }
+.column-list.grammar-matrix-grid .column > .grammar-card-subheading {
+  margin: 16px 0 10px;
+  text-wrap: pretty;
+  text-align: left;
+  text-justify: auto;
+  hyphens: none;
+  line-height: 1.4;
+}
 .column-list.grammar-matrix-grid .column > .grammar-card-heading strong {
   display: block;
 }
@@ -607,8 +776,8 @@ body {
   text-wrap: pretty;
 }
 .column-list.grammar-matrix-grid .column p[data-grammar-prose="true"] {
-  text-align: justify;
-  text-justify: inter-word;
+  text-align: left;
+  text-justify: auto;
   hyphens: auto;
 }
 .column-list.grammar-matrix-grid .column > p > em:only-child {
@@ -635,29 +804,24 @@ body {
   border: 0;
 }
 .table-of-contents {
-  background: var(--toc-bg);
-  padding: 10px 12px;
-  border-radius: 10px;
-  border: 1px solid var(--toc-border);
-  margin: 10px 0 0;
+  background: transparent;
+  padding: 10px 16px 16px;
+  border-radius: 0;
+  border: 0;
+  margin: 0;
   color: var(--page-muted);
 }
 .toc-shell {
-  margin: 16px 0;
-  border-radius: 12px;
-  border: 1px solid var(--toc-border);
-  background: color-mix(in srgb, var(--toc-bg) 72%, #ffffff 28%);
+  margin: 18px 0;
   overflow: hidden;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.24) 0%, rgba(255, 255, 255, 0) 42%),
+    color-mix(in srgb, var(--toc-bg) 30%, var(--page-card) 70%);
 }
 .toc-shell summary {
-  cursor: pointer;
-  font-weight: 700;
-  font-size: 14px;
-  letter-spacing: 0.03em;
-  text-transform: uppercase;
-  color: var(--page-muted);
-  padding: 12px 14px;
-  background: color-mix(in srgb, var(--toc-bg) 82%, var(--page-card) 18%);
+  font-size: 12px;
+  padding: 13px 16px 12px;
+  background: color-mix(in srgb, var(--toc-bg) 42%, var(--page-card) 58%);
   transition: background-color 0.3s ease, color 0.3s ease;
 }
 .toc-shell summary:hover {
@@ -679,7 +843,7 @@ body {
   margin: 0;
 }
 .table-of-contents li {
-  margin: 6px 0;
+  margin: 10px 0;
 }
 .table-of-contents a {
   color: var(--toc-link);
@@ -691,16 +855,17 @@ body {
   text-decoration: underline;
 }
 details:not(.study-text) {
-  margin: 12px 0;
-  padding: 10px 14px;
-  border-radius: 10px;
-  border: 1px solid var(--page-line);
-  background: color-mix(in srgb, var(--page-card) 94%, var(--page-bg) 6%);
+  margin: 16px 0;
+  padding: 0;
   transition: background-color 0.3s ease, border-color 0.3s ease;
 }
 details:not(.study-text) summary {
   cursor: pointer;
   font-weight: 600;
+  padding: 13px 16px 12px;
+}
+details:not(.study-text) > :not(summary) {
+  padding: 0 16px 16px;
 }
 pre {
   position: relative;
@@ -724,7 +889,8 @@ pre code {
 .markdown-body blockquote code,
 .markdown-body h1 code,
 .markdown-body h2 code,
-.markdown-body h3 code {
+.markdown-body h3 code,
+.markdown-body h4 code {
   background: var(--inline-code-bg);
   color: var(--inline-code-text);
   border-radius: 7px;
@@ -752,8 +918,8 @@ pre code {
 table {
   width: 100%;
   border-collapse: collapse;
-  margin: 12px 0 18px;
-  font-size: 14px;
+  margin: 14px 0 24px;
+  font-size: 13.5px;
   table-layout: auto;
 }
 .markdown-body table[data-balanced-columns="true"] {
@@ -761,14 +927,14 @@ table {
 }
 th,
 td {
-  border: 1px solid var(--page-line);
-  padding: 8px 10px;
+  border: 1px solid color-mix(in srgb, var(--page-line) 80%, var(--page-card) 20%);
+  padding: 9px 11px;
   text-align: left;
   vertical-align: top;
   white-space: normal;
   overflow-wrap: anywhere;
   word-break: normal;
-  line-height: 1.5;
+  line-height: 1.55;
   min-width: 0;
 }
 .markdown-body td[data-col-role="meaning"],
@@ -777,8 +943,8 @@ td {
 }
 .markdown-body table[data-table-archetype="glossary_2col"] td[data-col-role="meaning"][data-cell-prose="true"],
 .markdown-body table[data-table-archetype="long_meaning_3col"] td[data-col-role="meaning"][data-cell-prose="true"] {
-  text-align: justify;
-  text-justify: inter-word;
+  text-align: left;
+  text-justify: auto;
 }
 .markdown-body table[data-table-archetype="instructional_4col"] td[data-col-role="formula"],
 .markdown-body table[data-table-archetype="emoji_split_4col"] td[data-col-role="emoji"],
@@ -789,8 +955,26 @@ td {
   text-wrap: pretty;
 }
 th {
-  background: var(--table-head-bg);
+  background: color-mix(in srgb, var(--table-head-bg) 84%, var(--page-card) 16%);
   font-weight: 700;
+}
+tbody tr:nth-child(even) td {
+  background: color-mix(in srgb, var(--page-card) 90%, var(--theme-h1) 10%);
+}
+@media (max-width: 959px) {
+  .page {
+    padding: 28px 28px 44px;
+  }
+  .page::before {
+    display: none;
+  }
+  .markdown-body > h2 {
+    margin-left: 0;
+    padding-left: 0;
+  }
+  .markdown-body > h2::before {
+    display: none;
+  }
 }
 @media (max-width: 840px) {
   .page {
@@ -799,12 +983,32 @@ th {
     border-radius: 14px;
   }
   .hero {
-    min-height: 148px;
-    padding: 16px 14px;
+    grid-template-columns: 1fr;
+    min-height: auto;
+    padding: 18px 16px;
     gap: 12px;
   }
   .hero-emoji {
-    font-size: clamp(64px, 20vw, 88px);
+    justify-self: start;
+    font-size: clamp(54px, 18vw, 76px);
+  }
+  .hero-title {
+    max-inline-size: none;
+    font-size: clamp(29px, 8vw, 38px);
+  }
+  .hero-content {
+    max-width: none;
+  }
+  .callout {
+    grid-template-columns: 1fr;
+    gap: 10px;
+  }
+  .callout::before {
+    display: none;
+  }
+  .markdown-body h4 {
+    font-size: 12px;
+    margin-top: 18px;
   }
   .markdown-body h1 {
     font-size: 30px;
@@ -1824,6 +2028,7 @@ function normalizeGrammarMatrixColumnMarkup(sectionHtml: string): string {
         .trim();
       normalizedInner = splitStackedGrammarParagraphs(normalizedInner);
       normalizedInner = mergeFragmentedRuleParagraphs(normalizedInner);
+      normalizedInner = mergeStandaloneGrammarEmphasisParagraphs(normalizedInner);
       normalizedInner = normalizedInner.replaceAll(
         /<p\b([^>]*)>([\s\S]*?)<\/p>/gi,
         (_paragraphHtml, rawAttrs: string, rawContent: string) => {
@@ -1841,9 +2046,60 @@ function normalizeGrammarMatrixColumnMarkup(sectionHtml: string): string {
         },
       );
       normalizedInner = markFirstGrammarHeading(normalizedInner);
+      normalizedInner = markGrammarSubheadings(normalizedInner);
       return `<div class="column">${normalizedInner}</div>`;
     },
   );
+}
+
+function mergeStandaloneGrammarEmphasisParagraphs(columnInner: string): string {
+  const hasSentenceEnding = (value: string): boolean =>
+    /[.!?:](?:["')\]]+)?$/.test(stripHtml(value).replaceAll(/\s+/g, ' ').trim());
+
+  const isStandaloneInlineEmphasis = (value: string): boolean => {
+    const content = String(value || '').trim();
+    if (!/^\s*<em\b[\s\S]*<\/em>\s*$/i.test(content)) {
+      return false;
+    }
+    const plainText = stripHtml(content).replaceAll(/\s+/g, ' ').trim();
+    if (!plainText) {
+      return false;
+    }
+    return !/^\(.*\)$/.test(plainText);
+  };
+
+  let normalized = String(columnInner || '');
+
+  normalized = normalized.replaceAll(
+    /<p\b([^>]*)>([\s\S]*?)<\/p>\s*<p\b([^>]*)>\s*(<em\b[\s\S]*?<\/em>)\s*<\/p>\s*<p\b([^>]*)>([\s\S]*?)<\/p>/gi,
+    (fullMatch, prevAttrs: string, prevContent: string, _emAttrs: string, emphasisHtml: string, nextAttrs: string, nextContent: string) => {
+      if (!isStandaloneInlineEmphasis(emphasisHtml)) {
+        return fullMatch;
+      }
+      if (hasSentenceEnding(prevContent)) {
+        return fullMatch;
+      }
+
+      const mergedContent = normalizeInlineHtmlSpacing(
+        `${prevContent} ${emphasisHtml} ${nextContent}`,
+      );
+      return `<p${prevAttrs || nextAttrs}>${mergedContent}</p>`;
+    },
+  );
+
+  normalized = normalized.replaceAll(
+    /<p\b([^>]*)>\s*(<em\b[\s\S]*?<\/em>)\s*<\/p>\s*<p\b([^>]*)>([\s\S]*?)<\/p>/gi,
+    (fullMatch, emphasisAttrs: string, emphasisHtml: string, nextAttrs: string, nextContent: string) => {
+      if (!isStandaloneInlineEmphasis(emphasisHtml)) {
+        return fullMatch;
+      }
+
+      const mergedContent = normalizeInlineHtmlSpacing(`${emphasisHtml} ${nextContent}`);
+      return `<p${nextAttrs || emphasisAttrs}>${mergedContent}</p>`;
+    },
+  );
+
+  return normalized;
 }
 
 function normalizeInlineHtmlSpacing(content: string): string {
@@ -1948,6 +2204,43 @@ function markFirstGrammarHeading(columnInner: string): string {
   const content = paragraphMatch[2] || '';
   const replacement = `<p${appendClassToHtmlAttributes(attrs, 'grammar-card-heading')}>${content}</p>`;
   return `${columnInner.slice(0, paragraphIndex)}${replacement}${columnInner.slice(paragraphIndex + fullMatch.length)}`;
+}
+
+function markGrammarSubheadings(columnInner: string): string {
+  return columnInner.replaceAll(
+    /<p\b([^>]*)>([\s\S]*?)<\/p>/gi,
+    (fullMatch, rawAttrs: string, rawContent: string) => {
+      const attrs = String(rawAttrs || '').replaceAll(/\sdata-grammar-prose="true"/gi, '');
+      if (/\bgrammar-card-heading\b|\bgrammar-card-subheading\b/i.test(attrs)) {
+        return fullMatch;
+      }
+
+      const content = String(rawContent || '');
+      const plainText = stripHtml(content).replaceAll(/\s+/g, ' ').trim();
+      if (!plainText) {
+        return fullMatch;
+      }
+
+      const wordCount = plainText.split(' ').filter(Boolean).length;
+      const isRuleParagraph = /^rule:/i.test(plainText);
+      const isEmphasisOnly = /^\s*<em\b[\s\S]*<\/em>\s*$/i.test(content);
+      const hasStrongLead = /<strong\b/i.test(content);
+      const endsLikeHeading = /[:!?]$/.test(plainText);
+      const hasInstructionDash = plainText.includes('—') || plainText.includes('->');
+      const isShortHeadingLike =
+        !isRuleParagraph &&
+        !isEmphasisOnly &&
+        wordCount > 0 &&
+        wordCount <= 18 &&
+        (hasStrongLead || endsLikeHeading || hasInstructionDash);
+
+      if (!isShortHeadingLike) {
+        return fullMatch;
+      }
+
+      return `<p${appendClassToHtmlAttributes(attrs, 'grammar-card-subheading')}>${content}</p>`;
+    },
+  );
 }
 
 function appendClassToHtmlAttributes(attributes: string, className: string): string {
@@ -2124,53 +2417,144 @@ function buildBehaviorScript(features: ResolvedFeatures): string {
     });
   });
 
-  try {
-    const lockTrailingWords = (value, wordsToLock = 2) => {
-      let next = String(value || '')
-        .replace(/[ \\t\\r\\n\\f]+/g, ' ')
-        .trim();
-      if (!next) {
-        return '';
-      }
-      for (let index = 1; index < wordsToLock; index += 1) {
-        const match = /(\\S+)\\s+(\\S+)(\\s*)$/.exec(next);
-        if (!match?.[1] || !match[2]) {
-          break;
-        }
-        const prefix = next.slice(0, match.index).trimEnd();
-        const suffix = match[3] || '';
-        next = [prefix, match[1] + '\\u00A0' + match[2] + suffix].filter(Boolean).join(' ');
-      }
-      return next;
-    };
+  const updateEditorialRail = () => {
+    const page = document.querySelector('.page');
+    const header = page?.querySelector(':scope > .page-header');
+    if (!(page instanceof HTMLElement) || !(header instanceof HTMLElement)) {
+      return;
+    }
 
+    const pageRect = page.getBoundingClientRect();
+    const headerRect = header.getBoundingClientRect();
+    const nextStart = Math.max(120, Math.round(headerRect.bottom - pageRect.top + 18));
+    page.style.setProperty('--editorial-rail-start', String(nextStart) + 'px');
+  };
+
+  let railTicking = false;
+  const scheduleEditorialRailUpdate = () => {
+    if (railTicking) return;
+    railTicking = true;
+    requestAnimationFrame(() => {
+      updateEditorialRail();
+      railTicking = false;
+    });
+  };
+
+  scheduleEditorialRailUpdate();
+  window.addEventListener('resize', scheduleEditorialRailUpdate, { passive: true });
+  if (document.fonts?.ready) {
+    document.fonts.ready.then(() => {
+      scheduleEditorialRailUpdate();
+    }).catch(() => {});
+  }
+
+  try {
     const lockLeadingParentheticalPair = (value) =>
       String(value || '').replace(/^(\\(\\s*\\S+)\\s+(\\S+)/, '$1\\u00A0$2');
 
-    const applyGrammarWidowLock = (node, lockLeadingPair) => {
-      if (!(node instanceof HTMLElement)) return;
-      if (node.children.length > 0) return;
-      const original = String(node.textContent || '');
-      if (!original.trim()) return;
-      let next = original.replace(/[ \\t\\r\\n\\f]+/g, ' ').trim();
-      if (lockLeadingPair) {
-        next = lockLeadingParentheticalPair(next);
+    const lockTrailingShortLeadPhrase = (value) =>
+      String(value || '').replace(
+        /\\b(the|a|an|or|to|of|in|on|at|for|with)\\s+(\\S+)\\s+(\\S+)(\\s*)$/i,
+        '$1\\u00A0$2\\u00A0$3$4',
+      );
+
+    const lockCommonAffixNotation = (value) =>
+      String(value || '').replace(/(^|\\s)-(?=(er|est|ly|y)\\b)/gi, '$1\\u2011');
+
+    const lockSlashSeparatedPhrase = (value) =>
+      String(value || '').replace(/(\\S+)\\s*\\/\\s*(\\S+)/g, '$1\\u00A0/\\u00A0$2');
+
+    const widontText = (value) => String(value || '').replace(/(\\S+)\\s+(\\S+)(\\s*)$/, '$1\\u00A0$2$3');
+
+    const collectTextNodes = (root) => {
+      if (!(root instanceof HTMLElement)) return null;
+      const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+      const textNodes = [];
+      let current = walker.nextNode();
+      while (current) {
+        if ((current.textContent || '').trim()) {
+          textNodes.push(current);
+        }
+        current = walker.nextNode();
       }
-      next = lockTrailingWords(next, 2);
-      if (next && next !== original) {
-        node.textContent = next;
-      }
+      return textNodes;
     };
+
+    const findLeadingTextNode = (root) => {
+      const textNodes = collectTextNodes(root);
+      return textNodes?.[0] ?? null;
+    };
+
+    const findTerminalTextNode = (root) => {
+      const textNodes = collectTextNodes(root) ?? [];
+      for (let index = textNodes.length - 1; index >= 0; index -= 1) {
+        const candidate = textNodes[index];
+        if (candidate && /\\S+\\s+\\S+/.test(candidate.textContent || '')) {
+          return candidate;
+        }
+      }
+      return textNodes.at(-1) ?? null;
+    };
+
+    const lockTrailingMarker = (node) => {
+      const textNodes = collectTextNodes(node) ?? [];
+      if (textNodes.length < 2) return;
+
+      const trailingTextNode = textNodes.at(-1);
+      const rawTrailingText = trailingTextNode?.textContent || '';
+      const trailingMarker = rawTrailingText.trim();
+      if (!trailingMarker || trailingMarker.length > 4 || /[\\p{L}\\p{N}]/u.test(trailingMarker)) {
+        return;
+      }
+
+      trailingTextNode.textContent = '\\u00A0' + trailingMarker;
+    };
+
+    const applyWidont = (node, { lockLeadingPair = false } = {}) => {
+      if (!(node instanceof HTMLElement)) return;
+
+      if (lockLeadingPair) {
+        const leadingTextNode = findLeadingTextNode(node);
+        if (leadingTextNode) {
+          const lockedLeading = lockLeadingParentheticalPair(leadingTextNode.textContent || '');
+          if (lockedLeading && lockedLeading !== leadingTextNode.textContent) {
+            leadingTextNode.textContent = lockedLeading;
+          }
+        }
+      }
+
+      const terminalTextNode = findTerminalTextNode(node);
+      if (!terminalTextNode) return;
+
+      const updated = widontText(
+        lockTrailingShortLeadPhrase(
+          lockSlashSeparatedPhrase(lockCommonAffixNotation(terminalTextNode.textContent || '')),
+        ),
+      );
+      if (updated && updated !== terminalTextNode.textContent) {
+        terminalTextNode.textContent = updated;
+      }
+
+      lockTrailingMarker(node);
+    };
+
+    const grammarWidontTargets = document.querySelectorAll(
+      '.column-list.grammar-matrix-grid .column > .grammar-card-heading, ' +
+        '.column-list.grammar-matrix-grid .column > .grammar-card-subheading, ' +
+        '.column-list.grammar-matrix-grid .column > p[data-grammar-prose="true"], ' +
+        '.column-list.grammar-matrix-grid .column li',
+    );
+    grammarWidontTargets.forEach((element) => applyWidont(element));
 
     const grammarQuestionEmphasis = document.querySelectorAll(
       '.column-list.grammar-matrix-grid .column > p > em:only-child',
     );
-    grammarQuestionEmphasis.forEach((element) => applyGrammarWidowLock(element, true));
+    grammarQuestionEmphasis.forEach((element) => applyWidont(element, { lockLeadingPair: true }));
 
     const grammarInlineNotes = document.querySelectorAll(
       '.column-list.grammar-matrix-grid .column li > em',
     );
-    grammarInlineNotes.forEach((element) => applyGrammarWidowLock(element, true));
+    grammarInlineNotes.forEach((element) => applyWidont(element, { lockLeadingPair: true }));
   } catch {}
 
   const readStoredTheme = (key) => {
@@ -2811,6 +3195,18 @@ function buildBehaviorScript(features: ResolvedFeatures): string {
           return candidates.find((candidate) => hasSentenceAnchorLabel(candidate)) || null;
         };
 
+        const applySentenceAnchorTone = (element) => {
+          if (!(element instanceof HTMLElement)) return null;
+          element.classList.add('pronunciation-sentence-anchor');
+          const normalizedText = String(element.textContent || '').replace(/\s+/g, ' ').trim();
+          if (/(^|\b)shadow sentence\s*:/i.test(normalizedText)) {
+            element.classList.add('pronunciation-shadow-sentence');
+          } else {
+            element.classList.add('pronunciation-natural-sentence');
+          }
+          return element;
+        };
+
         const highlightSentenceAnchor = () => {
           const existing = document.querySelector('.pronunciation-sentence-anchor, .pronunciation-shadow-sentence');
           if (existing instanceof HTMLElement) {
@@ -2852,7 +3248,7 @@ function buildBehaviorScript(features: ResolvedFeatures): string {
             ) {
               parent.classList.add('pronunciation-sentence-anchor');
             }
-            return wrapper;
+            return applySentenceAnchorTone(wrapper);
           }
 
           const directBlockMatch = sectionElements.find((element) => {
@@ -2862,17 +3258,7 @@ function buildBehaviorScript(features: ResolvedFeatures): string {
             return hasSentenceAnchorLabel(element);
           });
           if (directBlockMatch instanceof HTMLElement) {
-            directBlockMatch.classList.add('pronunciation-sentence-anchor');
-            if (
-              /(^|\\b)shadow sentence\\s*:/i.test(
-                String(directBlockMatch.textContent || '').replace(/\\s+/g, ' ').trim(),
-              )
-            ) {
-              directBlockMatch.classList.add('pronunciation-shadow-sentence');
-            } else {
-              directBlockMatch.classList.add('pronunciation-natural-sentence');
-            }
-            return directBlockMatch;
+            return applySentenceAnchorTone(directBlockMatch);
           }
 
           const descendantSelectors = ['li', 'p', '.content > *', 'blockquote > *', 'div > *'];
@@ -2881,17 +3267,7 @@ function buildBehaviorScript(features: ResolvedFeatures): string {
             for (const selector of descendantSelectors) {
               const match = findFirstMatchingDescendant(element, selector);
               if (match instanceof HTMLElement) {
-                match.classList.add('pronunciation-sentence-anchor');
-                if (
-                  /(^|\\b)shadow sentence\\s*:/i.test(
-                    String(match.textContent || '').replace(/\\s+/g, ' ').trim(),
-                  )
-                ) {
-                  match.classList.add('pronunciation-shadow-sentence');
-                } else {
-                  match.classList.add('pronunciation-natural-sentence');
-                }
-                return match;
+                return applySentenceAnchorTone(match);
               }
             }
           }
@@ -2899,8 +3275,9 @@ function buildBehaviorScript(features: ResolvedFeatures): string {
           return null;
         };
 
-        const sentenceAnchorElement =
-          wordDrillEnabled || connectedSpeechEnabled ? highlightSentenceAnchor() : null;
+        if (wordDrillEnabled || connectedSpeechEnabled) {
+          highlightSentenceAnchor();
+        }
         const clipList = Array.isArray(pronunciationAudio.itemClips)
           ? pronunciationAudio.itemClips
           : [];
@@ -2953,24 +3330,6 @@ function buildBehaviorScript(features: ResolvedFeatures): string {
             );
           }
         };
-
-        if (
-          sentenceAnchorElement instanceof HTMLElement &&
-          pronunciationAudio?.primaryClip &&
-          !sentenceAnchorElement.querySelector('[data-sentence-anchor-controls="true"]')
-        ) {
-          const controls = document.createElement('span');
-          controls.className = 'pronunciation-line-meta';
-          controls.dataset.sentenceAnchorControls = 'true';
-          appendClipButtons(
-            controls,
-            [pronunciationAudio.primaryClip],
-            pronunciationAudio.primaryClip.label || 'Sentence',
-            'Play pronunciation sentence',
-          );
-          sentenceAnchorElement.appendChild(document.createElement('br'));
-          sentenceAnchorElement.appendChild(controls);
-        }
 
         const trimTrailingDelimiterInContainer = (container) => {
           if (!(container instanceof HTMLElement)) return;

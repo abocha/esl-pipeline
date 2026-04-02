@@ -1,0 +1,134 @@
+import { screen, waitFor } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+
+import {
+  STUDENT_WORKSPACE_ASYNC_TIMEOUT_MS,
+  renderInspectionPanel,
+  renderWorkspaceHistoryPanel,
+  renderWorkspaceInspectionReady,
+  setupStudentWorkspaceTest,
+} from './StudentWorkspace.test-harness';
+import * as api from '../../utils/api';
+
+describe('StudentWorkspace loading and inspection', () => {
+  beforeEach(() => {
+    setupStudentWorkspaceTest();
+  });
+
+  it('renders the inspection panel without a full workspace boot', () => {
+    renderInspectionPanel();
+
+    expect(screen.getByRole('heading', { name: /Lineage & Provenance/i })).toBeTruthy();
+    expect(screen.getByText(/Action audit:/i)).toBeTruthy();
+    expect(screen.getByText(/Assignment Memory Provenance/i)).toBeTruthy();
+    expect(screen.getByText(/student-memory-v1/i)).toBeTruthy();
+  });
+
+  it('does not refetch assignment history until apply is clicked', async () => {
+    const user = userEvent.setup();
+    const onApplyHistoryFilters = vi.fn();
+    renderWorkspaceHistoryPanel({ onApplyHistoryFilters });
+
+    await user.selectOptions(screen.getByRole('combobox', { name: /State/i }), 'failed');
+
+    const applyButtons = screen.getAllByRole('button', { name: /Apply/i });
+    await user.click(applyButtons[0]!);
+
+    expect(onApplyHistoryFilters).toHaveBeenCalledWith(
+      expect.objectContaining({ state: 'failed' }),
+    );
+  });
+
+  it('does not refetch timeline until apply is clicked', async () => {
+    const user = userEvent.setup();
+    const onApplyTimelineFilters = vi.fn();
+    renderWorkspaceHistoryPanel({ onApplyTimelineFilters });
+
+    await user.selectOptions(
+      screen.getByRole('combobox', { name: /Event type/i }),
+      'job_completed',
+    );
+
+    const applyButtons = screen.getAllByRole('button', { name: /Apply/i });
+    await user.click(applyButtons[1]!);
+
+    expect(onApplyTimelineFilters).toHaveBeenCalledWith(
+      expect.objectContaining({ type: 'job_completed' }),
+    );
+  });
+
+  it('inspects a job and loads provenance and lineage', async () => {
+    const user = userEvent.setup();
+    await renderWorkspaceInspectionReady();
+
+    const inspectButton = await screen.findByRole(
+      'button',
+      { name: /Inspect/i },
+      { timeout: STUDENT_WORKSPACE_ASYNC_TIMEOUT_MS },
+    );
+    await user.click(inspectButton);
+
+    await waitFor(
+      () => {
+        expect(api.fetchJobProvenance).toHaveBeenCalledWith('job-1');
+      },
+      { timeout: STUDENT_WORKSPACE_ASYNC_TIMEOUT_MS },
+    );
+    await waitFor(
+      () => {
+        expect(api.fetchPromptPackageLineage).toHaveBeenCalledWith('pkg-1');
+      },
+      { timeout: STUDENT_WORKSPACE_ASYNC_TIMEOUT_MS },
+    );
+
+    expect(screen.getByText(/Action audit:/i)).toBeTruthy();
+    expect(screen.getByText(/Binding at creation:/i)).toBeTruthy();
+  });
+
+  it('re-fetches lineage when inspecting the same job repeatedly', async () => {
+    const user = userEvent.setup();
+    await renderWorkspaceInspectionReady();
+
+    const inspectButton = await screen.findByRole(
+      'button',
+      { name: /Inspect/i },
+      { timeout: STUDENT_WORKSPACE_ASYNC_TIMEOUT_MS },
+    );
+    await user.click(inspectButton);
+
+    await waitFor(
+      () => {
+        expect(api.fetchJobProvenance).toHaveBeenCalledTimes(1);
+      },
+      { timeout: STUDENT_WORKSPACE_ASYNC_TIMEOUT_MS },
+    );
+    await waitFor(
+      () => {
+        expect(api.fetchPromptPackageLineage).toHaveBeenCalledTimes(1);
+      },
+      { timeout: STUDENT_WORKSPACE_ASYNC_TIMEOUT_MS },
+    );
+
+    await user.click(
+      await screen.findByRole(
+        'button',
+        { name: /Inspect/i },
+        { timeout: STUDENT_WORKSPACE_ASYNC_TIMEOUT_MS },
+      ),
+    );
+
+    await waitFor(
+      () => {
+        expect(api.fetchJobProvenance).toHaveBeenCalledTimes(2);
+      },
+      { timeout: STUDENT_WORKSPACE_ASYNC_TIMEOUT_MS },
+    );
+    await waitFor(
+      () => {
+        expect(api.fetchPromptPackageLineage).toHaveBeenCalledTimes(2);
+      },
+      { timeout: STUDENT_WORKSPACE_ASYNC_TIMEOUT_MS },
+    );
+  });
+});

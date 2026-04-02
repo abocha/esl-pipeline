@@ -23,7 +23,9 @@
     "clean": "node -e \"fs.rmSync('dist', {recursive:true, force:true})\"",
     "dev": "tsx watch --tsconfig tsconfig.json src/index.ts",
     "start": "node dist/src/index.js",
-    "test": "vitest run",
+    "test": "pnpm run test:unit",
+    "test:unit": "vitest run --exclude \"**/*.integration.test.ts\" --exclude \"**/*.integration.test.tsx\"",
+    "test:unit:timings": "vitest run --exclude \"**/*.integration.test.ts\" --exclude \"**/*.integration.test.tsx\" --reporter=json --outputFile=../../tmp/test-timings/telegram-ops-bot/vitest.json",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {

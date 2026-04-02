@@ -29,13 +29,20 @@ If this guide conflicts with [`docs/reference/agents-ssot.md`](agents-ssot.md), 
 ## Lane Contract
 
 - Root unit lane: `pnpm test`
+- Root prebuilt unit lane: `pnpm test:unit`
+- Root unit timing lane: `pnpm test:timings:unit`
+- Root legacy timing alias: `pnpm test:timings:frontend`
 - Root integration lane: `pnpm test:integration`
+- Root prebuilt integration lane: `pnpm test:integration:prebuilt`
 - Root backend DB + worker lane: `pnpm test:backend:db:worker`
 - Root full check: `pnpm check`
-  - Runs `build`, `typecheck`, `lint`, `test`, `test:integration`, and the backend DB + worker lane.
-- Current integration lane behavior at root:
-  - Runs `pnpm build` first.
-  - Then runs package-level integration scripts in parallel (`--if-present`).
+  - Runs `build`, `typecheck`, `lint`, `test`, `test:integration:prebuilt`, and the backend DB + worker lane.
+- Root lane behavior:
+  - `pnpm test` delegates to `pnpm test:unit`.
+  - `pnpm test:unit` runs package-level `test:unit` scripts in parallel (`--if-present`).
+  - `pnpm test:integration` runs `pnpm build` first, then delegates to `pnpm test:integration:prebuilt`.
+  - `pnpm test:integration:prebuilt` runs package-level integration scripts in parallel (`--if-present`).
+  - `pnpm test:timings:unit` runs the repo-wide timing lane across the targeted packages, and `pnpm test:timings:frontend` remains as a backwards-compatible alias.
 
 ## Script Methodology
 
@@ -45,6 +52,14 @@ When adding integration coverage to a package:
 - Define `test:unit` with explicit excludes for integration files.
 - Define `test:integration` with explicit integration targets.
 - Use deterministic file targeting for heavy integration suites.
+
+Root script contract:
+
+- `pnpm test` is the human-facing unit lane wrapper.
+- `pnpm test:unit` is the canonical workspace unit aggregator and only calls package `test:unit`.
+- `pnpm test:unit` must fail if any package contains test files but omits `test:unit`.
+- `pnpm test:integration` is the human-facing self-contained integration wrapper.
+- `pnpm test:integration:prebuilt` is the already-built integration aggregator for callers like `pnpm check`.
 
 Script contract baseline for unit-only packages:
 
@@ -123,7 +138,9 @@ Use this order when updating tests:
 1. Run targeted package tests first.
 2. Run lane-level checks:
    - `pnpm test`
+   - `pnpm test:unit` when specifically validating package entrypoint normalization
    - `pnpm test:integration`
+   - `pnpm test:integration:prebuilt` when the workspace is already built
    - `pnpm test:backend:db:worker` when backend PG/Redis behavior changed
 3. Run `pnpm check:fast` before PR when changes have broader behavior risk.
 4. Run `pnpm check` before merge for changes that can affect DB-backed backend or worker behavior.
