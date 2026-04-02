@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented here. Dates use `YYYY-MM-DD`.
 
+## [6.0.2] - 2026-04-02
+
+### Changed
+
+- Automated release from PR #55: Polish html publisher output and optimize test lanes (https://github.com/abocha/esl-pipeline/pull/55)
+
 ## [6.0.1] - 2026-03-28
 
 ### Changed
