@@ -30,6 +30,8 @@ If this guide conflicts with [`docs/reference/agents-ssot.md`](agents-ssot.md), 
 
 - Root unit lane: `pnpm test`
 - Root prebuilt unit lane: `pnpm test:unit`
+- Root unit timing lane: `pnpm test:timings:unit`
+- Root legacy timing alias: `pnpm test:timings:frontend`
 - Root integration lane: `pnpm test:integration`
 - Root prebuilt integration lane: `pnpm test:integration:prebuilt`
 - Root backend DB + worker lane: `pnpm test:backend:db:worker`
@@ -40,6 +42,7 @@ If this guide conflicts with [`docs/reference/agents-ssot.md`](agents-ssot.md), 
   - `pnpm test:unit` runs package-level `test:unit` scripts in parallel (`--if-present`).
   - `pnpm test:integration` runs `pnpm build` first, then delegates to `pnpm test:integration:prebuilt`.
   - `pnpm test:integration:prebuilt` runs package-level integration scripts in parallel (`--if-present`).
+  - `pnpm test:timings:unit` runs the repo-wide timing lane across the targeted packages, and `pnpm test:timings:frontend` remains as a backwards-compatible alias.
 
 ## Script Methodology
 
