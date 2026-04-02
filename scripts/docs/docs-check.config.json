@@ -112,5 +112,25 @@
     "`configs/wizard.defaults.json`",
     "file://"
   ],
-  "allowed_missing_targets": ["packages/orchestrator/configs/wizard.defaults.json"]
+  "allowed_missing_targets": ["packages/orchestrator/configs/wizard.defaults.json"],
+  "docs_gardening": {
+    "rolling_issue_title": "docs-gardening",
+    "stale_scan_roots": ["docs"],
+    "stale_excluded_prefixes": ["docs/archive/", "docs/drafts/", "docs/templates/", "docs/plans/"],
+    "low_signal_prefixes": ["docs/prompt-gallery/"],
+    "route_sources": [
+      "AGENTS.md",
+      "docs/README.md",
+      "docs/reference/DOCS_IA_MAP.md",
+      "docs/reference/DOCS_GOVERNANCE.md"
+    ],
+    "golden_set_docs": [
+      "AGENTS.md",
+      "docs/README.md",
+      "docs/reference/DOCS_IA_MAP.md",
+      "docs/reference/agents-ssot.md",
+      "docs/backend-frontend/backend-frontend-alignment.md",
+      "docs/reference/VERSIONING_MODEL.md"
+    ]
+  }
 }
