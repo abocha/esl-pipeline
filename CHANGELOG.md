@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented here. Dates use `YYYY-MM-DD`.
 
+## [6.0.3] - 2026-04-02
+
+### Changed
+
+- Automated release from PR #56: refactor(docs-gardening): build data-first docs harness (https://github.com/abocha/esl-pipeline/pull/56)
+
 ## [6.0.2] - 2026-04-02
 
 ### Changed
