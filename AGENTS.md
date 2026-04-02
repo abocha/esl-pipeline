@@ -172,7 +172,31 @@ Docs governance and IA:
   3. `git pull --ff-only`
   4. `git switch -c <branch>`
   5. `git push -u origin <branch>`
-  6. `gh pr create --base main --head <branch> --title "<title>" --body-file .github/pull_request_template.md`
+  6. `gh pr create --base main --head <branch> --title "<title>" --body-file .github/pull_request_template.md --label <release:major|release:minor|release:patch>`
+- Pull request body protocol:
+  - Use `.github/pull_request_template.md` sections exactly:
+    - `Summary`
+    - `Validation`
+    - `Risk Notes`
+    - `Checklist`
+  - In `Validation`, include commands actually run, including `pnpm check:fast`, targeted tests, and manual smoke if applicable.
+- Mandatory release label protocol:
+  - Every PR targeting `main` must have exactly one release label:
+    - `release:major`
+    - `release:minor`
+    - `release:patch`
+  - Determine the label using [`docs/reference/VERSIONING_MODEL.md`](docs/reference/VERSIONING_MODEL.md):
+    - `release:major`: breaking contract compatibility
+    - `release:minor`: backward-compatible feature or surface expansion
+    - `release:patch`: bugfix, docs, ops, refactor, or internal hardening
+  - If label choice is ambiguous, stop and ask before creating the PR.
+  - After PR creation, verify labels with `gh pr view <pr-number> --json labels` and fix immediately if missing or multiple.
+- Commit protocol:
+  - Use Conventional Commit style: `<type>(<scope>): <short imperative summary>`.
+  - Prefer: `feat`, `fix`, `docs`, `chore`, `refactor`, `test`, `build`, `ci`.
+  - Use a meaningful scope for the package or subsystem touched.
+  - Keep commits focused and avoid generated local artifacts.
+  - When behavior changes, include related docs updates in the same branch.
 - Monitor checks and comments:
   - `gh pr checks <pr-number>`
   - `gh pr view <pr-number> --comments`

@@ -39,18 +39,8 @@ jobs:
       - name: Install deps
         run: pnpm install --frozen-lockfile
 
-      - name: Docs checks
-        id: docs_checks
-        continue-on-error: true
-        run: pnpm docs:check
-
-      - name: Generate docs health report
-        if: always()
-        run: pnpm docs:health:report
-
-      - name: Find stale active docs
-        if: always()
-        run: pnpm docs:stale:active
+      - name: Generate docs gardening artifacts
+        run: pnpm docs:garden
 
       - name: Upload docs gardening artifacts
         if: always()
@@ -58,77 +48,68 @@ jobs:
         with:
           name: docs-gardening-artifacts
           path: |
+            tmp/docs-gardening.json
+            tmp/docs-gardening-issue.json
+            tmp/docs-gardening-issue.md
             tmp/docs-health-report.json
             tmp/docs-health-report.md
             tmp/docs-stale-active.json
             tmp/docs-stale-active.md
           if-no-files-found: warn
 
-      - name: Open or update rolling docs-gardening issue
+      - name: Update rolling docs-gardening issue
         if: always()
         uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd
-        env:
-          DOCS_CHECK_OUTCOME: ${{ steps.docs_checks.outcome }}
         with:
           script: |
             const fs = require('node:fs');
-
-            const title = 'docs-gardening';
-            const reportPath = 'tmp/docs-health-report.md';
-            const stalePath = 'tmp/docs-stale-active.md';
-
-            const report = fs.existsSync(reportPath) ? fs.readFileSync(reportPath, 'utf8') : 'missing docs health report';
-            const stale = fs.existsSync(stalePath) ? fs.readFileSync(stalePath, 'utf8') : 'missing stale docs report';
-
-            const checksFailed = process.env.DOCS_CHECK_OUTCOME === 'failure';
-            const hasErrors = /- Errors:\s+[1-9]/.test(report);
-            const hasWarnings = /- Warnings:\s+[1-9]/.test(report);
-            const hasCandidates = /\|\s+docs\//.test(stale);
-
-            if (!checksFailed && !hasErrors && !hasWarnings && !hasCandidates) {
-              core.info('No docs-gardening findings. Skipping issue update.');
+            const issuePath = 'tmp/docs-gardening-issue.json';
+            if (!fs.existsSync(issuePath)) {
+              core.setFailed(`Missing docs gardening issue artifact: ${issuePath}`);
               return;
             }
 
+            const issue = JSON.parse(fs.readFileSync(issuePath, 'utf8'));
+            const title = issue.title ?? 'docs-gardening';
             const runUrl = `${process.env.GITHUB_SERVER_URL}/${process.env.GITHUB_REPOSITORY}/actions/runs/${process.env.GITHUB_RUN_ID}`;
-            const summary = [
-              'Automated docs-gardening run found actionable items.',
-              '',
-              `- Run: ${runUrl}`,
-              `- docs:check outcome: ${process.env.DOCS_CHECK_OUTCOME}`,
-              `- docs health warnings present: ${hasWarnings}`,
-              '',
-              '## Actionable Checklist',
-              '',
-              '- [ ] Fix broken links and routing edge failures from report.',
-              '- [ ] Fix metadata/freshness violations from report.',
-              '- [ ] Triage stale-active candidates (archive/update/relink).',
-              '- [ ] Re-run `pnpm docs:check && pnpm docs:health:report` locally.',
-              '',
-              '## Docs Health Report',
-              '',
-              report,
-              '',
-              '## Stale Active Docs Candidates',
-              '',
-              stale,
-            ].join('\n');
+            const body = `${issue.body.trimEnd()}\n\n## Run\n\n- ${runUrl}\n`;
 
             const { data: issues } = await github.rest.issues.listForRepo({
               owner: context.repo.owner,
               repo: context.repo.repo,
-              state: 'open',
+              state: 'all',
               per_page: 100,
             });
-
             const existing = issues.find((issue) => issue.title === title);
+
+            if (issue.action === 'close') {
+              if (!existing) {
+                core.info('No existing docs-gardening issue to close.');
+                return;
+              }
+
+              await github.rest.issues.update({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: existing.number,
+                body,
+                state: 'closed',
+              });
+              core.info(`Closed docs-gardening issue #${existing.number}.`);
+              return;
+            }
+
+            if (issue.action !== 'create-or-update') {
+              core.info(`No docs-gardening issue action required: ${issue.action}`);
+              return;
+            }
 
             if (!existing) {
               await github.rest.issues.create({
                 owner: context.repo.owner,
                 repo: context.repo.repo,
                 title,
-                body: summary,
+                body,
               });
               core.info('Created new docs-gardening issue.');
               return;
@@ -138,12 +119,12 @@ jobs:
               owner: context.repo.owner,
               repo: context.repo.repo,
               issue_number: existing.number,
-              body: summary,
+              body,
+              state: 'open',
             });
             core.info(`Updated docs-gardening issue #${existing.number}.`);
 
-      - name: Fail workflow if docs checks failed
-        if: steps.docs_checks.outcome == 'failure'
+      - name: Fail workflow if hard gates failed
+        if: always()
         run: |
-          echo "Docs checks failed during docs-gardening run."
-          exit 1
+          node -e "const fs=require('node:fs');const report=JSON.parse(fs.readFileSync('tmp/docs-gardening.json','utf8')); if(report.summary?.status==='failing'){console.error('Docs gardening hard gates failed.'); process.exit(1);}"

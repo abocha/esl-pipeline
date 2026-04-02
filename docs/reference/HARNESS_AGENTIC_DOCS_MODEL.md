@@ -1,87 +1,58 @@
-# Harness Agentic Docs Model (Repo Implementation)
+# Harness Agentic Docs Model (v2)
 
 ## Meta
 
 - Audience: maintainers and AI agents improving docs operations.
-- Read Time: 6 minutes.
-- Authority Level: Docs system design and operating model.
-- Last Verified Against: 2026-03-13 repo state.
+- Read Time: 5 minutes.
+- Authority Level: docs system design and operating model.
+- Last Verified Against: 2026-04-03 repo state.
 - Owner: founder-maintainer + automation agents.
 - Review Cadence: monthly or after major workflow/tooling changes.
 - Status: `reference`.
 
 ## Purpose
 
-- Translate harness-engineering principles into concrete, enforceable repo rules.
-- Keep docs agent-friendly without overengineering.
-- Preserve the direct mapping back to the Harness article while the canonical repo model lives in `AGENT_LEGIBILITY_MODEL.md`.
+- Translate harness-engineering principles into the repo’s docs-gardening model.
+- Keep the system data-first, mechanically checkable, and easy for agents to act on.
 
-Reference article:
-`https://openai.com/index/harness-engineering/` (February 11, 2026)
+## V2 Harness Shape
+
+- One structured snapshot should drive the run.
+- Hard gates and heuristics should stay separate.
+- Markdown reports should render the snapshot; they should not be the primary source of truth.
+- The rolling issue should represent the manual review queue.
 
 ## Principle Mapping
 
 1. **Repo as system of record**
-   - Canonical guidance lives in tracked docs files.
-   - Chat outputs are advisory until encoded in repo docs.
+   - Repository-tracked docs define the contract.
+   - Generated artifacts summarize the latest run.
 
-2. **AGENTS.md as map, not full manual**
-   - `AGENTS.md` is short and routing-first.
-   - Deep contracts remain in SSOT and task docs.
+2. **Router docs stay short**
+   - `AGENTS.md` and `docs/README.md` point to the right place.
+   - Deep policy lives in reference docs, not in workflow code.
 
-3. **Progressive disclosure**
-   - Router chain:
-     `AGENTS.md -> docs/README.md -> DOCS_IA_MAP -> task-specific docs -> SSOT`
-   - Agents read the minimum required docs first.
+3. **Hard gates first**
+   - `docs:check` enforces the merge-blocking rules.
+   - Warnings and stale heuristics do not block by themselves.
 
-4. **Mechanical checks over social checks**
-   - `pnpm docs:check` enforces structure, links, metadata, freshness windows, and route integrity.
-   - CI blocks merges when enforced docs drift.
+4. **Manual review queue second**
+   - The rolling issue is where ambiguous candidates land.
+   - Human judgment decides archive versus refresh versus ignore.
 
-5. **Continuous docs-gardening**
-   - Weekly automated docs health run.
-   - Rolling issue for drift and stale-doc candidates.
-   - Rule promotion: repeated review comments become checks.
+5. **Data-first artifacts**
+   - JSON is the primary artifact.
+   - Markdown is a view for readers and issue bodies.
 
-## Operating Constraints (Pragmatic)
+## Operating Constraints
 
-- Keep enforced scope high-signal and explicitly enumerated.
-- Keep scripts fast and deterministic.
-- Enforce through CI for all declared scopes.
-- Prefer archiving stale long docs over indefinite patching.
-
-## Enforced Scope (Current)
-
-- Core routing and governance docs.
-- Active operations runbooks.
-- Selected non-core docs:
-  - `docs/backend-frontend/DEPLOYMENT.md`
-  - `docs/backend-frontend/batch-backend-ssot.md`
-  - `docs/reference/env.md`
-  - `docs/reference/pipeline-manifest.md`
-  - `docs/reference/ORCHESTRATOR_API_V2_MIGRATION.md`
-  - `docs/reference/GENERATION_PROVIDER_POLICY.md`
-  - `packages/orchestrator/README.md`
-  - `packages/batch-backend/README.md`
-  - `packages/batch-frontend/README.md`
-  - `packages/provider-runtime/README.md`
-
-See:
-
-- [`docs/reference/DOCS_GOVERNANCE.md`](DOCS_GOVERNANCE.md)
-- [`scripts/docs/docs-check.config.json`](../../scripts/docs/docs-check.config.json)
-
-## Quality Loop
-
-- Score quality with [`docs/reference/DOCS_QUALITY_SCORE.md`](DOCS_QUALITY_SCORE.md).
-- Track health via generated reports in `tmp/`.
-- Execute gardening process from [`docs/reference/DOCS_GARDENING_PLAYBOOK.md`](DOCS_GARDENING_PLAYBOOK.md).
+- Keep the harness fast and deterministic.
+- Keep enforced scope high-signal.
+- Prefer archive moves over indefinite doc drift.
+- Promote repeated review pain into explicit policy, not more ad hoc interpretation.
 
 ## Related
 
-- [`AGENTS.md`](../../AGENTS.md)
-- [`docs/reference/AGENT_LEGIBILITY_MODEL.md`](AGENT_LEGIBILITY_MODEL.md)
 - [`docs/reference/DOCS_GOVERNANCE.md`](DOCS_GOVERNANCE.md)
 - [`docs/reference/DOCS_GARDENING_PLAYBOOK.md`](DOCS_GARDENING_PLAYBOOK.md)
-- [`docs/reference/DOCS_IA_MAP.md`](DOCS_IA_MAP.md)
-- [`docs/reference/agents-ssot.md`](agents-ssot.md)
+- [`docs/reference/DOCS_QUALITY_SCORE.md`](DOCS_QUALITY_SCORE.md)
