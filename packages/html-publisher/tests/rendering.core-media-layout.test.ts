@@ -87,6 +87,20 @@ describe('rendering', () => {
     expect(html).toContain('copy-code-button');
   });
 
+  it('ships editorial rail, calmer hero treatment, and unified panel hooks', async () => {
+    const markdown = `## One\n\n### Two\n\n#### Detail Label\n\n:::callout 💡\nCallout text\n:::\n\n:::study-text\nStudy text\n:::\n\n:::toc\n\n## One`;
+    const html = await renderToHtml(markdown, 'Editorial');
+    expect(html).toContain('.page::before {');
+    expect(html).toContain('top: var(--editorial-rail-start, 246px);');
+    expect(html).toContain('.markdown-body > h2::before {');
+    expect(html).toContain('@media (max-width: 959px) {');
+    expect(html).toContain('.callout,\n.study-text,\n.toc-shell,\n.audio-figure,\ndetails:not(.study-text) {');
+    expect(html).toContain('.markdown-body h4 {');
+    expect(html).toContain('.markdown-body h4 .heading-text {');
+    expect(html).toContain("page.style.setProperty('--editorial-rail-start'");
+    expect(html).not.toContain('repeating-linear-gradient(135deg');
+  });
+
   it('wraps table of contents in a collapsed details shell', async () => {
     const markdown = `:::toc\n\n## One\n\n## Two`;
     const html = await renderToHtml(markdown, 'Toc');

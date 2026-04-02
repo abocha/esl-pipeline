@@ -9,7 +9,9 @@ describe('rendering', () => {
     const markdown = `| H1 | H2 |\n| --- | --- |\n| A | B |`;
     const html = await renderToHtml(markdown, 'Table');
     expect(html).toContain('--table-head-bg: color-mix');
-    expect(html).toContain('th {\n  background: var(--table-head-bg);');
+    expect(html).toContain(
+      'th {\n  background: color-mix(in srgb, var(--table-head-bg) 84%, var(--page-card) 16%);',
+    );
     expect(html).toContain('table-layout: auto;');
     expect(html).toContain('.markdown-body table[data-balanced-columns="true"]');
     expect(html).toContain('table-layout: fixed;');
@@ -90,7 +92,7 @@ describe('rendering', () => {
     const heading = renderedDocument.querySelector(
       '.column-list.grammar-matrix-grid .column > .grammar-card-heading',
     );
-    expect(heading?.textContent?.trim()).toBe('1. Is it GENERAL?');
+    expect(heading?.textContent?.replaceAll('\u00A0', ' ').trim()).toBe('1. Is it GENERAL?');
 
     const ruleParagraph = [
       ...renderedDocument.querySelectorAll('.column-list.grammar-matrix-grid .column > p'),
@@ -171,6 +173,136 @@ describe('rendering', () => {
     );
     expect(firstInlineNote?.textContent).toContain('(The\u00A0specific');
     expect(firstInlineNote?.textContent).toContain('music\u00A0there).');
+  });
+
+  it('marks short bold grammar helper lines as subheadings for balanced wrapping', async () => {
+    const markdown = `### A. 👀 Notice the Grammar
+  
+  :::column-list
+  :::column
+  **Short words (1 syllable) — add -er / -est:**
+  - *small → smaller → the smallest*
+  
+  **Words ending in -y — change y → i, then add -er / -est:**
+  - *friendly → friendlier → the friendliest*
+  :::
+  :::column
+  **Long words (3+ syllables) — use more / the most:**
+  - *comfortable → more comfortable → the most comfortable*
+  
+  **⚠️ Irregular forms — memorise these two pairs!**
+  - *good → better → the best*
+  :::
+  :::`;
+    const html = await renderToHtml(markdown, 'Grammar Subheadings');
+    const renderedDocument = createRenderedDocument(html);
+
+    const subheadings = [
+      ...renderedDocument.querySelectorAll(
+        '.column-list.grammar-matrix-grid .column > .grammar-card-subheading',
+      ),
+    ];
+    const text = subheadings.map((element) =>
+      element.textContent?.replaceAll('\u2011', '-').replaceAll(/\s+/g, ' ').trim(),
+    );
+
+    expect(text).toContain('Words ending in -y — change y → i, then add -er / -est:');
+    expect(text).toContain('⚠️ Irregular forms — memorise these two pairs!');
+  });
+
+  it('applies widont to grammar headings and helper lines with dangling last words', async () => {
+    const markdown = `### A. 👀 Notice the Grammar
+  
+  :::column-list
+  :::column
+  **Long words (3+ syllables) — use more / the most:**
+  - *comfortable → more comfortable → the most comfortable*
+  
+  **Adverbs ending in -ly** — always use more / the most:
+  - *kindly → more kindly → the most kindly*
+  
+  **⚠️ Irregular forms — memorise these two pairs!**
+  - *good → better → the best*
+  - *handsome → handsomer* **or** *more handsome* ✓
+  :::
+  :::`;
+    const html = await renderToHtml(markdown, 'Grammar Widont');
+    const renderedDocument = createRenderedDocument(html);
+
+    const helperLine = renderedDocument.querySelector('.grammar-card-subheading');
+    expect(helperLine?.textContent).toContain('the\u00A0most:');
+    expect(helperLine?.textContent).toContain('more\u00A0/\u00A0the\u00A0most:');
+
+    const firstListItem = renderedDocument.querySelector('li');
+    expect(firstListItem?.textContent).toContain('the\u00A0most\u00A0comfortable');
+
+    const allSubheadingText = [
+      ...renderedDocument.querySelectorAll('.grammar-card-subheading'),
+    ].map((element) => element.textContent ?? '');
+    expect(allSubheadingText.some((text) => text.includes('two\u00A0pairs!'))).toBe(true);
+
+    const allListItemText = [...renderedDocument.querySelectorAll('li')].map(
+      (element) => element.textContent ?? '',
+    );
+    expect(allListItemText.some((text) => text.includes('more\u00A0handsome\u00A0✓'))).toBe(true);
+  });
+
+  it('merges standalone non-parenthetical emphasis lines back into grammar prose', async () => {
+    const markdown = `### A. 👀 Notice the Grammar
+  
+  :::column-list
+  :::column
+  **3. Verb Positioning (Prefer… more)**
+  
+  In Russian, you might say "I more prefer" or "I more work." In English, the verb and its object must stay together.
+  
+  *More*
+  
+  goes at the end!
+  
+  - ❌ *I more prefer electronic music.*
+  - ✅ I prefer electronic music **more**.
+  :::
+  :::column
+  **4. The "To Be" Rule (Review)**
+  
+  Remember your state verbs! Do not use
+  
+  *am / is / are*
+  
+  with action verbs.
+  
+  - ❌ *I am hate rock.*
+  - ✅ I hate rock.
+  :::
+  :::`;
+    const html = await renderToHtml(markdown, 'Grammar Inline Emphasis Merge');
+    const renderedDocument = createRenderedDocument(html);
+
+    const directParagraphs = [
+      ...renderedDocument.querySelectorAll('.column-list.grammar-matrix-grid .column > p'),
+    ];
+
+    expect(
+      directParagraphs.some((paragraph) => {
+        const text = paragraph.textContent?.replaceAll('\u00A0', ' ').replaceAll(/\s+/g, ' ').trim();
+        return text === 'More' || text === 'am / is / are';
+      }),
+    ).toBe(false);
+
+    expect(
+      directParagraphs.some((paragraph) =>
+        paragraph.textContent?.replaceAll('\u00A0', ' ').replaceAll(/\s+/g, ' ').trim() ===
+        'More goes at the end!',
+      ),
+    ).toBe(true);
+
+    expect(
+      directParagraphs.some((paragraph) =>
+        paragraph.textContent?.replaceAll('\u00A0', ' ').replaceAll(/\s+/g, ' ').trim() ===
+        'Remember your state verbs! Do not use am / is / are with action verbs.',
+      ),
+    ).toBe(true);
   });
 
   it('leaves other column-list blocks unscoped', async () => {
