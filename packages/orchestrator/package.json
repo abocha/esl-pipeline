@@ -38,6 +38,7 @@
     "test": "pnpm run test:unit",
     "test:integration": "vitest run tests/pipeline.integration.test.ts",
     "test:unit": "vitest run --testTimeout=30000 --exclude \"tests/**/*.integration.test.ts\"",
+    "test:unit:timings": "vitest run --testTimeout=30000 --reporter=json --outputFile=../../tmp/test-timings/orchestrator/vitest.json --exclude \"tests/**/*.integration.test.ts\"",
     "test:watch": "vitest",
     "typecheck": "tsc --noEmit"
   },

@@ -92,10 +92,11 @@
     "test:coverage:report": "node scripts/test/generate-coverage-report.mjs",
     "test:integration": "pnpm build && pnpm run test:integration:prebuilt",
     "test:integration:prebuilt": "pnpm -r --parallel --workspace-concurrency=4 --filter './packages/*' --if-present run test:integration",
-    "test:unit": "node scripts/test/assert-test-unit-scripts.mjs && pnpm -r --parallel --workspace-concurrency=4 --filter './packages/*' --if-present run test:unit",
-    "test:timings:frontend": "node scripts/test/run-frontend-unit-timings.mjs",
+    "test:timings:frontend": "pnpm run test:timings:unit",
     "test:timings:report": "node scripts/test/generate-frontend-timing-report.mjs",
+    "test:timings:unit": "node scripts/test/run-frontend-unit-timings.mjs",
     "test:topo": "pnpm -r --filter './packages/*' run test",
+    "test:unit": "node scripts/test/assert-test-unit-scripts.mjs && pnpm -r --parallel --workspace-concurrency=4 --filter './packages/*' --if-present run test:unit",
     "test:watch": "pnpm -r --filter './packages/*' --if-present run test:watch",
     "typecheck": "pnpm -r --filter './packages/*' --if-present run typecheck"
   },
