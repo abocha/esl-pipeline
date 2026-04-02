@@ -4,7 +4,7 @@ import { beforeEach, describe, expect, it } from 'vitest';
 
 import {
   STUDENT_WORKSPACE_ASYNC_TIMEOUT_MS,
-  renderWorkspace,
+  renderWorkspaceWithProfileCandidates,
   setupStudentWorkspaceTest,
 } from './StudentWorkspace.test-harness';
 import * as api from '../../utils/api';
@@ -15,12 +15,7 @@ describe('StudentWorkspace candidates', () => {
   });
 
   it('renders pending profile candidates grouped by target section', async () => {
-    renderWorkspace();
-
-    await screen.findByText(/Profile Candidates/i, {}, { timeout: STUDENT_WORKSPACE_ASYNC_TIMEOUT_MS });
-    await screen.findAllByText(/Work and communication context/i, {}, {
-      timeout: STUDENT_WORKSPACE_ASYNC_TIMEOUT_MS,
-    });
+    await renderWorkspaceWithProfileCandidates();
 
     expect(
       screen.getAllByText(/Uses English with product and engineering teams at work\./i).length,
@@ -32,11 +27,8 @@ describe('StudentWorkspace candidates', () => {
 
   it('shows reviewed profile candidates including deferred items', async () => {
     const user = userEvent.setup();
-    renderWorkspace();
+    await renderWorkspaceWithProfileCandidates();
 
-    await screen.findByLabelText(/Profile Candidate Review Bucket/i, {}, {
-      timeout: STUDENT_WORKSPACE_ASYNC_TIMEOUT_MS,
-    });
     await user.selectOptions(
       screen.getByLabelText(/Profile Candidate Review Bucket/i),
       'reviewed',
@@ -53,7 +45,7 @@ describe('StudentWorkspace candidates', () => {
     'approves a profile candidate with edited text and a reviewer note',
     async () => {
       const user = userEvent.setup();
-      renderWorkspace();
+      await renderWorkspaceWithProfileCandidates();
 
       const approvedText = await screen.findByLabelText(
         /Approved Fact Text candidate-pending/i,
@@ -86,11 +78,8 @@ describe('StudentWorkspace candidates', () => {
     'promotes an explicit subset of approved profile candidates into a draft revision',
     async () => {
       const user = userEvent.setup();
-      renderWorkspace();
+      await renderWorkspaceWithProfileCandidates();
 
-      await screen.findByLabelText(/Profile Candidate Review Bucket/i, {}, {
-        timeout: STUDENT_WORKSPACE_ASYNC_TIMEOUT_MS,
-      });
       await user.selectOptions(
         screen.getByLabelText(/Profile Candidate Review Bucket/i),
         'reviewed',

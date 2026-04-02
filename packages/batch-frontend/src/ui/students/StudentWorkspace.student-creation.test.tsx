@@ -3,8 +3,7 @@ import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import {
-  STUDENT_WORKSPACE_ASYNC_TIMEOUT_MS,
-  renderWorkspace,
+  renderWorkspaceForStudentCreation,
   setupStudentWorkspaceTest,
 } from './StudentWorkspace.test-harness';
 import * as api from '../../utils/api';
@@ -16,13 +15,7 @@ describe('StudentWorkspace student creation', () => {
 
   it('validates student creation name before submit', async () => {
     const user = userEvent.setup();
-    renderWorkspace();
-
-    await screen.findByRole(
-      'button',
-      { name: /Create Student/i },
-      { timeout: STUDENT_WORKSPACE_ASYNC_TIMEOUT_MS },
-    );
+    await renderWorkspaceForStudentCreation();
 
     await user.click(screen.getByRole('button', { name: /Create Student/i }));
     await user.click(screen.getByRole('button', { name: /^Create Student$/i }));
@@ -53,13 +46,7 @@ describe('StudentWorkspace student creation', () => {
       };
     });
 
-    renderWorkspace();
-
-    await screen.findByRole(
-      'button',
-      { name: /Create Student/i },
-      { timeout: STUDENT_WORKSPACE_ASYNC_TIMEOUT_MS },
-    );
+    await renderWorkspaceForStudentCreation();
 
     await user.click(screen.getByRole('button', { name: /Create Student/i }));
     await user.type(screen.getByLabelText(/Student Name/i), 'Alex');
@@ -80,13 +67,7 @@ describe('StudentWorkspace student creation', () => {
     'creates a complete starter profile payload and lets it override the initial profile picker',
     async () => {
       const user = userEvent.setup();
-      renderWorkspace();
-
-      await screen.findByRole(
-        'button',
-        { name: /Create Student/i },
-        { timeout: STUDENT_WORKSPACE_ASYNC_TIMEOUT_MS },
-      );
+      await renderWorkspaceForStudentCreation();
 
       await user.click(screen.getByRole('button', { name: /Create Student/i }));
       await screen.findByLabelText(/Student Name/i);
@@ -132,13 +113,7 @@ describe('StudentWorkspace student creation', () => {
     'blocks create when the starter profile section is partially filled',
     async () => {
       const user = userEvent.setup();
-      renderWorkspace();
-
-      await screen.findByRole(
-        'button',
-        { name: /Create Student/i },
-        { timeout: STUDENT_WORKSPACE_ASYNC_TIMEOUT_MS },
-      );
+      await renderWorkspaceForStudentCreation();
 
       await user.click(screen.getByRole('button', { name: /Create Student/i }));
       fireEvent.change(screen.getByLabelText(/Student Name/i), { target: { value: 'Mira' } });
@@ -164,13 +139,7 @@ describe('StudentWorkspace student creation', () => {
       const user = userEvent.setup();
       vi.mocked(api.createStudentProfile).mockRejectedValue(new Error('Student already exists'));
 
-      renderWorkspace();
-
-      await screen.findByRole(
-        'button',
-        { name: /Create Student/i },
-        { timeout: STUDENT_WORKSPACE_ASYNC_TIMEOUT_MS },
-      );
+      await renderWorkspaceForStudentCreation();
 
       await user.click(screen.getByRole('button', { name: /Create Student/i }));
       await screen.findByLabelText(/Student Name/i);

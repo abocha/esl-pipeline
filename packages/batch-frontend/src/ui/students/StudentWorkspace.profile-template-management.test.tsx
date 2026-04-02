@@ -4,8 +4,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import {
   CLEAN_TEMPLATE_STARTER_CONTENT,
-  STUDENT_WORKSPACE_ASYNC_TIMEOUT_MS,
-  renderWorkspace,
+  renderLoadedWorkspace,
   setupStudentWorkspaceTest,
 } from './StudentWorkspace.test-harness';
 import * as api from '../../utils/api';
@@ -17,13 +16,7 @@ describe('StudentWorkspace profile and template management', () => {
 
   it('updates student profile binding', async () => {
     const user = userEvent.setup();
-    renderWorkspace();
-
-    await screen.findByRole(
-      'button',
-      { name: /Save Student Binding/i },
-      { timeout: STUDENT_WORKSPACE_ASYNC_TIMEOUT_MS },
-    );
+    await renderLoadedWorkspace();
 
     await user.selectOptions(
       screen.getByRole('combobox', { name: /Bound profile/i }),
@@ -40,13 +33,7 @@ describe('StudentWorkspace profile and template management', () => {
 
   it('saves template content from template gallery panel', async () => {
     const user = userEvent.setup();
-    renderWorkspace();
-
-    await screen.findByRole(
-      'button',
-      { name: /Save Template Content/i },
-      { timeout: STUDENT_WORKSPACE_ASYNC_TIMEOUT_MS },
-    );
+    await renderLoadedWorkspace();
 
     const templateEditor = screen.getByPlaceholderText(
       /Select a template to edit/i,
@@ -73,13 +60,7 @@ describe('StudentWorkspace profile and template management', () => {
       updatedAt: '2026-02-07T12:00:00.000Z',
     });
 
-    renderWorkspace();
-
-    await screen.findByRole(
-      'button',
-      { name: /Create Template/i },
-      { timeout: STUDENT_WORKSPACE_ASYNC_TIMEOUT_MS },
-    );
+    await renderLoadedWorkspace();
 
     await user.type(screen.getByLabelText(/New template ID/i), 'hw/custom-template.md');
     await user.click(screen.getByRole('button', { name: /Create Template/i }));

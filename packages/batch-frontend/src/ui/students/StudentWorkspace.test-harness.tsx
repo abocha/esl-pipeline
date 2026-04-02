@@ -1,4 +1,4 @@
-import { render } from '@testing-library/react';
+import { render, screen, waitFor } from '@testing-library/react';
 import type { RenderResult } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { vi } from 'vitest';
@@ -755,10 +755,124 @@ export function setupStudentWorkspaceTest() {
   seedStudentWorkspaceMocks();
 }
 
-export function renderWorkspace(): RenderResult {
+export function renderStudentWorkspace(): RenderResult {
   return render(
     <MemoryRouter>
       <StudentWorkspace />
     </MemoryRouter>,
   );
+}
+
+async function waitForLoadedWorkspace() {
+  await screen.findByText(
+    /Current profile:/i,
+    {},
+    { timeout: STUDENT_WORKSPACE_ASYNC_TIMEOUT_MS },
+  );
+  await screen.findByRole(
+    'heading',
+    { name: /Assignment History/i },
+    { timeout: STUDENT_WORKSPACE_ASYNC_TIMEOUT_MS },
+  );
+  await screen.findByRole(
+    'heading',
+    { name: /Student Timeline/i },
+    { timeout: STUDENT_WORKSPACE_ASYNC_TIMEOUT_MS },
+  );
+}
+
+async function waitForTimelineFilters() {
+  await waitFor(
+    () => {
+      if (vi.mocked(api.listUserJobs).mock.calls.length !== 1) {
+        throw new Error('Expected the initial assignment history load to complete.');
+      }
+    },
+    { timeout: STUDENT_WORKSPACE_ASYNC_TIMEOUT_MS },
+  );
+  await waitFor(
+    () => {
+      if (vi.mocked(api.getStudentTimeline).mock.calls.length !== 1) {
+        throw new Error('Expected the initial student timeline load to complete.');
+      }
+    },
+    { timeout: STUDENT_WORKSPACE_ASYNC_TIMEOUT_MS },
+  );
+  await screen.findByRole(
+    'combobox',
+    { name: /State/i },
+    { timeout: STUDENT_WORKSPACE_ASYNC_TIMEOUT_MS },
+  );
+  await screen.findByRole(
+    'combobox',
+    { name: /Event type/i },
+    { timeout: STUDENT_WORKSPACE_ASYNC_TIMEOUT_MS },
+  );
+  await screen.findAllByRole(
+    'button',
+    { name: /Apply/i },
+    { timeout: STUDENT_WORKSPACE_ASYNC_TIMEOUT_MS },
+  );
+}
+
+async function waitForProfileCandidates() {
+  await waitFor(
+    () => {
+      if (vi.mocked(api.listStudentProfileCandidates).mock.calls.length !== 1) {
+        throw new Error('Expected the initial candidate load to complete.');
+      }
+    },
+    { timeout: STUDENT_WORKSPACE_ASYNC_TIMEOUT_MS },
+  );
+  await screen.findByRole(
+    'heading',
+    { name: /Profile Candidates/i },
+    { timeout: STUDENT_WORKSPACE_ASYNC_TIMEOUT_MS },
+  );
+  await screen.findByLabelText(
+    /Profile Candidate Review Bucket/i,
+    {},
+    { timeout: STUDENT_WORKSPACE_ASYNC_TIMEOUT_MS },
+  );
+  await screen.findAllByText(
+    /Work and communication context/i,
+    {},
+    { timeout: STUDENT_WORKSPACE_ASYNC_TIMEOUT_MS },
+  );
+}
+
+async function waitForStudentCreation() {
+  await screen.findByRole(
+    'button',
+    { name: /Create Student/i },
+    { timeout: STUDENT_WORKSPACE_ASYNC_TIMEOUT_MS },
+  );
+}
+
+export async function renderLoadedWorkspace(): Promise<RenderResult> {
+  const result = renderStudentWorkspace();
+  await waitForLoadedWorkspace();
+  return result;
+}
+
+export async function renderWorkspaceWithTimelineFilters(): Promise<RenderResult> {
+  const result = await renderLoadedWorkspace();
+  await waitForTimelineFilters();
+  return result;
+}
+
+export async function renderWorkspaceWithProfileCandidates(): Promise<RenderResult> {
+  const result = await renderLoadedWorkspace();
+  await waitForProfileCandidates();
+  return result;
+}
+
+export async function renderWorkspaceForStudentCreation(): Promise<RenderResult> {
+  const result = await renderLoadedWorkspace();
+  await waitForStudentCreation();
+  return result;
+}
+
+export function renderWorkspace(): RenderResult {
+  return renderStudentWorkspace();
 }
