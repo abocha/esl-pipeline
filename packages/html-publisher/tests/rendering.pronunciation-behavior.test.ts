@@ -106,9 +106,6 @@ describe('rendering', () => {
     const listItems = [...renderedDocument.querySelectorAll('.markdown-body li')];
     const firstItem = listItems.find((item) => item.textContent?.includes('Change helps us.'));
     const sentenceAnchor = renderedDocument.querySelector('.pronunciation-natural-sentence');
-    const sentenceButtons = sentenceAnchor
-      ? [...sentenceAnchor.querySelectorAll('.word-tts-button')]
-      : [];
 
     expect(html).toContain('connected_speech');
     expect(html).toContain('Play connected speech line');
@@ -121,8 +118,7 @@ describe('rendering', () => {
     );
     expect(sentenceAnchor?.textContent).toContain('Natural sentence practice:');
     expect(sentenceAnchor?.textContent).toContain('The device is as heavy as the old one.');
-    expect(sentenceButtons).toHaveLength(1);
-    expect(sentenceButtons[0]?.getAttribute('aria-label')).toContain('Play pronunciation sentence');
+    expect(sentenceAnchor?.querySelector('.word-tts-button')).toBeNull();
   });
 
   it('renders sentence-level pronunciation controls for intonation mode', async () => {
@@ -163,9 +159,6 @@ describe('rendering', () => {
     const listItems = [...renderedDocument.querySelectorAll('.markdown-body li')];
     const firstItem = listItems.find((item) => item.textContent?.includes('Do you have a second?'));
     const sentenceAnchor = renderedDocument.querySelector('.pronunciation-natural-sentence');
-    const sentenceButtons = sentenceAnchor
-      ? [...sentenceAnchor.querySelectorAll('.word-tts-button')]
-      : [];
 
     expect(firstItem?.querySelector('.word-tts-button')?.textContent).toBe('Play');
     expect(firstItem?.querySelector('.pronunciation-line-text')?.textContent).toContain(
@@ -176,7 +169,7 @@ describe('rendering', () => {
     );
     expect(firstItem?.querySelector('.pronunciation-contour-badge')?.textContent).toBe('rise');
     expect(sentenceAnchor?.textContent).toContain('Are you free tonight after work?');
-    expect(sentenceButtons).toHaveLength(1);
+    expect(sentenceAnchor?.querySelector('.word-tts-button')).toBeNull();
   });
 
   it('renders disabled pronunciation buttons when preview payload has no clip URLs yet', async () => {
@@ -213,10 +206,11 @@ describe('rendering', () => {
     const buttons = [...renderedDocument.querySelectorAll('.word-tts-button')];
     const sentenceAnchor = renderedDocument.querySelector('.pronunciation-natural-sentence');
 
-    expect(buttons).toHaveLength(2);
+    expect(buttons).toHaveLength(1);
     expect(buttons.every((button) => button.getAttribute('disabled') !== null)).toBe(true);
     expect(buttons[0]?.getAttribute('title')).toContain('not generated yet');
     expect(sentenceAnchor?.textContent).toContain('Natural sentence practice:');
+    expect(sentenceAnchor?.querySelector('.word-tts-button')).toBeNull();
   });
 
   it('renders rhythm_chunking drill lines with playback controls', async () => {
