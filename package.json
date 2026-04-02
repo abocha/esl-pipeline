@@ -66,6 +66,8 @@
     "docs:check:core": "node scripts/docs/check-core-docs.mjs",
     "docs:check:non-core": "node scripts/docs/check-non-core-docs.mjs",
     "docs:check:ops": "node scripts/docs/check-active-ops-docs.mjs",
+    "docs:garden": "node scripts/docs/generate-docs-gardening.mjs",
+    "docs:gardening": "pnpm docs:garden",
     "docs:generate:indexes": "node scripts/docs/generate-docs-indexes.mjs",
     "docs:health:report": "node scripts/docs/generate-docs-health-report.mjs",
     "docs:stale:active": "node scripts/docs/find-stale-active-docs.mjs",

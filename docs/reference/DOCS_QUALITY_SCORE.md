@@ -5,88 +5,64 @@
 - Audience: maintainers and AI agents.
 - Read Time: 4 minutes.
 - Authority Level: operational quality rubric.
-- Last Verified Against: 2026-03-13 repo state.
+- Last Verified Against: 2026-04-03 repo state.
 - Owner: founder-maintainer + automation agents.
 - Review Cadence: weekly (docs-gardening run).
 - Status: `reference`.
 
 ## Purpose
 
-- Provide objective quality scoring for the docs system.
-- Track trendline and prioritize upgrades by measurable gaps.
-- Complement the operational gardening scorecard with a broader quality rubric.
+- Track whether docs gardening is making the repo easier to route, trust, and maintain.
+- Separate the stable rubric from the generated measurement snapshot.
 
-## Rubric (0-10 per dimension)
+## Rubric (0-10)
 
 1. Routing clarity
-2. Authority/ownership clarity
+2. Authority and ownership clarity
 3. Freshness and drift resistance
 4. Mechanical enforceability
 5. Ops runbook reliability
 6. Archive hygiene
 7. Agent onboarding speed
 
-## Current Baseline (2026-03-04)
+## Current Baseline
 
-| Dimension                      | Score | Notes                                                       |
-| ------------------------------ | ----- | ----------------------------------------------------------- |
-| Routing clarity                | 9.2   | Strong route chain and IA map coverage.                     |
-| Authority/ownership clarity    | 8.8   | SSOT precedence clear; owner metadata rollout in progress.  |
-| Freshness and drift resistance | 8.2   | Core docs refreshed; broader scope needs automated cadence. |
-| Mechanical enforceability      | 8.0   | Core checks in CI; ops and health artifacts being expanded. |
-| Ops runbook reliability        | 9.0   | Strong backup/ops/troubleshooting runbooks.                 |
-| Archive hygiene                | 8.9   | Active/archive split clear, with backend archive now added. |
-| Agent onboarding speed         | 8.6   | Good fast-path flow; can improve via score-driven grooming. |
+- The living measurement snapshot is generated in `tmp/docs-health-report.md`.
+- The rubric below is the durable target model; do not hand-edit the latest measured snapshot into this doc.
 
-**Composite (mean): 8.7 / 10**
+| Dimension                       | Baseline | Target | Notes                                                            |
+| ------------------------------- | -------: | -----: | ---------------------------------------------------------------- |
+| Routing clarity                 |      9.2 | >= 9.5 | Router chain is good; keep stale-route noise low.                |
+| Authority and ownership clarity |      8.8 | >= 9.2 | SSOT and governance are clear; keep ownership metadata explicit. |
+| Freshness and drift resistance  |      8.2 | >= 9.2 | Keep refresh cadence tight and stale candidates low.             |
+| Mechanical enforceability       |      8.0 | >= 9.2 | Prefer checks over review-only guidance.                         |
+| Ops runbook reliability         |      9.0 | >= 9.2 | Keep operational docs concise and current.                       |
+| Archive hygiene                 |      8.9 | >= 9.2 | Reduce stale-active noise and preserve clear archive boundaries. |
+| Agent onboarding speed          |      8.6 | >= 9.2 | Improve “read once, act correctly” behavior.                     |
 
-## Current Measured Snapshot (Automated)
+## How To Use This Scorecard
 
-- Source: `tmp/docs-health-report.md` generated via `pnpm docs:health:report`.
-- Timestamp: 2026-03-09T17:15:40.944Z.
-- Composite: **9.83 / 10**
+- Read it as a trend rubric, not as a compliance log.
+- Use `tmp/docs-health-report.md` for the current measured snapshot.
+- Use `tmp/docs-stale-active.md` as the queue for the next manual cleanup pass.
 
-## Next Target
+## Targets
 
-- Target composite by next monthly review: **9.9 / 10**
-
-Priority levers:
-
-1. Improve archive hygiene from `8.8` to `>= 9.2` by reducing stale-active noise and ambiguity.
-2. Tune stale-doc heuristic weights and routing coverage to reduce false positives.
-3. Promote one recurring stale-candidate review issue into an additional scripted check.
+- Keep the composite trending upward, but prioritize the dimensions that reduce docs-gardening noise first.
+- The practical order is:
+  1. archive hygiene
+  2. freshness/drift resistance
+  3. mechanical enforceability
+  4. onboarding speed
 
 ## Update Policy
 
-- Update after each weekly docs-gardening run.
-- Keep historical snapshots as dated sections below.
-
-## Historical Snapshots
-
-### 2026-03-10 (wave 2 reference expansion)
-
-- Expanded hard-fail selected non-core enforcement to `docs/reference/env.md`, `docs/reference/pipeline-manifest.md`, `docs/reference/ORCHESTRATOR_API_V2_MIGRATION.md`, and `docs/reference/GENERATION_PROVIDER_POLICY.md`.
-- Health report now checks `27` docs across `core`, `ops`, and `non_core`.
-- Composite remained stable at 9.83 after expansion.
-
-### 2026-03-09 (non-core enforcement expansion)
-
-- Expanded hard-fail docs enforcement to selected non-core docs (`docs/backend-frontend/DEPLOYMENT.md`, `docs/backend-frontend/batch-backend-ssot.md`, and four package READMEs).
-- Health report now checks `23` docs across `core`, `ops`, and `non_core`.
-- Composite remained stable at 9.83 after expansion.
-
-### 2026-03-09
-
-- Weekly docs-gardening run completed (`pnpm docs:check`, `pnpm docs:health:report`, `pnpm docs:stale:active`).
-- Automated snapshot remained stable at 9.83.
-- No `docs:check` errors or warnings detected.
-
-### 2026-03-04
-
-- Baseline established at 8.7.
-- Automated post-upgrade snapshot recorded at 9.83.
+- Refresh after each weekly docs-gardening run.
+- Keep the historical trendline compact.
+- Let the generated snapshot carry the exact current numbers.
 
 ## Related
 
 - [`docs/reference/DOCS_GARDENING_SCORECARD.md`](DOCS_GARDENING_SCORECARD.md)
 - [`docs/reference/DOCS_GARDENING_PLAYBOOK.md`](DOCS_GARDENING_PLAYBOOK.md)
+- [`docs/reference/HARNESS_AGENTIC_DOCS_MODEL.md`](HARNESS_AGENTIC_DOCS_MODEL.md)
