@@ -614,7 +614,9 @@ details:not(.study-text) {
   font-weight: 600;
   letter-spacing: 0.01em;
 }
-.pronunciation-shadow-sentence {
+.pronunciation-shadow-sentence,
+.pronunciation-natural-sentence {
+  display: block;
   margin: 14px 0 16px;
   padding: 12px 14px;
   border-radius: 12px;
@@ -625,7 +627,8 @@ details:not(.study-text) {
   font-size: 1.05em;
   line-height: 1.55;
 }
-.pronunciation-shadow-sentence strong {
+.pronunciation-shadow-sentence strong,
+.pronunciation-natural-sentence strong {
   color: color-mix(in srgb, var(--page-text) 88%, var(--theme-h2) 12%);
   letter-spacing: 0.01em;
 }
@@ -3192,6 +3195,18 @@ function buildBehaviorScript(features: ResolvedFeatures): string {
           return candidates.find((candidate) => hasSentenceAnchorLabel(candidate)) || null;
         };
 
+        const applySentenceAnchorTone = (element) => {
+          if (!(element instanceof HTMLElement)) return null;
+          element.classList.add('pronunciation-sentence-anchor');
+          const normalizedText = String(element.textContent || '').replace(/\s+/g, ' ').trim();
+          if (/(^|\b)shadow sentence\s*:/i.test(normalizedText)) {
+            element.classList.add('pronunciation-shadow-sentence');
+          } else {
+            element.classList.add('pronunciation-natural-sentence');
+          }
+          return element;
+        };
+
         const highlightSentenceAnchor = () => {
           const existing = document.querySelector('.pronunciation-sentence-anchor, .pronunciation-shadow-sentence');
           if (existing instanceof HTMLElement) {
@@ -3233,7 +3248,7 @@ function buildBehaviorScript(features: ResolvedFeatures): string {
             ) {
               parent.classList.add('pronunciation-sentence-anchor');
             }
-            return wrapper;
+            return applySentenceAnchorTone(wrapper);
           }
 
           const directBlockMatch = sectionElements.find((element) => {
@@ -3243,17 +3258,7 @@ function buildBehaviorScript(features: ResolvedFeatures): string {
             return hasSentenceAnchorLabel(element);
           });
           if (directBlockMatch instanceof HTMLElement) {
-            directBlockMatch.classList.add('pronunciation-sentence-anchor');
-            if (
-              /(^|\\b)shadow sentence\\s*:/i.test(
-                String(directBlockMatch.textContent || '').replace(/\\s+/g, ' ').trim(),
-              )
-            ) {
-              directBlockMatch.classList.add('pronunciation-shadow-sentence');
-            } else {
-              directBlockMatch.classList.add('pronunciation-natural-sentence');
-            }
-            return directBlockMatch;
+            return applySentenceAnchorTone(directBlockMatch);
           }
 
           const descendantSelectors = ['li', 'p', '.content > *', 'blockquote > *', 'div > *'];
@@ -3262,17 +3267,7 @@ function buildBehaviorScript(features: ResolvedFeatures): string {
             for (const selector of descendantSelectors) {
               const match = findFirstMatchingDescendant(element, selector);
               if (match instanceof HTMLElement) {
-                match.classList.add('pronunciation-sentence-anchor');
-                if (
-                  /(^|\\b)shadow sentence\\s*:/i.test(
-                    String(match.textContent || '').replace(/\\s+/g, ' ').trim(),
-                  )
-                ) {
-                  match.classList.add('pronunciation-shadow-sentence');
-                } else {
-                  match.classList.add('pronunciation-natural-sentence');
-                }
-                return match;
+                return applySentenceAnchorTone(match);
               }
             }
           }
@@ -3280,8 +3275,9 @@ function buildBehaviorScript(features: ResolvedFeatures): string {
           return null;
         };
 
-        const sentenceAnchorElement =
-          wordDrillEnabled || connectedSpeechEnabled ? highlightSentenceAnchor() : null;
+        if (wordDrillEnabled || connectedSpeechEnabled) {
+          highlightSentenceAnchor();
+        }
         const clipList = Array.isArray(pronunciationAudio.itemClips)
           ? pronunciationAudio.itemClips
           : [];
@@ -3334,24 +3330,6 @@ function buildBehaviorScript(features: ResolvedFeatures): string {
             );
           }
         };
-
-        if (
-          sentenceAnchorElement instanceof HTMLElement &&
-          pronunciationAudio?.primaryClip &&
-          !sentenceAnchorElement.querySelector('[data-sentence-anchor-controls="true"]')
-        ) {
-          const controls = document.createElement('span');
-          controls.className = 'pronunciation-line-meta';
-          controls.dataset.sentenceAnchorControls = 'true';
-          appendClipButtons(
-            controls,
-            [pronunciationAudio.primaryClip],
-            pronunciationAudio.primaryClip.label || 'Sentence',
-            'Play pronunciation sentence',
-          );
-          sentenceAnchorElement.appendChild(document.createElement('br'));
-          sentenceAnchorElement.appendChild(controls);
-        }
 
         const trimTrailingDelimiterInContainer = (container) => {
           if (!(container instanceof HTMLElement)) return;
