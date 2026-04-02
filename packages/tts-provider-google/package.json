@@ -28,7 +28,8 @@
   "scripts": {
     "build": "pnpm --filter @esl-pipeline/shared-infrastructure build && tsc -p tsconfig.json",
     "clean": "node -e \"fs.rmSync('dist', {recursive:true, force:true})\"",
-    "test": "pnpm --filter @esl-pipeline/tts-core build && vitest run",
+    "test": "pnpm run test:unit",
+    "test:unit": "vitest run --exclude \"**/*.integration.test.ts\" --exclude \"**/*.integration.test.tsx\"",
     "test:watch": "vitest",
     "typecheck": "tsc --noEmit"
   },
