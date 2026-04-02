@@ -6,6 +6,7 @@ import {
   parseCommandText,
   resetAdvancedControlApprovalsForTests,
 } from '../src/commands.js';
+import type { CommandContext } from '../src/types.js';
 
 import { createBaseContext } from './telegram-test-fixtures.js';
 
@@ -103,7 +104,7 @@ describe('telegram commands - core', () => {
         text: '/help',
         chat: { id: 123, type: 'supergroup', title: 'Ops Chat', is_forum: true },
         from: { id: 1, is_bot: false, first_name: 'Ops' },
-      } as Parameters<typeof createBaseContext>[0]['message'],
+      } as CommandContext['message'],
     });
 
     await helpCommand?.execute(context);

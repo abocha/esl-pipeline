@@ -2210,7 +2210,7 @@ function markGrammarSubheadings(columnInner: string): string {
   return columnInner.replaceAll(
     /<p\b([^>]*)>([\s\S]*?)<\/p>/gi,
     (fullMatch, rawAttrs: string, rawContent: string) => {
-      const attrs = String(rawAttrs || '').replace(/\sdata-grammar-prose="true"/gi, '');
+      const attrs = String(rawAttrs || '').replaceAll(/\sdata-grammar-prose="true"/gi, '');
       if (/\bgrammar-card-heading\b|\bgrammar-card-subheading\b/i.test(attrs)) {
         return fullMatch;
       }
