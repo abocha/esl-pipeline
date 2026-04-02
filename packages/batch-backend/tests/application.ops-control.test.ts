@@ -1,3 +1,4 @@
+import type { OpsActionStatus } from '@esl-pipeline/contracts';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 async function withEnv(env: Record<string, string | undefined>, fn: () => void | Promise<void>) {
@@ -16,20 +17,51 @@ async function loadOpsControlFresh() {
   return module;
 }
 
-async function waitForTerminalActionStatus(
-  ops: Awaited<ReturnType<typeof loadOpsControlFresh>>,
-  operationId: string,
-  timeoutMs = 12_000,
-) {
-  const startedAt = Date.now();
-  while (Date.now() - startedAt < timeoutMs) {
-    const current = await ops.getOpsActionStatus(operationId);
-    if (current && (current.state === 'succeeded' || current.state === 'failed')) {
-      return current;
+function createOpsControlTestScheduler() {
+  type ScheduledTask = () => Promise<void> | void;
+
+  const queuedTasks: ScheduledTask[] = [];
+  const inFlightTasks: Promise<void>[] = [];
+
+  const startQueuedTasks = () => {
+    while (queuedTasks.length > 0) {
+      const task = queuedTasks.shift();
+      if (!task) {
+        continue;
+      }
+      inFlightTasks.push(Promise.resolve(task()));
     }
-    await new Promise((resolve) => setTimeout(resolve, 50));
-  }
-  throw new Error(`Timed out waiting for terminal state for operation ${operationId}`);
+  };
+
+  const settle = async () => {
+    while (queuedTasks.length > 0 || inFlightTasks.length > 0) {
+      startQueuedTasks();
+      const current = inFlightTasks.splice(0);
+      if (current.length > 0) {
+        await Promise.all(current);
+      }
+    }
+  };
+
+  return {
+    scheduleTask(task: ScheduledTask) {
+      queuedTasks.push(task);
+    },
+    startQueuedTasks,
+    settle,
+  };
+}
+
+function setDeterministicOpsControlDependencies(
+  ops: Awaited<ReturnType<typeof loadOpsControlFresh>>,
+  scheduler: ReturnType<typeof createOpsControlTestScheduler>,
+  overrides: Record<string, unknown> = {},
+) {
+  ops.setOpsControlDependenciesForTests({
+    sleep: async () => {},
+    scheduleTask: scheduler.scheduleTask,
+    ...overrides,
+  });
 }
 
 describe('application/ops-control', () => {
@@ -135,11 +167,12 @@ describe('application/ops-control', () => {
       },
       async () => {
         const commands: string[] = [];
+        const scheduler = createOpsControlTestScheduler();
         const ops = await loadOpsControlFresh();
-        ops.setOpsControlDependenciesForTests({
+        setDeterministicOpsControlDependencies(ops, scheduler, {
           randomId: () => 'op-1',
           now: () => new Date('2026-03-11T00:00:00.000Z'),
-          runCommand: async (command) => {
+          runCommand: async (command: string) => {
             commands.push(command);
             return {
               exitCode: 0,
@@ -158,7 +191,7 @@ describe('application/ops-control', () => {
         expect(queued.state).toBe('queued');
         expect(commands).toHaveLength(0);
 
-        await new Promise((resolve) => setTimeout(resolve, 0));
+        await scheduler.settle();
 
         const completed = await ops.getOpsActionStatus('op-1');
         expect(completed?.state).toBe('succeeded');
@@ -212,8 +245,15 @@ describe('application/ops-control', () => {
       },
       async () => {
         const ops = await loadOpsControlFresh();
-        ops.setOpsControlDependenciesForTests({
+        const scheduler = createOpsControlTestScheduler();
+        setDeterministicOpsControlDependencies(ops, scheduler, {
           randomId: () => 'timeout-op',
+          runCommand: async () => ({
+            exitCode: 124,
+            stdout: '',
+            stderr: '',
+            timedOut: true,
+          }),
         });
 
         const startedAt = Date.now();
@@ -222,12 +262,13 @@ describe('application/ops-control', () => {
           { requestedBy: 'telegram:42', requestedByUserId: 'user-1' },
         );
 
-        const completed = await waitForTerminalActionStatus(ops, 'timeout-op', 10_000);
+        await scheduler.settle();
+        const completed = await ops.getOpsActionStatus('timeout-op');
         const elapsedMs = Date.now() - startedAt;
 
-        expect(completed.state).toBe('failed');
-        expect(completed.message).toContain('timed out after 1000ms');
-        expect(completed.exitCode).toBe(124);
+        expect(completed?.state).toBe('failed');
+        expect(completed?.message).toContain('timed out after 1000ms');
+        expect(completed?.exitCode).toBe(124);
         expect(elapsedMs).toBeLessThan(10_000);
       },
     );
@@ -250,11 +291,12 @@ describe('application/ops-control', () => {
           timedOut: boolean;
         }) => void)[] = [];
         const ids = ['op-1', 'op-2'];
+        const scheduler = createOpsControlTestScheduler();
 
         const ops = await loadOpsControlFresh();
-        ops.setOpsControlDependenciesForTests({
+        setDeterministicOpsControlDependencies(ops, scheduler, {
           randomId: () => ids.shift() ?? 'op-fallback',
-          runCommand: async (command) => {
+          runCommand: async (command: string) => {
             commands.push(command);
             return new Promise((resolve) => {
               pendingResolves.push(resolve);
@@ -271,7 +313,7 @@ describe('application/ops-control', () => {
           { requestedBy: 'telegram:42', requestedByUserId: 'user-1' },
         );
 
-        await new Promise((resolve) => setTimeout(resolve, 0));
+        scheduler.startQueuedTasks();
 
         expect(await ops.getOpsActionStatus('op-1')).not.toBeNull();
         expect(await ops.getOpsActionStatus('op-2')).not.toBeNull();
@@ -285,7 +327,7 @@ describe('application/ops-control', () => {
           });
         }
 
-        await waitForTerminalActionStatus(ops, 'op-2');
+        await scheduler.settle();
 
         expect(commands).toContain("echo backup 'one'");
         expect(commands).toContain("echo backup 'two'");
@@ -348,6 +390,7 @@ describe('application/ops-control', () => {
         const commands: string[] = [];
         let finalizeAttempts = 0;
         let upsertCalls = 0;
+        const scheduler = createOpsControlTestScheduler();
         const queuedAction = {
           operationId: 'op-finalize-failure',
           action: 'backup_upload' as const,
@@ -372,10 +415,10 @@ describe('application/ops-control', () => {
         let persistedAction: any = { ...queuedAction };
 
         const ops = await loadOpsControlFresh();
-        ops.setOpsControlDependenciesForTests({
+        setDeterministicOpsControlDependencies(ops, scheduler, {
           randomId: () => 'op-finalize-failure',
           isPersistenceEnabled: () => true,
-          upsertPersistedAction: async (action) => {
+          upsertPersistedAction: async (action: OpsActionStatus) => {
             upsertCalls += 1;
             persistedAction = { ...action };
             return persistedAction;
@@ -393,7 +436,7 @@ describe('application/ops-control', () => {
             throw new Error('transient pg failure during finalize');
           },
           readPersistedAction: async () => persistedAction,
-          runCommand: async (command) => {
+          runCommand: async (command: string) => {
             commands.push(command);
             return {
               exitCode: 0,
@@ -408,16 +451,18 @@ describe('application/ops-control', () => {
           { action: 'backup_upload', label: 'finalize-failure' },
           { requestedBy: 'telegram:42', requestedByUserId: 'user-1' },
         );
-        const terminal = await waitForTerminalActionStatus(ops, 'op-finalize-failure');
-        expect(terminal.state).toBe('succeeded');
+        await scheduler.settle();
+        const terminal = await ops.getOpsActionStatus('op-finalize-failure');
+        expect(terminal?.state).toBe('succeeded');
         expect(finalizeAttempts).toBe(3);
         expect(upsertCalls).toBeGreaterThanOrEqual(2);
         expect(persistedAction.state).toBe('succeeded');
         expect(persistedAction.finishedAt).not.toBeNull();
 
         vi.resetModules();
+        const restartedScheduler = createOpsControlTestScheduler();
         const restartedOps = await loadOpsControlFresh();
-        restartedOps.setOpsControlDependenciesForTests({
+        setDeterministicOpsControlDependencies(restartedOps, restartedScheduler, {
           isPersistenceEnabled: () => true,
           listResumablePersistedActions: async () =>
             persistedAction.state === 'queued' || persistedAction.state === 'running'
@@ -425,7 +470,7 @@ describe('application/ops-control', () => {
               : [],
           claimPersistedActionOwnership: async () => null,
           readPersistedAction: async () => persistedAction,
-          runCommand: async (command) => {
+          runCommand: async (command: string) => {
             commands.push(command);
             return {
               exitCode: 0,
@@ -436,7 +481,7 @@ describe('application/ops-control', () => {
           },
         });
         await restartedOps.resumePersistedOpsActionsOnStartup();
-        await new Promise((resolve) => setTimeout(resolve, 10));
+        await restartedScheduler.settle();
 
         expect(commands).toEqual(["echo backup 'finalize-failure'"]);
       },
@@ -453,6 +498,7 @@ describe('application/ops-control', () => {
       },
       async () => {
         const commands: string[] = [];
+        const scheduler = createOpsControlTestScheduler();
         let persistedAction: any = {
           operationId: 'op-fallback-failure',
           action: 'backup_upload' as const,
@@ -476,10 +522,10 @@ describe('application/ops-control', () => {
         };
 
         const ops = await loadOpsControlFresh();
-        ops.setOpsControlDependenciesForTests({
+        setDeterministicOpsControlDependencies(ops, scheduler, {
           randomId: () => 'op-fallback-failure',
           isPersistenceEnabled: () => true,
-          upsertPersistedAction: async (action) => {
+          upsertPersistedAction: async (action: OpsActionStatus) => {
             if (action.state === 'queued') {
               persistedAction = { ...action };
               return persistedAction;
@@ -495,7 +541,7 @@ describe('application/ops-control', () => {
             throw new Error('finalize unavailable');
           },
           readPersistedAction: async () => persistedAction,
-          runCommand: async (command) => {
+          runCommand: async (command: string) => {
             commands.push(command);
             return {
               exitCode: 0,
@@ -510,11 +556,12 @@ describe('application/ops-control', () => {
           { action: 'backup_upload', label: 'fallback-failure' },
           { requestedBy: 'telegram:42', requestedByUserId: 'user-1' },
         );
-        const terminal = await waitForTerminalActionStatus(ops, 'op-fallback-failure');
-        expect(terminal.state).toBe('succeeded');
+        await scheduler.settle();
+        const terminal = await ops.getOpsActionStatus('op-fallback-failure');
+        expect(terminal?.state).toBe('succeeded');
 
         await ops.resumePersistedOpsActionsOnStartup();
-        await new Promise((resolve) => setTimeout(resolve, 10));
+        await scheduler.settle();
 
         expect(commands).toEqual(["echo backup 'fallback-failure'"]);
       },
@@ -530,6 +577,7 @@ describe('application/ops-control', () => {
       },
       async () => {
         const commands: string[] = [];
+        const scheduler = createOpsControlTestScheduler();
         const queuedStatus = {
           operationId: 'claim-op',
           action: 'backup_upload' as const,
@@ -547,13 +595,13 @@ describe('application/ops-control', () => {
         };
 
         const ops = await loadOpsControlFresh();
-        ops.setOpsControlDependenciesForTests({
+        setDeterministicOpsControlDependencies(ops, scheduler, {
           randomId: () => 'claim-op',
           isPersistenceEnabled: () => true,
           upsertPersistedAction: async () => queuedStatus,
           claimPersistedActionOwnership: async () => null,
           readPersistedAction: async () => queuedStatus,
-          runCommand: async (command) => {
+          runCommand: async (command: string) => {
             commands.push(command);
             return {
               exitCode: 0,
@@ -570,7 +618,7 @@ describe('application/ops-control', () => {
         );
         expect(queued.state).toBe('queued');
 
-        await new Promise((resolve) => setTimeout(resolve, 0));
+        await scheduler.settle();
 
         expect(commands).toHaveLength(0);
         const status = await ops.getOpsActionStatus('claim-op');
@@ -588,6 +636,7 @@ describe('application/ops-control', () => {
       },
       async () => {
         const commands: string[] = [];
+        const scheduler = createOpsControlTestScheduler();
         const resumableAction = {
           operationId: 'resume-op-1',
           action: 'backup_upload' as const,
@@ -619,13 +668,13 @@ describe('application/ops-control', () => {
         };
 
         const ops = await loadOpsControlFresh();
-        ops.setOpsControlDependenciesForTests({
+        setDeterministicOpsControlDependencies(ops, scheduler, {
           isPersistenceEnabled: () => true,
           listResumablePersistedActions: async () => [resumableAction],
           claimPersistedActionOwnership: async () => claimedAction,
           finalizeOwnedPersistedAction: async () => finalizedAction,
           readPersistedAction: async () => null,
-          runCommand: async (command) => {
+          runCommand: async (command: string) => {
             commands.push(command);
             return {
               exitCode: 0,
@@ -637,11 +686,12 @@ describe('application/ops-control', () => {
         });
 
         await ops.resumePersistedOpsActionsOnStartup();
-        const terminal = await waitForTerminalActionStatus(ops, 'resume-op-1');
+        await scheduler.settle();
+        const terminal = await ops.getOpsActionStatus('resume-op-1');
 
         expect(commands).toEqual(["echo backup 'resume'"]);
-        expect(terminal.state).toBe('succeeded');
-        expect(terminal.stdoutTail).toBe('done');
+        expect(terminal?.state).toBe('succeeded');
+        expect(terminal?.stdoutTail).toBe('done');
       },
     );
   });

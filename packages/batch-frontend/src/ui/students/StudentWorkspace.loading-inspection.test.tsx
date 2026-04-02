@@ -4,7 +4,8 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import {
   STUDENT_WORKSPACE_ASYNC_TIMEOUT_MS,
-  renderWorkspace,
+  renderLoadedWorkspace,
+  renderWorkspaceWithTimelineFilters,
   setupStudentWorkspaceTest,
 } from './StudentWorkspace.test-harness';
 import * as api from '../../utils/api';
@@ -15,15 +16,9 @@ describe('StudentWorkspace loading and inspection', () => {
   });
 
   it('loads and renders student workspace data', async () => {
-    renderWorkspace();
+    await renderLoadedWorkspace();
 
     expect(screen.getByRole('heading', { name: /Student Workspace/i })).toBeTruthy();
-    await screen.findByText(
-      /Current profile:/i,
-      {},
-      { timeout: STUDENT_WORKSPACE_ASYNC_TIMEOUT_MS },
-    );
-
     expect(screen.getByRole('heading', { name: /Assignment History/i })).toBeTruthy();
     expect(screen.getByRole('heading', { name: /Student Timeline/i })).toBeTruthy();
     expect(api.getStudentMemoryOverview).toHaveBeenCalledWith('student-default', {
@@ -34,11 +29,7 @@ describe('StudentWorkspace loading and inspection', () => {
 
   it('does not refetch assignment history until apply is clicked', async () => {
     const user = userEvent.setup();
-    renderWorkspace();
-
-    await waitFor(() => {
-      expect(api.listUserJobs).toHaveBeenCalledTimes(1);
-    });
+    await renderWorkspaceWithTimelineFilters();
 
     await user.selectOptions(screen.getByRole('combobox', { name: /State/i }), 'failed');
     expect(api.listUserJobs).toHaveBeenCalledTimes(1);
@@ -56,11 +47,7 @@ describe('StudentWorkspace loading and inspection', () => {
 
   it('does not refetch timeline until apply is clicked', async () => {
     const user = userEvent.setup();
-    renderWorkspace();
-
-    await waitFor(() => {
-      expect(api.getStudentTimeline).toHaveBeenCalledTimes(1);
-    });
+    await renderWorkspaceWithTimelineFilters();
 
     await user.selectOptions(
       screen.getByRole('combobox', { name: /Event type/i }),
@@ -81,7 +68,7 @@ describe('StudentWorkspace loading and inspection', () => {
 
   it('inspects a job and loads provenance and lineage', async () => {
     const user = userEvent.setup();
-    renderWorkspace();
+    await renderLoadedWorkspace();
 
     const inspectButton = await screen.findByRole(
       'button',
@@ -110,7 +97,7 @@ describe('StudentWorkspace loading and inspection', () => {
 
   it('renders the read-only student memory overview near provenance', async () => {
     const user = userEvent.setup();
-    renderWorkspace();
+    await renderLoadedWorkspace();
 
     await screen.findByText(
       /The student is improving fluency but still needs article review\./i,
@@ -137,7 +124,7 @@ describe('StudentWorkspace loading and inspection', () => {
 
   it('re-fetches lineage when inspecting the same job repeatedly', async () => {
     const user = userEvent.setup();
-    renderWorkspace();
+    await renderLoadedWorkspace();
 
     const inspectButton = await screen.findByRole(
       'button',
@@ -192,7 +179,7 @@ describe('StudentWorkspace loading and inspection', () => {
   });
 
   it('renders a resume link to minimal workflow for each job', async () => {
-    renderWorkspace();
+    await renderLoadedWorkspace();
 
     const resumeLink = await screen.findByRole(
       'link',

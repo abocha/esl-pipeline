@@ -53,6 +53,8 @@ interface OpsControlDependencies {
   now: () => Date;
   randomId: () => string;
   runCommand: (command: string, timeoutMs: number) => Promise<RunCommandResult>;
+  sleep: (ms: number) => Promise<void>;
+  scheduleTask: (task: () => Promise<void> | void) => void;
   ownerId: () => string;
   isPersistenceEnabled: () => boolean;
   upsertPersistedAction: (action: InternalActionStatus) => Promise<InternalActionStatus>;
@@ -84,6 +86,12 @@ const dependencies: OpsControlDependencies = {
   now: () => new Date(),
   randomId: () => randomUUID(),
   runCommand: (command, timeoutMs) => runShellCommand(command, timeoutMs),
+  sleep: (ms) => sleep(ms),
+  scheduleTask: (task) => {
+    setImmediate(() => {
+      void task();
+    });
+  },
   ownerId: () => ownerId,
   isPersistenceEnabled: () => loadConfig().pg.enabled,
   upsertPersistedAction: async (action) => upsertOpsActionStatus(action),
@@ -122,6 +130,12 @@ export function resetOpsControlStateForTests(): void {
   dependencies.now = () => new Date();
   dependencies.randomId = () => randomUUID();
   dependencies.runCommand = (command, timeoutMs) => runShellCommand(command, timeoutMs);
+  dependencies.sleep = (ms) => sleep(ms);
+  dependencies.scheduleTask = (task) => {
+    setImmediate(() => {
+      void task();
+    });
+  };
   dependencies.ownerId = () => ownerId;
   dependencies.isPersistenceEnabled = () => loadConfig().pg.enabled;
   dependencies.upsertPersistedAction = async (action) => upsertOpsActionStatus(action);
@@ -220,15 +234,15 @@ export async function enqueueOpsAction(
   storeAction(queued, config.opsControl.actionHistoryLimit);
   void maybePrunePersistedActions(config.opsControl.actionRetentionDays);
 
-  setImmediate(() => {
-    void runQueuedAction(
+  dependencies.scheduleTask(() =>
+    runQueuedAction(
       operationId,
       command,
       config.opsControl.actionTimeoutMs,
       config.opsControl.actionHistoryLimit,
       config.opsControl.actionRetentionDays,
-    );
-  });
+    ),
+  );
 
   return { ...queued };
 }
@@ -266,15 +280,15 @@ export async function resumePersistedOpsActionsOnStartup(): Promise<void> {
         continue;
       }
       storeAction(action, config.opsControl.actionHistoryLimit);
-      setImmediate(() => {
-        void runQueuedAction(
+      dependencies.scheduleTask(() =>
+        runQueuedAction(
           action.operationId,
           action.command,
           config.opsControl.actionTimeoutMs,
           config.opsControl.actionHistoryLimit,
           config.opsControl.actionRetentionDays,
-        );
-      });
+        ),
+      );
     }
 
     if (resumable.length > 0) {
@@ -517,7 +531,7 @@ async function finalizePersistedActionWithRetry(
     } catch (error: unknown) {
       lastError = error;
       if (attempt < ACTION_FINALIZE_RETRY_ATTEMPTS) {
-        await sleep(ACTION_FINALIZE_RETRY_DELAY_MS);
+        await dependencies.sleep(ACTION_FINALIZE_RETRY_DELAY_MS);
       }
     }
   }
@@ -534,7 +548,7 @@ async function upsertPersistedActionWithRetry(
     } catch (error: unknown) {
       lastError = error;
       if (attempt < ACTION_FALLBACK_UPSERT_RETRY_ATTEMPTS) {
-        await sleep(ACTION_FALLBACK_UPSERT_RETRY_DELAY_MS);
+        await dependencies.sleep(ACTION_FALLBACK_UPSERT_RETRY_DELAY_MS);
       }
     }
   }
