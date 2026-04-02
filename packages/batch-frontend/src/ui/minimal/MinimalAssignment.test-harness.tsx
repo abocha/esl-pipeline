@@ -318,6 +318,89 @@ export async function renderPromptReadyAssignment(
   return { ...result, user };
 }
 
+export async function renderDraftReadyAssignment(
+  overrides: Parameters<typeof hydrateResumedAssignment>[0] = {},
+  options: {
+    user?: ReturnType<typeof userEvent.setup>;
+    waitFor?: 'promptReady' | 'jobActions' | 'none';
+  } = {},
+): Promise<
+  RenderResult & {
+    user: ReturnType<typeof userEvent.setup>;
+    status: ReturnType<typeof hydrateResumedAssignment>;
+  }
+> {
+  return renderResumedAssignment(
+    {
+      ...overrides,
+      draftText: overrides.draftText ?? '# Draft markdown',
+    },
+    options,
+  );
+}
+
+export async function renderPreviewReadyAssignment(
+  overrides: Parameters<typeof hydrateResumedAssignment>[0] = {},
+): Promise<
+  RenderResult & {
+    user: ReturnType<typeof userEvent.setup>;
+    status: ReturnType<typeof hydrateResumedAssignment>;
+  }
+> {
+  const rendered = await renderDraftReadyAssignment(overrides, { waitFor: 'promptReady' });
+  await previewCurrentDraft(rendered.user);
+  return rendered;
+}
+
+export async function renderPublishedActionsAssignment(
+  overrides: Parameters<typeof hydrateResumedAssignment>[0] = {},
+): Promise<
+  RenderResult & {
+    user: ReturnType<typeof userEvent.setup>;
+    status: ReturnType<typeof hydrateResumedAssignment>;
+  }
+> {
+  return renderPublishedAssignment(overrides, { user: createMinimalUser() });
+}
+
+export async function renderGenerationReadyAssignment(
+  overrides: Parameters<typeof hydrateResumedAssignment>[0] = {},
+): Promise<
+  RenderResult & {
+    user: ReturnType<typeof userEvent.setup>;
+    status: ReturnType<typeof hydrateResumedAssignment>;
+  }
+> {
+  return renderResumedAssignment(
+    {
+      ...overrides,
+      draftText: overrides.draftText ?? '# Draft markdown',
+    },
+    { user: createMinimalUser(), waitFor: 'promptReady' },
+  );
+}
+
+export async function renderResumedFailureAssignment(
+  overrides: Parameters<typeof hydrateResumedAssignment>[0] = {},
+): Promise<
+  RenderResult & {
+    user: ReturnType<typeof userEvent.setup>;
+    status: ReturnType<typeof hydrateResumedAssignment>;
+  }
+> {
+  return renderResumedAssignment(
+    {
+      ...overrides,
+      status: {
+        state: 'failed',
+        error: 'Something went wrong.',
+        ...overrides.status,
+      },
+    },
+    { waitFor: 'jobActions' },
+  );
+}
+
 export async function renderResumedAssignment(
   overrides: Parameters<typeof hydrateResumedAssignment>[0] = {},
   options: {

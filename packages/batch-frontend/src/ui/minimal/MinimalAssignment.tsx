@@ -4,7 +4,6 @@ import type {
   DraftResponse,
   GenerateDraftRequest,
   GenerateDraftResponse,
-  GoogleTtsModel,
   JobOptionsResponse,
   JobProvenanceResponse,
   JobStatus,
@@ -59,6 +58,14 @@ import {
   isTerminalJobState,
 } from './MinimalAssignment.polling';
 import { getGenerationQuotaWindowDecision } from './MinimalAssignment.quota-window';
+import {
+  buildCustomRerunPayload,
+  buildPresetRerunPayload,
+  buildPublishJobOverrides,
+  getDraftPreviewGate,
+  getNextGenerationQuotaSnapshot,
+  hasActiveGenerationQuotaSelection,
+} from './MinimalAssignment.logic';
 
 const AUDIO_EXTENSIONS = ['.wav', '.mp3', '.m4a', '.aac', '.ogg', '.opus'];
 const POLL_INTERVAL_MS = 3000;
@@ -102,10 +109,6 @@ function formatSttProviderLabel(provider: SttProvider): string {
   if (provider === 'deepgram') return 'Deepgram';
   if (provider === 'elevenlabs') return 'ElevenLabs';
   return 'Google';
-}
-
-function isGoogleTtsModel(value: string | null | undefined): value is GoogleTtsModel {
-  return value === 'chirp3_hd' || value === 'studio' || value === 'neural2' || value === 'wavenet';
 }
 
 function isDefaultStudentName(name: string): boolean {
@@ -177,19 +180,6 @@ function normalizePresetSelection(
     return currentPreset;
   }
   return availablePresets[0] ?? '';
-}
-
-function hashDraftText(value: string): string {
-  let hash = 2166136261;
-  for (const char of value) {
-    const codePoint = char.codePointAt(0);
-    if (codePoint === undefined) {
-      continue;
-    }
-    hash ^= codePoint;
-    hash = Math.imul(hash, 16777619);
-  }
-  return (hash >>> 0).toString(16);
 }
 
 function toGenerationQuotaSourceLabel(source: GenerateDraftResponse['quota']['source']): string {
@@ -1552,7 +1542,9 @@ export const MinimalAssignment: React.FC = () => {
       setPreviewHtml(null);
       setPreviewError(null);
       setLastPreviewedDraftHash(null);
-      setGenerationRuntimeQuotaSnapshot(generated.quota);
+      setGenerationRuntimeQuotaSnapshot((current) =>
+        getNextGenerationQuotaSnapshot(current, { kind: 'success', quota: generated.quota }),
+      );
       setGenerationRuntimeSelection({
         provider: generated.provider,
         model: generated.model,
@@ -1640,9 +1632,7 @@ export const MinimalAssignment: React.FC = () => {
 
   const handlePublish = async () => {
     setPublishError(null);
-    const normalizedDraft = draftText.trim();
-    const draftHash = hashDraftText(normalizedDraft);
-    if (lastPreviewedDraftHash !== draftHash) {
+    if (!draftPreviewGate.previewReady) {
       setPublishError('Preview current draft before publishing.');
       return;
     }
@@ -1662,15 +1652,14 @@ export const MinimalAssignment: React.FC = () => {
         selectedPreset && presetOptionIds.includes(selectedPreset) ? selectedPreset : '';
       const materialized = await materializeDraft(savedDraft.id, {
         ...(jobStatus?.jobId ? { jobId: jobStatus.jobId } : {}),
-        jobOverrides: {
+        jobOverrides: buildPublishJobOverrides({
           publishTarget,
-          withTts: true,
-          ttsProvider: selectedTtsProvider,
-          ...(selectedTtsProvider === 'google' && isGoogleTtsModel(selectedTtsModel)
-            ? { googleTtsModel: selectedTtsModel }
-            : {}),
-          ...(validPreset && learningPresetCatalogEnabled ? { learningPresetId: validPreset } : {}),
-        },
+          selectedTtsProvider,
+          selectedTtsModel,
+          selectedPreset: validPreset,
+          validPresetIds: presetOptionIds,
+          learningPresetCatalogEnabled,
+        }),
       });
       await approveJob(materialized.jobId, {
         md: materialized.mdPath,
@@ -1715,7 +1704,7 @@ export const MinimalAssignment: React.FC = () => {
       });
       const html = htmlResponse.html;
       setPreviewHtml(html);
-      setLastPreviewedDraftHash(hashDraftText(normalizedDraft));
+      setLastPreviewedDraftHash(draftPreviewGate.draftHash);
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Unable to render preview.';
       setPreviewError(message);
@@ -1813,120 +1802,52 @@ export const MinimalAssignment: React.FC = () => {
   };
 
   const handleRepublishCurrentDraft = async () => {
-    await queueRerun({ republishOnly: true }, 'Republish queued.');
+    await queueRerun(buildPresetRerunPayload('republish'), 'Republish queued.');
   };
 
   const handleRegeneratePronunciationAudio = async () => {
-    await queueRerun(
-      {
-        regeneratePronunciationMainAudio: true,
-        regeneratePronunciationChunkAudio: true,
-      },
-      'Pronunciation rerun queued.',
-    );
+    await queueRerun(buildPresetRerunPayload('pronunciation'), 'Pronunciation rerun queued.');
   };
 
   const handleRegenerateStudyTextAudio = async () => {
-    await queueRerun({ regenerateStudyTextAudio: true }, 'Study-text rerun queued.');
+    await queueRerun(buildPresetRerunPayload('studyText'), 'Study-text rerun queued.');
   };
 
   const handleRegenerateAllAudio = async () => {
-    await queueRerun(
-      {
-        regenerateStudyTextAudio: true,
-        regeneratePronunciationMainAudio: true,
-        regeneratePronunciationChunkAudio: true,
-      },
-      'Full audio rerun queued.',
-    );
+    await queueRerun(buildPresetRerunPayload('allAudio'), 'Full audio rerun queued.');
   };
 
   const handleCustomRerun = async () => {
     if (!jobStatus?.jobId) return;
 
-    const payload: Parameters<typeof rerunJob>[1] = {};
-    if (rerunStudyTextAudio) {
-      payload.regenerateStudyTextAudio = true;
-      payload.studyTextTtsProvider = rerunStudyTextProvider;
-      payload.studyTextVoiceId = rerunStudyTextVoiceId.trim() || undefined;
-      payload.studyTextVoiceAccent = rerunStudyTextVoiceAccent.trim() || undefined;
-      payload.studyTextTtsStrategy = rerunStudyTextStrategy;
-      payload.studyTextDialogueLanguage = rerunStudyTextDialogueLanguage.trim() || undefined;
-      const stabilityInput = rerunStudyTextDialogueStability.trim();
-      if (stabilityInput) {
-        const parsed = Number(stabilityInput);
-        if (Number.isNaN(parsed) || parsed < 0 || parsed > 1) {
-          setActionError('Dialogue stability must be a number between 0 and 1.');
-          return;
-        }
-        payload.studyTextDialogueStability = parsed;
-      }
-      const seedInput = rerunStudyTextDialogueSeed.trim();
-      if (seedInput) {
-        const parsed = Number(seedInput);
-        if (!Number.isInteger(parsed)) {
-          setActionError('Dialogue seed must be an integer.');
-          return;
-        }
-        payload.studyTextDialogueSeed = parsed;
-      }
-      if (rerunStudyTextProvider === 'google') {
-        if (isGoogleTtsModel(rerunStudyTextModel)) {
-          payload.studyTextGoogleTtsModel = rerunStudyTextModel;
-        }
-      } else if (rerunStudyTextModel.trim()) {
-        payload.studyTextElevenlabsModel = rerunStudyTextModel as
-          | 'eleven_v3'
-          | 'eleven_multilingual_v2'
-          | 'eleven_flash_v2_5'
-          | 'eleven_flash_v2';
-      }
+    const payload = buildCustomRerunPayload({
+      rerunStudyTextAudio,
+      rerunPronunciationMainAudio,
+      rerunPronunciationChunkAudio,
+      rerunStudyTextProvider,
+      rerunStudyTextModel,
+      rerunStudyTextVoiceId,
+      rerunStudyTextVoiceAccent,
+      rerunStudyTextStrategy,
+      rerunStudyTextDialogueLanguage,
+      rerunStudyTextDialogueStability,
+      rerunStudyTextDialogueSeed,
+      rerunPronunciationMainProvider,
+      rerunPronunciationMainModel,
+      rerunPronunciationMainVoiceId,
+      rerunPronunciationMainVoiceAccent,
+      rerunPronunciationChunkProvider,
+      rerunPronunciationChunkModel,
+      rerunPronunciationChunkVoiceId,
+      rerunPronunciationChunkVoiceAccent,
+      rerunPronunciationChunkEdgeVoice,
+    });
+    if (!payload.ok) {
+      setActionError(payload.error);
+      return;
     }
 
-    if (rerunPronunciationMainAudio) {
-      payload.regeneratePronunciationMainAudio = true;
-      payload.pronunciationMainTtsProvider = rerunPronunciationMainProvider;
-      payload.pronunciationMainVoiceId = rerunPronunciationMainVoiceId.trim() || undefined;
-      payload.pronunciationMainVoiceAccent =
-        rerunPronunciationMainVoiceAccent.trim() || undefined;
-      if (rerunPronunciationMainProvider === 'google') {
-        if (isGoogleTtsModel(rerunPronunciationMainModel)) {
-          payload.pronunciationMainGoogleTtsModel = rerunPronunciationMainModel;
-        }
-      } else if (rerunPronunciationMainModel.trim()) {
-        payload.pronunciationMainElevenlabsModel = rerunPronunciationMainModel as
-          | 'eleven_v3'
-          | 'eleven_multilingual_v2'
-          | 'eleven_flash_v2_5'
-          | 'eleven_flash_v2';
-      }
-    }
-
-    if (rerunPronunciationChunkAudio) {
-      payload.regeneratePronunciationChunkAudio = true;
-      payload.pronunciationChunkTtsProvider = rerunPronunciationChunkProvider;
-      payload.pronunciationChunkVoiceId = rerunPronunciationChunkVoiceId.trim() || undefined;
-      payload.pronunciationChunkVoiceAccent =
-        rerunPronunciationChunkVoiceAccent.trim() || undefined;
-      if (rerunPronunciationChunkProvider === 'google') {
-        if (isGoogleTtsModel(rerunPronunciationChunkModel)) {
-          payload.pronunciationChunkGoogleTtsModel = rerunPronunciationChunkModel;
-        }
-      } else if (rerunPronunciationChunkProvider === 'elevenlabs') {
-        if (rerunPronunciationChunkModel.trim()) {
-          payload.pronunciationChunkElevenlabsModel = rerunPronunciationChunkModel as
-            | 'eleven_v3'
-            | 'eleven_multilingual_v2'
-            | 'eleven_flash_v2_5'
-            | 'eleven_flash_v2';
-        }
-      } else {
-        payload.pronunciationChunkEdgeVoice =
-          rerunPronunciationChunkEdgeVoice.trim() || undefined;
-      }
-    }
-
-    await queueRerun(payload, 'Custom rerun queued.');
+    await queueRerun(payload.payload, 'Custom rerun queued.');
   };
 
   const handleCancelJob = async () => {
@@ -1989,11 +1910,16 @@ export const MinimalAssignment: React.FC = () => {
     [describeResumeJobStudent],
   );
   const canPublish = promptReady && draftText.trim().length > 0 && !publishing;
-  const draftPreviewHash = useMemo(() => hashDraftText(draftText.trim()), [draftText]);
-  const previewReadyForCurrentDraft =
-    draftText.trim().length > 0 &&
-    Boolean(previewHtml) &&
-    lastPreviewedDraftHash === draftPreviewHash;
+  const draftPreviewGate = useMemo(
+    () =>
+      getDraftPreviewGate({
+        draftText,
+        previewHtml,
+        lastPreviewedDraftHash,
+      }),
+    [draftText, previewHtml, lastPreviewedDraftHash],
+  );
+  const previewReadyForCurrentDraft = draftPreviewGate.previewReady;
   const canPublishWithPreview = canPublish && previewReadyForCurrentDraft;
   const jobPublishTarget = jobStatus?.publishTarget ?? publishTarget;
   const publishUrl =
@@ -2071,14 +1997,15 @@ export const MinimalAssignment: React.FC = () => {
         typeof generationOptions
       >['defaultModelByProvider']
     ] ?? generationModelsForProvider[0]?.id;
-  const activeQuotaAppliesToCurrentSelection = generationRuntimeQuotaSnapshot
-    ? generationRuntimeSelection?.provider === selectedGenerationProvider &&
-      generationRuntimeSelection?.model === selectedGenerationModel
-    : Boolean(
-        generationOptions &&
-        selectedGenerationProvider === generationOptions.defaultProvider &&
-        selectedGenerationModel === generationDefaultModelForSelection,
-      );
+  const activeQuotaAppliesToCurrentSelection = hasActiveGenerationQuotaSelection({
+    generationRuntimeQuotaSnapshot,
+    generationRuntimeSelection,
+    selectedGenerationProvider,
+    selectedGenerationModel,
+    generationDefaultProvider: generationOptions?.defaultProvider,
+    generationDefaultModelForSelection,
+    generationOptionsLoaded: Boolean(generationOptions),
+  });
   const quotaWindowDecision = getGenerationQuotaWindowDecision({
     quota: activeGenerationQuota,
     quotaWindowTickMs,

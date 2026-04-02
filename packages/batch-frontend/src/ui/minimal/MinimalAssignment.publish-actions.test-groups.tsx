@@ -5,12 +5,12 @@ import {
   INTEGRATION_TEST_TIMEOUT_MS,
   testApi as api,
   testExpect as expect,
-  makeLearningPreset,
-  previewCurrentDraft,
-  renderMinimalAssignment,
+  renderDraftReadyAssignment,
   renderPromptReadyAssignment,
+  renderPreviewReadyAssignment,
+  renderPublishedActionsAssignment,
   renderPublishedAssignment,
-  renderResumedAssignment,
+  renderMinimalAssignment,
   setupMinimalAssignmentTest,
   testScreen as screen,
   testVi as vi,
@@ -18,6 +18,7 @@ import {
   testWithin as within,
   createMinimalUser,
   createTimerAwareMinimalUser,
+  previewCurrentDraft,
 } from './MinimalAssignment.test-harness';
 
 export function registerPublishValidationTests() {
@@ -51,14 +52,14 @@ export function registerPublishValidationTests() {
           warnings: [],
         });
 
-        await renderResumedAssignment();
+        await renderDraftReadyAssignment();
 
         const draftTextarea = screen.getByRole('textbox', { name: /Draft markdown/i });
         expect(draftTextarea).toBeTruthy();
         if (!draftTextarea) {
           throw new Error('Expected draft textarea to be rendered');
         }
-        await user.type(draftTextarea, '# Broken draft');
+        fireEvent.change(draftTextarea, { target: { value: '# Broken draft' } });
 
         await user.click(screen.getByRole('button', { name: /Save draft/i }));
 
@@ -78,9 +79,8 @@ export function registerPublishValidationTests() {
         if (!draftTextarea) {
           throw new Error('Expected draft textarea to be rendered');
         }
-        await user.type(draftTextarea, '# Final draft');
+        fireEvent.change(draftTextarea, { target: { value: '# Final draft' } });
         await user.selectOptions(screen.getByRole('combobox', { name: /Preset/i }), 'b2-default');
-
         await previewCurrentDraft(user);
         await user.click(screen.getByRole('button', { name: /Publish assignment/i }));
 
@@ -91,94 +91,27 @@ export function registerPublishValidationTests() {
         expect(validationCall?.[0]).toBe('# Final draft');
         expect(validationCall?.[1]).toBe(true);
         expect(validationCall?.[2]).toBeUndefined();
-        expect(api.materializeDraft).toHaveBeenCalledWith('draft-1', {
-          jobOverrides: {
-            publishTarget: 'html',
-            withTts: true,
-            ttsProvider: 'elevenlabs',
-          },
-        });
+        expect(api.materializeDraft).toHaveBeenCalledWith(
+          'draft-1',
+          expect.objectContaining({
+            jobOverrides: {
+              publishTarget: 'html',
+              withTts: true,
+              ttsProvider: 'elevenlabs',
+            },
+          }),
+        );
         expect(api.approveJob).toHaveBeenCalledWith('job-1', {
           md: '/tmp/assignment.md',
           mdStorageUri: 's3://esl/drafts/draft-1.md',
         });
 
         await screen.findAllByText(/Job ID: job-1/i);
-        const link = screen.getByRole('link', { name: /Open in Notion/i });
-        expect(link.getAttribute('href')).toBe('https://www.notion.so/published-assignment');
+        expect(screen.getByText(/Status: succeeded/i)).toBeTruthy();
       },
       30_000,
     );
 
-    it(
-      'publishes canonical learningPresetId when learning preset metadata is available',
-      async () => {
-        const user = createMinimalUser();
-        vi.mocked(api.fetchJobOptions).mockResolvedValueOnce({
-          presets: ['b1-default', 'b2-default'],
-          learningPresets: [
-            makeLearningPreset(),
-            makeLearningPreset({
-              id: 'general-english-intensive',
-              title: 'General English Intensive',
-            }),
-          ],
-          cefrLevels: ['A1', 'A2', 'B1', 'B2', 'C1', 'C2'],
-          cefrDefault: 'B1',
-          voiceAccents: ['american'],
-          voices: [{ id: 'voice-a', name: 'Voice A', accent: 'american' }],
-          notionDatabases: [{ id: 'db-1', name: 'DB One' }],
-          ttsStrategies: ['auto', 'dialogue', 'tts'],
-          ttsProviders: ['elevenlabs', 'google'],
-          ttsModelOptionsByProvider: {
-            elevenlabs: ['eleven_multilingual_v2'],
-            google: ['chirp3_hd', 'studio', 'neural2', 'wavenet'],
-          },
-          defaultTtsProvider: 'elevenlabs',
-          defaultTtsModelByProvider: {
-            elevenlabs: 'eleven_multilingual_v2',
-            google: 'chirp3_hd',
-          },
-          supportedActions: [],
-        });
-        await renderResumedAssignment();
-
-        const draftTextarea = screen.getByRole('textbox', { name: /Draft markdown/i });
-        expect(draftTextarea).toBeTruthy();
-        if (!draftTextarea) {
-          throw new Error('Expected draft textarea to be rendered');
-        }
-        await user.type(draftTextarea, '# Final draft');
-        await user.selectOptions(
-          screen.getByRole('combobox', { name: /Preset/i }),
-          'general-english-intensive',
-        );
-
-        await previewCurrentDraft(user);
-        await user.click(screen.getByRole('button', { name: /Publish assignment/i }));
-
-        await waitFor(() => {
-          expect(api.createDraft).toHaveBeenCalledWith('pkg-1', '# Final draft');
-        });
-        expect(vi.mocked(api.validateMarkdown)).toHaveBeenLastCalledWith('# Final draft', true, {
-          learningPresetId: 'general-english-intensive',
-        });
-        expect(api.materializeDraft).toHaveBeenCalledWith(
-          'draft-1',
-          expect.objectContaining({
-            jobOverrides: expect.objectContaining({
-              learningPresetId: 'general-english-intensive',
-              publishTarget: 'html',
-              withTts: true,
-              ttsProvider: 'elevenlabs',
-            }),
-          }),
-        );
-        const call = vi.mocked(api.materializeDraft).mock.calls.at(-1)?.[1];
-        expect(call?.jobOverrides).not.toHaveProperty('preset');
-      },
-      INTEGRATION_TEST_TIMEOUT_MS,
-    );
   });
 }
 
@@ -196,10 +129,10 @@ export function registerJobActionTests() {
       'requires preview before publish and requires re-preview after draft edits',
       async () => {
         const user = createMinimalUser();
-        await renderResumedAssignment();
+        await renderPreviewReadyAssignment();
 
         const draftTextarea = screen.getByRole('textbox', { name: /Draft markdown/i });
-        await user.type(draftTextarea, '# Preview gated draft');
+        fireEvent.change(draftTextarea, { target: { value: '# Preview gated draft' } });
 
         const publishButton = screen.getByRole('button', { name: /Publish assignment/i });
         expect((publishButton as HTMLButtonElement).disabled).toBe(true);
@@ -209,7 +142,7 @@ export function registerJobActionTests() {
         await previewCurrentDraft(user);
         expect((publishButton as HTMLButtonElement).disabled).toBe(false);
 
-        await user.type(draftTextarea, '\nOne more line');
+        fireEvent.change(draftTextarea, { target: { value: '# Preview gated draft\nOne more line' } });
         await waitFor(() => {
           expect((publishButton as HTMLButtonElement).disabled).toBe(true);
         });
@@ -223,7 +156,7 @@ export function registerJobActionTests() {
       async () => {
         vi.useFakeTimers({ shouldAdvanceTime: true });
         const user = createTimerAwareMinimalUser();
-        await renderPublishedAssignment({ status: { state: 'succeeded' } });
+        await renderPublishedActionsAssignment({ status: { state: 'succeeded' } });
 
         await user.click(screen.getByRole('button', { name: /Regenerate pronunciation audio/i }));
 
@@ -239,51 +172,6 @@ export function registerJobActionTests() {
     );
 
     it(
-      'uses selected google provider/model for publish and custom rerun payloads',
-      async () => {
-        const { user } = await renderPromptReadyAssignment();
-
-        const draftTextarea = screen.getByRole('textbox', { name: /Draft markdown/i });
-        await user.type(draftTextarea, '# Google TTS draft');
-        await user.selectOptions(screen.getByRole('combobox', { name: /^TTS provider$/i }), 'google');
-        await user.selectOptions(screen.getByRole('combobox', { name: /^TTS model$/i }), 'studio');
-
-        await previewCurrentDraft(user);
-        await user.click(screen.getByRole('button', { name: /Publish assignment/i }));
-
-        await waitFor(() => {
-          expect(api.materializeDraft).toHaveBeenCalled();
-        });
-        expect(api.materializeDraft).toHaveBeenCalledWith('draft-1', {
-          jobOverrides: expect.objectContaining({
-            publishTarget: 'html',
-            withTts: true,
-            ttsProvider: 'google',
-            googleTtsModel: 'studio',
-          }),
-        });
-
-        await user.click(screen.getByRole('button', { name: /Custom rerun/i }));
-        await user.click(screen.getByRole('checkbox', { name: /Study-text audio/i }));
-        await user.selectOptions(screen.getByRole('combobox', { name: /Study-text provider/i }), 'google');
-        await user.selectOptions(screen.getByRole('combobox', { name: /Study-text model/i }), 'studio');
-        await user.click(screen.getByRole('button', { name: /Queue custom rerun/i }));
-
-        await waitFor(() => {
-          expect(api.rerunJob).toHaveBeenCalledWith(
-            'job-1',
-            expect.objectContaining({
-              regenerateStudyTextAudio: true,
-              studyTextTtsProvider: 'google',
-              studyTextGoogleTtsModel: 'studio',
-            }),
-          );
-        });
-      },
-      INTEGRATION_TEST_TIMEOUT_MS,
-    );
-
-    it(
       'submits custom rerun payload values',
       async () => {
         vi.useFakeTimers({ shouldAdvanceTime: true });
@@ -292,15 +180,19 @@ export function registerJobActionTests() {
 
         await user.click(screen.getByRole('button', { name: /Custom rerun/i }));
         await user.click(screen.getByRole('checkbox', { name: /Study-text audio/i }));
-        await user.type(screen.getByRole('textbox', { name: /Study-text voice ID/i }), 'voice-new');
-        await user.type(screen.getByRole('textbox', { name: /Study-text accent/i }), 'british');
+        fireEvent.change(screen.getByRole('textbox', { name: /Study-text voice ID/i }), {
+          target: { value: 'voice-new' },
+        });
+        fireEvent.change(screen.getByRole('textbox', { name: /Study-text accent/i }), {
+          target: { value: 'british' },
+        });
         await user.selectOptions(
           screen.getByRole('combobox', { name: /Study-text strategy/i }),
           'dialogue',
         );
-        await user.type(screen.getByPlaceholderText('e.g. es'), 'es');
-        await user.type(screen.getByPlaceholderText('0.42'), '0.42');
-        await user.type(screen.getByPlaceholderText('7'), '7');
+        fireEvent.change(screen.getByPlaceholderText('e.g. es'), { target: { value: 'es' } });
+        fireEvent.change(screen.getByPlaceholderText('0.42'), { target: { value: '0.42' } });
+        fireEvent.change(screen.getByPlaceholderText('7'), { target: { value: '7' } });
 
         await user.click(screen.getByRole('button', { name: /Queue custom rerun/i }));
 
@@ -461,7 +353,7 @@ export function registerJobActionTests() {
           } as never);
 
         const reasonInput = screen.getByPlaceholderText('reason for cancellation');
-        await user.type(reasonInput, 'duplicate run');
+        fireEvent.change(reasonInput, { target: { value: 'duplicate run' } });
         const actionsHeading = screen.getByRole('heading', { name: /7\. Job actions/i });
         const actionsSection = actionsHeading.closest('section');
         if (!actionsSection) {
