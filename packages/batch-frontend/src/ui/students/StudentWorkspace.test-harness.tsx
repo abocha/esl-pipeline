@@ -1,5 +1,5 @@
-/* eslint-disable react-refresh/only-export-components */
 import { render } from '@testing-library/react';
+import type { RenderResult } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { vi } from 'vitest';
 
@@ -755,7 +755,7 @@ export function setupStudentWorkspaceTest() {
   seedStudentWorkspaceMocks();
 }
 
-export function renderWorkspace() {
+export function renderWorkspace(): RenderResult {
   return render(
     <MemoryRouter>
       <StudentWorkspace />

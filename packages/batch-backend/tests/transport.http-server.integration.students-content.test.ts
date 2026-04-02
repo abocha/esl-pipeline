@@ -4,24 +4,12 @@ describeHttpServerIntegrationSuite(
   'transport/http-server - integration (in-process) [jobs-config-students-content]',
   ({
     app,
-    approveJobModule,
-    CONTRACT_VERSIONS,
-    createHttpServer,
-    DB_MIGRATION_HEAD,
     deriveStudentId,
     expect,
-    getJobOptions,
-    getJobStatusModule,
-    getVersionMeta,
     it,
-    mockListStudentProfiles,
     mockActivateProfileRevisionForProfile,
     mockDeleteProfileContent,
     mockDeleteTemplateContent,
-    mockGetJobProvenance,
-    studentStoreModule,
-    submitJobModule,
-    vi,
   }) => {
     it('GET /students returns student profiles', async () => {
       const response = await app.inject({
