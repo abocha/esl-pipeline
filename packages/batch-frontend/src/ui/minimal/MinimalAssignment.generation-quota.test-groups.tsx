@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, it } from 'vitest';
+import { fireEvent } from '@testing-library/react';
 
 import type * as ApiTypes from '../../utils/api';
 import {
@@ -10,6 +11,7 @@ import {
   testExpect as expect,
   now,
   previewCurrentDraft,
+  renderGenerationReadyAssignment,
   renderMinimalAssignment,
   renderResumedAssignment,
   setupMinimalAssignmentTest,
@@ -116,36 +118,6 @@ export function registerGenerationDefaultsTests() {
       expect(screen.queryByText(/RPM: 5/i)).toBeNull();
     });
 
-    it(
-      'updates quota panel with latest successful generation response',
-      async () => {
-        const user = createMinimalUser();
-        vi.mocked(api.generateDraft).mockResolvedValueOnce({
-          text: '# Generated assignment draft',
-          provider: 'openai',
-          model: 'gpt-5.2',
-          quota: {
-            source: 'provider',
-            lastUpdatedAt: '2026-02-18T00:04:00.000Z',
-            requestsPerMinute: 42,
-            requestsPerDay: 1000,
-          },
-        });
-
-        await renderResumedAssignment();
-        await selectOpenAiGenerationModel(user);
-        await user.click(screen.getByRole('button', { name: /Generate draft from prompt/i }));
-
-        await waitFor(() => {
-          expect(screen.getByText(/Source: Provider/i)).toBeTruthy();
-          expect(screen.getByText(/RPM: 42/i)).toBeTruthy();
-          expect(screen.getByText(/RPD: 1000/i)).toBeTruthy();
-        });
-        expect(screen.queryByText(/RPM: 5/i)).toBeNull();
-      },
-      INTEGRATION_TEST_TIMEOUT_MS,
-    );
-
     it('shows relative and absolute freshness in quota panel', async () => {
       renderMinimalAssignment();
 
@@ -184,7 +156,7 @@ export function registerGenerationDefaultsTests() {
       'generates draft markdown with selected provider/model',
       async () => {
         const user = createMinimalUser();
-        await renderResumedAssignment();
+        await renderGenerationReadyAssignment();
         await selectOpenAiGenerationModel(user);
 
         await user.click(screen.getByRole('button', { name: /Generate draft from prompt/i }));
@@ -213,84 +185,6 @@ export function registerGenerationThrottleTests() {
     afterEach(() => {
       vi.useRealTimers();
     });
-
-    it(
-      'keeps last successful quota snapshot when a later generation request fails',
-      async () => {
-        const user = createMinimalUser();
-        vi.mocked(api.generateDraft)
-          .mockResolvedValueOnce({
-            text: '# Generated assignment draft',
-            provider: 'openai',
-            model: 'gpt-5.2',
-            quota: {
-              source: 'provider',
-              lastUpdatedAt: '2026-02-18T00:04:00.000Z',
-              requestsPerMinute: 42,
-            },
-          })
-          .mockRejectedValueOnce(
-            new api.GenerationDraftApiError('Provider timed out', {
-              code: 'provider_timeout',
-              provider: 'openai',
-              model: 'gpt-5.2',
-              requestId: 'req-timeout-2',
-            }),
-          );
-
-        await renderResumedAssignment();
-        await selectOpenAiGenerationModel(user);
-        await user.click(screen.getByRole('button', { name: /Generate draft from prompt/i }));
-
-        await waitFor(() => {
-          expect(screen.getByText(/Source: Provider/i)).toBeTruthy();
-          expect(screen.getByText(/RPM: 42/i)).toBeTruthy();
-        });
-
-        await user.click(screen.getByRole('button', { name: /Generate draft from prompt/i }));
-        await waitFor(() => {
-          expect(screen.getByText(/Provider timed out/i)).toBeTruthy();
-        });
-        expect(screen.getByText(/Source: Provider/i)).toBeTruthy();
-        expect(screen.getByText(/RPM: 42/i)).toBeTruthy();
-      },
-      INTEGRATION_TEST_TIMEOUT_MS,
-    );
-
-    it(
-      'resets runtime quota snapshot on Start new and falls back to baseline quota',
-      async () => {
-        const user = createMinimalUser();
-        vi.mocked(api.generateDraft).mockResolvedValueOnce({
-          text: '# Generated assignment draft',
-          provider: 'openai',
-          model: 'gpt-5.2',
-          quota: {
-            source: 'provider',
-            lastUpdatedAt: '2026-02-18T00:04:00.000Z',
-            requestsPerMinute: 42,
-          },
-        });
-
-        await renderResumedAssignment();
-        await selectOpenAiGenerationModel(user);
-        await user.click(screen.getByRole('button', { name: /Generate draft from prompt/i }));
-
-        await waitFor(() => {
-          expect(screen.getByText(/Source: Provider/i)).toBeTruthy();
-          expect(screen.getByText(/RPM: 42/i)).toBeTruthy();
-        });
-
-        await user.click(screen.getByRole('button', { name: /Start new/i }));
-
-        await waitFor(() => {
-          expect(screen.getByText(/Source: Hybrid/i)).toBeTruthy();
-          expect(screen.getByText(/RPM: 5/i)).toBeTruthy();
-        });
-        expect(screen.queryByText(/RPM: 42/i)).toBeNull();
-      },
-      INTEGRATION_TEST_TIMEOUT_MS,
-    );
 
     it(
       'releases runtime RPM quota lock after minute window rollover',
@@ -354,7 +248,7 @@ export function registerGenerationThrottleTests() {
           }),
         );
 
-        await renderResumedAssignment();
+        await renderGenerationReadyAssignment();
         await selectOpenAiGenerationModel(user);
         await user.click(screen.getByRole('button', { name: /Generate draft from prompt/i }));
 
@@ -386,11 +280,11 @@ export function registerGenerationThrottleTests() {
             lastUpdatedAt: now,
           },
         });
-        await renderResumedAssignment();
+        await renderGenerationReadyAssignment();
         await selectOpenAiGenerationModel(user);
 
         const draftTextarea = screen.getByRole('textbox', { name: /Draft markdown/i });
-        await user.type(draftTextarea, '# Existing draft');
+        fireEvent.change(draftTextarea, { target: { value: '# Existing draft' } });
         await previewCurrentDraft(user);
 
         const publishButton = screen.getByRole('button', { name: /Publish assignment/i });

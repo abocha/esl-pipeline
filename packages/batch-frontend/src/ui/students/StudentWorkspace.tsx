@@ -8,7 +8,6 @@ import type {
   JobState,
   ProfileRevisionSummaryResponse,
   PromptPackageLineageResponse,
-  StarterProfileInput,
   StudentMemoryOverviewResponse,
   StudentProfile,
   StudentProfileBindingListResponse,
@@ -46,14 +45,32 @@ import {
   upsertProfileContent,
   upsertTemplateContent,
 } from '../../utils/api';
+import {
+  buildCreateStudentPayload,
+  formatCandidateSectionLabel,
+  formatCandidateStateLabel,
+  INITIAL_HISTORY_FILTERS,
+  INITIAL_TIMELINE_FILTERS,
+  INITIAL_CREATE_STUDENT_FORM,
+  PROFILE_CANDIDATE_PENDING_FILTER,
+  PROFILE_CANDIDATE_REVIEWED_FILTER,
+  type CandidateActionKind,
+  type CreateStudentFormState,
+  type HistoryFilters,
+  type ProfileCandidateFilter,
+  type TimelineFilters,
+  isPendingCandidate,
+  isReviewedCandidate,
+  isSelectableForPromotion,
+} from './StudentWorkspace.logic';
+import { CreateStudentDialog } from './CreateStudentDialog';
+import { WorkspaceInspectionPanel } from './WorkspaceInspectionPanel';
 
 const HISTORY_LIMIT = 25;
 const BINDING_LIMIT = 20;
 const MEMORY_OVERVIEW_LESSON_LIMIT = 3;
 const MEMORY_OVERVIEW_HOMEWORK_LIMIT = 2;
 const PROFILE_CANDIDATE_LIMIT = 200;
-const PROFILE_CANDIDATE_PENDING_FILTER = 'pending';
-const PROFILE_CANDIDATE_REVIEWED_FILTER = 'reviewed';
 const CLEAN_TEMPLATE_STARTER_CONTENT = String.raw`## **System Prompt: ESL Homework Generator**
 
 **Role & Scope**
@@ -105,69 +122,13 @@ function toIsoOrUndefined(value: string): string | undefined {
   return date.toISOString();
 }
 
-interface CreateStudentFormState {
-  student: string;
-  profileId: string;
-  dbId: string;
-  pageParentId: string;
-  colorPreset: string;
-  accentPreference: string;
-  manifestPreset: string;
-  starterLevel: string;
-  starterGoals: string;
-  starterProfessionOrContext: string;
-  starterInterests: string;
-  starterLongRunningChallenges: string;
-  starterStudyPreferencesOrConstraints: string;
-  starterTeacherNotes: string;
+function toTitleCaseLabel(value: string): string {
+  return value
+    .split(/[_-]+/g)
+    .filter(Boolean)
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(' ');
 }
-
-const INITIAL_CREATE_STUDENT_FORM: CreateStudentFormState = {
-  student: '',
-  profileId: '',
-  dbId: '',
-  pageParentId: '',
-  colorPreset: '',
-  accentPreference: '',
-  manifestPreset: '',
-  starterLevel: '',
-  starterGoals: '',
-  starterProfessionOrContext: '',
-  starterInterests: '',
-  starterLongRunningChallenges: '',
-  starterStudyPreferencesOrConstraints: '',
-  starterTeacherNotes: '',
-};
-
-type ProfileCandidateFilter =
-  | typeof PROFILE_CANDIDATE_PENDING_FILTER
-  | typeof PROFILE_CANDIDATE_REVIEWED_FILTER;
-
-type CandidateActionKind = 'approve' | 'reject' | 'defer';
-
-interface HistoryFilters {
-  state: 'all' | JobState;
-  from: string;
-  to: string;
-}
-
-interface TimelineFilters {
-  type: 'all' | StudentTimelineType;
-  from: string;
-  to: string;
-}
-
-const INITIAL_HISTORY_FILTERS: HistoryFilters = {
-  state: 'all',
-  from: '',
-  to: '',
-};
-
-const INITIAL_TIMELINE_FILTERS: TimelineFilters = {
-  type: 'all',
-  from: '',
-  to: '',
-};
 
 function isDefaultStudentName(name: string): boolean {
   return name.trim().toLowerCase() === 'default';
@@ -194,107 +155,6 @@ function formatDateTime(value?: string | null): string {
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return 'n/a';
   return date.toLocaleString();
-}
-
-function toTitleCaseLabel(value: string): string {
-  return value
-    .split(/[_-]+/g)
-    .filter(Boolean)
-    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
-    .join(' ');
-}
-
-function buildStarterProfileInput(
-  form: CreateStudentFormState,
-): {
-  starterProfile?: StarterProfileInput;
-  hasAnyValue: boolean;
-  hasMissingRequired: boolean;
-} {
-  const starterProfile: StarterProfileInput = {
-    level: form.starterLevel.trim() || undefined,
-    goals: form.starterGoals.trim() || undefined,
-    professionOrContext: form.starterProfessionOrContext.trim() || undefined,
-    interests: form.starterInterests.trim() || undefined,
-    longRunningChallenges: form.starterLongRunningChallenges.trim() || undefined,
-    studyPreferencesOrConstraints:
-      form.starterStudyPreferencesOrConstraints.trim() || undefined,
-    teacherNotes: form.starterTeacherNotes.trim() || undefined,
-  };
-
-  const requiredFields = [
-    starterProfile.goals,
-    starterProfile.professionOrContext,
-    starterProfile.interests,
-    starterProfile.longRunningChallenges,
-    starterProfile.studyPreferencesOrConstraints,
-  ];
-  const hasAnyValue = Object.values(starterProfile).some((value) => value && value.length > 0);
-  const hasMissingRequired =
-    hasAnyValue && requiredFields.some((value) => !value || value.trim().length === 0);
-
-  return {
-    starterProfile: hasAnyValue && !hasMissingRequired ? starterProfile : undefined,
-    hasAnyValue,
-    hasMissingRequired,
-  };
-}
-
-function isPendingCandidate(candidate: StudentProfileCandidate): boolean {
-  return candidate.status === 'pending_review' && candidate.reviewState === 'unreviewed';
-}
-
-function isReviewedCandidate(candidate: StudentProfileCandidate): boolean {
-  return !isPendingCandidate(candidate);
-}
-
-function isSelectableForPromotion(candidate: StudentProfileCandidate): boolean {
-  return candidate.status === 'approved';
-}
-
-function formatCandidateSectionLabel(section: string): string {
-  switch (section) {
-    case 'goals_motivation': {
-      return 'Goals and motivation';
-    }
-    case 'work_communication_context': {
-      return 'Work and communication context';
-    }
-    case 'interests_personal_context': {
-      return 'Interests and personal context';
-    }
-    case 'learning_preferences_study_habits': {
-      return 'Learning preferences and study habits';
-    }
-    case 'long_running_strengths': {
-      return 'Long-running strengths';
-    }
-    case 'persistent_challenges_constraints': {
-      return 'Persistent challenges or constraints';
-    }
-    default: {
-      return toTitleCaseLabel(section);
-    }
-  }
-}
-
-function formatCandidateStateLabel(candidate: StudentProfileCandidate): string {
-  if (candidate.status === 'promoted') {
-    return 'Promoted';
-  }
-  if (candidate.status === 'approved') {
-    return 'Approved, not yet promoted';
-  }
-  if (candidate.status === 'rejected') {
-    return 'Rejected';
-  }
-  if (candidate.reviewState === 'deferred') {
-    return 'Deferred';
-  }
-  if (candidate.status === 'superseded') {
-    return 'Superseded';
-  }
-  return 'Pending review';
 }
 
 export const StudentWorkspace: React.FC = () => {
@@ -825,42 +685,21 @@ export const StudentWorkspace: React.FC = () => {
   }, []);
 
   const handleCreateStudent = async () => {
-    const student = createStudentForm.student.trim();
-    if (!student) {
-      setCreateStudentError('Student name is required.');
+    const built = buildCreateStudentPayload(createStudentForm);
+    if (built.validationError) {
+      setCreateStudentError(built.validationError);
       return;
     }
-
-    const starterProfileState = buildStarterProfileInput(createStudentForm);
-    if (starterProfileState.hasMissingRequired) {
-      setCreateStudentError(
-        'Complete all required starter profile fields or clear the starter profile section before creating the student.',
-      );
-      return;
-    }
-    const starterProfile = starterProfileState.starterProfile;
 
     setCreateStudentBusy(true);
     setCreateStudentError(null);
     setCreateStudentSuccess(null);
 
     try {
-      const created = await createStudentProfile({
-        student,
-        ...(!starterProfile && createStudentForm.profileId
-          ? { profileId: createStudentForm.profileId }
-          : {}),
-        ...(createStudentForm.dbId ? { dbId: createStudentForm.dbId } : {}),
-        ...(createStudentForm.pageParentId ? { pageParentId: createStudentForm.pageParentId } : {}),
-        ...(createStudentForm.colorPreset ? { colorPreset: createStudentForm.colorPreset } : {}),
-        ...(createStudentForm.accentPreference
-          ? { accentPreference: createStudentForm.accentPreference }
-          : {}),
-        ...(createStudentForm.manifestPreset
-          ? { manifestPreset: createStudentForm.manifestPreset }
-          : {}),
-        ...(starterProfile ? { starterProfile } : {}),
-      });
+      if (!built.payload) {
+        throw new Error('Expected create-student payload to be available.');
+      }
+      const created = await createStudentProfile(built.payload);
 
       await Promise.all([loadStudents(), loadProfileOptions()]);
       setSelectedStudentId(created.id);
@@ -1306,288 +1145,27 @@ export const StudentWorkspace: React.FC = () => {
 
       <section className="workspace-grid">
         <article className="workspace-card card">
-          <header>
-            <div className="workspace-inline workspace-header-row">
-              <h2>Student Context</h2>
-              <button
-                type="button"
-                className="workspace-secondary-btn"
-                onClick={() => {
-                  setCreateStudentSuccess(null);
-                  setIsCreateStudentOpen((current) => !current);
-                  if (isCreateStudentOpen) {
-                    resetCreateStudentForm();
-                  }
-                }}
-              >
-                {isCreateStudentOpen ? 'Close Create Form' : 'Create Student'}
-              </button>
-            </div>
-            <p>Choose the student context for all workspace panels.</p>
-          </header>
-
-          {createStudentSuccess ? (
-            <p className="workspace-success">{createStudentSuccess}</p>
-          ) : null}
-
-          {isCreateStudentOpen ? (
-            <div className="workspace-create-panel">
-              <label className="workspace-field">
-                Student Name
-                <input
-                  aria-label="Student Name"
-                  value={createStudentForm.student}
-                  onChange={(event) =>
-                    setCreateStudentForm((current) => ({
-                      ...current,
-                      student: event.target.value,
-                    }))
-                  }
-                  placeholder="e.g. Alex"
-                />
-              </label>
-
-              <label className="workspace-field">
-                Initial Profile (optional)
-                <select
-                  aria-label="Initial Profile"
-                  value={createStudentForm.profileId}
-                  onChange={(event) =>
-                    setCreateStudentForm((current) => ({
-                      ...current,
-                      profileId: event.target.value,
-                    }))
-                  }
-                >
-                  <option value="">No profile binding</option>
-                  {profileOptions.map((profile) => (
-                    <option key={profile.id} value={profile.id}>
-                      {profile.label} ({profile.id})
-                    </option>
-                  ))}
-                </select>
-              </label>
-
-              <details className="workspace-advanced">
-                <summary>Starter profile (optional)</summary>
-                <p className="workspace-muted">
-                  Use this when you want the system to create an initial bound profile from teacher
-                  input. If you fill this in, it takes precedence over the Initial Profile picker.
-                </p>
-                <div className="workspace-grid">
-                  <label className="workspace-field">
-                    Starter Level
-                    <input
-                      aria-label="Starter Level"
-                      value={createStudentForm.starterLevel}
-                      onChange={(event) =>
-                        setCreateStudentForm((current) => ({
-                          ...current,
-                          starterLevel: event.target.value,
-                        }))
-                      }
-                      placeholder="e.g. A2"
-                    />
-                  </label>
-
-                  <label className="workspace-field workspace-field-span-2">
-                    Starter Goals
-                    <textarea
-                      aria-label="Starter Goals"
-                      value={createStudentForm.starterGoals}
-                      onChange={(event) =>
-                        setCreateStudentForm((current) => ({
-                          ...current,
-                          starterGoals: event.target.value,
-                        }))
-                      }
-                      rows={3}
-                      placeholder="What is this student trying to achieve?"
-                    />
-                  </label>
-
-                  <label className="workspace-field workspace-field-span-2">
-                    Profession Or Context
-                    <textarea
-                      aria-label="Profession Or Context"
-                      value={createStudentForm.starterProfessionOrContext}
-                      onChange={(event) =>
-                        setCreateStudentForm((current) => ({
-                          ...current,
-                          starterProfessionOrContext: event.target.value,
-                        }))
-                      }
-                      rows={2}
-                      placeholder="Work, life context, communication situations"
-                    />
-                  </label>
-
-                  <label className="workspace-field workspace-field-span-2">
-                    Interests
-                    <textarea
-                      aria-label="Interests"
-                      value={createStudentForm.starterInterests}
-                      onChange={(event) =>
-                        setCreateStudentForm((current) => ({
-                          ...current,
-                          starterInterests: event.target.value,
-                        }))
-                      }
-                      rows={2}
-                      placeholder="Topics or hobbies that help personalize homework"
-                    />
-                  </label>
-
-                  <label className="workspace-field workspace-field-span-2">
-                    Long-Running Challenges
-                    <textarea
-                      aria-label="Long-Running Challenges"
-                      value={createStudentForm.starterLongRunningChallenges}
-                      onChange={(event) =>
-                        setCreateStudentForm((current) => ({
-                          ...current,
-                          starterLongRunningChallenges: event.target.value,
-                        }))
-                      }
-                      rows={2}
-                      placeholder="Persistent issues, constraints, or caution areas"
-                    />
-                  </label>
-
-                  <label className="workspace-field workspace-field-span-2">
-                    Study Preferences Or Constraints
-                    <textarea
-                      aria-label="Study Preferences Or Constraints"
-                      value={createStudentForm.starterStudyPreferencesOrConstraints}
-                      onChange={(event) =>
-                        setCreateStudentForm((current) => ({
-                          ...current,
-                          starterStudyPreferencesOrConstraints: event.target.value,
-                        }))
-                      }
-                      rows={2}
-                      placeholder="Preferences, habits, formatting requests, constraints"
-                    />
-                  </label>
-
-                  <label className="workspace-field workspace-field-span-2">
-                    Starter Teacher Notes
-                    <textarea
-                      aria-label="Starter Teacher Notes"
-                      value={createStudentForm.starterTeacherNotes}
-                      onChange={(event) =>
-                        setCreateStudentForm((current) => ({
-                          ...current,
-                          starterTeacherNotes: event.target.value,
-                        }))
-                      }
-                      rows={2}
-                      placeholder="Anything the first profile draft should preserve"
-                    />
-                  </label>
-                </div>
-              </details>
-
-              <details className="workspace-advanced">
-                <summary>Advanced fields</summary>
-                <div className="workspace-grid">
-                  <label className="workspace-field">
-                    Notion DB ID
-                    <input
-                      aria-label="Notion DB ID"
-                      value={createStudentForm.dbId}
-                      onChange={(event) =>
-                        setCreateStudentForm((current) => ({
-                          ...current,
-                          dbId: event.target.value,
-                        }))
-                      }
-                    />
-                  </label>
-
-                  <label className="workspace-field">
-                    Notion Parent ID
-                    <input
-                      aria-label="Notion Parent ID"
-                      value={createStudentForm.pageParentId}
-                      onChange={(event) =>
-                        setCreateStudentForm((current) => ({
-                          ...current,
-                          pageParentId: event.target.value,
-                        }))
-                      }
-                    />
-                  </label>
-
-                  <label className="workspace-field">
-                    Color Preset
-                    <input
-                      aria-label="Color Preset"
-                      value={createStudentForm.colorPreset}
-                      onChange={(event) =>
-                        setCreateStudentForm((current) => ({
-                          ...current,
-                          colorPreset: event.target.value,
-                        }))
-                      }
-                    />
-                  </label>
-
-                  <label className="workspace-field">
-                    Accent Preference
-                    <input
-                      aria-label="Accent Preference"
-                      value={createStudentForm.accentPreference}
-                      onChange={(event) =>
-                        setCreateStudentForm((current) => ({
-                          ...current,
-                          accentPreference: event.target.value,
-                        }))
-                      }
-                    />
-                  </label>
-
-                  <label className="workspace-field">
-                    Manifest Preset
-                    <input
-                      aria-label="Manifest Preset"
-                      value={createStudentForm.manifestPreset}
-                      onChange={(event) =>
-                        setCreateStudentForm((current) => ({
-                          ...current,
-                          manifestPreset: event.target.value,
-                        }))
-                      }
-                    />
-                  </label>
-                </div>
-              </details>
-
-              <div className="workspace-inline">
-                <button
-                  type="button"
-                  className="workspace-primary-btn"
-                  onClick={() => void handleCreateStudent()}
-                  disabled={createStudentBusy}
-                >
-                  {createStudentBusy ? 'Creating...' : 'Create Student'}
-                </button>
-                <button
-                  type="button"
-                  className="workspace-secondary-btn"
-                  onClick={() => {
-                    resetCreateStudentForm();
-                    setIsCreateStudentOpen(false);
-                  }}
-                  disabled={createStudentBusy}
-                >
-                  Cancel
-                </button>
-              </div>
-
-              {createStudentError ? <p className="workspace-error">{createStudentError}</p> : null}
-            </div>
-          ) : null}
+          <CreateStudentDialog
+            isOpen={isCreateStudentOpen}
+            isBusy={createStudentBusy}
+            error={createStudentError}
+            success={createStudentSuccess}
+            profileOptions={profileOptions}
+            createStudentForm={createStudentForm}
+            onToggleOpen={() => {
+              setCreateStudentSuccess(null);
+              if (isCreateStudentOpen) {
+                resetCreateStudentForm();
+              }
+              setIsCreateStudentOpen((current) => !current);
+            }}
+            onCancel={() => {
+              resetCreateStudentForm();
+              setIsCreateStudentOpen(false);
+            }}
+            onSubmit={() => void handleCreateStudent()}
+            setCreateStudentForm={setCreateStudentForm}
+          />
 
           <label className="workspace-field">
             Student
@@ -2290,244 +1868,19 @@ export const StudentWorkspace: React.FC = () => {
       </section>
 
       <section className="workspace-grid workspace-grid-wide">
-        <article className="workspace-card card">
-          <header>
-            <h2>Lineage & Provenance</h2>
-            <p>Inspect selected assignment provenance and pinned prompt lineage.</p>
-          </header>
-
-          {selectedJob ? (
-            <p className="workspace-muted">
-              Inspecting job <code>{selectedJob.jobId}</code>
-            </p>
-          ) : (
-            <p className="workspace-muted">Select an assignment from history first.</p>
-          )}
-
-          {jobProvenanceLoading ? (
-            <p className="workspace-muted">Loading job provenance...</p>
-          ) : null}
-          {jobProvenanceError ? <p className="workspace-error">{jobProvenanceError}</p> : null}
-
-          {jobProvenance ? (
-            <div className="workspace-meta">
-              <span>
-                <strong>Source job:</strong> {jobProvenance.job.sourceJobId ?? 'none'}
-              </span>
-              <span>
-                <strong>Recording:</strong> {jobProvenance.recording?.id ?? 'n/a'}
-              </span>
-              <span>
-                <strong>Prompt package:</strong> {jobProvenance.promptPackage?.id ?? 'n/a'}
-              </span>
-              <span>
-                <strong>Draft:</strong> {jobProvenance.draft?.id ?? 'n/a'}
-              </span>
-              <span>
-                <strong>Action audit:</strong> {jobProvenance.actions.length}
-              </span>
-            </div>
-          ) : null}
-
-          {jobProvenance?.actions.length ? (
-            <div className="workspace-list">
-              {jobProvenance.actions.slice(0, 8).map((action) => (
-                <div key={action.id} className="workspace-list-item">
-                  <div>
-                    <strong>{action.actionType}</strong>
-                    <div className="workspace-muted">
-                      {new Date(action.requestedAt).toLocaleString()} by{' '}
-                      {action.requestedBy ?? 'unknown'}
-                    </div>
-                  </div>
-                  <span>{action.outcome}</span>
-                </div>
-              ))}
-            </div>
-          ) : null}
-
-          <div>
-            <h3>Student Memory</h3>
-            <p className="workspace-muted">
-              Latest snapshot summary plus the recent lesson and homework memory used to build
-              continuity over time.
-            </p>
-
-            {memoryOverviewLoading ? (
-              <p className="workspace-muted">Loading student memory...</p>
-            ) : null}
-            {memoryOverviewError ? <p className="workspace-error">{memoryOverviewError}</p> : null}
-
-            {memoryOverview?.latestReadyStudentMemorySnapshot ? (
-              <>
-                <div className="workspace-meta">
-                  <span>
-                    <strong>Latest snapshot:</strong>{' '}
-                    {memoryOverview.latestReadyStudentMemorySnapshot.id}
-                  </span>
-                  <span>
-                    <strong>Status:</strong>{' '}
-                    {memoryOverview.latestReadyStudentMemorySnapshot.status}
-                  </span>
-                  <span>
-                    <strong>Generated:</strong>{' '}
-                    {formatDateTime(memoryOverview.latestReadyStudentMemorySnapshot.generatedAt)}
-                  </span>
-                </div>
-                <p>
-                  {memoryOverview.latestReadyStudentMemorySnapshot.snapshotSummary ??
-                    'No snapshot summary available.'}
-                </p>
-              </>
-            ) : !memoryOverviewLoading && !memoryOverviewError ? (
-              <p className="workspace-muted">No ready student-memory snapshot available yet.</p>
-            ) : null}
-
-            <div>
-              <strong>Unresolved issues</strong>
-              {memoryOverview?.unresolvedIssues.length ? (
-                <div className="workspace-list">
-                  {memoryOverview.unresolvedIssues.map((issue) => (
-                    <div key={`${issue.issueType}:${issue.label}`} className="workspace-list-item">
-                      <div>
-                        <strong>{issue.label}</strong>
-                        <div className="workspace-muted">{issue.note}</div>
-                      </div>
-                      <span>
-                        {issue.issueType} · {issue.priority}
-                      </span>
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                <p className="workspace-muted">No unresolved issues recorded in the latest snapshot.</p>
-              )}
-            </div>
-
-            <div>
-              <strong>Recent lesson memory</strong>
-              {memoryOverview?.recentReadyLessonMemory.length ? (
-                <div className="workspace-list">
-                  {memoryOverview.recentReadyLessonMemory.map((entry) => (
-                    <div key={entry.id} className="workspace-list-item">
-                      <div>
-                        <strong>{entry.lessonSummary ?? 'Lesson memory entry'}</strong>
-                        <div className="workspace-muted">
-                          {entry.topicsDiscussed.slice(0, 2).map((topic) => topic.topic).join(', ') ||
-                            'No topics recorded'}
-                        </div>
-                      </div>
-                      <span>{formatDateTime(entry.generatedAt)}</span>
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                <p className="workspace-muted">No recent lesson-memory entries available.</p>
-              )}
-            </div>
-
-            <div>
-              <strong>Recent homework memory</strong>
-              {memoryOverview?.recentReadyHomeworkMemory.length ? (
-                <div className="workspace-list">
-                  {memoryOverview.recentReadyHomeworkMemory.map((entry) => (
-                    <div key={entry.id} className="workspace-list-item">
-                      <div>
-                        <strong>{entry.topic ?? 'Homework memory entry'}</strong>
-                        <div className="workspace-muted">
-                          {entry.homeworkSummary ?? entry.communicativeOutcome ?? 'No summary recorded'}
-                        </div>
-                      </div>
-                      <span>{formatDateTime(entry.publishedAt)}</span>
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                <p className="workspace-muted">No recent homework-memory entries available.</p>
-              )}
-            </div>
-          </div>
-
-          {lineageLoading ? <p className="workspace-muted">Loading prompt lineage...</p> : null}
-          {lineageError ? <p className="workspace-error">{lineageError}</p> : null}
-
-          {lineage ? (
-            <>
-              <div className="workspace-meta">
-                <span>
-                  <strong>Profile revision:</strong> {lineage.profile.snapshot.revisionId ?? 'n/a'}
-                </span>
-                <span>
-                  <strong>Template revision:</strong> {lineage.template.snapshot.revisionId ?? 'n/a'}
-                </span>
-                <span>
-                  <strong>Profile drift:</strong> {lineage.profile.drift?.reason ?? 'none'}
-                </span>
-                <span>
-                  <strong>Template drift:</strong> {lineage.template.drift?.reason ?? 'none'}
-                </span>
-                <span>
-                  <strong>Binding at creation:</strong>{' '}
-                  {lineage.bindingAtCreation?.profileId ?? 'n/a'}
-                </span>
-              </div>
-
-              <div>
-                <h3>Assignment Memory Provenance</h3>
-                <div className="workspace-meta">
-                  <span>
-                    <strong>Snapshot at creation:</strong>{' '}
-                    {lineage.memory.studentMemorySnapshotId ?? 'none'}
-                  </span>
-                  <span>
-                    <strong>Snapshot hash:</strong>{' '}
-                    {lineage.memory.studentMemorySnapshotHash ?? 'none'}
-                  </span>
-                  <span>
-                    <strong>Retrieval policy:</strong>{' '}
-                    {lineage.memory.retrievalPolicyVersion ?? 'none'}
-                  </span>
-                </div>
-
-                <div className="workspace-meta">
-                  <span>
-                    <strong>Selected lesson memory IDs:</strong>{' '}
-                    {lineage.memory.selectedLessonMemoryIds.length > 0
-                      ? lineage.memory.selectedLessonMemoryIds.join(', ')
-                      : 'none'}
-                  </span>
-                  <span>
-                    <strong>Selected homework memory IDs:</strong>{' '}
-                    {lineage.memory.selectedHomeworkMemoryIds.length > 0
-                      ? lineage.memory.selectedHomeworkMemoryIds.join(', ')
-                      : 'none'}
-                  </span>
-                </div>
-
-                <div className="workspace-list">
-                  <div className="workspace-list-item">
-                    <strong>Layer availability</strong>
-                    <span>
-                      snapshot {lineage.memory.layerAvailability.studentMemorySnapshot}
-                    </span>
-                  </div>
-                  <div className="workspace-list-item">
-                    <strong>Recent lesson memory</strong>
-                    <span>{lineage.memory.layerAvailability.recentLessonMemory}</span>
-                  </div>
-                  <div className="workspace-list-item">
-                    <strong>Recent homework memory</strong>
-                    <span>{lineage.memory.layerAvailability.recentHomeworkMemory}</span>
-                  </div>
-                  <div className="workspace-list-item">
-                    <strong>Retrieval policy</strong>
-                    <span>{lineage.memory.layerAvailability.retrievalPolicy}</span>
-                  </div>
-                </div>
-              </div>
-            </>
-          ) : null}
-        </article>
+        <WorkspaceInspectionPanel
+          selectedJob={selectedJob}
+          jobProvenanceLoading={jobProvenanceLoading}
+          jobProvenanceError={jobProvenanceError}
+          jobProvenance={jobProvenance}
+          memoryOverviewLoading={memoryOverviewLoading}
+          memoryOverviewError={memoryOverviewError}
+          memoryOverview={memoryOverview}
+          lineageLoading={lineageLoading}
+          lineageError={lineageError}
+          lineage={lineage}
+          formatDateTime={formatDateTime}
+        />
 
         <article className="workspace-card card">
           <header>
