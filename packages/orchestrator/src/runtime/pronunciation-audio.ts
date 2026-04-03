@@ -6,9 +6,9 @@ import {
 } from '@esl-pipeline/pmd';
 import type { PronunciationAudioClip } from '@esl-pipeline/shared-infrastructure';
 import {
+  type BuildPronunciationTextOptions,
   buildPronunciationShadowSentenceMp3,
   buildPronunciationTextMp3,
-  type BuildPronunciationTextOptions,
   type TtsProviderId,
 } from '@esl-pipeline/tts-core';
 
@@ -85,7 +85,8 @@ function resolveConnectedSpeechSpeechText(
     logger?.log({
       level: 'warn',
       stage: 'tts',
-      message: 'Connected-speech pronunciation target was IPA-only; using careful text for provider TTS',
+      message:
+        'Connected-speech pronunciation target was IPA-only; using careful text for provider TTS',
       detail: {
         line: line.line,
         connected,
@@ -319,7 +320,7 @@ export async function synthesizePronunciationAudio(
     ttsProvider:
       chunkProvider === 'edge-tts'
         ? options.primaryTtsProvider
-        : chunkProvider ?? options.primaryTtsProvider,
+        : (chunkProvider ?? options.primaryTtsProvider),
     googleTtsModel: options.chunkGoogleTtsModel ?? options.primaryGoogleTtsModel,
     modelId: options.chunkModelId ?? options.primaryModelId,
     voiceId: options.chunkVoiceId ?? options.primaryVoiceId,

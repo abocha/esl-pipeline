@@ -7,6 +7,7 @@ The assignment must be personalized, coherent, grounded in the supplied context,
 Completeness beats elaboration. Keep every section concise enough that the full assignment fits comfortably in one response.
 
 Optimize in this order:
+
 1. pedagogical usefulness
 2. fidelity to the supplied lesson context
 3. personalization
@@ -118,11 +119,11 @@ Return the assignment as **clean Markdown** inside **one single code block**.
 1. You **must** produce a single fenced code block that begins with valid YAML front matter at byte 0 (no leading whitespace or BOM).
 
    Inside that single output code block, the **first line must be `---`**.
-   Do **not** start the assignment body with ```` ```yaml ```` or any other fence marker.
+   Do **not** start the assignment body with ` ```yaml ` or any other fence marker.
    The front matter opens with `---` and closes with `---`.
 
-   Front matter skeleton (inside the output block):
-   ---
+   ## Front matter skeleton (inside the output block):
+
    title: <string>
    student: <string>
    level: <string>
@@ -130,7 +131,8 @@ Return the assignment as **clean Markdown** inside **one single code block**.
    input_type: "generate" | "authentic"
    study_text_type: "monologue" | "dialogue"
    icon: <emoji>
-   ---
+
+   ***
 
 - For required frontmatter fields, derive values conservatively from the strongest supported context.
 - If a required field is truly unavailable, use these fixed safe placeholders rather than unsupported specifics:
@@ -168,6 +170,7 @@ Return the assignment as **clean Markdown** inside **one single code block**.
 _(This is the required output shape. Fill every placeholder with real content. Output plain Markdown with no code fences or backticks.)_
 
 ---
+
 title: 'Homework Assignment: [Topic]'
 student: '[Current Student Name]'
 level: '[CEFR level]'
@@ -177,20 +180,22 @@ study_text_type: 'dialogue'
 icon: [relevant emoji]
 speaker_labels: [Name1, Name2]
 speaker_profiles:
-  - id: Name1
-    display_name: Name1
-    role: student
-    gender: female
-    age: young
-    accent: american
-    style: social
-  - id: Name2
-    display_name: Name2
-    role: student
-    gender: male
-    age: young
-    accent: british
-    style: thoughtful
+
+- id: Name1
+  display_name: Name1
+  role: student
+  gender: female
+  age: young
+  accent: american
+  style: social
+- id: Name2
+  display_name: Name2
+  role: student
+  gender: male
+  age: young
+  accent: british
+  style: thoughtful
+
 ---
 
 ## 1. 🎯 This Week's Mission Briefing
@@ -318,7 +323,7 @@ Use these exact mode contracts:
   - `1. We **really** need to leave now. — /<transcription>/`
   - After the numbered drills, add exactly one final line:
   - `**Natural sentence practice:** <full sentence>`
-:::
+    :::
 
 ## 6. ✅ Your Turn: Complete the Mission!
 
@@ -352,4 +357,4 @@ Use these exact mode contracts:
 
 - **Warm-up Idea:** [Give one concise, actionable warm-up that lets the teacher quickly reactivate this homework in the next lesson.]
 - **Error Correction Focus:** [Name one specific error pattern or listening target the teacher should monitor next time.]
-:::
+  :::

@@ -144,7 +144,9 @@ describe('FfmpegSemaphore', () => {
       mockRedis.pipeline.mockReturnValueOnce({ ttl, exec });
       mockRedis.scan.mockResolvedValueOnce(['0', ['lock1', 'lock2']]);
 
-      await (semaphore as unknown as { cleanupStaleLocks: () => Promise<void> }).cleanupStaleLocks();
+      await (
+        semaphore as unknown as { cleanupStaleLocks: () => Promise<void> }
+      ).cleanupStaleLocks();
 
       expect(ttl).toHaveBeenCalledTimes(2);
       expect(mockRedis.del).toHaveBeenCalledWith('lock1'); // Cleaned up stale lock

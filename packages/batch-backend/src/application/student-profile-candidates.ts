@@ -1,5 +1,10 @@
-import type { FactEvidence, MemoryConfidence, StudentFact, StudentFactAuthority } from '../domain/lesson-memory-model.js';
-import type { LessonMemoryRecord } from '../domain/lesson-memory-model.js';
+import type {
+  FactEvidence,
+  LessonMemoryRecord,
+  MemoryConfidence,
+  StudentFact,
+  StudentFactAuthority,
+} from '../domain/lesson-memory-model.js';
 import { listRecentReadyLessonMemoryByStudentId } from '../domain/lesson-memory-repository.js';
 import type { StudentMemorySnapshotRecord } from '../domain/student-memory-snapshot-model.js';
 import { getLatestReadyStudentMemorySnapshotByStudentId } from '../domain/student-memory-snapshot-repository.js';
@@ -264,7 +269,8 @@ async function reviewStudentProfileCandidate(args: {
     });
   }
 
-  const approvedFact = args.action === 'approve' ? args.approvedFact?.trim() || candidate.fact : null;
+  const approvedFact =
+    args.action === 'approve' ? args.approvedFact?.trim() || candidate.fact : null;
   const updated = await candidates.updateReview({
     studentId: args.studentId,
     candidateId: args.candidateId,
@@ -319,7 +325,10 @@ function buildCandidateDrafts(args: {
         reviewNeeded: fact.reviewNeeded || lessonObservation?.reviewNeeded || false,
         sourceSnapshotId: args.snapshot.id,
         sourceLessonMemoryIds: matchedLessonMemoryIds,
-        evidence: dedupeEvidence([...(fact.evidence ?? []), ...(lessonObservation?.evidence ?? [])]),
+        evidence: dedupeEvidence([
+          ...(fact.evidence ?? []),
+          ...(lessonObservation?.evidence ?? []),
+        ]),
       });
     }
   }
@@ -331,7 +340,10 @@ function buildCandidateDrafts(args: {
     if (observation.lessonMemoryIds.size < 2) {
       continue;
     }
-    if (isTransientFact(observation.fact) || !isStrengthEligible(observation.targetSection, observation.lessonMemoryIds.size)) {
+    if (
+      isTransientFact(observation.fact) ||
+      !isStrengthEligible(observation.targetSection, observation.lessonMemoryIds.size)
+    ) {
       continue;
     }
 
@@ -399,7 +411,11 @@ function shouldInsertCandidateProposal(
     return true;
   }
 
-  if (existing.status === 'pending_review' || existing.status === 'approved' || existing.status === 'promoted') {
+  if (
+    existing.status === 'pending_review' ||
+    existing.status === 'approved' ||
+    existing.status === 'promoted'
+  ) {
     return false;
   }
 
@@ -434,22 +450,90 @@ function classifyTargetSection(
 ): StudentProfileCandidateTargetSection | null {
   const haystack = `${fact.category} ${fact.fact}`.toLowerCase();
 
-  if (matchesAny(haystack, ['goal', 'motivat', 'wants to', 'wants', 'aims to', 'needs english', 'career transition'])) {
+  if (
+    matchesAny(haystack, [
+      'goal',
+      'motivat',
+      'wants to',
+      'wants',
+      'aims to',
+      'needs english',
+      'career transition',
+    ])
+  ) {
     return 'goals_motivation';
   }
-  if (matchesAny(haystack, ['profession', 'job', 'work', 'client', 'meeting', 'colleague', 'career', 'communication context'])) {
+  if (
+    matchesAny(haystack, [
+      'profession',
+      'job',
+      'work',
+      'client',
+      'meeting',
+      'colleague',
+      'career',
+      'communication context',
+    ])
+  ) {
     return 'work_communication_context';
   }
-  if (matchesAny(haystack, ['hobby', 'interest', 'likes', 'family', 'location', 'lives in', 'personal', 'routine'])) {
+  if (
+    matchesAny(haystack, [
+      'hobby',
+      'interest',
+      'likes',
+      'family',
+      'location',
+      'lives in',
+      'personal',
+      'routine',
+    ])
+  ) {
     return 'interests_personal_context';
   }
-  if (matchesAny(haystack, ['prefers', 'benefits from', 'study habit', 'study preference', 'uses', 'practices', 'one-take', 'notebook', 'chatgpt', 'methodical', 'logical', 'formula'])) {
+  if (
+    matchesAny(haystack, [
+      'prefers',
+      'benefits from',
+      'study habit',
+      'study preference',
+      'uses',
+      'practices',
+      'one-take',
+      'notebook',
+      'chatgpt',
+      'methodical',
+      'logical',
+      'formula',
+    ])
+  ) {
     return 'learning_preferences_study_habits';
   }
-  if (matchesAny(haystack, ['strength', 'strong at', 'responds well', 'retains', 'comfortable with', 'benefits from structured'])) {
+  if (
+    matchesAny(haystack, [
+      'strength',
+      'strong at',
+      'responds well',
+      'retains',
+      'comfortable with',
+      'benefits from structured',
+    ])
+  ) {
     return 'long_running_strengths';
   }
-  if (matchesAny(haystack, ['challenge', 'constraint', 'struggles', 'difficulty', 'under pressure', 'perfectionist', 'limited time', 'persistent', 'tends to'])) {
+  if (
+    matchesAny(haystack, [
+      'challenge',
+      'constraint',
+      'struggles',
+      'difficulty',
+      'under pressure',
+      'perfectionist',
+      'limited time',
+      'persistent',
+      'tends to',
+    ])
+  ) {
     return 'persistent_challenges_constraints';
   }
 
@@ -500,10 +584,7 @@ function strongerAuthority(
   return AUTHORITY_PRIORITY[right] > AUTHORITY_PRIORITY[left] ? right : left;
 }
 
-function strongerConfidence(
-  left: MemoryConfidence,
-  right?: MemoryConfidence,
-): MemoryConfidence {
+function strongerConfidence(left: MemoryConfidence, right?: MemoryConfidence): MemoryConfidence {
   if (!right) {
     return left;
   }

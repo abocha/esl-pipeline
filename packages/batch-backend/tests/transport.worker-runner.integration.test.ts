@@ -1,7 +1,7 @@
-import Fastify, { type FastifyReply, type FastifyRequest } from 'fastify';
 import { randomUUID } from 'node:crypto';
 import fs from 'node:fs/promises';
 import path from 'node:path';
+import Fastify, { type FastifyReply, type FastifyRequest } from 'fastify';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 
 import * as getJobStatusModule from '../src/application/get-job-status.js';
@@ -144,35 +144,35 @@ describe('transport/worker-runner - full pipeline (requires Postgres + Redis)', 
         }>,
         reply: FastifyReply,
       ) => {
-      try {
-        const body = request.body;
-        const result = await submitJobModule.submitJob({
-          md: body?.md,
-          withTts: body?.withTts,
-          upload: body?.upload,
-        });
-        return reply.code(202).send(result);
-      } catch (error: unknown) {
-        return reply
-          .code(400)
-          .send({ error: error instanceof Error ? error.message : 'Failed to submit job' });
-      }
+        try {
+          const body = request.body;
+          const result = await submitJobModule.submitJob({
+            md: body?.md,
+            withTts: body?.withTts,
+            upload: body?.upload,
+          });
+          return reply.code(202).send(result);
+        } catch (error: unknown) {
+          return reply
+            .code(400)
+            .send({ error: error instanceof Error ? error.message : 'Failed to submit job' });
+        }
       },
     );
 
     app.get(
       '/jobs/:jobId',
       async (request: FastifyRequest<{ Params: { jobId: string } }>, reply: FastifyReply) => {
-      try {
-        const { jobId } = request.params;
-        const status = await getJobStatusModule.getJobStatus(jobId);
-        if (!status) {
-          return reply.code(404).send({ error: 'Job not found' });
+        try {
+          const { jobId } = request.params;
+          const status = await getJobStatusModule.getJobStatus(jobId);
+          if (!status) {
+            return reply.code(404).send({ error: 'Job not found' });
+          }
+          return reply.send(status);
+        } catch {
+          return reply.code(500).send({ error: 'Failed to fetch job status' });
         }
-        return reply.send(status);
-      } catch {
-        return reply.code(500).send({ error: 'Failed to fetch job status' });
-      }
       },
     );
 

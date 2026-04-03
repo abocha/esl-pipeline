@@ -1,16 +1,15 @@
 import { randomUUID } from 'node:crypto';
-
 import type { PoolClient } from 'pg';
 
 import { withPgClient } from '../infrastructure/db.js';
 import { logger } from '../infrastructure/logger.js';
 import {
-  LessonMemoryEntryStatusSchema,
-  LessonMemorySourceKindSchema,
+  type LabeledNote,
   type LessonMemoryEntryStatus,
+  LessonMemoryEntryStatusSchema,
   type LessonMemoryGenerationNotes,
   type LessonMemoryRecord,
-  type LabeledNote,
+  LessonMemorySourceKindSchema,
   type MistakePattern,
   type NamedNote,
   type PronunciationFocusEntry,
@@ -207,7 +206,9 @@ export async function insertCanonicalReadyLessonMemoryEntry(
     await client.query('BEGIN');
     try {
       // Serialize canonical ready replacement per transcript to avoid supersession races.
-      await client.query('SELECT id FROM transcripts WHERE id = $1 FOR UPDATE', [params.transcriptId]);
+      await client.query('SELECT id FROM transcripts WHERE id = $1 FOR UPDATE', [
+        params.transcriptId,
+      ]);
 
       const insertResult = await client.query(
         `
@@ -689,9 +690,7 @@ export async function listLessonMemoryEntries(
   const values: (string | string[] | number)[] = [];
   const clauses: string[] = [];
   const requiresCanonicalReadyFilter =
-    Array.isArray(statuses) &&
-    statuses.length === 1 &&
-    statuses[0] === 'ready';
+    Array.isArray(statuses) && statuses.length === 1 && statuses[0] === 'ready';
 
   if (studentId) {
     values.push(studentId);
@@ -776,7 +775,10 @@ export async function listRecentReadyLessonMemoryByStudentId(
   options: ListRecentReadyLessonMemoryOptions,
 ): Promise<LessonMemoryRecord[]> {
   const values: (string | number)[] = [studentId];
-  const clauses = ['lesson_memory_entries.student_id = $1', `lesson_memory_entries.status = 'ready'`];
+  const clauses = [
+    'lesson_memory_entries.student_id = $1',
+    `lesson_memory_entries.status = 'ready'`,
+  ];
 
   if (options.excludeTranscriptId) {
     values.push(options.excludeTranscriptId);
@@ -965,8 +967,9 @@ export async function markLessonMemoryEntryFailed(params: {
   const generationNotes: LessonMemoryGenerationNotes = {
     ...existing.generationNotes,
     error: params.errorMessage,
-    providerRequestId: params.providerRequestId ?? (existing.generationNotes?.providerRequestId ?? null),
-    usage: params.usage ?? (existing.generationNotes?.usage ?? null),
+    providerRequestId:
+      params.providerRequestId ?? existing.generationNotes?.providerRequestId ?? null,
+    usage: params.usage ?? existing.generationNotes?.usage ?? null,
     failedAt: new Date().toISOString(),
   };
 

@@ -1,39 +1,65 @@
-import React, { useState } from 'react';
-import { render, screen, waitFor } from '@testing-library/react';
 import type { RenderResult } from '@testing-library/react';
+import { render, screen, waitFor } from '@testing-library/react';
+import React, { useState } from 'react';
 import { MemoryRouter } from 'react-router-dom';
 import { vi } from 'vitest';
 
-import * as api from '../../utils/api';
+import { CreateStudentDialog, type CreateStudentDialogProps } from './CreateStudentDialog';
 import { StudentWorkspace } from './StudentWorkspace';
 import {
-  INITIAL_CREATE_STUDENT_FORM,
-  INITIAL_HISTORY_FILTERS,
-  INITIAL_TIMELINE_FILTERS,
   type CandidateActionKind,
   type CreateStudentFormState,
   type HistoryFilters,
+  INITIAL_CREATE_STUDENT_FORM,
+  INITIAL_HISTORY_FILTERS,
+  INITIAL_TIMELINE_FILTERS,
   type ProfileCandidateFilter,
   type TimelineFilters,
 } from './StudentWorkspace.logic';
 import {
-  CreateStudentDialog,
-  type CreateStudentDialogProps,
-} from './CreateStudentDialog';
-import {
   WorkspaceCandidatesPanel,
   type WorkspaceCandidatesPanelProps,
 } from './WorkspaceCandidatesPanel';
+import { WorkspaceHistoryPanel, type WorkspaceHistoryPanelProps } from './WorkspaceHistoryPanel';
 import {
   WorkspaceInspectionPanel,
   type WorkspaceInspectionPanelProps,
 } from './WorkspaceInspectionPanel';
-import {
-  WorkspaceHistoryPanel,
-  type WorkspaceHistoryPanelProps,
-} from './WorkspaceHistoryPanel';
 
-vi.mock('../../utils/api', () => ({
+type MockFn = ReturnType<typeof vi.fn>;
+
+interface StudentWorkspaceApiMocks {
+  activateProfileRevision: MockFn;
+  activateTemplateRevision: MockFn;
+  approveStudentProfileCandidate: MockFn;
+  createStudentProfile: MockFn;
+  deferStudentProfileCandidate: MockFn;
+  deleteTemplateContent: MockFn;
+  fetchJobProvenance: MockFn;
+  fetchPromptPackageLineage: MockFn;
+  getProfileContent: MockFn;
+  getStudentMemoryOverview: MockFn;
+  getStudentProfile: MockFn;
+  getStudentTimeline: MockFn;
+  getTemplateContent: MockFn;
+  listProfileContents: MockFn;
+  listProfileRevisions: MockFn;
+  listStudentProfileBindings: MockFn;
+  listStudentProfileCandidates: MockFn;
+  listStudents: MockFn;
+  listTemplateContents: MockFn;
+  listTemplateRevisions: MockFn;
+  listUserJobs: MockFn;
+  promoteStudentProfileCandidates: MockFn;
+  rejectStudentProfileCandidate: MockFn;
+  restoreProfileRevision: MockFn;
+  restoreTemplateRevision: MockFn;
+  updateStudentProfile: MockFn;
+  upsertProfileContent: MockFn;
+  upsertTemplateContent: MockFn;
+}
+
+const studentWorkspaceApiMocks: StudentWorkspaceApiMocks = vi.hoisted(() => ({
   activateProfileRevision: vi.fn(),
   activateTemplateRevision: vi.fn(),
   approveStudentProfileCandidate: vi.fn(),
@@ -47,10 +73,10 @@ vi.mock('../../utils/api', () => ({
   getStudentProfile: vi.fn(),
   getStudentTimeline: vi.fn(),
   getTemplateContent: vi.fn(),
-  listStudentProfileCandidates: vi.fn(),
   listProfileContents: vi.fn(),
   listProfileRevisions: vi.fn(),
   listStudentProfileBindings: vi.fn(),
+  listStudentProfileCandidates: vi.fn(),
   listStudents: vi.fn(),
   listTemplateContents: vi.fn(),
   listTemplateRevisions: vi.fn(),
@@ -63,6 +89,10 @@ vi.mock('../../utils/api', () => ({
   upsertProfileContent: vi.fn(),
   upsertTemplateContent: vi.fn(),
 }));
+
+export { studentWorkspaceApiMocks };
+
+vi.mock('../../utils/api', () => studentWorkspaceApiMocks);
 
 export const STUDENT_WORKSPACE_ASYNC_TIMEOUT_MS = 5_000;
 export const CLEAN_TEMPLATE_STARTER_CONTENT = String.raw`## **System Prompt: ESL Homework Generator**
@@ -94,7 +124,7 @@ Use the runtime blocks in this order:
 const now = '2026-02-07T12:00:00.000Z';
 
 function seedStudentWorkspaceMocks() {
-  vi.mocked(api.listStudents).mockResolvedValue({
+  studentWorkspaceApiMocks.listStudents.mockResolvedValue({
     items: [
       {
         id: 'student-default',
@@ -108,20 +138,20 @@ function seedStudentWorkspaceMocks() {
     order: 'asc',
   });
 
-  vi.mocked(api.getStudentProfile).mockResolvedValue({
+  studentWorkspaceApiMocks.getStudentProfile.mockResolvedValue({
     id: 'student-default',
     student: 'Default',
     profileId: 'profile-default.md',
   });
 
-  vi.mocked(api.listProfileContents).mockResolvedValue({
+  studentWorkspaceApiMocks.listProfileContents.mockResolvedValue({
     profiles: [
       { id: 'profile-default.md', label: 'Default Profile' },
       { id: 'profile-alt.md', label: 'Alt Profile' },
     ],
   });
 
-  vi.mocked(api.getProfileContent).mockResolvedValue({
+  studentWorkspaceApiMocks.getProfileContent.mockResolvedValue({
     id: 'profile-default.md',
     label: 'Default Profile',
     content: 'PROFILE CONTENT',
@@ -129,7 +159,7 @@ function seedStudentWorkspaceMocks() {
     updatedAt: now,
   });
 
-  vi.mocked(api.listProfileRevisions).mockResolvedValue({
+  studentWorkspaceApiMocks.listProfileRevisions.mockResolvedValue({
     items: [
       {
         id: 'revision-1',
@@ -152,11 +182,11 @@ function seedStudentWorkspaceMocks() {
     order: 'desc',
   });
 
-  vi.mocked(api.listTemplateContents).mockResolvedValue({
+  studentWorkspaceApiMocks.listTemplateContents.mockResolvedValue({
     templates: [{ id: 'template-default.md', label: 'Default Template' }],
   });
 
-  vi.mocked(api.getTemplateContent).mockResolvedValue({
+  studentWorkspaceApiMocks.getTemplateContent.mockResolvedValue({
     id: 'template-default.md',
     label: 'Default Template',
     content: CLEAN_TEMPLATE_STARTER_CONTENT,
@@ -164,7 +194,7 @@ function seedStudentWorkspaceMocks() {
     updatedAt: now,
   });
 
-  vi.mocked(api.listTemplateRevisions).mockResolvedValue({
+  studentWorkspaceApiMocks.listTemplateRevisions.mockResolvedValue({
     items: [
       {
         id: 'template-revision-1',
@@ -187,7 +217,7 @@ function seedStudentWorkspaceMocks() {
     order: 'desc',
   });
 
-  vi.mocked(api.listUserJobs).mockResolvedValue({
+  studentWorkspaceApiMocks.listUserJobs.mockResolvedValue({
     jobs: [
       {
         jobId: 'job-1',
@@ -223,7 +253,7 @@ function seedStudentWorkspaceMocks() {
     offset: 0,
   });
 
-  vi.mocked(api.getStudentTimeline).mockResolvedValue({
+  studentWorkspaceApiMocks.getStudentTimeline.mockResolvedValue({
     items: [
       {
         type: 'job_completed',
@@ -239,7 +269,7 @@ function seedStudentWorkspaceMocks() {
     order: 'desc',
   });
 
-  vi.mocked(api.getStudentMemoryOverview).mockResolvedValue({
+  studentWorkspaceApiMocks.getStudentMemoryOverview.mockResolvedValue({
     studentId: 'student-default',
     latestReadyStudentMemorySnapshot: {
       id: 'snapshot-1',
@@ -350,7 +380,7 @@ function seedStudentWorkspaceMocks() {
     ],
   });
 
-  vi.mocked(api.listStudentProfileBindings).mockResolvedValue({
+  studentWorkspaceApiMocks.listStudentProfileBindings.mockResolvedValue({
     items: [
       {
         id: 'binding-1',
@@ -369,7 +399,7 @@ function seedStudentWorkspaceMocks() {
     order: 'desc',
   });
 
-  vi.mocked(api.fetchJobProvenance).mockResolvedValue({
+  studentWorkspaceApiMocks.fetchJobProvenance.mockResolvedValue({
     job: {
       id: 'job-1',
       state: 'succeeded',
@@ -428,7 +458,7 @@ function seedStudentWorkspaceMocks() {
     ],
   });
 
-  vi.mocked(api.fetchPromptPackageLineage).mockResolvedValue({
+  studentWorkspaceApiMocks.fetchPromptPackageLineage.mockResolvedValue({
     promptPackageId: 'pkg-1',
     recordingId: 'rec-1',
     transcriptId: 'tx-1',
@@ -498,13 +528,13 @@ function seedStudentWorkspaceMocks() {
     },
   });
 
-  vi.mocked(api.updateStudentProfile).mockResolvedValue({
+  studentWorkspaceApiMocks.updateStudentProfile.mockResolvedValue({
     id: 'student-default',
     student: 'Default',
     profileId: 'profile-alt.md',
   });
 
-  vi.mocked(api.upsertProfileContent).mockResolvedValue({
+  studentWorkspaceApiMocks.upsertProfileContent.mockResolvedValue({
     id: 'profile-default.md',
     label: 'Default Profile',
     content: 'PROFILE CONTENT',
@@ -512,7 +542,7 @@ function seedStudentWorkspaceMocks() {
     updatedAt: now,
   });
 
-  vi.mocked(api.restoreProfileRevision).mockResolvedValue({
+  studentWorkspaceApiMocks.restoreProfileRevision.mockResolvedValue({
     id: 'profile-default.md',
     label: 'Default Profile',
     content: 'PROFILE CONTENT',
@@ -520,7 +550,7 @@ function seedStudentWorkspaceMocks() {
     updatedAt: now,
   });
 
-  vi.mocked(api.activateProfileRevision).mockResolvedValue({
+  studentWorkspaceApiMocks.activateProfileRevision.mockResolvedValue({
     id: 'profile-default.md',
     label: 'Default Profile',
     content: 'PROFILE CONTENT',
@@ -528,7 +558,7 @@ function seedStudentWorkspaceMocks() {
     updatedAt: now,
   });
 
-  vi.mocked(api.upsertTemplateContent).mockResolvedValue({
+  studentWorkspaceApiMocks.upsertTemplateContent.mockResolvedValue({
     id: 'template-default.md',
     label: 'Default Template',
     content: CLEAN_TEMPLATE_STARTER_CONTENT,
@@ -536,7 +566,7 @@ function seedStudentWorkspaceMocks() {
     updatedAt: now,
   });
 
-  vi.mocked(api.restoreTemplateRevision).mockResolvedValue({
+  studentWorkspaceApiMocks.restoreTemplateRevision.mockResolvedValue({
     id: 'template-default.md',
     label: 'Default Template',
     content: CLEAN_TEMPLATE_STARTER_CONTENT,
@@ -544,7 +574,7 @@ function seedStudentWorkspaceMocks() {
     updatedAt: now,
   });
 
-  vi.mocked(api.activateTemplateRevision).mockResolvedValue({
+  studentWorkspaceApiMocks.activateTemplateRevision.mockResolvedValue({
     id: 'template-revision-1',
     templateId: 'template-default.md',
     contentHash: 'template-hash-1',
@@ -560,9 +590,9 @@ function seedStudentWorkspaceMocks() {
     content: CLEAN_TEMPLATE_STARTER_CONTENT,
   });
 
-  vi.mocked(api.deleteTemplateContent).mockResolvedValue();
+  studentWorkspaceApiMocks.deleteTemplateContent.mockResolvedValue(undefined);
 
-  vi.mocked(api.listStudentProfileCandidates).mockResolvedValue({
+  studentWorkspaceApiMocks.listStudentProfileCandidates.mockResolvedValue({
     studentId: 'student-default',
     items: [
       {
@@ -671,7 +701,7 @@ function seedStudentWorkspaceMocks() {
     order: 'desc',
   });
 
-  vi.mocked(api.approveStudentProfileCandidate).mockImplementation(
+  studentWorkspaceApiMocks.approveStudentProfileCandidate.mockImplementation(
     async (_studentId, candidateId, payload) => ({
       id: candidateId,
       studentId: 'student-default',
@@ -708,7 +738,7 @@ function seedStudentWorkspaceMocks() {
     }),
   );
 
-  vi.mocked(api.rejectStudentProfileCandidate).mockImplementation(
+  studentWorkspaceApiMocks.rejectStudentProfileCandidate.mockImplementation(
     async (_studentId, candidateId, payload) => ({
       id: candidateId,
       studentId: 'student-default',
@@ -735,7 +765,7 @@ function seedStudentWorkspaceMocks() {
     }),
   );
 
-  vi.mocked(api.deferStudentProfileCandidate).mockImplementation(
+  studentWorkspaceApiMocks.deferStudentProfileCandidate.mockImplementation(
     async (_studentId, candidateId, payload) => ({
       id: candidateId,
       studentId: 'student-default',
@@ -762,7 +792,7 @@ function seedStudentWorkspaceMocks() {
     }),
   );
 
-  vi.mocked(api.promoteStudentProfileCandidates).mockResolvedValue({
+  studentWorkspaceApiMocks.promoteStudentProfileCandidates.mockResolvedValue({
     draftRevisionId: 'revision-draft-2',
     profileId: 'profile-default.md',
     includedCandidateIds: ['candidate-approved'],
@@ -770,7 +800,7 @@ function seedStudentWorkspaceMocks() {
     contentHash: 'draft-hash-2',
   });
 
-  vi.mocked(api.createStudentProfile).mockResolvedValue({
+  studentWorkspaceApiMocks.createStudentProfile.mockResolvedValue({
     id: 'student-created',
     student: 'Created Student',
     profileId: null,
@@ -1038,7 +1068,9 @@ export function renderCreateStudentDialog(
         isBusy={isBusy}
         error={error}
         success={success}
-        profileOptions={options.profileOptions ?? DEFAULT_CREATE_STUDENT_DIALOG_PROPS.profileOptions}
+        profileOptions={
+          options.profileOptions ?? DEFAULT_CREATE_STUDENT_DIALOG_PROPS.profileOptions
+        }
         createStudentForm={createStudentForm}
         onToggleOpen={() => setIsOpen((current) => !current)}
         onCancel={() => {
@@ -1434,12 +1466,8 @@ export function renderWorkspaceCandidatesPanel(
         profileCandidatePromotionBusy={options.props?.profileCandidatePromotionBusy ?? false}
         profileCandidatePromotionError={options.props?.profileCandidatePromotionError ?? null}
         profileCandidatePromotionSuccess={options.props?.profileCandidatePromotionSuccess ?? null}
-        onRefreshCandidates={
-          options.onRefreshCandidates ?? (() => {})
-        }
-        onPromoteProfileCandidates={
-          options.onPromoteProfileCandidates ?? (() => {})
-        }
+        onRefreshCandidates={options.onRefreshCandidates ?? (() => {})}
+        onPromoteProfileCandidates={options.onPromoteProfileCandidates ?? (() => {})}
         onReviewProfileCandidate={
           options.onReviewProfileCandidate ??
           ((candidate, action) => {
@@ -1474,14 +1502,21 @@ export async function renderWorkspaceInspectionReady(): Promise<RenderResult> {
 export async function renderWorkspaceCandidatesReady(): Promise<RenderResult> {
   const result = await renderWorkspaceHistoryReady();
   await screen.findByRole('heading', { name: /Profile Candidates/i });
-  await waitFor(() => {
-    if (vi.mocked(api.listStudentProfileCandidates).mock.calls.length !== 1) {
-      throw new Error('Expected the initial candidate load to complete.');
-    }
-  }, { timeout: STUDENT_WORKSPACE_ASYNC_TIMEOUT_MS });
-  await screen.findAllByText(/Work and communication context/i, {}, {
-    timeout: STUDENT_WORKSPACE_ASYNC_TIMEOUT_MS,
-  });
+  await waitFor(
+    () => {
+      if (studentWorkspaceApiMocks.listStudentProfileCandidates.mock.calls.length !== 1) {
+        throw new Error('Expected the initial candidate load to complete.');
+      }
+    },
+    { timeout: STUDENT_WORKSPACE_ASYNC_TIMEOUT_MS },
+  );
+  await screen.findAllByText(
+    /Work and communication context/i,
+    {},
+    {
+      timeout: STUDENT_WORKSPACE_ASYNC_TIMEOUT_MS,
+    },
+  );
   return result;
 }
 

@@ -47,7 +47,8 @@ export async function executeJobAction(
 
   // Missing jobs are not persisted due to strict FK constraints on job_action_history.job_id.
   if (result.error !== 'not_found') {
-    const createdJobId = action.type === JobActionType.RERUN && result.success ? result.jobId : null;
+    const createdJobId =
+      action.type === JobActionType.RERUN && result.success ? result.jobId : null;
     const payload =
       action.payload && typeof action.payload === 'object'
         ? (action.payload as Record<string, unknown>)

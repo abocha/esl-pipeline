@@ -86,7 +86,7 @@ Content rules:
 ## Rollup Input Scope
 
 Student-memory snapshots are built from all historical `ready` lesson-memory and homework-memory
- artifacts.
+artifacts.
 
 Scope rules:
 

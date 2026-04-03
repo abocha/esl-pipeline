@@ -568,9 +568,7 @@ export function loadConfig(): BatchBackendConfig {
     throw new Error('BATCH_BACKEND_OPS_CONTROL_ACTION_HISTORY_LIMIT must be between 1 and 1000');
   }
   if (opsControlActionRetentionDays < 1 || opsControlActionRetentionDays > 3650) {
-    throw new Error(
-      'BATCH_BACKEND_OPS_CONTROL_ACTION_RETENTION_DAYS must be between 1 and 3650',
-    );
+    throw new Error('BATCH_BACKEND_OPS_CONTROL_ACTION_RETENTION_DAYS must be between 1 and 3650');
   }
 
   if (typeof process.env.STUDENT_SYSTEM_SOURCE === 'string') {

@@ -1,12 +1,12 @@
-/* eslint-disable react-refresh/only-export-components, unicorn/prefer-export-from */
+/* eslint-disable react-refresh/only-export-components */
 import {
   act,
   configure,
+  type RenderResult,
   render,
   screen,
   waitFor,
   within,
-  type RenderResult,
 } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { expect, vi } from 'vitest';
@@ -308,9 +308,7 @@ export function renderMinimalAssignment(): RenderResult {
 }
 
 export async function renderPromptReadyAssignment(
-  options: {
-    user?: ReturnType<typeof userEvent.setup>;
-  } = {},
+  options: { user?: ReturnType<typeof userEvent.setup> } = {},
 ): Promise<RenderResult & { user: ReturnType<typeof userEvent.setup> }> {
   const user = options.user ?? createMinimalUser();
   const result = renderMinimalAssignment();
@@ -741,4 +739,5 @@ export const testExpect = expect;
 export const testVi = vi;
 export const testApi = api;
 export const testMinimalAssignment = MinimalAssignment;
-export { now, UI_WAIT_TIMEOUT_MS, INTEGRATION_TEST_TIMEOUT_MS };
+
+export { INTEGRATION_TEST_TIMEOUT_MS, now, UI_WAIT_TIMEOUT_MS };

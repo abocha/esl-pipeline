@@ -1,24 +1,24 @@
-import { afterEach, beforeEach, describe, it } from 'vitest';
 import { fireEvent } from '@testing-library/react';
+import { afterEach, beforeEach, describe, it } from 'vitest';
 
 import {
-  INTEGRATION_TEST_TIMEOUT_MS,
   testApi as api,
+  createMinimalUser,
+  createTimerAwareMinimalUser,
   testExpect as expect,
+  INTEGRATION_TEST_TIMEOUT_MS,
+  previewCurrentDraft,
   renderDraftReadyAssignment,
-  renderPromptReadyAssignment,
+  renderMinimalAssignment,
   renderPreviewReadyAssignment,
+  renderPromptReadyAssignment,
   renderPublishedActionsAssignment,
   renderPublishedAssignment,
-  renderMinimalAssignment,
-  setupMinimalAssignmentTest,
   testScreen as screen,
+  setupMinimalAssignmentTest,
   testVi as vi,
   testWaitFor as waitFor,
   testWithin as within,
-  createMinimalUser,
-  createTimerAwareMinimalUser,
-  previewCurrentDraft,
 } from './MinimalAssignment.test-harness';
 
 export function registerPublishValidationTests() {
@@ -42,76 +42,67 @@ export function registerPublishValidationTests() {
       await screen.findByText('Upload failed at gateway');
     });
 
-    it(
-      'prevents draft save when markdown validation fails',
-      async () => {
-        const user = createMinimalUser();
-        vi.mocked(api.validateMarkdown).mockResolvedValueOnce({
-          ok: false,
-          errors: ['Missing study text block'],
-          warnings: [],
-        });
+    it('prevents draft save when markdown validation fails', async () => {
+      const user = createMinimalUser();
+      vi.mocked(api.validateMarkdown).mockResolvedValueOnce({
+        ok: false,
+        errors: ['Missing study text block'],
+        warnings: [],
+      });
 
-        await renderDraftReadyAssignment();
+      await renderDraftReadyAssignment();
 
-        const draftTextarea = screen.getByRole('textbox', { name: /Draft markdown/i });
-        expect(draftTextarea).toBeTruthy();
-        if (!draftTextarea) {
-          throw new Error('Expected draft textarea to be rendered');
-        }
-        fireEvent.change(draftTextarea, { target: { value: '# Broken draft' } });
+      const draftTextarea = screen.getByRole('textbox', { name: /Draft markdown/i });
+      expect(draftTextarea).toBeTruthy();
+      if (!draftTextarea) {
+        throw new Error('Expected draft textarea to be rendered');
+      }
+      fireEvent.change(draftTextarea, { target: { value: '# Broken draft' } });
 
-        await user.click(screen.getByRole('button', { name: /Save draft/i }));
+      await user.click(screen.getByRole('button', { name: /Save draft/i }));
 
-        await screen.findByText('Fix validation errors before saving.');
-        expect(api.createDraft).not.toHaveBeenCalled();
-      },
-      30_000,
-    );
+      await screen.findByText('Fix validation errors before saving.');
+      expect(api.createDraft).not.toHaveBeenCalled();
+    }, 30_000);
 
-    it(
-      'publishes a valid draft and displays the resulting job link',
-      async () => {
-        const { user } = await renderPromptReadyAssignment();
+    it('publishes a valid draft and displays the resulting job link', async () => {
+      const { user } = await renderPromptReadyAssignment();
 
-        const draftTextarea = screen.getByRole('textbox', { name: /Draft markdown/i });
-        expect(draftTextarea).toBeTruthy();
-        if (!draftTextarea) {
-          throw new Error('Expected draft textarea to be rendered');
-        }
-        fireEvent.change(draftTextarea, { target: { value: '# Final draft' } });
-        await user.selectOptions(screen.getByRole('combobox', { name: /Preset/i }), 'b2-default');
-        await previewCurrentDraft(user);
-        await user.click(screen.getByRole('button', { name: /Publish assignment/i }));
+      const draftTextarea = screen.getByRole('textbox', { name: /Draft markdown/i });
+      expect(draftTextarea).toBeTruthy();
+      if (!draftTextarea) {
+        throw new Error('Expected draft textarea to be rendered');
+      }
+      fireEvent.change(draftTextarea, { target: { value: '# Final draft' } });
+      await user.selectOptions(screen.getByRole('combobox', { name: /Preset/i }), 'b2-default');
+      await previewCurrentDraft(user);
+      await user.click(screen.getByRole('button', { name: /Publish assignment/i }));
 
-        await waitFor(() => {
-          expect(api.createDraft).toHaveBeenCalledWith('pkg-1', '# Final draft');
-        });
-        const validationCall = vi.mocked(api.validateMarkdown).mock.calls.at(-1);
-        expect(validationCall?.[0]).toBe('# Final draft');
-        expect(validationCall?.[1]).toBe(true);
-        expect(validationCall?.[2]).toBeUndefined();
-        expect(api.materializeDraft).toHaveBeenCalledWith(
-          'draft-1',
-          expect.objectContaining({
-            jobOverrides: {
-              publishTarget: 'html',
-              withTts: true,
-              ttsProvider: 'elevenlabs',
-            },
-          }),
-        );
-        expect(api.approveJob).toHaveBeenCalledWith('job-1', {
-          md: '/tmp/assignment.md',
-          mdStorageUri: 's3://esl/drafts/draft-1.md',
-        });
+      await waitFor(() => {
+        expect(api.createDraft).toHaveBeenCalledWith('pkg-1', '# Final draft');
+      });
+      const validationCall = vi.mocked(api.validateMarkdown).mock.calls.at(-1);
+      expect(validationCall?.[0]).toBe('# Final draft');
+      expect(validationCall?.[1]).toBe(true);
+      expect(validationCall?.[2]).toBeUndefined();
+      expect(api.materializeDraft).toHaveBeenCalledWith(
+        'draft-1',
+        expect.objectContaining({
+          jobOverrides: {
+            publishTarget: 'html',
+            withTts: true,
+            ttsProvider: 'elevenlabs',
+          },
+        }),
+      );
+      expect(api.approveJob).toHaveBeenCalledWith('job-1', {
+        md: '/tmp/assignment.md',
+        mdStorageUri: 's3://esl/drafts/draft-1.md',
+      });
 
-        await screen.findAllByText(/Job ID: job-1/i);
-        expect(screen.getByText(/Status: succeeded/i)).toBeTruthy();
-      },
-      30_000,
-    );
-
+      await screen.findAllByText(/Job ID: job-1/i);
+      expect(screen.getByText(/Status: succeeded/i)).toBeTruthy();
+    }, 30_000);
   });
 }
 
@@ -142,7 +133,9 @@ export function registerJobActionTests() {
         await previewCurrentDraft(user);
         expect((publishButton as HTMLButtonElement).disabled).toBe(false);
 
-        fireEvent.change(draftTextarea, { target: { value: '# Preview gated draft\nOne more line' } });
+        fireEvent.change(draftTextarea, {
+          target: { value: '# Preview gated draft\nOne more line' },
+        });
         await waitFor(() => {
           expect((publishButton as HTMLButtonElement).disabled).toBe(true);
         });
@@ -248,9 +241,11 @@ export function registerJobActionTests() {
         await user.click(screen.getByRole('checkbox', { name: /Pronunciation chunk audio/i }));
 
         expect(
-          (screen.getByRole('combobox', {
-            name: /Pronunciation chunk provider/i,
-          }) as HTMLSelectElement).value,
+          (
+            screen.getByRole('combobox', {
+              name: /Pronunciation chunk provider/i,
+            }) as HTMLSelectElement
+          ).value,
         ).toBe('elevenlabs');
       },
       INTEGRATION_TEST_TIMEOUT_MS,
@@ -271,9 +266,11 @@ export function registerJobActionTests() {
         await user.click(screen.getByRole('checkbox', { name: /Pronunciation chunk audio/i }));
 
         expect(
-          (screen.getByRole('combobox', {
-            name: /Pronunciation chunk provider/i,
-          }) as HTMLSelectElement).value,
+          (
+            screen.getByRole('combobox', {
+              name: /Pronunciation chunk provider/i,
+            }) as HTMLSelectElement
+          ).value,
         ).toBe('elevenlabs');
       },
       INTEGRATION_TEST_TIMEOUT_MS,

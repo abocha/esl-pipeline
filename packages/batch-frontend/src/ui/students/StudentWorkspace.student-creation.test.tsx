@@ -1,13 +1,13 @@
 import { screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it } from 'vitest';
 
 import {
   renderCreateStudentDialogOpen,
   renderWorkspaceForStudentCreation,
   setupStudentWorkspaceTest,
+  studentWorkspaceApiMocks,
 } from './StudentWorkspace.test-harness';
-import * as api from '../../utils/api';
 
 describe('StudentWorkspace student creation', () => {
   beforeEach(() => {
@@ -26,12 +26,12 @@ describe('StudentWorkspace student creation', () => {
 
   it('creates a student and keeps workspace context updated', async () => {
     const user = userEvent.setup();
-    vi.mocked(api.createStudentProfile).mockResolvedValue({
+    studentWorkspaceApiMocks.createStudentProfile.mockResolvedValue({
       id: 'student-alex',
       student: 'Alex',
       profileId: 'profile-alt.md',
     });
-    vi.mocked(api.getStudentProfile).mockImplementation(async (id: string) => {
+    studentWorkspaceApiMocks.getStudentProfile.mockImplementation(async (id: string) => {
       if (id === 'student-alex') {
         return {
           id: 'student-alex',
@@ -54,7 +54,7 @@ describe('StudentWorkspace student creation', () => {
     await user.click(screen.getByRole('button', { name: /^Create Student$/i }));
 
     await waitFor(() => {
-      expect(api.createStudentProfile).toHaveBeenCalledWith({
+      expect(studentWorkspaceApiMocks.createStudentProfile).toHaveBeenCalledWith({
         student: 'Alex',
         profileId: 'profile-alt.md',
       });

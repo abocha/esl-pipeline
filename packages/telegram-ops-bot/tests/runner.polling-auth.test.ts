@@ -1,7 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { resetGuidedConfirmGuardsForTests } from '../src/guided-ui.js';
-
 import { createRunner, createUpdate, processUpdate } from './telegram-test-fixtures.js';
 
 beforeEach(() => {
@@ -94,10 +93,18 @@ describe('telegram runner polling and auth', () => {
       },
     });
 
-    await processUpdate(runner, createUpdate('/status', { fromUserId: 1, chatId: 123, chatType: 'supergroup' }));
     await processUpdate(
       runner,
-      createUpdate('/unknown', { fromUserId: 99, updateId: 2, chatId: 123, chatType: 'supergroup' }),
+      createUpdate('/status', { fromUserId: 1, chatId: 123, chatType: 'supergroup' }),
+    );
+    await processUpdate(
+      runner,
+      createUpdate('/unknown', {
+        fromUserId: 99,
+        updateId: 2,
+        chatId: 123,
+        chatType: 'supergroup',
+      }),
     );
 
     expect(auditLog).toHaveBeenCalledWith(
@@ -327,7 +334,10 @@ describe('telegram runner polling and auth', () => {
       },
     });
 
-    await processUpdate(runner, createUpdate('/start', { fromUserId: 1, chatId: 999, chatType: 'private' }));
+    await processUpdate(
+      runner,
+      createUpdate('/start', { fromUserId: 1, chatId: 999, chatType: 'private' }),
+    );
 
     expect(sendHtmlMessage).toHaveBeenCalledTimes(1);
     expect(sendHtmlMessage.mock.calls[0]?.[0].chatId).toBe('999');
@@ -348,12 +358,17 @@ describe('telegram runner polling and auth', () => {
       },
     });
 
-    await processUpdate(runner, createUpdate('/backup nightly', { chatId: 999, chatType: 'private' }));
+    await processUpdate(
+      runner,
+      createUpdate('/backup nightly', { chatId: 999, chatType: 'private' }),
+    );
 
     expect(enqueueOpsAction).toHaveBeenCalledTimes(0);
     expect(sendHtmlMessage).toHaveBeenCalledTimes(1);
     expect(sendHtmlMessage.mock.calls[0]?.[0].chatId).toBe('999');
-    expect(sendHtmlMessage.mock.calls[0]?.[0].html).toContain('Private chat is limited to onboarding');
+    expect(sendHtmlMessage.mock.calls[0]?.[0].html).toContain(
+      'Private chat is limited to onboarding',
+    );
     expect(auditLog).toHaveBeenCalledWith(
       expect.objectContaining({
         event: 'command_rejected_private_chat_scope',

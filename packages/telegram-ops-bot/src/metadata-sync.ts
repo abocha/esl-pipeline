@@ -1,5 +1,5 @@
+import { type CommandRegistry, getAdvertisedCommands } from './commands.js';
 import type { TelegramClient } from './telegram-client.js';
-import { getAdvertisedCommands, type CommandRegistry } from './commands.js';
 import type { AuditLogger, BotConfig } from './types.js';
 
 const SHORT_DESCRIPTION = 'Internal ESL Pipeline ops bot.';

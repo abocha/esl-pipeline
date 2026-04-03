@@ -38,4 +38,3 @@ export function buildLessonMemoryPrompt(params: BuildLessonMemoryPromptParams): 
 
   return sections.join('\n');
 }
-

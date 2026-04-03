@@ -1,13 +1,14 @@
-import type { GenerationProvider } from '@esl-pipeline/contracts';
 import type { ZodIssue } from 'zod';
+
+import type { GenerationProvider } from '@esl-pipeline/contracts';
 
 import type { BatchBackendConfig } from '../config/env.js';
 import {
-  type ProviderStructuredExecutionRequest,
-  type ProviderStructuredExecutionResult,
   executeGoogleStructuredGeneration,
   executeOpenAiStructuredGeneration,
   executeOpenRouterStructuredGeneration,
+  type ProviderStructuredExecutionRequest,
+  type ProviderStructuredExecutionResult,
 } from './generation-providers.js';
 import {
   HOMEWORK_MEMORY_CONTENT_JSON_SCHEMA,
@@ -106,4 +107,3 @@ export async function extractHomeworkMemoryContent(args: {
     throw error;
   }
 }
-

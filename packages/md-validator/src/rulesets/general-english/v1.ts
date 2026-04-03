@@ -200,7 +200,7 @@ function normalizeHeadingText(s: string): string {
   return (
     oneSpace
       // keep letters/digits/space/._- quotes & colon; drop the rest
-      .replaceAll(/[^\w\s\.\-’'&:]/g, '')
+      .replaceAll(/[^\w\s.\-’'&:]/g, '')
       .trim()
       .toLowerCase()
   );
@@ -229,7 +229,7 @@ function isPronunciationMicroFocusHeading(text: string): boolean {
 
 function tokenizeHeading(text: string): string[] {
   const normalized = normalizeHeadingText(text);
-  const withoutNumber = normalized.replace(/^\d+\s*[\.\-:]?\s*/, '');
+  const withoutNumber = normalized.replace(/^\d+\s*[.\-:]?\s*/, '');
   return withoutNumber
     .split(/\s+/)
     .map((token) => token.replaceAll(/[^a-z0-9]/g, ''))
@@ -445,7 +445,7 @@ function pushPronunciationWarnings(
     case 'connected_speech': {
       if (pronunciationFocus.lines.length < 2 || pronunciationFocus.lines.length > 4) {
         warnings.push(
-          `Pronunciation Micro-Focus (line ${displayLine}): connected_speech mode recommends 2-4 lines in "1. \"careful form\" -> connected form" format.`,
+          `Pronunciation Micro-Focus (line ${displayLine}): connected_speech mode recommends 2-4 lines in "1. "careful form" -> connected form" format.`,
         );
       }
       if (!pronunciationFocus.naturalSentence?.trim()) {
@@ -887,7 +887,7 @@ function classifyStudyTextType(rawLines: string[]): StudyTextType {
     const line = raw.trim();
     if (!line) continue;
     const match = line.match(
-      /^\s*(?:\[([^\]]+)\]|(?:\*\*)?([A-Za-zА-Яа-яЁё0-9 _.\-]{1,32})(?:\*\*)?)\s*:(?:\*\*)?\s+.+$/,
+      /^\s*(?:\[([^\]]+)\]|(?:\*\*)?([A-Za-zА-Яа-яЁё0-9 _.-]{1,32})(?:\*\*)?)\s*:(?:\*\*)?\s+.+$/,
     );
     if (match) dialogueLines += 1;
   }
@@ -1262,7 +1262,7 @@ export async function validateGeneralEnglishRuleset(
               if (!line) continue;
               // Relaxed regex: allow markdown like **Name**: or [Name]: or **Name:**
               const m = line.match(
-                /^\s*(?:\[([^\]]+)\]|(?:\*\*)?([A-Za-zА-Яа-яЁё0-9 _.\-]{1,32})(?:\*\*)?)\s*:(?:\*\*)?\s+.+$/,
+                /^\s*(?:\[([^\]]+)\]|(?:\*\*)?([A-Za-zА-Яа-яЁё0-9 _.-]{1,32})(?:\*\*)?)\s*:(?:\*\*)?\s+.+$/,
               );
               if (m) {
                 const who = (m[1] ?? m[2] ?? '').trim();

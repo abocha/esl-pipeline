@@ -1,7 +1,7 @@
 #!/usr/bin/env node
-import { Command } from 'commander';
 import fs from 'node:fs';
 import path from 'node:path';
+import { Command } from 'commander';
 import pc from 'picocolors';
 
 import { loadCliEnv } from '@esl-pipeline/shared-infrastructure';

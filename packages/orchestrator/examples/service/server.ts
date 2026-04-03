@@ -1,11 +1,11 @@
-import Fastify from 'fastify';
 import { resolve } from 'node:path';
+import Fastify from 'fastify';
 
 import {
-  type PipelineNewAssignmentOptions,
   createPipeline,
   noopLogger,
   noopMetrics,
+  type PipelineNewAssignmentOptions,
 } from '../../src/index.js';
 
 const fastify = Fastify({ logger: true });

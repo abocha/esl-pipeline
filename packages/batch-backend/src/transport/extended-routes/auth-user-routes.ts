@@ -6,13 +6,13 @@ import type { JobState } from '@esl-pipeline/contracts';
 import { getJobSummaryWithDefaults } from '../../application/job-summary.js';
 import { listJobsWithDefaults } from '../../application/list-jobs.js';
 import { getReadinessMetricsWithDefaults } from '../../application/readiness-metrics.js';
-import { SubmitJobRequest, ValidationError, submitJob } from '../../application/submit-job.js';
+import { SubmitJobRequest, submitJob, ValidationError } from '../../application/submit-job.js';
 import type { BatchBackendConfig } from '../../config/env.js';
 import {
-  UserSettingsInput,
   isValidTtsProvider,
   isValidTtsStrategy,
   sanitizeSettings,
+  UserSettingsInput,
 } from '../../domain/settings-model.js';
 import {
   createDefaultSettings,
@@ -20,11 +20,11 @@ import {
   upsertSettings,
 } from '../../domain/settings-repository.js';
 import {
+  isValidRole,
+  sanitizeUser,
   UserLogin,
   UserRegistration,
   UserRole,
-  isValidRole,
-  sanitizeUser,
 } from '../../domain/user-model.js';
 import {
   countUsers,

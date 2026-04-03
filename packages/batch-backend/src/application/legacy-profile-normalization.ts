@@ -5,8 +5,8 @@ import { getActiveProfileRevision } from '../domain/profile-revision-repository.
 import type { ProfileRevisionDetailResponse } from './profile-content.js';
 import { saveProfileRevisionContent } from './profile-content.js';
 import {
-  generateProfileRevisionDraft,
   type GenerateProfileRevisionDraftResult,
+  generateProfileRevisionDraft,
 } from './profile-revision-drafting.js';
 import {
   getStudentMemoryOverview,
@@ -200,7 +200,8 @@ function buildLegacyNormalizationPrompt(args: {
     ? {
         id: args.memoryOverview.latestReadyStudentMemorySnapshot.id,
         generatedAt: args.memoryOverview.latestReadyStudentMemorySnapshot.generatedAt.toISOString(),
-        snapshotSummary: args.memoryOverview.latestReadyStudentMemorySnapshot.snapshotSummary ?? null,
+        snapshotSummary:
+          args.memoryOverview.latestReadyStudentMemorySnapshot.snapshotSummary ?? null,
         stableStrengths: args.memoryOverview.latestReadyStudentMemorySnapshot.stableStrengths,
         recurringIssues: args.memoryOverview.latestReadyStudentMemorySnapshot.recurringIssues,
         personalFacts: args.memoryOverview.latestReadyStudentMemorySnapshot.personalFacts,
@@ -243,7 +244,9 @@ function buildLegacyNormalizationPrompt(args: {
     args.activeProfileContent,
     '',
     '[LATEST_READY_STUDENT_MEMORY_SNAPSHOT]',
-    snapshotPayload ? JSON.stringify(snapshotPayload, null, 2) : 'No ready student-memory snapshot available.',
+    snapshotPayload
+      ? JSON.stringify(snapshotPayload, null, 2)
+      : 'No ready student-memory snapshot available.',
     '',
     '[RECENT_READY_LESSON_MEMORY]',
     lessonPayload.length > 0

@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // Align shared dependency versions across workspace packages.
 // Usage: pnpm exec node scripts/deps/pin-shared-deps.mjs
-import { existsSync, readFileSync, readdirSync, writeFileSync } from 'node:fs';
+import { existsSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 
 const SHARED = {

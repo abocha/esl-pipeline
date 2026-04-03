@@ -1,5 +1,5 @@
-import type { LessonMemoryRecord } from '../domain/lesson-memory-model.js';
 import type { HomeworkMemoryRecord } from '../domain/homework-memory-model.js';
+import type { LessonMemoryRecord } from '../domain/lesson-memory-model.js';
 
 export interface BuildStudentMemorySnapshotPromptParams {
   lessonMemoryEntries: LessonMemoryRecord[];

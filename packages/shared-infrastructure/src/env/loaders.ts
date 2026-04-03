@@ -139,8 +139,8 @@ export function loadEnvFiles(options: LoadEnvOptions = {}): Record<string, strin
   if (memoize && cacheKey) {
     envCache.set(cacheKey, {
       collected: { ...collected },
-      loadedFiles: files.filter((file, idx) => metas[idx]?.exists),
-      missingFiles: files.filter((file, idx) => !metas[idx]?.exists),
+      loadedFiles: files.filter((_file, idx) => metas[idx]?.exists),
+      missingFiles: files.filter((_file, idx) => !metas[idx]?.exists),
       assignedKeys: [],
       overriddenKeys: [],
       metas,

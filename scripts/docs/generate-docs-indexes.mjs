@@ -3,11 +3,13 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const rootDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
-const generatedDir = path.join(rootDir, 'docs', 'generated');
 const docsCheckConfigPath = path.join(rootDir, 'scripts', 'docs', 'docs-check.config.json');
 
 const docsCheckConfig = JSON.parse(await readFile(docsCheckConfigPath, 'utf8'));
-const enforcedDocs = new Set([...(docsCheckConfig.non_core_docs ?? []), ...(docsCheckConfig.active_ops_docs ?? [])]);
+const enforcedDocs = new Set([
+  ...(docsCheckConfig.non_core_docs ?? []),
+  ...(docsCheckConfig.active_ops_docs ?? []),
+]);
 
 async function walk(relativeDir, matcher) {
   const absoluteDir = path.join(rootDir, relativeDir);
@@ -114,10 +116,7 @@ async function extractEnvKeysFromExample(relativePath) {
 }
 
 function classifyEnvSurface(key) {
-  if (
-    key.startsWith('TELEGRAM_OPS_BOT_') ||
-    key.startsWith('BATCH_BACKEND_OPS_CONTROL_')
-  ) {
+  if (key.startsWith('TELEGRAM_OPS_BOT_') || key.startsWith('BATCH_BACKEND_OPS_CONTROL_')) {
     return {
       surface: 'telegram_ops',
       details: 'docs/operations/telegram-ops-control-panel.md',
@@ -145,11 +144,7 @@ function classifyEnvSurface(key) {
     };
   }
 
-  if (
-    key.startsWith('ESL_STT_') ||
-    key.startsWith('TRANSCRIBE_') ||
-    key === 'STT_PROVIDER'
-  ) {
+  if (key.startsWith('ESL_STT_') || key.startsWith('TRANSCRIBE_') || key === 'STT_PROVIDER') {
     return {
       surface: 'speech_runtime',
       details: 'docs/reference/env.md',
@@ -256,8 +251,7 @@ async function generateEnvSurfaceIndex() {
     '| Key | Example File | Surface | Details |',
     '| --- | --- | --- | --- |',
     ...rows.map(
-      (row) =>
-        `| \`${row.key}\` | \`${row.exampleFile}\` | ${row.surface} | \`${row.details}\` |`,
+      (row) => `| \`${row.key}\` | \`${row.exampleFile}\` | ${row.surface} | \`${row.details}\` |`,
     ),
     '',
   ];
@@ -319,9 +313,13 @@ function collectRouteMatches(contents) {
 }
 
 async function generateBackendRouteIndex() {
-  const routeFiles = (await walk('packages/batch-backend/src/transport', (relativePath) =>
-    relativePath.endsWith('.ts') && !relativePath.endsWith('auth-middleware.ts'),
-  ))
+  const routeFiles = (
+    await walk(
+      'packages/batch-backend/src/transport',
+      (relativePath) =>
+        relativePath.endsWith('.ts') && !relativePath.endsWith('auth-middleware.ts'),
+    )
+  )
     .map(posixRelative)
     .sort((left, right) => left.localeCompare(right));
 

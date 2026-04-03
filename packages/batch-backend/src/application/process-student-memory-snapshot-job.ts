@@ -11,11 +11,11 @@ import {
   supersedePendingStudentMemorySnapshotsForStudent,
 } from '../domain/student-memory-snapshot-repository.js';
 import { logger } from '../infrastructure/logger.js';
-import {
-  generateStudentMemorySnapshot,
-  type GenerateStudentMemorySnapshotDependencies,
-} from './student-memory-snapshot-generation.js';
 import { requestStudentProfileCandidateRefresh } from './request-student-profile-candidate-refresh.js';
+import {
+  type GenerateStudentMemorySnapshotDependencies,
+  generateStudentMemorySnapshot,
+} from './student-memory-snapshot-generation.js';
 import { buildStudentMemorySnapshotPrompt } from './student-memory-snapshot-prompt.js';
 
 export interface ProcessStudentMemorySnapshotJobPayload {
@@ -51,7 +51,9 @@ export async function processStudentMemorySnapshotJob(args: {
   payload: ProcessStudentMemorySnapshotJobPayload;
   attemptsMade?: number;
   maxAttempts?: number;
-  overrides?: Partial<ProcessStudentMemorySnapshotJobDependencies & GenerateStudentMemorySnapshotDependencies>;
+  overrides?: Partial<
+    ProcessStudentMemorySnapshotJobDependencies & GenerateStudentMemorySnapshotDependencies
+  >;
 }): Promise<void> {
   const lessonMemory = args.overrides?.lessonMemory ?? {
     list: listLessonMemoryEntries,
@@ -74,7 +76,10 @@ export async function processStudentMemorySnapshotJob(args: {
     return;
   }
 
-  const readyLessonMemory = await listAllReadyLessonMemory(args.payload.studentId, lessonMemory.list);
+  const readyLessonMemory = await listAllReadyLessonMemory(
+    args.payload.studentId,
+    lessonMemory.list,
+  );
   const readyHomeworkMemory = await listAllReadyHomeworkMemory(
     args.payload.studentId,
     homeworkMemory.list,

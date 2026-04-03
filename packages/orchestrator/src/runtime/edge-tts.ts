@@ -2,7 +2,12 @@ import { createHash } from 'node:crypto';
 import { mkdir, stat } from 'node:fs/promises';
 import { resolve } from 'node:path';
 
-import { InfrastructureError, ValidationError, noopLogger, type PipelineLogger } from '@esl-pipeline/contracts';
+import {
+  InfrastructureError,
+  noopLogger,
+  type PipelineLogger,
+  ValidationError,
+} from '@esl-pipeline/contracts';
 
 export interface EdgeTtsSynthesisOptions {
   text: string;
@@ -55,7 +60,10 @@ function resolveEdgeTtsCommand(): { command: string; argsPrefix: string[] } {
 }
 
 function sanitizeFileStem(value: string | undefined): string {
-  const stem = value?.trim().replaceAll(/[^a-z0-9-]+/gi, '-').replaceAll(/^-+|-+$/g, '');
+  const stem = value
+    ?.trim()
+    .replaceAll(/[^a-z0-9-]+/gi, '-')
+    .replaceAll(/^-+|-+$/g, '');
   return stem || 'pronunciation-edge';
 }
 
@@ -166,15 +174,7 @@ export async function synthesizeEdgeTtsClip(
   }
 
   const { command, argsPrefix } = resolveEdgeTtsCommand();
-  const args = [
-    ...argsPrefix,
-    '--voice',
-    voice,
-    '--text',
-    text,
-    '--write-media',
-    path,
-  ];
+  const args = [...argsPrefix, '--voice', voice, '--text', text, '--write-media', path];
   if (options.rate?.trim()) {
     args.push('--rate', options.rate.trim());
   }

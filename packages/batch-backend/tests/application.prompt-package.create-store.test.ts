@@ -56,9 +56,9 @@ describe('application/prompt-package', () => {
         expect(
           text.indexOf('[STUDENT_MEMORY_SNAPSHOT]') < text.indexOf('[RECENT_LESSON_MEMORY]'),
         ).toBe(true);
-        expect(text.indexOf('[RECENT_LESSON_MEMORY]') < text.indexOf('[RECENT_HOMEWORK_MEMORY]')).toBe(
-          true,
-        );
+        expect(
+          text.indexOf('[RECENT_LESSON_MEMORY]') < text.indexOf('[RECENT_HOMEWORK_MEMORY]'),
+        ).toBe(true);
         expect(text.indexOf('[RECENT_HOMEWORK_MEMORY]') < text.indexOf('[UNRESOLVED_ISSUES]')).toBe(
           true,
         );

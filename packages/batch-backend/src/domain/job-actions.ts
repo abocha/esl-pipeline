@@ -54,10 +54,7 @@ export interface EditMetadataAction extends JobAction {
 /**
  * Union type of all possible actions
  */
-export type AnyJobAction =
-  | RerunAction
-  | CancelJobAction
-  | EditMetadataAction;
+export type AnyJobAction = RerunAction | CancelJobAction | EditMetadataAction;
 
 /**
  * Result of executing a job action

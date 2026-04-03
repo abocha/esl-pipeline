@@ -1,7 +1,6 @@
 import { loadTopicState, saveTopicState } from './state.js';
 import type { TelegramClient } from './telegram-client.js';
-import type { BotConfig, BotDomain, TopicRouter } from './types.js';
-import type { AuditLogger } from './types.js';
+import type { AuditLogger, BotConfig, BotDomain, TopicRouter } from './types.js';
 
 const FORUM_STATUS_RETRY_DELAY_MS = 30_000;
 
@@ -90,7 +89,10 @@ export class ForumTopicRouter implements TopicRouter {
     return this.topicIds[args.domain] ?? this.config.defaultThreadId;
   }
 
-  async healStaleThread(args: { domain: BotDomain; staleThreadId: number }): Promise<number | undefined> {
+  async healStaleThread(args: {
+    domain: BotDomain;
+    staleThreadId: number;
+  }): Promise<number | undefined> {
     if (this.topicIds[args.domain] === args.staleThreadId) {
       delete this.topicIds[args.domain];
     }

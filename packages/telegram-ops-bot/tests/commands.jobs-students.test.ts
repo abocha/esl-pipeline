@@ -1,7 +1,6 @@
 import { mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-
 import { describe, expect, it, vi } from 'vitest';
 
 import {
@@ -10,7 +9,6 @@ import {
   loadJobsView,
   loadJobsViewFromKey,
 } from '../src/commands.js';
-
 import { createBaseContext } from './telegram-test-fixtures.js';
 
 describe('telegram commands - jobs and students', () => {
@@ -123,9 +121,7 @@ describe('telegram commands - jobs and students', () => {
     expect(sendMock).toHaveBeenCalledTimes(1);
     const markup = sendMock.mock.calls[0]?.[0].replyMarkup;
     const buttonTexts =
-      markup?.inline_keyboard
-        .flat()
-        .map((button: { text: string }) => button.text) ?? [];
+      markup?.inline_keyboard.flat().map((button: { text: string }) => button.text) ?? [];
     expect(buttonTexts).toContain('Share');
     expect(buttonTexts).not.toContain('Links');
   });
@@ -279,11 +275,17 @@ describe('telegram commands - jobs and students', () => {
             expect.objectContaining({ text: 'Succeeded', callback_data: 'a4|v|ss:72444fdf-4ab' }),
           ]),
           expect.arrayContaining([
-            expect.objectContaining({ text: 'Latest Job', callback_data: 'a4|j|job-student-1|sr:72444fdf-4ab' }),
+            expect.objectContaining({
+              text: 'Latest Job',
+              callback_data: 'a4|j|job-student-1|sr:72444fdf-4ab',
+            }),
             expect.objectContaining({ text: 'Share Latest', callback_data: 'a4|js|job-student-1' }),
           ]),
           expect.arrayContaining([
-            expect.objectContaining({ text: 'Refresh', callback_data: 'a4|st|72444fdf-4abe-43ce-9166-5a1529c2e6cb' }),
+            expect.objectContaining({
+              text: 'Refresh',
+              callback_data: 'a4|st|72444fdf-4abe-43ce-9166-5a1529c2e6cb',
+            }),
           ]),
         ]),
       }),
@@ -376,7 +378,14 @@ describe('telegram commands - jobs and students', () => {
 
     const context = createBaseContext({
       command: 'jobs',
-      args: ['state:failed,running', 'student:"Mary', 'Jane"', 'since:today', 'limit:5', 'order:asc'],
+      args: [
+        'state:failed,running',
+        'student:"Mary',
+        'Jane"',
+        'since:today',
+        'limit:5',
+        'order:asc',
+      ],
     });
     const searchStudentsMock = context.backend.searchStudents as ReturnType<typeof vi.fn>;
     const listJobsMock = context.backend.listJobs as ReturnType<typeof vi.fn>;
@@ -644,7 +653,9 @@ describe('telegram commands - jobs and students', () => {
       command: 'students',
       args: [],
     });
-    const listStudentSummariesMock = context.backend.listStudentSummaries as ReturnType<typeof vi.fn>;
+    const listStudentSummariesMock = context.backend.listStudentSummaries as ReturnType<
+      typeof vi.fn
+    >;
     listStudentSummariesMock.mockResolvedValue({
       items: [
         {
@@ -671,7 +682,12 @@ describe('telegram commands - jobs and students', () => {
     expect(sendMock.mock.calls[0]?.[0].replyMarkup).toEqual(
       expect.objectContaining({
         inline_keyboard: expect.arrayContaining([
-          [expect.objectContaining({ text: 'Margarita · 72444fdf', callback_data: 'a4|st|72444fdf-4abe-43ce-9166-5a1529c2e6cb' })],
+          [
+            expect.objectContaining({
+              text: 'Margarita · 72444fdf',
+              callback_data: 'a4|st|72444fdf-4abe-43ce-9166-5a1529c2e6cb',
+            }),
+          ],
           expect.arrayContaining([expect.objectContaining({ text: 'Next' })]),
         ]),
       }),

@@ -6,8 +6,8 @@
  * Usage: pnpm exec node scripts/deps/safe-upgrade.mjs
  */
 import { execSync } from 'node:child_process';
-import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const root = join(__dirname, '..', '..');
@@ -46,8 +46,6 @@ const buildScope = (pkgs) => pkgs.join(' ');
 
 const scopeCritical = buildScope(CRITICAL_ALLOWLIST);
 const scopeStable = buildScope([...STABLE_UTILS, ...EXTRA]);
-
-const modeFlag = MODE === 'patch' ? '--latest --depth -1 --filter \"...@^\"' : '--latest';
 
 // 1) Upgrade critical SDKs (always latest)
 run(`pnpm -r up --latest ${scopeCritical}`);

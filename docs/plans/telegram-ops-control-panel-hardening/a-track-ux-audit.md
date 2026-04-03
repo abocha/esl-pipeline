@@ -115,22 +115,22 @@ Official Telegram sources used for this benchmark:
 
 ### Status matrix
 
-| Area | Status | Repo-grounded assessment |
-| --- | --- | --- |
-| Single transport mode at a time | Aligned | Config enforces `polling` or `webhook`, and runtime chooses one path per process. |
-| Update filtering and replay safety | Aligned | Polling uses `allowed_updates: ['message']`, advances `offset` with `last_update_id + 1`, and supports startup replay skipping. |
-| Webhook secret-token hardening | Aligned | Webhook listener validates `x-telegram-bot-api-secret-token` when configured. |
-| Topic/thread routing resilience | Aligned | Domain topics, persisted topic ids, stale-thread healing, and fallback routing are implemented. |
-| Rate limiting and command telemetry | Aligned | Per-user rate limiting and additive log-based metrics are already present. |
-| Basic in-chat help | Partially aligned | `/help` exists and is readable, but onboarding still depends on users already knowing to ask for it. |
-| Discoverability and onboarding | Partially aligned | No `/start`, no first-run orientation flow, and no evidence of Telegram-level menu/description setup in this package. |
-| Command registration and scoping | Partially aligned | Commands exist in code, but command metadata registration, command scopes, and localized command lists are not surfaced here. |
-| Guided interaction controls | Not aligned | No reply keyboards, inline keyboards, `ForceReply`, callback queries, or edited-message navigation exist in the live bot package. |
-| Callback responsiveness | Not aligned | There is no callback-query flow, so there is also no `answerCallbackQuery` handling. |
-| Localization | Not aligned | No `language_code`-aware text, command metadata, or help branching is implemented in the package. |
-| Deep-link onboarding | Not aligned | No `start`/`startgroup` deep-link entry path is surfaced in the code. |
-| Privacy-mode stance | Not applicable yet | Current bot is allowlisted and command-driven; privacy-mode tuning is not a visible product issue in this internal scope. |
-| Mini Apps adoption | Not applicable yet | Current internal ops workflows do not yet appear cramped enough to justify a Mini App. |
+| Area                                | Status             | Repo-grounded assessment                                                                                                          |
+| ----------------------------------- | ------------------ | --------------------------------------------------------------------------------------------------------------------------------- |
+| Single transport mode at a time     | Aligned            | Config enforces `polling` or `webhook`, and runtime chooses one path per process.                                                 |
+| Update filtering and replay safety  | Aligned            | Polling uses `allowed_updates: ['message']`, advances `offset` with `last_update_id + 1`, and supports startup replay skipping.   |
+| Webhook secret-token hardening      | Aligned            | Webhook listener validates `x-telegram-bot-api-secret-token` when configured.                                                     |
+| Topic/thread routing resilience     | Aligned            | Domain topics, persisted topic ids, stale-thread healing, and fallback routing are implemented.                                   |
+| Rate limiting and command telemetry | Aligned            | Per-user rate limiting and additive log-based metrics are already present.                                                        |
+| Basic in-chat help                  | Partially aligned  | `/help` exists and is readable, but onboarding still depends on users already knowing to ask for it.                              |
+| Discoverability and onboarding      | Partially aligned  | No `/start`, no first-run orientation flow, and no evidence of Telegram-level menu/description setup in this package.             |
+| Command registration and scoping    | Partially aligned  | Commands exist in code, but command metadata registration, command scopes, and localized command lists are not surfaced here.     |
+| Guided interaction controls         | Not aligned        | No reply keyboards, inline keyboards, `ForceReply`, callback queries, or edited-message navigation exist in the live bot package. |
+| Callback responsiveness             | Not aligned        | There is no callback-query flow, so there is also no `answerCallbackQuery` handling.                                              |
+| Localization                        | Not aligned        | No `language_code`-aware text, command metadata, or help branching is implemented in the package.                                 |
+| Deep-link onboarding                | Not aligned        | No `start`/`startgroup` deep-link entry path is surfaced in the code.                                                             |
+| Privacy-mode stance                 | Not applicable yet | Current bot is allowlisted and command-driven; privacy-mode tuning is not a visible product issue in this internal scope.         |
+| Mini Apps adoption                  | Not applicable yet | Current internal ops workflows do not yet appear cramped enough to justify a Mini App.                                            |
 
 ### What is already strong
 

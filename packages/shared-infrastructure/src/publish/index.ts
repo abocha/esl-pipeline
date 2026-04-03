@@ -94,8 +94,7 @@ function parseShadowSentenceLine(line: string): { matches: boolean; hasValue: bo
 
 function parseNaturalSentencePracticeLine(line: string): { matches: boolean; hasValue: boolean } {
   const normalizedLine = normalizePronunciationSectionLine(line);
-  const match =
-    /^(?:\*\*)?natural sentence practice\s*:\s*(?:\*\*)?\s*(.*)$/i.exec(normalizedLine);
+  const match = /^(?:\*\*)?natural sentence practice\s*:\s*(?:\*\*)?\s*(.*)$/i.exec(normalizedLine);
   if (!match) return { matches: false, hasValue: false };
   const value = (match[1] ?? '').trim();
   return { matches: true, hasValue: value.length > 0 };
@@ -298,8 +297,7 @@ export function insertGeneratedAudioLinks(
       Boolean(options.insertPronunciationPlaceholderWhenMissing));
   if (includePronunciation && pronunciationAnchorIndex >= 0) {
     const pronunciationAudioUrl =
-      options.pronunciationAudio?.primaryClip?.url?.trim() ??
-      options.pronunciationAudioUrl?.trim();
+      options.pronunciationAudio?.primaryClip?.url?.trim() ?? options.pronunciationAudioUrl?.trim();
     if (pronunciationAudioUrl) {
       const audioLine = `[${PRONUNCIATION_AUDIO_LINK_LABEL}](${pronunciationAudioUrl})`;
       if (!next.some((line) => line.trim() === audioLine)) {

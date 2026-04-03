@@ -7,8 +7,8 @@ import {
   loadOperationDetailsView,
   loadOpsStatusView,
   loadRecentOpsView,
-  loadStudentView,
   loadStudentsView,
+  loadStudentView,
   loadTodayView,
   renderGuidedActionConfirmation,
   renderGuidedActionSubmitted,
@@ -31,7 +31,7 @@ export function resetGuidedConfirmGuardsForTests(): void {
 }
 
 export type GuidedCallbackHandleResult =
-    | {
+  | {
       kind: 'render';
       domain: BotDomain;
       html: string;
@@ -196,7 +196,9 @@ export async function handleGuidedCallback(args: {
       if (!guidedConfirmGuards.has(confirmKey)) {
         guidedConfirmGuards.set(confirmKey, nowMs + CONFIRM_GUARD_TTL_MS);
         try {
-          await (action.action === 'backup' ? executeBackupAction(actionContext) : executeDrillAction(actionContext));
+          await (action.action === 'backup'
+            ? executeBackupAction(actionContext)
+            : executeDrillAction(actionContext));
         } catch (error: unknown) {
           guidedConfirmGuards.delete(confirmKey);
           throw error;

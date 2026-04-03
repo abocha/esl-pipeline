@@ -1,13 +1,13 @@
 import { screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it } from 'vitest';
 
 import {
   CLEAN_TEMPLATE_STARTER_CONTENT,
   renderLoadedWorkspace,
   setupStudentWorkspaceTest,
+  studentWorkspaceApiMocks,
 } from './StudentWorkspace.test-harness';
-import * as api from '../../utils/api';
 
 describe('StudentWorkspace profile and template management', () => {
   beforeEach(() => {
@@ -25,9 +25,12 @@ describe('StudentWorkspace profile and template management', () => {
     await user.click(screen.getByRole('button', { name: /Save Student Binding/i }));
 
     await waitFor(() => {
-      expect(api.updateStudentProfile).toHaveBeenCalledWith('student-default', {
-        profileId: 'profile-alt.md',
-      });
+      expect(studentWorkspaceApiMocks.updateStudentProfile).toHaveBeenCalledWith(
+        'student-default',
+        {
+          profileId: 'profile-alt.md',
+        },
+      );
     });
   });
 
@@ -43,7 +46,7 @@ describe('StudentWorkspace profile and template management', () => {
     await user.click(screen.getByRole('button', { name: /Save Template Content/i }));
 
     await waitFor(() => {
-      expect(api.upsertTemplateContent).toHaveBeenCalledWith(
+      expect(studentWorkspaceApiMocks.upsertTemplateContent).toHaveBeenCalledWith(
         'template-default.md',
         expect.stringContaining(String.raw`HEADER\nUPDATED`),
       );
@@ -52,7 +55,7 @@ describe('StudentWorkspace profile and template management', () => {
 
   it('creates template with a clean static scaffold', async () => {
     const user = userEvent.setup();
-    vi.mocked(api.upsertTemplateContent).mockResolvedValue({
+    studentWorkspaceApiMocks.upsertTemplateContent.mockResolvedValue({
       id: 'hw/custom-template.md',
       label: 'Custom Template',
       content: CLEAN_TEMPLATE_STARTER_CONTENT,
@@ -66,7 +69,7 @@ describe('StudentWorkspace profile and template management', () => {
     await user.click(screen.getByRole('button', { name: /Create Template/i }));
 
     await waitFor(() => {
-      expect(api.upsertTemplateContent).toHaveBeenCalledWith(
+      expect(studentWorkspaceApiMocks.upsertTemplateContent).toHaveBeenCalledWith(
         'hw/custom-template.md',
         CLEAN_TEMPLATE_STARTER_CONTENT,
       );

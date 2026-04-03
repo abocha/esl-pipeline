@@ -4,10 +4,10 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   approveStudentProfileCandidate,
   getStudentMemoryOverview,
-  listStudentProfileCandidates,
   listStudentHomeworkMemoryEntries,
   listStudentLessonMemoryEntries,
   listStudentMemorySnapshots,
+  listStudentProfileCandidates,
 } from './api';
 import apiClient, { buildApiProxyPath, handleApiError, isAuthError } from './api-client';
 
@@ -29,11 +29,7 @@ vi.mock('./api-client', () => ({
   ),
 }));
 
-function makeAxiosError(args: {
-  status?: number;
-  data?: unknown;
-  message?: string;
-}): AxiosError {
+function makeAxiosError(args: { status?: number; data?: unknown; message?: string }): AxiosError {
   return {
     name: 'AxiosError',
     message: args.message ?? 'request failed',

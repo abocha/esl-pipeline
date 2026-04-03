@@ -84,7 +84,7 @@ This document captures the canonical schema so remote stores and services can va
         "hash": "<sha256 pronunciation sentence hash>",
         "key": "audio/pronunciation/<sha256>.mp3",
         "voiceId": "<provider-voice-id>",
-        "notionBlockId": "<notion-block-id>"
+        "notionBlockId": "<notion-block-id>",
       },
       "itemClips": [
         {
@@ -94,9 +94,9 @@ This document captures the canonical schema so remote stores and services can va
           "itemIndex": 0,
           "text": "review",
           "path": "./lessons/audio-pronunciation-item.mp3",
-          "url": "https://..."
-        }
-      ]
+          "url": "https://...",
+        },
+      ],
     },
   },
   // TTS metadata (additive, optional)

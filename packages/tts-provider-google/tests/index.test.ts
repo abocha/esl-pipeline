@@ -5,8 +5,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { parseMarkdownContext } from '@esl-pipeline/pmd';
 
-import * as googleApi from '../src/google.js';
 import type { GoogleVoiceListEntry } from '../src/google.js';
+import * as googleApi from '../src/google.js';
 import {
   buildPronunciationShadowSentenceMp3Google,
   buildStudyTextMp3Google,

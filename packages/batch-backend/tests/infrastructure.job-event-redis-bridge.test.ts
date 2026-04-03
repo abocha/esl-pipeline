@@ -74,8 +74,9 @@ describe('infrastructure/job-event-redis-bridge', () => {
       duplicate: duplicateMock,
     } as any);
 
-    const { enableRedisJobEventBridge } =
-      await import('../src/infrastructure/job-event-redis-bridge.js');
+    const { enableRedisJobEventBridge } = await import(
+      '../src/infrastructure/job-event-redis-bridge.js'
+    );
     const jobEvents = await import('../src/domain/job-events.js');
 
     await enableRedisJobEventBridge();
@@ -135,8 +136,9 @@ describe('infrastructure/job-event-redis-bridge', () => {
       duplicate: duplicateMock,
     } as any);
 
-    const { enableRedisJobEventBridge } =
-      await import('../src/infrastructure/job-event-redis-bridge.js');
+    const { enableRedisJobEventBridge } = await import(
+      '../src/infrastructure/job-event-redis-bridge.js'
+    );
     const jobEvents = await import('../src/domain/job-events.js');
 
     await enableRedisJobEventBridge();
@@ -184,8 +186,9 @@ describe('infrastructure/job-event-redis-bridge', () => {
       duplicate: duplicateMock,
     } as any);
 
-    const { enableRedisJobEventBridge } =
-      await import('../src/infrastructure/job-event-redis-bridge.js');
+    const { enableRedisJobEventBridge } = await import(
+      '../src/infrastructure/job-event-redis-bridge.js'
+    );
 
     await enableRedisJobEventBridge();
     await enableRedisJobEventBridge();

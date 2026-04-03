@@ -77,7 +77,7 @@ export class DefaultSttEngine implements SttEngine {
     const provider = this.providers.get(id);
     if (!provider) {
       throw new ConfigurationError(
-        `STT provider \"${id}\" is not registered. Registered providers: ${[...this.providers.keys()].join(', ') || '(none)'}`,
+        `STT provider "${id}" is not registered. Registered providers: ${[...this.providers.keys()].join(', ') || '(none)'}`,
       );
     }
     return provider;

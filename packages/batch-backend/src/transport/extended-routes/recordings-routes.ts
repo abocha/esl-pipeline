@@ -1,16 +1,16 @@
-import multipart, { type MultipartFile } from '@fastify/multipart';
-import type { FastifyInstance, FastifyRequest } from 'fastify';
 import { createHash, randomUUID } from 'node:crypto';
 import path from 'node:path';
 import { Readable, Transform } from 'node:stream';
+import multipart, { type MultipartFile } from '@fastify/multipart';
+import type { FastifyInstance, FastifyRequest } from 'fastify';
 import { z } from 'zod';
 
 import { createDraft } from '../../application/create-draft.js';
 import { createPromptPackage } from '../../application/create-prompt-package.js';
 import { getDraft } from '../../application/get-draft.js';
 import { getPromptPackage, getPromptPackageLineage } from '../../application/get-prompt-package.js';
-import { getRecordingTranscript } from '../../application/get-recording-transcript.js';
 import { getRecording } from '../../application/get-recording.js';
+import { getRecordingTranscript } from '../../application/get-recording-transcript.js';
 import { ingestRecordingUpload } from '../../application/ingest-recording-upload.js';
 import { listRecordingsWithDefaults } from '../../application/list-recordings.js';
 import { materializeDraft } from '../../application/materialize-draft.js';
@@ -51,7 +51,10 @@ type RecordingUploadRequest = FastifyRequest & {
   }) => Promise<MultipartFile | undefined>;
 };
 
-export function registerRecordingRoutes(app: FastifyInstance, context: ExtendedRoutesContext): void {
+export function registerRecordingRoutes(
+  app: FastifyInstance,
+  context: ExtendedRoutesContext,
+): void {
   const {
     authenticate,
     uploadRateLimitMiddleware,

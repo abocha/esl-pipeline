@@ -49,6 +49,8 @@ When implementing from a plan file, re-read that exact plan file after every con
   - [`docs/reference/env.md`](docs/reference/env.md)
 - Test writing + lane methodology:
   - [`docs/reference/TESTING_GUIDELINES.md`](docs/reference/TESTING_GUIDELINES.md)
+- Repo hygiene lint/tooling:
+  - [`docs/reference/REPO_HYGIENE_LINTING.md`](docs/reference/REPO_HYGIENE_LINTING.md)
 - Backend/frontend integration work:
   - [`docs/backend-frontend/BATCH_SYSTEM.md`](docs/backend-frontend/BATCH_SYSTEM.md)
   - [`docs/backend-frontend/backend-frontend-alignment.md`](docs/backend-frontend/backend-frontend-alignment.md)
@@ -119,6 +121,20 @@ For exact invariants and forbidden changes: [`docs/reference/agents-ssot.md`](do
 For lane semantics and test-authoring methodology, see
 [`docs/reference/TESTING_GUIDELINES.md`](docs/reference/TESTING_GUIDELINES.md).
 
+Lint/format ownership baseline:
+
+- `pnpm lint` is a hybrid lane:
+  - Biome is the default JS/TS/TSX/JSON linter.
+  - ESLint remains for specialized React and Vitest checks.
+- Repo hygiene:
+  - `pnpm run lint:repo-hygiene` runs workflow and shell linting (`actionlint` + `ShellCheck`).
+  - These checks are enforced in GitHub Actions and kept separate from the default local `pnpm lint` lane because they rely on extra non-Node tooling.
+- `pnpm format` is a hybrid lane:
+  - Biome formats JS/TS/TSX/JSON and organizes imports.
+  - Prettier remains for Markdown, YAML, and `package.json`.
+- Advisory lint:
+  - `pnpm lint:sqlfluff` is available for SQL debt review, but is not part of the default blocking lane until the existing SQL style is calibrated.
+
 Dependency hygiene when touching deps:
 
 1. `pnpm install`
@@ -171,15 +187,19 @@ Docs governance and IA:
   2. `git switch main`
   3. `git pull --ff-only`
   4. `git switch -c <branch>`
-  5. `git push -u origin <branch>`
-  6. `gh pr create --base main --head <branch> --title "<title>" --body-file .github/pull_request_template.md --label <release:major|release:minor|release:patch>`
+  5. `pnpm format:write`
+  6. `pnpm format`
+  7. `pnpm run lint:repo-hygiene`
+  8. `pnpm check:fast`
+  9. `git push -u origin <branch>`
+  10. `gh pr create --base main --head <branch> --title "<title>" --body-file .github/pull_request_template.md --label <release:major|release:minor|release:patch>`
 - Pull request body protocol:
   - Use `.github/pull_request_template.md` sections exactly:
     - `Summary`
     - `Validation`
     - `Risk Notes`
     - `Checklist`
-  - In `Validation`, include commands actually run, including `pnpm check:fast`, targeted tests, and manual smoke if applicable.
+  - In `Validation`, include commands actually run, including `pnpm format`, `pnpm run lint:repo-hygiene`, `pnpm check:fast`, targeted tests, and manual smoke if applicable.
 - Mandatory release label protocol:
   - Every PR targeting `main` must have exactly one release label:
     - `release:major`

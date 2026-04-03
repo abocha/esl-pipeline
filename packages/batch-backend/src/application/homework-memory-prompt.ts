@@ -1,9 +1,12 @@
-import type { HomeworkMemorySourceBundle } from './homework-memory-source.js';
 import type { NormalizedHomeworkMarkdown } from './homework-memory-normalization.js';
+import type { HomeworkMemorySourceBundle } from './homework-memory-source.js';
 
 export function buildHomeworkMemoryPrompt(args: {
   normalizedMarkdown: NormalizedHomeworkMarkdown;
-  source: Pick<HomeworkMemorySourceBundle, 'publishTargets' | 'publishedAt' | 'assignmentLineageKey'>;
+  source: Pick<
+    HomeworkMemorySourceBundle,
+    'publishTargets' | 'publishedAt' | 'assignmentLineageKey'
+  >;
 }): string {
   return [
     'You are generating canonical homework memory for one published ESL assignment.',

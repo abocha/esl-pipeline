@@ -3,21 +3,22 @@
 // - Wraps createPipeline from @esl-pipeline/orchestrator.
 // - Configured via env (see config/env).
 // - Keeps ESL pipeline wiring in one place so workers/controllers stay simple.
-import { S3Client } from '@aws-sdk/client-s3';
+
 import { fork } from 'node:child_process';
 import path from 'node:path';
+import { S3Client } from '@aws-sdk/client-s3';
 
 import {
   type ConfigProvider,
+  createPipeline,
   type JobOptionsPayload,
   type ManifestStore,
   type PipelineLogEvent,
   type PipelineLogger,
   RemoteConfigProvider,
-  S3ManifestStore,
-  createPipeline,
   resolveConfigPaths,
   resolveJobOptions,
+  S3ManifestStore,
 } from '@esl-pipeline/orchestrator';
 
 import { loadConfig } from '../config/env.js';

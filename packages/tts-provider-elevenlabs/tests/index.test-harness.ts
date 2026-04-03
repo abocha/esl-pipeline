@@ -5,8 +5,8 @@ import { afterEach, beforeEach, vi } from 'vitest';
 
 import { parseMarkdownContext } from '@esl-pipeline/pmd';
 
-import * as assign from '../src/assign.js';
 import type { VoiceCatalog } from '../src/assign.js';
+import * as assign from '../src/assign.js';
 import * as dialogue from '../src/dialogue.js';
 import * as eleven from '../src/eleven.js';
 import * as ffm from '../src/ffmpeg.js';

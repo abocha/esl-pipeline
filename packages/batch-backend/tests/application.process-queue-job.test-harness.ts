@@ -1,11 +1,11 @@
 import path from 'node:path';
 import { beforeEach, vi } from 'vitest';
 
+import * as homeworkMemoryGeneration from '../src/application/request-homework-memory-generation.js';
 import * as jobEvents from '../src/domain/job-events.js';
 import type { JobRecord } from '../src/domain/job-model.js';
 import * as jobRepository from '../src/domain/job-repository.js';
 import * as settingsRepository from '../src/domain/settings-repository.js';
-import * as homeworkMemoryGeneration from '../src/application/request-homework-memory-generation.js';
 import * as loggerModule from '../src/infrastructure/logger.js';
 import * as orchestratorService from '../src/infrastructure/orchestrator-service.js';
 import * as transcriptionStorage from '../src/infrastructure/transcription-storage.js';

@@ -3,9 +3,9 @@ import { randomUUID } from 'node:crypto';
 import type { SttProviderId } from '@esl-pipeline/contracts';
 import { classifyProviderRuntimeFailure } from '@esl-pipeline/provider-runtime';
 import {
-  type SttTranscriptionResult,
   formatSpeakerLabel,
   formatTranscriptFromSegments,
+  type SttTranscriptionResult,
   transcribeAudio,
 } from '@esl-pipeline/stt-core';
 

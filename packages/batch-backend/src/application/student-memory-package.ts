@@ -3,8 +3,8 @@ import type { HomeworkMemoryRecord } from '../domain/homework-memory-model.js';
 import { listRecentReadyHomeworkMemoryByStudentId } from '../domain/homework-memory-repository.js';
 import type { LessonMemoryRecord } from '../domain/lesson-memory-model.js';
 import { listRecentReadyLessonMemoryByStudentId } from '../domain/lesson-memory-repository.js';
-import { getLatestReadyStudentMemorySnapshotByStudentId } from '../domain/student-memory-snapshot-repository.js';
 import type { StudentMemorySnapshotRecord } from '../domain/student-memory-snapshot-model.js';
+import { getLatestReadyStudentMemorySnapshotByStudentId } from '../domain/student-memory-snapshot-repository.js';
 
 export interface StudentMemoryPackageContext {
   studentMemorySnapshotBlock: string;
@@ -43,7 +43,9 @@ export async function buildStudentMemoryPackageContext(args: {
     };
   }
 
-  const pgEnabled = Boolean((args.config as { pg?: { enabled?: boolean } } | undefined)?.pg?.enabled);
+  const pgEnabled = Boolean(
+    (args.config as { pg?: { enabled?: boolean } } | undefined)?.pg?.enabled,
+  );
   if (!pgEnabled) {
     return {
       studentMemorySnapshotBlock:
@@ -135,23 +137,45 @@ function formatStudentMemorySnapshotBlock(snapshot: StudentMemorySnapshotRecord 
     return 'No long-term student-memory snapshot available yet.';
   }
 
-  const lines = [snapshot.snapshotSummary?.trim() || 'Long-term student-memory snapshot available.'];
-  appendLabeledSummary(lines, 'Stable strengths', snapshot.stableStrengths.map((item) => item.label), 3);
-  appendLabeledSummary(lines, 'Recurring issues', snapshot.recurringIssues.map((item) => item.label), 3);
+  const lines = [
+    snapshot.snapshotSummary?.trim() || 'Long-term student-memory snapshot available.',
+  ];
+  appendLabeledSummary(
+    lines,
+    'Stable strengths',
+    snapshot.stableStrengths.map((item) => item.label),
+    3,
+  );
+  appendLabeledSummary(
+    lines,
+    'Recurring issues',
+    snapshot.recurringIssues.map((item) => item.label),
+    3,
+  );
   appendLabeledSummary(
     lines,
     'Active review backlog',
     snapshot.activeReviewBacklog.map((item) => item.label),
     3,
   );
-  appendLabeledSummary(lines, 'Recent progress', snapshot.recentProgress.map((item) => item.label), 3);
+  appendLabeledSummary(
+    lines,
+    'Recent progress',
+    snapshot.recentProgress.map((item) => item.label),
+    3,
+  );
   appendLabeledSummary(
     lines,
     'Recommended assignment directions',
     snapshot.recommendedAssignmentDirections.map((item) => item.direction),
     3,
   );
-  appendLabeledSummary(lines, 'Personal facts', snapshot.personalFacts.map((item) => item.fact), 3);
+  appendLabeledSummary(
+    lines,
+    'Personal facts',
+    snapshot.personalFacts.map((item) => item.fact),
+    3,
+  );
   return lines.join('\n');
 }
 
@@ -178,27 +202,42 @@ function formatLessonMemoryEntry(entry: LessonMemoryRecord): string[] {
 
   lines.push(`- ${entry.generatedAt.toISOString()}: ${summary}`);
 
-  const topics = summarizeValues(entry.topicsDiscussed.map((item) => item.topic), 3);
+  const topics = summarizeValues(
+    entry.topicsDiscussed.map((item) => item.topic),
+    3,
+  );
   if (topics) {
     lines.push(`  Topics: ${topics}`);
   }
 
-  const grammar = summarizeValues(entry.grammarWatchlist.map((item) => item.name), 3);
+  const grammar = summarizeValues(
+    entry.grammarWatchlist.map((item) => item.name),
+    3,
+  );
   if (grammar) {
     lines.push(`  Grammar watchlist: ${grammar}`);
   }
 
-  const vocabulary = summarizeValues(entry.vocabularyFocus.map((item) => item.text), 3);
+  const vocabulary = summarizeValues(
+    entry.vocabularyFocus.map((item) => item.text),
+    3,
+  );
   if (vocabulary) {
     lines.push(`  Vocabulary focus: ${vocabulary}`);
   }
 
-  const pronunciation = summarizeValues(entry.pronunciationFocus.map((item) => item.label), 2);
+  const pronunciation = summarizeValues(
+    entry.pronunciationFocus.map((item) => item.label),
+    2,
+  );
   if (pronunciation) {
     lines.push(`  Pronunciation: ${pronunciation}`);
   }
 
-  const followUp = summarizeValues(entry.followUpRecommendations.map((item) => item.label), 2);
+  const followUp = summarizeValues(
+    entry.followUpRecommendations.map((item) => item.label),
+    2,
+  );
   if (followUp) {
     lines.push(`  Follow-up: ${followUp}`);
   }
@@ -219,27 +258,42 @@ function formatHomeworkMemoryEntry(entry: HomeworkMemoryRecord): string[] {
     lines.push(`  Topic: ${entry.topic.trim()}`);
   }
 
-  const grammarTargets = summarizeValues(entry.grammarTargets.map((item) => item.name), 3);
+  const grammarTargets = summarizeValues(
+    entry.grammarTargets.map((item) => item.name),
+    3,
+  );
   if (grammarTargets) {
     lines.push(`  Grammar targets: ${grammarTargets}`);
   }
 
-  const reviewTargets = summarizeValues(entry.reviewTargets.map((item) => item.label), 3);
+  const reviewTargets = summarizeValues(
+    entry.reviewTargets.map((item) => item.label),
+    3,
+  );
   if (reviewTargets) {
     lines.push(`  Review targets: ${reviewTargets}`);
   }
 
-  const taskTypes = summarizeValues(entry.taskList.map((item) => item.taskType), 3);
+  const taskTypes = summarizeValues(
+    entry.taskList.map((item) => item.taskType),
+    3,
+  );
   if (taskTypes) {
     lines.push(`  Task types: ${taskTypes}`);
   }
 
-  const pronunciation = summarizeValues(entry.pronunciationFocus.map((item) => item.target), 2);
+  const pronunciation = summarizeValues(
+    entry.pronunciationFocus.map((item) => item.target),
+    2,
+  );
   if (pronunciation) {
     lines.push(`  Pronunciation: ${pronunciation}`);
   }
 
-  const followUp = summarizeValues(entry.teacherFollowUpCues.map((item) => item.note), 2);
+  const followUp = summarizeValues(
+    entry.teacherFollowUpCues.map((item) => item.note),
+    2,
+  );
   if (followUp) {
     lines.push(`  Teacher follow-up: ${followUp}`);
   }

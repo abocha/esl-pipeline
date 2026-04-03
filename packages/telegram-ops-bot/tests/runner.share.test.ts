@@ -1,7 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { resetGuidedConfirmGuardsForTests } from '../src/guided-ui.js';
-
 import { createJob, createRunner, createUpdate, processUpdate } from './telegram-test-fixtures.js';
 
 beforeEach(() => {
@@ -35,7 +34,10 @@ describe('telegram runner share smoke', () => {
       },
     });
 
-    await processUpdate(runner, createUpdate('/share job-md-first', { chatId: 123, chatType: 'supergroup' }));
+    await processUpdate(
+      runner,
+      createUpdate('/share job-md-first', { chatId: 123, chatType: 'supergroup' }),
+    );
 
     expect(backend.getJob).toHaveBeenCalledWith('job-md-first');
     expect(fetchSpy).not.toHaveBeenCalled();
@@ -70,18 +72,20 @@ describe('telegram runner share smoke', () => {
   });
 
   it('falls back to html extraction when markdown content is unavailable', async () => {
-    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValue(
-      new Response(
-        [
-          '<html><head><title>Homework Assignment: Html Fallback</title></head><body>',
-          '<div class="hero-emoji">🏢</div>',
-          'https://bucket.s3.amazonaws.com/audio/final/html-study.mp3',
-          'https://bucket.s3.amazonaws.com/audio/pronunciation/html-pron.mp3',
-          '</body></html>',
-        ].join('\n'),
-        { status: 200 },
-      ),
-    );
+    const fetchSpy = vi
+      .spyOn(globalThis, 'fetch')
+      .mockResolvedValue(
+        new Response(
+          [
+            '<html><head><title>Homework Assignment: Html Fallback</title></head><body>',
+            '<div class="hero-emoji">🏢</div>',
+            'https://bucket.s3.amazonaws.com/audio/final/html-study.mp3',
+            'https://bucket.s3.amazonaws.com/audio/pronunciation/html-pron.mp3',
+            '</body></html>',
+          ].join('\n'),
+          { status: 200 },
+        ),
+      );
 
     const { runner, sendHtmlMessage, auditLog } = createRunner({
       backend: {
@@ -103,7 +107,9 @@ describe('telegram runner share smoke', () => {
     expect(fetchSpy).toHaveBeenCalledOnce();
     expect(sendHtmlMessage).toHaveBeenCalledTimes(4);
     expect(sendHtmlMessage.mock.calls[0]?.[0].html).toContain('<b>Share package</b>');
-    expect(sendHtmlMessage.mock.calls[1]?.[0].html).toContain('🏢 Homework Assignment: Html Fallback');
+    expect(sendHtmlMessage.mock.calls[1]?.[0].html).toContain(
+      '🏢 Homework Assignment: Html Fallback',
+    );
     expect(sendHtmlMessage.mock.calls[2]?.[0].html).toContain('audio/final/html-study.mp3');
     expect(sendHtmlMessage.mock.calls[3]?.[0].html).toContain('audio/pronunciation/html-pron.mp3');
     expect(auditLog).toHaveBeenCalledWith(
@@ -121,17 +127,19 @@ describe('telegram runner share smoke', () => {
   });
 
   it('keeps markdown path-hint audio precedence over competing html audio urls', async () => {
-    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValue(
-      new Response(
-        [
-          '<html><head><title>Homework Assignment: Html Title</title></head><body>',
-          'https://bucket.s3.amazonaws.com/audio/final/html-should-not-win.mp3',
-          'https://bucket.s3.amazonaws.com/audio/pronunciation/html-should-not-win.mp3',
-          '</body></html>',
-        ].join('\n'),
-        { status: 200 },
-      ),
-    );
+    const fetchSpy = vi
+      .spyOn(globalThis, 'fetch')
+      .mockResolvedValue(
+        new Response(
+          [
+            '<html><head><title>Homework Assignment: Html Title</title></head><body>',
+            'https://bucket.s3.amazonaws.com/audio/final/html-should-not-win.mp3',
+            'https://bucket.s3.amazonaws.com/audio/pronunciation/html-should-not-win.mp3',
+            '</body></html>',
+          ].join('\n'),
+          { status: 200 },
+        ),
+      );
 
     const { runner, sendHtmlMessage, auditLog } = createRunner({
       backend: {
@@ -161,7 +169,9 @@ describe('telegram runner share smoke', () => {
     expect(sendHtmlMessage.mock.calls[2]?.[0].disableLinkPreview).toBe(false);
     expect(sendHtmlMessage.mock.calls[3]?.[0].disableLinkPreview).toBe(false);
     expect(sendHtmlMessage.mock.calls[2]?.[0].html).toContain('audio/final/md-path-study.mp3');
-    expect(sendHtmlMessage.mock.calls[3]?.[0].html).toContain('audio/pronunciation/md-path-pron.mp3');
+    expect(sendHtmlMessage.mock.calls[3]?.[0].html).toContain(
+      'audio/pronunciation/md-path-pron.mp3',
+    );
     expect(sendHtmlMessage.mock.calls[2]?.[0].html).not.toContain('html-should-not-win.mp3');
     expect(sendHtmlMessage.mock.calls[3]?.[0].html).not.toContain('html-should-not-win.mp3');
     expect(auditLog).toHaveBeenCalledWith(
@@ -200,7 +210,10 @@ describe('telegram runner share smoke', () => {
       },
     });
 
-    await processUpdate(runner, createUpdate('/share job-no-audio', { chatId: 123, chatType: 'supergroup' }));
+    await processUpdate(
+      runner,
+      createUpdate('/share job-no-audio', { chatId: 123, chatType: 'supergroup' }),
+    );
 
     expect(sendHtmlMessage).toHaveBeenCalledTimes(2);
     expect(sendHtmlMessage.mock.calls[0]?.[0].html).toContain('<b>Share package</b>');

@@ -12,8 +12,8 @@ import {
 } from '../domain/recording-repository.js';
 import { createTranscribeQueue } from '../infrastructure/transcribe-queue.js';
 import {
-  type TranscriptionStorage,
   createTranscriptionStorage,
+  type TranscriptionStorage,
 } from '../infrastructure/transcription-storage.js';
 
 export interface UploadRecordingOptions {

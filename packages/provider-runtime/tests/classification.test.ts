@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest';
 
 import {
-  type ProviderRuntimeClassificationRules,
   classifyProviderRuntimeFailure,
+  type ProviderRuntimeClassificationRules,
 } from '../src/classification.js';
 
 const GENERATION_RULES: ProviderRuntimeClassificationRules = {

@@ -181,7 +181,7 @@ export class FileSanitizationService {
       });
 
       // Remove path components and keep only the basename
-      sanitized = sanitized.split(/[\/\\]/).pop() || 'unnamed';
+      sanitized = sanitized.split(/[/\\]/).pop() || 'unnamed';
     }
 
     // Check for HTML-like content in filenames and remove it completely
