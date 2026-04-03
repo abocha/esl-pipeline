@@ -15,6 +15,8 @@ describe('rendering', () => {
     expect(html).toContain('table-layout: auto;');
     expect(html).toContain('.markdown-body table[data-balanced-columns="true"]');
     expect(html).toContain('table-layout: fixed;');
+    expect(html).toContain('.markdown-body table[data-tight-columns="true"]');
+    expect(html).toContain('width: max-content;');
     expect(html).toContain('white-space: normal;');
     expect(html).toContain('overflow-wrap: anywhere;');
     expect(html).toContain('width: max-content;');
@@ -49,6 +51,8 @@ describe('rendering', () => {
     expect(scriptMatch?.[1]).toContain("cell.setAttribute('data-col-role', column.role)");
     expect(scriptMatch?.[1]).toContain("table.setAttribute('data-table-archetype', archetype)");
     expect(scriptMatch?.[1]).toContain("normalized.includes('structural formula')");
+    expect(scriptMatch?.[1]).toContain('measureIntrinsicColumnWidths');
+    expect(scriptMatch?.[1]).toContain("table.setAttribute('data-tight-columns', 'true')");
   });
 
   it('applies grammar matrix styling only to Notice the Grammar column-list blocks', async () => {

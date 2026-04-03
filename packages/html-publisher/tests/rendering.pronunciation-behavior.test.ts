@@ -410,6 +410,61 @@ describe('rendering', () => {
     expect(buttons[1]?.getAttribute('aria-label')).toContain('sheep /ʃiːp/');
   });
 
+  it('removes empty spacer paragraphs around the natural sentence anchor and pronunciation audio', async () => {
+    const markdown = `### C. Pronunciation Micro-Focus
+  
+  **Mode:** rhythm_chunking
+  **Target:** Connecting the chunks in the "It takes time..." structure.
+  **Focus:** English speakers do not say every word separately. They group words into chunks.
+  **Action:** Read the chunks out loud, building up to the full sentence.
+
+  1. It takes me
+  2. an hour
+  3. to get to the airport
+
+  **Natural sentence practice:** It takes me an hour to get to the airport.`;
+    const baseHtml = await renderToHtml(markdown, 'Pronunciation Spacing', {
+      pronunciationAudio: buildPronunciationAudioPayload(
+        'rhythm_chunking',
+        [
+          {
+            id: 'rhythm-chunk-1',
+            itemIndex: 0,
+            kind: 'sentence_item',
+            engine: 'provider',
+            text: 'It takes me',
+            url: 'https://example.com/chunk-1.mp3',
+            label: 'Play',
+          },
+        ],
+        {
+          id: 'rhythm-primary',
+          kind: 'primary',
+          engine: 'provider',
+          text: 'It takes me an hour to get to the airport.',
+          url: 'https://example.com/rhythm-primary.mp3',
+          label: 'Sentence',
+        },
+      ),
+    });
+    const html = baseHtml.replace(
+      '<p><strong>Natural sentence practice:</strong> It takes me an hour to get to the airport.</p>',
+      '<p><strong>Natural sentence practice:</strong> It takes me an hour to get to the airport.</p><p></p><figure class="audio-figure"><audio controls preload="metadata" src="https://example.com/rhythm-primary.mp3"></audio><figcaption><a data-audio-fallback="true" href="https://example.com/rhythm-primary.mp3" target="_blank" rel="noopener noreferrer">Audio recording: Pronunciation Practice</a></figcaption></figure><p></p>',
+    );
+    const renderedDocument = createRenderedDocument(html);
+
+    const sentenceAnchor = renderedDocument.querySelector('.pronunciation-natural-sentence');
+    const audioFigure = [...renderedDocument.querySelectorAll('figure.audio-figure')].find((figure) =>
+      figure.textContent?.includes('Audio recording: Pronunciation Practice'),
+    );
+
+    expect(sentenceAnchor?.tagName).toBe('P');
+    expect(sentenceAnchor?.parentElement?.tagName).not.toBe('P');
+    expect(sentenceAnchor?.nextElementSibling).toBe(audioFigure);
+    expect(audioFigure?.previousElementSibling).toBe(sentenceAnchor);
+    expect(audioFigure?.nextElementSibling?.textContent?.trim()).toBeFalsy();
+  });
+
   it('emits a parseable behavior script', async () => {
     const html = await renderToHtml('### C. Pronunciation Micro-Focus', 'Script Parse');
     const scriptText = extractBehaviorScript(html);
@@ -454,7 +509,6 @@ describe('rendering', () => {
   :::`;
     const html = await renderToHtml(markdown, 'Pronunciation Shadow Target');
     const renderedDocument = createRenderedDocument(html);
-
     const shadowSentence = renderedDocument.querySelector('.pronunciation-shadow-sentence');
     expect(shadowSentence).toBeTruthy();
     expect(shadowSentence?.textContent).toContain('Shadow sentence');
@@ -479,7 +533,6 @@ describe('rendering', () => {
   :::`;
     const html = await renderToHtml(markdown, 'Pronunciation Paragraph Callout');
     const renderedDocument = createRenderedDocument(html);
-
     const highlighted = renderedDocument.querySelector('.pronunciation-shadow-sentence');
     expect(highlighted).toBeTruthy();
     expect(highlighted?.textContent).toContain('Shadow sentence:');
@@ -487,7 +540,7 @@ describe('rendering', () => {
 
     const paragraphs = [...renderedDocument.querySelectorAll('.callout .content p')];
     expect(paragraphs[0]?.classList.contains('pronunciation-shadow-sentence')).toBe(false);
-    expect(paragraphs[1]?.querySelector('.pronunciation-shadow-sentence')).toBeTruthy();
+    expect(paragraphs[1]?.classList.contains('pronunciation-shadow-sentence')).toBe(true);
   });
 
   it('preserves inline markup in word-drill items after behavior script runs', async () => {
