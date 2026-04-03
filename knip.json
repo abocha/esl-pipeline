@@ -12,7 +12,7 @@
     "zod",
     "pino-pretty"
   ],
-  "ignoreBinaries": ["rg"],
+  "ignoreBinaries": ["actionlint", "rg"],
   "workspaces": {
     "packages/*": {
       "entry": ["src/index.ts", "bin/cli.ts", "bin/**/*.ts"],
