@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented here. Dates use `YYYY-MM-DD`.
 
+## [6.0.4] - 2026-04-03
+
+### Changed
+
+- Automated release from PR #57: refactor(tooling): adopt hybrid biome and repo hygiene linting (https://github.com/abocha/esl-pipeline/pull/57)
+
 ## [6.0.3] - 2026-04-02
 
 ### Changed
