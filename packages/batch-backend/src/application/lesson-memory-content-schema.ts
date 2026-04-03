@@ -151,13 +151,7 @@ const mistakeEvidenceJsonSchema = {
     evidenceNote: nullableStringJsonSchema(),
     confidenceNote: nullableStringJsonSchema(),
   },
-  required: [
-    'observedForm',
-    'suggestedTarget',
-    'evidenceQuote',
-    'evidenceNote',
-    'confidenceNote',
-  ],
+  required: ['observedForm', 'suggestedTarget', 'evidenceQuote', 'evidenceNote', 'confidenceNote'],
 } as const;
 
 const pronunciationEvidenceJsonSchema = {
@@ -173,13 +167,7 @@ const pronunciationEvidenceJsonSchema = {
     evidenceNote: nullableStringJsonSchema(),
     confidenceNote: nullableStringJsonSchema(),
   },
-  required: [
-    'observedIssue',
-    'focusWords',
-    'evidenceQuote',
-    'evidenceNote',
-    'confidenceNote',
-  ],
+  required: ['observedIssue', 'focusWords', 'evidenceQuote', 'evidenceNote', 'confidenceNote'],
 } as const;
 
 export const LESSON_MEMORY_CONTENT_JSON_SCHEMA = {
@@ -336,4 +324,3 @@ export const LESSON_MEMORY_RESPONSE_SCHEMA_DESCRIPTION =
 export function validateLessonMemoryContent(input: unknown): LessonMemoryContent {
   return LessonMemoryContentSchema.parse(input);
 }
-

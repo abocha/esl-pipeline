@@ -1,5 +1,6 @@
-import type { SttProviderId } from '@esl-pipeline/contracts';
 import type { FastifyReply, FastifyRequest } from 'fastify';
+
+import type { SttProviderId } from '@esl-pipeline/contracts';
 
 import type { BatchBackendConfig } from '../../config/env.js';
 import type { AuthService } from '../../infrastructure/auth-service.js';

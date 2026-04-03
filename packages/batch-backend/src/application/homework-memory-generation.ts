@@ -5,8 +5,8 @@ import type { HomeworkMemoryRecord } from '../domain/homework-memory-model.js';
 import { insertCanonicalReadyHomeworkMemoryEntry } from '../domain/homework-memory-repository.js';
 import type { ProviderStructuredExecutionResult } from './generation-providers.js';
 import {
-  extractHomeworkMemoryContent,
   type ExtractHomeworkMemoryContentRequest,
+  extractHomeworkMemoryContent,
 } from './homework-memory-extraction.js';
 import type { HomeworkMemorySourceBundle } from './homework-memory-source.js';
 

@@ -132,7 +132,11 @@ export class RedisRateLimiter implements UploadRateLimiter {
   private rateLimitScriptSha: string | null = null;
   private requestCounter = 0;
 
-  constructor(redis: RateLimiterRedisClient, config: RateLimitConfig, securityLogger?: SecurityLogger) {
+  constructor(
+    redis: RateLimiterRedisClient,
+    config: RateLimitConfig,
+    securityLogger?: SecurityLogger,
+  ) {
     this.redis = redis;
     this.config = config;
     this.securityLogger = securityLogger || this.createDefaultSecurityLogger();
@@ -202,7 +206,9 @@ export class RedisRateLimiter implements UploadRateLimiter {
       if (state.mainLimitExceeded || state.burstLimitExceeded) {
         const retryCandidates: number[] = [];
         if (state.mainLimitExceeded) {
-          retryCandidates.push(this.calculateRetryFromOldest(now, state.oldestMainScore, this.config.windowSize));
+          retryCandidates.push(
+            this.calculateRetryFromOldest(now, state.oldestMainScore, this.config.windowSize),
+          );
         }
         if (state.burstLimitExceeded) {
           retryCandidates.push(
@@ -216,7 +222,9 @@ export class RedisRateLimiter implements UploadRateLimiter {
             : state.mainLimitExceeded
               ? 'main'
               : 'burst';
-        const violatedLimit = state.mainLimitExceeded ? this.config.maxRequests : this.config.burstLimit;
+        const violatedLimit = state.mainLimitExceeded
+          ? this.config.maxRequests
+          : this.config.burstLimit;
         const violatedCount = state.mainLimitExceeded ? state.mainCount : state.burstCount;
 
         await this.logSecurityEvent({
@@ -304,7 +312,9 @@ export class RedisRateLimiter implements UploadRateLimiter {
     const parseNumber = (value: unknown): number => {
       const parsed = Number(value);
       if (!Number.isFinite(parsed)) {
-        throw new TypeError(`Invalid numeric value in rate limit script response: ${String(value)}`);
+        throw new TypeError(
+          `Invalid numeric value in rate limit script response: ${String(value)}`,
+        );
       }
       return parsed;
     };
@@ -531,7 +541,6 @@ export async function createRateLimiterService(): Promise<UploadRateLimiter> {
  * CRITICAL FIX: Enhanced NoOp mode error handling and logging
  */
 export class NoOpRateLimiter implements UploadRateLimiter {
-  private static readonly MAX_REQUESTS = 1000;
   private static readonly WINDOW_SIZE = 60_000;
   private readonly fallbackActive: boolean = true;
 

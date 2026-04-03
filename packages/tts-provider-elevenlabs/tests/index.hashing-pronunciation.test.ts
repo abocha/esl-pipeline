@@ -1,8 +1,8 @@
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 
-import { hashStudyText } from '../src/index.js';
 import { createElevenLabsTtsProvider } from '../src/adapter.js';
+import { hashStudyText } from '../src/index.js';
 import {
   buildPronunciationShadowSentenceMp3FromPath,
   createTempDir,

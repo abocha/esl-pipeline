@@ -5,6 +5,7 @@ import { loadCliEnv } from '@esl-pipeline/shared-infrastructure';
 import { PostgresApprovalReplayStore } from './approval-replay-store.js';
 import { createAuditLogger } from './audit.js';
 import { HttpBackendClient } from './backend-client.js';
+import { createCommandRegistry } from './commands.js';
 import { loadBotConfigFromEnv } from './config.js';
 import { PostgresPollingLeaderElection } from './leader-election.js';
 import { syncTelegramMetadataBestEffort } from './metadata-sync.js';
@@ -12,7 +13,6 @@ import { TelegramOpsBotRunner } from './runner.js';
 import { TelegramClient } from './telegram-client.js';
 import { ForumTopicRouter } from './topic-router.js';
 import { type RunningWebhookUpdateServer, startWebhookUpdateServer } from './webhook-server.js';
-import { createCommandRegistry } from './commands.js';
 
 export async function startTelegramOpsBot(): Promise<void> {
   loadCliEnv({

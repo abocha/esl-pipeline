@@ -1,15 +1,14 @@
-import { randomUUID } from 'node:crypto';
 import { execFile as execFileCallback } from 'node:child_process';
+import { randomUUID } from 'node:crypto';
 import { promises as fs } from 'node:fs';
 import path from 'node:path';
-import { promisify } from 'node:util';
 import { fileURLToPath } from 'node:url';
-
+import { promisify } from 'node:util';
 import { Pool } from 'pg';
 
 import { closePgPool } from './db.js';
-import { getMigrationStatus, runMigrations } from './migrations.js';
 import { verifyMigrations } from './migration-verify.js';
+import { getMigrationStatus, runMigrations } from './migrations.js';
 
 const execFile = promisify(execFileCallback);
 const BASELINE_TOOL_VERSION = 'batch-backend-schema-baseline-v1';
@@ -282,9 +281,7 @@ async function withTemporaryDatabase<T>(
 async function resolveServerMajorVersion(connectionString: string): Promise<string> {
   const pool = new Pool({ connectionString });
   try {
-    const result = await pool.query<{ server_version_num: string }>(
-      'SHOW server_version_num',
-    );
+    const result = await pool.query<{ server_version_num: string }>('SHOW server_version_num');
     const numeric = result.rows[0]?.server_version_num ?? '';
     return numeric.slice(0, 2) === '10' || numeric.length > 5 ? numeric.slice(0, 2) : numeric[0]!;
   } finally {

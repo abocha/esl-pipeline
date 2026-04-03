@@ -1,7 +1,7 @@
 import { Readable } from 'node:stream';
 import { describe, expect, it, vi } from 'vitest';
 
-import { type DeepgramSttConfig, createDeepgramSttProvider } from '../src/index.js';
+import { createDeepgramSttProvider, type DeepgramSttConfig } from '../src/index.js';
 
 function baseConfig(): DeepgramSttConfig {
   return {

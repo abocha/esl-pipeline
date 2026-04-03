@@ -1,4 +1,4 @@
-import { describe, expect, it, vi, beforeEach } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('@esl-pipeline/pmd', () => ({
   extractPronunciationFocus: vi.fn(),
@@ -68,9 +68,9 @@ describe('runtime/pronunciation-audio', () => {
       },
     ]);
     expect(result?.primaryClip).toBeNull();
-    expect(result?.itemClips?.every((entry: { engine: string }) => entry.engine === 'provider')).toBe(
-      true,
-    );
+    expect(
+      result?.itemClips?.every((entry: { engine: string }) => entry.engine === 'provider'),
+    ).toBe(true);
     expect(vi.mocked(buildPronunciationTextMp3)).toHaveBeenCalledTimes(2);
     expect(logs).toEqual(
       expect.arrayContaining([

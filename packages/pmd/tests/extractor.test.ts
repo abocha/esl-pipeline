@@ -198,10 +198,7 @@ describe('pmd extractor', () => {
           '**Shadow sentence:** I was thinking about working this morning.',
           '**Action:** Read the careful form first, then the connected form.',
         )
-        .replace(
-          '1. **thinking** — /ˈθɪŋkɪŋ/',
-          '1. "Change helps us." -> Change help-sus.',
-        )
+        .replace('1. **thinking** — /ˈθɪŋkɪŋ/', '1. "Change helps us." -> Change help-sus.')
         .replace('2. **working** — /ˈwɜːrkɪŋ/', '2. "It gives us food." -> It give-sus food.')
         .replace(
           '3. **morning** — /ˈmɔːrnɪŋ/',
@@ -226,7 +223,10 @@ describe('pmd extractor', () => {
           '**Contour cue:** rise-fall',
         )
         .replace('1. **thinking** — /ˈθɪŋkɪŋ/', '1. Are you free tonight? — /ɑː juː friː təˈnaɪt/')
-        .replace('2. **working** — /ˈwɜːrkɪŋ/', '2. That sounds really great. — /ðæt saʊndz ˈrɪə.li ɡreɪt/')
+        .replace(
+          '2. **working** — /ˈwɜːrkɪŋ/',
+          '2. That sounds really great. — /ðæt saʊndz ˈrɪə.li ɡreɪt/',
+        )
         .replace(
           '3. **morning** — /ˈmɔːrnɪŋ/',
           '**Natural sentence practice:** Are you free tonight after work?',

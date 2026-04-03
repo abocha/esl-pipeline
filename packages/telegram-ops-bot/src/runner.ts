@@ -9,10 +9,10 @@ import { TelegramApiError, type TelegramClient } from './telegram-client.js';
 import type {
   AuditLogger,
   BackendClient,
-  BotDomain,
   BotConfig,
-  CommandContext,
+  BotDomain,
   BotRuntimeSnapshot,
+  CommandContext,
   PollLeaderElection,
   TelegramInlineKeyboardMarkup,
   TelegramMessenger,
@@ -893,19 +893,21 @@ export class TelegramOpsBotRunner {
       }
     }
 
-    await (typeof args.threadId === 'number' ? this.sendHtmlMessageWithTopicHealing({
-        chatId: args.chatId,
-        domain: args.domain,
-        threadId: args.threadId,
-        html: args.html,
-        disableLinkPreview: args.disableLinkPreview,
-        replyMarkup: args.replyMarkup,
-      }) : this.sendSimpleMessage({
-        chatId: args.chatId,
-        threadId: args.threadId,
-        html: args.html,
-        replyMarkup: args.replyMarkup,
-      }));
+    await (typeof args.threadId === 'number'
+      ? this.sendHtmlMessageWithTopicHealing({
+          chatId: args.chatId,
+          domain: args.domain,
+          threadId: args.threadId,
+          html: args.html,
+          disableLinkPreview: args.disableLinkPreview,
+          replyMarkup: args.replyMarkup,
+        })
+      : this.sendSimpleMessage({
+          chatId: args.chatId,
+          threadId: args.threadId,
+          html: args.html,
+          replyMarkup: args.replyMarkup,
+        }));
     this.audit.log({
       level: 'warn',
       event: 'callback_edit_fallback_used',

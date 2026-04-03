@@ -42,22 +42,22 @@ Provider-specific generation details stay in:
 
 ## Capability Matrix
 
-| Capability | Backend | Frontend | Next Note |
-| --- | --- | --- | --- |
-| Auth routes | Done | Done | maintain parity in errors/session UX |
-| Recording upload/read/transcript flow | Done | Done | keep polling/SSE fallback explicit |
-| Manual transcription retry | Done | Done | none |
-| Prompt options / prompt package flow | Done | Done | keep allowlists aligned |
-| Draft save/materialize/publish approve | Done | Done | none |
-| Job status and core job actions | Done | Done | rerun is a single action; chunk defaults remain mode-aware |
-| Student summary/profile/bindings | Done | Partial | workspace hardening continues |
-| Student timeline + provenance | Done | Done | continue ergonomics pass |
-| Student memory inspection + replay tooling | Done | Done | backend routes, prompt-package provenance, replay tools, and the minimal workspace inspection UI are live |
-| Direct generation provider/model selection | Done | Done | keep quota semantics aligned |
-| Generation safety guardrails | Done | Done | continue battle-testing telemetry |
-| STT provider metadata + persistence | Done | Done | keep defaults aligned with env policy |
-| Voice-alignment provenance and readiness | Done | Partial | dashboard UX remains thin |
-| Telegram ops control panel | Done | Partial | Telegram is the operator UI for this slice |
+| Capability                                 | Backend | Frontend | Next Note                                                                                                 |
+| ------------------------------------------ | ------- | -------- | --------------------------------------------------------------------------------------------------------- |
+| Auth routes                                | Done    | Done     | maintain parity in errors/session UX                                                                      |
+| Recording upload/read/transcript flow      | Done    | Done     | keep polling/SSE fallback explicit                                                                        |
+| Manual transcription retry                 | Done    | Done     | none                                                                                                      |
+| Prompt options / prompt package flow       | Done    | Done     | keep allowlists aligned                                                                                   |
+| Draft save/materialize/publish approve     | Done    | Done     | none                                                                                                      |
+| Job status and core job actions            | Done    | Done     | rerun is a single action; chunk defaults remain mode-aware                                                |
+| Student summary/profile/bindings           | Done    | Partial  | workspace hardening continues                                                                             |
+| Student timeline + provenance              | Done    | Done     | continue ergonomics pass                                                                                  |
+| Student memory inspection + replay tooling | Done    | Done     | backend routes, prompt-package provenance, replay tools, and the minimal workspace inspection UI are live |
+| Direct generation provider/model selection | Done    | Done     | keep quota semantics aligned                                                                              |
+| Generation safety guardrails               | Done    | Done     | continue battle-testing telemetry                                                                         |
+| STT provider metadata + persistence        | Done    | Done     | keep defaults aligned with env policy                                                                     |
+| Voice-alignment provenance and readiness   | Done    | Partial  | dashboard UX remains thin                                                                                 |
+| Telegram ops control panel                 | Done    | Partial  | Telegram is the operator UI for this slice                                                                |
 
 ## Current Blockers
 

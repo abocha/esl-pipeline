@@ -1,13 +1,13 @@
 #!/usr/bin/env node
 // Align shared dependency versions across workspace packages.
 // Usage: pnpm exec node scripts/deps/pin-shared-deps.mjs
-import { existsSync, readFileSync, readdirSync, writeFileSync } from 'node:fs';
+import { existsSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 
 const SHARED = {
-  '@aws-sdk/client-s3': '^3.1018.0',
-  '@aws-sdk/s3-request-presigner': '^3.1018.0',
-  '@aws-sdk/lib-storage': '^3.1018.0',
+  '@aws-sdk/client-s3': '^3.1019.0',
+  '@aws-sdk/s3-request-presigner': '^3.1019.0',
+  '@aws-sdk/lib-storage': '^3.1019.0',
   '@elevenlabs/elevenlabs-js': '^2.40.0',
   '@notionhq/client': '^5.15.0',
   commander: '^14.0.2',
@@ -15,7 +15,7 @@ const SHARED = {
   // Frontend
   react: '^19.2.0',
   'react-dom': '^19.2.0',
-  axios: '^1.13.6',
+  axios: '^1.14.0',
   '@tanstack/react-query': '^5.90.11',
   vite: '^8.0.3',
   '@vitejs/plugin-react': '^6.0.1',

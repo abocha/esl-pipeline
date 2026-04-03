@@ -1,0 +1,128 @@
+{
+  "$schema": "https://biomejs.dev/schemas/2.4.10/schema.json",
+  "vcs": {
+    "enabled": true,
+    "clientKind": "git",
+    "useIgnoreFile": true,
+    "defaultBranch": "main"
+  },
+  "files": {
+    "ignoreUnknown": true,
+    "includes": [
+      "packages/**",
+      "scripts/**",
+      "eslint.config.js",
+      "vitest.config.ts",
+      "!**/dist",
+      "!coverage",
+      "!out",
+      "!**/playwright-report",
+      "!**/test-results",
+      "!package.json",
+      "!**/package.json"
+    ]
+  },
+  "formatter": {
+    "enabled": true,
+    "indentStyle": "space",
+    "indentWidth": 2,
+    "lineEnding": "lf",
+    "lineWidth": 100
+  },
+  "linter": {
+    "enabled": true,
+    "rules": {
+      "recommended": true,
+      "a11y": {
+        "recommended": false
+      },
+      "complexity": {
+        "noImportantStyles": "off",
+        "noUselessConstructor": "off",
+        "noUselessContinue": "off",
+        "noUselessStringRaw": "off",
+        "noUselessTernary": "off",
+        "useLiteralKeys": "off",
+        "useOptionalChain": "off"
+      },
+      "correctness": {
+        "noVoidTypeReturn": "off",
+        "useExhaustiveDependencies": "off"
+      },
+      "style": {
+        "noNonNullAssertion": "off",
+        "useExponentiationOperator": "off",
+        "useExportType": "off",
+        "useImportType": "off"
+      },
+      "suspicious": {
+        "noArrayIndexKey": "off",
+        "noAssignInExpressions": "off",
+        "noImplicitAnyLet": "off",
+        "noMisleadingCharacterClass": "off"
+      }
+    }
+  },
+  "overrides": [
+    {
+      "includes": [
+        "**/*.test.{js,mjs,cjs,ts,tsx}",
+        "**/*.spec.{js,mjs,cjs,ts,tsx}",
+        "**/tests/**/*.{js,mjs,cjs,ts,tsx}"
+      ],
+      "linter": {
+        "rules": {
+          "correctness": {
+            "noUnusedFunctionParameters": "off"
+          },
+          "style": {
+            "useTemplate": "off"
+          },
+          "suspicious": {
+            "noExplicitAny": "off",
+            "noUselessEscapeInString": "off"
+          }
+        }
+      }
+    }
+  ],
+  "javascript": {
+    "formatter": {
+      "quoteStyle": "single",
+      "jsxQuoteStyle": "double",
+      "trailingCommas": "all",
+      "semicolons": "always",
+      "arrowParentheses": "always"
+    }
+  },
+  "json": {
+    "formatter": {
+      "trailingCommas": "none"
+    }
+  },
+  "assist": {
+    "enabled": true,
+    "actions": {
+      "source": {
+        "organizeImports": {
+          "level": "on",
+          "options": {
+            "groups": [
+              [
+                ":NODE:",
+                ":PACKAGE:",
+                ":PACKAGE_WITH_PROTOCOL:",
+                "!@esl-pipeline/*",
+                "!@esl-pipeline/**"
+              ],
+              ":BLANK_LINE:",
+              ["@esl-pipeline/*", "@esl-pipeline/**"],
+              ":BLANK_LINE:",
+              ":PATH:"
+            ]
+          }
+        }
+      }
+    }
+  }
+}

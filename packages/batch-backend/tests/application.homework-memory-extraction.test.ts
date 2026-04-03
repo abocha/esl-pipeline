@@ -1,15 +1,15 @@
 import { describe, expect, it, vi } from 'vitest';
 
 import {
-  HomeworkMemoryExtractionValidationError,
-  extractHomeworkMemoryContent,
-} from '../src/application/homework-memory-extraction.js';
-import {
   HOMEWORK_MEMORY_CONTENT_JSON_SCHEMA,
   HOMEWORK_MEMORY_RESPONSE_SCHEMA_DESCRIPTION,
   HOMEWORK_MEMORY_RESPONSE_SCHEMA_NAME,
   validateHomeworkMemoryContent,
 } from '../src/application/homework-memory-content-schema.js';
+import {
+  extractHomeworkMemoryContent,
+  HomeworkMemoryExtractionValidationError,
+} from '../src/application/homework-memory-extraction.js';
 import type { BatchBackendConfig } from '../src/config/env.js';
 import { loadConfig } from '../src/config/env.js';
 

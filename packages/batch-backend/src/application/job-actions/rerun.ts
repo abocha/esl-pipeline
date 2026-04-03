@@ -30,12 +30,16 @@ const rerunSchema = z
     studyTextDialogueSeed: z.number().int().optional(),
     pronunciationMainTtsProvider: z.enum(['elevenlabs', 'google']).optional(),
     pronunciationMainElevenlabsModel: elevenLabsModelSchema.optional(),
-    pronunciationMainGoogleTtsModel: z.enum(['chirp3_hd', 'studio', 'neural2', 'wavenet']).optional(),
+    pronunciationMainGoogleTtsModel: z
+      .enum(['chirp3_hd', 'studio', 'neural2', 'wavenet'])
+      .optional(),
     pronunciationMainVoiceId: z.string().min(1).optional(),
     pronunciationMainVoiceAccent: z.string().min(1).optional(),
     pronunciationChunkTtsProvider: z.enum(['edge-tts', 'elevenlabs', 'google']).optional(),
     pronunciationChunkElevenlabsModel: elevenLabsModelSchema.optional(),
-    pronunciationChunkGoogleTtsModel: z.enum(['chirp3_hd', 'studio', 'neural2', 'wavenet']).optional(),
+    pronunciationChunkGoogleTtsModel: z
+      .enum(['chirp3_hd', 'studio', 'neural2', 'wavenet'])
+      .optional(),
     pronunciationChunkVoiceId: z.string().min(1).optional(),
     pronunciationChunkVoiceAccent: z.string().min(1).optional(),
     pronunciationChunkEdgeVoice: z.string().min(1).optional(),
@@ -71,7 +75,8 @@ const rerunSchema = z
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
         path: ['studyTextElevenlabsModel'],
-        message: 'Automatic ElevenLabs study-text reruns must use strategy-default model selection.',
+        message:
+          'Automatic ElevenLabs study-text reruns must use strategy-default model selection.',
       });
     }
 

@@ -1,8 +1,7 @@
 /**
  * TTS strategy selection
  */
-import type { PipelineLogger } from '@esl-pipeline/contracts';
-import type { VoiceSelectionDiagnostics } from '@esl-pipeline/contracts';
+import type { PipelineLogger, VoiceSelectionDiagnostics } from '@esl-pipeline/contracts';
 import type { ParsedMarkdownContext } from '@esl-pipeline/pmd';
 
 export type TtsStrategy = 'auto' | 'tts' | 'dialogue';

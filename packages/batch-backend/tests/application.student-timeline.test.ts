@@ -2,8 +2,8 @@ import { randomUUID } from 'node:crypto';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 
 import {
-  type StudentTimelineType,
   getStudentTimeline,
+  type StudentTimelineType,
 } from '../src/application/student-timeline.js';
 import { deriveStudentId } from '../src/domain/student-utils.js';
 import { withPgClient } from '../src/infrastructure/db.js';

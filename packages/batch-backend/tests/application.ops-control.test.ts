@@ -1,5 +1,6 @@
-import type { OpsActionStatus } from '@esl-pipeline/contracts';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+
+import type { OpsActionStatus } from '@esl-pipeline/contracts';
 
 async function withEnv(env: Record<string, string | undefined>, fn: () => void | Promise<void>) {
   const oldEnv = { ...process.env };

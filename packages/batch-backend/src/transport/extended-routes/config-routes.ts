@@ -123,18 +123,12 @@ function normalizePronunciationSectionLine(line: string): string {
 
 function extractPronunciationMarkedField(markdown: string, fieldLabel: string): string {
   const normalized = normalizePronunciationSectionLine(markdown);
-  const pattern = new RegExp(
-    String.raw`^(?:\*\*)?${fieldLabel}\s*:\s*(?:\*\*)?\s*(.*)$`,
-    'i',
-  );
+  const pattern = new RegExp(String.raw`^(?:\*\*)?${fieldLabel}\s*:\s*(?:\*\*)?\s*(.*)$`, 'i');
   const match = pattern.exec(normalized);
   return (match?.[1] ?? '').trim();
 }
 
-function extractPronunciationMarkedFieldValue(
-  sectionLines: string[],
-  fieldLabel: string,
-): string {
+function extractPronunciationMarkedFieldValue(sectionLines: string[], fieldLabel: string): string {
   for (let index = 0; index < sectionLines.length; index += 1) {
     const current = sectionLines[index] ?? '';
     const inlineValue = extractPronunciationMarkedField(current, fieldLabel);
@@ -175,7 +169,9 @@ function extractTextBeforeTranscription(value: string): string {
   );
 }
 
-function buildFallbackPreviewPronunciationAudio(markdown: string): PronunciationAudioPayload | null {
+function buildFallbackPreviewPronunciationAudio(
+  markdown: string,
+): PronunciationAudioPayload | null {
   const mode = parsePronunciationMode(markdown);
   if (!mode) return null;
 
@@ -236,8 +232,9 @@ function buildFallbackPreviewPronunciationAudio(markdown: string): Pronunciation
       return {
         mode: 'minimal_pair',
         itemClips: numberedBodies.flatMap((body, index) => {
-          const pairMatch =
-            /^(.+?)\s+\/[^/\n]+\/\s+[—–-]\s+(.+?)\s+\/[^/\n]+\/(?:\s+.+)?$/u.exec(body);
+          const pairMatch = /^(.+?)\s+\/[^/\n]+\/\s+[—–-]\s+(.+?)\s+\/[^/\n]+\/(?:\s+.+)?$/u.exec(
+            body,
+          );
           const left = normalizePronunciationText(pairMatch?.[1] ?? body);
           const right = normalizePronunciationText(pairMatch?.[2] ?? body);
           return [
@@ -845,10 +842,14 @@ export function registerConfigRoutes(app: FastifyInstance, context: ExtendedRout
           includePronunciation:
             previewPronunciationAudio !== null || hasPronunciationReferenceMode(body.text),
         });
-        const html = await createStaticPageHtml(markdown, resolvePreviewTitle(body.text, body.title), {
-          headingTheme,
-          pronunciationAudio: previewPronunciationAudio ?? null,
-        });
+        const html = await createStaticPageHtml(
+          markdown,
+          resolvePreviewTitle(body.text, body.title),
+          {
+            headingTheme,
+            pronunciationAudio: previewPronunciationAudio ?? null,
+          },
+        );
 
         logger.info('HTTP request handled', {
           event: 'http_request',

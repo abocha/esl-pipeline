@@ -1,18 +1,21 @@
 import { randomUUID } from 'node:crypto';
-
 import type { PoolClient } from 'pg';
 
-import type { FactEvidence, MemoryConfidence, StudentFactAuthority } from './lesson-memory-model.js';
+import { withPgClient } from '../infrastructure/db.js';
+import type {
+  FactEvidence,
+  MemoryConfidence,
+  StudentFactAuthority,
+} from './lesson-memory-model.js';
 import {
   type StudentProfileCandidateRecord,
   type StudentProfileCandidateReviewState,
-  type StudentProfileCandidateStatus,
-  type StudentProfileCandidateTargetSection,
   StudentProfileCandidateReviewStateSchema,
+  type StudentProfileCandidateStatus,
   StudentProfileCandidateStatusSchema,
+  type StudentProfileCandidateTargetSection,
   StudentProfileCandidateTargetSectionSchema,
 } from './student-profile-candidate-model.js';
-import { withPgClient } from '../infrastructure/db.js';
 
 interface StudentProfileCandidateRow {
   id: string;
@@ -390,12 +393,7 @@ export async function markStudentProfileCandidatesPromoted(
       WHERE student_id = $1
         AND id = ANY($2::uuid[])
       `,
-      [
-        params.studentId,
-        params.candidateIds,
-        params.promotedRevisionId,
-        params.promotedAt ?? null,
-      ],
+      [params.studentId, params.candidateIds, params.promotedRevisionId, params.promotedAt ?? null],
     );
   });
 }

@@ -1,15 +1,14 @@
 import { fireEvent, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { beforeEach, describe, expect, it } from 'vitest';
-import { vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import {
-  STUDENT_WORKSPACE_ASYNC_TIMEOUT_MS,
   renderWorkspaceCandidatesPanel,
   renderWorkspaceWithProfileCandidates,
+  STUDENT_WORKSPACE_ASYNC_TIMEOUT_MS,
   setupStudentWorkspaceTest,
+  studentWorkspaceApiMocks,
 } from './StudentWorkspace.test-harness';
-import * as api from '../../utils/api';
 
 describe('StudentWorkspace candidates', () => {
   beforeEach(() => {
@@ -31,10 +30,7 @@ describe('StudentWorkspace candidates', () => {
     const user = userEvent.setup();
     renderWorkspaceCandidatesPanel();
 
-    await user.selectOptions(
-      screen.getByLabelText(/Profile Candidate Review Bucket/i),
-      'reviewed',
-    );
+    await user.selectOptions(screen.getByLabelText(/Profile Candidate Review Bucket/i), 'reviewed');
 
     await screen.findAllByText(/Prefers structured homework with built-in review blocks\./i);
     expect(
@@ -43,58 +39,50 @@ describe('StudentWorkspace candidates', () => {
     expect(screen.getAllByText(/Deferred/i).length).toBeGreaterThan(0);
   });
 
-  it(
-    'approves a profile candidate with edited text and a reviewer note',
-    async () => {
-      const user = userEvent.setup();
-      await renderWorkspaceWithProfileCandidates();
+  it('approves a profile candidate with edited text and a reviewer note', async () => {
+    const user = userEvent.setup();
+    await renderWorkspaceWithProfileCandidates();
 
-      const approvedText = await screen.findByLabelText(
-        /Approved Fact Text candidate-pending/i,
-        {},
-        { timeout: STUDENT_WORKSPACE_ASYNC_TIMEOUT_MS },
+    const approvedText = await screen.findByLabelText(
+      /Approved Fact Text candidate-pending/i,
+      {},
+      { timeout: STUDENT_WORKSPACE_ASYNC_TIMEOUT_MS },
+    );
+    fireEvent.change(approvedText, {
+      target: { value: 'Uses English with product, engineering, and client teams.' },
+    });
+    fireEvent.change(screen.getByLabelText(/Reviewer Note candidate-pending/i), {
+      target: { value: 'Confirmed.' },
+    });
+    await user.click(screen.getByRole('button', { name: /^Approve$/i }));
+
+    await waitFor(() => {
+      expect(studentWorkspaceApiMocks.approveStudentProfileCandidate).toHaveBeenCalledWith(
+        'student-default',
+        'candidate-pending',
+        {
+          approvedFactText: 'Uses English with product, engineering, and client teams.',
+          reviewerNote: 'Confirmed.',
+        },
       );
-      fireEvent.change(approvedText, {
-        target: { value: 'Uses English with product, engineering, and client teams.' },
-      });
-      fireEvent.change(screen.getByLabelText(/Reviewer Note candidate-pending/i), {
-        target: { value: 'Confirmed.' },
-      });
-      await user.click(screen.getByRole('button', { name: /^Approve$/i }));
+    });
+  }, 10000);
 
-      await waitFor(() => {
-        expect(api.approveStudentProfileCandidate).toHaveBeenCalledWith(
-          'student-default',
-          'candidate-pending',
-          {
-            approvedFactText: 'Uses English with product, engineering, and client teams.',
-            reviewerNote: 'Confirmed.',
-          },
-        );
-      });
-    },
-    10000,
-  );
+  it('promotes an explicit subset of approved profile candidates into a draft revision', async () => {
+    const user = userEvent.setup();
+    const onPromoteProfileCandidates = vi.fn();
+    renderWorkspaceCandidatesPanel({
+      profileCandidateFilter: 'reviewed',
+      selectedCandidateIds: ['candidate-approved'],
+      profileCandidatePromotionNote: '',
+      onPromoteProfileCandidates,
+    });
 
-  it(
-    'promotes an explicit subset of approved profile candidates into a draft revision',
-    async () => {
-      const user = userEvent.setup();
-      const onPromoteProfileCandidates = vi.fn();
-      renderWorkspaceCandidatesPanel({
-        profileCandidateFilter: 'reviewed',
-        selectedCandidateIds: ['candidate-approved'],
-        profileCandidatePromotionNote: '',
-        onPromoteProfileCandidates,
-      });
+    fireEvent.change(screen.getByLabelText(/Promotion Note/i), {
+      target: { value: 'Promote the verified study habits.' },
+    });
+    await user.click(screen.getByRole('button', { name: /Generate Draft Revision/i }));
 
-      fireEvent.change(screen.getByLabelText(/Promotion Note/i), {
-        target: { value: 'Promote the verified study habits.' },
-      });
-      await user.click(screen.getByRole('button', { name: /Generate Draft Revision/i }));
-
-      expect(onPromoteProfileCandidates).toHaveBeenCalled();
-    },
-    10000,
-  );
+    expect(onPromoteProfileCandidates).toHaveBeenCalled();
+  }, 10000);
 });

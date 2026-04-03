@@ -591,9 +591,7 @@ describe('config/env - ops control settings', () => {
           await loadConfigFresh();
         },
       ),
-    ).rejects.toThrow(
-      'BATCH_BACKEND_OPS_CONTROL_ACTION_RETENTION_DAYS must be between 1 and 3650',
-    );
+    ).rejects.toThrow('BATCH_BACKEND_OPS_CONTROL_ACTION_RETENTION_DAYS must be between 1 and 3650');
   });
 });
 

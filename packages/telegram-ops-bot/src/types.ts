@@ -128,7 +128,10 @@ export interface TelegramMessenger {
 export interface TopicRouter {
   initialize: () => Promise<void>;
   resolveThreadId: (args: { domain: BotDomain; incomingThreadId?: number }) => number | undefined;
-  healStaleThread: (args: { domain: BotDomain; staleThreadId: number }) => Promise<number | undefined>;
+  healStaleThread: (args: {
+    domain: BotDomain;
+    staleThreadId: number;
+  }) => Promise<number | undefined>;
 }
 
 export interface PollLeaderElection {

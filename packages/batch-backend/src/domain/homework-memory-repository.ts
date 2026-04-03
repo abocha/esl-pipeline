@@ -1,23 +1,22 @@
 import { randomUUID } from 'node:crypto';
-
 import type { PoolClient } from 'pg';
 
 import { withPgClient } from '../infrastructure/db.js';
 import { logger } from '../infrastructure/logger.js';
 import {
-  HomeworkMemoryEntryStatusSchema,
-  HomeworkMemoryInputTypeSchema,
-  HomeworkMemorySourceKindSchema,
-  HomeworkMemoryStudyTextTypeSchema,
   type HomeworkMemoryEntryStatus,
+  HomeworkMemoryEntryStatusSchema,
   type HomeworkMemoryGenerationNotes,
   type HomeworkMemoryInputType,
+  HomeworkMemoryInputTypeSchema,
   type HomeworkMemoryLabeledNote,
   type HomeworkMemoryNamedTarget,
   type HomeworkMemoryPronunciationFocusEntry,
   type HomeworkMemoryPublishTarget,
   type HomeworkMemoryRecord,
+  HomeworkMemorySourceKindSchema,
   type HomeworkMemoryStudyTextType,
+  HomeworkMemoryStudyTextTypeSchema,
   type HomeworkMemoryTaskEntry,
   type HomeworkMemoryTeacherFollowUpCue,
   type HomeworkMemoryVocabularyTarget,
@@ -251,7 +250,9 @@ export async function insertCanonicalReadyHomeworkMemoryEntry(
   const row = await withPgClient(async (client: PoolClient) => {
     await client.query('BEGIN');
     try {
-      await client.query('SELECT id FROM jobs WHERE id = $1 FOR UPDATE', [params.assignmentLineageKey]);
+      await client.query('SELECT id FROM jobs WHERE id = $1 FOR UPDATE', [
+        params.assignmentLineageKey,
+      ]);
 
       const insertResult = await client.query(
         `
@@ -365,7 +366,9 @@ export async function ensurePendingHomeworkMemoryEntry(
   return withPgClient(async (client: PoolClient) => {
     await client.query('BEGIN');
     try {
-      await client.query('SELECT id FROM jobs WHERE id = $1 FOR UPDATE', [params.assignmentLineageKey]);
+      await client.query('SELECT id FROM jobs WHERE id = $1 FOR UPDATE', [
+        params.assignmentLineageKey,
+      ]);
 
       if (!params.bypassReadyReuse) {
         const readyResult = await client.query<HomeworkMemoryRow>(
@@ -588,8 +591,15 @@ export async function getLatestPendingHomeworkMemoryByAssignmentLineageKey(
 export async function listHomeworkMemoryEntries(
   options: ListHomeworkMemoryEntriesOptions,
 ): Promise<HomeworkMemoryRecord[]> {
-  const { studentId, jobId, assignmentLineageKey, statuses, limit, offset, order = 'desc' } =
-    options;
+  const {
+    studentId,
+    jobId,
+    assignmentLineageKey,
+    statuses,
+    limit,
+    offset,
+    order = 'desc',
+  } = options;
   const values: (string | string[] | number)[] = [];
   const clauses: string[] = [];
 
@@ -680,7 +690,11 @@ export async function supersedeReadyHomeworkMemoryEntriesForAssignmentLineage(pa
   supersededAt?: Date;
 }): Promise<HomeworkMemoryRecord[]> {
   const supersededAt = params.supersededAt ?? new Date();
-  const values: (string | Date)[] = [params.supersededById, supersededAt, params.assignmentLineageKey];
+  const values: (string | Date)[] = [
+    params.supersededById,
+    supersededAt,
+    params.assignmentLineageKey,
+  ];
   const clauses = [`assignment_lineage_key = $3`, `status = 'ready'`, `id <> $1`];
 
   if (params.excludeEntryId) {
@@ -764,8 +778,8 @@ export async function markHomeworkMemoryEntryFailed(params: {
     ...existing.generationNotes,
     error: params.errorMessage,
     providerRequestId:
-      params.providerRequestId ?? (existing.generationNotes?.providerRequestId ?? null),
-    usage: params.usage ?? (existing.generationNotes?.usage ?? null),
+      params.providerRequestId ?? existing.generationNotes?.providerRequestId ?? null,
+    usage: params.usage ?? existing.generationNotes?.usage ?? null,
     failedAt: new Date().toISOString(),
   };
 

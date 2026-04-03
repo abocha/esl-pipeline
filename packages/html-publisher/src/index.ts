@@ -1,15 +1,14 @@
 export {
-  type FeatureFlags,
-  type RenderOptions,
-  type ThemeTokens,
-  createStaticPageHtml,
-  renderToHtml,
-} from './rendering.js';
-
-export {
   type HtmlPublishResult,
   type PublishHtmlOptions,
-  type RenderAndPublishOptions,
   publishHtmlToS3,
+  type RenderAndPublishOptions,
   renderAndPublishMarkdownToS3,
 } from './publish.js';
+export {
+  createStaticPageHtml,
+  type FeatureFlags,
+  type RenderOptions,
+  renderToHtml,
+  type ThemeTokens,
+} from './rendering.js';

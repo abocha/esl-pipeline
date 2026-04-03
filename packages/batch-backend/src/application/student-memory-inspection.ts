@@ -7,10 +7,7 @@ import {
   listHomeworkMemoryEntries,
   listRecentReadyHomeworkMemoryByStudentId,
 } from '../domain/homework-memory-repository.js';
-import type {
-  LessonMemoryEntryStatus,
-  LessonMemoryRecord,
-} from '../domain/lesson-memory-model.js';
+import type { LessonMemoryEntryStatus, LessonMemoryRecord } from '../domain/lesson-memory-model.js';
 import {
   listLessonMemoryEntries,
   listRecentReadyLessonMemoryByStudentId,

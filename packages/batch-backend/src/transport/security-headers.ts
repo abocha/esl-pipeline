@@ -216,7 +216,7 @@ export function securityHeadersMiddleware(
  * Pre-flight OPTIONS handler for CORS
  */
 export async function handleCorsPreflight(
-  request: FastifyRequest,
+  _request: FastifyRequest,
   reply: FastifyReply,
 ): Promise<void> {
   const config = getDefaultSecurityConfig();

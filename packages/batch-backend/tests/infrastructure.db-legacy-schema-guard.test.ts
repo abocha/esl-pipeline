@@ -1,7 +1,6 @@
 import { createHash } from 'node:crypto';
 import fs from 'node:fs/promises';
 import path from 'node:path';
-
 import { describe, expect, it } from 'vitest';
 
 const LEGACY_BEGIN_MARKER = 'LEGACY_SCHEMA_PATCH_CATALOG_BEGIN';
@@ -31,9 +30,9 @@ describe('infrastructure/db legacy schema guard', () => {
 
     try {
       const db = await import('../src/infrastructure/db.js');
-      await expect(
-        db.ensureJobsSchema({} as unknown as import('pg').PoolClient),
-      ).rejects.toThrow('PG_ENABLE_LEGACY_SCHEMA_PATCHES=true is required');
+      await expect(db.ensureJobsSchema({} as unknown as import('pg').PoolClient)).rejects.toThrow(
+        'PG_ENABLE_LEGACY_SCHEMA_PATCHES=true is required',
+      );
     } finally {
       if (original === undefined) {
         delete process.env.PG_ENABLE_LEGACY_SCHEMA_PATCHES;

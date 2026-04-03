@@ -11,10 +11,7 @@ import type {
   StudentSummaryResponse,
 } from '@esl-pipeline/contracts';
 
-import {
-  type ApprovalReplayStore,
-  InMemoryApprovalReplayStore,
-} from './approval-replay-store.js';
+import { type ApprovalReplayStore, InMemoryApprovalReplayStore } from './approval-replay-store.js';
 import {
   formatActionQueued,
   formatActionStatus,
@@ -22,16 +19,16 @@ import {
   formatBotStatusReport,
   formatCommandError,
   formatFinishedJobs,
-  formatGuidedHelpHome,
   formatGuidedActionConfirmation,
   formatGuidedActionSubmitted,
+  formatGuidedHelpHome,
   formatHelpWithOptions,
-  formatJobsQueryResults,
   formatJobDetails,
   formatJobLinks,
-  formatShareJobHeader,
+  formatJobsQueryResults,
   formatOpsStatus,
   formatRecentOpsActions,
+  formatShareJobHeader,
   formatStartMessage,
   formatStudentDisambiguation,
   formatStudentNotFound,
@@ -39,7 +36,7 @@ import {
   formatStudentsBrowser,
   formatTodaySummary,
 } from './formatter.js';
-import { type JobsViewKey, encodeGuidedCallback } from './guided-callbacks.js';
+import { encodeGuidedCallback, type JobsViewKey } from './guided-callbacks.js';
 import { emitBotMetricCounter } from './metrics.js';
 import type {
   BotDomain,
@@ -172,10 +169,7 @@ function decodeJobStateMask(maskCode: string): JobState[] | undefined {
   return states.length > 0 ? states : undefined;
 }
 
-function buildAdHocJobsViewKey(
-  parsed: ParsedJobsFilter,
-  options: JobsViewOptions,
-): JobsViewKey {
+function buildAdHocJobsViewKey(parsed: ParsedJobsFilter, options: JobsViewOptions): JobsViewKey {
   const limitCode = parsed.limit.toString(36);
   const studentCode = options.backToStudentId
     ? toCompactStudentRef(options.backToStudentId)
@@ -184,16 +178,14 @@ function buildAdHocJobsViewKey(
   return `q:${COMPACT_JOBS_VIEW_VERSION}${encodeJobStateMask(parsed.states)}${limitCode}${orderCode}${encodeDayCode(parsed.from)}${encodeDayCode(parsed.to)}${studentCode}` as JobsViewKey;
 }
 
-function buildNormalizedJobsTokens(
-  parsed: {
-    states?: JobState[];
-    studentLabel?: string;
-    from?: string;
-    to?: string;
-    limit: number;
-    order: 'asc' | 'desc';
-  },
-): string[] {
+function buildNormalizedJobsTokens(parsed: {
+  states?: JobState[];
+  studentLabel?: string;
+  from?: string;
+  to?: string;
+  limit: number;
+  order: 'asc' | 'desc';
+}): string[] {
   const tokens: string[] = [];
   if (parsed.states && parsed.states.length > 0) {
     tokens.push(`state:${parsed.states.join(',')}`);
@@ -442,7 +434,11 @@ async function approveAdvancedAction(
     return;
   }
   if (reserveResult === 'replayed') {
-    await sendDomainMessage(context, 'ops', formatCommandError('Approval token has already been used.'));
+    await sendDomainMessage(
+      context,
+      'ops',
+      formatCommandError('Approval token has already been used.'),
+    );
     return;
   }
 
@@ -535,7 +531,9 @@ export function getAdvertisedCommands(
   return commands.filter((command) => visibleInOpsChat(command, config));
 }
 
-export function buildGuidedHomeKeyboard(config: CommandContext['config']): TelegramInlineKeyboardMarkup {
+export function buildGuidedHomeKeyboard(
+  config: CommandContext['config'],
+): TelegramInlineKeyboardMarkup {
   const rows = [
     [
       { text: 'Today', callback_data: encodeGuidedCallback({ kind: 'today' }) },
@@ -727,8 +725,14 @@ export function buildJobsViewKeyboard(
   if (args.scope === 'global') {
     rows.push([
       { text: 'Failed', callback_data: encodeGuidedCallback({ kind: 'jobs_view', viewKey: 'gf' }) },
-      { text: 'Running', callback_data: encodeGuidedCallback({ kind: 'jobs_view', viewKey: 'gn' }) },
-      { text: 'Succeeded', callback_data: encodeGuidedCallback({ kind: 'jobs_view', viewKey: 'gs' }) },
+      {
+        text: 'Running',
+        callback_data: encodeGuidedCallback({ kind: 'jobs_view', viewKey: 'gn' }),
+      },
+      {
+        text: 'Succeeded',
+        callback_data: encodeGuidedCallback({ kind: 'jobs_view', viewKey: 'gs' }),
+      },
       { text: 'Today', callback_data: encodeGuidedCallback({ kind: 'jobs_view', viewKey: 'ta' }) },
       { text: 'Home', callback_data: encodeGuidedCallback({ kind: 'home' }) },
     ]);
@@ -737,12 +741,24 @@ export function buildJobsViewKeyboard(
     const studentRef = toStudentRef(args.backToStudentId);
     rows.push(
       [
-        { text: 'Recent', callback_data: encodeGuidedCallback({ kind: 'jobs_view', viewKey: `sr:${studentRef}` }) },
-        { text: 'Failed', callback_data: encodeGuidedCallback({ kind: 'jobs_view', viewKey: `sf:${studentRef}` }) },
-        { text: 'Succeeded', callback_data: encodeGuidedCallback({ kind: 'jobs_view', viewKey: `ss:${studentRef}` }) },
+        {
+          text: 'Recent',
+          callback_data: encodeGuidedCallback({ kind: 'jobs_view', viewKey: `sr:${studentRef}` }),
+        },
+        {
+          text: 'Failed',
+          callback_data: encodeGuidedCallback({ kind: 'jobs_view', viewKey: `sf:${studentRef}` }),
+        },
+        {
+          text: 'Succeeded',
+          callback_data: encodeGuidedCallback({ kind: 'jobs_view', viewKey: `ss:${studentRef}` }),
+        },
       ],
       [
-        { text: 'Back to Student', callback_data: encodeGuidedCallback({ kind: 'student', studentId: args.backToStudentId }) },
+        {
+          text: 'Back to Student',
+          callback_data: encodeGuidedCallback({ kind: 'student', studentId: args.backToStudentId }),
+        },
         { text: 'Home', callback_data: encodeGuidedCallback({ kind: 'home' }) },
       ],
     );
@@ -750,13 +766,28 @@ export function buildJobsViewKeyboard(
   if (args.scope === 'today') {
     rows.push(
       [
-        { text: 'Failed', callback_data: encodeGuidedCallback({ kind: 'jobs_view', viewKey: 'tf' }) },
-        { text: 'Running', callback_data: encodeGuidedCallback({ kind: 'jobs_view', viewKey: 'tn' }) },
-        { text: 'Awaiting', callback_data: encodeGuidedCallback({ kind: 'jobs_view', viewKey: 'tw' }) },
-        { text: 'Finished', callback_data: encodeGuidedCallback({ kind: 'jobs_view', viewKey: 'ts' }) },
+        {
+          text: 'Failed',
+          callback_data: encodeGuidedCallback({ kind: 'jobs_view', viewKey: 'tf' }),
+        },
+        {
+          text: 'Running',
+          callback_data: encodeGuidedCallback({ kind: 'jobs_view', viewKey: 'tn' }),
+        },
+        {
+          text: 'Awaiting',
+          callback_data: encodeGuidedCallback({ kind: 'jobs_view', viewKey: 'tw' }),
+        },
+        {
+          text: 'Finished',
+          callback_data: encodeGuidedCallback({ kind: 'jobs_view', viewKey: 'ts' }),
+        },
       ],
       [
-        { text: 'All Today', callback_data: encodeGuidedCallback({ kind: 'jobs_view', viewKey: 'ta' }) },
+        {
+          text: 'All Today',
+          callback_data: encodeGuidedCallback({ kind: 'jobs_view', viewKey: 'ta' }),
+        },
         { text: 'Back to Today', callback_data: encodeGuidedCallback({ kind: 'today' }) },
         { text: 'Home', callback_data: encodeGuidedCallback({ kind: 'home' }) },
       ],
@@ -816,20 +847,37 @@ export function buildTodayKeyboard(): TelegramInlineKeyboardMarkup {
   return {
     inline_keyboard: [
       [
-        { text: 'Failed', callback_data: encodeGuidedCallback({ kind: 'jobs_view', viewKey: 'tf' }) },
-        { text: 'Running', callback_data: encodeGuidedCallback({ kind: 'jobs_view', viewKey: 'tn' }) },
-        { text: 'Awaiting', callback_data: encodeGuidedCallback({ kind: 'jobs_view', viewKey: 'tw' }) },
+        {
+          text: 'Failed',
+          callback_data: encodeGuidedCallback({ kind: 'jobs_view', viewKey: 'tf' }),
+        },
+        {
+          text: 'Running',
+          callback_data: encodeGuidedCallback({ kind: 'jobs_view', viewKey: 'tn' }),
+        },
+        {
+          text: 'Awaiting',
+          callback_data: encodeGuidedCallback({ kind: 'jobs_view', viewKey: 'tw' }),
+        },
       ],
       [
-        { text: 'Finished', callback_data: encodeGuidedCallback({ kind: 'jobs_view', viewKey: 'ts' }) },
-        { text: 'All Today', callback_data: encodeGuidedCallback({ kind: 'jobs_view', viewKey: 'ta' }) },
+        {
+          text: 'Finished',
+          callback_data: encodeGuidedCallback({ kind: 'jobs_view', viewKey: 'ts' }),
+        },
+        {
+          text: 'All Today',
+          callback_data: encodeGuidedCallback({ kind: 'jobs_view', viewKey: 'ta' }),
+        },
         { text: 'Home', callback_data: encodeGuidedCallback({ kind: 'home' }) },
       ],
     ],
   };
 }
 
-export function buildRecentOpsKeyboard(response: OpsActionListResponse): TelegramInlineKeyboardMarkup {
+export function buildRecentOpsKeyboard(
+  response: OpsActionListResponse,
+): TelegramInlineKeyboardMarkup {
   const buttons = response.actions.slice(0, 5).map((action) => [
     {
       text: action.operationId.slice(0, 12),
@@ -853,9 +901,7 @@ export function buildJobDetailsKeyboard(
 ): TelegramInlineKeyboardMarkup {
   return {
     inline_keyboard: [
-      [
-        { text: 'Share', callback_data: encodeGuidedCallback({ kind: 'job_share', jobId }) },
-      ],
+      [{ text: 'Share', callback_data: encodeGuidedCallback({ kind: 'job_share', jobId }) }],
       [
         {
           text: 'Refresh',
@@ -1089,7 +1135,10 @@ export async function loadJobsView(
   response: JobListResponse;
 }> {
   const resolvedStudent = options.backToStudentId
-    ? { status: 'single' as const, matches: [await resolveStudentById(context, options.backToStudentId)] }
+    ? {
+        status: 'single' as const,
+        matches: [await resolveStudentById(context, options.backToStudentId)],
+      }
     : parsed.studentQuery
       ? await resolveStudentQuery(context, parsed.studentQuery)
       : null;
@@ -1321,7 +1370,9 @@ async function resolveStudentQuery(
   }
 
   if (EXACT_UUID_REGEX.test(query)) {
-    const exactIdMatches = matches.filter((student) => student.id.toLowerCase() === query.toLowerCase());
+    const exactIdMatches = matches.filter(
+      (student) => student.id.toLowerCase() === query.toLowerCase(),
+    );
     if (exactIdMatches.length === 1) {
       return { status: 'single', matches: exactIdMatches };
     }
@@ -1337,9 +1388,7 @@ async function resolveStudentQuery(
     return { status: 'multiple', matches: exactNameMatches };
   }
 
-  return matches.length === 1
-    ? { status: 'single', matches }
-    : { status: 'multiple', matches };
+  return matches.length === 1 ? { status: 'single', matches } : { status: 'multiple', matches };
 }
 
 function toStudentRef(studentId: string): string {
@@ -1364,11 +1413,7 @@ async function describeJobsViewKey(
       },
       options: {
         title: 'Browse Jobs',
-        footerLines: [
-          'Try /jobs failed',
-          'Try /jobs running today',
-          'Try /jobs Margarita',
-        ],
+        footerLines: ['Try /jobs failed', 'Try /jobs running today', 'Try /jobs Margarita'],
         keyboardScope: 'global',
         viewKey,
       },
@@ -1395,7 +1440,13 @@ async function describeJobsViewKey(
       },
     };
   }
-  if (viewKey === 'ta' || viewKey === 'tf' || viewKey === 'tn' || viewKey === 'tw' || viewKey === 'ts') {
+  if (
+    viewKey === 'ta' ||
+    viewKey === 'tf' ||
+    viewKey === 'tn' ||
+    viewKey === 'tw' ||
+    viewKey === 'ts'
+  ) {
     const state =
       viewKey === 'tf'
         ? 'failed'
@@ -1422,10 +1473,7 @@ async function describeJobsViewKey(
         from: todayStart,
         limit: 10,
         order: 'desc',
-        normalizedTokens: [
-          ...(state ? [`state:${state}`] : []),
-          'since:today',
-        ],
+        normalizedTokens: [...(state ? [`state:${state}`] : []), 'since:today'],
       },
       options: {
         title,
@@ -1456,12 +1504,9 @@ async function describeJobsViewKey(
     const from = decodeDayCode(payload.slice(4, 7)) ?? undefined;
     const to = decodeDayCode(payload.slice(7, 10)) ?? undefined;
     const studentCode = payload.slice(10, 22);
-    const studentRef = studentCode === COMPACT_JOBS_VIEW_EMPTY_STUDENT
-      ? null
-      : studentCode.replace(/_+$/u, '');
-    const student = studentRef
-      ? await resolveStudentRef(context, studentRef)
-      : null;
+    const studentRef =
+      studentCode === COMPACT_JOBS_VIEW_EMPTY_STUDENT ? null : studentCode.replace(/_+$/u, '');
+    const student = studentRef ? await resolveStudentRef(context, studentRef) : null;
     if (studentRef && !student) {
       throw new Error(`Student view ${viewKey} could not be resolved.`);
     }
@@ -1502,11 +1547,7 @@ async function describeJobsViewKey(
     throw new Error(`Student view ${viewKey} could not be resolved.`);
   }
   const state =
-    studentViewMatch[1] === 'sf'
-      ? 'failed'
-      : studentViewMatch[1] === 'ss'
-        ? 'succeeded'
-        : null;
+    studentViewMatch[1] === 'sf' ? 'failed' : studentViewMatch[1] === 'ss' ? 'succeeded' : null;
   const title =
     studentViewMatch[1] === 'sf'
       ? `Jobs · ${student.student} (${student.id.slice(0, 8)}) · Failed`
@@ -1518,10 +1559,7 @@ async function describeJobsViewKey(
       ...(state ? { states: [state] } : {}),
       limit: 10,
       order: 'desc',
-      normalizedTokens: [
-        ...(state ? [`state:${state}`] : []),
-        `student:${student.student}`,
-      ],
+      normalizedTokens: [...(state ? [`state:${state}`] : []), `student:${student.student}`],
     },
     options: {
       title,
@@ -1586,9 +1624,14 @@ function parseJobsFilterInput(raw: string, now = new Date()): ParsedJobsFilter |
 
     switch (key) {
       case 'state': {
-        const states = value.split(',').map((item) => item.trim()).filter(Boolean);
+        const states = value
+          .split(',')
+          .map((item) => item.trim())
+          .filter(Boolean);
         if (states.length === 0 || !states.every((state) => isJobState(state))) {
-          return { error: 'state must be queued, running, awaiting_approval, succeeded, or failed.' };
+          return {
+            error: 'state must be queued, running, awaiting_approval, succeeded, or failed.',
+          };
         }
         parsed.states = states;
         parsed.normalizedTokens.push(`state:${states.join(',')}`);
@@ -1734,11 +1777,7 @@ function isJobState(value: string): value is JobState {
   return ['queued', 'running', 'awaiting_approval', 'succeeded', 'failed'].includes(value);
 }
 
-function resolveDateFilter(
-  value: string,
-  kind: 'since' | 'before',
-  now: Date,
-): Date | null {
+function resolveDateFilter(value: string, kind: 'since' | 'before', now: Date): Date | null {
   if (value === 'today') {
     return startOfUtcDay(now);
   }
@@ -1768,7 +1807,10 @@ function formatUtcDateOnly(value: Date): string {
   return value.toISOString().slice(0, 10);
 }
 
-function resolveTopicStatus(context: CommandContext, domain: BotDomain): {
+function resolveTopicStatus(
+  context: CommandContext,
+  domain: BotDomain,
+): {
   domain: BotDomain;
   threadId?: number;
   routing: 'topic' | 'default' | 'unresolved';
@@ -1857,7 +1899,10 @@ async function resolveSharePayloadForJob(
 
   let studyTextAudioUrl: string | null = null;
   let studyAudioSource: ResolvedSharePayload['telemetry']['studyAudioSource'] = 'missing';
-  const studyTextLabeledUrl = extractLabeledMarkdownAudioUrl(markdown, 'Audio recording: Study Text');
+  const studyTextLabeledUrl = extractLabeledMarkdownAudioUrl(
+    markdown,
+    'Audio recording: Study Text',
+  );
   if (studyTextLabeledUrl) {
     studyTextAudioUrl = studyTextLabeledUrl;
     studyAudioSource = 'markdown_label';
@@ -1870,7 +1915,8 @@ async function resolveSharePayloadForJob(
   }
 
   let pronunciationAudioUrl: string | null = null;
-  let pronunciationAudioSource: ResolvedSharePayload['telemetry']['pronunciationAudioSource'] = 'missing';
+  let pronunciationAudioSource: ResolvedSharePayload['telemetry']['pronunciationAudioSource'] =
+    'missing';
   const pronunciationLabeledUrl = extractLabeledMarkdownAudioUrl(
     markdown,
     'Audio recording: Pronunciation Practice',
@@ -1940,7 +1986,9 @@ async function resolveSharePayloadForJob(
   const missingPronunciationAudio = pronunciationAudioUrl === null;
   const missingAudioCount = Number(missingStudyAudio) + Number(missingPronunciationAudio);
   const usedHtmlFallback =
-    studyAudioSource === 'html_path' || pronunciationAudioSource === 'html_path' || titleSource === 'html_title';
+    studyAudioSource === 'html_path' ||
+    pronunciationAudioSource === 'html_path' ||
+    titleSource === 'html_title';
 
   return {
     studyTextAudioUrl,
@@ -2272,10 +2320,7 @@ export async function sendShareableJobLinks(
   }
 }
 
-export async function executeBackupAction(
-  context: CommandContext,
-  label?: string,
-): Promise<void> {
+export async function executeBackupAction(context: CommandContext, label?: string): Promise<void> {
   if (!(await guardActionCommandsEnabled(context))) {
     return;
   }
@@ -2335,7 +2380,9 @@ export async function executeDrillAction(context: CommandContext): Promise<void>
   await sendDomainMessage(context, 'ops', formatActionQueued(result));
 }
 
-export function createCommandRegistry(args?: { replayStore?: ApprovalReplayStore }): CommandRegistry {
+export function createCommandRegistry(args?: {
+  replayStore?: ApprovalReplayStore;
+}): CommandRegistry {
   const replayStore = args?.replayStore ?? defaultApprovalReplayStore;
   const commands: CommandDefinition[] = [
     {
@@ -2350,7 +2397,9 @@ export function createCommandRegistry(args?: { replayStore?: ApprovalReplayStore
           opsChatId: context.config.chatId,
           inOpsChat: !isPrivateChatContext(context),
         });
-        await (isPrivateChatContext(context) ? sendDirectMessage(context, html) : sendDomainMessage(context, 'ops', html));
+        await (isPrivateChatContext(context)
+          ? sendDirectMessage(context, html)
+          : sendDomainMessage(context, 'ops', html));
         emitUxLatencyMetric(context, 'start', startedAtMs);
       },
     },
@@ -2483,7 +2532,9 @@ export function createCommandRegistry(args?: { replayStore?: ApprovalReplayStore
           await sendDomainMessage(
             context,
             'jobs',
-            formatCommandError('Usage: /student <name-or-id>\nExamples: /student Margarita or /student 72444fdf'),
+            formatCommandError(
+              'Usage: /student <name-or-id>\nExamples: /student Margarita or /student 72444fdf',
+            ),
           );
           return;
         }

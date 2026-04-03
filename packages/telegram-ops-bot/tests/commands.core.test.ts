@@ -7,7 +7,6 @@ import {
   resetAdvancedControlApprovalsForTests,
 } from '../src/commands.js';
 import type { CommandContext } from '../src/types.js';
-
 import { createBaseContext } from './telegram-test-fixtures.js';
 
 describe('telegram commands - core', () => {

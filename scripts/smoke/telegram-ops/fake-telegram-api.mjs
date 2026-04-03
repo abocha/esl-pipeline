@@ -134,22 +134,15 @@ function normalizeMessage(rawMessage) {
     message_id: Number.isInteger(rawMessage?.message_id)
       ? rawMessage.message_id
       : state.nextMessageId++,
-    date: Number.isInteger(rawMessage?.date)
-      ? rawMessage.date
-      : Math.floor(Date.now() / 1_000),
+    date: Number.isInteger(rawMessage?.date) ? rawMessage.date : Math.floor(Date.now() / 1_000),
     chat: {
       id: Number.isInteger(rawMessage?.chat?.id) ? rawMessage.chat.id : chatId,
       type: rawMessage?.chat?.type ?? 'supergroup',
       title: rawMessage?.chat?.title ?? 'Smoke Ops Chat',
-      is_forum:
-        typeof rawMessage?.chat?.is_forum === 'boolean'
-          ? rawMessage.chat.is_forum
-          : true,
+      is_forum: typeof rawMessage?.chat?.is_forum === 'boolean' ? rawMessage.chat.is_forum : true,
     },
     from: {
-      id: Number.isInteger(rawMessage?.from?.id)
-        ? rawMessage.from.id
-        : allowedUserId,
+      id: Number.isInteger(rawMessage?.from?.id) ? rawMessage.from.id : allowedUserId,
       is_bot: Boolean(rawMessage?.from?.is_bot ?? false),
       first_name: rawMessage?.from?.first_name ?? 'Smoke Operator',
       username: rawMessage?.from?.username ?? 'smoke_operator',
@@ -190,7 +183,7 @@ function apiError(res, statusCode, description) {
   });
 }
 
-async function handleTelegramMethod(req, res, method, payload) {
+async function handleTelegramMethod(_req, res, method, payload) {
   if (method === 'getMe') {
     state.calls.getMe += 1;
     apiSuccess(res, {

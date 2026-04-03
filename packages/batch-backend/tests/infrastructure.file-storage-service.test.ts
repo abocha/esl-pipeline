@@ -7,8 +7,8 @@ import { afterEach, describe, expect, it } from 'vitest';
 import { StorageConfigurationService } from '@esl-pipeline/shared-infrastructure';
 
 import {
-  FileStorageService,
   createFileStorageService,
+  FileStorageService,
 } from '../src/infrastructure/file-storage-service.js';
 
 describe('infrastructure/file-storage-service', () => {

@@ -54,7 +54,13 @@ export interface CreateStudentPayloadBuildResult {
   starterProfile: StarterProfileBuildResult;
 }
 
-export type HistoryFilterState = 'all' | 'queued' | 'running' | 'awaiting_approval' | 'succeeded' | 'failed';
+export type HistoryFilterState =
+  | 'all'
+  | 'queued'
+  | 'running'
+  | 'awaiting_approval'
+  | 'succeeded'
+  | 'failed';
 
 export interface HistoryFilters {
   state: HistoryFilterState;
@@ -206,8 +212,7 @@ export function buildStarterProfileInput(form: CreateStudentFormState): StarterP
     professionOrContext: form.starterProfessionOrContext.trim() || undefined,
     interests: form.starterInterests.trim() || undefined,
     longRunningChallenges: form.starterLongRunningChallenges.trim() || undefined,
-    studyPreferencesOrConstraints:
-      form.starterStudyPreferencesOrConstraints.trim() || undefined,
+    studyPreferencesOrConstraints: form.starterStudyPreferencesOrConstraints.trim() || undefined,
     teacherNotes: form.starterTeacherNotes.trim() || undefined,
   };
 

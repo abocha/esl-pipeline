@@ -1,10 +1,10 @@
 import type { GenerationProvider } from '@esl-pipeline/contracts';
 
 import {
+  type HomeworkMemoryBackfillSelection,
   listHomeworkMemoryBackfillTargets,
   requestHomeworkMemoryBackfill,
   resolveHomeworkMemoryBackfillCandidate,
-  type HomeworkMemoryBackfillSelection,
 } from '../application/homework-memory-backfill.js';
 import { loadBatchBackendEnv } from '../bootstrap/env.js';
 import { loadConfig } from '../config/env.js';
@@ -109,7 +109,9 @@ function parseArgs(argv: string[]): CliOptions {
   return options;
 }
 
-function printDryRunTargets(targets: Awaited<ReturnType<typeof listHomeworkMemoryBackfillTargets>>) {
+function printDryRunTargets(
+  targets: Awaited<ReturnType<typeof listHomeworkMemoryBackfillTargets>>,
+) {
   for (const target of targets) {
     console.log(
       [
@@ -151,7 +153,9 @@ async function run(): Promise<void> {
 
   if (options.dryRun) {
     printDryRunTargets(targets);
-    console.log(`[homework-memory-refresh] provider=${candidate.provider} model=${candidate.model}`);
+    console.log(
+      `[homework-memory-refresh] provider=${candidate.provider} model=${candidate.model}`,
+    );
     console.log(
       `[homework-memory-refresh] selection=${options.selection} processed=${targets.length} requested=0`,
     );

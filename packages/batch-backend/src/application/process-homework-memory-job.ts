@@ -7,8 +7,8 @@ import {
   markHomeworkMemoryEntryFailed,
   supersedePendingHomeworkMemoryEntriesForAssignmentLineage,
 } from '../domain/homework-memory-repository.js';
-import { buildHomeworkMemoryPrompt } from './homework-memory-prompt.js';
 import { generateHomeworkMemoryFromSource } from './homework-memory-generation.js';
+import { buildHomeworkMemoryPrompt } from './homework-memory-prompt.js';
 import { resolveHomeworkMemorySourceFromSucceededJob } from './homework-memory-source.js';
 import { requestStudentMemorySnapshotRefresh } from './request-student-memory-snapshot-refresh.js';
 
@@ -42,7 +42,8 @@ export async function processHomeworkMemoryJob(args: {
   maxAttempts?: number;
   overrides?: Partial<ProcessHomeworkMemoryJobDependencies>;
 }): Promise<void> {
-  const sourceResolver = args.overrides?.sourceResolver ?? resolveHomeworkMemorySourceFromSucceededJob;
+  const sourceResolver =
+    args.overrides?.sourceResolver ?? resolveHomeworkMemorySourceFromSucceededJob;
   const generator = args.overrides?.generator ?? generateHomeworkMemoryFromSource;
   const homeworkMemory = args.overrides?.homeworkMemory ?? {
     getById: getHomeworkMemoryEntryById,
@@ -65,7 +66,11 @@ export async function processHomeworkMemoryJob(args: {
     const latestReady = await homeworkMemory.getLatestReadyByAssignmentLineageKey(
       source.assignmentLineageKey,
     );
-    if (!forceRegenerate && latestReady && (latestReady.contentHash ?? null) === source.contentHash) {
+    if (
+      !forceRegenerate &&
+      latestReady &&
+      (latestReady.contentHash ?? null) === source.contentHash
+    ) {
       await homeworkMemory.supersedePendingForAssignmentLineage({
         assignmentLineageKey: source.assignmentLineageKey,
         supersededById: latestReady.id,

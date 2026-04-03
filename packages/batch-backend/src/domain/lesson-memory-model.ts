@@ -108,10 +108,5 @@ export const StudentFactAuthoritySchema = z.enum([
   'student_stated',
   'model_inferred',
 ]);
-export const LessonMemoryEntryStatusSchema = z.enum([
-  'pending',
-  'ready',
-  'failed',
-  'superseded',
-]);
+export const LessonMemoryEntryStatusSchema = z.enum(['pending', 'ready', 'failed', 'superseded']);
 export const LessonMemorySourceKindSchema = z.enum(['lesson_transcript']);

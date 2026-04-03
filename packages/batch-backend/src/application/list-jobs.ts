@@ -1,6 +1,6 @@
 import type { JobListResponse, JobState } from '@esl-pipeline/contracts';
 
-import { type JobListOptions, countJobs, listJobs } from '../domain/job-repository.js';
+import { countJobs, type JobListOptions, listJobs } from '../domain/job-repository.js';
 import { jobRecordToDto } from './job-dto.js';
 
 export interface ListJobsParams {

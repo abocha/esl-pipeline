@@ -24,8 +24,9 @@ describe('infrastructure/tts-cache-maintenance-coordinator', () => {
   });
 
   it('short-circuits before lock acquisition when maintenance is disabled', async () => {
-    const { maybeRunTtsCacheMaintenanceWithPgLock } =
-      await import('../src/infrastructure/tts-cache-maintenance-coordinator.js');
+    const { maybeRunTtsCacheMaintenanceWithPgLock } = await import(
+      '../src/infrastructure/tts-cache-maintenance-coordinator.js'
+    );
 
     const result = await maybeRunTtsCacheMaintenanceWithPgLock({
       cacheDir: '/tmp/tts-cache',
@@ -57,8 +58,9 @@ describe('infrastructure/tts-cache-maintenance-coordinator', () => {
       async (fn: (client: { query: typeof query }) => unknown) => fn({ query }),
     );
 
-    const { withTtsCacheActivitySharedLock } =
-      await import('../src/infrastructure/tts-cache-maintenance-coordinator.js');
+    const { withTtsCacheActivitySharedLock } = await import(
+      '../src/infrastructure/tts-cache-maintenance-coordinator.js'
+    );
 
     const result = await withTtsCacheActivitySharedLock({ lockKey: '910021' }, async () => 'done');
 
@@ -81,8 +83,9 @@ describe('infrastructure/tts-cache-maintenance-coordinator', () => {
       async (fn: (client: { query: typeof query }) => unknown) => fn({ query }),
     );
 
-    const { withTtsCacheActivitySharedLock } =
-      await import('../src/infrastructure/tts-cache-maintenance-coordinator.js');
+    const { withTtsCacheActivitySharedLock } = await import(
+      '../src/infrastructure/tts-cache-maintenance-coordinator.js'
+    );
 
     await expect(
       withTtsCacheActivitySharedLock({ lockKey: '910021' }, async () => {
@@ -125,8 +128,9 @@ describe('infrastructure/tts-cache-maintenance-coordinator', () => {
       fn({ query }),
     );
 
-    const { maybeRunTtsCacheMaintenanceWithPgLock, withTtsCacheActivitySharedLock } =
-      await import('../src/infrastructure/tts-cache-maintenance-coordinator.js');
+    const { maybeRunTtsCacheMaintenanceWithPgLock, withTtsCacheActivitySharedLock } = await import(
+      '../src/infrastructure/tts-cache-maintenance-coordinator.js'
+    );
 
     const result = await withTtsCacheActivitySharedLock({ lockKey: '910021' }, () =>
       maybeRunTtsCacheMaintenanceWithPgLock({
@@ -170,8 +174,9 @@ describe('infrastructure/tts-cache-maintenance-coordinator', () => {
       remainingBytes: 128,
     });
 
-    const { maybeRunTtsCacheMaintenanceWithPgLock } =
-      await import('../src/infrastructure/tts-cache-maintenance-coordinator.js');
+    const { maybeRunTtsCacheMaintenanceWithPgLock } = await import(
+      '../src/infrastructure/tts-cache-maintenance-coordinator.js'
+    );
 
     const result = await maybeRunTtsCacheMaintenanceWithPgLock({
       cacheDir: '/tmp/tts-cache',
@@ -203,8 +208,9 @@ describe('infrastructure/tts-cache-maintenance-coordinator', () => {
       async (fn: (client: { query: typeof query }) => unknown) => fn({ query }),
     );
 
-    const { maybeRunTtsCacheMaintenanceWithPgLock } =
-      await import('../src/infrastructure/tts-cache-maintenance-coordinator.js');
+    const { maybeRunTtsCacheMaintenanceWithPgLock } = await import(
+      '../src/infrastructure/tts-cache-maintenance-coordinator.js'
+    );
 
     const result = await maybeRunTtsCacheMaintenanceWithPgLock({
       cacheDir: '/tmp/tts-cache',
@@ -237,8 +243,9 @@ describe('infrastructure/tts-cache-maintenance-coordinator', () => {
     );
     mockMaybeRunTtsCacheMaintenance.mockRejectedValueOnce(new Error('maintenance failed'));
 
-    const { maybeRunTtsCacheMaintenanceWithPgLock } =
-      await import('../src/infrastructure/tts-cache-maintenance-coordinator.js');
+    const { maybeRunTtsCacheMaintenanceWithPgLock } = await import(
+      '../src/infrastructure/tts-cache-maintenance-coordinator.js'
+    );
 
     await expect(
       maybeRunTtsCacheMaintenanceWithPgLock({
@@ -270,8 +277,9 @@ describe('infrastructure/tts-cache-maintenance-coordinator', () => {
       remainingBytes: 512,
     });
 
-    const { maybeRunTtsCacheMaintenanceWithPgLock } =
-      await import('../src/infrastructure/tts-cache-maintenance-coordinator.js');
+    const { maybeRunTtsCacheMaintenanceWithPgLock } = await import(
+      '../src/infrastructure/tts-cache-maintenance-coordinator.js'
+    );
 
     const result = await maybeRunTtsCacheMaintenanceWithPgLock({
       cacheDir: '/tmp/tts-cache',
@@ -302,8 +310,9 @@ describe('infrastructure/tts-cache-maintenance-coordinator', () => {
       async (fn: (client: { query: typeof query }) => unknown) => fn({ query }),
     );
 
-    const { withTtsCacheActivitySharedLock } =
-      await import('../src/infrastructure/tts-cache-maintenance-coordinator.js');
+    const { withTtsCacheActivitySharedLock } = await import(
+      '../src/infrastructure/tts-cache-maintenance-coordinator.js'
+    );
 
     const result = await withTtsCacheActivitySharedLock({ lockKey: '910021' }, async () => 'ok');
 

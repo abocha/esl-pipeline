@@ -10,8 +10,8 @@ import type { PromptPackageRecord } from '../domain/prompt-package-model.js';
 import { getDefaultSettings } from '../domain/settings-model.js';
 import { createDefaultSettings, getSettingsByUserId } from '../domain/settings-repository.js';
 import {
-  DEFAULT_LEARNING_PRESET_ID,
   buildLearningPresetProvenance,
+  DEFAULT_LEARNING_PRESET_ID,
   normalizeLearningPresetId,
 } from './learning-preset.js';
 

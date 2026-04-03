@@ -1,11 +1,11 @@
 import { createTtsEngine } from './engine.js';
 import type {
-  BuildPronunciationTextInput,
-  BuildPronunciationTextOptions,
-  BuildPronunciationTextResult,
   BuildPronunciationShadowSentenceInput,
   BuildPronunciationShadowSentenceOptions,
   BuildPronunciationShadowSentenceResult,
+  BuildPronunciationTextInput,
+  BuildPronunciationTextOptions,
+  BuildPronunciationTextResult,
   BuildStudyTextInput,
   BuildStudyTextOptions,
   BuildStudyTextResult,
@@ -58,16 +58,15 @@ export async function loadVoicesCatalog(provider?: TtsProviderId): Promise<Voice
   return defaultEngine.loadVoicesCatalog(provider);
 }
 
-export { hashStudyText } from './hash.js';
-
 export { createTtsEngine } from './engine.js';
+export { hashStudyText } from './hash.js';
 export type {
-  BuildPronunciationTextInput,
-  BuildPronunciationTextOptions,
-  BuildPronunciationTextResult,
   BuildPronunciationShadowSentenceInput,
   BuildPronunciationShadowSentenceOptions,
   BuildPronunciationShadowSentenceResult,
+  BuildPronunciationTextInput,
+  BuildPronunciationTextOptions,
+  BuildPronunciationTextResult,
   BuildStudyTextInput,
   BuildStudyTextOptions,
   BuildStudyTextResult,

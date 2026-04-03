@@ -71,11 +71,21 @@
     "docs:generate:indexes": "node scripts/docs/generate-docs-indexes.mjs",
     "docs:health:report": "node scripts/docs/generate-docs-health-report.mjs",
     "docs:stale:active": "node scripts/docs/find-stale-active-docs.mjs",
-    "format": "pnpm exec prettier --check \"**/*.{ts,tsx,js,json,md,yml,yaml}\"",
-    "format:write": "pnpm exec prettier --write \"**/*.{ts,tsx,js,json,md,yml,yaml}\"",
+    "format": "pnpm run format:biome && pnpm run format:prettier",
+    "format:biome": "pnpm exec biome check --formatter-enabled=true --linter-enabled=false --assist-enabled=true .",
+    "format:biome:write": "pnpm exec biome check --write --formatter-enabled=true --linter-enabled=false --assist-enabled=true .",
+    "format:prettier": "pnpm exec prettier --check \"**/*.{md,yml,yaml}\" \"**/package.json\"",
+    "format:prettier:write": "pnpm exec prettier --write \"**/*.{md,yml,yaml}\" \"**/package.json\"",
+    "format:write": "pnpm run format:biome:write && pnpm run format:prettier:write",
     "guard:orchestrator:boundary": "node scripts/release/guard-orchestrator-library-boundary.mjs",
     "hadolint": "rg --files -g 'Dockerfile*' | xargs -r hadolint",
-    "lint": "pnpm exec eslint packages",
+    "lint": "pnpm run lint:biome && pnpm run lint:eslint:specialized",
+    "lint:biome": "pnpm exec biome lint .",
+    "lint:eslint:specialized": "pnpm exec eslint \"packages/batch-frontend/**/*.{ts,tsx}\" \"packages/**/*.{test,spec}.{js,mjs,cjs,ts,tsx}\"",
+    "lint:repo-hygiene": "pnpm run lint:workflows && pnpm run lint:shell",
+    "lint:shell": "rg --files scripts -g '*.sh' -g '*.bash' | xargs -r shellcheck",
+    "lint:sqlfluff": "bash -lc 'mkdir -p tmp/.uv-cache tmp/.uv-tools && UV_CACHE_DIR=$PWD/tmp/.uv-cache UV_TOOL_DIR=$PWD/tmp/.uv-tools uv tool run --from sqlfluff sqlfluff lint --dialect postgres packages/batch-backend/migrations packages/batch-backend/docker-entrypoint-initdb.d'",
+    "lint:workflows": "actionlint",
     "notes:pr-style": "bash scripts/git/pr-style-summary.sh",
     "ops:alert:check": "bash scripts/docker/run-postgres-ops-alert.sh",
     "ops:key-rotation:check": "bash scripts/docker/run-aws-key-rotation-reminder.sh",
@@ -103,9 +113,8 @@
     "typecheck": "pnpm -r --filter './packages/*' --if-present run typecheck"
   },
   "devDependencies": {
-    "@eslint-react/eslint-plugin": "^3.0.0",
-    "@eslint/js": "^10.0.1",
-    "@trivago/prettier-plugin-sort-imports": "^6.0.2",
+    "@biomejs/biome": "2.4.10",
+    "@eslint-react/eslint-plugin": "^4.2.3",
     "@types/node": "^25.5.0",
     "@vitest/coverage-v8": "^4.1.2",
     "@vitest/eslint-plugin": "^1.6.13",
@@ -113,11 +122,9 @@
     "dclint": "3.1.0",
     "eslint": "^10.1.0",
     "eslint-config-prettier": "^10.1.8",
-    "eslint-plugin-n": "^17.24.0",
     "eslint-plugin-react-refresh": "^0.5.2",
-    "eslint-plugin-unicorn": "^64.0.0",
     "globals": "^17.4.0",
-    "knip": "^6.1.0",
+    "knip": "^6.3.0",
     "prettier": "^3.8.1",
     "prettier-plugin-packagejson": "^3.0.2",
     "typescript": "^6.0.2",
@@ -130,11 +137,12 @@
   },
   "pnpm": {
     "overrides": {
-      "@trivago/prettier-plugin-sort-imports>lodash-es": "^4.17.23",
       "ajv@>=8.0.0 <8.18.0": "^8.18.0",
+      "fast-xml-parser": "^5.5.8",
       "ioredis": "^5.10.1",
       "minimatch": "^10.2.4",
-      "rollup": "^4.59.0"
+      "rollup": "^4.59.0",
+      "yaml": "^2.8.3"
     }
   }
 }

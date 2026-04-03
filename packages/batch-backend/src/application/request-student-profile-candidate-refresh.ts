@@ -1,5 +1,5 @@
-import { createStudentMemoryQueue } from '../infrastructure/student-memory-queue.js';
 import { logger } from '../infrastructure/logger.js';
+import { createStudentMemoryQueue } from '../infrastructure/student-memory-queue.js';
 
 export interface RequestStudentProfileCandidateRefreshParams {
   studentId: string;

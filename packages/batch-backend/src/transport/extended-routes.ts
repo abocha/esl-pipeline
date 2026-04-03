@@ -9,8 +9,8 @@ import { registerProfileTemplateRoutes } from './extended-routes/profiles-templa
 import { registerRecordingRoutes } from './extended-routes/recordings-routes.js';
 import { registerStudentRoutes } from './extended-routes/students-routes.js';
 
-export { inferTranscriptSttProvider } from './extended-routes/recording-provider-cache.js';
 export type { ExtendedRouteOptions } from './extended-routes/context.js';
+export { inferTranscriptSttProvider } from './extended-routes/recording-provider-cache.js';
 
 export function registerExtendedRoutes(
   app: FastifyInstance,

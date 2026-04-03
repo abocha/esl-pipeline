@@ -2,18 +2,17 @@ import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 
 import {
-  ProfileContentError,
   activateProfileRevisionForProfile,
   deleteProfileContent,
   getProfileContent,
   getProfileRevisionForProfile,
   listProfileContents,
   listProfileRevisionsForProfile,
+  ProfileContentError,
   restoreProfileRevision,
   upsertProfileContent,
 } from '../../application/profile-content.js';
 import {
-  TemplateContentError,
   activateTemplateRevisionForTemplate,
   deleteTemplateContent,
   getTemplateContent,
@@ -21,6 +20,7 @@ import {
   listTemplateContents,
   listTemplateRevisionsForTemplate,
   restoreTemplateRevision,
+  TemplateContentError,
   upsertTemplateContent,
 } from '../../application/template-content.js';
 import { logger } from '../../infrastructure/logger.js';

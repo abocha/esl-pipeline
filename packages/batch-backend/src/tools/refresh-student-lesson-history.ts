@@ -2,8 +2,8 @@ import type { PoolClient } from 'pg';
 
 import type { GenerationProvider } from '@esl-pipeline/contracts';
 
-import { requestLessonMemoryGeneration } from '../application/request-lesson-memory-generation.js';
 import { resolveGenerationCandidates } from '../application/generation-policy.js';
+import { requestLessonMemoryGeneration } from '../application/request-lesson-memory-generation.js';
 import { loadBatchBackendEnv } from '../bootstrap/env.js';
 import { type BatchBackendConfig, loadConfig } from '../config/env.js';
 import { withPgClient } from '../infrastructure/db.js';
@@ -213,8 +213,7 @@ function resolveModel(config: BatchBackendConfig, provider: GenerationProvider):
       config: config.generation,
       workload: 'student_memory_extraction',
       providerOverride: provider,
-    })[0]?.model ??
-    'openai/gpt-4o-mini'
+    })[0]?.model ?? 'openai/gpt-4o-mini'
   );
 }
 

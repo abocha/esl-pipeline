@@ -1,6 +1,7 @@
 # Plan: Add `/student`, `/jobs`, `/today`, and `/botstatus` to Telegram Ops Bot
 
 ## Summary
+
 Implement four operator-focused commands in the Telegram bot, with the minimum backend additions needed to keep them genuinely useful:
 
 - `/student <name-or-id>`: resolve a student by name/UUID/prefix, show a compact student status view, and disambiguate ambiguous names with inline buttons.
@@ -9,6 +10,7 @@ Implement four operator-focused commands in the Telegram bot, with the minimum b
 - `/botstatus`: bot-local diagnostic view that combines runtime/config state with a live backend reachability check.
 
 Keep the feature set intentionally narrow in v1:
+
 - No new env vars.
 - No natural-language query parsing.
 - No title/preset search in `/jobs` v1.
@@ -17,6 +19,7 @@ Keep the feature set intentionally narrow in v1:
 ## Implementation Changes
 
 ### 1. Backend/API surface
+
 Add or extend only the APIs the bot actually needs.
 
 - Add `GET /admin/jobs/summary` in batch-backend, admin-authenticated, mirroring `/user/jobs/summary` but without user scoping.
@@ -31,6 +34,7 @@ Add or extend only the APIs the bot actually needs.
   - Do not add timeline contracts; `/student` will use student search + admin jobs, not timeline.
 
 ### 2. Bot backend client and command context
+
 Extend the bot client and runtime context just enough to support the new commands.
 
 - Extend `BackendClient`/`HttpBackendClient` with:
@@ -49,7 +53,9 @@ Extend the bot client and runtime context just enough to support the new command
 ### 3. Command behaviors
 
 #### `/student <name-or-id>`
+
 Exact behavior:
+
 - Missing arg: send usage with examples.
 - Resolution flow:
   - If the input is an exact UUID, query `/students?q=<input>` and prefer exact ID match.
@@ -80,10 +86,13 @@ Exact behavior:
 - Do not call the student timeline endpoint in v1.
 
 #### `/jobs <filter>`
+
 Exact default:
+
 - `/jobs` with no filter returns the latest 10 jobs across all states.
 
 Supported filter grammar only:
+
 - `state:<queued|running|awaiting_approval|succeeded|failed[,more]>`
 - `student:<quoted name or id/prefix>`
 - `since:<today|yesterday|YYYY-MM-DD>`
@@ -92,6 +101,7 @@ Supported filter grammar only:
 - `order:<asc|desc>`
 
 Parsing rules:
+
 - Token format is strict `key:value`.
 - Quoted values are required for names with spaces, e.g. `student:"Mary Jane"`.
 - If there are no structured tokens and raw text is present, treat the whole input as a student query term.
@@ -102,12 +112,14 @@ Parsing rules:
   - `before:<date>` is exclusive at UTC midnight of that date.
 
 Student filter handling:
+
 - Resolve `student:` through `/students?q=...`.
 - If exactly one match, rewrite to `studentId`.
 - If multiple matches, return a short candidate list and tell the operator to rerun with an exact student ID.
 - No buttons for this ambiguity case in v1.
 
 Jobs result view:
+
 - Header with normalized filters and `Showing X of Y`.
 - List top `limit` jobs, each with:
   - student name + short student ID
@@ -119,10 +131,13 @@ Jobs result view:
 - No refresh callback in v1 because arbitrary filter state is not encoded into callbacks.
 
 #### `/today`
+
 Definition:
+
 - “Today” means current UTC calendar day: `[00:00 UTC, now)`.
 
 Data flow:
+
 - Call `/admin/jobs/summary?from=<utc-start>&to=<now>`.
 - Call `/admin/jobs` three times for short detail lists:
   - `state=failed`, `limit=3`
@@ -130,6 +145,7 @@ Data flow:
   - `state=succeeded`, `limit=5`
 
 Output:
+
 - Header: `Today · YYYY-MM-DD UTC`
 - Counts:
   - total
@@ -148,16 +164,20 @@ Output:
 - No inline callbacks in v1.
 
 #### `/botstatus`
+
 Goal:
+
 - Diagnose the bot itself, not replace `/status`.
 
 Data sources:
+
 - Runtime snapshot from the runner.
 - Live backend check via `getOpsStatus()`.
 - Topic routing inspection via `topicRouter.resolveThreadId()` for `ops`, `jobs`, `alerts`.
 - Static config values already in `CommandContext.config`.
 
 Output:
+
 - Overall state:
   - `healthy` if runtime is initialized and backend check succeeds
   - `degraded` otherwise
@@ -178,6 +198,7 @@ Output:
 - No inline callbacks in v1.
 
 ### 4. Formatter and callback work
+
 - Add new formatter functions for:
   - student ambiguity list
   - student detail view
@@ -190,6 +211,7 @@ Output:
 - Do not add callback kinds for `/jobs`, `/today`, or `/botstatus`.
 
 ## Test Plan
+
 Add focused coverage in bot and backend packages.
 
 - Backend
@@ -228,6 +250,7 @@ Add focused coverage in bot and backend packages.
   - UTC timestamps remain explicit and non-localized
 
 ## Assumptions and Defaults
+
 - UTC remains the canonical display and query boundary for all four commands.
 - `/jobs` v1 supports only `state`, `student`, `since`, `before`, `limit`, and `order`.
 - `/jobs` does not support preset/title/full-text markdown search in v1.

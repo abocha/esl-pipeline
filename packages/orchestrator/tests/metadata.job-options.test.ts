@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { getRegisteredTtsProvider, loadVoicesCatalog } from '@esl-pipeline/tts-core';
 import type { TtsProviderAdapter, TtsProviderId } from '@esl-pipeline/tts-core';
+import { getRegisteredTtsProvider, loadVoicesCatalog } from '@esl-pipeline/tts-core';
 
 import type { ConfigProvider } from '../src/config.js';
 import { resolveJobOptions } from '../src/metadata/job-options.js';

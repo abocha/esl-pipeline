@@ -1,6 +1,5 @@
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from 'node:http';
 import type { AddressInfo } from 'node:net';
-
 import type { Update } from '@grammyjs/types';
 
 import type { AuditLogger, BotConfig } from './types.js';

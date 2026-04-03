@@ -127,4 +127,3 @@ describe('telegram metadata sync', () => {
     );
   });
 });
-

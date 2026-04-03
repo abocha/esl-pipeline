@@ -5,6 +5,8 @@
 
 ## Validation
 
+- [ ] `pnpm format`
+- [ ] `pnpm run lint:repo-hygiene`
 - [ ] `pnpm check:fast`
 - [ ] Targeted package tests (if applicable)
 - [ ] Manual smoke test (if applicable)

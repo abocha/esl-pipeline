@@ -187,17 +187,13 @@ export async function processQueueJob(payload: QueueJobPayload): Promise<void> {
                 pronunciationMainVoiceAccent: payload.rerun?.pronunciationMainVoiceAccent,
                 pronunciationMainVoiceId: payload.rerun?.pronunciationMainVoiceId,
                 pronunciationMainTtsProvider: payload.rerun?.pronunciationMainTtsProvider,
-                pronunciationMainElevenlabsModel:
-                  payload.rerun?.pronunciationMainElevenlabsModel,
-                pronunciationMainGoogleTtsModel:
-                  payload.rerun?.pronunciationMainGoogleTtsModel,
+                pronunciationMainElevenlabsModel: payload.rerun?.pronunciationMainElevenlabsModel,
+                pronunciationMainGoogleTtsModel: payload.rerun?.pronunciationMainGoogleTtsModel,
                 pronunciationChunkVoiceAccent: payload.rerun?.pronunciationChunkVoiceAccent,
                 pronunciationChunkVoiceId: payload.rerun?.pronunciationChunkVoiceId,
                 pronunciationChunkTtsProvider: payload.rerun?.pronunciationChunkTtsProvider,
-                pronunciationChunkElevenlabsModel:
-                  payload.rerun?.pronunciationChunkElevenlabsModel,
-                pronunciationChunkGoogleTtsModel:
-                  payload.rerun?.pronunciationChunkGoogleTtsModel,
+                pronunciationChunkElevenlabsModel: payload.rerun?.pronunciationChunkElevenlabsModel,
+                pronunciationChunkGoogleTtsModel: payload.rerun?.pronunciationChunkGoogleTtsModel,
                 pronunciationChunkEdgeVoice: payload.rerun?.pronunciationChunkEdgeVoice,
                 settings: userSettings,
               },

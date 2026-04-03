@@ -2,7 +2,6 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { resetGuidedConfirmGuardsForTests } from '../src/guided-ui.js';
 import { TelegramApiError } from '../src/telegram-client.js';
-
 import {
   createCallbackUpdate,
   createJob,
@@ -62,7 +61,10 @@ describe('telegram runner callbacks', () => {
       },
     });
 
-    await processUpdate(runner, createCallbackUpdate('a4|s', { chatId: 123, chatType: 'supergroup' }));
+    await processUpdate(
+      runner,
+      createCallbackUpdate('a4|s', { chatId: 123, chatType: 'supergroup' }),
+    );
 
     expect(answerCallbackQuery).toHaveBeenCalledTimes(1);
     expect(editHtmlMessage).toHaveBeenCalledTimes(1);
@@ -74,15 +76,13 @@ describe('telegram runner callbacks', () => {
   it('renders guided student callbacks by editing the existing jobs message', async () => {
     const editHtmlMessage = vi.fn(async () => true);
     const answerCallbackQuery = vi.fn(async () => true);
-    const searchStudents = vi
-      .fn()
-      .mockResolvedValueOnce({
-        items: [{ id: '72444fdf-4abe-43ce-9166-5a1529c2e6cb', student: 'Margarita' }],
-        total: 1,
-        limit: 10,
-        offset: 0,
-        order: 'asc',
-      });
+    const searchStudents = vi.fn().mockResolvedValueOnce({
+      items: [{ id: '72444fdf-4abe-43ce-9166-5a1529c2e6cb', student: 'Margarita' }],
+      total: 1,
+      limit: 10,
+      offset: 0,
+      order: 'asc',
+    });
     const listJobs = vi.fn(async () => ({
       jobs: [
         createJob({
@@ -210,7 +210,9 @@ describe('telegram runner callbacks', () => {
       | [{ replyMarkup?: { inline_keyboard: { text: string; callback_data: string }[][] } }]
       | undefined;
     const jobDetailsMarkup = firstEditCall?.[0]?.replyMarkup;
-    const backButton = jobDetailsMarkup?.inline_keyboard[1]?.find((button) => button.text === 'Back');
+    const backButton = jobDetailsMarkup?.inline_keyboard[1]?.find(
+      (button) => button.text === 'Back',
+    );
     expect(backButton?.callback_data).toMatch(/^a4\|v\|q:[a-z0-9_-]{22}$/);
   });
 
@@ -297,7 +299,9 @@ describe('telegram runner callbacks', () => {
 
     expect(answerCallbackQuery).toHaveBeenCalledTimes(1);
     expect(sendHtmlMessage).toHaveBeenCalledTimes(3);
-    expect(sendHtmlMessage.mock.calls[0]?.[0].html).toContain('Use <code>/share</code> going forward.');
+    expect(sendHtmlMessage.mock.calls[0]?.[0].html).toContain(
+      'Use <code>/share</code> going forward.',
+    );
     expect(sendHtmlMessage.mock.calls[1]?.[0].html).toContain('<b>Share package</b>');
   });
 
@@ -343,7 +347,10 @@ describe('telegram runner callbacks', () => {
       },
     });
 
-    await processUpdate(runner, createCallbackUpdate('a4|r', { chatId: 123, chatType: 'supergroup' }));
+    await processUpdate(
+      runner,
+      createCallbackUpdate('a4|r', { chatId: 123, chatType: 'supergroup' }),
+    );
 
     expect(answerCallbackQuery).toHaveBeenCalledTimes(1);
     expect(editHtmlMessage).toHaveBeenCalledTimes(1);
@@ -395,7 +402,9 @@ describe('telegram runner callbacks', () => {
       | [{ html: string; replyMarkup?: { inline_keyboard: { text: string }[][] } }]
       | undefined;
     expect(editCall?.[0].html).toContain('request submitted');
-    expect(editCall?.[0].replyMarkup?.inline_keyboard).toEqual([[{ text: 'Home', callback_data: 'a4|h' }]]);
+    expect(editCall?.[0].replyMarkup?.inline_keyboard).toEqual([
+      [{ text: 'Home', callback_data: 'a4|h' }],
+    ]);
   });
 
   it('deduplicates rapid duplicate confirm callbacks before executing backup side effects', async () => {

@@ -1,9 +1,9 @@
 import { z } from 'zod';
 
 import {
+  LessonMemoryConfidenceSchema,
   LessonMemoryFactAuthoritySchema,
   LessonMemoryLabeledNoteSchema,
-  LessonMemoryConfidenceSchema,
   StudentFactContentSchema,
 } from './lesson-memory-content-schema.js';
 
@@ -199,9 +199,7 @@ export const STUDENT_MEMORY_SNAPSHOT_RESPONSE_SCHEMA_NAME = 'student_memory_snap
 export const STUDENT_MEMORY_SNAPSHOT_RESPONSE_SCHEMA_DESCRIPTION =
   'Canonical structured long-term student-memory snapshot derived from lesson and homework history.';
 
-export function validateStudentMemorySnapshotContent(
-  input: unknown,
-): StudentMemorySnapshotContent {
+export function validateStudentMemorySnapshotContent(input: unknown): StudentMemorySnapshotContent {
   return StudentMemorySnapshotContentSchema.parse(input);
 }
 

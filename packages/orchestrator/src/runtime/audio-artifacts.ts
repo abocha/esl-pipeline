@@ -11,10 +11,7 @@ import type {
 } from '../manifest.js';
 import type { PipelineMetrics } from '../observability.js';
 
-export type AudioArtifactKind =
-  | 'study_text'
-  | 'pronunciation_primary'
-  | 'pronunciation_item';
+export type AudioArtifactKind = 'study_text' | 'pronunciation_primary' | 'pronunciation_item';
 export type AudioArtifact = AudioArtifactManifest;
 
 export type PronunciationAudioArtifactClip = PronunciationAudioClip & AudioArtifactManifest;
@@ -60,7 +57,7 @@ export function resolveAudioArtifactsFromManifest(
             ...legacyPronunciationShadowSentence,
           },
         }
-    : undefined;
+      : undefined;
 
   if (!manifest) return {};
   return {
@@ -74,7 +71,7 @@ export function resolveAudioArtifactKey(
   prefix: string | undefined,
   kind: AudioArtifactKind = 'study_text',
 ): string {
-  const normalizedPrefix = prefix?.replace(/^[\/\\]+/, '').replace(/[\/\\]+$/, '') ?? '';
+  const normalizedPrefix = prefix?.replace(/^[/\\]+/, '').replace(/[/\\]+$/, '') ?? '';
   const key =
     kind === 'study_text'
       ? `audio/final/${audioHash}.mp3`

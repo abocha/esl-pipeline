@@ -189,7 +189,9 @@ export function WorkspaceHistoryPanel({
               <option value="draft_saved">draft_saved</option>
               <option value="job_awaiting_approval">job_awaiting_approval</option>
               <option value="job_completed">job_completed</option>
-              <option value="student_profile_binding_changed">student_profile_binding_changed</option>
+              <option value="student_profile_binding_changed">
+                student_profile_binding_changed
+              </option>
               <option value="profile_revision_saved">profile_revision_saved</option>
               <option value="profile_revision_restored">profile_revision_restored</option>
               <option value="profile_revision_activated">profile_revision_activated</option>
@@ -241,10 +243,15 @@ export function WorkspaceHistoryPanel({
         ) : timeline.length > 0 ? (
           <div className="workspace-list">
             {timeline.map((event, index) => (
-              <div key={`${event.type}-${event.createdAt}-${index}`} className="workspace-list-item">
+              <div
+                key={`${event.type}-${event.createdAt}-${index}`}
+                className="workspace-list-item"
+              >
                 <div>
                   <strong>{event.type}</strong>
-                  <div className="workspace-muted">{new Date(event.createdAt).toLocaleString()}</div>
+                  <div className="workspace-muted">
+                    {new Date(event.createdAt).toLocaleString()}
+                  </div>
                 </div>
                 <span>{event.status}</span>
               </div>

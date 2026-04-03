@@ -2,10 +2,9 @@ import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 
 import {
-  getActiveStudentProfileBindingForStudent,
-  listStudentProfileBindingsForStudent,
-  resolveStudentProfileBindingAt,
-} from '../../application/student-profile-bindings.js';
+  ProfileCandidatePromotionError,
+  promoteStudentProfileCandidates,
+} from '../../application/profile-candidate-promotion.js';
 import {
   getStudentMemoryOverview,
   listStudentHomeworkMemory,
@@ -14,23 +13,29 @@ import {
   listStudentProfileCandidatesForStudent,
 } from '../../application/student-memory-inspection.js';
 import {
-  StudentProfileCandidateServiceError,
+  getActiveStudentProfileBindingForStudent,
+  listStudentProfileBindingsForStudent,
+  resolveStudentProfileBindingAt,
+} from '../../application/student-profile-bindings.js';
+import {
   approveStudentProfileCandidate,
   deferStudentProfileCandidate,
   rejectStudentProfileCandidate,
+  StudentProfileCandidateServiceError,
 } from '../../application/student-profile-candidates.js';
 import {
-  ProfileCandidatePromotionError,
-  promoteStudentProfileCandidates,
-} from '../../application/profile-candidate-promotion.js';
-import {
-  StudentProfileStoreError,
   createStudentProfile,
   deleteStudentProfile,
   getStudentProfileById,
   listStudentProfiles,
+  StudentProfileStoreError,
   updateStudentProfile,
 } from '../../application/student-profiles-store.js';
+import { getStudentSummaryWithDefaults } from '../../application/student-summary.js';
+import {
+  getStudentTimeline,
+  type StudentTimelineType,
+} from '../../application/student-timeline.js';
 import { HomeworkMemoryEntryStatusSchema } from '../../domain/homework-memory-model.js';
 import { LessonMemoryEntryStatusSchema } from '../../domain/lesson-memory-model.js';
 import { StudentMemorySnapshotStatusSchema } from '../../domain/student-memory-snapshot-model.js';
@@ -38,8 +43,6 @@ import {
   StudentProfileCandidateReviewStateSchema,
   StudentProfileCandidateStatusSchema,
 } from '../../domain/student-profile-candidate-model.js';
-import { getStudentSummaryWithDefaults } from '../../application/student-summary.js';
-import { type StudentTimelineType, getStudentTimeline } from '../../application/student-timeline.js';
 import { logger } from '../../infrastructure/logger.js';
 import { getAuthenticatedUser } from '../auth-middleware.js';
 import { errorResponse, resolveRoutePath } from '../route-helpers.js';
@@ -79,24 +82,20 @@ export function registerStudentRoutes(app: FastifyInstance, context: ExtendedRou
         const params = paramsSchema.parse(request.params ?? {});
         const query = querySchema.parse(request.query ?? {});
         const statuses = query.status
-          ? z
-              .array(StudentProfileCandidateStatusSchema)
-              .parse(
-                query.status
-                  .split(',')
-                  .map((value) => value.trim())
-                  .filter(Boolean),
-              )
+          ? z.array(StudentProfileCandidateStatusSchema).parse(
+              query.status
+                .split(',')
+                .map((value) => value.trim())
+                .filter(Boolean),
+            )
           : undefined;
         const reviewStates = query.reviewState
-          ? z
-              .array(StudentProfileCandidateReviewStateSchema)
-              .parse(
-                query.reviewState
-                  .split(',')
-                  .map((value) => value.trim())
-                  .filter(Boolean),
-              )
+          ? z.array(StudentProfileCandidateReviewStateSchema).parse(
+              query.reviewState
+                .split(',')
+                .map((value) => value.trim())
+                .filter(Boolean),
+            )
           : undefined;
         const result = await listStudentProfileCandidatesForStudent({
           studentId: params.id,
@@ -147,7 +146,10 @@ export function registerStudentRoutes(app: FastifyInstance, context: ExtendedRou
       preHandler: [authenticate],
     },
     async (request, reply) => {
-      const routePath = resolveRoutePath(request, 'POST /students/:id/profile-candidates/:candidateId/approve');
+      const routePath = resolveRoutePath(
+        request,
+        'POST /students/:id/profile-candidates/:candidateId/approve',
+      );
       const paramsSchema = z.object({
         id: z.string().min(1),
         candidateId: z.string().min(1),
@@ -213,7 +215,10 @@ export function registerStudentRoutes(app: FastifyInstance, context: ExtendedRou
       preHandler: [authenticate],
     },
     async (request, reply) => {
-      const routePath = resolveRoutePath(request, 'POST /students/:id/profile-candidates/:candidateId/reject');
+      const routePath = resolveRoutePath(
+        request,
+        'POST /students/:id/profile-candidates/:candidateId/reject',
+      );
       const paramsSchema = z.object({
         id: z.string().min(1),
         candidateId: z.string().min(1),
@@ -276,7 +281,10 @@ export function registerStudentRoutes(app: FastifyInstance, context: ExtendedRou
       preHandler: [authenticate],
     },
     async (request, reply) => {
-      const routePath = resolveRoutePath(request, 'POST /students/:id/profile-candidates/:candidateId/defer');
+      const routePath = resolveRoutePath(
+        request,
+        'POST /students/:id/profile-candidates/:candidateId/defer',
+      );
       const paramsSchema = z.object({
         id: z.string().min(1),
         candidateId: z.string().min(1),
@@ -650,14 +658,12 @@ export function registerStudentRoutes(app: FastifyInstance, context: ExtendedRou
         const params = paramsSchema.parse(request.params ?? {});
         const query = querySchema.parse(request.query ?? {});
         const statuses = query.status
-          ? z
-              .array(LessonMemoryEntryStatusSchema)
-              .parse(
-                query.status
-                  .split(',')
-                  .map((value) => value.trim())
-                  .filter(Boolean),
-              )
+          ? z.array(LessonMemoryEntryStatusSchema).parse(
+              query.status
+                .split(',')
+                .map((value) => value.trim())
+                .filter(Boolean),
+            )
           : undefined;
         const result = await listStudentLessonMemory({
           studentId: params.id,
@@ -722,14 +728,12 @@ export function registerStudentRoutes(app: FastifyInstance, context: ExtendedRou
         const params = paramsSchema.parse(request.params ?? {});
         const query = querySchema.parse(request.query ?? {});
         const statuses = query.status
-          ? z
-              .array(HomeworkMemoryEntryStatusSchema)
-              .parse(
-                query.status
-                  .split(',')
-                  .map((value) => value.trim())
-                  .filter(Boolean),
-              )
+          ? z.array(HomeworkMemoryEntryStatusSchema).parse(
+              query.status
+                .split(',')
+                .map((value) => value.trim())
+                .filter(Boolean),
+            )
           : undefined;
         const result = await listStudentHomeworkMemory({
           studentId: params.id,
@@ -794,14 +798,12 @@ export function registerStudentRoutes(app: FastifyInstance, context: ExtendedRou
         const params = paramsSchema.parse(request.params ?? {});
         const query = querySchema.parse(request.query ?? {});
         const statuses = query.status
-          ? z
-              .array(StudentMemorySnapshotStatusSchema)
-              .parse(
-                query.status
-                  .split(',')
-                  .map((value) => value.trim())
-                  .filter(Boolean),
-              )
+          ? z.array(StudentMemorySnapshotStatusSchema).parse(
+              query.status
+                .split(',')
+                .map((value) => value.trim())
+                .filter(Boolean),
+            )
           : undefined;
         const result = await listStudentMemorySnapshotsForStudent({
           studentId: params.id,

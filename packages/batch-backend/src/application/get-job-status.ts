@@ -1,8 +1,8 @@
 // packages/batch-backend/src/application/get-job-status.ts
 // Application service for fetching job status by ID.
 import { getJobById } from '../domain/job-repository.js';
-import { detectJobPronunciationMode } from './job-pronunciation-mode.js';
 import { type JobStatusDto, jobRecordToDto } from './job-dto.js';
+import { detectJobPronunciationMode } from './job-pronunciation-mode.js';
 
 export type GetJobStatusResponse = JobStatusDto;
 

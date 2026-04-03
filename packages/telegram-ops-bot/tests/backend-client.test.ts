@@ -361,8 +361,16 @@ describe('backend client', () => {
     });
     await client.searchStudents('Mary Jane', 10);
 
-    expect(urls.some((url) => url.includes('/admin/jobs/summary?from=2026-03-14T00%3A00%3A00.000Z&to=2026-03-14T12%3A00%3A00.000Z'))).toBe(true);
-    expect(urls.some((url) => url.includes('/students?q=Mary+Jane&limit=10&offset=0&order=asc'))).toBe(true);
+    expect(
+      urls.some((url) =>
+        url.includes(
+          '/admin/jobs/summary?from=2026-03-14T00%3A00%3A00.000Z&to=2026-03-14T12%3A00%3A00.000Z',
+        ),
+      ),
+    ).toBe(true);
+    expect(
+      urls.some((url) => url.includes('/students?q=Mary+Jane&limit=10&offset=0&order=asc')),
+    ).toBe(true);
   });
 
   it('queries /students/summary with paging params', async () => {
@@ -390,7 +398,14 @@ describe('backend client', () => {
       if (url.includes('/students/summary?')) {
         return Response.json(
           {
-            items: [{ id: 'student-1', name: 'Mary Jane', lastLessonAt: '2026-03-14T08:47:06.373Z', pendingDrafts: 0 }],
+            items: [
+              {
+                id: 'student-1',
+                name: 'Mary Jane',
+                lastLessonAt: '2026-03-14T08:47:06.373Z',
+                pendingDrafts: 0,
+              },
+            ],
             total: 1,
             limit: 10,
             offset: 0,
@@ -416,6 +431,8 @@ describe('backend client', () => {
       order: 'desc',
     });
 
-    expect(urls.some((url) => url.includes('/students/summary?limit=10&offset=20&order=desc'))).toBe(true);
+    expect(
+      urls.some((url) => url.includes('/students/summary?limit=10&offset=20&order=desc')),
+    ).toBe(true);
   });
 });

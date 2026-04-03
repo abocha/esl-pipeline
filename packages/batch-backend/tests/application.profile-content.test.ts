@@ -49,9 +49,7 @@ function createInMemoryDependencies(seed?: {
       activatedAt:
         (params.status ?? 'active') === 'active' ? new Date('2026-01-01T00:00:00.000Z') : null,
       deprecatedAt:
-        (params.status ?? 'active') === 'deprecated'
-          ? new Date('2026-01-01T00:00:00.000Z')
-          : null,
+        (params.status ?? 'active') === 'deprecated' ? new Date('2026-01-01T00:00:00.000Z') : null,
       createdAt: new Date(`2026-01-01T00:00:0${Math.min(versionNumber, 9)}.000Z`),
       createdBy: params.createdBy ?? null,
       restoredFromRevisionId: params.restoredFromRevisionId ?? null,

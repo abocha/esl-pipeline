@@ -1,7 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
 
-import type { BatchBackendConfig } from '../src/config/env.js';
-import { loadConfig } from '../src/config/env.js';
 import {
   STUDENT_MEMORY_SNAPSHOT_CONTENT_JSON_SCHEMA,
   STUDENT_MEMORY_SNAPSHOT_RESPONSE_SCHEMA_DESCRIPTION,
@@ -9,9 +7,11 @@ import {
   validateStudentMemorySnapshotContent,
 } from '../src/application/student-memory-snapshot-content-schema.js';
 import {
-  StudentMemorySnapshotExtractionValidationError,
   extractStudentMemorySnapshotContent,
+  StudentMemorySnapshotExtractionValidationError,
 } from '../src/application/student-memory-snapshot-extraction.js';
+import type { BatchBackendConfig } from '../src/config/env.js';
+import { loadConfig } from '../src/config/env.js';
 
 function createGenerationConfig(): BatchBackendConfig['generation'] {
   return loadConfig().generation;
