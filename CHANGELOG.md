@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented here. Dates use `YYYY-MM-DD`.
 
+## [6.0.5] - 2026-04-03
+
+### Changed
+
+- Automated release from PR #58: fix(html-publisher): polish renderer layout behaviors (https://github.com/abocha/esl-pipeline/pull/58)
+
 ## [6.0.4] - 2026-04-03
 
 ### Changed
