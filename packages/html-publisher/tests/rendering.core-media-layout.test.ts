@@ -12,6 +12,10 @@ describe('rendering', () => {
     expect(html).toContain('<figure class="audio-figure">');
     expect(html).toContain('preload="metadata"');
     expect(html).toContain('data-audio-fallback="true"');
+    expect(html).toContain('details > .content {');
+    expect(html).toContain('overflow: hidden;');
+    expect(html).toContain('.content-inner {');
+    expect(html).toContain('overflow: visible;');
   });
 
   it('renders video directive', async () => {
