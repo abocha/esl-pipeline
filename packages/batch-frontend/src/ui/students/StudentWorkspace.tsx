@@ -260,12 +260,12 @@ export const StudentWorkspace: React.FC = () => {
   const [lineageLoading, setLineageLoading] = useState(false);
   const [lineageError, setLineageError] = useState<string | null>(null);
 
-  const selectedStudentRequestId = useRef(0);
-  const historyRequestId = useRef(0);
-  const timelineRequestId = useRef(0);
-  const bindingsRequestId = useRef(0);
-  const memoryOverviewRequestId = useRef(0);
-  const profileCandidatesRequestId = useRef(0);
+  const selectedStudentRequestIdRef = useRef(0);
+  const historyRequestIdRef = useRef(0);
+  const timelineRequestIdRef = useRef(0);
+  const bindingsRequestIdRef = useRef(0);
+  const memoryOverviewRequestIdRef = useRef(0);
+  const profileCandidatesRequestIdRef = useRef(0);
 
   const historyFiltersAppliedRef = useRef(historyFiltersApplied);
   const timelineFiltersAppliedRef = useRef(timelineFiltersApplied);
@@ -469,7 +469,7 @@ export const StudentWorkspace: React.FC = () => {
   }, []);
 
   const loadJobHistory = useCallback(async (studentId: string, filters: HistoryFilters) => {
-    const requestId = ++historyRequestId.current;
+    const requestId = ++historyRequestIdRef.current;
     if (!studentId) {
       setJobHistory([]);
       return;
@@ -486,22 +486,22 @@ export const StudentWorkspace: React.FC = () => {
         offset: 0,
         order: 'desc',
       });
-      if (requestId !== historyRequestId.current) return;
+      if (requestId !== historyRequestIdRef.current) return;
       setJobHistory(response.jobs ?? []);
     } catch (error) {
-      if (requestId !== historyRequestId.current) return;
+      if (requestId !== historyRequestIdRef.current) return;
       const message = error instanceof Error ? error.message : 'Unable to load assignment history.';
       setJobsError(message);
       setJobHistory([]);
     } finally {
-      if (requestId === historyRequestId.current) {
+      if (requestId === historyRequestIdRef.current) {
         setJobsLoading(false);
       }
     }
   }, []);
 
   const loadTimeline = useCallback(async (studentId: string, filters: TimelineFilters) => {
-    const requestId = ++timelineRequestId.current;
+    const requestId = ++timelineRequestIdRef.current;
     if (!studentId) {
       setTimeline([]);
       return;
@@ -517,22 +517,22 @@ export const StudentWorkspace: React.FC = () => {
         offset: 0,
         order: 'desc',
       });
-      if (requestId !== timelineRequestId.current) return;
+      if (requestId !== timelineRequestIdRef.current) return;
       setTimeline(response.items ?? []);
     } catch (error) {
-      if (requestId !== timelineRequestId.current) return;
+      if (requestId !== timelineRequestIdRef.current) return;
       const message = error instanceof Error ? error.message : 'Unable to load student timeline.';
       setTimelineError(message);
       setTimeline([]);
     } finally {
-      if (requestId === timelineRequestId.current) {
+      if (requestId === timelineRequestIdRef.current) {
         setTimelineLoading(false);
       }
     }
   }, []);
 
   const loadBindings = useCallback(async (studentId: string) => {
-    const requestId = ++bindingsRequestId.current;
+    const requestId = ++bindingsRequestIdRef.current;
     if (!studentId) {
       setBindingHistory([]);
       return;
@@ -545,23 +545,23 @@ export const StudentWorkspace: React.FC = () => {
         offset: 0,
         order: 'desc',
       });
-      if (requestId !== bindingsRequestId.current) return;
+      if (requestId !== bindingsRequestIdRef.current) return;
       setBindingHistory(response.items ?? []);
     } catch (error) {
-      if (requestId !== bindingsRequestId.current) return;
+      if (requestId !== bindingsRequestIdRef.current) return;
       const message =
         error instanceof Error ? error.message : 'Unable to load profile binding history.';
       setBindingHistoryError(message);
       setBindingHistory([]);
     } finally {
-      if (requestId === bindingsRequestId.current) {
+      if (requestId === bindingsRequestIdRef.current) {
         setBindingHistoryLoading(false);
       }
     }
   }, []);
 
   const loadMemoryOverview = useCallback(async (studentId: string) => {
-    const requestId = ++memoryOverviewRequestId.current;
+    const requestId = ++memoryOverviewRequestIdRef.current;
     if (!studentId) {
       setMemoryOverview(null);
       return;
@@ -574,22 +574,22 @@ export const StudentWorkspace: React.FC = () => {
         lessonLimit: MEMORY_OVERVIEW_LESSON_LIMIT,
         homeworkLimit: MEMORY_OVERVIEW_HOMEWORK_LIMIT,
       });
-      if (requestId !== memoryOverviewRequestId.current) return;
+      if (requestId !== memoryOverviewRequestIdRef.current) return;
       setMemoryOverview(response);
     } catch (error) {
-      if (requestId !== memoryOverviewRequestId.current) return;
+      if (requestId !== memoryOverviewRequestIdRef.current) return;
       const message = error instanceof Error ? error.message : 'Unable to load student memory.';
       setMemoryOverviewError(message);
       setMemoryOverview(null);
     } finally {
-      if (requestId === memoryOverviewRequestId.current) {
+      if (requestId === memoryOverviewRequestIdRef.current) {
         setMemoryOverviewLoading(false);
       }
     }
   }, []);
 
   const loadProfileCandidates = useCallback(async (studentId: string) => {
-    const requestId = ++profileCandidatesRequestId.current;
+    const requestId = ++profileCandidatesRequestIdRef.current;
     if (!studentId) {
       setProfileCandidates([]);
       setSelectedCandidateIds([]);
@@ -606,7 +606,7 @@ export const StudentWorkspace: React.FC = () => {
         offset: 0,
         order: 'desc',
       });
-      if (requestId !== profileCandidatesRequestId.current) return;
+      if (requestId !== profileCandidatesRequestIdRef.current) return;
       setProfileCandidates(response.items ?? []);
       setSelectedCandidateIds((current) =>
         current.filter((candidateId) =>
@@ -616,13 +616,13 @@ export const StudentWorkspace: React.FC = () => {
         ),
       );
     } catch (error) {
-      if (requestId !== profileCandidatesRequestId.current) return;
+      if (requestId !== profileCandidatesRequestIdRef.current) return;
       const message = error instanceof Error ? error.message : 'Unable to load profile candidates.';
       setProfileCandidatesError(message);
       setProfileCandidates([]);
       setSelectedCandidateIds([]);
     } finally {
-      if (requestId === profileCandidatesRequestId.current) {
+      if (requestId === profileCandidatesRequestIdRef.current) {
         setProfileCandidatesLoading(false);
       }
     }
@@ -630,13 +630,13 @@ export const StudentWorkspace: React.FC = () => {
 
   const loadSelectedStudent = useCallback(
     async (studentId: string) => {
-      const requestId = ++selectedStudentRequestId.current;
+      const requestId = ++selectedStudentRequestIdRef.current;
       if (!studentId) {
-        historyRequestId.current += 1;
-        timelineRequestId.current += 1;
-        bindingsRequestId.current += 1;
-        memoryOverviewRequestId.current += 1;
-        profileCandidatesRequestId.current += 1;
+        historyRequestIdRef.current += 1;
+        timelineRequestIdRef.current += 1;
+        bindingsRequestIdRef.current += 1;
+        memoryOverviewRequestIdRef.current += 1;
+        profileCandidatesRequestIdRef.current += 1;
         setSelectedStudent(null);
         setSelectedProfileId('');
         setJobHistory([]);
@@ -653,11 +653,11 @@ export const StudentWorkspace: React.FC = () => {
       setBindingSuccess(null);
       try {
         const profile = await getStudentProfile(studentId);
-        if (requestId !== selectedStudentRequestId.current) return;
+        if (requestId !== selectedStudentRequestIdRef.current) return;
         setSelectedStudent(profile);
         setSelectedProfileId(profile.profileId ?? '');
       } catch (error) {
-        if (requestId !== selectedStudentRequestId.current) return;
+        if (requestId !== selectedStudentRequestIdRef.current) return;
         const message = error instanceof Error ? error.message : 'Unable to load selected student.';
         setSelectedStudent(null);
         setProfileError(message);
