@@ -628,6 +628,16 @@ details:not(.study-text) {
   font-size: 1.05em;
   line-height: 1.55;
 }
+.markdown-body ol + .pronunciation-shadow-sentence,
+.markdown-body ol + .pronunciation-natural-sentence,
+.markdown-body ul + .pronunciation-shadow-sentence,
+.markdown-body ul + .pronunciation-natural-sentence {
+  margin-top: 8px;
+}
+.pronunciation-shadow-sentence + .audio-figure,
+.pronunciation-natural-sentence + .audio-figure {
+  margin-top: 8px;
+}
 .pronunciation-shadow-sentence strong,
 .pronunciation-natural-sentence strong {
   color: color-mix(in srgb, var(--page-text) 88%, var(--theme-h2) 12%);
@@ -644,17 +654,6 @@ details:not(.study-text) {
   background:
     linear-gradient(180deg, rgba(255, 255, 255, 0.28) 0%, rgba(255, 255, 255, 0) 44%),
     color-mix(in srgb, var(--callout-bg) 31%, var(--page-card) 69%);
-}
-.callout::before {
-  content: '';
-  position: absolute;
-  left: 18px;
-  top: 18px;
-  bottom: 18px;
-  width: 2px;
-  border-radius: 999px;
-  background: color-mix(in srgb, var(--callout-border) 64%, transparent 36%);
-  opacity: 0.7;
 }
 .callout .icon {
   width: 32px;
@@ -926,6 +925,10 @@ table {
 .markdown-body table[data-balanced-columns="true"] {
   table-layout: fixed;
 }
+.markdown-body table[data-tight-columns="true"] {
+  width: max-content;
+  max-width: 100%;
+}
 th,
 td {
   border: 1px solid color-mix(in srgb, var(--page-line) 80%, var(--page-card) 20%);
@@ -1098,13 +1101,14 @@ details > .content {
   grid-template-rows: 0fr;
   transition: grid-template-rows 0.3s ease-out, opacity 0.3s ease-out, padding 0.3s ease;
   opacity: 0;
+  overflow: hidden;
 }
 details.is-open > .content {
   grid-template-rows: 1fr;
   opacity: 1;
 }
 .content-inner {
-  overflow: hidden;
+  overflow: visible;
 }
 .back-to-top {
   position: fixed;
@@ -1302,6 +1306,7 @@ function createRenderer(): MarkdownIt {
   };
 
   applyTaskListRule(md);
+  applyH4OrderedListContinuationRule(md);
 
   return md;
 }
@@ -1392,6 +1397,107 @@ function applyTaskListRule(md: MarkdownIt): void {
       token.children = [checkboxToken, ...children];
     }
   });
+}
+
+function applyH4OrderedListContinuationRule(md: MarkdownIt): void {
+  md.core.ruler.after('inline', 'continue_ordered_lists_across_h4', (state) => {
+    let lastOrderedListNextStart: number | null = null;
+    let sawContinuationH4 = false;
+    const orderedListStack: { level: number; start: number; itemCount: number; managed: boolean }[] = [];
+
+    const resetContinuation = () => {
+      lastOrderedListNextStart = null;
+      sawContinuationH4 = false;
+    };
+
+    for (let index = 0; index < state.tokens.length; index += 1) {
+      const token = state.tokens[index];
+      if (!token) continue;
+
+      if (token.type === 'ordered_list_open') {
+        const explicitStart = parseStartAttr(token);
+        const shouldContinue =
+          token.level === 0 &&
+          explicitStart === 1 &&
+          lastOrderedListNextStart !== null &&
+          sawContinuationH4;
+        const start =
+          shouldContinue && lastOrderedListNextStart !== null
+            ? lastOrderedListNextStart
+            : explicitStart;
+        if (shouldContinue) {
+          token.attrSet('start', String(start));
+        }
+        orderedListStack.push({
+          level: token.level,
+          start,
+          itemCount: 0,
+          managed: token.level === 0,
+        });
+        if (token.level === 0) {
+          sawContinuationH4 = false;
+        }
+        continue;
+      }
+
+      if (token.type === 'ordered_list_close') {
+        const context = orderedListStack.pop();
+        if (context?.managed) {
+          lastOrderedListNextStart = context.start + context.itemCount;
+          sawContinuationH4 = false;
+        }
+        continue;
+      }
+
+      if (token.type === 'list_item_open') {
+        const currentList = orderedListStack.at(-1);
+        if (currentList && token.level === currentList.level + 1) {
+          currentList.itemCount += 1;
+        }
+        continue;
+      }
+
+      if (orderedListStack.length > 0) {
+        continue;
+      }
+
+      if (token.level !== 0) {
+        continue;
+      }
+
+      if (token.type === 'heading_open') {
+        if (token.tag === 'h4' && lastOrderedListNextStart !== null) {
+          sawContinuationH4 = true;
+        } else if (/^h[1-3]$/.test(token.tag)) {
+          resetContinuation();
+        } else if (!/^h4$/.test(token.tag)) {
+          resetContinuation();
+        }
+        continue;
+      }
+
+      if (
+        token.type === 'heading_close' ||
+        token.type === 'inline' ||
+        token.type === 'paragraph_open' ||
+        token.type === 'paragraph_close'
+      ) {
+        continue;
+      }
+
+      if (token.type === 'ordered_list_open') {
+        continue;
+      }
+
+      resetContinuation();
+    }
+  });
+}
+
+function parseStartAttr(token: { attrGet: (name: string) => string | null }): number {
+  const raw = token.attrGet('start');
+  const value = Number.parseInt(raw ?? '1', 10);
+  return Number.isFinite(value) && value > 0 ? value : 1;
 }
 
 function appendTokenClass(
@@ -3057,6 +3163,136 @@ function buildBehaviorScript(features: ResolvedFeatures): string {
       };
     };
 
+    const measureIntrinsicColumnWidths = (table) => {
+      const parentWidth = table.parentElement?.clientWidth ?? 0;
+      if (parentWidth <= 0) {
+        return null;
+      }
+
+      const clone = table.cloneNode(true);
+      if (!(clone instanceof HTMLTableElement)) {
+        return null;
+      }
+
+      removeGeneratedColgroup(clone);
+      clone.removeAttribute('data-balanced-columns');
+      clone.removeAttribute('data-tight-columns');
+      clone.style.position = 'absolute';
+      clone.style.left = '-99999px';
+      clone.style.top = '0';
+      clone.style.visibility = 'hidden';
+      clone.style.width = 'max-content';
+      clone.style.maxWidth = 'none';
+      clone.style.tableLayout = 'auto';
+
+      const cloneCells = clone.querySelectorAll('th, td');
+      cloneCells.forEach((cell) => {
+        if (!(cell instanceof HTMLElement)) return;
+        cell.style.whiteSpace = 'nowrap';
+        cell.style.width = 'auto';
+      });
+
+      document.body.appendChild(clone);
+
+      try {
+        const rows = Array.from(clone.querySelectorAll('tr'));
+        const columnCount = rows.reduce((maxColumns, row) => {
+          const cells = row.querySelectorAll('th, td');
+          return Math.max(maxColumns, cells.length);
+        }, 0);
+        if (columnCount <= 1) {
+          return null;
+        }
+
+        const widths = new Array(columnCount).fill(0);
+        rows.forEach((row) => {
+          const cells = Array.from(row.querySelectorAll('th, td'));
+          cells.forEach((cell, index) => {
+            if (!(cell instanceof HTMLElement)) return;
+            const rect = cell.getBoundingClientRect();
+            widths[index] = Math.max(widths[index], Math.ceil(rect.width));
+          });
+        });
+
+        const total = Math.ceil(clone.getBoundingClientRect().width);
+        if (total <= 0) {
+          return null;
+        }
+
+        return { widths, total, parentWidth };
+      } finally {
+        clone.remove();
+      }
+    };
+
+    const computeRenderedPixelWidths = (table, result) => {
+      const intrinsic = measureIntrinsicColumnWidths(table);
+      const parentWidth = intrinsic?.parentWidth ?? table.parentElement?.clientWidth ?? 0;
+      if (parentWidth <= 0) {
+        return null;
+      }
+
+      const plannedWidths = result.widths.map((width) => (parentWidth * width) / 100);
+      if (!intrinsic) {
+        return {
+          widths: plannedWidths,
+          totalWidth: parentWidth,
+          tight: false,
+        };
+      }
+
+      const widths = [...plannedWidths];
+      const cappedIndices = [];
+      let cappedTotal = 0;
+
+      for (let index = 0; index < widths.length; index += 1) {
+        const intrinsicWidth = intrinsic.widths[index] ?? plannedWidths[index] ?? 0;
+        const plannedWidth = plannedWidths[index] ?? 0;
+        if (intrinsicWidth + 4 < plannedWidth) {
+          widths[index] = intrinsicWidth;
+          cappedIndices.push(index);
+          cappedTotal += intrinsicWidth;
+        }
+      }
+
+      if (cappedIndices.length === 0) {
+        return {
+          widths: plannedWidths,
+          totalWidth: parentWidth,
+          tight: false,
+        };
+      }
+
+      const uncappedIndices = widths
+        .map((_, index) => index)
+        .filter((index) => !cappedIndices.includes(index));
+      if (uncappedIndices.length === 0) {
+        return {
+          widths,
+          totalWidth: cappedTotal,
+          tight: true,
+        };
+      }
+
+      const remainingWidth = Math.max(parentWidth - cappedTotal, 0);
+      const uncappedWeight = uncappedIndices.reduce(
+        (sum, index) => sum + (result.widths[index] ?? 0),
+        0,
+      );
+      uncappedIndices.forEach((index) => {
+        widths[index] =
+          uncappedWeight > 0
+            ? (remainingWidth * (result.widths[index] ?? 0)) / uncappedWeight
+            : remainingWidth / uncappedIndices.length;
+      });
+
+      return {
+        widths,
+        totalWidth: widths.reduce((sum, width) => sum + width, 0),
+        tight: true,
+      };
+    };
+
     const annotateTable = (table, columns, archetype) => {
       table.setAttribute('data-table-archetype', archetype);
       const rows = Array.from(table.querySelectorAll('tr'));
@@ -3108,6 +3344,9 @@ function buildBehaviorScript(features: ResolvedFeatures): string {
 
         if (!isDesktopViewport()) {
           removeGeneratedColgroup(table);
+          table.removeAttribute('data-tight-columns');
+          table.style.removeProperty('width');
+          table.style.removeProperty('max-width');
           return;
         }
 
@@ -3115,14 +3354,25 @@ function buildBehaviorScript(features: ResolvedFeatures): string {
 
         const generatedColgroup = document.createElement('colgroup');
         generatedColgroup.setAttribute('data-generated-colgroup', 'true');
-        result.widths.forEach((width) => {
+        const renderedWidths = computeRenderedPixelWidths(table, result);
+        const widths = renderedWidths?.widths ?? [];
+        widths.forEach((width) => {
           const col = document.createElement('col');
-          col.style.width = width + '%';
+          col.style.width = String(Math.max(width, 1)) + 'px';
           generatedColgroup.appendChild(col);
         });
 
         table.insertBefore(generatedColgroup, table.firstChild);
         table.setAttribute('data-balanced-columns', 'true');
+        if (renderedWidths?.tight) {
+          table.setAttribute('data-tight-columns', 'true');
+          table.style.width = String(Math.ceil(renderedWidths.totalWidth)) + 'px';
+          table.style.maxWidth = '100%';
+        } else {
+          table.removeAttribute('data-tight-columns');
+          table.style.width = '100%';
+          table.style.removeProperty('max-width');
+        }
       });
     };
 
@@ -3213,18 +3463,70 @@ function buildBehaviorScript(features: ResolvedFeatures): string {
         const applySentenceAnchorTone = (element) => {
           if (!(element instanceof HTMLElement)) return null;
           element.classList.add('pronunciation-sentence-anchor');
-          const normalizedText = String(element.textContent || '').replace(/s+/g, ' ').trim();
-          if (/(^|\b)shadow sentences*:/i.test(normalizedText)) {
+          const labelTexts = Array.from(element.querySelectorAll('strong, b'))
+            .map((label) => String(label.textContent || '').trim());
+          const hasShadowLabel = labelTexts.some((text) => /^shadow sentence:?$/i.test(text));
+          const hasNaturalLabel = labelTexts.some((text) =>
+            /^natural sentence practice:?$/i.test(text),
+          );
+          const normalizedText = String(element.textContent || '').replace(/\s+/g, ' ').trim();
+          if (hasShadowLabel || /(^|\b)shadow sentence\s*:/i.test(normalizedText)) {
             element.classList.add('pronunciation-shadow-sentence');
+          } else if (hasNaturalLabel || /(^|\b)natural sentence practice\s*:/i.test(normalizedText)) {
+            element.classList.add('pronunciation-natural-sentence');
           } else {
             element.classList.add('pronunciation-natural-sentence');
           }
           return element;
         };
 
+        const isEmptyPronunciationSpacer = (node) => {
+          if (!(node instanceof HTMLParagraphElement)) return false;
+          if (node.children.length > 0) return false;
+          return String(node.textContent || '').trim() === '';
+        };
+
+        const cleanupPronunciationSpacing = () => {
+          const targets = sectionElements.flatMap((element) => {
+            if (!(element instanceof HTMLElement)) return [];
+            const descendants = Array.from(
+              element.querySelectorAll(
+                '.pronunciation-sentence-anchor, .pronunciation-shadow-sentence, .pronunciation-natural-sentence, figure.audio-figure',
+              ),
+            );
+            return element.matches(
+              '.pronunciation-sentence-anchor, .pronunciation-shadow-sentence, .pronunciation-natural-sentence, figure.audio-figure',
+            )
+              ? [element, ...descendants]
+              : descendants;
+          });
+          for (const element of targets) {
+            const previous = element.previousElementSibling;
+            if (isEmptyPronunciationSpacer(previous)) {
+              previous.remove();
+            }
+            const next = element.nextElementSibling;
+            if (isEmptyPronunciationSpacer(next)) {
+              next.remove();
+            }
+          }
+        };
+
         const highlightSentenceAnchor = () => {
-          const existing = document.querySelector('.pronunciation-sentence-anchor, .pronunciation-shadow-sentence');
+          const existing = document.querySelector('.pronunciation-shadow-sentence, .pronunciation-natural-sentence');
           if (existing instanceof HTMLElement) {
+            if (
+              existing.tagName === 'SPAN' &&
+              existing.parentElement instanceof HTMLParagraphElement &&
+              existing.parentElement.classList.contains('pronunciation-sentence-anchor')
+            ) {
+              const parent = existing.parentElement;
+              while (existing.firstChild) {
+                parent.insertBefore(existing.firstChild, existing);
+              }
+              existing.remove();
+              return applySentenceAnchorTone(parent);
+            }
             return existing;
           }
           const sentenceAnchorLabel = sectionElements
@@ -3243,6 +3545,12 @@ function buildBehaviorScript(features: ResolvedFeatures): string {
             sentenceAnchorLabel.parentElement instanceof HTMLElement
           ) {
             const parent = sentenceAnchorLabel.parentElement;
+            if (
+              parent.tagName === 'P' &&
+              !/\bmode\s*:/i.test(String(parent.textContent || ''))
+            ) {
+              return applySentenceAnchorTone(parent);
+            }
             const wrapper = document.createElement('span');
             wrapper.className = 'pronunciation-sentence-anchor';
             if (/^shadow sentence:?$/i.test(String(sentenceAnchorLabel.textContent || '').trim())) {
@@ -3292,6 +3600,7 @@ function buildBehaviorScript(features: ResolvedFeatures): string {
 
         if (wordDrillEnabled || connectedSpeechEnabled) {
           highlightSentenceAnchor();
+          cleanupPronunciationSpacing();
         }
         const clipList = Array.isArray(pronunciationAudio.itemClips)
           ? pronunciationAudio.itemClips
