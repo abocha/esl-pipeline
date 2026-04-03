@@ -3469,10 +3469,15 @@ function buildBehaviorScript(features: ResolvedFeatures): string {
           const hasNaturalLabel = labelTexts.some((text) =>
             /^natural sentence practice:?$/i.test(text),
           );
-          const normalizedText = String(element.textContent || '').replace(/\s+/g, ' ').trim();
-          if (hasShadowLabel || /(^|\b)shadow sentence\s*:/i.test(normalizedText)) {
+          const normalizedText = String(element.textContent || '')
+            .replace(/\\s+/g, ' ')
+            .trim();
+          if (hasShadowLabel || /(^|\\b)shadow sentence\\s*:/i.test(normalizedText)) {
             element.classList.add('pronunciation-shadow-sentence');
-          } else if (hasNaturalLabel || /(^|\b)natural sentence practice\s*:/i.test(normalizedText)) {
+          } else if (
+            hasNaturalLabel ||
+            /(^|\\b)natural sentence practice\\s*:/i.test(normalizedText)
+          ) {
             element.classList.add('pronunciation-natural-sentence');
           } else {
             element.classList.add('pronunciation-natural-sentence');
@@ -3547,7 +3552,7 @@ function buildBehaviorScript(features: ResolvedFeatures): string {
             const parent = sentenceAnchorLabel.parentElement;
             if (
               parent.tagName === 'P' &&
-              !/\bmode\s*:/i.test(String(parent.textContent || ''))
+              !/\\bmode\\s*:/i.test(String(parent.textContent || ''))
             ) {
               return applySentenceAnchorTone(parent);
             }
