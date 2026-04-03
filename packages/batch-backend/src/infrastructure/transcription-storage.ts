@@ -6,7 +6,7 @@ import { Readable, Transform } from 'node:stream';
 import { finished, pipeline } from 'node:stream/promises';
 
 import { S3StorageAdapter } from './s3-storage-adapter.js';
-import { StorageConfigurationService, createStorageConfigService } from './storage-config.js';
+import { createStorageConfigService, StorageConfigurationService } from './storage-config.js';
 
 const LOCAL_URI_PREFIX = 'local://';
 const S3_URI_PREFIX = 's3://';

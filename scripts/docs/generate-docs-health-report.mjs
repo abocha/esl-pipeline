@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+
 import { buildDocsHealthReport, writeDocsHealthReportArtifacts } from './docs-gardening-lib.mjs';
 
 const repoRoot = process.cwd();

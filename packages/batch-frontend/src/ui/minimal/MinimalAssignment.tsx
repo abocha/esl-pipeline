@@ -18,7 +18,6 @@ import type {
   StudentOption,
 } from '../../utils/api';
 import {
-  GenerationDraftApiError,
   approveJob,
   cancelJob,
   createDraft,
@@ -30,6 +29,7 @@ import {
   fetchPromptPackage,
   fetchRecordingTranscript,
   fetchStudentOptions,
+  GenerationDraftApiError,
   generateDraft,
   getJobStatus,
   getProfileContent,
@@ -52,13 +52,6 @@ import { copyTextToClipboard } from '../../utils/clipboard';
 import { DropZone } from '../shared/DropZone';
 import { UploadProgress } from '../shared/UploadProgress';
 import {
-  getJobPollingDecision,
-  getRecordingPollingDecision,
-  isActivelyProcessingJobState,
-  isTerminalJobState,
-} from './MinimalAssignment.polling';
-import { getGenerationQuotaWindowDecision } from './MinimalAssignment.quota-window';
-import {
   buildCustomRerunPayload,
   buildPresetRerunPayload,
   buildPublishJobOverrides,
@@ -66,6 +59,13 @@ import {
   getNextGenerationQuotaSnapshot,
   hasActiveGenerationQuotaSelection,
 } from './MinimalAssignment.logic';
+import {
+  getJobPollingDecision,
+  getRecordingPollingDecision,
+  isActivelyProcessingJobState,
+  isTerminalJobState,
+} from './MinimalAssignment.polling';
+import { getGenerationQuotaWindowDecision } from './MinimalAssignment.quota-window';
 
 const AUDIO_EXTENSIONS = ['.wav', '.mp3', '.m4a', '.aac', '.ogg', '.opus'];
 const POLL_INTERVAL_MS = 3000;
@@ -359,7 +359,9 @@ export const MinimalAssignment: React.FC = () => {
   const [rerunStudyTextModel, setRerunStudyTextModel] = useState('');
   const [rerunStudyTextVoiceId, setRerunStudyTextVoiceId] = useState('');
   const [rerunStudyTextVoiceAccent, setRerunStudyTextVoiceAccent] = useState('');
-  const [rerunStudyTextStrategy, setRerunStudyTextStrategy] = useState<'auto' | 'dialogue' | 'tts'>('auto');
+  const [rerunStudyTextStrategy, setRerunStudyTextStrategy] = useState<'auto' | 'dialogue' | 'tts'>(
+    'auto',
+  );
   const [rerunStudyTextDialogueLanguage, setRerunStudyTextDialogueLanguage] = useState('');
   const [rerunStudyTextDialogueStability, setRerunStudyTextDialogueStability] = useState('');
   const [rerunStudyTextDialogueSeed, setRerunStudyTextDialogueSeed] = useState('');
@@ -376,8 +378,7 @@ export const MinimalAssignment: React.FC = () => {
     useState<PronunciationMode | null>(null);
   const [rerunPronunciationChunkModel, setRerunPronunciationChunkModel] = useState('');
   const [rerunPronunciationChunkVoiceId, setRerunPronunciationChunkVoiceId] = useState('');
-  const [rerunPronunciationChunkVoiceAccent, setRerunPronunciationChunkVoiceAccent] =
-    useState('');
+  const [rerunPronunciationChunkVoiceAccent, setRerunPronunciationChunkVoiceAccent] = useState('');
   const [rerunPronunciationChunkEdgeVoice, setRerunPronunciationChunkEdgeVoice] = useState('');
   const [cancelReason, setCancelReason] = useState('');
   const [previewHtml, setPreviewHtml] = useState<string | null>(null);
@@ -756,11 +757,7 @@ export const MinimalAssignment: React.FC = () => {
     if (!rerunPronunciationChunkProviderDirty) {
       setRerunPronunciationChunkProvider(defaultPronunciationChunkProvider);
     }
-  }, [
-    defaultPronunciationChunkProvider,
-    rerunPronunciationChunkProviderDirty,
-    jobStatus?.jobId,
-  ]);
+  }, [defaultPronunciationChunkProvider, rerunPronunciationChunkProviderDirty, jobStatus?.jobId]);
 
   useEffect(() => {
     if (rerunStudyTextProvider === 'google') {
@@ -1116,7 +1113,9 @@ export const MinimalAssignment: React.FC = () => {
             const resumedDraft = await fetchDraft(status.draftId);
             setDraft(resumedDraft);
             setDraftText(resumedDraft.text ?? '');
-            setRerunTargetPronunciationMode(detectPronunciationModeFromDraft(resumedDraft.text ?? ''));
+            setRerunTargetPronunciationMode(
+              detectPronunciationModeFromDraft(resumedDraft.text ?? ''),
+            );
             setDraftError(null);
             if (!resolvedStudentId && resumedDraft.studentId) {
               resolvedStudentId = resumedDraft.studentId;
@@ -1773,10 +1772,7 @@ export const MinimalAssignment: React.FC = () => {
     void loadJobProvenance(jobStatus.jobId);
   }, [jobStatus?.jobId, loadJobProvenance]);
 
-  const queueRerun = async (
-    payload: Parameters<typeof rerunJob>[1],
-    fallbackMessage: string,
-  ) => {
+  const queueRerun = async (payload: Parameters<typeof rerunJob>[1], fallbackMessage: string) => {
     if (!jobStatus?.jobId) return;
 
     setActionBusy('rerun');
@@ -1953,26 +1949,25 @@ export const MinimalAssignment: React.FC = () => {
     : null;
   const generationQuotaHasNumericValues = Boolean(
     activeGenerationQuota &&
-    [
-      activeGenerationQuota.requestsPerMinute,
-      activeGenerationQuota.tokensPerMinute,
-      activeGenerationQuota.requestsPerDay,
-      activeGenerationQuota.dailyTokenBudget,
-      activeGenerationQuota.dailyRequestBudget,
-      activeGenerationQuota.dailyRequestUsed,
-      activeGenerationQuota.dailyRequestRemaining,
-      activeGenerationQuota.dailyTokenUsed,
-      activeGenerationQuota.dailyTokenRemaining,
-      activeGenerationQuota.rpmBudget,
-      activeGenerationQuota.rpmUsed,
-      activeGenerationQuota.rpmRemaining,
-      activeGenerationQuota.usedRequestsToday,
-      activeGenerationQuota.usedTokensToday,
-    ].some((value) => value !== undefined && value !== null),
+      [
+        activeGenerationQuota.requestsPerMinute,
+        activeGenerationQuota.tokensPerMinute,
+        activeGenerationQuota.requestsPerDay,
+        activeGenerationQuota.dailyTokenBudget,
+        activeGenerationQuota.dailyRequestBudget,
+        activeGenerationQuota.dailyRequestUsed,
+        activeGenerationQuota.dailyRequestRemaining,
+        activeGenerationQuota.dailyTokenUsed,
+        activeGenerationQuota.dailyTokenRemaining,
+        activeGenerationQuota.rpmBudget,
+        activeGenerationQuota.rpmUsed,
+        activeGenerationQuota.rpmRemaining,
+        activeGenerationQuota.usedRequestsToday,
+        activeGenerationQuota.usedTokensToday,
+      ].some((value) => value !== undefined && value !== null),
   );
   const rerunImplemented =
-    actionCapabilities.find((capability) => capability.type === 'rerun')?.implemented ??
-    false;
+    actionCapabilities.find((capability) => capability.type === 'rerun')?.implemented ?? false;
   const cancelImplemented =
     actionCapabilities.find((capability) => capability.type === 'cancel')?.implemented ?? false;
   const cancelAllowedState = jobStatus?.state === 'queued' || jobStatus?.state === 'running';
@@ -2885,7 +2880,8 @@ export const MinimalAssignment: React.FC = () => {
                           ))
                         ) : rerunStudyTextStrategy === 'auto' ? (
                           <option value="">
-                            Strategy default (`dialogue` {`->`} `eleven_v3`, `tts` {`->`} `eleven_multilingual_v2`)
+                            Strategy default (`dialogue` {`->`} `eleven_v3`, `tts` {`->`}{' '}
+                            `eleven_multilingual_v2`)
                           </option>
                         ) : rerunStudyTextStrategy === 'dialogue' ? (
                           <>
@@ -3105,8 +3101,8 @@ export const MinimalAssignment: React.FC = () => {
                   </button>
                 </div>
                 <p className="minimal-help">
-                  `eleven_v3` is dialogue-only. `eleven_flash_v2` is the only ElevenLabs model
-                  that supports IPA. `eleven_flash_v2_5` is the fast, cheap pronunciation option.
+                  `eleven_v3` is dialogue-only. `eleven_flash_v2` is the only ElevenLabs model that
+                  supports IPA. `eleven_flash_v2_5` is the fast, cheap pronunciation option.
                 </p>
               </div>
             ) : null}

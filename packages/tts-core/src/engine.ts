@@ -1,12 +1,12 @@
 import { ConfigurationError } from '@esl-pipeline/contracts';
 
 import type {
-  BuildPronunciationTextInput,
-  BuildPronunciationTextOptions,
-  BuildPronunciationTextResult,
   BuildPronunciationShadowSentenceInput,
   BuildPronunciationShadowSentenceOptions,
   BuildPronunciationShadowSentenceResult,
+  BuildPronunciationTextInput,
+  BuildPronunciationTextOptions,
+  BuildPronunciationTextResult,
   BuildStudyTextInput,
   BuildStudyTextOptions,
   BuildStudyTextResult,

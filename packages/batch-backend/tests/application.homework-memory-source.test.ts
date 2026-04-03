@@ -1,8 +1,7 @@
-import { mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { randomUUID } from 'node:crypto';
+import { mkdtemp, rm, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
-
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 
 import {
@@ -117,7 +116,16 @@ describeIfPg('application/homework-memory-source', () => {
         )
         VALUES ($1, 'succeeded', $2, $3, $4, $5, $6, $7, $8, 'html', 'https://example.test/hw', NOW(), NOW(), NOW())
         `,
-        [rerunJobId, markdownPath, studentId, recordingId, transcriptId, promptPackageId, draftId, rootJobId],
+        [
+          rerunJobId,
+          markdownPath,
+          studentId,
+          recordingId,
+          transcriptId,
+          promptPackageId,
+          draftId,
+          rootJobId,
+        ],
       );
     });
 
@@ -126,7 +134,11 @@ describeIfPg('application/homework-memory-source', () => {
     expect(source.assignmentLineageKey).toBe(rootJobId);
     expect(source.publishTargets.map((target) => target.target)).toEqual(['html', 'notion']);
     expect(source.contentHash).toHaveLength(64);
-    expect(source.normalizedMarkdown.sections.some((section) => section.heading.includes('Your Mission'))).toBe(true);
+    expect(
+      source.normalizedMarkdown.sections.some((section) =>
+        section.heading.includes('Your Mission'),
+      ),
+    ).toBe(true);
   });
 
   it('treats publish-target expansion as non-material when the published markdown is unchanged', async () => {
@@ -211,6 +223,9 @@ describeIfPg('application/homework-memory-source', () => {
 
     expect(decision.shouldGenerate).toBe(false);
     expect(decision.reason).toBe('no_material_change');
-    expect(decision.source.publishTargets.map((target) => target.target)).toEqual(['html', 'notion']);
+    expect(decision.source.publishTargets.map((target) => target.target)).toEqual([
+      'html',
+      'notion',
+    ]);
   });
 });

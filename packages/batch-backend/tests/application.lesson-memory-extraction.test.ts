@@ -1,15 +1,15 @@
 import { describe, expect, it, vi } from 'vitest';
 
 import {
-  LessonMemoryExtractionValidationError,
-  extractLessonMemoryContent,
-} from '../src/application/lesson-memory-extraction.js';
-import {
   LESSON_MEMORY_CONTENT_JSON_SCHEMA,
   LESSON_MEMORY_RESPONSE_SCHEMA_DESCRIPTION,
   LESSON_MEMORY_RESPONSE_SCHEMA_NAME,
   validateLessonMemoryContent,
 } from '../src/application/lesson-memory-content-schema.js';
+import {
+  extractLessonMemoryContent,
+  LessonMemoryExtractionValidationError,
+} from '../src/application/lesson-memory-extraction.js';
 import type { BatchBackendConfig } from '../src/config/env.js';
 import { loadConfig } from '../src/config/env.js';
 

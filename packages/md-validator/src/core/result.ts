@@ -70,14 +70,13 @@ function inferBlockingInStrict(
   const normalized = message.toLowerCase();
   if (normalized.startsWith('controlled practice has ')) return false;
   if (normalized.startsWith('comprehension check has ')) return false;
-  if (normalized.startsWith('missing "### <letter>. pronunciation micro-focus" section under h2 #5.')) {
+  if (
+    normalized.startsWith('missing "### <letter>. pronunciation micro-focus" section under h2 #5.')
+  ) {
     return false;
   }
   if (normalized.startsWith('pronunciation micro-focus')) return false;
-  if (
-    normalized.startsWith('line ') &&
-    normalized.includes('must be wrapped in forward slashes')
-  ) {
+  if (normalized.startsWith('line ') && normalized.includes('must be wrapped in forward slashes')) {
     return false;
   }
   if (normalized.startsWith('additional h2 sections after section 9')) return false;

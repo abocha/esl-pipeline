@@ -1,17 +1,17 @@
 import { createHash } from 'node:crypto';
 import fs from 'node:fs/promises';
 import path from 'node:path';
+import type { PoolClient } from 'pg';
 
 import type { PublishTarget } from '@esl-pipeline/contracts';
-import type { PoolClient } from 'pg';
 
 import type { HomeworkMemoryPublishTarget } from '../domain/homework-memory-model.js';
 import { getLatestReadyHomeworkMemoryByAssignmentLineageKey } from '../domain/homework-memory-repository.js';
 import { withPgClient } from '../infrastructure/db.js';
 import { createTranscriptionStorageForUri } from '../infrastructure/transcription-storage.js';
 import {
-  normalizeHomeworkMarkdown,
   type NormalizedHomeworkMarkdown,
+  normalizeHomeworkMarkdown,
 } from './homework-memory-normalization.js';
 
 interface HomeworkSourceJobRow {
@@ -92,7 +92,9 @@ export async function resolveHomeworkMemorySourceFromSucceededJob(
     publishedAt: currentJob.finished_at ?? currentJob.updated_at,
     publishedMarkdown,
     contentHash,
-    publishTargets: mergePublishTargets(sameContentJobs.length > 0 ? sameContentJobs : [currentJob]),
+    publishTargets: mergePublishTargets(
+      sameContentJobs.length > 0 ? sameContentJobs : [currentJob],
+    ),
     normalizedMarkdown: normalizeHomeworkMarkdown(publishedMarkdown),
   };
 }

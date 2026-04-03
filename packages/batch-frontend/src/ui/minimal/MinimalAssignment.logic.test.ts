@@ -6,8 +6,8 @@ import {
   buildPublishJobOverrides,
   getDraftPreviewGate,
   getNextGenerationQuotaSnapshot,
-  hashDraftText,
   hasActiveGenerationQuotaSelection,
+  hashDraftText,
 } from './MinimalAssignment.logic';
 
 describe('MinimalAssignment logic helpers', () => {
@@ -164,9 +164,7 @@ describe('MinimalAssignment logic helpers', () => {
       lastUpdatedAt: '2026-02-18T00:00:00.000Z',
       requestsPerMinute: 5,
     };
-    expect(
-      getNextGenerationQuotaSnapshot(snapshot, { kind: 'failure' }),
-    ).toEqual(snapshot);
+    expect(getNextGenerationQuotaSnapshot(snapshot, { kind: 'failure' })).toEqual(snapshot);
     expect(
       getNextGenerationQuotaSnapshot(snapshot, {
         kind: 'success',

@@ -6,6 +6,7 @@ import { BrowserRouter } from 'react-router-dom';
 import { AuthProvider } from './context/AuthContext';
 import { ThemeProvider } from './context/ThemeContext';
 import './index.css';
+
 import { App } from './ui/App';
 
 ReactDOM.createRoot(document.querySelector('#root') as HTMLElement).render(

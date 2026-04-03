@@ -1,10 +1,10 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 
 import {
+  createSttEngine,
   type SttProviderAdapter,
   type SttProviderId,
   type SttTranscriptionResult,
-  createSttEngine,
 } from '../src/index.js';
 
 function createProvider(id: SttProviderId): SttProviderAdapter {

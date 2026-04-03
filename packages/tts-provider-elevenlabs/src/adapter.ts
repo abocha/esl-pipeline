@@ -1,8 +1,8 @@
 import type {
-  BuildPronunciationTextInput,
-  BuildPronunciationTextOptions,
   BuildPronunciationShadowSentenceInput,
   BuildPronunciationShadowSentenceOptions,
+  BuildPronunciationTextInput,
+  BuildPronunciationTextOptions,
   BuildStudyTextInput,
   BuildStudyTextOptions,
   SpeakerVoiceAssignment,
@@ -10,8 +10,8 @@ import type {
 } from '@esl-pipeline/tts-core';
 
 import {
-  buildPronunciationTextMp3,
   buildPronunciationShadowSentenceMp3,
+  buildPronunciationTextMp3,
   buildStudyTextMp3,
   loadVoicesCatalog,
 } from './index.js';

@@ -106,7 +106,7 @@ export function extractFrontmatter(md: ParsedMarkdownContext): Frontmatter {
 
 function isDialogueLine(line: string): boolean {
   // e.g., "A:", "Anna:", "[Teacher]:", "S1:", "**Teacher**:", "**Teacher:**"
-  return /^\s*(?:\[([^\]]+)\]|(?:\*\*)?([A-Za-zА-Яа-яЁё0-9 _.\-]{1,32})(?:\*\*)?)\s*:(?:\*\*)?\s+/.test(
+  return /^\s*(?:\[([^\]]+)\]|(?:\*\*)?([A-Za-zА-Яа-яЁё0-9 _.-]{1,32})(?:\*\*)?)\s*:(?:\*\*)?\s+/.test(
     line,
   );
 }
@@ -332,21 +332,20 @@ function parseMinimalPairLine(
     return {
       issue: {
         code: 'invalid_minimal_pair_format',
-        message:
-          'Minimal pair line must use "1. word /ipa/ — word /ipa/" format.',
+        message: 'Minimal pair line must use "1. word /ipa/ — word /ipa/" format.',
         line: lineNumber,
       },
     };
   }
 
-  const match =
-    /^(.+?)\s+(\/[^/\n]+\/)\s+[—–-]\s+(.+?)\s+(\/[^/\n]+\/)(?:\s+(.+))?$/.exec(itemContent);
+  const match = /^(.+?)\s+(\/[^/\n]+\/)\s+[—–-]\s+(.+?)\s+(\/[^/\n]+\/)(?:\s+(.+))?$/.exec(
+    itemContent,
+  );
   if (!match) {
     return {
       issue: {
         code: 'invalid_minimal_pair_format',
-        message:
-          'Minimal pair line must use "1. word /ipa/ — word /ipa/" format.',
+        message: 'Minimal pair line must use "1. word /ipa/ — word /ipa/" format.',
         line: lineNumber,
       },
     };
@@ -382,8 +381,7 @@ function parseConnectedSpeechLine(
     return {
       issue: {
         code: 'invalid_connected_speech_format',
-        message:
-          'Connected speech line must use "1. \"careful form\" -> connected form" format.',
+        message: 'Connected speech line must use "1. "careful form" -> connected form" format.',
         line: lineNumber,
       },
     };
@@ -394,8 +392,7 @@ function parseConnectedSpeechLine(
     return {
       issue: {
         code: 'invalid_connected_speech_format',
-        message:
-          'Connected speech line must use "1. \"careful form\" -> connected form" format.',
+        message: 'Connected speech line must use "1. "careful form" -> connected form" format.',
         line: lineNumber,
       },
     };
@@ -407,8 +404,7 @@ function parseConnectedSpeechLine(
     return {
       issue: {
         code: 'invalid_connected_speech_format',
-        message:
-          'Connected speech line must use "1. \"careful form\" -> connected form" format.',
+        message: 'Connected speech line must use "1. "careful form" -> connected form" format.',
         line: lineNumber,
       },
     };

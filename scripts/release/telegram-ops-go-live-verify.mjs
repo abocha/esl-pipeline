@@ -1,6 +1,6 @@
 #!/usr/bin/env node
-import process from 'node:process';
 import path from 'node:path';
+import process from 'node:process';
 import { fileURLToPath } from 'node:url';
 
 import {
@@ -258,7 +258,9 @@ function statusShapeValid(payload) {
   const value = payload;
   return (
     typeof value.checkedAtUtc === 'string' &&
-    Boolean(value.overall && typeof value.overall === 'object' && typeof value.overall.state === 'string')
+    Boolean(
+      value.overall && typeof value.overall === 'object' && typeof value.overall.state === 'string',
+    )
   );
 }
 
@@ -268,7 +270,9 @@ export async function runVerification(args = {}) {
   const email = normalizeEnvValue(args.email || env.TELEGRAM_OPS_BOT_BACKEND_EMAIL);
   const password = normalizeEnvValue(args.password || env.TELEGRAM_OPS_BOT_BACKEND_PASSWORD);
   const sharedSecret = normalizeEnvValue(
-    args.sharedSecret || env.TELEGRAM_OPS_BOT_BACKEND_SHARED_SECRET || env.BATCH_BACKEND_OPS_CONTROL_BOT_SECRET,
+    args.sharedSecret ||
+      env.TELEGRAM_OPS_BOT_BACKEND_SHARED_SECRET ||
+      env.BATCH_BACKEND_OPS_CONTROL_BOT_SECRET,
   );
   const operationId = normalizeEnvValue(args.operationId);
   const timeoutMs = args.timeoutMs ?? 15_000;
@@ -327,7 +331,9 @@ export async function runVerification(args = {}) {
   });
   traces.login = {
     status: loginResult.status,
-    body: loginResult.json ? truncateText(JSON.stringify(loginResult.json)) : truncateText(loginResult.text),
+    body: loginResult.json
+      ? truncateText(JSON.stringify(loginResult.json))
+      : truncateText(loginResult.text),
   };
   const accessToken =
     loginResult.status === 200 &&
@@ -398,7 +404,8 @@ export async function runVerification(args = {}) {
             missingSecretResult.status === 403 &&
             missingSecretResult.json &&
             missingSecretResult.json.code === 'ops_bot_secret_invalid',
-          message: 'When shared secret is configured, /ops/status without x-ops-bot-secret must return 403 ops_bot_secret_invalid.',
+          message:
+            'When shared secret is configured, /ops/status without x-ops-bot-secret must return 403 ops_bot_secret_invalid.',
           details: {
             status: missingSecretResult.status,
           },
@@ -428,7 +435,8 @@ export async function runVerification(args = {}) {
             wrongSecretResult.status === 403 &&
             wrongSecretResult.json &&
             wrongSecretResult.json.code === 'ops_bot_secret_invalid',
-          message: 'When shared secret is configured, /ops/status with wrong x-ops-bot-secret must return 403 ops_bot_secret_invalid.',
+          message:
+            'When shared secret is configured, /ops/status with wrong x-ops-bot-secret must return 403 ops_bot_secret_invalid.',
           details: {
             status: wrongSecretResult.status,
           },
@@ -468,7 +476,8 @@ export async function runVerification(args = {}) {
           missingActionResult.json &&
           missingActionResult.json.error === 'not_found' &&
           missingActionResult.json.code === 'ops_action_not_found',
-        message: 'GET /ops/actions/:operationId for unknown id must return 404 not_found with code ops_action_not_found.',
+        message:
+          'GET /ops/actions/:operationId for unknown id must return 404 not_found with code ops_action_not_found.',
         details: {
           status: missingActionResult.status,
         },
@@ -573,10 +582,10 @@ async function main() {
 if (process.argv[1] === fileURLToPath(import.meta.url)) {
   void main().catch((error) => {
     console.error(
-      `[telegram-ops-go-live-verify] fatal: ${error instanceof Error ? error.stack ?? error.message : String(error)}`,
+      `[telegram-ops-go-live-verify] fatal: ${error instanceof Error ? (error.stack ?? error.message) : String(error)}`,
     );
     process.exit(1);
   });
 }
 
-export { DEFAULT_JSON_OUT, parseArgs, normalizeBackendUrl, readResponsePayload };
+export { DEFAULT_JSON_OUT, normalizeBackendUrl, parseArgs, readResponsePayload };

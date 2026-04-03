@@ -2,11 +2,11 @@ import type { GenerationProvider } from '@esl-pipeline/contracts';
 
 import type { BatchBackendConfig } from '../config/env.js';
 import {
-  ensurePendingStudentMemorySnapshot,
   type EnsurePendingStudentMemorySnapshotResult,
+  ensurePendingStudentMemorySnapshot,
 } from '../domain/student-memory-snapshot-repository.js';
-import { createStudentMemoryQueue } from '../infrastructure/student-memory-queue.js';
 import { logger } from '../infrastructure/logger.js';
+import { createStudentMemoryQueue } from '../infrastructure/student-memory-queue.js';
 import { resolveGenerationCandidates } from './generation-policy.js';
 import { STUDENT_MEMORY_SNAPSHOT_SCHEMA_VERSION } from './student-memory-snapshot-generation.js';
 

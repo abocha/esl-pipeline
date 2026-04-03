@@ -5,8 +5,8 @@ import {
 import type { TranscriptionStorage } from '../infrastructure/transcription-storage.js';
 import { createTranscriptionStorage } from '../infrastructure/transcription-storage.js';
 import {
-  type RecordingTranscriptResponse,
   buildRecordingTranscriptResponse,
+  type RecordingTranscriptResponse,
 } from './get-recording-transcript.js';
 
 export interface UpdateRecordingTranscriptParams {

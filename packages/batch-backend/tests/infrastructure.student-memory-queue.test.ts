@@ -1,6 +1,9 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { createStudentMemoryQueue, createStudentMemoryWorker } from '../src/infrastructure/student-memory-queue.js';
+import {
+  createStudentMemoryQueue,
+  createStudentMemoryWorker,
+} from '../src/infrastructure/student-memory-queue.js';
 
 function getMockStorage() {
   if (!(globalThis as Record<string, unknown>).__studentMemoryQueueTestStorage) {

@@ -1,11 +1,11 @@
 import { describe, expect, it } from 'vitest';
 
 import {
-  StudentProfileStoreError,
   createStudentProfile,
   deleteStudentProfile,
   getStudentProfileById,
   listStudentProfiles,
+  StudentProfileStoreError,
   updateStudentProfile,
 } from '../src/application/student-profiles-store.js';
 import { loadConfig } from '../src/config/env.js';
@@ -172,7 +172,9 @@ function createInMemoryDeps(initial: StudentRecord[] = []) {
           id: profileId,
           label: existing?.label ?? profileId,
           activeRevisionId:
-            options?.status === 'active' ? `${profileId}-revision-1` : existing?.activeRevisionId ?? null,
+            options?.status === 'active'
+              ? `${profileId}-revision-1`
+              : (existing?.activeRevisionId ?? null),
         });
         return {
           id: `${profileId}-revision-1`,
@@ -182,8 +184,7 @@ function createInMemoryDeps(initial: StudentRecord[] = []) {
           status: options?.status ?? 'active',
           versionNumber: 1,
           versionLabel: 'v1',
-          activatedAt:
-            options?.status === 'active' ? '2026-01-01T00:00:00.000Z' : null,
+          activatedAt: options?.status === 'active' ? '2026-01-01T00:00:00.000Z' : null,
           deprecatedAt: null,
           createdAt: '2026-01-01T00:00:00.000Z',
           createdBy: options?.createdBy ?? null,
@@ -268,7 +269,9 @@ describe('student-profiles-store', () => {
     expect(created.profileId).toBe(`profiles/students/${created.id}.md`);
 
     const listed = await listStudentProfiles({ limit: 50 }, { deps });
-    expect(listed.items.some((item) => item.id === created.id && item.profileId === created.profileId)).toBe(true);
+    expect(
+      listed.items.some((item) => item.id === created.id && item.profileId === created.profileId),
+    ).toBe(true);
   });
 
   it('creates a starter profile revision and derived profile binding when starterProfile is supplied', async () => {

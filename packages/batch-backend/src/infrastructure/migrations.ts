@@ -307,7 +307,9 @@ export async function runMigrationsIfConfigured(): Promise<void> {
         throw new Error(
           `Pending migrations detected with PG_AUTO_MIGRATE_ON_BOOT=false: ${status.pending
             .map((migration) => migration.id)
-            .join(', ')}. Run db:migrate before startup or set PG_FAIL_ON_PENDING_MIGRATIONS=false for an explicit temporary override.`,
+            .join(
+              ', ',
+            )}. Run db:migrate before startup or set PG_FAIL_ON_PENDING_MIGRATIONS=false for an explicit temporary override.`,
         );
       }
       logger.warn('Pending migrations detected and PG_AUTO_MIGRATE_ON_BOOT=false', {

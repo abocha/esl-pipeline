@@ -52,8 +52,8 @@ export type {
   SttEngine,
   SttProviderAdapter,
   SttProviderId,
-  SttTranscriptionResult,
   SttTranscribeContext,
+  SttTranscriptionResult,
   TranscriptMode,
   TranscriptSegment,
 } from './types.js';

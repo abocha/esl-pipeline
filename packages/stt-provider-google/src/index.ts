@@ -1,12 +1,12 @@
+import type { Readable } from 'node:stream';
 import { SpeechClient } from '@google-cloud/speech';
 import { Storage } from '@google-cloud/storage';
-import type { Readable } from 'node:stream';
 
 import { classifyProviderRuntimeFailure } from '@esl-pipeline/provider-runtime';
 import {
+  mergeSegments,
   type SttProviderAdapter,
   type TranscriptSegment,
-  mergeSegments,
 } from '@esl-pipeline/stt-core';
 
 interface GoogleWordLike {

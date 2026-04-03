@@ -98,7 +98,9 @@ export function WorkspaceInspectionPanel({
           continuity over time.
         </p>
 
-        {memoryOverviewLoading ? <p className="workspace-muted">Loading student memory...</p> : null}
+        {memoryOverviewLoading ? (
+          <p className="workspace-muted">Loading student memory...</p>
+        ) : null}
         {memoryOverviewError ? <p className="workspace-error">{memoryOverviewError}</p> : null}
 
         {memoryOverview?.latestReadyStudentMemorySnapshot ? (
@@ -109,8 +111,7 @@ export function WorkspaceInspectionPanel({
                 {memoryOverview.latestReadyStudentMemorySnapshot.id}
               </span>
               <span>
-                <strong>Status:</strong>{' '}
-                {memoryOverview.latestReadyStudentMemorySnapshot.status}
+                <strong>Status:</strong> {memoryOverview.latestReadyStudentMemorySnapshot.status}
               </span>
               <span>
                 <strong>Generated:</strong>{' '}
@@ -156,8 +157,10 @@ export function WorkspaceInspectionPanel({
                   <div>
                     <strong>{entry.lessonSummary ?? 'Lesson memory entry'}</strong>
                     <div className="workspace-muted">
-                      {entry.topicsDiscussed.slice(0, 2).map((topic) => topic.topic).join(', ') ||
-                        'No topics recorded'}
+                      {entry.topicsDiscussed
+                        .slice(0, 2)
+                        .map((topic) => topic.topic)
+                        .join(', ') || 'No topics recorded'}
                     </div>
                   </div>
                   <span>{formatDateTime(entry.generatedAt)}</span>
@@ -210,8 +213,7 @@ export function WorkspaceInspectionPanel({
               <strong>Template drift:</strong> {lineage.template.drift?.reason ?? 'none'}
             </span>
             <span>
-              <strong>Binding at creation:</strong>{' '}
-              {lineage.bindingAtCreation?.profileId ?? 'n/a'}
+              <strong>Binding at creation:</strong> {lineage.bindingAtCreation?.profileId ?? 'n/a'}
             </span>
           </div>
 
@@ -223,12 +225,10 @@ export function WorkspaceInspectionPanel({
                 {lineage.memory.studentMemorySnapshotId ?? 'none'}
               </span>
               <span>
-                <strong>Snapshot hash:</strong>{' '}
-                {lineage.memory.studentMemorySnapshotHash ?? 'none'}
+                <strong>Snapshot hash:</strong> {lineage.memory.studentMemorySnapshotHash ?? 'none'}
               </span>
               <span>
-                <strong>Retrieval policy:</strong>{' '}
-                {lineage.memory.retrievalPolicyVersion ?? 'none'}
+                <strong>Retrieval policy:</strong> {lineage.memory.retrievalPolicyVersion ?? 'none'}
               </span>
             </div>
 

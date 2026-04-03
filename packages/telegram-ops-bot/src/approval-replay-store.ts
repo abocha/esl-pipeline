@@ -1,4 +1,4 @@
-import { Pool, type ClientConfig } from 'pg';
+import { type ClientConfig, Pool } from 'pg';
 
 import { readInt } from '@esl-pipeline/shared-infrastructure';
 

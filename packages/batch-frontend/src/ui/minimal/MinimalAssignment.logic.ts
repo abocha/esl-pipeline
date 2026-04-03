@@ -117,7 +117,9 @@ export function buildPublishJobOverrides(input: PublishJobOverridesInput): Publi
   return overrides;
 }
 
-export function buildPresetRerunPayload(kind: 'republish' | 'pronunciation' | 'studyText' | 'allAudio'): RerunPayload {
+export function buildPresetRerunPayload(
+  kind: 'republish' | 'pronunciation' | 'studyText' | 'allAudio',
+): RerunPayload {
   if (kind === 'republish') {
     return { republishOnly: true };
   }
@@ -219,7 +221,8 @@ export function buildCustomRerunPayload(input: CustomRerunInput): CustomRerunPay
           | 'eleven_flash_v2';
       }
     } else {
-      payload.pronunciationChunkEdgeVoice = input.rerunPronunciationChunkEdgeVoice.trim() || undefined;
+      payload.pronunciationChunkEdgeVoice =
+        input.rerunPronunciationChunkEdgeVoice.trim() || undefined;
     }
   }
 

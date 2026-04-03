@@ -2,13 +2,13 @@ import type { GenerationProvider } from '@esl-pipeline/contracts';
 
 import type { BatchBackendConfig } from '../config/env.js';
 import {
-  ensurePendingLessonMemoryEntry,
   type EnsurePendingLessonMemoryEntryResult,
+  ensurePendingLessonMemoryEntry,
 } from '../domain/lesson-memory-repository.js';
 import { logger } from '../infrastructure/logger.js';
 import { createStudentMemoryQueue } from '../infrastructure/student-memory-queue.js';
-import { resolveGenerationCandidates } from './generation-policy.js';
 import { LESSON_MEMORY_SCHEMA_VERSION } from './generate-lesson-memory-entry.js';
+import { resolveGenerationCandidates } from './generation-policy.js';
 
 export interface RequestLessonMemoryGenerationParams {
   studentId: string | null;

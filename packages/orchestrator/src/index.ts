@@ -21,18 +21,15 @@ import {
 } from '@esl-pipeline/notion-adapter';
 import { extractPronunciationFocus, parseMarkdownContext } from '@esl-pipeline/pmd';
 import { deriveS3UploadAddress, uploadFile } from '@esl-pipeline/storage-uploader';
-import {
-  buildStudyTextMp3,
-  hashStudyText,
-} from '@esl-pipeline/tts-core';
+import { buildStudyTextMp3, hashStudyText } from '@esl-pipeline/tts-core';
 
 import {
+  createProgressCallbacksFromV2Context,
+  failureResultV2,
   type GetAssignmentStatusOperationResultV2,
   type NewAssignmentOperationResultV2,
   type PlanRerunAssignmentOperationResultV2,
   type RerunAssignmentOperationResultV2,
-  createProgressCallbacksFromV2Context,
-  failureResultV2,
   successResultV2,
 } from './api-v2.js';
 import { DEFAULT_PRESETS_PATH, DEFAULT_VOICES_PATH } from './config.js';
@@ -46,13 +43,14 @@ import { computeRerunPlan } from './rerun-planner.js';
 import {
   type AudioArtifact,
   type AudioArtifactKind,
-  type PronunciationAudioArtifact,
   deriveS3GlobalUrl,
   emitArtifactReuseMetric,
+  type PronunciationAudioArtifact,
   resolveAudioArtifactKey,
   resolveAudioArtifactsFromManifest,
 } from './runtime/audio-artifacts.js';
 import { readMarkdownCached } from './runtime/markdown-cache.js';
+import { synthesizePronunciationAudio } from './runtime/pronunciation-audio.js';
 import {
   addAnytypePageToCollection,
   resolveAnytypeObjectId,
@@ -63,7 +61,6 @@ import {
   resolveHeadingTheme,
   resolveMarkdownTitle,
 } from './runtime/publish-utils.js';
-import { synthesizePronunciationAudio } from './runtime/pronunciation-audio.js';
 import { createStageReporter } from './runtime/stage-reporter.js';
 import {
   buildTtsSpendSummary,
@@ -94,32 +91,32 @@ import type {
 } from './types.js';
 
 export type {
-  AssignmentStage,
-  AssignmentStageStatus,
-  AssignmentProgressEvent,
   AssignmentProgressCallbacks,
+  AssignmentProgressEvent,
+  AssignmentStage,
   AssignmentStageEventV2,
-  RerunPlanRequest,
-  RerunPlanRequestV2,
-  RerunPlanResult,
-  RerunTargetStage,
-  OrchestratorDependencies,
-  OrchestratorApiResultV2,
-  OrchestratorErrorCategory,
-  OrchestratorErrorV2,
-  OrchestratorOperation,
-  OrchestratorV2ExecutionContext,
+  AssignmentStageStatus,
+  AssignmentStatus,
+  GetAssignmentStatusRequestV2,
   NewAssignmentFlags,
   NewAssignmentRequest,
   NewAssignmentRequestV2,
   NewAssignmentResult,
-  AssignmentStatus,
-  GetAssignmentStatusRequestV2,
-  RerunFlags,
+  OrchestratorApiResultV2,
+  OrchestratorDependencies,
+  OrchestratorErrorCategory,
+  OrchestratorErrorV2,
+  OrchestratorOperation,
+  OrchestratorV2ExecutionContext,
+  PublishTarget,
   RerunAssignmentRequest,
   RerunAssignmentRequestV2,
   RerunAssignmentResult,
-  PublishTarget,
+  RerunFlags,
+  RerunPlanRequest,
+  RerunPlanRequestV2,
+  RerunPlanResult,
+  RerunTargetStage,
 } from './types.js';
 
 const fallbackManifestStore = createFilesystemManifestStore();
@@ -230,57 +227,56 @@ function resolveDefaultChunkProvider(mode?: string | null): 'edge-tts' | 'eleven
 }
 
 export {
-  manifestPathFor,
-  readManifest,
-  writeManifest,
-  createFilesystemManifestStore,
-} from './manifest.js';
-export { createFilesystemConfigProvider } from './config.js';
-export type { StudentProfile } from './config.js';
-export { S3ManifestStore, type S3ManifestStoreOptions } from './adapters/manifest/s3.js';
-export {
   RemoteConfigProvider,
   type RemoteConfigProviderOptions,
 } from './adapters/config/remote.js';
-export type { AssignmentManifest, ManifestStore } from './manifest.js';
-export type { ConfigProvider } from './config.js';
-export { noopLogger, noopMetrics } from './observability.js';
-export type {
-  PipelineLogger,
-  PipelineMetrics,
-  PipelineLogEvent,
-  PipelineLogLevel,
-} from './observability.js';
-export {
-  createPipeline,
-  resolveConfigPaths,
-  loadEnvFiles,
-  loadEnvFilesWithSummary,
-  resolveManifestPath,
-} from './pipeline.js';
-export type {
-  CreatePipelineOptions,
-  OrchestratorPipeline,
-  ResolvedConfigPaths,
-  PipelineNewAssignmentOptions,
-  PipelineRerunOptions,
-  LoadEnvOptions,
-  LoadEnvSummary,
-} from './pipeline.js';
+export { S3ManifestStore, type S3ManifestStoreOptions } from './adapters/manifest/s3.js';
 export {
   categorizeOrchestratorError,
-  toStageEventV2,
   type GetAssignmentStatusOperationResultV2,
   type NewAssignmentOperationResultV2,
   type PlanRerunAssignmentOperationResultV2,
   type RerunAssignmentOperationResultV2,
+  toStageEventV2,
 } from './api-v2.js';
+export type { ConfigProvider, StudentProfile } from './config.js';
+export { createFilesystemConfigProvider } from './config.js';
+export type { AssignmentManifest, ManifestStore } from './manifest.js';
 export {
-  resolveJobOptions,
+  createFilesystemManifestStore,
+  manifestPathFor,
+  readManifest,
+  writeManifest,
+} from './manifest.js';
+export {
   type JobOptionsPayload,
-  type VoiceOption as JobVoiceOption,
   type NotionDatabaseOption as JobNotionDatabaseOption,
+  resolveJobOptions,
+  type VoiceOption as JobVoiceOption,
 } from './metadata/job-options.js';
+export type {
+  PipelineLogEvent,
+  PipelineLogger,
+  PipelineLogLevel,
+  PipelineMetrics,
+} from './observability.js';
+export { noopLogger, noopMetrics } from './observability.js';
+export type {
+  CreatePipelineOptions,
+  LoadEnvOptions,
+  LoadEnvSummary,
+  OrchestratorPipeline,
+  PipelineNewAssignmentOptions,
+  PipelineRerunOptions,
+  ResolvedConfigPaths,
+} from './pipeline.js';
+export {
+  createPipeline,
+  loadEnvFiles,
+  loadEnvFilesWithSummary,
+  resolveConfigPaths,
+  resolveManifestPath,
+} from './pipeline.js';
 export { computeRerunPlan } from './rerun-planner.js';
 export { summarizeVoiceSelections } from './runtime/tts-telemetry.js';
 
@@ -1233,7 +1229,9 @@ export async function rerunAssignment(
     }
 
     const mdContents = await readMarkdownCached(flags.md);
-    const markdownContext = rerunPlan.executable.includes('tts') ? parseMarkdownContext(mdContents) : null;
+    const markdownContext = rerunPlan.executable.includes('tts')
+      ? parseMarkdownContext(mdContents)
+      : null;
     const detectedPronunciationMode =
       (markdownContext ? extractPronunciationFocus(markdownContext)?.mode : null) ??
       rerunPlan.detectedPronunciationMode ??
@@ -1417,7 +1415,7 @@ export async function rerunAssignment(
               ...(audioArtifacts.pronunciation ?? { mode: generatedPronunciation.mode }),
               mode: generatedPronunciation.mode,
               primaryClip: flags.regeneratePronunciationMainAudio
-                ? generatedPronunciation.primaryClip ?? undefined
+                ? (generatedPronunciation.primaryClip ?? undefined)
                 : audioArtifacts.pronunciation?.primaryClip,
               itemClips: flags.regeneratePronunciationChunkAudio
                 ? generatedPronunciation.itemClips

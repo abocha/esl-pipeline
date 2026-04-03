@@ -316,7 +316,7 @@ export function registerErrorHandler(app: import('fastify').FastifyInstance): vo
   app.setErrorHandler(errorHandler);
 
   // Add request ID generation
-  app.addHook('onRequest', (request, reply, done) => {
+  app.addHook('onRequest', (request, _reply, done) => {
     (request as { id?: string }).id =
       request.id || `req_${Date.now()}_${Math.random().toString(36).slice(2, 11)}`;
     done();

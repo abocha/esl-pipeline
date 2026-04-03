@@ -2,16 +2,17 @@
 //
 // Tests for rate limiting middleware covering Redis-based rate limiting,
 // burst handling, and middleware integration.
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+
 import type { FastifyReply, FastifyRequest } from 'fastify';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { loadConfig } from '../src/config/env.js';
 import { createRedisClient } from '../src/infrastructure/redis.js';
 import {
-  type RateLimiterRedisClient,
-  RateLimiterService,
   createRateLimiterService,
   createUploadRateLimitMiddleware,
+  type RateLimiterRedisClient,
+  RateLimiterService,
 } from '../src/transport/rate-limit-middleware.js';
 
 // Mock Redis client

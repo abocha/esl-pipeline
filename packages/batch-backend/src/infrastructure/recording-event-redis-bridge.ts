@@ -1,12 +1,12 @@
-import type { Redis } from 'ioredis';
 import { randomUUID } from 'node:crypto';
+import type { Redis } from 'ioredis';
 
 import {
-  type RecordingEvent,
-  type RecordingEventType,
   getRecordingSubscriptionSnapshot,
   onRecordingSubscriptionChange,
   publishRecordingEvent,
+  type RecordingEvent,
+  type RecordingEventType,
   subscribeRecordingEvents,
 } from '../domain/recording-events.js';
 import type { RecordingRecord } from '../domain/recording-model.js';

@@ -1,14 +1,15 @@
+export type { AddAudioOpts, AddAudioResult } from './audio.js';
+export { addOrReplaceAudio, addOrReplaceAudioUnderStudyText, getClient } from './audio.js';
+export { mdToBlocks } from './blocks/mdToBlocks.js';
 export { createNotionClient } from './client.js';
-export { withRetry } from './retry.js';
+export type { ColorPreset, PresetsFile } from './colorizer.js';
+export { applyHeadingPreset, hashColorPreset, loadPreset, PresetSchema } from './colorizer.js';
 export {
+  findStudentPageId,
   resolveDataSourceId,
   resolveNotionTarget,
   resolveStudentId,
-  findStudentPageId,
 } from './data-source.js';
-export { mdToBlocks } from './blocks/mdToBlocks.js';
-export { addOrReplaceAudio, addOrReplaceAudioUnderStudyText, getClient } from './audio.js';
-export { applyHeadingPreset, hashColorPreset, loadPreset, PresetSchema } from './colorizer.js';
 export { runImport } from './importer.js';
 export {
   applyTopicProperty,
@@ -20,12 +21,11 @@ export {
   mapFrontmatterProperties,
 } from './properties.js';
 export { isProtectedToggleTitle, normalizeToggleLabel, shouldUsePlainToggle } from './rendering.js';
-export type { AddAudioOpts, AddAudioResult } from './audio.js';
-export type { ColorPreset, PresetsFile } from './colorizer.js';
+export { withRetry } from './retry.js';
 export type {
   FrontmatterShape,
   ImportOptions,
-  ResolvedNotionTarget,
   ResolveDataSourceInput,
   ResolveDataSourceResult,
+  ResolvedNotionTarget,
 } from './types.js';

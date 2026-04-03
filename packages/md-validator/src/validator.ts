@@ -3,7 +3,7 @@ import type {
   MarkdownValidationRuleSetInfo,
 } from '@esl-pipeline/contracts';
 
-import { type ValidateMarkdownInput, resolveValidateInput } from './core/input.js';
+import { resolveValidateInput, type ValidateMarkdownInput } from './core/input.js';
 import { buildIssuesFromLegacyMessages, mergeIssues, withRulesetMetadata } from './core/result.js';
 import { executeRuleset } from './rules/engine.js';
 import { resolveValidationRuleset } from './rulesets/registry.js';

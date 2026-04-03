@@ -2,11 +2,10 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { resetGuidedConfirmGuardsForTests } from '../src/guided-ui.js';
 import { TelegramApiError } from '../src/telegram-client.js';
-
 import {
+  createCallbackUpdate,
   createJob,
   createRunner,
-  createCallbackUpdate,
   createUpdate,
   processUpdate,
 } from './telegram-test-fixtures.js';
@@ -135,7 +134,10 @@ describe('telegram runner topic healing', () => {
       },
     });
 
-    await processUpdate(runner, createUpdate('/share job-heal', { chatId: 123, chatType: 'supergroup' }));
+    await processUpdate(
+      runner,
+      createUpdate('/share job-heal', { chatId: 123, chatType: 'supergroup' }),
+    );
 
     expect(healStaleThread).toHaveBeenCalledWith({
       domain: 'jobs',

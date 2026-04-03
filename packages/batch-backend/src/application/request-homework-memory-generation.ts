@@ -2,11 +2,11 @@ import type { GenerationProvider } from '@esl-pipeline/contracts';
 
 import type { BatchBackendConfig } from '../config/env.js';
 import {
-  ensurePendingHomeworkMemoryEntry,
   type EnsurePendingHomeworkMemoryEntryResult,
+  ensurePendingHomeworkMemoryEntry,
 } from '../domain/homework-memory-repository.js';
-import { createStudentMemoryQueue } from '../infrastructure/student-memory-queue.js';
 import { logger } from '../infrastructure/logger.js';
+import { createStudentMemoryQueue } from '../infrastructure/student-memory-queue.js';
 import { resolveGenerationCandidates } from './generation-policy.js';
 import { HOMEWORK_MEMORY_SCHEMA_VERSION } from './homework-memory-generation.js';
 import { resolveHomeworkMemorySourceFromSucceededJob } from './homework-memory-source.js';

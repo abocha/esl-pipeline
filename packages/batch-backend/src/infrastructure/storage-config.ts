@@ -1,7 +1,7 @@
 // Re-export storage utilities from shared infrastructure
 export {
-  type StorageProvider,
+  createStorageConfigService,
   type StorageConfig,
   StorageConfigurationService,
-  createStorageConfigService,
+  type StorageProvider,
 } from '@esl-pipeline/shared-infrastructure';

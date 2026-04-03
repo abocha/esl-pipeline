@@ -94,7 +94,9 @@ describe('rendering', () => {
     expect(html).toContain('top: var(--editorial-rail-start, 246px);');
     expect(html).toContain('.markdown-body > h2::before {');
     expect(html).toContain('@media (max-width: 959px) {');
-    expect(html).toContain('.callout,\n.study-text,\n.toc-shell,\n.audio-figure,\ndetails:not(.study-text) {');
+    expect(html).toContain(
+      '.callout,\n.study-text,\n.toc-shell,\n.audio-figure,\ndetails:not(.study-text) {',
+    );
     expect(html).toContain('.markdown-body h4 {');
     expect(html).toContain('.markdown-body h4 .heading-text {');
     expect(html).toContain("page.style.setProperty('--editorial-rail-start'");

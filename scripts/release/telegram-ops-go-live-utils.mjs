@@ -77,7 +77,7 @@ export async function loadEnvFromFiles(args = {}) {
       const content = await readFile(absolutePath, 'utf8');
       const parsed = parseDotEnvContent(content);
       for (const [key, value] of parsed.entries()) {
-        if (!Object.prototype.hasOwnProperty.call(env, key) || env[key] === '') {
+        if (!Object.hasOwn(env, key) || env[key] === '') {
           env[key] = value;
         }
       }

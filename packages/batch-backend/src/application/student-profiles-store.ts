@@ -2,11 +2,6 @@ import path from 'node:path';
 
 import type { BatchBackendConfig } from '../config/env.js';
 import { loadConfig } from '../config/env.js';
-import { saveProfileRevisionContent } from './profile-content.js';
-import {
-  type StarterProfileInput,
-  renderStarterProfileContent,
-} from './starter-profile-content.js';
 import { getProfileById, upsertProfile } from '../domain/profile-repository.js';
 import type { StudentRecord } from '../domain/student-model.js';
 import {
@@ -21,6 +16,11 @@ import {
   upsertStudent,
 } from '../domain/student-repository.js';
 import { deriveStudentId, normalizeStudentName } from '../domain/student-utils.js';
+import { saveProfileRevisionContent } from './profile-content.js';
+import {
+  renderStarterProfileContent,
+  type StarterProfileInput,
+} from './starter-profile-content.js';
 
 export interface StudentProfileData {
   id: string;
@@ -385,15 +385,11 @@ async function createStudentProfileDb(
         starterProfile,
       });
 
-      await dependencies.profiles.saveRevision(
-        profileId,
-        starterProfileContent,
-        {
-          source: 'starter_profile_form',
-          status: 'active',
-          createdBy: options?.bindingAudit?.changedBy ?? null,
-        },
-      );
+      await dependencies.profiles.saveRevision(profileId, starterProfileContent, {
+        source: 'starter_profile_form',
+        status: 'active',
+        createdBy: options?.bindingAudit?.changedBy ?? null,
+      });
     }
   } catch (error) {
     await dependencies.students.remove(inserted.id).catch(() => false);

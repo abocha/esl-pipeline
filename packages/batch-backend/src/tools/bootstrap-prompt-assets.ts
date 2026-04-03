@@ -209,10 +209,7 @@ async function scanAssetRoot(
   return assets;
 }
 
-export async function scanAssets(params: {
-  templateRoot: string;
-  profileRoot: string;
-}): Promise<{
+export async function scanAssets(params: { templateRoot: string; profileRoot: string }): Promise<{
   templates: ScannedAsset[];
   profiles: ScannedAsset[];
   scannedFiles: number;
@@ -422,7 +419,9 @@ async function run(): Promise<void> {
   };
 
   if (scanned.templates.length === 0) {
-    throw new Error('No template assets discovered. Ensure template files exist under template root.');
+    throw new Error(
+      'No template assets discovered. Ensure template files exist under template root.',
+    );
   }
   if (scanned.profiles.length === 0) {
     throw new Error('No profile assets discovered. Ensure profile files exist under profile root.');

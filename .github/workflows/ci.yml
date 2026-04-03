@@ -43,6 +43,21 @@ jobs:
       - name: Install deps
         run: pnpm install --frozen-lockfile
 
+      - name: Install repo hygiene tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y shellcheck
+          mkdir -p "$RUNNER_TEMP/actionlint-bin"
+          curl -sSfL https://github.com/rhysd/actionlint/releases/download/v1.7.11/actionlint_1.7.11_linux_amd64.tar.gz \
+            | tar -xzf - -C "$RUNNER_TEMP/actionlint-bin"
+          echo "$RUNNER_TEMP/actionlint-bin" >> "$GITHUB_PATH"
+
+      - name: Lint GitHub workflows
+        run: pnpm run lint:workflows
+
+      - name: Lint shell scripts
+        run: pnpm run lint:shell
+
       - name: Lint Docker Compose files
         run: pnpm docker:lint
 
@@ -274,14 +289,14 @@ jobs:
       - name: Wait for Postgres and Redis
         run: |
           set -euo pipefail
-          for attempt in {1..30}; do
+          for _ in {1..30}; do
             if timeout 1 bash -c '</dev/tcp/127.0.0.1/5432'; then
               break
             fi
             sleep 2
           done
           timeout 1 bash -c '</dev/tcp/127.0.0.1/5432'
-          for attempt in {1..30}; do
+          for _ in {1..30}; do
             if timeout 1 bash -c '</dev/tcp/127.0.0.1/6379'; then
               break
             fi

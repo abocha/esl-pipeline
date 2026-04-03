@@ -2,7 +2,9 @@ import type { AuditLogger } from './types.js';
 
 type MetricLabelValue = string | number | boolean | null | undefined;
 
-function cleanLabels(labels: Record<string, MetricLabelValue> | undefined): Record<string, MetricLabelValue> {
+function cleanLabels(
+  labels: Record<string, MetricLabelValue> | undefined,
+): Record<string, MetricLabelValue> {
   if (!labels) return {};
   const cleaned: Record<string, MetricLabelValue> = {};
   for (const [key, value] of Object.entries(labels)) {

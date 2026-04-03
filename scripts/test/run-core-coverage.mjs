@@ -1,6 +1,6 @@
 #!/usr/bin/env node
-import { mkdirSync, rmSync } from 'node:fs';
 import { spawnSync } from 'node:child_process';
+import { mkdirSync, rmSync } from 'node:fs';
 import path from 'node:path';
 
 const coverageRoot = path.resolve('tmp/coverage');

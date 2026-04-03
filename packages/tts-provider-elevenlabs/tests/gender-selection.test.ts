@@ -5,8 +5,8 @@ import { describe, expect, it, vi } from 'vitest';
 
 import { parseMarkdownContext } from '@esl-pipeline/pmd';
 
-import { pickVoiceForSpeaker } from '../src/assign.js';
 import * as assign from '../src/assign.js';
+import { pickVoiceForSpeaker } from '../src/assign.js';
 import { buildStudyTextMp3 } from '../src/index.js';
 import { resolveSpeakerVoices } from '../src/speakerAssignment.js';
 

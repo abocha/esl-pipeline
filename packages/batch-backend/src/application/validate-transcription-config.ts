@@ -6,10 +6,10 @@ import { ConfigurationError } from '@esl-pipeline/contracts';
 import type { BatchBackendConfig } from '../config/env.js';
 import { loadConfig } from '../config/env.js';
 import {
-  StorageConfigurationService,
   createStorageConfigService,
+  StorageConfigurationService,
 } from '../infrastructure/storage-config.js';
-import { PromptOptionError, getPromptOptions } from './prompt-options.js';
+import { getPromptOptions, PromptOptionError } from './prompt-options.js';
 
 export async function validateTranscriptionConfig(
   overrides?: Partial<{

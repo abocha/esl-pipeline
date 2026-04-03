@@ -1,4 +1,3 @@
-import yaml from 'js-yaml';
 import { createHash } from 'node:crypto';
 import { createWriteStream } from 'node:fs';
 import { copyFile, mkdir, readFile, rename, stat, unlink } from 'node:fs/promises';
@@ -6,19 +5,20 @@ import { dirname, resolve } from 'node:path';
 import { Readable } from 'node:stream';
 import { pipeline } from 'node:stream/promises';
 import type { ReadableStream as NodeReadableStream } from 'node:stream/web';
+import yaml from 'js-yaml';
 
 import {
   ConfigurationError,
   InfrastructureError,
+  noopLogger,
   ValidationError,
   type VoiceProviderErrorCategory,
-  noopLogger,
 } from '@esl-pipeline/contracts';
 import {
-  type Frontmatter,
   extractFrontmatter,
   extractPronunciationShadowFocus,
   extractStudyText,
+  type Frontmatter,
 } from '@esl-pipeline/pmd';
 import { runProviderFallbackLadder } from '@esl-pipeline/provider-runtime';
 
@@ -37,18 +37,19 @@ import {
   extractElevenLabsRuntimeErrorDetails,
   isElevenLabsTtsRetryableStatus,
 } from './provider-runtime.js';
-import { type VoiceMapConfig, resolveSpeakerVoices } from './speakerAssignment.js';
-import type { DialogueInput, TtsStrategy } from './types.js';
+import { resolveSpeakerVoices, type VoiceMapConfig } from './speakerAssignment.js';
 import type {
-  BuildPronunciationTextInput,
-  BuildPronunciationTextOptions,
-  BuildPronunciationTextResult,
   BuildPronunciationShadowSentenceInput,
   BuildPronunciationShadowSentenceOptions,
   BuildPronunciationShadowSentenceResult,
+  BuildPronunciationTextInput,
+  BuildPronunciationTextOptions,
+  BuildPronunciationTextResult,
   BuildStudyTextInput,
   BuildStudyTextOptions,
   BuildStudyTextResult,
+  DialogueInput,
+  TtsStrategy,
 } from './types.js';
 
 const DEFAULT_MODEL_ID =
@@ -130,8 +131,10 @@ function buildPronunciationOutputFileName(
 ): string {
   const prefix = sanitizeStudentName(frontmatter.student);
   const stem =
-    fileStem?.trim().replaceAll(/[^a-z0-9-]+/gi, '-').replaceAll(/^-+|-+$/g, '') ||
-    'pronunciation';
+    fileStem
+      ?.trim()
+      .replaceAll(/[^a-z0-9-]+/gi, '-')
+      .replaceAll(/^-+|-+$/g, '') || 'pronunciation';
   return prefix ? `${prefix}-${hash}-${stem}.mp3` : `${hash}-${stem}.mp3`;
 }
 
@@ -868,7 +871,10 @@ export async function buildPronunciationTextMp3(
       }),
     )
     .digest('hex');
-  const targetPath = resolve(outputDir, buildPronunciationOutputFileName(hash, frontmatter, fileStem));
+  const targetPath = resolve(
+    outputDir,
+    buildPronunciationOutputFileName(hash, frontmatter, fileStem),
+  );
   const generatedCharacters = sentence.length;
 
   if (opts.preview) {
@@ -938,7 +944,7 @@ export function parseSpeaker(line: string): { speaker?: string; text: string } {
 const MARKDOWN_STRIPPERS: [RegExp, string][] = [
   [/\r?\n/g, ' '], // single line
   [/^\s*[-*+]\s+/, ''], // bullet prefixes
-  [/^\s*\d+[\.)]\s+/, ''], // numbered lists
+  [/^\s*\d+[.)]\s+/, ''], // numbered lists
   [/\*\*(.+?)\*\*/g, '$1'],
   [/__(.+?)__/g, '$1'],
   [/\*(.+?)\*/g, '$1'],
@@ -1157,32 +1163,30 @@ function wait(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-export { resolveFfmpegPath, FfmpegNotFoundError } from './ffmpeg.js';
-export { loadVoiceCapabilities, loadVoicesCatalog } from './assign.js';
+export { createElevenLabsTtsProvider } from './adapter.js';
 export type { VoiceCatalog } from './assign.js';
+export { loadVoiceCapabilities, loadVoicesCatalog } from './assign.js';
+// Export dialogue functions for orchestrator integration
+export { buildDialogueHash, chunkDialogueInputs, synthesizeDialogue } from './dialogue.js';
+export { FfmpegNotFoundError, resolveFfmpegPath } from './ffmpeg.js';
 export { DEFAULT_VOICES_OUT, syncVoices } from './syncVoices.js';
-export {
-  buildVoiceCapabilitiesSnapshot,
-  getVoiceCapabilities,
-  validateCapabilityValue,
-} from './voiceCapabilities.js';
-
 // Export types for orchestrator integration
 export type {
-  TtsStrategy,
-  TtsProvider,
-  DialogueInput,
-  DialogueSynthesisOptions,
-  DialogueSynthesisResult,
-  DialogueChunk,
   BuildPronunciationShadowSentenceInput,
   BuildPronunciationShadowSentenceOptions,
   BuildPronunciationShadowSentenceResult,
   BuildStudyTextInput,
   BuildStudyTextOptions,
   BuildStudyTextResult,
+  DialogueChunk,
+  DialogueInput,
+  DialogueSynthesisOptions,
+  DialogueSynthesisResult,
+  TtsProvider,
+  TtsStrategy,
 } from './types.js';
-
-// Export dialogue functions for orchestrator integration
-export { chunkDialogueInputs, buildDialogueHash, synthesizeDialogue } from './dialogue.js';
-export { createElevenLabsTtsProvider } from './adapter.js';
+export {
+  buildVoiceCapabilitiesSnapshot,
+  getVoiceCapabilities,
+  validateCapabilityValue,
+} from './voiceCapabilities.js';

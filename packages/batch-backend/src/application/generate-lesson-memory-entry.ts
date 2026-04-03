@@ -2,13 +2,11 @@ import type { GenerationProvider } from '@esl-pipeline/contracts';
 
 import type { BatchBackendConfig } from '../config/env.js';
 import type { LessonMemoryRecord } from '../domain/lesson-memory-model.js';
-import {
-  insertCanonicalReadyLessonMemoryEntry,
-} from '../domain/lesson-memory-repository.js';
+import { insertCanonicalReadyLessonMemoryEntry } from '../domain/lesson-memory-repository.js';
 import type { ProviderStructuredExecutionResult } from './generation-providers.js';
 import {
-  extractLessonMemoryContent,
   type ExtractLessonMemoryContentRequest,
+  extractLessonMemoryContent,
 } from './lesson-memory-extraction.js';
 
 export const LESSON_MEMORY_SCHEMA_VERSION = 'lesson-memory.v1';

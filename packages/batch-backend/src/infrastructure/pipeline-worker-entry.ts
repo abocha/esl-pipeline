@@ -5,9 +5,9 @@ import { type BatchBackendConfig, loadConfig } from '../config/env.js';
 import { getFfmpegSemaphore } from './ffmpeg-semaphore.js';
 import { logger as rootLogger } from './logger.js';
 import {
+  getPipeline,
   type RunAssignmentPayload,
   type RunRerunAssignmentPayload,
-  getPipeline,
 } from './orchestrator-service.js';
 import { applyUserSettingsToEnv } from './pipeline-worker-env.js';
 import { toWorkerV2FailureError } from './pipeline-worker-v2.js';

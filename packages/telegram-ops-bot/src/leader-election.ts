@@ -1,4 +1,4 @@
-import { type ClientConfig, Client } from 'pg';
+import { Client, type ClientConfig } from 'pg';
 
 import { readString } from '@esl-pipeline/shared-infrastructure';
 

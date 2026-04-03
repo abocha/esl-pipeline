@@ -15,6 +15,7 @@ This does **not** need to remain production-usable at every intermediate checkpo
 ## Key Implementation Changes
 
 ### 1. Backend foundation: candidate facts, review state, and promotion
+
 - Add canonical `student_profile_candidates` persistence in `batch-backend` with:
   - lifecycle status: `pending_review | approved | rejected | promoted | superseded`
   - secondary review state: `unreviewed | deferred | approved | rejected`
@@ -50,6 +51,7 @@ This does **not** need to remain production-usable at every intermediate checkpo
   - pending/rejected/approved-but-not-promoted candidates never affect live generation
 
 ### 2. Starter-profile creation flow
+
 - Extend `POST /students` to accept an optional `starterProfile` object instead of forcing teachers to pre-create a full profile document.
 - `starterProfile` should support:
   - `level?`
@@ -67,6 +69,7 @@ This does **not** need to remain production-usable at every intermediate checkpo
 - CEFR level remains optional; unknown level must not block student creation.
 
 ### 3. Workspace UI: draft-grade but complete
+
 - Extend the typed frontend API surface for:
   - candidate list/read models
   - approve/reject/defer mutations
@@ -91,6 +94,7 @@ This does **not** need to remain production-usable at every intermediate checkpo
 - Keep the UI additive and operational; do not reorganize the whole workspace.
 
 ### 4. Temporary epilogue: tool-first live transition
+
 - Do **not** add a permanent public normalization API for migration.
 - Implement Phase 5 as tool-first operator support:
   - a backend tool/command that reads the active legacy profile plus current canonical memory
@@ -108,6 +112,7 @@ This does **not** need to remain production-usable at every intermediate checkpo
 - Keep migration helpers out of permanent runtime authority or prompt assembly.
 
 ### 5. Delegation plan
+
 - Explorer agents for codebase questions only, reused as needed.
 - Worker 1: backend schema/repository/routes for candidate lifecycle.
 - Worker 2: backend drafting/promotion/normalization services and tools.
@@ -141,6 +146,7 @@ This does **not** need to remain production-usable at every intermediate checkpo
 ## Test Plan
 
 ### Backend
+
 - Repository / PG-backed tests:
   - candidate insert/list/dedupe/supersession
   - review state transitions
@@ -162,6 +168,7 @@ This does **not** need to remain production-usable at every intermediate checkpo
 - PG-backed lanes should use the documented `BATCH_BACKEND_TEST_PG` host recipe and run serially where shared truncation is an issue.
 
 ### Frontend
+
 - `api.ts` tests for new candidate and starter-profile calls.
 - `StudentWorkspace` tests for:
   - candidate inspection
@@ -172,6 +179,7 @@ This does **not** need to remain production-usable at every intermediate checkpo
   - no regression to current memory/provenance surfaces
 
 ### Manual checkpoints
+
 - Checkpoint 1: after backend candidate/review/promotion contracts are green, pause for user review of route behavior and candidate semantics.
 - Checkpoint 2: after workspace review/promotion flow is working, pause for user review of the draft UX before adding migration tooling.
 - Checkpoint 3: after the normalization tool is working, run one real-student migration and inspect:

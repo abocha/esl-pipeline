@@ -31,6 +31,7 @@ import { requestLessonMemoryGeneration } from './request-lesson-memory-generatio
 import { buildStudentMemoryPackageContext } from './student-memory-package.js';
 import { resolveStudentProfileBindingAt } from './student-profile-bindings.js';
 import { getStudentProfileById } from './student-profiles-store.js';
+
 const LEGACY_PROFILE_MARKER = 'INSERT PROFILE HERE';
 
 export interface CreatePromptPackageParams {

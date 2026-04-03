@@ -1,13 +1,13 @@
-import { HeadObjectCommand, PutObjectCommand, S3Client } from '@aws-sdk/client-s3';
 import { createHash } from 'node:crypto';
 import { createReadStream } from 'node:fs';
 import { stat } from 'node:fs/promises';
+import { HeadObjectCommand, PutObjectCommand, S3Client } from '@aws-sdk/client-s3';
 
 import {
   ConfigurationError,
+  noopLogger,
   type PipelineLogger,
   ValidationError,
-  noopLogger,
 } from '@esl-pipeline/contracts';
 
 import { deriveS3ObjectUrl, deriveS3UploadAddress, normalizeS3ObjectKey } from './address.js';

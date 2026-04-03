@@ -1,7 +1,7 @@
 import type {
   JobListResponse,
-  JobSummaryResponse,
   JobStatusDto,
+  JobSummaryResponse,
   OpsActionListResponse,
   OpsActionStatus,
   OpsStatusResponse,
@@ -61,7 +61,9 @@ function formatPreset(job: Pick<JobStatusDto, 'learningPresetId' | 'preset'>): s
   return formatNullable(job.learningPresetId ?? job.preset);
 }
 
-function formatJobTimestamp(job: Pick<JobStatusDto, 'finishedAt' | 'updatedAt' | 'createdAt'>): string {
+function formatJobTimestamp(
+  job: Pick<JobStatusDto, 'finishedAt' | 'updatedAt' | 'createdAt'>,
+): string {
   return formatLocalizedDateTime(job.finishedAt ?? job.updatedAt ?? job.createdAt);
 }
 
@@ -75,9 +77,7 @@ function formatJobListLine(job: JobStatusDto): string {
   ].join('\n');
 }
 
-function formatStudentSummaryLine(
-  student: StudentSummaryResponse['items'][number],
-): string {
+function formatStudentSummaryLine(student: StudentSummaryResponse['items'][number]): string {
   const details: string[] = [];
   if (student.lastLessonAt) {
     details.push(`Last lesson ${formatLocalizedDateTime(student.lastLessonAt)}`);
@@ -87,7 +87,9 @@ function formatStudentSummaryLine(
   }
   return [
     `• <b>${escapeHtml(student.name)} (${escapeHtml(student.id.slice(0, 8))})</b>`,
-    details.length > 0 ? details.map((detail) => escapeHtml(detail)).join(' · ') : 'No recent activity',
+    details.length > 0
+      ? details.map((detail) => escapeHtml(detail)).join(' · ')
+      : 'No recent activity',
   ].join('\n');
 }
 
@@ -161,7 +163,10 @@ export function formatFinishedJobs(response: JobListResponse): string {
     '',
     `<b>Showing</b> ${response.jobs.length} of ${response.total}`,
     '',
-    response.jobs.slice(0, 10).map((job) => formatJobListLine(job)).join('\n\n'),
+    response.jobs
+      .slice(0, 10)
+      .map((job) => formatJobListLine(job))
+      .join('\n\n'),
   ].join('\n');
 }
 
@@ -219,7 +224,8 @@ export function formatStudentDisambiguation(args: {
   footer?: string;
 }): string {
   const lines = args.matches.map(
-    (student) => `• <b>${escapeHtml(student.student)}</b> — <code>${escapeHtml(student.id.slice(0, 8))}</code>`,
+    (student) =>
+      `• <b>${escapeHtml(student.student)}</b> — <code>${escapeHtml(student.id.slice(0, 8))}</code>`,
   );
   return [
     '<b>Multiple students matched</b>',
@@ -319,13 +325,34 @@ export function formatTodaySummary(args: {
     `<b>Awaiting approval</b> ${args.summary.byState.awaiting_approval ?? 0}`,
     ...(attentionLines.length > 0 ? ['', '<b>Attention</b>', ...attentionLines] : []),
     ...(args.succeededJobs.length > 0
-      ? ['', '<b>Recent finished</b>', ...args.succeededJobs.map((job) => `• ${escapeHtml(formatStudentIdentity(job))} · ${escapeHtml(formatJobTimestamp(job))} · <code>${escapeHtml(job.jobId.slice(0, 12))}</code>`)]
+      ? [
+          '',
+          '<b>Recent finished</b>',
+          ...args.succeededJobs.map(
+            (job) =>
+              `• ${escapeHtml(formatStudentIdentity(job))} · ${escapeHtml(formatJobTimestamp(job))} · <code>${escapeHtml(job.jobId.slice(0, 12))}</code>`,
+          ),
+        ]
       : []),
     ...(args.failedJobs.length > 0
-      ? ['', '<b>Recent failures</b>', ...args.failedJobs.map((job) => `• ${escapeHtml(formatStudentIdentity(job))} · ${escapeHtml(formatJobTimestamp(job))} · ${escapeHtml(formatNullable(job.error))}`)]
+      ? [
+          '',
+          '<b>Recent failures</b>',
+          ...args.failedJobs.map(
+            (job) =>
+              `• ${escapeHtml(formatStudentIdentity(job))} · ${escapeHtml(formatJobTimestamp(job))} · ${escapeHtml(formatNullable(job.error))}`,
+          ),
+        ]
       : []),
     ...(args.runningJobs.length > 0
-      ? ['', '<b>Running now</b>', ...args.runningJobs.map((job) => `• ${escapeHtml(formatStudentIdentity(job))} · ${escapeHtml(formatJobTimestamp(job))} · <code>${escapeHtml(job.jobId.slice(0, 12))}</code>`)]
+      ? [
+          '',
+          '<b>Running now</b>',
+          ...args.runningJobs.map(
+            (job) =>
+              `• ${escapeHtml(formatStudentIdentity(job))} · ${escapeHtml(formatJobTimestamp(job))} · <code>${escapeHtml(job.jobId.slice(0, 12))}</code>`,
+          ),
+        ]
       : []),
     '',
     '<b>Follow up</b>',
@@ -401,7 +428,9 @@ export function formatBotStatusReport(args: {
     '',
     '<b>Topics</b>',
     ...topicLines,
-    ...(warnings.length > 0 ? ['', '<b>Warnings</b>', ...warnings.map((line) => escapeHtml(line))] : []),
+    ...(warnings.length > 0
+      ? ['', '<b>Warnings</b>', ...warnings.map((line) => escapeHtml(line))]
+      : []),
   ].join('\n');
 }
 
@@ -410,11 +439,7 @@ export function formatStudentsBrowser(args: {
   page: number;
 }): string {
   if (args.response.items.length === 0) {
-    return [
-      `<b>Students · Page ${args.page}</b>`,
-      '',
-      'No students found.',
-    ].join('\n');
+    return [`<b>Students · Page ${args.page}</b>`, '', 'No students found.'].join('\n');
   }
 
   return [

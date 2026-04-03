@@ -209,10 +209,7 @@ plan
     it('warns on overly-generic section 5 headings that are semantically underspecified', async () => {
       const tempDir = await mkdtemp(path.join(tmpdir(), 'validator-'));
       const file = path.join(tempDir, 'generic-practice-heading.md');
-      const md = buildBaseDoc('text').replace(
-        '## 5. ✍️ Practice & Pronunciation',
-        '## 5. Practice',
-      );
+      const md = buildBaseDoc('text').replace('## 5. ✍️ Practice & Pronunciation', '## 5. Practice');
       await writeFile(file, md);
 
       const res = await validateMarkdownFile(file);

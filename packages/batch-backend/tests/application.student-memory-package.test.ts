@@ -120,7 +120,9 @@ describe('application/student-memory-package', () => {
       source: 'canonical',
     });
     expect(result.studentMemorySnapshotBlock).toContain('Long-term summary');
-    expect(result.studentMemorySnapshotBlock).toContain('Stable strengths: Uses advice phrases well');
+    expect(result.studentMemorySnapshotBlock).toContain(
+      'Stable strengths: Uses advice phrases well',
+    );
     expect(result.studentMemorySnapshotBlock).toContain('Recurring issues: Present perfect');
     expect(result.studentMemorySnapshotBlock).toContain(
       'Recommended assignment directions: Use advice scenarios with short spoken responses',

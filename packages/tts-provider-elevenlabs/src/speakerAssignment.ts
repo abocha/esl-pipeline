@@ -1,13 +1,12 @@
-import { ConfigurationError } from '@esl-pipeline/contracts';
 import type { VoiceSelectionDiagnostics } from '@esl-pipeline/contracts';
-import { normalizeSpeakerRole } from '@esl-pipeline/contracts';
+import { ConfigurationError, normalizeSpeakerRole } from '@esl-pipeline/contracts';
 import type { SpeakerProfile } from '@esl-pipeline/pmd';
 
 import {
   type PickedVoice,
+  pickVoiceForSpeaker,
   type SpeakerMeta,
   type VoiceCatalog,
-  pickVoiceForSpeaker,
 } from './assign.js';
 
 export interface VoiceMapConfig {

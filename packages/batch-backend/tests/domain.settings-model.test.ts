@@ -2,13 +2,13 @@
 import { describe, expect, it } from 'vitest';
 
 import {
-  UserSettingsRecord,
-  VALID_TTS_PROVIDERS,
-  VALID_TTS_STRATEGIES,
   getDefaultSettings,
   isValidTtsProvider,
   isValidTtsStrategy,
   sanitizeSettings,
+  UserSettingsRecord,
+  VALID_TTS_PROVIDERS,
+  VALID_TTS_STRATEGIES,
 } from '../src/domain/settings-model.js';
 
 describe('domain/settings-model', () => {
