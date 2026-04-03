@@ -85,4 +85,39 @@ describe('rendering', () => {
     expect(html).toContain('- [ ] keep this literal');
     expect(html).toContain('<input type="checkbox" class="task-list-item-checkbox">');
   });
+
+  it('continues ordered lists across h4 headings with intervening prose', async () => {
+    const markdown = `1. First question
+2. Second question
+
+#### Part 2
+
+Read the sentence and choose the best answer.
+
+1. Third question
+2. Fourth question`;
+    const html = await renderToHtml(markdown, 'H4 List Continuation');
+
+    expect(html).toContain('<h4 id="part-2" tabindex="-1"><span class="heading-text">Part 2</span></h4>');
+    expect(html).toContain('<p>Read the sentence and choose the best answer.</p>');
+    expect(html).toContain('<ol start="3">');
+    expect(html).toContain('<li>Third question</li>');
+    expect(html).toContain('<li>Fourth question</li>');
+  });
+
+  it('does not continue ordered lists across h3 headings', async () => {
+    const markdown = `1. First question
+2. Second question
+
+### B. New Section
+
+Read the sentence and choose the best answer.
+
+1. Third question
+2. Fourth question`;
+    const html = await renderToHtml(markdown, 'H3 List Reset');
+
+    expect(html).toContain('<h3 id="b.-new-section" tabindex="-1"><span class="heading-text">B. New Section</span></h3>');
+    expect(html).not.toContain('<ol start="3">');
+  });
 });
