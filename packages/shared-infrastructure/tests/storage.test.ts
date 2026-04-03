@@ -1,9 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import {
-  StorageConfigurationService,
   createStorageConfigService,
   resolveManifestStoreConfig,
+  StorageConfigurationService,
 } from '../src/index.js';
 
 describe('storage utilities', () => {

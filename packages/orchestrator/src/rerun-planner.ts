@@ -36,9 +36,7 @@ export function computeRerunPlan(input: PlannerInput): RerunPlanResult {
   }
 
   if (!requested.republishOnly && !regenerationSelected) {
-    errors.push(
-      'Select republish-only or at least one regeneration target for the rerun request.',
-    );
+    errors.push('Select republish-only or at least one regeneration target for the rerun request.');
   }
 
   if (errors.length > 0) {
@@ -101,7 +99,11 @@ export function computeRerunPlan(input: PlannerInput): RerunPlanResult {
   );
   const hasAnyAudioUrl = hasStudyTextUrl || hasPronunciationPrimaryUrl || hasPronunciationItemUrl;
 
-  if (requested.republishOnly && (publishTarget === 'notion' || publishTarget === 'anytype') && !hasAnyAudioUrl) {
+  if (
+    requested.republishOnly &&
+    (publishTarget === 'notion' || publishTarget === 'anytype') &&
+    !hasAnyAudioUrl
+  ) {
     missingManifestFields.add('audio.url');
     errors.push('Republish requires existing audio URLs in the manifest for this publish target.');
   }
@@ -131,7 +133,8 @@ export function computeRerunPlan(input: PlannerInput): RerunPlanResult {
     skipped,
     willReuse: {
       studyTextAudio: requested.republishOnly || !requested.regenerateStudyTextAudio,
-      pronunciationMainAudio: requested.republishOnly || !requested.regeneratePronunciationMainAudio,
+      pronunciationMainAudio:
+        requested.republishOnly || !requested.regeneratePronunciationMainAudio,
       pronunciationChunkAudio:
         requested.republishOnly || !requested.regeneratePronunciationChunkAudio,
     },

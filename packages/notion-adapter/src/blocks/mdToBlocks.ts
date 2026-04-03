@@ -2,6 +2,7 @@ import { normalizePronunciationCalloutLines, shouldUsePlainToggle } from '../ren
 
 // Notion SDK request types frequently change; keep this mapper permissive.
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
+// biome-ignore lint/suspicious/noExplicitAny: Notion SDK block request unions are unstable across releases.
 type BlockObjectRequest = any;
 
 type ParagraphBlock = Extract<BlockObjectRequest, { type?: 'paragraph' }>;

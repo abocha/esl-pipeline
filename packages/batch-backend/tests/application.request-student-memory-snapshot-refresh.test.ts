@@ -16,12 +16,14 @@ vi.mock('../src/domain/student-memory-snapshot-repository.js', () => ({
 }));
 
 vi.mock('../src/application/generation-policy.js', () => ({
-  resolveGenerationCandidates: vi.fn((args?: { providerOverride?: string; modelOverride?: string }) => [
-    {
-      provider: args?.providerOverride ?? 'openai',
-      model: args?.modelOverride ?? 'gpt-5.2',
-    },
-  ]),
+  resolveGenerationCandidates: vi.fn(
+    (args?: { providerOverride?: string; modelOverride?: string }) => [
+      {
+        provider: args?.providerOverride ?? 'openai',
+        model: args?.modelOverride ?? 'gpt-5.2',
+      },
+    ],
+  ),
 }));
 
 vi.mock('../src/infrastructure/logger.js', () => ({

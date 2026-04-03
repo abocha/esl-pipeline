@@ -1,10 +1,9 @@
 export {
-  type StorageProvider,
+  createStorageConfigService,
   type StorageConfig,
   StorageConfigurationService,
-  createStorageConfigService,
+  type StorageProvider,
 } from './config.js';
-
 export {
   type ManifestStoreOptions,
   type ResolvedManifestStoreConfig,

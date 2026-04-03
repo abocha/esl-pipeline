@@ -1,7 +1,7 @@
 import {
+  describeHttpServerIntegrationSuite,
   type JobRecord,
   type RecordingRecord,
-  describeHttpServerIntegrationSuite,
 } from './transport.http-server.integration.harness.js';
 
 type IncomingMessage = import('node:http').IncomingMessage;
@@ -635,143 +635,141 @@ describeHttpServerIntegrationSuite(
       expect(getJobStatus).toHaveBeenCalledTimes(1);
     });
 
-    it(
-      'GET /jobs/events streams recording events when jobId maps to a recording',
-      { timeout: 10_000 },
-      async () => {
-        const getJobStatus = vi.spyOn(getJobStatusModule, 'getJobStatus');
-        getJobStatus.mockClear();
-        getJobStatus.mockResolvedValue({
-          jobId: 'job-stream',
-          md: 'fixtures/ok.md',
-          recordingId: 'recording-1',
-          transcriptId: null,
-          promptPackageId: null,
-          draftId: null,
-          preset: null,
-          withTts: null,
-          upload: null,
-          voiceId: null,
-          voiceAccent: null,
-          forceTts: null,
-          notionDatabase: null,
-          publishTarget: 'notion',
-          ttsStrategy: null,
-          autoPublish: null,
-          notionUrl: null,
-          anytypeUrl: null,
-          state: 'queued',
-          createdAt: '2024-01-01T00:00:00.000Z',
-          updatedAt: '2024-01-01T00:00:00.000Z',
-          startedAt: null,
-          finishedAt: null,
-          error: null,
-          manifestPath: null,
-        });
+    it('GET /jobs/events streams recording events when jobId maps to a recording', {
+      timeout: 10_000,
+    }, async () => {
+      const getJobStatus = vi.spyOn(getJobStatusModule, 'getJobStatus');
+      getJobStatus.mockClear();
+      getJobStatus.mockResolvedValue({
+        jobId: 'job-stream',
+        md: 'fixtures/ok.md',
+        recordingId: 'recording-1',
+        transcriptId: null,
+        promptPackageId: null,
+        draftId: null,
+        preset: null,
+        withTts: null,
+        upload: null,
+        voiceId: null,
+        voiceAccent: null,
+        forceTts: null,
+        notionDatabase: null,
+        publishTarget: 'notion',
+        ttsStrategy: null,
+        autoPublish: null,
+        notionUrl: null,
+        anytypeUrl: null,
+        state: 'queued',
+        createdAt: '2024-01-01T00:00:00.000Z',
+        updatedAt: '2024-01-01T00:00:00.000Z',
+        startedAt: null,
+        finishedAt: null,
+        error: null,
+        manifestPath: null,
+      });
 
-        const streamingApp = await createHttpServer();
-        const address = (await streamingApp.listen({ port: 0, host: '127.0.0.1' })) as string;
-        const url = new URL('/jobs/events', address);
-        url.searchParams.set('jobId', 'job-stream');
+      const streamingApp = await createHttpServer();
+      const address = (await streamingApp.listen({ port: 0, host: '127.0.0.1' })) as string;
+      const url = new URL('/jobs/events', address);
+      url.searchParams.set('jobId', 'job-stream');
 
-        const recording: RecordingRecord = {
-          id: 'recording-1',
-          source: 'upload',
-          studentId: 'student-1',
-          sourcePath: '/tmp/recording.opus',
-          storageUri: 'local://recordings/recording.opus',
-          sha256: 'hash',
-          bytes: 12,
-          durationSec: 120,
-          channels: 2,
-          status: 'transcribed',
-          error: null,
-          createdAt: new Date('2024-01-01T10:00:00Z'),
-          updatedAt: new Date('2024-01-01T10:01:00Z'),
+      const recording: RecordingRecord = {
+        id: 'recording-1',
+        source: 'upload',
+        studentId: 'student-1',
+        sourcePath: '/tmp/recording.opus',
+        storageUri: 'local://recordings/recording.opus',
+        sha256: 'hash',
+        bytes: 12,
+        durationSec: 120,
+        channels: 2,
+        status: 'transcribed',
+        error: null,
+        createdAt: new Date('2024-01-01T10:00:00Z'),
+        updatedAt: new Date('2024-01-01T10:01:00Z'),
+      };
+
+      const eventPayload = await new Promise<any>((resolve, reject) => {
+        let resRef: IncomingMessage | null = null;
+        let settled = false;
+        let buffer = '';
+        let published = false;
+        let requestRef: ClientRequest | null = null;
+        let timeout: ReturnType<typeof setTimeout> | null = null;
+        let publishTimer: ReturnType<typeof setTimeout> | null = null;
+
+        const cleanup = (err?: Error, result?: any) => {
+          if (settled) return;
+          settled = true;
+          requestRef?.destroy();
+          resRef?.destroy();
+          if (timeout) {
+            clearTimeout(timeout);
+          }
+          if (publishTimer) {
+            clearTimeout(publishTimer);
+          }
+          void streamingApp.close();
+          if (err) {
+            reject(err);
+          } else {
+            resolve(result);
+          }
         };
 
-        const eventPayload = await new Promise<any>((resolve, reject) => {
-          let resRef: IncomingMessage | null = null;
-          let settled = false;
-          let buffer = '';
-          let published = false;
-          let requestRef: ClientRequest | null = null;
-          let timeout: ReturnType<typeof setTimeout> | null = null;
-          let publishTimer: ReturnType<typeof setTimeout> | null = null;
+        const req = httpRequest(url, (res: IncomingMessage) => {
+          resRef = res;
+          res.setEncoding('utf8');
 
-          const cleanup = (err?: Error, result?: any) => {
-            if (settled) return;
-            settled = true;
-            requestRef?.destroy();
-            resRef?.destroy();
-            if (timeout) {
-              clearTimeout(timeout);
+          res.on('data', (chunk: string) => {
+            buffer += chunk;
+
+            if (!published && buffer.includes(': connected')) {
+              published = true;
+              publishTimer = setTimeout(() => {
+                publishRecordingEvent({
+                  type: 'recording_state_changed',
+                  recording,
+                  transcriptId: 'transcript-1',
+                });
+              }, 0);
             }
-            if (publishTimer) {
-              clearTimeout(publishTimer);
+
+            const dataMatch = buffer.match(/data: (.+)\n\n/);
+            if (dataMatch) {
+              const payload = JSON.parse(dataMatch[1]!);
+              cleanup(undefined, payload);
             }
-            void streamingApp.close();
-            if (err) {
-              reject(err);
-            } else {
-              resolve(result);
-            }
-          };
-
-          const req = httpRequest(url, (res: IncomingMessage) => {
-            resRef = res;
-            res.setEncoding('utf8');
-
-            res.on('data', (chunk: string) => {
-              buffer += chunk;
-
-              if (!published && buffer.includes(': connected')) {
-                published = true;
-                publishTimer = setTimeout(() => {
-                  publishRecordingEvent({
-                    type: 'recording_state_changed',
-                    recording,
-                    transcriptId: 'transcript-1',
-                  });
-                }, 0);
-              }
-
-              const dataMatch = buffer.match(/data: (.+)\n\n/);
-              if (dataMatch) {
-                const payload = JSON.parse(dataMatch[1]!);
-                cleanup(undefined, payload);
-              }
-            });
-
-            res.on('error', (err: Error) => {
-              cleanup(err);
-            });
           });
 
-          requestRef = req;
-
-          req.on('error', (err: Error) => {
+          res.on('error', (err: Error) => {
             cleanup(err);
           });
-
-          req.end();
-
-          timeout = setTimeout(() => {
-            cleanup(new Error('Timed out waiting for SSE payload'));
-          }, 10_000);
         });
 
-        expect(getJobStatus).toHaveBeenCalledWith('job-stream');
-        expect(getJobStatus).toHaveBeenCalledTimes(1);
-        expect(eventPayload.type).toBe('recording_state_changed');
-        expect(eventPayload.recordingId).toBe('recording-1');
-        expect(eventPayload.status).toBe('transcribed');
-        expect(eventPayload.transcriptId).toBe('transcript-1');
-        expect(eventPayload.error).toBeNull();
-        expect(eventPayload.studentId).toBe('student-1');
-        expect(eventPayload.source).toBe('upload');
-        expect(eventPayload.bytes).toBe(12);
-      },
-    );
+        requestRef = req;
+
+        req.on('error', (err: Error) => {
+          cleanup(err);
+        });
+
+        req.end();
+
+        timeout = setTimeout(() => {
+          cleanup(new Error('Timed out waiting for SSE payload'));
+        }, 10_000);
+      });
+
+      expect(getJobStatus).toHaveBeenCalledWith('job-stream');
+      expect(getJobStatus).toHaveBeenCalledTimes(1);
+      expect(eventPayload.type).toBe('recording_state_changed');
+      expect(eventPayload.recordingId).toBe('recording-1');
+      expect(eventPayload.status).toBe('transcribed');
+      expect(eventPayload.transcriptId).toBe('transcript-1');
+      expect(eventPayload.error).toBeNull();
+      expect(eventPayload.studentId).toBe('student-1');
+      expect(eventPayload.source).toBe('upload');
+      expect(eventPayload.bytes).toBe(12);
+    });
   },
 );

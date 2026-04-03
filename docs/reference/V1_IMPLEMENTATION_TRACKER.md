@@ -54,17 +54,17 @@ Historical shipped detail moved to:
 
 ## Workstream Status
 
-| Workstream | Status | Gate / Note |
-| --- | --- | --- |
-| WS0 delivered foundations | complete | historical baseline |
-| WS1 CEFR baseline presets | complete | shipped |
-| WS6 readiness instrumentation | complete | shipped |
-| WS2A preset plumbing MVP | complete | shipped |
-| WS2B direct LLM generation | complete | shipped |
-| WS3 TTS abstraction + fallback | complete | shipped |
-| WS5 cost and quota policy | parked | depends on stabilized usage telemetry |
-| WS4 CRM-lite lesson ledger | parked | depends on stable assignment flow |
-| Stabilization and gate review | in progress | current active lane |
+| Workstream                     | Status      | Gate / Note                           |
+| ------------------------------ | ----------- | ------------------------------------- |
+| WS0 delivered foundations      | complete    | historical baseline                   |
+| WS1 CEFR baseline presets      | complete    | shipped                               |
+| WS6 readiness instrumentation  | complete    | shipped                               |
+| WS2A preset plumbing MVP       | complete    | shipped                               |
+| WS2B direct LLM generation     | complete    | shipped                               |
+| WS3 TTS abstraction + fallback | complete    | shipped                               |
+| WS5 cost and quota policy      | parked      | depends on stabilized usage telemetry |
+| WS4 CRM-lite lesson ledger     | parked      | depends on stable assignment flow     |
+| Stabilization and gate review  | in progress | current active lane                   |
 
 ## Current Gate Checks
 

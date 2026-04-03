@@ -1,22 +1,21 @@
 import { randomUUID } from 'node:crypto';
-
 import type { PoolClient } from 'pg';
 
-import type { StudentFact } from './lesson-memory-model.js';
 import { withPgClient } from '../infrastructure/db.js';
 import { logger } from '../infrastructure/logger.js';
+import type { StudentFact } from './lesson-memory-model.js';
 import {
   StudentMemoryConfidenceSchema,
   StudentMemoryIssueTypeSchema,
-  StudentMemoryPrioritySchema,
-  StudentMemorySnapshotSourceKindSchema,
-  StudentMemorySnapshotStatusSchema,
   type StudentMemoryLabeledNote,
+  StudentMemoryPrioritySchema,
   type StudentMemoryRecommendedAssignmentDirection,
   type StudentMemoryRecurringIssue,
   type StudentMemorySnapshotGenerationNotes,
   type StudentMemorySnapshotRecord,
+  StudentMemorySnapshotSourceKindSchema,
   type StudentMemorySnapshotStatus,
+  StudentMemorySnapshotStatusSchema,
   type StudentMemoryUnresolvedIssue,
 } from './student-memory-snapshot-model.js';
 
@@ -625,8 +624,8 @@ export async function markStudentMemorySnapshotFailed(params: {
     ...existing.generationNotes,
     error: params.errorMessage,
     providerRequestId:
-      params.providerRequestId ?? (existing.generationNotes?.providerRequestId ?? null),
-    usage: params.usage ?? (existing.generationNotes?.usage ?? null),
+      params.providerRequestId ?? existing.generationNotes?.providerRequestId ?? null,
+    usage: params.usage ?? existing.generationNotes?.usage ?? null,
     failedAt: new Date().toISOString(),
   };
 
@@ -741,9 +740,7 @@ export async function listStudentMemorySnapshots(
   return rows.map((row) => mapRowToStudentMemorySnapshot(row));
 }
 
-function mapRowToStudentMemorySnapshot(
-  row: StudentMemorySnapshotRow,
-): StudentMemorySnapshotRecord {
+function mapRowToStudentMemorySnapshot(row: StudentMemorySnapshotRow): StudentMemorySnapshotRecord {
   const recurringIssues = (row.recurring_issues ?? []).map((issue) => ({
     ...issue,
     issueType: StudentMemoryIssueTypeSchema.parse(issue.issueType),

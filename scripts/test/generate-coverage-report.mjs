@@ -116,13 +116,23 @@ if (packageMetrics.length > 0) {
 
 markdownLines.push('## Aggregate');
 markdownLines.push('');
-markdownLines.push(`- Lines: ${formatPercent(aggregate.linesPct, totals.lines.covered, totals.lines.total)}`);
-markdownLines.push(`- Statements: ${formatPercent(aggregate.statementsPct, totals.statements.covered, totals.statements.total)}`);
-markdownLines.push(`- Functions: ${formatPercent(aggregate.functionsPct, totals.functions.covered, totals.functions.total)}`);
-markdownLines.push(`- Branches: ${formatPercent(aggregate.branchesPct, totals.branches.covered, totals.branches.total)}`);
+markdownLines.push(
+  `- Lines: ${formatPercent(aggregate.linesPct, totals.lines.covered, totals.lines.total)}`,
+);
+markdownLines.push(
+  `- Statements: ${formatPercent(aggregate.statementsPct, totals.statements.covered, totals.statements.total)}`,
+);
+markdownLines.push(
+  `- Functions: ${formatPercent(aggregate.functionsPct, totals.functions.covered, totals.functions.total)}`,
+);
+markdownLines.push(
+  `- Branches: ${formatPercent(aggregate.branchesPct, totals.branches.covered, totals.branches.total)}`,
+);
 if (!aggregateHasData) {
   markdownLines.push('');
-  markdownLines.push('_Aggregate coverage is unavailable because no coverage summary inputs were found._');
+  markdownLines.push(
+    '_Aggregate coverage is unavailable because no coverage summary inputs were found._',
+  );
 }
 markdownLines.push('');
 

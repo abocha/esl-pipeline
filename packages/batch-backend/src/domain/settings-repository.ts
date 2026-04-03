@@ -7,12 +7,12 @@ import { withPgClient } from '../infrastructure/db.js';
 import { getEncryptionService } from '../infrastructure/encryption-service.js';
 import { logger } from '../infrastructure/logger.js';
 import {
+  getDefaultSettings,
+  isValidTtsProvider,
   TtsProvider,
   UserSettingsInput,
   UserSettingsRecord,
   UserTtsStrategy,
-  getDefaultSettings,
-  isValidTtsProvider,
 } from './settings-model.js';
 
 /**

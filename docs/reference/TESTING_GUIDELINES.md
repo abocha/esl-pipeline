@@ -25,6 +25,7 @@ If this guide conflicts with [`docs/reference/agents-ssot.md`](agents-ssot.md), 
 4. [`packages/orchestrator/package.json`](../../packages/orchestrator/package.json)
 5. [`packages/tts-core/package.json`](../../packages/tts-core/package.json)
 6. [`.github/workflows/ci.yml`](../../.github/workflows/ci.yml)
+7. [`biome.json`](../../biome.json)
 
 ## Lane Contract
 
@@ -37,6 +38,8 @@ If this guide conflicts with [`docs/reference/agents-ssot.md`](agents-ssot.md), 
 - Root backend DB + worker lane: `pnpm test:backend:db:worker`
 - Root full check: `pnpm check`
   - Runs `build`, `typecheck`, `lint`, `test`, `test:integration:prebuilt`, and the backend DB + worker lane.
+- Root lint lane:
+  - `pnpm lint` runs Biome for baseline JS/TS/TSX/JSON linting, then ESLint for specialized React and Vitest checks.
 - Root lane behavior:
   - `pnpm test` delegates to `pnpm test:unit`.
   - `pnpm test:unit` runs package-level `test:unit` scripts in parallel (`--if-present`).

@@ -2,6 +2,7 @@ import MarkdownIt from 'markdown-it';
 import anchor from 'markdown-it-anchor';
 import container from 'markdown-it-container';
 import toc from 'markdown-it-toc-done-right';
+
 import type { PronunciationAudioPayload } from '@esl-pipeline/shared-infrastructure';
 
 export interface ThemeTokens {
@@ -1860,7 +1861,7 @@ function sanitizeRenderedHtml(html: string, allowRawHtml: boolean): string {
 
   sanitized = sanitized.replaceAll(
     /\s(href|src)=("|')([^"']*)(\2)/gi,
-    (full, attr, quote, value) => {
+    (_full, attr, quote, value) => {
       const attribute = String(attr).toLowerCase();
       const safeValue =
         attribute === 'href' ? sanitizeLinkHref(value) : (sanitizeMediaUrl(value) ?? '#');
@@ -2072,7 +2073,15 @@ function mergeStandaloneGrammarEmphasisParagraphs(columnInner: string): string {
 
   normalized = normalized.replaceAll(
     /<p\b([^>]*)>([\s\S]*?)<\/p>\s*<p\b([^>]*)>\s*(<em\b[\s\S]*?<\/em>)\s*<\/p>\s*<p\b([^>]*)>([\s\S]*?)<\/p>/gi,
-    (fullMatch, prevAttrs: string, prevContent: string, _emAttrs: string, emphasisHtml: string, nextAttrs: string, nextContent: string) => {
+    (
+      fullMatch,
+      prevAttrs: string,
+      prevContent: string,
+      _emAttrs: string,
+      emphasisHtml: string,
+      nextAttrs: string,
+      nextContent: string,
+    ) => {
       if (!isStandaloneInlineEmphasis(emphasisHtml)) {
         return fullMatch;
       }
@@ -2089,7 +2098,13 @@ function mergeStandaloneGrammarEmphasisParagraphs(columnInner: string): string {
 
   normalized = normalized.replaceAll(
     /<p\b([^>]*)>\s*(<em\b[\s\S]*?<\/em>)\s*<\/p>\s*<p\b([^>]*)>([\s\S]*?)<\/p>/gi,
-    (fullMatch, emphasisAttrs: string, emphasisHtml: string, nextAttrs: string, nextContent: string) => {
+    (
+      fullMatch,
+      emphasisAttrs: string,
+      emphasisHtml: string,
+      nextAttrs: string,
+      nextContent: string,
+    ) => {
       if (!isStandaloneInlineEmphasis(emphasisHtml)) {
         return fullMatch;
       }
@@ -3198,8 +3213,8 @@ function buildBehaviorScript(features: ResolvedFeatures): string {
         const applySentenceAnchorTone = (element) => {
           if (!(element instanceof HTMLElement)) return null;
           element.classList.add('pronunciation-sentence-anchor');
-          const normalizedText = String(element.textContent || '').replace(/\s+/g, ' ').trim();
-          if (/(^|\b)shadow sentence\s*:/i.test(normalizedText)) {
+          const normalizedText = String(element.textContent || '').replace(/s+/g, ' ').trim();
+          if (/(^|\b)shadow sentences*:/i.test(normalizedText)) {
             element.classList.add('pronunciation-shadow-sentence');
           } else {
             element.classList.add('pronunciation-natural-sentence');
@@ -3244,7 +3259,7 @@ function buildBehaviorScript(features: ResolvedFeatures): string {
             }
             if (
               parent.tagName === 'P' &&
-              !/\bmode\s*:/i.test(String(parent.textContent || ''))
+              !/\bmodes*:/i.test(String(parent.textContent || ''))
             ) {
               parent.classList.add('pronunciation-sentence-anchor');
             }
@@ -3651,7 +3666,7 @@ function buildBehaviorScript(features: ResolvedFeatures): string {
             return;
           }
           const raw = (item.textContent || '').replace(/\\s+/g, ' ').trim();
-          if (/^(?:mode|target|focus|action|deliverable)\s*:/i.test(raw)) {
+          if (/^(?:mode|target|focus|action|deliverable)s*:/i.test(raw)) {
             return;
           }
 

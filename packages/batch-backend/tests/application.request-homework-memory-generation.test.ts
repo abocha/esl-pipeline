@@ -17,12 +17,14 @@ vi.mock('../src/infrastructure/student-memory-queue.js', () => ({
 }));
 
 vi.mock('../src/application/generation-policy.js', () => ({
-  resolveGenerationCandidates: vi.fn((args?: { providerOverride?: string; modelOverride?: string }) => [
-    {
-      provider: args?.providerOverride ?? 'openrouter',
-      model: args?.modelOverride ?? 'qwen/qwen3.5',
-    },
-  ]),
+  resolveGenerationCandidates: vi.fn(
+    (args?: { providerOverride?: string; modelOverride?: string }) => [
+      {
+        provider: args?.providerOverride ?? 'openrouter',
+        model: args?.modelOverride ?? 'qwen/qwen3.5',
+      },
+    ],
+  ),
 }));
 
 vi.mock('../src/application/homework-memory-source.js', async () => {

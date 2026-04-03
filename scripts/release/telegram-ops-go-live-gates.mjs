@@ -1,13 +1,13 @@
 #!/usr/bin/env node
-import process from 'node:process';
-import path from 'node:path';
 import { spawnSync } from 'node:child_process';
+import path from 'node:path';
+import process from 'node:process';
 import { fileURLToPath } from 'node:url';
 
 import {
   DEFAULT_ARTIFACT_DIR,
-  REPO_ROOT,
   normalizeEnvValue,
+  REPO_ROOT,
   writeJsonArtifact,
 } from './telegram-ops-go-live-utils.mjs';
 
@@ -172,10 +172,10 @@ async function main() {
 if (process.argv[1] === fileURLToPath(import.meta.url)) {
   void main().catch((error) => {
     console.error(
-      `[telegram-ops-go-live-gates] fatal: ${error instanceof Error ? error.stack ?? error.message : String(error)}`,
+      `[telegram-ops-go-live-gates] fatal: ${error instanceof Error ? (error.stack ?? error.message) : String(error)}`,
     );
     process.exit(1);
   });
 }
 
-export { DEFAULT_JSON_OUT, parseArgs, buildGateEnv, GATE_STEPS };
+export { buildGateEnv, DEFAULT_JSON_OUT, GATE_STEPS, parseArgs };

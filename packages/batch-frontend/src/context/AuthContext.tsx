@@ -1,12 +1,12 @@
-import { type ReactNode, createContext, useCallback, useContext, useEffect, useState } from 'react';
+import { createContext, type ReactNode, useCallback, useContext, useEffect, useState } from 'react';
 
+import type { UserRole as ApiUserRole, RegisterRole, UserProfile } from '../utils/api';
 import {
   login as loginRequest,
   logoutSession,
   refreshToken as refreshTokenRequest,
   register as registerRequest,
 } from '../utils/api';
-import type { UserRole as ApiUserRole, RegisterRole, UserProfile } from '../utils/api';
 import { setApiAuthToken } from '../utils/api-client';
 
 export type UserRole = ApiUserRole;

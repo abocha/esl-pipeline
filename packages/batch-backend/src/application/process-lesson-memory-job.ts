@@ -1,22 +1,22 @@
 import type { GenerationProvider } from '@esl-pipeline/contracts';
 
 import type { BatchBackendConfig } from '../config/env.js';
-import { getPromptPackageById } from '../domain/prompt-package-repository.js';
-import { getTranscriptByRecordingId } from '../domain/transcript-repository.js';
 import {
   getLessonMemoryEntryById,
   markLessonMemoryEntryFailed,
   supersedePendingLessonMemoryEntriesForTranscript,
 } from '../domain/lesson-memory-repository.js';
+import { getPromptPackageById } from '../domain/prompt-package-repository.js';
+import { getTranscriptByRecordingId } from '../domain/transcript-repository.js';
 import {
   createTranscriptionStorageForUri,
   type TranscriptionStorage,
 } from '../infrastructure/transcription-storage.js';
-import { buildLessonMemoryPrompt } from './lesson-memory-prompt.js';
 import {
-  generateLessonMemoryEntry,
   type GenerateLessonMemoryEntryDependencies,
+  generateLessonMemoryEntry,
 } from './generate-lesson-memory-entry.js';
+import { buildLessonMemoryPrompt } from './lesson-memory-prompt.js';
 import { requestStudentMemorySnapshotRefresh } from './request-student-memory-snapshot-refresh.js';
 
 export interface ProcessLessonMemoryJobPayload {

@@ -123,7 +123,7 @@ function hashHtmlArtifact(content: string): string {
 }
 
 function buildHtmlArtifactKey(hash: string, keyPrefix?: string): string {
-  const normalizedPrefix = keyPrefix?.replace(/^[\/\\]+/, '').replace(/[\/\\]+$/, '') ?? '';
+  const normalizedPrefix = keyPrefix?.replace(/^[/\\]+/, '').replace(/[/\\]+$/, '') ?? '';
   const baseKey = `materials/html/artifacts/${hash}.html`;
   return normalizedPrefix ? `${normalizedPrefix}/${baseKey}` : baseKey;
 }

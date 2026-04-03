@@ -23,7 +23,9 @@ function parseArgs(argv) {
       continue;
     }
     if (token === '-h' || token === '--help') {
-      console.log('Usage: node scripts/release/compute-next-version.mjs --current <X.Y.Z> --bump <major|minor|patch>');
+      console.log(
+        'Usage: node scripts/release/compute-next-version.mjs --current <X.Y.Z> --bump <major|minor|patch>',
+      );
       process.exit(0);
     }
     die(`Unknown argument: ${token}`);

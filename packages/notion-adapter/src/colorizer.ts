@@ -1,11 +1,11 @@
+import { createHash } from 'node:crypto';
+import { readFile, stat } from 'node:fs/promises';
 import type {
   BlockObjectResponse,
   ListBlockChildrenResponse,
   PartialBlockObjectResponse,
   UpdateBlockParameters,
 } from '@notionhq/client/build/src/api-endpoints.js';
-import { createHash } from 'node:crypto';
-import { readFile, stat } from 'node:fs/promises';
 import { z } from 'zod';
 
 import { ConfigurationError } from '@esl-pipeline/contracts';
@@ -218,7 +218,7 @@ export async function applyHeadingPreset(
   };
 
   // 1) list top-level children (paginate)
-  let cursor: string | undefined = undefined;
+  let cursor: string | undefined;
   let prevWasH2 = false;
 
   do {

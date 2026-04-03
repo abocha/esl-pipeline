@@ -2,8 +2,8 @@ import { ElevenLabsError, ElevenLabsTimeoutError } from '@elevenlabs/elevenlabs-
 
 import type { VoiceProviderErrorCategory } from '@esl-pipeline/contracts';
 import {
-  type ProviderRuntimeClassificationRules,
   classifyProviderRuntimeFailure,
+  type ProviderRuntimeClassificationRules,
 } from '@esl-pipeline/provider-runtime';
 
 const ELEVENLABS_PROVIDER = 'elevenlabs';

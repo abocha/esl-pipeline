@@ -1,6 +1,6 @@
-import Fastify from 'fastify';
 import { resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import Fastify from 'fastify';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
 import { createPipeline, noopLogger, noopMetrics } from '../../src/index.js';

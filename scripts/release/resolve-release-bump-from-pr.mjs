@@ -27,7 +27,9 @@ function parseArgs(argv) {
       continue;
     }
     if (token === '-h' || token === '--help') {
-      console.log('Usage: node scripts/release/resolve-release-bump-from-pr.mjs --event <github-event.json> [--json]');
+      console.log(
+        'Usage: node scripts/release/resolve-release-bump-from-pr.mjs --event <github-event.json> [--json]',
+      );
       process.exit(0);
     }
     die(`Unknown argument: ${token}`);

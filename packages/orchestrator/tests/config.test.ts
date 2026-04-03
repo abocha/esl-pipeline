@@ -4,8 +4,8 @@ import { join, relative } from 'node:path';
 import { describe, expect, it } from 'vitest';
 
 import {
-  DEFAULT_STUDENT_NAME,
   createFilesystemConfigProvider,
+  DEFAULT_STUDENT_NAME,
   findMarkdownCandidates,
 } from '../src/config.js';
 
@@ -34,7 +34,10 @@ describe('createFilesystemConfigProvider', () => {
     const studentsDir = join(cwd, 'students');
     await mkdir(studentsDir, { recursive: true });
 
-    await writeFile(join(studentsDir, 'valid.json'), JSON.stringify({ student: '  Zara  ', dbId: 'db-1' }));
+    await writeFile(
+      join(studentsDir, 'valid.json'),
+      JSON.stringify({ student: '  Zara  ', dbId: 'db-1' }),
+    );
     await writeFile(join(studentsDir, 'invalid.json'), '{');
     await writeFile(
       join(studentsDir, 'default.json'),

@@ -1,11 +1,11 @@
-import { ElevenLabsClient } from '@elevenlabs/elevenlabs-js';
 import type { Readable } from 'node:stream';
+import { ElevenLabsClient } from '@elevenlabs/elevenlabs-js';
 
 import { classifyProviderRuntimeFailure } from '@esl-pipeline/provider-runtime';
 import {
+  mergeSegments,
   type SttProviderAdapter,
   type TranscriptSegment,
-  mergeSegments,
 } from '@esl-pipeline/stt-core';
 
 interface ElevenLabsWord {

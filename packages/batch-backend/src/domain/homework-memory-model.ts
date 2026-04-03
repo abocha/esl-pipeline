@@ -1,5 +1,6 @@
-import type { PublishTarget } from '@esl-pipeline/contracts';
 import { z } from 'zod';
+
+import type { PublishTarget } from '@esl-pipeline/contracts';
 
 export type HomeworkMemoryEntryStatus = 'pending' | 'ready' | 'failed' | 'superseded';
 export type HomeworkMemorySourceKind = 'published_assignment';
@@ -107,12 +108,7 @@ export interface HomeworkMemoryRecord {
   updatedAt: Date;
 }
 
-export const HomeworkMemoryEntryStatusSchema = z.enum([
-  'pending',
-  'ready',
-  'failed',
-  'superseded',
-]);
+export const HomeworkMemoryEntryStatusSchema = z.enum(['pending', 'ready', 'failed', 'superseded']);
 export const HomeworkMemorySourceKindSchema = z.enum(['published_assignment']);
 export const HomeworkMemoryInputTypeSchema = z.enum(['generate', 'authentic']);
 export const HomeworkMemoryStudyTextTypeSchema = z.enum(['monologue', 'dialogue']);

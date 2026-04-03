@@ -29,7 +29,6 @@
  */
 import { type AxiosError, type AxiosProgressEvent, isAxiosError } from 'axios';
 
-import { JobActionType } from '@esl-pipeline/contracts';
 import type {
   ActionCapability,
   ElevenLabsTtsModelId as ContractElevenLabsTtsModelId,
@@ -44,7 +43,6 @@ import type {
   JobState as ContractJobState,
   JobSummaryResponse as ContractJobSummaryResponse,
   MarkdownValidationResponse as ContractMarkdownValidationResponse,
-  PublishTarget,
   PronunciationChunkTtsProviderId as ContractPronunciationChunkTtsProviderId,
   RecordingStatus as ContractRecordingStatus,
   RerunJobPayload as ContractRerunJobPayload,
@@ -58,8 +56,10 @@ import type {
   GenerationProvider,
   JobActionRequest,
   JobStatusDto,
+  PublishTarget,
   StreamEventMessage,
 } from '@esl-pipeline/contracts';
+import { JobActionType } from '@esl-pipeline/contracts';
 
 import apiClient, {
   buildApiProxyPath,
@@ -718,9 +718,7 @@ function buildCandidateSourceSummary(record: StudentProfileCandidateApiRecord): 
   }
   if (record.sourceLessonMemoryIds.length > 0) {
     const lessonCount = record.sourceLessonMemoryIds.length;
-    parts.push(
-      `${lessonCount} lesson memory entr${lessonCount === 1 ? 'y' : 'ies'}`,
-    );
+    parts.push(`${lessonCount} lesson memory entr${lessonCount === 1 ? 'y' : 'ies'}`);
   }
 
   return parts.length > 0 ? parts.join(' + ') : null;
@@ -1345,10 +1343,7 @@ export async function listUserJobs(
 }
 
 export async function getJobSummary(
-  params: {
-    from?: string;
-    to?: string;
-  } = {},
+  params: { from?: string; to?: string } = {},
 ): Promise<JobSummaryResponse> {
   try {
     const response = await apiClient.get(buildApiProxyPath('/user/jobs/summary'), { params });
@@ -1363,11 +1358,7 @@ export async function getJobSummary(
 }
 
 export async function getStudentSummary(
-  params: {
-    limit?: number;
-    offset?: number;
-    order?: 'asc' | 'desc';
-  } = {},
+  params: { limit?: number; offset?: number; order?: 'asc' | 'desc' } = {},
 ): Promise<StudentSummaryResponse> {
   try {
     const response = await apiClient.get(buildApiProxyPath('/students/summary'), { params });
@@ -1764,12 +1755,7 @@ export async function fetchStudentOptions(): Promise<StudentOptionsResponse> {
 }
 
 export async function listStudents(
-  params: {
-    q?: string;
-    limit?: number;
-    offset?: number;
-    order?: 'asc' | 'desc';
-  } = {},
+  params: { q?: string; limit?: number; offset?: number; order?: 'asc' | 'desc' } = {},
 ): Promise<StudentProfileListResponse> {
   try {
     const response = await apiClient.get(buildApiProxyPath('/students'), {
@@ -2258,9 +2244,7 @@ export async function listStudentProfileCandidates(
       search.set('status', values.join(','));
     }
     if (params.reviewState) {
-      const values = Array.isArray(params.reviewState)
-        ? params.reviewState
-        : [params.reviewState];
+      const values = Array.isArray(params.reviewState) ? params.reviewState : [params.reviewState];
       search.set('reviewState', values.join(','));
     }
     if (typeof params.limit === 'number') {

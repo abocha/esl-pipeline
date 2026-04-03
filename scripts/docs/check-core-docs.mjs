@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+
 import { formatCheckResult, runDocsChecks } from './docs-check-lib.mjs';
 
 const result = runDocsChecks('core');

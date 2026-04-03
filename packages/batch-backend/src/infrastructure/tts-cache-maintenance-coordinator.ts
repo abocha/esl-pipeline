@@ -3,9 +3,9 @@ import type { PoolClient } from 'pg';
 import { withPgClient } from './db.js';
 import { logger } from './logger.js';
 import {
+  maybeRunTtsCacheMaintenance,
   type TtsCacheMaintenanceOptions,
   type TtsCacheMaintenanceResult,
-  maybeRunTtsCacheMaintenance,
 } from './tts-cache-maintenance.js';
 
 export interface TtsCacheMaintenanceWithPgLockOptions extends TtsCacheMaintenanceOptions {

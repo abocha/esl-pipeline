@@ -102,35 +102,34 @@ describe('infrastructure/orchestrator-service', () => {
     // Each test dynamically imports to avoid sharing state.
   });
 
-  it(
-    'getPipeline creates pipeline once, maps env, and caches result',
-    { timeout: ORCHESTRATOR_SERVICE_TEST_TIMEOUT_MS },
-    async () => {
-      const { loadConfig } = await import('../src/config/env.js');
-      const { createPipeline } = await import('@esl-pipeline/orchestrator');
+  it('getPipeline creates pipeline once, maps env, and caches result', {
+    timeout: ORCHESTRATOR_SERVICE_TEST_TIMEOUT_MS,
+  }, async () => {
+    const { loadConfig } = await import('../src/config/env.js');
+    const { createPipeline } = await import('@esl-pipeline/orchestrator');
 
-      (loadConfig as any).mockReturnValue({
-        orchestrator: {
-          manifestStore: 'filesystem',
-          configProvider: 'local',
-        },
-      });
+    (loadConfig as any).mockReturnValue({
+      orchestrator: {
+        manifestStore: 'filesystem',
+        configProvider: 'local',
+      },
+    });
 
-      const { getPipeline } = await import('../src/infrastructure/orchestrator-service.js');
+    const { getPipeline } = await import('../src/infrastructure/orchestrator-service.js');
 
-      const p1 = getPipeline();
-      const p2 = getPipeline();
+    const p1 = getPipeline();
+    const p2 = getPipeline();
 
-      expect(loadConfig).toHaveBeenCalledTimes(1);
-      expect(createPipeline).toHaveBeenCalledTimes(1);
-      expect(p1).toBe(p2);
-    },
-  );
+    expect(loadConfig).toHaveBeenCalledTimes(1);
+    expect(createPipeline).toHaveBeenCalledTimes(1);
+    expect(p1).toBe(p2);
+  });
 
   it('runAssignmentJob calls pipeline.newAssignment with expected flags and dependencies and returns manifestPath', async () => {
     const { loadConfig } = await import('../src/config/env.js');
-    const { getPipeline, runAssignmentJob } =
-      await import('../src/infrastructure/orchestrator-service.js');
+    const { getPipeline, runAssignmentJob } = await import(
+      '../src/infrastructure/orchestrator-service.js'
+    );
 
     (loadConfig as any).mockReturnValue({
       orchestrator: {
@@ -178,8 +177,9 @@ describe('infrastructure/orchestrator-service', () => {
 
   it('runAssignmentJob rethrows when pipeline.newAssignment fails', async () => {
     const { loadConfig } = await import('../src/config/env.js');
-    const { getPipeline, runAssignmentJob } =
-      await import('../src/infrastructure/orchestrator-service.js');
+    const { getPipeline, runAssignmentJob } = await import(
+      '../src/infrastructure/orchestrator-service.js'
+    );
 
     (loadConfig as any).mockReturnValue({
       orchestrator: {
@@ -293,8 +293,9 @@ describe('infrastructure/orchestrator-service', () => {
   });
 
   it('isManifestBucketMissingError detects provider identity from name, causeName, and code', async () => {
-    const { isManifestBucketMissingError } =
-      await import('../src/infrastructure/orchestrator-service.js');
+    const { isManifestBucketMissingError } = await import(
+      '../src/infrastructure/orchestrator-service.js'
+    );
 
     const byName = new Error('bucket missing');
     byName.name = 'NoSuchBucket';
@@ -317,8 +318,9 @@ describe('infrastructure/orchestrator-service', () => {
 
   it('getJobOptionsFromOrchestrator delegates to orchestrator metadata helper', async () => {
     const { loadConfig } = await import('../src/config/env.js');
-    const { getPipeline, getJobOptionsFromOrchestrator } =
-      await import('../src/infrastructure/orchestrator-service.js');
+    const { getPipeline, getJobOptionsFromOrchestrator } = await import(
+      '../src/infrastructure/orchestrator-service.js'
+    );
 
     (loadConfig as any).mockReturnValue({
       orchestrator: {

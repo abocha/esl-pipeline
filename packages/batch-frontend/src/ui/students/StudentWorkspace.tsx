@@ -2,7 +2,6 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Link } from 'react-router-dom';
 
 import type {
-  StudentProfileCandidate,
   JobListResponse,
   JobProvenanceResponse,
   JobState,
@@ -11,6 +10,7 @@ import type {
   StudentMemoryOverviewResponse,
   StudentProfile,
   StudentProfileBindingListResponse,
+  StudentProfileCandidate,
   StudentTimelineResponse,
   StudentTimelineType,
   TemplateRevisionSummaryResponse,
@@ -29,10 +29,10 @@ import {
   getStudentProfile,
   getStudentTimeline,
   getTemplateContent,
-  listStudentProfileCandidates,
   listProfileContents,
   listProfileRevisions,
   listStudentProfileBindings,
+  listStudentProfileCandidates,
   listStudents,
   listTemplateContents,
   listTemplateRevisions,
@@ -45,25 +45,25 @@ import {
   upsertProfileContent,
   upsertTemplateContent,
 } from '../../utils/api';
+import { CreateStudentDialog } from './CreateStudentDialog';
 import {
   buildCreateStudentPayload,
-  formatCandidateSectionLabel,
-  formatCandidateStateLabel,
-  INITIAL_HISTORY_FILTERS,
-  INITIAL_TIMELINE_FILTERS,
-  INITIAL_CREATE_STUDENT_FORM,
-  PROFILE_CANDIDATE_PENDING_FILTER,
-  PROFILE_CANDIDATE_REVIEWED_FILTER,
   type CandidateActionKind,
   type CreateStudentFormState,
+  formatCandidateSectionLabel,
+  formatCandidateStateLabel,
   type HistoryFilters,
-  type ProfileCandidateFilter,
-  type TimelineFilters,
+  INITIAL_CREATE_STUDENT_FORM,
+  INITIAL_HISTORY_FILTERS,
+  INITIAL_TIMELINE_FILTERS,
   isPendingCandidate,
   isReviewedCandidate,
   isSelectableForPromotion,
+  PROFILE_CANDIDATE_PENDING_FILTER,
+  PROFILE_CANDIDATE_REVIEWED_FILTER,
+  type ProfileCandidateFilter,
+  type TimelineFilters,
 } from './StudentWorkspace.logic';
-import { CreateStudentDialog } from './CreateStudentDialog';
 import { WorkspaceInspectionPanel } from './WorkspaceInspectionPanel';
 
 const HISTORY_LIMIT = 25;
@@ -260,12 +260,12 @@ export const StudentWorkspace: React.FC = () => {
   const [lineageLoading, setLineageLoading] = useState(false);
   const [lineageError, setLineageError] = useState<string | null>(null);
 
-  const selectedStudentRequestId = useRef(0);
-  const historyRequestId = useRef(0);
-  const timelineRequestId = useRef(0);
-  const bindingsRequestId = useRef(0);
-  const memoryOverviewRequestId = useRef(0);
-  const profileCandidatesRequestId = useRef(0);
+  const selectedStudentRequestIdRef = useRef(0);
+  const historyRequestIdRef = useRef(0);
+  const timelineRequestIdRef = useRef(0);
+  const bindingsRequestIdRef = useRef(0);
+  const memoryOverviewRequestIdRef = useRef(0);
+  const profileCandidatesRequestIdRef = useRef(0);
 
   const historyFiltersAppliedRef = useRef(historyFiltersApplied);
   const timelineFiltersAppliedRef = useRef(timelineFiltersApplied);
@@ -469,7 +469,7 @@ export const StudentWorkspace: React.FC = () => {
   }, []);
 
   const loadJobHistory = useCallback(async (studentId: string, filters: HistoryFilters) => {
-    const requestId = ++historyRequestId.current;
+    const requestId = ++historyRequestIdRef.current;
     if (!studentId) {
       setJobHistory([]);
       return;
@@ -486,22 +486,22 @@ export const StudentWorkspace: React.FC = () => {
         offset: 0,
         order: 'desc',
       });
-      if (requestId !== historyRequestId.current) return;
+      if (requestId !== historyRequestIdRef.current) return;
       setJobHistory(response.jobs ?? []);
     } catch (error) {
-      if (requestId !== historyRequestId.current) return;
+      if (requestId !== historyRequestIdRef.current) return;
       const message = error instanceof Error ? error.message : 'Unable to load assignment history.';
       setJobsError(message);
       setJobHistory([]);
     } finally {
-      if (requestId === historyRequestId.current) {
+      if (requestId === historyRequestIdRef.current) {
         setJobsLoading(false);
       }
     }
   }, []);
 
   const loadTimeline = useCallback(async (studentId: string, filters: TimelineFilters) => {
-    const requestId = ++timelineRequestId.current;
+    const requestId = ++timelineRequestIdRef.current;
     if (!studentId) {
       setTimeline([]);
       return;
@@ -517,22 +517,22 @@ export const StudentWorkspace: React.FC = () => {
         offset: 0,
         order: 'desc',
       });
-      if (requestId !== timelineRequestId.current) return;
+      if (requestId !== timelineRequestIdRef.current) return;
       setTimeline(response.items ?? []);
     } catch (error) {
-      if (requestId !== timelineRequestId.current) return;
+      if (requestId !== timelineRequestIdRef.current) return;
       const message = error instanceof Error ? error.message : 'Unable to load student timeline.';
       setTimelineError(message);
       setTimeline([]);
     } finally {
-      if (requestId === timelineRequestId.current) {
+      if (requestId === timelineRequestIdRef.current) {
         setTimelineLoading(false);
       }
     }
   }, []);
 
   const loadBindings = useCallback(async (studentId: string) => {
-    const requestId = ++bindingsRequestId.current;
+    const requestId = ++bindingsRequestIdRef.current;
     if (!studentId) {
       setBindingHistory([]);
       return;
@@ -545,23 +545,23 @@ export const StudentWorkspace: React.FC = () => {
         offset: 0,
         order: 'desc',
       });
-      if (requestId !== bindingsRequestId.current) return;
+      if (requestId !== bindingsRequestIdRef.current) return;
       setBindingHistory(response.items ?? []);
     } catch (error) {
-      if (requestId !== bindingsRequestId.current) return;
+      if (requestId !== bindingsRequestIdRef.current) return;
       const message =
         error instanceof Error ? error.message : 'Unable to load profile binding history.';
       setBindingHistoryError(message);
       setBindingHistory([]);
     } finally {
-      if (requestId === bindingsRequestId.current) {
+      if (requestId === bindingsRequestIdRef.current) {
         setBindingHistoryLoading(false);
       }
     }
   }, []);
 
   const loadMemoryOverview = useCallback(async (studentId: string) => {
-    const requestId = ++memoryOverviewRequestId.current;
+    const requestId = ++memoryOverviewRequestIdRef.current;
     if (!studentId) {
       setMemoryOverview(null);
       return;
@@ -574,22 +574,22 @@ export const StudentWorkspace: React.FC = () => {
         lessonLimit: MEMORY_OVERVIEW_LESSON_LIMIT,
         homeworkLimit: MEMORY_OVERVIEW_HOMEWORK_LIMIT,
       });
-      if (requestId !== memoryOverviewRequestId.current) return;
+      if (requestId !== memoryOverviewRequestIdRef.current) return;
       setMemoryOverview(response);
     } catch (error) {
-      if (requestId !== memoryOverviewRequestId.current) return;
+      if (requestId !== memoryOverviewRequestIdRef.current) return;
       const message = error instanceof Error ? error.message : 'Unable to load student memory.';
       setMemoryOverviewError(message);
       setMemoryOverview(null);
     } finally {
-      if (requestId === memoryOverviewRequestId.current) {
+      if (requestId === memoryOverviewRequestIdRef.current) {
         setMemoryOverviewLoading(false);
       }
     }
   }, []);
 
   const loadProfileCandidates = useCallback(async (studentId: string) => {
-    const requestId = ++profileCandidatesRequestId.current;
+    const requestId = ++profileCandidatesRequestIdRef.current;
     if (!studentId) {
       setProfileCandidates([]);
       setSelectedCandidateIds([]);
@@ -606,7 +606,7 @@ export const StudentWorkspace: React.FC = () => {
         offset: 0,
         order: 'desc',
       });
-      if (requestId !== profileCandidatesRequestId.current) return;
+      if (requestId !== profileCandidatesRequestIdRef.current) return;
       setProfileCandidates(response.items ?? []);
       setSelectedCandidateIds((current) =>
         current.filter((candidateId) =>
@@ -616,14 +616,13 @@ export const StudentWorkspace: React.FC = () => {
         ),
       );
     } catch (error) {
-      if (requestId !== profileCandidatesRequestId.current) return;
-      const message =
-        error instanceof Error ? error.message : 'Unable to load profile candidates.';
+      if (requestId !== profileCandidatesRequestIdRef.current) return;
+      const message = error instanceof Error ? error.message : 'Unable to load profile candidates.';
       setProfileCandidatesError(message);
       setProfileCandidates([]);
       setSelectedCandidateIds([]);
     } finally {
-      if (requestId === profileCandidatesRequestId.current) {
+      if (requestId === profileCandidatesRequestIdRef.current) {
         setProfileCandidatesLoading(false);
       }
     }
@@ -631,13 +630,13 @@ export const StudentWorkspace: React.FC = () => {
 
   const loadSelectedStudent = useCallback(
     async (studentId: string) => {
-      const requestId = ++selectedStudentRequestId.current;
+      const requestId = ++selectedStudentRequestIdRef.current;
       if (!studentId) {
-        historyRequestId.current += 1;
-        timelineRequestId.current += 1;
-        bindingsRequestId.current += 1;
-        memoryOverviewRequestId.current += 1;
-        profileCandidatesRequestId.current += 1;
+        historyRequestIdRef.current += 1;
+        timelineRequestIdRef.current += 1;
+        bindingsRequestIdRef.current += 1;
+        memoryOverviewRequestIdRef.current += 1;
+        profileCandidatesRequestIdRef.current += 1;
         setSelectedStudent(null);
         setSelectedProfileId('');
         setJobHistory([]);
@@ -654,11 +653,11 @@ export const StudentWorkspace: React.FC = () => {
       setBindingSuccess(null);
       try {
         const profile = await getStudentProfile(studentId);
-        if (requestId !== selectedStudentRequestId.current) return;
+        if (requestId !== selectedStudentRequestIdRef.current) return;
         setSelectedStudent(profile);
         setSelectedProfileId(profile.profileId ?? '');
       } catch (error) {
-        if (requestId !== selectedStudentRequestId.current) return;
+        if (requestId !== selectedStudentRequestIdRef.current) return;
         const message = error instanceof Error ? error.message : 'Unable to load selected student.';
         setSelectedStudent(null);
         setProfileError(message);
@@ -1365,8 +1364,7 @@ export const StudentWorkspace: React.FC = () => {
                 <strong>Promotion queue</strong>
                 <div className="workspace-muted">
                   {approvedCandidatesReadyForPromotion.length} approved candidate
-                  {approvedCandidatesReadyForPromotion.length === 1 ? '' : 's'} ready for
-                  promotion.
+                  {approvedCandidatesReadyForPromotion.length === 1 ? '' : 's'} ready for promotion.
                 </div>
               </div>
 
@@ -1414,209 +1412,223 @@ export const StudentWorkspace: React.FC = () => {
             ) : null}
           </div>
 
-          {profileCandidatesError ? <p className="workspace-error">{profileCandidatesError}</p> : null}
+          {profileCandidatesError ? (
+            <p className="workspace-error">{profileCandidatesError}</p>
+          ) : null}
 
-          {selectedStudentId ? profileCandidatesLoading && profileCandidates.length === 0 ? (
-            <p className="workspace-muted">Loading profile candidates...</p>
-          ) : groupedProfileCandidates.length > 0 ? (
-            groupedProfileCandidates.map(([section, candidates]) => (
-              <section key={section} className="workspace-candidate-group">
-                <div className="workspace-inline workspace-header-row">
-                  <h3>{formatCandidateSectionLabel(section)}</h3>
-                  <span className="workspace-muted">
-                    {candidates.length} candidate{candidates.length === 1 ? '' : 's'}
-                  </span>
-                </div>
+          {selectedStudentId ? (
+            profileCandidatesLoading && profileCandidates.length === 0 ? (
+              <p className="workspace-muted">Loading profile candidates...</p>
+            ) : groupedProfileCandidates.length > 0 ? (
+              groupedProfileCandidates.map(([section, candidates]) => (
+                <section key={section} className="workspace-candidate-group">
+                  <div className="workspace-inline workspace-header-row">
+                    <h3>{formatCandidateSectionLabel(section)}</h3>
+                    <span className="workspace-muted">
+                      {candidates.length} candidate{candidates.length === 1 ? '' : 's'}
+                    </span>
+                  </div>
 
-                <div className="workspace-list">
-                  {candidates.map((candidate) => {
-                    const draft = profileCandidateDrafts[candidate.id];
-                    const approvedFactText =
-                      draft?.approvedFactText ??
-                      candidate.approvedFactText ??
-                      candidate.proposedFact;
-                    const reviewerNote = draft?.reviewerNote ?? '';
-                    const isBusy = profileCandidateAction?.candidateId === candidate.id;
-                    const isTerminal =
-                      candidate.status === 'promoted' || candidate.status === 'superseded';
-                    const isSelected = selectedCandidateIds.includes(candidate.id);
+                  <div className="workspace-list">
+                    {candidates.map((candidate) => {
+                      const draft = profileCandidateDrafts[candidate.id];
+                      const approvedFactText =
+                        draft?.approvedFactText ??
+                        candidate.approvedFactText ??
+                        candidate.proposedFact;
+                      const reviewerNote = draft?.reviewerNote ?? '';
+                      const isBusy = profileCandidateAction?.candidateId === candidate.id;
+                      const isTerminal =
+                        candidate.status === 'promoted' || candidate.status === 'superseded';
+                      const isSelected = selectedCandidateIds.includes(candidate.id);
 
-                    return (
-                      <details key={candidate.id} className="workspace-candidate-details">
-                        <summary className="workspace-candidate-summary">
-                          <div>
-                            <strong>{candidate.approvedFactText ?? candidate.proposedFact}</strong>
-                            <div className="workspace-muted">
-                              {toTitleCaseLabel(candidate.category)} ·{' '}
-                              {formatCandidateStateLabel(candidate)}
+                      return (
+                        <details key={candidate.id} className="workspace-candidate-details">
+                          <summary className="workspace-candidate-summary">
+                            <div>
+                              <strong>
+                                {candidate.approvedFactText ?? candidate.proposedFact}
+                              </strong>
+                              <div className="workspace-muted">
+                                {toTitleCaseLabel(candidate.category)} ·{' '}
+                                {formatCandidateStateLabel(candidate)}
+                              </div>
+                            </div>
+
+                            <div className="workspace-inline">
+                              {isSelectableForPromotion(candidate) ? (
+                                <label
+                                  className="workspace-inline workspace-muted"
+                                  onClick={(event) => event.stopPropagation()}
+                                >
+                                  <input
+                                    type="checkbox"
+                                    aria-label={`Select candidate ${candidate.id} for promotion`}
+                                    checked={isSelected}
+                                    onChange={(event) =>
+                                      handleToggleCandidateSelection(
+                                        candidate.id,
+                                        event.target.checked,
+                                      )
+                                    }
+                                  />
+                                  Select
+                                </label>
+                              ) : null}
+                              <span className="workspace-pill">
+                                {formatCandidateStateLabel(candidate)}
+                              </span>
+                            </div>
+                          </summary>
+
+                          <div className="workspace-candidate-body">
+                            <div className="workspace-meta">
+                              <span>
+                                <strong>Target section:</strong>{' '}
+                                {formatCandidateSectionLabel(candidate.targetSection)}
+                              </span>
+                              <span>
+                                <strong>Authority:</strong> {candidate.authority ?? 'n/a'}
+                              </span>
+                              <span>
+                                <strong>Confidence:</strong> {candidate.confidence ?? 'n/a'}
+                              </span>
+                              <span>
+                                <strong>Source summary:</strong> {candidate.sourceSummary ?? 'n/a'}
+                              </span>
+                              <span>
+                                <strong>Snapshot:</strong> {candidate.sourceSnapshotId ?? 'none'}
+                              </span>
+                              <span>
+                                <strong>Lesson memory IDs:</strong>{' '}
+                                {candidate.sourceLessonMemoryIds.length > 0
+                                  ? candidate.sourceLessonMemoryIds.join(', ')
+                                  : 'none'}
+                              </span>
+                              <span>
+                                <strong>Promoted revision:</strong>{' '}
+                                {candidate.promotedRevisionId ?? 'not yet promoted'}
+                              </span>
+                            </div>
+
+                            <div>
+                              <strong>Original proposal</strong>
+                              <p>{candidate.proposedFact}</p>
+                            </div>
+
+                            <label className="workspace-field">
+                              Approved Fact Text
+                              <textarea
+                                aria-label={`Approved Fact Text ${candidate.id}`}
+                                value={approvedFactText}
+                                onChange={(event) =>
+                                  updateProfileCandidateDraft(candidate.id, {
+                                    approvedFactText: event.target.value,
+                                  })
+                                }
+                                rows={3}
+                                disabled={isTerminal || isBusy}
+                              />
+                            </label>
+
+                            <label className="workspace-field">
+                              Reviewer Note
+                              <textarea
+                                aria-label={`Reviewer Note ${candidate.id}`}
+                                value={reviewerNote}
+                                onChange={(event) =>
+                                  updateProfileCandidateDraft(candidate.id, {
+                                    reviewerNote: event.target.value,
+                                  })
+                                }
+                                rows={2}
+                                disabled={isTerminal || isBusy}
+                              />
+                            </label>
+
+                            <div>
+                              <strong>Evidence</strong>
+                              {candidate.evidence.length > 0 ? (
+                                <div className="workspace-list">
+                                  {candidate.evidence.map((evidence, index) => (
+                                    <div
+                                      key={`${candidate.id}-evidence-${index}`}
+                                      className="workspace-list-item workspace-list-item-stack"
+                                    >
+                                      <div>
+                                        <strong>{evidence.quote}</strong>
+                                        <div className="workspace-muted">
+                                          {evidence.speakerRole ?? 'unknown'}
+                                          {evidence.transcriptSpan
+                                            ? ` · ${evidence.transcriptSpan}`
+                                            : ''}
+                                          {evidence.sourceKind ? ` · ${evidence.sourceKind}` : ''}
+                                        </div>
+                                        {evidence.evidenceNote ? (
+                                          <div className="workspace-muted">
+                                            {evidence.evidenceNote}
+                                          </div>
+                                        ) : null}
+                                      </div>
+                                      <span>{evidence.sourceArtifactId ?? 'n/a'}</span>
+                                    </div>
+                                  ))}
+                                </div>
+                              ) : (
+                                <p className="workspace-muted">No evidence excerpts provided.</p>
+                              )}
+                            </div>
+
+                            <div className="workspace-inline">
+                              <button
+                                type="button"
+                                className="workspace-primary-btn"
+                                onClick={() =>
+                                  void handleReviewProfileCandidate(candidate, 'approve')
+                                }
+                                disabled={isTerminal || isBusy}
+                              >
+                                {isBusy && profileCandidateAction?.action === 'approve'
+                                  ? 'Saving...'
+                                  : 'Approve'}
+                              </button>
+                              <button
+                                type="button"
+                                className="workspace-secondary-btn"
+                                onClick={() =>
+                                  void handleReviewProfileCandidate(candidate, 'defer')
+                                }
+                                disabled={isTerminal || isBusy}
+                              >
+                                {isBusy && profileCandidateAction?.action === 'defer'
+                                  ? 'Saving...'
+                                  : 'Defer'}
+                              </button>
+                              <button
+                                type="button"
+                                className="workspace-secondary-btn"
+                                onClick={() =>
+                                  void handleReviewProfileCandidate(candidate, 'reject')
+                                }
+                                disabled={isTerminal || isBusy}
+                              >
+                                {isBusy && profileCandidateAction?.action === 'reject'
+                                  ? 'Saving...'
+                                  : 'Reject'}
+                              </button>
                             </div>
                           </div>
-
-                          <div className="workspace-inline">
-                            {isSelectableForPromotion(candidate) ? (
-                              <label
-                                className="workspace-inline workspace-muted"
-                                onClick={(event) => event.stopPropagation()}
-                              >
-                                <input
-                                  type="checkbox"
-                                  aria-label={`Select candidate ${candidate.id} for promotion`}
-                                  checked={isSelected}
-                                  onChange={(event) =>
-                                    handleToggleCandidateSelection(
-                                      candidate.id,
-                                      event.target.checked,
-                                    )
-                                  }
-                                />
-                                Select
-                              </label>
-                            ) : null}
-                            <span className="workspace-pill">
-                              {formatCandidateStateLabel(candidate)}
-                            </span>
-                          </div>
-                        </summary>
-
-                        <div className="workspace-candidate-body">
-                          <div className="workspace-meta">
-                            <span>
-                              <strong>Target section:</strong>{' '}
-                              {formatCandidateSectionLabel(candidate.targetSection)}
-                            </span>
-                            <span>
-                              <strong>Authority:</strong> {candidate.authority ?? 'n/a'}
-                            </span>
-                            <span>
-                              <strong>Confidence:</strong> {candidate.confidence ?? 'n/a'}
-                            </span>
-                            <span>
-                              <strong>Source summary:</strong> {candidate.sourceSummary ?? 'n/a'}
-                            </span>
-                            <span>
-                              <strong>Snapshot:</strong> {candidate.sourceSnapshotId ?? 'none'}
-                            </span>
-                            <span>
-                              <strong>Lesson memory IDs:</strong>{' '}
-                              {candidate.sourceLessonMemoryIds.length > 0
-                                ? candidate.sourceLessonMemoryIds.join(', ')
-                                : 'none'}
-                            </span>
-                            <span>
-                              <strong>Promoted revision:</strong>{' '}
-                              {candidate.promotedRevisionId ?? 'not yet promoted'}
-                            </span>
-                          </div>
-
-                          <div>
-                            <strong>Original proposal</strong>
-                            <p>{candidate.proposedFact}</p>
-                          </div>
-
-                          <label className="workspace-field">
-                            Approved Fact Text
-                            <textarea
-                              aria-label={`Approved Fact Text ${candidate.id}`}
-                              value={approvedFactText}
-                              onChange={(event) =>
-                                updateProfileCandidateDraft(candidate.id, {
-                                  approvedFactText: event.target.value,
-                                })
-                              }
-                              rows={3}
-                              disabled={isTerminal || isBusy}
-                            />
-                          </label>
-
-                          <label className="workspace-field">
-                            Reviewer Note
-                            <textarea
-                              aria-label={`Reviewer Note ${candidate.id}`}
-                              value={reviewerNote}
-                              onChange={(event) =>
-                                updateProfileCandidateDraft(candidate.id, {
-                                  reviewerNote: event.target.value,
-                                })
-                              }
-                              rows={2}
-                              disabled={isTerminal || isBusy}
-                            />
-                          </label>
-
-                          <div>
-                            <strong>Evidence</strong>
-                            {candidate.evidence.length > 0 ? (
-                              <div className="workspace-list">
-                                {candidate.evidence.map((evidence, index) => (
-                                  <div
-                                    key={`${candidate.id}-evidence-${index}`}
-                                    className="workspace-list-item workspace-list-item-stack"
-                                  >
-                                    <div>
-                                      <strong>{evidence.quote}</strong>
-                                      <div className="workspace-muted">
-                                        {evidence.speakerRole ?? 'unknown'}
-                                        {evidence.transcriptSpan
-                                          ? ` · ${evidence.transcriptSpan}`
-                                          : ''}
-                                        {evidence.sourceKind ? ` · ${evidence.sourceKind}` : ''}
-                                      </div>
-                                      {evidence.evidenceNote ? (
-                                        <div className="workspace-muted">{evidence.evidenceNote}</div>
-                                      ) : null}
-                                    </div>
-                                    <span>{evidence.sourceArtifactId ?? 'n/a'}</span>
-                                  </div>
-                                ))}
-                              </div>
-                            ) : (
-                              <p className="workspace-muted">No evidence excerpts provided.</p>
-                            )}
-                          </div>
-
-                          <div className="workspace-inline">
-                            <button
-                              type="button"
-                              className="workspace-primary-btn"
-                              onClick={() => void handleReviewProfileCandidate(candidate, 'approve')}
-                              disabled={isTerminal || isBusy}
-                            >
-                              {isBusy && profileCandidateAction?.action === 'approve'
-                                ? 'Saving...'
-                                : 'Approve'}
-                            </button>
-                            <button
-                              type="button"
-                              className="workspace-secondary-btn"
-                              onClick={() => void handleReviewProfileCandidate(candidate, 'defer')}
-                              disabled={isTerminal || isBusy}
-                            >
-                              {isBusy && profileCandidateAction?.action === 'defer'
-                                ? 'Saving...'
-                                : 'Defer'}
-                            </button>
-                            <button
-                              type="button"
-                              className="workspace-secondary-btn"
-                              onClick={() => void handleReviewProfileCandidate(candidate, 'reject')}
-                              disabled={isTerminal || isBusy}
-                            >
-                              {isBusy && profileCandidateAction?.action === 'reject'
-                                ? 'Saving...'
-                                : 'Reject'}
-                            </button>
-                          </div>
-                        </div>
-                      </details>
-                    );
-                  })}
-                </div>
-              </section>
-            ))
-          ) : (
-            <p className="workspace-muted">
-              No {profileCandidateFilter} profile candidates visible for this student.
-            </p>
+                        </details>
+                      );
+                    })}
+                  </div>
+                </section>
+              ))
+            ) : (
+              <p className="workspace-muted">
+                No {profileCandidateFilter} profile candidates visible for this student.
+              </p>
+            )
           ) : (
             <p className="workspace-muted">Select a student to inspect profile candidates.</p>
           )}

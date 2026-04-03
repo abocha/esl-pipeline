@@ -1,9 +1,9 @@
+import { execFile as execFileCallback } from 'node:child_process';
 import fs from 'node:fs/promises';
 import path from 'node:path';
-import { execFile as execFileCallback } from 'node:child_process';
+import { promisify } from 'node:util';
 import { Pool } from 'pg';
 import { afterAll, beforeEach, describe, expect, it } from 'vitest';
-import { promisify } from 'node:util';
 
 import { closePgPool } from '../src/infrastructure/db.js';
 import { verifyMigrations } from '../src/infrastructure/migration-verify.js';
@@ -188,7 +188,9 @@ describe('integration/migrations', () => {
       expect(actual).toBe(expected);
       expect(actual).not.toContain('CREATE EXTENSION IF NOT EXISTS pg_trgm WITH SCHEMA public;');
       expect(actual).not.toContain('COMMENT ON EXTENSION pg_trgm');
-      expect(actual).toContain('Skipping pg_trgm extension creation because privileges are insufficient.');
+      expect(actual).toContain(
+        'Skipping pg_trgm extension creation because privileges are insufficient.',
+      );
     },
     testTimeout,
   );

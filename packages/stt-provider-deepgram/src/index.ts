@@ -1,12 +1,12 @@
-import { DeepgramClient } from '@deepgram/sdk';
 import type { Readable } from 'node:stream';
+import { DeepgramClient } from '@deepgram/sdk';
 
 import { classifyProviderRuntimeFailure } from '@esl-pipeline/provider-runtime';
 import {
-  type SttProviderAdapter,
-  type TranscriptSegment,
   mergeSegments,
   normalizeSegmentEnds,
+  type SttProviderAdapter,
+  type TranscriptSegment,
 } from '@esl-pipeline/stt-core';
 
 interface RetryableStatusError {

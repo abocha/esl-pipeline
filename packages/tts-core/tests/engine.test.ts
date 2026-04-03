@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { type TtsProviderAdapter, type TtsProviderId, createTtsEngine } from '../src/index.js';
+import { createTtsEngine, type TtsProviderAdapter, type TtsProviderId } from '../src/index.js';
 
 function createProvider(id: TtsProviderId): TtsProviderAdapter {
   return {

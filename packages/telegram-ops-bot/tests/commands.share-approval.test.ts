@@ -2,7 +2,6 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { InMemoryApprovalReplayStore } from '../src/approval-replay-store.js';
 import { createCommandRegistry, resetAdvancedControlApprovalsForTests } from '../src/commands.js';
-
 import { createBaseContext } from './telegram-test-fixtures.js';
 
 describe('telegram commands - share and approval', () => {
@@ -490,7 +489,9 @@ describe('telegram commands - share and approval', () => {
     await approveCommand?.execute(secondApproveContext);
 
     expect(enqueueMock).toHaveBeenCalledTimes(1);
-    const secondSendMock = secondApproveContext.messenger.sendHtmlMessage as ReturnType<typeof vi.fn>;
+    const secondSendMock = secondApproveContext.messenger.sendHtmlMessage as ReturnType<
+      typeof vi.fn
+    >;
     expect(secondSendMock).toHaveBeenCalledTimes(1);
     expect(String(secondSendMock.mock.calls[0]?.[0].html)).toContain('already been used');
   });
@@ -552,7 +553,9 @@ describe('telegram commands - share and approval', () => {
     await approveCommand?.execute(secondApproveContext);
 
     expect(enqueueMock).toHaveBeenCalledTimes(1);
-    const secondSendMock = secondApproveContext.messenger.sendHtmlMessage as ReturnType<typeof vi.fn>;
+    const secondSendMock = secondApproveContext.messenger.sendHtmlMessage as ReturnType<
+      typeof vi.fn
+    >;
     expect(secondSendMock).toHaveBeenCalledTimes(1);
     expect(String(secondSendMock.mock.calls[0]?.[0].html)).toContain('already been used');
   });
@@ -690,7 +693,9 @@ describe('telegram commands - share and approval', () => {
     await approveCommand?.execute(secondApproveContext);
 
     expect(enqueueMock).toHaveBeenCalledTimes(1);
-    const secondSendMock = secondApproveContext.messenger.sendHtmlMessage as ReturnType<typeof vi.fn>;
+    const secondSendMock = secondApproveContext.messenger.sendHtmlMessage as ReturnType<
+      typeof vi.fn
+    >;
     expect(secondSendMock).toHaveBeenCalledTimes(1);
     expect(String(secondSendMock.mock.calls[0]?.[0].html)).toContain('already been used');
   });

@@ -2,13 +2,14 @@
 //
 // Bridges in-process job events to Redis Pub/Sub so the API and worker (distinct Node processes)
 // observe the same lifecycle updates.
-import type { Redis } from 'ioredis';
+
 import { randomUUID } from 'node:crypto';
+import type { Redis } from 'ioredis';
 
 import {
+  getJobSubscriptionSnapshot,
   type JobEvent,
   type JobEventType,
-  getJobSubscriptionSnapshot,
   onJobSubscriptionChange,
   publishJobEvent,
   subscribeJobEvents,

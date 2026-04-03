@@ -102,7 +102,7 @@ All notable changes to this project will be documented here. Dates use `YYYY-MM-
 
 ### Changed
 
-- Automated release from PR #39: hardening: enable fsync in dev and enforce _test DB for backend PG tests (https://github.com/abocha/esl-pipeline/pull/39)
+- Automated release from PR #39: hardening: enable fsync in dev and enforce \_test DB for backend PG tests (https://github.com/abocha/esl-pipeline/pull/39)
 
 ## [4.3.2] - 2026-03-12
 

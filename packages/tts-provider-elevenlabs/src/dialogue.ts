@@ -1,8 +1,8 @@
-import { ElevenLabsClient } from '@elevenlabs/elevenlabs-js';
 import { createHash } from 'node:crypto';
 import { createWriteStream } from 'node:fs';
 import { stat } from 'node:fs/promises';
 import { resolve } from 'node:path';
+import { ElevenLabsClient } from '@elevenlabs/elevenlabs-js';
 
 import { InfrastructureError } from '@esl-pipeline/contracts';
 

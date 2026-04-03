@@ -152,9 +152,7 @@ describe('application/prompt-package', () => {
       id: 'template-revision-v1',
       templateId: 'template.md',
       content: 'TEMPLATE V1\nEND\n',
-      contentHash: createHash('sha256')
-        .update('TEMPLATE V1\nEND\n', 'utf8')
-        .digest('hex'),
+      contentHash: createHash('sha256').update('TEMPLATE V1\nEND\n', 'utf8').digest('hex'),
       source: 'update' as const,
       status: 'active' as const,
       versionNumber: 1,

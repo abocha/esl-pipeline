@@ -1,5 +1,5 @@
-import matter from 'gray-matter';
 import { readFile } from 'node:fs/promises';
+import matter from 'gray-matter';
 import remarkDirective from 'remark-directive';
 import remarkFrontmatter from 'remark-frontmatter';
 import remarkGfm from 'remark-gfm';

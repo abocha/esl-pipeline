@@ -85,10 +85,10 @@ export function assertTransition(from: JobState, to: JobState): void {
 }
 
 export {
+  type GoogleTtsModel,
   type JobState,
   type JobUploadOption,
   type PublishTarget,
   type TtsProviderId,
-  type GoogleTtsModel,
   type TtsStrategy,
 } from '@esl-pipeline/contracts';

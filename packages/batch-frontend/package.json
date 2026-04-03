@@ -6,7 +6,7 @@
     "build": "vite build",
     "clean": "node -e \"fs.rmSync('dist', {recursive:true, force:true})\"",
     "dev": "vite",
-    "lint": "eslint .",
+    "lint": "pnpm exec biome lint . && pnpm exec eslint .",
     "preview": "vite preview",
     "test": "pnpm run test:unit",
     "test:unit": "vitest run --testTimeout=15000 --passWithNoTests --exclude \"**/*.integration.test.ts\" --exclude \"**/*.integration.test.tsx\"",

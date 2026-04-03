@@ -24,5 +24,5 @@ This topic captures the remaining phases after the initial docs-governance basel
 
 1. `pnpm docs:generate:indexes`
 1. `pnpm docs:check`
-2. `pnpm docs:health:report`
-3. `pnpm docs:stale:active`
+1. `pnpm docs:health:report`
+1. `pnpm docs:stale:active`

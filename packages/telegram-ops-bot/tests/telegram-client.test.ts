@@ -5,10 +5,13 @@ import { TelegramClient } from '../src/telegram-client.js';
 describe('telegram client metadata methods', () => {
   it('serializes setMyCommands payloads correctly', async () => {
     const fetchImpl = vi.fn(async () =>
-      Response.json({ ok: true, result: true }, {
-        status: 200,
-        headers: { 'content-type': 'application/json' },
-      }),
+      Response.json(
+        { ok: true, result: true },
+        {
+          status: 200,
+          headers: { 'content-type': 'application/json' },
+        },
+      ),
     );
     const client = new TelegramClient({
       token: 'token',
@@ -38,10 +41,13 @@ describe('telegram client metadata methods', () => {
 
   it('serializes setChatMenuButton payloads correctly', async () => {
     const fetchImpl = vi.fn(async () =>
-      Response.json({ ok: true, result: true }, {
-        status: 200,
-        headers: { 'content-type': 'application/json' },
-      }),
+      Response.json(
+        { ok: true, result: true },
+        {
+          status: 200,
+          headers: { 'content-type': 'application/json' },
+        },
+      ),
     );
     const client = new TelegramClient({
       token: 'token',
@@ -63,10 +69,13 @@ describe('telegram client metadata methods', () => {
 
   it('serializes editMessageText and answerCallbackQuery payloads correctly', async () => {
     const fetchImpl = vi.fn(async () =>
-      Response.json({ ok: true, result: true }, {
-        status: 200,
-        headers: { 'content-type': 'application/json' },
-      }),
+      Response.json(
+        { ok: true, result: true },
+        {
+          status: 200,
+          headers: { 'content-type': 'application/json' },
+        },
+      ),
     );
     const client = new TelegramClient({
       token: 'token',

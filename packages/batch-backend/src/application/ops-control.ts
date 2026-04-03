@@ -12,15 +12,15 @@ import type {
 
 import { loadConfig } from '../config/env.js';
 import {
+  type ClaimOpsActionOwnershipParams,
   claimQueuedOpsActionOwnership,
+  type FinalizeOwnedOpsActionParams,
   finalizeOwnedOpsAction,
   getOpsActionStatusByOperationId,
   listOpsActions as listPersistedOpsActions,
   listResumableOpsActions,
   pruneOpsActionHistoryByFinishedAt,
   upsertOpsActionStatus,
-  type ClaimOpsActionOwnershipParams,
-  type FinalizeOwnedOpsActionParams,
 } from '../domain/ops-action-repository.js';
 import { logger } from '../infrastructure/logger.js';
 
@@ -139,7 +139,8 @@ export function resetOpsControlStateForTests(): void {
   dependencies.ownerId = () => ownerId;
   dependencies.isPersistenceEnabled = () => loadConfig().pg.enabled;
   dependencies.upsertPersistedAction = async (action) => upsertOpsActionStatus(action);
-  dependencies.readPersistedAction = async (operationId) => getOpsActionStatusByOperationId(operationId);
+  dependencies.readPersistedAction = async (operationId) =>
+    getOpsActionStatusByOperationId(operationId);
   dependencies.listPersistedActions = async ({ limit, offset }) =>
     listPersistedOpsActions({ limit, offset });
   dependencies.claimPersistedActionOwnership = async (params) =>
@@ -483,11 +484,14 @@ async function runQueuedAction(
         }
       }
     } catch (error: unknown) {
-      logger.error('Failed to finalize persisted ops action after retries; attempting terminal fallback upsert', {
-        event: 'ops_action_finalize_retry_exhausted',
-        operationId,
-        error: error instanceof Error ? error.message : String(error),
-      });
+      logger.error(
+        'Failed to finalize persisted ops action after retries; attempting terminal fallback upsert',
+        {
+          event: 'ops_action_finalize_retry_exhausted',
+          operationId,
+          error: error instanceof Error ? error.message : String(error),
+        },
+      );
 
       const terminalSnapshot: InternalActionStatus = {
         ...runningAction,
@@ -579,7 +583,9 @@ function storeAction(action: InternalActionStatus, maxActions: number): void {
   pruneActionHistory(maxActions);
 }
 
-function isTerminalActionState(state: InternalActionStatus['state']): state is 'succeeded' | 'failed' {
+function isTerminalActionState(
+  state: InternalActionStatus['state'],
+): state is 'succeeded' | 'failed' {
   return state === 'succeeded' || state === 'failed';
 }
 
@@ -599,7 +605,11 @@ async function maybePrunePersistedActions(retentionDays: number): Promise<void> 
   const cutoff = new Date(nowMs - retentionDays * ACTION_RETENTION_MS_PER_DAY);
 
   try {
-    for (let batchIndex = 0; batchIndex < ACTION_RETENTION_PRUNE_MAX_BATCHES_PER_PASS; batchIndex++) {
+    for (
+      let batchIndex = 0;
+      batchIndex < ACTION_RETENTION_PRUNE_MAX_BATCHES_PER_PASS;
+      batchIndex++
+    ) {
       const deleted = await dependencies.prunePersistedActions(
         cutoff,
         ACTION_RETENTION_PRUNE_BATCH_SIZE,

@@ -1,6 +1,10 @@
 import type { PoolClient } from 'pg';
 
-import type { OpsActionListResponse, OpsActionState, OpsActionStatus } from '@esl-pipeline/contracts';
+import type {
+  OpsActionListResponse,
+  OpsActionState,
+  OpsActionStatus,
+} from '@esl-pipeline/contracts';
 
 import { withPgClient } from '../infrastructure/db.js';
 

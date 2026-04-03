@@ -17,14 +17,14 @@
 
 ## Current Baseline (2026-03-13)
 
-| Metric | Current | Target | Notes |
-| --- | ---: | ---: | --- |
-| `pnpm docs:check` | pass | pass | Core, ops, and selected non-core scopes are green. |
-| Docs health composite | 9.83 | >= 9.9 | Source: `tmp/docs-health-report.md`. |
-| Stale active candidates | 1 | <= 3 | Remaining candidate is intentionally kept legacy-schema inventory. |
-| Generated reference indexes | 3 | 3+ | Backend routes, package READMEs, and plans inventory. |
-| Active docs with router coverage | improving | explicit routing for all new active docs | Track via router reviews and stale-candidate reduction. |
-| Package README governance coverage | expanding | top operational packages fully covered | `telegram-ops-bot` added to current governance scope. |
+| Metric                             |   Current |                                   Target | Notes                                                              |
+| ---------------------------------- | --------: | ---------------------------------------: | ------------------------------------------------------------------ |
+| `pnpm docs:check`                  |      pass |                                     pass | Core, ops, and selected non-core scopes are green.                 |
+| Docs health composite              |      9.83 |                                   >= 9.9 | Source: `tmp/docs-health-report.md`.                               |
+| Stale active candidates            |         1 |                                     <= 3 | Remaining candidate is intentionally kept legacy-schema inventory. |
+| Generated reference indexes        |         3 |                                       3+ | Backend routes, package READMEs, and plans inventory.              |
+| Active docs with router coverage   | improving | explicit routing for all new active docs | Track via router reviews and stale-candidate reduction.            |
+| Package README governance coverage | expanding |   top operational packages fully covered | `telegram-ops-bot` added to current governance scope.              |
 
 ## Operating Review Questions
 

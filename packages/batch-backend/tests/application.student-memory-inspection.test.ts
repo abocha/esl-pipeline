@@ -2,8 +2,8 @@ import { describe, expect, it, vi } from 'vitest';
 
 import {
   getStudentMemoryOverview,
-  listStudentProfileCandidatesForStudent,
   listStudentMemorySnapshotsForStudent,
+  listStudentProfileCandidatesForStudent,
 } from '../src/application/student-memory-inspection.js';
 
 describe('application/student-memory-inspection', () => {

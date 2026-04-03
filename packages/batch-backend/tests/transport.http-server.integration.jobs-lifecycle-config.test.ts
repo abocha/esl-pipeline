@@ -607,6 +607,5 @@ describeHttpServerIntegrationSuite(
         defaults: { templateId: 'template.md', profileId: 'profile.md' },
       });
     });
-
   },
 );

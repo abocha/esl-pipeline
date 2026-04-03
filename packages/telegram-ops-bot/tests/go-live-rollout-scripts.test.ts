@@ -1,7 +1,6 @@
 import { mkdtemp, readFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
-
 import { describe, expect, it } from 'vitest';
 
 const preflightModulePath = '../../../scripts/release/telegram-ops-go-live-preflight.mjs';
@@ -144,24 +143,21 @@ describe('telegram go-live preflight script', () => {
   });
 
   it('requires strict leader-election DB config when leader election is enabled', async () => {
-    const {
-      evaluateLeaderElectionDbConfig,
-      runPreflight,
-      buildBackendPgClientConfig,
-    } = (await import(preflightModuleUrl)) as {
-      evaluateLeaderElectionDbConfig: (env: Record<string, string>) => {
-        passed: boolean;
-        source: string | null;
-        missingTupleKeys: string[];
-      };
-      buildBackendPgClientConfig: (env: Record<string, string>) => Record<string, unknown> | null;
-      runPreflight: (args: Record<string, unknown>) => Promise<{
-        report: {
-          checks: { id: string; passed: boolean; details?: Record<string, unknown> }[];
+    const { evaluateLeaderElectionDbConfig, runPreflight, buildBackendPgClientConfig } =
+      (await import(preflightModuleUrl)) as {
+        evaluateLeaderElectionDbConfig: (env: Record<string, string>) => {
+          passed: boolean;
+          source: string | null;
+          missingTupleKeys: string[];
         };
-        exitCode: number;
-      }>;
-    };
+        buildBackendPgClientConfig: (env: Record<string, string>) => Record<string, unknown> | null;
+        runPreflight: (args: Record<string, unknown>) => Promise<{
+          report: {
+            checks: { id: string; passed: boolean; details?: Record<string, unknown> }[];
+          };
+          exitCode: number;
+        }>;
+      };
 
     expect(
       evaluateLeaderElectionDbConfig({
@@ -250,7 +246,9 @@ describe('telegram go-live preflight script', () => {
     });
 
     expect(result.exitCode).toBe(1);
-    const leaderCheck = result.report.checks.find((check) => check.id === 'leader_election_db_config');
+    const leaderCheck = result.report.checks.find(
+      (check) => check.id === 'leader_election_db_config',
+    );
     expect(leaderCheck?.passed).toBe(false);
     expect(leaderCheck?.details).toEqual(
       expect.objectContaining({
@@ -594,7 +592,10 @@ describe('telegram go-live gates script', () => {
     const result = await runGates({
       env: {},
       jsonOutPath: path.join(tmpdir(), `gates-${Date.now()}.json`),
-      runStep: (step: { id: string; command: string; args: string[] }, env: Record<string, string>) => {
+      runStep: (
+        step: { id: string; command: string; args: string[] },
+        env: Record<string, string>,
+      ) => {
         seenCommands.push(step.id);
         seenTmpDir = env.TMPDIR || '';
         seenTmp = env.TMP || '';

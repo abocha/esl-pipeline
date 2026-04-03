@@ -142,7 +142,10 @@ describe('application/process-homework-memory-job', () => {
             id: 'pending-1',
             status: 'pending',
             generatedAt: new Date('2026-03-20T00:00:00.000Z'),
-            generationNotes: { trigger: 'publish-succeeded', requestedAt: '2026-03-20T00:00:00.000Z' },
+            generationNotes: {
+              trigger: 'publish-succeeded',
+              requestedAt: '2026-03-20T00:00:00.000Z',
+            },
           }),
           getLatestReadyByAssignmentLineageKey: vi.fn().mockResolvedValue(null),
           markFailed: vi.fn(),

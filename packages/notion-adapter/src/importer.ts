@@ -1,10 +1,10 @@
+import { basename } from 'node:path';
 import type {
   CreatePageParameters,
   CreatePageResponse,
 } from '@notionhq/client/build/src/api-endpoints.js';
-import { basename } from 'node:path';
 
-import { ValidationError, noopLogger } from '@esl-pipeline/contracts';
+import { noopLogger, ValidationError } from '@esl-pipeline/contracts';
 import { validateMarkdown } from '@esl-pipeline/md-validator';
 
 import { mdToBlocks } from './blocks/mdToBlocks.js';

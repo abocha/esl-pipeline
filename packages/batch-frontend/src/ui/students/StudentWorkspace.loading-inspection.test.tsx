@@ -3,13 +3,13 @@ import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import {
-  STUDENT_WORKSPACE_ASYNC_TIMEOUT_MS,
   renderInspectionPanel,
   renderWorkspaceHistoryPanel,
   renderWorkspaceInspectionReady,
+  STUDENT_WORKSPACE_ASYNC_TIMEOUT_MS,
   setupStudentWorkspaceTest,
+  studentWorkspaceApiMocks,
 } from './StudentWorkspace.test-harness';
-import * as api from '../../utils/api';
 
 describe('StudentWorkspace loading and inspection', () => {
   beforeEach(() => {
@@ -71,13 +71,13 @@ describe('StudentWorkspace loading and inspection', () => {
 
     await waitFor(
       () => {
-        expect(api.fetchJobProvenance).toHaveBeenCalledWith('job-1');
+        expect(studentWorkspaceApiMocks.fetchJobProvenance).toHaveBeenCalledWith('job-1');
       },
       { timeout: STUDENT_WORKSPACE_ASYNC_TIMEOUT_MS },
     );
     await waitFor(
       () => {
-        expect(api.fetchPromptPackageLineage).toHaveBeenCalledWith('pkg-1');
+        expect(studentWorkspaceApiMocks.fetchPromptPackageLineage).toHaveBeenCalledWith('pkg-1');
       },
       { timeout: STUDENT_WORKSPACE_ASYNC_TIMEOUT_MS },
     );
@@ -99,13 +99,13 @@ describe('StudentWorkspace loading and inspection', () => {
 
     await waitFor(
       () => {
-        expect(api.fetchJobProvenance).toHaveBeenCalledTimes(1);
+        expect(studentWorkspaceApiMocks.fetchJobProvenance).toHaveBeenCalledTimes(1);
       },
       { timeout: STUDENT_WORKSPACE_ASYNC_TIMEOUT_MS },
     );
     await waitFor(
       () => {
-        expect(api.fetchPromptPackageLineage).toHaveBeenCalledTimes(1);
+        expect(studentWorkspaceApiMocks.fetchPromptPackageLineage).toHaveBeenCalledTimes(1);
       },
       { timeout: STUDENT_WORKSPACE_ASYNC_TIMEOUT_MS },
     );
@@ -120,13 +120,13 @@ describe('StudentWorkspace loading and inspection', () => {
 
     await waitFor(
       () => {
-        expect(api.fetchJobProvenance).toHaveBeenCalledTimes(2);
+        expect(studentWorkspaceApiMocks.fetchJobProvenance).toHaveBeenCalledTimes(2);
       },
       { timeout: STUDENT_WORKSPACE_ASYNC_TIMEOUT_MS },
     );
     await waitFor(
       () => {
-        expect(api.fetchPromptPackageLineage).toHaveBeenCalledTimes(2);
+        expect(studentWorkspaceApiMocks.fetchPromptPackageLineage).toHaveBeenCalledTimes(2);
       },
       { timeout: STUDENT_WORKSPACE_ASYNC_TIMEOUT_MS },
     );

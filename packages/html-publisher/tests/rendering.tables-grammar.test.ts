@@ -285,22 +285,27 @@ describe('rendering', () => {
 
     expect(
       directParagraphs.some((paragraph) => {
-        const text = paragraph.textContent?.replaceAll('\u00A0', ' ').replaceAll(/\s+/g, ' ').trim();
+        const text = paragraph.textContent
+          ?.replaceAll('\u00A0', ' ')
+          .replaceAll(/\s+/g, ' ')
+          .trim();
         return text === 'More' || text === 'am / is / are';
       }),
     ).toBe(false);
 
     expect(
-      directParagraphs.some((paragraph) =>
-        paragraph.textContent?.replaceAll('\u00A0', ' ').replaceAll(/\s+/g, ' ').trim() ===
-        'More goes at the end!',
+      directParagraphs.some(
+        (paragraph) =>
+          paragraph.textContent?.replaceAll('\u00A0', ' ').replaceAll(/\s+/g, ' ').trim() ===
+          'More goes at the end!',
       ),
     ).toBe(true);
 
     expect(
-      directParagraphs.some((paragraph) =>
-        paragraph.textContent?.replaceAll('\u00A0', ' ').replaceAll(/\s+/g, ' ').trim() ===
-        'Remember your state verbs! Do not use am / is / are with action verbs.',
+      directParagraphs.some(
+        (paragraph) =>
+          paragraph.textContent?.replaceAll('\u00A0', ' ').replaceAll(/\s+/g, ' ').trim() ===
+          'Remember your state verbs! Do not use am / is / are with action verbs.',
       ),
     ).toBe(true);
   });

@@ -4,12 +4,12 @@ import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 
 import {
-  PipelineCancelledError,
   categorizeOrchestratorError,
   executeGetAssignmentStatusV2,
   executeNewAssignmentV2,
   executePlanRerunAssignmentV2,
   executeRerunAssignmentV2,
+  PipelineCancelledError,
 } from '../src/index.js';
 
 const okFixturePath = join(import.meta.dirname, '../../md-validator/fixtures/ok.md');

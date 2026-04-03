@@ -1,39 +1,39 @@
-import yaml from 'js-yaml';
 import { createHash } from 'node:crypto';
 import { copyFile, mkdir, readFile, stat, unlink, writeFile } from 'node:fs/promises';
 import { dirname, resolve } from 'node:path';
+import yaml from 'js-yaml';
 
 import {
   ConfigurationError,
   InfrastructureError,
-  ValidationError,
-  type VoiceProviderErrorCategory,
   noopLogger,
   normalizeSpeakerRole,
+  ValidationError,
+  type VoiceProviderErrorCategory,
 } from '@esl-pipeline/contracts';
 import {
-  type Frontmatter,
-  type SpeakerProfile,
   extractFrontmatter,
   extractPronunciationShadowFocus,
   extractStudyText,
+  type Frontmatter,
+  type SpeakerProfile,
 } from '@esl-pipeline/pmd';
 import { runProviderFallbackLadder } from '@esl-pipeline/provider-runtime';
 import {
-  type BuildPronunciationTextInput,
-  type BuildPronunciationTextOptions,
-  type BuildPronunciationTextResult,
   type BuildPronunciationShadowSentenceInput,
   type BuildPronunciationShadowSentenceOptions,
   type BuildPronunciationShadowSentenceResult,
+  type BuildPronunciationTextInput,
+  type BuildPronunciationTextOptions,
+  type BuildPronunciationTextResult,
   type BuildStudyTextInput,
   type BuildStudyTextOptions,
   type BuildStudyTextResult,
   type GoogleTtsModel,
+  hashStudyText,
   type SpeakerVoiceAssignment,
   type TtsProviderAdapter,
   type VoiceCatalog,
-  hashStudyText,
 } from '@esl-pipeline/tts-core';
 
 import {
@@ -118,7 +118,7 @@ let googleCatalogCache: GoogleCatalogCacheEntry | null = null;
 const MARKDOWN_STRIPPERS: [RegExp, string][] = [
   [/\r?\n/g, ' '],
   [/^\s*[-*+]\s+/, ''],
-  [/^\s*\d+[\.)]\s+/, ''],
+  [/^\s*\d+[.)]\s+/, ''],
   [/\*\*(.+?)\*\*/g, '$1'],
   [/__(.+?)__/g, '$1'],
   [/\*(.+?)\*/g, '$1'],
@@ -935,7 +935,11 @@ function buildPronunciationOutputFileName(
   fileStem?: string,
 ): string {
   const prefix = sanitizeStudentName(frontmatter.student);
-  const stem = fileStem?.trim().replaceAll(/[^a-z0-9-]+/gi, '-').replaceAll(/^-+|-+$/g, '') || 'pronunciation';
+  const stem =
+    fileStem
+      ?.trim()
+      .replaceAll(/[^a-z0-9-]+/gi, '-')
+      .replaceAll(/^-+|-+$/g, '') || 'pronunciation';
   return prefix ? `${prefix}-${hash}-${stem}.mp3` : `${hash}-${stem}.mp3`;
 }
 
@@ -1667,7 +1671,10 @@ export async function buildPronunciationTextMp3Google(
     )
     .digest('hex');
 
-  const targetPath = resolve(outputDir, buildPronunciationOutputFileName(hash, frontmatter, fileStem));
+  const targetPath = resolve(
+    outputDir,
+    buildPronunciationOutputFileName(hash, frontmatter, fileStem),
+  );
   const generatedCharacters = sentence.length;
 
   if (opts.preview) {
@@ -1838,4 +1845,4 @@ export function createGoogleTtsProvider(): TtsProviderAdapter {
   };
 }
 
-export { resolveFfmpegPath, FfmpegNotFoundError } from './ffmpeg.js';
+export { FfmpegNotFoundError, resolveFfmpegPath } from './ffmpeg.js';

@@ -19,11 +19,11 @@ export interface S3ObjectUrlOptions {
 
 export function sanitizeS3KeyPrefix(prefix?: string): string {
   if (!prefix) return '';
-  return prefix.replace(/^[\/\\]+/, '').replace(/[\/\\]+$/, '');
+  return prefix.replace(/^[/\\]+/, '').replace(/[/\\]+$/, '');
 }
 
 export function normalizeS3ObjectKey(key: string): string {
-  return key.replace(/^[\/\\]+/, '').replaceAll('\\', '/');
+  return key.replace(/^[/\\]+/, '').replaceAll('\\', '/');
 }
 
 export function deriveS3ObjectUrl(options: S3ObjectUrlOptions): string {

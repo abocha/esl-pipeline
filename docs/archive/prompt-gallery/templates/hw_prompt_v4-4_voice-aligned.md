@@ -45,20 +45,23 @@ You must produce the assignment as **clean Markdown** inside **one single code b
 
 1.  You **must** produce a single fenced code block that begins with valid YAML front matter at byte 0 (no leading whitespace or BOM).
 
-   **Critical format note:** Inside your one output code block, the **first line must be `---`**.
-   Do **not** start the assignment body with ```` ```yaml ```` or any other fence marker.
-   The frontmatter opens with `---` and closes with `---`.
+    **Critical format note:** Inside your one output code block, the **first line must be `---`**.
+    Do **not** start the assignment body with ` ```yaml ` or any other fence marker.
+    The frontmatter opens with `---` and closes with `---`.
 
-   Frontmatter skeleton (inside the output block):
-   ---
-   title: <string>          # must be inside colons "Title: title"
-   student: <string>        # name of current student
-   level: <string>          # e.g. "A2", "B1"
-   topic: <string>          # MUST be inside colons if contains commas, e.g. "Grammar, Speaking"
-   input_type: "generate" | "authentic"
-   study_text_type: "monologue" | "dialogue"
-   icon: <emoji>            # Single emoji character (e.g. 🎯, 📚, 🎧) to be used as page icon
-   ---
+Frontmatter skeleton (inside the output block):
+
+---
+
+title: <string> # must be inside colons "Title: title"
+student: <string> # name of current student
+level: <string> # e.g. "A2", "B1"
+topic: <string> # MUST be inside colons if contains commas, e.g. "Grammar, Speaking"
+input_type: "generate" | "authentic"
+study_text_type: "monologue" | "dialogue"
+icon: <emoji> # Single emoji character (e.g. 🎯, 📚, 🎧) to be used as page icon
+
+---
 
 - **Always include this array.** For a monologue use one entry; for 2+ speakers list every unique speaker exactly as they appear in the study text (case sensitive).
 - **Do not add extra names.** Every label must appear in `:::study-text`, and every speaking name in `:::study-text` must appear in `speaker_labels`.
@@ -123,6 +126,7 @@ speaker_profiles:
 _(This is a template. Fill every placeholder with real content. Use the rich directives to make it look premium and engaging. Output plain Markdown with no code fences or backticks.)_
 
 ---
+
 title: 'Homework Assignment: [Topic]'
 student: '[Current Student Name]'
 level: '[CEFR level]'
@@ -132,20 +136,22 @@ study_text_type: 'dialogue'
 icon: [relevant emoji]
 speaker_labels: [Name1, Name2]
 speaker_profiles:
-  - id: Name1
-    display_name: Name1
-    role: student
-    gender: female
-    age: young
-    accent: american
-    style: social
-  - id: Name2
-    display_name: Name2
-    role: student
-    gender: male
-    age: young
-    accent: british
-    style: thoughtful
+
+- id: Name1
+  display_name: Name1
+  role: student
+  gender: female
+  age: young
+  accent: american
+  style: social
+- id: Name2
+  display_name: Name2
+  role: student
+  gender: male
+  age: young
+  accent: british
+  style: thoughtful
+
 ---
 
 ## 1. 🎯 This Week's Mission Briefing
@@ -233,6 +239,7 @@ _(2–3 questions about the main ideas of the study text.)_
 **Action:** [Give concrete steps the student should perform.]
 
 If `**Mode:** shadow_sentence`, you MUST include this exact structure:
+
 - `**Shadow sentence:** <full sentence>`
 - `1. <word> — /<transcription>/`
 - `2. <word> — /<transcription>/`

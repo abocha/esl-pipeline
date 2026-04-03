@@ -20,7 +20,7 @@ types, rollups, retrieval rules, provenance, and a rewritten stateless system pr
 1. Runtime generation remains backend-orchestrated and deterministic. The live model call does not
    decide which memories to fetch.
 2. The final homework generation path remains `one prepared prompt package -> one provider call ->
-   one reply`.
+one reply`.
 3. Student context is split into four layers:
    - foundational profile
    - lesson memory

@@ -12,6 +12,7 @@ import { buildLearningPresetProvenance } from '../application/learning-preset.js
 import { withPgClient } from '../infrastructure/db.js';
 import { logger } from '../infrastructure/logger.js';
 import {
+  assertTransition,
   GoogleTtsModel,
   JobRecord,
   JobState,
@@ -19,7 +20,6 @@ import {
   PublishTarget,
   TtsProviderId,
   TtsStrategy,
-  assertTransition,
 } from './job-model.js';
 
 /**

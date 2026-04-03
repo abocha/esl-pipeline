@@ -1,25 +1,25 @@
-import { afterEach, beforeEach, describe, it } from 'vitest';
 import { fireEvent } from '@testing-library/react';
+import { afterEach, beforeEach, describe, it } from 'vitest';
 
 import type * as ApiTypes from '../../utils/api';
 import {
-  INTEGRATION_TEST_TIMEOUT_MS,
-  UI_WAIT_TIMEOUT_MS,
-  preparePromptReady,
   testAct as act,
   testApi as api,
+  createMinimalUser,
+  createTimerAwareMinimalUser,
   testExpect as expect,
+  INTEGRATION_TEST_TIMEOUT_MS,
   now,
+  preparePromptReady,
   previewCurrentDraft,
   renderGenerationReadyAssignment,
   renderMinimalAssignment,
   renderResumedAssignment,
-  setupMinimalAssignmentTest,
   testScreen as screen,
+  setupMinimalAssignmentTest,
+  UI_WAIT_TIMEOUT_MS,
   testVi as vi,
   testWaitFor as waitFor,
-  createMinimalUser,
-  createTimerAwareMinimalUser,
 } from './MinimalAssignment.test-harness';
 
 const selectOpenAiGenerationModel = async (user: ReturnType<typeof createMinimalUser>) => {
@@ -27,10 +27,7 @@ const selectOpenAiGenerationModel = async (user: ReturnType<typeof createMinimal
     screen.getByRole('combobox', { name: /Generation provider/i }),
     'openai',
   );
-  await user.selectOptions(
-    screen.getByRole('combobox', { name: /Generation model/i }),
-    'gpt-5.2',
-  );
+  await user.selectOptions(screen.getByRole('combobox', { name: /Generation model/i }), 'gpt-5.2');
 };
 
 export function registerGenerationDefaultsTests() {

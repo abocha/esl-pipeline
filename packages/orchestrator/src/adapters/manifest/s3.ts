@@ -1,6 +1,5 @@
+import { basename, extname, isAbsolute, posix as posixPath, relative } from 'node:path';
 import { GetObjectCommand, PutObjectCommand, S3Client } from '@aws-sdk/client-s3';
-import { basename, extname, isAbsolute, relative } from 'node:path';
-import { posix as posixPath } from 'node:path';
 
 import type { AssignmentManifest, ManifestStore } from '../../manifest.js';
 

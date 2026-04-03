@@ -1,8 +1,8 @@
 #!/usr/bin/env node
-import { existsSync, readFileSync, readdirSync } from 'node:fs';
+import { execFileSync } from 'node:child_process';
+import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 import process from 'node:process';
-import { execFileSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -71,9 +71,7 @@ function resolveChangedFiles() {
 
   if (!hasBaseDiff) {
     const explicitBase = process.env.GUARD_ORCHESTRATOR_BASE_REF?.trim();
-    const baseCandidates = explicitBase
-      ? [explicitBase]
-      : ['origin/main', 'main'];
+    const baseCandidates = explicitBase ? [explicitBase] : ['origin/main', 'main'];
 
     for (const candidate of baseCandidates) {
       if (!candidate) continue;
@@ -92,7 +90,9 @@ function resolveChangedFiles() {
 }
 
 function includesAny(paths, prefixes) {
-  return paths.some((filePath) => prefixes.some((prefix) => filePath === prefix || filePath.startsWith(`${prefix}/`)));
+  return paths.some((filePath) =>
+    prefixes.some((prefix) => filePath === prefix || filePath.startsWith(`${prefix}/`)),
+  );
 }
 
 function main() {
@@ -153,7 +153,10 @@ function main() {
     { re: /from\s+['"]node:worker_threads['"]/u, message: 'node:worker_threads import' },
     { re: /from\s+['"]node:cluster['"]/u, message: 'node:cluster import' },
     { re: /BATCH_BACKEND_/u, message: 'BATCH_BACKEND_ env coupling' },
-    { re: /newAssignmentViaV2|rerunAssignmentViaV2|getAssignmentStatusViaV2|planRerunAssignmentViaV2/u, message: 'transitional v2 compatibility adapters' },
+    {
+      re: /newAssignmentViaV2|rerunAssignmentViaV2|getAssignmentStatusViaV2|planRerunAssignmentViaV2/u,
+      message: 'transitional v2 compatibility adapters',
+    },
   ];
 
   for (const absolutePath of orchestratorSourceFiles) {

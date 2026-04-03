@@ -37,19 +37,19 @@ describe('application/process-lesson-memory-job', () => {
             getText: vi.fn().mockResolvedValue('TRANSCRIPT'),
           }),
           generator: vi.fn().mockRejectedValue(new Error('provider failed')),
-        lessonMemory: {
-          getById: vi.fn().mockResolvedValue({
-            id: 'pending-1',
-            status: 'pending',
-          }),
-          markFailed,
-          supersedePendingForTranscript: vi.fn(),
+          lessonMemory: {
+            getById: vi.fn().mockResolvedValue({
+              id: 'pending-1',
+              status: 'pending',
+            }),
+            markFailed,
+            supersedePendingForTranscript: vi.fn(),
+          },
+          snapshots: {
+            requestRefresh: vi.fn(),
+          },
         },
-        snapshots: {
-          requestRefresh: vi.fn(),
-        },
-      },
-    }),
+      }),
     ).rejects.toThrow('provider failed');
 
     expect(markFailed).toHaveBeenCalledWith({

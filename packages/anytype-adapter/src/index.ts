@@ -1,5 +1,5 @@
 export { AnytypeClient, createAnytypeClient } from './client.js';
-export { renderToHtml, createStaticPageHtml } from './rendering.js';
+export { createStaticPageHtml, renderToHtml } from './rendering.js';
 export { sharePageToS3 } from './share.js';
 export type {
   AnytypeCreateObjectPayload,

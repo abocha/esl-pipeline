@@ -1,16 +1,16 @@
 #!/usr/bin/env node
-import process from 'node:process';
-import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { createRequire } from 'node:module';
+import path from 'node:path';
+import process from 'node:process';
 import { fileURLToPath } from 'node:url';
 
 import {
   DEFAULT_ARTIFACT_DIR,
-  REPO_ROOT,
   loadEnvFromFiles,
   normalizeEnvValue,
   parseBool,
+  REPO_ROOT,
   truncateText,
   writeJsonArtifact,
 } from './telegram-ops-go-live-utils.mjs';
@@ -104,7 +104,9 @@ function readPgTupleState(env) {
 }
 
 function evaluateLeaderElectionDbConfig(env) {
-  const leaderElectionDatabaseUrl = normalizeEnvValue(env.TELEGRAM_OPS_BOT_LEADER_ELECTION_DATABASE_URL);
+  const leaderElectionDatabaseUrl = normalizeEnvValue(
+    env.TELEGRAM_OPS_BOT_LEADER_ELECTION_DATABASE_URL,
+  );
   const pgConnectionString = normalizeEnvValue(env.PG_CONNECTION_STRING);
   const tupleState = readPgTupleState(env);
 
@@ -336,7 +338,10 @@ function collectConfigChecks(args) {
     }),
   );
 
-  const startupReplayGuardEnabled = parseBool(env.TELEGRAM_OPS_BOT_SKIP_PENDING_UPDATES_ON_STARTUP, true);
+  const startupReplayGuardEnabled = parseBool(
+    env.TELEGRAM_OPS_BOT_SKIP_PENDING_UPDATES_ON_STARTUP,
+    true,
+  );
   checks.push(
     createCheck({
       id: 'startup_replay_guard',
@@ -364,7 +369,8 @@ function collectConfigChecks(args) {
     createCheck({
       id: 'backend_service_account',
       passed: backendEmail.length > 0 && backendPassword.length > 0,
-      message: 'TELEGRAM_OPS_BOT_BACKEND_EMAIL and TELEGRAM_OPS_BOT_BACKEND_PASSWORD must be configured.',
+      message:
+        'TELEGRAM_OPS_BOT_BACKEND_EMAIL and TELEGRAM_OPS_BOT_BACKEND_PASSWORD must be configured.',
       details: {
         emailConfigured: backendEmail.length > 0,
         passwordConfigured: backendPassword.length > 0,
@@ -664,17 +670,17 @@ async function main() {
 if (process.argv[1] === fileURLToPath(import.meta.url)) {
   void main().catch((error) => {
     console.error(
-      `[telegram-ops-go-live-preflight] fatal: ${error instanceof Error ? error.stack ?? error.message : String(error)}`,
+      `[telegram-ops-go-live-preflight] fatal: ${error instanceof Error ? (error.stack ?? error.message) : String(error)}`,
     );
     process.exit(1);
   });
 }
 
 export {
-  DEFAULT_PROFILE,
-  DEFAULT_JSON_OUT,
-  parseArgs,
-  parseAllowedUserIds,
-  evaluateLeaderElectionDbConfig,
   buildBackendPgClientConfig,
+  DEFAULT_JSON_OUT,
+  DEFAULT_PROFILE,
+  evaluateLeaderElectionDbConfig,
+  parseAllowedUserIds,
+  parseArgs,
 };

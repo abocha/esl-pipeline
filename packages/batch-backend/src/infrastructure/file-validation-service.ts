@@ -899,67 +899,6 @@ export class FileValidationService {
   }
 
   /**
-   * Quick ZIP validation for small files
-   */
-  private quickZipValidation(fileBuffer: Buffer): {
-    isValid: boolean;
-    error?: ValidationError;
-    warning?: ValidationWarning;
-  } {
-    try {
-      // Check for multiple compressed streams (potential bomb indicator)
-      let compressedStreamCount = 0;
-      for (let i = 4; i < fileBuffer.length - 4; i++) {
-        if (fileBuffer[i] === 0x50 && fileBuffer[i + 1] === 0x4b) {
-          compressedStreamCount++;
-          if (compressedStreamCount > 50) {
-            return {
-              isValid: false,
-              error: {
-                code: 'ZIP_BOMB_DETECTED',
-                message: 'Too many compressed streams detected (potential ZIP bomb)',
-                field: 'content',
-              },
-            };
-          }
-        }
-      }
-
-      return { isValid: true };
-    } catch (error) {
-      logger.error('Quick ZIP validation failed', {
-        error: error instanceof Error ? error.message : String(error),
-      });
-      return {
-        isValid: false,
-        error: {
-          code: 'ZIP_QUICK_VALIDATION_FAILED',
-          message: 'ZIP quick validation failed',
-          field: 'content',
-        },
-      };
-    }
-  }
-
-  /**
-   * Check for suspicious ZIP file patterns
-   */
-  private containsSuspiciousZipPatterns(fileBuffer: Buffer): boolean {
-    // Check for very small files with multiple headers
-    if (fileBuffer.length < 1024) {
-      let headerCount = 0;
-      for (let i = 0; i < fileBuffer.length - 4; i++) {
-        if (fileBuffer[i] === 0x50 && fileBuffer[i + 1] === 0x4b) {
-          headerCount++;
-        }
-      }
-      return headerCount > 3; // Too many headers in a small file
-    }
-
-    return false;
-  }
-
-  /**
    * Check for invalid UTF-8 byte sequences in the buffer BEFORE decoding
    */
   private hasInvalidUTF8Bytes(buffer: Buffer): boolean {
@@ -1011,32 +950,6 @@ export class FileValidationService {
 
       // Invalid UTF-8 start byte
       return true;
-    }
-
-    return false;
-  }
-
-  /**
-   * Check for invalid Unicode sequences
-   */
-  private containsInvalidUnicode(content: string): boolean {
-    // Iterate by code points (handles surrogate pairs automatically)
-    for (const char of content) {
-      const codePoint = char.codePointAt(0);
-
-      if (codePoint === undefined) continue;
-
-      // If we see a surrogate code point here, it must be unpaired
-      // (because valid pairs are combined into a single code point by the iterator)
-      if (codePoint >= 0xd8_00 && codePoint <= 0xdf_ff) {
-        return true;
-      }
-
-      // Check for control characters that might indicate tampering
-      if (codePoint < 32 && codePoint !== 9 && codePoint !== 10 && codePoint !== 13) {
-        // Potentially problematic control character
-        return true;
-      }
     }
 
     return false;

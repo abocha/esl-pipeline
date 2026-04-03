@@ -4,42 +4,43 @@
 // - POST /jobs      -> submit a new ESL pipeline job
 // - GET /jobs/:id   -> fetch job status
 // Designed to be run as a containerized service.
+
+import { fileURLToPath } from 'node:url';
 import cookie from '@fastify/cookie';
 import Fastify, { type FastifyInstance } from 'fastify';
-import { fileURLToPath } from 'node:url';
 
-import { validateTranscriptionConfig } from '../application/validate-transcription-config.js';
 import { resumePersistedOpsActionsOnStartup } from '../application/ops-control.js';
+import { validateTranscriptionConfig } from '../application/validate-transcription-config.js';
 import { loadBatchBackendEnv } from '../bootstrap/env.js';
 import { loadConfig } from '../config/env.js';
 import { createAuthService } from '../infrastructure/auth-service.js';
 import {
-  type FileSanitizationService,
   createFileSanitizationService,
+  type FileSanitizationService,
 } from '../infrastructure/file-sanitization-service.js';
 import { createFileStorageService } from '../infrastructure/file-storage-service.js';
 import {
-  type FileValidationService,
   createFileValidationService,
   createRecordingUploadValidationService,
+  type FileValidationService,
 } from '../infrastructure/file-validation-service.js';
 import { enableRedisJobEventBridge } from '../infrastructure/job-event-redis-bridge.js';
 import { runMigrationsIfConfigured } from '../infrastructure/migrations.js';
 import { enableRedisRecordingEventBridge } from '../infrastructure/recording-event-redis-bridge.js';
 import { createRedisClient } from '../infrastructure/redis.js';
 import {
+  createStorageConfigService,
   type StorageConfig,
   StorageConfigurationService,
-  createStorageConfigService,
 } from '../infrastructure/storage-config.js';
 import { authenticate, configureAuthMiddleware } from './auth-middleware.js';
 import { registerCoreRoutes } from './core-routes.js';
 import { registerErrorHandler } from './error-handler.js';
 import { registerExtendedRoutes } from './extended-routes.js';
 import {
-  RateLimiterService,
   createRateLimiterService,
   createUploadRateLimitMiddleware,
+  RateLimiterService,
 } from './rate-limit-middleware.js';
 import { registerSecurityHeaders } from './security-headers.js';
 

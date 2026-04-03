@@ -1,11 +1,8 @@
 import eslintReactPlugin from '@eslint-react/eslint-plugin';
-import js from '@eslint/js';
 import vitestPlugin from '@vitest/eslint-plugin';
-import eslintConfigPrettier from 'eslint-config-prettier';
-import nodePlugin from 'eslint-plugin-n';
-import reactRefreshPlugin from 'eslint-plugin-react-refresh';
-import unicornPlugin from 'eslint-plugin-unicorn';
 import { defineConfig } from 'eslint/config';
+import eslintConfigPrettier from 'eslint-config-prettier';
+import reactRefreshPlugin from 'eslint-plugin-react-refresh';
 import globals from 'globals';
 import tseslint from 'typescript-eslint';
 
@@ -21,52 +18,9 @@ export default defineConfig(
       '**/test-results/**',
     ],
   },
-  // Base JS rules
+  // TypeScript parsing for the specialized ESLint lane
   {
-    files: ['**/*.{js,mjs,cjs,ts,tsx}'],
-    extends: [js.configs.recommended],
-    languageOptions: {
-      globals: {
-        ...globals.node,
-      },
-      parserOptions: {
-        ecmaVersion: 'latest',
-        sourceType: 'module',
-      },
-    },
-    plugins: {
-      n: nodePlugin,
-      unicorn: unicornPlugin,
-    },
-    rules: {
-      'no-console': 'off',
-      'no-unused-vars': 'off', // Handled by TS
-      'no-useless-assignment': 'off',
-      'preserve-caught-error': 'off',
-      'no-useless-escape': 'off',
-      'no-misleading-character-class': 'off',
-      'no-empty': 'off',
-
-      // Node rules
-      'n/no-unsupported-features/es-syntax': 'off',
-      'n/no-missing-import': 'off', // Handled by TS
-
-      // Unicorn rules - selective enablement
-      ...unicornPlugin.configs['recommended'].rules,
-      'unicorn/prevent-abbreviations': 'off',
-      'unicorn/filename-case': 'off',
-      'unicorn/no-null': 'off',
-      'unicorn/prefer-top-level-await': 'off',
-      'unicorn/no-process-exit': 'off',
-      'unicorn/import-style': 'off',
-      'unicorn/no-array-sort': 'off',
-      'unicorn/consistent-function-scoping': 'off',
-      'unicorn/numeric-separators-style': 'off',
-    },
-  },
-  // TypeScript rules
-  {
-    files: ['packages/**/*.{ts,tsx}'],
+    files: ['packages/batch-frontend/**/*.{ts,tsx}', 'packages/**/*.{test,spec}.{ts,tsx}'],
     extends: [...tseslint.configs.recommended, ...tseslint.configs.stylistic],
     languageOptions: {
       parserOptions: {
@@ -84,8 +38,8 @@ export default defineConfig(
       ],
       '@typescript-eslint/explicit-module-boundary-types': 'off',
       '@typescript-eslint/no-explicit-any': 'warn',
-      '@typescript-eslint/no-floating-promises': 'warn',
       '@typescript-eslint/no-empty-function': 'off',
+      '@typescript-eslint/no-floating-promises': 'off',
     },
   },
   // React rules (batch-frontend)
@@ -107,15 +61,14 @@ export default defineConfig(
     },
     rules: {
       '@eslint-react/component-hook-factories': 'off',
-      '@eslint-react/hooks-extra/no-direct-set-state-in-use-effect': 'off',
-      '@eslint-react/naming-convention/ref-name': 'off',
-      '@eslint-react/naming-convention/use-state': 'off',
       '@eslint-react/no-array-index-key': 'off',
       '@eslint-react/no-context-provider': 'off',
+      '@eslint-react/no-direct-mutation-state': 'off',
       '@eslint-react/no-use-context': 'off',
       '@eslint-react/purity': 'off',
       '@eslint-react/set-state-in-effect': 'off',
       '@eslint-react/use-state': 'off',
+      '@eslint-react/naming-convention-ref-name': 'off',
       'react-refresh/only-export-components': ['warn', { allowConstantExport: true }],
     },
   },
@@ -126,9 +79,9 @@ export default defineConfig(
       vitest: vitestPlugin,
     },
     rules: {
+      '@typescript-eslint/no-explicit-any': 'off',
       ...vitestPlugin.configs.recommended.rules,
       'vitest/expect-expect': 'off', // Common in some test patterns
-      '@typescript-eslint/no-explicit-any': 'off',
     },
   },
   // Batch frontend context files are allowed to export helpers alongside components

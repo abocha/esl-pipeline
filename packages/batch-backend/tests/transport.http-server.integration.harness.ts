@@ -15,8 +15,8 @@ import { getJobOptions } from '../src/application/get-job-options.js';
 import * as getJobProvenanceModule from '../src/application/get-job-provenance.js';
 import * as getJobStatusModule from '../src/application/get-job-status.js';
 import * as getPromptPackageModule from '../src/application/get-prompt-package.js';
-import * as getRecordingTranscriptModule from '../src/application/get-recording-transcript.js';
 import * as getRecordingModule from '../src/application/get-recording.js';
+import * as getRecordingTranscriptModule from '../src/application/get-recording-transcript.js';
 import * as jobSummaryModule from '../src/application/job-summary.js';
 import * as listJobsModule from '../src/application/list-jobs.js';
 import * as listRecordingsModule from '../src/application/list-recordings.js';
@@ -26,8 +26,8 @@ import * as profileContentModule from '../src/application/profile-content.js';
 import { ProfilePathError } from '../src/application/profile-path.js';
 import * as readinessMetricsModule from '../src/application/readiness-metrics.js';
 import * as retryRecordingModule from '../src/application/retry-recording-transcription.js';
-import * as studentBindingsModule from '../src/application/student-profile-bindings.js';
 import * as studentMemoryInspectionModule from '../src/application/student-memory-inspection.js';
+import * as studentBindingsModule from '../src/application/student-profile-bindings.js';
 import * as studentProfileCandidatesModule from '../src/application/student-profile-candidates.js';
 import * as studentStoreModule from '../src/application/student-profiles-store.js';
 import * as studentSummaryModule from '../src/application/student-summary.js';
@@ -303,7 +303,9 @@ export function describeHttpServerIntegrationSuite(
     const mockGetStudentMemoryOverview = vi.mocked(
       studentMemoryInspectionModule.getStudentMemoryOverview,
     );
-    const mockListStudentLessonMemory = vi.mocked(studentMemoryInspectionModule.listStudentLessonMemory);
+    const mockListStudentLessonMemory = vi.mocked(
+      studentMemoryInspectionModule.listStudentLessonMemory,
+    );
     const mockListStudentHomeworkMemory = vi.mocked(
       studentMemoryInspectionModule.listStudentHomeworkMemory,
     );

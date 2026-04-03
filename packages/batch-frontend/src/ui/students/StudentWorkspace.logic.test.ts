@@ -1,18 +1,18 @@
 import { describe, expect, it } from 'vitest';
 
+import type { StudentProfileCandidate } from '../../utils/api';
 import {
-  formatCandidateSectionLabel,
-  formatCandidateStateLabel,
   buildCreateStudentPayload,
   buildStarterProfileInput,
   CREATE_STUDENT_NAME_REQUIRED_MESSAGE,
   CREATE_STUDENT_STARTER_PROFILE_REQUIRED_MESSAGE,
+  formatCandidateSectionLabel,
+  formatCandidateStateLabel,
+  groupVisibleCandidatesBySection,
   INITIAL_CREATE_STUDENT_FORM,
   isSelectableForPromotion,
-  groupVisibleCandidatesBySection,
   type ProfileCandidateFilter,
 } from './StudentWorkspace.logic';
-import type { StudentProfileCandidate } from '../../utils/api';
 
 describe('StudentWorkspace logic', () => {
   it('builds a profile-bound payload when the starter profile is empty', () => {

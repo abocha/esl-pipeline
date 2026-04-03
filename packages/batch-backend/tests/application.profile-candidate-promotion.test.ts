@@ -105,8 +105,7 @@ describe('application/profile-candidate-promotion', () => {
             makeCandidate({
               id: 'candidate-1',
               fact: 'Plays pickleball regularly.',
-              approvedFact:
-                'Plays pickleball regularly and enjoys practical sports examples.',
+              approvedFact: 'Plays pickleball regularly and enjoys practical sports examples.',
               evidence: [{ quote: 'I play pickleball every week.', speakerRole: 'student' }],
             }),
           ],
@@ -198,19 +197,19 @@ describe('application/profile-candidate-promotion', () => {
               restoredFromRevisionId: null,
             }),
             getById: async () => null,
+          },
+          candidates: {
+            listByIds: async () => [
+              makeCandidate({
+                id: 'candidate-1',
+                status: 'pending_review',
+                reviewState: 'unreviewed',
+              }),
+            ],
+            linkToDraft: async () => {},
+          },
         },
-        candidates: {
-          listByIds: async () => [
-            makeCandidate({
-              id: 'candidate-1',
-              status: 'pending_review',
-              reviewState: 'unreviewed',
-            }),
-          ],
-          linkToDraft: async () => {},
-        },
-      },
-    }),
+      }),
     ).rejects.toMatchObject({
       code: 'profile_candidate_not_approved',
     });

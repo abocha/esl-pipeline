@@ -1,6 +1,7 @@
 # A-Track Completion Plan: `A2` Closeout + `A` Durability
 
 ## Summary
+
 1. Finish all remaining `A2` hardening items first, with CI-verifiable acceptance gates.
 2. Immediately follow with `A` durability work currently marked `V2/Defer`, but keep it additive and backward-compatible.
 3. Keep roadmap sequencing intact: no `B1` feature expansion until `A` reliability, observability, and operability are demonstrably stable.
@@ -8,6 +9,7 @@
 ## Implementation Changes
 
 ### Phase 1: `A2` Closeout (blocking before broader rollout)
+
 1. Add missing backend transport integration coverage for `/ops/*`.
    - Create a dedicated HTTP integration suite for `/ops/status`, `POST /ops/actions`, and `GET /ops/actions/:operationId`.
    - Validate route registration gating (`BATCH_BACKEND_ENABLE_OPS_CONTROL` off => routes unavailable).
@@ -38,6 +40,7 @@
    - Update ops runbook with troubleshooting flows for startup replay protection, topic healing, and share-fallback diagnostics.
 
 ### Phase 2: `A` Durability and Scale (formerly deferred, now planned)
+
 1. Persist ops action history to Postgres while keeping API shape unchanged.
    - Add migration for `ops_actions` table with operation lifecycle fields and indexed lookup by `operation_id`.
    - Implement repository-backed writes on queue/start/finish transitions and reads for status lookup.
@@ -55,6 +58,7 @@
    - Keep these commands disabled by default and out of baseline operator flow until post-hardening validation.
 
 ## Public Interfaces and Contract Changes
+
 1. Additive env vars only (no breaking changes):
    - `TELEGRAM_OPS_BOT_API_BASE_URL` for deterministic smoke/testing.
    - `BATCH_BACKEND_OPS_CONTROL_ACTION_RETENTION_DAYS` for persisted-history pruning.
@@ -67,6 +71,7 @@
    - Any future share-metadata DTO additions must be additive optional fields only.
 
 ## Test Plan and Acceptance Gates
+
 1. Required automated coverage additions:
    - New backend HTTP integration suite for `/ops/*`.
    - New bot runner smoke tests for `/share` deterministic behavior and topic-heal recovery.
@@ -88,6 +93,7 @@
    - Persisted action history survives backend restart and remains queryable by `operationId`.
 
 ## Assumptions and Defaults
+
 1. `A` completion means both `A2` hardening closure and practical durability readiness, not just feature completeness.
 2. Long-polling remains default transport until webhook mode is explicitly enabled.
 3. Action commands remain disabled-by-default in production unless explicitly enabled.

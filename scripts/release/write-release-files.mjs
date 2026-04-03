@@ -32,7 +32,9 @@ function parseArgs(argv) {
       continue;
     }
     if (token === '-h' || token === '--help') {
-      console.log('Usage: node scripts/release/write-release-files.mjs --event <github-event.json> --version <X.Y.Z>');
+      console.log(
+        'Usage: node scripts/release/write-release-files.mjs --event <github-event.json> --version <X.Y.Z>',
+      );
       process.exit(0);
     }
     die(`Unknown argument: ${token}`);

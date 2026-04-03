@@ -1,6 +1,10 @@
 import type { BatchBackendConfig } from '../config/env.js';
 import { loadConfig } from '../config/env.js';
-import type { FactEvidence, MemoryConfidence, StudentFactAuthority } from '../domain/lesson-memory-model.js';
+import type {
+  FactEvidence,
+  MemoryConfidence,
+  StudentFactAuthority,
+} from '../domain/lesson-memory-model.js';
 import { getProfileById } from '../domain/profile-repository.js';
 import {
   getActiveProfileRevision,
@@ -13,8 +17,8 @@ import {
 import type { ProfileRevisionDetailResponse } from './profile-content.js';
 import { saveProfileRevisionContent } from './profile-content.js';
 import {
-  generateProfileRevisionDraft,
   type GenerateProfileRevisionDraftResult,
+  generateProfileRevisionDraft,
 } from './profile-revision-drafting.js';
 import { getStudentProfileById } from './student-profiles-store.js';
 
