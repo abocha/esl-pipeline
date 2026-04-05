@@ -454,8 +454,8 @@ describe('rendering', () => {
     const renderedDocument = createRenderedDocument(html);
 
     const sentenceAnchor = renderedDocument.querySelector('.pronunciation-natural-sentence');
-    const audioFigure = [...renderedDocument.querySelectorAll('figure.audio-figure')].find((figure) =>
-      figure.textContent?.includes('Audio recording: Pronunciation Practice'),
+    const audioFigure = [...renderedDocument.querySelectorAll('figure.audio-figure')].find(
+      (figure) => figure.textContent?.includes('Audio recording: Pronunciation Practice'),
     );
 
     expect(sentenceAnchor?.tagName).toBe('P');
