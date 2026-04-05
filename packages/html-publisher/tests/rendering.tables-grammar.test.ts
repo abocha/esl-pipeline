@@ -16,10 +16,10 @@ describe('rendering', () => {
     expect(html).toContain('.markdown-body table[data-balanced-columns="true"]');
     expect(html).toContain('table-layout: fixed;');
     expect(html).toContain('.markdown-body table[data-tight-columns="true"]');
-    expect(html).toContain('width: max-content;');
+    expect(html).toContain('width: fit-content;');
     expect(html).toContain('white-space: normal;');
     expect(html).toContain('overflow-wrap: anywhere;');
-    expect(html).toContain('width: max-content;');
+    expect(html).toContain('.table-scroll {');
     expect(html).toContain('data-table-archetype="glossary_2col"');
     expect(html).toContain('data-col-role="meaning"');
     expect(html).toContain('text-wrap: pretty;');
@@ -71,10 +71,36 @@ describe('rendering', () => {
     expect(html).toContain('.column-list.grammar-matrix-grid .column p,');
     expect(html).toContain('.column-list.grammar-matrix-grid .column li {');
     expect(html).toContain('.column-list.grammar-matrix-grid .column > .grammar-card-heading {');
-    expect(html).toContain('.column-list.grammar-matrix-grid .column > p > em:only-child {');
-    expect(html).toContain('text-align: justify;');
+    expect(html).toContain(
+      '.column-list.grammar-matrix-grid .column > p[data-grammar-emphasis-only="true"] > em:only-child {',
+    );
+    expect(html).toContain('text-align: left;');
     expect(html).toContain('border-bottom: 1px dashed');
     expect(html).toContain('class="grammar-card-heading"');
+  });
+
+  it('keeps punctuation attached to inline italic grammar prose instead of styling it as a standalone emphasis line', async () => {
+    const markdown = `### A. 👀 Notice the Grammar
+  
+  :::column-list
+  :::column
+  **Meaning & Use:**
+  
+  This formula helps you calculate exactly which tense to use in the
+  
+  *If-clause*.
+  :::
+  :::`;
+    const html = await renderToHtml(markdown, 'Grammar Italic Punctuation');
+    const renderedDocument = createRenderedDocument(html);
+
+    const targetParagraph = [
+      ...renderedDocument.querySelectorAll('.column-list.grammar-matrix-grid .column > p'),
+    ].find((paragraph) => paragraph.textContent?.includes('If-clause'));
+
+    expect(targetParagraph).toBeTruthy();
+    expect(targetParagraph?.getAttribute('data-grammar-emphasis-only')).toBeNull();
+    expect(targetParagraph?.textContent?.replaceAll(/\s+/g, ' ').trim()).toBe('If-clause.');
   });
 
   it('normalizes rule line breaks and marks long grammar prose paragraphs', async () => {
@@ -342,6 +368,23 @@ describe('rendering', () => {
     expect(html).toContain('<th scope="col">Term</th>');
     expect(html).toContain('<th scope="col">Meaning &amp; Context</th>');
     expect(html).toContain('<td>freeze</td>');
+    expect(html).toContain('<div class="table-scroll"><table>');
+  });
+
+  it('wraps useful chunks tables in a scroll shell so wide vocabulary layouts stay inside the page', async () => {
+    const markdown = `### B. 🗣️ Useful Chunks & Vocabulary
+  
+  | Item | Meaning | Example from Text |
+  | --- | --- | --- |
+  | **There has always been** | Existential. There + Present Perfect. Used to say something existed in the past and still exists now. | "There has always been a lot of anxiety..." |`;
+    const html = await renderToHtml(markdown, 'Vocabulary Table');
+
+    expect(html).toContain('<div class="table-scroll"><table');
+    expect(html).toContain('.table-scroll {');
+    expect(html).toContain('overflow-x: auto;');
+    expect(html).toContain('.table-scroll > table {');
+    expect(html).toContain('.markdown-body table[data-tight-columns="true"]');
+    expect(html).toContain('width: fit-content;');
   });
 
   it('keeps non-useful-chunks raw tables unchanged', async () => {

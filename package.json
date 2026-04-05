@@ -83,7 +83,7 @@
     "lint:biome": "pnpm exec biome lint .",
     "lint:eslint:specialized": "pnpm exec eslint \"packages/batch-frontend/**/*.{ts,tsx}\" \"packages/**/*.{test,spec}.{js,mjs,cjs,ts,tsx}\"",
     "lint:repo-hygiene": "pnpm run lint:workflows && pnpm run lint:shell",
-    "lint:shell": "rg --files scripts -g '*.sh' -g '*.bash' | xargs -r shellcheck",
+    "lint:shell": "find scripts -type f \\( -name '*.sh' -o -name '*.bash' \\) -print0 | xargs -0 -r shellcheck",
     "lint:sqlfluff": "bash -lc 'mkdir -p tmp/.uv-cache tmp/.uv-tools && UV_CACHE_DIR=$PWD/tmp/.uv-cache UV_TOOL_DIR=$PWD/tmp/.uv-tools uv tool run --from sqlfluff sqlfluff lint --dialect postgres packages/batch-backend/migrations packages/batch-backend/docker-entrypoint-initdb.d'",
     "lint:workflows": "actionlint",
     "notes:pr-style": "bash scripts/git/pr-style-summary.sh",

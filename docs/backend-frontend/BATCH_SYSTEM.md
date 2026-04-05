@@ -5,7 +5,7 @@
 - Audience: AI agents and maintainers for batch frontend/backend tasks.
 - Read Time: 6 minutes.
 - Authority Level: Active system map.
-- Last Verified Against: 2026-03-04 repo state.
+- Last Verified Against: 2026-04-05 repo state.
 - Owner: backend/frontend maintainers + automation agents.
 - Review Cadence: monthly or after major batch workflow changes.
 - Status: `active`.
