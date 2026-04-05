@@ -131,7 +131,7 @@ JSON
 
 compose up -d telegram-ops-bot-smoke
 
-wait_for_topics_ready
+wait_for_topics_ready 120
 
 OPS_THREAD="$(curl -fsS "${API_URL}/_test/state" | node -e "const fs=require('node:fs'); const s=JSON.parse(fs.readFileSync(0,'utf8')); const topic=(s.createdTopics||[]).find((entry)=>entry.name==='Ops Control'); if (!topic) process.exit(1); process.stdout.write(String(topic.message_thread_id));")"
 
