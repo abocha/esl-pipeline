@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented here. Dates use `YYYY-MM-DD`.
 
+## [6.0.6] - 2026-04-05
+
+### Changed
+
+- Automated release from PR #59: refactor(html-publisher): decompose rendering pipeline (https://github.com/abocha/esl-pipeline/pull/59)
+
 ## [6.0.5] - 2026-04-03
 
 ### Changed
