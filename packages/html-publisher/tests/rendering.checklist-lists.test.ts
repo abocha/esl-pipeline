@@ -98,7 +98,9 @@ Read the sentence and choose the best answer.
 2. Fourth question`;
     const html = await renderToHtml(markdown, 'H4 List Continuation');
 
-    expect(html).toContain('<h4 id="part-2" tabindex="-1"><span class="heading-text">Part 2</span></h4>');
+    expect(html).toContain(
+      '<h4 id="part-2" tabindex="-1"><span class="heading-text">Part 2</span></h4>',
+    );
     expect(html).toContain('<p>Read the sentence and choose the best answer.</p>');
     expect(html).toContain('<ol start="3">');
     expect(html).toContain('<li>Third question</li>');
@@ -117,7 +119,9 @@ Read the sentence and choose the best answer.
 2. Fourth question`;
     const html = await renderToHtml(markdown, 'H3 List Reset');
 
-    expect(html).toContain('<h3 id="b.-new-section" tabindex="-1"><span class="heading-text">B. New Section</span></h3>');
+    expect(html).toContain(
+      '<h3 id="b.-new-section" tabindex="-1"><span class="heading-text">B. New Section</span></h3>',
+    );
     expect(html).not.toContain('<ol start="3">');
   });
 });

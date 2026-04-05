@@ -4,8 +4,7 @@
 
 - Audience: AI agents and maintainers.
 - Authority Level: router + operating contract.
-- Last Verified Against: 2026-03-05 repo state.
-- Last Verified Against: 2026-03-13 repo state.
+- Last Verified Against: 2026-04-05 repo state.
 - Owner: founder-maintainer + automation agents.
 - Review Cadence: biweekly or after major workflow/tooling changes.
 - Status: `router`.
