@@ -780,11 +780,19 @@ details:not(.study-text) {
   text-justify: auto;
   hyphens: auto;
 }
-.column-list.grammar-matrix-grid .column > p > em:only-child {
+.column-list.grammar-matrix-grid .column > p[data-grammar-emphasis-only="true"] > em:only-child {
   display: block;
-  text-align: justify;
-  text-justify: inter-word;
-  text-align-last: left;
+  text-align: left;
+  text-justify: auto;
+}
+.table-scroll {
+  max-width: 100%;
+  overflow-x: auto;
+  margin: 14px 0 24px;
+  -webkit-overflow-scrolling: touch;
+}
+.table-scroll > table {
+  margin: 0;
 }
 .video-embed {
   position: relative;
@@ -926,7 +934,7 @@ table {
   table-layout: fixed;
 }
 .markdown-body table[data-tight-columns="true"] {
-  width: max-content;
+  width: fit-content;
   max-width: 100%;
 }
 th,
@@ -1034,18 +1042,14 @@ tbody tr:nth-child(even) td {
     text-align: left;
     text-justify: auto;
   }
-  .column-list.grammar-matrix-grid .column > p > em:only-child {
+  .column-list.grammar-matrix-grid .column > p[data-grammar-emphasis-only="true"] > em:only-child {
     text-align: left;
     text-justify: auto;
     text-align-last: auto;
   }
-  .markdown-body table {
-    display: block;
-    max-width: 100%;
-    width: max-content;
-    min-width: 100%;
-    overflow-x: auto;
-    -webkit-overflow-scrolling: touch;
+  .table-scroll {
+    margin-left: -2px;
+    margin-right: -2px;
   }
   .markdown-body table td[data-cell-prose="true"] {
     text-align: left;
@@ -1179,7 +1183,8 @@ export async function renderToHtml(
   const withCollapsibleToc = wrapTableOfContents(withEmbeddedAudio);
   const withVocabularyHeaders = promoteUsefulChunksTableHeader(withCollapsibleToc);
   const withGrammarMatrix = decorateNoticeGrammarColumns(withVocabularyHeaders);
-  const safeBody = sanitizeRenderedHtml(withGrammarMatrix, resolved.allowRawHtml);
+  const withScrollableTables = wrapTables(withGrammarMatrix);
+  const safeBody = sanitizeRenderedHtml(withScrollableTables, resolved.allowRawHtml);
   const css = buildCss(resolved);
   const header = renderHeader(resolvedTitle, frontmatter, resolved);
   const behaviorScript = buildBehaviorScript(resolved.features);
@@ -1403,7 +1408,12 @@ function applyH4OrderedListContinuationRule(md: MarkdownIt): void {
   md.core.ruler.after('inline', 'continue_ordered_lists_across_h4', (state) => {
     let lastOrderedListNextStart: number | null = null;
     let sawContinuationH4 = false;
-    const orderedListStack: { level: number; start: number; itemCount: number; managed: boolean }[] = [];
+    const orderedListStack: {
+      level: number;
+      start: number;
+      itemCount: number;
+      managed: boolean;
+    }[] = [];
 
     const resetContinuation = () => {
       lastOrderedListNextStart = null;
@@ -2147,9 +2157,15 @@ function normalizeGrammarMatrixColumnMarkup(sectionHtml: string): string {
             .trim();
           const wordCount = plainText.length > 0 ? plainText.split(' ').filter(Boolean).length : 0;
           const isRuleParagraph = /^rule:/i.test(plainText);
+          const isEmphasisOnlyParagraph = /^\s*<em\b[^>]*>[\s\S]*<\/em>\s*$/i.test(
+            normalizedContent,
+          );
           const useProseAlignment = !isRuleParagraph && wordCount >= 12;
           const proseAttribute = useProseAlignment ? ' data-grammar-prose="true"' : '';
-          return `<p${attrs}${proseAttribute}>${normalizedContent}</p>`;
+          const emphasisOnlyAttribute = isEmphasisOnlyParagraph
+            ? ' data-grammar-emphasis-only="true"'
+            : '';
+          return `<p${attrs}${proseAttribute}${emphasisOnlyAttribute}>${normalizedContent}</p>`;
         },
       );
       normalizedInner = markFirstGrammarHeading(normalizedInner);
@@ -2399,6 +2415,15 @@ function promoteFirstTableRowToHeaderCells(sectionHtml: string): string {
         })
         .replaceAll(/<\/td>/gi, '</th>');
     });
+  });
+}
+
+function wrapTables(html: string): string {
+  return html.replaceAll(/<table\b[^>]*>[\s\S]*?<\/table>/gi, (tableHtml) => {
+    if (/<div class="table-scroll">\s*<table\b/i.test(tableHtml)) {
+      return tableHtml;
+    }
+    return `<div class="table-scroll">${tableHtml}</div>`;
   });
 }
 
@@ -2668,7 +2693,7 @@ function buildBehaviorScript(features: ResolvedFeatures): string {
     grammarWidontTargets.forEach((element) => applyWidont(element));
 
     const grammarQuestionEmphasis = document.querySelectorAll(
-      '.column-list.grammar-matrix-grid .column > p > em:only-child',
+      '.column-list.grammar-matrix-grid .column > p[data-grammar-emphasis-only="true"] > em:only-child',
     );
     grammarQuestionEmphasis.forEach((element) => applyWidont(element, { lockLeadingPair: true }));
 
