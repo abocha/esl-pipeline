@@ -703,6 +703,8 @@ export function loadConfig(): BatchBackendConfig {
       generationGoogleModelTertiary,
       'gemini-2.5-flash',
       generationGoogleModelFallback,
+      'gemma-4-31b-it',
+      'gemma-4-26b-a4b-it',
     ].join(','),
   );
   const generationOpenRouterModelPrimary = readString('GEN_OPENROUTER_MODEL_PRIMARY');
