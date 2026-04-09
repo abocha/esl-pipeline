@@ -197,15 +197,17 @@ export function makeLearningPreset(
 }
 
 export async function previewCurrentDraft(_user: ReturnType<typeof userEvent.setup>) {
-  fireEvent.click(screen.getByRole('button', { name: /Preview current draft/i }));
-  await screen.findByText('Preview ready for current draft.', {}, { timeout: UI_WAIT_TIMEOUT_MS });
+  fireEvent.click(screen.getByRole('button', { name: /Preview assignment/i }));
+  await screen.findByText('Preview ready for current assignment.', {}, {
+    timeout: UI_WAIT_TIMEOUT_MS,
+  });
 }
 
 export async function preparePromptReady(_user: ReturnType<typeof userEvent.setup>) {
   fireEvent.click(screen.getByRole('button', { name: /Drop audio file/i }));
   await screen.findByDisplayValue('Student transcript text', {}, { timeout: UI_WAIT_TIMEOUT_MS });
 
-  fireEvent.click(screen.getByRole('button', { name: /Generate prompt/i }));
+  fireEvent.click(screen.getByRole('button', { name: /Generate instructions/i }));
   await screen.findByDisplayValue('Prompt package output', {}, { timeout: UI_WAIT_TIMEOUT_MS });
 }
 
@@ -269,13 +271,49 @@ async function waitForResumedPromptReady(text = 'Prompt package output') {
 }
 
 async function waitForJobActionsReady(jobId = 'job-1') {
-  await screen.findByRole('heading', { name: /8\. Job actions/i }, { timeout: UI_WAIT_TIMEOUT_MS });
+  await screen.findByRole('heading', { name: /Advanced actions/i }, { timeout: UI_WAIT_TIMEOUT_MS });
+  fireEvent.click(screen.getByRole('button', { name: /Show advanced actions/i }));
   await waitFor(
     () => {
       expect(screen.getAllByText(new RegExp(`Job ID: ${jobId}`, 'i')).length).toBeGreaterThan(0);
     },
     { timeout: UI_WAIT_TIMEOUT_MS },
   );
+}
+
+export function openRecordingSettings() {
+  const trigger = screen.queryByText(/Recording settings/i);
+  if (trigger && !(trigger.closest('details') as HTMLDetailsElement | null)?.open) {
+    fireEvent.click(trigger);
+  }
+}
+
+export function openGenerationSettings() {
+  const trigger = screen.queryByText(/Generation settings/i);
+  if (trigger && !(trigger.closest('details') as HTMLDetailsElement | null)?.open) {
+    fireEvent.click(trigger);
+  }
+}
+
+export function openGenerationLimits() {
+  const trigger = screen.queryByText(/Generation limits and provider notes/i);
+  if (trigger && !(trigger.closest('details') as HTMLDetailsElement | null)?.open) {
+    fireEvent.click(trigger);
+  }
+}
+
+export function openPublishingSettings() {
+  const trigger = screen.queryByText(/Audio and publishing settings/i);
+  if (trigger && !(trigger.closest('details') as HTMLDetailsElement | null)?.open) {
+    fireEvent.click(trigger);
+  }
+}
+
+export function openAdvancedActions() {
+  const trigger = screen.queryByRole('button', { name: /Show advanced actions/i });
+  if (trigger) {
+    fireEvent.click(trigger);
+  }
 }
 
 export function createMinimalUser(): ReturnType<typeof userEvent.setup> {

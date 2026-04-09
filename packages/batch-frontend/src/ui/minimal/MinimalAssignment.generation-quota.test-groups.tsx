@@ -10,6 +10,9 @@ import {
   testExpect as expect,
   INTEGRATION_TEST_TIMEOUT_MS,
   now,
+  openAdvancedActions,
+  openGenerationLimits,
+  openGenerationSettings,
   preparePromptReady,
   previewCurrentDraft,
   renderGenerationReadyAssignment,
@@ -23,6 +26,7 @@ import {
 } from './MinimalAssignment.test-harness';
 
 const selectOpenAiGenerationModel = () => {
+  openGenerationSettings();
   fireEvent.change(screen.getByRole('combobox', { name: /Generation provider/i }), {
     target: { value: 'openai' },
   });
@@ -56,7 +60,8 @@ export function registerGenerationDefaultsTests() {
     it('shows quota panel from job options before first draft generation', async () => {
       renderMinimalAssignment();
 
-      await screen.findByText(/Generation quota/i);
+      openGenerationSettings();
+      openGenerationLimits();
       await screen.findByText(/Source: Hybrid/i);
       expect(screen.getByText(/RPM: 5/i)).toBeTruthy();
       expect(screen.getByText(/TPM: 250000/i)).toBeTruthy();
@@ -66,8 +71,10 @@ export function registerGenerationDefaultsTests() {
 
     it('refreshes baseline quota panel values when job options are reloaded', async () => {
       const user = createMinimalUser();
-      renderMinimalAssignment();
+      await renderResumedAssignment({}, { user, waitFor: 'promptReady' });
 
+      openGenerationSettings();
+      openGenerationLimits();
       await screen.findByText(/Source: Hybrid/i);
       expect(screen.getByText(/RPM: 5/i)).toBeTruthy();
 
@@ -105,6 +112,7 @@ export function registerGenerationDefaultsTests() {
         supportedActions: [],
       });
 
+      openAdvancedActions();
       await user.click(screen.getByRole('button', { name: /Refresh actions/i }));
 
       await waitFor(() => {
@@ -119,6 +127,8 @@ export function registerGenerationDefaultsTests() {
     it('shows relative and absolute freshness in quota panel', async () => {
       renderMinimalAssignment();
 
+      openGenerationSettings();
+      openGenerationLimits();
       await screen.findByText(/Updated: (just now|\d+[mhd] ago) \(.+\)/i);
     });
 
@@ -129,7 +139,7 @@ export function registerGenerationDefaultsTests() {
         renderMinimalAssignment();
 
         const generateDraftButton = screen.getByRole('button', {
-          name: /Generate draft from prompt/i,
+          name: /Generate assignment content/i,
         });
         expect((generateDraftButton as HTMLButtonElement).disabled).toBe(true);
 
@@ -150,7 +160,7 @@ export function registerGenerationDefaultsTests() {
         await renderGenerationReadyAssignment();
         selectOpenAiGenerationModel();
 
-        await user.click(screen.getByRole('button', { name: /Generate draft from prompt/i }));
+        await user.click(screen.getByRole('button', { name: /Generate assignment content/i }));
 
         await waitFor(() => {
           expect(api.generateDraft).toHaveBeenCalledWith({
@@ -201,7 +211,7 @@ export function registerGenerationThrottleTests() {
           selectOpenAiGenerationModel();
 
           const generateDraftButton = screen.getByRole('button', {
-            name: /Generate draft from prompt/i,
+            name: /Generate assignment content/i,
           });
           await user.click(generateDraftButton);
 
@@ -241,7 +251,7 @@ export function registerGenerationThrottleTests() {
 
         await renderGenerationReadyAssignment();
         selectOpenAiGenerationModel();
-        await user.click(screen.getByRole('button', { name: /Generate draft from prompt/i }));
+        await user.click(screen.getByRole('button', { name: /Generate assignment content/i }));
 
         await waitFor(() => {
           expect(api.generateDraft).toHaveBeenCalledWith({
@@ -278,11 +288,11 @@ export function registerGenerationThrottleTests() {
         fireEvent.change(draftTextarea, { target: { value: '# Existing draft' } });
         await previewCurrentDraft(user);
 
-        const publishButton = screen.getByRole('button', { name: /Publish assignment/i });
+        const publishButton = screen.getByRole('button', { name: /Share assignment/i });
         expect((publishButton as HTMLButtonElement).disabled).toBe(false);
 
         const generateDraftButton = screen.getByRole('button', {
-          name: /Generate draft from prompt/i,
+          name: /Generate assignment content/i,
         });
         await waitFor(() => {
           expect((generateDraftButton as HTMLButtonElement).disabled).toBe(false);
@@ -298,7 +308,7 @@ export function registerGenerationThrottleTests() {
           expect(screen.getByDisplayValue('# Generated assignment draft')).toBeTruthy();
         });
         expect((publishButton as HTMLButtonElement).disabled).toBe(true);
-        expect(screen.getByText('Preview required before publish.')).toBeTruthy();
+        expect(screen.getByText('Preview required before sharing.')).toBeTruthy();
       },
       INTEGRATION_TEST_TIMEOUT_MS,
     );
@@ -318,7 +328,7 @@ export function registerGenerationThrottleTests() {
         await renderResumedAssignment();
         selectOpenAiGenerationModel();
 
-        await user.click(screen.getByRole('button', { name: /Generate draft from prompt/i }));
+        await user.click(screen.getByRole('button', { name: /Generate assignment content/i }));
         await waitFor(() => {
           expect(api.generateDraft).toHaveBeenCalledWith({
             promptPackageId: 'pkg-1',
