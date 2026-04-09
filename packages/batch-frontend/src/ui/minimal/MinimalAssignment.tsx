@@ -487,7 +487,7 @@ export const MinimalAssignment: React.FC = () => {
     }
     const configured = (jobOptions?.ttsStrategies ?? []).filter(isUiPublishTtsStrategy);
     return configured.length > 0 ? configured : ['auto'];
-  }, [jobOptions, jobOptions?.ttsStrategies, selectedTtsStrategy]);
+  }, [jobOptions, selectedTtsStrategy]);
   const publishModelSelectionDisabled =
     selectedTtsProvider === 'elevenlabs' && selectedTtsStrategy === 'auto';
   const defaultPronunciationChunkProvider = useMemo<UiPronunciationChunkTtsProvider>(

@@ -50,10 +50,10 @@
   "devDependencies": {
     "@types/markdown-it": "^14.1.2",
     "@types/markdown-it-container": "^4.0.0",
-    "@types/node": "^25.5.0",
-    "jsdom": "^29.0.1",
+    "@types/node": "^25.5.2",
+    "jsdom": "^29.0.2",
     "typescript": "^6.0.2",
-    "vitest": "^4.1.2"
+    "vitest": "^4.1.4"
   },
   "engines": {
     "node": ">=24.11.1"
